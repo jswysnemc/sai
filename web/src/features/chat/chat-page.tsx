@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
+import { toDisplayError } from "../../api/api-error";
 import type { RunMode } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
 import { Modal } from "../../shared/ui/dialog/modal";
@@ -30,10 +31,10 @@ export function ChatPage() {
   const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const [input, setInput] = useState("");
-  const [undoError, setUndoError] = useState<string | null>(null);
+  const [undoError, setUndoError] = useState<Error | null>(null);
   const [undoConfirmOpen, setUndoConfirmOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<Error | null>(null);
   const sessions = useQuery({ queryKey: ["sessions"], queryFn: api.sessions.list });
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
   const activeSession = sessions.data?.find((session) => session.active);
@@ -180,7 +181,7 @@ export function ChatPage() {
         queryClient.invalidateQueries({ queryKey: ["workspace-diff"] })
       ]);
     } catch (error) {
-      setUndoError(error instanceof Error ? error.message : String(error));
+      setUndoError(toDisplayError(error, "Failed to undo the last turn", "撤销上一轮失败"));
     }
   };
   const overviewItems = useMemo(
@@ -230,7 +231,7 @@ export function ChatPage() {
         queryClient.invalidateQueries({ queryKey: ["timeline", session.id] })
       ]);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
+      setActionError(toDisplayError(error, "Failed to fork the conversation", "创建对话分支失败"));
     } finally {
       setActionBusy(false);
     }
@@ -287,7 +288,7 @@ export function ChatPage() {
             ))}
             {timeline.error && <div className="run-error">{timeline.error.message}</div>}
             {chatModel.error && <div className="run-error">{chatModel.error.message}</div>}
-            {actionError && <div className="run-error">{actionError}</div>}
+            {actionError && <div className="run-error">{actionError.message}</div>}
           </div>
         </div>
         <MessageOverviewRail
@@ -361,7 +362,7 @@ export function ChatPage() {
         onClose={() => setUndoError(null)}
         footer={<Button onClick={() => setUndoError(null)}>{t("Close", "关闭")}</Button>}
       >
-        <p>{undoError}</p>
+        <p>{undoError?.message}</p>
       </Modal>
     </div>
   );

@@ -2,6 +2,7 @@ import { ArrowUp, Check, CornerDownLeft, Eye, EyeOff, Folder, FolderPlus, GitBra
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { api } from "../../api/client";
+import { toDisplayError } from "../../api/api-error";
 import type { DirectoryEntry } from "../../api/contracts";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { useI18n } from "../i18n/use-i18n";
@@ -27,7 +28,7 @@ export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirecto
   const [submitting, setSubmitting] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
-  const [createError, setCreateError] = useState("");
+  const [createError, setCreateError] = useState<Error | null>(null);
   const listing = useQuery({ queryKey: ["workspace-directories", path], queryFn: () => api.workspaces.browse(path), enabled: open });
   const filter = draft.startsWith("/") ? "" : draft.trim();
   const entries = useMemo(
@@ -42,7 +43,7 @@ export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirecto
     setDraft("");
     setSelected("");
     setCreating(false);
-    setCreateError("");
+    setCreateError(null);
   };
 
   /** 处理路径输入框回车：以 / 开头的绝对路径才跳转。 */
@@ -56,7 +57,7 @@ export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirecto
     const parent = listing.data?.current;
     const name = newFolderName.trim();
     if (!parent || !name) return;
-    setCreateError("");
+    setCreateError(null);
     try {
       // 1. 调用后端接口创建目录
       const entry = await api.workspaces.createDirectory(parent, name);
@@ -66,7 +67,7 @@ export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirecto
       setCreating(false);
       setNewFolderName("");
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : String(error));
+      setCreateError(toDisplayError(error, "Failed to create directory", "创建目录失败"));
     }
   };
 
@@ -108,7 +109,7 @@ export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirecto
               onKeyDown={(event) => { if (event.key === "Enter") handleDraftEnter(); }}
             />
             {draft.trim().startsWith("/") && <button type="button" onClick={handleDraftEnter} aria-label={t("Go to entered path", "跳转到输入路径")}><CornerDownLeft size={14} /></button>}
-            <button type="button" onClick={() => { setCreating((value) => !value); setCreateError(""); }} disabled={!listing.data} aria-label={t("New folder", "新建文件夹")}><FolderPlus size={14} /></button>
+            <button type="button" onClick={() => { setCreating((value) => !value); setCreateError(null); }} disabled={!listing.data} aria-label={t("New folder", "新建文件夹")}><FolderPlus size={14} /></button>
             <button type="button" onClick={() => setShowHidden((value) => !value)} aria-label={showHidden ? t("Hide dot directories", "隐藏点开头目录") : t("Show dot directories", "显示点开头目录")}>
               {showHidden ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
@@ -126,12 +127,12 @@ export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirecto
                   onChange={(event) => setNewFolderName(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") void createFolder();
-                    if (event.key === "Escape") { setCreating(false); setNewFolderName(""); setCreateError(""); }
+                    if (event.key === "Escape") { setCreating(false); setNewFolderName(""); setCreateError(null); }
                   }}
                 />
               </div>
             )}
-            {createError && <div className="pane-error">{createError}</div>}
+            {createError && <div className="pane-error">{createError.message}</div>}
             {entries.map((entry) => (
               <button type="button" className={selected === entry.path ? "selected" : ""} key={entry.path} onDoubleClick={() => navigate(entry.path)} onClick={() => setSelected(entry.path)}>
                 <Folder size={16} /><span><strong>{entry.name}</strong><small>{entry.path}</small></span>{entry.git_repository && <span className="directory-git"><GitBranch size={12} />Git</span>}{selected === entry.path && <Check size={14} />}

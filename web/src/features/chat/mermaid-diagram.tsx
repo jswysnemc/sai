@@ -1,5 +1,6 @@
 import { Check, Code2, Copy, Eye, Maximize2 } from "lucide-react";
 import { memo, useEffect, useId, useState } from "react";
+import { toDisplayError } from "../../api/api-error";
 import { ImageLightbox } from "../../shared/ui/image-lightbox";
 import { SegmentedControl, type SegmentedControlOption } from "../../shared/ui/segmented-control";
 import { useI18n } from "../i18n/use-i18n";
@@ -86,7 +87,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source }: { source:
   const reactId = useId().replace(/:/g, "");
   const cacheKey = `${MERMAID_THEME}\u0000${source}`;
   const [svg, setSvg] = useState(() => readCache(cacheKey) ?? "");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
   const [view, setView] = useState<"preview" | "source">("preview");
   const [copied, setCopied] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -118,7 +119,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source }: { source:
           setError(null);
         })
         .catch((reason: unknown) => {
-          if (active) setError(reason instanceof Error ? reason.message : t("Failed to render Mermaid diagram", "Mermaid 渲染失败"));
+          if (active) setError(toDisplayError(reason, "Failed to render Mermaid diagram", "Mermaid 渲染失败"));
         });
     }, 120);
     return () => {
@@ -157,7 +158,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source }: { source:
       {view === "source" || error || !svg
         ? <pre className="mermaid-source"><code>{source}</code></pre>
         : <div className="mermaid-preview" dangerouslySetInnerHTML={{ __html: svg }} />}
-      {error && <div className="mermaid-error">{error}</div>}
+      {error && <div className="mermaid-error">{error.message}</div>}
       {lightboxUrl && <ImageLightbox src={lightboxUrl} alt={t("Mermaid diagram", "Mermaid 图表")} onClose={() => setLightboxUrl(null)} />}
     </div>
   );

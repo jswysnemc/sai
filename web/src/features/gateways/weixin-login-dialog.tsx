@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { api } from "../../api/client";
+import { toDisplayError } from "../../api/api-error";
 import type { WeixinLoginAccount, WeixinLoginSnapshot } from "../../api/contracts";
 import "./weixin-login-dialog.css";
 import { useI18n } from "../i18n/use-i18n";
@@ -45,7 +46,7 @@ function phaseLabel(snapshot: WeixinLoginSnapshot | null, t: (en: string, zh: st
 export function WeixinLoginDialog({ open, baseUrl, botType, onClose, onConfirmed }: WeixinLoginDialogProps) {
   const { t } = useI18n();
   const [snapshot, setSnapshot] = useState<WeixinLoginSnapshot | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
   const [verifyCode, setVerifyCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const sessionRef = useRef<string | null>(null);
@@ -71,8 +72,8 @@ export function WeixinLoginDialog({ open, baseUrl, botType, onClose, onConfirmed
         sessionRef.current = result.session_id;
         setSnapshot(result);
       })
-      .catch((err: Error) => {
-        if (!cancelled) setError(err.message);
+      .catch((err: unknown) => {
+        if (!cancelled) setError(toDisplayError(err, "Failed to start Weixin login", "启动微信登录失败"));
       });
     return () => {
       cancelled = true;
@@ -96,7 +97,7 @@ export function WeixinLoginDialog({ open, baseUrl, botType, onClose, onConfirmed
         const next = await api.gateways.weixinLogin.status(sessionId);
         setSnapshot(next);
       } catch (err) {
-        setError((err as Error).message);
+        setError(toDisplayError(err, "Failed to refresh Weixin login status", "刷新微信登录状态失败"));
       }
     }, 2000);
     return () => window.clearTimeout(timer);
@@ -113,7 +114,7 @@ export function WeixinLoginDialog({ open, baseUrl, botType, onClose, onConfirmed
       setSnapshot(next);
       setVerifyCode("");
     } catch (err) {
-      setError((err as Error).message);
+      setError(toDisplayError(err, "Failed to submit verification code", "提交验证码失败"));
     } finally {
       setSubmitting(false);
     }
@@ -153,7 +154,7 @@ export function WeixinLoginDialog({ open, baseUrl, botType, onClose, onConfirmed
             <div><dt>{t("API address", "API 地址")}</dt><dd>{snapshot.account.base_url}</dd></div>
           </dl>
         )}
-        {error && <div className="weixin-login-error">{error}</div>}
+        {error && <div className="weixin-login-error">{error.message}</div>}
       </div>
     </Modal>
   );

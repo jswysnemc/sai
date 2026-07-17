@@ -1,6 +1,7 @@
 import { Check, Cpu, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { createElement, useEffect, useState } from "react";
 import { api } from "../../api/client";
+import { toDisplayError } from "../../api/api-error";
 import type { AppConfig, ProviderConfig } from "../../api/contracts";
 import { EditorHeader } from "./editor-layout";
 import { ModelMetadataEditor } from "./model-metadata-editor";
@@ -30,7 +31,7 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
   const confirm = useConfirm();
   const [selectedId, setSelectedId] = useState(config.active_provider || config.providers[0]?.id || "");
   const [fetching, setFetching] = useState(false);
-  const [fetchError, setFetchError] = useState("");
+  const [fetchError, setFetchError] = useState<Error | null>(null);
   const [remoteModels, setRemoteModels] = useState<string[]>([]);
   const [remoteMetadata, setRemoteMetadata] = useState<Record<string,{provider:string;context_chars?:number | null;tags?:string[]}>>({});
   const [importOpen, setImportOpen] = useState(false);
@@ -65,21 +66,21 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
     };
     onConfigChange({ ...config, providers: [...config.providers, next] });
     setSelectedId(id);
-    setFetchError("");
+    setFetchError(null);
   };
 
   /** 获取当前供应商远端模型并打开导入弹层。 */
   const fetchModels = async () => {
     if (!provider) return;
     setFetching(true);
-    setFetchError("");
+    setFetchError(null);
     try {
       const response = await api.providers.models(provider);
       setRemoteModels(response.models);
       setRemoteMetadata(response.metadata);
       setImportOpen(true);
     } catch (error) {
-      setFetchError(error instanceof Error ? error.message : String(error));
+      setFetchError(toDisplayError(error, "Failed to fetch models", "获取模型失败"));
     } finally {
       setFetching(false);
     }
@@ -150,7 +151,7 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
         selectedId={selectedId}
         searchPlaceholder={t("Search providers", "搜索供应商")}
         addLabel={t("Add provider", "新增供应商")}
-        onSelect={(id) => { setSelectedId(id); setFetchError(""); }}
+        onSelect={(id) => { setSelectedId(id); setFetchError(null); }}
         onAdd={addProvider}
       />
       <section className="settings-editor">
@@ -164,7 +165,7 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
             <button type="button" className="settings-danger" onClick={() => void deleteProvider()}><Trash2 size={14} />{t("Delete provider", "删除供应商")}</button>
           </>}
         />
-        {fetchError && <div className="settings-inline-error">{fetchError}</div>}
+        {fetchError && <div className="settings-inline-error">{fetchError.message}</div>}
         <nav className="settings-tabs" aria-label={t("Provider configuration categories", "供应商配置分类")}>
           <button type="button" className={tab === "connection" ? "active" : ""} onClick={() => setTab("connection")}>{t("Connection", "连接")}</button>
           <button type="button" className={tab === "models" ? "active" : ""} onClick={() => setTab("models")}>{t("Models", "模型")}</button>

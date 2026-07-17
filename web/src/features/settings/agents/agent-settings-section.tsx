@@ -1,6 +1,7 @@
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { AppConfig } from "../../../api/contracts";
+import { toDisplayError } from "../../../api/api-error";
 import { useI18n } from "../../i18n/use-i18n";
 import { Button } from "../../../shared/ui/button/button";
 import { AgentProfileWorkspace } from "./agent-profile-workspace";
@@ -25,7 +26,7 @@ export function AgentSettingsSection({ config, onConfigChange }: AgentSettingsSe
   const { t } = useI18n();
   const [options, setOptions] = useState<AgentOptions>({ tools: [], skills: [] });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<Error | null>(null);
 
   /**
    * 读取主 Agent 可用的工具与 Skills，并同步加载状态。
@@ -35,12 +36,12 @@ export function AgentSettingsSection({ config, onConfigChange }: AgentSettingsSe
   const loadOptions = useCallback(async () => {
     // 1. 重置上一次加载状态
     setLoading(true);
-    setError("");
+    setError(null);
     // 2. 请求能力选项并记录可展示的错误信息
     try {
       setOptions(await fetchAgentOptions());
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(toDisplayError(reason, "Failed to load Agent capabilities", "Agent 能力加载失败"));
     } finally {
       setLoading(false);
     }
@@ -60,7 +61,7 @@ export function AgentSettingsSection({ config, onConfigChange }: AgentSettingsSe
       )}
       {!loading && error && (
         <div className="agent-settings-load-error">
-          <div><strong>{t("Failed to load Agent capabilities", "Agent 能力加载失败")}</strong><small>{error}</small></div>
+          <div><strong>{t("Failed to load Agent capabilities", "Agent 能力加载失败")}</strong><small>{error.message}</small></div>
           <Button className="settings-secondary" onClick={() => void loadOptions()}>
             <RefreshCw size={14} />{t("Reload", "重新加载")}
           </Button>

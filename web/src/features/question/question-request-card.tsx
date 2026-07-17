@@ -1,6 +1,7 @@
 import { Check, ChevronDown, HelpCircle, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
+import { LocalizedError, toDisplayError } from "../../api/api-error";
 import type { PendingQuestion, QuestionAnswers, QuestionPrompt, QuestionResponse } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
 import { TextArea } from "../../shared/ui/form/text-area";
@@ -27,14 +28,14 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
   const [answers, setAnswers] = useState<QuestionAnswers>(() => questions.map(() => []));
   const [customDrafts, setCustomDrafts] = useState<string[]>(() => questions.map(() => ""));
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<Error | null>(null);
   const [resolvedSummary, setResolvedSummary] = useState<string[]>(() => summaryFromResponse(response, t));
 
   useEffect(() => {
     setStatus(responseStatus(response));
     setExpanded(true);
     setSubmitting(false);
-    setError("");
+    setError(null);
     setResolvedSummary(summaryFromResponse(response, t));
   }, [pending.id, response, t]);
 
@@ -73,18 +74,18 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
 
   const submit = async () => {
     if (!allAnswered) {
-      setError(t("Answer every question first", "请先回答所有问题"));
+      setError(new LocalizedError("Answer every question first", "请先回答所有问题"));
       return;
     }
     setSubmitting(true);
-    setError("");
+    setError(null);
     try {
       await api.questions.answer(pending.id, answers);
       setStatus("answered");
       setResolvedSummary(answers.map((item) => item.join(t(", ", "、"))));
       setExpanded(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("Failed to submit answers", "提交回答失败"));
+      setError(toDisplayError(cause, "Failed to submit answers", "提交回答失败"));
     } finally {
       setSubmitting(false);
     }
@@ -92,13 +93,13 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
 
   const cancel = async () => {
     setSubmitting(true);
-    setError("");
+    setError(null);
     try {
       await api.questions.cancel(pending.id);
       setStatus("cancelled");
       setExpanded(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("Failed to cancel questions", "取消提问失败"));
+      setError(toDisplayError(cause, "Failed to cancel questions", "取消提问失败"));
     } finally {
       setSubmitting(false);
     }
@@ -158,7 +159,7 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
           )}
           {interactive && (
             <div className="question-request-actions">
-              {error && <div className="question-request-error">{error}</div>}
+              {error && <div className="question-request-error">{error.message}</div>}
               <div className="question-request-buttons">
                 <Button className="question-action" disabled={submitting} onClick={() => void cancel()}>
                   {submitting ? t("Processing", "处理中") : t("Cancel", "取消")}

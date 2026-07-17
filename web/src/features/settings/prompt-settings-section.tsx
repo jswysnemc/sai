@@ -2,6 +2,7 @@ import { Check, Copy, FileText, Save, Trash2 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
+import { toDisplayError } from "../../api/api-error";
 import type { AppConfig, PromptKind } from "../../api/contracts";
 import { EditorHeader } from "./editor-layout";
 import { ObjectListPanel } from "./object-list-panel";
@@ -29,7 +30,7 @@ export function PromptSettingsSection({ config, onConfigChange }: PromptSettings
   const [name, setName] = useState("");
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<Error | null>(null);
   const promptConfig = config.prompt ?? {};
   const activeName = kind === "personas" ? promptConfig.active_persona ?? "" : promptConfig.active_identity ?? "";
 
@@ -37,19 +38,19 @@ export function PromptSettingsSection({ config, onConfigChange }: PromptSettings
     setSelected(null);
     setName("");
     setContent("");
-    setError("");
+    setError(null);
   }, [kind]);
 
   /** 读取选中的提示词文件。 */
   const selectPrompt = async (nextName: string) => {
-    setError("");
+    setError(null);
     try {
       const document = await api.prompts.read(kind, nextName);
       setSelected(nextName);
       setName(document.name);
       setContent(document.content);
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(toDisplayError(reason, "Failed to load prompt", "读取提示词失败"));
     }
   };
 
@@ -58,7 +59,7 @@ export function PromptSettingsSection({ config, onConfigChange }: PromptSettings
     setSelected(null);
     setName(kind === "personas" ? t("New persona", "新建人设") : t("New identity", "新建身份"));
     setContent("");
-    setError("");
+    setError(null);
   };
 
   /** 复制当前提示词为新草稿。 */
@@ -72,7 +73,7 @@ export function PromptSettingsSection({ config, onConfigChange }: PromptSettings
   const savePrompt = async () => {
     if (!name.trim()) return;
     setSaving(true);
-    setError("");
+    setError(null);
     try {
       const document = selected
         ? await api.prompts.update(kind, selected, name, content)
@@ -83,7 +84,7 @@ export function PromptSettingsSection({ config, onConfigChange }: PromptSettings
       setContent(document.content);
       await queryClient.invalidateQueries({ queryKey: ["prompts", kind] });
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(toDisplayError(reason, "Failed to save prompt", "保存提示词失败"));
     } finally {
       setSaving(false);
     }
@@ -99,7 +100,7 @@ export function PromptSettingsSection({ config, onConfigChange }: PromptSettings
       danger: true
     });
     if (!confirmed) return;
-    setError("");
+    setError(null);
     try {
       await api.prompts.remove(kind, selected);
       if (activeName === selected || activeName === `${selected}.md`) activatePrompt("");
@@ -108,7 +109,7 @@ export function PromptSettingsSection({ config, onConfigChange }: PromptSettings
       setContent("");
       await queryClient.invalidateQueries({ queryKey: ["prompts", kind] });
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(toDisplayError(reason, "Failed to delete prompt", "删除提示词失败"));
     }
   };
 
@@ -162,20 +163,10 @@ export function PromptSettingsSection({ config, onConfigChange }: PromptSettings
         <label className="settings-field"><span>{t("Name", "名称")}</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("Prompt name", "提示词名称")} /></label>
         <label className="settings-field prompt-content-field"><span>{t("Prompt content", "提示词内容")}</span><textarea value={content} onChange={(event) => setContent(event.target.value)} placeholder={t("Enter a system prompt or user identity description", "输入系统提示词或用户身份说明")} spellCheck={false} /></label>
         <div className="prompt-editor-footer">
-          {error && <span className="settings-inline-error">{error}</span>}
+          {error && <span className="settings-inline-error">{error.message}</span>}
           <button type="button" className="settings-save" onClick={() => void savePrompt()} disabled={!name.trim() || saving}><Save size={14} />{saving ? t("Saving", "正在保存") : t("Save prompt", "保存提示词")}</button>
         </div>
       </section>
     </div>
   );
-}
-
-/**
- * 将未知异常转换为界面错误文本。
- *
- * @param reason 捕获的异常
- * @returns 错误文本
- */
-function errorMessage(reason: unknown): string {
-  return reason instanceof Error ? reason.message : String(reason);
 }

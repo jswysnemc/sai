@@ -1,6 +1,7 @@
 import { Check, ChevronDown, ShieldAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
+import { toDisplayError } from "../../api/api-error";
 import type { PermissionDecision, PermissionRequest } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
 import { TextArea } from "../../shared/ui/form/text-area";
@@ -30,7 +31,7 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
   const [replyOpen, setReplyOpen] = useState(false);
   const [reply, setReply] = useState(() => decision?.decision === "deny" ? decision.reply ?? "" : "");
   const [submitting, setSubmitting] = useState<"allow" | "deny" | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<Error | null>(null);
   const summary = toolCardSummary(request.tool, request.arguments) || request.tool.replaceAll("_", " ");
 
   useEffect(() => {
@@ -39,7 +40,7 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
     setReplyOpen(false);
     setReply(decision?.decision === "deny" ? decision.reply ?? "" : "");
     setSubmitting(null);
-    setError("");
+    setError(null);
   }, [request.id, decision]);
 
   /**
@@ -51,13 +52,13 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
    */
   const decide = async (decision: "allow" | "deny", includeReply = false) => {
     setSubmitting(decision);
-    setError("");
+    setError(null);
     try {
       await api.permissions.decide(request, decision, decision === "deny" && includeReply ? reply.trim() || undefined : undefined);
       setStatus(decision === "allow" ? "allowed" : "denied");
       setExpanded(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("Failed to submit permission decision", "提交权限决定失败"));
+      setError(toDisplayError(cause, "Failed to submit permission decision", "提交权限决定失败"));
     } finally {
       setSubmitting(null);
     }
@@ -88,7 +89,7 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
                   <TextArea value={reply} onChange={(event) => setReply(event.target.value)} placeholder={t("Explain the reason for denial or provide an alternative request", "说明拒绝原因或提供替代要求")} autoFocus />
                 </label>
               )}
-              {error && <div className="permission-request-error">{error}</div>}
+              {error && <div className="permission-request-error">{error.message}</div>}
               <div className="permission-request-buttons">
                 <Button className="permission-action" disabled={Boolean(submitting)} onClick={() => void decide("deny")}>{submitting === "deny" ? t("Denying", "正在拒绝") : t("Deny", "拒绝")}</Button>
                 <Button className="permission-action" disabled={Boolean(submitting)} onClick={() => setReplyOpen((value) => !value)}>{t("Deny with reply", "拒绝并回复")}</Button>

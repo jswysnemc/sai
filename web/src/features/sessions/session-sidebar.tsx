@@ -3,6 +3,7 @@ import { Cable, CalendarClock, CheckSquare2, ChevronDown, ChevronRight, FolderGi
 import { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
+import { toDisplayError } from "../../api/api-error";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { SaiLogo } from "../../shared/ui/sai-logo";
 import { switchWithTerminalConfirm } from "../workspaces/workspace-switcher";
@@ -177,7 +178,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
       }
       removeWorkspace.mutate(workspaceId);
     } catch (cause) {
-      setNavigationError(cause instanceof Error ? cause : new Error(String(cause)));
+      setNavigationError(toDisplayError(cause, "Failed to close workspace", "关闭工作区失败"));
     }
   };
 
@@ -228,7 +229,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
       else await refresh();
       onNavigate?.();
     } catch (cause) {
-      setNavigationError(cause instanceof Error ? cause : new Error(String(cause)));
+      setNavigationError(toDisplayError(cause, "Failed to open session", "打开会话失败"));
     }
   };
 

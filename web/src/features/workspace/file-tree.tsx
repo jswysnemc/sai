@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronRight, FilePlus2, Folder, FolderOpen, FolderPlus, PanelRightClose, Pencil, RefreshCw, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../api/client";
+import { toDisplayError } from "../../api/api-error";
 import type { FileNode } from "../../api/contracts";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { FileTypeIcon } from "../../shared/ui/file-icon";
@@ -32,7 +33,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
   const [focusedPath, setFocusedPath] = useState<string | null>(selectedFile);
   const [action, setAction] = useState<FileAction>(null);
   const [search, setSearch] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<Error | null>(null);
   const focusedNode = findFileNode(tree.data ?? [], focusedPath);
   const visibleNodes = filterFileNodes(tree.data ?? [], search);
 
@@ -40,20 +41,20 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
   const beginCreate = (kind: "file" | "directory") => {
     const parent = focusedNode?.kind === "directory" ? focusedNode.path : parentFilePath(focusedPath ?? "");
     setAction({ kind, value: parent ? `${parent}/` : "" });
-    setError("");
+    setError(null);
   };
 
   /** 打开重命名输入栏。 */
   const beginRename = () => {
     if (!focusedPath) return;
     setAction({ kind: "rename", value: focusedPath });
-    setError("");
+    setError(null);
   };
 
   /** 提交当前文件操作。 */
   const submitAction = async () => {
     if (!action?.value.trim()) return;
-    setError("");
+    setError(null);
     try {
       if (action.kind === "rename" && focusedPath) {
         const entry = await api.workspace.rename(focusedPath, action.value.trim());
@@ -67,7 +68,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
       setAction(null);
       await refreshWorkspaceQueries(queryClient);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(toDisplayError(reason, "Failed to update workspace files", "更新工作区文件失败"));
     }
   };
 
@@ -81,14 +82,14 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
       danger: true
     });
     if (!confirmed) return;
-    setError("");
+    setError(null);
     try {
       await api.workspace.remove(focusedPath);
       if (selectedFile === focusedPath || selectedFile?.startsWith(`${focusedPath}/`)) onClearFile();
       setFocusedPath(null);
       await refreshWorkspaceQueries(queryClient);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(toDisplayError(reason, "Failed to delete workspace item", "删除工作区条目失败"));
     }
   };
 
@@ -117,7 +118,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
         )}
         {visibleNodes.map((node) => <TreeNode key={node.path} node={node} selectedFile={selectedFile} focusedPath={focusedPath} onFocus={setFocusedPath} onSelectFile={onSelectFile} depth={0} forceOpen={Boolean(search.trim())} />)}
         {tree.data && visibleNodes.length === 0 && <p className="file-tree-empty">{t("No matching files", "没有匹配的文件")}</p>}
-        {(tree.error || error) && <p className="pane-error">{error || tree.error?.message}</p>}
+        {(tree.error || error) && <p className="pane-error">{error?.message || tree.error?.message}</p>}
       </div>
     </aside>
   );

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
+import { ApiError, LocalizedError, toDisplayError } from "../../api/api-error";
 import type { GitBranch as GitBranchInfo, GitCommitSummary, GitStatusEntry } from "../../api/contracts";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { DiffView } from "../chat/tool-renderers/diff-view";
@@ -44,7 +45,7 @@ export function DiffPane() {
   const [selectedCommitPath, setSelectedCommitPath] = useState<string | null>(null);
   const [historyLimit, setHistoryLimit] = useState(40);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<Error | null>(null);
   const [notice, setNotice] = useState("");
 
   const status = useQuery({
@@ -140,17 +141,21 @@ export function DiffPane() {
       }),
     onSuccess: async (result) => {
       if (!result.ok) {
-        setError(result.message || result.stderr || t("Git operation failed", "Git 操作失败"));
+        setError(
+          result.message || result.stderr
+            ? new ApiError(result.message || result.stderr)
+            : new LocalizedError("Git operation failed", "Git 操作失败")
+        );
         setNotice("");
         return;
       }
-      setError("");
+      setError(null);
       setNotice(result.message);
       queryClient.setQueryData(["git-status"], result.state);
       await refreshAll();
     },
     onError: (reason) => {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(toDisplayError(reason, "Git operation failed", "Git 操作失败"));
       setNotice("");
     }
   });
@@ -174,7 +179,7 @@ export function DiffPane() {
       });
       if (!confirmed) return;
     }
-    setError("");
+    setError(null);
     setNotice("");
     await op.mutateAsync({
       action,
@@ -229,7 +234,7 @@ export function DiffPane() {
             {t("Initialize repository", "初始化仓库")}
           </button>
         </div>
-        {(status.error || error) && <div className="pane-error">{error || status.error?.message}</div>}
+        {(status.error || error) && <div className="pane-error">{error?.message || status.error?.message}</div>}
       </section>
     );
   }
@@ -530,7 +535,7 @@ export function DiffPane() {
 
       {(error || notice || status.error) && (
         <div className={error || status.error ? "pane-error" : "pane-notice"}>
-          {error || status.error?.message || notice}
+          {error?.message || status.error?.message || notice}
         </div>
       )}
     </section>

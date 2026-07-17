@@ -23,6 +23,49 @@ export class ApiError extends Error {
 }
 
 /**
+ * 保存双语兜底错误，并在读取 message 时采用当前 Web 语言。
+ */
+export class LocalizedError extends Error {
+  readonly englishMessage: string;
+  readonly chineseMessage: string;
+
+  /**
+   * 创建可动态切换语言的界面错误。
+   *
+   * @param englishMessage 英文错误文案
+   * @param chineseMessage 中文错误文案
+   */
+  constructor(englishMessage: string, chineseMessage: string) {
+    super();
+    this.name = "LocalizedError";
+    this.englishMessage = englishMessage;
+    this.chineseMessage = chineseMessage;
+    Object.defineProperty(this, "message", {
+      configurable: true,
+      get: () => detectInitialLocale() === "zh-CN" ? this.chineseMessage : this.englishMessage
+    });
+  }
+}
+
+/**
+ * 将捕获的异常转换为可存入组件状态的错误对象。
+ *
+ * @param cause 捕获的异常
+ * @param englishFallback 非错误对象对应的英文兜底文案
+ * @param chineseFallback 非错误对象对应的中文兜底文案
+ * @returns 保留动态 message 的原错误，或可动态切换语言的兜底错误
+ */
+export function toDisplayError(
+  cause: unknown,
+  englishFallback: string,
+  chineseFallback: string
+): Error {
+  return cause instanceof Error
+    ? cause
+    : new LocalizedError(englishFallback, chineseFallback);
+}
+
+/**
  * 将服务端固定英文错误转换为当前界面语言。
  *
  * @param message 服务端原始错误
@@ -73,7 +116,8 @@ export function localizeApiErrorMessage(message: string, locale: Locale): string
     "absolute path is outside the workspace root": "绝对路径不在工作区根目录内",
     "provider_id and model must be provided together": "provider_id 和 model 必须同时提供",
     "provider_id cannot be empty": "provider_id 不能为空",
-    "provider_id and model cannot be empty": "provider_id 和 model 不能为空"
+    "provider_id and model cannot be empty": "provider_id 和 model 不能为空",
+    "answers are required unless cancelled": "未取消提问时必须提供答案"
   };
   if (exact[message]) return exact[message];
 
