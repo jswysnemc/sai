@@ -47,6 +47,7 @@ import type {
   UndoSessionResult,
   WeixinLoginSnapshot
 } from "./contracts";
+import { ApiError } from "./api-error";
 import { detectInitialLocale, text } from "../features/i18n/locale";
 
 /** 使用 URL 启动令牌建立同源会话。 */
@@ -75,7 +76,7 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `HTTP ${response.status}`);
+    throw new ApiError(body?.error ?? `HTTP ${response.status}`);
   }
   return response.json() as Promise<T>;
 }

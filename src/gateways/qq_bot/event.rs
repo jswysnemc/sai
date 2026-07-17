@@ -11,6 +11,24 @@ pub(crate) enum QqBotInboundMediaKind {
     File,
 }
 
+impl QqBotInboundMediaKind {
+    /// 返回媒体类型的本地化名称。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 本地化媒体类型名称
+    pub(crate) fn localized_label(self) -> &'static str {
+        match self {
+            Self::Image => t("image", "图片"),
+            Self::Voice => t("voice message", "语音"),
+            Self::Video => t("video", "视频"),
+            Self::File => t("file", "文件"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct QqBotInboundMedia {
     pub(crate) kind: QqBotInboundMediaKind,
@@ -203,12 +221,7 @@ fn build_prompt(text: &str, media: &[QqBotInboundMedia]) -> String {
         parts.push(text.trim().to_string());
     }
     for item in media {
-        let label = match item.kind {
-            QqBotInboundMediaKind::Image => t("Image", "图片"),
-            QqBotInboundMediaKind::Voice => t("Voice", "语音"),
-            QqBotInboundMediaKind::Video => t("Video", "视频"),
-            QqBotInboundMediaKind::File => t("File", "文件"),
-        };
+        let label = item.kind.localized_label();
         let name = item.name.as_deref().unwrap_or(t("Unnamed", "未命名"));
         parts.push(format!(
             "{label}: {name}\n{}: {}",

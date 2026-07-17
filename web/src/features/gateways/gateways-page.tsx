@@ -51,7 +51,7 @@ function GatewayCard({ gateway, pending, onStart, onStop }: { gateway: GatewaySt
   const running = gateway.status === "running";
   return (
     <article className={running ? "gateway-card running" : "gateway-card"}>
-      <div className="gateway-card-top"><span className="gateway-index">{gateway.id.toUpperCase()}</span><span className={running ? "gateway-state running" : "gateway-state"}><i />{running ? t("Running", "运行中") : gateway.status}</span></div>
+      <div className="gateway-card-top"><span className="gateway-index">{gateway.id.toUpperCase()}</span><span className={running ? "gateway-state running" : "gateway-state"}><i />{gatewayStatusLabel(gateway.status, t)}</span></div>
       <h2>{gateway.title}</h2>
       <dl>
         <div><dt>{t("Configuration", "配置")}</dt><dd>{gateway.enabled ? t("Enabled", "已启用") : t("Disabled", "未启用")}</dd></div>
@@ -63,4 +63,23 @@ function GatewayCard({ gateway, pending, onStart, onStop }: { gateway: GatewaySt
       </button>
     </article>
   );
+}
+
+/**
+ * 返回网关运行状态的本地化名称。
+ *
+ * @param status 网关运行状态
+ * @param t 双语文本选择方法
+ * @returns 本地化状态名称
+ */
+function gatewayStatusLabel(status: string, t: (en: string, zh: string) => string): string {
+  const labels: Record<string, string> = {
+    running: t("Running", "运行中"),
+    stopped: t("Stopped", "已停止"),
+    exited: t("Exited", "已退出"),
+    failed: t("Failed", "失败"),
+    timed_out: t("Timed out", "已超时"),
+    unknown: t("Unknown", "未知")
+  };
+  return labels[status] ?? status;
 }

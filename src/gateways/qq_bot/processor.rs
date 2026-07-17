@@ -266,7 +266,7 @@ impl QqBotProcessor {
                     prompt.push_str(&format!(
                         "\n\n{} {}: {err}\n{}: {}",
                         t("Failed to save user-sent", "用户发送的"),
-                        inbound_media_label(media.kind),
+                        media.kind.localized_label(),
                         t("Source", "来源"),
                         media.source
                     ));
@@ -397,7 +397,7 @@ fn append_saved_media_prompt(prompt: &mut String, saved: &SavedQqInboundMedia) {
     prompt.push_str(&format!(
         "\n\n{} {}: {}\n{}: {}\n{}: {}",
         t("The user sent", "用户发送了"),
-        inbound_media_label(saved.kind),
+        saved.kind.localized_label(),
         saved.name,
         t("Saved to", "已保存到"),
         saved.path.display(),
@@ -417,22 +417,6 @@ pub(crate) fn target_kind_name(kind: QqTargetKind) -> &'static str {
     match kind {
         QqTargetKind::User => "user",
         QqTargetKind::Group => "group",
-    }
-}
-
-/// 返回入站媒体本地化名称。
-///
-/// 参数:
-/// - `kind`: 入站媒体类型
-///
-/// 返回:
-/// - 媒体类型名称
-fn inbound_media_label(kind: QqBotInboundMediaKind) -> &'static str {
-    match kind {
-        QqBotInboundMediaKind::Image => t("image", "图片"),
-        QqBotInboundMediaKind::Voice => t("voice message", "语音"),
-        QqBotInboundMediaKind::Video => t("video", "视频"),
-        QqBotInboundMediaKind::File => t("file", "文件"),
     }
 }
 

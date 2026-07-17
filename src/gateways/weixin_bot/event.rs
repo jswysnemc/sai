@@ -10,6 +10,24 @@ pub(crate) enum WeixinInboundMediaKind {
     File,
 }
 
+impl WeixinInboundMediaKind {
+    /// 返回媒体类型的本地化名称。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 本地化媒体类型名称
+    pub(crate) fn localized_label(self) -> &'static str {
+        match self {
+            Self::Image => t("image", "图片"),
+            Self::Voice => t("voice message", "语音"),
+            Self::Video => t("video", "视频"),
+            Self::File => t("file", "文件"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct WeixinInboundMedia {
     pub(crate) kind: WeixinInboundMediaKind,
@@ -287,12 +305,7 @@ fn build_prompt(text: &str, media: &[WeixinInboundMedia]) -> String {
         parts.push(text.trim().to_string());
     }
     for item in media {
-        let label = match item.kind {
-            WeixinInboundMediaKind::Image => t("image", "图片"),
-            WeixinInboundMediaKind::Voice => t("voice message", "语音"),
-            WeixinInboundMediaKind::Video => t("video", "视频"),
-            WeixinInboundMediaKind::File => t("file", "文件"),
-        };
+        let label = item.kind.localized_label();
         let name = item.name.as_deref().unwrap_or(t("Unnamed", "未命名"));
         parts.push(format!(
             "{} {label}: {name}",

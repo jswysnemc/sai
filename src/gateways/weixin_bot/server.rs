@@ -220,13 +220,13 @@ async fn prepare_agent_input(
                 weixin_client.debug_log(format!(
                     "{} kind={} source={} error={err:#}",
                     t("failed to save inbound attachment", "入站附件保存失败"),
-                    inbound_media_label(media.kind),
+                    media.kind.localized_label(),
                     media.source
                 ));
                 prompt.push_str(&format!(
                     "\n\n{} {}: {err}\n{}: {}",
                     t("Failed to save user-sent", "用户发送的"),
-                    inbound_media_label(media.kind),
+                    media.kind.localized_label(),
                     t("Source", "来源"),
                     media.source
                 ));
@@ -248,29 +248,13 @@ fn append_saved_media_prompt(prompt: &mut String, saved: &SavedInboundMedia) {
     prompt.push_str(&format!(
         "\n\n{} {}: {}\n{}: {}\n{}: {}",
         t("The user sent", "用户发送了"),
-        inbound_media_label(saved.kind),
+        saved.kind.localized_label(),
         saved.name,
         t("Saved to", "已保存到"),
         saved.path.display(),
         t("Media type", "媒体类型"),
         saved.mime_type
     ));
-}
-
-/// 返回入站媒体本地化名称。
-///
-/// 参数:
-/// - `kind`: 入站媒体类型
-///
-/// 返回:
-/// - 媒体类型名称
-fn inbound_media_label(kind: WeixinInboundMediaKind) -> &'static str {
-    match kind {
-        WeixinInboundMediaKind::Image => t("image", "图片"),
-        WeixinInboundMediaKind::Voice => t("voice message", "语音"),
-        WeixinInboundMediaKind::Video => t("video", "视频"),
-        WeixinInboundMediaKind::File => t("file", "文件"),
-    }
 }
 
 /// 运行 Sai Agent 并返回回复文本。

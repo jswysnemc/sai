@@ -57,6 +57,12 @@ fn localize_outbound_message_args(command: clap::Command) -> clap::Command {
 }
 
 /// 本地化企业微信 Webhook 参数。
+///
+/// 参数:
+/// - `command`: Clap 企业微信 Webhook 子命令
+///
+/// 返回:
+/// - 已本地化的子命令
 fn localize_wecom_webhook(command: clap::Command) -> clap::Command {
     localize_outbound_message_args(
         command
@@ -71,6 +77,12 @@ fn localize_wecom_webhook(command: clap::Command) -> clap::Command {
 }
 
 /// 本地化 QQ 官方机器人出站参数。
+///
+/// 参数:
+/// - `command`: Clap QQ 官方机器人出站子命令
+///
+/// 返回:
+/// - 已本地化的子命令
 fn localize_qq_official(command: clap::Command) -> clap::Command {
     localize_outbound_message_args(
         command
@@ -97,6 +109,12 @@ fn localize_qq_official(command: clap::Command) -> clap::Command {
 }
 
 /// 本地化 QQ 官方机器人入站参数。
+///
+/// 参数:
+/// - `command`: Clap QQ 官方机器人入站子命令
+///
+/// 返回:
+/// - 已本地化的子命令
 fn localize_qq_bot(command: clap::Command) -> clap::Command {
     localize_qq_bot_credentials(command).mut_arg("transport", |arg| {
         arg.help(t(
@@ -107,6 +125,12 @@ fn localize_qq_bot(command: clap::Command) -> clap::Command {
 }
 
 /// 本地化 QQ 官方机器人通用凭据参数。
+///
+/// 参数:
+/// - `command`: 含 QQ 凭据参数的 Clap 子命令
+///
+/// 返回:
+/// - 已本地化的子命令
 fn localize_qq_bot_credentials(command: clap::Command) -> clap::Command {
     command
         .mut_arg("listen", |arg| {
@@ -128,6 +152,12 @@ fn localize_qq_bot_credentials(command: clap::Command) -> clap::Command {
 }
 
 /// 本地化 OneBot 出站参数。
+///
+/// 参数:
+/// - `command`: Clap OneBot 出站子命令
+///
+/// 返回:
+/// - 已本地化的子命令
 fn localize_onebot(command: clap::Command) -> clap::Command {
     localize_outbound_message_args(
         command
@@ -154,6 +184,12 @@ fn localize_onebot(command: clap::Command) -> clap::Command {
 }
 
 /// 本地化 OneBot 入站服务参数。
+///
+/// 参数:
+/// - `command`: Clap OneBot 入站服务子命令
+///
+/// 返回:
+/// - 已本地化的子命令
 fn localize_onebot_server(command: clap::Command) -> clap::Command {
     command
         .about(t(
@@ -172,6 +208,12 @@ fn localize_onebot_server(command: clap::Command) -> clap::Command {
 }
 
 /// 本地化微信登录参数。
+///
+/// 参数:
+/// - `command`: Clap 微信登录子命令
+///
+/// 返回:
+/// - 已本地化的子命令
 fn localize_weixin_login(command: clap::Command) -> clap::Command {
     command
         .about(t(
@@ -190,6 +232,12 @@ fn localize_weixin_login(command: clap::Command) -> clap::Command {
 }
 
 /// 本地化微信入站服务参数。
+///
+/// 参数:
+/// - `command`: Clap 微信入站服务子命令
+///
+/// 返回:
+/// - 已本地化的子命令
 fn localize_weixin_server(command: clap::Command) -> clap::Command {
     command
         .about(t(
