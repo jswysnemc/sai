@@ -40,14 +40,16 @@ impl WorkspaceManager {
             registry.workspaces.push(workspace_info(&current, None));
         }
         let gateway_id = workspace_id_for_path(&gateway_workspace);
-        if !registry
+        if let Some(workspace) = registry
             .workspaces
-            .iter()
-            .any(|workspace| workspace.id == gateway_id)
+            .iter_mut()
+            .find(|workspace| workspace.id == gateway_id)
         {
+            workspace.name = "Gateway sessions".to_string();
+        } else {
             registry
                 .workspaces
-                .push(workspace_info(&gateway_workspace, Some("网关会话")));
+                .push(workspace_info(&gateway_workspace, Some("Gateway sessions")));
         }
         if !registry
             .workspaces

@@ -3,6 +3,7 @@ import { Check, ChevronDown, FolderGit2, FolderOpen, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../api/client";
+import { localizeApiMessage } from "../../api/api-error";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { useAnchoredPopover } from "../../shared/ui/popover/use-anchored-popover";
 import { ServerDirectoryDialog } from "./server-directory-dialog";
@@ -16,7 +17,7 @@ import type { Translate } from "../i18n/i18n-context";
  * @returns 工作区选择器
  */
 export function WorkspaceSwitcher() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -25,6 +26,7 @@ export function WorkspaceSwitcher() {
   const confirm = useConfirm();
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
   const active = workspaces.data?.workspaces.find((workspace) => workspace.id === workspaces.data.active_id);
+  const activeName = active ? localizeApiMessage(active.name, locale) : t("Workspace", "工作区");
   const switchWorkspace = useMutation({
     mutationFn: (id: string) => switchWithTerminalConfirm(id, confirm, t),
     onSuccess: (switched) => { if (switched) window.location.reload(); }
@@ -52,15 +54,15 @@ export function WorkspaceSwitcher() {
   return (
     <div className="workspace-switcher" ref={rootRef}>
       <button ref={triggerRef} className="workspace-trigger" type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-        <FolderGit2 size={13} /><strong>{active?.name ?? t("Workspace", "工作区")}</strong><ChevronDown size={12} className={open ? "open" : ""} />
+        <FolderGit2 size={13} /><strong>{activeName}</strong><ChevronDown size={12} className={open ? "open" : ""} />
       </button>
       {open && createPortal(
         <div ref={menuRef} className="workspace-menu" style={menuStyle}>
-          <div className="workspace-menu-head"><span><strong>{active?.name}</strong><small>{active?.path}</small></span><button type="button" aria-label={t("Close workspace menu", "关闭工作区菜单")} onClick={() => setOpen(false)}><X size={15} /></button></div>
+          <div className="workspace-menu-head"><span><strong>{activeName}</strong><small>{active?.path}</small></span><button type="button" aria-label={t("Close workspace menu", "关闭工作区菜单")} onClick={() => setOpen(false)}><X size={15} /></button></div>
           <div className="workspace-items">
             {workspaces.data?.workspaces.map((workspace) => (
               <button type="button" className="workspace-item" key={workspace.id} onClick={() => workspace.id !== workspaces.data?.active_id && switchWorkspace.mutate(workspace.id)}>
-                <span><strong>{workspace.name}</strong><small>{workspace.path}</small></span>{workspace.id === workspaces.data?.active_id && <Check size={14} />}
+                <span><strong>{localizeApiMessage(workspace.name, locale)}</strong><small>{workspace.path}</small></span>{workspace.id === workspaces.data?.active_id && <Check size={14} />}
               </button>
             ))}
           </div>

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, LocalizedError, localizeApiErrorMessage, toDisplayError } from "./api-error";
+import { ApiError, LocalizedError, localizeApiErrorMessage, localizeApiMessage, toDisplayError } from "./api-error";
 import { LOCALE_STORAGE_KEY } from "../features/i18n/locale";
 
 describe("ApiError", () => {
@@ -15,6 +15,32 @@ describe("ApiError", () => {
   it("本地化未取消提问时缺少答案的错误", () => {
     expect(localizeApiErrorMessage("answers are required unless cancelled", "zh-CN"))
       .toBe("未取消提问时必须提供答案");
+  });
+
+  it("本地化 Git 操作成功消息", () => {
+    expect(localizeApiMessage("repository initialized", "zh-CN")).toBe("仓库已初始化");
+    expect(localizeApiMessage("repository initialized", "en-US")).toBe("repository initialized");
+  });
+
+  it("本地化 Git 工作区固定错误", () => {
+    expect(localizeApiMessage("current directory is not a Git repository", "zh-CN"))
+      .toBe("当前目录不是 Git 仓库");
+    expect(localizeApiMessage("failed to read .gitignore: permission denied", "zh-CN"))
+      .toBe("读取 .gitignore 失败：permission denied");
+  });
+
+  it("本地化其他 Web API 固定消息", () => {
+    expect(localizeApiMessage("Gateway sessions", "zh-CN")).toBe("网关会话");
+    expect(localizeApiMessage("model endpoint returned no result", "zh-CN"))
+      .toBe("模型接口未返回结果");
+    expect(localizeApiMessage("verification code rejected; enter it again", "zh-CN"))
+      .toBe("验证码被拒绝，请重新输入");
+    expect(localizeApiMessage("unknown login status: blocked", "zh-CN"))
+      .toBe("未知登录状态：blocked");
+    expect(localizeApiMessage(
+      "conversation has been compacted multiple times; start a focused session if details become distorted",
+      "zh-CN"
+    )).toBe("当前会话已经多次压缩；如果细节开始失真，请新建聚焦会话继续");
   });
 
   it("读取 message 时采用最新界面语言", () => {

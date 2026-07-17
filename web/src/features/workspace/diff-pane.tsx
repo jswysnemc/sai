@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
-import { ApiError, LocalizedError, toDisplayError } from "../../api/api-error";
+import { ApiError, LocalizedError, localizeApiMessage, toDisplayError } from "../../api/api-error";
 import type { GitBranch as GitBranchInfo, GitCommitSummary, GitStatusEntry } from "../../api/contracts";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { DiffView } from "../chat/tool-renderers/diff-view";
@@ -535,7 +535,7 @@ export function DiffPane() {
 
       {(error || notice || status.error) && (
         <div className={error || status.error ? "pane-error" : "pane-notice"}>
-          {error?.message || status.error?.message || notice}
+          {error?.message || status.error?.message || localizeApiMessage(notice, locale)}
         </div>
       )}
     </section>

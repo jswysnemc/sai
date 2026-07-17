@@ -103,11 +103,10 @@ async fn usage(
             compacted_turns: snapshot.checkpoint_covered_turns,
             latest_checkpoint_at: snapshot.latest_checkpoint_at,
             latest_checkpoint_reason: snapshot.latest_checkpoint_reason,
-            compaction_warning: snapshot
-                .projection_warnings
-                .iter()
-                .find(|warning| warning.contains("多次压缩"))
-                .cloned(),
+            compaction_warning: (snapshot.checkpoint_count >= 2).then(|| {
+                    "conversation has been compacted multiple times; start a focused session if details become distorted"
+                        .to_string()
+                }),
         },
         process: ProcessUsageResponse {
             pid: process.pid,

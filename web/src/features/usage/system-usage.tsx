@@ -3,6 +3,7 @@ import { Activity, Archive, Cpu, Gauge, HardDrive, TerminalSquare } from "lucide
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../api/client";
+import { localizeApiMessage } from "../../api/api-error";
 import type { RunModelSelection } from "../../api/contracts";
 import { useAnchoredPopover } from "../../shared/ui/popover/use-anchored-popover";
 import "./system-usage.css";
@@ -70,7 +71,7 @@ export function SystemUsage({ selection, onCompact, compactDisabled }: { selecti
                   </button>
                 </div>
                 {compact.error && <p className="usage-error">{compact.error.message}</p>}
-                {usage.data.session.compaction_warning && <p className="context-compaction-result">{usage.data.session.compaction_warning}</p>}
+                {usage.data.session.compaction_warning && <p className="context-compaction-result">{localizeApiMessage(usage.data.session.compaction_warning, locale)}</p>}
               </section>
               <div className="usage-metric-grid">
                 <UsageMetric icon={<Activity size={14} />} label={t("Total tokens", "累计 Token")} value={formatTokenCount(usage.data.session.total_tokens)} detail={t(`${usage.data.session.requests} requests`, `${usage.data.session.requests} 次请求`)} />

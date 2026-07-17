@@ -169,7 +169,7 @@ impl WeixinLoginManager {
         let session = sessions.get_mut(session_id)?;
         session.verify_code = Some(verify_code.trim().to_string());
         session.phase = WeixinLoginPhase::Waiting;
-        session.message = Some("验证码已提交，正在确认".to_string());
+        session.message = Some("verification code submitted; awaiting confirmation".to_string());
         Some(snapshot_from(session_id, session))
     }
 
@@ -249,7 +249,7 @@ impl WeixinLoginManager {
             "wait" => false,
             "scaned" => {
                 session.phase = WeixinLoginPhase::Scanned;
-                session.message = Some("已扫码，等待手机确认".to_string());
+                session.message = Some("QR code scanned; confirm on your phone".to_string());
                 false
             }
             "scaned_but_redirect" => {
@@ -266,25 +266,25 @@ impl WeixinLoginManager {
                 // 已提交验证码时保持等待，避免覆盖用户输入
                 if session.verify_code.is_none() {
                     session.phase = WeixinLoginPhase::NeedVerifyCode;
-                    session.message = Some("需要输入验证码".to_string());
+                    session.message = Some("verification code required".to_string());
                 }
                 false
             }
             "verify_code_blocked" => {
                 session.verify_code = None;
                 session.phase = WeixinLoginPhase::NeedVerifyCode;
-                session.message = Some("验证码被拒绝，请重新输入".to_string());
+                session.message = Some("verification code rejected; enter it again".to_string());
                 false
             }
             "expired" => {
                 session.phase = WeixinLoginPhase::Expired;
-                session.message = Some("二维码已过期，请重新获取".to_string());
+                session.message = Some("QR code expired; request a new one".to_string());
                 true
             }
             "binded_redirect" => {
                 session.phase = WeixinLoginPhase::Failed;
                 session.message = Some(
-                    "该微信账号已绑定，但未返回新凭证；如本机已保存账号可直接启动服务".to_string(),
+                    "this Weixin account is already linked, but no new credentials were returned; start the service directly if the account is saved locally".to_string(),
                 );
                 true
             }
@@ -294,7 +294,7 @@ impl WeixinLoginManager {
             }
             other => {
                 session.phase = WeixinLoginPhase::Failed;
-                session.message = Some(format!("未知登录状态: {other}"));
+                session.message = Some(format!("unknown login status: {other}"));
                 true
             }
         }
@@ -317,7 +317,7 @@ impl WeixinLoginManager {
         let account_id = status.ilink_bot_id.filter(|value| !value.trim().is_empty());
         let (Some(token), Some(account_id)) = (token, account_id) else {
             session.phase = WeixinLoginPhase::Failed;
-            session.message = Some("登录成功但响应缺少凭证".to_string());
+            session.message = Some("login succeeded but credentials are missing".to_string());
             return;
         };
         let saved = SavedWeixinAccount {
@@ -333,11 +333,11 @@ impl WeixinLoginManager {
         };
         if let Err(err) = self.persist_account(&saved) {
             session.phase = WeixinLoginPhase::Failed;
-            session.message = Some(format!("凭证保存失败: {err:#}"));
+            session.message = Some(format!("failed to save credentials: {err:#}"));
             return;
         }
         session.phase = WeixinLoginPhase::Confirmed;
-        session.message = Some("登录成功".to_string());
+        session.message = Some("login successful".to_string());
         session.account = Some(WeixinLoginAccount {
             account_id: saved.account_id.clone(),
             base_url: saved.base_url.clone(),
@@ -371,7 +371,7 @@ impl WeixinLoginManager {
         if let Some(session) = sessions.get_mut(session_id) {
             if !session.phase.is_terminal() {
                 session.phase = WeixinLoginPhase::Expired;
-                session.message = Some("登录超时，请重新获取二维码".to_string());
+                session.message = Some("login timed out; request a new QR code".to_string());
             }
         }
     }

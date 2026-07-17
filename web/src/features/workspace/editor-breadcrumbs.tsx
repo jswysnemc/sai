@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
+import { localizeApiMessage } from "../../api/api-error";
 import type { FileNode } from "../../api/contracts";
 import { useOutsidePointerDown } from "../../shared/hooks/use-outside-pointer-down";
 import { FileTypeIcon } from "../../shared/ui/file-icon";
@@ -22,13 +23,13 @@ type EditorBreadcrumbsProps = {
  * @returns 编辑器路径导航
  */
 export function EditorBreadcrumbs({ path, onSelectFile }: EditorBreadcrumbsProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const rootRef = useRef<HTMLElement>(null);
   const [openPath, setOpenPath] = useState<string | null>(null);
   const tree = useQuery({ queryKey: ["file-tree"], queryFn: () => api.workspace.tree() });
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
   const workspace = workspaces.data?.workspaces.find((item) => item.id === workspaces.data.active_id);
-  const workspaceName = workspace?.name ?? t("Workspace", "工作区");
+  const workspaceName = workspace ? localizeApiMessage(workspace.name, locale) : t("Workspace", "工作区");
   const nodes = tree.data ?? [];
   const relativePath = useMemo(() => workspaceRelativePath(path, workspace?.path ?? ""), [path, workspace?.path]);
   const parts = useMemo(() => buildBreadcrumbParts(relativePath, nodes, workspaceName), [relativePath, nodes, workspaceName]);

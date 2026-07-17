@@ -86,10 +86,10 @@ pub(super) async fn working_tree_diff(
 pub(super) async fn pull_repo(repo: &Path, state: &GitRepositoryState) -> Result<GitOutput> {
     if state.upstream.trim().is_empty() {
         if state.head.trim().is_empty() || state.head == "(detached)" {
-            Err(anyhow::anyhow!("当前不在可拉取的本地分支上。"))
+            Err(anyhow::anyhow!("not on a local branch that can be pulled"))
         } else if !git_origin_exists(repo).await {
             Err(anyhow::anyhow!(
-                "当前分支没有 upstream，且找不到 origin remote。"
+                "current branch has no upstream and origin remote is unavailable"
             ))
         } else {
             git_success(repo, &["pull", "--ff-only", "origin", state.head.as_str()]).await
@@ -102,10 +102,10 @@ pub(super) async fn pull_repo(repo: &Path, state: &GitRepositoryState) -> Result
 pub(super) async fn push_repo(repo: &Path, state: &GitRepositoryState) -> Result<GitOutput> {
     if state.upstream.trim().is_empty() {
         if state.head.trim().is_empty() || state.head == "(detached)" {
-            Err(anyhow::anyhow!("当前不在可推送的本地分支上。"))
+            Err(anyhow::anyhow!("not on a local branch that can be pushed"))
         } else if !git_origin_exists(repo).await {
             Err(anyhow::anyhow!(
-                "当前分支没有 upstream，且找不到 origin remote。"
+                "current branch has no upstream and origin remote is unavailable"
             ))
         } else {
             git_success(repo, &["push", "-u", "origin", state.head.as_str()]).await
@@ -141,7 +141,7 @@ pub(super) async fn add_to_gitignore(repo: &Path, path: Option<&str>) -> Result<
     let mut content = match tokio::fs::read_to_string(&gitignore).await {
         Ok(content) => content,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(error) => bail!("读取 .gitignore 失败：{error}"),
+        Err(error) => bail!("failed to read .gitignore: {error}"),
     };
     let already = content.lines().any(|line| {
         let line = line.trim();
@@ -188,7 +188,7 @@ pub(super) async fn ensure_ready(root: &Path) -> Result<GitRepositoryState> {
     if state.status != "ready" {
         bail!(state
             .error
-            .unwrap_or_else(|| "当前目录不是 Git 仓库。".to_string()));
+            .unwrap_or_else(|| "current directory is not a Git repository".to_string()));
     }
     Ok(state)
 }

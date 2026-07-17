@@ -79,7 +79,7 @@ pub(crate) fn fetch_models(paths: &SaiPaths, provider: &ProviderConfig) -> Resul
             }
         }
     }
-    bail!(last_error.unwrap_or_else(|| "模型接口未返回结果".to_string()))
+    bail!(last_error.unwrap_or_else(|| "model endpoint returned no result".to_string()))
 }
 
 #[derive(Clone, Debug, Serialize)]

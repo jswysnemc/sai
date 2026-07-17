@@ -3,7 +3,7 @@ import { Cable, CalendarClock, CheckSquare2, ChevronDown, ChevronRight, FolderGi
 import { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
-import { toDisplayError } from "../../api/api-error";
+import { localizeApiMessage, toDisplayError } from "../../api/api-error";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { SaiLogo } from "../../shared/ui/sai-logo";
 import { switchWithTerminalConfirm } from "../workspaces/workspace-switcher";
@@ -237,6 +237,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
   const visibleWorkspaces = (tree.data ?? []).filter((workspace) => {
     if (!query) return true;
     if (workspace.workspace_name.toLowerCase().includes(query)) return true;
+    if (localizeApiMessage(workspace.workspace_name, locale).toLowerCase().includes(query)) return true;
     return workspace.sessions.some(
       (session) => session.title.toLowerCase().includes(query) || session.id.toLowerCase().includes(query)
     );
@@ -324,6 +325,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
           <div className="sidebar-state">{t(`No sessions match “${sessionSearch.trim()}”`, `没有匹配“${sessionSearch.trim()}”的会话`)}</div>
         )}
         {visibleWorkspaces.map((workspace) => {
+          const workspaceName = localizeApiMessage(workspace.workspace_name, locale);
           const sessions = query
             ? workspace.sessions.filter((session) =>
                 session.title.toLowerCase().includes(query)
@@ -339,22 +341,22 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
               <button type="button" className="workspace-tree-main" onClick={() => !query && toggleWorkspace(workspace.workspace_id)} aria-expanded={workspaceExpanded}>
                 {workspaceExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 <FolderGit2 size={14} />
-                <span><strong>{workspace.workspace_name}</strong><small>{t(`${sessions.length} sessions`, `${sessions.length} 个会话`)}</small></span>
+                <span><strong>{workspaceName}</strong><small>{t(`${sessions.length} sessions`, `${sessions.length} 个会话`)}</small></span>
                 {workspaceRunning && <ActiveAgentIndicator />}
               </button>
               <span className="workspace-tree-actions">
-                {!selecting && <button type="button" className="workspace-create-session" onClick={() => create.mutate(workspace.active ? undefined : workspace.workspace_id)} disabled={create.isPending} aria-label={t(`Create a session in ${workspace.workspace_name}`, `在 ${workspace.workspace_name} 新建会话`)} title={t("New session", "新建会话")}><Plus size={14} /></button>}
+                {!selecting && <button type="button" className="workspace-create-session" onClick={() => create.mutate(workspace.active ? undefined : workspace.workspace_id)} disabled={create.isPending} aria-label={t(`Create a session in ${workspaceName}`, `在 ${workspaceName} 新建会话`)} title={t("New session", "新建会话")}><Plus size={14} /></button>}
                 {workspace.active && selecting && <span className="workspace-selection-count">{t(`${selected.size} selected`, `已选择 ${selected.size} 项`)}</span>}
                 {workspace.active && selecting && <button type="button" className={confirming ? "danger confirming" : "danger"} onClick={requestBulkDelete} disabled={selected.size === 0 || removeMany.isPending} aria-label={confirming ? t(`Confirm deletion of ${selected.size} items`, `确认删除 ${selected.size} 项`) : t("Delete selected sessions", "删除所选会话")} title={confirming ? t(`Confirm deletion of ${selected.size} items`, `确认删除 ${selected.size} 项`) : t("Delete selected sessions", "删除所选会话")}><Trash2 size={14} /></button>}
                 {workspace.active && selecting && <button type="button" onClick={closeSelection} aria-label={t("Exit selection", "退出选择")} title={t("Exit selection", "退出选择")}><X size={14} /></button>}
                 {!(workspace.active && selecting) && (canSelect || canClose) && (
-                  <button type="button" onClick={() => { setMenu(null); setWorkspaceMenu((value) => value === workspace.workspace_id ? null : workspace.workspace_id); }} aria-label={t(`Manage workspace ${workspace.workspace_name}`, `管理工作区 ${workspace.workspace_name}`)} title={t("Manage workspace", "管理工作区")}><MoreHorizontal size={14} /></button>
+                  <button type="button" onClick={() => { setMenu(null); setWorkspaceMenu((value) => value === workspace.workspace_id ? null : workspace.workspace_id); }} aria-label={t(`Manage workspace ${workspaceName}`, `管理工作区 ${workspaceName}`)} title={t("Manage workspace", "管理工作区")}><MoreHorizontal size={14} /></button>
                 )}
               </span>
               {workspaceMenu === workspace.workspace_id && (
                 <div className="session-menu workspace-menu-popover" ref={menuRef}>
                   {canSelect && <button type="button" onClick={() => { setWorkspaceMenu(null); selectWorkspaceSessions(); }}><CheckSquare2 size={14} /> {t("Select sessions", "多选会话")}</button>}
-                  {canClose && <button type="button" className="danger" onClick={() => { setWorkspaceMenu(null); void closeWorkspace(workspace.workspace_id, workspace.workspace_name, workspace.active); }}><X size={14} /> {t("Close workspace", "关闭工作区")}</button>}
+                  {canClose && <button type="button" className="danger" onClick={() => { setWorkspaceMenu(null); void closeWorkspace(workspace.workspace_id, workspaceName, workspace.active); }}><X size={14} /> {t("Close workspace", "关闭工作区")}</button>}
                 </div>
               )}
             </div>

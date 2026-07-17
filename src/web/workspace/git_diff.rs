@@ -422,7 +422,7 @@ pub(crate) async fn git_diff(
             .unwrap_or_default()
     };
     if base_ref.is_empty() {
-        bail!("找不到可用于审查的基线分支。请先设置 upstream 或 fetch 主分支。");
+        bail!("unable to find a base branch for review; set an upstream or fetch the main branch first");
     }
     let mut args = vec![
         "diff".to_string(),
@@ -530,7 +530,7 @@ pub(crate) async fn git_op(
             .filter(|value| !value.is_empty())
             .unwrap_or("main");
         let result = run_git_output(root, &["init", "-b", branch]).await;
-        return operation_response(root, result, "仓库已初始化。").await;
+        return operation_response(root, result, "repository initialized").await;
     }
 
     let state = ensure_ready(root).await?;
@@ -600,13 +600,13 @@ pub(crate) async fn git_op(
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| anyhow::anyhow!("commit message cannot be empty"))?;
             if state.dirty_counts.staged == 0 {
-                bail!("没有已暂存的改动可提交。");
+                bail!("no staged changes to commit");
             }
             git_success(repo, &["commit", "-m", message]).await
         }
         "fetch" => {
             if git_remote_names(repo).await?.is_empty() {
-                Err(anyhow::anyhow!("当前仓库还没有设置远端仓库。"))
+                Err(anyhow::anyhow!("repository has no remote configured"))
             } else {
                 git_success(repo, &["fetch", "--prune"]).await
             }
@@ -617,7 +617,7 @@ pub(crate) async fn git_op(
             let remote_url = remote_url
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| anyhow::anyhow!("远端仓库地址不能为空。"))?;
+                .ok_or_else(|| anyhow::anyhow!("remote URL cannot be empty"))?;
             if git_origin_exists(repo).await {
                 git_success(repo, &["remote", "set-url", "origin", remote_url]).await
             } else {
@@ -646,20 +646,20 @@ pub(crate) async fn git_op(
         _ => bail!("unsupported git action: {action}"),
     };
     let message = match action {
-        "stage" | "stage_all" => "文件已暂存。",
-        "unstage" | "unstage_all" => "文件已取消暂存。",
-        "discard" | "discard_all" => "改动已放弃。",
-        "commit" => "提交已创建。",
-        "fetch" => "Fetch 完成。",
-        "pull" => "Pull 完成。",
-        "push" => "Push 完成。",
-        "set_remote" => "远端仓库已保存。",
-        "switch_branch" => "分支已切换。",
-        "create_branch" => "分支已创建。",
-        "add_to_gitignore" => "路径已添加到 .gitignore。",
-        "stash_push" => "改动已贮藏。",
-        "stash_pop" => "贮藏已弹出。",
-        _ => "操作完成。",
+        "stage" | "stage_all" => "files staged",
+        "unstage" | "unstage_all" => "files unstaged",
+        "discard" | "discard_all" => "changes discarded",
+        "commit" => "commit created",
+        "fetch" => "fetch completed",
+        "pull" => "pull completed",
+        "push" => "push completed",
+        "set_remote" => "remote repository saved",
+        "switch_branch" => "branch switched",
+        "create_branch" => "branch created",
+        "add_to_gitignore" => "path added to .gitignore",
+        "stash_push" => "changes stashed",
+        "stash_pop" => "stash popped",
+        _ => "operation completed",
     };
     operation_response(root, result, message).await
 }

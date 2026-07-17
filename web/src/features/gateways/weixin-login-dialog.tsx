@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { api } from "../../api/client";
-import { toDisplayError } from "../../api/api-error";
+import { localizeApiMessage, toDisplayError } from "../../api/api-error";
 import type { WeixinLoginAccount, WeixinLoginSnapshot } from "../../api/contracts";
+import type { Locale } from "../i18n/locale";
 import "./weixin-login-dialog.css";
 import { useI18n } from "../i18n/use-i18n";
 
@@ -15,10 +16,21 @@ type WeixinLoginDialogProps = {
   onConfirmed: (account: WeixinLoginAccount) => void;
 };
 
-/** 将登录阶段映射为界面提示文字。 */
-function phaseLabel(snapshot: WeixinLoginSnapshot | null, t: (en: string, zh: string) => string): string {
+/**
+ * 将登录阶段和服务端消息映射为当前语言的界面提示文字。
+ *
+ * @param snapshot 微信登录快照
+ * @param t 双语文本选择方法
+ * @param locale 当前界面语言
+ * @returns 本地化登录提示
+ */
+function phaseLabel(
+  snapshot: WeixinLoginSnapshot | null,
+  t: (en: string, zh: string) => string,
+  locale: Locale
+): string {
   if (!snapshot) return t("Fetching QR code", "正在获取二维码");
-  if (snapshot.message) return snapshot.message;
+  if (snapshot.message) return localizeApiMessage(snapshot.message, locale);
   switch (snapshot.phase) {
     case "waiting":
       return t("Scan the QR code with Weixin on your phone", "请使用手机微信扫描二维码");
@@ -44,7 +56,7 @@ function phaseLabel(snapshot: WeixinLoginSnapshot | null, t: (en: string, zh: st
  * @returns 微信扫码登录弹窗
  */
 export function WeixinLoginDialog({ open, baseUrl, botType, onClose, onConfirmed }: WeixinLoginDialogProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [snapshot, setSnapshot] = useState<WeixinLoginSnapshot | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [verifyCode, setVerifyCode] = useState("");
@@ -133,7 +145,7 @@ export function WeixinLoginDialog({ open, baseUrl, botType, onClose, onConfirmed
             <div className="weixin-login-qr-placeholder"><LoaderCircle size={22} className="spin" /></div>
           )}
         </div>
-        <p className={confirmed ? "weixin-login-status confirmed" : "weixin-login-status"}>{phaseLabel(snapshot, t)}</p>
+        <p className={confirmed ? "weixin-login-status confirmed" : "weixin-login-status"}>{phaseLabel(snapshot, t, locale)}</p>
         {needVerify && (
           <div className="weixin-login-verify">
             <input
