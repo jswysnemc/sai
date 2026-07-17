@@ -277,6 +277,9 @@ fn localize_ask_command(command: clap::Command) -> clap::Command {
                 "临时覆盖模型思考等级：auto、none、low、medium、high、xhigh 或 max",
             ))
         })
+        .mut_arg("web_search", |arg| {
+            arg.help(t("Enable web search for this message", "为本次消息启用网页搜索"))
+        })
         .mut_arg("message", |arg| {
             arg.help(t("Message to send", "要发送的消息"))
         })
