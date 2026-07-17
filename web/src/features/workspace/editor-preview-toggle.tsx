@@ -1,4 +1,5 @@
 import { Eye, Pencil } from "lucide-react";
+import { useI18n } from "../i18n/use-i18n";
 
 type EditorPreviewToggleProps = {
   preview: boolean;
@@ -12,15 +13,16 @@ type EditorPreviewToggleProps = {
  * @returns 编辑器头部模式切换控件
  */
 export function EditorPreviewToggle({ preview, onChange }: EditorPreviewToggleProps) {
+  const { t } = useI18n();
   return (
-    <div className="editor-preview-toggle" role="group" aria-label="Markdown 显示模式">
+    <div className="editor-preview-toggle" role="group" aria-label={t("Markdown display mode", "Markdown 显示模式")}>
       <button type="button" className={!preview ? "active" : ""} onClick={() => onChange(false)} aria-pressed={!preview}>
         <Pencil size={13} />
-        编辑
+        {t("Edit", "编辑")}
       </button>
       <button type="button" className={preview ? "active" : ""} onClick={() => onChange(true)} aria-pressed={preview}>
         <Eye size={13} />
-        预览
+        {t("Preview", "预览")}
       </button>
     </div>
   );

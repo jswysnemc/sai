@@ -4,6 +4,7 @@ import type { AgentChoice } from "../agents/agent-types";
 import { AgentConfigDialog } from "../agents/agent-config-dialog/agent-config-dialog";
 import { Select } from "../../shared/ui/select/select";
 import "./agent-selector.css";
+import { useI18n } from "../i18n/use-i18n";
 
 type AgentSelectorProps = {
   choices: AgentChoice[];
@@ -20,6 +21,7 @@ type AgentSelectorProps = {
  * @returns Agent 单选控件与配置按钮
  */
 export function AgentSelector({ choices, selection, loading, disabled, onSelect }: AgentSelectorProps) {
+  const { t } = useI18n();
   const [configOpen, setConfigOpen] = useState(false);
   return (
     <div className="agent-selector">
@@ -28,7 +30,7 @@ export function AgentSelector({ choices, selection, loading, disabled, onSelect 
         value={selection?.id ?? ""}
         options={choices.map((choice) => ({ value: choice.id, label: choice.name }))}
         disabled={disabled || loading || choices.length === 0}
-        ariaLabel="选择 Agent"
+        ariaLabel={t("Choose Agent", "选择 Agent")}
         menuPreferredWidth={220}
         menuMinimumWidth={180}
         menuAlign="right"
@@ -39,8 +41,8 @@ export function AgentSelector({ choices, selection, loading, disabled, onSelect 
         type="button"
         className="agent-selector-config"
         onClick={() => setConfigOpen(true)}
-        title="Agent 配置"
-        aria-label="打开 Agent 配置"
+        title={t("Agent settings", "Agent 配置")}
+        aria-label={t("Open Agent settings", "打开 Agent 配置")}
       >
         <Settings2 size={13} />
       </button>

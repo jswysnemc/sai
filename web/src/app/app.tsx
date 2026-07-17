@@ -6,6 +6,7 @@ import { SettingsPage } from "../features/settings/settings-page";
 import { CodingPage } from "../features/workspace/coding-page";
 import { ChatAgentProvider } from "../features/agents/chat-agent-context";
 import { DialogProvider } from "../shared/ui/dialog/dialog-provider";
+import { I18nProvider } from "../features/i18n/i18n-context";
 
 /**
  * 组合应用级上下文和页面路由。
@@ -14,18 +15,20 @@ import { DialogProvider } from "../shared/ui/dialog/dialog-provider";
  */
 export function App() {
   return (
-    <DialogProvider>
-      <ChatAgentProvider>
-        <Routes>
-          <Route element={<AppShell />}>
-            <Route index element={<CodingPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="gateways" element={<GatewaysPage />} />
-            <Route path="cron-jobs" element={<CronJobsPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        </Routes>
-      </ChatAgentProvider>
-    </DialogProvider>
+    <I18nProvider>
+      <DialogProvider>
+        <ChatAgentProvider>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route index element={<CodingPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="gateways" element={<GatewaysPage />} />
+              <Route path="cron-jobs" element={<CronJobsPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+        </ChatAgentProvider>
+      </DialogProvider>
+    </I18nProvider>
   );
 }

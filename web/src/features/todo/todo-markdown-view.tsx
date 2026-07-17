@@ -7,6 +7,7 @@ import type { TodoStatus } from "../../api/contracts";
 import { useAnchoredPopover } from "../../shared/ui/popover/use-anchored-popover";
 import { summarizeTodos } from "./todo-summary";
 import "./todo-markdown.css";
+import { useI18n } from "../i18n/use-i18n";
 
 const statusIcons = {
   pending: Circle,
@@ -25,6 +26,7 @@ const statusIcons = {
  * @returns TODO 进度触发器与清单
  */
 export function TodoMarkdownView({ sessionId, compact = false }: { sessionId?: string; compact?: boolean }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -71,7 +73,7 @@ export function TodoMarkdownView({ sessionId, compact = false }: { sessionId?: s
       className={compact ? "todo-markdown-list todo-markdown-popover" : "todo-markdown-list"}
       style={compact ? menuStyle : undefined}
       role="listbox"
-      aria-label="计划清单"
+      aria-label={t("Plan checklist", "计划清单")}
     >
       {items.map((item) => {
         const Icon = statusIcons[item.status];
@@ -100,7 +102,7 @@ export function TodoMarkdownView({ sessionId, compact = false }: { sessionId?: s
         </span>
         <span className="todo-trigger-body">
           <span className="todo-trigger-line">
-            <strong>{summary.activeText || "计划"}</strong>
+            <strong>{summary.activeText || t("Plan", "计划")}</strong>
             <span className="todo-trigger-count">
               {summary.completed}/{summary.total}
             </span>

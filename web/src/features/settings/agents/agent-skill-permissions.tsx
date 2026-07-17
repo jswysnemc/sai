@@ -2,6 +2,7 @@ import { CheckCheck, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { Select } from "../../../shared/ui/select/select";
+import { useI18n } from "../../i18n/use-i18n";
 import type { AgentSkillOption } from "./agents-types";
 import "./agent-permissions.css";
 
@@ -18,19 +19,6 @@ type AgentSkillPermissionsProps = {
   /** Skill 权限变化回调 */
   onChange: (fullNames: string[], namedNames: string[]) => void;
 };
-
-const STATUS_FILTER_OPTIONS = [
-  { value: "all", label: "全部状态" },
-  { value: "full", label: "完整启用" },
-  { value: "named", label: "仅名称" },
-  { value: "off", label: "已关闭" }
-] satisfies Array<{ value: SkillStatusFilter; label: string }>;
-
-const PERMISSION_OPTIONS = [
-  { value: "full", label: "完整启用", description: "暴露名称与完整说明" },
-  { value: "named", label: "仅名称", description: "仅暴露 Skill 名称" },
-  { value: "off", label: "关闭", description: "不向 Agent 暴露" }
-] satisfies Array<{ value: SkillPermission; label: string; description: string }>;
 
 /**
  * 更新单个 Skill 的三态权限，并保证两个输出数组互斥。
@@ -61,17 +49,29 @@ export function updateSkillPermission(
  * @returns Skill 权限面板
  */
 export function AgentSkillPermissions({ skills, fullNames, namedNames, onChange }: AgentSkillPermissionsProps) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<SkillStatusFilter>("all");
+  const statusFilterOptions = [
+    { value: "all", label: t("All statuses", "全部状态") },
+    { value: "full", label: t("Fully enabled", "完整启用") },
+    { value: "named", label: t("Name only", "仅名称") },
+    { value: "off", label: t("Disabled", "已关闭") }
+  ] satisfies Array<{ value: SkillStatusFilter; label: string }>;
+  const permissionOptions = [
+    { value: "full", label: t("Fully enabled", "完整启用"), description: t("Expose the name and full description", "暴露名称与完整说明") },
+    { value: "named", label: t("Name only", "仅名称"), description: t("Expose only the Skill name", "仅暴露 Skill 名称") },
+    { value: "off", label: t("Disabled", "关闭"), description: t("Do not expose it to the Agent", "不向 Agent 暴露") }
+  ] satisfies Array<{ value: SkillPermission; label: string; description: string }>;
 
   /** 合并可用列表与配置中的未知 Skill，防止历史配置被静默隐藏。 */
   const allSkills = useMemo(() => {
     const known = new Map(skills.map((skill) => [skill.name, skill]));
     for (const name of [...fullNames, ...namedNames]) {
-      if (!known.has(name)) known.set(name, { name, description: "当前环境未返回该 Skill 的说明" });
+      if (!known.has(name)) known.set(name, { name, description: t("The current environment did not return a description for this Skill", "当前环境未返回该 Skill 的说明") });
     }
     return [...known.values()];
-  }, [fullNames, namedNames, skills]);
+  }, [fullNames, namedNames, skills, t]);
 
   /**
    * 获取指定 Skill 当前的权限状态。
@@ -103,37 +103,37 @@ export function AgentSkillPermissions({ skills, fullNames, namedNames, onChange 
           <input
             type="search"
             value={query}
-            placeholder="搜索 Skill"
-            aria-label="搜索 Skill"
+            placeholder={t("Search Skills", "搜索 Skill")}
+            aria-label={t("Search Skills", "搜索 Skill")}
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
         <div className="agent-skill-filter">
           <Select
             value={statusFilter}
-            options={STATUS_FILTER_OPTIONS}
-            ariaLabel="筛选 Skill 状态"
+            options={statusFilterOptions}
+            ariaLabel={t("Filter Skill status", "筛选 Skill 状态")}
             menuMinimumWidth={144}
             onChange={setStatusFilter}
           />
         </div>
-        <span className="agent-permissions-summary">已启用 {enabledCount}/{allSkills.length}</span>
+        <span className="agent-permissions-summary">{t(`Enabled ${enabledCount}/${allSkills.length}`, `已启用 ${enabledCount}/${allSkills.length}`)}</span>
         <div className="agent-permissions-actions">
           <Button onClick={() => onChange(allSkills.map((skill) => skill.name), [])}>
             <CheckCheck size={14} aria-hidden="true" />
-            全部启用
+            {t("Enable all", "全部启用")}
           </Button>
           <Button onClick={() => onChange([], [])} disabled={enabledCount === 0}>
             <X size={14} aria-hidden="true" />
-            全部关闭
+            {t("Disable all", "全部关闭")}
           </Button>
         </div>
       </div>
 
       {allSkills.length === 0 ? (
-        <p className="agent-permissions-empty">暂无可用 Skill。</p>
+        <p className="agent-permissions-empty">{t("No Skills available.", "暂无可用 Skill。")}</p>
       ) : visibleSkills.length === 0 ? (
-        <p className="agent-permissions-empty">没有匹配的 Skill。</p>
+        <p className="agent-permissions-empty">{t("No matching Skills.", "没有匹配的 Skill。")}</p>
       ) : (
         <div className="agent-skill-permission-list">
           {visibleSkills.map((skill) => {
@@ -144,7 +144,7 @@ export function AgentSkillPermissions({ skills, fullNames, namedNames, onChange 
                   <div className="agent-skill-permission-name">
                     <strong>{skill.name}</strong>
                     <em data-permission={permission}>
-                      {permission === "full" ? "完整" : permission === "named" ? "名称" : "关闭"}
+                      {permission === "full" ? t("Full", "完整") : permission === "named" ? t("Name", "名称") : t("Off", "关闭")}
                     </em>
                   </div>
                   {skill.description && <span>{skill.description}</span>}
@@ -152,8 +152,8 @@ export function AgentSkillPermissions({ skills, fullNames, namedNames, onChange 
                 <div className="agent-skill-permission-select">
                   <Select
                     value={permission}
-                    options={PERMISSION_OPTIONS}
-                    ariaLabel={`设置 ${skill.name} 的权限`}
+                    options={permissionOptions}
+                    ariaLabel={t(`Set permissions for ${skill.name}`, `设置 ${skill.name} 的权限`)}
                     menuPreferredWidth={208}
                     menuAlign="right"
                     onChange={(nextPermission) => {

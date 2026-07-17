@@ -8,6 +8,7 @@ import { SubagentStatusBadge } from "./subagent-status-badge";
 import { subagentDuration, subagentTypeLabel } from "./subagent-labels";
 import { subagentMessageParts } from "./subagent-message-parts";
 import { useSubagentStream } from "./use-subagent-stream";
+import { useI18n } from "../i18n/use-i18n";
 
 type SubagentDetailViewProps = {
   subagent: Subagent;
@@ -25,6 +26,7 @@ type SubagentDetailViewProps = {
  * @returns 子智能体详情视图
  */
 export function SubagentDetailView({ subagent, onBack, onCancel }: SubagentDetailViewProps) {
+  const { locale, t } = useI18n();
   const stream = useSubagentStream(subagent);
   const current = stream.snapshot;
   const running = current.status === "running";
@@ -47,23 +49,23 @@ export function SubagentDetailView({ subagent, onBack, onCancel }: SubagentDetai
   return (
     <section className="subagent-detail-view">
       <header className="subagent-detail-head">
-        <button type="button" className="subagent-detail-back" onClick={onBack}><ArrowLeft size={14} />概览</button>
+        <button type="button" className="subagent-detail-back" onClick={onBack}><ArrowLeft size={14} />{t("Overview", "概览")}</button>
         <SubagentStatusBadge status={current.status} />
         {running && (
-          <button type="button" className="subagent-detail-cancel" onClick={() => onCancel(current.id)}><Ban size={13} />取消</button>
+          <button type="button" className="subagent-detail-cancel" onClick={() => onCancel(current.id)}><Ban size={13} />{t("Cancel", "取消")}</button>
         )}
       </header>
       <div className="subagent-detail-scroll" ref={scrollRef}>
         <h2 className="subagent-detail-title">{current.description}</h2>
         <dl className="subagent-detail-meta">
-          <div><dt>类型</dt><dd>{subagentTypeLabel(current.subagent_type)}</dd></div>
-          <div><dt>用时</dt><dd>{subagentDuration(current.started_at, current.updated_at)}</dd></div>
-          {current.last_tool && <div><dt>最近工具</dt><dd>{current.last_tool}</dd></div>}
+          <div><dt>{t("Type", "类型")}</dt><dd>{subagentTypeLabel(current.subagent_type, locale)}</dd></div>
+          <div><dt>{t("Duration", "用时")}</dt><dd>{subagentDuration(current.started_at, current.updated_at)}</dd></div>
+          {current.last_tool && <div><dt>{t("Latest tool", "最近工具")}</dt><dd>{current.last_tool}</dd></div>}
         </dl>
         <SubagentStats subagent={current} />
         <SubagentProgress subagent={current} />
         {parts.length > 0 ? <MessageParts parts={parts} live={running} /> : (
-          <p className="subagent-detail-pending">{running ? "子智能体正在运行，执行过程会在此实时显示。" : "没有输出。"}</p>
+          <p className="subagent-detail-pending">{running ? t("The subagent is running. Its progress will appear here in real time.", "子智能体正在运行，执行过程会在此实时显示。") : t("No output.", "没有输出。")}</p>
         )}
       </div>
     </section>

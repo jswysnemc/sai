@@ -1,7 +1,5 @@
 use super::model::{PermissionAuditView, ToolView};
-use crate::render::command_output::{
-    render_command_block_with_action, render_command_result_view,
-};
+use crate::render::command_output::{render_command_block_with_action, render_command_result_view};
 use crate::render::tool_event_line::{tool_event_label, tool_event_text};
 use crate::render::ToolCallDisplayMode;
 use serde_json::Value;
@@ -123,10 +121,7 @@ fn render_permission(permission: Option<&PermissionAuditView>) -> String {
         return String::new();
     };
     match &permission.decision {
-        Some(decision) => format!(
-            "\n{}",
-            crate::render::render_permission_decision(decision)
-        ),
+        Some(decision) => format!("\n{}", crate::render::render_permission_decision(decision)),
         None => format!(
             "\n{}",
             crate::render::render_permission_controls(

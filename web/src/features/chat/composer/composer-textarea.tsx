@@ -18,6 +18,7 @@ import { findSkillMentionTrigger, formatSkillMention } from "./skill-mention-tok
 import { isCursorOnFirstLine, isCursorOnLastLine, navigateInputHistory } from "./input-history";
 import type { InputHistoryState } from "./input-history";
 import { api } from "../../../api/client";
+import { useI18n } from "../../i18n/use-i18n";
 
 type ComposerTextareaProps = {
   value: string;
@@ -71,6 +72,7 @@ function ensureComposerCaretVisible(editor: HTMLElement): void {
  * @returns 聊天文本输入区
  */
 export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTextareaProps>(function ComposerTextarea(props, ref) {
+  const { t } = useI18n();
   const editorRef = useRef<HTMLDivElement>(null);
   const mentionPopoverRef = useRef<HTMLDivElement>(null);
   const skillPopoverRef = useRef<HTMLDivElement>(null);
@@ -367,7 +369,7 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
         contentEditable={!props.disabled}
         suppressContentEditableWarning
         role="textbox"
-        aria-label="消息输入"
+        aria-label={t("Message input", "消息输入")}
         aria-multiline="true"
         aria-disabled={props.disabled}
         data-placeholder={props.placeholder}

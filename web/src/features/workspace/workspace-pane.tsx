@@ -9,6 +9,7 @@ import type { TerminalManager } from "../terminal/use-terminal-manager";
 import { createWorkspacePanelTab, type PaneTab, type WorkspacePanelTab } from "./workspace-tab";
 import { WorkspaceTabBar } from "./workspace-tab-bar";
 import "./workspace-pane.css";
+import { useI18n } from "../i18n/use-i18n";
 
 type WorkspacePaneProps = {
   selectedFile: string | null;
@@ -41,6 +42,7 @@ export function WorkspacePane({
   onCollapse,
   terminalManager
 }: WorkspacePaneProps) {
+  const { locale, t } = useI18n();
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
   // 初始不预开空编辑器；由 `+` 菜单、打开文件或外部入口创建标签。
   const [tabs, setTabs] = useState<WorkspacePanelTab[]>([]);
@@ -68,12 +70,12 @@ export function WorkspacePane({
             : tab
         );
       }
-      const created = createWorkspacePanelTab("files", { path: selectedFile });
+      const created = createWorkspacePanelTab("files", { path: selectedFile }, locale);
       setActiveTabId(created.id);
       return [...current, created];
     });
     onActiveTypeChange("files");
-  }, [onActiveTypeChange, selectedFile]);
+  }, [locale, onActiveTypeChange, selectedFile]);
 
   // 外部入口或重新打开时：已有则激活，没有则新建。
   useEffect(() => {
@@ -87,9 +89,9 @@ export function WorkspacePane({
         if (terminalManager.activeId) {
           const terminal = terminalManager.terminals.find((item) => item.id === terminalManager.activeId);
           const created = createWorkspacePanelTab("terminal", {
-            title: terminal?.title || "终端",
+            title: terminal?.title || t("Terminal", "终端"),
             terminalId: terminalManager.activeId
-          });
+          }, locale);
           setActiveTabId(created.id);
           return [...current, created];
         }
@@ -104,13 +106,13 @@ export function WorkspacePane({
         return current;
       }
       const created = createWorkspacePanelTab(activeType, {
-        title: activeType === "files" ? "编辑器" : undefined,
+        title: panelTitle(activeType, t),
         closable: true
-      });
+      }, locale);
       setActiveTabId(created.id);
       return [...current, created];
     });
-  }, [activeType, terminalManager.activeId, terminalManager.terminals]);
+  }, [activeType, locale, terminalManager.activeId, terminalManager.terminals, t]);
 
   useEffect(() => {
     setTabs((current) =>
@@ -118,17 +120,17 @@ export function WorkspacePane({
         if (tab.type !== "terminal" || !tab.terminalId) return tab;
         const terminal = terminalManager.terminals.find((item) => item.id === tab.terminalId);
         if (!terminal) return tab;
-        const title = terminal.title || "终端";
+        const title = terminal.title || t("Terminal", "终端");
         return tab.title === title ? tab : { ...tab, title };
       })
     );
-  }, [terminalManager.terminals]);
+  }, [terminalManager.terminals, t]);
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
 
   const addTab = async (type: PaneTab) => {
     if (type === "files") {
-      const created = createWorkspacePanelTab("files", { title: "编辑器" });
+      const created = createWorkspacePanelTab("files", { title: t("Editor", "编辑器") }, locale);
       setTabs((current) => [...current, created]);
       setActiveTabId(created.id);
       onActiveTypeChange("files");
@@ -138,9 +140,9 @@ export function WorkspacePane({
     if (type === "terminal") {
       const terminal = await terminalManager.createTerminal();
       const created = createWorkspacePanelTab("terminal", {
-        title: terminal.title || "终端",
+        title: terminal.title || t("Terminal", "终端"),
         terminalId: terminal.id
-      });
+      }, locale);
       setTabs((current) => [...current, created]);
       setActiveTabId(created.id);
       onActiveTypeChange("terminal");
@@ -152,7 +154,7 @@ export function WorkspacePane({
       onActiveTypeChange(type);
       return;
     }
-    const created = createWorkspacePanelTab(type);
+    const created = createWorkspacePanelTab(type, { title: panelTitle(type, t) }, locale);
     setTabs((current) => [...current, created]);
     setActiveTabId(created.id);
     onActiveTypeChange(type);
@@ -205,8 +207,8 @@ export function WorkspacePane({
       <div className="pane-body">
         {!activeTab && (
           <div className="workspace-pane-empty">
-            <p>没有打开的面板</p>
-            <span>点上方 + 选择要打开的组件</span>
+            <p>{t("No panels are open", "没有打开的面板")}</p>
+            <span>{t("Use the + button above to choose a component", "点上方 + 选择要打开的组件")}</span>
           </div>
         )}
         {activeTab?.type === "files" && (
@@ -236,4 +238,21 @@ export function WorkspacePane({
       </div>
     </div>
   );
+}
+
+/**
+ * 返回当前语言下的工作区面板默认标题。
+ *
+ * @param type 面板类型
+ * @param t 双语文本选择方法
+ * @returns 面板标题
+ */
+function panelTitle(type: PaneTab, t: (en: string, zh: string) => string): string {
+  return {
+    files: t("Editor", "编辑器"),
+    diff: "Git",
+    terminal: t("Terminal", "终端"),
+    tasks: t("Background tasks", "后台任务"),
+    subagents: t("Subagents", "子智能体")
+  }[type];
 }

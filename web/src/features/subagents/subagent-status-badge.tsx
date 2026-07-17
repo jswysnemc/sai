@@ -1,4 +1,5 @@
 import { subagentStatusLabel } from "./subagent-labels";
+import { useI18n } from "../i18n/use-i18n";
 
 /**
  * 渲染子智能体状态徽章。
@@ -7,5 +8,6 @@ import { subagentStatusLabel } from "./subagent-labels";
  * @returns 状态徽章
  */
 export function SubagentStatusBadge({ status }: { status: string }) {
-  return <span className={`subagent-status ${status}`}>{subagentStatusLabel(status)}</span>;
+  const { locale } = useI18n();
+  return <span className={`subagent-status ${status}`}>{subagentStatusLabel(status, locale)}</span>;
 }

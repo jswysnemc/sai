@@ -1,6 +1,7 @@
 import { Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { useI18n } from "../i18n/use-i18n";
 
 export type ObjectListItem = {
   id: string;
@@ -29,6 +30,7 @@ type ObjectListPanelProps = {
  * @returns 对象列表面板
  */
 export function ObjectListPanel({ title, items, selectedId, searchPlaceholder, addLabel, topSlot, headerSlot, onSelect, onAdd }: ObjectListPanelProps) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const keyword = query.trim().toLowerCase();
 
@@ -46,7 +48,7 @@ export function ObjectListPanel({ title, items, selectedId, searchPlaceholder, a
       <div className="object-list-head">
         <span className="object-list-title">{title}<small>{items.length}</small></span>
         {onAdd && (
-          <button type="button" className="object-list-add" onClick={onAdd} aria-label={addLabel ?? "新增"} title={addLabel ?? "新增"}>
+          <button type="button" className="object-list-add" onClick={onAdd} aria-label={addLabel ?? t("Add", "新增")} title={addLabel ?? t("Add", "新增")}>
             <Plus size={14} />
           </button>
         )}
@@ -72,7 +74,7 @@ export function ObjectListPanel({ title, items, selectedId, searchPlaceholder, a
             {item.marked && <i className="object-list-mark" aria-hidden="true" />}
           </button>
         ))}
-        {filtered.length === 0 && <div className="object-list-empty">没有匹配的条目</div>}
+        {filtered.length === 0 && <div className="object-list-empty">{t("No matching items", "没有匹配的条目")}</div>}
       </div>
     </aside>
   );

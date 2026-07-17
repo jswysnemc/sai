@@ -26,9 +26,7 @@ pub fn select_compaction(
     context_limit_tokens: usize,
     force: bool,
 ) -> Option<CompactionRequest> {
-    if !force
-        && !should_compact_for_context_tokens(current_context_tokens, context_limit_tokens)
-    {
+    if !force && !should_compact_for_context_tokens(current_context_tokens, context_limit_tokens) {
         return None;
     }
     let non_running = turns
@@ -125,8 +123,8 @@ mod tests {
         running.status = TurnStatus::Running;
         turns.push(running);
 
-        let request = select_compaction(&turns, None, 900, 1_000, false)
-            .expect("compaction request");
+        let request =
+            select_compaction(&turns, None, 900, 1_000, false).expect("compaction request");
 
         assert_eq!(
             request.compact_turn_ids,

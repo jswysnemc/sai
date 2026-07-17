@@ -1,6 +1,7 @@
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { AppConfig } from "../../../api/contracts";
+import { useI18n } from "../../i18n/use-i18n";
 import { Button } from "../../../shared/ui/button/button";
 import { AgentProfileWorkspace } from "./agent-profile-workspace";
 import { AgentSurfaceDefaults } from "./agent-surface-defaults";
@@ -21,6 +22,7 @@ type AgentSettingsSectionProps = {
  * @returns Agent 设置区域
  */
 export function AgentSettingsSection({ config, onConfigChange }: AgentSettingsSectionProps) {
+  const { t } = useI18n();
   const [options, setOptions] = useState<AgentOptions>({ tools: [], skills: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -53,14 +55,14 @@ export function AgentSettingsSection({ config, onConfigChange }: AgentSettingsSe
       {loading && (
         <div className="agent-settings-loading" aria-live="polite">
           <span />
-          <div><strong>正在读取 Agent 能力</strong><small>加载工具和 Skills 列表</small></div>
+          <div><strong>{t("Loading Agent capabilities", "正在读取 Agent 能力")}</strong><small>{t("Loading tools and Skills", "加载工具和 Skills 列表")}</small></div>
         </div>
       )}
       {!loading && error && (
         <div className="agent-settings-load-error">
-          <div><strong>Agent 能力加载失败</strong><small>{error}</small></div>
+          <div><strong>{t("Failed to load Agent capabilities", "Agent 能力加载失败")}</strong><small>{error}</small></div>
           <Button className="settings-secondary" onClick={() => void loadOptions()}>
-            <RefreshCw size={14} />重新加载
+            <RefreshCw size={14} />{t("Reload", "重新加载")}
           </Button>
         </div>
       )}

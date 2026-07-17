@@ -8,6 +8,7 @@ import { FileTypeIcon } from "../../shared/ui/file-icon";
 import { breadcrumbDirectoryPath, buildBreadcrumbParts } from "./editor-breadcrumb-utils";
 import { workspaceRelativePath } from "./workspace-path-utils";
 import "./editor-breadcrumbs.css";
+import { useI18n } from "../i18n/use-i18n";
 
 type EditorBreadcrumbsProps = {
   path: string;
@@ -21,12 +22,13 @@ type EditorBreadcrumbsProps = {
  * @returns 编辑器路径导航
  */
 export function EditorBreadcrumbs({ path, onSelectFile }: EditorBreadcrumbsProps) {
+  const { t } = useI18n();
   const rootRef = useRef<HTMLElement>(null);
   const [openPath, setOpenPath] = useState<string | null>(null);
   const tree = useQuery({ queryKey: ["file-tree"], queryFn: () => api.workspace.tree() });
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
   const workspace = workspaces.data?.workspaces.find((item) => item.id === workspaces.data.active_id);
-  const workspaceName = workspace?.name ?? "工作区";
+  const workspaceName = workspace?.name ?? t("Workspace", "工作区");
   const nodes = tree.data ?? [];
   const relativePath = useMemo(() => workspaceRelativePath(path, workspace?.path ?? ""), [path, workspace?.path]);
   const parts = useMemo(() => buildBreadcrumbParts(relativePath, nodes, workspaceName), [relativePath, nodes, workspaceName]);
@@ -41,7 +43,7 @@ export function EditorBreadcrumbs({ path, onSelectFile }: EditorBreadcrumbsProps
   useOutsidePointerDown(rootRef, () => setOpenPath(null), openPath !== null);
 
   return (
-    <nav className="editor-breadcrumbs" aria-label="当前文件路径" ref={rootRef}>
+    <nav className="editor-breadcrumbs" aria-label={t("Current file path", "当前文件路径")} ref={rootRef}>
       <div className="editor-breadcrumb-list">
         {parts.map((part, index) => (
           <span className="editor-breadcrumb-part" key={`${part.kind}:${part.path}`}>
@@ -61,9 +63,9 @@ export function EditorBreadcrumbs({ path, onSelectFile }: EditorBreadcrumbsProps
       </div>
       {openPart && (
         <div className="editor-breadcrumb-menu">
-          {directory.isLoading ? <span className="editor-breadcrumb-empty">正在读取目录</span> : menuNodes.length > 0 ? menuNodes.map((node) => (
+          {directory.isLoading ? <span className="editor-breadcrumb-empty">{t("Loading directory", "正在读取目录")}</span> : menuNodes.length > 0 ? menuNodes.map((node) => (
             <BreadcrumbMenuItem key={node.path} node={node} onSelectFile={onSelectFile} onClose={() => setOpenPath(null)} depth={0} />
-          )) : <span className="editor-breadcrumb-empty">目录中没有可显示的文件</span>}
+          )) : <span className="editor-breadcrumb-empty">{t("The directory has no displayable files", "目录中没有可显示的文件")}</span>}
         </div>
       )}
     </nav>

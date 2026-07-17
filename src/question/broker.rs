@@ -1,4 +1,4 @@
-use super::{QuestionAnswers, QuestionRequest, QuestionResponse, validate_answers};
+use super::{validate_answers, QuestionAnswers, QuestionRequest, QuestionResponse};
 use anyhow::{bail, Result};
 use serde::Serialize;
 use std::collections::HashMap;

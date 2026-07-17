@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 
 export type ThemeId = "system" | "linen" | "graphite" | "ocean";
 
-export const THEME_PRESETS: Array<{ id: ThemeId; name: string; description: string; colors: string[] }> = [
-  { id: "system", name: "跟随系统", description: "自动匹配系统明暗外观", colors: ["#f3f5f5", "#202526", "#477d70"] },
-  { id: "linen", name: "雾白", description: "低对比冷灰专业界面", colors: ["#f3f5f5", "#202526", "#477d70"] },
-  { id: "graphite", name: "石墨", description: "中性深色工程工作区", colors: ["#151a17", "#e5e9e6", "#52c488"] },
-  { id: "ocean", name: "深海", description: "冷色高辨识度工作区", colors: ["#101923", "#e5edf4", "#59b7d3"] }
+export const THEME_PRESETS: Array<{ id: ThemeId; nameEn: string; nameZh: string; descriptionEn: string; descriptionZh: string; colors: string[] }> = [
+  { id: "system", nameEn: "System", nameZh: "跟随系统", descriptionEn: "Match the operating system appearance", descriptionZh: "自动匹配系统明暗外观", colors: ["#f3f5f5", "#202526", "#477d70"] },
+  { id: "linen", nameEn: "Linen", nameZh: "雾白", descriptionEn: "Low-contrast cool gray workspace", descriptionZh: "低对比冷灰专业界面", colors: ["#f3f5f5", "#202526", "#477d70"] },
+  { id: "graphite", nameEn: "Graphite", nameZh: "石墨", descriptionEn: "Neutral dark engineering workspace", descriptionZh: "中性深色工程工作区", colors: ["#151a17", "#e5e9e6", "#52c488"] },
+  { id: "ocean", nameEn: "Ocean", nameZh: "深海", descriptionEn: "Cool high-contrast workspace", descriptionZh: "冷色高辨识度工作区", colors: ["#101923", "#e5edf4", "#59b7d3"] }
 ];
 
 const THEME_STORAGE_KEY = "sai.theme";

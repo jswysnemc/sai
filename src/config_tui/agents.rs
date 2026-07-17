@@ -324,7 +324,10 @@ fn parse_lines(value: &str) -> Vec<String> {
 /// 返回:
 /// - 是否为内置档案
 fn is_builtin(id: &str) -> bool {
-    matches!(id, DEFAULT_AGENT_ID | GENERAL_AGENT_ID | EXPLORE_AGENT_ID | GATEWAY_AGENT_ID)
+    matches!(
+        id,
+        DEFAULT_AGENT_ID | GENERAL_AGENT_ID | EXPLORE_AGENT_ID | GATEWAY_AGENT_ID
+    )
 }
 
 #[cfg(test)]

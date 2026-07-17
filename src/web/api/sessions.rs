@@ -233,7 +233,6 @@ async fn list(State(state): State<WebAppState>) -> WebResult<Json<Vec<SessionRes
     ))
 }
 
-
 /// 从指定轮次分支出新会话，源会话不变。
 async fn fork(
     State(state): State<WebAppState>,

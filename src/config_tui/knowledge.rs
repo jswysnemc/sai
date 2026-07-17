@@ -48,20 +48,24 @@ pub(crate) fn edit_knowledge_base(
                         .unwrap_or("-")
                 ))
             })
-            .unwrap_or_else(|| t("knowledge base empty or unavailable", "知识库为空或不可用").to_string());
+            .unwrap_or_else(|| {
+                t("knowledge base empty or unavailable", "知识库为空或不可用").to_string()
+            });
 
         let mut options = Vec::with_capacity(files.len().max(1) + 2);
-        options.push(format!("+ {}", t("Add file or directory", "添加文件或目录")));
-        options.push(format!("! {}", t("Clear all knowledge base files", "清空全部知识库文件")));
+        options.push(format!(
+            "+ {}",
+            t("Add file or directory", "添加文件或目录")
+        ));
+        options.push(format!(
+            "! {}",
+            t("Clear all knowledge base files", "清空全部知识库文件")
+        ));
         if files.is_empty() {
             options.push(format!("  ({})", t("no files yet", "暂无文件")));
         } else {
             for file in &files {
-                options.push(format!(
-                    "  {}  ({} B)",
-                    file.name,
-                    file.size_bytes
-                ));
+                options.push(format!("  {}  ({} B)", file.name, file.size_bytes));
             }
         }
         selected = selected.min(options.len().saturating_sub(1));
@@ -74,11 +78,7 @@ pub(crate) fn edit_knowledge_base(
         } else {
             status.clone()
         };
-        let title = format!(
-            "{} · {}",
-            t(" KNOWLEDGE BASE ", " 知识库管理 "),
-            summary
-        );
+        let title = format!("{} · {}", t(" KNOWLEDGE BASE ", " 知识库管理 "), summary);
         draw_menu(stdout, &title, &options, selected, &help)?;
 
         match read_key()? {
@@ -122,11 +122,7 @@ fn add_path(stdout: &mut io::Stdout, paths: &SaiPaths, config: &AppConfig) -> Re
         t("Path to file or directory", "文件或目录路径"),
         String::new(),
     )];
-    if !run_form(
-        stdout,
-        t(" ADD KNOWLEDGE ", " 添加知识库 "),
-        &mut fields,
-    )? {
+    if !run_form(stdout, t(" ADD KNOWLEDGE ", " 添加知识库 "), &mut fields)? {
         return Ok(t("cancelled", "已取消").to_string());
     }
     let path = fields[0].value.trim();
@@ -135,19 +131,11 @@ fn add_path(stdout: &mut io::Stdout, paths: &SaiPaths, config: &AppConfig) -> Re
     }
     let path = PathBuf::from(path);
     if !path.exists() {
-        bail!(
-            "{}: {}",
-            t("path not found", "路径不存在"),
-            path.display()
-        );
+        bail!("{}: {}", t("path not found", "路径不存在"), path.display());
     }
     let kb = KnowledgeBase::new(config.clone(), paths.clone())?;
     let added = block_on(kb.add_path(&path))?;
-    Ok(format!(
-        "{}: {}",
-        t("added", "已添加"),
-        added.len()
-    ))
+    Ok(format!("{}: {}", t("added", "已添加"), added.len()))
 }
 
 fn remove_one(paths: &SaiPaths, config: &AppConfig, name: &str) -> Result<String> {
@@ -158,7 +146,10 @@ fn remove_one(paths: &SaiPaths, config: &AppConfig, name: &str) -> Result<String
 
 fn clear_all(stdout: &mut io::Stdout, paths: &SaiPaths, config: &AppConfig) -> Result<String> {
     let mut fields = [Field::boolean(
-        t("Confirm clear all knowledge base files", "确认清空全部知识库文件"),
+        t(
+            "Confirm clear all knowledge base files",
+            "确认清空全部知识库文件",
+        ),
         false,
     )];
     if !run_form(
@@ -177,11 +168,7 @@ fn clear_all(stdout: &mut io::Stdout, paths: &SaiPaths, config: &AppConfig) -> R
     for file in files {
         kb.remove(&file.name)?;
     }
-    Ok(format!(
-        "{}: {}",
-        t("cleared files", "已清空文件数"),
-        count
-    ))
+    Ok(format!("{}: {}", t("cleared files", "已清空文件数"), count))
 }
 
 fn block_on<F: std::future::Future>(future: F) -> F::Output {

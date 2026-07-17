@@ -41,7 +41,10 @@ fn shared_help_lines(surface: ControlSurface) -> Vec<String> {
         format!(
             "  {}  {}",
             command_label(surface, "/compact", "/压缩"),
-            t("manually compact old conversation turns", "手动压缩旧会话轮次")
+            t(
+                "manually compact old conversation turns",
+                "手动压缩旧会话轮次"
+            )
         ),
         format!(
             "  {}  {}",

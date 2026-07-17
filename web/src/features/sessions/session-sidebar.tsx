@@ -9,6 +9,7 @@ import { switchWithTerminalConfirm } from "../workspaces/workspace-switcher";
 import { ServerDirectoryDialog } from "../workspaces/server-directory-dialog";
 import { ActiveAgentIndicator } from "./active-agent-indicator";
 import { useSessionTree } from "./use-session-tree";
+import { useI18n } from "../i18n/use-i18n";
 import "./session-sidebar.css";
 
 type SessionSidebarProps = {
@@ -24,6 +25,7 @@ type SessionSidebarProps = {
  * @returns 会话侧栏
  */
 export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: SessionSidebarProps) {
+  const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const confirm = useConfirm();
   const navigate = useNavigate();
@@ -150,7 +152,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
    */
   const openDirectory = async (path: string) => {
     const workspace = await api.workspaces.add(path);
-    const switched = await switchWithTerminalConfirm(workspace.id, confirm);
+    const switched = await switchWithTerminalConfirm(workspace.id, confirm, t);
     if (switched) window.location.reload();
   };
 
@@ -159,15 +161,15 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
     setNavigationError(null);
     try {
       const accepted = await confirm({
-        title: "关闭工作区",
-        description: `从列表中关闭“${workspaceName}”？工作区文件不会被删除。`,
-        confirmLabel: "关闭"
+        title: t("Close workspace", "关闭工作区"),
+        description: t(`Close “${workspaceName}” from the list? Workspace files will not be deleted.`, `从列表中关闭“${workspaceName}”？工作区文件不会被删除。`),
+        confirmLabel: t("Close", "关闭")
       });
       if (!accepted) return;
       if (workspaceActive) {
         const fallback = tree.data?.find((workspace) => workspace.workspace_id !== workspaceId);
         if (!fallback) return;
-        const switched = await switchWithTerminalConfirm(fallback.workspace_id, confirm);
+        const switched = await switchWithTerminalConfirm(fallback.workspace_id, confirm, t);
         if (!switched) return;
         await api.workspaces.remove(workspaceId);
         window.location.reload();
@@ -218,7 +220,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
         return;
       }
       if (!workspaceActive) {
-        const switched = await switchWithTerminalConfirm(workspaceId, confirm);
+        const switched = await switchWithTerminalConfirm(workspaceId, confirm, t);
         if (!switched) return;
       }
       await api.sessions.switch(sessionId);
@@ -242,16 +244,16 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
   if (collapsed) {
     return (
       <div className="session-sidebar collapsed">
-        <button type="button" className="sidebar-rail-button brand-rail" onClick={onToggleCollapsed} aria-label="展开会话侧栏" title="展开会话侧栏">
+        <button type="button" className="sidebar-rail-button brand-rail" onClick={onToggleCollapsed} aria-label={t("Expand session sidebar", "展开会话侧栏")} title={t("Expand session sidebar", "展开会话侧栏")}>
           <SaiLogo size={18} />
         </button>
-        <button type="button" className="sidebar-rail-button" onClick={onToggleCollapsed} aria-label="展开会话侧栏" title="展开会话侧栏">
+        <button type="button" className="sidebar-rail-button" onClick={onToggleCollapsed} aria-label={t("Expand session sidebar", "展开会话侧栏")} title={t("Expand session sidebar", "展开会话侧栏")}>
           <PanelLeftOpen size={17} />
         </button>
-        <button type="button" className="sidebar-rail-button" onClick={() => setBrowserOpen(true)} aria-label="打开服务端目录" title="打开服务端目录">
+        <button type="button" className="sidebar-rail-button" onClick={() => setBrowserOpen(true)} aria-label={t("Open server directory", "打开服务端目录")} title={t("Open server directory", "打开服务端目录")}>
           <FolderOpen size={17} />
         </button>
-        <button type="button" className="sidebar-rail-button" onClick={() => create.mutate(undefined)} disabled={create.isPending} aria-label="新建会话" title="新建会话">
+        <button type="button" className="sidebar-rail-button" onClick={() => create.mutate(undefined)} disabled={create.isPending} aria-label={t("New session", "新建会话")} title={t("New session", "新建会话")}>
           <Plus size={17} />
         </button>
         <div className="sidebar-app-menu collapsed-app-menu" ref={appMenuRef}>
@@ -259,8 +261,8 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
             type="button"
             className={`sidebar-rail-button${appMenuOpen || appMenuActive ? " active" : ""}`}
             onClick={() => setAppMenuOpen((value) => !value)}
-            aria-label="应用菜单"
-            title="应用菜单"
+            aria-label={t("Application menu", "应用菜单")}
+            title={t("Application menu", "应用菜单")}
             aria-expanded={appMenuOpen}
           >
             <Settings size={17} strokeWidth={1.8} />
@@ -268,16 +270,16 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
           {appMenuOpen && (
             <div className="sidebar-app-popover rail">
               <button type="button" onClick={() => { setAppMenuOpen(false); setBrowserOpen(true); }}>
-                <FolderOpen size={14} /><span>打开服务端目录</span>
+                <FolderOpen size={14} /><span>{t("Open server directory", "打开服务端目录")}</span>
               </button>
               <button type="button" onClick={() => { setAppMenuOpen(false); navigate("/settings"); onNavigate?.(); }}>
-                <Settings size={14} /><span>配置</span>
+                <Settings size={14} /><span>{t("Settings", "配置")}</span>
               </button>
               <button type="button" onClick={() => { setAppMenuOpen(false); navigate("/gateways"); onNavigate?.(); }}>
-                <Cable size={14} /><span>网关</span>
+                <Cable size={14} /><span>{t("Gateways", "网关")}</span>
               </button>
               <button type="button" onClick={() => { setAppMenuOpen(false); navigate("/cron-jobs"); onNavigate?.(); }}>
-                <CalendarClock size={14} /><span>定时任务</span>
+                <CalendarClock size={14} /><span>{t("Scheduled tasks", "定时任务")}</span>
               </button>
             </div>
           )}
@@ -295,7 +297,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
           <span>Sai</span>
         </button>
         <div className="sidebar-heading-actions">
-          <button type="button" className="icon-button" aria-label="折叠会话侧栏" title="折叠会话侧栏" onClick={onToggleCollapsed}>
+          <button type="button" className="icon-button" aria-label={t("Collapse session sidebar", "折叠会话侧栏")} title={t("Collapse session sidebar", "折叠会话侧栏")} onClick={onToggleCollapsed}>
             <PanelLeftClose size={16} />
           </button>
         </div>
@@ -305,20 +307,20 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
         <input
           value={sessionSearch}
           onChange={(event) => setSessionSearch(event.target.value)}
-          placeholder="搜索会话"
-          aria-label="搜索会话"
+          placeholder={t("Search sessions", "搜索会话")}
+          aria-label={t("Search sessions", "搜索会话")}
           spellCheck={false}
         />
         {sessionSearch && (
-          <button type="button" className="session-search-clear" onClick={() => setSessionSearch("")} aria-label="清空搜索">
+          <button type="button" className="session-search-clear" onClick={() => setSessionSearch("")} aria-label={t("Clear search", "清空搜索")}>
             <X size={13} />
           </button>
         )}
       </label>
       <div className="session-list">
-        {tree.isLoading && <div className="sidebar-state"><RefreshCw size={15} className="spin" /> 读取会话</div>}
+        {tree.isLoading && <div className="sidebar-state"><RefreshCw size={15} className="spin" /> {t("Loading sessions", "读取会话")}</div>}
         {!tree.isLoading && query && visibleWorkspaces.length === 0 && (
-          <div className="sidebar-state">没有匹配“{sessionSearch.trim()}”的会话</div>
+          <div className="sidebar-state">{t(`No sessions match “${sessionSearch.trim()}”`, `没有匹配“${sessionSearch.trim()}”的会话`)}</div>
         )}
         {visibleWorkspaces.map((workspace) => {
           const sessions = query
@@ -336,22 +338,22 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
               <button type="button" className="workspace-tree-main" onClick={() => !query && toggleWorkspace(workspace.workspace_id)} aria-expanded={workspaceExpanded}>
                 {workspaceExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 <FolderGit2 size={14} />
-                <span><strong>{workspace.workspace_name}</strong><small>{sessions.length} 个会话</small></span>
+                <span><strong>{workspace.workspace_name}</strong><small>{t(`${sessions.length} sessions`, `${sessions.length} 个会话`)}</small></span>
                 {workspaceRunning && <ActiveAgentIndicator />}
               </button>
               <span className="workspace-tree-actions">
-                {!selecting && <button type="button" className="workspace-create-session" onClick={() => create.mutate(workspace.active ? undefined : workspace.workspace_id)} disabled={create.isPending} aria-label={`在 ${workspace.workspace_name} 新建会话`} title="新建会话"><Plus size={14} /></button>}
-                {workspace.active && selecting && <span className="workspace-selection-count">已选择 {selected.size} 项</span>}
-                {workspace.active && selecting && <button type="button" className={confirming ? "danger confirming" : "danger"} onClick={requestBulkDelete} disabled={selected.size === 0 || removeMany.isPending} aria-label={confirming ? `确认删除 ${selected.size} 项` : "删除所选会话"} title={confirming ? `确认删除 ${selected.size} 项` : "删除所选会话"}><Trash2 size={14} /></button>}
-                {workspace.active && selecting && <button type="button" onClick={closeSelection} aria-label="退出选择" title="退出选择"><X size={14} /></button>}
+                {!selecting && <button type="button" className="workspace-create-session" onClick={() => create.mutate(workspace.active ? undefined : workspace.workspace_id)} disabled={create.isPending} aria-label={t(`Create a session in ${workspace.workspace_name}`, `在 ${workspace.workspace_name} 新建会话`)} title={t("New session", "新建会话")}><Plus size={14} /></button>}
+                {workspace.active && selecting && <span className="workspace-selection-count">{t(`${selected.size} selected`, `已选择 ${selected.size} 项`)}</span>}
+                {workspace.active && selecting && <button type="button" className={confirming ? "danger confirming" : "danger"} onClick={requestBulkDelete} disabled={selected.size === 0 || removeMany.isPending} aria-label={confirming ? t(`Confirm deletion of ${selected.size} items`, `确认删除 ${selected.size} 项`) : t("Delete selected sessions", "删除所选会话")} title={confirming ? t(`Confirm deletion of ${selected.size} items`, `确认删除 ${selected.size} 项`) : t("Delete selected sessions", "删除所选会话")}><Trash2 size={14} /></button>}
+                {workspace.active && selecting && <button type="button" onClick={closeSelection} aria-label={t("Exit selection", "退出选择")} title={t("Exit selection", "退出选择")}><X size={14} /></button>}
                 {!(workspace.active && selecting) && (canSelect || canClose) && (
-                  <button type="button" onClick={() => { setMenu(null); setWorkspaceMenu((value) => value === workspace.workspace_id ? null : workspace.workspace_id); }} aria-label={`管理工作区 ${workspace.workspace_name}`} title="管理工作区"><MoreHorizontal size={14} /></button>
+                  <button type="button" onClick={() => { setMenu(null); setWorkspaceMenu((value) => value === workspace.workspace_id ? null : workspace.workspace_id); }} aria-label={t(`Manage workspace ${workspace.workspace_name}`, `管理工作区 ${workspace.workspace_name}`)} title={t("Manage workspace", "管理工作区")}><MoreHorizontal size={14} /></button>
                 )}
               </span>
               {workspaceMenu === workspace.workspace_id && (
                 <div className="session-menu workspace-menu-popover" ref={menuRef}>
-                  {canSelect && <button type="button" onClick={() => { setWorkspaceMenu(null); selectWorkspaceSessions(); }}><CheckSquare2 size={14} /> 多选会话</button>}
-                  {canClose && <button type="button" className="danger" onClick={() => { setWorkspaceMenu(null); void closeWorkspace(workspace.workspace_id, workspace.workspace_name, workspace.active); }}><X size={14} /> 关闭工作区</button>}
+                  {canSelect && <button type="button" onClick={() => { setWorkspaceMenu(null); selectWorkspaceSessions(); }}><CheckSquare2 size={14} /> {t("Select sessions", "多选会话")}</button>}
+                  {canClose && <button type="button" className="danger" onClick={() => { setWorkspaceMenu(null); void closeWorkspace(workspace.workspace_id, workspace.workspace_name, workspace.active); }}><X size={14} /> {t("Close workspace", "关闭工作区")}</button>}
                 </div>
               )}
             </div>
@@ -361,7 +363,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
           return (
             <div className={`${session.active ? "session-row active" : "session-row"}${checked ? " selected" : ""}${running ? " running" : ""}`} key={session.id}>
               {selecting && workspace.active && (
-                <button type="button" className="session-check" onClick={() => toggleSelected(session.id)} disabled={session.id === "default"} aria-label={`选择 ${session.title}`}>
+                <button type="button" className="session-check" onClick={() => toggleSelected(session.id)} disabled={session.id === "default"} aria-label={t(`Select ${session.title}`, `选择 ${session.title}`)}>
                   {checked ? <CheckSquare2 size={15} /> : <Square size={15} />}
                 </button>
               )}
@@ -379,7 +381,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
                       if (event.key === "Escape") setRenaming(null);
                     }}
                     onBlur={() => setRenaming(null)}
-                    aria-label={`重命名 ${session.title}`}
+                    aria-label={t(`Rename ${session.title}`, `重命名 ${session.title}`)}
                   />
                 </div>
               ) : (
@@ -390,15 +392,15 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
                   }
                   void openSession(workspace.workspace_id, session.id, workspace.active, session.active);
                 }}>
-                  <span><strong>{session.title}</strong><small>{new Date(session.updated_at).toLocaleString()}</small></span>
+                  <span><strong>{session.title}</strong><small>{new Date(session.updated_at).toLocaleString(locale)}</small></span>
                   {running && <ActiveAgentIndicator />}
                 </button>
               )}
-              {!selecting && workspace.active && renaming !== session.id && <button type="button" className="session-more" aria-label={`管理 ${session.title}`} onClick={() => setMenu((value) => value === session.id ? null : session.id)}><MoreHorizontal size={15} /></button>}
+              {!selecting && workspace.active && renaming !== session.id && <button type="button" className="session-more" aria-label={t(`Manage ${session.title}`, `管理 ${session.title}`)} onClick={() => setMenu((value) => value === session.id ? null : session.id)}><MoreHorizontal size={15} /></button>}
               {!selecting && menu === session.id && (
                 <div className="session-menu" ref={menuRef}>
-                  <button type="button" onClick={() => startRename(session.id, session.title)}><Pencil size={14} /> 重命名</button>
-                  <button type="button" className="danger" disabled={session.id === "default"} onClick={() => { remove.mutate(session.id); setMenu(null); }}><Trash2 size={14} /> 删除</button>
+                  <button type="button" onClick={() => startRename(session.id, session.title)}><Pencil size={14} /> {t("Rename", "重命名")}</button>
+                  <button type="button" className="danger" disabled={session.id === "default"} onClick={() => { remove.mutate(session.id); setMenu(null); }}><Trash2 size={14} /> {t("Delete", "删除")}</button>
                 </div>
               )}
             </div>
@@ -415,21 +417,21 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
           onClick={() => setAppMenuOpen((value) => !value)}
           aria-expanded={appMenuOpen}
         >
-          <Settings size={15} strokeWidth={1.8} /><span>应用</span>
+          <Settings size={15} strokeWidth={1.8} /><span>{t("Application", "应用")}</span>
         </button>
         {appMenuOpen && (
           <div className="sidebar-app-popover">
             <button type="button" onClick={() => { setAppMenuOpen(false); setBrowserOpen(true); }}>
-              <FolderOpen size={14} /><span>打开服务端目录</span>
+              <FolderOpen size={14} /><span>{t("Open server directory", "打开服务端目录")}</span>
             </button>
             <NavLink to="/settings" onClick={() => { setAppMenuOpen(false); onNavigate?.(); }} className={({ isActive }) => isActive ? "active" : ""}>
-              <Settings size={14} /><span>配置</span>
+              <Settings size={14} /><span>{t("Settings", "配置")}</span>
             </NavLink>
             <NavLink to="/gateways" onClick={() => { setAppMenuOpen(false); onNavigate?.(); }} className={({ isActive }) => isActive ? "active" : ""}>
-              <Cable size={14} /><span>网关</span>
+              <Cable size={14} /><span>{t("Gateways", "网关")}</span>
             </NavLink>
             <NavLink to="/cron-jobs" onClick={() => { setAppMenuOpen(false); onNavigate?.(); }} className={({ isActive }) => isActive ? "active" : ""}>
-              <CalendarClock size={14} /><span>定时任务</span>
+              <CalendarClock size={14} /><span>{t("Scheduled tasks", "定时任务")}</span>
             </NavLink>
           </div>
         )}

@@ -391,9 +391,7 @@ fn repeated_compaction_reports_cumulative_checkpoint_coverage() {
     let first = store.select_manual_compaction(3).unwrap().unwrap();
     store.apply_compaction(&first, "first summary").unwrap();
     store.start_turn("turn_7", "user 7").unwrap();
-    store
-        .complete_turn("turn_7", "assistant 7", None)
-        .unwrap();
+    store.complete_turn("turn_7", "assistant 7", None).unwrap();
     let second = store.select_manual_compaction(1).unwrap().unwrap();
     store.apply_compaction(&second, "second summary").unwrap();
 

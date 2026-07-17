@@ -5,6 +5,7 @@ import { api } from "../../api/client";
 import { Button } from "../../shared/ui/button/button";
 import { Modal } from "../../shared/ui/dialog/modal";
 import "./permission-audit-dialog.css";
+import { useI18n } from "../i18n/use-i18n";
 
 type PermissionAuditDialogProps = {
   sessionId?: string;
@@ -17,6 +18,7 @@ type PermissionAuditDialogProps = {
  * @returns 权限审计按钮和对话框
  */
 export function PermissionAuditDialog({ sessionId }: PermissionAuditDialogProps) {
+  const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const audit = useQuery({
     queryKey: ["permission-audit", sessionId],
@@ -30,22 +32,22 @@ export function PermissionAuditDialog({ sessionId }: PermissionAuditDialogProps)
         className="composer-rail-button"
         disabled={!sessionId}
         onClick={() => setOpen(true)}
-        title="查看权限审计"
-        aria-label="查看权限审计"
+        title={t("View permission audit", "查看权限审计")}
+        aria-label={t("View permission audit", "查看权限审计")}
       >
         <ShieldCheck size={14} />
       </Button>
-      <Modal open={open} title="权限审计" description="当前会话最近的工具权限判定和执行结果。" onClose={() => setOpen(false)}>
+      <Modal open={open} title={t("Permission audit", "权限审计")} description={t("Recent tool permission decisions and execution results for the current session.", "当前会话最近的工具权限判定和执行结果。")} onClose={() => setOpen(false)}>
         <div className="permission-audit-list">
-          {audit.isLoading && <div className="permission-audit-empty">正在读取审计记录</div>}
-          {!audit.isLoading && audit.data?.length === 0 && <div className="permission-audit-empty">暂无审计记录</div>}
+          {audit.isLoading && <div className="permission-audit-empty">{t("Loading audit records", "正在读取审计记录")}</div>}
+          {!audit.isLoading && audit.data?.length === 0 && <div className="permission-audit-empty">{t("No audit records", "暂无审计记录")}</div>}
           {audit.data?.map((event, index) => (
             <article className="permission-audit-event" key={`${event.timestamp_ms}-${event.tool}-${index}`}>
               <div className="permission-audit-event-head">
                 <span>{event.tool}</span>
-                <span className={`permission-audit-decision is-${event.decision}`}>{decisionLabel(event.decision)}</span>
+                <span className={`permission-audit-decision is-${event.decision}`}>{decisionLabel(event.decision, t)}</span>
               </div>
-              <time>{new Date(event.timestamp_ms).toLocaleString()}</time>
+              <time>{new Date(event.timestamp_ms).toLocaleString(locale)}</time>
               {event.detail && <pre>{event.detail}</pre>}
             </article>
           ))}
@@ -61,13 +63,13 @@ export function PermissionAuditDialog({ sessionId }: PermissionAuditDialogProps)
  * @param decision 审计判定值
  * @returns 中文判定标签
  */
-function decisionLabel(decision: "requested" | "approved" | "allowed" | "denied" | "completed" | "failed") {
+function decisionLabel(decision: "requested" | "approved" | "allowed" | "denied" | "completed" | "failed", t: (en: string, zh: string) => string) {
   return {
-    requested: "待审批",
-    approved: "已批准",
-    allowed: "允许",
-    denied: "拒绝",
-    completed: "完成",
-    failed: "失败"
+    requested: t("Requested", "待审批"),
+    approved: t("Approved", "已批准"),
+    allowed: t("Allowed", "允许"),
+    denied: t("Denied", "拒绝"),
+    completed: t("Completed", "完成"),
+    failed: t("Failed", "失败")
   }[decision];
 }

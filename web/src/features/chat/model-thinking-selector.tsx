@@ -5,6 +5,7 @@ import type { RunModelSelection, ThinkingLevel } from "../../api/contracts";
 import { ModelIcon } from "../../shared/ui/model-icon";
 import type { ChatModelChoice } from "./chat-model-options";
 import { THINKING_OPTIONS, thinkingLevelLabel } from "./model-thinking-options";
+import { useI18n } from "../i18n/use-i18n";
 
 type ModelThinkingSelectorProps = {
   choices: ChatModelChoice[];
@@ -25,6 +26,7 @@ type SelectorSection = "model" | "thinking";
  * @returns 紧凑触发器与二级选择菜单
  */
 export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<SelectorSection>("model");
   const [query, setQuery] = useState("");
@@ -116,10 +118,10 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
         disabled={props.disabled || props.loading}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`${props.selection?.model ?? "未配置模型"}，推理强度 ${thinkingLabel}`}
+        aria-label={t(`${props.selection?.model ?? "No model configured"}, reasoning effort ${thinkingLabel}`, `${props.selection?.model ?? "未配置模型"}，推理强度 ${thinkingLabel}`)}
       >
         {props.selection?.model ? <ModelIcon model={props.selection.model} size={14} /> : null}
-        <span className="model-thinking-model">{props.loading ? "读取模型" : props.selection?.model ?? "未配置模型"}</span>
+        <span className="model-thinking-model">{props.loading ? t("Loading models", "读取模型") : props.selection?.model ?? t("No model configured", "未配置模型")}</span>
         <span className="model-thinking-level">{thinkingLabel}</span>
         <ChevronDown size={12} className={open ? "model-thinking-chevron open" : "model-thinking-chevron"} />
       </button>
@@ -128,7 +130,7 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
           ref={menuRef}
           className="model-thinking-menu"
           role="dialog"
-          aria-label="模型与推理强度"
+          aria-label={t("Model and reasoning effort", "模型与推理强度")}
           style={position}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
@@ -145,9 +147,9 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
               onClick={() => setSection("model")}
               onPointerEnter={() => setSection("model")}
               aria-expanded={section === "model"}
-              aria-label={`模型 ${props.selection?.model ?? "未配置"}`}
+              aria-label={t(`Model ${props.selection?.model ?? "not configured"}`, `模型 ${props.selection?.model ?? "未配置"}`)}
             >
-              <span><small>模型</small><strong>{props.selection?.model ?? "未配置"}</strong></span>
+              <span><small>{t("Model", "模型")}</small><strong>{props.selection?.model ?? t("Not configured", "未配置")}</strong></span>
               <ChevronRight size={13} />
             </button>
             <button
@@ -156,9 +158,9 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
               onClick={() => setSection("thinking")}
               onPointerEnter={() => setSection("thinking")}
               aria-expanded={section === "thinking"}
-              aria-label={`推理强度 ${thinkingLabel}`}
+              aria-label={t(`Reasoning effort ${thinkingLabel}`, `推理强度 ${thinkingLabel}`)}
             >
-              <span><small>推理强度</small><strong>{thinkingLabel}</strong></span>
+              <span><small>{t("Reasoning effort", "推理强度")}</small><strong>{thinkingLabel}</strong></span>
               <ChevronRight size={13} />
             </button>
           </div>
@@ -189,13 +191,14 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
  * @returns 模型二级菜单
  */
 function ModelOptions({ choices, selection, query, onQueryChange, onSelect }: { choices: ChatModelChoice[]; selection: ChatModelChoice | null; query: string; onQueryChange: (value: string) => void; onSelect: (choice: ChatModelChoice) => void }) {
+  const { t } = useI18n();
   return (
     <>
       <label className="model-thinking-search">
         <Search size={14} />
-        <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="搜索模型或供应商" aria-label="搜索模型或供应商" autoFocus />
+        <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t("Search models or providers", "搜索模型或供应商")} aria-label={t("Search models or providers", "搜索模型或供应商")} autoFocus />
       </label>
-      <div className="model-thinking-option-list" role="listbox" aria-label="选择模型">
+      <div className="model-thinking-option-list" role="listbox" aria-label={t("Choose model", "选择模型")}>
         {choices.map((choice) => {
           const active = choice.providerId === selection?.providerId && choice.model === selection.model;
           return (
@@ -206,7 +209,7 @@ function ModelOptions({ choices, selection, query, onQueryChange, onSelect }: { 
             </button>
           );
         })}
-        {choices.length === 0 && <div className="model-thinking-empty">没有匹配的模型</div>}
+        {choices.length === 0 && <div className="model-thinking-empty">{t("No matching models", "没有匹配的模型")}</div>}
       </div>
     </>
   );
@@ -219,12 +222,13 @@ function ModelOptions({ choices, selection, query, onQueryChange, onSelect }: { 
  * @returns 推理强度二级菜单
  */
 function ThinkingOptions({ value, onSelect }: { value: ThinkingLevel; onSelect: (level: ThinkingLevel) => void }) {
+  const { t } = useI18n();
   return (
-    <div className="model-thinking-option-list thinking" role="listbox" aria-label="选择推理强度">
-      <div className="model-thinking-option-head"><BrainCircuit size={14} /><span>推理强度</span></div>
+    <div className="model-thinking-option-list thinking" role="listbox" aria-label={t("Choose reasoning effort", "选择推理强度")}>
+      <div className="model-thinking-option-head"><BrainCircuit size={14} /><span>{t("Reasoning effort", "推理强度")}</span></div>
       {THINKING_OPTIONS.map((option) => (
         <button type="button" role="option" aria-selected={option.value === value} className={option.value === value ? "active" : ""} onClick={() => onSelect(option.value)} key={option.value}>
-          <span className="model-thinking-option-copy"><strong>{option.label}</strong><small>{option.description}</small></span>
+          <span className="model-thinking-option-copy"><strong>{option.label}</strong><small>{t(option.descriptionEn, option.descriptionZh)}</small></span>
           <Check size={14} />
         </button>
       ))}

@@ -15,6 +15,7 @@ import { SETTINGS_SECTIONS } from "./settings-sections";
 import type { SettingsSectionId } from "./settings-types";
 import { useSettingsConfig } from "./use-settings-config";
 import { useTheme } from "../theme/theme";
+import { useI18n } from "../i18n/use-i18n";
 import "./settings-layout.css";
 import "./settings-forms.css";
 
@@ -26,15 +27,16 @@ import "./settings-forms.css";
 export function SettingsPage() {
   const settings = useSettingsConfig();
   const theme = useTheme();
+  const { t } = useI18n();
   const [section, setSection] = useState<SettingsSectionId>("providers");
 
   return (
     <div className="settings-page">
       <header className="settings-topbar">
         <div className="settings-topbar-inner">
-          <Link to="/" className="settings-back" aria-label="返回主界面"><ArrowLeft size={15} /><span>返回主界面</span></Link>
-          <h1>设置</h1>
-          <p>管理模型、插件、提示词、工具、网关和界面偏好。</p>
+          <Link to="/" className="settings-back" aria-label={t("Back to workspace", "返回主界面")}><ArrowLeft size={15} /><span>{t("Back to workspace", "返回主界面")}</span></Link>
+          <h1>{t("Settings", "设置")}</h1>
+          <p>{t("Manage models, plugins, prompts, tools, gateways, and interface preferences.", "管理模型、插件、提示词、工具、网关和界面偏好。")}</p>
           <div className="settings-topbar-actions">
             <SaveStatusBadge dirty={settings.dirty} saving={settings.saving} saveError={Boolean(settings.error)} loaded={Boolean(settings.config)} />
             <button
@@ -43,23 +45,23 @@ export function SettingsPage() {
               onClick={() => void settings.saveConfig()}
               disabled={!settings.config || !settings.dirty || settings.saving}
             >
-              <Save size={14} />{settings.saving ? "正在保存" : "保存修改"}
+              <Save size={14} />{settings.saving ? t("Saving", "正在保存") : t("Save changes", "保存修改")}
             </button>
           </div>
         </div>
       </header>
       <div className="settings-workspace">
-        <nav className="settings-navigation" aria-label="设置分类">
-          <div className="settings-navigation-label">设置分类</div>
-          {SETTINGS_SECTIONS.map(({ id, label, description, icon: Icon }) => (
+        <nav className="settings-navigation" aria-label={t("Settings categories", "设置分类")}>
+          <div className="settings-navigation-label">{t("Settings categories", "设置分类")}</div>
+          {SETTINGS_SECTIONS.map(({ id, labelEn, labelZh, descriptionEn, descriptionZh, icon: Icon }) => (
             <button type="button" key={id} className={id === section ? "active" : ""} onClick={() => setSection(id)}>
               <Icon size={15} />
-              <span><strong>{label}</strong><small>{description}</small></span>
+              <span><strong>{t(labelEn, labelZh)}</strong><small>{t(descriptionEn, descriptionZh)}</small></span>
             </button>
           ))}
         </nav>
         <main className="settings-main">
-          {settings.loading && <div className="settings-state">正在读取配置</div>}
+          {settings.loading && <div className="settings-state">{t("Loading configuration", "正在读取配置")}</div>}
           {settings.config && section === "providers" && <ProviderSettingsSection config={settings.config} onConfigChange={settings.updateConfig} onProviderChange={settings.updateProvider} />}
           {settings.config && section === "agents" && <AgentSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
           {settings.config && section === "plugins" && <PluginSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}

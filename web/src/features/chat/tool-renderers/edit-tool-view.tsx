@@ -2,6 +2,8 @@ import { FileCheck2 } from "lucide-react";
 import { DiffView } from "./diff-view";
 import { parseJsonRecord, prettyJson, stringField } from "./tool-data";
 import { ToolFileReference } from "./tool-file-reference";
+import { useI18n } from "../../i18n/use-i18n";
+import { text, type Locale } from "../../i18n/locale";
 
 type EditToolViewProps = {
   argumentsText: string;
@@ -23,9 +25,10 @@ type ChangedFile = {
  * @returns 文件修改详情
  */
 export function EditToolView({ argumentsText, output, headerPath }: EditToolViewProps) {
+  const { locale, t } = useI18n();
   const args = parseJsonRecord(argumentsText);
   const result = parseJsonRecord(output);
-  const patch = stringField(args, "patch") || legacyEditAsPatch(args);
+  const patch = stringField(args, "patch") || legacyEditAsPatch(args, locale);
   const path = stringField(args, "path");
   const changedFiles = Array.isArray(result?.changed_files) ? result.changed_files as ChangedFile[] : [];
   return (
@@ -37,7 +40,7 @@ export function EditToolView({ argumentsText, output, headerPath }: EditToolView
               <FileCheck2 size={14} />
               <span>
                 {file.path && file.path !== headerPath && <ToolFileReference path={file.path} icon={false} />}
-                {!file.path && <strong>未知文件</strong>}
+                {!file.path && <strong>{t("Unknown file", "未知文件")}</strong>}
                 <small>{file.action || "Edited"}</small>
               </span>
               <span className="changed-file-stats"><b>+{file.added ?? 0}</b><i>-{file.removed ?? 0}</i></span>
@@ -45,7 +48,7 @@ export function EditToolView({ argumentsText, output, headerPath }: EditToolView
           ))}
         </div>
       )}
-      {path && path !== headerPath && !patch && <div className="legacy-edit-path"><span>文件</span><ToolFileReference path={path} icon={false} /></div>}
+      {path && path !== headerPath && !patch && <div className="legacy-edit-path"><span>{t("File", "文件")}</span><ToolFileReference path={path} icon={false} /></div>}
       {patch ? <DiffView source={patch} headerPath={headerPath} /> : argumentsText && <pre className="generic-tool-block"><code>{prettyJson(argumentsText)}</code></pre>}
       {output && !result && <pre className={`generic-tool-block result${/^tool error:/i.test(output.trimStart()) ? " tool-error-output" : ""}`}><code>{output}</code></pre>}
     </div>
@@ -58,7 +61,7 @@ export function EditToolView({ argumentsText, output, headerPath }: EditToolView
  * @param args 编辑工具参数
  * @returns Codex 风格 patch 文本，无法转换时返回空串
  */
-function legacyEditAsPatch(args: Record<string, unknown> | null): string {
+function legacyEditAsPatch(args: Record<string, unknown> | null, locale: Locale): string {
   const path = stringField(args, "path");
   if (!path) return "";
   const content = stringField(args, "content");
@@ -71,5 +74,5 @@ function legacyEditAsPatch(args: Record<string, unknown> | null): string {
   const end = args && typeof args.end_line === "number" ? args.end_line : null;
   if (replacement === null || start === null || end === null) return "";
   const body = replacement.replace(/\n$/, "").split("\n").map((line) => `+${line}`).join("\n");
-  return `*** Update File: ${path}\n@@ 第 ${start}-${end} 行\n${replacement ? body : "-（删除该行范围）"}`;
+  return `*** Update File: ${path}\n@@ ${text(locale, `Lines ${start}-${end}`, `第 ${start}-${end} 行`)}\n${replacement ? body : text(locale, "-(delete this line range)", "-（删除该行范围）")}`;
 }

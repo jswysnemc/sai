@@ -32,7 +32,12 @@ pub(super) fn select_agent_index_interactively(paths: &SaiPaths) -> Result<Optio
             } else {
                 format!(" — {}", choice.description.trim())
             };
-            format!("{marker} {}. {} ({}){desc}", index + 1, choice.name, choice.id)
+            format!(
+                "{marker} {}. {} ({}){desc}",
+                index + 1,
+                choice.name,
+                choice.id
+            )
         })
         .collect::<Vec<_>>();
     let Some(index) = inline_fuzzy_select(&labels)? else {

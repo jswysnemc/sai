@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { TodoStatus } from "../../../api/contracts";
 import { parseTodoTool, statusLabel, todoToolHeadline } from "./todo-tool-data";
 import "./todo-tool-view.css";
+import { useI18n } from "../../i18n/use-i18n";
 
 const statusIcons = { pending: Circle, in_progress: CircleDot, completed: CheckCircle2, cancelled: Ban } satisfies Record<TodoStatus, typeof Circle>;
 
@@ -18,9 +19,10 @@ type TodoToolItem = { id: string; text: string; status: TodoStatus };
  * @returns todo 工具卡片
  */
 export function TodoToolView({ argumentsText, output }: { argumentsText: string; output: string }) {
+  const { locale } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const summary = parseTodoTool(argumentsText, output);
-  const headline = todoToolHeadline(summary);
+  const headline = todoToolHeadline(summary, locale);
   const items = parseItems(output);
   const changed = new Set(summary.changedIds);
   const canExpand = items.length > 0;
@@ -35,7 +37,7 @@ export function TodoToolView({ argumentsText, output }: { argumentsText: string;
       >
         <span className="todo-tool-icon"><ListChecks size={14} /></span>
         <span className="todo-tool-headline">{headline}</span>
-        {summary.status && summary.action === "update" && <span className={`todo-tool-tag is-${summary.status}`}>{statusLabel(summary.status)}</span>}
+        {summary.status && summary.action === "update" && <span className={`todo-tool-tag is-${summary.status}`}>{statusLabel(summary.status, locale)}</span>}
         {canExpand && <ChevronDown size={14} className={expanded ? "open" : ""} />}
       </button>
       {expanded && canExpand && (

@@ -1,4 +1,5 @@
 import type { PendingQuestion, PermissionDecision, PermissionRequest, QuestionResponse, WebEvent } from "../../api/contracts";
+import { text, type Locale } from "../i18n/locale";
 
 export type ToolLifecycle = {
   id: string;
@@ -59,8 +60,26 @@ export const initialRunState: LiveRunState = {
   completed: false
 };
 
+/**
+ * 将运行状态中的内置错误文案切换到指定语言。
+ *
+ * @param message 当前错误文案
+ * @param locale 目标界面语言
+ * @returns 本地化后的内置文案；服务端原始错误保持不变
+ */
+export function relocalizeRunError(message: string | null, locale: Locale): string | null {
+  if (message === "Run failed" || message === "运行失败") return text(locale, "Run failed", "运行失败");
+  if (message === "The response was interrupted; generated content was preserved" || message === "响应已中断，已保留生成内容") {
+    return text(locale, "The response was interrupted; generated content was preserved", "响应已中断，已保留生成内容");
+  }
+  if (message === "The run was interrupted" || message === "运行已中断") {
+    return text(locale, "The run was interrupted", "运行已中断");
+  }
+  return message;
+}
+
 /** 将后端事件归并为单轮聊天与工具生命周期状态。 */
-export function runEventReducer(state: LiveRunState, action: RunAction): LiveRunState {
+export function runEventReducer(state: LiveRunState, action: RunAction, locale: Locale = "zh-CN"): LiveRunState {
   if (action.type === "reset") return initialRunState;
   if (action.type === "start" || action.type === "attach") {
     return { ...initialRunState, runId: action.runId, sessionId: action.sessionId, userInput: action.userInput, imageUrls: action.imageUrls ?? [], status: "waiting_response" };
@@ -149,7 +168,7 @@ export function runEventReducer(state: LiveRunState, action: RunAction): LiveRun
     case "run.failed":
       return {
         ...closeActiveReasoning(state, event.timestamp),
-        error: String(payload.message ?? "运行失败"),
+        error: String(payload.message ?? text(locale, "Run failed", "运行失败")),
         errorDetail: typeof payload.detail === "string" ? payload.detail : null,
         status: "idle",
         completed: true
@@ -157,7 +176,9 @@ export function runEventReducer(state: LiveRunState, action: RunAction): LiveRun
     case "run.interrupted":
       return {
         ...closeActiveReasoning(state, event.timestamp),
-        error: state.content ? "响应已中断，已保留生成内容" : "运行已中断",
+        error: state.content
+          ? text(locale, "The response was interrupted; generated content was preserved", "响应已中断，已保留生成内容")
+          : text(locale, "The run was interrupted", "运行已中断"),
         status: "idle",
         completed: true
       };

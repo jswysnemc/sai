@@ -4,6 +4,7 @@ import type { AgentProfileConfig, AppConfig } from "../../../api/contracts";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import { DEFAULT_AGENT_ID } from "../../agents/agent-options";
 import type { AgentProfile } from "../../agents/agent-types";
+import { useI18n } from "../../i18n/use-i18n";
 import { ObjectListPanel } from "../object-list-panel";
 import { AgentProfileEditor } from "./agent-profile-editor";
 import {
@@ -29,10 +30,11 @@ type AgentProfileWorkspaceProps = {
  */
 export function AgentProfileWorkspace({ config, options, onConfigChange }: AgentProfileWorkspaceProps) {
   const confirm = useConfirm();
+  const { locale, t } = useI18n();
   const stored = config.agents ?? [];
   const profiles = useMemo(
-    () => buildVisibleAgentProfiles(stored, options, config.subagent?.profiles),
-    [config.subagent?.profiles, options, stored]
+    () => buildVisibleAgentProfiles(stored, options, config.subagent?.profiles, locale),
+    [config.subagent?.profiles, locale, options, stored]
   );
   const [selectedId, setSelectedId] = useState(DEFAULT_AGENT_ID);
   const selected = profiles.find((profile) => profile.id === selectedId) ?? profiles[0] ?? null;
@@ -58,7 +60,7 @@ export function AgentProfileWorkspace({ config, options, onConfigChange }: Agent
   */
   const addProfile = () => {
     // 1. 生成不与现有标识冲突的新档案
-    const created = createUniqueAgentProfile(stored, options);
+    const created = createUniqueAgentProfile(stored, options, {}, locale);
     // 2. 写回配置并切换到新档案
     persistProfiles([...stored, created]);
     setSelectedId(created.id);
@@ -89,9 +91,9 @@ export function AgentProfileWorkspace({ config, options, onConfigChange }: Agent
     if (!selected || selected.id === DEFAULT_AGENT_ID || BUILTIN_AGENT_PROFILES.some((profile) => profile.id === selected.id)) return;
     // 1. 使用统一确认对话框核对删除操作
     const confirmed = await confirm({
-      title: "删除 Agent",
-      description: `将删除“${selected.name || selected.id}”的全部配置。`,
-      confirmLabel: "删除 Agent",
+      title: t("Delete Agent", "删除 Agent"),
+      description: t(`Delete all configuration for “${selected.name || selected.id}”.`, `将删除“${selected.name || selected.id}”的全部配置。`),
+      confirmLabel: t("Delete Agent", "删除 Agent"),
       danger: true
     });
     if (!confirmed) return;
@@ -104,17 +106,17 @@ export function AgentProfileWorkspace({ config, options, onConfigChange }: Agent
   return (
     <div className="settings-objects-layout agent-profile-workspace">
       <ObjectListPanel
-        title="Agent 档案"
+        title={t("Agent profiles", "Agent 档案")}
         items={profiles.map((profile) => {
           const skillCount = profile.skills_full.length + profile.skills_named.length;
           const badges: string[] = [];
-          if (profile.id === DEFAULT_AGENT_ID) badges.push("默认");
-          else if (["general", "explore"].includes(profile.id)) badges.push("内置");
-          if (profile.register_to_main && profile.id !== DEFAULT_AGENT_ID) badges.push("已注册");
+          if (profile.id === DEFAULT_AGENT_ID) badges.push(t("Default", "默认"));
+          else if (["general", "explore"].includes(profile.id)) badges.push(t("Built-in", "内置"));
+          if (profile.register_to_main && profile.id !== DEFAULT_AGENT_ID) badges.push(t("Registered", "已注册"));
           const metaParts = [
-            `${profile.enabled_tools.length} 工具`,
+            t(`${profile.enabled_tools.length} tools`, `${profile.enabled_tools.length} 工具`),
             `${skillCount} Skills`,
-            profile.model ? profile.model : "沿用模型"
+            profile.model ? profile.model : t("Inherit model", "沿用模型")
           ];
           if (badges.length > 0) metaParts.unshift(badges.join(" · "));
           return {
@@ -126,8 +128,8 @@ export function AgentProfileWorkspace({ config, options, onConfigChange }: Agent
           };
         })}
         selectedId={selected?.id ?? ""}
-        searchPlaceholder="搜索 Agent"
-        addLabel="新增 Agent"
+        searchPlaceholder={t("Search Agents", "搜索 Agent")}
+        addLabel={t("Add Agent", "新增 Agent")}
         onSelect={setSelectedId}
         onAdd={addProfile}
       />
@@ -140,7 +142,7 @@ export function AgentProfileWorkspace({ config, options, onConfigChange }: Agent
           onRemove={() => void removeSelected()}
         />
       ) : (
-        <div className="settings-empty">没有可编辑的 Agent 档案</div>
+        <div className="settings-empty">{t("No editable Agent profiles", "没有可编辑的 Agent 档案")}</div>
       )}
     </div>
   );

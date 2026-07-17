@@ -39,7 +39,9 @@ async fn answer(
         return Ok(Json(json!({ "accepted": true, "status": "cancelled" })));
     }
     let Some(answers) = request.answers else {
-        return Err(WebError::bad_request("answers are required unless cancelled"));
+        return Err(WebError::bad_request(
+            "answers are required unless cancelled",
+        ));
     };
     answer_question(&id, answers).map_err(WebError::from)?;
     let _ = QuestionResponse::Answered(vec![]);

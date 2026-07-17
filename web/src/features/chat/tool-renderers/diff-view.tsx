@@ -2,6 +2,7 @@ import { SyntaxHighlighter } from "../syntax-highlighter";
 import { parseDiff } from "./diff-parser";
 import type { DiffFile, DiffLine } from "./diff-parser";
 import { ToolFileReference } from "./tool-file-reference";
+import { useI18n } from "../../i18n/use-i18n";
 
 type DiffViewProps = {
   source: string;
@@ -15,10 +16,11 @@ type DiffViewProps = {
  * @returns 按文件分块、带双行号列的 Diff 视图
  */
 export function DiffView({ source, headerPath }: DiffViewProps) {
-  const files = parseDiff(source);
+  const { locale, t } = useI18n();
+  const files = parseDiff(source, locale);
   if (files.length === 0) return null;
   return (
-    <div className="structured-diff" role="region" aria-label="文件差异">
+    <div className="structured-diff" role="region" aria-label={t("File diff", "文件差异")}>
       {files.map((file, index) => (
         <DiffFileBlock file={file} hidePath={files.length === 1 && file.path === headerPath} key={`${file.path}-${index}`} />
       ))}
@@ -33,6 +35,7 @@ export function DiffView({ source, headerPath }: DiffViewProps) {
  * @returns 文件差异块
  */
 function DiffFileBlock({ file, hidePath }: { file: DiffFile; hidePath: boolean }) {
+  const { t } = useI18n();
   const showOldLine = file.lines.some((line) => line.oldLine !== undefined);
   const showNewLine = file.lines.some((line) => line.newLine !== undefined);
   const gutterClass = showOldLine && showNewLine ? "double-gutter" : showOldLine || showNewLine ? "single-gutter" : "no-gutter";
@@ -40,7 +43,7 @@ function DiffFileBlock({ file, hidePath }: { file: DiffFile; hidePath: boolean }
     <section className="diff-file">
       <header className="diff-file-head">
         {!hidePath && file.path && <ToolFileReference path={file.path} />}
-        {!file.path && <strong>变更片段</strong>}
+        {!file.path && <strong>{t("Change fragment", "变更片段")}</strong>}
         <small>{file.action}</small>
         <span className="diff-file-stats">
           {file.added > 0 && <b>+{file.added}</b>}

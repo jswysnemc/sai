@@ -24,7 +24,10 @@ impl Agent {
         if !self.state.should_attempt_auto_compaction()? {
             return Ok(false);
         }
-        let Some(request) = self.state.select_compaction_for_projection(&projection, false)? else {
+        let Some(request) = self
+            .state
+            .select_compaction_for_projection(&projection, false)?
+        else {
             return Ok(false);
         };
         self.execute_compaction(&request, &projection, Some(turn_id), false, on_event)
@@ -65,7 +68,10 @@ impl Agent {
             projection.estimate.message_chars,
             projection.estimate.context_limit_chars,
         )?;
-        let Some(request) = self.state.select_compaction_for_projection(&projection, true)? else {
+        let Some(request) = self
+            .state
+            .select_compaction_for_projection(&projection, true)?
+        else {
             self.record_overflow_retry_failed(turn_id, messages, err)?;
             return Ok(false);
         };

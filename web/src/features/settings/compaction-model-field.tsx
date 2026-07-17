@@ -1,6 +1,7 @@
 import type { AppConfig } from "../../api/contracts";
 import { Select } from "../../shared/ui/select/select";
 import { buildChatModelChoices } from "../chat/chat-model-options";
+import { useI18n } from "../i18n/use-i18n";
 
 const INHERIT_VALUE = "";
 
@@ -16,6 +17,7 @@ type CompactionModelFieldProps = {
  * @returns 压缩模型设置字段
  */
 export function CompactionModelField({ config, onConfigChange }: CompactionModelFieldProps) {
+  const { t } = useI18n();
   const context = config.context ?? { default_max_chars: 120_000 };
   const current = context.compaction_provider_id && context.compaction_model
     ? encodeChoice(context.compaction_provider_id, context.compaction_model)
@@ -23,13 +25,13 @@ export function CompactionModelField({ config, onConfigChange }: CompactionModel
   const options = [
     {
       value: INHERIT_VALUE,
-      label: "跟随会话模型",
-      description: "每次压缩使用当前会话实际选择的模型"
+      label: t("Follow conversation model", "跟随会话模型"),
+      description: t("Use the model selected by the current conversation for each compaction", "每次压缩使用当前会话实际选择的模型")
     },
     ...buildChatModelChoices(config).map((choice) => ({
       value: encodeChoice(choice.providerId, choice.model),
       label: `${choice.providerName} / ${choice.model}`,
-      description: "始终使用该模型生成压缩摘要"
+      description: t("Always use this model to generate compaction summaries", "始终使用该模型生成压缩摘要")
     }))
   ];
 
@@ -48,16 +50,16 @@ export function CompactionModelField({ config, onConfigChange }: CompactionModel
 
   return (
     <label className="settings-field">
-      <span>压缩模型</span>
+      <span>{t("Compaction model", "压缩模型")}</span>
       <Select
         value={current}
         options={options}
-        ariaLabel="选择上下文压缩模型"
+        ariaLabel={t("Choose context compaction model", "选择上下文压缩模型")}
         menuPreferredWidth={360}
         menuMinimumWidth={280}
         onChange={update}
       />
-      <small>留空时自动跟随当前会话模型</small>
+      <small>{t("An empty value follows the current conversation model", "留空时自动跟随当前会话模型")}</small>
     </label>
   );
 }

@@ -1,4 +1,5 @@
 import type { LiveMessagePart, ToolLifecycle } from "../run-event-reducer";
+import { text, type Locale } from "../../i18n/locale";
 
 export type GroupedMessagePart =
   | { type: "part"; id: string; part: LiveMessagePart }
@@ -47,8 +48,10 @@ export function groupCompletedToolCalls(parts: LiveMessagePart[]): GroupedMessag
  * @param tools 工具组中的完成项
  * @returns 命令组、计划组或通用操作组标题
  */
-export function toolCallGroupLabel(tools: ToolLifecycle[]): string {
-  if (tools.every((tool) => tool.name === "todo")) return `更新了 ${tools.length} 次计划`;
+export function toolCallGroupLabel(tools: ToolLifecycle[], locale: Locale = "zh-CN"): string {
+  if (tools.every((tool) => tool.name === "todo")) return text(locale, `Updated the plan ${tools.length} times`, `更新了 ${tools.length} 次计划`);
   const commandOnly = tools.every((tool) => tool.name === "run_command" || tool.name.includes("command"));
-  return commandOnly ? `运行了 ${tools.length} 个命令` : `执行了 ${tools.length} 项操作`;
+  return commandOnly
+    ? text(locale, `Ran ${tools.length} commands`, `运行了 ${tools.length} 个命令`)
+    : text(locale, `Performed ${tools.length} operations`, `执行了 ${tools.length} 项操作`);
 }

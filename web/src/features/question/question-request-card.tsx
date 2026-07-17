@@ -5,6 +5,7 @@ import type { PendingQuestion, QuestionAnswers, QuestionPrompt, QuestionResponse
 import { Button } from "../../shared/ui/button/button";
 import { TextArea } from "../../shared/ui/form/text-area";
 import "./question-request-card.css";
+import { useI18n } from "../i18n/use-i18n";
 
 type QuestionRequestCardProps = {
   pending: PendingQuestion;
@@ -18,6 +19,7 @@ type CardStatus = "pending" | "answered" | "cancelled" | "unavailable";
  * 在助手消息流内渲染可交互结构化提问卡片。
  */
 export function QuestionRequestCard({ pending, response, active = true }: QuestionRequestCardProps) {
+  const { t } = useI18n();
   const questions = pending.request.questions;
   const [status, setStatus] = useState<CardStatus>(() => responseStatus(response));
   const [expanded, setExpanded] = useState(true);
@@ -26,15 +28,15 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
   const [customDrafts, setCustomDrafts] = useState<string[]>(() => questions.map(() => ""));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [resolvedSummary, setResolvedSummary] = useState<string[]>(() => summaryFromResponse(response));
+  const [resolvedSummary, setResolvedSummary] = useState<string[]>(() => summaryFromResponse(response, t));
 
   useEffect(() => {
     setStatus(responseStatus(response));
     setExpanded(true);
     setSubmitting(false);
     setError("");
-    setResolvedSummary(summaryFromResponse(response));
-  }, [pending.id, response]);
+    setResolvedSummary(summaryFromResponse(response, t));
+  }, [pending.id, response, t]);
 
   const current = questions[tab] ?? questions[0];
   const allAnswered = useMemo(() => answers.every((item) => item.length > 0), [answers]);
@@ -71,7 +73,7 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
 
   const submit = async () => {
     if (!allAnswered) {
-      setError("请先回答所有问题");
+      setError(t("Answer every question first", "请先回答所有问题"));
       return;
     }
     setSubmitting(true);
@@ -79,10 +81,10 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
     try {
       await api.questions.answer(pending.id, answers);
       setStatus("answered");
-      setResolvedSummary(answers.map((item) => item.join("、")));
+      setResolvedSummary(answers.map((item) => item.join(t(", ", "、"))));
       setExpanded(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "提交回答失败");
+      setError(cause instanceof Error ? cause.message : t("Failed to submit answers", "提交回答失败"));
     } finally {
       setSubmitting(false);
     }
@@ -96,7 +98,7 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
       setStatus("cancelled");
       setExpanded(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "取消提问失败");
+      setError(cause instanceof Error ? cause.message : t("Failed to cancel questions", "取消提问失败"));
     } finally {
       setSubmitting(false);
     }
@@ -112,8 +114,8 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
           {status === "answered" ? <Check size={14} /> : status === "cancelled" || status === "unavailable" ? <X size={14} /> : <HelpCircle size={14} />}
         </span>
         <span className="question-request-copy">
-          <strong>{statusLabel(status, active)}</strong>
-          <span>{questions.length} 个问题 · {questions.map((item) => item.header).join(" / ")}</span>
+          <strong>{statusLabel(status, active, t)}</strong>
+          <span>{t(`${questions.length} questions`, `${questions.length} 个问题`)} · {questions.map((item) => item.header).join(" / ")}</span>
         </span>
         <ChevronDown size={14} className={expanded ? "rotate" : ""} aria-hidden />
       </Button>
@@ -149,7 +151,7 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
               {questions.map((question, index) => (
                 <div key={`${question.header}-summary-${index}`}>
                   <span>{question.header}</span>
-                  {resolvedSummary[index] || "未回答"}
+                  {resolvedSummary[index] || t("Unanswered", "未回答")}
                 </div>
               ))}
             </div>
@@ -159,15 +161,15 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
               {error && <div className="question-request-error">{error}</div>}
               <div className="question-request-buttons">
                 <Button className="question-action" disabled={submitting} onClick={() => void cancel()}>
-                  {submitting ? "处理中" : "取消"}
+                  {submitting ? t("Processing", "处理中") : t("Cancel", "取消")}
                 </Button>
                 <Button variant="primary" className="question-action" disabled={submitting || !allAnswered} onClick={() => void submit()}>
-                  {submitting ? "提交中" : "提交回答"}
+                  {submitting ? t("Submitting", "提交中") : t("Submit answers", "提交回答")}
                 </Button>
               </div>
             </div>
           )}
-          {!resolved && !active && <div className="question-request-ended">提问已随本轮运行结束</div>}
+          {!resolved && !active && <div className="question-request-ended">{t("The questions ended with this run", "提问已随本轮运行结束")}</div>}
         </div>
       )}
     </section>
@@ -191,6 +193,7 @@ function QuestionPanel({
   onCustomDraft: (value: string) => void;
   onSaveCustom: () => void;
 }) {
+  const { t } = useI18n();
   const multiple = Boolean(question.multiple);
   const allowCustom = question.custom !== false;
   return (
@@ -207,7 +210,7 @@ function QuestionPanel({
               disabled={!interactive}
               onClick={() => onToggle(option.label)}
             >
-              <strong>{multiple ? (active ? "[✓] " : "[ ] ") : ""}{option.label}</strong>
+              <strong>{multiple ? (active ? "[x] " : "[ ] ") : ""}{option.label}</strong>
               {option.description && <span>{option.description}</span>}
             </button>
           );
@@ -215,10 +218,10 @@ function QuestionPanel({
       </div>
       {allowCustom && interactive && (
         <label className="question-custom">
-          <span>自定义答案</span>
-          <TextArea value={customDraft} onChange={(event) => onCustomDraft(event.target.value)} placeholder="输入其他答案" />
+          <span>{t("Custom answer", "自定义答案")}</span>
+          <TextArea value={customDraft} onChange={(event) => onCustomDraft(event.target.value)} placeholder={t("Enter another answer", "输入其他答案")} />
           <Button className="question-custom-save" disabled={!customDraft.trim()} onClick={onSaveCustom}>
-            使用自定义答案
+            {t("Use custom answer", "使用自定义答案")}
           </Button>
         </label>
       )}
@@ -226,13 +229,13 @@ function QuestionPanel({
   );
 }
 
-function statusLabel(status: CardStatus, active: boolean): string {
-  if (status === "pending" && !active) return "提问已结束";
+function statusLabel(status: CardStatus, active: boolean, t: (en: string, zh: string) => string): string {
+  if (status === "pending" && !active) return t("Questions ended", "提问已结束");
   return {
-    pending: "需要你的回答",
-    answered: "已回答",
-    cancelled: "已取消",
-    unavailable: "无法提问"
+    pending: t("Your answer is required", "需要你的回答"),
+    answered: t("Answered", "已回答"),
+    cancelled: t("Cancelled", "已取消"),
+    unavailable: t("Questions unavailable", "无法提问")
   }[status];
 }
 
@@ -243,7 +246,7 @@ function responseStatus(response?: QuestionResponse): CardStatus {
   return "unavailable";
 }
 
-function summaryFromResponse(response?: QuestionResponse): string[] {
+function summaryFromResponse(response: QuestionResponse | undefined, t: (en: string, zh: string) => string): string[] {
   if (!response || response.status !== "answered") return [];
-  return response.data.map((item) => item.join("、"));
+  return response.data.map((item) => item.join(t(", ", "、")));
 }

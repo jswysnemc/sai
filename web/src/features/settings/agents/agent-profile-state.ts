@@ -2,6 +2,7 @@ import type { AgentProfileConfig, SubagentProfileConfig } from "../../../api/con
 import { buildDefaultAgent, DEFAULT_AGENT_ID } from "../../agents/agent-options";
 import type { AgentProfile } from "../../agents/agent-types";
 import type { AgentOptions } from "./agents-types";
+import { text, type Locale } from "../../i18n/locale";
 
 export const BUILTIN_AGENT_PROFILES: AgentProfileConfig[] = [
   {
@@ -80,7 +81,8 @@ export function normalizeAgentProfile(
 export function buildVisibleAgentProfiles(
   profiles: readonly AgentProfileConfig[] | undefined,
   options: AgentOptions,
-  legacyProfiles: readonly SubagentProfileConfig[] | undefined = undefined
+  legacyProfiles: readonly SubagentProfileConfig[] | undefined = undefined,
+  locale: Locale = "zh-CN"
 ): AgentProfile[] {
   const configured = profiles ?? [];
   const migrated = (legacyProfiles ?? [])
@@ -91,7 +93,7 @@ export function buildVisibleAgentProfiles(
     }));
   const stored = [...configured, ...migrated];
   const normalized = stored.map((profile) => normalizeAgentProfile(profile));
-  const builtins = BUILTIN_AGENT_PROFILES.map((builtin) => {
+  const builtins = localizedBuiltinProfiles(locale).map((builtin) => {
     const override = stored.find((profile) => profile.id === builtin.id);
     const defaults = builtin.id === "general"
       ? {
@@ -105,7 +107,7 @@ export function buildVisibleAgentProfiles(
   const custom = normalized.filter((profile) => !BUILTIN_AGENT_PROFILES.some((builtin) => builtin.id === profile.id));
   const visible = [...builtins, ...custom];
   if (!visible.some((profile) => profile.id === DEFAULT_AGENT_ID)) {
-    visible.unshift(buildDefaultAgent(options));
+    visible.unshift(buildDefaultAgent(options, locale));
   }
   return visible;
 }
@@ -121,14 +123,15 @@ export function buildVisibleAgentProfiles(
 export function createUniqueAgentProfile(
   profiles: readonly AgentProfileConfig[],
   options: AgentOptions,
-  overrides: Partial<AgentProfile> = {}
+  overrides: Partial<AgentProfile> = {},
+  locale: Locale = "zh-CN"
 ): AgentProfile {
   const id = nextNumericId(profiles.map((profile) => profile.id), "agent");
   const number = id.slice("agent-".length);
   const { id: _ignoredId, ...fields } = overrides;
   return normalizeAgentProfile({
     id,
-    name: `新 Agent ${number}`,
+    name: text(locale, `New Agent ${number}`, `新 Agent ${number}`),
     description: "",
     system_prompt: "",
     enabled_tools: options.tools.map((tool) => tool.name),
@@ -139,6 +142,32 @@ export function createUniqueAgentProfile(
     thinking_level: "auto",
     register_to_main: false,
     ...fields
+  });
+}
+
+/**
+ * 返回指定语言的内置 Agent 档案。
+ *
+ * @param locale 当前界面语言
+ * @returns 带本地化名称和说明的内置档案
+ */
+function localizedBuiltinProfiles(locale: Locale): AgentProfileConfig[] {
+  return BUILTIN_AGENT_PROFILES.map((profile) => {
+    if (profile.id === "general") return {
+      ...profile,
+      name: text(locale, "Coding Agent", "代码 Agent"),
+      description: text(locale, "Suitable for implementation, testing, documentation, and general engineering tasks", "适合实现、测试、文档和常规工程任务")
+    };
+    if (profile.id === "explore") return {
+      ...profile,
+      name: text(locale, "Explore Agent", "探索 Agent"),
+      description: text(locale, "Suitable for read-only search, code navigation, and research", "适合只读检索、代码定位和资料探索")
+    };
+    return {
+      ...profile,
+      name: text(locale, "Gateway Agent", "网关 Agent"),
+      description: text(locale, "Suitable for QQ, WeChat, and other messaging gateways: concise replies, troubleshooting, and queries", "适合 QQ/微信等即时通讯网关：短回复、排障与查询")
+    };
   });
 }
 

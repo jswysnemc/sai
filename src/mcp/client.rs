@@ -10,6 +10,10 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
 
+#[path = "naming.rs"]
+mod naming;
+pub use naming::dynamic_tool_name;
+
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 static POOL: OnceLock<Mutex<HashMap<String, Arc<Mutex<PooledClient>>>>> = OnceLock::new();
 
@@ -141,12 +145,7 @@ impl PooledClient {
         self.transport.request(id, payload, timeout_ms).await
     }
 
-    async fn notify(
-        &mut self,
-        method: &str,
-        params: Value,
-        timeout_ms: Option<u64>,
-    ) -> Result<()> {
+    async fn notify(&mut self, method: &str, params: Value, timeout_ms: Option<u64>) -> Result<()> {
         let payload = json!({
             "jsonrpc": "2.0",
             "method": method,
@@ -155,7 +154,10 @@ impl PooledClient {
         self.transport.notify(payload, timeout_ms).await
     }
 
-    async fn list_tools(&mut self, timeout_ms: Option<u64>) -> Result<Vec<(String, String, Value)>> {
+    async fn list_tools(
+        &mut self,
+        timeout_ms: Option<u64>,
+    ) -> Result<Vec<(String, String, Value)>> {
         let result = self.request("tools/list", json!({}), timeout_ms).await?;
         let tools = result
             .get("tools")
@@ -326,16 +328,9 @@ impl Transport {
         })
     }
 
-    async fn request(
-        &mut self,
-        id: u64,
-        payload: Value,
-        timeout_ms: Option<u64>,
-    ) -> Result<Value> {
+    async fn request(&mut self, id: u64, payload: Value, timeout_ms: Option<u64>) -> Result<Value> {
         match self {
-            Self::Stdio {
-                stdin, reader, ..
-            } => {
+            Self::Stdio { stdin, reader, .. } => {
                 let line = format!("{payload}\n");
                 stdin.write_all(line.as_bytes()).await?;
                 stdin.flush().await?;
@@ -713,38 +708,6 @@ pub async fn test_server(config: &McpServerConfig) -> Result<(usize, Vec<String>
         tools.len(),
         tools.into_iter().map(|tool| tool.name).collect(),
     ))
-}
-
-/// 规范化动态工具名：mcp_<server>_<tool>
-pub fn dynamic_tool_name(server_id: &str, tool_name: &str) -> String {
-    let server = sanitize_token(server_id);
-    let tool = sanitize_token(tool_name);
-    let mut name = format!("mcp_{server}_{tool}");
-    if name.len() > 64 {
-        let hash = {
-            use sha2::{Digest, Sha256};
-            let digest = Sha256::digest(name.as_bytes());
-            format!("{:x}", digest)[..8].to_string()
-        };
-        name = format!("mcp_{server}_{hash}");
-        name.truncate(64);
-    }
-    name
-}
-
-fn sanitize_token(value: &str) -> String {
-    let mut out = String::new();
-    for ch in value.chars() {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch.to_ascii_lowercase());
-        } else {
-            out.push('_');
-        }
-    }
-    while out.contains("__") {
-        out = out.replace("__", "_");
-    }
-    out.trim_matches('_').to_string()
 }
 
 /// 汇总全部启用 server 的工具。

@@ -1,11 +1,15 @@
 use super::background_commands::BackgroundCommandsArgs;
 use crate::gateways::cli::{GatewayArgs, WeixinLoginArgs};
+use crate::i18n::{text as t, Locale};
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
 #[command(name = "sai", version, about = "Sai CLI AI Agent")]
 pub struct Cli {
+    #[arg(long, global = true, value_name = "LANG", value_parser = parse_language_argument)]
+    pub lang: Option<String>,
+
     #[arg(long)]
     pub plan: bool,
 
@@ -37,6 +41,25 @@ pub struct Cli {
 
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub message: Vec<String>,
+}
+
+/// 校验命令行界面语言并返回标准语言代码。
+///
+/// 参数:
+/// - `value`: 用户输入的语言代码
+///
+/// 返回:
+/// - 规范化后的语言代码；不受支持时返回校验错误
+fn parse_language_argument(value: &str) -> Result<String, String> {
+    Locale::parse(value)
+        .map(|locale| locale.code().to_string())
+        .ok_or_else(|| {
+            t(
+                "language must be en-US or zh-CN",
+                "语言必须为 en-US 或 zh-CN",
+            )
+            .to_string()
+        })
 }
 
 #[derive(Debug, Subcommand)]

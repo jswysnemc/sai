@@ -71,8 +71,8 @@ async fn document(
     Path(name): Path<String>,
 ) -> WebResult<Json<SkillDocumentResponse>> {
     let config = AppConfig::load_or_default(&state.paths).unwrap_or_default();
-    let content = tools::load_installed_skill_document(&name, &config, &state.paths)
-        .map_err(|error| {
+    let content =
+        tools::load_installed_skill_document(&name, &config, &state.paths).map_err(|error| {
             let message = error.to_string();
             if message.starts_with("skill not found:") {
                 WebError::not_found(message)

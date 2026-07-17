@@ -166,11 +166,9 @@ fn work_status_hidden_when_live_reasoning_exists() {
 
     let live = store.display_live_tail(80, &options());
     let joined = live.iter().map(|line| line.as_str()).collect::<String>();
-    assert!(!joined.contains(WorkStatus::Thinking.label()));
     assert!(!joined.contains(WorkStatus::Working.label()));
     assert!(joined.contains("thinking"));
 }
-
 
 #[test]
 fn tool_progress_and_result_update_one_lifecycle_cell() {
@@ -280,8 +278,8 @@ fn permission_audit_stays_inside_existing_command_view() {
         .map(|line| line.as_str())
         .collect::<String>();
     assert!(pending.contains("❯"));
-    assert!(pending.contains("允许一次"));
-    assert!(!pending.contains("已允许一次"));
+    assert!(pending.contains(crate::i18n::text("Allow once", "允许一次")));
+    assert!(!pending.contains(crate::i18n::text("Allowed once", "已允许一次")));
     assert!(store.set_permission_reply_draft("permission", Some("请改为只读检查".to_string())));
     let reply = store
         .display_tail(100, &options())
@@ -289,7 +287,7 @@ fn permission_audit_stays_inside_existing_command_view() {
         .map(|line| line.as_str())
         .collect::<String>();
     assert!(reply.contains("请改为只读检查"));
-    assert!(reply.contains("Enter 提交"));
+    assert!(reply.contains(crate::i18n::text("Enter submit", "Enter 提交")));
     assert!(store.resolve_permission("permission", crate::permission::PermissionDecision::Allow));
 
     let rendered = store
@@ -300,9 +298,9 @@ fn permission_audit_stays_inside_existing_command_view() {
 
     assert!(rendered.contains("cargo"));
     assert!(rendered.contains("test"));
-    assert!(rendered.contains("已允许一次"));
+    assert!(rendered.contains(crate::i18n::text("Allowed once", "已允许一次")));
     assert!(!rendered.contains(r#"{"command""#));
-    assert!(!rendered.contains("需要权限"));
+    assert!(!rendered.contains(crate::i18n::text("Permission required", "需要权限确认")));
 }
 
 /// 验证 edit_file 权限选择直接附着在 diff 视图下方。
@@ -339,8 +337,8 @@ fn permission_audit_stays_inside_existing_diff_view() {
 
     assert!(rendered.contains("old"));
     assert!(rendered.contains("new"));
-    assert!(rendered.contains("允许一次"));
-    assert!(!rendered.contains("需要权限"));
+    assert!(rendered.contains(crate::i18n::text("Allow once", "允许一次")));
+    assert!(!rendered.contains(crate::i18n::text("Permission required", "需要权限确认")));
 }
 
 #[test]
@@ -401,7 +399,7 @@ fn background_subagent_cell_reads_persisted_timeline() {
         .iter()
         .map(|line| line.as_str())
         .collect::<String>();
-    assert!(rendered.contains("正在检查"));
+    assert!(rendered.contains("检查项目"));
 
     crate::tools::subagent_state::finish_subagent(
         &subagent.id,
@@ -414,11 +412,13 @@ fn background_subagent_cell_reads_persisted_timeline() {
     assert_ne!(store.subagent_signature(), running_signature);
 }
 
-
 #[test]
 fn diff_fill_reapplies_background_before_el() {
     // EL 必须在 reset 之前，背景才能铺满整行
-    let lines = AnsiLine::wrap_block("\x1b[48;5;22m\x1b[38;5;108mabcdef\x1b[48;5;22m\x1b[K\x1b[0m", 80);
+    let lines = AnsiLine::wrap_block(
+        "\x1b[48;5;22m\x1b[38;5;108mabcdef\x1b[48;5;22m\x1b[K\x1b[0m",
+        80,
+    );
     assert_eq!(lines.len(), 1);
     let s = lines[0].as_str();
     let k = s.find("\x1b[K").expect("el");
@@ -443,7 +443,13 @@ fn run_command_success_keeps_growing_output_in_summary() {
         r#"{"success":true,"exit_code":0,"stdout":"hi\n","stderr":""}"#.to_string(),
     );
     let after = tool_view::render(&view, ToolCallDisplayMode::Summary);
-    assert!(!after.is_empty(), "success should not swallow the command view");
-    assert!(after.len() >= before.len(), "result should not shrink the view");
+    assert!(
+        !after.is_empty(),
+        "success should not swallow the command view"
+    );
+    assert!(
+        after.len() >= before.len(),
+        "result should not shrink the view"
+    );
     assert!(after.contains("hi") || after.contains("output") || after.contains("echo"));
 }

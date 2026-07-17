@@ -1,6 +1,7 @@
 import { CheckCheck, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
+import { useI18n } from "../../i18n/use-i18n";
 import type { AgentToolOption } from "./agents-types";
 import "./agent-permissions.css";
 
@@ -70,6 +71,7 @@ function PermissionCheckbox({ checked, indeterminate, ariaLabel, onChange }: Per
  * @returns 工具权限面板
  */
 export function AgentToolPermissions({ tools, enabled, onChange }: AgentToolPermissionsProps) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLocaleLowerCase();
 
@@ -103,7 +105,7 @@ export function AgentToolPermissions({ tools, enabled, onChange }: AgentToolPerm
   }, [normalizedQuery, tools]);
 
   if (tools.length === 0) {
-    return <p className="agent-permissions-empty">暂无可用工具。</p>;
+    return <p className="agent-permissions-empty">{t("No tools available.", "暂无可用工具。")}</p>;
   }
 
   const enabledCount = tools.filter((tool) => enabled.includes(tool.name)).length;
@@ -116,26 +118,26 @@ export function AgentToolPermissions({ tools, enabled, onChange }: AgentToolPerm
           <input
             type="search"
             value={query}
-            placeholder="搜索工具、分组或说明"
-            aria-label="搜索工具、分组或说明"
+            placeholder={t("Search tools, groups, or descriptions", "搜索工具、分组或说明")}
+            aria-label={t("Search tools, groups, or descriptions", "搜索工具、分组或说明")}
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
-        <span className="agent-permissions-summary">已启用 {enabledCount}/{tools.length}</span>
+        <span className="agent-permissions-summary">{t(`Enabled ${enabledCount}/${tools.length}`, `已启用 ${enabledCount}/${tools.length}`)}</span>
         <div className="agent-permissions-actions">
           <Button onClick={() => onChange(tools.map((tool) => tool.name))}>
             <CheckCheck size={14} aria-hidden="true" />
-            全部启用
+            {t("Enable all", "全部启用")}
           </Button>
           <Button onClick={() => onChange([])} disabled={enabled.length === 0}>
             <X size={14} aria-hidden="true" />
-            全部清空
+            {t("Clear all", "全部清空")}
           </Button>
         </div>
       </div>
 
       {groups.length === 0 ? (
-        <p className="agent-permissions-empty">没有匹配的工具。</p>
+        <p className="agent-permissions-empty">{t("No matching tools.", "没有匹配的工具。")}</p>
       ) : (
         <div className="agent-tool-permission-groups">
           {groups.map(({ group, label, allItems, visibleItems }) => {
@@ -147,7 +149,7 @@ export function AgentToolPermissions({ tools, enabled, onChange }: AgentToolPerm
                   <PermissionCheckbox
                     checked={checkedCount === groupNames.length}
                     indeterminate={checkedCount > 0 && checkedCount < groupNames.length}
-                    ariaLabel={`选择${label}分组的全部工具`}
+                    ariaLabel={t(`Select all tools in the ${label} group`, `选择${label}分组的全部工具`)}
                     onChange={(checked) => onChange(updateEnabledTools(enabled, groupNames, checked))}
                   />
                   <div className="agent-tool-permission-group-title">

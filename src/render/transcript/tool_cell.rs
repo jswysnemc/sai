@@ -8,7 +8,10 @@ use crate::render::ToolCallDisplayMode;
 pub(crate) enum ToolCell {
     Invocation(ToolView),
     Subagent(SubagentCell),
-    CompactionStarted { turn_count: usize, model: String },
+    CompactionStarted {
+        turn_count: usize,
+        model: String,
+    },
     CompactionFinished {
         applied: bool,
         message: Option<String>,
@@ -40,7 +43,11 @@ pub(crate) fn render(cell: &ToolCell, mode: ToolCallDisplayMode) -> String {
                 "compact context",
                 if *applied { "ok" } else { "skip" },
             )];
-            if let Some(message) = message.as_ref().map(String::as_str).filter(|value| !value.is_empty()) {
+            if let Some(message) = message
+                .as_ref()
+                .map(String::as_str)
+                .filter(|value| !value.is_empty())
+            {
                 lines.push(message.to_string());
             }
             if let Some(detail) = detail

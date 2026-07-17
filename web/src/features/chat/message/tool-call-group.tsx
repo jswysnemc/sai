@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { ToolLifecycle } from "../run-event-reducer";
 import { ToolLifecycleCard } from "../tool-lifecycle-card";
 import { toolCallGroupLabel } from "./tool-call-grouping";
+import { useI18n } from "../../i18n/use-i18n";
 import "./tool-call-group.css";
 
 /**
@@ -12,10 +13,11 @@ import "./tool-call-group.css";
  * @returns 工具组标题和可展开原始卡片
  */
 export function ToolCallGroup({ tools }: { tools: ToolLifecycle[] }) {
+  const { locale } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const todoOnly = tools.every((tool) => tool.name === "todo");
   const commandOnly = tools.every((tool) => tool.name === "run_command" || tool.name.includes("command"));
-  const label = toolCallGroupLabel(tools);
+  const label = toolCallGroupLabel(tools, locale);
   return (
     <section className={`tool-call-group${expanded ? " expanded" : ""}`}>
       <button type="button" className="tool-call-group-trigger" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>

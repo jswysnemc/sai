@@ -59,22 +59,17 @@ pub fn register_mcp_tools(registry: &mut ToolRegistry, config: &AppConfig) {
             tool.input_schema.clone()
         };
         registry.register(
-            ToolSpec::new(
-                dynamic_name,
-                description,
-                parameters,
-                move |args: Value| {
-                    let servers = Arc::clone(&servers);
-                    let server_id = server_id.clone();
-                    let remote_name = remote_name.clone();
-                    async move {
-                        let Some(server) = servers.get(&server_id) else {
-                            anyhow::bail!("mcp server not found: {server_id}");
-                        };
-                        call_server_tool(server, &remote_name, args).await
-                    }
-                },
-            )
+            ToolSpec::new(dynamic_name, description, parameters, move |args: Value| {
+                let servers = Arc::clone(&servers);
+                let server_id = server_id.clone();
+                let remote_name = remote_name.clone();
+                async move {
+                    let Some(server) = servers.get(&server_id) else {
+                        anyhow::bail!("mcp server not found: {server_id}");
+                    };
+                    call_server_tool(server, &remote_name, args).await
+                }
+            })
             .writes(),
         );
     }

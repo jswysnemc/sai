@@ -62,10 +62,7 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
     let pending = total.saturating_sub(completed + in_progress + cancelled);
 
     // 摘要行：进度与状态统计
-    output.push_str(&format!(
-        "\n\x1b[2m  {}/{} done",
-        completed, total
-    ));
+    output.push_str(&format!("\n\x1b[2m  {}/{} done", completed, total));
     if in_progress > 0 {
         output.push_str(&format!(" · {in_progress} active"));
     }

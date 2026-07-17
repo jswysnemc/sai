@@ -2,9 +2,14 @@ use super::model::{SessionInfo, DEFAULT_SESSION_ID};
 use super::workspace::{current_workspace_scope, WorkspaceScope};
 use crate::paths::SaiPaths;
 use anyhow::{bail, Context, Result};
-use rusqlite;
 use chrono::Utc;
+use rusqlite;
 use std::path::{Path, PathBuf};
+
+#[path = "metadata.rs"]
+mod metadata;
+use metadata::{new_session_id, title_from_message};
+pub(super) use metadata::{sanitize_session_id, sort_sessions};
 
 /// 创建新会话并设为当前会话。
 ///
@@ -64,7 +69,6 @@ fn create_session_in_scope(scope: &WorkspaceScope, title: Option<&str>) -> Resul
     std::fs::create_dir_all(session_state_dir(&scope.state_dir, &session.id))?;
     Ok(session)
 }
-
 
 /// 将源会话截断到指定轮次（含），复制到新建会话；源会话不变。
 ///
@@ -677,82 +681,6 @@ pub(super) fn session_state_dir(base_state_dir: &Path, session_id: &str) -> Path
     base_state_dir
         .join("data")
         .join(sanitize_session_id(session_id))
-}
-
-/// 生成新会话 ID。
-///
-/// 参数:
-/// - 无
-///
-/// 返回:
-/// - 会话 ID
-fn new_session_id() -> String {
-    format!(
-        "session_{}_{}",
-        Utc::now().timestamp_millis(),
-        rand::random::<u16>()
-    )
-}
-
-/// 清理会话 ID。
-///
-/// 参数:
-/// - `session_id`: 原始会话 ID
-///
-/// 返回:
-/// - 安全会话 ID
-pub(super) fn sanitize_session_id(session_id: &str) -> String {
-    let value = session_id
-        .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
-        .collect::<String>();
-    if value.is_empty() {
-        DEFAULT_SESSION_ID.to_string()
-    } else {
-        value
-    }
-}
-
-/// 从用户消息生成会话标题。
-///
-/// 参数:
-/// - `message`: 用户消息
-/// - `fallback`: 默认标题
-///
-/// 返回:
-/// - 会话标题
-fn title_from_message(message: &str, fallback: &str) -> String {
-    let title = message
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .chars()
-        .take(32)
-        .collect::<String>();
-    if title.trim().is_empty() {
-        fallback.to_string()
-    } else {
-        title
-    }
-}
-
-/// 按更新时间排序会话。
-///
-/// 参数:
-/// - `sessions`: 会话列表
-///
-/// 返回:
-/// - 无
-pub(super) fn sort_sessions(sessions: &mut [SessionInfo]) {
-    sessions.sort_by(|a, b| {
-        if a.id == DEFAULT_SESSION_ID {
-            std::cmp::Ordering::Greater
-        } else if b.id == DEFAULT_SESSION_ID {
-            std::cmp::Ordering::Less
-        } else {
-            b.updated_at.cmp(&a.updated_at)
-        }
-    });
 }
 
 include!("repository_tests.rs");

@@ -27,6 +27,7 @@ use std::io::{self, IsTerminal, Read, Write};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+mod agent_select;
 mod alarm_worker;
 mod args;
 mod background_commands;
@@ -41,7 +42,6 @@ mod kb_commands;
 mod localization;
 mod memory_commands;
 mod message;
-mod agent_select;
 mod model_select;
 mod permission_prompt;
 mod providers;
@@ -431,11 +431,7 @@ fn handle_agent_event(renderer: &mut render::StreamRenderer, event: AgentEvent) 
             renderer.write_compaction_started(turn_count, &model)
         }
         AgentEvent::CompactionDelta { text } => renderer.write_compaction_delta(text),
-        AgentEvent::CompactionFinished {
-            applied,
-            error,
-            ..
-        } => {
+        AgentEvent::CompactionFinished { applied, error, .. } => {
             renderer.write_compaction_finished(applied, error.as_ref())
         }
         AgentEvent::FlushContent => renderer.flush_content(),
@@ -526,9 +522,8 @@ fn prompt_permission_request_tui(
 /// 返回:
 /// - 是否成功提交回答
 fn prompt_question_request(pending: &crate::question::PendingQuestion) -> Result<()> {
-    let response = crate::question_tui::ask(&pending.request).unwrap_or_else(|err| {
-        crate::question::QuestionResponse::Unavailable(err.to_string())
-    });
+    let response = crate::question_tui::ask(&pending.request)
+        .unwrap_or_else(|err| crate::question::QuestionResponse::Unavailable(err.to_string()));
     crate::question::resolve_question(&pending.id, response)
 }
 
@@ -554,9 +549,8 @@ fn prompt_question_request_tui(
         rt.pause_for_permission_prompt()?;
     }
 
-    let response = crate::question_tui::ask(&pending.request).unwrap_or_else(|err| {
-        crate::question::QuestionResponse::Unavailable(err.to_string())
-    });
+    let response = crate::question_tui::ask(&pending.request)
+        .unwrap_or_else(|err| crate::question::QuestionResponse::Unavailable(err.to_string()));
 
     // 2. 恢复终端模式，交回后续流式输出和下一轮输入
     let _ = disable_repl_terminal_input(&mut stdout);

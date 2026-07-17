@@ -102,7 +102,13 @@ impl StateStore {
         let previous_summary = self
             .load_authoritative_compaction_summary()?
             .map(|summary| summary.summary);
-        Ok(super::select_compaction(&turns, previous_summary, 0, 1, true))
+        Ok(super::select_compaction(
+            &turns,
+            previous_summary,
+            0,
+            1,
+            true,
+        ))
     }
 
     /// 构造带工具历史预算的压缩摘要提示词。

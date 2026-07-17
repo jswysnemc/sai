@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CalendarPlus, LoaderCircle } from "lucide-react";
 import type { CreateCronJobRequest, Session } from "../../api/contracts";
 import { Select } from "../../shared/ui/select/select";
+import { useI18n } from "../i18n/use-i18n";
 
 type CronJobFormProps = {
   sessions: Session[];
@@ -30,6 +31,7 @@ function defaultRunAt(): string {
  * @returns 定时任务创建表单
  */
 export function CronJobForm({ sessions, pending, onSubmit }: CronJobFormProps) {
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
   const [sessionId, setSessionId] = useState("");
@@ -38,14 +40,14 @@ export function CronJobForm({ sessions, pending, onSubmit }: CronJobFormProps) {
   const [intervalMinutes, setIntervalMinutes] = useState(60);
   const sessionOptions = useMemo(
     () => [
-      { value: "", label: sessions.length === 0 ? "暂无可用会话" : "选择会话" },
+      { value: "", label: sessions.length === 0 ? t("No sessions available", "暂无可用会话") : t("Select a session", "选择会话") },
       ...sessions.map((session) => ({
         value: session.id,
         label: session.title,
-        description: session.active ? "当前会话" : undefined
+        description: session.active ? t("Current session", "当前会话") : undefined
       }))
     ],
-    [sessions]
+    [sessions, t]
   );
 
   useEffect(() => {
@@ -77,28 +79,28 @@ export function CronJobForm({ sessions, pending, onSubmit }: CronJobFormProps) {
     <form className="cron-form" onSubmit={(event) => void handleSubmit(event)}>
       <div className="cron-section-heading">
         <CalendarPlus size={18} />
-        <div><h2>创建任务</h2><p>任务由正在运行的 Gateway 调度器执行。</p></div>
+        <div><h2>{t("Create task", "创建任务")}</h2><p>{t("Tasks run through the active Gateway scheduler.", "任务由正在运行的 Gateway 调度器执行。")}</p></div>
       </div>
       <div className="cron-form-grid">
-        <label><span>任务名称</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：每日项目摘要" maxLength={120} /></label>
+        <label><span>{t("Task name", "任务名称")}</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("For example: Daily project summary", "例如：每日项目摘要")} maxLength={120} /></label>
         <label>
-          <span>目标会话</span>
+          <span>{t("Target session", "目标会话")}</span>
           <Select
             value={sessionId}
             options={sessionOptions}
             disabled={sessions.length === 0}
-            ariaLabel="目标会话"
+            ariaLabel={t("Target session", "目标会话")}
             menuPreferredWidth={320}
             menuMinimumWidth={220}
             onChange={setSessionId}
           />
         </label>
-        <label className="cron-field-wide"><span>执行提示词</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="输入任务执行时发送给智能体的指令" rows={4} /></label>
-        <fieldset className="cron-field-wide cron-schedule-field"><legend>调度方式</legend><div className="cron-segmented"><button type="button" className={scheduleKind === "once" ? "active" : ""} onClick={() => setScheduleKind("once")}>单次</button><button type="button" className={scheduleKind === "interval" ? "active" : ""} onClick={() => setScheduleKind("interval")}>固定间隔</button></div></fieldset>
-        <label><span>{scheduleKind === "once" ? "执行时间" : "首次执行时间"}</span><input type="datetime-local" value={runAt} onChange={(event) => setRunAt(event.target.value)} /></label>
-        {scheduleKind === "interval" && <label><span>间隔分钟数</span><input type="number" min={1} step={1} value={intervalMinutes} onChange={(event) => setIntervalMinutes(Number(event.target.value))} /></label>}
+        <label className="cron-field-wide"><span>{t("Execution prompt", "执行提示词")}</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={t("Enter the instruction sent to the agent when the task runs", "输入任务执行时发送给智能体的指令")} rows={4} /></label>
+        <fieldset className="cron-field-wide cron-schedule-field"><legend>{t("Schedule", "调度方式")}</legend><div className="cron-segmented"><button type="button" className={scheduleKind === "once" ? "active" : ""} onClick={() => setScheduleKind("once")}>{t("Once", "单次")}</button><button type="button" className={scheduleKind === "interval" ? "active" : ""} onClick={() => setScheduleKind("interval")}>{t("Fixed interval", "固定间隔")}</button></div></fieldset>
+        <label><span>{scheduleKind === "once" ? t("Run time", "执行时间") : t("First run time", "首次执行时间")}</span><input type="datetime-local" value={runAt} onChange={(event) => setRunAt(event.target.value)} /></label>
+        {scheduleKind === "interval" && <label><span>{t("Interval in minutes", "间隔分钟数")}</span><input type="number" min={1} step={1} value={intervalMinutes} onChange={(event) => setIntervalMinutes(Number(event.target.value))} /></label>}
       </div>
-      <button type="submit" className="cron-primary-button" disabled={pending || invalid || sessions.length === 0}>{pending ? <LoaderCircle size={15} className="spin" /> : <CalendarPlus size={15} />}创建任务</button>
+      <button type="submit" className="cron-primary-button" disabled={pending || invalid || sessions.length === 0}>{pending ? <LoaderCircle size={15} className="spin" /> : <CalendarPlus size={15} />}{t("Create task", "创建任务")}</button>
     </form>
   );
 }

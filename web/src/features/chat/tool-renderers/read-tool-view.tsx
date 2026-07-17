@@ -2,6 +2,7 @@ import { SyntaxHighlighter } from "../syntax-highlighter";
 import { parseReadTextPages, type ReadTextPage } from "./read-result-parser";
 import { prettyJson } from "./tool-data";
 import { ToolFileReference } from "./tool-file-reference";
+import { useI18n } from "../../i18n/use-i18n";
 
 type ReadToolViewProps = {
   argumentsText: string;
@@ -36,13 +37,14 @@ export function ReadToolView({ output, headerPath }: ReadToolViewProps) {
  * @returns 单文件内容块
  */
 function ReadTextPageView({ page, hidePath }: { page: ReadTextPage; hidePath: boolean }) {
+  const { t } = useI18n();
   const source = page.lines.map((line) => line.text).join("\n");
   return (
     <section className="read-file-page">
       {(!hidePath || page.offset !== null) && (
         <div className={`read-file-head${hidePath ? " path-hidden" : ""}`}>
           {!hidePath && <ToolFileReference path={page.path} />}
-          {page.offset !== null && <small>{`第 ${page.offset} 行起`}</small>}
+          {page.offset !== null && <small>{t(`Starting at line ${page.offset}`, `第 ${page.offset} 行起`)}</small>}
         </div>
       )}
       <div className="read-file-content">

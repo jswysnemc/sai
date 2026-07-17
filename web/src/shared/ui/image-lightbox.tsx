@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./image-lightbox.css";
+import { useI18n } from "../../features/i18n/use-i18n";
 
 type ImageLightboxProps = {
   src: string;
@@ -24,6 +25,7 @@ const MAX_SCALE = 6;
  * @returns 全屏图片查看层
  */
 export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
+  const { t } = useI18n();
   const [view, setView] = useState<ViewState>({ scale: 1, x: 0, y: 0 });
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -69,8 +71,8 @@ export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
   }, []);
 
   return (
-    <div className="image-lightbox" role="dialog" aria-label={alt || "图片查看"} onClick={onClose} onWheel={onWheel}>
-      <button type="button" className="image-lightbox-close" aria-label="关闭图片" onClick={onClose}>
+    <div className="image-lightbox" role="dialog" aria-label={alt || t("Image viewer", "图片查看")} onClick={onClose} onWheel={onWheel}>
+      <button type="button" className="image-lightbox-close" aria-label={t("Close image", "关闭图片")} onClick={onClose}>
         <X size={18} />
       </button>
       <img

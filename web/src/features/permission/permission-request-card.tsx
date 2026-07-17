@@ -7,6 +7,7 @@ import { TextArea } from "../../shared/ui/form/text-area";
 import { toolCardSummary } from "../chat/tool-renderers/tool-card-summary";
 import { PermissionArgumentDetails } from "./permission-argument-details";
 import "./permission-request-card.css";
+import { useI18n } from "../i18n/use-i18n";
 
 type PermissionRequestCardProps = {
   request: PermissionRequest;
@@ -23,6 +24,7 @@ type PermissionCardStatus = "pending" | "allowed" | "denied";
  * @returns 内嵌权限审核卡片
  */
 export function PermissionRequestCard({ request, decision, active = true }: PermissionRequestCardProps) {
+  const { t } = useI18n();
   const [status, setStatus] = useState<PermissionCardStatus>(() => decisionStatus(decision));
   const [expanded, setExpanded] = useState(true);
   const [replyOpen, setReplyOpen] = useState(false);
@@ -55,7 +57,7 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
       setStatus(decision === "allow" ? "allowed" : "denied");
       setExpanded(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "提交权限决定失败");
+      setError(cause instanceof Error ? cause.message : t("Failed to submit permission decision", "提交权限决定失败"));
     } finally {
       setSubmitting(null);
     }
@@ -70,8 +72,8 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
           {status === "allowed" ? <Check size={14} /> : status === "denied" ? <X size={14} /> : <ShieldAlert size={14} />}
         </span>
         <span className="permission-request-copy">
-          <strong>{statusLabel(status, active)}</strong>
-          <span title={summary}>{actionLabel(request.tool)} · {summary}</span>
+          <strong>{statusLabel(status, active, t)}</strong>
+          <span title={summary}>{actionLabel(request.tool, t)} · {summary}</span>
         </span>
         <ChevronDown size={14} className={expanded ? "rotate" : ""} aria-hidden />
       </Button>
@@ -82,23 +84,23 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
             <div className="permission-request-actions">
               {replyOpen && (
                 <label className="permission-request-inline-reply">
-                  <span>告诉 Sai 应如何调整</span>
-                  <TextArea value={reply} onChange={(event) => setReply(event.target.value)} placeholder="说明拒绝原因或提供替代要求" autoFocus />
+                  <span>{t("Tell Sai how to adjust", "告诉 Sai 应如何调整")}</span>
+                  <TextArea value={reply} onChange={(event) => setReply(event.target.value)} placeholder={t("Explain the reason for denial or provide an alternative request", "说明拒绝原因或提供替代要求")} autoFocus />
                 </label>
               )}
               {error && <div className="permission-request-error">{error}</div>}
               <div className="permission-request-buttons">
-                <Button className="permission-action" disabled={Boolean(submitting)} onClick={() => void decide("deny")}>{submitting === "deny" ? "正在拒绝" : "拒绝"}</Button>
-                <Button className="permission-action" disabled={Boolean(submitting)} onClick={() => setReplyOpen((value) => !value)}>拒绝并回复</Button>
-                <Button variant="primary" className="permission-action" disabled={Boolean(submitting)} onClick={() => void decide("allow")}>{submitting === "allow" ? "正在允许" : "允许一次"}</Button>
+                <Button className="permission-action" disabled={Boolean(submitting)} onClick={() => void decide("deny")}>{submitting === "deny" ? t("Denying", "正在拒绝") : t("Deny", "拒绝")}</Button>
+                <Button className="permission-action" disabled={Boolean(submitting)} onClick={() => setReplyOpen((value) => !value)}>{t("Deny with reply", "拒绝并回复")}</Button>
+                <Button variant="primary" className="permission-action" disabled={Boolean(submitting)} onClick={() => void decide("allow")}>{submitting === "allow" ? t("Allowing", "正在允许") : t("Allow once", "允许一次")}</Button>
               </div>
               {replyOpen && (
-                <Button className="permission-reply-submit" disabled={Boolean(submitting) || !reply.trim()} onClick={() => void decide("deny", true)}>{submitting === "deny" ? "正在提交" : "提交拒绝回复"}</Button>
+                <Button className="permission-reply-submit" disabled={Boolean(submitting) || !reply.trim()} onClick={() => void decide("deny", true)}>{submitting === "deny" ? t("Submitting", "正在提交") : t("Submit denial reply", "提交拒绝回复")}</Button>
               )}
             </div>
           )}
-          {!resolved && !active && <div className="permission-request-ended">权限请求已随本轮运行结束</div>}
-          {resolved && reply.trim() && status === "denied" && <div className="permission-resolved-reply"><span>回复</span>{reply.trim()}</div>}
+          {!resolved && !active && <div className="permission-request-ended">{t("The permission request ended with this run", "权限请求已随本轮运行结束")}</div>}
+          {resolved && reply.trim() && status === "denied" && <div className="permission-resolved-reply"><span>{t("Reply", "回复")}</span>{reply.trim()}</div>}
         </div>
       )}
     </section>
@@ -109,24 +111,30 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
  * 返回工具权限动作标签。
  *
  * @param tool 工具名称
+ * @param t 双语文本选择方法
  * @returns 用户可读动作
  */
-function actionLabel(tool: string): string {
-  if (tool === "run_command" || tool.includes("background_command")) return "执行命令";
-  if (tool === "edit_file" || tool === "apply_patch") return "修改文件";
-  if (tool === "trash_path") return "移入回收站";
-  return "执行工具";
+function actionLabel(tool: string, t: (en: string, zh: string) => string): string {
+  if (tool === "run_command" || tool.includes("background_command")) return t("Run command", "执行命令");
+  if (tool === "edit_file" || tool === "apply_patch") return t("Modify file", "修改文件");
+  if (tool === "trash_path") return t("Move to trash", "移入回收站");
+  return t("Run tool", "执行工具");
 }
 
 /**
  * 返回权限卡片状态标签。
  *
  * @param status 当前卡片状态
- * @returns 中文状态标签
+ * @param t 双语文本选择方法
+ * @returns 状态标签
  */
-function statusLabel(status: PermissionCardStatus, active: boolean): string {
-  if (status === "pending" && !active) return "请求已结束";
-  return { pending: "需要权限", allowed: "已允许一次", denied: "已拒绝" }[status];
+function statusLabel(status: PermissionCardStatus, active: boolean, t: (en: string, zh: string) => string): string {
+  if (status === "pending" && !active) return t("Request ended", "请求已结束");
+  return {
+    pending: t("Permission required", "需要权限"),
+    allowed: t("Allowed once", "已允许一次"),
+    denied: t("Denied", "已拒绝")
+  }[status];
 }
 
 /**

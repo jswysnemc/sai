@@ -9,9 +9,10 @@ type ImageFilePreviewProps = {
  * @returns 图像预览
  */
 export function ImageFilePreview({ path }: ImageFilePreviewProps) {
+  const { t } = useI18n();
   return (
     <div className="editor-image-preview">
-      <img src={`/api/workspace/image?path=${encodeURIComponent(path)}`} alt={path.split(/[\\/]/).pop() ?? "图像预览"} />
+      <img src={`/api/workspace/image?path=${encodeURIComponent(path)}`} alt={path.split(/[\\/]/).pop() ?? t("Image preview", "图像预览")} />
     </div>
   );
 }
@@ -25,3 +26,4 @@ export function ImageFilePreview({ path }: ImageFilePreviewProps) {
 export function isImageFile(path: string): boolean {
   return /\.(png|jpe?g|gif|webp|bmp|svg|ico)$/i.test(path);
 }
+import { useI18n } from "../i18n/use-i18n";

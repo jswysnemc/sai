@@ -1,6 +1,7 @@
 import { type CSSProperties, type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react";
 import { evenlySpacedOverviewPosition, type MessageOverviewItem } from "./message-overview-utils";
 import "./message-overview-rail.css";
+import { useI18n } from "../i18n/use-i18n";
 
 interface MessageOverviewRailProps {
   scrollContainerRef: RefObject<HTMLElement | null>;
@@ -66,6 +67,7 @@ function layoutsEqual(previous: PositionedOverviewItem[], next: PositionedOvervi
  * @returns 消息概览轨道
  */
 export function MessageOverviewRail({ scrollContainerRef, items, activeId, onNavigate }: MessageOverviewRailProps) {
+  const { t } = useI18n();
   const railRef = useRef<HTMLElement>(null);
   const frameRef = useRef<number | null>(null);
   const itemsRef = useRef(items);
@@ -178,7 +180,7 @@ export function MessageOverviewRail({ scrollContainerRef, items, activeId, onNav
   if (items.length === 0) return null;
 
   return (
-    <nav ref={railRef} className={`message-overview-rail${visible ? "" : " is-hidden"}`} aria-label="消息概览">
+    <nav ref={railRef} className={`message-overview-rail${visible ? "" : " is-hidden"}`} aria-label={t("Message overview", "消息概览")}>
       <ol className="message-overview-list">
         {positionedItems.map(({ item, top, active }) => {
           const style = { "--message-overview-top": `${top}px` } as CSSProperties;
@@ -192,7 +194,7 @@ export function MessageOverviewRail({ scrollContainerRef, items, activeId, onNav
                 onMouseLeave={() => setPreviewId((current) => current === item.id ? null : current)}
                 onFocus={() => setPreviewId(item.id)}
                 onBlur={() => setPreviewId((current) => current === item.id ? null : current)}
-                aria-label={`跳转到${item.title}`}
+                aria-label={t(`Jump to ${item.title}`, `跳转到${item.title}`)}
                 aria-current={active ? "location" : undefined}
                 aria-describedby={previewId === item.id ? `message-overview-preview-${item.id}` : undefined}
               >

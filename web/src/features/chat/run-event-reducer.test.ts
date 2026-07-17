@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WebEvent } from "../../api/contracts";
-import { initialRunState, runEventReducer } from "./run-event-reducer";
+import { initialRunState, relocalizeRunError, runEventReducer } from "./run-event-reducer";
 
 function event(type: string, payload: Record<string, unknown>): WebEvent {
   return { sequence: 1, run_id: "run", workspace_id: "workspace", session_id: "session", timestamp: "now", type, payload };
@@ -179,5 +179,11 @@ describe("runEventReducer", () => {
     expect(interrupted.content).toBe("partial");
     expect(interrupted.completed).toBe(true);
     expect(interrupted.error).toContain("已保留");
+  });
+
+  it("relocalizes built-in run errors after the interface language changes", () => {
+    expect(relocalizeRunError("运行已中断", "en-US")).toBe("The run was interrupted");
+    expect(relocalizeRunError("Run failed", "zh-CN")).toBe("运行失败");
+    expect(relocalizeRunError("provider error", "zh-CN")).toBe("provider error");
   });
 });

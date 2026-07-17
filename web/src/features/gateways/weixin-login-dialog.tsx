@@ -4,6 +4,7 @@ import { Modal } from "../../shared/ui/dialog/modal";
 import { api } from "../../api/client";
 import type { WeixinLoginAccount, WeixinLoginSnapshot } from "../../api/contracts";
 import "./weixin-login-dialog.css";
+import { useI18n } from "../i18n/use-i18n";
 
 type WeixinLoginDialogProps = {
   open: boolean;
@@ -14,22 +15,22 @@ type WeixinLoginDialogProps = {
 };
 
 /** 将登录阶段映射为界面提示文字。 */
-function phaseLabel(snapshot: WeixinLoginSnapshot | null): string {
-  if (!snapshot) return "正在获取二维码";
+function phaseLabel(snapshot: WeixinLoginSnapshot | null, t: (en: string, zh: string) => string): string {
+  if (!snapshot) return t("Fetching QR code", "正在获取二维码");
   if (snapshot.message) return snapshot.message;
   switch (snapshot.phase) {
     case "waiting":
-      return "请使用手机微信扫描二维码";
+      return t("Scan the QR code with Weixin on your phone", "请使用手机微信扫描二维码");
     case "scanned":
-      return "已扫码，等待手机确认";
+      return t("QR code scanned; confirm on your phone", "已扫码，等待手机确认");
     case "need_verify_code":
-      return "需要输入验证码";
+      return t("Verification code required", "需要输入验证码");
     case "confirmed":
-      return "登录成功";
+      return t("Login successful", "登录成功");
     case "expired":
-      return "二维码已过期";
+      return t("QR code expired", "二维码已过期");
     case "failed":
-      return "登录失败";
+      return t("Login failed", "登录失败");
     default:
       return "";
   }
@@ -42,6 +43,7 @@ function phaseLabel(snapshot: WeixinLoginSnapshot | null): string {
  * @returns 微信扫码登录弹窗
  */
 export function WeixinLoginDialog({ open, baseUrl, botType, onClose, onConfirmed }: WeixinLoginDialogProps) {
+  const { t } = useI18n();
   const [snapshot, setSnapshot] = useState<WeixinLoginSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [verifyCode, setVerifyCode] = useState("");
@@ -121,7 +123,7 @@ export function WeixinLoginDialog({ open, baseUrl, botType, onClose, onConfirmed
   const confirmed = snapshot?.phase === "confirmed";
 
   return (
-    <Modal open={open} title="微信扫码登录" description="使用手机微信扫描二维码完成登录，凭证将自动保存并回填配置。" size="small" onClose={onClose}>
+    <Modal open={open} title={t("Weixin QR-code login", "微信扫码登录")} description={t("Scan the QR code with Weixin on your phone. Credentials are saved and filled into configuration automatically.", "使用手机微信扫描二维码完成登录，凭证将自动保存并回填配置。")} size="small" onClose={onClose}>
       <div className="weixin-login">
         <div className="weixin-login-qr">
           {snapshot?.qrcode_svg ? (
@@ -130,25 +132,25 @@ export function WeixinLoginDialog({ open, baseUrl, botType, onClose, onConfirmed
             <div className="weixin-login-qr-placeholder"><LoaderCircle size={22} className="spin" /></div>
           )}
         </div>
-        <p className={confirmed ? "weixin-login-status confirmed" : "weixin-login-status"}>{phaseLabel(snapshot)}</p>
+        <p className={confirmed ? "weixin-login-status confirmed" : "weixin-login-status"}>{phaseLabel(snapshot, t)}</p>
         {needVerify && (
           <div className="weixin-login-verify">
             <input
               value={verifyCode}
               onChange={(event) => setVerifyCode(event.target.value)}
-              placeholder="输入验证码"
+              placeholder={t("Enter verification code", "输入验证码")}
               spellCheck={false}
               onKeyDown={(event) => { if (event.key === "Enter") void handleVerify(); }}
             />
             <button type="button" onClick={() => void handleVerify()} disabled={submitting || !verifyCode.trim()}>
-              {submitting ? <LoaderCircle size={14} className="spin" /> : "提交"}
+              {submitting ? <LoaderCircle size={14} className="spin" /> : t("Submit", "提交")}
             </button>
           </div>
         )}
         {confirmed && snapshot?.account && (
           <dl className="weixin-login-account">
-            <div><dt>账号</dt><dd>{snapshot.account.account_id}</dd></div>
-            <div><dt>API 地址</dt><dd>{snapshot.account.base_url}</dd></div>
+            <div><dt>{t("Account", "账号")}</dt><dd>{snapshot.account.account_id}</dd></div>
+            <div><dt>{t("API address", "API 地址")}</dt><dd>{snapshot.account.base_url}</dd></div>
           </dl>
         )}
         {error && <div className="weixin-login-error">{error}</div>}

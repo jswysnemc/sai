@@ -3,6 +3,7 @@ import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { api } from "../../../api/client";
 import type { FileNode } from "../../../api/contracts";
+import { useI18n } from "../../i18n/use-i18n";
 
 type FileMentionPopoverProps = {
   open: boolean;
@@ -45,6 +46,7 @@ function filterPaths(paths: string[], query: string): string[] {
  * @returns 文件引用浮层，关闭时返回 null
  */
 export const FileMentionPopover = forwardRef<HTMLDivElement, FileMentionPopoverProps>(function FileMentionPopover({ open, onSelect, onClose }, ref) {
+  const { t } = useI18n();
   const [paths, setPaths] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
@@ -120,12 +122,12 @@ export const FileMentionPopover = forwardRef<HTMLDivElement, FileMentionPopoverP
 
   if (!open) return null;
   return (
-    <div className="file-mention-popover" role="listbox" aria-label="选择引用文件" ref={ref}>
+    <div className="file-mention-popover" role="listbox" aria-label={t("Choose a referenced file", "选择引用文件")} ref={ref}>
       <input
         ref={inputRef}
         className="file-mention-filter"
         value={query}
-        placeholder="筛选文件路径"
+        placeholder={t("Filter file paths", "筛选文件路径")}
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={handleKeyDown}
       />
@@ -144,7 +146,7 @@ export const FileMentionPopover = forwardRef<HTMLDivElement, FileMentionPopoverP
             <span>{path}</span>
           </button>
         ))}
-        {filtered.length === 0 && <div className="file-mention-empty">{loading ? "正在加载文件树" : "没有匹配的文件"}</div>}
+        {filtered.length === 0 && <div className="file-mention-empty">{loading ? t("Loading file tree", "正在加载文件树") : t("No matching files", "没有匹配的文件")}</div>}
       </div>
     </div>
   );

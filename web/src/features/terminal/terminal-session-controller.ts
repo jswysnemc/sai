@@ -7,6 +7,7 @@ type TerminalSessionControllerOptions = {
   terminal: Terminal;
   onStatusChange: (status: TerminalConnectionStatus) => void;
   onError: (message: string | null) => void;
+  disconnectedMessage: string;
 };
 
 export type TerminalSessionController = {
@@ -79,7 +80,7 @@ export function connectTerminalSession(options: TerminalSessionControllerOptions
     reconnectAttempts += 1;
     if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
       options.onStatusChange("failed");
-      options.onError("终端连接已断开，请重新选择终端或新建会话");
+      options.onError(options.disconnectedMessage);
       return;
     }
     options.onStatusChange("reconnecting");

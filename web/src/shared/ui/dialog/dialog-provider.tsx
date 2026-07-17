@@ -1,5 +1,6 @@
 import { createContext, useContext, useRef, useState } from "react";
 import { Modal } from "./modal";
+import { useI18n } from "../../../features/i18n/use-i18n";
 import "./dialog.css";
 
 export type ConfirmOptions = {
@@ -23,6 +24,7 @@ const DialogContext = createContext<((options: ConfirmOptions) => Promise<boolea
  * @returns 对话框上下文提供器
  */
 export function DialogProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n();
   const [request, setRequest] = useState<ConfirmRequest | null>(null);
   const activeRequest = useRef<ConfirmRequest | null>(null);
 
@@ -47,18 +49,18 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
       {children}
       <Modal
         open={Boolean(request)}
-        title={request?.title ?? "确认操作"}
+        title={request?.title ?? t("Confirm action", "确认操作")}
         description={request?.description}
         size="small"
         onClose={() => settle(false)}
         footer={(
           <>
-            <button type="button" className="ui-button secondary" onClick={() => settle(false)}>{request?.cancelLabel ?? "取消"}</button>
-            <button type="button" className={request?.danger ? "ui-button danger" : "ui-button primary"} onClick={() => settle(true)}>{request?.confirmLabel ?? "确认"}</button>
+            <button type="button" className="ui-button secondary" onClick={() => settle(false)}>{request?.cancelLabel ?? t("Cancel", "取消")}</button>
+            <button type="button" className={request?.danger ? "ui-button danger" : "ui-button primary"} onClick={() => settle(true)}>{request?.confirmLabel ?? t("Confirm", "确认")}</button>
           </>
         )}
       >
-        <div className="confirm-dialog-detail">操作确认后立即执行。</div>
+        <div className="confirm-dialog-detail">{t("The action runs immediately after confirmation.", "操作确认后立即执行。")}</div>
       </Modal>
     </DialogContext.Provider>
   );

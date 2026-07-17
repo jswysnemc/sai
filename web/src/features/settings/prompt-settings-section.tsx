@@ -6,6 +6,7 @@ import type { AppConfig, PromptKind } from "../../api/contracts";
 import { EditorHeader } from "./editor-layout";
 import { ObjectListPanel } from "./object-list-panel";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
+import { useI18n } from "../i18n/use-i18n";
 
 type PromptSettingsSectionProps = {
   config: AppConfig;
@@ -19,6 +20,7 @@ type PromptSettingsSectionProps = {
  * @returns 提示词管理区域
  */
 export function PromptSettingsSection({ config, onConfigChange }: PromptSettingsSectionProps) {
+  const { t } = useI18n();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
   const [kind, setKind] = useState<PromptKind>("personas");
@@ -54,7 +56,7 @@ export function PromptSettingsSection({ config, onConfigChange }: PromptSettings
   /** 创建空白提示词草稿。 */
   const createDraft = () => {
     setSelected(null);
-    setName(kind === "personas" ? "新建人设" : "新建身份");
+    setName(kind === "personas" ? t("New persona", "新建人设") : t("New identity", "新建身份"));
     setContent("");
     setError("");
   };
@@ -90,7 +92,12 @@ export function PromptSettingsSection({ config, onConfigChange }: PromptSettings
   /** 删除当前选中的提示词文件。 */
   const deletePrompt = async () => {
     if (!selected) return;
-    const confirmed = await confirm({ title: "删除提示词", description: `将删除“${selected}”及其关联文件。`, confirmLabel: "删除", danger: true });
+    const confirmed = await confirm({
+      title: t("Delete prompt", "删除提示词"),
+      description: t(`Delete “${selected}” and its associated file?`, `将删除“${selected}”及其关联文件。`),
+      confirmLabel: t("Delete", "删除"),
+      danger: true
+    });
     if (!confirmed) return;
     setError("");
     try {
@@ -115,7 +122,7 @@ export function PromptSettingsSection({ config, onConfigChange }: PromptSettings
   return (
     <div className="settings-objects-layout">
       <ObjectListPanel
-        title={kind === "personas" ? "AI 人设" : "用户身份"}
+        title={kind === "personas" ? t("AI personas", "AI 人设") : t("User identities", "用户身份")}
         items={items.map((item) => ({
           id: item.name,
           name: item.name,
@@ -124,39 +131,39 @@ export function PromptSettingsSection({ config, onConfigChange }: PromptSettings
           marked: activeName === item.name || activeName === `${item.name}.md`
         }))}
         selectedId={selected ?? ""}
-        searchPlaceholder="搜索提示词"
-        addLabel={kind === "personas" ? "新增人设" : "新增身份"}
+        searchPlaceholder={t("Search prompts", "搜索提示词")}
+        addLabel={kind === "personas" ? t("Add persona", "新增人设") : t("Add identity", "新增身份")}
         onSelect={(id) => void selectPrompt(id)}
         onAdd={createDraft}
         headerSlot={
           <div className="prompt-kind-tabs">
-            <button type="button" className={kind === "personas" ? "active" : ""} onClick={() => setKind("personas")}>AI 人设</button>
-            <button type="button" className={kind === "identities" ? "active" : ""} onClick={() => setKind("identities")}>用户身份</button>
+            <button type="button" className={kind === "personas" ? "active" : ""} onClick={() => setKind("personas")}>{t("AI personas", "AI 人设")}</button>
+            <button type="button" className={kind === "identities" ? "active" : ""} onClick={() => setKind("identities")}>{t("User identities", "用户身份")}</button>
           </div>
         }
         topSlot={
           <button type="button" className="prompt-default-row" onClick={() => activatePrompt("")}>
-            <span><strong>{kind === "personas" ? "内置 Sai" : "不使用用户身份"}</strong><small>默认配置</small></span>
+            <span><strong>{kind === "personas" ? t("Built-in Sai", "内置 Sai") : t("Do not use a user identity", "不使用用户身份")}</strong><small>{t("Default configuration", "默认配置")}</small></span>
             {!activeName && <Check size={14} />}
           </button>
         }
       />
       <section className="settings-editor prompt-editor">
         <EditorHeader
-          kicker="自定义提示词"
-          title={selected ? name : name || "选择或新增提示词"}
-          description="内容以 Markdown 文件保存，并与 TUI 使用相同目录。"
+          kicker={t("Custom prompts", "自定义提示词")}
+          title={selected ? name : name || t("Select or add a prompt", "选择或新增提示词")}
+          description={t("Content is stored as Markdown files in the same directory used by the TUI.", "内容以 Markdown 文件保存，并与 TUI 使用相同目录。")}
           actions={<>
-            <button type="button" className="settings-secondary" onClick={copyDraft} disabled={!name}><Copy size={14} />复制</button>
-            <button type="button" className="settings-secondary" onClick={() => activatePrompt(name)} disabled={!name || activeName === name || activeName === `${name}.md`}><Check size={14} />设为当前</button>
-            <button type="button" className="settings-danger" onClick={() => void deletePrompt()} disabled={!selected}><Trash2 size={14} />删除</button>
+            <button type="button" className="settings-secondary" onClick={copyDraft} disabled={!name}><Copy size={14} />{t("Copy", "复制")}</button>
+            <button type="button" className="settings-secondary" onClick={() => activatePrompt(name)} disabled={!name || activeName === name || activeName === `${name}.md`}><Check size={14} />{t("Set as current", "设为当前")}</button>
+            <button type="button" className="settings-danger" onClick={() => void deletePrompt()} disabled={!selected}><Trash2 size={14} />{t("Delete", "删除")}</button>
           </>}
         />
-        <label className="settings-field"><span>名称</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder="提示词名称" /></label>
-        <label className="settings-field prompt-content-field"><span>提示词内容</span><textarea value={content} onChange={(event) => setContent(event.target.value)} placeholder="输入系统提示词或用户身份说明" spellCheck={false} /></label>
+        <label className="settings-field"><span>{t("Name", "名称")}</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("Prompt name", "提示词名称")} /></label>
+        <label className="settings-field prompt-content-field"><span>{t("Prompt content", "提示词内容")}</span><textarea value={content} onChange={(event) => setContent(event.target.value)} placeholder={t("Enter a system prompt or user identity description", "输入系统提示词或用户身份说明")} spellCheck={false} /></label>
         <div className="prompt-editor-footer">
           {error && <span className="settings-inline-error">{error}</span>}
-          <button type="button" className="settings-save" onClick={() => void savePrompt()} disabled={!name.trim() || saving}><Save size={14} />{saving ? "正在保存" : "保存提示词"}</button>
+          <button type="button" className="settings-save" onClick={() => void savePrompt()} disabled={!name.trim() || saving}><Save size={14} />{saving ? t("Saving", "正在保存") : t("Save prompt", "保存提示词")}</button>
         </div>
       </section>
     </div>

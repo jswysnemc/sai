@@ -326,7 +326,6 @@ impl TranscriptStore {
         self.work_status.take().is_some()
     }
 
-
     /// 在追加定稿 cell 前收敛当前流式尾部。
     ///
     /// 参数:
@@ -503,7 +502,6 @@ impl TranscriptStore {
         self.live_animation_frame = 0;
         self.active_tool_index = None;
     }
-
 
     /// 结束当前活动的 edit_file Diff 单元。
     ///

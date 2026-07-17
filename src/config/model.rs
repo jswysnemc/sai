@@ -626,7 +626,6 @@ pub struct SecretsConfig {
     pub api_keys: HashMap<String, String>,
 }
 
-
 /// 对话生命周期 Hook 配置（参考 LiveAgent）。
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct HooksConfig {

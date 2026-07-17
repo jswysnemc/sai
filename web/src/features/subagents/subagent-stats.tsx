@@ -1,4 +1,5 @@
 import type { Subagent } from "../../api/contracts";
+import { useI18n } from "../i18n/use-i18n";
 
 /**
  * 从子智能体统计对象读取数值字段。
@@ -19,13 +20,14 @@ function readNumber(stats: Record<string, unknown> | undefined, key: string): nu
  * @returns 统计视图,无统计时返回 null
  */
 export function SubagentStats({ subagent }: { subagent: Subagent }) {
+  const { t } = useI18n();
   const stats = subagent.stats;
   if (!stats) return null;
   const toolCalls = readNumber(stats, "tool_calls");
   const tokens = readNumber(stats, "token_estimate");
   const isActual = stats["token_estimate_is_actual"] === true;
   const items: Array<{ label: string; value: string }> = [];
-  if (toolCalls !== undefined) items.push({ label: "工具调用", value: `${toolCalls} 次` });
+  if (toolCalls !== undefined) items.push({ label: t("Tool calls", "工具调用"), value: t(`${toolCalls} calls`, `${toolCalls} 次`) });
   if (tokens !== undefined) items.push({ label: "Token", value: `${isActual ? "" : "~"}${formatCount(tokens)}` });
   if (items.length === 0) return null;
   return (

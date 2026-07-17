@@ -11,6 +11,7 @@ import { PasswordField } from "../../shared/ui/password-field";
 import { Select } from "../../shared/ui/select/select";
 import { ModelIcon } from "../../shared/ui/model-icon";
 import { JsonCodeEditor } from "../../shared/ui/code-editor/json-code-editor";
+import { useI18n } from "../i18n/use-i18n";
 
 type ProviderSettingsSectionProps = {
   config: AppConfig;
@@ -25,6 +26,7 @@ type ProviderSettingsSectionProps = {
  * @returns 供应商设置区域
  */
 export function ProviderSettingsSection({ config, onConfigChange, onProviderChange }: ProviderSettingsSectionProps) {
+  const { t } = useI18n();
   const confirm = useConfirm();
   const [selectedId, setSelectedId] = useState(config.active_provider || config.providers[0]?.id || "");
   const [fetching, setFetching] = useState(false);
@@ -52,7 +54,7 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
     }
     const next: ProviderConfig = {
       id,
-      display_name: "新供应商",
+      display_name: t("New provider", "新供应商"),
       base_url: "https://api.example.com/v1",
       protocol: "auto",
       api_key: "",
@@ -98,9 +100,9 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
   const deleteProvider = async () => {
     if (!provider) return;
     const confirmed = await confirm({
-      title: "删除供应商",
-      description: `将删除“${provider.display_name || provider.id}”及其全部模型配置。`,
-      confirmLabel: "删除供应商",
+      title: t("Delete provider", "删除供应商"),
+      description: t(`Delete “${provider.display_name || provider.id}” and all of its model configuration.`, `将删除“${provider.display_name || provider.id}”及其全部模型配置。`),
+      confirmLabel: t("Delete provider", "删除供应商"),
       danger: true
     });
     if (!confirmed) return;
@@ -111,7 +113,7 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
   };
 
   if (!provider) {
-    return <div className="settings-empty"><button type="button" className="settings-secondary" onClick={addProvider}><Plus size={14} />新增供应商</button></div>;
+    return <div className="settings-empty"><button type="button" className="settings-secondary" onClick={addProvider}><Plus size={14} />{t("Add provider", "新增供应商")}</button></div>;
   }
 
   const models = provider.models ?? [];
@@ -120,78 +122,82 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
     ? [provider.default_model, ...models]
     : models
   ).map((model) => ({ value: model, label: model, icon: createElement(ModelIcon, { model, size: 14 }) }));
+  const emptyModelOptions = [{ value: "", label: t("Add models on the Models tab first", "先在模型页签添加模型") }];
+  const protocolOptions = [
+    { value: "auto", label: t("Auto detect", "自动检测") },
+    { value: "openai-chat", label: "OpenAI Chat Completions" },
+    { value: "openai-responses", label: "OpenAI Responses" },
+    { value: "anthropic", label: "Anthropic Messages" }
+  ];
+  const thinkingFormatOptions = [
+    { value: "auto", label: t("Automatic", "自动") },
+    { value: "reasoning_content", label: "reasoning_content" },
+    { value: "reasoning", label: "reasoning" },
+    { value: "thinking", label: "thinking" }
+  ];
 
   return (
     <div className="settings-objects-layout">
       <ObjectListPanel
-        title="供应商"
+        title={t("Providers", "供应商")}
         items={config.providers.map((item) => ({
           id: item.id,
           name: item.display_name || item.id,
-          meta: item.default_model || item.models?.[0] || "未配置模型",
+          meta: item.default_model || item.models?.[0] || t("No model configured", "未配置模型"),
           icon: <Cpu size={14} />,
           marked: item.id === config.active_provider
         }))}
         selectedId={selectedId}
-        searchPlaceholder="搜索供应商"
-        addLabel="新增供应商"
+        searchPlaceholder={t("Search providers", "搜索供应商")}
+        addLabel={t("Add provider", "新增供应商")}
         onSelect={(id) => { setSelectedId(id); setFetchError(""); }}
         onAdd={addProvider}
       />
       <section className="settings-editor">
         <EditorHeader
-          kicker="模型供应商"
+          kicker={t("Model provider", "模型供应商")}
           title={provider.display_name || provider.id}
-          description="配置接口、凭据和当前供应商可用的模型。"
+          description={t("Configure the endpoint, credentials, and models available from this provider.", "配置接口、凭据和当前供应商可用的模型。")}
           actions={<>
-            <button type="button" className="settings-secondary" onClick={() => void fetchModels()} disabled={fetching || !provider.base_url.trim()}><RefreshCw size={14} className={fetching ? "spin" : ""} />{fetching ? "正在获取" : "导入模型"}</button>
-            <button type="button" className={provider.id === config.active_provider ? "settings-secondary active" : "settings-secondary"} onClick={() => onConfigChange({ ...config, active_provider: provider.id })} disabled={provider.id === config.active_provider}><Check size={14} />{provider.id === config.active_provider ? "当前供应商" : "设为当前"}</button>
-            <button type="button" className="settings-danger" onClick={() => void deleteProvider()}><Trash2 size={14} />删除供应商</button>
+            <button type="button" className="settings-secondary" onClick={() => void fetchModels()} disabled={fetching || !provider.base_url.trim()}><RefreshCw size={14} className={fetching ? "spin" : ""} />{fetching ? t("Fetching", "正在获取") : t("Import models", "导入模型")}</button>
+            <button type="button" className={provider.id === config.active_provider ? "settings-secondary active" : "settings-secondary"} onClick={() => onConfigChange({ ...config, active_provider: provider.id })} disabled={provider.id === config.active_provider}><Check size={14} />{provider.id === config.active_provider ? t("Current provider", "当前供应商") : t("Set as current", "设为当前")}</button>
+            <button type="button" className="settings-danger" onClick={() => void deleteProvider()}><Trash2 size={14} />{t("Delete provider", "删除供应商")}</button>
           </>}
         />
         {fetchError && <div className="settings-inline-error">{fetchError}</div>}
-        <nav className="settings-tabs" aria-label="供应商配置分类">
-          <button type="button" className={tab === "connection" ? "active" : ""} onClick={() => setTab("connection")}>连接</button>
-          <button type="button" className={tab === "models" ? "active" : ""} onClick={() => setTab("models")}>模型</button>
-          <button type="button" className={tab === "behavior" ? "active" : ""} onClick={() => setTab("behavior")}>行为</button>
-          <button type="button" className={tab === "advanced" ? "active" : ""} onClick={() => setTab("advanced")}>高级</button>
+        <nav className="settings-tabs" aria-label={t("Provider configuration categories", "供应商配置分类")}>
+          <button type="button" className={tab === "connection" ? "active" : ""} onClick={() => setTab("connection")}>{t("Connection", "连接")}</button>
+          <button type="button" className={tab === "models" ? "active" : ""} onClick={() => setTab("models")}>{t("Models", "模型")}</button>
+          <button type="button" className={tab === "behavior" ? "active" : ""} onClick={() => setTab("behavior")}>{t("Behavior", "行为")}</button>
+          <button type="button" className={tab === "advanced" ? "active" : ""} onClick={() => setTab("advanced")}>{t("Advanced", "高级")}</button>
         </nav>
         {tab === "connection" && <div className="settings-form-grid">
-          <label className="settings-field"><span>供应商 ID</span><input value={provider.id} onChange={(event) => { setSelectedId(event.target.value); onProviderChange(selectedIndex, { id: event.target.value }); }} /><small>配置文件中的稳定标识</small></label>
-          <label className="settings-field"><span>显示名称</span><input value={provider.display_name} onChange={(event) => onProviderChange(selectedIndex, { display_name: event.target.value })} /><small>用于模型菜单和状态展示</small></label>
-          <label className="settings-field full"><span>API 地址</span><input value={provider.base_url} onChange={(event) => onProviderChange(selectedIndex, { base_url: event.target.value })} spellCheck={false} /><small>兼容接口的基础地址，获取模型时由服务端访问</small></label>
-          <div className="settings-field"><span>协议</span><Select value={provider.protocol ?? "auto"} options={PROTOCOL_OPTIONS} onChange={(value) => onProviderChange(selectedIndex, { protocol: value })} ariaLabel="供应商协议" /><small>协议决定请求和思考参数格式</small></div>
-          <div className="settings-field"><span>默认模型</span>
+          <label className="settings-field"><span>{t("Provider ID", "供应商 ID")}</span><input value={provider.id} onChange={(event) => { setSelectedId(event.target.value); onProviderChange(selectedIndex, { id: event.target.value }); }} /><small>{t("Stable identifier in the configuration file", "配置文件中的稳定标识")}</small></label>
+          <label className="settings-field"><span>{t("Display name", "显示名称")}</span><input value={provider.display_name} onChange={(event) => onProviderChange(selectedIndex, { display_name: event.target.value })} /><small>{t("Used in model menus and status displays", "用于模型菜单和状态展示")}</small></label>
+          <label className="settings-field full"><span>{t("API address", "API 地址")}</span><input value={provider.base_url} onChange={(event) => onProviderChange(selectedIndex, { base_url: event.target.value })} spellCheck={false} /><small>{t("Base URL of the compatible API; the server accesses it when fetching models", "兼容接口的基础地址，获取模型时由服务端访问")}</small></label>
+          <div className="settings-field"><span>{t("Protocol", "协议")}</span><Select value={provider.protocol ?? "auto"} options={protocolOptions} onChange={(value) => onProviderChange(selectedIndex, { protocol: value })} ariaLabel={t("Provider protocol", "供应商协议")} /><small>{t("The protocol determines request and reasoning parameter formats", "协议决定请求和思考参数格式")}</small></div>
+          <div className="settings-field"><span>{t("Default model", "默认模型")}</span>
             {models.length > 0
-              ? <Select value={provider.default_model ?? ""} options={defaultModelOptions} onChange={(value) => onProviderChange(selectedIndex, { default_model: value })} ariaLabel="默认模型" />
-              : <Select value="" options={EMPTY_MODEL_OPTIONS} disabled onChange={() => undefined} ariaLabel="默认模型" />}
-            <small>{models.length > 0 ? "未手动切换时使用" : "先在模型页签添加模型"}</small>
+              ? <Select value={provider.default_model ?? ""} options={defaultModelOptions} onChange={(value) => onProviderChange(selectedIndex, { default_model: value })} ariaLabel={t("Default model", "默认模型")} />
+              : <Select value="" options={emptyModelOptions} disabled onChange={() => undefined} ariaLabel={t("Default model", "默认模型")} />}
+            <small>{models.length > 0 ? t("Used when no model is selected manually", "未手动切换时使用") : t("Add models on the Models tab first", "先在模型页签添加模型")}</small>
           </div>
-          <div className="settings-field full"><span>API Key</span><PasswordField value={provider.api_key ?? ""} onChange={(value) => onProviderChange(selectedIndex, { api_key: value })} /><small>支持使用 `$env:VARIABLE_NAME` 引用环境变量</small></div>
+          <div className="settings-field full"><span>API Key</span><PasswordField value={provider.api_key ?? ""} onChange={(value) => onProviderChange(selectedIndex, { api_key: value })} /><small>{t("Environment variables can be referenced with `$env:VARIABLE_NAME`", "支持使用 `$env:VARIABLE_NAME` 引用环境变量")}</small></div>
         </div>}
         {tab === "behavior" && <div className="settings-form-grid">
-          <label className="settings-field"><span>请求超时</span><input type="number" min="1" value={provider.timeout_seconds ?? 120} onChange={(event) => onProviderChange(selectedIndex, { timeout_seconds: Number(event.target.value) })} /><small>单位为秒</small></label>
-          <label className="settings-field"><span>Temperature</span><input type="number" min="0" max="2" step="0.1" value={provider.temperature ?? 0.7} onChange={(event) => onProviderChange(selectedIndex, { temperature: Number(event.target.value) })} /><small>模型采样温度</small></label>
-          <div className="settings-field"><span>思考等级</span><Select value={provider.thinking_level ?? "auto"} options={THINKING_OPTIONS} onChange={(value) => onProviderChange(selectedIndex, { thinking_level: value })} ariaLabel="思考等级" /><small>供应商默认推理强度</small></div>
-          <div className="settings-field"><span>思考格式</span><Select value={provider.thinking_format ?? "auto"} options={THINKING_FORMAT_OPTIONS} onChange={(value) => onProviderChange(selectedIndex, { thinking_format: value })} ariaLabel="思考格式" /><small>响应中的思考字段</small></div>
-          <label className="settings-field"><span>Anthropic max_tokens</span><input type="number" min="1" value={provider.anthropic_max_tokens ?? 8192} onChange={(event) => onProviderChange(selectedIndex, { anthropic_max_tokens: Number(event.target.value) })} /><small>仅 Anthropic Messages 使用</small></label>
+          <label className="settings-field"><span>{t("Request timeout", "请求超时")}</span><input type="number" min="1" value={provider.timeout_seconds ?? 120} onChange={(event) => onProviderChange(selectedIndex, { timeout_seconds: Number(event.target.value) })} /><small>{t("Seconds", "单位为秒")}</small></label>
+          <label className="settings-field"><span>Temperature</span><input type="number" min="0" max="2" step="0.1" value={provider.temperature ?? 0.7} onChange={(event) => onProviderChange(selectedIndex, { temperature: Number(event.target.value) })} /><small>{t("Model sampling temperature", "模型采样温度")}</small></label>
+          <div className="settings-field"><span>{t("Thinking level", "思考等级")}</span><Select value={provider.thinking_level ?? "auto"} options={THINKING_OPTIONS} onChange={(value) => onProviderChange(selectedIndex, { thinking_level: value })} ariaLabel={t("Thinking level", "思考等级")} /><small>{t("Default reasoning intensity for the provider", "供应商默认推理强度")}</small></div>
+          <div className="settings-field"><span>{t("Thinking format", "思考格式")}</span><Select value={provider.thinking_format ?? "auto"} options={thinkingFormatOptions} onChange={(value) => onProviderChange(selectedIndex, { thinking_format: value })} ariaLabel={t("Thinking format", "思考格式")} /><small>{t("Reasoning field in the response", "响应中的思考字段")}</small></div>
+          <label className="settings-field"><span>Anthropic max_tokens</span><input type="number" min="1" value={provider.anthropic_max_tokens ?? 8192} onChange={(event) => onProviderChange(selectedIndex, { anthropic_max_tokens: Number(event.target.value) })} /><small>{t("Used by Anthropic Messages only", "仅 Anthropic Messages 使用")}</small></label>
         </div>}
         {tab === "models" && <ModelMetadataEditor provider={provider} onChange={(patch) => onProviderChange(selectedIndex, patch)} />}
-        {tab === "advanced" && <div className="settings-json-field"><div><span>自定义 body JSON</span><small>对象会合并到每次模型请求，显式配置字段优先</small></div><JsonCodeEditor value={provider.extra_body || "{}"} onChange={(value) => onProviderChange(selectedIndex, { extra_body: value === "{}" ? "" : value })} height={330} ariaLabel="供应商自定义 body JSON" /></div>}
+        {tab === "advanced" && <div className="settings-json-field"><div><span>{t("Custom body JSON", "自定义 body JSON")}</span><small>{t("The object is merged into each model request; explicit fields take precedence", "对象会合并到每次模型请求，显式配置字段优先")}</small></div><JsonCodeEditor value={provider.extra_body || "{}"} onChange={(value) => onProviderChange(selectedIndex, { extra_body: value === "{}" ? "" : value })} height={330} ariaLabel={t("Provider custom body JSON", "供应商自定义 body JSON")} /></div>}
       </section>
       <ModelImportDialog open={importOpen} models={remoteModels} existingModels={models} onClose={() => setImportOpen(false)} onImport={importModels} />
     </div>
   );
 }
-
-const EMPTY_MODEL_OPTIONS = [{ value: "", label: "先在模型页签添加模型" }];
-
-const PROTOCOL_OPTIONS = [
-  { value: "auto", label: "自动检测" },
-  { value: "openai-chat", label: "OpenAI Chat Completions" },
-  { value: "openai-responses", label: "OpenAI Responses" },
-  { value: "anthropic", label: "Anthropic Messages" }
-];
 
 const THINKING_OPTIONS = [
   { value: "auto", label: "auto" },
@@ -201,11 +207,4 @@ const THINKING_OPTIONS = [
   { value: "medium", label: "medium" },
   { value: "low", label: "low" },
   { value: "none", label: "none" }
-];
-
-const THINKING_FORMAT_OPTIONS = [
-  { value: "auto", label: "自动" },
-  { value: "reasoning_content", label: "reasoning_content" },
-  { value: "reasoning", label: "reasoning" },
-  { value: "thinking", label: "thinking" }
 ];

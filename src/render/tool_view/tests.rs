@@ -66,6 +66,6 @@ fn command_permission_uses_existing_command_view() {
 
     assert!(output.contains("cargo"));
     assert!(output.contains("test"));
-    assert!(output.contains("允许一次"));
-    assert!(!output.contains("需要权限"));
+    assert!(output.contains(crate::i18n::text("Allow once", "允许一次")));
+    assert!(!output.contains(crate::i18n::text("Permission required", "需要权限确认")));
 }

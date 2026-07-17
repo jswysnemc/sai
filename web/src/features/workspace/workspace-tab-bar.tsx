@@ -2,7 +2,7 @@ import { Activity, Bot, FileCode2, GitCompareArrows, Maximize2, Minimize2, Panel
 import { useRef, useState } from "react";
 import { useOutsidePointerDown } from "../../shared/hooks/use-outside-pointer-down";
 import type { PaneTab, WorkspacePanelTab } from "./workspace-tab";
-import { paneTabLabel } from "./workspace-tab";
+import { useI18n } from "../i18n/use-i18n";
 
 type WorkspaceTabBarProps = {
   tabs: WorkspacePanelTab[];
@@ -15,12 +15,12 @@ type WorkspaceTabBarProps = {
   onCollapse: () => void;
 };
 
-const addable: Array<{ type: PaneTab; label: string; icon: typeof FileCode2 }> = [
-  { type: "files", label: "编辑器", icon: FileCode2 },
-  { type: "diff", label: "Git", icon: GitCompareArrows },
-  { type: "terminal", label: "终端", icon: SquareTerminal },
-  { type: "tasks", label: "后台任务", icon: Activity },
-  { type: "subagents", label: "子智能体", icon: Bot }
+const addable: Array<{ type: PaneTab; labelEn: string; labelZh: string; icon: typeof FileCode2 }> = [
+  { type: "files", labelEn: "Editor", labelZh: "编辑器", icon: FileCode2 },
+  { type: "diff", labelEn: "Git", labelZh: "Git", icon: GitCompareArrows },
+  { type: "terminal", labelEn: "Terminal", labelZh: "终端", icon: SquareTerminal },
+  { type: "tasks", labelEn: "Background tasks", labelZh: "后台任务", icon: Activity },
+  { type: "subagents", labelEn: "Subagents", labelZh: "子智能体", icon: Bot }
 ];
 
 /**
@@ -33,12 +33,13 @@ const addable: Array<{ type: PaneTab; label: string; icon: typeof FileCode2 }> =
  * @returns 工作区标签导航
  */
 export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
+  const { t } = useI18n();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useOutsidePointerDown(menuRef, () => setMenuOpen(false), menuOpen);
 
   return (
-    <div className="workspace-tab-bar" role="tablist" aria-label="工作区标签">
+    <div className="workspace-tab-bar" role="tablist" aria-label={t("Workspace tabs", "工作区标签")}>
       <div className="workspace-tab-scroll-row">
         <div className="workspace-tab-scroll">
           {props.tabs.map((tab) => {
@@ -54,13 +55,13 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
                   title={tab.path ?? tab.title}
                 >
                   <TabIcon type={tab.type} />
-                  <span>{tab.title || paneTabLabel(tab.type)}</span>
+                  <span>{tab.title || translatedPaneLabel(tab.type, t)}</span>
                 </button>
                 {tab.closable && (
                   <button
                     type="button"
                     className="workspace-tab-close"
-                    aria-label={`关闭 ${tab.title}`}
+                    aria-label={t(`Close ${tab.title}`, `关闭 ${tab.title}`)}
                     onClick={(event) => {
                       event.stopPropagation();
                       props.onClose(tab.id);
@@ -77,8 +78,8 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
           <button
             type="button"
             className="workspace-tab-add"
-            aria-label="添加面板"
-            title="添加面板"
+            aria-label={t("Add panel", "添加面板")}
+            title={t("Add panel", "添加面板")}
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((value) => !value)}
           >
@@ -99,7 +100,7 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
                     }}
                   >
                     <Icon size={14} />
-                    <span>{item.label}</span>
+                    <span>{t(item.labelEn, item.labelZh)}</span>
                   </button>
                 );
               })}
@@ -112,18 +113,35 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
           type="button"
           className={props.maximized ? "active" : ""}
           onClick={props.onToggleMaximized}
-          title={props.maximized ? "退出全屏" : "全屏"}
-          aria-label={props.maximized ? "退出全屏" : "全屏"}
+          title={props.maximized ? t("Exit full screen", "退出全屏") : t("Full screen", "全屏")}
+          aria-label={props.maximized ? t("Exit full screen", "退出全屏") : t("Full screen", "全屏")}
           aria-pressed={props.maximized}
         >
           {props.maximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
         </button>
-        <button type="button" onClick={props.onCollapse} title="收起工作区" aria-label="收起工作区">
+        <button type="button" onClick={props.onCollapse} title={t("Collapse workspace", "收起工作区")} aria-label={t("Collapse workspace", "收起工作区")}>
           <PanelRightClose size={14} />
         </button>
       </div>
     </div>
   );
+}
+
+/**
+ * 返回当前语言下的面板标题。
+ *
+ * @param type 面板类型
+ * @param t 双语文本选择方法
+ * @returns 面板标题
+ */
+function translatedPaneLabel(type: PaneTab, t: (en: string, zh: string) => string): string {
+  return {
+    files: t("Editor", "编辑器"),
+    diff: "Git",
+    terminal: t("Terminal", "终端"),
+    tasks: t("Background tasks", "后台任务"),
+    subagents: t("Subagents", "子智能体")
+  }[type];
 }
 
 function TabIcon({ type }: { type: PaneTab }) {

@@ -19,6 +19,7 @@ import { useThinkingLevel } from "./use-thinking-level";
 import { useFollowOutputScroll } from "./use-follow-output-scroll";
 import "./chat-page.css";
 import { ContextCompactionPart } from "./message/context-compaction-part";
+import { useI18n } from "../i18n/use-i18n";
 
 /**
  * 渲染当前会话历史、实时运行事件和消息输入区。
@@ -26,6 +27,7 @@ import { ContextCompactionPart } from "./message/context-compaction-part";
  * @returns 聊天页面
  */
 export function ChatPage() {
+  const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const [input, setInput] = useState("");
   const [undoError, setUndoError] = useState<string | null>(null);
@@ -183,10 +185,10 @@ export function ChatPage() {
   };
   const overviewItems = useMemo(
     () => [
-      ...createTimelineOverviewItems(display.historyTurns),
-      ...display.liveRuns.map(createLiveOverviewItem).filter((item) => item !== null)
+      ...createTimelineOverviewItems(display.historyTurns, undefined, locale),
+      ...display.liveRuns.map((state) => createLiveOverviewItem(state, locale)).filter((item) => item !== null)
     ],
-    [display.historyTurns, display.liveRuns]
+    [display.historyTurns, display.liveRuns, locale]
   );
 
   /** 回滚被点击的持久化轮次，并使用原输入重新发起运行。 */
@@ -238,12 +240,12 @@ export function ChatPage() {
   return (
     <div className={emptySession ? "chat-page empty-session" : "chat-page"}>
       <header className="chat-header">
-        <h1>{activeSession?.title ?? "选择会话"}</h1>
+        <h1>{activeSession?.title ?? t("Select a session", "选择会话")}</h1>
       </header>
       <div className="message-scroll-region">
         <div className="message-scroll" ref={scrollRef}>
           <div className="message-column">
-            {timeline.isLoading && <div className="empty-chat">正在读取会话历史</div>}
+            {timeline.isLoading && <div className="empty-chat">{t("Loading conversation history", "正在读取会话历史")}</div>}
             {timeline.data?.compaction && !run.states.some((state) =>
               state.parts.some((part) => part.type === "compaction" && part.applied && part.summary)
             ) && (
@@ -294,15 +296,15 @@ export function ChatPage() {
           onNavigate={pauseFollowing}
         />
         {showJump && (
-          <button type="button" className="jump-to-bottom" onClick={jumpToBottom} aria-label="回到底部" title="回到底部">
+          <button type="button" className="jump-to-bottom" onClick={jumpToBottom} aria-label={t("Jump to bottom", "回到底部")} title={t("Jump to bottom", "回到底部")}>
             <ArrowDown size={16} />
           </button>
         )}
       </div>
       {emptySession && (
         <div className="empty-session-greeting">
-          <h2>开始新的对话</h2>
-          <p>输入任务或问题，Enter 发送，Shift+Enter 换行</p>
+          <h2>{t("Start a new conversation", "开始新的对话")}</h2>
+          <p>{t("Enter a task or question. Press Enter to send and Shift+Enter for a new line.", "输入任务或问题，Enter 发送，Shift+Enter 换行")}</p>
         </div>
       )}
       <ChatComposer
@@ -338,26 +340,26 @@ export function ChatPage() {
       />
       <Modal
         open={undoConfirmOpen}
-        title="撤销上一轮？"
-        description="将删除最后一轮对话，并尝试回滚该轮对工作树的修改；用户输入会恢复到输入框。"
+        title={t("Undo the previous turn?", "撤销上一轮？")}
+        description={t("The last turn will be deleted and its worktree changes will be rolled back when possible. The user input will return to the composer.", "将删除最后一轮对话，并尝试回滚该轮对工作树的修改；用户输入会恢复到输入框。")}
         size="small"
         onClose={() => setUndoConfirmOpen(false)}
         footer={(
           <>
-            <Button onClick={() => setUndoConfirmOpen(false)}>取消</Button>
-            <Button variant="danger" onClick={() => void undo()}>确认撤销</Button>
+            <Button onClick={() => setUndoConfirmOpen(false)}>{t("Cancel", "取消")}</Button>
+            <Button variant="danger" onClick={() => void undo()}>{t("Undo", "确认撤销")}</Button>
           </>
         )}
       >
-        <p>此操作不可通过同一按钮再次恢复。若工作树在本轮后继续被改动，撤销可能失败。</p>
+        <p>{t("This action cannot be restored with the same button. Undo may fail if the worktree changed again after this turn.", "此操作不可通过同一按钮再次恢复。若工作树在本轮后继续被改动，撤销可能失败。")}</p>
       </Modal>
       <Modal
         open={Boolean(undoError)}
-        title="撤销失败"
-        description="工作树在本轮结束后又发生变化，因此没有执行可能覆盖新修改的撤销。"
+        title={t("Undo failed", "撤销失败")}
+        description={t("The worktree changed after the turn completed, so Sai did not run an undo that could overwrite newer changes.", "工作树在本轮结束后又发生变化，因此没有执行可能覆盖新修改的撤销。")}
         size="small"
         onClose={() => setUndoError(null)}
-        footer={<Button onClick={() => setUndoError(null)}>关闭</Button>}
+        footer={<Button onClick={() => setUndoError(null)}>{t("Close", "关闭")}</Button>}
       >
         <p>{undoError}</p>
       </Modal>

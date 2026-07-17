@@ -1,5 +1,6 @@
 import { DiffView } from "./diff-view";
 import { parseJsonRecord, stringField } from "./tool-data";
+import { useI18n } from "../../i18n/use-i18n";
 
 type ShellToolViewProps = {
   argumentsText: string;
@@ -13,6 +14,7 @@ type ShellToolViewProps = {
  * @returns 终端风格工具结果
  */
 export function ShellToolView({ argumentsText, output }: ShellToolViewProps) {
+  const { t } = useI18n();
   const args = parseJsonRecord(argumentsText);
   const result = parseJsonRecord(output);
   const command = stringField(args, "command") || argumentsText;
@@ -24,7 +26,7 @@ export function ShellToolView({ argumentsText, output }: ShellToolViewProps) {
   return (
     <div className="shell-tool-view">
       <div className="shell-command-line"><span>$</span><code>{command}</code></div>
-      {result && <div className={success ? "shell-exit success" : "shell-exit failed"}>退出码 {exitCode ?? "未知"}</div>}
+      {result && <div className={success ? "shell-exit success" : "shell-exit failed"}>{t("Exit code", "退出码")} {exitCode ?? t("Unknown", "未知")}</div>}
       {stdout && (diffOutput ? <DiffView source={stdout} /> : <pre className="shell-output"><code>{stdout}</code></pre>)}
       {stderr && <pre className="shell-output stderr"><code>{stderr}</code></pre>}
       {!result && output && <pre className="shell-output"><code>{output}</code></pre>}

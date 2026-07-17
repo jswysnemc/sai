@@ -240,7 +240,7 @@ pub(crate) fn parse_bool_field(value: &str) -> Result<bool> {
     match value.trim().to_ascii_lowercase().as_str() {
         "true" | "yes" | "y" | "1" | "on" | "启用" | "是" => Ok(true),
         "false" | "no" | "n" | "0" | "off" | "禁用" | "否" => Ok(false),
-        value => bail!("invalid boolean value: {value}"),
+        value => bail!("{}: {value}", t("invalid boolean value", "无效布尔值")),
     }
 }
 
@@ -263,7 +263,7 @@ fn edit_textarea(stdout: &mut io::Stdout, value: &mut String) -> Result<()> {
         .status()
         .or_else(|_| Command::new("nano").arg(&path).status());
     if let Err(err) = status {
-        eprintln!("failed to open editor: {err}");
+        eprintln!("{}: {err}", t("failed to open editor", "无法打开编辑器"));
     }
     *value = std::fs::read_to_string(&path)?.trim().to_string();
     terminal::enable_raw_mode()?;

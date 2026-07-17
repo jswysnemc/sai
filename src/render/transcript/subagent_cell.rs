@@ -179,7 +179,10 @@ pub(super) fn render(cell: &SubagentCell, mode: ToolCallDisplayMode) -> String {
 ///
 /// 返回:
 /// - 简要状态文本
-fn compact_subagent_summary(cell: &SubagentCell, snapshot: Option<&SubagentSnapshot>) -> Option<String> {
+fn compact_subagent_summary(
+    cell: &SubagentCell,
+    snapshot: Option<&SubagentSnapshot>,
+) -> Option<String> {
     if let Some(snapshot) = snapshot {
         let status = match snapshot.status.as_str() {
             "running" => "运行中",

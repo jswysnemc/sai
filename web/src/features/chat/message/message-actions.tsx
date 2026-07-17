@@ -1,5 +1,6 @@
 import { Check, Copy, GitBranch, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "../../i18n/use-i18n";
 
 type MessageActionsProps = {
   text: string;
@@ -13,6 +14,7 @@ type MessageActionsProps = {
  * 消息操作行：时间、重试、分支、复制。
  */
 export function MessageActions({ text, timestamp, onRetry, onFork, busy }: MessageActionsProps) {
+  const { locale, t } = useI18n();
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | null>(null);
 
@@ -33,30 +35,30 @@ export function MessageActions({ text, timestamp, onRetry, onFork, busy }: Messa
 
   return (
     <div className="message-actions">
-      {timestamp && <time className="message-timestamp">{formatTimestamp(timestamp)}</time>}
+      {timestamp && <time className="message-timestamp">{formatTimestamp(timestamp, locale)}</time>}
       {onRetry && (
-        <button type="button" className="message-copy" onClick={onRetry} aria-label="重试本轮" title="重试本轮" disabled={busy}>
+        <button type="button" className="message-copy" onClick={onRetry} aria-label={t("Retry turn", "重试本轮")} title={t("Retry turn", "重试本轮")} disabled={busy}>
           <RotateCcw size={13} />
         </button>
       )}
       {onFork && (
-        <button type="button" className="message-copy" onClick={onFork} aria-label="分支对话" title="分支对话" disabled={busy}>
+        <button type="button" className="message-copy" onClick={onFork} aria-label={t("Fork conversation", "分支对话")} title={t("Fork conversation", "分支对话")} disabled={busy}>
           <GitBranch size={13} />
         </button>
       )}
-      <button type="button" className="message-copy" onClick={onCopy} aria-label="复制消息原文" title="复制原文">
+      <button type="button" className="message-copy" onClick={onCopy} aria-label={t("Copy original message", "复制消息原文")} title={t("Copy original", "复制原文")}>
         {copied ? <Check size={13} /> : <Copy size={13} />}
       </button>
     </div>
   );
 }
 
-function formatTimestamp(value: string): string {
+function formatTimestamp(value: string, locale: "en-US" | "zh-CN"): string {
   const parsed = Date.parse(value);
   if (!Number.isFinite(parsed)) return value;
   const date = new Date(parsed);
   const today = new Date();
   const sameDay = date.toDateString() === today.toDateString();
-  const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  return sameDay ? time : `${date.toLocaleDateString()} ${time}`;
+  const time = date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  return sameDay ? time : `${date.toLocaleDateString(locale)} ${time}`;
 }

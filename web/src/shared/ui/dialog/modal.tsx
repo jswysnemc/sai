@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useI18n } from "../../../features/i18n/use-i18n";
 
 type ModalProps = {
   open: boolean;
@@ -19,6 +20,7 @@ type ModalProps = {
  * @returns Portal 弹层
  */
 export function Modal({ open, title, description, size = "medium", children, footer, onClose }: ModalProps) {
+  const { t } = useI18n();
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useRef<HTMLElement>(null);
@@ -58,7 +60,7 @@ export function Modal({ open, title, description, size = "medium", children, foo
       <section ref={dialogRef} className={`ui-modal ${size}`} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}>
         <header className="ui-modal-header">
           <div><h2 id={titleId}>{title}</h2>{description && <p id={descriptionId}>{description}</p>}</div>
-          <button type="button" onClick={onClose} aria-label="关闭对话框"><X size={16} /></button>
+          <button type="button" onClick={onClose} aria-label={t("Close dialog", "关闭对话框")}><X size={16} /></button>
         </header>
         <div className="ui-modal-body">{children}</div>
         {footer && <footer className="ui-modal-footer">{footer}</footer>}

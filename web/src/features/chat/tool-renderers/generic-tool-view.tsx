@@ -1,5 +1,6 @@
 import { SyntaxHighlighter } from "../syntax-highlighter";
 import { prettyJson } from "./tool-data";
+import { useI18n } from "../../i18n/use-i18n";
 
 type GenericToolViewProps = {
   argumentsText: string;
@@ -13,10 +14,11 @@ type GenericToolViewProps = {
  * @returns 通用工具详情
  */
 export function GenericToolView({ argumentsText, output }: GenericToolViewProps) {
+  const { t } = useI18n();
   return (
     <div className="generic-tool-view">
-      {argumentsText && <section><span>参数</span><JsonBlock source={argumentsText} /></section>}
-      {output && <section><span>结果</span><JsonBlock source={output} className="result" /></section>}
+      {argumentsText && <section><span>{t("Arguments", "参数")}</span><JsonBlock source={argumentsText} /></section>}
+      {output && <section><span>{t("Result", "结果")}</span><JsonBlock source={output} className="result" /></section>}
     </div>
   );
 }

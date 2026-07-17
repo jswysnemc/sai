@@ -1,6 +1,7 @@
 import { BookOpen } from "lucide-react";
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../api/client";
+import { useI18n } from "../../i18n/use-i18n";
 
 export type SkillOption = {
   name: string;
@@ -41,6 +42,7 @@ export function filterSkills(skills: SkillOption[], query: string): SkillOption[
  */
 export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopoverProps>(
   function SkillMentionPopover({ open, query, activeIndex, onActiveIndexChange, onSelect }, ref) {
+    const { t } = useI18n();
     const [skills, setSkills] = useState<SkillOption[]>([]);
     const [loading, setLoading] = useState(false);
     const listRef = useRef<HTMLDivElement>(null);
@@ -79,8 +81,8 @@ export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopove
 
     if (!open) return null;
     return (
-      <div className="file-mention-popover skill-mention-popover" role="listbox" aria-label="选择 skill" ref={ref}>
-        <div className="file-mention-filter skill-mention-title">选择 skill · ↑↓ 导航 · Enter 确认 · Esc 关闭</div>
+      <div className="file-mention-popover skill-mention-popover" role="listbox" aria-label={t("Choose a Skill", "选择 Skill")} ref={ref}>
+        <div className="file-mention-filter skill-mention-title">{t("Choose a Skill · ↑↓ navigate · Enter select · Esc close", "选择 Skill · ↑↓ 导航 · Enter 确认 · Esc 关闭")}</div>
         <div className="file-mention-list" ref={listRef}>
           {filtered.map((skill, index) => (
             <button
@@ -98,7 +100,7 @@ export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopove
             </button>
           ))}
           {filtered.length === 0 && (
-            <div className="file-mention-empty">{loading ? "正在加载 skills" : "没有匹配的 skill"}</div>
+            <div className="file-mention-empty">{loading ? t("Loading Skills", "正在加载 Skills") : t("No matching Skills", "没有匹配的 Skill")}</div>
           )}
         </div>
       </div>

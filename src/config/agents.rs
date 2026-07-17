@@ -9,7 +9,6 @@ const GENERAL_AGENT_PROMPT: &str = include_str!("../prompts/code-agent.md");
 const EXPLORE_AGENT_PROMPT: &str = include_str!("../prompts/explore-agent.md");
 const GATEWAY_AGENT_PROMPT: &str = include_str!("../prompts/gateway-agent.md");
 
-
 const GATEWAY_AGENT_TOOLS: &[&str] = &[
     "check_os_info",
     "read_file",
@@ -185,23 +184,27 @@ impl crate::config::AppConfig {
     /// - 去重后的 Agent 档案
     pub fn resolved_agent_profiles(&self) -> Vec<AgentProfile> {
         let legacy = &self.subagent.profiles;
-        let mut profiles = [builtin_general_agent(), builtin_explore_agent(), builtin_gateway_agent()]
-            .into_iter()
-            .map(|builtin| {
-                self.agents
-                    .iter()
-                    .find(|profile| profile.id == builtin.id)
-                    .cloned()
-                    .or_else(|| {
-                        legacy
-                            .iter()
-                            .find(|profile| profile.id == builtin.id)
-                            .cloned()
-                            .map(AgentProfile::from_legacy_subagent)
-                    })
-                    .unwrap_or(builtin)
-            })
-            .collect::<Vec<_>>();
+        let mut profiles = [
+            builtin_general_agent(),
+            builtin_explore_agent(),
+            builtin_gateway_agent(),
+        ]
+        .into_iter()
+        .map(|builtin| {
+            self.agents
+                .iter()
+                .find(|profile| profile.id == builtin.id)
+                .cloned()
+                .or_else(|| {
+                    legacy
+                        .iter()
+                        .find(|profile| profile.id == builtin.id)
+                        .cloned()
+                        .map(AgentProfile::from_legacy_subagent)
+                })
+                .unwrap_or(builtin)
+        })
+        .collect::<Vec<_>>();
         for legacy in legacy.iter().cloned() {
             if profiles.iter().any(|profile| profile.id == legacy.id)
                 || self.agents.iter().any(|profile| profile.id == legacy.id)
@@ -214,7 +217,10 @@ impl crate::config::AppConfig {
             self.agents
                 .iter()
                 .filter(|profile| {
-                    !matches!(profile.id.as_str(), GENERAL_AGENT_ID | EXPLORE_AGENT_ID | GATEWAY_AGENT_ID)
+                    !matches!(
+                        profile.id.as_str(),
+                        GENERAL_AGENT_ID | EXPLORE_AGENT_ID | GATEWAY_AGENT_ID
+                    )
                 })
                 .cloned(),
         );
@@ -483,16 +489,31 @@ mod tests {
         assert_eq!(config.cli_agent.as_deref(), None);
         assert_eq!(config.gateway_agent.as_deref(), Some(GATEWAY_AGENT_ID));
         let gateway = apply_agent_override(config.clone(), None, AgentSurface::Gateway).unwrap();
-        assert!(gateway.system_prompt.as_deref().unwrap_or("").contains("网关"));
+        assert!(gateway
+            .system_prompt
+            .as_deref()
+            .unwrap_or("")
+            .contains("网关"));
         assert!(gateway
             .agent_runtime
             .as_ref()
             .map(|runtime| runtime.enabled_tools.iter().any(|tool| tool == "cron"))
             .unwrap_or(false));
         let web = apply_agent_override(config.clone(), None, AgentSurface::Web).unwrap();
-        assert!(web.system_prompt.as_deref().unwrap_or("").contains("核心铁律"));
+        assert!(web
+            .system_prompt
+            .as_deref()
+            .unwrap_or("")
+            .contains("核心铁律"));
         let cli = apply_agent_override(config, None, AgentSurface::Cli).unwrap();
-        assert!(cli.system_prompt.is_none() || !cli.system_prompt.as_deref().unwrap_or("").contains("核心铁律"));
+        assert!(
+            cli.system_prompt.is_none()
+                || !cli
+                    .system_prompt
+                    .as_deref()
+                    .unwrap_or("")
+                    .contains("核心铁律")
+        );
     }
 
     /// 验证旧子 Agent 档案会进入统一 Agent 列表并保留暴露状态。

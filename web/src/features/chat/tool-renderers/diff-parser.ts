@@ -1,4 +1,5 @@
 export type DiffLineKind = "added" | "removed" | "context" | "hunk";
+import { text, type Locale } from "../../i18n/locale";
 
 export type DiffLine = {
   kind: DiffLineKind;
@@ -17,7 +18,7 @@ export type DiffFile = {
 
 const CODEX_FILE = /^\*\*\* (Add|Delete|Update) File: (.+)$/;
 const UNIFIED_HUNK = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
-const CODEX_RANGE_HUNK = /^@@ 第 (\d+)(?:-\d+)? 行/;
+const CODEX_RANGE_HUNK = /^@@ (?:(?:第|Lines?) )?(\d+)(?:-\d+)?(?: 行| lines?)?/i;
 
 /**
  * 把 Codex patch 或 unified diff 文本解析为文件块结构。
@@ -25,7 +26,7 @@ const CODEX_RANGE_HUNK = /^@@ 第 (\d+)(?:-\d+)? 行/;
  * @param source Diff 源文本
  * @returns 带行号与增删统计的文件块列表
  */
-export function parseDiff(source: string): DiffFile[] {
+export function parseDiff(source: string, locale: Locale = "zh-CN"): DiffFile[] {
   const lines = source.replaceAll("\r\n", "\n").split("\n");
   const files: DiffFile[] = [];
   let current: DiffFile | null = null;
@@ -44,20 +45,24 @@ export function parseDiff(source: string): DiffFile[] {
     // 2. 识别 Codex patch 文件头
     const codexHead = CODEX_FILE.exec(line);
     if (codexHead) {
-      const action = { Add: "新增", Delete: "删除", Update: "修改" }[codexHead[1]] ?? codexHead[1];
+      const action = {
+        Add: text(locale, "Added", "新增"),
+        Delete: text(locale, "Deleted", "删除"),
+        Update: text(locale, "Modified", "修改")
+      }[codexHead[1]] ?? codexHead[1];
       openFile(codexHead[2].trim(), action, true);
       continue;
     }
     // 3. 识别 unified diff 文件头
     if (line.startsWith("diff --git ")) {
       const path = line.split(" b/").pop()?.trim() ?? line;
-      openFile(path, "修改", false);
+      openFile(path, text(locale, "Modified", "修改"), false);
       continue;
     }
     if (line.startsWith("+++ ")) {
       const path = line.slice(4).replace(/^b\//, "").trim();
       if (!current) {
-        openFile(path, "修改", false);
+        openFile(path, text(locale, "Modified", "修改"), false);
       } else {
         const file = current as DiffFile;
         if (!file.path || file.path === "/dev/null") file.path = path;
@@ -71,7 +76,7 @@ export function parseDiff(source: string): DiffFile[] {
     // 5. 没有任何文件头时把片段归入匿名文件块
     if (!current) {
       if (!line.trim()) continue;
-      openFile("", "变更", true);
+      openFile("", text(locale, "Changed", "变更"), true);
     }
     const file = current!;
     // 6. 处理 hunk 头并同步行号计数

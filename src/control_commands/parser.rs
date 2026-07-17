@@ -64,7 +64,8 @@ pub fn parse_control_command(
         }));
     }
     if matches_surface_alias(&name, surface, "compact", &["压缩"]) {
-        if !rest.trim().is_empty() {
+        // Gateway 兼容旧版 `/压缩 --keep N` 写法；当前实现统一忽略旧参数
+        if surface == ControlSurface::Repl && !rest.trim().is_empty() {
             bail!("compact command does not accept arguments");
         }
         return Ok(Some(ControlCommand::Compact));

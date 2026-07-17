@@ -1,8 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { RunInfo, RunMode, RunModelSelection, ThinkingLevel, WebEvent } from "../../api/contracts";
 import { api } from "../../api/client";
-import { initialRunState, runEventReducer, type LiveRunState } from "./run-event-reducer";
+import { initialRunState, relocalizeRunError, runEventReducer, type LiveRunState } from "./run-event-reducer";
+import { useI18n } from "../i18n/use-i18n";
+import type { Locale } from "../i18n/locale";
 
 const EVENT_TYPES = [
   "run.queued",
@@ -37,6 +39,7 @@ type SessionRunsAction =
   | { type: "attach"; runs: RunInfo[]; sessionId: string }
   | { type: "start"; run: RunInfo; sessionId: string; userInput: string; imageUrls?: string[] }
   | { type: "event"; event: WebEvent }
+  | { type: "relocalize" }
   | { type: "reset" };
 
 const initialSessionRunsState: SessionRunsState = { runs: [] };
@@ -48,8 +51,11 @@ const initialSessionRunsState: SessionRunsState = { runs: [] };
  * @param action 运行附加、启动或事件动作
  * @returns 更新后的会话运行集合
  */
-export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsAction): SessionRunsState {
+export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsAction, locale: Locale = "zh-CN"): SessionRunsState {
   if (action.type === "reset") return initialSessionRunsState;
+  if (action.type === "relocalize") {
+    return { runs: state.runs.map((run) => ({ ...run, error: relocalizeRunError(run.error, locale) })) };
+  }
   if (action.type === "attach") {
     const known = new Set(state.runs.map((run) => run.runId));
     const attached = action.runs
@@ -61,7 +67,7 @@ export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsA
           sessionId: action.sessionId,
           userInput: run.input ?? "",
           imageUrls: run.image_urls
-        }),
+        }, locale),
         status: run.status === "queued" ? "queued" as const : "waiting_response" as const
       }));
     return { runs: [...state.runs, ...attached] };
@@ -73,7 +79,7 @@ export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsA
       sessionId: action.sessionId,
       userInput: action.userInput,
       imageUrls: action.imageUrls
-    });
+    }, locale);
     return {
       runs: [...state.runs, {
         ...next,
@@ -86,7 +92,7 @@ export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsA
   }
   return {
     runs: state.runs.map((run) => run.runId === action.event.run_id
-      ? runEventReducer(run, { type: "event", event: action.event })
+      ? runEventReducer(run, { type: "event", event: action.event }, locale)
       : run)
   };
 }
@@ -108,9 +114,18 @@ export function useRunStream(
   onWorkspaceChanged?: () => void,
   onInterruptedWithoutReply?: (input: string) => void
 ) {
+  const { locale } = useI18n();
   const queryClient = useQueryClient();
-  const [state, dispatch] = useReducer(sessionRunsReducer, initialSessionRunsState);
+  const reducer = useCallback(
+    (state: SessionRunsState, action: SessionRunsAction) => sessionRunsReducer(state, action, locale),
+    [locale]
+  );
+  const [state, dispatch] = useReducer(reducer, initialSessionRunsState);
   const sourcesRef = useRef(new Map<string, EventSource>());
+
+  useEffect(() => {
+    dispatch({ type: "relocalize" });
+  }, [locale]);
 
   useEffect(() => {
     if (!workspaceId || !sessionId) return;

@@ -488,11 +488,7 @@ impl ReplRuntime {
                 });
                 self.sync_transcript(true)
             }
-            AgentEvent::CompactionFinished {
-                applied,
-                error,
-                ..
-            } => {
+            AgentEvent::CompactionFinished { applied, error, .. } => {
                 self.next_live_reasoning_refresh = None;
                 self.transcript.clear_work_status();
                 self.transcript.push_compaction_finished(

@@ -1,3 +1,4 @@
+use crate::i18n::text as t;
 use crate::permission::{
     PermissionDecision, PermissionInteractionState, PermissionRequest, PermissionTransition,
 };
@@ -99,7 +100,10 @@ fn is_interrupt(event: &Event) -> bool {
     }
     matches!(
         (key.code, key.modifiers.contains(KeyModifiers::CONTROL)),
-        (KeyCode::Char('c') | KeyCode::Char('C') | KeyCode::Char('d') | KeyCode::Char('D'), true)
+        (
+            KeyCode::Char('c') | KeyCode::Char('C') | KeyCode::Char('d') | KeyCode::Char('D'),
+            true
+        )
     )
 }
 
@@ -155,8 +159,19 @@ fn erase_menu(stdout: &mut io::Stdout, painted_rows: usize) -> Result<()> {
 /// - 用户提交的权限决定
 fn read_line_decision(request: &PermissionRequest) -> Result<PermissionDecision> {
     println!("{}", render_permission_title(&request.tool));
-    println!("1. 允许一次\n2. 拒绝\n3. 拒绝并告诉 Sai 如何调整");
-    print!("选择 [1-3]，也可直接输入拒绝原因: ");
+    println!(
+        "1. {}\n2. {}\n3. {}",
+        t("Allow once", "允许一次"),
+        t("Deny", "拒绝"),
+        t("Deny and tell Sai how to adjust", "拒绝并告诉 Sai 如何调整")
+    );
+    print!(
+        "{}: ",
+        t(
+            "Choose [1-3], or enter a denial reason directly",
+            "选择 [1-3]，也可直接输入拒绝原因"
+        )
+    );
     io::stdout().flush()?;
     let mut answer = String::new();
     io::stdin().read_line(&mut answer)?;
@@ -165,7 +180,7 @@ fn read_line_decision(request: &PermissionRequest) -> Result<PermissionDecision>
         return Ok(PermissionDecision::Allow);
     }
     if answer == "3" {
-        print!("告诉 Sai 应如何调整: ");
+        print!("{}: ", t("Tell Sai how to adjust", "告诉 Sai 应如何调整"));
         io::stdout().flush()?;
         let mut reply = String::new();
         io::stdin().read_line(&mut reply)?;

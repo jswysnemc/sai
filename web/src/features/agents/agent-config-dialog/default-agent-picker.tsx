@@ -1,5 +1,6 @@
 import { Select } from "../../../shared/ui/select/select";
 import type { AgentChoice } from "../agent-types";
+import { useI18n } from "../../i18n/use-i18n";
 
 type DefaultAgentPickerProps = {
   choices: AgentChoice[];
@@ -14,12 +15,13 @@ type DefaultAgentPickerProps = {
  * @returns 默认 Agent 选择区
  */
 export function DefaultAgentPicker({ choices, value, onChange }: DefaultAgentPickerProps) {
+  const { t } = useI18n();
   return (
     <Select
       value={value}
       options={choices.map((choice) => ({ value: choice.id, label: choice.name }))}
       onChange={onChange}
-      ariaLabel="选择默认 Agent"
+      ariaLabel={t("Choose default Agent", "选择默认 Agent")}
       menuPreferredWidth={280}
       menuMinimumWidth={220}
     />

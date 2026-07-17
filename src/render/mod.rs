@@ -38,7 +38,8 @@ pub(crate) mod work_status;
 
 pub(crate) use error::write_chat_error;
 pub(crate) use permission::{
-    render_permission_controls, render_permission_decision, render_permission_title, PermissionChoice,
+    render_permission_controls, render_permission_decision, render_permission_title,
+    PermissionChoice,
 };
 pub use session_summary::print_session_summary;
 pub use stream::StreamRenderer;

@@ -9,6 +9,7 @@ import { EditorPreviewToggle } from "./editor-preview-toggle";
 import { configureMonacoEnvironment } from "./monaco-environment";
 import { ImageFilePreview, isImageFile } from "./image-file-preview";
 import { isMarkdownFile, MarkdownFilePreview } from "./markdown-file-preview";
+import { useI18n } from "../i18n/use-i18n";
 
 type EditorPaneProps = {
   path: string | null;
@@ -24,6 +25,7 @@ type EditorPaneProps = {
  * @returns 编辑器面板
  */
 export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree }: EditorPaneProps) {
+  const { t } = useI18n();
   const { theme } = useTheme();
   const imageFile = Boolean(path && isImageFile(path));
   const markdownFile = Boolean(path && isMarkdownFile(path));
@@ -105,14 +107,14 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree 
     return (
       <section className="editor-pane">
         <header className="editor-head editor-head-empty">
-          <span>未打开文件</span>
+          <span>{t("No file open", "未打开文件")}</span>
           {!fileTreeOpen && (
-            <button type="button" className="editor-tree-toggle" onClick={onToggleFileTree} aria-label="打开文件树" aria-pressed={false}>
+            <button type="button" className="editor-tree-toggle" onClick={onToggleFileTree} aria-label={t("Open file tree", "打开文件树")} aria-pressed={false}>
               <FolderTree size={15} />
             </button>
           )}
         </header>
-        <div className="editor-empty"><FileCodePlaceholder /><p>从文件树选择文本文件</p></div>
+        <div className="editor-empty"><FileCodePlaceholder /><p>{t("Select a text file from the file tree", "从文件树选择文本文件")}</p></div>
       </section>
     );
   }
@@ -120,13 +122,13 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree 
     <section className="editor-pane">
       <header className="editor-head">
         <EditorBreadcrumbs path={path} onSelectFile={onSelectFile} />
-        {externalChange && <span className="editor-external-change">磁盘内容已变化</span>}
+        {externalChange && <span className="editor-external-change">{t("File changed on disk", "磁盘内容已变化")}</span>}
         {markdownFile && <EditorPreviewToggle preview={preview} onChange={setPreview} />}
         {!imageFile && <button type="button" className="editor-save" onClick={() => save.mutate()} disabled={!file.data || content === file.data.content || save.isPending}>
-          <Save size={14} /> 保存
+          <Save size={14} /> {t("Save", "保存")}
         </button>}
         {!fileTreeOpen && (
-          <button type="button" className="editor-tree-toggle" onClick={onToggleFileTree} aria-label="打开文件树" aria-pressed={false}>
+          <button type="button" className="editor-tree-toggle" onClick={onToggleFileTree} aria-label={t("Open file tree", "打开文件树")} aria-pressed={false}>
             <FolderTree size={15} />
           </button>
         )}
@@ -148,7 +150,7 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree 
             options={{ minimap: { enabled: false }, fontFamily: "Fira Code", fontSize: 13, lineHeight: 21, padding: { top: 12 }, automaticLayout: false, scrollBeyondLastLine: false }}
           />
         )}
-        {!imageFile && (file.isLoading || !editorReady) && <div className="editor-state">加载编辑器</div>}
+        {!imageFile && (file.isLoading || !editorReady) && <div className="editor-state">{t("Loading editor", "加载编辑器")}</div>}
         {file.error && <div className="pane-error">{file.error.message}</div>}
         {save.error && <div className="pane-error">{save.error.message}</div>}
       </div>

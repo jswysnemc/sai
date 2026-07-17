@@ -50,7 +50,10 @@ fn switch_agent_by_index(
     surface: ControlSurface,
 ) -> Result<AgentCommandResult> {
     if index == 0 || index > choices.len() {
-        bail!("{}: {index}", t("agent index out of range", "Agent 序号超出范围"));
+        bail!(
+            "{}: {index}",
+            t("agent index out of range", "Agent 序号超出范围")
+        );
     }
     let choice = &choices[index - 1];
     match surface {

@@ -510,7 +510,7 @@ fn sanitize_persona_name(value: &str) -> Result<String> {
         .trim_end_matches(".md")
         .replace(['/', '\\'], "-");
     if name.is_empty() {
-        bail!("persona name cannot be empty");
+        bail!("{}", t("persona name cannot be empty", "人格名称不能为空"));
     }
     name.push_str(".md");
     Ok(name)

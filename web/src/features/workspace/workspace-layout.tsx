@@ -22,6 +22,7 @@ import {
   type MobileWorkbenchPane
 } from "./mobile-workbench-state";
 import "./workspace-pane.css";
+import { useI18n } from "../i18n/use-i18n";
 
 type WorkspaceLayoutProps = {
   selectedFile: string | null;
@@ -29,12 +30,12 @@ type WorkspaceLayoutProps = {
   onClearFile: () => void;
 };
 
-const reopenChoices: Array<{ type: PaneTab; label: string; icon: typeof FileCode2 }> = [
-  { type: "files", label: "编辑器", icon: FileCode2 },
-  { type: "diff", label: "Git", icon: GitCompareArrows },
-  { type: "terminal", label: "终端", icon: SquareTerminal },
-  { type: "tasks", label: "后台任务", icon: Activity },
-  { type: "subagents", label: "子智能体", icon: Bot }
+const reopenChoices: Array<{ type: PaneTab; labelEn: string; labelZh: string; icon: typeof FileCode2 }> = [
+  { type: "files", labelEn: "Editor", labelZh: "编辑器", icon: FileCode2 },
+  { type: "diff", labelEn: "Git", labelZh: "Git", icon: GitCompareArrows },
+  { type: "terminal", labelEn: "Terminal", labelZh: "终端", icon: SquareTerminal },
+  { type: "tasks", labelEn: "Background tasks", labelZh: "后台任务", icon: Activity },
+  { type: "subagents", labelEn: "Subagents", labelZh: "子智能体", icon: Bot }
 ];
 
 /**
@@ -44,6 +45,7 @@ const reopenChoices: Array<{ type: PaneTab; label: string; icon: typeof FileCode
  * @returns 编程工作区布局
  */
 export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: WorkspaceLayoutProps) {
+  const { t } = useI18n();
   const layout = useWorkspaceLayout();
   const terminalManager = useTerminalManager();
   const sessionSidebar = useSessionSidebarLayout();
@@ -172,19 +174,19 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
 
   return (
     <div className={classes} style={style}>
-      <nav className="workbench-mobile-tabs" aria-label="工作台面板">
+      <nav className="workbench-mobile-tabs" aria-label={t("Workbench panels", "工作台面板")}>
         <button type="button" className={mobileLayout.pane === "chat" ? "active" : ""} onClick={() => showMobilePane("chat")} aria-current={mobileLayout.pane === "chat" ? "page" : undefined}>
-          <MessageSquare size={17} /><span>聊天</span>
+          <MessageSquare size={17} /><span>{t("Chat", "聊天")}</span>
         </button>
         <button type="button" className={mobileLayout.pane === "workspace" ? "active" : ""} onClick={() => showMobilePane("workspace")} aria-current={mobileLayout.pane === "workspace" ? "page" : undefined}>
-          <Code2 size={17} /><span>编辑器</span>
+          <Code2 size={17} /><span>{t("Editor", "编辑器")}</span>
         </button>
         <button type="button" className={mobileLayout.pane === "terminal" ? "active" : ""} onClick={() => showMobilePane("terminal")} aria-current={mobileLayout.pane === "terminal" ? "page" : undefined}>
-          <SquareTerminal size={17} /><span>终端</span>
+          <SquareTerminal size={17} /><span>{t("Terminal", "终端")}</span>
         </button>
       </nav>
       {mobileLayout.sidebarOpen && (
-        <button type="button" className="mobile-sidebar-scrim" onClick={() => dispatchMobileLayout({ type: "close-sidebar" })} aria-label="关闭会话侧栏" />
+        <button type="button" className="mobile-sidebar-scrim" onClick={() => dispatchMobileLayout({ type: "close-sidebar" })} aria-label={t("Close session sidebar", "关闭会话侧栏")} />
       )}
       <aside className="coding-sidebar" aria-hidden={isMobile && !mobileLayout.sidebarOpen} inert={isMobile && !mobileLayout.sidebarOpen}>
         <SessionSidebar
@@ -218,15 +220,15 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
               type="button"
               className="workspace-reopen"
               onClick={() => setReopenMenuOpen((value) => !value)}
-              title="打开工作区"
-              aria-label="打开工作区"
+              title={t("Open workspace panel", "打开工作区")}
+              aria-label={t("Open workspace panel", "打开工作区")}
               aria-expanded={reopenMenuOpen}
               aria-haspopup="menu"
             >
               <Plus size={16} />
             </button>
             {reopenMenuOpen && (
-              <div className="workspace-reopen-menu" role="menu" aria-label="选择面板">
+              <div className="workspace-reopen-menu" role="menu" aria-label={t("Choose panel", "选择面板")}>
                 {reopenChoices.map((item) => {
                   const Icon = item.icon;
                   return (
@@ -237,7 +239,7 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
                       onClick={() => openWorkspaceWith(item.type)}
                     >
                       <Icon size={14} />
-                      <span>{item.label}</span>
+                      <span>{t(item.labelEn, item.labelZh)}</span>
                     </button>
                   );
                 })}

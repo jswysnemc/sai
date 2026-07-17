@@ -2,6 +2,7 @@ import { Brain, CircleCheck, CircleX, Loader2, Wrench } from "lucide-react";
 import { useState } from "react";
 import type { SubagentTimelineEntry } from "../../api/contracts";
 import { MarkdownRenderer } from "../chat/markdown-renderer";
+import { useI18n } from "../i18n/use-i18n";
 
 /**
  * 渲染子智能体执行时间线:推理片段、轮间正文与工具调用按发生顺序排列。
@@ -33,9 +34,10 @@ export function SubagentTimeline({ entries, running }: { entries: SubagentTimeli
  * @returns 工具调用行
  */
 function ToolEntry({ entry, running }: { entry: Extract<SubagentTimelineEntry, { kind: "tool" }>; running: boolean }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const pending = entry.ok == null;
-  const detail = [entry.args_preview && `参数 ${entry.args_preview}`, entry.output_preview && `输出 ${entry.output_preview}`].filter(Boolean).join("\n");
+  const detail = [entry.args_preview && t(`Arguments ${entry.args_preview}`, `参数 ${entry.args_preview}`), entry.output_preview && t(`Output ${entry.output_preview}`, `输出 ${entry.output_preview}`)].filter(Boolean).join("\n");
   return (
     <div className="subagent-timeline-tool">
       <button type="button" onClick={() => detail && setExpanded((value) => !value)} aria-expanded={detail ? expanded : undefined}>
@@ -44,7 +46,7 @@ function ToolEntry({ entry, running }: { entry: Extract<SubagentTimelineEntry, {
         </span>
         <span className="subagent-timeline-tool-step">#{entry.step}</span>
         <span className="subagent-timeline-tool-name">{entry.name}</span>
-        {pending && running && <span className="subagent-timeline-tool-hint">运行中</span>}
+        {pending && running && <span className="subagent-timeline-tool-hint">{t("Running", "运行中")}</span>}
       </button>
       {expanded && detail && <pre className="subagent-timeline-tool-detail">{detail}</pre>}
     </div>
@@ -58,13 +60,14 @@ function ToolEntry({ entry, running }: { entry: Extract<SubagentTimelineEntry, {
  * @returns 推理条目
  */
 function ReasoningEntry({ text }: { text: string }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const firstLine = text.split("\n").find((line) => line.trim()) ?? "";
   return (
     <div className={`subagent-timeline-reasoning${expanded ? " expanded" : ""}`}>
       <button type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
         <Brain size={12} />
-        <span>{expanded ? "思考过程" : firstLine || "思考过程"}</span>
+        <span>{expanded ? t("Reasoning", "思考过程") : firstLine || t("Reasoning", "思考过程")}</span>
       </button>
       {expanded && <p>{text}</p>}
     </div>

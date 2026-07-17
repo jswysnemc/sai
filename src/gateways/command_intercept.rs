@@ -88,17 +88,14 @@ async fn compact_gateway_conversation(paths: &SaiPaths) -> Result<String> {
                     error: Some(error),
                     ..
                 } => {
-                    result_message = if error.detail.trim().is_empty()
-                        || error.detail == error.message
-                    {
-                        error.message
-                    } else {
-                        format!("{}\n{}", error.message, error.detail)
-                    };
+                    result_message =
+                        if error.detail.trim().is_empty() || error.detail == error.message {
+                            error.message
+                        } else {
+                            format!("{}\n{}", error.message, error.detail)
+                        };
                 }
-                crate::agent::AgentEvent::CompactionFinished {
-                    applied: false, ..
-                } => {
+                crate::agent::AgentEvent::CompactionFinished { applied: false, .. } => {
                     result_message =
                         t("no old turns to compact", "没有可压缩的旧会话轮次").to_string()
                 }

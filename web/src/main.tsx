@@ -18,6 +18,7 @@ import { App } from "./app/app";
 import { queryClient } from "./app/query-client";
 import { bootstrapSession } from "./api/client";
 import { initializeTheme } from "./features/theme/theme";
+import { detectInitialLocale, text } from "./features/i18n/locale";
 
 async function start() {
   initializeTheme();
@@ -37,5 +38,13 @@ async function start() {
 
 start().catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
-  document.body.innerHTML = `<main class="fatal-error"><h1>Sai Web 无法启动</h1><p>${message}</p></main>`;
+  const locale = detectInitialLocale();
+  const main = document.createElement("main");
+  const title = document.createElement("h1");
+  const detail = document.createElement("p");
+  main.className = "fatal-error";
+  title.textContent = text(locale, "Sai Web could not start", "Sai Web 无法启动");
+  detail.textContent = message;
+  main.append(title, detail);
+  document.body.replaceChildren(main);
 });

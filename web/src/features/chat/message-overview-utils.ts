@@ -1,5 +1,6 @@
 import type { SessionTimelineTurn } from "../../api/contracts";
 import type { LiveRunState, ToolLifecycle } from "./run-event-reducer";
+import { text, type Locale } from "../i18n/locale";
 
 export type MessageOverviewCategory = "history" | "live";
 
@@ -30,14 +31,16 @@ const FILE_ARGUMENT_KEYS = new Set(["file", "files", "file_path", "file_paths", 
  *
  * @param turns 按显示顺序排列的会话轮次
  * @param liveState 当前实时运行状态
+ * @param locale 当前界面语言
  * @returns 可用于概览导航的有序项目
  */
 export function createTimelineOverviewItems(
   turns: readonly SessionTimelineTurn[],
-  liveState?: LiveRunState
+  liveState?: LiveRunState,
+  locale: Locale = "zh-CN"
 ): MessageOverviewItem[] {
-  const items = turns.map(createHistoryOverviewItem);
-  const liveItem = liveState ? createLiveOverviewItem(liveState) : null;
+  const items = turns.map((turn) => createHistoryOverviewItem(turn, locale));
+  const liveItem = liveState ? createLiveOverviewItem(liveState, locale) : null;
   return liveItem ? [...items, liveItem] : items;
 }
 
@@ -45,10 +48,11 @@ export function createTimelineOverviewItems(
  * 将单个历史轮次转换为概览项。
  *
  * @param turn 会话时间线轮次
+ * @param locale 当前界面语言
  * @returns 历史概览项
  */
-export function createHistoryOverviewItem(turn: SessionTimelineTurn): MessageOverviewItem {
-  const label = historyStatusLabel(turn.status);
+export function createHistoryOverviewItem(turn: SessionTimelineTurn, locale: Locale = "zh-CN"): MessageOverviewItem {
+  const label = historyStatusLabel(turn.status, locale);
   const overviewTags = collectOverviewTags(
     [turn.user.content, turn.assistant.content, turn.assistant.reasoning ?? ""],
     turn.tools.map((tool) => ({ arguments: tool.arguments, output: tool.output }))
@@ -57,7 +61,7 @@ export function createHistoryOverviewItem(turn: SessionTimelineTurn): MessageOve
     id: `turn-${turn.turn_id}`,
     category: "history",
     label,
-    title: createOverviewSummary(turn.user.content, DEFAULT_TITLE_LENGTH) || "未命名请求",
+    title: createOverviewSummary(turn.user.content, DEFAULT_TITLE_LENGTH) || text(locale, "Untitled request", "未命名请求"),
     summary: createOverviewSummary(turn.assistant.content, DEFAULT_SUMMARY_LENGTH) || label,
     ...overviewTags,
     status: turn.status
@@ -68,11 +72,12 @@ export function createHistoryOverviewItem(turn: SessionTimelineTurn): MessageOve
  * 将实时运行状态转换为概览项。
  *
  * @param state 当前实时运行状态
+ * @param locale 当前界面语言
  * @returns 存在运行 ID 时返回实时概览项，否则返回 null
  */
-export function createLiveOverviewItem(state: LiveRunState): MessageOverviewItem | null {
+export function createLiveOverviewItem(state: LiveRunState, locale: Locale = "zh-CN"): MessageOverviewItem | null {
   if (!state.runId) return null;
-  const label = liveStatusLabel(state);
+  const label = liveStatusLabel(state, locale);
   const overviewTags = collectOverviewTags(
     [state.userInput, state.content, state.reasoning],
     state.tools.map((tool) => ({ arguments: tool.arguments, output: tool.output }))
@@ -81,7 +86,7 @@ export function createLiveOverviewItem(state: LiveRunState): MessageOverviewItem
     id: `live-${state.runId}`,
     category: "live",
     label,
-    title: createOverviewSummary(state.userInput, DEFAULT_TITLE_LENGTH) || "未命名请求",
+    title: createOverviewSummary(state.userInput, DEFAULT_TITLE_LENGTH) || text(locale, "Untitled request", "未命名请求"),
     summary: createOverviewSummary(state.content, DEFAULT_SUMMARY_LENGTH) || label,
     ...overviewTags,
     status: liveOverviewStatus(state)
@@ -234,28 +239,30 @@ function baseName(path: string): string {
  * 将历史轮次状态转换为显示标签。
  *
  * @param status 历史轮次状态
- * @returns 中文状态标签
+ * @param locale 当前界面语言
+ * @returns 本地化状态标签
  */
-function historyStatusLabel(status: SessionTimelineTurn["status"]): string {
-  if (status === "running") return "正在处理";
-  if (status === "interrupted") return "已中断";
-  return "已完成";
+function historyStatusLabel(status: SessionTimelineTurn["status"], locale: Locale): string {
+  if (status === "running") return text(locale, "Processing", "正在处理");
+  if (status === "interrupted") return text(locale, "Interrupted", "已中断");
+  return text(locale, "Completed", "已完成");
 }
 
 /**
  * 将实时状态转换为显示标签。
  *
  * @param state 当前实时运行状态
- * @returns 中文状态标签
+ * @param locale 当前界面语言
+ * @returns 本地化状态标签
  */
-function liveStatusLabel(state: LiveRunState): string {
-  if (state.status === "queued") return "排队中";
-  if (state.error) return "运行失败";
-  if (state.completed) return "已完成";
-  if (state.status === "waiting_response") return "等待响应";
-  if (state.status === "thinking") return "思考中";
-  if (state.status === "working") return "工作中";
-  return "等待开始";
+function liveStatusLabel(state: LiveRunState, locale: Locale): string {
+  if (state.status === "queued") return text(locale, "Queued", "排队中");
+  if (state.error) return text(locale, "Run failed", "运行失败");
+  if (state.completed) return text(locale, "Completed", "已完成");
+  if (state.status === "waiting_response") return text(locale, "Waiting for response", "等待响应");
+  if (state.status === "thinking") return text(locale, "Thinking", "思考中");
+  if (state.status === "working") return text(locale, "Working", "工作中");
+  return text(locale, "Waiting to start", "等待开始");
 }
 
 /**

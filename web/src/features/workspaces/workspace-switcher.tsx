@@ -7,6 +7,8 @@ import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { useAnchoredPopover } from "../../shared/ui/popover/use-anchored-popover";
 import { ServerDirectoryDialog } from "./server-directory-dialog";
 import "./workspace-switcher.css";
+import { useI18n } from "../i18n/use-i18n";
+import type { Translate } from "../i18n/i18n-context";
 
 /**
  * 渲染紧凑工作区入口、最近工作区和服务端目录浏览器。
@@ -14,6 +16,7 @@ import "./workspace-switcher.css";
  * @returns 工作区选择器
  */
 export function WorkspaceSwitcher() {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -23,7 +26,7 @@ export function WorkspaceSwitcher() {
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
   const active = workspaces.data?.workspaces.find((workspace) => workspace.id === workspaces.data.active_id);
   const switchWorkspace = useMutation({
-    mutationFn: (id: string) => switchWithTerminalConfirm(id, confirm),
+    mutationFn: (id: string) => switchWithTerminalConfirm(id, confirm, t),
     onSuccess: (switched) => { if (switched) window.location.reload(); }
   });
   const menuStyle = useAnchoredPopover({ open, anchorRef: triggerRef, preferredWidth: 520, minimumWidth: 240, maxHeight: 560 });
@@ -42,18 +45,18 @@ export function WorkspaceSwitcher() {
   /** 登记服务端目录并切换工作区。 */
   const openDirectory = async (path: string) => {
     const workspace = await api.workspaces.add(path);
-    const switched = await switchWithTerminalConfirm(workspace.id, confirm);
+    const switched = await switchWithTerminalConfirm(workspace.id, confirm, t);
     if (switched) window.location.reload();
   };
 
   return (
     <div className="workspace-switcher" ref={rootRef}>
       <button ref={triggerRef} className="workspace-trigger" type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-        <FolderGit2 size={13} /><strong>{active?.name ?? "工作区"}</strong><ChevronDown size={12} className={open ? "open" : ""} />
+        <FolderGit2 size={13} /><strong>{active?.name ?? t("Workspace", "工作区")}</strong><ChevronDown size={12} className={open ? "open" : ""} />
       </button>
       {open && createPortal(
         <div ref={menuRef} className="workspace-menu" style={menuStyle}>
-          <div className="workspace-menu-head"><span><strong>{active?.name}</strong><small>{active?.path}</small></span><button type="button" aria-label="关闭工作区菜单" onClick={() => setOpen(false)}><X size={15} /></button></div>
+          <div className="workspace-menu-head"><span><strong>{active?.name}</strong><small>{active?.path}</small></span><button type="button" aria-label={t("Close workspace menu", "关闭工作区菜单")} onClick={() => setOpen(false)}><X size={15} /></button></div>
           <div className="workspace-items">
             {workspaces.data?.workspaces.map((workspace) => (
               <button type="button" className="workspace-item" key={workspace.id} onClick={() => workspace.id !== workspaces.data?.active_id && switchWorkspace.mutate(workspace.id)}>
@@ -61,7 +64,7 @@ export function WorkspaceSwitcher() {
               </button>
             ))}
           </div>
-          <button type="button" className="workspace-add" onClick={() => { setOpen(false); setBrowserOpen(true); }}><FolderOpen size={15} /><span>浏览服务端目录</span></button>
+          <button type="button" className="workspace-add" onClick={() => { setOpen(false); setBrowserOpen(true); }}><FolderOpen size={15} /><span>{t("Browse server directories", "浏览服务端目录")}</span></button>
           {switchWorkspace.error && <p className="form-error workspace-error">{switchWorkspace.error.message}</p>}
         </div>,
         document.body
@@ -76,11 +79,13 @@ export function WorkspaceSwitcher() {
  *
  * @param id 目标工作区 ID
  * @param confirm 全局确认对话框方法
+ * @param t 双语文本选择方法
  * @returns 是否完成切换
  */
 export async function switchWithTerminalConfirm(
   id: string,
-  confirm: (options: { title: string; description: string; confirmLabel?: string; danger?: boolean }) => Promise<boolean>
+  confirm: (options: { title: string; description: string; confirmLabel?: string; danger?: boolean }) => Promise<boolean>,
+  t: Translate
 ): Promise<boolean> {
   try {
     // 1. 先尝试普通切换
@@ -92,9 +97,9 @@ export async function switchWithTerminalConfirm(
     if (!message.includes("terminal")) throw error;
     // 3. 询问用户是否关闭全部终端并切换
     const confirmed = await confirm({
-      title: "关闭终端并切换工作区",
-      description: "当前有终端会话在运行，关闭全部终端并切换？",
-      confirmLabel: "关闭并切换",
+      title: t("Close terminals and switch workspace", "关闭终端并切换工作区"),
+      description: t("Terminal sessions are running. Close all terminals and switch workspace?", "当前有终端会话在运行，关闭全部终端并切换？"),
+      confirmLabel: t("Close and switch", "关闭并切换"),
       danger: true
     });
     if (!confirmed) return false;

@@ -84,7 +84,10 @@ impl Agent {
         let base = self.chat_base_context_projection(None)?;
         let projection =
             project_provider_turn_from_messages(&base.messages, 0, self.context_char_budget);
-        let Some(request) = self.state.select_compaction_for_projection(&projection, true)? else {
+        let Some(request) = self
+            .state
+            .select_compaction_for_projection(&projection, true)?
+        else {
             on_event(AgentEvent::CompactionStarted {
                 turn_count: 0,
                 model: self.compaction_model_label.clone(),

@@ -1,3 +1,4 @@
+use crate::i18n::text as t;
 use crate::permission::PermissionDecision;
 
 /// 权限选择项索引。
@@ -41,9 +42,9 @@ impl PermissionChoice {
     /// 返回选项标签。
     pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::Allow => "允许一次",
-            Self::Deny => "拒绝",
-            Self::DenyWithReply => "拒绝并告诉 Sai 如何调整",
+            Self::Allow => t("Allow once", "允许一次"),
+            Self::Deny => t("Deny", "拒绝"),
+            Self::DenyWithReply => t("Deny and tell Sai how to adjust", "拒绝并告诉 Sai 如何调整"),
         }
     }
 }
@@ -70,13 +71,22 @@ pub(crate) fn render_permission_controls(
         }
     }
     if let Some(draft) = reply_draft {
-        lines.push("  \x1b[2m回复 Sai\x1b[0m".to_string());
+        lines.push(format!("  \x1b[2m{}\x1b[0m", t("Reply to Sai", "回复 Sai")));
         lines.push(format!("    {draft}\x1b[36m▌\x1b[0m"));
     }
     if reply_draft.is_some() {
-        lines.push("  \x1b[2mEnter 提交 · Esc 返回\x1b[0m".to_string());
+        lines.push(format!(
+            "  \x1b[2m{}\x1b[0m",
+            t("Enter submit · Esc back", "Enter 提交 · Esc 返回")
+        ));
     } else {
-        lines.push("  \x1b[2m↑↓ 选择 · Enter 确认 · y 允许 · n 拒绝\x1b[0m".to_string());
+        lines.push(format!(
+            "  \x1b[2m{}\x1b[0m",
+            t(
+                "Up/Down select · Enter confirm · y allow · n deny",
+                "上下键选择 · Enter 确认 · y 允许 · n 拒绝",
+            )
+        ));
     }
     lines.join("\n")
 }
@@ -89,7 +99,10 @@ pub(crate) fn render_permission_controls(
 /// 返回:
 /// - 标题 ANSI 文本
 pub(crate) fn render_permission_title(tool: &str) -> String {
-    format!("\x1b[1m需要权限确认\x1b[0m  \x1b[2m{tool}\x1b[0m")
+    format!(
+        "\x1b[1m{}\x1b[0m  \x1b[2m{tool}\x1b[0m",
+        t("Permission required", "需要权限确认")
+    )
 }
 
 /// 渲染附着在既有工具视图下方的权限决定。
@@ -101,11 +114,13 @@ pub(crate) fn render_permission_title(tool: &str) -> String {
 /// - 权限决定 ANSI 文本
 pub(crate) fn render_permission_decision(decision: &PermissionDecision) -> String {
     match decision {
-        PermissionDecision::Allow => "  \x1b[32m已允许一次\x1b[0m".to_string(),
+        PermissionDecision::Allow => {
+            format!("  \x1b[32m{}\x1b[0m", t("Allowed once", "已允许一次"))
+        }
         PermissionDecision::Deny { reply } => {
-            let mut output = "  \x1b[31m已拒绝\x1b[0m".to_string();
+            let mut output = format!("  \x1b[31m{}\x1b[0m", t("Denied", "已拒绝"));
             if let Some(reply) = reply.as_deref().filter(|value| !value.trim().is_empty()) {
-                output.push_str("\n  \x1b[2m回复: \x1b[0m");
+                output.push_str(&format!("\n  \x1b[2m{}: \x1b[0m", t("Reply", "回复")));
                 output.push_str(reply.trim());
             }
             output
@@ -123,16 +138,16 @@ mod tests {
         let output = render_permission_controls(PermissionChoice::Allow, None);
 
         assert!(output.contains("❯"));
-        assert!(output.contains("允许一次"));
+        assert!(output.contains(t("Allow once", "允许一次")));
         assert!(!output.starts_with('\n'));
-        assert!(!output.contains("需要权限"));
+        assert!(!output.contains(t("Permission required", "需要权限确认")));
         assert!(!output.contains("args:"));
     }
 
     #[test]
     fn permission_title_includes_tool_name() {
         let output = render_permission_title("edit_file");
-        assert!(output.contains("需要权限确认"));
+        assert!(output.contains(t("Permission required", "需要权限确认")));
         assert!(output.contains("edit_file"));
     }
 

@@ -19,11 +19,12 @@ export type WorkspacePanelTab = {
  */
 export function createWorkspacePanelTab(
   type: PaneTab,
-  options: { title?: string; path?: string; terminalId?: string; closable?: boolean } = {}
+  options: { title?: string; path?: string; terminalId?: string; closable?: boolean } = {},
+  locale: Locale = "zh-CN"
 ): WorkspacePanelTab {
   const path = options.path;
   if (type === "files") {
-    const title = options.title ?? (path ? path.split("/").filter(Boolean).at(-1) ?? path : "编辑器");
+    const title = options.title ?? (path ? path.split("/").filter(Boolean).at(-1) ?? path : text(locale, "Editor", "编辑器"));
     return {
       id: path ? `file:${path}` : `files:${crypto.randomUUID()}`,
       type,
@@ -37,15 +38,15 @@ export function createWorkspacePanelTab(
     return {
       id: `terminal:${terminalId}`,
       type,
-      title: options.title ?? "终端",
+      title: options.title ?? text(locale, "Terminal", "终端"),
       terminalId,
       closable: options.closable ?? true
     };
   }
   const defaults: Record<Exclude<PaneTab, "files" | "terminal">, string> = {
     diff: "Git",
-    tasks: "后台任务",
-    subagents: "子智能体"
+    tasks: text(locale, "Background tasks", "后台任务"),
+    subagents: text(locale, "Subagents", "子智能体")
   };
   return {
     id: `${type}:${crypto.randomUUID()}`,
@@ -61,12 +62,13 @@ export function createWorkspacePanelTab(
  * @param type 面板类型
  * @returns 标题
  */
-export function paneTabLabel(type: PaneTab): string {
+export function paneTabLabel(type: PaneTab, locale: Locale = "zh-CN"): string {
   return {
-    files: "编辑器",
+    files: text(locale, "Editor", "编辑器"),
     diff: "Git",
-    terminal: "终端",
-    tasks: "后台任务",
-    subagents: "子智能体"
+    terminal: text(locale, "Terminal", "终端"),
+    tasks: text(locale, "Background tasks", "后台任务"),
+    subagents: text(locale, "Subagents", "子智能体")
   }[type];
 }
+import { text, type Locale } from "../i18n/locale";

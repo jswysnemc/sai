@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { api } from "../../api/client";
 import type { DirectoryEntry } from "../../api/contracts";
 import { Modal } from "../../shared/ui/dialog/modal";
+import { useI18n } from "../i18n/use-i18n";
 
 type ServerDirectoryDialogProps = {
   open: boolean;
@@ -18,6 +19,7 @@ type ServerDirectoryDialogProps = {
  * @returns 服务端目录选择弹层
  */
 export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirectoryDialogProps) {
+  const { t } = useI18n();
   const [path, setPath] = useState<string | undefined>();
   const [draft, setDraft] = useState("");
   const [selected, setSelected] = useState("");
@@ -83,31 +85,31 @@ export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirecto
   return (
     <Modal
       open={open}
-      title="打开服务端工作区"
-      description="选择运行 Sai Web 的服务器上的目录。浏览范围由服务端配置限制。"
+      title={t("Open server workspace", "打开服务端工作区")}
+      description={t("Choose a directory on the server running Sai Web. Server configuration limits the browsing scope.", "选择运行 Sai Web 的服务器上的目录。浏览范围由服务端配置限制。")}
       size="large"
       onClose={onClose}
-      footer={<><button type="button" className="ui-button secondary" onClick={onClose}>取消</button><button type="button" className="ui-button primary" onClick={() => void submit()} disabled={submitting || !listing.data}>{submitting ? "正在打开" : selected ? "打开选中目录" : "打开当前目录"}</button></>}
+      footer={<><button type="button" className="ui-button secondary" onClick={onClose}>{t("Cancel", "取消")}</button><button type="button" className="ui-button primary" onClick={() => void submit()} disabled={submitting || !listing.data}>{submitting ? t("Opening", "正在打开") : selected ? t("Open selected directory", "打开选中目录") : t("Open current directory", "打开当前目录")}</button></>}
     >
       <div className="server-directory-dialog">
         <aside className="directory-roots">
-          <span>允许位置</span>
+          <span>{t("Allowed location", "允许位置")}</span>
           {listing.data?.roots.map((root) => <button type="button" key={root.path} onClick={() => navigate(root.path)}><HardDrive size={14} /><span><strong>{root.name}</strong><small>{root.path}</small></span></button>)}
         </aside>
         <section className="directory-browser">
           <header>
-            <button type="button" onClick={() => listing.data?.parent && navigate(listing.data.parent)} disabled={!listing.data?.parent} aria-label="上级目录"><ArrowUp size={14} /></button>
+            <button type="button" onClick={() => listing.data?.parent && navigate(listing.data.parent)} disabled={!listing.data?.parent} aria-label={t("Parent directory", "上级目录")}><ArrowUp size={14} /></button>
             <input
               className="directory-path-input"
               value={draft}
-              placeholder={listing.data?.current ?? "输入过滤词，或输入以 / 开头的绝对路径后回车"}
+              placeholder={listing.data?.current ?? t("Enter a filter, or type an absolute path beginning with / and press Enter", "输入过滤词，或输入以 / 开头的绝对路径后回车")}
               spellCheck={false}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => { if (event.key === "Enter") handleDraftEnter(); }}
             />
-            {draft.trim().startsWith("/") && <button type="button" onClick={handleDraftEnter} aria-label="跳转到输入路径"><CornerDownLeft size={14} /></button>}
-            <button type="button" onClick={() => { setCreating((value) => !value); setCreateError(""); }} disabled={!listing.data} aria-label="新建文件夹"><FolderPlus size={14} /></button>
-            <button type="button" onClick={() => setShowHidden((value) => !value)} aria-label={showHidden ? "隐藏点开头目录" : "显示点开头目录"}>
+            {draft.trim().startsWith("/") && <button type="button" onClick={handleDraftEnter} aria-label={t("Go to entered path", "跳转到输入路径")}><CornerDownLeft size={14} /></button>}
+            <button type="button" onClick={() => { setCreating((value) => !value); setCreateError(""); }} disabled={!listing.data} aria-label={t("New folder", "新建文件夹")}><FolderPlus size={14} /></button>
+            <button type="button" onClick={() => setShowHidden((value) => !value)} aria-label={showHidden ? t("Hide dot directories", "隐藏点开头目录") : t("Show dot directories", "显示点开头目录")}>
               {showHidden ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
           </header>
@@ -119,7 +121,7 @@ export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirecto
                 <input
                   autoFocus
                   value={newFolderName}
-                  placeholder="新文件夹名称，回车确认，Esc 取消"
+                  placeholder={t("New folder name; press Enter to confirm or Escape to cancel", "新文件夹名称，回车确认，Esc 取消")}
                   spellCheck={false}
                   onChange={(event) => setNewFolderName(event.target.value)}
                   onKeyDown={(event) => {
@@ -135,8 +137,8 @@ export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirecto
                 <Folder size={16} /><span><strong>{entry.name}</strong><small>{entry.path}</small></span>{entry.git_repository && <span className="directory-git"><GitBranch size={12} />Git</span>}{selected === entry.path && <Check size={14} />}
               </button>
             ))}
-            {entries.length === 0 && <div className="directory-empty">{filter ? `没有匹配“${filter}”的目录` : hiddenCount > 0 ? `当前目录只有 ${hiddenCount} 个隐藏目录` : "当前目录没有可浏览的子目录"}</div>}
-            {!showHidden && entries.length > 0 && hiddenCount > 0 && !filter && <div className="directory-hidden-hint">已折叠 {hiddenCount} 个点开头目录</div>}
+            {entries.length === 0 && <div className="directory-empty">{filter ? t(`No directories match “${filter}”`, `没有匹配“${filter}”的目录`) : hiddenCount > 0 ? t(`The current directory contains only ${hiddenCount} hidden directories`, `当前目录只有 ${hiddenCount} 个隐藏目录`) : t("The current directory has no browsable subdirectories", "当前目录没有可浏览的子目录")}</div>}
+            {!showHidden && entries.length > 0 && hiddenCount > 0 && !filter && <div className="directory-hidden-hint">{t(`${hiddenCount} dot directories collapsed`, `已折叠 ${hiddenCount} 个点开头目录`)}</div>}
             {listing.error && <div className="pane-error">{listing.error.message}</div>}
           </div>
         </section>

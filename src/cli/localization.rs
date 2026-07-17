@@ -1,8 +1,9 @@
 use super::args::Cli;
-use crate::i18n::{is_zh, text as t};
+use crate::i18n::{apply_locale_override_from_args, is_zh, text as t};
 use clap::{Arg, ArgAction, CommandFactory, FromArgMatches};
 
 pub(crate) fn parse() -> Cli {
+    apply_locale_override_from_args(std::env::args_os());
     let matches = localized_command().get_matches();
     Cli::from_arg_matches(&matches).unwrap_or_else(|err| err.exit())
 }
@@ -91,14 +92,35 @@ fn apply_chinese_help_template(mut command: clap::Command) -> clap::Command {
 
 fn localize_top_args(command: clap::Command) -> clap::Command {
     command
+        .mut_arg("lang", |arg| {
+            arg.help(t(
+                "Interface language: en-US or zh-CN",
+                "界面语言：en-US 或 zh-CN",
+            ))
+        })
         .mut_arg("plan", |arg| {
             arg.help(t("Run in read-only planning mode", "使用只读计划模式运行"))
+        })
+        .mut_arg("audited", |arg| {
+            arg.help(t(
+                "Run with audit logging and workspace sandboxing",
+                "使用审计日志和工作区沙盒运行",
+            ))
+        })
+        .mut_arg("yolo", |arg| {
+            arg.help(t(
+                "Run without interactive permission prompts",
+                "运行时不显示交互式权限询问",
+            ))
         })
         .mut_arg("clipb", |arg| {
             arg.help(t(
                 "Inject clipboard text or attach clipboard image to the prompt",
                 "将剪贴板文本注入提示词，或将剪贴板图片附加到提示词",
             ))
+        })
+        .mut_arg("web_search", |arg| {
+            arg.help(t("Enable web search for this message", "为本次消息启用网页搜索"))
         })
         .mut_arg("thinking", |arg| {
             arg.help(t(
@@ -116,6 +138,7 @@ fn localize_top_args(command: clap::Command) -> clap::Command {
 
 fn localize_subcommands(mut command: clap::Command) -> clap::Command {
     let descriptions = [
+        ("web", "Start the Sai Web coding workspace", "启动 Sai Web 编程工作台"),
         (
             "ask",
             "Send one message to the assistant",
@@ -163,6 +186,8 @@ fn localize_subcommands(mut command: clap::Command) -> clap::Command {
             "安全删除已安装的 Sai shell hook",
         ),
         ("history", "Show conversation history", "显示会话历史"),
+        ("sessions", "Manage saved sessions", "管理已保存会话"),
+        ("resume", "Resume a session by selection or ID", "交互选择或按 ID 恢复会话"),
         ("kb", "Manage local knowledge base", "管理本地知识库"),
         (
             "memory",
@@ -176,6 +201,11 @@ fn localize_subcommands(mut command: clap::Command) -> clap::Command {
             "Send messages through WeCom, QQ official bot, or OneBot gateways",
             "通过企业微信、QQ 官方机器人或 OneBot 网关发送消息",
         ),
+        (
+            "weixin-login",
+            "Log in to Weixin iLink by QR code",
+            "通过二维码登录微信 iLink",
+        ),
         ("set", "Set active configuration values", "设置当前配置项"),
         ("clear", "Clear current conversation history", "清空当前会话历史"),
         (
@@ -188,19 +218,43 @@ fn localize_subcommands(mut command: clap::Command) -> clap::Command {
         command = command.mut_subcommand(name, |subcommand| subcommand.about(t(en, zh)));
     }
     command = command
+        .mut_subcommand("web", localize_web_command)
         .mut_subcommand("ask", localize_ask_command)
         .mut_subcommand("providers", localize_providers_command)
         .mut_subcommand("history", localize_history_command)
+        .mut_subcommand("sessions", localize_sessions_command)
+        .mut_subcommand("resume", localize_resume_command)
         .mut_subcommand("kb", localize_kb_command)
         .mut_subcommand("memory", localize_memory_command)
         .mut_subcommand("skills", localize_skills_command)
         .mut_subcommand("ps", localize_background_commands_command)
         .mut_subcommand("gateway", localize_gateway_command)
+        .mut_subcommand("weixin-login", localize_weixin_login_command)
         .mut_subcommand("set", localize_set_command)
         .mut_subcommand("config", localize_config_command)
         .mut_subcommand("clear", localize_clear_command)
         .mut_subcommand("compact", localize_compact_command);
     command
+}
+
+/// 本地化 Web 工作台命令参数。
+///
+/// 参数:
+/// - `command`: Clap Web 子命令
+///
+/// 返回:
+/// - 已本地化的子命令
+fn localize_web_command(command: clap::Command) -> clap::Command {
+    command
+        .mut_arg("port", |arg| {
+            arg.help(t("HTTP listen port", "HTTP 监听端口"))
+        })
+        .mut_arg("no_open", |arg| {
+            arg.help(t(
+                "Do not open the browser automatically",
+                "不自动打开浏览器",
+            ))
+        })
 }
 
 fn localize_ask_command(command: clap::Command) -> clap::Command {
@@ -344,6 +398,86 @@ fn localize_history_command(command: clap::Command) -> clap::Command {
         })
         .mut_arg("no_thinking", |arg| {
             arg.help(t("Hide stored reasoning", "隐藏已保存的思考内容"))
+        })
+}
+
+/// 本地化会话管理命令和参数。
+///
+/// 参数:
+/// - `command`: Clap sessions 子命令
+///
+/// 返回:
+/// - 已本地化的子命令
+fn localize_sessions_command(mut command: clap::Command) -> clap::Command {
+    let descriptions = [
+        ("list", "List saved sessions", "列出已保存会话"),
+        ("new", "Create a new session", "创建新会话"),
+        ("switch", "Switch to a session by ID", "按 ID 切换会话"),
+        (
+            "resume",
+            "Resume a session by selection or ID",
+            "交互选择或按 ID 恢复会话",
+        ),
+        ("current", "Show the current session", "显示当前会话"),
+        ("delete", "Delete a session", "删除会话"),
+        ("rename", "Rename a session", "重命名会话"),
+    ];
+    for (name, en, zh) in descriptions {
+        command = command.mut_subcommand(name, |subcommand| subcommand.about(t(en, zh)));
+    }
+    command
+        .mut_subcommand("new", |subcommand| {
+            subcommand.mut_arg("title", |arg| arg.help(t("Session title", "会话标题")))
+        })
+        .mut_subcommand("switch", |subcommand| {
+            subcommand.mut_arg("id", |arg| arg.help(t("Session ID", "会话 ID")))
+        })
+        .mut_subcommand("resume", localize_resume_command)
+        .mut_subcommand("delete", |subcommand| {
+            subcommand.mut_arg("id", |arg| arg.help(t("Session ID", "会话 ID")))
+        })
+        .mut_subcommand("rename", |subcommand| {
+            subcommand
+                .mut_arg("id", |arg| arg.help(t("Session ID", "会话 ID")))
+                .mut_arg("title", |arg| {
+                    arg.help(t("New session title", "新会话标题"))
+                })
+        })
+}
+
+/// 本地化恢复会话命令参数。
+///
+/// 参数:
+/// - `command`: Clap resume 子命令
+///
+/// 返回:
+/// - 已本地化的子命令
+fn localize_resume_command(command: clap::Command) -> clap::Command {
+    command.mut_arg("id", |arg| {
+        arg.help(t(
+            "Session ID; omit to choose interactively",
+            "会话 ID；省略则进入交互选择",
+        ))
+    })
+}
+
+/// 本地化顶层微信登录命令参数。
+///
+/// 参数:
+/// - `command`: Clap weixin-login 子命令
+///
+/// 返回:
+/// - 已本地化的子命令
+fn localize_weixin_login_command(command: clap::Command) -> clap::Command {
+    command
+        .mut_arg("verbose", |arg| {
+            arg.help(t("Show verbose logs", "显示详细日志"))
+        })
+        .mut_arg("bot_type", |arg| {
+            arg.help(t("Weixin bot type", "微信机器人类型"))
+        })
+        .mut_arg("timeout_secs", |arg| {
+            arg.help(t("Login timeout in seconds", "登录超时秒数"))
         })
 }
 

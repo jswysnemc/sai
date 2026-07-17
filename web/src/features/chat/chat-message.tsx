@@ -7,6 +7,7 @@ import { MessageActions } from "./message/message-actions";
 import { MessageParts } from "./message/message-parts";
 import { UserMessageBubble } from "./message/user-message-bubble";
 import { ErrorDetailToggle } from "./message/error-detail-toggle";
+import { useI18n } from "../i18n/use-i18n";
 
 /**
  * 渲染一条历史消息。
@@ -41,6 +42,7 @@ export function HistoryTurn({
   onFork?: () => void;
   actionBusy?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <>
       <UserMessageBubble content={turn.user.content} timestamp={turn.user.timestamp} onRetry={onRetry} />
@@ -49,7 +51,7 @@ export function HistoryTurn({
         {turn.status === "interrupted" && (
           <div className="run-error">
             <span className="run-error-text">
-              {turn.assistant.content ? "响应已中断，已保留生成内容" : "运行已中断"}
+              {turn.assistant.content ? t("The response was interrupted; generated content was preserved", "响应已中断，已保留生成内容") : t("The run was interrupted", "运行已中断")}
             </span>
           </div>
         )}
@@ -73,6 +75,7 @@ export function HistoryTurn({
  * @returns 当前运行消息组
  */
 export function LiveRunMessage({ state, running, onRetry }: { state: LiveRunState; running: boolean; onRetry?: () => void }) {
+  const { t } = useI18n();
   const compacting = state.parts.some((part) => part.type === "compaction" && part.status === "running");
   return (
     <>
@@ -89,7 +92,7 @@ export function LiveRunMessage({ state, running, onRetry }: { state: LiveRunStat
             {onRetry && state.completed && (
               <button type="button" className="run-error-retry" onClick={onRetry}>
                 <RotateCcw size={12} />
-                <span>重试</span>
+                <span>{t("Retry", "重试")}</span>
               </button>
             )}
           </div>

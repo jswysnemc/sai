@@ -1,6 +1,7 @@
 import type { AppConfig } from "../../../api/contracts";
 import { ModelIcon } from "../../../shared/ui/model-icon";
 import { Select, type SelectOption } from "../../../shared/ui/select/select";
+import { useI18n } from "../../i18n/use-i18n";
 
 type AgentRuntimePatch = {
   provider_id?: string;
@@ -73,12 +74,13 @@ export function AgentRuntimeFields({
   thinkingHelp,
   onChange
 }: AgentRuntimeFieldsProps) {
+  const { t } = useI18n();
   const modelChoices = buildAgentModelChoices(config, providerId, model);
   const current = providerId && model ? `${providerId}\t${model}` : "";
 
   return <>
     <div className="settings-field">
-      <span>模型</span>
+      <span>{t("Model", "模型")}</span>
       <Select
         value={current}
         options={[{ value: "", label: inheritModelLabel }, ...modelChoices]}
@@ -87,13 +89,13 @@ export function AgentRuntimeFields({
           onChange({ provider_id: nextProvider, model: nextModel });
         }}
         disabled={modelChoices.length === 0}
-        ariaLabel="Agent 模型"
+        ariaLabel={t("Agent model", "Agent 模型")}
       />
-      <small>直接选择已启用的供应商与模型组合</small>
+      <small>{t("Select an enabled provider and model combination", "直接选择已启用的供应商与模型组合")}</small>
     </div>
     <div className="settings-field">
-      <span>思考等级</span>
-      <Select value={thinkingLevel || "auto"} options={THINKING_OPTIONS} onChange={(value) => onChange({ thinking_level: value })} ariaLabel="Agent 思考等级" />
+      <span>{t("Thinking level", "思考等级")}</span>
+      <Select value={thinkingLevel || "auto"} options={THINKING_OPTIONS} onChange={(value) => onChange({ thinking_level: value })} ariaLabel={t("Agent thinking level", "Agent 思考等级")} />
       <small>{thinkingHelp}</small>
     </div>
   </>;

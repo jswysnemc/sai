@@ -48,9 +48,9 @@ mod xuanxue;
 
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
-pub use registry::{empty_parameters, ToolPermission, ToolProgress, ToolRegistry, ToolSpec};
 pub(crate) use context::tool_output_for_context;
 pub(crate) use progressive::{register_loader as register_progressive_loader, LOAD_NAME};
+pub use registry::{empty_parameters, ToolPermission, ToolProgress, ToolRegistry, ToolSpec};
 pub(crate) use skills::load_installed_skill;
 pub use skills::{
     load_installed_skill_document, register_skills, skill_catalog, skills_catalog_prompt,
@@ -95,20 +95,24 @@ pub fn tool_catalog(config: &AppConfig, paths: &SaiPaths) -> Vec<ToolCatalogEntr
             }
         })
         .collect::<Vec<_>>();
-    entries.extend(["subagent", "todo", "ask_question"].into_iter().map(|name| {
-        let group = groups::group_for_tool(name);
-        ToolCatalogEntry {
-            name: name.to_string(),
-            group,
-            group_label: groups::group_description(group),
-            description: match name {
-                "subagent" => "启动子任务代理".to_string(),
-                "todo" => "管理待办任务清单".to_string(),
-                "ask_question" => "向用户提出结构化问题并等待回答".to_string(),
-                _ => String::new(),
-            },
-        }
-    }));
+    entries.extend(
+        ["subagent", "todo", "ask_question"]
+            .into_iter()
+            .map(|name| {
+                let group = groups::group_for_tool(name);
+                ToolCatalogEntry {
+                    name: name.to_string(),
+                    group,
+                    group_label: groups::group_description(group),
+                    description: match name {
+                        "subagent" => "启动子任务代理".to_string(),
+                        "todo" => "管理待办任务清单".to_string(),
+                        "ask_question" => "向用户提出结构化问题并等待回答".to_string(),
+                        _ => String::new(),
+                    },
+                }
+            }),
+    );
     entries.sort_by(|left, right| left.name.cmp(&right.name));
     entries.dedup_by(|left, right| left.name == right.name);
     entries

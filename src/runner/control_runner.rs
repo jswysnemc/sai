@@ -114,11 +114,13 @@ where
     S: RunnerEventSink,
 {
     match control.command {
-        crate::control_commands::ControlCommand::Compact => agent
-            .compact_conversation_now(&mut |event| {
-                sink.on_runner_event(RunnerEvent::Agent(event))
-            })
-            .await,
+        crate::control_commands::ControlCommand::Compact => {
+            agent
+                .compact_conversation_now(&mut |event| {
+                    sink.on_runner_event(RunnerEvent::Agent(event))
+                })
+                .await
+        }
         command => bail!("runner control submission is not supported: {command:?}"),
     }
 }

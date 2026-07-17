@@ -1,3 +1,4 @@
+use crate::i18n::text as t;
 use anyhow::{bail, Context, Result};
 use tokio::process::Command;
 
@@ -20,7 +21,10 @@ pub(super) struct ReplShellResult {
 pub(super) async fn execute_repl_shell(command: &str) -> Result<ReplShellResult> {
     let command = command.trim();
     if command.is_empty() {
-        bail!("请在 ! 后输入 Shell 命令")
+        bail!(
+            "{}",
+            t("enter a Shell command after !", "请在 ! 后输入 Shell 命令")
+        )
     }
     let invocation = crate::platform::shell::command_invocation(command);
     let cwd = crate::runtime_cwd::current_dir()?;
@@ -32,7 +36,8 @@ pub(super) async fn execute_repl_shell(command: &str) -> Result<ReplShellResult>
         .await
         .with_context(|| {
             format!(
-                "Shell 命令执行失败: {}",
+                "{}: {}",
+                t("Shell command failed", "Shell 命令执行失败"),
                 invocation.program.to_string_lossy()
             )
         })?;
@@ -64,7 +69,7 @@ fn truncate_output(output: &str) -> String {
         return output.to_string();
     }
     let mut truncated = output.chars().take(OUTPUT_LIMIT).collect::<String>();
-    truncated.push_str("\n[Shell 输出已截断]");
+    truncated.push_str(t("\n[Shell output truncated]", "\n[Shell 输出已截断]"));
     truncated
 }
 

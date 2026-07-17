@@ -292,7 +292,9 @@ fn compaction_runtime_config_inherits_active_model() {
     let mut config = AppConfig::default();
     let provider_id = config.providers[2].id.clone();
     let model = config.providers[2].default_model.clone();
-    config.set_active_provider_model(&provider_id, &model).unwrap();
+    config
+        .set_active_provider_model(&provider_id, &model)
+        .unwrap();
 
     let resolved = config.compaction_runtime_config().unwrap();
 

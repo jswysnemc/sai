@@ -146,20 +146,16 @@ pub(super) async fn run_repl(
                             ),
                         );
                         let result = {
-                            let runner =
-                                crate::runner::SessionRunner::new(paths).with_config(config.clone());
+                            let runner = crate::runner::SessionRunner::new(paths)
+                                .with_config(config.clone());
                             let runtime = std::cell::RefCell::new(&mut runtime);
                             let mut sink = |event: crate::runner::RunnerEvent| {
                                 runtime.borrow_mut().record_runner_event(&event)
                             };
-                            let compact = runner.run_submission_with_agent(
-                                submission,
-                                &mut agent,
-                                &mut sink,
-                            );
+                            let compact =
+                                runner.run_submission_with_agent(submission, &mut agent, &mut sink);
                             tokio::pin!(compact);
-                            let mut resize_tick =
-                                tokio::time::interval(Duration::from_millis(25));
+                            let mut resize_tick = tokio::time::interval(Duration::from_millis(25));
                             resize_tick
                                 .set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
                             let ctrl_c = tokio::signal::ctrl_c();

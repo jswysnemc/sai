@@ -7,6 +7,7 @@ import { ToolFileReference } from "./tool-renderers/tool-file-reference";
 import { ToolResultView } from "./tool-renderers/tool-result-view";
 import { TodoToolView } from "./tool-renderers/todo-tool-view";
 import "./tool-renderers/tool-renderers.css";
+import { useI18n } from "../i18n/use-i18n";
 
 /**
  * 渲染一项实时或历史工具生命周期。
@@ -15,6 +16,7 @@ import "./tool-renderers/tool-renderers.css";
  * @returns 可折叠工具卡片
  */
 export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
+  const { locale, t } = useI18n();
   const [expanded, setExpanded] = useState(tool.status === "failed");
   // 1. todo 工具已完成时改用专门的清单卡片,不暴露原始 JSON
   if (tool.name === "todo" && tool.status === "completed") {
@@ -29,7 +31,7 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
   const headerPath = toolFilePath(tool.name, argumentsText);
   const displayName = readableToolName(tool.name);
   const summary = uniqueSummary(
-    toolCardSummary(tool.name, argumentsText) || tool.progress || statusLabel(tool.status),
+    toolCardSummary(tool.name, argumentsText, locale) || tool.progress || statusLabel(tool.status, t),
     displayName
   );
   /**
@@ -118,6 +120,11 @@ function readableToolName(name: string): string {
  * @param status 工具状态
  * @returns 状态标签
  */
-function statusLabel(status: ToolLifecycle["status"]): string {
-  return { preparing: "准备参数", running: "正在执行", completed: "执行完成", failed: "执行失败" }[status];
+function statusLabel(status: ToolLifecycle["status"], t: (en: string, zh: string) => string): string {
+  return {
+    preparing: t("Preparing arguments", "准备参数"),
+    running: t("Running", "正在执行"),
+    completed: t("Completed", "执行完成"),
+    failed: t("Failed", "执行失败")
+  }[status];
 }

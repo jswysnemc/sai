@@ -227,9 +227,8 @@ impl EventAssembler {
                 summary,
                 error,
             } => {
-                let error = error.map(|error| {
-                    json!({ "message": error.message, "detail": error.detail })
-                });
+                let error =
+                    error.map(|error| json!({ "message": error.message, "detail": error.detail }));
                 vec![self.event(
                     "compaction.finished",
                     json!({ "applied": applied, "summary": summary, "error": error }),

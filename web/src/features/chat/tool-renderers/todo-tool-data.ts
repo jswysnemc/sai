@@ -1,4 +1,5 @@
 export type TodoToolAction = "list" | "add" | "update" | "remove" | "unknown";
+import { text, type Locale } from "../../i18n/locale";
 
 export type TodoToolSummary = {
   action: TodoToolAction;
@@ -42,23 +43,23 @@ export function parseTodoTool(argumentsText: string, output: string): TodoToolSu
  * @param summary todo 调用摘要
  * @returns 摘要文本
  */
-export function todoToolHeadline(summary: TodoToolSummary): string {
+export function todoToolHeadline(summary: TodoToolSummary, locale: Locale = "zh-CN"): string {
   switch (summary.action) {
     case "add":
-      if (summary.texts.length > 1) return `创建 ${summary.texts.length} 个任务`;
-      return summary.text ? `创建任务：${summary.text}` : "创建了一个任务";
+      if (summary.texts.length > 1) return text(locale, `Created ${summary.texts.length} tasks`, `创建 ${summary.texts.length} 个任务`);
+      return summary.text ? text(locale, `Created task: ${summary.text}`, `创建任务：${summary.text}`) : text(locale, "Created a task", "创建了一个任务");
     case "update":
       return summary.text
-        ? `更新任务：${summary.text}`
+        ? text(locale, `Updated task: ${summary.text}`, `更新任务：${summary.text}`)
         : summary.status
-          ? `更新任务状态为${statusLabel(summary.status)}`
-          : "更新了任务";
+          ? text(locale, `Updated task status to ${statusLabel(summary.status, locale)}`, `更新任务状态为${statusLabel(summary.status, locale)}`)
+          : text(locale, "Updated a task", "更新了任务");
     case "remove":
-      return summary.text ? `删除任务：${summary.text}` : "删除了一个任务";
+      return summary.text ? text(locale, `Deleted task: ${summary.text}`, `删除任务：${summary.text}`) : text(locale, "Deleted a task", "删除了一个任务");
     case "list":
-      return summary.itemCount !== null ? `查看计划清单（${summary.itemCount} 项）` : "查看计划清单";
+      return summary.itemCount !== null ? text(locale, `Viewed plan checklist (${summary.itemCount} items)`, `查看计划清单（${summary.itemCount} 项）`) : text(locale, "Viewed plan checklist", "查看计划清单");
     default:
-      return "更新计划清单";
+      return text(locale, "Updated plan checklist", "更新计划清单");
   }
 }
 
@@ -68,8 +69,13 @@ export function todoToolHeadline(summary: TodoToolSummary): string {
  * @param status 状态标识
  * @returns 状态名称
  */
-export function statusLabel(status: string): string {
-  return ({ pending: "待处理", in_progress: "进行中", completed: "已完成", cancelled: "已取消" } as Record<string, string>)[status] ?? status;
+export function statusLabel(status: string, locale: Locale = "zh-CN"): string {
+  return ({
+    pending: text(locale, "Pending", "待处理"),
+    in_progress: text(locale, "In progress", "进行中"),
+    completed: text(locale, "Completed", "已完成"),
+    cancelled: text(locale, "Cancelled", "已取消")
+  } as Record<string, string>)[status] ?? status;
 }
 
 /** 解析 JSON,失败时返回空对象。 */

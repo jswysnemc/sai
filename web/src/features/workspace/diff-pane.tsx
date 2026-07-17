@@ -19,6 +19,7 @@ import { api } from "../../api/client";
 import type { GitBranch as GitBranchInfo, GitCommitSummary, GitStatusEntry } from "../../api/contracts";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { DiffView } from "../chat/tool-renderers/diff-view";
+import { useI18n } from "../i18n/use-i18n";
 
 type ReviewMode = "changes" | "history";
 type DiffMode = "working_tree" | "branch";
@@ -30,6 +31,7 @@ type DiffMode = "working_tree" | "branch";
  */
 export function DiffPane() {
   const confirm = useConfirm();
+  const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<ReviewMode>("changes");
   const [diffMode, setDiffMode] = useState<DiffMode>("working_tree");
@@ -138,7 +140,7 @@ export function DiffPane() {
       }),
     onSuccess: async (result) => {
       if (!result.ok) {
-        setError(result.message || result.stderr || "Git 操作失败");
+        setError(result.message || result.stderr || t("Git operation failed", "Git 操作失败"));
         setNotice("");
         return;
       }
@@ -166,8 +168,8 @@ export function DiffPane() {
     if (options.confirmTitle) {
       const confirmed = await confirm({
         title: options.confirmTitle,
-        description: options.confirmDescription ?? "此操作可能无法撤销。",
-        confirmLabel: "继续",
+        description: options.confirmDescription ?? t("This action may not be reversible.", "此操作可能无法撤销。"),
+        confirmLabel: t("Continue", "继续"),
         danger: true
       });
       if (!confirmed) return;
@@ -191,7 +193,7 @@ export function DiffPane() {
   if (status.isLoading && !state) {
     return (
       <section className="diff-pane git-manager">
-        <div className="git-clean">正在读取 Git 状态…</div>
+        <div className="git-clean">{t("Loading Git status...", "正在读取 Git 状态…")}</div>
       </section>
     );
   }
@@ -201,22 +203,22 @@ export function DiffPane() {
       <section className="diff-pane git-manager">
         <header className="panel-head">
           <div>
-            <span className="eyebrow">Git 工作区</span>
+            <span className="eyebrow">{t("Git workspace", "Git 工作区")}</span>
             <h2>
               <GitBranch size={15} />
-              版本管理
+              {t("Version control", "版本管理")}
             </h2>
           </div>
-          <button type="button" className="icon-button" onClick={() => void status.refetch()} aria-label="刷新">
+          <button type="button" className="icon-button" onClick={() => void status.refetch()} aria-label={t("Refresh", "刷新")}>
             <RefreshCw size={14} />
           </button>
         </header>
         <div className="git-init-panel">
           <GitBranch size={24} />
-          <h3>初始化 Git 仓库</h3>
-          <p>为当前工作区创建本地版本历史，并支持后续 fetch / pull / push。</p>
+          <h3>{t("Initialize Git repository", "初始化 Git 仓库")}</h3>
+          <p>{t("Create local version history for this workspace and enable future fetch, pull, and push operations.", "为当前工作区创建本地版本历史，并支持后续 fetch / pull / push。")}</p>
           <label>
-            <span>默认分支</span>
+            <span>{t("Default branch", "默认分支")}</span>
             <input value={initBranch} onChange={(event) => setInitBranch(event.target.value)} spellCheck={false} />
           </label>
           <button
@@ -224,7 +226,7 @@ export function DiffPane() {
             onClick={() => void runOp("init", { message: initBranch })}
             disabled={!initBranch.trim() || op.isPending}
           >
-            初始化仓库
+            {t("Initialize repository", "初始化仓库")}
           </button>
         </div>
         {(status.error || error) && <div className="pane-error">{error || status.error?.message}</div>}
@@ -268,7 +270,7 @@ export function DiffPane() {
                 <input
                   value={createBranchName}
                   onChange={(event) => setCreateBranchName(event.target.value)}
-                  placeholder="新建分支名"
+                  placeholder={t("New branch name", "新建分支名")}
                   spellCheck={false}
                 />
                 <button
@@ -276,17 +278,17 @@ export function DiffPane() {
                   disabled={!createBranchName.trim() || busy}
                   onClick={() => void runOp("create_branch", { message: createBranchName.trim() })}
                 >
-                  创建
+                  {t("Create", "创建")}
                 </button>
               </div>
               <BranchGroup
-                title="本地分支"
+                title={t("Local branches", "本地分支")}
                 branches={localBranches}
                 busy={busy}
                 onSelect={(branch) => void runOp("switch_branch", { message: branch.full_name })}
               />
               <BranchGroup
-                title="远程分支"
+                title={t("Remote branches", "远程分支")}
                 branches={remoteBranches}
                 busy={busy}
                 onSelect={(branch) => void runOp("switch_branch", { message: branch.full_name })}
@@ -296,11 +298,11 @@ export function DiffPane() {
         </div>
         <div className="git-review-actions">
           <button type="button" className={mode === "changes" ? "active" : ""} onClick={() => setMode("changes")}>
-            变更
+            {t("Changes", "变更")}
           </button>
           <button type="button" className={mode === "history" ? "active" : ""} onClick={() => setMode("history")}>
             <History size={13} />
-            历史
+            {t("History", "历史")}
           </button>
           <button type="button" disabled={busy} onClick={() => void runOp("fetch")} title="Fetch">
             <CloudDownload size={13} />
@@ -320,11 +322,11 @@ export function DiffPane() {
             <Archive size={13} />
           </button>
           {(state?.stash_count ?? 0) > 0 && (
-            <button type="button" disabled={busy} onClick={() => void runOp("stash_pop")} title={`弹出 stash (${state?.stash_count})`}>
+            <button type="button" disabled={busy} onClick={() => void runOp("stash_pop")} title={t(`Pop stash (${state?.stash_count})`, `弹出 stash (${state?.stash_count})`)}>
               pop
             </button>
           )}
-          <button type="button" disabled={busy} onClick={() => void refreshAll()} title="刷新" aria-label="刷新">
+          <button type="button" disabled={busy} onClick={() => void refreshAll()} title={t("Refresh", "刷新")} aria-label={t("Refresh", "刷新")}>
             <RefreshCw size={13} />
           </button>
         </div>
@@ -334,23 +336,23 @@ export function DiffPane() {
         <div className="git-manager-body">
           <section className="git-change-panel">
             <div className="git-commit-box">
-              <textarea rows={3} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="提交说明" />
+              <textarea rows={3} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={t("Commit message", "提交说明")} />
               <button
                 type="button"
                 onClick={() => void runOp("commit", { message })}
                 disabled={!message.trim() || busy || (state?.dirty_counts.staged ?? 0) === 0}
               >
                 <Check size={13} />
-                提交已暂存变更
+                {t("Commit staged changes", "提交已暂存变更")}
               </button>
             </div>
 
             <div className="git-diff-mode">
               <button type="button" className={diffMode === "working_tree" ? "active" : ""} onClick={() => setDiffMode("working_tree")}>
-                工作树
+                {t("Working tree", "工作树")}
               </button>
               <button type="button" className={diffMode === "branch" ? "active" : ""} onClick={() => setDiffMode("branch")}>
-                相对基线
+                {t("Against baseline", "相对基线")}
               </button>
               {dirtyTotal > 0 && (
                 <button
@@ -359,18 +361,18 @@ export function DiffPane() {
                   disabled={busy}
                   onClick={() =>
                     void runOp("discard_all", {
-                      confirmTitle: "丢弃全部改动",
-                      confirmDescription: "将放弃所有已暂存、未暂存和未跟踪改动，此操作无法撤销。"
+                      confirmTitle: t("Discard all changes", "丢弃全部改动"),
+                      confirmDescription: t("Discard all staged, unstaged, and untracked changes. This action cannot be undone.", "将放弃所有已暂存、未暂存和未跟踪改动，此操作无法撤销。")
                     })
                   }
                 >
-                  全部丢弃
+                  {t("Discard all", "全部丢弃")}
                 </button>
               )}
             </div>
 
             <ChangeSection
-              title={`已暂存 ${staged.length}`}
+              title={t(`Staged ${staged.length}`, `已暂存 ${staged.length}`)}
               entries={staged}
               selectedPath={selectedPath}
               busy={busy}
@@ -382,14 +384,14 @@ export function DiffPane() {
               onDiscard={(path) =>
                 void runOp("discard", {
                   path,
-                  confirmTitle: "撤销工作区修改",
-                  confirmDescription: `将恢复 ${path}，未保存修改无法恢复。`
+                  confirmTitle: t("Discard working tree changes", "撤销工作区修改"),
+                  confirmDescription: t(`Restore ${path}. Unsaved changes cannot be recovered.`, `将恢复 ${path}，未保存修改无法恢复。`)
                 })
               }
               section="staged"
             />
             <ChangeSection
-              title={`更改 ${changes.length}`}
+              title={t(`Changes ${changes.length}`, `更改 ${changes.length}`)}
               entries={changes}
               selectedPath={selectedPath}
               busy={busy}
@@ -401,17 +403,17 @@ export function DiffPane() {
               onDiscard={(path) =>
                 void runOp("discard", {
                   path,
-                  confirmTitle: entryIsUntracked(changes, path) ? "删除未跟踪文件" : "撤销工作区修改",
+                  confirmTitle: entryIsUntracked(changes, path) ? t("Delete untracked file", "删除未跟踪文件") : t("Discard working tree changes", "撤销工作区修改"),
                   confirmDescription: entryIsUntracked(changes, path)
-                    ? `将永久删除“${path}”。`
-                    : `将恢复 ${path}，未保存修改无法恢复。`
+                    ? t(`Permanently delete “${path}”.`, `将永久删除“${path}”。`)
+                    : t(`Restore ${path}. Unsaved changes cannot be recovered.`, `将恢复 ${path}，未保存修改无法恢复。`)
                 })
               }
               section="changes"
             />
 
             <div className="git-remote-box">
-              <span>{state?.remote_url ? "远端 origin" : "设置 origin 远端"}</span>
+              <span>{state?.remote_url ? t("Remote origin", "远端 origin") : t("Set origin remote", "设置 origin 远端")}</span>
               <input
                 value={remoteUrl}
                 onChange={(event) => setRemoteUrl(event.target.value)}
@@ -423,13 +425,13 @@ export function DiffPane() {
                 disabled={!remoteUrl.trim() || busy}
                 onClick={() => void runOp("set_remote", { remote_url: remoteUrl })}
               >
-                {state?.remote_url ? "更新远端" : "保存远端"}
+                {state?.remote_url ? t("Update remote", "更新远端") : t("Save remote", "保存远端")}
               </button>
             </div>
           </section>
 
           <div className="diff-scroll">
-            {reviewDiff.isLoading && <div className="git-clean diff-clean">正在读取差异…</div>}
+            {reviewDiff.isLoading && <div className="git-clean diff-clean">{t("Loading diff...", "正在读取差异…")}</div>}
             {reviewDiff.error && <div className="pane-error">{reviewDiff.error.message}</div>}
             {reviewDiff.data?.patch ? (
               <div className="git-diff-shell">
@@ -439,10 +441,10 @@ export function DiffPane() {
                 </div>
                 {reviewDiff.data.stat && <pre className="git-diff-stat">{reviewDiff.data.stat}</pre>}
                 <DiffView source={reviewDiff.data.patch} headerPath={selectedPath ?? undefined} />
-                {reviewDiff.data.truncated && <div className="git-clean">差异已截断</div>}
+                {reviewDiff.data.truncated && <div className="git-clean">{t("Diff truncated", "差异已截断")}</div>}
               </div>
             ) : (
-              !reviewDiff.isLoading && !reviewDiff.error && <div className="git-clean diff-clean">没有可显示的差异</div>
+              !reviewDiff.isLoading && !reviewDiff.error && <div className="git-clean diff-clean">{t("No diff to display", "没有可显示的差异")}</div>
             )}
           </div>
         </div>
@@ -450,7 +452,7 @@ export function DiffPane() {
         <div className="git-manager-body">
           <section className="git-history-panel">
             <div className="git-change-head">
-              <span>历史 {commits.length}</span>
+              <span>{t(`History ${commits.length}`, `历史 ${commits.length}`)}</span>
               {(history.data?.history_ahead || history.data?.history_behind) ? (
                 <small>
                   ↑{history.data?.history_ahead ?? 0} ↓{history.data?.history_behind ?? 0}
@@ -472,16 +474,16 @@ export function DiffPane() {
                   <span>
                     <strong>{commit.subject || commit.short_sha}</strong>
                     <small>
-                      {commit.short_sha} · {commit.author_name} · {formatDate(commit.author_date)}
+                      {commit.short_sha} · {commit.author_name} · {formatDate(commit.author_date, locale)}
                     </small>
                   </span>
                   {commit.local_only && <em>local</em>}
                 </button>
               ))}
-              {commits.length === 0 && <div className="git-clean">暂无提交记录</div>}
+              {commits.length === 0 && <div className="git-clean">{t("No commits yet", "暂无提交记录")}</div>}
               {commits.length >= historyLimit && (
                 <button type="button" className="git-load-more" onClick={() => setHistoryLimit((value) => value + 40)}>
-                  加载更多
+                  {t("Load more", "加载更多")}
                 </button>
               )}
             </div>
@@ -493,7 +495,7 @@ export function DiffPane() {
                   <h3>{commitDetails.data.commit.subject}</h3>
                   <p>
                     {commitDetails.data.commit.short_sha} · {commitDetails.data.commit.author_name} ·{" "}
-                    {formatDate(commitDetails.data.commit.author_date)}
+                    {formatDate(commitDetails.data.commit.author_date, locale)}
                   </p>
                   {commitDetails.data.commit.body && <pre>{commitDetails.data.commit.body}</pre>}
                   <div className="git-commit-files">
@@ -516,11 +518,11 @@ export function DiffPane() {
                     <DiffView source={commitDiff.data.patch} headerPath={selectedCommitPath ?? undefined} />
                   </>
                 ) : (
-                  <div className="git-clean">没有可显示的提交差异</div>
+                  <div className="git-clean">{t("No commit diff to display", "没有可显示的提交差异")}</div>
                 )}
               </div>
             ) : (
-              <div className="git-clean diff-clean">选择一条提交查看详情</div>
+              <div className="git-clean diff-clean">{t("Select a commit to view details", "选择一条提交查看详情")}</div>
             )}
           </div>
         </div>
@@ -574,6 +576,7 @@ function ChangeSection(props: {
   onUnstage: (path: string) => void;
   onDiscard: (path: string) => void;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(true);
   return (
     <div className="git-section">
@@ -584,11 +587,11 @@ function ChangeSection(props: {
         </button>
         <span>
           {props.section === "staged" ? (
-            <button type="button" onClick={props.onUnstageAll} title="取消全部暂存" disabled={props.busy}>
+            <button type="button" onClick={props.onUnstageAll} title={t("Unstage all", "取消全部暂存")} disabled={props.busy}>
               <Minus size={12} />
             </button>
           ) : (
-            <button type="button" onClick={props.onStageAll} title="暂存全部" disabled={props.busy}>
+            <button type="button" onClick={props.onStageAll} title={t("Stage all", "暂存全部")} disabled={props.busy}>
               <Plus size={12} />
             </button>
           )}
@@ -607,12 +610,12 @@ function ChangeSection(props: {
               </button>
               <span className="git-file-actions">
                 {entry.staged && (
-                  <button type="button" disabled={props.busy} onClick={() => props.onUnstage(entry.path)} title="取消暂存">
+                  <button type="button" disabled={props.busy} onClick={() => props.onUnstage(entry.path)} title={t("Unstage", "取消暂存")}>
                     <Minus size={12} />
                   </button>
                 )}
                 {(entry.untracked || entry.worktree_status !== "." || entry.conflicted) && !entry.staged && (
-                  <button type="button" disabled={props.busy} onClick={() => props.onStage(entry.path)} title="暂存">
+                  <button type="button" disabled={props.busy} onClick={() => props.onStage(entry.path)} title={t("Stage", "暂存")}>
                     <Plus size={12} />
                   </button>
                 )}
@@ -621,7 +624,7 @@ function ChangeSection(props: {
                     type="button"
                     disabled={props.busy}
                     onClick={() => props.onDiscard(entry.path)}
-                    title={entry.untracked ? "删除未跟踪文件" : "撤销修改"}
+                    title={entry.untracked ? t("Delete untracked file", "删除未跟踪文件") : t("Discard changes", "撤销修改")}
                   >
                     {entry.untracked ? <Trash2 size={12} /> : <RotateCcw size={12} />}
                   </button>
@@ -629,7 +632,7 @@ function ChangeSection(props: {
               </span>
             </div>
           ))}
-          {props.entries.length === 0 && <div className="git-clean">无文件</div>}
+          {props.entries.length === 0 && <div className="git-clean">{t("No files", "无文件")}</div>}
         </div>
       )}
     </div>
@@ -657,9 +660,9 @@ function statusTone(entry: GitStatusEntry) {
   return "modified";
 }
 
-function formatDate(value: string) {
+function formatDate(value: string, locale: string) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  return date.toLocaleString(locale);
 }

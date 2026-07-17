@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createTerminalOptions } from "./terminal-options";
 import { connectTerminalSession, type TerminalConnectionStatus } from "./terminal-session-controller";
 import "./terminal-pane.css";
+import { useI18n } from "../i18n/use-i18n";
 
 /**
  * 渲染与指定终端会话相连的 xterm 实例。
@@ -12,6 +13,7 @@ import "./terminal-pane.css";
  * @returns xterm 终端界面
  */
 export function TerminalPane({ terminalId }: { terminalId: string }) {
+  const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<TerminalConnectionStatus>("connecting");
@@ -23,7 +25,13 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
     terminal.loadAddon(fit);
     terminal.open(container);
     fit.fit();
-    const controller = connectTerminalSession({ terminalId, terminal, onStatusChange: setStatus, onError: setError });
+    const controller = connectTerminalSession({
+      terminalId,
+      terminal,
+      onStatusChange: setStatus,
+      onError: setError,
+      disconnectedMessage: t("The terminal connection was lost. Select the terminal again or create a new session.", "终端连接已断开，请重新选择终端或新建会话")
+    });
     const observer = new ResizeObserver(() => {
       fit.fit();
       controller.resize(terminal.cols, terminal.rows);
@@ -34,8 +42,8 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
       controller.dispose();
       terminal.dispose();
     };
-  }, [terminalId]);
-  return <section className="terminal-pane"><div className="terminal-surface" ref={containerRef} />{status !== "connected" && <span className={`terminal-connection-status ${status}`}>{connectionLabel(status)}</span>}{error && <div className="pane-error terminal-error">{error}</div>}</section>;
+  }, [t, terminalId]);
+  return <section className="terminal-pane"><div className="terminal-surface" ref={containerRef} />{status !== "connected" && <span className={`terminal-connection-status ${status}`}>{connectionLabel(status, t)}</span>}{error && <div className="pane-error terminal-error">{error}</div>}</section>;
 }
 
 /**
@@ -44,11 +52,11 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
  * @param status 连接状态
  * @returns 中文状态文本
  */
-function connectionLabel(status: TerminalConnectionStatus): string {
+function connectionLabel(status: TerminalConnectionStatus, t: (en: string, zh: string) => string): string {
   return {
-    connecting: "正在连接",
-    connected: "已连接",
-    reconnecting: "正在重连",
-    failed: "连接失败"
+    connecting: t("Connecting", "正在连接"),
+    connected: t("Connected", "已连接"),
+    reconnecting: t("Reconnecting", "正在重连"),
+    failed: t("Connection failed", "连接失败")
   }[status];
 }

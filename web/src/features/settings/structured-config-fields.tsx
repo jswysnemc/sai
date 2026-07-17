@@ -1,5 +1,6 @@
 const SECRET_KEYS = ["api_key", "token", "secret", "password", "webhook"];
 import { PasswordField } from "../../shared/ui/password-field";
+import { useI18n } from "../i18n/use-i18n";
 
 type StructuredConfigFieldsProps = {
   value: Record<string, unknown>;
@@ -13,8 +14,9 @@ type StructuredConfigFieldsProps = {
  * @returns 可编辑字段集合
  */
 export function StructuredConfigFields({ value, onChange }: StructuredConfigFieldsProps) {
+  const { t } = useI18n();
   const entries = Object.entries(value);
-  if (entries.length === 0) return <div className="settings-state">当前配置组没有可编辑字段</div>;
+  if (entries.length === 0) return <div className="settings-state">{t("This configuration group has no editable fields", "当前配置组没有可编辑字段")}</div>;
   return (
     <div className="settings-form-grid structured-config-grid">
       {entries.map(([key, field]) => (
@@ -36,7 +38,8 @@ export function StructuredConfigFields({ value, onChange }: StructuredConfigFiel
  * @returns 单个配置字段
  */
 function StructuredField({ name, value, onChange }: { name: string; value: unknown; onChange: (value: unknown) => void }) {
-  const label = fieldLabel(name);
+  const { t } = useI18n();
+  const label = fieldLabel(name, t);
   if (typeof value === "boolean") {
     return (
       <label className="settings-toggle-field">
@@ -53,7 +56,7 @@ function StructuredField({ name, value, onChange }: { name: string; value: unkno
       <label className="settings-field full">
         <span>{label}</span>
         <textarea rows={Math.min(8, Math.max(3, value.length + 1))} value={value.join("\n")} onChange={(event) => onChange(event.target.value.split("\n").map((item) => item.trim()).filter(Boolean))} spellCheck={false} />
-        <small>{name}，每行一项</small>
+        <small>{t(`${name}, one item per line`, `${name}，每行一项`)}</small>
       </label>
     );
   }
@@ -74,26 +77,27 @@ function StructuredField({ name, value, onChange }: { name: string; value: unkno
  * 将配置字段标识转换为可读标签。
  *
  * @param name 配置字段标识
+ * @param t 双语文本选择方法
  * @returns 可读字段名称
  */
-function fieldLabel(name: string): string {
+function fieldLabel(name: string, t: (en: string, zh: string) => string): string {
   const labels: Record<string, string> = {
-    enabled: "启用",
-    max_rounds: "最大工具轮次",
-    command_shell: "命令 Shell",
-    progressive_loading_enabled: "渐进式加载",
-    background_commands_enabled: "允许后台命令",
-    background_command_timeout_seconds: "后台命令超时",
-    background_command_log_max_bytes: "后台日志上限",
-    background_command_stop_grace_seconds: "停止宽限时间",
-    allow_command_execution: "允许技能执行命令",
-    reasoning: "思考显示方式",
-    tool_calls: "工具显示方式",
-    readable_tool_names: "可读工具名称",
-    wait_show_model: "等待时显示模型",
-    wait_show_thinking_level: "等待时显示思考等级",
-    repl_transcript_row_cap: "终端记录行数上限",
-    default_max_chars: "默认上下文 token 数"
+    enabled: t("Enabled", "启用"),
+    max_rounds: t("Maximum tool rounds", "最大工具轮次"),
+    command_shell: t("Command Shell", "命令 Shell"),
+    progressive_loading_enabled: t("Progressive loading", "渐进式加载"),
+    background_commands_enabled: t("Allow background commands", "允许后台命令"),
+    background_command_timeout_seconds: t("Background command timeout", "后台命令超时"),
+    background_command_log_max_bytes: t("Background log limit", "后台日志上限"),
+    background_command_stop_grace_seconds: t("Stop grace period", "停止宽限时间"),
+    allow_command_execution: t("Allow skills to run commands", "允许技能执行命令"),
+    reasoning: t("Reasoning display", "思考显示方式"),
+    tool_calls: t("Tool call display", "工具显示方式"),
+    readable_tool_names: t("Readable tool names", "可读工具名称"),
+    wait_show_model: t("Show model while waiting", "等待时显示模型"),
+    wait_show_thinking_level: t("Show thinking level while waiting", "等待时显示思考等级"),
+    repl_transcript_row_cap: t("Terminal transcript row limit", "终端记录行数上限"),
+    default_max_chars: t("Default context tokens", "默认上下文 token 数")
   };
   return labels[name] ?? name.replaceAll("_", " ");
 }

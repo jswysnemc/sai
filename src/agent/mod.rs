@@ -1,7 +1,9 @@
 mod compaction;
 mod compaction_model;
+mod context_projection;
 mod conversation;
 mod event;
+mod lifecycle;
 mod message_context;
 mod mode;
 mod model_context;
@@ -34,9 +36,9 @@ use tokio::sync::mpsc;
 use tool_history::extract_persistable_tool_report;
 use tool_visibility::ToolVisibility;
 
+pub(crate) use compaction::CompactionRunOutcome;
 pub use event::{AgentEvent, CompactionError};
 pub use mode::AgentMode;
-pub(crate) use compaction::CompactionRunOutcome;
 
 const MAX_QUESTION_ROUNDS_PER_TURN: usize = 8;
 pub struct Agent {
@@ -59,242 +61,6 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn new(
-        config: AppConfig,
-        paths: &SaiPaths,
-        state: StateStore,
-        client: OpenAiCompatibleClient,
-        tools: ToolRegistry,
-        mode: AgentMode,
-    ) -> Result<Self> {
-        Self::new_with_extra_system_prompt(config, paths, state, client, tools, mode, None)
-    }
-
-    /// 创建带额外系统提示词的 Agent。
-    ///
-    /// 参数:
-    /// - `config`: 应用配置
-    /// - `paths`: Sai 路径
-    /// - `state`: 状态存储
-    /// - `client`: LLM 客户端
-    /// - `tools`: 工具注册表
-    /// - `mode`: Agent 模式
-    /// - `extra_system_prompt`: 额外系统提示词
-    ///
-    /// 返回:
-    /// - Agent 实例
-    pub fn new_with_extra_system_prompt(
-        config: AppConfig,
-        paths: &SaiPaths,
-        state: StateStore,
-        client: OpenAiCompatibleClient,
-        mut tools: ToolRegistry,
-        mode: AgentMode,
-        extra_system_prompt: Option<&str>,
-    ) -> Result<Self> {
-        let tools_enabled = config.tools.enabled && config.active_model_tools_enabled()?;
-        let base_system_prompt =
-            build_base_system_prompt(&config, paths, tools_enabled, extra_system_prompt)?;
-        if mode != AgentMode::Plan {
-            state.reset_if_prompt_changed(&base_system_prompt)?;
-            state.recover_stale_turns()?;
-        }
-        let context_char_budget = config.active_context_window_tokens()?;
-        let compaction_runtime = compaction_model::resolve_compaction_runtime(&config, paths)?;
-        let max_tool_rounds = config.tools.max_rounds;
-        if tools_enabled && config.tools.progressive_loading_enabled {
-            tools::register_progressive_loader(&mut tools);
-        }
-        let tool_visibility = ToolVisibility::new(config.tools.progressive_loading_enabled);
-        let memory = MemoryStore::new(&config, paths);
-        memory.init()?;
-        Ok(Self {
-            state,
-            client,
-            compaction_client: compaction_runtime.client,
-            compaction_model_label: compaction_runtime.label,
-            base_system_prompt,
-            context_char_budget,
-            tools_enabled,
-            max_tool_rounds,
-            tools,
-            tool_visibility,
-            memory,
-            mode,
-            config,
-            paths: paths.clone(),
-            last_dynamic_sources: Vec::new(),
-        })
-    }
-
-    /// 返回当前 Agent 模式。
-    ///
-    /// 返回:
-    /// - 当前模式
-    pub fn mode(&self) -> AgentMode {
-        self.mode
-    }
-
-    /// 返回当前会话 ID。
-    ///
-    /// 返回:
-    /// - 会话标识
-    pub fn session_id(&self) -> &str {
-        self.state.session_id()
-    }
-
-    /// 返回状态存储引用（runner 持久化渐进工具等）。
-    ///
-    /// 返回:
-    /// - 状态存储
-    pub fn state(&self) -> &StateStore {
-        &self.state
-    }
-
-    /// 切换模式并替换工具注册表（REPL 复用 Agent 时使用）。
-    ///
-    /// 参数:
-    /// - `mode`: 新模式
-    /// - `tools`: 与模式匹配的工具注册表
-    ///
-    /// 返回:
-    /// - 无
-    pub fn switch_mode(&mut self, mode: AgentMode, mut tools: ToolRegistry) {
-        self.mode = mode;
-        if self.tools_enabled && self.config.tools.progressive_loading_enabled {
-            tools::register_progressive_loader(&mut tools);
-        }
-        self.tools = tools;
-        // 1. 重置渐进加载可见性，避免跨模式残留
-        self.tool_visibility = ToolVisibility::new(self.config.tools.progressive_loading_enabled);
-    }
-
-    /// 每轮对话前轻量刷新：系统提示、上下文窗口、过期 turn 恢复。
-    ///
-    /// 返回:
-    /// - 刷新是否成功
-    pub fn prepare_for_turn(&mut self) -> Result<()> {
-        self.tools_enabled =
-            self.config.tools.enabled && self.config.active_model_tools_enabled()?;
-        self.base_system_prompt =
-            build_base_system_prompt(&self.config, &self.paths, self.tools_enabled, None)?;
-        if self.mode != AgentMode::Plan {
-            self.state
-                .reset_if_prompt_changed(&self.base_system_prompt)?;
-            self.state.recover_stale_turns()?;
-        }
-        self.context_char_budget = self.config.active_context_window_tokens()?;
-        self.max_tool_rounds = self.config.tools.max_rounds;
-        Ok(())
-    }
-
-    /// 配置/客户端变更后全量重载（providers、模型、thinking 等）。
-    ///
-    /// 参数:
-    /// - `config`: 新配置
-    /// - `client`: 新 LLM 客户端
-    /// - `tools`: 新工具注册表
-    /// - `mode`: 当前模式
-    ///
-    /// 返回:
-    /// - 重载是否成功
-    pub fn reload(
-        &mut self,
-        config: AppConfig,
-        client: OpenAiCompatibleClient,
-        mut tools: ToolRegistry,
-        mode: AgentMode,
-    ) -> Result<()> {
-        let compaction_runtime =
-            compaction_model::resolve_compaction_runtime(&config, &self.paths)?;
-        self.config = config;
-        self.client = client;
-        self.compaction_client = compaction_runtime.client;
-        self.compaction_model_label = compaction_runtime.label;
-        self.mode = mode;
-        self.tools_enabled =
-            self.config.tools.enabled && self.config.active_model_tools_enabled()?;
-        if self.tools_enabled && self.config.tools.progressive_loading_enabled {
-            tools::register_progressive_loader(&mut tools);
-        }
-        self.tools = tools;
-        self.tool_visibility = ToolVisibility::new(self.config.tools.progressive_loading_enabled);
-        if self.config.tools.progressive_loading_enabled {
-            let loaded = self.state.load_loaded_tools()?;
-            self.restore_loaded_tools(&loaded);
-        }
-        self.memory = MemoryStore::new(&self.config, &self.paths);
-        self.memory.init()?;
-        self.prepare_for_turn()
-    }
-
-    /// 切换会话状态（/new、/resume、/clear 后）。
-    ///
-    /// 参数:
-    /// - `state`: 新状态存储
-    ///
-    /// 返回:
-    /// - 切换是否成功
-    pub fn replace_state(&mut self, state: StateStore) -> Result<()> {
-        self.state = state;
-        self.tool_visibility = ToolVisibility::new(self.config.tools.progressive_loading_enabled);
-        if self.config.tools.progressive_loading_enabled {
-            let loaded = self.state.load_loaded_tools()?;
-            self.restore_loaded_tools(&loaded);
-        }
-        self.last_dynamic_sources.clear();
-        if self.mode != AgentMode::Plan {
-            self.state
-                .reset_if_prompt_changed(&self.base_system_prompt)?;
-            self.state.recover_stale_turns()?;
-        }
-        Ok(())
-    }
-
-    /// 重建记忆存储（/clear all 后）。
-    ///
-    /// 返回:
-    /// - 重建是否成功
-    pub fn reset_memory(&mut self) -> Result<()> {
-        self.memory = MemoryStore::new(&self.config, &self.paths);
-        self.memory.init()?;
-        Ok(())
-    }
-
-    /// 恢复上一轮已经加载的工具集合。
-    ///
-    /// 参数:
-    /// - `loaded_tools`: 上一轮保存的已加载工具名称
-    ///
-    /// 返回:
-    /// - 无
-    pub fn restore_loaded_tools(&mut self, loaded_tools: &[String]) {
-        self.tool_visibility
-            .restore_loaded_tools(&self.tools, loaded_tools);
-    }
-
-    /// 导出当前已经加载的工具集合。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 当前已经加载的工具名称列表
-    pub fn loaded_tools(&self) -> Vec<String> {
-        self.tool_visibility.loaded_tool_names()
-    }
-
-    /// 导出最近一次 provider 请求的动态上下文来源。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 动态上下文来源列表
-    pub fn last_dynamic_sources(&self) -> Vec<DynamicContextSource> {
-        self.last_dynamic_sources.clone()
-    }
-
     async fn chat_with_tools<F>(
         &mut self,
         turn_id: &str,
@@ -330,7 +96,12 @@ impl Agent {
             tool_name: None,
             extra: Default::default(),
         };
-        crate::hooks::dispatch(&self.config.hooks, crate::hooks::HookEvent::AgentStart, &hook_ctx).await;
+        crate::hooks::dispatch(
+            &self.config.hooks,
+            crate::hooks::HookEvent::AgentStart,
+            &hook_ctx,
+        )
+        .await;
         // 1. 上一轮结束后才完成的子智能体,在本轮首次请求前先补一次通知
         if let Some(reminder) = subagent_reminder.as_mut() {
             if let Some(content) = reminder.after_tool_round() {
@@ -347,7 +118,12 @@ impl Agent {
                     kind: ChatStreamKind::Content,
                     text: content.clone(),
                 }))?;
-                crate::hooks::dispatch(&self.config.hooks, crate::hooks::HookEvent::AgentEnd, &hook_ctx).await;
+                crate::hooks::dispatch(
+                    &self.config.hooks,
+                    crate::hooks::HookEvent::AgentEnd,
+                    &hook_ctx,
+                )
+                .await;
                 return Ok(ChatResult {
                     content,
                     reasoning: None,
@@ -356,8 +132,18 @@ impl Agent {
                 });
             }
             tool_round += 1;
-            crate::hooks::dispatch(&self.config.hooks, crate::hooks::HookEvent::TurnStart, &hook_ctx).await;
-            crate::hooks::dispatch(&self.config.hooks, crate::hooks::HookEvent::MessageStart, &hook_ctx).await;
+            crate::hooks::dispatch(
+                &self.config.hooks,
+                crate::hooks::HookEvent::TurnStart,
+                &hook_ctx,
+            )
+            .await;
+            crate::hooks::dispatch(
+                &self.config.hooks,
+                crate::hooks::HookEvent::MessageStart,
+                &hook_ctx,
+            )
+            .await;
             self.compact_between_tool_rounds(
                 tool_round,
                 turn_id,
@@ -490,23 +276,24 @@ impl Agent {
                         messages.push(ChatMessage::tool(call.id, output));
                         continue;
                     }
-                    let request = match crate::question::QuestionRequest::parse(&call.function.arguments)
-                    {
-                        Ok(request) => request,
-                        Err(err) => {
-                            let output = format!("tool error: invalid ask_question request: {err}");
-                            self.record_tool_result_completed(
-                                turn_id, &call, false, &output, &output,
-                            )?;
-                            on_event(AgentEvent::ToolResult {
-                                name: call.function.name.clone(),
-                                ok: false,
-                                output: output.clone(),
-                            })?;
-                            messages.push(ChatMessage::tool(call.id, output));
-                            continue;
-                        }
-                    };
+                    let request =
+                        match crate::question::QuestionRequest::parse(&call.function.arguments) {
+                            Ok(request) => request,
+                            Err(err) => {
+                                let output =
+                                    format!("tool error: invalid ask_question request: {err}");
+                                self.record_tool_result_completed(
+                                    turn_id, &call, false, &output, &output,
+                                )?;
+                                on_event(AgentEvent::ToolResult {
+                                    name: call.function.name.clone(),
+                                    ok: false,
+                                    output: output.clone(),
+                                })?;
+                                messages.push(ChatMessage::tool(call.id, output));
+                                continue;
+                            }
+                        };
                     let (pending, response_rx) =
                         crate::question::request_question(self.session_id(), request.clone());
                     let request_id = pending.id.clone();
@@ -523,7 +310,8 @@ impl Agent {
                             match crate::question::QuestionExchange::new(request, answers) {
                                 Ok(exchange) => crate::question::answered_tool_output(&exchange),
                                 Err(err) => {
-                                    let output = format!("tool error: invalid ask_question answers: {err}");
+                                    let output =
+                                        format!("tool error: invalid ask_question answers: {err}");
                                     self.record_tool_result_completed(
                                         turn_id, &call, false, &output, &output,
                                     )?;
@@ -829,73 +617,5 @@ impl Agent {
                 }
             }
         }
-    }
-
-    /// 构造当前轮完整请求消息。
-    ///
-    /// 参数:
-    /// - `turn_id`: 当前运行中轮次标识
-    /// - `input`: 当前用户输入
-    /// - `image_urls`: 图片 data URL 列表
-    /// - `association_prompt`: 可选关联记忆上下文
-    /// - `auto_meme_reminder`: 可选自动表情包提醒
-    ///
-    /// 返回:
-    /// - 当前轮请求消息列表
-    fn chat_messages_for_turn(
-        &mut self,
-        turn_id: &str,
-        input: &str,
-        image_urls: &[String],
-        association_prompt: Option<&str>,
-        auto_meme_reminder: Option<&str>,
-    ) -> Result<Vec<ChatMessage>> {
-        let base_projection = self.chat_base_context_projection(Some(turn_id))?;
-        let projection = project_provider_turn_from_base_projection(
-            base_projection,
-            input,
-            image_urls,
-            association_prompt,
-            auto_meme_reminder,
-            0,
-            self.context_char_budget,
-        );
-        self.last_dynamic_sources = projection.dynamic_sources.clone();
-        self.state
-            .enforce_provider_projection(Some(turn_id), &projection)?;
-        Ok(projection.messages)
-    }
-
-    /// 构造 provider base context 投影。
-    ///
-    /// 参数:
-    /// - `exclude_turn_id`: 需要从历史投影中排除的当前运行中轮次
-    ///
-    /// 返回:
-    /// - provider base context 投影
-    fn chat_base_context_projection(
-        &self,
-        exclude_turn_id: Option<&str>,
-    ) -> Result<ProjectedBaseContext> {
-        let loaded_tools_context = self.tool_visibility.loaded_context_prompt(&self.tools);
-        let projected_history = self.state.project_history(exclude_turn_id)?;
-        let compaction_summary_context = projected_history
-            .checkpoint_context
-            .or(self.state.compaction_summary_context()?);
-        let last_auto_meme_reminder = memes::last_auto_meme_reminder(&self.config, &self.paths)?;
-        let runtime_context = runtime_context_message();
-        let epoch = self
-            .state
-            .context_epoch_projection(&self.base_system_prompt)?;
-        Ok(project_provider_base_context_projection(
-            &epoch.baseline,
-            Some(self.mode.reminder()),
-            selected_model_label(&self.config)?.as_deref(),
-            loaded_tools_context.as_deref(),
-            compaction_summary_context.as_deref(),
-            projected_history.messages,
-            last_auto_meme_reminder.as_deref(),
-            &runtime_context,
-        ))
     }
 }
