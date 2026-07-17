@@ -1,0 +1,17 @@
+.workspace-file-search {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 22px;
+  align-items: center;
+  min-height: 30px;
+  margin: 6px 7px 3px;
+  padding-left: 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink-soft);
+}
+
+.workspace-file-search:focus-within { border-color: var(--line-strong); color: var(--ink); }
+.workspace-file-search input { min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: 400 10px var(--font-ui); }
+.workspace-file-search input::placeholder { color: var(--ink-soft); }
+.workspace-file-search button { display: grid; width: 22px; height: 22px; padding: 0; place-items: center; border: 0; border-radius: 4px; background: transparent; color: var(--ink-soft); }
+.workspace-file-search button:hover { background: var(--paper-deep); color: var(--ink); }

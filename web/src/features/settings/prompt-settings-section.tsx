@@ -1,0 +1,174 @@
+import { Check, Copy, FileText, Save, Trash2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { api } from "../../api/client";
+import type { AppConfig, PromptKind } from "../../api/contracts";
+import { EditorHeader } from "./editor-layout";
+import { ObjectListPanel } from "./object-list-panel";
+import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
+
+type PromptSettingsSectionProps = {
+  config: AppConfig;
+  onConfigChange: (config: AppConfig) => void;
+};
+
+/**
+ * 渲染 AI 人设和用户身份文件管理界面。
+ *
+ * @param props 应用配置和更新回调
+ * @returns 提示词管理区域
+ */
+export function PromptSettingsSection({ config, onConfigChange }: PromptSettingsSectionProps) {
+  const confirm = useConfirm();
+  const queryClient = useQueryClient();
+  const [kind, setKind] = useState<PromptKind>("personas");
+  const prompts = useQuery({ queryKey: ["prompts", kind], queryFn: () => api.prompts.list(kind) });
+  const [selected, setSelected] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [content, setContent] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const promptConfig = config.prompt ?? {};
+  const activeName = kind === "personas" ? promptConfig.active_persona ?? "" : promptConfig.active_identity ?? "";
+
+  useEffect(() => {
+    setSelected(null);
+    setName("");
+    setContent("");
+    setError("");
+  }, [kind]);
+
+  /** 读取选中的提示词文件。 */
+  const selectPrompt = async (nextName: string) => {
+    setError("");
+    try {
+      const document = await api.prompts.read(kind, nextName);
+      setSelected(nextName);
+      setName(document.name);
+      setContent(document.content);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
+  };
+
+  /** 创建空白提示词草稿。 */
+  const createDraft = () => {
+    setSelected(null);
+    setName(kind === "personas" ? "新建人设" : "新建身份");
+    setContent("");
+    setError("");
+  };
+
+  /** 复制当前提示词为新草稿。 */
+  const copyDraft = () => {
+    if (!name) return;
+    setSelected(null);
+    setName(`${name}-copy`);
+  };
+
+  /** 保存当前提示词草稿或修改。 */
+  const savePrompt = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    setError("");
+    try {
+      const document = selected
+        ? await api.prompts.update(kind, selected, name, content)
+        : await api.prompts.create(kind, name, content);
+      if (selected && (activeName === selected || activeName === `${selected}.md`)) activatePrompt(document.name);
+      setSelected(document.name);
+      setName(document.name);
+      setContent(document.content);
+      await queryClient.invalidateQueries({ queryKey: ["prompts", kind] });
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** 删除当前选中的提示词文件。 */
+  const deletePrompt = async () => {
+    if (!selected) return;
+    const confirmed = await confirm({ title: "删除提示词", description: `将删除“${selected}”及其关联文件。`, confirmLabel: "删除", danger: true });
+    if (!confirmed) return;
+    setError("");
+    try {
+      await api.prompts.remove(kind, selected);
+      if (activeName === selected || activeName === `${selected}.md`) activatePrompt("");
+      setSelected(null);
+      setName("");
+      setContent("");
+      await queryClient.invalidateQueries({ queryKey: ["prompts", kind] });
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
+  };
+
+  /** 将指定提示词设为当前人设或身份。 */
+  const activatePrompt = (value: string) => {
+    const key = kind === "personas" ? "active_persona" : "active_identity";
+    onConfigChange({ ...config, prompt: { ...promptConfig, [key]: value ? `${value}.md` : "" } });
+  };
+
+  const items = prompts.data?.items ?? [];
+  return (
+    <div className="settings-objects-layout">
+      <ObjectListPanel
+        title={kind === "personas" ? "AI 人设" : "用户身份"}
+        items={items.map((item) => ({
+          id: item.name,
+          name: item.name,
+          meta: "Markdown",
+          icon: <FileText size={14} />,
+          marked: activeName === item.name || activeName === `${item.name}.md`
+        }))}
+        selectedId={selected ?? ""}
+        searchPlaceholder="搜索提示词"
+        addLabel={kind === "personas" ? "新增人设" : "新增身份"}
+        onSelect={(id) => void selectPrompt(id)}
+        onAdd={createDraft}
+        headerSlot={
+          <div className="prompt-kind-tabs">
+            <button type="button" className={kind === "personas" ? "active" : ""} onClick={() => setKind("personas")}>AI 人设</button>
+            <button type="button" className={kind === "identities" ? "active" : ""} onClick={() => setKind("identities")}>用户身份</button>
+          </div>
+        }
+        topSlot={
+          <button type="button" className="prompt-default-row" onClick={() => activatePrompt("")}>
+            <span><strong>{kind === "personas" ? "内置 Sai" : "不使用用户身份"}</strong><small>默认配置</small></span>
+            {!activeName && <Check size={14} />}
+          </button>
+        }
+      />
+      <section className="settings-editor prompt-editor">
+        <EditorHeader
+          kicker="自定义提示词"
+          title={selected ? name : name || "选择或新增提示词"}
+          description="内容以 Markdown 文件保存，并与 TUI 使用相同目录。"
+          actions={<>
+            <button type="button" className="settings-secondary" onClick={copyDraft} disabled={!name}><Copy size={14} />复制</button>
+            <button type="button" className="settings-secondary" onClick={() => activatePrompt(name)} disabled={!name || activeName === name || activeName === `${name}.md`}><Check size={14} />设为当前</button>
+            <button type="button" className="settings-danger" onClick={() => void deletePrompt()} disabled={!selected}><Trash2 size={14} />删除</button>
+          </>}
+        />
+        <label className="settings-field"><span>名称</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder="提示词名称" /></label>
+        <label className="settings-field prompt-content-field"><span>提示词内容</span><textarea value={content} onChange={(event) => setContent(event.target.value)} placeholder="输入系统提示词或用户身份说明" spellCheck={false} /></label>
+        <div className="prompt-editor-footer">
+          {error && <span className="settings-inline-error">{error}</span>}
+          <button type="button" className="settings-save" onClick={() => void savePrompt()} disabled={!name.trim() || saving}><Save size={14} />{saving ? "正在保存" : "保存提示词"}</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/**
+ * 将未知异常转换为界面错误文本。
+ *
+ * @param reason 捕获的异常
+ * @returns 错误文本
+ */
+function errorMessage(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
+}

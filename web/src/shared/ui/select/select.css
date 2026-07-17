@@ -1,0 +1,20 @@
+.ui-select { position: relative; width: 100%; }
+.ui-select > button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; background: transparent; text-align: left; }
+.ui-select > button:hover:not(:disabled),
+.ui-select > button[aria-expanded="true"] { border-color: var(--line-strong); }
+.ui-select > button svg { color: var(--ink-soft); transition: transform 140ms ease; flex-shrink: 0; }
+.ui-select > button svg.open { transform: rotate(180deg); }
+.ui-select-value { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ui-select-value > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-select-value img,
+.ui-select-option-main img { flex-shrink: 0; border-radius: 3px; }
+.ui-select-menu { max-height: 280px; overflow-y: auto; padding: 5px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); box-shadow: var(--shadow); z-index: 240; }
+.ui-select-menu > button { display: grid; grid-template-columns: minmax(0, 1fr) 18px; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; text-align: left; }
+.ui-select-menu > button:hover,
+.ui-select-menu > button.active { background: var(--paper-deep); }
+.ui-select-option-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ui-select-option-main > span { display: grid; gap: 2px; min-width: 0; }
+.ui-select-menu strong { font-size: 11px; font-weight: 500; }
+.ui-select-menu small { color: var(--ink-soft); font-size: 9px; }
+.ui-select-menu > button > svg { visibility: hidden; color: var(--signal); }
+.ui-select-menu .active > svg { visibility: visible; }

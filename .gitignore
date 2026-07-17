@@ -1,0 +1,17 @@
+/target/
+/docs/
+/web/dist/
+/.idea/
+/.vscode/
+.DS_Store
+*.tmp
+*.bak
+*.swp
+*.swo
+*.log
+*.pkg.tar.zst
+*.part
+*.old
+.qoder/
+.doc/
+.ace-tool/

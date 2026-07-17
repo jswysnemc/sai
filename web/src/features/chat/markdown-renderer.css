@@ -1,0 +1,286 @@
+.markdown-body {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+}
+
+.markdown-body > :first-child { margin-top: 0; }
+.markdown-body > :last-child { margin-bottom: 0; }
+.markdown-body p { margin: 6px 0; line-height: 1.72; }
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  line-height: 1.28;
+}
+
+.markdown-body h1 { margin: 18px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); font-size: 1.5em; }
+.markdown-body h2 { margin: 16px 0 7px; padding-bottom: 5px; border-bottom: 1px solid var(--line); font-size: 1.32em; }
+.markdown-body h3 { margin: 14px 0 6px; font-size: 1.16em; }
+.markdown-body h4 { margin: 12px 0 5px; font-size: 1.08em; }
+.markdown-body h5 { margin: 10px 0 4px; font-size: 1em; }
+.markdown-body h6 { margin: 10px 0 4px; color: var(--ink-soft); font-size: 0.92em; }
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 7px 0;
+  padding-left: 23px;
+}
+
+.markdown-body li {
+  margin: 3px 0;
+  line-height: 1.68;
+}
+
+.markdown-body li > p {
+  margin: 2px 0;
+}
+
+.markdown-body input[type="checkbox"] {
+  margin: 0 7px 0 -18px;
+  accent-color: var(--signal);
+}
+
+.markdown-body blockquote {
+  margin: 10px 0;
+  padding: 6px 12px;
+  border-left: 3px solid var(--line-strong);
+  border-radius: 0 7px 7px 0;
+  background: color-mix(in srgb, var(--paper-deep) 70%, transparent);
+  color: var(--ink-soft);
+}
+
+.markdown-body blockquote p {
+  margin: 3px 0;
+}
+
+.markdown-body a {
+  color: var(--blue);
+  text-decoration-color: color-mix(in srgb, var(--blue) 50%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.markdown-body a:hover {
+  text-decoration-color: var(--blue);
+}
+
+.markdown-body hr {
+  height: 1px;
+  margin: 18px 0;
+  border: 0;
+  background: var(--line);
+}
+
+.markdown-body img {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  margin: 10px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.inline-code {
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  border-radius: 5px;
+  background: var(--paper-deep);
+  font: 500 0.88em/1.5 var(--font-code);
+}
+
+.markdown-table-wrap {
+  max-width: 100%;
+  margin: 12px 0;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.markdown-body table {
+  width: 100%;
+  min-width: 460px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 8px 11px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.markdown-body th:last-child,
+.markdown-body td:last-child { border-right: 0; }
+.markdown-body tr:last-child td { border-bottom: 0; }
+.markdown-body th { background: var(--paper-deep); font-weight: 600; }
+.markdown-body tbody tr:nth-child(even) { background: color-mix(in srgb, var(--paper-deep) 40%, transparent); }
+
+.markdown-code-block,
+.mermaid-wrapper {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  margin: 12px 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--code-surface);
+}
+
+.markdown-code-head,
+.mermaid-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 35px;
+  padding: 5px 9px 5px 13px;
+  border-bottom: 1px solid var(--line);
+  background: var(--code-head);
+  color: var(--ink-soft);
+  font: 500 10px var(--font-code);
+  user-select: none;
+}
+
+.markdown-code-head > span,
+.mermaid-toolbar > span {
+  margin-right: auto;
+  text-transform: lowercase;
+}
+
+.markdown-code-head button,
+.mermaid-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 25px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: 400 10px var(--font-ui);
+}
+
+.markdown-code-head button:hover,
+.mermaid-toolbar button:hover,
+.mermaid-toolbar button.active {
+  background: var(--paper-raised);
+  color: var(--ink);
+}
+
+.markdown-code-block pre,
+.mermaid-source {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  overflow: auto;
+  padding: 14px;
+  border: 0;
+  border-radius: 0;
+  background: var(--code-surface);
+  color: var(--code-text);
+  font: 400 12px/1.62 var(--font-code);
+  tab-size: 2;
+}
+
+.markdown-code-block code,
+.mermaid-source code {
+  display: block;
+  min-width: max-content;
+  font-family: var(--font-code);
+}
+
+.hljs-comment,
+.hljs-quote { color: var(--code-comment); font-style: italic; }
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link { color: var(--code-keyword); }
+.hljs-string,
+.hljs-title,
+.hljs-name,
+.hljs-type,
+.hljs-attribute,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition,
+.hljs-variable,
+.hljs-template-tag,
+.hljs-template-variable { color: var(--code-string); }
+.hljs-number,
+.hljs-meta,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-params { color: var(--code-number); }
+.hljs-deletion { color: var(--code-danger); }
+.hljs-addition { background: color-mix(in srgb, var(--signal) 10%, transparent); }
+.hljs-deletion { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 600; }
+
+.mermaid-view-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--paper-deep);
+}
+
+.mermaid-toolbar .mermaid-view-switcher button {
+  min-height: 22px;
+  padding: 0 6px;
+  border-radius: 5px;
+}
+
+.mermaid-copy {
+  margin-left: 2px;
+}
+
+.mermaid-preview {
+  max-width: 100%;
+  min-height: 80px;
+  overflow: auto;
+  padding: 14px;
+  background: #f8f8f4;
+}
+
+.mermaid-preview svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.mermaid-error {
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--danger);
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  .markdown-code-head,
+  .mermaid-toolbar {
+    padding-right: 6px;
+  }
+
+  .mermaid-toolbar button {
+    padding: 0 5px;
+  }
+}

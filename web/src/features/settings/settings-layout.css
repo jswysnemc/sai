@@ -1,0 +1,446 @@
+/* 设置页框架：页面容器、吸顶标题条、分类导航、对象列表和编辑区骨架 */
+
+.settings-page {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  overflow: auto;
+  background: var(--paper);
+}
+
+.settings-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.settings-back:hover { color: var(--ink); }
+
+/* ---------- 吸顶紧凑标题条 ---------- */
+
+.settings-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  box-shadow: 0 2px 8px rgb(20 28 23 / 5%);
+}
+
+.settings-topbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 1600px);
+  height: 56px;
+  margin: 0 auto;
+  padding: 0 clamp(16px, 2.5vw, 32px);
+}
+
+.settings-topbar h1 {
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+
+.settings-topbar p {
+  overflow: hidden;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.settings-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.settings-status-badge.saved { background: var(--signal-soft); color: var(--signal); }
+.settings-status-badge.dirty { background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--warning); }
+.settings-status-badge.failed { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+
+/* ---------- 主体三栏工作区 ---------- */
+
+.settings-workspace {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  width: min(100%, 1600px);
+  min-width: 0;
+  margin: 0 auto;
+  min-height: calc(100% - 57px);
+}
+
+.settings-navigation {
+  position: sticky;
+  top: 56px;
+  align-self: start;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  max-height: calc(100vh - 56px);
+  padding: 16px 12px 24px;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+}
+
+.settings-navigation-label {
+  padding: 0 10px 8px;
+  color: var(--ink-soft);
+  font: 500 10px var(--font-code);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.settings-navigation button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-soft);
+  text-align: left;
+}
+
+.settings-navigation button > svg {
+  color: var(--ink-soft);
+}
+
+.settings-navigation button > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-navigation strong { color: inherit; font-size: 13px; font-weight: 500; }
+.settings-navigation small { overflow: hidden; color: var(--ink-soft); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.settings-navigation button:hover { background: var(--paper-deep); color: var(--ink); }
+
+.settings-navigation button.active {
+  border-left-color: var(--signal);
+  border-radius: 0 8px 8px 0;
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.settings-navigation button.active > svg {
+  color: var(--signal);
+}
+
+.settings-main {
+  min-width: 0;
+  padding: 20px clamp(16px, 2.5vw, 32px) 56px;
+}
+
+/* ---------- 对象列表中列 ---------- */
+
+.settings-objects-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) minmax(min(680px, 100%), 1fr);
+  align-items: start;
+  gap: 24px;
+}
+
+.object-list {
+  position: sticky;
+  top: 76px;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  max-height: calc(100vh - 96px);
+  border-right: 1px solid var(--line);
+  padding-right: 16px;
+}
+
+.object-list:has(.prompt-kind-tabs) {
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+}
+
+.object-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 2px 10px;
+}
+
+.object-list-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.object-list-title small {
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+  font: 500 11px var(--font-code);
+}
+
+.object-list-add {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+}
+
+.object-list-add:hover { border-color: var(--line-strong); color: var(--ink); }
+
+.object-list-search {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  margin-bottom: 8px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink-soft);
+}
+
+.object-list-search:focus-within { border-color: var(--signal); }
+
+.object-list-search input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.object-list-scroll {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 2px 8px;
+}
+
+.object-list-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-soft);
+  text-align: left;
+}
+
+.object-list-item:has(> .object-list-copy:first-child) {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.object-list-item:hover { background: var(--paper-deep); color: var(--ink); }
+.object-list-item.active { background: var(--signal-soft); color: var(--ink); }
+.object-list-item.active .object-list-icon { color: var(--signal); }
+
+.object-list-icon {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+}
+
+.object-list-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.object-list-copy strong {
+  overflow-wrap: anywhere;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.object-list-copy small {
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+  font: 400 11px var(--font-code);
+}
+
+.object-list-mark {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--signal);
+}
+
+.object-list-empty {
+  padding: 20px 8px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ---------- 提示词列表附加行 ---------- */
+
+.prompt-kind-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.prompt-kind-tabs button {
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.prompt-kind-tabs button.active {
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.prompt-default-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 8px 9px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+}
+
+.prompt-default-row:hover { border-color: var(--line-strong); }
+.prompt-default-row > span { display: grid; gap: 2px; min-width: 0; }
+.prompt-default-row strong { font-size: 13px; font-weight: 500; }
+.prompt-default-row small { color: var(--ink-soft); font-size: 11px; }
+.prompt-default-row svg { color: var(--signal); }
+
+/* ---------- 状态与消息 ---------- */
+
+.settings-error,
+.settings-state,
+.settings-empty {
+  margin-top: 16px;
+  padding: 11px 13px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.settings-error { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); }
+.settings-state,
+.settings-empty { color: var(--ink-soft); }
+
+.settings-inline-error {
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.spin { animation: settings-spin 0.9s linear infinite; }
+@keyframes settings-spin { to { transform: rotate(360deg); } }
+
+/* ---------- 网关管理页沿用的通用类 ---------- */
+
+.management-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.management-page-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 24px clamp(18px, 4vw, 64px) 60px;
+}
+
+.management-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 18px;
+  max-width: 1180px;
+  margin: 0 auto 24px;
+}
+
+.management-hero h1 { margin: 3px 0 5px; font-size: clamp(26px, 3vw, 38px); letter-spacing: -0.04em; }
+.management-hero p { max-width: 680px; margin: 0; color: var(--ink-soft); line-height: 1.6; }
+.hero-icon { display: grid; width: 48px; height: 48px; place-items: center; border-radius: 13px; background: var(--graphite); color: var(--paper-raised); box-shadow: var(--shadow); }
+
+/* ---------- 响应式 ---------- */
+
+@media (max-width: 1180px) {
+  .settings-objects-layout { grid-template-columns: minmax(240px, 280px) minmax(0, 1fr); }
+}
+
+@media (max-width: 980px) {
+  .settings-objects-layout { grid-template-columns: 1fr; }
+  .object-list { position: static; max-height: 320px; padding-right: 0; padding-bottom: 12px; border-right: 0; border-bottom: 1px solid var(--line); }
+}
+
+@media (max-width: 760px) {
+  .settings-topbar-inner { flex-wrap: wrap; height: auto; padding-top: 8px; padding-bottom: 8px; }
+  .settings-topbar p { display: none; }
+  .settings-workspace { display: block; }
+  .settings-navigation { position: static; display: flex; width: 100%; min-width: 0; max-height: none; padding: 8px 10px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .settings-navigation-label { display: none; }
+  .settings-navigation button { flex: 0 0 auto; width: 168px; border-left: 0; }
+  .settings-navigation button.active { border-radius: 8px; box-shadow: inset 3px 0 0 var(--signal); }
+  .settings-main { padding: 16px 12px 72px; }
+  .management-hero { grid-template-columns: auto 1fr; }
+}

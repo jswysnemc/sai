@@ -1,0 +1,149 @@
+.agent-settings-shell {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.agent-surface-defaults {
+  display: grid;
+  gap: 0.75rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.agent-surface-defaults .settings-section-heading strong,
+.agent-surface-defaults .settings-section-heading small {
+  display: block;
+}
+
+.agent-surface-defaults .settings-section-heading strong {
+  color: var(--ink);
+  font-size: 0.875rem;
+}
+
+.agent-surface-defaults .settings-section-heading small {
+  margin-top: 0.1875rem;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.agent-surface-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.agent-surface-card {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper-raised);
+}
+
+.agent-surface-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.agent-surface-card header strong {
+  color: var(--ink);
+  font-size: 0.8125rem;
+}
+
+.agent-surface-card header span {
+  overflow: hidden;
+  color: var(--signal);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-surface-card p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  min-height: 2rem;
+}
+
+.agent-settings-loading,
+.agent-settings-load-error {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 5rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper-raised);
+}
+
+.agent-settings-loading > span {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--signal);
+  border-radius: 50%;
+  animation: agent-settings-spin 0.8s linear infinite;
+}
+
+.agent-settings-loading > div,
+.agent-settings-load-error > div {
+  display: grid;
+  gap: 0.1875rem;
+  min-width: 0;
+}
+
+.agent-settings-loading strong,
+.agent-settings-load-error strong {
+  color: var(--ink);
+  font-size: 0.8125rem;
+}
+
+.agent-settings-loading small,
+.agent-settings-load-error small {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-settings-load-error {
+  justify-content: space-between;
+}
+
+.agent-settings-load-error strong {
+  color: var(--danger);
+}
+
+.agent-profile-workspace {
+  align-items: start;
+}
+
+@keyframes agent-settings-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-settings-loading > span { animation: none; }
+}
+
+@media (max-width: 960px) {
+  .agent-surface-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .agent-settings-shell { gap: 1rem; }
+  .agent-settings-load-error { align-items: stretch; flex-direction: column; }
+  .agent-settings-load-error .settings-secondary { width: 100%; }
+}

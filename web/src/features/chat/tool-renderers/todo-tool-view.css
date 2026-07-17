@@ -1,0 +1,19 @@
+.todo-tool-view { min-width: 0; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper); }
+.todo-tool-head { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 7px 11px; border: 0; background: transparent; color: var(--ink); font-size: 12px; text-align: left; cursor: pointer; }
+.todo-tool-head:disabled { cursor: default; }
+.todo-tool-icon { display: grid; flex-shrink: 0; width: 22px; height: 22px; place-items: center; border-radius: var(--radius-sm); background: var(--signal-soft); color: var(--signal); }
+.todo-tool-headline { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-tool-tag { flex-shrink: 0; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 500; color: var(--ink-soft); background: var(--control-surface); }
+.todo-tool-tag.is-in_progress { color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent); }
+.todo-tool-tag.is-completed { color: var(--signal); background: var(--signal-soft); }
+.todo-tool-tag.is-cancelled { color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); }
+.todo-tool-head > svg { flex-shrink: 0; color: var(--ink-soft); transition: transform 140ms ease; }
+.todo-tool-head > svg.open { transform: rotate(180deg); }
+
+.todo-tool-list { display: grid; gap: 4px; margin: 0; padding: 4px 11px 11px 11px; list-style: none; border-top: 1px solid var(--line); }
+.todo-tool-item { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 24px; font-size: 12px; color: var(--ink); }
+.todo-tool-item svg { color: var(--ink-soft); }
+.todo-tool-item.is-in_progress svg { color: var(--blue); }
+.todo-tool-item.is-completed svg { color: var(--signal); }
+.todo-tool-item.is-completed span, .todo-tool-item.is-cancelled span { color: var(--ink-soft); text-decoration: line-through; }
+.todo-tool-item.is-changed { margin: 0 -6px; padding: 0 6px; border-radius: var(--radius-sm); background: var(--signal-soft); }

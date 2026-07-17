@@ -1,0 +1,85 @@
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::AppConfig;
+    use crate::paths::SaiPaths;
+
+    fn test_paths(temp: &tempfile::TempDir) -> SaiPaths {
+        SaiPaths {
+            config_dir: temp.path().join("config"),
+            config_file: temp.path().join("config/config.jsonc"),
+            secrets_file: temp.path().join("config/secrets.jsonc"),
+            skills_dir: temp.path().join("config/skills"),
+            data_dir: temp.path().join("data"),
+            cache_dir: temp.path().join("cache"),
+            state_dir: temp.path().join("state"),
+            pictures_dir: temp.path().join("pictures"),
+            fish_hook_file: temp.path().join("fish/sai.fish"),
+            bash_hook_file: temp.path().join("shell/bash-hook.sh"),
+            zsh_hook_file: temp.path().join("shell/zsh-hook.zsh"),
+            powershell_hook_file: temp.path().join("shell/powershell-hook.ps1"),
+        }
+    }
+
+    #[test]
+    fn remembers_and_recalls_fact() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = AppConfig::default();
+        let paths = test_paths(&temp);
+        let store = MemoryStore::new(&config, &paths);
+        store
+            .remember_fact("Niri 输入法需要 XMODIFIERS", "test")
+            .unwrap();
+        let result = store.recall_memories("Niri XMODIFIERS", 5, false).unwrap();
+        assert!(result.to_string().contains("XMODIFIERS"));
+    }
+
+    #[test]
+    fn reset_all_clears_facts_and_episodes() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = AppConfig::default();
+        let paths = test_paths(&temp);
+        let store = MemoryStore::new(&config, &paths);
+        store
+            .remember_fact("Niri 输入法需要 XMODIFIERS", "test")
+            .unwrap();
+        store.remember_pending_event("你好", "在呢").unwrap();
+        store.flush_pending_events().unwrap();
+
+        let before = store.recall_memories("你好 XMODIFIERS", 5, false).unwrap();
+        assert!(!before["facts"].as_array().unwrap().is_empty());
+        assert!(!before["episodes"].as_array().unwrap().is_empty());
+
+        store.reset_all(false).unwrap();
+
+        let after = store.recall_memories("你好 XMODIFIERS", 5, false).unwrap();
+        assert!(after["facts"].as_array().unwrap().is_empty());
+        assert!(after["episodes"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn evicted_context_can_be_cleared() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = AppConfig::default();
+        let paths = test_paths(&temp);
+        let store = MemoryStore::new(&config, &paths);
+        store
+            .remember_evicted_turns(&[EvictedTurn {
+                timestamp: "now".to_string(),
+                role: "user".to_string(),
+                content: "旧上下文 输入法".to_string(),
+            }])
+            .unwrap();
+        assert!(store
+            .search_evicted_context("输入法", 5)
+            .unwrap()
+            .to_string()
+            .contains("旧上下文"));
+        store.clear_evicted_context().unwrap();
+        assert!(!store
+            .search_evicted_context("输入法", 5)
+            .unwrap()
+            .to_string()
+            .contains("旧上下文"));
+    }
+}

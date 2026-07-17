@@ -1,0 +1,39 @@
+.markdown-code-block,
+.mermaid-wrapper,
+.tool-card,
+.tool-detail,
+.shell-tool-view,
+.edit-tool-view,
+.generic-tool-view,
+.structured-diff,
+.workspace-diff,
+.terminal-pane,
+.terminal-dock {
+  border-color: var(--technical-border);
+  background: var(--technical-surface);
+  color: var(--technical-text);
+}
+
+.markdown-code-block pre,
+.mermaid-source,
+.shell-command-line,
+.shell-output,
+.generic-tool-block,
+.structured-diff,
+.workspace-diff,
+.terminal-pane,
+.terminal-dock,
+.terminal-surface {
+  background: var(--technical-surface);
+  color: var(--technical-text);
+}
+
+.markdown-code-head,
+.mermaid-toolbar,
+.tool-card-head,
+.changed-file,
+.legacy-edit-path,
+.terminal-sidebar {
+  background: var(--technical-surface-muted);
+  color: var(--technical-muted);
+}

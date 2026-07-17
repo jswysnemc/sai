@@ -1,0 +1,50 @@
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: rgb(10 12 11 / 82%);
+  backdrop-filter: blur(6px);
+}
+
+.image-lightbox-image {
+  max-width: 88vw;
+  max-height: 88vh;
+  border-radius: 6px;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 45%);
+  cursor: grab;
+  transition: transform 80ms linear;
+  user-select: none;
+  touch-action: none;
+}
+
+.image-lightbox-image.dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+.image-lightbox-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 1;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 9px;
+  background: rgb(255 255 255 / 10%);
+  color: #fff;
+  cursor: pointer;
+}
+
+.image-lightbox-close:hover {
+  background: rgb(255 255 255 / 20%);
+}
+
+.lightbox-trigger {
+  cursor: zoom-in;
+}

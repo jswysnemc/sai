@@ -1,0 +1,61 @@
+name: Linux
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libasound2-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            pkg-config \
+            ripgrep
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build web assets
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run Rust tests
+        run: cargo test --locked
+
+      - name: Run web tests
+        working-directory: web
+        run: npm test
+
+      - name: Build Linux executable
+        run: cargo build --release --locked
+
+      - name: Verify Linux executable
+        run: test -x target/release/sai
+
+      - name: Upload Linux executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: sai-linux-x86_64
+          path: target/release/sai
+          if-no-files-found: error

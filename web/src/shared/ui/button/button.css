@@ -1,0 +1,19 @@
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ui-button.primary { border-color: var(--graphite); background: var(--graphite); color: var(--paper); }
+.ui-button.danger { border-color: var(--danger); background: var(--danger); color: #fff; }
+.ui-button.secondary:hover { background: var(--paper-deep); }
+.ui-button:disabled { cursor: not-allowed; opacity: 0.42; }

@@ -1,0 +1,24 @@
+.background-tasks-panel { position: relative; display: grid; grid-template-rows: 42px minmax(0, 1fr); height: 100%; min-width: 0; color: var(--ink); background: var(--paper); }
+.background-tasks-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px; border-bottom: 1px solid var(--terminal-line); }
+.background-tasks-panel > header > div { display: flex; align-items: baseline; gap: 8px; }
+.background-tasks-panel header strong { font-size: 12px; }
+.background-tasks-panel header span { color: var(--terminal-muted); font-size: 10px; }
+.background-task-actions button { display: inline-flex; align-items: center; gap: 5px; min-height: 27px; padding: 0 8px; border: 1px solid var(--terminal-line); border-radius: 5px; background: transparent; color: var(--terminal-muted); }
+.background-task-layout { display: grid; grid-template-columns: minmax(260px, 34%) minmax(0, 1fr); min-height: 0; }
+.background-task-list { min-width: 0; overflow: auto; padding: 7px; border-right: 1px solid var(--terminal-line); }
+.background-task-card { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 30px; margin-bottom: 5px; border: 1px solid transparent; border-radius: 7px; }
+.background-task-card:hover, .background-task-card.active { border-color: var(--terminal-line); background: var(--terminal-selection); }
+.background-task-select { display: grid; min-width: 0; gap: 3px; padding: 8px 9px; border: 0; background: transparent; color: inherit; text-align: left; }
+.background-task-select strong, .background-task-select code, .background-task-select > span:not(.background-task-status) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.background-task-select strong { font-size: 11px; }
+.background-task-select code, .background-task-select > span, .background-task-select small { color: var(--terminal-muted); font: 400 9px/1.45 var(--font-code); }
+.background-task-status { justify-self: start; padding: 1px 5px; border-radius: 4px; background: var(--paper-deep); color: var(--terminal-muted); font-size: 9px; }
+.background-task-status.running { background: color-mix(in srgb, var(--signal) 16%, transparent); color: var(--signal); }
+.background-task-stop { display: grid; width: 25px; height: 25px; place-items: center; align-self: center; border: 0; border-radius: 5px; background: transparent; color: var(--danger); }
+.background-task-detail { min-width: 0; min-height: 0; overflow: hidden; }
+.background-task-detail > header { display: grid; gap: 3px; padding: 9px 12px; border-bottom: 1px solid var(--terminal-line); }
+.background-task-detail header code { overflow: hidden; color: var(--terminal-muted); font: 400 10px var(--font-code); text-overflow: ellipsis; white-space: nowrap; }
+.background-task-detail pre { height: calc(100% - 52px); margin: 0; overflow: auto; padding: 12px; color: var(--terminal-text); font: 400 10px/1.6 var(--font-code); white-space: pre-wrap; overflow-wrap: anywhere; }
+.background-task-detail > p, .background-task-empty { color: var(--terminal-muted); font-size: 11px; text-align: center; }
+.background-task-error { position: absolute; right: 10px; bottom: 10px; }
+@media (max-width: 760px) { .background-task-layout { grid-template-columns: 1fr; } .background-task-detail { display: none; } }

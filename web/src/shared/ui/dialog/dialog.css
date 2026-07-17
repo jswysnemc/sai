@@ -1,0 +1,44 @@
+@import "../button/button.css";
+
+.ui-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(24 30 31 / 34%);
+  backdrop-filter: blur(3px);
+  z-index: 200;
+}
+
+.ui-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(620px, calc(100vw - 32px));
+  max-height: min(820px, calc(100vh - 48px));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 24px 80px rgb(18 24 25 / 24%);
+}
+
+.ui-modal.small { width: min(430px, calc(100vw - 32px)); }
+.ui-modal.large { width: min(980px, calc(100vw - 32px)); }
+
+.ui-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 17px 18px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ui-modal-header h2 { margin: 0; font-size: 16px; }
+.ui-modal-header p { margin: 5px 0 0; color: var(--ink-soft); font-size: 11px; line-height: 1.55; }
+.ui-modal-header > button { display: grid; width: 28px; height: 28px; padding: 0; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--ink-soft); }
+.ui-modal-header > button:hover { background: var(--paper-deep); color: var(--ink); }
+.ui-modal-body { min-height: 0; overflow: auto; padding: 16px 18px; }
+.ui-modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--line); }
+.confirm-dialog-detail { color: var(--ink-soft); font-size: 11px; }

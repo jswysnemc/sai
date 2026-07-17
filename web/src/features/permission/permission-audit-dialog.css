@@ -1,0 +1,59 @@
+.composer-rail-button.ui-button {
+  min-height: 0;
+}
+
+.permission-audit-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(62vh, 560px);
+  overflow: auto;
+}
+
+.permission-audit-empty {
+  padding: 28px 12px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.permission-audit-event {
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper-raised);
+}
+
+.permission-audit-event-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.permission-audit-event time {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.permission-audit-event pre {
+  max-height: 96px;
+  margin: 2px 0 0;
+  overflow: auto;
+  color: var(--ink-soft);
+  font: 11px/1.45 var(--font-code);
+  white-space: pre-wrap;
+}
+
+.permission-audit-decision {
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.permission-audit-decision.is-denied,
+.permission-audit-decision.is-failed {
+  color: var(--danger);
+}

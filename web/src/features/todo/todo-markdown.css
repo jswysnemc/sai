@@ -1,0 +1,202 @@
+.todo-markdown-view {
+  min-width: 0;
+  margin: 8px 0 20px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.todo-markdown-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  text-align: left;
+}
+
+.todo-trigger-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  color: var(--signal);
+}
+
+.todo-trigger-body {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+}
+
+.todo-trigger-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.todo-trigger-line strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo-trigger-count {
+  flex-shrink: 0;
+  font: 400 10px var(--font-code);
+  color: var(--ink-soft);
+}
+
+.todo-trigger-track {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--control-surface);
+}
+
+.todo-trigger-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--signal);
+  transition: width 320ms ease;
+}
+
+.todo-markdown-trigger > svg {
+  flex-shrink: 0;
+  color: var(--ink-soft);
+  transition: transform 140ms ease;
+}
+
+.todo-markdown-trigger > svg.open {
+  transform: rotate(180deg);
+}
+
+.todo-markdown-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0 0 10px;
+  list-style: none;
+}
+
+.todo-markdown-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-height: 27px;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.todo-markdown-item svg {
+  color: var(--ink-soft);
+}
+
+.todo-markdown-item.is-in_progress {
+  color: var(--ink);
+}
+
+.todo-markdown-item.is-in_progress svg {
+  color: var(--blue);
+}
+
+.todo-markdown-item.is-completed svg {
+  color: var(--signal);
+}
+
+.todo-markdown-item.is-completed span,
+.todo-markdown-item.is-cancelled span {
+  color: var(--ink-soft);
+  text-decoration: line-through;
+}
+
+.todo-markdown-view.compact {
+  position: relative;
+  margin: 0;
+  border: 0;
+}
+
+.todo-markdown-view.compact .todo-markdown-trigger {
+  min-width: 0;
+  max-width: 180px;
+  min-height: 28px;
+  gap: 5px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.todo-markdown-view.compact .todo-markdown-trigger:hover,
+.todo-markdown-view.compact .todo-markdown-trigger[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+  border-color: transparent;
+}
+
+.todo-markdown-view.compact .todo-trigger-icon {
+  color: inherit;
+  opacity: 0.72;
+}
+
+.todo-markdown-view.compact .todo-trigger-body {
+  gap: 2px;
+}
+
+.todo-markdown-view.compact .todo-trigger-line strong {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.todo-markdown-view.compact .todo-trigger-count {
+  font-size: 10px;
+  color: inherit;
+  opacity: 0.68;
+}
+
+.todo-markdown-view.compact .todo-trigger-track {
+  display: none;
+}
+
+.todo-markdown-view.compact .todo-markdown-trigger > svg {
+  width: 12px;
+  height: 12px;
+  opacity: 0.55;
+}
+
+/* Portal 到 body 后不再在 .todo-markdown-view.compact 内，必须用独立类名保留卡片样式。 */
+.todo-markdown-popover {
+  display: grid;
+  gap: 4px;
+  width: min(300px, calc(100vw - 24px));
+  max-height: 300px;
+  margin: 0;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper-raised);
+  box-shadow: var(--shadow);
+  list-style: none;
+  z-index: 120;
+}
+
+.todo-markdown-popover .todo-markdown-item {
+  min-height: 28px;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.todo-markdown-popover .todo-markdown-item:hover {
+  background: var(--paper-deep);
+}

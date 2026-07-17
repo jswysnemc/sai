@@ -1,0 +1,18 @@
+.weixin-login { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 6px 2px; }
+.weixin-login-qr { display: flex; align-items: center; justify-content: center; width: 220px; height: 220px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.weixin-login-qr-image { width: 100%; height: 100%; }
+.weixin-login-qr-image svg { display: block; width: 100%; height: 100%; }
+.weixin-login-qr-placeholder { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--ink-soft); }
+.weixin-login-status { margin: 0; color: var(--ink-soft); font-size: 0.8125rem; text-align: center; }
+.weixin-login-status.confirmed { color: var(--signal); font-weight: 500; }
+.weixin-login-verify { display: flex; gap: 8px; width: 100%; max-width: 260px; }
+.weixin-login-verify input { flex: 1; min-width: 0; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper-raised); color: var(--ink); font-size: 0.875rem; }
+.weixin-login-verify button { display: flex; align-items: center; justify-content: center; min-width: 62px; min-height: 36px; padding: 0 14px; border: 0; border-radius: 8px; background: var(--signal); color: #fff; font-weight: 500; }
+.weixin-login-verify button:disabled { cursor: not-allowed; opacity: 0.5; }
+.weixin-login-account { display: grid; gap: 6px; width: 100%; max-width: 280px; margin: 0; }
+.weixin-login-account div { display: grid; grid-template-columns: 68px minmax(0, 1fr); gap: 8px; }
+.weixin-login-account dt { color: var(--ink-soft); font-size: 0.75rem; }
+.weixin-login-account dd { margin: 0; overflow: hidden; font: 400 0.6875rem var(--font-code); text-overflow: ellipsis; white-space: nowrap; }
+.weixin-login-error { width: 100%; padding: 8px 12px; border-radius: 8px; background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); font-size: 0.75rem; text-align: center; }
+.spin { animation: weixin-login-spin 0.8s linear infinite; }
+@keyframes weixin-login-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

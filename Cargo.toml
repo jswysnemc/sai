@@ -1,0 +1,79 @@
+[package]
+name = "sai"
+version = "0.1.4"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/SHORiN-KiWATA/Sai"
+description = "Command-line AI assistant"
+
+[dependencies]
+anyhow = "1.0"
+arboard = { version = "3.6.1", features = ["wayland-data-control"] }
+aes = "0.8"
+axum = { version = "0.7", features = ["ws"] }
+base64 = "0.22"
+blake3 = "1.5"
+blake2 = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4.5", features = ["derive"] }
+crc32fast = "1.4"
+crossterm = "0.28"
+directories = "5.0"
+dunce = "1.0"
+ecb = { version = "0.1", features = ["alloc"] }
+ed25519-dalek = "2.1"
+hex = "0.4"
+html2md = "0.2"
+html2text = "0.12"
+ignore = "0.4"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+json_comments = "0.2"
+futures-util = "0.3"
+flate2 = "1.0"
+fuzzy-matcher = "0.3"
+fancy-regex = "0.17"
+globset = "0.4"
+libc = "0.2"
+mermaid-rs-renderer = { version = "0.2.2", default-features = false, features = ["png"] }
+md5 = "0.7"
+mime_guess = "2.0"
+open = "5.3"
+png = "0.17"
+portable-pty = "0.9"
+qrcode = "0.14"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls", "stream"] }
+rand = "0.8"
+rustc-hash = "2"
+regex = "1.12"
+rodio = { version = "0.19", default-features = false, features = ["mp3", "wav"] }
+ratex-layout = "0.1.12"
+ratex-parser = "0.1.12"
+ratex-render = { version = "0.1.12", features = ["embed-fonts"] }
+ratex-types = "0.1.12"
+rusqlite = { version = "0.32", features = ["bundled"] }
+rustyline = "14.0"
+rust-embed = "8.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha1 = "0.10"
+sha2 = "0.10"
+sha3 = "0.10"
+syntect = { version = "5.2", default-features = false, features = ["default-syntaxes", "regex-onig"] }
+termimad = "0.34"
+tempfile = "3.15"
+tar = "0.4"
+tokio = { version = "1.38", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+trash = "5.2"
+unicode-segmentation = "1.13"
+unicode-width = "0.1"
+urlencoding = "2.1"
+uuid = { version = "1.11", features = ["v4"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_ProcessStatus", "Win32_System_Threading"] }
+
+
+[build-dependencies]
+base64 = "0.22"

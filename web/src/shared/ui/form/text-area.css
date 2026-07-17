@@ -1,0 +1,14 @@
+.ui-text-area {
+  width: 100%;
+  min-height: 66px;
+  padding: 8px 9px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: 0;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font: 12px/1.5 var(--font-sans);
+}
+
+.ui-text-area:focus { border-color: var(--line-strong); }

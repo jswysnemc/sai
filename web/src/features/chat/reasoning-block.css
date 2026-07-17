@@ -1,0 +1,42 @@
+.reasoning-block {
+  min-width: 0;
+  max-width: 100%;
+  margin: 2px 0 6px;
+}
+
+.reasoning-block > button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.reasoning-block:not(.open) {
+  margin-bottom: 0;
+}
+
+.reasoning-block:not(.open) > button {
+  padding-bottom: 0;
+}
+
+.reasoning-block.open > button {
+  padding-bottom: 5px;
+}
+
+.reasoning-content {
+  min-width: 0;
+  max-width: 100%;
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: 5px 0 5px 14px;
+  border-left: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.72;
+  white-space: pre-wrap;
+}

@@ -1,0 +1,70 @@
+.tool-call-group {
+  overflow: hidden;
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-md);
+  background: var(--technical-surface);
+  color: var(--technical-text);
+  transition: border-color 140ms ease;
+}
+
+.tool-call-group:hover {
+  border-color: color-mix(in srgb, var(--technical-border) 60%, var(--line-strong));
+}
+
+.tool-call-group.expanded {
+  background: var(--technical-surface-muted);
+}
+
+.tool-call-group-trigger {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 18px 16px;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 11px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.tool-call-group-trigger:hover {
+  background: color-mix(in srgb, var(--technical-text) 5%, transparent);
+}
+
+.tool-call-group-trigger strong {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-call-group-icon,
+.tool-call-group-status {
+  display: grid;
+  place-items: center;
+  color: var(--technical-muted);
+}
+
+.tool-call-group-status {
+  color: var(--signal);
+}
+
+.tool-call-group-trigger > svg {
+  color: var(--technical-muted);
+  transition: transform 140ms ease;
+}
+
+.tool-call-group-items {
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+  border-top: 1px solid var(--technical-border);
+  background: var(--technical-surface);
+}
+
+.tool-call-group-items > .tool-card:first-child {
+  margin-top: 0;
+}

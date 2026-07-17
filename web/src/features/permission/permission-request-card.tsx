@@ -1,0 +1,141 @@
+import { Check, ChevronDown, ShieldAlert, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { api } from "../../api/client";
+import type { PermissionDecision, PermissionRequest } from "../../api/contracts";
+import { Button } from "../../shared/ui/button/button";
+import { TextArea } from "../../shared/ui/form/text-area";
+import { toolCardSummary } from "../chat/tool-renderers/tool-card-summary";
+import { PermissionArgumentDetails } from "./permission-argument-details";
+import "./permission-request-card.css";
+
+type PermissionRequestCardProps = {
+  request: PermissionRequest;
+  decision?: PermissionDecision;
+  active?: boolean;
+};
+
+type PermissionCardStatus = "pending" | "allowed" | "denied";
+
+/**
+ * 在助手 Markdown 流内渲染可交互权限请求。
+ *
+ * @param props 权限请求
+ * @returns 内嵌权限审核卡片
+ */
+export function PermissionRequestCard({ request, decision, active = true }: PermissionRequestCardProps) {
+  const [status, setStatus] = useState<PermissionCardStatus>(() => decisionStatus(decision));
+  const [expanded, setExpanded] = useState(true);
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [reply, setReply] = useState(() => decision?.decision === "deny" ? decision.reply ?? "" : "");
+  const [submitting, setSubmitting] = useState<"allow" | "deny" | null>(null);
+  const [error, setError] = useState("");
+  const summary = toolCardSummary(request.tool, request.arguments) || request.tool.replaceAll("_", " ");
+
+  useEffect(() => {
+    setStatus(decisionStatus(decision));
+    setExpanded(true);
+    setReplyOpen(false);
+    setReply(decision?.decision === "deny" ? decision.reply ?? "" : "");
+    setSubmitting(null);
+    setError("");
+  }, [request.id, decision]);
+
+  /**
+   * 提交允许或拒绝决定，并在原位置保留处理结果。
+   *
+   * @param decision 权限决定
+   * @param includeReply 是否附带拒绝回复
+   * @returns 提交完成后的 Promise
+   */
+  const decide = async (decision: "allow" | "deny", includeReply = false) => {
+    setSubmitting(decision);
+    setError("");
+    try {
+      await api.permissions.decide(request, decision, decision === "deny" && includeReply ? reply.trim() || undefined : undefined);
+      setStatus(decision === "allow" ? "allowed" : "denied");
+      setExpanded(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "提交权限决定失败");
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
+  const resolved = status !== "pending";
+  const interactive = !resolved && active;
+  return (
+    <section className={`permission-request-card is-${status}`}>
+      <Button className="permission-request-head" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
+        <span className="permission-request-icon" aria-hidden>
+          {status === "allowed" ? <Check size={14} /> : status === "denied" ? <X size={14} /> : <ShieldAlert size={14} />}
+        </span>
+        <span className="permission-request-copy">
+          <strong>{statusLabel(status, active)}</strong>
+          <span title={summary}>{actionLabel(request.tool)} · {summary}</span>
+        </span>
+        <ChevronDown size={14} className={expanded ? "rotate" : ""} aria-hidden />
+      </Button>
+      {expanded && (
+        <div className="permission-request-body">
+          <PermissionArgumentDetails tool={request.tool} argumentsText={request.arguments} />
+          {interactive && (
+            <div className="permission-request-actions">
+              {replyOpen && (
+                <label className="permission-request-inline-reply">
+                  <span>告诉 Sai 应如何调整</span>
+                  <TextArea value={reply} onChange={(event) => setReply(event.target.value)} placeholder="说明拒绝原因或提供替代要求" autoFocus />
+                </label>
+              )}
+              {error && <div className="permission-request-error">{error}</div>}
+              <div className="permission-request-buttons">
+                <Button className="permission-action" disabled={Boolean(submitting)} onClick={() => void decide("deny")}>{submitting === "deny" ? "正在拒绝" : "拒绝"}</Button>
+                <Button className="permission-action" disabled={Boolean(submitting)} onClick={() => setReplyOpen((value) => !value)}>拒绝并回复</Button>
+                <Button variant="primary" className="permission-action" disabled={Boolean(submitting)} onClick={() => void decide("allow")}>{submitting === "allow" ? "正在允许" : "允许一次"}</Button>
+              </div>
+              {replyOpen && (
+                <Button className="permission-reply-submit" disabled={Boolean(submitting) || !reply.trim()} onClick={() => void decide("deny", true)}>{submitting === "deny" ? "正在提交" : "提交拒绝回复"}</Button>
+              )}
+            </div>
+          )}
+          {!resolved && !active && <div className="permission-request-ended">权限请求已随本轮运行结束</div>}
+          {resolved && reply.trim() && status === "denied" && <div className="permission-resolved-reply"><span>回复</span>{reply.trim()}</div>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * 返回工具权限动作标签。
+ *
+ * @param tool 工具名称
+ * @returns 用户可读动作
+ */
+function actionLabel(tool: string): string {
+  if (tool === "run_command" || tool.includes("background_command")) return "执行命令";
+  if (tool === "edit_file" || tool === "apply_patch") return "修改文件";
+  if (tool === "trash_path") return "移入回收站";
+  return "执行工具";
+}
+
+/**
+ * 返回权限卡片状态标签。
+ *
+ * @param status 当前卡片状态
+ * @returns 中文状态标签
+ */
+function statusLabel(status: PermissionCardStatus, active: boolean): string {
+  if (status === "pending" && !active) return "请求已结束";
+  return { pending: "需要权限", allowed: "已允许一次", denied: "已拒绝" }[status];
+}
+
+/**
+ * 将后端权限决定转换为卡片状态。
+ *
+ * @param decision 可选权限决定
+ * @returns 权限卡片状态
+ */
+function decisionStatus(decision?: PermissionDecision): PermissionCardStatus {
+  if (!decision) return "pending";
+  return decision.decision === "allow" ? "allowed" : "denied";
+}

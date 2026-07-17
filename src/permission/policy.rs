@@ -1,0 +1,467 @@
+use super::path_policy::{
+    contains_sensitive_read_path, path_is_within_workspace, resolve_without_io,
+};
+use super::{AuditDecision, PermissionAuditLog};
+use crate::tools::ToolPermission;
+use anyhow::{bail, Result};
+use serde_json::Value;
+use std::path::{Path, PathBuf};
+
+/// 工具权限策略模式。
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum PermissionProfileMode {
+    Yolo,
+    Audited,
+    Plan,
+}
+
+impl PermissionProfileMode {
+    /// 返回用于协议和审计的稳定模式名称。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 小写模式名称
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Yolo => "yolo",
+            Self::Audited => "audited",
+            Self::Plan => "plan",
+        }
+    }
+}
+
+/// 单个工具注册表绑定的权限配置。
+#[derive(Debug, Clone)]
+pub(crate) struct PermissionProfile {
+    mode: PermissionProfileMode,
+    workspace: PathBuf,
+    audit: Option<PermissionAuditLog>,
+}
+
+impl PermissionProfile {
+    /// 记录等待用户处理的权限请求。
+    ///
+    /// 参数:
+    /// - `tool`: 工具名称
+    /// - `arguments`: 工具参数
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn record_requested(&self, tool: &str, arguments: &Value) {
+        self.record(tool, AuditDecision::Requested, arguments, None);
+    }
+
+    /// 记录用户批准的权限请求。
+    ///
+    /// 参数:
+    /// - `tool`: 工具名称
+    /// - `arguments`: 工具参数
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn record_approved(&self, tool: &str, arguments: &Value) {
+        self.record(tool, AuditDecision::Approved, arguments, None);
+    }
+
+    /// 记录用户拒绝的权限请求。
+    ///
+    /// 参数:
+    /// - `tool`: 工具名称
+    /// - `arguments`: 工具参数
+    /// - `reply`: 可选拒绝回复
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn record_denied(&self, tool: &str, arguments: &Value, reply: Option<&str>) {
+        self.record(tool, AuditDecision::Denied, arguments, reply);
+    }
+
+    /// 创建工具权限配置。
+    ///
+    /// 参数:
+    /// - `mode`: 权限策略模式
+    /// - `workspace`: 允许写入的工作区根目录
+    /// - `audit`: 非 YOLO 模式使用的审计日志
+    ///
+    /// 返回:
+    /// - 权限配置
+    pub(crate) fn new(
+        mode: PermissionProfileMode,
+        workspace: PathBuf,
+        audit: Option<PermissionAuditLog>,
+    ) -> Self {
+        Self {
+            mode,
+            workspace: workspace.canonicalize().unwrap_or(workspace),
+            audit,
+        }
+    }
+
+    /// 在工具执行前完成权限判定并写入审计日志。
+    ///
+    /// 参数:
+    /// - `tool`: 工具名称
+    /// - `permission`: 工具声明的权限等级
+    /// - `arguments`: 工具参数
+    ///
+    /// 返回:
+    /// - 是否需要启用 Shell 沙盒
+    pub(crate) fn authorize(
+        &self,
+        tool: &str,
+        permission: ToolPermission,
+        arguments: &Value,
+    ) -> Result<bool> {
+        // 1. YOLO 模式不增加权限检查和沙盒
+        if self.mode == PermissionProfileMode::Yolo {
+            return Ok(false);
+        }
+        // 2. TODO 仅维护会话计划，不参与权限审计交互或日志记录
+        if self.mode == PermissionProfileMode::Audited && tool == "todo" {
+            return Ok(false);
+        }
+        // 3. 规划模式和审计模式先阻止不允许的工具类别
+        if self.mode == PermissionProfileMode::Plan && permission == ToolPermission::Writes {
+            self.record(
+                tool,
+                AuditDecision::Denied,
+                arguments,
+                Some("plan mode blocks writes"),
+            );
+            bail!("Plan mode blocked non-read-only tool: {tool}")
+        }
+        if self.mode == PermissionProfileMode::Audited && tool == "background_command" {
+            self.record(
+                tool,
+                AuditDecision::Denied,
+                arguments,
+                Some("background commands are unavailable in audited sandbox mode"),
+            );
+            bail!("permission audit blocked background command outside the foreground sandbox")
+        }
+        // 4. 写入工具必须先通过工作区路径边界检查
+        if permission == ToolPermission::Writes {
+            self.ensure_workspace_paths(arguments).map_err(|error| {
+                self.record(
+                    tool,
+                    AuditDecision::Denied,
+                    arguments,
+                    Some(&error.to_string()),
+                );
+                error
+            })?;
+        }
+        // 5. 记录允许结果，并仅为前台命令启用审计沙盒
+        self.record(tool, AuditDecision::Allowed, arguments, None);
+        Ok(self.mode == PermissionProfileMode::Audited && tool == "run_command")
+    }
+
+    /// 判断工具执行前是否需要等待用户完成交互式审计。
+    ///
+    /// 参数:
+    /// - `tool`: 工具名称
+    /// - `permission`: 工具声明的权限等级
+    /// - `arguments`: 工具参数
+    ///
+    /// 返回:
+    /// - 审计模式下写入工具或敏感路径读取工具返回 `true`
+    pub(crate) fn requires_interactive_audit(
+        &self,
+        tool: &str,
+        permission: ToolPermission,
+        arguments: &Value,
+    ) -> bool {
+        if self.mode != PermissionProfileMode::Audited || tool == "todo" {
+            return false;
+        }
+        if permission == ToolPermission::Writes {
+            return true;
+        }
+        permission == ToolPermission::ReadOnly
+            && contains_sensitive_read_path(&self.workspace, arguments)
+    }
+
+    /// 记录工具最终执行结果。
+    ///
+    /// 参数:
+    /// - `tool`: 工具名称
+    /// - `arguments`: 工具参数
+    /// - `result`: 工具执行结果
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn record_result(&self, tool: &str, arguments: &Value, result: &Result<String>) {
+        if self.mode == PermissionProfileMode::Yolo
+            || (self.mode == PermissionProfileMode::Audited && tool == "todo")
+        {
+            return;
+        }
+        match result {
+            Ok(output) => self.record(
+                tool,
+                AuditDecision::Completed,
+                arguments,
+                Some(&truncate_detail(output)),
+            ),
+            Err(error) => self.record(
+                tool,
+                AuditDecision::Failed,
+                arguments,
+                Some(&truncate_detail(&error.to_string())),
+            ),
+        }
+    }
+
+    /// 校验显式路径参数没有逃逸工作区。
+    ///
+    /// 参数:
+    /// - `arguments`: 工具参数
+    ///
+    /// 返回:
+    /// - 所有路径均位于工作区时成功
+    fn ensure_workspace_paths(&self, arguments: &Value) -> Result<()> {
+        // 1. 校验常见独立路径字段
+        for key in ["path", "file", "target", "destination", "cwd"] {
+            let Some(value) = arguments.get(key).and_then(Value::as_str) else {
+                continue;
+            };
+            let resolved = resolve_without_io(&self.workspace, Path::new(value));
+            if !path_is_within_workspace(&self.workspace, &resolved) {
+                bail!(
+                    "permission audit blocked path outside workspace: {}",
+                    resolved.display()
+                )
+            }
+        }
+        // 2. 校验 Patch 中的源路径、目标路径和移动目标
+        if let Some(patch) = arguments.get("patch").and_then(Value::as_str) {
+            for line in patch.lines() {
+                if let Some(destination) = line.strip_prefix("*** Move to: ") {
+                    let destination =
+                        resolve_without_io(&self.workspace, Path::new(destination.trim()));
+                    if !path_is_within_workspace(&self.workspace, &destination) {
+                        bail!(
+                            "permission audit blocked patch destination outside workspace: {}",
+                            destination.display()
+                        )
+                    }
+                    continue;
+                }
+                let Some((_, value)) = line.split_once(" File: ") else {
+                    continue;
+                };
+                let path = value
+                    .split_once(" -> ")
+                    .map(|(source, _)| source)
+                    .unwrap_or(value);
+                let resolved = resolve_without_io(&self.workspace, Path::new(path.trim()));
+                if !path_is_within_workspace(&self.workspace, &resolved) {
+                    bail!(
+                        "permission audit blocked patch path outside workspace: {}",
+                        resolved.display()
+                    )
+                }
+                if let Some((_, destination)) = value.split_once(" -> ") {
+                    let destination =
+                        resolve_without_io(&self.workspace, Path::new(destination.trim()));
+                    if !path_is_within_workspace(&self.workspace, &destination) {
+                        bail!(
+                            "permission audit blocked patch destination outside workspace: {}",
+                            destination.display()
+                        )
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// 追加审计事件，审计写入失败不改变工具判定结果。
+    ///
+    /// 参数:
+    /// - `tool`: 工具名称
+    /// - `decision`: 审计决定
+    /// - `arguments`: 工具参数
+    /// - `detail`: 可选结果摘要
+    ///
+    /// 返回:
+    /// - 无
+    fn record(&self, tool: &str, decision: AuditDecision, arguments: &Value, detail: Option<&str>) {
+        if let Some(audit) = &self.audit {
+            let _ = audit.append(self.mode.as_str(), tool, decision, arguments, detail);
+        }
+    }
+}
+
+/// 限制审计结果摘要长度。
+///
+/// 参数:
+/// - `value`: 原始结果文本
+///
+/// 返回:
+/// - 最多五百字符的摘要
+fn truncate_detail(value: &str) -> String {
+    value.chars().take(500).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// 验证审计模式阻止工作区外的显式路径。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn audited_profile_blocks_explicit_path_outside_workspace() {
+        let profile = PermissionProfile::new(
+            PermissionProfileMode::Audited,
+            PathBuf::from("/workspace/project"),
+            None,
+        );
+        assert!(profile
+            .authorize(
+                "edit_file",
+                ToolPermission::Writes,
+                &json!({"path":"../secret"})
+            )
+            .is_err());
+    }
+
+    /// 验证 YOLO 模式保持不受限制的兼容行为。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn yolo_profile_keeps_unrestricted_behavior() {
+        let profile = PermissionProfile::new(
+            PermissionProfileMode::Yolo,
+            PathBuf::from("/workspace/project"),
+            None,
+        );
+        assert!(!profile
+            .authorize(
+                "edit_file",
+                ToolPermission::Writes,
+                &json!({"path":"/etc/hosts"})
+            )
+            .unwrap());
+    }
+
+    /// 验证审计模式阻止 Patch 移动到工作区外。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn audited_profile_blocks_patch_destination_outside_workspace() {
+        let profile = PermissionProfile::new(
+            PermissionProfileMode::Audited,
+            PathBuf::from("/workspace/project"),
+            None,
+        );
+        let patch = "*** Begin Patch\n*** Update File: src/main.rs\n*** Move to: ../escaped.rs\n@@\n-old\n+new\n*** End Patch";
+        assert!(profile
+            .authorize("edit_file", ToolPermission::Writes, &json!({"patch":patch}))
+            .is_err());
+    }
+
+    /// 验证 TODO 工具不需要交互式权限审计。
+    #[test]
+    fn audited_profile_skips_todo_audit() {
+        let profile = PermissionProfile::new(
+            PermissionProfileMode::Audited,
+            PathBuf::from("/workspace/project"),
+            None,
+        );
+        assert!(!profile.requires_interactive_audit(
+            "todo",
+            ToolPermission::Writes,
+            &json!({"action":"add", "text":"检查"}),
+        ));
+    }
+
+    /// 验证普通工作区读取不需要审计，但工作区内凭据文件仍需审计。
+    #[test]
+    fn audited_profile_skips_workspace_read_audit_but_catches_credentials() {
+        let profile = PermissionProfile::new(
+            PermissionProfileMode::Audited,
+            PathBuf::from("/workspace/project"),
+            None,
+        );
+        assert!(!profile.requires_interactive_audit(
+            "read_file",
+            ToolPermission::ReadOnly,
+            &json!({"path":"src/main.rs"}),
+        ));
+        assert!(profile.requires_interactive_audit(
+            "read_file",
+            ToolPermission::ReadOnly,
+            &json!({"path":".env.local"}),
+        ));
+    }
+
+    /// 验证读取系统敏感文件需要交互式权限审计。
+    #[test]
+    fn audited_profile_requires_sensitive_read_audit() {
+        let profile = PermissionProfile::new(
+            PermissionProfileMode::Audited,
+            PathBuf::from("/workspace/project"),
+            None,
+        );
+        assert!(profile.requires_interactive_audit(
+            "read_file",
+            ToolPermission::ReadOnly,
+            &json!({"path":"/etc/hosts"}),
+        ));
+        assert!(profile.requires_interactive_audit(
+            "read_file",
+            ToolPermission::ReadOnly,
+            &json!({"files":[{"path":"src/lib.rs"}, {"path":"/etc/passwd"}]}),
+        ));
+        assert!(profile.requires_interactive_audit(
+            "read_file",
+            ToolPermission::ReadOnly,
+            &json!({"path":"~/.ssh/id_rsa"}),
+        ));
+    }
+
+    #[cfg(unix)]
+    /// 验证审计模式阻止通过符号链接逃逸工作区。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn audited_profile_blocks_symlink_escape() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().unwrap();
+        let workspace = root.path().join("workspace");
+        let outside = root.path().join("outside");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        symlink(&outside, workspace.join("linked")).unwrap();
+        let profile = PermissionProfile::new(PermissionProfileMode::Audited, workspace, None);
+        assert!(profile
+            .authorize(
+                "edit_file",
+                ToolPermission::Writes,
+                &json!({"path":"linked/escaped.txt"}),
+            )
+            .is_err());
+    }
+}

@@ -1,0 +1,175 @@
+.permission-request-card {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--signal) 34%, var(--technical-border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--signal) 4%, var(--technical-surface));
+  color: var(--technical-text);
+}
+
+.permission-request-card.is-allowed {
+  border-color: color-mix(in srgb, var(--signal) 24%, var(--technical-border));
+  background: var(--technical-surface);
+}
+
+.permission-request-card.is-denied {
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--technical-border));
+  background: color-mix(in srgb, var(--danger) 3%, var(--technical-surface));
+}
+
+.permission-request-head {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 42px;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.permission-request-head:focus-visible {
+  outline: 1px solid var(--signal);
+  outline-offset: -2px;
+}
+
+.permission-request-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--signal) 10%, var(--technical-surface-muted));
+  color: var(--signal);
+}
+
+.permission-request-card.is-denied .permission-request-icon {
+  background: color-mix(in srgb, var(--danger) 9%, var(--technical-surface-muted));
+  color: var(--danger);
+}
+
+.permission-request-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.permission-request-copy strong {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.permission-request-copy span {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font: 400 10px var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.permission-request-head > svg {
+  color: var(--ink-soft);
+  transition: transform 140ms ease;
+}
+
+.permission-request-body {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--technical-border) 72%, transparent);
+}
+
+.permission-request-body .shell-tool-view,
+.permission-request-body .edit-tool-view {
+  overflow: hidden;
+  border: 1px solid var(--technical-border);
+  border-radius: 8px;
+}
+
+.permission-argument-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.permission-argument-list > div {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.permission-argument-list dt {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.permission-argument-list dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--technical-text);
+  font: 11px/1.5 var(--font-code);
+  white-space: pre-wrap;
+}
+
+.permission-request-actions {
+  display: grid;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.permission-request-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.permission-action,
+.permission-reply-submit {
+  min-height: 28px;
+  padding: 4px 10px;
+}
+
+.permission-request-inline-reply {
+  display: grid;
+  gap: 5px;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.permission-reply-submit {
+  justify-self: end;
+}
+
+.permission-request-error {
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--danger) 25%, var(--line));
+  border-radius: 7px;
+  color: var(--danger);
+  font-size: 11px;
+}
+
+.permission-request-ended {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.permission-resolved-reply {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  color: var(--technical-text);
+  font-size: 12px;
+}
+
+.permission-resolved-reply span {
+  color: var(--ink-soft);
+  font-size: 11px;
+}

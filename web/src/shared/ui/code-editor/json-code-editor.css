@@ -1,0 +1,8 @@
+.json-code-editor { overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+.json-code-editor > header { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding: 0 8px 0 11px; border-bottom: 1px solid var(--line); }
+.json-code-editor > header > span,
+.json-code-editor > header button { display: flex; align-items: center; gap: 6px; }
+.json-code-editor > header > span { color: var(--ink-soft); font: 500 9px var(--font-code); }
+.json-code-editor > header button { min-height: 26px; padding: 0 7px; border: 0; border-radius: 5px; background: transparent; color: var(--ink-soft); font-size: 9px; }
+.json-code-editor > header button:hover:not(:disabled) { background: var(--paper-deep); color: var(--ink); }
+.json-editor-surface { min-height: 120px; }
