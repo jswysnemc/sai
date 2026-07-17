@@ -1,5 +1,6 @@
 use super::channel_context::{save_session_channel_context, ChannelContext};
 use super::workspace::gateway_workspace_path;
+use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::Result;
 use sha2::{Digest, Sha256};
@@ -67,22 +68,22 @@ fn gateway_session_title(context: &ChannelContext) -> String {
             compact_target(target_id)
         ),
         ChannelContext::Weixin { to_user_id, .. } => {
-            format!("微信 · {}", compact_target(to_user_id))
+            format!("{} · {}", t("Weixin", "微信"), compact_target(to_user_id))
         }
     }
 }
 
-/// 返回 QQ 目标类型中文名称。
+/// 返回 QQ 目标类型本地化名称。
 ///
 /// 参数:
 /// - `target_kind`: QQ 目标类型文本
 ///
 /// 返回:
-/// - 中文名称
+/// - 本地化名称
 fn qq_target_label(target_kind: &str) -> &'static str {
     match target_kind {
-        "group" => "群聊",
-        _ => "私聊",
+        "group" => t("group", "群聊"),
+        _ => t("private", "私聊"),
     }
 }
 

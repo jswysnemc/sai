@@ -1,6 +1,7 @@
 use super::event::{parse_message_event, parse_validation_event};
 use super::processor::{target_kind_name, QqBotProcessor, QqBotProcessorConfig};
 use super::signature::{sign_validation, verify_event_signature};
+use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::{Context, Result};
 use axum::body::Bytes;
@@ -57,10 +58,22 @@ pub(crate) async fn run_qq_bot_webhook_server(
         .route("/", post(handle_qq_bot_webhook))
         .route("/qqbot", post(handle_qq_bot_webhook))
         .with_state(state.clone());
-    let listener = TcpListener::bind(listen)
-        .await
-        .with_context(|| format!("failed to bind QQ Bot webhook server: {listen}"))?;
-    println!("QQ Bot webhook server listening on http://{listen}");
+    let listener = TcpListener::bind(listen).await.with_context(|| {
+        format!(
+            "{}: {listen}",
+            t(
+                "failed to bind QQ Bot webhook server",
+                "无法绑定 QQ Bot Webhook 服务"
+            )
+        )
+    })?;
+    println!(
+        "{} http://{listen}",
+        t(
+            "QQ Bot webhook server listening on",
+            "QQ Bot Webhook 服务监听地址"
+        )
+    );
     state
         .processor
         .debug_log(format!("webhook server started listen={listen}"));
@@ -85,7 +98,10 @@ async fn handle_qq_bot_webhook(
     match handle_qq_bot_webhook_inner(state, headers, body).await {
         Ok(response) => response,
         Err(err) => {
-            eprintln!("【QQ网关】【请求失败】{err:#}");
+            eprintln!(
+                "{}{err:#}",
+                t("【QQ Gateway】【Request failed】", "【QQ网关】【请求失败】")
+            );
             (
                 StatusCode::BAD_REQUEST,
                 Json(json!({ "error": err.to_string() })),
@@ -109,9 +125,13 @@ async fn handle_qq_bot_webhook_inner(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response> {
-    let payload = serde_json::from_slice::<Value>(&body).with_context(|| "invalid QQ payload")?;
+    let payload = serde_json::from_slice::<Value>(&body)
+        .with_context(|| t("invalid QQ payload", "无效的 QQ 数据"))?;
     if let Some(validation) = parse_validation_event(&payload)? {
-        state.processor.debug_log("收到回调地址验证事件");
+        state.processor.debug_log(t(
+            "received callback URL validation event",
+            "收到回调地址验证事件",
+        ));
         let signature = sign_validation(
             &state.client_secret,
             &validation.event_ts,
@@ -126,7 +146,8 @@ async fn handle_qq_bot_webhook_inner(
     verify_request_signature(&state.client_secret, &headers, &body)?;
     if let Some(event) = parse_message_event(&payload)? {
         state.processor.debug_log(format!(
-            "收到消息 event_type={} target_kind={} target_id={} media_count={}",
+            "{} event_type={} target_kind={} target_id={} media_count={}",
+            t("received message", "收到消息"),
             event.event_type,
             target_kind_name(event.target_kind),
             event.target_id,
@@ -135,7 +156,13 @@ async fn handle_qq_bot_webhook_inner(
         let processor = state.processor.clone();
         tokio::spawn(async move {
             if let Err(err) = processor.handle_message_event(event).await {
-                eprintln!("【QQ网关】【消息处理失败】{err:#}");
+                eprintln!(
+                    "{}{err:#}",
+                    t(
+                        "【QQ Gateway】【Message processing failed】",
+                        "【QQ网关】【消息处理失败】"
+                    )
+                );
             }
         });
     }
@@ -155,10 +182,17 @@ fn verify_request_signature(client_secret: &str, headers: &HeaderMap, body: &[u8
     let signature = headers
         .get("X-Signature-Ed25519")
         .and_then(|value| value.to_str().ok())
-        .ok_or_else(|| anyhow::anyhow!("missing X-Signature-Ed25519"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!(t("missing X-Signature-Ed25519", "缺少 X-Signature-Ed25519"))
+        })?;
     let timestamp = headers
         .get("X-Signature-Timestamp")
         .and_then(|value| value.to_str().ok())
-        .ok_or_else(|| anyhow::anyhow!("missing X-Signature-Timestamp"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!(t(
+                "missing X-Signature-Timestamp",
+                "缺少 X-Signature-Timestamp"
+            ))
+        })?;
     verify_event_signature(client_secret, timestamp, body, signature)
 }

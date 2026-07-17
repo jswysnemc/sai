@@ -1,5 +1,6 @@
 use super::client::WeixinBotClient;
 use super::event::{WeixinInboundMedia, WeixinInboundMediaKind};
+use crate::i18n::text as t;
 use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyInit};
 use anyhow::{bail, Context, Result};
 use base64::Engine;
@@ -33,20 +34,24 @@ pub(crate) async fn save_inbound_media(
     http_client: &reqwest::Client,
     media: &WeixinInboundMedia,
 ) -> Result<SavedInboundMedia> {
-    let download = media
-        .download
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("微信附件缺少可下载信息"))?;
+    let download = media.download.as_ref().ok_or_else(|| {
+        anyhow::anyhow!(t(
+            "Weixin attachment has no download information",
+            "微信附件缺少可下载信息"
+        ))
+    })?;
     let url = resolve_download_url(client, download)?;
     client.debug_log(format!(
-        "入站附件下载开始 kind={} source={} url={}",
+        "{} kind={} source={} url={}",
+        t("inbound attachment download started", "入站附件下载开始"),
         inbound_kind_name(media.kind),
         media.source,
         redact_url_for_log(&url)
     ));
     let mut bytes = download_bytes(http_client, &url).await?;
     client.debug_log(format!(
-        "入站附件下载完成 kind={} encrypted_or_plain_bytes={}",
+        "{} kind={} encrypted_or_plain_bytes={}",
+        t("inbound attachment download completed", "入站附件下载完成"),
         inbound_kind_name(media.kind),
         bytes.len()
     ));
@@ -54,13 +59,21 @@ pub(crate) async fn save_inbound_media(
         let key = parse_aes_key(aes_key)?;
         bytes = decrypt_aes_ecb(&bytes, &key)?;
         client.debug_log(format!(
-            "入站附件解密完成 kind={} plain_bytes={}",
+            "{} kind={} plain_bytes={}",
+            t(
+                "inbound attachment decryption completed",
+                "入站附件解密完成"
+            ),
             inbound_kind_name(media.kind),
             bytes.len()
         ));
     }
     if bytes.len() > MAX_INBOUND_MEDIA_BYTES {
-        bail!("微信附件超过 {} bytes", MAX_INBOUND_MEDIA_BYTES);
+        bail!(
+            "{} {} bytes",
+            t("Weixin attachment exceeds", "微信附件超过"),
+            MAX_INBOUND_MEDIA_BYTES
+        );
     }
     let mime_type = infer_mime_type(media, &bytes);
     let name = media
@@ -69,7 +82,8 @@ pub(crate) async fn save_inbound_media(
         .unwrap_or_else(|| default_file_name(media.kind, &mime_type));
     let path = save_bytes(paths, &name, &bytes)?;
     client.debug_log(format!(
-        "入站附件已保存 kind={} name={} mime={} path={}",
+        "{} kind={} name={} mime={} path={}",
+        t("inbound attachment saved", "入站附件已保存"),
         inbound_kind_name(media.kind),
         name,
         mime_type,
@@ -108,7 +122,12 @@ fn resolve_download_url(
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("微信附件缺少 full_url 或 encrypt_query_param"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!(t(
+                "Weixin attachment has no full_url or encrypt_query_param",
+                "微信附件缺少 full_url 或 encrypt_query_param"
+            ))
+        })?;
     Ok(format!(
         "{}/download?encrypted_query_param={}",
         client.cdn_base_url().trim_end_matches('/'),
@@ -125,23 +144,35 @@ fn resolve_download_url(
 /// 返回:
 /// - 下载后的字节
 async fn download_bytes(client: &reqwest::Client, url: &str) -> Result<Vec<u8>> {
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .with_context(|| "微信附件下载请求失败")?;
+    let response = client.get(url).send().await.with_context(|| {
+        t(
+            "Weixin attachment download request failed",
+            "微信附件下载请求失败",
+        )
+    })?;
     let status = response.status();
     if !status.is_success() {
-        bail!("微信附件下载失败 HTTP {status}");
+        bail!(
+            "{} HTTP {status}",
+            t("Weixin attachment download failed", "微信附件下载失败")
+        );
     }
     if let Some(len) = response.content_length() {
         if len > MAX_INBOUND_MEDIA_BYTES as u64 {
-            bail!("微信附件超过 {} bytes", MAX_INBOUND_MEDIA_BYTES);
+            bail!(
+                "{} {} bytes",
+                t("Weixin attachment exceeds", "微信附件超过"),
+                MAX_INBOUND_MEDIA_BYTES
+            );
         }
     }
     let bytes = response.bytes().await?.to_vec();
     if bytes.len() > MAX_INBOUND_MEDIA_BYTES {
-        bail!("微信附件超过 {} bytes", MAX_INBOUND_MEDIA_BYTES);
+        bail!(
+            "{} {} bytes",
+            t("Weixin attachment exceeds", "微信附件超过"),
+            MAX_INBOUND_MEDIA_BYTES
+        );
     }
     Ok(bytes)
 }
@@ -156,17 +187,40 @@ async fn download_bytes(client: &reqwest::Client, url: &str) -> Result<Vec<u8>> 
 fn parse_aes_key(aes_key: &str) -> Result<[u8; 16]> {
     let decoded = base64::engine::general_purpose::STANDARD
         .decode(aes_key)
-        .with_context(|| "微信附件 AES key 不是有效 base64")?;
+        .with_context(|| {
+            t(
+                "Weixin attachment AES key is not valid base64",
+                "微信附件 AES key 不是有效 base64",
+            )
+        })?;
     let raw = if decoded.len() == 16 {
         decoded
     } else if decoded.len() == 32 && decoded.iter().all(u8::is_ascii_hexdigit) {
-        hex::decode(std::str::from_utf8(&decoded)?)
-            .with_context(|| "微信附件 AES key 不是有效 hex")?
+        hex::decode(std::str::from_utf8(&decoded)?).with_context(|| {
+            t(
+                "Weixin attachment AES key is not valid hex",
+                "微信附件 AES key 不是有效 hex",
+            )
+        })?
     } else {
-        bail!("微信附件 AES key 长度无效: {} bytes", decoded.len());
+        bail!(
+            "{}: {} bytes",
+            t(
+                "invalid Weixin attachment AES key length",
+                "微信附件 AES key 长度无效"
+            ),
+            decoded.len()
+        );
     };
     raw.try_into().map_err(|value: Vec<u8>| {
-        anyhow::anyhow!("微信附件 AES key 长度无效: {} bytes", value.len())
+        anyhow::anyhow!(
+            "{}: {} bytes",
+            t(
+                "invalid Weixin attachment AES key length",
+                "微信附件 AES key 长度无效"
+            ),
+            value.len()
+        )
     })
 }
 
@@ -181,7 +235,15 @@ fn parse_aes_key(aes_key: &str) -> Result<[u8; 16]> {
 fn decrypt_aes_ecb(bytes: &[u8], key: &[u8; 16]) -> Result<Vec<u8>> {
     Aes128EcbDecryptor::new(key.into())
         .decrypt_padded_vec_mut::<Pkcs7>(bytes)
-        .map_err(|err| anyhow::anyhow!("微信附件 AES 解密失败: {err}"))
+        .map_err(|err| {
+            anyhow::anyhow!(
+                "{}: {err}",
+                t(
+                    "Weixin attachment AES decryption failed",
+                    "微信附件 AES 解密失败"
+                )
+            )
+        })
 }
 
 /// 推断媒体 MIME 类型。

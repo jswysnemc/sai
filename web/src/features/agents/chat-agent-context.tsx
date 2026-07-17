@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useChatAgent } from "./use-chat-agent";
+import { useI18n } from "../i18n/use-i18n";
 
 type ChatAgentContextValue = ReturnType<typeof useChatAgent>;
 
@@ -22,7 +23,8 @@ export function ChatAgentProvider({ children }: { children: ReactNode }) {
  * @returns Agent 列表、当前选择和更新方法
  */
 export function useChatAgentContext(): ChatAgentContextValue {
+  const { t } = useI18n();
   const context = useContext(ChatAgentContext);
-  if (!context) throw new Error("useChatAgentContext 必须在 ChatAgentProvider 内使用");
+  if (!context) throw new Error(t("useChatAgentContext must be used within ChatAgentProvider", "useChatAgentContext 必须在 ChatAgentProvider 内使用"));
   return context;
 }

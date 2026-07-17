@@ -1,4 +1,5 @@
 use super::onebot::OneBotTargetKind;
+use crate::i18n::text as t;
 use anyhow::{bail, Result};
 use serde_json::Value;
 
@@ -43,17 +44,30 @@ pub(crate) fn parse_message_event(payload: &Value) -> Result<Option<OneBotMessag
             let user_id = payload
                 .get("user_id")
                 .and_then(Value::as_i64)
-                .ok_or_else(|| anyhow::anyhow!("missing OneBot private user_id"))?;
+                .ok_or_else(|| {
+                    anyhow::anyhow!(t(
+                        "missing OneBot private user_id",
+                        "缺少 OneBot 私聊 user_id"
+                    ))
+                })?;
             (OneBotTargetKind::Private, user_id)
         }
         "group" => {
             let group_id = payload
                 .get("group_id")
                 .and_then(Value::as_i64)
-                .ok_or_else(|| anyhow::anyhow!("missing OneBot group_id"))?;
+                .ok_or_else(|| {
+                    anyhow::anyhow!(t("missing OneBot group_id", "缺少 OneBot group_id"))
+                })?;
             (OneBotTargetKind::Group, group_id)
         }
-        value => bail!("unsupported OneBot message_type: {value}"),
+        value => bail!(
+            "{}: {value}",
+            t(
+                "unsupported OneBot message_type",
+                "不支持的 OneBot message_type"
+            )
+        ),
     };
     let (text, media) = parse_message_payload(payload.get("message"))?;
     let prompt = build_prompt(&text, &media);
@@ -79,7 +93,10 @@ fn parse_message_payload(message: Option<&Value>) -> Result<(String, Vec<OneBotI
     match message {
         Some(Value::String(text)) => Ok(parse_cq_string_message(text)),
         Some(Value::Array(segments)) => parse_message_segments(segments),
-        Some(_) => bail!("unsupported OneBot message payload"),
+        Some(_) => bail!(t(
+            "unsupported OneBot message payload",
+            "不支持的 OneBot 消息数据"
+        )),
         None => Ok((String::new(), Vec::new())),
     }
 }
@@ -267,15 +284,19 @@ fn build_prompt(text: &str, media: &[OneBotInboundMedia]) -> String {
     }
     for item in media {
         let label = match item.kind {
-            OneBotInboundMediaKind::Image => "图片",
-            OneBotInboundMediaKind::File => "文件",
+            OneBotInboundMediaKind::Image => t("Image", "图片"),
+            OneBotInboundMediaKind::File => t("File", "文件"),
         };
         let name = item
             .name
             .as_deref()
             .filter(|name| !name.trim().is_empty())
-            .unwrap_or("未命名");
-        parts.push(format!("{label}: {name}\n来源: {}", item.source));
+            .unwrap_or(t("Unnamed", "未命名"));
+        parts.push(format!(
+            "{label}: {name}\n{}: {}",
+            t("Source", "来源"),
+            item.source
+        ));
     }
     parts.join("\n\n")
 }

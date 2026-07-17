@@ -72,7 +72,8 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
  * @returns 异步确认方法
  */
 export function useConfirm() {
+  const { t } = useI18n();
   const confirm = useContext(DialogContext);
-  if (!confirm) throw new Error("DialogProvider is missing");
+  if (!confirm) throw new Error(t("DialogProvider is missing", "缺少 DialogProvider"));
   return confirm;
 }

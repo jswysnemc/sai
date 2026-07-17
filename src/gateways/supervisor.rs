@@ -7,6 +7,7 @@ use super::weixin_bot::client::default_cdn_base_url as default_weixin_cdn_base_u
 use super::weixin_bot::login::{default_base_url as default_weixin_base_url, load_weixin_account};
 use super::weixin_bot::server::{run_weixin_bot_server, WeixinBotServerConfig};
 use crate::config::{AppConfig, QqGatewayConfig, WeixinGatewayConfig};
+use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::{Context, Result};
 use std::net::SocketAddr;
@@ -56,11 +57,15 @@ pub(crate) async fn run_configured_gateways(paths: &SaiPaths, verbose: bool) -> 
     for gateway in gateways {
         spawn_gateway(&mut tasks, paths.clone(), gateway);
     }
-    println!("Configured gateways started: {}", names.join(", "));
+    println!(
+        "{}: {}",
+        t("Configured gateways started", "已启动配置网关"),
+        names.join(", ")
+    );
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             tasks.abort_all();
-            println!("Configured gateways stopped");
+            println!("{}", t("Configured gateways stopped", "配置网关已停止"));
             Ok(())
         }
         result = tasks.join_next() => {
@@ -68,7 +73,10 @@ pub(crate) async fn run_configured_gateways(paths: &SaiPaths, verbose: bool) -> 
             match result {
                 Some(Ok(Ok(()))) => Ok(()),
                 Some(Ok(Err(err))) => Err(err),
-                Some(Err(err)) => Err(anyhow::anyhow!("gateway task failed: {err}")),
+                Some(Err(err)) => Err(anyhow::anyhow!(
+                    "{}: {err}",
+                    t("gateway task failed", "网关任务失败")
+                )),
                 None => Ok(()),
             }
         }
@@ -217,10 +225,12 @@ fn non_empty_config(value: &str) -> Option<String> {
 /// 返回:
 /// - Socket 地址
 fn parse_listen_addr(value: &str) -> Result<SocketAddr> {
-    value
-        .trim()
-        .parse::<SocketAddr>()
-        .with_context(|| format!("invalid gateway listen address: {value}"))
+    value.trim().parse::<SocketAddr>().with_context(|| {
+        format!(
+            "{}: {value}",
+            t("invalid gateway listen address", "无效网关监听地址")
+        )
+    })
 }
 
 /// 返回 QQ Webhook 默认监听地址。

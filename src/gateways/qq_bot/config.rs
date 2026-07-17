@@ -1,4 +1,5 @@
 use crate::config::QqGatewayConfig;
+use crate::i18n::text as t;
 use anyhow::{bail, Context, Result};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -19,7 +20,10 @@ impl QqBotTransport {
         match value.trim().to_ascii_lowercase().as_str() {
             "" | "websocket" | "ws" => Ok(Self::Websocket),
             "webhook" | "http" => Ok(Self::Webhook),
-            _ => bail!("unsupported QQ bot transport: {value}"),
+            _ => bail!(
+                "{}: {value}",
+                t("unsupported QQ bot transport", "不支持的 QQ 机器人传输模式")
+            ),
         }
     }
 }
@@ -70,12 +74,18 @@ pub(crate) fn resolve_qq_credentials(
         .or_else(|| cli_token.as_ref().map(|token| token.app_id.clone()))
         .or_else(|| non_empty_string(&configured.app_id))
         .or_else(|| configured_token.as_ref().map(|token| token.app_id.clone()))
-        .context("provide --token, --app-id, or configure QQ credentials in TUI")?;
+        .context(t(
+            "provide --token, --app-id, or configure QQ credentials in TUI",
+            "请提供 --token、--app-id，或在 TUI 中配置 QQ 凭据",
+        ))?;
     let client_secret = non_empty_ref(overrides.client_secret)
         .or_else(|| cli_token.map(|token| token.client_secret))
         .or_else(|| non_empty_string(&configured.client_secret))
         .or_else(|| configured_token.map(|token| token.client_secret))
-        .context("provide --token, --client-secret, or configure QQ credentials in TUI")?;
+        .context(t(
+            "provide --token, --client-secret, or configure QQ credentials in TUI",
+            "请提供 --token、--client-secret，或在 TUI 中配置 QQ 凭据",
+        ))?;
     Ok(QqBotCredentials {
         app_id,
         client_secret,
@@ -90,13 +100,19 @@ pub(crate) fn resolve_qq_credentials(
 /// 返回:
 /// - QQ 认证信息
 pub(crate) fn parse_qq_token(value: &str) -> Result<QqBotCredentials> {
-    let (app_id, client_secret) = value
-        .split_once(':')
-        .ok_or_else(|| anyhow::anyhow!("QQ token must use AppID:AppSecret format"))?;
+    let (app_id, client_secret) = value.split_once(':').ok_or_else(|| {
+        anyhow::anyhow!(t(
+            "QQ token must use AppID:AppSecret format",
+            "QQ token 必须使用 AppID:AppSecret 格式"
+        ))
+    })?;
     let app_id = app_id.trim();
     let client_secret = client_secret.trim();
     if app_id.is_empty() || client_secret.is_empty() {
-        bail!("QQ token must include both AppID and AppSecret");
+        bail!(t(
+            "QQ token must include both AppID and AppSecret",
+            "QQ token 必须同时包含 AppID 和 AppSecret"
+        ));
     }
     Ok(QqBotCredentials {
         app_id: app_id.to_string(),

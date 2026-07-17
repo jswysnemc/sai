@@ -1,3 +1,4 @@
+use crate::i18n::text as t;
 use anyhow::{bail, Context, Result};
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -13,7 +14,7 @@ use std::process::{Command, Stdio};
 pub(super) fn run_command(mut command: Command, name: &str) -> Result<()> {
     let output = command
         .output()
-        .with_context(|| format!("failed to run {name}"))?;
+        .with_context(|| format!("{} {name}", t("failed to run", "运行失败")))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -22,7 +23,11 @@ pub(super) fn run_command(mut command: Command, name: &str) -> Result<()> {
         } else {
             stderr.trim()
         };
-        bail!("{name} exited with status {}: {message}", output.status);
+        bail!(
+            "{name} {} {}: {message}",
+            t("exited with status", "退出状态"),
+            output.status
+        );
     }
     Ok(())
 }
@@ -55,6 +60,10 @@ pub(super) fn ensure_file_exists(path: &Path) -> Result<()> {
     if path.is_file() {
         Ok(())
     } else {
-        bail!("renderer did not create {}", path.display())
+        bail!(
+            "{} {}",
+            t("renderer did not create", "渲染器未生成"),
+            path.display()
+        )
     }
 }

@@ -24,7 +24,10 @@ async function start() {
   initializeTheme();
   await bootstrapSession();
   const root = document.getElementById("root");
-  if (!root) throw new Error("root element is missing");
+  if (!root) {
+    const locale = detectInitialLocale();
+    throw new Error(text(locale, "The root element is missing", "缺少根元素"));
+  }
   createRoot(root).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>

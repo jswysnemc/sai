@@ -1,5 +1,6 @@
 use super::media::MediaBytes;
 use super::message::{MediaKind, OutboundMessage};
+use crate::i18n::text as t;
 use anyhow::{bail, Context, Result};
 use reqwest::multipart;
 use serde_json::{json, Value};
@@ -33,7 +34,7 @@ impl WecomWebhookClient {
     /// - 平台响应列表
     pub(crate) async fn send(&self, message: &OutboundMessage) -> Result<Vec<Value>> {
         if message.is_empty() {
-            bail!("message is empty");
+            bail!(t("message is empty", "消息为空"));
         }
         let mut responses = Vec::new();
         if let Some(text) = message
@@ -93,14 +94,27 @@ impl WecomWebhookClient {
             .json(&payload)
             .send()
             .await
-            .context("failed to send WeCom webhook message")?;
+            .context(t(
+                "failed to send WeCom webhook message",
+                "企业微信 Webhook 消息发送失败",
+            ))?;
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         if !status.is_success() {
-            bail!("WeCom webhook returned HTTP {status}: {body}");
+            bail!(
+                "{} HTTP {status}: {body}",
+                t("WeCom webhook returned", "企业微信 Webhook 返回")
+            );
         }
-        let value = serde_json::from_str::<Value>(&body)
-            .with_context(|| format!("invalid WeCom webhook response: {body}"))?;
+        let value = serde_json::from_str::<Value>(&body).with_context(|| {
+            format!(
+                "{}: {body}",
+                t(
+                    "invalid WeCom webhook response",
+                    "无效的企业微信 Webhook 响应"
+                )
+            )
+        })?;
         ensure_ok(&value)?;
         Ok(value)
     }
@@ -126,21 +140,39 @@ impl WecomWebhookClient {
             .multipart(form)
             .send()
             .await
-            .context("failed to upload WeCom webhook media")?;
+            .context(t(
+                "failed to upload WeCom webhook media",
+                "企业微信 Webhook 媒体上传失败",
+            ))?;
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         if !status.is_success() {
-            bail!("WeCom media upload returned HTTP {status}: {body}");
+            bail!(
+                "{} HTTP {status}: {body}",
+                t("WeCom media upload returned", "企业微信媒体上传返回")
+            );
         }
-        let value = serde_json::from_str::<Value>(&body)
-            .with_context(|| format!("invalid WeCom media upload response: {body}"))?;
+        let value = serde_json::from_str::<Value>(&body).with_context(|| {
+            format!(
+                "{}: {body}",
+                t(
+                    "invalid WeCom media upload response",
+                    "无效的企业微信媒体上传响应"
+                )
+            )
+        })?;
         ensure_ok(&value)?;
         value
             .get("media_id")
             .and_then(Value::as_str)
             .map(ToString::to_string)
             .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| anyhow::anyhow!("WeCom media upload response has no media_id"))
+            .ok_or_else(|| {
+                anyhow::anyhow!(t(
+                    "WeCom media upload response has no media_id",
+                    "企业微信媒体上传响应缺少 media_id"
+                ))
+            })
     }
 }
 
@@ -154,7 +186,7 @@ impl WecomWebhookClient {
 fn ensure_ok(value: &Value) -> Result<()> {
     let errcode = value.get("errcode").and_then(Value::as_i64).unwrap_or(0);
     if errcode != 0 {
-        bail!("WeCom API error: {value}");
+        bail!("{}: {value}", t("WeCom API error", "企业微信 API 错误"));
     }
     Ok(())
 }
@@ -175,7 +207,10 @@ fn webhook_key(webhook_url: &str) -> Result<String> {
             return Ok(value.to_string());
         }
     }
-    bail!("WeCom webhook URL must contain key query parameter");
+    bail!(t(
+        "WeCom webhook URL must contain the key query parameter",
+        "企业微信 Webhook URL 必须包含 key 查询参数"
+    ));
 }
 
 #[cfg(test)]

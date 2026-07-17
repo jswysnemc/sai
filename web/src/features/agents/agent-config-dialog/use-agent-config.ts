@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../api/client";
 import type { AppConfig } from "../../../api/contracts";
+import { useI18n } from "../../i18n/use-i18n";
 
 export type AgentConfigDraft = {
   webAgent: string;
@@ -32,12 +33,13 @@ export function readAgentConfigDraft(config: AppConfig): AgentConfigDraft {
  * @returns 配置、加载状态与保存方法
  */
 export function useAgentConfig() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const query = useQuery({ queryKey: ["config"], queryFn: api.config.load });
   const save = useMutation({
     mutationFn: (draft: AgentConfigDraft) => {
       const current = query.data?.config;
-      if (!current) throw new Error("配置尚未加载");
+      if (!current) throw new Error(t("Configuration has not loaded yet", "配置尚未加载"));
       const next: AppConfig = {
         ...current,
         default_agent: draft.webAgent === "default" ? null : draft.webAgent,

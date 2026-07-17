@@ -1,3 +1,4 @@
+use crate::i18n::text as t;
 use anyhow::{bail, Context, Result};
 use std::fs;
 use std::path::PathBuf;
@@ -21,16 +22,25 @@ pub(super) fn edit_input_buffer(input: &str) -> Result<String> {
         })
         .unwrap_or_else(|| crate::platform::shell::default_editor().to_string());
     let path = temporary_buffer_path();
-    fs::write(&path, input).with_context(|| format!("failed to write {}", path.display()))?;
+    fs::write(&path, input)
+        .with_context(|| format!("{} {}", t("failed to write", "写入失败"), path.display()))?;
     let status = crate::platform::shell::editor_command(&editor, &path)
         .status()
-        .with_context(|| format!("failed to launch editor: {editor}"))?;
+        .with_context(|| {
+            format!(
+                "{}: {editor}",
+                t("failed to launch editor", "无法启动编辑器")
+            )
+        })?;
     if !status.success() {
         let _ = fs::remove_file(&path);
-        bail!("editor exited with status: {status}");
+        bail!(
+            "{}: {status}",
+            t("editor exited with status", "编辑器退出状态")
+        );
     }
-    let edited =
-        fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
+    let edited = fs::read_to_string(&path)
+        .with_context(|| format!("{} {}", t("failed to read", "读取失败"), path.display()))?;
     let _ = fs::remove_file(&path);
     Ok(edited.trim_end_matches(['\r', '\n']).to_string())
 }

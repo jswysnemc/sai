@@ -40,7 +40,10 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
                 config.plugins.web.anysearch_api_keys.join("\n"),
             )
             .secret(),
-            Field::new("SearXNG URL", config.plugins.web.searxng_base_url.clone()),
+            Field::new(
+                t("SearXNG URL", "SearXNG 地址"),
+                config.plugins.web.searxng_base_url.clone(),
+            ),
         ],
         1 => vec![
             Field::boolean(t("Enabled", "启用"), config.plugins.deep_research.enabled),
@@ -116,7 +119,10 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
                 config.plugins.image_generation.provider_type.clone(),
             )
             .choices(&["openai", "rightcode"]),
-            Field::new("Base URL", config.plugins.image_generation.base_url.clone()),
+            Field::new(
+                t("Base URL", "基础地址"),
+                config.plugins.image_generation.base_url.clone(),
+            ),
             Field::textarea(
                 "API Keys",
                 config.plugins.image_generation.api_keys.join("\n"),

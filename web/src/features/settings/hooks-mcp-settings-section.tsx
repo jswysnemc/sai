@@ -144,7 +144,7 @@ export function HooksMcpSettingsSection({ config, onConfigChange }: HooksMcpSett
                 <input
                   value={server.id}
                   onChange={(event) => updateServer(index, { id: event.target.value })}
-                  placeholder="server id"
+                  placeholder={t("Server ID", "服务标识")}
                 />
                 <Select
                   value={server.transport ?? "stdio"}

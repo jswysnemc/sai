@@ -304,26 +304,26 @@ export function DiffPane() {
             <History size={13} />
             {t("History", "历史")}
           </button>
-          <button type="button" disabled={busy} onClick={() => void runOp("fetch")} title="Fetch">
+          <button type="button" disabled={busy} onClick={() => void runOp("fetch")} title={t("Fetch remote updates", "获取远端更新")}>
             <CloudDownload size={13} />
           </button>
-          <button type="button" disabled={busy} onClick={() => void runOp("pull")} title="Pull">
+          <button type="button" disabled={busy} onClick={() => void runOp("pull")} title={t("Pull and merge", "拉取并合并")}>
             <RefreshCw size={13} />
           </button>
-          <button type="button" disabled={busy} onClick={() => void runOp("push")} title="Push">
+          <button type="button" disabled={busy} onClick={() => void runOp("push")} title={t("Push", "推送")}>
             <CloudUpload size={13} />
           </button>
           <button
             type="button"
             disabled={busy || dirtyTotal === 0}
             onClick={() => void runOp("stash_push", { message: "Sai stash" })}
-            title="Stash"
+            title={t("Stash changes", "暂存修改")}
           >
             <Archive size={13} />
           </button>
           {(state?.stash_count ?? 0) > 0 && (
             <button type="button" disabled={busy} onClick={() => void runOp("stash_pop")} title={t(`Pop stash (${state?.stash_count})`, `弹出 stash (${state?.stash_count})`)}>
-              pop
+              {t("Pop", "弹出")}
             </button>
           )}
           <button type="button" disabled={busy} onClick={() => void refreshAll()} title={t("Refresh", "刷新")} aria-label={t("Refresh", "刷新")}>
@@ -477,7 +477,7 @@ export function DiffPane() {
                       {commit.short_sha} · {commit.author_name} · {formatDate(commit.author_date, locale)}
                     </small>
                   </span>
-                  {commit.local_only && <em>local</em>}
+                  {commit.local_only && <em>{t("local", "本地")}</em>}
                 </button>
               ))}
               {commits.length === 0 && <div className="git-clean">{t("No commits yet", "暂无提交记录")}</div>}

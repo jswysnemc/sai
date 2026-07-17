@@ -1,6 +1,7 @@
 use super::auth::QqBotAuthenticator;
 use super::event::parse_message_event;
 use super::processor::{target_kind_name, QqBotProcessor, QqBotProcessorConfig};
+use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use crate::runtime_recovery::RuntimeTransportReplayDecision;
 use anyhow::{bail, Context, Result};
@@ -75,7 +76,13 @@ pub(crate) async fn run_qq_bot_websocket(
     ));
     let http_client = reqwest::Client::new();
     let mut authenticator = QqBotAuthenticator::new(config.app_id, config.client_secret);
-    println!("QQ Bot websocket gateway started");
+    println!(
+        "{}",
+        t(
+            "QQ Bot WebSocket gateway started",
+            "QQ Bot WebSocket 网关已启动"
+        )
+    );
     processor.debug_log(format!(
         "websocket gateway started base_url={} verbose={}",
         base_url, config.verbose
@@ -83,13 +90,22 @@ pub(crate) async fn run_qq_bot_websocket(
     loop {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
-                println!("QQ Bot websocket gateway stopped");
+                println!("{}", t(
+                    "QQ Bot WebSocket gateway stopped",
+                    "QQ Bot WebSocket 网关已停止"
+                ));
                 return Ok(());
             }
             result = run_websocket_once(&base_url, &http_client, &mut authenticator, processor.clone()) => {
                 match result {
-                    Ok(()) => eprintln!("【QQ网关】【WebSocket断开】连接已关闭，准备重连"),
-                    Err(err) => eprintln!("【QQ网关】【WebSocket失败】{err:#}"),
+                    Ok(()) => eprintln!("{}", t(
+                        "【QQ Gateway】【WebSocket disconnected】Connection closed; reconnecting",
+                        "【QQ网关】【WebSocket断开】连接已关闭，准备重连"
+                    )),
+                    Err(err) => eprintln!("{}{err:#}", t(
+                        "【QQ Gateway】【WebSocket failed】",
+                        "【QQ网关】【WebSocket失败】"
+                    )),
                 }
                 audit_websocket_transport_replay(&processor);
                 tokio::time::sleep(RECONNECT_DELAY).await;
@@ -116,17 +132,34 @@ async fn run_websocket_once(
 ) -> Result<()> {
     let access_token = authenticator.access_token().await?;
     let gateway_url = get_gateway_url(base_url, http_client, &access_token).await?;
-    processor.debug_log(format!("连接 WebSocket gateway_url={gateway_url}"));
+    processor.debug_log(format!(
+        "{} gateway_url={gateway_url}",
+        t("connecting to WebSocket", "连接 WebSocket")
+    ));
     let mut request = gateway_url
         .as_str()
         .into_client_request()
-        .with_context(|| format!("invalid QQ websocket gateway URL: {gateway_url}"))?;
+        .with_context(|| {
+            format!(
+                "{}: {gateway_url}",
+                t(
+                    "invalid QQ WebSocket gateway URL",
+                    "无效的 QQ WebSocket 网关地址"
+                )
+            )
+        })?;
     request
         .headers_mut()
         .insert(USER_AGENT, HeaderValue::from_static(QQ_GATEWAY_USER_AGENT));
-    let (mut websocket, _) = connect_async(request)
-        .await
-        .with_context(|| format!("failed to connect QQ websocket gateway: {gateway_url}"))?;
+    let (mut websocket, _) = connect_async(request).await.with_context(|| {
+        format!(
+            "{}: {gateway_url}",
+            t(
+                "failed to connect QQ WebSocket gateway",
+                "QQ WebSocket 网关连接失败"
+            )
+        )
+    })?;
     let heartbeat_interval = read_hello(&mut websocket).await?;
     send_identify(&mut websocket, &access_token).await?;
     run_dispatch_loop(websocket, heartbeat_interval, processor).await
@@ -152,17 +185,32 @@ async fn get_gateway_url(
         .header("Authorization", format!("QQBot {access_token}"))
         .send()
         .await
-        .with_context(|| format!("failed to request QQ gateway URL: {url}"))?;
+        .with_context(|| {
+            format!(
+                "{}: {url}",
+                t("failed to request QQ gateway URL", "QQ 网关地址请求失败")
+            )
+        })?;
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        bail!("QQ gateway URL API returned HTTP {status}: {body}");
+        bail!(
+            "{} HTTP {status}: {body}",
+            t("QQ gateway URL API returned", "QQ 网关地址 API 返回")
+        );
     }
-    let parsed = serde_json::from_str::<GatewayUrlResponse>(&body)
-        .with_context(|| format!("invalid QQ gateway URL response: {body}"))?;
+    let parsed = serde_json::from_str::<GatewayUrlResponse>(&body).with_context(|| {
+        format!(
+            "{}: {body}",
+            t("invalid QQ gateway URL response", "无效的 QQ 网关地址响应")
+        )
+    })?;
     let gateway_url = parsed.url.trim();
     if gateway_url.is_empty() {
-        bail!("QQ gateway URL response has empty url");
+        bail!(t(
+            "QQ gateway URL response has an empty url",
+            "QQ 网关地址响应中的 url 为空"
+        ));
     }
     Ok(gateway_url.to_string())
 }
@@ -206,7 +254,10 @@ async fn send_identify(websocket: &mut QqWebSocket, access_token: &str) -> Resul
     websocket
         .send(Message::Text(payload.to_string().into()))
         .await
-        .context("failed to send QQ websocket identify")?;
+        .context(t(
+            "failed to send QQ WebSocket identify",
+            "QQ WebSocket identify 发送失败",
+        ))?;
     Ok(())
 }
 
@@ -300,7 +351,10 @@ async fn send_heartbeat(websocket: &mut QqWebSocket, last_sequence: Option<u64>)
     websocket
         .send(Message::Text(payload.to_string().into()))
         .await
-        .context("failed to send QQ websocket heartbeat")?;
+        .context(t(
+            "failed to send QQ WebSocket heartbeat",
+            "QQ WebSocket 心跳发送失败",
+        ))?;
     Ok(())
 }
 
@@ -320,7 +374,13 @@ fn record_websocket_transport_close(
 ) {
     // 1. WebSocket reconnect 是 transport 边界，不能复用进程关闭策略终止网关进程
     if let Err(err) = processor.record_websocket_transport_close(reason, last_sequence) {
-        eprintln!("【QQ网关】【恢复记录失败】{err:#}");
+        eprintln!(
+            "{}{err:#}",
+            t(
+                "【QQ Gateway】【Recovery record failed】",
+                "【QQ网关】【恢复记录失败】"
+            )
+        );
     }
 }
 
@@ -340,7 +400,13 @@ fn advance_websocket_transport_cursor(
 ) {
     // 1. cursor/ack 是 transport 恢复边界，不写入 conversation turn
     if let Err(err) = processor.advance_websocket_transport_cursor(cursor_seq, acked_seq) {
-        eprintln!("【QQ网关】【游标记录失败】{err:#}");
+        eprintln!(
+            "{}{err:#}",
+            t(
+                "【QQ Gateway】【Cursor record failed】",
+                "【QQ网关】【游标记录失败】"
+            )
+        );
     }
 }
 
@@ -354,7 +420,13 @@ fn advance_websocket_transport_cursor(
 fn audit_websocket_transport_replay(processor: &QqBotProcessor) {
     // 1. QQ Gateway 当前没有 replay 请求实现，只能把未确认区间暴露为恢复记录
     if let Err(err) = processor.audit_websocket_transport_replay() {
-        eprintln!("【QQ网关】【重放审计失败】{err:#}");
+        eprintln!(
+            "{}{err:#}",
+            t(
+                "【QQ Gateway】【Replay audit failed】",
+                "【QQ网关】【重放审计失败】"
+            )
+        );
     }
 }
 
@@ -370,7 +442,13 @@ fn audit_websocket_transport_replay(processor: &QqBotProcessor) {
 fn record_websocket_transport_event(processor: &QqBotProcessor, sequence: u64, payload: &Value) {
     // 1. transport payload 先落本地 inbox，后续 gap 才能从本地 replay source 恢复
     if let Err(err) = processor.record_websocket_transport_event(sequence, payload) {
-        eprintln!("【QQ网关】【重放事件记录失败】{err:#}");
+        eprintln!(
+            "{}{err:#}",
+            t(
+                "【QQ Gateway】【Replay event record failed】",
+                "【QQ网关】【重放事件记录失败】"
+            )
+        );
     }
 }
 
@@ -395,7 +473,13 @@ fn begin_websocket_transport_replay_event(
         }) => match processor.load_websocket_transport_replay_events(replay_start, replay_end) {
             Ok(payloads) => WebsocketReplayAction::ApplyBuffered(payloads),
             Err(err) => {
-                eprintln!("【QQ网关】【重放读取失败】{err:#}");
+                eprintln!(
+                    "{}{err:#}",
+                    t(
+                        "【QQ Gateway】【Replay read failed】",
+                        "【QQ网关】【重放读取失败】"
+                    )
+                );
                 WebsocketReplayAction::Skip
             }
         },
@@ -404,7 +488,11 @@ fn begin_websocket_transport_replay_event(
             acked_seq,
         }) => {
             eprintln!(
-                "【QQ网关】【重放跳过】跳过已确认事件 sequence={sequence} acked_seq={acked_seq}"
+                "{} sequence={sequence} acked_seq={acked_seq}",
+                t(
+                    "【QQ Gateway】【Replay skipped】Skipping acknowledged event",
+                    "【QQ网关】【重放跳过】跳过已确认事件"
+                )
             );
             WebsocketReplayAction::Skip
         }
@@ -415,12 +503,22 @@ fn begin_websocket_transport_replay_event(
             acked_seq,
         }) => {
             eprintln!(
-                "【QQ网关】【重放缺口】跳过缺口后的事件 sequence={sequence} missing={missing_start}..{missing_end} acked_seq={acked_seq}"
+                "{} sequence={sequence} missing={missing_start}..{missing_end} acked_seq={acked_seq}",
+                t(
+                    "【QQ Gateway】【Replay gap】Skipping event after unavailable gap",
+                    "【QQ网关】【重放缺口】跳过缺口后的事件"
+                )
             );
             WebsocketReplayAction::Skip
         }
         Err(err) => {
-            eprintln!("【QQ网关】【重放状态失败】{err:#}");
+            eprintln!(
+                "{}{err:#}",
+                t(
+                    "【QQ Gateway】【Replay state failed】",
+                    "【QQ网关】【重放状态失败】"
+                )
+            );
             WebsocketReplayAction::ApplyCurrent
         }
     }
@@ -437,29 +535,44 @@ async fn read_json_message(websocket: &mut QqWebSocket) -> Result<Option<Value>>
     let message = websocket
         .next()
         .await
-        .ok_or_else(|| anyhow::anyhow!("QQ websocket closed"))?
-        .context("failed to read QQ websocket message")?;
+        .ok_or_else(|| anyhow::anyhow!(t("QQ WebSocket closed", "QQ WebSocket 已关闭")))?
+        .context(t(
+            "failed to read QQ WebSocket message",
+            "QQ WebSocket 消息读取失败",
+        ))?;
     match message {
         Message::Text(text) => {
-            let value = serde_json::from_str::<Value>(&text)
-                .with_context(|| format!("invalid QQ websocket text payload: {text}"))?;
+            let value = serde_json::from_str::<Value>(&text).with_context(|| {
+                format!(
+                    "{}: {text}",
+                    t(
+                        "invalid QQ WebSocket text payload",
+                        "无效的 QQ WebSocket 文本数据"
+                    )
+                )
+            })?;
             Ok(Some(value))
         }
         Message::Binary(bytes) => {
-            let value = serde_json::from_slice::<Value>(&bytes)
-                .context("invalid QQ websocket binary payload")?;
+            let value = serde_json::from_slice::<Value>(&bytes).context(t(
+                "invalid QQ WebSocket binary payload",
+                "无效的 QQ WebSocket 二进制数据",
+            ))?;
             Ok(Some(value))
         }
         Message::Ping(bytes) => {
-            websocket
-                .send(Message::Pong(bytes))
-                .await
-                .context("failed to send QQ websocket pong")?;
+            websocket.send(Message::Pong(bytes)).await.context(t(
+                "failed to send QQ WebSocket pong",
+                "QQ WebSocket pong 发送失败",
+            ))?;
             Ok(None)
         }
         Message::Pong(_) => Ok(None),
         Message::Close(frame) => {
-            bail!("QQ websocket closed by server: {frame:?}");
+            bail!(
+                "{}: {frame:?}",
+                t("QQ WebSocket closed by server", "服务端关闭 QQ WebSocket")
+            );
         }
         _ => Ok(None),
     }
@@ -479,7 +592,8 @@ async fn handle_gateway_payload(payload: Value, processor: Arc<QqBotProcessor>) 
     }
     if let Some(event) = parse_message_event(&payload)? {
         processor.debug_log(format!(
-            "收到 WebSocket 消息 event_type={} target_kind={} target_id={} media_count={}",
+            "{} event_type={} target_kind={} target_id={} media_count={}",
+            t("received WebSocket message", "收到 WebSocket 消息"),
             event.event_type,
             target_kind_name(event.target_kind),
             event.target_id,
@@ -487,7 +601,13 @@ async fn handle_gateway_payload(payload: Value, processor: Arc<QqBotProcessor>) 
         ));
         tokio::spawn(async move {
             if let Err(err) = processor.handle_message_event(event).await {
-                eprintln!("【QQ网关】【消息处理失败】{err:#}");
+                eprintln!(
+                    "{}{err:#}",
+                    t(
+                        "【QQ Gateway】【Message processing failed】",
+                        "【QQ网关】【消息处理失败】"
+                    )
+                );
             }
         });
     }
@@ -507,6 +627,11 @@ fn heartbeat_interval(payload: &Value) -> Result<Duration> {
         .and_then(|data| data.get("heartbeat_interval"))
         .and_then(Value::as_u64)
         .filter(|value| *value > 0)
-        .ok_or_else(|| anyhow::anyhow!("QQ websocket hello has no heartbeat_interval"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!(t(
+                "QQ WebSocket hello has no heartbeat_interval",
+                "QQ WebSocket hello 缺少 heartbeat_interval"
+            ))
+        })?;
     Ok(Duration::from_millis(interval_ms))
 }

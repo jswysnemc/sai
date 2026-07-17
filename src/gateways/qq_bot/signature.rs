@@ -1,3 +1,4 @@
+use crate::i18n::text as t;
 use anyhow::{bail, Context, Result};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier};
 
@@ -23,7 +24,7 @@ fn signing_key_from_secret(bot_secret: &str) -> Result<SigningKey> {
 fn repeated_seed(bot_secret: &str) -> Result<[u8; 32]> {
     let source = bot_secret.as_bytes();
     if source.is_empty() {
-        bail!("QQ bot secret is empty");
+        bail!(t("QQ bot secret is empty", "QQ 机器人密钥为空"));
     }
     let mut seed = [0_u8; 32];
     for index in 0..seed.len() {
@@ -68,19 +69,30 @@ pub(crate) fn verify_event_signature(
     signature_hex: &str,
 ) -> Result<()> {
     let key = signing_key_from_secret(bot_secret)?;
-    let signature_bytes =
-        hex::decode(signature_hex.trim()).with_context(|| "invalid QQ webhook signature hex")?;
+    let signature_bytes = hex::decode(signature_hex.trim()).with_context(|| {
+        t(
+            "invalid QQ webhook signature hex",
+            "无效的 QQ Webhook 十六进制签名",
+        )
+    })?;
     if signature_bytes.len() != 64 || signature_bytes[63] & 224 != 0 {
-        bail!("invalid QQ webhook signature shape");
+        bail!(t(
+            "invalid QQ webhook signature shape",
+            "无效的 QQ Webhook 签名结构"
+        ));
     }
-    let signature = Signature::try_from(signature_bytes.as_slice())
-        .with_context(|| "invalid QQ webhook signature bytes")?;
+    let signature = Signature::try_from(signature_bytes.as_slice()).with_context(|| {
+        t(
+            "invalid QQ webhook signature bytes",
+            "无效的 QQ Webhook 签名字节",
+        )
+    })?;
     let mut message = Vec::with_capacity(timestamp.len() + body.len());
     message.extend_from_slice(timestamp.as_bytes());
     message.extend_from_slice(body);
     key.verifying_key()
         .verify(&message, &signature)
-        .with_context(|| "invalid QQ webhook signature")
+        .with_context(|| t("invalid QQ webhook signature", "无效的 QQ Webhook 签名"))
 }
 
 #[cfg(test)]

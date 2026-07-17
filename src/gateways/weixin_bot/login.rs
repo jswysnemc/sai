@@ -1,5 +1,6 @@
 use super::client::default_cdn_base_url;
 use crate::config::AppConfig;
+use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::{bail, Context, Result};
 use base64::Engine;
@@ -97,17 +98,23 @@ pub(crate) async fn run_weixin_login(paths: &SaiPaths, config: WeixinLoginConfig
     let client = reqwest::Client::new();
     let mut base_url = config.base_url.trim_end_matches('/').to_string();
     let qr = fetch_qrcode(&client, &base_url, &config.bot_type).await?;
-    println!("微信二维码登录链接:");
+    println!("{}", t("Weixin QR login link:", "微信二维码登录链接:"));
     println!("{}", qr.qrcode_img_content);
     println!();
     print_qrcode(&qr.qrcode_img_content)?;
-    println!("请使用手机微信扫描二维码并确认登录。");
+    println!(
+        "{}",
+        t(
+            "Scan the QR code with Weixin on your phone and confirm login.",
+            "请使用手机微信扫描二维码并确认登录。"
+        )
+    );
     let deadline = Instant::now() + Duration::from_secs(config.timeout_secs);
     let mut verify_code = None::<String>;
     let mut printed_scanned = false;
     loop {
         if Instant::now() >= deadline {
-            bail!("微信二维码登录超时");
+            bail!(t("Weixin QR login timed out", "微信二维码登录超时"));
         }
         let status = poll_qrcode_status(&client, &base_url, &qr.qrcode, verify_code.as_deref())
             .await
@@ -123,7 +130,13 @@ pub(crate) async fn run_weixin_login(paths: &SaiPaths, config: WeixinLoginConfig
             "wait" => {}
             "scaned" => {
                 if !printed_scanned {
-                    println!("已扫码，等待手机确认。");
+                    println!(
+                        "{}",
+                        t(
+                            "QR code scanned; waiting for confirmation on the phone.",
+                            "已扫码，等待手机确认。"
+                        )
+                    );
                     printed_scanned = true;
                 }
             }
@@ -139,23 +152,42 @@ pub(crate) async fn run_weixin_login(paths: &SaiPaths, config: WeixinLoginConfig
                 verify_code = Some(read_verify_code()?);
             }
             "verify_code_blocked" => {
-                bail!("微信验证码被拒绝，请重新运行登录命令");
+                bail!(t(
+                    "The Weixin verification code was rejected; run the login command again",
+                    "微信验证码被拒绝，请重新运行登录命令"
+                ));
             }
             "expired" => {
-                bail!("微信二维码已过期，请重新运行登录命令");
+                bail!(t(
+                    "The Weixin QR code expired; run the login command again",
+                    "微信二维码已过期，请重新运行登录命令"
+                ));
             }
             "binded_redirect" => {
-                bail!("该微信账号已经绑定，但本次未返回新 token；如果本机已有保存账号，可直接运行 weixin-server");
+                bail!(t(
+                    "This Weixin account is already linked, but no new token was returned; if an account is already saved locally, run weixin-server directly",
+                    "该微信账号已经绑定，但本次未返回新 token；如果本机已有保存账号，可直接运行 weixin-server"
+                ));
             }
             "confirmed" => {
                 let token = status
                     .bot_token
                     .filter(|value| !value.trim().is_empty())
-                    .ok_or_else(|| anyhow::anyhow!("微信登录成功但响应中没有 bot_token"))?;
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(t(
+                            "Weixin login succeeded but the response has no bot_token",
+                            "微信登录成功但响应中没有 bot_token"
+                        ))
+                    })?;
                 let account_id = status
                     .ilink_bot_id
                     .filter(|value| !value.trim().is_empty())
-                    .ok_or_else(|| anyhow::anyhow!("微信登录成功但响应中没有 ilink_bot_id"))?;
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(t(
+                            "Weixin login succeeded but the response has no ilink_bot_id",
+                            "微信登录成功但响应中没有 ilink_bot_id"
+                        ))
+                    })?;
                 let saved = SavedWeixinAccount {
                     account_id,
                     token,
@@ -169,17 +201,25 @@ pub(crate) async fn run_weixin_login(paths: &SaiPaths, config: WeixinLoginConfig
                 };
                 let path = save_weixin_account(paths, &saved)?;
                 update_weixin_gateway_config(paths, &saved)?;
-                println!("微信登录成功。");
-                println!("账号: {}", saved.account_id);
-                println!("凭证已保存: {}", path.display());
+                println!("{}", t("Weixin login succeeded.", "微信登录成功。"));
+                println!("{}: {}", t("Account", "账号"), saved.account_id);
                 println!(
-                    "启动命令: sai gateway weixin-server --account {}",
+                    "{}: {}",
+                    t("Credentials saved", "凭证已保存"),
+                    path.display()
+                );
+                println!(
+                    "{}: sai gateway weixin-server --account {}",
+                    t("Start command", "启动命令"),
                     saved.account_id
                 );
                 return Ok(());
             }
             other => {
-                bail!("未知微信登录状态: {other}");
+                bail!(
+                    "{}: {other}",
+                    t("unknown Weixin login status", "未知微信登录状态")
+                );
             }
         }
     }
@@ -224,21 +264,43 @@ pub(crate) fn load_weixin_account(
         None => {
             let latest = weixin_state_dir(paths).join("latest.json");
             let raw = std::fs::read_to_string(&latest).with_context(|| {
-                format!("failed to read latest Weixin account: {}", latest.display())
+                format!(
+                    "{}: {}",
+                    t(
+                        "failed to read latest Weixin account",
+                        "读取最近微信账号失败"
+                    ),
+                    latest.display()
+                )
             })?;
             serde_json::from_str::<Value>(&raw)?
                 .get("account_id")
                 .and_then(Value::as_str)
                 .map(ToOwned::to_owned)
                 .filter(|value| !value.trim().is_empty())
-                .ok_or_else(|| anyhow::anyhow!("latest Weixin account file has no account_id"))?
+                .ok_or_else(|| {
+                    anyhow::anyhow!(t(
+                        "latest Weixin account file has no account_id",
+                        "最近微信账号文件缺少 account_id"
+                    ))
+                })?
         }
     };
     let path = account_file(paths, &account_id);
-    let raw = std::fs::read_to_string(&path)
-        .with_context(|| format!("failed to read Weixin account: {}", path.display()))?;
-    serde_json::from_str::<SavedWeixinAccount>(&raw)
-        .with_context(|| format!("invalid Weixin account file: {}", path.display()))
+    let raw = std::fs::read_to_string(&path).with_context(|| {
+        format!(
+            "{}: {}",
+            t("failed to read Weixin account", "读取微信账号失败"),
+            path.display()
+        )
+    })?;
+    serde_json::from_str::<SavedWeixinAccount>(&raw).with_context(|| {
+        format!(
+            "{}: {}",
+            t("invalid Weixin account file", "无效的微信账号文件"),
+            path.display()
+        )
+    })
 }
 
 /// 请求微信登录二维码。
@@ -266,7 +328,12 @@ pub(crate) async fn fetch_qrcode(
         .json(&json!({ "local_token_list": [] }))
         .send()
         .await
-        .with_context(|| "failed to request Weixin login QR code")?;
+        .with_context(|| {
+            t(
+                "failed to request Weixin login QR code",
+                "微信登录二维码请求失败",
+            )
+        })?;
     parse_response(response, "Weixin get_bot_qrcode").await
 }
 
@@ -301,7 +368,7 @@ pub(crate) async fn poll_qrcode_status(
         .timeout(QR_POLL_TIMEOUT)
         .send()
         .await
-        .with_context(|| "failed to poll Weixin QR status")?;
+        .with_context(|| t("failed to poll Weixin QR status", "微信二维码状态轮询失败"))?;
     parse_response(response, "Weixin get_qrcode_status").await
 }
 
@@ -320,9 +387,14 @@ where
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        bail!("{label} returned HTTP {status}: {body}");
+        bail!("{label} {} HTTP {status}: {body}", t("returned", "返回"));
     }
-    serde_json::from_str::<T>(&body).with_context(|| format!("invalid {label} response: {body}"))
+    serde_json::from_str::<T>(&body).with_context(|| {
+        format!(
+            "{} {label}: {body}",
+            t("invalid response from", "无效响应来源")
+        )
+    })
 }
 
 /// 在终端打印二维码。
@@ -333,7 +405,8 @@ where
 /// 返回:
 /// - 是否打印成功
 fn print_qrcode(content: &str) -> Result<()> {
-    let code = QrCode::new(content.as_bytes()).with_context(|| "failed to build QR code")?;
+    let code = QrCode::new(content.as_bytes())
+        .with_context(|| t("failed to build QR code", "二维码生成失败"))?;
     let image = code
         .render::<unicode::Dense1x2>()
         .dark_color(unicode::Dense1x2::Dark)
@@ -351,13 +424,19 @@ fn print_qrcode(content: &str) -> Result<()> {
 /// 返回:
 /// - 验证码
 fn read_verify_code() -> Result<String> {
-    print!("需要验证码，请输入后回车: ");
+    print!(
+        "{}: ",
+        t(
+            "Verification code required; enter it and press Enter",
+            "需要验证码，请输入后回车"
+        )
+    );
     io::stdout().flush()?;
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     let code = input.trim().to_string();
     if code.is_empty() {
-        bail!("验证码不能为空");
+        bail!(t("verification code cannot be empty", "验证码不能为空"));
     }
     Ok(code)
 }

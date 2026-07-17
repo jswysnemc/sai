@@ -398,6 +398,7 @@ fn compact_text(value: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::i18n::text as t;
 
     #[test]
     fn command_tools_use_run_label() {
@@ -410,11 +411,11 @@ mod tests {
                 "background_command",
                 Some(r#"{"action":"start","command":"sleep 1"}"#)
             ),
-            "Background start sleep 1"
+            format!("{} sleep 1", t("Background start", "启动后台命令"))
         );
         assert_eq!(
             tool_event_label("background_command", Some(r#"{"action":"list"}"#)),
-            "Background list"
+            t("Background list", "后台命令列表")
         );
     }
 

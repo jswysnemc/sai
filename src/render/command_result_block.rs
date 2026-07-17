@@ -23,14 +23,14 @@ pub(crate) fn write_command_result_blocks(stdout: &mut io::Stdout, output: &str)
     if !result.stderr.trim().is_empty() {
         let label = result
             .exit_code
-            .map(|code| format!("err exit {code}"))
-            .unwrap_or_else(|| "err".to_string());
+            .map(|code| format!("{} {code}", t("err exit", "错误 退出码")))
+            .unwrap_or_else(|| t("err", "错误").to_string());
         write_output_block(stdout, &label, &result.stderr)?;
     } else if !result.success {
         let label = result
             .exit_code
-            .map(|code| format!("err exit {code}"))
-            .unwrap_or_else(|| "err".to_string());
+            .map(|code| format!("{} {code}", t("err exit", "错误 退出码")))
+            .unwrap_or_else(|| t("err", "错误").to_string());
         write_output_block(
             stdout,
             &label,
@@ -53,15 +53,15 @@ pub(crate) fn write_command_result_blocks(stdout: &mut io::Stdout, output: &str)
 /// - 写入是否成功
 pub(crate) fn write_command_error_block(stdout: &mut io::Stdout, output: &str) -> Result<()> {
     let Some(result) = parse_command_result(output) else {
-        return write_output_block(stdout, "err", output);
+        return write_output_block(stdout, t("err", "错误"), output);
     };
     if result.success {
         return Ok(());
     }
     let label = result
         .exit_code
-        .map(|code| format!("err exit {code}"))
-        .unwrap_or_else(|| "err".to_string());
+        .map(|code| format!("{} {code}", t("err exit", "错误 退出码")))
+        .unwrap_or_else(|| t("err", "错误").to_string());
     let message = if result.stderr.trim().is_empty() {
         result.stdout.as_str()
     } else {
@@ -204,14 +204,14 @@ pub(crate) fn render_command_result_view(output: &str) -> String {
     if !result.stderr.trim().is_empty() {
         let label = result
             .exit_code
-            .map(|code| format!("err exit {code}"))
-            .unwrap_or_else(|| "err".to_string());
+            .map(|code| format!("{} {code}", t("err exit", "错误 退出码")))
+            .unwrap_or_else(|| t("err", "错误").to_string());
         parts.push(render_output_block(&label, &result.stderr));
     } else if !result.success {
         let label = result
             .exit_code
-            .map(|code| format!("err exit {code}"))
-            .unwrap_or_else(|| "err".to_string());
+            .map(|code| format!("{} {code}", t("err exit", "错误 退出码")))
+            .unwrap_or_else(|| t("err", "错误").to_string());
         parts.push(render_output_block(
             &label,
             t(

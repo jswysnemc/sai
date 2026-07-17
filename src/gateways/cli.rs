@@ -16,6 +16,7 @@ use super::weixin_bot::login::{
 };
 use super::weixin_bot::server::{run_weixin_bot_server, WeixinBotServerConfig};
 use crate::config::AppConfig;
+use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::{bail, Context, Result};
 use clap::{Args, Subcommand};
@@ -471,10 +472,12 @@ fn non_empty_arg(arg: Option<String>, configured: &str) -> Option<String> {
 /// 返回:
 /// - Socket 地址
 fn parse_listen_addr(value: &str) -> Result<SocketAddr> {
-    value
-        .trim()
-        .parse::<SocketAddr>()
-        .with_context(|| format!("invalid gateway listen address: {value}"))
+    value.trim().parse::<SocketAddr>().with_context(|| {
+        format!(
+            "{}: {value}",
+            t("invalid gateway listen address", "无效网关监听地址")
+        )
+    })
 }
 
 /// 返回 QQ Webhook 默认监听地址。
@@ -501,7 +504,11 @@ fn enter_gateway_workspace(paths: &SaiPaths, verbose: bool) -> Result<()> {
     std::fs::create_dir_all(&workspace)?;
     std::env::set_current_dir(&workspace)?;
     if verbose {
-        eprintln!("【网关】【工作目录】{}", workspace.display());
+        eprintln!(
+            "{}{}",
+            t("【Gateway】【Workspace】", "【网关】【工作目录】"),
+            workspace.display()
+        );
     }
     Ok(())
 }
@@ -539,7 +546,10 @@ fn outbound_message(
         });
     }
     if message.is_empty() {
-        bail!("provide --text, --image, or --file");
+        bail!(t(
+            "provide --text, --image, or --file",
+            "请提供 --text、--image 或 --file"
+        ));
     }
     Ok(message)
 }
@@ -552,10 +562,19 @@ fn outbound_message(
 /// 返回:
 /// - 文件是否有效
 fn validate_file(path: &PathBuf) -> Result<()> {
-    let metadata = std::fs::metadata(path)
-        .map_err(|err| anyhow::anyhow!("invalid media path {}: {err}", path.display()))?;
+    let metadata = std::fs::metadata(path).map_err(|err| {
+        anyhow::anyhow!(
+            "{} {}: {err}",
+            t("invalid media path", "无效媒体路径"),
+            path.display()
+        )
+    })?;
     if !metadata.is_file() {
-        bail!("media path is not a file: {}", path.display());
+        bail!(
+            "{}: {}",
+            t("media path is not a file", "媒体路径不是文件"),
+            path.display()
+        );
     }
     Ok(())
 }
@@ -572,7 +591,10 @@ mod tests {
     fn rejects_empty_outbound_message() {
         let err = outbound_message(None, Vec::new(), Vec::new()).unwrap_err();
 
-        assert!(err.to_string().contains("provide --text"));
+        assert!(err.to_string().contains(t(
+            "provide --text, --image, or --file",
+            "请提供 --text、--image 或 --file"
+        )));
     }
 
     #[test]

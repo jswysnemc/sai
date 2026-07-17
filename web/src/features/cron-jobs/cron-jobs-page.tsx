@@ -72,7 +72,7 @@ export function CronJobsPage() {
         </div>
       </header>
       <div className="cron-page-body">
-        <header className="cron-hero"><div className="cron-hero-icon"><CalendarClock size={24} /></div><div><span className="cron-eyebrow">Gateway scheduler</span><h1>{t("Task scheduling", "任务调度")}</h1><p>{t("Due tasks run only while the Gateway process is active.", "只有 Gateway 进程运行时才会执行到期任务。")}</p></div></header>
+        <header className="cron-hero"><div className="cron-hero-icon"><CalendarClock size={24} /></div><div><span className="cron-eyebrow">{t("Gateway scheduler", "网关调度器")}</span><h1>{t("Task scheduling", "任务调度")}</h1><p>{t("Due tasks run only while the Gateway process is active.", "只有 Gateway 进程运行时才会执行到期任务。")}</p></div></header>
         <div className="cron-layout"><CronJobForm sessions={sessions.data ?? []} pending={create.isPending} onSubmit={handleCreate} /><section className="cron-list-panel"><div className="cron-section-heading"><CalendarClock size={18} /><div><h2>{t("Task status", "任务状态")}</h2><p>{t(`${jobs.data?.length ?? 0} tasks; status refreshes every 5 seconds.`, `${jobs.data?.length ?? 0} 个任务，状态每 5 秒刷新。`)}</p></div></div>{jobs.isLoading ? <div className="cron-loading"><LoaderLabel /></div> : <CronJobList jobs={jobs.data ?? []} pendingId={pendingId} onToggle={handleToggle} onRemove={(job) => void handleRemove(job)} />}</section></div>
         {error && <div className="cron-error">{error.message}</div>}
       </div>

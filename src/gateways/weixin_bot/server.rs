@@ -9,6 +9,7 @@ use crate::gateways::channel_context::{save_latest_channel_context, ChannelConte
 use crate::gateways::channel_tools::{register_channel_message_tool, ActiveChannelTarget};
 use crate::gateways::command_intercept::handle_gateway_command;
 use crate::gateways::session::ensure_gateway_session;
+use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::{bail, Context, Result};
 use base64::Engine;
@@ -48,7 +49,13 @@ pub(crate) async fn run_weixin_bot_server(
     let http_client = reqwest::Client::new();
     let agent_lock = Mutex::new(());
     let mut updates_buf = None::<String>;
-    println!("Weixin bot long-poll server started");
+    println!(
+        "{}",
+        t(
+            "Weixin bot long-poll server started",
+            "微信机器人长轮询服务已启动"
+        )
+    );
     client.debug_log(format!(
         "server started base_url={} cdn_base_url={} verbose={}",
         client.base_url(),
@@ -58,7 +65,10 @@ pub(crate) async fn run_weixin_bot_server(
     loop {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
-                println!("Weixin bot long-poll server stopped");
+                println!("{}", t(
+                    "Weixin bot long-poll server stopped",
+                    "微信机器人长轮询服务已停止"
+                ));
                 return Ok(());
             }
             result = client.get_updates(updates_buf.as_deref()) => {
@@ -72,7 +82,7 @@ pub(crate) async fn run_weixin_bot_server(
                         handle_updates(paths, &client, &http_client, &agent_lock, &response).await?;
                     }
                     Err(err) => {
-                        eprintln!("Weixin getupdates failed: {err:#}");
+                        eprintln!("{}: {err:#}", t("Weixin getupdates failed", "微信 getupdates 失败"));
                         tokio::time::sleep(RETRY_DELAY).await;
                     }
                 }
@@ -101,17 +111,28 @@ async fn handle_updates(
 ) -> Result<()> {
     let ret = response.get("ret").and_then(Value::as_i64).unwrap_or(0);
     if ret != 0 {
-        bail!("Weixin getupdates ret={ret}: {response}");
+        bail!(
+            "{} ret={ret}: {response}",
+            t("Weixin getupdates failed", "微信 getupdates 失败")
+        );
     }
     let Some(messages) = response.get("msgs").and_then(Value::as_array) else {
-        client.debug_log("getupdates 无消息数组");
+        client.debug_log(t(
+            "getupdates response has no message array",
+            "getupdates 无消息数组",
+        ));
         return Ok(());
     };
-    client.debug_log(format!("getupdates 收到消息数: {}", messages.len()));
+    client.debug_log(format!(
+        "{}: {}",
+        t("getupdates message count", "getupdates 收到消息数"),
+        messages.len()
+    ));
     for message in messages {
         if let Some(event) = parse_weixin_message(message) {
             client.debug_log(format!(
-                "处理微信消息 from={} media_count={} prompt_chars={}",
+                "{} from={} media_count={} prompt_chars={}",
+                t("processing Weixin message", "处理微信消息"),
                 event.from_user_id,
                 event.media.len(),
                 event.prompt.chars().count()
@@ -185,19 +206,28 @@ async fn prepare_agent_input(
                 if saved.kind == WeixinInboundMediaKind::Image && image_url.is_none() {
                     match saved_image_to_data_url(&saved) {
                         Ok(data_url) => image_url = Some(data_url),
-                        Err(err) => prompt.push_str(&format!("\n\n图片视觉输入准备失败: {err}")),
+                        Err(err) => prompt.push_str(&format!(
+                            "\n\n{}: {err}",
+                            t(
+                                "failed to prepare image vision input",
+                                "图片视觉输入准备失败"
+                            )
+                        )),
                     }
                 }
             }
             Err(err) => {
                 weixin_client.debug_log(format!(
-                    "入站附件保存失败 kind={} source={} error={err:#}",
+                    "{} kind={} source={} error={err:#}",
+                    t("failed to save inbound attachment", "入站附件保存失败"),
                     inbound_media_label(media.kind),
                     media.source
                 ));
                 prompt.push_str(&format!(
-                    "\n\n用户发送的{}保存失败: {err}\n来源: {}",
+                    "\n\n{} {}: {err}\n{}: {}",
+                    t("Failed to save user-sent", "用户发送的"),
                     inbound_media_label(media.kind),
+                    t("Source", "来源"),
                     media.source
                 ));
             }
@@ -216,15 +246,18 @@ async fn prepare_agent_input(
 /// - 无
 fn append_saved_media_prompt(prompt: &mut String, saved: &SavedInboundMedia) {
     prompt.push_str(&format!(
-        "\n\n用户发送了{}: {}\n已保存到: {}\n媒体类型: {}",
+        "\n\n{} {}: {}\n{}: {}\n{}: {}",
+        t("The user sent", "用户发送了"),
         inbound_media_label(saved.kind),
         saved.name,
+        t("Saved to", "已保存到"),
         saved.path.display(),
+        t("Media type", "媒体类型"),
         saved.mime_type
     ));
 }
 
-/// 返回入站媒体中文名称。
+/// 返回入站媒体本地化名称。
 ///
 /// 参数:
 /// - `kind`: 入站媒体类型
@@ -233,10 +266,10 @@ fn append_saved_media_prompt(prompt: &mut String, saved: &SavedInboundMedia) {
 /// - 媒体类型名称
 fn inbound_media_label(kind: WeixinInboundMediaKind) -> &'static str {
     match kind {
-        WeixinInboundMediaKind::Image => "图片",
-        WeixinInboundMediaKind::Voice => "语音",
-        WeixinInboundMediaKind::Video => "视频",
-        WeixinInboundMediaKind::File => "文件",
+        WeixinInboundMediaKind::Image => t("image", "图片"),
+        WeixinInboundMediaKind::Voice => t("voice message", "语音"),
+        WeixinInboundMediaKind::Video => t("video", "视频"),
+        WeixinInboundMediaKind::File => t("file", "文件"),
     }
 }
 
@@ -294,7 +327,10 @@ async fn run_agent(
     .with_channel(channel);
     let output = run_gateway_submission(paths, config, registry, submission).await?;
     let Some(completion) = output.completion else {
-        bail!("gateway runner completed without assistant content");
+        bail!(t(
+            "gateway runner completed without assistant content",
+            "网关运行完成，但没有助手回复内容"
+        ));
     };
     Ok(completion.content)
 }
@@ -336,10 +372,22 @@ async fn run_gateway_submission(
 /// 返回:
 /// - 图片 data URL
 fn saved_image_to_data_url(saved: &SavedInboundMedia) -> Result<String> {
-    let bytes = std::fs::read(&saved.path)
-        .with_context(|| format!("读取已保存微信图片失败: {}", saved.path.display()))?;
-    let content_type = image_mime(&bytes)
-        .ok_or_else(|| anyhow::anyhow!("已保存微信图片不是模型支持的图片格式"))?;
+    let bytes = std::fs::read(&saved.path).with_context(|| {
+        format!(
+            "{}: {}",
+            t(
+                "failed to read saved Weixin image",
+                "读取已保存微信图片失败"
+            ),
+            saved.path.display()
+        )
+    })?;
+    let content_type = image_mime(&bytes).ok_or_else(|| {
+        anyhow::anyhow!(t(
+            "the saved Weixin image format is not supported by the model",
+            "已保存微信图片不是模型支持的图片格式"
+        ))
+    })?;
     let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
     Ok(format!("data:{content_type};base64,{encoded}"))
 }

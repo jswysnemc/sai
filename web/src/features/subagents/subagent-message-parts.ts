@@ -1,5 +1,6 @@
 import type { Subagent, SubagentTimelineEntry } from "../../api/contracts";
 import type { LiveMessagePart, ToolLifecycle } from "../chat/run-event-reducer";
+import { text, type Locale } from "../i18n/locale";
 
 /**
  * 将子智能体时间线转换为主对话统一消息部件。
@@ -7,12 +8,14 @@ import type { LiveMessagePart, ToolLifecycle } from "../chat/run-event-reducer";
  * @param entries 子智能体时间线
  * @param running 子智能体是否仍在运行
  * @param timestamp 最近事件时间
+ * @param locale 当前界面语言
  * @returns 可交给 MessageParts 渲染的有序部件
  */
 export function subagentMessageParts(
   entries: SubagentTimelineEntry[],
   running: boolean,
-  timestamp = ""
+  timestamp = "",
+  locale: Locale = "zh-CN"
 ): LiveMessagePart[] {
   return entries.map((entry, index) => {
     if (entry.kind === "reasoning") {
@@ -30,7 +33,7 @@ export function subagentMessageParts(
     return {
       id: `subagent-tool-${entry.step}-${index}`,
       type: "tool" as const,
-      tool: subagentToolLifecycle(entry, running)
+      tool: subagentToolLifecycle(entry, running, locale)
     };
   });
 }
@@ -40,18 +43,20 @@ export function subagentMessageParts(
  *
  * @param entry 子智能体工具时间线条目
  * @param running 子智能体是否仍在运行
+ * @param locale 当前界面语言
  * @returns 主对话工具生命周期
  */
 function subagentToolLifecycle(
   entry: Extract<SubagentTimelineEntry, { kind: "tool" }>,
-  running: boolean
+  running: boolean,
+  locale: Locale
 ): ToolLifecycle {
   return {
     id: `subagent-tool-${entry.step}`,
     name: entry.name,
     argumentsPreview: entry.args_preview,
     arguments: entry.args_preview,
-    progress: entry.ok == null && running ? "正在执行" : "",
+    progress: entry.ok == null && running ? text(locale, "Running", "正在执行") : "",
     output: entry.output_preview ?? "",
     status: entry.ok == null ? (running ? "running" : "failed") : entry.ok ? "completed" : "failed"
   };

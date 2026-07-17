@@ -1,3 +1,4 @@
+use crate::i18n::text as t;
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Deserializer};
 use serde_json::json;
@@ -107,18 +108,31 @@ impl QqBotAuthenticator {
             }))
             .send()
             .await
-            .with_context(|| "failed to request QQ access token")?;
+            .with_context(|| {
+                t(
+                    "failed to request QQ access token",
+                    "QQ access token 请求失败",
+                )
+            })?;
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         if !status.is_success() {
-            bail!("QQ token API returned HTTP {status}: {body}");
+            bail!(
+                "{} HTTP {status}: {body}",
+                t("QQ token API returned", "QQ token API 返回")
+            );
         }
         let parsed = serde_json::from_str::<AccessTokenResponse>(&body)
-            .with_context(|| "invalid QQ token response")?;
+            .with_context(|| t("invalid QQ token response", "无效的 QQ token 响应"))?;
         let access_token = parsed
             .access_token
             .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| anyhow::anyhow!("QQ token response has no access_token"))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!(t(
+                    "QQ token response has no access_token",
+                    "QQ token 响应缺少 access_token"
+                ))
+            })?;
         let expires_in = parsed.expires_in.unwrap_or(7200).max(120);
         Ok(CachedToken {
             access_token,

@@ -2,6 +2,7 @@ use super::process_control::{
     refresh_gateway_processes, spawn_gateway_process, stop_gateway_process,
 };
 use crate::config::AppConfig;
+use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use crate::state::StateStore;
 use anyhow::{Context, Result};
@@ -268,7 +269,10 @@ fn ensure_scheduler_process(paths: &SaiPaths, config: &AppConfig) -> Result<()> 
 /// 返回:
 /// - shell 命令
 fn command_for_args(args: &[&str]) -> Result<String> {
-    let exe = std::env::current_exe().context("failed to resolve current executable")?;
+    let exe = std::env::current_exe().context(t(
+        "failed to resolve current executable",
+        "无法确定当前可执行文件路径",
+    ))?;
     let mut parts = vec![shell_quote(&exe.display().to_string())];
     parts.extend(args.iter().map(|arg| shell_quote(arg)));
     Ok(parts.join(" "))

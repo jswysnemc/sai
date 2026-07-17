@@ -1,3 +1,4 @@
+use crate::i18n::text as t;
 use serde_json::Value;
 
 /// 生成后台命令调用展示标签。
@@ -9,16 +10,25 @@ use serde_json::Value;
 /// - 面向终端展示的后台命令动作标签
 pub(crate) fn background_command_call_label(arguments: Option<&str>) -> String {
     let Some(arguments) = arguments else {
-        return "Background command".to_string();
+        return t("Background command", "后台命令").to_string();
     };
     let action = background_action(arguments).unwrap_or_else(|| "command".to_string());
     match action.as_str() {
-        "start" => label_with_target("Background start", start_target(arguments)),
-        "list" => "Background list".to_string(),
-        "output" => label_with_target("Background output", task_id_target(arguments)),
-        "stop" => label_with_target("Background stop", task_id_target(arguments)),
-        "cleanup" => "Background cleanup".to_string(),
-        _ => "Background command".to_string(),
+        "start" => label_with_target(
+            t("Background start", "启动后台命令"),
+            start_target(arguments),
+        ),
+        "list" => t("Background list", "后台命令列表").to_string(),
+        "output" => label_with_target(
+            t("Background output", "后台命令输出"),
+            task_id_target(arguments),
+        ),
+        "stop" => label_with_target(
+            t("Background stop", "停止后台命令"),
+            task_id_target(arguments),
+        ),
+        "cleanup" => t("Background cleanup", "清理后台命令").to_string(),
+        _ => t("Background command", "后台命令").to_string(),
     }
 }
 
@@ -43,7 +53,7 @@ pub(crate) fn is_background_command_start(arguments: &str) -> bool {
 /// 返回:
 /// - 命令块动作标题
 pub(crate) fn background_command_block_action() -> &'static str {
-    "Background"
+    t("Background", "后台")
 }
 
 /// 生成后台命令结果摘要。
@@ -149,7 +159,11 @@ fn start_result_label(task: &Value) -> String {
     let id = string_field(task, "id").map(short_id);
     let pid = task.get("pid").and_then(Value::as_u64);
     let timeout = task.get("timeout_seconds").and_then(Value::as_u64);
-    let mut parts = vec![format!("Background started {}", compact_text(label))];
+    let mut parts = vec![format!(
+        "{} {}",
+        t("Background started", "后台命令已启动"),
+        compact_text(label)
+    )];
     if let Some(id) = id {
         parts.push(format!("id={id}"));
     }
@@ -175,7 +189,12 @@ fn list_result_label(tasks: &[Value]) -> String {
     let stopped = count_status(tasks, "stopped");
     let timed_out = count_status(tasks, "timed_out");
     format!(
-        "Background list running={running} exited={exited} stopped={stopped} timed_out={timed_out}"
+        "{} {}={running} {}={exited} {}={stopped} {}={timed_out}",
+        t("Background list", "后台命令列表"),
+        t("running", "运行中"),
+        t("exited", "已退出"),
+        t("stopped", "已停止"),
+        t("timed_out", "已超时")
     )
 }
 
@@ -193,7 +212,12 @@ fn output_result_label(task: &Value, value: &Value) -> String {
         .unwrap_or_else(|| "task".to_string());
     let stdout_lines = text_line_count(value.get("stdout"));
     let stderr_lines = text_line_count(value.get("stderr"));
-    format!("Background output {id} stdout={stdout_lines} lines stderr={stderr_lines} lines")
+    format!(
+        "{} {id} stdout={stdout_lines} {} stderr={stderr_lines} {}",
+        t("Background output", "后台命令输出"),
+        t("lines", "行"),
+        t("lines", "行")
+    )
 }
 
 /// 生成停止结果摘要。
@@ -214,9 +238,18 @@ fn stop_result_label(task: &Value, value: &Value) -> String {
         .and_then(Value::as_bool)
         .unwrap_or(false);
     if was_running {
-        format!("Background stop {id} {status}")
+        format!(
+            "{} {id} {}",
+            t("Background stop", "停止后台命令"),
+            localized_status(&status)
+        )
     } else {
-        format!("Background stop {id} already_{status}")
+        format!(
+            "{} {id} {}_{}",
+            t("Background stop", "停止后台命令"),
+            t("already", "已经"),
+            localized_status(&status)
+        )
     }
 }
 
@@ -237,7 +270,29 @@ fn cleanup_result_label(value: &Value) -> String {
         .get("remaining")
         .and_then(Value::as_u64)
         .unwrap_or_default();
-    format!("Background cleanup removed={removed} remaining={remaining}")
+    format!(
+        "{} {}={removed} {}={remaining}",
+        t("Background cleanup", "清理后台命令"),
+        t("removed", "已移除"),
+        t("remaining", "剩余")
+    )
+}
+
+/// 返回后台任务状态的本地化名称。
+///
+/// 参数:
+/// - `status`: 后台任务状态
+///
+/// 返回:
+/// - 本地化状态名称
+fn localized_status(status: &str) -> &str {
+    match status {
+        "running" => t("running", "运行中"),
+        "exited" => t("exited", "已退出"),
+        "stopped" => t("stopped", "已停止"),
+        "timed_out" => t("timed_out", "已超时"),
+        _ => status,
+    }
 }
 
 /// 统计指定状态任务数量。
@@ -389,21 +444,24 @@ mod tests {
             background_command_call_label(Some(
                 r#"{"action":"start","label":"dev server","command":"npm run dev"}"#
             )),
-            "Background start dev server"
+            format!("{} dev server", t("Background start", "启动后台命令"))
         );
         assert_eq!(
             background_command_call_label(Some(r#"{"action":"list"}"#)),
-            "Background list"
+            t("Background list", "后台命令列表")
         );
         assert_eq!(
             background_command_call_label(Some(
                 r#"{"action":"output","task_id":"1730000000-12345"}"#
             )),
-            "Background output 1730000000-12345"
+            format!(
+                "{} 1730000000-12345",
+                t("Background output", "后台命令输出")
+            )
         );
         assert_eq!(
             background_command_call_label(Some(r#"{"action":"cleanup"}"#)),
-            "Background cleanup"
+            t("Background cleanup", "清理后台命令")
         );
     }
 
@@ -422,7 +480,10 @@ mod tests {
 
         assert_eq!(
             background_command_result_label(&output).unwrap(),
-            "Background started dev server id=1730000000-12345 pid=12345 timeout=none"
+            format!(
+                "{} dev server id=1730000000-12345 pid=12345 timeout=none",
+                t("Background started", "后台命令已启动")
+            )
         );
     }
 
@@ -461,19 +522,40 @@ mod tests {
 
         assert_eq!(
             background_command_result_label(&list).unwrap(),
-            "Background list running=2 exited=1 stopped=1 timed_out=1"
+            format!(
+                "{} {}=2 {}=1 {}=1 {}=1",
+                t("Background list", "后台命令列表"),
+                t("running", "运行中"),
+                t("exited", "已退出"),
+                t("stopped", "已停止"),
+                t("timed_out", "已超时")
+            )
         );
         assert_eq!(
             background_command_result_label(&output).unwrap(),
-            "Background output 1730000000-12345 stdout=2 lines stderr=0 lines"
+            format!(
+                "{} 1730000000-12345 stdout=2 {} stderr=0 {}",
+                t("Background output", "后台命令输出"),
+                t("lines", "行"),
+                t("lines", "行")
+            )
         );
         assert_eq!(
             background_command_result_label(&stop).unwrap(),
-            "Background stop 1730000000-12345 stopped"
+            format!(
+                "{} 1730000000-12345 {}",
+                t("Background stop", "停止后台命令"),
+                t("stopped", "已停止")
+            )
         );
         assert_eq!(
             background_command_result_label(&cleanup).unwrap(),
-            "Background cleanup removed=2 remaining=1"
+            format!(
+                "{} {}=2 {}=1",
+                t("Background cleanup", "清理后台命令"),
+                t("removed", "已移除"),
+                t("remaining", "剩余")
+            )
         );
     }
 }

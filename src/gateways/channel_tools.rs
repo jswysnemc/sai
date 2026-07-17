@@ -7,6 +7,7 @@ use super::weixin_bot::client::WeixinBotClient;
 use super::weixin_bot::login::{default_base_url as default_weixin_base_url, load_weixin_account};
 use super::weixin_bot::media::{send_local_media, WeixinOutboundMediaKind};
 use crate::config::AppConfig;
+use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use crate::tools::{ToolRegistry, ToolSpec};
 use anyhow::{bail, Context, Result};
@@ -170,7 +171,7 @@ async fn resolve_target(
         "" | "current" => Ok(current),
         "qq" => resolve_qq_target(paths, config).await,
         "weixin" | "wechat" => resolve_weixin_target(paths, config),
-        value => bail!("unsupported channel: {value}"),
+        value => bail!("{}: {value}", t("unsupported channel", "不支持的渠道")),
     }
 }
 
@@ -190,7 +191,10 @@ async fn resolve_qq_target(paths: &SaiPaths, config: &AppConfig) -> Result<Activ
         ..
     }) = load_latest_channel_context(paths, "qq")?
     else {
-        bail!("no recent QQ channel target");
+        bail!(t(
+            "no recent QQ channel target",
+            "没有最近使用的 QQ 渠道目标"
+        ));
     };
     resolve_qq_context_target(config, &target_kind, &target_id, msg_id).await
 }
@@ -247,7 +251,10 @@ fn resolve_weixin_target(paths: &SaiPaths, config: &AppConfig) -> Result<ActiveC
         ..
     }) = load_latest_channel_context(paths, "weixin")?
     else {
-        bail!("no recent Weixin channel target");
+        bail!(t(
+            "no recent Weixin channel target",
+            "没有最近使用的微信渠道目标"
+        ));
     };
     resolve_weixin_context_target(paths, config, to_user_id, context_token)
 }
@@ -330,8 +337,14 @@ async fn send_qq_message(
                 path: required_path(path)?,
             }],
         },
-        "video" => bail!("QQ channel does not support video via send_channel_message"),
-        value => bail!("unsupported message kind: {value}"),
+        "video" => bail!(t(
+            "QQ channel does not support video via send_channel_message",
+            "QQ 渠道不支持通过 send_channel_message 发送视频"
+        )),
+        value => bail!(
+            "{}: {value}",
+            t("unsupported message kind", "不支持的消息类型")
+        ),
     };
     let responses = client.send(&message, msg_id.as_deref()).await?;
     Ok(serde_json::to_string_pretty(&json!({
@@ -396,7 +409,10 @@ async fn send_weixin_message(
                 "message_id": message_id,
             }))?)
         }
-        value => bail!("unsupported message kind: {value}"),
+        value => bail!(
+            "{}: {value}",
+            t("unsupported message kind", "不支持的消息类型")
+        ),
     }
 }
 
@@ -409,7 +425,7 @@ async fn send_weixin_message(
 /// 返回:
 /// - 字符串值
 fn required_string(args: &Value, key: &str) -> Result<String> {
-    optional_string(args, key).with_context(|| format!("{key} is required"))
+    optional_string(args, key).with_context(|| format!("{key} {}", t("is required", "不能为空")))
 }
 
 /// 读取可选字符串参数。
@@ -436,8 +452,10 @@ fn optional_string(args: &Value, key: &str) -> Option<String> {
 /// 返回:
 /// - 文本
 fn required_text(text: Option<String>) -> Result<String> {
-    text.filter(|value| !value.trim().is_empty())
-        .context("text is required for text messages")
+    text.filter(|value| !value.trim().is_empty()).context(t(
+        "text is required for text messages",
+        "文本消息必须提供 text",
+    ))
 }
 
 /// 读取必填路径。
@@ -448,7 +466,10 @@ fn required_text(text: Option<String>) -> Result<String> {
 /// 返回:
 /// - 路径
 fn required_path(path: Option<PathBuf>) -> Result<PathBuf> {
-    path.context("path is required for media messages")
+    path.context(t(
+        "path is required for media messages",
+        "媒体消息必须提供 path",
+    ))
 }
 
 /// 读取非空配置字符串。
@@ -517,7 +538,9 @@ mod tests {
     fn required_string_rejects_missing_values() {
         let err = required_string(&json!({}), "kind").unwrap_err();
 
-        assert!(err.to_string().contains("kind is required"));
+        assert!(err
+            .to_string()
+            .contains(&format!("kind {}", t("is required", "不能为空"))));
     }
 
     /// 验证文本消息必须提供非空文本。
@@ -531,7 +554,10 @@ mod tests {
     fn required_text_rejects_blank_text() {
         let err = required_text(Some("   ".to_string())).unwrap_err();
 
-        assert!(err.to_string().contains("text is required"));
+        assert!(err.to_string().contains(t(
+            "text is required for text messages",
+            "文本消息必须提供 text"
+        )));
     }
 
     /// 验证媒体消息必须提供本机路径。
@@ -545,7 +571,10 @@ mod tests {
     fn required_path_rejects_missing_path() {
         let err = required_path(None).unwrap_err();
 
-        assert!(err.to_string().contains("path is required"));
+        assert!(err.to_string().contains(t(
+            "path is required for media messages",
+            "媒体消息必须提供 path"
+        )));
     }
 
     /// 验证非空配置读取会去除空白。

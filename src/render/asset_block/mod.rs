@@ -6,6 +6,7 @@ mod table_math;
 #[cfg(test)]
 mod tests;
 
+use crate::i18n::text as t;
 use crate::render::style::{ASSET_ERROR_STYLE, RESET};
 
 pub(crate) use table_math::{
@@ -59,7 +60,7 @@ pub(crate) fn is_asset_language(lang: &str) -> bool {
 /// - 终端图片协议文本或错误提示
 pub(crate) fn render_asset_block(lang: &str, lines: &[String]) -> String {
     let Some(kind) = asset_kind_from_lang(lang) else {
-        return render_error("asset", "unsupported asset language");
+        return render_error("asset", t("unsupported asset language", "不支持的资源语言"));
     };
     render_asset(kind, &lines.join("\n"))
 }
@@ -111,7 +112,7 @@ fn asset_kind_from_lang(lang: &str) -> Option<AssetKind> {
 /// - 终端图片协议文本或错误提示
 fn render_asset(kind: AssetKind, source: &str) -> String {
     if source.trim().is_empty() {
-        return render_error(kind.label(), "content is empty");
+        return render_error(kind.label(), t("content is empty", "内容为空"));
     }
     if matches!(kind, AssetKind::Math) {
         return math::render_source(source, MathRenderMode::Block);

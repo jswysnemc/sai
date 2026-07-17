@@ -27,7 +27,7 @@ pub(super) fn edit_provider_form(
     let mut fields = vec![
         Field::new(t("Config ID", "配置 ID"), provider.id.clone()),
         Field::new(t("Display name", "显示名称"), provider.display_name.clone()),
-        Field::new("Base URL", provider.base_url.clone()),
+        Field::new(t("Base URL", "基础地址"), provider.base_url.clone()),
         Field::new(t("Protocol", "协议"), provider.protocol.clone()).choices(&[
             "auto",
             "openai-chat",
@@ -67,7 +67,10 @@ pub(super) fn edit_provider_form(
             t("Timeout seconds", "超时秒数"),
             provider.timeout_seconds.to_string(),
         ),
-        Field::new("Temperature", provider.temperature.to_string()),
+        Field::new(
+            t("Temperature", "温度参数"),
+            provider.temperature.to_string(),
+        ),
         Field::new(
             t("Thinking level", "思考等级"),
             provider.thinking_level.clone(),

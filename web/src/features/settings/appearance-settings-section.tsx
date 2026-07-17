@@ -39,8 +39,8 @@ export function AppearanceSettingsSection({ theme, onThemeChange }: AppearanceSe
           <Select
             value={locale}
             options={[
-              { value: "zh-CN", label: "简体中文", description: "Chinese (Simplified)" },
-              { value: "en-US", label: "English", description: "英语" }
+              { value: "zh-CN", label: "简体中文", description: t("Chinese (Simplified)", "简体中文") },
+              { value: "en-US", label: "English", description: t("English", "英语") }
             ]}
             ariaLabel={t("Interface language", "界面语言")}
             onChange={setLocale}

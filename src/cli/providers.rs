@@ -95,7 +95,9 @@ pub(super) fn run_set_thinking(paths: &SaiPaths, args: SetThinkingArgs) -> Resul
         .providers
         .iter_mut()
         .find(|provider| provider.id == active)
-        .ok_or_else(|| anyhow::anyhow!("provider not found: {active}"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("{}: {active}", t("provider not found", "未找到 provider"))
+        })?;
     let current_level = display_thinking_level(&provider.thinking_level);
     let provider_name = provider.display_name.clone();
     let level = resolve_thinking_level_arg(args.level.as_deref(), &current_level, &provider_name)?;
@@ -171,7 +173,7 @@ pub(super) fn normalize_thinking_level(level: &str) -> Result<&'static str> {
         .iter()
         .copied()
         .find(|item| *item == level)
-        .ok_or_else(|| anyhow::anyhow!("invalid thinking level: {level}"))
+        .ok_or_else(|| anyhow::anyhow!("{}: {level}", t("invalid thinking level", "无效思考等级")))
 }
 
 /// 返回用于展示的思考等级。
@@ -208,7 +210,9 @@ pub(super) fn apply_thinking_override(config: &mut AppConfig, level: Option<&str
         .providers
         .iter_mut()
         .find(|provider| provider.id == active)
-        .ok_or_else(|| anyhow::anyhow!("provider not found: {active}"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("{}: {active}", t("provider not found", "未找到 provider"))
+        })?;
     provider.thinking_level = level.to_string();
     Ok(())
 }

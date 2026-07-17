@@ -1,3 +1,4 @@
+use crate::i18n::text as t;
 use anyhow::{bail, Result};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -66,7 +67,10 @@ pub fn parse_control_command(
     if matches_surface_alias(&name, surface, "compact", &["压缩"]) {
         // Gateway 兼容旧版 `/压缩 --keep N` 写法；当前实现统一忽略旧参数
         if surface == ControlSurface::Repl && !rest.trim().is_empty() {
-            bail!("compact command does not accept arguments");
+            bail!(t(
+                "compact command does not accept arguments",
+                "compact 命令不接受参数"
+            ));
         }
         return Ok(Some(ControlCommand::Compact));
     }
@@ -148,8 +152,8 @@ fn parse_clear_command(input: &str, surface: ControlSurface) -> Result<ControlCo
         {
             Ok(ControlCommand::ClearMemory)
         }
-        [scope] => bail!("unknown clear scope: {scope}"),
-        _ => bail!("too many clear arguments"),
+        [scope] => bail!("{}: {scope}", t("unknown clear scope", "未知清空范围")),
+        _ => bail!(t("too many clear arguments", "clear 参数过多")),
     }
 }
 
@@ -164,12 +168,10 @@ fn parse_model_args(input: &str) -> Result<Option<usize>> {
     let parts = input.split_whitespace().collect::<Vec<_>>();
     match parts.as_slice() {
         [] => Ok(None),
-        [index] => {
-            Ok(Some(index.parse::<usize>().map_err(|_| {
-                anyhow::anyhow!("invalid model index: {index}")
-            })?))
-        }
-        _ => bail!("too many model arguments"),
+        [index] => Ok(Some(index.parse::<usize>().map_err(|_| {
+            anyhow::anyhow!("{}: {index}", t("invalid model index", "无效模型序号"))
+        })?)),
+        _ => bail!(t("too many model arguments", "model 参数过多")),
     }
 }
 

@@ -2,6 +2,12 @@ use super::args::Cli;
 use crate::i18n::{apply_locale_override_from_args, is_zh, text as t};
 use clap::{Arg, ArgAction, CommandFactory, FromArgMatches};
 
+mod background;
+mod gateway;
+
+use self::background::localize_background_commands_command;
+use self::gateway::localize_gateway_command;
+
 pub(crate) fn parse() -> Cli {
     apply_locale_override_from_args(std::env::args_os());
     let matches = localized_command().get_matches();
@@ -276,93 +282,6 @@ fn localize_ask_command(command: clap::Command) -> clap::Command {
         })
 }
 
-fn localize_background_commands_command(command: clap::Command) -> clap::Command {
-    command
-        .mut_subcommand("start", |subcommand| {
-            subcommand.about(t(
-                "Start a managed background command",
-                "启动受管理后台命令",
-            ))
-        })
-        .mut_subcommand("list", |subcommand| {
-            subcommand.about(t("List background commands", "列出后台命令"))
-        })
-        .mut_subcommand("output", |subcommand| {
-            subcommand.about(t("Read background command output", "读取后台命令输出"))
-        })
-        .mut_subcommand("stop", |subcommand| {
-            subcommand.about(t("Stop a background command", "停止后台命令"))
-        })
-        .mut_subcommand("cleanup", |subcommand| {
-            subcommand.about(t(
-                "Cleanup finished background commands",
-                "清理已结束后台命令",
-            ))
-        })
-}
-
-fn localize_gateway_command(command: clap::Command) -> clap::Command {
-    command
-        .mut_subcommand("start", |subcommand| {
-            subcommand.about(t(
-                "Start all enabled gateway channels from configuration",
-                "启动配置中已启用的所有渠道网关",
-            ))
-        })
-        .mut_subcommand("wecom-webhook", |subcommand| {
-            subcommand
-                .about(t(
-                    "Send text, images, or files through a WeCom group webhook",
-                    "通过企业微信群机器人 Webhook 发送文本、图片或文件",
-                ))
-                .mut_arg("webhook_url", |arg| {
-                    arg.help(t("Full WeCom webhook URL", "企业微信 Webhook 完整地址"))
-                })
-        })
-        .mut_subcommand("qq-official", |subcommand| {
-            subcommand.about(t(
-                "Send text, images, or files through QQ Bot OpenAPI",
-                "通过 QQ 官方机器人 OpenAPI 发送文本、图片或文件",
-            ))
-        })
-        .mut_subcommand("qq-bot", |subcommand| {
-            subcommand.about(t(
-                "Receive QQ Bot events through websocket by default, invoke Sai, and reply through QQ Bot OpenAPI",
-                "默认通过 WebSocket 接收 QQ 官方机器人事件，调用 Sai 后通过 QQ Bot OpenAPI 回复",
-            ))
-        })
-        .mut_subcommand("qq-bot-webhook", |subcommand| {
-            subcommand.about(t(
-                "Receive QQ Bot webhook events through the legacy HTTP callback mode",
-                "通过旧 HTTP 回调模式接收 QQ 官方机器人 Webhook 事件",
-            ))
-        })
-        .mut_subcommand("onebot", |subcommand| {
-            subcommand.about(t(
-                "Send text, images, or files through a OneBot HTTP gateway such as NapCat",
-                "通过 NapCat 等 OneBot HTTP 网关发送文本、图片或文件",
-            ))
-        })
-        .mut_subcommand("onebot-server", |subcommand| {
-            subcommand.about(t(
-                "Receive OneBot HTTP events, invoke Sai, and reply through OneBot",
-                "接收 OneBot HTTP 事件，调用 Sai 后通过 OneBot 回复",
-            ))
-        })
-        .mut_subcommand("weixin-login", |subcommand| {
-            subcommand.about(t(
-                "Log in to Weixin iLink by QR code and save the bot token",
-                "通过二维码登录微信 iLink 并保存机器人 token",
-            ))
-        })
-        .mut_subcommand("weixin-server", |subcommand| {
-            subcommand.about(t(
-                "Receive Weixin iLink long-poll events by token or saved account",
-                "通过 token 或已保存账号接收微信 iLink 长轮询事件",
-            ))
-        })
-}
-
 fn localize_set_command(command: clap::Command) -> clap::Command {
     command.mut_subcommand("thinking", |subcommand| {
         subcommand
@@ -479,6 +398,9 @@ fn localize_weixin_login_command(command: clap::Command) -> clap::Command {
         .mut_arg("timeout_secs", |arg| {
             arg.help(t("Login timeout in seconds", "登录超时秒数"))
         })
+        .mut_arg("base_url", |arg| {
+            arg.help(t("Weixin iLink base URL", "微信 iLink 基础地址"))
+        })
 }
 
 fn localize_config_command(command: clap::Command) -> clap::Command {
@@ -492,12 +414,19 @@ fn localize_config_command(command: clap::Command) -> clap::Command {
 }
 
 fn localize_clear_command(command: clap::Command) -> clap::Command {
-    command.mut_arg("scope", |arg| {
-        arg.help(t(
-            "all also clears long-term memory",
-            "all 同时清空长期记忆",
-        ))
-    })
+    command
+        .mut_arg("scope", |arg| {
+            arg.help(t(
+                "all also clears long-term memory",
+                "all 同时清空长期记忆",
+            ))
+        })
+        .mut_arg("memory", |arg| {
+            arg.help(t(
+                "Clear assistant memory without deleting the current session",
+                "清空助手记忆，但保留当前会话",
+            ))
+        })
 }
 
 fn localize_compact_command(command: clap::Command) -> clap::Command {
@@ -554,6 +483,15 @@ fn localize_kb_command(mut command: clap::Command) -> clap::Command {
         })
         .mut_subcommand("remove", |subcommand| {
             subcommand.mut_arg("file", |arg| arg.help(t("File to remove", "要移除的文件")))
+        })
+        .mut_subcommand("embed", |subcommand| {
+            subcommand.mut_subcommand("reindex", |nested| {
+                nested
+                    .about(t("Rebuild semantic embeddings", "重建语义嵌入索引"))
+                    .mut_arg("quiet", |arg| {
+                        arg.help(t("Suppress progress output", "不输出处理进度"))
+                    })
+            })
         })
 }
 

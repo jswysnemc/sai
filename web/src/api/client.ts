@@ -47,6 +47,7 @@ import type {
   UndoSessionResult,
   WeixinLoginSnapshot
 } from "./contracts";
+import { detectInitialLocale, text } from "../features/i18n/locale";
 
 /** 使用 URL 启动令牌建立同源会话。 */
 export async function bootstrapSession(): Promise<void> {
@@ -57,7 +58,7 @@ export async function bootstrapSession(): Promise<void> {
     method: "POST",
     credentials: "same-origin"
   });
-  if (!response.ok) throw new Error("Sai Web 访问令牌无效");
+  if (!response.ok) throw new Error(text(detectInitialLocale(), "The Sai Web access token is invalid", "Sai Web 访问令牌无效"));
   url.searchParams.delete("token");
   window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
 }

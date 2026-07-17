@@ -5,6 +5,7 @@ use super::onebot_event::{
 };
 use crate::agent::AgentMode;
 use crate::gateways::command_intercept::handle_gateway_command;
+use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::{bail, Context, Result};
 use axum::extract::State;
@@ -56,10 +57,22 @@ pub(crate) async fn run_onebot_server(paths: &SaiPaths, config: OneBotServerConf
         .route("/", post(handle_onebot_event))
         .route("/onebot", post(handle_onebot_event))
         .with_state(state);
-    let listener = TcpListener::bind(listen)
-        .await
-        .with_context(|| format!("failed to bind OneBot inbound server: {listen}"))?;
-    println!("OneBot inbound server listening on http://{listen}");
+    let listener = TcpListener::bind(listen).await.with_context(|| {
+        format!(
+            "{}: {listen}",
+            t(
+                "failed to bind OneBot inbound server",
+                "无法绑定 OneBot 入站服务"
+            )
+        )
+    })?;
+    println!(
+        "{} http://{listen}",
+        t(
+            "OneBot inbound server listening on",
+            "OneBot 入站服务监听地址"
+        )
+    );
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -80,13 +93,22 @@ async fn handle_onebot_event(
         Ok(Some(event)) => {
             tokio::spawn(async move {
                 if let Err(err) = process_message_event(state, event).await {
-                    eprintln!("OneBot inbound event processing failed: {err:#}");
+                    eprintln!(
+                        "{}: {err:#}",
+                        t(
+                            "OneBot inbound event processing failed",
+                            "OneBot 入站事件处理失败"
+                        )
+                    );
                 }
             });
         }
         Ok(None) => {}
         Err(err) => {
-            eprintln!("OneBot inbound event ignored: {err:#}");
+            eprintln!(
+                "{}: {err:#}",
+                t("OneBot inbound event ignored", "已忽略 OneBot 入站事件")
+            );
         }
     }
     Json(json!({ "status": "ok" }))
@@ -152,13 +174,20 @@ async fn prepare_agent_input(
                 match media_to_data_url(&state.http_client, media).await {
                     Ok(data_url) => image_url = Some(data_url),
                     Err(err) => {
-                        prompt.push_str(&format!("\n\n图片读取失败: {err}"));
+                        prompt.push_str(&format!(
+                            "\n\n{}: {err}",
+                            t("failed to read image", "图片读取失败")
+                        ));
                     }
                 }
             }
             OneBotInboundMediaKind::File => {
                 if let Ok(path) = download_file_to_cache(state, media).await {
-                    prompt.push_str(&format!("\n\n文件已保存到: {}", path.display()));
+                    prompt.push_str(&format!(
+                        "\n\n{}: {}",
+                        t("File saved to", "文件已保存到"),
+                        path.display()
+                    ));
                 }
             }
             _ => {}
@@ -187,7 +216,10 @@ async fn run_agent(paths: &SaiPaths, prompt: String, image_url: Option<String>) 
     );
     let output = crate::runner::run_submission(paths, submission).await?;
     let Some(completion) = output.completion else {
-        bail!("gateway runner completed without assistant content");
+        bail!(t(
+            "gateway runner completed without assistant content",
+            "网关运行完成，但没有助手回复内容"
+        ));
     };
     Ok(completion.content)
 }
@@ -208,8 +240,13 @@ async fn media_to_data_url(client: &reqwest::Client, media: &OneBotInboundMedia)
         download_bytes(client, &media.source).await?
     } else {
         let path = local_source_path(&media.source);
-        let bytes = std::fs::read(&path)
-            .with_context(|| format!("failed to read inbound image: {}", path.display()))?;
+        let bytes = std::fs::read(&path).with_context(|| {
+            format!(
+                "{}: {}",
+                t("failed to read inbound image", "入站图片读取失败"),
+                path.display()
+            )
+        })?;
         ensure_media_size(bytes.len())?;
         (bytes, content_type_from_path(&path))
     };
@@ -255,14 +292,18 @@ async fn download_file_to_cache(
 /// 返回:
 /// - 资源字节和 MIME 类型
 async fn download_bytes(client: &reqwest::Client, url: &str) -> Result<(Vec<u8>, String)> {
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .with_context(|| format!("failed to download inbound media: {url}"))?;
+    let response = client.get(url).send().await.with_context(|| {
+        format!(
+            "{}: {url}",
+            t("failed to download inbound media", "入站媒体下载失败")
+        )
+    })?;
     let status = response.status();
     if !status.is_success() {
-        bail!("inbound media returned HTTP {status}");
+        bail!(
+            "{} HTTP {status}",
+            t("inbound media returned", "入站媒体请求返回")
+        );
     }
     let content_type = response
         .headers()
@@ -284,7 +325,11 @@ async fn download_bytes(client: &reqwest::Client, url: &str) -> Result<(Vec<u8>,
 /// - 媒体大小是否合法
 fn ensure_media_size(size: usize) -> Result<()> {
     if size > MAX_INBOUND_MEDIA_BYTES {
-        bail!("inbound media exceeds {} bytes", MAX_INBOUND_MEDIA_BYTES);
+        bail!(
+            "{} {} bytes",
+            t("inbound media exceeds", "入站媒体超过限制"),
+            MAX_INBOUND_MEDIA_BYTES
+        );
     }
     Ok(())
 }

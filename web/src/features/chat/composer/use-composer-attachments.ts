@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useI18n } from "../../i18n/use-i18n";
 
 export type ComposerAttachment = {
   id: number;
@@ -9,11 +10,10 @@ export type ComposerAttachment = {
 /**
  * 管理输入区图片、token 插入和文本同步。
  *
- * @param value 当前输入文本
- * @param onValueChange 输入文本更新回调
  * @returns 图片附件状态和操作方法
  */
 export function useComposerAttachments() {
+  const { t } = useI18n();
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const sequence = useRef(0);
 
@@ -28,8 +28,8 @@ export function useComposerAttachments() {
     const images = files.filter((file) => file.type.startsWith("image/"));
     if (images.length === 0) return undefined;
     const loaded = await Promise.all(images.map(async (file) => ({
-      name: file.name || `粘贴图片_${Date.now()}.png`,
-      dataUrl: await readFileAsDataUrl(file)
+      name: file.name || t(`pasted-image_${Date.now()}.png`, `粘贴图片_${Date.now()}.png`),
+      dataUrl: await readFileAsDataUrl(file, t)
     })));
     const nextAttachments = [...attachments];
     for (const image of loaded) {
@@ -71,13 +71,14 @@ export function useComposerAttachments() {
  * 将图片文件读取为 data URL。
  *
  * @param file 图片文件
+ * @param t 双语文本选择方法
  * @returns 图片 data URL
  */
-function readFileAsDataUrl(file: File): Promise<string> {
+function readFileAsDataUrl(file: File, t: (en: string, zh: string) => string): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error("读取图片失败"));
+    reader.onerror = () => reject(reader.error ?? new Error(t("Failed to read image", "读取图片失败")));
     reader.readAsDataURL(file);
   });
 }

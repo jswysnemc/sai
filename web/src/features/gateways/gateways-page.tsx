@@ -34,7 +34,7 @@ export function GatewaysPage() {
       <div className="management-page-body">
         <header className="management-hero">
           <div className="hero-icon"><Cable size={24} /></div>
-          <div><span className="eyebrow">Messaging gateways</span><h1>{t("Gateway management", "网关管理")}</h1><p>{t("Start or stop managed gateway processes from the Web interface.", "在网页中启动或停止受管理任务。")}</p></div>
+          <div><span className="eyebrow">{t("Messaging gateways", "消息网关")}</span><h1>{t("Gateway management", "网关管理")}</h1><p>{t("Start or stop managed gateway processes from the Web interface.", "在网页中启动或停止受管理任务。")}</p></div>
         </header>
         <div className="gateway-grid">
           {gateways.data?.map((gateway) => <GatewayCard key={gateway.id} gateway={gateway} pending={start.isPending || stop.isPending} onStart={() => start.mutate(gateway.id)} onStop={() => stop.mutate(gateway.id)} />)}

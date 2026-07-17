@@ -11,6 +11,7 @@ use crate::gateways::command_intercept::handle_gateway_command;
 use crate::gateways::message::OutboundMessage;
 use crate::gateways::qq_official::{QqOfficialClient, QqTargetKind};
 use crate::gateways::session::ensure_gateway_session;
+use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use crate::state::StateStore;
 use anyhow::{bail, Result};
@@ -62,7 +63,11 @@ impl QqBotProcessor {
     /// - 无
     pub(crate) fn debug_log(&self, message: impl AsRef<str>) {
         if self.verbose {
-            eprintln!("【QQ网关】【调试】{}", message.as_ref());
+            eprintln!(
+                "{}{}",
+                t("【QQ Gateway】【Debug】", "【QQ网关】【调试】"),
+                message.as_ref()
+            );
         }
     }
 
@@ -229,7 +234,8 @@ impl QqBotProcessor {
                 Ok(saved) => {
                     append_saved_media_prompt(&mut prompt, &saved);
                     self.debug_log(format!(
-                        "入站附件已保存 kind={} name={} mime={} path={}",
+                        "{} kind={} name={} mime={} path={}",
+                        t("inbound attachment saved", "入站附件已保存"),
                         inbound_media_name(saved.kind),
                         saved.name,
                         saved.mime_type,
@@ -239,20 +245,29 @@ impl QqBotProcessor {
                         match saved_image_to_data_url(&saved) {
                             Ok(data_url) => image_url = Some(data_url),
                             Err(err) => {
-                                prompt.push_str(&format!("\n\n图片视觉输入准备失败: {err}"));
+                                prompt.push_str(&format!(
+                                    "\n\n{}: {err}",
+                                    t(
+                                        "failed to prepare image vision input",
+                                        "图片视觉输入准备失败"
+                                    )
+                                ));
                             }
                         }
                     }
                 }
                 Err(err) => {
                     self.debug_log(format!(
-                        "入站附件保存失败 kind={} source={} error={err:#}",
+                        "{} kind={} source={} error={err:#}",
+                        t("failed to save inbound attachment", "入站附件保存失败"),
                         inbound_media_name(media.kind),
                         media.source
                     ));
                     prompt.push_str(&format!(
-                        "\n\n用户发送的{}保存失败: {err}\n来源: {}",
+                        "\n\n{} {}: {err}\n{}: {}",
+                        t("Failed to save user-sent", "用户发送的"),
                         inbound_media_label(media.kind),
+                        t("Source", "来源"),
                         media.source
                     ));
                 }
@@ -308,7 +323,10 @@ impl QqBotProcessor {
         .with_channel(channel);
         let output = run_gateway_submission(&self.paths, config, registry, submission).await?;
         let Some(completion) = output.completion else {
-            bail!("gateway runner completed without assistant content");
+            bail!(t(
+                "gateway runner completed without assistant content",
+                "网关运行完成，但没有助手回复内容"
+            ));
         };
         Ok(completion.content)
     }
@@ -377,10 +395,13 @@ async fn run_gateway_submission(
 /// - 无
 fn append_saved_media_prompt(prompt: &mut String, saved: &SavedQqInboundMedia) {
     prompt.push_str(&format!(
-        "\n\n用户发送了{}: {}\n已保存到: {}\n媒体类型: {}",
+        "\n\n{} {}: {}\n{}: {}\n{}: {}",
+        t("The user sent", "用户发送了"),
         inbound_media_label(saved.kind),
         saved.name,
+        t("Saved to", "已保存到"),
         saved.path.display(),
+        t("Media type", "媒体类型"),
         saved.mime_type
     ));
 }
@@ -399,7 +420,7 @@ pub(crate) fn target_kind_name(kind: QqTargetKind) -> &'static str {
     }
 }
 
-/// 返回入站媒体中文名称。
+/// 返回入站媒体本地化名称。
 ///
 /// 参数:
 /// - `kind`: 入站媒体类型
@@ -408,10 +429,10 @@ pub(crate) fn target_kind_name(kind: QqTargetKind) -> &'static str {
 /// - 媒体类型名称
 fn inbound_media_label(kind: QqBotInboundMediaKind) -> &'static str {
     match kind {
-        QqBotInboundMediaKind::Image => "图片",
-        QqBotInboundMediaKind::Voice => "语音",
-        QqBotInboundMediaKind::Video => "视频",
-        QqBotInboundMediaKind::File => "文件",
+        QqBotInboundMediaKind::Image => t("image", "图片"),
+        QqBotInboundMediaKind::Voice => t("voice message", "语音"),
+        QqBotInboundMediaKind::Video => t("video", "视频"),
+        QqBotInboundMediaKind::File => t("file", "文件"),
     }
 }
 

@@ -41,7 +41,7 @@ export function EditToolView({ argumentsText, output, headerPath }: EditToolView
               <span>
                 {file.path && file.path !== headerPath && <ToolFileReference path={file.path} icon={false} />}
                 {!file.path && <strong>{t("Unknown file", "未知文件")}</strong>}
-                <small>{file.action || "Edited"}</small>
+                <small>{file.action || t("Edited", "已编辑")}</small>
               </span>
               <span className="changed-file-stats"><b>+{file.added ?? 0}</b><i>-{file.removed ?? 0}</i></span>
             </div>

@@ -1,5 +1,6 @@
 use super::media::MediaBytes;
 use super::message::{MediaKind, OutboundMessage};
+use crate::i18n::text as t;
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 
@@ -21,7 +22,10 @@ impl QqTargetKind {
         match value.trim().to_ascii_lowercase().as_str() {
             "user" | "c2c" | "private" => Ok(Self::User),
             "group" => Ok(Self::Group),
-            _ => bail!("unsupported QQ target kind: {value}"),
+            _ => bail!(
+                "{}: {value}",
+                t("unsupported QQ target kind", "不支持的 QQ 目标类型")
+            ),
         }
     }
 }
@@ -75,7 +79,7 @@ impl QqOfficialClient {
         msg_id: Option<&str>,
     ) -> Result<Vec<Value>> {
         if message.is_empty() {
-            bail!("message is empty");
+            bail!(t("message is empty", "消息为空"));
         }
         let mut responses = Vec::new();
         if let Some(text) = message
@@ -142,7 +146,12 @@ impl QqOfficialClient {
             .and_then(Value::as_str)
             .map(ToString::to_string)
             .filter(|value| !value.trim().is_empty())
-            .ok_or_else(|| anyhow::anyhow!("QQ media upload response has no file_info"))
+            .ok_or_else(|| {
+                anyhow::anyhow!(t(
+                    "QQ media upload response has no file_info",
+                    "QQ 媒体上传响应缺少 file_info"
+                ))
+            })
     }
 
     /// 发送 QQ 消息。
@@ -180,14 +189,21 @@ impl QqOfficialClient {
             .json(&payload)
             .send()
             .await
-            .with_context(|| format!("failed to call QQ API: {url}"))?;
+            .with_context(|| format!("{}: {url}", t("failed to call QQ API", "QQ API 调用失败")))?;
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         if !status.is_success() {
-            bail!("QQ API returned HTTP {status}: {body}");
+            bail!(
+                "{} HTTP {status}: {body}",
+                t("QQ API returned", "QQ API 返回")
+            );
         }
-        serde_json::from_str::<Value>(&body)
-            .with_context(|| format!("invalid QQ API response: {body}"))
+        serde_json::from_str::<Value>(&body).with_context(|| {
+            format!(
+                "{}: {body}",
+                t("invalid QQ API response", "无效的 QQ API 响应")
+            )
+        })
     }
 }
 

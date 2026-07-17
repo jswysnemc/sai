@@ -1,4 +1,5 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
+import { useI18n } from "../i18n/use-i18n";
 
 /**
  * 渲染底部终端高度调整手柄。
@@ -7,6 +8,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
  * @returns 水平调整手柄
  */
 export function TerminalResizeHandle({ onResize }: { onResize: (height: number) => void }) {
+  const { t } = useI18n();
   /** 监听指针移动并换算终端高度。 */
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -20,5 +22,5 @@ export function TerminalResizeHandle({ onResize }: { onResize: (height: number) 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp, { once: true });
   };
-  return <div className="terminal-resize-handle" role="separator" aria-label="调整终端高度" aria-orientation="horizontal" onPointerDown={handlePointerDown}><span /></div>;
+  return <div className="terminal-resize-handle" role="separator" aria-label={t("Resize terminal height", "调整终端高度")} aria-orientation="horizontal" onPointerDown={handlePointerDown}><span /></div>;
 }

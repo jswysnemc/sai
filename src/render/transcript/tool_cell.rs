@@ -1,4 +1,5 @@
 use super::subagent_cell::{self, SubagentCell};
+use crate::i18n::text as t;
 use crate::render::tool_event_line::tool_event_text;
 use crate::render::tool_view::{self, ToolView};
 use crate::render::ToolCallDisplayMode;
@@ -31,16 +32,20 @@ pub(crate) fn render(cell: &ToolCell, mode: ToolCallDisplayMode) -> String {
     match cell {
         ToolCell::Invocation(view) => tool_view::render(view, mode),
         ToolCell::Subagent(cell) => subagent_cell::render(cell, mode),
-        ToolCell::CompactionStarted { turn_count, model } => {
-            tool_event_text(&format!("compact context×{turn_count} · {model}"), "run")
-        }
+        ToolCell::CompactionStarted { turn_count, model } => tool_event_text(
+            &format!(
+                "{}×{turn_count} · {model}",
+                t("compact context", "压缩上下文")
+            ),
+            "run",
+        ),
         ToolCell::CompactionFinished {
             applied,
             message,
             detail,
         } => {
             let mut lines = vec![tool_event_text(
-                "compact context",
+                t("compact context", "压缩上下文"),
                 if *applied { "ok" } else { "skip" },
             )];
             if let Some(message) = message

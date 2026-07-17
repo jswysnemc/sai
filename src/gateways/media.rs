@@ -1,3 +1,4 @@
+use crate::i18n::text as t;
 use anyhow::{Context, Result};
 use base64::Engine;
 use std::path::{Path, PathBuf};
@@ -17,8 +18,13 @@ impl MediaBytes {
     /// 返回:
     /// - 文件名和字节内容
     pub(crate) fn read(path: &Path) -> Result<Self> {
-        let bytes = std::fs::read(path)
-            .with_context(|| format!("failed to read media file: {}", path.display()))?;
+        let bytes = std::fs::read(path).with_context(|| {
+            format!(
+                "{}: {}",
+                t("failed to read media file", "媒体文件读取失败"),
+                path.display()
+            )
+        })?;
         let filename = path
             .file_name()
             .map(|name| name.to_string_lossy().to_string())

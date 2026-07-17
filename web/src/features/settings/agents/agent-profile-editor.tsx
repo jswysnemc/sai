@@ -36,7 +36,7 @@ export function AgentProfileEditor({ config, profile, options, onChange, onRemov
   const tabs: Array<{ id: AgentEditorTab; label: string; icon: typeof Settings2 }> = [
     { id: "basic", label: t("Basics", "基础配置"), icon: Settings2 },
     { id: "tools", label: t("Tool permissions", "工具权限"), icon: Wrench },
-    { id: "skills", label: "Skills", icon: Sparkles }
+    { id: "skills", label: t("Skills", "技能"), icon: Sparkles }
   ];
 
   useEffect(() => {
@@ -80,7 +80,7 @@ export function AgentProfileEditor({ config, profile, options, onChange, onRemov
           <small>/{options.tools.length || "—"}</small>
         </div>
         <div>
-          <span>Skills</span>
+          <span>{t("Skills", "技能")}</span>
           <strong>{skillCount}</strong>
           <small>/{options.skills.length || "—"}</small>
         </div>

@@ -1,4 +1,5 @@
 use super::client::WeixinBotClient;
+use crate::i18n::text as t;
 use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, KeyInit};
 use anyhow::{bail, Context, Result};
 use base64::Engine;
@@ -50,8 +51,13 @@ pub(crate) async fn send_local_media(
     kind: WeixinOutboundMediaKind,
 ) -> Result<String> {
     let file_path = validate_media_file(path, kind)?;
-    let bytes = std::fs::read(&file_path)
-        .with_context(|| format!("读取媒体文件失败: {}", file_path.display()))?;
+    let bytes = std::fs::read(&file_path).with_context(|| {
+        format!(
+            "{}: {}",
+            t("failed to read media file", "读取媒体文件失败"),
+            file_path.display()
+        )
+    })?;
     let file_name = file_path
         .file_name()
         .and_then(|value| value.to_str())
@@ -59,7 +65,8 @@ pub(crate) async fn send_local_media(
         .unwrap_or("file")
         .to_string();
     client.debug_log(format!(
-        "准备发送本地媒体 kind={} path={} bytes={}",
+        "{} kind={} path={} bytes={}",
+        t("preparing local media", "准备发送本地媒体"),
         media_kind_name(kind),
         file_path.display(),
         bytes.len()
@@ -88,14 +95,24 @@ fn validate_media_file(path: &Path, kind: WeixinOutboundMediaKind) -> Result<Pat
     } else {
         crate::runtime_cwd::current_dir()?.join(path)
     };
-    let metadata =
-        std::fs::metadata(&path).with_context(|| format!("媒体文件不存在: {}", path.display()))?;
+    let metadata = std::fs::metadata(&path).with_context(|| {
+        format!(
+            "{}: {}",
+            t("media file does not exist", "媒体文件不存在"),
+            path.display()
+        )
+    })?;
     if !metadata.is_file() {
-        bail!("媒体路径不是文件: {}", path.display());
+        bail!(
+            "{}: {}",
+            t("media path is not a file", "媒体路径不是文件"),
+            path.display()
+        );
     }
     if metadata.len() > MAX_OUTBOUND_MEDIA_BYTES {
         bail!(
-            "媒体文件超过 {} bytes: {}",
+            "{} {} bytes: {}",
+            t("media file exceeds", "媒体文件超过"),
             MAX_OUTBOUND_MEDIA_BYTES,
             path.display()
         );
@@ -106,10 +123,24 @@ fn validate_media_file(path: &Path, kind: WeixinOutboundMediaKind) -> Result<Pat
         .to_string();
     match kind {
         WeixinOutboundMediaKind::Image if !mime.starts_with("image/") => {
-            bail!("send_channel_image 只能发送图片文件: {}", path.display());
+            bail!(
+                "{}: {}",
+                t(
+                    "send_channel_image only accepts image files",
+                    "send_channel_image 只能发送图片文件"
+                ),
+                path.display()
+            );
         }
         WeixinOutboundMediaKind::Video if !mime.starts_with("video/") => {
-            bail!("send_channel_video 只能发送视频文件: {}", path.display());
+            bail!(
+                "{}: {}",
+                t(
+                    "send_channel_video only accepts video files",
+                    "send_channel_video 只能发送视频文件"
+                ),
+                path.display()
+            );
         }
         WeixinOutboundMediaKind::File => {}
         WeixinOutboundMediaKind::Image | WeixinOutboundMediaKind::Video => {}
@@ -142,7 +173,8 @@ async fn upload_media(
     let cipher_size = aes_ecb_padded_size(raw_size);
     let raw_md5 = format!("{:x}", md5::compute(bytes));
     client.debug_log(format!(
-        "请求 CDN 上传地址 kind={} raw_bytes={} cipher_bytes={cipher_size}",
+        "{} kind={} raw_bytes={} cipher_bytes={cipher_size}",
+        t("requesting CDN upload URL", "请求 CDN 上传地址"),
         media_kind_name(kind),
         raw_size
     ));
@@ -161,7 +193,8 @@ async fn upload_media(
     let encrypted = encrypt_aes_ecb(bytes, &aes_key);
     let download_param = upload_encrypted_bytes(client, &upload_url, &file_key, &encrypted).await?;
     client.debug_log(format!(
-        "CDN 上传完成 kind={} encrypted_bytes={} download_param_present={}",
+        "{} kind={} encrypted_bytes={} download_param_present={}",
+        t("CDN upload completed", "CDN 上传完成"),
         media_kind_name(kind),
         encrypted.len(),
         !download_param.trim().is_empty()
@@ -230,14 +263,16 @@ async fn upload_encrypted_bytes(
 ) -> Result<String> {
     let url = resolve_upload_url(client, upload_url, file_key)?;
     client.debug_log(format!(
-        "CDN 上传地址 host_path={}",
+        "{} host_path={}",
+        t("CDN upload URL", "CDN 上传地址"),
         redact_url_for_log(&url)
     ));
     let http = reqwest::Client::new();
     let mut last_error = None;
     for attempt in 1..=CDN_UPLOAD_RETRIES {
         client.debug_log(format!(
-            "CDN 上传开始 attempt={attempt} encrypted_bytes={}",
+            "{} attempt={attempt} encrypted_bytes={}",
+            t("CDN upload started", "CDN 上传开始"),
             encrypted.len()
         ));
         let response = http
@@ -248,44 +283,65 @@ async fn upload_encrypted_bytes(
             .await;
         match response {
             Ok(response) if response.status().as_u16() == 200 => {
-                client.debug_log(format!("CDN 上传 HTTP 200 attempt={attempt}"));
+                client.debug_log(format!(
+                    "{} HTTP 200 attempt={attempt}",
+                    t("CDN upload", "CDN 上传")
+                ));
                 return response
                     .headers()
                     .get("x-encrypted-param")
                     .and_then(|value| value.to_str().ok())
                     .map(ToOwned::to_owned)
                     .filter(|value| !value.trim().is_empty())
-                    .ok_or_else(|| anyhow::anyhow!("微信 CDN 上传响应缺少 x-encrypted-param"));
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(t(
+                            "Weixin CDN upload response has no x-encrypted-param",
+                            "微信 CDN 上传响应缺少 x-encrypted-param"
+                        ))
+                    });
             }
             Ok(response) if response.status().is_client_error() => {
                 let status = response.status();
                 let body = response.text().await.unwrap_or_default();
                 client.debug_log(format!(
-                    "CDN 上传客户端错误 attempt={attempt} status={status} body={}",
+                    "{} attempt={attempt} status={status} body={}",
+                    t("CDN upload client error", "CDN 上传客户端错误"),
                     truncate_for_log(&body)
                 ));
-                bail!("微信 CDN 上传失败 HTTP {status}: {body}");
+                bail!(
+                    "{} HTTP {status}: {body}",
+                    t("Weixin CDN upload failed", "微信 CDN 上传失败")
+                );
             }
             Ok(response) => {
                 client.debug_log(format!(
-                    "CDN 上传服务端错误 attempt={attempt} status={}",
+                    "{} attempt={attempt} status={}",
+                    t("CDN upload server error", "CDN 上传服务端错误"),
                     response.status()
                 ));
                 last_error = Some(anyhow::anyhow!(
-                    "微信 CDN 上传失败 HTTP {}",
+                    "{} HTTP {}",
+                    t("Weixin CDN upload failed", "微信 CDN 上传失败"),
                     response.status()
                 ));
             }
             Err(err) => {
-                client.debug_log(format!("CDN 上传请求错误 attempt={attempt}: {err}"));
-                last_error = Some(anyhow::anyhow!("微信 CDN 上传请求失败: {err}"));
+                client.debug_log(format!(
+                    "{} attempt={attempt}: {err}",
+                    t("CDN upload request error", "CDN 上传请求错误")
+                ));
+                last_error = Some(anyhow::anyhow!(
+                    "{}: {err}",
+                    t("Weixin CDN upload request failed", "微信 CDN 上传请求失败")
+                ));
             }
         }
         if attempt < CDN_UPLOAD_RETRIES {
             tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         }
     }
-    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("微信 CDN 上传失败")))
+    Err(last_error
+        .unwrap_or_else(|| anyhow::anyhow!(t("Weixin CDN upload failed", "微信 CDN 上传失败"))))
 }
 
 /// 解析微信 CDN 上传地址。
@@ -316,7 +372,10 @@ fn resolve_upload_url(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .ok_or_else(|| {
-            anyhow::anyhow!("微信 getuploadurl 响应缺少 upload_full_url 或 upload_param")
+            anyhow::anyhow!(t(
+                "Weixin getuploadurl response has no upload_full_url or upload_param",
+                "微信 getuploadurl 响应缺少 upload_full_url 或 upload_param"
+            ))
         })?;
     Ok(format!(
         "{}/upload?encrypted_query_param={}&filekey={}",

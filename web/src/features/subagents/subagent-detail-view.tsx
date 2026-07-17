@@ -32,7 +32,7 @@ export function SubagentDetailView({ subagent, onBack, onCancel }: SubagentDetai
   const running = current.status === "running";
   const scrollRef = useRef<HTMLDivElement>(null);
   const timeline = stream.timeline;
-  const parts = subagentMessageParts(timeline, running, stream.timestamp);
+  const parts = subagentMessageParts(timeline, running, stream.timestamp, locale);
   const body = current.result || current.error || "";
   if (body && !timeline.some((entry) => entry.kind === "text" && entry.text === body)) {
     parts.push({ id: "subagent-result", type: "text", source: body });

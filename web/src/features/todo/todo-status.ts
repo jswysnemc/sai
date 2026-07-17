@@ -1,22 +1,22 @@
 import type { TodoStatus } from "../../api/contracts";
+import { text, type Locale } from "../i18n/locale";
 
 const todoStatusOrder: TodoStatus[] = ["pending", "in_progress", "completed", "cancelled"];
 
-const todoStatusLabels: Record<TodoStatus, string> = {
-  pending: "待处理",
-  in_progress: "进行中",
-  completed: "已完成",
-  cancelled: "已取消"
-};
-
 /**
- * 返回待办状态的中文名称。
+ * 返回待办状态的本地化名称。
  *
  * @param status 待办状态
+ * @param locale 当前界面语言
  * @returns 状态名称
  */
-export function todoStatusLabel(status: TodoStatus): string {
-  return todoStatusLabels[status];
+export function todoStatusLabel(status: TodoStatus, locale: Locale = "zh-CN"): string {
+  return {
+    pending: text(locale, "Pending", "待处理"),
+    in_progress: text(locale, "In progress", "进行中"),
+    completed: text(locale, "Completed", "已完成"),
+    cancelled: text(locale, "Cancelled", "已取消")
+  }[status];
 }
 
 /**

@@ -1,4 +1,5 @@
 use super::event::{QqBotInboundMedia, QqBotInboundMediaKind};
+use crate::i18n::text as t;
 use anyhow::{bail, Context, Result};
 use base64::Engine;
 use reqwest::header::CONTENT_TYPE;
@@ -30,7 +31,11 @@ pub(crate) async fn save_inbound_media(
 ) -> Result<SavedQqInboundMedia> {
     let (bytes, source_mime) = read_media_bytes(http_client, &media.source).await?;
     if bytes.len() > MAX_INBOUND_MEDIA_BYTES {
-        bail!("QQ 附件超过 {} bytes", MAX_INBOUND_MEDIA_BYTES);
+        bail!(
+            "{} {} bytes",
+            t("QQ attachment exceeds", "QQ 附件超过"),
+            MAX_INBOUND_MEDIA_BYTES
+        );
     }
     let mime_type = infer_mime_type(media, &bytes, source_mime.as_deref());
     let name = media
@@ -54,10 +59,19 @@ pub(crate) async fn save_inbound_media(
 /// 返回:
 /// - 图片 data URL
 pub(crate) fn saved_image_to_data_url(saved: &SavedQqInboundMedia) -> Result<String> {
-    let bytes = std::fs::read(&saved.path)
-        .with_context(|| format!("读取已保存 QQ 图片失败: {}", saved.path.display()))?;
-    let content_type = image_mime(&bytes)
-        .ok_or_else(|| anyhow::anyhow!("已保存 QQ 图片不是模型支持的图片格式"))?;
+    let bytes = std::fs::read(&saved.path).with_context(|| {
+        format!(
+            "{}: {}",
+            t("failed to read saved QQ image", "读取已保存 QQ 图片失败"),
+            saved.path.display()
+        )
+    })?;
+    let content_type = image_mime(&bytes).ok_or_else(|| {
+        anyhow::anyhow!(t(
+            "the saved QQ image format is not supported by the model",
+            "已保存 QQ 图片不是模型支持的图片格式"
+        ))
+    })?;
     let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
     Ok(format!("data:{content_type};base64,{encoded}"))
 }
@@ -81,8 +95,13 @@ async fn read_media_bytes(
         return download_bytes(http_client, source).await;
     }
     let path = local_source_path(source);
-    let bytes = std::fs::read(&path)
-        .with_context(|| format!("读取 QQ 入站文件失败: {}", path.display()))?;
+    let bytes = std::fs::read(&path).with_context(|| {
+        format!(
+            "{}: {}",
+            t("failed to read QQ inbound file", "读取 QQ 入站文件失败"),
+            path.display()
+        )
+    })?;
     Ok((bytes, mime_from_path(&path)))
 }
 
@@ -98,18 +117,29 @@ async fn download_bytes(
     http_client: &reqwest::Client,
     url: &str,
 ) -> Result<(Vec<u8>, Option<String>)> {
-    let response = http_client
-        .get(url)
-        .send()
-        .await
-        .with_context(|| format!("QQ 附件下载请求失败: {url}"))?;
+    let response = http_client.get(url).send().await.with_context(|| {
+        format!(
+            "{}: {url}",
+            t(
+                "QQ attachment download request failed",
+                "QQ 附件下载请求失败"
+            )
+        )
+    })?;
     let status = response.status();
     if !status.is_success() {
-        bail!("QQ 附件下载失败 HTTP {status}");
+        bail!(
+            "{} HTTP {status}",
+            t("QQ attachment download failed", "QQ 附件下载失败")
+        );
     }
     if let Some(len) = response.content_length() {
         if len > MAX_INBOUND_MEDIA_BYTES as u64 {
-            bail!("QQ 附件超过 {} bytes", MAX_INBOUND_MEDIA_BYTES);
+            bail!(
+                "{} {} bytes",
+                t("QQ attachment exceeds", "QQ 附件超过"),
+                MAX_INBOUND_MEDIA_BYTES
+            );
         }
     }
     let mime_type = response
@@ -130,10 +160,13 @@ async fn download_bytes(
 /// - 媒体字节和可选 MIME 类型
 fn read_data_url(source: &str) -> Result<(Vec<u8>, Option<String>)> {
     let Some((prefix, encoded)) = source.split_once(',') else {
-        bail!("QQ data URL 格式无效");
+        bail!(t("invalid QQ data URL format", "QQ data URL 格式无效"));
     };
     if !prefix.contains(";base64") {
-        bail!("QQ data URL 只支持 base64 编码");
+        bail!(t(
+            "QQ data URL only supports base64 encoding",
+            "QQ data URL 只支持 base64 编码"
+        ));
     }
     let mime_type = prefix
         .strip_prefix("data:")
@@ -143,7 +176,12 @@ fn read_data_url(source: &str) -> Result<(Vec<u8>, Option<String>)> {
         .map(ToOwned::to_owned);
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(encoded)
-        .with_context(|| "QQ data URL base64 解码失败")?;
+        .with_context(|| {
+            t(
+                "QQ data URL base64 decoding failed",
+                "QQ data URL base64 解码失败",
+            )
+        })?;
     Ok((bytes, mime_type))
 }
 

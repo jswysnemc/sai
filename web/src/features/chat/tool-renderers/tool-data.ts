@@ -1,3 +1,5 @@
+import { text, type Locale } from "../../i18n/locale";
+
 export type JsonRecord = Record<string, unknown>;
 
 /**
@@ -46,18 +48,20 @@ export function prettyJson(value: string): string {
  *
  * @param name 工具名称
  * @param argumentsText 工具参数 JSON
+ * @param locale 当前界面语言
  * @returns 路径、命令或搜索词摘要
  */
-export function toolSummary(name: string, argumentsText: string): string {
+export function toolSummary(name: string, argumentsText: string, locale: Locale = "zh-CN"): string {
   const args = parseJsonRecord(argumentsText);
   if (name === "run_command") return stringField(args, "command");
   if (name === "edit_file") {
     const path = stringField(args, "path");
     if (path) return path;
     const patch = stringField(args, "patch");
-    return patch.split("\n").find((line) => line.startsWith("*** ") && line.includes(" File: "))?.split(" File: ")[1] ?? "文件修改";
+    return patch.split("\n").find((line) => line.startsWith("*** ") && line.includes(" File: "))?.split(" File: ")[1]
+      ?? text(locale, "File edit", "文件修改");
   }
-  if (name === "read_file") return stringField(args, "path") || "批量读取";
+  if (name === "read_file") return stringField(args, "path") || text(locale, "Batch read", "批量读取");
   if (name === "grep") return stringField(args, "pattern");
   if (name === "glob") return stringField(args, "pattern");
   return "";

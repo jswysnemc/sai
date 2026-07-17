@@ -1,4 +1,5 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
+import { useI18n } from "../i18n/use-i18n";
 
 type WorkspaceResizeHandleProps = {
   swapped?: boolean;
@@ -12,6 +13,7 @@ type WorkspaceResizeHandleProps = {
  * @returns 工作区拖动手柄
  */
 export function WorkspaceResizeHandle({ swapped = false, onResize }: WorkspaceResizeHandleProps) {
+  const { t } = useI18n();
   /**
    * 开始监听全局指针移动，直到用户释放指针。
    *
@@ -44,7 +46,7 @@ export function WorkspaceResizeHandle({ swapped = false, onResize }: WorkspaceRe
     <div
       className="workspace-resize-handle"
       role="separator"
-      aria-label="调整工作区宽度"
+      aria-label={t("Resize workspace width", "调整工作区宽度")}
       aria-orientation="vertical"
       onPointerDown={handlePointerDown}
     >

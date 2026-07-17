@@ -1,5 +1,6 @@
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import { SESSION_SIDEBAR_MAX_WIDTH, SESSION_SIDEBAR_MIN_WIDTH } from "./use-session-sidebar-layout";
+import { useI18n } from "../i18n/use-i18n";
 
 type SessionSidebarResizeHandleProps = {
   width: number;
@@ -13,6 +14,7 @@ type SessionSidebarResizeHandleProps = {
  * @returns 会话侧栏拖动手柄
  */
 export function SessionSidebarResizeHandle({ width, onResize }: SessionSidebarResizeHandleProps) {
+  const { t } = useI18n();
   /**
    * 开始监听全局指针移动，直到用户释放指针。
    *
@@ -64,7 +66,7 @@ export function SessionSidebarResizeHandle({ width, onResize }: SessionSidebarRe
       className="session-sidebar-resize-handle"
       role="separator"
       tabIndex={0}
-      aria-label="调整会话侧栏宽度"
+      aria-label={t("Resize session sidebar width", "调整会话侧栏宽度")}
       aria-orientation="vertical"
       aria-valuemin={SESSION_SIDEBAR_MIN_WIDTH}
       aria-valuemax={SESSION_SIDEBAR_MAX_WIDTH}

@@ -1,3 +1,4 @@
+use crate::i18n::text as t;
 use base64::Engine;
 use serde_json::Value;
 
@@ -287,13 +288,16 @@ fn build_prompt(text: &str, media: &[WeixinInboundMedia]) -> String {
     }
     for item in media {
         let label = match item.kind {
-            WeixinInboundMediaKind::Image => "图片",
-            WeixinInboundMediaKind::Voice => "语音",
-            WeixinInboundMediaKind::Video => "视频",
-            WeixinInboundMediaKind::File => "文件",
+            WeixinInboundMediaKind::Image => t("image", "图片"),
+            WeixinInboundMediaKind::Voice => t("voice message", "语音"),
+            WeixinInboundMediaKind::Video => t("video", "视频"),
+            WeixinInboundMediaKind::File => t("file", "文件"),
         };
-        let name = item.name.as_deref().unwrap_or("未命名");
-        parts.push(format!("用户发送了{label}: {name}"));
+        let name = item.name.as_deref().unwrap_or(t("Unnamed", "未命名"));
+        parts.push(format!(
+            "{} {label}: {name}",
+            t("The user sent", "用户发送了")
+        ));
     }
     parts.join("\n\n")
 }

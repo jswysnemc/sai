@@ -1,4 +1,5 @@
 use super::message::{MediaKind, OutboundMessage};
+use crate::i18n::text as t;
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use std::path::Path;
@@ -21,7 +22,10 @@ impl OneBotTargetKind {
         match value.trim().to_ascii_lowercase().as_str() {
             "private" | "user" | "friend" => Ok(Self::Private),
             "group" => Ok(Self::Group),
-            _ => bail!("unsupported OneBot target kind: {value}"),
+            _ => bail!(
+                "{}: {value}",
+                t("unsupported OneBot target kind", "不支持的 OneBot 目标类型")
+            ),
         }
     }
 }
@@ -69,7 +73,7 @@ impl OneBotClient {
     /// - 平台响应列表
     pub(crate) async fn send(&self, message: &OutboundMessage) -> Result<Vec<Value>> {
         if message.is_empty() {
-            bail!("message is empty");
+            bail!(t("message is empty", "消息为空"));
         }
         let mut responses = Vec::new();
         if !message.media.is_empty() {
@@ -174,17 +178,26 @@ impl OneBotClient {
         {
             request = request.bearer_auth(token);
         }
-        let response = request
-            .send()
-            .await
-            .with_context(|| format!("failed to call OneBot API: {api}"))?;
+        let response = request.send().await.with_context(|| {
+            format!(
+                "{}: {api}",
+                t("failed to call OneBot API", "OneBot API 调用失败")
+            )
+        })?;
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         if !status.is_success() {
-            bail!("OneBot API returned HTTP {status}: {body}");
+            bail!(
+                "{} HTTP {status}: {body}",
+                t("OneBot API returned", "OneBot API 返回")
+            );
         }
-        let value = serde_json::from_str::<Value>(&body)
-            .with_context(|| format!("invalid OneBot API response: {body}"))?;
+        let value = serde_json::from_str::<Value>(&body).with_context(|| {
+            format!(
+                "{}: {body}",
+                t("invalid OneBot API response", "无效的 OneBot API 响应")
+            )
+        })?;
         ensure_ok(&value)?;
         Ok(value)
     }
@@ -212,7 +225,7 @@ fn ensure_ok(value: &Value) -> Result<()> {
     let status = value.get("status").and_then(Value::as_str).unwrap_or("ok");
     let retcode = value.get("retcode").and_then(Value::as_i64).unwrap_or(0);
     if status != "ok" || retcode != 0 {
-        bail!("OneBot API error: {value}");
+        bail!("{}: {value}", t("OneBot API error", "OneBot API 错误"));
     }
     Ok(())
 }

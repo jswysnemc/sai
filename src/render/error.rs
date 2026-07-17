@@ -73,7 +73,7 @@ fn simplify_error_text(text: &str) -> String {
     let message = error
         .get("message")
         .and_then(Value::as_str)
-        .unwrap_or("unknown provider error");
+        .unwrap_or(t("unknown provider error", "未知供应商错误"));
     let kind = error.get("type").and_then(Value::as_str);
     let code = error.get("code").and_then(Value::as_str);
     let mut details = Vec::new();

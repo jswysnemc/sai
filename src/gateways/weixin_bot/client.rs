@@ -1,3 +1,4 @@
+use crate::i18n::text as t;
 use anyhow::{bail, Context, Result};
 use base64::Engine;
 use rand::RngCore;
@@ -113,7 +114,11 @@ impl WeixinBotClient {
     /// - 无
     pub(crate) fn debug_log(&self, message: impl AsRef<str>) {
         if self.verbose {
-            eprintln!("【微信网关】【调试】{}", message.as_ref());
+            eprintln!(
+                "{}{}",
+                t("【Weixin Gateway】【Debug】", "【微信网关】【调试】"),
+                message.as_ref()
+            );
         }
     }
 
@@ -129,7 +134,8 @@ impl WeixinBotClient {
             .post_json_with_base_info("ilink/bot/getuploadurl", payload, API_TIMEOUT)
             .await?;
         self.debug_log(format!(
-            "getuploadurl 响应 upload_full_url={} upload_param={} thumb_upload_param={}",
+            "{} upload_full_url={} upload_param={} thumb_upload_param={}",
+            t("getuploadurl response", "getuploadurl 响应"),
             response.get("upload_full_url").is_some(),
             response.get("upload_param").is_some(),
             response.get("thumb_upload_param").is_some()
@@ -175,9 +181,15 @@ impl WeixinBotClient {
             .await?;
         let ret = response.get("ret").and_then(Value::as_i64).unwrap_or(0);
         if ret != 0 {
-            bail!("Weixin sendmessage ret={ret}: {response}");
+            bail!(
+                "{} ret={ret}: {response}",
+                t("Weixin sendmessage failed", "微信 sendmessage 失败")
+            );
         }
-        self.debug_log(format!("sendmessage 文本发送成功 client_id={client_id}"));
+        self.debug_log(format!(
+            "{} client_id={client_id}",
+            t("sendmessage text sent", "sendmessage 文本发送成功")
+        ));
         Ok(())
     }
 
@@ -217,9 +229,15 @@ impl WeixinBotClient {
             .await?;
         let ret = response.get("ret").and_then(Value::as_i64).unwrap_or(0);
         if ret != 0 {
-            bail!("Weixin sendmessage ret={ret}: {response}");
+            bail!(
+                "{} ret={ret}: {response}",
+                t("Weixin sendmessage failed", "微信 sendmessage 失败")
+            );
         }
-        self.debug_log(format!("sendmessage 媒体发送成功 client_id={client_id}"));
+        self.debug_log(format!(
+            "{} client_id={client_id}",
+            t("sendmessage media sent", "sendmessage 媒体发送成功")
+        ));
         Ok(client_id)
     }
 
@@ -268,7 +286,12 @@ impl WeixinBotClient {
             .timeout(timeout)
             .send()
             .await
-            .with_context(|| format!("failed to call Weixin API: {endpoint}"))?;
+            .with_context(|| {
+                format!(
+                    "{}: {endpoint}",
+                    t("failed to call Weixin API", "微信 API 调用失败")
+                )
+            })?;
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         self.debug_log(format!(
@@ -276,10 +299,17 @@ impl WeixinBotClient {
             body.len()
         ));
         if !status.is_success() {
-            bail!("Weixin API returned HTTP {status}: {body}");
+            bail!(
+                "{} HTTP {status}: {body}",
+                t("Weixin API returned", "微信 API 返回")
+            );
         }
-        serde_json::from_str::<Value>(&body)
-            .with_context(|| format!("invalid Weixin API response: {body}"))
+        serde_json::from_str::<Value>(&body).with_context(|| {
+            format!(
+                "{}: {body}",
+                t("invalid Weixin API response", "无效的微信 API 响应")
+            )
+        })
     }
 
     /// 构建 iLink 请求头。

@@ -1,4 +1,5 @@
 use crate::gateways::qq_official::QqTargetKind;
+use crate::i18n::text as t;
 use anyhow::{bail, Result};
 use serde_json::Value;
 
@@ -58,7 +59,10 @@ pub(crate) fn parse_validation_event(payload: &Value) -> Result<Option<QqBotVali
         .trim()
         .to_string();
     if plain_token.is_empty() || event_ts.is_empty() {
-        bail!("invalid QQ webhook validation payload");
+        bail!(t(
+            "invalid QQ webhook validation payload",
+            "无效的 QQ Webhook 验证数据"
+        ));
     }
     Ok(Some(QqBotValidationEvent {
         plain_token,
@@ -98,14 +102,14 @@ pub(crate) fn parse_message_event(payload: &Value) -> Result<Option<QqBotMessage
     }
     .map(str::trim)
     .filter(|value| !value.is_empty())
-    .ok_or_else(|| anyhow::anyhow!("missing QQ target id"))?
+    .ok_or_else(|| anyhow::anyhow!(t("missing QQ target id", "缺少 QQ 目标 ID")))?
     .to_string();
     let msg_id = data
         .get("id")
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("missing QQ message id"))?
+        .ok_or_else(|| anyhow::anyhow!(t("missing QQ message id", "缺少 QQ 消息 ID")))?
         .to_string();
     let text = data
         .get("content")
@@ -200,13 +204,17 @@ fn build_prompt(text: &str, media: &[QqBotInboundMedia]) -> String {
     }
     for item in media {
         let label = match item.kind {
-            QqBotInboundMediaKind::Image => "图片",
-            QqBotInboundMediaKind::Voice => "语音",
-            QqBotInboundMediaKind::Video => "视频",
-            QqBotInboundMediaKind::File => "文件",
+            QqBotInboundMediaKind::Image => t("Image", "图片"),
+            QqBotInboundMediaKind::Voice => t("Voice", "语音"),
+            QqBotInboundMediaKind::Video => t("Video", "视频"),
+            QqBotInboundMediaKind::File => t("File", "文件"),
         };
-        let name = item.name.as_deref().unwrap_or("未命名");
-        parts.push(format!("{label}: {name}\n来源: {}", item.source));
+        let name = item.name.as_deref().unwrap_or(t("Unnamed", "未命名"));
+        parts.push(format!(
+            "{label}: {name}\n{}: {}",
+            t("Source", "来源"),
+            item.source
+        ));
     }
     parts.join("\n\n")
 }

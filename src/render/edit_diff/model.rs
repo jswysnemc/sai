@@ -1,3 +1,4 @@
+use crate::i18n::text as t;
 use crate::tools::edit_patch::{AppliedPatch, FileChange, LineChange, LineChangeKind};
 use anyhow::{bail, Result};
 use serde_json::Value;
@@ -100,11 +101,11 @@ fn preview_full_file_edit(value: &Value) -> Result<AppliedPatch> {
         .get("path")
         .and_then(Value::as_str)
         .map(expand_path)
-        .ok_or_else(|| anyhow::anyhow!("path is required"))?;
+        .ok_or_else(|| anyhow::anyhow!(t("path is required", "必须提供路径")))?;
     let content = value
         .get("content")
         .and_then(Value::as_str)
-        .ok_or_else(|| anyhow::anyhow!("content is required"))?
+        .ok_or_else(|| anyhow::anyhow!(t("content is required", "必须提供内容")))?
         .replace("\r\n", "\n")
         .replace('\r', "\n");
     if !path.exists() {
@@ -136,28 +137,30 @@ fn preview_line_edit(value: &Value) -> Result<AppliedPatch> {
         .get("path")
         .and_then(Value::as_str)
         .map(expand_path)
-        .ok_or_else(|| anyhow::anyhow!("path is required"))?;
+        .ok_or_else(|| anyhow::anyhow!(t("path is required", "必须提供路径")))?;
     let start_line = value
         .get("start_line")
         .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow::anyhow!("start_line is required"))? as usize;
+        .ok_or_else(|| anyhow::anyhow!(t("start_line is required", "必须提供 start_line")))?
+        as usize;
     let end_line = value
         .get("end_line")
         .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow::anyhow!("end_line is required"))? as usize;
+        .ok_or_else(|| anyhow::anyhow!(t("end_line is required", "必须提供 end_line")))?
+        as usize;
     let replacement = value
         .get("replacement")
         .and_then(Value::as_str)
-        .ok_or_else(|| anyhow::anyhow!("replacement is required"))?
+        .ok_or_else(|| anyhow::anyhow!(t("replacement is required", "必须提供 replacement")))?
         .replace("\r\n", "\n")
         .replace('\r', "\n");
     if start_line == 0 || end_line == 0 || start_line > end_line {
-        bail!("invalid line range")
+        bail!(t("invalid line range", "无效行范围"))
     }
     let old_content = std::fs::read_to_string(&path)?;
     let old_lines = old_content.lines().map(str::to_string).collect::<Vec<_>>();
     if start_line > old_lines.len() || end_line > old_lines.len() {
-        bail!("line range out of range")
+        bail!(t("line range out of range", "行范围超出文件范围"))
     }
     let replacement_lines = if replacement.is_empty() {
         Vec::new()
