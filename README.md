@@ -286,26 +286,9 @@ Global flags: `--lang en-US|zh-CN` (language), `--plan` / `--audited` / `--yolo`
 
 ## Architecture
 
-Sai is layered: an entry layer dispatches to the Agent layer, which coordinates LLM, tools, memory, and state; gateways, config, shell, and web modules surround the core. Full architecture, data-flow, and Agent-loop diagrams live in [ARCHITECTURE.md](ARCHITECTURE.md).
+Sai is layered around a shared Runner and Agent core. Entrypoints feed normalized submissions into the Runner; the Agent coordinates LLM calls, tools, memory, and session state.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         Entry layer                           │
-│   main.rs · cli · REPL · ask · shell-intercept · alarm-worker │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────┐
-│                        Agent layer                            │
-│  Agent · chat_with_tools loop · ToolVisibility progressive    │
-│  AgentMode (Yolo/Audited/Plan) · conversation classification  │
-├──────────┬───────────┬───────────┬───────────┬──────────────┤
-│  LLM     │  Tools    │  Memory   │  State    │  Gateways    │
-│ OpenAI   │ Registry  │ MemorySto │ StateSto  │ supervisor   │
-│ Responses│ 30+ built │ facts/epi │ turns WAL │ qq/weixin    │
-│ Anthropic│ subagent  │ FTS5 decay│ pending   │ onebot/wecom │
-│ thinking │ mcp/skill │ evicted   │ usage     │ channel tools│
-└──────────┴───────────┴───────────┴───────────┴──────────────┘
-```
+![Sai system architecture](pics/sai-architecture.svg)
 
 ### Tech stack
 
@@ -345,12 +328,11 @@ Sai/
 │   └── ...               # alarm/memes/knowledge_base/hooks, etc.
 ├── web/                  # Web workbench frontend (React + Vite)
 ├── assets/               # o200k tokenizer vocabulary
-├── pics/                 # Screenshots
+├── pics/                 # Screenshots and architecture overview
 ├── scripts/              # Packaging scripts (package-arch.sh)
 ├── .github/workflows/    # CI (linux.yml + windows.yml)
 ├── build.rs              # Build script
-├── Cargo.toml            # Rust package manifest
-└── ARCHITECTURE.md       # Detailed architecture doc
+└── Cargo.toml            # Rust package manifest
 ```
 
 ---
@@ -443,8 +425,6 @@ Issues and pull requests are welcome. Before submitting, ensure:
 2. Web frontend builds and tests pass: `cd web && npm ci && npm run build && npm test`
 3. Config validates: `sai config validate`
 4. Commit messages follow Conventional Commits (`feat:` / `fix:` / `docs:`)
-
-For full architecture, data-flow, and Agent-loop details see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## License
 

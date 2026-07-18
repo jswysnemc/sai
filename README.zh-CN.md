@@ -286,26 +286,9 @@ $ nonexist-cmd --flag
 
 ## 架构总览
 
-Sai 采用分层架构,入口层分发到 Agent 层,Agent 层协调 LLM、工具、记忆、状态四层,外围由网关、配置、Shell、Web 等模块支撑。完整架构图、数据流图与 Agent 循环图见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+Sai 采用共享 Runner 与 Agent 内核的分层架构。各入口先把请求归一化为 submission，再由 Runner 和 Agent 协调 LLM、工具、记忆与会话状态。
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         入口层                                │
-│   main.rs · cli · REPL · ask · shell-intercept · alarm-worker │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────────┐
-│                        Agent 层                               │
-│  Agent · chat_with_tools 循环 · ToolVisibility 渐进加载       │
-│  AgentMode (Yolo/Audited/Plan) · conversation 响应分类        │
-├──────────┬───────────┬───────────┬───────────┬──────────────┤
-│  LLM 层   │  工具层    │  记忆层    │  状态层    │  网关层       │
-│ OpenAI   │ Registry  │ MemorySto │ StateSto  │ supervisor  │
-│ Responses│ 30+ 内置   │ facts/epi │ turns WAL │ qq/weixin    │
-│ Anthropic│ subagent  │ FTS5 衰减  │ pending   │ onebot/wecom │
-│ thinking │ mcp/skill │ evicted   │ usage     │ channel 工具 │
-└──────────┴───────────┴───────────┴───────────┴──────────────┘
-```
+![Sai 系统架构总览](pics/sai-architecture.svg)
 
 ### 技术栈
 
@@ -345,12 +328,11 @@ Sai/
 │   └── ...               # alarm/memes/knowledge_base/hooks 等
 ├── web/                  # Web 工作台前端(React + Vite)
 ├── assets/               # o200k tokenizer 词表
-├── pics/                 # 截图
+├── pics/                 # 截图与架构总览图
 ├── scripts/              # 打包脚本(package-arch.sh)
 ├── .github/workflows/    # CI(linux.yml + windows.yml)
 ├── build.rs              # 构建脚本
-├── Cargo.toml            # Rust 包定义
-└── ARCHITECTURE.md       # 详细架构文档
+└── Cargo.toml            # Rust 包定义
 ```
 
 ---
@@ -443,8 +425,6 @@ Linux `~/.local/share/sai` / Windows 数据目录
 2. Web 前端构建与测试通过:`cd web && npm ci && npm run build && npm test`
 3. 配置校验通过:`sai config validate`
 4. 提交信息遵循 Conventional Commits(`feat:` / `fix:` / `docs:` 等)
-
-详细的架构、数据流与 Agent 循环说明见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ## License
 

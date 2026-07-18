@@ -107,7 +107,7 @@ mod tests {
         for text in [
             include_str!("prompts/sai.md"),
             include_str!("prompts/plan.md"),
-            include_str!("../ARCHITECTURE.md"),
+            include_str!("../README.md"),
         ] {
             let tokens = estimate_tokens(text);
             assert!(tokens > 0);
