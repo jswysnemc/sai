@@ -10,6 +10,7 @@ import { switchWithTerminalConfirm } from "../workspaces/workspace-switcher";
 import { ServerDirectoryDialog } from "../workspaces/server-directory-dialog";
 import { ActiveAgentIndicator } from "./active-agent-indicator";
 import { useSessionTree } from "./use-session-tree";
+import { LocaleSwitcher } from "../i18n/locale-switcher";
 import { useI18n } from "../i18n/use-i18n";
 import "./session-sidebar.css";
 
@@ -269,6 +270,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
           >
             <Settings size={17} strokeWidth={1.8} />
           </button>
+          <LocaleSwitcher compact />
           {appMenuOpen && (
             <div className="sidebar-app-popover rail">
               <button type="button" onClick={() => { setAppMenuOpen(false); setBrowserOpen(true); }}>
@@ -414,14 +416,17 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
       </div>
       {error && <p className="sidebar-error">{error.message}</p>}
       <div className="sidebar-footer" ref={appMenuRef}>
-        <button
-          type="button"
-          className={`sidebar-settings-link${appMenuOpen || appMenuActive ? " active" : ""}`}
-          onClick={() => setAppMenuOpen((value) => !value)}
-          aria-expanded={appMenuOpen}
-        >
-          <Settings size={15} strokeWidth={1.8} /><span>{t("Application", "应用")}</span>
-        </button>
+        <div className="sidebar-footer-actions">
+          <button
+            type="button"
+            className={`sidebar-settings-link${appMenuOpen || appMenuActive ? " active" : ""}`}
+            onClick={() => setAppMenuOpen((value) => !value)}
+            aria-expanded={appMenuOpen}
+          >
+            <Settings size={15} strokeWidth={1.8} /><span>{t("Application", "应用")}</span>
+          </button>
+          <LocaleSwitcher />
+        </div>
         {appMenuOpen && (
           <div className="sidebar-app-popover">
             <button type="button" onClick={() => { setAppMenuOpen(false); setBrowserOpen(true); }}>
