@@ -1,18 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Cable, Globe2, Plus, Save, Terminal, Trash2 } from "lucide-react";
+import { Braces, Cable, FormInput, Globe2, Plus, Save, Terminal, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import type { McpConfig, McpServerConfig } from "../../api/contracts";
 import { toDisplayError } from "../../api/api-error";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
+import { JsonCodeEditor } from "../../shared/ui/code-editor/json-code-editor";
 import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
 import { EditorHeader, SettingsGroup } from "./editor-layout";
 import { ObjectListPanel } from "./object-list-panel";
 import { KeyValueEditor } from "./key-value-editor";
 
+type EditorMode = "form" | "json";
+
 /**
- * 渲染独立 MCP 配置（`~/.config/sai/mcp.jsonc`）的列表与详情编辑。
+ * 渲染独立 MCP 配置（`~/.config/sai/mcp.jsonc`）。
+ *
+ * 支持结构化表单和完整 JSON 两种编辑方式，保存都写入独立配置文件。
  *
  * @returns MCP 配置区域
  */
@@ -22,12 +27,17 @@ export function McpSettingsSection() {
   const queryClient = useQueryClient();
   const response = useQuery({ queryKey: ["mcp-config"], queryFn: api.config.loadMcp });
   const [mcp, setMcp] = useState<McpConfig | null>(null);
+  const [raw, setRaw] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [mode, setMode] = useState<EditorMode>("form");
   const [selectedId, setSelectedId] = useState("");
+  const [parseError, setParseError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!response.data || dirty) return;
     setMcp(response.data.config);
+    setRaw(JSON.stringify(response.data.config, null, 2));
+    setParseError(null);
   }, [response.data, dirty]);
 
   const servers = mcp?.servers ?? [];
@@ -42,20 +52,29 @@ export function McpSettingsSection() {
 
   const save = useMutation({
     mutationFn: async () => {
-      if (!mcp) throw new Error(t("MCP config is not loaded", "MCP 配置尚未加载"));
-      return api.config.saveMcp(mcp);
+      const config = mode === "json" ? parseMcpJson(raw) : mcp;
+      if (!config) throw new Error(t("MCP config is not loaded", "MCP 配置尚未加载"));
+      return api.config.saveMcp(config);
     },
     onSuccess: (saved) => {
       setMcp(saved.config);
+      setRaw(JSON.stringify(saved.config, null, 2));
       setDirty(false);
+      setParseError(null);
       queryClient.setQueryData(["mcp-config"], saved);
     }
   });
 
-  const updateMcp = (next: McpConfig) => {
-    setMcp(next);
+  const markDirty = () => {
     setDirty(true);
     save.reset();
+  };
+
+  const updateMcp = (next: McpConfig) => {
+    setMcp(next);
+    setRaw(JSON.stringify(next, null, 2));
+    setParseError(null);
+    markDirty();
   };
 
   const patchMcp = (patch: Partial<McpConfig>) => {
@@ -104,6 +123,37 @@ export function McpSettingsSection() {
     setSelectedId(next[0]?.id ?? "");
   };
 
+  /** 在表单与 JSON 模式间切换，尽量保留未保存改动。 */
+  const switchMode = (next: EditorMode) => {
+    if (next === mode) return;
+    if (next === "json") {
+      if (mcp) setRaw(JSON.stringify(mcp, null, 2));
+      setParseError(null);
+      setMode("json");
+      return;
+    }
+    try {
+      const parsed = parseMcpJson(raw);
+      setMcp(parsed);
+      setParseError(null);
+      setMode("form");
+    } catch (error) {
+      setParseError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const updateRaw = (value: string) => {
+    setRaw(value);
+    setParseError(null);
+    markDirty();
+    // 1. JSON 合法时同步到表单状态，便于切回表单不丢内容
+    try {
+      setMcp(parseMcpJson(value));
+    } catch {
+      // 输入中途不合法时保留上一份 mcp，切模式时再强制校验
+    }
+  };
+
   if (response.isLoading || !mcp) {
     return <div className="settings-state">{t("Loading MCP configuration", "正在读取 MCP 配置")}</div>;
   }
@@ -119,54 +169,74 @@ export function McpSettingsSection() {
     { value: "sse", label: t("SSE", "SSE") }
   ];
 
-  return (
-    <div className="settings-objects-layout">
-      <ObjectListPanel
-        title="MCP"
-        items={servers.map((item) => ({
-          id: item.id,
-          name: item.id,
-          meta: transportMeta(item.transport ?? "stdio", item, t),
-          icon: (item.transport ?? "stdio") === "stdio" ? <Terminal size={14} /> : <Globe2 size={14} />,
-          marked: item.enabled !== false
-        }))}
-        selectedId={selectedId}
-        searchPlaceholder={t("Search MCP servers", "搜索 MCP 服务")}
-        addLabel={t("Add MCP server", "添加 MCP 服务")}
-        onSelect={setSelectedId}
-        onAdd={addServer}
-        headerSlot={
-          <label className="settings-toggle-field object-list-toggle">
-            <span>
-              <strong>{t("Enable MCP", "启用 MCP")}</strong>
-              <small>{t("Stored in a separate mcp.jsonc file", "保存在独立的 mcp.jsonc")}</small>
-            </span>
-            <input
-              type="checkbox"
-              checked={mcp.enabled !== false}
-              onChange={(event) => patchMcp({ enabled: event.target.checked })}
-            />
-          </label>
+  const saveBar = (
+    <button
+      type="button"
+      className="settings-secondary"
+      disabled={!dirty || save.isPending}
+      onClick={() => void save.mutateAsync().catch((cause) => {
+        if (mode === "json") {
+          setParseError(cause instanceof Error ? cause.message : String(cause));
         }
-      />
+      })}
+    >
+      <Save size={14} />{save.isPending ? t("Saving", "正在保存") : dirty ? t("Save MCP", "保存 MCP") : t("Saved", "已保存")}
+    </button>
+  );
+
+  return (
+    <div className={mode === "json" ? "settings-editor advanced-settings mcp-json-layout" : "settings-objects-layout"}>
+      {mode === "form" && (
+        <ObjectListPanel
+          title="MCP"
+          items={servers.map((item) => ({
+            id: item.id,
+            name: item.id,
+            meta: transportMeta(item.transport ?? "stdio", item, t),
+            icon: (item.transport ?? "stdio") === "stdio" ? <Terminal size={14} /> : <Globe2 size={14} />,
+            marked: item.enabled !== false
+          }))}
+          selectedId={selectedId}
+          searchPlaceholder={t("Search MCP servers", "搜索 MCP 服务")}
+          addLabel={t("Add MCP server", "添加 MCP 服务")}
+          onSelect={setSelectedId}
+          onAdd={addServer}
+          headerSlot={
+            <label className="settings-toggle-field object-list-toggle">
+              <span>
+                <strong>{t("Enable MCP", "启用 MCP")}</strong>
+                <small>{t("Stored in a separate mcp.jsonc file", "保存在独立的 mcp.jsonc")}</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={mcp.enabled !== false}
+                onChange={(event) => patchMcp({ enabled: event.target.checked })}
+              />
+            </label>
+          }
+        />
+      )}
+
       <section className="settings-editor">
-        {!server ? (
-          <div className="settings-empty">
-            <p>{t("No MCP servers yet. Connect stdio, HTTP, or SSE servers to expose tools as mcp_<server>_<tool>.", "还没有 MCP 服务。可接入 stdio / HTTP / SSE，工具会注册为 mcp_<server>_<tool>。")}</p>
-            <button type="button" className="settings-secondary" onClick={addServer}>
-              <Plus size={14} />{t("Add MCP server", "添加 MCP 服务")}
-            </button>
-          </div>
-        ) : (
-          <>
-            <EditorHeader
-              kicker="MCP"
-              title={server.id}
-              description={t(
-                `Config file: ${path}. Tools register as mcp_<server>_<tool>. Progressive loading still requires load group “mcp”.`,
-                `配置文件：${path}。工具注册为 mcp_<server>_<tool>。渐进加载下仍需 load 分组 “mcp”。`
-              )}
-              actions={
+        <EditorHeader
+          kicker="MCP"
+          title={mode === "json" ? t("MCP JSON", "MCP JSON") : (server?.id || t("MCP servers", "MCP 服务"))}
+          description={t(
+            `File: ${path}. Form and JSON edit the same independent config.`,
+            `文件：${path}。表单与 JSON 编辑同一份独立配置。`
+          )}
+          actions={
+            <>
+              <nav className="settings-tabs mcp-mode-tabs" aria-label={t("MCP editor mode", "MCP 编辑模式")}>
+                <button type="button" className={mode === "form" ? "active" : ""} onClick={() => switchMode("form")}>
+                  <FormInput size={13} />{t("Form", "表单")}
+                </button>
+                <button type="button" className={mode === "json" ? "active" : ""} onClick={() => switchMode("json")}>
+                  <Braces size={13} />JSON
+                </button>
+              </nav>
+              {saveBar}
+              {mode === "form" && server && (
                 <>
                   <label className="settings-switch">
                     <input
@@ -177,22 +247,43 @@ export function McpSettingsSection() {
                     <span />
                     <strong>{server.enabled !== false ? t("Enabled", "已启用") : t("Disabled", "已禁用")}</strong>
                   </label>
-                  <button
-                    type="button"
-                    className="settings-secondary"
-                    disabled={!dirty || save.isPending}
-                    onClick={() => void save.mutateAsync()}
-                  >
-                    <Save size={14} />{save.isPending ? t("Saving", "正在保存") : dirty ? t("Save MCP", "保存 MCP") : t("Saved", "已保存")}
-                  </button>
                   <button type="button" className="settings-danger" onClick={() => void deleteServer()}>
                     <Trash2 size={14} />{t("Delete", "删除")}
                   </button>
                 </>
-              }
-            />
-            {error && <div className="settings-inline-error">{error.message}</div>}
+              )}
+            </>
+          }
+        />
 
+        {(error || parseError) && (
+          <div className="settings-inline-error">{parseError ?? error?.message}</div>
+        )}
+
+        {mode === "json" ? (
+          <>
+            <div className="advanced-settings-note">
+              {t(
+                "Edit the full mcp.jsonc content. Saving validates transport, server ids, and timeouts on the server.",
+                "编辑完整 mcp.jsonc。保存时服务端会校验传输方式、服务 ID 和超时。"
+              )}
+            </div>
+            <JsonCodeEditor
+              value={raw}
+              onChange={updateRaw}
+              height="calc(100vh - 250px)"
+              ariaLabel={t("MCP configuration JSON", "MCP 配置 JSON")}
+            />
+          </>
+        ) : !server ? (
+          <div className="settings-empty">
+            <p>{t("No MCP servers yet. Connect stdio, HTTP, or SSE servers to expose tools as mcp_<server>_<tool>.", "还没有 MCP 服务。可接入 stdio / HTTP / SSE，工具会注册为 mcp_<server>_<tool>。")}</p>
+            <button type="button" className="settings-secondary" onClick={addServer}>
+              <Plus size={14} />{t("Add MCP server", "添加 MCP 服务")}
+            </button>
+          </div>
+        ) : (
+          <>
             <SettingsGroup
               title={t("Server identity", "服务标识")}
               description={t("Stable id and transport used to reach the server", "稳定标识与连接方式")}
@@ -337,30 +428,29 @@ export function McpSettingsSection() {
                 <strong>{t("Independent config file", "独立配置文件")}</strong>
                 <p>
                   {t(
-                    `MCP is no longer stored in config.jsonc. Changes here save to ${path} only.`,
-                    `MCP 已不再写入 config.jsonc。这里的修改只会保存到 ${path}。`
+                    `MCP lives in ${path}. Use the JSON tab to edit the whole file like Advanced settings.`,
+                    `MCP 保存在 ${path}。可用 JSON 页签像高级配置一样编辑整份文件。`
                   )}
                 </p>
               </div>
             </div>
           </>
         )}
-        {!server && error && <div className="settings-inline-error">{error.message}</div>}
-        {!server && (
-          <div className="editor-header-actions" style={{ marginTop: 12 }}>
-            <button
-              type="button"
-              className="settings-secondary"
-              disabled={!dirty || save.isPending}
-              onClick={() => void save.mutateAsync()}
-            >
-              <Save size={14} />{save.isPending ? t("Saving", "正在保存") : dirty ? t("Save MCP", "保存 MCP") : t("Saved", "已保存")}
-            </button>
-          </div>
-        )}
       </section>
     </div>
   );
+}
+
+/** 解析 MCP JSON 文本。 */
+function parseMcpJson(raw: string): McpConfig {
+  const value = JSON.parse(raw) as McpConfig;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("MCP configuration must be a JSON object");
+  }
+  if (value.servers !== undefined && !Array.isArray(value.servers)) {
+    throw new Error("mcp.servers must be an array");
+  }
+  return value;
 }
 
 function uniqueServerId(servers: McpServerConfig[]): string {
