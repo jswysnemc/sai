@@ -15,6 +15,10 @@ pub(crate) const SECRET_SENTINEL: &str = "__SAI_SECRET_UNCHANGED__";
 pub(crate) fn load_redacted(paths: &SaiPaths) -> Result<Value> {
     let config = AppConfig::load_or_default(paths)?;
     let mut value = serde_json::to_value(config)?;
+    // MCP 已独立到 mcp.jsonc，主配置 API 不再暴露该字段
+    if let Some(object) = value.as_object_mut() {
+        object.remove("mcp");
+    }
     redact_value(&mut value, None);
     Ok(value)
 }
@@ -28,6 +32,10 @@ pub(crate) fn load_redacted(paths: &SaiPaths) -> Result<Value> {
 /// 返回:
 /// - 保存后的脱敏配置
 pub(crate) fn save(paths: &SaiPaths, mut submitted: Value) -> Result<Value> {
+    // 主配置保存忽略 mcp；请走 /api/config/mcp
+    if let Some(object) = submitted.as_object_mut() {
+        object.remove("mcp");
+    }
     let current = serde_json::to_value(AppConfig::load_or_default(paths)?)?;
     merge_secret_sentinels(&mut submitted, &current);
     let config: AppConfig =
