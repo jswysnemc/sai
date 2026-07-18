@@ -3,6 +3,7 @@ mod compaction_model;
 mod context_projection;
 mod conversation;
 mod event;
+mod instruction_files;
 mod lifecycle;
 mod message_context;
 mod mode;
