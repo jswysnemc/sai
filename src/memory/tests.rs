@@ -35,6 +35,28 @@ mod tests {
     }
 
     #[test]
+    fn writes_markdown_and_fts_index() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = AppConfig::default();
+        let paths = test_paths(&temp);
+        let store = MemoryStore::new(&config, &paths);
+        let id = store
+            .remember_fact("Niri 是基于 Smithay 的 Wayland 合成器", "test")
+            .unwrap();
+        assert!(id > 0);
+        let md = config
+            .active_persona_memory_data_dir(&paths)
+            .join("memory/files/facts")
+            .join(format!("{id}.md"));
+        assert!(md.is_file(), "expected markdown at {}", md.display());
+        let body = std::fs::read_to_string(&md).unwrap();
+        assert!(body.contains("Niri"));
+        assert!(body.contains("kind: facts"));
+        let result = store.recall_memories("Smithay Wayland", 5, false).unwrap();
+        assert!(result.to_string().contains("Smithay"));
+    }
+
+    #[test]
     fn reset_all_clears_facts_and_episodes() {
         let temp = tempfile::tempdir().unwrap();
         let config = AppConfig::default();

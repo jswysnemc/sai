@@ -45,7 +45,137 @@ fn init_data_db(conn: &Connection) -> Result<()> {
     add_column_if_missing(conn, "facts", "last_decay_at", "TEXT")?;
     add_column_if_missing(conn, "episodes", "strength", "REAL NOT NULL DEFAULT 1.0")?;
     add_column_if_missing(conn, "episodes", "last_decay_at", "TEXT")?;
+    ensure_fts(conn)?;
     Ok(())
+}
+
+fn ensure_fts(conn: &Connection) -> Result<()> {
+    // Standalone FTS5 indexes (not external-content) over memory bodies.
+    conn.execute_batch(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(
+            content,
+            tokenize = 'unicode61 remove_diacritics 2'
+        );
+        CREATE VIRTUAL TABLE IF NOT EXISTS episodes_fts USING fts5(
+            content,
+            tokenize = 'unicode61 remove_diacritics 2'
+        );
+        CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts_tri USING fts5(
+            content,
+            tokenize = 'trigram'
+        );
+        CREATE VIRTUAL TABLE IF NOT EXISTS episodes_fts_tri USING fts5(
+            content,
+            tokenize = 'trigram'
+        );",
+    )?;
+    Ok(())
+}
+
+fn rebuild_fts_table(conn: &Connection, table: &str) -> Result<()> {
+    for suffix in ["_fts", "_fts_tri"] {
+        let fts = format!("{table}{suffix}");
+        conn.execute(&format!("DELETE FROM {fts}"), [])?;
+        conn.execute(
+            &format!("INSERT INTO {fts}(rowid, content) SELECT id, content FROM {table}"),
+            [],
+        )?;
+    }
+    Ok(())
+}
+
+fn fts_upsert_row(conn: &Connection, table: &str, id: i64, content: &str) -> Result<()> {
+    for suffix in ["_fts", "_fts_tri"] {
+        let fts = format!("{table}{suffix}");
+        conn.execute(&format!("DELETE FROM {fts} WHERE rowid = ?1"), params![id])?;
+        conn.execute(
+            &format!("INSERT INTO {fts}(rowid, content) VALUES (?1, ?2)"),
+            params![id, content],
+        )?;
+    }
+    Ok(())
+}
+
+fn fts_delete_row(conn: &Connection, table: &str, id: i64) -> Result<()> {
+    for suffix in ["_fts", "_fts_tri"] {
+        let fts = format!("{table}{suffix}");
+        conn.execute(&format!("DELETE FROM {fts} WHERE rowid = ?1"), params![id])?;
+    }
+    Ok(())
+}
+
+fn write_memory_markdown(
+    files_dir: &PathBuf,
+    kind: &str,
+    id: i64,
+    content: &str,
+    source: &str,
+    status: &str,
+    confidence: Option<f64>,
+    strength: f64,
+    created_at: &str,
+    updated_at: &str,
+) -> Result<PathBuf> {
+    let dir = files_dir.join(kind);
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join(format!("{id}.md"));
+    let conf = confidence
+        .map(|value| format!("{value}"))
+        .unwrap_or_else(|| "1.0".to_string());
+    let body = format!(
+        "---\nid: {id}\nkind: {kind}\nsource: {source}\nstatus: {status}\nconfidence: {conf}\nstrength: {strength}\ncreated_at: {created_at}\nupdated_at: {updated_at}\n---\n\n{content}\n"
+    );
+    std::fs::write(&path, body)?;
+    Ok(path)
+}
+
+fn delete_memory_markdown(files_dir: &PathBuf, kind: &str, id: i64) -> Result<()> {
+    let path = files_dir.join(kind).join(format!("{id}.md"));
+    if path.is_file() {
+        let _ = std::fs::remove_file(path);
+    }
+    Ok(())
+}
+
+fn clear_memory_markdown(files_dir: &PathBuf) -> Result<()> {
+    for kind in ["facts", "episodes"] {
+        let dir = files_dir.join(kind);
+        if !dir.is_dir() {
+            continue;
+        }
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            if entry.path().extension().and_then(|e| e.to_str()) == Some("md") {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn fts_query_terms(query: &str) -> String {
+    // Build a safe FTS5 phrase/OR query from whitespace tokens.
+    let tokens = query_tokens(query);
+    if tokens.is_empty() {
+        return String::new();
+    }
+    tokens
+        .into_iter()
+        .map(|token| {
+            let escaped = token.replace('"', "\"\"");
+            format!("\"{escaped}\"")
+        })
+        .collect::<Vec<_>>()
+        .join(" OR ")
+}
+
+fn contains_cjk(text: &str) -> bool {
+    text.chars().any(|ch| {
+        ('\u{4e00}'..='\u{9fff}').contains(&ch)
+            || ('\u{3400}'..='\u{4dbf}').contains(&ch)
+            || ('\u{3040}'..='\u{30ff}').contains(&ch)
+            || ('\u{ac00}'..='\u{d7af}').contains(&ch)
+    })
 }
 
 fn init_state_db(conn: &Connection) -> Result<()> {

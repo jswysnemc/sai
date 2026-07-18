@@ -227,12 +227,32 @@ async fn start_subagent(args: Value, context: SubagentContext) -> Result<String>
     let _ =
         subagent_runtime::record_subagent_started(&context.paths, &context.session_id, &subagent);
     let subagent_id = subagent.id.clone();
-    let runtime_cwd =
+    let parent_workdir =
         crate::runtime_cwd::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let isolated = match super::subagent_worktree::try_create(&parent_workdir, &subagent.description)
+    {
+        Ok(value) => value,
+        Err(err) => {
+            // Isolation is best-effort; fall back to parent workdir if git worktree fails.
+            tracing_or_ignore(&format!("subagent worktree create failed: {err}"));
+            None
+        }
+    };
+    let runtime_cwd = if let Some(ref worktree) = isolated {
+        subagent_state::set_subagent_worktree(
+            &subagent_id,
+            Some(worktree.worktree_root.display().to_string()),
+            Some(worktree.branch_name.clone()),
+            Some(worktree.parent_workdir.display().to_string()),
+        );
+        worktree.workdir.clone()
+    } else {
+        parent_workdir
+    };
     tokio::spawn(async move {
         crate::runtime_cwd::scope(
             runtime_cwd,
-            execute_subagent(subagent_id, prompt, context, cancel_rx),
+            execute_subagent(subagent_id, prompt, context, cancel_rx, isolated),
         )
         .await;
     });
@@ -344,6 +364,7 @@ async fn execute_subagent(
     prompt: String,
     context: SubagentContext,
     mut cancel_rx: tokio::sync::oneshot::Receiver<()>,
+    worktree: Option<super::subagent_worktree::SubagentWorktree>,
 ) {
     let paths = context.paths.clone();
     let session_id = context.session_id.clone();
@@ -385,8 +406,10 @@ async fn execute_subagent(
     {
         progress_task.abort();
     }
+    let merge_summary = finalize_worktree(&subagent_id, worktree.as_ref(), matches!(&result, Ok(_)));
     match result {
         Ok((content, stats)) => {
+            let content = append_merge_summary(content, merge_summary.as_ref());
             subagent_state::finish_subagent(
                 &subagent_id,
                 "completed",
@@ -417,6 +440,89 @@ async fn execute_subagent(
             record_finished_runtime_subagent(&paths, &session_id, &subagent_id);
         }
     }
+}
+
+/// Apply (on success) and always clean up a delegated worktree.
+fn finalize_worktree(
+    subagent_id: &str,
+    worktree: Option<&super::subagent_worktree::SubagentWorktree>,
+    completed_ok: bool,
+) -> Option<serde_json::Value> {
+    let worktree = worktree?;
+    let mut summary = serde_json::Map::new();
+    summary.insert(
+        "worktree_root".to_string(),
+        json!(worktree.worktree_root.display().to_string()),
+    );
+    summary.insert(
+        "branch".to_string(),
+        json!(worktree.branch_name.clone()),
+    );
+
+    if completed_ok {
+        match super::subagent_worktree::apply(worktree) {
+            Ok(apply_result) => {
+                summary.insert(
+                    "apply".to_string(),
+                    serde_json::to_value(&apply_result).unwrap_or(json!({})),
+                );
+            }
+            Err(err) => {
+                summary.insert("apply_error".to_string(), json!(err.to_string()));
+            }
+        }
+    } else {
+        summary.insert("apply_skipped".to_string(), json!("subagent_not_completed"));
+    }
+
+    let cleanup = super::subagent_worktree::cleanup(worktree);
+    summary.insert(
+        "cleanup".to_string(),
+        serde_json::to_value(&cleanup).unwrap_or(json!({})),
+    );
+    let value = Value::Object(summary);
+    subagent_state::set_subagent_worktree_merge(subagent_id, value.clone());
+    Some(value)
+}
+
+fn append_merge_summary(content: String, merge: Option<&Value>) -> String {
+    let Some(merge) = merge else {
+        return content;
+    };
+    let applied = merge
+        .pointer("/apply/applied")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let changed = merge
+        .pointer("/apply/changed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let method = merge
+        .pointer("/apply/apply_method")
+        .and_then(Value::as_str)
+        .unwrap_or("-");
+    let apply_error = merge.get("apply_error").and_then(Value::as_str);
+    let note = if let Some(error) = apply_error {
+        format!("
+
+[worktree merge failed: {error}]")
+    } else if changed && applied {
+        format!("
+
+[worktree changes auto-merged via {method}]")
+    } else if changed {
+        "
+
+[worktree had changes but auto-merge skipped or no-op]".to_string()
+    } else {
+        String::new()
+    };
+    format!("{content}{note}")
+}
+
+fn tracing_or_ignore(message: &str) {
+    // Avoid hard dependency on a tracing facade for this best-effort path.
+    let _ = message;
 }
 
 /// 记录已结束子智能体的运行时状态。

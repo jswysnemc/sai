@@ -177,6 +177,10 @@ mod tests {
             result: None,
             error: None,
             stats: None,
+            worktree_root: None,
+            worktree_branch: None,
+            parent_workdir: None,
+            worktree_merge: None,
         }
     }
 

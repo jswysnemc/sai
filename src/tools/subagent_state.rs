@@ -33,6 +33,14 @@ pub(crate) struct SubagentSnapshot {
     pub(crate) error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) stats: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) worktree_root: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) worktree_branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) parent_workdir: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) worktree_merge: Option<Value>,
 }
 
 /// 子智能体运行过程中的一次进度更新。
@@ -114,6 +122,10 @@ pub(crate) fn create_subagent_for_owner(
         result: None,
         error: None,
         stats: None,
+        worktree_root: None,
+        worktree_branch: None,
+        parent_workdir: None,
+        worktree_merge: None,
     };
     let mut record = SubagentRecord {
         owner_key: owner_key.to_string(),
@@ -128,6 +140,40 @@ pub(crate) fn create_subagent_for_owner(
     subagents.insert(id, record);
     persist_owner_locked(&subagents, owner_key);
     (snapshot, cancel_rx)
+}
+
+
+/// Attach worktree isolation metadata to a running subagent.
+pub(crate) fn set_subagent_worktree(
+    id: &str,
+    worktree_root: Option<String>,
+    worktree_branch: Option<String>,
+    parent_workdir: Option<String>,
+) {
+    let mut subagents = subagents().lock().expect("subagent state lock");
+    let Some(record) = subagents.get_mut(id) else {
+        return;
+    };
+    record.snapshot.worktree_root = worktree_root;
+    record.snapshot.worktree_branch = worktree_branch;
+    record.snapshot.parent_workdir = parent_workdir;
+    record.snapshot.updated_at = unix_seconds();
+    publish_record(record);
+    let owner_key = record.owner_key.clone();
+    persist_owner_locked(&subagents, &owner_key);
+}
+
+/// Attach worktree merge result metadata to a finished or finishing subagent.
+pub(crate) fn set_subagent_worktree_merge(id: &str, merge: Value) {
+    let mut subagents = subagents().lock().expect("subagent state lock");
+    let Some(record) = subagents.get_mut(id) else {
+        return;
+    };
+    record.snapshot.worktree_merge = Some(merge);
+    record.snapshot.updated_at = unix_seconds();
+    publish_record(record);
+    let owner_key = record.owner_key.clone();
+    persist_owner_locked(&subagents, &owner_key);
 }
 
 /// 完成后台子智能体记录。

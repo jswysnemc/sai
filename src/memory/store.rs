@@ -13,6 +13,8 @@ pub struct MemoryStore {
     kb_config: KnowledgeBasePluginConfig,
     data_db: PathBuf,
     state_db: PathBuf,
+    /// Markdown memory source files (`facts/*.md`, `episodes/*.md`).
+    files_dir: PathBuf,
     skills_dir: PathBuf,
 }
 
@@ -48,6 +50,7 @@ impl MemoryStore {
             kb_config: config.plugins.knowledge_base.clone(),
             data_db: data_dir.join("memory.db"),
             state_db: state_dir.join("evicted_context.db"),
+            files_dir: data_dir.join("files"),
             skills_dir: config.active_persona_skills_dir(paths),
         }
     }
@@ -59,8 +62,11 @@ impl MemoryStore {
         if let Some(parent) = self.state_db.parent() {
             std::fs::create_dir_all(parent)?;
         }
+        std::fs::create_dir_all(self.files_dir.join("facts"))?;
+        std::fs::create_dir_all(self.files_dir.join("episodes"))?;
         init_data_db(&self.data_conn()?)?;
         init_state_db(&self.state_conn()?)?;
+        self.ensure_markdown_and_fts()?;
         self.decay_memories()?;
         Ok(())
     }
@@ -154,11 +160,28 @@ impl MemoryStore {
         }
         self.init()?;
         let conn = self.data_conn()?;
+        let ts = now();
+        let content = content.trim();
+        let source = source.trim();
         conn.execute(
-            "INSERT INTO facts (content, source, status, confidence, recall_count, created_at, updated_at) VALUES (?1, ?2, 'active', 1.0, 0, ?3, ?3)",
-            params![content.trim(), source.trim(), now()],
+            "INSERT INTO facts (content, source, status, confidence, strength, recall_count, created_at, updated_at) VALUES (?1, ?2, 'active', 1.0, 1.0, 0, ?3, ?3)",
+            params![content, source, ts],
         )?;
-        Ok(conn.last_insert_rowid())
+        let id = conn.last_insert_rowid();
+        fts_upsert_row(&conn, "facts", id, content)?;
+        write_memory_markdown(
+            &self.files_dir,
+            "facts",
+            id,
+            content,
+            source,
+            "active",
+            Some(1.0),
+            1.0,
+            &ts,
+            &ts,
+        )?;
+        Ok(id)
     }
 
     pub fn remember_pending_event(
@@ -192,6 +215,7 @@ impl MemoryStore {
             "ok": true,
             "data_db": self.data_db.display().to_string(),
             "state_db": self.state_db.display().to_string(),
+            "files_dir": self.files_dir.display().to_string(),
             "skills_dir": self.skills_dir.display().to_string(),
             "facts": count_rows(&data, "facts")?,
             "episodes": count_rows(&data, "episodes")?,
@@ -266,9 +290,12 @@ impl MemoryStore {
             "episode" | "episodes" => "episodes",
             _ => anyhow::bail!("unsupported memory kind: {kind}"),
         };
-        let affected = self
-            .data_conn()?
-            .execute(&format!("DELETE FROM {table} WHERE id = ?1"), params![id])?;
+        let conn = self.data_conn()?;
+        let affected = conn.execute(&format!("DELETE FROM {table} WHERE id = ?1"), params![id])?;
+        if affected > 0 {
+            fts_delete_row(&conn, table, id)?;
+            delete_memory_markdown(&self.files_dir, table, id)?;
+        }
         Ok(affected > 0)
     }
 
@@ -283,6 +310,11 @@ impl MemoryStore {
             "DELETE FROM sqlite_sequence WHERE name IN ('facts', 'episodes', 'pending_events', 'skill_records')",
             [],
         )?;
+        // Clear external-content FTS indexes.
+        for table in ["facts_fts", "facts_fts_tri", "episodes_fts", "episodes_fts_tri"] {
+            let _ = data.execute(&format!("DELETE FROM {table}"), []);
+        }
+        clear_memory_markdown(&self.files_dir)?;
         self.clear_evicted_context()?;
         if include_skills {
             self.remove_auto_skills()?;
@@ -337,8 +369,22 @@ impl MemoryStore {
                 truncate_chars(&compact_line(&assistant), 520)
             );
             conn.execute(
-                "INSERT INTO episodes (content, source, status, recall_count, created_at, updated_at) VALUES (?1, 'episode', 'active', 0, ?2, ?2)",
+                "INSERT INTO episodes (content, source, status, strength, recall_count, created_at, updated_at) VALUES (?1, 'episode', 'active', 1.0, 0, ?2, ?2)",
                 params![content, created_at],
+            )?;
+            let episode_id = conn.last_insert_rowid();
+            fts_upsert_row(&conn, "episodes", episode_id, &content)?;
+            write_memory_markdown(
+                &self.files_dir,
+                "episodes",
+                episode_id,
+                &content,
+                "episode",
+                "active",
+                None,
+                1.0,
+                &created_at,
+                &created_at,
             )?;
             conn.execute(
                 "UPDATE pending_events SET processed_at=?1 WHERE id=?2",
@@ -494,37 +540,51 @@ impl MemoryStore {
         include_forgotten: bool,
     ) -> Result<Vec<MemoryHit>> {
         let tokens = query_tokens(query);
-        let sql = format!(
-            "SELECT id, content, source, status, created_at FROM {table} ORDER BY updated_at DESC LIMIT 1000"
-        );
         let conn = self.data_conn()?;
-        let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt.query_map([], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-            ))
-        })?;
         let mut hits = Vec::new();
-        for row in rows {
-            let (id, content, source, status, timestamp) = row?;
-            if !include_forgotten && status == "forgotten" {
-                continue;
+        let fts_match = fts_query_terms(query);
+        if !fts_match.is_empty() {
+            self.search_table_fts(
+                &conn,
+                table,
+                &fts_match,
+                include_forgotten,
+                contains_cjk(query),
+                &mut hits,
+            )?;
+        }
+        // Keyword fallback keeps recall working when FTS returns nothing (short tokens, etc.).
+        if hits.is_empty() {
+            let sql = format!(
+                "SELECT id, content, source, status, created_at FROM {table} ORDER BY updated_at DESC LIMIT 1000"
+            );
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            })?;
+            for row in rows {
+                let (id, content, source, status, timestamp) = row?;
+                if !include_forgotten && status == "forgotten" {
+                    continue;
+                }
+                let score = score_text(&content, &tokens);
+                if score <= 0.0 {
+                    continue;
+                }
+                hits.push(MemoryHit {
+                    id,
+                    content,
+                    score,
+                    timestamp,
+                    source,
+                });
             }
-            let score = score_text(&content, &tokens);
-            if score <= 0.0 {
-                continue;
-            }
-            hits.push(MemoryHit {
-                id,
-                content,
-                score,
-                timestamp,
-                source,
-            });
         }
         hits.sort_by(|a, b| {
             b.score
@@ -533,6 +593,133 @@ impl MemoryStore {
         });
         hits.truncate(limit.clamp(1, 50));
         Ok(hits)
+    }
+
+    fn search_table_fts(
+        &self,
+        conn: &Connection,
+        table: &str,
+        fts_match: &str,
+        include_forgotten: bool,
+        prefer_trigram: bool,
+        hits: &mut Vec<MemoryHit>,
+    ) -> Result<()> {
+        let tables = if prefer_trigram {
+            [format!("{table}_fts_tri"), format!("{table}_fts")]
+        } else {
+            [format!("{table}_fts"), format!("{table}_fts_tri")]
+        };
+        let mut seen = HashSet::new();
+        for fts_table in tables {
+            let sql = format!(
+                "SELECT m.id, m.content, m.source, m.status, m.created_at, bm25({fts_table}) AS rank
+                 FROM {fts_table}
+                 JOIN {table} m ON m.id = {fts_table}.rowid
+                 WHERE {fts_table} MATCH ?1
+                 LIMIT 64"
+            );
+            let mut stmt = match conn.prepare(&sql) {
+                Ok(stmt) => stmt,
+                Err(_) => continue,
+            };
+            let rows = stmt.query_map(params![fts_match], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, f64>(5).unwrap_or(0.0),
+                ))
+            });
+            let Ok(rows) = rows else {
+                continue;
+            };
+            for row in rows {
+                let (id, content, source, status, timestamp, rank) = row?;
+                if !include_forgotten && status == "forgotten" {
+                    continue;
+                }
+                if !seen.insert(id) {
+                    continue;
+                }
+                // bm25 is lower-is-better; invert into a positive score.
+                let score = 100.0 / (1.0 + rank.max(0.0) as f32);
+                hits.push(MemoryHit {
+                    id,
+                    content,
+                    score,
+                    timestamp,
+                    source,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Ensure markdown files exist for SQL rows and FTS indexes are populated.
+    fn ensure_markdown_and_fts(&self) -> Result<()> {
+        let conn = self.data_conn()?;
+        for table in ["facts", "episodes"] {
+            let sql = if table == "facts" {
+                "SELECT id, content, source, status, confidence, strength, created_at, updated_at FROM facts"
+            } else {
+                "SELECT id, content, source, status, 1.0, strength, created_at, updated_at FROM episodes"
+            };
+            let mut stmt = conn.prepare(sql)?;
+            let rows = stmt.query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, f64>(4).unwrap_or(1.0),
+                    row.get::<_, f64>(5).unwrap_or(1.0),
+                    row.get::<_, String>(6)?,
+                    row.get::<_, String>(7)?,
+                ))
+            })?;
+            for row in rows {
+                let (id, content, source, status, confidence, strength, created_at, updated_at) =
+                    row?;
+                let path = self.files_dir.join(table).join(format!("{id}.md"));
+                if !path.is_file() {
+                    write_memory_markdown(
+                        &self.files_dir,
+                        table,
+                        id,
+                        &content,
+                        &source,
+                        &status,
+                        if table == "facts" {
+                            Some(confidence)
+                        } else {
+                            None
+                        },
+                        strength,
+                        &created_at,
+                        &updated_at,
+                    )?;
+                }
+            }
+            drop(stmt);
+            let base_count: i64 = conn.query_row(
+                &format!("SELECT COUNT(*) FROM {table}"),
+                [],
+                |row| row.get(0),
+            )?;
+            let fts_count: i64 = conn
+                .query_row(
+                    &format!("SELECT COUNT(*) FROM {table}_fts"),
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            if base_count > 0 && fts_count == 0 {
+                rebuild_fts_table(&conn, table)?;
+            }
+        }
+        Ok(())
     }
 
     fn reinforce(&self, id: i64, source: &str) -> Result<()> {

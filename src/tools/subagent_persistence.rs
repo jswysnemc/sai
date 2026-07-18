@@ -80,6 +80,10 @@ mod tests {
                 result: Some("done".to_string()),
                 error: None,
                 stats: None,
+                worktree_root: None,
+                worktree_branch: None,
+                parent_workdir: None,
+                worktree_merge: None,
             },
             timeline: vec![SubagentTimelineEntry::Text {
                 text: "done".to_string(),

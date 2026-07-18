@@ -36,6 +36,7 @@ mod subagent_persistence;
 mod subagent_reminder;
 mod subagent_runner;
 mod subagent_runtime;
+mod subagent_worktree;
 pub(crate) mod subagent_state;
 pub(crate) mod subagent_timeline;
 pub(crate) mod todo;

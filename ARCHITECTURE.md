@@ -230,7 +230,8 @@ flowchart LR
         KB["kb/ 知识库文件 + 关键词索引 + 语义嵌入"]
         PERSONA["persona/ 按人格隔离"]
         MEMEDIR["persona/memes/ 表情包图片 + 索引"]
-        MEMDB["persona/memory/memory.db 记忆数据"]
+        MEMDB["persona/memory/memory.db 记忆元数据+FTS"]
+        MEMMD["persona/memory/files/*.md Markdown 记忆源"]
         EVIDB["persona/memory/evicted_context.db 裁剪上下文"]
         AUTOSKILL["persona/skills/ 自动学习的 skill"]
     end
@@ -252,6 +253,7 @@ flowchart LR
         S_EPI["episodes id content source status strength recall_count last_recalled_at last_decay_at created_at updated_at"]
         S_PE["pending_events id user_message assistant_message created_at processed_at"]
         S_SKR["skill_records id name path summary created_at updated_at"]
+        S_FTS["facts_fts / episodes_fts (+ trigram) FTS5 全文索引"]
     end
 
     subgraph Schema3["evicted_context.db schema"]
@@ -259,7 +261,8 @@ flowchart LR
     end
 
     CONVDB -.-> S_TURNS
-    MEMDB -.-> S_FACTS & S_EPI & S_PE & S_SKR
+    MEMDB -.-> S_FACTS & S_EPI & S_PE & S_SKR & S_FTS
+    MEMMD -.-> S_FACTS & S_EPI
     EVIDB -.-> S_EVI
 
     CFG -->|读写| AGENTW["Agent / Config"]
@@ -395,8 +398,8 @@ flowchart TB
 - **入口分发**：`main.rs` → `cli::run`，按子命令分发。无参数进 REPL，带消息走单轮对话，`--shell-intercept` 处理 shell command-not-found 拦截。
 - **Agent 两种模式**：`Yolo` 自由调用工具；`Plan` 只允许只读工具，遇写入工具直接 bail。
 - **渐进式工具加载**：启动仅暴露 `load` + 基础工具，模型按需调用 `load` 加载工具组/skill，可见集持久化到 `loaded-tools.json` 跨轮恢复。
-- **记忆双库**：`memory.db` 存 facts/episodes/pending_events/skill_records；`evicted_context.db` 存被上下文裁剪掉的旧轮次。基于半衰期 strength 衰减实现遗忘，召回时 reinforce 强化。
-- **子代理**：`task` 工具启动后台子代理，`SubagentRunner` 独立 LLM 循环，有 max_steps 预算与超时，预算耗尽注入 `finalization_prompt` 收尾。
+- **记忆双库**：`memory.db` 存 facts/episodes/pending_events/skill_records 与 FTS5 索引（unicode61 + trigram）；Markdown 源文件在 `memory/files/{facts,episodes}/*.md`；`evicted_context.db` 存被上下文裁剪掉的旧轮次。基于半衰期 strength 衰减实现遗忘，召回时 reinforce 强化。
+- **子代理**：`subagent` 工具启动后台子代理；可写任务在 git 仓库内自动创建 `.sai-subagents` worktree 隔离，成功完成后自动 apply 回父工作区并清理 worktree/分支。`SubagentRunner` 独立 LLM 循环，有 max_steps 预算与超时，预算耗尽注入 `finalization_prompt` 收尾。
 - **网关**：`supervisor` 用 JoinSet 并发启动配置中启用的 QQ/微信/OneBot 渠道，事件接入后构建 Agent 走 `chat_stream`，再通过渠道工具回复。
 - **存储隔离**：记忆、表情包、skills 按人格（persona）目录隔离；对话状态、用量、闹钟全局共享。
 - **跨平台目录**：`paths::SaiPaths` 通过 `directories` 解析配置/数据/缓存/状态目录。Linux 遵循 XDG；Windows 映射到 `%APPDATA%` / `%LOCALAPPDATA%` 等标准位置。PowerShell hook 写入 `config_dir/shell/powershell-hook.ps1`。
