@@ -225,14 +225,36 @@ impl PooledClient {
     }
 }
 
+/// 展开配置中的 `$env:VAR` 引用；非该前缀则原样返回。
+fn expand_env_value(value: &str) -> String {
+    let trimmed = value.trim();
+    if let Some(name) = trimmed.strip_prefix("$env:") {
+        let name = name.trim();
+        if name.is_empty() {
+            return String::new();
+        }
+        return std::env::var(name).unwrap_or_default();
+    }
+    value.to_string()
+}
+
+/// 展开字符串键值表中的 `$env:` 引用。
+fn expand_env_map(map: &std::collections::HashMap<String, String>) -> std::collections::HashMap<String, String> {
+    map.iter()
+        .map(|(key, value)| (key.clone(), expand_env_value(value)))
+        .collect()
+}
+
 impl Transport {
     async fn connect_stdio(config: &McpServerConfig) -> Result<Self> {
         if config.command.trim().is_empty() {
             bail!("mcp server {} missing command", config.id);
         }
         let mut command = Command::new(&config.command);
+        let args: Vec<String> = config.args.iter().map(|arg| expand_env_value(arg)).collect();
+        let env = expand_env_map(&config.env);
         command
-            .args(&config.args)
+            .args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -245,7 +267,7 @@ impl Transport {
         {
             command.current_dir(cwd);
         }
-        for (key, value) in &config.env {
+        for (key, value) in &env {
             command.env(key, value);
         }
         let mut child = command
@@ -276,7 +298,7 @@ impl Transport {
         Ok(Self::Http {
             client,
             url,
-            headers: config.headers.clone(),
+            headers: expand_env_map(&config.headers),
             session_id: None,
         })
     }
@@ -304,7 +326,7 @@ impl Transport {
             return Ok(Self::Sse {
                 client,
                 message_url: message_url.to_string(),
-                headers: config.headers.clone(),
+                headers: expand_env_map(&config.headers),
                 session_id: None,
             });
         }
@@ -323,7 +345,7 @@ impl Transport {
         Ok(Self::Sse {
             client,
             message_url,
-            headers: config.headers.clone(),
+            headers: expand_env_map(&config.headers),
             session_id: None,
         })
     }
