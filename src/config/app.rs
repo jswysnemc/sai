@@ -656,6 +656,16 @@ impl AppConfig {
     }
 
     pub fn base_system_prompt(&self, paths: &SaiPaths) -> Result<String> {
+        // 1. Agent 档案 / 运行时覆盖写入的 system_prompt 优先于 persona 文件
+        if let Some(prompt) = self
+            .system_prompt
+            .as_deref()
+            .map(str::trim)
+            .filter(|prompt| !prompt.is_empty())
+        {
+            return Ok(prompt.to_string());
+        }
+        // 2. 未覆盖时再读 active_persona / legacy 提示词
         let persona = self.active_persona_prompt(paths)?;
         if persona.trim().is_empty() {
             Ok(default_system_prompt())
@@ -733,19 +743,20 @@ impl AppConfig {
     }
 
     pub fn active_persona_prompt(&self, paths: &SaiPaths) -> Result<String> {
-        if !self.prompt.active_persona.trim().is_empty() {
-            let path = self.persona_path(paths, self.prompt.active_persona.trim());
-            if path.exists() {
-                return std::fs::read_to_string(&path)
-                    .with_context(|| format!("failed to read {}", path.display()));
-            }
-        }
+        // 显式 system_prompt（含 Agent 覆盖）优先，避免 persona 文件盖掉 code-agent 等档案
         if let Some(prompt) = self
             .system_prompt
             .as_deref()
             .filter(|prompt| !prompt.trim().is_empty())
         {
             return Ok(prompt.to_string());
+        }
+        if !self.prompt.active_persona.trim().is_empty() {
+            let path = self.persona_path(paths, self.prompt.active_persona.trim());
+            if path.exists() {
+                return std::fs::read_to_string(&path)
+                    .with_context(|| format!("failed to read {}", path.display()));
+            }
         }
         let legacy = self.custom_system_prompt(paths)?;
         if legacy.trim().is_empty() {

@@ -14,9 +14,11 @@ const STORAGE_KEY = "sai.chat-agent";
 export function useChatAgent() {
   const { locale } = useI18n();
   const response = useQuery({ queryKey: ["config"], queryFn: api.config.load });
-  const [preferredId, setPreferredId] = useState(() => window.localStorage.getItem(STORAGE_KEY) ?? "general");
+  const [preferredId, setPreferredId] = useState(() => window.localStorage.getItem(STORAGE_KEY));
   const choices = response.data ? buildAgentChoices(response.data.config, locale) : [];
-  const selection = resolveAgentChoice(choices, preferredId);
+  // 本地未选过时，跟随配置里的 Web 默认 Agent（default_agent），而不是写死 general
+  const fallbackId = response.data?.config.default_agent?.trim() || "general";
+  const selection = resolveAgentChoice(choices, preferredId ?? fallbackId);
 
   useEffect(() => {
     if (selection) window.localStorage.setItem(STORAGE_KEY, selection.id);
