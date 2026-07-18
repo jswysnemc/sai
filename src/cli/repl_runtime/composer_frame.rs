@@ -105,13 +105,21 @@ impl ComposerFrame {
 
         queue!(output, MoveTo(0, row), Print(chrome_rule(cols)))?;
         row = row.saturating_add(1);
-        if layout.slash_panel.is_visible() {
+        let end_row = if layout.slash_panel.is_visible() {
             layout.slash_panel.draw(output, row, cols)?;
+            row.saturating_add(layout.slash_panel.height())
         } else {
             queue!(output, MoveTo(0, row), Print(self.chrome.footer_line(cols)))?;
+            row.saturating_add(1)
+        };
+
+        // 3. composer 是受管区域底部：面板收起或行数减少后下方残留一并清除；
+        //    贴底时无下方区域，跳过以免 MoveTo 越界被 clamp 到底行误清 footer
+        if end_row < viewport.size().rows {
+            queue!(output, MoveTo(0, end_row), Clear(ClearType::FromCursorDown))?;
         }
 
-        // 3. 历史插入会移动终端光标，最后必须把它放回可继续编辑的位置
+        // 4. 历史插入会移动终端光标，最后必须把它放回可继续编辑的位置
         queue!(
             output,
             MoveTo(
@@ -273,5 +281,54 @@ mod tests {
         assert!(output.contains("/"));
         assert!(output.contains("!"));
         assert!(output.contains("\x1b[2m"));
+    }
+
+    /// 验证悬浮 composer 绘制后清除其下方残留内容。
+    #[test]
+    fn floating_composer_clears_stale_rows_below() {
+        let chrome = ReplChrome {
+            mode: AgentMode::Yolo,
+            context_ratio: 0.0,
+            context_window_tokens: 120_000,
+            model: "gpt".to_string(),
+            thinking: "auto".to_string(),
+            directory: "/workspace".to_string(),
+            git_branch: None,
+        };
+        let frame = ComposerFrame::new(chrome, String::new(), 0, false, 0);
+        let mut viewport = InlineViewport::new();
+        viewport.update(TerminalSize { cols: 72, rows: 24 }, frame.height(72), 4);
+        let mut output = Vec::new();
+
+        frame.draw(&mut output, &viewport).unwrap();
+
+        let output = String::from_utf8(output).unwrap();
+        // composer 顶部在行 4（0 起），高 4 行，末行之后（行 8 → 1 起第 9 行）清到屏底
+        assert!(output.contains("\x1b[9;1H\x1b[J"));
+    }
+
+    /// 验证贴底 composer 不发出越界清除，footer 行保持完整。
+    #[test]
+    fn bottom_pinned_composer_keeps_footer_row() {
+        let chrome = ReplChrome {
+            mode: AgentMode::Yolo,
+            context_ratio: 0.0,
+            context_window_tokens: 120_000,
+            model: "gpt".to_string(),
+            thinking: "auto".to_string(),
+            directory: "/workspace".to_string(),
+            git_branch: None,
+        };
+        let frame = ComposerFrame::new(chrome, String::new(), 0, false, 0);
+        let mut viewport = InlineViewport::new();
+        // 历史充满屏幕：composer 固定在底部，末行即屏幕最后一行
+        viewport.update(TerminalSize { cols: 72, rows: 24 }, frame.height(72), 60);
+        let mut output = Vec::new();
+
+        frame.draw(&mut output, &viewport).unwrap();
+
+        let output = String::from_utf8(output).unwrap();
+        assert!(!output.contains("\x1b[J"), "贴底时不能清除 footer 行");
+        assert!(output.contains("gpt"));
     }
 }

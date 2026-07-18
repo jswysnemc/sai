@@ -24,6 +24,13 @@ pub(super) async fn run_repl(
         reasoning_mode: render::ReasoningDisplayMode::from_config(&config.display.reasoning),
         tool_call_mode: render::ToolCallDisplayMode::from_config(&config.display.tool_calls),
     };
+    // 光标不在行首时先换行，避免受管区域首行覆盖 shell 残留输出
+    if crossterm::cursor::position()
+        .map(|(col, _)| col != 0)
+        .unwrap_or(false)
+    {
+        println!();
+    }
     let mut runtime = ReplRuntime::new(
         config.display.repl_transcript_row_cap,
         initial_transcript_options,
@@ -36,7 +43,20 @@ pub(super) async fn run_repl(
             .unwrap_or_else(|_| "~".to_string()),
         format!("{} mode", mode.label()),
     )?;
-    // 1. 循环外创建 Agent，避免每轮重建 MemoryStore / 工具注册表
+    runtime.record_meta(
+        t(
+            "Tab mode · Enter send · Shift+Enter newline · Ctrl+V paste",
+            "Tab 模式 · Enter 发送 · Shift+Enter 换行 · Ctrl+V 粘贴",
+        )
+        .to_string(),
+    )?;
+    // 1. 重量级初始化前先呈现输入框，避免版本信息后长时间没有输入区
+    {
+        let chrome = ReplChrome::from_runtime(&config, &state, mode);
+        runtime.update_composer(&chrome, "", 0, false, 0)?;
+        runtime.draw_composer(&mut std::io::stdout())?;
+    }
+    // 2. 循环外创建 Agent，避免每轮重建 MemoryStore / 工具注册表
     let initial_registry = build_repl_tool_registry(&config, paths, mode)?;
     let mut agent = Agent::new(
         config.clone(),
@@ -47,13 +67,6 @@ pub(super) async fn run_repl(
         mode,
     )?;
 
-    runtime.record_meta(
-        t(
-            "Tab mode · Enter send · Shift+Enter newline · Ctrl+V paste",
-            "Tab 模式 · Enter 发送 · Shift+Enter 换行 · Ctrl+V 粘贴",
-        )
-        .to_string(),
-    )?;
     loop {
         // 每轮刷新底栏上下文/模型信息
         let mut chrome = ReplChrome::from_runtime(&config, &state, mode);
@@ -181,7 +194,7 @@ pub(super) async fn run_repl(
                     crate::control_commands::ControlCommand::Clear { all } => {
                         let message = crate::control_commands::clear_state(paths, all)?;
                         input_history.clear();
-                        // 2. 会话清空后刷新 Agent 状态；all 时重建记忆
+                        // 3. 会话清空后刷新 Agent 状态；all 时重建记忆
                         state = StateStore::new(paths)?;
                         state.init_files()?;
                         agent.replace_state(state.clone())?;
@@ -398,7 +411,7 @@ pub(super) async fn run_repl(
             input_history.push(input.to_string());
         }
         runtime.record_user(mode, input.to_string())?;
-        // 3. 模式变化时换工具表；每轮只做轻量 prepare
+        // 4. 模式变化时换工具表；每轮只做轻量 prepare
         if agent.mode() != mode {
             let registry = build_repl_tool_registry(&config, paths, mode)?;
             agent.switch_mode(mode, registry);

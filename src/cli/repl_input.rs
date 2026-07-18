@@ -71,11 +71,8 @@ pub(super) fn read_repl_input(
     let mut clipboard_state = ReplClipboardState::default();
     let mut last_escape = None::<Instant>;
     let mut last_ctrl_c = None::<Instant>;
-    let (cursor_col, _) = cursor::position()?;
-    if cursor_col != 0 {
-        writeln!(stdout)?;
-        stdout.flush()?;
-    }
+    // 输入框由 composer 绝对定位绘制；这里禁止直接向终端写换行，
+    // 否则屏幕底部会触发受管模型感知不到的滚动，吞掉上方内容
     enable_repl_terminal_input(&mut stdout)?;
     let (_, mut input_row) = cursor::position()?;
     let mut rendered_rows = 0u16;

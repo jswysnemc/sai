@@ -114,6 +114,9 @@ impl ReplRuntime {
         let previous_size = self.viewport.size();
         let previous_history = self.viewport.history_height();
         let composer_height = self.composer_height_for(size);
+        // composer 需要的行数超过内容下方空余时，先滚动终端腾出空间，
+        // 避免 composer 直接覆盖历史尾部（如启动于屏幕底部时的欢迎面板）
+        self.reserve_composer_rows(size, composer_height)?;
         self.viewport
             .update(size, composer_height, self.stream.on_screen());
         if self.needs_replay_after_layout(previous_size, previous_history) {
@@ -121,6 +124,45 @@ impl ReplRuntime {
             self.maybe_reflow_due(false)?;
         }
         Ok((self.viewport.composer_top(), composer_height))
+    }
+
+    /// 在内容尾部与屏幕底部之间为 composer 腾出足够行数。
+    ///
+    /// 不足时在屏幕底行输出换行触发真实滚动，上方内容进入原生
+    /// scrollback；被 origin 上移吸收的部分不计入滚出行。
+    ///
+    /// 参数:
+    /// - `size`: 当前终端尺寸
+    /// - `composer_height`: composer 需要的行数
+    ///
+    /// 返回:
+    /// - 操作是否成功
+    fn reserve_composer_rows(&mut self, size: TerminalSize, composer_height: u16) -> Result<()> {
+        let on_screen = self
+            .stream
+            .on_screen()
+            .min(usize::from(size.rows))
+            .min(usize::from(u16::MAX)) as u16;
+        let content_bottom = self
+            .viewport
+            .origin_row()
+            .saturating_add(on_screen)
+            .min(size.rows);
+        let free_rows = size.rows.saturating_sub(content_bottom);
+        let deficit = composer_height.saturating_sub(free_rows);
+        if deficit == 0 {
+            return Ok(());
+        }
+        let mut stdout = io::stdout();
+        crossterm::queue!(stdout, crossterm::cursor::MoveTo(0, size.rows.saturating_sub(1)))?;
+        for _ in 0..deficit {
+            crossterm::queue!(stdout, crossterm::style::Print("\r\n"))?;
+        }
+        stdout.flush()?;
+        let absorbed = deficit.min(self.viewport.origin_row());
+        self.viewport.apply_terminal_scroll(deficit);
+        self.stream.note_scrolled(deficit.saturating_sub(absorbed));
+        Ok(())
     }
 
     /// 按已保存的 source 重绘固定在底部的 composer。
@@ -552,8 +594,11 @@ impl ReplRuntime {
                     new_total,
                     self.stream.offscreen(),
                 )?;
-                self.stream.note_scrolled(outcome.scrolled_rows);
+                // 被 origin 上移吸收的滚动只是把屏幕整体上移，transcript 行并未滚出
+                let absorbed = outcome.scrolled_rows.min(self.viewport.origin_row());
                 self.viewport.apply_terminal_scroll(outcome.scrolled_rows);
+                self.stream
+                    .note_scrolled(outcome.scrolled_rows.saturating_sub(absorbed));
                 self.draw_composer(&mut stdout)
             }
             SyncPlan::Repaint => self.replay(streaming),
