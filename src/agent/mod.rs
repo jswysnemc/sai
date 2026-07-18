@@ -3,6 +3,7 @@ mod compaction_model;
 mod context_projection;
 mod conversation;
 mod event;
+mod goal_events;
 mod instruction_files;
 mod lifecycle;
 mod message_context;
@@ -39,6 +40,7 @@ use tool_visibility::ToolVisibility;
 
 pub(crate) use compaction::CompactionRunOutcome;
 pub use event::{AgentEvent, CompactionError};
+pub(crate) use goal_events::GoalEventBatch;
 pub use mode::AgentMode;
 
 const MAX_QUESTION_ROUNDS_PER_TURN: usize = 8;

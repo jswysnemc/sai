@@ -271,6 +271,7 @@ mod tests {
             runtime_owner_kind: owner_kind.map(str::to_string),
             runtime_owner_id: owner_id.map(str::to_string),
             runtime_process_kind: None,
+            goal_id: None,
             label: label.to_string(),
             command: "sai gateway qq-bot".to_string(),
             cwd: ".".to_string(),
@@ -282,6 +283,7 @@ mod tests {
             started_at: 1,
             updated_at: 1,
             timeout_seconds: 0,
+            completion_notified: false,
         }
     }
 

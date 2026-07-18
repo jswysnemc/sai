@@ -4,6 +4,7 @@ mod background_runtime;
 mod background_schema;
 mod background_tasks;
 pub(crate) mod background_timeout;
+mod goal_completions;
 mod process;
 mod run;
 mod store;
@@ -18,6 +19,9 @@ pub(crate) use background::{
     cleanup_background_tasks_for_user, list_background_tasks_for_user,
     read_background_task_output_for_user, start_background_task_for_user,
     stop_background_task_for_user,
+};
+pub(crate) use goal_completions::{
+    acknowledge_background_completions, poll_background_completions, BackgroundCompletionNotice,
 };
 pub(crate) use process::{process_exists, spawn_background_shell, terminate_process};
 pub(crate) use store::{unix_seconds, BackgroundCommandStore, BackgroundCommandTask};
@@ -66,6 +70,30 @@ pub(crate) fn register_command_mode_background(
             paths.clone(),
             true,
             Some(BackgroundRuntimeOwner::command_mode(session_id)),
+        );
+    }
+}
+
+/// 为交互式会话绑定后台命令工具 owner。
+///
+/// 参数:
+/// - `registry`: 工具注册表
+/// - `config`: 应用配置
+/// - `paths`: Sai 路径
+/// - `session_id`: 会话标识
+pub(crate) fn register_session_background(
+    registry: &mut ToolRegistry,
+    config: &AppConfig,
+    paths: &SaiPaths,
+    session_id: &str,
+) {
+    if config.tools.background_commands_enabled {
+        background::register_with_runtime_owner(
+            registry,
+            config.clone(),
+            paths.clone(),
+            true,
+            Some(BackgroundRuntimeOwner::session(session_id)),
         );
     }
 }

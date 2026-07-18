@@ -68,6 +68,7 @@ mod tests {
             owner_key: owner_key.clone(),
             snapshot: SubagentSnapshot {
                 id: "subagent-1".to_string(),
+                goal_id: None,
                 description: "inspect".to_string(),
                 subagent_type: "general".to_string(),
                 status: "completed".to_string(),

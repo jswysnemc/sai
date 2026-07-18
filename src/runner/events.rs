@@ -7,6 +7,8 @@ use anyhow::Result;
 #[derive(Debug, Clone)]
 pub(crate) enum RunnerEvent {
     Started,
+    /// Goal 仍未完成，正在等待后台命令或子 Agent 完成后自动续轮
+    WaitingExternal,
     Agent(AgentEvent),
     Interrupted,
     Completed(ChatResult),

@@ -14,6 +14,7 @@ export function LiveRunIndicator({ status }: { status: LiveRunState["status"] })
   const labels: Record<Exclude<LiveRunState["status"], "idle">, string> = {
     queued: t("Queued for this session", "已加入会话队列"),
     waiting_response: t("Waiting for model response", "等待模型响应"),
+    waiting_external: t("Waiting for background work", "等待后台工作"),
     waiting_permission: t("Waiting for permission decision", "等待权限决定"),
     waiting_question: t("Waiting for your answer", "等待你的回答"),
     thinking: t("Organizing thoughts", "正在整理思路"),

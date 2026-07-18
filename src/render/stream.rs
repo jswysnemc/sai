@@ -119,6 +119,15 @@ impl StreamRenderer {
         self.ensure_work_spinner(wait_spinner_detail_line(&self.options))
     }
 
+    /// 显示等待后台命令或子 Agent 完成的状态。
+    ///
+    /// 返回:
+    /// - 启动是否成功
+    pub fn start_waiting_external(&mut self) -> Result<()> {
+        self.work_status = Some(WorkStatus::WaitingExternal);
+        self.ensure_work_spinner(wait_spinner_detail_line(&self.options))
+    }
+
     /// 写入模型流式文本片段。
     ///
     /// 参数:

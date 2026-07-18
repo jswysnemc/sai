@@ -218,8 +218,13 @@ async fn start_subagent(args: Value, context: SubagentContext) -> Result<String>
         .map(|value| value as usize)
         .unwrap_or(DEFAULT_MAX_STEPS)
         .clamp(1, MAX_MAX_STEPS);
-    let (subagent, cancel_rx) = subagent_state::create_subagent_for_owner(
+    let goal_id = crate::state::StateStore::for_session(&context.paths, &context.session_id)?
+        .goal()?
+        .filter(|goal| goal.status.accepts_external_wake())
+        .map(|goal| goal.id);
+    let (subagent, cancel_rx) = subagent_state::create_subagent_for_owner_goal(
         &context.owner_key,
+        goal_id,
         description,
         subagent_type,
         max_steps,

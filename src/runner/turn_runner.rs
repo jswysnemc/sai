@@ -1,5 +1,5 @@
 use super::{RunnerEvent, RunnerEventSink, UserInputSubmission};
-use crate::agent::Agent;
+use crate::agent::{Agent, GoalEventBatch};
 use crate::llm::ChatResult;
 use anyhow::Result;
 use std::time::Instant;
@@ -38,6 +38,7 @@ impl<'agent> TurnRunner<'agent> {
         S: RunnerEventSink,
     {
         let mut current = input.clone();
+        let mut pending_external_events = None::<GoalEventBatch>;
         loop {
             // 1. 内部续轮每次读取最新目标，保证暂停、编辑和预算状态立即生效
             if current.goal_continuation {
@@ -48,6 +49,10 @@ impl<'agent> TurnRunner<'agent> {
                     .filter(|goal| goal.status.is_active())
                     .ok_or_else(|| anyhow::anyhow!("no active goal to continue"))?;
                 current.input = crate::goal::continuation_prompt(&goal);
+                if let Some(prompt) = current.goal_event_prompt.take() {
+                    current.input.push_str("\n\n");
+                    current.input.push_str(&prompt);
+                }
                 current.image_urls.clear();
                 current.turn_id = None;
             }
@@ -94,16 +99,44 @@ impl<'agent> TurnRunner<'agent> {
                     .state()
                     .account_goal_progress(&goal.id, tokens, elapsed)?;
             }
-            // 3. 活动目标继续下一轮；其他状态结束当前 runner
-            if self
-                .agent
-                .state()
-                .goal()?
-                .is_some_and(|goal| goal.status.is_active())
-            {
-                current =
-                    UserInputSubmission::new(String::new(), input.mode).with_goal_continuation();
-                continue;
+            if let Some(batch) = pending_external_events.take() {
+                self.agent.acknowledge_goal_events(&batch)?;
+            }
+            // 3. Goal 处于活动或阻塞状态时，等待后台工作完成并主动发起完整续轮
+            if let Some(goal) = self.agent.state().goal()? {
+                if goal.status.accepts_external_wake() {
+                    let batch = self
+                        .agent
+                        .wait_for_goal_events(|| sink.on_runner_event(RunnerEvent::WaitingExternal))
+                        .await?;
+                    let latest_goal = self.agent.state().goal()?;
+                    if let Some(batch) = batch {
+                        if latest_goal
+                            .as_ref()
+                            .is_some_and(|goal| goal.status.accepts_external_wake())
+                        {
+                            if latest_goal
+                                .as_ref()
+                                .is_some_and(|goal| goal.status == crate::goal::GoalStatus::Blocked)
+                            {
+                                self.agent
+                                    .state()
+                                    .set_goal_status(crate::goal::GoalStatus::Active)?;
+                            }
+                            let prompt = batch.prompt().to_string();
+                            pending_external_events = Some(batch);
+                            current = UserInputSubmission::new(String::new(), input.mode)
+                                .with_goal_continuation()
+                                .with_goal_event_prompt(prompt);
+                            continue;
+                        }
+                    }
+                    if latest_goal.is_some_and(|goal| goal.status.is_active()) {
+                        current = UserInputSubmission::new(String::new(), input.mode)
+                            .with_goal_continuation();
+                        continue;
+                    }
+                }
             }
             sink.on_runner_event(RunnerEvent::Completed(result.clone()))?;
             return Ok(result);

@@ -213,6 +213,9 @@ pub(super) async fn run_chat_with_options(paths: &SaiPaths, options: ChatRunOpti
     let result = {
         let mut sink = |event: crate::runner::RunnerEvent| {
             match &event {
+                crate::runner::RunnerEvent::WaitingExternal => {
+                    renderer.start_waiting_external()?;
+                }
                 crate::runner::RunnerEvent::Agent(agent_event) => {
                     handle_agent_event(&mut renderer, agent_event.clone())?;
                 }

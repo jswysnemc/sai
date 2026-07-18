@@ -34,6 +34,7 @@ mod skills;
 mod subagent;
 pub(crate) mod subagent_event;
 mod subagent_feed;
+pub(crate) mod subagent_goal;
 mod subagent_persistence;
 mod subagent_reminder;
 mod subagent_runner;
@@ -280,6 +281,7 @@ pub(crate) fn register_interactive_tools(
     owner_key: String,
     session_id: String,
 ) {
+    command::register_session_background(registry, config, paths, &session_id);
     let subagent_tools = registry.clone();
     subagent::register(
         registry,

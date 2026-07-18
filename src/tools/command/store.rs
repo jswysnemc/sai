@@ -13,6 +13,8 @@ pub(crate) struct BackgroundCommandTask {
     pub(crate) runtime_owner_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) runtime_process_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) goal_id: Option<String>,
     pub(crate) label: String,
     pub(crate) command: String,
     pub(crate) cwd: String,
@@ -24,6 +26,9 @@ pub(crate) struct BackgroundCommandTask {
     pub(crate) started_at: u64,
     pub(crate) updated_at: u64,
     pub(crate) timeout_seconds: u64,
+    /// 终态完成通知是否已经交给所属会话 Agent
+    #[serde(default)]
+    pub(crate) completion_notified: bool,
 }
 
 #[derive(Debug, Clone)]

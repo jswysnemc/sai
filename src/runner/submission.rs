@@ -28,6 +28,7 @@ pub(crate) struct UserInputSubmission {
     pub(crate) extra_system_prompt: Option<String>,
     pub(crate) mode: AgentMode,
     pub(crate) goal_continuation: bool,
+    pub(crate) goal_event_prompt: Option<String>,
 }
 
 impl UserInputSubmission {
@@ -47,6 +48,7 @@ impl UserInputSubmission {
             extra_system_prompt: None,
             mode,
             goal_continuation: false,
+            goal_event_prompt: None,
         }
     }
 
@@ -104,6 +106,18 @@ impl UserInputSubmission {
     /// - 更新后的用户输入 submission
     pub(crate) fn with_goal_continuation(mut self) -> Self {
         self.goal_continuation = true;
+        self
+    }
+
+    /// 附加外部完成事件，供 Goal 自动续轮消费。
+    ///
+    /// 参数:
+    /// - `prompt`: 后台工作完成事件提示
+    ///
+    /// 返回:
+    /// - 更新后的用户输入 submission
+    pub(crate) fn with_goal_event_prompt(mut self, prompt: impl Into<String>) -> Self {
+        self.goal_event_prompt = Some(prompt.into());
         self
     }
 }

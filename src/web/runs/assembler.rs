@@ -60,6 +60,7 @@ impl EventAssembler {
                 events.push(self.event("run.started", json!({})));
                 events
             }
+            RunnerEvent::WaitingExternal => self.status_event("waiting_external"),
             RunnerEvent::Agent(event) => self.map_agent_event(event),
             RunnerEvent::Interrupted => {
                 self.status = None;
@@ -536,5 +537,16 @@ mod tests {
             output: "ok".to_string(),
         }));
         assert!(events.iter().any(|event| event.kind == "workspace.changed"));
+    }
+
+    /// 验证 Goal 等待外部工作时向 Web 暴露独立状态。
+    #[test]
+    fn maps_external_waiting_status() {
+        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let events = assembler.map(RunnerEvent::WaitingExternal);
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].kind, "status.changed");
+        assert_eq!(events[0].payload["status"], "waiting_external");
     }
 }

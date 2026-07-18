@@ -36,6 +36,14 @@ impl Agent {
         if !self.tools.contains("subagent") {
             return Ok(initial_result);
         }
+        // Goal 运行由 TurnRunner 统一等待外部事件并发起完整续轮，避免这里只发起无工具补充请求。
+        if self
+            .state
+            .goal()?
+            .is_some_and(|goal| goal.status.accepts_external_wake())
+        {
+            return Ok(initial_result);
+        }
         let owner_key = self.state.state_dir().display().to_string();
         let mut combined = initial_result;
         messages.push(ChatMessage::assistant(combined.content.clone(), None));

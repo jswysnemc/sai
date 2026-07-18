@@ -20,6 +20,11 @@ impl ReplRuntime {
                 self.arm_live_ticker();
                 return self.sync_transcript(true);
             }
+            RunnerEvent::WaitingExternal => {
+                self.transcript.set_work_status(WorkStatus::WaitingExternal);
+                self.arm_live_ticker();
+                return self.sync_transcript(true);
+            }
             RunnerEvent::Agent(agent_event) => agent_event,
             RunnerEvent::Interrupted | RunnerEvent::Completed(_) | RunnerEvent::Failed(_) => {
                 self.next_live_refresh = None;

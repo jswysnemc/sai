@@ -36,6 +36,14 @@ impl GoalStatus {
         self == Self::Active
     }
 
+    /// 判断目标是否可以由外部完成事件重新唤醒。
+    ///
+    /// 返回:
+    /// - 活动或阻塞目标返回 `true`
+    pub(crate) fn accepts_external_wake(self) -> bool {
+        matches!(self, Self::Active | Self::Blocked)
+    }
+
     /// 判断状态是否已经结束当前目标。
     ///
     /// 返回:

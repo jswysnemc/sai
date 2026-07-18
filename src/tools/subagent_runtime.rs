@@ -165,6 +165,7 @@ mod tests {
     fn subagent(status: &str) -> SubagentSnapshot {
         SubagentSnapshot {
             id: "subagent_1".to_string(),
+            goal_id: None,
             description: "inspect runtime recovery".to_string(),
             subagent_type: "explore".to_string(),
             status: status.to_string(),

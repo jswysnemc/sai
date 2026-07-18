@@ -24,6 +24,21 @@ pub(super) struct BackgroundRuntimeOwner {
 }
 
 impl BackgroundRuntimeOwner {
+    /// 创建交互式会话运行时 owner。
+    ///
+    /// 参数:
+    /// - `session_id`: 会话标识
+    ///
+    /// 返回:
+    /// - 后台任务运行时 owner 元数据
+    pub(super) fn session(session_id: &str) -> Self {
+        Self {
+            owner_kind: OwnerKind::Session,
+            owner_id: session_id.to_string(),
+            process_kind: ProcessKind::BackgroundCommand,
+        }
+    }
+
     /// 创建命令模式运行时 owner。
     ///
     /// 参数:
@@ -95,7 +110,14 @@ pub(super) fn start_background_task(
         timeout_seconds_from_args(&args, config.tools.background_command_timeout_seconds);
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
     store.init()?;
-    let state = StateStore::new(paths)?;
+    let state = state_for_runtime_owner(paths, runtime_owner.as_ref())?;
+    let goal_id = match runtime_owner.as_ref() {
+        Some(owner) if owner.owner_kind == OwnerKind::Session => state
+            .goal()?
+            .filter(|goal| goal.status.accepts_external_wake())
+            .map(|goal| goal.id),
+        _ => None,
+    };
     let now = unix_seconds();
     let id_prefix = sanitize_id(&label);
     let stdout_log = store.logs_dir().join(format!("{now}-{id_prefix}.out.log"));
@@ -116,6 +138,7 @@ pub(super) fn start_background_task(
         runtime_process_kind: runtime_owner
             .as_ref()
             .map(|owner| owner.process_kind.as_str().to_string()),
+        goal_id,
         label,
         command,
         cwd: cwd.display().to_string(),
@@ -127,6 +150,7 @@ pub(super) fn start_background_task(
         started_at: now,
         updated_at: now,
         timeout_seconds,
+        completion_notified: false,
     };
     store.upsert(task.clone())?;
     sync_runtime_task(&state, &task)?;
@@ -330,8 +354,12 @@ pub(super) async fn cleanup_background_tasks(
 /// 参数:
 /// - `tasks`: 任务列表
 /// - `config`: 应用配置
-async fn refresh_task_statuses(tasks: &mut [BackgroundCommandTask], config: &AppConfig) {
+pub(super) async fn refresh_task_statuses(
+    tasks: &mut [BackgroundCommandTask],
+    config: &AppConfig,
+) -> bool {
     let now = unix_seconds();
+    let mut changed = false;
     for task in tasks {
         if task.status != "running" {
             continue;
@@ -339,6 +367,7 @@ async fn refresh_task_statuses(tasks: &mut [BackgroundCommandTask], config: &App
         if !process_exists(task.pid) {
             task.status = "exited".to_string();
             task.updated_at = now;
+            changed = true;
             continue;
         }
         if !is_unlimited(task.timeout_seconds)
@@ -354,7 +383,25 @@ async fn refresh_task_statuses(tasks: &mut [BackgroundCommandTask], config: &App
             }
             task.status = "timed_out".to_string();
             task.updated_at = unix_seconds();
+            changed = true;
         }
+    }
+    changed
+}
+
+/// 打开后台任务所属会话的状态存储。
+fn state_for_runtime_owner(
+    paths: &SaiPaths,
+    owner: Option<&BackgroundRuntimeOwner>,
+) -> Result<StateStore> {
+    match owner {
+        Some(owner) if owner.owner_kind == OwnerKind::Session => {
+            StateStore::for_session(paths, &owner.owner_id)
+        }
+        Some(owner) if owner.owner_kind == OwnerKind::CommandMode => {
+            StateStore::for_session(paths, &owner.owner_id).or_else(|_| StateStore::new(paths))
+        }
+        _ => StateStore::new(paths),
     }
 }
 
@@ -385,7 +432,7 @@ fn find_task<'a>(
 ///
 /// 返回:
 /// - 日志文本
-fn read_log_tail(path: &str, tail_lines: usize, max_bytes: u64) -> Result<LogTail> {
+pub(super) fn read_log_tail(path: &str, tail_lines: usize, max_bytes: u64) -> Result<LogTail> {
     let path = Path::new(path);
     if !path.exists() {
         return Ok(LogTail::empty(max_bytes.max(1)));
@@ -512,6 +559,16 @@ mod tests {
         assert_eq!(sanitize_id("Dev Server 01!"), "dev-server-01");
     }
 
+    /// 验证交互会话 owner 定位失败时不会退回当前活动会话。
+    #[test]
+    fn session_owner_requires_exact_session_state() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path().to_path_buf());
+        let owner = BackgroundRuntimeOwner::session("missing-session");
+
+        assert!(state_for_runtime_owner(&paths, Some(&owner)).is_err());
+    }
+
     #[test]
     fn gateway_owned_tasks_are_detected_by_owner_and_label() {
         let mut task = BackgroundCommandTask {
@@ -520,6 +577,7 @@ mod tests {
             runtime_owner_kind: Some("gateway".to_string()),
             runtime_owner_id: Some("qq".to_string()),
             runtime_process_kind: Some("gateway".to_string()),
+            goal_id: None,
             label: "gateway:qq".to_string(),
             command: "sai gateway qq-bot".to_string(),
             cwd: ".".to_string(),
@@ -531,6 +589,7 @@ mod tests {
             started_at: 0,
             updated_at: 0,
             timeout_seconds: 0,
+            completion_notified: false,
         };
         assert!(is_gateway_owned_task(&task));
 
@@ -553,6 +612,7 @@ mod tests {
             runtime_owner_kind: None,
             runtime_owner_id: None,
             runtime_process_kind: None,
+            goal_id: None,
             label: "server".to_string(),
             command: "sleep 9999".to_string(),
             cwd: ".".to_string(),
@@ -564,6 +624,7 @@ mod tests {
             started_at: 0,
             updated_at: 0,
             timeout_seconds: 0,
+            completion_notified: false,
         }];
 
         refresh_task_statuses(&mut tasks, &AppConfig::default()).await;
@@ -588,6 +649,7 @@ mod tests {
                 runtime_owner_kind: None,
                 runtime_owner_id: None,
                 runtime_process_kind: None,
+                goal_id: None,
                 label: "server".to_string(),
                 command: "printf lines".to_string(),
                 cwd: ".".to_string(),
@@ -599,6 +661,7 @@ mod tests {
                 started_at: 0,
                 updated_at: 0,
                 timeout_seconds: 0,
+                completion_notified: false,
             }])
             .unwrap();
         let mut config = AppConfig::default();

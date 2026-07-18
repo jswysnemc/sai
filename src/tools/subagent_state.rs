@@ -16,6 +16,9 @@ static LOADED_OWNERS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) struct SubagentSnapshot {
     pub(crate) id: String,
+    /// 创建子智能体时关联的持续目标，旧记录缺失时保持为空
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) goal_id: Option<String>,
     pub(crate) description: String,
     pub(crate) subagent_type: String,
     pub(crate) status: String,
@@ -66,6 +69,7 @@ struct SubagentRecord {
 #[derive(Debug, Clone)]
 pub(crate) struct FinishedSubagentNotice {
     pub(crate) id: String,
+    pub(crate) goal_id: Option<String>,
     pub(crate) description: String,
     pub(crate) status: String,
 }
@@ -98,8 +102,30 @@ pub(crate) fn create_subagent(
 ///
 /// 返回:
 /// - 子智能体快照和取消接收器
+#[cfg(test)]
 pub(crate) fn create_subagent_for_owner(
     owner_key: &str,
+    description: String,
+    subagent_type: String,
+    max_steps: usize,
+) -> (SubagentSnapshot, oneshot::Receiver<()>) {
+    create_subagent_for_owner_goal(owner_key, None, description, subagent_type, max_steps)
+}
+
+/// 创建绑定到父会话和持续目标的后台子智能体记录。
+///
+/// 参数:
+/// - `owner_key`: 父会话稳定作用域键
+/// - `goal_id`: 当前持续目标标识
+/// - `description`: 任务描述
+/// - `subagent_type`: 子代理类型
+/// - `max_steps`: 最大工具调用次数
+///
+/// 返回:
+/// - 子智能体快照和取消接收器
+pub(crate) fn create_subagent_for_owner_goal(
+    owner_key: &str,
+    goal_id: Option<String>,
     description: String,
     subagent_type: String,
     max_steps: usize,
@@ -110,6 +136,7 @@ pub(crate) fn create_subagent_for_owner(
     let (cancel_tx, cancel_rx) = oneshot::channel();
     let snapshot = SubagentSnapshot {
         id: id.clone(),
+        goal_id,
         description,
         subagent_type,
         status: "running".to_string(),
@@ -141,7 +168,6 @@ pub(crate) fn create_subagent_for_owner(
     persist_owner_locked(&subagents, owner_key);
     (snapshot, cancel_rx)
 }
-
 
 /// Attach worktree isolation metadata to a running subagent.
 pub(crate) fn set_subagent_worktree(
@@ -417,6 +443,7 @@ pub(crate) fn pending_finished_notices(owner_key: &str) -> Vec<FinishedSubagentN
         }
         notices.push(FinishedSubagentNotice {
             id: record.snapshot.id.clone(),
+            goal_id: record.snapshot.goal_id.clone(),
             description: record.snapshot.description.clone(),
             status: record.snapshot.status.clone(),
         });

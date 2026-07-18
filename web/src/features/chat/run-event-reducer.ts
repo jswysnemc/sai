@@ -27,7 +27,7 @@ export type RunErrorDetail = {
 export type LiveRunState = {
   runId: string | null;
   sessionId: string | null;
-  status: "idle" | "queued" | "waiting_response" | "waiting_permission" | "waiting_question" | "thinking" | "working" | "compacting";
+  status: "idle" | "queued" | "waiting_response" | "waiting_external" | "waiting_permission" | "waiting_question" | "thinking" | "working" | "compacting";
   userInput: string;
   imageUrls: string[];
   content: string;

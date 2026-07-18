@@ -10,6 +10,7 @@ pub(crate) const STATUS_PULSE_FRAMES: [&str; 4] = ["·  ", " · ", "  ·", " · 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum WorkStatus {
     WaitingResponse,
+    WaitingExternal,
     Thinking,
     Working,
     Compacting,
@@ -52,6 +53,7 @@ impl WorkStatus {
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::WaitingResponse => t("waiting", "等待中"),
+            Self::WaitingExternal => t("waiting for external work", "等待后台工作"),
             Self::Thinking => t("thinking", "思考中"),
             Self::Working => t("working", "工作中"),
             Self::Compacting => t("compacting", "压缩中"),

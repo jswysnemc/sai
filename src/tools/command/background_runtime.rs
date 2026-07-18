@@ -312,6 +312,7 @@ mod tests {
             runtime_owner_kind: None,
             runtime_owner_id: None,
             runtime_process_kind: None,
+            goal_id: None,
             label: "server".to_string(),
             command: "sleep 9999".to_string(),
             cwd: ".".to_string(),
@@ -325,6 +326,7 @@ mod tests {
             timeout_seconds: AppConfig::default()
                 .tools
                 .background_command_timeout_seconds,
+            completion_notified: false,
         };
 
         sync_runtime_task(&state, &task).unwrap();
@@ -345,6 +347,7 @@ mod tests {
             runtime_owner_kind: Some("gateway".to_string()),
             runtime_owner_id: Some("qq".to_string()),
             runtime_process_kind: Some("gateway".to_string()),
+            goal_id: None,
             label: "gateway:qq".to_string(),
             command: "sai gateway qq-bot".to_string(),
             cwd: ".".to_string(),
@@ -358,6 +361,7 @@ mod tests {
             timeout_seconds: AppConfig::default()
                 .tools
                 .background_command_timeout_seconds,
+            completion_notified: false,
         };
 
         sync_runtime_task(&state, &task).unwrap();
