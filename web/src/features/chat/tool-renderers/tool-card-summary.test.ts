@@ -5,6 +5,7 @@ describe("tool card summary", () => {
   it("展示 Shell 命令和加载目标", () => {
     expect(toolCardSummary("run_command", JSON.stringify({ command: "git status --short" }))).toBe("git status --short");
     expect(toolCardSummary("load", JSON.stringify({ skill_name: "drawio" }))).toBe("drawio");
+    expect(toolCardSummary("load", JSON.stringify({ tool_names: ["web_search", "web_fetch"] }))).toBe("web_search, web_fetch");
   });
 
   it("展示批量读取的首个路径和数量", () => {

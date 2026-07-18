@@ -17,7 +17,8 @@ export function toolCardSummary(name: string, argumentsText: string, locale: Loc
     return stringField(args, "command") || stringField(args, "cmd");
   }
   if (name === "load") {
-    return stringField(args, "tool_name")
+    return stringListField(args, "tool_names")
+      || stringField(args, "tool_name")
       || stringField(args, "group_name")
       || stringField(args, "skill_name");
   }
@@ -48,6 +49,22 @@ export function toolCardSummary(name: string, argumentsText: string, locale: Loc
  */
 function compactText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * 将字符串数组字段转换为紧凑摘要。
+ *
+ * @param record 参数对象
+ * @param field 字段名
+ * @returns 去除空值后的逗号分隔摘要
+ */
+function stringListField(record: Record<string, unknown>, field: string): string {
+  const value = record[field];
+  if (!Array.isArray(value)) return "";
+  return value
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .map((item) => item.trim())
+    .join(", ");
 }
 
 /**

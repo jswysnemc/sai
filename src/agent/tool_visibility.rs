@@ -154,10 +154,12 @@ impl ToolVisibility {
             serde_json::from_str::<Value>(arguments)?
         };
         let tool_name = string_arg(&args, "tool_name");
+        let tool_names = string_array_arg(&args, "tool_names")?;
         let group_name = string_arg(&args, "group_name");
         let skill_name = string_arg(&args, "skill_name");
         let requested_count = [
             tool_name.is_some(),
+            tool_names.is_some(),
             group_name.is_some(),
             skill_name.is_some(),
         ]
@@ -165,7 +167,7 @@ impl ToolVisibility {
         .filter(|selected| *selected)
         .count();
         if requested_count != 1 {
-            bail!("provide exactly one of tool_name, group_name, or skill_name");
+            bail!("provide exactly one of tool_name, tool_names, group_name, or skill_name");
         }
         if let Some(skill_name) = skill_name {
             if !config.skills.enabled {
@@ -173,14 +175,18 @@ impl ToolVisibility {
             }
             return tools::load_installed_skill(&skill_name, config, paths);
         }
-        let (requested_tool, requested_group, result) = if let Some(tool_name) = tool_name {
-            let result = self.load_tool(registry, &tool_name)?;
-            (Some(tool_name), None, result)
-        } else {
-            let group_name = group_name.unwrap();
-            let result = self.load_group(registry, &group_name)?;
-            (None, Some(group_name), result)
-        };
+        let (requested_tool, requested_tools, requested_group, result) =
+            if let Some(tool_name) = tool_name {
+                let result = self.load_tool(registry, &tool_name)?;
+                (Some(tool_name), None, None, result)
+            } else if let Some(tool_names) = tool_names {
+                let result = self.load_tools(registry, &tool_names)?;
+                (None, Some(tool_names), None, result)
+            } else {
+                let group_name = group_name.unwrap();
+                let result = self.load_group(registry, &group_name)?;
+                (None, None, Some(group_name), result)
+            };
         let already_loaded = result.is_already_loaded_request();
         let instruction = if already_loaded {
             "This request only targeted tools that were already loaded. Do not call load for this target again; call the tool directly."
@@ -190,6 +196,7 @@ impl ToolVisibility {
         Ok(serde_json::to_string_pretty(&json!({
             "ok": true,
             "requested_tool": requested_tool,
+            "requested_tools": requested_tools,
             "requested_group": requested_group,
             "already_loaded": already_loaded,
             "newly_loaded_tools": result.newly_loaded_tools,
@@ -210,18 +217,33 @@ impl ToolVisibility {
     /// 返回:
     /// - 本次请求加载的工具名称列表
     fn load_tool(&mut self, registry: &ToolRegistry, name: &str) -> Result<ToolLoadResult> {
-        if !registry.contains(name) {
-            bail!("unknown tool: {name}");
+        self.load_tools(registry, &[name.to_string()])
+    }
+
+    /// 原子加载多个工具。
+    ///
+    /// 参数:
+    /// - `registry`: 完整工具注册表
+    /// - `names`: 已经去重的工具名称列表
+    ///
+    /// 返回:
+    /// - 本次请求新增和此前已经加载的工具名称
+    fn load_tools(&mut self, registry: &ToolRegistry, names: &[String]) -> Result<ToolLoadResult> {
+        // 1. 在更新状态前完整校验，避免批量请求出现部分加载
+        for name in names {
+            if !registry.contains(name) {
+                bail!("unknown tool: {name}");
+            }
         }
+
+        // 2. 按请求顺序更新状态并生成分类结果
         let mut result = ToolLoadResult::default();
-        if tools::progressive::is_initial_tool(name) {
-            result.already_loaded_tools.push(name.to_string());
-            return Ok(result);
-        }
-        if self.loaded.insert(name.to_string()) {
-            result.newly_loaded_tools.push(name.to_string());
-        } else {
-            result.already_loaded_tools.push(name.to_string());
+        for name in names {
+            if tools::progressive::is_initial_tool(name) || !self.loaded.insert(name.clone()) {
+                result.already_loaded_tools.push(name.clone());
+            } else {
+                result.newly_loaded_tools.push(name.clone());
+            }
         }
         Ok(result)
     }
@@ -337,6 +359,44 @@ fn string_arg(args: &Value, name: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
         .map(str::to_string)
 }
+
+/// 从 JSON 参数中读取非空字符串数组，并按首次出现顺序去重。
+///
+/// 参数:
+/// - `args`: JSON 参数对象
+/// - `name`: 字段名
+///
+/// 返回:
+/// - 字段不存在时返回空，字段合法时返回去重后的字符串列表
+fn string_array_arg(args: &Value, name: &str) -> Result<Option<Vec<String>>> {
+    let Some(value) = args.get(name) else {
+        return Ok(None);
+    };
+    let Some(values) = value.as_array() else {
+        bail!("{name} must be a non-empty array of strings");
+    };
+    if values.is_empty() {
+        bail!("{name} must be a non-empty array of strings");
+    }
+    let mut unique = BTreeSet::new();
+    let mut result = Vec::new();
+    for value in values {
+        let Some(value) = value.as_str().map(str::trim) else {
+            bail!("{name} must contain only non-empty strings");
+        };
+        if value.is_empty() {
+            bail!("{name} must contain only non-empty strings");
+        }
+        if unique.insert(value.to_string()) {
+            result.push(value.to_string());
+        }
+    }
+    Ok(Some(result))
+}
+
+#[cfg(test)]
+#[path = "tool_visibility_batch_tests.rs"]
+mod batch_tests;
 
 #[cfg(test)]
 mod tests {
