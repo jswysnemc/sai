@@ -38,12 +38,13 @@ pub use session_snapshot::{ActiveRunSummary, SessionSnapshot};
 pub use session_timeline::{
     SessionTimeline, SessionTimelineCompaction, SessionTimelineTurn, TimelinePermissionDecision,
 };
+#[allow(unused_imports)]
 pub use sessions::{
     active_session_id_for_workspace, active_state_dir, create_session,
     create_session_for_workspace, delete_session, delete_sessions,
     ensure_active_session as active_session, ensure_workspace_session, fork_session_until_turn,
-    list_sessions, list_sessions_for_workspace, rename_session, state_dir_for_workspace_session,
-    switch_session, workspace_id_for_path,
+    list_sessions, list_sessions_for_workspace, locate_session_dirs, rename_session,
+    state_dir_for_workspace_session, switch_session, workspace_id_for_path,
 };
 #[allow(unused_imports)]
 pub use tool_history::{ToolCallStatus, ToolHistorySummary};
@@ -107,8 +108,7 @@ impl StateStore {
     /// 返回:
     /// - 指定会话状态存储
     pub fn for_session(paths: &SaiPaths, session_id: &str) -> Result<Self> {
-        let base_state_dir = sessions::session_scope_dir(paths)?;
-        let state_dir = sessions::state_dir_for_session(paths, session_id)?;
+        let (base_state_dir, state_dir) = sessions::locate_session_dirs(paths, session_id)?;
         let conv_db = Arc::new(ConversationDb::open(&state_dir)?);
         let store = Self {
             base_state_dir,

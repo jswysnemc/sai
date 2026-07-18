@@ -347,16 +347,63 @@ pub fn active_state_dir(paths: &SaiPaths) -> Result<PathBuf> {
 ///
 /// 返回:
 /// - 指定会话状态目录
+#[allow(dead_code)]
 pub fn state_dir_for_session(paths: &SaiPaths, session_id: &str) -> Result<PathBuf> {
-    let scope = current_session_scope(paths)?;
+    Ok(locate_session_dirs(paths, session_id)?.1)
+}
+
+/// 定位会话所属工作区目录与会话状态目录。
+///
+/// 优先当前工作区；找不到时再扫描其它工作区索引，避免跨工作区读取 timeline 时 404。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+/// - `session_id`: 会话 ID
+///
+/// 返回:
+/// - `(工作区会话作用域目录, 会话状态目录)`
+pub fn locate_session_dirs(paths: &SaiPaths, session_id: &str) -> Result<(PathBuf, PathBuf)> {
     let session_id = session_id.trim();
-    ensure_default_session_for_base(&scope.state_dir)?
-        .into_iter()
-        .find(|session| session.id == session_id)
-        .with_context(|| format!("session not found: {session_id}"))?;
-    let state_dir = session_state_dir(&scope.state_dir, session_id);
+    if session_id.is_empty() {
+        bail!("session id cannot be empty");
+    }
+
+    // 1. 先查当前工作区（热路径）
+    let current = current_session_scope(paths)?;
+    if let Some(state_dir) = session_dir_if_present(&current.state_dir, session_id)? {
+        return Ok((current.state_dir, state_dir));
+    }
+
+    // 2. 扫描其它工作区索引，只读 index.json，不创建默认会话
+    let workspaces_root = paths.state_dir.join("sessions").join("workspaces");
+    if workspaces_root.is_dir() {
+        for entry in std::fs::read_dir(&workspaces_root)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_dir() {
+                continue;
+            }
+            let base = entry.path();
+            if base == current.state_dir {
+                continue;
+            }
+            if let Some(state_dir) = session_dir_if_present(&base, session_id)? {
+                return Ok((base, state_dir));
+            }
+        }
+    }
+
+    Err(anyhow::anyhow!("session not found: {session_id}"))
+}
+
+/// 若索引中存在该会话则返回会话状态目录。
+fn session_dir_if_present(base_state_dir: &Path, session_id: &str) -> Result<Option<PathBuf>> {
+    let sessions = read_sessions_from_base(base_state_dir)?;
+    if !sessions.iter().any(|session| session.id == session_id) {
+        return Ok(None);
+    }
+    let state_dir = session_state_dir(base_state_dir, session_id);
     std::fs::create_dir_all(&state_dir)?;
-    Ok(state_dir)
+    Ok(Some(state_dir))
 }
 
 /// 返回当前工作区会话作用域目录。

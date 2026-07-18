@@ -97,4 +97,31 @@ mod tests {
             .state_dir
             .ends_with(workspace_id_for_path(Path::new("/tmp/project-a"))));
     }
+
+    #[test]
+    fn locate_session_dirs_finds_other_workspace_session() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path().to_path_buf());
+        let cwd = temp.path().join("workspace-a");
+        let other = temp.path().join("workspace-b");
+        std::fs::create_dir_all(&cwd).unwrap();
+        std::fs::create_dir_all(&other).unwrap();
+        let previous = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&cwd).unwrap();
+
+        let foreign =
+            crate::state::create_session_for_workspace(&paths, &other, Some("foreign")).unwrap();
+        let local = crate::state::create_session(&paths, Some("local")).unwrap();
+
+        let found = crate::state::locate_session_dirs(&paths, &foreign.id).unwrap();
+        assert!(found
+            .1
+            .ends_with(std::path::Path::new("data").join(&foreign.id)));
+        let local_found = crate::state::locate_session_dirs(&paths, &local.id).unwrap();
+        assert!(local_found
+            .1
+            .ends_with(std::path::Path::new("data").join(&local.id)));
+
+        let _ = std::env::set_current_dir(previous);
+    }
 }

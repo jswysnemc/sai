@@ -2,6 +2,7 @@ import Editor, { loader } from "@monaco-editor/react";
 import { Braces, WandSparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTheme } from "../../../features/theme/theme";
+import { configureMonacoEnvironment } from "../../../features/workspace/monaco-environment";
 import "./json-code-editor.css";
 import { useI18n } from "../../../features/i18n/use-i18n";
 
@@ -27,6 +28,8 @@ export function JsonCodeEditor({ value, height = 420, ariaLabel, onChange }: Jso
 
   useEffect(() => {
     let active = true;
+    // 1. 先注册 Worker 与 _VSCODE_FILE_ROOT，再加载 Monaco 主模块
+    configureMonacoEnvironment();
     import("monaco-editor").then((monaco) => {
       loader.config({ monaco });
       if (active) setReady(true);

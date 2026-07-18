@@ -19,9 +19,12 @@ import { queryClient } from "./app/query-client";
 import { bootstrapSession } from "./api/client";
 import { initializeTheme } from "./features/theme/theme";
 import { detectInitialLocale, text } from "./features/i18n/locale";
+import { configureMonacoEnvironment } from "./features/workspace/monaco-environment";
 
 async function start() {
   initializeTheme();
+  // 尽早配置 Monaco，避免设置页 JSON 编辑器在未进代码页时触发 toUrl 报错
+  configureMonacoEnvironment();
   await bootstrapSession();
   const root = document.getElementById("root");
   if (!root) {

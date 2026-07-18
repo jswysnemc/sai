@@ -77,9 +77,35 @@ async fn usage(
     let config = AppConfig::load_or_default(&state.paths).map_err(WebError::from)?;
     let context_window_tokens = usage_context_window(&config, &query).map_err(WebError::from)?;
     let store = StateStore::new(&state.paths).map_err(WebError::from)?;
-    let snapshot = store
-        .session_snapshot(context_window_tokens)
-        .map_err(WebError::from)?;
+    // 用量顶栏不应因瞬时 DB 忙碌打挂；快照失败时降级为零值并带警告
+    let snapshot = match store.session_snapshot(context_window_tokens) {
+        Ok(snapshot) => snapshot,
+        Err(error) => crate::state::SessionSnapshot {
+            session_id: store.session_id().to_string(),
+            turn_count: 0,
+            checkpoint_count: 0,
+            checkpoint_covered_turns: 0,
+            tail_turns: 0,
+            latest_checkpoint_at: None,
+            latest_checkpoint_reason: None,
+            context_chars: 0,
+            context_limit_chars: context_window_tokens,
+            context_ratio: 0.0,
+            context_prompt_tokens: 0,
+            context_window_tokens,
+            context_token_ratio: 0.0,
+            usage: crate::state::UsageSnapshot::default(),
+            compaction: None,
+            recovery: crate::state::RecoverySnapshot::default(),
+            context_epoch: None,
+            session_memory: None,
+            tool_history: crate::state::ToolHistorySummary::default(),
+            runtime_recovery: crate::runtime_recovery::RuntimeRecoverySummary::default(),
+            dynamic_sources: Vec::new(),
+            projection_warnings: vec![format!("usage snapshot unavailable: {error}")],
+            active_run: None,
+        },
+    };
     let process = state.system_monitor.snapshot();
     let terminal_count = state.terminals.list().map_err(WebError::from)?.len();
     let workspace = state.workspaces.active().map_err(WebError::from)?;
