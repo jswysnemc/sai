@@ -1,5 +1,6 @@
 pub mod bash;
 pub mod fish;
+mod parent;
 pub mod powershell;
 pub mod zsh;
 
@@ -34,35 +35,7 @@ pub fn print_reload_hint(shell: &str, hook_file: &Path) {
 }
 
 pub fn current_parent_shell() -> Option<String> {
-    let mut pid = std::process::id();
-    for _ in 0..8 {
-        let parent = parent_pid(pid)?;
-        let name = process_name(parent)?;
-        if matches!(
-            name.as_str(),
-            "fish" | "bash" | "zsh" | "pwsh" | "powershell"
-        ) {
-            if matches!(name.as_str(), "pwsh" | "powershell") {
-                return Some("powershell".to_string());
-            }
-            return Some(name);
-        }
-        pid = parent;
-    }
-    None
-}
-
-fn parent_pid(pid: u32) -> Option<u32> {
-    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
-    let after_name = stat.rsplit_once(") ")?.1;
-    after_name.split_whitespace().nth(1)?.parse().ok()
-}
-
-fn process_name(pid: u32) -> Option<String> {
-    std::fs::read_to_string(format!("/proc/{pid}/comm"))
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
+    parent::current_shell()
 }
 
 fn shell_quote(path: &Path) -> String {

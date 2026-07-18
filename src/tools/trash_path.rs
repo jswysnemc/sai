@@ -80,27 +80,7 @@ fn ensure_safe_trash_target(path: &Path) -> Result<()> {
     let cwd = crate::runtime_cwd::current_dir()?.canonicalize()?;
     let resolved_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
-    let dangerous = [
-        Path::new("/"),
-        Path::new("/bin"),
-        Path::new("/boot"),
-        Path::new("/dev"),
-        Path::new("/etc"),
-        Path::new("/home"),
-        Path::new("/opt"),
-        Path::new("/proc"),
-        Path::new("/root"),
-        Path::new("/run"),
-        Path::new("/sbin"),
-        Path::new("/sys"),
-        Path::new("/tmp"),
-        Path::new("/usr"),
-        Path::new("/var"),
-    ];
-    if dangerous
-        .iter()
-        .any(|item| path == *item || resolved_path == *item)
-    {
+    if is_dangerous_system_path(path, &resolved_path) {
         bail!(
             "refusing to trash dangerous system path: {}",
             path.display()
@@ -116,15 +96,134 @@ fn ensure_safe_trash_target(path: &Path) -> Result<()> {
         if path == home {
             bail!("refusing to trash home directory: {}", path.display())
         }
-        let trash_dir = home.join(".local/share/Trash");
-        if path == trash_dir || path.starts_with(&trash_dir) {
-            bail!(
-                "refusing to trash the Trash directory itself: {}",
-                path.display()
-            )
+        if let Some(trash_dir) = trash_directory(&home) {
+            if path == trash_dir || path.starts_with(&trash_dir) {
+                bail!(
+                    "refusing to trash the Trash directory itself: {}",
+                    path.display()
+                )
+            }
         }
     }
     Ok(())
+}
+
+/// 判断路径是否属于当前平台的系统目录。
+///
+/// 参数:
+/// - `path`: 未跟随叶子符号链接的路径
+/// - `resolved_path`: 已尽可能解析的路径
+///
+/// 返回:
+/// - 系统目录或系统根目录返回 `true`
+fn is_dangerous_system_path(path: &Path, resolved_path: &Path) -> bool {
+    let dangerous = dangerous_system_paths();
+    if dangerous
+        .iter()
+        .any(|item| path == Path::new(item) || resolved_path == Path::new(item))
+    {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        return windows_dangerous_system_paths()
+            .iter()
+            .any(|item| path == item || resolved_path == item);
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
+/// 返回当前平台需要保护的系统路径。
+///
+/// 返回:
+/// - 不应移入回收站的系统目录
+fn dangerous_system_paths() -> &'static [&'static str] {
+    #[cfg(target_os = "macos")]
+    {
+        return &[
+            "/",
+            "/Applications",
+            "/Library",
+            "/System",
+            "/Users",
+            "/bin",
+            "/dev",
+            "/etc",
+            "/private",
+            "/sbin",
+            "/tmp",
+            "/usr",
+            "/var",
+        ];
+    }
+    #[cfg(windows)]
+    {
+        return &[];
+    }
+    #[cfg(all(not(target_os = "macos"), not(windows)))]
+    {
+        &[
+            "/", "/bin", "/boot", "/dev", "/etc", "/home", "/opt", "/proc", "/root", "/run",
+            "/sbin", "/sys", "/tmp", "/usr", "/var",
+        ]
+    }
+}
+
+/// 返回 Windows 需要保护的系统目录。
+///
+/// 返回:
+/// - 从系统环境变量解析的 Windows、Program Files、ProgramData 和用户根目录
+#[cfg(windows)]
+fn windows_dangerous_system_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    let system_root = std::env::var_os("SystemRoot")
+        .or_else(|| std::env::var_os("WINDIR"))
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("SystemDrive").map(|drive| PathBuf::from(drive).join("Windows"))
+        });
+    if let Some(system_root) = system_root {
+        paths.push(system_root.clone());
+        if let Some(root) = system_root.parent() {
+            paths.push(root.to_path_buf());
+            paths.push(root.join("Users"));
+            paths.push(root.join("ProgramData"));
+            paths.push(root.join("Program Files"));
+            paths.push(root.join("Program Files (x86)"));
+        }
+    }
+    for variable in ["ProgramFiles", "ProgramFiles(x86)", "ProgramData"] {
+        if let Some(value) = std::env::var_os(variable) {
+            paths.push(PathBuf::from(value));
+        }
+    }
+    paths
+}
+
+/// 返回当前用户的系统回收站目录。
+///
+/// 参数:
+/// - `home`: 当前用户主目录
+///
+/// 返回:
+/// - 可识别的回收站目录；Windows 由系统 API 管理，不返回路径
+fn trash_directory(home: &Path) -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        Some(home.join(".Trash"))
+    }
+    #[cfg(all(not(target_os = "macos"), not(windows)))]
+    {
+        Some(home.join(".local/share/Trash"))
+    }
+    #[cfg(windows)]
+    {
+        let _ = home;
+        None
+    }
 }
 
 /// 获取路径类型。

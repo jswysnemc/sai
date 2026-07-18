@@ -7,9 +7,10 @@ Multi-protocol LLM · 30+ built-in tools · Long-term memory · Chat platform ga
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-stable-orange)](https://www.rust-lang.org/)
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blueviolet)](https://github.com/SHORiN-KiWATA/Sai)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-blueviolet)](https://github.com/SHORiN-KiWATA/Sai)
 [![CI Linux](https://img.shields.io/badge/CI-Linux-passing-success)](https://github.com/SHORiN-KiWATA/Sai/actions/workflows/linux.yml)
 [![CI Windows](https://img.shields.io/badge/CI-Windows-passing-success)](https://github.com/SHORiN-KiWATA/Sai/actions/workflows/windows.yml)
+[![CI macOS](https://img.shields.io/badge/CI-macOS-passing-success)](https://github.com/SHORiN-KiWATA/Sai/actions/workflows/macos.yml)
 
 [Why Sai](#why-sai) · [Core capabilities](#core-capabilities) · [Installation](#installation) · [Quick start](#quick-start) · [CLI reference](#cli-reference) · [Architecture](#architecture) · [Storage layout](#storage-layout) · [FAQ](#faq) · [Contributing](#contributing)
 
@@ -69,7 +70,7 @@ Sai is a terminal-native AI desktop assistant written in Rust. It fuses large la
 ### Permission, audit, and sandbox
 
 - **Three tiers** - Yolo / Audited / Plan; TUI and CLI can set independent defaults
-- **Workspace sandbox** - In Audited mode, Linux uses `bubblewrap` to confine writes to the workspace; Windows disables the sandbox automatically
+- **Workspace sandbox** - In Audited mode, Linux uses `bubblewrap` to confine writes to the workspace; Windows and macOS keep audit checks but do not provide command isolation
 - **Sensitive path protection** - Reads of sensitive paths (SSH keys, credential dirs, etc.) always require explicit permission
 - **Audit log** - Every Requested / Approved / Denied event is appended to `permission-audit.jsonl` for traceability
 - **Permission broker** - A unified request/decision channel shared by TUI / CLI / Web, with optional denial replies
@@ -93,7 +94,7 @@ Run `sai web` and a browser opens a full remote programming workbench:
 - **Shell interception** - Unknown commands are forwarded to the Agent for natural-language explanation or fix suggestions
 - **Hook install** - `sai fish-init` / `bash-init` / `zsh-init` / `powershell-init` installs the command-not-found hook for the target shell
 - **Platform abstraction** - Windows prefers `SHELL`, then `pwsh.exe` / `powershell.exe` / `cmd.exe`; POSIX uses `-lc`
-- **XDG dirs** - Linux follows XDG; Windows maps to `%APPDATA%` / `%LOCALAPPDATA%` standard locations
+- **System directories** - Linux follows XDG; Windows and macOS use their standard application directories
 
 ### Internationalization
 
@@ -110,6 +111,7 @@ Run `sai web` and a browser opens a full remote programming workbench:
 | --- | --- |
 | Linux | x86_64; `ripgrep` (file search), `alsa-lib` (audio alarms); audit sandbox requires `bubblewrap` |
 | Windows | x86_64; WebView2 or a modern browser for the web workbench; `ripgrep` |
+| macOS | Apple Silicon or Intel; a modern browser for the web workbench; `ripgrep` recommended |
 
 ### Build from source
 
@@ -156,7 +158,7 @@ sudo pacman -U ~/.cache/sai/packages/sai-<version>-1-x86_64.pkg.tar.zst
 
 ### Prebuilt binaries
 
-Every push to `main` triggers GitHub Actions to build Linux and Windows binaries. Download the artifact for your platform from the [Actions](https://github.com/SHORiN-KiWATA/Sai/actions) page.
+Every push to `main` triggers GitHub Actions to build Linux, Windows, and macOS binaries. Download the artifact for your platform from the [Actions](https://github.com/SHORiN-KiWATA/Sai/actions) page.
 
 ---
 
@@ -178,7 +180,7 @@ sai
 
 ### 2. Configure a provider
 
-Edit the config file (Linux `~/.config/sai/config.jsonc`, Windows `%APPDATA%\sai\config.jsonc`):
+Edit the config file (Linux `~/.config/sai/config.jsonc`, macOS `~/Library/Application Support/sai/config.jsonc`, Windows `%APPDATA%\sai\config.jsonc`):
 
 ```jsonc
 {
@@ -301,7 +303,7 @@ Sai is layered around a shared Runner and Agent core. Entrypoints feed normalize
 | Web server | axum + WebSocket + embedded static assets |
 | Web frontend | React 19 · Vite 8 · TypeScript · Monaco · xterm · KaTeX · Mermaid · TanStack Query |
 | Build | build.rs (prompt obfuscation + o200k tokenizer compiled in) · rust-embed |
-| CI | GitHub Actions (Linux + Windows) |
+| CI | GitHub Actions (Linux + Windows + macOS) |
 
 ### Project structure
 
@@ -330,7 +332,7 @@ Sai/
 ├── assets/               # o200k tokenizer vocabulary
 ├── pics/                 # Screenshots and architecture overview
 ├── scripts/              # Packaging scripts (package-arch.sh)
-├── .github/workflows/    # CI (linux.yml + windows.yml)
+├── .github/workflows/    # CI (linux.yml + windows.yml + macos.yml)
 ├── build.rs              # Build script
 └── Cargo.toml            # Rust package manifest
 ```
@@ -339,11 +341,11 @@ Sai/
 
 ## Storage layout
 
-Sai follows the XDG spec on Linux and standard system dirs on Windows. Run `sai paths` to inspect all paths.
+Sai follows XDG on Linux, the Application Support and Caches conventions on macOS, and Known Folders on Windows. Run `sai paths` to inspect all paths.
 
 ### Config directory
 
-Linux `~/.config/sai` / Windows `%APPDATA%\sai`
+Linux `~/.config/sai` / macOS `~/Library/Application Support/sai` / Windows `%APPDATA%\sai`
 
 | File / Dir | Purpose |
 | --- | --- |
@@ -356,7 +358,7 @@ Linux `~/.config/sai` / Windows `%APPDATA%\sai`
 
 ### State directory
 
-Linux `~/.local/state/sai` / Windows `%LOCALAPPDATA%\sai`
+Linux `~/.local/state/sai` / macOS `~/Library/Application Support/sai` / Windows `%LOCALAPPDATA%\sai`
 
 | File / Dir | Purpose |
 | --- | --- |
@@ -371,7 +373,7 @@ Linux `~/.local/state/sai` / Windows `%LOCALAPPDATA%\sai`
 
 ### Data directory
 
-Linux `~/.local/share/sai` / Windows data dir
+Linux `~/.local/share/sai` / macOS `~/Library/Application Support/sai` / Windows `%APPDATA%\sai`
 
 | File / Dir | Purpose |
 | --- | --- |
@@ -384,8 +386,8 @@ Linux `~/.local/share/sai` / Windows data dir
 
 ### Other dirs
 
-- Cache: Linux `~/.cache/sai`
-- Image artifacts: Linux `~/Pictures/sai` / Windows `Pictures\sai`
+- Cache: Linux `~/.cache/sai` / macOS `~/Library/Caches/sai` / Windows `%LOCALAPPDATA%\sai`
+- Image artifacts: Linux `~/Pictures/sai` / macOS `~/Pictures/sai` / Windows `Pictures\sai`
 
 ---
 
@@ -407,9 +409,9 @@ Any model compatible with OpenAI Chat, OpenAI Responses, or Anthropic Messages. 
 
 No. Turns beyond the character budget are written to `evicted_context.db` and can be recalled by memory tools. A dedicated compaction model can also summarize history while preserving key points.
 
-**Does the sandbox work on Windows?**
+**Does the sandbox work on Windows or macOS?**
 
-No. The audit sandbox relies on Linux `bubblewrap`. On Windows, Audited mode still provides audit logging and per-call confirmation, but file-write sandboxing is disabled.
+No. The audit sandbox relies on Linux `bubblewrap`. On Windows and macOS, Audited mode still provides audit logging, workspace path validation, and per-call confirmation, but command isolation is disabled.
 
 **Do subagents pollute the main workspace?**
 

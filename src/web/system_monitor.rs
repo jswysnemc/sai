@@ -179,11 +179,32 @@ fn process_rss_bytes() -> Option<u64> {
     (status != 0).then_some(counters.WorkingSetSize as u64)
 }
 
+/// 读取 macOS 当前进程常驻内存。
+///
+/// 返回:
+/// - 常驻内存字节数，读取失败时返回空值
+#[cfg(target_os = "macos")]
+fn process_rss_bytes() -> Option<u64> {
+    let mut info = std::mem::MaybeUninit::<libc::rusage_info_v2>::zeroed();
+    let mut buffer = info.as_mut_ptr().cast::<libc::c_void>();
+    let status = unsafe {
+        libc::proc_pid_rusage(
+            std::process::id() as libc::c_int,
+            libc::RUSAGE_INFO_V2,
+            &mut buffer,
+        )
+    };
+    if status != 0 {
+        return None;
+    }
+    Some(unsafe { info.assume_init().ri_resident_size })
+}
+
 /// 其他平台暂不提供常驻内存。
 ///
 /// 返回:
 /// - 空值
-#[cfg(not(any(target_os = "linux", windows)))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 fn process_rss_bytes() -> Option<u64> {
     None
 }
@@ -198,7 +219,7 @@ mod tests {
         let snapshot = monitor.snapshot();
         assert_eq!(snapshot.pid, std::process::id());
         assert!(snapshot.cpu_percent >= 0.0);
-        #[cfg(any(target_os = "linux", windows))]
+        #[cfg(any(target_os = "linux", target_os = "macos", windows))]
         assert!(snapshot.rss_bytes.unwrap_or_default() > 0);
     }
 }

@@ -153,9 +153,11 @@ impl PermissionProfile {
                 error
             })?;
         }
-        // 5. 记录允许结果，并仅为前台命令启用审计沙盒
+        // 5. 记录允许结果，只有 Linux 能为前台命令附加 bubblewrap 沙盒
         self.record(tool, AuditDecision::Allowed, arguments, None);
-        Ok(self.mode == PermissionProfileMode::Audited && tool == "run_command")
+        Ok(self.mode == PermissionProfileMode::Audited
+            && tool == "run_command"
+            && cfg!(target_os = "linux"))
     }
 
     /// 判断工具执行前是否需要等待用户完成交互式审计。
@@ -390,6 +392,25 @@ mod tests {
             ToolPermission::Writes,
             &json!({"action":"add", "text":"检查"}),
         ));
+    }
+
+    #[test]
+    fn audited_run_command_only_requests_linux_sandbox() {
+        let profile = PermissionProfile::new(
+            PermissionProfileMode::Audited,
+            PathBuf::from("/workspace/project"),
+            None,
+        );
+
+        let sandboxed = profile
+            .authorize(
+                "run_command",
+                ToolPermission::Writes,
+                &json!({"command":"printf ok"}),
+            )
+            .unwrap();
+
+        assert_eq!(sandboxed, cfg!(target_os = "linux"));
     }
 
     /// 验证普通工作区读取不需要审计，但工作区内凭据文件仍需审计。

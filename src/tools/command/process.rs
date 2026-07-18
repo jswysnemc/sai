@@ -196,7 +196,7 @@ fn shell_commands(
     ])
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
 fn shell_commands(
     command: &str,
     configured_shell: &str,
@@ -215,6 +215,22 @@ fn shell_commands(
     Ok(vec![shell_command_entry(command, &shell)])
 }
 
+#[cfg(all(not(windows), not(target_os = "linux")))]
+fn shell_commands(
+    command: &str,
+    configured_shell: &str,
+    sandboxed: bool,
+) -> Result<Vec<(String, Command)>> {
+    if sandboxed {
+        bail!("audited sandbox mode is only supported on Linux")
+    }
+    let shell = configured_shell_path(configured_shell)
+        .or_else(|| std::env::var("SHELL").ok())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "sh".to_string());
+    Ok(vec![shell_command_entry(command, &shell)])
+}
+
 /// 构造 Linux 工作区写入沙盒命令。
 ///
 /// 参数:
@@ -223,7 +239,7 @@ fn shell_commands(
 ///
 /// 返回:
 /// - bubblewrap 命令
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
 fn sandboxed_shell_command(command: &str, shell: &str) -> Result<Command> {
     let workspace = crate::runtime_cwd::current_dir()?;
     let mut process = Command::new("bwrap");
@@ -250,7 +266,7 @@ fn sandboxed_shell_command(command: &str, shell: &str) -> Result<Command> {
     Ok(inherit_env(process))
 }
 
-#[cfg(all(test, not(windows)))]
+#[cfg(all(test, target_os = "linux"))]
 mod sandbox_tests {
     use super::*;
 
