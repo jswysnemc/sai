@@ -1,4 +1,5 @@
 use super::repl_chrome::ReplChrome;
+use super::repl_tool_warmup::ReplToolWarmup;
 use super::*;
 use crate::agent::Agent;
 
@@ -56,8 +57,21 @@ pub(super) async fn run_repl(
         runtime.update_composer(&chrome, "", 0, false, 0)?;
         runtime.draw_composer(&mut std::io::stdout())?;
     }
-    // 2. 循环外创建 Agent，避免每轮重建 MemoryStore / 工具注册表
-    let initial_registry = build_repl_tool_registry(&config, paths, mode)?;
+    // 2. 本地工具立即可用，MCP 动态工具在后台发现，避免阻塞输入框
+    let initial_registry = build_repl_tool_registry_without_mcp_for_session(
+        &config,
+        paths,
+        mode,
+        state.session_id(),
+        state.state_dir(),
+    )?;
+    let mut tool_warmup = ReplToolWarmup::start(
+        config.clone(),
+        paths.clone(),
+        mode,
+        state.session_id().to_string(),
+        state.state_dir().to_path_buf(),
+    );
     let mut agent = Agent::new(
         config.clone(),
         paths,
@@ -68,6 +82,7 @@ pub(super) async fn run_repl(
     )?;
 
     loop {
+        apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
         // 每轮刷新底栏上下文/模型信息
         let mut chrome = ReplChrome::from_runtime(&config, &state, mode);
         let transcript_options = render::transcript::TranscriptRenderOptions {
@@ -88,6 +103,7 @@ pub(super) async fn run_repl(
             }
             None => break,
         };
+        apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
         let input = submission.raw_input.trim();
         let submitted_input = input.to_string();
         if input.eq_ignore_ascii_case("exit")
@@ -479,6 +495,36 @@ pub(super) async fn run_repl(
             runtime.record_meta(err.to_string())?;
             continue;
         }
+    }
+    Ok(())
+}
+
+/// 将后台发现完成的 MCP 工具无阻塞合并到当前 Agent。
+///
+/// 参数:
+/// - `warmup`: MCP 工具预热任务
+/// - `agent`: 当前复用的 Agent
+/// - `mode`: 当前输入选择的模式
+/// - `runtime`: TUI 运行期，用于展示后台错误
+///
+/// 返回:
+/// - 合并或错误展示是否成功
+fn apply_ready_tool_registry(
+    warmup: &mut ReplToolWarmup,
+    agent: &mut Agent,
+    mode: AgentMode,
+    runtime: &mut ReplRuntime,
+) -> Result<()> {
+    let Some(result) = warmup.take_ready() else {
+        return Ok(());
+    };
+    match result {
+        Ok((warmup_mode, registry)) if warmup_mode == mode => agent.replace_tools(registry),
+        Ok(_) => {}
+        Err(error) => runtime.record_meta(format!(
+            "{}: {error}",
+            t("MCP tool discovery failed", "MCP 工具发现失败")
+        ))?,
     }
     Ok(())
 }

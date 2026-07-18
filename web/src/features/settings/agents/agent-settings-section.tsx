@@ -1,12 +1,12 @@
 import { RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AppConfig } from "../../../api/contracts";
 import { toDisplayError } from "../../../api/api-error";
 import { useI18n } from "../../i18n/use-i18n";
 import { Button } from "../../../shared/ui/button/button";
 import { AgentProfileWorkspace } from "./agent-profile-workspace";
 import { AgentSurfaceDefaults } from "./agent-surface-defaults";
-import { fetchAgentOptions } from "./agents-api";
+import { fetchAgentMcpOptions, fetchAgentOptions, mergeAgentOptions } from "./agents-api";
 import type { AgentOptions } from "./agents-types";
 import "./agent-settings-layout.css";
 import "./agent-profile-form.css";
@@ -27,6 +27,7 @@ export function AgentSettingsSection({ config, onConfigChange }: AgentSettingsSe
   const [options, setOptions] = useState<AgentOptions>({ tools: [], skills: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const loadGeneration = useRef(0);
 
   /**
    * 读取主 Agent 可用的工具与 Skills，并同步加载状态。
@@ -34,21 +35,37 @@ export function AgentSettingsSection({ config, onConfigChange }: AgentSettingsSe
    * @returns 加载流程完成后的 Promise
   */
   const loadOptions = useCallback(async () => {
+    const generation = loadGeneration.current + 1;
+    loadGeneration.current = generation;
     // 1. 重置上一次加载状态
     setLoading(true);
     setError(null);
-    // 2. 请求能力选项并记录可展示的错误信息
+    // 2. 先读取本地选项并立即解除首屏加载状态
     try {
-      setOptions(await fetchAgentOptions());
+      const local = await fetchAgentOptions();
+      if (loadGeneration.current !== generation) return;
+      setOptions(local);
+      setLoading(false);
+      // 3. MCP 发现可能涉及网络或子进程，在后台完成后再合并
+      void fetchAgentMcpOptions()
+        .then((mcp) => {
+          if (loadGeneration.current === generation) {
+            setOptions((current) => mergeAgentOptions(current, mcp));
+          }
+        })
+        .catch(() => undefined);
     } catch (reason) {
+      if (loadGeneration.current !== generation) return;
       setError(toDisplayError(reason, "Failed to load Agent capabilities", "Agent 能力加载失败"));
-    } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void loadOptions();
+    return () => {
+      loadGeneration.current += 1;
+    };
   }, [loadOptions]);
 
   return (

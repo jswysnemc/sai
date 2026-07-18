@@ -60,6 +60,7 @@ mod repl_input_tests;
 mod repl_runtime;
 mod repl_shell;
 mod repl_text;
+mod repl_tool_warmup;
 mod reset;
 mod sessions;
 mod skills_commands;
@@ -329,10 +330,41 @@ pub(crate) fn build_tool_registry(
     paths: &SaiPaths,
     mode: AgentMode,
 ) -> Result<tools::ToolRegistry> {
+    build_tool_registry_with_mcp(config, paths, mode, true)
+}
+
+/// 构建不连接 MCP 服务的本地工具注册表。
+///
+/// 参数:
+/// - `config`: 应用配置
+/// - `paths`: Sai 路径
+/// - `mode`: 当前 Agent 模式
+///
+/// 返回:
+/// - 本地工具注册表
+pub(crate) fn build_tool_registry_without_mcp(
+    config: &AppConfig,
+    paths: &SaiPaths,
+    mode: AgentMode,
+) -> Result<tools::ToolRegistry> {
+    build_tool_registry_with_mcp(config, paths, mode, false)
+}
+
+/// 按需构建本地或完整工具注册表。
+fn build_tool_registry_with_mcp(
+    config: &AppConfig,
+    paths: &SaiPaths,
+    mode: AgentMode,
+    discover_mcp: bool,
+) -> Result<tools::ToolRegistry> {
     let mut registry = if config.tools.enabled {
         match mode {
-            AgentMode::Yolo => tools::builtin_registry(config, paths),
-            AgentMode::Audited => tools::builtin_registry(config, paths),
+            AgentMode::Yolo | AgentMode::Audited if discover_mcp => {
+                tools::builtin_registry(config, paths)
+            }
+            AgentMode::Yolo | AgentMode::Audited => {
+                tools::builtin_registry_without_mcp(config, paths)
+            }
             AgentMode::Plan => tools::readonly_registry(config, paths),
         }
     } else {
@@ -371,7 +403,44 @@ pub(crate) fn build_repl_tool_registry_for_session(
     session_id: &str,
     state_dir: &std::path::Path,
 ) -> Result<tools::ToolRegistry> {
-    let mut registry = build_tool_registry(config, paths, mode)?;
+    build_repl_tool_registry_for_session_with_mcp(config, paths, mode, session_id, state_dir, true)
+}
+
+/// 构造不连接 MCP 服务的会话工具注册表。
+///
+/// 参数:
+/// - `config`: 应用配置
+/// - `paths`: Sai 路径
+/// - `mode`: Agent 模式
+/// - `session_id`: 会话 ID
+/// - `state_dir`: 会话状态目录
+///
+/// 返回:
+/// - 可立即用于 TUI 首屏的本地工具注册表
+pub(crate) fn build_repl_tool_registry_without_mcp_for_session(
+    config: &AppConfig,
+    paths: &SaiPaths,
+    mode: AgentMode,
+    session_id: &str,
+    state_dir: &std::path::Path,
+) -> Result<tools::ToolRegistry> {
+    build_repl_tool_registry_for_session_with_mcp(config, paths, mode, session_id, state_dir, false)
+}
+
+/// 按需构造本地或完整的会话工具注册表。
+fn build_repl_tool_registry_for_session_with_mcp(
+    config: &AppConfig,
+    paths: &SaiPaths,
+    mode: AgentMode,
+    session_id: &str,
+    state_dir: &std::path::Path,
+    discover_mcp: bool,
+) -> Result<tools::ToolRegistry> {
+    let mut registry = if discover_mcp {
+        build_tool_registry(config, paths, mode)?
+    } else {
+        build_tool_registry_without_mcp(config, paths, mode)?
+    };
     if mode != AgentMode::Plan && config.tools.enabled {
         tools::register_interactive_tools(
             &mut registry,

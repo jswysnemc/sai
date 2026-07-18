@@ -2,6 +2,7 @@ mod alarm;
 mod archlinux;
 mod ask_question;
 mod calculator;
+mod catalog;
 pub(crate) mod command;
 mod context;
 mod deep_diagnose;
@@ -49,6 +50,7 @@ mod xuanxue;
 
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
+pub(crate) use catalog::{mcp_tool_catalog, tool_catalog, ToolCatalogEntry};
 pub(crate) use context::tool_output_for_context;
 pub(crate) use progressive::{register_loader as register_progressive_loader, LOAD_NAME};
 pub use registry::{empty_parameters, ToolPermission, ToolProgress, ToolRegistry, ToolSpec};
@@ -58,83 +60,6 @@ pub use skills::{
     skills_prompt,
 };
 pub(crate) use subagent_reminder::SubagentReminder;
-
-/// 内置工具目录条目。
-pub struct ToolCatalogEntry {
-    /// 工具名称
-    pub name: String,
-    /// 用途分组标识
-    pub group: &'static str,
-    /// 用途分组展示名
-    pub group_label: &'static str,
-    /// 工具摘要说明
-    pub description: String,
-}
-
-/// 枚举当前配置下的内置工具及其分组。
-///
-/// 参数:
-/// - `config`: 当前应用配置
-/// - `paths`: 应用目录路径集合
-///
-/// 返回:
-/// - 按工具名排序的目录条目列表
-pub fn tool_catalog(config: &AppConfig, paths: &SaiPaths) -> Vec<ToolCatalogEntry> {
-    // 1. 构建内置注册表以获取全部工具名
-    let registry = builtin_registry(config, paths);
-    // 2. 为每个工具附加用途分组与摘要
-    let mut entries = registry
-        .tool_infos()
-        .into_iter()
-        .map(|info| {
-            let group = groups::group_for_tool(&info.name);
-            ToolCatalogEntry {
-                description: summarize_tool_description(&info.description),
-                group,
-                group_label: groups::group_description(group),
-                name: info.name,
-            }
-        })
-        .collect::<Vec<_>>();
-    entries.extend(
-        ["subagent", "todo", "ask_question"]
-            .into_iter()
-            .map(|name| {
-                let group = groups::group_for_tool(name);
-                ToolCatalogEntry {
-                    name: name.to_string(),
-                    group,
-                    group_label: groups::group_description(group),
-                    description: match name {
-                        "subagent" => "启动子任务代理".to_string(),
-                        "todo" => "管理待办任务清单".to_string(),
-                        "ask_question" => "向用户提出结构化问题并等待回答".to_string(),
-                        _ => String::new(),
-                    },
-                }
-            }),
-    );
-    entries.sort_by(|left, right| left.name.cmp(&right.name));
-    entries.dedup_by(|left, right| left.name == right.name);
-    entries
-}
-
-/// 截取工具描述首句作为配置界面摘要。
-///
-/// 参数:
-/// - `description`: 完整工具描述
-///
-/// 返回:
-/// - 适合列表展示的短说明
-fn summarize_tool_description(description: &str) -> String {
-    description
-        .split(['.', '。'])
-        .next()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or(description.trim())
-        .to_string()
-}
 
 pub fn readable_tool_name(name: &str) -> &str {
     match name {
@@ -226,7 +151,29 @@ pub fn clear_aur_review_state(paths: &SaiPaths) -> anyhow::Result<()> {
     package_advisor::clear_aur_review_state(paths)
 }
 
+/// 构建完整工具注册表，包括外部 MCP 动态工具。
+///
+/// 参数:
+/// - `config`: 当前应用配置
+/// - `paths`: 应用目录路径集合
+///
+/// 返回:
+/// - 可直接用于 Agent 运行的完整工具注册表
 pub fn builtin_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
+    let mut registry = builtin_registry_without_mcp(config, paths);
+    crate::mcp::register_mcp_tools(&mut registry, config);
+    registry
+}
+
+/// 构建不触发 MCP 发现的本地工具注册表。
+///
+/// 参数:
+/// - `config`: 当前应用配置
+/// - `paths`: 应用目录路径集合
+///
+/// 返回:
+/// - 内置工具与 MCP 管理工具组成的注册表
+pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     let mut registry = ToolRegistry::new();
     command::register(&mut registry, config, paths, true);
     default_tools::register(&mut registry, config, paths);
@@ -290,7 +237,6 @@ pub fn builtin_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     if config.memory_config().enabled {
         memory::register(&mut registry, config.clone(), paths.clone());
     }
-    crate::mcp::register_mcp_tools(&mut registry, config);
     crate::mcp::register_mcp_manager(&mut registry, paths.clone());
     registry
 }

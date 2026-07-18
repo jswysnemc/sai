@@ -123,6 +123,23 @@ impl Agent {
         self.tool_visibility = ToolVisibility::new(self.config.tools.progressive_loading_enabled);
     }
 
+    /// 替换工具注册表并保留当前模式和渐进加载状态。
+    ///
+    /// 参数:
+    /// - `tools`: 后台发现完成后的完整工具注册表
+    ///
+    /// 返回:
+    /// - 无
+    pub fn replace_tools(&mut self, mut tools: ToolRegistry) {
+        let loaded = self.tool_visibility.loaded_tool_names();
+        if self.tools_enabled && self.config.tools.progressive_loading_enabled {
+            tools::register_progressive_loader(&mut tools);
+        }
+        self.tools = tools;
+        self.tool_visibility
+            .restore_loaded_tools(&self.tools, &loaded);
+    }
+
     /// 每轮对话前轻量刷新：系统提示、上下文窗口、过期 turn 恢复。
     ///
     /// 返回:
