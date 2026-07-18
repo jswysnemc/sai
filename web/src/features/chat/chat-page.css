@@ -1,6 +1,8 @@
 .chat-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
+  width: 100%;
   height: 100%;
   min-height: 0;
 }
@@ -59,6 +61,13 @@
   letter-spacing: -0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 移动端头部控件：侧栏菜单与工作区面板 `+` 菜单，桌面端隐藏 */
+
+.chat-header-menu,
+.chat-header-panel {
+  display: none;
 }
 
 .message-scroll-region {
@@ -264,7 +273,84 @@
 
 @media (max-width: 760px) {
   .message-column { padding: 18px 14px 34px; }
-  .chat-header { padding: 9px 13px; }
+
+  /* 移动端头部：左菜单按钮、居中标题、右 `+` 面板菜单 */
+  .chat-header {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) 32px;
+    gap: 6px;
+    min-height: 46px;
+    padding: 6px 10px;
+  }
+
+  .chat-header h1 {
+    max-width: none;
+    align-self: center;
+    font-size: 0.875rem;
+    text-align: center;
+  }
+
+  .chat-header-menu,
+  .chat-header-plus {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    align-self: center;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink-soft);
+  }
+
+  .chat-header-menu:hover,
+  .chat-header-plus:hover,
+  .chat-header-plus[aria-expanded="true"] {
+    background: var(--paper-deep);
+    color: var(--ink);
+  }
+
+  .chat-header-panel {
+    position: relative;
+    display: block;
+    align-self: center;
+  }
+
+  .chat-header-panel-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    display: grid;
+    gap: 2px;
+    min-width: 148px;
+    padding: 5px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--paper-raised);
+    box-shadow: var(--shadow);
+    z-index: 40;
+  }
+
+  .chat-header-panel-menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 34px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ink-soft);
+    font-size: 0.75rem;
+    text-align: left;
+  }
+
+  .chat-header-panel-menu button:hover {
+    background: var(--paper-deep);
+    color: var(--ink);
+  }
 }
 
 .user-bubble {

@@ -1,0 +1,250 @@
+/* 供应商模型目录与模型导入弹层：目录栅格、模型芯片、元数据表单、导入列表 */
+
+/* ---------- 供应商模型目录 ---------- */
+
+.model-catalog {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.model-catalog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 50px;
+  padding: 8px 10px 8px 13px;
+  border-bottom: 1px solid var(--line);
+}
+
+.model-catalog > header > div:first-child { display: grid; gap: 2px; min-width: 0; }
+.model-catalog > header span { font-size: 0.8125rem; font-weight: 500; }
+.model-catalog > header small { color: var(--ink-soft); font-size: 0.6875rem; }
+
+.model-add {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.model-add input {
+  width: min(200px, 100%);
+  min-width: 0;
+  height: 32px;
+  padding: 0 9px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 400 0.75rem var(--font-code);
+}
+
+.model-add button {
+  display: grid;
+  width: 32px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+}
+
+.model-catalog-body {
+  display: grid;
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+  min-height: 220px;
+}
+
+.model-chip-list {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  padding: 7px;
+  border-right: 1px solid var(--line);
+}
+
+.model-chip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26px;
+  border-radius: 6px;
+}
+
+.model-chip.active,
+.model-chip:hover { background: var(--paper-deep); }
+
+.model-chip button {
+  overflow: hidden;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 400 0.75rem var(--font-code);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-chip button:last-child {
+  display: grid;
+  padding: 0;
+  place-items: center;
+  color: var(--ink-soft);
+}
+
+.model-metadata-form { padding: 14px; }
+.model-context-input { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 7px; }
+
+.model-metadata-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.model-metadata-head > div { display: grid; gap: 3px; min-width: 0; }
+.model-metadata-head strong { font: 500 0.8125rem var(--font-code); overflow-wrap: anywhere; }
+.model-metadata-head small { color: var(--ink-soft); font-size: 0.6875rem; }
+
+.model-tag-field {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.model-tag-field > span { color: var(--ink); font-size: 0.75rem; font-weight: 600; }
+.model-tag-field > div { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.model-tag-field button {
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: 400 0.6875rem var(--font-code);
+}
+
+.model-tag-field button.active {
+  border-color: color-mix(in srgb, var(--signal) 50%, var(--line));
+  background: var(--signal-soft);
+  color: var(--signal);
+}
+
+/* ---------- 供应商自定义 JSON ---------- */
+
+.settings-json-field {
+  display: grid;
+  gap: 9px;
+}
+
+.settings-json-field > div:first-child { display: grid; gap: 3px; }
+.settings-json-field > div:first-child > span { font-size: 0.75rem; font-weight: 600; }
+.settings-json-field > div:first-child > small { color: var(--ink-soft); font-size: 0.75rem; }
+
+/* ---------- 模型导入弹层 ---------- */
+
+.model-import-dialog {
+  display: grid;
+  grid-template-rows: 42px minmax(0, 1fr);
+  min-height: min(470px, 70vh);
+  margin: -16px -18px;
+}
+
+.model-import-search {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+}
+
+.model-import-search input {
+  width: 100%;
+  min-height: 30px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.8125rem;
+}
+
+.model-import-list {
+  display: grid;
+  align-content: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 9px;
+}
+
+.model-import-list button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 7px;
+  min-height: 48px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.model-import-list button:hover:not(:disabled),
+.model-import-list button.active {
+  border-color: var(--line-strong);
+  background: var(--paper-deep);
+}
+
+.model-import-list button:disabled { opacity: 0.52; }
+.model-import-list button > span { display: grid; min-width: 0; gap: 3px; }
+
+.model-import-list strong {
+  overflow: hidden;
+  font: 500 0.75rem var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-import-list small { color: var(--ink-soft); font-size: 0.6875rem; }
+.model-import-list svg { color: var(--signal); }
+
+.model-import-empty {
+  grid-column: 1 / -1;
+  display: grid;
+  min-height: 300px;
+  place-content: center;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.model-import-count {
+  margin-right: auto;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+/* ---------- 响应式 ---------- */
+
+@media (max-width: 900px) {
+  .model-catalog-body { grid-template-columns: 1fr; }
+  .model-chip-list { max-height: 180px; overflow-y: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+}
+
+@media (max-width: 768px) {
+  .model-add { flex: 1; }
+  .model-add input { flex: 1; width: auto; }
+  .model-import-list { grid-template-columns: 1fr; }
+  .model-import-dialog { min-height: min(420px, 64vh); }
+}

@@ -1,7 +1,8 @@
-import { Activity, Bot, FileCode2, GitCompareArrows, Maximize2, Minimize2, PanelRightClose, Plus, SquareTerminal, X } from "lucide-react";
+import { Activity, Bot, ChevronLeft, FileCode2, GitCompareArrows, Maximize2, Minimize2, PanelRightClose, Plus, SquareTerminal, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { useOutsidePointerDown } from "../../shared/hooks/use-outside-pointer-down";
 import type { PaneTab, WorkspacePanelTab } from "./workspace-tab";
+import { WORKSPACE_PANEL_OPTIONS, workspacePanelTitle } from "./workspace-panel-options";
 import { useI18n } from "../i18n/use-i18n";
 
 type WorkspaceTabBarProps = {
@@ -15,13 +16,7 @@ type WorkspaceTabBarProps = {
   onCollapse: () => void;
 };
 
-const addable: Array<{ type: PaneTab; labelEn: string; labelZh: string; icon: typeof FileCode2 }> = [
-  { type: "files", labelEn: "Editor", labelZh: "编辑器", icon: FileCode2 },
-  { type: "diff", labelEn: "Git", labelZh: "Git", icon: GitCompareArrows },
-  { type: "terminal", labelEn: "Terminal", labelZh: "终端", icon: SquareTerminal },
-  { type: "tasks", labelEn: "Background tasks", labelZh: "后台任务", icon: Activity },
-  { type: "subagents", labelEn: "Subagents", labelZh: "子智能体", icon: Bot }
-];
+const addable = WORKSPACE_PANEL_OPTIONS;
 
 /**
  * 渲染 Cursor 风格的工作区顶部标签栏。
@@ -40,6 +35,16 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
 
   return (
     <div className="workspace-tab-bar" role="tablist" aria-label={t("Workspace tabs", "工作区标签")}>
+      <button
+        type="button"
+        className="workspace-tab-back"
+        onClick={props.onCollapse}
+        aria-label={t("Back to chat", "返回聊天")}
+        title={t("Back to chat", "返回聊天")}
+      >
+        <ChevronLeft size={16} />
+        <span>{t("Chat", "聊天")}</span>
+      </button>
       <div className="workspace-tab-scroll-row">
         <div className="workspace-tab-scroll">
           {props.tabs.map((tab) => {
@@ -135,13 +140,7 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
  * @returns 面板标题
  */
 function translatedPaneLabel(type: PaneTab, t: (en: string, zh: string) => string): string {
-  return {
-    files: t("Editor", "编辑器"),
-    diff: "Git",
-    terminal: t("Terminal", "终端"),
-    tasks: t("Background tasks", "后台任务"),
-    subagents: t("Subagents", "子智能体")
-  }[type];
+  return workspacePanelTitle(type, t);
 }
 
 function TabIcon({ type }: { type: PaneTab }) {

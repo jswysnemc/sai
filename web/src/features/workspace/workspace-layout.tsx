@@ -1,4 +1,4 @@
-import { Activity, Bot, Code2, FileCode2, GitCompareArrows, MessageSquare, Plus, SquareTerminal } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { CSSProperties } from "react";
 import { useEffect, useReducer, useRef, useState } from "react";
@@ -18,9 +18,9 @@ import {
   initialMobileWorkbenchState,
   MOBILE_SIDEBAR_TOGGLE_EVENT,
   MOBILE_WORKBENCH_MEDIA_QUERY,
-  reduceMobileWorkbenchState,
-  type MobileWorkbenchPane
+  reduceMobileWorkbenchState
 } from "./mobile-workbench-state";
+import { OPEN_WORKSPACE_PANEL_EVENT, WORKSPACE_PANEL_OPTIONS } from "./workspace-panel-options";
 import "./workspace-pane.css";
 import { useI18n } from "../i18n/use-i18n";
 
@@ -29,14 +29,6 @@ type WorkspaceLayoutProps = {
   onSelectFile: (path: string) => void;
   onClearFile: () => void;
 };
-
-const reopenChoices: Array<{ type: PaneTab; labelEn: string; labelZh: string; icon: typeof FileCode2 }> = [
-  { type: "files", labelEn: "Editor", labelZh: "编辑器", icon: FileCode2 },
-  { type: "diff", labelEn: "Git", labelZh: "Git", icon: GitCompareArrows },
-  { type: "terminal", labelEn: "Terminal", labelZh: "终端", icon: SquareTerminal },
-  { type: "tasks", labelEn: "Background tasks", labelZh: "后台任务", icon: Activity },
-  { type: "subagents", labelEn: "Subagents", labelZh: "子智能体", icon: Bot }
-];
 
 /**
  * 组合会话栏、聊天区和可调整的右侧工作区。
@@ -114,42 +106,33 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
   }, [activeWorkspace?.path, onSelectFile, layout.openWorkspace]);
 
   useEffect(() => {
-    /** 响应聊天区发出的终端/后台任务入口，打开右侧同级面板。 */
+    /** 响应聊天区发出的终端/后台任务/面板入口，打开右侧同级面板。 */
     const openPanel = (tab: PaneTab) => {
       layout.openWorkspace();
       setPaneTab(tab);
       if (window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY).matches) {
-        dispatchMobileLayout({ type: "show-pane", pane: "workspace" });
+        dispatchMobileLayout({ type: "show-pane", pane: tab === "terminal" ? "terminal" : "workspace" });
       }
     };
     const handleToggleTerminal = () => openPanel("terminal");
     const handleOpenTasks = () => openPanel("tasks");
     const handleOpenSubagents = () => openPanel("subagents");
+    /** 响应移动端聊天头部 `+` 菜单发出的面板打开请求。 */
+    const handleOpenPanel = (event: Event) => {
+      const tab = (event as CustomEvent<{ tab?: PaneTab }>).detail?.tab;
+      if (tab) openPanel(tab);
+    };
     window.addEventListener("sai:toggle-terminal", handleToggleTerminal);
     window.addEventListener("sai:open-tasks", handleOpenTasks);
     window.addEventListener("sai:open-subagents", handleOpenSubagents);
+    window.addEventListener(OPEN_WORKSPACE_PANEL_EVENT, handleOpenPanel);
     return () => {
       window.removeEventListener("sai:toggle-terminal", handleToggleTerminal);
       window.removeEventListener("sai:open-tasks", handleOpenTasks);
       window.removeEventListener("sai:open-subagents", handleOpenSubagents);
+      window.removeEventListener(OPEN_WORKSPACE_PANEL_EVENT, handleOpenPanel);
     };
   }, [layout.openWorkspace]);
-
-  /**
-   * 显示指定移动端工作台面板，并确保对应桌面布局区域已经打开。
-   *
-   * @param pane 需要显示的面板
-   */
-  const showMobilePane = (pane: MobileWorkbenchPane) => {
-    if (pane === "chat" && !layout.chatOpen) layout.toggleChat();
-    if (pane === "chat" && layout.workspaceMaximized) layout.toggleWorkspaceMaximized();
-    if (pane === "workspace") layout.openWorkspace();
-    if (pane === "terminal") {
-      layout.openWorkspace();
-      setPaneTab("terminal");
-    }
-    dispatchMobileLayout({ type: "show-pane", pane });
-  };
 
   /** 关闭工作区，并在移动端回到聊天面板。 */
   const closeWorkspace = () => {
@@ -174,17 +157,6 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
 
   return (
     <div className={classes} style={style}>
-      <nav className="workbench-mobile-tabs" aria-label={t("Workbench panels", "工作台面板")}>
-        <button type="button" className={mobileLayout.pane === "chat" ? "active" : ""} onClick={() => showMobilePane("chat")} aria-current={mobileLayout.pane === "chat" ? "page" : undefined}>
-          <MessageSquare size={17} /><span>{t("Chat", "聊天")}</span>
-        </button>
-        <button type="button" className={mobileLayout.pane === "workspace" ? "active" : ""} onClick={() => showMobilePane("workspace")} aria-current={mobileLayout.pane === "workspace" ? "page" : undefined}>
-          <Code2 size={17} /><span>{t("Editor", "编辑器")}</span>
-        </button>
-        <button type="button" className={mobileLayout.pane === "terminal" ? "active" : ""} onClick={() => showMobilePane("terminal")} aria-current={mobileLayout.pane === "terminal" ? "page" : undefined}>
-          <SquareTerminal size={17} /><span>{t("Terminal", "终端")}</span>
-        </button>
-      </nav>
       {mobileLayout.sidebarOpen && (
         <button type="button" className="mobile-sidebar-scrim" onClick={() => dispatchMobileLayout({ type: "close-sidebar" })} aria-label={t("Close session sidebar", "关闭会话侧栏")} />
       )}
@@ -229,7 +201,7 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
             </button>
             {reopenMenuOpen && (
               <div className="workspace-reopen-menu" role="menu" aria-label={t("Choose panel", "选择面板")}>
-                {reopenChoices.map((item) => {
+                {WORKSPACE_PANEL_OPTIONS.map((item) => {
                   const Icon = item.icon;
                   return (
                     <button

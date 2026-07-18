@@ -21,6 +21,11 @@
   background: color-mix(in srgb, var(--paper-deep) 55%, var(--paper));
 }
 
+/* 移动端返回聊天按钮，桌面端隐藏 */
+.workspace-tab-back {
+  display: none;
+}
+
 .workspace-tab-scroll-row {
   display: flex;
   align-items: stretch;
@@ -200,6 +205,35 @@
 .workspace-tab-layout button.active {
   background: var(--paper-deep);
   color: var(--ink);
+}
+
+/* 手机端：标签栏左侧提供返回聊天按钮，隐藏无意义的全屏/收起操作 */
+@media (max-width: 760px) {
+  .workspace-tab-bar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .workspace-tab-back {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    padding: 0 8px 0 5px;
+    border: 0;
+    border-right: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+    border-radius: 0;
+    background: transparent;
+    color: var(--ink-soft);
+    font-size: 0.75rem;
+  }
+
+  .workspace-tab-back:hover {
+    background: var(--paper-deep);
+    color: var(--ink);
+  }
+
+  .workspace-tab-layout {
+    display: none;
+  }
 }
 
 .workspace-pane-empty {

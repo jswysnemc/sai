@@ -18,6 +18,8 @@ import { useTheme } from "../theme/theme";
 import { useI18n } from "../i18n/use-i18n";
 import "./settings-layout.css";
 import "./settings-forms.css";
+import "./settings-catalog.css";
+import "./settings-sections.css";
 
 /**
  * 渲染应用配置页面，含紧凑吸顶标题条、分类导航和编辑区。

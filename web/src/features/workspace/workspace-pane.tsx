@@ -7,6 +7,7 @@ import { BackgroundTasksPanel } from "../background-tasks/background-tasks-panel
 import { SubagentWorkspace } from "../subagents/subagent-workspace";
 import type { TerminalManager } from "../terminal/use-terminal-manager";
 import { createWorkspacePanelTab, type PaneTab, type WorkspacePanelTab } from "./workspace-tab";
+import { workspacePanelTitle } from "./workspace-panel-options";
 import { WorkspaceTabBar } from "./workspace-tab-bar";
 import "./workspace-pane.css";
 import { useI18n } from "../i18n/use-i18n";
@@ -248,11 +249,5 @@ export function WorkspacePane({
  * @returns 面板标题
  */
 function panelTitle(type: PaneTab, t: (en: string, zh: string) => string): string {
-  return {
-    files: t("Editor", "编辑器"),
-    diff: "Git",
-    terminal: t("Terminal", "终端"),
-    tasks: t("Background tasks", "后台任务"),
-    subagents: t("Subagents", "子智能体")
-  }[type];
+  return workspacePanelTitle(type, t);
 }

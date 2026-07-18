@@ -1,0 +1,349 @@
+/* 设置分区专有样式：提示词编辑、运行参数、高级 JSON、主题预设、网关、记忆和通用条目 */
+
+/* ---------- 提示词编辑区 ---------- */
+
+.prompt-editor {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 14px;
+  min-height: calc(100vh - 190px);
+}
+
+.prompt-editor .editor-header { margin-bottom: 0; }
+.prompt-content-field { min-height: 0; }
+
+.prompt-content-field textarea {
+  min-height: 320px;
+  height: 100%;
+  font-family: var(--font-code);
+  line-height: 1.65;
+}
+
+.prompt-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.prompt-editor-footer .settings-inline-error { margin: 0; }
+
+/* ---------- 运行参数分组 ---------- */
+
+.runtime-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr));
+  align-items: start;
+  gap: 0 40px;
+}
+
+/* ---------- 高级 JSON ---------- */
+
+.advanced-settings {
+  display: grid;
+  gap: 12px;
+}
+
+.advanced-settings .editor-header { margin-bottom: 0; }
+
+.advanced-settings-note {
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--warning) 32%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+/* ---------- 主题预设 ---------- */
+
+.theme-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: 12px;
+  max-width: 960px;
+}
+
+.theme-preset {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 12px;
+  min-height: 78px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  text-align: left;
+}
+
+.theme-preset:hover,
+.theme-preset.active {
+  border-color: color-mix(in srgb, var(--signal) 55%, var(--line));
+  background: var(--paper-deep);
+}
+
+.theme-swatches {
+  display: flex;
+  height: 48px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.theme-swatches i { flex: 1; }
+.theme-preset-copy { display: grid; gap: 4px; min-width: 0; }
+.theme-preset-copy strong { color: var(--ink); font-size: 0.8125rem; font-weight: 500; }
+.theme-preset-copy small { font-size: 0.6875rem; line-height: 1.45; }
+.theme-preset-check { visibility: hidden; color: var(--signal); }
+.theme-preset.active .theme-preset-check { visibility: visible; }
+
+/* ---------- 网关配置与运行控制 ---------- */
+
+.gateway-settings { max-width: 1100px; }
+
+.gateway-weixin-login-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.gateway-weixin-login-button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.gateway-weixin-login-button:hover {
+  border-color: color-mix(in srgb, var(--signal) 50%, var(--line));
+  color: var(--signal);
+}
+
+.gateway-weixin-login-row small {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.settings-switch {
+  display: grid;
+  grid-template-columns: 38px auto;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.settings-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.settings-switch > span {
+  position: relative;
+  width: 38px;
+  height: 21px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition: background 150ms ease;
+}
+
+.settings-switch > span::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--paper-raised);
+  box-shadow: 0 1px 4px rgb(20 28 23 / 22%);
+  content: "";
+  transition: transform 150ms ease;
+}
+
+.settings-switch input:checked + span { background: var(--signal); }
+.settings-switch input:checked + span::after { transform: translateX(17px); }
+.settings-switch input:focus-visible + span { outline: 2px solid var(--signal); outline-offset: 2px; }
+.settings-switch strong { color: var(--ink-soft); font-size: 0.6875rem; font-weight: 500; }
+
+.gateway-runtime {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--paper-deep) 62%, transparent);
+}
+
+.gateway-runtime-state {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.gateway-runtime-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); }
+.gateway-runtime-state.running { color: var(--signal); }
+.gateway-runtime-state.running i { background: var(--signal); box-shadow: 0 0 0 4px var(--signal-soft); }
+.gateway-runtime-state small { padding-left: 4px; color: var(--ink-soft); font: 400 0.6875rem var(--font-code); }
+
+.gateway-runtime-button {
+  border: 0;
+  background: var(--signal);
+  color: #fff;
+}
+
+.gateway-runtime-button.stop { background: var(--danger); }
+.gateway-runtime-error { grid-column: 1 / -1; color: var(--danger); font-size: 0.6875rem; }
+
+/* ---------- 记忆管理 ---------- */
+
+.memory-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.memory-compose {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.memory-compose textarea,
+.memory-search input {
+  width: 100%;
+  border: 1px solid var(--technical-border);
+  border-radius: 8px;
+  padding: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.8125rem;
+}
+
+.memory-search {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.memory-search input { flex: 1; min-width: 160px; }
+
+.memory-list-block {
+  margin-top: 18px;
+}
+
+.memory-list {
+  display: grid;
+  gap: 8px;
+}
+
+.memory-item {
+  border: 1px solid var(--technical-border);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.memory-item footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.memory-item button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.memory-search-result {
+  max-height: 240px;
+  overflow: auto;
+  font-size: 0.75rem;
+  background: color-mix(in srgb, var(--technical-surface) 90%, black);
+  padding: 8px;
+  border-radius: 8px;
+}
+
+/* ---------- 通用堆叠条目 ---------- */
+
+.settings-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-list {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.settings-item-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--technical-border, var(--line));
+  border-radius: 10px;
+}
+
+.settings-item-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-item-row input,
+.settings-item-row select,
+.settings-item-card textarea,
+.settings-item-card > input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid var(--technical-border, var(--line));
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.8125rem;
+}
+
+.settings-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+}
+
+/* ---------- 响应式 ---------- */
+
+@media (max-width: 768px) {
+  .prompt-editor { min-height: 0; }
+  .prompt-content-field textarea { min-height: 240px; }
+  .gateway-runtime { grid-template-columns: 1fr; }
+  .gateway-runtime-button { width: 100%; }
+}

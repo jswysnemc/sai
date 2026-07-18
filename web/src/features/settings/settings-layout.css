@@ -13,7 +13,7 @@
   align-items: center;
   gap: 5px;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: 0.75rem;
   text-decoration: none;
 }
 
@@ -37,12 +37,12 @@
   width: min(100%, 1600px);
   height: 56px;
   margin: 0 auto;
-  padding: 0 clamp(16px, 2.5vw, 32px);
+  padding: 0 clamp(12px, 2.5vw, 32px);
 }
 
 .settings-topbar h1 {
   margin: 0;
-  font-size: 17px;
+  font-size: 1.0625rem;
   letter-spacing: -0.02em;
 }
 
@@ -50,7 +50,7 @@
   overflow: hidden;
   margin: 0;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: 0.75rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -69,15 +69,16 @@
   height: 26px;
   padding: 0 10px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .settings-status-badge.saved { background: var(--signal-soft); color: var(--signal); }
 .settings-status-badge.dirty { background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--warning); }
 .settings-status-badge.failed { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
 
-/* ---------- 主体三栏工作区 ---------- */
+/* ---------- 主体两栏工作区 ---------- */
 
 .settings-workspace {
   display: grid;
@@ -104,7 +105,7 @@
 .settings-navigation-label {
   padding: 0 10px 8px;
   color: var(--ink-soft);
-  font: 500 10px var(--font-code);
+  font: 500 0.625rem var(--font-code);
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
@@ -117,7 +118,6 @@
   width: 100%;
   padding: 8px 10px;
   border: 0;
-  border-left: 3px solid transparent;
   border-radius: 8px;
   background: transparent;
   color: var(--ink-soft);
@@ -134,13 +134,11 @@
   min-width: 0;
 }
 
-.settings-navigation strong { color: inherit; font-size: 13px; font-weight: 500; }
-.settings-navigation small { overflow: hidden; color: var(--ink-soft); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.settings-navigation strong { color: inherit; font-size: 0.8125rem; font-weight: 500; }
+.settings-navigation small { overflow: hidden; color: var(--ink-soft); font-size: 0.6875rem; text-overflow: ellipsis; white-space: nowrap; }
 .settings-navigation button:hover { background: var(--paper-deep); color: var(--ink); }
 
 .settings-navigation button.active {
-  border-left-color: var(--signal);
-  border-radius: 0 8px 8px 0;
   background: var(--paper-deep);
   color: var(--ink);
 }
@@ -151,7 +149,7 @@
 
 .settings-main {
   min-width: 0;
-  padding: 20px clamp(16px, 2.5vw, 32px) 56px;
+  padding: 20px clamp(12px, 2.5vw, 32px) 56px;
 }
 
 /* ---------- 对象列表中列 ---------- */
@@ -190,7 +188,7 @@
   align-items: center;
   gap: 8px;
   color: var(--ink);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 
@@ -203,7 +201,7 @@
   border-radius: 6px;
   background: var(--paper-deep);
   color: var(--ink-soft);
-  font: 500 11px var(--font-code);
+  font: 500 0.6875rem var(--font-code);
 }
 
 .object-list-add {
@@ -242,7 +240,7 @@
   outline: 0;
   background: transparent;
   color: var(--ink);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .object-list-scroll {
@@ -295,7 +293,7 @@
 .object-list-copy strong {
   overflow-wrap: anywhere;
   color: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   line-height: 1.35;
 }
@@ -303,7 +301,7 @@
 .object-list-copy small {
   overflow-wrap: anywhere;
   color: var(--ink-soft);
-  font: 400 11px var(--font-code);
+  font: 400 0.6875rem var(--font-code);
 }
 
 .object-list-mark {
@@ -316,7 +314,7 @@
 .object-list-empty {
   padding: 20px 8px;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: 0.75rem;
   text-align: center;
 }
 
@@ -338,7 +336,7 @@
   border-radius: 6px;
   background: transparent;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .prompt-kind-tabs button.active {
@@ -362,8 +360,8 @@
 
 .prompt-default-row:hover { border-color: var(--line-strong); }
 .prompt-default-row > span { display: grid; gap: 2px; min-width: 0; }
-.prompt-default-row strong { font-size: 13px; font-weight: 500; }
-.prompt-default-row small { color: var(--ink-soft); font-size: 11px; }
+.prompt-default-row strong { font-size: 0.8125rem; font-weight: 500; }
+.prompt-default-row small { color: var(--ink-soft); font-size: 0.6875rem; }
 .prompt-default-row svg { color: var(--signal); }
 
 /* ---------- 状态与消息 ---------- */
@@ -374,7 +372,7 @@
   margin-top: 16px;
   padding: 11px 13px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .settings-error { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); }
@@ -384,10 +382,11 @@
 .settings-inline-error {
   margin: 12px 0 0;
   padding: 9px 11px;
-  border-left: 3px solid var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 32%, transparent);
+  border-radius: 8px;
   background: color-mix(in srgb, var(--danger) 8%, transparent);
   color: var(--danger);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .spin { animation: settings-spin 0.9s linear infinite; }
@@ -406,7 +405,7 @@
 .management-page-body {
   min-height: 0;
   overflow: auto;
-  padding: 24px clamp(18px, 4vw, 64px) 60px;
+  padding: 24px clamp(14px, 4vw, 64px) 60px;
 }
 
 .management-hero {
@@ -418,9 +417,9 @@
   margin: 0 auto 24px;
 }
 
-.management-hero h1 { margin: 3px 0 5px; font-size: clamp(26px, 3vw, 38px); letter-spacing: -0.04em; }
-.management-hero p { max-width: 680px; margin: 0; color: var(--ink-soft); line-height: 1.6; }
-.hero-icon { display: grid; width: 48px; height: 48px; place-items: center; border-radius: 13px; background: var(--graphite); color: var(--paper-raised); box-shadow: var(--shadow); }
+.management-hero h1 { margin: 3px 0 5px; font-size: clamp(1.25rem, 2vw, 1.5rem); letter-spacing: -0.02em; }
+.management-hero p { max-width: 680px; margin: 0; color: var(--ink-soft); font-size: 0.875rem; line-height: 1.6; }
+.hero-icon { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 10px; background: var(--graphite); color: var(--paper-raised); box-shadow: var(--shadow); }
 
 /* ---------- 响应式 ---------- */
 
@@ -433,14 +432,48 @@
   .object-list { position: static; max-height: 320px; padding-right: 0; padding-bottom: 12px; border-right: 0; border-bottom: 1px solid var(--line); }
 }
 
-@media (max-width: 760px) {
-  .settings-topbar-inner { flex-wrap: wrap; height: auto; padding-top: 8px; padding-bottom: 8px; }
+/* 手机端：顶栏保持单行紧凑，分类导航降级为吸顶横向滚动页签 */
+@media (max-width: 768px) {
+  .settings-topbar-inner { gap: 8px; }
+  .settings-topbar h1 { font-size: 1rem; }
   .settings-topbar p { display: none; }
-  .settings-workspace { display: block; }
-  .settings-navigation { position: static; display: flex; width: 100%; min-width: 0; max-height: none; padding: 8px 10px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .settings-back { gap: 0; }
+  .settings-back span { display: none; }
+  .settings-topbar-actions { gap: 6px; }
+  .settings-status-badge { width: 26px; padding: 0; justify-content: center; }
+  .settings-status-badge-text { display: none; }
+  .settings-workspace { display: block; min-height: 0; }
+  .settings-navigation {
+    top: 56px;
+    z-index: 15;
+    display: flex;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+    max-height: none;
+    margin: 0;
+    padding: 8px 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    background: var(--paper);
+    scrollbar-width: none;
+  }
+  .settings-navigation::-webkit-scrollbar { display: none; }
   .settings-navigation-label { display: none; }
-  .settings-navigation button { flex: 0 0 auto; width: 168px; border-left: 0; }
-  .settings-navigation button.active { border-radius: 8px; box-shadow: inset 3px 0 0 var(--signal); }
+  .settings-navigation button {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    padding: 6px 10px;
+    white-space: nowrap;
+  }
+  .settings-navigation button > span { display: block; }
+  .settings-navigation button small { display: none; }
   .settings-main { padding: 16px 12px 72px; }
-  .management-hero { grid-template-columns: auto 1fr; }
+  .management-hero { grid-template-columns: auto 1fr; gap: 12px; }
+  .management-hero h1 { font-size: 1.25rem; }
 }
