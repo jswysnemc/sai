@@ -2,20 +2,19 @@ use crate::i18n::text as t;
 use crate::render::background_command_event::background_command_block_action;
 use crate::render::command_output::{render_command_block_with_action, write_tool_payload};
 use crate::render::edit_diff::write_edit_file_diff_block;
-use crate::render::streaming_command_block::StreamingCommandBlock;
-use crate::render::streaming_replace::clear_rendered_rows;
 use anyhow::Result;
 use std::collections::HashSet;
 use std::io::{self, Write};
 
 /// 写入命令类工具调用块。
 ///
+/// 命令块只在收到完整 ToolCall 时输出一次；参数流式期间由单行状态提示，
+/// 不做多行预览替换，避免清除错位导致命令重复展示。
+///
 /// 参数:
 /// - `name`: 工具名称
 /// - `arguments`: 工具参数
-/// - `event_label`: 工具事件标签
 /// - `background_command_start`: 是否为后台命令启动
-/// - `streaming_command_block`: 命令参数流式预览状态
 /// - `command_block_tools`: 已渲染命令块工具集合
 ///
 /// 返回:
@@ -23,9 +22,7 @@ use std::io::{self, Write};
 pub(crate) fn write_command_tool_call_block(
     name: &str,
     arguments: &str,
-    event_label: &str,
     background_command_start: bool,
-    streaming_command_block: &mut StreamingCommandBlock,
     command_block_tools: &mut HashSet<String>,
 ) -> Result<bool> {
     if name != "run_command" && !background_command_start {
@@ -36,15 +33,8 @@ pub(crate) fn write_command_tool_call_block(
     let command_block_action = if background_command_start {
         background_command_block_action()
     } else {
-        event_label
+        "Run"
     };
-    if name == "run_command" {
-        write!(
-            stdout,
-            "{}",
-            clear_rendered_rows(streaming_command_block.take_rendered_rows())
-        )?;
-    }
     write!(
         stdout,
         "{}",

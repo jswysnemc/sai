@@ -4,8 +4,8 @@ use crate::render::background_command_event::{
     background_command_result_label, is_background_command_start,
 };
 use crate::render::command_output::{
-    render_command_block_with_action, write_command_block_with_action, write_command_error_block,
-    write_command_result_blocks, write_tool_payload,
+    write_command_block_with_action, write_command_error_block, write_command_result_blocks,
+    write_tool_payload,
 };
 use crate::render::edit_diff::write_edit_file_diff_block;
 use crate::render::live_tool_status::LiveToolStatus;
@@ -18,8 +18,6 @@ pub(crate) use crate::render::stream_text::{
     normalize_stream_text, tool_call_has_visible_block, wait_spinner_detail_line,
 };
 use crate::render::stream_tool_status::tool_start_status;
-use crate::render::streaming_command_block::StreamingCommandBlock;
-use crate::render::streaming_replace::{clear_rendered_rows, rendered_visual_rows};
 use crate::render::style::TOOL_BULLET;
 use crate::render::tool_call_blocks::{
     write_command_tool_call_block, write_edit_tool_call_block, write_edit_tool_call_diff_block,
@@ -59,7 +57,7 @@ pub struct StreamRenderer {
     command_block_tools: HashSet<String>,
     streaming_edit_progress: HashSet<usize>,
     pending_streamed_edit_blocks: usize,
-    streaming_command_block: StreamingCommandBlock,
+    suppressed_denied_results: HashSet<String>,
     work_status: Option<WorkStatus>,
 }
 
@@ -96,9 +94,20 @@ impl StreamRenderer {
             command_block_tools: HashSet::new(),
             streaming_edit_progress: HashSet::new(),
             pending_streamed_edit_blocks: 0,
-            streaming_command_block: StreamingCommandBlock::new(),
+            suppressed_denied_results: HashSet::new(),
             work_status: None,
         }
+    }
+
+    /// 标记指定工具的下一条失败结果由权限拒绝产生，无需重复输出。
+    ///
+    /// 参数:
+    /// - `tool`: 被拒绝的工具名称
+    ///
+    /// 返回:
+    /// - 无
+    pub fn suppress_denied_result(&mut self, tool: &str) {
+        self.suppressed_denied_results.insert(tool.to_string());
     }
 
     /// 启动等待响应动画。
@@ -200,9 +209,7 @@ impl StreamRenderer {
             if write_command_tool_call_block(
                 name,
                 arguments,
-                &event_label,
                 background_command_start,
-                &mut self.streaming_command_block,
                 &mut self.command_block_tools,
             )? {
                 self.resume_work_spinner()?;
@@ -237,6 +244,9 @@ impl StreamRenderer {
 
     /// 写入工具调用参数接收进度。
     ///
+    /// 参数进度只更新单行 live 状态；完整命令块等 ToolCall 定稿后一次性输出，
+    /// 避免多行预览反复清除重绘在宽字符或滚动场景下残留重复内容。
+    ///
     /// 参数:
     /// - `progress`: 工具调用参数流式进度
     ///
@@ -254,23 +264,6 @@ impl StreamRenderer {
         let event_label = tool_event_label(name, Some(&progress.arguments_preview));
         self.tool_event_labels
             .insert(name.to_string(), event_label.clone());
-        if let Some(preview) = self
-            .streaming_command_block
-            .command_from_progress(name, &progress.arguments_preview)
-        {
-            self.clear_live_tool_status()?;
-            self.end_active_stream_line()?;
-            self.finalize_reasoning_summary()?;
-            let mut stdout = io::stdout();
-            let block = render_command_block_with_action(&preview.command, &event_label);
-            write!(stdout, "{}", clear_rendered_rows(preview.clear_rows))?;
-            write!(stdout, "{block}")?;
-            stdout.flush()?;
-            self.streaming_command_block
-                .mark_rendered_rows(rendered_visual_rows(&block));
-            self.resume_work_spinner()?;
-            return Ok(());
-        }
         if name == "edit_file" && !self.streaming_edit_progress.contains(&progress.index) {
             self.clear_live_tool_status()?;
             self.end_active_stream_line()?;
@@ -336,6 +329,16 @@ impl StreamRenderer {
             return Ok(());
         }
         self.set_work_status(WorkStatus::Working, false)?;
+        // 权限拒绝的失败结果已由「已拒绝」决定行呈现，跳过重复的输出块
+        let suppressed = self.suppressed_denied_results.remove(name);
+        if suppressed && !ok {
+            if self.tool_call_mode == ToolCallDisplayMode::Summary {
+                self.summary.note_tool_result(name, ok);
+            }
+            self.finish_live_tool_status()?;
+            self.resume_work_spinner()?;
+            return Ok(());
+        }
         let status = if ok { "ok" } else { "err" };
         let event_label = self
             .tool_event_labels

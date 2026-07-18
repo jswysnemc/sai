@@ -3,6 +3,7 @@ mod event_loop;
 mod history_insert;
 mod reflow;
 mod reflow_state;
+mod runner_events;
 mod slash_panel;
 mod stream;
 mod viewport;
@@ -10,26 +11,25 @@ mod viewport;
 #[cfg(test)]
 mod tests;
 
-use crate::agent::{AgentEvent, AgentMode};
+use crate::agent::AgentMode;
 use crate::cli::repl_chrome::ReplChrome;
 use crate::render::transcript::{
     TranscriptMode, TranscriptRenderOptions, TranscriptStore, WelcomeCell,
 };
-use crate::render::work_status::WorkStatus;
-use crate::runner::RunnerEvent;
 use anyhow::Result;
-use std::io;
+use std::io::{self, Write};
 use std::time::{Duration, Instant};
 
 use composer_frame::ComposerFrame;
 use reflow_state::ReflowState;
-use stream::{StreamState, StreamSync};
+use stream::{StreamState, SyncPlan};
 use viewport::{InlineViewport, TerminalSize};
 
-const LIVE_REASONING_REFRESH_INTERVAL: Duration = Duration::from_millis(100);
+/// live 动效与流式文本的统一刷新周期。
+const LIVE_REFRESH_INTERVAL: Duration = Duration::from_millis(100);
 const SUBAGENT_REFRESH_INTERVAL: Duration = Duration::from_millis(150);
 
-/// REPL 的 source-backed transcript、inline viewport 与 resize reflow 运行期。
+/// REPL 的 source-backed transcript、inline viewport 与增量协调运行期。
 pub(super) struct ReplRuntime {
     transcript: TranscriptStore,
     options: TranscriptRenderOptions,
@@ -37,7 +37,9 @@ pub(super) struct ReplRuntime {
     reflow: ReflowState,
     stream: StreamState,
     composer: Option<ComposerFrame>,
-    next_live_reasoning_refresh: Option<Instant>,
+    next_live_refresh: Option<Instant>,
+    live_sync_pending: bool,
+    desynced: bool,
     subagent_signature: Vec<(String, String, u64, u64)>,
 }
 
@@ -61,7 +63,9 @@ impl ReplRuntime {
             reflow,
             stream: StreamState::default(),
             composer: None,
-            next_live_reasoning_refresh: None,
+            next_live_refresh: None,
+            live_sync_pending: false,
+            desynced: false,
             subagent_signature: Vec::new(),
         }
     }
@@ -79,13 +83,14 @@ impl ReplRuntime {
         self.options = options;
     }
 
-    /// 更新 composer source，并在边界变化时从 source 重放历史。
+    /// 更新 composer source，并在可视历史增高时从 source 重放。
     ///
     /// 参数:
     /// - `chrome`: 当前输入框 chrome 状态
     /// - `input`: 原始输入文本
     /// - `cursor`: 光标字符偏移
     /// - `is_pasted`: 是否为粘贴内容
+    /// - `slash_selection`: slash 面板当前选中项
     ///
     /// 返回:
     /// - composer 顶部行号与视觉行数
@@ -106,12 +111,12 @@ impl ReplRuntime {
             slash_selection,
         );
         self.composer = Some(frame);
-        let lines = self
-            .transcript
-            .display_tail(usize::from(size.cols), &self.options);
+        let previous_size = self.viewport.size();
+        let previous_history = self.viewport.history_height();
         let composer_height = self.composer_height_for(size);
-        let changed = self.viewport.update(size, composer_height, lines.len());
-        if changed {
+        self.viewport
+            .update(size, composer_height, self.stream.on_screen());
+        if self.needs_replay_after_layout(previous_size, previous_history) {
             self.reflow.schedule_immediate();
             self.maybe_reflow_due(false)?;
         }
@@ -142,14 +147,26 @@ impl ReplRuntime {
     pub(super) fn end_composer(&mut self) -> Result<()> {
         self.composer = None;
         let size = TerminalSize::current();
-        let lines = self
-            .transcript
-            .display_tail(usize::from(size.cols), &self.options);
-        if self.viewport.update(size, 0, lines.len()) {
+        let previous_size = self.viewport.size();
+        let previous_history = self.viewport.history_height();
+        self.viewport.update(size, 0, self.stream.on_screen());
+        if self.needs_replay_after_layout(previous_size, previous_history) {
             self.reflow.schedule_immediate();
             self.maybe_reflow_due(false)?;
         }
         Ok(())
+    }
+
+    /// 判断布局变化后是否需要重放可视历史。
+    ///
+    /// 参数:
+    /// - `previous_size`: 变化前的终端尺寸
+    /// - `previous_history`: 变化前的可视历史行数
+    ///
+    /// 返回:
+    /// - 尺寸变化或历史区域增高（露出被 composer 覆盖的行）时返回 true
+    fn needs_replay_after_layout(&self, previous_size: TerminalSize, previous_history: u16) -> bool {
+        self.viewport.size() != previous_size || self.viewport.history_height() > previous_history
     }
 
     /// 处理输入阶段的 Resize 事件。
@@ -322,7 +339,8 @@ impl ReplRuntime {
     /// 返回:
     /// - transcript 同步结果
     pub(super) fn pause_for_permission_prompt(&mut self) -> Result<()> {
-        self.next_live_reasoning_refresh = None;
+        self.next_live_refresh = None;
+        self.live_sync_pending = false;
         self.transcript.clear_work_status();
         self.transcript.finalize_live_tail();
         self.sync_transcript(false)
@@ -373,139 +391,6 @@ impl ReplRuntime {
         self.sync_transcript(false)
     }
 
-    /// 记录一条 RunnerEvent 并将可显示部分插入历史区。
-    ///
-    /// 参数:
-    /// - `event`: Runner 输出事件
-    ///
-    /// 返回:
-    /// - 操作是否成功
-    pub(super) fn record_runner_event(&mut self, event: &RunnerEvent) -> Result<()> {
-        let agent_event = match event {
-            RunnerEvent::Started => {
-                self.transcript.set_work_status(WorkStatus::WaitingResponse);
-                self.next_live_reasoning_refresh =
-                    Some(Instant::now() + LIVE_REASONING_REFRESH_INTERVAL);
-                return self.sync_transcript(true);
-            }
-            RunnerEvent::Agent(agent_event) => agent_event,
-            RunnerEvent::Interrupted | RunnerEvent::Completed(_) | RunnerEvent::Failed(_) => {
-                self.next_live_reasoning_refresh = None;
-                self.transcript.finalize_live_tail();
-                self.transcript.clear_work_status();
-                return self.sync_transcript(false);
-            }
-            RunnerEvent::LoadedToolsChanged(_) | RunnerEvent::FinalSummary(_) => return Ok(()),
-        };
-        if let Some(status) = WorkStatus::from_agent_event(agent_event) {
-            if self.transcript.set_work_status(status) {
-                self.next_live_reasoning_refresh =
-                    Some(Instant::now() + LIVE_REASONING_REFRESH_INTERVAL);
-            } else if self.next_live_reasoning_refresh.is_none() {
-                self.next_live_reasoning_refresh =
-                    Some(Instant::now() + LIVE_REASONING_REFRESH_INTERVAL);
-            }
-        }
-        match agent_event {
-            AgentEvent::Chunk(chunk) => {
-                let is_reasoning = chunk.kind == crate::llm::ChatStreamKind::Reasoning;
-                let show_reasoning_live =
-                    is_reasoning && self.next_live_reasoning_refresh.is_none();
-                self.transcript.push_chunk(chunk);
-                if is_reasoning {
-                    if show_reasoning_live {
-                        self.next_live_reasoning_refresh =
-                            Some(Instant::now() + LIVE_REASONING_REFRESH_INTERVAL);
-                        self.sync_transcript(true)
-                    } else {
-                        Ok(())
-                    }
-                } else {
-                    self.next_live_reasoning_refresh = None;
-                    self.sync_transcript(true)
-                }
-            }
-            AgentEvent::ToolCall { name, arguments } => {
-                self.next_live_reasoning_refresh = None;
-                self.transcript
-                    .push_tool_call(name.clone(), arguments.clone());
-                self.sync_transcript(true)
-            }
-            // 参数预览是临时 source；完整 ToolCall 到达后会替换为定稿工具块
-            AgentEvent::ToolCallProgress(progress) => {
-                self.next_live_reasoning_refresh = None;
-                self.transcript.push_tool_call_progress(progress);
-                self.sync_transcript(true)
-            }
-            AgentEvent::ToolResult { name, ok, output } => {
-                self.next_live_reasoning_refresh = None;
-                self.transcript
-                    .push_tool_result(name.clone(), *ok, output.clone());
-                self.sync_transcript(true)
-            }
-            AgentEvent::ToolProgress { name, message } => {
-                self.next_live_reasoning_refresh = None;
-                self.transcript
-                    .push_tool_progress(name.clone(), message.clone());
-                self.sync_transcript(true)
-            }
-            AgentEvent::PermissionRequested(request) => {
-                // 权限选择期间不显示工作动效
-                self.next_live_reasoning_refresh = None;
-                self.transcript.clear_work_status();
-                let _ = request;
-                Ok(())
-            }
-            AgentEvent::PermissionResolved {
-                request_id,
-                decision,
-            } => {
-                self.next_live_reasoning_refresh = None;
-                self.resolve_permission(request_id, decision.clone())
-            }
-            AgentEvent::QuestionRequested(_) => {
-                self.next_live_reasoning_refresh = None;
-                self.transcript.clear_work_status();
-                self.transcript.finalize_live_tail();
-                self.sync_transcript(false)
-            }
-            AgentEvent::QuestionResolved { .. } => {
-                self.next_live_reasoning_refresh = None;
-                Ok(())
-            }
-            AgentEvent::CompactionStarted { turn_count, model } => {
-                self.next_live_reasoning_refresh = None;
-                self.transcript
-                    .push_compaction_started(*turn_count, model.clone());
-                self.sync_transcript(true)
-            }
-            AgentEvent::CompactionDelta { text } => {
-                self.next_live_reasoning_refresh = None;
-                self.transcript.clear_work_status();
-                self.transcript.push_chunk(&crate::llm::ChatStreamChunk {
-                    kind: crate::llm::ChatStreamKind::Content,
-                    text: text.clone(),
-                });
-                self.sync_transcript(true)
-            }
-            AgentEvent::CompactionFinished { applied, error, .. } => {
-                self.next_live_reasoning_refresh = None;
-                self.transcript.clear_work_status();
-                self.transcript.push_compaction_finished(
-                    *applied,
-                    error.as_ref().map(|item| item.message.clone()),
-                    error.as_ref().map(|item| item.detail.clone()),
-                );
-                self.sync_transcript(true)
-            }
-            AgentEvent::FlushContent | AgentEvent::ExternalOutput => {
-                self.next_live_reasoning_refresh = None;
-                self.transcript.finalize_live_tail();
-                self.sync_transcript(true)
-            }
-        }
-    }
-
     /// 在流结束后收敛 source，并修复所有 stream-time reflow。
     ///
     /// 参数:
@@ -514,15 +399,27 @@ impl ReplRuntime {
     /// 返回:
     /// - 操作是否成功
     pub(super) fn finish_stream(&mut self) -> Result<()> {
-        self.next_live_reasoning_refresh = None;
-        let consolidated = self.transcript.finalize_live_tail();
+        self.next_live_refresh = None;
+        self.live_sync_pending = false;
+        self.transcript.finalize_live_tail();
+        self.transcript.clear_work_status();
         if self.reflow.take_stream_finish_reflow_needed() {
             self.reflow.schedule_immediate();
             self.maybe_reflow_due(false)?;
-        } else if consolidated {
-            self.sync_transcript(false)?;
+            return Ok(());
         }
-        Ok(())
+        self.sync_transcript(false)
+    }
+
+    /// 标记终端已被外部程序写入，下一次同步前重启受管区域。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn mark_desynced(&mut self) {
+        self.desynced = true;
     }
 
     /// 清空 transcript 与终端的 Sai 输出区域。
@@ -535,8 +432,10 @@ impl ReplRuntime {
     pub(super) fn clear(&mut self) -> Result<()> {
         self.transcript.clear();
         self.reflow.clear();
-        self.stream.reset(Vec::new());
-        self.next_live_reasoning_refresh = None;
+        self.stream = StreamState::default();
+        self.next_live_refresh = None;
+        self.live_sync_pending = false;
+        self.desynced = false;
         self.replay(false)
     }
 
@@ -551,27 +450,29 @@ impl ReplRuntime {
         self.replay(false)
     }
 
-    /// 在固定节流周期内刷新 reasoning 字符计数与跳动状态。
+    /// 在固定节流周期内刷新动效帧并冲刷待同步的流式内容。
     ///
     /// 参数:
     /// - 无
     ///
     /// 返回:
     /// - 是否执行了 live 刷新
-    pub(super) fn tick_live_reasoning(&mut self) -> Result<bool> {
-        let Some(next_refresh) = self.next_live_reasoning_refresh else {
+    pub(super) fn tick_live(&mut self) -> Result<bool> {
+        let Some(next_refresh) = self.next_live_refresh else {
             return Ok(false);
         };
         let now = Instant::now();
         if now < next_refresh {
             return Ok(false);
         }
-        if !self.transcript.advance_live_animation() {
-            self.next_live_reasoning_refresh = None;
+        let animated = self.transcript.advance_live_animation();
+        let pending = std::mem::take(&mut self.live_sync_pending);
+        if !animated && !pending {
+            self.next_live_refresh = None;
             return Ok(false);
         }
-        // 工作状态或 reasoning 仍在进行时持续刷新动效与耗时
-        self.next_live_reasoning_refresh = Some(now + LIVE_REASONING_REFRESH_INTERVAL);
+        // 工作状态、reasoning 或未冲刷的正文仍在进行时保持节奏刷新
+        self.next_live_refresh = Some(now + LIVE_REFRESH_INTERVAL);
         self.sync_transcript(true)?;
         Ok(true)
     }
@@ -586,6 +487,7 @@ impl ReplRuntime {
             return Ok(false);
         }
         self.subagent_signature = signature;
+        self.transcript.mark_subagents_dirty();
         self.sync_transcript(true)?;
         Ok(true)
     }
@@ -602,56 +504,103 @@ impl ReplRuntime {
 
     /// 记录终端尺寸变化并安排 resize reflow。
     fn observe_size(&mut self, size: TerminalSize, streaming: bool) {
-        let lines = self
-            .transcript
-            .display_tail(usize::from(size.cols), &self.options);
         self.viewport
-            .update(size, self.composer_height_for(size), lines.len());
+            .update(size, self.composer_height_for(size), self.stream.on_screen());
         self.reflow.observe(size, streaming);
     }
 
-    /// 将 transcript 与前一次已写入快照比较，必要时增量插入或全量重放。
+    /// 将 transcript 与终端已写内容做增量协调。
+    ///
+    /// 稳定前缀不触碰；变化行按行修补；新增行走真实滚动进入原生
+    /// scrollback；行数收缩时清理尾部。只有终端尺寸变化才整区重放。
     fn sync_transcript(&mut self, streaming: bool) -> Result<()> {
+        if self.desynced {
+            self.restart_after_external()?;
+        }
         let size = self.viewport.size();
         let width = usize::from(size.cols);
-        let all_lines = self.transcript.display_tail(width, &self.options);
+        let min_rows = usize::from(size.rows).saturating_mul(2).max(64);
+        let window =
+            self.transcript
+                .display_window(width, &self.options, min_rows, self.stream.offscreen());
+        self.transcript.clear_dirty();
         let previous_viewport = self.viewport;
-        if self
-            .viewport
-            .update(size, self.composer_height_for(size), all_lines.len())
-            && size != previous_viewport.size()
-        {
+        self.viewport.update(
+            size,
+            self.composer_height_for(size),
+            window.total.saturating_sub(self.stream.offscreen()),
+        );
+        if size != previous_viewport.size() {
             return self.replay(streaming);
         }
-        match self.stream.sync(all_lines) {
-            StreamSync::Unchanged => Ok(()),
-            StreamSync::Append(lines) => {
+        match self.stream.sync(&window) {
+            SyncPlan::Unchanged => Ok(()),
+            SyncPlan::Delta {
+                patches,
+                append,
+                old_total,
+                new_total,
+            } => {
                 let mut stdout = io::stdout();
-                let outcome = history_insert::append_lines(
+                let outcome = history_insert::apply_delta(
                     &mut stdout,
                     &previous_viewport,
                     &self.viewport,
-                    &lines,
+                    &patches,
+                    &append,
+                    old_total,
+                    new_total,
+                    self.stream.offscreen(),
                 )?;
+                self.stream.note_scrolled(outcome.scrolled_rows);
                 self.viewport.apply_terminal_scroll(outcome.scrolled_rows);
                 self.draw_composer(&mut stdout)
             }
-            StreamSync::Rebuild => self.replay(streaming),
+            SyncPlan::Repaint => self.replay(streaming),
         }
     }
 
-    /// 清屏并从所有 source cell 重新插入当前宽度的历史行。
+    /// 清屏范围内从 source 重新铺设当前宽度的可视历史。
     fn replay(&mut self, streaming: bool) -> Result<()> {
         let size = TerminalSize::current();
         let width = usize::from(size.cols);
-        let lines = self.transcript.display_tail(width, &self.options);
+        // 重放窗口至少覆盖屏幕，同时尊重配置的 row cap 上限
+        let min_rows = usize::from(size.rows)
+            .saturating_mul(2)
+            .max(64)
+            .min(self.transcript.row_cap())
+            .max(usize::from(size.rows));
+        let window = self
+            .transcript
+            .display_window(width, &self.options, min_rows, usize::MAX);
+        self.transcript.clear_dirty();
         self.viewport
-            .update(size, self.composer_height_for(size), lines.len());
+            .update(size, self.composer_height_for(size), window.total);
         let mut stdout = io::stdout();
-        reflow::replay(&mut stdout, &self.viewport, &lines)?;
+        let painted = reflow::replay(&mut stdout, &self.viewport, &window.lines)?;
         self.draw_composer(&mut stdout)?;
-        self.stream.reset(lines);
+        self.stream.reset(&window, painted);
         self.reflow.mark_reflowed(size, streaming);
+        Ok(())
+    }
+
+    /// 外部程序写过终端后，从当前光标行重启受管区域。
+    ///
+    /// 已有输出全部视作 scrollback 保留原样，后续内容从光标处追加。
+    fn restart_after_external(&mut self) -> Result<()> {
+        self.desynced = false;
+        let mut stdout = io::stdout();
+        let position = crossterm::cursor::position().unwrap_or((0, 0));
+        if position.0 != 0 {
+            write!(stdout, "\r\n")?;
+            stdout.flush()?;
+        }
+        let size = TerminalSize::current();
+        let origin = crossterm::cursor::position()
+            .map(|(_, row)| row)
+            .unwrap_or(position.1);
+        self.viewport.restart_at(size, origin);
+        self.stream.mark_all_offscreen();
         Ok(())
     }
 

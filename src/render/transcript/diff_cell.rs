@@ -130,9 +130,11 @@ impl DiffCell {
 /// - ANSI 文本块
 pub(crate) fn render(cell: &DiffCell) -> String {
     let mut output = cell.rendered.clone();
+    let mut denied = false;
     if let Some(permission) = &cell.permission {
         match &permission.decision {
             Some(decision) => {
+                denied = matches!(decision, PermissionDecision::Deny { .. });
                 if !output.ends_with('\n') {
                     output.push('\n');
                 }
@@ -149,7 +151,8 @@ pub(crate) fn render(cell: &DiffCell) -> String {
             }
         }
     }
-    if let Some(ok) = cell.completed {
+    // 拒绝后的失败状态行与「已拒绝」重复，跳过
+    if let Some(ok) = cell.completed.filter(|_| !denied) {
         let status = if ok { "ok" } else { "err" };
         output.push_str(&format!(
             "\n{}",

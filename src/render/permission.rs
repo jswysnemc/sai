@@ -95,12 +95,14 @@ pub(crate) fn render_permission_controls(
 ///
 /// 参数:
 /// - `tool`: 待确认的工具名称
+/// - `arguments`: 可选工具参数，用于生成对象标签
 ///
 /// 返回:
 /// - 标题 ANSI 文本
-pub(crate) fn render_permission_title(tool: &str) -> String {
+pub(crate) fn render_permission_title(tool: &str, arguments: Option<&str>) -> String {
+    let label = crate::render::tool_event_line::tool_event_label(tool, arguments);
     format!(
-        "\x1b[1m{}\x1b[0m  \x1b[2m{tool}\x1b[0m",
+        "\x1b[1m{}\x1b[0m  \x1b[2m{label}\x1b[0m",
         t("Permission required", "需要权限确认")
     )
 }
@@ -145,10 +147,12 @@ mod tests {
     }
 
     #[test]
-    fn permission_title_includes_tool_name() {
-        let output = render_permission_title("edit_file");
+    fn permission_title_includes_tool_label() {
+        let output = render_permission_title("edit_file", Some(r#"{"path":"src/main.rs"}"#));
         assert!(output.contains(t("Permission required", "需要权限确认")));
-        assert!(output.contains("edit_file"));
+        assert!(output.contains("Edit main.rs"));
+        // 标题只展示对象标签，不重复整段参数
+        assert!(!output.contains("{\"path\""));
     }
 
     #[test]

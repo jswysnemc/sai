@@ -1,7 +1,5 @@
 use super::cell::{HistoryCell, TranscriptMode};
-use super::line::AnsiLine;
-use super::markdown_cell;
-use super::reasoning_cell;
+use super::render_cache::RenderCache;
 use super::subagent_cell::SubagentCell;
 use super::tool_cell::ToolCell;
 use super::welcome_cell::WelcomeCell;
@@ -9,11 +7,10 @@ use crate::llm::{ChatStreamChunk, ChatStreamKind, ToolCallStreamProgress};
 use crate::render::tool_view::ToolView;
 use crate::render::work_status::WorkStatus;
 use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
-use std::collections::VecDeque;
 use std::time::Instant;
 
 /// REPL transcript 的渲染选项快照。
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct TranscriptRenderOptions {
     pub(crate) reasoning_mode: ReasoningDisplayMode,
     pub(crate) tool_call_mode: ToolCallDisplayMode,
@@ -21,16 +18,16 @@ pub(crate) struct TranscriptRenderOptions {
 
 /// 仍在生成中的文本 source。
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct LiveTail {
-    kind: ChatStreamKind,
-    source: String,
+pub(super) struct LiveTail {
+    pub(super) kind: ChatStreamKind,
+    pub(super) source: String,
 }
 
 /// 正在接收参数的工具调用预览。
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct LiveToolCall {
-    name: String,
-    arguments_preview: String,
+pub(super) struct LiveToolCall {
+    pub(super) name: String,
+    pub(super) arguments_preview: String,
 }
 
 impl LiveTail {
@@ -51,14 +48,16 @@ impl LiveTail {
 
 /// 保存 REPL 会话的定稿 cell 与可变流式尾部。
 pub(crate) struct TranscriptStore {
-    cells: Vec<HistoryCell>,
-    live_tail: Option<LiveTail>,
-    live_tool_call: Option<LiveToolCall>,
-    live_animation_frame: usize,
-    active_tool_index: Option<usize>,
-    work_status: Option<WorkStatus>,
-    work_status_started: Option<Instant>,
-    row_cap: usize,
+    pub(super) cells: Vec<HistoryCell>,
+    pub(super) live_tail: Option<LiveTail>,
+    pub(super) live_tool_call: Option<LiveToolCall>,
+    pub(super) live_animation_frame: usize,
+    pub(super) active_tool_index: Option<usize>,
+    pub(super) work_status: Option<WorkStatus>,
+    pub(super) work_status_started: Option<Instant>,
+    pub(super) row_cap: usize,
+    pub(super) cache: RenderCache,
+    pub(super) dirty_from_cell: Option<usize>,
 }
 
 impl TranscriptStore {
@@ -79,6 +78,8 @@ impl TranscriptStore {
             work_status: None,
             work_status_started: None,
             row_cap: row_cap.max(1),
+            cache: RenderCache::default(),
+            dirty_from_cell: None,
         }
     }
 
@@ -91,6 +92,63 @@ impl TranscriptStore {
     /// - 无
     pub(crate) fn set_row_cap(&mut self, row_cap: usize) {
         self.row_cap = row_cap.max(1);
+    }
+
+    /// 返回 resize 重放窗口的行数上限。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 行数上限
+    pub(crate) fn row_cap(&self) -> usize {
+        self.row_cap
+    }
+
+    /// 标记指定 cell 的渲染结果已失效。
+    ///
+    /// 参数:
+    /// - `index`: cell 下标
+    ///
+    /// 返回:
+    /// - 无
+    fn mark_dirty(&mut self, index: usize) {
+        self.cache.invalidate(index);
+        self.dirty_from_cell = Some(match self.dirty_from_cell {
+            Some(existing) => existing.min(index),
+            None => index,
+        });
+    }
+
+    /// 清除脏水位，由增量同步在消费视图后调用。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn clear_dirty(&mut self) {
+        self.dirty_from_cell = None;
+    }
+
+    /// 标记所有子智能体单元需要重绘（后台时间线更新时调用）。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn mark_subagents_dirty(&mut self) {
+        let indexes = self
+            .cells
+            .iter()
+            .enumerate()
+            .filter(|(_, cell)| matches!(cell, HistoryCell::Tool(ToolCell::Subagent(_))))
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>();
+        for index in indexes {
+            self.mark_dirty(index);
+        }
     }
 
     /// 记录用户输入回显。
@@ -155,22 +213,13 @@ impl TranscriptStore {
         request_id: &str,
         decision: crate::permission::PermissionDecision,
     ) -> bool {
-        for cell in self.cells.iter_mut().rev() {
-            match cell {
-                HistoryCell::Tool(ToolCell::Invocation(view)) => {
-                    if view.resolve_permission(request_id, decision.clone()) {
-                        return true;
-                    }
-                }
-                HistoryCell::Diff(cell) => {
-                    if cell.resolve_permission(request_id, decision.clone()) {
-                        return true;
-                    }
-                }
-                _ => {}
+        self.update_permission_cells(|cell| match cell {
+            HistoryCell::Tool(ToolCell::Invocation(view)) => {
+                view.resolve_permission(request_id, decision.clone())
             }
-        }
-        false
+            HistoryCell::Diff(cell) => cell.resolve_permission(request_id, decision.clone()),
+            _ => false,
+        })
     }
 
     /// 更新指定权限事件的拒绝回复草稿。
@@ -186,22 +235,13 @@ impl TranscriptStore {
         request_id: &str,
         draft: Option<String>,
     ) -> bool {
-        for cell in self.cells.iter_mut().rev() {
-            match cell {
-                HistoryCell::Tool(ToolCell::Invocation(view)) => {
-                    if view.set_permission_reply(request_id, draft.clone()) {
-                        return true;
-                    }
-                }
-                HistoryCell::Diff(cell) => {
-                    if cell.set_permission_reply(request_id, draft.clone()) {
-                        return true;
-                    }
-                }
-                _ => {}
+        self.update_permission_cells(|cell| match cell {
+            HistoryCell::Tool(ToolCell::Invocation(view)) => {
+                view.set_permission_reply(request_id, draft.clone())
             }
-        }
-        false
+            HistoryCell::Diff(cell) => cell.set_permission_reply(request_id, draft.clone()),
+            _ => false,
+        })
     }
 
     /// 更新指定权限事件的当前高亮选项。
@@ -217,19 +257,30 @@ impl TranscriptStore {
         request_id: &str,
         selected: crate::render::PermissionChoice,
     ) -> bool {
-        for cell in self.cells.iter_mut().rev() {
-            match cell {
-                HistoryCell::Tool(ToolCell::Invocation(view)) => {
-                    if view.set_permission_choice(request_id, selected) {
-                        return true;
-                    }
-                }
-                HistoryCell::Diff(cell) => {
-                    if cell.set_permission_choice(request_id, selected) {
-                        return true;
-                    }
-                }
-                _ => {}
+        self.update_permission_cells(|cell| match cell {
+            HistoryCell::Tool(ToolCell::Invocation(view)) => {
+                view.set_permission_choice(request_id, selected)
+            }
+            HistoryCell::Diff(cell) => cell.set_permission_choice(request_id, selected),
+            _ => false,
+        })
+    }
+
+    /// 从最新 cell 向前查找并更新权限事件，命中时标脏。
+    ///
+    /// 参数:
+    /// - `update`: 权限更新函数，命中时返回 true
+    ///
+    /// 返回:
+    /// - 是否找到并更新了权限事件
+    fn update_permission_cells<F>(&mut self, mut update: F) -> bool
+    where
+        F: FnMut(&mut HistoryCell) -> bool,
+    {
+        for index in (0..self.cells.len()).rev() {
+            if update(&mut self.cells[index]) {
+                self.mark_dirty(index);
+                return true;
             }
         }
         false
@@ -335,7 +386,10 @@ impl TranscriptStore {
     /// - 无
     pub(crate) fn push_cell(&mut self, cell: HistoryCell) {
         self.finalize_live_tail();
+        let index = self.cells.len();
         self.cells.push(cell);
+        self.cache.push_slot();
+        self.mark_dirty(index);
     }
 
     /// 记录工具调用。
@@ -349,25 +403,19 @@ impl TranscriptStore {
     pub(crate) fn push_tool_call(&mut self, name: String, arguments: String) {
         self.finalize_live_tail();
         self.live_tool_call = None;
+        let index = self.cells.len();
         if name == "edit_file" {
-            let index = self.cells.len();
-            self.cells.push(HistoryCell::diff(arguments));
-            self.active_tool_index = Some(index);
+            self.push_cell(HistoryCell::diff(arguments));
         } else if name == "subagent" {
-            let index = self.cells.len();
-            self.cells
-                .push(HistoryCell::Tool(ToolCell::Subagent(SubagentCell::new(
-                    arguments,
-                ))));
-            self.active_tool_index = Some(index);
+            self.push_cell(HistoryCell::Tool(ToolCell::Subagent(SubagentCell::new(
+                arguments,
+            ))));
         } else {
-            let index = self.cells.len();
-            self.cells
-                .push(HistoryCell::Tool(ToolCell::Invocation(ToolView::running(
-                    name, arguments,
-                ))));
-            self.active_tool_index = Some(index);
+            self.push_cell(HistoryCell::Tool(ToolCell::Invocation(ToolView::running(
+                name, arguments,
+            ))));
         }
+        self.active_tool_index = Some(index);
     }
 
     /// 记录工具结果。
@@ -484,7 +532,10 @@ impl TranscriptStore {
         if tail.source.is_empty() {
             return cleared_tool_preview;
         }
+        let index = self.cells.len();
         self.cells.push(tail.into_cell());
+        self.cache.push_slot();
+        self.mark_dirty(index);
         true
     }
 
@@ -501,6 +552,8 @@ impl TranscriptStore {
         self.live_tool_call = None;
         self.live_animation_frame = 0;
         self.active_tool_index = None;
+        self.cache.clear();
+        self.dirty_from_cell = None;
     }
 
     /// 结束当前活动的 edit_file Diff 单元。
@@ -518,6 +571,7 @@ impl TranscriptStore {
             return false;
         };
         cell.finish(ok);
+        self.mark_dirty(index);
         true
     }
 
@@ -534,7 +588,7 @@ impl TranscriptStore {
         index: usize,
         request: &crate::permission::PermissionRequest,
     ) -> bool {
-        match self.cells.get_mut(index) {
+        let attached = match self.cells.get_mut(index) {
             Some(HistoryCell::Tool(ToolCell::Invocation(view))) if view.name == request.tool => {
                 view.request_permission(request.id.clone());
                 true
@@ -544,7 +598,11 @@ impl TranscriptStore {
                 true
             }
             _ => false,
+        };
+        if attached {
+            self.mark_dirty(index);
         }
+        attached
     }
 
     /// 更新当前活动工具单元。
@@ -569,6 +627,7 @@ impl TranscriptStore {
             return false;
         }
         update(view);
+        self.mark_dirty(index);
         true
     }
 
@@ -593,6 +652,7 @@ impl TranscriptStore {
             return false;
         }
         update(cell);
+        self.mark_dirty(index);
         true
     }
 
@@ -614,100 +674,6 @@ impl TranscriptStore {
         }
         self.live_animation_frame = self.live_animation_frame.wrapping_add(1);
         true
-    }
-
-    /// 渲染所有定稿 cell 与当前 live tail 的尾部窗口。
-    ///
-    /// 参数:
-    /// - `width`: 当前终端列数
-    /// - `options`: transcript 渲染选项
-    ///
-    /// 返回:
-    /// - row cap 范围内的预换行 ANSI 行
-    pub(crate) fn display_tail(
-        &self,
-        width: usize,
-        options: &TranscriptRenderOptions,
-    ) -> Vec<AnsiLine> {
-        let mut retained = VecDeque::new();
-
-        // 1. 流式重放只恢复已提交的稳定行，未结束尾部等待收敛后再写入
-        prepend_tail_lines(
-            &mut retained,
-            self.display_live_tail(width, options),
-            self.row_cap,
-        );
-
-        // 2. 从最新定稿 cell 向前渲染，到达 row cap 后停止处理更早 source
-        for cell in self.cells.iter().rev() {
-            if retained.len() >= self.row_cap {
-                break;
-            }
-            prepend_tail_lines(
-                &mut retained,
-                cell.display_lines(width, options),
-                self.row_cap,
-            );
-        }
-        retained.into_iter().collect()
-    }
-
-    /// 渲染当前 live tail，用于流式增量插入。
-    ///
-    /// 参数:
-    /// - `width`: 当前终端列数
-    /// - `options`: transcript 渲染选项
-    ///
-    /// 返回:
-    /// - 当前 live tail 的预换行 ANSI 行
-    pub(crate) fn display_live_tail(
-        &self,
-        width: usize,
-        options: &TranscriptRenderOptions,
-    ) -> Vec<AnsiLine> {
-        let mut lines = Vec::new();
-        // 有思考内容时只显示 reasoning 动效，不再叠一层 working/thinking 文案
-        let has_live_reasoning = self
-            .live_tail
-            .as_ref()
-            .is_some_and(|tail| tail.kind == ChatStreamKind::Reasoning && !tail.source.is_empty());
-        if let Some(status) = self.work_status {
-            if !has_live_reasoning {
-                let elapsed = self
-                    .work_status_started
-                    .map(|started| started.elapsed())
-                    .unwrap_or_default();
-                lines.extend(AnsiLine::wrap_block(
-                    &super::work_status_cell::render(status, self.live_animation_frame, elapsed),
-                    width,
-                ));
-            }
-        }
-        if let Some(tail) = &self.live_tail {
-            let rendered = match tail.kind {
-                ChatStreamKind::Content => markdown_cell::render_completed(&tail.source),
-                // reasoning 在定稿前显示节流的字符计数与跳动标记，结束后再按配置完整固化
-                ChatStreamKind::Reasoning => reasoning_cell::render_live(
-                    &tail.source,
-                    options.reasoning_mode,
-                    self.live_animation_frame,
-                ),
-            };
-            if !rendered.is_empty() {
-                lines.extend(AnsiLine::wrap_block(&rendered, width));
-            }
-        }
-        if let Some(tool_call) = &self.live_tool_call {
-            let rendered = super::tool_cell::render_live_call(
-                &tool_call.name,
-                &tool_call.arguments_preview,
-                options.tool_call_mode,
-            );
-            if !rendered.is_empty() {
-                lines.extend(AnsiLine::wrap_block(&rendered, width));
-            }
-        }
-        lines
     }
 
     /// 判断 transcript 中是否有仍在更新的后台子智能体。
@@ -735,15 +701,5 @@ impl TranscriptStore {
                 _ => None,
             })
             .collect()
-    }
-}
-
-/// 从一组预换行行中保留尾部，并将其插入当前尾部窗口前方。
-fn prepend_tail_lines(retained: &mut VecDeque<AnsiLine>, lines: Vec<AnsiLine>, row_cap: usize) {
-    for line in lines.into_iter().rev() {
-        retained.push_front(line);
-        if retained.len() > row_cap {
-            retained.pop_back();
-        }
     }
 }

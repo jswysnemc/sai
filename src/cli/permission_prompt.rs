@@ -3,13 +3,13 @@ use crate::permission::{
     PermissionDecision, PermissionInteractionState, PermissionRequest, PermissionTransition,
 };
 use crate::render::{
-    clear_rendered_rows, render_permission_controls, render_permission_title, rendered_visual_rows,
+    render_permission_controls, render_permission_title, rendered_visual_rows,
 };
 use anyhow::Result;
-use crossterm::cursor::{Hide, Show};
+use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-use crossterm::execute;
-use crossterm::terminal;
+use crossterm::terminal::{Clear, ClearType};
+use crossterm::{execute, queue};
 use std::io::{self, IsTerminal, Write};
 
 /// 终端原始模式与光标恢复守卫。
@@ -23,7 +23,7 @@ impl Drop for TerminalGuard {
         if self.show_cursor {
             let _ = execute!(stdout, Show);
         }
-        let _ = terminal::disable_raw_mode();
+        let _ = crossterm::terminal::disable_raw_mode();
         let _ = stdout.flush();
     }
 }
@@ -43,7 +43,10 @@ pub(super) fn read_permission_decision(request: &PermissionRequest) -> Result<Pe
     }
 }
 
-/// 在交互式终端 stdout 按固定行数擦除重绘权限菜单。
+/// 在交互式终端 stdout 用固定锚点擦除重绘权限菜单。
+///
+/// 菜单始终从记录的锚点行开始绘制，重绘前从锚点清到屏幕底部，
+/// 不再按估算行数上移擦除，避免测量偏差留下菜单残影。
 ///
 /// 参数:
 /// - `request`: 当前权限请求
@@ -55,27 +58,34 @@ fn read_terminal_decision(request: &PermissionRequest) -> Result<PermissionDecis
     let mut stdout = io::stdout();
     // 1. 先刷掉上游流式输出，再进入 raw mode
     stdout.flush()?;
-    terminal::enable_raw_mode()?;
+    crossterm::terminal::enable_raw_mode()?;
     execute!(stdout, Hide)?;
     let _guard = TerminalGuard { show_cursor: true };
-    // 2. 记录当前菜单占用视觉行数，上下键只擦这些行，避免标题叠加
-    let mut painted_rows = paint_menu(&mut stdout, request, &state)?;
+    // 2. 预留菜单空间并记录锚点行，之后的重绘都从锚点开始
+    let mut anchor = reserve_menu_anchor(&mut stdout, menu_rows(request, &state))?;
+    paint_menu_at(&mut stdout, anchor, request, &state)?;
     loop {
         let event = event::read()?;
         // Ctrl+C / Ctrl+D 视为拒绝并退出
         if is_interrupt(&event) {
-            erase_menu(&mut stdout, painted_rows)?;
+            erase_menu_at(&mut stdout, anchor)?;
             execute!(stdout, Show)?;
             stdout.flush()?;
             return Ok(PermissionDecision::Deny { reply: None });
         }
+        if let Event::Resize(_, _) = event {
+            anchor = reserve_menu_anchor(&mut stdout, menu_rows(request, &state))?;
+            paint_menu_at(&mut stdout, anchor, request, &state)?;
+            continue;
+        }
         match state.handle_event(event) {
             PermissionTransition::Continue => {
-                erase_menu(&mut stdout, painted_rows)?;
-                painted_rows = paint_menu(&mut stdout, request, &state)?;
+                // 回复草稿可能换行增高，重绘前确认锚点下空间仍然充足
+                anchor = ensure_anchor_space(&mut stdout, anchor, menu_rows(request, &state))?;
+                paint_menu_at(&mut stdout, anchor, request, &state)?;
             }
             PermissionTransition::Submit(decision) => {
-                erase_menu(&mut stdout, painted_rows)?;
+                erase_menu_at(&mut stdout, anchor)?;
                 execute!(stdout, Show)?;
                 stdout.flush()?;
                 return Ok(decision);
@@ -91,7 +101,7 @@ fn read_terminal_decision(request: &PermissionRequest) -> Result<PermissionDecis
 ///
 /// 返回:
 /// - 是否应中断权限交互
-fn is_interrupt(event: &Event) -> bool {
+pub(super) fn is_interrupt(event: &Event) -> bool {
     let Event::Key(key) = event else {
         return false;
     };
@@ -107,45 +117,107 @@ fn is_interrupt(event: &Event) -> bool {
     )
 }
 
-/// 绘制完整权限菜单，返回占用的视觉行数。
+/// 计算当前菜单占用的视觉行数。
 ///
 /// 参数:
-/// - `stdout`: 标准输出
 /// - `request`: 权限请求
 /// - `state`: 交互状态
 ///
 /// 返回:
-/// - 菜单占用的视觉行数
-fn paint_menu(
-    stdout: &mut io::Stdout,
-    request: &PermissionRequest,
-    state: &PermissionInteractionState,
-) -> Result<usize> {
-    let title = render_permission_title(&request.tool);
-    let controls = render_permission_controls(state.selected(), state.reply_draft());
-    // raw mode 下必须 \r\n，否则会阶梯缩进
-    let logical = format!("{title}\n{controls}");
-    let rows = rendered_visual_rows(&logical).max(1);
-    let mut output = logical.replace('\n', "\r\n");
-    output.push_str("\r\n");
-    write!(stdout, "{output}")?;
-    stdout.flush()?;
-    // 末尾 \r\n 会把光标移到菜单下一空行起点；擦除时行数按逻辑内容行计
-    Ok(rows)
+/// - 菜单视觉行数
+fn menu_rows(request: &PermissionRequest, state: &PermissionInteractionState) -> u16 {
+    let logical = format!(
+        "{}\n{}",
+        render_permission_title(&request.tool, Some(&request.arguments)),
+        render_permission_controls(state.selected(), state.reply_draft())
+    );
+    rendered_visual_rows(&logical).max(1).min(usize::from(u16::MAX)) as u16
 }
 
-/// 擦除刚画过的权限菜单。
+/// 预留菜单空间并返回锚点行。
+///
+/// 光标位于行中时先换行；屏幕剩余行数不足时用换行滚动腾出空间，
+/// 被顶上去的内容自然进入终端 scrollback。
 ///
 /// 参数:
 /// - `stdout`: 标准输出
-/// - `painted_rows`: 上一次绘制的视觉行数
+/// - `rows`: 需要的行数
+///
+/// 返回:
+/// - 菜单锚点行（从零开始）
+fn reserve_menu_anchor(stdout: &mut io::Stdout, rows: u16) -> Result<u16> {
+    let (col, row) = crossterm::cursor::position().unwrap_or((0, 0));
+    if col != 0 {
+        write!(stdout, "\r\n")?;
+        stdout.flush()?;
+    }
+    let (_, current) = crossterm::cursor::position().unwrap_or((0, row));
+    ensure_anchor_space(stdout, current, rows)
+}
+
+/// 确认锚点之下有足够行数，不足时滚动终端并上移锚点。
+///
+/// 参数:
+/// - `stdout`: 标准输出
+/// - `anchor`: 当前锚点行
+/// - `rows`: 菜单需要的行数
+///
+/// 返回:
+/// - 调整后的锚点行
+fn ensure_anchor_space(stdout: &mut io::Stdout, anchor: u16, rows: u16) -> Result<u16> {
+    let (_, screen_rows) = crossterm::terminal::size().unwrap_or((80, 24));
+    let screen_rows = screen_rows.max(1);
+    let anchor = anchor.min(screen_rows.saturating_sub(1));
+    let needed = rows.min(screen_rows);
+    let overflow = (anchor.saturating_add(needed)).saturating_sub(screen_rows);
+    if overflow == 0 {
+        return Ok(anchor);
+    }
+    // 在屏幕底行输出换行触发真实滚动，菜单上方内容进入 scrollback
+    queue!(stdout, MoveTo(0, screen_rows.saturating_sub(1)))?;
+    for _ in 0..overflow {
+        queue!(stdout, crossterm::style::Print("\r\n"))?;
+    }
+    stdout.flush()?;
+    Ok(anchor.saturating_sub(overflow))
+}
+
+/// 从锚点行绘制完整权限菜单。
+///
+/// 参数:
+/// - `stdout`: 标准输出
+/// - `anchor`: 菜单锚点行
+/// - `request`: 权限请求
+/// - `state`: 交互状态
+///
+/// 返回:
+/// - 绘制是否成功
+fn paint_menu_at(
+    stdout: &mut io::Stdout,
+    anchor: u16,
+    request: &PermissionRequest,
+    state: &PermissionInteractionState,
+) -> Result<()> {
+    let title = render_permission_title(&request.tool, Some(&request.arguments));
+    let controls = render_permission_controls(state.selected(), state.reply_draft());
+    // raw mode 下必须 \r\n，否则会阶梯缩进
+    let body = format!("{title}\n{controls}").replace('\n', "\r\n");
+    queue!(stdout, MoveTo(0, anchor), Clear(ClearType::FromCursorDown))?;
+    write!(stdout, "{body}")?;
+    stdout.flush()?;
+    Ok(())
+}
+
+/// 擦除锚点行之后的菜单区域。
+///
+/// 参数:
+/// - `stdout`: 标准输出
+/// - `anchor`: 菜单锚点行
 ///
 /// 返回:
 /// - 擦除是否成功
-fn erase_menu(stdout: &mut io::Stdout, painted_rows: usize) -> Result<()> {
-    // 光标在菜单末尾下一行；先回上一行内容区，再按行上移并清行
-    write!(stdout, "\r\x1b[2K")?;
-    write!(stdout, "{}", clear_rendered_rows(painted_rows))?;
+fn erase_menu_at(stdout: &mut io::Stdout, anchor: u16) -> Result<()> {
+    queue!(stdout, MoveTo(0, anchor), Clear(ClearType::FromCursorDown))?;
     stdout.flush()?;
     Ok(())
 }
@@ -158,7 +230,10 @@ fn erase_menu(stdout: &mut io::Stdout, painted_rows: usize) -> Result<()> {
 /// 返回:
 /// - 用户提交的权限决定
 fn read_line_decision(request: &PermissionRequest) -> Result<PermissionDecision> {
-    println!("{}", render_permission_title(&request.tool));
+    println!(
+        "{}",
+        render_permission_title(&request.tool, Some(&request.arguments))
+    );
     println!(
         "1. {}\n2. {}\n3. {}",
         t("Allow once", "允许一次"),
@@ -237,5 +312,18 @@ mod tests {
             state: KeyEventState::NONE,
         });
         assert!(is_interrupt(&event));
+    }
+
+    #[test]
+    fn menu_rows_count_title_and_controls() {
+        let request = PermissionRequest {
+            id: "id".to_string(),
+            session_id: "session".to_string(),
+            tool: "run_command".to_string(),
+            arguments: r#"{"command":"date"}"#.to_string(),
+        };
+        let state = PermissionInteractionState::new();
+        // 标题 + 三个选项 + 提示行
+        assert!(menu_rows(&request, &state) >= 5);
     }
 }

@@ -22,7 +22,6 @@ mod stream_summary;
 mod stream_text;
 mod stream_tool_status;
 mod streaming_asset_block;
-mod streaming_command_block;
 mod streaming_replace;
 mod style;
 mod table;
@@ -45,7 +44,7 @@ pub use session_summary::print_session_summary;
 pub use stream::StreamRenderer;
 pub use stream_config::{ReasoningDisplayMode, StreamRenderOptions, ToolCallDisplayMode};
 pub use stream_output::print_assistant_response;
-pub(crate) use streaming_replace::{clear_rendered_rows, rendered_visual_rows};
+pub(crate) use streaming_replace::rendered_visual_rows;
 
 /// 渲染直接 CLI 工具调用使用的既有工具视图。
 ///

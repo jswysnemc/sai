@@ -78,8 +78,13 @@ pub(crate) fn render_command_block_with_action(arguments: &str, action: &str) ->
         .as_ref()
         .and_then(|value| value.get("command"))
         .and_then(Value::as_str)
-        .unwrap_or(arguments)
-        .trim();
+        .map(str::to_string)
+        // 参数流式期间 JSON 尚未闭合，宽松提取已收到的命令文本，避免展示原始 JSON
+        .or_else(|| {
+            crate::render::tool_event_line::lenient_string_field(arguments, "command")
+        })
+        .unwrap_or_else(|| arguments.to_string());
+    let command = command.trim();
     let lines = shell_command_lines(command);
     let header = if action.trim().is_empty() {
         format!("{TOOL_BULLET} command")

@@ -147,7 +147,7 @@ fn edit_progress_waits_for_renderable_diff_before_consuming_preview() {
 }
 
 #[test]
-fn command_progress_preview_is_replaced_by_final_tool_call() {
+fn command_progress_keeps_single_line_status_until_final_call() {
     let mut renderer = StreamRenderer::new(
         ReasoningDisplayMode::Full,
         ToolCallDisplayMode::Summary,
@@ -164,21 +164,30 @@ fn command_progress_preview_is_replaced_by_final_tool_call() {
             arguments_preview: r#"{"command":"echo"#.to_string(),
         })
         .unwrap();
-    assert!(renderer.streaming_command_block.rendered_rows() > 0);
-
-    renderer
-        .write_tool_call_progress(&ToolCallStreamProgress {
-            index: 0,
-            name: Some("run_command".to_string()),
-            arguments_chars: 0,
-            arguments_bytes: 0,
-            arguments_preview: r#"{"command":"echo hi"#.to_string(),
-        })
-        .unwrap();
-    assert!(renderer.streaming_command_block.rendered_rows() > 0);
+    // 参数流式期间只保留单行状态，不再做多行命令块预览
+    assert!(renderer.live_tool_status.is_active());
 
     renderer
         .write_tool_call("run_command", r#"{"command":"echo hi"}"#)
         .unwrap();
-    assert_eq!(renderer.streaming_command_block.take_rendered_rows(), 0);
+    // 定稿后一次性输出命令块，单行状态被清除
+    assert!(renderer.command_block_tools.contains("run_command"));
+    assert!(!renderer.live_tool_status.is_active());
+}
+
+#[test]
+fn denied_tool_result_is_suppressed_once() {
+    let mut renderer = StreamRenderer::new(
+        ReasoningDisplayMode::Full,
+        ToolCallDisplayMode::Summary,
+        false,
+        StreamRenderOptions::default(),
+    );
+
+    renderer.suppress_denied_result("run_command");
+    renderer
+        .write_tool_result("run_command", false, "用户拒绝了此工具调用")
+        .unwrap();
+    // 抑制标记一次性生效
+    assert!(!renderer.suppressed_denied_results.contains("run_command"));
 }

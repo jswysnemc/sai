@@ -100,6 +100,17 @@ impl InlineViewport {
             .min(max_history_height);
     }
 
+    /// 外部程序写入终端后，从指定行重新开始受管区域。
+    ///
+    /// 参数:
+    /// - `size`: 当前终端尺寸
+    /// - `row`: 新的受管区域起始行
+    pub(super) fn restart_at(&mut self, size: TerminalSize, row: u16) {
+        self.size = size;
+        self.origin_row = row.min(size.rows.saturating_sub(1));
+        self.history_height = 0;
+    }
+
     /// 返回当前终端尺寸。
     ///
     /// 参数:

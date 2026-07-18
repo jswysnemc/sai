@@ -1,4 +1,5 @@
 use super::model::{PermissionAuditView, ToolView};
+use crate::permission::PermissionDecision;
 use crate::render::command_output::{render_command_block_with_action, render_command_result_view};
 use crate::render::tool_event_line::{tool_event_label, tool_event_text};
 use crate::render::ToolCallDisplayMode;
@@ -36,6 +37,7 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
         None if view.arguments.trim().is_empty() => "arg",
         None => "run",
     };
+    let denied = permission_denied(view.permission.as_ref());
     if mode == ToolCallDisplayMode::Summary {
         let mut output = tool_event_text(&label, status);
         if let Some(progress) = visible_progress(view.progress.as_deref()) {
@@ -43,7 +45,7 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
         }
         // 失败时在 summary 也展示输出摘要，成功则保留状态行（不再整段吞掉）
         if let Some(outcome) = &view.outcome {
-            if !outcome.ok && !outcome.output.trim().is_empty() {
+            if !outcome.ok && !denied && !outcome.output.trim().is_empty() {
                 output.push('\n');
                 output.push_str(&render_payload("output", &outcome.output));
             }
@@ -61,7 +63,7 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
         output.push_str(&format!("\n\x1b[2m  ├─ {progress}\x1b[0m"));
     }
     if let Some(outcome) = &view.outcome {
-        if !outcome.output.trim().is_empty() {
+        if !denied && !outcome.output.trim().is_empty() {
             output.push('\n');
             output.push_str(&render_payload("output", &outcome.output));
         }
@@ -90,7 +92,9 @@ fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
     if let Some(progress) = visible_progress(view.progress.as_deref()) {
         output.push_str(&format!("\n\x1b[2m  ├─ {progress}\x1b[0m"));
     }
-    if let Some(outcome) = &view.outcome {
+    // 权限拒绝的失败输出与「已拒绝」决定行重复，跳过结果块
+    let denied = permission_denied(view.permission.as_ref());
+    if let Some(outcome) = view.outcome.as_ref().filter(|_| !denied) {
         // Full / Summary 都展示结果块，保证历史长度随输出增长
         let results = render_command_result_view(&outcome.output);
         if !results.trim().is_empty() {
@@ -107,6 +111,19 @@ fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
     }
     output.push_str(&render_permission(view.permission.as_ref()));
     output
+}
+
+/// 判断权限审计是否以拒绝告终。
+///
+/// 参数:
+/// - `permission`: 可选权限审计状态
+///
+/// 返回:
+/// - 拒绝时返回 true
+fn permission_denied(permission: Option<&PermissionAuditView>) -> bool {
+    permission
+        .and_then(|item| item.decision.as_ref())
+        .is_some_and(|decision| matches!(decision, PermissionDecision::Deny { .. }))
 }
 
 /// 渲染附着在工具生命周期中的权限审计状态。

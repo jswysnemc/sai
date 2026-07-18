@@ -417,7 +417,14 @@ fn handle_agent_event(renderer: &mut render::StreamRenderer, event: AgentEvent) 
             // 停掉末行动效与 live 行，再在 stdout 画可导航审计菜单
             renderer.prepare_for_external_output()?;
             io::stdout().flush()?;
-            let _ = prompt_permission_request(&request)?;
+            let decision = prompt_permission_request(&request)?;
+            // 拒绝决定已单独展示，抑制随后同名工具的失败输出块避免重复
+            if matches!(
+                decision,
+                crate::permission::PermissionDecision::Deny { .. }
+            ) {
+                renderer.suppress_denied_result(&request.tool);
+            }
             Ok(())
         }
         AgentEvent::PermissionResolved { .. } => Ok(()),
@@ -486,6 +493,13 @@ fn prompt_permission_request_tui(
     let result = (|| -> Result<()> {
         loop {
             let event = event::read()?;
+            // Ctrl+C / Ctrl+D 视为拒绝，避免审计循环无法退出
+            if permission_prompt::is_interrupt(&event) {
+                return crate::permission::decide_permission(
+                    &request.id,
+                    crate::permission::PermissionDecision::Deny { reply: None },
+                );
+            }
             if let Event::Resize(cols, rows) = event {
                 let mut rt = runtime.borrow_mut();
                 rt.observe_input_resize(cols, rows);
@@ -552,7 +566,8 @@ fn prompt_question_request_tui(
     let response = crate::question_tui::ask(&pending.request)
         .unwrap_or_else(|err| crate::question::QuestionResponse::Unavailable(err.to_string()));
 
-    // 2. 恢复终端模式，交回后续流式输出和下一轮输入
+    // 2. 恢复终端模式；提问面板直接写过终端，受管区域需要在下次同步前重启
     let _ = disable_repl_terminal_input(&mut stdout);
+    runtime.borrow_mut().mark_desynced();
     crate::question::resolve_question(&pending.id, response)
 }

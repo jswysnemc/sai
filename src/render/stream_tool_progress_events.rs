@@ -59,11 +59,8 @@ impl StreamRenderer {
             self.finalize_reasoning_summary()?;
             let mut stdout = io::stdout();
             if tool_name == "run_command" {
-                write_command_block_with_action(
-                    &mut stdout,
-                    args,
-                    &tool_event_label(tool_name, Some(args)),
-                )?;
+                // 命令内容已在代码块内展示，标题固定用动作短名避免重复
+                write_command_block_with_action(&mut stdout, args, "Run")?;
             } else if tool_name == "edit_file" {
                 if !write_edit_file_diff_block(&mut stdout, args)? {
                     write_tool_payload(&mut stdout, t("args", "参数"), args)?;

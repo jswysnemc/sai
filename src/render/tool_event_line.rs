@@ -110,6 +110,7 @@ fn tool_suffix_from_text(name: &str, arguments: &str) -> Option<String> {
 /// - 可展示对象文本
 fn tool_suffix(name: &str, arguments: &Value) -> Option<String> {
     match name {
+        "run_command" => string_field(arguments, &["command"]).map(command_summary),
         "edit_file" | "trash_path" => string_field(arguments, &["path"]).map(file_basename),
         "read_file" => read_file_suffix(arguments),
         "glob" | "find_files" | "grep" | "search_text" => {
@@ -132,6 +133,7 @@ fn tool_suffix(name: &str, arguments: &Value) -> Option<String> {
 /// - 可展示对象文本
 fn tool_suffix_from_partial_text(name: &str, arguments: &str) -> Option<String> {
     match name {
+        "run_command" => lenient_string_field(arguments, "command").map(command_summary),
         "edit_file" | "trash_path" => {
             string_field_from_partial(arguments, &["path"]).map(file_basename)
         }
@@ -144,6 +146,62 @@ fn tool_suffix_from_partial_text(name: &str, arguments: &str) -> Option<String> 
         "load" => load_suffix_from_partial(arguments),
         _ => None,
     }
+}
+
+/// 提取命令首个非空行作为单行展示摘要。
+///
+/// 参数:
+/// - `value`: 原始命令文本
+///
+/// 返回:
+/// - 压缩后的首行摘要
+fn command_summary(value: String) -> String {
+    let first_line = value
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("");
+    compact_text(first_line.to_string())
+}
+
+/// 从可能未闭合的 JSON 片段中宽松提取字符串字段。
+///
+/// 与严格版不同：字符串尚未闭合时返回已收到的内容，
+/// 供参数流式阶段的单行状态提前展示命令。
+///
+/// 参数:
+/// - `raw`: JSON 参数片段
+/// - `key`: 字段名
+///
+/// 返回:
+/// - 字段内容；未找到字段时返回空
+pub(crate) fn lenient_string_field(raw: &str, key: &str) -> Option<String> {
+    let pattern = format!("\"{key}\"");
+    let key_index = raw.find(&pattern)?;
+    let after_key = &raw[key_index + pattern.len()..];
+    let colon_index = after_key.find(':')?;
+    let after_colon = after_key[colon_index + 1..].trim_start();
+    let value = after_colon.strip_prefix('"')?;
+    let mut output = String::new();
+    let mut escaped = false;
+    for ch in value.chars() {
+        if escaped {
+            output.push(match ch {
+                'n' => '\n',
+                'r' => '\r',
+                't' => '\t',
+                other => other,
+            });
+            escaped = false;
+            continue;
+        }
+        match ch {
+            '\\' => escaped = true,
+            '"' => break,
+            other => output.push(other),
+        }
+    }
+    (!output.trim().is_empty()).then_some(output)
 }
 
 /// 提取待办或定时任务动作与对象。
@@ -404,7 +462,20 @@ mod tests {
     fn command_tools_use_run_label() {
         assert_eq!(
             tool_event_label("run_command", Some(r#"{"command":"date"}"#)),
-            "Run"
+            "Run date"
+        );
+        // 参数尚未闭合时宽松提取已收到的命令内容
+        assert_eq!(
+            tool_event_label("run_command", Some(r#"{"command":"cargo bui"#)),
+            "Run cargo bui"
+        );
+        // 多行命令只展示首个非空行
+        assert_eq!(
+            tool_event_label(
+                "run_command",
+                Some(r#"{"command":"cargo test\ncargo build"}"#)
+            ),
+            "Run cargo test"
         );
         assert_eq!(
             tool_event_label(
