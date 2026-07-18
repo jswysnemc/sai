@@ -48,7 +48,9 @@ pub struct AppConfig {
     pub agent_runtime: Option<AgentRuntimeOverride>,
     #[serde(default)]
     pub hooks: HooksConfig,
-    #[serde(default)]
+    /// MCP 配置在运行时从独立 `mcp.jsonc` 注入；主配置文件不再写出该字段。
+    /// 读取 `config.jsonc` 时仍可解析 legacy `mcp` 段用于迁移。
+    #[serde(default, skip_serializing)]
     pub mcp: McpConfig,
     #[serde(default)]
     pub plugins: PluginsConfig,

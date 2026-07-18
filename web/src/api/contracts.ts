@@ -683,3 +683,9 @@ export type McpConfig = {
   enabled?: boolean;
   servers?: McpServerConfig[];
 };
+
+export type McpConfigResponse = {
+  config: McpConfig;
+  path: string;
+  secret_sentinel: string;
+};

@@ -58,6 +58,11 @@ impl SaiPaths {
         })
     }
 
+    /// 返回 MCP 独立配置文件路径（`~/.config/sai/mcp.jsonc`）。
+    pub fn mcp_config_file(&self) -> PathBuf {
+        self.config_dir.join("mcp.jsonc")
+    }
+
     pub fn create_dirs(&self) -> Result<()> {
         std::fs::create_dir_all(&self.config_dir)?;
         std::fs::create_dir_all(&self.skills_dir)?;
@@ -83,6 +88,11 @@ impl SaiPaths {
             "{}: {}",
             t("secrets_file", "密钥文件"),
             self.secrets_file.display()
+        );
+        println!(
+            "{}: {}",
+            t("mcp_config_file", "MCP 配置文件"),
+            self.mcp_config_file().display()
         );
         println!(
             "{}: {}",

@@ -1,5 +1,7 @@
 import type {
   ConfigResponse,
+  McpConfig,
+  McpConfigResponse,
   ContextRollbackResult,
   CreateCronJobRequest,
   CronJob,
@@ -261,7 +263,10 @@ export const api = {
   config: {
     load: () => apiRequest<ConfigResponse>("/api/config"),
     save: (config: Record<string, unknown>) =>
-      apiRequest<ConfigResponse>("/api/config", { method: "PUT", body: JSON.stringify(config) })
+      apiRequest<ConfigResponse>("/api/config", { method: "PUT", body: JSON.stringify(config) }),
+    loadMcp: () => apiRequest<McpConfigResponse>("/api/config/mcp"),
+    saveMcp: (config: McpConfig) =>
+      apiRequest<McpConfigResponse>("/api/config/mcp", { method: "PUT", body: JSON.stringify(config) })
   },
   providers: {
     models: (provider: ProviderConfig) =>

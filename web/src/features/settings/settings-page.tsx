@@ -72,7 +72,7 @@ export function SettingsPage() {
           {section === "appearance" && <AppearanceSettingsSection theme={theme.theme} onThemeChange={theme.setTheme} />}
           {section === "memory" && <MemorySettingsSection />}
           {settings.config && section === "hooks" && <HooksSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
-          {settings.config && section === "mcp" && <McpSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
+          {section === "mcp" && <McpSettingsSection />}
           {settings.config && section === "gateways" && <GatewaySettingsSection config={settings.config} dirty={settings.dirty} onGatewayChange={settings.updateGateway} onSave={settings.saveConfig} />}
           {settings.config && section === "advanced" && <AdvancedSettingsSection value={settings.raw} onChange={settings.updateRaw} />}
           {settings.error && <div className="settings-error">{settings.error.message}</div>}

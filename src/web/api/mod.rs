@@ -5,6 +5,7 @@ mod cron_jobs;
 mod gateway_weixin_login;
 mod gateways;
 mod health;
+mod mcp_config;
 mod memory;
 mod permissions;
 mod prompts;
@@ -36,6 +37,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
     let protected = Router::new()
         .merge(workspaces::routes())
         .merge(config::routes())
+        .merge(mcp_config::routes())
         .merge(agent_options::routes())
         .merge(skills::routes())
         .merge(background_tasks::routes())

@@ -37,6 +37,16 @@ pub(crate) fn save(paths: &SaiPaths, mut submitted: Value) -> Result<Value> {
     load_redacted(paths)
 }
 
+/// 对外暴露的脱敏入口。
+pub(crate) fn redact_json_value(value: &mut Value) {
+    redact_value(value, None);
+}
+
+/// 对外暴露的敏感字段合并入口。
+pub(crate) fn merge_secret_sentinels_json(submitted: &mut Value, current: &Value) {
+    merge_secret_sentinels(submitted, current);
+}
+
 /// 递归隐藏配置中的敏感字符串。
 fn redact_value(value: &mut Value, key: Option<&str>) {
     match value {

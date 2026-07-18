@@ -27,6 +27,12 @@ impl AppConfig {
         let stripped = json_comments::StripComments::new(raw.as_bytes());
         let mut config: Self = serde_json::from_reader(stripped)
             .with_context(|| format!("invalid JSONC in {}", paths.config_file.display()))?;
+        // 1. 主配置内的 legacy mcp 仅用于首次迁移
+        let legacy_mcp = config.mcp.clone();
+        // 2. 确保独立 mcp.jsonc 存在（从 legacy 迁移或写默认）
+        super::mcp_file::init_mcp_config_file(paths, Some(&legacy_mcp))?;
+        // 3. 始终以独立文件为准注入运行时 mcp 配置
+        config.mcp = super::mcp_file::load_mcp_config(paths)?;
         config.normalize_builtin_providers();
         config.validate()?;
         Ok(config)
@@ -49,6 +55,11 @@ impl AppConfig {
             let raw = "{\n  // Optional provider API keys. Prefer $env:... in config.jsonc.\n  \"api_keys\": {}\n}\n";
             std::fs::write(&paths.secrets_file, raw)?;
             set_private_permissions(&paths.secrets_file)?;
+        }
+        // 独立 MCP 配置：从主配置 legacy 段迁移或写默认
+        if !paths.mcp_config_file().exists() {
+            let legacy = read_legacy_mcp_from_main_config(paths);
+            super::mcp_file::init_mcp_config_file(paths, legacy.as_ref())?;
         }
         Ok(())
     }
@@ -77,6 +88,10 @@ impl AppConfig {
             .is_empty()
         {
             config.system_prompt_file = Some("system-prompt.md".to_string());
+        }
+        // MCP 不写入主配置；若独立文件尚不存在则落一份当前值
+        if !paths.mcp_config_file().exists() {
+            super::mcp_file::save_mcp_config(paths, &config.mcp)?;
         }
         let raw = serde_json::to_string_pretty(&config)?;
         std::fs::write(&paths.config_file, format!("{raw}\n"))?;
@@ -782,4 +797,17 @@ impl AppConfig {
             None => self.providers.push(provider),
         }
     }
+}
+
+
+/// 仅解析主配置中的 legacy `mcp` 段，不触发完整校验/迁移。
+fn read_legacy_mcp_from_main_config(paths: &SaiPaths) -> Option<crate::config::McpConfig> {
+    if !paths.config_file.exists() {
+        return None;
+    }
+    let raw = std::fs::read_to_string(&paths.config_file).ok()?;
+    let stripped = json_comments::StripComments::new(raw.as_bytes());
+    let value: serde_json::Value = serde_json::from_reader(stripped).ok()?;
+    let mcp = value.get("mcp")?.clone();
+    serde_json::from_value(mcp).ok()
 }
