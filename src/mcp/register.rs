@@ -11,25 +11,14 @@ pub fn register_mcp_tools(registry: &mut ToolRegistry, config: &AppConfig) {
         return;
     }
     let servers = config.mcp.servers.clone();
-    // 独立线程 + 独立 runtime，避免在已有 tokio runtime 内 block_on
-    let tools = std::thread::spawn(move || {
-        let runtime = match tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-        {
-            Ok(runtime) => runtime,
-            Err(error) => {
-                eprintln!("[mcp] runtime error: {error}");
-                return Vec::new();
-            }
-        };
-        runtime.block_on(list_enabled_tools(&servers))
-    })
-    .join()
-    .unwrap_or_else(|_| {
-        eprintln!("[mcp] list tools thread panicked");
-        Vec::new()
-    });
+    // 在专用 MCP runtime 上列举工具（stdio Child 与连接池绑定该 runtime）
+    // 从主 runtime 的同步路径调用时，放到独立线程避免嵌套 block_on
+    let tools = std::thread::spawn(move || super::client::block_on_mcp(list_enabled_tools(&servers)))
+        .join()
+        .unwrap_or_else(|_| {
+            eprintln!("[mcp] list tools thread panicked");
+            Vec::new()
+        });
 
     let server_index: Arc<HashMap<String, McpServerConfig>> = Arc::new(
         config

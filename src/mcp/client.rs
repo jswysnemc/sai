@@ -16,9 +16,44 @@ pub use naming::dynamic_tool_name;
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 static POOL: OnceLock<Mutex<HashMap<String, Arc<Mutex<PooledClient>>>>> = OnceLock::new();
+/// 进程级 MCP runtime：stdio Child 与连接池必须活在同一 runtime 上，
+/// 不能用临时 current_thread runtime 建连后关掉。
+static MCP_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
 fn pool() -> &'static Mutex<HashMap<String, Arc<Mutex<PooledClient>>>> {
     POOL.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// 返回常驻 MCP multi-thread runtime。
+fn mcp_runtime() -> &'static tokio::runtime::Runtime {
+    MCP_RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .thread_name("sai-mcp")
+            .build()
+            .expect("failed to create MCP runtime")
+    })
+}
+
+/// 在 MCP 专用 runtime 上执行 future（供同步注册路径使用）。
+pub fn block_on_mcp<F>(future: F) -> F::Output
+where
+    F: std::future::Future,
+{
+    mcp_runtime().block_on(future)
+}
+
+/// 从任意 async 上下文把 MCP 工作调度到专用 runtime，避免跨 runtime 使用 Child。
+pub async fn run_on_mcp_runtime<F, T>(future: F) -> Result<T>
+where
+    F: std::future::Future<Output = Result<T>> + Send + 'static,
+    T: Send + 'static,
+{
+    let handle = mcp_runtime().handle().clone();
+    tokio::task::spawn_blocking(move || handle.block_on(future))
+        .await
+        .map_err(|error| anyhow::anyhow!("mcp runtime worker failed: {error}"))?
 }
 
 #[derive(Debug, Clone)]
@@ -642,18 +677,38 @@ where
 
 /// 停止连接池中的指定 server。
 pub async fn stop_server(server_id: &str) -> bool {
+    let server_id = server_id.to_string();
+    run_on_mcp_runtime(async move { Ok(stop_server_on_rt(&server_id).await) })
+        .await
+        .unwrap_or(false)
+}
+
+async fn stop_server_on_rt(server_id: &str) -> bool {
     let mut map = pool().lock().await;
     map.remove(server_id).is_some()
 }
 
 /// 清空连接池。
 pub async fn stop_all_servers() {
-    let mut map = pool().lock().await;
-    map.clear();
+    let _ = run_on_mcp_runtime(async move {
+        let mut map = pool().lock().await;
+        map.clear();
+        Ok::<(), anyhow::Error>(())
+    })
+    .await;
 }
 
 /// 运行态状态列表。
 pub async fn runtime_statuses(servers: &[McpServerConfig]) -> Vec<McpRuntimeStatus> {
+    let servers = servers.to_vec();
+    run_on_mcp_runtime(async move {
+        Ok(runtime_statuses_on_rt(&servers).await)
+    })
+    .await
+    .unwrap_or_default()
+}
+
+async fn runtime_statuses_on_rt(servers: &[McpServerConfig]) -> Vec<McpRuntimeStatus> {
     let map = pool().lock().await;
     servers
         .iter()
@@ -690,6 +745,11 @@ pub async fn runtime_statuses(servers: &[McpServerConfig]) -> Vec<McpRuntimeStat
 
 /// 列出单个 MCP server 的工具。
 pub async fn list_server_tools(config: &McpServerConfig) -> Result<Vec<McpToolInfo>> {
+    let config = config.clone();
+    run_on_mcp_runtime(async move { list_server_tools_on_rt(&config).await }).await
+}
+
+async fn list_server_tools_on_rt(config: &McpServerConfig) -> Result<Vec<McpToolInfo>> {
     with_client(config, |client| async move {
         let mut guard = client.lock().await;
         let tools = guard.list_tools(config.timeout_ms).await?;
@@ -712,36 +772,50 @@ pub async fn call_server_tool(
     tool_name: &str,
     arguments: Value,
 ) -> Result<String> {
-    with_client(config, |client| async move {
-        let mut guard = client.lock().await;
-        guard
-            .call_tool(tool_name, arguments, config.timeout_ms)
-            .await
+    let config = config.clone();
+    let tool_name = tool_name.to_string();
+    run_on_mcp_runtime(async move {
+        with_client(&config, |client| async move {
+            let mut guard = client.lock().await;
+            guard
+                .call_tool(&tool_name, arguments, config.timeout_ms)
+                .await
+        })
+        .await
     })
     .await
 }
 
 /// 测试连接并返回工具数量。
 pub async fn test_server(config: &McpServerConfig) -> Result<(usize, Vec<String>)> {
-    // 测试时先踢掉旧连接，再重建
-    let _ = stop_server(&config.id).await;
-    let tools = list_server_tools(config).await?;
-    Ok((
-        tools.len(),
-        tools.into_iter().map(|tool| tool.name).collect(),
-    ))
+    let config = config.clone();
+    run_on_mcp_runtime(async move {
+        // 测试时先踢掉旧连接，再重建
+        let _ = stop_server_on_rt(&config.id).await;
+        let tools = list_server_tools_on_rt(&config).await?;
+        Ok((
+            tools.len(),
+            tools.into_iter().map(|tool| tool.name).collect(),
+        ))
+    })
+    .await
 }
 
 /// 汇总全部启用 server 的工具。
 pub async fn list_enabled_tools(servers: &[McpServerConfig]) -> Vec<McpToolInfo> {
-    let mut all = Vec::new();
-    for server in servers.iter().filter(|server| server.enabled) {
-        match list_server_tools(server).await {
-            Ok(mut tools) => all.append(&mut tools),
-            Err(error) => eprintln!("[mcp] list tools for {}: {error}", server.id),
+    let servers = servers.to_vec();
+    run_on_mcp_runtime(async move {
+        let mut all = Vec::new();
+        for server in servers.iter().filter(|server| server.enabled) {
+            match list_server_tools_on_rt(server).await {
+                Ok(mut tools) => all.append(&mut tools),
+                Err(error) => eprintln!("[mcp] list tools for {}: {error}", server.id),
+            }
         }
-    }
-    all
+        Ok(all)
+    })
+    .await
+    .unwrap_or_default()
 }
 
 #[cfg(test)]
