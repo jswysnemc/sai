@@ -56,6 +56,7 @@ impl Agent {
         let context_char_budget = config.active_context_window_tokens()?;
         let compaction_runtime = compaction_model::resolve_compaction_runtime(&config, paths)?;
         let max_tool_rounds = config.tools.max_rounds;
+        crate::goal::register_tools(&mut tools, state.goal_file());
         if tools_enabled && config.tools.progressive_loading_enabled {
             tools::register_progressive_loader(&mut tools);
         }
@@ -115,6 +116,7 @@ impl Agent {
     /// - 无
     pub fn switch_mode(&mut self, mode: AgentMode, mut tools: ToolRegistry) {
         self.mode = mode;
+        crate::goal::register_tools(&mut tools, self.state.goal_file());
         if self.tools_enabled && self.config.tools.progressive_loading_enabled {
             tools::register_progressive_loader(&mut tools);
         }
@@ -132,6 +134,7 @@ impl Agent {
     /// - 无
     pub fn replace_tools(&mut self, mut tools: ToolRegistry) {
         let loaded = self.tool_visibility.loaded_tool_names();
+        crate::goal::register_tools(&mut tools, self.state.goal_file());
         if self.tools_enabled && self.config.tools.progressive_loading_enabled {
             tools::register_progressive_loader(&mut tools);
         }
@@ -185,6 +188,7 @@ impl Agent {
         self.mode = mode;
         self.tools_enabled =
             self.config.tools.enabled && self.config.active_model_tools_enabled()?;
+        crate::goal::register_tools(&mut tools, self.state.goal_file());
         if self.tools_enabled && self.config.tools.progressive_loading_enabled {
             tools::register_progressive_loader(&mut tools);
         }
@@ -208,6 +212,7 @@ impl Agent {
     /// - 切换是否成功
     pub fn replace_state(&mut self, state: StateStore) -> Result<()> {
         self.state = state;
+        crate::goal::register_tools(&mut self.tools, self.state.goal_file());
         self.tool_visibility = ToolVisibility::new(self.config.tools.progressive_loading_enabled);
         if self.config.tools.progressive_loading_enabled {
             let loaded = self.state.load_loaded_tools()?;

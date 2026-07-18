@@ -50,6 +50,7 @@ pub(crate) enum RunKind {
     #[default]
     Conversation,
     Compaction,
+    GoalContinuation,
 }
 
 /// 活动运行摘要。
@@ -500,6 +501,10 @@ async fn run_agent(
             SubmissionSource::Web,
             mode,
             ControlSubmission::new(crate::control_commands::ControlCommand::Compact),
+        ),
+        RunKind::GoalContinuation => RunnerSubmission::user_input(
+            SubmissionSource::Web,
+            UserInputSubmission::new(String::new(), mode).with_goal_continuation(),
         ),
     }
     .with_session_id(info.session_id.clone())

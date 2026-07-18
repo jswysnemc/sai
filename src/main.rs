@@ -8,6 +8,7 @@ mod control_commands;
 mod cron;
 mod default_models;
 mod gateways;
+mod goal;
 mod hooks;
 mod i18n;
 mod llm;

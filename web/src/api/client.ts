@@ -54,6 +54,8 @@ import type {
 } from "./contracts";
 import { ApiError } from "./api-error";
 import { detectInitialLocale, text } from "../features/i18n/locale";
+import type { GoalResponse, GoalUpdateRequest } from "./goal-contracts";
+import type { GitOperationOptions } from "./git-contracts";
 
 /** 使用 URL 启动令牌建立同源会话。 */
 export async function bootstrapSession(): Promise<void> {
@@ -145,6 +147,24 @@ export const api = {
         })
       })
   },
+  goals: {
+    read: (sessionId: string) =>
+      apiRequest<GoalResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/goal`),
+    set: (sessionId: string, objective: string, tokenBudget?: number) =>
+      apiRequest<GoalResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/goal`, {
+        method: "PUT",
+        body: JSON.stringify({ objective, token_budget: tokenBudget })
+      }),
+    update: (sessionId: string, request: GoalUpdateRequest) =>
+      apiRequest<GoalResponse>(`/api/sessions/${encodeURIComponent(sessionId)}/goal`, {
+        method: "PATCH",
+        body: JSON.stringify(request)
+      }),
+    clear: (sessionId: string) =>
+      apiRequest<{ cleared: boolean }>(`/api/sessions/${encodeURIComponent(sessionId)}/goal`, {
+        method: "DELETE"
+      })
+  },
   runs: {
     active: () => apiRequest<ActiveRunsResponse>("/api/runs/active"),
     interruptionRecovery: (workspaceId: string, sessionId: string) =>
@@ -168,6 +188,26 @@ export const api = {
           provider_id: selection?.providerId,
           model: selection?.model,
           image_urls: imageUrls,
+          thinking_level: thinkingLevel
+        })
+      }),
+    startGoal: (
+      sessionId: string,
+      mode: RunMode,
+      selection?: RunModelSelection,
+      thinkingLevel?: ThinkingLevel,
+      agentId?: string
+    ) =>
+      apiRequest<RunInfo>("/api/runs", {
+        method: "POST",
+        body: JSON.stringify({
+          kind: "goal_continuation",
+          session_id: sessionId,
+          agent_id: agentId,
+          input: "",
+          mode,
+          provider_id: selection?.providerId,
+          model: selection?.model,
           thinking_level: thinkingLevel
         })
       }),
@@ -257,7 +297,7 @@ export const api = {
       if (path) query.set("path", path);
       return apiRequest<GitDiffResponse>(`/api/workspace/git/diff?${query}`);
     },
-    gitOp: (action: string, options: { path?: string; message?: string; remote_url?: string } = {}) =>
+    gitOp: (action: string, options: GitOperationOptions = {}) =>
       apiRequest<GitOperationResponse>("/api/workspace/git/op", {
         method: "POST",
         body: JSON.stringify({ action, ...options })

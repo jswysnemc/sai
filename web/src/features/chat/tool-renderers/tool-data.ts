@@ -76,7 +76,7 @@ export function toolSummary(name: string, argumentsText: string, locale: Locale 
  */
 export function toolFilePath(name: string, argumentsText: string): string {
   const args = parseJsonRecord(argumentsText);
-  if (name === "read_file" || name === "edit_file") return stringField(args, "path");
+  if (["read_file", "edit_file", "write_file", "replace_file_lines"].includes(name)) return stringField(args, "path");
   if (name !== "apply_patch") return "";
   const paths = stringField(args, "patch")
     .split("\n")

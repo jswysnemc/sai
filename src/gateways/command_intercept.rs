@@ -61,6 +61,10 @@ pub(crate) async fn handle_gateway_command(
             crate::control_commands::run_agent_command(paths, selection, ControlSurface::Gateway)?
                 .message
         }
+        ControlCommand::Goal(command) => {
+            let state = crate::state::StateStore::new(paths)?;
+            crate::control_commands::execute_goal_command(&state, command)?.message
+        }
     }))
 }
 

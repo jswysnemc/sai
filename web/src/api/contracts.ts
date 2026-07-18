@@ -140,6 +140,7 @@ export type SessionTimelineTurn = {
   turn_id: string;
   seq: number;
   status: "running" | "completed" | "interrupted";
+  automatic: boolean;
   user: TimelineMessage;
   assistant: TimelineMessage;
   tools: TimelineToolEntry[];

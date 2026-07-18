@@ -53,6 +53,9 @@ export function createTimelineOverviewItems(
  */
 export function createHistoryOverviewItem(turn: SessionTimelineTurn, locale: Locale = "zh-CN"): MessageOverviewItem {
   const label = historyStatusLabel(turn.status, locale);
+  const titleSource = turn.automatic
+    ? text(locale, "Goal continuation", "目标续作")
+    : turn.user.content;
   const overviewTags = collectOverviewTags(
     [turn.user.content, turn.assistant.content, turn.assistant.reasoning ?? ""],
     turn.tools.map((tool) => ({ arguments: tool.arguments, output: tool.output }))
@@ -61,7 +64,7 @@ export function createHistoryOverviewItem(turn: SessionTimelineTurn, locale: Loc
     id: `turn-${turn.turn_id}`,
     category: "history",
     label,
-    title: createOverviewSummary(turn.user.content, DEFAULT_TITLE_LENGTH) || text(locale, "Untitled request", "未命名请求"),
+    title: createOverviewSummary(titleSource, DEFAULT_TITLE_LENGTH) || text(locale, "Untitled request", "未命名请求"),
     summary: createOverviewSummary(turn.assistant.content, DEFAULT_SUMMARY_LENGTH) || label,
     ...overviewTags,
     status: turn.status

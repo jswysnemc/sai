@@ -1,7 +1,6 @@
 use super::*;
 use anyhow::{bail, Result};
 use std::path::{Component, Path};
-use tokio::process::Command;
 
 pub(super) async fn working_tree_diff(
     state: &GitRepositoryState,
@@ -112,25 +111,6 @@ pub(super) async fn push_repo(repo: &Path, state: &GitRepositoryState) -> Result
         }
     } else {
         git_success(repo, &["push"]).await
-    }
-}
-
-pub(super) async fn switch_branch(repo: &Path, message: Option<&str>) -> Result<GitOutput> {
-    let branch = message
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("branch name cannot be empty"))?;
-    if branch.starts_with("origin/")
-        || (branch.contains('/') && remote_ref_exists(repo, branch).await)
-    {
-        let local = branch.rsplit('/').next().unwrap_or(branch);
-        if branch_exists_local(repo, local).await {
-            git_success(repo, &["switch", local]).await
-        } else {
-            git_success(repo, &["switch", "-c", local, "--track", branch]).await
-        }
-    } else {
-        git_success(repo, &["switch", branch]).await
     }
 }
 
@@ -602,46 +582,6 @@ pub(super) async fn git_origin_exists(repo_root: &Path) -> bool {
     git_success(repo_root, &["remote", "get-url", "origin"])
         .await
         .is_ok()
-}
-
-pub(super) async fn run_git(root: &Path, args: &[&str]) -> Result<()> {
-    let _ = run_git_output(root, args).await?;
-    Ok(())
-}
-
-pub(super) async fn run_git_output(root: &Path, args: &[&str]) -> Result<GitOutput> {
-    let output = git_raw(root, args).await?;
-    if output.status.success() {
-        return Ok(GitOutput {
-            stdout: trim_bytes(&output.stdout),
-            stderr: trim_bytes(&output.stderr),
-        });
-    }
-    let message = trim_bytes(&output.stderr);
-    if message.is_empty() {
-        bail!("git command failed");
-    }
-    bail!("{message}")
-}
-
-pub(super) async fn git_success(root: &Path, args: &[&str]) -> Result<GitOutput> {
-    run_git_output(root, args).await
-}
-
-pub(super) async fn git_raw(root: &Path, args: &[&str]) -> Result<std::process::Output> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(root)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GIT_OPTIONAL_LOCKS", "0")
-        .env("LC_ALL", "C")
-        .output()
-        .await?;
-    Ok(output)
-}
-
-pub(super) fn trim_bytes(bytes: &[u8]) -> String {
-    String::from_utf8_lossy(bytes).trim().to_string()
 }
 
 pub(super) fn empty_output() -> GitOutput {

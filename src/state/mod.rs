@@ -2,6 +2,7 @@ mod checkpoints;
 mod compaction;
 mod context_epoch;
 pub(crate) mod failure_recovery;
+mod goals;
 mod loaded_tools;
 mod pending_turn;
 pub(crate) mod request_projection;

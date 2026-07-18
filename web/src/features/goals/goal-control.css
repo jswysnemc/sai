@@ -1,0 +1,80 @@
+.goal-control {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.goal-control-trigger {
+  max-width: 11rem;
+}
+
+.goal-control-trigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-context-strip .ui-button.goal-control-action {
+  width: 1.75rem;
+  min-width: 1.75rem;
+  padding: 0;
+}
+
+.goal-control.status-active .goal-control-trigger {
+  color: var(--signal);
+}
+
+.goal-control.status-blocked .goal-control-trigger,
+.goal-control.status-budget_limited .goal-control-trigger {
+  color: var(--danger);
+}
+
+.goal-control-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.goal-control-form label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.goal-control-form input {
+  width: 100%;
+  min-height: 2.125rem;
+  padding: 0 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  outline: 0;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font-size: 0.75rem;
+}
+
+.goal-control-form input:focus {
+  border-color: var(--line-strong);
+}
+
+.goal-control-usage {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+}
+
+.goal-control-error {
+  color: var(--danger);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 40rem) {
+  .goal-control-trigger {
+    max-width: 7rem;
+  }
+}

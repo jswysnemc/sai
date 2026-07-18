@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
+  ArrowDown,
+  ArrowUp,
   Check,
   ChevronDown,
   CloudDownload,
@@ -17,10 +19,12 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { ApiError, LocalizedError, localizeApiMessage, toDisplayError } from "../../api/api-error";
-import type { GitBranch as GitBranchInfo, GitCommitSummary, GitStatusEntry } from "../../api/contracts";
+import type { GitCommitSummary, GitOperationResponse, GitStatusEntry } from "../../api/contracts";
+import type { GitOperationOptions } from "../../api/git-contracts";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { DiffView } from "../chat/tool-renderers/diff-view";
 import { useI18n } from "../i18n/use-i18n";
+import { GitBranchMenu } from "./git-branch-menu";
 
 type ReviewMode = "changes" | "history";
 type DiffMode = "working_tree" | "branch";
@@ -38,7 +42,6 @@ export function DiffPane() {
   const [diffMode, setDiffMode] = useState<DiffMode>("working_tree");
   const [message, setMessage] = useState("");
   const [initBranch, setInitBranch] = useState("main");
-  const [createBranchName, setCreateBranchName] = useState("");
   const [remoteUrl, setRemoteUrl] = useState("");
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [selectedCommit, setSelectedCommit] = useState<string | null>(null);
@@ -56,13 +59,13 @@ export function DiffPane() {
   const branches = useQuery({
     queryKey: ["git-branches"],
     queryFn: api.workspace.gitBranches,
-    enabled: status.data?.status === "ready",
+    enabled: status.data?.status === "ready" && branchMenuOpen,
     staleTime: 10_000
   });
   const history = useQuery({
     queryKey: ["git-log", historyLimit],
     queryFn: () => api.workspace.gitLog(historyLimit, 0),
-    enabled: status.data?.status === "ready",
+    enabled: status.data?.status === "ready" && mode === "history",
     staleTime: 10_000
   });
   const reviewDiff = useQuery({
@@ -73,12 +76,12 @@ export function DiffPane() {
   const commitDetails = useQuery({
     queryKey: ["git-commit-details", selectedCommit],
     queryFn: () => api.workspace.gitCommitDetails(selectedCommit!),
-    enabled: Boolean(selectedCommit)
+    enabled: mode === "history" && Boolean(selectedCommit)
   });
   const commitDiff = useQuery({
     queryKey: ["git-commit-diff", selectedCommit, selectedCommitPath],
     queryFn: () => api.workspace.gitCommitDiff(selectedCommit!, selectedCommitPath ?? undefined),
-    enabled: Boolean(selectedCommit)
+    enabled: mode === "history" && Boolean(selectedCommit)
   });
 
   const state = status.data;
@@ -94,34 +97,14 @@ export function DiffPane() {
       ),
     [state?.entries]
   );
-  const localBranches = useMemo(
-    () => (branches.data?.branches ?? []).filter((branch) => branch.kind === "local"),
-    [branches.data?.branches]
-  );
-  const remoteBranches = useMemo(
-    () => (branches.data?.branches ?? []).filter((branch) => branch.kind === "remote"),
-    [branches.data?.branches]
-  );
-
   useEffect(() => {
     if (state?.remote_url) setRemoteUrl(state.remote_url);
   }, [state?.remote_url]);
 
-  useEffect(() => {
-    if (!branchMenuOpen) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (!target?.closest(".git-branch-menu") && !target?.closest(".git-branch-trigger")) {
-        setBranchMenuOpen(false);
-      }
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [branchMenuOpen]);
-
-  const refreshAll = async () => {
+  /** 刷新 Git 派生数据；操作响应已携带状态时不重复读取状态。 */
+  const refreshAll = async (includeStatus = true) => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["git-status"] }),
+      includeStatus ? queryClient.invalidateQueries({ queryKey: ["git-status"] }) : Promise.resolve(),
       queryClient.invalidateQueries({ queryKey: ["git-branches"] }),
       queryClient.invalidateQueries({ queryKey: ["git-log"] }),
       queryClient.invalidateQueries({ queryKey: ["git-review-diff"] }),
@@ -133,13 +116,10 @@ export function DiffPane() {
   };
 
   const op = useMutation({
-    mutationFn: (input: { action: string; path?: string; message?: string; remote_url?: string }) =>
-      api.workspace.gitOp(input.action, {
-        path: input.path,
-        message: input.message,
-        remote_url: input.remote_url
-      }),
+    mutationFn: (input: { action: string; options: GitOperationOptions }) =>
+      api.workspace.gitOp(input.action, input.options),
     onSuccess: async (result) => {
+      queryClient.setQueryData(["git-status"], result.state);
       if (!result.ok) {
         setError(
           result.message || result.stderr
@@ -151,8 +131,7 @@ export function DiffPane() {
       }
       setError(null);
       setNotice(result.message);
-      queryClient.setQueryData(["git-status"], result.state);
-      await refreshAll();
+      await refreshAll(false);
     },
     onError: (reason) => {
       setError(toDisplayError(reason, "Git operation failed", "Git 操作失败"));
@@ -162,14 +141,11 @@ export function DiffPane() {
 
   const runOp = async (
     action: string,
-    options: {
-      path?: string;
-      message?: string;
-      remote_url?: string;
+    options: GitOperationOptions & {
       confirmTitle?: string;
       confirmDescription?: string;
     } = {}
-  ) => {
+  ): Promise<GitOperationResponse | undefined> => {
     if (options.confirmTitle) {
       const confirmed = await confirm({
         title: options.confirmTitle,
@@ -177,22 +153,14 @@ export function DiffPane() {
         confirmLabel: t("Continue", "继续"),
         danger: true
       });
-      if (!confirmed) return;
+      if (!confirmed) return undefined;
     }
     setError(null);
     setNotice("");
-    await op.mutateAsync({
-      action,
-      path: options.path,
-      message: options.message,
-      remote_url: options.remote_url
-    });
+    const { confirmTitle: _confirmTitle, confirmDescription: _confirmDescription, ...operationOptions } = options;
+    const result = await op.mutateAsync({ action, options: operationOptions });
     if (action === "commit") setMessage("");
-    if (action === "create_branch") {
-      setCreateBranchName("");
-      setBranchMenuOpen(false);
-    }
-    if (action === "switch_branch") setBranchMenuOpen(false);
+    return result;
   };
 
   if (status.isLoading && !state) {
@@ -251,56 +219,15 @@ export function DiffPane() {
   return (
     <section className="diff-pane git-manager git-review">
       <header className="git-review-toolbar">
-        <div className="git-review-branch">
-          <button
-            type="button"
-            className="git-branch-trigger"
-            onClick={() => setBranchMenuOpen((value) => !value)}
-            aria-expanded={branchMenuOpen}
-          >
-            <GitBranch size={14} />
-            <strong title={state?.head}>{state?.head || "HEAD"}</strong>
-            <ChevronDown size={12} className={branchMenuOpen ? "open" : ""} />
-          </button>
-          {(state?.ahead || state?.behind) ? (
-            <span className="git-review-sync">
-              {state.ahead > 0 && <b>↑{state.ahead}</b>}
-              {state.behind > 0 && <i>↓{state.behind}</i>}
-            </span>
-          ) : null}
-          {state?.upstream && <small title={state.upstream}>{state.upstream}</small>}
-          {branchMenuOpen && (
-            <div className="git-branch-menu">
-              <div className="git-branch-create">
-                <input
-                  value={createBranchName}
-                  onChange={(event) => setCreateBranchName(event.target.value)}
-                  placeholder={t("New branch name", "新建分支名")}
-                  spellCheck={false}
-                />
-                <button
-                  type="button"
-                  disabled={!createBranchName.trim() || busy}
-                  onClick={() => void runOp("create_branch", { message: createBranchName.trim() })}
-                >
-                  {t("Create", "创建")}
-                </button>
-              </div>
-              <BranchGroup
-                title={t("Local branches", "本地分支")}
-                branches={localBranches}
-                busy={busy}
-                onSelect={(branch) => void runOp("switch_branch", { message: branch.full_name })}
-              />
-              <BranchGroup
-                title={t("Remote branches", "远程分支")}
-                branches={remoteBranches}
-                busy={busy}
-                onSelect={(branch) => void runOp("switch_branch", { message: branch.full_name })}
-              />
-            </div>
-          )}
-        </div>
+        <GitBranchMenu
+          state={state!}
+          branches={branches.data?.branches ?? []}
+          loading={branches.isLoading}
+          open={branchMenuOpen}
+          busy={busy}
+          onOpenChange={setBranchMenuOpen}
+          onOperation={runOp}
+        />
         <div className="git-review-actions">
           <button type="button" className={mode === "changes" ? "active" : ""} onClick={() => setMode("changes")}>
             {t("Changes", "变更")}
@@ -386,11 +313,12 @@ export function DiffPane() {
               onUnstageAll={() => void runOp("unstage_all")}
               onStage={(path) => void runOp("stage", { path })}
               onUnstage={(path) => void runOp("unstage", { path })}
-              onDiscard={(path) =>
+              onDiscard={(entry) =>
                 void runOp("discard", {
-                  path,
+                  path: entry.path,
+                  old_path: entry.old_path ?? undefined,
                   confirmTitle: t("Discard working tree changes", "撤销工作区修改"),
-                  confirmDescription: t(`Restore ${path}. Unsaved changes cannot be recovered.`, `将恢复 ${path}，未保存修改无法恢复。`)
+                  confirmDescription: t(`Restore ${entry.path}. Unsaved changes cannot be recovered.`, `将恢复 ${entry.path}，未保存修改无法恢复。`)
                 })
               }
               section="staged"
@@ -405,13 +333,14 @@ export function DiffPane() {
               onUnstageAll={() => void runOp("unstage_all")}
               onStage={(path) => void runOp("stage", { path })}
               onUnstage={(path) => void runOp("unstage", { path })}
-              onDiscard={(path) =>
+              onDiscard={(entry) =>
                 void runOp("discard", {
-                  path,
-                  confirmTitle: entryIsUntracked(changes, path) ? t("Delete untracked file", "删除未跟踪文件") : t("Discard working tree changes", "撤销工作区修改"),
-                  confirmDescription: entryIsUntracked(changes, path)
-                    ? t(`Permanently delete “${path}”.`, `将永久删除“${path}”。`)
-                    : t(`Restore ${path}. Unsaved changes cannot be recovered.`, `将恢复 ${path}，未保存修改无法恢复。`)
+                  path: entry.path,
+                  old_path: entry.old_path ?? undefined,
+                  confirmTitle: entry.untracked ? t("Delete untracked file", "删除未跟踪文件") : t("Discard working tree changes", "撤销工作区修改"),
+                  confirmDescription: entry.untracked
+                    ? t(`Permanently delete “${entry.path}”.`, `将永久删除“${entry.path}”。`)
+                    : t(`Restore ${entry.path}. Unsaved changes cannot be recovered.`, `将恢复 ${entry.path}，未保存修改无法恢复。`)
                 })
               }
               section="changes"
@@ -459,8 +388,9 @@ export function DiffPane() {
             <div className="git-change-head">
               <span>{t(`History ${commits.length}`, `历史 ${commits.length}`)}</span>
               {(history.data?.history_ahead || history.data?.history_behind) ? (
-                <small>
-                  ↑{history.data?.history_ahead ?? 0} ↓{history.data?.history_behind ?? 0}
+                <small className="git-history-sync">
+                  <span><ArrowUp size={10} />{history.data?.history_ahead ?? 0}</span>
+                  <span><ArrowDown size={10} />{history.data?.history_behind ?? 0}</span>
                 </small>
               ) : null}
             </div>
@@ -542,32 +472,6 @@ export function DiffPane() {
   );
 }
 
-function BranchGroup(props: {
-  title: string;
-  branches: GitBranchInfo[];
-  busy: boolean;
-  onSelect: (branch: GitBranchInfo) => void;
-}) {
-  if (props.branches.length === 0) return null;
-  return (
-    <div className="git-branch-group">
-      <span>{props.title}</span>
-      {props.branches.map((branch) => (
-        <button
-          type="button"
-          key={`${branch.kind}:${branch.full_name}`}
-          className={branch.current ? "active" : ""}
-          disabled={props.busy || branch.current}
-          onClick={() => props.onSelect(branch)}
-        >
-          <strong>{branch.name}</strong>
-          {branch.upstream && <small>{branch.upstream}</small>}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function ChangeSection(props: {
   title: string;
   entries: GitStatusEntry[];
@@ -579,7 +483,7 @@ function ChangeSection(props: {
   onUnstageAll: () => void;
   onStage: (path: string) => void;
   onUnstage: (path: string) => void;
-  onDiscard: (path: string) => void;
+  onDiscard: (entry: GitStatusEntry) => void;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(true);
@@ -628,7 +532,7 @@ function ChangeSection(props: {
                   <button
                     type="button"
                     disabled={props.busy}
-                    onClick={() => props.onDiscard(entry.path)}
+                    onClick={() => props.onDiscard(entry)}
                     title={entry.untracked ? t("Delete untracked file", "删除未跟踪文件") : t("Discard changes", "撤销修改")}
                   >
                     {entry.untracked ? <Trash2 size={12} /> : <RotateCcw size={12} />}
@@ -642,10 +546,6 @@ function ChangeSection(props: {
       )}
     </div>
   );
-}
-
-function entryIsUntracked(entries: GitStatusEntry[], path: string) {
-  return entries.some((entry) => entry.path === path && entry.untracked);
 }
 
 function statusLabel(entry: GitStatusEntry) {

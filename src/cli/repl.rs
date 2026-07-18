@@ -105,7 +105,7 @@ pub(super) async fn run_repl(
         };
         apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
         let input = submission.raw_input.trim();
-        let submitted_input = input.to_string();
+        let mut submitted_input = input.to_string();
         if input.eq_ignore_ascii_case("exit")
             || input.eq_ignore_ascii_case("quit")
             || input.eq_ignore_ascii_case("/exit")
@@ -121,6 +121,7 @@ pub(super) async fn run_repl(
             }
             continue;
         }
+        let mut goal_continuation = false;
         match crate::control_commands::parse_control_command(
             input,
             crate::control_commands::ControlSurface::Repl,
@@ -307,8 +308,22 @@ pub(super) async fn run_repl(
                             Err(err) => runtime.record_meta(err.to_string())?,
                         }
                     }
+                    crate::control_commands::ControlCommand::Goal(command) => {
+                        match crate::control_commands::execute_goal_command(&state, command) {
+                            Ok(outcome) => {
+                                runtime.record_meta(outcome.message)?;
+                                goal_continuation = outcome.should_continue;
+                                if goal_continuation {
+                                    submitted_input.clear();
+                                }
+                            }
+                            Err(error) => runtime.record_meta(error.to_string())?,
+                        }
+                    }
                 }
-                continue;
+                if !goal_continuation {
+                    continue;
+                }
             }
             Ok(None) => {}
             Err(err) => {
@@ -423,10 +438,12 @@ pub(super) async fn run_repl(
         if chat_input.message.trim().is_empty() && chat_input.image_url.is_none() {
             continue;
         }
-        if !input.trim().is_empty() {
+        if !goal_continuation && !input.trim().is_empty() {
             input_history.push(input.to_string());
         }
-        runtime.record_user(mode, input.to_string())?;
+        if !goal_continuation {
+            runtime.record_user(mode, input.to_string())?;
+        }
         // 4. 模式变化时换工具表；每轮只做轻量 prepare
         if agent.mode() != mode {
             let registry = build_repl_tool_registry(&config, paths, mode)?;
@@ -442,6 +459,7 @@ pub(super) async fn run_repl(
             reasoning_mode,
             tool_call_mode,
             render_options.clone(),
+            goal_continuation,
         );
         let mut interrupted = false;
         let chat_result = {
@@ -546,12 +564,16 @@ fn repl_runner_submission(
     reasoning_mode: render::ReasoningDisplayMode,
     tool_call_mode: render::ToolCallDisplayMode,
     render_options: render::StreamRenderOptions,
+    goal_continuation: bool,
 ) -> crate::runner::RunnerSubmission {
-    let user_input = match chat_input.image_url {
+    let mut user_input = match chat_input.image_url {
         Some(image_url) => crate::runner::UserInputSubmission::new(chat_input.message, mode)
             .with_image_url(image_url),
         None => crate::runner::UserInputSubmission::new(chat_input.message, mode),
     };
+    if goal_continuation {
+        user_input = user_input.with_goal_continuation();
+    }
     crate::runner::RunnerSubmission::user_input(crate::runner::SubmissionSource::Repl, user_input)
         .with_render_policy(crate::runner::RenderPolicy::new(
             false,
@@ -613,7 +635,11 @@ pub(super) fn load_repl_input_history(state: &StateStore) -> Result<Vec<String>>
     Ok(state
         .load_conversation()?
         .into_iter()
-        .filter(|entry| entry.role == "user" && !entry.content.trim().is_empty())
+        .filter(|entry| {
+            entry.role == "user"
+                && !entry.content.trim().is_empty()
+                && !crate::goal::is_continuation_input(&entry.content)
+        })
         .map(|entry| strip_terminal_control_sequences(&entry.content))
         .filter(|content| !content.trim().is_empty())
         .collect())
@@ -641,6 +667,7 @@ mod tests {
             render::ReasoningDisplayMode::Summary,
             render::ToolCallDisplayMode::Summary,
             render::StreamRenderOptions::default(),
+            false,
         );
 
         assert_eq!(submission.source, crate::runner::SubmissionSource::Repl);

@@ -89,7 +89,7 @@ function uniqueSummary(summary: string, displayName: string): string {
  */
 function ToolIcon({ name }: { name: string }) {
   if (name === "run_command" || name.includes("command")) return <TerminalSquare size={15} />;
-  if (name === "edit_file" || name === "apply_patch") return <FilePenLine size={15} />;
+  if (["edit_file", "apply_patch", "write_file", "replace_file_lines"].includes(name)) return <FilePenLine size={15} />;
   if (name === "read_file") return <FileSearch size={15} />;
   if (name === "grep" || name === "glob") return <Search size={15} />;
   return <Wrench size={15} />;

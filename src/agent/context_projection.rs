@@ -48,6 +48,15 @@ impl Agent {
         exclude_turn_id: Option<&str>,
     ) -> Result<ProjectedBaseContext> {
         let loaded_tools_context = self.tool_visibility.loaded_context_prompt(&self.tools);
+        let goal_context = self
+            .state
+            .goal()?
+            .map(|goal| crate::goal::system_context(&goal));
+        let dynamic_tool_context = [loaded_tools_context.as_deref(), goal_context.as_deref()]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join("\n\n");
         let projected_history = self.state.project_history(exclude_turn_id)?;
         let compaction_summary_context = projected_history
             .checkpoint_context
@@ -61,7 +70,7 @@ impl Agent {
             &epoch.baseline,
             Some(self.mode.reminder()),
             selected_model_label(&self.config)?.as_deref(),
-            loaded_tools_context.as_deref(),
+            (!dynamic_tool_context.is_empty()).then_some(dynamic_tool_context.as_str()),
             compaction_summary_context.as_deref(),
             projected_history.messages,
             last_auto_meme_reminder.as_deref(),

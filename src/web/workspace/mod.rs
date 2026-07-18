@@ -9,5 +9,5 @@ pub(crate) use files::{
 pub(crate) use git_diff::{
     apply_git_action, git_branches, git_commit_details, git_commit_diff, git_diff, git_log, git_op,
     git_status, read_git_diff, GitBranchesResponse, GitCommitDetailsResponse, GitDiff,
-    GitDiffResponse, GitLogResponse, GitOperationResponse, GitRepositoryState,
+    GitDiffResponse, GitLogResponse, GitOperationRequest, GitOperationResponse, GitRepositoryState,
 };

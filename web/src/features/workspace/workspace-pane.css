@@ -371,12 +371,20 @@
 .git-remote-box button { min-height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: var(--graphite); color: var(--paper); font-size: 11px; }
 .git-branch-group { display: grid; gap: 2px; }
 .git-branch-group > span { padding: 4px 6px; color: var(--ink-soft); font-size: 10px; }
-.git-branch-group button { display: grid; gap: 2px; width: 100%; min-height: 36px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); text-align: left; }
-.git-branch-group button:hover:not(:disabled),
-.git-branch-group button.active { background: var(--paper-deep); }
-.git-branch-group button:disabled { opacity: 0.72; }
+.git-branch-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-radius: 6px; }
+.git-branch-row:hover,
+.git-branch-row.active { background: var(--paper-deep); }
+.git-branch-row-main { display: flex; align-items: center; gap: 5px; min-width: 0; min-height: 36px; padding: 6px 8px; border: 0; background: transparent; color: var(--ink); text-align: left; }
+.git-branch-row-main > span { display: grid; min-width: 0; gap: 2px; }
+.git-branch-row-main:disabled { opacity: 0.72; }
+.git-branch-row-actions { display: inline-flex; gap: 1px; padding-right: 4px; }
+.git-branch-row-actions button { display: grid; width: 26px; height: 26px; place-items: center; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--ink-soft); }
+.git-branch-row-actions button:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
 .git-branch-group strong { font-size: 12px; font-weight: 500; }
 .git-branch-group small { color: var(--ink-soft); font: 400 10px var(--font-code); }
+.git-branch-rename-field { display: grid; gap: 6px; color: var(--ink-soft); font-size: 11px; }
+.git-branch-rename-field input { min-height: 34px; padding: 0 9px; border: 1px solid var(--line); border-radius: 7px; outline: 0; background: var(--paper-raised); color: var(--ink); font: 400 12px var(--font-code); }
+.git-branch-rename-field input:focus { border-color: var(--line-strong); }
 .git-diff-mode { display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
 .git-diff-mode button { min-height: 26px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--ink-soft); font-size: 11px; }
 .git-diff-mode button:hover:not(:disabled),
@@ -387,6 +395,8 @@
 .git-load-more:hover { background: var(--paper-deep); color: var(--ink); }
 .git-review-branch small { overflow: hidden; color: var(--ink-soft); font: 400 10px var(--font-code); text-overflow: ellipsis; white-space: nowrap; }
 .git-review-sync { display: inline-flex; gap: 4px; font: 500 10px var(--font-code); }
+.git-review-sync b,
+.git-review-sync i { display: inline-flex; align-items: center; }
 .git-review-sync b { color: var(--signal); }
 .git-review-sync i { color: var(--ink-soft); font-style: normal; }
 .git-review-actions { display: flex; align-items: center; gap: 3px; }
@@ -406,6 +416,8 @@
 .git-remote-box input { min-height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; font: 400 11px var(--font-code); }
 .git-section { border-bottom: 1px solid var(--line); }
 .git-change-head { display: flex; align-items: center; justify-content: space-between; min-height: 34px; padding: 0 8px 0 6px; border-bottom: 1px solid var(--line); color: var(--ink-soft); font-size: 11px; }
+.git-history-sync { display: inline-flex; gap: 4px; }
+.git-history-sync span { display: inline-flex; align-items: center; }
 .git-section-toggle { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: inherit; font: inherit; }
 .git-section-toggle svg { transition: transform 140ms ease; }
 .git-section-toggle svg.open { transform: rotate(180deg); }

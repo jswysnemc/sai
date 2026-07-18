@@ -16,6 +16,7 @@ function turn(id: string, content: string, status: SessionTimelineTurn["status"]
     turn_id: id,
     seq: 1,
     status,
+    automatic: false,
     user: { timestamp: "now", content },
     assistant: { timestamp: "later", content: status === "running" ? "" : "answer" },
     tools: []

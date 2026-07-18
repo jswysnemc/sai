@@ -9,6 +9,7 @@ describe("HistoryTurn", () => {
       turn_id: "turn",
       seq: 1,
       status: "completed",
+      automatic: false,
       user: { timestamp: "now", content: "修改文件" },
       assistant: { timestamp: "later", content: "已保留文件" },
       tools: [{
@@ -34,6 +35,7 @@ describe("HistoryTurn", () => {
       turn_id: "run-1",
       seq: 1,
       status: "interrupted",
+      automatic: false,
       user: { timestamp: "now", content: "执行检查" },
       assistant: { timestamp: "later", content: "" },
       tools: []
@@ -42,5 +44,22 @@ describe("HistoryTurn", () => {
     const html = renderToStaticMarkup(<HistoryTurn turn={turn} />);
 
     expect(html).toContain("运行已中断");
+  });
+
+  it("hides the internal goal continuation prompt", () => {
+    const turn: SessionTimelineTurn = {
+      turn_id: "goal-turn",
+      seq: 2,
+      status: "completed",
+      automatic: true,
+      user: { timestamp: "now", content: "<goal-continuation>internal</goal-continuation>" },
+      assistant: { timestamp: "later", content: "继续完成目标" },
+      tools: []
+    };
+
+    const html = renderToStaticMarkup(<HistoryTurn turn={turn} />);
+
+    expect(html).not.toContain("goal-continuation");
+    expect(html).toContain("继续完成目标");
   });
 });

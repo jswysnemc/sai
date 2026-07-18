@@ -165,7 +165,9 @@ export function ChatPage() {
   const runningStates = run.states.filter((state) => !state.completed);
   const activeRun = runningStates.find((state) => state.status !== "queued") ?? runningStates[0];
   const running = runningStates.length > 0;
-  const historyEntries = timeline.data?.turns.map((turn) => turn.user.content) ?? [];
+  const historyEntries = timeline.data?.turns
+    .filter((turn) => !turn.automatic)
+    .map((turn) => turn.user.content) ?? [];
 
   /**
    * 撤销最后一轮对话及该轮造成的工作树修改，并恢复用户输入。
@@ -220,7 +222,7 @@ export function ChatPage() {
       throw error;
     }
   };
-  const lastTurnId = timeline.data?.turns.at(-1)?.turn_id;
+  const lastTurnId = timeline.data?.turns.filter((turn) => !turn.automatic).at(-1)?.turn_id;
   const emptySession = !timeline.isLoading && display.historyTurns.length === 0 && display.liveRuns.length === 0;
 
   const forkFromTurn = async (turnId: string) => {
@@ -385,6 +387,15 @@ export function ChatPage() {
         onAgentSelect={chatAgent.selectAgent}
         onCompact={() => activeSession
           ? run.startCompaction(activeSession.id, chatModel.selection ?? undefined)
+          : Promise.resolve()}
+        onContinueGoal={() => activeSession
+          ? run.startGoal(
+              activeSession.id,
+              mode,
+              chatModel.selection ?? undefined,
+              thinking.thinkingLevel,
+              chatAgent.selection?.id
+            )
           : Promise.resolve()}
       />
       <Modal

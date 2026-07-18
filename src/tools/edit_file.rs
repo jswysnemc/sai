@@ -25,6 +25,7 @@ pub(crate) fn register(registry: &mut ToolRegistry) {
         )
         .writes(),
     );
+    super::edit_file_tools::register(registry);
 }
 
 /**
@@ -55,21 +56,63 @@ fn edit_file_parameters() -> Value {
 ///
 /// 返回:
 /// - JSON 格式编辑结果
-fn edit_file(args: Value) -> Result<String> {
+fn edit_file(mut args: Value) -> Result<String> {
+    normalize_edit_file_args(&mut args)?;
     validate_edit_file_mode(&args)?;
     if let Some(patch) = args.get("patch").and_then(Value::as_str) {
-        let cwd = crate::runtime_cwd::current_dir()?;
-        let applied = apply_patch(patch, &cwd)?;
-        return Ok(serde_json::to_string_pretty(&json!({
-            "ok": true,
-            "mode": "patch",
-            "changed_files": applied.changes.iter().map(file_change_summary).collect::<Vec<_>>()
-        }))?);
+        return execute_patch(patch);
     }
     if args.get("content").is_some() {
         return write_file(args);
     }
     edit_file_lines(args)
+}
+
+/// 归一化兼容入口中的宽松模型参数。
+///
+/// 参数:
+/// - `args`: 待归一化的编辑参数对象
+///
+/// 返回:
+/// - 参数对象合法时返回成功
+fn normalize_edit_file_args(args: &mut Value) -> Result<()> {
+    let Some(object) = args.as_object_mut() else {
+        bail!("edit_file arguments must be an object");
+    };
+    // 1. 部分模型会补齐未使用字段并传 null，这些字段不应参与模式判定
+    object.retain(|_, value| !value.is_null());
+    // 2. 兼容 JSON 中的数字字符串，避免行范围模式因类型漂移重试
+    for key in ["start_line", "end_line"] {
+        let parsed = object
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::parse::<u64>)
+            .transpose()
+            .map_err(|_| anyhow::anyhow!("{key} must be a positive integer"))?;
+        if let Some(value) = parsed {
+            object.insert(key.to_string(), json!(value));
+        }
+    }
+    Ok(())
+}
+
+/// 应用 Codex 格式补丁。
+///
+/// 参数:
+/// - `patch`: 完整补丁文本
+///
+/// 返回:
+/// - JSON 格式文件变更摘要
+pub(super) fn execute_patch(patch: &str) -> Result<String> {
+    let cwd = crate::runtime_cwd::current_dir()?;
+    let applied = apply_patch(patch, &cwd)?;
+    Ok(serde_json::to_string_pretty(&json!({
+        "ok": true,
+        "mode": "patch",
+        "changed_files": applied.changes.iter().map(file_change_summary).collect::<Vec<_>>()
+    }))?)
 }
 
 /// 校验编辑文件参数只使用一种模式。
@@ -105,7 +148,7 @@ fn validate_edit_file_mode(args: &Value) -> Result<()> {
 ///
 /// 返回:
 /// - JSON 格式写入结果
-fn write_file(args: Value) -> Result<String> {
+pub(super) fn write_file(args: Value) -> Result<String> {
     let path = path_arg(&args, "path")?;
     let content = args
         .get("content")
@@ -136,7 +179,7 @@ fn write_file(args: Value) -> Result<String> {
 ///
 /// 返回:
 /// - JSON 格式编辑结果
-fn edit_file_lines(args: Value) -> Result<String> {
+pub(super) fn edit_file_lines(args: Value) -> Result<String> {
     let path = path_arg(&args, "path")?;
     ensure_editable_file_path(&path)?;
     let start_line = args
@@ -358,6 +401,48 @@ mod tests {
 
         assert_eq!(data["changed_files"][0]["action"], "Edited");
         assert_eq!(std::fs::read_to_string(path).unwrap(), "ONE\ntwo\n");
+    }
+
+    #[test]
+    fn edit_file_ignores_null_fields_from_other_modes() {
+        let cwd = crate::runtime_cwd::current_dir().unwrap();
+        let temp = tempfile::tempdir_in(cwd).unwrap();
+        let path = temp.path().join("sample.txt");
+        std::fs::write(&path, "one\n").unwrap();
+        let patch = format!(
+            "*** Begin Patch\n*** Update File: {}\n@@\n-one\n+ONE\n*** End Patch",
+            path.display()
+        );
+
+        edit_file(json!({
+            "patch": patch,
+            "path": null,
+            "content": null,
+            "start_line": null,
+            "end_line": null,
+            "replacement": null
+        }))
+        .unwrap();
+
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "ONE\n");
+    }
+
+    #[test]
+    fn edit_file_accepts_string_line_numbers() {
+        let cwd = crate::runtime_cwd::current_dir().unwrap();
+        let temp = tempfile::tempdir_in(cwd).unwrap();
+        let path = temp.path().join("sample.txt");
+        std::fs::write(&path, "one\ntwo\n").unwrap();
+
+        edit_file(json!({
+            "path": path.display().to_string(),
+            "start_line": "2",
+            "end_line": "2",
+            "replacement": "TWO"
+        }))
+        .unwrap();
+
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "one\nTWO\n");
     }
 
     #[test]

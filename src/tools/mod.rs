@@ -11,6 +11,7 @@ mod deepseek_status;
 mod default_tools;
 mod diagnostics;
 mod edit_file;
+mod edit_file_tools;
 pub(crate) mod edit_patch;
 mod exchange_rate;
 mod fcitx_wiki;
@@ -37,9 +38,9 @@ mod subagent_persistence;
 mod subagent_reminder;
 mod subagent_runner;
 mod subagent_runtime;
-mod subagent_worktree;
 pub(crate) mod subagent_state;
 pub(crate) mod subagent_timeline;
+mod subagent_worktree;
 pub(crate) mod todo;
 mod trash_path;
 mod vision;
@@ -70,6 +71,12 @@ pub fn readable_tool_name(name: &str) -> &str {
         "cron" => "定时任务",
         "read_file" => "读取文件",
         "edit_file" => "编辑文件",
+        "apply_patch" => "应用补丁",
+        "write_file" => "写入文件",
+        "replace_file_lines" => "替换文件行",
+        "create_goal" => "创建目标",
+        "get_goal" => "查看目标",
+        "update_goal" => "更新目标",
         "list_directory" => "列目录",
         "create_directory" => "创建目录",
         "trash_path" => "移入回收站",

@@ -210,6 +210,27 @@ export function useRunStream(
     dispatch({ type: "start", run, sessionId: targetSessionId, userInput: input, imageUrls });
   };
 
+  /**
+   * 启动当前会话的 Goal 自动续轮。
+   *
+   * @param targetSessionId 目标会话标识
+   * @param mode 当前运行模式
+   * @param selection 可选模型选择
+   * @param thinkingLevel 可选思考等级
+   * @param agentId 可选智能体标识
+   * @returns 启动完成后的 Promise
+   */
+  const startGoal = async (
+    targetSessionId: string,
+    mode: RunMode,
+    selection?: RunModelSelection,
+    thinkingLevel?: ThinkingLevel,
+    agentId?: string
+  ) => {
+    const run = await api.runs.startGoal(targetSessionId, mode, selection, thinkingLevel, agentId);
+    dispatch({ type: "start", run, sessionId: targetSessionId, userInput: "" });
+  };
+
   /** 使用当前会话模型选择启动一次手动压缩。 */
   const startCompaction = async (
     targetSessionId: string,
@@ -224,5 +245,5 @@ export function useRunStream(
     await api.runs.stop(runId);
   };
 
-  return { states: state.runs, start, startCompaction, stop, reset: () => dispatch({ type: "reset" }) };
+  return { states: state.runs, start, startGoal, startCompaction, stop, reset: () => dispatch({ type: "reset" }) };
 }

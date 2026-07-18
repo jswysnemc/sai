@@ -1,6 +1,7 @@
 pub mod catalog;
 
 pub mod agent;
+mod goal;
 mod help;
 mod model;
 mod parser;
@@ -8,6 +9,7 @@ mod reset;
 mod session;
 
 pub use agent::run_agent_command;
+pub use goal::{execute_goal_command, GoalCommand};
 pub use help::help_text;
 pub use model::run_model_command;
 pub use parser::{parse_control_command, ControlCommand, ControlSurface};

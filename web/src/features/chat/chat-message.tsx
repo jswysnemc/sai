@@ -45,7 +45,9 @@ export function HistoryTurn({
   const { t } = useI18n();
   return (
     <>
-      <UserMessageBubble content={turn.user.content} timestamp={turn.user.timestamp} onRetry={onRetry} />
+      {!turn.automatic && (
+        <UserMessageBubble content={turn.user.content} timestamp={turn.user.timestamp} onRetry={onRetry} />
+      )}
       <article className="message assistant-message">
         <MessageParts parts={historyTurnParts(turn)} />
         {turn.status === "interrupted" && (

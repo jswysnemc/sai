@@ -27,6 +27,7 @@ pub(crate) struct UserInputSubmission {
     pub(crate) turn_id: Option<String>,
     pub(crate) extra_system_prompt: Option<String>,
     pub(crate) mode: AgentMode,
+    pub(crate) goal_continuation: bool,
 }
 
 impl UserInputSubmission {
@@ -45,6 +46,7 @@ impl UserInputSubmission {
             turn_id: None,
             extra_system_prompt: None,
             mode,
+            goal_continuation: false,
         }
     }
 
@@ -93,6 +95,15 @@ impl UserInputSubmission {
     /// - 更新后的用户输入 submission
     pub(crate) fn with_extra_system_prompt(mut self, prompt: impl Into<String>) -> Self {
         self.extra_system_prompt = Some(prompt.into());
+        self
+    }
+
+    /// 标记输入为内部 Goal 自动续轮。
+    ///
+    /// 返回:
+    /// - 更新后的用户输入 submission
+    pub(crate) fn with_goal_continuation(mut self) -> Self {
+        self.goal_continuation = true;
         self
     }
 }

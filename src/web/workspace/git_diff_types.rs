@@ -156,3 +156,65 @@ pub(super) struct GitOutput {
     pub(super) stdout: String,
     pub(super) stderr: String,
 }
+
+/// Git 操作的内部借用参数。
+pub(crate) struct GitOperationRequest<'a> {
+    pub(crate) action: &'a str,
+    pub(crate) path: Option<&'a str>,
+    pub(crate) old_path: Option<&'a str>,
+    pub(crate) message: Option<&'a str>,
+    pub(crate) remote_url: Option<&'a str>,
+    pub(crate) branch: Option<&'a str>,
+    pub(crate) branch_kind: Option<&'a str>,
+    pub(crate) new_branch: Option<&'a str>,
+    pub(crate) start_point: Option<&'a str>,
+    pub(crate) force: bool,
+}
+
+impl<'a> GitOperationRequest<'a> {
+    /// 创建仅包含操作名称的参数。
+    ///
+    /// 参数:
+    /// - `action`: Git 操作名称
+    ///
+    /// 返回:
+    /// - 空选项的操作参数
+    pub(crate) fn new(action: &'a str) -> Self {
+        Self {
+            action,
+            path: None,
+            old_path: None,
+            message: None,
+            remote_url: None,
+            branch: None,
+            branch_kind: None,
+            new_branch: None,
+            start_point: None,
+            force: false,
+        }
+    }
+
+    /// 附加仓库相对路径。
+    ///
+    /// 参数:
+    /// - `path`: 可选路径
+    ///
+    /// 返回:
+    /// - 更新后的操作参数
+    pub(crate) fn with_path(mut self, path: &'a str) -> Self {
+        self.path = Some(path);
+        self
+    }
+
+    /// 附加可选提交说明。
+    ///
+    /// 参数:
+    /// - `message`: 可选说明
+    ///
+    /// 返回:
+    /// - 更新后的操作参数
+    pub(crate) fn with_message(mut self, message: Option<&'a str>) -> Self {
+        self.message = message;
+        self
+    }
+}

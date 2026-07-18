@@ -46,6 +46,7 @@ pub struct SessionTimelineTurn {
     pub user: TimelineMessage,
     pub assistant: TimelineMessage,
     pub tools: Vec<TimelineToolEntry>,
+    pub automatic: bool,
 }
 
 /// 会话时间线中展示的最新压缩摘要。
@@ -113,6 +114,7 @@ impl StateStore {
                         permission: None,
                     })
                     .collect();
+                let automatic = crate::goal::is_continuation_input(&turn.user_content);
                 Ok(SessionTimelineTurn {
                     turn_id: turn.turn_id,
                     seq: turn.seq,
@@ -128,6 +130,7 @@ impl StateStore {
                         reasoning: turn.assistant_reasoning,
                     },
                     tools,
+                    automatic,
                 })
             })
             .collect()
@@ -260,5 +263,23 @@ mod tests {
         assert_eq!(timeline[0].tools.len(), 1);
         assert_eq!(timeline[0].tools[0].name, "run_command");
         assert_eq!(timeline[0].tools[0].output, "ok");
+    }
+
+    #[test]
+    fn marks_goal_continuation_turns_as_automatic() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
+        store
+            .start_turn(
+                "turn_goal",
+                "<goal-continuation goal_id=\"goal_test\">continue</goal-continuation>",
+            )
+            .unwrap();
+        store.complete_turn("turn_goal", "progress", None).unwrap();
+
+        let timeline = store.session_timeline(10).unwrap();
+
+        assert_eq!(timeline.len(), 1);
+        assert!(timeline[0].automatic);
     }
 }

@@ -4,6 +4,7 @@ mod config;
 mod cron_jobs;
 mod gateway_weixin_login;
 mod gateways;
+mod goals;
 mod health;
 mod mcp_config;
 mod memory;
@@ -50,6 +51,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(permissions::routes())
         .merge(questions::routes())
         .merge(gateways::routes())
+        .merge(goals::routes())
         .merge(gateway_weixin_login::routes())
         .merge(sessions::routes())
         .merge(runs::routes())

@@ -188,8 +188,9 @@ mod tests {
     fn records_subagent_started_runtime_process() {
         let temp = tempfile::tempdir().unwrap();
         let paths = test_paths(temp.path().to_path_buf());
+        let session_id = StateStore::new(&paths).unwrap().session_id().to_string();
 
-        record_subagent_started(&paths, "default", &subagent("running")).unwrap();
+        record_subagent_started(&paths, &session_id, &subagent("running")).unwrap();
 
         let db_path = crate::state::active_state_dir(&paths)
             .unwrap()

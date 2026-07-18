@@ -56,8 +56,15 @@ struct GitActionRequest {
 struct GitOpRequest {
     action: String,
     path: Option<String>,
+    old_path: Option<String>,
     message: Option<String>,
     remote_url: Option<String>,
+    branch: Option<String>,
+    branch_kind: Option<String>,
+    new_branch: Option<String>,
+    start_point: Option<String>,
+    #[serde(default)]
+    force: bool,
 }
 
 #[derive(Deserialize)]
@@ -322,10 +329,18 @@ async fn git_op(
     let active = state.workspaces.active().map_err(WebError::from)?;
     let result = workspace::git_op(
         std::path::Path::new(&active.path),
-        &request.action,
-        request.path.as_deref(),
-        request.message.as_deref(),
-        request.remote_url.as_deref(),
+        workspace::GitOperationRequest {
+            action: &request.action,
+            path: request.path.as_deref(),
+            old_path: request.old_path.as_deref(),
+            message: request.message.as_deref(),
+            remote_url: request.remote_url.as_deref(),
+            branch: request.branch.as_deref(),
+            branch_kind: request.branch_kind.as_deref(),
+            new_branch: request.new_branch.as_deref(),
+            start_point: request.start_point.as_deref(),
+            force: request.force,
+        },
     )
     .await
     .map_err(|error| WebError::bad_request(error.to_string()))?;

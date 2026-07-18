@@ -8,13 +8,25 @@ use types::GitOutput;
 pub(crate) use types::{
     GitBranch, GitBranchesResponse, GitCommitDetails, GitCommitDetailsResponse, GitCommitFile,
     GitCommitSummary, GitDiff, GitDiffResponse, GitDirtyCounts, GitFileStatus, GitLogResponse,
-    GitOperationResponse, GitRepositoryState, GitStatusEntry,
+    GitOperationRequest, GitOperationResponse, GitRepositoryState, GitStatusEntry,
 };
 
 #[path = "git_diff_support.rs"]
 mod support;
 
+#[path = "git_process.rs"]
+mod process;
+
+#[path = "git_branches.rs"]
+mod branches;
+
+use branches::*;
+use process::*;
 use support::*;
+
+#[cfg(test)]
+#[path = "git_tests.rs"]
+mod tests;
 
 const GIT_DIFF_MAX_BYTES: usize = 512 * 1024;
 const GIT_LOG_DEFAULT_LIMIT: usize = 50;
@@ -64,19 +76,19 @@ pub(crate) async fn apply_git_action(
         }
         "stage" => {
             if paths.is_empty() {
-                git_op(root, "stage_all", None, None, None).await?;
+                git_op(root, GitOperationRequest::new("stage_all")).await?;
             } else {
                 for path in paths {
-                    git_op(root, "stage", Some(path.as_str()), None, None).await?;
+                    git_op(root, GitOperationRequest::new("stage").with_path(path)).await?;
                 }
             }
         }
         "unstage" => {
             if paths.is_empty() {
-                git_op(root, "unstage_all", None, None, None).await?;
+                git_op(root, GitOperationRequest::new("unstage_all")).await?;
             } else {
                 for path in paths {
-                    git_op(root, "unstage", Some(path.as_str()), None, None).await?;
+                    git_op(root, GitOperationRequest::new("unstage").with_path(path)).await?;
                 }
             }
         }
@@ -85,11 +97,15 @@ pub(crate) async fn apply_git_action(
                 bail!("discard requires at least one path");
             }
             for path in paths {
-                git_op(root, "discard", Some(path.as_str()), None, None).await?;
+                git_op(root, GitOperationRequest::new("discard").with_path(path)).await?;
             }
         }
         "commit" => {
-            git_op(root, "commit", None, message, None).await?;
+            git_op(
+                root,
+                GitOperationRequest::new("commit").with_message(message),
+            )
+            .await?;
         }
         _ => bail!("unsupported git action: {action}"),
     }
@@ -519,13 +535,11 @@ pub(crate) async fn git_commit_diff(
 /// 执行写操作。
 pub(crate) async fn git_op(
     root: &Path,
-    action: &str,
-    path: Option<&str>,
-    message: Option<&str>,
-    remote_url: Option<&str>,
+    request: GitOperationRequest<'_>,
 ) -> Result<GitOperationResponse> {
-    if action == "init" {
-        let branch = message
+    if request.action == "init" {
+        let branch = request
+            .message
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .unwrap_or("main");
@@ -535,14 +549,14 @@ pub(crate) async fn git_op(
 
     let state = ensure_ready(root).await?;
     let repo = Path::new(&state.repo_root);
-    let result = match action {
+    let result = match request.action {
         "stage" => {
-            let path = validate_repo_relative_path(path.unwrap_or_default())?;
+            let path = validate_repo_relative_path(request.path.unwrap_or_default())?;
             git_success(repo, &["add", "--", path.as_str()]).await
         }
         "stage_all" => git_success(repo, &["add", "-A", "--"]).await,
         "unstage" => {
-            let path = validate_repo_relative_path(path.unwrap_or_default())?;
+            let path = validate_repo_relative_path(request.path.unwrap_or_default())?;
             if !ref_exists(repo, "HEAD").await {
                 git_success(repo, &["rm", "--cached", "--", path.as_str()]).await
             } else {
@@ -561,7 +575,12 @@ pub(crate) async fn git_op(
             }
         }
         "discard" => {
-            let path = validate_repo_relative_path(path.unwrap_or_default())?;
+            let path = validate_repo_relative_path(request.path.unwrap_or_default())?;
+            let old_path = request
+                .old_path
+                .filter(|value| !value.trim().is_empty())
+                .map(validate_repo_relative_path)
+                .transpose()?;
             let is_untracked = state
                 .entries
                 .iter()
@@ -571,11 +590,13 @@ pub(crate) async fn git_op(
             } else if !ref_exists(repo, "HEAD").await {
                 git_success(repo, &["rm", "-f", "--", path.as_str()]).await
             } else {
-                git_success(
-                    repo,
-                    &["restore", "--staged", "--worktree", "--", path.as_str()],
-                )
-                .await
+                let mut args = vec!["restore", "--staged", "--worktree", "--", path.as_str()];
+                if let Some(old_path) = old_path.as_deref() {
+                    if old_path != path {
+                        args.push(old_path);
+                    }
+                }
+                git_success(repo, &args).await
             }
         }
         "discard_all" => {
@@ -595,7 +616,8 @@ pub(crate) async fn git_op(
             }
         }
         "commit" => {
-            let message = message
+            let message = request
+                .message
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| anyhow::anyhow!("commit message cannot be empty"))?;
@@ -614,7 +636,8 @@ pub(crate) async fn git_op(
         "pull" => pull_repo(repo, &state).await,
         "push" => push_repo(repo, &state).await,
         "set_remote" => {
-            let remote_url = remote_url
+            let remote_url = request
+                .remote_url
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| anyhow::anyhow!("remote URL cannot be empty"))?;
@@ -624,28 +647,42 @@ pub(crate) async fn git_op(
                 git_success(repo, &["remote", "add", "origin", remote_url]).await
             }
         }
-        "switch_branch" => switch_branch(repo, message).await,
-        "create_branch" => {
-            let branch = message
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| anyhow::anyhow!("branch name cannot be empty"))?;
-            git_success(repo, &["switch", "-c", branch]).await
+        "switch_branch" => {
+            switch_branch(
+                repo,
+                request.branch.or(request.message),
+                request.branch_kind,
+            )
+            .await
         }
-        "add_to_gitignore" => add_to_gitignore(repo, path).await,
+        "create_branch" => {
+            create_branch(
+                repo,
+                request.branch.or(request.message),
+                request.start_point,
+            )
+            .await
+        }
+        "rename_branch" => rename_branch(repo, request.branch, request.new_branch).await,
+        "delete_branch" => delete_branch(repo, &state, request.branch, request.force).await,
+        "add_to_gitignore" => add_to_gitignore(repo, request.path).await,
         "stash_push" => {
             let mut args = vec!["stash", "push", "--include-untracked"];
             let owned;
-            if let Some(value) = message.map(str::trim).filter(|value| !value.is_empty()) {
+            if let Some(value) = request
+                .message
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
                 owned = value.to_string();
                 args.extend(["-m", owned.as_str()]);
             }
             git_success(repo, &args).await
         }
         "stash_pop" => git_success(repo, &["stash", "pop"]).await,
-        _ => bail!("unsupported git action: {action}"),
+        _ => bail!("unsupported git action: {}", request.action),
     };
-    let message = match action {
+    let message = match request.action {
         "stage" | "stage_all" => "files staged",
         "unstage" | "unstage_all" => "files unstaged",
         "discard" | "discard_all" => "changes discarded",
@@ -656,6 +693,8 @@ pub(crate) async fn git_op(
         "set_remote" => "remote repository saved",
         "switch_branch" => "branch switched",
         "create_branch" => "branch created",
+        "rename_branch" => "branch renamed",
+        "delete_branch" => "branch deleted",
         "add_to_gitignore" => "path added to .gitignore",
         "stash_push" => "changes stashed",
         "stash_pop" => "stash popped",

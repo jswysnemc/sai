@@ -1,6 +1,8 @@
 use crate::i18n::text as t;
 use anyhow::{bail, Result};
 
+use super::GoalCommand;
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ControlSurface {
     Repl,
@@ -28,6 +30,7 @@ pub enum ControlCommand {
     Agent {
         selection: Option<usize>,
     },
+    Goal(GoalCommand),
 }
 
 /// 解析 REPL 或网关控制命令。
@@ -86,6 +89,11 @@ pub fn parse_control_command(
         return Ok(Some(ControlCommand::Agent {
             selection: parse_model_args(rest)?,
         }));
+    }
+    if matches_surface_alias(&name, surface, "goal", &["目标"]) {
+        return super::goal::parse_goal_command(rest)
+            .map(ControlCommand::Goal)
+            .map(Some);
     }
     Ok(None)
 }
@@ -228,6 +236,25 @@ mod tests {
         assert_eq!(
             parse_control_command("/代理 1", ControlSurface::Gateway).unwrap(),
             Some(ControlCommand::Agent { selection: Some(1) })
+        );
+    }
+
+    #[test]
+    fn parses_goal_commands_and_budget() {
+        assert_eq!(
+            parse_control_command(
+                "/goal finish the migration --tokens 20000",
+                ControlSurface::Repl
+            )
+            .unwrap(),
+            Some(ControlCommand::Goal(GoalCommand::Set {
+                objective: "finish the migration".to_string(),
+                token_budget: Some(20_000),
+            }))
+        );
+        assert_eq!(
+            parse_control_command("/goal pause", ControlSurface::Repl).unwrap(),
+            Some(ControlCommand::Goal(GoalCommand::Pause))
         );
     }
 

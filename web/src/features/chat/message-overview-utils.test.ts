@@ -19,6 +19,7 @@ function timelineTurn(patch: Partial<SessionTimelineTurn> = {}): SessionTimeline
     turn_id: "turn-1",
     seq: 1,
     status: "completed",
+    automatic: false,
     user: { timestamp: "2026-07-11T00:00:00Z", content: "修复 `src/chat-page.tsx` 的布局", reasoning: null },
     assistant: {
       timestamp: "2026-07-11T00:01:00Z",

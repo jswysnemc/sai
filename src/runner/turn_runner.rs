@@ -2,6 +2,7 @@ use super::{RunnerEvent, RunnerEventSink, UserInputSubmission};
 use crate::agent::Agent;
 use crate::llm::ChatResult;
 use anyhow::Result;
+use std::time::Instant;
 
 /// 单轮 runner，当前只包装现有 Agent 单轮调用。
 pub(crate) struct TurnRunner<'agent> {
@@ -36,16 +37,76 @@ impl<'agent> TurnRunner<'agent> {
     where
         S: RunnerEventSink,
     {
-        let result = self
-            .agent
-            .chat_stream_with_images(
-                &input.input,
-                input.image_urls.clone(),
-                input.turn_id.clone(),
-                |event| sink.on_runner_event(RunnerEvent::Agent(event)),
-            )
-            .await?;
-        sink.on_runner_event(RunnerEvent::Completed(result.clone()))?;
-        Ok(result)
+        let mut current = input.clone();
+        loop {
+            // 1. 内部续轮每次读取最新目标，保证暂停、编辑和预算状态立即生效
+            if current.goal_continuation {
+                let goal = self
+                    .agent
+                    .state()
+                    .goal()?
+                    .filter(|goal| goal.status.is_active())
+                    .ok_or_else(|| anyhow::anyhow!("no active goal to continue"))?;
+                current.input = crate::goal::continuation_prompt(&goal);
+                current.image_urls.clear();
+                current.turn_id = None;
+            }
+            let active_goal = self
+                .agent
+                .state()
+                .goal()?
+                .filter(|goal| goal.status.is_active());
+            let started = Instant::now();
+            let result = self
+                .agent
+                .chat_stream_with_images(
+                    &current.input,
+                    current.image_urls.clone(),
+                    current.turn_id.clone(),
+                    |event| sink.on_runner_event(RunnerEvent::Agent(event)),
+                )
+                .await;
+            let elapsed = started.elapsed().as_secs().max(1);
+            let result = match result {
+                Ok(result) => result,
+                Err(error) => {
+                    if let Some(goal) = active_goal {
+                        let _ = self
+                            .agent
+                            .state()
+                            .account_goal_progress(&goal.id, 0, elapsed);
+                        let _ = self
+                            .agent
+                            .state()
+                            .set_goal_status(crate::goal::GoalStatus::Blocked);
+                    }
+                    return Err(error);
+                }
+            };
+            // 2. 只把本轮开始时已经活动的目标计入使用量，避免倒算创建目标之前的消耗
+            if let Some(goal) = active_goal {
+                let tokens = result
+                    .usage
+                    .as_ref()
+                    .map(|usage| usage.total_tokens)
+                    .unwrap_or_default();
+                self.agent
+                    .state()
+                    .account_goal_progress(&goal.id, tokens, elapsed)?;
+            }
+            // 3. 活动目标继续下一轮；其他状态结束当前 runner
+            if self
+                .agent
+                .state()
+                .goal()?
+                .is_some_and(|goal| goal.status.is_active())
+            {
+                current =
+                    UserInputSubmission::new(String::new(), input.mode).with_goal_continuation();
+                continue;
+            }
+            sink.on_runner_event(RunnerEvent::Completed(result.clone()))?;
+            return Ok(result);
+        }
     }
 }
