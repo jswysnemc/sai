@@ -107,7 +107,6 @@ export function ChatComposer(props: ChatComposerProps) {
         {git.data?.status === "ready" && git.data.head && <span className="composer-context-chip" title={git.data.upstream || git.data.head}><GitBranch size={13}/><span>{git.data.head}</span></span>}
         <SystemUsage selection={props.selection} onCompact={props.onCompact} compactDisabled={props.running} />
         <AgentSelector choices={props.agentChoices} selection={props.agentSelection} loading={props.agentLoading} disabled={props.running} onSelect={props.onAgentSelect} />
-        <TodoMarkdownView sessionId={props.sessionId} compact />
         <PermissionAuditDialog sessionId={props.sessionId} />
         <Button className="composer-rail-button" onClick={props.onUndo} disabled={!props.undoAvailable || props.running} title={t("Undo the last turn and its worktree changes", "撤销最后一轮及其工作树修改")} aria-label={t("Undo last turn", "撤销最后一轮")}><Undo2 size={14} /></Button>
         <div className="composer-mode">
@@ -132,6 +131,7 @@ export function ChatComposer(props: ChatComposerProps) {
             <span className="composer-activity-badge">{runtimeActivity.runningSubagents}</span>
           </button>
         )}
+        <TodoMarkdownView sessionId={props.sessionId} compact />
       </div>
       <form className="composer" onSubmit={handleSubmit}>
         <AttachmentStrip attachments={props.attachments} onRemove={props.onRemoveAttachment} />

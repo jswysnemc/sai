@@ -3,7 +3,7 @@ import { Ban, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Circ
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../api/client";
-import type { TodoHistoryBatch, TodoItem, TodoStatus } from "../../api/contracts";
+import type { TodoHistoryBatch, TodoItem, TodoSnapshot, TodoStatus } from "../../api/contracts";
 import { useAnchoredPopover } from "../../shared/ui/popover/use-anchored-popover";
 import { summarizeTodos } from "./todo-summary";
 import "./todo-markdown.css";
@@ -50,7 +50,17 @@ export function TodoMarkdownView({ sessionId, compact = false }: { sessionId?: s
   });
   const query = useQuery({
     queryKey: ["todos", sessionId],
-    queryFn: api.todos.list,
+    queryFn: async () => {
+      const data = await api.todos.list() as TodoSnapshot | TodoItem[];
+      // 兼容旧接口（直接返回数组）与新接口（items + history）
+      if (Array.isArray(data)) {
+        return { items: data, history: [] as TodoHistoryBatch[] };
+      }
+      return {
+        items: Array.isArray(data.items) ? data.items : [],
+        history: Array.isArray(data.history) ? data.history : []
+      };
+    },
     enabled: Boolean(sessionId),
     // 运行中更快刷新状态
     refetchInterval: open ? 1000 : 1500
@@ -163,7 +173,7 @@ export function TodoMarkdownView({ sessionId, compact = false }: { sessionId?: s
           </span>
           <span className="todo-trigger-body">
             <span className="todo-trigger-line">
-              <strong>{summary.activeText || plan.label || t("Plan", "计划")}</strong>
+              <strong>{summary.activeText || (summary.allDone ? t("All tasks completed", "全部完成") : plan.label) || t("Plan", "计划")}</strong>
               <span className="todo-trigger-count">
                 {summary.completed}/{summary.total}
                 {summary.allDone ? ` · ${t("Done", "已完成")}` : ""}
@@ -218,10 +228,12 @@ function buildPlans(
   // history 文件从旧到新；界面从新到旧浏览
   for (let index = history.length - 1; index >= 0; index -= 1) {
     const batch = history[index];
-    if (!batch.items.length) continue;
+    if (!batch?.items?.length) continue;
     plans.push({
       key: `history:${batch.archived_at}:${index}`,
-      label: t("Archived plan", "历史计划"),
+      label: items.length === 0 && index === history.length - 1
+        ? t("Latest plan", "最近计划")
+        : t("Archived plan", "历史计划"),
       items: batch.items,
       archived: true,
       archivedAt: batch.archived_at

@@ -498,3 +498,134 @@
   display: grid;
   min-height: calc(100vh - 160px);
 }
+
+
+.memory-storage-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.memory-storage-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--technical-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+.memory-storage-card header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.memory-storage-icon {
+  display: grid;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--signal-soft);
+  color: var(--signal);
+}
+
+.memory-storage-card strong {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.memory-storage-card small {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+}
+
+.memory-storage-card p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.75rem;
+}
+
+.memory-storage-card code,
+.memory-md-path {
+  display: block;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font: 400 0.625rem/1.3 var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-search-panel {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 10px;
+  border: 1px solid var(--technical-border);
+  border-radius: 8px;
+}
+
+.memory-search-meta {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.memory-search-group h4 {
+  margin: 0 0 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.memory-search-group ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memory-search-group li {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+.memory-search-score {
+  display: grid;
+  place-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  background: var(--signal-soft);
+  color: var(--signal);
+  font: 500 0.625rem var(--font-code);
+}
+
+.memory-search-group p {
+  margin: 0 0 2px;
+  font-size: 0.75rem;
+}
+
+.memory-search-group small {
+  color: var(--ink-soft);
+  font-size: 0.625rem;
+}
+
+.memory-item .memory-md-path {
+  margin-top: 4px;
+}
+
+@media (max-width: 860px) {
+  .memory-storage-grid {
+    grid-template-columns: 1fr;
+  }
+}

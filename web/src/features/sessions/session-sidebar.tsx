@@ -12,6 +12,7 @@ import { ActiveAgentIndicator } from "./active-agent-indicator";
 import { useSessionTree } from "./use-session-tree";
 import { LocaleSwitcher } from "../i18n/locale-switcher";
 import { useI18n } from "../i18n/use-i18n";
+import { formatRelativeTime } from "../../shared/format-relative-time";
 import "./session-sidebar.css";
 
 type SessionSidebarProps = {
@@ -43,6 +44,12 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [navigationError, setNavigationError] = useState<Error | null>(null);
+  // 相对时间每分钟刷新一次
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTick(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const appMenuRef = useRef<HTMLDivElement | null>(null);
   const { tree, expanded, runningSessions, toggleWorkspace } = useSessionTree();
@@ -397,7 +404,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
                   }
                   void openSession(workspace.workspace_id, session.id, workspace.active, session.active);
                 }}>
-                  <span><strong>{session.title}</strong><small>{new Date(session.updated_at).toLocaleString(locale)}</small></span>
+                  <span><strong>{session.title}</strong><small title={new Date(session.updated_at).toLocaleString(locale)}>{formatRelativeTime(session.updated_at, locale, nowTick)}</small></span>
                   {running && <ActiveAgentIndicator />}
                 </button>
               )}

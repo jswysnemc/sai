@@ -24,6 +24,8 @@ import type {
   PromptSummary,
   PermissionAuditEvent,
   MemoryEntry,
+  MemorySearchResult,
+  MemoryStats,
   PermissionRequest,
   ProviderConfig,
   ProviderModelsResponse,
@@ -173,10 +175,10 @@ export const api = {
   },
 
   memory: {
-    stats: () => apiRequest<Record<string, unknown>>("/api/memory/stats"),
+    stats: () => apiRequest<MemoryStats>("/api/memory/stats"),
     list: (limit = 100) => apiRequest<{ facts: MemoryEntry[]; episodes: MemoryEntry[] }>(`/api/memory/entries?limit=${limit}`),
     search: (q: string, limit = 20, forgotten = false) =>
-      apiRequest<Record<string, unknown>>(`/api/memory/search?q=${encodeURIComponent(q)}&limit=${limit}&forgotten=${forgotten}`),
+      apiRequest<MemorySearchResult>(`/api/memory/search?q=${encodeURIComponent(q)}&limit=${limit}&forgotten=${forgotten}`),
     remember: (content: string, source = "web") =>
       apiRequest<{ ok: boolean; id: number }>("/api/memory/entries", {
         method: "POST",

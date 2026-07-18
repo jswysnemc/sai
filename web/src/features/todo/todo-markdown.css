@@ -158,7 +158,7 @@
 }
 
 .todo-markdown-view.compact .todo-markdown-bar {
-  max-width: min(240px, 100%);
+  max-width: min(260px, 100%);
 }
 
 .todo-markdown-view.compact .todo-plan-nav {
@@ -168,7 +168,7 @@
 
 .todo-markdown-view.compact .todo-markdown-trigger {
   min-width: 0;
-  max-width: 180px;
+  max-width: 220px;
   min-height: 28px;
   gap: 5px;
   padding: 0 6px;
@@ -290,4 +290,24 @@
 
 .todo-plan-switcher button:disabled {
   opacity: 0.28;
+}
+
+
+/* 工具条内紧凑芯片：不占满宽度，清单走 Portal 弹层 */
+.composer-context-strip > .todo-markdown-view.compact {
+  flex: 0 1 auto;
+  max-width: min(280px, 42vw);
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.composer-context-strip > .todo-markdown-view.compact .todo-markdown-bar {
+  max-width: 100%;
+}
+
+.composer-context-strip > .todo-markdown-view.compact.is-done .todo-trigger-count {
+  color: var(--signal);
 }

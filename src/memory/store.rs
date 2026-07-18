@@ -206,27 +206,6 @@ impl MemoryStore {
         Ok(())
     }
 
-    pub fn stats(&self) -> Result<Value> {
-        self.init()?;
-        self.prune_missing_skill_records()?;
-        let data = self.data_conn()?;
-        let state = self.state_conn()?;
-        Ok(json!({
-            "ok": true,
-            "data_db": self.data_db.display().to_string(),
-            "state_db": self.state_db.display().to_string(),
-            "files_dir": self.files_dir.display().to_string(),
-            "skills_dir": self.skills_dir.display().to_string(),
-            "facts": count_rows(&data, "facts")?,
-            "episodes": count_rows(&data, "episodes")?,
-            "unprocessed_pending_events": count_where(&data, "pending_events", "processed_at IS NULL")?,
-            "total_pending_events": count_rows(&data, "pending_events")?,
-            "skill_records": count_rows(&data, "skill_records")?,
-            "skill_dirs": count_skill_dirs(&self.skills_dir)?,
-            "evicted_turns": count_rows(&state, "evicted_turns")?,
-        }))
-    }
-
     /// 列出事实与往事，供记忆管理界面使用。
     pub fn list_entries(&self, limit: usize) -> Result<Value> {
         self.init()?;
@@ -278,6 +257,9 @@ impl MemoryStore {
             for row in rows {
                 episodes.push(row?);
             }
+        }
+        for entry in facts.iter_mut().chain(episodes.iter_mut()) {
+            attach_markdown_meta(entry, &self.files_dir);
         }
         Ok(json!({ "ok": true, "facts": facts, "episodes": episodes }))
     }
@@ -362,12 +344,18 @@ impl MemoryStore {
         })?;
         for row in rows {
             let (id, user, assistant, created_at) = row?;
-            let content = format!(
-                "{}，我被要求：{}；结果：{}",
-                created_at,
-                truncate_chars(&compact_line(&user), 260),
-                truncate_chars(&compact_line(&assistant), 520)
-            );
+            // 1. 提炼日记摘要；寒暄/空内容不入库
+            let content = match summarize_episode(&created_at, &user, &assistant) {
+                Some(value) => value,
+                None => {
+                    conn.execute(
+                        "UPDATE pending_events SET processed_at=?1 WHERE id=?2",
+                        params![now(), id],
+                    )?;
+                    continue;
+                }
+            };
+            // 2. 写入 episodes + FTS + Markdown 源文件
             conn.execute(
                 "INSERT INTO episodes (content, source, status, strength, recall_count, created_at, updated_at) VALUES (?1, 'episode', 'active', 1.0, 0, ?2, ?2)",
                 params![content, created_at],

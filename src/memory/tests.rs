@@ -65,18 +65,54 @@ mod tests {
         store
             .remember_fact("Niri 输入法需要 XMODIFIERS", "test")
             .unwrap();
-        store.remember_pending_event("你好", "在呢").unwrap();
+        store
+            .remember_pending_event("完成提交", "提交完成。提交：3a85e86。工作区已干净。")
+            .unwrap();
         store.flush_pending_events().unwrap();
 
-        let before = store.recall_memories("你好 XMODIFIERS", 5, false).unwrap();
+        let before = store.recall_memories("提交 XMODIFIERS", 5, false).unwrap();
         assert!(!before["facts"].as_array().unwrap().is_empty());
         assert!(!before["episodes"].as_array().unwrap().is_empty());
 
         store.reset_all(false).unwrap();
 
-        let after = store.recall_memories("你好 XMODIFIERS", 5, false).unwrap();
+        let after = store.recall_memories("提交 XMODIFIERS", 5, false).unwrap();
         assert!(after["facts"].as_array().unwrap().is_empty());
         assert!(after["episodes"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn distills_pending_events_into_short_episodes() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = AppConfig::default();
+        let paths = test_paths(&temp);
+        let store = MemoryStore::new(&config, &paths);
+        store
+            .remember_pending_event(
+                "在某轮更改中,让todo在输入框上面常驻显示",
+                "## 原因\n\n1. 位置不对\n2. 完成后不显示\n\n```\nnpm run build\n```\n\n已挪到输入框正上方并重建前端。",
+            )
+            .unwrap();
+        store.flush_pending_events().unwrap();
+        let result = store.recall_past_events("todo 输入框", 5).unwrap();
+        let episodes = result["episodes"].as_array().unwrap();
+        assert_eq!(episodes.len(), 1);
+        let content = episodes[0]["content"].as_str().unwrap();
+        assert!(content.contains("todo") || content.contains("输入框"));
+        assert!(!content.contains("npm run build"));
+        assert!(content.chars().count() < 320);
+    }
+
+    #[test]
+    fn skips_greeting_pending_events() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = AppConfig::default();
+        let paths = test_paths(&temp);
+        let store = MemoryStore::new(&config, &paths);
+        store.remember_pending_event("你好", "在呢").unwrap();
+        store.flush_pending_events().unwrap();
+        let result = store.recall_past_events("你好", 5).unwrap();
+        assert!(result["episodes"].as_array().unwrap().is_empty());
     }
 
     #[test]

@@ -355,6 +355,61 @@ fn count_skill_dirs(skills_dir: &PathBuf) -> Result<usize> {
     Ok(count)
 }
 
+
+fn count_markdown_files(files_dir: &PathBuf, kind: &str) -> Result<i64> {
+    let dir = files_dir.join(kind);
+    if !dir.is_dir() {
+        return Ok(0);
+    }
+    let mut count = 0i64;
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        if entry.path().extension().and_then(|e| e.to_str()) == Some("md") {
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
+fn count_fts_rows(conn: &Connection, table: &str) -> Result<i64> {
+    match conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0)) {
+        Ok(count) => Ok(count),
+        Err(_) => Ok(0),
+    }
+}
+
+fn fts_ready(conn: &Connection, facts: i64, episodes: i64) -> Result<bool> {
+    let facts_fts = count_fts_rows(conn, "facts_fts")?;
+    let episodes_fts = count_fts_rows(conn, "episodes_fts")?;
+    // 索引表存在且行数与主表大致一致，即视为就绪
+    Ok(facts_fts >= facts && episodes_fts >= episodes)
+}
+
+fn attach_markdown_meta(entry: &mut Value, files_dir: &PathBuf) {
+    let Some(kind) = entry.get("kind").and_then(Value::as_str) else {
+        return;
+    };
+    let folder = match kind {
+        "fact" | "facts" => "facts",
+        "episode" | "episodes" => "episodes",
+        _ => return,
+    };
+    let Some(id) = entry.get("id").and_then(Value::as_i64) else {
+        return;
+    };
+    let path = files_dir.join(folder).join(format!("{id}.md"));
+    let exists = path.is_file();
+    if let Some(obj) = entry.as_object_mut() {
+        obj.insert("has_markdown".to_string(), json!(exists));
+        if exists {
+            obj.insert(
+                "markdown_path".to_string(),
+                json!(path.display().to_string()),
+            );
+        }
+    }
+}
+
 fn now() -> String {
     Utc::now().to_rfc3339()
 }
