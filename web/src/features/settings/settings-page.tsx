@@ -9,7 +9,8 @@ import { ProviderSettingsSection } from "./provider-settings-section";
 import { PluginSettingsSection } from "./plugin-settings-section";
 import { RuntimeSettingsSection } from "./runtime-settings-section";
 import { MemorySettingsSection } from "./memory-settings-section";
-import { HooksMcpSettingsSection } from "./hooks-mcp-settings-section";
+import { HooksSettingsSection } from "./hooks-settings-section";
+import { McpSettingsSection } from "./mcp-settings-section";
 import { SaveStatusBadge } from "./save-status-badge";
 import { SETTINGS_SECTIONS } from "./settings-sections";
 import type { SettingsSectionId } from "./settings-types";
@@ -70,7 +71,8 @@ export function SettingsPage() {
           {settings.config && section === "runtime" && <RuntimeSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
           {section === "appearance" && <AppearanceSettingsSection theme={theme.theme} onThemeChange={theme.setTheme} />}
           {section === "memory" && <MemorySettingsSection />}
-          {settings.config && section === "hooks" && <HooksMcpSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
+          {settings.config && section === "hooks" && <HooksSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
+          {settings.config && section === "mcp" && <McpSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
           {settings.config && section === "gateways" && <GatewaySettingsSection config={settings.config} dirty={settings.dirty} onGatewayChange={settings.updateGateway} onSave={settings.saveConfig} />}
           {settings.config && section === "advanced" && <AdvancedSettingsSection value={settings.raw} onChange={settings.updateRaw} />}
           {settings.error && <div className="settings-error">{settings.error.message}</div>}

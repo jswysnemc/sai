@@ -1,4 +1,4 @@
-import { Bot, Brain, Braces, Cable, KeyRound, Palette, Plug, SlidersHorizontal, Webhook } from "lucide-react";
+import { Bot, Brain, Braces, Cable, KeyRound, Palette, Plug, Server, SlidersHorizontal, Webhook } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { SettingsSectionId } from "./settings-types";
 
@@ -25,6 +25,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   { id: "appearance", labelEn: "Appearance", labelZh: "主题与配色", descriptionEn: "Language, theme, and colors", descriptionZh: "界面语言、主题和颜色方案", icon: Palette },
   { id: "gateways", labelEn: "Gateways", labelZh: "消息网关", descriptionEn: "QQ, Weixin, and runtime status", descriptionZh: "QQ、微信和运行状态", icon: Cable },
   { id: "memory", labelEn: "Memory", labelZh: "记忆管理", descriptionEn: "Facts, events, and reset controls", descriptionZh: "长期事实、往事和清空", icon: Brain },
-  { id: "hooks", labelEn: "Hooks and MCP", labelZh: "Hooks 与 MCP", descriptionEn: "Lifecycle hooks and external MCP tools", descriptionZh: "生命周期钩子和外部 MCP 工具", icon: Webhook },
+  { id: "hooks", labelEn: "Hooks", labelZh: "Hooks", descriptionEn: "Lifecycle shell and HTTP actions", descriptionZh: "生命周期 shell 与 HTTP 动作", icon: Webhook },
+  { id: "mcp", labelEn: "MCP", labelZh: "MCP", descriptionEn: "External Model Context Protocol servers", descriptionZh: "外部 MCP 工具服务", icon: Server },
   { id: "advanced", labelEn: "Advanced", labelZh: "高级配置", descriptionEn: "Complete AppConfig JSON", descriptionZh: "完整 AppConfig JSON", icon: Braces }
 ];
