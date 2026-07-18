@@ -582,6 +582,8 @@ export type BackgroundTaskOutput = {
 
 export type TodoStatus = "pending" | "in_progress" | "completed" | "cancelled";
 export type TodoItem = { id:string; text:string; status:TodoStatus; created_at:string; updated_at:string };
+export type TodoHistoryBatch = { archived_at: string; items: TodoItem[] };
+export type TodoSnapshot = { items: TodoItem[]; history: TodoHistoryBatch[] };
 
 export type Subagent = {
   id:string; description:string; subagent_type:string; status:string; max_steps:number;

@@ -40,6 +40,7 @@ import type {
   BackgroundTask,
   BackgroundTaskOutput,
   TodoItem,
+  TodoSnapshot,
   TodoStatus,
   Subagent,
   SubagentDetail,
@@ -344,7 +345,7 @@ export const api = {
       apiRequest<{ removed: string[]; remaining: number }>(`/api/background-tasks?remove_logs=${removeLogs}`, { method: "DELETE" })
   },
   todos: {
-    list: () => apiRequest<TodoItem[]>("/api/todos"),
+    list: () => apiRequest<TodoSnapshot>("/api/todos"),
     create: (text: string) => apiRequest<TodoItem>("/api/todos", { method:"POST", body:JSON.stringify({ text }) }),
     update: (id: string, input: { text?: string; status?: TodoStatus }) => apiRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}`, { method:"PATCH", body:JSON.stringify(input) }),
     remove: (id: string) => apiRequest<TodoItem>(`/api/todos/${encodeURIComponent(id)}`, { method:"DELETE" })
