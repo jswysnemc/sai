@@ -27,4 +27,19 @@ describe("composer atom token", () => {
       }
     ]);
   });
+
+  it("parses expanded skill references as one previewable atom", () => {
+    const value = "使用 <skill-reference name=\"research\">\n# Research\nRead primary sources\n</skill-reference> 完成分析";
+
+    expect(parseComposerAtoms(value)).toEqual([
+      { type: "text", value: "使用 " },
+      {
+        type: "skill",
+        name: "research",
+        content: "# Research\nRead primary sources",
+        value: "<skill-reference name=\"research\">\n# Research\nRead primary sources\n</skill-reference>"
+      },
+      { type: "text", value: " 完成分析" }
+    ]);
+  });
 });

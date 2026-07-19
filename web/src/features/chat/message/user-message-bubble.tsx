@@ -1,8 +1,10 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { LightboxImage } from "../../../shared/ui/image-lightbox";
-import { MarkdownRenderer } from "../markdown-renderer";
+import { Button } from "../../../shared/ui/button/button";
 import { MessageActions } from "./message-actions";
 import { useI18n } from "../../i18n/use-i18n";
+import { UserMessageContent } from "./user-message-content";
+import "./user-message-bubble.css";
 
 type UserMessageBubbleProps = {
   content: string;
@@ -36,21 +38,21 @@ export function UserMessageBubble({ content, timestamp, imageUrls, onRetry }: Us
   return (
     <article className="message user-message">
       <div className="user-message-stack">
-        {imageUrls && imageUrls.length > 0 && (
-          <div className="user-attachments">
-            {imageUrls.map((url, index) => (
-              <LightboxImage className="user-attachment" src={url} alt={t(`User attachment ${index + 1}`, `用户附件 ${index + 1}`)} key={`${index}-${url.slice(-24)}`} />
-            ))}
-          </div>
-        )}
         <div className="user-bubble">
+          {imageUrls && imageUrls.length > 0 && (
+            <div className="user-attachments">
+              {imageUrls.map((url, index) => (
+                <LightboxImage className="user-attachment" src={url} alt={t(`User attachment ${index + 1}`, `用户附件 ${index + 1}`)} key={`${index}-${url.slice(-24)}`} />
+              ))}
+            </div>
+          )}
           <div ref={bodyRef} className={`message-content user-markdown${collapsed ? " collapsed" : ""}`}>
-            <MarkdownRenderer source={content} />
+            <UserMessageContent content={content} />
           </div>
           {collapsible && (
-            <button type="button" className="bubble-expand" onClick={() => setExpanded((value) => !value)}>
+            <Button className="bubble-expand" onClick={() => setExpanded((value) => !value)}>
               {expanded ? t("Collapse", "收起") : t("Show more", "显示更多")}
-            </button>
+            </Button>
           )}
           <MessageActions text={content} timestamp={timestamp} onRetry={onRetry} />
         </div>

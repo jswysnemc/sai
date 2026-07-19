@@ -1,10 +1,10 @@
 import { parseFileMentions } from "./file-mention-token";
-import { parseSkillMentions } from "./skill-mention-token";
+import { parseExpandedSkillReferences, parseSkillMentions } from "./skill-mention-token";
 
 export type ComposerAtomSegment =
   | { type: "text"; value: string }
   | { type: "file"; path: string; value: string }
-  | { type: "skill"; name: string; value: string }
+  | { type: "skill"; name: string; content?: string; value: string }
   | { type: "goal"; value: string }
   | { type: "terminal"; source: string; content: string; value: string };
 
@@ -23,18 +23,29 @@ export function parseComposerAtoms(value: string): ComposerAtomSegment[] {
       segments.push(terminalSegment);
       continue;
     }
-    for (const fileSegment of parseFileMentions(terminalSegment.value)) {
-      if (fileSegment.type === "mention") {
-        segments.push({ type: "file", path: fileSegment.path, value: fileSegment.value });
+    for (const skillReference of parseExpandedSkillReferences(terminalSegment.value)) {
+      if (skillReference.type === "skill_reference") {
+        segments.push({
+          type: "skill",
+          name: skillReference.name,
+          content: skillReference.content,
+          value: skillReference.value
+        });
         continue;
       }
-      for (const skillSegment of parseSkillMentions(fileSegment.value)) {
-        if (skillSegment.type === "text") {
-          if (skillSegment.value) segments.push(skillSegment);
-        } else if (skillSegment.name === "goal") {
-          segments.push({ type: "goal", value: skillSegment.value });
-        } else {
-          segments.push({ type: "skill", name: skillSegment.name, value: skillSegment.value });
+      for (const fileSegment of parseFileMentions(skillReference.value)) {
+        if (fileSegment.type === "mention") {
+          segments.push({ type: "file", path: fileSegment.path, value: fileSegment.value });
+          continue;
+        }
+        for (const skillSegment of parseSkillMentions(fileSegment.value)) {
+          if (skillSegment.type === "text") {
+            if (skillSegment.value) segments.push(skillSegment);
+          } else if (skillSegment.name === "goal") {
+            segments.push({ type: "goal", value: skillSegment.value });
+          } else {
+            segments.push({ type: "skill", name: skillSegment.name, value: skillSegment.value });
+          }
         }
       }
     }

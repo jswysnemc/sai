@@ -2,6 +2,10 @@ export type SkillMentionSegment =
   | { type: "text"; value: string }
   | { type: "skill"; name: string; value: string };
 
+export type ExpandedSkillReferenceSegment =
+  | { type: "text"; value: string }
+  | { type: "skill_reference"; name: string; content: string; value: string };
+
 export type SkillMentionTriggerRange = {
   start: number;
   end: number;
@@ -9,6 +13,7 @@ export type SkillMentionTriggerRange = {
 };
 
 const SKILL_PATTERN = /(^|\s)\/([A-Za-z0-9][A-Za-z0-9._-]*)/gu;
+const EXPANDED_SKILL_PATTERN = /<skill-reference name="([A-Za-z0-9][A-Za-z0-9._-]*)">([\s\S]*?)<\/skill-reference>/gu;
 
 /**
  * 查找光标前的 skill 斜杠触发范围。
@@ -82,6 +87,47 @@ export function collectSkillMentionNames(value: string): string[] {
 }
 
 /**
+ * 将展开后的 Skill 文档编码为可持久化引用。
+ *
+ * @param name Skill 名称
+ * @param content 完整 Skill 文档
+ * @returns 同时供模型读取和气泡还原的引用文本
+ */
+export function formatExpandedSkillReference(name: string, content: string): string {
+  const safeContent = content.trim().replaceAll("</skill-reference>", "<\\/skill-reference>");
+  return `<skill-reference name="${name.trim()}">\n${safeContent}\n</skill-reference>`;
+}
+
+/**
+ * 解析展开后的 Skill 引用，并保留引用之间的普通文本。
+ *
+ * @param value 已发送或持久化的用户输入
+ * @returns 普通文本和完整 Skill 引用片段
+ */
+export function parseExpandedSkillReferences(value: string): ExpandedSkillReferenceSegment[] {
+  const segments: ExpandedSkillReferenceSegment[] = [];
+  let cursor = 0;
+  for (const match of value.matchAll(EXPANDED_SKILL_PATTERN)) {
+    const start = match.index ?? 0;
+    if (start > cursor) segments.push({ type: "text", value: value.slice(cursor, start) });
+    const raw = match[0];
+    const content = (match[2] ?? "")
+      .replace(/^\n/u, "")
+      .replace(/\n$/u, "")
+      .replaceAll("<\\/skill-reference>", "</skill-reference>");
+    segments.push({
+      type: "skill_reference",
+      name: match[1] ?? "",
+      content,
+      value: raw
+    });
+    cursor = start + raw.length;
+  }
+  if (cursor < value.length) segments.push({ type: "text", value: value.slice(cursor) });
+  return segments;
+}
+
+/**
  * 将输入中的 `/skill` 引用替换为完整 skill 文档，再发给模型。
  *
  * 输入区仍保留短 token，仅发送路径展开完整内容。
@@ -95,7 +141,7 @@ export function expandSkillMentions(value: string, documents: Record<string, str
     .map((segment) => {
       if (segment.type === "text") return segment.value;
       const document = documents[segment.name];
-      return document?.trim() ? document.trim() : segment.value;
+      return document?.trim() ? formatExpandedSkillReference(segment.name, document) : segment.value;
     })
     .join("");
 }

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { SessionTimelineTurn } from "../../api/contracts";
 import { HistoryTurn, LiveRunMessage } from "./chat-message";
 import { initialRunState } from "./run-event-reducer";
+import { UserMessageBubble } from "./message/user-message-bubble";
 
 describe("HistoryTurn", () => {
   it("restores a persisted permission card before its historical tool", () => {
@@ -101,5 +102,19 @@ describe("HistoryTurn", () => {
 
     expect(html).not.toContain("goal-continuation");
     expect(html).toContain("继续完成目标");
+  });
+
+  it("keeps images and special skill rendering inside the user bubble", () => {
+    const html = renderToStaticMarkup(
+      <UserMessageBubble
+        content={'使用 <skill-reference name="research">\n# Research\nRead primary sources\n</skill-reference> 完成分析'}
+        imageUrls={["data:image/png;base64,AA=="]}
+      />
+    );
+
+    expect(html).toContain('<div class="user-bubble"><div class="user-attachments">');
+    expect(html).toContain("user-skill-atom");
+    expect(html).toContain("/research");
+    expect(html).not.toContain("Read primary sources");
   });
 });

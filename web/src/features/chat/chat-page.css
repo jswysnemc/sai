@@ -127,50 +127,6 @@
   margin: 0 0 22px;
 }
 
-.user-message {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.user-message .message-content {
-  min-width: 0;
-  max-width: min(82%, 680px);
-  padding: 11px 14px;
-  border: 1px solid var(--line);
-  border-radius: 14px 14px 4px 14px;
-  background: var(--paper-raised);
-  box-shadow: 0 4px 18px rgb(20 28 23 / 5%);
-  line-height: 1.55;
-  white-space: pre-wrap;
-}
-
-.user-message-stack {
-  display: grid;
-  justify-items: end;
-  gap: 7px;
-  max-width: min(82%, 680px);
-}
-
-.user-message-stack .message-content {
-  max-width: 100%;
-}
-
-.user-attachment {
-  display: block;
-  max-width: 220px;
-  max-height: 180px;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  object-fit: cover;
-}
-
-.user-attachments {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 7px;
-}
-
 .assistant-message {
   min-width: 0;
   max-width: 100%;
@@ -315,36 +271,6 @@
     background: var(--paper-deep);
     color: var(--ink);
   }
-}
-
-.user-bubble {
-  position: relative;
-  display: grid;
-  justify-items: end;
-  max-width: 100%;
-}
-
-.user-message .message-content.user-markdown {
-  overflow: hidden;
-  white-space: normal;
-}
-
-.user-markdown .markdown-body > :first-child { margin-top: 0; }
-.user-markdown .markdown-body > :last-child { margin-bottom: 0; }
-
-.user-markdown.collapsed {
-  max-height: 320px;
-  mask-image: linear-gradient(to bottom, #000 78%, transparent 100%);
-}
-
-.bubble-expand {
-  margin-top: 4px;
-  padding: 2px 8px;
-  border: 0;
-  background: transparent;
-  color: var(--signal);
-  font-size: 11px;
-  cursor: pointer;
 }
 
 .message-actions {

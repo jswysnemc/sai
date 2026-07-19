@@ -31,6 +31,6 @@ describe("skill mention token", () => {
       expandSkillMentions("先 /drawio 后继续", {
         drawio: "<loaded-skill name=\"drawio\">body</loaded-skill>"
       })
-    ).toBe("先 <loaded-skill name=\"drawio\">body</loaded-skill> 后继续");
+    ).toBe("先 <skill-reference name=\"drawio\">\n<loaded-skill name=\"drawio\">body</loaded-skill>\n</skill-reference> 后继续");
   });
 });

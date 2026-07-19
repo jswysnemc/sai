@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { createContext, memo, useContext, type ReactNode } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
@@ -21,12 +21,19 @@ function transformUrl(url: string): string {
 /** 模块级插件常量，避免每次渲染创建新数组导致 ReactMarkdown 重新解析 */
 const remarkPlugins = [remarkGfm, remarkMath];
 const rehypePlugins = [rehypeKatex];
+const inlineAtomContext = createContext<readonly ReactNode[]>([]);
+const INLINE_ATOM_PATTERN = /^sai-atom-(\d+)$/u;
 
 /** 模块级组件映射常量，保证子组件在父组件重渲染时不被卸载重建 */
 const markdownComponents: Components = {
   code({ className, children, ...props }) {
     const language = /language-(\w+)/.exec(className ?? "")?.[1];
     const text = String(children).replace(/\n$/, "");
+    const inlineAtoms = useContext(inlineAtomContext);
+    const atomIndex = !language ? INLINE_ATOM_PATTERN.exec(text)?.[1] : undefined;
+    if (atomIndex !== undefined) {
+      return <>{inlineAtoms[Number(atomIndex)] ?? children}</>;
+    }
     if (language === "mermaid") return <MermaidDiagram source={text} />;
     if (language || text.includes("\n")) return <MarkdownCodeBlock language={language} source={text} />;
     return <code className="inline-code" {...props}>{children}</code>;
@@ -48,17 +55,25 @@ const markdownComponents: Components = {
  * @param props Markdown 源文本
  * @returns Markdown 内容
  */
-export const MarkdownRenderer = memo(function MarkdownRenderer({ source }: { source: string }) {
+export const MarkdownRenderer = memo(function MarkdownRenderer({
+  source,
+  inlineAtoms = []
+}: {
+  source: string;
+  inlineAtoms?: readonly ReactNode[];
+}) {
   return (
-    <div className="markdown-body">
-      <ReactMarkdown
-        remarkPlugins={remarkPlugins}
-        rehypePlugins={rehypePlugins}
-        urlTransform={transformUrl}
-        components={markdownComponents}
-      >
-        {source}
-      </ReactMarkdown>
-    </div>
+    <inlineAtomContext.Provider value={inlineAtoms}>
+      <div className="markdown-body">
+        <ReactMarkdown
+          remarkPlugins={remarkPlugins}
+          rehypePlugins={rehypePlugins}
+          urlTransform={transformUrl}
+          components={markdownComponents}
+        >
+          {source}
+        </ReactMarkdown>
+      </div>
+    </inlineAtomContext.Provider>
   );
 });
