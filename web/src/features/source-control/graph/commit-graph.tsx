@@ -5,6 +5,7 @@ import { Button } from "../../../shared/ui/button/button";
 import { Modal } from "../../../shared/ui/dialog/modal";
 import { useI18n } from "../../i18n/use-i18n";
 import type { RunGitOperation } from "../types";
+import { createBranchNameSuggestion } from "../branches/branch-name-suggestion";
 import { CommitContextMenu } from "./commit-context-menu";
 import { formatGitDate, formatGitReference } from "./graph-utils";
 
@@ -14,6 +15,7 @@ type CommitGraphProps = {
   busy: boolean;
   locale: string;
   canLoadMore: boolean;
+  suggestBranchNames: boolean;
   onSelect: (commit: GitCommitSummary) => void;
   onLoadMore: () => void;
   runOperation: RunGitOperation;
@@ -67,6 +69,17 @@ export function CommitGraph(props: CommitGraphProps) {
     setBranchName("");
   };
 
+  /**
+   * 打开从提交创建分支的弹层并按配置填入建议名称。
+   *
+   * @param commit 作为新分支起点的提交
+   * @returns 无返回值
+   */
+  const openBranchDialog = (commit: GitCommitSummary) => {
+    setBranchCommit(commit);
+    setBranchName(props.suggestBranchNames ? createBranchNameSuggestion() : "");
+  };
+
   return (
     <>
       <div className="git-commit-graph">
@@ -107,7 +120,7 @@ export function CommitGraph(props: CommitGraphProps) {
           busy={props.busy}
           runOperation={props.runOperation}
           onView={() => props.onSelect(menu.commit)}
-          onCreateBranch={() => setBranchCommit(menu.commit)}
+          onCreateBranch={() => openBranchDialog(menu.commit)}
           onClose={() => setMenu(null)}
         />
       )}

@@ -6,6 +6,7 @@ import { Button } from "../../shared/ui/button/button";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { useI18n } from "../i18n/use-i18n";
+import { createBranchNameSuggestion } from "../source-control/branches/branch-name-suggestion";
 
 type GitBranchMenuProps = {
   state: GitRepositoryState;
@@ -13,6 +14,7 @@ type GitBranchMenuProps = {
   loading: boolean;
   open: boolean;
   busy: boolean;
+  suggestBranchNames: boolean;
   onOpenChange: (open: boolean) => void;
   onOperation: (action: string, options?: GitOperationOptions) => Promise<GitOperationResponse | undefined>;
 };
@@ -41,6 +43,11 @@ export function GitBranchMenu(props: GitBranchMenuProps) {
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [props.open, props.onOpenChange]);
+
+  useEffect(() => {
+    if (!props.open || !props.suggestBranchNames) return;
+    setCreateName((current) => current || createBranchNameSuggestion());
+  }, [props.open, props.suggestBranchNames]);
 
   /**
    * 创建并切换到新分支。

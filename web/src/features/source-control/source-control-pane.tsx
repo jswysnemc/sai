@@ -38,6 +38,7 @@ import { PublishRepositoryControl } from "./remote/publish-repository-control";
 import { useScmStateStore } from "./state/use-scm-state-store";
 import { useGitRepositoryEvents, type GitWatchMode } from "./state/use-git-repository-events";
 import { useGitSettings } from "./state/use-git-settings";
+import { useGitAutofetch } from "./state/use-git-autofetch";
 import { useRepositoryStatuses } from "./state/use-repository-statuses";
 import { resolveScmCountBadge } from "./state/scm-count-badge";
 import type { GitOutputEntry, GitOperationUiOptions } from "./types";
@@ -334,6 +335,15 @@ export function SourceControlPane() {
     return true;
   };
 
+  useGitAutofetch({
+    enabled: git.autofetch,
+    ready: Boolean(ready),
+    remoteConfigured: Boolean(state?.remote_url),
+    busy: op.isPending || clone.isPending,
+    hasOperation: Boolean(state?.operation),
+    onFetch: () => runOp("fetch")
+  });
+
   if ((statusLoading || repositories.isLoading) && !state) {
     return (
       <section className="diff-pane git-manager">
@@ -448,6 +458,7 @@ export function SourceControlPane() {
           loading={branches.isLoading}
           open={branchMenuOpen}
           busy={busy}
+          suggestBranchNames={git.branch_random_name.enable}
           onOpenChange={setBranchMenuOpen}
           onOperation={runOp}
         />
@@ -613,6 +624,7 @@ export function SourceControlPane() {
               busy={busy}
               locale={locale}
               canLoadMore={commits.length >= historyLimit}
+              suggestBranchNames={git.branch_random_name.enable}
               onSelect={(commit) => {
                 setSelectedCommit(commit.sha);
                 setSelectedCommitPath(null);
