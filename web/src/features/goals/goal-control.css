@@ -4,17 +4,6 @@
   align-items: center;
 }
 
-.goal-control-trigger {
-  max-width: 11rem;
-}
-
-.goal-control-trigger span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .composer-context-strip .ui-button.goal-control-action {
   width: 1.75rem;
   min-width: 1.75rem;
@@ -73,10 +62,4 @@
   color: var(--danger);
   font-size: 0.75rem;
   overflow-wrap: anywhere;
-}
-
-@media (max-width: 40rem) {
-  .goal-control-trigger {
-    max-width: 7rem;
-  }
 }

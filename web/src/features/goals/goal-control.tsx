@@ -176,7 +176,6 @@ export function GoalControl({ sessionId, running, onContinue }: GoalControlProps
           aria-label={goal ? t("Open goal", "打开目标") : t("Set goal", "设置目标")}
         >
           <Target size={14} />
-          <span>{goal?.objective ?? statusLabel}</span>
         </Button>
         {goal?.status === "active" && !running && (
           <Button className="composer-rail-button goal-control-action" onClick={() => void continueGoal()} disabled={busy} title={t("Continue goal", "继续目标")} aria-label={t("Continue goal", "继续目标")}>
