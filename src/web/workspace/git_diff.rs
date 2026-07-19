@@ -15,6 +15,9 @@ pub(crate) use types::{
 #[path = "git_diff_support.rs"]
 mod support;
 
+#[path = "git_diff_content.rs"]
+mod diff_content;
+
 #[path = "git_process.rs"]
 mod process;
 
@@ -25,6 +28,7 @@ mod branches;
 mod operations;
 
 use branches::*;
+use diff_content::*;
 pub(crate) use operations::git_op;
 use process::*;
 use support::*;
@@ -425,17 +429,19 @@ pub(crate) async fn git_diff(
 ) -> Result<GitDiffResponse> {
     let state = ensure_ready(root).await?;
     let clean_path = path.map(validate_repo_relative_path).transpose()?;
-    let files: Vec<String> = if let Some(path) = clean_path.clone() {
-        vec![path]
-    } else {
-        state
-            .entries
-            .iter()
-            .map(|entry| entry.path.clone())
-            .collect()
-    };
-    if mode == "working_tree" {
-        return working_tree_diff(&state, files, clean_path.as_deref()).await;
+    let files = diff_files(&state, mode, clean_path.as_deref())?;
+    match mode {
+        "working_tree" => {
+            return working_tree_diff(&state, files, clean_path.as_deref()).await;
+        }
+        "unstaged" => {
+            return unstaged_diff(&state, files, clean_path.as_deref()).await;
+        }
+        "staged" => {
+            return staged_diff(&state, files, clean_path.as_deref()).await;
+        }
+        "branch" => {}
+        _ => bail!("unsupported git diff mode: {mode}"),
     }
 
     let base_ref = if !state.upstream.trim().is_empty() {

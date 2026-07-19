@@ -303,7 +303,7 @@ export const api = {
       if (path) query.set("path", path);
       return apiRequest<GitDiffResponse>(`/api/workspace/git/commit-diff?${query}`);
     },
-    gitReviewDiff: (mode: "working_tree" | "branch" = "working_tree", path?: string) => {
+    gitReviewDiff: (mode: "working_tree" | "unstaged" | "staged" | "branch" = "working_tree", path?: string) => {
       const query = new URLSearchParams({ mode });
       if (path) query.set("path", path);
       return apiRequest<GitDiffResponse>(`/api/workspace/git/diff?${query}`);

@@ -5,7 +5,7 @@ import { Button } from "../../../shared/ui/button/button";
 import { FileTypeIcon } from "../../../shared/ui/file-icon";
 import { useI18n } from "../../i18n/use-i18n";
 
-type ChangeSectionKind = "merge" | "staged" | "changes" | "untracked";
+export type ChangeSectionKind = "merge" | "staged" | "changes" | "untracked";
 
 type ChangeSectionProps = {
   title: string;

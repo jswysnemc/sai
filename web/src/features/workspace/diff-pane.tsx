@@ -19,9 +19,11 @@ import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { DiffView } from "../chat/tool-renderers/diff-view";
 import { useI18n } from "../i18n/use-i18n";
 import { ChangeSection } from "../source-control/changes/change-section";
+import type { ChangeSectionKind } from "../source-control/changes/change-section";
 import { CommitControl } from "../source-control/changes/commit-control";
 import { groupGitChanges } from "../source-control/changes/change-groups";
 import { MoreActionsMenu } from "../source-control/actions/more-actions-menu";
+import { resolveGitReviewDiffMode, type SourceControlDiffView } from "../source-control/diff/diff-mode";
 import { InProgressOperationBar } from "../source-control/operation/in-progress-operation-bar";
 import { GitOutputPanel } from "../source-control/output/git-output-panel";
 import type { GitOutputEntry, GitOperationUiOptions } from "../source-control/types";
@@ -29,7 +31,6 @@ import "../source-control/source-control.css";
 import { GitBranchMenu } from "./git-branch-menu";
 
 type ReviewMode = "changes" | "history";
-type DiffMode = "working_tree" | "branch";
 
 /**
  * 渲染 LiveAgent 风格的 Git 变更与历史面板。
@@ -41,11 +42,12 @@ export function DiffPane() {
   const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<ReviewMode>("changes");
-  const [diffMode, setDiffMode] = useState<DiffMode>("working_tree");
+  const [diffMode, setDiffMode] = useState<SourceControlDiffView>("changes");
   const [message, setMessage] = useState("");
   const [initBranch, setInitBranch] = useState("main");
   const [remoteUrl, setRemoteUrl] = useState("");
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [selectedSection, setSelectedSection] = useState<ChangeSectionKind>("changes");
   const [selectedCommit, setSelectedCommit] = useState<string | null>(null);
   const [selectedCommitPath, setSelectedCommitPath] = useState<string | null>(null);
   const [historyLimit, setHistoryLimit] = useState(40);
@@ -72,9 +74,10 @@ export function DiffPane() {
     enabled: status.data?.status === "ready" && mode === "history",
     staleTime: 10_000
   });
+  const reviewDiffMode = resolveGitReviewDiffMode(diffMode, selectedSection);
   const reviewDiff = useQuery({
-    queryKey: ["git-review-diff", diffMode, selectedPath],
-    queryFn: () => api.workspace.gitReviewDiff(diffMode, selectedPath ?? undefined),
+    queryKey: ["git-review-diff", reviewDiffMode, selectedPath],
+    queryFn: () => api.workspace.gitReviewDiff(reviewDiffMode, selectedPath ?? undefined),
     enabled: status.data?.status === "ready" && mode === "changes"
   });
   const commitDetails = useQuery({
@@ -270,6 +273,37 @@ export function DiffPane() {
     });
   };
 
+  /**
+   * 选择文件并记录所属分区，用于确定 INDEX 或 HEAD 比较基线。
+   *
+   * @param path 仓库相对路径
+   * @param section 文件所属分区
+   * @returns 无返回值
+   */
+  const selectChange = (path: string, section: ChangeSectionKind) => {
+    setSelectedPath(path);
+    setSelectedSection(section);
+  };
+
+  /**
+   * 执行文件暂存状态变更，并同步当前 Diff 所属分区。
+   *
+   * @param action stage 或 unstage
+   * @param path 仓库相对路径
+   * @param nextSection 操作成功后的文件分区
+   * @returns 无返回值
+   */
+  const moveChange = async (
+    action: "stage" | "unstage",
+    path: string,
+    nextSection: ChangeSectionKind
+  ) => {
+    const result = await runOp(action, { path });
+    if (!result?.ok) return;
+    setSelectedPath(path);
+    setSelectedSection(nextSection);
+  };
+
   return (
     <section className="diff-pane git-manager git-review">
       <header className="git-review-toolbar">
@@ -333,8 +367,8 @@ export function DiffPane() {
             />
 
             <div className="git-diff-mode">
-              <Button className={diffMode === "working_tree" ? "active" : ""} onClick={() => setDiffMode("working_tree")}>
-                {t("Working tree", "工作树")}
+              <Button className={diffMode === "changes" ? "active" : ""} onClick={() => setDiffMode("changes")}>
+                {t("Selected changes", "所选变更")}
               </Button>
               <Button className={diffMode === "branch" ? "active" : ""} onClick={() => setDiffMode("branch")}>
                 {t("Against baseline", "相对基线")}
@@ -361,11 +395,11 @@ export function DiffPane() {
                 entries={groups.conflicts}
                 selectedPath={selectedPath}
                 busy={busy}
-                onSelect={setSelectedPath}
+                onSelect={(path) => selectChange(path, "merge")}
                 onStageAll={() => void runOp("stage_all")}
                 onUnstageAll={() => void runOp("unstage_all")}
-                onStage={(path) => void runOp("stage", { path })}
-                onUnstage={(path) => void runOp("unstage", { path })}
+                onStage={(path) => void moveChange("stage", path, "staged")}
+                onUnstage={(path) => void moveChange("unstage", path, "changes")}
                 onIgnore={(path) => void runOp("add_to_gitignore", { path })}
                 onDiscard={discardEntry}
                 section="merge"
@@ -377,11 +411,11 @@ export function DiffPane() {
                 entries={groups.staged}
                 selectedPath={selectedPath}
                 busy={busy}
-                onSelect={setSelectedPath}
+                onSelect={(path) => selectChange(path, "staged")}
                 onStageAll={() => void runOp("stage_all")}
                 onUnstageAll={() => void runOp("unstage_all")}
-                onStage={(path) => void runOp("stage", { path })}
-                onUnstage={(path) => void runOp("unstage", { path })}
+                onStage={(path) => void moveChange("stage", path, "staged")}
+                onUnstage={(path) => void moveChange("unstage", path, "changes")}
                 onIgnore={(path) => void runOp("add_to_gitignore", { path })}
                 onDiscard={discardEntry}
                 section="staged"
@@ -393,11 +427,11 @@ export function DiffPane() {
                 entries={groups.changes}
                 selectedPath={selectedPath}
                 busy={busy}
-                onSelect={setSelectedPath}
+                onSelect={(path) => selectChange(path, "changes")}
                 onStageAll={() => void runOp("stage_all")}
                 onUnstageAll={() => void runOp("unstage_all")}
-                onStage={(path) => void runOp("stage", { path })}
-                onUnstage={(path) => void runOp("unstage", { path })}
+                onStage={(path) => void moveChange("stage", path, "staged")}
+                onUnstage={(path) => void moveChange("unstage", path, "changes")}
                 onIgnore={(path) => void runOp("add_to_gitignore", { path })}
                 onDiscard={discardEntry}
                 section="changes"
@@ -409,11 +443,11 @@ export function DiffPane() {
                 entries={groups.untracked}
                 selectedPath={selectedPath}
                 busy={busy}
-                onSelect={setSelectedPath}
+                onSelect={(path) => selectChange(path, "untracked")}
                 onStageAll={() => void runOp("stage_all")}
                 onUnstageAll={() => void runOp("unstage_all")}
-                onStage={(path) => void runOp("stage", { path })}
-                onUnstage={(path) => void runOp("unstage", { path })}
+                onStage={(path) => void moveChange("stage", path, "staged")}
+                onUnstage={(path) => void moveChange("unstage", path, "changes")}
                 onIgnore={(path) => void runOp("add_to_gitignore", { path })}
                 onDiscard={discardEntry}
                 section="untracked"

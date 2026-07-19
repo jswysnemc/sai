@@ -223,3 +223,32 @@ async fn detects_and_aborts_merge_conflict() {
     assert!(response.state.operation.is_none());
     assert_eq!(response.state.dirty_counts.conflicted, 0);
 }
+
+#[tokio::test]
+async fn separates_staged_and_unstaged_diff_content() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path();
+    init_repository(repo).await;
+    tokio::fs::write(repo.join("tracked.txt"), "staged\n")
+        .await
+        .unwrap();
+    git_success(repo, &["add", "tracked.txt"]).await.unwrap();
+    tokio::fs::write(repo.join("tracked.txt"), "unstaged\n")
+        .await
+        .unwrap();
+    tokio::fs::write(repo.join("new.txt"), "untracked\n")
+        .await
+        .unwrap();
+
+    let staged = git_diff(repo, "staged", Some("tracked.txt")).await.unwrap();
+    let unstaged = git_diff(repo, "unstaged", None).await.unwrap();
+
+    assert_eq!(staged.base_ref, "HEAD");
+    assert_eq!(staged.head_ref, "INDEX");
+    assert!(staged.patch.contains("+staged"));
+    assert!(!staged.patch.contains("+unstaged"));
+    assert_eq!(unstaged.base_ref, "INDEX");
+    assert_eq!(unstaged.head_ref, "WORKTREE");
+    assert!(unstaged.patch.contains("+unstaged"));
+    assert!(unstaged.patch.contains("+untracked"));
+}

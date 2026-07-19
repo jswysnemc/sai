@@ -2,86 +2,6 @@ use super::*;
 use anyhow::{bail, Result};
 use std::path::{Component, Path, PathBuf};
 
-pub(super) async fn working_tree_diff(
-    state: &GitRepositoryState,
-    files: Vec<String>,
-    clean_path: Option<&str>,
-) -> Result<GitDiffResponse> {
-    if !ref_exists(Path::new(&state.repo_root), "HEAD").await {
-        let mut patch = String::new();
-        for entry in &state.entries {
-            if let Some(path) = clean_path {
-                if entry.path != path {
-                    continue;
-                }
-            }
-            if entry.untracked {
-                if let Ok(Some(part)) =
-                    build_untracked_file_patch(Path::new(&state.repo_root), &entry.path).await
-                {
-                    if !patch.is_empty() {
-                        patch.push('\n');
-                    }
-                    patch.push_str(&part);
-                }
-            }
-        }
-        let (patch, truncated) = truncate_patch(patch);
-        return Ok(GitDiffResponse {
-            base_ref: "ROOT".to_string(),
-            head_ref: "WORKTREE".to_string(),
-            mode: "working_tree".to_string(),
-            files,
-            patch,
-            stat: String::new(),
-            truncated,
-            binary_files: Vec::new(),
-        });
-    }
-    let mut args = vec![
-        "diff".to_string(),
-        "--patch".to_string(),
-        "--stat".to_string(),
-        "HEAD".to_string(),
-    ];
-    if let Some(path) = clean_path {
-        args.push("--".to_string());
-        args.push(path.to_string());
-    }
-    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    let output = git_success(Path::new(&state.repo_root), &arg_refs).await?;
-    let (stat, mut patch) = split_stat_and_patch(&output.stdout);
-    for entry in &state.entries {
-        if !entry.untracked {
-            continue;
-        }
-        if let Some(path) = clean_path {
-            if entry.path != path {
-                continue;
-            }
-        }
-        if let Ok(Some(part)) =
-            build_untracked_file_patch(Path::new(&state.repo_root), &entry.path).await
-        {
-            if !patch.is_empty() {
-                patch.push('\n');
-            }
-            patch.push_str(&part);
-        }
-    }
-    let (patch, truncated) = truncate_patch(patch);
-    Ok(GitDiffResponse {
-        base_ref: "HEAD".to_string(),
-        head_ref: "WORKTREE".to_string(),
-        mode: "working_tree".to_string(),
-        files,
-        patch,
-        stat,
-        truncated,
-        binary_files: Vec::new(),
-    })
-}
-
 pub(super) async fn pull_repo(repo: &Path, state: &GitRepositoryState) -> Result<GitOutput> {
     if state.upstream.trim().is_empty() {
         if state.head.trim().is_empty() || state.head == "(detached)" {
@@ -514,28 +434,6 @@ pub(super) fn parse_shortstat(raw: &str) -> (usize, usize, usize) {
     (files_changed, insertions, deletions)
 }
 
-pub(super) fn split_stat_and_patch(output: &str) -> (String, String) {
-    if let Some(index) = output.find("\ndiff --git ") {
-        let (stat, patch) = output.split_at(index + 1);
-        (stat.trim().to_string(), patch.to_string())
-    } else if output.starts_with("diff --git ") {
-        (String::new(), output.to_string())
-    } else {
-        (output.trim().to_string(), String::new())
-    }
-}
-
-pub(super) fn truncate_patch(value: String) -> (String, bool) {
-    if value.len() <= GIT_DIFF_MAX_BYTES {
-        return (value, false);
-    }
-    let mut end = GIT_DIFF_MAX_BYTES.min(value.len());
-    while end > 0 && !value.is_char_boundary(end) {
-        end -= 1;
-    }
-    (format!("{}\n\n… diff truncated …\n", &value[..end]), true)
-}
-
 pub(super) fn validate_repo_relative_path(path: &str) -> Result<String> {
     let path = path.trim().replace('\\', "/");
     if path.is_empty() {
@@ -556,43 +454,6 @@ pub(super) fn validate_repo_relative_path(path: &str) -> Result<String> {
         bail!("path cannot be empty");
     }
     Ok(normalized.join("/"))
-}
-
-pub(super) async fn build_untracked_file_patch(
-    repo_root: &Path,
-    path: &str,
-) -> Result<Option<String>> {
-    let clean = validate_repo_relative_path(path)?;
-    let absolute = repo_root.join(&clean);
-    let metadata = match tokio::fs::metadata(&absolute).await {
-        Ok(metadata) => metadata,
-        Err(_) => return Ok(None),
-    };
-    if !metadata.is_file() || metadata.len() > 128 * 1024 {
-        return Ok(None);
-    }
-    let bytes = tokio::fs::read(&absolute).await?;
-    if bytes.contains(&0) {
-        return Ok(None);
-    }
-    let text = String::from_utf8_lossy(&bytes);
-    let mut patch = format!(
-        "diff --git a/{clean} b/{clean}\nnew file mode 100644\n--- /dev/null\n+++ b/{clean}\n"
-    );
-    let lines: Vec<&str> = text.split_inclusive('\n').collect();
-    patch.push_str(&format!("@@ -0,0 +1,{} @@\n", lines.len().max(1)));
-    if lines.is_empty() {
-        patch.push_str("+\n");
-    } else {
-        for line in lines {
-            patch.push('+');
-            patch.push_str(line);
-            if !line.ends_with('\n') {
-                patch.push('\n');
-            }
-        }
-    }
-    Ok(Some(patch))
 }
 
 pub(super) async fn resolve_state_remote(repo_root: &Path, upstream: &str) -> (String, String) {
