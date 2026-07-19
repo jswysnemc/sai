@@ -132,7 +132,7 @@ Web Views (Changes / Graph / Repositories / Diff / Merge Editor)
 | Area | Status | Current behavior |
 | --- | --- | --- |
 | Changes and commit workflow | Implemented | Multi-repository sections, tree/list views, multi-select, stage/unstage/discard, Smart Commit, amend, sign-off, push/sync variants |
-| Diff and partial staging | Partial | Correct HEAD/Index/Working Tree selection and complete-hunk actions; arbitrary selected-line patch editing is not provided |
+| Diff and partial staging | Implemented | Correct HEAD/Index/Working Tree selection plus selected-line and complete-hunk stage, unstage, and revert actions for text changes; file lifecycle changes remain whole-hunk operations |
 | Branches and remotes | Implemented | Create, checkout, rename, delete, merge, rebase, fetch, pull, push, sync, publish upstream, force-with-lease |
 | Commit Graph | Partial | Paginated, virtualized history with refs, incoming/outgoing markers and history actions; the lane renderer is simplified |
 | Stash, tags, and remotes | Implemented | List/create/apply/pop/drop and add/remove operations, including stash patch preview |
