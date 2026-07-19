@@ -11,6 +11,7 @@ import "./merge-editor.css";
 
 type MergeEditorProps = {
   path: string;
+  repoRoot: string | null;
   busy: boolean;
   runOperation: RunGitOperation;
   onResolved: () => void;
@@ -25,17 +26,18 @@ type MergeEditorProps = {
 export function MergeEditor(props: MergeEditorProps) {
   const { t } = useI18n();
   const [draft, setDraft] = useState("");
-  const initializedPath = useRef<string | null>(null);
+  const initializedTarget = useRef<string | null>(null);
   const conflict = useQuery({
-    queryKey: ["git-conflict", props.path],
-    queryFn: () => api.workspace.gitConflict(props.path)
+    queryKey: ["git-conflict", props.repoRoot, props.path],
+    queryFn: () => api.workspace.gitConflict(props.path, props.repoRoot ?? undefined)
   });
 
   useEffect(() => {
-    if (!conflict.data || initializedPath.current === props.path) return;
-    initializedPath.current = props.path;
+    const target = `${props.repoRoot ?? ""}\0${props.path}`;
+    if (!conflict.data || initializedTarget.current === target) return;
+    initializedTarget.current = target;
     setDraft(conflict.data.current);
-  }, [conflict.data, props.path]);
+  }, [conflict.data, props.path, props.repoRoot]);
   const combinedDraft = useMemo(
     () => (conflict.data ? combineConflictBlocks(conflict.data.current) : null),
     [conflict.data]

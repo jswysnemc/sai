@@ -7,6 +7,7 @@ import { useI18n } from "../../i18n/use-i18n";
 import type { RunGitOperation } from "../types";
 
 type RepositoryResourcesProps = {
+  repoRoot: string | null;
   open: boolean;
   busy: boolean;
   runOperation: RunGitOperation;
@@ -24,8 +25,8 @@ export function RepositoryResources(props: RepositoryResourcesProps) {
   const [remoteName, setRemoteName] = useState("");
   const [remoteUrl, setRemoteUrl] = useState("");
   const resources = useQuery({
-    queryKey: ["git-resources"],
-    queryFn: api.workspace.gitResources,
+    queryKey: ["git-resources", props.repoRoot],
+    queryFn: () => api.workspace.gitResources(props.repoRoot ?? undefined),
     enabled: props.open,
     staleTime: 5_000
   });

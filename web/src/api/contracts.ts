@@ -229,6 +229,34 @@ export type GitRepositoryState = {
   error?: string | null;
 };
 
+export type GitWorktree = {
+  path: string;
+  head: string;
+  branch: string;
+  bare: boolean;
+  detached: boolean;
+  locked: boolean;
+  prunable: boolean;
+  current: boolean;
+};
+
+export type GitRepositorySummary = {
+  root: string;
+  name: string;
+  head: string;
+  ahead: number;
+  behind: number;
+  changed: number;
+  status: string;
+  error?: string | null;
+  worktrees: GitWorktree[];
+};
+
+export type GitRepositoriesResponse = {
+  workspace_root: string;
+  repositories: GitRepositorySummary[];
+};
+
 export type GitBranch = {
   name: string;
   full_name: string;

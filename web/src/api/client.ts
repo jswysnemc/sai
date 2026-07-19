@@ -18,6 +18,7 @@ import type {
   GitDiffResponse,
   GitLogResponse,
   GitOperationResponse,
+  GitRepositoriesResponse,
   GitRepositoryResources,
   GitRepositoryState,
   HistoryEntry,
@@ -294,22 +295,35 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ action, paths, message })
       }),
-    gitStatus: () => apiRequest<GitRepositoryState>("/api/workspace/git/status"),
-    gitBranches: () => apiRequest<GitBranchesResponse>("/api/workspace/git/branches"),
-    gitLog: (limit = 50, skip = 0) =>
-      apiRequest<GitLogResponse>(`/api/workspace/git/log?limit=${limit}&skip=${skip}`),
-    gitResources: () => apiRequest<GitRepositoryResources>("/api/workspace/git/resources"),
-    gitConflict: (path: string) =>
-      apiRequest<GitConflictContent>(`/api/workspace/git/conflict?path=${encodeURIComponent(path)}`),
-    gitCommitDetails: (commit: string) =>
-      apiRequest<GitCommitDetailsResponse>(`/api/workspace/git/commit?commit=${encodeURIComponent(commit)}`),
-    gitCommitDiff: (commit: string, path?: string) => {
+    gitRepositories: () => apiRequest<GitRepositoriesResponse>("/api/workspace/git/repositories"),
+    gitStatus: (repoRoot?: string) => apiRequest<GitRepositoryState>(gitUrl("/api/workspace/git/status", repoRoot)),
+    gitBranches: (repoRoot?: string) => apiRequest<GitBranchesResponse>(gitUrl("/api/workspace/git/branches", repoRoot)),
+    gitLog: (limit = 50, skip = 0, repoRoot?: string) => {
+      const query = gitQuery(repoRoot);
+      query.set("limit", String(limit));
+      query.set("skip", String(skip));
+      return apiRequest<GitLogResponse>(`/api/workspace/git/log?${query}`);
+    },
+    gitResources: (repoRoot?: string) => apiRequest<GitRepositoryResources>(gitUrl("/api/workspace/git/resources", repoRoot)),
+    gitConflict: (path: string, repoRoot?: string) => {
+      const query = gitQuery(repoRoot);
+      query.set("path", path);
+      return apiRequest<GitConflictContent>(`/api/workspace/git/conflict?${query}`);
+    },
+    gitCommitDetails: (commit: string, repoRoot?: string) => {
+      const query = gitQuery(repoRoot);
+      query.set("commit", commit);
+      return apiRequest<GitCommitDetailsResponse>(`/api/workspace/git/commit?${query}`);
+    },
+    gitCommitDiff: (commit: string, path?: string, repoRoot?: string) => {
       const query = new URLSearchParams({ commit });
+      if (repoRoot) query.set("repo_root", repoRoot);
       if (path) query.set("path", path);
       return apiRequest<GitDiffResponse>(`/api/workspace/git/commit-diff?${query}`);
     },
-    gitReviewDiff: (mode: "working_tree" | "unstaged" | "staged" | "branch" = "working_tree", path?: string) => {
+    gitReviewDiff: (mode: "working_tree" | "unstaged" | "staged" | "branch" = "working_tree", path?: string, repoRoot?: string) => {
       const query = new URLSearchParams({ mode });
+      if (repoRoot) query.set("repo_root", repoRoot);
       if (path) query.set("path", path);
       return apiRequest<GitDiffResponse>(`/api/workspace/git/diff?${query}`);
     },
@@ -432,3 +446,27 @@ export const api = {
       )
   }
 };
+
+/**
+ * 构造包含可选仓库根目录的 Git 查询参数。
+ *
+ * @param repoRoot 可选仓库根目录
+ * @returns Git 查询参数
+ */
+function gitQuery(repoRoot?: string): URLSearchParams {
+  const query = new URLSearchParams();
+  if (repoRoot) query.set("repo_root", repoRoot);
+  return query;
+}
+
+/**
+ * 构造包含可选仓库根目录的 Git GET 地址。
+ *
+ * @param path Git API 路径
+ * @param repoRoot 可选仓库根目录
+ * @returns 完整请求地址
+ */
+function gitUrl(path: string, repoRoot?: string): string {
+  const query = gitQuery(repoRoot).toString();
+  return query ? `${path}?${query}` : path;
+}

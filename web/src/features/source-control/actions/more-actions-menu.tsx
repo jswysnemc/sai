@@ -8,6 +8,7 @@ import type { GitOperationUiOptions, RunGitOperation } from "../types";
 type MoreActionsMenuProps = {
   busy: boolean;
   dirtyTotal: number;
+  repoRoot: string | null;
   runOperation: RunGitOperation;
 };
 
@@ -72,7 +73,7 @@ export function MoreActionsMenu(props: MoreActionsMenuProps) {
           <Button disabled={props.dirtyTotal === 0} onClick={() => void run("stash_push", { message: "Sai stash", include_untracked: true })}>
             {t("Stash Including Untracked", "储藏并包含未跟踪文件")}
           </Button>
-          <RepositoryResources open={open} busy={props.busy} runOperation={props.runOperation} />
+          <RepositoryResources repoRoot={props.repoRoot} open={open} busy={props.busy} runOperation={props.runOperation} />
         </div>
       )}
     </div>

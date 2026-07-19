@@ -63,7 +63,7 @@ type ChatComposerProps = {
  */
 export function ChatComposer(props: ChatComposerProps) {
   const { t } = useI18n();
-  const git = useQuery({ queryKey:["git-status"], queryFn:api.workspace.gitStatus, staleTime:20_000 });
+  const git = useQuery({ queryKey: ["git-status", null], queryFn: () => api.workspace.gitStatus(), staleTime: 20_000 });
   const runtimeActivity = useRuntimeActivity();
   const fileInputRef = useRef<HTMLInputElement>(null);
 

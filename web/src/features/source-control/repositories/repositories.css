@@ -1,0 +1,215 @@
+.git-repositories-view {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  min-height: 0;
+  background: var(--paper);
+}
+
+.git-repositories-view > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2.5rem;
+  padding: 0.375rem 0.5rem 0.375rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.git-repositories-view > header > span,
+.git-worktree-create > span {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  font-size: 0.75rem;
+}
+
+.git-repositories-view > header > div {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+.git-worktree-create {
+  display: grid;
+  grid-template-columns: auto minmax(8rem, 1fr) minmax(7rem, 0.8fr) minmax(7rem, 0.7fr) auto;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-deep);
+}
+
+.git-worktree-create input {
+  min-width: 0;
+  min-height: 1.875rem;
+  padding: 0 0.4375rem;
+  border: 1px solid var(--line);
+  border-radius: 0.3125rem;
+  outline: 0;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font: 400 0.6875rem var(--font-code);
+}
+
+.git-worktree-create input:focus {
+  border-color: var(--line-strong);
+}
+
+.git-repository-list {
+  min-height: 0;
+  overflow: auto;
+  padding: 0.375rem;
+}
+
+.git-repository-group {
+  margin-bottom: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.git-repository-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1.75rem;
+  align-items: center;
+}
+
+.git-repository-heading > .ui-button:last-child {
+  width: 1.5rem;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  padding: 0;
+  border: 0;
+}
+
+.git-repository-item.ui-button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.375rem 0.5rem;
+  border: 0;
+  border-radius: 0;
+  text-align: left;
+}
+
+.git-repository-item.active,
+.git-worktree-item.active {
+  background: color-mix(in srgb, var(--accent) 11%, var(--paper));
+}
+
+.git-repository-item > span,
+.git-worktree-item > .ui-button > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.0625rem;
+}
+
+.git-repository-item strong,
+.git-repository-item small,
+.git-worktree-item strong,
+.git-worktree-item small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-repository-item strong,
+.git-worktree-item strong {
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.git-repository-item small,
+.git-worktree-item small {
+  color: var(--ink-soft);
+  font: 400 0.5625rem var(--font-code);
+}
+
+.git-repository-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.375rem;
+}
+
+.git-repository-meta small {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.0625rem;
+}
+
+.git-worktree-list {
+  display: grid;
+  padding: 0.25rem;
+  border-top: 1px solid var(--line);
+}
+
+.git-worktree-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1.75rem 1.75rem;
+  align-items: center;
+  border-radius: 0.3125rem;
+}
+
+.git-worktree-item > .ui-button:first-child {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  justify-content: stretch;
+  min-width: 0;
+  padding: 0.25rem 0.5rem 0.25rem 1rem;
+  border: 0;
+  text-align: left;
+}
+
+.git-worktree-item > .ui-button:not(:first-child) {
+  width: 1.5rem;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  padding: 0;
+  border: 0;
+}
+
+.git-worktree-item em {
+  color: var(--ink-soft);
+  font-size: 0.5625rem;
+  font-style: normal;
+}
+
+.git-repository-error,
+.git-repository-state {
+  padding: 0.5rem;
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+}
+
+.git-repository-error,
+.git-repository-state.error {
+  color: var(--danger);
+}
+
+@media (max-width: 58rem) {
+  .git-worktree-create {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+
+  .git-worktree-create > span,
+  .git-worktree-create input:first-of-type {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 38rem) {
+  .git-worktree-create {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .git-worktree-create input {
+    grid-column: 1 / -1;
+  }
+
+  .git-repository-meta {
+    max-width: 7rem;
+    flex-wrap: wrap;
+  }
+}

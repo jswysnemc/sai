@@ -185,6 +185,40 @@ pub(crate) struct GitRepositoryResources {
     pub remotes: Vec<GitRemote>,
 }
 
+/// Git worktree 摘要。
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct GitWorktree {
+    pub path: String,
+    pub head: String,
+    pub branch: String,
+    pub bare: bool,
+    pub detached: bool,
+    pub locked: bool,
+    pub prunable: bool,
+    pub current: bool,
+}
+
+/// 工作区中单个 Git 仓库的轻量摘要。
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct GitRepositorySummary {
+    pub root: String,
+    pub name: String,
+    pub head: String,
+    pub ahead: i32,
+    pub behind: i32,
+    pub changed: usize,
+    pub status: String,
+    pub error: Option<String>,
+    pub worktrees: Vec<GitWorktree>,
+}
+
+/// 工作区仓库发现响应。
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct GitRepositoriesResponse {
+    pub workspace_root: String,
+    pub repositories: Vec<GitRepositorySummary>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct GitConflictContent {
     pub state: GitRepositoryState,
@@ -227,6 +261,8 @@ pub(crate) struct GitOperationRequest<'a> {
     pub(crate) stash_ref: Option<&'a str>,
     pub(crate) tag: Option<&'a str>,
     pub(crate) remote_name: Option<&'a str>,
+    pub(crate) worktree_path: Option<&'a str>,
+    pub(crate) workspace_root: Option<&'a str>,
     pub(crate) include_untracked: bool,
     pub(crate) resolution: Option<&'a str>,
     pub(crate) content: Option<&'a str>,
@@ -262,6 +298,8 @@ impl<'a> GitOperationRequest<'a> {
             stash_ref: None,
             tag: None,
             remote_name: None,
+            worktree_path: None,
+            workspace_root: None,
             include_untracked: false,
             resolution: None,
             content: None,

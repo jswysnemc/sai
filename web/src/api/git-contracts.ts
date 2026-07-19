@@ -1,4 +1,5 @@
 export type GitOperationOptions = {
+  repo_root?: string;
   path?: string;
   old_path?: string;
   message?: string;
@@ -14,6 +15,7 @@ export type GitOperationOptions = {
   stash_ref?: string;
   tag?: string;
   remote_name?: string;
+  worktree_path?: string;
   include_untracked?: boolean;
   resolution?: "ours" | "theirs" | "content";
   content?: string;

@@ -10,7 +10,8 @@ pub(crate) use types::{
     GitBranch, GitBranchesResponse, GitCommitDetails, GitCommitDetailsResponse, GitCommitFile,
     GitCommitSummary, GitConflictContent, GitDiff, GitDiffResponse, GitDirtyCounts, GitFileStatus,
     GitInProgressOperation, GitLogResponse, GitOperationRequest, GitOperationResponse, GitRemote,
-    GitRepositoryResources, GitRepositoryState, GitStashEntry, GitStatusEntry, GitTag,
+    GitRepositoriesResponse, GitRepositoryResources, GitRepositoryState, GitRepositorySummary,
+    GitStashEntry, GitStatusEntry, GitTag, GitWorktree,
 };
 
 #[path = "git_diff_support.rs"]
@@ -40,6 +41,12 @@ mod resource_operations;
 #[path = "git_conflicts.rs"]
 mod conflicts;
 
+#[path = "git_repositories.rs"]
+mod repositories;
+
+#[path = "git_worktrees.rs"]
+mod worktrees;
+
 use branches::*;
 pub(crate) use conflicts::git_conflict;
 use conflicts::resolve_conflict;
@@ -47,9 +54,11 @@ use diff_content::*;
 use history_operations::*;
 pub(crate) use operations::git_op;
 use process::*;
+pub(crate) use repositories::{git_repositories, validate_git_repository_root};
 use resource_operations::*;
 pub(crate) use resources::git_resources;
 use support::*;
+use worktrees::{add_worktree, git_worktrees, remove_worktree};
 
 #[cfg(test)]
 #[path = "git_tests.rs"]
@@ -58,6 +67,10 @@ mod tests;
 #[cfg(test)]
 #[path = "git_conflict_tests.rs"]
 mod conflict_tests;
+
+#[cfg(test)]
+#[path = "git_repository_tests.rs"]
+mod repository_tests;
 
 const GIT_DIFF_MAX_BYTES: usize = 512 * 1024;
 const GIT_LOG_DEFAULT_LIMIT: usize = 50;

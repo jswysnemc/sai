@@ -94,6 +94,17 @@ async fn dispatch_operation(
         "tag_delete" => delete_tag(repo, request.tag).await,
         "remote_add" => add_remote(repo, request.remote_name, request.remote_url).await,
         "remote_remove" => remove_remote(repo, request.remote_name).await,
+        "worktree_add" => {
+            add_worktree(
+                repo,
+                request.workspace_root.map(Path::new).unwrap_or(repo),
+                request.worktree_path,
+                request.branch,
+                request.new_branch,
+            )
+            .await
+        }
+        "worktree_remove" => remove_worktree(repo, request.worktree_path, request.force).await,
         "resolve_conflict" => {
             resolve_conflict(
                 repo,
@@ -530,6 +541,8 @@ fn operation_message(action: &str) -> &'static str {
         "tag_delete" => "tag deleted",
         "remote_add" => "remote added",
         "remote_remove" => "remote removed",
+        "worktree_add" => "worktree created",
+        "worktree_remove" => "worktree removed",
         "resolve_conflict" => "conflict resolved",
         "continue_operation" => "operation continued",
         "skip_operation" => "operation step skipped",
