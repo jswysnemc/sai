@@ -7,6 +7,7 @@ import {
   ChevronDown,
   CloudDownload,
   CloudUpload,
+  EyeOff,
   GitBranch,
   GitCommitHorizontal,
   History,
@@ -313,6 +314,7 @@ export function DiffPane() {
               onUnstageAll={() => void runOp("unstage_all")}
               onStage={(path) => void runOp("stage", { path })}
               onUnstage={(path) => void runOp("unstage", { path })}
+              onIgnore={(path) => void runOp("add_to_gitignore", { path })}
               onDiscard={(entry) =>
                 void runOp("discard", {
                   path: entry.path,
@@ -333,6 +335,7 @@ export function DiffPane() {
               onUnstageAll={() => void runOp("unstage_all")}
               onStage={(path) => void runOp("stage", { path })}
               onUnstage={(path) => void runOp("unstage", { path })}
+              onIgnore={(path) => void runOp("add_to_gitignore", { path })}
               onDiscard={(entry) =>
                 void runOp("discard", {
                   path: entry.path,
@@ -483,6 +486,7 @@ function ChangeSection(props: {
   onUnstageAll: () => void;
   onStage: (path: string) => void;
   onUnstage: (path: string) => void;
+  onIgnore: (path: string) => void;
   onDiscard: (entry: GitStatusEntry) => void;
 }) {
   const { t } = useI18n();
@@ -518,14 +522,19 @@ function ChangeSection(props: {
                 <span title={entry.path}>{entry.path}</span>
               </button>
               <span className="git-file-actions">
-                {entry.staged && (
+                {props.section === "staged" && entry.staged && (
                   <button type="button" disabled={props.busy} onClick={() => props.onUnstage(entry.path)} title={t("Unstage", "取消暂存")}>
                     <Minus size={12} />
                   </button>
                 )}
-                {(entry.untracked || entry.worktree_status !== "." || entry.conflicted) && !entry.staged && (
+                {props.section === "changes" && (entry.untracked || entry.worktree_status !== "." || entry.conflicted) && (
                   <button type="button" disabled={props.busy} onClick={() => props.onStage(entry.path)} title={t("Stage", "暂存")}>
                     <Plus size={12} />
+                  </button>
+                )}
+                {props.section === "changes" && entry.untracked && (
+                  <button type="button" disabled={props.busy} onClick={() => props.onIgnore(entry.path)} title={t("Add to .gitignore", "加入 .gitignore")}>
+                    <EyeOff size={12} />
                   </button>
                 )}
                 {(entry.untracked || entry.worktree_status !== ".") && (
