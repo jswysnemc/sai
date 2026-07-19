@@ -33,6 +33,10 @@ mod branches;
 #[path = "git_operations.rs"]
 mod operations;
 
+#[cfg(test)]
+#[path = "git_push_tests.rs"]
+mod push_tests;
+
 #[path = "git_history_operations.rs"]
 mod history_operations;
 

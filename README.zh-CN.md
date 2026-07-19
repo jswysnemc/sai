@@ -120,7 +120,7 @@ Web 视图（Changes / Graph / Repositories / Diff / Merge Editor）
 | 暂存 / 取消暂存 / 丢弃区块 | 使用经过校验的 unified patch 调用 `git apply --cached` 或 `git apply --reverse` |
 | 提交变体 | `git commit -m`，可附加 `--amend`、`--signoff` 或 `--allow-empty` |
 | 获取 / 拉取 / 拉取并变基 | `git fetch --prune`、`git pull`、`git pull --rebase` |
-| 推送 / 强制推送 / 同步 | `git push`、`git push --force-with-lease`，或依次执行 pull 与 push |
+| 推送 / 推送到指定远端 / 强制推送 / 同步 | `git push`、`git push -u <remote> <branch>`、`git push --force-with-lease`，或依次执行 pull 与 push |
 | 分支操作 | `git switch`、`git switch -c`、`git branch -m/-d/-D`、`git merge`、`git rebase` |
 | 历史操作 | `git switch --detach`、`git cherry-pick`、`git rebase`、`git reset`、`git revert --no-edit` |
 | stash / 标签 / 远端 | `git stash`、`git tag`、`git remote add/remove/set-url` |

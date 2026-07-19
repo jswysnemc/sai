@@ -26,6 +26,7 @@ export type GitCommandId =
   | "git.pull"
   | "git.pullRebase"
   | "git.push"
+  | "git.pushTo"
   | "git.pushForce"
   | "git.sync"
   | "git.setRemote"
@@ -73,6 +74,7 @@ const COMMANDS: GitCommandDefinition[] = [
   command("git.pull", "pull", "remote"),
   command("git.pullRebase", "pull_rebase", "remote"),
   command("git.push", "push", "remote"),
+  command("git.pushTo", "push_to", "remote"),
   command("git.pushForce", "force_push_with_lease", "remote", true),
   command("git.sync", "sync", "remote"),
   command("git.setRemote", "set_remote", "remote"),

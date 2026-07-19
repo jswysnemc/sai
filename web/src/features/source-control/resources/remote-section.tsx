@@ -1,8 +1,9 @@
-import { Plus, RadioTower, Trash2 } from "lucide-react";
+import { CloudUpload, Plus, RadioTower, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { GitRemote } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
+import { executeGitCommand } from "../commands/git-command-registry";
 import type { RunGitOperation } from "../types";
 
 type RemoteSectionProps = {
@@ -50,6 +51,11 @@ export function RemoteSection(props: RemoteSectionProps) {
         <div className="git-resource-row" key={remote.name}>
           <span title={remote.fetch_url || remote.push_url}><strong>{remote.name}</strong><small>{remote.fetch_url || remote.push_url}</small></span>
           <div>
+            <Button
+              disabled={props.busy}
+              title={t(`Push current branch to ${remote.name}`, `将当前分支推送到 ${remote.name}`)}
+              onClick={() => void executeGitCommand("git.pushTo", props.runOperation, { remote_name: remote.name })}
+            ><CloudUpload size={11} /></Button>
             <Button disabled={props.busy} title={t("Remove remote", "删除远端")} onClick={() => void props.runOperation("remote_remove", {
               remote_name: remote.name,
               confirmTitle: t("Remove remote?", "删除远端？"),

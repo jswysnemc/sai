@@ -5,7 +5,7 @@ import { executeGitCommand, GIT_COMMANDS } from "./git-command-registry";
 describe("Git command registry", () => {
   it("keeps command identifiers unique and grouped", () => {
     const commands = [...GIT_COMMANDS.values()];
-    expect(commands.length).toBe(45);
+    expect(commands.length).toBe(46);
     expect(new Set(commands.map((command) => command.id)).size).toBe(commands.length);
     expect(commands.every((command) => command.id.startsWith("git.") && Boolean(command.group))).toBe(true);
   });
@@ -19,6 +19,8 @@ describe("Git command registry", () => {
     const runOperation = vi.fn().mockResolvedValue(undefined);
     await executeGitCommand("git.pullRebase", runOperation, { repo_root: "/repo" });
     expect(runOperation).toHaveBeenCalledWith("pull_rebase", { repo_root: "/repo" });
+    await executeGitCommand("git.pushTo", runOperation, { remote_name: "backup" });
+    expect(runOperation).toHaveBeenCalledWith("push_to", { remote_name: "backup" });
   });
 
   it("marks irreversible commands as destructive", () => {

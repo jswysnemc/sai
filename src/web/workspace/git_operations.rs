@@ -61,6 +61,7 @@ async fn dispatch_operation(
         "pull" => pull_repo(repo, state).await,
         "pull_rebase" => pull_rebase(repo, state).await,
         "push" => push_repo(repo, state).await,
+        "push_to" => push_to_remote(repo, state, request.remote_name).await,
         "force_push_with_lease" => force_push_with_lease(repo, state).await,
         "sync" => sync_repo(repo, state).await,
         "set_remote" => set_origin_remote(repo, request.remote_url).await,
@@ -494,6 +495,31 @@ async fn pull_rebase(repo: &Path, state: &GitRepositoryState) -> Result<GitOutpu
     }
 }
 
+/// 将当前分支推送到指定远端，并设置对应上游分支。
+///
+/// 参数:
+/// - `repo`: 仓库根目录
+/// - `state`: 当前仓库状态
+/// - `remote_name`: 目标远端名称
+///
+/// 返回:
+/// - Git 命令输出
+async fn push_to_remote(
+    repo: &Path,
+    state: &GitRepositoryState,
+    remote_name: Option<&str>,
+) -> Result<GitOutput> {
+    if state.head.trim().is_empty() || state.head == "(detached)" {
+        bail!("not on a local branch that can be pushed");
+    }
+    let remote_name = validate_remote_name(repo, remote_name).await?;
+    let remotes = git_remote_names(repo).await?;
+    if !remotes.iter().any(|name| name == &remote_name) {
+        bail!("remote does not exist: {remote_name}");
+    }
+    git_success(repo, &["push", "-u", &remote_name, state.head.as_str()]).await
+}
+
 /// 使用 force-with-lease 推送当前分支。
 ///
 /// 参数:
@@ -629,7 +655,7 @@ fn operation_message(action: &str) -> &'static str {
         "commit" => "commit created",
         "fetch" => "fetch completed",
         "pull" | "pull_rebase" => "pull completed",
-        "push" | "force_push_with_lease" => "push completed",
+        "push" | "push_to" | "force_push_with_lease" => "push completed",
         "sync" => "sync completed",
         "set_remote" => "remote repository saved",
         "publish" => "repository published",

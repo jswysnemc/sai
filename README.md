@@ -120,7 +120,7 @@ Web Views (Changes / Graph / Repositories / Diff / Merge Editor)
 | Stage / unstage / revert hunk | `git apply --cached` or `git apply --reverse` with a validated unified patch |
 | Commit variants | `git commit -m`, optionally `--amend`, `--signoff`, or `--allow-empty` |
 | Fetch / Pull / Pull Rebase | `git fetch --prune`, `git pull`, `git pull --rebase` |
-| Push / Force Push / Sync | `git push`, `git push --force-with-lease`, or pull followed by push |
+| Push / Push to / Force Push / Sync | `git push`, `git push -u <remote> <branch>`, `git push --force-with-lease`, or pull followed by push |
 | Branch operations | `git switch`, `git switch -c`, `git branch -m/-d/-D`, `git merge`, `git rebase` |
 | History operations | `git switch --detach`, `git cherry-pick`, `git rebase`, `git reset`, `git revert --no-edit` |
 | Stash / tags / remotes | `git stash`, `git tag`, `git remote add/remove/set-url` |

@@ -201,7 +201,7 @@ async fn validate_tag(repo: &Path, tag: Option<&str>) -> Result<String> {
 ///
 /// 返回:
 /// - 清理后的远端名称
-async fn validate_remote_name(repo: &Path, name: Option<&str>) -> Result<String> {
+pub(super) async fn validate_remote_name(repo: &Path, name: Option<&str>) -> Result<String> {
     let name = name
         .map(str::trim)
         .filter(|value| !value.is_empty())
