@@ -476,7 +476,10 @@ mod tests {
             "unknown thinking parameter"
         ));
         assert!(!anthropic_thinking_unsupported(401, "invalid api key"));
-        assert!(!anthropic_thinking_unsupported(400, "max_tokens is too low"));
+        assert!(!anthropic_thinking_unsupported(
+            400,
+            "max_tokens is too low"
+        ));
     }
 
     #[test]
@@ -627,7 +630,10 @@ mod tests {
         let payload = "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"等\"}}\n\n";
         let split = payload.find("等").unwrap() + 1;
         let mut buffer = SseDataBuffer::default();
-        assert!(buffer.push(&payload.as_bytes()[..split]).unwrap().is_empty());
+        assert!(buffer
+            .push(&payload.as_bytes()[..split])
+            .unwrap()
+            .is_empty());
         let events = buffer.push(&payload.as_bytes()[split..]).unwrap();
         assert_eq!(events.len(), 1);
         assert!(events[0].contains("等"));

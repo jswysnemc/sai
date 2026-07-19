@@ -32,11 +32,7 @@ impl ProviderProtocol {
             "" | "auto" => Ok(Self::Auto),
             "openai-chat" => Ok(Self::OpenAiChat),
             "openai-responses" => Ok(Self::OpenAiResponses),
-            "anthropic"
-            | "anthropic-messages"
-            | "messages"
-            | "claude"
-            | "claude-code"
+            "anthropic" | "anthropic-messages" | "messages" | "claude" | "claude-code"
             | "claude-messages" => Ok(Self::Anthropic),
             protocol => bail!("unsupported provider protocol: {protocol}"),
         }
@@ -156,7 +152,8 @@ impl OpenAiCompatibleClient {
     {
         let protocol = ProviderProtocol::from_provider(&self.provider)?;
         if protocol == ProviderProtocol::Anthropic
-            || (protocol == ProviderProtocol::Auto && provider_looks_official_anthropic(&self.provider))
+            || (protocol == ProviderProtocol::Auto
+                && provider_looks_official_anthropic(&self.provider))
         {
             return self
                 .chat_anthropic_stream(messages, tools, &mut on_event)
@@ -196,8 +193,7 @@ impl OpenAiCompatibleClient {
             self.provider.base_url.trim_end_matches('/')
         );
         let headers = bearer_request_headers(&self.api_key, &[]);
-        let mut debug =
-            self.start_http_debug("POST", &url, "openai-chat", &headers, &request);
+        let mut debug = self.start_http_debug("POST", &url, "openai-chat", &headers, &request);
         let response = self
             .client
             .post(&url)
@@ -246,12 +242,8 @@ impl OpenAiCompatibleClient {
                     &mut on_event,
                 )? {
                     if done {
-                        let result = finalize_stream_result(
-                            content,
-                            reasoning,
-                            usage,
-                            tool_calls.finish(),
-                        )?;
+                        let result =
+                            finalize_stream_result(content, reasoning, usage, tool_calls.finish())?;
                         if let Some(debug) = debug.as_ref() {
                             let _ = debug.finish_ok(&result);
                         }
@@ -311,8 +303,7 @@ impl OpenAiCompatibleClient {
         )?;
         let url = format!("{}/messages", self.provider.base_url.trim_end_matches('/'));
         let headers = anthropic_request_headers(&self.api_key);
-        let mut debug =
-            self.start_http_debug("POST", &url, "anthropic", &headers, &request);
+        let mut debug = self.start_http_debug("POST", &url, "anthropic", &headers, &request);
         // 【Anthropic】【Messages 请求】1. 首先使用当前 thinking 配置发送请求
         let response = self.send_anthropic_request(&url, &request).await?;
         let status = response.status();
@@ -341,7 +332,8 @@ impl OpenAiCompatibleClient {
                     &headers,
                     &fallback_request,
                 );
-                let fallback_response = self.send_anthropic_request(&url, &fallback_request).await?;
+                let fallback_response =
+                    self.send_anthropic_request(&url, &fallback_request).await?;
                 let fallback_status = fallback_response.status();
                 if let Some(debug) = debug.as_ref() {
                     let _ = debug.write_response_headers(
@@ -430,7 +422,11 @@ impl OpenAiCompatibleClient {
     ///
     /// 返回:
     /// - HTTP 响应
-    async fn send_anthropic_request(&self, url: &str, request: &Value) -> Result<reqwest::Response> {
+    async fn send_anthropic_request(
+        &self,
+        url: &str,
+        request: &Value,
+    ) -> Result<reqwest::Response> {
         Ok(self
             .client
             .post(url)
@@ -472,8 +468,7 @@ impl OpenAiCompatibleClient {
         )?;
         let url = format!("{}/responses", self.provider.base_url.trim_end_matches('/'));
         let headers = bearer_request_headers(&self.api_key, &[]);
-        let mut debug =
-            self.start_http_debug("POST", &url, "openai-responses", &headers, &request);
+        let mut debug = self.start_http_debug("POST", &url, "openai-responses", &headers, &request);
         let response = self
             .client
             .post(&url)
@@ -589,7 +584,10 @@ fn claude_protocol_hint(provider: &ProviderConfig) -> &'static str {
     let model = provider.default_model.to_ascii_lowercase();
     let claude_related = model.contains("claude")
         || provider.id.to_ascii_lowercase().contains("claude")
-        || provider.display_name.to_ascii_lowercase().contains("claude");
+        || provider
+            .display_name
+            .to_ascii_lowercase()
+            .contains("claude");
     if claude_related
         && !provider_looks_official_anthropic(provider)
         && matches!(protocol, "" | "auto" | "openai-chat")
@@ -613,9 +611,15 @@ fn anthropic_thinking_unsupported(status: u16, body: &str) -> bool {
     }
     let body = body.to_ascii_lowercase();
     body.contains("thinking")
-        && ["unsupported", "not supported", "unknown", "invalid", "unrecognized"]
-            .iter()
-            .any(|marker| body.contains(marker))
+        && [
+            "unsupported",
+            "not supported",
+            "unknown",
+            "invalid",
+            "unrecognized",
+        ]
+        .iter()
+        .any(|marker| body.contains(marker))
 }
 
 /// 按模型配置处理 Anthropic 网页搜索工具名称冲突。

@@ -38,7 +38,8 @@ pub(super) fn load_instruction_prompt(paths: &SaiPaths) -> String {
     // 1. 全局配置目录中的 AGENT.md
     for name in GLOBAL_INSTRUCTION_NAMES {
         let path = paths.config_dir.join(name);
-        if let Some(section) = read_instruction_section(&path, "global", &mut seen_paths, &mut seen_content)
+        if let Some(section) =
+            read_instruction_section(&path, "global", &mut seen_paths, &mut seen_content)
         {
             sections.push(section);
             break;

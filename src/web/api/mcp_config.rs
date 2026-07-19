@@ -23,7 +23,9 @@ pub(super) fn routes() -> Router<WebAppState> {
 /// 读取脱敏后的 MCP 配置。
 async fn load(State(state): State<WebAppState>) -> WebResult<Json<McpConfigResponse>> {
     let config = load_mcp_config(&state.paths).map_err(WebError::from)?;
-    let mut value = serde_json::to_value(config).map_err(anyhow::Error::from).map_err(WebError::from)?;
+    let mut value = serde_json::to_value(config)
+        .map_err(anyhow::Error::from)
+        .map_err(WebError::from)?;
     config_service::redact_json_value(&mut value);
     Ok(Json(McpConfigResponse {
         config: value,
@@ -44,6 +46,7 @@ async fn save(
     config_service::merge_secret_sentinels_json(&mut submitted, &current);
     let config: McpConfig = serde_json::from_value(submitted)
         .map_err(|error| WebError::bad_request(format!("invalid MCP configuration: {error}")))?;
-    save_mcp_config(&state.paths, &config).map_err(|error| WebError::bad_request(error.to_string()))?;
+    save_mcp_config(&state.paths, &config)
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
     load(State(state)).await
 }

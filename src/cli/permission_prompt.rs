@@ -2,9 +2,7 @@ use crate::i18n::text as t;
 use crate::permission::{
     PermissionDecision, PermissionInteractionState, PermissionRequest, PermissionTransition,
 };
-use crate::render::{
-    render_permission_controls, render_permission_title, rendered_visual_rows,
-};
+use crate::render::{render_permission_controls, render_permission_title, rendered_visual_rows};
 use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
@@ -131,7 +129,9 @@ fn menu_rows(request: &PermissionRequest, state: &PermissionInteractionState) ->
         render_permission_title(&request.tool, Some(&request.arguments)),
         render_permission_controls(state.selected(), state.reply_draft())
     );
-    rendered_visual_rows(&logical).max(1).min(usize::from(u16::MAX)) as u16
+    rendered_visual_rows(&logical)
+        .max(1)
+        .min(usize::from(u16::MAX)) as u16
 }
 
 /// 预留菜单空间并返回锚点行。
