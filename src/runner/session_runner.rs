@@ -374,9 +374,8 @@ fn build_submission_tool_registry(
         SubmissionSource::Repl | SubmissionSource::Web => {
             build_repl_tool_registry_for_session(config, paths, mode, session_id, state_dir)
         }
-        SubmissionSource::Command
-        | SubmissionSource::Gateway
-        | SubmissionSource::ShellIntercept => build_tool_registry(config, paths, mode),
+        source if should_discover_mcp(source) => build_tool_registry(config, paths, mode),
+        _ => crate::cli::build_tool_registry_without_mcp(config, paths, mode),
     }?;
     // CLI 单次对话也可提问；网关没有交互面，不注册 ask_question
     if matches!(
@@ -391,6 +390,20 @@ fn build_submission_tool_registry(
         crate::tools::register_command_mode_background(&mut registry, config, paths, session_id);
     }
     Ok(registry)
+}
+
+/// 判断指定提交来源是否需要同步发现 MCP 工具。
+///
+/// 参数:
+/// - `source`: 当前提交来源
+///
+/// 返回:
+/// - 长生命周期入口返回 `true`，短生命周期命令入口返回 `false`
+fn should_discover_mcp(source: SubmissionSource) -> bool {
+    !matches!(
+        source,
+        SubmissionSource::Command | SubmissionSource::ShellIntercept
+    )
 }
 
 /// 判断当前 submission 是否使用命令模式运行时清理策略。
@@ -636,6 +649,22 @@ mod tests {
             assert!(!registry.contains("subagent"), "source: {source:?}");
             assert!(!registry.contains("todo"), "source: {source:?}");
         }
+    }
+
+    /// 验证短生命周期命令入口不会在模型请求前同步发现 MCP。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn short_lived_command_sources_skip_eager_mcp_discovery() {
+        assert!(!should_discover_mcp(SubmissionSource::Command));
+        assert!(!should_discover_mcp(SubmissionSource::ShellIntercept));
+        assert!(should_discover_mcp(SubmissionSource::Repl));
+        assert!(should_discover_mcp(SubmissionSource::Web));
+        assert!(should_discover_mcp(SubmissionSource::Gateway));
     }
 
     /// 验证定时任务管理工具只对 Gateway 来源开放。
