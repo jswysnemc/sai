@@ -1,4 +1,4 @@
-import { BookOpen } from "lucide-react";
+import { BookOpen, Target } from "lucide-react";
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import { useI18n } from "../../i18n/use-i18n";
@@ -6,6 +6,7 @@ import { useI18n } from "../../i18n/use-i18n";
 export type SkillOption = {
   name: string;
   description: string;
+  kind?: "skill" | "command";
 };
 
 type SkillMentionPopoverProps = {
@@ -14,6 +15,7 @@ type SkillMentionPopoverProps = {
   activeIndex: number;
   onActiveIndexChange: (index: number) => void;
   onSelect: (name: string) => void;
+  onOptionsChange: (options: SkillOption[]) => void;
 };
 
 /**
@@ -41,7 +43,7 @@ export function filterSkills(skills: SkillOption[], query: string): SkillOption[
  * @returns skill 浮层；关闭时返回 null
  */
 export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopoverProps>(
-  function SkillMentionPopover({ open, query, activeIndex, onActiveIndexChange, onSelect }, ref) {
+  function SkillMentionPopover({ open, query, activeIndex, onActiveIndexChange, onSelect, onOptionsChange }, ref) {
     const { t } = useI18n();
     const [skills, setSkills] = useState<SkillOption[]>([]);
     const [loading, setLoading] = useState(false);
@@ -54,10 +56,27 @@ export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopove
       api.skills
         .list()
         .then((response) => {
-          if (!cancelled) setSkills(response.skills);
+          if (cancelled) return;
+          const options: SkillOption[] = [
+            {
+              name: "goal",
+              description: t("Use the remaining input as the session goal", "将后续输入设为会话目标"),
+              kind: "command"
+            },
+            ...response.skills.map((skill) => ({ ...skill, kind: "skill" as const }))
+          ];
+          setSkills(options);
+          onOptionsChange(options);
         })
         .catch(() => {
-          if (!cancelled) setSkills([]);
+          if (cancelled) return;
+          const options: SkillOption[] = [{
+            name: "goal",
+            description: t("Use the remaining input as the session goal", "将后续输入设为会话目标"),
+            kind: "command"
+          }];
+          setSkills(options);
+          onOptionsChange(options);
         })
         .finally(() => {
           if (!cancelled) setLoading(false);
@@ -65,7 +84,7 @@ export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopove
       return () => {
         cancelled = true;
       };
-    }, [open]);
+    }, [onOptionsChange, open, t]);
 
     const filtered = useMemo(() => filterSkills(skills, query), [skills, query]);
 
@@ -94,7 +113,7 @@ export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopove
               onClick={() => onSelect(skill.name)}
               key={skill.name}
             >
-              <BookOpen size={12} />
+              {skill.kind === "command" ? <Target size={12} /> : <BookOpen size={12} />}
               <span className="skill-mention-name">/{skill.name}</span>
               {skill.description && <span className="skill-mention-desc">{skill.description}</span>}
             </button>

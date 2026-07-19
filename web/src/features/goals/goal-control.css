@@ -23,11 +23,13 @@
 
 .goal-control.status-active .goal-control-trigger {
   color: var(--signal);
+  background: color-mix(in srgb, var(--signal) 8%, transparent);
 }
 
 .goal-control.status-blocked .goal-control-trigger,
 .goal-control.status-budget_limited .goal-control-trigger {
   color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
 }
 
 .goal-control-form {

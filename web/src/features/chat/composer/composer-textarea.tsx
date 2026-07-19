@@ -1,15 +1,15 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import type { ClipboardEvent, FormEvent, KeyboardEvent, PointerEvent } from "react";
 import { useOutsidePointerDown } from "../../../shared/hooks/use-outside-pointer-down";
 import {
-  deleteAdjacentFileMention,
+  deleteAdjacentComposerAtom,
   insertEditorPlainText,
   readEditorTextSelection,
-  renderFileMentionEditor,
-  selectFileMentionToken,
-  serializeFileMentionEditor,
+  renderComposerAtomEditor,
+  selectComposerAtom,
+  serializeComposerAtomEditor,
   setEditorTextSelection
-} from "./file-mention-editor";
+} from "./composer-atom-editor";
 import { findFileMentionTrigger, formatFileMention } from "./file-mention-token";
 import { FileMentionPopover } from "./file-mention-popover";
 import { filterSkills, SkillMentionPopover } from "./skill-mention-popover";
@@ -17,7 +17,6 @@ import type { SkillOption } from "./skill-mention-popover";
 import { findSkillMentionTrigger, formatSkillMention } from "./skill-mention-token";
 import { isCursorOnFirstLine, isCursorOnLastLine, navigateInputHistory } from "./input-history";
 import type { InputHistoryState } from "./input-history";
-import { api } from "../../../api/client";
 import { useI18n } from "../../i18n/use-i18n";
 
 type ComposerTextareaProps = {
@@ -102,25 +101,11 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
   useOutsidePointerDown(mentionPopoverRef, () => dismissMention(false), mentionOpen);
   useOutsidePointerDown(skillPopoverRef, () => dismissSkill(false), skillOpen);
 
-  // skill 列表缓存，供键盘确认时读取当前过滤结果
-  useEffect(() => {
-    if (!skillOpen) return;
-    let cancelled = false;
-    api.skills.list().then((response) => {
-      if (!cancelled) skillOptionsRef.current = response.skills;
-    }).catch(() => {
-      if (!cancelled) skillOptionsRef.current = [];
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [skillOpen]);
-
   // 1. 外部状态变化时重建 token DOM，本地输入同步时不触碰浏览器选区
   useLayoutEffect(() => {
     const editor = editorRef.current;
-    if (!editor || serializeFileMentionEditor(editor) === props.value) return;
-    renderFileMentionEditor(editor, props.value);
+    if (!editor || serializeComposerAtomEditor(editor) === props.value) return;
+    renderComposerAtomEditor(editor, props.value);
     const pending = pendingSelectionRef.current;
     pendingSelectionRef.current = null;
     const start = pending?.start ?? props.value.length;
@@ -165,7 +150,7 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
    * @returns 无返回值
    */
   const handleMentionSelect = (path: string) => {
-    const current = editorRef.current ? serializeFileMentionEditor(editorRef.current) : props.value;
+    const current = editorRef.current ? serializeComposerAtomEditor(editorRef.current) : props.value;
     const range = mentionRangeRef.current ?? { start: current.length, end: current.length };
     const mention = formatFileMention(path);
     const insertion = `${mention} `;
@@ -182,7 +167,7 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
    * @returns 无返回值
    */
   const handleSkillSelect = useCallback((name: string) => {
-    const current = editorRef.current ? serializeFileMentionEditor(editorRef.current) : props.value;
+    const current = editorRef.current ? serializeComposerAtomEditor(editorRef.current) : props.value;
     const range = skillRangeRef.current ?? { start: current.length, end: current.length, query: "" };
     const mention = formatSkillMention(name);
     const insertion = `${mention} `;
@@ -191,6 +176,11 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
     props.onChange(next);
     dismissSkill(false);
   }, [props]);
+
+  /** 缓存斜杠菜单选项，供键盘确认当前高亮项。 */
+  const handleSkillOptionsChange = useCallback((options: SkillOption[]) => {
+    skillOptionsRef.current = options;
+  }, []);
 
   /**
    * 将 DOM 输入同步为后端文本，并识别 @ 文件引用与 / skill 引用。
@@ -201,7 +191,7 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
   const handleInput = (event: FormEvent<HTMLDivElement>) => {
     historyRef.current = { index: null, draft: "" };
     const editor = event.currentTarget;
-    const next = serializeFileMentionEditor(editor);
+    const next = serializeComposerAtomEditor(editor);
     const selection = readEditorTextSelection(editor);
     const caret = selection?.end ?? next.length;
     const inputEvent = event.nativeEvent as InputEvent;
@@ -254,7 +244,7 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
     }
     const text = event.clipboardData.getData("text/plain");
     if (text && insertEditorPlainText(editor, text)) {
-      props.onChange(serializeFileMentionEditor(editor));
+      props.onChange(serializeComposerAtomEditor(editor));
       requestAnimationFrame(() => ensureComposerCaretVisible(editor));
     }
   };
@@ -267,7 +257,7 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
    */
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     event.currentTarget.focus();
-    if (!selectFileMentionToken(event.currentTarget, event.target)) return;
+    if (!selectComposerAtom(event.currentTarget, event.target)) return;
     event.preventDefault();
   };
 
@@ -279,7 +269,7 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
    */
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const editor = event.currentTarget;
-    const current = serializeFileMentionEditor(editor);
+    const current = serializeComposerAtomEditor(editor);
     const selection = readEditorTextSelection(editor) ?? { start: current.length, end: current.length };
 
     if (skillOpen) {
@@ -311,9 +301,9 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
 
     if ((event.key === "Backspace" || event.key === "Delete") && selection.start === selection.end) {
       const direction = event.key === "Backspace" ? "backward" : "forward";
-      if (deleteAdjacentFileMention(editor, direction)) {
+      if (deleteAdjacentComposerAtom(editor, direction)) {
         event.preventDefault();
-        props.onChange(serializeFileMentionEditor(editor));
+        props.onChange(serializeComposerAtomEditor(editor));
         return;
       }
     }
@@ -346,7 +336,7 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
     if (event.key === "Enter" && event.shiftKey) {
       event.preventDefault();
       if (insertEditorPlainText(editor, "\n")) {
-        props.onChange(serializeFileMentionEditor(editor));
+        props.onChange(serializeComposerAtomEditor(editor));
         requestAnimationFrame(() => ensureComposerCaretVisible(editor));
       }
     }
@@ -361,6 +351,7 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
         query={skillQuery}
         activeIndex={skillActiveIndex}
         onActiveIndexChange={setSkillActiveIndex}
+        onOptionsChange={handleSkillOptionsChange}
         onSelect={handleSkillSelect}
       />
       <div

@@ -119,25 +119,60 @@
   opacity: 0.55;
 }
 
-.composer-file-mention {
-  display: inline-block;
+.composer-atom {
+  display: inline-flex;
+  position: relative;
   max-width: min(360px, 72vw);
   margin: 0 2px;
-  padding: 0 6px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px 0 4px;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--signal) 28%, var(--line));
+  border: 1px solid color-mix(in srgb, var(--atom-color) 28%, var(--line));
   border-radius: 5px;
-  background: color-mix(in srgb, var(--signal) 9%, var(--paper-raised));
-  color: var(--signal);
+  background: color-mix(in srgb, var(--atom-color) 9%, var(--paper-raised));
+  color: var(--atom-color);
   font: 500 12px/19px var(--font-code);
-  text-overflow: ellipsis;
   vertical-align: -4px;
   white-space: nowrap;
   user-select: all;
 }
 
-.composer-file-mention::selection {
-  background: color-mix(in srgb, var(--signal) 28%, transparent);
+.composer-file-mention {
+  --atom-color: #3975a6;
+}
+
+.composer-skill-mention {
+  --atom-color: #167d66;
+}
+
+.composer-goal-mention {
+  --atom-color: #9a6700;
+}
+
+.composer-terminal-mention {
+  --atom-color: #a1425f;
+}
+
+.composer-atom-icon {
+  display: inline-grid;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--atom-color) 12%, transparent);
+}
+
+.composer-atom-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.composer-atom::selection,
+.composer-atom *::selection {
+  background: color-mix(in srgb, var(--atom-color) 28%, transparent);
 }
 
 .composer-attachments {

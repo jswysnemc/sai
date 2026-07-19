@@ -25,6 +25,7 @@ import type { PaneTab } from "../workspace/workspace-tab";
 import "./chat-page.css";
 import { ContextCompactionPart } from "./message/context-compaction-part";
 import { useI18n } from "../i18n/use-i18n";
+import { parseGoalCommand } from "../goals/goal-command";
 
 /**
  * 渲染当前会话历史、实时运行事件和消息输入区。
@@ -138,6 +139,39 @@ export function ChatPage() {
   const submit = async () => {
     const value = input.trim();
     if ((!value && composerAttachments.attachments.length === 0) || !activeSession) return;
+    const goalCommand = parseGoalCommand(value);
+    if (goalCommand) {
+      if (!goalCommand.objective) {
+        setActionError(new Error(t("Enter an objective after /goal", "请在 /goal 后输入目标内容")));
+        return;
+      }
+      const originalInput = input;
+      const currentAttachments = composerAttachments.attachments;
+      setActionError(null);
+      setInput("");
+      clearComposerDraft(activeSession.id);
+      composerAttachments.clearAttachments();
+      jumpToBottom();
+      try {
+        // 1. 将命令后的完整输入保存为当前会话目标
+        const response = await api.goals.set(activeSession.id, goalCommand.objective);
+        queryClient.setQueryData(["goal", activeSession.id], response);
+        // 2. 目标保存成功后立即启动主动续轮
+        await run.startGoal(
+          activeSession.id,
+          mode,
+          chatModel.selection ?? undefined,
+          thinking.thinkingLevel,
+          chatAgent.selection?.id
+        );
+      } catch (error) {
+        setInput(originalInput);
+        writeComposerDraft(activeSession.id, originalInput);
+        composerAttachments.restoreAttachments(currentAttachments);
+        setActionError(toDisplayError(error, "Failed to start goal", "启动目标失败"));
+      }
+      return;
+    }
     await queryClient.invalidateQueries({ queryKey: ["timeline", activeSession.id] });
     const originalInput = input;
     const currentAttachments = composerAttachments.attachments;
