@@ -17,10 +17,12 @@ export type GitOperationOptions = {
   remote_name?: string;
   worktree_path?: string;
   include_untracked?: boolean;
+  exclude_untracked?: boolean;
   resolution?: "ours" | "theirs" | "content";
   content?: string;
   all?: boolean;
   amend?: boolean;
   signoff?: boolean;
+  allow_empty?: boolean;
   force?: boolean;
 };

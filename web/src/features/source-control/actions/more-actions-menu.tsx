@@ -9,6 +9,8 @@ type MoreActionsMenuProps = {
   busy: boolean;
   dirtyTotal: number;
   repoRoot: string | null;
+  confirmSync: boolean;
+  confirmForcePush: boolean;
   runOperation: RunGitOperation;
 };
 
@@ -61,10 +63,15 @@ export function MoreActionsMenu(props: MoreActionsMenuProps) {
         <div className="git-more-actions-menu" role="menu">
           <span>{t("Remote", "远端")}</span>
           <Button onClick={() => void run("pull_rebase")}>{t("Pull (Rebase)", "拉取并变基")}</Button>
-          <Button onClick={() => void run("sync")}>{t("Sync", "同步")}</Button>
+          <Button onClick={() => void run("sync", props.confirmSync ? {
+            confirmTitle: t("Sync changes?", "同步改动？"),
+            confirmDescription: t("Git will pull remote changes and then push the current branch.", "Git 将先获取远端改动，再推送当前分支。")
+          } : {})}>{t("Sync", "同步")}</Button>
           <Button onClick={() => void run("force_push_with_lease", {
-            confirmTitle: t("Force push with lease?", "使用租约强制推送？"),
-            confirmDescription: t("Remote commits may be replaced. Git will refuse if the remote changed unexpectedly.", "远端提交可能被替换；远端状态意外变化时 Git 会拒绝执行。")
+            ...(props.confirmForcePush ? {
+              confirmTitle: t("Force push with lease?", "使用租约强制推送？"),
+              confirmDescription: t("Remote commits may be replaced. Git will refuse if the remote changed unexpectedly.", "远端提交可能被替换；远端状态意外变化时 Git 会拒绝执行。")
+            } : {})
           })}>{t("Force Push with Lease", "使用租约强制推送")}</Button>
           <span>{t("Stash", "储藏")}</span>
           <Button disabled={props.dirtyTotal === 0} onClick={() => void run("stash_push", { message: "Sai stash" })}>

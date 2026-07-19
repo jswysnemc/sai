@@ -57,6 +57,8 @@ struct GitOpRequest {
     worktree_path: Option<String>,
     #[serde(default)]
     include_untracked: bool,
+    #[serde(default)]
+    exclude_untracked: bool,
     resolution: Option<String>,
     content: Option<String>,
     #[serde(default)]
@@ -65,6 +67,8 @@ struct GitOpRequest {
     amend: bool,
     #[serde(default)]
     signoff: bool,
+    #[serde(default)]
+    allow_empty: bool,
     #[serde(default)]
     force: bool,
 }
@@ -395,11 +399,13 @@ async fn git_op(
             worktree_path: request.worktree_path.as_deref(),
             workspace_root: Some(&active.path),
             include_untracked: request.include_untracked,
+            exclude_untracked: request.exclude_untracked,
             resolution: request.resolution.as_deref(),
             content: request.content.as_deref(),
             all: request.all,
             amend: request.amend,
             signoff: request.signoff,
+            allow_empty: request.allow_empty,
             force: request.force,
         },
     )

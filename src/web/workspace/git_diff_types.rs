@@ -271,11 +271,13 @@ pub(crate) struct GitOperationRequest<'a> {
     pub(crate) worktree_path: Option<&'a str>,
     pub(crate) workspace_root: Option<&'a str>,
     pub(crate) include_untracked: bool,
+    pub(crate) exclude_untracked: bool,
     pub(crate) resolution: Option<&'a str>,
     pub(crate) content: Option<&'a str>,
     pub(crate) all: bool,
     pub(crate) amend: bool,
     pub(crate) signoff: bool,
+    pub(crate) allow_empty: bool,
     pub(crate) force: bool,
 }
 
@@ -308,11 +310,13 @@ impl<'a> GitOperationRequest<'a> {
             worktree_path: None,
             workspace_root: None,
             include_untracked: false,
+            exclude_untracked: false,
             resolution: None,
             content: None,
             all: false,
             amend: false,
             signoff: false,
+            allow_empty: false,
             force: false,
         }
     }

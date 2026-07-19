@@ -315,13 +315,18 @@ async fn commit(
         bail!("resolve all merge conflicts before committing");
     }
 
-    // 1. Commit All 先使用 Git 暂存全部工作树修改
+    // 1. Commit All 按配置暂存全部文件或仅暂存已经跟踪的文件
     let staged = if request.all {
-        Some(git_success(repo, &["add", "-A", "--"]).await?)
+        let args: &[&str] = if request.exclude_untracked {
+            &["add", "-u", "--"]
+        } else {
+            &["add", "-A", "--"]
+        };
+        Some(git_success(repo, args).await?)
     } else {
         None
     };
-    if !request.all && !request.amend && state.dirty_counts.staged == 0 {
+    if !request.all && !request.amend && !request.allow_empty && state.dirty_counts.staged == 0 {
         bail!("no staged changes to commit");
     }
 
@@ -332,6 +337,9 @@ async fn commit(
     }
     if request.signoff {
         args.push("--signoff");
+    }
+    if request.allow_empty {
+        args.push("--allow-empty");
     }
     let committed = git_success(repo, &args).await?;
     let mut outputs = Vec::new();

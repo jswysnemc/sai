@@ -480,6 +480,8 @@ export function SourceControlPane() {
             busy={busy}
             dirtyTotal={dirtyTotal}
             repoRoot={selectedRepoRoot}
+            confirmSync={git.confirm_sync}
+            confirmForcePush={git.confirm_force_push}
             runOperation={runOp}
           />
         </div>
@@ -502,6 +504,13 @@ export function SourceControlPane() {
               workingCount={workingCount}
               conflictedCount={groups.conflicts.length}
               busy={busy}
+              enableSmartCommit={git.enable_smart_commit}
+              suggestSmartCommit={git.suggest_smart_commit}
+              showActionButton={git.show_action_button}
+              confirmEmptyCommits={git.confirm_empty_commits}
+              confirmSync={git.confirm_sync}
+              postCommitCommand={git.post_commit_command}
+              untrackedChanges={git.untracked_changes}
               onMessageChange={setMessage}
               onCommit={commitChanges}
             />
