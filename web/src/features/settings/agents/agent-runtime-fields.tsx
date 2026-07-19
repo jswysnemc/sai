@@ -1,6 +1,6 @@
 import type { AppConfig } from "../../../api/contracts";
-import { ModelIcon } from "../../../shared/ui/model-icon";
-import { Select, type SelectOption } from "../../../shared/ui/select/select";
+import { Select } from "../../../shared/ui/select/select";
+import { AGENT_THINKING_OPTIONS, buildAgentModelChoices } from "../../agents/agent-runtime-options";
 import { useI18n } from "../../i18n/use-i18n";
 
 type AgentRuntimePatch = {
@@ -25,39 +25,6 @@ type AgentRuntimeFieldsProps = {
   /** 运行参数变化回调 */
   onChange: (patch: AgentRuntimePatch) => void;
 };
-
-const THINKING_OPTIONS = ["auto", "none", "low", "medium", "high", "xhigh", "max"]
-  .map((value) => ({ value, label: value }));
-
-/**
- * 构造当前运行覆盖可选择的模型名称，并保留模型列表外的历史配置值。
- *
- * @param config 应用配置
- * @param providerId 当前独立供应商标识
- * @param currentModel 当前模型覆盖值
- * @returns 可直接用于单一模型选择器的选项
- */
-export function buildAgentModelChoices(config: AppConfig, providerId: string, currentModel: string) {
-  const choices: SelectOption<string>[] = config.providers.flatMap((provider) => {
-    const configured = provider.models ?? [];
-    const models = configured.length > 0
-      ? configured
-      : [provider.default_model].filter((model): model is string => Boolean(model));
-    return models.map((model) => ({
-      value: `${provider.id}\t${model}`,
-      label: `${provider.display_name || provider.id} / ${model}`,
-      icon: <ModelIcon model={model} size={14} />
-    }));
-  });
-  if (providerId && currentModel && !choices.some((choice) => choice.value === `${providerId}\t${currentModel}`)) {
-    choices.unshift({
-      value: `${providerId}\t${currentModel}`,
-      label: `${providerId} / ${currentModel}`,
-      icon: <ModelIcon model={currentModel} size={14} />
-    });
-  }
-  return choices;
-}
 
 /**
  * 渲染统一 Agent 使用的模型组合和思考等级字段。
@@ -95,7 +62,7 @@ export function AgentRuntimeFields({
     </div>
     <div className="settings-field">
       <span>{t("Thinking level", "思考等级")}</span>
-      <Select value={thinkingLevel || "auto"} options={THINKING_OPTIONS} onChange={(value) => onChange({ thinking_level: value })} ariaLabel={t("Agent thinking level", "Agent 思考等级")} />
+      <Select value={thinkingLevel || "auto"} options={AGENT_THINKING_OPTIONS} onChange={(value) => onChange({ thinking_level: value })} ariaLabel={t("Agent thinking level", "Agent 思考等级")} />
       <small>{thinkingHelp}</small>
     </div>
   </>;

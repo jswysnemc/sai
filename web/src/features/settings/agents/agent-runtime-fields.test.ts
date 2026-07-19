@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AppConfig } from "../../../api/contracts";
-import { buildAgentModelChoices } from "./agent-runtime-fields";
+import { buildAgentModelChoices } from "../../agents/agent-runtime-options";
 
 const config = {
   active_provider: "active",

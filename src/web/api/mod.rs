@@ -1,4 +1,5 @@
 mod agent_options;
+mod agents;
 mod background_tasks;
 mod config;
 mod cron_jobs;
@@ -40,6 +41,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(config::routes())
         .merge(mcp_config::routes())
         .merge(agent_options::routes())
+        .merge(agents::routes())
         .merge(skills::routes())
         .merge(background_tasks::routes())
         .merge(todos::routes())

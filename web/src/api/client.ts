@@ -34,11 +34,14 @@ import type {
   ThinkingLevel,
   RunInfo,
   ActiveRunsResponse,
+  AgentRuntimeProfile,
+  AgentRuntimeProfilesResponse,
   SessionTimeline,
   SystemUsage,
   Session,
   TerminalInfo,
   UpdateCronJobRequest,
+  UpdateAgentRuntimeRequest,
   BackgroundTask,
   BackgroundTaskOutput,
   TodoItem,
@@ -212,6 +215,14 @@ export const api = {
         })
       }),
     stop: (id: string) => apiRequest<{ stopped: boolean }>(`/api/runs/${id}`, { method: "DELETE" })
+  },
+  agents: {
+    runtimeProfiles: () => apiRequest<AgentRuntimeProfilesResponse>("/api/agents/runtime"),
+    updateRuntime: (agentId: string, request: UpdateAgentRuntimeRequest) =>
+      apiRequest<AgentRuntimeProfile>(`/api/agents/${encodeURIComponent(agentId)}/runtime`, {
+        method: "PUT",
+        body: JSON.stringify(request)
+      })
   },
 
   memory: {

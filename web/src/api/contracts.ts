@@ -492,6 +492,24 @@ export type AgentProfileConfig = {
   register_to_main?: boolean;
 };
 
+export type AgentRuntimeProfile = {
+  id: string;
+  name: string;
+  provider_id: string;
+  model: string;
+  thinking_level: string;
+};
+
+export type AgentRuntimeProfilesResponse = {
+  profiles: AgentRuntimeProfile[];
+};
+
+export type UpdateAgentRuntimeRequest = {
+  provider_id: string;
+  model: string;
+  thinking_level: string;
+};
+
 export type SubagentProfileConfig = {
   id: string;
   name: string;

@@ -1,0 +1,50 @@
+.agent-quick-grid {
+  display: grid;
+  gap: 0.875rem;
+}
+
+.agent-quick-field {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.agent-quick-field > span {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+.agent-quick-field > span svg {
+  color: var(--signal);
+}
+
+.agent-quick-grid > p,
+.agent-quick-state,
+.agent-quick-error {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+
+.agent-quick-state,
+.agent-quick-error {
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4375rem;
+  background: var(--paper-deep);
+}
+
+.agent-quick-error {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
+  color: var(--danger);
+}
+
+@media (max-width: 40rem) {
+  .agent-quick-grid {
+    gap: 0.75rem;
+  }
+}

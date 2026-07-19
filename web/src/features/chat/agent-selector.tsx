@@ -1,7 +1,7 @@
 import { Bot, Settings2 } from "lucide-react";
 import { useState } from "react";
 import type { AgentChoice } from "../agents/agent-types";
-import { AgentConfigDialog } from "../agents/agent-config-dialog/agent-config-dialog";
+import { AgentQuickConfigDialog } from "../agents/agent-quick-config/agent-quick-config-dialog";
 import { Select } from "../../shared/ui/select/select";
 import "./agent-selector.css";
 import { useI18n } from "../i18n/use-i18n";
@@ -22,7 +22,7 @@ type AgentSelectorProps = {
  */
 export function AgentSelector({ choices, selection, loading, disabled, onSelect }: AgentSelectorProps) {
   const { t } = useI18n();
-  const [configOpen, setConfigOpen] = useState(false);
+  const [quickConfigOpen, setQuickConfigOpen] = useState(false);
   return (
     <div className="agent-selector">
       <Bot size={13} aria-hidden />
@@ -40,13 +40,15 @@ export function AgentSelector({ choices, selection, loading, disabled, onSelect 
       <button
         type="button"
         className="agent-selector-config"
-        onClick={() => setConfigOpen(true)}
-        title={t("Agent settings", "Agent 配置")}
-        aria-label={t("Open Agent settings", "打开 Agent 配置")}
+        onClick={() => setQuickConfigOpen(true)}
+        title={t("Quick Agent model settings", "快速调整 Agent 模型")}
+        aria-label={t("Quick Agent model settings", "快速调整 Agent 模型")}
       >
         <Settings2 size={13} />
       </button>
-      <AgentConfigDialog open={configOpen} onClose={() => setConfigOpen(false)} />
+      {quickConfigOpen && (
+        <AgentQuickConfigDialog open agent={selection} onClose={() => setQuickConfigOpen(false)} />
+      )}
     </div>
   );
 }
