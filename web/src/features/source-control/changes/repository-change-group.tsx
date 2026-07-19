@@ -1,11 +1,11 @@
 import { ChevronDown, FolderGit2, GitBranch } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { GitRepositoryState, GitStatusEntry } from "../../../api/contracts";
+import type { GitRepositoryState, GitStatusEntry, ScmConfig } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
 import type { GitOperationUiOptions, RunGitOperation } from "../types";
 import { ChangeSection, type ChangeSectionKind } from "./change-section";
-import { groupGitChanges } from "./change-groups";
+import { countVisibleGitChanges, groupGitChanges, type GitUntrackedChangesMode } from "./change-groups";
 import "./repository-change-group.css";
 
 type RepositoryChangeGroupProps = {
@@ -13,6 +13,8 @@ type RepositoryChangeGroupProps = {
   state: GitRepositoryState;
   active: boolean;
   selectedPath: string | null;
+  viewMode: ScmConfig["default_view_mode"];
+  untrackedMode: GitUntrackedChangesMode;
   busy: boolean;
   runOperation: RunGitOperation;
   onSelectRepository: () => void;
@@ -28,8 +30,11 @@ type RepositoryChangeGroupProps = {
 export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(true);
-  const groups = useMemo(() => groupGitChanges(props.state.entries), [props.state.entries]);
-  const changed = props.state.entries.length;
+  const groups = useMemo(
+    () => groupGitChanges(props.state.entries, props.untrackedMode),
+    [props.state.entries, props.untrackedMode]
+  );
+  const changed = countVisibleGitChanges(props.state.entries, props.untrackedMode);
 
   /**
    * 对当前仓库执行 Git 操作。
@@ -103,6 +108,7 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
               title={t(`Merge Changes ${groups.conflicts.length}`, `合并变更 ${groups.conflicts.length}`)}
               entries={groups.conflicts}
               selectedPath={selectedPath}
+              viewMode={props.viewMode}
               busy={props.busy}
               onSelect={(path) => props.onSelectChange(path, "merge")}
               onStageAll={() => void run("stage_all")}
@@ -119,6 +125,7 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
               title={t(`Staged Changes ${groups.staged.length}`, `已暂存变更 ${groups.staged.length}`)}
               entries={groups.staged}
               selectedPath={selectedPath}
+              viewMode={props.viewMode}
               busy={props.busy}
               onSelect={(path) => props.onSelectChange(path, "staged")}
               onStageAll={() => void run("stage_all")}
@@ -135,6 +142,7 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
               title={t(`Changes ${groups.changes.length}`, `更改 ${groups.changes.length}`)}
               entries={groups.changes}
               selectedPath={selectedPath}
+              viewMode={props.viewMode}
               busy={props.busy}
               onSelect={(path) => props.onSelectChange(path, "changes")}
               onStageAll={() => void run("stage_all")}
@@ -151,6 +159,7 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
               title={t(`Untracked ${groups.untracked.length}`, `未跟踪 ${groups.untracked.length}`)}
               entries={groups.untracked}
               selectedPath={selectedPath}
+              viewMode={props.viewMode}
               busy={props.busy}
               onSelect={(path) => props.onSelectChange(path, "untracked")}
               onStageAll={() => void run("stage_all")}

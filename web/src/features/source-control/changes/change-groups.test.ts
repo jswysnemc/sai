@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GitStatusEntry } from "../../../api/contracts";
-import { groupGitChanges } from "./change-groups";
+import { countVisibleGitChanges, groupGitChanges } from "./change-groups";
 
 /**
  * 创建测试用 Git 状态条目。
@@ -40,5 +40,19 @@ describe("groupGitChanges", () => {
     expect(groups.untracked).toEqual([untracked]);
     expect(groups.staged).toEqual([]);
     expect(groups.changes).toEqual([]);
+  });
+
+  it("mixes or hides untracked files according to configuration", () => {
+    const modified = entry({ path: "changed.txt", worktree_status: "M" });
+    const untracked = entry({ path: "new.txt", untracked: true, index_status: "?", worktree_status: "?" });
+
+    const mixed = groupGitChanges([modified, untracked], "mixed");
+    expect(mixed.changes).toEqual([modified, untracked]);
+    expect(mixed.untracked).toEqual([]);
+
+    const hidden = groupGitChanges([modified, untracked], "hidden");
+    expect(hidden.changes).toEqual([modified]);
+    expect(hidden.untracked).toEqual([]);
+    expect(countVisibleGitChanges([modified, untracked], "hidden")).toBe(1);
   });
 });

@@ -1,0 +1,54 @@
+.git-file-list-tree .git-file-main.ui-button {
+  padding-inline-start: calc(0.25rem + var(--git-tree-indent, 0rem));
+}
+
+.git-tree-directory.ui-button {
+  display: grid;
+  grid-template-columns: 0.75rem 0.875rem minmax(0, 1fr);
+  justify-content: stretch;
+  width: 100%;
+  min-height: 1.75rem;
+  padding-inline-end: 0.25rem;
+  border: 0;
+  border-radius: 0.3125rem;
+  background: transparent;
+  color: var(--ink-soft);
+  text-align: left;
+}
+
+.git-tree-directory.ui-button:hover {
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.git-tree-directory > svg:first-child {
+  transition: transform 140ms ease;
+}
+
+.git-tree-directory > svg:first-child.open {
+  transform: rotate(90deg);
+}
+
+.git-tree-directory > span {
+  overflow: hidden;
+  font: 500 0.6875rem var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-view-count-badge {
+  min-width: 1rem;
+  padding: 0.0625rem 0.25rem;
+  border-radius: 0.625rem;
+  background: color-mix(in srgb, var(--signal) 14%, transparent);
+  color: var(--signal);
+  font: 600 0.5625rem var(--font-code);
+  text-align: center;
+}
+
+@media (max-width: 40rem) {
+  .git-view-count-badge {
+    min-width: 0.875rem;
+    padding-inline: 0.1875rem;
+  }
+}

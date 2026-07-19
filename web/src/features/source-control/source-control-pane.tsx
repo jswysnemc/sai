@@ -37,7 +37,9 @@ import { RepositoriesView } from "./repositories/repositories-view";
 import { PublishRepositoryControl } from "./remote/publish-repository-control";
 import { useScmStateStore } from "./state/use-scm-state-store";
 import { useGitRepositoryEvents, type GitWatchMode } from "./state/use-git-repository-events";
+import { useGitSettings } from "./state/use-git-settings";
 import { useRepositoryStatuses } from "./state/use-repository-statuses";
+import { resolveScmCountBadge } from "./state/scm-count-badge";
 import type { GitOutputEntry, GitOperationUiOptions } from "./types";
 import "./source-control.css";
 import { GitBranchMenu } from "../workspace/git-branch-menu";
@@ -63,6 +65,7 @@ export function SourceControlPane() {
   const [openFolderDialogOpen, setOpenFolderDialogOpen] = useState(false);
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
   const [cloneInput, setCloneInput] = useState<CloneRepositoryInput | null>(null);
+  const { scm, git } = useGitSettings();
   const scmState = useScmStateStore(selectedRepoRoot);
   const {
     message,
@@ -145,7 +148,10 @@ export function SourceControlPane() {
   });
 
   const ready = state?.status === "ready";
-  const groups = useMemo(() => groupGitChanges(state?.entries ?? []), [state?.entries]);
+  const groups = useMemo(
+    () => groupGitChanges(state?.entries ?? [], git.untracked_changes),
+    [git.untracked_changes, state?.entries]
+  );
   useEffect(() => {
     const available = (visibleRepositories?.repositories ?? []).flatMap((repository) => [
       repository.root,
@@ -426,6 +432,12 @@ export function SourceControlPane() {
     (state?.dirty_counts.untracked ?? 0) +
     (state?.dirty_counts.conflicted ?? 0);
   const workingCount = groups.changes.length + groups.untracked.length;
+  const countBadge = resolveScmCountBadge(
+    scm.count_badge,
+    hasRepositories ? repositoryStatuses.data?.repositories ?? [] : state ? [state] : [],
+    state?.repo_root ?? selectedRepoRoot,
+    git.untracked_changes
+  );
 
   return (
     <section className="diff-pane git-manager git-review">
@@ -442,6 +454,7 @@ export function SourceControlPane() {
         <div className="git-review-actions">
           <Button className={mode === "changes" ? "active" : ""} onClick={() => setMode("changes")}>
             {t("Changes", "变更")}
+            {countBadge !== null && <span className="git-view-count-badge">{countBadge}</span>}
           </Button>
           <Button className={mode === "history" ? "active" : ""} onClick={() => setMode("history")}>
             <History size={13} />
@@ -527,6 +540,8 @@ export function SourceControlPane() {
                     state={repository}
                     active={repository.repo_root === selectedRepoRoot || !hasRepositories}
                     selectedPath={selectedPath}
+                    viewMode={scm.default_view_mode}
+                    untrackedMode={git.untracked_changes}
                     busy={busy}
                     runOperation={runOp}
                     onSelectRepository={() => setSelectedRepoRoot(repository.repo_root)}
