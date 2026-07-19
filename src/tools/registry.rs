@@ -360,3 +360,56 @@ pub fn empty_parameters() -> Value {
         "additionalProperties": false,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::permission::{PermissionProfile, PermissionProfileMode};
+    use std::path::PathBuf;
+    use std::sync::Mutex;
+
+    /// 验证批准后的网络命令不会再注入沙箱标记。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[tokio::test]
+    async fn approved_network_command_reaches_handler_without_sandbox_marker() {
+        let received = Arc::new(Mutex::new(None));
+        let handler_received = Arc::clone(&received);
+        let mut registry = ToolRegistry::new();
+        registry.register(
+            ToolSpec::new(
+                "run_command",
+                "test",
+                empty_parameters(),
+                move |arguments| {
+                    let handler_received = Arc::clone(&handler_received);
+                    async move {
+                        *handler_received.lock().unwrap() = Some(arguments);
+                        Ok("ok".to_string())
+                    }
+                },
+            )
+            .writes(),
+        );
+        registry.set_permission_profile(PermissionProfile::new(
+            PermissionProfileMode::Audited,
+            PathBuf::from("/workspace/project"),
+            None,
+        ));
+        let arguments = r#"{"command":"curl https://example.com"}"#;
+
+        registry
+            .record_permission_approved("run_command", arguments)
+            .unwrap();
+        registry.call("run_command", arguments).await.unwrap();
+
+        let received = received.lock().unwrap();
+        assert!(received
+            .as_ref()
+            .is_some_and(|arguments| arguments.get("_sai_sandbox").is_none()));
+    }
+}

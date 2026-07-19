@@ -1,3 +1,4 @@
+use super::command_policy::requires_sandbox_escape;
 use super::path_policy::{
     contains_external_path, contains_sensitive_read_path, path_is_within_workspace,
     resolve_without_io,
@@ -203,11 +204,13 @@ impl PermissionProfile {
                 error
             })?;
         }
-        // 6. 记录允许结果，只有 Linux 能为前台命令附加 bubblewrap 沙盒
+        // 6. 已批准的网络或显式提升命令在沙箱外执行，其他前台命令保留工作区沙箱
+        let escape_sandbox = tool == "run_command" && requires_sandbox_escape(arguments);
         self.record(tool, AuditDecision::Allowed, arguments, None);
         Ok(self.mode == PermissionProfileMode::Audited
             && tool == "run_command"
-            && cfg!(target_os = "linux"))
+            && cfg!(target_os = "linux")
+            && !(approved && escape_sandbox))
     }
 
     /// 判断工具执行前是否需要等待用户完成交互式审计。
@@ -529,6 +532,29 @@ mod tests {
             .unwrap();
 
         assert_eq!(sandboxed, cfg!(target_os = "linux"));
+    }
+
+    /// 验证用户批准网络命令后不再隔离网络命名空间。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn audited_profile_runs_approved_network_command_outside_sandbox() {
+        let profile = PermissionProfile::new(
+            PermissionProfileMode::Audited,
+            PathBuf::from("/workspace/project"),
+            None,
+        );
+        let args = json!({"command":"curl https://example.com"});
+
+        profile.record_approved("run_command", &args);
+
+        assert!(!profile
+            .authorize("run_command", ToolPermission::Writes, &args)
+            .unwrap());
     }
 
     /// 验证普通工作区读取不需要审计，但工作区内凭据文件仍需审计。

@@ -1,5 +1,6 @@
 mod audit;
 mod broker;
+mod command_policy;
 mod interaction;
 mod path_policy;
 mod policy;
