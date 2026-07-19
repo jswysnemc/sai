@@ -17,7 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import { TodoMarkdownView } from "../todo/todo-markdown-view";
 import { useRuntimeActivity } from "../runtime-activity/use-runtime-activity";
-import { PermissionAuditDialog } from "../permission/permission-audit-dialog";
+import { createRunModeOptions } from "../permission/run-mode-options";
 import { Button } from "../../shared/ui/button/button";
 import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
@@ -96,11 +96,7 @@ export function ChatComposer(props: ChatComposerProps) {
     runStatus: props.runStatus,
     hasDraft: Boolean(props.value.trim()) || props.attachments.length > 0
   });
-  const runModeOptions = [
-    { value: "yolo", label: t("Work", "工作"), description: t("Execute directly without per-tool permission prompts", "直接执行，不逐次询问工具权限") },
-    { value: "audited", label: t("Audited", "审核"), description: t("Ask before write tools and restrict them to the workspace sandbox", "写入工具逐次询问，限制在工作区沙盒") },
-    { value: "plan", label: t("Plan", "规划"), description: t("Use read-only tools and prohibit modifications", "仅只读工具，禁止修改与写操作") }
-  ] satisfies Array<{ value: RunMode; label: string; description: string }>;
+  const runModeOptions = createRunModeOptions(t);
 
   return (
     <div className="composer-shell">
@@ -109,7 +105,6 @@ export function ChatComposer(props: ChatComposerProps) {
         {git.data?.status === "ready" && git.data.head && <span className="composer-context-chip" title={git.data.upstream || git.data.head}><GitBranch size={13}/><span>{git.data.head}</span></span>}
         <SystemUsage selection={props.selection} onCompact={props.onCompact} compactDisabled={props.running} />
         <AgentSelector choices={props.agentChoices} selection={props.agentSelection} loading={props.agentLoading} disabled={props.running} onSelect={props.onAgentSelect} />
-        <PermissionAuditDialog sessionId={props.sessionId} />
         <GoalControl sessionId={props.sessionId} running={props.running} onContinue={props.onContinueGoal} />
         <Button className="composer-rail-button" onClick={props.onUndo} disabled={!props.undoAvailable || props.running} title={t("Undo the last turn and its worktree changes", "撤销最后一轮及其工作树修改")} aria-label={t("Undo last turn", "撤销最后一轮")}><Undo2 size={14} /></Button>
         <div className="composer-mode">

@@ -1,0 +1,35 @@
+.run-mode-icon {
+  display: inline-grid;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 5px;
+}
+
+.run-mode-icon.yolo {
+  background: color-mix(in srgb, #b7791f 14%, transparent);
+  color: #9a6700;
+}
+
+.run-mode-icon.audit {
+  background: color-mix(in srgb, #167d66 14%, transparent);
+  color: #167d66;
+}
+
+.run-mode-icon.plan {
+  background: color-mix(in srgb, #3f6fb5 14%, transparent);
+  color: #3f6fb5;
+}
+
+[data-theme="dark"] .run-mode-icon.yolo {
+  color: #e3ae4f;
+}
+
+[data-theme="dark"] .run-mode-icon.audit {
+  color: #62bea5;
+}
+
+[data-theme="dark"] .run-mode-icon.plan {
+  color: #7fa8e5;
+}

@@ -271,8 +271,8 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
             type="button"
             className={`sidebar-rail-button${appMenuOpen || appMenuActive ? " active" : ""}`}
             onClick={() => setAppMenuOpen((value) => !value)}
-            aria-label={t("Application menu", "应用菜单")}
-            title={t("Application menu", "应用菜单")}
+            aria-label={t("Settings menu", "设置菜单")}
+            title={t("Settings menu", "设置菜单")}
             aria-expanded={appMenuOpen}
           >
             <Settings size={17} strokeWidth={1.8} />
@@ -284,7 +284,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
                 <FolderOpen size={14} /><span>{t("Open server directory", "打开服务端目录")}</span>
               </button>
               <button type="button" onClick={() => { setAppMenuOpen(false); navigate("/settings"); onNavigate?.(); }}>
-                <Settings size={14} /><span>{t("Settings", "配置")}</span>
+                <Settings size={14} /><span>{t("Settings", "设置")}</span>
               </button>
               <button type="button" onClick={() => { setAppMenuOpen(false); navigate("/gateways"); onNavigate?.(); }}>
                 <Cable size={14} /><span>{t("Gateways", "网关")}</span>
@@ -430,7 +430,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
             onClick={() => setAppMenuOpen((value) => !value)}
             aria-expanded={appMenuOpen}
           >
-            <Settings size={15} strokeWidth={1.8} /><span>{t("Application", "应用")}</span>
+            <Settings size={15} strokeWidth={1.8} /><span>{t("Settings", "设置")}</span>
           </button>
           <LocaleSwitcher />
         </div>
@@ -440,7 +440,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
               <FolderOpen size={14} /><span>{t("Open server directory", "打开服务端目录")}</span>
             </button>
             <NavLink to="/settings" onClick={() => { setAppMenuOpen(false); onNavigate?.(); }} className={({ isActive }) => isActive ? "active" : ""}>
-              <Settings size={14} /><span>{t("Settings", "配置")}</span>
+              <Settings size={14} /><span>{t("Settings", "设置")}</span>
             </NavLink>
             <NavLink to="/gateways" onClick={() => { setAppMenuOpen(false); onNavigate?.(); }} className={({ isActive }) => isActive ? "active" : ""}>
               <Cable size={14} /><span>{t("Gateways", "网关")}</span>

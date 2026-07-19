@@ -1,5 +1,6 @@
 import type { AppConfig, RunMode } from "../../../api/contracts";
 import { Select } from "../../../shared/ui/select/select";
+import { createRunModeOptions } from "../../permission/run-mode-options";
 import { SettingsGroup } from "../editor-layout";
 import { useI18n } from "../../i18n/use-i18n";
 
@@ -18,11 +19,7 @@ export function PermissionDefaultSettings({ config, onConfigChange }: Permission
   const { t } = useI18n();
   const tuiValue = config.permission?.tui_mode ?? config.permission?.default_mode ?? "yolo";
   const cliValue = config.permission?.cli_mode ?? config.permission?.default_mode ?? "yolo";
-  const permissionOptions = [
-    { value: "audited", label: t("Audited", "审计"), description: t("Ask before write tools and restrict them to the workspace sandbox.", "写入工具逐次询问，并限制在工作区沙盒内。") },
-    { value: "plan", label: t("Plan", "规划"), description: t("Allow read-only tools only; file modifications and write operations are prohibited.", "仅允许只读工具，禁止修改文件和执行写操作。") },
-    { value: "yolo", label: "YOLO", description: t("Run allowed tools without permission prompts.", "不询问工具权限，直接执行允许的工具。") }
-  ] satisfies Array<{ value: RunMode; label: string; description: string }>;
+  const permissionOptions = createRunModeOptions(t);
 
   /**
    * 更新 TUI 默认权限模式。
