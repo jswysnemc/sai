@@ -28,6 +28,13 @@ struct GitStatusesRequest {
 }
 
 #[derive(Deserialize)]
+struct GitCloneRequest {
+    remote_url: String,
+    parent: String,
+    directory: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct GitOpRequest {
     action: String,
     repo_root: Option<String>,
@@ -97,6 +104,7 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/workspace/git", axum::routing::post(git_action))
         .route("/api/workspace/git/repositories", get(git_repositories))
         .route("/api/workspace/git/status", get(git_status))
+        .route("/api/workspace/git/clone", axum::routing::post(git_clone))
         .route(
             "/api/workspace/git/statuses",
             axum::routing::post(git_statuses),
@@ -128,6 +136,26 @@ async fn git_statuses(
         .await
         .map_err(|error| WebError::bad_request(error.to_string()))?;
     Ok(Json(statuses))
+}
+
+/// 将远端仓库克隆到服务端允许的目标目录。
+///
+/// 参数:
+/// - `request`: 远端地址、父目录和可选目录名
+///
+/// 返回:
+/// - Git 输出与克隆后仓库状态
+async fn git_clone(
+    Json(request): Json<GitCloneRequest>,
+) -> WebResult<Json<workspace::GitOperationResponse>> {
+    // 1. 目标父目录必须位于服务端工作区允许范围
+    let parent = super::super::workspaces::validate_browsable_directory(&request.parent)
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    // 2. 克隆命令使用系统 Git，并返回真实标准输出和错误
+    let result = workspace::git_clone(&parent, &request.remote_url, request.directory.as_deref())
+        .await
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    Ok(Json(result))
 }
 
 /// 执行兼容版 Git 暂存、取消暂存、撤销或提交操作。

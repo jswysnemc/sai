@@ -110,6 +110,7 @@ pub(super) fn not_repo_state(workdir: &str) -> GitRepositoryState {
         repo_root: String::new(),
         workdir: workdir.to_string(),
         head: String::new(),
+        has_commits: false,
         upstream: String::new(),
         remote_name: String::new(),
         remote_url: String::new(),
@@ -244,8 +245,9 @@ pub(super) fn status_entry(
 
 pub(super) fn parse_status_porcelain_v2(
     raw: &[u8],
-) -> (String, String, i32, i32, i32, Vec<GitStatusEntry>) {
+) -> (String, bool, String, i32, i32, i32, Vec<GitStatusEntry>) {
     let mut head = String::new();
+    let mut has_commits = false;
     let mut upstream = String::new();
     let mut ahead = 0;
     let mut behind = 0;
@@ -259,7 +261,10 @@ pub(super) fn parse_status_porcelain_v2(
     let mut index = 0;
     while index < records.len() {
         let record = records[index].trim_end_matches('\n');
-        if let Some(value) = record.strip_prefix("# branch.head ") {
+        if let Some(value) = record.strip_prefix("# branch.oid ") {
+            let oid = value.trim();
+            has_commits = !oid.is_empty() && oid != "(initial)";
+        } else if let Some(value) = record.strip_prefix("# branch.head ") {
             head = value.trim().to_string();
         } else if let Some(value) = record.strip_prefix("# branch.upstream ") {
             upstream = value.trim().to_string();
@@ -318,7 +323,15 @@ pub(super) fn parse_status_porcelain_v2(
         }
         index += 1;
     }
-    (head, upstream, ahead, behind, stash_count, entries)
+    (
+        head,
+        has_commits,
+        upstream,
+        ahead,
+        behind,
+        stash_count,
+        entries,
+    )
 }
 
 pub(super) fn dirty_counts(entries: &[GitStatusEntry]) -> GitDirtyCounts {
@@ -575,13 +588,22 @@ mod tests {
 
     #[test]
     fn parses_status_records() {
-        let raw = b"# branch.head main\0# branch.upstream origin/main\0# branch.ab +1 -0\01 M. N... 100644 100644 100644 111 222 333 src/main.rs\0? notes.md\0";
-        let (head, upstream, ahead, behind, _, files) = parse_status_porcelain_v2(raw);
+        let raw = b"# branch.oid abc123\0# branch.head main\0# branch.upstream origin/main\0# branch.ab +1 -0\01 M. N... 100644 100644 100644 111 222 333 src/main.rs\0? notes.md\0";
+        let (head, has_commits, upstream, ahead, behind, _, files) = parse_status_porcelain_v2(raw);
         assert_eq!(head, "main");
+        assert!(has_commits);
         assert_eq!(upstream, "origin/main");
         assert_eq!(ahead, 1);
         assert_eq!(behind, 0);
         assert_eq!(files.len(), 2);
         assert!(files[1].untracked);
+    }
+
+    #[test]
+    fn recognizes_repository_without_commits() {
+        let raw = b"# branch.oid (initial)\0# branch.head main\0";
+        let (_, has_commits, _, _, _, _, files) = parse_status_porcelain_v2(raw);
+        assert!(!has_commits);
+        assert!(files.is_empty());
     }
 }

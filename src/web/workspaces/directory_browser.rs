@@ -89,6 +89,18 @@ pub(crate) fn create_directory(parent: &str, name: &str) -> Result<DirectoryEntr
     directory_entry(target)
 }
 
+/// 校验目录位于服务端允许浏览的根目录内。
+///
+/// 参数:
+/// - `requested`: 待校验绝对目录
+///
+/// 返回:
+/// - 规范化后的允许目录
+pub(crate) fn validate_browsable_directory(requested: &str) -> Result<PathBuf> {
+    let roots = allowed_roots()?;
+    canonical_allowed_directory(Path::new(requested.trim()), &roots)
+}
+
 /// 返回配置后的服务端目录根集合。
 fn allowed_roots() -> Result<Vec<PathBuf>> {
     let mut roots = Vec::new();

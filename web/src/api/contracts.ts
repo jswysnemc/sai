@@ -216,6 +216,7 @@ export type GitRepositoryState = {
   repo_root: string;
   workdir: string;
   head: string;
+  has_commits: boolean;
   upstream: string;
   remote_name: string;
   remote_url: string;

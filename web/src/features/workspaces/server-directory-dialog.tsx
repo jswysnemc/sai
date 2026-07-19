@@ -1,14 +1,20 @@
 import { ArrowUp, Check, CornerDownLeft, Eye, EyeOff, Folder, FolderPlus, GitBranch, HardDrive } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { DirectoryEntry } from "../../api/contracts";
+import { Button } from "../../shared/ui/button/button";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { useI18n } from "../i18n/use-i18n";
 
 type ServerDirectoryDialogProps = {
   open: boolean;
+  title?: string;
+  description?: string;
+  selectedLabel?: string;
+  currentLabel?: string;
+  pendingLabel?: string;
   onClose: () => void;
   onSelect: (path: string) => Promise<void>;
 };
@@ -19,7 +25,7 @@ type ServerDirectoryDialogProps = {
  * @param props 打开状态、关闭回调和目录选择回调
  * @returns 服务端目录选择弹层
  */
-export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirectoryDialogProps) {
+export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
   const { t } = useI18n();
   const [path, setPath] = useState<string | undefined>();
   const [draft, setDraft] = useState("");
@@ -29,13 +35,18 @@ export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirecto
   const [creating, setCreating] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [createError, setCreateError] = useState<Error | null>(null);
-  const listing = useQuery({ queryKey: ["workspace-directories", path], queryFn: () => api.workspaces.browse(path), enabled: open });
+  const [submitError, setSubmitError] = useState<Error | null>(null);
+  const listing = useQuery({ queryKey: ["workspace-directories", path], queryFn: () => api.workspaces.browse(path), enabled: props.open });
   const filter = draft.startsWith("/") ? "" : draft.trim();
   const entries = useMemo(
     () => filterEntries(sortEntries(listing.data?.entries ?? [], showHidden), filter),
     [listing.data?.entries, showHidden, filter]
   );
   const hiddenCount = (listing.data?.entries.length ?? 0) - sortEntries(listing.data?.entries ?? [], false).length;
+
+  useEffect(() => {
+    if (props.open) setSubmitError(null);
+  }, [props.open]);
 
   /** 切换当前浏览目录并清空过滤与选中状态。 */
   const navigate = (nextPath: string) => {
@@ -44,6 +55,7 @@ export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirecto
     setSelected("");
     setCreating(false);
     setCreateError(null);
+    setSubmitError(null);
   };
 
   /** 处理路径输入框回车：以 / 开头的绝对路径才跳转。 */
@@ -71,13 +83,20 @@ export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirecto
     }
   };
 
-  /** 登记并切换到选中的服务端目录。 */
+  /**
+   * 执行调用方指定的目录操作，并在弹层内保留可读错误。
+   *
+   * @returns 无返回值
+   */
   const submit = async () => {
     const target = selected || listing.data?.current;
     if (!target) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
-      await onSelect(target);
+      await props.onSelect(target);
+    } catch (error) {
+      setSubmitError(toDisplayError(error, "Directory action failed", "目录操作失败"));
     } finally {
       setSubmitting(false);
     }
@@ -85,12 +104,23 @@ export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirecto
 
   return (
     <Modal
-      open={open}
-      title={t("Open server workspace", "打开服务端工作区")}
-      description={t("Choose a directory on the server running Sai Web. Server configuration limits the browsing scope.", "选择运行 Sai Web 的服务器上的目录。浏览范围由服务端配置限制。")}
+      open={props.open}
+      title={props.title ?? t("Open server workspace", "打开服务端工作区")}
+      description={props.description ?? t("Choose a directory on the server running Sai Web. Server configuration limits the browsing scope.", "选择运行 Sai Web 的服务器上的目录。浏览范围由服务端配置限制。")}
       size="large"
-      onClose={onClose}
-      footer={<><button type="button" className="ui-button secondary" onClick={onClose}>{t("Cancel", "取消")}</button><button type="button" className="ui-button primary" onClick={() => void submit()} disabled={submitting || !listing.data}>{submitting ? t("Opening", "正在打开") : selected ? t("Open selected directory", "打开选中目录") : t("Open current directory", "打开当前目录")}</button></>}
+      onClose={props.onClose}
+      footer={(
+        <>
+          <Button onClick={props.onClose}>{t("Cancel", "取消")}</Button>
+          <Button variant="primary" onClick={() => void submit()} disabled={submitting || !listing.data}>
+            {submitting
+              ? props.pendingLabel ?? t("Opening", "正在打开")
+              : selected
+                ? props.selectedLabel ?? t("Open selected directory", "打开选中目录")
+                : props.currentLabel ?? t("Open current directory", "打开当前目录")}
+          </Button>
+        </>
+      )}
     >
       <div className="server-directory-dialog">
         <aside className="directory-roots">
@@ -133,6 +163,7 @@ export function ServerDirectoryDialog({ open, onClose, onSelect }: ServerDirecto
               </div>
             )}
             {createError && <div className="pane-error">{createError.message}</div>}
+            {submitError && <div className="pane-error">{submitError.message}</div>}
             {entries.map((entry) => (
               <button type="button" className={selected === entry.path ? "selected" : ""} key={entry.path} onDoubleClick={() => navigate(entry.path)} onClick={() => setSelected(entry.path)}>
                 <Folder size={16} /><span><strong>{entry.name}</strong><small>{entry.path}</small></span>{entry.git_repository && <span className="directory-git"><GitBranch size={12} />Git</span>}{selected === entry.path && <Check size={14} />}

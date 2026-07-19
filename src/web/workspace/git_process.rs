@@ -33,7 +33,24 @@ pub(super) async fn run_git(root: &Path, args: &[&str]) -> Result<()> {
 /// 返回:
 /// - 清理后的标准输出和标准错误
 pub(super) async fn run_git_output(root: &Path, args: &[&str]) -> Result<GitOutput> {
-    let output = git_raw(root, args).await?;
+    run_git_output_with_timeout(root, args, GIT_COMMAND_TIMEOUT).await
+}
+
+/// 使用指定超时执行要求成功的 Git 命令。
+///
+/// 参数:
+/// - `root`: Git 工作目录
+/// - `args`: Git 参数
+/// - `command_timeout`: 单次命令最长运行时间
+///
+/// 返回:
+/// - 清理后的标准输出和标准错误
+pub(super) async fn run_git_output_with_timeout(
+    root: &Path,
+    args: &[&str],
+    command_timeout: Duration,
+) -> Result<GitOutput> {
+    let output = git_raw_with_timeout(root, args, command_timeout).await?;
     if output.status.success() {
         return Ok(GitOutput {
             stdout: trim_bytes(&output.stdout),
@@ -100,8 +117,25 @@ pub(super) async fn git_success_with_input(
 /// 返回:
 /// - 原始进程输出
 pub(super) async fn git_raw(root: &Path, args: &[&str]) -> Result<std::process::Output> {
+    git_raw_with_timeout(root, args, GIT_COMMAND_TIMEOUT).await
+}
+
+/// 使用指定超时执行 Git 子进程，并对临时锁错误进行有限重试。
+///
+/// 参数:
+/// - `root`: Git 工作目录
+/// - `args`: Git 参数
+/// - `command_timeout`: 单次命令最长运行时间
+///
+/// 返回:
+/// - 原始进程输出
+async fn git_raw_with_timeout(
+    root: &Path,
+    args: &[&str],
+    command_timeout: Duration,
+) -> Result<std::process::Output> {
     for attempt in 0..GIT_TRANSIENT_RETRY_ATTEMPTS {
-        let output = run_git_once(root, args).await?;
+        let output = run_git_once(root, args, command_timeout).await?;
         let message = format!(
             "{}\n{}",
             trim_bytes(&output.stderr),
@@ -123,10 +157,15 @@ pub(super) async fn git_raw(root: &Path, args: &[&str]) -> Result<std::process::
 /// 参数:
 /// - `root`: Git 工作目录
 /// - `args`: Git 参数
+/// - `command_timeout`: 单次命令最长运行时间
 ///
 /// 返回:
 /// - 原始进程输出
-async fn run_git_once(root: &Path, args: &[&str]) -> Result<std::process::Output> {
+async fn run_git_once(
+    root: &Path,
+    args: &[&str],
+    command_timeout: Duration,
+) -> Result<std::process::Output> {
     let mut command = Command::new("git");
     command
         .args(args)
@@ -137,11 +176,12 @@ async fn run_git_once(root: &Path, args: &[&str]) -> Result<std::process::Output
         .env("GIT_SEQUENCE_EDITOR", "true")
         .env("LC_ALL", "C")
         .kill_on_drop(true);
-    timeout(GIT_COMMAND_TIMEOUT, command.output())
+    timeout(command_timeout, command.output())
         .await
         .with_context(|| {
             format!(
-                "git command timed out after 60 seconds: git {}",
+                "git command timed out after {} seconds: git {}",
+                command_timeout.as_secs(),
                 args.join(" ")
             )
         })?

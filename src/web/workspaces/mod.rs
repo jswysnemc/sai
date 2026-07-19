@@ -4,7 +4,8 @@ mod model;
 mod window_launcher;
 
 pub(crate) use directory_browser::{
-    browse as browse_directories, create_directory, DirectoryEntry, DirectoryListing,
+    browse as browse_directories, create_directory, validate_browsable_directory, DirectoryEntry,
+    DirectoryListing,
 };
 pub(crate) use manager::WorkspaceManager;
 pub(crate) use model::WorkspaceInfo;

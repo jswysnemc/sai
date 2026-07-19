@@ -1,0 +1,112 @@
+.source-control-empty-state {
+  display: grid;
+  align-content: center;
+  width: min(32rem, calc(100% - 2rem));
+  min-height: 100%;
+  margin: auto;
+  gap: 0.875rem;
+  padding: 1.25rem 0;
+}
+
+.source-control-empty-state > header {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.625rem;
+}
+
+.source-control-empty-state > header > svg {
+  color: var(--signal);
+}
+
+.source-control-empty-state > header span {
+  display: grid;
+  gap: 0.1875rem;
+}
+
+.source-control-empty-state > header strong {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.source-control-empty-state > header small {
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+
+.source-control-empty-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.source-control-empty-actions .ui-button,
+.source-control-init-row .ui-button {
+  min-height: 2.125rem;
+  padding: 0 0.75rem;
+  font-size: 0.6875rem;
+}
+
+.source-control-init-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.source-control-init-row label,
+.clone-repository-form label {
+  display: grid;
+  min-width: 0;
+  gap: 0.3125rem;
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+}
+
+.source-control-init-row input,
+.clone-repository-form input {
+  min-width: 0;
+  min-height: 2.125rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+  outline: 0;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font: 400 0.75rem var(--font-code);
+}
+
+.source-control-init-row input:focus,
+.clone-repository-form input:focus {
+  border-color: var(--line-strong);
+}
+
+.clone-repository-form {
+  display: grid;
+  gap: 0.875rem;
+}
+
+.clone-repository-form label > span {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+}
+
+.clone-repository-form small {
+  color: var(--ink-soft);
+  font-size: 0.625rem;
+}
+
+@media (max-width: 36rem) {
+  .source-control-empty-state {
+    width: min(calc(100% - 1.25rem), 32rem);
+  }
+
+  .source-control-empty-actions,
+  .source-control-init-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

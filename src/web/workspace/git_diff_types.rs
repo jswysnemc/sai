@@ -43,6 +43,7 @@ pub(crate) struct GitRepositoryState {
     pub repo_root: String,
     pub workdir: String,
     pub head: String,
+    pub has_commits: bool,
     pub upstream: String,
     pub remote_name: String,
     pub remote_url: String,

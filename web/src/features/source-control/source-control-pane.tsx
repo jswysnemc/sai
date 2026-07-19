@@ -18,18 +18,23 @@ import { Button } from "../../shared/ui/button/button";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { DiffView } from "../chat/tool-renderers/diff-view";
 import { useI18n } from "../i18n/use-i18n";
+import { ServerDirectoryDialog } from "../workspaces/server-directory-dialog";
+import { switchWithTerminalConfirm } from "../workspaces/workspace-switcher";
 import { CommitControl } from "./changes/commit-control";
 import { groupGitChanges } from "./changes/change-groups";
 import { RepositoryChangeGroup } from "./changes/repository-change-group";
 import { MoreActionsMenu } from "./actions/more-actions-menu";
 import { resolveGitReviewDiffMode } from "./diff/diff-mode";
 import { SourceControlDiff } from "./diff/source-control-diff";
+import { CloneRepositoryDialog, type CloneRepositoryInput } from "./empty/clone-repository-dialog";
+import { SourceControlEmptyState } from "./empty/source-control-empty-state";
 import { CommitGraph } from "./graph/commit-graph";
 import { formatGitDate } from "./graph/graph-utils";
 import { InProgressOperationBar } from "./operation/in-progress-operation-bar";
 import { MergeEditor } from "./conflicts/merge-editor";
 import { GitOutputPanel } from "./output/git-output-panel";
 import { RepositoriesView } from "./repositories/repositories-view";
+import { PublishRepositoryControl } from "./remote/publish-repository-control";
 import { useScmStateStore } from "./state/use-scm-state-store";
 import { useGitRepositoryEvents, type GitWatchMode } from "./state/use-git-repository-events";
 import { useRepositoryStatuses } from "./state/use-repository-statuses";
@@ -55,6 +60,9 @@ export function SourceControlPane() {
   const [outputEntries, setOutputEntries] = useState<GitOutputEntry[]>([]);
   const [selectedRepoRoot, setSelectedRepoRoot] = useState<string | null>(null);
   const [closedRepoRoots, setClosedRepoRoots] = useState<string[]>([]);
+  const [openFolderDialogOpen, setOpenFolderDialogOpen] = useState(false);
+  const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
+  const [cloneInput, setCloneInput] = useState<CloneRepositoryInput | null>(null);
   const scmState = useScmStateStore(selectedRepoRoot);
   const {
     message,
@@ -199,6 +207,10 @@ export function SourceControlPane() {
       setNotice("");
     }
   });
+  const clone = useMutation({
+    mutationFn: (input: CloneRepositoryInput & { parent: string }) =>
+      api.workspace.gitClone(input.remoteUrl, input.parent, input.directory)
+  });
 
   /**
    * 将一次 Git 操作输出追加到面板，并限制保留数量。
@@ -252,6 +264,58 @@ export function SourceControlPane() {
   };
 
   /**
+   * 登记服务端目录并切换当前工作区。
+   *
+   * @param path 待打开目录绝对路径
+   * @returns 无返回值
+   */
+  const openWorkspace = async (path: string) => {
+    const workspace = await api.workspaces.add(path);
+    const switched = await switchWithTerminalConfirm(workspace.id, confirm, t);
+    if (switched) window.location.reload();
+  };
+
+  /**
+   * 克隆仓库到选中的父目录，并在完成后询问是否打开。
+   *
+   * @param parent 目标父目录绝对路径
+   * @returns 无返回值
+   */
+  const cloneRepository = async (parent: string) => {
+    if (!cloneInput) return;
+    pendingActionRef.current = "clone";
+    setError(null);
+    setNotice("");
+    let outputRecorded = false;
+    try {
+      // 1. 调用独立 clone 接口，保留真实 Git 输出
+      const result = await clone.mutateAsync({ ...cloneInput, parent });
+      appendOutput(result.ok, result.message, result.stdout, result.stderr);
+      outputRecorded = true;
+      if (!result.ok) throw new ApiError(result.message || result.stderr);
+
+      // 2. 关闭目标目录弹层并刷新当前工作区仓库发现
+      setCloneInput(null);
+      setNotice(result.message);
+      await refreshAll();
+
+      // 3. 克隆完成后由用户决定是否切换到新仓库
+      const shouldOpen = await confirm({
+        title: t("Open cloned repository?", "打开已克隆仓库？"),
+        description: t(`Repository cloned to ${result.state.repo_root}.`, `仓库已克隆到 ${result.state.repo_root}。`),
+        confirmLabel: t("Open Repository", "打开仓库")
+      });
+      if (shouldOpen) await openWorkspace(result.state.repo_root);
+    } catch (reason) {
+      const displayError = toDisplayError(reason, "Failed to clone repository", "克隆仓库失败");
+      if (!outputRecorded) appendOutput(false, displayError.message, "", displayError.message);
+      setError(displayError);
+      setNotice("");
+      throw displayError;
+    }
+  };
+
+  /**
    * 执行提交变体，并仅在成功后清空提交说明。
    *
    * @param options 提交变体参数
@@ -280,7 +344,7 @@ export function SourceControlPane() {
           data={visibleRepositories}
           loading={repositories.isLoading}
           error={repositories.error}
-          busy={op.isPending}
+          busy={op.isPending || clone.isPending}
           selectedRoot={null}
           hiddenCount={closedRepoRoots.length}
           onSelect={setSelectedRepoRoot}
@@ -305,7 +369,7 @@ export function SourceControlPane() {
 
   if (!ready) {
     return (
-      <section className="diff-pane git-manager">
+      <section className="diff-pane git-manager git-review">
         <header className="panel-head">
           <div>
             <span className="eyebrow">{t("Git workspace", "Git 工作区")}</span>
@@ -318,28 +382,44 @@ export function SourceControlPane() {
             <RefreshCw size={14} />
           </Button>
         </header>
-        <div className="git-init-panel">
-          <GitBranch size={24} />
-          <h3>{t("Initialize Git repository", "初始化 Git 仓库")}</h3>
-          <p>{t("Create local version history for this workspace and enable future fetch, pull, and push operations.", "为当前工作区创建本地版本历史，并支持后续 fetch / pull / push。")}</p>
-          <label>
-            <span>{t("Default branch", "默认分支")}</span>
-            <input value={initBranch} onChange={(event) => setInitBranch(event.target.value)} spellCheck={false} />
-          </label>
-          <Button
-            variant="primary"
-            onClick={() => void runOp("init", { message: initBranch })}
-            disabled={!initBranch.trim() || op.isPending}
-          >
-            {t("Initialize repository", "初始化仓库")}
-          </Button>
-        </div>
+        <SourceControlEmptyState
+          branch={initBranch}
+          busy={op.isPending || clone.isPending}
+          onBranchChange={setInitBranch}
+          onInitialize={() => void runOp("init", { message: initBranch })}
+          onOpenFolder={() => setOpenFolderDialogOpen(true)}
+          onClone={() => setCloneDialogOpen(true)}
+        />
+        <GitOutputPanel entries={outputEntries} />
         {(statusError || error) && <div className="pane-error">{error?.message || statusError?.message}</div>}
+        <CloneRepositoryDialog
+          open={cloneDialogOpen}
+          onClose={() => setCloneDialogOpen(false)}
+          onContinue={(input) => {
+            setCloneDialogOpen(false);
+            setCloneInput(input);
+          }}
+        />
+        <ServerDirectoryDialog
+          open={openFolderDialogOpen}
+          onClose={() => setOpenFolderDialogOpen(false)}
+          onSelect={openWorkspace}
+        />
+        <ServerDirectoryDialog
+          open={Boolean(cloneInput)}
+          title={t("Choose Clone Destination", "选择克隆目标目录")}
+          description={t("Choose the parent directory where Git will create the cloned repository folder.", "选择父目录，Git 将在其中创建克隆仓库文件夹。")}
+          selectedLabel={t("Clone into selected directory", "克隆到所选目录")}
+          currentLabel={t("Clone into current directory", "克隆到当前目录")}
+          pendingLabel={t("Cloning Repository", "正在克隆仓库")}
+          onClose={() => setCloneInput(null)}
+          onSelect={cloneRepository}
+        />
       </section>
     );
   }
 
-  const busy = op.isPending;
+  const busy = op.isPending || clone.isPending;
   const dirtyTotal =
     (state?.dirty_counts.staged ?? 0) +
     (state?.dirty_counts.unstaged ?? 0) +
@@ -459,21 +539,15 @@ export function SourceControlPane() {
               })}
             </div>
 
-            <div className="git-remote-box">
-              <span>{state?.remote_url ? t("Remote origin", "远端 origin") : t("Set origin remote", "设置 origin 远端")}</span>
-              <input
-                value={remoteUrl}
-                onChange={(event) => setRemoteUrl(event.target.value)}
-                placeholder="git@github.com:org/repo.git"
-                spellCheck={false}
-              />
-              <Button
-                disabled={!remoteUrl.trim() || busy}
-                onClick={() => void runOp("set_remote", { remote_url: remoteUrl })}
-              >
-                {state?.remote_url ? t("Update remote", "更新远端") : t("Save remote", "保存远端")}
-              </Button>
-            </div>
+            <PublishRepositoryControl
+              remoteUrl={remoteUrl}
+              remoteConfigured={Boolean(state.remote_url)}
+              canPublish={!state.remote_url && state.has_commits}
+              busy={busy}
+              onRemoteUrlChange={setRemoteUrl}
+              onSave={() => void runOp("set_remote", { remote_url: remoteUrl })}
+              onPublish={() => void runOp("publish", { remote_url: remoteUrl })}
+            />
           </section>
 
           <div className="diff-scroll">

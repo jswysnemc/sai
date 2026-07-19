@@ -48,6 +48,12 @@ mod repositories;
 #[path = "git_repository_statuses.rs"]
 mod repository_statuses;
 
+#[path = "git_clone.rs"]
+mod clone;
+
+#[path = "git_publish.rs"]
+mod publish;
+
 #[path = "git_worktrees.rs"]
 mod worktrees;
 
@@ -55,12 +61,14 @@ mod worktrees;
 mod watcher;
 
 use branches::*;
+pub(crate) use clone::git_clone;
 pub(crate) use conflicts::git_conflict;
 use conflicts::resolve_conflict;
 use diff_content::*;
 use history_operations::*;
 pub(crate) use operations::git_op;
 use process::*;
+use publish::*;
 pub(crate) use repositories::{
     git_repositories, validate_git_repository_root, validate_git_repository_roots,
 };
@@ -82,6 +90,14 @@ mod conflict_tests;
 #[cfg(test)]
 #[path = "git_repository_tests.rs"]
 mod repository_tests;
+
+#[cfg(test)]
+#[path = "git_clone_tests.rs"]
+mod clone_tests;
+
+#[cfg(test)]
+#[path = "git_publish_tests.rs"]
+mod publish_tests;
 
 const GIT_DIFF_MAX_BYTES: usize = 512 * 1024;
 const GIT_LOG_DEFAULT_LIMIT: usize = 50;
@@ -183,6 +199,7 @@ pub(crate) async fn git_status(root: &Path) -> Result<GitRepositoryState> {
             repo_root: repo_root.display().to_string(),
             workdir,
             head: String::new(),
+            has_commits: false,
             upstream: String::new(),
             remote_name: String::new(),
             remote_url: String::new(),
@@ -196,7 +213,7 @@ pub(crate) async fn git_status(root: &Path) -> Result<GitRepositoryState> {
             error: Some(trim_bytes(&output.stderr)),
         });
     }
-    let (head, upstream, ahead, behind, stash_count, entries) =
+    let (head, has_commits, upstream, ahead, behind, stash_count, entries) =
         parse_status_porcelain_v2(&output.stdout);
     let (remote_name, remote_url) = resolve_state_remote(&repo_root, &upstream).await;
     let operation = detect_in_progress_operation(&repo_root).await;
@@ -204,6 +221,7 @@ pub(crate) async fn git_status(root: &Path) -> Result<GitRepositoryState> {
         repo_root: repo_root.display().to_string(),
         workdir,
         head,
+        has_commits,
         upstream,
         remote_name,
         remote_url,

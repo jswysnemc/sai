@@ -62,6 +62,7 @@ async fn dispatch_operation(
         "force_push_with_lease" => force_push_with_lease(repo, state).await,
         "sync" => sync_repo(repo, state).await,
         "set_remote" => set_origin_remote(repo, request.remote_url).await,
+        "publish" => publish_repository(repo, state, request.remote_url).await,
         "switch_branch" => {
             switch_branch(
                 repo,
@@ -523,6 +524,7 @@ fn operation_message(action: &str) -> &'static str {
         "push" | "force_push_with_lease" => "push completed",
         "sync" => "sync completed",
         "set_remote" => "remote repository saved",
+        "publish" => "repository published",
         "switch_branch" => "branch switched",
         "create_branch" => "branch created",
         "rename_branch" => "branch renamed",

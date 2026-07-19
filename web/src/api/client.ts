@@ -308,6 +308,11 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ repo_roots: repoRoots })
       }),
+    gitClone: (remoteUrl: string, parent: string, directory?: string) =>
+      apiRequest<GitOperationResponse>("/api/workspace/git/clone", {
+        method: "POST",
+        body: JSON.stringify({ remote_url: remoteUrl, parent, directory })
+      }),
     gitBranches: (repoRoot?: string) => apiRequest<GitBranchesResponse>(gitUrl("/api/workspace/git/branches", repoRoot)),
     gitLog: (limit = 50, skip = 0, repoRoot?: string) => {
       const query = gitQuery(repoRoot);
