@@ -24,6 +24,7 @@ import { CommitControl } from "../source-control/changes/commit-control";
 import { groupGitChanges } from "../source-control/changes/change-groups";
 import { MoreActionsMenu } from "../source-control/actions/more-actions-menu";
 import { resolveGitReviewDiffMode, type SourceControlDiffView } from "../source-control/diff/diff-mode";
+import { SourceControlDiff } from "../source-control/diff/source-control-diff";
 import { InProgressOperationBar } from "../source-control/operation/in-progress-operation-bar";
 import { GitOutputPanel } from "../source-control/output/git-output-panel";
 import type { GitOutputEntry, GitOperationUiOptions } from "../source-control/types";
@@ -473,21 +474,14 @@ export function DiffPane() {
           </section>
 
           <div className="diff-scroll">
-            {reviewDiff.isLoading && <div className="git-clean diff-clean">{t("Loading diff...", "正在读取差异…")}</div>}
-            {reviewDiff.error && <div className="pane-error">{reviewDiff.error.message}</div>}
-            {reviewDiff.data?.patch ? (
-              <div className="git-diff-shell">
-                <div className="git-diff-meta">
-                  {reviewDiff.data.base_ref} → {reviewDiff.data.head_ref}
-                  {selectedPath ? ` · ${selectedPath}` : ""}
-                </div>
-                {reviewDiff.data.stat && <pre className="git-diff-stat">{reviewDiff.data.stat}</pre>}
-                <DiffView source={reviewDiff.data.patch} headerPath={selectedPath ?? undefined} />
-                {reviewDiff.data.truncated && <div className="git-clean">{t("Diff truncated", "差异已截断")}</div>}
-              </div>
-            ) : (
-              !reviewDiff.isLoading && !reviewDiff.error && <div className="git-clean diff-clean">{t("No diff to display", "没有可显示的差异")}</div>
-            )}
+            <SourceControlDiff
+              data={reviewDiff.data}
+              loading={reviewDiff.isLoading}
+              error={reviewDiff.error}
+              selectedPath={selectedPath}
+              busy={busy}
+              runOperation={runOp}
+            />
           </div>
         </div>
       ) : (

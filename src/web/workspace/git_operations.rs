@@ -51,6 +51,9 @@ async fn dispatch_operation(
         "unstage_all" => unstage_all(repo, state).await,
         "discard" => discard_path(repo, state, request.path, request.old_path).await,
         "discard_all" => discard_all(repo, state).await,
+        "stage_patch" => apply_patch(repo, request.patch, PatchOperation::Stage).await,
+        "unstage_patch" => apply_patch(repo, request.patch, PatchOperation::Unstage).await,
+        "discard_patch" => apply_patch(repo, request.patch, PatchOperation::Discard).await,
         "commit" => commit(repo, state, request).await,
         "fetch" => fetch(repo).await,
         "pull" => pull_repo(repo, state).await,
@@ -191,6 +194,69 @@ async fn discard_all(repo: &Path, state: &GitRepositoryState) -> Result<GitOutpu
     };
     let untracked = git_success(repo, &["clean", "-fd", "--", "."]).await?;
     Ok(merge_outputs([tracked, untracked]))
+}
+
+#[derive(Clone, Copy)]
+enum PatchOperation {
+    Stage,
+    Unstage,
+    Discard,
+}
+
+/// 将统一 Diff 应用到暂存区或工作树，实现部分暂存、取消暂存和丢弃。
+///
+/// 参数:
+/// - `repo`: 仓库根目录
+/// - `patch`: 前端选择的 unified patch
+/// - `operation`: patch 应用目标与方向
+///
+/// 返回:
+/// - Git 命令输出
+async fn apply_patch(
+    repo: &Path,
+    patch: Option<&str>,
+    operation: PatchOperation,
+) -> Result<GitOutput> {
+    let patch = validate_patch(patch)?;
+    let args: &[&str] = match operation {
+        PatchOperation::Stage => &["apply", "--cached", "--recount", "--whitespace=nowarn", "-"],
+        PatchOperation::Unstage => &[
+            "apply",
+            "--cached",
+            "--reverse",
+            "--recount",
+            "--whitespace=nowarn",
+            "-",
+        ],
+        PatchOperation::Discard => &[
+            "apply",
+            "--reverse",
+            "--recount",
+            "--whitespace=nowarn",
+            "-",
+        ],
+    };
+    git_success_with_input(repo, args, patch.as_bytes()).await
+}
+
+/// 校验前端传入的部分 Diff，限制大小并拒绝非 unified patch 文本。
+///
+/// 参数:
+/// - `patch`: 待校验 patch
+///
+/// 返回:
+/// - 校验通过的原始 patch
+fn validate_patch(patch: Option<&str>) -> Result<&str> {
+    let patch = patch
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::anyhow!("patch cannot be empty"))?;
+    if patch.len() > GIT_DIFF_MAX_BYTES {
+        bail!("patch exceeds the maximum supported size");
+    }
+    if !patch.contains("diff --git ") || !patch.contains("@@") {
+        bail!("patch must be a unified git diff");
+    }
+    Ok(patch)
 }
 
 /// 创建提交，并按请求选择全部暂存、修订、签署和后续同步动作。
@@ -454,9 +520,9 @@ fn require_operation(state: &GitRepositoryState) -> Result<&GitInProgressOperati
 /// - 成功提示
 fn operation_message(action: &str) -> &'static str {
     match action {
-        "stage" | "stage_all" => "files staged",
-        "unstage" | "unstage_all" => "files unstaged",
-        "discard" | "discard_all" => "changes discarded",
+        "stage" | "stage_all" | "stage_patch" => "files staged",
+        "unstage" | "unstage_all" | "unstage_patch" => "files unstaged",
+        "discard" | "discard_all" | "discard_patch" => "changes discarded",
         "commit" => "commit created",
         "fetch" => "fetch completed",
         "pull" | "pull_rebase" => "pull completed",

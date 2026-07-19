@@ -105,6 +105,7 @@ async fn discards_both_paths_of_a_staged_rename() {
             new_branch: None,
             start_point: None,
             post_action: None,
+            patch: None,
             all: false,
             amend: false,
             signoff: false,
@@ -145,6 +146,7 @@ async fn commits_all_changes_with_signoff() {
             new_branch: None,
             start_point: None,
             post_action: None,
+            patch: None,
             all: true,
             amend: false,
             signoff: true,
@@ -210,6 +212,7 @@ async fn detects_and_aborts_merge_conflict() {
             new_branch: None,
             start_point: None,
             post_action: None,
+            patch: None,
             all: false,
             amend: false,
             signoff: false,
@@ -251,4 +254,81 @@ async fn separates_staged_and_unstaged_diff_content() {
     assert_eq!(unstaged.head_ref, "WORKTREE");
     assert!(unstaged.patch.contains("+unstaged"));
     assert!(unstaged.patch.contains("+untracked"));
+}
+
+#[tokio::test]
+async fn applies_partial_patch_to_index_and_worktree() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path();
+    init_repository(repo).await;
+    tokio::fs::write(repo.join("tracked.txt"), "updated\n")
+        .await
+        .unwrap();
+    let patch = concat!(
+        "diff --git a/tracked.txt b/tracked.txt\n",
+        "--- a/tracked.txt\n",
+        "+++ b/tracked.txt\n",
+        "@@ -1 +1 @@\n",
+        "-initial\n",
+        "+updated\n"
+    );
+
+    let staged = git_op(
+        repo,
+        GitOperationRequest {
+            action: "stage_patch",
+            path: None,
+            old_path: None,
+            message: None,
+            remote_url: None,
+            branch: None,
+            branch_kind: None,
+            new_branch: None,
+            start_point: None,
+            post_action: None,
+            patch: Some(patch),
+            all: false,
+            amend: false,
+            signoff: false,
+            force: false,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(staged.ok, "{}", staged.stderr);
+    assert_eq!(staged.state.dirty_counts.staged, 1);
+    assert_eq!(staged.state.dirty_counts.unstaged, 0);
+
+    let unstaged = git_op(
+        repo,
+        GitOperationRequest {
+            action: "unstage_patch",
+            patch: Some(patch),
+            ..GitOperationRequest::new("unstage_patch")
+        },
+    )
+    .await
+    .unwrap();
+    assert!(unstaged.ok, "{}", unstaged.stderr);
+    assert_eq!(unstaged.state.dirty_counts.staged, 0);
+    assert_eq!(unstaged.state.dirty_counts.unstaged, 1);
+
+    let discarded = git_op(
+        repo,
+        GitOperationRequest {
+            action: "discard_patch",
+            patch: Some(patch),
+            ..GitOperationRequest::new("discard_patch")
+        },
+    )
+    .await
+    .unwrap();
+    assert!(discarded.ok, "{}", discarded.stderr);
+    assert!(discarded.state.entries.is_empty());
+    assert_eq!(
+        tokio::fs::read_to_string(repo.join("tracked.txt"))
+            .await
+            .unwrap(),
+        "initial\n"
+    );
 }

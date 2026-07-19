@@ -1,7 +1,9 @@
 use super::types::GitOutput;
 use anyhow::{bail, Context, Result};
 use std::path::Path;
+use std::process::Stdio;
 use std::time::Duration;
+use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::time::{sleep, timeout};
 
@@ -59,6 +61,36 @@ pub(super) async fn git_success(root: &Path, args: &[&str]) -> Result<GitOutput>
     run_git_output(root, args).await
 }
 
+/// 执行从标准输入读取内容且要求成功的 Git 命令。
+///
+/// 参数:
+/// - `root`: Git 工作目录
+/// - `args`: Git 参数
+/// - `input`: 写入 Git 标准输入的字节
+///
+/// 返回:
+/// - 清理后的命令输出
+pub(super) async fn git_success_with_input(
+    root: &Path,
+    args: &[&str],
+    input: &[u8],
+) -> Result<GitOutput> {
+    let output = run_git_with_input_once(root, args, input).await?;
+    if output.status.success() {
+        return Ok(GitOutput {
+            stdout: trim_bytes(&output.stdout),
+            stderr: trim_bytes(&output.stderr),
+        });
+    }
+    let stderr = trim_bytes(&output.stderr);
+    let stdout = trim_bytes(&output.stdout);
+    let message = if stderr.is_empty() { stdout } else { stderr };
+    if message.is_empty() {
+        bail!("git command failed");
+    }
+    bail!(message)
+}
+
 /// 执行 Git 子进程，并对临时锁错误进行有限重试。
 ///
 /// 参数:
@@ -101,6 +133,8 @@ async fn run_git_once(root: &Path, args: &[&str]) -> Result<std::process::Output
         .current_dir(root)
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_EDITOR", "true")
+        .env("GIT_SEQUENCE_EDITOR", "true")
         .env("LC_ALL", "C")
         .kill_on_drop(true);
     timeout(GIT_COMMAND_TIMEOUT, command.output())
@@ -112,6 +146,51 @@ async fn run_git_once(root: &Path, args: &[&str]) -> Result<std::process::Output
             )
         })?
         .context("failed to execute git command")
+}
+
+/// 执行单次带标准输入和超时的 Git 子进程。
+///
+/// 参数:
+/// - `root`: Git 工作目录
+/// - `args`: Git 参数
+/// - `input`: 标准输入内容
+///
+/// 返回:
+/// - 原始进程输出
+async fn run_git_with_input_once(
+    root: &Path,
+    args: &[&str],
+    input: &[u8],
+) -> Result<std::process::Output> {
+    let mut command = Command::new("git");
+    command
+        .args(args)
+        .current_dir(root)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_EDITOR", "true")
+        .env("GIT_SEQUENCE_EDITOR", "true")
+        .env("LC_ALL", "C")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    let mut child = command.spawn().context("failed to execute git command")?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(input)
+            .await
+            .context("failed to write git command input")?;
+    }
+    timeout(GIT_COMMAND_TIMEOUT, child.wait_with_output())
+        .await
+        .with_context(|| {
+            format!(
+                "git command timed out after 60 seconds: git {}",
+                args.join(" ")
+            )
+        })?
+        .context("failed to read git command output")
 }
 
 /// 判断错误是否来自可重试的 Git 临时锁。

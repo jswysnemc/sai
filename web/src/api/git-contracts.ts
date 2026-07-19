@@ -8,6 +8,7 @@ export type GitOperationOptions = {
   new_branch?: string;
   start_point?: string;
   post_action?: "push" | "sync";
+  patch?: string;
   all?: boolean;
   amend?: boolean;
   signoff?: boolean;
