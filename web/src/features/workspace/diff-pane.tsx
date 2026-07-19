@@ -1,30 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Archive,
   ArrowDown,
   ArrowUp,
-  Check,
-  ChevronDown,
   CloudDownload,
   CloudUpload,
-  EyeOff,
   GitBranch,
   GitCommitHorizontal,
   History,
-  Minus,
-  Plus,
   RefreshCw,
-  RotateCcw,
-  Trash2
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { ApiError, LocalizedError, localizeApiMessage, toDisplayError } from "../../api/api-error";
 import type { GitCommitSummary, GitOperationResponse, GitStatusEntry } from "../../api/contracts";
 import type { GitOperationOptions } from "../../api/git-contracts";
+import { Button } from "../../shared/ui/button/button";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { DiffView } from "../chat/tool-renderers/diff-view";
 import { useI18n } from "../i18n/use-i18n";
+import { ChangeSection } from "../source-control/changes/change-section";
+import { CommitControl } from "../source-control/changes/commit-control";
+import { groupGitChanges } from "../source-control/changes/change-groups";
+import { MoreActionsMenu } from "../source-control/actions/more-actions-menu";
+import { InProgressOperationBar } from "../source-control/operation/in-progress-operation-bar";
+import { GitOutputPanel } from "../source-control/output/git-output-panel";
+import type { GitOutputEntry, GitOperationUiOptions } from "../source-control/types";
+import "../source-control/source-control.css";
 import { GitBranchMenu } from "./git-branch-menu";
 
 type ReviewMode = "changes" | "history";
@@ -51,6 +52,8 @@ export function DiffPane() {
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [notice, setNotice] = useState("");
+  const [outputEntries, setOutputEntries] = useState<GitOutputEntry[]>([]);
+  const pendingActionRef = useRef("operation");
 
   const status = useQuery({
     queryKey: ["git-status"],
@@ -87,17 +90,7 @@ export function DiffPane() {
 
   const state = status.data;
   const ready = state?.status === "ready";
-  const staged = useMemo(
-    () => (state?.entries ?? []).filter((entry) => entry.staged && !entry.untracked),
-    [state?.entries]
-  );
-  const changes = useMemo(
-    () =>
-      (state?.entries ?? []).filter(
-        (entry) => entry.untracked || entry.worktree_status !== "." || entry.conflicted
-      ),
-    [state?.entries]
-  );
+  const groups = useMemo(() => groupGitChanges(state?.entries ?? []), [state?.entries]);
   useEffect(() => {
     if (state?.remote_url) setRemoteUrl(state.remote_url);
   }, [state?.remote_url]);
@@ -120,6 +113,7 @@ export function DiffPane() {
     mutationFn: (input: { action: string; options: GitOperationOptions }) =>
       api.workspace.gitOp(input.action, input.options),
     onSuccess: async (result) => {
+      appendOutput(result.ok, result.message, result.stdout, result.stderr);
       queryClient.setQueryData(["git-status"], result.state);
       if (!result.ok) {
         setError(
@@ -135,17 +129,40 @@ export function DiffPane() {
       await refreshAll(false);
     },
     onError: (reason) => {
-      setError(toDisplayError(reason, "Git operation failed", "Git 操作失败"));
+      const displayError = toDisplayError(reason, "Git operation failed", "Git 操作失败");
+      appendOutput(false, displayError.message, "", displayError.message);
+      setError(displayError);
       setNotice("");
     }
   });
 
+  /**
+   * 将一次 Git 操作输出追加到面板，并限制保留数量。
+   *
+   * @param ok 操作是否成功
+   * @param outputMessage 操作摘要
+   * @param stdout Git 标准输出
+   * @param stderr Git 标准错误
+   * @returns 无返回值
+   */
+  function appendOutput(ok: boolean, outputMessage: string, stdout: string, stderr: string) {
+    setOutputEntries((current) => [
+      ...current.slice(-49),
+      {
+        id: Date.now() * 100 + current.length,
+        action: pendingActionRef.current,
+        ok,
+        message: outputMessage,
+        stdout,
+        stderr,
+        createdAt: Date.now()
+      }
+    ]);
+  }
+
   const runOp = async (
     action: string,
-    options: GitOperationOptions & {
-      confirmTitle?: string;
-      confirmDescription?: string;
-    } = {}
+    options: GitOperationUiOptions = {}
   ): Promise<GitOperationResponse | undefined> => {
     if (options.confirmTitle) {
       const confirmed = await confirm({
@@ -159,9 +176,25 @@ export function DiffPane() {
     setError(null);
     setNotice("");
     const { confirmTitle: _confirmTitle, confirmDescription: _confirmDescription, ...operationOptions } = options;
-    const result = await op.mutateAsync({ action, options: operationOptions });
-    if (action === "commit") setMessage("");
-    return result;
+    pendingActionRef.current = action;
+    try {
+      return await op.mutateAsync({ action, options: operationOptions });
+    } catch {
+      return undefined;
+    }
+  };
+
+  /**
+   * 执行提交变体，并仅在成功后清空提交说明。
+   *
+   * @param options 提交变体参数
+   * @returns 提交是否成功
+   */
+  const commitChanges = async (options: GitOperationOptions): Promise<boolean> => {
+    const result = await runOp("commit", { message, ...options });
+    if (!result?.ok) return false;
+    setMessage("");
+    return true;
   };
 
   if (status.isLoading && !state) {
@@ -183,9 +216,9 @@ export function DiffPane() {
               {t("Version control", "版本管理")}
             </h2>
           </div>
-          <button type="button" className="icon-button" onClick={() => void status.refetch()} aria-label={t("Refresh", "刷新")}>
+          <Button className="icon-button" onClick={() => void status.refetch()} aria-label={t("Refresh", "刷新")}>
             <RefreshCw size={14} />
-          </button>
+          </Button>
         </header>
         <div className="git-init-panel">
           <GitBranch size={24} />
@@ -195,13 +228,13 @@ export function DiffPane() {
             <span>{t("Default branch", "默认分支")}</span>
             <input value={initBranch} onChange={(event) => setInitBranch(event.target.value)} spellCheck={false} />
           </label>
-          <button
-            type="button"
+          <Button
+            variant="primary"
             onClick={() => void runOp("init", { message: initBranch })}
             disabled={!initBranch.trim() || op.isPending}
           >
             {t("Initialize repository", "初始化仓库")}
-          </button>
+          </Button>
         </div>
         {(status.error || error) && <div className="pane-error">{error?.message || status.error?.message}</div>}
       </section>
@@ -216,6 +249,26 @@ export function DiffPane() {
     (state?.dirty_counts.unstaged ?? 0) +
     (state?.dirty_counts.untracked ?? 0) +
     (state?.dirty_counts.conflicted ?? 0);
+  const workingCount = groups.changes.length + groups.untracked.length;
+
+  /**
+   * 通过确认对话框丢弃单个普通修改或未跟踪文件。
+   *
+   * @param entry 待丢弃文件状态
+   * @returns 无返回值
+   */
+  const discardEntry = (entry: GitStatusEntry) => {
+    void runOp("discard", {
+      path: entry.path,
+      old_path: entry.old_path ?? undefined,
+      confirmTitle: entry.untracked
+        ? t("Delete untracked file", "删除未跟踪文件")
+        : t("Discard working tree changes", "撤销工作区修改"),
+      confirmDescription: entry.untracked
+        ? t(`Permanently delete “${entry.path}”.`, `将永久删除“${entry.path}”。`)
+        : t(`Restore ${entry.path}. Unsaved changes cannot be recovered.`, `将恢复 ${entry.path}，未保存修改无法恢复。`)
+    });
+  };
 
   return (
     <section className="diff-pane git-manager git-review">
@@ -230,66 +283,64 @@ export function DiffPane() {
           onOperation={runOp}
         />
         <div className="git-review-actions">
-          <button type="button" className={mode === "changes" ? "active" : ""} onClick={() => setMode("changes")}>
+          <Button className={mode === "changes" ? "active" : ""} onClick={() => setMode("changes")}>
             {t("Changes", "变更")}
-          </button>
-          <button type="button" className={mode === "history" ? "active" : ""} onClick={() => setMode("history")}>
+          </Button>
+          <Button className={mode === "history" ? "active" : ""} onClick={() => setMode("history")}>
             <History size={13} />
             {t("History", "历史")}
-          </button>
-          <button type="button" disabled={busy} onClick={() => void runOp("fetch")} title={t("Fetch remote updates", "获取远端更新")}>
+          </Button>
+          <Button disabled={busy} onClick={() => void runOp("fetch")} title={t("Fetch remote updates", "获取远端更新")}>
             <CloudDownload size={13} />
-          </button>
-          <button type="button" disabled={busy} onClick={() => void runOp("pull")} title={t("Pull and merge", "拉取并合并")}>
+          </Button>
+          <Button disabled={busy} onClick={() => void runOp("pull")} title={t("Pull and merge", "拉取并合并")}>
             <RefreshCw size={13} />
-          </button>
-          <button type="button" disabled={busy} onClick={() => void runOp("push")} title={t("Push", "推送")}>
+          </Button>
+          <Button disabled={busy} onClick={() => void runOp("push")} title={t("Push", "推送")}>
             <CloudUpload size={13} />
-          </button>
-          <button
-            type="button"
-            disabled={busy || dirtyTotal === 0}
-            onClick={() => void runOp("stash_push", { message: "Sai stash" })}
-            title={t("Stash changes", "暂存修改")}
-          >
-            <Archive size={13} />
-          </button>
-          {(state?.stash_count ?? 0) > 0 && (
-            <button type="button" disabled={busy} onClick={() => void runOp("stash_pop")} title={t(`Pop stash (${state?.stash_count})`, `弹出 stash (${state?.stash_count})`)}>
-              {t("Pop", "弹出")}
-            </button>
-          )}
-          <button type="button" disabled={busy} onClick={() => void refreshAll()} title={t("Refresh", "刷新")} aria-label={t("Refresh", "刷新")}>
+          </Button>
+          <Button disabled={busy} onClick={() => void refreshAll()} title={t("Refresh", "刷新")} aria-label={t("Refresh", "刷新")}>
             <RefreshCw size={13} />
-          </button>
+          </Button>
+          <MoreActionsMenu
+            busy={busy}
+            dirtyTotal={dirtyTotal}
+            stashCount={state?.stash_count ?? 0}
+            runOperation={runOp}
+          />
         </div>
       </header>
 
       {mode === "changes" ? (
         <div className="git-manager-body">
           <section className="git-change-panel">
-            <div className="git-commit-box">
-              <textarea rows={3} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={t("Commit message", "提交说明")} />
-              <button
-                type="button"
-                onClick={() => void runOp("commit", { message })}
-                disabled={!message.trim() || busy || (state?.dirty_counts.staged ?? 0) === 0}
-              >
-                <Check size={13} />
-                {t("Commit staged changes", "提交已暂存变更")}
-              </button>
-            </div>
+            {state?.operation && (
+              <InProgressOperationBar
+                operation={state.operation}
+                conflictedCount={groups.conflicts.length}
+                busy={busy}
+                runOperation={runOp}
+              />
+            )}
+            <CommitControl
+              message={message}
+              stagedCount={groups.staged.length}
+              workingCount={workingCount}
+              conflictedCount={groups.conflicts.length}
+              busy={busy}
+              onMessageChange={setMessage}
+              onCommit={commitChanges}
+            />
 
             <div className="git-diff-mode">
-              <button type="button" className={diffMode === "working_tree" ? "active" : ""} onClick={() => setDiffMode("working_tree")}>
+              <Button className={diffMode === "working_tree" ? "active" : ""} onClick={() => setDiffMode("working_tree")}>
                 {t("Working tree", "工作树")}
-              </button>
-              <button type="button" className={diffMode === "branch" ? "active" : ""} onClick={() => setDiffMode("branch")}>
+              </Button>
+              <Button className={diffMode === "branch" ? "active" : ""} onClick={() => setDiffMode("branch")}>
                 {t("Against baseline", "相对基线")}
-              </button>
+              </Button>
               {dirtyTotal > 0 && (
-                <button
-                  type="button"
+                <Button
                   className="danger"
                   disabled={busy}
                   onClick={() =>
@@ -300,54 +351,75 @@ export function DiffPane() {
                   }
                 >
                   {t("Discard all", "全部丢弃")}
-                </button>
+                </Button>
               )}
             </div>
 
-            <ChangeSection
-              title={t(`Staged ${staged.length}`, `已暂存 ${staged.length}`)}
-              entries={staged}
-              selectedPath={selectedPath}
-              busy={busy}
-              onSelect={setSelectedPath}
-              onStageAll={() => void runOp("stage_all")}
-              onUnstageAll={() => void runOp("unstage_all")}
-              onStage={(path) => void runOp("stage", { path })}
-              onUnstage={(path) => void runOp("unstage", { path })}
-              onIgnore={(path) => void runOp("add_to_gitignore", { path })}
-              onDiscard={(entry) =>
-                void runOp("discard", {
-                  path: entry.path,
-                  old_path: entry.old_path ?? undefined,
-                  confirmTitle: t("Discard working tree changes", "撤销工作区修改"),
-                  confirmDescription: t(`Restore ${entry.path}. Unsaved changes cannot be recovered.`, `将恢复 ${entry.path}，未保存修改无法恢复。`)
-                })
-              }
-              section="staged"
-            />
-            <ChangeSection
-              title={t(`Changes ${changes.length}`, `更改 ${changes.length}`)}
-              entries={changes}
-              selectedPath={selectedPath}
-              busy={busy}
-              onSelect={setSelectedPath}
-              onStageAll={() => void runOp("stage_all")}
-              onUnstageAll={() => void runOp("unstage_all")}
-              onStage={(path) => void runOp("stage", { path })}
-              onUnstage={(path) => void runOp("unstage", { path })}
-              onIgnore={(path) => void runOp("add_to_gitignore", { path })}
-              onDiscard={(entry) =>
-                void runOp("discard", {
-                  path: entry.path,
-                  old_path: entry.old_path ?? undefined,
-                  confirmTitle: entry.untracked ? t("Delete untracked file", "删除未跟踪文件") : t("Discard working tree changes", "撤销工作区修改"),
-                  confirmDescription: entry.untracked
-                    ? t(`Permanently delete “${entry.path}”.`, `将永久删除“${entry.path}”。`)
-                    : t(`Restore ${entry.path}. Unsaved changes cannot be recovered.`, `将恢复 ${entry.path}，未保存修改无法恢复。`)
-                })
-              }
-              section="changes"
-            />
+            {groups.conflicts.length > 0 && (
+              <ChangeSection
+                title={t(`Merge Changes ${groups.conflicts.length}`, `合并变更 ${groups.conflicts.length}`)}
+                entries={groups.conflicts}
+                selectedPath={selectedPath}
+                busy={busy}
+                onSelect={setSelectedPath}
+                onStageAll={() => void runOp("stage_all")}
+                onUnstageAll={() => void runOp("unstage_all")}
+                onStage={(path) => void runOp("stage", { path })}
+                onUnstage={(path) => void runOp("unstage", { path })}
+                onIgnore={(path) => void runOp("add_to_gitignore", { path })}
+                onDiscard={discardEntry}
+                section="merge"
+              />
+            )}
+            {groups.staged.length > 0 && (
+              <ChangeSection
+                title={t(`Staged Changes ${groups.staged.length}`, `已暂存变更 ${groups.staged.length}`)}
+                entries={groups.staged}
+                selectedPath={selectedPath}
+                busy={busy}
+                onSelect={setSelectedPath}
+                onStageAll={() => void runOp("stage_all")}
+                onUnstageAll={() => void runOp("unstage_all")}
+                onStage={(path) => void runOp("stage", { path })}
+                onUnstage={(path) => void runOp("unstage", { path })}
+                onIgnore={(path) => void runOp("add_to_gitignore", { path })}
+                onDiscard={discardEntry}
+                section="staged"
+              />
+            )}
+            {groups.changes.length > 0 && (
+              <ChangeSection
+                title={t(`Changes ${groups.changes.length}`, `更改 ${groups.changes.length}`)}
+                entries={groups.changes}
+                selectedPath={selectedPath}
+                busy={busy}
+                onSelect={setSelectedPath}
+                onStageAll={() => void runOp("stage_all")}
+                onUnstageAll={() => void runOp("unstage_all")}
+                onStage={(path) => void runOp("stage", { path })}
+                onUnstage={(path) => void runOp("unstage", { path })}
+                onIgnore={(path) => void runOp("add_to_gitignore", { path })}
+                onDiscard={discardEntry}
+                section="changes"
+              />
+            )}
+            {groups.untracked.length > 0 && (
+              <ChangeSection
+                title={t(`Untracked ${groups.untracked.length}`, `未跟踪 ${groups.untracked.length}`)}
+                entries={groups.untracked}
+                selectedPath={selectedPath}
+                busy={busy}
+                onSelect={setSelectedPath}
+                onStageAll={() => void runOp("stage_all")}
+                onUnstageAll={() => void runOp("unstage_all")}
+                onStage={(path) => void runOp("stage", { path })}
+                onUnstage={(path) => void runOp("unstage", { path })}
+                onIgnore={(path) => void runOp("add_to_gitignore", { path })}
+                onDiscard={discardEntry}
+                section="untracked"
+              />
+            )}
+            {dirtyTotal === 0 && <div className="git-clean">{t("No changes", "没有变更")}</div>}
 
             <div className="git-remote-box">
               <span>{state?.remote_url ? t("Remote origin", "远端 origin") : t("Set origin remote", "设置 origin 远端")}</span>
@@ -357,13 +429,12 @@ export function DiffPane() {
                 placeholder="git@github.com:org/repo.git"
                 spellCheck={false}
               />
-              <button
-                type="button"
+              <Button
                 disabled={!remoteUrl.trim() || busy}
                 onClick={() => void runOp("set_remote", { remote_url: remoteUrl })}
               >
                 {state?.remote_url ? t("Update remote", "更新远端") : t("Save remote", "保存远端")}
-              </button>
+              </Button>
             </div>
           </section>
 
@@ -399,8 +470,7 @@ export function DiffPane() {
             </div>
             <div className="git-file-list">
               {commits.map((commit: GitCommitSummary) => (
-                <button
-                  type="button"
+                <Button
                   key={commit.sha}
                   className={`git-history-row${activeCommit === commit.sha ? " active" : ""}`}
                   onClick={() => {
@@ -416,13 +486,13 @@ export function DiffPane() {
                     </small>
                   </span>
                   {commit.local_only && <em>{t("local", "本地")}</em>}
-                </button>
+                </Button>
               ))}
               {commits.length === 0 && <div className="git-clean">{t("No commits yet", "暂无提交记录")}</div>}
               {commits.length >= historyLimit && (
-                <button type="button" className="git-load-more" onClick={() => setHistoryLimit((value) => value + 40)}>
+                <Button className="git-load-more" onClick={() => setHistoryLimit((value) => value + 40)}>
                   {t("Load more", "加载更多")}
-                </button>
+                </Button>
               )}
             </div>
           </section>
@@ -438,15 +508,14 @@ export function DiffPane() {
                   {commitDetails.data.commit.body && <pre>{commitDetails.data.commit.body}</pre>}
                   <div className="git-commit-files">
                     {commitDetails.data.commit.files.map((file) => (
-                      <button
-                        type="button"
+                      <Button
                         key={`${file.status}:${file.path}`}
                         className={selectedCommitPath === file.path ? "active" : ""}
                         onClick={() => setSelectedCommitPath(file.path)}
                       >
                         <span>{file.status}</span>
                         <strong>{file.path}</strong>
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>
@@ -466,6 +535,7 @@ export function DiffPane() {
         </div>
       )}
 
+      <GitOutputPanel entries={outputEntries} />
       {(error || notice || status.error) && (
         <div className={error || status.error ? "pane-error" : "pane-notice"}>
           {error?.message || status.error?.message || localizeApiMessage(notice, locale)}
@@ -475,106 +545,14 @@ export function DiffPane() {
   );
 }
 
-function ChangeSection(props: {
-  title: string;
-  entries: GitStatusEntry[];
-  selectedPath: string | null;
-  busy: boolean;
-  section: "staged" | "changes";
-  onSelect: (path: string) => void;
-  onStageAll: () => void;
-  onUnstageAll: () => void;
-  onStage: (path: string) => void;
-  onUnstage: (path: string) => void;
-  onIgnore: (path: string) => void;
-  onDiscard: (entry: GitStatusEntry) => void;
-}) {
-  const { t } = useI18n();
-  const [open, setOpen] = useState(true);
-  return (
-    <div className="git-section">
-      <div className="git-change-head">
-        <button type="button" className="git-section-toggle" onClick={() => setOpen((value) => !value)}>
-          <ChevronDown size={12} className={open ? "open" : ""} />
-          <span>{props.title}</span>
-        </button>
-        <span>
-          {props.section === "staged" ? (
-            <button type="button" onClick={props.onUnstageAll} title={t("Unstage all", "取消全部暂存")} disabled={props.busy}>
-              <Minus size={12} />
-            </button>
-          ) : (
-            <button type="button" onClick={props.onStageAll} title={t("Stage all", "暂存全部")} disabled={props.busy}>
-              <Plus size={12} />
-            </button>
-          )}
-        </span>
-      </div>
-      {open && (
-        <div className="git-file-list">
-          {props.entries.map((entry) => (
-            <div
-              className={`git-file-row${props.selectedPath === entry.path ? " active" : ""}`}
-              key={`${entry.index_status}${entry.worktree_status}${entry.path}`}
-            >
-              <button type="button" className="git-file-main" onClick={() => props.onSelect(entry.path)}>
-                <span className={`git-file-status tone-${statusTone(entry)}`}>{statusLabel(entry)}</span>
-                <span title={entry.path}>{entry.path}</span>
-              </button>
-              <span className="git-file-actions">
-                {props.section === "staged" && entry.staged && (
-                  <button type="button" disabled={props.busy} onClick={() => props.onUnstage(entry.path)} title={t("Unstage", "取消暂存")}>
-                    <Minus size={12} />
-                  </button>
-                )}
-                {props.section === "changes" && (entry.untracked || entry.worktree_status !== "." || entry.conflicted) && (
-                  <button type="button" disabled={props.busy} onClick={() => props.onStage(entry.path)} title={t("Stage", "暂存")}>
-                    <Plus size={12} />
-                  </button>
-                )}
-                {props.section === "changes" && entry.untracked && (
-                  <button type="button" disabled={props.busy} onClick={() => props.onIgnore(entry.path)} title={t("Add to .gitignore", "加入 .gitignore")}>
-                    <EyeOff size={12} />
-                  </button>
-                )}
-                {(entry.untracked || entry.worktree_status !== ".") && (
-                  <button
-                    type="button"
-                    disabled={props.busy}
-                    onClick={() => props.onDiscard(entry)}
-                    title={entry.untracked ? t("Delete untracked file", "删除未跟踪文件") : t("Discard changes", "撤销修改")}
-                  >
-                    {entry.untracked ? <Trash2 size={12} /> : <RotateCcw size={12} />}
-                  </button>
-                )}
-              </span>
-            </div>
-          ))}
-          {props.entries.length === 0 && <div className="git-clean">{t("No files", "无文件")}</div>}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function statusLabel(entry: GitStatusEntry) {
-  if (entry.conflicted) return "U";
-  if (entry.untracked) return "U";
-  if (entry.staged && entry.worktree_status !== ".") return "M*";
-  if (entry.staged) return entry.index_status === "A" ? "A" : entry.index_status === "D" ? "D" : "M";
-  if (entry.worktree_status === "D") return "D";
-  return "M";
-}
-
-function statusTone(entry: GitStatusEntry) {
-  if (entry.conflicted) return "conflict";
-  if (entry.untracked) return "untracked";
-  if (entry.worktree_status === "D" || entry.index_status === "D") return "deleted";
-  if (entry.index_status === "A") return "added";
-  return "modified";
-}
-
-function formatDate(value: string, locale: string) {
+/**
+ * 将 Git ISO 时间格式化为当前界面语言的日期时间。
+ *
+ * @param value Git 日期字符串
+ * @param locale 当前界面语言
+ * @returns 本地化日期文本
+ */
+function formatDate(value: string, locale: string): string {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;

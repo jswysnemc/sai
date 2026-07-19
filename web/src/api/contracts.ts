@@ -205,6 +205,13 @@ export type GitStatusEntry = {
   untracked: boolean;
 };
 
+export type GitInProgressOperation = {
+  kind: "merge" | "rebase" | "cherry_pick" | "revert" | string;
+  can_continue: boolean;
+  can_skip: boolean;
+  can_abort: boolean;
+};
+
 export type GitRepositoryState = {
   repo_root: string;
   workdir: string;
@@ -217,6 +224,7 @@ export type GitRepositoryState = {
   stash_count: number;
   dirty_counts: GitDirtyCounts;
   entries: GitStatusEntry[];
+  operation: GitInProgressOperation | null;
   status: string;
   error?: string | null;
 };

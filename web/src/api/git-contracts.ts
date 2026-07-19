@@ -7,5 +7,9 @@ export type GitOperationOptions = {
   branch_kind?: "local" | "remote";
   new_branch?: string;
   start_point?: string;
+  post_action?: "push" | "sync";
+  all?: boolean;
+  amend?: boolean;
+  signoff?: boolean;
   force?: boolean;
 };
