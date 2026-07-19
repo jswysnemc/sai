@@ -1,3 +1,4 @@
+pub(crate) mod command_output_buffer;
 mod formatter;
 mod model;
 mod todo;

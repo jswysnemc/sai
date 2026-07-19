@@ -1,4 +1,4 @@
-use crate::i18n::text as t;
+use crate::render::terminal_text as t;
 use crate::llm::ChatResult;
 use crate::render::markdown::MarkdownStreamRenderer;
 use crate::render::style::TOOL_BULLET;

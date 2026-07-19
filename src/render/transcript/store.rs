@@ -112,7 +112,7 @@ impl TranscriptStore {
     ///
     /// 返回:
     /// - 无
-    fn mark_dirty(&mut self, index: usize) {
+    pub(super) fn mark_dirty(&mut self, index: usize) {
         self.cache.invalidate(index);
         self.dirty_from_cell = Some(match self.dirty_from_cell {
             Some(existing) => existing.min(index),
@@ -642,7 +642,7 @@ impl TranscriptStore {
     ///
     /// 返回:
     /// - 是否找到可更新的活动工具
-    fn update_active_tool<F>(&mut self, name: &str, update: F) -> bool
+    pub(super) fn update_active_tool<F>(&mut self, name: &str, update: F) -> bool
     where
         F: FnOnce(&mut ToolView),
     {

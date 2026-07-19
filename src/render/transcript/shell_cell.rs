@@ -1,4 +1,4 @@
-use crate::i18n::text as t;
+use crate::render::terminal_text as t;
 use crate::render::style::TOOL_BULLET;
 
 /// REPL 本地 Shell 命令单元。

@@ -1,4 +1,4 @@
-use crate::i18n::text as t;
+use crate::render::terminal_text as t;
 use anyhow::{bail, Context, Result};
 use std::path::Path;
 use std::process::{Command, Stdio};

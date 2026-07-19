@@ -6,7 +6,7 @@ mod table_math;
 #[cfg(test)]
 mod tests;
 
-use crate::i18n::text as t;
+use crate::render::terminal_text as t;
 use crate::render::style::{ASSET_ERROR_STYLE, RESET};
 
 pub(crate) use table_math::{

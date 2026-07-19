@@ -1,4 +1,4 @@
-use crate::i18n::text as t;
+use crate::render::terminal_text as t;
 use crate::tools::edit_patch::{AppliedPatch, FileChange, LineChange, LineChangeKind};
 use anyhow::{bail, Result};
 use serde_json::Value;

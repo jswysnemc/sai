@@ -1,3 +1,4 @@
+use super::command_output_buffer::CommandOutputBuffer;
 use crate::permission::PermissionDecision;
 use crate::render::PermissionChoice;
 
@@ -16,6 +17,9 @@ pub(crate) struct ToolView {
     pub(crate) progress: Option<String>,
     pub(crate) outcome: Option<ToolOutcome>,
     pub(crate) permission: Option<PermissionAuditView>,
+    command_stdout: CommandOutputBuffer,
+    command_stderr: CommandOutputBuffer,
+    pub(crate) command_expanded: bool,
 }
 
 /// 附着在既有工具视图中的权限审计状态。
@@ -72,6 +76,9 @@ impl ToolView {
             progress: None,
             outcome: None,
             permission: None,
+            command_stdout: CommandOutputBuffer::default(),
+            command_stderr: CommandOutputBuffer::default(),
+            command_expanded: false,
         }
     }
 
@@ -93,6 +100,69 @@ impl ToolView {
     /// - `message`: 最新进度文本
     pub(crate) fn set_progress(&mut self, message: String) {
         self.progress = Some(message);
+    }
+
+    /// 追加命令执行期间产生的输出片段。
+    ///
+    /// 参数:
+    /// - `stream`: 输出流类型
+    /// - `bytes`: 原始输出字节
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn append_command_output(
+        &mut self,
+        stream: crate::tools::command::CommandOutputStream,
+        bytes: &[u8],
+        omitted_bytes: usize,
+    ) {
+        let target = match stream {
+            crate::tools::command::CommandOutputStream::Stdout => &mut self.command_stdout,
+            crate::tools::command::CommandOutputStream::Stderr => &mut self.command_stderr,
+        };
+        target.append(bytes, omitted_bytes);
+    }
+
+    /// 切换命令输出展开状态。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 切换后的展开状态
+    pub(crate) fn toggle_command_expanded(&mut self) -> bool {
+        self.command_expanded = !self.command_expanded;
+        self.command_expanded
+    }
+
+    /// 判断当前视图是否包含可展开的命令输出。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - run_command 且已有输出时返回 true
+    pub(crate) fn has_command_output(&self) -> bool {
+        self.name == "run_command"
+            && (!self.command_stdout.is_empty()
+                || !self.command_stderr.is_empty()
+                || self.outcome.is_some())
+    }
+
+    /// 返回 stdout 的有界显示文本。
+    ///
+    /// 返回:
+    /// - 包含省略标记的 stdout
+    pub(crate) fn command_stdout_text(&self) -> std::borrow::Cow<'_, str> {
+        self.command_stdout.display_text()
+    }
+
+    /// 返回 stderr 的有界显示文本。
+    ///
+    /// 返回:
+    /// - 包含省略标记的 stderr
+    pub(crate) fn command_stderr_text(&self) -> std::borrow::Cow<'_, str> {
+        self.command_stderr.display_text()
     }
 
     /// 完成工具调用。

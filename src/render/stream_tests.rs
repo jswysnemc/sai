@@ -175,6 +175,61 @@ fn command_progress_keeps_single_line_status_until_final_call() {
     assert!(!renderer.live_tool_status.is_active());
 }
 
+/// 验证正式前台命令调用会清空上一条命令实时预览。
+#[test]
+fn consecutive_foreground_commands_reset_live_preview() {
+    let mut renderer = StreamRenderer::new(
+        ReasoningDisplayMode::Full,
+        ToolCallDisplayMode::Summary,
+        false,
+        StreamRenderOptions::default(),
+    );
+    renderer
+        .write_tool_call("run_command", r#"{"command":"printf first"}"#)
+        .unwrap();
+    let message = crate::tools::command::encode_command_output_for_test(
+        crate::tools::command::CommandOutputStream::Stdout,
+        b"first\n",
+    );
+    renderer
+        .write_tool_progress("run_command", &message)
+        .unwrap();
+    assert!(renderer.command_preview.display_texts().0.contains("first"));
+
+    renderer
+        .write_tool_call("run_command", r#"{"command":"printf second"}"#)
+        .unwrap();
+
+    assert_eq!(
+        renderer.command_preview.display_texts(),
+        (String::new(), String::new())
+    );
+}
+
+/// 验证后台命令进度不会进入 CLI 前台命令预览。
+#[test]
+fn background_progress_uses_generic_tool_rendering() {
+    let mut renderer = StreamRenderer::new(
+        ReasoningDisplayMode::Full,
+        ToolCallDisplayMode::Summary,
+        false,
+        StreamRenderOptions::default(),
+    );
+    let message = crate::tools::command::encode_command_output_for_test(
+        crate::tools::command::CommandOutputStream::Stdout,
+        b"background\n",
+    );
+
+    renderer
+        .write_tool_progress("background_command", &message)
+        .unwrap();
+
+    assert_eq!(
+        renderer.command_preview.display_texts(),
+        (String::new(), String::new())
+    );
+}
+
 #[test]
 fn denied_tool_result_is_suppressed_once() {
     let mut renderer = StreamRenderer::new(

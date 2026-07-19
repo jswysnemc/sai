@@ -1,4 +1,4 @@
-use crate::i18n::text as t;
+use crate::render::terminal_text as t;
 use crate::render::status_style::{color_running, color_status};
 use crate::render::style::TOOL_BULLET;
 use crate::render::tool_names::readable_tool_name;

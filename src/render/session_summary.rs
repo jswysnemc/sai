@@ -1,4 +1,4 @@
-use crate::i18n::text as t;
+use crate::render::terminal_text as t;
 use crate::runtime_recovery::has_visible_runtime_recovery;
 use crate::state::failure_recovery::summary::{format_recovery_snapshot, has_visible_recovery};
 use crate::state::SessionSnapshot;

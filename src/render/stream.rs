@@ -1,10 +1,11 @@
-use crate::i18n::text as t;
+use crate::render::terminal_text as t;
 use crate::llm::{ChatStreamChunk, ChatStreamKind, ToolCallStreamProgress};
 use crate::render::background_command_event::{
     background_command_result_label, is_background_command_start,
 };
+use crate::render::cli_command_preview::CliCommandPreview;
 use crate::render::command_output::{
-    write_command_block_with_action, write_command_error_block, write_command_result_blocks,
+    write_command_block_with_action, write_command_error_preview, write_command_result_preview,
     write_tool_payload,
 };
 use crate::render::edit_diff::write_edit_file_diff_block;
@@ -59,6 +60,7 @@ pub struct StreamRenderer {
     pending_streamed_edit_blocks: usize,
     suppressed_denied_results: HashSet<String>,
     work_status: Option<WorkStatus>,
+    command_preview: CliCommandPreview,
 }
 
 impl StreamRenderer {
@@ -96,6 +98,7 @@ impl StreamRenderer {
             pending_streamed_edit_blocks: 0,
             suppressed_denied_results: HashSet::new(),
             work_status: None,
+            command_preview: CliCommandPreview::new(),
         }
     }
 
@@ -202,6 +205,9 @@ impl StreamRenderer {
         let event_label = tool_event_label(name, Some(arguments));
         self.tool_event_labels
             .insert(name.to_string(), event_label.clone());
+        if name == "run_command" {
+            self.command_preview.begin();
+        }
         if self.tool_call_mode == ToolCallDisplayMode::Summary
             && !tool_call_has_visible_block(name)
             && !background_command_start
@@ -362,9 +368,15 @@ impl StreamRenderer {
         let command_block_result = self.command_block_tools.remove(name);
         if self.tool_call_mode == ToolCallDisplayMode::Summary {
             if tool_call_has_visible_block(name) || command_block_result {
-                if name == "run_command" && !ok {
+                if name == "run_command" {
                     let mut stdout = io::stdout();
-                    write_command_error_block(&mut stdout, output)?;
+                    self.stop_waiting()?;
+                    self.command_preview.clear()?;
+                    if ok {
+                        write_command_result_preview(&mut stdout, output)?;
+                    } else {
+                        write_command_error_preview(&mut stdout, output)?;
+                    }
                     stdout.flush()?;
                     self.resume_work_spinner()?;
                     return Ok(());
@@ -396,9 +408,15 @@ impl StreamRenderer {
             return Ok(());
         }
         self.finish_live_tool_status()?;
-        if name == "run_command" && self.tool_call_mode == ToolCallDisplayMode::Full {
+        if name == "run_command" {
             let mut stdout = io::stdout();
-            write_command_result_blocks(&mut stdout, output)?;
+            self.stop_waiting()?;
+            self.command_preview.clear()?;
+            if ok {
+                write_command_result_preview(&mut stdout, output)?;
+            } else {
+                write_command_error_preview(&mut stdout, output)?;
+            }
             stdout.flush()?;
             self.resume_work_spinner()?;
             return Ok(());
@@ -471,6 +489,16 @@ impl StreamRenderer {
         }
         if let Some(payload) = message.strip_prefix("__subtool_result__") {
             return self.write_subtool_result(name, payload);
+        }
+        if name == "run_command" {
+            if let Some(chunk) = crate::tools::command::decode_command_output(message) {
+                self.stop_waiting()?;
+                self.end_active_stream_line()?;
+                self.finalize_reasoning_summary()?;
+                self.command_preview.append(&chunk)?;
+                self.resume_work_spinner()?;
+                return Ok(());
+            }
         }
         self.stop_waiting()?;
         self.end_active_stream_line()?;

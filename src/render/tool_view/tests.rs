@@ -66,6 +66,21 @@ fn command_permission_uses_existing_command_view() {
 
     assert!(output.contains("cargo"));
     assert!(output.contains("test"));
-    assert!(output.contains(crate::i18n::text("Allow once", "允许一次")));
-    assert!(!output.contains(crate::i18n::text("Permission required", "需要权限确认")));
+    assert!(output.contains("Allow once"));
+    assert!(!output.contains("Permission required"));
+}
+
+/// 验证后台命令结果按普通工具载荷展示，不复用前台命令输出块。
+#[test]
+fn background_command_result_uses_tool_payload_view() {
+    let output = render_result(
+        "background_command",
+        true,
+        r#"{"ok":true,"task":{"id":"task-1","status":"running"}}"#,
+        ToolCallDisplayMode::Full,
+    );
+
+    assert!(output.contains("task-1"));
+    assert!(!output.contains("── • Run command"));
+    assert!(!output.contains("Ctrl+O"));
 }

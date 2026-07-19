@@ -1,4 +1,3 @@
-use crate::i18n::text as t;
 use crate::render::background_command_event::background_command_block_action;
 use crate::render::command_output::{render_command_block_with_action, write_tool_payload};
 use crate::render::edit_diff::write_edit_file_diff_block;
@@ -58,7 +57,7 @@ pub(crate) fn write_edit_tool_call_block(name: &str, arguments: &str) -> Result<
     }
     let mut stdout = io::stdout();
     if !write_edit_file_diff_block(&mut stdout, arguments)? {
-        write_tool_payload(&mut stdout, t("args", "参数"), arguments)?;
+        write_tool_payload(&mut stdout, "args", arguments)?;
     }
     stdout.flush()?;
     Ok(true)

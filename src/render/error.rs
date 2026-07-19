@@ -1,4 +1,4 @@
-use crate::i18n::text as t;
+use crate::render::terminal_text as t;
 use crate::render::style::{ASSET_ERROR_STYLE, RESET, TOOL_BULLET};
 use anyhow::{Error, Result};
 use serde_json::Value;

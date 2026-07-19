@@ -1,6 +1,10 @@
 use super::model::{PermissionAuditView, ToolView};
 use crate::permission::PermissionDecision;
-use crate::render::command_output::{render_command_block_with_action, render_command_result_view};
+use crate::render::command_output::render_command_block_with_action;
+use crate::render::command_result_block::{
+    render_command_result_view_with_limit, render_completed_command_output,
+    render_live_command_output,
+};
 use crate::render::tool_event_line::{tool_event_label, tool_event_text};
 use crate::render::ToolCallDisplayMode;
 use serde_json::Value;
@@ -20,8 +24,8 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
         return String::new();
     }
 
-    // 命令类工具：始终用代码块展示命令；完成后追加 stdout/stderr 块
-    if matches!(view.name.as_str(), "run_command" | "background_command") {
+    // 只有前台命令使用命令输出专用视图，后台命令按普通工具载荷展示
+    if view.name == "run_command" {
         return render_command_tool(view, mode);
     }
     if view.name == "todo" {
@@ -72,7 +76,7 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
     output
 }
 
-/// 渲染 run_command / background_command 的完整视图。
+/// 渲染前台 run_command 的完整视图。
 ///
 /// 参数:
 /// - `view`: 工具生命周期
@@ -81,11 +85,7 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
 /// 返回:
 /// - 命令代码块 + 可选结果块
 fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
-    let action = if view.name == "background_command" {
-        "Background"
-    } else {
-        "Run"
-    };
+    let action = "Run";
     let mut output = render_command_block_with_action(&view.arguments, action)
         .trim_end()
         .to_string();
@@ -95,8 +95,18 @@ fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
     // 权限拒绝的失败输出与「已拒绝」决定行重复，跳过结果块
     let denied = permission_denied(view.permission.as_ref());
     if let Some(outcome) = view.outcome.as_ref().filter(|_| !denied) {
-        // Full / Summary 都展示结果块，保证历史长度随输出增长
-        let results = render_command_result_view(&outcome.output);
+        let results = if view.name == "run_command" {
+            let stdout = view.command_stdout_text();
+            let stderr = view.command_stderr_text();
+            render_completed_command_output(
+                &outcome.output,
+                &stdout,
+                &stderr,
+                view.command_expanded,
+            )
+        } else {
+            render_command_result_view_with_limit(&outcome.output, None)
+        };
         if !results.trim().is_empty() {
             output.push('\n');
             output.push_str(&results);
@@ -108,6 +118,14 @@ fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
             ));
         }
         let _ = mode;
+    } else if view.name == "run_command" {
+        let stdout = view.command_stdout_text();
+        let stderr = view.command_stderr_text();
+        let preview = render_live_command_output(&stdout, &stderr, view.command_expanded);
+        if !preview.trim().is_empty() {
+            output.push('\n');
+            output.push_str(&preview);
+        }
     }
     output.push_str(&render_permission(view.permission.as_ref()));
     output

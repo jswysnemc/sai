@@ -1,5 +1,5 @@
 use super::subagent_cell::{self, SubagentCell};
-use crate::i18n::text as t;
+use crate::render::terminal_text as t;
 use crate::render::tool_event_line::tool_event_text;
 use crate::render::tool_view::{self, ToolView};
 use crate::render::ToolCallDisplayMode;

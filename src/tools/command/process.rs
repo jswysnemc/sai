@@ -1,9 +1,15 @@
+use super::progress::{CommandOutputBatch, CommandOutputStream};
+use crate::tools::ToolProgress;
 use anyhow::{bail, Result};
 use std::io::ErrorKind;
 use std::process::{Output, Stdio};
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
+use tokio::time::{Instant, MissedTickBehavior};
+
+const MAX_CAPTURED_OUTPUT_BYTES: usize = 80_004;
+const PROGRESS_INTERVAL: Duration = Duration::from_millis(50);
 
 /// 用 shell 执行短命令并在超时时清理进程。
 ///
@@ -20,10 +26,66 @@ pub(crate) async fn run_shell_command(
     configured_shell: &str,
     sandboxed: bool,
 ) -> Result<Output> {
+    run_shell_command_with_optional_progress(
+        command,
+        timeout_seconds,
+        configured_shell,
+        sandboxed,
+        None,
+    )
+    .await
+}
+
+/// 用 shell 执行短命令并实时报告 stdout 和 stderr。
+///
+/// 参数:
+/// - `command`: shell 命令文本
+/// - `timeout_seconds`: 超时时间，单位秒
+/// - `configured_shell`: 配置指定的 shell，空值表示使用用户环境
+/// - `sandboxed`: 是否使用只读沙盒
+/// - `progress`: 工具进度通道
+///
+/// 返回:
+/// - 命令输出
+pub(crate) async fn run_shell_command_with_progress(
+    command: &str,
+    timeout_seconds: u64,
+    configured_shell: &str,
+    sandboxed: bool,
+    progress: ToolProgress,
+) -> Result<Output> {
+    run_shell_command_with_optional_progress(
+        command,
+        timeout_seconds,
+        configured_shell,
+        sandboxed,
+        Some(progress),
+    )
+    .await
+}
+
+/// 按可选进度通道执行 shell 命令。
+///
+/// 参数:
+/// - `command`: shell 命令文本
+/// - `timeout_seconds`: 超时时间，单位秒
+/// - `configured_shell`: 配置指定的 shell
+/// - `sandboxed`: 是否启用只读沙盒
+/// - `progress`: 可选工具进度通道
+///
+/// 返回:
+/// - 命令输出
+async fn run_shell_command_with_optional_progress(
+    command: &str,
+    timeout_seconds: u64,
+    configured_shell: &str,
+    sandboxed: bool,
+    progress: Option<ToolProgress>,
+) -> Result<Output> {
     let duration = Duration::from_secs(timeout_seconds.max(1));
     let mut missing = Vec::new();
     for (program, mut shell) in shell_commands(command, configured_shell, sandboxed)? {
-        match run_command_with_timeout(&mut shell, duration).await {
+        match run_command_with_timeout(&mut shell, duration, progress.clone()).await {
             Ok(output) => return Ok(output),
             Err(CommandRunError::NotFound) => missing.push(program),
             Err(CommandRunError::Timeout) => {
@@ -95,6 +157,7 @@ enum CommandRunError {
 async fn run_command_with_timeout(
     command: &mut Command,
     duration: Duration,
+    progress: Option<ToolProgress>,
 ) -> std::result::Result<Output, CommandRunError> {
     configure_process_group(command);
     command
@@ -112,8 +175,14 @@ async fn run_command_with_timeout(
     let pid = child.id();
     let mut stdout = child.stdout.take();
     let mut stderr = child.stderr.take();
-    let stdout_task = tokio::spawn(async move { read_pipe(&mut stdout).await });
-    let stderr_task = tokio::spawn(async move { read_pipe(&mut stderr).await });
+    let stdout_progress = progress.clone();
+    let stderr_progress = progress;
+    let stdout_task = tokio::spawn(async move {
+        read_pipe(&mut stdout, stdout_progress, CommandOutputStream::Stdout).await
+    });
+    let stderr_task = tokio::spawn(async move {
+        read_pipe(&mut stderr, stderr_progress, CommandOutputStream::Stderr).await
+    });
     let status = match tokio::time::timeout(duration, child.wait()).await {
         Ok(Ok(status)) => status,
         Ok(Err(err)) => return Err(CommandRunError::Other(err.into())),
@@ -123,6 +192,8 @@ async fn run_command_with_timeout(
             } else {
                 let _ = child.kill().await;
             }
+            let _ = stdout_task.await;
+            let _ = stderr_task.await;
             return Err(CommandRunError::Timeout);
         }
     };
@@ -145,18 +216,115 @@ async fn run_command_with_timeout(
 ///
 /// 参数:
 /// - `pipe`: 可选管道
+/// - `progress`: 可选工具进度通道
+/// - `stream`: 输出流类型
 ///
 /// 返回:
 /// - 读取到的字节
-async fn read_pipe<T>(pipe: &mut Option<T>) -> std::io::Result<Vec<u8>>
+async fn read_pipe<T>(
+    pipe: &mut Option<T>,
+    progress: Option<ToolProgress>,
+    stream: CommandOutputStream,
+) -> std::io::Result<Vec<u8>>
 where
     T: tokio::io::AsyncRead + Unpin,
 {
     let mut buffer = Vec::new();
     if let Some(pipe) = pipe {
-        pipe.read_to_end(&mut buffer).await?;
+        let mut chunk = [0u8; 4_096];
+        let mut progress_batch = CommandOutputBatch::default();
+        let mut progress_tick =
+            tokio::time::interval_at(Instant::now() + PROGRESS_INTERVAL, PROGRESS_INTERVAL);
+        progress_tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                read = pipe.read(&mut chunk) => {
+                    let read = read?;
+                    if read == 0 {
+                        break;
+                    }
+                    append_captured_output(&mut buffer, &chunk[..read]);
+                    if progress.is_some() {
+                        progress_batch.append(&chunk[..read]);
+                    }
+                }
+                _ = progress_tick.tick(), if !progress_batch.is_empty() => {
+                    report_command_output(&progress, stream, &mut progress_batch);
+                }
+            }
+        }
+        report_command_output(&progress, stream, &mut progress_batch);
     }
     Ok(buffer)
+}
+
+/// 上报并清空一批命令输出。
+///
+/// 参数:
+/// - `progress`: 可选工具进度通道
+/// - `stream`: 输出流类型
+/// - `batch`: 待发送输出批次
+///
+/// 返回:
+/// - 无
+fn report_command_output(
+    progress: &Option<ToolProgress>,
+    stream: CommandOutputStream,
+    batch: &mut CommandOutputBatch,
+) {
+    if let Some(progress) = progress {
+        if let Some(message) = batch.take_message(stream) {
+            progress.report(message);
+        }
+    }
+}
+
+/// 将输出追加到返回结果的有界缓冲。
+///
+/// 参数:
+/// - `buffer`: 已捕获的输出
+/// - `chunk`: 新输出片段
+///
+/// 返回:
+/// - 无
+fn append_captured_output(buffer: &mut Vec<u8>, chunk: &[u8]) {
+    let remaining = MAX_CAPTURED_OUTPUT_BYTES.saturating_sub(buffer.len());
+    buffer.extend_from_slice(&chunk[..chunk.len().min(remaining)]);
+}
+
+#[cfg(test)]
+mod output_capture_tests {
+    use super::*;
+
+    #[test]
+    fn captured_output_does_not_exceed_memory_limit() {
+        let mut buffer = vec![b'a'; MAX_CAPTURED_OUTPUT_BYTES - 2];
+        append_captured_output(&mut buffer, b"bcdef");
+
+        assert_eq!(buffer.len(), MAX_CAPTURED_OUTPUT_BYTES);
+        assert!(buffer.ends_with(b"bc"));
+    }
+
+    #[tokio::test]
+    async fn timeout_flushes_pending_progress_output() {
+        #[cfg(windows)]
+        let command = "Write-Output before-timeout; Start-Sleep -Seconds 2";
+        #[cfg(not(windows))]
+        let command = "printf before-timeout; sleep 2";
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let error =
+            run_shell_command_with_progress(command, 1, "", false, ToolProgress::new(sender))
+                .await
+                .unwrap_err();
+        let output = std::iter::from_fn(|| receiver.try_recv().ok())
+            .filter_map(|message| super::super::progress::decode_command_output(&message))
+            .flat_map(|chunk| chunk.bytes)
+            .collect::<Vec<_>>();
+
+        assert!(error.to_string().contains("timed out"));
+        assert!(String::from_utf8_lossy(&output).contains("before-timeout"));
+    }
 }
 
 #[cfg(windows)]

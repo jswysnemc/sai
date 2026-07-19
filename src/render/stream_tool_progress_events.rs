@@ -28,12 +28,7 @@ impl StreamRenderer {
         let line_count = text.matches('\n').count().max(1);
         self.summary.note_tool_progress(
             name,
-            &format!(
-                "{} · {} {}",
-                t("subagent reasoning", "子代理推理"),
-                line_count,
-                t("lines", "行")
-            ),
+            &format!("{} · {} {}", "subagent reasoning", line_count, "lines"),
         );
         Ok(())
     }
@@ -63,7 +58,7 @@ impl StreamRenderer {
                 write_command_block_with_action(&mut stdout, args, "Run")?;
             } else if tool_name == "edit_file" {
                 if !write_edit_file_diff_block(&mut stdout, args)? {
-                    write_tool_payload(&mut stdout, t("args", "参数"), args)?;
+                    write_tool_payload(&mut stdout, "args", args)?;
                 }
             } else {
                 writeln!(
@@ -71,7 +66,7 @@ impl StreamRenderer {
                     "{}",
                     tool_event_text(&tool_event_label(tool_name, Some(args)), "run")
                 )?;
-                write_tool_payload(&mut stdout, t("args", "参数"), args)?;
+                write_tool_payload(&mut stdout, "args", args)?;
             }
             stdout.flush()?;
         } else if self.tool_call_mode == ToolCallDisplayMode::Summary {
@@ -79,7 +74,7 @@ impl StreamRenderer {
                 parent_name,
                 &format!(
                     "{}: {}",
-                    t("subtool running", "子工具运行中"),
+                    "subtool running",
                     self.summary.display_tool_name(tool_name)
                 ),
             );
@@ -109,23 +104,19 @@ impl StreamRenderer {
             self.end_active_stream_line()?;
             self.finalize_reasoning_summary()?;
             let mut stdout = io::stdout();
-            if tool_name == "run_command" {
-                write_command_result_blocks(&mut stdout, output)?;
-            } else {
-                writeln!(
-                    stdout,
-                    "{}",
-                    tool_event_text(&tool_event_label(tool_name, None), status)
-                )?;
-                write_tool_payload(&mut stdout, t("output", "输出"), output)?;
-            }
+            writeln!(
+                stdout,
+                "{}",
+                tool_event_text(&tool_event_label(tool_name, None), status)
+            )?;
+            write_tool_payload(&mut stdout, "output", output)?;
             stdout.flush()?;
         } else if self.tool_call_mode == ToolCallDisplayMode::Summary {
             self.summary.note_tool_progress(
                 parent_name,
                 &format!(
                     "{}: {} {status}",
-                    t("subtool finished", "子工具结束"),
+                    "subtool finished",
                     self.summary.display_tool_name(tool_name)
                 ),
             );

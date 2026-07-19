@@ -1,4 +1,4 @@
-use crate::i18n::{locale, Locale};
+use crate::i18n::Locale;
 
 /// 返回面向用户展示的工具名称。
 ///
@@ -6,9 +6,9 @@ use crate::i18n::{locale, Locale};
 /// - `name`: 工具原始名称
 ///
 /// 返回:
-/// - 本地化后的工具名称，未知工具返回原名
+/// - 英文工具名称，未知工具返回原名
 pub(crate) fn readable_tool_name(name: &str) -> &str {
-    readable_tool_name_for_locale(name, locale())
+    readable_tool_name_for_locale(name, Locale::En)
 }
 
 /// 按指定语言返回面向用户展示的工具名称。
@@ -126,103 +126,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn readable_tool_names_translate_known_tools_to_chinese() {
-        assert_eq!(
-            readable_tool_name_for_locale("deep_research", Locale::Zh),
-            "深度研究"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("read_file", Locale::Zh),
-            "读取文件"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("inspect_issue", Locale::Zh),
-            "检查问题"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("check_os_info", Locale::Zh),
-            "查看系统信息"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("get_weather", Locale::Zh),
-            "天气查询"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("get_exchange_rate", Locale::Zh),
-            "汇率查询"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("draw_zhouyi_hexagram", Locale::Zh),
-            "周易起卦"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("draw_tarot_card", Locale::Zh),
-            "抽塔罗牌"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("draw_fortune_lot", Locale::Zh),
-            "抽签"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("search_meme", Locale::Zh),
-            "搜索表情包"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("show_meme", Locale::Zh),
-            "发送表情"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("add_meme", Locale::Zh),
-            "添加表情包"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("subagent", Locale::Zh),
-            "子智能体"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("upload_text_to_knowledge_base", Locale::Zh),
-            "导入知识库"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("search_evicted_context", Locale::Zh),
-            "搜索旧上下文"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("recall_past_events", Locale::Zh),
-            "回忆往事"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("aur_check_status", Locale::Zh),
-            "查询 AUR 状态"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("online_man_search", Locale::Zh),
-            "搜索在线手册"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("online_man_get_page", Locale::Zh),
-            "读取在线手册"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("install_aur_package", Locale::Zh),
-            "安装 AUR 包"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("search_knowledge_base_by_name", Locale::Zh),
-            "按名称搜索知识库"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("recall_memories", Locale::Zh),
-            "召回记忆"
-        );
-        assert_eq!(
-            readable_tool_name_for_locale("custom_skill", Locale::Zh),
-            "custom_skill"
-        );
-    }
-
-    #[test]
-    fn readable_tool_names_translate_known_tools_to_english() {
+    fn readable_tool_names_use_english() {
         assert_eq!(
             readable_tool_name_for_locale("deep_research", Locale::En),
             "Deep research"

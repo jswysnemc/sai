@@ -1,4 +1,3 @@
-use crate::i18n::text as t;
 use crate::render::stream_config::StreamRenderOptions;
 
 /// 归一化流式文本换行。
@@ -38,7 +37,7 @@ pub(crate) fn wait_spinner_detail_line(options: &StreamRenderOptions) -> Option<
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        parts.push(format!("{}: {model}", t("model", "模型")));
+        parts.push(format!("model: {model}"));
     }
     if let Some(level) = options
         .wait_thinking_level
@@ -46,7 +45,7 @@ pub(crate) fn wait_spinner_detail_line(options: &StreamRenderOptions) -> Option<
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        parts.push(format!("{}: {level}", t("thinking level", "思考等级")));
+        parts.push(format!("thinking level: {level}"));
     }
     (!parts.is_empty()).then(|| parts.join(" · "))
 }

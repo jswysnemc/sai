@@ -1,4 +1,4 @@
-use crate::i18n::text as t;
+use crate::render::terminal_text as t;
 use crate::permission::PermissionDecision;
 
 /// 权限选择项索引。

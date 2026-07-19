@@ -3,6 +3,7 @@ mod background_command_event;
 mod code_block;
 mod command_output;
 mod command_result_block;
+mod cli_command_preview;
 mod edit_diff;
 mod error;
 mod live_tool_status;
@@ -45,6 +46,18 @@ pub use stream::StreamRenderer;
 pub use stream_config::{ReasoningDisplayMode, StreamRenderOptions, ToolCallDisplayMode};
 pub use stream_output::print_assistant_response;
 pub(crate) use streaming_replace::rendered_visual_rows;
+
+/// 终端聊天渲染统一使用英文文案。
+///
+/// 参数:
+/// - `english`: 英文文本
+/// - `_localized`: 兼容现有调用的本地化文本
+///
+/// 返回:
+/// - 英文文本
+pub(crate) const fn terminal_text<'a>(english: &'a str, _localized: &'a str) -> &'a str {
+    english
+}
 
 /// 渲染直接 CLI 工具调用使用的既有工具视图。
 ///

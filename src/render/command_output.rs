@@ -1,7 +1,7 @@
 use crate::render::code_block::{highlight_code_line, render_code_footer, render_code_header};
 use crate::render::command_result_block::truncate_chars;
 pub(crate) use crate::render::command_result_block::{
-    render_command_result_view, write_command_error_block, write_command_result_blocks,
+    render_command_error_view_for_cli, render_command_result_view_for_cli,
 };
 use crate::render::style::TOOL_BULLET;
 use anyhow::Result;
@@ -52,6 +52,32 @@ pub(crate) fn write_command_block_with_action(
     Ok(())
 }
 
+/// 写入普通 CLI 使用的五行命令结果摘要。
+///
+/// 参数:
+/// - `stdout`: 标准输出句柄
+/// - `output`: 命令工具返回的 JSON
+///
+/// 返回:
+/// - 写入是否成功
+pub(crate) fn write_command_result_preview(stdout: &mut io::Stdout, output: &str) -> Result<()> {
+    write!(stdout, "{}", render_command_result_view_for_cli(output))?;
+    Ok(())
+}
+
+/// 写入普通 CLI 使用的五行命令错误摘要。
+///
+/// 参数:
+/// - `stdout`: 标准输出句柄
+/// - `output`: 命令工具返回的 JSON 或错误文本
+///
+/// 返回:
+/// - 写入是否成功
+pub(crate) fn write_command_error_preview(stdout: &mut io::Stdout, output: &str) -> Result<()> {
+    write!(stdout, "{}", render_command_error_view_for_cli(output))?;
+    Ok(())
+}
+
 /// 渲染命令调用块。
 ///
 /// 参数:
@@ -80,9 +106,7 @@ pub(crate) fn render_command_block_with_action(arguments: &str, action: &str) ->
         .and_then(Value::as_str)
         .map(str::to_string)
         // 参数流式期间 JSON 尚未闭合，宽松提取已收到的命令文本，避免展示原始 JSON
-        .or_else(|| {
-            crate::render::tool_event_line::lenient_string_field(arguments, "command")
-        })
+        .or_else(|| crate::render::tool_event_line::lenient_string_field(arguments, "command"))
         .unwrap_or_else(|| arguments.to_string());
     let command = command.trim();
     let lines = shell_command_lines(command);

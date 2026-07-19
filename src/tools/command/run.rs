@@ -1,7 +1,7 @@
-use super::process::run_shell_command;
+use super::process::{run_shell_command, run_shell_command_with_progress};
 use crate::config::AppConfig;
 use crate::i18n::text as t;
-use crate::tools::{ToolRegistry, ToolSpec};
+use crate::tools::{ToolProgress, ToolRegistry, ToolSpec};
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
 
@@ -19,16 +19,16 @@ pub(crate) fn register(
     allow_command_execution: bool,
 ) {
     let shell = config.tools.command_shell.clone();
-    registry.register(ToolSpec::new(
+    registry.register(ToolSpec::new_with_progress(
         "run_command",
         t(
             "Run workspace shell commands for builds, tests, validation, export, inspection, and other command-line programs. Prefer edit_file/write_file for source text edits, but shell redirection, tee, and heredocs are allowed when useful. A program's own -o/--output option may create build artifacts.",
             "运行构建、测试、校验、导出、检查及其他命令行程序。源码文本修改优先使用 edit_file/write_file，但 shell 重定向、tee、heredoc 也允许使用。程序自身通过 -o/--output 生成构建产物属于允许用途。",
         ),
         json!({"type":"object","properties":{"command":{"type":"string","description": t("Complete shell command string. Put pipelines and conditionals in this single field; do not pass argv arrays or separate cwd fields.", "完整 Shell 命令字符串。管道和条件语句都放在此字段中，不要传 argv 数组或额外 cwd 字段。")},"timeout_seconds":{"type":"integer","minimum":1,"maximum":120,"description": t("Optional timeout from 1 to 120 seconds. Defaults to 30.", "可选超时，范围 1 到 120 秒，默认 30 秒。")}},"required":["command"],"additionalProperties":false}),
-        move |args| {
+        move |args, progress| {
             let shell = shell.clone();
-            async move { run_command(args, allow_command_execution, shell).await }
+            async move { run_command(args, allow_command_execution, shell, progress).await }
         },
     ).writes());
 }
@@ -60,7 +60,12 @@ pub(crate) fn register_readonly(registry: &mut ToolRegistry, config: &AppConfig)
 ///
 /// 返回:
 /// - JSON 格式命令结果
-async fn run_command(args: Value, allowed: bool, shell: String) -> Result<String> {
+async fn run_command(
+    args: Value,
+    allowed: bool,
+    shell: String,
+    progress: ToolProgress,
+) -> Result<String> {
     if !allowed {
         bail!("{}", t("command execution is disabled; set skills.allow_command_execution=true in config.jsonc to enable run_command", "命令执行已禁用；请在 config.jsonc 中设置 skills.allow_command_execution=true 以启用 run_command"));
     }
@@ -70,7 +75,9 @@ async fn run_command(args: Value, allowed: bool, shell: String) -> Result<String
         .get("_sai_sandbox")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let output = run_shell_command(&command, timeout, shell.as_str(), sandboxed).await?;
+    let output =
+        run_shell_command_with_progress(&command, timeout, shell.as_str(), sandboxed, progress)
+            .await?;
     command_output(output)
 }
 /// 执行只读 shell 命令。
@@ -293,5 +300,34 @@ mod tests {
         let data: Value = serde_json::from_str(&result).unwrap();
         assert_eq!(data["success"], true);
         assert_eq!(data["stdout"], "hello");
+    }
+
+    #[tokio::test]
+    async fn writable_command_reports_output_before_completion() {
+        #[cfg(windows)]
+        let command = "Write-Output first; Start-Sleep -Milliseconds 50; Write-Output second";
+        #[cfg(not(windows))]
+        let command = "printf 'first\\n'; sleep 0.05; printf 'second\\n'";
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        let result = run_command(
+            json!({"command": command}),
+            true,
+            String::new(),
+            ToolProgress::new(sender),
+        )
+        .await
+        .unwrap();
+        let chunks = std::iter::from_fn(|| receiver.try_recv().ok())
+            .filter_map(|message| super::super::progress::decode_command_output(&message))
+            .collect::<Vec<_>>();
+        let stdout = chunks
+            .into_iter()
+            .filter(|chunk| chunk.stream == super::super::progress::CommandOutputStream::Stdout)
+            .flat_map(|chunk| chunk.bytes)
+            .collect::<Vec<_>>();
+
+        assert_eq!(String::from_utf8_lossy(&stdout), "first\nsecond\n");
+        assert!(result.contains("first"));
     }
 }

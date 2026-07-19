@@ -1,4 +1,4 @@
-use crate::i18n::text as t;
+use crate::render::terminal_text as t;
 use serde_json::Value;
 
 /// 生成后台命令调用展示标签。

@@ -1,5 +1,4 @@
 use crate::agent::AgentEvent;
-use crate::i18n::text as t;
 use crate::llm::ChatStreamKind;
 use std::time::Duration;
 
@@ -46,17 +45,17 @@ impl WorkStatus {
         }
     }
 
-    /// 返回当前语言下的状态名称。
+    /// 返回统一英文状态名称。
     ///
     /// 返回:
     /// - 工作状态文本
     pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::WaitingResponse => t("waiting", "等待中"),
-            Self::WaitingExternal => t("waiting for external work", "等待后台工作"),
-            Self::Thinking => t("thinking", "思考中"),
-            Self::Working => t("working", "工作中"),
-            Self::Compacting => t("compacting", "压缩中"),
+            Self::WaitingResponse => "waiting",
+            Self::WaitingExternal => "waiting for external work",
+            Self::Thinking => "thinking",
+            Self::Working => "working",
+            Self::Compacting => "compacting",
         }
     }
 

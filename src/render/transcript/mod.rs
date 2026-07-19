@@ -1,4 +1,5 @@
 mod cell;
+mod command_output;
 mod diff_cell;
 mod line;
 mod markdown_cell;

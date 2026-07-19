@@ -6,6 +6,7 @@ mod background_tasks;
 pub(crate) mod background_timeout;
 mod goal_completions;
 mod process;
+mod progress;
 mod run;
 mod store;
 
@@ -25,6 +26,9 @@ pub(crate) use goal_completions::{
     poll_session_background_completions, BackgroundCompletionNotice,
 };
 pub(crate) use process::{process_exists, spawn_background_shell, terminate_process};
+#[cfg(test)]
+pub(crate) use progress::encode_command_output as encode_command_output_for_test;
+pub(crate) use progress::{decode_command_output, CommandOutputChunk, CommandOutputStream};
 pub(crate) use store::{unix_seconds, BackgroundCommandStore, BackgroundCommandTask};
 
 /// 注册命令相关工具。

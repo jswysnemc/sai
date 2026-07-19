@@ -199,6 +199,65 @@ fn tool_progress_and_result_update_one_lifecycle_cell() {
 }
 
 #[test]
+fn command_output_updates_live_cell_and_toggles_expansion() {
+    let mut store = TranscriptStore::new(100);
+    store.push_tool_call(
+        "run_command".to_string(),
+        r#"{"command":"test"}"#.to_string(),
+    );
+    let chunk = crate::tools::command::CommandOutputChunk {
+        stream: crate::tools::command::CommandOutputStream::Stdout,
+        bytes: b"one\ntwo\nthree\nfour\nfive\nsix\nseven\n".to_vec(),
+        omitted_bytes: 0,
+    };
+    assert!(store.push_command_output("run_command", &chunk));
+    let collapsed = store
+        .display_tail(120, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(collapsed.contains("Ctrl+O"));
+
+    assert!(store.toggle_latest_command_output());
+    let expanded = store
+        .display_tail(120, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(expanded.contains("four"));
+    assert!(!expanded.contains("Ctrl+O"));
+
+    store.push_tool_result(
+        "run_command".to_string(),
+        true,
+        serde_json::json!({
+            "success": true,
+            "exit_code": 0,
+            "stdout": "final result was truncated",
+            "stderr": ""
+        })
+        .to_string(),
+    );
+    let completed_expanded = store
+        .display_tail(120, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(completed_expanded.contains("four"));
+    assert!(completed_expanded.contains("seven"));
+    assert!(!completed_expanded.contains("Ctrl+O"));
+
+    assert!(store.toggle_latest_command_output());
+    let completed_collapsed = store
+        .display_tail(120, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(!completed_collapsed.contains("four"));
+    assert!(completed_collapsed.contains("Ctrl+O"));
+}
+
+#[test]
 fn user_echo_uses_a_prominent_bullet() {
     let mut store = TranscriptStore::new(100);
     store.push_user_echo(TranscriptMode::Yolo, "inspect resize".to_string());
@@ -292,8 +351,8 @@ fn permission_audit_stays_inside_existing_command_view() {
         .map(|line| line.as_str())
         .collect::<String>();
     assert!(pending.contains("❯"));
-    assert!(pending.contains(crate::i18n::text("Allow once", "允许一次")));
-    assert!(!pending.contains(crate::i18n::text("Allowed once", "已允许一次")));
+    assert!(pending.contains("Allow once"));
+    assert!(!pending.contains("Allowed once"));
     assert!(store.set_permission_reply_draft("permission", Some("请改为只读检查".to_string())));
     let reply = store
         .display_tail(100, &options())
@@ -301,7 +360,7 @@ fn permission_audit_stays_inside_existing_command_view() {
         .map(|line| line.as_str())
         .collect::<String>();
     assert!(reply.contains("请改为只读检查"));
-    assert!(reply.contains(crate::i18n::text("Enter submit", "Enter 提交")));
+    assert!(reply.contains("Enter submit"));
     assert!(store.resolve_permission("permission", crate::permission::PermissionDecision::Allow));
 
     let rendered = store
@@ -312,9 +371,9 @@ fn permission_audit_stays_inside_existing_command_view() {
 
     assert!(rendered.contains("cargo"));
     assert!(rendered.contains("test"));
-    assert!(rendered.contains(crate::i18n::text("Allowed once", "已允许一次")));
+    assert!(rendered.contains("Allowed once"));
     assert!(!rendered.contains(r#"{"command""#));
-    assert!(!rendered.contains(crate::i18n::text("Permission required", "需要权限确认")));
+    assert!(!rendered.contains("Permission required"));
 }
 
 /// 验证 edit_file 权限选择直接附着在 diff 视图下方。
@@ -351,8 +410,8 @@ fn permission_audit_stays_inside_existing_diff_view() {
 
     assert!(rendered.contains("old"));
     assert!(rendered.contains("new"));
-    assert!(rendered.contains(crate::i18n::text("Allow once", "允许一次")));
-    assert!(!rendered.contains(crate::i18n::text("Permission required", "需要权限确认")));
+    assert!(rendered.contains("Allow once"));
+    assert!(!rendered.contains("Permission required"));
 }
 
 #[test]
