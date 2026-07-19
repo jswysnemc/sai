@@ -1,5 +1,5 @@
 import { GitCommitHorizontal, Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { GitCommitSummary } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { Modal } from "../../../shared/ui/dialog/modal";
@@ -8,6 +8,9 @@ import type { RunGitOperation } from "../types";
 import { createBranchNameSuggestion } from "../branches/branch-name-suggestion";
 import { CommitContextMenu } from "./commit-context-menu";
 import { formatGitDate, formatGitReference } from "./graph-utils";
+import { calculateGitGraphWindow } from "./graph-window";
+
+const GRAPH_ROW_HEIGHT = 56;
 
 type CommitGraphProps = {
   commits: GitCommitSummary[];
@@ -35,9 +38,39 @@ type ContextMenuState = {
  */
 export function CommitGraph(props: CommitGraphProps) {
   const { t } = useI18n();
+  const viewportRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
   const [branchCommit, setBranchCommit] = useState<GitCommitSummary | null>(null);
   const [branchName, setBranchName] = useState("");
+  const [viewport, setViewport] = useState({ scrollTop: 0, height: GRAPH_ROW_HEIGHT * 10 });
+  const windowState = useMemo(
+    () => calculateGitGraphWindow(
+      props.commits.length,
+      GRAPH_ROW_HEIGHT,
+      viewport.scrollTop,
+      viewport.height
+    ),
+    [props.commits.length, viewport]
+  );
+  const visibleCommits = props.commits.slice(windowState.start, windowState.end);
+
+  useEffect(() => {
+    const element = viewportRef.current;
+    if (!element) return;
+
+    /**
+     * 同步滚动容器尺寸，保证响应式布局下仍使用正确可见区。
+     *
+     * @returns 无返回值
+     */
+    const updateViewport = () => {
+      setViewport({ scrollTop: element.scrollTop, height: element.clientHeight });
+    };
+    updateViewport();
+    const observer = new ResizeObserver(updateViewport);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   /**
    * 打开提交右键菜单，并限制菜单起点不超出视口。
@@ -82,36 +115,55 @@ export function CommitGraph(props: CommitGraphProps) {
 
   return (
     <>
-      <div className="git-commit-graph">
-        {props.commits.map((commit, index) => (
-          <Button
-            key={commit.sha}
-            className={`git-graph-row${props.activeCommit === commit.sha ? " active" : ""}`}
-            onClick={() => props.onSelect(commit)}
-            onContextMenu={(event) => openContextMenu(event, commit)}
-          >
-            <span className={`git-graph-lane${commit.parents.length > 1 ? " merge" : ""}${index === 0 ? " first" : ""}${index === props.commits.length - 1 ? " last" : ""}`}>
-              <i />
-            </span>
-            <span className="git-graph-content">
-              <strong>{commit.subject || commit.short_sha}</strong>
-              <small>{commit.short_sha} · {commit.author_name} · {formatGitDate(commit.author_date, props.locale)}</small>
-              {commit.refs.length > 0 && (
-                <span className="git-graph-refs">
-                  {commit.refs.slice(0, 4).map((reference) => <em key={reference}>{formatGitReference(reference)}</em>)}
-                </span>
-              )}
-            </span>
-            <span className="git-graph-direction">
-              {commit.local_only && <b>{t("Outgoing", "待推送")}</b>}
-              {commit.remote_only && <i>{t("Incoming", "待拉取")}</i>}
-              {commit.parents.length > 1 && <GitCommitHorizontal size={12} />}
-            </span>
-          </Button>
-        ))}
-        {props.commits.length === 0 && <div className="git-clean">{t("No commits yet", "暂无提交记录")}</div>}
+      <div
+        ref={viewportRef}
+        className="git-commit-graph"
+        onScroll={(event) => setViewport((current) => ({
+          ...current,
+          scrollTop: event.currentTarget.scrollTop
+        }))}
+      >
+        {props.commits.length > 0 ? (
+          <div className="git-graph-spacer" style={{ height: windowState.totalHeight }}>
+            <div className="git-graph-window" style={{ transform: `translateY(${windowState.offsetTop}px)` }}>
+              {visibleCommits.map((commit, visibleIndex) => {
+                const index = windowState.start + visibleIndex;
+                return (
+                  <Button
+                    key={commit.sha}
+                    className={`git-graph-row${props.activeCommit === commit.sha ? " active" : ""}`}
+                    onClick={() => props.onSelect(commit)}
+                    onContextMenu={(event) => openContextMenu(event, commit)}
+                  >
+                    <span className={`git-graph-lane${commit.parents.length > 1 ? " merge" : ""}${index === 0 ? " first" : ""}${index === props.commits.length - 1 ? " last" : ""}`}>
+                      <i />
+                    </span>
+                    <span className="git-graph-content">
+                      <strong>{commit.subject || commit.short_sha}</strong>
+                      <small>{commit.short_sha} · {commit.author_name} · {formatGitDate(commit.author_date, props.locale)}</small>
+                      {commit.refs.length > 0 && (
+                        <span className="git-graph-refs">
+                          {commit.refs.slice(0, 4).map((reference) => <em key={reference}>{formatGitReference(reference)}</em>)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="git-graph-direction">
+                      {commit.local_only && <b>{t("Outgoing", "待推送")}</b>}
+                      {commit.remote_only && <i>{t("Incoming", "待拉取")}</i>}
+                      {commit.parents.length > 1 && <GitCommitHorizontal size={12} />}
+                    </span>
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="git-clean">{t("No commits yet", "暂无提交记录")}</div>
+        )}
         {props.canLoadMore && (
-          <Button className="git-load-more" onClick={props.onLoadMore}>{t("Load more", "加载更多")}</Button>
+          <div className="git-load-more-shell">
+            <Button className="git-load-more" onClick={props.onLoadMore}>{t("Load more", "加载更多")}</Button>
+          </div>
         )}
       </div>
       {menu && (
