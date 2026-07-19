@@ -432,30 +432,29 @@ fn render_output_block_limited_with_hint(
 ) -> String {
     let sanitized = sanitize_command_output(text.trim());
     let (content, omitted) = limited_output_text(&sanitized, line_limit);
-    let mut output = render_output_block_unbounded(label, &content);
+    let mut lines = output_block_lines(&content);
     if omitted > 0 && show_expand_hint {
         let hint = format!("{omitted} lines omitted, press Ctrl+O to expand");
-        output.push_str(&format!("\n\x1b[2m  {hint}\x1b[0m"));
+        lines.push(format!("\x1b[2m  {hint}\x1b[0m"));
     }
-    output
+    render_output_block_lines(label, &lines)
 }
 
-/// 不施加额外字符上限地渲染命令输出块。
+/// 使用统一的内容行渲染输出块及底部边框。
 ///
 /// 参数:
 /// - `label`: 输出块标签
-/// - `text`: 已清理的输出文本
+/// - `lines`: 已准备好的输出内容行
 ///
 /// 返回:
-/// - 完整代码块文本
-fn render_output_block_unbounded(label: &str, text: &str) -> String {
-    let lines = output_block_lines(text);
+/// - 带头部和底部边框的输出文本
+fn render_output_block_lines(label: &str, lines: &[String]) -> String {
     let mut output = render_code_header(&format!("{TOOL_BULLET} {label}"));
-    for line in &lines {
+    for line in lines {
         output.push_str(line);
         output.push('\n');
     }
-    output.push_str(&render_code_footer(&lines));
+    output.push_str(&render_code_footer(lines));
     output
 }
 
@@ -566,6 +565,27 @@ mod tests {
         assert!(plain.contains("seven"));
         assert!(plain.contains("Ctrl+O"));
         assert!(!plain.contains("four"));
+    }
+
+    #[test]
+    fn collapsed_hint_stays_inside_output_block_before_footer() {
+        let output =
+            render_live_command_output("one\ntwo\nthree\nfour\nfive\nsix\nseven\n", "", false);
+        let plain = strip_ansi_for_test(&output);
+        let lines = plain.lines().collect::<Vec<_>>();
+        let hint_index = lines
+            .iter()
+            .position(|line| line.contains("Ctrl+O"))
+            .expect("collapsed output should include an expand hint");
+        let footer_index = lines
+            .iter()
+            .rposition(|line| !line.is_empty() && line.chars().all(|ch| ch == '─'))
+            .expect("output should include a footer border");
+
+        assert!(
+            hint_index < footer_index,
+            "expand hint must be rendered before the output footer"
+        );
     }
 
     #[test]
