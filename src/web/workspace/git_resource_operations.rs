@@ -159,7 +159,7 @@ pub(super) async fn remove_remote(repo: &Path, name: Option<&str>) -> Result<Git
 ///
 /// 返回:
 /// - 清理后的 stash 引用
-fn validate_stash_ref(reference: Option<&str>) -> Result<String> {
+pub(super) fn validate_stash_ref(reference: Option<&str>) -> Result<String> {
     let reference = reference
         .map(str::trim)
         .filter(|value| !value.is_empty())

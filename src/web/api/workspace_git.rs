@@ -109,6 +109,12 @@ struct GitConflictQuery {
     path: String,
 }
 
+#[derive(Deserialize)]
+struct GitStashQuery {
+    repo_root: Option<String>,
+    stash_ref: String,
+}
+
 /// 返回工作区 Git 路由。
 ///
 /// 返回:
@@ -126,6 +132,7 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/workspace/git/branches", get(git_branches))
         .route("/api/workspace/git/log", get(git_log))
         .route("/api/workspace/git/resources", get(git_resources))
+        .route("/api/workspace/git/stash-diff", get(git_stash_diff))
         .route("/api/workspace/git/conflict", get(git_conflict))
         .route("/api/workspace/git/commit", get(git_commit_details))
         .route("/api/workspace/git/commit-diff", get(git_commit_diff))
@@ -294,6 +301,25 @@ async fn git_resources(
         .await
         .map_err(WebError::from)?;
     Ok(Json(resources))
+}
+
+/// 读取选中仓库的 stash 补丁内容。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `query`: 仓库根目录与 stash 引用
+///
+/// 返回:
+/// - stash Diff
+async fn git_stash_diff(
+    State(state): State<WebAppState>,
+    Query(query): Query<GitStashQuery>,
+) -> WebResult<Json<workspace::GitDiffResponse>> {
+    let root = request_repository_root(&state, query.repo_root.as_deref()).await?;
+    let diff = workspace::git_stash_diff(&root, &query.stash_ref)
+        .await
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    Ok(Json(diff))
 }
 
 /// 读取选中仓库单个冲突文件内容。

@@ -321,6 +321,11 @@ export const api = {
       return apiRequest<GitLogResponse>(`/api/workspace/git/log?${query}`);
     },
     gitResources: (repoRoot?: string) => apiRequest<GitRepositoryResources>(gitUrl("/api/workspace/git/resources", repoRoot)),
+    gitStashDiff: (stashRef: string, repoRoot?: string) => {
+      const query = new URLSearchParams({ stash_ref: stashRef });
+      if (repoRoot) query.set("repo_root", repoRoot);
+      return apiRequest<GitDiffResponse>(`/api/workspace/git/stash-diff?${query}`);
+    },
     gitConflict: (path: string, repoRoot?: string) => {
       const query = gitQuery(repoRoot);
       query.set("path", path);

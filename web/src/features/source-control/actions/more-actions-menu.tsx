@@ -29,6 +29,7 @@ export function MoreActionsMenu(props: MoreActionsMenuProps) {
     if (!open) return;
     /** 点击菜单外部时关闭操作菜单。 */
     const closeOutside = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest(".ui-modal")) return;
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
     document.addEventListener("pointerdown", closeOutside);

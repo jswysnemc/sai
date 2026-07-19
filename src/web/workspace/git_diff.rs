@@ -42,6 +42,9 @@ mod resources;
 #[path = "git_resource_operations.rs"]
 mod resource_operations;
 
+#[path = "git_stash_preview.rs"]
+mod stash_preview;
+
 #[path = "git_conflicts.rs"]
 mod conflicts;
 
@@ -80,6 +83,7 @@ pub(crate) use repositories::{
 pub(crate) use repository_statuses::git_repository_statuses;
 use resource_operations::*;
 pub(crate) use resources::git_resources;
+pub(crate) use stash_preview::git_stash_diff;
 use support::*;
 pub(crate) use watcher::{GitWatchEvent, RepositoryWatcher};
 use worktrees::{add_worktree, git_worktrees, remove_worktree};
@@ -107,6 +111,10 @@ mod publish_tests;
 #[cfg(test)]
 #[path = "git_file_compare_tests.rs"]
 mod file_compare_tests;
+
+#[cfg(test)]
+#[path = "git_stash_preview_tests.rs"]
+mod stash_preview_tests;
 
 const GIT_DIFF_MAX_BYTES: usize = 512 * 1024;
 const GIT_LOG_DEFAULT_LIMIT: usize = 50;
