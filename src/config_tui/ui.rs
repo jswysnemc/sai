@@ -2,7 +2,9 @@ use crate::i18n::text as t;
 use anyhow::Result;
 use crossterm::cursor::MoveTo;
 use crossterm::queue;
-use crossterm::style::{Attribute, Print, SetAttribute};
+use crossterm::style::{
+    Attribute, Color, Print, ResetColor, SetAttribute, SetBackgroundColor, SetForegroundColor,
+};
 use crossterm::terminal::{self, Clear, ClearType};
 use std::io::{self, Write};
 
@@ -126,18 +128,25 @@ pub(crate) fn draw_column(
     selected: usize,
     active: bool,
 ) -> Result<()> {
-    let attr = if active {
-        Attribute::Reverse
+    queue!(stdout, MoveTo(x, y))?;
+    if active {
+        queue!(
+            stdout,
+            SetAttribute(Attribute::Bold),
+            SetForegroundColor(Color::White),
+            SetBackgroundColor(Color::DarkBlue),
+            Print(pad(&truncate(title, width as usize), width as usize)),
+            ResetColor,
+            SetAttribute(Attribute::Reset)
+        )?;
     } else {
-        Attribute::Bold
-    };
-    queue!(
-        stdout,
-        MoveTo(x, y),
-        SetAttribute(attr),
-        Print(pad(&truncate(title, width as usize), width as usize)),
-        SetAttribute(Attribute::Reset)
-    )?;
+        queue!(
+            stdout,
+            SetAttribute(Attribute::Bold),
+            Print(pad(&truncate(title, width as usize), width as usize)),
+            SetAttribute(Attribute::Reset)
+        )?;
+    }
     let visible_rows = height.saturating_sub(2) as usize;
     let start = selected.saturating_sub(visible_rows.saturating_sub(1));
     for row in 0..visible_rows {

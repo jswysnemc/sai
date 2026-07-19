@@ -11,6 +11,7 @@ use std::io::{self, Write};
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
+use super::form::add_custom_model_form;
 use super::input::{read_key, read_key_with_timeout};
 use super::provider_fetch::{fetch_models, FetchModelsResult};
 use super::provider_forms::{edit_model_form, edit_provider_form};
@@ -79,7 +80,9 @@ impl<'a> ProviderBrowser<'a> {
                         self.rebuild_models();
                     }
                     KeyCode::Char('r') => self.refresh_models(),
+                    KeyCode::Char('a') if self.active_col == 2 => self.add_custom_model(stdout)?,
                     KeyCode::Char('a') => self.add_provider(stdout)?,
+                    KeyCode::Char('d') if self.active_col == 2 => self.delete_model(),
                     KeyCode::Char('d') => self.delete_provider(),
                     KeyCode::Tab if self.active_col == 2 => self.toggle_model_activation(),
                     KeyCode::Enter | KeyCode::Char('i') => self.select_or_edit(stdout)?,
@@ -148,9 +151,15 @@ impl<'a> ProviderBrowser<'a> {
         self.provider_idx = self
             .provider_idx
             .min(self.config.providers.len().saturating_sub(1));
-        self.raw_models.clear();
+        self.raw_models = self
+            .config
+            .providers
+            .get(self.provider_idx)
+            .map(local_provider_models)
+            .unwrap_or_default();
         self.orgs = vec!["All".to_string()];
         self.models.clear();
+        self.rebuild_models();
         self.fetch_seq += 1;
         if let Some(provider) = self.config.providers.get(self.provider_idx).cloned() {
             let seq = self.fetch_seq;
@@ -191,7 +200,11 @@ impl<'a> ProviderBrowser<'a> {
                     result.models.len(),
                     t("models", "个模型")
                 );
-                self.raw_models = result.models;
+                for model in result.models {
+                    if !self.raw_models.iter().any(|item| item == &model) {
+                        self.raw_models.push(model);
+                    }
+                }
                 self.remote_metadata = result.metadata;
             }
             Err(err) => {
@@ -199,7 +212,6 @@ impl<'a> ProviderBrowser<'a> {
                     "{}: {err}",
                     t("Failed to fetch models", "获取模型失败")
                 ));
-                self.raw_models.clear();
             }
         }
         self.rebuild_models();
@@ -208,7 +220,8 @@ impl<'a> ProviderBrowser<'a> {
     fn rebuild_models(&mut self) {
         let filter = self.filter.to_ascii_lowercase();
         let mut grouped: BTreeMap<String, Vec<ModelEntry>> = BTreeMap::new();
-        for model in &self.raw_models {
+        let ordered_models = self.prioritized_models();
+        for model in &ordered_models {
             if !filter.is_empty() && !model.to_ascii_lowercase().contains(&filter) {
                 continue;
             }
@@ -294,6 +307,9 @@ impl<'a> ProviderBrowser<'a> {
                         if current.context_chars.is_none() {
                             current.context_chars = metadata.context_chars;
                         }
+                        if current.max_output_tokens.is_none() {
+                            current.max_output_tokens = metadata.max_output_tokens;
+                        }
                         if current.tags.is_empty() {
                             current.tags = metadata.tags;
                         }
@@ -355,6 +371,78 @@ impl<'a> ProviderBrowser<'a> {
                 provider.default_model = model.full.clone();
             }
             self.status = format!("{}: {}", t("Activated model", "已激活模型"), model.full);
+        }
+    }
+
+    /// 返回本地已激活模型优先的合并列表。
+    fn prioritized_models(&self) -> Vec<String> {
+        let mut models = self
+            .config
+            .providers
+            .get(self.provider_idx)
+            .map(local_provider_models)
+            .unwrap_or_default();
+        for model in &self.raw_models {
+            if !models.iter().any(|item| item == model) {
+                models.push(model.clone());
+            }
+        }
+        models
+    }
+
+    /// 在当前供应商下新增自定义模型。
+    fn add_custom_model(&mut self, stdout: &mut io::Stdout) -> Result<()> {
+        let Some(model) = add_custom_model_form(stdout)? else {
+            return Ok(());
+        };
+        let Some(provider) = self.config.providers.get_mut(self.provider_idx) else {
+            return Ok(());
+        };
+        if provider.models.iter().any(|item| item == &model) {
+            self.status = format!("Model already exists: {model}");
+            return Ok(());
+        }
+        provider.models.push(model.clone());
+        if provider.default_model.trim().is_empty() {
+            provider.default_model = model.clone();
+        }
+        if !self.raw_models.iter().any(|item| item == &model) {
+            self.raw_models.push(model.clone());
+        }
+        self.rebuild_models();
+        self.model_idx = self
+            .models
+            .iter()
+            .position(|entry| entry.full == model)
+            .unwrap_or(self.model_idx);
+        self.status = format!("Added custom model: {model}");
+        Ok(())
+    }
+
+    /// 删除当前选中的本地模型和关联元数据。
+    fn delete_model(&mut self) {
+        let Some(model) = self
+            .models
+            .get(self.model_idx)
+            .map(|entry| entry.full.clone())
+        else {
+            return;
+        };
+        let Some(provider_id) = self
+            .config
+            .providers
+            .get(self.provider_idx)
+            .map(|provider| provider.id.clone())
+        else {
+            return;
+        };
+        if self
+            .config
+            .remove_active_provider_model(&provider_id, &model)
+            .is_ok()
+        {
+            self.rebuild_models();
+            self.status = format!("Removed model: {model}");
         }
     }
 
@@ -502,6 +590,20 @@ fn format_status_line(value: &str) -> String {
 struct ModelEntry {
     name: String,
     full: String,
+}
+
+/// 返回当前供应商的本地模型，默认模型和已激活模型优先。
+fn local_provider_models(provider: &ProviderConfig) -> Vec<String> {
+    let mut models = Vec::new();
+    if !provider.default_model.trim().is_empty() {
+        models.push(provider.default_model.clone());
+    }
+    for model in &provider.models {
+        if !models.iter().any(|item| item == model) {
+            models.push(model.clone());
+        }
+    }
+    models
 }
 
 impl ModelEntry {

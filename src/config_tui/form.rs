@@ -144,6 +144,22 @@ pub(crate) fn run_form(stdout: &mut io::Stdout, title: &str, fields: &mut [Field
     }
 }
 
+/// 通过统一表单输入一个自定义模型标识。
+///
+/// 参数:
+/// - `stdout`: TUI 输出句柄
+///
+/// 返回:
+/// - 非空模型标识，取消时返回空
+pub(crate) fn add_custom_model_form(stdout: &mut io::Stdout) -> Result<Option<String>> {
+    let mut fields = [Field::new("Model ID", String::new())];
+    if !run_form(stdout, " ADD CUSTOM MODEL ", &mut fields)? {
+        return Ok(None);
+    }
+    let model = fields[0].value.trim().to_string();
+    Ok((!model.is_empty()).then_some(model))
+}
+
 fn select_choice(
     stdout: &mut io::Stdout,
     label: &str,

@@ -124,6 +124,7 @@ fn remove_active_provider_model_clears_removed_current_model() {
         "old-model".to_string(),
         ModelMetadata {
             context_chars: Some(8192),
+            max_output_tokens: None,
             tags: vec!["web_search".to_string()],
             tools_enabled: None,
             web_search_tool_mode: None,
@@ -277,6 +278,7 @@ fn active_context_window_tokens_prefers_model_metadata() {
         model,
         ModelMetadata {
             context_chars: Some(128_000),
+            max_output_tokens: None,
             tools_enabled: None,
             tags: Vec::new(),
             web_search_tool_mode: None,

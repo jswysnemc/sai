@@ -1,7 +1,9 @@
 use crate::config::{parse_context_chars, ProviderConfig, MODEL_TAGS};
-use crate::config::{WEB_SEARCH_TOOL_MODE_HIDE, WEB_SEARCH_TOOL_MODE_RENAME};
+use crate::config::{
+    WEB_SEARCH_TOOL_MODE_ENABLED, WEB_SEARCH_TOOL_MODE_HIDE, WEB_SEARCH_TOOL_MODE_RENAME,
+};
 use crate::i18n::text as t;
-use anyhow::Result;
+use anyhow::{bail, Result};
 
 use super::form::{parse_bool_field, Field};
 
@@ -16,6 +18,14 @@ use super::form::{parse_bool_field, Field};
 pub(super) fn context_chars_field_value(provider: &ProviderConfig, model: &str) -> String {
     provider
         .model_context_chars_for(model)
+        .map(|value| value.to_string())
+        .unwrap_or_default()
+}
+
+/// 返回模型最大输出 token 字段值。
+pub(super) fn max_output_tokens_field_value(provider: &ProviderConfig, model: &str) -> String {
+    provider
+        .model_max_output_tokens_for(model)
         .map(|value| value.to_string())
         .unwrap_or_default()
 }
@@ -62,12 +72,13 @@ pub(super) fn tools_enabled_field(provider: &ProviderConfig, model: &str) -> Fie
 pub(super) fn web_search_tool_mode_field(provider: &ProviderConfig, model: &str) -> Field {
     Field::new(
         t("Web search tool conflict", "网页搜索工具冲突"),
-        provider
-            .model_web_search_tool_mode_for(model)
-            .unwrap_or(WEB_SEARCH_TOOL_MODE_HIDE)
-            .to_string(),
+        provider.model_web_search_tool_mode_for(model).to_string(),
     )
-    .choices(&[WEB_SEARCH_TOOL_MODE_HIDE, WEB_SEARCH_TOOL_MODE_RENAME])
+    .choices(&[
+        WEB_SEARCH_TOOL_MODE_ENABLED,
+        WEB_SEARCH_TOOL_MODE_HIDE,
+        WEB_SEARCH_TOOL_MODE_RENAME,
+    ])
 }
 
 /// 应用网页搜索工具冲突策略字段。
@@ -76,7 +87,11 @@ pub(super) fn apply_web_search_tool_mode_field(
     model: &str,
     value: &str,
 ) {
-    provider.set_model_web_search_tool_mode(model, Some(value.trim().to_string()));
+    let value = value.trim();
+    provider.set_model_web_search_tool_mode(
+        model,
+        (value != WEB_SEARCH_TOOL_MODE_ENABLED).then(|| value.to_string()),
+    );
 }
 
 /// 应用模型上下文 token 字段。
@@ -94,6 +109,33 @@ pub(super) fn apply_context_chars_field(
     value: &str,
 ) -> Result<()> {
     provider.set_model_context_chars_for(model, parse_context_chars(value)?);
+    Ok(())
+}
+
+/// 应用模型最大输出 token 字段。
+///
+/// 参数:
+/// - `provider`: Provider 配置
+/// - `model`: 模型 ID
+/// - `value`: 表单输入的最大输出 token 数
+///
+/// 返回:
+/// - 应用是否成功
+pub(super) fn apply_max_output_tokens_field(
+    provider: &mut ProviderConfig,
+    model: &str,
+    value: &str,
+) -> Result<()> {
+    let value = parse_context_chars(value)?;
+    let value = value
+        .map(|value| {
+            u32::try_from(value).map_err(|_| anyhow::anyhow!("max output tokens is too large"))
+        })
+        .transpose()?;
+    if value == Some(0) {
+        bail!("max output tokens must be greater than 0");
+    }
+    provider.set_model_max_output_tokens_for(model, value);
     Ok(())
 }
 
@@ -178,6 +220,33 @@ mod tests {
         assert_eq!(
             provider.model_tags_for("test-model"),
             &["tool".to_string(), "vision".to_string()]
+        );
+    }
+
+    #[test]
+    fn applies_max_output_tokens() {
+        let mut provider = provider_with_model("test-model");
+
+        apply_max_output_tokens_field(&mut provider, "test-model", "32k").unwrap();
+
+        assert_eq!(
+            provider.model_max_output_tokens_for("test-model"),
+            Some(32_000)
+        );
+    }
+
+    #[test]
+    fn web_search_defaults_to_enabled_without_tag() {
+        let mut provider = provider_with_model("test-model");
+        assert_eq!(
+            provider.model_web_search_tool_mode_for("test-model"),
+            WEB_SEARCH_TOOL_MODE_ENABLED
+        );
+
+        apply_web_search_tool_mode_field(&mut provider, "test-model", WEB_SEARCH_TOOL_MODE_HIDE);
+        assert_eq!(
+            provider.model_web_search_tool_mode_for("test-model"),
+            WEB_SEARCH_TOOL_MODE_HIDE
         );
     }
 

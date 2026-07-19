@@ -1,6 +1,7 @@
 use super::model::ProviderConfig;
 use super::model_metadata::{
-    is_valid_model_tag, WEB_SEARCH_TOOL_MODE_HIDE, WEB_SEARCH_TOOL_MODE_RENAME,
+    is_valid_model_tag, WEB_SEARCH_TOOL_MODE_ENABLED, WEB_SEARCH_TOOL_MODE_HIDE,
+    WEB_SEARCH_TOOL_MODE_RENAME,
 };
 use anyhow::{bail, Result};
 
@@ -58,6 +59,13 @@ pub(super) fn validate_provider_model_metadata(provider: &ProviderConfig) -> Res
                 model
             );
         }
+        if metadata.max_output_tokens == Some(0) {
+            bail!(
+                "provider {} model_metadata max_output_tokens for {} must be greater than 0",
+                provider.id,
+                model
+            );
+        }
         for tag in &metadata.tags {
             if !is_valid_model_tag(tag) {
                 bail!(
@@ -69,7 +77,10 @@ pub(super) fn validate_provider_model_metadata(provider: &ProviderConfig) -> Res
             }
         }
         if let Some(mode) = metadata.web_search_tool_mode.as_deref() {
-            if mode != WEB_SEARCH_TOOL_MODE_HIDE && mode != WEB_SEARCH_TOOL_MODE_RENAME {
+            if mode != WEB_SEARCH_TOOL_MODE_ENABLED
+                && mode != WEB_SEARCH_TOOL_MODE_HIDE
+                && mode != WEB_SEARCH_TOOL_MODE_RENAME
+            {
                 bail!(
                     "provider {} model_metadata web_search_tool_mode for {} is invalid: {}",
                     provider.id,

@@ -8,6 +8,7 @@ pub const MODEL_TAG_VISION: &str = "vision";
 pub const MODEL_TAG_WEB_SEARCH: &str = "web_search";
 pub const MODEL_TAG_FAST: &str = "fast";
 pub const MODEL_TAG_LOW_COST: &str = "low_cost";
+pub const WEB_SEARCH_TOOL_MODE_ENABLED: &str = "enabled";
 pub const WEB_SEARCH_TOOL_MODE_HIDE: &str = "hide_builtin";
 pub const WEB_SEARCH_TOOL_MODE_RENAME: &str = "rename_local";
 pub const MODEL_TAGS: [&str; 6] = [
@@ -28,6 +29,8 @@ pub struct ModelMetadata {
     )]
     pub context_chars: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tools_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
@@ -45,6 +48,7 @@ impl ModelMetadata {
     /// - 没有上下文长度、工具开关和标签时返回 true
     pub fn is_empty(&self) -> bool {
         self.context_chars.is_none()
+            && self.max_output_tokens.is_none()
             && self.tools_enabled.is_none()
             && self.tags.is_empty()
             && self.web_search_tool_mode.is_none()
@@ -100,18 +104,12 @@ impl ProviderConfig {
     /// - `model`: 模型 ID
     ///
     /// 返回:
-    /// - 仅带 web_search 标签时返回已配置策略
-    pub fn model_web_search_tool_mode_for(&self, model: &str) -> Option<&str> {
-        let metadata = self.model_metadata.get(model)?;
-        if !metadata.tags.iter().any(|tag| tag == MODEL_TAG_WEB_SEARCH) {
-            return None;
-        }
-        Some(
-            metadata
-                .web_search_tool_mode
-                .as_deref()
-                .unwrap_or(WEB_SEARCH_TOOL_MODE_HIDE),
-        )
+    /// - 未配置时返回启用本地 Web Search
+    pub fn model_web_search_tool_mode_for(&self, model: &str) -> &str {
+        self.model_metadata
+            .get(model)
+            .and_then(|metadata| metadata.web_search_tool_mode.as_deref())
+            .unwrap_or(WEB_SEARCH_TOOL_MODE_ENABLED)
     }
 
     /// 设置模型的网页搜索工具冲突策略。
@@ -147,6 +145,36 @@ impl ProviderConfig {
             self.model_metadata_mut(model).context_chars = Some(context_chars);
         } else if let Some(metadata) = self.model_metadata.get_mut(model) {
             metadata.context_chars = None;
+        }
+        self.remove_empty_model_metadata(model);
+    }
+
+    /// 获取模型最大输出 token 数。
+    ///
+    /// 参数:
+    /// - `model`: 模型 ID
+    ///
+    /// 返回:
+    /// - 模型级最大输出限制
+    pub fn model_max_output_tokens_for(&self, model: &str) -> Option<u32> {
+        self.model_metadata
+            .get(model)
+            .and_then(|metadata| metadata.max_output_tokens)
+    }
+
+    /// 设置模型最大输出 token 数。
+    ///
+    /// 参数:
+    /// - `model`: 模型 ID
+    /// - `max_output_tokens`: 最大输出 token 数，空值表示不限制
+    pub fn set_model_max_output_tokens_for(&mut self, model: &str, max_output_tokens: Option<u32>) {
+        if model.trim().is_empty() {
+            return;
+        }
+        if let Some(value) = max_output_tokens {
+            self.model_metadata_mut(model).max_output_tokens = Some(value);
+        } else if let Some(metadata) = self.model_metadata.get_mut(model) {
+            metadata.max_output_tokens = None;
         }
         self.remove_empty_model_metadata(model);
     }

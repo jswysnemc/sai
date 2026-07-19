@@ -46,12 +46,17 @@ pub(super) fn fetch_models(provider: &ProviderConfig) -> Result<FetchModelsResul
     let mut metadata = BTreeMap::new();
     for model in parsed.data.into_iter().filter(|model| !model.id.is_empty()) {
         let context_chars = model.context_length.or(model.context_window);
+        let max_output_tokens = model
+            .max_output_tokens
+            .or(model.max_completion_tokens)
+            .and_then(|value| u32::try_from(value).ok());
         let tags = model.tags();
-        if context_chars.is_some() || !tags.is_empty() {
+        if context_chars.is_some() || max_output_tokens.is_some() || !tags.is_empty() {
             metadata.insert(
                 model.id.clone(),
                 ModelMetadata {
                     context_chars,
+                    max_output_tokens,
                     tags,
                     ..ModelMetadata::default()
                 },
@@ -63,6 +68,11 @@ pub(super) fn fetch_models(provider: &ProviderConfig) -> Result<FetchModelsResul
         let entry = metadata.entry(model).or_default();
         if entry.context_chars.is_none() {
             entry.context_chars = catalog.context_chars.map(|value| value as usize);
+        }
+        if entry.max_output_tokens.is_none() {
+            entry.max_output_tokens = catalog
+                .max_output_tokens
+                .and_then(|value| value.try_into().ok());
         }
         if entry.tags.is_empty() {
             entry.tags = catalog.tags;
@@ -102,6 +112,10 @@ struct ModelInfo {
     context_length: Option<usize>,
     #[serde(default)]
     context_window: Option<usize>,
+    #[serde(default)]
+    max_output_tokens: Option<u64>,
+    #[serde(default)]
+    max_completion_tokens: Option<u64>,
     #[serde(default)]
     capabilities: Vec<String>,
 }

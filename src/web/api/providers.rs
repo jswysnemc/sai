@@ -41,15 +41,16 @@ async fn fetch_models(
     let paths = state.paths.clone();
     let provider = provider_models::restore_provider_secret(&paths, request.provider)
         .map_err(WebError::from)?;
-    let (models, metadata) = tokio::task::spawn_blocking(move || {
-        let models = provider_models::fetch_models(&paths, &provider)?;
-        let metadata = provider_models::fetch_catalog_metadata(&models)
-            .into_iter()
-            .collect();
-        anyhow::Ok((models, metadata))
+    let result = tokio::task::spawn_blocking(move || {
+        let mut result = provider_models::fetch_models(&paths, &provider)?;
+        provider_models::enrich_catalog_metadata(&mut result);
+        anyhow::Ok(result)
     })
     .await
     .map_err(|error| WebError::from(anyhow::anyhow!(error)))?
     .map_err(|error| WebError::bad_request(error.to_string()))?;
-    Ok(Json(FetchModelsResponse { models, metadata }))
+    Ok(Json(FetchModelsResponse {
+        models: result.models,
+        metadata: result.metadata,
+    }))
 }

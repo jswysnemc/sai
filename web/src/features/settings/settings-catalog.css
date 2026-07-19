@@ -99,6 +99,8 @@
 
 .model-metadata-form { padding: 14px; }
 .model-context-input { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 7px; }
+.model-metadata-tabs { width: fit-content; max-width: 100%; }
+.model-metadata-panel { margin-top: 14px; }
 
 .model-metadata-head {
   display: flex;

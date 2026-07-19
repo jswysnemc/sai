@@ -413,6 +413,14 @@ mod tests {
             },
         };
 
+        assert_eq!(
+            prepare_anthropic_tools(&provider, vec![tool.clone()]).len(),
+            1
+        );
+        provider.set_model_web_search_tool_mode(
+            "grok-4.5",
+            Some(WEB_SEARCH_TOOL_MODE_HIDE.to_string()),
+        );
         assert!(prepare_anthropic_tools(&provider, vec![tool.clone()]).is_empty());
         provider.set_model_web_search_tool_mode(
             "grok-4.5",

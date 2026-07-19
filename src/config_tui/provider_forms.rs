@@ -5,11 +5,13 @@ use serde_json::Value;
 use std::io;
 
 use super::form::{parse_bool_field, run_form, Field};
+use super::input::read_key;
 use super::model_metadata_form::{
-    apply_context_chars_field, apply_tag_fields, apply_tools_enabled_field,
-    apply_web_search_tool_mode_field, context_chars_field_value, tag_fields, tools_enabled_field,
-    web_search_tool_mode_field,
+    apply_context_chars_field, apply_max_output_tokens_field, apply_tag_fields,
+    apply_tools_enabled_field, apply_web_search_tool_mode_field, context_chars_field_value,
+    max_output_tokens_field_value, tag_fields, tools_enabled_field, web_search_tool_mode_field,
 };
+use super::ui::draw_menu;
 
 /// 编辑 provider 配置表单。
 ///
@@ -23,7 +25,6 @@ pub(super) fn edit_provider_form(
     stdout: &mut io::Stdout,
     provider: ProviderConfig,
 ) -> Result<Option<ProviderConfig>> {
-    let current_context_chars = context_chars_field_value(&provider, &provider.default_model);
     let mut fields = vec![
         Field::new(t("Config ID", "配置 ID"), provider.id.clone()),
         Field::new(t("Display name", "显示名称"), provider.display_name.clone()),
@@ -39,30 +40,6 @@ pub(super) fn edit_provider_form(
             provider.api_key.clone().unwrap_or_default(),
         )
         .secret(),
-        Field::new(
-            t("Current model", "当前模型"),
-            provider.default_model.clone(),
-        ),
-        Field::new(
-            t("Model context tokens", "模型上下文 token 数"),
-            current_context_chars,
-        ),
-    ];
-    let tag_start = fields.len();
-    fields.extend(tag_fields(&provider, &provider.default_model));
-    let tag_end = fields.len();
-    let web_search_mode_index = provider
-        .model_tags_for(&provider.default_model)
-        .iter()
-        .any(|tag| tag == "web_search")
-        .then(|| {
-            fields.push(web_search_tool_mode_field(
-                &provider,
-                &provider.default_model,
-            ));
-            fields.len() - 1
-        });
-    fields.extend([
         Field::new(
             t("Timeout seconds", "超时秒数"),
             provider.timeout_seconds.to_string(),
@@ -94,44 +71,28 @@ pub(super) fn edit_provider_form(
             t("Custom Body JSON", "自定义 Body JSON"),
             provider.extra_body.clone(),
         ),
-    ]);
+    ];
     if !run_form(stdout, t(" EDIT PROVIDER ", " 编辑供应商 "), &mut fields)? {
         return Ok(None);
     }
-    let default_model = fields[5].value.trim().to_string();
-    let mut models = provider.models.clone();
-    if !default_model.trim().is_empty() && !models.iter().any(|item| item == &default_model) {
-        models.push(default_model.clone());
-    }
-    let behavior_start = tag_end + usize::from(web_search_mode_index.is_some());
-    let extra_body = normalize_extra_body(&fields[behavior_start + 4].value)?;
-    let mut updated = ProviderConfig {
+    let extra_body = normalize_extra_body(&fields[9].value)?;
+    let updated = ProviderConfig {
         id: fields[0].value.trim().to_string(),
         display_name: fields[1].value.trim().to_string(),
         base_url: normalize_base_url(&fields[2].value),
         protocol: fields[3].value.trim().to_string(),
         api_key: Some(fields[4].value.trim().to_string()).filter(|value| !value.is_empty()),
-        models,
+        models: provider.models.clone(),
         model_context_chars: provider.model_context_chars.clone(),
         model_metadata: provider.model_metadata.clone(),
-        default_model,
-        timeout_seconds: fields[behavior_start].value.trim().parse().unwrap_or(60),
-        temperature: fields[behavior_start + 1]
-            .value
-            .trim()
-            .parse()
-            .unwrap_or(0.7),
+        default_model: provider.default_model.clone(),
+        timeout_seconds: fields[5].value.trim().parse().unwrap_or(60),
+        temperature: fields[6].value.trim().parse().unwrap_or(0.7),
         anthropic_max_tokens: provider.anthropic_max_tokens,
-        thinking_level: fields[behavior_start + 2].value.trim().to_string(),
-        thinking_format: fields[behavior_start + 3].value.trim().to_string(),
+        thinking_level: fields[7].value.trim().to_string(),
+        thinking_format: fields[8].value.trim().to_string(),
         extra_body,
     };
-    let default_model = updated.default_model.clone();
-    apply_context_chars_field(&mut updated, &default_model, &fields[6].value)?;
-    apply_tag_fields(&mut updated, &default_model, &fields[tag_start..tag_end])?;
-    if let Some(index) = web_search_mode_index {
-        apply_web_search_tool_mode_field(&mut updated, &default_model, &fields[index].value);
-    }
     Ok(Some(updated))
 }
 
@@ -174,6 +135,50 @@ pub(super) fn edit_model_form(
     provider: &mut ProviderConfig,
     model: &str,
 ) -> Result<bool> {
+    let original = provider.clone();
+    let options = vec![
+        t("General settings", "常规设置").to_string(),
+        t("Model tags", "模型标签").to_string(),
+        t("Save model settings", "保存模型设置").to_string(),
+    ];
+    let mut selected = 0usize;
+    loop {
+        draw_menu(
+            stdout,
+            &format!(" EDIT MODEL: {model} "),
+            &options,
+            selected,
+            t("[Enter] open [q] cancel", "[Enter]打开 [q]取消"),
+        )?;
+        match read_key()? {
+            crossterm::event::KeyCode::Up | crossterm::event::KeyCode::Char('k') => {
+                selected = selected.saturating_sub(1)
+            }
+            crossterm::event::KeyCode::Down | crossterm::event::KeyCode::Char('j') => {
+                selected = (selected + 1).min(options.len() - 1)
+            }
+            crossterm::event::KeyCode::Enter if selected == 0 => {
+                edit_model_general_form(stdout, provider, model)?;
+            }
+            crossterm::event::KeyCode::Enter if selected == 1 => {
+                edit_model_tags_form(stdout, provider, model)?;
+            }
+            crossterm::event::KeyCode::Enter => return Ok(true),
+            crossterm::event::KeyCode::Esc | crossterm::event::KeyCode::Char('q') => {
+                *provider = original;
+                return Ok(false);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// 编辑模型常规设置子面板。
+fn edit_model_general_form(
+    stdout: &mut io::Stdout,
+    provider: &mut ProviderConfig,
+    model: &str,
+) -> Result<()> {
     let active = provider.models.iter().any(|item| item == model);
     let current = provider.default_model == model;
     let context_chars = context_chars_field_value(provider, model);
@@ -185,20 +190,14 @@ pub(super) fn edit_model_form(
             t("Model context tokens", "模型上下文 token 数"),
             context_chars,
         ),
+        Field::new(
+            t("Maximum output tokens", "最大输出 token 数"),
+            max_output_tokens_field_value(provider, model),
+        ),
+        web_search_tool_mode_field(provider, model),
     ];
-    let tag_start = fields.len();
-    fields.extend(tag_fields(provider, model));
-    let tag_end = fields.len();
-    let web_search_mode_index = provider
-        .model_tags_for(model)
-        .iter()
-        .any(|tag| tag == "web_search")
-        .then(|| {
-            fields.push(web_search_tool_mode_field(provider, model));
-            fields.len() - 1
-        });
-    if !run_form(stdout, t(" EDIT MODEL ", " 编辑模型 "), &mut fields)? {
-        return Ok(false);
+    if !run_form(stdout, t(" MODEL GENERAL ", " 模型常规设置 "), &mut fields)? {
+        return Ok(());
     }
     let active = parse_bool_field(&fields[0].value)?;
     let current = parse_bool_field(&fields[1].value)?;
@@ -226,11 +225,22 @@ pub(super) fn edit_model_form(
     }
     apply_tools_enabled_field(provider, model, &fields[2].value)?;
     apply_context_chars_field(provider, model, &fields[3].value)?;
-    apply_tag_fields(provider, model, &fields[tag_start..tag_end])?;
-    if let Some(index) = web_search_mode_index {
-        apply_web_search_tool_mode_field(provider, model, &fields[index].value);
+    apply_max_output_tokens_field(provider, model, &fields[4].value)?;
+    apply_web_search_tool_mode_field(provider, model, &fields[5].value);
+    Ok(())
+}
+
+/// 编辑模型标签子面板。
+fn edit_model_tags_form(
+    stdout: &mut io::Stdout,
+    provider: &mut ProviderConfig,
+    model: &str,
+) -> Result<()> {
+    let mut fields = tag_fields(provider, model);
+    if run_form(stdout, t(" MODEL TAGS ", " 模型标签 "), &mut fields)? {
+        apply_tag_fields(provider, model, &fields)?;
     }
-    Ok(true)
+    Ok(())
 }
 
 /// 规范化 provider Base URL。

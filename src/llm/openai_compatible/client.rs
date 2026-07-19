@@ -180,6 +180,9 @@ impl OpenAiCompatibleClient {
             messages,
             temperature: self.provider.temperature,
             stream: true,
+            max_tokens: self
+                .provider
+                .model_max_output_tokens_for(&self.provider.default_model),
             tools: (!tools.is_empty()).then_some(tools),
             chat_template_kwargs: taotoken_glm_chat_template_kwargs(&self.provider),
         };
@@ -295,7 +298,10 @@ impl OpenAiCompatibleClient {
             messages: lower_anthropic_messages(messages),
             tools: (!tools.is_empty()).then(|| lower_anthropic_tools(tools)),
             stream: true,
-            max_tokens: self.provider.anthropic_max_tokens,
+            max_tokens: self
+                .provider
+                .model_max_output_tokens_for(&self.provider.default_model)
+                .unwrap_or(self.provider.anthropic_max_tokens),
             temperature: Some(self.provider.temperature),
         };
         let request = apply_provider_body_options(
@@ -449,6 +455,9 @@ impl OpenAiCompatibleClient {
             input: lower_responses_messages(messages),
             instructions: None,
             stream: true,
+            max_output_tokens: self
+                .provider
+                .model_max_output_tokens_for(&self.provider.default_model),
             tools: (!tools.is_empty()).then(|| lower_responses_tools(tools)),
             reasoning: Some(ResponsesReasoning {
                 effort: Some("medium"),
@@ -622,11 +631,11 @@ fn prepare_anthropic_tools(
     tools: Vec<ToolDefinition>,
 ) -> Vec<ToolDefinition> {
     match provider.model_web_search_tool_mode_for(&provider.default_model) {
-        Some(WEB_SEARCH_TOOL_MODE_HIDE) => tools
+        WEB_SEARCH_TOOL_MODE_HIDE => tools
             .into_iter()
             .filter(|tool| tool.function.name != "web_search")
             .collect(),
-        Some(WEB_SEARCH_TOOL_MODE_RENAME) => tools
+        WEB_SEARCH_TOOL_MODE_RENAME => tools
             .into_iter()
             .map(|mut tool| {
                 if tool.function.name == "web_search" {
