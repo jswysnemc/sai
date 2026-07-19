@@ -1,4 +1,4 @@
-import { GitCommitHorizontal, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GitCommitSummary } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
@@ -7,8 +7,10 @@ import { useI18n } from "../../i18n/use-i18n";
 import type { RunGitOperation } from "../types";
 import { createBranchNameSuggestion } from "../branches/branch-name-suggestion";
 import { CommitContextMenu } from "./commit-context-menu";
-import { formatGitDate, formatGitReference } from "./graph-utils";
+import { CommitGraphRow } from "./commit-graph-row";
+import { calculateGitGraphLanes } from "./graph-lanes";
 import { calculateGitGraphWindow } from "./graph-window";
+import "./commit-graph.css";
 
 const GRAPH_ROW_HEIGHT = 56;
 
@@ -52,6 +54,7 @@ export function CommitGraph(props: CommitGraphProps) {
     ),
     [props.commits.length, viewport]
   );
+  const graphLayouts = useMemo(() => calculateGitGraphLanes(props.commits), [props.commits]);
   const visibleCommits = props.commits.slice(windowState.start, windowState.end);
 
   useEffect(() => {
@@ -129,30 +132,15 @@ export function CommitGraph(props: CommitGraphProps) {
               {visibleCommits.map((commit, visibleIndex) => {
                 const index = windowState.start + visibleIndex;
                 return (
-                  <Button
+                  <CommitGraphRow
                     key={commit.sha}
-                    className={`git-graph-row${props.activeCommit === commit.sha ? " active" : ""}`}
-                    onClick={() => props.onSelect(commit)}
+                    commit={commit}
+                    layout={graphLayouts[index]}
+                    active={props.activeCommit === commit.sha}
+                    locale={props.locale}
+                    onSelect={() => props.onSelect(commit)}
                     onContextMenu={(event) => openContextMenu(event, commit)}
-                  >
-                    <span className={`git-graph-lane${commit.parents.length > 1 ? " merge" : ""}${index === 0 ? " first" : ""}${index === props.commits.length - 1 ? " last" : ""}`}>
-                      <i />
-                    </span>
-                    <span className="git-graph-content">
-                      <strong>{commit.subject || commit.short_sha}</strong>
-                      <small>{commit.short_sha} · {commit.author_name} · {formatGitDate(commit.author_date, props.locale)}</small>
-                      {commit.refs.length > 0 && (
-                        <span className="git-graph-refs">
-                          {commit.refs.slice(0, 4).map((reference) => <em key={reference}>{formatGitReference(reference)}</em>)}
-                        </span>
-                      )}
-                    </span>
-                    <span className="git-graph-direction">
-                      {commit.local_only && <b>{t("Outgoing", "待推送")}</b>}
-                      {commit.remote_only && <i>{t("Incoming", "待拉取")}</i>}
-                      {commit.parents.length > 1 && <GitCommitHorizontal size={12} />}
-                    </span>
-                  </Button>
+                  />
                 );
               })}
             </div>

@@ -1,0 +1,216 @@
+.git-commit-graph {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.25rem;
+}
+
+.git-history-panel {
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: stretch;
+  overflow: hidden;
+}
+
+.git-graph-spacer {
+  position: relative;
+  min-height: 100%;
+}
+
+.git-graph-window {
+  position: absolute;
+  inset: 0 0 auto;
+}
+
+.git-graph-row.ui-button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 0.375rem;
+  width: 100%;
+  height: 3.5rem;
+  min-height: 3.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.3125rem;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  content-visibility: auto;
+  contain-intrinsic-size: 3.5rem;
+}
+
+.git-load-more-shell {
+  display: flex;
+  justify-content: center;
+  padding: 0.375rem;
+}
+
+.git-graph-row:hover,
+.git-graph-row.active {
+  background: var(--paper-deep);
+}
+
+.git-graph-lanes {
+  display: block;
+  min-width: 1rem;
+  max-width: 7rem;
+  height: 3.5rem;
+  overflow: hidden;
+}
+
+.git-graph-lanes svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.git-graph-lanes path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  vector-effect: non-scaling-stroke;
+}
+
+.git-graph-node {
+  fill: var(--paper);
+  stroke: currentColor;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.git-graph-node.merge {
+  fill: currentColor;
+}
+
+.git-lane-color-0 { color: var(--signal); }
+.git-lane-color-1 { color: #3974a8; }
+.git-lane-color-2 { color: #b4691f; }
+.git-lane-color-3 { color: #2e8b68; }
+.git-lane-color-4 { color: #a44d73; }
+.git-lane-color-5 { color: #7164ad; }
+
+.git-graph-content {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  gap: 0.125rem;
+  padding: 0.375rem 0;
+}
+
+.git-graph-content > strong,
+.git-graph-content > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-graph-content > strong {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.git-graph-content > small {
+  color: var(--ink-soft);
+  font: 400 0.625rem var(--font-code);
+}
+
+.git-graph-refs {
+  display: flex;
+  min-width: 0;
+  gap: 0.1875rem;
+  overflow: hidden;
+}
+
+.git-graph-refs em {
+  overflow: hidden;
+  max-width: 8rem;
+  padding: 0.0625rem 0.3125rem;
+  border: 1px solid var(--line);
+  border-radius: 0.25rem;
+  color: var(--ink-soft);
+  font: 500 0.5625rem var(--font-code);
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-graph-direction {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.375rem;
+}
+
+.git-graph-direction b,
+.git-graph-direction i {
+  font-size: 0.5625rem;
+  font-style: normal;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.git-graph-direction b {
+  color: var(--signal);
+}
+
+.git-graph-direction i {
+  color: #3974a8;
+}
+
+.git-commit-context-menu {
+  position: fixed;
+  z-index: 90;
+  display: grid;
+  width: 16rem;
+  max-height: min(25rem, calc(100vh - 1rem));
+  overflow: auto;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4375rem;
+  background: var(--paper-raised);
+  box-shadow: var(--shadow);
+}
+
+.git-commit-context-menu > span {
+  padding: 0.4375rem 0.5rem 0.1875rem;
+  color: var(--ink-soft);
+  font-size: 0.625rem;
+  font-weight: 600;
+}
+
+.git-commit-context-menu .ui-button {
+  justify-content: flex-start;
+  min-height: 1.875rem;
+  padding: 0 0.5rem;
+  border: 0;
+  font-size: 0.6875rem;
+}
+
+.git-graph-branch-field {
+  display: grid;
+  gap: 0.375rem;
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+}
+
+.git-graph-branch-field input {
+  min-height: 2.125rem;
+  padding: 0 0.5625rem;
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+  outline: 0;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font: 400 0.75rem var(--font-code);
+}
+
+.git-graph-branch-field input:focus {
+  border-color: var(--line-strong);
+}
+
+@media (max-width: 44rem) {
+  .git-graph-direction b,
+  .git-graph-direction i {
+    display: none;
+  }
+}
