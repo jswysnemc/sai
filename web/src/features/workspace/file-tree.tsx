@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronRight, FilePlus2, Folder, FolderOpen, FolderPlus, PanelRightClose, Pencil, RefreshCw, Trash2, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { FileNode } from "../../api/contracts";
@@ -36,6 +36,10 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
   const [error, setError] = useState<Error | null>(null);
   const focusedNode = findFileNode(tree.data ?? [], focusedPath);
   const visibleNodes = filterFileNodes(tree.data ?? [], search);
+
+  useEffect(() => {
+    if (selectedFile) setFocusedPath(selectedFile);
+  }, [selectedFile]);
 
   /** 打开新建文件或目录输入栏。 */
   const beginCreate = (kind: "file" | "directory") => {
@@ -129,6 +133,9 @@ function TreeNode({ node, selectedFile, focusedPath, onFocus, onSelectFile, dept
   const [open, setOpen] = useState(depth < 1);
   const directory = node.kind === "directory";
   const active = selectedFile === node.path || focusedPath === node.path;
+  useEffect(() => {
+    if (directory && selectedFile?.startsWith(`${node.path}/`)) setOpen(true);
+  }, [directory, node.path, selectedFile]);
   return (
     <div>
       <button

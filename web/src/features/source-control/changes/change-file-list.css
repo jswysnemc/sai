@@ -46,6 +46,43 @@
   text-align: center;
 }
 
+.git-file-row.selected:not(.active) {
+  background: color-mix(in srgb, var(--signal) 8%, var(--paper));
+}
+
+.git-change-context-menu {
+  position: fixed;
+  z-index: 95;
+  display: grid;
+  width: min(17rem, calc(100vw - 1rem));
+  max-height: min(24rem, calc(100vh - 1rem));
+  overflow: auto;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4375rem;
+  background: var(--paper-raised);
+  box-shadow: var(--shadow);
+}
+
+.git-change-context-menu > span {
+  padding: 0.4375rem 0.5rem 0.1875rem;
+  color: var(--ink-soft);
+  font-size: 0.625rem;
+  font-weight: 600;
+}
+
+.git-change-context-menu .ui-button {
+  justify-content: flex-start;
+  min-height: 1.875rem;
+  padding: 0 0.5rem;
+  border: 0;
+  font-size: 0.6875rem;
+}
+
+.git-change-context-menu .ui-button.danger {
+  color: var(--danger);
+}
+
 @media (max-width: 40rem) {
   .git-view-count-badge {
     min-width: 0.875rem;

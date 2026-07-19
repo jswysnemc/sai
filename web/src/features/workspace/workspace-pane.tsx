@@ -51,6 +51,13 @@ export function WorkspacePane({
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
   useEffect(() => {
+    /** Source Control 请求定位文件时打开当前编辑器的文件树。 */
+    const revealFile = () => setFileTreeOpen(true);
+    window.addEventListener("sai:reveal-workspace-file", revealFile);
+    return () => window.removeEventListener("sai:reveal-workspace-file", revealFile);
+  }, []);
+
+  useEffect(() => {
     if (!selectedFile) return;
     setTabs((current) => {
       const existing = current.find((tab) => tab.type === "files" && tab.path === selectedFile);

@@ -12,9 +12,11 @@ type ChangeFileListProps = {
   entries: GitStatusEntry[];
   viewMode: ScmConfig["default_view_mode"];
   selectedPath: string | null;
+  selectedPaths: ReadonlySet<string>;
   busy: boolean;
   section: ChangeSectionKind;
-  onSelect: (path: string) => void;
+  onSelect: (path: string, event: React.MouseEvent<HTMLButtonElement>) => void;
+  onContextMenu: (path: string, event: React.MouseEvent<HTMLDivElement>) => void;
   onStage: (path: string) => void;
   onUnstage: (path: string) => void;
   onIgnore: (path: string) => void;
@@ -101,10 +103,12 @@ function renderFileRow(
       entry={entry}
       displayName={displayName}
       depth={depth}
-      selected={props.selectedPath === entry.path}
+      active={props.selectedPath === entry.path}
+      selected={props.selectedPaths.has(entry.path)}
       busy={props.busy}
       section={props.section}
-      onSelect={() => props.onSelect(entry.path)}
+      onSelect={(event) => props.onSelect(entry.path, event)}
+      onContextMenu={(event) => props.onContextMenu(entry.path, event)}
       onStage={() => props.onStage(entry.path)}
       onUnstage={() => props.onUnstage(entry.path)}
       onIgnore={() => props.onIgnore(entry.path)}

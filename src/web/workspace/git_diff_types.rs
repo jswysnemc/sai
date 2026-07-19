@@ -254,6 +254,7 @@ pub(super) struct GitOutput {
 pub(crate) struct GitOperationRequest<'a> {
     pub(crate) action: &'a str,
     pub(crate) path: Option<&'a str>,
+    pub(crate) paths: &'a [String],
     pub(crate) old_path: Option<&'a str>,
     pub(crate) message: Option<&'a str>,
     pub(crate) remote_url: Option<&'a str>,
@@ -293,6 +294,7 @@ impl<'a> GitOperationRequest<'a> {
         Self {
             action,
             path: None,
+            paths: &[],
             old_path: None,
             message: None,
             remote_url: None,

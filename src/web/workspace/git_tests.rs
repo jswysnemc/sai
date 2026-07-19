@@ -187,6 +187,7 @@ async fn discards_both_paths_of_a_staged_rename() {
         GitOperationRequest {
             action: "discard",
             path: Some("renamed.txt"),
+            paths: &[],
             old_path: Some("tracked.txt"),
             message: None,
             remote_url: None,
@@ -223,6 +224,62 @@ async fn discards_both_paths_of_a_staged_rename() {
     assert!(response.state.entries.is_empty());
 }
 
+/// 验证批量路径可以一次完成暂存、取消暂存和丢弃。
+#[tokio::test]
+async fn batches_file_stage_unstage_and_discard() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path();
+    init_repository(repo).await;
+    tokio::fs::write(repo.join("tracked.txt"), "batch update\n")
+        .await
+        .unwrap();
+    tokio::fs::write(repo.join("new.txt"), "new file\n")
+        .await
+        .unwrap();
+    let paths = vec!["tracked.txt".to_string(), "new.txt".to_string()];
+
+    let staged = git_op(
+        repo,
+        GitOperationRequest {
+            paths: &paths,
+            ..GitOperationRequest::new("stage")
+        },
+    )
+    .await
+    .unwrap();
+    assert!(staged.ok, "{}", staged.stderr);
+    assert_eq!(staged.state.dirty_counts.staged, 2);
+
+    let unstaged = git_op(
+        repo,
+        GitOperationRequest {
+            paths: &paths,
+            ..GitOperationRequest::new("unstage")
+        },
+    )
+    .await
+    .unwrap();
+    assert!(unstaged.ok, "{}", unstaged.stderr);
+    assert_eq!(unstaged.state.dirty_counts.staged, 0);
+
+    let discarded = git_op(
+        repo,
+        GitOperationRequest {
+            paths: &paths,
+            ..GitOperationRequest::new("discard")
+        },
+    )
+    .await
+    .unwrap();
+    assert!(discarded.ok, "{}", discarded.stderr);
+    assert!(discarded.state.entries.is_empty());
+    assert!(!repo.join("new.txt").exists());
+    let content = tokio::fs::read_to_string(repo.join("tracked.txt"))
+        .await
+        .unwrap();
+    assert_eq!(content, "initial\n");
+}
+
 #[tokio::test]
 async fn commits_all_changes_with_signoff() {
     let temp = tempfile::tempdir().unwrap();
@@ -240,6 +297,7 @@ async fn commits_all_changes_with_signoff() {
         GitOperationRequest {
             action: "commit",
             path: None,
+            paths: &[],
             old_path: None,
             message: Some("feat: update files"),
             remote_url: None,
@@ -384,6 +442,7 @@ async fn detects_and_aborts_merge_conflict() {
         GitOperationRequest {
             action: "abort_operation",
             path: None,
+            paths: &[],
             old_path: None,
             message: None,
             remote_url: None,
@@ -533,6 +592,7 @@ async fn applies_partial_patch_to_index_and_worktree() {
         GitOperationRequest {
             action: "stage_patch",
             path: None,
+            paths: &[],
             old_path: None,
             message: None,
             remote_url: None,

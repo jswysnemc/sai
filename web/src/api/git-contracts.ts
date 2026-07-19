@@ -1,6 +1,7 @@
 export type GitOperationOptions = {
   repo_root?: string;
   path?: string;
+  paths?: string[];
   old_path?: string;
   message?: string;
   remote_url?: string;

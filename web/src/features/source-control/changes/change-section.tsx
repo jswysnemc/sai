@@ -11,10 +11,12 @@ type ChangeSectionProps = {
   title: string;
   entries: GitStatusEntry[];
   selectedPath: string | null;
+  selectedPaths: ReadonlySet<string>;
   viewMode: ScmConfig["default_view_mode"];
   busy: boolean;
   section: ChangeSectionKind;
-  onSelect: (path: string) => void;
+  onSelect: (path: string, event: React.MouseEvent<HTMLButtonElement>) => void;
+  onContextMenu: (path: string, event: React.MouseEvent<HTMLDivElement>) => void;
   onStageAll: () => void;
   onUnstageAll: () => void;
   onStage: (path: string) => void;
@@ -57,9 +59,11 @@ export function ChangeSection(props: ChangeSectionProps) {
           entries={props.entries}
           viewMode={props.viewMode}
           selectedPath={props.selectedPath}
+          selectedPaths={props.selectedPaths}
           busy={props.busy}
           section={props.section}
           onSelect={props.onSelect}
+          onContextMenu={props.onContextMenu}
           onStage={props.onStage}
           onUnstage={props.onUnstage}
           onIgnore={props.onIgnore}

@@ -45,11 +45,13 @@ async fn dispatch_operation(
     request: &GitOperationRequest<'_>,
 ) -> Result<GitOutput> {
     match request.action {
-        "stage" => stage_path(repo, request.path).await,
+        "stage" => stage_paths(repo, request.path, request.paths).await,
         "stage_all" => git_success(repo, &["add", "-A", "--"]).await,
-        "unstage" => unstage_path(repo, request.path).await,
+        "unstage" => unstage_paths(repo, request.path, request.paths).await,
         "unstage_all" => unstage_all(repo, state).await,
-        "discard" => discard_path(repo, state, request.path, request.old_path).await,
+        "discard" => {
+            discard_paths(repo, state, request.path, request.paths, request.old_path).await
+        }
         "discard_all" => discard_all(repo, state).await,
         "stage_patch" => apply_patch(repo, request.patch, PatchOperation::Stage).await,
         "unstage_patch" => apply_patch(repo, request.patch, PatchOperation::Unstage).await,
@@ -88,7 +90,7 @@ async fn dispatch_operation(
         "rebase_onto" => rebase_onto_commit(repo, request.commit).await,
         "reset_commit" => reset_commit(repo, request.commit, request.reset_mode).await,
         "revert_commit" => revert_commit(repo, request.commit).await,
-        "add_to_gitignore" => add_to_gitignore(repo, request.path).await,
+        "add_to_gitignore" => add_paths_to_gitignore(repo, request.path, request.paths).await,
         "stash_push" => stash_push(repo, request.message, request.include_untracked).await,
         "stash_apply" => stash_apply(repo, request.stash_ref).await,
         "stash_pop" => stash_pop(repo, request.stash_ref).await,
@@ -125,33 +127,42 @@ async fn dispatch_operation(
     }
 }
 
-/// 暂存单个仓库相对路径。
+/// 暂存一个或多个仓库相对路径。
 ///
 /// 参数:
 /// - `repo`: 仓库根目录
-/// - `path`: 仓库相对路径
+/// - `path`: 兼容单路径参数
+/// - `paths`: 批量路径参数
 ///
 /// 返回:
 /// - Git 命令输出
-async fn stage_path(repo: &Path, path: Option<&str>) -> Result<GitOutput> {
-    let path = validate_repo_relative_path(path.unwrap_or_default())?;
-    git_success(repo, &["add", "--", path.as_str()]).await
+async fn stage_paths(repo: &Path, path: Option<&str>, paths: &[String]) -> Result<GitOutput> {
+    let paths = validate_operation_paths(path, paths)?;
+    let mut args = vec!["add", "--"];
+    args.extend(paths.iter().map(String::as_str));
+    git_success(repo, &args).await
 }
 
-/// 取消暂存单个路径，并兼容尚无 HEAD 的仓库。
+/// 取消暂存一个或多个路径，并兼容尚无 HEAD 的仓库。
 ///
 /// 参数:
 /// - `repo`: 仓库根目录
-/// - `path`: 仓库相对路径
+/// - `path`: 兼容单路径参数
+/// - `paths`: 批量路径参数
 ///
 /// 返回:
 /// - Git 命令输出
-async fn unstage_path(repo: &Path, path: Option<&str>) -> Result<GitOutput> {
-    let path = validate_repo_relative_path(path.unwrap_or_default())?;
+async fn unstage_paths(repo: &Path, path: Option<&str>, paths: &[String]) -> Result<GitOutput> {
+    let paths = validate_operation_paths(path, paths)?;
     if ref_exists(repo, "HEAD").await {
-        git_success(repo, &["restore", "--staged", "--", path.as_str()]).await
+        let mut args = vec!["restore", "--staged", "--"];
+        args.extend(paths.iter().map(String::as_str));
+        git_success(repo, &args).await
     } else {
-        git_success(repo, &["rm", "--cached", "--", path.as_str()]).await
+        let mut args = vec!["rm", "--cached"];
+        args.push("--");
+        args.extend(paths.iter().map(String::as_str));
+        git_success(repo, &args).await
     }
 }
 
@@ -173,24 +184,59 @@ async fn unstage_all(repo: &Path, state: &GitRepositoryState) -> Result<GitOutpu
     }
 }
 
-/// 丢弃单个文件的工作树和暂存区修改。
+/// 丢弃一个或多个文件的工作树和暂存区修改。
 ///
 /// 参数:
 /// - `repo`: 仓库根目录
 /// - `state`: 当前仓库状态
-/// - `path`: 当前路径
+/// - `path`: 兼容单路径参数
+/// - `paths`: 批量路径参数
 /// - `old_path`: 重命名前路径
 ///
 /// 返回:
 /// - Git 命令输出
-async fn discard_path(
+async fn discard_paths(
     repo: &Path,
     state: &GitRepositoryState,
     path: Option<&str>,
+    paths: &[String],
     old_path: Option<&str>,
 ) -> Result<GitOutput> {
-    let path = validate_repo_relative_path(path.unwrap_or_default())?;
+    let paths = validate_operation_paths(path, paths)?;
+    if paths.len() == 1 {
+        return discard_single_path(repo, state, &paths[0], old_path).await;
+    }
+    let mut outputs = Vec::with_capacity(paths.len());
+    for path in paths {
+        outputs.push(discard_single_path(repo, state, &path, None).await?);
+    }
+    Ok(merge_outputs(outputs))
+}
+
+/// 丢弃一个已经校验的仓库相对路径。
+///
+/// 参数:
+/// - `repo`: 仓库根目录
+/// - `state`: 当前仓库状态
+/// - `path`: 已校验相对路径
+/// - `old_path`: 重命名前路径
+///
+/// 返回:
+/// - Git 命令输出
+async fn discard_single_path(
+    repo: &Path,
+    state: &GitRepositoryState,
+    path: &str,
+    old_path: Option<&str>,
+) -> Result<GitOutput> {
     let old_path = old_path
+        .or_else(|| {
+            state
+                .entries
+                .iter()
+                .find(|entry| entry.path == path)
+                .and_then(|entry| entry.old_path.as_deref())
+        })
         .filter(|value| !value.trim().is_empty())
         .map(validate_repo_relative_path)
         .transpose()?;
@@ -199,16 +245,68 @@ async fn discard_path(
         .iter()
         .any(|entry| entry.path == path && entry.untracked);
     if is_untracked {
-        return git_success(repo, &["clean", "-fd", "--", path.as_str()]).await;
+        return git_success(repo, &["clean", "-fd", "--", path]).await;
     }
     if !ref_exists(repo, "HEAD").await {
-        return git_success(repo, &["rm", "-f", "--", path.as_str()]).await;
+        return git_success(repo, &["rm", "-f", "--", path]).await;
     }
-    let mut args = vec!["restore", "--staged", "--worktree", "--", path.as_str()];
+    let mut args = vec!["restore", "--staged", "--worktree", "--", path];
     if let Some(old_path) = old_path.as_deref().filter(|old_path| *old_path != path) {
         args.push(old_path);
     }
     git_success(repo, &args).await
+}
+
+/// 校验单路径或批量路径请求，并限制批处理数量。
+///
+/// 参数:
+/// - `path`: 兼容单路径参数
+/// - `paths`: 批量路径参数
+///
+/// 返回:
+/// - 去重后的安全仓库相对路径
+fn validate_operation_paths(path: Option<&str>, paths: &[String]) -> Result<Vec<String>> {
+    if paths.len() > 512 {
+        bail!("too many Git paths requested");
+    }
+    let values = if paths.is_empty() {
+        vec![path.unwrap_or_default()]
+    } else {
+        paths.iter().map(String::as_str).collect()
+    };
+    let mut validated = Vec::with_capacity(values.len());
+    for value in values {
+        let path = validate_repo_relative_path(value)?;
+        if !validated.contains(&path) {
+            validated.push(path);
+        }
+    }
+    if validated.is_empty() {
+        bail!("at least one Git path is required");
+    }
+    Ok(validated)
+}
+
+/// 将单个或多个仓库相对路径加入 `.gitignore`。
+///
+/// 参数:
+/// - `repo`: 仓库根目录
+/// - `path`: 兼容单路径参数
+/// - `paths`: 批量路径参数
+///
+/// 返回:
+/// - 合并后的文件写入和暂存输出
+async fn add_paths_to_gitignore(
+    repo: &Path,
+    path: Option<&str>,
+    paths: &[String],
+) -> Result<GitOutput> {
+    let paths = validate_operation_paths(path, paths)?;
+    let mut outputs = Vec::with_capacity(paths.len());
+    for path in paths {
+        outputs.push(add_to_gitignore(repo, Some(&path)).await?);
+    }
+    Ok(merge_outputs(outputs))
 }
 
 /// 丢弃仓库中的全部已跟踪和未跟踪修改。

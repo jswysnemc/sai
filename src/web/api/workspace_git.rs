@@ -40,6 +40,8 @@ struct GitOpRequest {
     action: String,
     repo_root: Option<String>,
     path: Option<String>,
+    #[serde(default)]
+    paths: Vec<String>,
     old_path: Option<String>,
     message: Option<String>,
     remote_url: Option<String>,
@@ -382,6 +384,7 @@ async fn git_op(
         workspace::GitOperationRequest {
             action: &request.action,
             path: request.path.as_deref(),
+            paths: &request.paths,
             old_path: request.old_path.as_deref(),
             message: request.message.as_deref(),
             remote_url: request.remote_url.as_deref(),

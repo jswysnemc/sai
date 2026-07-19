@@ -92,11 +92,20 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
   useEffect(() => {
     /** 响应消息区发出的"在编辑器中打开文件"事件。 */
     const handleOpenFile = (event: Event) => {
-      const path = (event as CustomEvent<{ path?: string }>).detail?.path;
+      const detail = (event as CustomEvent<{ path?: string; reveal?: boolean }>).detail;
+      const path = detail?.path;
       if (!path) return;
-      onSelectFile(workspaceRelativePath(path, activeWorkspace?.path ?? ""));
+      const relativePath = workspaceRelativePath(path, activeWorkspace?.path ?? "");
+      onSelectFile(relativePath);
       layout.openWorkspace();
       setPaneTab("files");
+      if (detail.reveal) {
+        requestAnimationFrame(() => {
+          window.dispatchEvent(new CustomEvent("sai:reveal-workspace-file", {
+            detail: { path: relativePath }
+          }));
+        });
+      }
       if (window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY).matches) {
         dispatchMobileLayout({ type: "show-pane", pane: "workspace" });
       }

@@ -6,6 +6,8 @@ import { useI18n } from "../../i18n/use-i18n";
 import type { GitOperationUiOptions, RunGitOperation } from "../types";
 import { ChangeSection, type ChangeSectionKind } from "./change-section";
 import { countVisibleGitChanges, groupGitChanges, type GitUntrackedChangesMode } from "./change-groups";
+import { ChangeContextMenu } from "./change-context-menu";
+import { useChangeSelection } from "./use-change-selection";
 import "./repository-change-group.css";
 
 type RepositoryChangeGroupProps = {
@@ -35,6 +37,23 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
     [props.state.entries, props.untrackedMode]
   );
   const changed = countVisibleGitChanges(props.state.entries, props.untrackedMode);
+  const orderedPaths = useMemo(
+    () => [...new Set([
+      ...groups.conflicts,
+      ...groups.staged,
+      ...groups.changes,
+      ...groups.untracked
+    ].map((entry) => entry.path))],
+    [groups]
+  );
+  const selection = useChangeSelection(orderedPaths);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    paths: string[];
+    primaryPath: string;
+    section: ChangeSectionKind;
+  } | null>(null);
 
   /**
    * 对当前仓库执行 Git 操作。
@@ -84,6 +103,51 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
     });
   };
 
+  /**
+   * 处理文件点击，同时更新多选状态和 Diff 文件。
+   *
+   * @param path 文件路径
+   * @param section 文件分区
+   * @param event 鼠标事件
+   * @returns 无返回值
+   */
+  const selectChange = (
+    path: string,
+    section: ChangeSectionKind,
+    event: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    selection.select(path, {
+      toggle: event.ctrlKey || event.metaKey,
+      range: event.shiftKey
+    });
+    props.onSelectChange(path, section);
+  };
+
+  /**
+   * 打开文件右键菜单并保留已有多选集合。
+   *
+   * @param path 文件路径
+   * @param section 文件分区
+   * @param event 鼠标右键事件
+   * @returns 无返回值
+   */
+  const openContextMenu = (
+    path: string,
+    section: ChangeSectionKind,
+    event: React.MouseEvent<HTMLDivElement>
+  ) => {
+    event.preventDefault();
+    const paths = selection.selectedPaths.has(path) ? [...selection.selectedPaths] : [path];
+    selection.selectForContext(path);
+    setContextMenu({
+      x: Math.max(8, Math.min(event.clientX, window.innerWidth - 17 * 16)),
+      y: Math.max(8, Math.min(event.clientY, window.innerHeight - 24 * 16)),
+      paths,
+      primaryPath: path,
+      section
+    });
+  };
+
   const selectedPath = props.active ? props.selectedPath : null;
   return (
     <section className={`git-repository-changes${props.active ? " active" : ""}`}>
@@ -108,9 +172,11 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
               title={t(`Merge Changes ${groups.conflicts.length}`, `合并变更 ${groups.conflicts.length}`)}
               entries={groups.conflicts}
               selectedPath={selectedPath}
+              selectedPaths={selection.selectedPaths}
               viewMode={props.viewMode}
               busy={props.busy}
-              onSelect={(path) => props.onSelectChange(path, "merge")}
+              onSelect={(path, event) => selectChange(path, "merge", event)}
+              onContextMenu={(path, event) => openContextMenu(path, "merge", event)}
               onStageAll={() => void run("stage_all")}
               onUnstageAll={() => void run("unstage_all")}
               onStage={(path) => void move("stage", path, "staged")}
@@ -125,9 +191,11 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
               title={t(`Staged Changes ${groups.staged.length}`, `已暂存变更 ${groups.staged.length}`)}
               entries={groups.staged}
               selectedPath={selectedPath}
+              selectedPaths={selection.selectedPaths}
               viewMode={props.viewMode}
               busy={props.busy}
-              onSelect={(path) => props.onSelectChange(path, "staged")}
+              onSelect={(path, event) => selectChange(path, "staged", event)}
+              onContextMenu={(path, event) => openContextMenu(path, "staged", event)}
               onStageAll={() => void run("stage_all")}
               onUnstageAll={() => void run("unstage_all")}
               onStage={(path) => void move("stage", path, "staged")}
@@ -142,9 +210,11 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
               title={t(`Changes ${groups.changes.length}`, `更改 ${groups.changes.length}`)}
               entries={groups.changes}
               selectedPath={selectedPath}
+              selectedPaths={selection.selectedPaths}
               viewMode={props.viewMode}
               busy={props.busy}
-              onSelect={(path) => props.onSelectChange(path, "changes")}
+              onSelect={(path, event) => selectChange(path, "changes", event)}
+              onContextMenu={(path, event) => openContextMenu(path, "changes", event)}
               onStageAll={() => void run("stage_all")}
               onUnstageAll={() => void run("unstage_all")}
               onStage={(path) => void move("stage", path, "staged")}
@@ -159,9 +229,11 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
               title={t(`Untracked ${groups.untracked.length}`, `未跟踪 ${groups.untracked.length}`)}
               entries={groups.untracked}
               selectedPath={selectedPath}
+              selectedPaths={selection.selectedPaths}
               viewMode={props.viewMode}
               busy={props.busy}
-              onSelect={(path) => props.onSelectChange(path, "untracked")}
+              onSelect={(path, event) => selectChange(path, "untracked", event)}
+              onContextMenu={(path, event) => openContextMenu(path, "untracked", event)}
               onStageAll={() => void run("stage_all")}
               onUnstageAll={() => void run("unstage_all")}
               onStage={(path) => void move("stage", path, "staged")}
@@ -173,6 +245,22 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
           )}
           {changed === 0 && <div className="git-clean">{t("No changes", "没有变更")}</div>}
         </div>
+      )}
+      {contextMenu && (
+        <ChangeContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          primaryPath={contextMenu.primaryPath}
+          section={contextMenu.section}
+          repoRoot={props.state.repo_root}
+          entries={contextMenu.paths
+            .map((path) => props.state.entries.find((entry) => entry.path === path))
+            .filter((entry): entry is GitStatusEntry => Boolean(entry))}
+          busy={props.busy}
+          runOperation={run}
+          onOpenChanges={props.onSelectChange}
+          onClose={() => setContextMenu(null)}
+        />
       )}
     </section>
   );

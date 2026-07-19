@@ -10,10 +10,12 @@ type ChangeFileRowProps = {
   entry: GitStatusEntry;
   displayName: string;
   depth: number;
+  active: boolean;
   selected: boolean;
   busy: boolean;
   section: ChangeSectionKind;
-  onSelect: () => void;
+  onSelect: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onContextMenu: (event: React.MouseEvent<HTMLDivElement>) => void;
   onStage: () => void;
   onUnstage: () => void;
   onIgnore: () => void;
@@ -34,8 +36,9 @@ export function ChangeFileRow(props: ChangeFileRowProps) {
 
   return (
     <div
-      className={`git-file-row${props.selected ? " active" : ""}`}
+      className={`git-file-row${props.active ? " active" : ""}${props.selected ? " selected" : ""}`}
       style={style}
+      onContextMenu={props.onContextMenu}
     >
       <Button className="git-file-main" onClick={props.onSelect} title={props.entry.path}>
         <FileTypeIcon name={props.entry.path} size={13} />
