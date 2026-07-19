@@ -1,4 +1,4 @@
-import { Copy, EyeOff, FileDiff, FileText, FolderSearch, GitMerge, Minus, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Copy, EyeOff, FileDiff, FileText, FolderSearch, GitCompareArrows, GitMerge, Minus, Pin, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { GitStatusEntry } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
@@ -16,7 +16,10 @@ type ChangeContextMenuProps = {
   section: ChangeSectionKind;
   busy: boolean;
   runOperation: RunGitOperation;
+  comparisonBasePath: string | null;
   onOpenChanges: (path: string, section: ChangeSectionKind) => void;
+  onSelectForCompare: (path: string) => void;
+  onCompareWithSelected: (path: string) => void;
   onClose: () => void;
 };
 
@@ -98,6 +101,15 @@ export function ChangeContextMenu(props: ChangeContextMenuProps) {
       <Button onClick={() => openFile(false)}><FileText size={12} />{t("Open File", "打开文件")}</Button>
       <Button onClick={() => { props.onOpenChanges(primary.path, props.section); props.onClose(); }}><FileDiff size={12} />{t("Open Changes", "打开变更")}</Button>
       {primary.conflicted && <Button onClick={() => { props.onOpenChanges(primary.path, "merge"); props.onClose(); }}><GitMerge size={12} />{t("Open in Merge Editor", "在合并编辑器中打开")}</Button>}
+      <Button onClick={() => { props.onSelectForCompare(primary.path); props.onClose(); }}><Pin size={12} />{t("Select for Compare", "选择以进行比较")}</Button>
+      {props.comparisonBasePath && props.comparisonBasePath !== primary.path && (
+        <Button
+          title={t(`Compare ${primary.path} with ${props.comparisonBasePath}`, `将 ${primary.path} 与 ${props.comparisonBasePath} 比较`)}
+          onClick={() => { props.onCompareWithSelected(primary.path); props.onClose(); }}
+        >
+          <GitCompareArrows size={12} />{t("Compare with Selected", "与所选文件比较")}
+        </Button>
+      )}
       <span>{t("Changes", "改动")}</span>
       {stagePaths.length > 0 && <Button disabled={props.busy} onClick={() => void run("stage", stagePaths)}><Plus size={12} />{t(`Stage ${stagePaths.length} Selected`, `暂存选中的 ${stagePaths.length} 项`)}</Button>}
       {unstagePaths.length > 0 && <Button disabled={props.busy} onClick={() => void run("unstage", unstagePaths)}><Minus size={12} />{t(`Unstage ${unstagePaths.length} Selected`, `取消暂存选中的 ${unstagePaths.length} 项`)}</Button>}

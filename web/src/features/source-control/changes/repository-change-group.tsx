@@ -19,8 +19,11 @@ type RepositoryChangeGroupProps = {
   untrackedMode: GitUntrackedChangesMode;
   busy: boolean;
   runOperation: RunGitOperation;
+  comparisonBasePath: string | null;
   onSelectRepository: () => void;
   onSelectChange: (path: string, section: ChangeSectionKind) => void;
+  onSelectForCompare: (path: string) => void;
+  onCompareWithSelected: (path: string) => void;
 };
 
 /**
@@ -258,7 +261,10 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
             .filter((entry): entry is GitStatusEntry => Boolean(entry))}
           busy={props.busy}
           runOperation={run}
+          comparisonBasePath={props.comparisonBasePath}
           onOpenChanges={props.onSelectChange}
+          onSelectForCompare={props.onSelectForCompare}
+          onCompareWithSelected={props.onCompareWithSelected}
           onClose={() => setContextMenu(null)}
         />
       )}

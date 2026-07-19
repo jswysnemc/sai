@@ -21,6 +21,9 @@ mod support;
 #[path = "git_diff_content.rs"]
 mod diff_content;
 
+#[path = "git_file_compare.rs"]
+mod file_compare;
+
 #[path = "git_process.rs"]
 mod process;
 
@@ -65,6 +68,7 @@ pub(crate) use clone::git_clone;
 pub(crate) use conflicts::git_conflict;
 use conflicts::resolve_conflict;
 use diff_content::*;
+pub(crate) use file_compare::git_file_compare;
 use history_operations::*;
 pub(crate) use operations::git_op;
 use process::*;
@@ -99,6 +103,10 @@ mod clone_tests;
 #[cfg(test)]
 #[path = "git_publish_tests.rs"]
 mod publish_tests;
+
+#[cfg(test)]
+#[path = "git_file_compare_tests.rs"]
+mod file_compare_tests;
 
 const GIT_DIFF_MAX_BYTES: usize = 512 * 1024;
 const GIT_LOG_DEFAULT_LIMIT: usize = 50;

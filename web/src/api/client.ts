@@ -343,6 +343,11 @@ export const api = {
       if (path) query.set("path", path);
       return apiRequest<GitDiffResponse>(`/api/workspace/git/diff?${query}`);
     },
+    gitFileDiff: (basePath: string, headPath: string, repoRoot?: string) => {
+      const query = new URLSearchParams({ base_path: basePath, head_path: headPath });
+      if (repoRoot) query.set("repo_root", repoRoot);
+      return apiRequest<GitDiffResponse>(`/api/workspace/git/file-diff?${query}`);
+    },
     gitOp: (action: string, options: GitOperationOptions = {}) =>
       apiRequest<GitOperationResponse>("/api/workspace/git/op", {
         method: "POST",

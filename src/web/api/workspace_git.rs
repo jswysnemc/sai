@@ -83,6 +83,13 @@ struct GitDiffQuery {
 }
 
 #[derive(Deserialize)]
+struct GitFileCompareQuery {
+    repo_root: Option<String>,
+    base_path: String,
+    head_path: String,
+}
+
+#[derive(Deserialize)]
 struct GitLogQuery {
     repo_root: Option<String>,
     limit: Option<usize>,
@@ -123,6 +130,7 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/workspace/git/commit", get(git_commit_details))
         .route("/api/workspace/git/commit-diff", get(git_commit_diff))
         .route("/api/workspace/git/diff", get(git_review_diff))
+        .route("/api/workspace/git/file-diff", get(git_file_diff))
         .route("/api/workspace/git/op", axum::routing::post(git_op))
 }
 
@@ -360,6 +368,25 @@ async fn git_review_diff(
     let root = request_repository_root(&state, query.repo_root.as_deref()).await?;
     let mode = query.mode.as_deref().unwrap_or("working_tree");
     let diff = workspace::git_diff(&root, mode, query.path.as_deref())
+        .await
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    Ok(Json(diff))
+}
+
+/// 比较选中仓库工作树中的两个文件。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `query`: 仓库根目录、基准路径与目标路径
+///
+/// 返回:
+/// - 文件间 Diff
+async fn git_file_diff(
+    State(state): State<WebAppState>,
+    Query(query): Query<GitFileCompareQuery>,
+) -> WebResult<Json<workspace::GitDiffResponse>> {
+    let root = request_repository_root(&state, query.repo_root.as_deref()).await?;
+    let diff = workspace::git_file_compare(&root, &query.base_path, &query.head_path)
         .await
         .map_err(|error| WebError::bad_request(error.to_string()))?;
     Ok(Json(diff))

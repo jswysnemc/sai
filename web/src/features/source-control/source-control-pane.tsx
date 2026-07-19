@@ -25,7 +25,9 @@ import { groupGitChanges } from "./changes/change-groups";
 import { RepositoryChangeGroup } from "./changes/repository-change-group";
 import { MoreActionsMenu } from "./actions/more-actions-menu";
 import { resolveGitReviewDiffMode } from "./diff/diff-mode";
+import { FileComparisonView } from "./diff/file-comparison-view";
 import { SourceControlDiff } from "./diff/source-control-diff";
+import { useFileComparison } from "./diff/use-file-comparison";
 import { CloneRepositoryDialog, type CloneRepositoryInput } from "./empty/clone-repository-dialog";
 import { SourceControlEmptyState } from "./empty/source-control-empty-state";
 import { CommitGraph } from "./graph/commit-graph";
@@ -84,6 +86,7 @@ export function SourceControlPane() {
     setHistoryLimit,
     selectRepositoryChange
   } = scmState;
+  const fileComparison = useFileComparison();
   const pendingActionRef = useRef("operation");
 
   const repositories = useQuery({
@@ -135,7 +138,7 @@ export function SourceControlPane() {
   const reviewDiff = useQuery({
     queryKey: ["git-review-diff", selectedRepoRoot, reviewDiffMode, selectedPath],
     queryFn: () => api.workspace.gitReviewDiff(reviewDiffMode, selectedPath ?? undefined, selectedRepoRoot ?? undefined),
-    enabled: state?.status === "ready" && mode === "changes" && selectedSection !== "merge"
+    enabled: state?.status === "ready" && mode === "changes" && selectedSection !== "merge" && !fileComparison.target
   });
   const commitDetails = useQuery({
     queryKey: ["git-commit-details", selectedRepoRoot, activeCommit],
@@ -564,9 +567,19 @@ export function SourceControlPane() {
                     untrackedMode={git.untracked_changes}
                     busy={busy}
                     runOperation={runOp}
-                    onSelectRepository={() => setSelectedRepoRoot(repository.repo_root)}
+                    comparisonBasePath={fileComparison.bases[repository.repo_root] ?? null}
+                    onSelectRepository={() => {
+                      fileComparison.clear();
+                      setSelectedRepoRoot(repository.repo_root);
+                    }}
                     onSelectChange={(path, section) => {
+                      fileComparison.clear();
                       selectRepositoryChange(repository.repo_root, path, section);
+                      setSelectedRepoRoot(repository.repo_root);
+                    }}
+                    onSelectForCompare={(path) => fileComparison.selectBase(repository.repo_root, path)}
+                    onCompareWithSelected={(path) => {
+                      fileComparison.compare(repository.repo_root, path);
                       setSelectedRepoRoot(repository.repo_root);
                     }}
                   />
@@ -586,7 +599,17 @@ export function SourceControlPane() {
           </section>
 
           <div className="diff-scroll">
-            {selectedSection === "merge" && selectedPath ? (
+            {fileComparison.target ? (
+              <FileComparisonView
+                target={fileComparison.target}
+                data={fileComparison.data}
+                loading={fileComparison.loading}
+                error={fileComparison.error}
+                busy={busy}
+                runOperation={runOp}
+                onClose={fileComparison.clear}
+              />
+            ) : selectedSection === "merge" && selectedPath ? (
               <MergeEditor
                 path={selectedPath}
                 repoRoot={selectedRepoRoot}
