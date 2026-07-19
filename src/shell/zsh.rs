@@ -8,22 +8,19 @@ const BEGIN_MARKER: &str = "# >>> sai zsh hook >>>";
 const END_MARKER: &str = "# <<< sai zsh hook <<<";
 
 pub fn hook() -> &'static str {
-    r#"command_not_found_handler() {
-    [[ -o interactive ]] || return 127
+    r#"autoload -Uz add-zsh-hook
 
-    local sai_clipb=()
-    if [[ "$1" == "-c" || "$1" == "--clipb" ]]; then
-        sai_clipb=(--clipb)
-        shift
-    fi
-
-    local text="$*"
-    [[ -n "$text" ]] || return 127
-    [[ "$text" != *$'\n'* && "$text" != *$'\r'* ]] || return 127
-
-    sai --shell-intercept --shell zsh "${sai_clipb[@]}" -- "$@" 2>/dev/null
-    return 127
+_sai_store_preexec_command() {
+    [[ -o interactive ]] || return 0
+    local text="$1"
+    [[ -n "$text" ]] || return 0
+    [[ "$text" != sai && "$text" != sai\ * ]] || return 0
+    sai --shell-intercept --shell zsh -- "$text" >/dev/null 2>&1
+    return 0
 }
+
+add-zsh-hook -d preexec _sai_store_preexec_command 2>/dev/null
+add-zsh-hook preexec _sai_store_preexec_command
 "#
 }
 
@@ -122,20 +119,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn zsh_hook_defines_command_not_found_handler() {
+    fn zsh_hook_stores_commands_before_execution() {
         let hook = hook();
-        assert!(hook.contains("command_not_found_handler"));
+        assert!(hook.contains("add-zsh-hook preexec"));
         assert!(hook.contains("--shell zsh"));
-        assert!(hook.contains("sai_clipb=(--clipb)"));
-        assert!(hook.contains("return 127"));
+        assert!(hook.contains("\"$text\""));
+        assert!(hook.contains("return 0"));
+        assert!(hook.contains("$text\" != sai"));
     }
 
     #[test]
-    fn zsh_hook_does_not_filter_natural_language_symbols() {
+    fn zsh_hook_does_not_block_shell_commands() {
         let hook = hook();
-        assert!(!hook.contains("${#text} <= 120"));
-        assert!(!hook.contains("sai_shell_syntax_pattern"));
-        assert!(!hook.contains("sai_leading_pattern"));
+        assert!(!hook.contains("command_not_found_handler"));
+        assert!(!hook.contains("return 127"));
     }
 
     #[test]

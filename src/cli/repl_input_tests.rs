@@ -54,6 +54,24 @@ fn cli_parses_leading_web_search_flag_as_option() {
 }
 
 #[test]
+fn cli_parses_explain_with_clipboard_and_web_flags() {
+    let cli = Cli::try_parse_from(["sai", "-e", "-c", "-w", "解释这段命令"]).unwrap();
+
+    assert!(cli.explain);
+    assert!(cli.clipb);
+    assert!(cli.web_search);
+    assert_eq!(cli.message, ["解释这段命令"]);
+}
+
+#[test]
+fn cli_parses_explain_without_instruction() {
+    let cli = Cli::try_parse_from(["sai", "-e"]).unwrap();
+
+    assert!(cli.explain);
+    assert!(cli.message.is_empty());
+}
+
+#[test]
 fn shell_intercept_parses_leading_clipboard_flag_after_separator() {
     let cli = Cli::try_parse_from([
         "sai",

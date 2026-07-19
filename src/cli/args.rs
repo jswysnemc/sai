@@ -27,6 +27,9 @@ pub struct Cli {
     #[arg(short = 'w', long = "web")]
     pub web_search: bool,
 
+    #[arg(short = 'e', long = "explain")]
+    pub explain: bool,
+
     #[arg(long, value_name = "LEVEL")]
     pub thinking: Option<String>,
 

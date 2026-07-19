@@ -68,7 +68,9 @@ mod skills_commands;
 use alarm_worker::run_alarm_worker;
 pub(crate) use args::*;
 use background_commands::run_background_commands;
-use chat::{run_chat_with_options, run_shell_intercept, ChatRunOptions};
+use chat::{
+    run_chat_with_options, run_shell_intercept, run_stored_shell_explanation, ChatRunOptions,
+};
 use compaction::run_compaction;
 use config_commands::run_config;
 use fuzzy_select::inline_fuzzy_select;
@@ -109,20 +111,35 @@ pub async fn run(cli: Cli) -> Result<()> {
     if cli.shell_intercept {
         let shell_name = cli.shell.as_deref().unwrap_or("fish");
         let input = parse_message_input_flags(cli.message, cli.clipb, cli.web_search);
-        let mode = resolve_agent_mode(&paths, mode_override, PermissionSurface::Cli)?;
         return run_shell_intercept(
             &paths,
             shell_name,
             input.message,
             input.clipb,
             input.web_search,
-            mode,
         )
         .await;
     }
 
     if !paths.config_file.exists() && !matches!(cli.command, Some(Command::Init)) {
         run_init(&paths, InitKind::FirstRun)?;
+    }
+
+    if cli.explain {
+        if cli.command.is_some() {
+            bail!("-e/--explain cannot be combined with a subcommand");
+        }
+        let input = parse_message_input_flags(cli.message, cli.clipb, cli.web_search);
+        let mode = resolve_agent_mode(&paths, mode_override, PermissionSurface::Cli)?;
+        return run_stored_shell_explanation(
+            &paths,
+            input.message,
+            input.clipb,
+            input.web_search,
+            mode,
+            thinking_override,
+        )
+        .await;
     }
 
     match cli.command {

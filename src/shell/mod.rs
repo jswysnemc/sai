@@ -1,5 +1,6 @@
 pub mod bash;
 pub mod fish;
+pub(crate) mod intercept_store;
 mod parent;
 pub mod powershell;
 pub mod zsh;

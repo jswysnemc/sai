@@ -1,6 +1,6 @@
 use super::*;
 
-/// 处理 shell command-not-found 拦截生成的自然语言请求。
+/// 保存 shell hook 在命令执行前截获的命令。
 ///
 /// 参数:
 /// - `paths`: Sai 路径集合
@@ -8,7 +8,6 @@ use super::*;
 /// - `message`: 拦截到的自然语言文本
 /// - `clipb`: 是否读取剪贴板
 /// - `web_search`: 是否启用网络搜索模型
-/// - `mode`: CLI 当前权限模式
 ///
 /// 返回:
 /// - 执行是否成功
@@ -18,53 +17,61 @@ pub(super) async fn run_shell_intercept(
     message: String,
     clipb: bool,
     web_search: bool,
-    mode: AgentMode,
 ) -> Result<()> {
     if !matches!(shell_name, "fish" | "bash" | "zsh" | "powershell") {
         bail!("{}: {shell_name}", t("unsupported shell", "不支持的 shell"));
     }
-    if message.is_empty() || !shell::looks_like_natural_language(&message) {
+    if message.is_empty() {
         bail!(
             "{}",
-            t("not a natural language command", "不是自然语言命令")
+            t("empty intercepted shell command", "拦截到的 shell 命令为空")
         );
     }
-    let result = run_chat_with_options(
-        paths,
-        shell_intercept_chat_options(message, clipb, web_search, mode),
-    )
-    .await;
-    drain_stdin();
-    result
+    crate::shell::intercept_store::store(paths, shell_name, &message, clipb, web_search)?;
+    Ok(())
 }
 
-/// 构造 shell 拦截入口的单轮聊天选项。
+/// 使用最近一次 shell 命令开启解释对话。
 ///
 /// 参数:
-/// - `message`: 自然语言命令文本
+/// - `paths`: Sai 路径集合
+/// - `instruction`: 用户补充要求
 /// - `clipb`: 是否读取剪贴板
-/// - `web_search`: 是否启用网络搜索模型
+/// - `web_search`: 是否使用网络搜索
 /// - `mode`: CLI 当前权限模式
+/// - `thinking_override`: 可选思考等级
 ///
 /// 返回:
-/// - 单轮聊天执行选项
-fn shell_intercept_chat_options(
-    message: String,
+/// - 对话执行结果
+pub(super) async fn run_stored_shell_explanation(
+    paths: &SaiPaths,
+    instruction: String,
     clipb: bool,
     web_search: bool,
     mode: AgentMode,
-) -> ChatRunOptions {
-    ChatRunOptions {
-        message,
-        source: crate::runner::SubmissionSource::ShellIntercept,
-        show_reasoning: None,
-        plain: false,
-        mode,
-        clipb,
-        web_search,
-        thinking_override: None,
-        show_final_summary: true,
-    }
+    thinking_override: Option<String>,
+) -> Result<()> {
+    let record = crate::shell::intercept_store::load(paths)?.ok_or_else(|| {
+        anyhow::anyhow!(t(
+            "no intercepted shell command is available",
+            "没有可解释的 shell 命令记录"
+        ))
+    })?;
+    run_chat_with_options(
+        paths,
+        ChatRunOptions {
+            message: crate::shell::intercept_store::prompt(&record, &instruction),
+            source: crate::runner::SubmissionSource::Command,
+            show_reasoning: None,
+            plain: false,
+            mode,
+            clipb: clipb || record.clipb,
+            web_search: web_search || record.web_search,
+            thinking_override,
+            show_final_summary: true,
+        },
+    )
+    .await
 }
 
 /// 清理当前终端标准输入中残留的按键内容。
@@ -245,34 +252,17 @@ pub(super) async fn run_chat_with_options(paths: &SaiPaths, options: ChatRunOpti
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
-    fn shell_intercept_prints_final_summary() {
-        let options = shell_intercept_chat_options(
-            "整理当前目录".to_string(),
-            false,
-            false,
-            AgentMode::Audited,
-        );
+    fn stored_shell_prompt_keeps_user_instruction() {
+        let record = crate::shell::intercept_store::StoredShellCommand {
+            shell: "zsh".to_string(),
+            command: "source missing.zsh".to_string(),
+            clipb: false,
+            web_search: false,
+        };
 
-        assert!(options.show_final_summary);
-        assert_eq!(
-            options.source,
-            crate::runner::SubmissionSource::ShellIntercept
-        );
-    }
-
-    /// 验证 Shell 拦截入口不会绕过 CLI 权限审计模式。
-    #[test]
-    fn shell_intercept_uses_cli_permission_mode() {
-        let options = shell_intercept_chat_options(
-            "修改当前文件".to_string(),
-            false,
-            false,
-            AgentMode::Audited,
-        );
-
-        assert_eq!(options.mode, AgentMode::Audited);
+        let prompt = crate::shell::intercept_store::prompt(&record, "explain this command");
+        assert!(prompt.contains("source missing.zsh"));
+        assert!(prompt.contains("explain this command"));
     }
 }
