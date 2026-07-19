@@ -70,10 +70,38 @@ impl AutomaticInput {
     ///
     /// 返回:
     /// - 简洁的自动消息文本
-    pub(crate) fn display_text(&self, goal: &Goal) -> String {
+    pub(crate) fn display_text(&self, goal: Option<&Goal>) -> String {
         self.display
             .clone()
-            .unwrap_or_else(|| format!("Goal 自动续轮：{}", goal.objective))
+            .unwrap_or_else(|| {
+                goal.map(|goal| format!("Goal 自动续轮：{}", goal.objective))
+                    .unwrap_or_else(|| "自动继续当前任务".to_string())
+            })
+    }
+
+    /// 构造自动队列项发送给模型的用户输入。
+    ///
+    /// 参数:
+    /// - `goal`: 当前活动 Goal，可用于构造续轮提示
+    ///
+    /// 返回:
+    /// - 用户输入文本；Goal 续轮缺少活动目标时返回空值
+    pub(crate) fn prompt_text(&self, goal: Option<&Goal>) -> Option<String> {
+        let mut prompt = match self.kind {
+            AutomaticInputKind::GoalContinuation => {
+                crate::goal::continuation_prompt(goal?)
+            }
+            AutomaticInputKind::ExternalCompletion => goal
+                .map(crate::goal::continuation_prompt)
+                .unwrap_or_default(),
+        };
+        if let Some(extra) = &self.prompt {
+            if !prompt.is_empty() {
+                prompt.push_str("\n\n");
+            }
+            prompt.push_str(extra);
+        }
+        Some(prompt)
     }
 }
 
@@ -95,5 +123,24 @@ impl AutomaticInputEvent {
     /// - 自动输入事件
     pub(crate) fn new(kind: AutomaticInputKind, content: String) -> Self {
         Self { kind, content }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn external_completion_can_build_a_non_goal_prompt() {
+        let input = AutomaticInput::external_completion(
+            "<external-completion-events>done</external-completion-events>".to_string(),
+            "后台工作已完成".to_string(),
+        );
+
+        assert_eq!(
+            input.prompt_text(None).as_deref(),
+            Some("<external-completion-events>done</external-completion-events>")
+        );
+        assert_eq!(input.display_text(None), "后台工作已完成");
     }
 }

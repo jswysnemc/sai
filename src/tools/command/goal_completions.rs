@@ -31,13 +31,44 @@ pub(crate) async fn poll_background_completions(
     session_id: &str,
     goal_id: &str,
 ) -> Result<(Vec<BackgroundCompletionNotice>, usize)> {
+    poll_background_completions_matching(
+        paths,
+        config,
+        |task| owned_by_goal(task, session_id, goal_id),
+    )
+    .await
+}
+
+/// 查询指定会话中未绑定 Goal 的后台命令完成事件。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+/// - `config`: 应用配置
+/// - `session_id`: 会话标识
+///
+/// 返回:
+/// - 完成通知列表和仍在运行的任务数量
+pub(crate) async fn poll_session_background_completions(
+    paths: &SaiPaths,
+    config: &AppConfig,
+    session_id: &str,
+) -> Result<(Vec<BackgroundCompletionNotice>, usize)> {
+    poll_background_completions_matching(paths, config, |task| {
+        owned_by_session(task, session_id) && task.goal_id.is_none()
+    })
+    .await
+}
+
+/// 按任务归属条件查询后台命令完成事件。
+async fn poll_background_completions_matching(
+    paths: &SaiPaths,
+    config: &AppConfig,
+    matches: impl Fn(&BackgroundCommandTask) -> bool,
+) -> Result<(Vec<BackgroundCompletionNotice>, usize)> {
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
     let mut tasks = store.load()?;
     let mut changed = false;
-    for task in tasks
-        .iter_mut()
-        .filter(|task| owned_by_goal(task, session_id, goal_id))
-    {
+    for task in tasks.iter_mut().filter(|task| matches(task)) {
         changed |= refresh_task_statuses(std::slice::from_mut(task), config).await;
     }
     if changed {
@@ -45,10 +76,7 @@ pub(crate) async fn poll_background_completions(
     }
     let mut notices = Vec::new();
     let mut running = 0;
-    for task in tasks
-        .iter()
-        .filter(|task| owned_by_goal(task, session_id, goal_id))
-    {
+    for task in tasks.iter().filter(|task| matches(task)) {
         if task.status == "running" {
             running += 1;
             continue;
@@ -207,6 +235,28 @@ mod tests {
                 .status,
             "running"
         );
+
+        let mut all_tasks = store.load().unwrap();
+        let mut session_task = all_tasks
+            .iter()
+            .find(|task| task.id == "goal-task")
+            .cloned()
+            .unwrap();
+        session_task.id = "session-task".to_string();
+        session_task.goal_id = None;
+        session_task.completion_notified = false;
+        all_tasks.push(session_task);
+        store.save(&all_tasks).unwrap();
+        let (session_notices, session_running) = poll_session_background_completions(
+            &paths,
+            &AppConfig::default(),
+            "session-1",
+        )
+        .await
+        .unwrap();
+        assert_eq!(session_running, 0);
+        assert_eq!(session_notices.len(), 1);
+        assert_eq!(session_notices[0].task_id, "session-task");
 
         acknowledge_background_completions(&paths, "session-1", &["goal-task".to_string()])
             .unwrap();

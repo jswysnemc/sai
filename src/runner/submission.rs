@@ -127,6 +127,26 @@ impl UserInputSubmission {
         ));
         self
     }
+
+    /// 附加非 Goal 会话的外部完成事件，供自动队列消费。
+    ///
+    /// 参数:
+    /// - `prompt`: 发送给模型的后台工作完成事件提示
+    /// - `display`: 展示给用户的后台工作完成结果
+    ///
+    /// 返回:
+    /// - 更新后的用户输入 submission
+    pub(crate) fn with_external_event(
+        mut self,
+        prompt: impl Into<String>,
+        display: impl Into<String>,
+    ) -> Self {
+        self.automatic_input = Some(AutomaticInput::external_completion(
+            prompt.into(),
+            display.into(),
+        ));
+        self
+    }
 }
 
 /// 控制命令 submission。

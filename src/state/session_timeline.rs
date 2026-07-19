@@ -114,7 +114,7 @@ impl StateStore {
                         permission: None,
                     })
                     .collect();
-                let automatic = crate::goal::is_continuation_input(&turn.user_content);
+                let automatic = is_automatic_input(&turn.user_content);
                 Ok(SessionTimelineTurn {
                     turn_id: turn.turn_id,
                     seq: turn.seq,
@@ -182,6 +182,20 @@ impl StateStore {
             .to_string(),
         }))
     }
+}
+
+/// 判断时间线中的用户输入是否由 Sai 自动提交。
+///
+/// 参数:
+/// - `content`: 持久化的轮次用户输入
+///
+/// 返回:
+/// - Goal 续轮或外部完成事件返回 true
+fn is_automatic_input(content: &str) -> bool {
+    crate::goal::is_continuation_input(content)
+        || content
+            .trim_start()
+            .starts_with("<external-completion-events>")
 }
 
 /// 将工具状态转换为 Web 稳定文本。
@@ -280,6 +294,23 @@ mod tests {
         let timeline = store.session_timeline(10).unwrap();
 
         assert_eq!(timeline.len(), 1);
+        assert!(timeline[0].automatic);
+    }
+
+    #[test]
+    fn marks_external_completion_turns_as_automatic() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
+        store
+            .start_turn(
+                "turn_external",
+                "<external-completion-events>subagent done</external-completion-events>",
+            )
+            .unwrap();
+        store.complete_turn("turn_external", "continued", None).unwrap();
+
+        let timeline = store.session_timeline(10).unwrap();
+
         assert!(timeline[0].automatic);
     }
 }

@@ -178,15 +178,6 @@ impl Agent {
             }
             Err(err) => return Err(err),
         };
-        let result = self
-            .consume_subagent_results_after_final(
-                &turn_id,
-                &mut messages,
-                result,
-                &mut emit_event,
-                &mut perf,
-            )
-            .await?;
         emit_event.as_mut()(AgentEvent::FlushContent)?;
         perf.mark("final content flushed");
         if let Some(plan) = auto_meme_plan {

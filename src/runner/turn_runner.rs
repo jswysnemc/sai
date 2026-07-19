@@ -1,5 +1,5 @@
 use super::{AutomaticInputEvent, RunnerEvent, RunnerEventSink, UserInputSubmission};
-use crate::agent::{Agent, GoalEventBatch};
+use crate::agent::{Agent, ExternalEventBatch};
 use crate::llm::ChatResult;
 use anyhow::Result;
 use std::collections::VecDeque;
@@ -39,30 +39,28 @@ impl<'agent> TurnRunner<'agent> {
         S: RunnerEventSink,
     {
         let mut queued_inputs = VecDeque::from([input.clone()]);
-        let mut pending_external_events = None::<GoalEventBatch>;
+        let mut pending_external_events = None::<ExternalEventBatch>;
         loop {
             let mut current = queued_inputs
                 .pop_front()
                 .ok_or_else(|| anyhow::anyhow!("automatic input queue is empty"))?;
             // 1. 自动队列项每次读取最新目标，并在发送给模型前发布用户可见消息
-            if let Some(automatic) = current.automatic_input.take() {
-                let goal = self
+            let automatic = current.automatic_input.take();
+            if let Some(automatic) = automatic.as_ref() {
+                let goal_state = self
                     .agent
                     .state()
                     .goal()?
-                    .filter(|goal| goal.status.is_active())
+                    .filter(|goal| goal.status.is_active());
+                let goal = goal_state.as_ref();
+                current.input = automatic
+                    .prompt_text(goal)
                     .ok_or_else(|| anyhow::anyhow!("no active goal to continue"))?;
-                let display = automatic.display_text(&goal);
-                current.input = crate::goal::continuation_prompt(&goal);
-                if let Some(prompt) = automatic.prompt {
-                    current.input.push_str("\n\n");
-                    current.input.push_str(&prompt);
-                }
                 current.image_urls.clear();
                 current.turn_id = None;
                 sink.on_runner_event(RunnerEvent::AutomaticInput(AutomaticInputEvent::new(
                     automatic.kind,
-                    display,
+                    automatic.display_text(goal),
                 )))?;
             }
             let active_goal = self
@@ -97,7 +95,11 @@ impl<'agent> TurnRunner<'agent> {
                     return Err(error);
                 }
             };
-            // 2. 只把本轮开始时已经活动的目标计入使用量，避免倒算创建目标之前的消耗
+            // 2. 模型成功接收自动输入后再确认外部完成通知，失败时保留通知供下次重试
+            if let Some(batch) = pending_external_events.take() {
+                self.agent.acknowledge_external_events(&batch)?;
+            }
+            // 3. 只把本轮开始时已经活动的目标计入使用量，避免倒算创建目标之前的消耗
             if let Some(goal) = active_goal {
                 let tokens = result
                     .usage
@@ -108,10 +110,7 @@ impl<'agent> TurnRunner<'agent> {
                     .state()
                     .account_goal_progress(&goal.id, tokens, elapsed)?;
             }
-            if let Some(batch) = pending_external_events.take() {
-                self.agent.acknowledge_goal_events(&batch)?;
-            }
-            // 3. Goal 处于活动或阻塞状态时，等待后台工作完成并主动发起完整续轮
+            // 4. Goal 处于活动或阻塞状态时，等待后台工作完成并主动发起完整续轮
             if let Some(goal) = self.agent.state().goal()? {
                 if goal.status.accepts_external_wake() {
                     let batch = self
@@ -150,6 +149,21 @@ impl<'agent> TurnRunner<'agent> {
                         continue;
                     }
                 }
+            }
+            // 5. 非 Goal 会话同样等待未绑定 Goal 的后台工作，并通过自动队列发起新轮次
+            if let Some(batch) = self
+                .agent
+                .wait_for_session_events(|| sink.on_runner_event(RunnerEvent::WaitingExternal))
+                .await?
+            {
+                let prompt = batch.prompt().to_string();
+                let display = batch.display().to_string();
+                pending_external_events = Some(batch);
+                queued_inputs.push_back(
+                    UserInputSubmission::new(String::new(), input.mode)
+                        .with_external_event(prompt, display),
+                );
+                continue;
             }
             sink.on_runner_event(RunnerEvent::Completed(result.clone()))?;
             return Ok(result);

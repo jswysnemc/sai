@@ -3,14 +3,13 @@ mod compaction_model;
 mod context_projection;
 mod conversation;
 mod event;
-mod goal_events;
+mod external_events;
 mod instruction_files;
 mod lifecycle;
 mod message_context;
 mod mode;
 mod model_context;
 mod recovery;
-mod subagent_completion;
 mod system_prompt;
 mod tool_history;
 mod tool_visibility;
@@ -40,7 +39,7 @@ use tool_visibility::ToolVisibility;
 
 pub(crate) use compaction::CompactionRunOutcome;
 pub use event::{AgentEvent, CompactionError};
-pub(crate) use goal_events::GoalEventBatch;
+pub(crate) use external_events::ExternalEventBatch;
 pub use mode::AgentMode;
 
 const MAX_QUESTION_ROUNDS_PER_TURN: usize = 8;
@@ -86,10 +85,6 @@ impl Agent {
             .tools
             .contains("todo")
             .then(|| tools::todo::TodoReminder::new(self.state.todo_file()));
-        let mut subagent_reminder = self
-            .tools
-            .contains("subagent")
-            .then(|| tools::SubagentReminder::new(self.state.state_dir().display().to_string()));
         let mut question_rounds = 0usize;
         let hook_ctx = crate::hooks::HookContext {
             session_id: self.state.session_id().to_string(),
@@ -105,12 +100,6 @@ impl Agent {
             &hook_ctx,
         )
         .await;
-        // 1. 上一轮结束后才完成的子智能体,在本轮首次请求前先补一次通知
-        if let Some(reminder) = subagent_reminder.as_mut() {
-            if let Some(content) = reminder.after_tool_round() {
-                messages.push(ChatMessage::system(content));
-            }
-        }
         loop {
             if self.max_tool_rounds > 0 && tool_round >= self.max_tool_rounds {
                 let content = format!(
@@ -204,9 +193,6 @@ impl Agent {
                     }
                 })
                 .await?;
-            if let Some(reminder) = subagent_reminder.as_mut() {
-                reminder.acknowledge_delivered();
-            }
             perf.mark(&format!("round {tool_round} model request done"));
             if result.tool_calls.is_empty() || !self.tools_enabled {
                 crate::hooks::dispatch(
@@ -611,12 +597,6 @@ impl Agent {
                     if let Some(content) = reminder.after_tool_round(todo_updated)? {
                         messages.push(ChatMessage::system(content));
                     }
-                }
-            }
-            // 1. 本轮所有工具处理完后,把新完成的后台子智能体主动通知主 Agent
-            if let Some(reminder) = subagent_reminder.as_mut() {
-                if let Some(content) = reminder.after_tool_round() {
-                    messages.push(ChatMessage::system(content));
                 }
             }
         }

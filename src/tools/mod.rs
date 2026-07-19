@@ -36,7 +36,6 @@ pub(crate) mod subagent_event;
 mod subagent_feed;
 pub(crate) mod subagent_goal;
 mod subagent_persistence;
-mod subagent_reminder;
 mod subagent_runner;
 mod subagent_runtime;
 pub(crate) mod subagent_state;
@@ -61,7 +60,6 @@ pub use skills::{
     load_installed_skill_document, register_skills, skill_catalog, skills_catalog_prompt,
     skills_prompt,
 };
-pub(crate) use subagent_reminder::SubagentReminder;
 
 pub fn readable_tool_name(name: &str) -> &str {
     match name {

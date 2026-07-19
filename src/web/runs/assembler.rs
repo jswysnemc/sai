@@ -1,7 +1,7 @@
 use super::WebEvent;
 use crate::agent::AgentEvent;
 use crate::llm::ChatStreamKind;
-use crate::runner::{AutomaticInputEvent, AutomaticInputKind, RunnerEvent};
+use crate::runner::RunnerEvent;
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
 
@@ -374,6 +374,7 @@ fn tool_can_mutate_workspace(name: &str) -> bool {
 mod tests {
     use super::*;
     use crate::llm::ToolCallStreamProgress;
+    use crate::runner::{AutomaticInputEvent, AutomaticInputKind};
 
     /// 验证权限决定会作为可重放事件发送到 Web 消息流。
     ///

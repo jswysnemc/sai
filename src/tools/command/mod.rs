@@ -21,7 +21,8 @@ pub(crate) use background::{
     stop_background_task_for_user,
 };
 pub(crate) use goal_completions::{
-    acknowledge_background_completions, poll_background_completions, BackgroundCompletionNotice,
+    acknowledge_background_completions, poll_background_completions,
+    poll_session_background_completions, BackgroundCompletionNotice,
 };
 pub(crate) use process::{process_exists, spawn_background_shell, terminate_process};
 pub(crate) use store::{unix_seconds, BackgroundCommandStore, BackgroundCommandTask};
