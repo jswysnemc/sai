@@ -532,7 +532,8 @@ mod tests {
         let output = render_output_block("output", "sent to snemc@qq.com\n");
         let plain = strip_ansi_for_test(&output);
 
-        assert!(plain.contains("── • output "));
+        assert!(plain.contains("• output"));
+        assert!(!plain.contains("──"));
         assert!(plain.contains("sent to snemc@qq.com"));
         assert!(!plain.contains(",-- output"));
         assert!(!plain.contains("`--"));
@@ -543,7 +544,8 @@ mod tests {
         let output = render_output_block("err exit 1", "not found\n");
         let plain = strip_ansi_for_test(&output);
 
-        assert!(plain.contains("── • err exit 1 "));
+        assert!(plain.contains("• err exit 1"));
+        assert!(!plain.contains("──"));
         assert!(plain.contains("not found"));
         assert!(!plain.contains(",-- err"));
         assert!(!plain.contains("`--"));
@@ -564,7 +566,7 @@ mod tests {
     }
 
     #[test]
-    fn collapsed_hint_stays_inside_output_block_before_footer() {
+    fn collapsed_hint_stays_after_latest_output_without_footer() {
         let output =
             render_live_command_output("one\ntwo\nthree\nfour\nfive\nsix\nseven\n", "", false);
         let plain = strip_ansi_for_test(&output);
@@ -573,15 +575,13 @@ mod tests {
             .iter()
             .position(|line| line.contains("Ctrl+O"))
             .expect("collapsed output should include an expand hint");
-        let footer_index = lines
+        let latest_index = lines
             .iter()
-            .rposition(|line| !line.is_empty() && line.chars().all(|ch| ch == '─'))
-            .expect("output should include a footer border");
+            .position(|line| line == &"seven")
+            .expect("latest output should remain visible");
 
-        assert!(
-            hint_index < footer_index,
-            "expand hint must be rendered before the output footer"
-        );
+        assert!(hint_index > latest_index);
+        assert!(!plain.contains("──"));
     }
 
     #[test]

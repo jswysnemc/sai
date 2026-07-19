@@ -165,7 +165,8 @@ mod tests {
         );
         let plain = strip_ansi_for_test(&output);
 
-        assert!(plain.contains("── • command "));
+        assert!(plain.contains("• command"));
+        assert!(!plain.contains("──"));
         assert!(plain.contains("python3 - <<'PY'"));
         assert!(!plain.contains("$ python3"));
         assert!(plain.contains("from pathlib import Path"));
@@ -180,10 +181,11 @@ mod tests {
         let output = render_command_block_with_action(r#"{"command":"date"}"#, "Run");
         let plain = strip_ansi_for_test(&output);
 
-        assert!(plain.contains("── • Run command "));
+        assert!(plain.contains("• Run command"));
+        assert!(!plain.contains("──"));
         assert!(plain.contains("date"));
         assert!(!plain.contains("Run run"));
-        assert!(!plain.contains("── • command "));
+        assert!(!plain.contains("• command"));
     }
 
     #[test]
@@ -191,7 +193,8 @@ mod tests {
         let output = render_command_block_with_action(r#"{"command":"sleep 1"}"#, "Background");
         let plain = strip_ansi_for_test(&output);
 
-        assert!(plain.contains("── • Background command "));
+        assert!(plain.contains("• Background command"));
+        assert!(!plain.contains("──"));
         assert!(plain.contains("sleep 1"));
         assert!(!plain.contains("Run command"));
     }

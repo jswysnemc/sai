@@ -2,81 +2,31 @@ use super::style::{
     CODE_BLOCK_FRAME_STYLE, CODE_COMMENT_STYLE, CODE_FUNCTION_STYLE, CODE_KEYWORD_STYLE,
     CODE_NUMBER_STYLE, CODE_STRING_STYLE, CODE_TOKEN_RESET, PRIMARY_STYLE, RESET,
 };
-use super::table::visible_width;
-use crossterm::terminal;
 
-/// 计算代码块边框的最小宽度（基于终端宽度）。
-pub(crate) fn frame_min_width() -> usize {
-    terminal::size()
-        .map(|(w, _)| usize::from(w) / 2)
-        .unwrap_or(24)
-        .clamp(20, 60)
-}
-
-/// 计算代码块边框的最大宽度（基于终端宽度）。
-pub(crate) fn frame_max_width() -> usize {
-    terminal::size()
-        .map(|(w, _)| usize::from(w).max(1))
-        .unwrap_or(120)
-}
-
-/// 按内容宽度、最小宽度和最大宽度计算代码块边框宽度。
-///
-/// 参数:
-/// - `content_width`: 代码块内容的最大可见宽度
-/// - `min_width`: 代码块边框最小宽度
-/// - `max_width`: 代码块边框最大宽度
-///
-/// 返回:
-/// - 不超过最大宽度的代码块边框宽度
-fn frame_width_for_content(content_width: usize, min_width: usize, max_width: usize) -> usize {
-    content_width.max(min_width).min(max_width.max(1))
-}
-
-/// 渲染代码块头部（开标签行）。
-///
-/// 流式渲染时在遇到开标签 ``` 即输出，宽度基于终端宽度，
-/// 因为此时还不知道内容行的最长宽度。
+/// 渲染不带横线的代码块标签行。
 ///
 /// 参数:
 /// - `lang`: Markdown 代码块语言标识
 ///
 /// 返回:
-/// - 头部文本（含结尾换行）
+/// - 标签文本；空标签返回空文本
 pub(crate) fn render_code_header(lang: &str) -> String {
-    let width = frame_width_for_content(0, frame_min_width(), frame_max_width());
     if lang.is_empty() {
-        format!("{CODE_BLOCK_FRAME_STYLE}{}{RESET}\n", "─".repeat(width))
+        String::new()
     } else {
-        let prefix = format!("── {lang} ");
-        let prefix_width = visible_width(&prefix);
-        let padding = width.saturating_sub(prefix_width);
-        format!(
-            "{CODE_BLOCK_FRAME_STYLE}{prefix}{}{RESET}\n",
-            "─".repeat(padding)
-        )
+        format!("{CODE_BLOCK_FRAME_STYLE}{lang}{RESET}\n")
     }
 }
 
-/// 渲染代码块尾部（闭标签行）。
-///
-/// 流式渲染时在遇到闭标签 ``` 或 flush 时输出，
-/// 宽度取最长内容行与终端最小宽度的较大值（CJK 双宽）。
+/// 结束代码块但不渲染底部横线。
 ///
 /// 参数:
-/// - `lines`: 代码块内容行
+/// - `_lines`: 代码块内容行，保留参数以兼容流式渲染调用
 ///
 /// 返回:
-/// - 尾部文本（含结尾换行）
-pub(crate) fn render_code_footer(lines: &[String]) -> String {
-    let content_width = lines
-        .iter()
-        .map(|line| visible_width(line))
-        .max()
-        .unwrap_or(0);
-
-    let width = frame_width_for_content(content_width, frame_min_width(), frame_max_width());
-    format!("{CODE_BLOCK_FRAME_STYLE}{}{RESET}\n", "─".repeat(width))
+/// - 空文本
+pub(crate) fn render_code_footer(_lines: &[String]) -> String {
+    String::new()
 }
 
 /// 对单行代码做轻量语法高亮。
@@ -258,19 +208,4 @@ fn next_non_space_is_open_paren(chars: &[char], mut index: usize) -> bool {
         index += 1;
     }
     chars.get(index) == Some(&'(')
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn frame_width_does_not_exceed_terminal_limit() {
-        assert_eq!(frame_width_for_content(200, 20, 80), 80);
-    }
-
-    #[test]
-    fn frame_width_keeps_minimum_for_short_content() {
-        assert_eq!(frame_width_for_content(8, 20, 80), 20);
-    }
 }
