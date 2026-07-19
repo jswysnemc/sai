@@ -24,6 +24,7 @@
 .goal-control-form {
   display: grid;
   gap: 0.75rem;
+  min-height: 0;
 }
 
 .goal-control-form label {
@@ -47,6 +48,13 @@
 
 .goal-control-form input:focus {
   border-color: var(--line-strong);
+}
+
+.goal-control-form .ui-text-area {
+  min-height: 10rem;
+  max-height: min(45vh, 24rem);
+  line-height: 1.5;
+  overflow-y: auto;
 }
 
 .goal-control-usage {

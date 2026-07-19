@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pause, Play, Target, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import type { Goal, GoalStatus } from "../../api/goal-contracts";
 import { toDisplayError } from "../../api/api-error";
@@ -32,6 +32,7 @@ export function GoalControl({ sessionId, running, onContinue }: GoalControlProps
   const [tokenBudget, setTokenBudget] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const objectiveRef = useRef<HTMLTextAreaElement>(null);
   const queryKey = ["goal", sessionId] as const;
   const goalQuery = useQuery({
     queryKey,
@@ -198,6 +199,7 @@ export function GoalControl({ sessionId, running, onContinue }: GoalControlProps
         title={goal ? t("Session goal", "会话目标") : t("Create goal", "创建目标")}
         description={goal ? statusLabel : undefined}
         size="small"
+        initialFocusRef={objectiveRef}
         onClose={() => setOpen(false)}
         footer={(
           <>
@@ -210,7 +212,7 @@ export function GoalControl({ sessionId, running, onContinue }: GoalControlProps
         <div className="goal-control-form">
           <label>
             <span>{t("Objective", "目标内容")}</span>
-            <TextArea value={objective} maxLength={32_000} onChange={(event) => setObjective(event.target.value)} />
+            <TextArea ref={objectiveRef} value={objective} maxLength={32_000} onChange={(event) => setObjective(event.target.value)} />
           </label>
           <label>
             <span>{t("Token budget", "Token 预算")}</span>

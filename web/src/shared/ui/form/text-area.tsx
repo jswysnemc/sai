@@ -1,4 +1,4 @@
-import type { TextareaHTMLAttributes } from "react";
+import { forwardRef, type TextareaHTMLAttributes } from "react";
 import "./text-area.css";
 
 type TextAreaProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
@@ -9,6 +9,9 @@ type TextAreaProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
  * @param props 原生多行输入属性
  * @returns 统一样式多行输入框
  */
-export function TextArea({ className = "", ...props }: TextAreaProps) {
-  return <textarea className={`ui-text-area${className ? ` ${className}` : ""}`} {...props} />;
-}
+export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function TextArea(
+  { className = "", ...props },
+  ref
+) {
+  return <textarea ref={ref} className={`ui-text-area${className ? ` ${className}` : ""}`} {...props} />;
+});

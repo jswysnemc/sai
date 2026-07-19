@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../../features/i18n/use-i18n";
 
@@ -10,6 +10,7 @@ type ModalProps = {
   size?: "small" | "medium" | "large";
   children: React.ReactNode;
   footer?: React.ReactNode;
+  initialFocusRef?: RefObject<HTMLElement | null>;
   onClose: () => void;
 };
 
@@ -19,21 +20,24 @@ type ModalProps = {
  * @param props 弹层状态、标题、内容和关闭回调
  * @returns Portal 弹层
  */
-export function Modal({ open, title, description, size = "medium", children, footer, onClose }: ModalProps) {
+export function Modal({ open, title, description, size = "medium", children, footer, initialFocusRef, onClose }: ModalProps) {
   const { t } = useI18n();
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
     const previousFocus = document.activeElement as HTMLElement | null;
-    requestAnimationFrame(() => {
-      const focusable = dialogRef.current?.querySelector<HTMLElement>('button, input, textarea, [tabindex]:not([tabindex="-1"])');
+    const focusFrame = requestAnimationFrame(() => {
+      const focusable = initialFocusRef?.current
+        ?? dialogRef.current?.querySelector<HTMLElement>('button, input, textarea, [tabindex]:not([tabindex="-1"])');
       focusable?.focus();
     });
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") onCloseRef.current();
       if (event.key !== "Tab" || !dialogRef.current) return;
       const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'));
       if (focusable.length === 0) return;
@@ -49,10 +53,11 @@ export function Modal({ open, title, description, size = "medium", children, foo
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => {
+      cancelAnimationFrame(focusFrame);
       document.removeEventListener("keydown", handleKeyDown);
       previousFocus?.focus();
     };
-  }, [open, onClose]);
+  }, [initialFocusRef, open]);
 
   if (!open) return null;
   return createPortal(
