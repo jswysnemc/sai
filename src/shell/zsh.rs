@@ -7,20 +7,77 @@ use std::path::Path;
 const BEGIN_MARKER: &str = "# >>> sai zsh hook >>>";
 const END_MARKER: &str = "# <<< sai zsh hook <<<";
 
+/// 生成 Zsh 命令预存和自然语言拦截脚本。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 可直接加载的 Zsh Hook 脚本
 pub fn hook() -> &'static str {
     r#"autoload -Uz add-zsh-hook
+
+typeset -g _sai_last_preexec_command=""
 
 _sai_store_preexec_command() {
     [[ -o interactive ]] || return 0
     local text="$1"
     [[ -n "$text" ]] || return 0
     [[ "$text" != sai && "$text" != sai\ * ]] || return 0
+    _sai_last_preexec_command="$text"
     sai --shell-intercept --shell zsh -- "$text" >/dev/null 2>&1
     return 0
 }
 
 add-zsh-hook -d preexec _sai_store_preexec_command 2>/dev/null
 add-zsh-hook preexec _sai_store_preexec_command
+
+if (( $+functions[command_not_found_handler] )) \
+    && [[ "${functions[command_not_found_handler]}" != *"_sai_last_preexec_command"* ]]; then
+    functions[_sai_previous_command_not_found_handler]="${functions[command_not_found_handler]}"
+fi
+
+command_not_found_handler() {
+    [[ -o interactive ]] || {
+        (( $+functions[_sai_previous_command_not_found_handler] )) \
+            && _sai_previous_command_not_found_handler "$@"
+        return 127
+    }
+    (( $+commands[sai] )) || {
+        (( $+functions[_sai_previous_command_not_found_handler] )) \
+            && _sai_previous_command_not_found_handler "$@"
+        return 127
+    }
+
+    local -a sai_flags=()
+    while (( $# > 0 )); do
+        case "$1" in
+            -c|--clipb)
+                sai_flags+=(--clipb)
+                shift
+                ;;
+            -w|--web)
+                sai_flags+=(--web)
+                shift
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
+    local text
+    if (( ${#sai_flags[@]} == 0 )) && [[ -n "$_sai_last_preexec_command" ]]; then
+        text="$_sai_last_preexec_command"
+    else
+        text="$*"
+    fi
+    _sai_last_preexec_command=""
+    [[ -n "$text" ]] || return 127
+    [[ "$text" != *$'\n'* && "$text" != *$'\r'* ]] || return 127
+
+    sai "${sai_flags[@]}" -- "$text"
+}
 "#
 }
 
@@ -129,10 +186,14 @@ mod tests {
     }
 
     #[test]
-    fn zsh_hook_does_not_block_shell_commands() {
+    fn zsh_hook_routes_missing_commands_to_chat() {
         let hook = hook();
-        assert!(!hook.contains("command_not_found_handler"));
-        assert!(!hook.contains("return 127"));
+        assert!(hook.contains("command_not_found_handler"));
+        assert!(hook.contains("sai \"${sai_flags[@]}\" -- \"$text\""));
+        assert!(hook.contains("_sai_previous_command_not_found_handler"));
+        assert!(hook.contains("text=\"$_sai_last_preexec_command\""));
+        assert!(hook.contains("-c|--clipb"));
+        assert!(hook.contains("-w|--web"));
     }
 
     #[test]
