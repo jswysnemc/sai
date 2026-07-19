@@ -28,11 +28,12 @@ use std::sync::Arc;
 pub(super) async fn run(paths: &SaiPaths, args: WebArgs) -> Result<()> {
     AppConfig::init_files(paths)?;
     let token = generate_token();
+    let workspaces = WorkspaceManager::new(paths, args.workspace.as_deref())?;
     let runs = RunManager::new(paths)?;
     let state = WebAppState {
         paths: paths.clone(),
         auth_token: Arc::from(token.as_str()),
-        workspaces: WorkspaceManager::new(paths)?,
+        workspaces,
         runs: runs.clone(),
         terminals: TerminalManager::new(),
         system_monitor: SystemMonitor::new(),

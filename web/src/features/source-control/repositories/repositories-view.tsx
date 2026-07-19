@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, FolderGit2, FolderOpen, GitBranch, RefreshCw, RotateCcw, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ExternalLink, FolderGit2, FolderOpen, GitBranch, RefreshCw, RotateCcw, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../../api/client";
 import type { GitRepositoriesResponse, GitWorktree } from "../../../api/contracts";
@@ -48,6 +48,29 @@ export function RepositoriesView(props: RepositoriesViewProps) {
       const switched = await switchWithTerminalConfirm(workspace.id, confirm, t);
       if (switched) window.location.reload();
     } catch (error) {
+      setOpenError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  /**
+   * 在独立 Sai Web 进程和浏览器窗口中打开 worktree。
+   *
+   * @param path worktree 绝对路径
+   * @returns 无返回值
+   */
+  const openWorktreeInNewWindow = async (path: string) => {
+    const target = window.open("about:blank", "_blank");
+    if (target) target.opener = null;
+    try {
+      setOpenError("");
+      const result = await api.workspaces.openWindow(path);
+      if (!target) {
+        setOpenError(t(`The browser blocked the new window. Open ${result.url}`, `浏览器阻止了新窗口，请打开 ${result.url}`));
+        return;
+      }
+      target.location.href = result.url;
+    } catch (error) {
+      target?.close();
       setOpenError(error instanceof Error ? error.message : String(error));
     }
   };
@@ -117,8 +140,11 @@ export function RepositoriesView(props: RepositoriesViewProps) {
                     <span><strong>{worktree.branch || t("Detached HEAD", "分离头指针")}</strong><small>{worktree.path}</small></span>
                     {worktree.locked && <em>{t("Locked", "已锁定")}</em>}
                   </Button>
-                  <Button title={t("Open as workspace", "作为工作区打开")} onClick={() => void openWorktree(worktree.path)}>
+                  <Button title={t("Open in current window", "在当前窗口打开")} onClick={() => void openWorktree(worktree.path)}>
                     <FolderOpen size={12} />
+                  </Button>
+                  <Button title={t("Open in new window", "在新窗口打开")} onClick={() => void openWorktreeInNewWindow(worktree.path)}>
+                    <ExternalLink size={12} />
                   </Button>
                   {!worktree.current && (
                     <Button disabled={props.busy} title={t("Remove worktree", "移除 worktree")} onClick={() => void removeWorktree(repository.root, worktree)}>

@@ -177,6 +177,9 @@ pub struct WebArgs {
 
     #[arg(long)]
     pub no_open: bool,
+
+    #[arg(long, value_name = "PATH")]
+    pub workspace: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -290,6 +293,7 @@ pub struct MemoryRememberArgs {
 mod tests {
     use super::{ClearArgs, Cli, Command};
     use clap::Parser;
+    use std::path::PathBuf;
 
     /// 验证 clear 命令可仅清空助手记忆。
     ///
@@ -367,6 +371,28 @@ mod tests {
         assert!(args.verbose);
         assert_eq!(args.login.bot_type.as_deref(), Some("3"));
         assert_eq!(args.login.timeout_secs, 30);
+    }
+
+    /// 验证 Web 子命令可以指定独立进程的初始工作区。
+    #[test]
+    fn parses_web_workspace() {
+        let cli = Cli::try_parse_from([
+            "sai",
+            "web",
+            "--port",
+            "0",
+            "--no-open",
+            "--workspace",
+            "/workspace/repository",
+        ])
+        .unwrap();
+
+        let Some(Command::Web(args)) = cli.command else {
+            panic!("expected web command");
+        };
+        assert_eq!(args.port, 0);
+        assert!(args.no_open);
+        assert_eq!(args.workspace, Some(PathBuf::from("/workspace/repository")));
     }
 }
 

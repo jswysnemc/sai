@@ -36,6 +36,11 @@ struct CreateDirectoryRequest {
 }
 
 #[derive(Deserialize)]
+struct OpenWorkspaceWindowRequest {
+    path: String,
+}
+
+#[derive(Deserialize)]
 struct SwitchWorkspaceQuery {
     close_terminals: Option<bool>,
 }
@@ -45,17 +50,49 @@ struct RemovedResponse {
     removed: bool,
 }
 
+#[derive(Serialize)]
+struct OpenedWindowResponse {
+    opened: bool,
+    url: String,
+}
+
 /// 返回工作区管理路由。
 pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
         .route("/api/workspaces", get(list).post(add))
         .route("/api/workspaces/browse", get(browse))
+        .route("/api/workspaces/open-window", post(open_window))
         .route(
             "/api/workspaces/browse/directory",
             post(create_browse_directory),
         )
         .route("/api/workspaces/:id", patch(rename).delete(remove))
         .route("/api/workspaces/:id/switch", post(switch))
+}
+
+/// 在独立 Sai Web 进程中打开工作区。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `request`: 待打开工作区路径
+///
+/// 返回:
+/// - 新服务访问地址
+async fn open_window(
+    State(state): State<WebAppState>,
+    Json(request): Json<OpenWorkspaceWindowRequest>,
+) -> WebResult<Json<OpenedWindowResponse>> {
+    // 1. 先登记并规范化工作区，避免对子进程传递无效路径
+    let workspace = state
+        .workspaces
+        .add(&PathBuf::from(request.path), None)
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    // 2. 启动独立服务并等待实际端口地址
+    let workspace_path = PathBuf::from(workspace.path);
+    let url = super::super::workspaces::open_workspace_window(&workspace_path)
+        .await
+        .map_err(WebError::from)?;
+    Ok(Json(OpenedWindowResponse { opened: true, url }))
 }
 
 /// 列出工作区和当前活动项。

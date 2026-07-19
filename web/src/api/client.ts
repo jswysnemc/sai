@@ -110,6 +110,11 @@ export const api = {
       }),
     switch: (id: string, closeTerminals = false) =>
       apiRequest<Workspace>(`/api/workspaces/${id}/switch${closeTerminals ? "?close_terminals=true" : ""}`, { method: "POST" }),
+    openWindow: (path: string) =>
+      apiRequest<{ opened: boolean; url: string }>("/api/workspaces/open-window", {
+        method: "POST",
+        body: JSON.stringify({ path })
+      }),
     rename: (id: string, name: string) =>
       apiRequest<Workspace>(`/api/workspaces/${id}`, {
         method: "PATCH",

@@ -11,6 +11,7 @@ use std::sync::{Arc, RwLock};
 pub(crate) struct WorkspaceManager {
     registry_file: PathBuf,
     registry: Arc<RwLock<WorkspaceRegistry>>,
+    active_id: Arc<RwLock<String>>,
 }
 
 impl WorkspaceManager {
@@ -18,12 +19,16 @@ impl WorkspaceManager {
     ///
     /// 参数:
     /// - `paths`: Sai 路径集合
+    /// - `initial_workspace`: 可选当前进程专属初始工作区
     ///
     /// 返回:
     /// - 工作区管理器
-    pub(crate) fn new(paths: &SaiPaths) -> Result<Self> {
+    pub(crate) fn new(paths: &SaiPaths, initial_workspace: Option<&Path>) -> Result<Self> {
         let registry_file = paths.state_dir.join("web/workspaces.json");
-        let current = canonical_directory(&std::env::current_dir()?)?;
+        let current = match initial_workspace {
+            Some(path) => canonical_directory(path)?,
+            None => canonical_directory(&std::env::current_dir()?)?,
+        };
         let gateway_workspace = crate::gateways::workspace::gateway_workspace_path(paths);
         std::fs::create_dir_all(&gateway_workspace)?;
         let gateway_workspace = canonical_directory(&gateway_workspace)?;
@@ -51,16 +56,22 @@ impl WorkspaceManager {
                 .workspaces
                 .push(workspace_info(&gateway_workspace, Some("Gateway sessions")));
         }
-        if !registry
+        let persisted_active_exists = registry
             .workspaces
             .iter()
-            .any(|workspace| workspace.id == registry.active_id)
-        {
-            registry.active_id = current_id;
+            .any(|workspace| workspace.id == registry.active_id);
+        if !persisted_active_exists {
+            registry.active_id = current_id.clone();
         }
+        let active_id = if initial_workspace.is_some() {
+            current_id
+        } else {
+            registry.active_id.clone()
+        };
         let manager = Self {
             registry_file,
             registry: Arc::new(RwLock::new(registry)),
+            active_id: Arc::new(RwLock::new(active_id)),
         };
         let active = manager.active()?;
         std::env::set_current_dir(&active.path)
@@ -82,11 +93,12 @@ impl WorkspaceManager {
     /// 返回:
     /// - 活动工作区
     pub(crate) fn active(&self) -> Result<WorkspaceInfo> {
+        let active_id = self.read_active_id()?.clone();
         let registry = self.read_registry()?;
         registry
             .workspaces
             .iter()
-            .find(|workspace| workspace.id == registry.active_id)
+            .find(|workspace| workspace.id == active_id)
             .cloned()
             .context("active workspace is missing")
     }
@@ -184,6 +196,7 @@ impl WorkspaceManager {
         let result = workspace.clone();
         registry.active_id = result.id.clone();
         drop(registry);
+        *self.write_active_id()? = result.id.clone();
         self.save()?;
         Ok(result)
     }
@@ -196,8 +209,9 @@ impl WorkspaceManager {
     /// 返回:
     /// - 是否完成移除
     pub(crate) fn remove(&self, id: &str) -> Result<bool> {
+        let active_id = self.read_active_id()?.clone();
         let mut registry = self.write_registry()?;
-        if registry.active_id == id {
+        if active_id == id {
             bail!("active workspace cannot be removed");
         }
         let before = registry.workspaces.len();
@@ -236,6 +250,26 @@ impl WorkspaceManager {
         self.registry
             .write()
             .map_err(|_| anyhow::anyhow!("workspace registry lock is poisoned"))
+    }
+
+    /// 获取当前进程活动工作区读锁。
+    ///
+    /// 返回:
+    /// - 当前进程活动工作区 ID
+    fn read_active_id(&self) -> Result<std::sync::RwLockReadGuard<'_, String>> {
+        self.active_id
+            .read()
+            .map_err(|_| anyhow::anyhow!("active workspace lock is poisoned"))
+    }
+
+    /// 获取当前进程活动工作区写锁。
+    ///
+    /// 返回:
+    /// - 可更新的当前进程活动工作区 ID
+    fn write_active_id(&self) -> Result<std::sync::RwLockWriteGuard<'_, String>> {
+        self.active_id
+            .write()
+            .map_err(|_| anyhow::anyhow!("active workspace lock is poisoned"))
     }
 }
 
@@ -280,4 +314,36 @@ fn normalized_name(name: Option<&str>) -> Option<String> {
     name.map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 验证共享注册表的两个管理器保持独立活动工作区。
+    #[test]
+    fn active_workspace_is_process_local() {
+        let first_path = PathBuf::from("/workspace/first");
+        let second_path = PathBuf::from("/workspace/second");
+        let first = workspace_info(&first_path, None);
+        let second = workspace_info(&second_path, None);
+        let registry = Arc::new(RwLock::new(WorkspaceRegistry {
+            active_id: first.id.clone(),
+            workspaces: vec![first.clone(), second.clone()],
+        }));
+        let registry_file = PathBuf::from("workspaces.json");
+        let first_manager = WorkspaceManager {
+            registry_file: registry_file.clone(),
+            registry: registry.clone(),
+            active_id: Arc::new(RwLock::new(first.id.clone())),
+        };
+        let second_manager = WorkspaceManager {
+            registry_file,
+            registry,
+            active_id: Arc::new(RwLock::new(second.id.clone())),
+        };
+
+        assert_eq!(first_manager.active().unwrap().id, first.id);
+        assert_eq!(second_manager.active().unwrap().id, second.id);
+    }
 }
