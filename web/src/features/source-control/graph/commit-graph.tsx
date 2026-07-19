@@ -9,6 +9,7 @@ import { createBranchNameSuggestion } from "../branches/branch-name-suggestion";
 import { CommitContextMenu } from "./commit-context-menu";
 import { CommitGraphRow } from "./commit-graph-row";
 import { calculateGitGraphLanes } from "./graph-lanes";
+import { snapshotGraphViewport } from "./graph-viewport";
 import { calculateGitGraphWindow } from "./graph-window";
 import "./commit-graph.css";
 
@@ -67,7 +68,7 @@ export function CommitGraph(props: CommitGraphProps) {
      * @returns 无返回值
      */
     const updateViewport = () => {
-      setViewport({ scrollTop: element.scrollTop, height: element.clientHeight });
+      setViewport(snapshotGraphViewport(element));
     };
     updateViewport();
     const observer = new ResizeObserver(updateViewport);
@@ -116,15 +117,22 @@ export function CommitGraph(props: CommitGraphProps) {
     setBranchName(props.suggestBranchNames ? createBranchNameSuggestion() : "");
   };
 
+  /**
+   * 在 React 释放滚动事件前复制视口数据并更新虚拟列表窗口。
+   *
+   * @param event 提交图滚动事件
+   * @returns 无返回值
+   */
+  const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    setViewport(snapshotGraphViewport(event.currentTarget));
+  };
+
   return (
     <>
       <div
         ref={viewportRef}
         className="git-commit-graph"
-        onScroll={(event) => setViewport((current) => ({
-          ...current,
-          scrollTop: event.currentTarget.scrollTop
-        }))}
+        onScroll={handleScroll}
       >
         {props.commits.length > 0 ? (
           <div className="git-graph-spacer" style={{ height: windowState.totalHeight }}>
