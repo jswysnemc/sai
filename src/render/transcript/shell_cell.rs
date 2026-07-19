@@ -18,25 +18,21 @@ pub(crate) struct ShellCell {
 /// - 适合 transcript 的 ANSI 文本
 pub(super) fn render(cell: &ShellCell) -> String {
     let mut rendered = format!("{TOOL_BULLET} {} {}", t("You ran", "已执行"), cell.command);
-    let output = cell.output.trim_end();
-    if output.is_empty() {
+    if cell.output.is_empty() {
         rendered.push_str(&format!(
-            "\n\x1b[2m  └─ {}\x1b[0m",
+            "\n\x1b[2m{}\x1b[0m",
             t("no output", "无输出")
         ));
     } else {
-        for (index, line) in output.lines().enumerate() {
-            let branch = if index + 1 == output.lines().count() {
-                "└─"
-            } else {
-                "├─"
-            };
-            rendered.push_str(&format!("\n\x1b[2m  {branch} {line}\x1b[0m"));
-        }
+        rendered.push('\n');
+        rendered.push_str(&cell.output);
     }
     if cell.exit_code.is_some_and(|code| code != 0) {
+        if !rendered.ends_with('\n') {
+            rendered.push('\n');
+        }
         rendered.push_str(&format!(
-            "\n\x1b[31m  {} {}\x1b[0m",
+            "\x1b[31m  {} {}\x1b[0m",
             t("exit code", "退出码"),
             cell.exit_code.unwrap_or_default()
         ));
@@ -49,7 +45,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn renders_command_and_indented_output() {
+    fn renders_command_output_without_tree_prefixes() {
         let rendered = render(&ShellCell {
             command: "ls".to_string(),
             output: "one\ntwo\n".to_string(),
@@ -57,7 +53,8 @@ mod tests {
         });
 
         assert!(rendered.contains("ls"));
-        assert!(rendered.contains("├─ one"));
-        assert!(rendered.contains("└─ two"));
+        assert!(rendered.contains("\none\ntwo"));
+        assert!(!rendered.contains("├─"));
+        assert!(!rendered.contains("└─"));
     }
 }
