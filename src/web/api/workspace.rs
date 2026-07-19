@@ -63,6 +63,13 @@ struct GitOpRequest {
     branch_kind: Option<String>,
     new_branch: Option<String>,
     start_point: Option<String>,
+    post_action: Option<String>,
+    #[serde(default)]
+    all: bool,
+    #[serde(default)]
+    amend: bool,
+    #[serde(default)]
+    signoff: bool,
     #[serde(default)]
     force: bool,
 }
@@ -339,6 +346,10 @@ async fn git_op(
             branch_kind: request.branch_kind.as_deref(),
             new_branch: request.new_branch.as_deref(),
             start_point: request.start_point.as_deref(),
+            post_action: request.post_action.as_deref(),
+            all: request.all,
+            amend: request.amend,
+            signoff: request.signoff,
             force: request.force,
         },
     )

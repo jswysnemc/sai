@@ -51,8 +51,18 @@ pub(crate) struct GitRepositoryState {
     pub stash_count: i32,
     pub dirty_counts: GitDirtyCounts,
     pub entries: Vec<GitStatusEntry>,
+    pub operation: Option<GitInProgressOperation>,
     pub status: String,
     pub error: Option<String>,
+}
+
+/// 仓库中正在进行的 Git 操作。
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct GitInProgressOperation {
+    pub kind: String,
+    pub can_continue: bool,
+    pub can_skip: bool,
+    pub can_abort: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -168,6 +178,10 @@ pub(crate) struct GitOperationRequest<'a> {
     pub(crate) branch_kind: Option<&'a str>,
     pub(crate) new_branch: Option<&'a str>,
     pub(crate) start_point: Option<&'a str>,
+    pub(crate) post_action: Option<&'a str>,
+    pub(crate) all: bool,
+    pub(crate) amend: bool,
+    pub(crate) signoff: bool,
     pub(crate) force: bool,
 }
 
@@ -190,6 +204,10 @@ impl<'a> GitOperationRequest<'a> {
             branch_kind: None,
             new_branch: None,
             start_point: None,
+            post_action: None,
+            all: false,
+            amend: false,
+            signoff: false,
             force: false,
         }
     }

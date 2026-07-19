@@ -1,6 +1,6 @@
 use super::*;
 use anyhow::{bail, Result};
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 pub(super) async fn working_tree_diff(
     state: &GitRepositoryState,
@@ -198,8 +198,92 @@ pub(super) fn not_repo_state(workdir: &str) -> GitRepositoryState {
         stash_count: 0,
         dirty_counts: GitDirtyCounts::default(),
         entries: Vec::new(),
+        operation: None,
         status: "not_repo".to_string(),
         error: None,
+    }
+}
+
+/// 检测仓库当前是否处于合并、变基、拣选或还原流程。
+///
+/// 参数:
+/// - `repo_root`: 仓库工作树根目录
+///
+/// 返回:
+/// - 存在进行中操作时返回操作能力，否则返回空
+pub(super) async fn detect_in_progress_operation(
+    repo_root: &Path,
+) -> Option<GitInProgressOperation> {
+    let git_dir = resolve_git_dir(repo_root).await?;
+
+    // 1. 变基目录可能采用 merge 或 apply 两种后端
+    if path_exists(&git_dir.join("rebase-merge")).await
+        || path_exists(&git_dir.join("rebase-apply")).await
+    {
+        return Some(in_progress_operation("rebase", true));
+    }
+
+    // 2. 其余流程通过 Git 写入的状态文件判断
+    for (marker, kind, can_skip) in [
+        ("MERGE_HEAD", "merge", false),
+        ("CHERRY_PICK_HEAD", "cherry_pick", true),
+        ("REVERT_HEAD", "revert", true),
+    ] {
+        if path_exists(&git_dir.join(marker)).await {
+            return Some(in_progress_operation(kind, can_skip));
+        }
+    }
+    None
+}
+
+/// 解析普通仓库与 worktree 的实际 Git 元数据目录。
+///
+/// 参数:
+/// - `repo_root`: 仓库工作树根目录
+///
+/// 返回:
+/// - 可读取时返回 Git 元数据目录
+async fn resolve_git_dir(repo_root: &Path) -> Option<PathBuf> {
+    let dot_git = repo_root.join(".git");
+    let metadata = tokio::fs::metadata(&dot_git).await.ok()?;
+    if metadata.is_dir() {
+        return Some(dot_git);
+    }
+    let content = tokio::fs::read_to_string(&dot_git).await.ok()?;
+    let value = content.trim().strip_prefix("gitdir:")?.trim();
+    let path = PathBuf::from(value);
+    Some(if path.is_absolute() {
+        path
+    } else {
+        repo_root.join(path)
+    })
+}
+
+/// 判断路径是否存在，读取失败时按不存在处理。
+///
+/// 参数:
+/// - `path`: 待检测路径
+///
+/// 返回:
+/// - 路径是否存在
+async fn path_exists(path: &Path) -> bool {
+    tokio::fs::try_exists(path).await.unwrap_or(false)
+}
+
+/// 创建进行中操作描述。
+///
+/// 参数:
+/// - `kind`: 操作类型
+/// - `can_skip`: 是否允许跳过当前提交
+///
+/// 返回:
+/// - 操作能力描述
+fn in_progress_operation(kind: &str, can_skip: bool) -> GitInProgressOperation {
+    GitInProgressOperation {
+        kind: kind.to_string(),
+        can_continue: true,
+        can_skip,
+        can_abort: true,
     }
 }
 

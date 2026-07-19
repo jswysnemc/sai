@@ -7,8 +7,9 @@ mod types;
 use types::GitOutput;
 pub(crate) use types::{
     GitBranch, GitBranchesResponse, GitCommitDetails, GitCommitDetailsResponse, GitCommitFile,
-    GitCommitSummary, GitDiff, GitDiffResponse, GitDirtyCounts, GitFileStatus, GitLogResponse,
-    GitOperationRequest, GitOperationResponse, GitRepositoryState, GitStatusEntry,
+    GitCommitSummary, GitDiff, GitDiffResponse, GitDirtyCounts, GitFileStatus,
+    GitInProgressOperation, GitLogResponse, GitOperationRequest, GitOperationResponse,
+    GitRepositoryState, GitStatusEntry,
 };
 
 #[path = "git_diff_support.rs"]
@@ -20,7 +21,11 @@ mod process;
 #[path = "git_branches.rs"]
 mod branches;
 
+#[path = "git_operations.rs"]
+mod operations;
+
 use branches::*;
+pub(crate) use operations::git_op;
 use process::*;
 use support::*;
 
@@ -136,6 +141,7 @@ pub(crate) async fn git_status(root: &Path) -> Result<GitRepositoryState> {
             stash_count: 0,
             dirty_counts: GitDirtyCounts::default(),
             entries: Vec::new(),
+            operation: None,
             status: "error".to_string(),
             error: Some(trim_bytes(&output.stderr)),
         });
@@ -143,6 +149,7 @@ pub(crate) async fn git_status(root: &Path) -> Result<GitRepositoryState> {
     let (head, upstream, ahead, behind, stash_count, entries) =
         parse_status_porcelain_v2(&output.stdout);
     let (remote_name, remote_url) = resolve_state_remote(&repo_root, &upstream).await;
+    let operation = detect_in_progress_operation(&repo_root).await;
     Ok(GitRepositoryState {
         repo_root: repo_root.display().to_string(),
         workdir,
@@ -155,6 +162,7 @@ pub(crate) async fn git_status(root: &Path) -> Result<GitRepositoryState> {
         stash_count,
         dirty_counts: dirty_counts(&entries),
         entries,
+        operation,
         status: "ready".to_string(),
         error: None,
     })
@@ -530,175 +538,4 @@ pub(crate) async fn git_commit_diff(
         truncated,
         binary_files: Vec::new(),
     })
-}
-
-/// 执行写操作。
-pub(crate) async fn git_op(
-    root: &Path,
-    request: GitOperationRequest<'_>,
-) -> Result<GitOperationResponse> {
-    if request.action == "init" {
-        let branch = request
-            .message
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .unwrap_or("main");
-        let result = run_git_output(root, &["init", "-b", branch]).await;
-        return operation_response(root, result, "repository initialized").await;
-    }
-
-    let state = ensure_ready(root).await?;
-    let repo = Path::new(&state.repo_root);
-    let result = match request.action {
-        "stage" => {
-            let path = validate_repo_relative_path(request.path.unwrap_or_default())?;
-            git_success(repo, &["add", "--", path.as_str()]).await
-        }
-        "stage_all" => git_success(repo, &["add", "-A", "--"]).await,
-        "unstage" => {
-            let path = validate_repo_relative_path(request.path.unwrap_or_default())?;
-            if !ref_exists(repo, "HEAD").await {
-                git_success(repo, &["rm", "--cached", "--", path.as_str()]).await
-            } else {
-                git_success(repo, &["restore", "--staged", "--", path.as_str()]).await
-            }
-        }
-        "unstage_all" => {
-            if !ref_exists(repo, "HEAD").await {
-                if state.dirty_counts.staged > 0 {
-                    git_success(repo, &["rm", "--cached", "-r", "--", "."]).await
-                } else {
-                    Ok(empty_output())
-                }
-            } else {
-                git_success(repo, &["restore", "--staged", "--", "."]).await
-            }
-        }
-        "discard" => {
-            let path = validate_repo_relative_path(request.path.unwrap_or_default())?;
-            let old_path = request
-                .old_path
-                .filter(|value| !value.trim().is_empty())
-                .map(validate_repo_relative_path)
-                .transpose()?;
-            let is_untracked = state
-                .entries
-                .iter()
-                .any(|entry| entry.path == path && entry.untracked);
-            if is_untracked {
-                git_success(repo, &["clean", "-fd", "--", path.as_str()]).await
-            } else if !ref_exists(repo, "HEAD").await {
-                git_success(repo, &["rm", "-f", "--", path.as_str()]).await
-            } else {
-                let mut args = vec!["restore", "--staged", "--worktree", "--", path.as_str()];
-                if let Some(old_path) = old_path.as_deref() {
-                    if old_path != path {
-                        args.push(old_path);
-                    }
-                }
-                git_success(repo, &args).await
-            }
-        }
-        "discard_all" => {
-            if !ref_exists(repo, "HEAD").await {
-                let remove = if state.dirty_counts.staged > 0 {
-                    git_success(repo, &["rm", "-f", "-r", "--", "."]).await?
-                } else {
-                    empty_output()
-                };
-                let clean = git_success(repo, &["clean", "-fd", "--", "."]).await?;
-                Ok(merge_outputs([remove, clean]))
-            } else {
-                let restore =
-                    git_success(repo, &["restore", "--staged", "--worktree", "--", "."]).await?;
-                let clean = git_success(repo, &["clean", "-fd", "--", "."]).await?;
-                Ok(merge_outputs([restore, clean]))
-            }
-        }
-        "commit" => {
-            let message = request
-                .message
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| anyhow::anyhow!("commit message cannot be empty"))?;
-            if state.dirty_counts.staged == 0 {
-                bail!("no staged changes to commit");
-            }
-            git_success(repo, &["commit", "-m", message]).await
-        }
-        "fetch" => {
-            if git_remote_names(repo).await?.is_empty() {
-                Err(anyhow::anyhow!("repository has no remote configured"))
-            } else {
-                git_success(repo, &["fetch", "--prune"]).await
-            }
-        }
-        "pull" => pull_repo(repo, &state).await,
-        "push" => push_repo(repo, &state).await,
-        "set_remote" => {
-            let remote_url = request
-                .remote_url
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| anyhow::anyhow!("remote URL cannot be empty"))?;
-            if git_origin_exists(repo).await {
-                git_success(repo, &["remote", "set-url", "origin", remote_url]).await
-            } else {
-                git_success(repo, &["remote", "add", "origin", remote_url]).await
-            }
-        }
-        "switch_branch" => {
-            switch_branch(
-                repo,
-                request.branch.or(request.message),
-                request.branch_kind,
-            )
-            .await
-        }
-        "create_branch" => {
-            create_branch(
-                repo,
-                request.branch.or(request.message),
-                request.start_point,
-            )
-            .await
-        }
-        "rename_branch" => rename_branch(repo, request.branch, request.new_branch).await,
-        "delete_branch" => delete_branch(repo, &state, request.branch, request.force).await,
-        "add_to_gitignore" => add_to_gitignore(repo, request.path).await,
-        "stash_push" => {
-            let mut args = vec!["stash", "push", "--include-untracked"];
-            let owned;
-            if let Some(value) = request
-                .message
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-            {
-                owned = value.to_string();
-                args.extend(["-m", owned.as_str()]);
-            }
-            git_success(repo, &args).await
-        }
-        "stash_pop" => git_success(repo, &["stash", "pop"]).await,
-        _ => bail!("unsupported git action: {}", request.action),
-    };
-    let message = match request.action {
-        "stage" | "stage_all" => "files staged",
-        "unstage" | "unstage_all" => "files unstaged",
-        "discard" | "discard_all" => "changes discarded",
-        "commit" => "commit created",
-        "fetch" => "fetch completed",
-        "pull" => "pull completed",
-        "push" => "push completed",
-        "set_remote" => "remote repository saved",
-        "switch_branch" => "branch switched",
-        "create_branch" => "branch created",
-        "rename_branch" => "branch renamed",
-        "delete_branch" => "branch deleted",
-        "add_to_gitignore" => "path added to .gitignore",
-        "stash_push" => "changes stashed",
-        "stash_pop" => "stash popped",
-        _ => "operation completed",
-    };
-    operation_response(root, result, message).await
 }
