@@ -312,15 +312,14 @@ fn subagent_suffix_from_partial(arguments: &str) -> Option<String> {
 /// 返回:
 /// - 加载对象文本
 fn load_suffix(arguments: &Value) -> Option<String> {
-    if let Some(tool) = string_field(arguments, &["tool_name"]).map(compact_text) {
-        return Some(format!("tool {tool}"));
-    }
-    if let Some(group) = string_field(arguments, &["group_name"]).map(compact_text) {
-        return Some(format!("group {group}"));
-    }
-    string_field(arguments, &["skill_name"])
-        .map(compact_text)
-        .map(|skill| format!("skill {skill}"))
+    let kind = string_field(arguments, &["type", "kind"])?;
+    let keywords = arguments.get("keywords").and_then(Value::as_array)?;
+    let first = keywords
+        .iter()
+        .find_map(Value::as_str)
+        .map(ToString::to_string)
+        .map(compact_text)?;
+    Some(format!("{} {first}", kind.to_ascii_lowercase()))
 }
 
 /// 从不完整参数文本中提取加载请求的展示对象。
@@ -331,15 +330,49 @@ fn load_suffix(arguments: &Value) -> Option<String> {
 /// 返回:
 /// - 加载对象文本
 fn load_suffix_from_partial(arguments: &str) -> Option<String> {
-    if let Some(tool) = string_field_from_partial(arguments, &["tool_name"]).map(compact_text) {
-        return Some(format!("tool {tool}"));
+    let kind = string_field_from_partial(arguments, &["type", "kind"])?;
+    let keyword = first_string_array_item_from_partial(arguments, "keywords")
+        .or_else(|| string_field_from_partial(arguments, &["keyword"]))?;
+    Some(format!(
+        "{} {}",
+        kind.to_ascii_lowercase(),
+        compact_text(keyword)
+    ))
+}
+
+/// 从可能未闭合的 JSON 数组字段中读取首个字符串。
+///
+/// 参数:
+/// - `raw`: 流式 JSON 参数片段
+/// - `key`: 数组字段名
+///
+/// 返回:
+/// - 首个非空字符串，数组尚未闭合时也可返回已经接收的内容
+fn first_string_array_item_from_partial(raw: &str, key: &str) -> Option<String> {
+    let pattern = format!("\"{key}\"");
+    let key_index = raw.find(&pattern)?;
+    let after_key = &raw[key_index + pattern.len()..];
+    let colon_index = after_key.find(':')?;
+    let after_colon = after_key[colon_index + 1..].trim_start();
+    let value = after_colon
+        .strip_prefix('[')?
+        .trim_start()
+        .strip_prefix('"')?;
+    let mut output = String::new();
+    let mut escaped = false;
+    for ch in value.chars() {
+        if escaped {
+            output.push(ch);
+            escaped = false;
+            continue;
+        }
+        match ch {
+            '\\' => escaped = true,
+            '"' => break,
+            other => output.push(other),
+        }
     }
-    if let Some(group) = string_field_from_partial(arguments, &["group_name"]).map(compact_text) {
-        return Some(format!("group {group}"));
-    }
-    string_field_from_partial(arguments, &["skill_name"])
-        .map(compact_text)
-        .map(|skill| format!("skill {skill}"))
+    (!output.trim().is_empty()).then_some(output)
 }
 
 /// 从 JSON 中读取第一个非空字符串字段。
@@ -456,7 +489,7 @@ fn compact_text(value: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::i18n::text as t;
+    use crate::render::terminal_text as t;
 
     #[test]
     fn command_tools_use_run_label() {
@@ -515,23 +548,23 @@ mod tests {
             "Edit main.rs"
         );
         assert_eq!(
-            tool_event_label("load", Some(r#"{"group_name":"web","#)),
-            "Load group web"
+            tool_event_label("load", Some(r#"{"type":"tool","keywords":["web_search"#)),
+            "Load tool web_search"
         );
     }
 
     #[test]
     fn load_uses_load_label() {
         assert_eq!(
-            tool_event_label("load", Some(r#"{"group_name":"web"}"#)),
-            "Load group web"
+            tool_event_label("load", Some(r#"{"type":"tool","keywords":["web_search"]}"#)),
+            "Load tool web_search"
         );
         assert_eq!(
-            tool_event_label("load", Some(r#"{"tool_name":"web_fetch"}"#)),
+            tool_event_label("load", Some(r#"{"type":"tool","keywords":["web_fetch"]}"#)),
             "Load tool web_fetch"
         );
         assert_eq!(
-            tool_event_label("load", Some(r#"{"skill_name":"yce"}"#)),
+            tool_event_label("load", Some(r#"{"type":"skill","keywords":["yce"]}"#)),
             "Load skill yce"
         );
     }

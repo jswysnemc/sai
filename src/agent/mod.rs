@@ -6,6 +6,7 @@ mod event;
 mod external_events;
 mod instruction_files;
 mod lifecycle;
+mod load_request;
 mod message_context;
 mod mode;
 mod model_context;
@@ -454,7 +455,7 @@ impl Agent {
                 }
                 if !self.tool_visibility.is_visible(&call.function.name) {
                     let output = format!(
-                        "tool error: tool {} is not loaded in the current visible tool set; call load with tool_name or group_name first. If this tool was loaded in a previous conversation, the loaded-tool session state was reset or is unavailable.",
+                        "tool error: tool {} is not loaded in the current visible tool set; call load with type=tool and a keywords array first. If this tool was loaded in a previous conversation, the loaded-tool session state was reset or is unavailable.",
                         call.function.name
                     );
                     on_event(AgentEvent::ToolResult {

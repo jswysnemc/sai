@@ -48,7 +48,7 @@ pub fn skills_catalog_prompt(config: &AppConfig, paths: &SaiPaths) -> Result<Str
         return Ok(String::new());
     }
     Ok(format!(
-        "<available-skills>\n这些是已安装的 skills 目录。默认只提供名称和简介；需要使用某个 skill 的完整流程时，先调用 load 并传入 skill_name 读取完整 SKILL.md。\n{}\n</available-skills>",
+        "<available-skills>\n这些是已安装的 skills 目录。默认只提供名称和简介；需要使用完整流程时，调用 load，设置 type 为 skill，并通过 keywords 数组传入名称。\n{}\n</available-skills>",
         entries.join("\n")
     ))
 }

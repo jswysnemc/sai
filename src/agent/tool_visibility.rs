@@ -1,9 +1,10 @@
+use super::load_request::{LoadRequest, LoadType};
 use crate::config::AppConfig;
 use crate::llm::ToolDefinition;
 use crate::paths::SaiPaths;
 use crate::tools::{self, ToolRegistry};
 use anyhow::{bail, Result};
-use serde_json::{json, Value};
+use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) struct ToolVisibility {
@@ -148,76 +149,83 @@ impl ToolVisibility {
         config: &AppConfig,
         paths: &SaiPaths,
     ) -> Result<String> {
-        let args = if arguments.trim().is_empty() {
-            json!({})
-        } else {
-            serde_json::from_str::<Value>(arguments)?
-        };
-        let tool_name = string_arg(&args, "tool_name");
-        let tool_names = string_array_arg(&args, "tool_names")?;
-        let group_name = string_arg(&args, "group_name");
-        let skill_name = string_arg(&args, "skill_name");
-        let requested_count = [
-            tool_name.is_some(),
-            tool_names.is_some(),
-            group_name.is_some(),
-            skill_name.is_some(),
-        ]
-        .into_iter()
-        .filter(|selected| *selected)
-        .count();
-        if requested_count != 1 {
-            bail!("provide exactly one of tool_name, tool_names, group_name, or skill_name");
+        let request = LoadRequest::parse(arguments)?;
+        match request.resource_type {
+            LoadType::Skill => self.load_skills(&request.keywords, config, paths),
+            LoadType::Tool => self.load_requested_tools(registry, &request.keywords),
         }
-        if let Some(skill_name) = skill_name {
-            if !config.skills.enabled {
-                bail!("skill loading is disabled");
-            }
-            return tools::load_installed_skill(&skill_name, config, paths);
-        }
-        let (requested_tool, requested_tools, requested_group, result) =
-            if let Some(tool_name) = tool_name {
-                let result = self.load_tool(registry, &tool_name)?;
-                (Some(tool_name), None, None, result)
-            } else if let Some(tool_names) = tool_names {
-                let result = self.load_tools(registry, &tool_names)?;
-                (None, Some(tool_names), None, result)
-            } else {
-                let group_name = group_name.unwrap();
-                let result = self.load_group(registry, &group_name)?;
-                (None, None, Some(group_name), result)
-            };
+    }
+
+    /// 加载多个工具并返回固定的 `tools` 数组。
+    ///
+    /// 参数:
+    /// - `registry`: 完整工具注册表
+    /// - `keywords`: 要加载的工具名称
+    ///
+    /// 返回:
+    /// - 包含工具名称和加载状态的 JSON
+    fn load_requested_tools(
+        &mut self,
+        registry: &ToolRegistry,
+        keywords: &[String],
+    ) -> Result<String> {
+        let result = self.load_tools(registry, keywords)?;
         let already_loaded = result.is_already_loaded_request();
         let instruction = if already_loaded {
             "This request only targeted tools that were already loaded. Do not call load for this target again; call the tool directly."
         } else {
             "The requested tools are now available. Call the loaded tool directly; do not reload it before use."
         };
+        let tools = keywords
+            .iter()
+            .map(|name| {
+                let status = if result.newly_loaded_tools.contains(name) {
+                    "loaded"
+                } else {
+                    "already_loaded"
+                };
+                json!({"name": name, "status": status})
+            })
+            .collect::<Vec<_>>();
         Ok(serde_json::to_string_pretty(&json!({
             "ok": true,
-            "requested_tool": requested_tool,
-            "requested_tools": requested_tools,
-            "requested_group": requested_group,
+            "tools": tools,
             "already_loaded": already_loaded,
-            "newly_loaded_tools": result.newly_loaded_tools,
-            "already_loaded_tools": result.already_loaded_tools,
             "currently_loaded_tools": self.loaded_tool_names(),
-            "loaded_groups": self.loaded_group_names(registry),
-            "visible_tools": self.visible_tool_names(registry),
             "instruction": instruction,
         }))?)
     }
 
-    /// 加载单个工具。
+    /// 加载多个 skill 文档并返回固定的 `skills` 数组。
     ///
     /// 参数:
-    /// - `registry`: 完整工具注册表
-    /// - `name`: 要加载的工具名称
+    /// - `keywords`: 要加载的 skill 名称
+    /// - `config`: 当前应用配置
+    /// - `paths`: 应用目录路径集合
     ///
     /// 返回:
-    /// - 本次请求加载的工具名称列表
-    fn load_tool(&mut self, registry: &ToolRegistry, name: &str) -> Result<ToolLoadResult> {
-        self.load_tools(registry, &[name.to_string()])
+    /// - 包含名称和完整文档的 JSON
+    fn load_skills(
+        &self,
+        keywords: &[String],
+        config: &AppConfig,
+        paths: &SaiPaths,
+    ) -> Result<String> {
+        if !config.skills.enabled {
+            bail!("skill loading is disabled");
+        }
+        // 1. 先读取全部文档，任一名称无效时不返回部分结果
+        let skills = keywords
+            .iter()
+            .map(|name| {
+                tools::load_installed_skill(name, config, paths)
+                    .map(|content| json!({"name": name, "content": content}))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(serde_json::to_string_pretty(&json!({
+            "ok": true,
+            "skills": skills,
+        }))?)
     }
 
     /// 原子加载多个工具。
@@ -243,38 +251,6 @@ impl ToolVisibility {
                 result.already_loaded_tools.push(name.clone());
             } else {
                 result.newly_loaded_tools.push(name.clone());
-            }
-        }
-        Ok(result)
-    }
-
-    /// 加载一个用途分组下的所有工具。
-    ///
-    /// 参数:
-    /// - `registry`: 完整工具注册表
-    /// - `group`: 要加载的分组名称
-    ///
-    /// 返回:
-    /// - 本次请求加载的工具名称列表
-    fn load_group(&mut self, registry: &ToolRegistry, group: &str) -> Result<ToolLoadResult> {
-        let names = registry
-            .tool_infos()
-            .into_iter()
-            .filter(|info| {
-                !tools::progressive::is_initial_tool(&info.name)
-                    && tools::progressive::tool_group(&info.name) == group
-            })
-            .map(|info| info.name)
-            .collect::<Vec<_>>();
-        if names.is_empty() {
-            bail!("unknown or empty tool group: {group}");
-        }
-        let mut result = ToolLoadResult::default();
-        for name in &names {
-            if self.loaded.insert(name.clone()) {
-                result.newly_loaded_tools.push(name.clone());
-            } else {
-                result.already_loaded_tools.push(name.clone());
             }
         }
         Ok(result)
@@ -307,22 +283,6 @@ impl ToolVisibility {
             })
             .collect()
     }
-
-    /// 获取当前可见工具名称。
-    ///
-    /// 参数:
-    /// - `registry`: 完整工具注册表
-    ///
-    /// 返回:
-    /// - 当前可见工具名称列表
-    fn visible_tool_names(&self, registry: &ToolRegistry) -> Vec<String> {
-        registry
-            .tool_infos()
-            .into_iter()
-            .filter(|info| self.is_visible(&info.name))
-            .map(|info| info.name)
-            .collect()
-    }
 }
 
 #[derive(Default)]
@@ -342,56 +302,6 @@ impl ToolLoadResult {
     fn is_already_loaded_request(&self) -> bool {
         self.newly_loaded_tools.is_empty() && !self.already_loaded_tools.is_empty()
     }
-}
-
-/// 从 JSON 参数中读取非空字符串。
-///
-/// 参数:
-/// - `args`: JSON 参数对象
-/// - `name`: 字段名
-///
-/// 返回:
-/// - 字段存在且非空时返回字符串
-fn string_arg(args: &Value, name: &str) -> Option<String> {
-    args.get(name)
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-}
-
-/// 从 JSON 参数中读取非空字符串数组，并按首次出现顺序去重。
-///
-/// 参数:
-/// - `args`: JSON 参数对象
-/// - `name`: 字段名
-///
-/// 返回:
-/// - 字段不存在时返回空，字段合法时返回去重后的字符串列表
-fn string_array_arg(args: &Value, name: &str) -> Result<Option<Vec<String>>> {
-    let Some(value) = args.get(name) else {
-        return Ok(None);
-    };
-    let Some(values) = value.as_array() else {
-        bail!("{name} must be a non-empty array of strings");
-    };
-    if values.is_empty() {
-        bail!("{name} must be a non-empty array of strings");
-    }
-    let mut unique = BTreeSet::new();
-    let mut result = Vec::new();
-    for value in values {
-        let Some(value) = value.as_str().map(str::trim) else {
-            bail!("{name} must contain only non-empty strings");
-        };
-        if value.is_empty() {
-            bail!("{name} must contain only non-empty strings");
-        }
-        if unique.insert(value.to_string()) {
-            result.push(value.to_string());
-        }
-    }
-    Ok(Some(result))
 }
 
 #[cfg(test)]
@@ -417,12 +327,16 @@ mod tests {
     }
 
     #[test]
-    fn progressive_visibility_loads_group() {
+    fn progressive_visibility_loads_individual_tools() {
         let mut registry = test_registry();
         tools::register_progressive_loader(&mut registry);
         let mut visibility = ToolVisibility::new(true);
 
-        load_args(&mut visibility, &registry, r#"{"group_name":"web"}"#);
+        load_args(
+            &mut visibility,
+            &registry,
+            r#"{"type":"tool","keywords":["web_search"]}"#,
+        );
         let names = definition_names(visibility.definitions(&registry));
 
         assert!(names.contains(&"web_search".to_string()));
@@ -430,21 +344,28 @@ mod tests {
     }
 
     #[test]
-    fn progressive_visibility_reports_duplicate_group_load() {
+    fn progressive_visibility_reports_duplicate_tool_load() {
         let mut registry = test_registry();
         tools::register_progressive_loader(&mut registry);
         let mut visibility = ToolVisibility::new(true);
 
-        let first = load_args(&mut visibility, &registry, r#"{"group_name":"web"}"#);
-        let second = load_args(&mut visibility, &registry, r#"{"group_name":"web"}"#);
+        let first = load_args(
+            &mut visibility,
+            &registry,
+            r#"{"type":"tool","keywords":["web_search"]}"#,
+        );
+        let second = load_args(
+            &mut visibility,
+            &registry,
+            r#"{"type":"tool","keywords":["web_search"]}"#,
+        );
         let first = serde_json::from_str::<Value>(&first).unwrap();
         let second = serde_json::from_str::<Value>(&second).unwrap();
 
         assert_eq!(first["already_loaded"], json!(false));
-        assert_eq!(first["newly_loaded_tools"], json!(["web_search"]));
+        assert_eq!(first["tools"][0]["name"], json!("web_search"));
         assert_eq!(second["already_loaded"], json!(true));
-        assert_eq!(second["newly_loaded_tools"], json!([]));
-        assert_eq!(second["already_loaded_tools"], json!(["web_search"]));
+        assert_eq!(second["tools"][0]["status"], json!("already_loaded"));
         assert!(second["instruction"]
             .as_str()
             .unwrap()
@@ -457,7 +378,11 @@ mod tests {
         tools::register_progressive_loader(&mut registry);
         let mut visibility = ToolVisibility::new(true);
 
-        load_args(&mut visibility, &registry, r#"{"group_name":"web"}"#);
+        load_args(
+            &mut visibility,
+            &registry,
+            r#"{"type":"tool","keywords":["web_search"]}"#,
+        );
         let definitions = visibility.definitions(&registry);
         let description = definitions
             .iter()
@@ -524,15 +449,20 @@ mod tests {
         let output = visibility
             .load_from_arguments(
                 &registry,
-                r#"{"skill_name":"gpu-passthrough"}"#,
+                r#"{"type":"skill","keywords":["gpu-passthrough"]}"#,
                 &config,
                 &paths,
             )
             .unwrap();
 
-        assert!(output.contains("<loaded-skill"));
-        assert!(output.contains("gpu-passthrough"));
-        assert!(output.contains("gpustoggle --status"));
+        let output = serde_json::from_str::<serde_json::Value>(&output).unwrap();
+        assert!(output["skills"].is_array());
+        assert!(output["skills"][0]["content"]
+            .as_str()
+            .unwrap()
+            .contains("<loaded-skill"));
+        assert!(output.to_string().contains("gpu-passthrough"));
+        assert!(output.to_string().contains("gpustoggle --status"));
     }
 
     #[test]
@@ -545,7 +475,12 @@ mod tests {
         let mut visibility = ToolVisibility::new(true);
 
         let err = visibility
-            .load_from_arguments(&registry, r#"{"skill_name":"yce"}"#, &config, &paths)
+            .load_from_arguments(
+                &registry,
+                r#"{"type":"skill","keywords":["yce"]}"#,
+                &config,
+                &paths,
+            )
             .unwrap_err();
 
         assert!(err.to_string().contains("skill loading is disabled"));

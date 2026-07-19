@@ -20,28 +20,22 @@ pub(crate) fn register_loader(registry: &mut ToolRegistry) {
         json!({
             "type": "object",
             "properties": {
-                "tool_name": {
+                "type": {
                     "type": "string",
-                    "description": "Name of one tool to load, including one tool listed inside a group. Use exactly one of tool_name, tool_names, group_name, or skill_name."
+                    "enum": ["tool", "skill"],
+                    "description": "Resource type to load."
                 },
-                "tool_names": {
+                "keywords": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     },
                     "minItems": 1,
                     "uniqueItems": true,
-                    "description": "Names of multiple tools to load together, including tools from different groups. Use exactly one of tool_name, tool_names, group_name, or skill_name."
-                },
-                "group_name": {
-                    "type": "string",
-                    "description": "Name of one entire tool group to load. Use exactly one of tool_name, tool_names, group_name, or skill_name."
-                },
-                "skill_name": {
-                    "type": "string",
-                    "description": "Name of one installed skill whose full SKILL.md should be loaded. Use exactly one of tool_name, tool_names, group_name, or skill_name."
+                    "description": "Exact tool or installed skill names to load. Always pass an array, including for one item."
                 }
             },
+            "required": ["type", "keywords"],
             "additionalProperties": false
         }),
         |_| async move {
@@ -116,7 +110,7 @@ pub(crate) fn loader_description(registry: &ToolRegistry, loaded: &BTreeSet<Stri
             .push(format!("{} ({permission}) - {summary}", info.name));
     }
     let mut text = String::from(
-        "Load additional tools or full skill documents before using them. Use tool_name to load any one listed tool, tool_names to load multiple listed tools together, group_name to load an entire group, or skill_name to load one installed skill's full SKILL.md. Tools listed inside a group can be loaded individually; group_name is only needed when every tool in that group is required. Initial tools are limited to base tools and this loader. Do not call load for already loaded tools or groups; call the loaded tool directly. If a loaded tool returns an error, treat it as a tool execution or workflow error, not as a loading error.\n",
+        "Load additional tools or full skill documents before using them. Set type to tool or skill and pass exact names in the keywords array, including when loading one item. Multiple tools or skills can be loaded in one call. Tools listed inside a group can be loaded individually. Initial tools are limited to base tools and this loader. Do not call load for already loaded tools; call the loaded tool directly. If a loaded tool returns an error, treat it as a tool execution or workflow error, not as a loading error.\n",
     );
     if !loaded_tools.is_empty() {
         let loaded_groups = fully_loaded_groups(&group_totals, &group_loaded);

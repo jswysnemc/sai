@@ -5,15 +5,18 @@ use crate::tools::{ToolRegistry, ToolSpec};
 use serde_json::{json, Value};
 
 #[test]
-fn loads_one_tool_from_group_with_legacy_argument() {
+fn loads_one_tool_with_public_argument() {
     let registry = test_registry();
     let mut visibility = ToolVisibility::new(true);
 
-    let output = load(&mut visibility, &registry, r#"{"tool_name":"web_search"}"#);
+    let output = load(
+        &mut visibility,
+        &registry,
+        r#"{"type":"tool","keywords":["web_search"]}"#,
+    );
     let output = serde_json::from_str::<Value>(&output).unwrap();
 
-    assert_eq!(output["requested_tool"], json!("web_search"));
-    assert_eq!(output["newly_loaded_tools"], json!(["web_search"]));
+    assert_eq!(output["tools"][0]["name"], json!("web_search"));
     assert!(visibility.is_visible("web_search"));
     assert!(!visibility.is_visible("web_fetch"));
 }
@@ -26,18 +29,11 @@ fn loads_multiple_tools_and_deduplicates_names() {
     let output = load(
         &mut visibility,
         &registry,
-        r#"{"tool_names":["web_search","analyze_image","web_search"]}"#,
+        r#"{"type":"tool","keywords":["web_search","analyze_image","web_search"]}"#,
     );
     let output = serde_json::from_str::<Value>(&output).unwrap();
 
-    assert_eq!(
-        output["requested_tools"],
-        json!(["web_search", "analyze_image"])
-    );
-    assert_eq!(
-        output["newly_loaded_tools"],
-        json!(["web_search", "analyze_image"])
-    );
+    assert_eq!(output["tools"].as_array().unwrap().len(), 2);
     assert!(visibility.is_visible("web_search"));
     assert!(visibility.is_visible("analyze_image"));
 }
@@ -46,48 +42,52 @@ fn loads_multiple_tools_and_deduplicates_names() {
 fn classifies_mixed_multiple_tool_load() {
     let registry = test_registry();
     let mut visibility = ToolVisibility::new(true);
-    load(&mut visibility, &registry, r#"{"tool_name":"web_search"}"#);
+    load(
+        &mut visibility,
+        &registry,
+        r#"{"type":"tool","keywords":["web_search"]}"#,
+    );
 
     let output = load(
         &mut visibility,
         &registry,
-        r#"{"tool_names":["web_search","analyze_image"]}"#,
+        r#"{"type":"tool","keywords":["web_search","analyze_image"]}"#,
     );
     let output = serde_json::from_str::<Value>(&output).unwrap();
 
-    assert_eq!(output["already_loaded_tools"], json!(["web_search"]));
-    assert_eq!(output["newly_loaded_tools"], json!(["analyze_image"]));
+    assert_eq!(output["tools"][0]["status"], json!("already_loaded"));
+    assert_eq!(output["tools"][1]["status"], json!("loaded"));
     assert_eq!(output["already_loaded"], json!(false));
 }
 
 #[test]
-fn rejects_invalid_tool_name_arrays() {
+fn rejects_invalid_keyword_arrays() {
     let registry = test_registry();
     for arguments in [
-        r#"{"tool_names":[]}"#,
-        r#"{"tool_names":["web_search",2]}"#,
-        r#"{"tool_names":["web_search",""]}"#,
+        r#"{"type":"tool","keywords":[]}"#,
+        r#"{"type":"tool","keywords":["web_search",2]}"#,
+        r#"{"type":"tool","keywords":["web_search",""]}"#,
     ] {
         let mut visibility = ToolVisibility::new(true);
         let error = load_error(&mut visibility, &registry, arguments);
 
-        assert!(error.contains("tool_names must"));
+        assert!(error.contains("keywords"));
         assert!(visibility.loaded_tool_names().is_empty());
     }
 }
 
 #[test]
-fn rejects_conflicting_load_modes() {
+fn rejects_conflicting_keyword_sources() {
     let registry = test_registry();
     let mut visibility = ToolVisibility::new(true);
 
     let error = load_error(
         &mut visibility,
         &registry,
-        r#"{"tool_names":["web_search"],"group_name":"web"}"#,
+        r#"{"type":"tool","keywords":["web_search"],"tools":["web_fetch"]}"#,
     );
 
-    assert!(error.contains("provide exactly one"));
+    assert!(error.contains("one keywords source"));
     assert!(visibility.loaded_tool_names().is_empty());
 }
 
@@ -99,7 +99,7 @@ fn rejects_unknown_batch_atomically() {
     let error = load_error(
         &mut visibility,
         &registry,
-        r#"{"tool_names":["web_search","missing_tool"]}"#,
+        r#"{"type":"tool","keywords":["web_search","missing_tool"]}"#,
     );
 
     assert!(error.contains("unknown tool: missing_tool"));
