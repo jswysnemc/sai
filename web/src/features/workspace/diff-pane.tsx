@@ -5,14 +5,13 @@ import {
   CloudDownload,
   CloudUpload,
   GitBranch,
-  GitCommitHorizontal,
   History,
   RefreshCw,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { ApiError, LocalizedError, localizeApiMessage, toDisplayError } from "../../api/api-error";
-import type { GitCommitSummary, GitOperationResponse, GitStatusEntry } from "../../api/contracts";
+import type { GitOperationResponse, GitStatusEntry } from "../../api/contracts";
 import type { GitOperationOptions } from "../../api/git-contracts";
 import { Button } from "../../shared/ui/button/button";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
@@ -25,6 +24,8 @@ import { groupGitChanges } from "../source-control/changes/change-groups";
 import { MoreActionsMenu } from "../source-control/actions/more-actions-menu";
 import { resolveGitReviewDiffMode, type SourceControlDiffView } from "../source-control/diff/diff-mode";
 import { SourceControlDiff } from "../source-control/diff/source-control-diff";
+import { CommitGraph } from "../source-control/graph/commit-graph";
+import { formatGitDate } from "../source-control/graph/graph-utils";
 import { InProgressOperationBar } from "../source-control/operation/in-progress-operation-bar";
 import { GitOutputPanel } from "../source-control/output/git-output-panel";
 import type { GitOutputEntry, GitOperationUiOptions } from "../source-control/types";
@@ -75,6 +76,8 @@ export function DiffPane() {
     enabled: status.data?.status === "ready" && mode === "history",
     staleTime: 10_000
   });
+  const commits = history.data?.commits ?? [];
+  const activeCommit = selectedCommit ?? commits[0]?.sha ?? null;
   const reviewDiffMode = resolveGitReviewDiffMode(diffMode, selectedSection);
   const reviewDiff = useQuery({
     queryKey: ["git-review-diff", reviewDiffMode, selectedPath],
@@ -82,14 +85,14 @@ export function DiffPane() {
     enabled: status.data?.status === "ready" && mode === "changes"
   });
   const commitDetails = useQuery({
-    queryKey: ["git-commit-details", selectedCommit],
-    queryFn: () => api.workspace.gitCommitDetails(selectedCommit!),
-    enabled: mode === "history" && Boolean(selectedCommit)
+    queryKey: ["git-commit-details", activeCommit],
+    queryFn: () => api.workspace.gitCommitDetails(activeCommit!),
+    enabled: mode === "history" && Boolean(activeCommit)
   });
   const commitDiff = useQuery({
-    queryKey: ["git-commit-diff", selectedCommit, selectedCommitPath],
-    queryFn: () => api.workspace.gitCommitDiff(selectedCommit!, selectedCommitPath ?? undefined),
-    enabled: mode === "history" && Boolean(selectedCommit)
+    queryKey: ["git-commit-diff", activeCommit, selectedCommitPath],
+    queryFn: () => api.workspace.gitCommitDiff(activeCommit!, selectedCommitPath ?? undefined),
+    enabled: mode === "history" && Boolean(activeCommit)
   });
 
   const state = status.data;
@@ -246,8 +249,6 @@ export function DiffPane() {
   }
 
   const busy = op.isPending;
-  const commits = history.data?.commits ?? [];
-  const activeCommit = selectedCommit ?? commits[0]?.sha ?? null;
   const dirtyTotal =
     (state?.dirty_counts.staged ?? 0) +
     (state?.dirty_counts.unstaged ?? 0) +
@@ -323,7 +324,7 @@ export function DiffPane() {
           </Button>
           <Button className={mode === "history" ? "active" : ""} onClick={() => setMode("history")}>
             <History size={13} />
-            {t("History", "历史")}
+            {t("Graph", "提交图")}
           </Button>
           <Button disabled={busy} onClick={() => void runOp("fetch")} title={t("Fetch remote updates", "获取远端更新")}>
             <CloudDownload size={13} />
@@ -488,7 +489,7 @@ export function DiffPane() {
         <div className="git-manager-body">
           <section className="git-history-panel">
             <div className="git-change-head">
-              <span>{t(`History ${commits.length}`, `历史 ${commits.length}`)}</span>
+              <span>{t(`Source Control Graph ${commits.length}`, `源代码管理提交图 ${commits.length}`)}</span>
               {(history.data?.history_ahead || history.data?.history_behind) ? (
                 <small className="git-history-sync">
                   <span><ArrowUp size={10} />{history.data?.history_ahead ?? 0}</span>
@@ -496,33 +497,19 @@ export function DiffPane() {
                 </small>
               ) : null}
             </div>
-            <div className="git-file-list">
-              {commits.map((commit: GitCommitSummary) => (
-                <Button
-                  key={commit.sha}
-                  className={`git-history-row${activeCommit === commit.sha ? " active" : ""}`}
-                  onClick={() => {
-                    setSelectedCommit(commit.sha);
-                    setSelectedCommitPath(null);
-                  }}
-                >
-                  <GitCommitHorizontal size={13} />
-                  <span>
-                    <strong>{commit.subject || commit.short_sha}</strong>
-                    <small>
-                      {commit.short_sha} · {commit.author_name} · {formatDate(commit.author_date, locale)}
-                    </small>
-                  </span>
-                  {commit.local_only && <em>{t("local", "本地")}</em>}
-                </Button>
-              ))}
-              {commits.length === 0 && <div className="git-clean">{t("No commits yet", "暂无提交记录")}</div>}
-              {commits.length >= historyLimit && (
-                <Button className="git-load-more" onClick={() => setHistoryLimit((value) => value + 40)}>
-                  {t("Load more", "加载更多")}
-                </Button>
-              )}
-            </div>
+            <CommitGraph
+              commits={commits}
+              activeCommit={activeCommit}
+              busy={busy}
+              locale={locale}
+              canLoadMore={commits.length >= historyLimit}
+              onSelect={(commit) => {
+                setSelectedCommit(commit.sha);
+                setSelectedCommitPath(null);
+              }}
+              onLoadMore={() => setHistoryLimit((value) => value + 40)}
+              runOperation={runOp}
+            />
           </section>
           <div className="diff-scroll">
             {activeCommit && commitDetails.data ? (
@@ -531,7 +518,7 @@ export function DiffPane() {
                   <h3>{commitDetails.data.commit.subject}</h3>
                   <p>
                     {commitDetails.data.commit.short_sha} · {commitDetails.data.commit.author_name} ·{" "}
-                    {formatDate(commitDetails.data.commit.author_date, locale)}
+                    {formatGitDate(commitDetails.data.commit.author_date, locale)}
                   </p>
                   {commitDetails.data.commit.body && <pre>{commitDetails.data.commit.body}</pre>}
                   <div className="git-commit-files">
@@ -571,18 +558,4 @@ export function DiffPane() {
       )}
     </section>
   );
-}
-
-/**
- * 将 Git ISO 时间格式化为当前界面语言的日期时间。
- *
- * @param value Git 日期字符串
- * @param locale 当前界面语言
- * @returns 本地化日期文本
- */
-function formatDate(value: string, locale: string): string {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(locale);
 }

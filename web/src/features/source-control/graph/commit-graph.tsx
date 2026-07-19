@@ -1,0 +1,136 @@
+import { GitCommitHorizontal, Plus } from "lucide-react";
+import { useState } from "react";
+import type { GitCommitSummary } from "../../../api/contracts";
+import { Button } from "../../../shared/ui/button/button";
+import { Modal } from "../../../shared/ui/dialog/modal";
+import { useI18n } from "../../i18n/use-i18n";
+import type { RunGitOperation } from "../types";
+import { CommitContextMenu } from "./commit-context-menu";
+import { formatGitDate, formatGitReference } from "./graph-utils";
+
+type CommitGraphProps = {
+  commits: GitCommitSummary[];
+  activeCommit: string | null;
+  busy: boolean;
+  locale: string;
+  canLoadMore: boolean;
+  onSelect: (commit: GitCommitSummary) => void;
+  onLoadMore: () => void;
+  runOperation: RunGitOperation;
+};
+
+type ContextMenuState = {
+  commit: GitCommitSummary;
+  x: number;
+  y: number;
+};
+
+/**
+ * 渲染带引用、同步方向和提交操作菜单的 Source Control Graph。
+ *
+ * @param props 提交列表、选择状态和 Git 操作回调
+ * @returns 提交图列表
+ */
+export function CommitGraph(props: CommitGraphProps) {
+  const { t } = useI18n();
+  const [menu, setMenu] = useState<ContextMenuState | null>(null);
+  const [branchCommit, setBranchCommit] = useState<GitCommitSummary | null>(null);
+  const [branchName, setBranchName] = useState("");
+
+  /**
+   * 打开提交右键菜单，并限制菜单起点不超出视口。
+   *
+   * @param event 鼠标右键事件
+   * @param commit 对应提交
+   * @returns 无返回值
+   */
+  const openContextMenu = (event: React.MouseEvent, commit: GitCommitSummary) => {
+    event.preventDefault();
+    setMenu({
+      commit,
+      x: Math.max(8, Math.min(event.clientX, window.innerWidth - 17 * 16)),
+      y: Math.max(8, Math.min(event.clientY, window.innerHeight - 25 * 16))
+    });
+  };
+
+  /**
+   * 从选定提交创建并切换到新分支。
+   *
+   * @returns 无返回值
+   */
+  const createBranch = async () => {
+    const name = branchName.trim();
+    if (!branchCommit || !name) return;
+    const result = await props.runOperation("create_branch", { branch: name, start_point: branchCommit.sha });
+    if (!result?.ok) return;
+    setBranchCommit(null);
+    setBranchName("");
+  };
+
+  return (
+    <>
+      <div className="git-commit-graph">
+        {props.commits.map((commit, index) => (
+          <Button
+            key={commit.sha}
+            className={`git-graph-row${props.activeCommit === commit.sha ? " active" : ""}`}
+            onClick={() => props.onSelect(commit)}
+            onContextMenu={(event) => openContextMenu(event, commit)}
+          >
+            <span className={`git-graph-lane${commit.parents.length > 1 ? " merge" : ""}${index === 0 ? " first" : ""}${index === props.commits.length - 1 ? " last" : ""}`}>
+              <i />
+            </span>
+            <span className="git-graph-content">
+              <strong>{commit.subject || commit.short_sha}</strong>
+              <small>{commit.short_sha} · {commit.author_name} · {formatGitDate(commit.author_date, props.locale)}</small>
+              {commit.refs.length > 0 && (
+                <span className="git-graph-refs">
+                  {commit.refs.slice(0, 4).map((reference) => <em key={reference}>{formatGitReference(reference)}</em>)}
+                </span>
+              )}
+            </span>
+            <span className="git-graph-direction">
+              {commit.local_only && <b>{t("Outgoing", "待推送")}</b>}
+              {commit.remote_only && <i>{t("Incoming", "待拉取")}</i>}
+              {commit.parents.length > 1 && <GitCommitHorizontal size={12} />}
+            </span>
+          </Button>
+        ))}
+        {props.commits.length === 0 && <div className="git-clean">{t("No commits yet", "暂无提交记录")}</div>}
+        {props.canLoadMore && (
+          <Button className="git-load-more" onClick={props.onLoadMore}>{t("Load more", "加载更多")}</Button>
+        )}
+      </div>
+      {menu && (
+        <CommitContextMenu
+          {...menu}
+          busy={props.busy}
+          runOperation={props.runOperation}
+          onView={() => props.onSelect(menu.commit)}
+          onCreateBranch={() => setBranchCommit(menu.commit)}
+          onClose={() => setMenu(null)}
+        />
+      )}
+      <Modal
+        open={Boolean(branchCommit)}
+        title={t("Create branch from commit", "从提交创建分支")}
+        description={branchCommit ? `${branchCommit.short_sha} · ${branchCommit.subject}` : undefined}
+        size="small"
+        onClose={() => setBranchCommit(null)}
+        footer={(
+          <>
+            <Button onClick={() => setBranchCommit(null)}>{t("Cancel", "取消")}</Button>
+            <Button variant="primary" disabled={props.busy || !branchName.trim()} onClick={() => void createBranch()}>
+              <Plus size={12} />{t("Create", "创建")}
+            </Button>
+          </>
+        )}
+      >
+        <label className="git-graph-branch-field">
+          <span>{t("Branch name", "分支名称")}</span>
+          <input value={branchName} onChange={(event) => setBranchName(event.target.value)} spellCheck={false} />
+        </label>
+      </Modal>
+    </>
+  );
+}

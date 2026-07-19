@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use std::collections::HashSet;
 use std::path::Path;
 
 #[path = "git_diff_types.rs"]
@@ -27,8 +28,12 @@ mod branches;
 #[path = "git_operations.rs"]
 mod operations;
 
+#[path = "git_history_operations.rs"]
+mod history_operations;
+
 use branches::*;
 use diff_content::*;
+use history_operations::*;
 pub(crate) use operations::git_op;
 use process::*;
 use support::*;
@@ -292,7 +297,7 @@ pub(crate) async fn git_log(
         "-z".to_string(),
         "--find-renames".to_string(),
         format!("--max-count={limit}"),
-        "--pretty=format:%x1e%H%x1f%h%x1f%P%x1f%D%x1f%an%x1f%ae%x1f%aI%x1f%s".to_string(),
+        "--pretty=format:%x1e%H%x1f%h%x1f%P%x1f%D%x1f%an%x1f%ae%x1f%aI%x1f%s%x00".to_string(),
     ];
     if skip > 0 {
         args.push(format!("--skip={skip}"));
@@ -305,6 +310,8 @@ pub(crate) async fn git_log(
     let mut history_ahead = state.ahead;
     let mut history_behind = state.behind;
     let mut merge_base = String::new();
+    let mut local_only = HashSet::new();
+    let mut remote_only = HashSet::new();
     if !remote_ref.is_empty() {
         if let Ok(output) = git_success(
             Path::new(&state.repo_root),
@@ -316,29 +323,32 @@ pub(crate) async fn git_log(
         }
         if let Ok(output) = git_success(
             Path::new(&state.repo_root),
-            &[
-                "rev-list",
-                "--left-right",
-                "--count",
-                &format!("HEAD...{remote_ref}"),
-            ],
+            &["rev-list", "--left-right", &format!("HEAD...{remote_ref}")],
         )
         .await
         {
-            let mut parts = output.stdout.split_whitespace();
-            history_ahead = parts
-                .next()
-                .and_then(|value| value.parse().ok())
-                .unwrap_or(0);
-            history_behind = parts
-                .next()
-                .and_then(|value| value.parse().ok())
-                .unwrap_or(0);
+            for line in output.stdout.lines() {
+                if let Some(sha) = line.strip_prefix('<') {
+                    local_only.insert(sha.to_string());
+                } else if let Some(sha) = line.strip_prefix('>') {
+                    remote_only.insert(sha.to_string());
+                }
+            }
+            history_ahead = local_only.len() as i32;
+            history_behind = remote_only.len() as i32;
         }
+    }
+    args.push("HEAD".to_string());
+    if !remote_ref.is_empty() {
+        args.push(remote_ref.clone());
     }
     let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
     let output = git_success(Path::new(&state.repo_root), &arg_refs).await?;
-    let commits = parse_git_log(&output.stdout);
+    let mut commits = parse_git_log(&output.stdout);
+    for commit in &mut commits {
+        commit.local_only = local_only.contains(&commit.sha);
+        commit.remote_only = remote_only.contains(&commit.sha);
+    }
     Ok(GitLogResponse {
         state,
         commits,

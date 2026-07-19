@@ -65,6 +65,8 @@ struct GitOpRequest {
     start_point: Option<String>,
     post_action: Option<String>,
     patch: Option<String>,
+    commit: Option<String>,
+    reset_mode: Option<String>,
     #[serde(default)]
     all: bool,
     #[serde(default)]
@@ -349,6 +351,8 @@ async fn git_op(
             start_point: request.start_point.as_deref(),
             post_action: request.post_action.as_deref(),
             patch: request.patch.as_deref(),
+            commit: request.commit.as_deref(),
+            reset_mode: request.reset_mode.as_deref(),
             all: request.all,
             amend: request.amend,
             signoff: request.signoff,

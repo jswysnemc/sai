@@ -372,6 +372,7 @@ pub(super) fn parse_git_log(raw: &str) -> Vec<GitCommitSummary> {
             file_count: files.len(),
             files,
             local_only: false,
+            remote_only: false,
         });
     }
     commits

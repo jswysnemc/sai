@@ -115,6 +115,7 @@ pub(crate) struct GitCommitSummary {
     pub files: Vec<GitCommitFile>,
     pub file_count: usize,
     pub local_only: bool,
+    pub remote_only: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -180,6 +181,8 @@ pub(crate) struct GitOperationRequest<'a> {
     pub(crate) start_point: Option<&'a str>,
     pub(crate) post_action: Option<&'a str>,
     pub(crate) patch: Option<&'a str>,
+    pub(crate) commit: Option<&'a str>,
+    pub(crate) reset_mode: Option<&'a str>,
     pub(crate) all: bool,
     pub(crate) amend: bool,
     pub(crate) signoff: bool,
@@ -207,6 +210,8 @@ impl<'a> GitOperationRequest<'a> {
             start_point: None,
             post_action: None,
             patch: None,
+            commit: None,
+            reset_mode: None,
             all: false,
             amend: false,
             signoff: false,

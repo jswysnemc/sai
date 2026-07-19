@@ -9,6 +9,8 @@ export type GitOperationOptions = {
   start_point?: string;
   post_action?: "push" | "sync";
   patch?: string;
+  commit?: string;
+  reset_mode?: "soft" | "mixed" | "hard";
   all?: boolean;
   amend?: boolean;
   signoff?: boolean;

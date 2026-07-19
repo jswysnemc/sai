@@ -274,6 +274,7 @@ export type GitCommitSummary = {
   files: GitCommitFile[];
   file_count: number;
   local_only: boolean;
+  remote_only: boolean;
 };
 
 export type GitLogResponse = {
