@@ -89,6 +89,67 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 - **设置中心** - 供应商、模型、权限、网关、MCP、Hooks、记忆、人格、Skills 全图形化配置
 - **国际化** - 中英文界面切换
 
+#### 源代码管理
+
+Web 工作台内置与 VS Code 风格一致的源代码管理工作区，底层调用系统 `git`，直接操作真实仓库。命令结束后会强制刷新；外部文件变化或 `.git` 元数据变化也会触发自动刷新。
+
+**模块结构**
+
+```text
+Web 视图（Changes / Graph / Repositories / Diff / Merge Editor）
+  -> ScmStateStore 与类型化命令注册表
+  -> /api/workspace/git/*
+  -> GitService 模块（状态 / 差异 / 历史 / 资源 / worktree）
+  -> RepositoryWatcher（文件事件，300 毫秒防抖）
+  -> 系统 git CLI
+```
+
+- `src/web/workspace/git_*.rs` 分别负责进程执行、状态、差异、分支、历史、冲突、仓库、资源、监听和 worktree。
+- `src/web/api/workspace_git*.rs` 校验活动工作区中的仓库根目录，并提供 Git HTTP 接口和事件流接口。
+- `web/src/features/source-control/` 包含 Changes、Graph、Repositories、Diff、Merge Editor、命令注册表、状态钩子、设置、确认框和 Git 输出视图。
+- 仓库发现限制扫描深度，状态刷新限制并发数，Git 命令具备超时与锁冲突重试，Graph 只挂载可见行。
+
+**界面操作与 Git 命令对照**
+
+| 界面操作 | 系统 Git 命令 |
+| --- | --- |
+| 刷新状态 | `git status --porcelain=v2 --branch --show-stash -z` |
+| 暂存 / 全部暂存 | `git add -- <paths>` / `git add -A --` |
+| 取消暂存 / 全部取消暂存 | `git restore --staged -- <paths>` / `git restore --staged -- .` |
+| 丢弃 / 全部丢弃 | `git restore --staged --worktree -- <paths>`；未跟踪文件使用 `git clean -fd -- <paths>` |
+| 暂存 / 取消暂存 / 丢弃区块 | 使用经过校验的 unified patch 调用 `git apply --cached` 或 `git apply --reverse` |
+| 提交变体 | `git commit -m`，可附加 `--amend`、`--signoff` 或 `--allow-empty` |
+| 获取 / 拉取 / 拉取并变基 | `git fetch --prune`、`git pull`、`git pull --rebase` |
+| 推送 / 强制推送 / 同步 | `git push`、`git push --force-with-lease`，或依次执行 pull 与 push |
+| 分支操作 | `git switch`、`git switch -c`、`git branch -m/-d/-D`、`git merge`、`git rebase` |
+| 历史操作 | `git switch --detach`、`git cherry-pick`、`git rebase`、`git reset`、`git revert --no-edit` |
+| stash / 标签 / 远端 | `git stash`、`git tag`、`git remote add/remove/set-url` |
+| 完成冲突操作 | `git add`，随后执行 merge/rebase/cherry-pick/revert 的 `--continue`、`--skip` 或 `--abort` |
+| worktree | `git worktree list --porcelain -z`、`git worktree add`、`git worktree remove` |
+
+**与 VS Code 功能差异**
+
+| 范围 | 状态 | 当前行为 |
+| --- | --- | --- |
+| 变更与提交流程 | 已实现 | 多仓库分区、树形/列表视图、多选、暂存/取消暂存/丢弃、Smart Commit、修订、签署、提交后推送或同步 |
+| 差异与部分暂存 | 部分实现 | 正确选择 HEAD/Index/Working Tree，并支持完整区块操作；暂不提供任意选中行补丁编辑 |
+| 分支与远端 | 已实现 | 创建、切换、重命名、删除、合并、变基、获取、拉取、推送、同步、发布上游、租约强制推送 |
+| 提交图 | 部分实现 | 分页和虚拟化历史、引用标签、待拉取/待推送标记、历史操作；提交轨道采用简化渲染 |
+| stash、标签与远端 | 已实现 | 列表、创建、应用、弹出、删除、添加与移除，并支持 stash 补丁预览 |
+| 冲突 | 部分实现 | 文本合并编辑器支持 base/ours/theirs 和流程控制；二进制与符号链接冲突需使用外部工具 |
+| 多仓库与 worktree | 已实现 | 有限深度发现、仓库独立状态、关闭/恢复显示、创建/打开/移除 worktree |
+| Git 输出与失败 | 已实现 | 非零退出状态显示 stderr，Git 输出面板保留命令详情，破坏性命令使用项目统一对话框确认 |
+| GitHub 发布与 PR 审核 | 未实现 | 已支持通用远端发布；GitHub 登录、仓库列表和 PR 审核不在当前范围内 |
+
+**源代码管理快捷键**
+
+| 快捷键 | 操作 |
+| --- | --- |
+| `Ctrl+Enter` / `Cmd+Enter` | 在提交说明输入区执行主提交动作 |
+| `Ctrl+单击` / `Cmd+单击` | 切换当前文件的多选状态 |
+| `Shift+单击` | 从当前锚点扩展文件选择范围 |
+| `Escape` | 关闭文件或提交右键菜单 |
+
 ### 跨平台 Shell 集成
 
 - **Shell 拦截** - 命令未找到时自动转发给 Agent,用自然语言解释或建议修复

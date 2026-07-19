@@ -89,6 +89,67 @@ Run `sai web` and a browser opens a full remote programming workbench:
 - **Settings center** - Graphical config for providers, models, permissions, gateways, MCP, hooks, memory, personas, skills
 - **i18n** - Chinese / English UI toggle
 
+#### Source Control
+
+The Web workbench includes a VS Code-style Source Control workspace backed by the system `git` executable. It operates on real repositories and refreshes after commands or external file and `.git` metadata changes.
+
+**Module layout**
+
+```text
+Web Views (Changes / Graph / Repositories / Diff / Merge Editor)
+  -> ScmStateStore and typed command registry
+  -> /api/workspace/git/*
+  -> GitService modules (status / diff / history / resources / worktrees)
+  -> RepositoryWatcher (filesystem events, 300 ms debounce)
+  -> system git CLI
+```
+
+- `src/web/workspace/git_*.rs` separates process execution, status, diff, branch, history, conflict, repository, resource, watcher, and worktree responsibilities.
+- `src/web/api/workspace_git*.rs` validates active-workspace repository roots and exposes Git HTTP and event-stream endpoints.
+- `web/src/features/source-control/` contains the Changes, Graph, Repositories, Diff, Merge Editor, command registry, state hooks, settings, confirmations, and Git Output views.
+- Repository discovery scans to a bounded depth, status refreshes use bounded concurrency, Git commands have timeouts and lock retries, and the Graph mounts only visible rows.
+
+**UI action to Git command mapping**
+
+| UI action | System Git command |
+| --- | --- |
+| Refresh status | `git status --porcelain=v2 --branch --show-stash -z` |
+| Stage / Stage All | `git add -- <paths>` / `git add -A --` |
+| Unstage / Unstage All | `git restore --staged -- <paths>` / `git restore --staged -- .` |
+| Discard / Discard All | `git restore --staged --worktree -- <paths>` plus `git clean -fd -- <paths>` for untracked files |
+| Stage / unstage / revert hunk | `git apply --cached` or `git apply --reverse` with a validated unified patch |
+| Commit variants | `git commit -m`, optionally `--amend`, `--signoff`, or `--allow-empty` |
+| Fetch / Pull / Pull Rebase | `git fetch --prune`, `git pull`, `git pull --rebase` |
+| Push / Force Push / Sync | `git push`, `git push --force-with-lease`, or pull followed by push |
+| Branch operations | `git switch`, `git switch -c`, `git branch -m/-d/-D`, `git merge`, `git rebase` |
+| History operations | `git switch --detach`, `git cherry-pick`, `git rebase`, `git reset`, `git revert --no-edit` |
+| Stash / tags / remotes | `git stash`, `git tag`, `git remote add/remove/set-url` |
+| Conflict completion | `git add`, then merge/rebase/cherry-pick/revert `--continue`, `--skip`, or `--abort` |
+| Worktrees | `git worktree list --porcelain -z`, `git worktree add`, `git worktree remove` |
+
+**VS Code compatibility**
+
+| Area | Status | Current behavior |
+| --- | --- | --- |
+| Changes and commit workflow | Implemented | Multi-repository sections, tree/list views, multi-select, stage/unstage/discard, Smart Commit, amend, sign-off, push/sync variants |
+| Diff and partial staging | Partial | Correct HEAD/Index/Working Tree selection and complete-hunk actions; arbitrary selected-line patch editing is not provided |
+| Branches and remotes | Implemented | Create, checkout, rename, delete, merge, rebase, fetch, pull, push, sync, publish upstream, force-with-lease |
+| Commit Graph | Partial | Paginated, virtualized history with refs, incoming/outgoing markers and history actions; the lane renderer is simplified |
+| Stash, tags, and remotes | Implemented | List/create/apply/pop/drop and add/remove operations, including stash patch preview |
+| Conflicts | Partial | Text merge editor with base/ours/theirs and operation state controls; binary and symbolic-link conflicts require an external tool |
+| Multiple repositories and worktrees | Implemented | Bounded discovery, independent repository state, close/show controls, create/open/remove worktrees |
+| Git output and failures | Implemented | Non-zero exit status is reported with stderr in the Git Output panel; destructive commands use project dialogs |
+| GitHub publishing and PR review | Not implemented | Generic remote publication is available; GitHub authentication, repository listing, and pull-request review are outside this scope |
+
+**Source Control shortcuts**
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+Enter` / `Cmd+Enter` | Run the primary commit action from the commit message field |
+| `Ctrl+Click` / `Cmd+Click` | Toggle files in the current multi-selection |
+| `Shift+Click` | Extend file selection from the current anchor |
+| `Escape` | Close an open file or commit context menu |
+
 ### Cross-platform shell integration
 
 - **Shell interception** - Unknown commands are forwarded to the Agent for natural-language explanation or fix suggestions
