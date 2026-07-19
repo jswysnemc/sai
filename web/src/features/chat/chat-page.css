@@ -284,9 +284,14 @@
   transition: opacity 140ms ease;
 }
 
-.user-bubble:hover .message-actions,
+.user-message-stack:hover .message-actions,
 .assistant-message:hover .message-actions {
   opacity: 1;
+}
+
+.user-message-actions {
+  justify-self: end;
+  margin-top: 3px;
 }
 
 .assistant-message .message-actions {

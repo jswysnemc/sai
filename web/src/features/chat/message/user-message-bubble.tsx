@@ -54,8 +54,8 @@ export function UserMessageBubble({ content, timestamp, imageUrls, onRetry }: Us
               {expanded ? t("Collapse", "收起") : t("Show more", "显示更多")}
             </Button>
           )}
-          <MessageActions text={content} timestamp={timestamp} onRetry={onRetry} />
         </div>
+        <MessageActions className="user-message-actions" text={content} timestamp={timestamp} onRetry={onRetry} />
       </div>
     </article>
   );

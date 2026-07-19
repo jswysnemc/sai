@@ -116,5 +116,6 @@ describe("HistoryTurn", () => {
     expect(html).toContain("user-skill-atom");
     expect(html).toContain("/research");
     expect(html).not.toContain("Read primary sources");
+    expect(html).toContain('</div><div class="message-actions user-message-actions">');
   });
 });

@@ -4,6 +4,7 @@ import { useI18n } from "../../i18n/use-i18n";
 
 type MessageActionsProps = {
   text: string;
+  className?: string;
   timestamp?: string;
   onRetry?: () => void;
   onFork?: () => void;
@@ -13,7 +14,7 @@ type MessageActionsProps = {
 /**
  * 消息操作行：时间、重试、分支、复制。
  */
-export function MessageActions({ text, timestamp, onRetry, onFork, busy }: MessageActionsProps) {
+export function MessageActions({ text, className, timestamp, onRetry, onFork, busy }: MessageActionsProps) {
   const { locale, t } = useI18n();
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | null>(null);
@@ -34,7 +35,7 @@ export function MessageActions({ text, timestamp, onRetry, onFork, busy }: Messa
   };
 
   return (
-    <div className="message-actions">
+    <div className={`message-actions${className ? ` ${className}` : ""}`}>
       {timestamp && <time className="message-timestamp">{formatTimestamp(timestamp, locale)}</time>}
       {onRetry && (
         <button type="button" className="message-copy" onClick={onRetry} aria-label={t("Retry turn", "重试本轮")} title={t("Retry turn", "重试本轮")} disabled={busy}>
