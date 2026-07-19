@@ -429,6 +429,24 @@ impl TranscriptStore {
         self.active_tool_index = Some(index);
     }
 
+    /// 记录历史工具调用，避免根据当前工作区重建编辑差异。
+    ///
+    /// 参数:
+    /// - `name`: 工具名称
+    /// - `arguments`: 原始工具参数
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn push_history_tool_call(&mut self, name: String, arguments: String) {
+        self.finalize_live_tail();
+        self.live_tool_call = None;
+        let index = self.cells.len();
+        self.push_cell(HistoryCell::Tool(ToolCell::Invocation(ToolView::running(
+            name, arguments,
+        ))));
+        self.active_tool_index = Some(index);
+    }
+
     /// 记录工具结果。
     ///
     /// 参数:

@@ -1,5 +1,6 @@
 mod composer_frame;
 mod event_loop;
+mod history;
 mod history_insert;
 mod reflow;
 mod reflow_state;
@@ -16,6 +17,7 @@ use crate::cli::repl_chrome::ReplChrome;
 use crate::render::transcript::{
     TranscriptMode, TranscriptRenderOptions, TranscriptStore, WelcomeCell,
 };
+use crate::state::SessionTimelineTurn;
 use anyhow::Result;
 use std::io::{self, Write};
 use std::time::{Duration, Instant};
@@ -294,6 +296,18 @@ impl ReplRuntime {
     /// - 操作是否成功
     pub(super) fn record_user(&mut self, mode: AgentMode, text: String) -> Result<()> {
         self.transcript.push_user_echo(transcript_mode(mode), text);
+        self.sync_transcript(false)
+    }
+
+    /// 将已保存的会话历史渲染到当前 TUI transcript。
+    ///
+    /// 参数:
+    /// - `turns`: 按时间顺序排列的历史轮次
+    ///
+    /// 返回:
+    /// - transcript 同步结果
+    pub(super) fn record_history(&mut self, turns: &[SessionTimelineTurn]) -> Result<()> {
+        history::append_timeline(&mut self.transcript, turns);
         self.sync_transcript(false)
     }
 

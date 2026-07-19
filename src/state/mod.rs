@@ -37,7 +37,8 @@ pub use session_memory::summary::SessionMemorySummary;
 pub use session_snapshot::{ActiveRunSummary, SessionSnapshot};
 #[allow(unused_imports)]
 pub use session_timeline::{
-    SessionTimeline, SessionTimelineCompaction, SessionTimelineTurn, TimelinePermissionDecision,
+    SessionTimeline, SessionTimelineCompaction, SessionTimelineTurn, TimelineMessage,
+    TimelinePermissionDecision, TimelineToolEntry,
 };
 #[allow(unused_imports)]
 pub use sessions::{

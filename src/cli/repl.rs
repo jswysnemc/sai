@@ -3,6 +3,8 @@ use super::repl_tool_warmup::ReplToolWarmup;
 use super::*;
 use crate::agent::Agent;
 
+const REPL_HISTORY_TURN_LIMIT: usize = 50;
+
 pub(super) async fn run_repl(
     paths: &SaiPaths,
     initial_mode: AgentMode,
@@ -51,6 +53,7 @@ pub(super) async fn run_repl(
         )
         .to_string(),
     )?;
+    record_repl_history(&mut runtime, &state)?;
     // 1. 重量级初始化前先呈现输入框，避免版本信息后长时间没有输入区
     {
         let chrome = ReplChrome::from_runtime(&config, &state, mode);
@@ -163,6 +166,7 @@ pub(super) async fn run_repl(
                                 prefill = None;
                                 runtime.clear()?;
                                 runtime.record_meta(message)?;
+                                record_repl_history(&mut runtime, &state)?;
                             }
                             Err(err) => runtime.record_meta(err.to_string())?,
                         }
@@ -515,6 +519,19 @@ pub(super) async fn run_repl(
         }
     }
     Ok(())
+}
+
+/// 读取当前会话最近的持久化轮次并渲染到 TUI。
+///
+/// 参数:
+/// - `runtime`: 当前 TUI 运行期
+/// - `state`: 当前会话状态存储
+///
+/// 返回:
+/// - 历史读取与渲染是否成功
+fn record_repl_history(runtime: &mut ReplRuntime, state: &StateStore) -> Result<()> {
+    let turns = state.session_timeline(REPL_HISTORY_TURN_LIMIT)?;
+    runtime.record_history(&turns)
 }
 
 /// 将后台发现完成的 MCP 工具无阻塞合并到当前 Agent。
