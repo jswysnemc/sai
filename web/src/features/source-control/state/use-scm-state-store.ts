@@ -53,6 +53,32 @@ export function useScmStateStore(repositoryRoot: string | null) {
     });
   }, [key]);
 
+  /**
+   * 原子更新指定仓库的文件和分区选择。
+   *
+   * @param targetRoot 目标仓库根目录
+   * @param path 仓库相对文件路径
+   * @param section 文件所属分区
+   * @returns 无返回值
+   */
+  const selectRepositoryChange = useCallback((
+    targetRoot: string,
+    path: string,
+    section: ChangeSectionKind
+  ) => {
+    setStates((current) => {
+      const previous = current[targetRoot] ?? INITIAL_STATE;
+      return {
+        ...current,
+        [targetRoot]: {
+          ...previous,
+          selectedPath: path,
+          selectedSection: section
+        }
+      };
+    });
+  }, []);
+
   return {
     ...state,
     setMessage: (value: SetStateAction<string>) => setField("message", value),
@@ -61,6 +87,7 @@ export function useScmStateStore(repositoryRoot: string | null) {
     setSelectedSection: (value: SetStateAction<ChangeSectionKind>) => setField("selectedSection", value),
     setSelectedCommit: (value: SetStateAction<string | null>) => setField("selectedCommit", value),
     setSelectedCommitPath: (value: SetStateAction<string | null>) => setField("selectedCommitPath", value),
-    setHistoryLimit: (value: SetStateAction<number>) => setField("historyLimit", value)
+    setHistoryLimit: (value: SetStateAction<number>) => setField("historyLimit", value),
+    selectRepositoryChange
   };
 }

@@ -22,6 +22,12 @@ struct GitActionRequest {
 }
 
 #[derive(Deserialize)]
+struct GitStatusesRequest {
+    #[serde(default)]
+    repo_roots: Vec<String>,
+}
+
+#[derive(Deserialize)]
 struct GitOpRequest {
     action: String,
     repo_root: Option<String>,
@@ -91,6 +97,10 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/workspace/git", axum::routing::post(git_action))
         .route("/api/workspace/git/repositories", get(git_repositories))
         .route("/api/workspace/git/status", get(git_status))
+        .route(
+            "/api/workspace/git/statuses",
+            axum::routing::post(git_statuses),
+        )
         .route("/api/workspace/git/branches", get(git_branches))
         .route("/api/workspace/git/log", get(git_log))
         .route("/api/workspace/git/resources", get(git_resources))
@@ -99,6 +109,25 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/workspace/git/commit-diff", get(git_commit_diff))
         .route("/api/workspace/git/diff", get(git_review_diff))
         .route("/api/workspace/git/op", axum::routing::post(git_op))
+}
+
+/// 批量读取当前工作区多个仓库的完整状态。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `request`: 待读取仓库根目录列表
+///
+/// 返回:
+/// - 并发上限受控的多仓库状态
+async fn git_statuses(
+    State(state): State<WebAppState>,
+    Json(request): Json<GitStatusesRequest>,
+) -> WebResult<Json<workspace::GitRepositoryStatusesResponse>> {
+    let active = state.workspaces.active().map_err(WebError::from)?;
+    let statuses = workspace::git_repository_statuses(Path::new(&active.path), &request.repo_roots)
+        .await
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    Ok(Json(statuses))
 }
 
 /// 执行兼容版 Git 暂存、取消暂存、撤销或提交操作。

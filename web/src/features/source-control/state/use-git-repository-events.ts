@@ -39,6 +39,7 @@ export function useGitRepositoryEvents(
       const currentMode = modeRef.current;
       const requests = [
         queryClient.invalidateQueries({ queryKey: ["git-status", repoRoot] }),
+        queryClient.invalidateQueries({ queryKey: ["git-statuses"] }),
         queryClient.invalidateQueries({ queryKey: ["git-review-diff", repoRoot] }),
         queryClient.invalidateQueries({ queryKey: ["git-conflict", repoRoot] })
       ];

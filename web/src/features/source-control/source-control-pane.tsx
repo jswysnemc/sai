@@ -12,16 +12,15 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { ApiError, LocalizedError, localizeApiMessage, toDisplayError } from "../../api/api-error";
-import type { GitOperationResponse, GitStatusEntry } from "../../api/contracts";
+import type { GitOperationResponse } from "../../api/contracts";
 import type { GitOperationOptions } from "../../api/git-contracts";
 import { Button } from "../../shared/ui/button/button";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { DiffView } from "../chat/tool-renderers/diff-view";
 import { useI18n } from "../i18n/use-i18n";
-import { ChangeSection } from "./changes/change-section";
-import type { ChangeSectionKind } from "./changes/change-section";
 import { CommitControl } from "./changes/commit-control";
 import { groupGitChanges } from "./changes/change-groups";
+import { RepositoryChangeGroup } from "./changes/repository-change-group";
 import { MoreActionsMenu } from "./actions/more-actions-menu";
 import { resolveGitReviewDiffMode } from "./diff/diff-mode";
 import { SourceControlDiff } from "./diff/source-control-diff";
@@ -33,6 +32,7 @@ import { GitOutputPanel } from "./output/git-output-panel";
 import { RepositoriesView } from "./repositories/repositories-view";
 import { useScmStateStore } from "./state/use-scm-state-store";
 import { useGitRepositoryEvents, type GitWatchMode } from "./state/use-git-repository-events";
+import { useRepositoryStatuses } from "./state/use-repository-statuses";
 import type { GitOutputEntry, GitOperationUiOptions } from "./types";
 import "./source-control.css";
 import { GitBranchMenu } from "../workspace/git-branch-menu";
@@ -66,11 +66,11 @@ export function SourceControlPane() {
     historyLimit,
     setMessage,
     setDiffMode,
-    setSelectedPath,
     setSelectedSection,
     setSelectedCommit,
     setSelectedCommitPath,
-    setHistoryLimit
+    setHistoryLimit,
+    selectRepositoryChange
   } = scmState;
   const pendingActionRef = useRef("operation");
 
@@ -83,22 +83,38 @@ export function SourceControlPane() {
     ...repositories.data,
     repositories: repositories.data.repositories.filter((repository) => !closedRepoRoots.includes(repository.root))
   } : undefined, [closedRepoRoots, repositories.data]);
-  const status = useQuery({
+  const hasRepositories = (repositories.data?.repositories.length ?? 0) > 0;
+  const statusRoots = useMemo(() => {
+    const roots = (visibleRepositories?.repositories ?? []).map((repository) => repository.root);
+    if (selectedRepoRoot && !roots.includes(selectedRepoRoot)) roots.push(selectedRepoRoot);
+    return roots;
+  }, [selectedRepoRoot, visibleRepositories]);
+  const repositoryStatuses = useRepositoryStatuses(
+    statusRoots,
+    repositories.isSuccess && hasRepositories
+  );
+  const gitStatus = useQuery({
     queryKey: ["git-status", selectedRepoRoot],
     queryFn: () => api.workspace.gitStatus(selectedRepoRoot ?? undefined),
-    enabled: repositories.isSuccess && (repositories.data.repositories.length === 0 || Boolean(selectedRepoRoot))
+    enabled: repositories.isSuccess && !hasRepositories
   });
+  const state = hasRepositories
+    ? repositoryStatuses.data?.repositories.find((repository) => repository.repo_root === selectedRepoRoot)
+    : gitStatus.data;
+  const statusLoading = hasRepositories ? repositoryStatuses.isLoading : gitStatus.isLoading;
+  const statusError = hasRepositories ? repositoryStatuses.error : gitStatus.error;
+  const refetchStatus = hasRepositories ? repositoryStatuses.refetch : gitStatus.refetch;
   const gitWatchError = useGitRepositoryEvents(selectedRepoRoot, repositories.isSuccess, mode);
   const branches = useQuery({
     queryKey: ["git-branches", selectedRepoRoot],
     queryFn: () => api.workspace.gitBranches(selectedRepoRoot ?? undefined),
-    enabled: status.data?.status === "ready" && branchMenuOpen,
+    enabled: state?.status === "ready" && branchMenuOpen,
     staleTime: 10_000
   });
   const history = useQuery({
     queryKey: ["git-log", selectedRepoRoot, historyLimit],
     queryFn: () => api.workspace.gitLog(historyLimit, 0, selectedRepoRoot ?? undefined),
-    enabled: status.data?.status === "ready" && mode === "history",
+    enabled: state?.status === "ready" && mode === "history",
     staleTime: 10_000
   });
   const commits = history.data?.commits ?? [];
@@ -107,7 +123,7 @@ export function SourceControlPane() {
   const reviewDiff = useQuery({
     queryKey: ["git-review-diff", selectedRepoRoot, reviewDiffMode, selectedPath],
     queryFn: () => api.workspace.gitReviewDiff(reviewDiffMode, selectedPath ?? undefined, selectedRepoRoot ?? undefined),
-    enabled: status.data?.status === "ready" && mode === "changes" && selectedSection !== "merge"
+    enabled: state?.status === "ready" && mode === "changes" && selectedSection !== "merge"
   });
   const commitDetails = useQuery({
     queryKey: ["git-commit-details", selectedRepoRoot, activeCommit],
@@ -120,7 +136,6 @@ export function SourceControlPane() {
     enabled: mode === "history" && Boolean(activeCommit)
   });
 
-  const state = status.data;
   const ready = state?.status === "ready";
   const groups = useMemo(() => groupGitChanges(state?.entries ?? []), [state?.entries]);
   useEffect(() => {
@@ -143,6 +158,7 @@ export function SourceControlPane() {
   const refreshAll = async (includeStatus = true) => {
     await Promise.all([
       includeStatus ? queryClient.invalidateQueries({ queryKey: ["git-status"] }) : Promise.resolve(),
+      includeStatus ? queryClient.invalidateQueries({ queryKey: ["git-statuses"] }) : Promise.resolve(),
       queryClient.invalidateQueries({ queryKey: ["git-repositories"] }),
       queryClient.invalidateQueries({ queryKey: ["git-branches"] }),
       queryClient.invalidateQueries({ queryKey: ["git-log"] }),
@@ -162,6 +178,7 @@ export function SourceControlPane() {
     onSuccess: async (result, input) => {
       appendOutput(result.ok, result.message, result.stdout, result.stderr);
       queryClient.setQueryData(["git-status", input.options.repo_root ?? selectedRepoRoot], result.state);
+      repositoryStatuses.updateRepositoryStatus(result.state);
       if (!result.ok) {
         setError(
           result.message || result.stderr
@@ -247,7 +264,7 @@ export function SourceControlPane() {
     return true;
   };
 
-  if ((status.isLoading || repositories.isLoading) && !state) {
+  if ((statusLoading || repositories.isLoading) && !state) {
     return (
       <section className="diff-pane git-manager">
         <div className="git-clean">{t("Loading Git status...", "正在读取 Git 状态…")}</div>
@@ -255,7 +272,6 @@ export function SourceControlPane() {
     );
   }
 
-  const hasRepositories = (repositories.data?.repositories.length ?? 0) > 0;
   const allRepositoriesClosed = hasRepositories && (visibleRepositories?.repositories.length ?? 0) === 0;
   if (allRepositoriesClosed) {
     return (
@@ -298,7 +314,7 @@ export function SourceControlPane() {
               {t("Version control", "版本管理")}
             </h2>
           </div>
-          <Button className="icon-button" onClick={() => void status.refetch()} aria-label={t("Refresh", "刷新")}>
+          <Button className="icon-button" onClick={() => void refetchStatus()} aria-label={t("Refresh", "刷新")}>
             <RefreshCw size={14} />
           </Button>
         </header>
@@ -318,7 +334,7 @@ export function SourceControlPane() {
             {t("Initialize repository", "初始化仓库")}
           </Button>
         </div>
-        {(status.error || error) && <div className="pane-error">{error?.message || status.error?.message}</div>}
+        {(statusError || error) && <div className="pane-error">{error?.message || statusError?.message}</div>}
       </section>
     );
   }
@@ -330,56 +346,6 @@ export function SourceControlPane() {
     (state?.dirty_counts.untracked ?? 0) +
     (state?.dirty_counts.conflicted ?? 0);
   const workingCount = groups.changes.length + groups.untracked.length;
-
-  /**
-   * 通过确认对话框丢弃单个普通修改或未跟踪文件。
-   *
-   * @param entry 待丢弃文件状态
-   * @returns 无返回值
-   */
-  const discardEntry = (entry: GitStatusEntry) => {
-    void runOp("discard", {
-      path: entry.path,
-      old_path: entry.old_path ?? undefined,
-      confirmTitle: entry.untracked
-        ? t("Delete untracked file", "删除未跟踪文件")
-        : t("Discard working tree changes", "撤销工作区修改"),
-      confirmDescription: entry.untracked
-        ? t(`Permanently delete “${entry.path}”.`, `将永久删除“${entry.path}”。`)
-        : t(`Restore ${entry.path}. Unsaved changes cannot be recovered.`, `将恢复 ${entry.path}，未保存修改无法恢复。`)
-    });
-  };
-
-  /**
-   * 选择文件并记录所属分区，用于确定 INDEX 或 HEAD 比较基线。
-   *
-   * @param path 仓库相对路径
-   * @param section 文件所属分区
-   * @returns 无返回值
-   */
-  const selectChange = (path: string, section: ChangeSectionKind) => {
-    setSelectedPath(path);
-    setSelectedSection(section);
-  };
-
-  /**
-   * 执行文件暂存状态变更，并同步当前 Diff 所属分区。
-   *
-   * @param action stage 或 unstage
-   * @param path 仓库相对路径
-   * @param nextSection 操作成功后的文件分区
-   * @returns 无返回值
-   */
-  const moveChange = async (
-    action: "stage" | "unstage",
-    path: string,
-    nextSection: ChangeSectionKind
-  ) => {
-    const result = await runOp(action, { path });
-    if (!result?.ok) return;
-    setSelectedPath(path);
-    setSelectedSection(nextSection);
-  };
 
   return (
     <section className="diff-pane git-manager git-review">
@@ -470,71 +436,28 @@ export function SourceControlPane() {
               )}
             </div>
 
-            {groups.conflicts.length > 0 && (
-              <ChangeSection
-                title={t(`Merge Changes ${groups.conflicts.length}`, `合并变更 ${groups.conflicts.length}`)}
-                entries={groups.conflicts}
-                selectedPath={selectedPath}
-                busy={busy}
-                onSelect={(path) => selectChange(path, "merge")}
-                onStageAll={() => void runOp("stage_all")}
-                onUnstageAll={() => void runOp("unstage_all")}
-                onStage={(path) => void moveChange("stage", path, "staged")}
-                onUnstage={(path) => void moveChange("unstage", path, "changes")}
-                onIgnore={(path) => void runOp("add_to_gitignore", { path })}
-                onDiscard={discardEntry}
-                section="merge"
-              />
-            )}
-            {groups.staged.length > 0 && (
-              <ChangeSection
-                title={t(`Staged Changes ${groups.staged.length}`, `已暂存变更 ${groups.staged.length}`)}
-                entries={groups.staged}
-                selectedPath={selectedPath}
-                busy={busy}
-                onSelect={(path) => selectChange(path, "staged")}
-                onStageAll={() => void runOp("stage_all")}
-                onUnstageAll={() => void runOp("unstage_all")}
-                onStage={(path) => void moveChange("stage", path, "staged")}
-                onUnstage={(path) => void moveChange("unstage", path, "changes")}
-                onIgnore={(path) => void runOp("add_to_gitignore", { path })}
-                onDiscard={discardEntry}
-                section="staged"
-              />
-            )}
-            {groups.changes.length > 0 && (
-              <ChangeSection
-                title={t(`Changes ${groups.changes.length}`, `更改 ${groups.changes.length}`)}
-                entries={groups.changes}
-                selectedPath={selectedPath}
-                busy={busy}
-                onSelect={(path) => selectChange(path, "changes")}
-                onStageAll={() => void runOp("stage_all")}
-                onUnstageAll={() => void runOp("unstage_all")}
-                onStage={(path) => void moveChange("stage", path, "staged")}
-                onUnstage={(path) => void moveChange("unstage", path, "changes")}
-                onIgnore={(path) => void runOp("add_to_gitignore", { path })}
-                onDiscard={discardEntry}
-                section="changes"
-              />
-            )}
-            {groups.untracked.length > 0 && (
-              <ChangeSection
-                title={t(`Untracked ${groups.untracked.length}`, `未跟踪 ${groups.untracked.length}`)}
-                entries={groups.untracked}
-                selectedPath={selectedPath}
-                busy={busy}
-                onSelect={(path) => selectChange(path, "untracked")}
-                onStageAll={() => void runOp("stage_all")}
-                onUnstageAll={() => void runOp("unstage_all")}
-                onStage={(path) => void moveChange("stage", path, "staged")}
-                onUnstage={(path) => void moveChange("unstage", path, "changes")}
-                onIgnore={(path) => void runOp("add_to_gitignore", { path })}
-                onDiscard={discardEntry}
-                section="untracked"
-              />
-            )}
-            {dirtyTotal === 0 && <div className="git-clean">{t("No changes", "没有变更")}</div>}
+            <div className="git-repository-change-list">
+              {(hasRepositories ? repositoryStatuses.data?.repositories ?? [] : [state!]).map((repository) => {
+                const summary = visibleRepositories?.repositories.find((item) => item.root === repository.repo_root);
+                const name = summary?.name ?? repository.repo_root.split(/[\\/]/).filter(Boolean).at(-1) ?? "repository";
+                return (
+                  <RepositoryChangeGroup
+                    key={repository.repo_root}
+                    name={name}
+                    state={repository}
+                    active={repository.repo_root === selectedRepoRoot || !hasRepositories}
+                    selectedPath={selectedPath}
+                    busy={busy}
+                    runOperation={runOp}
+                    onSelectRepository={() => setSelectedRepoRoot(repository.repo_root)}
+                    onSelectChange={(path, section) => {
+                      selectRepositoryChange(repository.repo_root, path, section);
+                      setSelectedRepoRoot(repository.repo_root);
+                    }}
+                  />
+                );
+              })}
+            </div>
 
             <div className="git-remote-box">
               <span>{state?.remote_url ? t("Remote origin", "远端 origin") : t("Set origin remote", "设置 origin 远端")}</span>
@@ -654,9 +577,9 @@ export function SourceControlPane() {
       )}
 
       <GitOutputPanel entries={outputEntries} />
-      {(error || gitWatchError || notice || status.error) && (
-        <div className={error || gitWatchError || status.error ? "pane-error" : "pane-notice"}>
-          {error?.message || gitWatchError || status.error?.message || localizeApiMessage(notice, locale)}
+      {(error || gitWatchError || notice || statusError) && (
+        <div className={error || gitWatchError || statusError ? "pane-error" : "pane-notice"}>
+          {error?.message || gitWatchError || statusError?.message || localizeApiMessage(notice, locale)}
         </div>
       )}
     </section>

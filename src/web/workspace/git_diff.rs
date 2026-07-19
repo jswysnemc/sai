@@ -10,8 +10,9 @@ pub(crate) use types::{
     GitBranch, GitBranchesResponse, GitCommitDetails, GitCommitDetailsResponse, GitCommitFile,
     GitCommitSummary, GitConflictContent, GitDiff, GitDiffResponse, GitDirtyCounts, GitFileStatus,
     GitInProgressOperation, GitLogResponse, GitOperationRequest, GitOperationResponse, GitRemote,
-    GitRepositoriesResponse, GitRepositoryResources, GitRepositoryState, GitRepositorySummary,
-    GitStashEntry, GitStatusEntry, GitTag, GitWorktree,
+    GitRepositoriesResponse, GitRepositoryResources, GitRepositoryState,
+    GitRepositoryStatusesResponse, GitRepositorySummary, GitStashEntry, GitStatusEntry, GitTag,
+    GitWorktree,
 };
 
 #[path = "git_diff_support.rs"]
@@ -44,6 +45,9 @@ mod conflicts;
 #[path = "git_repositories.rs"]
 mod repositories;
 
+#[path = "git_repository_statuses.rs"]
+mod repository_statuses;
+
 #[path = "git_worktrees.rs"]
 mod worktrees;
 
@@ -57,7 +61,10 @@ use diff_content::*;
 use history_operations::*;
 pub(crate) use operations::git_op;
 use process::*;
-pub(crate) use repositories::{git_repositories, validate_git_repository_root};
+pub(crate) use repositories::{
+    git_repositories, validate_git_repository_root, validate_git_repository_roots,
+};
+pub(crate) use repository_statuses::git_repository_statuses;
 use resource_operations::*;
 pub(crate) use resources::git_resources;
 use support::*;

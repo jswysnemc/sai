@@ -219,6 +219,12 @@ pub(crate) struct GitRepositoriesResponse {
     pub repositories: Vec<GitRepositorySummary>,
 }
 
+/// 多仓库完整状态响应。
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct GitRepositoryStatusesResponse {
+    pub repositories: Vec<GitRepositoryState>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct GitConflictContent {
     pub state: GitRepositoryState,

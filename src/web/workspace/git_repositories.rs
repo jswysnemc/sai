@@ -45,23 +45,70 @@ pub(crate) async fn validate_git_repository_root(
     workspace_root: &Path,
     requested: &str,
 ) -> Result<PathBuf> {
-    // 1. 工作区内部仓库和父仓库走快速路径，避免重复目录扫描
+    let roots = validate_git_repository_roots(workspace_root, &[requested.to_string()]).await?;
+    roots.into_iter().next().context("repository root is empty")
+}
+
+/// 批量校验请求仓库属于当前工作区、其父仓库或关联 worktree。
+///
+/// 参数:
+/// - `workspace_root`: 当前工作区目录
+/// - `requested`: 请求中的仓库根目录列表
+///
+/// 返回:
+/// - 按请求顺序去重后的仓库规范路径
+pub(crate) async fn validate_git_repository_roots(
+    workspace_root: &Path,
+    requested: &[String],
+) -> Result<Vec<PathBuf>> {
+    // 1. 先规范化全部请求，并判断是否需要扫描外部关联 worktree
     let workspace_root = canonical_directory(workspace_root)?;
-    let requested = canonical_directory(Path::new(requested))?;
-    if requested.starts_with(&workspace_root) || workspace_root.starts_with(&requested) {
-        if let Some(root) = discover_repo(&requested).await? {
-            if canonical_directory(&root)? == requested {
-                return Ok(requested);
-            }
+    let mut candidates = Vec::new();
+    let mut seen = HashSet::new();
+    for value in requested {
+        let value = value.trim();
+        if value.is_empty() {
+            continue;
         }
-        bail!("requested path is not a Git repository root");
+        let path = canonical_directory(Path::new(value))?;
+        if seen.insert(path.clone()) {
+            candidates.push(path);
+        }
     }
-    // 2. 工作区外路径仅接受 Git 已登记的关联 worktree
-    let roots = allowed_repository_roots(&workspace_root).await?;
-    if roots.iter().any(|root| root == &requested) {
-        return Ok(requested);
+    let needs_external_scan = candidates
+        .iter()
+        .any(|path| !path.starts_with(&workspace_root) && !workspace_root.starts_with(path));
+    let allowed = if needs_external_scan {
+        Some(allowed_repository_roots(&workspace_root).await?)
+    } else {
+        None
+    };
+
+    // 2. 内部路径使用快速 Git 根校验，外部路径复用一次关联 worktree 扫描结果
+    for path in &candidates {
+        if path.starts_with(&workspace_root) || workspace_root.starts_with(path) {
+            if let Some(root) = discover_repo(path).await? {
+                if canonical_directory(&root)? == *path {
+                    continue;
+                }
+            }
+            bail!(
+                "requested path is not a Git repository root: {}",
+                path.display()
+            );
+        }
+        if allowed
+            .as_ref()
+            .is_some_and(|roots| roots.iter().any(|root| root == path))
+        {
+            continue;
+        }
+        bail!(
+            "repository is not available in the active workspace: {}",
+            path.display()
+        );
     }
-    bail!("repository is not available in the active workspace")
+    Ok(candidates)
 }
 
 /// 构造单个仓库摘要，状态读取失败时保留可展示错误。

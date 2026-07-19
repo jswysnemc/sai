@@ -78,6 +78,26 @@ async fn discovers_repositories_and_manages_worktrees() {
         .iter()
         .any(|item| item.path == worktree.display().to_string()));
 
+    let statuses = git_repository_statuses(
+        &workspace,
+        &[
+            second.display().to_string(),
+            first.display().to_string(),
+            first.display().to_string(),
+        ],
+    )
+    .await
+    .unwrap();
+    assert_eq!(statuses.repositories.len(), 2);
+    assert_eq!(
+        statuses.repositories[0].repo_root,
+        second.display().to_string()
+    );
+    assert_eq!(
+        statuses.repositories[1].repo_root,
+        first.display().to_string()
+    );
+
     let validated = validate_git_repository_root(&workspace, worktree.to_str().unwrap())
         .await
         .unwrap();

@@ -19,6 +19,7 @@ import type {
   GitLogResponse,
   GitOperationResponse,
   GitRepositoriesResponse,
+  GitRepositoryStatusesResponse,
   GitRepositoryResources,
   GitRepositoryState,
   HistoryEntry,
@@ -302,6 +303,11 @@ export const api = {
       }),
     gitRepositories: () => apiRequest<GitRepositoriesResponse>("/api/workspace/git/repositories"),
     gitStatus: (repoRoot?: string) => apiRequest<GitRepositoryState>(gitUrl("/api/workspace/git/status", repoRoot)),
+    gitStatuses: (repoRoots: string[]) =>
+      apiRequest<GitRepositoryStatusesResponse>("/api/workspace/git/statuses", {
+        method: "POST",
+        body: JSON.stringify({ repo_roots: repoRoots })
+      }),
     gitBranches: (repoRoot?: string) => apiRequest<GitBranchesResponse>(gitUrl("/api/workspace/git/branches", repoRoot)),
     gitLog: (limit = 50, skip = 0, repoRoot?: string) => {
       const query = gitQuery(repoRoot);

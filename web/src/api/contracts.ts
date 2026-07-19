@@ -257,6 +257,10 @@ export type GitRepositoriesResponse = {
   repositories: GitRepositorySummary[];
 };
 
+export type GitRepositoryStatusesResponse = {
+  repositories: GitRepositoryState[];
+};
+
 export type GitBranch = {
   name: string;
   full_name: string;
