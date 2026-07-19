@@ -1,11 +1,14 @@
 use super::path_policy::{
-    contains_sensitive_read_path, path_is_within_workspace, resolve_without_io,
+    contains_external_path, contains_sensitive_read_path, path_is_within_workspace,
+    resolve_without_io,
 };
 use super::{AuditDecision, PermissionAuditLog};
 use crate::tools::ToolPermission;
 use anyhow::{bail, Result};
 use serde_json::Value;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 /// 工具权限策略模式。
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -38,6 +41,7 @@ pub(crate) struct PermissionProfile {
     mode: PermissionProfileMode,
     workspace: PathBuf,
     audit: Option<PermissionAuditLog>,
+    approved: Arc<Mutex<HashSet<String>>>,
 }
 
 impl PermissionProfile {
@@ -62,6 +66,7 @@ impl PermissionProfile {
     /// 返回:
     /// - 无
     pub(crate) fn record_approved(&self, tool: &str, arguments: &Value) {
+        self.approve_once(tool, arguments);
         self.record(tool, AuditDecision::Approved, arguments, None);
     }
 
@@ -96,7 +101,37 @@ impl PermissionProfile {
             mode,
             workspace: workspace.canonicalize().unwrap_or(workspace),
             audit,
+            approved: Arc::new(Mutex::new(HashSet::new())),
         }
+    }
+
+    /// 标记指定工具调用已获得一次性用户批准。
+    ///
+    /// 参数:
+    /// - `tool`: 工具名称
+    /// - `arguments`: 工具参数
+    ///
+    /// 返回:
+    /// - 无
+    fn approve_once(&self, tool: &str, arguments: &Value) {
+        if let Ok(mut approved) = self.approved.lock() {
+            approved.insert(approval_key(tool, arguments));
+        }
+    }
+
+    /// 消费指定工具调用的一次性批准状态。
+    ///
+    /// 参数:
+    /// - `tool`: 工具名称
+    /// - `arguments`: 工具参数
+    ///
+    /// 返回:
+    /// - 存在匹配批准状态时返回 `true`
+    fn consume_approval(&self, tool: &str, arguments: &Value) -> bool {
+        self.approved
+            .lock()
+            .map(|mut approved| approved.remove(&approval_key(tool, arguments)))
+            .unwrap_or(false)
     }
 
     /// 在工具执行前完成权限判定并写入审计日志。
@@ -118,6 +153,7 @@ impl PermissionProfile {
         if self.mode == PermissionProfileMode::Yolo {
             return Ok(false);
         }
+        let approved = self.consume_approval(tool, arguments);
         // 2. TODO 仅维护会话计划，不参与权限审计交互或日志记录
         if self.mode == PermissionProfileMode::Audited && tool == "todo" {
             return Ok(false);
@@ -132,7 +168,8 @@ impl PermissionProfile {
             );
             bail!("Plan mode blocked non-read-only tool: {tool}")
         }
-        if self.mode == PermissionProfileMode::Audited && tool == "background_command" {
+        if self.mode == PermissionProfileMode::Audited && tool == "background_command" && !approved
+        {
             self.record(
                 tool,
                 AuditDecision::Denied,
@@ -141,8 +178,21 @@ impl PermissionProfile {
             );
             bail!("permission audit blocked background command outside the foreground sandbox")
         }
-        // 4. 写入工具必须先通过工作区路径边界检查
-        if permission == ToolPermission::Writes {
+        let external_path = contains_external_path(&self.workspace, arguments);
+        let protected_read = contains_sensitive_read_path(&self.workspace, arguments);
+        // 4. 外部读取和敏感读取必须经过交互批准；批准后允许本次调用继续
+        if permission == ToolPermission::ReadOnly && (external_path || protected_read) && !approved
+        {
+            self.record(
+                tool,
+                AuditDecision::Denied,
+                arguments,
+                Some("interactive approval required for external or sensitive path access"),
+            );
+            bail!("permission audit requires interactive approval for path access")
+        }
+        // 5. 写入工具必须先通过工作区路径边界检查，批准的外部写入放行一次
+        if permission == ToolPermission::Writes && !approved {
             self.ensure_workspace_paths(arguments).map_err(|error| {
                 self.record(
                     tool,
@@ -153,7 +203,7 @@ impl PermissionProfile {
                 error
             })?;
         }
-        // 5. 记录允许结果，只有 Linux 能为前台命令附加 bubblewrap 沙盒
+        // 6. 记录允许结果，只有 Linux 能为前台命令附加 bubblewrap 沙盒
         self.record(tool, AuditDecision::Allowed, arguments, None);
         Ok(self.mode == PermissionProfileMode::Audited
             && tool == "run_command"
@@ -168,7 +218,7 @@ impl PermissionProfile {
     /// - `arguments`: 工具参数
     ///
     /// 返回:
-    /// - 审计模式下写入工具或敏感路径读取工具返回 `true`
+    /// - 审计模式下写入工具或工作区外、敏感路径读取工具返回 `true`
     pub(crate) fn requires_interactive_audit(
         &self,
         tool: &str,
@@ -182,7 +232,8 @@ impl PermissionProfile {
             return true;
         }
         permission == ToolPermission::ReadOnly
-            && contains_sensitive_read_path(&self.workspace, arguments)
+            && (contains_external_path(&self.workspace, arguments)
+                || contains_sensitive_read_path(&self.workspace, arguments))
     }
 
     /// 记录工具最终执行结果。
@@ -297,6 +348,21 @@ impl PermissionProfile {
     }
 }
 
+/// 生成稳定的一次性批准键。
+///
+/// 参数:
+/// - `tool`: 工具名称
+/// - `arguments`: 工具参数
+///
+/// 返回:
+/// - 由工具名称和规范化参数组成的键
+fn approval_key(tool: &str, arguments: &Value) -> String {
+    format!(
+        "{tool}\n{}",
+        serde_json::to_string(arguments).unwrap_or_default()
+    )
+}
+
 /// 限制审计结果摘要长度。
 ///
 /// 参数:
@@ -313,7 +379,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    /// 验证审计模式阻止工作区外的显式路径。
+    /// 验证未经批准的审计模式仍阻止工作区外的显式路径。
     ///
     /// 参数:
     /// - 无
@@ -334,6 +400,58 @@ mod tests {
                 &json!({"path":"../secret"})
             )
             .is_err());
+    }
+
+    /// 验证批准后允许一次工作区外写入。
+    #[test]
+    fn audited_profile_allows_approved_external_write_once() {
+        let profile = PermissionProfile::new(
+            PermissionProfileMode::Audited,
+            PathBuf::from("/workspace/project"),
+            None,
+        );
+        let args = json!({"path":"../secret"});
+        profile.record_approved("edit_file", &args);
+        assert!(profile
+            .authorize("edit_file", ToolPermission::Writes, &args)
+            .is_ok());
+        assert!(profile
+            .authorize("edit_file", ToolPermission::Writes, &args)
+            .is_err());
+    }
+
+    /// 验证工作区外读取需要交互批准。
+    #[test]
+    fn audited_profile_requires_approval_for_any_external_read() {
+        let profile = PermissionProfile::new(
+            PermissionProfileMode::Audited,
+            PathBuf::from("/workspace/project"),
+            None,
+        );
+        let args = json!({"path":"/home/user/notes.txt"});
+        assert!(profile.requires_interactive_audit("read_file", ToolPermission::ReadOnly, &args));
+        assert!(profile
+            .authorize("read_file", ToolPermission::ReadOnly, &args)
+            .is_err());
+        profile.record_approved("read_file", &args);
+        assert!(profile
+            .authorize("read_file", ToolPermission::ReadOnly, &args)
+            .is_ok());
+    }
+
+    /// 验证后台命令在审计模式下批准后可以运行。
+    #[test]
+    fn audited_profile_allows_approved_background_command() {
+        let profile = PermissionProfile::new(
+            PermissionProfileMode::Audited,
+            PathBuf::from("/workspace/project"),
+            None,
+        );
+        let args = json!({"action":"start", "command":"sleep 1"});
+        profile.record_approved("background_command", &args);
+        assert!(profile
+            .authorize("background_command", ToolPermission::Writes, &args)
+            .is_ok());
     }
 
     /// 验证 YOLO 模式保持不受限制的兼容行为。
