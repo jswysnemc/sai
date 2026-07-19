@@ -155,6 +155,37 @@ pub(crate) struct GitCommitDetailsResponse {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct GitStashEntry {
+    pub reference: String,
+    pub sha: String,
+    pub subject: String,
+    pub created_at: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct GitTag {
+    pub name: String,
+    pub sha: String,
+    pub created_at: String,
+    pub subject: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct GitRemote {
+    pub name: String,
+    pub fetch_url: String,
+    pub push_url: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct GitRepositoryResources {
+    pub state: GitRepositoryState,
+    pub stashes: Vec<GitStashEntry>,
+    pub tags: Vec<GitTag>,
+    pub remotes: Vec<GitRemote>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct GitOperationResponse {
     pub ok: bool,
     pub state: GitRepositoryState,
@@ -183,6 +214,10 @@ pub(crate) struct GitOperationRequest<'a> {
     pub(crate) patch: Option<&'a str>,
     pub(crate) commit: Option<&'a str>,
     pub(crate) reset_mode: Option<&'a str>,
+    pub(crate) stash_ref: Option<&'a str>,
+    pub(crate) tag: Option<&'a str>,
+    pub(crate) remote_name: Option<&'a str>,
+    pub(crate) include_untracked: bool,
     pub(crate) all: bool,
     pub(crate) amend: bool,
     pub(crate) signoff: bool,
@@ -212,6 +247,10 @@ impl<'a> GitOperationRequest<'a> {
             patch: None,
             commit: None,
             reset_mode: None,
+            stash_ref: None,
+            tag: None,
+            remote_name: None,
+            include_untracked: false,
             all: false,
             amend: false,
             signoff: false,

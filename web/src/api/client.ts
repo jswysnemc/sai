@@ -17,6 +17,7 @@ import type {
   GitDiffResponse,
   GitLogResponse,
   GitOperationResponse,
+  GitRepositoryResources,
   GitRepositoryState,
   HistoryEntry,
   PromptDocument,
@@ -296,6 +297,7 @@ export const api = {
     gitBranches: () => apiRequest<GitBranchesResponse>("/api/workspace/git/branches"),
     gitLog: (limit = 50, skip = 0) =>
       apiRequest<GitLogResponse>(`/api/workspace/git/log?limit=${limit}&skip=${skip}`),
+    gitResources: () => apiRequest<GitRepositoryResources>("/api/workspace/git/resources"),
     gitCommitDetails: (commit: string) =>
       apiRequest<GitCommitDetailsResponse>(`/api/workspace/git/commit?commit=${encodeURIComponent(commit)}`),
     gitCommitDiff: (commit: string, path?: string) => {

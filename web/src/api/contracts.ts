@@ -318,6 +318,33 @@ export type GitOperationResponse = {
   message: string;
 };
 
+export type GitStashEntry = {
+  reference: string;
+  sha: string;
+  subject: string;
+  created_at: string;
+};
+
+export type GitTag = {
+  name: string;
+  sha: string;
+  created_at: string;
+  subject: string;
+};
+
+export type GitRemote = {
+  name: string;
+  fetch_url: string;
+  push_url: string;
+};
+
+export type GitRepositoryResources = {
+  state: GitRepositoryState;
+  stashes: GitStashEntry[];
+  tags: GitTag[];
+  remotes: GitRemote[];
+};
+
 export type FileMutation = {
   path: string;
   kind: "file" | "directory";

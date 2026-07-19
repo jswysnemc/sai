@@ -9,8 +9,8 @@ use types::GitOutput;
 pub(crate) use types::{
     GitBranch, GitBranchesResponse, GitCommitDetails, GitCommitDetailsResponse, GitCommitFile,
     GitCommitSummary, GitDiff, GitDiffResponse, GitDirtyCounts, GitFileStatus,
-    GitInProgressOperation, GitLogResponse, GitOperationRequest, GitOperationResponse,
-    GitRepositoryState, GitStatusEntry,
+    GitInProgressOperation, GitLogResponse, GitOperationRequest, GitOperationResponse, GitRemote,
+    GitRepositoryResources, GitRepositoryState, GitStashEntry, GitStatusEntry, GitTag,
 };
 
 #[path = "git_diff_support.rs"]
@@ -31,11 +31,19 @@ mod operations;
 #[path = "git_history_operations.rs"]
 mod history_operations;
 
+#[path = "git_resources.rs"]
+mod resources;
+
+#[path = "git_resource_operations.rs"]
+mod resource_operations;
+
 use branches::*;
 use diff_content::*;
 use history_operations::*;
 pub(crate) use operations::git_op;
 use process::*;
+use resource_operations::*;
+pub(crate) use resources::git_resources;
 use support::*;
 
 #[cfg(test)]

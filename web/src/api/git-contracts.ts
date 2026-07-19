@@ -11,6 +11,10 @@ export type GitOperationOptions = {
   patch?: string;
   commit?: string;
   reset_mode?: "soft" | "mixed" | "hard";
+  stash_ref?: string;
+  tag?: string;
+  remote_name?: string;
+  include_untracked?: boolean;
   all?: boolean;
   amend?: boolean;
   signoff?: boolean;

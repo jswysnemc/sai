@@ -86,7 +86,7 @@ pub(super) async fn revert_commit(repo: &Path, commit: Option<&str>) -> Result<G
 ///
 /// 返回:
 /// - 完整提交哈希
-async fn validate_commit(repo: &Path, commit: Option<&str>) -> Result<String> {
+pub(super) async fn validate_commit(repo: &Path, commit: Option<&str>) -> Result<String> {
     let commit = commit
         .map(str::trim)
         .filter(|value| !value.is_empty())

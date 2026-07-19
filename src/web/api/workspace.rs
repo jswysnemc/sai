@@ -67,6 +67,11 @@ struct GitOpRequest {
     patch: Option<String>,
     commit: Option<String>,
     reset_mode: Option<String>,
+    stash_ref: Option<String>,
+    tag: Option<String>,
+    remote_name: Option<String>,
+    #[serde(default)]
+    include_untracked: bool,
     #[serde(default)]
     all: bool,
     #[serde(default)]
@@ -112,6 +117,7 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/workspace/git/status", get(git_status))
         .route("/api/workspace/git/branches", get(git_branches))
         .route("/api/workspace/git/log", get(git_log))
+        .route("/api/workspace/git/resources", get(git_resources))
         .route("/api/workspace/git/commit", get(git_commit_details))
         .route("/api/workspace/git/commit-diff", get(git_commit_diff))
         .route("/api/workspace/git/diff", get(git_review_diff))
@@ -286,6 +292,17 @@ async fn git_log(
     Ok(Json(log))
 }
 
+/// 读取当前仓库的 stash、标签和远端资源。
+async fn git_resources(
+    State(state): State<WebAppState>,
+) -> WebResult<Json<workspace::GitRepositoryResources>> {
+    let active = state.workspaces.active().map_err(WebError::from)?;
+    let resources = workspace::git_resources(std::path::Path::new(&active.path))
+        .await
+        .map_err(WebError::from)?;
+    Ok(Json(resources))
+}
+
 /// 读取提交详情。
 async fn git_commit_details(
     State(state): State<WebAppState>,
@@ -353,6 +370,10 @@ async fn git_op(
             patch: request.patch.as_deref(),
             commit: request.commit.as_deref(),
             reset_mode: request.reset_mode.as_deref(),
+            stash_ref: request.stash_ref.as_deref(),
+            tag: request.tag.as_deref(),
+            remote_name: request.remote_name.as_deref(),
+            include_untracked: request.include_untracked,
             all: request.all,
             amend: request.amend,
             signoff: request.signoff,

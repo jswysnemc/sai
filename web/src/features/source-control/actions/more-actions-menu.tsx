@@ -2,12 +2,12 @@ import { MoreHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
+import { RepositoryResources } from "../resources/repository-resources";
 import type { GitOperationUiOptions, RunGitOperation } from "../types";
 
 type MoreActionsMenuProps = {
   busy: boolean;
   dirtyTotal: number;
-  stashCount: number;
   runOperation: RunGitOperation;
 };
 
@@ -67,11 +67,12 @@ export function MoreActionsMenu(props: MoreActionsMenuProps) {
           })}>{t("Force Push with Lease", "使用租约强制推送")}</Button>
           <span>{t("Stash", "储藏")}</span>
           <Button disabled={props.dirtyTotal === 0} onClick={() => void run("stash_push", { message: "Sai stash" })}>
+            {t("Stash", "储藏修改")}
+          </Button>
+          <Button disabled={props.dirtyTotal === 0} onClick={() => void run("stash_push", { message: "Sai stash", include_untracked: true })}>
             {t("Stash Including Untracked", "储藏并包含未跟踪文件")}
           </Button>
-          <Button disabled={props.stashCount === 0} onClick={() => void run("stash_pop")}>
-            {t(`Pop Stash (${props.stashCount})`, `弹出储藏 (${props.stashCount})`)}
-          </Button>
+          <RepositoryResources open={open} busy={props.busy} runOperation={props.runOperation} />
         </div>
       )}
     </div>

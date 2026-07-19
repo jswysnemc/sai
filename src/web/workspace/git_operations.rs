@@ -61,7 +61,7 @@ async fn dispatch_operation(
         "push" => push_repo(repo, state).await,
         "force_push_with_lease" => force_push_with_lease(repo, state).await,
         "sync" => sync_repo(repo, state).await,
-        "set_remote" => set_remote(repo, request.remote_url).await,
+        "set_remote" => set_origin_remote(repo, request.remote_url).await,
         "switch_branch" => {
             switch_branch(
                 repo,
@@ -86,8 +86,14 @@ async fn dispatch_operation(
         "reset_commit" => reset_commit(repo, request.commit, request.reset_mode).await,
         "revert_commit" => revert_commit(repo, request.commit).await,
         "add_to_gitignore" => add_to_gitignore(repo, request.path).await,
-        "stash_push" => stash_push(repo, request.message).await,
-        "stash_pop" => git_success(repo, &["stash", "pop"]).await,
+        "stash_push" => stash_push(repo, request.message, request.include_untracked).await,
+        "stash_apply" => stash_apply(repo, request.stash_ref).await,
+        "stash_pop" => stash_pop(repo, request.stash_ref).await,
+        "stash_drop" => stash_drop(repo, request.stash_ref).await,
+        "tag_create" => create_tag(repo, request.tag, request.commit).await,
+        "tag_delete" => delete_tag(repo, request.tag).await,
+        "remote_add" => add_remote(repo, request.remote_name, request.remote_url).await,
+        "remote_remove" => remove_remote(repo, request.remote_name).await,
         "continue_operation" => continue_operation(repo, state).await,
         "skip_operation" => skip_operation(repo, state).await,
         "abort_operation" => abort_operation(repo, state).await,
@@ -405,44 +411,6 @@ async fn sync_repo(repo: &Path, state: &GitRepositoryState) -> Result<GitOutput>
     Ok(merge_outputs([pulled, pushed]))
 }
 
-/// 新增或更新 origin 远端地址。
-///
-/// 参数:
-/// - `repo`: 仓库根目录
-/// - `remote_url`: 远端地址
-///
-/// 返回:
-/// - Git 命令输出
-async fn set_remote(repo: &Path, remote_url: Option<&str>) -> Result<GitOutput> {
-    let remote_url = remote_url
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("remote URL cannot be empty"))?;
-    if git_origin_exists(repo).await {
-        git_success(repo, &["remote", "set-url", "origin", remote_url]).await
-    } else {
-        git_success(repo, &["remote", "add", "origin", remote_url]).await
-    }
-}
-
-/// 保存工作树修改到 stash，并包含未跟踪文件。
-///
-/// 参数:
-/// - `repo`: 仓库根目录
-/// - `message`: 可选 stash 说明
-///
-/// 返回:
-/// - Git 命令输出
-async fn stash_push(repo: &Path, message: Option<&str>) -> Result<GitOutput> {
-    let mut args = vec!["stash", "push", "--include-untracked"];
-    let owned;
-    if let Some(value) = message.map(str::trim).filter(|value| !value.is_empty()) {
-        owned = value.to_string();
-        args.extend(["-m", owned.as_str()]);
-    }
-    git_success(repo, &args).await
-}
-
 /// 继续当前合并、变基、拣选或还原流程。
 ///
 /// 参数:
@@ -545,7 +513,13 @@ fn operation_message(action: &str) -> &'static str {
         "revert_commit" => "commit reverted",
         "add_to_gitignore" => "path added to .gitignore",
         "stash_push" => "changes stashed",
+        "stash_apply" => "stash applied",
         "stash_pop" => "stash popped",
+        "stash_drop" => "stash dropped",
+        "tag_create" => "tag created",
+        "tag_delete" => "tag deleted",
+        "remote_add" => "remote added",
+        "remote_remove" => "remote removed",
         "continue_operation" => "operation continued",
         "skip_operation" => "operation step skipped",
         "abort_operation" => "operation aborted",

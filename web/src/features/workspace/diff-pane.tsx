@@ -108,6 +108,7 @@ export function DiffPane() {
       includeStatus ? queryClient.invalidateQueries({ queryKey: ["git-status"] }) : Promise.resolve(),
       queryClient.invalidateQueries({ queryKey: ["git-branches"] }),
       queryClient.invalidateQueries({ queryKey: ["git-log"] }),
+      queryClient.invalidateQueries({ queryKey: ["git-resources"] }),
       queryClient.invalidateQueries({ queryKey: ["git-review-diff"] }),
       queryClient.invalidateQueries({ queryKey: ["git-commit-details"] }),
       queryClient.invalidateQueries({ queryKey: ["git-commit-diff"] }),
@@ -341,7 +342,6 @@ export function DiffPane() {
           <MoreActionsMenu
             busy={busy}
             dirtyTotal={dirtyTotal}
-            stashCount={state?.stash_count ?? 0}
             runOperation={runOp}
           />
         </div>
