@@ -52,6 +52,7 @@ mod repl_chrome;
 mod repl_clipboard;
 mod repl_commands;
 mod repl_editor;
+mod repl_external_events;
 mod repl_input;
 mod repl_input_navigation;
 mod repl_input_render;
@@ -61,6 +62,7 @@ mod repl_runtime;
 mod repl_shell;
 mod repl_text;
 mod repl_tool_warmup;
+mod repl_turn;
 mod reset;
 mod sessions;
 mod skills_commands;
@@ -85,13 +87,15 @@ use providers::{apply_thinking_override, run_providers, run_set, run_set_thinkin
 use render_options::stream_render_options;
 use repl::run_repl;
 use repl_background::run_repl_background_manager;
-use repl_clipboard::ReplClipboardState;
-use repl_commands::{complete_repl_command, repl_command_rest, repl_command_suggestions};
+use repl_commands::{
+    complete_repl_command, repl_command_rest, repl_command_suggestions,
+    visible_repl_command_suggestions,
+};
 use repl_editor::edit_input_buffer;
 use repl_input::read_repl_input;
 use repl_input_navigation::{move_cursor_down_by_visual_row, move_cursor_up_by_visual_row};
 use repl_input_render::{clear_repl_input, render_repl_input};
-use repl_runtime::{process_stream_tick, ReplRuntime};
+use repl_runtime::{process_stream_input, process_stream_tick, ReplRuntime};
 use repl_shell::execute_repl_shell;
 use repl_text::*;
 use reset::run_reset;
@@ -286,7 +290,8 @@ enum PermissionSurface {
 
 async fn run_tool(paths: &SaiPaths, mode: AgentMode, args: ToolArgs) -> Result<()> {
     let config = AppConfig::load_or_default(paths)?;
-    let mut registry = build_tool_registry(&config, paths, mode)?;
+    // 单工具 CLI 只需要本地工具定义，避免同步发现 MCP 服务阻塞命令执行
+    let mut registry = build_tool_registry_without_mcp(&config, paths, mode)?;
     let profile_mode = mode.permission_profile_mode();
     let audit = (mode != AgentMode::Yolo).then(|| {
         crate::permission::PermissionAuditLog::new(
@@ -505,10 +510,7 @@ fn handle_agent_event(renderer: &mut render::StreamRenderer, event: AgentEvent) 
             io::stdout().flush()?;
             let decision = prompt_permission_request(&request)?;
             // 拒绝决定已单独展示，抑制随后同名工具的失败输出块避免重复
-            if matches!(
-                decision,
-                crate::permission::PermissionDecision::Deny { .. }
-            ) {
+            if matches!(decision, crate::permission::PermissionDecision::Deny { .. }) {
                 renderer.suppress_denied_result(&request.tool);
             }
             Ok(())

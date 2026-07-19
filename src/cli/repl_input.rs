@@ -1,11 +1,32 @@
 use super::repl_chrome::ReplChrome;
+use super::repl_clipboard::ReplClipboardState;
+use super::repl_external_events::ReplExternalEvents;
 use super::repl_runtime::ReplRuntime;
 use super::*;
+use crate::agent::ExternalEventWake;
+
+const EXTERNAL_EVENT_INPUT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 pub(super) struct ReplInputSubmission {
     pub(super) mode: AgentMode,
     pub(super) raw_input: String,
     pub(super) chat_input: clipboard::ClipboardChatInput,
+}
+
+/// 输入框产生的下一项工作。
+pub(super) enum ReplInputEvent {
+    User(ReplInputSubmission),
+    Automatic {
+        mode: AgentMode,
+        wake: ExternalEventWake,
+        draft: ReplInputDraft,
+    },
+}
+
+/// 自动唤醒期间暂存的输入文本与剪贴板附件。
+pub(super) struct ReplInputDraft {
+    pub(super) text: String,
+    pub(super) clipboard_state: ReplClipboardState,
 }
 
 /// 启用 REPL 原始输入模式并确保编辑光标可见。
@@ -49,26 +70,30 @@ pub(super) fn disable_repl_terminal_input(stdout: &mut io::Stdout) -> Result<()>
 /// 参数:
 /// - `mode`: 当前 REPL 模式
 /// - `prefill`: 待编辑的预填输入
+/// - `prefill_clipboard`: 预填输入关联的剪贴板附件
 /// - `history`: 输入历史记录
 /// - `chrome`: 可变的输入区 chrome 状态
 /// - `runtime`: REPL 终端运行期
+/// - `external_events`: 后台完成事件监听器
 ///
 /// 返回:
-/// - 用户提交的输入，或退出时的空值
+/// - 用户提交或自动唤醒事件，退出时返回空值
 pub(super) fn read_repl_input(
     mut mode: AgentMode,
     prefill: Option<String>,
+    prefill_clipboard: Option<ReplClipboardState>,
     history: &[String],
     chrome: &mut ReplChrome,
     runtime: &mut ReplRuntime,
-) -> Result<Option<ReplInputSubmission>> {
+    external_events: &mut ReplExternalEvents,
+) -> Result<Option<ReplInputEvent>> {
     let mut stdout = io::stdout();
     let mut input = strip_terminal_control_sequences(&prefill.unwrap_or_default());
     let mut cursor = input.chars().count();
     let mut slash_selection = 0usize;
     let mut history_index = history.len();
     let mut history_clean_index = None::<usize>;
-    let mut clipboard_state = ReplClipboardState::default();
+    let mut clipboard_state = prefill_clipboard.unwrap_or_default();
     let mut last_escape = None::<Instant>;
     let mut last_ctrl_c = None::<Instant>;
     // 输入框由 composer 绝对定位绘制；这里禁止直接向终端写换行，
@@ -87,6 +112,7 @@ pub(super) fn read_repl_input(
                 &input,
                 cursor,
                 is_pasted,
+                &clipboard_state,
                 slash_selection,
                 runtime,
             )
@@ -94,21 +120,42 @@ pub(super) fn read_repl_input(
     }
     redraw_input!()?;
     loop {
-        if let Some(wait) = runtime.pending_wait() {
-            if !event::poll(wait)? {
-                if runtime.process_idle_tick()? {
-                    input_row = 0;
-                    rendered_rows = 0;
-                    redraw_input!()?;
+        if let Some(wake) = external_events.take_ready() {
+            disable_repl_terminal_input(&mut stdout)?;
+            return Ok(Some(ReplInputEvent::Automatic {
+                mode,
+                wake: wake?,
+                draft: ReplInputDraft {
+                    text: input,
+                    clipboard_state,
+                },
+            }));
+        }
+        let queued_event = runtime.pop_input_event();
+        if queued_event.is_none() {
+            let wait = match (runtime.pending_wait(), external_events.is_armed()) {
+                (Some(wait), true) => Some(wait.min(EXTERNAL_EVENT_INPUT_POLL_INTERVAL)),
+                (Some(wait), false) => Some(wait),
+                (None, true) => Some(EXTERNAL_EVENT_INPUT_POLL_INTERVAL),
+                (None, false) => None,
+            };
+            if let Some(wait) = wait {
+                if !event::poll(wait)? {
+                    if runtime.process_idle_tick()? {
+                        input_row = 0;
+                        rendered_rows = 0;
+                        redraw_input!()?;
+                    }
+                    continue;
                 }
-                continue;
             }
         }
-        match event::read()? {
+        let event = queued_event.map(Ok).unwrap_or_else(event::read)?;
+        match event {
             Event::Resize(cols, rows) => runtime.observe_input_resize(cols, rows),
             Event::Paste(text) => {
                 let text = strip_terminal_control_sequences(&text);
-                insert_str_at_cursor(&mut input, &mut cursor, &text);
+                clipboard_state.paste_text_into_input(&mut input, &mut cursor, text);
                 slash_selection = 0;
                 history_clean_index = None;
                 is_pasted = true;
@@ -185,7 +232,7 @@ pub(super) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Up => {
-                        let suggestions = repl_command_suggestions(&input);
+                        let suggestions = visible_repl_command_suggestions(&input);
                         if !suggestions.is_empty() {
                             slash_selection = (slash_selection % suggestions.len())
                                 .checked_sub(1)
@@ -221,7 +268,7 @@ pub(super) fn read_repl_input(
                         }
                     }
                     KeyCode::Down => {
-                        let suggestions = repl_command_suggestions(&input);
+                        let suggestions = visible_repl_command_suggestions(&input);
                         if !suggestions.is_empty() {
                             slash_selection = (slash_selection + 1) % suggestions.len();
                         } else {
@@ -265,7 +312,7 @@ pub(super) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Enter => {
-                        let suggestions = repl_command_suggestions(&input);
+                        let suggestions = visible_repl_command_suggestions(&input);
                         if let Some(selected) = suggestions
                             .get(slash_selection.min(suggestions.len().saturating_sub(1)))
                         {
@@ -281,11 +328,11 @@ pub(super) fn read_repl_input(
                         // 1. 提交后立即显示空 composer，流式输出始终插入其上方
                         redraw_input!()?;
                         disable_repl_terminal_input(&mut stdout)?;
-                        return Ok(Some(ReplInputSubmission {
+                        return Ok(Some(ReplInputEvent::User(ReplInputSubmission {
                             mode,
                             raw_input,
                             chat_input,
-                        }));
+                        })));
                     }
                     KeyCode::Char('j') if modifiers.contains(KeyModifiers::CONTROL) => {
                         insert_newline_at_cursor(&mut input, &mut cursor);
@@ -354,6 +401,13 @@ pub(super) fn read_repl_input(
                         input_row = 0;
                         rendered_rows = 0;
                         redraw_input!()?;
+                    }
+                    KeyCode::Char('o') if modifiers.contains(KeyModifiers::CONTROL) => {
+                        if runtime.toggle_command_output()? {
+                            input_row = 0;
+                            rendered_rows = 0;
+                            redraw_input!()?;
+                        }
                     }
                     KeyCode::Char('w') if modifiers.contains(KeyModifiers::CONTROL) => {
                         remove_word_before_cursor(&mut input, &mut cursor);

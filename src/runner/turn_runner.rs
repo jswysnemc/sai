@@ -1,4 +1,6 @@
-use super::{AutomaticInputEvent, RunnerEvent, RunnerEventSink, UserInputSubmission};
+use super::{
+    AutomaticInputEvent, RunnerEvent, RunnerEventSink, SubmissionSource, UserInputSubmission,
+};
 use crate::agent::{Agent, ExternalEventBatch};
 use crate::llm::ChatResult;
 use anyhow::Result;
@@ -8,6 +10,7 @@ use std::time::Instant;
 /// 单轮 runner，当前只包装现有 Agent 单轮调用。
 pub(crate) struct TurnRunner<'agent> {
     agent: &'agent mut Agent,
+    wait_for_external_events: bool,
 }
 
 impl<'agent> TurnRunner<'agent> {
@@ -19,7 +22,25 @@ impl<'agent> TurnRunner<'agent> {
     /// 返回:
     /// - 单轮 runner
     pub(crate) fn new(agent: &'agent mut Agent) -> Self {
-        Self { agent }
+        Self {
+            agent,
+            wait_for_external_events: true,
+        }
+    }
+
+    /// 根据入口来源设置是否等待后台任务完成后自动续轮。
+    ///
+    /// 参数:
+    /// - `agent`: 当前会话 Agent
+    /// - `source`: submission 来源
+    ///
+    /// 返回:
+    /// - 已配置外部事件等待策略的单轮 runner
+    pub(crate) fn for_source(agent: &'agent mut Agent, source: SubmissionSource) -> Self {
+        Self {
+            agent,
+            wait_for_external_events: source_waits_for_external_events(source),
+        }
     }
 
     /// 执行用户输入单轮对话。
@@ -110,7 +131,12 @@ impl<'agent> TurnRunner<'agent> {
                     .state()
                     .account_goal_progress(&goal.id, tokens, elapsed)?;
             }
-            // 4. Goal 处于活动或阻塞状态时，等待后台工作完成并主动发起完整续轮
+            // 4. CLI 单次命令只返回当前模型结果，不等待后台工作完成
+            if !self.wait_for_external_events {
+                sink.on_runner_event(RunnerEvent::Completed(result.clone()))?;
+                return Ok(result);
+            }
+            // 5. Goal 处于活动或阻塞状态时，等待后台工作完成并主动发起完整续轮
             if let Some(goal) = self.agent.state().goal()? {
                 if goal.status.accepts_external_wake() {
                     let batch = self
@@ -150,7 +176,7 @@ impl<'agent> TurnRunner<'agent> {
                     }
                 }
             }
-            // 5. 非 Goal 会话同样等待未绑定 Goal 的后台工作，并通过自动队列发起新轮次
+            // 6. 非 Goal 会话同样等待未绑定 Goal 的后台工作，并通过自动队列发起新轮次
             if let Some(batch) = self
                 .agent
                 .wait_for_session_events(|| sink.on_runner_event(RunnerEvent::WaitingExternal))
@@ -168,5 +194,46 @@ impl<'agent> TurnRunner<'agent> {
             sink.on_runner_event(RunnerEvent::Completed(result.clone()))?;
             return Ok(result);
         }
+    }
+}
+
+/// 判断指定入口是否应该等待外部完成事件并自动续轮。
+///
+/// 参数:
+/// - `source`: submission 来源
+///
+/// 返回:
+/// - Web 和网关入口返回 `true`；TUI 使用独立外部事件监听器
+fn source_waits_for_external_events(source: SubmissionSource) -> bool {
+    !matches!(
+        source,
+        SubmissionSource::Command | SubmissionSource::Repl | SubmissionSource::ShellIntercept
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 验证一次性 CLI 命令不会等待后台工作完成。
+    #[test]
+    fn command_sources_skip_external_wait() {
+        assert!(!source_waits_for_external_events(SubmissionSource::Command));
+        assert!(!source_waits_for_external_events(
+            SubmissionSource::ShellIntercept
+        ));
+    }
+
+    /// 验证 TUI 单轮会先返回输入框，外部完成事件交给独立监听器。
+    #[test]
+    fn repl_source_returns_before_external_completion() {
+        assert!(!source_waits_for_external_events(SubmissionSource::Repl));
+    }
+
+    /// 验证 Web 与网关持久入口仍会消费后台完成事件。
+    #[test]
+    fn persistent_sources_keep_external_wait() {
+        assert!(source_waits_for_external_events(SubmissionSource::Web));
+        assert!(source_waits_for_external_events(SubmissionSource::Gateway));
     }
 }

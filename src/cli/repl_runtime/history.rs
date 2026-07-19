@@ -57,11 +57,7 @@ fn history_user_text(turn: &SessionTimelineTurn) -> String {
         .strip_prefix(EXTERNAL_OPEN)
         .and_then(|value| value.strip_suffix(EXTERNAL_CLOSE))
     {
-        let heading = if crate::i18n::is_zh() {
-            "后台工作已完成，自动继续当前对话"
-        } else {
-            "Background work completed; continuing the conversation automatically"
-        };
+        let heading = "Background work completed; continuing the conversation automatically";
         let details = inner
             .trim()
             .split_once("\n\n")
@@ -69,11 +65,7 @@ fn history_user_text(turn: &SessionTimelineTurn) -> String {
             .unwrap_or_else(|| inner.trim());
         return format!("{heading}\n\n{details}");
     }
-    if crate::i18n::is_zh() {
-        "Goal 自动续轮".to_string()
-    } else {
-        "Goal continuation".to_string()
-    }
+    "Goal continuation".to_string()
 }
 
 /// 追加历史推理内容。
@@ -107,11 +99,7 @@ fn append_tools(transcript: &mut TranscriptStore, turn: &SessionTimelineTurn) {
     for tool in &turn.tools {
         transcript.push_history_tool_call(tool.name.clone(), tool.arguments.clone());
         if tool.status == "running" {
-            let output = if crate::i18n::is_zh() {
-                "上次会话中的工具调用未完成"
-            } else {
-                "The tool call was not completed in the previous session"
-            };
+            let output = "The tool call was not completed in the previous session";
             transcript.push_tool_result(tool.name.clone(), false, output.to_string());
             continue;
         }

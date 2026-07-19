@@ -1,5 +1,8 @@
 use super::repl_chrome::ReplChrome;
+use super::repl_external_events::ReplExternalEvents;
+use super::repl_input::ReplInputEvent;
 use super::repl_tool_warmup::ReplToolWarmup;
+use super::repl_turn::{execute_automatic_repl_turn, execute_repl_turn};
 use super::*;
 use crate::agent::Agent;
 
@@ -23,6 +26,7 @@ pub(super) async fn run_repl(
     let mut mode = initial_mode;
     let mut input_history = load_repl_input_history(&state)?;
     let mut prefill = None::<String>;
+    let mut prefill_clipboard = None;
     let initial_transcript_options = render::transcript::TranscriptRenderOptions {
         reasoning_mode: render::ReasoningDisplayMode::from_config(&config.display.reasoning),
         tool_call_mode: render::ToolCallDisplayMode::from_config(&config.display.tool_calls),
@@ -57,7 +61,7 @@ pub(super) async fn run_repl(
     // 1. 重量级初始化前先呈现输入框，避免版本信息后长时间没有输入区
     {
         let chrome = ReplChrome::from_runtime(&config, &state, mode);
-        runtime.update_composer(&chrome, "", 0, false, 0)?;
+        runtime.update_composer(&chrome, "", 0, false, Vec::new(), 0)?;
         runtime.draw_composer(&mut std::io::stdout())?;
     }
     // 2. 本地工具立即可用，MCP 动态工具在后台发现，避免阻塞输入框
@@ -83,8 +87,11 @@ pub(super) async fn run_repl(
         initial_registry,
         mode,
     )?;
+    let mut external_events = ReplExternalEvents::new();
 
     loop {
+        // 每次进入输入循环都重新绑定当前 Agent，会话切换后不会消费旧监听结果
+        external_events.arm(&agent);
         apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
         // 每轮刷新底栏上下文/模型信息
         let mut chrome = ReplChrome::from_runtime(&config, &state, mode);
@@ -96,13 +103,44 @@ pub(super) async fn run_repl(
         let submission = match read_repl_input(
             mode,
             prefill.take(),
+            prefill_clipboard.take(),
             &input_history,
             &mut chrome,
             &mut runtime,
+            &mut external_events,
         )? {
-            Some(submission) => {
+            Some(ReplInputEvent::User(submission)) => {
                 mode = submission.mode;
                 submission
+            }
+            Some(ReplInputEvent::Automatic {
+                mode: automatic_mode,
+                wake,
+                draft,
+            }) => {
+                mode = automatic_mode;
+                prefill = (!draft.text.trim().is_empty()).then_some(draft.text);
+                prefill_clipboard = prefill.as_ref().map(|_| draft.clipboard_state);
+                apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
+                let outcome = execute_automatic_repl_turn(
+                    paths,
+                    &config,
+                    &mut agent,
+                    &mut runtime,
+                    mode,
+                    transcript_options.reasoning_mode,
+                    transcript_options.tool_call_mode,
+                    wake,
+                )
+                .await?;
+                if outcome.interrupted {
+                    if let Some(error) = outcome.result.err() {
+                        runtime.record_meta(error.to_string())?;
+                    }
+                } else if let Err(error) = outcome.result {
+                    runtime.record_meta(error.to_string())?;
+                }
+                continue;
             }
             None => break,
         };
@@ -465,56 +503,16 @@ pub(super) async fn run_repl(
             render_options.clone(),
             goal_continuation,
         );
-        let mut interrupted = false;
-        let chat_result = {
-            let runner = crate::runner::SessionRunner::new(paths).with_config(config.clone());
-            let runtime = std::cell::RefCell::new(&mut runtime);
-            let mut sink = |event: crate::runner::RunnerEvent| {
-                if let crate::runner::RunnerEvent::Agent(AgentEvent::PermissionRequested(request)) =
-                    &event
-                {
-                    runtime
-                        .borrow_mut()
-                        .record_permission_request(request.clone())?;
-                    prompt_permission_request_tui(request, &runtime)?;
-                }
-                if let crate::runner::RunnerEvent::Agent(AgentEvent::QuestionRequested(pending)) =
-                    &event
-                {
-                    prompt_question_request_tui(pending, &runtime)?;
-                }
-                runtime.borrow_mut().record_runner_event(&event)
-            };
-            let chat = runner.run_submission_with_agent(runner_submission, &mut agent, &mut sink);
-            tokio::pin!(chat);
-            let mut resize_tick = tokio::time::interval(Duration::from_millis(25));
-            resize_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            let ctrl_c = tokio::signal::ctrl_c();
-            tokio::pin!(ctrl_c);
-            loop {
-                tokio::select! {
-                    result = &mut chat => break result.map(|_| ()),
-                    signal = &mut ctrl_c => {
-                        signal?;
-                        interrupted = true;
-                        break Ok(());
-                    }
-                    _ = resize_tick.tick() => {
-                        let mut runtime_ref = runtime.borrow_mut();
-                        process_stream_tick(&mut *runtime_ref)?;
-                    }
-                }
-            }
-        };
-        runtime.finish_stream()?;
-        if interrupted {
+        let outcome =
+            execute_repl_turn(paths, &config, &mut agent, &mut runtime, runner_submission).await?;
+        if outcome.interrupted {
             if !state.latest_interrupted_turn_has_content(&submitted_input)? {
                 prefill = Some(submitted_input);
             }
             continue;
         }
-        if let Err(err) = chat_result {
-            runtime.record_meta(err.to_string())?;
+        if let Err(error) = outcome.result {
+            runtime.record_meta(error.to_string())?;
             continue;
         }
     }

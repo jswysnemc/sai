@@ -10,9 +10,25 @@ enum ReplClipboardItem {
     Image { marker: String, data_url: String },
 }
 
+/// 输入区中剪贴板原子块的种类。
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(super) enum ReplClipboardBlockKind {
+    Text,
+    Image,
+}
+
+/// 剪贴板原子块在输入字符串中的字符区间。
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(super) struct ReplClipboardBlockSpan {
+    pub(super) start: usize,
+    pub(super) end: usize,
+    pub(super) kind: ReplClipboardBlockKind,
+}
+
 #[derive(Debug, Default, Clone)]
 pub(super) struct ReplClipboardState {
     items: Vec<ReplClipboardItem>,
+    next_text_index: usize,
     next_image_index: usize,
 }
 
@@ -37,7 +53,51 @@ impl ReplClipboardState {
     /// 清空所有已记录的剪贴板附件。
     pub(super) fn clear(&mut self) {
         self.items.clear();
+        self.next_text_index = 0;
         self.next_image_index = 0;
+    }
+
+    /// 将括号粘贴事件中的文本插入输入区，长文本会生成原子块。
+    ///
+    /// 参数:
+    /// - `input`: 当前输入内容
+    /// - `cursor`: 当前光标字符位置
+    /// - `text`: 粘贴文本
+    ///
+    /// 返回:
+    /// - 是否生成了折叠原子块
+    pub(super) fn paste_text_into_input(
+        &mut self,
+        input: &mut String,
+        cursor: &mut usize,
+        text: String,
+    ) -> bool {
+        self.insert_text(input, cursor, text)
+    }
+
+    /// 返回当前输入中的剪贴板原子块区间。
+    ///
+    /// 参数:
+    /// - `input`: 当前输入内容
+    ///
+    /// 返回:
+    /// - 按输入顺序排列的原子块区间
+    pub(super) fn block_spans(&self, input: &str) -> Vec<ReplClipboardBlockSpan> {
+        let mut spans = Vec::new();
+        for item in &self.items {
+            let marker = item.marker();
+            let kind = item.kind();
+            if let Some(start_byte) = input.find(marker) {
+                let start = input[..start_byte].chars().count();
+                spans.push(ReplClipboardBlockSpan {
+                    start,
+                    end: start + marker.chars().count(),
+                    kind,
+                });
+            }
+        }
+        spans.sort_by_key(|span| span.start);
+        spans
     }
 
     /// 删除光标前方的完整剪贴板占位块。
@@ -165,7 +225,8 @@ impl ReplClipboardState {
             insert_text_at_cursor(input, cursor, &trimmed);
             return false;
         }
-        let marker = format!("[text {chars} chars]");
+        self.next_text_index += 1;
+        let marker = format!("[text {} {chars} chars]", self.next_text_index);
         insert_text_at_cursor(input, cursor, &marker);
         self.items.push(ReplClipboardItem::Text {
             marker,
@@ -216,6 +277,14 @@ impl ReplClipboardItem {
     fn marker(&self) -> &str {
         match self {
             Self::Text { marker, .. } | Self::Image { marker, .. } => marker,
+        }
+    }
+
+    /// 返回原子块的渲染类型。
+    fn kind(&self) -> ReplClipboardBlockKind {
+        match self {
+            Self::Text { .. } => ReplClipboardBlockKind::Text,
+            Self::Image { .. } => ReplClipboardBlockKind::Image,
         }
     }
 }
@@ -313,7 +382,7 @@ mod tests {
         let chat = state.to_chat_input(&input);
 
         assert!(folded);
-        assert!(input.contains("[text 201 chars]"));
+        assert!(input.contains("[text 1 201 chars]"));
         assert!(chat.message.contains("<clipboard>"));
         assert!(chat.message.contains(&text));
     }
@@ -374,5 +443,51 @@ mod tests {
 
         assert!(state.remove_block_at_cursor(&mut input, 1));
         assert_eq!(input, "x");
+    }
+
+    #[test]
+    fn block_spans_identify_text_and_image_markers() {
+        let mut state = ReplClipboardState::default();
+        let mut input = String::new();
+        let mut cursor = 0;
+        state.insert_payload(
+            &mut input,
+            &mut cursor,
+            ClipboardPayload::Text("a".repeat(LONG_TEXT_CHARS + 1)),
+        );
+        state.insert_payload(
+            &mut input,
+            &mut cursor,
+            ClipboardPayload::ImageDataUrl {
+                data_url: "data:image/png;base64,abc".to_string(),
+                width: 10,
+                height: 20,
+            },
+        );
+
+        let spans = state.block_spans(&input);
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].kind, ReplClipboardBlockKind::Text);
+        assert_eq!(spans[1].kind, ReplClipboardBlockKind::Image);
+        assert_eq!(spans[0].end, spans[1].start);
+    }
+
+    #[test]
+    fn text_block_uses_distinct_color_without_changing_width() {
+        let mut state = ReplClipboardState::default();
+        let mut input = String::new();
+        let mut cursor = 0;
+        state.paste_text_into_input(&mut input, &mut cursor, "a".repeat(LONG_TEXT_CHARS + 1));
+
+        let styled = crate::cli::repl_input_render::style_clipboard_line(
+            &input,
+            0,
+            &state.block_spans(&input),
+        );
+        assert!(styled.contains("\x1b[48;5;25m"));
+        assert_eq!(
+            crate::cli::repl_text::visible_width(&styled),
+            input.chars().count()
+        );
     }
 }

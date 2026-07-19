@@ -188,7 +188,7 @@ impl<'paths> SessionRunner<'paths> {
             sink.on_runner_event(RunnerEvent::LoadedToolsChanged(loaded_tools))?;
         }
         sink.on_runner_event(RunnerEvent::Started)?;
-        let mut turn_runner = TurnRunner::new(&mut agent);
+        let mut turn_runner = TurnRunner::for_source(&mut agent, submission.source);
         let result = turn_runner.run_user_input(&input, sink).await;
         perf.mark("turn runner done");
         if config.tools.progressive_loading_enabled {
@@ -247,7 +247,7 @@ impl<'paths> SessionRunner<'paths> {
         sink.on_runner_event(RunnerEvent::Started)?;
         let input = with_channel_marker(input, submission.channel.as_ref());
         // 2. 执行单轮（Agent 已由 REPL 完成 prepare_for_turn / switch_mode）
-        let mut turn_runner = TurnRunner::new(agent);
+        let mut turn_runner = TurnRunner::for_source(agent, submission.source);
         let result = turn_runner.run_user_input(&input, sink).await;
         perf.mark("turn runner done");
         if config.tools.progressive_loading_enabled {

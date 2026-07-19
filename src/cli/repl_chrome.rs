@@ -2,7 +2,6 @@ use super::repl_text::visible_width;
 use super::*;
 use crate::config::AppConfig;
 use crate::state::StateStore;
-use std::process::Command;
 
 /// REPL 底栏与输入框 chrome 状态。
 #[derive(Debug, Clone)]
@@ -13,7 +12,6 @@ pub(super) struct ReplChrome {
     pub(super) model: String,
     pub(super) thinking: String,
     pub(super) directory: String,
-    pub(super) git_branch: Option<String>,
 }
 
 impl ReplChrome {
@@ -53,8 +51,7 @@ impl ReplChrome {
                 .unwrap_or(context_limit),
             model,
             thinking,
-            directory: directory.clone(),
-            git_branch: current_git_branch(&directory),
+            directory,
         }
     }
 
@@ -72,10 +69,7 @@ impl ReplChrome {
     /// - 如 `0.0%/272k (auto)`
     pub(super) fn context_status(&self) -> String {
         let pct = (self.context_ratio * 100.0).clamp(0.0, 999.9);
-        format!(
-            "{pct:.1}%/{} (auto)",
-            format_token_k(self.context_window_tokens)
-        )
+        format!("{pct:.1}%/{}", format_token_k(self.context_window_tokens))
     }
 
     /// 模式纯文本（用于宽度计算）。
@@ -111,56 +105,68 @@ impl ReplChrome {
     /// - 已着色状态行
     pub(super) fn footer_line(&self, cols: usize) -> String {
         let cols = cols.max(1);
-        let context = self.context_status();
-        let subagent = running_subagent_footer_label();
-        let left = match &subagent {
-            Some(status) => format!("{}  {}  {}", self.mode_plain(), context, status),
-            None => format!("{}  {}", self.mode_plain(), context),
+        let left_plain = format!(
+            "{}  {}  {}  {}",
+            self.mode_plain(),
+            self.context_status(),
+            self.model,
+            self.thinking
+        );
+        let right_plain = self.directory.clone();
+        let right_budget = right_plain
+            .chars()
+            .count()
+            .min(cols.saturating_sub(visible_width(&left_plain) + 3));
+        let left_budget = cols.saturating_sub(right_budget + 1);
+        let left = if visible_width(&left_plain) > left_budget {
+            truncate_to_width(&self.colored_left_status(), left_budget)
+        } else {
+            self.colored_left_status()
         };
-        let mut right = format!("{} · {} · {}", self.model, self.thinking, self.directory);
-        if let Some(branch) = &self.git_branch {
-            right.push_str(" · ");
-            right.push_str(branch);
-        }
-        let right = truncate_to_width(&right, cols.saturating_sub(visible_width(&left) + 3));
+        let right = color_directory(&truncate_to_width(&right_plain, right_budget));
         let gap = cols
             .saturating_sub(visible_width(&left) + visible_width(&right))
             .max(1);
+        format!("{left}{}{}", " ".repeat(gap), right)
+    }
+
+    /// 返回按 mode、context、model、thinking 顺序着色的左侧状态。
+    fn colored_left_status(&self) -> String {
         format!(
-            "{}  \x1b[2m{}{}{}\x1b[0m",
+            "{}  {}  {}  {}",
             self.mode_status(),
-            match &subagent {
-                Some(status) => format!("{context}  {status}"),
-                None => context,
-            },
-            " ".repeat(gap),
-            right,
+            self.context_status_colored(),
+            color_model(&self.model),
+            color_thinking(&self.thinking)
         )
+    }
+
+    /// 按上下文占用比例生成带风险等级颜色的状态文本。
+    fn context_status_colored(&self) -> String {
+        let color = if self.context_ratio >= 0.9 {
+            "\x1b[31m"
+        } else if self.context_ratio >= 0.7 {
+            "\x1b[33m"
+        } else {
+            "\x1b[32m"
+        };
+        format!("{color}{}\x1b[0m", self.context_status())
     }
 }
 
-/// 汇总当前运行中的子智能体，供底栏简要展示。
-///
-/// 返回:
-/// - 如 `sub×1 检查项目`；没有运行中的子智能体时返回空
-fn running_subagent_footer_label() -> Option<String> {
-    let running = crate::tools::subagent_state::list_subagents()
-        .into_iter()
-        .filter(|item| item.status == "running")
-        .collect::<Vec<_>>();
-    if running.is_empty() {
-        return None;
-    }
-    let first = running
-        .first()
-        .map(|item| item.description.trim())
-        .filter(|value| !value.is_empty())
-        .unwrap_or("subagent");
-    if running.len() == 1 {
-        Some(format!("sub {first}"))
-    } else {
-        Some(format!("sub×{} {first}", running.len()))
-    }
+/// 给模型名称使用稳定的重点颜色。
+fn color_model(value: &str) -> String {
+    format!("\x1b[38;5;81m{value}\x1b[0m")
+}
+
+/// 给思考等级使用独立颜色。
+fn color_thinking(value: &str) -> String {
+    format!("\x1b[38;5;177m{value}\x1b[0m")
+}
+
+/// 给右侧当前目录使用弱化但可辨识的颜色。
+fn color_directory(value: &str) -> String {
+    format!("\x1b[38;5;110m{value}\x1b[0m")
 }
 
 /// 将 token 数格式化为 `272k` 风格。
@@ -181,25 +187,6 @@ fn format_token_k(value: usize) -> String {
     } else {
         value.to_string()
     }
-}
-
-/// 读取当前目录的 Git 分支名。
-///
-/// 参数:
-/// - `directory`: 当前工作目录
-///
-/// 返回:
-/// - 位于 Git 仓库时返回分支名
-fn current_git_branch(directory: &str) -> Option<String> {
-    let output = Command::new("git")
-        .args(["-C", directory, "branch", "--show-current"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    (!branch.is_empty()).then_some(branch)
 }
 
 /// 将 footer 的右侧信息截断到当前终端宽度。
@@ -303,13 +290,17 @@ mod tests {
             model: "gpt".to_string(),
             thinking: "xhigh".to_string(),
             directory: "/workspace".to_string(),
-            git_branch: Some("main".to_string()),
         };
         let line = chrome.footer_line(80);
         let plain = strip_ansi(&line);
         assert!(plain.starts_with("yolo"));
-        assert!(plain.contains("0.0%/272k (auto)"));
-        assert!(plain.contains("gpt · xhigh · /workspace · main"));
+        assert!(plain.contains("0.0%/272k"));
+        assert!(plain.contains("gpt"));
+        assert!(plain.contains("xhigh"));
+        assert!(plain.contains("/workspace"));
+        assert!(!plain.contains("main"));
+        assert!(line.contains("\x1b[38;5;81m"));
+        assert!(line.contains("\x1b[38;5;177m"));
     }
 
     fn strip_ansi(text: &str) -> String {

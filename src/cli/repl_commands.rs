@@ -28,6 +28,20 @@ pub(super) fn repl_command_suggestions(input: &str) -> Vec<ReplCommandSuggestion
         .collect()
 }
 
+/// 根据当前输入生成面板可见的斜杠菜单建议。
+///
+/// 参数:
+/// - `input`: 当前输入内容
+///
+/// 返回:
+/// - 不超过面板容量的补全建议
+pub(super) fn visible_repl_command_suggestions(input: &str) -> Vec<ReplCommandSuggestion> {
+    repl_command_suggestions(input)
+        .into_iter()
+        .take(MAX_REPL_COMMAND_SUGGESTIONS)
+        .collect()
+}
+
 /// 返回唯一匹配的斜杠菜单补全文本。
 ///
 /// 参数:
@@ -44,7 +58,7 @@ pub(super) fn complete_repl_command(input: &str) -> Option<&'static str> {
     }
 }
 
-/// 返回 slash 命令在当前语言下的说明文本。
+/// 返回 slash 命令的英文说明文本。
 ///
 /// 参数:
 /// - `command`: slash 命令文本
@@ -52,120 +66,23 @@ pub(super) fn complete_repl_command(input: &str) -> Option<&'static str> {
 /// 返回:
 /// - 适合 command palette 右侧展示的简短说明
 fn command_description(command: &str) -> &'static str {
-    let zh = is_zh();
     match command {
-        "/help" => {
-            if zh {
-                "显示可用命令"
-            } else {
-                "show available commands"
-            }
-        }
-        "/new" => {
-            if zh {
-                "创建新会话"
-            } else {
-                "start a new session"
-            }
-        }
-        "/resume" => {
-            if zh {
-                "恢复或切换会话"
-            } else {
-                "resume or switch sessions"
-            }
-        }
-        "/compact" => {
-            if zh {
-                "压缩较早的会话内容"
-            } else {
-                "compact older conversation history"
-            }
-        }
-        "/clear" => {
-            if zh {
-                "清空会话；/clear memory 清空记忆"
-            } else {
-                "clear conversation; /clear memory clears memory"
-            }
-        }
-        "/model" => {
-            if zh {
-                "选择当前模型"
-            } else {
-                "choose the active model"
-            }
-        }
-        "/agent" => {
-            if zh {
-                "切换当前 Agent"
-            } else {
-                "switch the active agent"
-            }
-        }
-        "/providers" => {
-            if zh {
-                "切换服务商或模型"
-            } else {
-                "switch provider or model"
-            }
-        }
-        "/config" => {
-            if zh {
-                "打开配置界面"
-            } else {
-                "open configuration"
-            }
-        }
-        "/ps" => {
-            if zh {
-                "管理后台任务"
-            } else {
-                "manage background tasks"
-            }
-        }
-        "/thinking" => {
-            if zh {
-                "设置思考强度"
-            } else {
-                "set reasoning effort"
-            }
-        }
-        "/plan" => {
-            if zh {
-                "切换到只读规划模式"
-            } else {
-                "switch to read-only planning mode"
-            }
-        }
-        "/audit" => {
-            if zh {
-                "切换到权限审计和工作区沙盒模式"
-            } else {
-                "switch to audited workspace sandbox mode"
-            }
-        }
-        "/yolo" => {
-            if zh {
-                "切换到 YOLO 模式"
-            } else {
-                "switch to YOLO mode"
-            }
-        }
-        "/undo" => {
-            if zh {
-                "撤销上一轮并恢复输入"
-            } else {
-                "undo the last turn and restore input"
-            }
-        }
-        "/exit" => {
-            if zh {
-                "退出 REPL"
-            } else {
-                "leave the REPL"
-            }
-        }
+        "/help" => "show available commands",
+        "/new" => "start a new session",
+        "/resume" => "resume or switch sessions",
+        "/compact" => "compact older conversation history",
+        "/clear" => "clear conversation; /clear memory clears memory",
+        "/model" => "choose the active model",
+        "/agent" => "switch the active agent",
+        "/providers" => "switch provider or model",
+        "/config" => "open configuration",
+        "/ps" => "manage background tasks",
+        "/thinking" => "set reasoning effort",
+        "/plan" => "switch to read-only planning mode",
+        "/audit" => "switch to audited workspace sandbox mode",
+        "/yolo" => "switch to YOLO mode",
+        "/undo" => "undo the last turn and restore input",
+        "/exit" => "leave the REPL",
         _ => "",
     }
 }
@@ -238,12 +155,28 @@ mod tests {
         assert_eq!(suggestions[0].command, "/model");
         assert!(!suggestions[0].description.is_empty());
     }
-}
-use crate::i18n::is_zh;
 
+    #[test]
+    fn visible_suggestions_match_panel_capacity() {
+        let suggestions = visible_repl_command_suggestions("/");
+
+        assert_eq!(suggestions.len(), MAX_REPL_COMMAND_SUGGESTIONS);
+        assert!(repl_command_suggestions("/").len() > suggestions.len());
+    }
+
+    #[test]
+    fn command_descriptions_are_always_english() {
+        let suggestions = visible_repl_command_suggestions("/");
+
+        assert!(suggestions
+            .iter()
+            .all(|suggestion| suggestion.description.is_ascii()));
+    }
+}
 /// slash 命令面板中的单条说明。
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct ReplCommandSuggestion {
     pub(super) command: &'static str,
     pub(super) description: &'static str,
 }
+pub(super) const MAX_REPL_COMMAND_SUGGESTIONS: usize = 8;

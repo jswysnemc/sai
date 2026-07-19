@@ -1,4 +1,5 @@
 use super::repl_chrome::{chrome_fixed_rows, ReplChrome};
+use super::repl_clipboard::ReplClipboardState;
 use super::repl_runtime::ReplRuntime;
 use super::*;
 
@@ -32,11 +33,18 @@ pub(super) fn render_repl_input(
     input: &str,
     cursor: usize,
     is_pasted: bool,
+    clipboard_state: &ReplClipboardState,
     slash_selection: usize,
     runtime: &mut ReplRuntime,
 ) -> Result<()> {
-    let (next_input_row, current_rows) =
-        runtime.update_composer(chrome, input, cursor, is_pasted, slash_selection)?;
+    let (next_input_row, current_rows) = runtime.update_composer(
+        chrome,
+        input,
+        cursor,
+        is_pasted,
+        clipboard_state.block_spans(input),
+        slash_selection,
+    )?;
     *input_row = next_input_row;
     runtime.draw_composer(stdout)?;
     *rendered_rows = current_rows;
@@ -98,6 +106,54 @@ pub(super) fn repl_render_rows(prefix: &str, lines: &[String], has_suggestions: 
 
 pub(super) fn repl_prompt_rows(prefix: &str, lines: &[String]) -> u16 {
     repl_prompt_rows_for_cols(prefix, lines, terminal_cols())
+}
+
+/// 为剪贴板原子块插入特殊颜色，保持原始文本和字符区间不变。
+///
+/// 参数:
+/// - `line`: 待渲染的一行原始文本
+/// - `line_start`: 该行在输入中的字符起点
+/// - `spans`: 剪贴板原子块区间
+///
+/// 返回:
+/// - 带 ANSI 样式的文本行
+pub(super) fn style_clipboard_line(
+    line: &str,
+    line_start: usize,
+    spans: &[super::repl_clipboard::ReplClipboardBlockSpan],
+) -> String {
+    let chars = line.chars().collect::<Vec<_>>();
+    let mut output = String::new();
+    let mut active = None;
+    for (offset, ch) in chars.iter().enumerate() {
+        let position = line_start + offset;
+        let next = spans
+            .iter()
+            .find(|span| span.start <= position && position < span.end)
+            .map(|span| span.kind);
+        if next != active {
+            if active.is_some() {
+                output.push_str("\x1b[0m");
+            }
+            if let Some(kind) = next {
+                output.push_str(match kind {
+                    super::repl_clipboard::ReplClipboardBlockKind::Text => {
+                        "\x1b[48;5;25m\x1b[38;5;159m"
+                    }
+                    super::repl_clipboard::ReplClipboardBlockKind::Image => {
+                        "\x1b[48;5;89m\x1b[38;5;225m"
+                    }
+                });
+            }
+            active = next;
+        }
+        output.push(*ch);
+        if active.is_some() && spans.iter().any(|span| span.end == position + 1) {
+            output.push_str("\x1b[0m");
+            active = None;
+        }
+    }
+    output
 }
 
 pub(super) fn repl_line_rows_for_cols(prefix: &str, line: &str, cols: usize) -> u16 {

@@ -14,11 +14,14 @@ mod tests;
 
 use crate::agent::AgentMode;
 use crate::cli::repl_chrome::ReplChrome;
+use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
 use crate::render::transcript::{
     TranscriptMode, TranscriptRenderOptions, TranscriptStore, WelcomeCell,
 };
 use crate::state::SessionTimelineTurn;
 use anyhow::Result;
+use crossterm::event::Event;
+use std::collections::VecDeque;
 use std::io::{self, Write};
 use std::time::{Duration, Instant};
 
@@ -43,6 +46,7 @@ pub(super) struct ReplRuntime {
     live_sync_pending: bool,
     desynced: bool,
     subagent_signature: Vec<(String, String, u64, u64)>,
+    pending_input_events: VecDeque<Event>,
 }
 
 impl ReplRuntime {
@@ -69,6 +73,7 @@ impl ReplRuntime {
             live_sync_pending: false,
             desynced: false,
             subagent_signature: Vec::new(),
+            pending_input_events: VecDeque::new(),
         }
     }
 
@@ -92,6 +97,7 @@ impl ReplRuntime {
     /// - `input`: 原始输入文本
     /// - `cursor`: 光标字符偏移
     /// - `is_pasted`: 是否为粘贴内容
+    /// - `clipboard_blocks`: 剪贴板原子块区间
     /// - `slash_selection`: slash 面板当前选中项
     ///
     /// 返回:
@@ -102,6 +108,7 @@ impl ReplRuntime {
         input: &str,
         cursor: usize,
         is_pasted: bool,
+        clipboard_blocks: Vec<ReplClipboardBlockSpan>,
         slash_selection: usize,
     ) -> Result<(u16, u16)> {
         let size = TerminalSize::current();
@@ -110,6 +117,7 @@ impl ReplRuntime {
             input.to_string(),
             cursor,
             is_pasted,
+            clipboard_blocks,
             slash_selection,
         );
         self.composer = Some(frame);
@@ -156,7 +164,10 @@ impl ReplRuntime {
             return Ok(());
         }
         let mut stdout = io::stdout();
-        crossterm::queue!(stdout, crossterm::cursor::MoveTo(0, size.rows.saturating_sub(1)))?;
+        crossterm::queue!(
+            stdout,
+            crossterm::cursor::MoveTo(0, size.rows.saturating_sub(1))
+        )?;
         for _ in 0..deficit {
             crossterm::queue!(stdout, crossterm::style::Print("\r\n"))?;
         }
@@ -209,7 +220,11 @@ impl ReplRuntime {
     ///
     /// 返回:
     /// - 尺寸变化或历史区域增高（露出被 composer 覆盖的行）时返回 true
-    fn needs_replay_after_layout(&self, previous_size: TerminalSize, previous_history: u16) -> bool {
+    fn needs_replay_after_layout(
+        &self,
+        previous_size: TerminalSize,
+        previous_history: u16,
+    ) -> bool {
         self.viewport.size() != previous_size || self.viewport.history_height() > previous_history
     }
 
@@ -492,6 +507,7 @@ impl ReplRuntime {
         self.next_live_refresh = None;
         self.live_sync_pending = false;
         self.desynced = false;
+        self.pending_input_events.clear();
         self.replay(false)
     }
 
@@ -560,8 +576,11 @@ impl ReplRuntime {
 
     /// 记录终端尺寸变化并安排 resize reflow。
     fn observe_size(&mut self, size: TerminalSize, streaming: bool) {
-        self.viewport
-            .update(size, self.composer_height_for(size), self.stream.on_screen());
+        self.viewport.update(
+            size,
+            self.composer_height_for(size),
+            self.stream.on_screen(),
+        );
         self.reflow.observe(size, streaming);
     }
 
@@ -688,4 +707,4 @@ fn transcript_mode(mode: AgentMode) -> TranscriptMode {
     }
 }
 
-pub(super) use event_loop::process_stream_tick;
+pub(super) use event_loop::{process_stream_input, process_stream_tick};

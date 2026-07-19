@@ -78,7 +78,11 @@ pub(super) fn apply_delta<W: Write>(
     if new_total < old_total {
         let clear_row = screen_row_for(previous_viewport, old_total, new_total, offscreen)
             .unwrap_or(previous_viewport.origin_row());
-        queue!(output, MoveTo(0, clear_row), Clear(ClearType::FromCursorDown))?;
+        queue!(
+            output,
+            MoveTo(0, clear_row),
+            Clear(ClearType::FromCursorDown)
+        )?;
     }
     // 3. 追加新行：屏幕未满时直接写入，满后用真实终端滚动保留原生 scrollback
     let outcome = append_lines_to(output, previous_viewport, viewport, append)?;
@@ -350,8 +354,7 @@ mod tests {
 
         // 5 行历史（全局行 0..5），修补行 3
         let patches = vec![(3usize, AnsiLine::new("patched".to_string()))];
-        let outcome =
-            apply_delta(&mut sink, &previous, &viewport, &patches, &[], 5, 5, 0).unwrap();
+        let outcome = apply_delta(&mut sink, &previous, &viewport, &patches, &[], 5, 5, 0).unwrap();
 
         let output = String::from_utf8(sink).unwrap();
         // composer_top = 5，行 3 距底部 2 行 → 屏幕第 4 行（1 起）

@@ -79,6 +79,14 @@ impl ReplRuntime {
                     self.mark_desynced();
                     return Ok(());
                 }
+                if name == "run_command" {
+                    if let Some(chunk) = crate::tools::command::decode_command_output(message) {
+                        if self.transcript.push_command_output(name, &chunk) {
+                            return self.throttled_live_sync();
+                        }
+                        return Ok(());
+                    }
+                }
                 self.transcript
                     .push_tool_progress(name.clone(), message.clone());
                 self.sync_transcript(true)

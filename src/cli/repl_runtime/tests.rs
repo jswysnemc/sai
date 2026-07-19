@@ -6,6 +6,7 @@ use crate::llm::{ChatStreamChunk, ChatStreamKind};
 use crate::render::transcript::TranscriptRenderOptions;
 use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
 use crate::runner::{AutomaticInputEvent, AutomaticInputKind, RunnerEvent};
+use crossterm::event::Event;
 
 #[test]
 fn resize_during_stream_requires_finish_reflow() {
@@ -153,4 +154,59 @@ fn automatic_input_event_is_rendered_as_blue_message() {
         .collect::<String>();
     assert!(rendered.contains("\x1b[38;5;39m●"));
     assert!(rendered.contains("后台任务已完成"));
+}
+
+#[test]
+fn command_progress_renders_five_lines_and_toggles_expansion() {
+    let mut runtime = ReplRuntime::new(5_000, options());
+    runtime
+        .record_runner_event(&RunnerEvent::Agent(AgentEvent::ToolCall {
+            name: "run_command".to_string(),
+            arguments: r#"{"command":"test"}"#.to_string(),
+        }))
+        .unwrap();
+    let message = crate::tools::command::encode_command_output_for_test(
+        crate::tools::command::CommandOutputStream::Stdout,
+        b"one\ntwo\nthree\nfour\nfive\nsix\nseven\n",
+    );
+    runtime
+        .record_runner_event(&RunnerEvent::Agent(AgentEvent::ToolProgress {
+            name: "run_command".to_string(),
+            message,
+        }))
+        .unwrap();
+
+    let collapsed = runtime
+        .transcript
+        .display_tail(120, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(collapsed.contains("Ctrl+O"));
+
+    assert!(runtime.toggle_command_output().unwrap());
+    let expanded = runtime
+        .transcript
+        .display_tail(120, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(expanded.contains("four"));
+}
+
+#[test]
+fn stream_input_events_are_replayed_in_order() {
+    let mut runtime = ReplRuntime::new(5_000, options());
+    runtime.queue_input_event(Event::Paste("first".to_string()));
+    runtime.queue_input_event(Event::Paste("second".to_string()));
+
+    assert_eq!(
+        runtime.pop_input_event(),
+        Some(Event::Paste("first".to_string()))
+    );
+    assert_eq!(
+        runtime.pop_input_event(),
+        Some(Event::Paste("second".to_string()))
+    );
+    assert_eq!(runtime.pop_input_event(), None);
 }

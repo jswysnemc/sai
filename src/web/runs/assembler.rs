@@ -169,6 +169,11 @@ impl EventAssembler {
             }
             AgentEvent::ToolProgress { name, message } => {
                 let mut events = self.status_event("working");
+                if name == "run_command"
+                    && crate::tools::command::decode_command_output(&message).is_some()
+                {
+                    return events;
+                }
                 let tool_id = self.active_tool_id(&name);
                 events.push(self.event(
                     "tool.progress",
@@ -433,6 +438,21 @@ mod tests {
             .unwrap();
         assert_eq!(started.last().unwrap().payload["tool_id"], id);
         assert_eq!(result.last().unwrap().payload["tool_id"], id);
+    }
+
+    #[test]
+    fn hides_internal_command_output_progress_events() {
+        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let message = crate::tools::command::encode_command_output_for_test(
+            crate::tools::command::CommandOutputStream::Stdout,
+            b"building\n",
+        );
+        let events = assembler.map(RunnerEvent::Agent(AgentEvent::ToolProgress {
+            name: "run_command".to_string(),
+            message,
+        }));
+
+        assert!(events.iter().all(|event| event.kind != "tool.progress"));
     }
 
     #[test]

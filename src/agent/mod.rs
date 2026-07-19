@@ -40,7 +40,7 @@ use tool_visibility::ToolVisibility;
 
 pub(crate) use compaction::CompactionRunOutcome;
 pub use event::{AgentEvent, CompactionError};
-pub(crate) use external_events::ExternalEventBatch;
+pub(crate) use external_events::{ExternalEventBatch, ExternalEventWake};
 pub use mode::AgentMode;
 
 const MAX_QUESTION_ROUNDS_PER_TURN: usize = 8;

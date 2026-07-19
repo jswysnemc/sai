@@ -1,12 +1,10 @@
-use crate::cli::repl_commands::{repl_command_suggestions, ReplCommandSuggestion};
+use crate::cli::repl_commands::{visible_repl_command_suggestions, ReplCommandSuggestion};
 use crate::cli::repl_text::visible_width;
 use anyhow::Result;
 use crossterm::cursor::MoveTo;
 use crossterm::queue;
 use crossterm::style::Print;
 use std::io::Write;
-
-const MAX_ITEMS: usize = 8;
 
 /// 独立于输入框的斜杠命令面板。
 pub(super) struct SlashPanel {
@@ -24,10 +22,7 @@ impl SlashPanel {
     /// 返回:
     /// - 已过滤的命令面板
     pub(super) fn new(input: &str, selected: usize) -> Self {
-        let suggestions = repl_command_suggestions(input)
-            .into_iter()
-            .take(MAX_ITEMS)
-            .collect::<Vec<_>>();
+        let suggestions = visible_repl_command_suggestions(input);
         let selected = selected.min(suggestions.len().saturating_sub(1));
         Self {
             suggestions,

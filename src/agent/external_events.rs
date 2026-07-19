@@ -1,4 +1,7 @@
 use super::Agent;
+use crate::config::AppConfig;
+use crate::paths::SaiPaths;
+use crate::state::StateStore;
 use crate::tools::command::{
     acknowledge_background_completions, poll_background_completions,
     poll_session_background_completions, BackgroundCompletionNotice,
@@ -14,6 +17,7 @@ use std::time::Duration;
 const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 /// 一批尚未交给主 Agent 的外部完成事件。
+#[derive(Debug)]
 pub(crate) struct ExternalEventBatch {
     prompt: String,
     display: String,
@@ -21,7 +25,46 @@ pub(crate) struct ExternalEventBatch {
     background_task_ids: Vec<String>,
 }
 
+/// TUI 后台监听器可以投递的下一次自动输入。
+#[derive(Debug)]
+pub(crate) enum ExternalEventWake {
+    GoalContinuation,
+    Completion(ExternalEventBatch),
+}
+
+/// 与主 Agent 解耦的会话外部事件监听上下文。
+#[derive(Clone)]
+pub(crate) struct ExternalEventMonitor {
+    paths: SaiPaths,
+    config: AppConfig,
+    state: StateStore,
+}
+
+enum ExternalEventPoll {
+    Ready(ExternalEventWake),
+    Waiting,
+    Idle,
+}
+
 impl ExternalEventBatch {
+    #[cfg(test)]
+    /// 创建不包含实际任务标识的测试事件批次。
+    ///
+    /// 参数:
+    /// - `prompt`: 发送给模型的提示
+    /// - `display`: 展示给用户的消息
+    ///
+    /// 返回:
+    /// - 测试事件批次
+    pub(crate) fn for_test(prompt: &str, display: &str) -> Self {
+        Self {
+            prompt: prompt.to_string(),
+            display: display.to_string(),
+            subagent_ids: Vec::new(),
+            background_task_ids: Vec::new(),
+        }
+    }
+
     /// 返回发送给模型的外部事件提示。
     ///
     /// 参数:
@@ -46,6 +89,18 @@ impl ExternalEventBatch {
 }
 
 impl Agent {
+    /// 创建不借用主 Agent 的外部事件监听上下文。
+    ///
+    /// 返回:
+    /// - 可移动到独立 Tokio 任务的监听上下文
+    pub(crate) fn external_event_monitor(&self) -> ExternalEventMonitor {
+        ExternalEventMonitor {
+            paths: self.paths.clone(),
+            config: self.config.clone(),
+            state: self.state.clone(),
+        }
+    }
+
     /// 等待当前活动 Goal 绑定的后台工作产生完成事件。
     ///
     /// 参数:
@@ -179,6 +234,127 @@ impl Agent {
         )?;
         acknowledge_finished_notices(&owner_key, &batch.subagent_ids);
         Ok(())
+    }
+}
+
+impl ExternalEventMonitor {
+    /// 等待下一条外部完成消息或 Goal 自动续轮请求。
+    ///
+    /// 返回:
+    /// - 可以提交的自动输入；当前会话没有待处理工作时返回空
+    pub(crate) async fn wait_for_wake(&self) -> Result<Option<ExternalEventWake>> {
+        loop {
+            // 1. 主 Agent 正在写入当前轮时只等待，避免提前投递重复续轮
+            if self.state.has_running_turns()? {
+                tokio::time::sleep(EVENT_POLL_INTERVAL).await;
+                continue;
+            }
+            // 2. 每次只投递一个唤醒事件，由 REPL 完成该轮后重新建立监听
+            match self.poll_once().await? {
+                ExternalEventPoll::Ready(wake) => return Ok(Some(wake)),
+                ExternalEventPoll::Waiting => {
+                    tokio::time::sleep(EVENT_POLL_INTERVAL).await;
+                }
+                ExternalEventPoll::Idle => return Ok(None),
+            }
+        }
+    }
+
+    /// 查询一次当前会话外部事件状态。
+    ///
+    /// 返回:
+    /// - 已就绪事件、仍需等待或当前空闲
+    async fn poll_once(&self) -> Result<ExternalEventPoll> {
+        if let Some(goal) = self
+            .state
+            .goal()?
+            .filter(|goal| goal.status.accepts_external_wake())
+        {
+            return self.poll_goal(&goal.id).await;
+        }
+        self.poll_session().await
+    }
+
+    /// 查询活动 Goal 绑定的后台工作。
+    ///
+    /// 参数:
+    /// - `goal_id`: 当前 Goal 标识
+    ///
+    /// 返回:
+    /// - Goal 外部事件状态
+    async fn poll_goal(&self, goal_id: &str) -> Result<ExternalEventPoll> {
+        let owner_key = self.state.state_dir().display().to_string();
+        let subagent_notices = pending_finished_notices_for_goal(&owner_key, goal_id);
+        let (background_notices, running_background) = poll_background_completions(
+            &self.paths,
+            &self.config,
+            self.state.session_id(),
+            goal_id,
+        )
+        .await?;
+        if !subagent_notices.is_empty() || !background_notices.is_empty() {
+            let latest_goal = self.state.goal()?;
+            if latest_goal
+                .as_ref()
+                .is_some_and(|goal| goal.id == goal_id && goal.status.accepts_external_wake())
+            {
+                if latest_goal
+                    .as_ref()
+                    .is_some_and(|goal| goal.status == crate::goal::GoalStatus::Blocked)
+                {
+                    self.state
+                        .set_goal_status(crate::goal::GoalStatus::Active)?;
+                }
+                return Ok(ExternalEventPoll::Ready(ExternalEventWake::Completion(
+                    build_event_batch(&owner_key, &subagent_notices, &background_notices, true),
+                )));
+            }
+            return Ok(ExternalEventPoll::Idle);
+        }
+        let running_subagents = list_subagents_for_goal(&owner_key, goal_id)
+            .iter()
+            .any(|snapshot| snapshot.status == "running");
+        if running_subagents || running_background > 0 {
+            return Ok(ExternalEventPoll::Waiting);
+        }
+        if self
+            .state
+            .goal()?
+            .is_some_and(|goal| goal.id == goal_id && goal.status.is_active())
+        {
+            return Ok(ExternalEventPoll::Ready(
+                ExternalEventWake::GoalContinuation,
+            ));
+        }
+        Ok(ExternalEventPoll::Idle)
+    }
+
+    /// 查询当前会话中未绑定 Goal 的后台工作。
+    ///
+    /// 返回:
+    /// - 会话外部事件状态
+    async fn poll_session(&self) -> Result<ExternalEventPoll> {
+        let owner_key = self.state.state_dir().display().to_string();
+        let subagent_notices = pending_finished_notices(&owner_key)
+            .into_iter()
+            .filter(|notice| notice.goal_id.is_none())
+            .collect::<Vec<_>>();
+        let (background_notices, running_background) =
+            poll_session_background_completions(&self.paths, &self.config, self.state.session_id())
+                .await?;
+        if !subagent_notices.is_empty() || !background_notices.is_empty() {
+            return Ok(ExternalEventPoll::Ready(ExternalEventWake::Completion(
+                build_event_batch(&owner_key, &subagent_notices, &background_notices, false),
+            )));
+        }
+        let running_subagents = list_subagents_for_owner(&owner_key)
+            .iter()
+            .any(|snapshot| snapshot.goal_id.is_none() && snapshot.status == "running");
+        if running_subagents || running_background > 0 {
+            Ok(ExternalEventPoll::Waiting)
+        } else {
+            Ok(ExternalEventPoll::Idle)
+        }
     }
 }
 
