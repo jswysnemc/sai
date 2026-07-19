@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { ApiError, LocalizedError, localizeApiMessage, toDisplayError } from "../../api/api-error";
 import type { GitOperationResponse } from "../../api/contracts";
-import type { GitOperationOptions } from "../../api/git-contracts";
+import type { GitOperationAction, GitOperationOptions } from "../../api/git-contracts";
 import { Button } from "../../shared/ui/button/button";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { DiffView } from "../chat/tool-renderers/diff-view";
@@ -24,6 +24,7 @@ import { CommitControl } from "./changes/commit-control";
 import { groupGitChanges } from "./changes/change-groups";
 import { RepositoryChangeGroup } from "./changes/repository-change-group";
 import { MoreActionsMenu } from "./actions/more-actions-menu";
+import { executeGitCommand } from "./commands/git-command-registry";
 import { resolveGitReviewDiffMode } from "./diff/diff-mode";
 import { FileComparisonView } from "./diff/file-comparison-view";
 import { SourceControlDiff } from "./diff/source-control-diff";
@@ -191,7 +192,7 @@ export function SourceControlPane() {
   };
 
   const op = useMutation({
-    mutationFn: (input: { action: string; options: GitOperationOptions }) =>
+    mutationFn: (input: { action: GitOperationAction; options: GitOperationOptions }) =>
       api.workspace.gitOp(input.action, input.options),
     onSuccess: async (result, input) => {
       appendOutput(result.ok, result.message, result.stdout, result.stderr);
@@ -247,7 +248,7 @@ export function SourceControlPane() {
   }
 
   const runOp = async (
-    action: string,
+    action: GitOperationAction,
     options: GitOperationUiOptions = {}
   ): Promise<GitOperationResponse | undefined> => {
     if (options.confirmTitle) {
@@ -478,13 +479,13 @@ export function SourceControlPane() {
             <FolderGit2 size={13} />
             {t("Repositories", "仓库")}
           </Button>
-          <Button disabled={busy} onClick={() => void runOp("fetch")} title={t("Fetch remote updates", "获取远端更新")}>
+          <Button disabled={busy} onClick={() => void executeGitCommand("git.fetch", runOp)} title={t("Fetch remote updates", "获取远端更新")}>
             <CloudDownload size={13} />
           </Button>
-          <Button disabled={busy} onClick={() => void runOp("pull")} title={t("Pull and merge", "拉取并合并")}>
+          <Button disabled={busy} onClick={() => void executeGitCommand("git.pull", runOp)} title={t("Pull and merge", "拉取并合并")}>
             <RefreshCw size={13} />
           </Button>
-          <Button disabled={busy} onClick={() => void runOp("push")} title={t("Push", "推送")}>
+          <Button disabled={busy} onClick={() => void executeGitCommand("git.push", runOp)} title={t("Push", "推送")}>
             <CloudUpload size={13} />
           </Button>
           <Button disabled={busy} onClick={() => void refreshAll()} title={t("Refresh", "刷新")} aria-label={t("Refresh", "刷新")}>

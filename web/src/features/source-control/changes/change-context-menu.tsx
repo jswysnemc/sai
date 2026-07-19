@@ -1,6 +1,7 @@
 import { Copy, EyeOff, FileDiff, FileText, FolderSearch, GitCompareArrows, GitMerge, Minus, Pin, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { GitStatusEntry } from "../../../api/contracts";
+import type { GitOperationAction } from "../../../api/git-contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import { useI18n } from "../../i18n/use-i18n";
@@ -59,7 +60,7 @@ export function ChangeContextMenu(props: ChangeContextMenuProps) {
   }, [props]);
 
   /** 执行批量 Git 操作并关闭菜单。 */
-  const run = async (action: string, targetPaths: string[]) => {
+  const run = async (action: GitOperationAction, targetPaths: string[]) => {
     props.onClose();
     await props.runOperation(action, { paths: targetPaths });
   };

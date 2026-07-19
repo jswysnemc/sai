@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, Check, ChevronDown, GitBranch, GitMerge, GitPullRequest, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { GitOperationOptions } from "../../api/git-contracts";
+import type { GitOperationAction, GitOperationOptions } from "../../api/git-contracts";
 import type { GitBranch as GitBranchInfo, GitOperationResponse, GitRepositoryState } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
@@ -16,7 +16,7 @@ type GitBranchMenuProps = {
   busy: boolean;
   suggestBranchNames: boolean;
   onOpenChange: (open: boolean) => void;
-  onOperation: (action: string, options?: GitOperationOptions) => Promise<GitOperationResponse | undefined>;
+  onOperation: (action: GitOperationAction, options?: GitOperationOptions) => Promise<GitOperationResponse | undefined>;
 };
 
 /**

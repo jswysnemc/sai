@@ -1,5 +1,5 @@
 import type { GitOperationResponse } from "../../api/contracts";
-import type { GitOperationOptions } from "../../api/git-contracts";
+import type { GitOperationAction, GitOperationOptions } from "../../api/git-contracts";
 
 export type GitOperationUiOptions = GitOperationOptions & {
   confirmTitle?: string;
@@ -7,7 +7,7 @@ export type GitOperationUiOptions = GitOperationOptions & {
 };
 
 export type RunGitOperation = (
-  action: string,
+  action: GitOperationAction,
   options?: GitOperationUiOptions
 ) => Promise<GitOperationResponse | undefined>;
 

@@ -62,7 +62,7 @@ import type {
 import { ApiError } from "./api-error";
 import { detectInitialLocale, text } from "../features/i18n/locale";
 import type { GoalResponse, GoalUpdateRequest } from "./goal-contracts";
-import type { GitOperationOptions } from "./git-contracts";
+import type { GitOperationAction, GitOperationOptions } from "./git-contracts";
 
 /** 使用 URL 启动令牌建立同源会话。 */
 export async function bootstrapSession(): Promise<void> {
@@ -353,7 +353,7 @@ export const api = {
       if (repoRoot) query.set("repo_root", repoRoot);
       return apiRequest<GitDiffResponse>(`/api/workspace/git/file-diff?${query}`);
     },
-    gitOp: (action: string, options: GitOperationOptions = {}) =>
+    gitOp: (action: GitOperationAction, options: GitOperationOptions = {}) =>
       apiRequest<GitOperationResponse>("/api/workspace/git/op", {
         method: "POST",
         body: JSON.stringify({ action, ...options })

@@ -1,6 +1,7 @@
 import { ChevronDown, FolderGit2, GitBranch } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { GitRepositoryState, GitStatusEntry, ScmConfig } from "../../../api/contracts";
+import type { GitOperationAction } from "../../../api/git-contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
 import type { GitOperationUiOptions, RunGitOperation } from "../types";
@@ -65,7 +66,7 @@ export function RepositoryChangeGroup(props: RepositoryChangeGroupProps) {
    * @param options 可选操作参数
    * @returns Git 操作结果
    */
-  const run = (action: string, options: GitOperationUiOptions = {}) => props.runOperation(action, {
+  const run = (action: GitOperationAction, options: GitOperationUiOptions = {}) => props.runOperation(action, {
     ...options,
     repo_root: props.state.repo_root
   });

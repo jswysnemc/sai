@@ -1,6 +1,7 @@
 import { CheckCircle2, Cherry, Copy, GitBranch, LogOut, RotateCcw } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { GitCommitSummary } from "../../../api/contracts";
+import type { GitOperationAction } from "../../../api/git-contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
 import type { GitOperationUiOptions, RunGitOperation } from "../types";
@@ -49,7 +50,7 @@ export function CommitContextMenu(props: CommitContextMenuProps) {
    * @param options 操作参数和可选确认信息
    * @returns 无返回值
    */
-  const run = async (action: string, options: GitOperationUiOptions = {}) => {
+  const run = async (action: GitOperationAction, options: GitOperationUiOptions = {}) => {
     props.onClose();
     await props.runOperation(action, { commit: props.commit.sha, ...options });
   };

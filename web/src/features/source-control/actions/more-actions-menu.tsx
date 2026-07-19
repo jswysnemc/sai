@@ -2,6 +2,7 @@ import { MoreHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
+import { executeGitCommand, type GitCommandId } from "../commands/git-command-registry";
 import { RepositoryResources } from "../resources/repository-resources";
 import type { GitOperationUiOptions, RunGitOperation } from "../types";
 
@@ -39,13 +40,13 @@ export function MoreActionsMenu(props: MoreActionsMenuProps) {
   /**
    * 执行菜单动作并关闭菜单。
    *
-   * @param action Git 操作名称
+   * @param commandId VS Code 风格 Git 命令标识
    * @param options 可选确认信息
    * @returns 无返回值
    */
-  const run = async (action: string, options: GitOperationUiOptions = {}) => {
+  const run = async (commandId: GitCommandId, options: GitOperationUiOptions = {}) => {
     setOpen(false);
-    await props.runOperation(action, options);
+    await executeGitCommand(commandId, props.runOperation, options);
   };
 
   return (
@@ -63,22 +64,22 @@ export function MoreActionsMenu(props: MoreActionsMenuProps) {
       {open && (
         <div className="git-more-actions-menu" role="menu">
           <span>{t("Remote", "远端")}</span>
-          <Button onClick={() => void run("pull_rebase")}>{t("Pull (Rebase)", "拉取并变基")}</Button>
-          <Button onClick={() => void run("sync", props.confirmSync ? {
+          <Button onClick={() => void run("git.pullRebase")}>{t("Pull (Rebase)", "拉取并变基")}</Button>
+          <Button onClick={() => void run("git.sync", props.confirmSync ? {
             confirmTitle: t("Sync changes?", "同步改动？"),
             confirmDescription: t("Git will pull remote changes and then push the current branch.", "Git 将先获取远端改动，再推送当前分支。")
           } : {})}>{t("Sync", "同步")}</Button>
-          <Button onClick={() => void run("force_push_with_lease", {
+          <Button onClick={() => void run("git.pushForce", {
             ...(props.confirmForcePush ? {
               confirmTitle: t("Force push with lease?", "使用租约强制推送？"),
               confirmDescription: t("Remote commits may be replaced. Git will refuse if the remote changed unexpectedly.", "远端提交可能被替换；远端状态意外变化时 Git 会拒绝执行。")
             } : {})
           })}>{t("Force Push with Lease", "使用租约强制推送")}</Button>
           <span>{t("Stash", "储藏")}</span>
-          <Button disabled={props.dirtyTotal === 0} onClick={() => void run("stash_push", { message: "Sai stash" })}>
+          <Button disabled={props.dirtyTotal === 0} onClick={() => void run("git.stash", { message: "Sai stash" })}>
             {t("Stash", "储藏修改")}
           </Button>
-          <Button disabled={props.dirtyTotal === 0} onClick={() => void run("stash_push", { message: "Sai stash", include_untracked: true })}>
+          <Button disabled={props.dirtyTotal === 0} onClick={() => void run("git.stash", { message: "Sai stash", include_untracked: true })}>
             {t("Stash Including Untracked", "储藏并包含未跟踪文件")}
           </Button>
           <RepositoryResources repoRoot={props.repoRoot} open={open} busy={props.busy} runOperation={props.runOperation} />
