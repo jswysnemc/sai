@@ -47,6 +47,9 @@ mod repositories;
 #[path = "git_worktrees.rs"]
 mod worktrees;
 
+#[path = "git_watcher.rs"]
+mod watcher;
+
 use branches::*;
 pub(crate) use conflicts::git_conflict;
 use conflicts::resolve_conflict;
@@ -58,6 +61,7 @@ pub(crate) use repositories::{git_repositories, validate_git_repository_root};
 use resource_operations::*;
 pub(crate) use resources::git_resources;
 use support::*;
+pub(crate) use watcher::{GitWatchEvent, RepositoryWatcher};
 use worktrees::{add_worktree, git_worktrees, remove_worktree};
 
 #[cfg(test)]

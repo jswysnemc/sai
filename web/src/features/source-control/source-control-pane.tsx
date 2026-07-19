@@ -32,11 +32,10 @@ import { MergeEditor } from "./conflicts/merge-editor";
 import { GitOutputPanel } from "./output/git-output-panel";
 import { RepositoriesView } from "./repositories/repositories-view";
 import { useScmStateStore } from "./state/use-scm-state-store";
+import { useGitRepositoryEvents, type GitWatchMode } from "./state/use-git-repository-events";
 import type { GitOutputEntry, GitOperationUiOptions } from "./types";
 import "./source-control.css";
 import { GitBranchMenu } from "../workspace/git-branch-menu";
-
-type ReviewMode = "changes" | "history" | "repositories";
 
 /**
  * 渲染 LiveAgent 风格的 Git 变更与历史面板。
@@ -47,7 +46,7 @@ export function SourceControlPane() {
   const confirm = useConfirm();
   const { locale, t } = useI18n();
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<ReviewMode>("changes");
+  const [mode, setMode] = useState<GitWatchMode>("changes");
   const [initBranch, setInitBranch] = useState("main");
   const [remoteUrl, setRemoteUrl] = useState("");
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
@@ -87,9 +86,9 @@ export function SourceControlPane() {
   const status = useQuery({
     queryKey: ["git-status", selectedRepoRoot],
     queryFn: () => api.workspace.gitStatus(selectedRepoRoot ?? undefined),
-    refetchInterval: 8_000,
     enabled: repositories.isSuccess && (repositories.data.repositories.length === 0 || Boolean(selectedRepoRoot))
   });
+  const gitWatchError = useGitRepositoryEvents(selectedRepoRoot, repositories.isSuccess, mode);
   const branches = useQuery({
     queryKey: ["git-branches", selectedRepoRoot],
     queryFn: () => api.workspace.gitBranches(selectedRepoRoot ?? undefined),
@@ -275,6 +274,7 @@ export function SourceControlPane() {
           runOperation={runOp}
         />
         <GitOutputPanel entries={outputEntries} />
+        {gitWatchError && <div className="pane-error">{gitWatchError}</div>}
       </section>
     );
   }
@@ -654,9 +654,9 @@ export function SourceControlPane() {
       )}
 
       <GitOutputPanel entries={outputEntries} />
-      {(error || notice || status.error) && (
-        <div className={error || status.error ? "pane-error" : "pane-notice"}>
-          {error?.message || status.error?.message || localizeApiMessage(notice, locale)}
+      {(error || gitWatchError || notice || status.error) && (
+        <div className={error || gitWatchError || status.error ? "pane-error" : "pane-notice"}>
+          {error?.message || gitWatchError || status.error?.message || localizeApiMessage(notice, locale)}
         </div>
       )}
     </section>

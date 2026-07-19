@@ -22,6 +22,7 @@ mod terminal;
 mod todos;
 mod workspace;
 mod workspace_git;
+mod workspace_git_events;
 mod workspaces;
 use super::app_state::WebAppState;
 use super::auth;
@@ -60,6 +61,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(runs::routes())
         .merge(workspace::routes())
         .merge(workspace_git::routes())
+        .merge(workspace_git_events::routes())
         .merge(system::routes())
         .merge(terminal::routes())
         .layer(middleware::from_fn_with_state(

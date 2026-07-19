@@ -12,4 +12,5 @@ pub(crate) use git_diff::{
     validate_git_repository_root, GitBranchesResponse, GitCommitDetailsResponse,
     GitConflictContent, GitDiff, GitDiffResponse, GitLogResponse, GitOperationRequest,
     GitOperationResponse, GitRepositoriesResponse, GitRepositoryResources, GitRepositoryState,
+    GitWatchEvent, RepositoryWatcher,
 };

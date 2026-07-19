@@ -37,6 +37,7 @@ libc = "0.2"
 mermaid-rs-renderer = { version = "0.2.2", default-features = false, features = ["png"] }
 md5 = "0.7"
 mime_guess = "2.0"
+notify = "8.2"
 open = "5.3"
 png = "0.17"
 portable-pty = "0.9"
