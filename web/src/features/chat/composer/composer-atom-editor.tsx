@@ -143,6 +143,29 @@ export function deleteAdjacentComposerAtom(editor: HTMLElement, direction: "back
 }
 
 /**
+ * 删除当前选区覆盖的输入原子和普通文本。
+ *
+ * @param editor 输入区根元素
+ * @returns 选区是否包含并删除了输入原子
+ */
+export function deleteSelectedComposerAtoms(editor: HTMLElement): boolean {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return false;
+  const range = selection.getRangeAt(0);
+  if (!editor.contains(range.commonAncestorContainer)) return false;
+  const atoms = Array.from(editor.querySelectorAll<HTMLElement>(`[${ATOM_ATTRIBUTE}]`))
+    .filter((atom) => selection.containsNode(atom, true));
+  if (atoms.length === 0) return false;
+  atoms.forEach(unmountIcon);
+  range.deleteContents();
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  editor.normalize();
+  return true;
+}
+
+/**
  * 在当前选区插入纯文本并保持 DOM 不含外部富文本节点。
  *
  * @param editor 输入区根元素
@@ -174,7 +197,7 @@ function createAtom(segment: Exclude<ComposerAtomSegment, { type: "text" }>): HT
   atom.dataset.composerAtom = segment.value;
   atom.dataset.atomKind = segment.type;
   atom.title = presentation.title;
-  if (segment.type === "terminal") atom.dataset.preview = segment.content;
+  if (segment.type === "terminal") atom.dataset.preview = terminalPreview(segment.content);
 
   const icon = document.createElement("span");
   icon.className = "composer-atom-icon";
@@ -201,6 +224,12 @@ function atomPresentation(segment: Exclude<ComposerAtomSegment, { type: "text" }
     label: `${segment.source || "Terminal"} · ${lines} lines`,
     title: segment.content
   };
+}
+
+/** 将终端悬停预览限制在紧凑长度内。 */
+function terminalPreview(content: string): string {
+  const limit = 800;
+  return content.length > limit ? `${content.slice(0, limit)}\n...` : content;
 }
 
 /** 卸载编辑器内全部图标根节点。 */

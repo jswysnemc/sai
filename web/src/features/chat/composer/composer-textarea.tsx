@@ -1,8 +1,9 @@
-import { forwardRef, useCallback, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import type { ClipboardEvent, FormEvent, KeyboardEvent, PointerEvent } from "react";
 import { useOutsidePointerDown } from "../../../shared/hooks/use-outside-pointer-down";
 import {
   deleteAdjacentComposerAtom,
+  deleteSelectedComposerAtoms,
   insertEditorPlainText,
   readEditorTextSelection,
   renderComposerAtomEditor,
@@ -18,6 +19,7 @@ import { findSkillMentionTrigger, formatSkillMention } from "./skill-mention-tok
 import { isCursorOnFirstLine, isCursorOnLastLine, navigateInputHistory } from "./input-history";
 import type { InputHistoryState } from "./input-history";
 import { useI18n } from "../../i18n/use-i18n";
+import { FOCUS_COMPOSER_EVENT } from "./composer-events";
 
 type ComposerTextareaProps = {
   value: string;
@@ -97,6 +99,13 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
       setMentionOpen(true);
     }
   }));
+
+  useEffect(() => {
+    /** 响应工作区操作并把焦点交还聊天输入区。 */
+    const focusComposer = () => editorRef.current?.focus();
+    window.addEventListener(FOCUS_COMPOSER_EVENT, focusComposer);
+    return () => window.removeEventListener(FOCUS_COMPOSER_EVENT, focusComposer);
+  }, []);
 
   useOutsidePointerDown(mentionPopoverRef, () => dismissMention(false), mentionOpen);
   useOutsidePointerDown(skillPopoverRef, () => dismissSkill(false), skillOpen);
@@ -299,6 +308,13 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
       }
     }
 
+    if (event.key === "Backspace" || event.key === "Delete") {
+      if (deleteSelectedComposerAtoms(editor)) {
+        event.preventDefault();
+        props.onChange(serializeComposerAtomEditor(editor));
+        return;
+      }
+    }
     if ((event.key === "Backspace" || event.key === "Delete") && selection.start === selection.end) {
       const direction = event.key === "Backspace" ? "backward" : "forward";
       if (deleteAdjacentComposerAtom(editor, direction)) {

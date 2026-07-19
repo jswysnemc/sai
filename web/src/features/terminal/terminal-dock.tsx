@@ -10,9 +10,11 @@ import { useI18n } from "../i18n/use-i18n";
  */
 export function TerminalDock({
   terminalId,
+  title,
   error
 }: {
   terminalId?: string | null;
+  title: string;
   error?: Error | null;
 }) {
   const { t } = useI18n();
@@ -20,7 +22,7 @@ export function TerminalDock({
     <section className="terminal-dock terminal-dock-flat">
       <div className="terminal-main">
         {terminalId ? (
-          <TerminalPane terminalId={terminalId} />
+          <TerminalPane terminalId={terminalId} title={title} />
         ) : (
           <div className="terminal-empty">
             <TerminalSquare size={22} />

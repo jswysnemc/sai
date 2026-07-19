@@ -26,6 +26,7 @@ import "./chat-page.css";
 import { ContextCompactionPart } from "./message/context-compaction-part";
 import { useI18n } from "../i18n/use-i18n";
 import { parseGoalCommand } from "../goals/goal-command";
+import { appendTerminalSelection, INSERT_TERMINAL_SELECTION_EVENT, type TerminalSelectionDetail } from "./composer/composer-events";
 
 /**
  * 渲染当前会话历史、实时运行事件和消息输入区。
@@ -110,6 +111,19 @@ export function ChatPage() {
     if (!input) return;
     jumpToBottom();
   }, [input, jumpToBottom]);
+
+  useEffect(() => {
+    /** 将终端右键菜单发送的选区追加为输入原子。 */
+    const handleTerminalSelection = (event: Event) => {
+      if (!activeSession) return;
+      const detail = (event as CustomEvent<TerminalSelectionDetail>).detail;
+      if (!detail?.content) return;
+      setInput((current) => appendTerminalSelection(current, detail));
+      jumpToBottom();
+    };
+    window.addEventListener(INSERT_TERMINAL_SELECTION_EVENT, handleTerminalSelection);
+    return () => window.removeEventListener(INSERT_TERMINAL_SELECTION_EVENT, handleTerminalSelection);
+  }, [activeSession, jumpToBottom]);
 
   /**
    * 提交前把输入中的 `/skill` 引用展开为完整 skill 文档。

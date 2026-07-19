@@ -152,6 +152,36 @@
 
 .composer-terminal-mention {
   --atom-color: #a1425f;
+  overflow: visible;
+}
+
+.composer-terminal-mention .composer-atom-label {
+  max-width: min(300px, 58vw);
+}
+
+.composer-terminal-mention::after {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  display: none;
+  width: min(420px, 72vw);
+  max-height: 180px;
+  padding: 8px 9px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper-raised);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  content: attr(data-preview);
+  font: 400 10px/1.5 var(--font-code);
+  text-align: left;
+  white-space: pre-wrap;
+  z-index: 90;
+}
+
+.composer-terminal-mention:hover::after {
+  display: block;
 }
 
 .composer-atom-icon {

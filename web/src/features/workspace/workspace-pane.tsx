@@ -11,6 +11,7 @@ import { workspacePanelTitle } from "./workspace-panel-options";
 import { WorkspaceTabBar } from "./workspace-tab-bar";
 import "./workspace-pane.css";
 import { useI18n } from "../i18n/use-i18n";
+import { ensureTerminalTab } from "../terminal/terminal-tab-state";
 
 type WorkspacePaneProps = {
   selectedFile: string | null;
@@ -94,7 +95,7 @@ export function WorkspacePane({
             terminalId: terminalManager.activeId
           }, locale);
           setActiveTabId(created.id);
-          return [...current, created];
+          return ensureTerminalTab(current, created);
         }
         return current;
       });
@@ -144,7 +145,7 @@ export function WorkspacePane({
         title: terminal.title || t("Terminal", "终端"),
         terminalId: terminal.id
       }, locale);
-      setTabs((current) => [...current, created]);
+      setTabs((current) => ensureTerminalTab(current, created));
       setActiveTabId(created.id);
       onActiveTypeChange("terminal");
       return;
@@ -232,7 +233,7 @@ export function WorkspacePane({
         )}
         {activeTab?.type === "diff" && <DiffPane />}
         {activeTab?.type === "terminal" && (
-          <TerminalDock terminalId={activeTab.terminalId} error={terminalManager.error} />
+          <TerminalDock terminalId={activeTab.terminalId} title={activeTab.title} error={terminalManager.error} />
         )}
         {activeTab?.type === "tasks" && <BackgroundTasksPanel />}
         {activeTab?.type === "subagents" && <SubagentWorkspace />}

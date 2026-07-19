@@ -43,6 +43,51 @@
   color: var(--danger);
 }
 
+.terminal-context-menu {
+  position: fixed;
+  display: grid;
+  width: 188px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--paper-raised);
+  box-shadow: var(--shadow);
+  z-index: 320;
+}
+
+.terminal-context-menu > button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.6875rem;
+  text-align: left;
+}
+
+.terminal-context-menu > button:hover:not(:disabled) {
+  background: var(--paper-deep);
+}
+
+.terminal-context-menu > button:disabled {
+  opacity: 0.38;
+}
+
+.terminal-context-menu > button svg {
+  color: var(--ink-soft);
+}
+
+.terminal-context-menu-separator {
+  height: 1px;
+  margin: 4px 3px;
+  background: var(--line);
+}
+
 .terminal-dock {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
