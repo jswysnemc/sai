@@ -216,6 +216,10 @@ fn command_output_updates_live_cell_and_toggles_expansion() {
         .iter()
         .map(|line| line.as_str())
         .collect::<String>();
+    assert!(!collapsed.contains("one"));
+    assert!(!collapsed.contains("two"));
+    assert!(collapsed.contains("three"));
+    assert!(collapsed.contains("seven"));
     assert!(collapsed.contains("Ctrl+O"));
 
     assert!(store.toggle_latest_command_output());
@@ -253,7 +257,10 @@ fn command_output_updates_live_cell_and_toggles_expansion() {
         .iter()
         .map(|line| line.as_str())
         .collect::<String>();
-    assert!(!completed_collapsed.contains("four"));
+    assert!(!completed_collapsed.contains("one"));
+    assert!(!completed_collapsed.contains("two"));
+    assert!(completed_collapsed.contains("four"));
+    assert!(completed_collapsed.contains("seven"));
     assert!(completed_collapsed.contains("Ctrl+O"));
 }
 

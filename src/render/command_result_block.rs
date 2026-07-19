@@ -1,6 +1,6 @@
-use crate::render::terminal_text as t;
 use crate::render::code_block::{render_code_footer, render_code_header};
 use crate::render::style::TOOL_BULLET;
+use crate::render::terminal_text as t;
 use serde_json::Value;
 
 const COMMAND_PREVIEW_LINES: usize = 5;
@@ -491,14 +491,14 @@ fn sanitize_command_output(text: &str) -> String {
     output
 }
 
-/// 保留输出首尾行并返回省略数量。
+/// 保留输出最新行并返回折叠的旧行数量。
 ///
 /// 参数:
 /// - `text`: 已清理的输出文本
 /// - `line_limit`: 最大内容行数
 ///
 /// 返回:
-/// - 保留文本与省略行数
+/// - 最新输出文本与折叠行数
 fn limited_output_text(text: &str, line_limit: Option<usize>) -> (String, usize) {
     let lines = text.lines().collect::<Vec<_>>();
     let Some(limit) = line_limit else {
@@ -507,14 +507,8 @@ fn limited_output_text(text: &str, line_limit: Option<usize>) -> (String, usize)
     if lines.len() <= limit {
         return (text.to_string(), 0);
     }
-    let head = (limit + 1) / 2;
-    let tail = limit.saturating_sub(head);
-    let omitted = lines.len().saturating_sub(head + tail);
-    let mut visible = lines[..head].to_vec();
-    if tail > 0 {
-        visible.extend_from_slice(&lines[lines.len() - tail..]);
-    }
-    (visible.join("\n"), omitted)
+    let visible_start = lines.len().saturating_sub(limit);
+    (lines[visible_start..].join("\n"), visible_start)
 }
 
 #[cfg(test)]
@@ -556,15 +550,17 @@ mod tests {
     }
 
     #[test]
-    fn live_command_preview_keeps_five_lines_and_expand_hint() {
+    fn live_command_preview_keeps_latest_five_lines_and_expand_hint() {
         let output =
             render_live_command_output("one\ntwo\nthree\nfour\nfive\nsix\nseven\n", "", false);
         let plain = strip_ansi_for_test(&output);
 
-        assert!(plain.contains("one"));
+        assert!(!plain.lines().any(|line| line == "one"));
+        assert!(!plain.lines().any(|line| line == "two"));
+        assert!(plain.lines().any(|line| line == "three"));
+        assert!(plain.lines().any(|line| line == "four"));
         assert!(plain.contains("seven"));
         assert!(plain.contains("Ctrl+O"));
-        assert!(!plain.contains("four"));
     }
 
     #[test]
@@ -667,7 +663,9 @@ mod tests {
 
         assert_eq!(visible_lines, COMMAND_PREVIEW_LINES);
         assert!(!plain.contains("Ctrl+O"));
-        assert!(!plain.contains("four"));
+        assert!(!plain.lines().any(|line| line == "one"));
+        assert!(!plain.lines().any(|line| line == "two"));
+        assert!(plain.lines().any(|line| line == "four"));
     }
 
     #[test]
