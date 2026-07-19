@@ -65,7 +65,10 @@ async fn discovers_repositories_and_manages_worktrees() {
     .unwrap();
     assert!(nested_created.ok, "{}", nested_created.stderr);
 
-    let repositories = git_repositories(&workspace).await.unwrap();
+    let repositories =
+        git_repositories_with_options(&workspace, GitRepositoryDiscoveryOptions::default())
+            .await
+            .unwrap();
     assert_eq!(repositories.repositories.len(), 2);
     let first_summary = repositories
         .repositories
@@ -128,6 +131,83 @@ async fn discovers_repositories_and_manages_worktrees() {
     .unwrap();
     assert!(nested_removed.ok, "{}", nested_removed.stderr);
     assert!(!nested_worktree.exists());
+}
+
+/// 验证仓库自动探测关闭后不扫描工作区中的嵌套仓库。
+#[tokio::test]
+async fn disables_nested_repository_detection() {
+    let temp = tempfile::tempdir().unwrap();
+    let workspace = temp.path().join("workspace");
+    let nested = workspace.join("packages/nested");
+    init_repository(&nested).await;
+
+    let repositories = git_repositories_with_options(
+        &workspace,
+        GitRepositoryDiscoveryOptions {
+            auto_repository_detection: false,
+            ..GitRepositoryDiscoveryOptions::default()
+        },
+    )
+    .await
+    .unwrap();
+
+    assert!(repositories.repositories.is_empty());
+}
+
+/// 验证 worktree 探测开关和数量限制会应用到仓库摘要。
+#[tokio::test]
+async fn applies_worktree_detection_options() {
+    let temp = tempfile::tempdir().unwrap();
+    let repository = temp.path().join("repository");
+    let first_worktree = temp.path().join("first-worktree");
+    let second_worktree = temp.path().join("second-worktree");
+    init_repository(&repository).await;
+    git_success(
+        &repository,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "feature/first",
+            first_worktree.to_str().unwrap(),
+        ],
+    )
+    .await
+    .unwrap();
+    git_success(
+        &repository,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "feature/second",
+            second_worktree.to_str().unwrap(),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let limited = git_repositories_with_options(
+        &repository,
+        GitRepositoryDiscoveryOptions {
+            detect_worktrees_limit: 2,
+            ..GitRepositoryDiscoveryOptions::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(limited.repositories[0].worktrees.len(), 2);
+
+    let disabled = git_repositories_with_options(
+        &repository,
+        GitRepositoryDiscoveryOptions {
+            detect_worktrees: false,
+            ..GitRepositoryDiscoveryOptions::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert!(disabled.repositories[0].worktrees.is_empty());
 }
 
 /// 验证新 worktree 不能逃逸活动工作区允许范围。

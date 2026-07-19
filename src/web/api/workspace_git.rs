@@ -1,6 +1,7 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
 use super::super::workspace;
+use crate::config::AppConfig;
 use axum::extract::{Query, State};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -192,8 +193,16 @@ async fn git_action(
 async fn git_repositories(
     State(state): State<WebAppState>,
 ) -> WebResult<Json<workspace::GitRepositoriesResponse>> {
+    // 1. 仓库发现读取持久化配置，确保设置页修改能够影响实际扫描行为
+    let config = AppConfig::load_or_default(&state.paths).map_err(WebError::from)?;
     let active = state.workspaces.active().map_err(WebError::from)?;
-    let repositories = workspace::git_repositories(Path::new(&active.path))
+    // 2. 扫描深度保持服务端约束，worktree 数量使用已经校验的配置上限
+    let options = workspace::GitRepositoryDiscoveryOptions {
+        auto_repository_detection: config.git.auto_repository_detection,
+        detect_worktrees: config.git.detect_worktrees,
+        detect_worktrees_limit: config.git.detect_worktrees_limit,
+    };
+    let repositories = workspace::git_repositories_with_options(Path::new(&active.path), options)
         .await
         .map_err(WebError::from)?;
     Ok(Json(repositories))

@@ -70,7 +70,8 @@ pub(crate) use operations::git_op;
 use process::*;
 use publish::*;
 pub(crate) use repositories::{
-    git_repositories, validate_git_repository_root, validate_git_repository_roots,
+    git_repositories_with_options, validate_git_repository_root, validate_git_repository_roots,
+    GitRepositoryDiscoveryOptions,
 };
 pub(crate) use repository_statuses::git_repository_statuses;
 use resource_operations::*;

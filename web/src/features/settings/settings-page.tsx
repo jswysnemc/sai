@@ -5,6 +5,7 @@ import { AdvancedSettingsSection } from "./advanced-settings-section";
 import { AgentSettingsSection } from "./agents/agent-settings-section";
 import { AppearanceSettingsSection } from "./appearance-settings-section";
 import { GatewaySettingsSection } from "./gateway-settings-section";
+import { GitSettingsPanel } from "./git/git-settings-panel";
 import { ProviderSettingsSection } from "./provider-settings-section";
 import { PluginSettingsSection } from "./plugin-settings-section";
 import { RuntimeSettingsSection } from "./runtime-settings-section";
@@ -69,6 +70,7 @@ export function SettingsPage() {
           {settings.config && section === "agents" && <AgentSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
           {settings.config && section === "plugins" && <PluginSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
           {settings.config && section === "runtime" && <RuntimeSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
+          {settings.config && section === "git" && <GitSettingsPanel config={settings.config} onConfigChange={settings.updateConfig} />}
           {section === "appearance" && <AppearanceSettingsSection theme={theme.theme} onThemeChange={theme.setTheme} />}
           {section === "memory" && <MemorySettingsSection />}
           {settings.config && section === "hooks" && <HooksSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}

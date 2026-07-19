@@ -1,4 +1,5 @@
 use super::agents::SubagentConfig;
+use super::git::{GitConfig, ScmConfig};
 use super::model::*;
 use super::paths::persona_scope_name;
 use super::permission::PermissionConfig;
@@ -16,6 +17,8 @@ impl Default for AppConfig {
             terminal: TerminalConfig::default(),
             skills: SkillsConfig::default(),
             display: DisplayConfig::default(),
+            scm: ScmConfig::default(),
+            git: GitConfig::default(),
             prompt: PromptConfig::default(),
             gateways: GatewayConfig::default(),
             agents: Vec::new(),

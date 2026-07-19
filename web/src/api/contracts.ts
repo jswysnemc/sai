@@ -526,6 +526,29 @@ export type ContextConfig = {
   [key: string]: unknown;
 };
 
+export type ScmConfig = {
+  default_view_mode: "list" | "tree";
+  count_badge: "all" | "focused" | "off";
+};
+
+export type GitConfig = {
+  auto_repository_detection: boolean;
+  untracked_changes: "mixed" | "separate" | "hidden";
+  enable_smart_commit: boolean;
+  suggest_smart_commit: boolean;
+  confirm_sync: boolean;
+  confirm_force_push: boolean;
+  confirm_empty_commits: boolean;
+  post_commit_command: "none" | "push" | "sync";
+  show_action_button: boolean;
+  detect_worktrees: boolean;
+  detect_worktrees_limit: number;
+  autofetch: boolean;
+  branch_random_name: {
+    enable: boolean;
+  };
+};
+
 export type AppConfig = {
   active_provider: string;
   providers: ProviderConfig[];
@@ -552,6 +575,8 @@ export type AppConfig = {
   tools?: Record<string, unknown>;
   skills?: Record<string, unknown>;
   display?: Record<string, unknown>;
+  scm?: ScmConfig;
+  git?: GitConfig;
   context?: ContextConfig;
   [key: string]: unknown;
 };

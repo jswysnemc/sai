@@ -1,5 +1,6 @@
 use super::agents::{AgentProfile, AgentRuntimeOverride, SubagentConfig};
 use super::defaults::*;
+use super::git::{GitConfig, ScmConfig};
 use super::model_metadata::ModelMetadata;
 use super::permission::PermissionConfig;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -21,6 +22,10 @@ pub struct AppConfig {
     pub skills: SkillsConfig,
     #[serde(default)]
     pub display: DisplayConfig,
+    #[serde(default)]
+    pub scm: ScmConfig,
+    #[serde(default)]
+    pub git: GitConfig,
     #[serde(default)]
     pub prompt: PromptConfig,
     #[serde(default)]

@@ -44,6 +44,45 @@ fn legacy_app_config_defaults_web_terminal_shell() {
     assert_eq!(config.terminal.shell, TerminalConfig::default().shell);
 }
 
+/// 验证旧版应用配置会补齐 Git 与 Source Control 默认值。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn legacy_app_config_defaults_git_settings() {
+    let mut value = serde_json::to_value(AppConfig::default()).unwrap();
+    value.as_object_mut().unwrap().remove("git");
+    value.as_object_mut().unwrap().remove("scm");
+
+    let config: AppConfig = serde_json::from_value(value).unwrap();
+
+    assert_eq!(config.scm.default_view_mode, "list");
+    assert_eq!(config.git.untracked_changes, "separate");
+    assert!(config.git.auto_repository_detection);
+    assert!(config.git.detect_worktrees);
+}
+
+/// 验证反序列化会拒绝无效 Git 枚举和 worktree 限制。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn git_settings_reject_invalid_values() {
+    let mut value = serde_json::to_value(AppConfig::default()).unwrap();
+    value["git"]["untracked_changes"] = serde_json::json!("unknown");
+    assert!(serde_json::from_value::<AppConfig>(value.clone()).is_err());
+
+    value["git"]["untracked_changes"] = serde_json::json!("separate");
+    value["git"]["detect_worktrees_limit"] = serde_json::json!(0);
+    assert!(serde_json::from_value::<AppConfig>(value).is_err());
+}
+
 /// 验证网页终端 Shell 会保留用户配置值。
 #[test]
 fn web_terminal_shell_preserves_user_configuration() {

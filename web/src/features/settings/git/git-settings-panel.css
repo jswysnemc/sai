@@ -1,0 +1,79 @@
+.git-settings-panel {
+  max-width: 72rem;
+}
+
+.git-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.git-settings-grid.toggles {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.git-setting-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.125rem;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.25rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4375rem;
+}
+
+.git-setting-toggle > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.125rem;
+}
+
+.git-setting-toggle strong {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.git-setting-toggle small {
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+  font: 400 0.625rem var(--font-code);
+}
+
+.git-setting-toggle input {
+  width: 2.125rem;
+  height: 1.125rem;
+  accent-color: var(--signal);
+}
+
+.git-settings-safety-note,
+.git-settings-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+}
+
+.git-settings-safety-note {
+  margin-top: 0.75rem;
+}
+
+.git-settings-footer {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 64rem) {
+  .git-settings-grid,
+  .git-settings-grid.toggles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 40rem) {
+  .git-settings-grid,
+  .git-settings-grid.toggles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

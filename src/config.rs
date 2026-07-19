@@ -3,6 +3,7 @@ mod app;
 mod app_validation;
 mod defaults;
 mod gateway_defaults;
+mod git;
 mod mcp_file;
 mod model;
 mod model_metadata;
@@ -17,6 +18,8 @@ mod tests;
 
 #[allow(unused_imports)]
 pub use agents::*;
+#[allow(unused_imports)]
+pub use git::*;
 #[allow(unused_imports)]
 pub use mcp_file::{init_mcp_config_file, load_mcp_config, save_mcp_config, validate_mcp_config};
 pub use model::*;

@@ -8,20 +8,46 @@ use std::path::{Path, PathBuf};
 const REPOSITORY_SCAN_MAX_DEPTH: usize = 6;
 const REPOSITORY_STATUS_CONCURRENCY: usize = 4;
 
-/// 发现工作区内仓库并并发读取轻量摘要。
+/// 工作区仓库与 worktree 探测选项。
+#[derive(Clone, Copy)]
+pub(crate) struct GitRepositoryDiscoveryOptions {
+    pub auto_repository_detection: bool,
+    pub detect_worktrees: bool,
+    pub detect_worktrees_limit: usize,
+}
+
+impl Default for GitRepositoryDiscoveryOptions {
+    fn default() -> Self {
+        Self {
+            auto_repository_detection: true,
+            detect_worktrees: true,
+            detect_worktrees_limit: 10,
+        }
+    }
+}
+
+/// 按配置发现工作区仓库并并发读取轻量摘要。
 ///
 /// 参数:
 /// - `workspace_root`: 当前工作区目录
+/// - `options`: 自动探测与 worktree 限制
 ///
 /// 返回:
 /// - 工作区仓库与 worktree 列表
-pub(crate) async fn git_repositories(workspace_root: &Path) -> Result<GitRepositoriesResponse> {
+pub(crate) async fn git_repositories_with_options(
+    workspace_root: &Path,
+    options: GitRepositoryDiscoveryOptions,
+) -> Result<GitRepositoriesResponse> {
     let workspace_root = canonical_directory(workspace_root)?;
-    let roots = discover_repository_roots(&workspace_root).await?;
+    let roots = if options.auto_repository_detection {
+        discover_repository_roots(&workspace_root).await?
+    } else {
+        discover_current_repository_root(&workspace_root).await?
+    };
     let mut repositories = stream::iter(
         roots
             .into_iter()
-            .map(|root| async move { repository_summary(root).await }),
+            .map(|root| async move { repository_summary(root, options).await }),
     )
     .buffer_unordered(REPOSITORY_STATUS_CONCURRENCY)
     .collect::<Vec<_>>()
@@ -118,8 +144,18 @@ pub(crate) async fn validate_git_repository_roots(
 ///
 /// 返回:
 /// - 仓库轻量摘要
-async fn repository_summary(root: PathBuf) -> GitRepositorySummary {
-    let (state, worktrees) = tokio::join!(git_status(&root), git_worktrees(&root));
+async fn repository_summary(
+    root: PathBuf,
+    options: GitRepositoryDiscoveryOptions,
+) -> GitRepositorySummary {
+    let (state, worktrees) = tokio::join!(
+        git_status(&root),
+        configured_worktrees(
+            &root,
+            options.detect_worktrees,
+            options.detect_worktrees_limit
+        )
+    );
     let name = root
         .file_name()
         .and_then(|value| value.to_str())
@@ -150,6 +186,28 @@ async fn repository_summary(root: PathBuf) -> GitRepositorySummary {
             worktrees: worktrees.unwrap_or_default(),
         },
     }
+}
+
+/// 按配置读取并截断关联 worktree。
+///
+/// 参数:
+/// - `root`: 仓库根目录
+/// - `enabled`: 是否执行 worktree 命令
+/// - `limit`: 最大返回数量
+///
+/// 返回:
+/// - 受限的 worktree 列表
+async fn configured_worktrees(
+    root: &Path,
+    enabled: bool,
+    limit: usize,
+) -> Result<Vec<GitWorktree>> {
+    if !enabled {
+        return Ok(Vec::new());
+    }
+    let mut worktrees = git_worktrees(root).await?;
+    worktrees.truncate(limit);
+    Ok(worktrees)
 }
 
 /// 返回请求可选的仓库根和关联 worktree 根。
@@ -200,6 +258,20 @@ async fn discover_repository_roots(workspace_root: &Path) -> Result<Vec<PathBuf>
     let mut roots = roots.into_iter().collect::<Vec<_>>();
     roots.sort();
     deduplicate_repository_roots(roots).await
+}
+
+/// 仅发现包含当前工作区的直接仓库，不扫描嵌套目录。
+///
+/// 参数:
+/// - `workspace_root`: 规范化工作区目录
+///
+/// 返回:
+/// - 零个或一个仓库根目录
+async fn discover_current_repository_root(workspace_root: &Path) -> Result<Vec<PathBuf>> {
+    match discover_repo(workspace_root).await? {
+        Some(root) => Ok(vec![canonical_directory(&root)?]),
+        None => Ok(Vec::new()),
+    }
 }
 
 /// 在有限深度内同步扫描嵌套仓库。
