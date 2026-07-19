@@ -1,10 +1,10 @@
-import { Minus, Plus, RotateCcw } from "lucide-react";
 import type { GitDiffResponse } from "../../../api/contracts";
-import { Button } from "../../../shared/ui/button/button";
 import { DiffView } from "../../chat/tool-renderers/diff-view";
 import { useI18n } from "../../i18n/use-i18n";
 import type { RunGitOperation } from "../types";
-import { splitGitPatchHunks, type GitPatchHunk } from "./partial-diff";
+import { splitGitPatchHunks } from "./partial-diff";
+import { SelectablePatchHunk } from "./selectable-patch-hunk";
+import "./source-control-diff.css";
 
 type SourceControlDiffProps = {
   data?: GitDiffResponse;
@@ -43,7 +43,7 @@ export function SourceControlDiff(props: SourceControlDiffProps) {
       {hunks.length > 0 ? (
         <div className="git-partial-diff">
           {hunks.map((hunk, index) => (
-            <PatchHunk
+            <SelectablePatchHunk
               key={hunk.id}
               hunk={hunk}
               index={index}
@@ -58,52 +58,5 @@ export function SourceControlDiff(props: SourceControlDiffProps) {
       )}
       {props.data.truncated && <div className="git-clean">{t("Diff truncated", "差异已截断")}</div>}
     </div>
-  );
-}
-
-/**
- * 渲染单个可独立应用的 Diff hunk 和索引操作。
- *
- * @param props hunk 内容、模式和操作回调
- * @returns 单个 hunk 控件
- */
-function PatchHunk(props: {
-  hunk: GitPatchHunk;
-  index: number;
-  mode: string;
-  busy: boolean;
-  runOperation: RunGitOperation;
-}) {
-  const { t } = useI18n();
-  return (
-    <section className="git-patch-hunk">
-      <header>
-        <span>{t(`Change ${props.index + 1}`, `变更 ${props.index + 1}`)}</span>
-        <div>
-          {props.mode === "staged" ? (
-            <Button disabled={props.busy} onClick={() => void props.runOperation("unstage_patch", { patch: props.hunk.patch })}>
-              <Minus size={12} />{t("Unstage Hunk", "取消暂存此区块")}
-            </Button>
-          ) : (
-            <>
-              <Button variant="primary" disabled={props.busy} onClick={() => void props.runOperation("stage_patch", { patch: props.hunk.patch })}>
-                <Plus size={12} />{t("Stage Hunk", "暂存此区块")}
-              </Button>
-              <Button
-                disabled={props.busy}
-                onClick={() => void props.runOperation("discard_patch", {
-                  patch: props.hunk.patch,
-                  confirmTitle: t("Discard selected hunk?", "丢弃所选变更区块？"),
-                  confirmDescription: t("The selected working tree lines cannot be recovered.", "所选工作树内容无法恢复。")
-                })}
-              >
-                <RotateCcw size={12} />{t("Discard Hunk", "丢弃此区块")}
-              </Button>
-            </>
-          )}
-        </div>
-      </header>
-      <DiffView source={props.hunk.patch} headerPath={props.hunk.path} />
-    </section>
   );
 }
