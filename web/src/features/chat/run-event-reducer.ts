@@ -177,20 +177,23 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
         typeof payload.summary === "string" ? payload.summary : undefined,
         parseRunError(payload.error)
       );
-    case "run.failed":
+    case "run.failed": {
+      const message = String(payload.message ?? text(locale, "Run failed", "运行失败"));
       return {
         ...closeActiveReasoning(state, event.timestamp),
-        error: String(payload.message ?? text(locale, "Run failed", "运行失败")),
-        errorDetail: typeof payload.detail === "string" ? payload.detail : null,
+        error: message,
+        errorDetail: nonEmptyDetail(payload.detail) ?? message,
         status: "idle",
         completed: true
       };
+    }
     case "run.interrupted":
       return {
         ...closeActiveReasoning(state, event.timestamp),
         error: state.content
           ? text(locale, "The response was interrupted; generated content was preserved", "响应已中断，已保留生成内容")
           : text(locale, "The run was interrupted", "运行已中断"),
+        errorDetail: nonEmptyDetail(payload.detail),
         status: "idle",
         completed: true
       };
@@ -199,6 +202,16 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
     default:
       return state;
   }
+}
+
+/**
+ * 从事件载荷中读取非空错误详情。
+ *
+ * @param value 待检查的事件字段
+ * @returns 去除首尾空白后的详情；无有效文本时返回空
+ */
+function nonEmptyDetail(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function resolvePermissionPart(state: LiveRunState, requestId: string, decision: PermissionDecision): LiveRunState {

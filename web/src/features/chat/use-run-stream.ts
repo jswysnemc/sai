@@ -4,7 +4,7 @@ import type { RunInfo, RunMode, RunModelSelection, ThinkingLevel, WebEvent } fro
 import { api } from "../../api/client";
 import { initialRunState, relocalizeRunError, runEventReducer, type LiveRunState } from "./run-event-reducer";
 import { useI18n } from "../i18n/use-i18n";
-import type { Locale } from "../i18n/locale";
+import { text, type Locale } from "../i18n/locale";
 
 const EVENT_TYPES = [
   "run.queued",
@@ -162,7 +162,17 @@ export function useRunStream(
       if (sourcesRef.current.has(runId)) continue;
       const source = new EventSource(`/api/runs/${runId}/events`);
       const handle = (message: MessageEvent<string>) => {
-        const event = JSON.parse(message.data) as WebEvent;
+        let event: WebEvent;
+        try {
+          event = JSON.parse(message.data) as WebEvent;
+        } catch (error) {
+          event = runFailureEvent(
+            runId,
+            sessionId,
+            text(locale, "Invalid run event", "运行事件格式无效"),
+            errorDetail(error, message.data)
+          );
+        }
         if (event.type === "run.interrupted" && event.payload.discard_user_turn === true) {
           onInterruptedWithoutReply?.(String(event.payload.restore_input ?? ""));
         }
@@ -180,15 +190,30 @@ export function useRunStream(
           void queryClient.invalidateQueries({ queryKey: ["system-usage"] });
         }
         if (["run.completed", "run.interrupted", "run.failed"].includes(event.type)) {
+          source.onerror = null;
           source.close();
           sourcesRef.current.delete(runId);
           onSettled();
         }
       };
       for (const type of EVENT_TYPES) source.addEventListener(type, handle as EventListener);
+      source.onerror = () => {
+        if (source.readyState !== EventSource.CLOSED) return;
+        dispatch({
+          type: "event",
+          event: runFailureEvent(
+            runId,
+            sessionId,
+            text(locale, "Run event stream disconnected", "运行事件流已断开"),
+            `The browser event stream closed before a terminal event was received. Run ID: ${runId}`
+          )
+        });
+        sourcesRef.current.delete(runId);
+        onSettled();
+      };
       sourcesRef.current.set(runId, source);
     }
-  }, [openRunKey, onInterruptedWithoutReply, onSettled, onWorkspaceChanged, queryClient, sessionId]);
+  }, [locale, openRunKey, onInterruptedWithoutReply, onSettled, onWorkspaceChanged, queryClient, sessionId]);
 
   useEffect(() => () => {
     for (const source of sourcesRef.current.values()) source.close();
@@ -247,4 +272,37 @@ export function useRunStream(
   };
 
   return { states: state.runs, start, startGoal, startCompaction, stop, reset: () => dispatch({ type: "reset" }) };
+}
+
+/**
+ * 构造仅供前端状态归并使用的运行失败事件。
+ *
+ * @param runId 运行标识
+ * @param sessionId 会话标识
+ * @param message 面向用户的错误摘要
+ * @param detail 原始错误详情
+ * @returns 与服务端终态事件结构一致的失败事件
+ */
+function runFailureEvent(runId: string, sessionId: string | undefined, message: string, detail: string): WebEvent {
+  return {
+    sequence: 0,
+    run_id: runId,
+    workspace_id: "",
+    session_id: sessionId ?? "",
+    timestamp: new Date().toISOString(),
+    type: "run.failed",
+    payload: { message, detail }
+  };
+}
+
+/**
+ * 将事件解析异常和原始载荷组合为可诊断详情。
+ *
+ * @param error JSON 解析异常
+ * @param payload 原始事件文本
+ * @returns 包含异常和载荷的详情文本
+ */
+function errorDetail(error: unknown, payload: string): string {
+  const reason = error instanceof Error ? error.stack || error.message : String(error);
+  return `${reason}\n\nEvent payload:\n${payload}`;
 }

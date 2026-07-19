@@ -145,6 +145,7 @@ impl RunManager {
                     "recovered": true,
                     "discard_user_turn": false,
                     "restore_input": null,
+                    "detail": "Sai restarted while this run was still active.",
                 }),
             ));
         }
@@ -349,6 +350,7 @@ impl RunManager {
                     json!({
                         "discard_user_turn": false,
                         "restore_input": null,
+                        "detail": "The user stopped this run before it completed.",
                     }),
                 ));
             }
@@ -381,6 +383,7 @@ impl RunManager {
                     "queued": true,
                     "discard_user_turn": true,
                     "restore_input": queued.info.input,
+                    "detail": "The queued run was cancelled before it started.",
                 }),
             ));
             return Ok(true);

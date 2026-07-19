@@ -196,6 +196,28 @@ describe("runEventReducer", () => {
     expect(interrupted.error).toContain("已保留");
   });
 
+  it("keeps interruption details for the expandable error view", () => {
+    const interrupted = runEventReducer(initialRunState, {
+      type: "event",
+      event: event("run.interrupted", {
+        detail: "The upstream request exceeded its 120 second timeout."
+      })
+    });
+
+    expect(interrupted.error).toBe("运行已中断");
+    expect(interrupted.errorDetail).toBe("The upstream request exceeded its 120 second timeout.");
+  });
+
+  it("uses the failure message as details when no separate trace is available", () => {
+    const failed = runEventReducer(initialRunState, {
+      type: "event",
+      event: event("run.failed", { message: "upstream timeout" })
+    });
+
+    expect(failed.error).toBe("upstream timeout");
+    expect(failed.errorDetail).toBe("upstream timeout");
+  });
+
   it("relocalizes built-in run errors after the interface language changes", () => {
     expect(relocalizeRunError("运行已中断", "en-US")).toBe("The run was interrupted");
     expect(relocalizeRunError("Run failed", "zh-CN")).toBe("运行失败");

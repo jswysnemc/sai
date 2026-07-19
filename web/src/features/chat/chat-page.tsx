@@ -24,6 +24,7 @@ import { OPEN_WORKSPACE_PANEL_EVENT, WORKSPACE_PANEL_OPTIONS } from "../workspac
 import type { PaneTab } from "../workspace/workspace-tab";
 import "./chat-page.css";
 import { ContextCompactionPart } from "./message/context-compaction-part";
+import { errorDetailForDisplay, RunErrorNotice } from "./message/run-error-notice";
 import { useI18n } from "../i18n/use-i18n";
 import { parseGoalCommand } from "../goals/goal-command";
 import { appendTerminalSelection, INSERT_TERMINAL_SELECTION_EVENT, type TerminalSelectionDetail } from "./composer/composer-events";
@@ -190,24 +191,27 @@ export function ChatPage() {
     const originalInput = input;
     const currentAttachments = composerAttachments.attachments;
     const expanded = value ? await expandSkillsForSubmit(value) : value;
+    setActionError(null);
     setInput("");
     clearComposerDraft(activeSession.id);
     composerAttachments.clearAttachments();
     jumpToBottom();
-    await run.start(
-      activeSession.id,
-      expanded,
-      mode,
-      chatModel.selection ?? undefined,
-      currentAttachments.map((attachment) => attachment.dataUrl),
-      thinking.thinkingLevel,
-      chatAgent.selection?.id
-    ).catch((error: unknown) => {
+    try {
+      await run.start(
+        activeSession.id,
+        expanded,
+        mode,
+        chatModel.selection ?? undefined,
+        currentAttachments.map((attachment) => attachment.dataUrl),
+        thinking.thinkingLevel,
+        chatAgent.selection?.id
+      );
+    } catch (error) {
       setInput(originalInput);
       writeComposerDraft(activeSession.id, originalInput);
       composerAttachments.restoreAttachments(currentAttachments);
-      throw error;
-    });
+      setActionError(toDisplayError(error, "Failed to start the run", "启动运行失败"));
+    }
   };
 
   const runningStates = run.states.filter((state) => !state.completed);
@@ -253,6 +257,7 @@ export function ChatPage() {
   const retry = async (content: string, liveImages: string[] | undefined, candidateTurnId: string | null) => {
     if (!activeSession || running) return;
     if (!content.trim() && !(liveImages && liveImages.length > 0)) return;
+    setActionError(null);
     try {
       // 1. 主动读取最新时间线，避免终态事件和后台刷新之间的竞态
       const refreshedTimeline = await api.sessions.timeline(activeSession.id);
@@ -267,7 +272,7 @@ export function ChatPage() {
       await run.start(activeSession.id, content, mode, chatModel.selection ?? undefined, liveImages, thinking.thinkingLevel, chatAgent.selection?.id);
     } catch (error) {
       setInput(content);
-      throw error;
+      setActionError(toDisplayError(error, "Failed to retry the run", "重试运行失败"));
     }
   };
   const lastTurnId = timeline.data?.turns.filter((turn) => !turn.automatic).at(-1)?.turn_id;
@@ -384,9 +389,9 @@ export function ChatPage() {
                 />
               </section>
             ))}
-            {timeline.error && <div className="run-error">{timeline.error.message}</div>}
-            {chatModel.error && <div className="run-error">{chatModel.error.message}</div>}
-            {actionError && <div className="run-error">{actionError.message}</div>}
+            {timeline.error && <RunErrorNotice message={timeline.error.message} detail={errorDetailForDisplay(timeline.error)} />}
+            {chatModel.error && <RunErrorNotice message={chatModel.error.message} detail={errorDetailForDisplay(chatModel.error)} />}
+            {actionError && <RunErrorNotice message={actionError.message} detail={errorDetailForDisplay(actionError)} />}
           </div>
         </div>
         <MessageOverviewRail

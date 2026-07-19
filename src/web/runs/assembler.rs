@@ -75,7 +75,12 @@ impl EventAssembler {
             RunnerEvent::Agent(event) => self.map_agent_event(event),
             RunnerEvent::Interrupted => {
                 self.status = None;
-                vec![self.event("run.interrupted", json!({}))]
+                vec![self.event(
+                    "run.interrupted",
+                    json!({
+                        "detail": "The runner stopped before it produced a terminal response."
+                    }),
+                )]
             }
             RunnerEvent::Completed(result) => {
                 self.status = None;
@@ -380,6 +385,22 @@ mod tests {
     use super::*;
     use crate::llm::ToolCallStreamProgress;
     use crate::runner::{AutomaticInputEvent, AutomaticInputKind};
+
+    /// 验证运行中断事件包含可供前端展开的诊断详情。
+    #[test]
+    fn interrupted_event_contains_diagnostic_detail() {
+        let mut assembler = EventAssembler::new("run", "workspace", "session");
+
+        let events = assembler.map(RunnerEvent::Interrupted);
+        let interrupted = events
+            .iter()
+            .find(|event| event.kind == "run.interrupted")
+            .unwrap();
+
+        assert!(interrupted.payload["detail"]
+            .as_str()
+            .is_some_and(|detail| !detail.trim().is_empty()));
+    }
 
     /// 验证权限决定会作为可重放事件发送到 Web 消息流。
     ///

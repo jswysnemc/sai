@@ -1,4 +1,3 @@
-import { RotateCcw } from "lucide-react";
 import type { HistoryEntry, SessionTimelineTurn, TimelineToolEntry } from "../../api/contracts";
 import type { LiveRunState } from "./run-event-reducer";
 import type { LiveMessagePart } from "./run-event-reducer";
@@ -6,7 +5,7 @@ import { LiveRunIndicator } from "./live-run-indicator";
 import { MessageActions } from "./message/message-actions";
 import { MessageParts } from "./message/message-parts";
 import { UserMessageBubble } from "./message/user-message-bubble";
-import { ErrorDetailToggle } from "./message/error-detail-toggle";
+import { RunErrorNotice } from "./message/run-error-notice";
 import { useI18n } from "../i18n/use-i18n";
 
 /**
@@ -51,11 +50,10 @@ export function HistoryTurn({
       <article className="message assistant-message">
         <MessageParts parts={historyTurnParts(turn)} />
         {turn.status === "interrupted" && (
-          <div className="run-error">
-            <span className="run-error-text">
-              {turn.assistant.content ? t("The response was interrupted; generated content was preserved", "响应已中断，已保留生成内容") : t("The run was interrupted", "运行已中断")}
-            </span>
-          </div>
+          <RunErrorNotice
+            message={turn.assistant.content ? t("The response was interrupted; generated content was preserved", "响应已中断，已保留生成内容") : t("The run was interrupted", "运行已中断")}
+            detail={historicalInterruptionDetail(turn)}
+          />
         )}
         {(turn.assistant.content || onFork) && (
           <MessageActions
@@ -77,7 +75,6 @@ export function HistoryTurn({
  * @returns 当前运行消息组
  */
 export function LiveRunMessage({ state, running, onRetry }: { state: LiveRunState; running: boolean; onRetry?: () => void }) {
-  const { t } = useI18n();
   const compacting = state.parts.some((part) => part.type === "compaction" && part.status === "running");
   return (
     <>
@@ -88,21 +85,31 @@ export function LiveRunMessage({ state, running, onRetry }: { state: LiveRunStat
         <MessageParts parts={state.parts} live={running} />
         {running && !compacting && <LiveRunIndicator status={state.status} />}
         {state.error && (
-          <div className="run-error">
-            <span className="run-error-text">{state.error}</span>
-            {state.errorDetail && <ErrorDetailToggle detail={state.errorDetail} />}
-            {onRetry && state.completed && (
-              <button type="button" className="run-error-retry" onClick={onRetry}>
-                <RotateCcw size={12} />
-                <span>{t("Retry", "重试")}</span>
-              </button>
-            )}
-          </div>
+          <RunErrorNotice
+            message={state.error}
+            detail={state.errorDetail}
+            onRetry={onRetry && state.completed ? onRetry : undefined}
+          />
         )}
         {!running && state.content && <MessageActions text={state.content} />}
       </article>
     </>
   );
+}
+
+/**
+ * 从中断轮次最后一个失败工具中提取可展示详情。
+ *
+ * @param turn 已持久化会话轮次
+ * @returns 原始工具错误或失败输出
+ */
+function historicalInterruptionDetail(turn: SessionTimelineTurn): string | null {
+  for (let index = turn.tools.length - 1; index >= 0; index -= 1) {
+    const tool = turn.tools[index];
+    const detail = tool.error?.trim() || (tool.status === "failed" ? tool.output.trim() : "");
+    if (detail) return detail;
+  }
+  return null;
 }
 
 /**

@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { SessionTimelineTurn } from "../../api/contracts";
-import { HistoryTurn } from "./chat-message";
+import { HistoryTurn, LiveRunMessage } from "./chat-message";
+import { initialRunState } from "./run-event-reducer";
 
 describe("HistoryTurn", () => {
   it("restores a persisted permission card before its historical tool", () => {
@@ -44,6 +45,45 @@ describe("HistoryTurn", () => {
     const html = renderToStaticMarkup(<HistoryTurn turn={turn} />);
 
     expect(html).toContain("运行已中断");
+  });
+
+  it("offers expandable details for live failures", () => {
+    const html = renderToStaticMarkup(
+      <LiveRunMessage
+        running={false}
+        state={{
+          ...initialRunState,
+          completed: true,
+          error: "运行失败",
+          errorDetail: "upstream request timed out after 120 seconds"
+        }}
+      />
+    );
+
+    expect(html).toContain("查看错误详情");
+  });
+
+  it("offers the last failed tool output as interruption details", () => {
+    const turn: SessionTimelineTurn = {
+      turn_id: "run-timeout",
+      seq: 2,
+      status: "interrupted",
+      automatic: false,
+      user: { timestamp: "now", content: "执行检查" },
+      assistant: { timestamp: "later", content: "" },
+      tools: [{
+        id: "timeout",
+        name: "run_command",
+        arguments: "{}",
+        status: "failed",
+        output: "command timed out after 30 seconds",
+        created_at: "now"
+      }]
+    };
+
+    const html = renderToStaticMarkup(<HistoryTurn turn={turn} />);
+
+    expect(html).toContain("查看错误详情");
   });
 
   it("hides the internal goal continuation prompt", () => {
