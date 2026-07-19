@@ -1,7 +1,7 @@
 use super::WebEvent;
 use crate::agent::AgentEvent;
 use crate::llm::ChatStreamKind;
-use crate::runner::RunnerEvent;
+use crate::runner::{AutomaticInputEvent, AutomaticInputKind, RunnerEvent};
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
 
@@ -58,6 +58,17 @@ impl EventAssembler {
             RunnerEvent::Started => {
                 let mut events = self.status_event("waiting_response");
                 events.push(self.event("run.started", json!({})));
+                events
+            }
+            RunnerEvent::AutomaticInput(input) => {
+                let mut events = self.status_event("waiting_response");
+                events.push(self.event(
+                    "message.automatic.input",
+                    json!({
+                        "kind": input.kind.as_str(),
+                        "content": input.content,
+                    }),
+                ));
                 events
             }
             RunnerEvent::WaitingExternal => self.status_event("waiting_external"),
@@ -548,5 +559,22 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].kind, "status.changed");
         assert_eq!(events[0].payload["status"], "waiting_external");
+    }
+
+    /// 验证自动输入事件向 Web 传递展示文本而不是内部提示。
+    #[test]
+    fn maps_automatic_input_message() {
+        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let events = assembler.map(RunnerEvent::AutomaticInput(AutomaticInputEvent::new(
+            AutomaticInputKind::ExternalCompletion,
+            "后台任务已完成".to_string(),
+        )));
+
+        let message = events
+            .iter()
+            .find(|event| event.kind == "message.automatic.input")
+            .unwrap();
+        assert_eq!(message.payload["kind"], "external_completion");
+        assert_eq!(message.payload["content"], "后台任务已完成");
     }
 }

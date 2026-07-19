@@ -5,7 +5,7 @@ use crate::agent::AgentEvent;
 use crate::llm::{ChatStreamChunk, ChatStreamKind};
 use crate::render::transcript::TranscriptRenderOptions;
 use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
-use crate::runner::RunnerEvent;
+use crate::runner::{AutomaticInputEvent, AutomaticInputKind, RunnerEvent};
 
 #[test]
 fn resize_during_stream_requires_finish_reflow() {
@@ -132,4 +132,25 @@ fn external_output_restarts_managed_region() {
     // 重启后旧行全部视作 scrollback，屏幕上只保留新追加内容
     assert!(runtime.stream.offscreen() >= before);
     assert!(runtime.stream.on_screen() >= 1);
+}
+
+/// 验证自动输入事件以蓝色圆点消息写入 TUI 历史。
+#[test]
+fn automatic_input_event_is_rendered_as_blue_message() {
+    let mut runtime = ReplRuntime::new(5_000, options());
+    runtime
+        .record_runner_event(&RunnerEvent::AutomaticInput(AutomaticInputEvent::new(
+            AutomaticInputKind::ExternalCompletion,
+            "后台任务已完成".to_string(),
+        )))
+        .unwrap();
+
+    let rendered = runtime
+        .transcript
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(rendered.contains("\x1b[38;5;39m●"));
+    assert!(rendered.contains("后台任务已完成"));
 }

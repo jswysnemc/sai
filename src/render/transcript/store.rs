@@ -163,6 +163,17 @@ impl TranscriptStore {
         self.push_cell(HistoryCell::user_echo(mode, text));
     }
 
+    /// 记录 Sai 主动提交的自动输入回显。
+    ///
+    /// 参数:
+    /// - `text`: 展示给用户的自动消息文本
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn push_automatic_echo(&mut self, text: String) {
+        self.push_user_echo(TranscriptMode::Automatic, text);
+    }
+
     /// 记录系统提示或控制命令输出。
     ///
     /// 参数:

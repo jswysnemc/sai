@@ -1,3 +1,4 @@
+use super::AutomaticInputEvent;
 use crate::agent::AgentEvent;
 use crate::llm::ChatResult;
 use crate::state::SessionSnapshot;
@@ -7,6 +8,8 @@ use anyhow::Result;
 #[derive(Debug, Clone)]
 pub(crate) enum RunnerEvent {
     Started,
+    /// 自动队列项已经开始发送给 Agent
+    AutomaticInput(AutomaticInputEvent),
     /// Goal 仍未完成，正在等待后台命令或子 Agent 完成后自动续轮
     WaitingExternal,
     Agent(AgentEvent),

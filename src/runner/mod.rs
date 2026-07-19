@@ -1,5 +1,6 @@
 #![allow(dead_code, unused_imports)]
 
+mod automatic_input;
 mod continuation;
 mod control_runner;
 mod events;
@@ -11,6 +12,7 @@ mod turn_runner;
 use crate::paths::SaiPaths;
 use anyhow::Result;
 
+pub(crate) use automatic_input::{AutomaticInput, AutomaticInputEvent, AutomaticInputKind};
 pub(crate) use continuation::{ContinuationReason, RunnerContinuation};
 pub(crate) use events::{RunnerEvent, RunnerEventSink, RunnerOutput};
 pub(crate) use ownership::{ActiveRunGuard, SessionOwner};

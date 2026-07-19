@@ -18,6 +18,7 @@ pub(crate) fn render(cell: &UserEchoCell) -> String {
     let prefix = match cell.mode {
         TranscriptMode::Yolo => "\x1b[38;5;208m●\x1b[0m ",
         TranscriptMode::Plan => "\x1b[36m●\x1b[0m ",
+        TranscriptMode::Automatic => "\x1b[38;5;39m●\x1b[0m ",
     };
     // 轮次前空一行，和上一轮响应轻微隔开
     let body = cell

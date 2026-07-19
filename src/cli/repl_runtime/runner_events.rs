@@ -20,6 +20,15 @@ impl ReplRuntime {
                 self.arm_live_ticker();
                 return self.sync_transcript(true);
             }
+            RunnerEvent::AutomaticInput(input) => {
+                self.next_live_refresh = None;
+                self.live_sync_pending = false;
+                self.transcript.finalize_live_tail();
+                self.transcript.push_automatic_echo(input.content.clone());
+                self.transcript.set_work_status(WorkStatus::WaitingResponse);
+                self.arm_live_ticker();
+                return self.sync_transcript(true);
+            }
             RunnerEvent::WaitingExternal => {
                 self.transcript.set_work_status(WorkStatus::WaitingExternal);
                 self.arm_live_ticker();

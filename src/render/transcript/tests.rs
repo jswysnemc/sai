@@ -209,6 +209,20 @@ fn user_echo_uses_a_prominent_bullet() {
         .any(|line| line.as_str().contains("●")));
 }
 
+/// 验证自动输入回显使用蓝色圆点。
+#[test]
+fn automatic_echo_uses_a_blue_bullet() {
+    let mut store = TranscriptStore::new(100);
+    store.push_automatic_echo("后台任务已完成".to_string());
+
+    let rendered = store
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(rendered.contains("\x1b[38;5;39m●"));
+}
+
 #[test]
 fn summary_mode_keeps_compact_tool_call_block_visible() {
     let mut store = TranscriptStore::new(100);

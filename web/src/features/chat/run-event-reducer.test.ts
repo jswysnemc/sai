@@ -120,6 +120,21 @@ describe("runEventReducer", () => {
     ]);
   });
 
+  it("renders automatic input as a separate message part", () => {
+    const next = runEventReducer(initialRunState, {
+      type: "event",
+      event: event("message.automatic.input", {
+        kind: "external_completion",
+        content: "后台任务已完成"
+      })
+    });
+
+    expect(next.status).toBe("waiting_response");
+    expect(next.parts).toEqual([
+      expect.objectContaining({ type: "automatic_input", source: "后台任务已完成" })
+    ]);
+  });
+
   it("does not duplicate a permission card after an SSE replay", () => {
     const request = {
       id: "permission",

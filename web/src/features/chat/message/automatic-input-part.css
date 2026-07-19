@@ -1,0 +1,22 @@
+.automatic-input-part {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  color: var(--ink-soft);
+}
+
+.automatic-input-dot {
+  flex: 0 0 auto;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-top: 0.45rem;
+  border-radius: 50%;
+  background: var(--blue);
+}
+
+.automatic-input-content {
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.55;
+}

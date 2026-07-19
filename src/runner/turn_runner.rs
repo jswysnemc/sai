@@ -1,7 +1,8 @@
-use super::{RunnerEvent, RunnerEventSink, UserInputSubmission};
+use super::{AutomaticInputEvent, RunnerEvent, RunnerEventSink, UserInputSubmission};
 use crate::agent::{Agent, GoalEventBatch};
 use crate::llm::ChatResult;
 use anyhow::Result;
+use std::collections::VecDeque;
 use std::time::Instant;
 
 /// 单轮 runner，当前只包装现有 Agent 单轮调用。
@@ -37,24 +38,32 @@ impl<'agent> TurnRunner<'agent> {
     where
         S: RunnerEventSink,
     {
-        let mut current = input.clone();
+        let mut queued_inputs = VecDeque::from([input.clone()]);
         let mut pending_external_events = None::<GoalEventBatch>;
         loop {
-            // 1. 内部续轮每次读取最新目标，保证暂停、编辑和预算状态立即生效
-            if current.goal_continuation {
+            let mut current = queued_inputs
+                .pop_front()
+                .ok_or_else(|| anyhow::anyhow!("automatic input queue is empty"))?;
+            // 1. 自动队列项每次读取最新目标，并在发送给模型前发布用户可见消息
+            if let Some(automatic) = current.automatic_input.take() {
                 let goal = self
                     .agent
                     .state()
                     .goal()?
                     .filter(|goal| goal.status.is_active())
                     .ok_or_else(|| anyhow::anyhow!("no active goal to continue"))?;
+                let display = automatic.display_text(&goal);
                 current.input = crate::goal::continuation_prompt(&goal);
-                if let Some(prompt) = current.goal_event_prompt.take() {
+                if let Some(prompt) = automatic.prompt {
                     current.input.push_str("\n\n");
                     current.input.push_str(&prompt);
                 }
                 current.image_urls.clear();
                 current.turn_id = None;
+                sink.on_runner_event(RunnerEvent::AutomaticInput(AutomaticInputEvent::new(
+                    automatic.kind,
+                    display,
+                )))?;
             }
             let active_goal = self
                 .agent
@@ -124,16 +133,20 @@ impl<'agent> TurnRunner<'agent> {
                                     .set_goal_status(crate::goal::GoalStatus::Active)?;
                             }
                             let prompt = batch.prompt().to_string();
+                            let display = batch.display().to_string();
                             pending_external_events = Some(batch);
-                            current = UserInputSubmission::new(String::new(), input.mode)
-                                .with_goal_continuation()
-                                .with_goal_event_prompt(prompt);
+                            queued_inputs.push_back(
+                                UserInputSubmission::new(String::new(), input.mode)
+                                    .with_goal_event(prompt, display),
+                            );
                             continue;
                         }
                     }
                     if latest_goal.is_some_and(|goal| goal.status.is_active()) {
-                        current = UserInputSubmission::new(String::new(), input.mode)
-                            .with_goal_continuation();
+                        queued_inputs.push_back(
+                            UserInputSubmission::new(String::new(), input.mode)
+                                .with_goal_continuation(),
+                        );
                         continue;
                     }
                 }

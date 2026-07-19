@@ -7,6 +7,7 @@ import { groupCompletedToolCalls } from "./tool-call-grouping";
 import { ContextCompactionPart } from "./context-compaction-part";
 import { PermissionRequestCard } from "../../permission/permission-request-card";
 import { QuestionRequestCard } from "../../question/question-request-card";
+import { AutomaticInputPart } from "./automatic-input-part";
 
 /**
  * 按消息部件顺序渲染思考、正文和工具调用。
@@ -28,6 +29,7 @@ export function MessageParts({ parts, live }: { parts: LiveMessagePart[]; live?:
         if (part.type === "permission") return <PermissionRequestCard key={item.id} request={part.request} decision={part.decision} active={Boolean(live)} />;
         if (part.type === "question") return <QuestionRequestCard key={item.id} pending={part.pending} response={part.response} active={Boolean(live)} />;
         if (part.type === "compaction") return <ContextCompactionPart key={item.id} part={part} />;
+        if (part.type === "automatic_input") return <AutomaticInputPart key={item.id} content={part.source} />;
         return <MarkdownRenderer key={item.id} source={part.source} />;
       })}
     </div>

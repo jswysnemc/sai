@@ -10,6 +10,7 @@ const EVENT_TYPES = [
   "run.queued",
   "run.dequeued",
   "run.started",
+  "message.automatic.input",
   "status.changed",
   "message.content.delta",
   "message.reasoning.delta",

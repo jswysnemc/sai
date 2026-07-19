@@ -14,6 +14,7 @@ export type ToolLifecycle = {
 export type LiveMessagePart =
   | { id: string; type: "reasoning"; source: string; startedAt: string; endedAt?: string }
   | { id: string; type: "text"; source: string }
+  | { id: string; type: "automatic_input"; kind: string; source: string }
   | { id: string; type: "tool"; tool: ToolLifecycle }
   | { id: string; type: "permission"; request: PermissionRequest; decision?: PermissionDecision }
   | { id: string; type: "question"; pending: PendingQuestion; response?: QuestionResponse }
@@ -94,6 +95,17 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
     case "run.dequeued":
     case "run.started":
       return { ...state, status: "waiting_response" };
+    case "message.automatic.input":
+      return {
+        ...closeActiveReasoning(state, event.timestamp),
+        status: "waiting_response",
+        parts: [...state.parts, {
+          id: `automatic-input-${event.sequence}`,
+          type: "automatic_input",
+          kind: String(payload.kind ?? "automatic"),
+          source: String(payload.content ?? "")
+        }]
+      };
     case "message.content.delta":
       return appendTextPart(closeActiveReasoning(state, event.timestamp), event.sequence, String(payload.text ?? ""));
     case "message.reasoning.delta":

@@ -14,6 +14,7 @@ use super::TranscriptRenderOptions;
 pub(crate) enum TranscriptMode {
     Plan,
     Yolo,
+    Automatic,
 }
 
 /// REPL 历史的 source-backed cell。
