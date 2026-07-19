@@ -13,6 +13,7 @@ import type {
   GatewayStatus,
   GitBranchesResponse,
   GitCommitDetailsResponse,
+  GitConflictContent,
   GitDiff,
   GitDiffResponse,
   GitLogResponse,
@@ -298,6 +299,8 @@ export const api = {
     gitLog: (limit = 50, skip = 0) =>
       apiRequest<GitLogResponse>(`/api/workspace/git/log?limit=${limit}&skip=${skip}`),
     gitResources: () => apiRequest<GitRepositoryResources>("/api/workspace/git/resources"),
+    gitConflict: (path: string) =>
+      apiRequest<GitConflictContent>(`/api/workspace/git/conflict?path=${encodeURIComponent(path)}`),
     gitCommitDetails: (commit: string) =>
       apiRequest<GitCommitDetailsResponse>(`/api/workspace/git/commit?commit=${encodeURIComponent(commit)}`),
     gitCommitDiff: (commit: string, path?: string) => {

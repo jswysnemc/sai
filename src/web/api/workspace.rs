@@ -72,6 +72,8 @@ struct GitOpRequest {
     remote_name: Option<String>,
     #[serde(default)]
     include_untracked: bool,
+    resolution: Option<String>,
+    content: Option<String>,
     #[serde(default)]
     all: bool,
     #[serde(default)]
@@ -100,6 +102,11 @@ struct GitCommitQuery {
     path: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct GitConflictQuery {
+    path: String,
+}
+
 /// 返回工作区文件与 Diff 路由。
 pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
@@ -118,6 +125,7 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/workspace/git/branches", get(git_branches))
         .route("/api/workspace/git/log", get(git_log))
         .route("/api/workspace/git/resources", get(git_resources))
+        .route("/api/workspace/git/conflict", get(git_conflict))
         .route("/api/workspace/git/commit", get(git_commit_details))
         .route("/api/workspace/git/commit-diff", get(git_commit_diff))
         .route("/api/workspace/git/diff", get(git_review_diff))
@@ -303,6 +311,18 @@ async fn git_resources(
     Ok(Json(resources))
 }
 
+/// 读取单个冲突文件的 Merge Editor 内容。
+async fn git_conflict(
+    State(state): State<WebAppState>,
+    Query(query): Query<GitConflictQuery>,
+) -> WebResult<Json<workspace::GitConflictContent>> {
+    let active = state.workspaces.active().map_err(WebError::from)?;
+    let conflict = workspace::git_conflict(std::path::Path::new(&active.path), &query.path)
+        .await
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    Ok(Json(conflict))
+}
+
 /// 读取提交详情。
 async fn git_commit_details(
     State(state): State<WebAppState>,
@@ -374,6 +394,8 @@ async fn git_op(
             tag: request.tag.as_deref(),
             remote_name: request.remote_name.as_deref(),
             include_untracked: request.include_untracked,
+            resolution: request.resolution.as_deref(),
+            content: request.content.as_deref(),
             all: request.all,
             amend: request.amend,
             signoff: request.signoff,

@@ -27,6 +27,7 @@ import { SourceControlDiff } from "../source-control/diff/source-control-diff";
 import { CommitGraph } from "../source-control/graph/commit-graph";
 import { formatGitDate } from "../source-control/graph/graph-utils";
 import { InProgressOperationBar } from "../source-control/operation/in-progress-operation-bar";
+import { MergeEditor } from "../source-control/conflicts/merge-editor";
 import { GitOutputPanel } from "../source-control/output/git-output-panel";
 import type { GitOutputEntry, GitOperationUiOptions } from "../source-control/types";
 import "../source-control/source-control.css";
@@ -82,7 +83,7 @@ export function DiffPane() {
   const reviewDiff = useQuery({
     queryKey: ["git-review-diff", reviewDiffMode, selectedPath],
     queryFn: () => api.workspace.gitReviewDiff(reviewDiffMode, selectedPath ?? undefined),
-    enabled: status.data?.status === "ready" && mode === "changes"
+    enabled: status.data?.status === "ready" && mode === "changes" && selectedSection !== "merge"
   });
   const commitDetails = useQuery({
     queryKey: ["git-commit-details", activeCommit],
@@ -109,6 +110,7 @@ export function DiffPane() {
       queryClient.invalidateQueries({ queryKey: ["git-branches"] }),
       queryClient.invalidateQueries({ queryKey: ["git-log"] }),
       queryClient.invalidateQueries({ queryKey: ["git-resources"] }),
+      queryClient.invalidateQueries({ queryKey: ["git-conflict"] }),
       queryClient.invalidateQueries({ queryKey: ["git-review-diff"] }),
       queryClient.invalidateQueries({ queryKey: ["git-commit-details"] }),
       queryClient.invalidateQueries({ queryKey: ["git-commit-diff"] }),
@@ -475,14 +477,23 @@ export function DiffPane() {
           </section>
 
           <div className="diff-scroll">
-            <SourceControlDiff
-              data={reviewDiff.data}
-              loading={reviewDiff.isLoading}
-              error={reviewDiff.error}
-              selectedPath={selectedPath}
-              busy={busy}
-              runOperation={runOp}
-            />
+            {selectedSection === "merge" && selectedPath ? (
+              <MergeEditor
+                path={selectedPath}
+                busy={busy}
+                runOperation={runOp}
+                onResolved={() => setSelectedSection("staged")}
+              />
+            ) : (
+              <SourceControlDiff
+                data={reviewDiff.data}
+                loading={reviewDiff.isLoading}
+                error={reviewDiff.error}
+                selectedPath={selectedPath}
+                busy={busy}
+                runOperation={runOp}
+              />
+            )}
           </div>
         </div>
       ) : (

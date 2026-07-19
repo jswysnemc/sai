@@ -8,7 +8,7 @@ mod types;
 use types::GitOutput;
 pub(crate) use types::{
     GitBranch, GitBranchesResponse, GitCommitDetails, GitCommitDetailsResponse, GitCommitFile,
-    GitCommitSummary, GitDiff, GitDiffResponse, GitDirtyCounts, GitFileStatus,
+    GitCommitSummary, GitConflictContent, GitDiff, GitDiffResponse, GitDirtyCounts, GitFileStatus,
     GitInProgressOperation, GitLogResponse, GitOperationRequest, GitOperationResponse, GitRemote,
     GitRepositoryResources, GitRepositoryState, GitStashEntry, GitStatusEntry, GitTag,
 };
@@ -37,7 +37,12 @@ mod resources;
 #[path = "git_resource_operations.rs"]
 mod resource_operations;
 
+#[path = "git_conflicts.rs"]
+mod conflicts;
+
 use branches::*;
+pub(crate) use conflicts::git_conflict;
+use conflicts::resolve_conflict;
 use diff_content::*;
 use history_operations::*;
 pub(crate) use operations::git_op;
@@ -49,6 +54,10 @@ use support::*;
 #[cfg(test)]
 #[path = "git_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "git_conflict_tests.rs"]
+mod conflict_tests;
 
 const GIT_DIFF_MAX_BYTES: usize = 512 * 1024;
 const GIT_LOG_DEFAULT_LIMIT: usize = 50;

@@ -15,6 +15,8 @@ export type GitOperationOptions = {
   tag?: string;
   remote_name?: string;
   include_untracked?: boolean;
+  resolution?: "ours" | "theirs" | "content";
+  content?: string;
   all?: boolean;
   amend?: boolean;
   signoff?: boolean;

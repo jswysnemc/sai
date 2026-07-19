@@ -94,6 +94,16 @@ async fn dispatch_operation(
         "tag_delete" => delete_tag(repo, request.tag).await,
         "remote_add" => add_remote(repo, request.remote_name, request.remote_url).await,
         "remote_remove" => remove_remote(repo, request.remote_name).await,
+        "resolve_conflict" => {
+            resolve_conflict(
+                repo,
+                state,
+                request.path,
+                request.resolution,
+                request.content,
+            )
+            .await
+        }
         "continue_operation" => continue_operation(repo, state).await,
         "skip_operation" => skip_operation(repo, state).await,
         "abort_operation" => abort_operation(repo, state).await,
@@ -520,6 +530,7 @@ fn operation_message(action: &str) -> &'static str {
         "tag_delete" => "tag deleted",
         "remote_add" => "remote added",
         "remote_remove" => "remote removed",
+        "resolve_conflict" => "conflict resolved",
         "continue_operation" => "operation continued",
         "skip_operation" => "operation step skipped",
         "abort_operation" => "operation aborted",

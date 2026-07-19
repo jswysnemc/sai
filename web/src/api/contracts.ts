@@ -345,6 +345,15 @@ export type GitRepositoryResources = {
   remotes: GitRemote[];
 };
 
+export type GitConflictContent = {
+  state: GitRepositoryState;
+  path: string;
+  base: string | null;
+  ours: string | null;
+  theirs: string | null;
+  current: string;
+};
+
 export type FileMutation = {
   path: string;
   kind: "file" | "directory";

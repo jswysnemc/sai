@@ -186,6 +186,16 @@ pub(crate) struct GitRepositoryResources {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct GitConflictContent {
+    pub state: GitRepositoryState,
+    pub path: String,
+    pub base: Option<String>,
+    pub ours: Option<String>,
+    pub theirs: Option<String>,
+    pub current: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct GitOperationResponse {
     pub ok: bool,
     pub state: GitRepositoryState,
@@ -218,6 +228,8 @@ pub(crate) struct GitOperationRequest<'a> {
     pub(crate) tag: Option<&'a str>,
     pub(crate) remote_name: Option<&'a str>,
     pub(crate) include_untracked: bool,
+    pub(crate) resolution: Option<&'a str>,
+    pub(crate) content: Option<&'a str>,
     pub(crate) all: bool,
     pub(crate) amend: bool,
     pub(crate) signoff: bool,
@@ -251,6 +263,8 @@ impl<'a> GitOperationRequest<'a> {
             tag: None,
             remote_name: None,
             include_untracked: false,
+            resolution: None,
+            content: None,
             all: false,
             amend: false,
             signoff: false,

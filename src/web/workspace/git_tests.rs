@@ -112,6 +112,8 @@ async fn discards_both_paths_of_a_staged_rename() {
             tag: None,
             remote_name: None,
             include_untracked: false,
+            resolution: None,
+            content: None,
             all: false,
             amend: false,
             signoff: false,
@@ -159,6 +161,8 @@ async fn commits_all_changes_with_signoff() {
             tag: None,
             remote_name: None,
             include_untracked: false,
+            resolution: None,
+            content: None,
             all: true,
             amend: false,
             signoff: true,
@@ -231,6 +235,8 @@ async fn detects_and_aborts_merge_conflict() {
             tag: None,
             remote_name: None,
             include_untracked: false,
+            resolution: None,
+            content: None,
             all: false,
             amend: false,
             signoff: false,
@@ -243,6 +249,69 @@ async fn detects_and_aborts_merge_conflict() {
     assert!(response.ok, "{}", response.stderr);
     assert!(response.state.operation.is_none());
     assert_eq!(response.state.dirty_counts.conflicted, 0);
+}
+
+#[tokio::test]
+async fn reads_and_resolves_merge_editor_content() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path();
+    init_repository(repo).await;
+    create_branch(repo, Some("feature/merge-editor"), None)
+        .await
+        .unwrap();
+    tokio::fs::write(repo.join("tracked.txt"), "theirs\n")
+        .await
+        .unwrap();
+    git_success(repo, &["commit", "-am", "theirs"])
+        .await
+        .unwrap();
+    switch_branch(repo, Some("main"), Some("local"))
+        .await
+        .unwrap();
+    tokio::fs::write(repo.join("tracked.txt"), "ours\n")
+        .await
+        .unwrap();
+    git_success(repo, &["commit", "-am", "ours"]).await.unwrap();
+    assert!(!git_raw(repo, &["merge", "feature/merge-editor"])
+        .await
+        .unwrap()
+        .status
+        .success());
+
+    let conflict = git_conflict(repo, "tracked.txt").await.unwrap();
+    assert_eq!(conflict.base.as_deref(), Some("initial\n"));
+    assert_eq!(conflict.ours.as_deref(), Some("ours\n"));
+    assert_eq!(conflict.theirs.as_deref(), Some("theirs\n"));
+    assert!(conflict.current.contains("<<<<<<<"));
+
+    let resolved = git_op(
+        repo,
+        GitOperationRequest {
+            action: "resolve_conflict",
+            path: Some("tracked.txt"),
+            resolution: Some("content"),
+            content: Some("resolved\n"),
+            ..GitOperationRequest::new("resolve_conflict")
+        },
+    )
+    .await
+    .unwrap();
+    assert!(resolved.ok, "{}", resolved.stderr);
+    assert_eq!(resolved.state.dirty_counts.conflicted, 0);
+    assert_eq!(resolved.state.dirty_counts.staged, 1);
+    assert_eq!(
+        tokio::fs::read_to_string(repo.join("tracked.txt"))
+            .await
+            .unwrap(),
+        "resolved\n"
+    );
+
+    let completed = git_op(repo, GitOperationRequest::new("continue_operation"))
+        .await
+        .unwrap();
+    assert!(completed.ok, "{}", completed.stderr);
+    assert!(completed.state.operation.is_none());
+    assert!(completed.state.entries.is_empty());
 }
 
 #[tokio::test]
@@ -311,6 +380,8 @@ async fn applies_partial_patch_to_index_and_worktree() {
             tag: None,
             remote_name: None,
             include_untracked: false,
+            resolution: None,
+            content: None,
             all: false,
             amend: false,
             signoff: false,
