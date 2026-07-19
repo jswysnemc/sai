@@ -1,3 +1,7 @@
+use sha2::{Digest, Sha256};
+
+const RESPONSES_CALL_ID_MAX_CHARS: usize = 64;
+
 fn responses_unsupported(status: u16, body: &str) -> bool {
     if status == 404 || status == 405 {
         return true;
@@ -128,7 +132,7 @@ fn lower_responses_messages(messages: Vec<ChatMessage>) -> Vec<Value> {
             "system" => vec![json!({"role": "system", "content": chat_content_text(message.content)})],
             "user" => vec![json!({"role": "user", "content": lower_responses_user_content(message.content)})],
             "assistant" => lower_responses_assistant_message(message),
-            "tool" => vec![json!({"type": "function_call_output", "call_id": message.tool_call_id.unwrap_or_default(), "output": chat_content_text(message.content)})],
+            "tool" => vec![json!({"type": "function_call_output", "call_id": responses_call_id(&message.tool_call_id.unwrap_or_default()), "output": chat_content_text(message.content)})],
             role => vec![json!({"role": role, "content": chat_content_text(message.content)})],
         })
         .collect()
@@ -145,13 +149,28 @@ fn lower_responses_assistant_message(message: ChatMessage) -> Vec<Value> {
         items.extend(tool_calls.into_iter().map(|call| {
             json!({
                 "type": "function_call",
-                "call_id": call.id,
+                "call_id": responses_call_id(&call.id),
                 "name": call.function.name,
                 "arguments": call.function.arguments,
             })
         }));
     }
     items
+}
+
+/// 将工具调用标识归一化到 OpenAI Responses 的 64 字符限制内。
+///
+/// 参数:
+/// - `value`: 原始 provider 工具调用标识
+///
+/// 返回:
+/// - 可稳定配对的 Responses 工具调用标识
+fn responses_call_id(value: &str) -> String {
+    if value.chars().count() <= RESPONSES_CALL_ID_MAX_CHARS {
+        return value.to_string();
+    }
+    let digest = hex::encode(Sha256::digest(value.as_bytes()));
+    format!("c{}", &digest[..RESPONSES_CALL_ID_MAX_CHARS - 1])
 }
 
 fn lower_responses_user_content(content: Option<super::ChatContent>) -> Vec<Value> {

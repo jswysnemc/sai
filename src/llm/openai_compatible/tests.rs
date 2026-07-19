@@ -325,6 +325,34 @@ mod tests {
     }
 
     #[test]
+    fn responses_request_shortens_long_call_ids_consistently() {
+        let original = format!("call_{}", "x".repeat(78));
+        let assistant = ChatMessage::assistant(
+            "",
+            Some(vec![ToolCall {
+                id: original.clone(),
+                kind: "function".to_string(),
+                function: ToolCallFunction {
+                    name: "calc".to_string(),
+                    arguments: "{}".to_string(),
+                },
+            }]),
+        );
+        let input = lower_responses_messages(vec![assistant, ChatMessage::tool(&original, "ok")]);
+
+        let call_id = input[0]["call_id"].as_str().unwrap();
+        let result_id = input[1]["call_id"].as_str().unwrap();
+        assert_eq!(call_id.chars().count(), RESPONSES_CALL_ID_MAX_CHARS);
+        assert_eq!(call_id, result_id);
+        assert_ne!(call_id, original);
+    }
+
+    #[test]
+    fn responses_request_preserves_valid_call_ids() {
+        assert_eq!(responses_call_id("call_1"), "call_1");
+    }
+
+    #[test]
     fn protocol_config_accepts_explicit_anthropic() {
         let mut provider = test_provider("anthropic", "https://api.anthropic.com/v1");
         provider.protocol = "anthropic".to_string();
