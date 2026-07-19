@@ -107,6 +107,48 @@ pub(super) async fn delete_branch(
     git_success(repo, &["branch", flag, &branch]).await
 }
 
+/// 将指定分支合并到当前分支。
+///
+/// 参数:
+/// - `repo`: 仓库根目录
+/// - `state`: 当前仓库状态
+/// - `branch`: 待合并分支
+///
+/// 返回:
+/// - Git 合并输出
+pub(super) async fn merge_branch(
+    repo: &Path,
+    state: &GitRepositoryState,
+    branch: Option<&str>,
+) -> Result<GitOutput> {
+    let branch = validate_branch_name(repo, branch).await?;
+    if branch == state.head {
+        bail!("cannot merge the current branch into itself");
+    }
+    git_success(repo, &["merge", "--no-edit", &branch]).await
+}
+
+/// 将当前分支变基到指定分支。
+///
+/// 参数:
+/// - `repo`: 仓库根目录
+/// - `state`: 当前仓库状态
+/// - `branch`: 目标分支
+///
+/// 返回:
+/// - Git 变基输出
+pub(super) async fn rebase_branch(
+    repo: &Path,
+    state: &GitRepositoryState,
+    branch: Option<&str>,
+) -> Result<GitOutput> {
+    let branch = validate_branch_name(repo, branch).await?;
+    if branch == state.head {
+        bail!("cannot rebase the current branch onto itself");
+    }
+    git_success(repo, &["rebase", &branch]).await
+}
+
 /// 校验分支名称。
 ///
 /// 参数:

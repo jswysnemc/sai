@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Check, ChevronDown, GitBranch, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, GitBranch, GitMerge, GitPullRequest, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { GitOperationOptions } from "../../api/git-contracts";
 import type { GitBranch as GitBranchInfo, GitOperationResponse, GitRepositoryState } from "../../api/contracts";
@@ -131,6 +131,34 @@ export function GitBranchMenu(props: GitBranchMenuProps) {
     if (force) await props.onOperation("delete_branch", { branch: branch.full_name, force: true });
   };
 
+  /**
+   * 将所选分支合并到当前分支。
+   *
+   * @param branch 待合并分支
+   * @returns 无返回值
+   */
+  const merge = async (branch: GitBranchInfo) => {
+    props.onOpenChange(false);
+    await props.onOperation("merge_branch", { branch: branch.full_name });
+  };
+
+  /**
+   * 经确认后将当前分支变基到所选分支。
+   *
+   * @param branch 目标分支
+   * @returns 无返回值
+   */
+  const rebase = async (branch: GitBranchInfo) => {
+    const accepted = await confirm({
+      title: t("Rebase current branch?", "变基当前分支？"),
+      description: t(`Rebase ${props.state.head} onto ${branch.full_name}.`, `将 ${props.state.head} 变基到 ${branch.full_name}。`),
+      confirmLabel: t("Rebase", "变基")
+    });
+    if (!accepted) return;
+    props.onOpenChange(false);
+    await props.onOperation("rebase_branch", { branch: branch.full_name });
+  };
+
   return (
     <div className="git-review-branch" ref={rootRef}>
       <Button className="git-branch-trigger" onClick={() => props.onOpenChange(!props.open)} aria-expanded={props.open}>
@@ -152,8 +180,8 @@ export function GitBranchMenu(props: GitBranchMenuProps) {
             <Button variant="primary" disabled={!createName.trim() || props.busy} onClick={() => void create()}><Plus size={12} />{t("Create", "创建")}</Button>
           </div>
           {props.loading && <div className="git-clean">{t("Loading branches...", "正在读取分支…")}</div>}
-          <BranchGroup title={t("Local branches", "本地分支")} branches={localBranches} busy={props.busy} onSelect={select} onRename={openRename} onDelete={remove} />
-          <BranchGroup title={t("Remote branches", "远程分支")} branches={remoteBranches} busy={props.busy} onSelect={select} />
+          <BranchGroup title={t("Local branches", "本地分支")} branches={localBranches} busy={props.busy} onSelect={select} onRename={openRename} onDelete={remove} onMerge={merge} onRebase={rebase} />
+          <BranchGroup title={t("Remote branches", "远程分支")} branches={remoteBranches} busy={props.busy} onSelect={select} onMerge={merge} onRebase={rebase} />
         </div>
       )}
       <Modal
@@ -191,6 +219,8 @@ function BranchGroup(props: {
   onSelect: (branch: GitBranchInfo) => void;
   onRename?: (branch: GitBranchInfo) => void;
   onDelete?: (branch: GitBranchInfo) => void;
+  onMerge?: (branch: GitBranchInfo) => void;
+  onRebase?: (branch: GitBranchInfo) => void;
 }) {
   const { t } = useI18n();
   if (props.branches.length === 0) return null;
@@ -203,9 +233,11 @@ function BranchGroup(props: {
             {branch.current && <Check size={12} />}
             <span><strong>{branch.name}</strong>{branch.upstream && <small>{branch.upstream}</small>}</span>
           </Button>
-          {(props.onRename || (props.onDelete && !branch.current)) && (
+          {(props.onRename || props.onMerge || props.onRebase || (props.onDelete && !branch.current)) && (
             <span className="git-branch-row-actions">
               {props.onRename && <Button onClick={() => props.onRename?.(branch)} disabled={props.busy} title={t("Rename branch", "重命名分支")} aria-label={t("Rename branch", "重命名分支")}><Pencil size={12} /></Button>}
+              {props.onMerge && !branch.current && <Button onClick={() => void props.onMerge?.(branch)} disabled={props.busy} title={t("Merge into current branch", "合并到当前分支")} aria-label={t("Merge into current branch", "合并到当前分支")}><GitMerge size={12} /></Button>}
+              {props.onRebase && !branch.current && <Button onClick={() => void props.onRebase?.(branch)} disabled={props.busy} title={t("Rebase current branch onto", "将当前分支变基到此处")} aria-label={t("Rebase current branch onto", "将当前分支变基到此处")}><GitPullRequest size={12} /></Button>}
               {props.onDelete && !branch.current && <Button onClick={() => void props.onDelete?.(branch)} disabled={props.busy} title={t("Delete branch", "删除分支")} aria-label={t("Delete branch", "删除分支")}><Trash2 size={12} /></Button>}
             </span>
           )}

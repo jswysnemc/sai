@@ -81,6 +81,8 @@ async fn dispatch_operation(
         }
         "rename_branch" => rename_branch(repo, request.branch, request.new_branch).await,
         "delete_branch" => delete_branch(repo, state, request.branch, request.force).await,
+        "merge_branch" => merge_branch(repo, state, request.branch).await,
+        "rebase_branch" => rebase_branch(repo, state, request.branch).await,
         "checkout_commit" => checkout_commit(repo, request.commit).await,
         "cherry_pick" => cherry_pick_commit(repo, request.commit).await,
         "rebase_onto" => rebase_onto_commit(repo, request.commit).await,
@@ -537,6 +539,8 @@ fn operation_message(action: &str) -> &'static str {
         "create_branch" => "branch created",
         "rename_branch" => "branch renamed",
         "delete_branch" => "branch deleted",
+        "merge_branch" => "branch merged",
+        "rebase_branch" => "branch rebased",
         "checkout_commit" => "commit checked out",
         "cherry_pick" => "commit cherry-picked",
         "rebase_onto" => "branch rebased",
