@@ -124,7 +124,8 @@ async fn discovers_repositories_and_manages_worktrees() {
     let validated = validate_git_repository_root(&workspace, worktree.to_str().unwrap())
         .await
         .unwrap();
-    assert_eq!(validated, worktree);
+    // Windows 8.3 短路径与 macOS /private 前缀在 canonicalize 后可能不同
+    assert_eq!(path_key(&validated), path_key(&worktree));
 
     let removed = git_op(
         &first,
