@@ -6,6 +6,7 @@ mod control_runner;
 mod events;
 mod ownership;
 mod session_runner;
+mod submission_tools;
 mod submission;
 mod turn_runner;
 

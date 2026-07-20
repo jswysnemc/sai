@@ -171,6 +171,23 @@ pub fn builtin_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     registry
 }
 
+/// 构建使用缓存定义并延迟连接 MCP 的工具注册表。
+///
+/// 参数:
+/// - `config`: 当前应用配置
+/// - `paths`: 应用目录路径集合
+///
+/// 返回:
+/// - 内置工具与缓存 MCP 工具组成的注册表
+pub(crate) fn builtin_registry_with_cached_mcp(
+    config: &AppConfig,
+    paths: &SaiPaths,
+) -> ToolRegistry {
+    let mut registry = builtin_registry_without_mcp(config, paths);
+    crate::mcp::register_cached_mcp_tools(&mut registry, config, paths);
+    registry
+}
+
 /// 构建不触发 MCP 发现的本地工具注册表。
 ///
 /// 参数:

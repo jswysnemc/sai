@@ -372,6 +372,36 @@ pub(crate) fn build_tool_registry_without_mcp(
     build_tool_registry_with_mcp(config, paths, mode, false)
 }
 
+/// 构建从缓存注册并在首次调用时连接 MCP 的工具注册表。
+///
+/// 参数:
+/// - `config`: 应用配置
+/// - `paths`: Sai 路径
+/// - `mode`: 当前 Agent 模式
+///
+/// 返回:
+/// - 本地工具与延迟 MCP 工具组成的注册表
+pub(crate) fn build_tool_registry_with_cached_mcp(
+    config: &AppConfig,
+    paths: &SaiPaths,
+    mode: AgentMode,
+) -> Result<tools::ToolRegistry> {
+    let mut registry = if config.tools.enabled {
+        match mode {
+            AgentMode::Yolo | AgentMode::Audited => {
+                tools::builtin_registry_with_cached_mcp(config, paths)
+            }
+            AgentMode::Plan => tools::readonly_registry(config, paths),
+        }
+    } else {
+        tools::ToolRegistry::new()
+    };
+    if mode != AgentMode::Plan && config.tools.enabled && config.skills.enabled {
+        tools::register_skills(&mut registry, config, paths, true)?;
+    }
+    Ok(registry)
+}
+
 /// 按需构建本地或完整工具注册表。
 fn build_tool_registry_with_mcp(
     config: &AppConfig,

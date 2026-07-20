@@ -82,7 +82,9 @@ pub(super) fn store_server(
         config_fingerprint: fingerprint(server),
         tools: tools.to_vec(),
     });
-    cache.servers.sort_by(|left, right| left.server_id.cmp(&right.server_id));
+    cache
+        .servers
+        .sort_by(|left, right| left.server_id.cmp(&right.server_id));
     std::fs::create_dir_all(&paths.cache_dir)?;
     let path = cache_path(paths);
     let temporary = path.with_extension("json.tmp");
@@ -227,8 +229,12 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let paths = test_paths(temp.path());
         let mut server = server("mcp-files");
-        server.env.insert("TOKEN".to_string(), "secret-env".to_string());
-        server.headers.insert("Authorization".to_string(), "secret-header".to_string());
+        server
+            .env
+            .insert("TOKEN".to_string(), "secret-env".to_string());
+        server
+            .headers
+            .insert("Authorization".to_string(), "secret-header".to_string());
 
         store_server(&paths, &server, &[]).unwrap();
 
