@@ -1,5 +1,6 @@
 use crate::config::McpServerConfig;
 use anyhow::{bail, Context, Result};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::process::Stdio;
@@ -56,7 +57,7 @@ where
         .map_err(|error| anyhow::anyhow!("mcp runtime worker failed: {error}"))?
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct McpToolInfo {
     pub server_id: String,
     pub name: String,
@@ -749,7 +750,9 @@ pub async fn list_server_tools(config: &McpServerConfig) -> Result<Vec<McpToolIn
     run_on_mcp_runtime(async move { list_server_tools_on_rt(&config).await }).await
 }
 
-async fn list_server_tools_on_rt(config: &McpServerConfig) -> Result<Vec<McpToolInfo>> {
+pub(super) async fn list_server_tools_on_rt(
+    config: &McpServerConfig,
+) -> Result<Vec<McpToolInfo>> {
     with_client(config, |client| async move {
         let mut guard = client.lock().await;
         let tools = guard.list_tools(config.timeout_ms).await?;
@@ -799,23 +802,6 @@ pub async fn test_server(config: &McpServerConfig) -> Result<(usize, Vec<String>
         ))
     })
     .await
-}
-
-/// 汇总全部启用 server 的工具。
-pub async fn list_enabled_tools(servers: &[McpServerConfig]) -> Vec<McpToolInfo> {
-    let servers = servers.to_vec();
-    run_on_mcp_runtime(async move {
-        let mut all = Vec::new();
-        for server in servers.iter().filter(|server| server.enabled) {
-            match list_server_tools_on_rt(server).await {
-                Ok(mut tools) => all.append(&mut tools),
-                Err(error) => eprintln!("[mcp] list tools for {}: {error}", server.id),
-            }
-        }
-        Ok(all)
-    })
-    .await
-    .unwrap_or_default()
 }
 
 #[cfg(test)]

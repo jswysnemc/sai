@@ -167,7 +167,7 @@ pub fn clear_aur_review_state(paths: &SaiPaths) -> anyhow::Result<()> {
 /// - 可直接用于 Agent 运行的完整工具注册表
 pub fn builtin_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     let mut registry = builtin_registry_without_mcp(config, paths);
-    crate::mcp::register_mcp_tools(&mut registry, config);
+    crate::mcp::register_mcp_tools(&mut registry, config, paths);
     registry
 }
 
