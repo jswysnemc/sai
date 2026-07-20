@@ -78,11 +78,23 @@ mod tests {
         let mut warmup = ReplToolWarmup::from_task(AgentMode::Audited, task);
         let started = Instant::now();
 
+        // 1. 未完成时立即返回空
         assert!(warmup.take_ready().is_none());
         assert!(started.elapsed() < Duration::from_millis(50));
 
-        std::thread::sleep(Duration::from_millis(220));
-        let (mode, _) = warmup.take_ready().unwrap().unwrap();
+        // 2. 轮询等待完成，避免 CI 调度抖动导致固定 sleep 不够
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let result = loop {
+            if let Some(ready) = warmup.take_ready() {
+                break ready;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "warmup task should finish within 2s"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        let (mode, _) = result.unwrap();
         assert_eq!(mode, AgentMode::Audited);
     }
 }
