@@ -10,13 +10,34 @@ const END_MARKER: &str = "# <<< sai bash hook <<<";
 pub fn hook() -> &'static str {
     r#"command_not_found_handle() {
     [[ $- == *i* ]] || return 127
+    command -v sai >/dev/null 2>&1 || return 127
 
-    local text="$*"
+    local -a sai_flags=()
+    local -a command=("$@")
+    while ((${#command[@]} > 0)); do
+        case "${command[0]}" in
+            -c|--clipb)
+                sai_flags+=(--clipb)
+                command=("${command[@]:1}")
+                ;;
+            -w|--web)
+                sai_flags+=(--web)
+                command=("${command[@]:1}")
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
+    local text="${command[*]}"
     [[ -n "$text" ]] || return 127
     [[ "$text" != *$'\n'* && "$text" != *$'\r'* ]] || return 127
 
-    sai --shell-intercept --shell bash -- "$@" 2>/dev/null
-    return 127
+    # 1. 预存最近命令供 sai -e 解释
+    sai --shell-intercept --shell bash -- "${command[@]}" 2>/dev/null
+    # 2. 直接把未找到的命令转发给 Sai 对话
+    sai "${sai_flags[@]}" -- "$text"
 }
 "#
 }
@@ -120,7 +141,10 @@ mod tests {
         let hook = hook();
         assert!(hook.contains("command_not_found_handle"));
         assert!(hook.contains("--shell bash"));
-        assert!(hook.contains("return 127"));
+        assert!(hook.contains("sai \"${sai_flags[@]}\" -- \"$text\""));
+        assert!(hook.contains("-c|--clipb"));
+        assert!(hook.contains("-w|--web"));
+        assert!(hook.contains("command -v sai"));
     }
 
     #[test]

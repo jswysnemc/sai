@@ -155,11 +155,13 @@ mod tests {
                 timestamp: String::new(),
                 content: user.to_string(),
                 reasoning: None,
+                            image_urls: Vec::new(),
             },
             assistant: TimelineMessage {
                 timestamp: String::new(),
                 content: "已完成".to_string(),
                 reasoning: None,
+                            image_urls: Vec::new(),
             },
             tools: vec![TimelineToolEntry {
                 id: "tool-1".to_string(),

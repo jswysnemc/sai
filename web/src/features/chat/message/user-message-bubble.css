@@ -5,21 +5,23 @@
 
 .user-message-stack {
   display: grid;
-  width: min(82%, 42.5rem);
-  max-width: 100%;
+  width: fit-content;
+  max-width: min(82%, 42.5rem);
   justify-items: end;
+  gap: 0.1875rem;
 }
 
 .user-bubble {
   position: relative;
   display: grid;
-  width: 100%;
+  width: fit-content;
   min-width: 0;
+  max-width: 100%;
   gap: 0.5rem;
   justify-items: stretch;
   padding: 0.6875rem 0.875rem;
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
+  border-radius: 0.875rem 0.875rem 0.25rem 0.875rem;
   background: var(--paper-raised);
   box-shadow: 0 0.25rem 1.125rem rgb(20 28 23 / 5%);
 }
@@ -210,7 +212,7 @@
 
 @media (max-width: 47.5rem) {
   .user-message-stack {
-    width: min(92%, 42.5rem);
+    max-width: min(92%, 42.5rem);
   }
 
   .user-attachments {

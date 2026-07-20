@@ -55,6 +55,8 @@ pub(crate) fn process_stream_tick(runtime: &mut ReplRuntime) -> Result<()> {
 
 /// 处理模型运行期间的非阻塞终端事件。
 ///
+/// Agent 工作时仅允许中断与命令输出展开，禁止写入输入框或切换模式。
+///
 /// 参数:
 /// - `runtime`: 当前 REPL 运行期
 ///
@@ -69,17 +71,19 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                 if matches!(key.code, KeyCode::Char('o'))
                     && key.modifiers.contains(KeyModifiers::CONTROL)
                 {
+                    // 1. 允许展开或收起最近命令输出
                     runtime.toggle_command_output()?;
                 } else if matches!(key.code, KeyCode::Char('c'))
                     && key.modifiers.contains(KeyModifiers::CONTROL)
                 {
+                    // 2. Ctrl+C 中断当前轮
                     return Ok(true);
-                } else {
-                    runtime.queue_input_event(Event::Key(key));
                 }
+                // 3. 其他按键在运行期间丢弃，避免污染输入框或切换模式
             }
             Event::Key(_) => {}
-            input => runtime.queue_input_event(input),
+            // 粘贴与鼠标等输入在运行期间同样丢弃
+            _ => {}
         }
     }
     Ok(false)

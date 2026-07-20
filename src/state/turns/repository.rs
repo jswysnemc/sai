@@ -62,6 +62,24 @@ impl ConversationDb {
     /// 返回:
     /// - 写入是否成功
     pub fn start_turn(&self, turn_id: &str, user_content: &str) -> Result<()> {
+        self.start_turn_with_images(turn_id, user_content, &[])
+    }
+
+    /// 开始一轮新对话并保存用户图片。
+    ///
+    /// 参数:
+    /// - `turn_id`: 当前轮唯一标识
+    /// - `user_content`: 用户输入
+    /// - `user_image_urls`: 用户附件图片 data URL 列表
+    ///
+    /// 返回:
+    /// - 写入是否成功
+    pub fn start_turn_with_images(
+        &self,
+        turn_id: &str,
+        user_content: &str,
+        user_image_urls: &[String],
+    ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let now = Utc::now().to_rfc3339();
         self.insert_turn_locked(
@@ -69,6 +87,7 @@ impl ConversationDb {
             InsertTurn {
                 turn_id,
                 user_content,
+                user_image_urls,
                 user_timestamp: &now,
                 assistant_content: "",
                 assistant_reasoning: None,
@@ -172,7 +191,7 @@ impl ConversationDb {
         let conn = self.conn.lock().unwrap();
         load_turns_with_sql(
             &conn,
-            "SELECT turn_id, seq, user_content, user_timestamp, assistant_content,
+            "SELECT turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
                     assistant_reasoning, assistant_timestamp, status, tool_reports
              FROM turns ORDER BY seq ASC",
             [],
@@ -196,7 +215,7 @@ impl ConversationDb {
         match exclude_turn_id {
             Some(turn_id) => {
                 let mut stmt = conn.prepare(
-                    "SELECT turn_id, seq, user_content, user_timestamp, assistant_content,
+                    "SELECT turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
                             assistant_reasoning, assistant_timestamp, status, tool_reports
                      FROM turns WHERE seq > ?1 AND turn_id != ?2 ORDER BY seq ASC",
                 )?;
@@ -207,7 +226,7 @@ impl ConversationDb {
             }
             None => load_turns_with_sql(
                 &conn,
-                "SELECT turn_id, seq, user_content, user_timestamp, assistant_content,
+                "SELECT turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
                         assistant_reasoning, assistant_timestamp, status, tool_reports
                  FROM turns WHERE seq > ?1 ORDER BY seq ASC",
                 params![after_seq],
@@ -394,13 +413,14 @@ impl ConversationDb {
     pub(super) fn insert_turn_locked(&self, conn: &Connection, turn: InsertTurn<'_>) -> Result<()> {
         conn.execute(
             "INSERT INTO turns (
-                turn_id, seq, user_content, user_timestamp, assistant_content,
+                turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
                 assistant_reasoning, assistant_timestamp, status, tool_reports
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 turn.turn_id,
                 self.next_seq_locked(conn)?,
                 turn.user_content,
+                serde_json::to_string(turn.user_image_urls)?,
                 turn.user_timestamp,
                 turn.assistant_content,
                 turn.assistant_reasoning,
@@ -436,6 +456,7 @@ fn delete_turn_locked(conn: &Connection, turn_id: &str) -> Result<usize> {
 pub(super) struct InsertTurn<'a> {
     pub(super) turn_id: &'a str,
     pub(super) user_content: &'a str,
+    pub(super) user_image_urls: &'a [String],
     pub(super) user_timestamp: &'a str,
     pub(super) assistant_content: &'a str,
     pub(super) assistant_reasoning: Option<&'a str>,
@@ -472,17 +493,20 @@ where
 /// 返回:
 /// - 轮次
 fn map_turn(row: &Row<'_>) -> rusqlite::Result<Turn> {
-    let tool_reports_json: String = row.get(8)?;
+    let image_urls_json: String = row.get(3)?;
+    let user_image_urls = serde_json::from_str(&image_urls_json).unwrap_or_default();
+    let tool_reports_json: String = row.get(9)?;
     let tool_reports = serde_json::from_str(&tool_reports_json).unwrap_or_default();
-    let status: String = row.get(7)?;
+    let status: String = row.get(8)?;
     Ok(Turn {
         turn_id: row.get(0)?,
         seq: row.get(1)?,
         user_content: row.get(2)?,
-        user_timestamp: row.get(3)?,
-        assistant_content: row.get(4)?,
-        assistant_reasoning: row.get(5)?,
-        assistant_timestamp: row.get(6)?,
+        user_image_urls,
+        user_timestamp: row.get(4)?,
+        assistant_content: row.get(5)?,
+        assistant_reasoning: row.get(6)?,
+        assistant_timestamp: row.get(7)?,
         status: TurnStatus::from_str(&status),
         tool_reports,
     })

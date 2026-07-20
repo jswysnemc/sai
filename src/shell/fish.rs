@@ -5,17 +5,35 @@ use anyhow::Result;
 pub fn hook() -> &'static str {
     r#"function fish_command_not_found
     status is-interactive; or return 127
+    command -q sai; or return 127
 
     set -l command $argv
     if test (count $command) -eq 0
         return 127
     end
 
+    set -l sai_flags
+    while test (count $command) -gt 0
+        switch $command[1]
+            case -c --clipb
+                set -a sai_flags --clipb
+                set -e command[1]
+            case -w --web
+                set -a sai_flags --web
+                set -e command[1]
+            case '*'
+                break
+        end
+    end
+
     set -l text (string join ' ' -- $command)
+    test -n "$text"; or return 127
     string match -qr '[\n\r]' -- $text; and return 127
 
+    # 1. 预存最近命令供 sai -e 解释
     sai --shell-intercept --shell fish -- $command 2>/dev/null
-    return 127
+    # 2. 直接把未找到的命令转发给 Sai 对话
+    sai $sai_flags -- $text
 end
 "#
 }
@@ -58,7 +76,10 @@ mod tests {
         let hook = hook();
         assert!(hook.contains("fish_command_not_found"));
         assert!(hook.contains("--shell fish"));
-        assert!(hook.contains("return 127"));
+        assert!(hook.contains("sai $sai_flags -- $text"));
+        assert!(hook.contains("-c --clipb"));
+        assert!(hook.contains("-w --web"));
+        assert!(hook.contains("command -q sai"));
     }
 
     #[test]

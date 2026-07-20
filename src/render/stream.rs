@@ -206,6 +206,8 @@ impl StreamRenderer {
         self.tool_event_labels
             .insert(name.to_string(), event_label.clone());
         if name == "run_command" {
+            // 命令输出预览接管底部动效，停掉 WaitSpinner 避免锚点冲突
+            self.stop_waiting()?;
             self.command_preview.begin();
         }
         if self.tool_call_mode == ToolCallDisplayMode::Summary
@@ -372,6 +374,7 @@ impl StreamRenderer {
                     let mut stdout = io::stdout();
                     self.stop_waiting()?;
                     self.command_preview.clear()?;
+                    // 命令结束后恢复末行 WaitSpinner
                     if ok {
                         write_command_result_preview(&mut stdout, output)?;
                     } else {
@@ -492,11 +495,12 @@ impl StreamRenderer {
         }
         if name == "run_command" {
             if let Some(chunk) = crate::tools::command::decode_command_output(message) {
+                // 1. 停止 WaitSpinner，改由命令预览内嵌 working 动效
                 self.stop_waiting()?;
                 self.end_active_stream_line()?;
                 self.finalize_reasoning_summary()?;
+                // 2. 命令预览独占底部行，避免 clear_rendered_rows 与 spinner 锚点冲突
                 self.command_preview.append(&chunk)?;
-                self.resume_work_spinner()?;
                 return Ok(());
             }
         }

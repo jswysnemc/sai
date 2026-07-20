@@ -131,6 +131,10 @@ impl StreamRenderer {
         if self.work_status.is_none() {
             return Ok(());
         }
+        // 命令输出预览已内嵌 working 动效，不再启动 WaitSpinner
+        if self.command_preview.is_active() {
+            return Ok(());
+        }
         // 思考正文流式输出期间不叠 working 文案；工具阶段显示工作中
         if self.mode == Some(ChatStreamKind::Reasoning)
             && self.reasoning_mode != ReasoningDisplayMode::Summary

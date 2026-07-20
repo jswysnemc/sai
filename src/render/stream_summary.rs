@@ -1,4 +1,5 @@
 use crate::render::terminal_text as t;
+use crate::token_counter;
 use crate::render::status_style::{color_running, color_status};
 use crate::render::style::TOOL_BULLET;
 use crate::render::tool_names::readable_tool_name;
@@ -13,6 +14,8 @@ const TOOL_SUMMARY_DETAIL_LIMIT: usize = 8;
 pub(crate) struct StreamSummary {
     reasoning_chars: usize,
     reasoning_lines: usize,
+    reasoning_tokens: usize,
+    reasoning_source: String,
     /// 思考摘要行是否正在终端上 live 刷新
     reasoning_live: bool,
     tool_stats: BTreeMap<String, ToolStats>,
@@ -31,6 +34,8 @@ impl StreamSummary {
         Self {
             reasoning_chars: 0,
             reasoning_lines: 0,
+            reasoning_tokens: 0,
+            reasoning_source: String::new(),
             reasoning_live: false,
             tool_stats: BTreeMap::new(),
             readable_tool_names,
@@ -45,8 +50,11 @@ impl StreamSummary {
     /// 返回:
     /// - 刷新是否成功
     pub(crate) fn add_reasoning_text(&mut self, text: &str) -> Result<()> {
-        self.reasoning_chars += text.chars().count();
-        self.reasoning_lines += text.matches('\n').count();
+        self.reasoning_source.push_str(text);
+        self.reasoning_chars = self.reasoning_source.chars().count();
+        self.reasoning_lines = self.reasoning_source.lines().count().max(if self.reasoning_source.is_empty() { 0 } else { 1 });
+        // 使用内置 o200k 计数库实时统计 token
+        self.reasoning_tokens = token_counter::count(&self.reasoning_source);
         // 一开始收到思考内容就显示块，随后只更新计数
         if self.reasoning_chars > 0 {
             self.render_live_reasoning()?;
@@ -84,13 +92,13 @@ impl StreamSummary {
     /// 返回:
     /// - 推理摘要文本
     pub(crate) fn reasoning_text(&self) -> String {
+        // CLI 摘要：实时 token 量（o200k）
+        let tokens = self.reasoning_tokens.max(1);
         format!(
-            "{TOOL_BULLET} {} · {} {} · {} {}",
+            "{TOOL_BULLET} {} · {} {}",
             t("thinking", "思考"),
-            self.reasoning_lines.max(1),
-            t("lines", "行"),
-            self.reasoning_chars,
-            t("chars", "字符")
+            tokens,
+            t("tokens", "tokens")
         )
     }
 
@@ -129,6 +137,8 @@ impl StreamSummary {
         stdout.flush()?;
         self.reasoning_chars = 0;
         self.reasoning_lines = 0;
+        self.reasoning_tokens = 0;
+        self.reasoning_source.clear();
         self.reasoning_live = false;
         Ok(())
     }
@@ -429,25 +439,18 @@ mod tests {
         assert!(output.starts_with("• "));
         assert!(output.contains("思考") || output.contains("thinking"));
         assert!(summary.reasoning_live_active());
-        assert!(output.contains("1"));
-        assert!(output.contains("4") || output.contains("3"));
+        assert!(output.contains("tokens"));
     }
 
     #[test]
-    fn reasoning_summary_counts_grow_with_chunks() {
+    fn reasoning_summary_token_count_grows_with_chunks() {
         let mut summary = StreamSummary::new(false);
         summary.add_reasoning_text("ab").unwrap();
-        assert!(summary.reasoning_text().contains("2"));
-        // "cd\n" 计 3 字符、1 换行 => 合计 5 字符、1 行
-        summary.add_reasoning_text("cd\n").unwrap();
-        let text = summary.reasoning_text();
-        assert!(text.contains("5"));
-        assert!(text.contains("1"));
-        // 再加 "ef\n" => 8 字符、2 行
-        summary.add_reasoning_text("ef\n").unwrap();
-        let text = summary.reasoning_text();
-        assert!(text.contains("8"));
-        assert!(text.contains("2"));
+        let first = summary.reasoning_tokens;
+        assert!(first >= 1);
+        summary.add_reasoning_text("cd\n more tokens here please").unwrap();
+        assert!(summary.reasoning_tokens >= first);
+        assert!(summary.reasoning_text().contains("tokens"));
     }
 
     #[test]

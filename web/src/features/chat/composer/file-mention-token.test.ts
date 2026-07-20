@@ -2,17 +2,19 @@ import { describe, expect, it } from "vitest";
 import { findFileMentionTrigger, formatFileMention, parseFileMentions } from "./file-mention-token";
 
 describe("file mention token", () => {
-  it("parses mentions at text boundaries without converting email addresses", () => {
-    expect(parseFileMentions("检查 @web/src/main.tsx 和 test@example.com")).toEqual([
+  it("only special-cases successful file-reference picks", () => {
+    const mention = formatFileMention("web/src/main.tsx");
+    expect(mention).toBe('<file-reference path="web/src/main.tsx"></file-reference>');
+    expect(parseFileMentions(`检查 ${mention} 和 test@example.com 以及 @handwritten/path`)).toEqual([
       { type: "text", value: "检查 " },
-      { type: "mention", path: "web/src/main.tsx", value: "@web/src/main.tsx" },
-      { type: "text", value: " 和 test@example.com" }
+      { type: "mention", path: "web/src/main.tsx", value: mention },
+      { type: "text", value: " 和 test@example.com 以及 @handwritten/path" }
     ]);
   });
 
-  it("quotes paths containing whitespace and restores their original value", () => {
+  it("quotes and restores paths containing whitespace", () => {
     const mention = formatFileMention("docs/design draft.md");
-    expect(mention).toBe('@"docs/design draft.md"');
+    expect(mention).toBe('<file-reference path="docs/design draft.md"></file-reference>');
     expect(parseFileMentions(mention)).toEqual([
       { type: "mention", path: "docs/design draft.md", value: mention }
     ]);

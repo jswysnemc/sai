@@ -45,7 +45,7 @@ export function HistoryTurn({
   return (
     <>
       {!turn.automatic && (
-        <UserMessageBubble content={turn.user.content} timestamp={turn.user.timestamp} onRetry={onRetry} />
+        <UserMessageBubble content={turn.user.content} timestamp={turn.user.timestamp} imageUrls={turn.user.image_urls} onRetry={onRetry} />
       )}
       <article className="message assistant-message">
         <MessageParts parts={historyTurnParts(turn)} />

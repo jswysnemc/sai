@@ -10,6 +10,8 @@ pub struct TimelineMessage {
     pub timestamp: String,
     pub content: String,
     pub reasoning: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub image_urls: Vec<String>,
 }
 
 /// 会话时间线中的工具调用。
@@ -123,11 +125,13 @@ impl StateStore {
                         timestamp: turn.user_timestamp,
                         content: turn.user_content,
                         reasoning: None,
+                        image_urls: turn.user_image_urls,
                     },
                     assistant: TimelineMessage {
                         timestamp: turn.assistant_timestamp.unwrap_or_default(),
                         content: turn.assistant_content,
                         reasoning: turn.assistant_reasoning,
+                        image_urls: Vec::new(),
                     },
                     tools,
                     automatic,

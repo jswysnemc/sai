@@ -1,6 +1,23 @@
 use super::*;
 use std::path::Path;
 
+/// 规范化路径字符串，便于跨平台比较。
+fn path_key(path: impl AsRef<std::path::Path>) -> String {
+    let path = path.as_ref();
+    let canonical = crate::platform::windows_path::canonicalize(path)
+        .unwrap_or_else(|_| path.to_path_buf());
+    let simplified = crate::platform::windows_path::simplified(&canonical);
+    let value = simplified.display().to_string();
+    #[cfg(windows)]
+    {
+        return value.replace('/', "\\").to_ascii_lowercase();
+    }
+    #[cfg(not(windows))]
+    {
+        value
+    }
+}
+
 /// 创建用于仓库发现测试的最小 Git 仓库。
 ///
 /// 参数:
@@ -15,6 +32,9 @@ async fn init_repository(root: &Path) {
         .await
         .unwrap();
     git_success(root, &["config", "user.email", "sai@example.com"])
+        .await
+        .unwrap();
+    git_success(root, &["config", "core.autocrlf", "false"])
         .await
         .unwrap();
     tokio::fs::write(root.join("README.md"), "repository\n")
@@ -73,13 +93,13 @@ async fn discovers_repositories_and_manages_worktrees() {
     let first_summary = repositories
         .repositories
         .iter()
-        .find(|repository| repository.root == first.display().to_string())
+        .find(|repository| path_key(&repository.root) == path_key(&first))
         .unwrap();
     assert_eq!(first_summary.worktrees.len(), 3);
     assert!(first_summary
         .worktrees
         .iter()
-        .any(|item| item.path == worktree.display().to_string()));
+        .any(|item| path_key(&item.path) == path_key(&worktree)));
 
     let statuses = git_repository_statuses(
         &workspace,
@@ -93,12 +113,12 @@ async fn discovers_repositories_and_manages_worktrees() {
     .unwrap();
     assert_eq!(statuses.repositories.len(), 2);
     assert_eq!(
-        statuses.repositories[0].repo_root,
-        second.display().to_string()
+        path_key(&statuses.repositories[0].repo_root),
+        path_key(&second)
     );
     assert_eq!(
-        statuses.repositories[1].repo_root,
-        first.display().to_string()
+        path_key(&statuses.repositories[1].repo_root),
+        path_key(&first)
     );
 
     let validated = validate_git_repository_root(&workspace, worktree.to_str().unwrap())

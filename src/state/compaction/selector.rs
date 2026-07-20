@@ -61,6 +61,7 @@ mod tests {
             turn_id: format!("turn_{seq}"),
             seq,
             user_content: "u".repeat(chars),
+            user_image_urls: Vec::new(),
             user_timestamp: "2026-01-01T00:00:00Z".to_string(),
             assistant_content: "a".repeat(chars),
             assistant_reasoning: None,

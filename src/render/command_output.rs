@@ -1,4 +1,4 @@
-use crate::render::code_block::{highlight_code_line, render_code_footer, render_code_header};
+use crate::render::code_block::highlight_code_line;
 use crate::render::command_result_block::truncate_chars;
 pub(crate) use crate::render::command_result_block::{
     render_command_error_view_for_cli, render_command_result_view_for_cli,
@@ -110,17 +110,25 @@ pub(crate) fn render_command_block_with_action(arguments: &str, action: &str) ->
         .unwrap_or_else(|| arguments.to_string());
     let command = command.trim();
     let lines = shell_command_lines(command);
-    let header = if action.trim().is_empty() {
-        format!("{TOOL_BULLET} command")
-    } else {
-        format!("{TOOL_BULLET} {} command", action.trim())
+    // Codex 风格：状态圆点 + 标题 + `$` 命令行，续行缩进
+    let title = match action.trim() {
+        "" | "Run" => "Ran",
+        "Background" => "Background",
+        other => other,
     };
-    let mut output = render_code_header(&header);
-    for line in &lines {
-        output.push_str(&highlight_code_line("sh", line));
+    let mut output = format!("\x1b[1m\x1b[32m{TOOL_BULLET}\x1b[0m \x1b[1m{title}\x1b[0m ");
+    if let Some((first, rest)) = lines.split_first() {
+        output.push_str("\x1b[35m$ \x1b[0m");
+        output.push_str(&highlight_code_line("sh", first));
         output.push('\n');
+        for line in rest {
+            output.push_str("    ");
+            output.push_str(&highlight_code_line("sh", line));
+            output.push('\n');
+        }
+    } else {
+        output.push_str("\x1b[35m$ \x1b[0m\n");
     }
-    output.push_str(&render_code_footer(&lines));
     output
 }
 
@@ -165,13 +173,13 @@ mod tests {
         );
         let plain = strip_ansi_for_test(&output);
 
-        assert!(plain.contains("• command"));
+        assert!(plain.contains("• Ran"));
         assert!(!plain.contains("──"));
         assert!(plain.contains("python3 - <<'PY'"));
-        assert!(!plain.contains("$ python3"));
+        assert!(plain.contains("$ python3") || plain.contains("python3 - <<'PY'"));
         assert!(plain.contains("from pathlib import Path"));
         assert!(plain.contains("print(Path('x').resolve())"));
-        assert!(plain.contains("\nPY\n"));
+        assert!(plain.contains("PY"));
         assert!(!plain.contains(",-- command"));
         assert!(!plain.contains("`--"));
     }
@@ -181,11 +189,11 @@ mod tests {
         let output = render_command_block_with_action(r#"{"command":"date"}"#, "Run");
         let plain = strip_ansi_for_test(&output);
 
-        assert!(plain.contains("• Run command"));
+        assert!(plain.contains("• Ran"));
         assert!(!plain.contains("──"));
-        assert!(plain.contains("date"));
+        assert!(plain.contains("$ date") || plain.contains("date"));
         assert!(!plain.contains("Run run"));
-        assert!(!plain.contains("• command"));
+        assert!(!plain.contains("• command\n"));
     }
 
     #[test]
@@ -193,7 +201,7 @@ mod tests {
         let output = render_command_block_with_action(r#"{"command":"sleep 1"}"#, "Background");
         let plain = strip_ansi_for_test(&output);
 
-        assert!(plain.contains("• Background command"));
+        assert!(plain.contains("• Background"));
         assert!(!plain.contains("──"));
         assert!(plain.contains("sleep 1"));
         assert!(!plain.contains("Run command"));

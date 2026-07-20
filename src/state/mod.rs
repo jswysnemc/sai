@@ -227,7 +227,26 @@ impl StateStore {
     /// 返回:
     /// - 写入是否成功
     pub fn start_turn(&self, turn_id: &str, user_content: &str) -> Result<()> {
-        self.conv_db.start_turn(turn_id, user_content)?;
+        self.start_turn_with_images(turn_id, user_content, &[])
+    }
+
+    /// 开始对话轮次并持久化用户图片附件。
+    ///
+    /// 参数:
+    /// - `turn_id`: 当前轮唯一标识
+    /// - `user_content`: 用户输入
+    /// - `user_image_urls`: 用户附件图片 data URL 列表
+    ///
+    /// 返回:
+    /// - 写入是否成功
+    pub fn start_turn_with_images(
+        &self,
+        turn_id: &str,
+        user_content: &str,
+        user_image_urls: &[String],
+    ) -> Result<()> {
+        self.conv_db
+            .start_turn_with_images(turn_id, user_content, user_image_urls)?;
         sessions::touch_session_with_message(&self.base_state_dir, &self.session_id, user_content)
     }
 

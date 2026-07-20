@@ -119,6 +119,7 @@ export type TimelineMessage = {
   timestamp: string;
   content: string;
   reasoning?: string | null;
+  image_urls?: string[];
 };
 
 export type TimelineToolEntry = {

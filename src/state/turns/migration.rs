@@ -91,6 +91,7 @@ impl ConversationDb {
             InsertTurn {
                 turn_id: &format!("migrated_{index}"),
                 user_content,
+                user_image_urls: &[],
                 user_timestamp,
                 assistant_content: "(migrated without reply)",
                 assistant_reasoning: None,
@@ -128,6 +129,7 @@ impl ConversationDb {
             InsertTurn {
                 turn_id: &format!("migrated_{index}"),
                 user_content,
+                user_image_urls: &[],
                 user_timestamp,
                 assistant_content,
                 assistant_reasoning: reasoning,

@@ -1,5 +1,5 @@
-use crate::render::terminal_text as t;
 use crate::render::style::TOOL_BULLET;
+use crate::render::terminal_text as t;
 
 /// REPL 本地 Shell 命令单元。
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -17,23 +17,23 @@ pub(crate) struct ShellCell {
 /// 返回:
 /// - 适合 transcript 的 ANSI 文本
 pub(super) fn render(cell: &ShellCell) -> String {
-    let mut rendered = format!("{TOOL_BULLET} {} {}", t("You ran", "已执行"), cell.command);
+    // Codex 风格：• You ran $ command
+    let mut rendered = format!(
+        "\x1b[1m\x1b[32m{TOOL_BULLET}\x1b[0m \x1b[1m{}\x1b[0m \x1b[35m$\x1b[0m {}",
+        t("You ran", "已执行"),
+        cell.command
+    );
     if cell.output.is_empty() {
-        rendered.push_str(&format!(
-            "\n\x1b[2m{}\x1b[0m",
-            t("no output", "无输出")
-        ));
+        rendered.push_str("\n\x1b[2m  └ (no output)\x1b[0m");
     } else {
-        rendered.push('\n');
-        rendered.push_str(&cell.output);
+        for (index, line) in cell.output.lines().enumerate() {
+            let prefix = if index == 0 { "  └ " } else { "    " };
+            rendered.push_str(&format!("\n\x1b[2m{prefix}{line}\x1b[0m"));
+        }
     }
     if cell.exit_code.is_some_and(|code| code != 0) {
-        if !rendered.ends_with('\n') {
-            rendered.push('\n');
-        }
         rendered.push_str(&format!(
-            "\x1b[31m  {} {}\x1b[0m",
-            t("exit code", "退出码"),
+            "\n\x1b[31m✗ ({})\x1b[0m",
             cell.exit_code.unwrap_or_default()
         ));
     }
@@ -53,8 +53,10 @@ mod tests {
         });
 
         assert!(rendered.contains("ls"));
-        assert!(rendered.contains("\none\ntwo"));
+        assert!(rendered.contains("one"));
+        assert!(rendered.contains("two"));
         assert!(!rendered.contains("├─"));
         assert!(!rendered.contains("└─"));
+        assert!(rendered.contains("└"));
     }
 }

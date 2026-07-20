@@ -97,7 +97,7 @@ fn live_reasoning_summary_animates_without_waiting_for_consolidation() {
     assert_eq!(first.len(), 1);
     assert_eq!(second.len(), 1);
     assert_ne!(first, second);
-    assert!(second[0].as_str().contains("14 chars"));
+    assert!(second[0].as_str().contains("tokens"));
 }
 
 #[test]
@@ -207,7 +207,7 @@ fn command_output_updates_live_cell_and_toggles_expansion() {
     );
     let chunk = crate::tools::command::CommandOutputChunk {
         stream: crate::tools::command::CommandOutputStream::Stdout,
-        bytes: b"one\ntwo\nthree\nfour\nfive\nsix\nseven\n".to_vec(),
+        bytes: b"one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\n".to_vec(),
         omitted_bytes: 0,
     };
     assert!(store.push_command_output("run_command", &chunk));
@@ -216,10 +216,12 @@ fn command_output_updates_live_cell_and_toggles_expansion() {
         .iter()
         .map(|line| line.as_str())
         .collect::<String>();
-    assert!(!collapsed.contains("one"));
-    assert!(!collapsed.contains("two"));
-    assert!(collapsed.contains("three"));
-    assert!(collapsed.contains("seven"));
+    // Codex 风格：首尾各保留预览行，中间省略
+    assert!(collapsed.contains("one"));
+    assert!(collapsed.contains("five"));
+    assert!(collapsed.contains("eight") || collapsed.contains("twelve"));
+    assert!(collapsed.contains("twelve"));
+    assert!(collapsed.contains("…") || collapsed.contains("+2 lines"));
     assert!(collapsed.contains("Ctrl+O"));
 
     assert!(store.toggle_latest_command_output());
@@ -228,7 +230,8 @@ fn command_output_updates_live_cell_and_toggles_expansion() {
         .iter()
         .map(|line| line.as_str())
         .collect::<String>();
-    assert!(expanded.contains("four"));
+    assert!(expanded.contains("six"));
+    assert!(expanded.contains("seven"));
     assert!(!expanded.contains("Ctrl+O"));
 
     store.push_tool_result(
@@ -247,8 +250,8 @@ fn command_output_updates_live_cell_and_toggles_expansion() {
         .iter()
         .map(|line| line.as_str())
         .collect::<String>();
-    assert!(completed_expanded.contains("four"));
-    assert!(completed_expanded.contains("seven"));
+    assert!(completed_expanded.contains("six"));
+    assert!(completed_expanded.contains("twelve"));
     assert!(!completed_expanded.contains("Ctrl+O"));
 
     assert!(store.toggle_latest_command_output());
@@ -257,10 +260,8 @@ fn command_output_updates_live_cell_and_toggles_expansion() {
         .iter()
         .map(|line| line.as_str())
         .collect::<String>();
-    assert!(!completed_collapsed.contains("one"));
-    assert!(!completed_collapsed.contains("two"));
-    assert!(completed_collapsed.contains("four"));
-    assert!(completed_collapsed.contains("seven"));
+    assert!(completed_collapsed.contains("one"));
+    assert!(completed_collapsed.contains("twelve"));
     assert!(completed_collapsed.contains("Ctrl+O"));
 }
 

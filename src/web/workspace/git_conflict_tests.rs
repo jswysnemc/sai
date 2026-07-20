@@ -16,6 +16,9 @@ async fn init_conflict_repository(root: &Path) {
     git_success(root, &["config", "user.email", "sai@example.com"])
         .await
         .unwrap();
+    git_success(root, &["config", "core.autocrlf", "false"])
+        .await
+        .unwrap();
     tokio::fs::write(root.join("tracked.txt"), "initial\n")
         .await
         .unwrap();
@@ -73,12 +76,11 @@ async fn resolves_add_add_conflict() {
 
     assert!(resolved.ok, "{}", resolved.stderr);
     assert_eq!(resolved.state.dirty_counts.conflicted, 0);
-    assert_eq!(
-        tokio::fs::read_to_string(repo.join("shared.txt"))
-            .await
-            .unwrap(),
-        "ours\n"
-    );
+    let shared = tokio::fs::read_to_string(repo.join("shared.txt"))
+        .await
+        .unwrap()
+        .replace("\r\n", "\n");
+    assert_eq!(shared, "ours\n");
 }
 
 /// 验证 modify/delete 冲突选择删除侧时会暂存文件删除。

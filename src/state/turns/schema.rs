@@ -30,7 +30,8 @@ pub(super) fn open_connection(state_dir: &Path) -> Result<Connection> {
             assistant_reasoning TEXT,
             assistant_timestamp TEXT,
             status              TEXT NOT NULL DEFAULT 'running',
-            tool_reports        TEXT NOT NULL DEFAULT '[]'
+            tool_reports        TEXT NOT NULL DEFAULT '[]',
+            user_image_urls     TEXT NOT NULL DEFAULT '[]'
         );
         CREATE INDEX IF NOT EXISTS idx_turns_seq ON turns(seq);
         CREATE INDEX IF NOT EXISTS idx_turns_status ON turns(status);",
@@ -41,6 +42,7 @@ pub(super) fn open_connection(state_dir: &Path) -> Result<Connection> {
     crate::state::session_memory::schema::create_session_memory_tables(&conn)?;
     crate::state::tool_history::schema::create_tool_history_tables(&conn)?;
     crate::runtime_recovery::schema::create_runtime_recovery_tables(&conn)?;
+    ensure_user_image_urls_column(&conn)?;
     conn.execute_batch(
         "UPDATE turns
          SET assistant_content = '', assistant_reasoning = NULL
@@ -51,4 +53,28 @@ pub(super) fn open_connection(state_dir: &Path) -> Result<Connection> {
            );",
     )?;
     Ok(conn)
+}
+
+/// 确保 turns 表包含用户图片列。
+///
+/// 参数:
+/// - `conn`: SQLite 连接
+///
+/// 返回:
+/// - 表结构补齐是否成功
+fn ensure_user_image_urls_column(conn: &Connection) -> Result<()> {
+    let column_count: i64 = conn.query_row(
+        "SELECT COUNT(*)
+         FROM pragma_table_info('turns')
+         WHERE name = 'user_image_urls'",
+        [],
+        |row| row.get(0),
+    )?;
+    if column_count == 0 {
+        conn.execute(
+            "ALTER TABLE turns ADD COLUMN user_image_urls TEXT NOT NULL DEFAULT '[]'",
+            [],
+        )?;
+    }
+    Ok(())
 }

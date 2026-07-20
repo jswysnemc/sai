@@ -327,7 +327,8 @@ mod tests {
             .flat_map(|chunk| chunk.bytes)
             .collect::<Vec<_>>();
 
-        assert_eq!(String::from_utf8_lossy(&stdout), "first\nsecond\n");
+        let stdout_text = String::from_utf8_lossy(&stdout).replace("\r\n", "\n");
+        assert_eq!(stdout_text, "first\nsecond\n");
         assert!(result.contains("first"));
     }
 }

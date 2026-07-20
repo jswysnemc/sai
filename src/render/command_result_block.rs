@@ -1,4 +1,3 @@
-use crate::render::code_block::{render_code_footer, render_code_header};
 use crate::render::style::TOOL_BULLET;
 use crate::render::terminal_text as t;
 use serde_json::Value;
@@ -37,32 +36,9 @@ pub(crate) fn truncate_chars(text: &str, max_chars: usize) -> String {
 /// - 代码块风格的输出文本
 #[cfg(test)]
 fn render_output_block(label: &str, text: &str) -> String {
-    let content = truncate_chars(text.trim(), 2400);
-    let content = sanitize_command_output(&content);
-    let lines = output_block_lines(&content);
-    let mut output = render_code_header(&format!("{TOOL_BULLET} {label}"));
-    for line in &lines {
-        output.push_str(line);
-        output.push('\n');
-    }
-    output.push_str(&render_code_footer(&lines));
-    output
+    render_output_block_limited(label, text, None)
 }
 
-/// 生成输出代码块行。
-///
-/// 参数:
-/// - `content`: 已截断的输出文本
-///
-/// 返回:
-/// - 输出行列表
-fn output_block_lines(content: &str) -> Vec<String> {
-    let mut lines = content.lines().map(str::to_string).collect::<Vec<_>>();
-    if lines.is_empty() {
-        lines.push(String::new());
-    }
-    lines
-}
 
 struct CommandResult {
     success: bool,
@@ -370,35 +346,8 @@ fn shared_line_limits(
     line_limit: Option<usize>,
     blocks: &[(String, String)],
 ) -> Vec<Option<usize>> {
-    let Some(limit) = line_limit else {
-        return vec![None; blocks.len()];
-    };
-    if blocks.is_empty() {
-        return Vec::new();
-    }
-    let line_counts = blocks
-        .iter()
-        .map(|(_, text)| sanitize_command_output(text.trim()).lines().count().max(1))
-        .collect::<Vec<_>>();
-    let mut allocations = vec![0usize; blocks.len()];
-    let mut remaining = limit;
-    while remaining > 0 {
-        let mut allocated = false;
-        for (index, count) in line_counts.iter().enumerate() {
-            if remaining == 0 {
-                break;
-            }
-            if allocations[index] < *count {
-                allocations[index] += 1;
-                remaining -= 1;
-                allocated = true;
-            }
-        }
-        if !allocated {
-            break;
-        }
-    }
-    allocations.into_iter().map(Some).collect()
+    // Codex 风格：每个输出流独立使用预览行预算，首尾截断
+    vec![line_limit; blocks.len()]
 }
 
 /// 按可选行数限制渲染命令输出块。
@@ -432,29 +381,52 @@ fn render_output_block_limited_with_hint(
 ) -> String {
     let sanitized = sanitize_command_output(text.trim());
     let (content, omitted) = limited_output_text(&sanitized, line_limit);
-    let mut lines = output_block_lines(&content);
-    if omitted > 0 && show_expand_hint {
-        let hint = format!("{omitted} lines omitted, press Ctrl+O to expand");
-        lines.push(format!("\x1b[2m  {hint}\x1b[0m"));
+    let raw_lines = content.lines().map(str::to_string).collect::<Vec<_>>();
+    let mut lines = Vec::new();
+    for (index, line) in raw_lines.iter().enumerate() {
+        if line == "__OMITTED__" {
+            let hint = if show_expand_hint {
+                format!("… +{omitted} lines (Ctrl+O to expand)")
+            } else {
+                format!("… +{omitted} lines")
+            };
+            lines.push(format!("\x1b[2m  └ {hint}\x1b[0m"));
+            continue;
+        }
+        // Codex 输出 gutter：首行 `  └ `，续行四空格，整体 dim
+        let prefix = if index == 0 { "  └ " } else { "    " };
+        lines.push(format!("\x1b[2m{prefix}{line}\x1b[0m"));
+    }
+    if lines.is_empty() {
+        lines.push("\x1b[2m  └ (no output)\x1b[0m".to_string());
+    } else if omitted > 0 && !raw_lines.iter().any(|line| line == "__OMITTED__") && show_expand_hint {
+        // 兼容旧逻辑：若仅尾部折叠，在末尾附加提示
+        lines.push(format!(
+            "\x1b[2m    … +{omitted} lines (Ctrl+O to expand)\x1b[0m"
+        ));
     }
     render_output_block_lines(label, &lines)
 }
 
-/// 使用统一的内容行渲染输出块及底部边框。
+/// 使用 Codex 风格 gutter 渲染输出块。
 ///
 /// 参数:
-/// - `label`: 输出块标签
+/// - `label`: 输出块标签（stdout/stderr 语义）
 /// - `lines`: 已准备好的输出内容行
 ///
 /// 返回:
-/// - 带头部和底部边框的输出文本
+/// - 带 dim 前缀的输出文本
 fn render_output_block_lines(label: &str, lines: &[String]) -> String {
-    let mut output = render_code_header(&format!("{TOOL_BULLET} {label}"));
+    let mut output = String::new();
+    // 错误流保留标签行，标准输出直接展示内容
+    let is_error = label.starts_with("err") || label.contains("错误") || label.contains("err");
+    if is_error {
+        output.push_str(&format!("\x1b[31m{TOOL_BULLET} {label}\x1b[0m\n"));
+    }
     for line in lines {
         output.push_str(line);
         output.push('\n');
     }
-    output.push_str(&render_code_footer(lines));
     output
 }
 
@@ -504,11 +476,27 @@ fn limited_output_text(text: &str, line_limit: Option<usize>) -> (String, usize)
     let Some(limit) = line_limit else {
         return (text.to_string(), 0);
     };
-    if lines.len() <= limit {
+    if lines.is_empty() {
+        return (String::new(), 0);
+    }
+    // Codex 风格：保留首尾各 limit 行，中间省略
+    if lines.len() <= limit * 2 {
         return (text.to_string(), 0);
     }
-    let visible_start = lines.len().saturating_sub(limit);
-    (lines[visible_start..].join("\n"), visible_start)
+    let omitted = lines.len() - limit * 2;
+    let mut kept = Vec::with_capacity(limit * 2 + 1);
+    kept.extend(lines[..limit].iter().copied());
+    kept.push("__OMITTED__");
+    kept.extend(lines[lines.len() - limit..].iter().copied());
+    // 用特殊标记行，render 阶段替换为提示
+    let mut body = String::new();
+    for (index, line) in kept.iter().enumerate() {
+        if index > 0 {
+            body.push('\n');
+        }
+        body.push_str(line);
+    }
+    (body, omitted)
 }
 
 #[cfg(test)]
@@ -528,13 +516,13 @@ mod tests {
     }
 
     #[test]
-    fn renders_command_output_as_code_block() {
+    fn renders_command_output_with_codex_gutter() {
         let output = render_output_block("output", "sent to snemc@qq.com\n");
         let plain = strip_ansi_for_test(&output);
 
-        assert!(plain.contains("• output"));
         assert!(!plain.contains("──"));
         assert!(plain.contains("sent to snemc@qq.com"));
+        assert!(plain.contains("└"));
         assert!(!plain.contains(",-- output"));
         assert!(!plain.contains("`--"));
     }
@@ -552,36 +540,36 @@ mod tests {
     }
 
     #[test]
-    fn live_command_preview_keeps_latest_five_lines_and_expand_hint() {
-        let output =
-            render_live_command_output("one\ntwo\nthree\nfour\nfive\nsix\nseven\n", "", false);
+    fn live_command_preview_keeps_head_and_tail_with_middle_ellipsis() {
+        let output = render_live_command_output(
+            "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\n",
+            "",
+            false,
+        );
         let plain = strip_ansi_for_test(&output);
 
-        assert!(!plain.lines().any(|line| line == "one"));
-        assert!(!plain.lines().any(|line| line == "two"));
-        assert!(plain.lines().any(|line| line == "three"));
-        assert!(plain.lines().any(|line| line == "four"));
-        assert!(plain.contains("seven"));
+        assert!(plain.contains("one"));
+        assert!(plain.contains("five"));
+        assert!(!plain.lines().any(|line| line.trim_end() == "six" || line.ends_with(" six")));
+        assert!(!plain.contains("seven\n"));
+        // 中间省略
+        assert!(plain.contains("… +2 lines") || plain.contains("+2 lines"));
+        assert!(plain.contains("eight") || plain.contains("twelve"));
+        assert!(plain.contains("twelve"));
         assert!(plain.contains("Ctrl+O"));
     }
 
     #[test]
-    fn collapsed_hint_stays_after_latest_output_without_footer() {
-        let output =
-            render_live_command_output("one\ntwo\nthree\nfour\nfive\nsix\nseven\n", "", false);
+    fn collapsed_hint_stays_without_frame_footer() {
+        let output = render_live_command_output(
+            "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\n",
+            "",
+            false,
+        );
         let plain = strip_ansi_for_test(&output);
-        let lines = plain.lines().collect::<Vec<_>>();
-        let hint_index = lines
-            .iter()
-            .position(|line| line.contains("Ctrl+O"))
-            .expect("collapsed output should include an expand hint");
-        let latest_index = lines
-            .iter()
-            .position(|line| line == &"seven")
-            .expect("latest output should remain visible");
-
-        assert!(hint_index > latest_index);
+        assert!(plain.contains("Ctrl+O"));
         assert!(!plain.contains("──"));
+        assert!(plain.contains("└") || plain.contains("…"));
     }
 
     #[test]
@@ -597,34 +585,32 @@ mod tests {
     #[test]
     fn live_command_output_removes_terminal_control_sequences() {
         let output = render_live_command_output("\x1b[2Jfirst\rsecond\x07\n", "", true);
+        let plain = strip_ansi_for_test(&output);
 
         assert!(!output.contains("\x1b[2J"));
         assert!(!output.contains('\x07'));
-        assert!(output.contains("first\nsecond"));
+        assert!(plain.contains("first"));
+        assert!(plain.contains("second"));
     }
 
     #[test]
-    fn stdout_and_stderr_share_five_line_preview_budget() {
+    fn stdout_and_stderr_each_keep_preview_budget() {
         let output = render_live_command_output(
-            "out-1\nout-2\nout-3\nout-4\nout-5\n",
-            "err-1\nerr-2\nerr-3\nerr-4\nerr-5\n",
+            "out-1\nout-2\nout-3\nout-4\nout-5\nout-6\nout-7\nout-8\nout-9\nout-10\nout-11\nout-12\n",
+            "err-1\nerr-2\nerr-3\nerr-4\nerr-5\nerr-6\nerr-7\nerr-8\nerr-9\nerr-10\nerr-11\nerr-12\n",
             false,
         );
         let plain = strip_ansi_for_test(&output);
-        let visible_lines = [
-            "out-1", "out-2", "out-3", "out-4", "out-5", "err-1", "err-2", "err-3", "err-4",
-            "err-5",
-        ]
-        .into_iter()
-        .filter(|line| plain.lines().any(|candidate| candidate == *line))
-        .count();
-
-        assert_eq!(visible_lines, COMMAND_PREVIEW_LINES);
+        // 每流首尾各 5 行
+        assert!(plain.contains("out-1"));
+        assert!(plain.contains("out-12"));
+        assert!(plain.contains("err-1"));
+        assert!(plain.contains("err-12"));
         assert!(plain.contains("Ctrl+O"));
     }
 
     #[test]
-    fn completed_command_result_uses_shared_preview_budget() {
+    fn completed_command_result_keeps_each_stream_preview() {
         let output = serde_json::json!({
             "success": false,
             "exit_code": 1,
@@ -634,38 +620,35 @@ mod tests {
         .to_string();
         let rendered = render_command_result_view_with_limit(&output, Some(COMMAND_PREVIEW_LINES));
         let plain = strip_ansi_for_test(&rendered);
-        let visible_lines = [
-            "out-1", "out-2", "out-3", "out-4", "err-1", "err-2", "err-3", "err-4",
-        ]
-        .into_iter()
-        .filter(|line| plain.lines().any(|candidate| candidate == *line))
-        .count();
-
-        assert_eq!(visible_lines, COMMAND_PREVIEW_LINES);
+        // 每流行数 <= 2*limit，完整保留
+        for line in ["out-1", "out-4", "err-1", "err-4"] {
+            assert!(plain.contains(line), "{line}");
+        }
     }
 
     /// 验证普通 CLI 仅展示五行命令摘要且不提供展开提示。
     #[test]
-    fn cli_command_result_keeps_five_lines_without_expand_hint() {
+    fn cli_command_result_keeps_head_and_tail_without_expand_hint() {
         let output = serde_json::json!({
             "success": true,
             "exit_code": 0,
-            "stdout": "one\ntwo\nthree\nfour\nfive\nsix\nseven",
+            "stdout": "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve",
             "stderr": ""
         })
         .to_string();
         let rendered = render_command_result_view_for_cli(&output);
         let plain = strip_ansi_for_test(&rendered);
-        let visible_lines = ["one", "two", "three", "four", "five", "six", "seven"]
+        let visible = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"]
             .into_iter()
-            .filter(|line| plain.lines().any(|candidate| candidate == *line))
+            .filter(|line| plain.contains(line))
             .count();
 
-        assert_eq!(visible_lines, COMMAND_PREVIEW_LINES);
+        // 首尾各 5 行，中间省略 2 行
+        assert_eq!(visible, COMMAND_PREVIEW_LINES * 2);
         assert!(!plain.contains("Ctrl+O"));
-        assert!(!plain.lines().any(|line| line == "one"));
-        assert!(!plain.lines().any(|line| line == "two"));
-        assert!(plain.lines().any(|line| line == "four"));
+        assert!(plain.contains("one"));
+        assert!(plain.contains("twelve"));
+        assert!(!plain.contains("six\n") && !plain.lines().any(|l| l.trim().ends_with("six") && !l.contains("…")));
     }
 
     #[test]

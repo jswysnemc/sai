@@ -42,6 +42,7 @@ pub struct Turn {
     pub turn_id: String,
     pub seq: i64,
     pub user_content: String,
+    pub user_image_urls: Vec<String>,
     pub user_timestamp: String,
     pub assistant_content: String,
     pub assistant_reasoning: Option<String>,

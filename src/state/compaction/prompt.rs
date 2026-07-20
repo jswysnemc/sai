@@ -132,6 +132,7 @@ mod tests {
             turn_id: "turn_1".to_string(),
             seq: 1,
             user_content: "implement feature".to_string(),
+            user_image_urls: Vec::new(),
             user_timestamp: "2026-01-01T00:00:00Z".to_string(),
             assistant_content: "implemented src/main.rs".to_string(),
             assistant_reasoning: None,

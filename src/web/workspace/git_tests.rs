@@ -16,6 +16,9 @@ async fn init_repository(root: &Path) {
     git_success(root, &["config", "user.email", "sai@example.com"])
         .await
         .unwrap();
+    git_success(root, &["config", "core.autocrlf", "false"])
+        .await
+        .unwrap();
     tokio::fs::write(root.join("tracked.txt"), "initial\n")
         .await
         .unwrap();
@@ -276,8 +279,9 @@ async fn batches_file_stage_unstage_and_discard() {
     assert!(!repo.join("new.txt").exists());
     let content = tokio::fs::read_to_string(repo.join("tracked.txt"))
         .await
-        .unwrap();
-    assert_eq!(content, "initial\n");
+        .unwrap()
+        .replace("\r\n", "\n");
+    assert_eq!(content.replace("\r\n", "\n"), "initial\n");
 }
 
 #[tokio::test]
@@ -529,7 +533,8 @@ async fn reads_and_resolves_merge_editor_content() {
     assert_eq!(
         tokio::fs::read_to_string(repo.join("tracked.txt"))
             .await
-            .unwrap(),
+            .unwrap()
+            .replace("\r\n", "\n"),
         "resolved\n"
     );
 
@@ -655,7 +660,8 @@ async fn applies_partial_patch_to_index_and_worktree() {
     assert_eq!(
         tokio::fs::read_to_string(repo.join("tracked.txt"))
             .await
-            .unwrap(),
+            .unwrap()
+            .replace("\r\n", "\n"),
         "initial\n"
     );
 }

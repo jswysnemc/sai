@@ -24,9 +24,14 @@ describe("skill mention token", () => {
     expect(findSkillMentionTrigger("a/b", 3)).toBeNull();
   });
 
-  it("formats and expands skill documents for model input", () => {
-    expect(formatSkillMention("drawio")).toBe("/drawio");
-    expect(collectSkillMentionNames("先 /drawio 再 /drawio")).toEqual(["drawio"]);
+  it("formats successful picks as skill-mention and expands for model input", () => {
+    expect(formatSkillMention("drawio")).toBe('<skill-mention name="drawio"></skill-mention>');
+    expect(collectSkillMentionNames('先 <skill-mention name="drawio"></skill-mention> 再 /drawio')).toEqual(["drawio"]);
+    expect(
+      expandSkillMentions('先 <skill-mention name="drawio"></skill-mention> 后继续', {
+        drawio: "<loaded-skill name=\"drawio\">body</loaded-skill>"
+      })
+    ).toBe("先 <skill-reference name=\"drawio\">\n<loaded-skill name=\"drawio\">body</loaded-skill>\n</skill-reference> 后继续");
     expect(
       expandSkillMentions("先 /drawio 后继续", {
         drawio: "<loaded-skill name=\"drawio\">body</loaded-skill>"

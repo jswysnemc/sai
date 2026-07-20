@@ -12,40 +12,44 @@
 
 .shell-command-line {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  gap: 7px;
-  padding: 12px 14px;
+  grid-template-columns: 0.75rem minmax(0, 1fr);
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
   border-bottom: 1px solid var(--technical-border);
   background: var(--technical-surface-muted);
-  font-size: 12px;
+  color: var(--technical-text);
+  font-size: 0.75rem;
   line-height: 1.55;
 }
 
 .shell-command-line > span {
-  color: var(--signal);
+  color: color-mix(in srgb, #c4a7e7 88%, white);
+  font-weight: 600;
   user-select: none;
 }
 
 .shell-command-line code {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+  color: var(--technical-text);
 }
 
 .shell-exit {
-  justify-self: end;
-  margin: 8px 10px 0;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0.375rem 0.75rem 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: 500 0.6875rem/1.4 var(--font-code);
 }
 
 .shell-exit.success {
-  background: var(--diff-added-bg);
   color: var(--diff-added-text);
 }
 
 .shell-exit.failed {
-  background: var(--diff-removed-bg);
   color: var(--diff-removed-text);
 }
 
@@ -53,20 +57,23 @@
 .generic-tool-block {
   min-width: 0;
   max-width: 100%;
-  max-height: 420px;
+  max-height: 26.25rem;
   overflow: auto;
   margin: 0;
-  padding: 13px 14px;
+  padding: 0.5rem 0.75rem 0.75rem 1.75rem;
   border: 0;
   background: transparent;
-  color: var(--technical-text);
-  font: 400 11px/1.65 var(--font-code);
+  color: color-mix(in srgb, var(--technical-text) 78%, transparent);
+  font: 400 0.6875rem/1.65 var(--font-code);
   white-space: pre-wrap;
+  border-left: 2px solid color-mix(in srgb, var(--technical-border) 80%, transparent);
+  margin-left: 0.75rem;
 }
 
 .shell-output.stderr {
   border-top: 1px solid var(--technical-border);
-  color: var(--danger);
+  border-left-color: color-mix(in srgb, var(--danger) 55%, transparent);
+  color: color-mix(in srgb, var(--danger) 88%, white);
 }
 
 .structured-diff {

@@ -291,7 +291,8 @@
 
 .user-message-actions {
   justify-self: end;
-  margin-top: 3px;
+  width: max-content;
+  margin-top: 0;
 }
 
 .assistant-message .message-actions {

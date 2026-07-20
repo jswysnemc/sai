@@ -26,7 +26,11 @@ export function ShellToolView({ argumentsText, output }: ShellToolViewProps) {
   return (
     <div className="shell-tool-view">
       <div className="shell-command-line"><span>$</span><code>{command}</code></div>
-      {result && <div className={success ? "shell-exit success" : "shell-exit failed"}>{t("Exit code", "退出码")} {exitCode ?? t("Unknown", "未知")}</div>}
+      {result && (
+        <div className={success ? "shell-exit success" : "shell-exit failed"}>
+          {success ? "ok" : `err (${exitCode ?? t("Unknown", "未知")})`}
+        </div>
+      )}
       {stdout && (diffOutput ? <DiffView source={stdout} /> : <pre className="shell-output"><code>{stdout}</code></pre>)}
       {stderr && <pre className="shell-output stderr"><code>{stderr}</code></pre>}
       {!result && output && <pre className="shell-output"><code>{output}</code></pre>}

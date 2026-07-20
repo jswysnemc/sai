@@ -2,7 +2,7 @@ export type FileMentionSegment =
   | { type: "text"; value: string }
   | { type: "mention"; path: string; value: string };
 
-const MENTION_PATTERN = /(^|\s)@(?:"((?:\\.|[^"\\])+)"|([^\s]+))/gu;
+const FILE_REFERENCE_PATTERN = /<file-reference path="((?:\\.|[^"\\])*)"><\/file-reference>/gu;
 
 export type FileMentionTriggerRange = {
   start: number;
@@ -25,18 +25,19 @@ export function findFileMentionTrigger(value: string, caret: number, insertedTex
 }
 
 /**
- * 将文件路径格式化为后端可直接理解的 @ 引用文本。
+ * 将文件路径格式化为成功引用协议，仅选择器确认后插入。
  *
  * @param path 工作区相对文件路径
- * @returns 可插入输入内容的引用文本
+ * @returns 可插入输入内容的成功引用文本
  */
 export function formatFileMention(path: string): string {
-  if (!/\s/u.test(path)) return `@${path}`;
-  return `@"${path.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+  return `<file-reference path="${escapeXmlAttr(path.trim())}"></file-reference>`;
 }
 
 /**
- * 将输入文本拆分为普通文本和文件引用 token。
+ * 将输入文本拆分为普通文本和成功选择的文件引用。
+ *
+ * 手写 `@path` 保持普通文本，只有选择器生成的 file-reference 会特殊渲染。
  *
  * @param value 输入框保存的后端文本
  * @returns 保持原始顺序的文本片段
@@ -44,25 +45,32 @@ export function formatFileMention(path: string): string {
 export function parseFileMentions(value: string): FileMentionSegment[] {
   const segments: FileMentionSegment[] = [];
   let cursor = 0;
-  for (const match of value.matchAll(MENTION_PATTERN)) {
-    const boundary = match[1] ?? "";
-    const mentionStart = (match.index ?? 0) + boundary.length;
-    if (mentionStart > cursor) segments.push({ type: "text", value: value.slice(cursor, mentionStart) });
-    const raw = match[0].slice(boundary.length);
-    const path = match[2] ? unescapeQuotedPath(match[2]) : match[3] ?? "";
+  for (const match of value.matchAll(FILE_REFERENCE_PATTERN)) {
+    const start = match.index ?? 0;
+    if (start > cursor) segments.push({ type: "text", value: value.slice(cursor, start) });
+    const raw = match[0];
+    const path = unescapeXmlAttr(match[1] ?? "");
     segments.push({ type: "mention", path, value: raw });
-    cursor = mentionStart + raw.length;
+    cursor = start + raw.length;
   }
   if (cursor < value.length) segments.push({ type: "text", value: value.slice(cursor) });
   return segments;
 }
 
-/**
- * 还原带引号文件引用中的转义字符。
- *
- * @param path 带转义的路径正文
- * @returns 原始文件路径
- */
-function unescapeQuotedPath(path: string): string {
-  return path.replace(/\\([\\"])/gu, "$1");
+/** 将路径写入 XML 属性。 */
+function escapeXmlAttr(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+/** 还原 XML 属性中的路径。 */
+function unescapeXmlAttr(value: string): string {
+  return value
+    .replaceAll("&quot;", '"')
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
 }

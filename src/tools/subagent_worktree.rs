@@ -885,8 +885,24 @@ fn is_worktree_name_collision(message: &str) -> bool {
         || lower.contains("is a missing but already registered worktree")
 }
 
+/// 将路径格式化为 Git 可接受的路径字符串。
+///
+/// Windows 上会去掉 `\\?\` 扩展前缀，避免 worktree 路径无效。
 fn display_path(path: &Path) -> String {
-    path.to_string_lossy().to_string()
+    let raw = path.to_string_lossy();
+    #[cfg(windows)]
+    {
+        let trimmed = raw
+            .strip_prefix(r"\\?\UNC\")
+            .map(|rest| format!(r"\\{rest}"))
+            .or_else(|| raw.strip_prefix(r"\\?\").map(|rest| rest.to_string()))
+            .unwrap_or_else(|| raw.into_owned());
+        return trimmed;
+    }
+    #[cfg(not(windows))]
+    {
+        raw.into_owned()
+    }
 }
 
 #[cfg(test)]
@@ -910,6 +926,7 @@ mod tests {
         git(root, &["init"])?;
         git(root, &["config", "user.email", "sai-test@example.com"])?;
         git(root, &["config", "user.name", "Sai Test"])?;
+        git(root, &["config", "core.autocrlf", "false"])?;
         fs::write(root.join("README.md"), "base\n")
             .map_err(|err| format!("failed to write README: {err}"))?;
         git(root, &["add", "README.md"])?;

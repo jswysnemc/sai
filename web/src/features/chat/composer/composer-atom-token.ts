@@ -1,5 +1,5 @@
 import { parseFileMentions } from "./file-mention-token";
-import { parseExpandedSkillReferences, parseSkillMentions } from "./skill-mention-token";
+import { parseExpandedSkillReferences, parseSelectedSkillMentions } from "./skill-mention-token";
 
 export type ComposerAtomSegment =
   | { type: "text"; value: string }
@@ -38,11 +38,12 @@ export function parseComposerAtoms(value: string): ComposerAtomSegment[] {
           segments.push({ type: "file", path: fileSegment.path, value: fileSegment.value });
           continue;
         }
-        for (const skillSegment of parseSkillMentions(fileSegment.value)) {
+        for (const skillSegment of parseSelectedSkillMentions(fileSegment.value)) {
           if (skillSegment.type === "text") {
-            if (skillSegment.value) segments.push(skillSegment);
-          } else if (skillSegment.name === "goal") {
-            segments.push({ type: "goal", value: skillSegment.value });
+            // 仅当整段以 /goal 命令形式出现时保留 goal 特殊渲染
+            for (const goalSegment of parseGoalCommandAtoms(skillSegment.value)) {
+              if (goalSegment.value) segments.push(goalSegment);
+            }
           } else {
             segments.push({ type: "skill", name: skillSegment.name, value: skillSegment.value });
           }
@@ -104,4 +105,25 @@ function unescapeXml(value: string): string {
     .replaceAll("&lt;", "<")
     .replaceAll("&gt;", ">")
     .replaceAll("&amp;", "&");
+}
+
+/**
+ * 仅把独立的 `/goal` 命令 token 标为 goal 原子，其余手写斜杠文本保持原样。
+ *
+ * @param value 普通文本片段
+ * @returns 文本与可选 goal 原子
+ */
+function parseGoalCommandAtoms(value: string): Array<ComposerAtomSegment> {
+  const pattern = /(^|\s)(\/goal)(?=\s|$)/gu;
+  const segments: ComposerAtomSegment[] = [];
+  let cursor = 0;
+  for (const match of value.matchAll(pattern)) {
+    const boundary = match[1] ?? "";
+    const start = (match.index ?? 0) + boundary.length;
+    if (start > cursor) segments.push({ type: "text", value: value.slice(cursor, start) });
+    segments.push({ type: "goal", value: "/goal" });
+    cursor = start + 5;
+  }
+  if (cursor < value.length) segments.push({ type: "text", value: value.slice(cursor) });
+  return segments;
 }

@@ -43,7 +43,7 @@ export function findSkillMentionTrigger(value: string, caret: number): SkillMent
  * @returns 可插入输入内容的 skill 引用
  */
 export function formatSkillMention(name: string): string {
-  return `/${name.trim()}`;
+  return `<skill-mention name="${name.trim()}"></skill-mention>`;
 }
 
 /**
@@ -77,11 +77,19 @@ export function parseSkillMentions(value: string): SkillMentionSegment[] {
 export function collectSkillMentionNames(value: string): string[] {
   const names: string[] = [];
   const seen = new Set<string>();
+  const add = (name: string) => {
+    if (!name || seen.has(name)) return;
+    seen.add(name);
+    names.push(name);
+  };
+  for (const match of value.matchAll(/<skill-mention name="([A-Za-z0-9][A-Za-z0-9._-]*)"><\/skill-mention>/gu)) {
+    add(match[1] ?? "");
+  }
+  for (const match of value.matchAll(/<skill-reference name="([A-Za-z0-9][A-Za-z0-9._-]*)">/gu)) {
+    add(match[1] ?? "");
+  }
   for (const segment of parseSkillMentions(value)) {
-    if (segment.type !== "skill") continue;
-    if (seen.has(segment.name)) continue;
-    seen.add(segment.name);
-    names.push(segment.name);
+    if (segment.type === "skill") add(segment.name);
   }
   return names;
 }
@@ -137,11 +145,40 @@ export function parseExpandedSkillReferences(value: string): ExpandedSkillRefere
  * @returns 展开后的模型输入
  */
 export function expandSkillMentions(value: string, documents: Record<string, string>): string {
-  return parseSkillMentions(value)
+  // 1. 先展开选择器插入的 skill-mention
+  let expanded = value.replace(
+    /<skill-mention name="([A-Za-z0-9][A-Za-z0-9._-]*)"><\/skill-mention>/gu,
+    (_raw, name: string) => {
+      const document = documents[name];
+      return document?.trim() ? formatExpandedSkillReference(name, document) : `/${name}`;
+    }
+  );
+  // 2. 再展开普通 `/name` token（兼容手写 skill 名称）
+  return parseSkillMentions(expanded)
     .map((segment) => {
       if (segment.type === "text") return segment.value;
       const document = documents[segment.name];
       return document?.trim() ? formatExpandedSkillReference(segment.name, document) : segment.value;
     })
     .join("");
+}
+
+/**
+ * 解析选择器确认后的 skill 引用，手写 `/name` 保持普通文本。
+ *
+ * @param value 输入文本
+ * @returns 成功引用与普通文本片段
+ */
+export function parseSelectedSkillMentions(value: string): Array<{ type: "text"; value: string } | { type: "skill"; name: string; value: string }> {
+  const pattern = /<skill-mention name="([A-Za-z0-9][A-Za-z0-9._-]*)"><\/skill-mention>/gu;
+  const segments: Array<{ type: "text"; value: string } | { type: "skill"; name: string; value: string }> = [];
+  let cursor = 0;
+  for (const match of value.matchAll(pattern)) {
+    const start = match.index ?? 0;
+    if (start > cursor) segments.push({ type: "text", value: value.slice(cursor, start) });
+    segments.push({ type: "skill", name: match[1] ?? "", value: match[0] });
+    cursor = start + match[0].length;
+  }
+  if (cursor < value.length) segments.push({ type: "text", value: value.slice(cursor) });
+  return segments;
 }

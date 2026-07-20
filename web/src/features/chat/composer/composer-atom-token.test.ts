@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { formatTerminalSelection, parseComposerAtoms } from "./composer-atom-token";
+import { formatFileMention } from "./file-mention-token";
+import { formatSkillMention } from "./skill-mention-token";
 
 describe("composer atom token", () => {
-  it("parses file skill and goal tokens in source order", () => {
-    expect(parseComposerAtoms("检查 @src/main.rs 使用 /drawio 后执行 /goal 完成重构")).toEqual([
+  it("special-renders only successful file and skill picks", () => {
+    const file = formatFileMention("src/main.rs");
+    const skill = formatSkillMention("drawio");
+    expect(parseComposerAtoms(`检查 ${file} 使用 ${skill} 后执行 /goal 完成重构，手写 /research 和 @src/other.rs`)).toEqual([
       { type: "text", value: "检查 " },
-      { type: "file", path: "src/main.rs", value: "@src/main.rs" },
+      { type: "file", path: "src/main.rs", value: file },
       { type: "text", value: " 使用 " },
-      { type: "skill", name: "drawio", value: "/drawio" },
+      { type: "skill", name: "drawio", value: skill },
       { type: "text", value: " 后执行 " },
       { type: "goal", value: "/goal" },
-      { type: "text", value: " 完成重构" }
+      { type: "text", value: " 完成重构，手写 /research 和 @src/other.rs" }
     ]);
   });
 

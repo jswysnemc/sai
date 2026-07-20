@@ -16,6 +16,9 @@ async fn init_repository(root: &Path) {
     git_success(root, &["config", "user.email", "sai@example.com"])
         .await
         .unwrap();
+    git_success(root, &["config", "core.autocrlf", "false"])
+        .await
+        .unwrap();
     tokio::fs::write(root.join("tracked.txt"), "initial\n")
         .await
         .unwrap();

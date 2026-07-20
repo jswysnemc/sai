@@ -86,7 +86,7 @@ impl WorkStatus {
 ///
 /// 返回:
 /// - 人类可读时长文本
-fn format_elapsed(elapsed: Duration) -> String {
+pub(crate) fn format_elapsed(elapsed: Duration) -> String {
     let total_secs = elapsed.as_secs();
     if total_secs < 60 {
         let tenths = elapsed.as_millis() / 100;
