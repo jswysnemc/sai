@@ -157,7 +157,7 @@ fn automatic_input_event_is_rendered_as_blue_message() {
 }
 
 #[test]
-fn command_progress_renders_five_lines_and_toggles_expansion() {
+fn command_progress_renders_head_tail_preview_and_toggles_expansion() {
     let mut runtime = ReplRuntime::new(5_000, options());
     runtime
         .record_runner_event(&RunnerEvent::Agent(AgentEvent::ToolCall {
@@ -165,9 +165,10 @@ fn command_progress_renders_five_lines_and_toggles_expansion() {
             arguments: r#"{"command":"test"}"#.to_string(),
         }))
         .unwrap();
+    // 超过 2*5 行才会出现中间省略与 Ctrl+O 提示
     let message = crate::tools::command::encode_command_output_for_test(
         crate::tools::command::CommandOutputStream::Stdout,
-        b"one\ntwo\nthree\nfour\nfive\nsix\nseven\n",
+        b"one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\n",
     );
     runtime
         .record_runner_event(&RunnerEvent::Agent(AgentEvent::ToolProgress {
@@ -183,6 +184,8 @@ fn command_progress_renders_five_lines_and_toggles_expansion() {
         .map(|line| line.as_str())
         .collect::<String>();
     assert!(collapsed.contains("Ctrl+O"));
+    assert!(collapsed.contains("one"));
+    assert!(collapsed.contains("twelve"));
 
     assert!(runtime.toggle_command_output().unwrap());
     let expanded = runtime
@@ -191,7 +194,9 @@ fn command_progress_renders_five_lines_and_toggles_expansion() {
         .iter()
         .map(|line| line.as_str())
         .collect::<String>();
-    assert!(expanded.contains("four"));
+    assert!(expanded.contains("six"));
+    assert!(expanded.contains("seven"));
+    assert!(!expanded.contains("Ctrl+O"));
 }
 
 #[test]
