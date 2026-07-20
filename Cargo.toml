@@ -1,9 +1,9 @@
 [package]
 name = "sai"
-version = "0.1.4"
+version = "0.1.0"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/SHORiN-KiWATA/Sai"
+repository = "https://github.com/jswysnemc/sai"
 description = "Command-line AI assistant"
 
 [dependencies]
