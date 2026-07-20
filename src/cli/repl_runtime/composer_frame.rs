@@ -300,7 +300,7 @@ mod tests {
         assert!(!output.contains("120k"));
     }
 
-    /// 验证空输入框显示灰色操作提示。
+/// 验证空输入框显示灰色轮询提示。
     #[test]
     fn empty_composer_shows_placeholder() {
         let chrome = ReplChrome {
@@ -319,8 +319,10 @@ mod tests {
         frame.draw(&mut output, &viewport).unwrap();
 
         let output = String::from_utf8(output).unwrap();
-        assert!(output.contains("/"));
-        assert!(output.contains("!"));
+let tip = crate::cli::composer_tips::current_composer_tip();
+        // 轮询提示内容随种子与墙钟变化，只校验当前 tip 与 dim 样式
+        assert!(!tip.is_empty());
+        assert!(output.contains(tip));
         assert!(output.contains("\x1b[2m"));
     }
 
