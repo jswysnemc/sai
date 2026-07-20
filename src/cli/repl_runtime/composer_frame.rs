@@ -180,7 +180,8 @@ impl ComposerFrame {
 /// 返回:
 /// - 包含快捷操作说明的 ANSI 文本
 fn placeholder_text() -> String {
-    let text = "Type a message, / for commands, ! for shell";
+    // 1. 每次启动种子不同，并按墙钟轮询下一条小技巧
+    let text = super::super::composer_tips::current_composer_tip();
     format!("\x1b[2m{text}\x1b[0m")
 }
 

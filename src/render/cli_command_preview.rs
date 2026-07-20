@@ -155,7 +155,7 @@ fn redraw_preview(state: &Arc<Mutex<PreviewState>>) -> Result<bool> {
     let elapsed = format_elapsed(guard.started.elapsed());
     let status = format!(
         "\x1b[2m\x1b[36m{pulse} {} · {elapsed}\x1b[0m",
-        WorkStatus::Working.label()
+        WorkStatus::Working.localized_label()
     );
     if rendered.trim().is_empty() {
         rendered = status;

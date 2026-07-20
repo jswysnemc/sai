@@ -1,4 +1,4 @@
-import { ClipboardList, ShieldCheck, Zap } from "lucide-react";
+import { Bot, ClipboardList, ShieldCheck, Zap } from "lucide-react";
 import type { RunMode } from "../../api/contracts";
 import type { SelectOption } from "../../shared/ui/select/select";
 import type { Translate } from "../i18n/i18n-context";
@@ -29,6 +29,15 @@ export function createRunModeOptions(t: Translate): SelectOption<RunMode>[] {
         "写入工具逐次询问，并限制在工作区沙盒内。"
       ),
       icon: <span className="run-mode-icon audit"><ShieldCheck size={13} /></span>
+    },
+    {
+      value: "auto_audit",
+      label: t("Auto audit", "自动审核"),
+      description: t(
+        "LLM auto-review runs in parallel with human approval; human decision wins if first.",
+        "LLM 自动审核与人工审核并行，人工先决定则优先生效。"
+      ),
+      icon: <span className="run-mode-icon auto"><Bot size={13} /></span>
     },
     {
       value: "plan",

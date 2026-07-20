@@ -90,3 +90,10 @@
 @media (prefers-reduced-motion: reduce) {
   .live-run-motion i { animation: none !important; }
 }
+
+.live-run-elapsed {
+  margin-left: 0.2rem;
+  color: var(--ink-muted, var(--ink-soft));
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}

@@ -19,10 +19,11 @@
 }
 
 .skill-content-field textarea {
-  min-height: min(32rem, calc(100dvh - 24rem));
+  min-height: min(40rem, calc(100dvh - 18rem));
+  height: min(44rem, calc(100dvh - 16rem));
   resize: vertical;
   font-family: "Fira Code", monospace;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   line-height: 1.55;
   tab-size: 2;
 }
@@ -98,13 +99,51 @@
 }
 
 .skill-markdown-preview {
-  min-height: min(32rem, calc(100dvh - 24rem));
-  max-height: min(40rem, calc(100dvh - 18rem));
+  min-height: min(40rem, calc(100dvh - 18rem));
+  max-height: min(48rem, calc(100dvh - 14rem));
   overflow: auto;
   padding: 0.85rem 1rem;
   border: 1px solid var(--line);
   border-radius: 0.5rem;
   background: var(--paper);
+}
+
+.skill-meta-grid {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.skill-name-field input {
+  font: 500 0.875rem var(--font-code);
+}
+
+.skill-description-field textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+  line-height: 1.45;
+  font-size: 0.8125rem;
+}
+
+.skill-preview-meta {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.skill-preview-meta strong {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.skill-preview-meta p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 .skill-preview-empty {

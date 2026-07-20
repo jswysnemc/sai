@@ -83,7 +83,7 @@ export function LiveRunMessage({ state, running, onRetry }: { state: LiveRunStat
       )}
       <article className="message assistant-message live-message">
         <MessageParts parts={state.parts} live={running} />
-        {running && !compacting && <LiveRunIndicator status={state.status} />}
+        {running && !compacting && <LiveRunIndicator status={state.status} startedAtMs={state.startedAtMs} />}
         {state.error && (
           <RunErrorNotice
             message={state.error}

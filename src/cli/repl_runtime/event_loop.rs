@@ -24,7 +24,7 @@ impl ReplRuntime {
         self.pending_input_events.pop_front()
     }
 
-    /// 切换最近命令输出的展开状态并重绘 TUI。
+    /// 切换最近命令输出或思考段落的展开状态并重绘 TUI。
     ///
     /// 参数:
     /// - 无
@@ -72,7 +72,7 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                 if matches!(key.code, KeyCode::Char('o'))
                     && key.modifiers.contains(KeyModifiers::CONTROL)
                 {
-                    // 1. 允许展开或收起最近命令输出
+                    // 1. 允许展开或收起最近命令输出 / 思考段落
                     runtime.toggle_command_output()?;
                 } else if matches!(key.code, KeyCode::Char('c'))
                     && key.modifiers.contains(KeyModifiers::CONTROL)

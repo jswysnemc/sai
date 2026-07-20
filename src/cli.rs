@@ -46,6 +46,7 @@ mod model_select;
 mod permission_prompt;
 mod providers;
 mod render_options;
+mod composer_tips;
 mod repl;
 mod repl_background;
 mod repl_chrome;
@@ -249,6 +250,8 @@ fn cli_mode_override(cli: &Cli) -> Option<AgentMode> {
         Some(AgentMode::Plan)
     } else if cli.audited {
         Some(AgentMode::Audited)
+    } else if cli.auto_audit {
+        Some(AgentMode::AutoAudit)
     } else if cli.yolo {
         Some(AgentMode::Yolo)
     } else {
@@ -389,7 +392,7 @@ pub(crate) fn build_tool_registry_with_cached_mcp(
 ) -> Result<tools::ToolRegistry> {
     let mut registry = if config.tools.enabled {
         match mode {
-            AgentMode::Yolo | AgentMode::Audited => {
+            AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit => {
                 tools::builtin_registry_with_cached_mcp(config, paths)
             }
             AgentMode::Plan => tools::readonly_registry(config, paths),
@@ -412,10 +415,10 @@ fn build_tool_registry_with_mcp(
 ) -> Result<tools::ToolRegistry> {
     let mut registry = if config.tools.enabled {
         match mode {
-            AgentMode::Yolo | AgentMode::Audited if discover_mcp => {
+            AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit if discover_mcp => {
                 tools::builtin_registry(config, paths)
             }
-            AgentMode::Yolo | AgentMode::Audited => {
+            AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit => {
                 tools::builtin_registry_without_mcp(config, paths)
             }
             AgentMode::Plan => tools::readonly_registry(config, paths),

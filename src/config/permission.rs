@@ -6,21 +6,20 @@ use serde::{Deserialize, Serialize};
 pub enum DefaultPermissionMode {
     Yolo,
     Audited,
+    AutoAudit,
     Plan,
 }
 
 impl DefaultPermissionMode {
     /// 返回配置文件使用的稳定字符串。
     ///
-    /// 参数:
-    /// - 无
-    ///
     /// 返回:
-    /// - `yolo`、`audited` 或 `plan`
+    /// - `yolo`、`audited`、`auto_audit` 或 `plan`
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Yolo => "yolo",
             Self::Audited => "audited",
+            Self::AutoAudit => "auto_audit",
             Self::Plan => "plan",
         }
     }
@@ -34,7 +33,8 @@ impl DefaultPermissionMode {
     /// - 已识别模式；未知值回退到 YOLO
     pub fn parse_or_default(value: &str) -> Self {
         match value.trim() {
-            "audited" => Self::Audited,
+            "audited" | "audit" => Self::Audited,
+            "auto_audit" | "auto-audit" | "auto" => Self::AutoAudit,
             "plan" => Self::Plan,
             _ => Self::Yolo,
         }
@@ -59,6 +59,12 @@ pub struct PermissionConfig {
     /// CLI 单次命令（ask/tool 等）默认权限模式；缺省时回退 `default_mode`。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cli_mode: Option<DefaultPermissionMode>,
+    /// 自动审核专用供应商；空则使用当前会话供应商。
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub auto_audit_provider_id: String,
+    /// 自动审核专用模型；空则使用当前会话模型。
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub auto_audit_model: String,
 }
 
 impl Default for PermissionConfig {
@@ -67,29 +73,19 @@ impl Default for PermissionConfig {
             default_mode: DefaultPermissionMode::Yolo,
             tui_mode: None,
             cli_mode: None,
+            auto_audit_provider_id: String::new(),
+            auto_audit_model: String::new(),
         }
     }
 }
 
 impl PermissionConfig {
     /// 返回 TUI 使用的默认权限模式。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - `tui_mode`，缺省时使用 `default_mode`
     pub fn tui_mode(&self) -> DefaultPermissionMode {
         self.tui_mode.unwrap_or(self.default_mode)
     }
 
     /// 返回 CLI 使用的默认权限模式。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - `cli_mode`，缺省时使用 `default_mode`
     pub fn cli_mode(&self) -> DefaultPermissionMode {
         self.cli_mode.unwrap_or(self.default_mode)
     }
@@ -99,16 +95,15 @@ impl PermissionConfig {
 mod tests {
     use super::*;
 
-    /// 验证旧配置缺少权限字段时保持 YOLO 兼容默认值。
     #[test]
     fn permission_config_defaults_to_yolo_for_legacy_configs() {
         let config: PermissionConfig = serde_json::from_str("{}").unwrap();
         assert_eq!(config.default_mode, DefaultPermissionMode::Yolo);
         assert_eq!(config.tui_mode(), DefaultPermissionMode::Yolo);
         assert_eq!(config.cli_mode(), DefaultPermissionMode::Yolo);
+        assert!(config.auto_audit_provider_id.is_empty());
     }
 
-    /// 验证 TUI/CLI 可分别配置，并在缺省时回退旧字段。
     #[test]
     fn permission_config_supports_separate_tui_and_cli_modes() {
         let config: PermissionConfig = serde_json::from_str(
@@ -122,5 +117,17 @@ mod tests {
             serde_json::from_str(r#"{"default_mode":"audited"}"#).unwrap();
         assert_eq!(legacy.tui_mode(), DefaultPermissionMode::Audited);
         assert_eq!(legacy.cli_mode(), DefaultPermissionMode::Audited);
+    }
+
+    #[test]
+    fn parses_auto_audit_mode() {
+        assert_eq!(
+            DefaultPermissionMode::parse_or_default("auto_audit"),
+            DefaultPermissionMode::AutoAudit
+        );
+        assert_eq!(
+            DefaultPermissionMode::parse_or_default("auto"),
+            DefaultPermissionMode::AutoAudit
+        );
     }
 }

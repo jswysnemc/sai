@@ -10,15 +10,19 @@ pub struct Cli {
     #[arg(long, global = true, value_name = "LANG", value_parser = parse_language_argument)]
     pub lang: Option<String>,
 
-    #[arg(long)]
+    #[arg(long, conflicts_with_all = ["audited", "yolo", "auto_audit"])]
     pub plan: bool,
 
     /// 启用带审计日志和工作区沙盒的执行模式
-    #[arg(long, conflicts_with_all = ["plan", "yolo"])]
+    #[arg(long, conflicts_with_all = ["plan", "yolo", "auto_audit"])]
     pub audited: bool,
 
+    /// 启用 LLM 自动审核与人工审核并行的模式
+    #[arg(long = "auto-audit", conflicts_with_all = ["plan", "yolo", "audited"])]
+    pub auto_audit: bool,
+
     /// 显式启用不询问权限的执行模式
-    #[arg(long, conflicts_with_all = ["plan", "audited"])]
+    #[arg(long, conflicts_with_all = ["plan", "audited", "auto_audit"])]
     pub yolo: bool,
 
     #[arg(short = 'c', long = "clipb")]

@@ -33,3 +33,8 @@
 [data-theme="dark"] .run-mode-icon.plan {
   color: #7fa8e5;
 }
+
+.run-mode-icon.auto {
+  color: #7c6af2;
+  background: color-mix(in srgb, #7c6af2 12%, transparent);
+}

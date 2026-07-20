@@ -12,6 +12,7 @@ impl Default for AppConfig {
             active_provider: OPENCODE_PROVIDER_ID.to_string(),
             providers: ProviderConfig::default_templates(),
             permission: PermissionConfig::default(),
+            notification: crate::config::NotificationConfig::default(),
             context: ContextConfig::default(),
             tools: ToolsConfig::default(),
             terminal: TerminalConfig::default(),

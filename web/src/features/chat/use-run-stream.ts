@@ -1,10 +1,11 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
-import type { RunInfo, RunMode, RunModelSelection, ThinkingLevel, WebEvent } from "../../api/contracts";
+import type { AppConfig, RunInfo, RunMode, RunModelSelection, ThinkingLevel, WebEvent } from "../../api/contracts";
 import { api } from "../../api/client";
 import { initialRunState, relocalizeRunError, runEventReducer, type LiveRunState } from "./run-event-reducer";
 import { useI18n } from "../i18n/use-i18n";
 import { text, type Locale } from "../i18n/locale";
+import { notifyReplyComplete } from "../../shared/notify/reply-complete-notify";
 
 const EVENT_TYPES = [
   "run.queued",
@@ -117,6 +118,8 @@ export function useRunStream(
 ) {
   const { locale } = useI18n();
   const queryClient = useQueryClient();
+  // 预取配置，供答复完成通知读取 notification 开关
+  useQuery({ queryKey: ["config"], queryFn: api.config.load });
   const reducer = useCallback(
     (state: SessionRunsState, action: SessionRunsAction) => sessionRunsReducer(state, action, locale),
     [locale]
@@ -190,6 +193,14 @@ export function useRunStream(
           void queryClient.invalidateQueries({ queryKey: ["system-usage"] });
         }
         if (["run.completed", "run.interrupted", "run.failed"].includes(event.type)) {
+          const response = queryClient.getQueryData(["config"]) as { config?: AppConfig } | undefined;
+          const body =
+            event.type === "run.interrupted"
+              ? text(locale, "Reply interrupted", "答复已中断")
+              : event.type === "run.failed"
+                ? text(locale, "Reply failed", "答复失败")
+                : text(locale, "Reply complete", "答复已完成");
+          notifyReplyComplete(response?.config?.notification, text(locale, "Sai", "Sai"), body);
           source.onerror = null;
           source.close();
           sourcesRef.current.delete(runId);

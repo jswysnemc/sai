@@ -9,6 +9,7 @@ mod model;
 mod model_metadata;
 mod model_units;
 mod paths;
+mod notification;
 mod permission;
 mod provider;
 mod secrets;
@@ -25,4 +26,5 @@ pub use mcp_file::{init_mcp_config_file, load_mcp_config, save_mcp_config, valid
 pub use model::*;
 pub use model_metadata::*;
 pub use model_units::*;
+pub use notification::*;
 pub use permission::*;

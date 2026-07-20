@@ -95,7 +95,7 @@ impl HistoryCell {
     /// 返回:
     /// - reasoning cell
     pub(crate) fn reasoning(source: String) -> Self {
-        Self::Reasoning(ReasoningCell { source })
+        Self::Reasoning(ReasoningCell::new(source))
     }
 
     /// 构造本地 Shell 命令 cell。

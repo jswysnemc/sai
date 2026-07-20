@@ -4,7 +4,7 @@ mod diff_cell;
 mod line;
 mod markdown_cell;
 mod meta_cell;
-mod reasoning_cell;
+pub(crate) mod reasoning_cell;
 mod render_cache;
 mod shell_cell;
 mod store;

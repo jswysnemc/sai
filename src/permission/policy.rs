@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 pub(crate) enum PermissionProfileMode {
     Yolo,
     Audited,
+    AutoAudit,
     Plan,
 }
 
@@ -31,6 +32,7 @@ impl PermissionProfileMode {
         match self {
             Self::Yolo => "yolo",
             Self::Audited => "audited",
+            Self::AutoAudit => "auto_audit",
             Self::Plan => "plan",
         }
     }
@@ -156,7 +158,11 @@ impl PermissionProfile {
         }
         let approved = self.consume_approval(tool, arguments);
         // 2. TODO 仅维护会话计划，不参与权限审计交互或日志记录
-        if self.mode == PermissionProfileMode::Audited && tool == "todo" {
+        if matches!(
+            self.mode,
+            PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
+        ) && tool == "todo"
+        {
             return Ok(false);
         }
         // 3. 规划模式和审计模式先阻止不允许的工具类别
@@ -169,7 +175,11 @@ impl PermissionProfile {
             );
             bail!("Plan mode blocked non-read-only tool: {tool}")
         }
-        if self.mode == PermissionProfileMode::Audited && tool == "background_command" && !approved
+        if matches!(
+            self.mode,
+            PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
+        ) && tool == "background_command"
+            && !approved
         {
             self.record(
                 tool,
@@ -204,11 +214,28 @@ impl PermissionProfile {
                 error
             })?;
         }
-        // 6. 已批准的网络或显式提升命令在沙箱外执行，其他前台命令保留工作区沙箱
+        // 6. 需要逃逸沙箱但未获批准时拒绝，避免沙箱内静默失败
         let escape_sandbox = tool == "run_command" && requires_sandbox_escape(arguments);
+        if matches!(
+            self.mode,
+            PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
+        ) && escape_sandbox
+            && !approved
+        {
+            self.record(
+                tool,
+                AuditDecision::Denied,
+                arguments,
+                Some("interactive approval required to leave workspace sandbox"),
+            );
+            bail!("permission audit requires interactive approval for elevated sandbox access")
+        }
+        // 7. 已批准的提升命令在沙箱外执行，其他前台命令保留工作区沙箱
         self.record(tool, AuditDecision::Allowed, arguments, None);
-        Ok(self.mode == PermissionProfileMode::Audited
-            && tool == "run_command"
+        Ok(matches!(
+            self.mode,
+            PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
+        ) && tool == "run_command"
             && cfg!(target_os = "linux")
             && !(approved && escape_sandbox))
     }
@@ -228,10 +255,18 @@ impl PermissionProfile {
         permission: ToolPermission,
         arguments: &Value,
     ) -> bool {
-        if self.mode != PermissionProfileMode::Audited || tool == "todo" {
+        if !matches!(
+            self.mode,
+            PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
+        ) || tool == "todo"
+        {
             return false;
         }
         if permission == ToolPermission::Writes {
+            return true;
+        }
+        // run_command 需要逃逸沙箱（网络 / 包管理 / 家目录）时必须先交互批准
+        if tool == "run_command" && requires_sandbox_escape(arguments) {
             return true;
         }
         permission == ToolPermission::ReadOnly
@@ -250,7 +285,10 @@ impl PermissionProfile {
     /// - 无
     pub(crate) fn record_result(&self, tool: &str, arguments: &Value, result: &Result<String>) {
         if self.mode == PermissionProfileMode::Yolo
-            || (self.mode == PermissionProfileMode::Audited && tool == "todo")
+            || (matches!(
+                self.mode,
+                PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
+            ) && tool == "todo")
         {
             return;
         }
@@ -629,4 +667,29 @@ mod tests {
             )
             .is_err());
     }
+    #[test]
+    fn auto_audit_profile_requires_package_manager_approval() {
+        let workspace = std::env::temp_dir().join("sai-policy-auto-pkg");
+        let _ = std::fs::create_dir_all(&workspace);
+        let profile = PermissionProfile::new(PermissionProfileMode::AutoAudit, workspace, None);
+        let args = serde_json::json!({"command":"paru -Qua"});
+        assert!(profile.requires_interactive_audit(
+            "run_command",
+            crate::tools::ToolPermission::Writes,
+            &args
+        ));
+        let err = profile
+            .authorize(
+                "run_command",
+                crate::tools::ToolPermission::Writes,
+                &args,
+            )
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("elevated sandbox") || err.contains("interactive approval"),
+            "{err}"
+        );
+    }
+
 }

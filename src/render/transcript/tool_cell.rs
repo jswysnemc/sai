@@ -1,4 +1,5 @@
 use super::subagent_cell::{self, SubagentCell};
+use crate::render::edit_diff::render_edit_file_diff;
 use crate::render::terminal_text as t;
 use crate::render::tool_event_line::tool_event_text;
 use crate::render::tool_view::{self, ToolView};
@@ -93,6 +94,12 @@ pub(crate) fn render_live_call(
     arguments_preview: &str,
     mode: ToolCallDisplayMode,
 ) -> String {
+    // 1. edit_file 在参数流阶段优先渲染 diff，与 CLI 流式预览一致
+    if name == "edit_file" {
+        if let Some(diff) = render_edit_file_diff(arguments_preview) {
+            return diff.trim_end().to_string();
+        }
+    }
     tool_view::render(
         &ToolView::preparing(name.to_string(), arguments_preview.to_string()),
         mode,

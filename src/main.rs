@@ -1,5 +1,6 @@
 mod agent;
 mod alarm;
+mod reply_notify;
 mod cli;
 mod clipboard;
 mod config;

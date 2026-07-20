@@ -54,6 +54,7 @@ describe("HistoryTurn", () => {
         running={false}
         state={{
           ...initialRunState,
+          startedAtMs: null,
           completed: true,
           error: "运行失败",
           errorDetail: "upstream request timed out after 120 seconds"

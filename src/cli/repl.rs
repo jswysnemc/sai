@@ -394,6 +394,11 @@ pub(super) async fn run_repl(
             runtime.record_meta(format!("{}: {}", t("mode", "模式"), mode.label()))?;
             continue;
         }
+        if input.eq_ignore_ascii_case("/auto") || input.eq_ignore_ascii_case("/auto-audit") {
+            mode = AgentMode::AutoAudit;
+            runtime.record_meta(format!("{}: {}", t("mode", "模式"), mode.label()))?;
+            continue;
+        }
         if input.eq_ignore_ascii_case("/providers") {
             run_providers(paths, ProvidersArgs { index: None })?;
             reload_repl_agent(

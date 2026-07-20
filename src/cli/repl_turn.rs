@@ -158,6 +158,15 @@ pub(super) async fn execute_repl_turn(
     .await;
     crossterm::terminal::disable_raw_mode()?;
     runtime.borrow_mut().finish_stream()?;
+    // 1. 答复结束（完成 / 中断 / 失败）发送桌面通知
+    let body = if interrupted {
+        crate::i18n::text("Reply interrupted", "答复已中断")
+    } else if result.is_err() {
+        crate::i18n::text("Reply failed", "答复失败")
+    } else {
+        crate::i18n::text("Reply complete", "答复已完成")
+    };
+    crate::reply_notify::notify_reply_complete(config, "Sai", body);
     Ok(ReplTurnOutcome {
         interrupted,
         result,

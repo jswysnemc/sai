@@ -135,19 +135,19 @@ fn work_status_is_replaced_without_becoming_history() {
     let waiting = store.display_live_tail(80, &options());
     assert!(waiting[0]
         .as_str()
-        .contains(WorkStatus::WaitingResponse.label()));
+        .contains(WorkStatus::WaitingResponse.localized_label()));
     assert!(waiting[0].as_str().contains('·') || waiting[0].as_str().contains('s'));
 
     assert!(store.set_work_status(WorkStatus::Thinking));
     let thinking = store.display_live_tail(80, &options());
-    assert!(thinking[0].as_str().contains(WorkStatus::Thinking.label()));
+    assert!(thinking[0].as_str().contains(WorkStatus::Thinking.localized_label()));
     assert!(!thinking[0]
         .as_str()
-        .contains(WorkStatus::WaitingResponse.label()));
+        .contains(WorkStatus::WaitingResponse.localized_label()));
 
     assert!(store.advance_live_animation());
     let animated = store.display_live_tail(80, &options());
-    assert!(animated[0].as_str().contains(WorkStatus::Thinking.label()));
+    assert!(animated[0].as_str().contains(WorkStatus::Thinking.localized_label()));
 
     assert!(store.clear_work_status());
     assert!(store.display_live_tail(80, &options()).is_empty());
@@ -166,8 +166,8 @@ fn work_status_hidden_when_live_reasoning_exists() {
 
     let live = store.display_live_tail(80, &options());
     let joined = live.iter().map(|line| line.as_str()).collect::<String>();
-    assert!(!joined.contains(WorkStatus::Working.label()));
-    assert!(joined.contains("thinking"));
+    assert!(!joined.contains(WorkStatus::Working.localized_label()));
+    assert!(joined.contains("thinking") || joined.contains("思考"));
 }
 
 #[test]
@@ -533,4 +533,33 @@ fn run_command_success_keeps_growing_output_in_summary() {
         "result should not shrink the view"
     );
     assert!(after.contains("hi") || after.contains("output") || after.contains("echo"));
+}
+
+#[test]
+fn history_edit_file_restores_diff_cell() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("history.txt");
+    std::fs::write(&path, "old\n").unwrap();
+    let arguments = serde_json::json!({
+        "path": path.to_string_lossy(),
+        "content": "new\n"
+    })
+    .to_string();
+    let mut store = TranscriptStore::new(100);
+    store.push_history_tool_call("edit_file".to_string(), arguments);
+    store.push_tool_result("edit_file".to_string(), true, r#"{"ok":true}"#.to_string());
+    let rendered = store
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(
+        rendered.contains("old") || rendered.contains("new") || rendered.contains("Edited") || rendered.contains("Edit"),
+        "{rendered}"
+    );
+    // 不应只剩通用 run_command 风格而无编辑标记
+    assert!(
+        rendered.contains('+') || rendered.contains('-') || rendered.contains("Edit"),
+        "{rendered}"
+    );
 }

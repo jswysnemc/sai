@@ -1,9 +1,16 @@
-export type RunMode = "plan" | "audited" | "yolo";
+export type RunMode = "plan" | "audited" | "auto_audit" | "yolo";
 
 export type PermissionConfig = {
   default_mode: RunMode;
   tui_mode?: RunMode;
   cli_mode?: RunMode;
+  auto_audit_provider_id?: string;
+  auto_audit_model?: string;
+};
+
+export type NotificationConfig = {
+  enabled: boolean;
+  sound: boolean;
 };
 
 export type PermissionAuditEvent = {
@@ -554,6 +561,7 @@ export type AppConfig = {
   active_provider: string;
   providers: ProviderConfig[];
   permission?: PermissionConfig;
+  notification?: NotificationConfig;
   gateways: GatewayConfig;
   agents?: AgentProfileConfig[];
   default_agent?: string | null;

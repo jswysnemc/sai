@@ -29,6 +29,8 @@ export type LiveRunState = {
   runId: string | null;
   sessionId: string | null;
   status: "idle" | "queued" | "waiting_response" | "waiting_external" | "waiting_permission" | "waiting_question" | "thinking" | "working" | "compacting";
+  /** 本轮开始时间戳（毫秒），用于状态行展示已用时长。 */
+  startedAtMs: number | null;
   userInput: string;
   imageUrls: string[];
   content: string;
@@ -50,6 +52,7 @@ export const initialRunState: LiveRunState = {
   runId: null,
   sessionId: null,
   status: "idle",
+  startedAtMs: null,
   userInput: "",
   imageUrls: [],
   content: "",
@@ -83,7 +86,15 @@ export function relocalizeRunError(message: string | null, locale: Locale): stri
 export function runEventReducer(state: LiveRunState, action: RunAction, locale: Locale = "zh-CN"): LiveRunState {
   if (action.type === "reset") return initialRunState;
   if (action.type === "start" || action.type === "attach") {
-    return { ...initialRunState, runId: action.runId, sessionId: action.sessionId, userInput: action.userInput, imageUrls: action.imageUrls ?? [], status: "waiting_response" };
+    return {
+      ...initialRunState,
+      runId: action.runId,
+      sessionId: action.sessionId,
+      userInput: action.userInput,
+      imageUrls: action.imageUrls ?? [],
+      status: "waiting_response",
+      startedAtMs: Date.now()
+    };
   }
   const { event } = action;
   const payload = event.payload;

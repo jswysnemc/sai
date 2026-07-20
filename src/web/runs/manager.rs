@@ -565,6 +565,7 @@ fn parse_mode(value: Option<&str>) -> Result<AgentMode> {
     match value.unwrap_or("yolo").trim().to_ascii_lowercase().as_str() {
         "plan" => Ok(AgentMode::Plan),
         "audited" | "audit" => Ok(AgentMode::Audited),
+        "auto_audit" | "auto-audit" | "auto" => Ok(AgentMode::AutoAudit),
         "yolo" | "" => Ok(AgentMode::Yolo),
         value => bail!("unsupported run mode: {value}"),
     }

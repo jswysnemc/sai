@@ -60,6 +60,8 @@ pub struct StreamRenderer {
     pending_streamed_edit_blocks: usize,
     suppressed_denied_results: HashSet<String>,
     work_status: Option<WorkStatus>,
+    /// Full 模式下缓存思考正文，结束后按折叠块输出
+    reasoning_full_buffer: String,
     command_preview: CliCommandPreview,
 }
 
@@ -98,6 +100,7 @@ impl StreamRenderer {
             pending_streamed_edit_blocks: 0,
             suppressed_denied_results: HashSet::new(),
             work_status: None,
+            reasoning_full_buffer: String::new(),
             command_preview: CliCommandPreview::new(),
         }
     }
@@ -170,15 +173,27 @@ impl StreamRenderer {
             false,
         )?;
         self.finish_live_tool_status()?;
+        // Full 模式思考：缓存正文，结束时折叠输出（与 TUI/命令输出一致）
+        if self.reasoning_mode == ReasoningDisplayMode::Full
+            && chunk.kind == ChatStreamKind::Reasoning
+        {
+            if self.mode != Some(ChatStreamKind::Reasoning) {
+                self.mode = Some(ChatStreamKind::Reasoning);
+                self.reasoning_full_buffer.clear();
+            }
+            self.reasoning_full_buffer.push_str(&text);
+            return Ok(());
+        }
         if self.mode != Some(chunk.kind) {
             if chunk.kind == ChatStreamKind::Content {
+                self.flush_full_reasoning_block()?;
                 self.finalize_reasoning_summary()?;
                 self.finalize_tools_summary()?;
             }
             self.switch_mode(chunk.kind)?;
         }
         let mut stdout = io::stdout();
-        if self.plain || chunk.kind == ChatStreamKind::Reasoning {
+        if self.plain {
             write!(stdout, "{text}")?;
         } else {
             write!(stdout, "{}", self.markdown.push(&text))?;

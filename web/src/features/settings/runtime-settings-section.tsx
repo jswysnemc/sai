@@ -2,6 +2,7 @@ import type { AppConfig } from "../../api/contracts";
 import { SettingsGroup } from "./editor-layout";
 import { StructuredConfigFields } from "./structured-config-fields";
 import { PermissionDefaultSettings } from "./runtime/permission-default-settings";
+import { NotificationSettings } from "./runtime/notification-settings";
 import { TerminalSettingsFields } from "./terminal-settings-fields";
 import { CompactionModelField } from "./compaction-model-field";
 import { useI18n } from "../i18n/use-i18n";
@@ -27,6 +28,7 @@ export function RuntimeSettingsSection({ config, onConfigChange }: RuntimeSettin
   return (
     <div className="runtime-groups">
       <PermissionDefaultSettings config={config} onConfigChange={onConfigChange} />
+      <NotificationSettings config={config} onConfigChange={onConfigChange} />
       <SettingsGroup title={t("Web terminal", "网页终端")} description={t("Configure the Shell used by new Web terminal sessions.", "配置网页终端启动的 Shell，新建终端时生效。")}>
         <TerminalSettingsFields config={config} onConfigChange={onConfigChange} />
       </SettingsGroup>

@@ -1,10 +1,11 @@
 import { Activity, ArrowRight, Bot, GitBranch, Paperclip, Square, Undo2 } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useEffect, useState, useMemo } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import type { RunMode, RunModelSelection, ThinkingLevel } from "../../api/contracts";
 import type { ChatModelChoice } from "./chat-model-options";
 import { AttachmentStrip } from "./composer/attachment-strip";
 import { ComposerTextarea } from "./composer/composer-textarea";
+import { composerTipIntervalMs, currentComposerTip } from "./composer/composer-tips";
 import type { ComposerAttachment } from "./composer/use-composer-attachments";
 import { resolveComposerAvailability } from "./composer-availability";
 import { ModelThinkingSelector } from "./model-thinking-selector";
@@ -62,7 +63,17 @@ type ChatComposerProps = {
  * @returns 聊天输入区
  */
 export function ChatComposer(props: ChatComposerProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const [tipNow, setTipNow] = useState(() => Date.now());
+  // 1. 空输入时轮询展示操作小技巧；每次页面加载起点不同
+  useEffect(() => {
+    const timer = window.setInterval(() => setTipNow(Date.now()), composerTipIntervalMs());
+    return () => window.clearInterval(timer);
+  }, []);
+  const rotatingPlaceholder = props.sessionAvailable
+    ? currentComposerTip(locale, tipNow)
+    : undefined;
+
   const git = useQuery({ queryKey: ["git-status", null], queryFn: () => api.workspace.gitStatus(), staleTime: 20_000 });
   const runtimeActivity = useRuntimeActivity();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -124,7 +135,7 @@ export function ChatComposer(props: ChatComposerProps) {
           value={props.value}
           historyEntries={props.historyEntries}
           disabled={availability.inputDisabled}
-          placeholder={props.sessionAvailable ? t("Type a message; press Enter to send", "输入消息，Enter 发送") : t("Select a session first", "请先选择会话")}
+          placeholder={props.sessionAvailable ? (rotatingPlaceholder ?? t("Type a message; press Enter to send", "输入消息，Enter 发送")) : t("Select a session first", "请先选择会话")}
           onChange={props.onChange}
           onPasteImages={props.onAddImages}
           onSubmit={() => {

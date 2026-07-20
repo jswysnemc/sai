@@ -80,6 +80,7 @@ impl ReplChrome {
         match self.mode {
             AgentMode::Yolo => "yolo",
             AgentMode::Audited => "audit",
+            AgentMode::AutoAudit => "auto",
             AgentMode::Plan => "plan",
         }
     }
@@ -92,6 +93,7 @@ impl ReplChrome {
         match self.mode {
             AgentMode::Yolo => "\x1b[38;5;208myolo\x1b[0m".to_string(),
             AgentMode::Audited => "\x1b[35maudit\x1b[0m".to_string(),
+            AgentMode::AutoAudit => "\x1b[38;5;141mauto\x1b[0m".to_string(),
             AgentMode::Plan => "\x1b[36mplan\x1b[0m".to_string(),
         }
     }

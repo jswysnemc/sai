@@ -714,8 +714,7 @@ impl ReplRuntime {
 fn transcript_mode(mode: AgentMode) -> TranscriptMode {
     match mode {
         AgentMode::Plan => TranscriptMode::Plan,
-        AgentMode::Audited => TranscriptMode::Yolo,
-        AgentMode::Yolo => TranscriptMode::Yolo,
+        AgentMode::Audited | AgentMode::AutoAudit | AgentMode::Yolo => TranscriptMode::Yolo,
     }
 }
 

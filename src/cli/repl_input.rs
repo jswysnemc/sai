@@ -139,9 +139,18 @@ pub(super) fn read_repl_input(
                 (None, true) => Some(EXTERNAL_EVENT_INPUT_POLL_INTERVAL),
                 (None, false) => None,
             };
+            // 空输入时短轮询，便于灰色操作提示按时切换
+            let wait = if input.is_empty() {
+                Some(
+                    wait.unwrap_or(std::time::Duration::from_secs(1))
+                        .min(std::time::Duration::from_secs(1)),
+                )
+            } else {
+                wait
+            };
             if let Some(wait) = wait {
                 if !event::poll(wait)? {
-                    if runtime.process_idle_tick()? {
+                    if runtime.process_idle_tick()? || input.is_empty() {
                         input_row = 0;
                         rendered_rows = 0;
                         redraw_input!()?;
@@ -190,7 +199,8 @@ pub(super) fn read_repl_input(
                         } else {
                             mode = match mode {
                                 AgentMode::Yolo => AgentMode::Audited,
-                                AgentMode::Audited => AgentMode::Plan,
+                                AgentMode::Audited => AgentMode::AutoAudit,
+                                AgentMode::AutoAudit => AgentMode::Plan,
                                 AgentMode::Plan => AgentMode::Yolo,
                             };
                             chrome.set_mode(mode);

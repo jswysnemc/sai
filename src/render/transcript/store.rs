@@ -441,9 +441,14 @@ impl TranscriptStore {
         self.finalize_live_tail();
         self.live_tool_call = None;
         let index = self.cells.len();
-        self.push_cell(HistoryCell::Tool(ToolCell::Invocation(ToolView::running(
-            name, arguments,
-        ))));
+        // edit_file 历史恢复仍用 DiffCell（按参数重建预览），避免只剩摘要工具行
+        if name == "edit_file" {
+            self.push_cell(HistoryCell::diff(arguments));
+        } else {
+            self.push_cell(HistoryCell::Tool(ToolCell::Invocation(ToolView::running(
+                name, arguments,
+            ))));
+        }
         self.active_tool_index = Some(index);
     }
 

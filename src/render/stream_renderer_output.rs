@@ -10,18 +10,23 @@ impl StreamRenderer {
         let mut stdout = io::stdout();
         match mode {
             ChatStreamKind::Reasoning => {
-                if self.mode.is_some() {
+                // Full 模式在 flush 时统一输出折叠块；Summary 由 summary 负责
+                if self.mode.is_some() && self.reasoning_mode != ReasoningDisplayMode::Full {
                     writeln!(stdout)?;
                 }
-                execute!(stdout, SetForegroundColor(Color::DarkCyan))?;
-                writeln!(
-                    stdout,
-                    "{TOOL_BULLET} {}",
-                    self.work_status.unwrap_or(WorkStatus::Thinking).label()
-                )?;
+                if self.reasoning_mode != ReasoningDisplayMode::Full {
+                    execute!(stdout, SetForegroundColor(Color::DarkCyan))?;
+                    writeln!(
+                        stdout,
+                        "{TOOL_BULLET} {}",
+                        self.work_status.unwrap_or(WorkStatus::Thinking).localized_label()
+                    )?;
+                }
             }
             ChatStreamKind::Content => {
-                if self.mode == Some(ChatStreamKind::Reasoning) {
+                if self.mode == Some(ChatStreamKind::Reasoning)
+                    && self.reasoning_mode != ReasoningDisplayMode::Full
+                {
                     execute!(stdout, ResetColor)?;
                     writeln!(stdout)?;
                 }
@@ -44,6 +49,13 @@ impl StreamRenderer {
             self.mode = None;
             return Ok(());
         }
+        // Full 思考块在此折叠输出
+        if self.mode == Some(ChatStreamKind::Reasoning)
+            && self.reasoning_mode == ReasoningDisplayMode::Full
+        {
+            self.flush_full_reasoning_block()?;
+            return Ok(());
+        }
         if self.mode == Some(ChatStreamKind::Reasoning) {
             execute!(io::stdout(), ResetColor)?;
         } else if self.mode == Some(ChatStreamKind::Content) && !self.plain {
@@ -58,11 +70,38 @@ impl StreamRenderer {
         Ok(())
     }
 
+    /// 将 Full 模式缓存的思考正文折叠输出到终端。
+    ///
+    /// 返回:
+    /// - 是否成功
+    pub(super) fn flush_full_reasoning_block(&mut self) -> Result<()> {
+        if self.reasoning_full_buffer.trim().is_empty() {
+            self.mode = None;
+            return Ok(());
+        }
+        let body = std::mem::take(&mut self.reasoning_full_buffer);
+        let rendered = crate::render::transcript::reasoning_cell::render_thinking_body(
+            &body, false, false,
+        );
+        let mut stdout = io::stdout();
+        if self.mode.is_some() {
+            // 与前序输出空一行
+            writeln!(stdout)?;
+        }
+        writeln!(stdout, "{rendered}")?;
+        stdout.flush()?;
+        self.mode = None;
+        Ok(())
+    }
+
     /// 固化推理摘要。
     ///
     /// 返回:
     /// - 固化是否成功
     pub(super) fn finalize_reasoning_summary(&mut self) -> Result<()> {
+        if self.reasoning_mode == ReasoningDisplayMode::Full {
+            return self.flush_full_reasoning_block();
+        }
         if self.reasoning_mode == ReasoningDisplayMode::Summary && self.summary.has_reasoning() {
             self.stop_waiting()?;
             self.summary.finalize_reasoning()?;
@@ -95,7 +134,7 @@ impl StreamRenderer {
             return Ok(());
         }
         let status = self.work_status.unwrap_or(WorkStatus::Working);
-        let phase = status.label().to_string();
+        let phase = status.localized_label().to_string();
         if let Some(spinner) = self.wait_spinner.as_ref() {
             spinner.set_phase(phase);
             spinner.set_sub_phase(sub_phase);

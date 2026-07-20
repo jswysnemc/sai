@@ -153,6 +153,13 @@ fn repl_only_help_lines() -> Vec<String> {
             t("switch to YOLO mode", "切换到 YOLO 模式")
         ),
         format!(
+            "  /auto       {}",
+            t(
+                "switch to auto-audit mode (LLM + human in parallel)",
+                "切换到自动审核模式（LLM 与人工并行）"
+            )
+        ),
+        format!(
             "  /undo       {}",
             t(
                 "remove last turn and restore prompt",
