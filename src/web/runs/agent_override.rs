@@ -88,40 +88,17 @@ mod tests {
     }
 
     #[test]
-    fn agent_prompt_overrides_persona_file() {
-        let temp = tempfile::tempdir().unwrap();
-        let config_dir = temp.path().join("config");
-        let prompts = config_dir.join("prompts");
-        std::fs::create_dir_all(&prompts).unwrap();
-        std::fs::write(prompts.join("Sai-copy.md"), "persona-content").unwrap();
-        let paths = crate::paths::SaiPaths {
-            config_dir: config_dir.clone(),
-            config_file: config_dir.join("config.jsonc"),
-            secrets_file: config_dir.join("secrets.jsonc"),
-            skills_dir: config_dir.join("skills"),
-            data_dir: temp.path().join("data"),
-            cache_dir: temp.path().join("cache"),
-            state_dir: temp.path().join("state"),
-            pictures_dir: temp.path().join("pictures"),
-            fish_hook_file: temp.path().join("fish/sai.fish"),
-            bash_hook_file: temp.path().join("shell/bash-hook.sh"),
-            zsh_hook_file: temp.path().join("shell/zsh-hook.zsh"),
-            powershell_hook_file: temp.path().join("shell/powershell-hook.ps1"),
-        };
+    fn agent_system_prompt_overrides_runtime_config() {
         let mut config = AppConfig::default();
-        config.prompt.active_persona = "Sai-copy.md".to_string();
         config.agents.push(AgentProfile {
-            id: "agent-1".to_string(),
-            name: "code-agent".to_string(),
+            id: "code-agent".to_string(),
+            name: "代码".to_string(),
             system_prompt: "code-agent-content".to_string(),
-            enabled_tools: Vec::new(),
-            skills_full: Vec::new(),
-            skills_named: Vec::new(),
+            register_to_main: true,
             ..AgentProfile::default()
         });
-        let resolved = apply_agent_override(config, Some("agent-1")).unwrap();
-        let prompt = resolved.base_system_prompt(&paths).unwrap();
-        assert_eq!(prompt, "code-agent-content");
-        assert!(!prompt.contains("persona-content"));
+        let resolved = apply_agent_override(config, Some("code-agent")).unwrap();
+        assert_eq!(resolved.system_prompt.as_deref(), Some("code-agent-content"));
+        assert!(resolved.system_prompt_file.is_none());
     }
 }

@@ -480,12 +480,12 @@ mod tests {
         assert!(!explore.enabled_tools.is_empty());
     }
 
-    /// Web / TUI 默认应落到代码 Agent，CLI 不强制覆盖以保留 Sai 提示词。
+    /// Web/TUI/CLI 默认不强制 code-agent；网关仍使用专用档案。
     #[test]
-    fn default_surfaces_prefer_general_except_cli() {
+    fn default_surfaces_use_builtin_prompt_except_gateway() {
         let config = crate::config::AppConfig::default();
-        assert_eq!(config.default_agent.as_deref(), Some(GENERAL_AGENT_ID));
-        assert_eq!(config.tui_agent.as_deref(), Some(GENERAL_AGENT_ID));
+        assert_eq!(config.default_agent.as_deref(), None);
+        assert_eq!(config.tui_agent.as_deref(), None);
         assert_eq!(config.cli_agent.as_deref(), None);
         assert_eq!(config.gateway_agent.as_deref(), Some(GATEWAY_AGENT_ID));
         let gateway = apply_agent_override(config.clone(), None, AgentSurface::Gateway).unwrap();
@@ -493,27 +493,18 @@ mod tests {
             .system_prompt
             .as_deref()
             .unwrap_or("")
-            .contains("网关"));
+            .contains("Sai"));
         assert!(gateway
             .agent_runtime
             .as_ref()
             .map(|runtime| runtime.enabled_tools.iter().any(|tool| tool == "cron"))
             .unwrap_or(false));
         let web = apply_agent_override(config.clone(), None, AgentSurface::Web).unwrap();
-        assert!(web
-            .system_prompt
-            .as_deref()
-            .unwrap_or("")
-            .contains("核心铁律"));
+        assert!(web.system_prompt.is_none());
+        let tui = apply_agent_override(config.clone(), None, AgentSurface::Tui).unwrap();
+        assert!(tui.system_prompt.is_none());
         let cli = apply_agent_override(config, None, AgentSurface::Cli).unwrap();
-        assert!(
-            cli.system_prompt.is_none()
-                || !cli
-                    .system_prompt
-                    .as_deref()
-                    .unwrap_or("")
-                    .contains("核心铁律")
-        );
+        assert!(cli.system_prompt.is_none());
     }
 
     /// 验证旧子 Agent 档案会进入统一 Agent 列表并保留暴露状态。

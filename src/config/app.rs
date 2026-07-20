@@ -656,7 +656,7 @@ impl AppConfig {
     }
 
     pub fn base_system_prompt(&self, paths: &SaiPaths) -> Result<String> {
-        // 1. Agent 档案 / 运行时覆盖写入的 system_prompt 优先于 persona 文件
+        // 1. Agent 档案 / 运行时覆盖写入的 system_prompt 优先
         if let Some(prompt) = self
             .system_prompt
             .as_deref()
@@ -665,13 +665,13 @@ impl AppConfig {
         {
             return Ok(prompt.to_string());
         }
-        // 2. 未覆盖时再读 active_persona / legacy 提示词
-        let persona = self.active_persona_prompt(paths)?;
-        if persona.trim().is_empty() {
-            Ok(default_system_prompt())
-        } else {
-            Ok(persona)
+        // 2. 兼容旧 system-prompt.md 文件，否则使用内置默认人设提示
+        let legacy = self.custom_system_prompt(paths)?;
+        if !legacy.trim().is_empty() {
+            return Ok(legacy);
         }
+        let _ = paths;
+        Ok(default_system_prompt())
     }
 
     pub fn custom_system_prompt(&self, paths: &SaiPaths) -> Result<String> {
@@ -742,29 +742,6 @@ impl AppConfig {
         self.persona_skills_dir(paths, self.prompt.active_persona.trim())
     }
 
-    pub fn active_persona_prompt(&self, paths: &SaiPaths) -> Result<String> {
-        // 显式 system_prompt（含 Agent 覆盖）优先，避免 persona 文件盖掉 code-agent 等档案
-        if let Some(prompt) = self
-            .system_prompt
-            .as_deref()
-            .filter(|prompt| !prompt.trim().is_empty())
-        {
-            return Ok(prompt.to_string());
-        }
-        if !self.prompt.active_persona.trim().is_empty() {
-            let path = self.persona_path(paths, self.prompt.active_persona.trim());
-            if path.exists() {
-                return std::fs::read_to_string(&path)
-                    .with_context(|| format!("failed to read {}", path.display()));
-            }
-        }
-        let legacy = self.custom_system_prompt(paths)?;
-        if legacy.trim().is_empty() {
-            Ok(String::new())
-        } else {
-            Ok(legacy)
-        }
-    }
 
     pub fn user_identity_prompt(&self, paths: &SaiPaths) -> Result<String> {
         if !self.prompt.active_identity.trim().is_empty() {

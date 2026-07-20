@@ -40,7 +40,7 @@ export function SettingsPage() {
         <div className="settings-topbar-inner">
           <Link to="/" className="settings-back" aria-label={t("Back to workspace", "返回主界面")}><ArrowLeft size={15} /><span>{t("Back to workspace", "返回主界面")}</span></Link>
           <h1>{t("Settings", "设置")}</h1>
-          <p>{t("Manage models, plugins, prompts, tools, gateways, and interface preferences.", "管理模型、插件、提示词、工具、网关和界面偏好。")}</p>
+          <p>{t("Manage models, plugins, agents, tools, gateways, and interface preferences.", "管理模型、插件、Agent、工具、网关和界面偏好。")}</p>
           <div className="settings-topbar-actions">
             <SaveStatusBadge dirty={settings.dirty} saving={settings.saving} saveError={Boolean(settings.error)} loaded={Boolean(settings.config)} />
             <button

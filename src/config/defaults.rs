@@ -22,8 +22,9 @@ impl Default for AppConfig {
             prompt: PromptConfig::default(),
             gateways: GatewayConfig::default(),
             agents: Vec::new(),
-            default_agent: Some("general".to_string()),
-            tui_agent: Some("general".to_string()),
+            // 默认入口不强制 code-agent，使用内置 Sai 系统提示；可在 Agent 配置中切换
+            default_agent: None,
+            tui_agent: None,
             cli_agent: None,
             gateway_agent: Some("gateway".to_string()),
             subagent: SubagentConfig::default(),

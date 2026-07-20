@@ -41,5 +41,7 @@ mod tests {
         assert!(!prompt.contains("draw_zhouyi_hexagram"));
         assert!(!prompt.contains("Available groups"));
         assert!(prompt.contains("Sai"));
+        assert!(prompt.contains("md渲染") || prompt.contains("mermaid"));
+        assert!(prompt.contains("绝对禁忌") || prompt.contains("基础规则"));
     }
 }
