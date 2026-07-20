@@ -1,18 +1,23 @@
+import { useI18n } from "../i18n/use-i18n";
+import { LightboxImage } from "../../shared/ui/image-lightbox";
+
 type ImageFilePreviewProps = {
   path: string;
 };
 
 /**
- * 在编辑器区域中自适应显示图像文件。
+ * 在编辑器区域中自适应显示图像文件，点击可全屏预览。
  *
  * @param props 图像相对路径
  * @returns 图像预览
  */
 export function ImageFilePreview({ path }: ImageFilePreviewProps) {
   const { t } = useI18n();
+  const src = `/api/workspace/image?path=${encodeURIComponent(path)}`;
+  const alt = path.split(/[\\/]/).pop() ?? t("Image preview", "图像预览");
   return (
     <div className="editor-image-preview">
-      <img src={`/api/workspace/image?path=${encodeURIComponent(path)}`} alt={path.split(/[\\/]/).pop() ?? t("Image preview", "图像预览")} />
+      <LightboxImage className="editor-image-preview-image" src={src} alt={alt} />
     </div>
   );
 }
@@ -26,4 +31,3 @@ export function ImageFilePreview({ path }: ImageFilePreviewProps) {
 export function isImageFile(path: string): boolean {
   return /\.(png|jpe?g|gif|webp|bmp|svg|ico)$/i.test(path);
 }
-import { useI18n } from "../i18n/use-i18n";

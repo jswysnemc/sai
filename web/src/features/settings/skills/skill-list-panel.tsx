@@ -27,7 +27,7 @@ export function SkillListPanel({ skills, selectedId, scanning, onSelect, onAdd, 
       items={skills.map((skill) => ({
         id: skill.id,
         name: skill.name,
-        meta: `${skill.scope === "global" ? t("Global", "全局") : t("Workspace", "工作区")} / ${skill.directory_name}`,
+        meta: `${scopeLabel(skill.scope, t)} / ${skill.directory_name}`,
         icon: <Sparkles size={14} />,
         marked: skill.enabled
       }))}
@@ -44,4 +44,32 @@ export function SkillListPanel({ skills, selectedId, scanning, onSelect, onAdd, 
       )}
     />
   );
+}
+
+/**
+ * 将扫描源标识转为界面文案。
+ *
+ * @param scope 后端 scope
+ * @param t 双语函数
+ * @returns 展示名
+ */
+function scopeLabel(scope: string, t: (en: string, zh: string) => string): string {
+  const map: Record<string, [string, string]> = {
+    global: ["Global", "全局"],
+    persona: ["Persona", "人格"],
+    claude: ["Claude", "Claude"],
+    codex: ["Codex", "Codex"],
+    agents: ["Agents", "Agents"],
+    agent: ["Agent", "Agent"],
+    opencode: ["OpenCode", "OpenCode"],
+    opencode_home: ["OpenCode", "OpenCode"],
+    project_claude: ["Project Claude", "项目 Claude"],
+    project_codex: ["Project Codex", "项目 Codex"],
+    project_agents: ["Project Agents", "项目 Agents"],
+    project_agent: ["Project Agent", "项目 Agent"],
+    project_opencode: ["Project OpenCode", "项目 OpenCode"],
+    project_skills: ["Project skills", "项目 skills"]
+  };
+  const pair = map[scope] ?? [scope, scope];
+  return t(...pair);
 }

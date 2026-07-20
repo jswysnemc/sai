@@ -29,22 +29,34 @@ pub(crate) fn list_managed_skills(
     paths: &SaiPaths,
 ) -> Result<Vec<ManagedSkill>> {
     let mut skills = Vec::new();
+    let mut seen_paths = std::collections::BTreeSet::new();
+    let mut seen_names = std::collections::BTreeSet::new();
     for (scope, root) in skill_roots(config, paths) {
         if !root.exists() {
             continue;
         }
         for entry in std::fs::read_dir(&root)? {
             let entry = entry?;
-            if !entry.file_type()?.is_dir() {
+            if !is_skill_directory_entry(&entry) {
                 continue;
             }
             let directory_name = entry.file_name().to_string_lossy().to_string();
-            let file = entry.path().join("SKILL.md");
+            let skill_dir = entry.path();
+            let file = skill_dir.join("SKILL.md");
             if !file.is_file() {
+                continue;
+            }
+            // 1. 真实路径去重（软链接与重复挂载）
+            let path_key = canonical_path(&file).display().to_string();
+            if !seen_paths.insert(path_key) {
                 continue;
             }
             let raw = std::fs::read_to_string(&file)?;
             let name = frontmatter_value(&raw, "name").unwrap_or_else(|| directory_name.clone());
+            // 2. 同名 skill 按优先级保留一项
+            if !seen_names.insert(name.clone()) {
+                continue;
+            }
             let description = frontmatter_value(&raw, "description").unwrap_or_default();
             skills.push(ManagedSkill {
                 id: format!("{scope}:{directory_name}"),
@@ -53,7 +65,7 @@ pub(crate) fn list_managed_skills(
                 scope: scope.to_string(),
                 directory_name,
                 path: file.display().to_string(),
-                enabled: !entry.path().join(".disabled").exists(),
+                enabled: !skill_dir.join(".disabled").exists(),
             });
         }
     }
@@ -193,14 +205,28 @@ fn resolve_skill_directory(id: &str, config: &AppConfig, paths: &SaiPaths) -> Re
     Ok(directory)
 }
 
-/// 返回全局与当前人格 Skills 根目录。
+/// 返回全局、人格与常见三方 Skills 根目录。
 fn skill_roots(config: &AppConfig, paths: &SaiPaths) -> Vec<(&'static str, PathBuf)> {
-    let mut roots = vec![("global", paths.skills_dir.clone())];
-    let persona = config.active_persona_skills_dir(paths);
-    if persona != paths.skills_dir {
-        roots.push(("persona", persona));
+    super::skills::skill_source_roots(config, paths)
+}
+
+/// 判断目录项是否可作为 skill 目录（含指向目录的软链接）。
+fn is_skill_directory_entry(entry: &std::fs::DirEntry) -> bool {
+    let Ok(file_type) = entry.file_type() else {
+        return false;
+    };
+    if file_type.is_dir() {
+        return true;
     }
-    roots
+    if file_type.is_symlink() {
+        return entry.path().is_dir();
+    }
+    false
+}
+
+/// 规范化路径，便于识别软链接重复项。
+fn canonical_path(path: &std::path::Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// 校验目录名称为单个安全路径片段。
@@ -287,10 +313,20 @@ mod tests {
         let initial = "---\nname: review\ndescription: Review code\n---\n\nInitial.";
         let id = create_managed_skill("review", initial, &paths).unwrap();
         assert_eq!(id, "global:review");
-        assert!(list_managed_skills(&config, &paths).unwrap()[0].enabled);
+        let listed = list_managed_skills(&config, &paths).unwrap();
+        let skill = listed
+            .iter()
+            .find(|item| item.id == id)
+            .expect("created skill present");
+        assert!(skill.enabled);
 
         set_managed_skill_enabled(&id, false, &config, &paths).unwrap();
-        assert!(!list_managed_skills(&config, &paths).unwrap()[0].enabled);
+        let listed = list_managed_skills(&config, &paths).unwrap();
+        let skill = listed
+            .iter()
+            .find(|item| item.id == id)
+            .expect("disabled skill present");
+        assert!(!skill.enabled);
 
         let updated = "---\nname: review\ndescription: Review changes\n---\n\nUpdated.";
         update_managed_skill(&id, updated, &config, &paths).unwrap();

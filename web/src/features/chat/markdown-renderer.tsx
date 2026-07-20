@@ -3,6 +3,7 @@ import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markd
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
+import { LightboxImage } from "../../shared/ui/image-lightbox";
 import { MarkdownCodeBlock } from "./markdown-code-block";
 import { MermaidDiagram } from "./mermaid-diagram";
 import "./markdown-renderer.css";
@@ -44,8 +45,9 @@ const markdownComponents: Components = {
   table({ children }) {
     return <div className="markdown-table-wrap"><table>{children}</table></div>;
   },
-  img({ alt, ...props }) {
-    return <img {...props} alt={alt ?? ""} loading="lazy" />;
+  img({ alt, src, className }) {
+    if (!src) return null;
+    return <LightboxImage className={className} src={src} alt={alt ?? ""} />;
   }
 };
 

@@ -66,7 +66,7 @@ pub fn register_skills(
         }
         for entry in std::fs::read_dir(&skills_dir)? {
             let entry = entry?;
-            if !entry.file_type()?.is_dir() {
+            if !is_skill_directory_entry(&entry) {
                 continue;
             }
             let skill_dir = entry.path();
@@ -90,13 +90,87 @@ pub fn register_skills(
     Ok(())
 }
 
-fn skill_search_dirs(config: &AppConfig, paths: &SaiPaths) -> Vec<PathBuf> {
-    let mut dirs = vec![paths.skills_dir.clone()];
+/// 返回 skills 扫描根目录，顺序即优先级（先匹配先采用）。
+///
+/// 参数:
+/// - `config`: 当前应用配置
+/// - `paths`: 应用目录路径集合
+///
+/// 返回:
+/// - `(scope, 根目录)` 列表；含 Sai 全局/人格与常见三方目录
+pub(crate) fn skill_source_roots(
+    config: &AppConfig,
+    paths: &SaiPaths,
+) -> Vec<(&'static str, PathBuf)> {
+    let mut roots = vec![("global", paths.skills_dir.clone())];
     let active = config.active_persona_skills_dir(paths);
     if active != paths.skills_dir {
-        dirs.push(active);
+        roots.push(("persona", active));
     }
-    dirs
+    roots.extend(third_party_skill_roots());
+    roots
+}
+
+/// 仅返回目录路径，供运行时发现使用。
+fn skill_search_dirs(config: &AppConfig, paths: &SaiPaths) -> Vec<PathBuf> {
+    skill_source_roots(config, paths)
+        .into_iter()
+        .map(|(_, root)| root)
+        .collect()
+}
+
+/// 收集工作区与用户目录下常见三方 Agent Skills 路径。
+///
+/// 返回:
+/// - scope 与路径；不要求目录已存在
+fn third_party_skill_roots() -> Vec<(&'static str, PathBuf)> {
+    let mut roots = Vec::new();
+    // 1. 当前工作区相对目录（Claude / Codex / Agent / OpenCode）
+    if let Ok(cwd) = crate::runtime_cwd::current_dir() {
+        for (scope, relative) in [
+            ("project_claude", ".claude/skills"),
+            ("project_codex", ".codex/skills"),
+            ("project_agents", ".agents/skills"),
+            ("project_agent", ".agent/skills"),
+            ("project_opencode", ".opencode/skills"),
+            ("project_skills", "skills"),
+        ] {
+            roots.push((scope, cwd.join(relative)));
+        }
+    }
+    // 2. 用户主目录常见安装位置
+    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from).filter(|path| !path.as_os_str().is_empty()) {
+        for (scope, relative) in [
+            ("claude", ".claude/skills"),
+            ("codex", ".codex/skills"),
+            ("agents", ".agents/skills"),
+            ("agent", ".agent/skills"),
+            ("opencode", ".config/opencode/skills"),
+            ("opencode_home", ".opencode/skills"),
+        ] {
+            roots.push((scope, home.join(relative)));
+        }
+    }
+    roots
+}
+
+/// 判断目录项是否可作为 skill 目录（目录或指向目录的软链接）。
+fn is_skill_directory_entry(entry: &std::fs::DirEntry) -> bool {
+    let Ok(file_type) = entry.file_type() else {
+        return false;
+    };
+    if file_type.is_dir() {
+        return true;
+    }
+    if file_type.is_symlink() {
+        return entry.path().is_dir();
+    }
+    false
+}
+
+/// 规范化路径用于软链接与重复目录去重。
+fn canonical_path(path: &std::path::Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 struct SkillEntry {
@@ -119,29 +193,31 @@ struct SkillEntry {
 /// - 按搜索目录优先级去重后的 skill 条目
 fn skill_entries(config: &AppConfig, paths: &SaiPaths) -> Result<Vec<SkillEntry>> {
     let mut entries = Vec::new();
-    let mut seen = BTreeSet::new();
-    let search_dirs = skill_search_dirs(config, paths);
-    for skills_dir in search_dirs {
+    let mut seen_names = BTreeSet::new();
+    let mut seen_paths = BTreeSet::new();
+    for (source, skills_dir) in skill_source_roots(config, paths) {
         if !skills_dir.exists() {
             continue;
         }
-        let source = if skills_dir == paths.skills_dir {
-            "global"
-        } else {
-            "persona"
-        };
         for entry in std::fs::read_dir(&skills_dir)? {
             let entry = entry?;
-            if !entry.file_type()?.is_dir() || entry.path().join(".disabled").exists() {
+            if !is_skill_directory_entry(&entry) || entry.path().join(".disabled").exists() {
                 continue;
             }
-            let skill_file = entry.path().join("SKILL.md");
+            let skill_dir = entry.path();
+            let skill_file = skill_dir.join("SKILL.md");
             if !skill_file.is_file() {
+                continue;
+            }
+            // 1. 同一真实路径（含软链接）只保留优先级更高的一项
+            let path_key = canonical_path(&skill_file).display().to_string();
+            if !seen_paths.insert(path_key) {
                 continue;
             }
             let raw = std::fs::read_to_string(&skill_file)?;
             let name = skill_name(&raw, &entry.file_name().to_string_lossy());
-            if !seen.insert(name.clone()) {
+            // 2. 同名 skill 按扫描顺序去重，先出现者优先
+            if !seen_names.insert(name.clone()) {
                 continue;
             }
             let description = frontmatter_value(&raw, "description").unwrap_or_default();
@@ -152,7 +228,7 @@ fn skill_entries(config: &AppConfig, paths: &SaiPaths) -> Result<Vec<SkillEntry>
                 body,
                 raw,
                 source,
-                dir: entry.path(),
+                dir: skill_dir,
                 file: skill_file,
             });
         }
@@ -585,4 +661,43 @@ mod tests {
         #[cfg(not(windows))]
         assert_eq!(labels, vec!["python3", "python"]);
     }
+
+    #[test]
+    fn third_party_skill_roots_cover_common_agent_paths() {
+        let roots = third_party_skill_roots();
+        let scopes: std::collections::BTreeSet<_> = roots.iter().map(|(scope, _)| *scope).collect();
+        assert!(scopes.contains("claude") || scopes.contains("project_claude"));
+        assert!(scopes.contains("codex") || scopes.contains("project_codex"));
+        assert!(scopes.contains("agents") || scopes.contains("project_agents") || scopes.contains("agent"));
+        assert!(scopes.contains("opencode") || scopes.contains("opencode_home") || scopes.contains("project_opencode"));
+    }
+
+    #[test]
+    fn skill_entries_dedupe_symlinked_roots() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let paths = test_paths(root);
+        let config = AppConfig::default();
+        let primary = paths.skills_dir.join("shared-skill");
+        std::fs::create_dir_all(&primary).unwrap();
+        std::fs::write(
+            primary.join("SKILL.md"),
+            "---\nname: shared-skill\ndescription: shared\n---\nbody\n",
+        )
+        .unwrap();
+        // 在 persona 目录放置指向同一 skill 的软链接目录
+        let persona = config.active_persona_skills_dir(&paths);
+        if persona != paths.skills_dir {
+            std::fs::create_dir_all(&persona).unwrap();
+            #[cfg(unix)]
+            {
+                let link = persona.join("shared-skill-link");
+                std::os::unix::fs::symlink(&primary, &link).unwrap();
+            }
+        }
+        let entries = skill_entries(&config, &paths).unwrap();
+        let count = entries.iter().filter(|item| item.name == "shared-skill").count();
+        assert_eq!(count, 1);
+    }
+
 }
