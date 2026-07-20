@@ -42,6 +42,8 @@ import type {
   AgentRuntimeProfilesResponse,
   SessionTimeline,
   SystemUsage,
+  UsageStatsQuery,
+  UsageStatsResponse,
   Session,
   TerminalInfo,
   UpdateCronJobRequest,
@@ -463,6 +465,21 @@ export const api = {
       const suffix = query.size > 0 ? `?${query.toString()}` : "";
       return apiRequest<SystemUsage>(`/api/system/usage${suffix}`);
     }
+  },
+  usage: {
+    stats: (query: UsageStatsQuery = {}) => {
+      const params = new URLSearchParams();
+      if (query.range) params.set("range", query.range);
+      if (query.source) params.set("source", query.source);
+      if (query.status) params.set("status", query.status);
+      if (query.provider_search) params.set("provider_search", query.provider_search);
+      if (query.model_search) params.set("model_search", query.model_search);
+      if (query.limit != null) params.set("limit", String(query.limit));
+      if (query.offset != null) params.set("offset", String(query.offset));
+      const suffix = params.size > 0 ? `?${params.toString()}` : "";
+      return apiRequest<UsageStatsResponse>(`/api/usage/stats${suffix}`);
+    },
+    clear: () => apiRequest<{ ok: boolean }>("/api/usage/logs", { method: "DELETE" })
   },
   skills: {
     list: () => apiRequest<{ skills: Array<{ name: string; description: string }> }>("/api/skills"),

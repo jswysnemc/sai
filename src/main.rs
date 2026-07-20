@@ -29,6 +29,7 @@ mod shell;
 mod state;
 mod token_counter;
 mod token_estimate;
+mod usage_history;
 mod tools;
 mod web;
 

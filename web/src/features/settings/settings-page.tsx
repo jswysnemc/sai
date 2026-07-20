@@ -12,6 +12,7 @@ import { RuntimeSettingsSection } from "./runtime-settings-section";
 import { MemorySettingsSection } from "./memory-settings-section";
 import { HooksSettingsSection } from "./hooks-settings-section";
 import { McpSettingsSection } from "./mcp-settings-section";
+import { UsageStatsSection } from "./usage-stats-section";
 import { SaveStatusBadge } from "./save-status-badge";
 import { SETTINGS_SECTIONS } from "./settings-sections";
 import type { SettingsSectionId } from "./settings-types";
@@ -75,6 +76,7 @@ export function SettingsPage() {
           {section === "memory" && <MemorySettingsSection />}
           {settings.config && section === "hooks" && <HooksSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
           {section === "mcp" && <McpSettingsSection />}
+          {section === "usage" && <UsageStatsSection />}
           {settings.config && section === "gateways" && <GatewaySettingsSection config={settings.config} dirty={settings.dirty} onGatewayChange={settings.updateGateway} onSave={settings.saveConfig} />}
           {settings.config && section === "advanced" && <AdvancedSettingsSection value={settings.raw} onChange={settings.updateRaw} />}
           {settings.error && <div className="settings-error">{settings.error.message}</div>}

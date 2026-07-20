@@ -1,4 +1,4 @@
-import { Bot, Brain, Braces, Cable, GitBranch, KeyRound, Palette, Plug, Server, SlidersHorizontal, Webhook } from "lucide-react";
+import { BarChart3, Bot, Brain, Braces, Cable, GitBranch, KeyRound, Palette, Plug, Server, SlidersHorizontal, Webhook } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { SettingsSectionId } from "./settings-types";
 
@@ -28,5 +28,6 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   { id: "memory", labelEn: "Memory", labelZh: "记忆管理", descriptionEn: "Facts, events, and reset controls", descriptionZh: "长期事实、往事和清空", icon: Brain },
   { id: "hooks", labelEn: "Hooks", labelZh: "Hooks", descriptionEn: "Lifecycle shell and HTTP actions", descriptionZh: "生命周期 shell 与 HTTP 动作", icon: Webhook },
   { id: "mcp", labelEn: "MCP", labelZh: "MCP", descriptionEn: "External Model Context Protocol servers", descriptionZh: "外部 MCP 工具服务", icon: Server },
+  { id: "usage", labelEn: "Usage stats", labelZh: "用量统计", descriptionEn: "Token trends, providers, models, and request logs", descriptionZh: "Token 趋势、供应商、模型与请求日志", icon: BarChart3 },
   { id: "advanced", labelEn: "Advanced", labelZh: "高级配置", descriptionEn: "Complete AppConfig JSON", descriptionZh: "完整 AppConfig JSON", icon: Braces }
 ];

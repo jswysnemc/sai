@@ -18,6 +18,7 @@ mod sessions;
 mod skills;
 mod subagents;
 mod system;
+mod usage_stats;
 mod terminal;
 mod todos;
 mod workspace;
@@ -63,6 +64,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(workspace_git::routes())
         .merge(workspace_git_events::routes())
         .merge(system::routes())
+        .merge(usage_stats::routes())
         .merge(terminal::routes())
         .layer(middleware::from_fn_with_state(
             state.clone(),

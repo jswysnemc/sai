@@ -198,8 +198,46 @@ impl Agent {
         perf.mark("session memory extraction spawned");
         self.memory.process_after_turn(&input, &result.content)?;
         perf.mark("memory process after turn");
+        // 1. 会话级累计（顶栏）
+        // 2. 全局 JSONL 历史（设置页统计）
+        let started_at = chrono::Utc::now().timestamp();
         if let Some(usage) = &result.usage {
             self.state.add_usage(usage)?;
+            let _ = crate::usage_history::record_model_call(
+                &self.paths,
+                crate::usage_history::UsageRecordInput {
+                    provider_id: self.client.provider_id(),
+                    provider_name: self.client.provider_name(),
+                    model: self.client.model(),
+                    source: "chat",
+                    operation: "turn",
+                    status: "success",
+                    usage: Some(usage),
+                    usage_source: "provider_reported",
+                    started_at,
+                    duration_ms: 0,
+                    session_id: Some(self.state.session_id()),
+                    error_kind: None,
+                },
+            );
+        } else {
+            let _ = crate::usage_history::record_model_call(
+                &self.paths,
+                crate::usage_history::UsageRecordInput {
+                    provider_id: self.client.provider_id(),
+                    provider_name: self.client.provider_name(),
+                    model: self.client.model(),
+                    source: "chat",
+                    operation: "turn",
+                    status: "success",
+                    usage: None,
+                    usage_source: "missing",
+                    started_at,
+                    duration_ms: 0,
+                    session_id: Some(self.state.session_id()),
+                    error_kind: None,
+                },
+            );
         }
         perf.mark("usage saved");
         Ok(result)

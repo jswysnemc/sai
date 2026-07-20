@@ -139,9 +139,10 @@ impl Agent {
     pub(super) fn spawn_session_memory_extraction(&self) {
         let state = self.state.clone();
         let client = self.client.clone();
+        let paths = self.paths.clone();
         let context_char_budget = self.context_char_budget;
         tokio::spawn(async move {
-            let _ = extract_session_memory_with_model(state, client, context_char_budget).await;
+            let _ = extract_session_memory_with_model(state, client, paths, context_char_budget).await;
         });
     }
 }
@@ -158,6 +159,7 @@ impl Agent {
 async fn extract_session_memory_with_model(
     state: StateStore,
     client: OpenAiCompatibleClient,
+    paths: crate::paths::SaiPaths,
     context_char_budget: usize,
 ) -> Result<bool> {
     let mut perf = PerfTrace::new("session-memory");
@@ -188,6 +190,23 @@ async fn extract_session_memory_with_model(
     perf.mark("model done");
     if let Some(usage) = &result.usage {
         state.add_auxiliary_usage(usage)?;
+        let _ = crate::usage_history::record_model_call(
+            &paths,
+            crate::usage_history::UsageRecordInput {
+                provider_id: client.provider_id(),
+                provider_name: client.provider_name(),
+                model: client.model(),
+                source: "session_memory",
+                operation: "extract",
+                status: "success",
+                usage: Some(usage),
+                usage_source: "provider_reported",
+                started_at: chrono::Utc::now().timestamp(),
+                duration_ms: 0,
+                session_id: Some(state.session_id()),
+                error_kind: None,
+            },
+        );
     }
     state.apply_session_memory_model_extraction(&input, &result.content)?;
     perf.mark("applied");

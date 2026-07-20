@@ -54,6 +54,25 @@ impl OpenAiCompatibleClient {
         Self::new(provider, config, paths)
     }
 
+    /// 返回客户端绑定的 provider id。
+    pub fn provider_id(&self) -> &str {
+        &self.provider.id
+    }
+
+    /// 返回客户端绑定的 provider 显示名。
+    pub fn provider_name(&self) -> &str {
+        if self.provider.display_name.trim().is_empty() {
+            &self.provider.id
+        } else {
+            &self.provider.display_name
+        }
+    }
+
+    /// 返回客户端当前默认模型。
+    pub fn model(&self) -> &str {
+        &self.provider.default_model
+    }
+
     pub fn new(provider: &ProviderConfig, _config: &AppConfig, paths: &SaiPaths) -> Result<Self> {
         if provider.default_model.trim().is_empty() {
             bail!(

@@ -245,6 +245,23 @@ impl Agent {
             .await?;
         if let Some(usage) = &result.usage {
             self.state.add_auxiliary_usage(usage)?;
+            let _ = crate::usage_history::record_model_call(
+                &self.paths,
+                crate::usage_history::UsageRecordInput {
+                    provider_id: self.compaction_client.provider_id(),
+                    provider_name: self.compaction_client.provider_name(),
+                    model: self.compaction_client.model(),
+                    source: "compaction",
+                    operation: "summary",
+                    status: "success",
+                    usage: Some(usage),
+                    usage_source: "provider_reported",
+                    started_at: chrono::Utc::now().timestamp(),
+                    duration_ms: 0,
+                    session_id: Some(self.state.session_id()),
+                    error_kind: None,
+                },
+            );
         }
         Ok(result.content.trim().to_string())
     }

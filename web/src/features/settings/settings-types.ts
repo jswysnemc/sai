@@ -1,6 +1,6 @@
 import type { AppConfig, ProviderConfig } from "../../api/contracts";
 
-export type SettingsSectionId = "providers" | "agents" | "plugins" | "runtime" | "git" | "appearance" | "gateways" | "memory" | "hooks" | "mcp" | "advanced";
+export type SettingsSectionId = "providers" | "agents" | "plugins" | "runtime" | "git" | "appearance" | "gateways" | "memory" | "hooks" | "mcp" | "usage" | "advanced";
 export type GatewayId = "qq" | "weixin";
 
 export type SettingsConfigController = {
