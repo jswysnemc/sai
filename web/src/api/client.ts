@@ -65,6 +65,8 @@ import { ApiError } from "./api-error";
 import { detectInitialLocale, text } from "../features/i18n/locale";
 import type { GoalResponse, GoalUpdateRequest } from "./goal-contracts";
 import type { GitOperationAction, GitOperationOptions } from "./git-contracts";
+import type { McpToolInfo } from "./mcp-tool-contracts";
+import type { ManagedSkill, ManagedSkillDocument } from "./skill-contracts";
 
 /** 使用 URL 启动令牌建立同源会话。 */
 export async function bootstrapSession(): Promise<void> {
@@ -367,7 +369,12 @@ export const api = {
       apiRequest<ConfigResponse>("/api/config", { method: "PUT", body: JSON.stringify(config) }),
     loadMcp: () => apiRequest<McpConfigResponse>("/api/config/mcp"),
     saveMcp: (config: McpConfig) =>
-      apiRequest<McpConfigResponse>("/api/config/mcp", { method: "PUT", body: JSON.stringify(config) })
+      apiRequest<McpConfigResponse>("/api/config/mcp", { method: "PUT", body: JSON.stringify(config) }),
+    scanMcpTools: (server: import("./contracts").McpServerConfig) =>
+      apiRequest<{ tools: McpToolInfo[] }>("/api/config/mcp/tools", {
+        method: "POST",
+        body: JSON.stringify(server)
+      })
   },
   providers: {
     models: (provider: ProviderConfig) =>
@@ -486,7 +493,25 @@ export const api = {
     document: (name: string) =>
       apiRequest<{ name: string; description: string; content: string }>(
         `/api/skills/${encodeURIComponent(name)}`
-      )
+      ),
+    managedList: () => apiRequest<{ skills: ManagedSkill[] }>("/api/skills/manage"),
+    managedDocument: (id: string) =>
+      apiRequest<ManagedSkillDocument>(`/api/skills/manage/${encodeURIComponent(id)}`),
+    create: (directoryName: string, content: string) =>
+      apiRequest<ManagedSkillDocument>("/api/skills/manage", {
+        method: "POST",
+        body: JSON.stringify({ directory_name: directoryName, content })
+      }),
+    update: (id: string, content: string) =>
+      apiRequest<ManagedSkillDocument>(`/api/skills/manage/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        body: JSON.stringify({ content })
+      }),
+    setEnabled: (id: string, enabled: boolean) =>
+      apiRequest<ManagedSkillDocument>(`/api/skills/manage/${encodeURIComponent(id)}/enabled`, {
+        method: "POST",
+        body: JSON.stringify({ enabled })
+      })
   }
 };
 

@@ -18,6 +18,7 @@ struct SetGoalRequest {
 struct UpdateGoalRequest {
     status: Option<String>,
     objective: Option<String>,
+    note: Option<String>,
     #[serde(default, deserialize_with = "deserialize_double_option")]
     token_budget: Option<Option<u64>>,
 }
@@ -63,8 +64,9 @@ async fn set(
     Json(request): Json<SetGoalRequest>,
 ) -> WebResult<Json<Value>> {
     let store = session_state(&state, &id)?;
+    // Web /goal 与目标面板创建视为显式切换：允许替换未结束目标
     let goal = store
-        .replace_goal(&request.objective, request.token_budget, false)
+        .replace_goal(&request.objective, request.token_budget, true)
         .map_err(|error| WebError::bad_request(error.to_string()))?;
     Ok(Json(json!({ "goal": goal })))
 }
@@ -83,7 +85,11 @@ async fn update(
     Path(id): Path<String>,
     Json(request): Json<UpdateGoalRequest>,
 ) -> WebResult<Json<Value>> {
-    if request.status.is_none() && request.objective.is_none() && request.token_budget.is_none() {
+    if request.status.is_none()
+        && request.objective.is_none()
+        && request.token_budget.is_none()
+        && request.note.as_ref().map(|v| v.trim().is_empty()).unwrap_or(true)
+    {
         return Err(WebError::bad_request("goal update cannot be empty"));
     }
     let status = request
@@ -101,9 +107,23 @@ async fn update(
         ));
     }
     let store = session_state(&state, &id)?;
-    let goal = store
-        .update_goal(request.objective.as_deref(), request.token_budget, status)
-        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    let goal = if request.objective.is_some() || request.token_budget.is_some() || status.is_some() {
+        store
+            .update_goal(request.objective.as_deref(), request.token_budget, status)
+            .map_err(|error| WebError::bad_request(error.to_string()))?
+    } else {
+        store
+            .goal()
+            .map_err(WebError::from)?
+            .ok_or_else(|| WebError::bad_request("no active goal".to_string()))?
+    };
+    let goal = if let Some(note) = request.note.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+        store
+            .append_goal_progress(note)
+            .map_err(|error| WebError::bad_request(error.to_string()))?
+    } else {
+        goal
+    };
     Ok(Json(json!({ "goal": goal })))
 }
 

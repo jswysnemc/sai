@@ -3,9 +3,9 @@ use super::super::error::{WebError, WebResult};
 use crate::config::AppConfig;
 use crate::tools;
 use axum::extract::{Path, State};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
 struct SkillListItem {
@@ -25,6 +25,33 @@ struct SkillDocumentResponse {
     content: String,
 }
 
+#[derive(Serialize)]
+struct ManagedSkillListResponse {
+    skills: Vec<tools::ManagedSkill>,
+}
+
+#[derive(Serialize)]
+struct ManagedSkillDocumentResponse {
+    skill: tools::ManagedSkill,
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct CreateSkillRequest {
+    directory_name: String,
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct UpdateSkillRequest {
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct SetSkillEnabledRequest {
+    enabled: bool,
+}
+
 /// 返回 skills 目录与文档路由。
 ///
 /// 参数:
@@ -36,6 +63,9 @@ pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
         .route("/api/skills", get(list))
         .route("/api/skills/:name", get(document))
+        .route("/api/skills/manage", get(managed_list).post(create))
+        .route("/api/skills/manage/:id", get(managed_document).put(update))
+        .route("/api/skills/manage/:id/enabled", post(set_enabled))
 }
 
 /// 枚举当前可用 skills 的名称与描述。
@@ -94,4 +124,65 @@ async fn document(
         description,
         content,
     }))
+}
+
+/// 扫描全局与当前人格 Skills，包含已禁用条目。
+async fn managed_list(
+    State(state): State<WebAppState>,
+) -> WebResult<Json<ManagedSkillListResponse>> {
+    let config = AppConfig::load_or_default(&state.paths).unwrap_or_default();
+    let skills = tools::list_managed_skills(&config, &state.paths).map_err(WebError::from)?;
+    Ok(Json(ManagedSkillListResponse { skills }))
+}
+
+/// 读取指定 Skill 的原始文档。
+async fn managed_document(
+    State(state): State<WebAppState>,
+    Path(id): Path<String>,
+) -> WebResult<Json<ManagedSkillDocumentResponse>> {
+    let config = AppConfig::load_or_default(&state.paths).unwrap_or_default();
+    let (skill, content) = tools::read_managed_skill(&id, &config, &state.paths)
+        .map_err(|error| WebError::not_found(error.to_string()))?;
+    Ok(Json(ManagedSkillDocumentResponse { skill, content }))
+}
+
+/// 在全局 Skills 目录创建新 Skill。
+async fn create(
+    State(state): State<WebAppState>,
+    Json(request): Json<CreateSkillRequest>,
+) -> WebResult<Json<ManagedSkillDocumentResponse>> {
+    let id = tools::create_managed_skill(&request.directory_name, &request.content, &state.paths)
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    let config = AppConfig::load_or_default(&state.paths).unwrap_or_default();
+    let (skill, content) =
+        tools::read_managed_skill(&id, &config, &state.paths).map_err(WebError::from)?;
+    Ok(Json(ManagedSkillDocumentResponse { skill, content }))
+}
+
+/// 更新指定 Skill 的完整文档。
+async fn update(
+    State(state): State<WebAppState>,
+    Path(id): Path<String>,
+    Json(request): Json<UpdateSkillRequest>,
+) -> WebResult<Json<ManagedSkillDocumentResponse>> {
+    let config = AppConfig::load_or_default(&state.paths).unwrap_or_default();
+    tools::update_managed_skill(&id, &request.content, &config, &state.paths)
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    let (skill, content) =
+        tools::read_managed_skill(&id, &config, &state.paths).map_err(WebError::from)?;
+    Ok(Json(ManagedSkillDocumentResponse { skill, content }))
+}
+
+/// 启用或禁用指定 Skill。
+async fn set_enabled(
+    State(state): State<WebAppState>,
+    Path(id): Path<String>,
+    Json(request): Json<SetSkillEnabledRequest>,
+) -> WebResult<Json<ManagedSkillDocumentResponse>> {
+    let config = AppConfig::load_or_default(&state.paths).unwrap_or_default();
+    tools::set_managed_skill_enabled(&id, request.enabled, &config, &state.paths)
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    let (skill, content) =
+        tools::read_managed_skill(&id, &config, &state.paths).map_err(WebError::from)?;
+    Ok(Json(ManagedSkillDocumentResponse { skill, content }))
 }

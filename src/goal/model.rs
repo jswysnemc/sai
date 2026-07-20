@@ -72,6 +72,23 @@ impl GoalStatus {
     }
 }
 
+/// 目标执行过程中的一轮更新记录。
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub(crate) struct GoalUpdateEntry {
+    /// 记录时间（RFC3339）。
+    pub at: String,
+    /// 更新类型：progress / status / account。
+    pub kind: String,
+    /// 人类可读摘要。
+    pub message: String,
+    /// 可选状态快照。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// 可选累计 Token 用量快照。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tokens_used: Option<u64>,
+}
+
 /// 会话级持续执行目标。
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct Goal {
@@ -83,4 +100,7 @@ pub(crate) struct Goal {
     pub time_used_seconds: u64,
     pub created_at: String,
     pub updated_at: String,
+    /// Agent / 系统产生的按轮更新详情，旧文件缺失时按空列表处理。
+    #[serde(default)]
+    pub updates: Vec<GoalUpdateEntry>,
 }

@@ -30,6 +30,7 @@ mod package_advisor;
 pub(crate) mod progressive;
 mod protondb_query;
 mod registry;
+mod skill_management;
 mod skills;
 mod subagent;
 pub(crate) mod subagent_event;
@@ -55,6 +56,10 @@ pub(crate) use catalog::{mcp_tool_catalog, tool_catalog, ToolCatalogEntry};
 pub(crate) use context::tool_output_for_context;
 pub(crate) use progressive::{register_loader as register_progressive_loader, LOAD_NAME};
 pub use registry::{empty_parameters, ToolPermission, ToolProgress, ToolRegistry, ToolSpec};
+pub(crate) use skill_management::{
+    create_managed_skill, list_managed_skills, read_managed_skill, set_managed_skill_enabled,
+    update_managed_skill, ManagedSkill,
+};
 pub(crate) use skills::load_installed_skill;
 pub use skills::{
     load_installed_skill_document, register_skills, skill_catalog, skills_catalog_prompt,

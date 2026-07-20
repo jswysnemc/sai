@@ -44,6 +44,9 @@ export function parseComposerAtoms(value: string): ComposerAtomSegment[] {
             for (const goalSegment of parseGoalCommandAtoms(skillSegment.value)) {
               if (goalSegment.value) segments.push(goalSegment);
             }
+          } else if (skillSegment.name === "goal") {
+            // 兼容旧草稿里误写成 skill-mention 的 /goal
+            segments.push({ type: "goal", value: "/goal" });
           } else {
             segments.push({ type: "skill", name: skillSegment.name, value: skillSegment.value });
           }

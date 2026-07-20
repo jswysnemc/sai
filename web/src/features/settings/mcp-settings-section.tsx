@@ -6,11 +6,13 @@ import type { McpConfig, McpServerConfig } from "../../api/contracts";
 import { toDisplayError } from "../../api/api-error";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { JsonCodeEditor } from "../../shared/ui/code-editor/json-code-editor";
+import { Button } from "../../shared/ui/button/button";
 import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
 import { EditorHeader, SettingsGroup } from "./editor-layout";
 import { ObjectListPanel } from "./object-list-panel";
 import { KeyValueEditor } from "./key-value-editor";
+import { McpToolBrowser } from "./mcp-tool-browser";
 
 type EditorMode = "form" | "json";
 
@@ -32,6 +34,7 @@ export function McpSettingsSection() {
   const [mode, setMode] = useState<EditorMode>("form");
   const [selectedId, setSelectedId] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
+  const [scannedServerId, setScannedServerId] = useState("");
 
   useEffect(() => {
     if (!response.data || dirty) return;
@@ -65,6 +68,11 @@ export function McpSettingsSection() {
     }
   });
 
+  const scanTools = useMutation({
+    mutationFn: (target: McpServerConfig) => api.config.scanMcpTools(target),
+    onSuccess: (_, target) => setScannedServerId(target.id)
+  });
+
   const markDirty = () => {
     setDirty(true);
     save.reset();
@@ -86,6 +94,8 @@ export function McpSettingsSection() {
     if (!mcp) return;
     const nextServers = servers.map((item, i) => (i === index ? { ...item, ...patch } : item));
     updateMcp({ ...mcp, servers: nextServers });
+    scanTools.reset();
+    setScannedServerId("");
     if (index === selectedIndex && patch.id !== undefined) setSelectedId(patch.id);
   };
 
@@ -170,8 +180,7 @@ export function McpSettingsSection() {
   ];
 
   const saveBar = (
-    <button
-      type="button"
+    <Button
       className="settings-secondary"
       disabled={!dirty || save.isPending}
       onClick={() => void save.mutateAsync().catch((cause) => {
@@ -181,7 +190,7 @@ export function McpSettingsSection() {
       })}
     >
       <Save size={14} />{save.isPending ? t("Saving", "正在保存") : dirty ? t("Save MCP", "保存 MCP") : t("Saved", "已保存")}
-    </button>
+    </Button>
   );
 
   return (
@@ -228,12 +237,12 @@ export function McpSettingsSection() {
           actions={
             <>
               <nav className="settings-tabs mcp-mode-tabs" aria-label={t("MCP editor mode", "MCP 编辑模式")}>
-                <button type="button" className={mode === "form" ? "active" : ""} onClick={() => switchMode("form")}>
+                <Button className={mode === "form" ? "settings-secondary active" : "settings-secondary"} onClick={() => switchMode("form")}>
                   <FormInput size={13} />{t("Form", "表单")}
-                </button>
-                <button type="button" className={mode === "json" ? "active" : ""} onClick={() => switchMode("json")}>
+                </Button>
+                <Button className={mode === "json" ? "settings-secondary active" : "settings-secondary"} onClick={() => switchMode("json")}>
                   <Braces size={13} />JSON
-                </button>
+                </Button>
               </nav>
               {saveBar}
               {mode === "form" && server && (
@@ -247,9 +256,9 @@ export function McpSettingsSection() {
                     <span />
                     <strong>{server.enabled !== false ? t("Enabled", "已启用") : t("Disabled", "已禁用")}</strong>
                   </label>
-                  <button type="button" className="settings-danger" onClick={() => void deleteServer()}>
+                  <Button variant="danger" onClick={() => void deleteServer()}>
                     <Trash2 size={14} />{t("Delete", "删除")}
-                  </button>
+                  </Button>
                 </>
               )}
             </>
@@ -278,9 +287,9 @@ export function McpSettingsSection() {
         ) : !server ? (
           <div className="settings-empty">
             <p>{t("No MCP servers yet. Connect stdio, HTTP, or SSE servers to expose tools as mcp_<server>_<tool>.", "还没有 MCP 服务。可接入 stdio / HTTP / SSE，工具会注册为 mcp_<server>_<tool>。")}</p>
-            <button type="button" className="settings-secondary" onClick={addServer}>
+            <Button className="settings-secondary" onClick={addServer}>
               <Plus size={14} />{t("Add MCP server", "添加 MCP 服务")}
-            </button>
+            </Button>
           </div>
         ) : (
           <>
@@ -421,6 +430,15 @@ export function McpSettingsSection() {
                 </div>
               </SettingsGroup>
             )}
+
+            <McpToolBrowser
+              serverId={server.id}
+              tools={scannedServerId === server.id ? (scanTools.data?.tools ?? []) : []}
+              scanning={scanTools.isPending}
+              scanned={scannedServerId === server.id}
+              error={scanTools.error ? toDisplayError(scanTools.error, "MCP tool scan failed", "MCP 工具扫描失败").message : null}
+              onScan={() => void scanTools.mutateAsync(server).catch(() => undefined)}
+            />
 
             <div className="settings-note-card">
               <Cable size={15} />

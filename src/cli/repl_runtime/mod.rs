@@ -18,7 +18,7 @@ use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
 use crate::render::transcript::{
     TranscriptMode, TranscriptRenderOptions, TranscriptStore, WelcomeCell,
 };
-use crate::state::SessionTimelineTurn;
+use crate::state::{SessionTimelineCompaction, SessionTimelineTurn};
 use anyhow::Result;
 use crossterm::event::Event;
 use std::collections::VecDeque;
@@ -321,8 +321,20 @@ impl ReplRuntime {
     ///
     /// 返回:
     /// - transcript 同步结果
-    pub(super) fn record_history(&mut self, turns: &[SessionTimelineTurn]) -> Result<()> {
-        history::append_timeline(&mut self.transcript, turns);
+    /// 将已保存的会话历史与压缩摘要渲染到当前 TUI transcript。
+    ///
+    /// 参数:
+    /// - `turns`: 按时间顺序排列的历史轮次
+    /// - `compaction`: 最新压缩摘要
+    ///
+    /// 返回:
+    /// - transcript 同步结果
+    pub(super) fn record_history_with_compaction(
+        &mut self,
+        turns: &[SessionTimelineTurn],
+        compaction: Option<&SessionTimelineCompaction>,
+    ) -> Result<()> {
+        history::append_timeline_with_compaction(&mut self.transcript, turns, compaction);
         self.sync_transcript(false)
     }
 

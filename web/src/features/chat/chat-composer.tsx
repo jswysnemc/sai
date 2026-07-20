@@ -105,20 +105,7 @@ export function ChatComposer(props: ChatComposerProps) {
         {git.data?.status === "ready" && git.data.head && <span className="composer-context-chip" title={git.data.upstream || git.data.head}><GitBranch size={13}/><span>{git.data.head}</span></span>}
         <SystemUsage selection={props.selection} onCompact={props.onCompact} compactDisabled={props.running} />
         <AgentSelector choices={props.agentChoices} selection={props.agentSelection} loading={props.agentLoading} disabled={props.running} onSelect={props.onAgentSelect} />
-        <GoalControl sessionId={props.sessionId} running={props.running} onContinue={props.onContinueGoal} />
         <Button className="composer-rail-button" onClick={props.onUndo} disabled={!props.undoAvailable || props.running} title={t("Undo the last turn and its worktree changes", "撤销最后一轮及其工作树修改")} aria-label={t("Undo last turn", "撤销最后一轮")}><Undo2 size={14} /></Button>
-        <div className="composer-mode">
-          <Select
-            value={props.mode}
-            options={runModeOptions}
-            disabled={props.running}
-            ariaLabel={t("Run mode", "运行模式")}
-            menuPreferredWidth={240}
-            menuMinimumWidth={200}
-            menuAlign="right"
-            onChange={props.onModeChange}
-          />
-        </div>
         <button type="button" className={`composer-rail-button composer-activity-button${runtimeActivity.runningTasks > 0 ? " is-active" : ""}`} onClick={() => window.dispatchEvent(new Event("sai:open-tasks"))} title={runtimeActivity.runningTasks > 0 ? t(`${runtimeActivity.runningTasks} background tasks running`, `${runtimeActivity.runningTasks} 个后台任务进行中`) : t("Open background tasks", "打开后台任务")} aria-label={t("Open background tasks", "打开后台任务")}>
           <Activity size={14} />
           {runtimeActivity.runningTasks > 0 && <span className="composer-activity-badge">{runtimeActivity.runningTasks}</span>}
@@ -156,6 +143,19 @@ export function ChatComposer(props: ChatComposerProps) {
                 onModelSelect={props.onModelSelect}
                 onThinkingLevelChange={props.onThinkingLevelChange}
               />
+              <GoalControl sessionId={props.sessionId} running={props.running} onContinue={props.onContinueGoal} />
+              <div className="composer-mode">
+                <Select
+                  value={props.mode}
+                  options={runModeOptions}
+                  disabled={props.running}
+                  ariaLabel={t("Run mode", "运行模式")}
+                  menuPreferredWidth={240}
+                  menuMinimumWidth={200}
+                  menuAlign="left"
+                  onChange={props.onModeChange}
+                />
+              </div>
             </div>
           </div>
           <div className="composer-actions">

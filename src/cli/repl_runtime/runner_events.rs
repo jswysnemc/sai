@@ -124,12 +124,20 @@ impl ReplRuntime {
                 });
                 self.throttled_live_sync()
             }
-            AgentEvent::CompactionFinished { applied, error, .. } => {
+            AgentEvent::CompactionFinished {
+                applied,
+                summary,
+                error,
+            } => {
                 self.transcript.clear_work_status();
                 self.transcript.push_compaction_finished(
                     *applied,
                     error.as_ref().map(|item| item.message.clone()),
                     error.as_ref().map(|item| item.detail.clone()),
+                    summary
+                        .as_ref()
+                        .map(|value| value.trim().to_string())
+                        .filter(|value| !value.is_empty()),
                 );
                 self.sync_transcript(true)
             }

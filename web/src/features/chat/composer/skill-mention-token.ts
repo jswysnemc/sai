@@ -78,7 +78,7 @@ export function collectSkillMentionNames(value: string): string[] {
   const names: string[] = [];
   const seen = new Set<string>();
   const add = (name: string) => {
-    if (!name || seen.has(name)) return;
+    if (!name || name === "goal" || seen.has(name)) return;
     seen.add(name);
     names.push(name);
   };
@@ -149,14 +149,16 @@ export function expandSkillMentions(value: string, documents: Record<string, str
   let expanded = value.replace(
     /<skill-mention name="([A-Za-z0-9][A-Za-z0-9._-]*)"><\/skill-mention>/gu,
     (_raw, name: string) => {
+      if (name === "goal") return "/goal";
       const document = documents[name];
       return document?.trim() ? formatExpandedSkillReference(name, document) : `/${name}`;
     }
   );
-  // 2. 再展开普通 `/name` token（兼容手写 skill 名称）
+  // 2. 再展开普通 `/name` token（兼容手写 skill 名称）；跳过 /goal 命令
   return parseSkillMentions(expanded)
     .map((segment) => {
       if (segment.type === "text") return segment.value;
+      if (segment.name === "goal") return "/goal";
       const document = documents[segment.name];
       return document?.trim() ? formatExpandedSkillReference(segment.name, document) : segment.value;
     })

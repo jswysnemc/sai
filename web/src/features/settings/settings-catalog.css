@@ -43,15 +43,25 @@
   font: 400 0.75rem var(--font-code);
 }
 
-.model-add button {
+.model-add .ui-button.model-add-button {
   display: grid;
   width: 32px;
+  min-height: 32px;
+  height: 32px;
   flex-shrink: 0;
   place-items: center;
+  padding: 0;
   border: 0;
+  border-radius: 0;
   border-left: 1px solid var(--line);
   background: var(--paper-deep);
+  box-shadow: none;
   color: var(--ink-soft);
+}
+
+.model-add .ui-button.model-add-button:hover:not(:disabled) {
+  background: var(--paper-deep);
+  color: var(--ink);
 }
 
 .model-catalog-body {
@@ -77,30 +87,49 @@
 .model-chip.active,
 .model-chip:hover { background: var(--paper-deep); }
 
-.model-chip button {
+.model-chip .ui-button.model-chip-select {
   overflow: hidden;
+  justify-content: flex-start;
   min-height: 32px;
+  height: 32px;
   padding: 0 8px;
   border: 0;
+  border-radius: 6px 0 0 6px;
   background: transparent;
+  box-shadow: none;
   color: var(--ink);
   font: 400 0.75rem var(--font-code);
   text-align: left;
+}
+
+.model-chip .ui-button.model-chip-select > span,
+.model-chip .ui-button.model-chip-select {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.model-chip button:last-child {
+.model-chip .ui-button.model-chip-remove {
   display: grid;
+  width: 26px;
+  min-height: 32px;
+  height: 32px;
   padding: 0;
   place-items: center;
+  border: 0;
+  border-radius: 0 6px 6px 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--ink-soft);
+}
+
+.model-chip .ui-button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--ink);
 }
 
 .model-metadata-form { padding: 14px; }
 .model-context-input { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 7px; }
-.model-metadata-tabs { width: fit-content; max-width: 100%; }
-.model-metadata-panel { margin-top: 14px; }
+.model-metadata-panel { margin-top: 0; }
 
 .model-metadata-head {
   display: flex;
@@ -117,26 +146,21 @@
 .model-tag-field {
   display: grid;
   gap: 7px;
-  margin-top: 14px;
 }
 
 .model-tag-field > span { color: var(--ink); font-size: 0.75rem; font-weight: 600; }
-.model-tag-field > div { display: flex; flex-wrap: wrap; gap: 6px; }
 
-.model-tag-field button {
-  height: 28px;
-  padding: 0 9px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--ink-soft);
-  font: 400 0.6875rem var(--font-code);
+.model-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.model-tag-field button.active {
-  border-color: color-mix(in srgb, var(--signal) 50%, var(--line));
-  background: var(--signal-soft);
-  color: var(--signal);
+.model-tag-list .ui-button {
+  min-height: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.625rem;
+  font: 400 0.6875rem var(--font-code);
 }
 
 /* ---------- 供应商自定义 JSON ---------- */

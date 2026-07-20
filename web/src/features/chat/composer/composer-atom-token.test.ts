@@ -46,4 +46,12 @@ describe("composer atom token", () => {
       { type: "text", value: " 完成分析" }
     ]);
   });
+
+  it("maps skill-mention goal to goal atom instead of skill", () => {
+    expect(parseComposerAtoms(`prefix <skill-mention name="goal"></skill-mention> finish`)).toEqual([
+      { type: "text", value: "prefix " },
+      { type: "goal", value: "/goal" },
+      { type: "text", value: " finish" }
+    ]);
+  });
 });

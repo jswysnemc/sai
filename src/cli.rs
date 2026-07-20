@@ -88,9 +88,10 @@ use render_options::stream_render_options;
 use repl::run_repl;
 use repl_background::run_repl_background_manager;
 use repl_commands::{
-    complete_repl_command, repl_command_rest, repl_command_suggestions,
-    visible_repl_command_suggestions,
+    complete_repl_command, repl_command_rest, visible_repl_command_suggestions,
 };
+#[cfg(test)]
+use repl_commands::repl_command_suggestions;
 use repl_editor::edit_input_buffer;
 use repl_input::read_repl_input;
 use repl_input_navigation::{move_cursor_down_by_visual_row, move_cursor_up_by_visual_row};

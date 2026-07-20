@@ -17,6 +17,8 @@ pub(crate) enum ToolCell {
         applied: bool,
         message: Option<String>,
         detail: Option<String>,
+        /// 成功应用时的压缩摘要正文。
+        summary: Option<String>,
     },
 }
 
@@ -43,6 +45,7 @@ pub(crate) fn render(cell: &ToolCell, mode: ToolCallDisplayMode) -> String {
             applied,
             message,
             detail,
+            summary,
         } => {
             let mut lines = vec![tool_event_text(
                 t("compact context", "压缩上下文"),
@@ -61,6 +64,15 @@ pub(crate) fn render(cell: &ToolCell, mode: ToolCallDisplayMode) -> String {
                 .filter(|value| !value.is_empty() && message.as_deref() != Some(*value))
             {
                 lines.push(detail.to_string());
+            }
+            if *applied {
+                if let Some(summary) = summary
+                    .as_ref()
+                    .map(String::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                {
+                    lines.push(summary.trim().to_string());
+                }
             }
             lines.join("\n")
         }

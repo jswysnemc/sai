@@ -82,6 +82,7 @@ pub(super) async fn run_stored_shell_explanation(
 /// 返回:
 /// - 无
 #[cfg(unix)]
+#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn drain_stdin() {
     use std::os::fd::AsRawFd;
 
@@ -117,6 +118,7 @@ pub(super) fn drain_stdin() {
 /// 返回:
 /// - 无
 #[cfg(windows)]
+#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn drain_stdin() {
     if !io::stdin().is_terminal() {
         return;
@@ -134,6 +136,7 @@ pub(super) fn drain_stdin() {
 /// 返回:
 /// - 无
 #[cfg(not(any(unix, windows)))]
+#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn drain_stdin() {}
 
 /// 单次命令聊天执行选项。

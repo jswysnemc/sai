@@ -11,6 +11,7 @@ impl ReplRuntime {
     ///
     /// 返回:
     /// - 无
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::cli) fn queue_input_event(&mut self, event: Event) {
         self.pending_input_events.push_back(event);
     }

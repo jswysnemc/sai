@@ -1,4 +1,4 @@
-use super::{Goal, GoalStatus};
+use super::{Goal, GoalStatus, GoalUpdateEntry};
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use std::path::{Path, PathBuf};
@@ -60,13 +60,20 @@ impl GoalStore {
         let now = Utc::now().to_rfc3339();
         let goal = Goal {
             id: format!("goal_{}", uuid::Uuid::new_v4().simple()),
-            objective,
+            objective: objective.clone(),
             status: GoalStatus::Active,
             token_budget,
             tokens_used: 0,
             time_used_seconds: 0,
             created_at: now.clone(),
-            updated_at: now,
+            updated_at: now.clone(),
+            updates: vec![GoalUpdateEntry {
+                at: now,
+                kind: "status".to_string(),
+                message: format!("Goal created: {objective}"),
+                status: Some(GoalStatus::Active.as_str().to_string()),
+                tokens_used: Some(0),
+            }],
         };
         write_goal(&self.path, &goal)?;
         Ok(goal)
@@ -104,13 +111,38 @@ impl GoalStore {
         }
         self.update(|goal| {
             if let Some(objective) = objective {
+                if goal.objective != objective {
+                    push_update(
+                        goal,
+                        "status",
+                        "Objective updated",
+                        Utc::now().to_rfc3339(),
+                    );
+                }
                 goal.objective = objective;
             }
             if let Some(token_budget) = token_budget {
                 goal.token_budget = token_budget;
             }
             if let Some(status) = status {
-                goal.status = status;
+                let next = if status == GoalStatus::Active
+                    && goal
+                        .token_budget
+                        .is_some_and(|budget| goal.tokens_used >= budget)
+                {
+                    GoalStatus::BudgetLimited
+                } else {
+                    status
+                };
+                if goal.status != next {
+                    push_update(
+                        goal,
+                        "status",
+                        &format!("Status -> {}", next.as_str()),
+                        Utc::now().to_rfc3339(),
+                    );
+                }
+                goal.status = next;
             }
             if goal.status == GoalStatus::Active
                 && goal
@@ -130,9 +162,32 @@ impl GoalStore {
     ///
     /// 返回:
     /// - 更新后的目标
-    pub(crate) fn set_status(&self, status: GoalStatus) -> Result<Goal> {
+    /// 追加一条人类可读的目标进度说明。
+    ///
+    /// 参数:
+    /// - `message`: 进度摘要
+    ///
+    /// 返回:
+    /// - 更新后的目标
+    pub(crate) fn append_progress(&self, message: &str) -> Result<Goal> {
+        let message = message.trim();
+        if message.is_empty() {
+            bail!("progress message is empty");
+        }
         self.update(|goal| {
-            goal.status = if status == GoalStatus::Active
+            push_update(
+                goal,
+                "progress",
+                message,
+                Utc::now().to_rfc3339(),
+            );
+            Ok(())
+        })
+    }
+
+        pub(crate) fn set_status(&self, status: GoalStatus) -> Result<Goal> {
+        self.update(|goal| {
+            let next = if status == GoalStatus::Active
                 && goal
                     .token_budget
                     .is_some_and(|budget| goal.tokens_used >= budget)
@@ -141,6 +196,15 @@ impl GoalStore {
             } else {
                 status
             };
+            if goal.status != next {
+                push_update(
+                    goal,
+                    "status",
+                    &format!("Status -> {}", next.as_str()),
+                    Utc::now().to_rfc3339(),
+                );
+            }
+            goal.status = next;
             Ok(())
         })
     }
@@ -176,7 +240,14 @@ impl GoalStore {
         {
             goal.status = GoalStatus::BudgetLimited;
         }
-        goal.updated_at = Utc::now().to_rfc3339();
+        let now = Utc::now().to_rfc3339();
+        goal.updated_at = now.clone();
+        push_update(
+            &mut goal,
+            "account",
+            &format!("Turn usage +{tokens} tokens · +{elapsed_seconds}s"),
+            now,
+        );
         write_goal(&self.path, &goal)?;
         Ok(Some(goal))
     }
@@ -228,6 +299,32 @@ fn goal_lock() -> Result<std::sync::MutexGuard<'static, ()>> {
 ///
 /// 返回:
 /// - 当前目标
+
+/// 向目标写入一条更新记录，并限制历史长度。
+///
+/// 参数:
+/// - `goal`: 待修改目标
+/// - `kind`: 更新类型
+/// - `message`: 摘要
+/// - `at`: 时间戳
+///
+/// 返回:
+/// - 无
+fn push_update(goal: &mut Goal, kind: &str, message: &str, at: String) {
+    goal.updates.push(GoalUpdateEntry {
+        at,
+        kind: kind.to_string(),
+        message: message.to_string(),
+        status: Some(goal.status.as_str().to_string()),
+        tokens_used: Some(goal.tokens_used),
+    });
+    const MAX_UPDATES: usize = 200;
+    if goal.updates.len() > MAX_UPDATES {
+        let drop = goal.updates.len() - MAX_UPDATES;
+        goal.updates.drain(0..drop);
+    }
+}
+
 fn read_goal(path: &Path) -> Result<Option<Goal>> {
     let raw = match std::fs::read(path) {
         Ok(raw) => raw,

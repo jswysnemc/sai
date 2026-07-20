@@ -178,8 +178,8 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
   const handleSkillSelect = useCallback((name: string) => {
     const current = editorRef.current ? serializeComposerAtomEditor(editorRef.current) : props.value;
     const range = skillRangeRef.current ?? { start: current.length, end: current.length, query: "" };
-    const mention = formatSkillMention(name);
-    const insertion = `${mention} `;
+    // /goal 是会话目标命令，不是 Skill，插入纯文本 token 以渲染 Target 图标
+    const insertion = name === "goal" ? "/goal " : `${formatSkillMention(name)} `;
     const next = `${current.slice(0, range.start)}${insertion}${current.slice(range.end)}`;
     pendingSelectionRef.current = { start: range.start + insertion.length, end: range.start + insertion.length };
     props.onChange(next);

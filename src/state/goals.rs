@@ -103,4 +103,15 @@ impl StateStore {
     pub(crate) fn clear_goal(&self) -> Result<bool> {
         GoalStore::new(self.goal_file()).clear()
     }
+
+    /// 追加目标进度说明。
+    ///
+    /// 参数:
+    /// - `message`: 进度摘要
+    ///
+    /// 返回:
+    /// - 更新后的目标
+    pub(crate) fn append_goal_progress(&self, message: &str) -> Result<Goal> {
+        GoalStore::new(self.goal_file()).append_progress(message)
+    }
 }

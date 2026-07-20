@@ -61,6 +61,7 @@ impl ConversationDb {
     ///
     /// 返回:
     /// - 写入是否成功
+    #[allow(dead_code)]
     pub fn start_turn(&self, turn_id: &str, user_content: &str) -> Result<()> {
         self.start_turn_with_images(turn_id, user_content, &[])
     }

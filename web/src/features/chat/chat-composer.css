@@ -123,6 +123,7 @@
   display: inline-flex;
   position: relative;
   max-width: min(360px, 72vw);
+  height: 1.25rem;
   margin: 0 2px;
   align-items: center;
   gap: 4px;
@@ -132,10 +133,34 @@
   border-radius: 5px;
   background: color-mix(in srgb, var(--atom-color) 9%, var(--paper-raised));
   color: var(--atom-color);
-  font: 500 12px/19px var(--font-code);
-  vertical-align: -4px;
+  font: 500 12px/1 var(--font-code);
+  vertical-align: middle;
   white-space: nowrap;
   user-select: all;
+}
+
+.composer-atom-icon {
+  display: inline-grid;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  line-height: 0;
+}
+
+.composer-atom-icon svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.composer-atom-label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-overflow: ellipsis;
 }
 
 .composer-file-mention {
@@ -184,21 +209,7 @@
   display: block;
 }
 
-.composer-atom-icon {
-  display: inline-grid;
-  flex: 0 0 16px;
-  width: 16px;
-  height: 16px;
-  place-items: center;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--atom-color) 12%, transparent);
-}
 
-.composer-atom-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 .composer-atom::selection,
 .composer-atom *::selection {
@@ -241,16 +252,26 @@
   position: absolute;
   top: 4px;
   right: 4px;
-  display: grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  padding: 0;
   border: 0;
-  border-radius: 50%;
+  border-radius: 999px;
   background: rgb(16 22 18 / 78%);
   color: #f2f5f3;
+  line-height: 0;
   opacity: 0;
   transition: opacity 120ms ease;
+}
+
+.composer-attachment .attachment-remove svg {
+  display: block;
+  width: 0.8125rem;
+  height: 0.8125rem;
+  flex: 0 0 auto;
 }
 
 .composer-attachment:hover .attachment-remove,
@@ -775,4 +796,54 @@
   .composer-context-strip .agent-selector {
     margin-right: 4px;
   }
+}
+
+
+
+/* model-group-inline-controls */
+.composer-model-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.composer-footer .composer-mode {
+  flex: 0 0 auto;
+}
+
+.composer-footer .goal-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.composer-footer .ui-button.composer-rail-button {
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.composer-footer .ui-button.composer-rail-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}
+
+.composer-footer .composer-mode .ui-select > button {
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.composer-footer .composer-mode .ui-select > button:hover:not(:disabled),
+.composer-footer .composer-mode .ui-select > button[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
 }

@@ -317,4 +317,33 @@ mod tests {
 
         assert!(timeline[0].automatic);
     }
+
+    #[test]
+    fn includes_latest_checkpoint_summary_in_timeline() {
+        use crate::llm::ChatMessage;
+
+        let temp = tempfile::tempdir().unwrap();
+        let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
+        for index in 1..=4 {
+            let turn_id = format!("turn_{index}");
+            store.start_turn(&turn_id, &"u".repeat(200)).unwrap();
+            store
+                .complete_turn(&turn_id, &"a".repeat(200), None)
+                .unwrap();
+        }
+        let messages = vec![ChatMessage::plain("user", "x".repeat(8_000))];
+        let request = store
+            .select_compaction_for_messages(&messages, 2_000, true)
+            .unwrap()
+            .expect("compaction request");
+        store
+            .apply_compaction(&request, "## Goal\n- keep context")
+            .unwrap();
+
+        let timeline = store.session_timeline_with_compaction(10).unwrap();
+        let compaction = timeline.compaction.expect("compaction present");
+        assert!(compaction.applied);
+        assert!(compaction.summary.contains("keep context"));
+        assert!(compaction.turn_count >= 1);
+    }
 }

@@ -57,6 +57,7 @@ fn powershell_quote(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "''"))
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn looks_like_natural_language(input: &str) -> bool {
     let trimmed = input.trim();
     if trimmed.is_empty() {

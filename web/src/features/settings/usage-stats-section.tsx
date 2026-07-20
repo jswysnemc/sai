@@ -9,6 +9,8 @@ import type {
   UsageStatsResponse,
   UsageTrendPoint,
 } from "../../api/contracts";
+import { Button } from "../../shared/ui/button/button";
+import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
 import "./usage-stats-section.css";
 
@@ -66,53 +68,55 @@ export function UsageStatsSection() {
           <p>{t("Provider-reported tokens across chat and auxiliary calls.", "汇总 Chat 与辅助调用的 Provider Token 用量。")}</p>
         </div>
         <div className="usage-stats-actions">
-          <button type="button" className="usage-btn" onClick={() => void stats.refetch()} disabled={stats.isFetching}>
+          <Button className="settings-secondary" onClick={() => void stats.refetch()} disabled={stats.isFetching}>
             <RefreshCw size={14} />
             {t("Refresh", "刷新")}
-          </button>
-          <button
-            type="button"
-            className="usage-btn danger"
+          </Button>
+          <Button
+            variant="danger"
             onClick={() => clear.mutate()}
             disabled={clear.isPending}
             title={t("Clear all usage logs", "清空全部用量日志")}
           >
             <Trash2 size={14} />
             {t("Clear", "清空")}
-          </button>
+          </Button>
         </div>
       </header>
 
-      <div className="usage-filters">
-        <label>
+      <div className="usage-filters settings-form-grid">
+        <div className="settings-field">
           <span>{t("Range", "时间范围")}</span>
-          <select value={range} onChange={(event) => { setRange(event.target.value as UsageRange); setPage(0); }}>
-            {RANGES.map((item) => (
-              <option key={item} value={item}>{rangeLabel(item, t)}</option>
-            ))}
-          </select>
-        </label>
-        <label>
+          <Select
+            value={range}
+            options={RANGES.map((item) => ({ value: item, label: rangeLabel(item, t) }))}
+            ariaLabel={t("Range", "时间范围")}
+            onChange={(value) => { setRange(value as UsageRange); setPage(0); }}
+          />
+        </div>
+        <div className="settings-field">
           <span>{t("Source", "来源")}</span>
-          <select value={source} onChange={(event) => { setSource(event.target.value); setPage(0); }}>
-            {SOURCES.map((item) => (
-              <option key={item} value={item}>{sourceLabel(item, t)}</option>
-            ))}
-          </select>
-        </label>
-        <label>
+          <Select
+            value={source}
+            options={SOURCES.map((item) => ({ value: item, label: sourceLabel(item, t) }))}
+            ariaLabel={t("Source", "来源")}
+            onChange={(value) => { setSource(value); setPage(0); }}
+          />
+        </div>
+        <div className="settings-field">
           <span>{t("Status", "状态")}</span>
-          <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(0); }}>
-            {STATUSES.map((item) => (
-              <option key={item} value={item}>{statusLabel(item, t)}</option>
-            ))}
-          </select>
-        </label>
-        <label>
+          <Select
+            value={status}
+            options={STATUSES.map((item) => ({ value: item, label: statusLabel(item, t) }))}
+            ariaLabel={t("Status", "状态")}
+            onChange={(value) => { setStatus(value); setPage(0); }}
+          />
+        </div>
+        <label className="settings-field">
           <span>{t("Provider", "供应商")}</span>
           <input value={providerSearch} onChange={(event) => { setProviderSearch(event.target.value); setPage(0); }} placeholder={t("Search provider", "搜索供应商")} />
         </label>
-        <label>
+        <label className="settings-field">
           <span>{t("Model", "模型")}</span>
           <input value={modelSearch} onChange={(event) => { setModelSearch(event.target.value); setPage(0); }} placeholder={t("Search model", "搜索模型")} />
         </label>
@@ -120,9 +124,13 @@ export function UsageStatsSection() {
 
       <div className="usage-tabs">
         {(["overview", "providers", "models", "logs"] as const).map((item) => (
-          <button key={item} type="button" className={view === item ? "active" : ""} onClick={() => setView(item)}>
+          <Button
+            key={item}
+            className={`settings-secondary${view === item ? " active" : ""}`}
+            onClick={() => setView(item)}
+          >
             {viewLabel(item, t)}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -137,13 +145,13 @@ export function UsageStatsSection() {
         <>
           <LogsTable logs={data.logs} t={t} locale={locale} />
           <div className="usage-pager">
-            <button type="button" disabled={page <= 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>
+            <Button className="settings-secondary" disabled={page <= 0} onClick={() => setPage((value) => Math.max(0, value - 1))} aria-label={t("Previous page", "上一页")}>
               <ChevronLeft size={14} />
-            </button>
+            </Button>
             <span>{page + 1} / {totalPages} · {data.total_logs}</span>
-            <button type="button" disabled={page + 1 >= totalPages} onClick={() => setPage((value) => value + 1)}>
+            <Button className="settings-secondary" disabled={page + 1 >= totalPages} onClick={() => setPage((value) => value + 1)} aria-label={t("Next page", "下一页")}>
               <ChevronRight size={14} />
-            </button>
+            </Button>
           </div>
         </>
       )}

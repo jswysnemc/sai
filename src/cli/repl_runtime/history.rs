@@ -1,6 +1,6 @@
 use crate::llm::{ChatStreamChunk, ChatStreamKind};
 use crate::render::transcript::{TranscriptMode, TranscriptStore};
-use crate::state::SessionTimelineTurn;
+use crate::state::{SessionTimelineCompaction, SessionTimelineTurn};
 
 /// 将持久化会话时间线追加到 TUI transcript。
 ///
@@ -10,13 +10,55 @@ use crate::state::SessionTimelineTurn;
 ///
 /// 返回:
 /// - 无
+#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn append_timeline(transcript: &mut TranscriptStore, turns: &[SessionTimelineTurn]) {
+    append_timeline_with_compaction(transcript, turns, None);
+}
+
+/// 将持久化会话时间线与可选压缩摘要追加到 TUI transcript。
+///
+/// 参数:
+/// - `transcript`: 当前 TUI transcript
+/// - `turns`: 按时间顺序排列的会话轮次
+/// - `compaction`: 最新压缩摘要；有内容时先于历史轮次渲染
+///
+/// 返回:
+/// - 无
+pub(super) fn append_timeline_with_compaction(
+    transcript: &mut TranscriptStore,
+    turns: &[SessionTimelineTurn],
+    compaction: Option<&SessionTimelineCompaction>,
+) {
+    if let Some(compaction) = compaction {
+        append_compaction(transcript, compaction);
+    }
     for turn in turns {
         append_user_message(transcript, turn);
         append_reasoning(transcript, turn.assistant.reasoning.as_deref());
         append_tools(transcript, turn);
         append_content(transcript, &turn.assistant.content);
     }
+}
+
+/// 追加历史压缩摘要单元。
+///
+/// 参数:
+/// - `transcript`: 当前 TUI transcript
+/// - `compaction`: 压缩展示数据
+///
+/// 返回:
+/// - 无
+fn append_compaction(transcript: &mut TranscriptStore, compaction: &SessionTimelineCompaction) {
+    let summary = compaction.summary.trim();
+    if summary.is_empty() {
+        return;
+    }
+    transcript.push_compaction_finished(
+        compaction.applied,
+        None,
+        None,
+        Some(summary.to_string()),
+    );
 }
 
 /// 追加历史用户输入，自动轮次使用蓝色圆点。

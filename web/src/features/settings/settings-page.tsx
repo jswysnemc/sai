@@ -12,6 +12,7 @@ import { RuntimeSettingsSection } from "./runtime-settings-section";
 import { MemorySettingsSection } from "./memory-settings-section";
 import { HooksSettingsSection } from "./hooks-settings-section";
 import { McpSettingsSection } from "./mcp-settings-section";
+import { SkillsSettingsSection } from "./skills/skills-settings-section";
 import { UsageStatsSection } from "./usage-stats-section";
 import { SaveStatusBadge } from "./save-status-badge";
 import { SETTINGS_SECTIONS } from "./settings-sections";
@@ -71,6 +72,7 @@ export function SettingsPage() {
           {settings.config && section === "agents" && <AgentSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
           {settings.config && section === "plugins" && <PluginSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
           {settings.config && section === "runtime" && <RuntimeSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
+          {section === "skills" && <SkillsSettingsSection />}
           {settings.config && section === "git" && <GitSettingsPanel config={settings.config} onConfigChange={settings.updateConfig} />}
           {section === "appearance" && <AppearanceSettingsSection theme={theme.theme} onThemeChange={theme.setTheme} />}
           {section === "memory" && <MemorySettingsSection />}

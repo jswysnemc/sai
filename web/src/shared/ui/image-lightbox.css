@@ -30,15 +30,24 @@
   top: 18px;
   right: 18px;
   z-index: 1;
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
   border: 1px solid rgb(255 255 255 / 22%);
-  border-radius: 9px;
-  background: rgb(255 255 255 / 10%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 12%);
   color: #fff;
+  line-height: 0;
   cursor: pointer;
+}
+
+.image-lightbox-close svg {
+  display: block;
+  width: 1.125rem;
+  height: 1.125rem;
 }
 
 .image-lightbox-close:hover {

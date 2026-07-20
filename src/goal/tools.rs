@@ -46,13 +46,16 @@ pub(crate) fn register(registry: &mut ToolRegistry, goal_file: PathBuf) {
     let update_store = GoalStore::new(goal_file);
     registry.register(ToolSpec::new(
         "update_goal",
-        "Set the current goal to complete only after the full objective is verified, or blocked only after the same blocking condition repeats for at least three consecutive goal turns and progress is impossible without user input or an external change. Do not use this tool merely to pause or limit work.",
+        "Record goal progress or set terminal status. Use note for each meaningful agent turn update. Set status to complete only after the full objective is verified, or blocked only after the same blocking condition repeats for at least three consecutive goal turns and progress is impossible without user input or an external change.",
         json!({
             "type": "object",
             "properties": {
-                "status": {"type": "string", "enum": ["complete", "blocked"]}
+                "status": {"type": "string", "enum": ["complete", "blocked"]},
+                "note": {
+                    "type": "string",
+                    "description": "Short progress summary for this goal turn; persisted in goal history."
+                }
             },
-            "required": ["status"],
             "additionalProperties": false
         }),
         move |args| {
@@ -131,13 +134,33 @@ fn get_goal(store: &GoalStore) -> Result<String> {
 /// 返回:
 /// - JSON 格式更新结果
 fn update_goal(store: &GoalStore, args: &Value) -> Result<String> {
-    let status = required_string(args, "status")?;
-    let status = match status.to_ascii_lowercase().as_str() {
-        "complete" => GoalStatus::Complete,
-        "blocked" => GoalStatus::Blocked,
-        _ => bail!("update_goal status must be complete or blocked"),
+    let note = args
+        .get("note")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let status = args
+        .get("status")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if note.is_none() && status.is_none() {
+        bail!("update_goal requires status and/or note");
+    }
+    if let Some(note) = note.as_deref() {
+        store.append_progress(note)?;
+    }
+    let goal = if let Some(status) = status {
+        let status = match status.to_ascii_lowercase().as_str() {
+            "complete" => GoalStatus::Complete,
+            "blocked" => GoalStatus::Blocked,
+            _ => bail!("update_goal status must be complete or blocked"),
+        };
+        store.set_status(status)?
+    } else {
+        store.get()?.ok_or_else(|| anyhow::anyhow!("no active goal"))?
     };
-    let goal = store.set_status(status)?;
     Ok(serde_json::to_string_pretty(&goal)?)
 }
 

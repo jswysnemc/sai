@@ -6,6 +6,7 @@ pub(super) fn insert_char_at_cursor(value: &mut String, cursor: &mut usize, ch: 
     *cursor += 1;
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn insert_str_at_cursor(value: &mut String, cursor: &mut usize, text: &str) {
     let byte_index = byte_index_for_char(value, *cursor);
     value.insert_str(byte_index, text);

@@ -95,6 +95,7 @@ mod tests {
             time_used_seconds: 56,
             created_at: "now".to_string(),
             updated_at: "now".to_string(),
+            updates: Vec::new(),
         }
     }
 

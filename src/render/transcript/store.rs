@@ -537,12 +537,14 @@ impl TranscriptStore {
         applied: bool,
         message: Option<String>,
         detail: Option<String>,
+        summary: Option<String>,
     ) {
         self.active_tool_index = None;
         self.push_cell(HistoryCell::Tool(ToolCell::CompactionFinished {
             applied,
             message,
             detail,
+            summary,
         }));
     }
 

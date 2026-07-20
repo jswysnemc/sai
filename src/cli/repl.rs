@@ -528,8 +528,8 @@ pub(super) async fn run_repl(
 /// 返回:
 /// - 历史读取与渲染是否成功
 fn record_repl_history(runtime: &mut ReplRuntime, state: &StateStore) -> Result<()> {
-    let turns = state.session_timeline(REPL_HISTORY_TURN_LIMIT)?;
-    runtime.record_history(&turns)
+    let timeline = state.session_timeline_with_compaction(REPL_HISTORY_TURN_LIMIT)?;
+    runtime.record_history_with_compaction(&timeline.turns, timeline.compaction.as_ref())
 }
 
 /// 将后台发现完成的 MCP 工具无阻塞合并到当前 Agent。

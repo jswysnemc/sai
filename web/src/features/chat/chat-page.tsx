@@ -276,7 +276,12 @@ export function ChatPage() {
     }
   };
   const lastTurnId = timeline.data?.turns.filter((turn) => !turn.automatic).at(-1)?.turn_id;
-  const emptySession = !timeline.isLoading && display.historyTurns.length === 0 && display.liveRuns.length === 0;
+  const hasHistoryCompaction = Boolean(timeline.data?.compaction?.summary?.trim());
+  const emptySession =
+    !timeline.isLoading
+    && display.historyTurns.length === 0
+    && display.liveRuns.length === 0
+    && !hasHistoryCompaction;
 
   const forkFromTurn = async (turnId: string) => {
     if (!activeSession || actionBusy) return;
