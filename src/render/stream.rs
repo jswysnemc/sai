@@ -141,8 +141,22 @@ impl StreamRenderer {
     ///
     /// 返回:
     /// - 写入是否成功
+
+    /// 停止并清除前台命令输出预览动效。
+    ///
+    /// 返回:
+    /// - 是否成功
+    fn stop_command_preview(&mut self) -> Result<()> {
+        if self.command_preview.is_active() {
+            self.command_preview.clear()?;
+        }
+        Ok(())
+    }
+
     pub fn write_chunk(&mut self, chunk: ChatStreamChunk) -> Result<()> {
         self.hide_cursor()?;
+        // 正文/思考到来时结束命令预览动效，防止相对清屏擦掉流式输出
+        self.stop_command_preview()?;
         let text = normalize_stream_text(&chunk.text);
         if self.plain && chunk.kind == ChatStreamKind::Reasoning {
             return Ok(());
@@ -224,6 +238,9 @@ impl StreamRenderer {
             // 命令输出预览接管底部动效，停掉 WaitSpinner 避免锚点冲突
             self.stop_waiting()?;
             self.command_preview.begin();
+        } else {
+            // 其它工具写入前必须停掉上一条命令预览，否则会相对上移擦屏
+            self.stop_command_preview()?;
         }
         if self.tool_call_mode == ToolCallDisplayMode::Summary
             && !tool_call_has_visible_block(name)
@@ -293,6 +310,9 @@ impl StreamRenderer {
             return Ok(());
         }
         let name = progress.name.as_deref().unwrap_or("tool");
+        if name != "run_command" {
+            self.stop_command_preview()?;
+        }
         let event_label = tool_event_label(name, Some(&progress.arguments_preview));
         self.tool_event_labels
             .insert(name.to_string(), event_label.clone());
@@ -363,6 +383,9 @@ impl StreamRenderer {
             return Ok(());
         }
         self.set_work_status(WorkStatus::Working, false)?;
+        if name != "run_command" {
+            self.stop_command_preview()?;
+        }
         // 权限拒绝的失败结果已由「已拒绝」决定行呈现，跳过重复的输出块
         let suppressed = self.suppressed_denied_results.remove(name);
         if suppressed && !ok {
@@ -630,6 +653,7 @@ impl StreamRenderer {
     /// - 准备是否成功
     pub fn prepare_for_external_output(&mut self) -> Result<()> {
         self.stop_waiting()?;
+        self.stop_command_preview()?;
         // 权限交互期间不要恢复末行 working 动效
         self.work_status = None;
         // 先固化思考摘要，再清 live / 切出流式行
@@ -669,6 +693,7 @@ impl StreamRenderer {
     /// - 收尾是否成功
     pub fn finish(&mut self) -> Result<()> {
         self.stop_waiting()?;
+        self.stop_command_preview()?;
         self.finish_live_tool_status()?;
         // Summary 思考 live 行先定格，避免后面的 println 拆成两行
         if self.reasoning_mode == ReasoningDisplayMode::Summary {

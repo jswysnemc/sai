@@ -52,17 +52,22 @@ impl CliCommandPreview {
     }
 
     /// 开始新的前台命令输出预览。
+    ///
+    /// 仅重置缓冲与标记；动效在首个输出分块到达后再启动，
+    /// 避免在命令块 / 其它工具输出写入期间用相对清屏擦掉终端内容。
     pub(crate) fn begin(&mut self) {
         self.stop_animation();
         if let Ok(mut state) = self.state.lock() {
             state.stdout = CommandOutputBuffer::default();
             state.stderr = CommandOutputBuffer::default();
             state.rendered_rows = 0;
+            // 1. 标记会话已开始，但尚未占用终端行
             state.active = true;
             state.started = Instant::now();
             state.frame = 0;
         }
-        self.start_animation();
+        // 2. 不在此处 start_animation：此时光标仍在命令块区域之外，
+        //    后台 clear_rendered_rows 会按相对位置上移并擦除后续正常输出
     }
 
     /// 追加命令输出分块并重绘摘要（含工作动效行）。
@@ -191,6 +196,8 @@ mod tests {
         preview.begin();
         assert_eq!(preview.display_texts(), (String::new(), String::new()));
         assert!(preview.is_active());
+        // begin 不应立刻启动动画线程（否则会在命令块写入期间相对清屏）
+        assert!(!preview.animating.load(Ordering::SeqCst));
         preview.clear().unwrap();
     }
 }
