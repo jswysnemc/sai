@@ -50,7 +50,7 @@ async fn search_ddg_images(
             ("p", if safe_search { "1" } else { "-1" }),
             ("s", "0"),
             ("u", "bing"),
-            ("f", ",,,"),
+            ("f", ",,"),
             ("l", "us-en"),
             ("vqd", vqd.as_str()),
         ])

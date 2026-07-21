@@ -34,6 +34,7 @@ fn renders_compact_session_summary_with_key_fields() {
         dynamic_sources: Vec::new(),
         projection_warnings: Vec::new(),
         active_run: None,
+        last_turn_duration_ms: 12_500,
     };
 
     let output = render_session_summary(&snapshot);
@@ -50,8 +51,10 @@ fn renders_compact_session_summary_with_key_fields() {
     assert!(output.contains("token"));
     assert!(!output.contains("12k"));
     assert!(!output.contains("128k"));
-    assert!(output.contains("Session ID") || output.contains("会话 ID"));
-    assert!(output.contains("default"));
+    assert!(!output.contains("Session ID") && !output.contains("会话 ID"));
+    assert!(!output.contains("default"));
+    assert!(output.contains("Turn") || output.contains("本轮"));
+    assert!(output.contains("12") || output.contains("s") || output.contains("秒"));
     assert!(!output.contains("Checkpoint"));
     assert!(!output.contains("Compaction"));
 }

@@ -90,18 +90,38 @@ impl<'agent> TurnRunner<'agent> {
                 .goal()?
                 .filter(|goal| goal.status.is_active());
             let started = Instant::now();
-            let result = self
-                .agent
-                .chat_stream_with_images(
-                    &current.input,
-                    current.image_urls.clone(),
-                    current.turn_id.clone(),
-                    |event| sink.on_runner_event(RunnerEvent::Agent(event)),
-                )
-                .await;
+            // 本轮耗时从首次思考/正文输出开始；若无输出则从请求开始
+            let first_output = std::sync::Arc::new(std::sync::Mutex::new(None::<Instant>));
+            let result = {
+                let first_output_cb = std::sync::Arc::clone(&first_output);
+                self.agent
+                    .chat_stream_with_images(
+                        &current.input,
+                        current.image_urls.clone(),
+                        current.turn_id.clone(),
+                        |event| {
+                            if matches!(&event, crate::agent::AgentEvent::Chunk(_)) {
+                                let mut guard = first_output_cb.lock().unwrap();
+                                if guard.is_none() {
+                                    *guard = Some(Instant::now());
+                                }
+                            }
+                            sink.on_runner_event(RunnerEvent::Agent(event))
+                        },
+                    )
+                    .await
+            };
+            let output_started = first_output
+                .lock()
+                .unwrap()
+                .unwrap_or(started);
+            let duration_ms = output_started.elapsed().as_millis() as u64;
             let elapsed = started.elapsed().as_secs().max(1);
             let result = match result {
-                Ok(result) => result,
+                Ok(mut result) => {
+                    result.duration_ms = duration_ms.max(1);
+                    result
+                }
                 Err(error) => {
                     if let Some(goal) = active_goal {
                         let _ = self

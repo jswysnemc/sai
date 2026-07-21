@@ -36,6 +36,7 @@ function run(id: string, content: string, completed: boolean): LiveRunState {
     runId: id,
     sessionId: "session",
     startedAtMs: null,
+    durationMs: null,
     status: completed ? "idle" : "working",
     userInput: content,
     imageUrls: [],

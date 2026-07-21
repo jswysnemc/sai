@@ -1,5 +1,5 @@
 mod cell;
-mod command_output;
+pub(crate) mod command_output;
 mod diff_cell;
 mod line;
 mod markdown_cell;
@@ -19,6 +19,7 @@ mod work_status_cell;
 mod tests;
 
 pub(crate) use cell::TranscriptMode;
+pub(crate) use command_output::ExpandableBlock;
 pub(crate) use line::AnsiLine;
 pub(crate) use store::{TranscriptRenderOptions, TranscriptStore};
 pub(crate) use welcome_cell::WelcomeCell;

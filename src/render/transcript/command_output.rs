@@ -1,11 +1,14 @@
 use super::cell::HistoryCell;
 use super::store::TranscriptStore;
 use super::tool_cell::ToolCell;
+use crate::i18n::text as t;
 
 /// 可在 pager 中展开的折叠块内容。
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ExpandableBlock {
+    /// 标题（含类型与对象名）
     pub(crate) title: String,
+    /// 完整正文
     pub(crate) body: String,
 }
 
@@ -28,37 +31,46 @@ impl TranscriptStore {
         })
     }
 
-    /// 查找最近一个可展开块（命令输出优先，其次思考段落）。
+    /// 收集全部可展开块（时间顺序：旧 → 新）。
     ///
     /// 返回:
-    /// - 标题与完整正文；无则 None
-    pub(crate) fn latest_expandable_block(&self) -> Option<ExpandableBlock> {
-        // 1. 从后往前找最近的命令输出
-        for cell in self.cells.iter().rev() {
-            if let HistoryCell::Tool(ToolCell::Invocation(view)) = cell {
-                if view.has_command_output() {
+    /// - 思考段落与命令输出块列表
+    pub(crate) fn expandable_blocks(&self) -> Vec<ExpandableBlock> {
+        let mut blocks = Vec::new();
+        for cell in &self.cells {
+            match cell {
+                HistoryCell::Reasoning(cell) if !cell.source.trim().is_empty() => {
+                    blocks.push(ExpandableBlock {
+                        title: t("thinking", "思考").to_string(),
+                        body: cell.source.clone(),
+                    });
+                }
+                HistoryCell::Tool(ToolCell::Invocation(view)) if view.has_command_output() => {
                     let body = command_full_body(view);
                     if !body.trim().is_empty() {
-                        return Some(ExpandableBlock {
-                            title: format!("command · {}", view.name),
+                        let label = crate::render::tool_event_line::tool_event_label(
+                            &view.name,
+                            Some(&view.arguments),
+                        );
+                        blocks.push(ExpandableBlock {
+                            title: format!("{} · {label}", t("command", "命令")),
                             body,
                         });
                     }
                 }
+                _ => {}
             }
         }
-        // 2. 否则取最近思考段落
-        for cell in self.cells.iter().rev() {
-            if let HistoryCell::Reasoning(cell) = cell {
-                if !cell.source.trim().is_empty() {
-                    return Some(ExpandableBlock {
-                        title: "thinking".to_string(),
-                        body: cell.source.clone(),
-                    });
-                }
-            }
-        }
-        None
+        blocks
+    }
+
+    /// 查找最近一个可展开块。
+    ///
+    /// 返回:
+    /// - 标题与完整正文；无则 None
+    #[allow(dead_code)]
+    pub(crate) fn latest_expandable_block(&self) -> Option<ExpandableBlock> {
+        self.expandable_blocks().into_iter().next_back()
     }
 
     /// 切换最近一个可折叠块的展开状态（兼容测试；TUI 优先走 pager）。

@@ -122,6 +122,7 @@ impl Agent {
                     reasoning: None,
                     usage: None,
                     tool_calls: Vec::new(),
+                    duration_ms: 0,
                 });
             }
             tool_round += 1;
@@ -168,32 +169,75 @@ impl Agent {
             let mut saw_content = false;
             let mut saw_tool_progress = false;
             perf.mark(&format!("round {tool_round} model request start"));
-            let result = self
-                .client
-                .chat_stream_events(ordered_messages, definitions.clone(), |event| match event {
-                    ChatStreamEvent::Chunk(chunk) => {
-                        match chunk.kind {
-                            ChatStreamKind::Reasoning if !saw_reasoning => {
-                                saw_reasoning = true;
-                                perf.mark(&format!("round {tool_round} first reasoning chunk"));
+            // 输出开始前：瞬时断连/网关错误自动重试；一旦开始吐字则不再自动重试
+            let emitted = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let result = {
+                const MAX_TRANSPORT_ATTEMPTS: u32 = 3;
+                let mut attempt = 0u32;
+                loop {
+                    attempt += 1;
+                    let emitted_flag = std::sync::Arc::clone(&emitted);
+                    let request_result = self
+                        .client
+                        .chat_stream_events(
+                            ordered_messages.clone(),
+                            definitions.clone(),
+                            |event| match event {
+                                ChatStreamEvent::Chunk(chunk) => {
+                                    emitted_flag.store(
+                                        true,
+                                        std::sync::atomic::Ordering::SeqCst,
+                                    );
+                                    match chunk.kind {
+                                        ChatStreamKind::Reasoning if !saw_reasoning => {
+                                            saw_reasoning = true;
+                                            perf.mark(&format!(
+                                                "round {tool_round} first reasoning chunk"
+                                            ));
+                                        }
+                                        ChatStreamKind::Content if !saw_content => {
+                                            saw_content = true;
+                                            perf.mark(&format!(
+                                                "round {tool_round} first content chunk"
+                                            ));
+                                        }
+                                        _ => {}
+                                    }
+                                    on_event(AgentEvent::Chunk(chunk))
+                                }
+                                ChatStreamEvent::ToolCallProgress(progress) => {
+                                    emitted_flag.store(
+                                        true,
+                                        std::sync::atomic::Ordering::SeqCst,
+                                    );
+                                    if !saw_tool_progress {
+                                        saw_tool_progress = true;
+                                        perf.mark(&format!(
+                                            "round {tool_round} first tool args chunk"
+                                        ));
+                                    }
+                                    on_event(AgentEvent::ToolCallProgress(progress))
+                                }
+                            },
+                        )
+                        .await;
+                    match request_result {
+                        Ok(result) => break result,
+                        Err(error) => {
+                            let can_retry = !emitted.load(std::sync::atomic::Ordering::SeqCst)
+                                && crate::llm::is_transient_transport_error(&error)
+                                && attempt < MAX_TRANSPORT_ATTEMPTS;
+                            if !can_retry {
+                                return Err(error);
                             }
-                            ChatStreamKind::Content if !saw_content => {
-                                saw_content = true;
-                                perf.mark(&format!("round {tool_round} first content chunk"));
-                            }
-                            _ => {}
+                            // 静默退避后重试连接
+                            let delay_ms =
+                                200u64.saturating_mul(1u64 << (attempt.saturating_sub(1).min(3)));
+                            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
                         }
-                        on_event(AgentEvent::Chunk(chunk))
                     }
-                    ChatStreamEvent::ToolCallProgress(progress) => {
-                        if !saw_tool_progress {
-                            saw_tool_progress = true;
-                            perf.mark(&format!("round {tool_round} first tool args chunk"));
-                        }
-                        on_event(AgentEvent::ToolCallProgress(progress))
-                    }
-                })
-                .await?;
+                }
+            };
             perf.mark(&format!("round {tool_round} model request done"));
             if result.tool_calls.is_empty() || !self.tools_enabled {
                 crate::hooks::dispatch(

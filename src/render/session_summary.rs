@@ -22,19 +22,24 @@ pub fn print_session_summary(snapshot: &SessionSnapshot) -> Result<()> {
 /// - `snapshot`: 当前会话状态快照
 ///
 /// 返回:
-/// - 仅包含关键上下文和会话标识的摘要
+/// - 上下文占用与本轮耗时摘要（不含会话 ID）
 pub fn render_session_summary(snapshot: &SessionSnapshot) -> String {
     observe_non_display_fields(snapshot);
     let mut output = format!(
-        "▸ {}: {} / {} {} ({:.1}%) · {}: {}",
+        "▸ {}: {} / {} {} ({:.1}%)",
         t("Context", "上下文"),
         format_k(snapshot.context_prompt_tokens),
         format_k(snapshot.context_window_tokens),
         t("tokens", "token"),
         snapshot.context_token_ratio * 100.0,
-        t("Session ID", "会话 ID"),
-        snapshot.session_id
     );
+    if snapshot.last_turn_duration_ms > 0 {
+        output.push_str(&format!(
+            " · {}: {}",
+            t("Turn", "本轮"),
+            format_turn_duration_ms(snapshot.last_turn_duration_ms),
+        ));
+    }
     if snapshot.checkpoint_count > 0 {
         let reason = match snapshot.latest_checkpoint_reason.as_deref() {
             Some("manual") => t("manual", "手动"),
@@ -61,6 +66,46 @@ pub fn render_session_summary(snapshot: &SessionSnapshot) -> String {
     output
 }
 
+/// 将毫秒格式化为人类可读本轮耗时。
+///
+/// 参数:
+/// - `ms`: 耗时毫秒
+///
+/// 返回:
+/// - 如 `12.5s` / `12秒` / `1m05s`
+pub(crate) fn format_turn_duration_ms(ms: u64) -> String {
+    use crate::i18n::is_zh;
+    let total_secs = ms / 1_000;
+    let tenths = (ms % 1_000) / 100;
+    if is_zh() {
+        if total_secs < 60 {
+            if tenths == 0 {
+                return format!("{total_secs}秒");
+            }
+            return format!("{total_secs}.{tenths}秒");
+        }
+        let mins = total_secs / 60;
+        let secs = total_secs % 60;
+        if mins < 60 {
+            return format!("{mins}分{secs:02}秒");
+        }
+        let hours = mins / 60;
+        let remain_mins = mins % 60;
+        return format!("{hours}小时{remain_mins}分{secs:02}秒");
+    }
+    if total_secs < 60 {
+        return format!("{}.{}s", total_secs, tenths);
+    }
+    let mins = total_secs / 60;
+    let secs = total_secs % 60;
+    if mins < 60 {
+        return format!("{mins}m{secs:02}s");
+    }
+    let hours = mins / 60;
+    let remain_mins = mins % 60;
+    format!("{hours}h{remain_mins:02}m{secs:02}s")
+}
+
 /// 读取快照中当前不展示的诊断字段。
 ///
 /// 参数:
@@ -70,6 +115,7 @@ pub fn render_session_summary(snapshot: &SessionSnapshot) -> String {
 /// - 无
 fn observe_non_display_fields(snapshot: &SessionSnapshot) {
     let _ = (
+        snapshot.session_id.as_str(),
         snapshot.turn_count,
         snapshot.context_chars,
         snapshot.context_limit_chars,
@@ -106,6 +152,7 @@ fn observe_non_display_fields(snapshot: &SessionSnapshot) {
         snapshot.tool_history.call_count,
         snapshot.dynamic_sources.len(),
         snapshot.projection_warnings.len(),
+        snapshot.last_turn_duration_ms,
     );
     if let Some(active_run) = &snapshot.active_run {
         let _ = (

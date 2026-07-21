@@ -90,6 +90,7 @@ impl EventAssembler {
                         "content": result.content,
                         "reasoning": result.reasoning,
                         "usage": result.usage,
+                        "duration_ms": result.duration_ms,
                     }),
                 )]
             }
@@ -111,6 +112,10 @@ impl EventAssembler {
                     "context_chars": summary.context_chars,
                     "context_limit_chars": summary.context_limit_chars,
                     "context_ratio": summary.context_ratio,
+                    "context_prompt_tokens": summary.context_prompt_tokens,
+                    "context_window_tokens": summary.context_window_tokens,
+                    "context_token_ratio": summary.context_token_ratio,
+                    "duration_ms": summary.last_turn_duration_ms,
                 }),
             )],
         }

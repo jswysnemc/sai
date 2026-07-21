@@ -77,3 +77,19 @@
     justify-self: start;
   }
 }
+
+.run-error.is-disconnect {
+  border-color: color-mix(in srgb, var(--signal) 34%, var(--line));
+  background: color-mix(in srgb, var(--signal) 8%, transparent);
+  color: var(--ink);
+}
+
+.run-error.is-disconnect .run-error-summary > svg,
+.run-error.is-disconnect .run-error-text {
+  color: var(--signal);
+}
+
+.run-error.is-disconnect .ui-button.run-error-retry {
+  border-color: color-mix(in srgb, var(--signal) 40%, var(--line));
+  color: var(--signal);
+}

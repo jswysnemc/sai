@@ -1,12 +1,13 @@
 import type { HistoryEntry, SessionTimelineTurn, TimelineToolEntry } from "../../api/contracts";
 import type { LiveRunState } from "./run-event-reducer";
 import type { LiveMessagePart } from "./run-event-reducer";
-import { LiveRunIndicator } from "./live-run-indicator";
+import { LiveRunIndicator, formatTurnElapsed } from "./live-run-indicator";
 import { MessageActions } from "./message/message-actions";
 import { MessageParts } from "./message/message-parts";
 import { UserMessageBubble } from "./message/user-message-bubble";
 import { RunErrorNotice } from "./message/run-error-notice";
 import { useI18n } from "../i18n/use-i18n";
+import "./turn-duration-meta.css";
 
 /**
  * 渲染一条历史消息。
@@ -74,25 +75,50 @@ export function HistoryTurn({
  * @param props state 为运行状态，running 为运行标记，onRetry 为可选的重试本轮回调
  * @returns 当前运行消息组
  */
-export function LiveRunMessage({ state, running, onRetry }: { state: LiveRunState; running: boolean; onRetry?: () => void }) {
+export function LiveRunMessage({
+  state,
+  running,
+  onRetry,
+  onRemoveFromQueue
+}: {
+  state: LiveRunState;
+  running: boolean;
+  onRetry?: () => void;
+  /** 从会话队列取消排队中的运行 */
+  onRemoveFromQueue?: () => void;
+}) {
+  const { t, locale } = useI18n();
   const compacting = state.parts.some((part) => part.type === "compaction" && part.status === "running");
+  const queued = state.status === "queued";
   return (
     <>
       {(state.userInput || state.imageUrls.length > 0) && (
-        <UserMessageBubble content={state.userInput} imageUrls={state.imageUrls} onRetry={running ? undefined : onRetry} />
+        <UserMessageBubble
+          content={state.userInput}
+          imageUrls={state.imageUrls}
+          onRetry={running || queued ? undefined : onRetry}
+          onRemoveFromQueue={queued ? onRemoveFromQueue : undefined}
+        />
       )}
-      <article className="message assistant-message live-message">
-        <MessageParts parts={state.parts} live={running} />
-        {running && !compacting && <LiveRunIndicator status={state.status} startedAtMs={state.startedAtMs} />}
-        {state.error && (
-          <RunErrorNotice
-            message={state.error}
-            detail={state.errorDetail}
-            onRetry={onRetry && state.completed ? onRetry : undefined}
-          />
-        )}
-        {!running && state.content && <MessageActions text={state.content} />}
-      </article>
+      {!queued && (
+        <article className="message assistant-message live-message">
+          <MessageParts parts={state.parts} live={running} />
+          {running && !compacting && <LiveRunIndicator status={state.status} startedAtMs={state.startedAtMs} />}
+          {!running && state.completed && state.durationMs != null && state.durationMs > 0 && (
+            <div className="turn-duration-meta" role="status">
+              {t("Turn", "本轮")} · {formatTurnElapsed(state.durationMs, locale.startsWith("zh"))}
+            </div>
+          )}
+          {state.error && (
+            <RunErrorNotice
+              message={state.error}
+              detail={state.errorDetail}
+              onRetry={onRetry && state.completed ? onRetry : undefined}
+            />
+          )}
+          {!running && state.content && <MessageActions text={state.content} />}
+        </article>
+      )}
     </>
   );
 }

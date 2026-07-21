@@ -208,6 +208,7 @@ impl<'paths> SessionRunner<'paths> {
             perf.mark("session snapshot");
             snapshot.dynamic_sources = agent.last_dynamic_sources();
             snapshot.active_run = Some(_active_run.summary());
+            snapshot.last_turn_duration_ms = result.duration_ms;
             sink.on_runner_event(RunnerEvent::FinalSummary(snapshot))?;
             perf.mark("final summary event");
         }
@@ -268,6 +269,7 @@ impl<'paths> SessionRunner<'paths> {
             perf.mark("session snapshot");
             snapshot.dynamic_sources = agent.last_dynamic_sources();
             snapshot.active_run = Some(_active_run.summary());
+            snapshot.last_turn_duration_ms = result.duration_ms;
             sink.on_runner_event(RunnerEvent::FinalSummary(snapshot))?;
             perf.mark("final summary event");
         }

@@ -138,5 +138,6 @@ fn empty_result() -> ChatResult {
         reasoning: None,
         usage: None,
         tool_calls: Vec::new(),
+        duration_ms: 0,
     }
 }

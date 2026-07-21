@@ -3,7 +3,7 @@ mod background_command_event;
 mod code_block;
 mod command_output;
 mod command_result_block;
-mod fold_text;
+pub(crate) mod fold_text;
 mod cli_command_preview;
 mod edit_diff;
 mod error;
@@ -12,7 +12,7 @@ mod markdown;
 mod markdown_blocks;
 mod markdown_inline;
 mod permission;
-mod session_summary;
+pub(crate) mod session_summary;
 #[cfg(test)]
 mod session_summary_tests;
 mod status_style;

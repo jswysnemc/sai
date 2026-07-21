@@ -477,6 +477,7 @@ mod tests {
                 total_tokens: 3,
             }),
             tool_calls: Vec::new(),
+            duration_ms: 0,
         };
         recorder.finish_ok(&result).unwrap();
 

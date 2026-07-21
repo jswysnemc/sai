@@ -14,15 +14,34 @@ use std::io::{self, Write};
 /// - 输出是否成功
 pub(crate) fn write_chat_error(error: &Error, plain: bool) -> Result<()> {
     let mut stdout = io::stdout();
+    let disconnect = crate::llm::is_transient_transport_error(error);
     let lines = error_chain_lines(error);
-    let title = t("request failed", "请求失败");
+    let title = if disconnect {
+        t("connection interrupted", "连接中断")
+    } else {
+        t("request failed", "请求失败")
+    };
     if plain {
         writeln!(stdout, "{title}: {}", lines.join(": "))?;
+        if disconnect {
+            writeln!(
+                stdout,
+                "{}",
+                t("You can retry this turn.", "可重试本轮请求。")
+            )?;
+        }
         return Ok(());
     }
     writeln!(stdout, "{ASSET_ERROR_STYLE}{TOOL_BULLET} {title}{RESET}")?;
     for line in lines {
         writeln!(stdout, "  {ASSET_ERROR_STYLE}{line}{RESET}")?;
+    }
+    if disconnect {
+        writeln!(
+            stdout,
+            "  {ASSET_ERROR_STYLE}{}{RESET}",
+            t("You can retry this turn.", "可重试本轮请求。")
+        )?;
     }
     Ok(())
 }

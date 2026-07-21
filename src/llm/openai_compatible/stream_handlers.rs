@@ -562,5 +562,6 @@ fn finalize_stream_result(
         reasoning: reasoning.filter(|text| !text.trim().is_empty()),
         usage,
         tool_calls,
+        duration_ms: 0,
     })
 }

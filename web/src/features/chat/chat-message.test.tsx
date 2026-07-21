@@ -48,6 +48,27 @@ describe("HistoryTurn", () => {
     expect(html).toContain("运行已中断");
   });
 
+
+  it("shows remove control for queued live user messages", () => {
+    const html = renderToStaticMarkup(
+      <LiveRunMessage
+        running
+        state={{
+          ...initialRunState,
+          status: "queued",
+          userInput: "queued task",
+          runId: "run-q",
+          startedAtMs: null,
+          durationMs: null
+        }}
+        onRemoveFromQueue={() => undefined}
+      />
+    );
+    expect(html).toContain("从队列移除");
+    expect(html).toContain("排队中");
+    expect(html).not.toContain("assistant-message");
+  });
+
   it("offers expandable details for live failures", () => {
     const html = renderToStaticMarkup(
       <LiveRunMessage
@@ -55,6 +76,7 @@ describe("HistoryTurn", () => {
         state={{
           ...initialRunState,
           startedAtMs: null,
+    durationMs: null,
           completed: true,
           error: "运行失败",
           errorDetail: "upstream request timed out after 120 seconds"

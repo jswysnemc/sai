@@ -421,6 +421,8 @@ pub(super) fn read_repl_input(
                     }
                     KeyCode::Char('o') if modifiers.contains(KeyModifiers::CONTROL) => {
                         if runtime.toggle_command_output()? {
+                            // pager 返回后重新打开增强输入，并重绘输入框
+                            enable_repl_terminal_input(&mut stdout)?;
                             input_row = 0;
                             rendered_rows = 0;
                             redraw_input!()?;

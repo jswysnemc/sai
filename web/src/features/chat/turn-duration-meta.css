@@ -1,0 +1,5 @@
+.turn-duration-meta {
+  margin-top: 6px;
+  color: var(--ink-soft);
+  font: 500 11px/1.4 var(--font-code);
+}

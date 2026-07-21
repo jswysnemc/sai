@@ -104,6 +104,7 @@ async fn usage(
             dynamic_sources: Vec::new(),
             projection_warnings: vec![format!("usage snapshot unavailable: {error}")],
             active_run: None,
+            last_turn_duration_ms: 0,
         },
     };
     let process = state.system_monitor.snapshot();

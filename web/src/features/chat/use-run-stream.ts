@@ -156,6 +156,7 @@ export function useRunStream(
 
   useEffect(() => {
     const desired = new Set(openRunIds);
+    const reconnectTimers = new Map<string, number>();
     for (const [runId, source] of sourcesRef.current) {
       if (desired.has(runId)) continue;
       source.close();
@@ -163,68 +164,107 @@ export function useRunStream(
     }
     for (const runId of openRunIds) {
       if (sourcesRef.current.has(runId)) continue;
-      const source = new EventSource(`/api/runs/${runId}/events`);
-      const handle = (message: MessageEvent<string>) => {
-        let event: WebEvent;
-        try {
-          event = JSON.parse(message.data) as WebEvent;
-        } catch (error) {
-          event = runFailureEvent(
-            runId,
-            sessionId,
-            text(locale, "Invalid run event", "运行事件格式无效"),
-            errorDetail(error, message.data)
-          );
-        }
-        if (event.type === "run.interrupted" && event.payload.discard_user_turn === true) {
-          onInterruptedWithoutReply?.(String(event.payload.restore_input ?? ""));
-        }
-        dispatch({ type: "event", event });
-        if (event.type === "workspace.changed") onWorkspaceChanged?.();
-        // 压缩完成后立刻刷新顶栏上下文占用与会话时间线
-        if (event.type === "compaction.finished" && event.payload.applied === true) {
-          void Promise.all([
-            queryClient.invalidateQueries({ queryKey: ["system-usage"] }),
-            queryClient.invalidateQueries({ queryKey: ["timeline", event.session_id || sessionId] })
-          ]);
-        }
-        // 轮次结束时 usage 会更新 prompt_tokens，同步刷新顶栏
-        if (event.type === "session.summary" || event.type === "run.completed") {
-          void queryClient.invalidateQueries({ queryKey: ["system-usage"] });
-        }
-        if (["run.completed", "run.interrupted", "run.failed"].includes(event.type)) {
-          const response = queryClient.getQueryData(["config"]) as { config?: AppConfig } | undefined;
-          const body =
-            event.type === "run.interrupted"
-              ? text(locale, "Reply interrupted", "答复已中断")
-              : event.type === "run.failed"
-                ? text(locale, "Reply failed", "答复失败")
-                : text(locale, "Reply complete", "答复已完成");
-          notifyReplyComplete(response?.config?.notification, text(locale, "Sai", "Sai"), body);
-          source.onerror = null;
-          source.close();
-          sourcesRef.current.delete(runId);
-          onSettled();
-        }
-      };
-      for (const type of EVENT_TYPES) source.addEventListener(type, handle as EventListener);
-      source.onerror = () => {
-        if (source.readyState !== EventSource.CLOSED) return;
+      // 断连自动重连：带 after=sequence 续订，避免丢事件
+      let lastSequence = 0;
+      let reconnectAttempts = 0;
+      let closedByClient = false;
+      const MAX_RECONNECT = 5;
+
+      const failDisconnected = () => {
         dispatch({
           type: "event",
           event: runFailureEvent(
             runId,
             sessionId,
-            text(locale, "Run event stream disconnected", "运行事件流已断开"),
-            `The browser event stream closed before a terminal event was received. Run ID: ${runId}`
+            text(locale, "Connection interrupted", "连接中断"),
+            text(
+              locale,
+              "The run event stream disconnected after multiple reconnect attempts. You can retry this turn.",
+              "运行事件流在多次重连后仍断开。可点击重试本轮。"
+            )
           )
         });
         sourcesRef.current.delete(runId);
         onSettled();
       };
-      sourcesRef.current.set(runId, source);
+
+      const openSource = () => {
+        if (closedByClient) return;
+        const query = lastSequence > 0 ? `?after=${lastSequence}` : "";
+        const source = new EventSource(`/api/runs/${runId}/events${query}`);
+        sourcesRef.current.set(runId, source);
+
+        const handle = (message: MessageEvent<string>) => {
+          let event: WebEvent;
+          try {
+            event = JSON.parse(message.data) as WebEvent;
+          } catch (error) {
+            event = runFailureEvent(
+              runId,
+              sessionId,
+              text(locale, "Invalid run event", "运行事件格式无效"),
+              errorDetail(error, message.data)
+            );
+          }
+          if (typeof event.sequence === "number" && event.sequence > lastSequence) {
+            lastSequence = event.sequence;
+          }
+          reconnectAttempts = 0;
+          if (event.type === "run.interrupted" && event.payload.discard_user_turn === true) {
+            onInterruptedWithoutReply?.(String(event.payload.restore_input ?? ""));
+          }
+          dispatch({ type: "event", event });
+          if (event.type === "workspace.changed") onWorkspaceChanged?.();
+          if (event.type === "compaction.finished" && event.payload.applied === true) {
+            void Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["system-usage"] }),
+              queryClient.invalidateQueries({ queryKey: ["timeline", event.session_id || sessionId] })
+            ]);
+          }
+          if (event.type === "session.summary" || event.type === "run.completed") {
+            void queryClient.invalidateQueries({ queryKey: ["system-usage"] });
+          }
+          if (["run.completed", "run.interrupted", "run.failed"].includes(event.type)) {
+            const response = queryClient.getQueryData(["config"]) as { config?: AppConfig } | undefined;
+            const body =
+              event.type === "run.interrupted"
+                ? text(locale, "Reply interrupted", "答复已中断")
+                : event.type === "run.failed"
+                  ? text(locale, "Reply failed", "答复失败")
+                  : text(locale, "Reply complete", "答复已完成");
+            notifyReplyComplete(response?.config?.notification, text(locale, "Sai", "Sai"), body);
+            closedByClient = true;
+            source.onerror = null;
+            source.close();
+            sourcesRef.current.delete(runId);
+            onSettled();
+          }
+        };
+        for (const type of EVENT_TYPES) source.addEventListener(type, handle as EventListener);
+        source.onerror = () => {
+          if (closedByClient) return;
+          if (source.readyState !== EventSource.CLOSED) return;
+          sourcesRef.current.delete(runId);
+          reconnectAttempts += 1;
+          if (reconnectAttempts > MAX_RECONNECT) {
+            failDisconnected();
+            return;
+          }
+          const delay = Math.min(4_000, 300 * 2 ** (reconnectAttempts - 1));
+          const timer = window.setTimeout(() => {
+            reconnectTimers.delete(runId);
+            openSource();
+          }, delay);
+          reconnectTimers.set(runId, timer);
+        };
+      };
+
+      openSource();
     }
-  }, [locale, openRunKey, onInterruptedWithoutReply, onSettled, onWorkspaceChanged, queryClient, sessionId]);
+    return () => {
+      for (const timer of reconnectTimers.values()) window.clearTimeout(timer);
+    };
+  }, [locale, openRunIds, openRunKey, onInterruptedWithoutReply, onSettled, onWorkspaceChanged, queryClient, sessionId]);
 
   useEffect(() => () => {
     for (const source of sourcesRef.current.values()) source.close();

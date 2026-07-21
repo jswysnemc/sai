@@ -684,6 +684,30 @@ impl ReplRuntime {
         self.replay(false)
     }
 
+    /// 从备用屏/外部 UI 返回后恢复 TUI 输入与显示。
+    ///
+    /// 备用屏会完整还原主缓冲内容，因此默认只重绘输入框并校准尺寸；
+    /// 尺寸变化时再全量重放，避免原点漂移导致输入框错位。
+    ///
+    /// 返回:
+    /// - 是否成功
+    pub(super) fn resync_after_overlay(&mut self) -> Result<()> {
+        self.desynced = false;
+        // 1. 确保 raw mode（pager 可能曾临时关闭）
+        if !crossterm::terminal::is_raw_mode_enabled().unwrap_or(false) {
+            crossterm::terminal::enable_raw_mode()?;
+        }
+        let previous = self.viewport.size();
+        let size = TerminalSize::current();
+        // 2. 尺寸变了：全量重放；否则仅重绘 composer 恢复光标
+        if size != previous {
+            self.viewport.update(size, self.composer_height_for(size), self.stream.on_screen());
+            self.replay(false)?;
+        }
+        self.redraw_stream_composer()?;
+        Ok(())
+    }
+
     /// 立即按当前 viewport 从 source 重绘 REPL 终端。
     ///
     /// 参数:

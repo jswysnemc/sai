@@ -391,6 +391,11 @@ export function ChatPage() {
                   onRetry={!running && state.completed
                     ? () => void retry(state.userInput, state.imageUrls, state.runId)
                     : undefined}
+                  onRemoveFromQueue={
+                    state.status === "queued" && state.runId
+                      ? () => void run.stop(state.runId!)
+                      : undefined
+                  }
                 />
               </section>
             ))}

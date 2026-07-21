@@ -42,7 +42,18 @@ impl ReplRuntime {
                 self.transcript.clear_work_status();
                 return self.sync_transcript(false);
             }
-            RunnerEvent::LoadedToolsChanged(_) | RunnerEvent::FinalSummary(_) => return Ok(()),
+            RunnerEvent::LoadedToolsChanged(_) => return Ok(()),
+            RunnerEvent::FinalSummary(snapshot) => {
+                // 本轮结束后追加上下文与耗时摘要
+                let summary = crate::render::session_summary::render_session_summary(snapshot);
+                if !summary.trim().is_empty() {
+                    self.transcript.finalize_live_tail();
+                    self.transcript.clear_work_status();
+                    self.transcript.push_meta(summary);
+                    return self.sync_transcript(false);
+                }
+                return Ok(());
+            }
         };
         // 【TUI】【增量同步】事件驱动的工作状态与动效节拍统一在此维护
         if let Some(status) = WorkStatus::from_agent_event(agent_event) {

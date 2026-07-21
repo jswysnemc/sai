@@ -38,14 +38,16 @@ impl ReplRuntime {
         if cfg!(test) {
             return Ok(self.transcript.toggle_latest_command_output());
         }
-        // 2. 交互终端：学习 codex，进入备用屏幕 pager 展示完整内容
+        // 2. 交互终端：备用屏 pager 展示全部折叠块，左右切换
         if std::io::stdout().is_terminal() && std::io::stdin().is_terminal() {
-            let Some(block) = self.transcript.latest_expandable_block() else {
+            let blocks = self.transcript.expandable_blocks();
+            if blocks.is_empty() {
                 return Ok(false);
-            };
-            super::super::repl_pager::open_text_pager(&block.title, &block.body)?;
-            self.replay(false)?;
-            self.redraw_stream_composer()?;
+            }
+            let start = blocks.len().saturating_sub(1);
+            super::super::repl_pager::open_blocks_pager(&blocks, start)?;
+            // 备用屏返回后强制重同步 viewport 与 composer，避免输入框错位
+            self.resync_after_overlay()?;
             return Ok(true);
         }
         // 3. 非交互：内联展开/折叠

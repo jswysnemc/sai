@@ -552,8 +552,12 @@ pub(super) async fn run_repl(
             continue;
         }
         if let Err(error) = outcome.result {
-            runtime.record_meta(error.to_string())?;
-            if let Some(draft) = outcome.leftover_draft {
+            // 断连类错误：展示可重试提示，并把用户输入回填便于 Enter 重试
+            let hint = crate::llm::disconnect_user_hint(&error);
+            runtime.record_meta(hint)?;
+            if crate::llm::is_transient_transport_error(&error) {
+                prefill = Some(submitted_input.clone());
+            } else if let Some(draft) = outcome.leftover_draft {
                 prefill = Some(draft);
             }
             continue;
@@ -779,6 +783,7 @@ fn repl_runner_submission(
             tool_call_mode,
             render_options,
         ))
+        .with_final_summary(true)
 }
 
 /// 返回欢迎面板中展示的当前模型名称。

@@ -3,10 +3,12 @@ mod openai_compatible;
 mod stream_event;
 mod thinking;
 mod tool_call_stream;
+mod transport_retry;
 
 pub use http_debug::SessionGuard as HttpDebugSessionGuard;
 pub use openai_compatible::OpenAiCompatibleClient;
 pub use stream_event::{ChatStreamEvent, ToolCallStreamProgress};
+pub(crate) use transport_retry::{disconnect_user_hint, is_transient_transport_error};
 
 use serde::{Deserialize, Serialize};
 
@@ -152,6 +154,8 @@ pub struct ChatResult {
     pub reasoning: Option<String>,
     pub usage: Option<Usage>,
     pub tool_calls: Vec<ToolCall>,
+    /// 本轮从首次思考/正文输出到结束的耗时（毫秒）
+    pub duration_ms: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

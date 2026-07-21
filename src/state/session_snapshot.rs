@@ -42,6 +42,8 @@ pub struct SessionSnapshot {
     pub dynamic_sources: Vec<DynamicContextSource>,
     pub projection_warnings: Vec<String>,
     pub active_run: Option<ActiveRunSummary>,
+    /// 最近一轮从首次思考/正文到结束的耗时（毫秒）；未设置时为 0
+    pub last_turn_duration_ms: u64,
 }
 
 impl StateStore {
@@ -126,6 +128,7 @@ impl StateStore {
             dynamic_sources: Vec::new(),
             projection_warnings,
             active_run: None,
+            last_turn_duration_ms: 0,
         })
     }
 

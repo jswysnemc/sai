@@ -40,6 +40,8 @@ export type LiveRunState = {
   error: string | null;
   errorDetail: string | null;
   completed: boolean;
+  /** 本轮耗时（毫秒），从首次思考/正文到结束 */
+  durationMs: number | null;
 };
 
 export type RunAction =
@@ -61,7 +63,8 @@ export const initialRunState: LiveRunState = {
   parts: [],
   error: null,
   errorDetail: null,
-  completed: false
+  completed: false,
+  durationMs: null
 };
 
 /**
@@ -93,7 +96,8 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
       userInput: action.userInput,
       imageUrls: action.imageUrls ?? [],
       status: "waiting_response",
-      startedAtMs: Date.now()
+      startedAtMs: Date.now(),
+      durationMs: null
     };
   }
   const { event } = action;
@@ -117,10 +121,14 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
           source: String(payload.content ?? "")
         }]
       };
-    case "message.content.delta":
-      return appendTextPart(closeActiveReasoning(state, event.timestamp), event.sequence, String(payload.text ?? ""));
-    case "message.reasoning.delta":
-      return appendReasoningPart(state, event.sequence, event.timestamp, String(payload.text ?? ""));
+    case "message.content.delta": {
+      const withClock = markFirstOutput(state, event.timestamp);
+      return appendTextPart(closeActiveReasoning(withClock, event.timestamp), event.sequence, String(payload.text ?? ""));
+    }
+    case "message.reasoning.delta": {
+      const withClock = markFirstOutput(state, event.timestamp);
+      return appendReasoningPart(withClock, event.sequence, event.timestamp, String(payload.text ?? ""));
+    }
     case "tool.call.preparing":
       return upsertTool(closeActiveReasoning(state, event.timestamp), String(payload.tool_id), {
         name: String(payload.name ?? "tool"),
@@ -208,8 +216,19 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
         status: "idle",
         completed: true
       };
-    case "run.completed":
-      return { ...closeActiveReasoning(state, event.timestamp), status: "idle", completed: true };
+    case "run.completed": {
+      const durationMs = typeof payload.duration_ms === "number" ? payload.duration_ms : state.durationMs;
+      return {
+        ...closeActiveReasoning(state, event.timestamp),
+        status: "idle",
+        completed: true,
+        durationMs: durationMs ?? null
+      };
+    }
+    case "session.summary": {
+      const durationMs = typeof payload.duration_ms === "number" ? payload.duration_ms : state.durationMs;
+      return { ...state, durationMs: durationMs ?? state.durationMs };
+    }
     default:
       return state;
   }
@@ -224,6 +243,29 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
 function nonEmptyDetail(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
+
+/**
+ * 首次思考/正文输出时校准本轮计时起点。
+ *
+ * @param state 当前运行状态
+ * @param timestamp 事件时间戳
+ * @returns 更新后的状态
+ */
+function markFirstOutput(state: LiveRunState, timestamp: string): LiveRunState {
+  // 等待阶段的 startedAtMs 是请求开始时间；首次输出后改用输出时间，与 CLI/TUI 一致
+  if (state.status === "thinking" || state.status === "working") {
+    // 已在输出阶段时不再覆盖
+    if (state.parts.some((part) => part.type === "reasoning" || part.type === "text")) {
+      return state;
+    }
+  }
+  const hasOutput = state.parts.some((part) => part.type === "reasoning" || part.type === "text");
+  if (hasOutput) return state;
+  const ms = Date.parse(timestamp);
+  if (!Number.isFinite(ms)) return state;
+  return { ...state, startedAtMs: ms };
+}
+
 
 function resolvePermissionPart(state: LiveRunState, requestId: string, decision: PermissionDecision): LiveRunState {
   return {
