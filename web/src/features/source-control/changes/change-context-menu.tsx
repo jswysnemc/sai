@@ -115,7 +115,7 @@ export function ChangeContextMenu(props: ChangeContextMenuProps) {
       {stagePaths.length > 0 && <Button disabled={props.busy} onClick={() => void run("stage", stagePaths)}><Plus size={12} />{t(`Stage ${stagePaths.length} Selected`, `暂存选中的 ${stagePaths.length} 项`)}</Button>}
       {unstagePaths.length > 0 && <Button disabled={props.busy} onClick={() => void run("unstage", unstagePaths)}><Minus size={12} />{t(`Unstage ${unstagePaths.length} Selected`, `取消暂存选中的 ${unstagePaths.length} 项`)}</Button>}
       {untrackedPaths.length > 0 && <Button disabled={props.busy} onClick={() => void run("add_to_gitignore", untrackedPaths)}><EyeOff size={12} />{t("Add to .gitignore", "加入 .gitignore")}</Button>}
-      {discardPaths.length > 0 && <Button className="danger" disabled={props.busy} onClick={() => void discard()}>{props.entries.some((entry) => entry.untracked) ? <Trash2 size={12} /> : <RotateCcw size={12} />}{t("Discard Selected", "丢弃所选改动")}</Button>}
+      {discardPaths.length > 0 && <Button className="tone-danger" disabled={props.busy} onClick={() => void discard()}>{props.entries.some((entry) => entry.untracked) ? <Trash2 size={12} /> : <RotateCcw size={12} />}{t("Discard Selected", "丢弃所选改动")}</Button>}
       <span>{t("Path", "路径")}</span>
       <Button onClick={() => openFile(true)}><FolderSearch size={12} />{t("Reveal in Explorer", "在资源管理器中显示")}</Button>
       <Button onClick={() => void copyPath(false)}><Copy size={12} />{t("Copy Path", "复制路径")}</Button>

@@ -395,10 +395,64 @@
 .git-branch-rename-field input { min-height: 34px; padding: 0 9px; border: 1px solid var(--line); border-radius: 7px; outline: 0; background: var(--paper-raised); color: var(--ink); font: 400 12px var(--font-code); }
 .git-branch-rename-field input:focus { border-color: var(--line-strong); }
 .git-diff-mode { display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-.git-diff-mode button { min-height: 26px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--ink-soft); font-size: 11px; }
-.git-diff-mode button:hover:not(:disabled),
-.git-diff-mode button.active { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
-.git-diff-mode button.danger { margin-left: auto; color: var(--danger); }
+.git-diff-mode button,
+.git-diff-mode .ui-button {
+  min-height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+.git-diff-mode button:hover:not(:disabled):not(.danger):not(.tone-danger):not(.git-discard-all),
+.git-diff-mode button.active:not(.danger):not(.tone-danger),
+.git-diff-mode .ui-button:hover:not(:disabled):not(.danger):not(.tone-danger):not(.git-discard-all),
+.git-diff-mode .ui-button.active:not(.danger):not(.tone-danger) {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}
+/* 全部丢弃等幽灵危险：默认透明红字；hover 浅红底，禁止实心红底/白字 */
+.git-diff-mode > button.danger,
+.git-diff-mode > button.tone-danger,
+.git-diff-mode > button.git-discard-all,
+.git-diff-mode > .ui-button.danger,
+.git-diff-mode > .ui-button.tone-danger,
+.git-diff-mode > .ui-button.git-discard-all,
+.git-diff-mode > .ui-button.secondary.tone-danger,
+.git-diff-mode > .ui-button.secondary.danger {
+  margin-left: auto;
+  border: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--danger);
+  box-shadow: none;
+}
+.git-diff-mode > button.danger:hover:not(:disabled),
+.git-diff-mode > button.tone-danger:hover:not(:disabled),
+.git-diff-mode > button.git-discard-all:hover:not(:disabled),
+.git-diff-mode > .ui-button.danger:hover:not(:disabled),
+.git-diff-mode > .ui-button.tone-danger:hover:not(:disabled),
+.git-diff-mode > .ui-button.git-discard-all:hover:not(:disabled),
+.git-diff-mode > .ui-button.secondary.tone-danger:hover:not(:disabled),
+.git-diff-mode > .ui-button.secondary.danger:hover:not(:disabled) {
+  border: 0;
+  border-color: transparent;
+  background: color-mix(in srgb, var(--danger) 12%, var(--paper));
+  color: var(--danger);
+  box-shadow: none;
+}
+.git-diff-mode > button.danger:active:not(:disabled),
+.git-diff-mode > button.tone-danger:active:not(:disabled),
+.git-diff-mode > button.git-discard-all:active:not(:disabled),
+.git-diff-mode > .ui-button.danger:active:not(:disabled),
+.git-diff-mode > .ui-button.tone-danger:active:not(:disabled),
+.git-diff-mode > .ui-button.git-discard-all:active:not(:disabled),
+.git-diff-mode > .ui-button.secondary.tone-danger:active:not(:disabled),
+.git-diff-mode > .ui-button.secondary.danger:active:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 18%, var(--paper));
+  color: var(--danger);
+}
 .git-diff-meta { padding: 8px 12px; border-bottom: 1px solid var(--line); color: var(--code-comment); font: 400 11px var(--font-code); }
 .git-load-more { width: 100%; min-height: 32px; margin-top: 4px; border: 1px dashed var(--line); border-radius: 6px; background: transparent; color: var(--ink-soft); font-size: 11px; }
 .git-load-more:hover { background: var(--paper-deep); color: var(--ink); }
@@ -409,17 +463,60 @@
 .git-review-sync b { color: var(--signal); }
 .git-review-sync i { color: var(--ink-soft); font-style: normal; }
 .git-review-actions { display: flex; align-items: center; gap: 3px; }
-.git-review-actions > button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 28px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--ink-soft); font-size: 11px; }
+.git-review-actions > button,
+.git-review-actions > .ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
 .git-review-actions > button:hover:not(:disabled),
-.git-review-actions > button.active { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+.git-review-actions > button.active,
+.git-review-actions > .ui-button:hover:not(:disabled),
+.git-review-actions > .ui-button.active {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}
+.git-review-actions > .ui-button.primary {
+  background: var(--graphite);
+  color: var(--paper);
+}
+.git-review-actions > .ui-button.danger {
+  background: transparent;
+  color: var(--danger);
+}
+.git-review-actions > .ui-button.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
 .git-manager-body { display: grid; grid-template-columns: minmax(250px, 320px) minmax(0, 1fr); min-height: 0; height: 100%; }
 .git-change-panel,
 .git-history-panel { display: grid; align-content: start; min-height: 0; overflow: auto; border-right: 1px solid var(--line); background: var(--paper); }
 .git-commit-box { display: grid; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); }
 .git-commit-box textarea { width: 100%; resize: none; padding: 7px; border: 1px solid var(--line); border-radius: 6px; outline: 0; background: transparent; font-size: 11px; }
 .git-commit-box textarea:focus { border-color: var(--line-strong); }
-.git-commit-box button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; border: 0; border-radius: 6px; background: var(--graphite); color: var(--paper); font-size: 11px; }
-.git-commit-box button:disabled { opacity: 0.42; cursor: not-allowed; }
+/* 仅主提交动作使用实心主色；次要/危险/菜单按钮走统一 ui-button 语义 */
+.git-commit-box .ui-button.primary.git-commit-primary,
+.git-commit-box .ui-button.primary.git-commit-menu-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--graphite);
+  color: var(--paper);
+  font-size: 11px;
+}
+.git-commit-box .ui-button:disabled { opacity: 0.42; cursor: not-allowed; }
 .git-remote-box button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; border: 0; border-radius: 6px; background: var(--graphite); color: var(--paper); font-size: 11px; }
 .git-remote-box { display: grid; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
 .git-remote-box input { min-height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; font: 400 11px var(--font-code); }

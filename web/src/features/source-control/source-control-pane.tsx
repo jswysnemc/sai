@@ -69,6 +69,7 @@ export function SourceControlPane() {
   const [openFolderDialogOpen, setOpenFolderDialogOpen] = useState(false);
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
   const [cloneInput, setCloneInput] = useState<CloneRepositoryInput | null>(null);
+  const [suggestingMessage, setSuggestingMessage] = useState(false);
   const { scm, git } = useGitSettings();
   const scmState = useScmStateStore(selectedRepoRoot);
   const {
@@ -560,7 +561,7 @@ export function SourceControlPane() {
               </Button>
               {dirtyTotal > 0 && (
                 <Button
-                  className="danger"
+                  className="git-discard-all tone-danger"
                   disabled={busy}
                   onClick={() =>
                     void runOp("discard_all", {

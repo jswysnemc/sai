@@ -79,8 +79,16 @@
   font-size: 0.6875rem;
 }
 
-.git-change-context-menu .ui-button.danger {
+.git-change-context-menu .ui-button.danger,
+.git-change-context-menu .ui-button.tone-danger {
+  border: 0;
+  background: transparent;
   color: var(--danger);
+}
+
+.git-change-context-menu .ui-button.danger:hover:not(:disabled),
+.git-change-context-menu .ui-button.tone-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
 
 @media (max-width: 40rem) {
