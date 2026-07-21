@@ -15,4 +15,13 @@ describe("currentComposerTip", () => {
     const tip = currentComposerTip("en-US", 0);
     expect(tip).toMatch(/[A-Za-z]/);
   });
+
+  it("keeps web tips free of TUI-only shortcuts", () => {
+    const samples = Array.from({ length: 20 }, (_, i) => currentComposerTip("en-US", i * 8_000)).join("\n");
+    expect(samples).not.toMatch(/\bTUI\b/);
+    expect(samples).not.toMatch(/Prefix !/);
+    expect(samples).not.toMatch(/Double Esc/);
+    expect(samples).not.toMatch(/Ctrl\+O/);
+    expect(samples).toMatch(/@|skill|lightbox|Settings|paperclip|model/i);
+  });
 });

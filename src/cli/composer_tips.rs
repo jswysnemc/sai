@@ -43,7 +43,7 @@ const EN_TIPS: &[&str] = &[
     "Double Esc clears the current draft",
     "Modes: yolo · audit · auto · plan",
     "Ctrl+C interrupts the current agent turn",
-    "Use @ for files and /name for skills in the web UI",
+    "Use /auto-audit for LLM + human parallel review",
 ];
 
 const ZH_TIPS: &[&str] = &[
@@ -56,7 +56,7 @@ const ZH_TIPS: &[&str] = &[
     "连按两次 Esc 清空当前草稿",
     "模式：yolo · audit · auto · plan",
     "Ctrl+C 中断当前智能体轮次",
-    "Web 用 @ 提及文件 · 用 /名称 引用技能",
+    "用 /auto-audit 启用 LLM 与人工并行审核",
 ];
 
 #[cfg(test)]
@@ -71,5 +71,17 @@ mod tests {
         assert!(!current_composer_tip().is_empty());
         assert!(EN_TIPS.len() >= 5);
         assert_eq!(EN_TIPS.len(), ZH_TIPS.len());
+    }
+
+    #[test]
+    fn tui_tips_exclude_web_only_features() {
+        let joined = EN_TIPS.join("\n");
+        assert!(!joined.contains("web UI"));
+        assert!(!joined.contains("@ for files"));
+        assert!(!joined.contains("lightbox"));
+        assert!(joined.contains("Tab cycles mode") || joined.contains("Prefix !"));
+        let zh = ZH_TIPS.join("\n");
+        assert!(!zh.contains("Web 用"));
+        assert!(!zh.contains("灯箱"));
     }
 }
