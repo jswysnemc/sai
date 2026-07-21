@@ -34,7 +34,7 @@ pub(crate) fn current_composer_tip() -> &'static str {
 }
 
 const EN_TIPS: &[&str] = &[
-    "Tab cycles mode · Enter send · Shift+Enter newline",
+    "Shift+Tab cycles mode · Enter send · Shift+Enter newline",
     "Type / for commands · /model · /auto · /help",
     "Prefix ! to run a local shell command",
     "Ctrl+O expands or collapses command / thinking output",
@@ -43,11 +43,12 @@ const EN_TIPS: &[&str] = &[
     "Double Esc clears the current draft",
     "Modes: yolo · audit · auto · plan",
     "Ctrl+C interrupts the current agent turn",
+    "Tab queues input while the agent is working",
     "Use /auto-audit for LLM + human parallel review",
 ];
 
 const ZH_TIPS: &[&str] = &[
-    "Tab 切换模式 · Enter 发送 · Shift+Enter 换行",
+    "Shift+Tab 切换模式 · Enter 发送 · Shift+Enter 换行",
     "输入 / 打开命令 · /model · /auto · /help",
     "以 ! 开头可执行本地 shell 命令",
     "Ctrl+O 展开或折叠命令输出 / 思考段落",
@@ -56,6 +57,7 @@ const ZH_TIPS: &[&str] = &[
     "连按两次 Esc 清空当前草稿",
     "模式：yolo · audit · auto · plan",
     "Ctrl+C 中断当前智能体轮次",
+    "智能体工作时按 Tab 将输入加入队列",
     "用 /auto-audit 启用 LLM 与人工并行审核",
 ];
 
@@ -79,7 +81,7 @@ mod tests {
         assert!(!joined.contains("web UI"));
         assert!(!joined.contains("@ for files"));
         assert!(!joined.contains("lightbox"));
-        assert!(joined.contains("Tab cycles mode") || joined.contains("Prefix !"));
+        assert!(joined.contains("Shift+Tab cycles mode") || joined.contains("Prefix !"));
         let zh = ZH_TIPS.join("\n");
         assert!(!zh.contains("Web 用"));
         assert!(!zh.contains("灯箱"));

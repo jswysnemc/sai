@@ -52,8 +52,8 @@ pub(super) async fn run_repl(
     )?;
     runtime.record_meta(
         t(
-            "Tab mode · Enter send · Shift+Enter newline · Ctrl+V paste",
-            "Tab 模式 · Enter 发送 · Shift+Enter 换行 · Ctrl+V 粘贴",
+            "Shift+Tab mode · Tab queues while working · Enter send · Shift+Enter newline",
+            "Shift+Tab 切模式 · 工作时 Tab 入队 · Enter 发送 · Shift+Enter 换行",
         )
         .to_string(),
     )?;
@@ -139,6 +139,23 @@ pub(super) async fn run_repl(
                     }
                 } else if let Err(error) = outcome.result {
                     runtime.record_meta(error.to_string())?;
+                }
+                if let Some(draft) = outcome.leftover_draft {
+                    prefill = Some(draft);
+                }
+                drain_submission_queue(
+                    paths,
+                    &config,
+                    &mut agent,
+                    &mut runtime,
+                    &mut mode,
+                    &mut input_history,
+                    transcript_options.reasoning_mode,
+                    transcript_options.tool_call_mode,
+                )
+                .await?;
+                if let Some(draft) = take_stream_draft_prefill(&mut runtime) {
+                    prefill = Some(draft);
                 }
                 continue;
             }
@@ -513,12 +530,157 @@ pub(super) async fn run_repl(
         if outcome.interrupted {
             if !state.latest_interrupted_turn_has_content(&submitted_input)? {
                 prefill = Some(submitted_input);
+            } else if let Some(draft) = outcome.leftover_draft {
+                prefill = Some(draft);
+            }
+            // 中断后仍执行已入队内容
+            drain_submission_queue(
+                paths,
+                &config,
+                &mut agent,
+                &mut runtime,
+                &mut mode,
+                &mut input_history,
+                transcript_options.reasoning_mode,
+                transcript_options.tool_call_mode,
+            )
+            .await?;
+            if let Some(draft) = take_stream_draft_prefill(&mut runtime) {
+                prefill = Some(draft);
             }
             continue;
         }
         if let Err(error) = outcome.result {
             runtime.record_meta(error.to_string())?;
+            if let Some(draft) = outcome.leftover_draft {
+                prefill = Some(draft);
+            }
             continue;
+        }
+        if let Some(draft) = outcome.leftover_draft {
+            prefill = Some(draft);
+        }
+        // 1. 本轮成功后依次执行 Tab 入队的消息
+        drain_submission_queue(
+            paths,
+            &config,
+            &mut agent,
+            &mut runtime,
+            &mut mode,
+            &mut input_history,
+            transcript_options.reasoning_mode,
+            transcript_options.tool_call_mode,
+        )
+        .await?;
+        if let Some(draft) = take_stream_draft_prefill(&mut runtime) {
+            prefill = Some(draft);
+        }
+    }
+    Ok(())
+}
+
+/// 取出流式阶段残留草稿作为下一轮 prefill。
+///
+/// 参数:
+/// - `runtime`: TUI 运行期
+///
+/// 返回:
+/// - 非空草稿文本
+fn take_stream_draft_prefill(runtime: &mut ReplRuntime) -> Option<String> {
+    let text = runtime.stream_draft().text.trim().to_string();
+    if text.is_empty() {
+        return None;
+    }
+    let mode = runtime.stream_draft().mode;
+    let draft = runtime.stream_draft_mut();
+    *draft = Default::default();
+    draft.mode = mode;
+    Some(text)
+}
+
+/// 依次执行运行期间 Tab 入队的用户消息。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+/// - `config`: 应用配置
+/// - `agent`: 复用 Agent
+/// - `runtime`: TUI 运行期
+/// - `mode`: 当前模式（入队项可覆盖）
+/// - `input_history`: 输入历史
+/// - `reasoning_mode`: 推理显示模式
+/// - `tool_call_mode`: 工具显示模式
+///
+/// 返回:
+/// - 是否全部执行完成
+async fn drain_submission_queue(
+    paths: &SaiPaths,
+    config: &AppConfig,
+    agent: &mut Agent,
+    runtime: &mut ReplRuntime,
+    mode: &mut AgentMode,
+    input_history: &mut Vec<String>,
+    reasoning_mode: render::ReasoningDisplayMode,
+    tool_call_mode: render::ToolCallDisplayMode,
+) -> Result<()> {
+    loop {
+        let queued = runtime.take_submission_queue();
+        if queued.is_empty() {
+            break;
+        }
+        for item in queued {
+            *mode = item.mode;
+            let text = item.text.trim().to_string();
+            if text.is_empty() {
+                continue;
+            }
+            // 控制命令 / shell 在队列中直接走常规路径过于复杂，仅当作用户消息
+            input_history.push(text.clone());
+            runtime.record_user(*mode, text.clone())?;
+            if agent.mode() != *mode {
+                let registry = build_repl_tool_registry(config, paths, *mode)?;
+                agent.switch_mode(*mode, registry);
+            }
+            agent.prepare_for_turn()?;
+            let chat_input = crate::clipboard::ClipboardChatInput {
+                message: text.clone(),
+                image_url: None,
+            };
+            let runner_submission = repl_runner_submission(
+                chat_input,
+                *mode,
+                reasoning_mode,
+                tool_call_mode,
+                stream_render_options(config),
+                false,
+            );
+            let outcome =
+                execute_repl_turn(paths, config, agent, runtime, runner_submission).await?;
+            if outcome.interrupted {
+                if let Some(draft) = outcome.leftover_draft {
+                    let draft_mut = runtime.stream_draft_mut();
+                    draft_mut.text = draft.clone();
+                    draft_mut.cursor = draft.chars().count();
+                }
+                return Ok(());
+            }
+            if let Err(error) = outcome.result {
+                runtime.record_meta(error.to_string())?;
+                if let Some(draft) = outcome.leftover_draft {
+                    let draft_mut = runtime.stream_draft_mut();
+                    draft_mut.text = draft.clone();
+                    draft_mut.cursor = draft.chars().count();
+                }
+                return Ok(());
+            }
+            // 队列下一项 begin 会清空草稿：把残留文本插到队首，避免丢失
+            if let Some(draft) = outcome.leftover_draft {
+                let text = draft.trim().to_string();
+                if !text.is_empty() {
+                    let qmode = runtime.stream_mode(*mode);
+                    runtime.prepend_submission(qmode, text);
+                }
+            }
+            // 本轮执行中新入队的项会在外层 loop 继续取出
         }
     }
     Ok(())

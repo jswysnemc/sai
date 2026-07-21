@@ -55,7 +55,7 @@ impl ReplChrome {
         }
     }
 
-    /// 更新模式（Tab 切换时）。
+    /// 更新模式（Shift+Tab 切换时）。
     ///
     /// 参数:
     /// - `mode`: 新模式

@@ -14,7 +14,7 @@ mod tests;
 
 use crate::agent::AgentMode;
 use crate::cli::repl_chrome::ReplChrome;
-use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
+use crate::cli::repl_clipboard::{ReplClipboardBlockSpan, ReplClipboardState};
 use crate::render::transcript::{
     TranscriptMode, TranscriptRenderOptions, TranscriptStore, WelcomeCell,
 };
@@ -47,6 +47,30 @@ pub(super) struct ReplRuntime {
     desynced: bool,
     subagent_signature: Vec<(String, String, u64, u64)>,
     pending_input_events: VecDeque<Event>,
+    /// 智能体运行期间编辑的草稿输入
+    stream_draft: StreamComposerDraft,
+    /// Tab 入队、等待当前轮结束后执行的提交
+    submission_queue: VecDeque<QueuedSubmission>,
+    /// 最近一次 composer chrome，供流式阶段重建输入框
+    last_chrome: Option<ReplChrome>,
+}
+
+/// 运行期间底部输入框草稿。
+#[derive(Clone, Debug, Default)]
+pub(super) struct StreamComposerDraft {
+    pub(super) text: String,
+    pub(super) cursor: usize,
+    pub(super) is_pasted: bool,
+    pub(super) clipboard: ReplClipboardState,
+    pub(super) slash_selection: usize,
+    pub(super) mode: Option<AgentMode>,
+}
+
+/// 队列中的下一条用户提交。
+#[derive(Clone, Debug)]
+pub(super) struct QueuedSubmission {
+    pub(super) mode: AgentMode,
+    pub(super) text: String,
 }
 
 impl ReplRuntime {
@@ -74,6 +98,9 @@ impl ReplRuntime {
             desynced: false,
             subagent_signature: Vec::new(),
             pending_input_events: VecDeque::new(),
+            stream_draft: StreamComposerDraft::default(),
+            submission_queue: VecDeque::new(),
+            last_chrome: None,
         }
     }
 
@@ -120,6 +147,7 @@ impl ReplRuntime {
             clipboard_blocks,
             slash_selection,
         );
+        self.last_chrome = Some(chrome.clone());
         self.composer = Some(frame);
         let previous_size = self.viewport.size();
         let previous_history = self.viewport.history_height();
@@ -190,6 +218,137 @@ impl ReplRuntime {
             return Ok(());
         };
         composer.draw(stdout, &self.viewport)
+    }
+
+
+    /// 返回运行期间输入草稿的可变引用。
+    ///
+    /// 返回:
+    /// - 流式阶段 composer 草稿
+    pub(super) fn stream_draft_mut(&mut self) -> &mut StreamComposerDraft {
+        &mut self.stream_draft
+    }
+
+    /// 返回运行期间输入草稿的引用。
+    ///
+    /// 返回:
+    /// - 流式阶段 composer 草稿
+    pub(super) fn stream_draft(&self) -> &StreamComposerDraft {
+        &self.stream_draft
+    }
+
+    /// 解析运行中输入框应使用的模式。
+    ///
+    /// 参数:
+    /// - `fallback`: 无记录时的回退模式
+    ///
+    /// 返回:
+    /// - 当前草稿或 chrome 模式
+    pub(super) fn stream_mode(&self, fallback: AgentMode) -> AgentMode {
+        self.stream_draft
+            .mode
+            .or_else(|| self.composer.as_ref().map(|frame| frame.chrome().mode))
+            .unwrap_or(fallback)
+    }
+
+    /// 将当前流式草稿入队，并清空草稿。
+    ///
+    /// 参数:
+    /// - `fallback_mode`: 草稿未记录模式时使用的模式
+    ///
+    /// 返回:
+    /// - 是否成功入队（空文本返回 false）
+    pub(super) fn enqueue_stream_draft(&mut self, fallback_mode: AgentMode) -> Result<bool> {
+        let text = self.stream_draft.text.trim().to_string();
+        if text.is_empty() {
+            return Ok(false);
+        }
+        let mode = self.stream_draft.mode.unwrap_or(fallback_mode);
+        self.submission_queue.push_back(QueuedSubmission { mode, text });
+        self.stream_draft = StreamComposerDraft {
+            mode: Some(mode),
+            ..StreamComposerDraft::default()
+        };
+        // 1. 反馈队列长度
+        let len = self.submission_queue.len();
+        self.transcript.push_meta(format!(
+            "{} ({len})",
+            crate::i18n::text("Queued for next turn", "已加入下一轮队列")
+        ));
+        self.redraw_stream_composer()?;
+        self.sync_transcript(false)?;
+        Ok(true)
+    }
+
+    /// 取出全部排队提交（先进先出）。
+    ///
+    /// 返回:
+    /// - 排队提交列表
+    pub(super) fn take_submission_queue(&mut self) -> Vec<QueuedSubmission> {
+        self.submission_queue.drain(..).collect()
+    }
+
+    /// 将一条提交插入队列最前。
+    ///
+    /// 参数:
+    /// - `mode`: 执行模式
+    /// - `text`: 用户输入
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn prepend_submission(&mut self, mode: AgentMode, text: String) {
+        let text = text.trim().to_string();
+        if text.is_empty() {
+            return;
+        }
+        self.submission_queue
+            .push_front(QueuedSubmission { mode, text });
+    }
+
+    /// 开始一轮流式输出前重置草稿，保留空 composer 供边工作边输入。
+    ///
+    /// 参数:
+    /// - `mode`: 当前轮模式
+    ///
+    /// 返回:
+    /// - 是否成功
+    pub(super) fn begin_stream_composer(&mut self, mode: AgentMode) -> Result<()> {
+        self.stream_draft = StreamComposerDraft {
+            mode: Some(mode),
+            ..StreamComposerDraft::default()
+        };
+        self.redraw_stream_composer()
+    }
+
+    /// 按流式草稿重绘底部输入框。
+    ///
+    /// 返回:
+    /// - 是否成功
+    pub(super) fn redraw_stream_composer(&mut self) -> Result<()> {
+        let Some(mut chrome) = self
+            .composer
+            .as_ref()
+            .map(|frame| frame.chrome().clone())
+            .or_else(|| self.last_chrome.clone())
+        else {
+            return Ok(());
+        };
+        if let Some(mode) = self.stream_draft.mode {
+            chrome.set_mode(mode);
+        }
+        let draft = self.stream_draft.clone();
+        self.update_composer(
+            &chrome,
+            &draft.text,
+            draft.cursor,
+            draft.is_pasted,
+            draft.clipboard.block_spans(&draft.text),
+            draft.slash_selection,
+        )?;
+        let mut stdout = io::stdout();
+        self.draw_composer(&mut stdout)?;
+        stdout.flush()?;
+        Ok(())
     }
 
     /// 结束 composer 绘制并释放底部 viewport 给历史输出。
@@ -520,6 +679,8 @@ impl ReplRuntime {
         self.live_sync_pending = false;
         self.desynced = false;
         self.pending_input_events.clear();
+        self.stream_draft = StreamComposerDraft::default();
+        self.submission_queue.clear();
         self.replay(false)
     }
 

@@ -1,4 +1,5 @@
 use super::ReplRuntime;
+use crate::agent::AgentMode;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use std::time::Duration;
@@ -36,6 +37,8 @@ impl ReplRuntime {
             return Ok(false);
         }
         self.replay(false)?;
+        // 重放历史后保持运行中输入框
+        self.redraw_stream_composer()?;
         Ok(true)
     }
 }
@@ -56,7 +59,7 @@ pub(crate) fn process_stream_tick(runtime: &mut ReplRuntime) -> Result<()> {
 
 /// 处理模型运行期间的非阻塞终端事件。
 ///
-/// Agent 工作时仅允许中断与命令输出展开，禁止写入输入框或切换模式。
+/// Agent 工作时允许编辑底部输入框：Tab 入队，Shift+Tab 切换模式，Ctrl+C 中断。
 ///
 /// 参数:
 /// - `runtime`: 当前 REPL 运行期
@@ -67,25 +70,229 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
     while event::poll(Duration::ZERO)? {
         let input = event::read()?;
         match input {
-            Event::Resize(cols, rows) => runtime.observe_input_resize(cols, rows),
+            Event::Resize(cols, rows) => {
+                runtime.observe_input_resize(cols, rows);
+                runtime.redraw_stream_composer()?;
+            }
+            Event::Paste(text) => {
+                let text = strip_control_sequences(&text);
+                let draft = runtime.stream_draft_mut();
+                draft
+                    .clipboard
+                    .paste_text_into_input(&mut draft.text, &mut draft.cursor, text);
+                draft.is_pasted = true;
+                draft.slash_selection = 0;
+                runtime.redraw_stream_composer()?;
+            }
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 if matches!(key.code, KeyCode::Char('o'))
                     && key.modifiers.contains(KeyModifiers::CONTROL)
                 {
                     // 1. 允许展开或收起最近命令输出 / 思考段落
                     runtime.toggle_command_output()?;
-                } else if matches!(key.code, KeyCode::Char('c'))
+                    continue;
+                }
+                if matches!(key.code, KeyCode::Char('c'))
                     && key.modifiers.contains(KeyModifiers::CONTROL)
                 {
                     // 2. Ctrl+C 中断当前轮
                     return Ok(true);
                 }
-                // 3. 其他按键在运行期间丢弃，避免污染输入框或切换模式
+                // 3. 其他键写入运行中输入框
+                handle_stream_key(runtime, key.code, key.modifiers)?;
             }
             Event::Key(_) => {}
-            // 粘贴与鼠标等输入在运行期间同样丢弃
             _ => {}
         }
     }
     Ok(false)
+}
+
+/// 将单个按键应用到运行中 composer 草稿。
+///
+/// 参数:
+/// - `runtime`: REPL 运行期
+/// - `code`: 键码
+/// - `modifiers`: 修饰键
+///
+/// 返回:
+/// - 是否成功
+fn handle_stream_key(
+    runtime: &mut ReplRuntime,
+    code: KeyCode,
+    modifiers: KeyModifiers,
+) -> Result<()> {
+    match code {
+        KeyCode::Tab if modifiers.contains(KeyModifiers::SHIFT) => {
+            // Shift+Tab：循环权限模式
+            let current = runtime.stream_mode(AgentMode::Yolo);
+            let next = cycle_mode(current);
+            runtime.stream_draft_mut().mode = Some(next);
+            runtime.redraw_stream_composer()?;
+        }
+        KeyCode::Tab => {
+            // Tab：当前草稿入队，等待本轮结束后执行
+            let mode = runtime.stream_mode(AgentMode::Yolo);
+            let _ = runtime.enqueue_stream_draft(mode)?;
+        }
+        KeyCode::Enter => {
+            if modifiers.contains(KeyModifiers::SHIFT) {
+                let draft = runtime.stream_draft_mut();
+                insert_char(&mut draft.text, &mut draft.cursor, '\n');
+                draft.slash_selection = 0;
+                draft.is_pasted = false;
+                runtime.redraw_stream_composer()?;
+            } else {
+                // Enter：入队，等待本轮结束后执行
+                let mode = runtime.stream_mode(AgentMode::Yolo);
+                let _ = runtime.enqueue_stream_draft(mode)?;
+            }
+        }
+        KeyCode::Backspace => {
+            let draft = runtime.stream_draft_mut();
+            if !draft
+                .clipboard
+                .remove_block_before_cursor(&mut draft.text, &mut draft.cursor)
+                && draft.cursor > 0
+            {
+                remove_char_before(&mut draft.text, &mut draft.cursor);
+            }
+            draft.slash_selection = 0;
+            draft.is_pasted = false;
+            runtime.redraw_stream_composer()?;
+        }
+        KeyCode::Delete => {
+            let draft = runtime.stream_draft_mut();
+            if !draft
+                .clipboard
+                .remove_block_at_cursor(&mut draft.text, draft.cursor)
+                && draft.cursor < draft.text.chars().count()
+            {
+                remove_char_at(&mut draft.text, draft.cursor);
+            }
+            draft.slash_selection = 0;
+            draft.is_pasted = false;
+            runtime.redraw_stream_composer()?;
+        }
+        KeyCode::Left => {
+            let draft = runtime.stream_draft_mut();
+            draft.cursor = draft.cursor.saturating_sub(1);
+            runtime.redraw_stream_composer()?;
+        }
+        KeyCode::Right => {
+            let draft = runtime.stream_draft_mut();
+            draft.cursor = (draft.cursor + 1).min(draft.text.chars().count());
+            runtime.redraw_stream_composer()?;
+        }
+        KeyCode::Home => {
+            runtime.stream_draft_mut().cursor = 0;
+            runtime.redraw_stream_composer()?;
+        }
+        KeyCode::End => {
+            let draft = runtime.stream_draft_mut();
+            draft.cursor = draft.text.chars().count();
+            runtime.redraw_stream_composer()?;
+        }
+        KeyCode::Char('v') if modifiers.contains(KeyModifiers::CONTROL) => {
+            let draft = runtime.stream_draft_mut();
+            draft.is_pasted = draft
+                .clipboard
+                .paste_into_input(&mut draft.text, &mut draft.cursor)?;
+            draft.slash_selection = 0;
+            runtime.redraw_stream_composer()?;
+        }
+        KeyCode::Char(ch)
+            if !modifiers.contains(KeyModifiers::CONTROL)
+                && !modifiers.contains(KeyModifiers::ALT) =>
+        {
+            if !is_control_char(ch) {
+                let draft = runtime.stream_draft_mut();
+                insert_char(&mut draft.text, &mut draft.cursor, ch);
+                draft.slash_selection = 0;
+                draft.is_pasted = false;
+                runtime.redraw_stream_composer()?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// 循环切换 Agent 模式。
+fn cycle_mode(mode: AgentMode) -> AgentMode {
+    match mode {
+        AgentMode::Yolo => AgentMode::Audited,
+        AgentMode::Audited => AgentMode::AutoAudit,
+        AgentMode::AutoAudit => AgentMode::Plan,
+        AgentMode::Plan => AgentMode::Yolo,
+    }
+}
+
+/// 在光标处插入字符。
+fn insert_char(input: &mut String, cursor: &mut usize, ch: char) {
+    let byte = input
+        .char_indices()
+        .nth(*cursor)
+        .map(|(index, _)| index)
+        .unwrap_or(input.len());
+    input.insert(byte, ch);
+    *cursor += 1;
+}
+
+/// 删除光标前一个字符。
+fn remove_char_before(input: &mut String, cursor: &mut usize) {
+    if *cursor == 0 {
+        return;
+    }
+    let start = input
+        .char_indices()
+        .nth(*cursor - 1)
+        .map(|(index, _)| index)
+        .unwrap_or(0);
+    let end = input
+        .char_indices()
+        .nth(*cursor)
+        .map(|(index, _)| index)
+        .unwrap_or(input.len());
+    input.replace_range(start..end, "");
+    *cursor -= 1;
+}
+
+/// 删除光标处字符。
+fn remove_char_at(input: &mut String, cursor: usize) {
+    let Some((start, ch)) = input.char_indices().nth(cursor) else {
+        return;
+    };
+    let end = start + ch.len_utf8();
+    input.replace_range(start..end, "");
+}
+
+/// 判断是否为不应写入输入框的控制字符。
+fn is_control_char(ch: char) -> bool {
+    ch.is_control() && ch != '\n' && ch != '\t'
+}
+
+/// 去掉终端控制序列，避免粘贴污染输入框。
+fn strip_control_sequences(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\u{1b}' {
+            // 跳过 CSI / 简单 ESC 序列
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                for next in chars.by_ref() {
+                    if next.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+        if ch == '\r' {
+            continue;
+        }
+        out.push(ch);
+    }
+    out
 }

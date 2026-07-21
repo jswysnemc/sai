@@ -57,6 +57,14 @@ impl ComposerFrame {
         }
     }
 
+    /// 返回当前 composer 绑定的 chrome 状态。
+    ///
+    /// 返回:
+    /// - chrome 引用
+    pub(super) fn chrome(&self) -> &ReplChrome {
+        &self.chrome
+    }
+
     /// 返回 composer 在指定终端宽度下的视觉行数。
     ///
     /// 参数:

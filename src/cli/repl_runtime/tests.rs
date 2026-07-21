@@ -215,3 +215,29 @@ fn stream_input_events_are_replayed_in_order() {
     );
     assert_eq!(runtime.pop_input_event(), None);
 }
+
+#[test]
+fn enqueue_stream_draft_queues_and_clears_input() {
+    let mut runtime = ReplRuntime::new(5_000, options());
+    runtime.stream_draft_mut().mode = Some(crate::agent::AgentMode::Audited);
+    runtime.stream_draft_mut().text = " next task ".to_string();
+    runtime.stream_draft_mut().cursor = 5;
+    assert!(runtime
+        .enqueue_stream_draft(crate::agent::AgentMode::Yolo)
+        .unwrap());
+    assert!(runtime.stream_draft().text.is_empty());
+    let queued = runtime.take_submission_queue();
+    assert_eq!(queued.len(), 1);
+    assert_eq!(queued[0].text, "next task");
+    assert_eq!(queued[0].mode, crate::agent::AgentMode::Audited);
+}
+
+#[test]
+fn stream_mode_prefers_draft_mode() {
+    let mut runtime = ReplRuntime::new(5_000, options());
+    runtime.stream_draft_mut().mode = Some(crate::agent::AgentMode::Plan);
+    assert_eq!(
+        runtime.stream_mode(crate::agent::AgentMode::Yolo),
+        crate::agent::AgentMode::Plan
+    );
+}

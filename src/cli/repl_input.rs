@@ -188,7 +188,20 @@ pub(super) fn read_repl_input(
                     last_ctrl_c = None;
                 }
                 match code {
+                    KeyCode::Tab if modifiers.contains(KeyModifiers::SHIFT) => {
+                        // Shift+Tab：循环权限模式
+                        mode = match mode {
+                            AgentMode::Yolo => AgentMode::Audited,
+                            AgentMode::Audited => AgentMode::AutoAudit,
+                            AgentMode::AutoAudit => AgentMode::Plan,
+                            AgentMode::Plan => AgentMode::Yolo,
+                        };
+                        chrome.set_mode(mode);
+                        is_pasted = false;
+                        redraw_input!()?;
+                    }
                     KeyCode::Tab => {
+                        // Tab：斜杠命令补全；空闲时也可提示队列能力（无文本则忽略）
                         if input.starts_with('/') {
                             if let Some(completed) = complete_repl_command(&input) {
                                 input = completed.to_string();
@@ -196,14 +209,6 @@ pub(super) fn read_repl_input(
                                 history_clean_index = None;
                             }
                             slash_selection = 0;
-                        } else {
-                            mode = match mode {
-                                AgentMode::Yolo => AgentMode::Audited,
-                                AgentMode::Audited => AgentMode::AutoAudit,
-                                AgentMode::AutoAudit => AgentMode::Plan,
-                                AgentMode::Plan => AgentMode::Yolo,
-                            };
-                            chrome.set_mode(mode);
                         }
                         is_pasted = false;
                         redraw_input!()?;

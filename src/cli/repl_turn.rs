@@ -11,6 +11,8 @@ pub(super) struct AutomaticReplSubmission {
 pub(super) struct ReplTurnOutcome {
     pub(super) interrupted: bool,
     pub(super) result: Result<()>,
+    /// 运行期间未入队的草稿，交回空闲输入框
+    pub(super) leftover_draft: Option<String>,
 }
 
 /// 把后台唤醒事件构造成带蓝色自动消息的 REPL submission。
@@ -136,6 +138,12 @@ pub(super) async fn execute_repl_turn(
         }
         runtime.borrow_mut().record_runner_event(&event)
     };
+    let stream_mode = submission.mode;
+    {
+        let mut rt = runtime.borrow_mut();
+        // 1. 本轮开始时保留可编辑输入框，供 Tab 入队
+        rt.begin_stream_composer(stream_mode)?;
+    }
     let chat = runner.run_submission_with_agent(submission, agent, &mut sink);
     tokio::pin!(chat);
     let mut interrupted = false;
@@ -159,7 +167,12 @@ pub(super) async fn execute_repl_turn(
     }
     .await;
     crossterm::terminal::disable_raw_mode()?;
-    runtime.borrow_mut().finish_stream()?;
+    let leftover_draft = {
+        let mut rt = runtime.borrow_mut();
+        rt.finish_stream()?;
+        let draft = rt.stream_draft().text.trim().to_string();
+        (!draft.is_empty()).then_some(draft)
+    };
     // 1. 答复结束（完成 / 中断 / 失败）发送桌面通知
     let body = if interrupted {
         crate::i18n::text("Reply interrupted", "答复已中断")
@@ -172,6 +185,7 @@ pub(super) async fn execute_repl_turn(
     Ok(ReplTurnOutcome {
         interrupted,
         result,
+        leftover_draft,
     })
 }
 
