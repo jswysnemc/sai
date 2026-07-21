@@ -35,7 +35,8 @@ export function buildDefaultAgent(options: AgentOptions, locale: Locale = "zh-CN
     provider_id: "",
     model: "",
     thinking_level: "auto",
-    register_to_main: false
+    register_to_main: false,
+    load_instruction_files: true
   };
 }
 

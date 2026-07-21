@@ -55,27 +55,26 @@ export function AgentProfileEditor({ config, profile, options, onChange, onRemov
         }
         actions={<>
           {profile.id !== DEFAULT_AGENT_ID && (
-            <label className="settings-switch">
-              <input
-                type="checkbox"
-                checked={profile.register_to_main}
-                onChange={(event) => onChange({ register_to_main: event.target.checked })}
-              />
-              <span />
-              <strong>{profile.register_to_main ? t("Registered with main Agent", "已向主 Agent 注册") : t("Not registered", "未注册")}</strong>
-            </label>
-            <label className="agent-toggle">
-              <input
-                type="checkbox"
-                checked={profile.load_instruction_files}
-                onChange={(event) => onChange({ load_instruction_files: event.target.checked })}
-              />
-              <span>
+            <>
+              <label className="settings-switch">
+                <input
+                  type="checkbox"
+                  checked={profile.register_to_main}
+                  onChange={(event) => onChange({ register_to_main: event.target.checked })}
+                />
+                <span />
+                <strong>{profile.register_to_main ? t("Registered with main Agent", "已向主 Agent 注册") : t("Not registered", "未注册")}</strong>
+              </label>
+              <label className="settings-switch">
+                <input
+                  type="checkbox"
+                  checked={profile.load_instruction_files}
+                  onChange={(event) => onChange({ load_instruction_files: event.target.checked })}
+                />
+                <span />
                 <strong>{profile.load_instruction_files ? t("Loads AGENT.md files", "加载 AGENT.md") : t("Skips AGENT.md files", "不加载 AGENT.md")}</strong>
-                <small>{t("Global and project instruction files", "全局与项目指令文件")}</small>
-              </span>
-            </label>
-
+              </label>
+            </>
           )}
           {!isBuiltin && (
             <Button className="settings-danger" onClick={onRemove}>
