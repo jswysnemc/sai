@@ -33,11 +33,14 @@ impl Drop for TerminalGuard {
 ///
 /// 返回:
 /// - 用户选择的允许或拒绝决定
-pub(super) fn read_permission_decision(request: &PermissionRequest) -> Result<PermissionDecision> {
+pub(super) fn read_permission_decision(
+    request: &PermissionRequest,
+) -> Result<Option<PermissionDecision>> {
     if io::stdin().is_terminal() && io::stdout().is_terminal() {
         read_terminal_decision(request)
     } else {
-        read_line_decision(request)
+        // 管道输入无法与自动审核并行轮询，仅人工决定
+        Ok(Some(read_line_decision(request)?))
     }
 }
 
@@ -51,7 +54,7 @@ pub(super) fn read_permission_decision(request: &PermissionRequest) -> Result<Pe
 ///
 /// 返回:
 /// - 用户提交的权限决定
-fn read_terminal_decision(request: &PermissionRequest) -> Result<PermissionDecision> {
+fn read_terminal_decision(request: &PermissionRequest) -> Result<Option<PermissionDecision>> {
     let mut state = PermissionInteractionState::new();
     let mut stdout = io::stdout();
     // 1. 先刷掉上游流式输出，再进入 raw mode
@@ -61,16 +64,19 @@ fn read_terminal_decision(request: &PermissionRequest) -> Result<PermissionDecis
     let _guard = TerminalGuard { show_cursor: true };
     // 2. 预留菜单空间并记录锚点行，之后的重绘都从锚点开始
     let mut anchor = reserve_menu_anchor(&mut stdout, menu_rows(request, &state))?;
-    paint_menu_at(&mut stdout, anchor, request, &state)?;
+    // 初始绘制含自动审核状态行
+    paint_menu_at(&mut stdout, anchor, request, &state, request.auto_audit)?;
     loop {
         // 自动审核已提交决定时收起菜单并退出，不再阻塞
         if !crate::permission::is_permission_pending(&request.id) {
             erase_menu_at(&mut stdout, anchor)?;
             execute!(stdout, Show)?;
             stdout.flush()?;
-            return Ok(PermissionDecision::Allow);
+            return Ok(None);
         }
         if !event::poll(std::time::Duration::from_millis(120))? {
+            // 刷新自动审核状态提示
+            paint_menu_at(&mut stdout, anchor, request, &state, request.auto_audit)?;
             continue;
         }
         let event = event::read()?;
@@ -79,24 +85,24 @@ fn read_terminal_decision(request: &PermissionRequest) -> Result<PermissionDecis
             erase_menu_at(&mut stdout, anchor)?;
             execute!(stdout, Show)?;
             stdout.flush()?;
-            return Ok(PermissionDecision::Deny { reply: None });
+            return Ok(Some(PermissionDecision::Deny { reply: None }));
         }
         if let Event::Resize(_, _) = event {
             anchor = reserve_menu_anchor(&mut stdout, menu_rows(request, &state))?;
-            paint_menu_at(&mut stdout, anchor, request, &state)?;
+            paint_menu_at(&mut stdout, anchor, request, &state, request.auto_audit)?;
             continue;
         }
         match state.handle_event(event) {
             PermissionTransition::Continue => {
                 // 回复草稿可能换行增高，重绘前确认锚点下空间仍然充足
                 anchor = ensure_anchor_space(&mut stdout, anchor, menu_rows(request, &state))?;
-                paint_menu_at(&mut stdout, anchor, request, &state)?;
+                paint_menu_at(&mut stdout, anchor, request, &state, request.auto_audit)?;
             }
             PermissionTransition::Submit(decision) => {
                 erase_menu_at(&mut stdout, anchor)?;
                 execute!(stdout, Show)?;
                 stdout.flush()?;
-                return Ok(decision);
+                return Ok(Some(decision));
             }
         }
     }
@@ -134,11 +140,21 @@ pub(super) fn is_interrupt(event: &Event) -> bool {
 /// 返回:
 /// - 菜单视觉行数
 fn menu_rows(request: &PermissionRequest, state: &PermissionInteractionState) -> u16 {
-    let logical = format!(
-        "{}\n{}",
-        render_permission_title(&request.tool, Some(&request.arguments)),
-        render_permission_controls(state.selected(), state.reply_draft())
-    );
+    let status = crate::render::render_auto_audit_status(request.auto_audit);
+    let logical = if status.is_empty() {
+        format!(
+            "{}\n{}",
+            render_permission_title(&request.tool, Some(&request.arguments)),
+            render_permission_controls(state.selected(), state.reply_draft())
+        )
+    } else {
+        format!(
+            "{}\n{}\n{}",
+            render_permission_title(&request.tool, Some(&request.arguments)),
+            status,
+            render_permission_controls(state.selected(), state.reply_draft())
+        )
+    };
     rendered_visual_rows(&logical)
         .max(1)
         .min(usize::from(u16::MAX)) as u16
@@ -207,11 +223,20 @@ fn paint_menu_at(
     anchor: u16,
     request: &PermissionRequest,
     state: &PermissionInteractionState,
+    show_auto_audit: bool,
 ) -> Result<()> {
     let title = render_permission_title(&request.tool, Some(&request.arguments));
     let controls = render_permission_controls(state.selected(), state.reply_draft());
     // raw mode 下必须 \r\n，否则会阶梯缩进
-    let body = format!("{title}\n{controls}").replace('\n', "\r\n");
+    let body = if show_auto_audit {
+        format!(
+            "{title}\n{}\n{controls}",
+            crate::render::render_auto_audit_status(true)
+        )
+    } else {
+        format!("{title}\n{controls}")
+    }
+    .replace('\n', "\r\n");
     queue!(stdout, MoveTo(0, anchor), Clear(ClearType::FromCursorDown))?;
     write!(stdout, "{body}")?;
     stdout.flush()?;
@@ -331,6 +356,7 @@ mod tests {
             session_id: "session".to_string(),
             tool: "run_command".to_string(),
             arguments: r#"{"command":"date"}"#.to_string(),
+            auto_audit: false,
         };
         let state = PermissionInteractionState::new();
         // 标题 + 三个选项 + 提示行

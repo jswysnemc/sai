@@ -42,6 +42,18 @@ impl InlineViewport {
     /// 返回:
     /// - 初始 viewport
     pub(super) fn new() -> Self {
+        // 测试环境不向终端查询光标，避免 cursor position 请求阻塞
+        if cfg!(test) {
+            return Self {
+                size: TerminalSize {
+                    cols: 80,
+                    rows: 24,
+                },
+                origin_row: 0,
+                composer_height: 0,
+                history_height: 0,
+            };
+        }
         Self {
             size: TerminalSize::current(),
             origin_row: cursor::position().map(|(_, row)| row).unwrap_or(0),

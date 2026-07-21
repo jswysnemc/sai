@@ -4,6 +4,8 @@ use crate::paths::SaiPaths;
 use crate::permission::{decide_permission, PermissionDecision};
 use crate::prompts;
 use anyhow::{bail, Context, Result};
+use std::time::Duration;
+use tokio::time::timeout;
 use serde::Deserialize;
 
 /// LLM 自动审核的结构化结果。
@@ -81,11 +83,18 @@ pub(crate) async fn run_auto_audit(
         ChatMessage::system(prompts::AUTO_AUDIT_SYSTEM_PROMPT),
         ChatMessage::plain("user", user),
     ];
-    // 2. 流式收集正文
-    let result = client
-        .chat_stream_events(messages, Vec::new(), |_event: ChatStreamEvent| Ok(()))
-        .await
-        .context("auto-audit model request failed")?;
+    // 2. 流式收集正文（超时后静默失败，交还人工审核）
+    const AUTO_AUDIT_TIMEOUT: Duration = Duration::from_secs(45);
+    let result = match timeout(
+        AUTO_AUDIT_TIMEOUT,
+        client.chat_stream_events(messages, Vec::new(), |_event: ChatStreamEvent| Ok(())),
+    )
+    .await
+    {
+        Ok(Ok(result)) => result,
+        Ok(Err(error)) => return Err(error).context("auto-audit model request failed"),
+        Err(_) => bail!("auto-audit timed out after {}s", AUTO_AUDIT_TIMEOUT.as_secs()),
+    };
     let content = result.content.trim();
     let decision = parse_auto_audit_response(content)?;
     // 3. 提交决定；若人工已先处理则请求已不存在

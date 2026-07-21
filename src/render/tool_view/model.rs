@@ -29,6 +29,8 @@ pub(crate) struct PermissionAuditView {
     pub(crate) selected: PermissionChoice,
     pub(crate) reply_draft: Option<String>,
     pub(crate) decision: Option<PermissionDecision>,
+    /// 是否正在并行自动审核（用于 UI 状态行）
+    pub(crate) auto_audit: bool,
 }
 
 impl PermissionAuditView {
@@ -39,12 +41,26 @@ impl PermissionAuditView {
     ///
     /// 返回:
     /// - 尚未包含决定的审计状态
+    #[allow(dead_code)]
     pub(crate) fn pending(request_id: String) -> Self {
+        Self::pending_with_auto_audit(request_id, false)
+    }
+
+    /// 创建等待决定的审计状态，并标记是否启用自动审核。
+    ///
+    /// 参数:
+    /// - `request_id`: 权限请求标识
+    /// - `auto_audit`: 是否并行自动审核
+    ///
+    /// 返回:
+    /// - 尚未包含决定的审计状态
+    pub(crate) fn pending_with_auto_audit(request_id: String, auto_audit: bool) -> Self {
         Self {
             request_id,
             selected: PermissionChoice::Allow,
             reply_draft: None,
             decision: None,
+            auto_audit,
         }
     }
 
@@ -181,8 +197,21 @@ impl ToolView {
     ///
     /// 返回:
     /// - 无
+    #[allow(dead_code)]
     pub(crate) fn request_permission(&mut self, request_id: String) {
-        self.permission = Some(PermissionAuditView::pending(request_id));
+        self.request_permission_with_auto_audit(request_id, false);
+    }
+
+    /// 将权限请求附着到当前工具视图，并标记自动审核。
+    ///
+    /// 参数:
+    /// - `request_id`: 权限请求标识
+    /// - `auto_audit`: 是否并行自动审核
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn request_permission_with_auto_audit(&mut self, request_id: String, auto_audit: bool) {
+        self.permission = Some(PermissionAuditView::pending_with_auto_audit(request_id, auto_audit));
     }
 
     /// 写入权限请求的最终决定。

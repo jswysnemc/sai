@@ -77,11 +77,19 @@ impl StreamRenderer {
     pub(super) fn flush_full_reasoning_block(&mut self) -> Result<()> {
         if self.reasoning_full_buffer.trim().is_empty() {
             self.mode = None;
+            self.reasoning_started = None;
+            let _ = self.summary.clear_live_lines();
             return Ok(());
         }
+        // 1. 先擦除 live 摘要行，再输出折叠正文
+        let _ = self.summary.clear_live_lines();
+        // 清空 summary 计数，避免后续 finalize 重复输出
+        let _ = self.summary.finalize_reasoning_silent();
         let body = std::mem::take(&mut self.reasoning_full_buffer);
+        let duration = self.reasoning_started.map(|started| started.elapsed());
+        self.reasoning_started = None;
         let rendered = crate::render::transcript::reasoning_cell::render_thinking_body(
-            &body, false, false,
+            &body, false, false, duration,
         );
         let mut stdout = io::stdout();
         if self.mode.is_some() {

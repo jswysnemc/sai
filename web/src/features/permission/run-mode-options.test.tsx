@@ -9,7 +9,7 @@ describe("createRunModeOptions", () => {
     expect(options.map(({ value, label }) => ({ value, label }))).toEqual([
       { value: "yolo", label: "YOLO" },
       { value: "audited", label: "Audit" },
-      { value: "auto_audit", label: "Auto audit" },
+      { value: "auto_audit", label: "Review" },
       { value: "plan", label: "Plan" }
     ]);
     expect(options.map((option) => renderToStaticMarkup(<>{option.icon}</>))).toEqual([

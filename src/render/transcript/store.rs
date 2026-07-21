@@ -38,10 +38,14 @@ impl LiveTail {
     ///
     /// 返回:
     /// - 对应的历史 cell
-    fn into_cell(self) -> HistoryCell {
+    fn into_cell(self, duration: Option<std::time::Duration>) -> HistoryCell {
         match self.kind {
             ChatStreamKind::Content => HistoryCell::markdown(self.source),
-            ChatStreamKind::Reasoning => HistoryCell::reasoning(self.source),
+            ChatStreamKind::Reasoning => {
+                let mut cell = crate::render::transcript::reasoning_cell::ReasoningCell::new(self.source);
+                cell.duration = duration;
+                HistoryCell::Reasoning(cell)
+            }
         }
     }
 }
@@ -568,8 +572,13 @@ impl TranscriptStore {
         if tail.source.is_empty() {
             return cleared_tool_preview;
         }
+        let duration = if tail.kind == ChatStreamKind::Reasoning {
+            self.work_status_started.map(|started| started.elapsed())
+        } else {
+            None
+        };
         let index = self.cells.len();
-        self.cells.push(tail.into_cell());
+        self.cells.push(tail.into_cell(duration));
         self.cache.push_slot();
         self.mark_dirty(index);
         true
@@ -626,13 +635,13 @@ impl TranscriptStore {
     ) -> bool {
         let attached = match self.cells.get_mut(index) {
             Some(HistoryCell::Tool(ToolCell::Invocation(view))) if view.name == request.tool => {
-                view.request_permission(request.id.clone());
+                view.request_permission_with_auto_audit(request.id.clone(), request.auto_audit);
                 true
             }
             Some(HistoryCell::Diff(cell))
                 if crate::render::stream_text::is_file_edit_tool(&request.tool) =>
             {
-                cell.request_permission(request.id.clone());
+                cell.request_permission_with_auto_audit(request.id.clone(), request.auto_audit);
                 true
             }
             _ => false,

@@ -12,6 +12,9 @@ pub(crate) struct PermissionRequest {
     pub(crate) session_id: String,
     pub(crate) tool: String,
     pub(crate) arguments: String,
+    /// 是否并行自动审核（供 UI 展示状态）
+    #[serde(default)]
+    pub(crate) auto_audit: bool,
 }
 
 /// 用户对权限请求作出的决定。
@@ -53,12 +56,32 @@ pub(crate) fn request_permission(
     tool: &str,
     arguments: &str,
 ) -> (PermissionRequest, oneshot::Receiver<PermissionDecision>) {
+    request_permission_with_auto_audit(session_id, tool, arguments, false)
+}
+
+/// 创建权限请求并等待用户/自动审核决定。
+///
+/// 参数:
+/// - `session_id`: 请求所属会话标识
+/// - `tool`: 待执行工具名称
+/// - `arguments`: 工具参数文本
+/// - `auto_audit`: 是否并行自动审核
+///
+/// 返回:
+/// - 权限请求及接收最终决定的一次性通道
+pub(crate) fn request_permission_with_auto_audit(
+    session_id: &str,
+    tool: &str,
+    arguments: &str,
+    auto_audit: bool,
+) -> (PermissionRequest, oneshot::Receiver<PermissionDecision>) {
     // 1. 创建带稳定标识的请求和一次性决定通道
     let request = PermissionRequest {
         id: Uuid::new_v4().to_string(),
         session_id: session_id.to_string(),
         tool: tool.to_string(),
         arguments: arguments.to_string(),
+        auto_audit,
     };
     let (sender, receiver) = oneshot::channel();
     // 2. 请求进入共享等待表，供 CLI、TUI 或 Web 查询和处理

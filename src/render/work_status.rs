@@ -171,6 +171,7 @@ mod tests {
             session_id: "s".into(),
             tool: "edit_file".into(),
             arguments: "{}".into(),
+            auto_audit: false,
         });
         assert_eq!(WorkStatus::from_agent_event(&event), None);
     }

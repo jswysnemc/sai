@@ -3,6 +3,7 @@ mod background_command_event;
 mod code_block;
 mod command_output;
 mod command_result_block;
+mod fold_text;
 mod cli_command_preview;
 mod edit_diff;
 mod error;
@@ -38,7 +39,7 @@ pub(crate) mod work_status;
 
 pub(crate) use error::write_chat_error;
 pub(crate) use permission::{
-    render_permission_controls, render_permission_decision, render_permission_title,
+    render_auto_audit_status, render_permission_controls, render_permission_decision, render_permission_title,
     PermissionChoice,
 };
 pub use session_summary::print_session_summary;

@@ -1,3 +1,4 @@
+use crate::render::fold_text::{fold_display_lines, terminal_wrap_width, wrap_display_lines};
 use crate::render::style::TOOL_BULLET;
 use crate::render::terminal_text as t;
 use serde_json::Value;
@@ -472,31 +473,16 @@ fn sanitize_command_output(text: &str) -> String {
 /// 返回:
 /// - 最新输出文本与折叠行数
 fn limited_output_text(text: &str, line_limit: Option<usize>) -> (String, usize) {
-    let lines = text.lines().collect::<Vec<_>>();
+    // 1. 先按终端显示宽度折行，再按显示行折叠（避免超长单行挤占视野）
+    let display_lines = wrap_display_lines(text, terminal_wrap_width());
     let Some(limit) = line_limit else {
-        return (text.to_string(), 0);
+        return (display_lines.join("\n"), 0);
     };
-    if lines.is_empty() {
+    if display_lines.is_empty() {
         return (String::new(), 0);
     }
-    // Codex 风格：保留首尾各 limit 行，中间省略
-    if lines.len() <= limit * 2 {
-        return (text.to_string(), 0);
-    }
-    let omitted = lines.len() - limit * 2;
-    let mut kept = Vec::with_capacity(limit * 2 + 1);
-    kept.extend(lines[..limit].iter().copied());
-    kept.push("__OMITTED__");
-    kept.extend(lines[lines.len() - limit..].iter().copied());
-    // 用特殊标记行，render 阶段替换为提示
-    let mut body = String::new();
-    for (index, line) in kept.iter().enumerate() {
-        if index > 0 {
-            body.push('\n');
-        }
-        body.push_str(line);
-    }
-    (body, omitted)
+    let (kept, omitted) = fold_display_lines(&display_lines, limit, false);
+    (kept.join("\n"), omitted)
 }
 
 #[cfg(test)]
@@ -695,5 +681,15 @@ mod tests {
             }
         }
         output
+    }
+
+    #[test]
+    fn long_single_line_command_output_folds_by_display_width() {
+        // 按当前终端宽度生成足够多的显示行（> 2*预览行）
+        let width = crate::render::fold_text::terminal_wrap_width().max(8);
+        let long = "x".repeat(width * 12);
+        let output = render_live_command_output(&long, "", false);
+        let plain = strip_ansi_for_test(&output);
+        assert!(plain.contains("Ctrl+O") || plain.contains("…"), "got: {plain}");
     }
 }

@@ -527,6 +527,7 @@ pub(super) async fn run_repl(
         );
         let outcome =
             execute_repl_turn(paths, &config, &mut agent, &mut runtime, runner_submission).await?;
+        apply_stream_mode(&runtime, &mut mode);
         if outcome.interrupted {
             if !state.latest_interrupted_turn_has_content(&submitted_input)? {
                 prefill = Some(submitted_input);
@@ -586,6 +587,20 @@ pub(super) async fn run_repl(
 ///
 /// 返回:
 /// - 非空草稿文本
+/// 将运行中 Shift+Tab 切换的模式应用到主循环（下次请求生效）。
+///
+/// 参数:
+/// - `runtime`: TUI 运行期
+/// - `mode`: 主循环模式
+///
+/// 返回:
+/// - 无
+fn apply_stream_mode(runtime: &ReplRuntime, mode: &mut AgentMode) {
+    if let Some(next) = runtime.stream_draft().mode {
+        *mode = next;
+    }
+}
+
 fn take_stream_draft_prefill(runtime: &mut ReplRuntime) -> Option<String> {
     let text = runtime.stream_draft().text.trim().to_string();
     if text.is_empty() {
@@ -655,6 +670,7 @@ async fn drain_submission_queue(
             );
             let outcome =
                 execute_repl_turn(paths, config, agent, runtime, runner_submission).await?;
+            apply_stream_mode(runtime, mode);
             if outcome.interrupted {
                 if let Some(draft) = outcome.leftover_draft {
                     let draft_mut = runtime.stream_draft_mut();

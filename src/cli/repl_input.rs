@@ -188,14 +188,16 @@ pub(super) fn read_repl_input(
                     last_ctrl_c = None;
                 }
                 match code {
+                    KeyCode::BackTab => {
+                        // 部分终端把 Shift+Tab 发成 BackTab
+                        mode = cycle_repl_mode(mode);
+                        chrome.set_mode(mode);
+                        is_pasted = false;
+                        redraw_input!()?;
+                    }
                     KeyCode::Tab if modifiers.contains(KeyModifiers::SHIFT) => {
                         // Shift+Tab：循环权限模式
-                        mode = match mode {
-                            AgentMode::Yolo => AgentMode::Audited,
-                            AgentMode::Audited => AgentMode::AutoAudit,
-                            AgentMode::AutoAudit => AgentMode::Plan,
-                            AgentMode::Plan => AgentMode::Yolo,
-                        };
+                        mode = cycle_repl_mode(mode);
                         chrome.set_mode(mode);
                         is_pasted = false;
                         redraw_input!()?;
@@ -519,4 +521,21 @@ pub(super) fn repl_should_browse_history(
 ) -> bool {
     !history.is_empty()
         && (input.is_empty() || repl_history_is_clean(input, history, history_clean_index))
+}
+
+
+/// 循环切换 REPL 权限模式。
+///
+/// 参数:
+/// - `mode`: 当前模式
+///
+/// 返回:
+/// - 下一模式
+fn cycle_repl_mode(mode: AgentMode) -> AgentMode {
+    match mode {
+        AgentMode::Yolo => AgentMode::Audited,
+        AgentMode::Audited => AgentMode::AutoAudit,
+        AgentMode::AutoAudit => AgentMode::Plan,
+        AgentMode::Plan => AgentMode::Yolo,
+    }
 }

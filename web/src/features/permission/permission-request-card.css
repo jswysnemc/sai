@@ -173,3 +173,26 @@
   color: var(--ink-soft);
   font-size: 11px;
 }
+
+.permission-auto-audit-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--signal) 14%, transparent);
+  color: var(--signal);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.permission-auto-audit-hint {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--signal) 8%, transparent);
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}

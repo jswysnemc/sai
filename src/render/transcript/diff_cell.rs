@@ -39,8 +39,21 @@ impl DiffCell {
     ///
     /// 返回:
     /// - 无
+    #[allow(dead_code)]
     pub(crate) fn request_permission(&mut self, request_id: String) {
-        self.permission = Some(PermissionAuditView::pending(request_id));
+        self.request_permission_with_auto_audit(request_id, false);
+    }
+
+    /// 将权限请求附着到 diff 视图，并标记自动审核。
+    ///
+    /// 参数:
+    /// - `request_id`: 权限请求标识
+    /// - `auto_audit`: 是否并行自动审核
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn request_permission_with_auto_audit(&mut self, request_id: String, auto_audit: bool) {
+        self.permission = Some(PermissionAuditView::pending_with_auto_audit(request_id, auto_audit));
     }
 
     /// 写入权限请求的最终决定。

@@ -28,6 +28,8 @@ export type PermissionRequest = {
   session_id: string;
   tool: string;
   arguments: string;
+  /** 是否并行自动审核 */
+  auto_audit?: boolean;
 };
 
 export type PermissionDecision =

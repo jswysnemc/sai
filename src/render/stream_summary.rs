@@ -1,4 +1,5 @@
 use crate::render::terminal_text as t;
+use crate::render::work_status::{format_elapsed, STATUS_PULSE_FRAMES};
 use crate::token_counter;
 use crate::render::status_style::{color_running, color_status};
 use crate::render::style::TOOL_BULLET;
@@ -8,6 +9,7 @@ use crossterm::execute;
 use crossterm::terminal::{Clear, ClearType};
 use std::collections::BTreeMap;
 use std::io::{self, Write};
+use std::time::Duration;
 
 const TOOL_SUMMARY_DETAIL_LIMIT: usize = 8;
 
@@ -18,6 +20,10 @@ pub(crate) struct StreamSummary {
     reasoning_source: String,
     /// 思考摘要行是否正在终端上 live 刷新
     reasoning_live: bool,
+    /// live 动画帧
+    reasoning_frame: usize,
+    /// 最近一次 live 耗时
+    reasoning_elapsed: Duration,
     tool_stats: BTreeMap<String, ToolStats>,
     readable_tool_names: bool,
 }
@@ -37,6 +43,8 @@ impl StreamSummary {
             reasoning_tokens: 0,
             reasoning_source: String::new(),
             reasoning_live: false,
+            reasoning_frame: 0,
+            reasoning_elapsed: Duration::ZERO,
             tool_stats: BTreeMap::new(),
             readable_tool_names,
         }
@@ -49,14 +57,37 @@ impl StreamSummary {
     ///
     /// 返回:
     /// - 刷新是否成功
+    #[allow(dead_code)]
     pub(crate) fn add_reasoning_text(&mut self, text: &str) -> Result<()> {
+        self.add_reasoning_text_with_elapsed(text, self.reasoning_elapsed)
+    }
+
+    /// 累加推理摘要计数，并按耗时刷新 live 行。
+    ///
+    /// 参数:
+    /// - `text`: 本次收到的推理文本
+    /// - `elapsed`: 本段思考已持续时长
+    ///
+    /// 返回:
+    /// - 刷新是否成功
+    pub(crate) fn add_reasoning_text_with_elapsed(
+        &mut self,
+        text: &str,
+        elapsed: Duration,
+    ) -> Result<()> {
+        // 1. 累计源文与 token
         self.reasoning_source.push_str(text);
         self.reasoning_chars = self.reasoning_source.chars().count();
-        self.reasoning_lines = self.reasoning_source.lines().count().max(if self.reasoning_source.is_empty() { 0 } else { 1 });
-        // 使用内置 o200k 计数库实时统计 token
+        self.reasoning_lines = self
+            .reasoning_source
+            .lines()
+            .count()
+            .max(if self.reasoning_source.is_empty() { 0 } else { 1 });
         self.reasoning_tokens = token_counter::count(&self.reasoning_source);
-        // 一开始收到思考内容就显示块，随后只更新计数
+        self.reasoning_elapsed = elapsed;
+        // 2. 有内容时立刻刷新 live 行（动效 + tokens + 耗时）
         if self.reasoning_chars > 0 {
+            self.reasoning_frame = self.reasoning_frame.wrapping_add(1);
             self.render_live_reasoning()?;
         }
         Ok(())
@@ -92,11 +123,35 @@ impl StreamSummary {
     /// 返回:
     /// - 推理摘要文本
     pub(crate) fn reasoning_text(&self) -> String {
-        // CLI 摘要：实时 token 量（o200k）
+        self.reasoning_text_with_pulse(false)
+    }
+
+    /// 生成推理摘要文本。
+    ///
+    /// 参数:
+    /// - `live`: 是否使用跳动前缀
+    ///
+    /// 返回:
+    /// - 推理摘要文本
+    fn reasoning_text_with_pulse(&self, live: bool) -> String {
         let tokens = self.reasoning_tokens.max(1);
+        let label = if self.reasoning_elapsed.is_zero() {
+            t("thinking", "思考").to_string()
+        } else {
+            format!(
+                "{}({})",
+                t("thinking", "思考"),
+                format_elapsed(self.reasoning_elapsed)
+            )
+        };
+        let prefix = if live {
+            STATUS_PULSE_FRAMES[self.reasoning_frame % STATUS_PULSE_FRAMES.len()]
+        } else {
+            TOOL_BULLET
+        };
         format!(
-            "{TOOL_BULLET} {} · {} {}",
-            t("thinking", "思考"),
+            "{prefix} {} · {} {}",
+            label,
             tokens,
             t("tokens", "tokens")
         )
@@ -107,7 +162,10 @@ impl StreamSummary {
     /// 返回:
     /// - 渲染是否成功
     fn render_live_reasoning(&mut self) -> Result<()> {
-        let text = style_summary_text(&self.reasoning_text(), SummaryStyle::Reasoning);
+        let text = style_summary_text(
+            &self.reasoning_text_with_pulse(true),
+            SummaryStyle::Reasoning,
+        );
         let mut stdout = io::stdout();
         execute!(stdout, Clear(ClearType::CurrentLine))?;
         write!(stdout, "\r{text}")?;
@@ -120,6 +178,21 @@ impl StreamSummary {
     ///
     /// 返回:
     /// - 固化是否成功
+    /// 静默清空推理摘要状态（不输出，用于 Full 模式已另输出折叠块后）。
+    ///
+    /// 返回:
+    /// - 始终成功
+    pub(crate) fn finalize_reasoning_silent(&mut self) -> Result<()> {
+        self.reasoning_chars = 0;
+        self.reasoning_lines = 0;
+        self.reasoning_tokens = 0;
+        self.reasoning_source.clear();
+        self.reasoning_live = false;
+        self.reasoning_frame = 0;
+        self.reasoning_elapsed = Duration::ZERO;
+        Ok(())
+    }
+
     pub(crate) fn finalize_reasoning(&mut self) -> Result<()> {
         if !self.has_reasoning() {
             return Ok(());
@@ -140,6 +213,8 @@ impl StreamSummary {
         self.reasoning_tokens = 0;
         self.reasoning_source.clear();
         self.reasoning_live = false;
+        self.reasoning_frame = 0;
+        self.reasoning_elapsed = Duration::ZERO;
         Ok(())
     }
 

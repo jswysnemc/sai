@@ -16,7 +16,7 @@ impl AgentMode {
         match self {
             Self::Yolo => "YOLO",
             Self::Audited => "AUDIT",
-            Self::AutoAudit => "AUTO",
+            Self::AutoAudit => "REVIEW",
             Self::Plan => "PLAN",
         }
     }

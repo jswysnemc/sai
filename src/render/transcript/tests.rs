@@ -352,6 +352,7 @@ fn permission_audit_stays_inside_existing_command_view() {
         session_id: "session".to_string(),
         tool: "run_command".to_string(),
         arguments: r#"{"command":"cargo test","cwd":"/workspace"}"#.to_string(),
+        auto_audit: false,
     });
     let pending = store
         .display_tail(100, &options())
@@ -407,7 +408,8 @@ fn permission_audit_stays_inside_existing_diff_view() {
         id: "permission".to_string(),
         session_id: "session".to_string(),
         tool: "edit_file".to_string(),
-        arguments,
+        arguments: arguments,
+        auto_audit: false,
     });
 
     let rendered = store

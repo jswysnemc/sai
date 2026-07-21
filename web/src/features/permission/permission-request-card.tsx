@@ -75,11 +75,17 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
         <span className="permission-request-copy">
           <strong>{statusLabel(status, active, t)}</strong>
           <span title={summary}>{actionLabel(request.tool, t)} · {summary}</span>
+          {status === "pending" && request.auto_audit ? (
+            <span className="permission-auto-audit-badge">{t("Auto audit running", "自动审核进行中")}</span>
+          ) : null}
         </span>
         <ChevronDown size={14} className={expanded ? "rotate" : ""} aria-hidden />
       </Button>
       {expanded && (
         <div className="permission-request-body">
+          {status === "pending" && request.auto_audit ? (
+            <div className="permission-auto-audit-hint">{t("LLM auto-audit is running in parallel. Your decision wins if submitted first; auto-audit timeout falls back to human review silently.", "LLM 自动审核并行进行中。人工先提交则优先生效；自动审核超时将静默回退人工审核。")}</div>
+          ) : null}
           <PermissionArgumentDetails tool={request.tool} argumentsText={request.arguments} />
           {interactive && (
             <div className="permission-request-actions">

@@ -49,6 +49,7 @@ mod render_options;
 mod composer_tips;
 mod repl;
 mod repl_background;
+mod repl_pager;
 mod repl_chrome;
 mod repl_clipboard;
 mod repl_commands;
@@ -542,14 +543,24 @@ fn handle_agent_event(renderer: &mut render::StreamRenderer, event: AgentEvent) 
             // 停掉末行动效与 live 行，再在 stdout 画可导航审计菜单
             renderer.prepare_for_external_output()?;
             io::stdout().flush()?;
-            let decision = prompt_permission_request(&request)?;
-            // 拒绝决定已单独展示，抑制随后同名工具的失败输出块避免重复
-            if matches!(decision, crate::permission::PermissionDecision::Deny { .. }) {
-                renderer.suppress_denied_result(&request.tool);
+            match prompt_permission_request(&request)? {
+                Some(decision) => {
+                    // 拒绝决定已单独展示，抑制随后同名工具的失败输出块避免重复
+                    if matches!(decision, crate::permission::PermissionDecision::Deny { .. }) {
+                        renderer.suppress_denied_result(&request.tool);
+                    }
+                }
+                None => {
+                    // 自动审核已决出：结果在 PermissionResolved 中展示
+                }
             }
             Ok(())
         }
-        AgentEvent::PermissionResolved { .. } => Ok(()),
+        AgentEvent::PermissionResolved { decision, .. } => {
+            // 人工与自动审核统一在此打印结果（prompt 不再打印，避免竞态重复）
+            println!("{}", crate::render::render_permission_decision(&decision));
+            Ok(())
+        }
         AgentEvent::QuestionRequested(pending) => {
             renderer.prepare_for_external_output()?;
             io::stdout().flush()?;
@@ -577,12 +588,18 @@ fn handle_agent_event(renderer: &mut render::StreamRenderer, event: AgentEvent) 
 /// - 已提交给权限 Broker 的用户决定
 fn prompt_permission_request(
     request: &crate::permission::PermissionRequest,
-) -> Result<crate::permission::PermissionDecision> {
-    // 1. 先把工具输出刷到屏幕，再画权限菜单（写到 stdout，避免被 stderr 错位）
-    let decision = permission_prompt::read_permission_decision(request)?;
-    crate::permission::decide_permission(&request.id, decision.clone())?;
-    println!("{}", crate::render::render_permission_decision(&decision));
-    Ok(decision)
+) -> Result<Option<crate::permission::PermissionDecision>> {
+    // 1. 读取人工选择；None 表示自动审核已先决出
+    let Some(decision) = permission_prompt::read_permission_decision(request)? else {
+        return Ok(None);
+    };
+    // 2. 仅在请求仍 pending 时提交，避免与自动审核竞态
+    if crate::permission::is_permission_pending(&request.id) {
+        crate::permission::decide_permission(&request.id, decision.clone())?;
+        Ok(Some(decision))
+    } else {
+        Ok(None)
+    }
 }
 
 /// 在 TUI 原始模式中读取权限选择，并更新既有工具视图。

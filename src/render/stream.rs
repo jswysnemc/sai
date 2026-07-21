@@ -33,6 +33,7 @@ use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
+use std::time::Instant;
 
 include!("stream_renderer_output.rs");
 #[path = "stream_tool_progress_events.rs"]
@@ -62,6 +63,8 @@ pub struct StreamRenderer {
     work_status: Option<WorkStatus>,
     /// Full 模式下缓存思考正文，结束后按折叠块输出
     reasoning_full_buffer: String,
+    /// 当前思考段开始时间（用于 live 耗时）
+    reasoning_started: Option<Instant>,
     command_preview: CliCommandPreview,
 }
 
@@ -101,6 +104,7 @@ impl StreamRenderer {
             suppressed_denied_results: HashSet::new(),
             work_status: None,
             reasoning_full_buffer: String::new(),
+            reasoning_started: None,
             command_preview: CliCommandPreview::new(),
         }
     }
@@ -172,7 +176,14 @@ impl StreamRenderer {
             // Summary 模式：一开始就显示思考块，并随 chunk 更新行数/字符数
             self.finish_live_tool_status()?;
             self.finalize_tools_summary()?;
-            self.summary.add_reasoning_text(&text)?;
+            if self.mode != Some(ChatStreamKind::Reasoning) {
+                self.reasoning_started = Some(Instant::now());
+            }
+            let elapsed = self
+                .reasoning_started
+                .map(|started| started.elapsed())
+                .unwrap_or_default();
+            self.summary.add_reasoning_text_with_elapsed(&text, elapsed)?;
             self.mode = Some(ChatStreamKind::Reasoning);
             // 有思考内容时不显示 working 文案
             self.set_work_status(WorkStatus::Thinking, false)?;
@@ -187,15 +198,19 @@ impl StreamRenderer {
             false,
         )?;
         self.finish_live_tool_status()?;
-        // Full 模式思考：缓存正文，结束时折叠输出（与 TUI/命令输出一致）
+        // Full 模式思考：缓存正文并刷新与 Summary 一致的 live 摘要行，结束时折叠输出
         if self.reasoning_mode == ReasoningDisplayMode::Full
             && chunk.kind == ChatStreamKind::Reasoning
         {
             if self.mode != Some(ChatStreamKind::Reasoning) {
                 self.mode = Some(ChatStreamKind::Reasoning);
                 self.reasoning_full_buffer.clear();
+                self.reasoning_started = Some(Instant::now());
             }
             self.reasoning_full_buffer.push_str(&text);
+            // live 行：动效 + tokens + thinking(耗时)
+            self.summary
+                .add_reasoning_text_with_elapsed(&text, self.reasoning_started.map(|s| s.elapsed()).unwrap_or_default())?;
             return Ok(());
         }
         if self.mode != Some(chunk.kind) {

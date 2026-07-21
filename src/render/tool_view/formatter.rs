@@ -157,13 +157,18 @@ fn render_permission(permission: Option<&PermissionAuditView>) -> String {
     };
     match &permission.decision {
         Some(decision) => format!("\n{}", crate::render::render_permission_decision(decision)),
-        None => format!(
-            "\n{}",
-            crate::render::render_permission_controls(
+        None => {
+            let status = crate::render::render_auto_audit_status(permission.auto_audit);
+            let controls = crate::render::render_permission_controls(
                 permission.selected,
                 permission.reply_draft.as_deref(),
-            )
-        ),
+            );
+            if status.is_empty() {
+                format!("\n{controls}")
+            } else {
+                format!("\n{status}\n{controls}")
+            }
+        }
     }
 }
 

@@ -107,6 +107,27 @@ pub(crate) fn render_permission_title(tool: &str, arguments: Option<&str>) -> St
     )
 }
 
+
+/// 渲染自动审核进行中状态行。
+///
+/// 参数:
+/// - `active`: 是否显示（自动审核模式为 true）
+///
+/// 返回:
+/// - ANSI 状态文本；非 active 时为空
+pub(crate) fn render_auto_audit_status(active: bool) -> String {
+    if !active {
+        return String::new();
+    }
+    format!(
+        "  \x1b[2m\x1b[38;5;141m{}\x1b[0m",
+        t(
+            "Auto audit running · human decision wins if first",
+            "自动审核进行中 · 人工先决定则优先生效",
+        )
+    )
+}
+
 /// 渲染附着在既有工具视图下方的权限决定。
 ///
 /// 参数:

@@ -1,6 +1,7 @@
 use super::ReplRuntime;
 use crate::agent::AgentMode;
 use anyhow::Result;
+use std::io::IsTerminal;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use std::time::Duration;
 
@@ -33,11 +34,25 @@ impl ReplRuntime {
     /// 返回:
     /// - 是否找到可切换的命令输出
     pub(in crate::cli) fn toggle_command_output(&mut self) -> Result<bool> {
+        // 1. 测试：只切换 transcript 状态，避免 replay 触碰真实终端
+        if cfg!(test) {
+            return Ok(self.transcript.toggle_latest_command_output());
+        }
+        // 2. 交互终端：学习 codex，进入备用屏幕 pager 展示完整内容
+        if std::io::stdout().is_terminal() && std::io::stdin().is_terminal() {
+            let Some(block) = self.transcript.latest_expandable_block() else {
+                return Ok(false);
+            };
+            super::super::repl_pager::open_text_pager(&block.title, &block.body)?;
+            self.replay(false)?;
+            self.redraw_stream_composer()?;
+            return Ok(true);
+        }
+        // 3. 非交互：内联展开/折叠
         if !self.transcript.toggle_latest_command_output() {
             return Ok(false);
         }
         self.replay(false)?;
-        // 重放历史后保持运行中输入框
         self.redraw_stream_composer()?;
         Ok(true)
     }
@@ -123,8 +138,15 @@ fn handle_stream_key(
     modifiers: KeyModifiers,
 ) -> Result<()> {
     match code {
+        KeyCode::BackTab => {
+            // 部分终端把 Shift+Tab 发成 BackTab
+            let current = runtime.stream_mode(AgentMode::Yolo);
+            let next = cycle_mode(current);
+            runtime.stream_draft_mut().mode = Some(next);
+            runtime.redraw_stream_composer()?;
+        }
         KeyCode::Tab if modifiers.contains(KeyModifiers::SHIFT) => {
-            // Shift+Tab：循环权限模式
+            // Shift+Tab：循环权限模式（下次请求生效）
             let current = runtime.stream_mode(AgentMode::Yolo);
             let next = cycle_mode(current);
             runtime.stream_draft_mut().mode = Some(next);

@@ -375,44 +375,65 @@ impl Agent {
                         &call.function.name,
                         &call.function.arguments,
                     )?;
-                    let (request, decision_rx) = crate::permission::request_permission(
-                        self.session_id(),
-                        &call.function.name,
-                        &call.function.arguments,
-                    );
-                    let request_id = request.id.clone();
                     // 自动审核：与人工审核并行；必须在 on_event（可能阻塞）之前启动
-                    let auto_task = if self.mode == AgentMode::AutoAudit {
+                    let (auto_task, auto_audit_active) = if self.mode == AgentMode::AutoAudit {
                         let context =
                             crate::permission::build_audit_context(&messages, 2_500);
                         let tool_name = call.function.name.clone();
                         let arguments = call.function.arguments.clone();
-                        let audit_request_id = request_id.clone();
                         match crate::permission::resolve_auto_audit_client(
                             &self.config,
                             &self.paths,
                         ) {
-                            Ok(audit_client) => Some(tokio::spawn(async move {
-                                if let Err(error) = crate::permission::run_auto_audit(
-                                    &audit_client,
-                                    &audit_request_id,
-                                    &tool_name,
-                                    &arguments,
-                                    &context,
-                                )
-                                .await
-                                {
-                                    eprintln!("[sai] auto-audit failed: {error:#}");
-                                }
-                            })),
-                            Err(error) => {
-                                eprintln!("[sai] auto-audit client unavailable: {error:#}");
-                                None
+                            Ok(audit_client) => {
+                                // 先占位 request_id，创建请求后再克隆给任务
+                                (Some((audit_client, context, tool_name, arguments)), true)
+                            }
+                            Err(_) => {
+                                // 客户端不可用：静默回退人工审核
+                                (None, false)
                             }
                         }
                     } else {
-                        None
+                        (None, false)
                     };
+                    let (request, decision_rx) =
+                        crate::permission::request_permission_with_auto_audit(
+                            self.session_id(),
+                            &call.function.name,
+                            &call.function.arguments,
+                            auto_audit_active,
+                        );
+                    let request_id = request.id.clone();
+                    let auto_task = auto_task.map(|(audit_client, context, tool_name, arguments)| {
+                        let audit_request_id = request_id.clone();
+                        tokio::spawn(async move {
+                            // 超时或失败时静默回退人工审核
+                            match crate::permission::run_auto_audit(
+                                &audit_client,
+                                &audit_request_id,
+                                &tool_name,
+                                &arguments,
+                                &context,
+                            )
+                            .await
+                            {
+                                Ok(_) => {}
+                                Err(error) => {
+                                    let message = format!("{error:#}");
+                                    // 超时 / 竞态：完全静默；其它失败仅提示一次后回退人工
+                                    if message.contains("timed out")
+                                        || message.contains("timeout")
+                                        || message.contains("no longer pending")
+                                        || message.contains("no longer running")
+                                    {
+                                        return;
+                                    }
+                                    eprintln!("[sai] auto-audit fallback to human: {message}");
+                                }
+                            }
+                        })
+                    });
                     on_event(AgentEvent::PermissionRequested(request.clone()))?;
                     let decision = match decision_rx.await {
                         Ok(decision) => {

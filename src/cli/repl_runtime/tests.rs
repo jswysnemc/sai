@@ -85,6 +85,7 @@ fn full_stream_event_sequence_drives_reconcile_pipeline() {
             session_id: "session".to_string(),
             tool: "run_command".to_string(),
             arguments: r#"{"command":"cargo test"}"#.to_string(),
+            auto_audit: false,
         })
         .unwrap();
     runtime

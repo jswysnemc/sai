@@ -94,6 +94,7 @@ impl HistoryCell {
     ///
     /// 返回:
     /// - reasoning cell
+    #[allow(dead_code)]
     pub(crate) fn reasoning(source: String) -> Self {
         Self::Reasoning(ReasoningCell::new(source))
     }

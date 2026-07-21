@@ -137,11 +137,18 @@ impl TranscriptStore {
             let rendered = match tail.kind {
                 ChatStreamKind::Content => markdown_cell::render_completed(&tail.source),
                 // reasoning 在定稿前显示节流的字符计数与跳动标记，结束后再按配置完整固化
-                ChatStreamKind::Reasoning => reasoning_cell::render_live(
-                    &tail.source,
-                    options.reasoning_mode,
-                    self.live_animation_frame,
-                ),
+                ChatStreamKind::Reasoning => {
+                    let elapsed = self
+                        .work_status_started
+                        .map(|started| started.elapsed())
+                        .unwrap_or_default();
+                    reasoning_cell::render_live(
+                        &tail.source,
+                        options.reasoning_mode,
+                        self.live_animation_frame,
+                        elapsed,
+                    )
+                }
             };
             if !rendered.is_empty() {
                 lines.extend(AnsiLine::wrap_block(&rendered, width));
