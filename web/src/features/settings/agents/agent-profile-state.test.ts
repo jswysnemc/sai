@@ -26,7 +26,8 @@ describe("主 Agent 档案状态", () => {
       provider_id: "",
       model: "",
       thinking_level: "auto",
-      register_to_main: false
+      register_to_main: false,
+      load_instruction_files: true
     });
   });
 
@@ -34,10 +35,19 @@ describe("主 Agent 档案状态", () => {
     const stored = [{ id: "review", name: "审查", enabled_tools: ["read_file"] }];
     const visible = buildVisibleAgentProfiles(stored, options);
 
-    expect(visible.map((profile) => profile.id)).toEqual(["default", "general", "explore", "gateway", "review"]);
+    expect(visible.map((profile) => profile.id)).toEqual([
+      "default",
+      "cli",
+      "general",
+      "explore",
+      "plan",
+      "gateway",
+      "review"
+    ]);
     expect(visible[0].enabled_tools).toEqual(["read_file", "run_command"]);
-    expect(visible[1].enabled_tools).toEqual(["read_file", "run_command"]);
-    expect(visible[1].skills_full).toEqual(["review"]);
+    // cli 内置默认继承全部可选工具
+    expect(visible.find((p) => p.id === "cli")?.enabled_tools).toEqual(["read_file", "run_command"]);
+    expect(visible.find((p) => p.id === "cli")?.skills_full).toEqual(["review"]);
     expect(stored).toEqual([{ id: "review", name: "审查", enabled_tools: ["read_file"] }]);
   });
 
@@ -46,7 +56,7 @@ describe("主 Agent 档案状态", () => {
       { id: "default", name: "项目默认", thinking_level: "high" }
     ], options);
 
-    expect(visible).toHaveLength(4);
+    expect(visible).toHaveLength(6);
     expect(visible.find((profile) => profile.id === "default"))
       .toMatchObject({ id: "default", name: "项目默认", thinking_level: "high" });
   });

@@ -6,19 +6,46 @@ import { text, type Locale } from "../../i18n/locale";
 
 export const BUILTIN_AGENT_PROFILES: AgentProfileConfig[] = [
   {
+    id: "cli",
+    name: "CLI 助手",
+    description: "人格化终端助手：工具全量开放，适合日常排障与对话",
+    thinking_level: "auto",
+    register_to_main: false,
+    load_instruction_files: true
+  },
+  {
     id: "general",
     name: "代码 Agent",
-    description: "适合实现、测试、文档和常规工程任务",
+    description: "适合实现、测试、文档和常规工程任务；工具面向长程编程",
     thinking_level: "auto",
-    register_to_main: true
+    register_to_main: true,
+    load_instruction_files: true
   },
   {
     id: "explore",
     name: "探索 Agent",
-    description: "适合只读检索、代码定位和资料探索",
+    description: "适合只读检索、代码定位和资料探索；返回证据与路径",
     enabled_tools: ["check_os_info", "read_file", "glob", "grep", "web_search", "web_fetch"],
     thinking_level: "auto",
-    register_to_main: true
+    register_to_main: true,
+    load_instruction_files: true
+  },
+  {
+    id: "plan",
+    name: "Plan Agent",
+    description: "只读调研与方案规划，不改系统状态",
+    enabled_tools: [
+      "check_os_info",
+      "read_file",
+      "glob",
+      "grep",
+      "web_search",
+      "web_fetch",
+      "ask_question"
+    ],
+    thinking_level: "auto",
+    register_to_main: true,
+    load_instruction_files: true
   },
   {
     id: "gateway",
@@ -39,7 +66,8 @@ export const BUILTIN_AGENT_PROFILES: AgentProfileConfig[] = [
       "send_channel_message"
     ],
     thinking_level: "auto",
-    register_to_main: false
+    register_to_main: false,
+    load_instruction_files: false
   }
 ];
 
@@ -66,7 +94,8 @@ export function normalizeAgentProfile(
     provider_id: profile.provider_id ?? defaults.provider_id ?? "",
     model: profile.model ?? defaults.model ?? "",
     thinking_level: profile.thinking_level ?? defaults.thinking_level ?? "auto",
-    register_to_main: profile.register_to_main ?? defaults.register_to_main ?? false
+    register_to_main: profile.register_to_main ?? defaults.register_to_main ?? false,
+    load_instruction_files: profile.load_instruction_files ?? defaults.load_instruction_files ?? true
   };
 }
 
@@ -95,13 +124,20 @@ export function buildVisibleAgentProfiles(
   const normalized = stored.map((profile) => normalizeAgentProfile(profile));
   const builtins = localizedBuiltinProfiles(locale).map((builtin) => {
     const override = stored.find((profile) => profile.id === builtin.id);
-    const defaults = builtin.id === "general"
+    const defaults = builtin.id === "cli"
       ? {
           ...builtin,
           enabled_tools: options.tools.map((tool) => tool.name),
           skills_full: options.skills.map((skill) => skill.name)
         }
-      : builtin;
+      : builtin.id === "general"
+        ? {
+            ...builtin,
+            // 代码 Agent 若无覆盖则沿用后端白名单；UI 编辑时再细化
+            enabled_tools: builtin.enabled_tools ?? options.tools.map((tool) => tool.name),
+            skills_full: options.skills.map((skill) => skill.name)
+          }
+        : builtin;
     return normalizeAgentProfile(override ?? defaults, normalizeAgentProfile(defaults));
   });
   const custom = normalized.filter((profile) => !BUILTIN_AGENT_PROFILES.some((builtin) => builtin.id === profile.id));

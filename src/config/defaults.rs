@@ -23,10 +23,10 @@ impl Default for AppConfig {
             prompt: PromptConfig::default(),
             gateways: GatewayConfig::default(),
             agents: Vec::new(),
-            // 默认入口不强制 code-agent，使用内置 Sai 系统提示；可在 Agent 配置中切换
-            default_agent: None,
-            tui_agent: None,
-            cli_agent: None,
+            // 首次 init 会 seed agents；此处给出入口默认 id
+            default_agent: Some("general".to_string()),
+            tui_agent: Some("general".to_string()),
+            cli_agent: Some("cli".to_string()),
             gateway_agent: Some("gateway".to_string()),
             subagent: SubagentConfig::default(),
             agent_runtime: None,
@@ -36,6 +36,7 @@ impl Default for AppConfig {
             memory: MemoryConfig::default(),
             system_prompt_file: Some("system-prompt.md".to_string()),
             system_prompt: None,
+            load_instruction_files: true,
         }
     }
 }

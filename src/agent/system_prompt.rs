@@ -23,11 +23,13 @@ pub(super) fn build_base_system_prompt(
     // 1. Agent / persona / 用户身份
     let mut base_system_prompt = config.system_prompt(paths)?;
 
-    // 2. 全局 AGENT.md 与项目 .AGENT.md / .CLAUDE.md 等附加指令
-    let instruction_prompt = load_instruction_prompt(paths);
-    if !instruction_prompt.trim().is_empty() {
-        base_system_prompt.push_str("\n\n");
-        base_system_prompt.push_str(&instruction_prompt);
+    // 2. 全局 AGENT.md 与项目 .AGENT.md / .CLAUDE.md 等附加指令（可按 Agent 关闭）
+    if config.load_instruction_files {
+        let instruction_prompt = load_instruction_prompt(paths);
+        if !instruction_prompt.trim().is_empty() {
+            base_system_prompt.push_str("\n\n");
+            base_system_prompt.push_str(&instruction_prompt);
+        }
     }
 
     // 3. Skills 目录（渐进加载时仅 catalog）

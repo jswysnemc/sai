@@ -49,7 +49,17 @@ impl AppConfig {
     pub fn init_files(paths: &SaiPaths) -> Result<()> {
         paths.create_dirs()?;
         if !paths.config_file.exists() {
-            Self::default().save(paths)?;
+            // 1. 首次运行写入入口默认 Agent 与可编辑档案列表
+            let mut config = Self::default();
+            let _ = super::agents::ensure_surface_agent_defaults(&mut config);
+            config.save(paths)?;
+        } else {
+            // 2. 已有配置：若 agents 为空或入口默认缺失，补齐并回写
+            if let Ok(mut config) = Self::load_or_default(paths) {
+                if super::agents::ensure_surface_agent_defaults(&mut config) {
+                    let _ = config.save(paths);
+                }
+            }
         }
         if !paths.secrets_file.exists() {
             let raw = "{\n  // Optional provider API keys. Prefer $env:... in config.jsonc.\n  \"api_keys\": {}\n}\n";

@@ -165,12 +165,16 @@ fn edit_agent_profile(
             t("Register to main Agent", "向主 Agent 注册"),
             profile.register_to_main,
         ),
+        Field::boolean(
+            t("Load AGENT.md instruction files", "加载 AGENT.md 指令文件"),
+            profile.load_instruction_files,
+        ),
         Field::textarea(
             t("System prompt", "系统提示词"),
             profile.system_prompt.clone(),
         ),
         Field::textarea(
-            t("Enabled tools, one per line", "启用工具，每行一个"),
+            t("Enabled tools, one per line (empty = all)", "启用工具，每行一个（空=全量）"),
             profile.enabled_tools.join("\n"),
         ),
         Field::textarea(
@@ -188,10 +192,11 @@ fn edit_agent_profile(
         (profile.provider_id, profile.model) = parse_provider_model_choice(&fields[2].value);
         profile.thinking_level = fields[3].value.trim().to_string();
         profile.register_to_main = parse_bool_field(&fields[4].value)?;
-        profile.system_prompt = fields[5].value.trim().to_string();
-        profile.enabled_tools = parse_lines(&fields[6].value);
-        profile.skills_full = parse_lines(&fields[7].value);
-        profile.skills_named = parse_lines(&fields[8].value);
+        profile.load_instruction_files = parse_bool_field(&fields[5].value)?;
+        profile.system_prompt = fields[6].value.trim().to_string();
+        profile.enabled_tools = parse_lines(&fields[7].value);
+        profile.skills_full = parse_lines(&fields[8].value);
+        profile.skills_named = parse_lines(&fields[9].value);
         upsert_agent(config, profile);
     }
     Ok(())

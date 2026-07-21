@@ -68,6 +68,9 @@ pub struct AppConfig {
     pub system_prompt_file: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system_prompt: Option<String>,
+    /// 是否加载全局 / 项目 AGENT.md 等指令文件（可由 Agent 档案覆盖）
+    #[serde(default = "default_load_instruction_files", skip_serializing)]
+    pub load_instruction_files: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -724,4 +727,8 @@ fn default_http_method() -> String {
 
 fn default_mcp_transport() -> String {
     "stdio".to_string()
+}
+
+fn default_load_instruction_files() -> bool {
+    true
 }

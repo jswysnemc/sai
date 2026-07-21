@@ -1,12 +1,16 @@
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_AGENT_ID: &str = "default";
+pub const CLI_AGENT_ID: &str = "cli";
 pub const GENERAL_AGENT_ID: &str = "general";
 pub const EXPLORE_AGENT_ID: &str = "explore";
+pub const PLAN_AGENT_ID: &str = "plan";
 pub const GATEWAY_AGENT_ID: &str = "gateway";
 
+const CLI_AGENT_PROMPT: &str = include_str!("../prompts/cli-agent.md");
 const GENERAL_AGENT_PROMPT: &str = include_str!("../prompts/code-agent.md");
 const EXPLORE_AGENT_PROMPT: &str = include_str!("../prompts/explore-agent.md");
+const PLAN_AGENT_PROMPT: &str = include_str!("../prompts/plan-agent.md");
 const GATEWAY_AGENT_PROMPT: &str = include_str!("../prompts/gateway-agent.md");
 
 const GATEWAY_AGENT_TOOLS: &[&str] = &[
@@ -44,6 +48,79 @@ const GATEWAY_AGENT_TOOLS: &[&str] = &[
     "send_channel_message",
 ];
 
+
+/// TUI / Web 长程编程默认工具白名单（排除表情包、趣味占卜等助手娱乐工具）。
+const CODE_AGENT_TOOLS: &[&str] = &[
+    "run_command",
+    "background_command",
+    "subagent",
+    "todo",
+    "edit_file",
+    "apply_patch",
+    "write_file",
+    "replace_file_lines",
+    "create_goal",
+    "get_goal",
+    "update_goal",
+    "trash_path",
+    "check_os_info",
+    "read_file",
+    "glob",
+    "grep",
+    "ask_question",
+    "web_search",
+    "web_fetch",
+    "fetch_url",
+    "remember_fact",
+    "recall_memories",
+    "recall_past_events",
+    "search_evicted_context",
+    "search_knowledge_base",
+    "search_knowledge_base_by_name",
+    "read_knowledge_base_file",
+    "upload_text_to_knowledge_base",
+    "edit_knowledge_base_file",
+    "deep_research",
+    "check_issue",
+    "linux_input_method_diagnose",
+    "linux_game_compatibility",
+    "archwiki_query",
+    "archlinux_official_package_query",
+    "aur_search_packages",
+    "aur_get_package_info",
+    "man_page_search",
+    "man_page_read",
+    "review_aur_package",
+    "calculate",
+    "calculate_hash",
+    "decode_encoded_text",
+    "mcp_manager",
+];
+
+/// Plan Agent 只读工具。
+const PLAN_AGENT_TOOLS: &[&str] = &[
+    "check_os_info",
+    "read_file",
+    "glob",
+    "grep",
+    "web_search",
+    "web_fetch",
+    "fetch_url",
+    "ask_question",
+    "archwiki_query",
+    "archlinux_official_package_query",
+    "aur_search_packages",
+    "aur_get_package_info",
+    "man_page_search",
+    "man_page_read",
+    "search_knowledge_base",
+    "search_knowledge_base_by_name",
+    "read_knowledge_base_file",
+    "recall_memories",
+    "recall_past_events",
+    "search_evicted_context",
+];
+
 const EXPLORE_AGENT_TOOLS: &[&str] = &[
     "check_os_info",
     "read_file",
@@ -76,7 +153,7 @@ pub struct AgentRuntimeOverride {
 /// Agent 配置档案。
 ///
 /// 描述一个可复用的 Agent 预设：运行模型、系统提示词、能力集合和注册范围。
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AgentProfile {
     /// Agent 唯一标识
     pub id: String,
@@ -109,6 +186,9 @@ pub struct AgentProfile {
     /// 是否向主 Agent 注册为可调用的子 Agent
     #[serde(default)]
     pub register_to_main: bool,
+    /// 是否加载全局 / 项目 AGENT.md、AGENTS.md、CLAUDE.md 等指令文件
+    #[serde(default = "default_true")]
+    pub load_instruction_files: bool,
 }
 
 /// 旧版可由主 Agent 选择的子 Agent 档案，仅用于配置兼容迁移。
@@ -149,6 +229,25 @@ pub struct SubagentConfig {
     pub profiles: Vec<SubagentProfile>,
 }
 
+impl Default for AgentProfile {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            description: String::new(),
+            system_prompt: String::new(),
+            enabled_tools: Vec::new(),
+            skills_full: Vec::new(),
+            skills_named: Vec::new(),
+            provider_id: String::new(),
+            model: String::new(),
+            thinking_level: default_agent_thinking_level(),
+            register_to_main: false,
+            load_instruction_files: true,
+        }
+    }
+}
+
 impl AgentProfile {
     /// 将旧子 Agent 档案转换为统一 Agent 档案。
     ///
@@ -170,6 +269,7 @@ impl AgentProfile {
             model: profile.model,
             thinking_level: profile.thinking_level,
             register_to_main: profile.exposed,
+            load_instruction_files: true,
         }
     }
 }
@@ -185,8 +285,10 @@ impl crate::config::AppConfig {
     pub fn resolved_agent_profiles(&self) -> Vec<AgentProfile> {
         let legacy = &self.subagent.profiles;
         let mut profiles = [
+            builtin_cli_agent(),
             builtin_general_agent(),
             builtin_explore_agent(),
+            builtin_plan_agent(),
             builtin_gateway_agent(),
         ]
         .into_iter()
@@ -219,7 +321,11 @@ impl crate::config::AppConfig {
                 .filter(|profile| {
                     !matches!(
                         profile.id.as_str(),
-                        GENERAL_AGENT_ID | EXPLORE_AGENT_ID | GATEWAY_AGENT_ID
+                        CLI_AGENT_ID
+                            | GENERAL_AGENT_ID
+                            | EXPLORE_AGENT_ID
+                            | PLAN_AGENT_ID
+                            | GATEWAY_AGENT_ID
                     )
                 })
                 .cloned(),
@@ -323,22 +429,10 @@ pub fn apply_agent_override(
             provider.thinking_level = profile.thinking_level.clone();
         }
     }
-    // 4. 内置通用 Agent 的空能力配置表示继承，其他档案使用显式能力列表
-    let enabled_tools = if profile.id == EXPLORE_AGENT_ID && profile.enabled_tools.is_empty() {
-        EXPLORE_AGENT_TOOLS
-            .iter()
-            .map(|tool| (*tool).to_string())
-            .collect()
-    } else if profile.id == GATEWAY_AGENT_ID && profile.enabled_tools.is_empty() {
-        GATEWAY_AGENT_TOOLS
-            .iter()
-            .map(|tool| (*tool).to_string())
-            .collect()
-    } else {
-        profile.enabled_tools
-    };
-    config.agent_runtime = if profile.id == GENERAL_AGENT_ID
-        && enabled_tools.is_empty()
+    // 4. 工具白名单：空列表表示全量；内置 explore/plan/gateway/code 有默认白名单
+    let enabled_tools = resolve_enabled_tools(&profile);
+    config.load_instruction_files = profile.load_instruction_files;
+    config.agent_runtime = if enabled_tools.is_empty()
         && profile.skills_full.is_empty()
         && profile.skills_named.is_empty()
     {
@@ -353,21 +447,67 @@ pub fn apply_agent_override(
     Ok(config)
 }
 
-/// 构造可由用户覆盖的内置通用 Agent 档案。
+/// 解析 Agent 档案的工具列表。
 ///
 /// 参数:
-/// - 无
+/// - `profile`: Agent 档案
 ///
 /// 返回:
-/// - 默认注册到主 Agent 的通用档案
+/// - 空向量表示全量工具；非空为白名单
+fn resolve_enabled_tools(profile: &AgentProfile) -> Vec<String> {
+    if !profile.enabled_tools.is_empty() {
+        return profile.enabled_tools.clone();
+    }
+    match profile.id.as_str() {
+        EXPLORE_AGENT_ID => EXPLORE_AGENT_TOOLS
+            .iter()
+            .map(|tool| (*tool).to_string())
+            .collect(),
+        PLAN_AGENT_ID => PLAN_AGENT_TOOLS
+            .iter()
+            .map(|tool| (*tool).to_string())
+            .collect(),
+        GATEWAY_AGENT_ID => GATEWAY_AGENT_TOOLS
+            .iter()
+            .map(|tool| (*tool).to_string())
+            .collect(),
+        GENERAL_AGENT_ID => CODE_AGENT_TOOLS
+            .iter()
+            .map(|tool| (*tool).to_string())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// 构造 CLI 终端助手默认档案（全量工具 + 人格提示）。
+fn builtin_cli_agent() -> AgentProfile {
+    AgentProfile {
+        id: CLI_AGENT_ID.to_string(),
+        name: "CLI 助手".to_string(),
+        description: "人格化终端助手：工具全量开放，适合日常排障与对话".to_string(),
+        system_prompt: CLI_AGENT_PROMPT.to_string(),
+        enabled_tools: Vec::new(),
+        thinking_level: "auto".to_string(),
+        register_to_main: false,
+        load_instruction_files: true,
+        ..AgentProfile::default()
+    }
+}
+
+/// 构造 TUI / Web 长程代码 Agent 档案。
 fn builtin_general_agent() -> AgentProfile {
     AgentProfile {
         id: GENERAL_AGENT_ID.to_string(),
         name: "代码 Agent".to_string(),
-        description: "适合实现、测试、文档和常规工程任务".to_string(),
+        description: "适合实现、测试、文档和常规工程任务；工具面向长程编程".to_string(),
         system_prompt: GENERAL_AGENT_PROMPT.to_string(),
+        enabled_tools: CODE_AGENT_TOOLS
+            .iter()
+            .map(|tool| (*tool).to_string())
+            .collect(),
         thinking_level: "auto".to_string(),
         register_to_main: true,
+        load_instruction_files: true,
         ..AgentProfile::default()
     }
 }
@@ -383,7 +523,7 @@ fn builtin_explore_agent() -> AgentProfile {
     AgentProfile {
         id: EXPLORE_AGENT_ID.to_string(),
         name: "探索 Agent".to_string(),
-        description: "适合只读检索、代码定位和资料探索".to_string(),
+        description: "适合只读检索、代码定位和资料探索；返回证据与路径".to_string(),
         system_prompt: EXPLORE_AGENT_PROMPT.to_string(),
         enabled_tools: EXPLORE_AGENT_TOOLS
             .iter()
@@ -391,6 +531,25 @@ fn builtin_explore_agent() -> AgentProfile {
             .collect(),
         thinking_level: "auto".to_string(),
         register_to_main: true,
+        load_instruction_files: true,
+        ..AgentProfile::default()
+    }
+}
+
+/// 构造只读 Plan Agent。
+fn builtin_plan_agent() -> AgentProfile {
+    AgentProfile {
+        id: PLAN_AGENT_ID.to_string(),
+        name: "Plan Agent".to_string(),
+        description: "只读调研与方案规划，不改系统状态".to_string(),
+        system_prompt: PLAN_AGENT_PROMPT.to_string(),
+        enabled_tools: PLAN_AGENT_TOOLS
+            .iter()
+            .map(|tool| (*tool).to_string())
+            .collect(),
+        thinking_level: "auto".to_string(),
+        register_to_main: true,
+        load_instruction_files: true,
         ..AgentProfile::default()
     }
 }
@@ -408,6 +567,7 @@ fn builtin_gateway_agent() -> AgentProfile {
             .collect(),
         thinking_level: "auto".to_string(),
         register_to_main: false,
+        load_instruction_files: false,
         ..AgentProfile::default()
     }
 }
@@ -418,6 +578,76 @@ fn default_agent_thinking_level() -> String {
 
 fn default_true() -> bool {
     true
+}
+
+/// 首次运行写入配置文件的默认 Agent 列表。
+///
+/// 返回:
+/// - CLI / 代码 / 探索 / Plan / 网关档案
+pub fn seed_default_agent_profiles() -> Vec<AgentProfile> {
+    vec![
+        builtin_cli_agent(),
+        builtin_general_agent(),
+        builtin_explore_agent(),
+        builtin_plan_agent(),
+        builtin_gateway_agent(),
+    ]
+}
+
+/// 为尚未指定入口默认 Agent 的配置补齐表面默认值。
+///
+/// 参数:
+/// - `config`: 待补齐配置
+///
+/// 返回:
+/// - 是否改动了配置
+pub fn ensure_surface_agent_defaults(config: &mut crate::config::AppConfig) -> bool {
+    let mut changed = false;
+    if config
+        .cli_agent
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or("")
+        .is_empty()
+    {
+        config.cli_agent = Some(CLI_AGENT_ID.to_string());
+        changed = true;
+    }
+    if config
+        .tui_agent
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or("")
+        .is_empty()
+    {
+        config.tui_agent = Some(GENERAL_AGENT_ID.to_string());
+        changed = true;
+    }
+    if config
+        .default_agent
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or("")
+        .is_empty()
+    {
+        config.default_agent = Some(GENERAL_AGENT_ID.to_string());
+        changed = true;
+    }
+    if config
+        .gateway_agent
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or("")
+        .is_empty()
+    {
+        config.gateway_agent = Some(GATEWAY_AGENT_ID.to_string());
+        changed = true;
+    }
+    if config.agents.is_empty() {
+        config.agents = seed_default_agent_profiles();
+        changed = true;
+    }
+    changed
 }
 
 #[cfg(test)]
@@ -473,39 +703,59 @@ mod tests {
     /// 内置代码 Agent 带有工程规范提示词；探索 Agent 为只读。
     #[test]
     fn builtin_agents_include_default_prompts() {
+        let cli = builtin_cli_agent();
         let general = builtin_general_agent();
         let explore = builtin_explore_agent();
+        let plan = builtin_plan_agent();
+        assert!(cli.system_prompt.contains("Sai"));
+        assert!(cli.enabled_tools.is_empty());
         assert!(general.system_prompt.contains("核心铁律"));
+        assert!(!general.enabled_tools.is_empty());
         assert!(explore.system_prompt.contains("只读"));
         assert!(!explore.enabled_tools.is_empty());
+        assert!(plan.system_prompt.contains("Plan"));
+        assert!(!plan.enabled_tools.is_empty());
     }
 
-    /// Web/TUI/CLI 默认不强制 code-agent；网关仍使用专用档案。
+    /// 默认入口：CLI 助手全量；TUI/Web 代码 Agent；网关专用。
     #[test]
-    fn default_surfaces_use_builtin_prompt_except_gateway() {
-        let config = crate::config::AppConfig::default();
-        assert_eq!(config.default_agent.as_deref(), None);
-        assert_eq!(config.tui_agent.as_deref(), None);
-        assert_eq!(config.cli_agent.as_deref(), None);
+    fn default_surfaces_use_cli_and_code_agents() {
+        let mut config = crate::config::AppConfig::default();
+        ensure_surface_agent_defaults(&mut config);
+        assert_eq!(config.cli_agent.as_deref(), Some(CLI_AGENT_ID));
+        assert_eq!(config.tui_agent.as_deref(), Some(GENERAL_AGENT_ID));
+        assert_eq!(config.default_agent.as_deref(), Some(GENERAL_AGENT_ID));
         assert_eq!(config.gateway_agent.as_deref(), Some(GATEWAY_AGENT_ID));
-        let gateway = apply_agent_override(config.clone(), None, AgentSurface::Gateway).unwrap();
-        assert!(gateway
-            .system_prompt
-            .as_deref()
-            .unwrap_or("")
-            .contains("Sai"));
-        assert!(gateway
-            .agent_runtime
-            .as_ref()
-            .map(|runtime| runtime.enabled_tools.iter().any(|tool| tool == "cron"))
-            .unwrap_or(false));
-        let web = apply_agent_override(config.clone(), None, AgentSurface::Web).unwrap();
-        assert!(web.system_prompt.is_none());
+        let cli = apply_agent_override(config.clone(), None, AgentSurface::Cli).unwrap();
+        assert!(cli.agent_runtime.is_none(), "CLI 应继承全量工具");
+        assert!(cli.system_prompt.as_deref().unwrap_or("").contains("Sai"));
+        assert!(cli.load_instruction_files);
         let tui = apply_agent_override(config.clone(), None, AgentSurface::Tui).unwrap();
-        assert!(tui.system_prompt.is_none());
-        let cli = apply_agent_override(config, None, AgentSurface::Cli).unwrap();
-        assert!(cli.system_prompt.is_none());
+        let runtime = tui.agent_runtime.expect("code agent whitelist");
+        assert!(runtime.enabled_tools.iter().any(|t| t == "edit_file"));
+        assert!(!runtime.enabled_tools.iter().any(|t| t == "show_meme"));
+        assert!(tui.system_prompt.as_deref().unwrap_or("").contains("核心铁律"));
+        let gateway = apply_agent_override(config, None, AgentSurface::Gateway).unwrap();
+        assert!(!gateway.load_instruction_files);
+        assert!(gateway.agent_runtime.is_some());
     }
+
+    #[test]
+    fn explore_and_plan_are_readonly_scoped() {
+        let config = crate::config::AppConfig::default();
+        let explore =
+            apply_agent_override(config.clone(), Some(EXPLORE_AGENT_ID), AgentSurface::Web)
+                .unwrap();
+        let tools = explore.agent_runtime.unwrap().enabled_tools;
+        assert!(tools.iter().any(|t| t == "read_file"));
+        assert!(!tools.iter().any(|t| t == "edit_file"));
+        let plan = apply_agent_override(config, Some(PLAN_AGENT_ID), AgentSurface::Web).unwrap();
+        let tools = plan.agent_runtime.unwrap().enabled_tools;
+        assert!(tools.iter().any(|t| t == "web_search"));
+        assert!(!tools.iter().any(|t| t == "run_command"));
+        assert!(plan.system_prompt.as_deref().unwrap_or("").contains("Plan"));
+    }
+
 
     /// 验证旧子 Agent 档案会进入统一 Agent 列表并保留暴露状态。
     #[test]

@@ -602,6 +602,7 @@ export type AgentProfileConfig = {
   model?: string;
   thinking_level?: string;
   register_to_main?: boolean;
+  load_instruction_files?: boolean;
 };
 
 export type AgentRuntimeProfile = {

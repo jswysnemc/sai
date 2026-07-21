@@ -10,6 +10,7 @@ export type AgentProfile = {
   model: string;
   thinking_level: string;
   register_to_main: boolean;
+  load_instruction_files: boolean;
 };
 
 export type AgentChoice = {
