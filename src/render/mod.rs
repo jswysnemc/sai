@@ -69,7 +69,7 @@ pub(crate) const fn terminal_text<'a>(english: &'a str, _localized: &'a str) -> 
 /// 返回:
 /// - diff、命令或普通工具视图文本
 pub(crate) fn render_tool_call(name: &str, arguments: &str, mode: ToolCallDisplayMode) -> String {
-    if name == "edit_file" {
+    if stream_text::is_file_edit_tool(name) {
         return edit_diff::render_edit_file_diff(arguments)
             .unwrap_or_else(|| tool_view::render_call(name, arguments, mode));
     }

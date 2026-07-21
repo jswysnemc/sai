@@ -19,7 +19,21 @@ pub(crate) fn normalize_stream_text(text: &str) -> String {
 /// 返回:
 /// - 是否已经有命令块或 diff 块展示
 pub(crate) fn tool_call_has_visible_block(name: &str) -> bool {
-    matches!(name, "run_command" | "edit_file")
+    matches!(name, "run_command") || is_file_edit_tool(name)
+}
+
+/// 判断是否为会产出文件 diff 预览的编辑类工具。
+///
+/// 参数:
+/// - `name`: 工具名称
+///
+/// 返回:
+/// - 是否应走 diff 渲染路径
+pub(crate) fn is_file_edit_tool(name: &str) -> bool {
+    matches!(
+        name,
+        "edit_file" | "apply_patch" | "write_file" | "replace_file_lines"
+    )
 }
 
 /// 生成等待动效详情行。

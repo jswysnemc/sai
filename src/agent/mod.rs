@@ -381,15 +381,14 @@ impl Agent {
                         &call.function.arguments,
                     );
                     let request_id = request.id.clone();
-                    on_event(AgentEvent::PermissionRequested(request.clone()))?;
-                    // 自动审核：与人工审核并行，人工先到则丢弃 LLM 结果
-                    let decision = if self.mode == AgentMode::AutoAudit {
+                    // 自动审核：与人工审核并行；必须在 on_event（可能阻塞）之前启动
+                    let auto_task = if self.mode == AgentMode::AutoAudit {
                         let context =
                             crate::permission::build_audit_context(&messages, 2_500);
                         let tool_name = call.function.name.clone();
                         let arguments = call.function.arguments.clone();
                         let audit_request_id = request_id.clone();
-                        let auto_task = match crate::permission::resolve_auto_audit_client(
+                        match crate::permission::resolve_auto_audit_client(
                             &self.config,
                             &self.paths,
                         ) {
@@ -410,25 +409,26 @@ impl Agent {
                                 eprintln!("[sai] auto-audit client unavailable: {error:#}");
                                 None
                             }
-                        };
-                        match decision_rx.await {
-                            Ok(decision) => {
-                                if let Some(task) = auto_task {
-                                    task.abort();
-                                }
-                                decision
-                            }
-                            Err(_) => {
-                                if let Some(task) = auto_task {
-                                    let _ = task.await;
-                                }
-                                crate::permission::PermissionDecision::Deny {
-                                    reply: Some("权限审核通道已关闭".to_string()),
-                                }
-                            }
                         }
                     } else {
-                        decision_rx.await?
+                        None
+                    };
+                    on_event(AgentEvent::PermissionRequested(request.clone()))?;
+                    let decision = match decision_rx.await {
+                        Ok(decision) => {
+                            if let Some(task) = auto_task {
+                                task.abort();
+                            }
+                            decision
+                        }
+                        Err(_) => {
+                            if let Some(task) = auto_task {
+                                let _ = task.await;
+                            }
+                            crate::permission::PermissionDecision::Deny {
+                                reply: Some("权限审核通道已关闭".to_string()),
+                            }
+                        }
                     };
                     on_event(AgentEvent::PermissionResolved {
                         request_id,

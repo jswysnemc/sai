@@ -97,7 +97,8 @@ impl ReplRuntime {
                 self.live_sync_pending = false;
                 self.transcript.clear_work_status();
                 let _ = request;
-                Ok(())
+                // 立刻同步，避免上一状态的 working 行与审核控件同屏
+                self.sync_transcript(false)
             }
             AgentEvent::PermissionResolved {
                 request_id,

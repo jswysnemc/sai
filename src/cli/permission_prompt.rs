@@ -63,6 +63,16 @@ fn read_terminal_decision(request: &PermissionRequest) -> Result<PermissionDecis
     let mut anchor = reserve_menu_anchor(&mut stdout, menu_rows(request, &state))?;
     paint_menu_at(&mut stdout, anchor, request, &state)?;
     loop {
+        // 自动审核已提交决定时收起菜单并退出，不再阻塞
+        if !crate::permission::is_permission_pending(&request.id) {
+            erase_menu_at(&mut stdout, anchor)?;
+            execute!(stdout, Show)?;
+            stdout.flush()?;
+            return Ok(PermissionDecision::Allow);
+        }
+        if !event::poll(std::time::Duration::from_millis(120))? {
+            continue;
+        }
         let event = event::read()?;
         // Ctrl+C / Ctrl+D 视为拒绝并退出
         if is_interrupt(&event) {

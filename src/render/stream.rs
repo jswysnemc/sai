@@ -248,7 +248,7 @@ impl StreamRenderer {
                 return Ok(());
             }
         }
-        if name == "edit_file" {
+        if crate::render::stream_text::is_file_edit_tool(name) {
             self.summary.clear_live_lines()?;
             if self.pending_streamed_edit_blocks > 0 {
                 self.pending_streamed_edit_blocks -= 1;
@@ -296,7 +296,9 @@ impl StreamRenderer {
         let event_label = tool_event_label(name, Some(&progress.arguments_preview));
         self.tool_event_labels
             .insert(name.to_string(), event_label.clone());
-        if name == "edit_file" && !self.streaming_edit_progress.contains(&progress.index) {
+        if crate::render::stream_text::is_file_edit_tool(name)
+            && !self.streaming_edit_progress.contains(&progress.index)
+        {
             self.clear_live_tool_status()?;
             self.end_active_stream_line()?;
             self.finalize_reasoning_summary()?;

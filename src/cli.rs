@@ -604,19 +604,28 @@ fn prompt_permission_request_tui(
     let mut stdout = io::stdout();
     // 1. 独占 raw 输入，避免与主循环输入框事件竞争
     enable_repl_terminal_input(&mut stdout)?;
-    // 2. 暂停工作动效，选择项附着在工具视图下方
+    // 2. 选择项附着在工具视图下方（working 动效已在 sink 入口暂停）
     {
         let mut rt = runtime.borrow_mut();
-        rt.pause_for_permission_prompt()?;
         rt.update_permission_choice(&request.id, state.selected())?;
         rt.update_permission_reply(&request.id, state.reply_draft().map(str::to_string))?;
     }
 
     let result = (|| -> Result<()> {
         loop {
+            // 自动审核已提交时退出交互，交还主循环
+            if !crate::permission::is_permission_pending(&request.id) {
+                return Ok(());
+            }
+            if !event::poll(std::time::Duration::from_millis(120))? {
+                continue;
+            }
             let event = event::read()?;
             // Ctrl+C / Ctrl+D 视为拒绝，避免审计循环无法退出
             if permission_prompt::is_interrupt(&event) {
+                if !crate::permission::is_permission_pending(&request.id) {
+                    return Ok(());
+                }
                 return crate::permission::decide_permission(
                     &request.id,
                     crate::permission::PermissionDecision::Deny { reply: None },
@@ -639,6 +648,9 @@ fn prompt_permission_request_tui(
                     )?;
                 }
                 PermissionTransition::Submit(decision) => {
+                    if !crate::permission::is_permission_pending(&request.id) {
+                        return Ok(());
+                    }
                     return crate::permission::decide_permission(&request.id, decision);
                 }
             }

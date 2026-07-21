@@ -90,6 +90,18 @@ pub(crate) fn decide_permission(id: &str, decision: PermissionDecision) -> Resul
         .map_err(|_| anyhow::anyhow!("permission requester is no longer running"))
 }
 
+
+/// 判断权限请求是否仍在等待决定。
+///
+/// 参数:
+/// - `id`: 权限请求标识
+///
+/// 返回:
+/// - 仍在 pending 表中则为 true
+pub(crate) fn is_permission_pending(id: &str) -> bool {
+    pending().lock().unwrap().contains_key(id)
+}
+
 /// 返回指定会话当前等待处理的权限请求。
 ///
 /// 参数:

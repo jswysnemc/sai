@@ -122,6 +122,8 @@ pub(super) async fn execute_repl_turn(
     let mut sink = |event: crate::runner::RunnerEvent| {
         if let crate::runner::RunnerEvent::Agent(AgentEvent::PermissionRequested(request)) = &event
         {
+            // 1. 先清掉 working 动效，再挂权限控件，避免最后一行重叠
+            runtime.borrow_mut().pause_for_permission_prompt()?;
             runtime
                 .borrow_mut()
                 .record_permission_request(request.clone())?;

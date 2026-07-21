@@ -1,6 +1,7 @@
 use crate::render::background_command_event::background_command_block_action;
 use crate::render::command_output::{render_command_block_with_action, write_tool_payload};
 use crate::render::edit_diff::write_edit_file_diff_block;
+use crate::render::stream_text::is_file_edit_tool;
 use anyhow::Result;
 use std::collections::HashSet;
 use std::io::{self, Write};
@@ -52,7 +53,7 @@ pub(crate) fn write_command_tool_call_block(
 /// 返回:
 /// - 是否已经写入编辑块
 pub(crate) fn write_edit_tool_call_block(name: &str, arguments: &str) -> Result<bool> {
-    if name != "edit_file" {
+    if !is_file_edit_tool(name) {
         return Ok(false);
     }
     let mut stdout = io::stdout();
@@ -72,7 +73,7 @@ pub(crate) fn write_edit_tool_call_block(name: &str, arguments: &str) -> Result<
 /// 返回:
 /// - 是否已经写入 diff 块
 pub(crate) fn write_edit_tool_call_diff_block(name: &str, arguments: &str) -> Result<bool> {
-    if name != "edit_file" {
+    if !is_file_edit_tool(name) {
         return Ok(false);
     }
     let mut stdout = io::stdout();

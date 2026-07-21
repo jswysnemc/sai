@@ -415,7 +415,7 @@ impl TranscriptStore {
         self.finalize_live_tail();
         self.live_tool_call = None;
         let index = self.cells.len();
-        if name == "edit_file" {
+        if crate::render::stream_text::is_file_edit_tool(&name) {
             self.push_cell(HistoryCell::diff(arguments));
         } else if name == "subagent" {
             self.push_cell(HistoryCell::Tool(ToolCell::Subagent(SubagentCell::new(
@@ -441,8 +441,8 @@ impl TranscriptStore {
         self.finalize_live_tail();
         self.live_tool_call = None;
         let index = self.cells.len();
-        // edit_file 历史恢复仍用 DiffCell（按参数重建预览），避免只剩摘要工具行
-        if name == "edit_file" {
+        // 编辑类工具历史恢复仍用 DiffCell（按参数重建预览），避免只剩摘要工具行
+        if crate::render::stream_text::is_file_edit_tool(&name) {
             self.push_cell(HistoryCell::diff(arguments));
         } else {
             self.push_cell(HistoryCell::Tool(ToolCell::Invocation(ToolView::running(
@@ -468,8 +468,8 @@ impl TranscriptStore {
             self.active_tool_index = None;
             return;
         }
-        // edit_file 使用 DiffCell：在原 diff 上标记完成，避免再塞一个空结果 cell
-        if name == "edit_file" && self.finish_active_diff(ok) {
+        // 编辑类工具使用 DiffCell：在原 diff 上标记完成，避免再塞一个空结果 cell
+        if crate::render::stream_text::is_file_edit_tool(&name) && self.finish_active_diff(ok) {
             self.active_tool_index = None;
             self.work_status = None;
             self.work_status_started = None;
@@ -629,7 +629,9 @@ impl TranscriptStore {
                 view.request_permission(request.id.clone());
                 true
             }
-            Some(HistoryCell::Diff(cell)) if request.tool == "edit_file" => {
+            Some(HistoryCell::Diff(cell))
+                if crate::render::stream_text::is_file_edit_tool(&request.tool) =>
+            {
                 cell.request_permission(request.id.clone());
                 true
             }

@@ -33,10 +33,10 @@ impl WorkStatus {
             | AgentEvent::ToolCallProgress(_)
             | AgentEvent::ToolResult { .. }
             | AgentEvent::ToolProgress { .. }
-            | AgentEvent::PermissionRequested(_)
             | AgentEvent::PermissionResolved { .. }
-            | AgentEvent::QuestionRequested(_)
             | AgentEvent::QuestionResolved { .. } => Some(Self::Working),
+            // 权限/提问交互期间由专门 UI 接管，不进入 Working，避免与审核行重叠
+            AgentEvent::PermissionRequested(_) | AgentEvent::QuestionRequested(_) => None,
             AgentEvent::CompactionStarted { .. } => Some(Self::Compacting),
             AgentEvent::CompactionDelta { .. }
             | AgentEvent::CompactionFinished { .. }
@@ -162,5 +162,16 @@ mod tests {
         assert!(line.contains(STATUS_PULSE_FRAMES[0]));
         // 与思考 live 动效同色同款（dim cyan + pulse）
         assert!(line.contains("\x1b[2m\x1b[36m") || line.contains("\x1b[2m") && line.contains("·"));
+    }
+
+    #[test]
+    fn permission_requested_does_not_enter_working() {
+        let event = AgentEvent::PermissionRequested(crate::permission::PermissionRequest {
+            id: "p".into(),
+            session_id: "s".into(),
+            tool: "edit_file".into(),
+            arguments: "{}".into(),
+        });
+        assert_eq!(WorkStatus::from_agent_event(&event), None);
     }
 }

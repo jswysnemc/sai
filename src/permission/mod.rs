@@ -8,7 +8,7 @@ mod policy;
 
 pub(crate) use audit::{AuditDecision, PermissionAuditLog};
 pub(crate) use broker::{
-    decide_permission, pending_permissions, request_permission, PermissionDecision,
+    decide_permission, is_permission_pending, pending_permissions, request_permission, PermissionDecision,
     PermissionRequest,
 };
 pub(crate) use interaction::{PermissionInteractionState, PermissionTransition};

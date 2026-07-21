@@ -56,7 +56,7 @@ impl StreamRenderer {
             if tool_name == "run_command" {
                 // 命令内容已在代码块内展示，标题固定用动作短名避免重复
                 write_command_block_with_action(&mut stdout, args, "Run")?;
-            } else if tool_name == "edit_file" {
+            } else if crate::render::stream_text::is_file_edit_tool(tool_name) {
                 if !write_edit_file_diff_block(&mut stdout, args)? {
                     write_tool_payload(&mut stdout, "args", args)?;
                 }
