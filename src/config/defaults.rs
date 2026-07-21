@@ -3,6 +3,7 @@ use super::git::{GitConfig, ScmConfig};
 use super::model::*;
 use super::paths::persona_scope_name;
 use super::permission::PermissionConfig;
+use super::session::SessionConfig;
 use crate::default_models::OPENCODE_PROVIDER_ID;
 use std::collections::HashMap;
 
@@ -12,6 +13,7 @@ impl Default for AppConfig {
             active_provider: OPENCODE_PROVIDER_ID.to_string(),
             providers: ProviderConfig::default_templates(),
             permission: PermissionConfig::default(),
+            session: SessionConfig::default(),
             notification: crate::config::NotificationConfig::default(),
             context: ContextConfig::default(),
             tools: ToolsConfig::default(),

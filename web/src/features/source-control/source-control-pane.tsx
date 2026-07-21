@@ -332,6 +332,24 @@ export function SourceControlPane() {
    * @param options 提交变体参数
    * @returns 提交是否成功
    */
+  /**
+   * 调用小模型根据当前仓库改动生成提交说明。
+   *
+   * @returns 无
+   */
+  const suggestCommitMessage = async () => {
+    if (suggestingMessage || busy) return;
+    setSuggestingMessage(true);
+    try {
+      const result = await api.workspace.suggestCommitMessage(selectedRepoRoot || undefined);
+      if (result.message?.trim()) setMessage(result.message.trim());
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSuggestingMessage(false);
+    }
+  };
+
   const commitChanges = async (options: GitOperationOptions): Promise<boolean> => {
     const result = await runOp("commit", { message, ...options });
     if (!result?.ok) return false;
@@ -528,6 +546,9 @@ export function SourceControlPane() {
               untrackedChanges={git.untracked_changes}
               onMessageChange={setMessage}
               onCommit={commitChanges}
+              allowSuggestMessage={git.auto_commit_message_enabled !== false}
+              suggestingMessage={suggestingMessage}
+              onSuggestMessage={() => void suggestCommitMessage()}
             />
 
             <div className="git-diff-mode">

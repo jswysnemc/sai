@@ -139,6 +139,10 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/workspace/git/diff", get(git_review_diff))
         .route("/api/workspace/git/file-diff", get(git_file_diff))
         .route("/api/workspace/git/op", axum::routing::post(git_op))
+        .route(
+            "/api/workspace/git/suggest-commit-message",
+            axum::routing::post(suggest_commit_message),
+        )
 }
 
 /// 批量读取当前工作区多个仓库的完整状态。
@@ -468,6 +472,43 @@ async fn git_op(
     .await
     .map_err(|error| WebError::bad_request(error.to_string()))?;
     Ok(Json(result))
+}
+
+
+/// 使用小模型根据仓库改动生成 Conventional Commits 说明。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `request`: 可选仓库根目录
+///
+/// 返回:
+/// - 生成的提交说明
+async fn suggest_commit_message(
+    State(state): State<WebAppState>,
+    Json(request): Json<GitRepositoryQuery>,
+) -> WebResult<Json<serde_json::Value>> {
+    let config = crate::config::AppConfig::load_or_default(&state.paths).map_err(WebError::from)?;
+    if !config.git.auto_commit_message_enabled {
+        return Err(WebError::bad_request(
+            "git.auto_commit_message_enabled is false".to_string(),
+        ));
+    }
+    let root = request_repository_root(&state, request.repo_root.as_deref()).await?;
+    let (status, diff) = crate::assistants::collect_repo_change_summary(&root)
+        .await
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    if status.trim().is_empty() && diff.trim().is_empty() {
+        return Err(WebError::bad_request("no repository changes to summarize"));
+    }
+    let client = crate::assistants::resolve_commit_message_client(&config, &state.paths)
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    let message = crate::assistants::generate_commit_message(&client, &status, &diff)
+        .await
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    if message.trim().is_empty() {
+        return Err(WebError::bad_request("model returned empty commit message"));
+    }
+    Ok(Json(serde_json::json!({ "message": message })))
 }
 
 /// 解析并校验请求使用的仓库工作目录。

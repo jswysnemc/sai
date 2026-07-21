@@ -18,7 +18,12 @@ pub fn register(registry: &mut ToolRegistry, config: AppConfig, paths: SaiPaths)
             "type": "object",
             "properties": {
                 "content": { "type": "string", "description": t("The concise fact or knowledge point to remember.", "要记住的简洁事实或知识点。") },
-                "source": { "type": "string", "description": t("Optional source label.", "可选来源标签。") }
+                "source": { "type": "string", "description": t("Optional source label.", "可选来源标签。") },
+                "tags": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": t("Optional retrieval tags, e.g. niri, input-method.", "可选检索标签，例如 niri、input-method。")
+                }
             },
             "required": ["content"],
             "additionalProperties": false
@@ -91,7 +96,12 @@ pub fn register_readonly(registry: &mut ToolRegistry, config: AppConfig, paths: 
             "properties": {
                 "query": { "type": "string", "description": t("Search keywords or question.", "搜索关键词或问题。") },
                 "max_results": { "type": "integer", "description": t("Optional result limit.", "可选结果数量限制。") },
-                "include_forgotten": { "type": "boolean", "description": t("Whether to include forgotten memories.", "是否包含已遗忘记忆。") }
+                "include_forgotten": { "type": "boolean", "description": t("Whether to include forgotten memories.", "是否包含已遗忘记忆。") },
+                "tags": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": t("Optional tags to bias or filter memory search.", "可选标签，用于偏置或过滤记忆检索。")
+                }
             },
             "required": ["query"],
             "additionalProperties": false
@@ -130,9 +140,22 @@ async fn remember_fact(args: Value, config: AppConfig, paths: SaiPaths) -> Resul
         .get("source")
         .and_then(Value::as_str)
         .unwrap_or("conversation");
+    let tags = args
+        .get("tags")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
     let store = MemoryStore::new(&config, &paths);
-    let id = store.remember_fact(content, source)?;
-    Ok(json!({ "ok": true, "id": id }).to_string())
+    let id = store.remember_fact_with_tags(content, source, &tags)?;
+    Ok(json!({ "ok": true, "id": id, "tags": tags }).to_string())
 }
 
 async fn recall_memories(args: Value, config: AppConfig, paths: SaiPaths) -> Result<String> {
@@ -142,9 +165,27 @@ async fn recall_memories(args: Value, config: AppConfig, paths: SaiPaths) -> Res
         .get("include_forgotten")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let tag_query = args
+        .get("tags")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .unwrap_or_default();
+    let effective_query = if tag_query.is_empty() {
+        query.to_string()
+    } else {
+        format!("{query} {tag_query}")
+    };
     let store = MemoryStore::new(&config, &paths);
     Ok(store
-        .recall_memories_readonly(query, limit, include_forgotten)?
+        .recall_memories_readonly(&effective_query, limit, include_forgotten)?
         .to_string())
 }
 

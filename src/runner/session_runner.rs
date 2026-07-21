@@ -212,6 +212,7 @@ impl<'paths> SessionRunner<'paths> {
             sink.on_runner_event(RunnerEvent::FinalSummary(snapshot))?;
             perf.mark("final summary event");
         }
+        try_auto_title_session(self.paths, &config, &state, &input, &result.content).await;
         Ok(result)
     }
 
@@ -273,6 +274,7 @@ impl<'paths> SessionRunner<'paths> {
             sink.on_runner_event(RunnerEvent::FinalSummary(snapshot))?;
             perf.mark("final summary event");
         }
+        try_auto_title_session(self.paths, &config, agent.state(), &input, &result.content).await;
         Ok(result)
     }
 
@@ -727,4 +729,45 @@ mod tests {
 
         assert_eq!(owner_kind, "command_mode");
     }
+}
+
+
+/// 会话仍为默认/启发式标题时，调用小模型生成标题。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+/// - `config`: 应用配置
+/// - `state`: 会话状态
+/// - `input`: 用户输入
+/// - `assistant_preview`: 助手回复预览
+async fn try_auto_title_session(
+    paths: &SaiPaths,
+    config: &AppConfig,
+    state: &StateStore,
+    input: &UserInputSubmission,
+    assistant_preview: &str,
+) {
+    if input.automatic_input.is_some() {
+        return;
+    }
+    let user_message = input.input.trim();
+    if user_message.is_empty() {
+        return;
+    }
+    let session_id = state.session_id().to_string();
+    let Ok(sessions) = crate::state::list_sessions(paths) else {
+        return;
+    };
+    let Some(session) = sessions.iter().find(|item| item.id == session_id) else {
+        return;
+    };
+    let _ = crate::assistants::maybe_auto_title_session(
+        paths,
+        config,
+        &session_id,
+        &session.title,
+        user_message,
+        Some(assistant_preview),
+    )
+    .await;
 }

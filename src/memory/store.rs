@@ -39,6 +39,7 @@ pub struct MemoryHit {
     pub score: f32,
     pub timestamp: String,
     pub source: String,
+    pub tags: Vec<String>,
 }
 
 impl MemoryStore {
@@ -155,6 +156,24 @@ impl MemoryStore {
     }
 
     pub fn remember_fact(&self, content: &str, source: &str) -> Result<i64> {
+        self.remember_fact_with_tags(content, source, &[])
+    }
+
+    /// 保存带标签的长期事实。
+    ///
+    /// 参数:
+    /// - `content`: 事实正文
+    /// - `source`: 来源标签
+    /// - `tags`: 检索标签
+    ///
+    /// 返回:
+    /// - 事实 ID
+    pub fn remember_fact_with_tags(
+        &self,
+        content: &str,
+        source: &str,
+        tags: &[String],
+    ) -> Result<i64> {
         if !self.config.enabled || content.trim().is_empty() {
             return Ok(0);
         }
@@ -163,12 +182,19 @@ impl MemoryStore {
         let ts = now();
         let content = content.trim();
         let source = source.trim();
+        let tags_text = normalize_tags(tags);
         conn.execute(
-            "INSERT INTO facts (content, source, status, confidence, strength, recall_count, created_at, updated_at) VALUES (?1, ?2, 'active', 1.0, 1.0, 0, ?3, ?3)",
-            params![content, source, ts],
+            "INSERT INTO facts (content, source, status, confidence, strength, recall_count, created_at, updated_at, tags) VALUES (?1, ?2, 'active', 1.0, 1.0, 0, ?3, ?3, ?4)",
+            params![content, source, ts, tags_text],
         )?;
         let id = conn.last_insert_rowid();
-        fts_upsert_row(&conn, "facts", id, content)?;
+        // FTS 同步写入标签，便于按标签检索
+        let fts_body = if tags_text.is_empty() {
+            content.to_string()
+        } else {
+            format!("{content}\n{tags_text}")
+        };
+        fts_upsert_row(&conn, "facts", id, &fts_body)?;
         write_memory_markdown(
             &self.files_dir,
             "facts",
@@ -180,6 +206,7 @@ impl MemoryStore {
             1.0,
             &ts,
             &ts,
+            &tags_text,
         )?;
         Ok(id)
     }
@@ -214,10 +241,11 @@ impl MemoryStore {
         let mut facts = Vec::new();
         {
             let mut stmt = data.prepare(
-                "SELECT id, content, source, status, confidence, strength, recall_count, created_at, updated_at
+                "SELECT id, content, source, status, confidence, strength, recall_count, created_at, updated_at, tags
                  FROM facts ORDER BY updated_at DESC LIMIT ?1",
             )?;
             let rows = stmt.query_map(params![limit], |row| {
+                let tags_raw: String = row.get::<_, String>(9).unwrap_or_default();
                 Ok(json!({
                     "id": row.get::<_, i64>(0)?,
                     "kind": "fact",
@@ -229,6 +257,7 @@ impl MemoryStore {
                     "recall_count": row.get::<_, i64>(6).unwrap_or(0),
                     "created_at": row.get::<_, String>(7)?,
                     "updated_at": row.get::<_, String>(8)?,
+                    "tags": split_tags(&tags_raw),
                 }))
             })?;
             for row in rows {
@@ -373,6 +402,7 @@ impl MemoryStore {
                 1.0,
                 &created_at,
                 &created_at,
+                "",
             )?;
             conn.execute(
                 "UPDATE pending_events SET processed_at=?1 WHERE id=?2",
@@ -543,9 +573,16 @@ impl MemoryStore {
         }
         // Keyword fallback keeps recall working when FTS returns nothing (short tokens, etc.).
         if hits.is_empty() {
-            let sql = format!(
-                "SELECT id, content, source, status, created_at FROM {table} ORDER BY updated_at DESC LIMIT 1000"
-            );
+            let has_tags = table == "facts";
+            let sql = if has_tags {
+                format!(
+                    "SELECT id, content, source, status, created_at, tags FROM {table} ORDER BY updated_at DESC LIMIT 1000"
+                )
+            } else {
+                format!(
+                    "SELECT id, content, source, status, created_at, '' as tags FROM {table} ORDER BY updated_at DESC LIMIT 1000"
+                )
+            };
             let mut stmt = conn.prepare(&sql)?;
             let rows = stmt.query_map([], |row| {
                 Ok((
@@ -554,14 +591,27 @@ impl MemoryStore {
                     row.get::<_, String>(2)?,
                     row.get::<_, String>(3)?,
                     row.get::<_, String>(4)?,
+                    row.get::<_, String>(5).unwrap_or_default(),
                 ))
             })?;
             for row in rows {
-                let (id, content, source, status, timestamp) = row?;
+                let (id, content, source, status, timestamp, tags_raw) = row?;
                 if !include_forgotten && status == "forgotten" {
                     continue;
                 }
-                let score = score_text(&content, &tokens);
+                let tags = split_tags(&tags_raw);
+                let searchable = if tags_raw.is_empty() {
+                    content.clone()
+                } else {
+                    format!("{content} {tags_raw}")
+                };
+                let mut score = score_text(&searchable, &tokens);
+                // 标签精确匹配加权
+                for token in &tokens {
+                    if tags.iter().any(|tag| tag.eq_ignore_ascii_case(token)) {
+                        score += 25.0;
+                    }
+                }
                 if score <= 0.0 {
                     continue;
                 }
@@ -571,6 +621,7 @@ impl MemoryStore {
                     score,
                     timestamp,
                     source,
+                    tags,
                 });
             }
         }
@@ -599,8 +650,9 @@ impl MemoryStore {
         };
         let mut seen = HashSet::new();
         for fts_table in tables {
+            let tags_expr = if table == "facts" { "m.tags" } else { "''" };
             let sql = format!(
-                "SELECT m.id, m.content, m.source, m.status, m.created_at, bm25({fts_table}) AS rank
+                "SELECT m.id, m.content, m.source, m.status, m.created_at, bm25({fts_table}) AS rank, {tags_expr}
                  FROM {fts_table}
                  JOIN {table} m ON m.id = {fts_table}.rowid
                  WHERE {fts_table} MATCH ?1
@@ -618,13 +670,14 @@ impl MemoryStore {
                     row.get::<_, String>(3)?,
                     row.get::<_, String>(4)?,
                     row.get::<_, f64>(5).unwrap_or(0.0),
+                    row.get::<_, String>(6).unwrap_or_default(),
                 ))
             });
             let Ok(rows) = rows else {
                 continue;
             };
             for row in rows {
-                let (id, content, source, status, timestamp, rank) = row?;
+                let (id, content, source, status, timestamp, rank, tags_raw) = row?;
                 if !include_forgotten && status == "forgotten" {
                     continue;
                 }
@@ -632,13 +685,20 @@ impl MemoryStore {
                     continue;
                 }
                 // bm25 is lower-is-better; invert into a positive score.
-                let score = 100.0 / (1.0 + rank.max(0.0) as f32);
+                let mut score = 100.0 / (1.0 + rank.max(0.0) as f32);
+                let tags = split_tags(&tags_raw);
+                for tag in &tags {
+                    if fts_match.to_ascii_lowercase().contains(&tag.to_ascii_lowercase()) {
+                        score += 15.0;
+                    }
+                }
                 hits.push(MemoryHit {
                     id,
                     content,
                     score,
                     timestamp,
                     source,
+                    tags,
                 });
             }
         }
@@ -650,9 +710,9 @@ impl MemoryStore {
         let conn = self.data_conn()?;
         for table in ["facts", "episodes"] {
             let sql = if table == "facts" {
-                "SELECT id, content, source, status, confidence, strength, created_at, updated_at FROM facts"
+                "SELECT id, content, source, status, confidence, strength, created_at, updated_at, tags FROM facts"
             } else {
-                "SELECT id, content, source, status, 1.0, strength, created_at, updated_at FROM episodes"
+                "SELECT id, content, source, status, 1.0, strength, created_at, updated_at, '' FROM episodes"
             };
             let mut stmt = conn.prepare(sql)?;
             let rows = stmt.query_map([], |row| {
@@ -665,11 +725,21 @@ impl MemoryStore {
                     row.get::<_, f64>(5).unwrap_or(1.0),
                     row.get::<_, String>(6)?,
                     row.get::<_, String>(7)?,
+                    row.get::<_, String>(8).unwrap_or_default(),
                 ))
             })?;
             for row in rows {
-                let (id, content, source, status, confidence, strength, created_at, updated_at) =
-                    row?;
+                let (
+                    id,
+                    content,
+                    source,
+                    status,
+                    confidence,
+                    strength,
+                    created_at,
+                    updated_at,
+                    tags_raw,
+                ) = row?;
                 let path = self.files_dir.join(table).join(format!("{id}.md"));
                 if !path.is_file() {
                     write_memory_markdown(
@@ -687,6 +757,7 @@ impl MemoryStore {
                         strength,
                         &created_at,
                         &updated_at,
+                        &tags_raw,
                     )?;
                 }
             }

@@ -1,10 +1,14 @@
 import { GitBranch, ShieldCheck } from "lucide-react";
 import type { AppConfig, GitConfig, ScmConfig } from "../../../api/contracts";
+import { Select } from "../../../shared/ui/select/select";
+import { buildChatModelChoices } from "../../chat/chat-model-options";
 import { EditorHeader, SettingsGroup } from "../editor-layout";
 import { useI18n } from "../../i18n/use-i18n";
 import { DEFAULT_GIT_CONFIG, DEFAULT_SCM_CONFIG } from "../../source-control/state/use-git-settings";
 import { GitSettingNumber, GitSettingSelect, GitSettingToggle } from "./git-settings-fields";
 import "./git-settings-panel.css";
+
+const SESSION_MODEL_VALUE = "";
 
 type GitSettingsPanelProps = {
   config: AppConfig;
@@ -41,6 +45,23 @@ export function GitSettingsPanel(props: GitSettingsPanelProps) {
   const updateGit = (patch: Partial<GitConfig>) => {
     props.onConfigChange({ ...props.config, git: { ...git, ...patch } });
   };
+
+  const commitProvider = git.auto_commit_message_provider_id ?? "";
+  const commitModel = git.auto_commit_message_model ?? "";
+  const commitModelValue =
+    commitProvider && commitModel ? `${commitProvider}\u0000${commitModel}` : SESSION_MODEL_VALUE;
+  const commitModelOptions = [
+    {
+      value: SESSION_MODEL_VALUE,
+      label: t("Active model", "当前模型"),
+      description: t("Use the currently active provider model.", "使用当前活动供应商模型。")
+    },
+    ...buildChatModelChoices(props.config).map((choice) => ({
+      value: `${choice.providerId}\u0000${choice.model}`,
+      label: `${choice.providerName} / ${choice.model}`,
+      description: t("Always use this model for commit messages", "始终使用该模型生成提交说明")
+    }))
+  ];
 
   return (
     <div className="settings-editor git-settings-panel">
@@ -115,6 +136,30 @@ export function GitSettingsPanel(props: GitSettingsPanelProps) {
             checked={git.branch_random_name.enable}
             onChange={(value) => updateGit({ branch_random_name: { enable: value } })}
           />
+          <GitSettingToggle
+            label={t("AI commit message", "AI 提交说明")}
+            description="git.auto_commit_message_enabled"
+            checked={git.auto_commit_message_enabled ?? true}
+            onChange={(value) => updateGit({ auto_commit_message_enabled: value })}
+          />
+          <label className="settings-field full">
+            <span>{t("Commit message model", "提交说明模型")}</span>
+            <Select
+              value={commitModelValue}
+              options={commitModelOptions}
+              onChange={(value) => {
+                const [providerId = "", model = ""] = value ? value.split("\u0000", 2) : [];
+                updateGit({
+                  auto_commit_message_provider_id: providerId || "",
+                  auto_commit_message_model: model || ""
+                });
+              }}
+              ariaLabel={t("Commit message model", "提交说明模型")}
+              menuPreferredWidth={360}
+              menuMinimumWidth={280}
+            />
+            <small>git.auto_commit_message_provider_id / git.auto_commit_message_model</small>
+          </label>
         </div>
       </SettingsGroup>
       <SettingsGroup title={t("Safety confirmations", "安全确认")} description={t("Keep explicit confirmation around remote rewriting, sync, and empty commits.", "为远端改写、同步和空提交保留明确确认。")}>

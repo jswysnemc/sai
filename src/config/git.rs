@@ -26,6 +26,15 @@ pub struct GitConfig {
     pub detect_worktrees_limit: usize,
     pub autofetch: bool,
     pub branch_random_name: GitBranchRandomNameConfig,
+    /// 是否启用 AI 生成提交说明。
+    #[serde(default = "default_true")]
+    pub auto_commit_message_enabled: bool,
+    /// 提交说明生成专用供应商；空则使用当前活动供应商。
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub auto_commit_message_provider_id: String,
+    /// 提交说明生成专用模型；空则使用当前活动模型。
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub auto_commit_message_model: String,
 }
 
 /// 新建分支名称建议配置。
@@ -71,6 +80,12 @@ struct RawGitConfig {
     autofetch: bool,
     #[serde(default)]
     branch_random_name: GitBranchRandomNameConfig,
+    #[serde(default = "default_true")]
+    auto_commit_message_enabled: bool,
+    #[serde(default)]
+    auto_commit_message_provider_id: String,
+    #[serde(default)]
+    auto_commit_message_model: String,
 }
 
 impl Default for ScmConfig {
@@ -98,6 +113,9 @@ impl Default for GitConfig {
             detect_worktrees_limit: DEFAULT_WORKTREE_LIMIT,
             autofetch: false,
             branch_random_name: GitBranchRandomNameConfig::default(),
+            auto_commit_message_enabled: true,
+            auto_commit_message_provider_id: String::new(),
+            auto_commit_message_model: String::new(),
         }
     }
 }
@@ -137,6 +155,9 @@ impl<'de> Deserialize<'de> for GitConfig {
             detect_worktrees_limit: raw.detect_worktrees_limit,
             autofetch: raw.autofetch,
             branch_random_name: raw.branch_random_name,
+            auto_commit_message_enabled: raw.auto_commit_message_enabled,
+            auto_commit_message_provider_id: raw.auto_commit_message_provider_id,
+            auto_commit_message_model: raw.auto_commit_message_model,
         };
         config.validate().map_err(D::Error::custom)?;
         Ok(config)

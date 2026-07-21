@@ -43,6 +43,7 @@ fn init_data_db(conn: &Connection) -> Result<()> {
     )?;
     add_column_if_missing(conn, "facts", "strength", "REAL NOT NULL DEFAULT 1.0")?;
     add_column_if_missing(conn, "facts", "last_decay_at", "TEXT")?;
+    add_column_if_missing(conn, "facts", "tags", "TEXT NOT NULL DEFAULT ''")?;
     add_column_if_missing(conn, "episodes", "strength", "REAL NOT NULL DEFAULT 1.0")?;
     add_column_if_missing(conn, "episodes", "last_decay_at", "TEXT")?;
     ensure_fts(conn)?;
@@ -115,6 +116,7 @@ fn write_memory_markdown(
     strength: f64,
     created_at: &str,
     updated_at: &str,
+    tags: &str,
 ) -> Result<PathBuf> {
     let dir = files_dir.join(kind);
     std::fs::create_dir_all(&dir)?;
@@ -122,12 +124,40 @@ fn write_memory_markdown(
     let conf = confidence
         .map(|value| format!("{value}"))
         .unwrap_or_else(|| "1.0".to_string());
+    let tags = tags.trim();
     let body = format!(
-        "---\nid: {id}\nkind: {kind}\nsource: {source}\nstatus: {status}\nconfidence: {conf}\nstrength: {strength}\ncreated_at: {created_at}\nupdated_at: {updated_at}\n---\n\n{content}\n"
+        "---\nid: {id}\nkind: {kind}\nsource: {source}\nstatus: {status}\nconfidence: {conf}\nstrength: {strength}\ntags: {tags}\ncreated_at: {created_at}\nupdated_at: {updated_at}\n---\n\n{content}\n"
     );
     std::fs::write(&path, body)?;
     Ok(path)
 }
+
+/// 规范化标签列表为逗号分隔小写串。
+fn normalize_tags(tags: &[String]) -> String {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut out = Vec::new();
+    for tag in tags {
+        let value = tag
+            .trim()
+            .trim_start_matches('#')
+            .to_ascii_lowercase();
+        if value.is_empty() || !seen.insert(value.clone()) {
+            continue;
+        }
+        out.push(value);
+    }
+    out.join(",")
+}
+
+/// 将标签文本拆成列表。
+fn split_tags(raw: &str) -> Vec<String> {
+    raw.split(|ch: char| ch == ',' || ch == ';' || ch.is_whitespace())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.trim_start_matches('#').to_string())
+        .collect()
+}
+
 
 fn delete_memory_markdown(files_dir: &PathBuf, kind: &str, id: i64) -> Result<()> {
     let path = files_dir.join(kind).join(format!("{id}.md"));
@@ -261,6 +291,7 @@ fn memory_hit_json(hit: &MemoryHit) -> Value {
         "score": hit.score,
         "source": hit.source,
         "content": hit.content,
+        "tags": hit.tags,
     })
 }
 

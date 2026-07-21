@@ -1,4 +1,5 @@
 mod agent;
+mod assistants;
 mod alarm;
 mod reply_notify;
 mod cli;

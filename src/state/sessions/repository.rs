@@ -11,6 +11,19 @@ mod metadata;
 use metadata::{new_session_id, title_from_message};
 pub(super) use metadata::{sanitize_session_id, sort_sessions};
 
+/// 从用户消息生成会话标题（供自动命名失败时回退）。
+///
+/// 参数:
+/// - `message`: 用户消息
+/// - `fallback`: 默认标题
+///
+/// 返回:
+/// - 会话标题
+pub fn title_from_message_public(message: &str, fallback: &str) -> String {
+    title_from_message(message, fallback)
+}
+
+
 /// 创建新会话并设为当前会话。
 ///
 /// 参数:

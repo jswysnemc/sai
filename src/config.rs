@@ -11,6 +11,7 @@ mod model_units;
 mod paths;
 mod notification;
 mod permission;
+mod session;
 mod provider;
 mod secrets;
 
@@ -27,4 +28,6 @@ pub use model::*;
 pub use model_metadata::*;
 pub use model_units::*;
 pub use notification::*;
+#[allow(unused_imports)]
+pub use session::SessionConfig;
 pub use permission::*;

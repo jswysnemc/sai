@@ -140,4 +140,23 @@ mod tests {
             .to_string()
             .contains("旧上下文"));
     }
+    #[test]
+    fn remembers_fact_with_tags_and_recalls_by_tag() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = AppConfig::default();
+        let paths = test_paths(&temp);
+        let store = MemoryStore::new(&config, &paths);
+        let id = store
+            .remember_fact_with_tags(
+                "Niri 输入法需要 XMODIFIERS",
+                "test",
+                &["niri".into(), "input-method".into()],
+            )
+            .unwrap();
+        assert!(id > 0);
+        let recalled = store.recall_memories("niri", 5, false).unwrap();
+        let text = recalled.to_string();
+        assert!(text.contains("XMODIFIERS"));
+        assert!(text.contains("niri") || text.contains("input-method") || text.contains("XMODIFIERS"));
+    }
 }

@@ -1,4 +1,4 @@
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { GitOperationOptions } from "../../../api/git-contracts";
 import { Button } from "../../../shared/ui/button/button";
@@ -22,6 +22,12 @@ type CommitControlProps = {
   untrackedChanges: "mixed" | "separate" | "hidden";
   onMessageChange: (message: string) => void;
   onCommit: (options: GitOperationOptions) => Promise<boolean>;
+  /** 是否允许 AI 生成提交说明 */
+  allowSuggestMessage?: boolean;
+  /** AI 生成中 */
+  suggestingMessage?: boolean;
+  /** 点击生成提交说明 */
+  onSuggestMessage?: () => void;
 };
 
 type CommitChoice = {
@@ -149,6 +155,20 @@ export function CommitControl(props: CommitControlProps) {
         onKeyDown={handleKeyDown}
         placeholder={t("Message (Ctrl+Enter to commit)", "提交说明（Ctrl+Enter 提交）")}
       />
+      {props.allowSuggestMessage && props.onSuggestMessage && (
+        <div className="git-commit-suggest-row">
+          <Button
+            className="git-commit-suggest"
+            onClick={props.onSuggestMessage}
+            disabled={props.busy || props.suggestingMessage || hasConflicts}
+          >
+            <Sparkles size={12} />
+            {props.suggestingMessage
+              ? t("Generating…", "生成中…")
+              : t("Generate commit message", "生成提交说明")}
+          </Button>
+        </div>
+      )}
       {props.showActionButton && <div className="git-commit-actions">
         <Button
           variant="primary"

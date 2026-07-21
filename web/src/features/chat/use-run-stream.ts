@@ -30,6 +30,7 @@ const EVENT_TYPES = [
   "compaction.finished",
   "loaded_tools.changed",
   "session.summary",
+  "session.renamed",
   "run.completed",
   "run.interrupted",
   "run.failed"
@@ -224,7 +225,17 @@ export function useRunStream(
           if (event.type === "session.summary" || event.type === "run.completed") {
             void queryClient.invalidateQueries({ queryKey: ["system-usage"] });
           }
+          if (event.type === "session.renamed") {
+            void Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["sessions"] }),
+              queryClient.invalidateQueries({ queryKey: ["session-tree"] })
+            ]);
+          }
           if (["run.completed", "run.interrupted", "run.failed"].includes(event.type)) {
+            void Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["sessions"] }),
+              queryClient.invalidateQueries({ queryKey: ["session-tree"] })
+            ]);
             const response = queryClient.getQueryData(["config"]) as { config?: AppConfig } | undefined;
             const body =
               event.type === "run.interrupted"

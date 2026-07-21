@@ -4,6 +4,7 @@ use super::git::{GitConfig, ScmConfig};
 use super::model_metadata::ModelMetadata;
 use super::notification::NotificationConfig;
 use super::permission::PermissionConfig;
+use super::session::SessionConfig;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
@@ -13,6 +14,8 @@ pub struct AppConfig {
     pub providers: Vec<ProviderConfig>,
     #[serde(default)]
     pub permission: PermissionConfig,
+    #[serde(default)]
+    pub session: SessionConfig,
     #[serde(default)]
     pub notification: NotificationConfig,
     #[serde(default)]

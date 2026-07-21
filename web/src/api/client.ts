@@ -361,6 +361,11 @@ export const api = {
       apiRequest<GitOperationResponse>("/api/workspace/git/op", {
         method: "POST",
         body: JSON.stringify({ action, ...options })
+      }),
+    suggestCommitMessage: (repoRoot?: string) =>
+      apiRequest<{ message: string }>("/api/workspace/git/suggest-commit-message", {
+        method: "POST",
+        body: JSON.stringify({ repo_root: repoRoot })
       })
   },
   config: {

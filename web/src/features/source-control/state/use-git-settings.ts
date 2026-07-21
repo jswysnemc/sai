@@ -20,7 +20,10 @@ export const DEFAULT_GIT_CONFIG: GitConfig = {
   detect_worktrees: true,
   detect_worktrees_limit: 10,
   autofetch: false,
-  branch_random_name: { enable: false }
+  branch_random_name: { enable: false },
+  auto_commit_message_enabled: true,
+  auto_commit_message_provider_id: "",
+  auto_commit_message_model: ""
 };
 
 /**

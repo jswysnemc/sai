@@ -27,6 +27,11 @@ export function PermissionDefaultSettings({ config, onConfigChange }: Permission
   const autoModel = config.permission?.auto_audit_model ?? "";
   const autoAuditValue =
     autoProvider && autoModel ? encodeModelChoice(autoProvider, autoModel) : SESSION_MODEL_VALUE;
+  const titleProvider = config.session?.auto_title_provider_id ?? "";
+  const titleModel = config.session?.auto_title_model ?? "";
+  const autoTitleValue =
+    titleProvider && titleModel ? encodeModelChoice(titleProvider, titleModel) : SESSION_MODEL_VALUE;
+  const autoTitleEnabled = config.session?.auto_title_enabled ?? true;
   const autoAuditOptions = [
     {
       value: SESSION_MODEL_VALUE,
@@ -93,6 +98,32 @@ export function PermissionDefaultSettings({ config, onConfigChange }: Permission
     });
   };
 
+  /**
+   * 更新会话自动标题配置。
+   *
+   * @param patch 会话配置局部更新
+   */
+  const patchSession = (patch: Partial<NonNullable<AppConfig["session"]>>) => {
+    onConfigChange({
+      ...config,
+      session: {
+        auto_title_enabled: config.session?.auto_title_enabled ?? true,
+        auto_title_provider_id: config.session?.auto_title_provider_id,
+        auto_title_model: config.session?.auto_title_model,
+        ...patch
+      }
+    });
+  };
+
+  /** 更新自动标题模型。 */
+  const updateAutoTitleModel = (value: string) => {
+    const [providerId = "", model = ""] = value ? value.split("\u0000", 2) : [];
+    patchSession({
+      auto_title_provider_id: providerId || undefined,
+      auto_title_model: model || undefined
+    });
+  };
+
   return (
     <>
       <SettingsGroup title={t("Default permissions", "默认权限")} description={t("TUI and CLI can use separate default permission modes; command-line options can still override them temporarily.", "TUI 与 CLI 可分别配置默认权限模式；命令行参数仍可临时覆盖。")}>
@@ -122,6 +153,45 @@ export function PermissionDefaultSettings({ config, onConfigChange }: Permission
               menuMinimumWidth={280}
             />
             <small>{t("An empty value follows the current conversation model.", "留空时自动跟随当前会话模型。")}</small>
+          </label>
+        </div>
+      </SettingsGroup>
+      <SettingsGroup title={t("Session title", "会话标题")} description={t("Automatically name a new session once after the first reply. Manual renames are kept.", "新建会话在首次回复后自动命名一次；手动重命名后不再覆盖。")}>
+        <div className="settings-form-grid">
+          <label className="settings-field">
+            <span>{t("Auto title on first turn", "首轮自动标题")}</span>
+            <Select
+              value={autoTitleEnabled ? "on" : "off"}
+              options={[
+                { value: "on", label: t("Enabled", "启用") },
+                { value: "off", label: t("Disabled", "关闭") }
+              ]}
+              onChange={(value) => patchSession({ auto_title_enabled: value === "on" })}
+              ariaLabel={t("Auto title on first turn", "首轮自动标题")}
+            />
+          </label>
+          <label className="settings-field full">
+            <span>{t("Title model", "标题模型")}</span>
+            <Select
+              value={autoTitleValue}
+              options={[
+                {
+                  value: SESSION_MODEL_VALUE,
+                  label: t("Session model", "会话模型"),
+                  description: t("Reuse the conversation model for title summarization.", "标题总结复用当前会话模型。")
+                },
+                ...buildChatModelChoices(config).map((choice) => ({
+                  value: encodeModelChoice(choice.providerId, choice.model),
+                  label: `${choice.providerName} / ${choice.model}`,
+                  description: t("Always use this model for session titles", "始终使用该模型生成会话标题")
+                }))
+              ]}
+              onChange={updateAutoTitleModel}
+              ariaLabel={t("Title model", "标题模型")}
+              menuPreferredWidth={360}
+              menuMinimumWidth={280}
+            />
+            <small>{t("Leave empty to reuse the current conversation model.", "留空则沿用当前会话模型。")}</small>
           </label>
         </div>
       </SettingsGroup>

@@ -8,6 +8,12 @@ export type PermissionConfig = {
   auto_audit_model?: string;
 };
 
+export type SessionConfig = {
+  auto_title_enabled?: boolean;
+  auto_title_provider_id?: string;
+  auto_title_model?: string;
+};
+
 export type NotificationConfig = {
   enabled: boolean;
   sound: boolean;
@@ -557,12 +563,16 @@ export type GitConfig = {
   branch_random_name: {
     enable: boolean;
   };
+  auto_commit_message_enabled?: boolean;
+  auto_commit_message_provider_id?: string;
+  auto_commit_message_model?: string;
 };
 
 export type AppConfig = {
   active_provider: string;
   providers: ProviderConfig[];
   permission?: PermissionConfig;
+  session?: SessionConfig;
   notification?: NotificationConfig;
   gateways: GatewayConfig;
   agents?: AgentProfileConfig[];
