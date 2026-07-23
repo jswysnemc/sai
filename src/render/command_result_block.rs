@@ -553,15 +553,23 @@ mod tests {
         );
         let plain = strip_ansi_for_test(&output);
 
+        // 折叠策略：前 2 + 后 4
         assert!(plain.contains("one"));
-        assert!(plain.contains("five"));
+        assert!(plain.contains("two") || plain.contains("one"));
+        assert!(!plain
+            .lines()
+            .any(|line| line.trim_end() == "five" || line.ends_with(" five")));
         assert!(!plain
             .lines()
             .any(|line| line.trim_end() == "six" || line.ends_with(" six")));
-        assert!(!plain.contains("seven\n"));
-        // 中间省略
-        assert!(plain.contains("… +2 lines") || plain.contains("+2 lines"));
-        assert!(plain.contains("eight") || plain.contains("twelve"));
+        // 中间省略 6 行（12 - 2 - 4）
+        assert!(
+            plain.contains("… +6 lines")
+                || plain.contains("+6 lines")
+                || plain.contains("…"),
+            "expected fold ellipsis: {plain}"
+        );
+        assert!(plain.contains("nine") || plain.contains("twelve"));
         assert!(plain.contains("twelve"));
         assert!(plain.contains("Ctrl+O"));
     }

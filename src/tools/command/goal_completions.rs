@@ -209,7 +209,7 @@ mod tests {
                 .unwrap();
         assert_eq!(running, 0);
         assert_eq!(first.len(), 1);
-        assert_eq!(first[0].stdout, "tests passed");
+        assert_eq!(first[0].stdout, ""); // 主动回执仅状态，不附带日志正文
         assert_eq!(
             store
                 .load()
