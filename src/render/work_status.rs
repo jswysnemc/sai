@@ -60,67 +60,57 @@ impl WorkStatus {
         }
     }
 
-    /// 返回本地化状态文案。
+    /// 返回动效状态文案（固定英文短词，界面语言不影响）。
     ///
     /// 返回:
-    /// - 中英文状态短语
+    /// - 英文状态短语
     pub(crate) fn localized_label(self) -> &'static str {
-        use crate::render::terminal_text as t;
         match self {
-            Self::WaitingResponse => t("Waiting for model response", "等待模型响应"),
-            Self::WaitingExternal => t("Waiting for background work", "等待后台工作"),
-            Self::Thinking => t("Organizing thoughts", "正在整理思路"),
-            Self::Working => t("Working on the task", "正在执行任务"),
-            Self::Compacting => t("Compacting context", "正在压缩上下文"),
+            Self::WaitingResponse => "waiting",
+            Self::WaitingExternal => "waiting",
+            Self::Thinking => "thinking",
+            Self::Working => "working",
+            Self::Compacting => "compacting",
         }
     }
 
     /// 渲染适合历史区展示的动态状态行。
     ///
-    /// 复用思考中的点跳动动效，仅文案与耗时不同。
+    /// 复用点跳动动效，只展示本轮已工作时长。
     ///
     /// 参数:
     /// - `frame`: 动画帧序号
-    /// - `elapsed`: 当前状态已持续时长
+    /// - `elapsed`: 本轮自首次回应起的已持续时长
     ///
     /// 返回:
     /// - 带 ANSI 样式的状态行
     pub(crate) fn render_line(self, frame: usize, elapsed: Duration) -> String {
         let pulse = STATUS_PULSE_FRAMES[frame % STATUS_PULSE_FRAMES.len()];
         format!(
-            "\x1b[2m\x1b[36m{pulse} {}({})\x1b[0m",
+            "\x1b[2m\x1b[36m{pulse} {} ({})\x1b[0m",
             self.localized_label(),
             format_elapsed(elapsed)
         )
     }
 }
 
-/// 格式化工作时长，用于状态行展示。
+/// 格式化工作时长（固定英文，与 thinking/waiting/working 标签一致）。
 ///
 /// 参数:
 /// - `elapsed`: 已用时长
 ///
 /// 返回:
-/// - 人类可读时长文本
+/// - 如 `12s` / `1m05s` / `1.5s`
 pub(crate) fn format_elapsed(elapsed: Duration) -> String {
-    use crate::i18n::is_zh;
     let total_secs = elapsed.as_secs();
-    if is_zh() {
-        if total_secs < 60 {
-            return format!("{total_secs}秒");
-        }
-        let mins = total_secs / 60;
-        let secs = total_secs % 60;
-        if mins < 60 {
-            return format!("{mins}分{secs}秒");
-        }
-        let hours = mins / 60;
-        let remain_mins = mins % 60;
-        return format!("{hours}小时{remain_mins}分{secs}秒");
-    }
     if total_secs < 60 {
+        // 整秒用 Ns；不足 1s 或需十分位时用 N.Ms
         let tenths = elapsed.as_millis() / 100;
-        format!("{}.{}s", tenths / 10, tenths % 10)
+        if tenths % 10 == 0 {
+            format!("{}s", tenths / 10)
+        } else {
+            format!("{}.{}s", tenths / 10, tenths % 10)
+        }
     } else {
         let mins = total_secs / 60;
         let secs = total_secs % 60;
@@ -157,8 +147,8 @@ mod tests {
     #[test]
     fn working_reuses_thinking_pulse_animation() {
         let line = WorkStatus::Working.render_line(0, Duration::from_millis(1500));
-        assert!(line.contains(WorkStatus::Working.label()) || line.contains("正在执行任务") || line.contains("Working on the task"));
-        assert!(line.contains("1.5s") || line.contains("1秒") || line.contains("("));
+        assert!(line.contains(WorkStatus::Working.localized_label()));
+        assert!(line.contains("1.5s"));
         assert!(line.contains(STATUS_PULSE_FRAMES[0]));
         // 与思考 live 动效同色同款（dim cyan + pulse）
         assert!(line.contains("\x1b[2m\x1b[36m") || line.contains("\x1b[2m") && line.contains("·"));

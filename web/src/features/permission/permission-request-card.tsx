@@ -123,7 +123,7 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
  */
 function actionLabel(tool: string, t: (en: string, zh: string) => string): string {
   if (tool === "run_command" || tool.includes("background_command")) return t("Run command", "执行命令");
-  if (tool === "edit_file" || tool === "apply_patch") return t("Modify file", "修改文件");
+  if (tool === "edit_file") return t("Modify file", "修改文件");
   if (tool === "trash_path") return t("Move to trash", "移入回收站");
   return t("Run tool", "执行工具");
 }

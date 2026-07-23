@@ -2,6 +2,7 @@ use super::auth::QqBotAuthenticator;
 use super::event::{QqBotInboundMediaKind, QqBotMessageEvent};
 use super::inbound_media::{save_inbound_media, saved_image_to_data_url, SavedQqInboundMedia};
 use super::prompt::channel_prompt;
+use super::replay_guard::MessageReplayGuard;
 use crate::agent::AgentMode;
 use crate::cli::build_tool_registry;
 use crate::config::AppConfig;
@@ -32,6 +33,7 @@ pub(crate) struct QqBotProcessor {
     authenticator: Mutex<QqBotAuthenticator>,
     http_client: reqwest::Client,
     agent_lock: Mutex<()>,
+    message_replay_guard: MessageReplayGuard,
 }
 
 impl QqBotProcessor {
@@ -51,6 +53,7 @@ impl QqBotProcessor {
             authenticator: Mutex::new(QqBotAuthenticator::new(config.app_id, config.client_secret)),
             http_client: reqwest::Client::new(),
             agent_lock: Mutex::new(()),
+            message_replay_guard: MessageReplayGuard::default(),
         }
     }
 
@@ -179,6 +182,38 @@ impl QqBotProcessor {
     /// 返回:
     /// - 处理是否成功
     pub(crate) async fn handle_message_event(&self, event: QqBotMessageEvent) -> Result<()> {
+        if !self.message_replay_guard.try_claim(&event.msg_id)? {
+            self.debug_log(format!(
+                "{} msg_id={}",
+                t("duplicate QQ message ignored", "已忽略重复 QQ 消息"),
+                event.msg_id
+            ));
+            return Ok(());
+        }
+        let result = self.process_message_event(&event).await;
+        if result.is_err() {
+            if let Err(err) = self.message_replay_guard.release(&event.msg_id) {
+                self.debug_log(format!(
+                    "{} msg_id={} error={err:#}",
+                    t(
+                        "failed to release QQ message replay guard",
+                        "释放 QQ 消息去重保护失败"
+                    ),
+                    event.msg_id
+                ));
+            }
+        }
+        result
+    }
+
+    /// 执行单条 QQ 消息的实际处理流程。
+    ///
+    /// 参数:
+    /// - `event`: 已通过消息去重检查的 QQ 消息事件
+    ///
+    /// 返回:
+    /// - 处理是否成功
+    async fn process_message_event(&self, event: &QqBotMessageEvent) -> Result<()> {
         let _guard = self.agent_lock.lock().await;
         let context = ChannelContext::qq(
             event.target_kind,

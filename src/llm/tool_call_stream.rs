@@ -285,15 +285,15 @@ mod tests {
     fn tracker_emits_initial_name_and_large_argument_steps() {
         let mut tracker = ToolCallProgressTracker::default();
 
-        let initial = tracker.update(0, "write_file", "").unwrap();
-        assert_eq!(initial.name.as_deref(), Some("write_file"));
+        let initial = tracker.update(0, "edit_file", "").unwrap();
+        assert_eq!(initial.name.as_deref(), Some("edit_file"));
         assert_eq!(initial.arguments_bytes, 0);
         assert_eq!(initial.arguments_preview, "");
 
-        assert!(tracker.update(0, "write_file", "abc").is_none());
+        assert!(tracker.update(0, "edit_file", "abc").is_none());
 
         let large = "x".repeat(PROGRESS_BYTE_STEP);
-        let next = tracker.update(0, "write_file", &large).unwrap();
+        let next = tracker.update(0, "edit_file", &large).unwrap();
         assert_eq!(next.arguments_bytes, PROGRESS_BYTE_STEP);
         assert_eq!(next.arguments_preview.len(), ARGUMENTS_PREVIEW_CHARS);
     }
@@ -302,20 +302,20 @@ mod tests {
     fn tracker_emits_when_target_field_is_complete() {
         let mut tracker = ToolCallProgressTracker::default();
 
-        let initial = tracker.update(0, "write_file", "").unwrap();
-        assert_eq!(initial.name.as_deref(), Some("write_file"));
+        let initial = tracker.update(0, "edit_file", "").unwrap();
+        assert_eq!(initial.name.as_deref(), Some("edit_file"));
 
         let started = tracker
-            .update(0, "write_file", r#"{"path":"src/mai"#)
+            .update(0, "edit_file", r#"{"patch":"*** Begin Pa"#)
             .unwrap();
-        assert_eq!(started.arguments_preview, r#"{"path":"src/mai"#);
+        assert_eq!(started.arguments_preview, r#"{"patch":"*** Begin Pa"#);
 
         let target = tracker
-            .update(0, "write_file", r#"{"path":"src/main.rs","content":""#)
+            .update(0, "edit_file", r#"{"patch":"*** Begin Patch\n*** End Patch","extra":""#)
             .unwrap();
         assert_eq!(
             target.arguments_preview,
-            r#"{"path":"src/main.rs","content":""#
+            r#"{"patch":"*** Begin Patch\n*** End Patch","extra":""#
         );
     }
 

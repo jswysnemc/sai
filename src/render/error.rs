@@ -1,5 +1,5 @@
-use crate::render::terminal_text as t;
 use crate::render::style::{ASSET_ERROR_STYLE, RESET, TOOL_BULLET};
+use crate::render::terminal_text as t;
 use anyhow::{Error, Result};
 use serde_json::Value;
 use std::io::{self, Write};

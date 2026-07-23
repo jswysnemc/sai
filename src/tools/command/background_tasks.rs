@@ -73,6 +73,32 @@ pub(super) fn start_background_task(
     allowed: bool,
     runtime_owner: Option<BackgroundRuntimeOwner>,
 ) -> Result<String> {
+    let task = spawn_managed_task(args, config, paths, allowed, runtime_owner)?;
+    Ok(serde_json::to_string_pretty(&json!({
+        "ok": true,
+        "task": task,
+        "note": "Use background_command with action=list, action=output, action=stop, or action=cleanup to manage this task."
+    }))?)
+}
+
+/// 启动受管理的后台任务并写入状态存储。
+///
+/// 参数:
+/// - `args`: 工具参数
+/// - `config`: 应用配置
+/// - `paths`: Sai 路径
+/// - `allowed`: 是否允许命令执行
+/// - `runtime_owner`: 可选运行时 owner 元数据
+///
+/// 返回:
+/// - 已登记的后台任务
+pub(super) fn spawn_managed_task(
+    args: Value,
+    config: &AppConfig,
+    paths: &SaiPaths,
+    allowed: bool,
+    runtime_owner: Option<BackgroundRuntimeOwner>,
+) -> Result<BackgroundCommandTask> {
     if !allowed {
         bail!("{}", t("command execution is disabled; set skills.allow_command_execution=true in config.jsonc to enable background commands", "命令执行已禁用；请在 config.jsonc 中设置 skills.allow_command_execution=true 以启用后台命令"));
     }
@@ -154,13 +180,10 @@ pub(super) fn start_background_task(
     };
     store.upsert(task.clone())?;
     sync_runtime_task(&state, &task)?;
-    Ok(serde_json::to_string_pretty(&json!({
-        "ok": true,
-        "task": task,
-        "note": "Use background_command with action=list, action=output, action=stop, or action=cleanup to manage this task."
-    }))?)
+Ok(task)
 }
 
+/// 列出后台命令。
 /// 列出后台命令。
 ///
 /// 参数:
@@ -216,11 +239,17 @@ pub(super) async fn read_background_task_output(
         .and_then(Value::as_str)
         .unwrap_or("all")
         .trim();
-    let tail_lines = args
-        .get("tail_lines")
+    // 默认读取前 50 行；可用 max_lines / head_lines / tail_lines 调整
+    let max_lines = args
+        .get("max_lines")
+        .or_else(|| args.get("head_lines"))
+        .or_else(|| args.get("tail_lines"))
         .and_then(Value::as_u64)
-        .unwrap_or(200)
+        .unwrap_or(50)
         .clamp(1, 2000) as usize;
+    let prefer_tail = args.get("tail_lines").is_some()
+        && args.get("max_lines").is_none()
+        && args.get("head_lines").is_none();
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
     let mut tasks = store.load()?;
     refresh_task_statuses(&mut tasks, config).await;
@@ -229,13 +258,20 @@ pub(super) async fn read_background_task_output(
     sync_runtime_tasks(&state, &tasks)?;
     let task = find_task(&tasks, &task_id)?;
     let max_bytes = config.tools.background_command_log_max_bytes;
+    let read_log = |path: &str| -> Result<LogTail> {
+        if prefer_tail {
+            read_log_tail(path, max_lines, max_bytes)
+        } else {
+            read_log_head(path, max_lines, max_bytes)
+        }
+    };
     let stdout = if matches!(stream, "stdout" | "all") {
-        Some(read_log_tail(&task.stdout_log, tail_lines, max_bytes)?)
+        Some(read_log(&task.stdout_log)?)
     } else {
         None
     };
     let stderr = if matches!(stream, "stderr" | "all") {
-        Some(read_log_tail(&task.stderr_log, tail_lines, max_bytes)?)
+        Some(read_log(&task.stderr_log)?)
     } else {
         None
     };
@@ -253,7 +289,9 @@ pub(super) async fn read_background_task_output(
         "stdout_truncated": stdout.as_ref().map(|output| output.truncated).unwrap_or(false),
         "stderr_truncated": stderr.as_ref().map(|output| output.truncated).unwrap_or(false),
         "log_max_bytes": max_bytes,
-        "tail_lines": tail_lines,
+        "max_lines": max_lines,
+        "mode": if prefer_tail { "tail" } else { "head" },
+        "tail_lines": max_lines,
     }))?)
 }
 
@@ -432,6 +470,39 @@ fn find_task<'a>(
 ///
 /// 返回:
 /// - 日志文本
+/// 读取日志文件开头若干行。
+///
+/// 参数:
+/// - `path`: 日志路径
+/// - `head_lines`: 开头行数
+/// - `max_bytes`: 最大读取字节
+///
+/// 返回:
+/// - 日志片段
+pub(super) fn read_log_head(path: &str, head_lines: usize, max_bytes: u64) -> Result<LogTail> {
+    use std::io::Read;
+    let path = Path::new(path);
+    let max_bytes = max_bytes.max(1);
+    if !path.exists() {
+        return Ok(LogTail::empty(max_bytes));
+    }
+    let metadata = std::fs::metadata(path)?;
+    let mut file = std::fs::File::open(path)?;
+    let mut bytes = Vec::new();
+    file.by_ref().take(max_bytes).read_to_end(&mut bytes)?;
+    let text = String::from_utf8_lossy(&bytes).into_owned();
+    let lines = text.lines().collect::<Vec<_>>();
+    let end = lines.len().min(head_lines);
+    let truncated = metadata.len() > max_bytes || lines.len() > head_lines;
+    Ok(LogTail::new(
+        lines[..end].join("\n"),
+        truncated,
+        metadata.len(),
+        bytes.len() as u64,
+        max_bytes,
+    ))
+}
+
 pub(super) fn read_log_tail(path: &str, tail_lines: usize, max_bytes: u64) -> Result<LogTail> {
     let path = Path::new(path);
     if !path.exists() {

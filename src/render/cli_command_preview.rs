@@ -1,6 +1,6 @@
 use super::command_result_block::render_live_command_output_for_cli;
 use super::streaming_replace::{clear_rendered_rows, rendered_visual_rows};
-use super::work_status::{format_elapsed, WorkStatus, STATUS_PULSE_FRAMES};
+use super::work_status::{format_elapsed, STATUS_PULSE_FRAMES};
 use crate::render::tool_view::command_output_buffer::CommandOutputBuffer;
 use crate::tools::command::{CommandOutputChunk, CommandOutputStream};
 use anyhow::Result;
@@ -45,10 +45,7 @@ impl CliCommandPreview {
 
     /// 是否正在展示前台命令输出预览。
     pub(crate) fn is_active(&self) -> bool {
-        self.state
-            .lock()
-            .map(|state| state.active)
-            .unwrap_or(false)
+        self.state.lock().map(|state| state.active).unwrap_or(false)
     }
 
     /// 开始新的前台命令输出预览。
@@ -159,8 +156,7 @@ fn redraw_preview(state: &Arc<Mutex<PreviewState>>) -> Result<bool> {
     let pulse = STATUS_PULSE_FRAMES[guard.frame % STATUS_PULSE_FRAMES.len()];
     let elapsed = format_elapsed(guard.started.elapsed());
     let status = format!(
-        "\x1b[2m\x1b[36m{pulse} {} · {elapsed}\x1b[0m",
-        WorkStatus::Working.localized_label()
+        "\x1b[2m\x1b[36m{pulse} {elapsed}\x1b[0m"
     );
     if rendered.trim().is_empty() {
         rendered = status;

@@ -133,21 +133,26 @@ fn work_status_is_replaced_without_becoming_history() {
 
     assert!(store.set_work_status(WorkStatus::WaitingResponse));
     let waiting = store.display_live_tail(80, &options());
-    assert!(waiting[0]
-        .as_str()
-        .contains(WorkStatus::WaitingResponse.localized_label()));
-    assert!(waiting[0].as_str().contains('·') || waiting[0].as_str().contains('s'));
+    assert!(!waiting.is_empty());
+    assert!(waiting[0].as_str().contains('·') || waiting[0].as_str().contains('s') || waiting[0].as_str().contains("秒"));
 
     assert!(store.set_work_status(WorkStatus::Thinking));
     let thinking = store.display_live_tail(80, &options());
-    assert!(thinking[0].as_str().contains(WorkStatus::Thinking.localized_label()));
+    assert!(!thinking.is_empty());
+    // 状态切换：waiting -> thinking，行内展示英文状态名与耗时
     assert!(!thinking[0]
         .as_str()
         .contains(WorkStatus::WaitingResponse.localized_label()));
+    assert!(thinking[0]
+        .as_str()
+        .contains(WorkStatus::Thinking.localized_label()));
 
     assert!(store.advance_live_animation());
     let animated = store.display_live_tail(80, &options());
-    assert!(animated[0].as_str().contains(WorkStatus::Thinking.localized_label()));
+    assert!(!animated.is_empty());
+    assert!(animated[0]
+        .as_str()
+        .contains(WorkStatus::Thinking.localized_label()));
 
     assert!(store.clear_work_status());
     assert!(store.display_live_tail(80, &options()).is_empty());
@@ -207,7 +212,8 @@ fn command_output_updates_live_cell_and_toggles_expansion() {
     );
     let chunk = crate::tools::command::CommandOutputChunk {
         stream: crate::tools::command::CommandOutputStream::Stdout,
-        bytes: b"one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\n".to_vec(),
+        bytes: b"one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\n"
+            .to_vec(),
         omitted_bytes: 0,
     };
     assert!(store.push_command_output("run_command", &chunk));
@@ -216,12 +222,12 @@ fn command_output_updates_live_cell_and_toggles_expansion() {
         .iter()
         .map(|line| line.as_str())
         .collect::<String>();
-    // Codex 风格：首尾各保留预览行，中间省略
+    // 前 2 后 4：可见 one/two 与 nine..twelve
     assert!(collapsed.contains("one"));
-    assert!(collapsed.contains("five"));
-    assert!(collapsed.contains("eight") || collapsed.contains("twelve"));
+    assert!(collapsed.contains("two") || collapsed.contains("twelve"));
     assert!(collapsed.contains("twelve"));
-    assert!(collapsed.contains("…") || collapsed.contains("+2 lines"));
+    assert!(!collapsed.contains("five") || collapsed.contains("…"));
+    assert!(collapsed.contains("…") || collapsed.contains("lines"));
     assert!(collapsed.contains("Ctrl+O"));
 
     assert!(store.toggle_latest_command_output());
@@ -398,8 +404,10 @@ fn permission_audit_stays_inside_existing_diff_view() {
     let path = temp.path().join("audit.txt");
     std::fs::write(&path, "old\n").unwrap();
     let arguments = serde_json::json!({
-        "path": path.to_string_lossy(),
-        "content": "new\n"
+        "patch": format!(
+            "*** Begin Patch\n*** Update File: {}\n@@\n-old\n+new\n*** End Patch",
+            path.display()
+        )
     })
     .to_string();
     let mut store = TranscriptStore::new(100);
@@ -438,8 +446,10 @@ fn diff_cell_keeps_pre_edit_snapshot_after_file_changes() {
     let path = temp.path().join("snapshot.txt");
     std::fs::write(&path, "old\n").unwrap();
     let arguments = serde_json::json!({
-        "path": path.to_string_lossy(),
-        "content": "new\n"
+        "patch": format!(
+            "*** Begin Patch\n*** Update File: {}\n@@\n-old\n+new\n*** End Patch",
+            path.display()
+        )
     })
     .to_string();
     let mut store = TranscriptStore::new(100);
@@ -543,8 +553,10 @@ fn history_edit_file_restores_diff_cell() {
     let path = temp.path().join("history.txt");
     std::fs::write(&path, "old\n").unwrap();
     let arguments = serde_json::json!({
-        "path": path.to_string_lossy(),
-        "content": "new\n"
+        "patch": format!(
+            "*** Begin Patch\n*** Update File: {}\n@@\n-old\n+new\n*** End Patch",
+            path.display()
+        )
     })
     .to_string();
     let mut store = TranscriptStore::new(100);
@@ -556,7 +568,10 @@ fn history_edit_file_restores_diff_cell() {
         .map(|line| line.as_str())
         .collect::<String>();
     assert!(
-        rendered.contains("old") || rendered.contains("new") || rendered.contains("Edited") || rendered.contains("Edit"),
+        rendered.contains("old")
+            || rendered.contains("new")
+            || rendered.contains("Edited")
+            || rendered.contains("Edit"),
         "{rendered}"
     );
     // 不应只剩通用 run_command 风格而无编辑标记

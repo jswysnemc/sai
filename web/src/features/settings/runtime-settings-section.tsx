@@ -5,6 +5,7 @@ import { PermissionDefaultSettings } from "./runtime/permission-default-settings
 import { NotificationSettings } from "./runtime/notification-settings";
 import { TerminalSettingsFields } from "./terminal-settings-fields";
 import { CompactionModelField } from "./compaction-model-field";
+import { MemoryExtractionModelField } from "./memory-extraction-model-field";
 import { useI18n } from "../i18n/use-i18n";
 
 type RuntimeSettingsSectionProps = {
@@ -51,6 +52,7 @@ export function RuntimeSettingsSection({ config, onConfigChange }: RuntimeSettin
             <small>{t("Used only when the model has no dedicated context window setting", "仅在模型没有单独配置上下文窗口时使用")}</small>
           </label>
           <CompactionModelField config={config} onConfigChange={onConfigChange} />
+          <MemoryExtractionModelField config={config} onConfigChange={onConfigChange} />
         </div>
       </SettingsGroup>
       {groups.map(([key, title, description]) => (

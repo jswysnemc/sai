@@ -2,15 +2,9 @@ use super::cell::HistoryCell;
 use super::store::TranscriptStore;
 use super::tool_cell::ToolCell;
 use crate::i18n::text as t;
+use crate::render::command_result_block::command_result_streams;
 
-/// 可在 pager 中展开的折叠块内容。
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ExpandableBlock {
-    /// 标题（含类型与对象名）
-    pub(crate) title: String,
-    /// 完整正文
-    pub(crate) body: String,
-}
+pub(crate) use crate::render::expandable::{ExpandableBlock, ExpandableBlockKind};
 
 impl TranscriptStore {
     /// 追加当前活动命令的实时输出。
@@ -41,20 +35,46 @@ impl TranscriptStore {
             match cell {
                 HistoryCell::Reasoning(cell) if !cell.source.trim().is_empty() => {
                     blocks.push(ExpandableBlock {
-                        title: t("thinking", "思考").to_string(),
+                        title: "thinking".to_string(),
                         body: cell.source.clone(),
+                        kind: ExpandableBlockKind::Markdown,
+                    });
+                }
+                HistoryCell::Shell(cell)
+                    if !cell.command.trim().is_empty() || !cell.output.trim().is_empty() =>
+                {
+                    // 1. 标题：完整命令逐行 shell 着色，不省略
+                    let colored = colorize_command_lines(&cell.command);
+                    // 2. 正文：完整 stdout（及退出码）
+                    let mut body = String::new();
+                    if !cell.output.trim().is_empty() {
+                        body.push_str("── stdout ──\n");
+                        body.push_str(&cell.output);
+                    }
+                    if let Some(code) = cell.exit_code {
+                        if !body.is_empty() {
+                            body.push_str("\n\n");
+                        }
+                        body.push_str(&format!("exit_code: {code}"));
+                    }
+                    blocks.push(ExpandableBlock {
+                        title: format!("{} · {}", t("You ran", "已执行"), colored),
+                        body,
+                        kind: ExpandableBlockKind::Command,
                     });
                 }
                 HistoryCell::Tool(ToolCell::Invocation(view)) if view.has_command_output() => {
                     let body = command_full_body(view);
                     if !body.trim().is_empty() {
-                        let label = crate::render::tool_event_line::tool_event_label(
+                        // 命令标题使用完整命令并做 shell 着色，Ctrl+O 界面不省略
+                        let label = crate::render::tool_event_line::tool_command_title_colored(
                             &view.name,
                             Some(&view.arguments),
                         );
                         blocks.push(ExpandableBlock {
                             title: format!("{} · {label}", t("command", "命令")),
                             body,
+                            kind: ExpandableBlockKind::Command,
                         });
                     }
                 }
@@ -81,7 +101,9 @@ impl TranscriptStore {
         // 1. 从后往前找最近的命令输出
         for index in (0..self.cells.len()).rev() {
             let toggled = match self.cells.get_mut(index) {
-                Some(HistoryCell::Tool(ToolCell::Invocation(view))) if view.has_command_output() => {
+                Some(HistoryCell::Tool(ToolCell::Invocation(view)))
+                    if view.has_command_output() =>
+                {
                     view.toggle_command_expanded();
                     true
                 }
@@ -104,6 +126,22 @@ impl TranscriptStore {
     }
 }
 
+/// 将命令文本逐行做 shell 语法着色。
+///
+/// 参数:
+/// - `command`: 原始命令（可多行）
+///
+/// 返回:
+/// - ANSI 着色后的完整命令
+fn colorize_command_lines(command: &str) -> String {
+    command
+        .lines()
+        .map(|line| crate::render::code_block::highlight_code_line("bash", line))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+
 /// 拼装命令工具的完整 stdout/stderr 正文。
 ///
 /// 参数:
@@ -123,6 +161,17 @@ fn command_full_body(view: &crate::render::tool_view::ToolView) -> String {
     }
     if parts.is_empty() {
         if let Some(outcome) = view.outcome.as_ref() {
+            if let Some((_success, stdout, stderr)) = command_result_streams(&outcome.output) {
+                if !stdout.trim().is_empty() {
+                    parts.push(format!("── stdout ──\n{stdout}"));
+                }
+                if !stderr.trim().is_empty() {
+                    parts.push(format!("── stderr ──\n{stderr}"));
+                }
+                if !parts.is_empty() {
+                    return parts.join("\n\n");
+                }
+            }
             return outcome.output.clone();
         }
     }

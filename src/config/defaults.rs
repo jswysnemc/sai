@@ -379,6 +379,8 @@ impl Default for MemoryConfig {
             forgetting_review_boost: default_memory_review_boost(),
             learning_min_task_chars: default_memory_min_task_chars(),
             learning_min_method_chars: default_memory_min_method_chars(),
+            extraction_provider_id: String::new(),
+            extraction_model: String::new(),
         }
     }
 }

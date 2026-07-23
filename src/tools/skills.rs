@@ -139,7 +139,10 @@ fn third_party_skill_roots() -> Vec<(&'static str, PathBuf)> {
         }
     }
     // 2. 用户主目录常见安装位置
-    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from).filter(|path| !path.as_os_str().is_empty()) {
+    if let Some(home) = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty())
+    {
         for (scope, relative) in [
             ("claude", ".claude/skills"),
             ("codex", ".codex/skills"),
@@ -668,8 +671,16 @@ mod tests {
         let scopes: std::collections::BTreeSet<_> = roots.iter().map(|(scope, _)| *scope).collect();
         assert!(scopes.contains("claude") || scopes.contains("project_claude"));
         assert!(scopes.contains("codex") || scopes.contains("project_codex"));
-        assert!(scopes.contains("agents") || scopes.contains("project_agents") || scopes.contains("agent"));
-        assert!(scopes.contains("opencode") || scopes.contains("opencode_home") || scopes.contains("project_opencode"));
+        assert!(
+            scopes.contains("agents")
+                || scopes.contains("project_agents")
+                || scopes.contains("agent")
+        );
+        assert!(
+            scopes.contains("opencode")
+                || scopes.contains("opencode_home")
+                || scopes.contains("project_opencode")
+        );
     }
 
     #[test]
@@ -696,8 +707,10 @@ mod tests {
             }
         }
         let entries = skill_entries(&config, &paths).unwrap();
-        let count = entries.iter().filter(|item| item.name == "shared-skill").count();
+        let count = entries
+            .iter()
+            .filter(|item| item.name == "shared-skill")
+            .count();
         assert_eq!(count, 1);
     }
-
 }

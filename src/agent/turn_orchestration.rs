@@ -62,7 +62,8 @@ impl Agent {
         let mut perf = PerfTrace::new("agent");
         perf.mark("start turn");
         let turn_id = turn_id.unwrap_or_else(new_turn_id);
-        self.state.start_turn_with_images(&turn_id, &input, &image_urls)?;
+        self.state
+            .start_turn_with_images(&turn_id, &input, &image_urls)?;
         perf.mark("state start_turn");
         let mut guard = PendingTurnGuard::new(self.state.clone(), turn_id.clone());
         let worktree_undo = crate::state::worktree_undo::WorktreeUndoGuard::begin(

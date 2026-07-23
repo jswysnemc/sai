@@ -1,6 +1,8 @@
 use super::path_guard::{existing_path, mutable_existing_path, writable_path};
+use super::file_write_lock::with_file_write_lock;
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
+use std::fmt;
 use std::fs::OpenOptions;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
@@ -26,6 +28,8 @@ pub(crate) struct FileContent {
     pub content: String,
     pub size: u64,
     pub modified_at: Option<u64>,
+    /// 文件内容指纹，用于避免秒级修改时间无法识别的并发覆盖
+    pub version: String,
 }
 
 /// 工作区文件变更结果。
@@ -40,6 +44,25 @@ pub(crate) struct ImageFile {
     pub mime: String,
     pub bytes: Vec<u8>,
 }
+
+/// 工作区文件内容版本不匹配。
+#[derive(Debug)]
+pub(crate) struct FileVersionConflict;
+
+impl fmt::Display for FileVersionConflict {
+    /// 返回供 API 映射冲突响应使用的错误文本。
+    ///
+    /// 参数:
+    /// - `formatter`: 错误文本格式化器
+    ///
+    /// 返回:
+    /// - 格式化结果
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("file changed outside the editor")
+    }
+}
+
+impl std::error::Error for FileVersionConflict {}
 
 /// 读取工作区文件树。
 ///
@@ -73,6 +96,7 @@ pub(crate) fn read_file(root: &Path, relative: &str) -> Result<FileContent> {
         bail!("binary files are not supported");
     }
     let content = String::from_utf8(bytes).context("file is not valid UTF-8")?;
+    let version = blake3::hash(content.as_bytes()).to_hex().to_string();
     Ok(FileContent {
         path: relative.to_string(),
         content,
@@ -82,6 +106,7 @@ pub(crate) fn read_file(root: &Path, relative: &str) -> Result<FileContent> {
             .ok()
             .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
             .map(|duration| duration.as_secs()),
+        version,
     })
 }
 
@@ -131,19 +156,181 @@ mod image_tests {
 }
 
 /// 原子保存 UTF-8 文本文件。
-pub(crate) fn write_file(root: &Path, relative: &str, content: &str) -> Result<FileContent> {
+///
+/// 参数:
+/// - `root`: 工作区根目录
+/// - `relative`: 文件相对路径
+/// - `content`: 待保存文本
+/// - `expected_version`: 编辑器读取时的内容指纹
+///
+/// 返回:
+/// - 保存后的文件内容；版本不匹配时返回 `FileVersionConflict`
+pub(crate) fn write_file(
+    root: &Path,
+    relative: &str,
+    content: &str,
+    expected_version: Option<&str>,
+) -> Result<FileContent> {
     if content.len() as u64 > MAX_FILE_BYTES {
         bail!("file exceeds {} bytes", MAX_FILE_BYTES);
     }
     let path = writable_path(root, relative)?;
+    with_file_write_lock(&path, || {
+        write_file_locked(root, relative, content, expected_version, &path)
+    })
+}
+
+/// 在路径锁内校验版本并原子替换文件。
+///
+/// 参数:
+/// - `root`: 工作区根目录
+/// - `relative`: 文件相对路径
+/// - `content`: 待保存文本
+/// - `expected_version`: 编辑器读取时的内容指纹
+/// - `path`: 已通过路径保护的写入路径
+///
+/// 返回:
+/// - 保存后的文件内容；版本不匹配时返回 `FileVersionConflict`
+fn write_file_locked(
+    root: &Path,
+    relative: &str,
+    content: &str,
+    expected_version: Option<&str>,
+    path: &Path,
+) -> Result<FileContent> {
     if path.exists() && !path.is_file() {
         bail!("path is not a regular file");
     }
+    validate_expected_version(root, relative, expected_version)?;
+    // 1. 覆盖已有文件时复制原权限，避免临时文件的 0600 覆盖执行位或组权限
+    let original_permissions = if path.is_file() {
+        Some(std::fs::metadata(&path)?.permissions())
+    } else {
+        None
+    };
     let parent = path.parent().context("file path has no parent")?;
     let temp = tempfile::NamedTempFile::new_in(parent)?;
     std::fs::write(temp.path(), content.as_bytes())?;
+    if let Some(permissions) = original_permissions {
+        std::fs::set_permissions(temp.path(), permissions)?;
+    }
+    // 2. 临时文件准备完成后紧邻替换操作再次校验，覆盖保存期间发生的外部修改
+    validate_expected_version(root, relative, expected_version)?;
     temp.persist(&path)?;
     read_file(root, relative)
+}
+
+/// 校验工作区文件当前内容指纹。
+///
+/// 参数:
+/// - `root`: 工作区根目录
+/// - `relative`: 文件相对路径
+/// - `expected_version`: 可选预期内容指纹
+///
+/// 返回:
+/// - 指纹一致或未要求校验时返回成功
+fn validate_expected_version(
+    root: &Path,
+    relative: &str,
+    expected_version: Option<&str>,
+) -> Result<()> {
+    let Some(expected_version) = expected_version else {
+        return Ok(());
+    };
+    let current = read_file(root, relative).map_err(|_| FileVersionConflict)?;
+    if current.version != expected_version {
+        return Err(FileVersionConflict.into());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod write_tests {
+    use super::*;
+
+    #[test]
+    fn content_version_changes_when_content_changes() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("file.txt"), "first").unwrap();
+        let first = read_file(temp.path(), "file.txt").unwrap();
+
+        std::fs::write(temp.path().join("file.txt"), "second").unwrap();
+        let second = read_file(temp.path(), "file.txt").unwrap();
+
+        assert_ne!(first.version, second.version);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_file_preserves_existing_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("script.sh");
+        std::fs::write(&path, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o750)).unwrap();
+
+        write_file(temp.path(), "script.sh", "#!/bin/sh\necho ok\n", None).unwrap();
+
+        let mode = std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o750);
+    }
+
+    #[test]
+    fn write_file_rejects_stale_content_version() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("file.txt"), "first").unwrap();
+        let original = read_file(temp.path(), "file.txt").unwrap();
+        std::fs::write(temp.path().join("file.txt"), "external").unwrap();
+
+        let error =
+            write_file(temp.path(), "file.txt", "editor", Some(&original.version)).unwrap_err();
+
+        assert!(error.downcast_ref::<FileVersionConflict>().is_some());
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("file.txt")).unwrap(),
+            "external"
+        );
+    }
+
+    #[test]
+    fn concurrent_writes_with_one_version_allow_only_one_replace() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("file.txt"), "first").unwrap();
+        let original = read_file(temp.path(), "file.txt").unwrap();
+        let root = std::sync::Arc::new(temp.path().to_path_buf());
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let mut handles = Vec::new();
+        for content in ["second", "third"] {
+            let root = root.clone();
+            let barrier = barrier.clone();
+            let version = original.version.clone();
+            handles.push(std::thread::spawn(move || {
+                barrier.wait();
+                write_file(&root, "file.txt", content, Some(&version))
+            }));
+        }
+
+        let results = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(
+            results
+                .iter()
+                .filter(|result| {
+                    result
+                        .as_ref()
+                        .err()
+                        .and_then(|error| error.downcast_ref::<FileVersionConflict>())
+                        .is_some()
+                })
+                .count(),
+            1
+        );
+    }
 }
 
 /// 创建空文件或目录。

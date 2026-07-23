@@ -5,57 +5,26 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
-use tokio::sync::Mutex;
 
+mod environment;
 #[path = "naming.rs"]
 mod naming;
+mod protocol;
+mod runtime;
+
+use environment::{expand_env_map, expand_env_value};
 pub use naming::dynamic_tool_name;
+use protocol::{matches_id, parse_rpc_body, parse_sse_endpoint};
+pub(super) use runtime::list_server_tools_on_rt;
+pub use runtime::{
+    block_on_mcp, call_server_tool, list_server_tools, runtime_statuses, stop_all_servers,
+    stop_server, test_server,
+};
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
-static POOL: OnceLock<Mutex<HashMap<String, Arc<Mutex<PooledClient>>>>> = OnceLock::new();
-/// 进程级 MCP runtime：stdio Child 与连接池必须活在同一 runtime 上，
-/// 不能用临时 current_thread runtime 建连后关掉。
-static MCP_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
-
-fn pool() -> &'static Mutex<HashMap<String, Arc<Mutex<PooledClient>>>> {
-    POOL.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-/// 返回常驻 MCP multi-thread runtime。
-fn mcp_runtime() -> &'static tokio::runtime::Runtime {
-    MCP_RUNTIME.get_or_init(|| {
-        tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .enable_all()
-            .thread_name("sai-mcp")
-            .build()
-            .expect("failed to create MCP runtime")
-    })
-}
-
-/// 在 MCP 专用 runtime 上执行 future（供同步注册路径使用）。
-pub fn block_on_mcp<F>(future: F) -> F::Output
-where
-    F: std::future::Future,
-{
-    mcp_runtime().block_on(future)
-}
-
-/// 从任意 async 上下文把 MCP 工作调度到专用 runtime，避免跨 runtime 使用 Child。
-pub async fn run_on_mcp_runtime<F, T>(future: F) -> Result<T>
-where
-    F: std::future::Future<Output = Result<T>> + Send + 'static,
-    T: Send + 'static,
-{
-    let handle = mcp_runtime().handle().clone();
-    tokio::task::spawn_blocking(move || handle.block_on(future))
-        .await
-        .map_err(|error| anyhow::anyhow!("mcp runtime worker failed: {error}"))?
-}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct McpToolInfo {
@@ -104,6 +73,13 @@ struct PooledClient {
 }
 
 impl PooledClient {
+    /// 创建并初始化一个 MCP 池化客户端。
+    ///
+    /// 参数:
+    /// - `config`: MCP 服务器配置
+    ///
+    /// 返回:
+    /// - 已完成协议初始化的客户端
     async fn connect(config: &McpServerConfig) -> Result<Self> {
         let transport_name = config.transport.trim().to_ascii_lowercase();
         let transport = match transport_name.as_str() {
@@ -112,7 +88,7 @@ impl PooledClient {
             _ => Transport::connect_stdio(config).await?,
         };
         let mut client = Self {
-            config_fingerprint: fingerprint(config),
+            config_fingerprint: runtime::fingerprint(config),
             transport,
             initialized: false,
             last_error: None,
@@ -121,6 +97,13 @@ impl PooledClient {
         Ok(client)
     }
 
+    /// 协商 MCP 协议版本并发送初始化完成通知。
+    ///
+    /// 参数:
+    /// - `timeout_ms`: 可选请求超时时间
+    ///
+    /// 返回:
+    /// - 初始化成功时返回空值
     async fn initialize(&mut self, timeout_ms: Option<u64>) -> Result<()> {
         if self.initialized {
             return Ok(());
@@ -165,6 +148,15 @@ impl PooledClient {
         Err(error)
     }
 
+    /// 发送带请求 ID 的 MCP JSON-RPC 请求。
+    ///
+    /// 参数:
+    /// - `method`: JSON-RPC 方法名
+    /// - `params`: 请求参数
+    /// - `timeout_ms`: 可选请求超时时间
+    ///
+    /// 返回:
+    /// - JSON-RPC result 字段
     async fn request(
         &mut self,
         method: &str,
@@ -181,6 +173,15 @@ impl PooledClient {
         self.transport.request(id, payload, timeout_ms).await
     }
 
+    /// 发送不需要响应的 MCP JSON-RPC 通知。
+    ///
+    /// 参数:
+    /// - `method`: JSON-RPC 方法名
+    /// - `params`: 通知参数
+    /// - `timeout_ms`: 可选请求超时时间
+    ///
+    /// 返回:
+    /// - 通知发送结果
     async fn notify(&mut self, method: &str, params: Value, timeout_ms: Option<u64>) -> Result<()> {
         let payload = json!({
             "jsonrpc": "2.0",
@@ -190,6 +191,13 @@ impl PooledClient {
         self.transport.notify(payload, timeout_ms).await
     }
 
+    /// 读取 MCP 服务器提供的工具定义。
+    ///
+    /// 参数:
+    /// - `timeout_ms`: 可选请求超时时间
+    ///
+    /// 返回:
+    /// - 工具名称、说明和输入 Schema 列表
     async fn list_tools(
         &mut self,
         timeout_ms: Option<u64>,
@@ -224,6 +232,15 @@ impl PooledClient {
         Ok(out)
     }
 
+    /// 调用一个 MCP 工具并提取文本结果。
+    ///
+    /// 参数:
+    /// - `name`: 远端工具名称
+    /// - `arguments`: 工具参数
+    /// - `timeout_ms`: 可选请求超时时间
+    ///
+    /// 返回:
+    /// - 工具文本结果
     async fn call_tool(
         &mut self,
         name: &str,
@@ -261,33 +278,24 @@ impl PooledClient {
     }
 }
 
-/// 展开配置中的 `$env:VAR` 引用；非该前缀则原样返回。
-fn expand_env_value(value: &str) -> String {
-    let trimmed = value.trim();
-    if let Some(name) = trimmed.strip_prefix("$env:") {
-        let name = name.trim();
-        if name.is_empty() {
-            return String::new();
-        }
-        return std::env::var(name).unwrap_or_default();
-    }
-    value.to_string()
-}
-
-/// 展开字符串键值表中的 `$env:` 引用。
-fn expand_env_map(map: &std::collections::HashMap<String, String>) -> std::collections::HashMap<String, String> {
-    map.iter()
-        .map(|(key, value)| (key.clone(), expand_env_value(value)))
-        .collect()
-}
-
 impl Transport {
+    /// 启动 stdio MCP 子进程并接管标准输入输出。
+    ///
+    /// 参数:
+    /// - `config`: MCP 服务器配置
+    ///
+    /// 返回:
+    /// - stdio 传输实例
     async fn connect_stdio(config: &McpServerConfig) -> Result<Self> {
         if config.command.trim().is_empty() {
             bail!("mcp server {} missing command", config.id);
         }
         let mut command = Command::new(&config.command);
-        let args: Vec<String> = config.args.iter().map(|arg| expand_env_value(arg)).collect();
+        let args: Vec<String> = config
+            .args
+            .iter()
+            .map(|arg| expand_env_value(arg))
+            .collect();
         let env = expand_env_map(&config.env);
         command
             .args(&args)
@@ -318,6 +326,13 @@ impl Transport {
         })
     }
 
+    /// 创建 Streamable HTTP MCP 传输。
+    ///
+    /// 参数:
+    /// - `config`: MCP 服务器配置
+    ///
+    /// 返回:
+    /// - HTTP 传输实例
     async fn connect_http(config: &McpServerConfig) -> Result<Self> {
         let url = config
             .url
@@ -339,6 +354,13 @@ impl Transport {
         })
     }
 
+    /// 创建经典 SSE MCP 传输并解析消息端点。
+    ///
+    /// 参数:
+    /// - `config`: MCP 服务器配置
+    ///
+    /// 返回:
+    /// - SSE 传输实例
     async fn connect_sse(config: &McpServerConfig) -> Result<Self> {
         let url = config
             .url
@@ -386,6 +408,15 @@ impl Transport {
         })
     }
 
+    /// 通过当前传输发送 JSON-RPC 请求。
+    ///
+    /// 参数:
+    /// - `id`: JSON-RPC 请求 ID
+    /// - `payload`: 完整请求载荷
+    /// - `timeout_ms`: 可选请求超时时间
+    ///
+    /// 返回:
+    /// - JSON-RPC result 字段
     async fn request(&mut self, id: u64, payload: Value, timeout_ms: Option<u64>) -> Result<Value> {
         match self {
             Self::Stdio { stdin, reader, .. } => {
@@ -473,6 +504,14 @@ impl Transport {
         }
     }
 
+    /// 通过当前传输发送 JSON-RPC 通知。
+    ///
+    /// 参数:
+    /// - `payload`: 完整通知载荷
+    /// - `timeout_ms`: 可选请求超时时间
+    ///
+    /// 返回:
+    /// - 通知发送结果
     async fn notify(&mut self, payload: Value, timeout_ms: Option<u64>) -> Result<()> {
         let _ = timeout_ms;
         match self {
@@ -517,6 +556,15 @@ impl Transport {
     }
 }
 
+/// 从 stdio 输出中读取与请求 ID 匹配的 JSON-RPC 响应。
+///
+/// 参数:
+/// - `reader`: MCP 子进程标准输出读取器
+/// - `id`: 目标 JSON-RPC 请求 ID
+/// - `timeout_ms`: 可选请求超时时间
+///
+/// 返回:
+/// - JSON-RPC result 字段
 async fn read_stdio_response(
     reader: &mut BufReader<ChildStdout>,
     id: u64,
@@ -553,278 +601,5 @@ async fn read_stdio_response(
     }
 }
 
-fn matches_id(value: &Value, id: u64) -> bool {
-    value.get("id").and_then(|value| value.as_u64()) == Some(id)
-        || value.get("id").and_then(|value| value.as_i64()) == Some(id as i64)
-}
-
-fn parse_rpc_body(body: &str, content_type: &str, id: u64) -> Result<Value> {
-    if content_type.contains("text/event-stream") || body.contains("event:") {
-        for chunk in body.split("\n\n") {
-            for line in chunk.lines() {
-                let line = line.trim();
-                if let Some(data) = line.strip_prefix("data:") {
-                    let data = data.trim();
-                    if data.is_empty() || data == "[DONE]" {
-                        continue;
-                    }
-                    if let Ok(value) = serde_json::from_str::<Value>(data) {
-                        if matches_id(&value, id) {
-                            if let Some(error) = value.get("error") {
-                                bail!("mcp error: {error}");
-                            }
-                            return Ok(value.get("result").cloned().unwrap_or(Value::Null));
-                        }
-                    }
-                }
-            }
-        }
-        bail!("sse response missing matching rpc id");
-    }
-    let value: Value = serde_json::from_str(body).context("invalid mcp json response")?;
-    if matches_id(&value, id) {
-        if let Some(error) = value.get("error") {
-            bail!("mcp error: {error}");
-        }
-        return Ok(value.get("result").cloned().unwrap_or(Value::Null));
-    }
-    // 部分 HTTP 实现直接返回 result 对象
-    Ok(value)
-}
-
-fn parse_sse_endpoint(body: &str, base_url: &str) -> Option<String> {
-    let mut event = String::new();
-    let mut data = String::new();
-    for line in body.lines() {
-        let line = line.trim_end();
-        if line.is_empty() {
-            if event == "endpoint" && !data.is_empty() {
-                return Some(resolve_url(base_url, data.trim()));
-            }
-            event.clear();
-            data.clear();
-            continue;
-        }
-        if let Some(value) = line.strip_prefix("event:") {
-            event = value.trim().to_string();
-        } else if let Some(value) = line.strip_prefix("data:") {
-            if !data.is_empty() {
-                data.push('\n');
-            }
-            data.push_str(value.trim());
-        }
-    }
-    if event == "endpoint" && !data.is_empty() {
-        return Some(resolve_url(base_url, data.trim()));
-    }
-    None
-}
-
-fn resolve_url(base: &str, maybe_relative: &str) -> String {
-    if maybe_relative.starts_with("http://") || maybe_relative.starts_with("https://") {
-        return maybe_relative.to_string();
-    }
-    if let Ok(base) = reqwest::Url::parse(base) {
-        if let Ok(joined) = base.join(maybe_relative) {
-            return joined.to_string();
-        }
-    }
-    maybe_relative.to_string()
-}
-
-fn fingerprint(config: &McpServerConfig) -> String {
-    format!(
-        "{}|{}|{}|{}|{}|{}|{}|{}",
-        config.id,
-        config.transport,
-        config.command,
-        config.args.join("\u{1f}"),
-        config.url.clone().unwrap_or_default(),
-        config.message_url.clone().unwrap_or_default(),
-        config.cwd.clone().unwrap_or_default(),
-        config.timeout_ms.unwrap_or(0)
-    )
-}
-
-async fn with_client<T, F, Fut>(config: &McpServerConfig, f: F) -> Result<T>
-where
-    F: FnOnce(Arc<Mutex<PooledClient>>) -> Fut,
-    Fut: std::future::Future<Output = Result<T>>,
-{
-    let key = config.id.clone();
-    let fp = fingerprint(config);
-    let client = {
-        let mut map = pool().lock().await;
-        if let Some(existing) = map.get(&key) {
-            let guard = existing.lock().await;
-            if guard.config_fingerprint == fp && guard.initialized {
-                drop(guard);
-                existing.clone()
-            } else {
-                drop(guard);
-                map.remove(&key);
-                let created = Arc::new(Mutex::new(PooledClient::connect(config).await?));
-                map.insert(key.clone(), created.clone());
-                created
-            }
-        } else {
-            let created = Arc::new(Mutex::new(PooledClient::connect(config).await?));
-            map.insert(key, created.clone());
-            created
-        }
-    };
-    f(client).await
-}
-
-/// 停止连接池中的指定 server。
-pub async fn stop_server(server_id: &str) -> bool {
-    let server_id = server_id.to_string();
-    run_on_mcp_runtime(async move { Ok(stop_server_on_rt(&server_id).await) })
-        .await
-        .unwrap_or(false)
-}
-
-async fn stop_server_on_rt(server_id: &str) -> bool {
-    let mut map = pool().lock().await;
-    map.remove(server_id).is_some()
-}
-
-/// 清空连接池。
-pub async fn stop_all_servers() {
-    let _ = run_on_mcp_runtime(async move {
-        let mut map = pool().lock().await;
-        map.clear();
-        Ok::<(), anyhow::Error>(())
-    })
-    .await;
-}
-
-/// 运行态状态列表。
-pub async fn runtime_statuses(servers: &[McpServerConfig]) -> Vec<McpRuntimeStatus> {
-    let servers = servers.to_vec();
-    run_on_mcp_runtime(async move {
-        Ok(runtime_statuses_on_rt(&servers).await)
-    })
-    .await
-    .unwrap_or_default()
-}
-
-async fn runtime_statuses_on_rt(servers: &[McpServerConfig]) -> Vec<McpRuntimeStatus> {
-    let map = pool().lock().await;
-    servers
-        .iter()
-        .map(|server| {
-            if let Some(client) = map.get(&server.id) {
-                // try_lock to avoid deadlock if held elsewhere
-                if let Ok(guard) = client.try_lock() {
-                    return McpRuntimeStatus {
-                        server_id: server.id.clone(),
-                        transport: server.transport.clone(),
-                        running: true,
-                        initialized: guard.initialized,
-                        last_error: guard.last_error.clone(),
-                    };
-                }
-                return McpRuntimeStatus {
-                    server_id: server.id.clone(),
-                    transport: server.transport.clone(),
-                    running: true,
-                    initialized: true,
-                    last_error: None,
-                };
-            }
-            McpRuntimeStatus {
-                server_id: server.id.clone(),
-                transport: server.transport.clone(),
-                running: false,
-                initialized: false,
-                last_error: None,
-            }
-        })
-        .collect()
-}
-
-/// 列出单个 MCP server 的工具。
-pub async fn list_server_tools(config: &McpServerConfig) -> Result<Vec<McpToolInfo>> {
-    let config = config.clone();
-    run_on_mcp_runtime(async move { list_server_tools_on_rt(&config).await }).await
-}
-
-pub(super) async fn list_server_tools_on_rt(
-    config: &McpServerConfig,
-) -> Result<Vec<McpToolInfo>> {
-    with_client(config, |client| async move {
-        let mut guard = client.lock().await;
-        let tools = guard.list_tools(config.timeout_ms).await?;
-        Ok(tools
-            .into_iter()
-            .map(|(name, description, input_schema)| McpToolInfo {
-                server_id: config.id.clone(),
-                name,
-                description,
-                input_schema,
-            })
-            .collect())
-    })
-    .await
-}
-
-/// 调用 MCP 工具。
-pub async fn call_server_tool(
-    config: &McpServerConfig,
-    tool_name: &str,
-    arguments: Value,
-) -> Result<String> {
-    let config = config.clone();
-    let tool_name = tool_name.to_string();
-    run_on_mcp_runtime(async move {
-        with_client(&config, |client| async move {
-            let mut guard = client.lock().await;
-            guard
-                .call_tool(&tool_name, arguments, config.timeout_ms)
-                .await
-        })
-        .await
-    })
-    .await
-}
-
-/// 测试连接并返回工具数量。
-pub async fn test_server(config: &McpServerConfig) -> Result<(usize, Vec<String>)> {
-    let config = config.clone();
-    run_on_mcp_runtime(async move {
-        // 测试时先踢掉旧连接，再重建
-        let _ = stop_server_on_rt(&config.id).await;
-        let tools = list_server_tools_on_rt(&config).await?;
-        Ok((
-            tools.len(),
-            tools.into_iter().map(|tool| tool.name).collect(),
-        ))
-    })
-    .await
-}
-
 #[cfg(test)]
-mod tests {
-    use super::{dynamic_tool_name, parse_sse_endpoint};
-
-    #[test]
-    fn dynamic_tool_name_is_stable_and_sanitized() {
-        let name = dynamic_tool_name("File System", "read/file");
-        assert!(name.starts_with("mcp_"));
-        assert!(!name.contains('/'));
-        assert!(!name.contains(' '));
-    }
-
-    #[test]
-    fn parse_sse_endpoint_absolute_and_relative() {
-        let body = "event: endpoint\ndata: /messages?session=1\n\n";
-        let url = parse_sse_endpoint(body, "http://127.0.0.1:3000/sse").unwrap();
-        assert_eq!(url, "http://127.0.0.1:3000/messages?session=1");
-        let body2 = "event: endpoint\ndata: http://example.com/m\n\n";
-        assert_eq!(
-            parse_sse_endpoint(body2, "http://127.0.0.1:3000/sse").unwrap(),
-            "http://example.com/m"
-        );
-    }
-}
+mod tests;

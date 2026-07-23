@@ -81,12 +81,32 @@ impl WaitSpinner {
     ///
     /// 返回:
     /// - 等待动画控制器
+    #[allow(dead_code)]
     pub(crate) fn start(phase: String, style: SpinnerStyle, sub_phase: Option<String>) -> Self {
+        Self::start_with_clock(phase, style, sub_phase, Instant::now())
+    }
+
+    /// 启动等待响应动画，并使用指定起点计时。
+    ///
+    /// 参数:
+    /// - `phase`: 初始状态文本
+    /// - `style`: 动画样式
+    /// - `sub_phase`: 初始子状态文本，空值表示隐藏
+    /// - `started_at`: 本轮计时起点
+    ///
+    /// 返回:
+    /// - 等待动画控制器
+    pub(crate) fn start_with_clock(
+        phase: String,
+        style: SpinnerStyle,
+        sub_phase: Option<String>,
+        started_at: Instant,
+    ) -> Self {
         let anchor_row = reserve_spinner_rows(spinner_line_count(sub_phase.as_deref()));
         let state = Arc::new(Mutex::new(WaitSpinnerState {
             phase,
             sub_phase,
-            start: Instant::now(),
+            start: started_at,
             seed: spinner_seed(),
             anchor_row,
             lines_rendered: 0,
@@ -104,7 +124,7 @@ impl WaitSpinner {
         }
     }
 
-    /// 更新末行动效的主状态文案；文案变化时重置计时。
+    /// 更新末行动效的主状态文案；不重置本轮累计计时。
     ///
     /// 参数:
     /// - `phase`: 新的状态文案
@@ -116,7 +136,6 @@ impl WaitSpinner {
         if let Ok(mut state) = self.state.lock() {
             if state.phase != phase {
                 state.phase = phase;
-                state.start = Instant::now();
             }
         }
     }
@@ -223,8 +242,8 @@ fn render_frame(frame: usize, state: &WaitSpinnerState) -> (String, u16) {
     };
     let main_line = match state.style {
         SpinnerStyle::Scanner => format!("{spinner_prefix} {phase}{elapsed}"),
-        // 与 TUI 思考/工作动效一致：点跳动 + 文案 · 耗时
-        SpinnerStyle::Braille => format!("{spinner_prefix}{phase} · {elapsed}"),
+        // 与 TUI 工作动效一致：点跳动 + 耗时
+        SpinnerStyle::Braille => format!("{spinner_prefix}{elapsed}"),
     };
     match &state.sub_phase {
         Some(sub_phase) if !sub_phase.trim().is_empty() => {

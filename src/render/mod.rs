@@ -1,12 +1,13 @@
 mod asset_block;
 mod background_command_event;
+mod cli_command_preview;
 mod code_block;
 mod command_output;
 mod command_result_block;
-pub(crate) mod fold_text;
-mod cli_command_preview;
 mod edit_diff;
 mod error;
+pub(crate) mod expandable;
+pub(crate) mod fold_text;
 mod live_tool_status;
 mod markdown;
 mod markdown_blocks;
@@ -37,10 +38,12 @@ pub(crate) mod transcript;
 mod wait_spinner;
 pub(crate) mod work_status;
 
+pub(crate) use command_result_block::command_result_streams;
 pub(crate) use error::write_chat_error;
+pub(crate) use expandable::render_expandable_body;
 pub(crate) use permission::{
-    render_auto_audit_status, render_permission_controls, render_permission_decision, render_permission_title,
-    PermissionChoice,
+    render_auto_audit_status, render_permission_controls, render_permission_decision,
+    render_permission_title, PermissionChoice,
 };
 pub use session_summary::print_session_summary;
 pub use stream::StreamRenderer;

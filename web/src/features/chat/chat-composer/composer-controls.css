@@ -1,0 +1,216 @@
+.composer-mode {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  min-width: 0;
+  color: var(--ink-soft);
+}
+
+.composer-mode .ui-select {
+  width: auto;
+  min-width: 0;
+}
+
+.composer-mode .ui-select > button {
+  min-height: 28px;
+  max-width: 88px;
+  gap: 4px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.composer-mode .ui-select > button:hover:not(:disabled),
+.composer-mode .ui-select > button[aria-expanded="true"] {
+  border: 0;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}
+
+.composer-mode .ui-select > button > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-mode .ui-select > button svg {
+  width: 12px;
+  height: 12px;
+  opacity: 0.55;
+}
+
+.composer-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.composer-rail-button {
+  display: grid;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.composer-rail-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}
+
+.composer-rail-button:disabled {
+  opacity: 0.35;
+}
+
+.composer-activity-button {
+  position: relative;
+}
+
+.composer-activity-button.is-active {
+  color: var(--signal);
+  background: var(--signal-soft);
+}
+
+.composer-activity-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  display: grid;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--signal);
+  color: var(--paper);
+  font: 600 9px/1 var(--font-code);
+}
+
+.composer-icon-button,
+.composer-send {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+}
+
+.composer-icon-button {
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.composer-icon-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}
+
+.composer-send {
+  background: var(--graphite);
+  color: var(--paper-raised);
+}
+
+.composer-send:hover:not(:disabled) {
+  opacity: 0.84;
+}
+
+.composer-send.stop {
+  background: var(--ink-soft);
+}
+
+.composer-send:disabled,
+.composer-icon-button:disabled,
+.model-thinking-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
+@media (max-width: 760px) {
+  .composer-shell {
+    padding: 8px 10px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .composer {
+    padding: 9px 10px 8px 14px;
+    gap: 8px;
+  }
+
+  .model-thinking-trigger {
+    max-width: 170px;
+    font-size: 11px;
+  }
+
+  .model-thinking-menu {
+    grid-template-columns: minmax(128px, 38%) minmax(0, 1fr);
+  }
+
+  .composer-mode .ui-select > button {
+    max-width: 72px;
+    padding: 0 4px;
+  }
+
+  .composer-context-strip .agent-selector {
+    margin-right: 4px;
+  }
+}
+
+
+
+/* model-group-inline-controls */
+.composer-model-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.composer-footer .composer-mode {
+  flex: 0 0 auto;
+}
+
+.composer-footer .goal-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.composer-footer .ui-button.composer-rail-button {
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.composer-footer .ui-button.composer-rail-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}
+
+.composer-footer .composer-mode .ui-select > button {
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.composer-footer .composer-mode .ui-select > button:hover:not(:disabled),
+.composer-footer .composer-mode .ui-select > button[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}

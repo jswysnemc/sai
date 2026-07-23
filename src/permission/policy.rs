@@ -283,7 +283,12 @@ impl PermissionProfile {
     ///
     /// 返回:
     /// - 无
-    pub(crate) fn record_result(&self, tool: &str, arguments: &Value, result: &Result<String>) {
+    pub(crate) fn record_result(
+        &self,
+        tool: &str,
+        arguments: &Value,
+        result: std::result::Result<&str, &anyhow::Error>,
+    ) {
         if self.mode == PermissionProfileMode::Yolo
             || (matches!(
                 self.mode,
@@ -438,7 +443,7 @@ mod tests {
             .authorize(
                 "edit_file",
                 ToolPermission::Writes,
-                &json!({"path":"../secret"})
+                &json!({"patch":"*** Begin Patch\n*** Update File: ../secret\n@@\n-old\n+new\n*** End Patch"})
             )
             .is_err());
     }
@@ -451,7 +456,7 @@ mod tests {
             PathBuf::from("/workspace/project"),
             None,
         );
-        let args = json!({"path":"../secret"});
+        let args = json!({"patch":"*** Begin Patch\n*** Update File: ../secret\n@@\n-old\n+new\n*** End Patch"});
         profile.record_approved("edit_file", &args);
         assert!(profile
             .authorize("edit_file", ToolPermission::Writes, &args)
@@ -513,7 +518,7 @@ mod tests {
             .authorize(
                 "edit_file",
                 ToolPermission::Writes,
-                &json!({"path":"/etc/hosts"})
+                &json!({"patch":"*** Begin Patch\n*** Update File: /etc/hosts\n@@\n-old\n+new\n*** End Patch"})
             )
             .unwrap());
     }
@@ -663,7 +668,7 @@ mod tests {
             .authorize(
                 "edit_file",
                 ToolPermission::Writes,
-                &json!({"path":"linked/escaped.txt"}),
+                &json!({"patch":"*** Begin Patch\n*** Update File: linked/escaped.txt\n@@\n-old\n+new\n*** End Patch"}),
             )
             .is_err());
     }
@@ -679,11 +684,7 @@ mod tests {
             &args
         ));
         let err = profile
-            .authorize(
-                "run_command",
-                crate::tools::ToolPermission::Writes,
-                &args,
-            )
+            .authorize("run_command", crate::tools::ToolPermission::Writes, &args)
             .unwrap_err()
             .to_string();
         assert!(
@@ -691,5 +692,4 @@ mod tests {
             "{err}"
         );
     }
-
 }

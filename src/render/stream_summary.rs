@@ -1,9 +1,9 @@
-use crate::render::terminal_text as t;
-use crate::render::work_status::{format_elapsed, STATUS_PULSE_FRAMES};
-use crate::token_counter;
 use crate::render::status_style::{color_running, color_status};
 use crate::render::style::TOOL_BULLET;
+use crate::render::terminal_text as t;
 use crate::render::tool_names::readable_tool_name;
+use crate::render::work_status::{format_elapsed, STATUS_PULSE_FRAMES};
+use crate::token_counter;
 use anyhow::Result;
 use crossterm::execute;
 use crossterm::terminal::{Clear, ClearType};
@@ -78,11 +78,15 @@ impl StreamSummary {
         // 1. 累计源文与 token
         self.reasoning_source.push_str(text);
         self.reasoning_chars = self.reasoning_source.chars().count();
-        self.reasoning_lines = self
-            .reasoning_source
-            .lines()
-            .count()
-            .max(if self.reasoning_source.is_empty() { 0 } else { 1 });
+        self.reasoning_lines =
+            self.reasoning_source
+                .lines()
+                .count()
+                .max(if self.reasoning_source.is_empty() {
+                    0
+                } else {
+                    1
+                });
         self.reasoning_tokens = token_counter::count(&self.reasoning_source);
         self.reasoning_elapsed = elapsed;
         // 2. 有内容时立刻刷新 live 行（动效 + tokens + 耗时）
@@ -149,12 +153,7 @@ impl StreamSummary {
         } else {
             TOOL_BULLET
         };
-        format!(
-            "{prefix} {} · {} {}",
-            label,
-            tokens,
-            t("tokens", "tokens")
-        )
+        format!("{prefix} {} · {} {}", label, tokens, t("tokens", "tokens"))
     }
 
     /// 用当前计数覆盖终端上的思考摘要 live 行。
@@ -523,7 +522,9 @@ mod tests {
         summary.add_reasoning_text("ab").unwrap();
         let first = summary.reasoning_tokens;
         assert!(first >= 1);
-        summary.add_reasoning_text("cd\n more tokens here please").unwrap();
+        summary
+            .add_reasoning_text("cd\n more tokens here please")
+            .unwrap();
         assert!(summary.reasoning_tokens >= first);
         assert!(summary.reasoning_text().contains("tokens"));
     }

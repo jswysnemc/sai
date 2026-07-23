@@ -1,4 +1,4 @@
-use super::subagent_runner::{ProgressMode, SubagentProgress, SubagentRunner, SubagentStats};
+use super::subagent_runner::{ProgressMode, SubagentProgress, SubagentRunner};
 use super::{
     subagent_feed, subagent_runtime, subagent_state, ToolProgress, ToolRegistry, ToolSpec,
 };
@@ -12,8 +12,10 @@ use std::time::Duration;
 
 #[path = "subagent_args.rs"]
 mod args;
+mod control;
 
 use args::{optional_string_arg, string_arg, summarize_prompt};
+use control::{stats_json, subagent_cancel, subagent_list, subagent_result, subagent_status};
 
 const EXPLORE_PROMPT: &str = include_str!("../prompts/subagent-explore.md");
 const GENERAL_PROMPT: &str = include_str!("../prompts/subagent-general.md");
@@ -234,15 +236,15 @@ async fn start_subagent(args: Value, context: SubagentContext) -> Result<String>
     let subagent_id = subagent.id.clone();
     let parent_workdir =
         crate::runtime_cwd::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let isolated = match super::subagent_worktree::try_create(&parent_workdir, &subagent.description)
-    {
-        Ok(value) => value,
-        Err(err) => {
-            // Isolation is best-effort; fall back to parent workdir if git worktree fails.
-            tracing_or_ignore(&format!("subagent worktree create failed: {err}"));
-            None
-        }
-    };
+    let isolated =
+        match super::subagent_worktree::try_create(&parent_workdir, &subagent.description) {
+            Ok(value) => value,
+            Err(err) => {
+                // Isolation is best-effort; fall back to parent workdir if git worktree fails.
+                tracing_or_ignore(&format!("subagent worktree create failed: {err}"));
+                None
+            }
+        };
     let runtime_cwd = if let Some(ref worktree) = isolated {
         subagent_state::set_subagent_worktree(
             &subagent_id,
@@ -411,7 +413,8 @@ async fn execute_subagent(
     {
         progress_task.abort();
     }
-    let merge_summary = finalize_worktree(&subagent_id, worktree.as_ref(), matches!(&result, Ok(_)));
+    let merge_summary =
+        finalize_worktree(&subagent_id, worktree.as_ref(), matches!(&result, Ok(_)));
     match result {
         Ok((content, stats)) => {
             let content = append_merge_summary(content, merge_summary.as_ref());
@@ -459,10 +462,7 @@ fn finalize_worktree(
         "worktree_root".to_string(),
         json!(worktree.worktree_root.display().to_string()),
     );
-    summary.insert(
-        "branch".to_string(),
-        json!(worktree.branch_name.clone()),
-    );
+    summary.insert("branch".to_string(), json!(worktree.branch_name.clone()));
 
     if completed_ok {
         match super::subagent_worktree::apply(worktree) {
@@ -508,17 +508,22 @@ fn append_merge_summary(content: String, merge: Option<&Value>) -> String {
         .unwrap_or("-");
     let apply_error = merge.get("apply_error").and_then(Value::as_str);
     let note = if let Some(error) = apply_error {
-        format!("
+        format!(
+            "
 
-[worktree merge failed: {error}]")
+[worktree merge failed: {error}]"
+        )
     } else if changed && applied {
-        format!("
+        format!(
+            "
 
-[worktree changes auto-merged via {method}]")
+[worktree changes auto-merged via {method}]"
+        )
     } else if changed {
         "
 
-[worktree had changes but auto-merge skipped or no-op]".to_string()
+[worktree had changes but auto-merge skipped or no-op]"
+            .to_string()
     } else {
         String::new()
     };
@@ -723,83 +728,6 @@ fn subagent_system_prompt(
     } else {
         Ok(format!("{base_prompt}\n\n{skills}"))
     }
-}
-
-/// 生成子智能体统计 JSON。
-///
-/// 参数:
-/// - `stats`: 子代理统计
-///
-/// 返回:
-/// - 公开统计信息
-fn stats_json(stats: &SubagentStats) -> Value {
-    let mut value = stats.public();
-    if let Value::Object(map) = &mut value {
-        map.insert("budget_reached".to_string(), json!(stats.budget_reached));
-    }
-    value
-}
-
-/// 查询单个后台子智能体状态。
-///
-/// 参数:
-/// - `args`: 查询参数
-///
-/// 返回:
-/// - 子智能体快照
-fn subagent_status(args: Value, owner_key: &str) -> Result<String> {
-    let subagent_id = string_arg(&args, "subagent_id")?;
-    let subagent = subagent_state::subagent_snapshot_for_owner(owner_key, &subagent_id)?;
-    Ok(serde_json::to_string_pretty(&json!({
-        "ok": true,
-        "subagent": subagent
-    }))?)
-}
-
-/// 查询后台子智能体结果。
-///
-/// 参数:
-/// - `args`: 查询参数
-///
-/// 返回:
-/// - 子智能体结果或当前状态
-fn subagent_result(args: Value, owner_key: &str) -> Result<String> {
-    let subagent_id = string_arg(&args, "subagent_id")?;
-    let subagent = subagent_state::subagent_snapshot_for_owner(owner_key, &subagent_id)?;
-    Ok(serde_json::to_string_pretty(&json!({
-        "ok": subagent.status == "completed",
-        "subagent": subagent
-    }))?)
-}
-
-/// 列出后台子智能体。
-///
-/// 参数:
-/// - 无
-///
-/// 返回:
-/// - 子智能体列表
-fn subagent_list(owner_key: &str) -> Result<String> {
-    Ok(serde_json::to_string_pretty(&json!({
-        "ok": true,
-        "subagents": subagent_state::list_subagents_for_owner(owner_key)
-    }))?)
-}
-
-/// 取消后台子智能体。
-///
-/// 参数:
-/// - `args`: 取消参数
-///
-/// 返回:
-/// - 取消后的子智能体快照
-fn subagent_cancel(args: Value, owner_key: &str) -> Result<String> {
-    let subagent_id = string_arg(&args, "subagent_id")?;
-    let subagent = subagent_state::cancel_subagent_for_owner(owner_key, &subagent_id)?;
-    Ok(serde_json::to_string_pretty(&json!({
-        "ok": true,
-        "subagent": subagent
-    }))?)
 }
 
 include!("subagent_tests.rs");

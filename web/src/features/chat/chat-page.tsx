@@ -214,6 +214,24 @@ export function ChatPage() {
     }
   };
 
+  /**
+   * 校验并加入图片附件，失败时使用聊天页统一错误提示。
+   *
+   * @param files 待加入图片文件
+   * @param selectionStart 当前选区起点
+   * @param selectionEnd 当前选区终点
+   * @returns 更新后的光标位置；失败时返回 undefined
+   */
+  const addComposerImages = async (files: File[], selectionStart: number, selectionEnd: number) => {
+    try {
+      setActionError(null);
+      return await composerAttachments.addFiles(files, selectionStart, selectionEnd);
+    } catch (error) {
+      setActionError(toDisplayError(error, "Failed to attach image", "添加图片失败"));
+      return undefined;
+    }
+  };
+
   const runningStates = run.states.filter((state) => !state.completed);
   const activeRun = runningStates.find((state) => state.status !== "queued") ?? runningStates[0];
   const running = runningStates.length > 0;
@@ -441,7 +459,7 @@ export function ChatPage() {
         onChange={setInput}
         onModeChange={setMode}
         onThinkingLevelChange={thinking.setThinkingLevel}
-        onAddImages={composerAttachments.addFiles}
+        onAddImages={addComposerImages}
         onRemoveAttachment={composerAttachments.removeAttachment}
         onModelSelect={chatModel.selectModel}
         onSubmit={() => void submit()}

@@ -12,6 +12,7 @@ mod mode;
 mod model_context;
 mod recovery;
 mod system_prompt;
+mod tool_attachments;
 mod tool_history;
 mod tool_visibility;
 mod turn_orchestration;
@@ -184,10 +185,7 @@ impl Agent {
                             definitions.clone(),
                             |event| match event {
                                 ChatStreamEvent::Chunk(chunk) => {
-                                    emitted_flag.store(
-                                        true,
-                                        std::sync::atomic::Ordering::SeqCst,
-                                    );
+                                    emitted_flag.store(true, std::sync::atomic::Ordering::SeqCst);
                                     match chunk.kind {
                                         ChatStreamKind::Reasoning if !saw_reasoning => {
                                             saw_reasoning = true;
@@ -206,10 +204,7 @@ impl Agent {
                                     on_event(AgentEvent::Chunk(chunk))
                                 }
                                 ChatStreamEvent::ToolCallProgress(progress) => {
-                                    emitted_flag.store(
-                                        true,
-                                        std::sync::atomic::Ordering::SeqCst,
-                                    );
+                                    emitted_flag.store(true, std::sync::atomic::Ordering::SeqCst);
                                     if !saw_tool_progress {
                                         saw_tool_progress = true;
                                         perf.mark(&format!(
@@ -239,6 +234,7 @@ impl Agent {
                 }
             };
             perf.mark(&format!("round {tool_round} model request done"));
+            tool_attachments::remove_pending_model_attachments(messages);
             if result.tool_calls.is_empty() || !self.tools_enabled {
                 crate::hooks::dispatch(
                     &self.config.hooks,
@@ -276,6 +272,7 @@ impl Agent {
             let question_round_allowed =
                 question_call_count == 1 && question_rounds <= MAX_QUESTION_ROUNDS_PER_TURN;
             let defer_sibling_tools = question_call_count == 1 && result.tool_calls.len() > 1;
+            let mut round_model_attachments = Vec::new();
             for call in result.tool_calls {
                 tool_event_seq += 1;
                 self.record_tool_call_started(turn_id, tool_event_seq, &call)?;
@@ -421,8 +418,7 @@ impl Agent {
                     )?;
                     // 自动审核：与人工审核并行；必须在 on_event（可能阻塞）之前启动
                     let (auto_task, auto_audit_active) = if self.mode == AgentMode::AutoAudit {
-                        let context =
-                            crate::permission::build_audit_context(&messages, 2_500);
+                        let context = crate::permission::build_audit_context(&messages, 2_500);
                         let tool_name = call.function.name.clone();
                         let arguments = call.function.arguments.clone();
                         match crate::permission::resolve_auto_audit_client(
@@ -449,35 +445,36 @@ impl Agent {
                             auto_audit_active,
                         );
                     let request_id = request.id.clone();
-                    let auto_task = auto_task.map(|(audit_client, context, tool_name, arguments)| {
-                        let audit_request_id = request_id.clone();
-                        tokio::spawn(async move {
-                            // 超时或失败时静默回退人工审核
-                            match crate::permission::run_auto_audit(
-                                &audit_client,
-                                &audit_request_id,
-                                &tool_name,
-                                &arguments,
-                                &context,
-                            )
-                            .await
-                            {
-                                Ok(_) => {}
-                                Err(error) => {
-                                    let message = format!("{error:#}");
-                                    // 超时 / 竞态：完全静默；其它失败仅提示一次后回退人工
-                                    if message.contains("timed out")
-                                        || message.contains("timeout")
-                                        || message.contains("no longer pending")
-                                        || message.contains("no longer running")
-                                    {
-                                        return;
+                    let auto_task =
+                        auto_task.map(|(audit_client, context, tool_name, arguments)| {
+                            let audit_request_id = request_id.clone();
+                            tokio::spawn(async move {
+                                // 超时或失败时静默回退人工审核
+                                match crate::permission::run_auto_audit(
+                                    &audit_client,
+                                    &audit_request_id,
+                                    &tool_name,
+                                    &arguments,
+                                    &context,
+                                )
+                                .await
+                                {
+                                    Ok(_) => {}
+                                    Err(error) => {
+                                        let message = format!("{error:#}");
+                                        // 超时 / 竞态：完全静默；其它失败仅提示一次后回退人工
+                                        if message.contains("timed out")
+                                            || message.contains("timeout")
+                                            || message.contains("no longer pending")
+                                            || message.contains("no longer running")
+                                        {
+                                            return;
+                                        }
+                                        eprintln!("[sai] auto-audit fallback to human: {message}");
                                     }
-                                    eprintln!("[sai] auto-audit fallback to human: {message}");
                                 }
-                            }
-                        })
-                    });
+                            })
+                        });
                     on_event(AgentEvent::PermissionRequested(request.clone()))?;
                     let decision = match decision_rx.await {
                         Ok(decision) => {
@@ -628,7 +625,10 @@ impl Agent {
                     tokio::select! {
                         result = &mut tool_future => {
                             break match result {
-                                Ok(output) => {
+                                Ok(mut tool_output) => {
+                                    let output = std::mem::take(&mut tool_output.content);
+                                    round_model_attachments
+                                        .append(&mut tool_output.model_attachments);
                                     while let Ok(message) = progress_rx.try_recv() {
                                         on_event(AgentEvent::ToolProgress {
                                             name: call.function.name.clone(),
@@ -712,6 +712,7 @@ impl Agent {
                     }
                 }
             }
+            tool_attachments::append_model_attachments(messages, round_model_attachments);
         }
     }
 }

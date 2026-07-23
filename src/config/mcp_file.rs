@@ -1,4 +1,5 @@
 use super::model::{McpConfig, McpServerConfig};
+use super::secrets::{set_private_permissions, write_private_file};
 use crate::paths::SaiPaths;
 use anyhow::{bail, Context, Result};
 
@@ -9,6 +10,8 @@ use anyhow::{bail, Context, Result};
 pub fn load_mcp_config(paths: &SaiPaths) -> Result<McpConfig> {
     let file = paths.mcp_config_file();
     if file.exists() {
+        // 1. MCP env 和 headers 可能包含凭据，读取已有文件前先收紧权限
+        set_private_permissions(&file)?;
         let raw = std::fs::read_to_string(&file)
             .with_context(|| format!("failed to read {}", file.display()))?;
         let stripped = json_comments::StripComments::new(raw.as_bytes());
@@ -26,7 +29,7 @@ pub fn save_mcp_config(paths: &SaiPaths, config: &McpConfig) -> Result<()> {
     paths.create_dirs()?;
     let file = paths.mcp_config_file();
     let raw = serde_json::to_string_pretty(config)?;
-    std::fs::write(&file, format!("{raw}\n"))
+    write_private_file(&file, format!("{raw}\n").as_bytes())
         .with_context(|| format!("failed to write {}", file.display()))?;
     Ok(())
 }
@@ -37,10 +40,36 @@ pub fn save_mcp_config(paths: &SaiPaths, config: &McpConfig) -> Result<()> {
 pub fn init_mcp_config_file(paths: &SaiPaths, legacy: Option<&McpConfig>) -> Result<()> {
     let file = paths.mcp_config_file();
     if file.exists() {
+        set_private_permissions(&file)?;
         return Ok(());
     }
     let config = legacy.cloned().unwrap_or_default();
     save_mcp_config(paths, &config)
+}
+
+/// 从主配置迁移 legacy MCP 配置，并确保独立文件权限正确。
+///
+/// 参数:
+/// - `paths`: Sai 路径集合
+///
+/// 返回:
+/// - 独立 MCP 配置初始化结果
+pub(super) fn init_mcp_config_from_main(paths: &SaiPaths) -> Result<()> {
+    let legacy = (!paths.mcp_config_file().exists())
+        .then(|| read_legacy_mcp_from_main_config(paths))
+        .flatten();
+    init_mcp_config_file(paths, legacy.as_ref())
+}
+
+/// 仅解析主配置中的 legacy `mcp` 段，不触发完整配置校验。
+fn read_legacy_mcp_from_main_config(paths: &SaiPaths) -> Option<McpConfig> {
+    if !paths.config_file.exists() {
+        return None;
+    }
+    let raw = std::fs::read_to_string(&paths.config_file).ok()?;
+    let stripped = json_comments::StripComments::new(raw.as_bytes());
+    let value: serde_json::Value = serde_json::from_reader(stripped).ok()?;
+    serde_json::from_value(value.get("mcp")?.clone()).ok()
 }
 
 /// 校验 MCP 配置合法性。
@@ -59,7 +88,11 @@ fn validate_mcp_server(server: &McpServerConfig) -> Result<()> {
     if server.id.trim().is_empty() {
         bail!("mcp server id cannot be empty");
     }
-    if server.id.chars().any(|c| !(c.is_ascii_alphanumeric() || c == '_' || c == '-')) {
+    if server
+        .id
+        .chars()
+        .any(|c| !(c.is_ascii_alphanumeric() || c == '_' || c == '-'))
+    {
         bail!(
             "mcp server id may only contain letters, digits, '_' and '-': {}",
             server.id
@@ -74,7 +107,10 @@ fn validate_mcp_server(server: &McpServerConfig) -> Result<()> {
         }
         "http" | "sse" => {
             if server.enabled && server.url.as_deref().unwrap_or("").trim().is_empty() {
-                bail!("mcp server {} ({transport}) requires url when enabled", server.id);
+                bail!(
+                    "mcp server {} ({transport}) requires url when enabled",
+                    server.id
+                );
             }
         }
         other if !other.is_empty() => {
@@ -127,7 +163,11 @@ mod tests {
                 enabled: true,
                 transport: "stdio".into(),
                 command: "npx".into(),
-                args: vec!["-y".into(), "@modelcontextprotocol/server-filesystem".into(), ".".into()],
+                args: vec![
+                    "-y".into(),
+                    "@modelcontextprotocol/server-filesystem".into(),
+                    ".".into(),
+                ],
                 env: Default::default(),
                 cwd: None,
                 url: None,
@@ -140,5 +180,36 @@ mod tests {
         let loaded = load_mcp_config(&paths).unwrap();
         assert_eq!(loaded, config);
         assert!(paths.mcp_config_file().exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn saves_mcp_config_with_private_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path().to_path_buf());
+        let config = McpConfig::default();
+        save_mcp_config(&paths, &config).unwrap();
+        let created_mode = std::fs::metadata(paths.mcp_config_file())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(created_mode, 0o600);
+        std::fs::set_permissions(
+            paths.mcp_config_file(),
+            std::fs::Permissions::from_mode(0o644),
+        )
+        .unwrap();
+
+        let _ = load_mcp_config(&paths).unwrap();
+
+        let mode = std::fs::metadata(paths.mcp_config_file())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600);
     }
 }

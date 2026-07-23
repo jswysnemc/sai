@@ -1,5 +1,10 @@
 import { useRef, useState } from "react";
 import { useI18n } from "../../i18n/use-i18n";
+import {
+  attachmentLimitViolation,
+  MAX_IMAGE_ATTACHMENTS,
+  MAX_IMAGE_ATTACHMENT_BYTES
+} from "./attachment-limits";
 
 export type ComposerAttachment = {
   id: number;
@@ -27,6 +32,20 @@ export function useComposerAttachments() {
   const addFiles = async (files: File[], selectionStart: number, selectionEnd: number): Promise<number | undefined> => {
     const images = files.filter((file) => file.type.startsWith("image/"));
     if (images.length === 0) return undefined;
+    const violation = attachmentLimitViolation(attachments.length, images);
+    if (violation === "too_many") {
+      throw new Error(t(
+        `Attach at most ${MAX_IMAGE_ATTACHMENTS} images`,
+        `最多添加 ${MAX_IMAGE_ATTACHMENTS} 张图片`
+      ));
+    }
+    if (violation === "too_large") {
+      const megabytes = MAX_IMAGE_ATTACHMENT_BYTES / 1024 / 1024;
+      throw new Error(t(
+        `Each image must be ${megabytes} MiB or smaller`,
+        `每张图片不能超过 ${megabytes} MiB`
+      ));
+    }
     const loaded = await Promise.all(images.map(async (file) => ({
       name: file.name || t(`pasted-image_${Date.now()}.png`, `粘贴图片_${Date.now()}.png`),
       dataUrl: await readFileAsDataUrl(file, t)

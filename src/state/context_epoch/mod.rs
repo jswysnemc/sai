@@ -128,3 +128,16 @@ pub(crate) fn context_epoch_projection_from_sources(
         blocked_source: epoch.blocked_source,
     })
 }
+
+/// 读取当前会话已持久化的 Context Epoch baseline 文本。
+///
+/// 参数:
+/// - `db`: 对话数据库
+/// - `session_id`: 当前会话标识
+///
+/// 返回:
+/// - baseline 文本；尚未初始化时返回 None
+pub(crate) fn load_baseline(db: &ConversationDb, session_id: &str) -> Result<Option<String>> {
+    Ok(repository::load_epoch(db, session_id)?.map(|epoch| epoch.baseline))
+}
+

@@ -45,10 +45,7 @@ impl InlineViewport {
         // 测试环境不向终端查询光标，避免 cursor position 请求阻塞
         if cfg!(test) {
             return Self {
-                size: TerminalSize {
-                    cols: 80,
-                    rows: 24,
-                },
+                size: TerminalSize { cols: 80, rows: 24 },
                 origin_row: 0,
                 composer_height: 0,
                 history_height: 0,

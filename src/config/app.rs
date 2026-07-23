@@ -2,15 +2,12 @@ use super::app_validation::{
     default_context_chars_for_provider_model, validate_provider_model_metadata,
 };
 use super::model::*;
-use super::paths::{config_relative_path, persona_scope_name};
-use super::secrets::set_private_permissions;
+use super::secrets::{set_private_permissions, write_private_file};
 use crate::default_models::OPENCODE_PROVIDER_ID;
 use crate::paths::SaiPaths;
-use crate::prompts::default_system_prompt;
 use anyhow::{bail, Context, Result};
 use std::collections::HashSet;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 
 impl AppConfig {
     pub fn memory_config(&self) -> &MemoryConfig {
@@ -22,6 +19,8 @@ impl AppConfig {
     }
 
     pub fn load(paths: &SaiPaths) -> Result<Self> {
+        // 1. 主配置包含供应商、网关和插件凭据，读取已有文件前先收紧权限
+        set_private_permissions(&paths.config_file)?;
         let raw = std::fs::read_to_string(&paths.config_file)
             .with_context(|| format!("failed to read {}", paths.config_file.display()))?;
         let stripped = json_comments::StripComments::new(raw.as_bytes());
@@ -51,26 +50,25 @@ impl AppConfig {
         if !paths.config_file.exists() {
             // 1. 首次运行写入入口默认 Agent 与可编辑档案列表
             let mut config = Self::default();
-            let _ = super::agents::ensure_surface_agent_defaults(&mut config);
+            let _ = super::agent_presets::ensure_surface_agent_defaults(&mut config);
             config.save(paths)?;
         } else {
+            set_private_permissions(&paths.config_file)?;
             // 2. 已有配置：若 agents 为空或入口默认缺失，补齐并回写
             if let Ok(mut config) = Self::load_or_default(paths) {
-                if super::agents::ensure_surface_agent_defaults(&mut config) {
+                if super::agent_presets::ensure_surface_agent_defaults(&mut config) {
                     let _ = config.save(paths);
                 }
             }
         }
         if !paths.secrets_file.exists() {
             let raw = "{\n  // Optional provider API keys. Prefer $env:... in config.jsonc.\n  \"api_keys\": {}\n}\n";
-            std::fs::write(&paths.secrets_file, raw)?;
+            write_private_file(&paths.secrets_file, raw.as_bytes())?;
+        } else {
             set_private_permissions(&paths.secrets_file)?;
         }
-        // 独立 MCP 配置：从主配置 legacy 段迁移或写默认
-        if !paths.mcp_config_file().exists() {
-            let legacy = read_legacy_mcp_from_main_config(paths);
-            super::mcp_file::init_mcp_config_file(paths, legacy.as_ref())?;
-        }
+        // 独立 MCP 配置：新文件执行迁移，已有文件也通过初始化入口收紧权限
+        super::mcp_file::init_mcp_config_from_main(paths)?;
         Ok(())
     }
 
@@ -104,7 +102,7 @@ impl AppConfig {
             super::mcp_file::save_mcp_config(paths, &config.mcp)?;
         }
         let raw = serde_json::to_string_pretty(&config)?;
-        std::fs::write(&paths.config_file, format!("{raw}\n"))?;
+        write_private_file(&paths.config_file, format!("{raw}\n").as_bytes())?;
         Ok(())
     }
 
@@ -139,9 +137,13 @@ impl AppConfig {
         if self.providers.is_empty() {
             bail!("at least one provider is required");
         }
+        let mut provider_ids = HashSet::new();
         for provider in &self.providers {
             if provider.id.trim().is_empty() {
                 bail!("provider id cannot be empty");
+            }
+            if !provider_ids.insert(provider.id.as_str()) {
+                bail!("duplicate provider id: {}", provider.id);
             }
             if provider.base_url.trim().is_empty() {
                 bail!("provider {} base_url cannot be empty", provider.id);
@@ -439,6 +441,49 @@ impl AppConfig {
     ///
     /// 返回:
     /// - 供应商与模型选择
+    /// 构造会话记忆提取使用的运行时配置。
+    ///
+    /// 未配置专用模型时原样返回当前配置。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 已应用记忆提取模型选择的独立配置副本
+    pub fn session_memory_runtime_config(&self) -> Result<Self> {
+        self.validate_session_memory_model()?;
+        if self.memory.extraction_provider_id.trim().is_empty() {
+            return Ok(self.clone());
+        }
+        let mut config = self.clone();
+        let provider_id = self.memory.extraction_provider_id.trim();
+        let model = self.memory.extraction_model.trim();
+        config.set_active_provider_model(provider_id, model)?;
+        Ok(config)
+    }
+
+    /// 校验会话记忆提取供应商与模型必须同时配置。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 配置合法时成功
+    fn validate_session_memory_model(&self) -> Result<()> {
+        let provider_id = self.memory.extraction_provider_id.trim();
+        let model = self.memory.extraction_model.trim();
+        match (provider_id.is_empty(), model.is_empty()) {
+            (true, true) => Ok(()),
+            (false, false) => {
+                self.provider(Some(provider_id))?;
+                Ok(())
+            }
+            _ => bail!(
+                "memory.extraction_provider_id and memory.extraction_model must be provided together"
+            ),
+        }
+    }
+
     pub fn compaction_provider_model(&self) -> Result<ProviderModelChoice> {
         let config = self.compaction_runtime_config()?;
         let provider = config.provider(None)?;
@@ -653,137 +698,6 @@ impl AppConfig {
             .unwrap_or(self.context.default_max_chars))
     }
 
-    pub fn system_prompt(&self, paths: &SaiPaths) -> Result<String> {
-        let mut prompt = self.base_system_prompt(paths)?;
-        let user_identity = self.user_identity_prompt(paths)?;
-        if !user_identity.trim().is_empty() {
-            prompt.push_str("\n\n<current-user-profile>\n");
-            prompt.push_str("This profile describes the user currently interacting with you.\n\n");
-            prompt.push_str(user_identity.trim());
-            prompt.push_str("\n</current-user-profile>");
-        }
-        Ok(prompt)
-    }
-
-    pub fn base_system_prompt(&self, paths: &SaiPaths) -> Result<String> {
-        // 1. Agent 档案 / 运行时覆盖写入的 system_prompt 优先
-        if let Some(prompt) = self
-            .system_prompt
-            .as_deref()
-            .map(str::trim)
-            .filter(|prompt| !prompt.is_empty())
-        {
-            return Ok(prompt.to_string());
-        }
-        // 2. 兼容旧 system-prompt.md 文件，否则使用内置默认人设提示
-        let legacy = self.custom_system_prompt(paths)?;
-        if !legacy.trim().is_empty() {
-            return Ok(legacy);
-        }
-        let _ = paths;
-        Ok(default_system_prompt())
-    }
-
-    pub fn custom_system_prompt(&self, paths: &SaiPaths) -> Result<String> {
-        if let Some(prompt) = self
-            .system_prompt
-            .as_deref()
-            .filter(|prompt| !prompt.trim().is_empty())
-        {
-            return Ok(prompt.to_string());
-        }
-        let prompt_file = self.system_prompt_path(paths);
-        if prompt_file.exists() {
-            return Ok(std::fs::read_to_string(prompt_file)?);
-        }
-        Ok(String::new())
-    }
-
-    pub fn prompts_dir_path(&self, paths: &SaiPaths) -> PathBuf {
-        config_relative_path(paths, &self.prompt.prompts_dir)
-    }
-
-    pub fn user_identity_path(&self, paths: &SaiPaths) -> PathBuf {
-        config_relative_path(paths, &self.prompt.user_identity_file)
-    }
-
-    pub fn identities_dir_path(&self, paths: &SaiPaths) -> PathBuf {
-        config_relative_path(paths, &self.prompt.identities_dir)
-    }
-
-    pub fn persona_path(&self, paths: &SaiPaths, name: &str) -> PathBuf {
-        self.prompts_dir_path(paths).join(name)
-    }
-
-    pub fn identity_path(&self, paths: &SaiPaths, name: &str) -> PathBuf {
-        self.identities_dir_path(paths).join(name)
-    }
-
-    pub fn persona_memory_data_dir(&self, paths: &SaiPaths, persona: &str) -> PathBuf {
-        paths
-            .data_dir
-            .join("personas")
-            .join(persona_scope_name(persona))
-    }
-
-    pub fn persona_memory_state_dir(&self, paths: &SaiPaths, persona: &str) -> PathBuf {
-        paths
-            .state_dir
-            .join("personas")
-            .join(persona_scope_name(persona))
-    }
-
-    pub fn persona_skills_dir(&self, paths: &SaiPaths, persona: &str) -> PathBuf {
-        paths
-            .skills_dir
-            .join("personas")
-            .join(persona_scope_name(persona))
-    }
-
-    pub fn active_persona_memory_data_dir(&self, paths: &SaiPaths) -> PathBuf {
-        self.persona_memory_data_dir(paths, self.prompt.active_persona.trim())
-    }
-
-    pub fn active_persona_memory_state_dir(&self, paths: &SaiPaths) -> PathBuf {
-        self.persona_memory_state_dir(paths, self.prompt.active_persona.trim())
-    }
-
-    pub fn active_persona_skills_dir(&self, paths: &SaiPaths) -> PathBuf {
-        self.persona_skills_dir(paths, self.prompt.active_persona.trim())
-    }
-
-
-    pub fn user_identity_prompt(&self, paths: &SaiPaths) -> Result<String> {
-        if !self.prompt.active_identity.trim().is_empty() {
-            let path = self.identity_path(paths, self.prompt.active_identity.trim());
-            if path.exists() {
-                return std::fs::read_to_string(&path)
-                    .with_context(|| format!("failed to read {}", path.display()));
-            }
-        }
-        let path = self.user_identity_path(paths);
-        if path.exists() {
-            return std::fs::read_to_string(&path)
-                .with_context(|| format!("failed to read {}", path.display()));
-        }
-        Ok(String::new())
-    }
-
-    pub fn system_prompt_path(&self, paths: &SaiPaths) -> PathBuf {
-        let value = self
-            .system_prompt_file
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .unwrap_or("system-prompt.md");
-        let path = PathBuf::from(value);
-        if path.is_absolute() {
-            path
-        } else {
-            paths.config_dir.join(path)
-        }
-    }
-
     pub fn upsert_provider(&mut self, provider: ProviderConfig) {
         self.active_provider = provider.id.clone();
         match self
@@ -795,17 +709,4 @@ impl AppConfig {
             None => self.providers.push(provider),
         }
     }
-}
-
-
-/// 仅解析主配置中的 legacy `mcp` 段，不触发完整校验/迁移。
-fn read_legacy_mcp_from_main_config(paths: &SaiPaths) -> Option<crate::config::McpConfig> {
-    if !paths.config_file.exists() {
-        return None;
-    }
-    let raw = std::fs::read_to_string(&paths.config_file).ok()?;
-    let stripped = json_comments::StripComments::new(raw.as_bytes());
-    let value: serde_json::Value = serde_json::from_reader(stripped).ok()?;
-    let mcp = value.get("mcp")?.clone();
-    serde_json::from_value(mcp).ok()
 }

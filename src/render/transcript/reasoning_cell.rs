@@ -1,6 +1,6 @@
 use crate::i18n::text as t;
 use crate::render::fold_text::{
-    fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_PREVIEW_LINES,
+    fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
 };
 use crate::render::work_status::{format_elapsed, STATUS_PULSE_FRAMES};
 use crate::render::ReasoningDisplayMode;
@@ -124,7 +124,7 @@ pub(crate) fn render_thinking_body(
     }
     // 1. 按终端实际显示宽度折行后计数，避免无换行长行挤占视野
     let lines = wrap_display_lines(body, terminal_wrap_width());
-    let (visible, omitted) = fold_display_lines(&lines, FOLD_PREVIEW_LINES, expanded);
+    let (visible, omitted) = fold_display_lines(&lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
 
     let mut output = title;
     let mut content_index = 0usize;
@@ -157,9 +157,10 @@ pub(crate) fn render_thinking_body(
 /// 返回:
 /// - 如 `thinking(12s)` / `思考(12秒)`
 fn thinking_label(duration: Option<Duration>) -> String {
-    let base = t("thinking", "思考");
+    let base = "thinking";
     match duration {
-        Some(elapsed) => format!("{base}({})", format_elapsed(elapsed)),
+        // 固定英文：thinking (12s)，避免中文「秒」与英文标签混排
+        Some(elapsed) => format!("{base} ({})", format_elapsed(elapsed)),
         None => base.to_string(),
     }
 }
@@ -189,7 +190,7 @@ mod tests {
         );
         assert!(rendered.contains("tokens"));
         assert!(rendered.contains("thinking") || rendered.contains("思考"));
-        assert!(rendered.contains("12") || rendered.contains("s") || rendered.contains("秒"));
+        assert!(rendered.contains("12s") || rendered.contains("12"));
     }
 
     #[test]
@@ -227,7 +228,8 @@ mod tests {
         assert!(collapsed.contains("line 12"));
         assert!(!collapsed.contains("line 6"));
         assert!(collapsed.contains("Ctrl+O"));
-        assert!(collapsed.contains("+2"));
+        // 12 行、前 2 后 4，中间省略 6 行
+        assert!(collapsed.contains("+6"));
 
         let expanded = render(
             &ReasoningCell {

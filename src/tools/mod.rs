@@ -11,7 +11,6 @@ mod deepseek_status;
 mod default_tools;
 mod diagnostics;
 mod edit_file;
-mod edit_file_tools;
 pub(crate) mod edit_patch;
 mod exchange_rate;
 mod fcitx_wiki;
@@ -54,8 +53,9 @@ use crate::config::AppConfig;
 use crate::paths::SaiPaths;
 pub(crate) use catalog::{mcp_tool_catalog, tool_catalog, ToolCatalogEntry};
 pub(crate) use context::tool_output_for_context;
-pub(crate) use progressive::{register_loader as register_progressive_loader, LOAD_NAME};
+pub(crate) use progressive::{is_initial_tool, register_loader as register_progressive_loader, LOAD_NAME};
 pub use registry::{empty_parameters, ToolPermission, ToolProgress, ToolRegistry, ToolSpec};
+pub(crate) use registry::{ToolModelAttachment, ToolOutput};
 pub(crate) use skill_management::{
     create_managed_skill, list_managed_skills, read_managed_skill, set_managed_skill_enabled,
     update_managed_skill, ManagedSkill,
@@ -75,9 +75,6 @@ pub fn readable_tool_name(name: &str) -> &str {
         "cron" => "定时任务",
         "read_file" => "读取文件",
         "edit_file" => "编辑文件",
-        "apply_patch" => "应用补丁",
-        "write_file" => "写入文件",
-        "replace_file_lines" => "替换文件行",
         "create_goal" => "创建目标",
         "get_goal" => "查看目标",
         "update_goal" => "更新目标",

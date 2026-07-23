@@ -24,6 +24,7 @@ struct FileQuery {
 struct SaveFileRequest {
     path: String,
     content: String,
+    expected_version: Option<String>,
     expected_modified_at: Option<u64>,
 }
 
@@ -108,21 +109,36 @@ async fn save_file(
     Json(request): Json<SaveFileRequest>,
 ) -> WebResult<Json<workspace::FileContent>> {
     let active = state.workspaces.active().map_err(WebError::from)?;
-    if let Some(expected) = request.expected_modified_at {
-        let current = workspace::read_file(std::path::Path::new(&active.path), &request.path)
-            .map_err(|error| WebError::bad_request(error.to_string()))?;
-        if current.modified_at != Some(expected) {
-            return Err(WebError::conflict(
-                "file changed outside the editor; review the latest content before saving",
-            ));
-        }
+    // 1. 保存现有文件必须携带内容指纹，秒级修改时间不足以排除同秒覆盖
+    let expected_version = request
+        .expected_version
+        .filter(|value| !value.trim().is_empty());
+    if expected_version.is_none() {
+        let detail = if request.expected_modified_at.is_some() {
+            "file version is required; reload the file before saving"
+        } else {
+            "file version is required for saving an existing file"
+        };
+        return Err(WebError::conflict(detail));
     }
     let file = workspace::write_file(
         std::path::Path::new(&active.path),
         &request.path,
         &request.content,
+        expected_version.as_deref(),
     )
-    .map_err(|error| WebError::bad_request(error.to_string()))?;
+    .map_err(|error| {
+        if error
+            .downcast_ref::<workspace::FileVersionConflict>()
+            .is_some()
+        {
+            WebError::conflict(
+                "file changed outside the editor; review the latest content before saving",
+            )
+        } else {
+            WebError::bad_request(error.to_string())
+        }
+    })?;
     Ok(Json(file))
 }
 

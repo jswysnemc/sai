@@ -53,12 +53,7 @@ fn append_compaction(transcript: &mut TranscriptStore, compaction: &SessionTimel
     if summary.is_empty() {
         return;
     }
-    transcript.push_compaction_finished(
-        compaction.applied,
-        None,
-        None,
-        Some(summary.to_string()),
-    );
+    transcript.push_compaction_finished(compaction.applied, None, None, Some(summary.to_string()));
 }
 
 /// 追加历史用户输入，自动轮次使用蓝色圆点。
@@ -197,13 +192,13 @@ mod tests {
                 timestamp: String::new(),
                 content: user.to_string(),
                 reasoning: None,
-                            image_urls: Vec::new(),
+                image_urls: Vec::new(),
             },
             assistant: TimelineMessage {
                 timestamp: String::new(),
                 content: "已完成".to_string(),
                 reasoning: None,
-                            image_urls: Vec::new(),
+                image_urls: Vec::new(),
             },
             tools: vec![TimelineToolEntry {
                 id: "tool-1".to_string(),

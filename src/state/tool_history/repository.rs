@@ -5,10 +5,11 @@ use super::model::{
 };
 use crate::state::turns::ConversationDb;
 use crate::state::StateStore;
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use rusqlite::{params, OptionalExtension};
 use sha2::{Digest, Sha256};
+use std::path::{Component, Path};
 
 impl StateStore {
     /// 返回指定轮次已经持久化的工具调用数量。
@@ -157,6 +158,36 @@ impl StateStore {
             },
         )?;
         Ok(Some(result_ref))
+    }
+
+    /// 读取当前会话目录中的完整工具结果引用。
+    ///
+    /// 参数:
+    /// - `result_ref`: 相对于当前会话目录的工具结果引用
+    ///
+    /// 返回:
+    /// - 完整工具结果文本；引用越界、缺失或不可读时返回错误
+    pub(crate) fn read_tool_result_ref(&self, result_ref: &str) -> Result<String> {
+        let reference = Path::new(result_ref);
+        if result_ref.trim().is_empty()
+            || reference.is_absolute()
+            || reference
+                .components()
+                .any(|component| !matches!(component, Component::Normal(_)))
+        {
+            bail!("工具结果引用必须是会话目录内的普通相对路径");
+        }
+
+        let state_root =
+            std::fs::canonicalize(&self.state_dir).context("无法解析当前会话状态目录")?;
+        let result_path = std::fs::canonicalize(self.state_dir.join(reference))
+            .with_context(|| format!("完整工具结果引用不存在: {result_ref}"))?;
+        if !result_path.starts_with(&state_root) || !result_path.is_file() {
+            bail!("工具结果引用超出当前会话目录: {result_ref}");
+        }
+
+        std::fs::read_to_string(&result_path)
+            .with_context(|| format!("无法读取完整工具结果引用: {result_ref}"))
     }
 }
 

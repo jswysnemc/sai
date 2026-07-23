@@ -47,6 +47,8 @@ async fn save(
         .map_err(WebError::from)?;
     let mut submitted = submitted;
     config_service::merge_secret_sentinels_json(&mut submitted, &current);
+    config_service::ensure_secret_sentinels_resolved(&submitted)
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
     let config: McpConfig = serde_json::from_value(submitted)
         .map_err(|error| WebError::bad_request(format!("invalid MCP configuration: {error}")))?;
     save_mcp_config(&state.paths, &config)
@@ -83,6 +85,8 @@ async fn scan_tools(
             .map_err(WebError::from)?;
         config_service::merge_secret_sentinels_json(&mut submitted, &current_value);
     }
+    config_service::ensure_secret_sentinels_resolved(&submitted)
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
     let server: McpServerConfig = serde_json::from_value(submitted).map_err(|error| {
         WebError::bad_request(format!("invalid MCP server configuration: {error}"))
     })?;

@@ -1,4 +1,4 @@
-use crate::render::fold_text::{fold_display_lines, terminal_wrap_width, wrap_display_lines};
+use crate::render::fold_text::{fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES};
 use crate::render::style::TOOL_BULLET;
 use crate::render::terminal_text as t;
 use serde_json::Value;
@@ -40,7 +40,6 @@ fn render_output_block(label: &str, text: &str) -> String {
     render_output_block_limited(label, text, None)
 }
 
-
 struct CommandResult {
     success: bool,
     exit_code: Option<i64>,
@@ -71,6 +70,18 @@ fn parse_command_result(output: &str) -> Option<CommandResult> {
             .unwrap_or_default()
             .to_string(),
     })
+}
+
+/// 提取命令工具 JSON 结果中的状态与输出流。
+///
+/// 参数:
+/// - output: 命令工具返回的 JSON
+///
+/// 返回:
+/// - (是否成功, stdout, stderr)；无法解析时返回空
+pub(crate) fn command_result_streams(output: &str) -> Option<(bool, String, String)> {
+    let result = parse_command_result(output)?;
+    Some((result.success, result.stdout, result.stderr))
 }
 
 /// 将命令工具 JSON 结果渲染为 stdout/stderr 代码块（供 TUI 工具视图复用）。
@@ -400,7 +411,8 @@ fn render_output_block_limited_with_hint(
     }
     if lines.is_empty() {
         lines.push("\x1b[2m  └ (no output)\x1b[0m".to_string());
-    } else if omitted > 0 && !raw_lines.iter().any(|line| line == "__OMITTED__") && show_expand_hint {
+    } else if omitted > 0 && !raw_lines.iter().any(|line| line == "__OMITTED__") && show_expand_hint
+    {
         // 兼容旧逻辑：若仅尾部折叠，在末尾附加提示
         lines.push(format!(
             "\x1b[2m    … +{omitted} lines (Ctrl+O to expand)\x1b[0m"
@@ -438,7 +450,7 @@ fn render_output_block_lines(label: &str, lines: &[String]) -> String {
 ///
 /// 返回:
 /// - 仅保留可显示字符的文本
-fn sanitize_command_output(text: &str) -> String {
+pub(crate) fn sanitize_command_output(text: &str) -> String {
     let mut output = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
     while let Some(ch) = chars.next() {
@@ -481,7 +493,14 @@ fn limited_output_text(text: &str, line_limit: Option<usize>) -> (String, usize)
     if display_lines.is_empty() {
         return (String::new(), 0);
     }
-    let (kept, omitted) = fold_display_lines(&display_lines, limit, false);
+    // 预览折叠固定前 2 后 4；line_limit 仅用于决定是否折叠（Some 即折叠）
+    let _ = limit;
+    let (kept, omitted) = fold_display_lines(
+        &display_lines,
+        FOLD_HEAD_LINES,
+        FOLD_TAIL_LINES,
+        false,
+    );
     (kept.join("\n"), omitted)
 }
 
@@ -536,7 +555,9 @@ mod tests {
 
         assert!(plain.contains("one"));
         assert!(plain.contains("five"));
-        assert!(!plain.lines().any(|line| line.trim_end() == "six" || line.ends_with(" six")));
+        assert!(!plain
+            .lines()
+            .any(|line| line.trim_end() == "six" || line.ends_with(" six")));
         assert!(!plain.contains("seven\n"));
         // 中间省略
         assert!(plain.contains("… +2 lines") || plain.contains("+2 lines"));
@@ -624,17 +645,25 @@ mod tests {
         .to_string();
         let rendered = render_command_result_view_for_cli(&output);
         let plain = strip_ansi_for_test(&rendered);
-        let visible = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"]
-            .into_iter()
-            .filter(|line| plain.contains(line))
-            .count();
+        let visible = [
+            "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+            "eleven", "twelve",
+        ]
+        .into_iter()
+        .filter(|line| plain.contains(line))
+        .count();
 
         // 首尾各 5 行，中间省略 2 行
-        assert_eq!(visible, COMMAND_PREVIEW_LINES * 2);
+        assert_eq!(visible, FOLD_HEAD_LINES + FOLD_TAIL_LINES);
         assert!(!plain.contains("Ctrl+O"));
         assert!(plain.contains("one"));
         assert!(plain.contains("twelve"));
-        assert!(!plain.contains("six\n") && !plain.lines().any(|l| l.trim().ends_with("six") && !l.contains("…")));
+        assert!(
+            !plain.contains("six\n")
+                && !plain
+                    .lines()
+                    .any(|l| l.trim().ends_with("six") && !l.contains("…"))
+        );
     }
 
     #[test]
@@ -690,6 +719,9 @@ mod tests {
         let long = "x".repeat(width * 12);
         let output = render_live_command_output(&long, "", false);
         let plain = strip_ansi_for_test(&output);
-        assert!(plain.contains("Ctrl+O") || plain.contains("…"), "got: {plain}");
+        assert!(
+            plain.contains("Ctrl+O") || plain.contains("…"),
+            "got: {plain}"
+        );
     }
 }

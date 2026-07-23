@@ -73,9 +73,6 @@ fn read_file_start_status_uses_progress_marker() {
 fn visible_tool_blocks_do_not_need_extra_start_events() {
     assert!(tool_call_has_visible_block("run_command"));
     assert!(tool_call_has_visible_block("edit_file"));
-    assert!(tool_call_has_visible_block("apply_patch"));
-    assert!(tool_call_has_visible_block("write_file"));
-    assert!(tool_call_has_visible_block("replace_file_lines"));
     assert!(!tool_call_has_visible_block("web_search"));
 }
 

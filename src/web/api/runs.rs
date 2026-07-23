@@ -1,7 +1,7 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
-use super::super::runs::{StartRunRequest, WebEvent};
-use axum::extract::{Path, Query, State};
+use super::super::runs::{StartRunRequest, WebEvent, MAX_RUN_REQUEST_BYTES};
+use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::HeaderMap;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::routing::{delete, get, post};
@@ -27,7 +27,10 @@ struct InterruptionRecoveryQuery {
 /// 返回 Agent 运行路由。
 pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
-        .route("/api/runs", post(start))
+        .route(
+            "/api/runs",
+            post(start).layer(DefaultBodyLimit::max(MAX_RUN_REQUEST_BYTES)),
+        )
         .route("/api/runs/active", get(active))
         .route(
             "/api/runs/interruption-recovery",

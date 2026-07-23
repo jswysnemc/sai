@@ -1,10 +1,11 @@
+mod file_write_lock;
 mod files;
 mod git_diff;
 mod path_guard;
 
 pub(crate) use files::{
     create_entry, delete_entry, read_file, read_image, read_tree, rename_entry, write_file,
-    FileContent, FileMutation, FileNode,
+    FileContent, FileMutation, FileNode, FileVersionConflict,
 };
 pub(crate) use git_diff::{
     apply_git_action, git_branches, git_clone, git_commit_details, git_commit_diff, git_conflict,

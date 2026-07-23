@@ -14,8 +14,7 @@ use anyhow::{bail, Result};
 use crossterm::cursor::{self, Hide, MoveTo, Show};
 use crossterm::event::{
     self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEvent, KeyEventKind,
-    KeyModifiers, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
-    PushKeyboardEnhancementFlags,
+    KeyModifiers,
 };
 use crossterm::style::{Attribute, Print, SetAttribute};
 use crossterm::terminal::{self, Clear, ClearType};
@@ -33,12 +32,14 @@ mod args;
 mod background_commands;
 mod chat;
 mod compaction;
+mod composer_tips;
 mod config_commands;
 mod fuzzy_select;
 mod history;
 mod init;
 mod input_flags;
 mod kb_commands;
+mod keyboard_enhancement;
 mod localization;
 mod memory_commands;
 mod message;
@@ -46,10 +47,8 @@ mod model_select;
 mod permission_prompt;
 mod providers;
 mod render_options;
-mod composer_tips;
 mod repl;
 mod repl_background;
-mod repl_pager;
 mod repl_chrome;
 mod repl_clipboard;
 mod repl_commands;
@@ -60,6 +59,7 @@ mod repl_input_navigation;
 mod repl_input_render;
 #[cfg(test)]
 mod repl_input_tests;
+mod repl_pager;
 mod repl_runtime;
 mod repl_shell;
 mod repl_text;
@@ -89,11 +89,9 @@ use providers::{apply_thinking_override, run_providers, run_set, run_set_thinkin
 use render_options::stream_render_options;
 use repl::run_repl;
 use repl_background::run_repl_background_manager;
-use repl_commands::{
-    complete_repl_command, repl_command_rest, visible_repl_command_suggestions,
-};
 #[cfg(test)]
 use repl_commands::repl_command_suggestions;
+use repl_commands::{complete_repl_command, repl_command_rest, visible_repl_command_suggestions};
 use repl_editor::edit_input_buffer;
 use repl_input::read_repl_input;
 use repl_input_navigation::{move_cursor_down_by_visual_row, move_cursor_up_by_visual_row};
@@ -620,7 +618,7 @@ fn prompt_permission_request_tui(
     let mut state = PermissionInteractionState::new();
     let mut stdout = io::stdout();
     // 1. 独占 raw 输入，避免与主循环输入框事件竞争
-    enable_repl_terminal_input(&mut stdout)?;
+    let mut keyboard_enhancement = enable_repl_terminal_input(&mut stdout)?;
     // 2. 选择项附着在工具视图下方（working 动效已在 sink 入口暂停）
     {
         let mut rt = runtime.borrow_mut();
@@ -675,7 +673,7 @@ fn prompt_permission_request_tui(
     })();
 
     // 3. 恢复终端模式，交回后续流式输出和下一轮输入
-    let _ = disable_repl_terminal_input(&mut stdout);
+    let _ = disable_repl_terminal_input(&mut stdout, &mut keyboard_enhancement);
     result
 }
 
@@ -708,7 +706,7 @@ fn prompt_question_request_tui(
 
     let mut stdout = io::stdout();
     // 1. 独占 raw 输入，避免与主循环输入框事件竞争
-    enable_repl_terminal_input(&mut stdout)?;
+    let mut keyboard_enhancement = enable_repl_terminal_input(&mut stdout)?;
     {
         let mut rt = runtime.borrow_mut();
         rt.pause_for_permission_prompt()?;
@@ -718,7 +716,7 @@ fn prompt_question_request_tui(
         .unwrap_or_else(|err| crate::question::QuestionResponse::Unavailable(err.to_string()));
 
     // 2. 恢复终端模式；提问面板直接写过终端，受管区域需要在下次同步前重启
-    let _ = disable_repl_terminal_input(&mut stdout);
+    let _ = disable_repl_terminal_input(&mut stdout, &mut keyboard_enhancement);
     runtime.borrow_mut().mark_desynced();
     crate::question::resolve_question(&pending.id, response)
 }

@@ -122,7 +122,7 @@ pub async fn analyze_local_image_with_prompt(
     image: &Path,
     prompt: &str,
 ) -> Result<String> {
-    let image_url = local_image_data_url(&image.display().to_string())?;
+    let image_url = local_image_data_url(image)?;
     analyze_image_url_with_prompt(config, paths, &image_url, prompt).await
 }
 
@@ -179,9 +179,15 @@ fn vision_provider(config: &AppConfig, vision: &VisionPluginConfig) -> Result<Pr
     Ok(provider)
 }
 
-fn local_image_data_url(value: &str) -> Result<String> {
-    let path = expand_path(value);
-    let metadata = std::fs::metadata(&path)
+/// 将本地图片编码为模型请求使用的 data URL。
+///
+/// 参数:
+/// - `path`: 本地图片路径
+///
+/// 返回:
+/// - 包含 MIME 类型和 Base64 数据的 URL
+pub(crate) fn local_image_data_url(path: &Path) -> Result<String> {
+    let metadata = std::fs::metadata(path)
         .with_context(|| format!("failed to stat image {}", path.display()))?;
     if !metadata.is_file() {
         bail!("image path is not a file: {}", path.display())
@@ -190,8 +196,8 @@ fn local_image_data_url(value: &str) -> Result<String> {
         bail!("image too large: {} bytes", metadata.len())
     }
     let bytes =
-        std::fs::read(&path).with_context(|| format!("failed to read image {}", path.display()))?;
-    let mime = mime_from_path(&path)?;
+        std::fs::read(path).with_context(|| format!("failed to read image {}", path.display()))?;
+    let mime = mime_from_path(path)?;
     let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
     Ok(format!("data:{mime};base64,{encoded}"))
 }

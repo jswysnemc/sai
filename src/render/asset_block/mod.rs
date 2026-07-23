@@ -6,8 +6,8 @@ mod table_math;
 #[cfg(test)]
 mod tests;
 
-use crate::render::terminal_text as t;
 use crate::render::style::{ASSET_ERROR_STYLE, RESET};
+use crate::render::terminal_text as t;
 
 pub(crate) use table_math::{
     decode_source as decode_table_math_source, render_cell as render_inline_math_table_cell,

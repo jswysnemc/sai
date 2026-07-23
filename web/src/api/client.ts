@@ -279,10 +279,15 @@ export const api = {
     },
     file: (path: string) => apiRequest<FileContent>(`/api/workspace/file?path=${encodeURIComponent(path)}`),
     imageUrl: (path: string) => `/api/workspace/image?path=${encodeURIComponent(path)}`,
-    save: (path: string, content: string, expectedModifiedAt?: number | null) =>
+    save: (path: string, content: string, expectedVersion?: string, expectedModifiedAt?: number | null) =>
       apiRequest<FileContent>("/api/workspace/file", {
         method: "PUT",
-        body: JSON.stringify({ path, content, expected_modified_at: expectedModifiedAt })
+        body: JSON.stringify({
+          path,
+          content,
+          expected_version: expectedVersion,
+          expected_modified_at: expectedModifiedAt
+        })
       }),
     create: (path: string, kind: "file" | "directory") =>
       apiRequest<FileMutation>("/api/workspace/entry", {

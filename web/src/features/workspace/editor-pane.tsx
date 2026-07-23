@@ -1,6 +1,6 @@
 import Editor, { loader, type OnMount } from "@monaco-editor/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderTree, Save } from "lucide-react";
+import { FolderTree, RefreshCw, Save } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { useTheme } from "../theme/theme";
@@ -10,6 +10,14 @@ import { configureMonacoEnvironment } from "./monaco-environment";
 import { ImageFilePreview, isImageFile } from "./image-file-preview";
 import { isMarkdownFile, MarkdownFilePreview } from "./markdown-file-preview";
 import { useI18n } from "../i18n/use-i18n";
+import {
+  acceptSavedFile,
+  applyRemoteFile,
+  canSaveDocument,
+  createEditorDocumentState,
+  reloadRemoteFile,
+  updateDocumentContent
+} from "./editor-document-state";
 
 type EditorPaneProps = {
   path: string | null;
@@ -31,8 +39,7 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree 
   const markdownFile = Boolean(path && isMarkdownFile(path));
   const queryClient = useQueryClient();
   const file = useQuery({ queryKey: ["file", path], queryFn: () => api.workspace.file(path!), enabled: Boolean(path) && !imageFile });
-  const [content, setContent] = useState("");
-  const [externalChange, setExternalChange] = useState(false);
+  const [document, setDocument] = useState(() => createEditorDocumentState(path));
   const [editorReady, setEditorReady] = useState(false);
   const [preview, setPreview] = useState(false);
   const editorAreaRef = useRef<HTMLDivElement>(null);
@@ -48,8 +55,7 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree 
     return () => { active = false; };
   }, []);
   useEffect(() => {
-    setContent("");
-    setExternalChange(false);
+    setDocument(createEditorDocumentState(path));
     setPreview(false);
     return () => {
       editorRef.current = null;
@@ -57,15 +63,7 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree 
   }, [path]);
   useEffect(() => {
     if (!file.data) return;
-    setContent((current) => {
-      const dirty = current !== "" && current !== file.data.content;
-      if (dirty) {
-        setExternalChange(true);
-        return current;
-      }
-      setExternalChange(false);
-      return file.data.content;
-    });
+    setDocument((current) => applyRemoteFile(current, file.data));
   }, [file.data]);
 
   useEffect(() => {
@@ -96,13 +94,30 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree 
   };
 
   const save = useMutation({
-    mutationFn: () => api.workspace.save(path!, content, file.data?.modified_at),
-    onSuccess: async () => {
+    mutationFn: () => api.workspace.save(
+      path!,
+      document.content,
+      document.baseline?.version,
+      document.baseline?.modified_at
+    ),
+    onSuccess: async (saved) => {
+      setDocument((current) => acceptSavedFile(current, saved));
       await queryClient.invalidateQueries({ queryKey: ["file", path] });
       await queryClient.invalidateQueries({ queryKey: ["workspace-diff"] });
-      setExternalChange(false);
     }
   });
+
+  /**
+   * 重新读取磁盘文件并明确丢弃当前草稿。
+   *
+   * @returns 重载完成后的 Promise
+   */
+  const reload = async () => {
+    const refreshed = await file.refetch();
+    const remote = refreshed.data;
+    if (!remote) return;
+    setDocument((current) => reloadRemoteFile(applyRemoteFile(current, remote)));
+  };
   if (!path) {
     return (
       <section className="editor-pane">
@@ -122,9 +137,14 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree 
     <section className="editor-pane">
       <header className="editor-head">
         <EditorBreadcrumbs path={path} onSelectFile={onSelectFile} />
-        {externalChange && <span className="editor-external-change">{t("File changed on disk", "磁盘内容已变化")}</span>}
+        {document.externalChange && <span className="editor-external-change">{t("File changed on disk", "磁盘内容已变化")}</span>}
+        {document.externalChange && (
+          <button type="button" className="editor-reload" onClick={() => void reload()} title={t("Reload file from disk", "从磁盘重新载入文件")} aria-label={t("Reload file from disk", "从磁盘重新载入文件")}>
+            <RefreshCw size={14} />
+          </button>
+        )}
         {markdownFile && <EditorPreviewToggle preview={preview} onChange={setPreview} />}
-        {!imageFile && <button type="button" className="editor-save" onClick={() => save.mutate()} disabled={!file.data || content === file.data.content || save.isPending}>
+        {!imageFile && <button type="button" className="editor-save" onClick={() => save.mutate()} disabled={!canSaveDocument(document) || save.isPending}>
           <Save size={14} /> {t("Save", "保存")}
         </button>}
         {!fileTreeOpen && (
@@ -135,17 +155,17 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree 
       </header>
       <div className="editor-area" ref={editorAreaRef}>
         {imageFile && <ImageFilePreview path={path} />}
-        {markdownFile && preview && file.data && <MarkdownFilePreview source={content} />}
+        {markdownFile && preview && file.data && <MarkdownFilePreview source={document.content} />}
         {file.data && editorReady && !(markdownFile && preview) && (
           <Editor
             key={path}
             path={path}
             language={languageForPath(path)}
-            value={content}
+            value={document.content}
             width="100%"
             height="100%"
             onMount={handleEditorMount}
-            onChange={(value) => setContent(value ?? "")}
+            onChange={(value) => setDocument((current) => updateDocumentContent(current, value ?? ""))}
             theme={theme === "graphite" || theme === "ocean" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "vs-dark" : "light"}
             options={{ minimap: { enabled: false }, fontFamily: "Fira Code", fontSize: 13, lineHeight: 21, padding: { top: 12 }, automaticLayout: false, scrollBeyondLastLine: false }}
           />

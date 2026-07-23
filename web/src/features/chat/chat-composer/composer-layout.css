@@ -1,0 +1,218 @@
+.composer-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 18px 12px;
+  background: var(--paper);
+}
+
+.composer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 784px;
+  min-height: 58px;
+  padding: 9px 10px 7px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--control-surface);
+  box-shadow: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.composer:focus-within {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+.composer-context-strip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  max-width: 784px;
+  min-height: 28px;
+  padding: 0 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.composer-context-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.composer-context-strip .agent-selector {
+  margin-right: auto;
+}
+
+.composer-context-chip {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  max-width: 120px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 7px;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.composer-context-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-context-strip .ui-button.composer-rail-button {
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.composer-context-strip .ui-button.composer-rail-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}
+
+.composer-text-wrap {
+  position: relative;
+  min-height: 32px;
+}
+
+.composer-editor {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  max-height: 166px;
+  padding: 5px 2px;
+  box-sizing: border-box;
+  font: 400 14px/22px var(--font-ui);
+  letter-spacing: normal;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  position: relative;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  caret-color: var(--ink);
+  z-index: 2;
+}
+
+.composer-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--ink-soft);
+  opacity: 0.62;
+  pointer-events: none;
+}
+
+.composer-editor[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.composer-atom {
+  display: inline-flex;
+  position: relative;
+  max-width: min(360px, 72vw);
+  height: 1.25rem;
+  margin: 0 2px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px 0 4px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--atom-color) 28%, var(--line));
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--atom-color) 9%, var(--paper-raised));
+  color: var(--atom-color);
+  font: 500 12px/1 var(--font-code);
+  vertical-align: middle;
+  white-space: nowrap;
+  user-select: all;
+}
+
+.composer-atom-icon {
+  display: inline-grid;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  line-height: 0;
+}
+
+.composer-atom-icon svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.composer-atom-label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-overflow: ellipsis;
+}
+
+.composer-file-mention {
+  --atom-color: #3975a6;
+}
+
+.composer-skill-mention {
+  --atom-color: #167d66;
+}
+
+.composer-goal-mention {
+  --atom-color: #9a6700;
+}
+
+.composer-terminal-mention {
+  --atom-color: #a1425f;
+  overflow: visible;
+}
+
+.composer-terminal-mention .composer-atom-label {
+  max-width: min(300px, 58vw);
+}
+
+.composer-terminal-mention::after {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  display: none;
+  width: min(420px, 72vw);
+  max-height: 180px;
+  padding: 8px 9px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper-raised);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  content: attr(data-preview);
+  font: 400 10px/1.5 var(--font-code);
+  text-align: left;
+  white-space: pre-wrap;
+  z-index: 90;
+}
+
+.composer-terminal-mention:hover::after {
+  display: block;
+}
+
+
+
+.composer-atom::selection,
+.composer-atom *::selection {
+  background: color-mix(in srgb, var(--atom-color) 28%, transparent);
+}
+

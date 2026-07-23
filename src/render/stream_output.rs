@@ -1,7 +1,7 @@
-use crate::render::terminal_text as t;
 use crate::llm::ChatResult;
 use crate::render::markdown::MarkdownStreamRenderer;
 use crate::render::style::TOOL_BULLET;
+use crate::render::terminal_text as t;
 use anyhow::Result;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use crossterm::{execute, terminal};

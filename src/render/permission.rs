@@ -1,5 +1,5 @@
-use crate::render::terminal_text as t;
 use crate::permission::PermissionDecision;
+use crate::render::terminal_text as t;
 
 /// 权限选择项索引。
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -106,7 +106,6 @@ pub(crate) fn render_permission_title(tool: &str, arguments: Option<&str>) -> St
         t("Permission required", "需要权限确认")
     )
 }
-
 
 /// 渲染自动审核进行中状态行。
 ///

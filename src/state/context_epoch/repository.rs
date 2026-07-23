@@ -122,7 +122,7 @@ pub(crate) fn load_summary(
 ///
 /// 返回:
 /// - Context Epoch
-fn load_epoch(db: &ConversationDb, session_id: &str) -> Result<Option<ContextEpoch>> {
+pub(crate) fn load_epoch(db: &ConversationDb, session_id: &str) -> Result<Option<ContextEpoch>> {
     let conn = db.conn.lock().unwrap();
     conn.query_row(
         "SELECT session_id, baseline, baseline_hash, snapshot_json,

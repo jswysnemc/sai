@@ -50,7 +50,10 @@ impl Agent {
         let trailing_runtime_messages = messages
             .iter()
             .rev()
-            .take_while(|message| message.role == "system")
+            .take_while(|message| {
+                message.role == "system"
+                    || super::tool_attachments::is_pending_model_attachment(message)
+            })
             .cloned()
             .collect::<Vec<_>>()
             .into_iter()

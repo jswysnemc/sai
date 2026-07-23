@@ -99,6 +99,29 @@ fn large_tool_output_reuses_stable_replacement_after_resume() {
 }
 
 #[test]
+fn tool_result_ref_reader_accepts_session_relative_file() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
+    let result_ref = store
+        .save_clipped_tool_output_replacement("call_1", "完整输出", "预览")
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(store.read_tool_result_ref(&result_ref).unwrap(), "完整输出");
+}
+
+#[test]
+fn tool_result_ref_reader_rejects_paths_outside_session() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
+
+    assert!(store.read_tool_result_ref("../config.json").is_err());
+    assert!(store
+        .read_tool_result_ref(temp.path().to_string_lossy().as_ref())
+        .is_err());
+}
+
+#[test]
 fn session_snapshot_rebuilds_resume_visible_state_after_store_reopen() {
     let temp = tempfile::tempdir().unwrap();
     let paths = test_paths(temp.path().to_path_buf());

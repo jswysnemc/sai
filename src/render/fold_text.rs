@@ -1,7 +1,11 @@
 use unicode_width::UnicodeWidthChar;
 
-/// 折叠预览时首尾各保留的显示行数。
-pub(crate) const FOLD_PREVIEW_LINES: usize = 5;
+/// 折叠预览：默认保留前 2 行与后 4 行。
+pub(crate) const FOLD_HEAD_LINES: usize = 2;
+pub(crate) const FOLD_TAIL_LINES: usize = 4;
+/// 兼容旧名：对称折叠时取 head（优先使用 FOLD_HEAD/TAIL）。
+#[allow(dead_code)]
+pub(crate) const FOLD_PREVIEW_LINES: usize = FOLD_HEAD_LINES;
 
 /// 将纯文本按显示宽度拆成虚拟显示行（忽略 ANSI，用于折叠计数）。
 ///
@@ -44,24 +48,28 @@ pub(crate) fn wrap_display_lines(text: &str, wrap_width: usize) -> Vec<String> {
 ///
 /// 参数:
 /// - `lines`: 显示行
-/// - `preview`: 首尾各保留行数
+/// - `head`: 头部保留行数
+/// - `tail`: 尾部保留行数
 /// - `expanded`: 是否展开
 ///
 /// 返回:
 /// - `(可见行, 省略行数)`；省略处用 `__OMITTED__` 占位
 pub(crate) fn fold_display_lines(
     lines: &[String],
-    preview: usize,
+    head: usize,
+    tail: usize,
     expanded: bool,
 ) -> (Vec<String>, usize) {
-    if expanded || lines.len() <= preview.saturating_mul(2) {
+    let keep = head.saturating_add(tail);
+    if expanded || keep == 0 || lines.len() <= keep {
         return (lines.to_vec(), 0);
     }
-    let omitted = lines.len() - preview * 2;
-    let mut visible = Vec::with_capacity(preview * 2 + 1);
-    visible.extend_from_slice(&lines[..preview]);
+    let omitted = lines.len() - keep;
+    let mut visible = Vec::with_capacity(keep + 1);
+    visible.extend_from_slice(&lines[..head.min(lines.len())]);
     visible.push("__OMITTED__".to_string());
-    visible.extend_from_slice(&lines[lines.len() - preview..]);
+    let tail_start = lines.len().saturating_sub(tail);
+    visible.extend_from_slice(&lines[tail_start..]);
     (visible, omitted)
 }
 
@@ -85,7 +93,10 @@ mod tests {
         let lines = wrap_display_lines(&"字".repeat(30), 10);
         assert!(lines.len() > 1);
         assert!(lines.iter().all(|l| {
-            let w: usize = l.chars().map(|c| UnicodeWidthChar::width(c).unwrap_or(0)).sum();
+            let w: usize = l
+                .chars()
+                .map(|c| UnicodeWidthChar::width(c).unwrap_or(0))
+                .sum();
             w <= 10
         }));
     }
@@ -93,10 +104,11 @@ mod tests {
     #[test]
     fn folds_middle_when_too_many_display_lines() {
         let lines: Vec<String> = (1..=20).map(|n| format!("line{n}")).collect();
-        let (visible, omitted) = fold_display_lines(&lines, 5, false);
-        assert_eq!(omitted, 10);
+        let (visible, omitted) = fold_display_lines(&lines, 2, 4, false);
+        assert_eq!(omitted, 14);
         assert!(visible.iter().any(|l| l == "__OMITTED__"));
         assert!(visible.contains(&"line1".to_string()));
+        assert!(visible.contains(&"line2".to_string()));
         assert!(visible.contains(&"line20".to_string()));
         assert!(!visible.iter().any(|l| l == "line10"));
     }

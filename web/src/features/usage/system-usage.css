@@ -247,3 +247,117 @@
 .context-compaction-actions button { display:inline-flex; align-items:center; gap:5px; min-height:27px; padding:4px 8px; border:1px solid var(--line); border-radius:7px; background:var(--paper); color:var(--ink); font-size:11px; }
 .context-compaction-actions button:disabled { opacity:.5; cursor:not-allowed; }
 .context-compaction-result { margin:7px 0 0; color:var(--ink-muted); font-size:11px; }
+
+
+.context-usage-card {
+  --context-system: #34d399;
+  --context-tools: #fbbf24;
+  --context-conversation: #a78bfa;
+  --context-connectors: #38bdf8;
+  --context-skills: #60a5fa;
+}
+
+.context-usage-close {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.context-usage-close:hover {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+
+.context-usage-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.context-usage-summary strong {
+  color: var(--ink);
+  font: 600 1.35rem / 1.1 var(--font-code);
+  letter-spacing: -0.02em;
+}
+
+.context-usage-summary small {
+  color: var(--ink-soft);
+  font: 400 0.75rem var(--font-code);
+}
+
+.context-usage-track-stacked {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+.context-usage-track-stacked .context-usage-segment {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.context-usage-track-stacked .context-usage-remaining {
+  background: transparent;
+}
+
+.context-usage-legend {
+  display: grid;
+  gap: 6px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.context-usage-legend li {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.context-usage-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.context-usage-legend span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-usage-legend strong {
+  color: var(--ink-soft);
+  font: 400 0.75rem var(--font-code);
+  white-space: nowrap;
+}
+
+.context-usage-head {
+  font-size: 0.8125rem;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+@media (max-width: 760px) {
+  .context-usage-summary strong {
+    font-size: 1.2rem;
+  }
+
+  .context-usage-legend li {
+    font-size: 0.72rem;
+  }
+}

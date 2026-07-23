@@ -266,6 +266,7 @@ function liveStatusLabel(state: LiveRunState, locale: Locale): string {
   if (state.status === "waiting_external") return text(locale, "Waiting for background work", "等待后台工作");
   if (state.status === "thinking") return text(locale, "Thinking", "思考中");
   if (state.status === "working") return text(locale, "Working", "工作中");
+  if (state.status === "compacting") return text(locale, "Compacting", "压缩中");
   return text(locale, "Waiting to start", "等待开始");
 }
 

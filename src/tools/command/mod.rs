@@ -44,7 +44,7 @@ pub(crate) fn register(
     paths: &SaiPaths,
     allow_command_execution: bool,
 ) {
-    run::register(registry, config, allow_command_execution);
+    run::register(registry, config, paths, allow_command_execution, None);
     if config.tools.background_commands_enabled {
         background::register(
             registry,
@@ -68,13 +68,15 @@ pub(crate) fn register_command_mode_background(
     paths: &SaiPaths,
     session_id: &str,
 ) {
+    let owner = BackgroundRuntimeOwner::command_mode(session_id);
+    run::register(registry, config, paths, true, Some(owner.clone()));
     if config.tools.background_commands_enabled {
         background::register_with_runtime_owner(
             registry,
             config.clone(),
             paths.clone(),
             true,
-            Some(BackgroundRuntimeOwner::command_mode(session_id)),
+            Some(owner),
         );
     }
 }
@@ -92,13 +94,15 @@ pub(crate) fn register_session_background(
     paths: &SaiPaths,
     session_id: &str,
 ) {
+    let owner = BackgroundRuntimeOwner::session(session_id);
+    run::register(registry, config, paths, true, Some(owner.clone()));
     if config.tools.background_commands_enabled {
         background::register_with_runtime_owner(
             registry,
             config.clone(),
             paths.clone(),
             true,
-            Some(BackgroundRuntimeOwner::session(session_id)),
+            Some(owner),
         );
     }
 }

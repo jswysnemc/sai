@@ -111,8 +111,8 @@ fn full_stream_event_sequence_drives_reconcile_pipeline() {
             reasoning: None,
             usage: None,
             tool_calls: Vec::new(),
-        duration_ms: 0,
-    }))
+            duration_ms: 0,
+        }))
         .unwrap();
     runtime.finish_stream().unwrap();
 

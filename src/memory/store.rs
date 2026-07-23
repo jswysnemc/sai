@@ -18,30 +18,6 @@ pub struct MemoryStore {
     skills_dir: PathBuf,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct EvictedTurn {
-    pub timestamp: String,
-    pub role: String,
-    pub content: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct AssociationContext {
-    pub facts: Vec<MemoryHit>,
-    pub episodes: Vec<MemoryHit>,
-}
-
-#[derive(Debug, Clone)]
-pub struct MemoryHit {
-    pub id: i64,
-    pub content: String,
-    pub score: f32,
-    pub timestamp: String,
-    pub source: String,
-    pub tags: Vec<String>,
-}
-
 impl MemoryStore {
     pub fn new(config: &AppConfig, paths: &SaiPaths) -> Self {
         let data_dir = config.active_persona_memory_data_dir(paths).join("memory");
@@ -322,7 +298,12 @@ impl MemoryStore {
             [],
         )?;
         // Clear external-content FTS indexes.
-        for table in ["facts_fts", "facts_fts_tri", "episodes_fts", "episodes_fts_tri"] {
+        for table in [
+            "facts_fts",
+            "facts_fts_tri",
+            "episodes_fts",
+            "episodes_fts_tri",
+        ] {
             let _ = data.execute(&format!("DELETE FROM {table}"), []);
         }
         clear_memory_markdown(&self.files_dir)?;
@@ -688,7 +669,10 @@ impl MemoryStore {
                 let mut score = 100.0 / (1.0 + rank.max(0.0) as f32);
                 let tags = split_tags(&tags_raw);
                 for tag in &tags {
-                    if fts_match.to_ascii_lowercase().contains(&tag.to_ascii_lowercase()) {
+                    if fts_match
+                        .to_ascii_lowercase()
+                        .contains(&tag.to_ascii_lowercase())
+                    {
                         score += 15.0;
                     }
                 }
@@ -703,115 +687,5 @@ impl MemoryStore {
             }
         }
         Ok(())
-    }
-
-    /// Ensure markdown files exist for SQL rows and FTS indexes are populated.
-    fn ensure_markdown_and_fts(&self) -> Result<()> {
-        let conn = self.data_conn()?;
-        for table in ["facts", "episodes"] {
-            let sql = if table == "facts" {
-                "SELECT id, content, source, status, confidence, strength, created_at, updated_at, tags FROM facts"
-            } else {
-                "SELECT id, content, source, status, 1.0, strength, created_at, updated_at, '' FROM episodes"
-            };
-            let mut stmt = conn.prepare(sql)?;
-            let rows = stmt.query_map([], |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, f64>(4).unwrap_or(1.0),
-                    row.get::<_, f64>(5).unwrap_or(1.0),
-                    row.get::<_, String>(6)?,
-                    row.get::<_, String>(7)?,
-                    row.get::<_, String>(8).unwrap_or_default(),
-                ))
-            })?;
-            for row in rows {
-                let (
-                    id,
-                    content,
-                    source,
-                    status,
-                    confidence,
-                    strength,
-                    created_at,
-                    updated_at,
-                    tags_raw,
-                ) = row?;
-                let path = self.files_dir.join(table).join(format!("{id}.md"));
-                if !path.is_file() {
-                    write_memory_markdown(
-                        &self.files_dir,
-                        table,
-                        id,
-                        &content,
-                        &source,
-                        &status,
-                        if table == "facts" {
-                            Some(confidence)
-                        } else {
-                            None
-                        },
-                        strength,
-                        &created_at,
-                        &updated_at,
-                        &tags_raw,
-                    )?;
-                }
-            }
-            drop(stmt);
-            let base_count: i64 = conn.query_row(
-                &format!("SELECT COUNT(*) FROM {table}"),
-                [],
-                |row| row.get(0),
-            )?;
-            let fts_count: i64 = conn
-                .query_row(
-                    &format!("SELECT COUNT(*) FROM {table}_fts"),
-                    [],
-                    |row| row.get(0),
-                )
-                .unwrap_or(0);
-            if base_count > 0 && fts_count == 0 {
-                rebuild_fts_table(&conn, table)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn reinforce(&self, id: i64, source: &str) -> Result<()> {
-        let table = if source == "episode" {
-            "episodes"
-        } else {
-            "facts"
-        };
-        let sql = format!(
-            "UPDATE {table} SET recall_count=recall_count+1, strength=MIN(1.0, strength+?1), last_recalled_at=?2, updated_at=?2, status='active' WHERE id=?3"
-        );
-        self.data_conn()?.execute(
-            &sql,
-            params![self.config.forgetting_review_boost, now(), id],
-        )?;
-        Ok(())
-    }
-
-    fn decay_memories(&self) -> Result<()> {
-        if !self.config.enabled || !self.config.forgetting_enabled {
-            return Ok(());
-        }
-        let conn = self.data_conn()?;
-        decay_table(&conn, "facts", &self.config)?;
-        decay_table(&conn, "episodes", &self.config)?;
-        Ok(())
-    }
-
-    fn data_conn(&self) -> Result<Connection> {
-        Ok(Connection::open(&self.data_db)?)
-    }
-
-    fn state_conn(&self) -> Result<Connection> {
-        Ok(Connection::open(&self.state_db)?)
     }
 }

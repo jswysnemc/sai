@@ -109,7 +109,8 @@ pub(crate) fn render_command_block_with_action(arguments: &str, action: &str) ->
         .or_else(|| crate::render::tool_event_line::lenient_string_field(arguments, "command"))
         .unwrap_or_else(|| arguments.to_string());
     let command = command.trim();
-    let lines = shell_command_lines(command);
+    // 1. 按终端宽度折行后首尾折叠，过长命令在主列表收缩
+    let lines = fold_shell_command_lines(command, false);
     // Codex 风格：状态圆点 + 标题 + `$` 命令行，续行缩进
     let title = match action.trim() {
         "" | "Run" => "Ran",
@@ -119,17 +120,63 @@ pub(crate) fn render_command_block_with_action(arguments: &str, action: &str) ->
     let mut output = format!("\x1b[1m\x1b[32m{TOOL_BULLET}\x1b[0m \x1b[1m{title}\x1b[0m ");
     if let Some((first, rest)) = lines.split_first() {
         output.push_str("\x1b[35m$ \x1b[0m");
-        output.push_str(&highlight_code_line("sh", first));
-        output.push('\n');
+        append_command_display_line(&mut output, first, true);
         for line in rest {
             output.push_str("    ");
-            output.push_str(&highlight_code_line("sh", line));
-            output.push('\n');
+            append_command_display_line(&mut output, line, false);
         }
     } else {
         output.push_str("\x1b[35m$ \x1b[0m\n");
     }
     output
+}
+
+/// 将命令文本折行并按预览预算折叠。
+///
+/// 参数:
+/// - `command`: 原始命令
+/// - `expanded`: 是否展开全文
+///
+/// 返回:
+/// - 可见显示行（省略处为 `… +N lines`）
+fn fold_shell_command_lines(command: &str, expanded: bool) -> Vec<String> {
+    use crate::render::fold_text::{
+        fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
+    };
+    // 命令行预览：前 2 后 4，过长时收缩
+    let wrap = terminal_wrap_width().saturating_sub(6).min(72).max(24);
+    let wrapped = wrap_display_lines(command, wrap);
+    let (visible, omitted) = fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
+    visible
+        .into_iter()
+        .map(|line| {
+            if line == "__OMITTED__" {
+                format!("… +{omitted} lines (Ctrl+O to expand)")
+            } else {
+                line
+            }
+        })
+        .collect()
+}
+
+/// 追加一行命令显示（省略行 dim，普通行 shell 着色）。
+///
+/// 参数:
+/// - `output`: 输出缓冲
+/// - `line`: 显示行
+/// - `is_first`: 是否为 `$` 同行首行
+fn append_command_display_line(output: &mut String, line: &str, is_first: bool) {
+    if line.starts_with('…') {
+        if !is_first {
+            // 续行已有缩进
+        }
+        output.push_str("\x1b[2m");
+        output.push_str(line);
+        output.push_str("\x1b[0m\n");
+    } else {
+        output.push_str(&highlight_code_line("sh", line));
+        output.push('\n');
+    }
 }
 
 /// 生成命令代码块行。
@@ -139,13 +186,7 @@ pub(crate) fn render_command_block_with_action(arguments: &str, action: &str) ->
 ///
 /// 返回:
 /// - 命令行列表
-fn shell_command_lines(command: &str) -> Vec<String> {
-    let mut lines = command.lines().map(str::to_string).collect::<Vec<_>>();
-    if lines.is_empty() {
-        lines.push(String::new());
-    }
-    lines
-}
+
 
 /// 格式化工具载荷并限制长度。
 ///
@@ -214,6 +255,17 @@ mod tests {
     ///
     /// 返回:
     /// - 去除样式后的文本
+
+    #[test]
+    fn folds_long_ran_command_in_main_view() {
+        let long = "echo ".to_string() + &"x".repeat(800);
+        let args = format!(r#"{{"command":"{long}"}}"#);
+        let output = render_command_block_with_action(&args, "Run");
+        let plain = strip_ansi_for_test(&output);
+        assert!(plain.contains("…") || plain.contains("lines"), "expected fold: {plain}");
+        assert!(plain.contains("Ran") || plain.contains("$"));
+    }
+
     fn strip_ansi_for_test(text: &str) -> String {
         let mut output = String::new();
         let mut escape = false;

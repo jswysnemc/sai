@@ -1,5 +1,7 @@
 use unicode_width::UnicodeWidthChar;
 
+const TAB_STOP_COLUMNS: usize = 4;
+
 /// 已按指定宽度预换行的 ANSI 终端行。
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct AnsiLine {
@@ -85,6 +87,23 @@ fn wrap_line(text: &str, width: usize) -> Vec<AnsiLine> {
             continue;
         }
 
+        if ch == '\t' {
+            let spaces = TAB_STOP_COLUMNS - (current_width % TAB_STOP_COLUMNS);
+            // 1. 将制表符展开到固定四列制表位
+            for _ in 0..spaces {
+                // 2. 逐列折行，避免终端再次解释制表符后破坏 pager 行数
+                if current_width >= width {
+                    lines.push(finish_line(&current, fill_to_end, &last_fill_sgr));
+                    current = active_sgr.clone();
+                    current_width = 0;
+                }
+                current.push(' ');
+                current_width += 1;
+            }
+            index += ch.len_utf8();
+            continue;
+        }
+
         let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
         if current_width > 0 && current_width.saturating_add(char_width) > width {
             lines.push(finish_line(&current, fill_to_end, &last_fill_sgr));
@@ -153,4 +172,29 @@ fn finish_line(text: &str, fill_to_end: bool, fill_sgr: &str) -> AnsiLine {
     }
     output.push_str("\x1b[0m");
     AnsiLine::new(output)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AnsiLine;
+
+    /// ANSI 文本中的制表符按四列制表位展开并参与折行。
+    #[test]
+    fn wraps_ansi_text_with_expanded_tab_stops() {
+        let lines = AnsiLine::wrap_block("\x1b[31ma\tb\x1b[0m", 4);
+
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].as_str().contains("a   "));
+        assert!(lines[1].as_str().contains("\x1b[31mb"));
+        assert!(!lines.iter().any(|line| line.as_str().contains('\t')));
+    }
+
+    /// 窄终端会把一个制表符展开后的空格分配到多行。
+    #[test]
+    fn wraps_tab_expansion_across_narrow_rows() {
+        let lines = AnsiLine::wrap_block("\tX", 2);
+
+        assert_eq!(lines.len(), 3);
+        assert!(lines[2].as_str().starts_with('X'));
+    }
 }

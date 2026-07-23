@@ -275,15 +275,13 @@ impl TodoStore {
         if !history_file.exists() {
             return Ok(Vec::new());
         }
-        let content = std::fs::read_to_string(&history_file).with_context(|| {
-            format!("failed to read todo history {}", history_file.display())
-        })?;
+        let content = std::fs::read_to_string(&history_file)
+            .with_context(|| format!("failed to read todo history {}", history_file.display()))?;
         if content.trim().is_empty() {
             return Ok(Vec::new());
         }
-        serde_json::from_str(&content).with_context(|| {
-            format!("failed to parse todo history {}", history_file.display())
-        })
+        serde_json::from_str(&content)
+            .with_context(|| format!("failed to parse todo history {}", history_file.display()))
     }
 
     /// 将已完成计划追加到历史文件。

@@ -1,3 +1,5 @@
+use super::*;
+
 impl StreamRenderer {
     /// 切换当前流式输出模式。
     ///
@@ -19,7 +21,9 @@ impl StreamRenderer {
                     writeln!(
                         stdout,
                         "{TOOL_BULLET} {}",
-                        self.work_status.unwrap_or(WorkStatus::Thinking).localized_label()
+                        self.work_status
+                            .unwrap_or(WorkStatus::Thinking)
+                            .localized_label()
                     )?;
                 }
             }
@@ -143,13 +147,19 @@ impl StreamRenderer {
         }
         let status = self.work_status.unwrap_or(WorkStatus::Working);
         let phase = status.localized_label().to_string();
+        let started_at = *self.work_started.get_or_insert_with(Instant::now);
         if let Some(spinner) = self.wait_spinner.as_ref() {
             spinner.set_phase(phase);
             spinner.set_sub_phase(sub_phase);
             return Ok(());
         }
         self.hide_cursor()?;
-        self.wait_spinner = Some(WaitSpinner::start(phase, SpinnerStyle::Braille, sub_phase));
+        self.wait_spinner = Some(WaitSpinner::start_with_clock(
+            phase,
+            SpinnerStyle::Braille,
+            sub_phase,
+            started_at,
+        ));
         Ok(())
     }
 
@@ -222,6 +232,14 @@ impl StreamRenderer {
         self.write_custom_tool_event_line(label, status)
     }
 
+    /// 以指定标签写入工具状态事件。
+    ///
+    /// 参数:
+    /// - `label`: 已格式化的工具显示名称
+    /// - `status`: 工具状态文本
+    ///
+    /// 返回:
+    /// - 写入是否成功
     pub(super) fn write_custom_tool_event_line(&self, label: &str, status: &str) -> Result<()> {
         let mut stdout = io::stdout();
         writeln!(stdout, "{}", tool_event_text(label, status))?;

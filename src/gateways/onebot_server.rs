@@ -8,7 +8,10 @@ use crate::gateways::command_intercept::handle_gateway_command;
 use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::{bail, Context, Result};
+use axum::body::Bytes;
 use axum::extract::State;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
 use base64::Engine;
@@ -45,6 +48,7 @@ struct OneBotInboundState {
 /// 返回:
 /// - 服务运行结果
 pub(crate) async fn run_onebot_server(paths: &SaiPaths, config: OneBotServerConfig) -> Result<()> {
+    validate_server_config(&config)?;
     let listen = config.listen;
     let state = Arc::new(OneBotInboundState {
         paths: paths.clone(),
@@ -87,8 +91,41 @@ pub(crate) async fn run_onebot_server(paths: &SaiPaths, config: OneBotServerConf
 /// - OneBot HTTP 确认响应
 async fn handle_onebot_event(
     State(state): State<Arc<OneBotInboundState>>,
-    Json(payload): Json<Value>,
-) -> Json<Value> {
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    if !is_authorized(&headers, state.access_token.as_deref()) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({
+                "status": "failed",
+                "retcode": -1,
+                "message": "unauthorized"
+            })),
+        )
+            .into_response();
+    }
+    let payload = match serde_json::from_slice::<Value>(&body) {
+        Ok(payload) => payload,
+        Err(err) => {
+            eprintln!(
+                "{}: {err:#}",
+                t(
+                    "【OneBot Gateway】【Invalid payload】",
+                    "【OneBot网关】【数据无效】"
+                )
+            );
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "status": "failed",
+                    "retcode": -1,
+                    "message": "invalid json"
+                })),
+            )
+                .into_response();
+        }
+    };
     match parse_message_event(&payload) {
         Ok(Some(event)) => {
             tokio::spawn(async move {
@@ -111,7 +148,105 @@ async fn handle_onebot_event(
             );
         }
     }
-    Json(json!({ "status": "ok" }))
+    Json(json!({ "status": "ok" })).into_response()
+}
+
+/// 校验 OneBot 入站服务配置，避免公网监听时意外启用匿名入口。
+///
+/// 参数:
+/// - `config`: OneBot 入站服务配置
+///
+/// 返回:
+/// - 配置是否满足安全要求
+fn validate_server_config(config: &OneBotServerConfig) -> Result<()> {
+    let has_token = config
+        .access_token
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|token| !token.is_empty());
+    if !has_token && !config.listen.ip().is_loopback() {
+        bail!(t(
+            "OneBot inbound server requires --access-token when listening beyond loopback",
+            "OneBot 入站服务监听非回环地址时必须配置 --access-token"
+        ));
+    }
+    Ok(())
+}
+
+/// 校验 OneBot 入站请求中的访问令牌。
+///
+/// 参数:
+/// - `headers`: HTTP 请求头
+/// - `expected_token`: 服务端配置的访问令牌
+///
+/// 返回:
+/// - 请求是否通过令牌校验
+fn is_authorized(headers: &HeaderMap, expected_token: Option<&str>) -> bool {
+    let Some(expected_token) = expected_token
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+    else {
+        return true;
+    };
+    let authorization = headers
+        .get("Authorization")
+        .and_then(|value| value.to_str().ok())
+        .and_then(parse_bearer_token);
+    let legacy_token = headers
+        .get("X-Access-Token")
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|token| !token.is_empty());
+    match (authorization, legacy_token) {
+        (Some(authorization), Some(legacy_token)) => {
+            constant_time_eq(authorization.as_bytes(), expected_token.as_bytes())
+                && constant_time_eq(legacy_token.as_bytes(), expected_token.as_bytes())
+        }
+        (Some(token), None) | (None, Some(token)) => {
+            constant_time_eq(token.as_bytes(), expected_token.as_bytes())
+        }
+        (None, None) => false,
+    }
+}
+
+/// 解析 Bearer 访问令牌，认证方案名称不区分大小写。
+///
+/// 参数:
+/// - `value`: Authorization 请求头
+///
+/// 返回:
+/// - Bearer 令牌
+fn parse_bearer_token(value: &str) -> Option<&str> {
+    let mut parts = value.trim().split_whitespace();
+    let scheme = parts.next()?;
+    let token = parts.next()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    if !scheme.eq_ignore_ascii_case("Bearer") {
+        return None;
+    }
+    let token = token.trim();
+    (!token.is_empty()).then_some(token)
+}
+
+/// 以常量时间比较两个令牌，减少长度相同令牌的时序差异。
+///
+/// 参数:
+/// - `left`: 第一个字节序列
+/// - `right`: 第二个字节序列
+///
+/// 返回:
+/// - 两个字节序列是否相同
+fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
+    let max_len = left.len().max(right.len());
+    let mut difference = left.len() ^ right.len();
+    for index in 0..max_len {
+        let left_byte = left.get(index).copied().unwrap_or_default();
+        let right_byte = right.get(index).copied().unwrap_or_default();
+        difference |= usize::from(left_byte ^ right_byte);
+    }
+    difference == 0
 }
 
 /// 处理一条 OneBot 消息事件。
@@ -418,4 +553,96 @@ fn sanitize_filename(name: &str) -> String {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::HeaderValue;
+
+    fn headers() -> HeaderMap {
+        HeaderMap::new()
+    }
+
+    fn test_state() -> Arc<OneBotInboundState> {
+        Arc::new(OneBotInboundState {
+            paths: SaiPaths::new().unwrap(),
+            onebot_base_url: "http://127.0.0.1:3000".to_string(),
+            access_token: Some("secret".to_string()),
+            http_client: reqwest::Client::new(),
+            agent_lock: Mutex::new(()),
+        })
+    }
+
+    #[test]
+    fn rejects_missing_onebot_token() {
+        let headers = headers();
+        assert!(!is_authorized(&headers, Some("secret")));
+    }
+
+    #[test]
+    fn accepts_bearer_and_legacy_onebot_tokens() {
+        let mut bearer = headers();
+        bearer.insert("Authorization", HeaderValue::from_static("Bearer secret"));
+        assert!(is_authorized(&bearer, Some("secret")));
+
+        let mut legacy = headers();
+        legacy.insert("X-Access-Token", HeaderValue::from_static("secret"));
+        assert!(is_authorized(&legacy, Some("secret")));
+    }
+
+    #[test]
+    fn rejects_wrong_or_conflicting_onebot_tokens() {
+        let mut wrong = headers();
+        wrong.insert("Authorization", HeaderValue::from_static("Bearer wrong"));
+        assert!(!is_authorized(&wrong, Some("secret")));
+
+        let mut conflicting = headers();
+        conflicting.insert("Authorization", HeaderValue::from_static("Bearer secret"));
+        conflicting.insert("X-Access-Token", HeaderValue::from_static("wrong"));
+        assert!(!is_authorized(&conflicting, Some("secret")));
+    }
+
+    #[test]
+    fn allows_anonymous_loopback_only() {
+        let loopback = OneBotServerConfig {
+            listen: "127.0.0.1:8765".parse().unwrap(),
+            onebot_base_url: "http://127.0.0.1:3000".to_string(),
+            access_token: None,
+        };
+        validate_server_config(&loopback).unwrap();
+
+        let public = OneBotServerConfig {
+            listen: "0.0.0.0:8765".parse().unwrap(),
+            onebot_base_url: "http://127.0.0.1:3000".to_string(),
+            access_token: None,
+        };
+        assert!(validate_server_config(&public).is_err());
+    }
+
+    #[tokio::test]
+    async fn handler_rejects_missing_or_wrong_token() {
+        let missing = handle_onebot_event(
+            State(test_state()),
+            HeaderMap::new(),
+            Bytes::from_static(b"{}"),
+        )
+        .await;
+        assert_eq!(missing.status(), StatusCode::UNAUTHORIZED);
+
+        let mut headers = HeaderMap::new();
+        headers.insert("Authorization", HeaderValue::from_static("Bearer wrong"));
+        let wrong =
+            handle_onebot_event(State(test_state()), headers, Bytes::from_static(b"{}")).await;
+        assert_eq!(wrong.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn handler_accepts_correct_token() {
+        let mut headers = HeaderMap::new();
+        headers.insert("Authorization", HeaderValue::from_static("Bearer secret"));
+        let response =
+            handle_onebot_event(State(test_state()), headers, Bytes::from_static(b"{}")).await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
 }

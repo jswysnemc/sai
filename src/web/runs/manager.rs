@@ -1,6 +1,8 @@
+use self::history::RunJournals;
 use super::assembler::EventAssembler;
 use super::checkpoint::{RunCheckpoint, RunCheckpointStatus, RunCheckpointStore};
 use super::model_override::resolve_run_config;
+use super::request_limits::validate_start_request;
 use super::{EventJournal, WebEvent};
 use crate::agent::AgentMode;
 use crate::paths::SaiPaths;
@@ -18,7 +20,9 @@ use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex, RwLock};
 use tokio::task::JoinHandle;
 
-const RUN_JOURNAL_CAPACITY: usize = 32;
+mod history;
+#[cfg(test)]
+mod tests;
 
 /// 启动一轮 Web 对话所需参数。
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -78,12 +82,6 @@ struct QueuedRun {
     info: ActiveRunInfo,
     workspace: WorkspaceInfo,
     request: StartRunRequest,
-}
-
-#[derive(Default)]
-struct RunJournals {
-    entries: HashMap<String, EventJournal>,
-    order: VecDeque<String>,
 }
 
 /// 管理 Web 运行互斥、事件日志和中断句柄。
@@ -165,6 +163,7 @@ impl RunManager {
         workspace: WorkspaceInfo,
         request: StartRunRequest,
     ) -> Result<ActiveRunInfo> {
+        validate_start_request(&request)?;
         if request.kind == RunKind::Conversation
             && request.input.trim().is_empty()
             && request.image_url.is_none()
@@ -204,7 +203,6 @@ impl RunManager {
             restore_input: None,
         };
         let journal = EventJournal::persistent(self.checkpoints.event_path(&run_id));
-        self.insert_journal(run_id.clone(), journal.clone()).await;
         self.checkpoints.upsert(RunCheckpoint {
             info: info.clone(),
             workspace: workspace.clone(),
@@ -212,6 +210,7 @@ impl RunManager {
             status,
             updated_at: String::new(),
         })?;
+        self.insert_journal(run_id.clone(), journal.clone()).await;
         let queued_run = QueuedRun {
             info: info.clone(),
             workspace,
@@ -391,16 +390,6 @@ impl RunManager {
         Ok(false)
     }
 
-    /// 返回指定运行事件日志。
-    pub(crate) async fn journal(&self, run_id: &str) -> Option<EventJournal> {
-        if let Some(journal) = self.journals.read().await.entries.get(run_id).cloned() {
-            return Some(journal);
-        }
-        self.checkpoints
-            .get(run_id)
-            .map(|_| EventJournal::persistent(self.checkpoints.event_path(run_id)))
-    }
-
     /// 取出指定会话尚未消费的无回复中断恢复输入。
     ///
     /// 参数:
@@ -416,22 +405,6 @@ impl RunManager {
     ) -> Result<Option<ActiveRunInfo>> {
         self.checkpoints
             .take_interruption_recovery(workspace_id, session_id)
-    }
-
-    /// 保存运行事件日志并移除最早的过期日志。
-    ///
-    /// 参数:
-    /// - `run_id`: 运行 ID
-    /// - `journal`: 运行事件日志
-    async fn insert_journal(&self, run_id: String, journal: EventJournal) {
-        let mut journals = self.journals.write().await;
-        journals.entries.insert(run_id.clone(), journal);
-        journals.order.push_back(run_id);
-        while journals.order.len() > RUN_JOURNAL_CAPACITY {
-            if let Some(expired_id) = journals.order.pop_front() {
-                journals.entries.remove(&expired_id);
-            }
-        }
     }
 
     /// 清理指定活动运行。
@@ -568,102 +541,5 @@ fn parse_mode(value: Option<&str>) -> Result<AgentMode> {
         "auto_audit" | "auto-audit" | "auto" => Ok(AgentMode::AutoAudit),
         "yolo" | "" => Ok(AgentMode::Yolo),
         value => bail!("unsupported run mode: {value}"),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::PathBuf;
-
-    /// 创建运行管理器测试路径。
-    fn test_paths(root: PathBuf) -> SaiPaths {
-        SaiPaths {
-            config_dir: root.join("config"),
-            config_file: root.join("config/config.jsonc"),
-            secrets_file: root.join("config/secrets.jsonc"),
-            skills_dir: root.join("config/skills"),
-            data_dir: root.join("data"),
-            cache_dir: root.join("cache"),
-            state_dir: root.join("state"),
-            pictures_dir: root.join("pictures"),
-            fish_hook_file: root.join("fish/sai.fish"),
-            bash_hook_file: root.join("shell/bash-hook.sh"),
-            zsh_hook_file: root.join("shell/zsh-hook.zsh"),
-            powershell_hook_file: root.join("shell/powershell-hook.ps1"),
-        }
-    }
-
-    #[tokio::test]
-    async fn keeps_only_recent_run_journals() {
-        let temp = tempfile::tempdir().unwrap();
-        let manager = RunManager::new(&test_paths(temp.path().to_path_buf())).unwrap();
-        for index in 0..=RUN_JOURNAL_CAPACITY {
-            manager
-                .insert_journal(format!("run-{index}"), EventJournal::new())
-                .await;
-        }
-        assert!(manager.journal("run-0").await.is_none());
-        assert!(manager
-            .journal(&format!("run-{RUN_JOURNAL_CAPACITY}"))
-            .await
-            .is_some());
-    }
-
-    /// 验证同一会话的第二次提交会进入持久化队列。
-    #[tokio::test]
-    async fn queues_second_submission_for_same_session() {
-        let temp = tempfile::tempdir().unwrap();
-        let paths = test_paths(temp.path().to_path_buf());
-        let manager = RunManager::new(&paths).unwrap();
-        let workspace = WorkspaceInfo {
-            id: "workspace".to_string(),
-            name: "workspace".to_string(),
-            path: temp.path().display().to_string(),
-            last_opened_at: String::new(),
-        };
-        let key = session_key(&workspace.id, "session");
-        let task = tokio::spawn(std::future::pending::<()>());
-        manager.active.lock().await.insert(
-            key,
-            ActiveRun {
-                info: ActiveRunInfo {
-                    run_id: "running".to_string(),
-                    workspace_id: workspace.id.clone(),
-                    session_id: "session".to_string(),
-                    input: "first".to_string(),
-                    image_urls: Vec::new(),
-                    status: RunCheckpointStatus::Running,
-                    discard_user_turn: false,
-                    restore_input: None,
-                },
-                handle: task,
-            },
-        );
-
-        let queued = manager
-            .start(
-                workspace,
-                StartRunRequest {
-                    kind: RunKind::Conversation,
-                    session_id: "session".to_string(),
-                    input: "second".to_string(),
-                    agent_id: None,
-                    image_url: None,
-                    image_urls: Vec::new(),
-                    mode: None,
-                    provider_id: None,
-                    model: None,
-                    thinking_level: None,
-                },
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(queued.status, RunCheckpointStatus::Queued);
-        assert_eq!(
-            manager.checkpoints.get(&queued.run_id).unwrap().status,
-            RunCheckpointStatus::Queued
-        );
     }
 }

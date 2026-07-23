@@ -1,4 +1,4 @@
-use super::background_tasks::{read_log_tail, refresh_task_statuses};
+use super::background_tasks::refresh_task_statuses;
 use super::store::{BackgroundCommandStore, BackgroundCommandTask};
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
@@ -11,7 +11,9 @@ pub(crate) struct BackgroundCompletionNotice {
     pub(crate) task_id: String,
     pub(crate) label: String,
     pub(crate) status: String,
+    #[allow(dead_code)]
     pub(crate) stdout: String,
+    #[allow(dead_code)]
     pub(crate) stderr: String,
 }
 
@@ -31,11 +33,9 @@ pub(crate) async fn poll_background_completions(
     session_id: &str,
     goal_id: &str,
 ) -> Result<(Vec<BackgroundCompletionNotice>, usize)> {
-    poll_background_completions_matching(
-        paths,
-        config,
-        |task| owned_by_goal(task, session_id, goal_id),
-    )
+    poll_background_completions_matching(paths, config, |task| {
+        owned_by_goal(task, session_id, goal_id)
+    })
     .await
 }
 
@@ -84,19 +84,14 @@ async fn poll_background_completions_matching(
         if task.completion_notified {
             continue;
         }
-        let max_bytes = config.tools.background_command_log_max_bytes;
-        let stdout = read_log_tail(&task.stdout_log, 200, max_bytes)
-            .map(|tail| bounded_completion_output(&tail.text))
-            .unwrap_or_default();
-        let stderr = read_log_tail(&task.stderr_log, 200, max_bytes)
-            .map(|tail| bounded_completion_output(&tail.text))
-            .unwrap_or_default();
+        // 主动完成回执不附带日志正文，避免一次性塞入大量 token
+        let _ = config;
         notices.push(BackgroundCompletionNotice {
             task_id: task.id.clone(),
             label: task.label.clone(),
             status: task.status.clone(),
-            stdout,
-            stderr,
+            stdout: String::new(),
+            stderr: String::new(),
         });
     }
     Ok((notices, running))
@@ -143,16 +138,6 @@ fn owned_by_goal(task: &BackgroundCommandTask, session_id: &str, goal_id: &str) 
     owned_by_session(task, session_id) && task.goal_id.as_deref() == Some(goal_id)
 }
 
-/// 限制后台命令输出进入模型上下文的长度。
-fn bounded_completion_output(text: &str) -> String {
-    const LIMIT: usize = 4_000;
-    if text.chars().count() <= LIMIT {
-        return text.to_string();
-    }
-    let mut result = text.chars().take(LIMIT).collect::<String>();
-    result.push_str("\n[后台命令输出已截断]");
-    result
-}
 
 #[cfg(test)]
 mod tests {
@@ -247,13 +232,10 @@ mod tests {
         session_task.completion_notified = false;
         all_tasks.push(session_task);
         store.save(&all_tasks).unwrap();
-        let (session_notices, session_running) = poll_session_background_completions(
-            &paths,
-            &AppConfig::default(),
-            "session-1",
-        )
-        .await
-        .unwrap();
+        let (session_notices, session_running) =
+            poll_session_background_completions(&paths, &AppConfig::default(), "session-1")
+                .await
+                .unwrap();
         assert_eq!(session_running, 0);
         assert_eq!(session_notices.len(), 1);
         assert_eq!(session_notices[0].task_id, "session-task");

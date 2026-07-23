@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Activity, Archive, Cpu, Gauge, HardDrive, TerminalSquare } from "lucide-react";
+import { Activity, Archive, Cpu, Gauge, HardDrive, TerminalSquare, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../api/client";
@@ -33,6 +33,7 @@ export function SystemUsage({ selection, onCompact, compactDisabled }: { selecti
     mutationFn: onCompact
   });
   const contextPercent = Math.round(Math.min(1, Math.max(0, usage.data?.session.context_token_ratio ?? 0)) * 100);
+  const contextBreakdown = usage.data ? resolveContextBreakdown(usage.data.session, t) : null;
   const popoverStyle = useAnchoredPopover({ open, anchorRef: triggerRef, preferredWidth: 390, minimumWidth: 300, align: "right", maxHeight: 620 });
 
   useEffect(() => {
@@ -60,9 +61,46 @@ export function SystemUsage({ selection, onCompact, compactDisabled }: { selecti
           {usage.data && (
             <>
               <section className="context-usage-card">
-                <div className="context-usage-head"><span>{t("Context usage", "上下文占用")}</span><strong>{contextPercent}%</strong></div>
-                <div className="context-usage-track"><span style={{ width: `${contextPercent}%` }} /></div>
-                <small>{formatTokenCount(usage.data.session.context_prompt_tokens)} / {formatTokenCount(usage.data.session.context_window_tokens)} token</small>
+                <div className="context-usage-head">
+                  <span>{t("Context usage", "上下文用量")}</span>
+                  <button type="button" className="context-usage-close" onClick={() => setOpen(false)} aria-label={t("Close", "关闭")}>
+                    <X size={14} />
+                  </button>
+                </div>
+                <div className="context-usage-summary">
+                  <strong>{formatContextPercent(usage.data.session.context_token_ratio)}</strong>
+                  <small>{t("Used", "已使用")} {formatTokenCount(usage.data.session.context_prompt_tokens)}/{formatTokenCount(usage.data.session.context_window_tokens)}</small>
+                </div>
+                <div className="context-usage-track context-usage-track-stacked" aria-hidden="true">
+                  {contextBreakdown ? (
+                    <>
+                      {contextBreakdown.segments.map((segment) => (
+                        <span
+                          key={segment.key}
+                          className="context-usage-segment"
+                          style={{ width: `${segment.widthPercent}%`, background: segment.color }}
+                          title={`${segment.label} ${formatTokenApprox(segment.tokens)}`}
+                        />
+                      ))}
+                      {contextBreakdown.remainingPercent > 0.05 && (
+                        <span className="context-usage-segment context-usage-remaining" style={{ width: `${contextBreakdown.remainingPercent}%` }} />
+                      )}
+                    </>
+                  ) : (
+                    <span className="context-usage-segment" style={{ width: `${contextPercent}%`, background: "var(--signal)" }} />
+                  )}
+                </div>
+                {contextBreakdown && (
+                  <ul className="context-usage-legend">
+                    {contextBreakdown.segments.map((segment) => (
+                      <li key={segment.key}>
+                        <i style={{ background: segment.color }} />
+                        <span>{segment.label}</span>
+                        <strong>{formatTokenApprox(segment.tokens)}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <div className="context-compaction-actions">
                   <span>{usage.data.session.checkpoint_count > 0 ? t(`Compacted ${usage.data.session.compacted_turns} turns · ${formatCompactionReason(usage.data.session.latest_checkpoint_reason, t)}`, `已压缩 ${usage.data.session.compacted_turns} 轮 · ${formatCompactionReason(usage.data.session.latest_checkpoint_reason, t)}`) : t("Not compacted", "尚未压缩")}</span>
                   <button type="button" onClick={() => compact.mutate()} disabled={compact.isPending || compactDisabled || usage.data.runtime.active_run}>
@@ -97,6 +135,91 @@ export function SystemUsage({ selection, onCompact, compactDisabled }: { selecti
  */
 function UsageMetric({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
   return <div className="usage-metric"><span>{icon}</span><div><small>{label}</small><strong>{value}</strong><i>{detail}</i></div></div>;
+}
+
+
+type ContextBreakdownSession = {
+  context_prompt_tokens: number;
+  context_window_tokens: number;
+  context_breakdown?: {
+    system_prompt_tokens: number;
+    tools_and_agents_tokens: number;
+    conversation_tokens: number;
+    connectors_and_mcp_tokens: number;
+    skills_tokens: number;
+  } | null;
+};
+
+type ContextLegendSegment = {
+  key: string;
+  label: string;
+  tokens: number;
+  color: string;
+  widthPercent: number;
+};
+
+/**
+ * 解析上下文分项并映射为图例与进度条分段。
+ *
+ * @param session 会话用量数据
+ * @param t 中英文文案函数
+ * @returns 图例分段与剩余空间占比；无分项时返回 null
+ */
+function resolveContextBreakdown(
+  session: ContextBreakdownSession,
+  t: (en: string, zh: string) => string
+): { segments: ContextLegendSegment[]; remainingPercent: number } | null {
+  const raw = session.context_breakdown;
+  if (!raw) return null;
+  // 1. 固定分项顺序与配色，对齐参考图例
+  const items: Array<{ key: string; label: string; tokens: number; color: string }> = [
+    { key: "system", label: t("System prompt", "系统提示词"), tokens: raw.system_prompt_tokens, color: "var(--context-system)" },
+    { key: "tools", label: t("Tools & subagents", "工具及子智能体"), tokens: raw.tools_and_agents_tokens, color: "var(--context-tools)" },
+    { key: "conversation", label: t("Conversation", "对话消息"), tokens: raw.conversation_tokens, color: "var(--context-conversation)" },
+    { key: "connectors", label: t("Connectors & MCP", "连接器及MCP"), tokens: raw.connectors_and_mcp_tokens, color: "var(--context-connectors)" },
+    { key: "skills", label: t("Skills", "技能"), tokens: raw.skills_tokens, color: "var(--context-skills)" }
+  ];
+  // 2. 进度条宽度按「已用 / 窗口」铺满；分项 token 保持估算值，仅用相对占比着色
+  const windowTokens = Math.max(0, session.context_window_tokens);
+  const usedTokens = Math.max(0, session.context_prompt_tokens);
+  const estimatedTotal = items.reduce((sum, item) => sum + Math.max(0, item.tokens), 0);
+  const usedPercent = windowTokens > 0 ? Math.min(100, (usedTokens / windowTokens) * 100) : 0;
+  const segments = items.map((item) => {
+    const tokens = Math.max(0, item.tokens);
+    const share = estimatedTotal > 0 ? tokens / estimatedTotal : 0;
+    const widthPercent = usedPercent * share;
+    return {
+      key: item.key,
+      label: item.label,
+      tokens,
+      color: item.color,
+      widthPercent
+    };
+  });
+  const remainingPercent = Math.max(0, 100 - usedPercent);
+  return { segments, remainingPercent };
+}
+
+/**
+ * 格式化上下文占用百分比，保留一位小数。
+ *
+ * @param ratio 0~1 比例
+ * @returns 百分比文本
+ */
+function formatContextPercent(ratio: number): string {
+  const value = Math.min(100, Math.max(0, ratio * 100));
+  if (value > 0 && value < 0.1) return "<0.1%";
+  return `${value.toFixed(1).replace(/\.0$/, "")}%`;
+}
+
+/**
+ * 格式化图例中的约略 token 数。
+ *
+ * @param value token 数
+ * @returns 带波浪号的紧凑文本
+ */
+function formatTokenApprox(value: number): string {
+  return `~${formatTokenCount(Math.max(0, value))}`;
 }
 
 /**

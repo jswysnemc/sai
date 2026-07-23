@@ -1,6 +1,10 @@
 use super::event::{parse_message_event, parse_validation_event};
 use super::processor::{target_kind_name, QqBotProcessor, QqBotProcessorConfig};
 use super::signature::{sign_validation, verify_event_signature};
+use super::webhook_security::{
+    current_unix_timestamp, validate_timestamp, validate_validation_event,
+    validate_validation_headers, validation_cache_key, ValidationSignatureCache,
+};
 use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::{Context, Result};
@@ -24,8 +28,10 @@ pub(crate) struct QqBotWebhookServerConfig {
 }
 
 struct QqBotWebhookState {
+    app_id: String,
     client_secret: String,
     processor: Arc<QqBotProcessor>,
+    validation_cache: ValidationSignatureCache,
 }
 
 /// 启动 QQ 官方机器人 Webhook 入站服务。
@@ -45,14 +51,16 @@ pub(crate) async fn run_qq_bot_webhook_server(
         paths,
         QqBotProcessorConfig {
             base_url: config.base_url,
-            app_id: config.app_id,
+            app_id: config.app_id.clone(),
             client_secret: config.client_secret.clone(),
             verbose: config.verbose,
         },
     ));
     let state = Arc::new(QqBotWebhookState {
+        app_id: config.app_id,
         client_secret: config.client_secret.clone(),
         processor,
+        validation_cache: ValidationSignatureCache::default(),
     });
     let app = Router::new()
         .route("/", post(handle_qq_bot_webhook))
@@ -128,15 +136,29 @@ async fn handle_qq_bot_webhook_inner(
     let payload = serde_json::from_slice::<Value>(&body)
         .with_context(|| t("invalid QQ payload", "无效的 QQ 数据"))?;
     if let Some(validation) = parse_validation_event(&payload)? {
+        validate_validation_headers(&headers, &state.app_id)?;
+        let now = current_unix_timestamp()?;
+        validate_validation_event(&validation, now)?;
         state.processor.debug_log(t(
             "received callback URL validation event",
             "收到回调地址验证事件",
         ));
-        let signature = sign_validation(
-            &state.client_secret,
-            &validation.event_ts,
-            &validation.plain_token,
-        )?;
+        let cache_key = validation_cache_key(&validation);
+        let (signature, cached) = state.validation_cache.get_or_insert(&cache_key, now, || {
+            sign_validation(
+                &state.client_secret,
+                &validation.event_ts,
+                &validation.plain_token,
+            )
+        })?;
+        state.processor.debug_log(format!(
+            "callback validation challenge {}",
+            if cached {
+                "replayed from cache"
+            } else {
+                "signed"
+            }
+        ));
         return Ok(Json(json!({
             "plain_token": validation.plain_token,
             "signature": signature,
@@ -194,5 +216,56 @@ fn verify_request_signature(client_secret: &str, headers: &HeaderMap, body: &[u8
                 "缺少 X-Signature-Timestamp"
             ))
         })?;
+    validate_timestamp(timestamp, current_unix_timestamp()?)?;
     verify_event_signature(client_secret, timestamp, body, signature)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::HeaderValue;
+
+    /// 组装带有效 QQ Ed25519 签名的请求头。
+    ///
+    /// 参数:
+    /// - `secret`: QQ Bot Secret
+    /// - `timestamp`: 签名时间戳
+    /// - `body`: HTTP 请求正文
+    ///
+    /// 返回:
+    /// - QQ Webhook 签名请求头
+    fn signed_headers(secret: &str, timestamp: &str, body: &str) -> HeaderMap {
+        let signature = sign_validation(secret, timestamp, body).unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "X-Signature-Ed25519",
+            HeaderValue::from_str(&signature).unwrap(),
+        );
+        headers.insert(
+            "X-Signature-Timestamp",
+            HeaderValue::from_str(timestamp).unwrap(),
+        );
+        headers
+    }
+
+    #[test]
+    fn accepts_current_signed_webhook_request() {
+        let secret = "naOC0ocQE3shWLAfffVLB1rhYPG7";
+        let timestamp = current_unix_timestamp().unwrap().to_string();
+        let body = r#"{"op":0}"#;
+        let headers = signed_headers(secret, &timestamp, body);
+        verify_request_signature(secret, &headers, body.as_bytes()).unwrap();
+    }
+
+    #[test]
+    fn rejects_stale_webhook_request_with_valid_signature() {
+        let secret = "naOC0ocQE3shWLAfffVLB1rhYPG7";
+        let now = current_unix_timestamp().unwrap();
+        let timestamp =
+            (now - crate::gateways::qq_bot::webhook_security::QQ_WEBHOOK_TIMESTAMP_WINDOW_SECS - 1)
+                .to_string();
+        let body = r#"{"op":0}"#;
+        let headers = signed_headers(secret, &timestamp, body);
+        assert!(verify_request_signature(secret, &headers, body.as_bytes()).is_err());
+    }
 }

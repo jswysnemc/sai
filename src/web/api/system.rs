@@ -38,6 +38,16 @@ struct SessionUsageResponse {
     latest_checkpoint_at: Option<String>,
     latest_checkpoint_reason: Option<String>,
     compaction_warning: Option<String>,
+    context_breakdown: ContextUsageBreakdownResponse,
+}
+
+#[derive(Serialize, Default)]
+struct ContextUsageBreakdownResponse {
+    system_prompt_tokens: usize,
+    tools_and_agents_tokens: usize,
+    conversation_tokens: usize,
+    connectors_and_mcp_tokens: usize,
+    skills_tokens: usize,
 }
 
 #[derive(Serialize)]
@@ -114,6 +124,15 @@ async fn usage(
         .runs
         .is_session_active(&workspace.id, &snapshot.session_id)
         .await;
+    // 【Web主界面】【上下文分项】估算系统提示、工具、对话、MCP、技能占用
+    let breakdown = match super::super::services::context_breakdown::estimate_context_breakdown(
+        &config,
+        &state.paths,
+        &store,
+    ) {
+        Ok(value) => value,
+        Err(_error) => super::super::services::context_breakdown::ContextUsageBreakdown::default(),
+    };
     Ok(Json(SystemUsageResponse {
         session: SessionUsageResponse {
             id: snapshot.session_id,
@@ -134,6 +153,13 @@ async fn usage(
                     "conversation has been compacted multiple times; start a focused session if details become distorted"
                         .to_string()
                 }),
+            context_breakdown: ContextUsageBreakdownResponse {
+                system_prompt_tokens: breakdown.system_prompt_tokens,
+                tools_and_agents_tokens: breakdown.tools_and_agents_tokens,
+                conversation_tokens: breakdown.conversation_tokens,
+                connectors_and_mcp_tokens: breakdown.connectors_and_mcp_tokens,
+                skills_tokens: breakdown.skills_tokens,
+            },
         },
         process: ProcessUsageResponse {
             pid: process.pid,

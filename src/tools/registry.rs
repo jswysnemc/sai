@@ -9,8 +9,77 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-pub type ToolFuture = Pin<Box<dyn Future<Output = Result<String>> + Send>>;
+pub type ToolFuture = Pin<Box<dyn Future<Output = Result<ToolOutput>> + Send>>;
 pub type ToolHandler = Arc<dyn Fn(Value, ToolProgress) -> ToolFuture + Send + Sync>;
+
+/// 工具希望在下一次模型请求中附加的图片。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ToolModelAttachment {
+    pub(crate) image_url: String,
+    pub(crate) source: String,
+    pub(crate) prompt: String,
+}
+
+impl ToolModelAttachment {
+    /// 创建模型图片附件。
+    ///
+    /// 参数:
+    /// - `image_url`: 图片 data URL 或远程 URL
+    /// - `source`: 图片来源路径或标识
+    /// - `prompt`: 当前模型分析图片时使用的提示
+    ///
+    /// 返回:
+    /// - 模型图片附件
+    pub(crate) fn new(
+        image_url: impl Into<String>,
+        source: impl Into<String>,
+        prompt: impl Into<String>,
+    ) -> Self {
+        Self {
+            image_url: image_url.into(),
+            source: source.into(),
+            prompt: prompt.into(),
+        }
+    }
+}
+
+/// 工具文本结果和仅供下一次模型请求使用的附件。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ToolOutput {
+    pub(crate) content: String,
+    pub(crate) model_attachments: Vec<ToolModelAttachment>,
+}
+
+impl ToolOutput {
+    /// 创建不包含模型附件的普通工具结果。
+    ///
+    /// 参数:
+    /// - `content`: 工具文本结果
+    ///
+    /// 返回:
+    /// - 普通工具结果
+    pub(crate) fn text(content: impl Into<String>) -> Self {
+        Self {
+            content: content.into(),
+            model_attachments: Vec::new(),
+        }
+    }
+
+    /// 为工具结果附加下一次模型请求使用的图片。
+    ///
+    /// 参数:
+    /// - `attachments`: 图片附件列表
+    ///
+    /// 返回:
+    /// - 包含模型图片附件的工具结果
+    pub(crate) fn with_model_attachments(
+        mut self,
+        attachments: impl IntoIterator<Item = ToolModelAttachment>,
+    ) -> Self {
+        self.model_attachments.extend(attachments);
+        self
+    }
+}
 
 #[derive(Clone, Default)]
 pub struct ToolProgress {
@@ -69,6 +138,38 @@ impl ToolSpec {
             description: description.into(),
             parameters,
             permission: ToolPermission::ReadOnly,
+            handler: Arc::new(move |args, _progress| {
+                let future = handler(args);
+                Box::pin(async move { future.await.map(ToolOutput::text) })
+            }),
+        }
+    }
+
+    /// 创建可以返回下一次模型请求附件的工具。
+    ///
+    /// 参数:
+    /// - `name`: 工具名称
+    /// - `description`: 工具说明
+    /// - `parameters`: JSON Schema 参数定义
+    /// - `handler`: 返回结构化工具结果的异步处理函数
+    ///
+    /// 返回:
+    /// - 工具定义
+    pub(crate) fn new_with_output<F, Fut>(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        parameters: Value,
+        handler: F,
+    ) -> Self
+    where
+        F: Fn(Value) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<ToolOutput>> + Send + 'static,
+    {
+        Self {
+            name: name.into(),
+            description: description.into(),
+            parameters,
+            permission: ToolPermission::ReadOnly,
             handler: Arc::new(move |args, _progress| Box::pin(handler(args))),
         }
     }
@@ -88,7 +189,10 @@ impl ToolSpec {
             description: description.into(),
             parameters,
             permission: ToolPermission::ReadOnly,
-            handler: Arc::new(move |args, progress| Box::pin(handler(args, progress))),
+            handler: Arc::new(move |args, progress| {
+                let future = handler(args, progress);
+                Box::pin(async move { future.await.map(ToolOutput::text) })
+            }),
         }
     }
 
@@ -108,7 +212,7 @@ impl ToolSpec {
         }
     }
 
-    async fn call(&self, args: Value, progress: ToolProgress) -> Result<String> {
+    async fn call(&self, args: Value, progress: ToolProgress) -> Result<ToolOutput> {
         (self.handler)(args, progress).await
     }
 }
@@ -283,8 +387,10 @@ impl ToolRegistry {
             bail!("unknown tool: {name}");
         };
         let mut args = parse_arguments(arguments)?;
-        self.call_authorized(tool, name, &mut args, ToolProgress::default())
-            .await
+        Ok(self
+            .call_authorized(tool, name, &mut args, ToolProgress::default(), false)
+            .await?
+            .content)
     }
 
     pub async fn call_with_progress(
@@ -292,13 +398,13 @@ impl ToolRegistry {
         name: &str,
         arguments: &str,
         sender: mpsc::UnboundedSender<String>,
-    ) -> Result<String> {
+    ) -> Result<ToolOutput> {
         let name = local_tool_name(name);
         let Some(tool) = self.tools.get(name) else {
             bail!("unknown tool: {name}");
         };
         let mut args = parse_arguments(arguments)?;
-        self.call_authorized(tool, name, &mut args, ToolProgress::new(sender))
+        self.call_authorized(tool, name, &mut args, ToolProgress::new(sender), true)
             .await
     }
 
@@ -309,6 +415,7 @@ impl ToolRegistry {
     /// - `name`: 本地工具名称
     /// - `args`: 已解析工具参数
     /// - `progress`: 工具进度通道
+    /// - `accept_model_attachments`: 调用方是否会把临时附件提交给模型
     ///
     /// 返回:
     /// - 工具执行结果
@@ -318,7 +425,8 @@ impl ToolRegistry {
         name: &str,
         args: &mut Value,
         progress: ToolProgress,
-    ) -> Result<String> {
+        accept_model_attachments: bool,
+    ) -> Result<ToolOutput> {
         if let Some(profile) = &self.permission_profile {
             let sandboxed = profile.authorize(name, tool.permission, args)?;
             if sandboxed {
@@ -327,9 +435,18 @@ impl ToolRegistry {
                     .insert("_sai_sandbox".to_string(), Value::Bool(true));
             }
         }
+        if accept_model_attachments && name == "read_file" {
+            args.as_object_mut()
+                .context("tool arguments must be a JSON object")?
+                .insert("_sai_model_attachments".to_string(), Value::Bool(true));
+        }
         let result = tool.call(args.clone(), progress).await;
         if let Some(profile) = &self.permission_profile {
-            profile.record_result(name, args, &result);
+            profile.record_result(
+                name,
+                args,
+                result.as_ref().map(|output| output.content.as_str()),
+            );
         }
         result
     }

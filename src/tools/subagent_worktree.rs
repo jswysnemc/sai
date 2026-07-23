@@ -2,12 +2,17 @@
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
 use std::fs;
-use std::io::Write;
-use std::path::{Component, Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+mod git;
+
+use git::{
+    collect_apply_paths, collect_worktree_paths, head_file_bytes, is_sai_subagent_worktree,
+    normalize_sai_subagent_branch, run_git, run_git_apply_3way, run_git_apply_with_options,
+    run_git_owned, run_git_raw, stage_apply_paths, validate_git_relative_path,
+};
 
 const CREATE_WORKTREE_MAX_ATTEMPTS: usize = 8;
 const WORKTREE_DIR_MARKER: &str = ".sai-subagents";
@@ -164,23 +169,26 @@ fn apply_worktree_changes(
     parent_workdir: &Path,
     worktree_root: &Path,
 ) -> Result<SubagentWorktreeApplyResult> {
-    let parent_workdir = canonicalize_existing_dir(
-        &display_path(parent_workdir),
-        "parent workdir",
-    )?;
-    let worktree_root =
-        canonicalize_existing_dir(&display_path(worktree_root), "worktree root")?;
+    let parent_workdir =
+        canonicalize_existing_dir(&display_path(parent_workdir), "parent workdir")?;
+    let worktree_root = canonicalize_existing_dir(&display_path(worktree_root), "worktree root")?;
 
-    let parent_repo_root_raw = run_git(&parent_workdir, &["rev-parse", "--show-toplevel"]).map_err(|e| anyhow::anyhow!(e))?;
+    let parent_repo_root_raw = run_git(&parent_workdir, &["rev-parse", "--show-toplevel"])
+        .map_err(|e| anyhow::anyhow!(e))?;
     let parent_repo_root =
         canonicalize_existing_dir(&parent_repo_root_raw, "parent git repo root")?;
 
-    let parent_common_raw = run_git(&parent_workdir, &["rev-parse", "--git-common-dir"]).map_err(|e| anyhow::anyhow!(e))?;
-    let worktree_common_raw = run_git(&worktree_root, &["rev-parse", "--git-common-dir"]).map_err(|e| anyhow::anyhow!(e))?;
+    let parent_common_raw = run_git(&parent_workdir, &["rev-parse", "--git-common-dir"])
+        .map_err(|e| anyhow::anyhow!(e))?;
+    let worktree_common_raw = run_git(&worktree_root, &["rev-parse", "--git-common-dir"])
+        .map_err(|e| anyhow::anyhow!(e))?;
     let parent_common =
         canonicalize_git_path(&parent_workdir, &parent_common_raw, "parent git common dir")?;
-    let worktree_common =
-        canonicalize_git_path(&worktree_root, &worktree_common_raw, "worktree git common dir")?;
+    let worktree_common = canonicalize_git_path(
+        &worktree_root,
+        &worktree_common_raw,
+        "worktree git common dir",
+    )?;
     if parent_common != worktree_common {
         bail!("worktree does not belong to the same git repository as parent workdir");
     }
@@ -252,55 +260,53 @@ fn apply_worktree_changes(
             deleted_files: Vec::new(),
             conflict_files: Vec::new(),
         }),
-        Err(apply_error) => {
-            match run_git_apply_3way(&parent_repo_root, &patch) {
-                Ok(()) => {
-                    return Ok(SubagentWorktreeApplyResult {
-                        applied: true,
-                        changed: true,
-                        status,
-                        patch_bytes,
-                        skipped_reason: None,
-                        apply_method: Some("git_apply_3way".to_string()),
-                        fallback_reason: Some(apply_error),
-                        copied_files: Vec::new(),
-                        deleted_files: Vec::new(),
-                        conflict_files: Vec::new(),
-                    });
-                }
-                Err(three_way_error) => {
-                    let three_way_error = three_way_error;
-            let fallback = apply_file_copy_fallback(&parent_repo_root, &worktree_root, &apply_paths)
+        Err(apply_error) => match run_git_apply_3way(&parent_repo_root, &patch) {
+            Ok(()) => {
+                return Ok(SubagentWorktreeApplyResult {
+                    applied: true,
+                    changed: true,
+                    status,
+                    patch_bytes,
+                    skipped_reason: None,
+                    apply_method: Some("git_apply_3way".to_string()),
+                    fallback_reason: Some(apply_error),
+                    copied_files: Vec::new(),
+                    deleted_files: Vec::new(),
+                    conflict_files: Vec::new(),
+                });
+            }
+            Err(three_way_error) => {
+                let three_way_error = three_way_error;
+                let fallback = apply_file_copy_fallback(&parent_repo_root, &worktree_root, &apply_paths)
                 .map_err(|fallback_error| {
                     anyhow::anyhow!(
                         "git apply failed: {apply_error}; git apply --3way failed: {three_way_error}; file copy fallback failed:\n{fallback_error}"
                     )
                 })?;
-            let copied_or_deleted =
-                !fallback.copied_files.is_empty() || !fallback.deleted_files.is_empty();
-            Ok(SubagentWorktreeApplyResult {
-                applied: copied_or_deleted,
-                changed: true,
-                status,
-                patch_bytes,
-                skipped_reason: if copied_or_deleted {
-                    None
-                } else if fallback.already_applied_count > 0 {
-                    Some("already_applied".to_string())
-                } else {
-                    Some("fallback_noop".to_string())
-                },
-                apply_method: Some("file_copy_fallback".to_string()),
-                fallback_reason: Some(format!(
+                let copied_or_deleted =
+                    !fallback.copied_files.is_empty() || !fallback.deleted_files.is_empty();
+                Ok(SubagentWorktreeApplyResult {
+                    applied: copied_or_deleted,
+                    changed: true,
+                    status,
+                    patch_bytes,
+                    skipped_reason: if copied_or_deleted {
+                        None
+                    } else if fallback.already_applied_count > 0 {
+                        Some("already_applied".to_string())
+                    } else {
+                        Some("fallback_noop".to_string())
+                    },
+                    apply_method: Some("file_copy_fallback".to_string()),
+                    fallback_reason: Some(format!(
                     "git apply failed: {apply_error}; git apply --3way failed: {three_way_error}"
                 )),
-                copied_files: fallback.copied_files,
-                deleted_files: fallback.deleted_files,
-                conflict_files: fallback.conflict_files,
-            })
-                }
+                    copied_files: fallback.copied_files,
+                    deleted_files: fallback.deleted_files,
+                    conflict_files: fallback.conflict_files,
+                })
             }
-        }
+        },
     }
 }
 
@@ -569,258 +575,6 @@ fn apply_file_copy_fallback(
     })
 }
 
-fn stage_apply_paths(worktree_root: &Path, paths: &[String]) -> Result<(), String> {
-    run_git(worktree_root, &["reset", "-q", "HEAD", "--"])?;
-    if paths.is_empty() {
-        return Ok(());
-    }
-    let mut args = vec!["add".to_string(), "-A".to_string(), "--".to_string()];
-    args.extend(paths.iter().cloned());
-    run_git_owned(worktree_root, args)?;
-    Ok(())
-}
-
-fn head_file_bytes(repo_root: &Path, rel_path: &str) -> Result<Option<Vec<u8>>, String> {
-    let head_spec = format!("HEAD:{rel_path}");
-    if run_git_owned(
-        repo_root,
-        vec!["cat-file".to_string(), "-e".to_string(), head_spec.clone()],
-    )
-    .is_err()
-    {
-        return Ok(None);
-    }
-    run_git_owned_bytes(repo_root, vec!["show".to_string(), head_spec]).map(Some)
-}
-
-fn run_git_apply_with_options(cwd: &Path, patch: &str, options: &[&str]) -> Result<(), String> {
-    let mut check_args = vec!["apply", "--check", "--whitespace=nowarn", "--binary"];
-    check_args.extend(options.iter().copied());
-    let mut apply_args = vec!["apply", "--whitespace=nowarn", "--binary"];
-    apply_args.extend(options.iter().copied());
-    run_git_with_input(cwd, &check_args, patch)
-        .and_then(|_| run_git_with_input(cwd, &apply_args, patch))
-        .map(|_| ())
-}
-
-fn run_git_apply_3way(cwd: &Path, patch: &str) -> Result<(), String> {
-    let check_output = run_git_with_input_output(
-        cwd,
-        &[
-            "apply",
-            "--check",
-            "--whitespace=nowarn",
-            "--binary",
-            "--3way",
-        ],
-        patch,
-    )?;
-    if check_output.to_ascii_lowercase().contains("with conflicts") {
-        return Err(format!(
-            "git apply --3way would leave conflicts:\n{check_output}"
-        ));
-    }
-    run_git_with_input(
-        cwd,
-        &["apply", "--whitespace=nowarn", "--binary", "--3way"],
-        patch,
-    )
-    .map(|_| ())
-}
-
-fn collect_apply_paths(worktree_root: &Path) -> Result<Vec<String>, String> {
-    let mut paths = BTreeSet::new();
-    let tracked_raw = run_git_raw(
-        worktree_root,
-        &["diff", "--no-renames", "--name-only", "-z", "HEAD", "--"],
-    )?;
-    let untracked_raw =
-        run_git_raw(worktree_root, &["ls-files", "--others", "--exclude-standard", "-z"])?;
-    for raw in split_nul_paths(&tracked_raw).chain(split_nul_paths(&untracked_raw)) {
-        if should_ignore_apply_path(raw) {
-            continue;
-        }
-        paths.insert(validate_git_relative_path(raw)?);
-    }
-    Ok(paths.into_iter().collect())
-}
-
-fn collect_worktree_paths(cwd: &Path) -> Result<Vec<PathBuf>, String> {
-    let raw = run_git_raw(cwd, &["worktree", "list", "--porcelain"])?;
-    let mut paths = Vec::new();
-    for line in raw.lines() {
-        let Some(path) = line.strip_prefix("worktree ") else {
-            continue;
-        };
-        let path = PathBuf::from(path.trim());
-        if path.is_absolute() {
-            paths.push(path);
-        }
-    }
-    Ok(paths)
-}
-
-fn is_sai_subagent_worktree(path: &Path) -> bool {
-    path.components().any(|component| match component {
-        Component::Normal(name) => name == WORKTREE_DIR_MARKER,
-        _ => false,
-    })
-}
-
-fn normalize_sai_subagent_branch(branch_name: Option<&str>) -> Option<String> {
-    let branch = branch_name?.trim();
-    if branch.starts_with(BRANCH_PREFIX) {
-        Some(branch.to_string())
-    } else {
-        None
-    }
-}
-
-fn should_ignore_apply_path(path: &str) -> bool {
-    let file_name = Path::new(path)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("");
-    matches!(file_name, ".DS_Store" | "Thumbs.db" | "Desktop.ini")
-}
-
-fn validate_git_relative_path(raw: &str) -> Result<String, String> {
-    if raw.is_empty() {
-        return Err("empty git path".to_string());
-    }
-    let path = Path::new(raw);
-    if path.is_absolute() {
-        return Err(format!("git path must be relative: {raw}"));
-    }
-    for component in path.components() {
-        match component {
-            Component::Normal(_) => {}
-            _ => return Err(format!("git path contains unsafe component: {raw}")),
-        }
-    }
-    Ok(raw.to_string())
-}
-
-fn split_nul_paths(raw: &str) -> impl Iterator<Item = &str> {
-    raw.split('\0').filter(|path| !path.is_empty())
-}
-
-fn run_git(cwd: &Path, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(cwd)
-        .args(args)
-        .output()
-        .map_err(|err| format!("failed to run git: {err}"))?;
-    if output.status.success() {
-        return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
-    }
-    Err(git_error_message(&output))
-}
-
-fn run_git_raw(cwd: &Path, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(cwd)
-        .args(args)
-        .output()
-        .map_err(|err| format!("failed to run git: {err}"))?;
-    if output.status.success() {
-        return Ok(String::from_utf8_lossy(&output.stdout).to_string());
-    }
-    Err(git_error_message(&output))
-}
-
-fn run_git_owned(cwd: &Path, args: Vec<String>) -> Result<String, String> {
-    let output = Command::new("git")
-        .current_dir(cwd)
-        .args(args)
-        .output()
-        .map_err(|err| format!("failed to run git: {err}"))?;
-    if output.status.success() {
-        return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
-    }
-    Err(git_error_message(&output))
-}
-
-fn run_git_owned_bytes(cwd: &Path, args: Vec<String>) -> Result<Vec<u8>, String> {
-    let output = Command::new("git")
-        .current_dir(cwd)
-        .args(args)
-        .output()
-        .map_err(|err| format!("failed to run git: {err}"))?;
-    if output.status.success() {
-        return Ok(output.stdout);
-    }
-    Err(git_error_message(&output))
-}
-
-fn run_git_with_input(cwd: &Path, args: &[&str], input: &str) -> Result<String, String> {
-    let mut child = Command::new("git")
-        .current_dir(cwd)
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|err| format!("failed to run git: {err}"))?;
-    if let Some(stdin) = child.stdin.as_mut() {
-        stdin
-            .write_all(input.as_bytes())
-            .map_err(|err| format!("failed to write git stdin: {err}"))?;
-    }
-    let output = child
-        .wait_with_output()
-        .map_err(|err| format!("failed to wait for git: {err}"))?;
-    if output.status.success() {
-        return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
-    }
-    Err(git_error_message(&output))
-}
-
-fn run_git_with_input_output(cwd: &Path, args: &[&str], input: &str) -> Result<String, String> {
-    let mut child = Command::new("git")
-        .current_dir(cwd)
-        .args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|err| format!("failed to run git: {err}"))?;
-    if let Some(stdin) = child.stdin.as_mut() {
-        stdin
-            .write_all(input.as_bytes())
-            .map_err(|err| format!("failed to write git stdin: {err}"))?;
-    }
-    let output = child
-        .wait_with_output()
-        .map_err(|err| format!("failed to wait for git: {err}"))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let combined = match (stdout.is_empty(), stderr.is_empty()) {
-        (true, true) => String::new(),
-        (false, true) => stdout,
-        (true, false) => stderr,
-        (false, false) => format!("{stdout}\n{stderr}"),
-    };
-    if output.status.success() {
-        Ok(combined)
-    } else if combined.is_empty() {
-        Err(format!("git exited with status {}", output.status))
-    } else {
-        Err(combined)
-    }
-}
-
-fn git_error_message(output: &std::process::Output) -> String {
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let message = if stderr.is_empty() { stdout } else { stderr };
-    if message.is_empty() {
-        format!("git exited with status {}", output.status)
-    } else {
-        message
-    }
-}
-
 fn canonicalize_existing_dir(raw: &str, label: &str) -> Result<PathBuf> {
     let path = PathBuf::from(raw.trim());
     if raw.trim().is_empty() {
@@ -841,8 +595,12 @@ fn canonicalize_git_path(cwd: &Path, raw: &str, label: &str) -> Result<PathBuf> 
     } else {
         cwd.join(path)
     };
-    fs::canonicalize(&absolute)
-        .with_context(|| format!("{label} must resolve to an existing path: {}", display_path(&absolute)))
+    fs::canonicalize(&absolute).with_context(|| {
+        format!(
+            "{label} must resolve to an existing path: {}",
+            display_path(&absolute)
+        )
+    })
 }
 
 fn sanitize_path_component(input: &str, fallback: &str) -> String {
@@ -906,74 +664,4 @@ fn display_path(path: &Path) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn temp_root(label: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "sai-subagent-worktree-{label}-{}-{}",
-            std::process::id(),
-            uuid::Uuid::new_v4().simple()
-        ))
-    }
-
-    fn git(cwd: &Path, args: &[&str]) -> Result<String, String> {
-        run_git_owned(cwd, args.iter().map(|arg| (*arg).to_string()).collect())
-    }
-
-    fn init_repo(root: &Path) -> Result<(), String> {
-        fs::create_dir_all(root).map_err(|err| format!("failed to create repo: {err}"))?;
-        git(root, &["init"])?;
-        git(root, &["config", "user.email", "sai-test@example.com"])?;
-        git(root, &["config", "user.name", "Sai Test"])?;
-        git(root, &["config", "core.autocrlf", "false"])?;
-        fs::write(root.join("README.md"), "base\n")
-            .map_err(|err| format!("failed to write README: {err}"))?;
-        git(root, &["add", "README.md"])?;
-        git(root, &["commit", "-m", "init"])?;
-        Ok(())
-    }
-
-    #[test]
-    fn creates_applies_and_cleans_worktree() -> Result<(), String> {
-        let root = temp_root("create-apply");
-        let repo = root.join("repo");
-        init_repo(&repo)?;
-
-        let worktree = try_create(&repo, "edit")
-            .map_err(|err| err.to_string())?
-            .ok_or_else(|| "expected worktree".to_string())?;
-        assert!(worktree.worktree_root.exists());
-        assert!(is_sai_subagent_worktree(&worktree.worktree_root));
-
-        fs::create_dir_all(worktree.workdir.join("test"))
-            .map_err(|err| format!("failed to create test dir: {err}"))?;
-        fs::write(
-            worktree.workdir.join("test/agent.md"),
-            "# Agent CRUD Test\n\n- status: done\n",
-        )
-        .map_err(|err| format!("failed to write worktree file: {err}"))?;
-
-        let apply_result = apply(&worktree).map_err(|err| err.to_string())?;
-        assert!(apply_result.applied);
-        assert_eq!(
-            fs::read_to_string(repo.join("test/agent.md"))
-                .map_err(|err| format!("failed to read parent file: {err}"))?,
-            "# Agent CRUD Test\n\n- status: done\n"
-        );
-
-        let cleanup_result = cleanup(&worktree);
-        assert!(cleanup_result.removed);
-        assert!(!worktree.worktree_root.exists());
-
-        let _ = fs::remove_dir_all(root);
-        Ok(())
-    }
-
-    #[test]
-    fn skips_non_git_directory() {
-        let temp = tempfile::tempdir().unwrap();
-        let result = try_create(temp.path(), "agent").unwrap();
-        assert!(result.is_none());
-    }
-}
+mod tests;

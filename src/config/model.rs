@@ -356,6 +356,12 @@ pub struct MemoryConfig {
     pub learning_min_task_chars: usize,
     #[serde(default = "default_memory_min_method_chars")]
     pub learning_min_method_chars: usize,
+    /// 会话记忆点提取专用供应商；留空时沿用当前会话供应商。
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub extraction_provider_id: String,
+    /// 会话记忆点提取专用模型；留空时沿用当前会话模型。
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub extraction_model: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

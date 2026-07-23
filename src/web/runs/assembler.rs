@@ -375,9 +375,6 @@ fn tool_can_mutate_workspace(name: &str) -> bool {
     matches!(
         name,
         "edit_file"
-            | "apply_patch"
-            | "write_file"
-            | "replace_file_lines"
             | "run_command"
             | "background_command"
             | "trash_path"

@@ -1,9 +1,13 @@
-use super::{
-    ActiveRunGuard, ChannelSubmission, RunnerEvent, RunnerEventSink, RunnerSubmission,
-    RunnerSubmissionKind, SessionOwner, SubmissionSource, TurnRunner, UserInputSubmission,
+use self::support::{
+    build_agent, loaded_tools_for_submission, merge_loaded_tools, try_auto_title_session,
+    with_channel_marker,
 };
 use super::submission_tools::{
     build_submission_tool_registry, should_apply_command_mode_exit_policy, should_discover_mcp,
+};
+use super::{
+    ActiveRunGuard, ChannelSubmission, RunnerEvent, RunnerEventSink, RunnerSubmission,
+    RunnerSubmissionKind, SessionOwner, SubmissionSource, TurnRunner, UserInputSubmission,
 };
 use crate::agent::{Agent, AgentMode};
 use crate::config::AppConfig;
@@ -14,7 +18,8 @@ use crate::permission::{PermissionAuditLog, PermissionProfile};
 use crate::state::StateStore;
 use crate::tools::ToolRegistry;
 use anyhow::{bail, Result};
-use std::collections::BTreeSet;
+
+mod support;
 
 /// 会话 runner，负责会话范围资源和单轮执行边界。
 pub(crate) struct SessionRunner<'paths> {
@@ -358,109 +363,6 @@ impl<'paths> SessionRunner<'paths> {
     }
 }
 
-/// 构造 Agent。
-///
-
-/// 构造 Agent。
-///
-/// 参数:
-/// - `config`: 应用配置
-/// - `paths`: Sai 路径集合
-/// - `state`: 状态存储
-/// - `client`: LLM 客户端
-/// - `registry`: 工具注册表
-/// - `mode`: Agent 模式
-/// - `extra_system_prompt`: 额外系统提示词
-///
-/// 返回:
-/// - Agent 实例
-fn build_agent(
-    config: AppConfig,
-    paths: &SaiPaths,
-    state: StateStore,
-    client: OpenAiCompatibleClient,
-    registry: ToolRegistry,
-    mode: AgentMode,
-    extra_system_prompt: Option<&str>,
-) -> Result<Agent> {
-    if extra_system_prompt.is_some() {
-        Agent::new_with_extra_system_prompt(
-            config,
-            paths,
-            state,
-            client,
-            registry,
-            mode,
-            extra_system_prompt,
-        )
-    } else {
-        Agent::new(config, paths, state, client, registry, mode)
-    }
-}
-
-/// 读取当前 submission 的已加载工具集合。
-///
-/// 参数:
-/// - `state`: 状态存储
-/// - `channel`: 可选渠道元数据
-///
-/// 返回:
-/// - 已加载工具集合
-fn loaded_tools_for_submission(
-    state: &StateStore,
-    channel: Option<&ChannelSubmission>,
-) -> Result<Vec<String>> {
-    let loaded_tools = state.load_loaded_tools()?;
-    Ok(merge_loaded_tools(loaded_tools, channel))
-}
-
-/// 合并状态内和渠道要求的已加载工具。
-///
-/// 参数:
-/// - `loaded_tools`: 状态内已加载工具
-/// - `channel`: 可选渠道元数据
-///
-/// 返回:
-/// - 去重后的已加载工具
-fn merge_loaded_tools(
-    loaded_tools: Vec<String>,
-    channel: Option<&ChannelSubmission>,
-) -> Vec<String> {
-    let mut seen = BTreeSet::new();
-    let mut merged = Vec::new();
-    for tool in loaded_tools.into_iter().chain(
-        channel
-            .into_iter()
-            .flat_map(|channel| channel.extra_loaded_tools.iter().cloned()),
-    ) {
-        if seen.insert(tool.clone()) {
-            merged.push(tool);
-        }
-    }
-    merged
-}
-
-/// 将渠道入站标记加入用户输入。
-///
-/// 参数:
-/// - `input`: 用户输入 submission
-/// - `channel`: 可选渠道元数据
-///
-/// 返回:
-/// - 更新后的用户输入 submission
-fn with_channel_marker(
-    mut input: UserInputSubmission,
-    channel: Option<&ChannelSubmission>,
-) -> UserInputSubmission {
-    if let Some(marker) = channel.and_then(|channel| channel.inbound_marker.as_deref()) {
-        input.extra_system_prompt = Some(match input.extra_system_prompt.take() {
-            Some(prompt) => format!("{prompt}\n\n{marker}"),
-            None => marker.to_string(),
-        });
-    }
-    input
-}
-
 #[cfg(test)]
 #[path = "session_runner_gateway_tests.rs"]
 mod gateway_tests;
@@ -529,13 +431,13 @@ mod tests {
         let loaded_tools = vec!["read_file".to_string(), "send_channel_message".to_string()];
         let channel = ChannelSubmission::new("qq")
             .with_extra_loaded_tool("send_channel_message")
-            .with_extra_loaded_tool("write_file");
+            .with_extra_loaded_tool("edit_file");
 
         let merged = merge_loaded_tools(loaded_tools, Some(&channel));
 
         assert_eq!(
             merged,
-            vec!["read_file", "send_channel_message", "write_file"]
+            vec!["read_file", "send_channel_message", "edit_file"]
         );
     }
 
@@ -729,45 +631,4 @@ mod tests {
 
         assert_eq!(owner_kind, "command_mode");
     }
-}
-
-
-/// 会话仍为默认/启发式标题时，调用小模型生成标题。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-/// - `config`: 应用配置
-/// - `state`: 会话状态
-/// - `input`: 用户输入
-/// - `assistant_preview`: 助手回复预览
-async fn try_auto_title_session(
-    paths: &SaiPaths,
-    config: &AppConfig,
-    state: &StateStore,
-    input: &UserInputSubmission,
-    assistant_preview: &str,
-) {
-    if input.automatic_input.is_some() {
-        return;
-    }
-    let user_message = input.input.trim();
-    if user_message.is_empty() {
-        return;
-    }
-    let session_id = state.session_id().to_string();
-    let Ok(sessions) = crate::state::list_sessions(paths) else {
-        return;
-    };
-    let Some(session) = sessions.iter().find(|item| item.id == session_id) else {
-        return;
-    };
-    let _ = crate::assistants::maybe_auto_title_session(
-        paths,
-        config,
-        &session_id,
-        &session.title,
-        user_message,
-        Some(assistant_preview),
-    )
-    .await;
 }

@@ -1,8 +1,8 @@
 use super::ReplRuntime;
 use crate::agent::AgentMode;
 use anyhow::Result;
-use std::io::IsTerminal;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use std::io::IsTerminal;
 use std::time::Duration;
 
 impl ReplRuntime {

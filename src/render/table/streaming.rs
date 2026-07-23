@@ -103,7 +103,8 @@ impl StreamingTable {
             PreviewMode::ReplaceTerminalRows | PreviewMode::StableFinal if self.is_confirmed() => {
                 self.render_current()
             }
-            PreviewMode::ReplaceTerminalRows | PreviewMode::StableFinal => String::new(),
+            PreviewMode::StableFinal => self.render_raw_source(),
+            PreviewMode::ReplaceTerminalRows => String::new(),
         };
         self.lines.clear();
         self.raw_visual_rows = 0;
@@ -121,6 +122,14 @@ impl StreamingTable {
         };
         output.push_str(&render_table(&self.lines, render_table_cell_content));
         output
+    }
+
+    /// 将尚未确认成表格的候选行恢复为原始 Markdown。
+    ///
+    /// 返回:
+    /// - 每行保留换行符的原始候选文本
+    fn render_raw_source(&self) -> String {
+        self.lines.iter().map(|line| format!("{line}\n")).collect()
     }
 }
 
@@ -173,5 +182,14 @@ mod tests {
 
         assert!(output.contains('┌'));
         assert!(!output.contains("| a | b |"));
+    }
+
+    #[test]
+    fn stable_table_restores_unconfirmed_candidate_rows() {
+        let mut table = StreamingTable::new_stable();
+
+        assert!(table.push_line("| note |").is_empty());
+
+        assert_eq!(table.finish(), "| note |\n");
     }
 }

@@ -55,8 +55,6 @@ export function toolSummary(name: string, argumentsText: string, locale: Locale 
   const args = parseJsonRecord(argumentsText);
   if (name === "run_command") return stringField(args, "command");
   if (name === "edit_file") {
-    const path = stringField(args, "path");
-    if (path) return path;
     const patch = stringField(args, "patch");
     return patch.split("\n").find((line) => line.startsWith("*** ") && line.includes(" File: "))?.split(" File: ")[1]
       ?? text(locale, "File edit", "文件修改");
@@ -76,8 +74,8 @@ export function toolSummary(name: string, argumentsText: string, locale: Locale 
  */
 export function toolFilePath(name: string, argumentsText: string): string {
   const args = parseJsonRecord(argumentsText);
-  if (["read_file", "edit_file", "write_file", "replace_file_lines"].includes(name)) return stringField(args, "path");
-  if (name !== "apply_patch") return "";
+  if (name === "read_file") return stringField(args, "path");
+  if (name !== "edit_file") return "";
   const paths = stringField(args, "patch")
     .split("\n")
     .flatMap((line) => {

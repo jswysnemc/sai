@@ -1,4 +1,4 @@
-use super::{ToolRegistry, ToolSpec};
+use super::{ToolModelAttachment, ToolOutput, ToolRegistry, ToolSpec};
 use crate::config::AppConfig;
 use crate::i18n::text as t;
 use crate::paths::SaiPaths;
@@ -7,6 +7,8 @@ use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
+mod image;
+
 const MAX_READ_BYTES: usize = 50 * 1024;
 const MAX_BATCH_BYTES: usize = 100 * 1024;
 const MAX_BATCH_FILES: usize = 10;
@@ -14,7 +16,7 @@ const MAX_READ_LINES: usize = 2_000;
 const MAX_LINE_CHARS: usize = 2_000;
 
 pub fn register(registry: &mut ToolRegistry, config: AppConfig, paths: SaiPaths) {
-    registry.register(ToolSpec::new(
+    registry.register(ToolSpec::new_with_output(
         "read_file",
         t(
             "Read one or more UTF-8 text files by 1-based line offset, list directory pages, or analyze local images with the vision model. Use path for one target or files for batch reads.",
@@ -75,14 +77,18 @@ pub fn register(registry: &mut ToolRegistry, config: AppConfig, paths: SaiPaths)
 ///
 /// 返回:
 /// - JSON 格式读取结果
-async fn read_file(args: Value, config: AppConfig, paths: SaiPaths) -> Result<String> {
+async fn read_file(args: Value, config: AppConfig, paths: SaiPaths) -> Result<ToolOutput> {
+    let accept_model_attachments = args
+        .get("_sai_model_attachments")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     if let Some(files) = args.get("files") {
-        return read_files(files, &config, &paths).await;
+        return read_files(files, &config, &paths, accept_model_attachments).await;
     }
-    let request = ReadRequest::from_value(&args)?;
-    Ok(serde_json::to_string_pretty(
-        &read_page(&request, MAX_READ_BYTES, &config, &paths).await?,
-    )?)
+    let request = ReadRequest::from_value(&args, accept_model_attachments)?;
+    let page = read_page(&request, MAX_READ_BYTES, &config, &paths).await?;
+    Ok(ToolOutput::text(serde_json::to_string_pretty(&page.value)?)
+        .with_model_attachments(page.model_attachments))
 }
 
 /// 批量读取多个文件或目录分页。
@@ -94,7 +100,12 @@ async fn read_file(args: Value, config: AppConfig, paths: SaiPaths) -> Result<St
 ///
 /// 返回:
 /// - JSON 格式批量读取结果
-async fn read_files(files: &Value, config: &AppConfig, paths: &SaiPaths) -> Result<String> {
+async fn read_files(
+    files: &Value,
+    config: &AppConfig,
+    paths: &SaiPaths,
+    accept_model_attachments: bool,
+) -> Result<ToolOutput> {
     let Some(items) = files.as_array() else {
         bail!("files must be an array")
     };
@@ -106,6 +117,7 @@ async fn read_files(files: &Value, config: &AppConfig, paths: &SaiPaths) -> Resu
     }
     let mut used_bytes = 0usize;
     let mut results = Vec::new();
+    let mut model_attachments = Vec::new();
     for item in items {
         if used_bytes >= MAX_BATCH_BYTES {
             results.push(json!({
@@ -119,11 +131,12 @@ async fn read_files(files: &Value, config: &AppConfig, paths: &SaiPaths) -> Resu
         let remaining = MAX_BATCH_BYTES
             .saturating_sub(used_bytes)
             .min(MAX_READ_BYTES);
-        let result = match ReadRequest::from_value(item) {
+        let result = match ReadRequest::from_value(item, accept_model_attachments) {
             Ok(request) => match read_page(&request, remaining, config, paths).await {
-                Ok(value) => {
-                    used_bytes += value.to_string().len();
-                    value
+                Ok(page) => {
+                    used_bytes += page.value.to_string().len();
+                    model_attachments.extend(page.model_attachments);
+                    page.value
                 }
                 Err(err) => json!({
                     "ok": false,
@@ -141,19 +154,43 @@ async fn read_files(files: &Value, config: &AppConfig, paths: &SaiPaths) -> Resu
         };
         results.push(result);
     }
-    Ok(serde_json::to_string_pretty(&json!({
+    Ok(ToolOutput::text(serde_json::to_string_pretty(&json!({
         "type": "multi-text-page",
         "count": results.len(),
         "max_batch_bytes": MAX_BATCH_BYTES,
         "results": results,
     }))?)
+    .with_model_attachments(model_attachments))
 }
 
-struct ReadRequest {
-    path: PathBuf,
-    offset: usize,
-    limit: usize,
-    image_prompt: Option<String>,
+pub(super) struct ReadRequest {
+    pub(super) path: PathBuf,
+    pub(super) offset: usize,
+    pub(super) limit: usize,
+    pub(super) image_prompt: Option<String>,
+    pub(super) accept_model_attachment: bool,
+}
+
+/// 单个读取页面及其下一次模型请求附件。
+pub(super) struct ReadPage {
+    pub(super) value: Value,
+    pub(super) model_attachments: Vec<ToolModelAttachment>,
+}
+
+impl ReadPage {
+    /// 创建不包含模型附件的普通读取页面。
+    ///
+    /// 参数:
+    /// - `value`: 工具可见 JSON 值
+    ///
+    /// 返回:
+    /// - 普通读取页面
+    pub(super) fn text(value: Value) -> Self {
+        Self {
+            value,
+            model_attachments: Vec::new(),
+        }
+    }
 }
 
 impl ReadRequest {
@@ -164,7 +201,7 @@ impl ReadRequest {
     ///
     /// 返回:
     /// - 读取请求
-    fn from_value(args: &Value) -> Result<Self> {
+    fn from_value(args: &Value, accept_model_attachment: bool) -> Result<Self> {
         Ok(Self {
             path: path_arg(args, "path")?,
             offset: args
@@ -183,6 +220,7 @@ impl ReadRequest {
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .map(ToString::to_string),
+            accept_model_attachment,
         })
     }
 }
@@ -202,9 +240,9 @@ async fn read_page(
     byte_budget: usize,
     config: &AppConfig,
     paths: &SaiPaths,
-) -> Result<Value> {
+) -> Result<ReadPage> {
     if request.path.is_dir() {
-        return read_directory_page(request);
+        return read_directory_page(request).map(ReadPage::text);
     }
     let metadata = std::fs::metadata(&request.path)?;
     if !metadata.is_file() {
@@ -214,39 +252,10 @@ async fn read_page(
         )
     }
     if is_image_file(&request.path) {
-        return read_image_page(request, config, paths).await;
+        return image::read_image_page(request, config, paths).await;
     }
     ensure_not_binary_file(&request.path)?;
-    read_text_page(request, byte_budget)
-}
-
-/// 使用视觉模型读取图片内容。
-///
-/// 参数:
-/// - `request`: 读取请求
-/// - `config`: 应用配置
-/// - `paths`: Sai 路径
-///
-/// 返回:
-/// - 图片分析 JSON
-async fn read_image_page(
-    request: &ReadRequest,
-    config: &AppConfig,
-    paths: &SaiPaths,
-) -> Result<Value> {
-    let prompt = request
-        .image_prompt
-        .as_deref()
-        .unwrap_or("请简洁描述这张图片，并指出重要细节。");
-    let description =
-        super::vision::analyze_local_image_with_prompt(config, paths, &request.path, prompt)
-            .await?;
-    Ok(json!({
-        "type": "image-analysis",
-        "path": request.path.display().to_string(),
-        "prompt": prompt,
-        "content": description,
-    }))
+    read_text_page(request, byte_budget).map(ReadPage::text)
 }
 
 /// 判断路径是否为常见图片文件。
@@ -462,7 +471,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let data: Value = serde_json::from_str(&result).unwrap();
+        let data: Value = serde_json::from_str(&result.content).unwrap();
         assert_eq!(data["type"], "text-page");
         assert_eq!(data["content"], "2: two");
         assert_eq!(data["truncated"], true);
@@ -490,7 +499,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let data: Value = serde_json::from_str(&result).unwrap();
+        let data: Value = serde_json::from_str(&result.content).unwrap();
         assert_eq!(data["type"], "multi-text-page");
         assert_eq!(data["count"], 2);
         assert_eq!(data["results"][0]["content"], "2: a2");
@@ -519,7 +528,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let data: Value = serde_json::from_str(&result).unwrap();
+        let data: Value = serde_json::from_str(&result.content).unwrap();
         assert_eq!(data["results"][0]["type"], "text-page");
         assert_eq!(data["results"][1]["ok"], false);
         assert!(data["results"][1]["error"]

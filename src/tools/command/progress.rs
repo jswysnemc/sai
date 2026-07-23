@@ -103,7 +103,6 @@ impl CommandOutputBatch {
 ///
 /// 返回:
 /// - 可通过 ToolProgress 传递的内部消息
-#[cfg(test)]
 pub(crate) fn encode_command_output(stream: CommandOutputStream, bytes: &[u8]) -> String {
     encode_command_output_with_omission(stream, bytes, 0)
 }

@@ -25,6 +25,68 @@ pub(crate) fn tool_event_label(name: &str, arguments: Option<&str>) -> String {
     }
 }
 
+/// 提取命令类工具的完整命令文本（不做省略）。
+///
+/// 参数:
+/// - `name`: 工具名
+/// - `arguments`: 工具参数 JSON
+///
+/// 返回:
+/// - 完整命令字符串；非命令工具或解析失败返回 None
+pub(crate) fn tool_command_full_text(name: &str, arguments: Option<&str>) -> Option<String> {
+    let arguments = arguments?;
+    match name {
+        "run_command" => parse_arguments(arguments)
+            .and_then(|value| string_field(&value, &["command"]))
+            .or_else(|| lenient_string_field(arguments, "command"))
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+        "background_command" => {
+            let action = parse_arguments(arguments)
+                .and_then(|value| string_field(&value, &["action"]))
+                .or_else(|| lenient_string_field(arguments, "action"))
+                .unwrap_or_else(|| "start".to_string());
+            let command = parse_arguments(arguments)
+                .and_then(|value| string_field(&value, &["command"]))
+                .or_else(|| lenient_string_field(arguments, "command"));
+            match command {
+                Some(command) if !command.trim().is_empty() => {
+                    Some(format!("{action} {}", command.trim()))
+                }
+                _ if !action.trim().is_empty() => Some(action),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// 渲染带 shell 语法着色的命令标题（完整命令不省略）。
+///
+/// 参数:
+/// - `name`: 工具名
+/// - `arguments`: 工具参数 JSON
+///
+/// 返回:
+/// - ANSI 标题；非命令工具时回退到短标签
+pub(crate) fn tool_command_title_colored(name: &str, arguments: Option<&str>) -> String {
+    let action = if name == "background_command" {
+        "Background".to_string()
+    } else {
+        tool_action(name).to_string()
+    };
+    if let Some(command) = tool_command_full_text(name, arguments) {
+        // 多行命令逐行着色，保留完整文本
+        let colored = command
+            .lines()
+            .map(|line| crate::render::code_block::highlight_code_line("bash", line))
+            .collect::<Vec<_>>()
+            .join("\n");
+        return format!("{action} {colored}");
+    }
+    tool_event_label(name, arguments)
+}
+
 /// 生成工具状态事件文本。
 ///
 /// 参数:
@@ -111,7 +173,8 @@ fn tool_suffix_from_text(name: &str, arguments: &str) -> Option<String> {
 fn tool_suffix(name: &str, arguments: &Value) -> Option<String> {
     match name {
         "run_command" => string_field(arguments, &["command"]).map(command_summary),
-        "edit_file" | "trash_path" => string_field(arguments, &["path"]).map(file_basename),
+        "edit_file" => patch_file_basename(arguments),
+        "trash_path" => string_field(arguments, &["path"]).map(file_basename),
         "read_file" => read_file_suffix(arguments),
         "glob" | "find_files" | "grep" | "search_text" => {
             string_field(arguments, &["include", "pattern"]).map(compact_text)
@@ -134,9 +197,15 @@ fn tool_suffix(name: &str, arguments: &Value) -> Option<String> {
 fn tool_suffix_from_partial_text(name: &str, arguments: &str) -> Option<String> {
     match name {
         "run_command" => lenient_string_field(arguments, "command").map(command_summary),
-        "edit_file" | "trash_path" => {
-            string_field_from_partial(arguments, &["path"]).map(file_basename)
+        "edit_file" => {
+            lenient_string_field(arguments, "patch").and_then(|patch| {
+                patch
+                    .lines()
+                    .find_map(patch_path_from_line)
+                    .map(file_basename)
+            })
         }
+        "trash_path" => string_field_from_partial(arguments, &["path"]).map(file_basename),
         "read_file" => read_file_suffix_from_partial(arguments),
         "glob" | "find_files" | "grep" | "search_text" => {
             string_field_from_partial(arguments, &["include", "pattern"]).map(compact_text)
@@ -162,6 +231,47 @@ fn command_summary(value: String) -> String {
         .find(|line| !line.is_empty())
         .unwrap_or("");
     compact_text(first_line.to_string())
+}
+
+/// 从 edit_file patch 参数提取首个目标文件 basename。
+///
+/// 参数:
+/// - `arguments`: 工具参数
+///
+/// 返回:
+/// - 文件 basename
+fn patch_file_basename(arguments: &Value) -> Option<String> {
+    string_field(arguments, &["patch"]).and_then(|patch| {
+        patch
+            .lines()
+            .find_map(patch_path_from_line)
+            .map(file_basename)
+    })
+}
+
+/// 从 patch 头行解析文件路径。
+///
+/// 参数:
+/// - `line`: patch 中的一行
+///
+/// 返回:
+/// - 文件路径
+fn patch_path_from_line(line: &str) -> Option<String> {
+    let path = if let Some(rest) = line.strip_prefix("*** Add File: ") {
+        Some(rest.trim())
+    } else if let Some(rest) = line.strip_prefix("*** Delete File: ") {
+        Some(rest.trim())
+    } else if let Some(rest) = line.strip_prefix("*** Update File: ") {
+        Some(rest.trim())
+    } else {
+        None
+    }?;
+    let source = path
+        .split_once(" -> ")
+        .map(|(value, _)| value)
+        .unwrap_or(path)
+        .trim();
+    (!source.is_empty()).then(|| source.to_string())
 }
 
 /// 从可能未闭合的 JSON 片段中宽松提取字符串字段。
@@ -491,6 +601,28 @@ mod tests {
     use super::*;
     use crate::render::terminal_text as t;
 
+
+    #[test]
+    fn command_full_text_keeps_multiline_and_long_command() {
+        assert_eq!(
+            tool_command_full_text(
+                "run_command",
+                Some(r#"{"command":"cargo test\ncargo build"}"#)
+            )
+            .as_deref(),
+            Some("cargo test\ncargo build")
+        );
+        let long = "a".repeat(80);
+        let args = format!(r#"{{"command":"{long}"}}"#);
+        assert_eq!(
+            tool_command_full_text("run_command", Some(&args)).as_deref(),
+            Some(long.as_str())
+        );
+        let title = tool_command_title_colored("run_command", Some(r#"{"command":"echo hello"}"#));
+        assert!(title.contains("Run"));
+        assert!(title.contains("echo") || title.contains("\x1b["));
+    }
+
     #[test]
     fn command_tools_use_run_label() {
         assert_eq!(
@@ -526,7 +658,10 @@ mod tests {
     #[test]
     fn file_tools_include_basename() {
         assert_eq!(
-            tool_event_label("edit_file", Some(r#"{"path":"src/render/stream.rs"}"#)),
+            tool_event_label(
+                "edit_file",
+                Some(r#"{"patch":"*** Begin Patch\n*** Update File: src/render/stream.rs\n@@\n-a\n+b\n*** End Patch"}"#)
+            ),
             "Edit stream.rs"
         );
         assert_eq!(
@@ -543,7 +678,7 @@ mod tests {
         assert_eq!(
             tool_event_label(
                 "edit_file",
-                Some(r#"{"path":"src/main.rs","content":"unfinished"#)
+                Some(r#"{"patch":"*** Begin Patch\n*** Update File: src/main.rs\n@@\n-unfinished"#)
             ),
             "Edit main.rs"
         );

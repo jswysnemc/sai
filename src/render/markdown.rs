@@ -274,8 +274,9 @@ impl MarkdownLineRenderer {
             output.push_str(&self.take_pending_blank_lines());
             output
         } else {
-            self.table.finish();
-            self.take_pending_blank_lines()
+            let mut output = self.table.finish();
+            output.push_str(&self.take_pending_blank_lines());
+            output
         }
     }
 

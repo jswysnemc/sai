@@ -320,9 +320,16 @@ async fn remove(
     State(state): State<WebAppState>,
     Path(id): Path<String>,
 ) -> WebResult<Json<DeleteResponse>> {
-    reject_session_run(&state, &id).await?;
+    let workspace_id = reject_session_run(&state, &id).await?;
     let deleted = crate::state::delete_session(&state.paths, &id)
         .map_err(|error| WebError::bad_request(error.to_string()))?;
+    if deleted {
+        state
+            .runs
+            .remove_session_history(&workspace_id, &id)
+            .await
+            .map_err(WebError::from)?;
+    }
     Ok(Json(DeleteResponse { deleted }))
 }
 
@@ -338,14 +345,25 @@ async fn remove_many(
     State(state): State<WebAppState>,
     Json(request): Json<BulkDeleteSessionsRequest>,
 ) -> WebResult<Json<BulkDeleteResponse>> {
+    let mut session_workspaces = std::collections::HashMap::new();
     for id in &request.ids {
-        reject_session_run(&state, id).await?;
+        let workspace_id = reject_session_run(&state, id).await?;
+        session_workspaces.insert(id.clone(), workspace_id);
     }
     if request.ids.is_empty() {
         return Err(WebError::bad_request("session ids cannot be empty"));
     }
     let deleted_ids = crate::state::delete_sessions(&state.paths, &request.ids)
         .map_err(|error| WebError::bad_request(error.to_string()))?;
+    for id in &deleted_ids {
+        if let Some(workspace_id) = session_workspaces.get(id) {
+            state
+                .runs
+                .remove_session_history(workspace_id, id)
+                .await
+                .map_err(WebError::from)?;
+        }
+    }
     Ok(Json(BulkDeleteResponse { deleted_ids }))
 }
 
@@ -399,7 +417,7 @@ async fn undo(
     State(state): State<WebAppState>,
     Path(id): Path<String>,
 ) -> WebResult<Json<UndoSessionResponse>> {
-    reject_session_run(&state, &id).await?;
+    let _workspace_id = reject_session_run(&state, &id).await?;
     let store = StateStore::for_session(&state.paths, &id)
         .map_err(|error| WebError::not_found(error.to_string()))?;
     let outcome = store
@@ -426,7 +444,7 @@ async fn rollback(
     Path(id): Path<String>,
     Json(request): Json<RollbackSessionRequest>,
 ) -> WebResult<Json<RollbackSessionResponse>> {
-    reject_session_run(&state, &id).await?;
+    let _workspace_id = reject_session_run(&state, &id).await?;
     let store = StateStore::for_session(&state.paths, &id)
         .map_err(|error| WebError::not_found(error.to_string()))?;
     let outcome = store
@@ -438,17 +456,88 @@ async fn rollback(
     }))
 }
 
-/// 活动运行期间仅禁止删除对应会话。
-async fn reject_session_run(state: &WebAppState, session_id: &str) -> WebResult<()> {
-    let workspace = state.workspaces.active().map_err(WebError::from)?;
+/// 活动运行期间禁止修改对应会话。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `session_id`: 待修改会话标识
+///
+/// 返回:
+/// - 会话所属工作区标识
+async fn reject_session_run(state: &WebAppState, session_id: &str) -> WebResult<String> {
+    let workspace_id = session_workspace_id(&state.paths, session_id)
+        .map_err(|error| WebError::not_found(error.to_string()))?;
     if state
         .runs
-        .is_session_active(&workspace.id, session_id)
+        .is_session_active(&workspace_id, session_id)
         .await
     {
         return Err(WebError::conflict(
-            "stop the session run before deleting it",
+            "stop the session run before modifying it",
         ));
     }
-    Ok(())
+    Ok(workspace_id)
+}
+
+/// 从会话状态目录解析所属工作区标识。
+///
+/// 参数:
+/// - `paths`: Sai 路径集合
+/// - `session_id`: 会话标识
+///
+/// 返回:
+/// - 会话所属工作区标识
+fn session_workspace_id(
+    paths: &crate::paths::SaiPaths,
+    session_id: &str,
+) -> anyhow::Result<String> {
+    let (scope, _) = crate::state::locate_session_dirs(paths, session_id)?;
+    scope
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(str::to_string)
+        .ok_or_else(|| anyhow::anyhow!("session workspace is invalid: {session_id}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 创建会话 API 测试路径。
+    fn test_paths(root: &std::path::Path) -> crate::paths::SaiPaths {
+        crate::paths::SaiPaths {
+            config_dir: root.join("config"),
+            config_file: root.join("config/config.jsonc"),
+            secrets_file: root.join("config/secrets.jsonc"),
+            skills_dir: root.join("config/skills"),
+            data_dir: root.join("data"),
+            cache_dir: root.join("cache"),
+            state_dir: root.join("state"),
+            pictures_dir: root.join("pictures"),
+            fish_hook_file: root.join("fish/sai.fish"),
+            bash_hook_file: root.join("shell/bash-hook.sh"),
+            zsh_hook_file: root.join("shell/zsh-hook.zsh"),
+            powershell_hook_file: root.join("shell/powershell-hook.ps1"),
+        }
+    }
+
+    #[tokio::test]
+    async fn session_workspace_id_uses_session_owner() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path());
+        let active = temp.path().join("active");
+        let owner = temp.path().join("owner");
+        std::fs::create_dir_all(&active).unwrap();
+        std::fs::create_dir_all(&owner).unwrap();
+
+        crate::runtime_cwd::scope(active, async {
+            let session =
+                crate::state::create_session_for_workspace(&paths, &owner, Some("owned")).unwrap();
+
+            let actual = session_workspace_id(&paths, &session.id).unwrap();
+
+            assert_eq!(actual, crate::state::workspace_id_for_path(&owner));
+        })
+        .await;
+    }
 }

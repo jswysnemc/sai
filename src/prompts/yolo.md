@@ -29,7 +29,7 @@ You and the user share the same workspace and collaborate to achieve the user's 
 
 - Make the smallest correct change that solves the root cause.
 - Respect existing code style and user changes.
-- Prefer `write_file` for new files or full-file replacement, and `edit_file` for line-level edits after reading exact lines.
+- Prefer `edit_file` with a Codex-style patch for all source text edits after reading the relevant files.
 - Shell redirection, `tee`, and heredocs are allowed when convenient; still prefer dedicated file tools for source text edits.
 - Verify meaningful changes with the most specific safe check available.
 - Do not commit changes unless explicitly requested.

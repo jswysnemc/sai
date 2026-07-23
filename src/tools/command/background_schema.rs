@@ -15,8 +15,8 @@ pub(crate) fn background_tool_name() -> &'static str {
 /// - 支持启动、查看、读取、停止和清理的工具说明
 pub(super) fn writable_description() -> &'static str {
     t(
-        "Manage long-running shell commands as background tasks. Use action=start to launch a command, list to inspect tasks, output to read logs, stop to terminate a task, and cleanup to remove finished records. Set timeout_seconds=0 for a true background task with no automatic timeout.",
-        "以后台任务方式管理长时间运行的 shell 命令。使用 action=start 启动命令，list 查看任务，output 读取日志，stop 停止任务，cleanup 清理结束记录。设置 timeout_seconds=0 可创建不会自动超时的真后台任务。",
+        "Manage long-running shell commands as background tasks. Prefer run_command for ordinary work: it waits up to timeout_seconds and promotes to a background task on timeout (timeout_seconds=0 starts background immediately). Use action=start only when you intentionally want a background task without waiting. Use list/output/stop/cleanup to manage tasks. For action=start, timeout_seconds=0 means no automatic task lifetime timeout.",
+        "以后台任务方式管理长时间运行的 shell 命令。普通命令优先用 run_command：会等待 timeout_seconds，超时后提升为后台任务（timeout_seconds=0 表示立即后台）。仅在明确不想等待时使用 action=start。用 list/output/stop/cleanup 管理任务。action=start 时 timeout_seconds=0 表示任务本身不自动超时。",
     )
 }
 
@@ -89,9 +89,17 @@ fn schema(actions: &[&str]) -> Value {
                 "enum": ["stdout", "stderr", "all"],
                 "description": t("Log stream for action=output. Defaults to all.", "action=output 的日志流，默认 all。"),
             },
+            "max_lines": {
+                "type": "integer",
+                "description": t("Alias of head_lines: max lines to return from the start. Defaults to 50.", "与 head_lines 相同：从开头返回的最大行数，默认 50。"),
+            },
+            "head_lines": {
+                "type": "integer",
+                "description": t("Number of leading lines for action=output. Defaults to 50, max 2000.", "action=output 开头行数，默认 50，最大 2000。"),
+            },
             "tail_lines": {
                 "type": "integer",
-                "description": t("Number of last lines for action=output. Defaults to 200, max 2000.", "action=output 返回末尾行数，默认 200，最大 2000。"),
+                "description": t("Number of lines for action=output. Defaults to first 50 (head). Pass tail_lines alone to read from the end. Max 2000.", "action=output 默认读取前 50 行；仅传 tail_lines 时从末尾读。最大 2000。"),
             },
             "force": {
                 "type": "boolean",

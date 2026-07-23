@@ -218,16 +218,32 @@ pub(crate) fn render_result(
 /// 返回:
 /// - Codex 风格的层级载荷块
 fn render_payload(label: &str, payload: &str) -> String {
+    use crate::render::fold_text::{
+        fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
+    };
     let formatted = serde_json::from_str::<Value>(payload)
         .ok()
         .and_then(|value| serde_json::to_string_pretty(&value).ok())
         .unwrap_or_else(|| payload.trim().to_string());
+    // 1. 先按字符上限粗截，再按显示行首尾折叠（后台/子智能体长结果）
     let truncated = truncate_chars(&formatted, PAYLOAD_LIMIT);
-    let mut lines = truncated.lines();
-    let first = lines.next().unwrap_or_default();
-    let mut output = format!("\x1b[2m  └─ {label}: {first}\x1b[0m");
-    for line in lines {
-        output.push_str(&format!("\n\x1b[2m     {line}\x1b[0m"));
+    let wrapped = wrap_display_lines(&truncated, terminal_wrap_width().saturating_sub(8).max(8));
+    let (visible, omitted) = fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, false);
+    let mut output = String::new();
+    for (index, line) in visible.iter().enumerate() {
+        let text = if line == "__OMITTED__" {
+            format!("… +{omitted} lines")
+        } else {
+            line.clone()
+        };
+        if index == 0 {
+            output.push_str(&format!("\x1b[2m  └─ {label}: {text}\x1b[0m"));
+        } else {
+            output.push_str(&format!("\n\x1b[2m     {text}\x1b[0m"));
+        }
+    }
+    if output.is_empty() {
+        output.push_str(&format!("\x1b[2m  └─ {label}:\x1b[0m"));
     }
     output
 }

@@ -52,8 +52,14 @@ impl DiffCell {
     ///
     /// 返回:
     /// - 无
-    pub(crate) fn request_permission_with_auto_audit(&mut self, request_id: String, auto_audit: bool) {
-        self.permission = Some(PermissionAuditView::pending_with_auto_audit(request_id, auto_audit));
+    pub(crate) fn request_permission_with_auto_audit(
+        &mut self,
+        request_id: String,
+        auto_audit: bool,
+    ) {
+        self.permission = Some(PermissionAuditView::pending_with_auto_audit(
+            request_id, auto_audit,
+        ));
     }
 
     /// 写入权限请求的最终决定。

@@ -9,7 +9,7 @@ use crate::tools::command::{
 use crate::tools::subagent_goal::{list_subagents_for_goal, pending_finished_notices_for_goal};
 use crate::tools::subagent_state::{
     acknowledge_finished_notices, list_subagents_for_owner, pending_finished_notices,
-    subagent_snapshot_for_owner, FinishedSubagentNotice,
+    FinishedSubagentNotice,
 };
 use anyhow::Result;
 use std::time::Duration;
@@ -378,33 +378,18 @@ fn build_event_batch(
     goal_continuation: bool,
 ) -> ExternalEventBatch {
     let mut sections = Vec::new();
+    let _ = owner_key;
+    // 主动回执仅含状态；完整输出由主 Agent 主动 action=result / background_command output 读取
     for notice in subagents {
-        let payload = subagent_snapshot_for_owner(owner_key, &notice.id)
-            .ok()
-            .and_then(|snapshot| snapshot.result.or(snapshot.error))
-            .map(|value| bounded_text(&value))
-            .unwrap_or_default();
         sections.push(format!(
-            "子 Agent：{}（{}）\n状态：{}\n{}",
-            notice.description, notice.id, notice.status, payload
+            "子 Agent：{}（{}）\n状态：{}\n说明：结果未附带，请使用 subagent action=result 读取（默认前 50 行，可用参数调整）",
+            notice.description, notice.id, notice.status
         ));
     }
     for notice in background {
-        let mut output = String::new();
-        if !notice.stdout.trim().is_empty() {
-            output.push_str("stdout:\n");
-            output.push_str(&notice.stdout);
-        }
-        if !notice.stderr.trim().is_empty() {
-            if !output.is_empty() {
-                output.push('\n');
-            }
-            output.push_str("stderr:\n");
-            output.push_str(&notice.stderr);
-        }
         sections.push(format!(
-            "后台命令：{}（{}）\n状态：{}\n{}",
-            notice.label, notice.task_id, notice.status, output
+            "后台命令：{}（{}）\n状态：{}\n说明：日志未附带，请使用 background_command action=output 读取（默认前 50 行，可用 tail_lines 调整）",
+            notice.label, notice.task_id, notice.status
         ));
     }
     let details = sections.join("\n\n");
@@ -420,9 +405,9 @@ fn build_event_batch(
         format!("Background work completed; continuing the conversation automatically\n\n{details}")
     };
     let instruction = if goal_continuation {
-        "请消费这些结果，主动继续未完成的 Goal，并使用完整工具能力完成验证"
+        "请消费这些状态回执，按需主动读取完整结果后继续未完成的 Goal，并使用完整工具能力完成验证"
     } else {
-        "请消费这些结果，继续当前任务并在必要时使用工具完成验证"
+        "请消费这些状态回执，按需主动读取完整结果后继续当前任务并在必要时使用工具完成验证"
     };
     ExternalEventBatch {
         prompt: format!(
@@ -437,7 +422,8 @@ fn build_event_batch(
     }
 }
 
-/// 限制单条外部结果进入模型上下文的长度。
+/// 限制单条外部结果进入模型上下文的长度（保留供按需读取扩展）。
+#[allow(dead_code)]
 fn bounded_text(text: &str) -> String {
     const LIMIT: usize = 4_000;
     if text.chars().count() <= LIMIT {

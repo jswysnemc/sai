@@ -67,17 +67,16 @@ impl TranscriptStore {
         }
         .min(total);
         // 3. 窗口首行同时满足最小覆盖行数与调用方的追加/修补需求
-        let start = total
-            .saturating_sub(min_rows)
-            .min(max_start)
-            .min(cell_rows);
+        let start = total.saturating_sub(min_rows).min(max_start).min(cell_rows);
         // 4. 顺序拼出窗口行：跳过完全位于窗口上方的 cell，首个跨界 cell 截取尾部
         let mut lines = Vec::with_capacity(total - start);
         let mut offset = 0usize;
         for (index, count) in counts.iter().enumerate() {
             let end = offset + count;
             if end > start {
-                let cell_lines = self.cache.lines_for(index, &self.cells[index], width, options);
+                let cell_lines = self
+                    .cache
+                    .lines_for(index, &self.cells[index], width, options);
                 let skip = start.saturating_sub(offset);
                 lines.extend(cell_lines.into_iter().skip(skip));
             }

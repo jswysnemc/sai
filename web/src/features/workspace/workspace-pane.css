@@ -332,7 +332,9 @@
 .editor-head { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 0 7px 0 10px; border-bottom: 1px solid var(--line); background: var(--paper); }
 .editor-head-empty > span { flex: 1; overflow: hidden; color: var(--ink-soft); font: 400 11px var(--font-code); text-overflow: ellipsis; white-space: nowrap; }
 .editor-external-change { margin-left: auto; color: var(--warning); font: 400 9px var(--font-ui) !important; }
-.editor-external-change + .editor-save { margin-left: 0; }
+.editor-reload { display: grid; width: 27px; height: 27px; padding: 0; place-items: center; border: 1px solid var(--line); border-radius: 6px; background: var(--paper-deep); color: var(--ink-soft); }
+.editor-reload:hover { color: var(--ink); border-color: var(--line-strong); }
+.editor-external-change + .editor-save, .editor-reload + .editor-save { margin-left: 0; }
 .editor-save { display: flex; align-items: center; gap: 5px; height: 27px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper-deep); font-size: 11px; }
 .editor-save:disabled { cursor: not-allowed; opacity: 0.35; }
 .editor-preview-toggle { display: flex; align-items: center; gap: 0.125rem; margin-left: auto; padding: 0.125rem; border: 1px solid var(--line); border-radius: 0.4375rem; background: var(--paper-deep); }
