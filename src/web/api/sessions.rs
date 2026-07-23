@@ -535,8 +535,11 @@ mod tests {
                 crate::state::create_session_for_workspace(&paths, &owner, Some("owned")).unwrap();
 
             let actual = session_workspace_id(&paths, &session.id).unwrap();
-
-            assert_eq!(actual, crate::state::workspace_id_for_path(&owner));
+            // workspace_scope 会 canonicalize 路径，期望值需与落盘 ID 使用同一口径
+            let expected = crate::platform::windows_path::canonicalize(&owner)
+                .map(|path| crate::state::workspace_id_for_path(&path))
+                .unwrap_or_else(|_| crate::state::workspace_id_for_path(&owner));
+            assert_eq!(actual, expected);
         })
         .await;
     }
