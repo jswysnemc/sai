@@ -16,7 +16,7 @@ impl AgentMode {
         match self {
             Self::Yolo => "YOLO",
             Self::Audited => "AUDIT",
-            Self::AutoAudit => "REVIEW",
+            Self::AutoAudit => "AUTO-AUDIT",
             Self::Plan => "PLAN",
         }
     }
@@ -54,6 +54,26 @@ impl AgentMode {
     #[allow(dead_code)]
     pub(crate) fn needs_permission_audit(self) -> bool {
         matches!(self, Self::Audited | Self::AutoAudit)
+    }
+
+    /// 编码为原子状态值。
+    pub(crate) fn as_u8(self) -> u8 {
+        match self {
+            Self::Yolo => 0,
+            Self::Audited => 1,
+            Self::AutoAudit => 2,
+            Self::Plan => 3,
+        }
+    }
+
+    /// 从原子状态值解码。
+    pub(crate) fn from_u8(value: u8) -> Self {
+        match value {
+            1 => Self::Audited,
+            2 => Self::AutoAudit,
+            3 => Self::Plan,
+            _ => Self::Yolo,
+        }
     }
 }
 

@@ -68,7 +68,7 @@ impl Agent {
             .context_epoch_projection(&self.base_system_prompt)?;
         Ok(project_provider_base_context_projection(
             &epoch.baseline,
-            Some(self.mode.reminder()),
+            Some(self.mode().reminder()),
             selected_model_label(&self.config)?.as_deref(),
             (!dynamic_tool_context.is_empty()).then_some(dynamic_tool_context.as_str()),
             compaction_summary_context.as_deref(),

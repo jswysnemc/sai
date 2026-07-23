@@ -96,7 +96,7 @@ impl PermissionInteractionState {
                 PermissionTransition::Continue
             }
             KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Char('1') => {
-                PermissionTransition::Submit(PermissionDecision::Allow)
+                PermissionTransition::Submit(PermissionDecision::allow_once())
             }
             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Char('2') | KeyCode::Esc => {
                 PermissionTransition::Submit(PermissionDecision::Deny { reply: None })
@@ -107,7 +107,7 @@ impl PermissionInteractionState {
                 PermissionTransition::Continue
             }
             KeyCode::Enter => match self.selected {
-                PermissionChoice::Allow => PermissionTransition::Submit(PermissionDecision::Allow),
+                PermissionChoice::Allow => PermissionTransition::Submit(PermissionDecision::allow_once()),
                 PermissionChoice::Deny => {
                     PermissionTransition::Submit(PermissionDecision::Deny { reply: None })
                 }

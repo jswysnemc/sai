@@ -52,6 +52,9 @@ pub(super) struct ReplRuntime {
     stream_draft: StreamComposerDraft,
     /// Tab 入队、等待当前轮结束后执行的提交
     submission_queue: VecDeque<QueuedSubmission>,
+    /// 运行中权限模式热切换句柄（与 Agent 共享）
+    live_mode_handle: Option<std::sync::Arc<std::sync::atomic::AtomicU8>>,
+    live_session_id: Option<String>,
     /// 最近一次 composer chrome，供流式阶段重建输入框
     last_chrome: Option<ReplChrome>,
 }
@@ -101,6 +104,8 @@ impl ReplRuntime {
             pending_input_events: VecDeque::new(),
             stream_draft: StreamComposerDraft::default(),
             submission_queue: VecDeque::new(),
+            live_mode_handle: None,
+            live_session_id: None,
             last_chrome: None,
         }
     }
@@ -116,6 +121,39 @@ impl ReplRuntime {
     pub(super) fn update_options(&mut self, row_cap: usize, options: TranscriptRenderOptions) {
         self.transcript.set_row_cap(row_cap);
         self.options = options;
+    }
+
+    /// 绑定当前轮 Agent 的热切换模式句柄。
+    pub(in crate::cli) fn bind_live_mode(
+        &mut self,
+        handle: std::sync::Arc<std::sync::atomic::AtomicU8>,
+        session_id: impl Into<String>,
+    ) {
+        self.live_mode_handle = Some(handle);
+        self.live_session_id = Some(session_id.into());
+    }
+
+    pub(in crate::cli) fn clear_live_mode(&mut self) {
+        self.live_mode_handle = None;
+        self.live_session_id = None;
+    }
+
+    pub(in crate::cli) fn apply_stream_mode_live(
+        &mut self,
+        fallback: crate::agent::AgentMode,
+    ) -> crate::agent::AgentMode {
+        use crate::agent::AgentMode;
+        use std::sync::atomic::Ordering;
+        let mode = self.stream_mode(fallback);
+        if let Some(handle) = self.live_mode_handle.as_ref() {
+            handle.store(mode.as_u8(), Ordering::SeqCst);
+        }
+        if mode == AgentMode::Yolo {
+            if let Some(session_id) = self.live_session_id.as_deref() {
+                let _ = crate::permission::allow_all_pending_for_session(session_id);
+            }
+        }
+        mode
     }
 
     /// 在流式阶段采样终端尺寸。

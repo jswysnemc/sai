@@ -63,6 +63,13 @@ impl Agent {
         let tool_visibility = ToolVisibility::new(config.tools.progressive_loading_enabled);
         let memory = MemoryStore::new(&config, paths);
         memory.init()?;
+        let live_mode = tools
+            .permission_mode_handle()
+            .unwrap_or_else(|| {
+                std::sync::Arc::new(std::sync::atomic::AtomicU8::new(mode.as_u8()))
+            });
+        live_mode.store(mode.as_u8(), std::sync::atomic::Ordering::SeqCst);
+        tools.set_permission_mode(mode.permission_profile_mode());
         Ok(Self {
             state,
             client,
@@ -76,6 +83,7 @@ impl Agent {
             tool_visibility,
             memory,
             mode,
+            live_mode,
             config,
             paths: paths.clone(),
             last_dynamic_sources: Vec::new(),
@@ -87,7 +95,34 @@ impl Agent {
     /// 返回:
     /// - 当前模式
     pub fn mode(&self) -> AgentMode {
-        self.mode
+        AgentMode::from_u8(
+            self.live_mode
+                .load(std::sync::atomic::Ordering::SeqCst),
+        )
+    }
+
+    /// 返回可在运行期热切换的模式句柄。
+    pub fn live_mode_handle(&self) -> std::sync::Arc<std::sync::atomic::AtomicU8> {
+        self.live_mode.clone()
+    }
+
+    /// 立即应用新模式：更新权限策略；YOLO 时放行全部待审权限。
+    ///
+    /// 参数:
+    /// - `mode`: 新模式
+    ///
+    /// 返回:
+    /// - 无
+    #[allow(dead_code)]
+    pub fn apply_live_mode(&self, mode: AgentMode) {
+        self.live_mode
+            .store(mode.as_u8(), std::sync::atomic::Ordering::SeqCst);
+        self.tools
+            .set_permission_mode(mode.permission_profile_mode());
+        // 切到 YOLO：立刻允许所有待审请求，避免继续点「允许一次」
+        if mode == AgentMode::Yolo {
+            let _ = crate::permission::allow_all_pending_for_session(self.session_id());
+        }
     }
 
     /// 返回当前会话 ID。
@@ -121,6 +156,17 @@ impl Agent {
             tools::register_progressive_loader(&mut tools);
         }
         self.tools = tools;
+        // 与工具权限配置共享原子模式，保证运行中 Shift+Tab 立即生效
+        self.live_mode = self
+            .tools
+            .permission_mode_handle()
+            .unwrap_or_else(|| {
+                std::sync::Arc::new(std::sync::atomic::AtomicU8::new(mode.as_u8()))
+            });
+        self.live_mode
+            .store(mode.as_u8(), std::sync::atomic::Ordering::SeqCst);
+        self.tools
+            .set_permission_mode(mode.permission_profile_mode());
         // 1. 重置渐进加载可见性，避免跨模式残留
         self.tool_visibility = ToolVisibility::new(self.config.tools.progressive_loading_enabled);
     }
@@ -186,6 +232,7 @@ impl Agent {
         self.compaction_client = compaction_runtime.client;
         self.compaction_model_label = compaction_runtime.label;
         self.mode = mode;
+        self.live_mode.store(mode.as_u8(), std::sync::atomic::Ordering::SeqCst);
         self.tools_enabled =
             self.config.tools.enabled && self.config.active_model_tools_enabled()?;
         crate::goal::register_tools(&mut tools, self.state.goal_file());

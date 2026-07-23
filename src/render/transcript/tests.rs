@@ -376,7 +376,7 @@ fn permission_audit_stays_inside_existing_command_view() {
         .collect::<String>();
     assert!(reply.contains("请改为只读检查"));
     assert!(reply.contains("Enter submit"));
-    assert!(store.resolve_permission("permission", crate::permission::PermissionDecision::Allow));
+    assert!(store.resolve_permission("permission", crate::permission::PermissionDecision::allow_once()));
 
     let rendered = store
         .display_tail(100, &options())

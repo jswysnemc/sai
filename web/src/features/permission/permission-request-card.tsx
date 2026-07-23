@@ -16,7 +16,7 @@ type PermissionRequestCardProps = {
   active?: boolean;
 };
 
-type PermissionCardStatus = "pending" | "allowed" | "denied";
+type PermissionCardStatus = "pending" | "allowed" | "auto_allowed" | "denied";
 
 /**
  * 在助手 Markdown 流内渲染可交互权限请求。
@@ -55,7 +55,7 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
     setError(null);
     try {
       await api.permissions.decide(request, decision, decision === "deny" && includeReply ? reply.trim() || undefined : undefined);
-      setStatus(decision === "allow" ? "allowed" : "denied");
+      setStatus(decision === "allow" ? "allowed" : "denied"); // 人工按钮仅提交 human allow
       setExpanded(false);
     } catch (cause) {
       setError(toDisplayError(cause, "Failed to submit permission decision", "提交权限决定失败"));
@@ -70,7 +70,7 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
     <section className={`permission-request-card is-${status}`}>
       <Button className="permission-request-head" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
         <span className="permission-request-icon" aria-hidden>
-          {status === "allowed" ? <Check size={14} /> : status === "denied" ? <X size={14} /> : <ShieldAlert size={14} />}
+          {status === "allowed" || status === "auto_allowed" ? <Check size={14} /> : status === "denied" ? <X size={14} /> : <ShieldAlert size={14} />}
         </span>
         <span className="permission-request-copy">
           <strong>{statusLabel(status, active, t)}</strong>
@@ -140,6 +140,7 @@ function statusLabel(status: PermissionCardStatus, active: boolean, t: (en: stri
   return {
     pending: t("Permission required", "需要权限"),
     allowed: t("Allowed once", "已允许一次"),
+    auto_allowed: t("Auto-allowed once", "已自动允许一次"),
     denied: t("Denied", "已拒绝")
   }[status];
 }
@@ -152,5 +153,7 @@ function statusLabel(status: PermissionCardStatus, active: boolean, t: (en: stri
  */
 function decisionStatus(decision?: PermissionDecision): PermissionCardStatus {
   if (!decision) return "pending";
-  return decision.decision === "allow" ? "allowed" : "denied";
+  if (decision.decision === "deny") return "denied";
+  if (decision.source === "auto_audit") return "auto_allowed";
+  return "allowed";
 }

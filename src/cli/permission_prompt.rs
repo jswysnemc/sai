@@ -92,6 +92,21 @@ fn read_terminal_decision(request: &PermissionRequest) -> Result<Option<Permissi
             paint_menu_at(&mut stdout, anchor, request, &state, request.auto_audit)?;
             continue;
         }
+        // Shift+Tab / BackTab：视为切换到 YOLO，立即放行待审
+        if let Event::Key(key) = &event {
+            if key.kind != KeyEventKind::Release {
+                let shift_tab = matches!(key.code, KeyCode::BackTab)
+                    || (matches!(key.code, KeyCode::Tab)
+                        && key.modifiers.contains(KeyModifiers::SHIFT));
+                if shift_tab {
+                    let _ = crate::permission::allow_all_pending_for_session(&request.session_id);
+                    erase_menu_at(&mut stdout, anchor)?;
+                    execute!(stdout, Show)?;
+                    stdout.flush()?;
+                    return Ok(None);
+                }
+            }
+        }
         match state.handle_event(event) {
             PermissionTransition::Continue => {
                 // 回复草稿可能换行增高，重绘前确认锚点下空间仍然充足
@@ -287,7 +302,7 @@ fn read_line_decision(request: &PermissionRequest) -> Result<PermissionDecision>
     io::stdin().read_line(&mut answer)?;
     let answer = answer.trim();
     if answer == "1" || answer.eq_ignore_ascii_case("y") || answer.eq_ignore_ascii_case("yes") {
-        return Ok(PermissionDecision::Allow);
+        return Ok(PermissionDecision::allow_once());
     }
     if answer == "3" {
         print!("{}: ", t("Tell Sai how to adjust", "告诉 Sai 应如何调整"));

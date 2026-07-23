@@ -38,8 +38,10 @@ export type PermissionRequest = {
   auto_audit?: boolean;
 };
 
+export type PermissionAllowSource = "human" | "auto_audit";
+
 export type PermissionDecision =
-  | { decision: "allow" }
+  | { decision: "allow"; source?: PermissionAllowSource }
   | { decision: "deny"; reply?: string | null };
 
 export type QuestionOption = {

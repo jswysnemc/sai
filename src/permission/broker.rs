@@ -17,12 +17,60 @@ pub(crate) struct PermissionRequest {
     pub(crate) auto_audit: bool,
 }
 
+/// 允许决定的来源。
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum PermissionAllowSource {
+    /// 人工确认允许
+    #[default]
+    Human,
+    /// LLM 自动审核允许
+    AutoAudit,
+}
+
 /// 用户对权限请求作出的决定。
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "decision", rename_all = "snake_case")]
 pub(crate) enum PermissionDecision {
-    Allow,
+    Allow {
+        /// 允许来源；缺省为人工
+        #[serde(default)]
+        source: PermissionAllowSource,
+    },
     Deny { reply: Option<String> },
+}
+
+impl PermissionDecision {
+    /// 构造人工允许一次。
+    pub(crate) fn allow_once() -> Self {
+        Self::Allow {
+            source: PermissionAllowSource::Human,
+        }
+    }
+
+    /// 构造 LLM 自动允许一次。
+    pub(crate) fn auto_allow_once() -> Self {
+        Self::Allow {
+            source: PermissionAllowSource::AutoAudit,
+        }
+    }
+
+    /// 是否为允许决定。
+    #[allow(dead_code)]
+    pub(crate) fn is_allow(&self) -> bool {
+        matches!(self, Self::Allow { .. })
+    }
+
+    /// 是否为 LLM 自动允许。
+    #[allow(dead_code)]
+    pub(crate) fn is_auto_allow(&self) -> bool {
+        matches!(
+            self,
+            Self::Allow {
+                source: PermissionAllowSource::AutoAudit
+            }
+        )
+    }
 }
 
 struct PendingPermission {
@@ -142,6 +190,27 @@ pub(crate) fn pending_permissions(session_id: &str) -> Vec<PermissionRequest> {
         .collect()
 }
 
+/// 立即允许指定会话下全部待审权限（用于切换到 YOLO）。
+///
+/// 参数:
+/// - `session_id`: 会话标识
+///
+/// 返回:
+/// - 被放行的请求数量
+pub(crate) fn allow_all_pending_for_session(session_id: &str) -> usize {
+    let ids = pending_permissions(session_id)
+        .into_iter()
+        .map(|request| request.id)
+        .collect::<Vec<_>>();
+    let mut allowed = 0usize;
+    for id in ids {
+        if decide_permission(&id, PermissionDecision::allow_once()).is_ok() {
+            allowed += 1;
+        }
+    }
+    allowed
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -159,7 +228,7 @@ mod tests {
         assert!(pending_permissions("session")
             .iter()
             .any(|item| item.id == request.id));
-        decide_permission(&request.id, PermissionDecision::Allow).unwrap();
-        assert!(matches!(receiver.await.unwrap(), PermissionDecision::Allow));
+        decide_permission(&request.id, PermissionDecision::allow_once()).unwrap();
+        assert!(matches!(receiver.await.unwrap(), PermissionDecision::Allow { .. }));
     }
 }

@@ -59,6 +59,8 @@ pub struct Agent {
     tool_visibility: ToolVisibility,
     memory: MemoryStore,
     mode: AgentMode,
+    /// 运行中可热更新的模式（Shift+Tab 立即生效）
+    live_mode: std::sync::Arc<std::sync::atomic::AtomicU8>,
     config: AppConfig,
     paths: SaiPaths,
     last_dynamic_sources: Vec<DynamicContextSource>,
@@ -395,7 +397,7 @@ impl Agent {
                     messages.push(ChatMessage::tool(call.id, output));
                     continue;
                 }
-                if self.mode == AgentMode::Plan
+                if self.mode() == AgentMode::Plan
                     && self.tools.permission(&call.function.name)? != ToolPermission::ReadOnly
                 {
                     let output = format!(
@@ -417,7 +419,7 @@ impl Agent {
                         &call.function.arguments,
                     )?;
                     // 自动审核：与人工审核并行；必须在 on_event（可能阻塞）之前启动
-                    let (auto_task, auto_audit_active) = if self.mode == AgentMode::AutoAudit {
+                    let (auto_task, auto_audit_active) = if self.mode() == AgentMode::AutoAudit {
                         let context = crate::permission::build_audit_context(&messages, 2_500);
                         let tool_name = call.function.name.clone();
                         let arguments = call.function.arguments.clone();
@@ -497,7 +499,7 @@ impl Agent {
                         decision: decision.clone(),
                     })?;
                     match decision {
-                        crate::permission::PermissionDecision::Allow => {
+                        crate::permission::PermissionDecision::Allow { .. } => {
                             self.tools.record_permission_approved(
                                 &call.function.name,
                                 &call.function.arguments,

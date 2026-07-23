@@ -9,6 +9,7 @@ use anyhow::{bail, Result};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// 工具权限策略模式。
@@ -36,12 +37,33 @@ impl PermissionProfileMode {
             Self::Plan => "plan",
         }
     }
+
+    /// 编码为原子状态值。
+    pub(crate) fn as_u8(self) -> u8 {
+        match self {
+            Self::Yolo => 0,
+            Self::Audited => 1,
+            Self::AutoAudit => 2,
+            Self::Plan => 3,
+        }
+    }
+
+    /// 从原子状态值解码。
+    pub(crate) fn from_u8(value: u8) -> Self {
+        match value {
+            1 => Self::Audited,
+            2 => Self::AutoAudit,
+            3 => Self::Plan,
+            _ => Self::Yolo,
+        }
+    }
 }
 
 /// 单个工具注册表绑定的权限配置。
 #[derive(Debug, Clone)]
 pub(crate) struct PermissionProfile {
-    mode: PermissionProfileMode,
+    /// 可热更新的权限模式（Shift+Tab 立即生效）
+    mode: Arc<AtomicU8>,
     workspace: PathBuf,
     audit: Option<PermissionAuditLog>,
     approved: Arc<Mutex<HashSet<String>>>,
@@ -101,11 +123,32 @@ impl PermissionProfile {
         audit: Option<PermissionAuditLog>,
     ) -> Self {
         Self {
-            mode,
+            mode: Arc::new(AtomicU8::new(mode.as_u8())),
             workspace: workspace.canonicalize().unwrap_or(workspace),
             audit,
             approved: Arc::new(Mutex::new(HashSet::new())),
         }
+    }
+
+    /// 立即切换权限模式（无需重建工具注册表）。
+    ///
+    /// 参数:
+    /// - `mode`: 新权限模式
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn set_mode(&self, mode: PermissionProfileMode) {
+        self.mode.store(mode.as_u8(), Ordering::SeqCst);
+    }
+
+    /// 返回可与 Agent 共享的模式原子句柄。
+    pub(crate) fn mode_handle(&self) -> Arc<AtomicU8> {
+        self.mode.clone()
+    }
+
+    /// 读取当前权限模式。
+    fn current_mode(&self) -> PermissionProfileMode {
+        PermissionProfileMode::from_u8(self.mode.load(Ordering::SeqCst))
     }
 
     /// 标记指定工具调用已获得一次性用户批准。
@@ -153,20 +196,20 @@ impl PermissionProfile {
         arguments: &Value,
     ) -> Result<bool> {
         // 1. YOLO 模式不增加权限检查和沙盒
-        if self.mode == PermissionProfileMode::Yolo {
+        if self.current_mode() == PermissionProfileMode::Yolo {
             return Ok(false);
         }
         let approved = self.consume_approval(tool, arguments);
         // 2. TODO 仅维护会话计划，不参与权限审计交互或日志记录
         if matches!(
-            self.mode,
+            self.current_mode(),
             PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
         ) && tool == "todo"
         {
             return Ok(false);
         }
         // 3. 规划模式和审计模式先阻止不允许的工具类别
-        if self.mode == PermissionProfileMode::Plan && permission == ToolPermission::Writes {
+        if self.current_mode() == PermissionProfileMode::Plan && permission == ToolPermission::Writes {
             self.record(
                 tool,
                 AuditDecision::Denied,
@@ -176,7 +219,7 @@ impl PermissionProfile {
             bail!("Plan mode blocked non-read-only tool: {tool}")
         }
         if matches!(
-            self.mode,
+            self.current_mode(),
             PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
         ) && tool == "background_command"
             && !approved
@@ -217,7 +260,7 @@ impl PermissionProfile {
         // 6. 需要逃逸沙箱但未获批准时拒绝，避免沙箱内静默失败
         let escape_sandbox = tool == "run_command" && requires_sandbox_escape(arguments);
         if matches!(
-            self.mode,
+            self.current_mode(),
             PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
         ) && escape_sandbox
             && !approved
@@ -233,7 +276,7 @@ impl PermissionProfile {
         // 7. 已批准的提升命令在沙箱外执行，其他前台命令保留工作区沙箱
         self.record(tool, AuditDecision::Allowed, arguments, None);
         Ok(matches!(
-            self.mode,
+            self.current_mode(),
             PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
         ) && tool == "run_command"
             && cfg!(target_os = "linux")
@@ -256,7 +299,7 @@ impl PermissionProfile {
         arguments: &Value,
     ) -> bool {
         if !matches!(
-            self.mode,
+            self.current_mode(),
             PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
         ) || tool == "todo"
         {
@@ -289,9 +332,9 @@ impl PermissionProfile {
         arguments: &Value,
         result: std::result::Result<&str, &anyhow::Error>,
     ) {
-        if self.mode == PermissionProfileMode::Yolo
+        if self.current_mode() == PermissionProfileMode::Yolo
             || (matches!(
-                self.mode,
+            self.current_mode(),
                 PermissionProfileMode::Audited | PermissionProfileMode::AutoAudit
             ) && tool == "todo")
         {
@@ -389,7 +432,7 @@ impl PermissionProfile {
     /// - 无
     fn record(&self, tool: &str, decision: AuditDecision, arguments: &Value, detail: Option<&str>) {
         if let Some(audit) = &self.audit {
-            let _ = audit.append(self.mode.as_str(), tool, decision, arguments, detail);
+            let _ = audit.append(self.current_mode().as_str(), tool, decision, arguments, detail);
         }
     }
 }

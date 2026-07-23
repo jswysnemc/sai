@@ -32,9 +32,9 @@ export function createRunModeOptions(t: Translate): SelectOption<RunMode>[] {
     },
     {
       value: "auto_audit",
-      label: t("Review", "审核"),
+      label: t("Auto-audit", "自动审核"),
       description: t(
-        "LLM auto-review runs in parallel with human approval; human decision wins if first.",
+        "LLM auto-audit runs in parallel with human approval; human decision wins if first.",
         "LLM 自动审核与人工审核并行，人工先决定则优先生效。"
       ),
       icon: <span className="run-mode-icon auto"><Bot size={13} /></span>

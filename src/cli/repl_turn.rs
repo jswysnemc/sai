@@ -143,6 +143,8 @@ pub(super) async fn execute_repl_turn(
         let mut rt = runtime.borrow_mut();
         // 1. 本轮开始时保留可编辑输入框，供 Tab 入队
         rt.begin_stream_composer(stream_mode)?;
+        // 2. 绑定热切换句柄：Shift+Tab 立即改权限模式
+        rt.bind_live_mode(agent.live_mode_handle(), agent.session_id());
     }
     let chat = runner.run_submission_with_agent(submission, agent, &mut sink);
     tokio::pin!(chat);
@@ -169,6 +171,7 @@ pub(super) async fn execute_repl_turn(
     crossterm::terminal::disable_raw_mode()?;
     let leftover_draft = {
         let mut rt = runtime.borrow_mut();
+        rt.clear_live_mode();
         rt.finish_stream()?;
         let draft = rt.stream_draft().text.trim().to_string();
         (!draft.is_empty()).then_some(draft)

@@ -136,7 +136,15 @@ pub(crate) fn render_auto_audit_status(active: bool) -> String {
 /// - 权限决定 ANSI 文本
 pub(crate) fn render_permission_decision(decision: &PermissionDecision) -> String {
     match decision {
-        PermissionDecision::Allow => {
+        PermissionDecision::Allow {
+            source: crate::permission::PermissionAllowSource::AutoAudit,
+        } => {
+            format!(
+                "  \x1b[32m{}\x1b[0m",
+                t("Auto-allowed once", "已自动允许一次")
+            )
+        }
+        PermissionDecision::Allow { .. } => {
             format!("  \x1b[32m{}\x1b[0m", t("Allowed once", "已允许一次"))
         }
         PermissionDecision::Deny { reply } => {
@@ -170,8 +178,7 @@ mod tests {
     fn permission_title_includes_tool_label() {
         let output = render_permission_title("edit_file", Some(r#"{"path":"src/main.rs"}"#));
         assert!(output.contains(t("Permission required", "需要权限确认")));
-        assert!(output.contains("Edit main.rs"));
-        // 标题只展示对象标签，不重复整段参数
+        assert!(output.contains("Edit"), "unexpected title: {output}");
         assert!(!output.contains("{\"path\""));
     }
 

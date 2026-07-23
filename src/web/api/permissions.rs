@@ -31,7 +31,7 @@ async fn decide(
     Json(request): Json<PermissionDecisionRequest>,
 ) -> WebResult<Json<Value>> {
     let decision = match request.decision.as_str() {
-        "allow" => PermissionDecision::Allow,
+        "allow" => PermissionDecision::allow_once(),
         "deny" => PermissionDecision::Deny {
             reply: request.reply,
         },

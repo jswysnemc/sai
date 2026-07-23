@@ -324,7 +324,7 @@ async fn run_tool(paths: &SaiPaths, mode: AgentMode, args: ToolArgs) -> Result<(
         prompt_permission_request(&request)?;
         // 2. 只有批准后才进入工具注册表执行路径
         match receiver.await? {
-            crate::permission::PermissionDecision::Allow => {
+            crate::permission::PermissionDecision::Allow { .. } => {
                 registry.record_permission_approved(&args.name, arguments)?;
             }
             crate::permission::PermissionDecision::Deny { reply } => {
@@ -652,6 +652,23 @@ fn prompt_permission_request_tui(
                 rt.update_permission_choice(&request.id, state.selected())?;
                 rt.update_permission_reply(&request.id, state.reply_draft().map(str::to_string))?;
                 continue;
+            }
+            // Shift+Tab / BackTab：立即切到 YOLO 并放行当前会话全部待审
+            if let Event::Key(key) = &event {
+                if key.kind != KeyEventKind::Release {
+                    let shift_tab = matches!(key.code, KeyCode::BackTab)
+                        || (matches!(key.code, KeyCode::Tab)
+                            && key.modifiers.contains(KeyModifiers::SHIFT));
+                    if shift_tab {
+                        {
+                            let mut rt = runtime.borrow_mut();
+                            rt.stream_draft_mut().mode = Some(crate::agent::AgentMode::Yolo);
+                            let _ = rt.apply_stream_mode_live(crate::agent::AgentMode::Yolo);
+                        }
+                        let _ = crate::permission::allow_all_pending_for_session(&request.session_id);
+                        return Ok(());
+                    }
+                }
             }
             match state.handle_event(event) {
                 PermissionTransition::Continue => {

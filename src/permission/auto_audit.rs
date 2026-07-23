@@ -130,7 +130,7 @@ fn parse_auto_audit_response(content: &str) -> Result<PermissionDecision> {
         .filter(|value| !value.is_empty())
         .map(str::to_string);
     match decision.as_str() {
-        "allow" | "approve" | "approved" => Ok(PermissionDecision::Allow),
+        "allow" | "approve" | "approved" => Ok(PermissionDecision::auto_allow_once()),
         "deny" | "reject" | "rejected" | "block" | "blocked" => Ok(PermissionDecision::Deny {
             reply: Some(reason.unwrap_or_else(|| "自动审核拒绝".to_string())),
         }),
@@ -212,7 +212,7 @@ mod tests {
     #[test]
     fn parses_allow_and_deny_json() {
         let allow = parse_auto_audit_response(r#"{"decision":"allow","reason":"safe"}"#).unwrap();
-        assert!(matches!(allow, PermissionDecision::Allow));
+        assert!(matches!(allow, PermissionDecision::Allow { source: crate::permission::PermissionAllowSource::AutoAudit }));
         let deny = parse_auto_audit_response(
             r#"prefix {"decision":"deny","reason":"risk"} suffix"#,
         )

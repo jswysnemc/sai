@@ -50,60 +50,55 @@ pub(super) fn open_blocks_pager(blocks: &[ExpandableBlock], start_index: usize) 
     let result = (|| -> Result<()> {
         let mut index = start_index.min(blocks.len() - 1);
         let mut scroll: usize = 0;
-        // 拖动进度条时记录是否处于拖动态
-        let mut dragging_scrollbar = false;
+        // 拖动目标：横向底栏进度条 / 右侧竖向滚动条
+        let mut drag_target = ScrollDragTarget::None;
         loop {
             let (cols, rows) = terminal::size().unwrap_or((80, 24));
             let rows = rows.max(4) as usize;
             let cols = cols.max(20) as usize;
-            // 2. 先渲染 Markdown / 命令正文，再按 ANSI 可见宽度折行
+            // 2. 固定顶栏仅序号；命令标题进入可滚动区，不钉在顶部
             let block = &blocks[index];
             let rendered_body = render_expandable_body(block.kind, &block.body);
-            // 3. 标题允许换行，完整展示命令（含着色）
-            let header_lines = AnsiLine::wrap_block(&block.title, cols.saturating_sub(2).max(1));
-            let header_prefix = format!("[{}/{}] ", index + 1, blocks.len());
-            let header_rows = header_lines.len().max(1) + 1; // 序号行 + 标题行
+            let header_prefix = format!("[{}/{}]", index + 1, blocks.len());
+            let header_rows = 1usize; // 仅块序号
             let footer_rows = 2usize; // 进度条 + 快捷键
             let view_h = rows
                 .saturating_sub(header_rows + footer_rows)
                 .max(1);
-            // 4. 正文窗口（右侧预留 1 列给竖向进度条）
+            // 3. 滚动窗口内容 = 完整命令标题 + 空行 + 正文
             let body_width = cols.saturating_sub(1).max(1);
-            let body_lines = AnsiLine::wrap_block(&rendered_body, body_width);
-            let max_scroll = body_lines.len().saturating_sub(view_h);
+            let mut content_lines = AnsiLine::wrap_block(&block.title, body_width);
+            if !block.title.trim().is_empty() && !rendered_body.trim().is_empty() {
+                content_lines.push(AnsiLine::new(String::new()));
+            }
+            content_lines.extend(AnsiLine::wrap_block(&rendered_body, body_width));
+            let max_scroll = content_lines.len().saturating_sub(view_h);
             if scroll > max_scroll {
                 scroll = max_scroll;
             }
 
             queue!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
-            // 5. 标题：块序号 + 完整标题（可多行，保留 ANSI 着色）
+            // 4. 固定顶栏：仅块序号
             write!(
                 stdout,
                 "\x1b[1m{}\x1b[0m\r\n",
                 truncate_visible(&header_prefix, cols)
             )?;
-            if header_lines.is_empty() {
-                write!(stdout, "\r\n")?;
-            } else {
-                for line in &header_lines {
-                    write!(stdout, "{}\r\n", line.as_str())?;
-                }
-            }
-            let scrollbar = scrollbar_glyphs(view_h, body_lines.len(), scroll);
+            let scrollbar = scrollbar_glyphs(view_h, content_lines.len(), scroll);
             for row in 0..view_h {
                 let idx = scroll + row;
-                let line = body_lines.get(idx).map(AnsiLine::as_str).unwrap_or("");
+                let line = content_lines.get(idx).map(AnsiLine::as_str).unwrap_or("");
                 let bar = scrollbar.get(row).copied().unwrap_or(' ');
                 write!(stdout, "{}\x1b[2m{}\x1b[0m\r\n", pad_line(line, body_width), bar)?;
             }
             // 7. 可拖动进度条（第二底栏上方的横向轨道）
-            let end = (scroll + view_h).min(body_lines.len()).max(scroll);
-            let pct = if body_lines.is_empty() {
+            let end = (scroll + view_h).min(content_lines.len()).max(scroll);
+            let pct = if content_lines.is_empty() {
                 100
             } else {
-                ((end as f64 / body_lines.len() as f64) * 100.0).round() as u16
+                ((end as f64 / content_lines.len() as f64) * 100.0).round() as u16
             };
-            let track = horizontal_progress_track(cols, body_lines.len(), view_h, scroll);
+            let track = horizontal_progress_track(cols, content_lines.len(), view_h, scroll);
             write!(stdout, "{track}\r\n")?;
             // 8. 底栏快捷键
             let footer = if blocks.len() > 1 {
@@ -147,36 +142,36 @@ pub(super) fn open_blocks_pager(blocks: &[ExpandableBlock], start_index: usize) 
                             index - 1
                         };
                         scroll = 0;
-                        dragging_scrollbar = false;
+                        drag_target = ScrollDragTarget::None;
                     }
                     KeyCode::Right | KeyCode::Char('l') if blocks.len() > 1 => {
                         index = (index + 1) % blocks.len();
                         scroll = 0;
-                        dragging_scrollbar = false;
+                        drag_target = ScrollDragTarget::None;
                     }
                     KeyCode::Up | KeyCode::Char('k') => {
                         scroll = scroll.saturating_sub(1);
-                        dragging_scrollbar = false;
+                        drag_target = ScrollDragTarget::None;
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
                         scroll = (scroll + 1).min(max_scroll);
-                        dragging_scrollbar = false;
+                        drag_target = ScrollDragTarget::None;
                     }
                     KeyCode::PageUp => {
                         scroll = scroll.saturating_sub(view_h);
-                        dragging_scrollbar = false;
+                        drag_target = ScrollDragTarget::None;
                     }
                     KeyCode::PageDown | KeyCode::Char(' ') => {
                         scroll = (scroll + view_h).min(max_scroll);
-                        dragging_scrollbar = false;
+                        drag_target = ScrollDragTarget::None;
                     }
                     KeyCode::Home => {
                         scroll = 0;
-                        dragging_scrollbar = false;
+                        drag_target = ScrollDragTarget::None;
                     }
                     KeyCode::End => {
                         scroll = max_scroll;
-                        dragging_scrollbar = false;
+                        drag_target = ScrollDragTarget::None;
                     }
                     _ => {}
                 },
@@ -185,16 +180,16 @@ pub(super) fn open_blocks_pager(blocks: &[ExpandableBlock], start_index: usize) 
                         mouse,
                         cols,
                         view_h,
-                        body_lines.len(),
+                        content_lines.len(),
                         max_scroll,
                         progress_row,
                         header_rows as u16,
                         &mut scroll,
-                        &mut dragging_scrollbar,
+                        &mut drag_target,
                     );
                 }
                 Event::Resize(_, _) => {
-                    dragging_scrollbar = false;
+                    drag_target = ScrollDragTarget::None;
                 }
                 _ => {}
             }
@@ -244,7 +239,28 @@ pub(super) fn open_text_pager(title: &str, body: &str) -> Result<()> {
 /// - `progress_row`: 横向进度条所在行
 /// - `body_top_row`: 正文首行所在行
 /// - `scroll`: 当前滚动偏移（可写）
-/// - `dragging`: 是否处于拖动（可写）
+/// 滚动条拖动目标。
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ScrollDragTarget {
+    None,
+    /// 底部横向进度条
+    Horizontal,
+    /// 右侧竖向滚动条
+    Vertical,
+}
+
+/// 处理鼠标事件（滚轮、点击/拖动进度条）。
+///
+/// 参数:
+/// - `mouse`: 鼠标事件
+/// - `cols`: 终端列数
+/// - `view_h`: 可视行数
+/// - `total_lines`: 正文总行数
+/// - `max_scroll`: 最大滚动偏移
+/// - `progress_row`: 横向进度条所在行
+/// - `body_top_row`: 正文首行所在行
+/// - `scroll`: 当前滚动偏移（可写）
+/// - `drag_target`: 当前拖动目标（可写）
 fn apply_mouse(
     mouse: MouseEvent,
     cols: usize,
@@ -254,44 +270,61 @@ fn apply_mouse(
     progress_row: u16,
     body_top_row: u16,
     scroll: &mut usize,
-    dragging: &mut bool,
+    drag_target: &mut ScrollDragTarget,
 ) {
+    let body_bottom = body_top_row.saturating_add(view_h as u16);
+    let on_horizontal = mouse.row == progress_row
+        || mouse.row.saturating_add(1) == progress_row
+        || progress_row.saturating_add(1) == mouse.row;
+    let on_vertical = mouse.row >= body_top_row
+        && mouse.row < body_bottom
+        && cols > 0
+        && mouse.column as usize + 1 >= cols;
     match mouse.kind {
         MouseEventKind::ScrollUp => {
             *scroll = scroll.saturating_sub(3);
-            *dragging = false;
+            *drag_target = ScrollDragTarget::None;
         }
         MouseEventKind::ScrollDown => {
             *scroll = (*scroll + 3).min(max_scroll);
-            *dragging = false;
+            *drag_target = ScrollDragTarget::None;
         }
         MouseEventKind::Down(MouseButton::Left) => {
-            if mouse.row == progress_row {
-                *dragging = true;
+            if on_horizontal {
+                *drag_target = ScrollDragTarget::Horizontal;
                 *scroll = scroll_from_track_x(mouse.column as usize, cols, total_lines, view_h);
-            } else if mouse.row >= body_top_row
-                && (mouse.row as usize) < body_top_row as usize + view_h
-                && cols > 0
-                && mouse.column as usize + 1 >= cols
-            {
-                // 点击右侧竖向滚动条
-                *dragging = true;
-                let local = (mouse.row - body_top_row) as usize;
+            } else if on_vertical {
+                *drag_target = ScrollDragTarget::Vertical;
+                let local = (mouse.row.saturating_sub(body_top_row)) as usize;
                 *scroll = scroll_from_vertical_thumb(local, view_h, total_lines, max_scroll);
             } else {
-                *dragging = false;
+                *drag_target = ScrollDragTarget::None;
             }
         }
-        MouseEventKind::Drag(MouseButton::Left) if *dragging => {
-            if mouse.row == progress_row || mouse.row + 1 == progress_row || mouse.row == progress_row + 1 {
-                *scroll = scroll_from_track_x(mouse.column as usize, cols, total_lines, view_h);
-            } else if mouse.row >= body_top_row {
-                let local = (mouse.row.saturating_sub(body_top_row)) as usize;
-                *scroll = scroll_from_vertical_thumb(local.min(view_h.saturating_sub(1)), view_h, total_lines, max_scroll);
+        // 部分终端把按住拖动报告为 Moved 而非 Drag
+        MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Moved => {
+            if *drag_target == ScrollDragTarget::None {
+                return;
+            }
+            // 拖动中不依赖当前行是否仍在轨道上，避免松脱
+            match *drag_target {
+                ScrollDragTarget::Horizontal => {
+                    *scroll = scroll_from_track_x(mouse.column as usize, cols, total_lines, view_h);
+                }
+                ScrollDragTarget::Vertical => {
+                    let local = if mouse.row < body_top_row {
+                        0
+                    } else {
+                        (mouse.row.saturating_sub(body_top_row) as usize)
+                            .min(view_h.saturating_sub(1))
+                    };
+                    *scroll = scroll_from_vertical_thumb(local, view_h, total_lines, max_scroll);
+                }
+                ScrollDragTarget::None => {}
             }
         }
         MouseEventKind::Up(MouseButton::Left) => {
-            *dragging = false;
+            *drag_target = ScrollDragTarget::None;
         }
         _ => {}
     }
@@ -312,8 +345,12 @@ fn scroll_from_track_x(x: usize, cols: usize, total_lines: usize, view_h: usize)
     if max_scroll == 0 || cols == 0 {
         return 0;
     }
-    let ratio = (x.min(cols.saturating_sub(1)) as f64) / (cols.saturating_sub(1).max(1) as f64);
-    ((ratio * max_scroll as f64).round() as usize).min(max_scroll)
+    let thumb_w = ((cols * view_h) / total_lines.max(1)).clamp(1, cols);
+    let travel = cols.saturating_sub(thumb_w).max(1);
+    // 点击位置映射到滑块中心所在行程
+    let x = x.min(cols.saturating_sub(1));
+    let center = x.saturating_sub(thumb_w / 2).min(travel);
+    ((center as f64 / travel as f64) * max_scroll as f64).round() as usize
 }
 
 /// 由竖向滚动条位置换算 scroll。
@@ -337,8 +374,8 @@ fn scroll_from_vertical_thumb(
     }
     let thumb_h = vertical_thumb_height(view_h, total_lines);
     let travel = view_h.saturating_sub(thumb_h).max(1);
-    let pos = local_row.min(travel);
-    ((pos as f64 / travel as f64) * max_scroll as f64).round() as usize
+    let center = local_row.saturating_sub(thumb_h / 2).min(travel);
+    ((center as f64 / travel as f64) * max_scroll as f64).round() as usize
 }
 
 /// 计算竖向滑块高度。
@@ -494,4 +531,24 @@ fn truncate_visible(value: &str, width: usize) -> String {
         used += w;
     }
     out
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn track_x_maps_edges() {
+        assert_eq!(scroll_from_track_x(0, 100, 1000, 10), 0);
+        let end = scroll_from_track_x(99, 100, 1000, 10);
+        assert!(end >= 900, "end scroll should be near max, got {end}");
+    }
+
+    #[test]
+    fn vertical_thumb_maps_edges() {
+        assert_eq!(scroll_from_vertical_thumb(0, 20, 200, 180), 0);
+        let end = scroll_from_vertical_thumb(19, 20, 200, 180);
+        assert!(end >= 150, "end scroll should be near max, got {end}");
+    }
 }

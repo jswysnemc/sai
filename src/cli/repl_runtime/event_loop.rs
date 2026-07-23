@@ -141,17 +141,19 @@ fn handle_stream_key(
 ) -> Result<()> {
     match code {
         KeyCode::BackTab => {
-            // 部分终端把 Shift+Tab 发成 BackTab
+            // 部分终端把 Shift+Tab 发成 BackTab：立即生效
             let current = runtime.stream_mode(AgentMode::Yolo);
             let next = cycle_mode(current);
             runtime.stream_draft_mut().mode = Some(next);
+            let _ = runtime.apply_stream_mode_live(AgentMode::Yolo);
             runtime.redraw_stream_composer()?;
         }
         KeyCode::Tab if modifiers.contains(KeyModifiers::SHIFT) => {
-            // Shift+Tab：循环权限模式（下次请求生效）
+            // Shift+Tab：立即切换权限模式（当前轮生效）
             let current = runtime.stream_mode(AgentMode::Yolo);
             let next = cycle_mode(current);
             runtime.stream_draft_mut().mode = Some(next);
+            let _ = runtime.apply_stream_mode_live(AgentMode::Yolo);
             runtime.redraw_stream_composer()?;
         }
         KeyCode::Tab => {

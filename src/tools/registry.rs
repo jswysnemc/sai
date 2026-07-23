@@ -243,6 +243,28 @@ impl ToolRegistry {
         self.permission_profile = Some(profile);
     }
 
+    /// 立即更新权限模式（热切换，无需重建注册表）。
+    ///
+    /// 参数:
+    /// - `mode`: 新权限模式
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn set_permission_mode(&self, mode: crate::permission::PermissionProfileMode) {
+        if let Some(profile) = &self.permission_profile {
+            profile.set_mode(mode);
+        }
+    }
+
+    /// 返回权限模式原子句柄（运行中热切换）。
+    pub(crate) fn permission_mode_handle(
+        &self,
+    ) -> Option<std::sync::Arc<std::sync::atomic::AtomicU8>> {
+        self.permission_profile
+            .as_ref()
+            .map(|profile| profile.mode_handle())
+    }
+
     pub fn definitions(&self) -> Vec<ToolDefinition> {
         self.tools.values().map(ToolSpec::definition).collect()
     }
