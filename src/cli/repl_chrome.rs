@@ -165,27 +165,24 @@ fn fit_status_segments(left: &str, right: &str, cols: usize) -> (String, String,
     let cols = cols.max(1);
     let mut left = left.to_string();
     let mut right = right.to_string();
-
-    // 1. 右侧先让位：优先保留模式/上下文/模型
     let left_w = visible_width(&left);
-    let sep = usize::from(!left.is_empty() && !right.is_empty());
-    let right_budget = cols.saturating_sub(left_w.min(cols) + sep);
-    if visible_width(&right) > right_budget {
-        right = truncate_to_width(&right, right_budget);
-    }
-
-    // 2. 若左侧本身过长，再裁左侧
     let right_w = visible_width(&right);
-    let sep = usize::from(!left.is_empty() && !right.is_empty());
-    let left_budget = cols.saturating_sub(right_w + sep);
-    if visible_width(&left) > left_budget {
-        left = truncate_to_width(&left, left_budget);
+
+    // 1. 左右总宽不超过终端：gap 填剩余列，贴满时为 0（不再额外预留分隔列）
+    if left_w + right_w <= cols {
+        return (left, right, cols - left_w - right_w);
     }
 
-    // 3. gap 可为 0；仅在有剩余列时填充，绝不超过 cols
-    let used = visible_width(&left) + visible_width(&right);
-    let gap = cols.saturating_sub(used);
-    (left, right, gap)
+    // 2. 放不下时右侧先让位，优先保留模式/上下文/模型
+    if left_w < cols {
+        right = truncate_to_width(&right, cols - left_w);
+        let used = left_w + visible_width(&right);
+        return (left, right, cols.saturating_sub(used));
+    }
+
+    // 3. 左侧单独已超宽：只保留左侧并裁剪
+    left = truncate_to_width(&left, cols);
+    (left, String::new(), 0)
 }
 
 /// 将纯文本左侧状态按段落重新着色（mode / context / model / thinking）。
