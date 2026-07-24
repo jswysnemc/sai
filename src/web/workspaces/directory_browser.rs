@@ -43,13 +43,9 @@ pub(crate) fn browse(requested: Option<&str>) -> Result<DirectoryListing> {
         .filter_map(|entry| directory_entry(entry.path()).ok())
         .collect::<Vec<_>>();
     entries.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
-    let parent = current.parent().and_then(|parent| {
-        canonical_allowed_directory(parent, &roots)
-            .ok()
-            .map(|path| path.display().to_string())
-    });
+    let parent = resolve_allowed_parent(&current, &roots);
     Ok(DirectoryListing {
-        current: current.display().to_string(),
+        current: display_path(&current),
         parent,
         roots: roots
             .iter()
@@ -73,7 +69,7 @@ pub(crate) fn create_directory(parent: &str, name: &str) -> Result<DirectoryEntr
     if name.is_empty() {
         bail!("directory name is empty");
     }
-    if name == "." || name == ".." || name.contains('/') || name.contains('\\') {
+    if name == "." || name == ".." || name.contains('/') || name.contains('\u{5c}') {
         bail!("directory name contains illegal characters");
     }
     // 2. 校验父目录位于允许根目录内
@@ -133,16 +129,51 @@ fn push_root(roots: &mut Vec<PathBuf>, path: PathBuf) {
 
 /// 校验目录处于允许根目录中。
 fn canonical_allowed_directory(path: &Path, roots: &[PathBuf]) -> Result<PathBuf> {
+    // 1. 先规范化，Windows 下可接受盘符与正斜杠写法
     let canonical = path
         .canonicalize()
         .with_context(|| format!("directory does not exist: {}", path.display()))?;
     if !canonical.is_dir() {
         bail!("path is not a directory: {}", canonical.display());
     }
-    if !roots.iter().any(|root| canonical.starts_with(root)) {
+    // 2. 允许根内判断：同时比较原始规范化路径与去掉扩展前缀后的路径
+    if !roots.iter().any(|root| path_is_within(&canonical, root)) {
         bail!("directory is outside configured workspace roots");
     }
     Ok(canonical)
+}
+
+/// 判断 path 是否位于 root 之下（含 root 自身）。
+fn path_is_within(path: &Path, root: &Path) -> bool {
+    if path.starts_with(root) || paths_equal(path, root) {
+        return true;
+    }
+    let path_text = strip_verbatim_prefix(&path.display().to_string());
+    let root_text = strip_verbatim_prefix(&root.display().to_string());
+    if cfg!(windows) {
+        let path_norm = normalize_windows_text(&path_text);
+        let root_norm = normalize_windows_text(&root_text);
+        if path_norm == root_norm {
+            return true;
+        }
+        let mut prefix = root_norm;
+        prefix.push('\u{5c}');
+        path_norm.starts_with(&prefix)
+    } else {
+        let path_norm = path_text.trim_end_matches('/');
+        let root_norm = root_text.trim_end_matches('/');
+        path_norm == root_norm || path_norm.starts_with(&(root_norm.to_string() + "/"))
+    }
+}
+
+/// Windows 路径文本归一化：统一分隔符并去掉末尾分隔符。
+fn normalize_windows_text(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| if ch == '/' { '\u{5c}' } else { ch })
+        .collect::<String>()
+        .trim_end_matches('\u{5c}')
+        .to_ascii_lowercase()
 }
 
 /// 构造服务端目录条目。
@@ -160,8 +191,87 @@ fn directory_entry(path: PathBuf) -> Result<DirectoryEntry> {
     Ok(DirectoryEntry {
         name,
         git_repository: canonical.join(".git").is_dir(),
-        path: canonical.display().to_string(),
+        path: display_path(&canonical),
     })
+}
+
+/// 解析当前目录在允许根内的上级路径。
+///
+/// 参数:
+/// - `current`: 已规范化的当前目录
+/// - `roots`: 允许根目录
+///
+/// 返回:
+/// - 可浏览的上级目录；已在根边界时返回 None
+fn resolve_allowed_parent(current: &Path, roots: &[PathBuf]) -> Option<String> {
+    // 1. 若当前就是某个允许根，禁止再向上跳出
+    if roots.iter().any(|root| paths_equal(root, current)) {
+        return None;
+    }
+    // 2. 逐级向上找到仍落在任一允许根内的父目录
+    let mut cursor = current.parent().map(Path::to_path_buf);
+    while let Some(parent) = cursor {
+        if let Ok(canonical) = canonical_allowed_directory(&parent, roots) {
+            return Some(display_path(&canonical));
+        }
+        if roots.iter().any(|root| paths_equal(root, &parent)) {
+            return Some(display_path(&parent));
+        }
+        cursor = parent.parent().map(Path::to_path_buf);
+    }
+    None
+}
+
+/// 输出给前端的路径字符串（去掉 Windows 扩展前缀，便于回退与输入）。
+fn display_path(path: &Path) -> String {
+    strip_verbatim_prefix(&path.display().to_string())
+}
+
+/// 去掉 Windows 扩展路径前缀。
+fn strip_verbatim_prefix(value: &str) -> String {
+    strip_windows_verbatim(value).unwrap_or_else(|| value.to_string())
+}
+
+/// 剥离 Windows 扩展路径前缀；非匹配时返回 None。
+fn strip_windows_verbatim(value: &str) -> Option<String> {
+    let bytes = value.as_bytes();
+    // \\?\UNC\
+    const UNC: &[u8] = &[0x5c, 0x5c, 0x3f, 0x5c, b'U', b'N', b'C', 0x5c];
+    // \\?\
+    const VERBATIM: &[u8] = &[0x5c, 0x5c, 0x3f, 0x5c];
+    if bytes.starts_with(UNC) {
+        let rest = &value[UNC.len()..];
+        let mut out = String::new();
+        out.push('\u{5c}');
+        out.push('\u{5c}');
+        out.push_str(rest);
+        return Some(out);
+    }
+    if bytes.starts_with(VERBATIM) {
+        return Some(value[VERBATIM.len()..].to_string());
+    }
+    if let Some(rest) = value.strip_prefix("//?/UNC/") {
+        let mut out = String::new();
+        out.push('\u{5c}');
+        out.push('\u{5c}');
+        for ch in rest.chars() {
+            out.push(if ch == '/' { '\u{5c}' } else { ch });
+        }
+        return Some(out);
+    }
+    if let Some(rest) = value.strip_prefix("//?/") {
+        return Some(rest.chars().map(|ch| if ch == '/' { '\u{5c}' } else { ch }).collect());
+    }
+    None
+}
+
+/// 比较两个路径是否指向同一位置（忽略 Windows 扩展前缀差异）。
+fn paths_equal(left: &Path, right: &Path) -> bool {
+    if left == right {
+        return true;
+    }
+    strip_verbatim_prefix(&left.display().to_string())
+        .eq_ignore_ascii_case(&strip_verbatim_prefix(&right.display().to_string()))
 }
 
 #[cfg(test)]
@@ -174,5 +284,32 @@ mod tests {
         let outside = tempfile::tempdir().unwrap();
         let roots = vec![root.path().canonicalize().unwrap()];
         assert!(canonical_allowed_directory(outside.path(), &roots).is_err());
+    }
+
+    #[test]
+    fn parent_stops_at_allowed_root() {
+        let root = tempfile::tempdir().unwrap();
+        let child = root.path().join("child");
+        std::fs::create_dir(&child).unwrap();
+        let roots = vec![root.path().canonicalize().unwrap()];
+        let current = child.canonicalize().unwrap();
+        let parent = resolve_allowed_parent(&current, &roots).unwrap();
+        assert_eq!(PathBuf::from(&parent).canonicalize().unwrap(), roots[0]);
+        assert!(resolve_allowed_parent(&roots[0], &roots).is_none());
+    }
+
+    #[test]
+    fn strip_verbatim_prefix_removes_windows_extended_form() {
+        let input = String::from_utf8(vec![
+            0x5c, 0x5c, 0x3f, 0x5c, b'C', b':', 0x5c, b'U', b's', b'e', b'r', b's', 0x5c, b'd',
+            b'e', b'm', b'o',
+        ])
+        .unwrap();
+        let expected = String::from_utf8(vec![
+            b'C', b':', 0x5c, b'U', b's', b'e', b'r', b's', 0x5c, b'd', b'e', b'm', b'o',
+        ])
+        .unwrap();
+        assert_eq!(strip_verbatim_prefix(&input), expected);
+        assert_eq!(strip_verbatim_prefix("/home/demo"), "/home/demo");
     }
 }

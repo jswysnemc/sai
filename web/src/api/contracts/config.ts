@@ -14,6 +14,8 @@ export type ProviderConfig = {
   temperature?: number;
   anthropic_max_tokens?: number;
   extra_body?: string;
+  extra_headers?: Record<string, string>;
+  client_style?: string;
   model_context_chars?: Record<string, number>;
   model_metadata?: Record<string, ModelMetadata>;
   [key: string]: unknown;

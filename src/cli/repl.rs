@@ -523,6 +523,8 @@ pub(super) async fn run_repl(
             agent.switch_mode(mode, registry);
         }
         agent.prepare_for_turn()?;
+        // 用户主动发话：清除历史未消费回执
+        agent.discard_stale_external_completion_notices()?;
         let reasoning_mode = transcript_options.reasoning_mode;
         let tool_call_mode = transcript_options.tool_call_mode;
         let render_options = stream_render_options(&config);

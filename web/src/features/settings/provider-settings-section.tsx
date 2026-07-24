@@ -13,6 +13,7 @@ import { Select } from "../../shared/ui/select/select";
 import { ModelIcon } from "../../shared/ui/model-icon";
 import { JsonCodeEditor } from "../../shared/ui/code-editor/json-code-editor";
 import { useI18n } from "../i18n/use-i18n";
+import { KeyValueEditor } from "./key-value-editor";
 
 type ProviderSettingsSectionProps = {
   config: AppConfig;
@@ -67,7 +68,10 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
       models: [],
       default_model: "",
       thinking_level: "auto",
-      thinking_format: "auto"
+      thinking_format: "auto",
+      client_style: "auto",
+      extra_headers: {},
+      extra_body: ""
     };
     onConfigChange({ ...config, providers: [...config.providers, next] });
     setSelectedId(id);
@@ -214,7 +218,42 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
           <label className="settings-field"><span>Anthropic max_tokens</span><input type="number" min="1" value={provider.anthropic_max_tokens ?? 8192} onChange={(event) => onProviderChange(selectedIndex, { anthropic_max_tokens: Number(event.target.value) })} /><small>{t("Used by Anthropic Messages only", "仅 Anthropic Messages 使用")}</small></label>
         </div>}
         {tab === "models" && <ModelMetadataEditor provider={provider} onChange={(patch) => onProviderChange(selectedIndex, patch)} />}
-        {tab === "advanced" && <div className="settings-json-field"><div><span>{t("Custom body JSON", "自定义 body JSON")}</span><small>{t("The object is merged into each model request; explicit fields take precedence", "对象会合并到每次模型请求，显式配置字段优先")}</small></div><JsonCodeEditor value={provider.extra_body || "{}"} onChange={(value) => onProviderChange(selectedIndex, { extra_body: value === "{}" ? "" : value })} height={330} ariaLabel={t("Provider custom body JSON", "供应商自定义 body JSON")} /></div>}
+        {tab === "advanced" && <div className="settings-form-grid">
+          <div className="settings-field">
+            <span>{t("Client style", "客户端模拟")}</span>
+            <Select
+              value={provider.client_style ?? "auto"}
+              options={[
+                { value: "auto", label: t("Auto", "自动") },
+                { value: "default", label: t("Default", "默认") },
+                { value: "codex", label: "Codex CLI" },
+              ]}
+              onChange={(value) => onProviderChange(selectedIndex, { client_style: value })}
+              ariaLabel={t("Client style", "客户端模拟")}
+            />
+            <small>{t("Codex simulates codex_cli_rs headers and Responses body for compatible gateways", "Codex 会模拟 codex_cli_rs 请求头与 Responses 请求体")}</small>
+          </div>
+          <div className="settings-field full">
+            <span>{t("Extra headers", "自定义请求头")}</span>
+            <KeyValueEditor
+              value={provider.extra_headers ?? {}}
+              onChange={(extra_headers) => onProviderChange(selectedIndex, { extra_headers })}
+            />
+            <small>{t("Merged into each model request; Authorization is not overridden", "合并到每次模型请求，不覆盖 Authorization")}</small>
+          </div>
+          <div className="settings-json-field full">
+            <div>
+              <span>{t("Custom body JSON", "自定义 body JSON")}</span>
+              <small>{t("The object is merged into each model request; explicit fields take precedence", "对象会合并到每次模型请求，显式配置字段优先")}</small>
+            </div>
+            <JsonCodeEditor
+              value={provider.extra_body || "{}"}
+              onChange={(value) => onProviderChange(selectedIndex, { extra_body: value === "{}" ? "" : value })}
+              height={280}
+              ariaLabel={t("Provider custom body JSON", "供应商自定义 body JSON")}
+            />
+          </div>
+        </div>}
       </section>
       <ModelImportDialog open={importOpen} models={remoteModels} existingModels={models} onClose={() => setImportOpen(false)} onImport={importModels} />
     </div>

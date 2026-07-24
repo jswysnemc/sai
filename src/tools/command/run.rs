@@ -689,10 +689,11 @@ mod tests {
         config.tools.background_commands_enabled = true;
         config.tools.background_command_timeout_seconds = 0;
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        // 托管 spawn 在 Windows 默认走 cmd，测试命令需与默认 shell 一致
         #[cfg(windows)]
-        let command = "Start-Sleep -Seconds 5";
+        let command = "ping -n 6 127.0.0.1 >nul";
         #[cfg(not(windows))]
-        let command = "printf 'before\\n'; sleep 5";
+        let command = "printf 'before\n'; sleep 5";
 
         let result = run_command(
             json!({"command": command, "timeout_seconds": 1, "label": "promote-test"}),
@@ -706,11 +707,15 @@ mod tests {
         .await
         .unwrap();
         let data: Value = serde_json::from_str(&result).unwrap();
-        assert_eq!(data["mode"], "background");
+        assert_eq!(
+            data["mode"],
+            "background",
+            "expected background promotion, got: {data}"
+        );
         assert_eq!(data["promoted"], true);
         let task_id = data["task_id"].as_str().unwrap().to_string();
         let pid = data["task"]["pid"].as_u64().unwrap() as u32;
-        assert!(process_exists(pid));
+        assert!(process_exists(pid), "promoted task pid should still be alive");
 
         // 清理：停止后台进程
         terminate_process(pid, data["task"]["pgid"].as_i64().map(|v| v as i32), true).await;
@@ -725,10 +730,11 @@ mod tests {
         let mut config = AppConfig::default();
         config.tools.background_commands_enabled = true;
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        // 托管 spawn 在 Windows 默认走 cmd，避免 PowerShell 专有语法
         #[cfg(windows)]
-        let command = "Write-Output done";
+        let command = "echo done";
         #[cfg(not(windows))]
-        let command = "printf 'done\\n'";
+        let command = "printf 'done\n'";
 
         let result = run_command(
             json!({"command": command, "timeout_seconds": 10}),
@@ -742,7 +748,15 @@ mod tests {
         .await
         .unwrap();
         let data: Value = serde_json::from_str(&result).unwrap();
-        assert_eq!(data["mode"], "foreground");
-        assert!(data["stdout"].as_str().unwrap().contains("done"));
+        assert_eq!(
+            data["mode"],
+            "foreground",
+            "expected foreground finish, got: {data}"
+        );
+        let stdout = data["stdout"].as_str().unwrap_or_default();
+        assert!(
+            stdout.to_ascii_lowercase().contains("done"),
+            "stdout should contain done, got: {stdout:?}"
+        );
     }
 }

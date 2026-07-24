@@ -136,9 +136,9 @@ impl<'agent> TurnRunner<'agent> {
                     return Err(error);
                 }
             };
-            // 2. 模型成功接收自动输入后再确认外部完成通知，失败时保留通知供下次重试
+            // 2. 外部完成回执在 take_event_batch 时已 claim 清除；此处幂等确认旧路径残留
             if let Some(batch) = pending_external_events.take() {
-                self.agent.acknowledge_external_events(&batch)?;
+                let _ = self.agent.acknowledge_external_events(&batch);
             }
             // 3. 只把本轮开始时已经活动的目标计入使用量，避免倒算创建目标之前的消耗
             if let Some(goal) = active_goal {

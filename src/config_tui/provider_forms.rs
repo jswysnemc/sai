@@ -71,11 +71,25 @@ pub(super) fn edit_provider_form(
             t("Custom Body JSON", "自定义 Body JSON"),
             provider.extra_body.clone(),
         ),
+        Field::new(
+            t("Client style", "客户端模拟"),
+            provider.client_style.clone(),
+        )
+        .choices(&["auto", "default", "codex"]),
+        Field::textarea(
+            t("Extra Headers JSON", "自定义请求头 JSON"),
+            if provider.extra_headers.is_empty() {
+                String::new()
+            } else {
+                serde_json::to_string_pretty(&provider.extra_headers).unwrap_or_default()
+            },
+        ),
     ];
     if !run_form(stdout, t(" EDIT PROVIDER ", " 编辑供应商 "), &mut fields)? {
         return Ok(None);
     }
     let extra_body = normalize_extra_body(&fields[9].value)?;
+    let extra_headers = normalize_extra_headers(&fields[11].value)?;
     let updated = ProviderConfig {
         id: fields[0].value.trim().to_string(),
         display_name: fields[1].value.trim().to_string(),
@@ -92,6 +106,8 @@ pub(super) fn edit_provider_form(
         thinking_level: fields[7].value.trim().to_string(),
         thinking_format: fields[8].value.trim().to_string(),
         extra_body,
+        extra_headers,
+        client_style: fields[10].value.trim().to_string(),
     };
     Ok(Some(updated))
 }
@@ -103,6 +119,41 @@ pub(super) fn edit_provider_form(
 ///
 /// 返回:
 /// - 为空时返回空字符串，否则返回格式化后的 JSON 对象字符串
+/// 规范化自定义请求头 JSON 对象。
+///
+/// 参数:
+/// - `value`: 表单 JSON 文本
+///
+/// 返回:
+/// - 键值表；空输入返回空表
+fn normalize_extra_headers(value: &str) -> Result<std::collections::HashMap<String, String>> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+    let parsed = serde_json::from_str::<Value>(value)?;
+    let obj = parsed.as_object().ok_or_else(|| {
+        anyhow::anyhow!(
+            "{}",
+            t(
+                "Extra Headers JSON must be a JSON object of string values",
+                "自定义请求头 JSON 必须是字符串键值对象"
+            )
+        )
+    })?;
+    let mut headers = std::collections::HashMap::new();
+    for (key, val) in obj {
+        let text = match val {
+            Value::String(s) => s.clone(),
+            other => other.to_string(),
+        };
+        if !key.trim().is_empty() {
+            headers.insert(key.clone(), text);
+        }
+    }
+    Ok(headers)
+}
+
 fn normalize_extra_body(value: &str) -> Result<String> {
     let value = value.trim();
     if value.is_empty() {

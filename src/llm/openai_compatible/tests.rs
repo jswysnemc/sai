@@ -76,6 +76,54 @@ mod tests {
     }
 
     #[test]
+    fn lower_responses_messages_wraps_codex_message_type() {
+        let input = lower_responses_messages(vec![
+            ChatMessage::system("sys"),
+            ChatMessage::plain("user", "hi"),
+        ]);
+        assert_eq!(input[0]["type"], "message");
+        assert_eq!(input[0]["role"], "system");
+        assert_eq!(input[0]["content"][0]["type"], "input_text");
+        assert_eq!(input[1]["type"], "message");
+        assert_eq!(input[1]["role"], "user");
+        assert_eq!(input[1]["content"][0]["type"], "input_text");
+    }
+
+    #[test]
+    fn prefers_codex_shape_for_sol_and_codex_models() {
+        assert!(prefers_codex_responses_shape(
+            "gpt-5.6-sol",
+            "https://example.com/v1",
+            "auto"
+        ));
+        assert!(prefers_codex_responses_shape(
+            "gpt-5-codex",
+            "https://example.com/v1",
+            "auto"
+        ));
+        assert!(prefers_codex_responses_shape(
+            "gpt-4o",
+            "https://a-ocnfniawgw.cn-shanghai.fcapp.run/v1",
+            "auto"
+        ));
+        assert!(!prefers_codex_responses_shape(
+            "gpt-4o",
+            "https://api.openai.com/v1",
+            "auto"
+        ));
+        assert!(prefers_codex_responses_shape(
+            "gpt-4o",
+            "https://api.openai.com/v1",
+            "codex"
+        ));
+        assert!(!prefers_codex_responses_shape(
+            "gpt-5.6-sol",
+            "https://example.com/v1",
+            "default"
+        ));
+    }
+
+    #[test]
     fn openai_gpt5_uses_responses_api() {
         let mut provider = test_provider("openai", "https://api.openai.com/v1");
         provider.default_model = "gpt-5.5".to_string();
@@ -593,6 +641,8 @@ mod tests {
             thinking_level: "auto".to_string(),
             thinking_format: "auto".to_string(),
             extra_body: String::new(),
+            extra_headers: std::collections::HashMap::new(),
+            client_style: "auto".to_string(),
         }
     }
 

@@ -1,5 +1,6 @@
 import { Check, ChevronDown, CircleEllipsis, FilePenLine, FileSearch, Search, TerminalSquare, Wrench, X } from "lucide-react";
-import { useState, type KeyboardEvent } from "react";
+import { type KeyboardEvent } from "react";
+import { usePersistedExpand } from "./message/tool-expand-state";
 import type { ToolLifecycle } from "./run-event-reducer";
 import { toolCardSummary } from "./tool-renderers/tool-card-summary";
 import { toolFilePath } from "./tool-renderers/tool-data";
@@ -17,10 +18,11 @@ import { useI18n } from "../i18n/use-i18n";
  */
 export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
   const { locale, t } = useI18n();
-  const [expanded, setExpanded] = useState(tool.status === "failed");
+  // 失败默认展开；用户展开后按 tool.id 记忆，流式更新不自动收缩
+  const [expanded, setExpanded] = usePersistedExpand(tool.id, tool.status === "failed");
   // 1. todo 工具已完成时改用专门的清单卡片,不暴露原始 JSON
   if (tool.name === "todo" && tool.status === "completed") {
-    return <TodoToolView argumentsText={tool.arguments || tool.argumentsPreview} output={tool.output} />;
+    return <TodoToolView toolId={tool.id} argumentsText={tool.arguments || tool.argumentsPreview} output={tool.output} />;
   }
   const statusIcon = tool.status === "completed"
     ? <Check size={14} />

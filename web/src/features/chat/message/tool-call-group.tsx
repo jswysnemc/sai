@@ -1,5 +1,5 @@
 import { Check, ChevronDown, ListChecks, TerminalSquare, Wrench } from "lucide-react";
-import { useState } from "react";
+import { groupHasExpandedTool, usePersistedExpand } from "./tool-expand-state";
 import type { ToolLifecycle } from "../run-event-reducer";
 import { ToolLifecycleCard } from "../tool-lifecycle-card";
 import { toolCallGroupLabel } from "./tool-call-grouping";
@@ -14,7 +14,12 @@ import "./tool-call-group.css";
  */
 export function ToolCallGroup({ tools }: { tools: ToolLifecycle[] }) {
   const { locale } = useI18n();
-  const [expanded, setExpanded] = useState(false);
+  // 组 id 用首项稳定；若用户已展开组内任一工具则保持展开
+  const groupId = tools[0]?.id ? `tool-group-${tools[0].id}` : "tool-group";
+  const [expanded, setExpanded] = usePersistedExpand(
+    groupId,
+    groupHasExpandedTool(tools.map((tool) => tool.id))
+  );
   const todoOnly = tools.every((tool) => tool.name === "todo");
   const commandOnly = tools.every((tool) => tool.name === "run_command" || tool.name.includes("command"));
   const label = toolCallGroupLabel(tools, locale);

@@ -7,6 +7,7 @@ import type { DirectoryEntry } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { useI18n } from "../i18n/use-i18n";
+import { isAbsoluteFilesystemPath, normalizePathInput } from "./path-utils";
 
 type ServerDirectoryDialogProps = {
   open: boolean;
@@ -37,7 +38,7 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
   const [createError, setCreateError] = useState<Error | null>(null);
   const [submitError, setSubmitError] = useState<Error | null>(null);
   const listing = useQuery({ queryKey: ["workspace-directories", path], queryFn: () => api.workspaces.browse(path), enabled: props.open });
-  const filter = draft.startsWith("/") ? "" : draft.trim();
+  const filter = isAbsoluteFilesystemPath(draft) ? "" : draft.trim();
   const entries = useMemo(
     () => filterEntries(sortEntries(listing.data?.entries ?? [], showHidden), filter),
     [listing.data?.entries, showHidden, filter]
@@ -58,10 +59,10 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
     setSubmitError(null);
   };
 
-  /** 处理路径输入框回车：以 / 开头的绝对路径才跳转。 */
+  /** 处理路径输入框回车：POSIX 或 Windows 绝对路径才跳转。 */
   const handleDraftEnter = () => {
-    const value = draft.trim();
-    if (value.startsWith("/")) navigate(value);
+    const value = normalizePathInput(draft);
+    if (isAbsoluteFilesystemPath(value)) navigate(value);
   };
 
   /** 在当前浏览目录下创建子目录，成功后刷新列表并选中新目录。 */
@@ -133,12 +134,12 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
             <input
               className="directory-path-input"
               value={draft}
-              placeholder={listing.data?.current ?? t("Enter a filter, or type an absolute path beginning with / and press Enter", "输入过滤词，或输入以 / 开头的绝对路径后回车")}
+              placeholder={listing.data?.current ?? t("Enter a filter, or an absolute path (for example /home or C:\\Users) and press Enter", "输入过滤词，或输入绝对路径（如 /home 或 C:\\Users）后回车")}
               spellCheck={false}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => { if (event.key === "Enter") handleDraftEnter(); }}
             />
-            {draft.trim().startsWith("/") && <button type="button" onClick={handleDraftEnter} aria-label={t("Go to entered path", "跳转到输入路径")}><CornerDownLeft size={14} /></button>}
+            {isAbsoluteFilesystemPath(draft) && <button type="button" onClick={handleDraftEnter} aria-label={t("Go to entered path", "跳转到输入路径")}><CornerDownLeft size={14} /></button>}
             <button type="button" onClick={() => { setCreating((value) => !value); setCreateError(null); }} disabled={!listing.data} aria-label={t("New folder", "新建文件夹")}><FolderPlus size={14} /></button>
             <button type="button" onClick={() => setShowHidden((value) => !value)} aria-label={showHidden ? t("Hide dot directories", "隐藏点开头目录") : t("Show dot directories", "显示点开头目录")}>
               {showHidden ? <EyeOff size={14} /> : <Eye size={14} />}

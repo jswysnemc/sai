@@ -58,8 +58,29 @@ pub(super) fn repl_visible_input_lines(
     is_pasted: bool,
 ) -> Vec<String> {
     let total_rows = repl_prompt_rows(prefix, lines);
-    if total_rows <= max_rows || lines.len() <= 2 || !is_pasted {
+    let total_chars: usize = lines.iter().map(|line| line.chars().count()).sum();
+    // 粘贴内容：行数或字符数超限时收缩；单行巨长文本也收缩（不再要求 lines>2）
+    const LONG_PASTE_VISIBLE_CHARS: usize = 240;
+    let should_collapse = is_pasted
+        && !lines.is_empty()
+        && (total_rows > max_rows
+            || total_chars > LONG_PASTE_VISIBLE_CHARS
+            || lines.iter().any(|line| line.chars().count() > 160));
+    if !should_collapse {
         return lines.to_vec();
+    }
+
+    if lines.len() == 1 {
+        let line = &lines[0];
+        let chars = line.chars().count();
+        let head: String = line.chars().take(48).collect();
+        let omitted = chars.saturating_sub(head.chars().count());
+        let note = if is_zh() {
+            format!("... 已隐藏 {omitted} 字符粘贴内容 ...")
+        } else {
+            format!("... {omitted} pasted chars hidden ...")
+        };
+        return vec![format!("{head}…"), note];
     }
 
     let omitted_lines = lines.len().saturating_sub(2);

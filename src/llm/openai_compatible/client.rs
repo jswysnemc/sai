@@ -211,15 +211,20 @@ impl OpenAiCompatibleClient {
             "{}/chat/completions",
             self.provider.base_url.trim_end_matches('/')
         );
-        let headers = bearer_request_headers(&self.api_key, &[]);
+        let headers = merge_provider_extra_headers(
+            bearer_request_headers(&self.api_key, &[]),
+            &self.provider,
+        );
         let mut debug = self.start_http_debug("POST", &url, "openai-chat", &headers, &request);
-        let response = self
-            .client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&request)
-            .send()
-            .await?;
+        let response = with_provider_extra_headers(
+            self.client
+                .post(&url)
+                .bearer_auth(&self.api_key)
+                .json(&request),
+            &self.provider,
+        )
+        .send()
+        .await?;
         let status = response.status();
         if let Some(debug) = debug.as_ref() {
             let _ = debug.write_response_headers(status.as_u16(), response.headers());
@@ -321,7 +326,10 @@ impl OpenAiCompatibleClient {
             ThinkingProtocol::Anthropic,
         )?;
         let url = format!("{}/messages", self.provider.base_url.trim_end_matches('/'));
-        let headers = anthropic_request_headers(&self.api_key);
+        let headers = merge_provider_extra_headers(
+            anthropic_request_headers(&self.api_key),
+            &self.provider,
+        );
         let mut debug = self.start_http_debug("POST", &url, "anthropic", &headers, &request);
         // 【Anthropic】【Messages 请求】1. 首先使用当前 thinking 配置发送请求
         let response = self.send_anthropic_request(&url, &request).await?;
@@ -446,12 +454,13 @@ impl OpenAiCompatibleClient {
         url: &str,
         request: &Value,
     ) -> Result<reqwest::Response> {
-        Ok(self
+        let builder = self
             .client
             .post(url)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
-            .json(request)
+            .json(request);
+        Ok(with_provider_extra_headers(builder, &self.provider)
             .send()
             .await?)
     }
@@ -465,20 +474,44 @@ impl OpenAiCompatibleClient {
     where
         F: FnMut(ChatStreamEvent) -> Result<()>,
     {
+        // 1. 拆出 system 作为 instructions；其余消息进 input
+        let (instructions, input_messages) = split_responses_instructions(messages);
+        let codex = prefers_codex_responses_shape(
+            &self.provider.default_model,
+            &self.provider.base_url,
+            &self.provider.client_style,
+        );
+        let session_key = uuid::Uuid::new_v4().to_string();
         let request = ResponsesRequest {
             model: self.provider.default_model.clone(),
-            input: lower_responses_messages(messages),
-            instructions: None,
+            input: lower_responses_messages(input_messages),
+            instructions: Some(instructions.unwrap_or_default()),
             stream: true,
-            max_output_tokens: self
-                .provider
-                .model_max_output_tokens_for(&self.provider.default_model),
+            store: false,
+            tool_choice: "auto".to_string(),
+            parallel_tool_calls: true,
+            include: vec!["reasoning.encrypted_content".to_string()],
+            // Codex 通道会剥离 max_output_tokens / temperature；非 Codex 仍可带
+            max_output_tokens: if codex {
+                None
+            } else {
+                self.provider
+                    .model_max_output_tokens_for(&self.provider.default_model)
+            },
             tools: (!tools.is_empty()).then(|| lower_responses_tools(tools)),
             reasoning: Some(ResponsesReasoning {
-                effort: Some("medium"),
-                summary: Some("concise"),
+                effort: Some(if codex { "low" } else { "medium" }),
+                summary: Some(if codex { "auto" } else { "concise" }),
             }),
-            temperature: Some(self.provider.temperature),
+            temperature: if codex {
+                None
+            } else {
+                Some(self.provider.temperature)
+            },
+            prompt_cache_key: codex.then(|| session_key.clone()),
+            client_metadata: codex.then(|| {
+                serde_json::json!({ "session_id": session_key })
+            }),
         };
         let request = apply_provider_body_options(
             serde_json::to_value(request)?,
@@ -486,15 +519,28 @@ impl OpenAiCompatibleClient {
             ThinkingProtocol::OpenAiResponses,
         )?;
         let url = format!("{}/responses", self.provider.base_url.trim_end_matches('/'));
-        let headers = bearer_request_headers(&self.api_key, &[]);
+        let headers = merge_provider_extra_headers(
+            if codex {
+                codex_responses_request_headers(&self.api_key, &session_key)
+            } else {
+                bearer_request_headers(&self.api_key, &[])
+            },
+            &self.provider,
+        );
         let mut debug = self.start_http_debug("POST", &url, "openai-responses", &headers, &request);
-        let response = self
-            .client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&request)
-            .send()
-            .await?;
+        let mut req = self.client.post(&url).bearer_auth(&self.api_key).json(&request);
+        if codex {
+            // 额外 Codex 请求头（Authorization / Content-Type 由 bearer + json 处理）
+            req = req
+                .header("User-Agent", "codex_cli_rs/0.144.0")
+                .header("originator", "codex_cli_rs")
+                .header("OpenAI-Beta", "responses=experimental")
+                .header("version", "0.144.0")
+                .header("session_id", &session_key)
+                .header("Accept", "text/event-stream")
+                .header("x-client-request-id", &session_key);
+        }
+        let response = with_provider_extra_headers(req, &self.provider).send().await?;
         let status = response.status();
         if let Some(debug) = debug.as_ref() {
             let _ = debug.write_response_headers(status.as_u16(), response.headers());
@@ -574,10 +620,131 @@ impl OpenAiCompatibleClient {
     fn uses_openai_responses(&self) -> bool {
         let model = self.provider.default_model.to_ascii_lowercase();
         model.starts_with("gpt-5")
+            || model.contains("codex")
             || model.starts_with("o1")
             || model.starts_with("o3")
             || model.starts_with("o4")
+            || prefers_codex_responses_shape(
+                &self.provider.default_model,
+                &self.provider.base_url,
+                &self.provider.client_style,
+            )
     }
+}
+
+/// 拆分 Responses 请求的 instructions 与 input 消息。
+///
+/// 参数:
+/// - `messages`: 原始 Chat 消息
+///
+/// 返回:
+/// - (可选 instructions, 剩余消息)
+fn split_responses_instructions(
+    messages: Vec<ChatMessage>,
+) -> (Option<String>, Vec<ChatMessage>) {
+    let mut instructions = Vec::new();
+    let mut rest = Vec::new();
+    let mut past_system = false;
+    for message in messages {
+        if !past_system && message.role == "system" {
+            if let Some(text) = message.content.as_ref().map(|c| match c {
+                crate::llm::ChatContent::Text(t) => t.clone(),
+                crate::llm::ChatContent::Parts(parts) => parts
+                    .iter()
+                    .filter_map(|p| match p {
+                        crate::llm::ChatContentPart::Text { text } => Some(text.as_str()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join(""),
+            }) {
+                if !text.trim().is_empty() {
+                    instructions.push(text);
+                }
+            }
+            continue;
+        }
+        past_system = true;
+        rest.push(message);
+    }
+    let joined = instructions.join("
+
+");
+    (
+        (!joined.trim().is_empty()).then_some(joined),
+        rest,
+    )
+}
+
+/// 构造 Codex Responses 调试用请求头列表。
+fn codex_responses_request_headers(api_key: &str, session_id: &str) -> Vec<(String, String)> {
+    bearer_request_headers(
+        api_key,
+        &[
+            ("User-Agent", "codex_cli_rs/0.144.0"),
+            ("originator", "codex_cli_rs"),
+            ("OpenAI-Beta", "responses=experimental"),
+            ("version", "0.144.0"),
+            ("session_id", session_id),
+            ("x-client-request-id", session_id),
+        ],
+    )
+}
+
+/// 将供应商自定义头合并进调试头列表。
+///
+/// 参数:
+/// - `headers`: 已有头
+/// - `provider`: 供应商配置
+///
+/// 返回:
+/// - 合并后的头列表
+fn merge_provider_extra_headers(
+    mut headers: Vec<(String, String)>,
+    provider: &ProviderConfig,
+) -> Vec<(String, String)> {
+    for (name, value) in &provider.extra_headers {
+        let key = name.trim();
+        if key.is_empty() {
+            continue;
+        }
+        // 自定义头覆盖同名项
+        if let Some(pos) = headers
+            .iter()
+            .position(|(existing, _)| existing.eq_ignore_ascii_case(key))
+        {
+            headers[pos] = (key.to_string(), value.clone());
+        } else {
+            headers.push((key.to_string(), value.clone()));
+        }
+    }
+    headers
+}
+
+/// 向 reqwest 请求附加供应商自定义头。
+///
+/// 参数:
+/// - `req`: 请求构建器
+/// - `provider`: 供应商配置
+///
+/// 返回:
+/// - 附带头后的构建器
+fn with_provider_extra_headers(
+    mut req: reqwest::RequestBuilder,
+    provider: &ProviderConfig,
+) -> reqwest::RequestBuilder {
+    for (name, value) in &provider.extra_headers {
+        let key = name.trim();
+        if key.is_empty() {
+            continue;
+        }
+        // 不覆盖 Authorization / Content-Type 由调用方控制的核心鉴权
+        if key.eq_ignore_ascii_case("authorization") {
+            continue;
+        }
+        req = req.header(key, value);
+    }
+    req
 }
 
 /// 判断供应商是否指向官方 Anthropic API。

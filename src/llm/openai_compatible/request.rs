@@ -2,6 +2,46 @@ use sha2::{Digest, Sha256};
 
 const RESPONSES_CALL_ID_MAX_CHARS: usize = 64;
 
+/// 判断是否应按 Codex 通道形态发 Responses（缺字段会 400 invalid codex request）。
+///
+/// 参数:
+/// - `model`: 模型名
+/// - `base_url`: 供应商 base_url
+///
+/// 返回:
+/// - 需要 Codex 完整字段时 true
+/// 是否按 Codex 通道形态发 Responses。
+///
+/// 参数:
+/// - `model`: 模型名
+/// - `base_url`: 供应商 base_url
+/// - `client_style`: 供应商客户端模拟（auto/default/codex）
+///
+/// 返回:
+/// - 需要 Codex 完整字段与请求头时 true
+fn prefers_codex_responses_shape(model: &str, base_url: &str, client_style: &str) -> bool {
+    let style = client_style.trim().to_ascii_lowercase();
+    if style == "codex" {
+        return true;
+    }
+    if style == "default" {
+        return false;
+    }
+    // auto：按模型名 / 网关特征推断
+    let model = model.to_ascii_lowercase();
+    let url = base_url.to_ascii_lowercase();
+    model.contains("codex")
+        || model.ends_with("-sol")
+        || model.ends_with("-terra")
+        || model.ends_with("-luna")
+        || model.starts_with("gpt-5.6")
+        || model.starts_with("gpt-5.5")
+        || model.starts_with("gpt-5.4")
+        || model.starts_with("gpt-5.3")
+        || url.contains("fcapp.run")
+        || url.contains("new-api")
+}
+
 fn responses_unsupported(status: u16, body: &str) -> bool {
     if status == 404 || status == 405 {
         return true;
@@ -38,6 +78,11 @@ struct ResponsesRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     instructions: Option<String>,
     stream: bool,
+    /// Codex / new-api 通道要求 store=false
+    store: bool,
+    tool_choice: String,
+    parallel_tool_calls: bool,
+    include: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_output_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -46,6 +91,10 @@ struct ResponsesRequest {
     reasoning: Option<ResponsesReasoning>,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prompt_cache_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    client_metadata: Option<Value>,
 }
 
 #[derive(Debug, Serialize)]
@@ -133,11 +182,28 @@ fn lower_responses_messages(messages: Vec<ChatMessage>) -> Vec<Value> {
     messages
         .into_iter()
         .flat_map(|message| match message.role.as_str() {
-            "system" => vec![json!({"role": "system", "content": chat_content_text(message.content)})],
-            "user" => vec![json!({"role": "user", "content": lower_responses_user_content(message.content)})],
+            // Codex 要求 message 包装：type=message + role + content parts
+            "system" => vec![json!({
+                "type": "message",
+                "role": "system",
+                "content": [{"type": "input_text", "text": chat_content_text(message.content)}]
+            })],
+            "user" => vec![json!({
+                "type": "message",
+                "role": "user",
+                "content": lower_responses_user_content(message.content)
+            })],
             "assistant" => lower_responses_assistant_message(message),
-            "tool" => vec![json!({"type": "function_call_output", "call_id": responses_call_id(&message.tool_call_id.unwrap_or_default()), "output": chat_content_text(message.content)})],
-            role => vec![json!({"role": role, "content": chat_content_text(message.content)})],
+            "tool" => vec![json!({
+                "type": "function_call_output",
+                "call_id": responses_call_id(&message.tool_call_id.unwrap_or_default()),
+                "output": chat_content_text(message.content)
+            })],
+            role => vec![json!({
+                "type": "message",
+                "role": role,
+                "content": [{"type": "input_text", "text": chat_content_text(message.content)}]
+            })],
         })
         .collect()
 }
@@ -146,8 +212,11 @@ fn lower_responses_assistant_message(message: ChatMessage) -> Vec<Value> {
     let mut items = Vec::new();
     let text = chat_content_text(message.content);
     if !text.trim().is_empty() {
-        items
-            .push(json!({"role": "assistant", "content": [{"type": "output_text", "text": text}]}));
+        items.push(json!({
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "output_text", "text": text}]
+        }));
     }
     if let Some(tool_calls) = message.tool_calls {
         items.extend(tool_calls.into_iter().map(|call| {

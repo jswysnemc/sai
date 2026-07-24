@@ -139,12 +139,14 @@ impl Agent {
             )
             .await?;
             if !subagent_notices.is_empty() || !background_notices.is_empty() {
-                return Ok(Some(build_event_batch(
+                return Ok(Some(take_event_batch(
+                    &self.paths,
+                    self.state.session_id(),
                     &owner_key,
                     &subagent_notices,
                     &background_notices,
                     true,
-                )));
+                )?));
             }
 
             // 2. 只有存在运行中工作时才保持当前运行并继续等待
@@ -198,12 +200,14 @@ impl Agent {
             )
             .await?;
             if !subagent_notices.is_empty() || !background_notices.is_empty() {
-                return Ok(Some(build_event_batch(
+                return Ok(Some(take_event_batch(
+                    &self.paths,
+                    self.state.session_id(),
                     &owner_key,
                     &subagent_notices,
                     &background_notices,
                     false,
-                )));
+                )?));
             }
 
             // 2. 只有存在运行中工作时才保持当前运行并继续等待
@@ -218,7 +222,7 @@ impl Agent {
         }
     }
 
-    /// 确认一批外部完成事件已经成功进入模型轮次。
+    /// 再次确认外部完成事件（投递时通常已 claim；此处幂等，防止旧路径重复标记）。
     ///
     /// 参数:
     /// - `batch`: 已消费事件批次
@@ -233,6 +237,40 @@ impl Agent {
             &batch.background_task_ids,
         )?;
         acknowledge_finished_notices(&owner_key, &batch.subagent_ids);
+        Ok(())
+    }
+
+    /// 新一轮用户/自动对话开始时丢弃历史未消费完成回执，避免整包旧任务重新注入。
+    ///
+    /// 返回:
+    /// - 是否成功清除
+    pub(crate) fn discard_stale_external_completion_notices(&self) -> Result<()> {
+        let owner_key = self.state.state_dir().display().to_string();
+        let session_id = self.state.session_id().to_string();
+        // 1. 收集当前全部未确认完成项（不区分 Goal）
+        let subagents = pending_finished_notices(&owner_key);
+        let store = crate::tools::command::BackgroundCommandStore::new(self.paths.state_dir.clone());
+        let tasks = store.load().unwrap_or_default();
+        let background_ids = tasks
+            .into_iter()
+            .filter(|task| {
+                task.runtime_owner_kind.as_deref() == Some("session")
+                    && task.runtime_owner_id.as_deref() == Some(session_id.as_str())
+                    && task.status != "running"
+                    && !task.completion_notified
+            })
+            .map(|task| task.id)
+            .collect::<Vec<_>>();
+        let subagent_ids = subagents
+            .into_iter()
+            .map(|notice| notice.id)
+            .collect::<Vec<_>>();
+        if background_ids.is_empty() && subagent_ids.is_empty() {
+            return Ok(());
+        }
+        // 2. 静默 claim：不注入模型上下文
+        acknowledge_background_completions(&self.paths, &session_id, &background_ids)?;
+        acknowledge_finished_notices(&owner_key, &subagent_ids);
         Ok(())
     }
 }
@@ -306,7 +344,14 @@ impl ExternalEventMonitor {
                         .set_goal_status(crate::goal::GoalStatus::Active)?;
                 }
                 return Ok(ExternalEventPoll::Ready(ExternalEventWake::Completion(
-                    build_event_batch(&owner_key, &subagent_notices, &background_notices, true),
+                    take_event_batch(
+                        &self.paths,
+                        self.state.session_id(),
+                        &owner_key,
+                        &subagent_notices,
+                        &background_notices,
+                        true,
+                    )?,
                 )));
             }
             return Ok(ExternalEventPoll::Idle);
@@ -344,7 +389,14 @@ impl ExternalEventMonitor {
                 .await?;
         if !subagent_notices.is_empty() || !background_notices.is_empty() {
             return Ok(ExternalEventPoll::Ready(ExternalEventWake::Completion(
-                build_event_batch(&owner_key, &subagent_notices, &background_notices, false),
+                take_event_batch(
+                    &self.paths,
+                    self.state.session_id(),
+                    &owner_key,
+                    &subagent_notices,
+                    &background_notices,
+                    false,
+                )?,
             )));
         }
         let running_subagents = list_subagents_for_owner(&owner_key)
@@ -368,6 +420,33 @@ where
         *announced = true;
     }
     Ok(())
+}
+
+/// 构造完成事件批次，并在投递前立即确认（消费后清除，避免历史回执再次注入）。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+/// - `session_id`: 会话标识
+/// - `owner_key`: 父会话作用域键
+/// - `subagents`: 子 Agent 完成通知
+/// - `background`: 后台命令完成通知
+/// - `goal_continuation`: 是否 Goal 续轮
+///
+/// 返回:
+/// - 已确认投递的事件批次
+fn take_event_batch(
+    paths: &SaiPaths,
+    session_id: &str,
+    owner_key: &str,
+    subagents: &[FinishedSubagentNotice],
+    background: &[BackgroundCompletionNotice],
+    goal_continuation: bool,
+) -> Result<ExternalEventBatch> {
+    let batch = build_event_batch(owner_key, subagents, background, goal_continuation);
+    // 1. 投递即消费：标记完成通知已清除，防止积压回执在后续轮次整包重放
+    acknowledge_background_completions(paths, session_id, &batch.background_task_ids)?;
+    acknowledge_finished_notices(owner_key, &batch.subagent_ids);
+    Ok(batch)
 }
 
 /// 构造一批统一外部完成事件。
@@ -437,6 +516,37 @@ fn bounded_text(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn take_event_batch_returns_ids_for_claim() {
+        let notices = vec![BackgroundCompletionNotice {
+            task_id: "claim-1".to_string(),
+            label: "unit".to_string(),
+            status: "exited".to_string(),
+            stdout: String::new(),
+            stderr: String::new(),
+        }];
+        // paths 无任务时 claim 仍成功（幂等空写）
+        let temp = tempfile::tempdir().unwrap();
+        let paths = crate::paths::SaiPaths {
+            config_dir: temp.path().to_path_buf(),
+            config_file: temp.path().join("config.jsonc"),
+            secrets_file: temp.path().join("secrets.json"),
+            skills_dir: temp.path().join("skills"),
+            data_dir: temp.path().join("data"),
+            cache_dir: temp.path().join("cache"),
+            state_dir: temp.path().join("state"),
+            pictures_dir: temp.path().join("pictures"),
+            fish_hook_file: temp.path().join("fish"),
+            bash_hook_file: temp.path().join("bash"),
+            zsh_hook_file: temp.path().join("zsh"),
+            powershell_hook_file: temp.path().join("ps1"),
+        };
+        std::fs::create_dir_all(paths.state_dir.join("background-commands")).unwrap();
+        let batch = take_event_batch(&paths, "sess", "owner", &[], &notices, false).unwrap();
+        assert_eq!(batch.background_task_ids, vec!["claim-1".to_string()]);
+        assert!(batch.prompt().contains("claim-1"));
+    }
 
     #[test]
     fn completion_batch_marks_payload_as_untrusted() {

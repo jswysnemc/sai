@@ -3,6 +3,8 @@ use anyhow::Result;
 
 const LONG_TEXT_CHARS: usize = 200;
 const LONG_TEXT_LINES: usize = 4;
+/// 单行超过该字符数时也折叠为占位块（避免单行巨长文本撑爆输入区）
+const LONG_LINE_CHARS: usize = 160;
 
 #[derive(Debug, Clone)]
 enum ReplClipboardItem {
@@ -220,8 +222,17 @@ impl ReplClipboardState {
     fn insert_text(&mut self, input: &mut String, cursor: &mut usize, text: String) -> bool {
         let trimmed = text.trim().to_string();
         let chars = trimmed.chars().count();
-        let lines = trimmed.lines().count();
-        if chars <= LONG_TEXT_CHARS && lines <= LONG_TEXT_LINES {
+        let lines = trimmed.lines().count().max(if trimmed.is_empty() { 0 } else { 1 });
+        // 1. 任一行超长也按折叠处理，不再只看总行数
+        let max_line_chars = trimmed
+            .lines()
+            .map(|line| line.chars().count())
+            .max()
+            .unwrap_or(chars);
+        if chars <= LONG_TEXT_CHARS
+            && lines <= LONG_TEXT_LINES
+            && max_line_chars <= LONG_LINE_CHARS
+        {
             insert_text_at_cursor(input, cursor, &trimmed);
             return false;
         }
@@ -365,6 +376,24 @@ mod tests {
         assert!(!folded);
         assert_eq!(input, "问: 内容");
         assert_eq!(state.to_chat_input(&input).message, "问: 内容");
+    }
+
+    #[test]
+    fn single_long_line_pastes_as_marker() {
+        let mut state = ReplClipboardState::default();
+        let mut input = String::new();
+        let mut cursor = 0usize;
+        // 字符总数未超 LONG_TEXT_CHARS，但单行超 LONG_LINE_CHARS
+        let text = "x".repeat(LONG_LINE_CHARS + 1);
+        let folded = state.insert_payload(
+            &mut input,
+            &mut cursor,
+            ClipboardPayload::Text(text.clone()),
+        );
+        assert!(folded);
+        assert!(input.starts_with("[text 1 "));
+        let chat = state.to_chat_input(&input);
+        assert_eq!(chat.message, text);
     }
 
     #[test]

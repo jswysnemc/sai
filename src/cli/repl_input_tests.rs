@@ -219,6 +219,15 @@ fn long_paste_visible_lines_are_collapsed() {
 }
 
 #[test]
+fn long_single_line_paste_visible_is_collapsed() {
+    let lines = vec!["x".repeat(400)];
+    let visible = repl_visible_input_lines("", &lines, 12, true);
+    assert_eq!(visible.len(), 2);
+    assert!(visible[0].ends_with('…') || visible[0].ends_with("…"));
+    assert!(visible[1].contains("hidden") || visible[1].contains("已隐藏"));
+}
+
+#[test]
 fn strips_terminal_control_sequences_from_repl_text() {
     assert_eq!(
         strip_terminal_control_sequences("\x1b[E表情包\x1b[0m\x07 ok"),

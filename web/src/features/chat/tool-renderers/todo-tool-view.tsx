@@ -1,5 +1,5 @@
 import { Ban, CheckCircle2, ChevronDown, Circle, CircleDot, ListChecks } from "lucide-react";
-import { useState } from "react";
+import { usePersistedExpand } from "../message/tool-expand-state";
 import type { TodoStatus } from "../../../api/contracts";
 import { parseTodoTool, statusLabel, todoToolHeadline } from "./todo-tool-data";
 import "./todo-tool-view.css";
@@ -18,9 +18,9 @@ type TodoToolItem = { id: string; text: string; status: TodoStatus };
  * @param props todo 工具调用的参数与输出
  * @returns todo 工具卡片
  */
-export function TodoToolView({ argumentsText, output }: { argumentsText: string; output: string }) {
+export function TodoToolView({ toolId, argumentsText, output }: { toolId?: string; argumentsText: string; output: string }) {
   const { locale } = useI18n();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = usePersistedExpand(toolId || argumentsText.slice(0, 64), false);
   const summary = parseTodoTool(argumentsText, output);
   const headline = todoToolHeadline(summary, locale);
   const items = parseItems(output);

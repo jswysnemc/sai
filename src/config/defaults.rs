@@ -739,3 +739,13 @@ pub(super) fn default_calculator_backend() -> String {
 pub(super) fn default_context_chars() -> usize {
     120_000
 }
+
+/// 默认客户端模拟风格。
+pub(super) fn default_client_style() -> String {
+    "auto".to_string()
+}
+
+/// 是否为 auto 客户端风格（序列化时可省略）。
+pub(super) fn is_auto_client_style(value: &str) -> bool {
+    value.trim().is_empty() || value.eq_ignore_ascii_case("auto")
+}

@@ -93,9 +93,10 @@ pub(super) async fn execute_automatic_repl_turn(
     );
     let batch = automatic.batch;
     let outcome = execute_repl_turn(paths, config, agent, runtime, automatic.submission).await?;
+    // 回执在监听器 take 时已清除；成功后再次确认保持幂等
     if !outcome.interrupted && outcome.result.is_ok() {
         if let Some(batch) = batch.as_ref() {
-            agent.acknowledge_external_events(batch)?;
+            let _ = agent.acknowledge_external_events(batch);
         }
     }
     Ok(outcome)

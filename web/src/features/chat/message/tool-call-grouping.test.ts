@@ -25,6 +25,17 @@ describe("tool call grouping", () => {
     expect(grouped[0].type).toBe("tool-group");
   });
 
+  it("keeps a stable group id when more tools append", () => {
+    const first = groupCompletedToolCalls([toolPart("a", "completed"), toolPart("b", "completed")]);
+    const second = groupCompletedToolCalls([
+      toolPart("a", "completed"),
+      toolPart("b", "completed"),
+      toolPart("c", "completed")
+    ]);
+    expect(first[0].id).toBe("tool-group-a");
+    expect(second[0].id).toBe("tool-group-a");
+  });
+
   it("keeps running and failed tools visible outside groups", () => {
     const grouped = groupCompletedToolCalls([
       toolPart("a", "completed"),

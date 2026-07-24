@@ -20,7 +20,8 @@ export function groupCompletedToolCalls(parts: LiveMessagePart[]): GroupedMessag
     if (completedTools.length >= 2) {
       result.push({
         type: "tool-group",
-        id: `tool-group-${completedTools[0].id}-${completedTools.at(-1)!.id}`,
+        // 仅用首项 id，组增长时不重挂载，避免展开状态被重置
+        id: `tool-group-${completedTools[0].id}`,
         tools: completedTools.map((item) => item.tool)
       });
     } else if (completedTools.length === 1) {

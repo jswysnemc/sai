@@ -36,6 +36,8 @@ impl ProviderConfig {
             thinking_level: default_thinking_level(),
             thinking_format: default_thinking_format(),
             extra_body: String::new(),
+            extra_headers: HashMap::new(),
+            client_style: default_client_style(),
         }
     }
 
@@ -56,6 +58,8 @@ impl ProviderConfig {
             thinking_level: default_thinking_level(),
             thinking_format: default_thinking_format(),
             extra_body: String::new(),
+            extra_headers: HashMap::new(),
+            client_style: default_client_style(),
         }
     }
 
@@ -80,6 +84,8 @@ impl ProviderConfig {
             thinking_level: default_thinking_level(),
             thinking_format: default_thinking_format(),
             extra_body: String::new(),
+            extra_headers: HashMap::new(),
+            client_style: default_client_style(),
         }
     }
 
@@ -124,6 +130,8 @@ impl ProviderConfig {
             thinking_level: default_thinking_level(),
             thinking_format: default_thinking_format(),
             extra_body: String::new(),
+            extra_headers: HashMap::new(),
+            client_style: default_client_style(),
         }
     }
 
