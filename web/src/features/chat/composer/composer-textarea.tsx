@@ -17,6 +17,7 @@ import { filterSkills, SkillMentionPopover } from "./skill-mention-popover";
 import type { SkillOption } from "./skill-mention-popover";
 import { findSkillMentionTrigger, formatSkillMention } from "./skill-mention-token";
 import { isCursorOnFirstLine, isCursorOnLastLine, navigateInputHistory } from "./input-history";
+import { ComposerEditHistory, isRedoShortcut, isUndoShortcut } from "./composer-edit-history";
 import type { InputHistoryState } from "./input-history";
 import { useI18n } from "../../i18n/use-i18n";
 import { FOCUS_COMPOSER_EVENT } from "./composer-events";
@@ -78,6 +79,9 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
   const mentionPopoverRef = useRef<HTMLDivElement>(null);
   const skillPopoverRef = useRef<HTMLDivElement>(null);
   const historyRef = useRef<InputHistoryState>({ index: null, draft: "" });
+  const editHistoryRef = useRef(new ComposerEditHistory());
+  const lastSnapshotRef = useRef({ value: "", selection: { start: 0, end: 0 } });
+  const applyingHistoryRef = useRef(false);
   const lastEscapeRef = useRef(0);
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null);
   const mentionRangeRef = useRef<{ start: number; end: number } | null>(null);
@@ -113,12 +117,31 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
   // 1. 外部状态变化时重建 token DOM，本地输入同步时不触碰浏览器选区
   useLayoutEffect(() => {
     const editor = editorRef.current;
-    if (!editor || serializeComposerAtomEditor(editor) === props.value) return;
+    if (!editor) return;
+    const currentSerialized = serializeComposerAtomEditor(editor);
+    if (currentSerialized === props.value) {
+      // 本地输入已与 props 对齐：更新基线选区，便于下一次 Ctrl+Z 记录
+      const selection = readEditorTextSelection(editor) ?? {
+        start: props.value.length,
+        end: props.value.length
+      };
+      lastSnapshotRef.current = { value: props.value, selection };
+      return;
+    }
     renderComposerAtomEditor(editor, props.value);
     const pending = pendingSelectionRef.current;
     pendingSelectionRef.current = null;
     const start = pending?.start ?? props.value.length;
     const end = pending?.end ?? start;
+    lastSnapshotRef.current = { value: props.value, selection: { start, end } };
+    // 程序化写入（历史导航、提交清空、skill 插入等）不是用户打字，不自动入撤销栈
+    if (!applyingHistoryRef.current) {
+      // 从空到非空的外部重置时清空撤销栈，避免跨轮次误撤销
+      if (!props.value) {
+        editHistoryRef.current.reset({ value: "", selection: { start: 0, end: 0 } });
+      }
+    }
+    applyingHistoryRef.current = false;
     requestAnimationFrame(() => {
       editor.focus();
       setEditorTextSelection(editor, start, end);
@@ -165,6 +188,9 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
     const insertion = `${mention} `;
     const next = `${current.slice(0, range.start)}${insertion}${current.slice(range.end)}`;
     pendingSelectionRef.current = { start: range.start + insertion.length, end: range.start + insertion.length };
+    const nextSelection = pendingSelectionRef.current;
+    editHistoryRef.current.record(lastSnapshotRef.current, { value: next, selection: nextSelection });
+    lastSnapshotRef.current = { value: next, selection: nextSelection };
     props.onChange(next);
     dismissMention(false);
   };
@@ -182,6 +208,9 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
     const insertion = name === "goal" ? "/goal " : `${formatSkillMention(name)} `;
     const next = `${current.slice(0, range.start)}${insertion}${current.slice(range.end)}`;
     pendingSelectionRef.current = { start: range.start + insertion.length, end: range.start + insertion.length };
+    const nextSelection = pendingSelectionRef.current;
+    editHistoryRef.current.record(lastSnapshotRef.current, { value: next, selection: nextSelection });
+    lastSnapshotRef.current = { value: next, selection: nextSelection };
     props.onChange(next);
     dismissSkill(false);
   }, [props]);
@@ -200,9 +229,13 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
   const handleInput = (event: FormEvent<HTMLDivElement>) => {
     historyRef.current = { index: null, draft: "" };
     const editor = event.currentTarget;
+    const previous = lastSnapshotRef.current;
     const next = serializeComposerAtomEditor(editor);
-    const selection = readEditorTextSelection(editor);
-    const caret = selection?.end ?? next.length;
+    const selection = readEditorTextSelection(editor) ?? { start: next.length, end: next.length };
+    // 1. 记录用户输入产生的变更，供 Ctrl+Z / Ctrl+Y 使用
+    editHistoryRef.current.record(previous, { value: next, selection });
+    lastSnapshotRef.current = { value: next, selection };
+    const caret = selection.end;
     const inputEvent = event.nativeEvent as InputEvent;
     const insertedText = inputEvent.inputType?.startsWith("insert") ? inputEvent.data : null;
     // 2. 优先识别 @ 文件引用
@@ -253,7 +286,11 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
     }
     const text = event.clipboardData.getData("text/plain");
     if (text && insertEditorPlainText(editor, text)) {
-      props.onChange(serializeComposerAtomEditor(editor));
+      const next = serializeComposerAtomEditor(editor);
+      const nextSelection = readEditorTextSelection(editor) ?? { start: next.length, end: next.length };
+      editHistoryRef.current.record(lastSnapshotRef.current, { value: next, selection: nextSelection });
+      lastSnapshotRef.current = { value: next, selection: nextSelection };
+      props.onChange(next);
       requestAnimationFrame(() => ensureComposerCaretVisible(editor));
     }
   };
@@ -280,6 +317,22 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
     const editor = event.currentTarget;
     const current = serializeComposerAtomEditor(editor);
     const selection = readEditorTextSelection(editor) ?? { start: current.length, end: current.length };
+
+    // 0. 撤销/重做：受控 contentEditable 丢失浏览器原生历史，改用应用层栈
+    if (isUndoShortcut(event) || isRedoShortcut(event)) {
+      event.preventDefault();
+      const currentSnapshot = { value: current, selection };
+      const target = isUndoShortcut(event)
+        ? editHistoryRef.current.undo(currentSnapshot)
+        : editHistoryRef.current.redo(currentSnapshot);
+      if (!target) return;
+      applyingHistoryRef.current = true;
+      pendingSelectionRef.current = target.selection;
+      lastSnapshotRef.current = target;
+      historyRef.current = { index: null, draft: "" };
+      props.onChange(target.value);
+      return;
+    }
 
     if (skillOpen) {
       const filtered = filterSkills(skillOptionsRef.current, skillQuery);
@@ -311,7 +364,11 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
     if (event.key === "Backspace" || event.key === "Delete") {
       if (deleteSelectedComposerAtoms(editor)) {
         event.preventDefault();
-        props.onChange(serializeComposerAtomEditor(editor));
+        const next = serializeComposerAtomEditor(editor);
+        const nextSelection = readEditorTextSelection(editor) ?? { start: next.length, end: next.length };
+        editHistoryRef.current.record(lastSnapshotRef.current, { value: next, selection: nextSelection });
+        lastSnapshotRef.current = { value: next, selection: nextSelection };
+        props.onChange(next);
         return;
       }
     }
@@ -319,7 +376,11 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
       const direction = event.key === "Backspace" ? "backward" : "forward";
       if (deleteAdjacentComposerAtom(editor, direction)) {
         event.preventDefault();
-        props.onChange(serializeComposerAtomEditor(editor));
+        const next = serializeComposerAtomEditor(editor);
+        const nextSelection = readEditorTextSelection(editor) ?? { start: next.length, end: next.length };
+        editHistoryRef.current.record(lastSnapshotRef.current, { value: next, selection: nextSelection });
+        lastSnapshotRef.current = { value: next, selection: nextSelection };
+        props.onChange(next);
         return;
       }
     }
@@ -338,6 +399,9 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
         dismissMention(true);
       } else if (now - lastEscapeRef.current < 500 && current) {
         event.preventDefault();
+        const empty = { value: "", selection: { start: 0, end: 0 } };
+        editHistoryRef.current.record(lastSnapshotRef.current, empty);
+        lastSnapshotRef.current = empty;
         props.onChange("");
         historyRef.current = { index: null, draft: "" };
       }
@@ -352,7 +416,11 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
     if (event.key === "Enter" && event.shiftKey) {
       event.preventDefault();
       if (insertEditorPlainText(editor, "\n")) {
-        props.onChange(serializeComposerAtomEditor(editor));
+        const next = serializeComposerAtomEditor(editor);
+        const nextSelection = readEditorTextSelection(editor) ?? { start: next.length, end: next.length };
+        editHistoryRef.current.record(lastSnapshotRef.current, { value: next, selection: nextSelection });
+        lastSnapshotRef.current = { value: next, selection: nextSelection };
+        props.onChange(next);
         requestAnimationFrame(() => ensureComposerCaretVisible(editor));
       }
     }

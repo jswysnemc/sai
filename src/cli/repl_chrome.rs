@@ -85,19 +85,6 @@ impl ReplChrome {
         }
     }
 
-    /// 模式标签（小写极简，带颜色）。
-    ///
-    /// 返回:
-    /// - 带颜色的 `yolo` / `plan`
-    pub(super) fn mode_status(&self) -> String {
-        match self.mode {
-            AgentMode::Yolo => "\x1b[38;5;208myolo\x1b[0m".to_string(),
-            AgentMode::Audited => "\x1b[35maudit\x1b[0m".to_string(),
-            AgentMode::AutoAudit => "\x1b[38;5;141mauto-audit\x1b[0m".to_string(),
-            AgentMode::Plan => "\x1b[36mplan\x1b[0m".to_string(),
-        }
-    }
-
     /// 底栏整行：模式、上下文、模型、思考等级、目录和 Git 分支。
     ///
     /// 参数:
@@ -114,46 +101,20 @@ impl ReplChrome {
             self.model,
             self.thinking
         );
-        let right_plain = self.directory.clone();
-        let right_budget = right_plain
-            .chars()
-            .count()
-            .min(cols.saturating_sub(visible_width(&left_plain) + 3));
-        let left_budget = cols.saturating_sub(right_budget + 1);
-        let left = if visible_width(&left_plain) > left_budget {
-            truncate_to_width(&self.colored_left_status(), left_budget)
+        // 1. 先在纯文本上裁剪，保证 left + 空格 + right 不超过终端列数
+        //    禁止对 gap 强制 max(1)：贴满时再塞空格会变成 cols+1 并触发终端换行
+        let (left_text, right_text, gap) =
+            fit_status_segments(&left_plain, &self.directory, cols);
+        // 2. 裁剪后再着色，避免 ANSI 干扰宽度计算
+        let left = colorize_left_status(self.mode, &left_text, self.context_ratio);
+        let right = if right_text.is_empty() {
+            String::new()
         } else {
-            self.colored_left_status()
+            color_directory(&right_text)
         };
-        let right = color_directory(&truncate_to_width(&right_plain, right_budget));
-        let gap = cols
-            .saturating_sub(visible_width(&left) + visible_width(&right))
-            .max(1);
         format!("{left}{}{}", " ".repeat(gap), right)
     }
 
-    /// 返回按 mode、context、model、thinking 顺序着色的左侧状态。
-    fn colored_left_status(&self) -> String {
-        format!(
-            "{}  {}  {}  {}",
-            self.mode_status(),
-            self.context_status_colored(),
-            color_model(&self.model),
-            color_thinking(&self.thinking)
-        )
-    }
-
-    /// 按上下文占用比例生成带风险等级颜色的状态文本。
-    fn context_status_colored(&self) -> String {
-        let color = if self.context_ratio >= 0.9 {
-            "\x1b[31m"
-        } else if self.context_ratio >= 0.7 {
-            "\x1b[33m"
-        } else {
-            "\x1b[32m"
-        };
-        format!("{color}{}\x1b[0m", self.context_status())
-    }
 }
 
 /// 给模型名称使用稳定的重点颜色。
@@ -191,15 +152,99 @@ fn format_token_k(value: usize) -> String {
     }
 }
 
-/// 将 footer 的右侧信息截断到当前终端宽度。
+/// 将左右状态段裁剪到终端宽度内。
 ///
 /// 参数:
-/// - `value`: 原始信息文本
+/// - `left`: 左侧纯文本
+/// - `right`: 右侧纯文本
+/// - `cols`: 终端列数
+///
+/// 返回:
+/// - (左侧文本, 右侧文本, 中间空格数)；总显示宽度不超过 cols
+fn fit_status_segments(left: &str, right: &str, cols: usize) -> (String, String, usize) {
+    let cols = cols.max(1);
+    let mut left = left.to_string();
+    let mut right = right.to_string();
+
+    // 1. 右侧先让位：优先保留模式/上下文/模型
+    let left_w = visible_width(&left);
+    let sep = usize::from(!left.is_empty() && !right.is_empty());
+    let right_budget = cols.saturating_sub(left_w.min(cols) + sep);
+    if visible_width(&right) > right_budget {
+        right = truncate_to_width(&right, right_budget);
+    }
+
+    // 2. 若左侧本身过长，再裁左侧
+    let right_w = visible_width(&right);
+    let sep = usize::from(!left.is_empty() && !right.is_empty());
+    let left_budget = cols.saturating_sub(right_w + sep);
+    if visible_width(&left) > left_budget {
+        left = truncate_to_width(&left, left_budget);
+    }
+
+    // 3. gap 可为 0；仅在有剩余列时填充，绝不超过 cols
+    let used = visible_width(&left) + visible_width(&right);
+    let gap = cols.saturating_sub(used);
+    (left, right, gap)
+}
+
+/// 将纯文本左侧状态按段落重新着色（mode / context / model / thinking）。
+///
+/// 参数:
+/// - `mode`: 当前模式
+/// - `left_text`: 已裁剪的左侧纯文本
+/// - `context_ratio`: 上下文占用比例
+///
+/// 返回:
+/// - 着色后的左侧状态
+fn colorize_left_status(mode: AgentMode, left_text: &str, context_ratio: f32) -> String {
+    // 用双空格切回四段；截断后段数可能不足
+    let parts = left_text.split("  ").collect::<Vec<_>>();
+    if parts.len() < 2 {
+        return color_model(left_text);
+    }
+    let mode_text = parts[0];
+    let context = parts.get(1).copied().unwrap_or("");
+    let model = parts.get(2).copied().unwrap_or("");
+    let thinking = parts.get(3..).map(|rest| rest.join("  ")).unwrap_or_default();
+
+    let mode_colored = match mode {
+        AgentMode::Yolo => format!("\x1b[38;5;208m{mode_text}\x1b[0m"),
+        AgentMode::Audited => format!("\x1b[35m{mode_text}\x1b[0m"),
+        AgentMode::AutoAudit => format!("\x1b[38;5;141m{mode_text}\x1b[0m"),
+        AgentMode::Plan => format!("\x1b[36m{mode_text}\x1b[0m"),
+    };
+    let context_color = if context_ratio >= 0.9 {
+        "\x1b[31m"
+    } else if context_ratio >= 0.7 {
+        "\x1b[33m"
+    } else {
+        "\x1b[32m"
+    };
+    let mut out = format!("{mode_colored}  {context_color}{context}\x1b[0m");
+    if !model.is_empty() {
+        out.push_str("  ");
+        out.push_str(&color_model(model));
+    }
+    if !thinking.is_empty() {
+        out.push_str("  ");
+        out.push_str(&color_thinking(&thinking));
+    }
+    out
+}
+
+/// 将纯文本截断到指定显示宽度。
+///
+/// 参数:
+/// - `value`: 原始信息文本（不应含 ANSI）
 /// - `width`: 最大显示宽度
 ///
 /// 返回:
 /// - 不超过最大宽度的文本
 fn truncate_to_width(value: &str, width: usize) -> String {
+    if width == 0 {
+        return String::new();
+    }
     if visible_width(value) <= width {
         return value.to_string();
     }
@@ -209,7 +254,8 @@ fn truncate_to_width(value: &str, width: usize) -> String {
     let mut output = String::new();
     let mut used = 0usize;
     for ch in value.chars() {
-        let char_width = visible_width(&ch.to_string());
+        // 宽字符按 2 列计
+        let char_width = if (ch as u32) >= 0x2e80 { 2 } else { 1 };
         if used.saturating_add(char_width) > width - 3 {
             break;
         }
@@ -303,6 +349,41 @@ mod tests {
         assert!(!plain.contains("main"));
         assert!(line.contains("\x1b[38;5;81m"));
         assert!(line.contains("\x1b[38;5;177m"));
+        assert_eq!(visible_width(&line), 80);
+    }
+
+    #[test]
+    fn footer_line_never_exceeds_terminal_cols() {
+        let chrome = ReplChrome {
+            mode: AgentMode::AutoAudit,
+            context_ratio: 0.12,
+            context_window_tokens: 500_000,
+            model: "gpt-5.6-sol".to_string(),
+            thinking: "auto".to_string(),
+            directory: "/home/snemc/workspace/sai/very/long/path/segment".to_string(),
+        };
+        for cols in [20usize, 40, 59, 60, 80, 120] {
+            let line = chrome.footer_line(cols);
+            let width = visible_width(&line);
+            assert!(
+                width <= cols,
+                "cols={cols} width={width} plain={}",
+                strip_ansi(&line)
+            );
+        }
+    }
+
+    #[test]
+    fn fit_status_segments_avoids_forced_gap_overflow() {
+        let left = "yolo  0.0%/500k  gpt-5.6-sol  auto";
+        let right = "/home/snemc/workspace/sai";
+        let cols = visible_width(left) + visible_width(right);
+        let (fitted_left, fitted_right, gap) = fit_status_segments(left, right, cols);
+        assert_eq!(gap, 0);
+        assert_eq!(
+            visible_width(&fitted_left) + gap + visible_width(&fitted_right),
+            cols
+        );
     }
 
     fn strip_ansi(text: &str) -> String {
