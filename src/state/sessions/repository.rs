@@ -289,10 +289,7 @@ pub fn delete_sessions(paths: &SaiPaths, session_ids: &[String]) -> Result<Vec<S
         .map(|id| id.trim())
         .filter(|id| !id.is_empty())
         .collect::<std::collections::BTreeSet<_>>();
-    if requested.contains(DEFAULT_SESSION_ID) {
-        bail!("default session cannot be deleted");
-    }
-    let mut sessions = ensure_default_session_for_base(&scope.state_dir)?;
+    let mut sessions = read_sessions_from_base(&scope.state_dir)?;
     let deleted = sessions
         .iter()
         .filter(|session| requested.contains(session.id.as_str()))
@@ -301,6 +298,7 @@ pub fn delete_sessions(paths: &SaiPaths, session_ids: &[String]) -> Result<Vec<S
     if deleted.is_empty() {
         return Ok(Vec::new());
     }
+    // 1. 允许删除任意会话（含 default），不再强制保留至少一个
     sessions.retain(|session| !requested.contains(session.id.as_str()));
     save_sessions_to_base(&scope.state_dir, &sessions)?;
     for session_id in &deleted {
@@ -309,8 +307,15 @@ pub fn delete_sessions(paths: &SaiPaths, session_ids: &[String]) -> Result<Vec<S
             std::fs::remove_dir_all(state_dir)?;
         }
     }
-    if deleted.contains(&read_current_session_id_from_base(&scope.state_dir)?) {
-        write_current_session_id_to_base(&scope.state_dir, DEFAULT_SESSION_ID)?;
+    // 2. 当前会话被删时，切到剩余最新会话；若已删空则写入空标记，下一次 ensure 再补默认
+    let current = read_current_session_id_from_base(&scope.state_dir)?;
+    if deleted.contains(&current) {
+        if let Some(fallback) = sessions.first() {
+            write_current_session_id_to_base(&scope.state_dir, &fallback.id)?;
+        } else {
+            // 索引已空：清理 current，避免指向已删除目录
+            let _ = std::fs::remove_file(current_session_file(&scope.state_dir));
+        }
     }
     Ok(deleted)
 }

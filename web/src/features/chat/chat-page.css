@@ -23,6 +23,12 @@
   text-align: center;
 }
 
+.empty-session-context-prompt {
+  margin: 0 auto 14px;
+  max-width: 100%;
+  text-align: left;
+}
+
 .empty-session-greeting h2 {
   margin: 0 0 6px;
   font-size: 19px;

@@ -1,0 +1,183 @@
+.context-prompt-banner {
+  width: 100%;
+  max-width: 100%;
+  margin: 4px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--control-surface);
+  overflow: hidden;
+}
+
+.context-prompt-banner-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-prompt-banner-head:hover {
+  background: color-mix(in srgb, var(--paper-raised) 70%, transparent);
+}
+
+.context-prompt-banner-icon {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--ink-muted);
+  background: color-mix(in srgb, var(--paper-raised) 80%, var(--line));
+  flex: 0 0 auto;
+}
+
+.context-prompt-banner-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.context-prompt-banner-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.context-prompt-banner-subtitle {
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+  line-height: 1.35;
+}
+
+.context-prompt-banner-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.context-prompt-banner-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+  line-height: 1.3;
+}
+
+.context-prompt-banner-tag.muted {
+  color: var(--ink-muted);
+}
+
+.context-prompt-banner-chevron {
+  flex: 0 0 auto;
+  margin-top: 4px;
+  color: var(--ink-muted);
+  transition: transform 0.15s ease;
+}
+
+.context-prompt-banner-chevron.rotate {
+  transform: rotate(180deg);
+}
+
+/* 展开后完整铺开：不限制短高度，由消息列表自身滚动 */
+.context-prompt-banner-body {
+  max-height: none;
+  overflow: visible;
+  border-top: 1px solid var(--line);
+  padding: 14px 14px 16px;
+  background: color-mix(in srgb, var(--paper) 88%, var(--control-surface));
+}
+
+.context-prompt-banner-markdown {
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+
+.context-prompt-banner-markdown .markdown-body {
+  font-size: inherit;
+  color: inherit;
+  overflow: visible;
+}
+
+.context-prompt-banner-markdown .markdown-body h1,
+.context-prompt-banner-markdown .markdown-body h2,
+.context-prompt-banner-markdown .markdown-body h3 {
+  margin-top: 1.1em;
+  margin-bottom: 0.45em;
+  line-height: 1.35;
+}
+
+.context-prompt-banner-markdown .markdown-body h2 {
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--line);
+  font-size: 1.05rem;
+}
+
+.context-prompt-banner-markdown .markdown-body h3 {
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.context-prompt-banner-markdown .markdown-body p,
+.context-prompt-banner-markdown .markdown-body li {
+  line-height: 1.7;
+}
+
+.context-prompt-banner-markdown .markdown-body ul,
+.context-prompt-banner-markdown .markdown-body ol {
+  margin: 0.45em 0 0.7em;
+}
+
+.context-prompt-banner-markdown .markdown-body hr {
+  margin: 1.1em 0;
+}
+
+.context-prompt-banner-markdown .markdown-body pre,
+.context-prompt-banner-markdown .markdown-body .code-block {
+  margin: 0.65em 0 0.9em;
+}
+
+.context-prompt-banner-markdown .markdown-body code.inline-code {
+  font-size: 0.84em;
+}
+
+.context-prompt-banner-status {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+}
+
+.context-prompt-banner-status.error {
+  color: var(--danger, #b42318);
+}
+
+@media (max-width: 720px) {
+  .context-prompt-banner-head {
+    padding: 9px 10px;
+  }
+
+  .context-prompt-banner-body {
+    padding: 12px 10px 14px;
+  }
+
+  .context-prompt-banner-markdown {
+    font-size: 0.8125rem;
+  }
+}

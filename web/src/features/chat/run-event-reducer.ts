@@ -103,8 +103,14 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
   const { event } = action;
   const payload = event.payload;
   switch (event.type) {
-    case "status.changed":
-      return { ...state, status: String(payload.status) as LiveRunState["status"] };
+    case "status.changed": {
+      const next = String(payload.status) as LiveRunState["status"];
+      // 正文已开始后忽略回退到 thinking，避免 Codex 晚到推理状态卡住指示器
+      if (next === "thinking" && (state.content || state.status === "working")) {
+        return state;
+      }
+      return { ...state, status: next };
+    }
     case "run.queued":
       return { ...state, status: "queued" };
     case "run.dequeued":
@@ -380,7 +386,11 @@ function appendTextPart(state: LiveRunState, sequence: number, text: string): Li
   const parts = last?.type === "text"
     ? state.parts.map((part, index) => index === state.parts.length - 1 && part.type === "text" ? { ...part, source: part.source + text } : part)
     : [...state.parts, { id: `text-${sequence}`, type: "text" as const, source: text }];
-  return { ...state, content: state.content + text, parts };
+  // 正文到达后，从等待/思考态切到 working，避免指示器卡在“正在整理思路”
+  const status = !state.completed && (state.status === "thinking" || state.status === "waiting_response")
+    ? "working"
+    : state.status;
+  return { ...state, content: state.content + text, parts, status };
 }
 
 function appendReasoningPart(state: LiveRunState, sequence: number, timestamp: string, text: string): LiveRunState {
@@ -388,7 +398,11 @@ function appendReasoningPart(state: LiveRunState, sequence: number, timestamp: s
   const parts = last?.type === "reasoning" && !last.endedAt
     ? state.parts.map((part, index) => index === state.parts.length - 1 && part.type === "reasoning" ? { ...part, source: part.source + text } : part)
     : [...state.parts, { id: `reasoning-${sequence}`, type: "reasoning" as const, source: text, startedAt: timestamp }];
-  return { ...state, reasoning: state.reasoning + text, parts };
+  // 推理增量到达且尚未进入正文时，从等待态切到 thinking
+  const status = !state.completed && !state.content && state.status === "waiting_response"
+    ? "thinking"
+    : state.status;
+  return { ...state, reasoning: state.reasoning + text, parts, status };
 }
 
 function closeActiveReasoning(state: LiveRunState, timestamp: string): LiveRunState {

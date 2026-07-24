@@ -24,6 +24,7 @@ import { OPEN_WORKSPACE_PANEL_EVENT, WORKSPACE_PANEL_OPTIONS } from "../workspac
 import type { PaneTab } from "../workspace/workspace-tab";
 import "./chat-page.css";
 import { ContextCompactionPart } from "./message/context-compaction-part";
+import { ContextPromptBanner } from "./message/context-prompt-banner";
 import { errorDetailForDisplay, RunErrorNotice } from "./message/run-error-notice";
 import { useI18n } from "../i18n/use-i18n";
 import { parseGoalCommand } from "../goals/goal-command";
@@ -81,7 +82,7 @@ export function ChatPage() {
   const chatAgent = useChatAgentContext();
   const thinking = useThinkingLevel(activeSession?.id);
   const [mode, setMode] = useState<RunMode>("yolo");
-  const composerAttachments = useComposerAttachments();
+  const composerAttachments = useComposerAttachments(activeSession?.id);
   const [panelMenuOpen, setPanelMenuOpen] = useState(false);
   const panelMenuRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -100,7 +101,6 @@ export function ChatPage() {
   useEffect(() => {
     run.reset();
     setInput(readComposerDraft(activeSession?.id));
-    composerAttachments.clearAttachments();
   }, [activeSession?.id]);
 
   // 输入变化时写入草稿，避免跳转设置/网关后丢失；同时把消息区滚到底部，方便看到最新上下文。
@@ -373,6 +373,9 @@ export function ChatPage() {
         <div className="message-scroll" ref={scrollRef}>
           <div className="message-column">
             {timeline.isLoading && <div className="empty-chat">{t("Loading conversation history", "正在读取会话历史")}</div>}
+            {activeSession && !timeline.isLoading && !emptySession && (
+              <ContextPromptBanner sessionId={activeSession.id} agentId={chatAgent.selection?.id} />
+            )}
             {timeline.data?.compaction && !run.states.some((state) =>
               state.parts.some((part) => part.type === "compaction" && part.applied && part.summary)
             ) && (

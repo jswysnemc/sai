@@ -111,3 +111,18 @@ export type WebEvent = {
   type: string;
   payload: Record<string, unknown>;
 };
+
+export type SessionContextPrompt = {
+  source: "session_baseline" | "live" | string;
+  content: string;
+  char_count: number;
+  has_instruction_files: boolean;
+  has_skills: boolean;
+  has_tools: boolean;
+  has_memory: boolean;
+  has_dynamic: boolean;
+  tool_count: number;
+  agent_id?: string | null;
+  sections: string[];
+};
+

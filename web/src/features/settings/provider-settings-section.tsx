@@ -70,6 +70,7 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
       thinking_level: "auto",
       thinking_format: "auto",
       client_style: "auto",
+      user_agent: "",
       extra_headers: {},
       extra_body: ""
     };
@@ -218,40 +219,54 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
           <label className="settings-field"><span>Anthropic max_tokens</span><input type="number" min="1" value={provider.anthropic_max_tokens ?? 8192} onChange={(event) => onProviderChange(selectedIndex, { anthropic_max_tokens: Number(event.target.value) })} /><small>{t("Used by Anthropic Messages only", "仅 Anthropic Messages 使用")}</small></label>
         </div>}
         {tab === "models" && <ModelMetadataEditor provider={provider} onChange={(patch) => onProviderChange(selectedIndex, patch)} />}
-        {tab === "advanced" && <div className="settings-form-grid">
-          <div className="settings-field">
-            <span>{t("Client style", "客户端模拟")}</span>
-            <Select
-              value={provider.client_style ?? "auto"}
-              options={[
-                { value: "auto", label: t("Auto", "自动") },
-                { value: "default", label: t("Default", "默认") },
-                { value: "codex", label: "Codex CLI" },
-              ]}
-              onChange={(value) => onProviderChange(selectedIndex, { client_style: value })}
-              ariaLabel={t("Client style", "客户端模拟")}
-            />
-            <small>{t("Codex simulates codex_cli_rs headers and Responses body for compatible gateways", "Codex 会模拟 codex_cli_rs 请求头与 Responses 请求体")}</small>
-          </div>
-          <div className="settings-field full">
-            <span>{t("Extra headers", "自定义请求头")}</span>
-            <KeyValueEditor
-              value={provider.extra_headers ?? {}}
-              onChange={(extra_headers) => onProviderChange(selectedIndex, { extra_headers })}
-            />
-            <small>{t("Merged into each model request; Authorization is not overridden", "合并到每次模型请求，不覆盖 Authorization")}</small>
-          </div>
-          <div className="settings-json-field full">
-            <div>
-              <span>{t("Custom body JSON", "自定义 body JSON")}</span>
-              <small>{t("The object is merged into each model request; explicit fields take precedence", "对象会合并到每次模型请求，显式配置字段优先")}</small>
+        {tab === "advanced" && <div className="provider-advanced-layout">
+          <div className="provider-advanced-top">
+            <div className="settings-field">
+              <span>{t("Client style", "客户端模拟")}</span>
+              <Select
+                value={provider.client_style ?? "auto"}
+                options={[
+                  { value: "auto", label: t("Auto", "自动") },
+                  { value: "default", label: t("Default", "默认") },
+                  { value: "codex", label: "Codex CLI" },
+                ]}
+                onChange={(value) => onProviderChange(selectedIndex, { client_style: value })}
+                ariaLabel={t("Client style", "客户端模拟")}
+              />
+              <small>{t("Codex forces Responses body and codex_cli_rs headers (originator, OpenAI-Beta, session_id). Use for new-api Codex gateways like gpt-5.6-sol.", "Codex 强制 Responses 请求体与 codex_cli_rs 头（originator、OpenAI-Beta、session_id）。适用于 new-api Codex 通道（如 gpt-5.6-sol）。")}</small>
             </div>
-            <JsonCodeEditor
-              value={provider.extra_body || "{}"}
-              onChange={(value) => onProviderChange(selectedIndex, { extra_body: value === "{}" ? "" : value })}
-              height={280}
-              ariaLabel={t("Provider custom body JSON", "供应商自定义 body JSON")}
-            />
+            <label className="settings-field">
+              <span>User-Agent</span>
+              <input
+                value={provider.user_agent ?? ""}
+                onChange={(event) => onProviderChange(selectedIndex, { user_agent: event.target.value })}
+                spellCheck={false}
+                placeholder={provider.client_style === "codex" ? "codex_cli_rs/0.144.0" : "sai/0.1"}
+              />
+              <small>{t("Empty uses Codex UA when Client style is Codex, otherwise sai/0.1. Overrides User-Agent in extra headers.", "留空时：客户端模拟为 Codex 则用 codex_cli_rs/0.144.0，否则 sai/0.1。优先于自定义请求头中的 User-Agent。")}</small>
+            </label>
+          </div>
+          <div className="provider-advanced-panels">
+            <div className="settings-field provider-advanced-panel">
+              <span>{t("Extra headers", "自定义请求头")}</span>
+              <KeyValueEditor
+                value={provider.extra_headers ?? {}}
+                onChange={(extra_headers) => onProviderChange(selectedIndex, { extra_headers })}
+              />
+              <small>{t("Merged into each model request; Authorization is not overridden", "合并到每次模型请求，不覆盖 Authorization")}</small>
+            </div>
+            <div className="settings-json-field provider-advanced-panel">
+              <div>
+                <span>{t("Custom body JSON", "自定义 body JSON")}</span>
+                <small>{t("The object is merged into each model request; explicit fields take precedence", "对象会合并到每次模型请求，显式配置字段优先")}</small>
+              </div>
+              <JsonCodeEditor
+                value={provider.extra_body || "{}"}
+                onChange={(value) => onProviderChange(selectedIndex, { extra_body: value === "{}" ? "" : value })}
+                height={220}
+                ariaLabel={t("Provider custom body JSON", "供应商自定义 body JSON")}
+              />
+            </div>
           </div>
         </div>}
       </section>

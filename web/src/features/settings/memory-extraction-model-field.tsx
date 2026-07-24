@@ -18,7 +18,12 @@ type MemoryExtractionModelFieldProps = {
  */
 export function MemoryExtractionModelField({ config, onConfigChange }: MemoryExtractionModelFieldProps) {
   const { t } = useI18n();
-  const memory = (config.memory as { extraction_provider_id?: string; extraction_model?: string } | undefined) ?? {};
+  const memoryPlugin = (config.plugins?.memory as { extraction_provider_id?: string; extraction_model?: string; enabled?: boolean } | undefined) ?? {};
+  const memoryRoot = (config.memory as { extraction_provider_id?: string; extraction_model?: string } | undefined) ?? {};
+  const memory = {
+    extraction_provider_id: memoryPlugin.extraction_provider_id || memoryRoot.extraction_provider_id,
+    extraction_model: memoryPlugin.extraction_model || memoryRoot.extraction_model
+  };
   const current = memory.extraction_provider_id && memory.extraction_model
     ? encodeChoice(memory.extraction_provider_id, memory.extraction_model)
     : INHERIT_VALUE;
@@ -38,8 +43,19 @@ export function MemoryExtractionModelField({ config, onConfigChange }: MemoryExt
   /** 更新记忆提取模型配置。 */
   const update = (value: string) => {
     const [providerId = "", model = ""] = value ? value.split("\u0000", 2) : [];
+    const plugins = config.plugins ?? {};
+    const prevMemory = (plugins.memory as Record<string, unknown> | undefined) ?? {};
     onConfigChange({
       ...config,
+      plugins: {
+        ...plugins,
+        memory: {
+          ...prevMemory,
+          extraction_provider_id: providerId,
+          extraction_model: model
+        }
+      },
+      // 运行时 memory 镜像，便于立即生效
       memory: {
         ...(config.memory as Record<string, unknown> | undefined),
         extraction_provider_id: providerId,

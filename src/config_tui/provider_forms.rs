@@ -76,6 +76,10 @@ pub(super) fn edit_provider_form(
             provider.client_style.clone(),
         )
         .choices(&["auto", "default", "codex"]),
+        Field::new(
+            t("User-Agent", "User-Agent"),
+            provider.user_agent.clone(),
+        ),
         Field::textarea(
             t("Extra Headers JSON", "自定义请求头 JSON"),
             if provider.extra_headers.is_empty() {
@@ -89,7 +93,7 @@ pub(super) fn edit_provider_form(
         return Ok(None);
     }
     let extra_body = normalize_extra_body(&fields[9].value)?;
-    let extra_headers = normalize_extra_headers(&fields[11].value)?;
+    let extra_headers = normalize_extra_headers(&fields[12].value)?;
     let updated = ProviderConfig {
         id: fields[0].value.trim().to_string(),
         display_name: fields[1].value.trim().to_string(),
@@ -107,6 +111,7 @@ pub(super) fn edit_provider_form(
         thinking_format: fields[8].value.trim().to_string(),
         extra_body,
         extra_headers,
+        user_agent: fields[11].value.trim().to_string(),
         client_style: fields[10].value.trim().to_string(),
     };
     Ok(Some(updated))

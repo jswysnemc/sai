@@ -335,10 +335,10 @@ impl RunManager {
             .find_map(|(key, run)| (run.info.run_id == run_id).then(|| key.clone()));
         if let Some(key) = active_key {
             let current = active.remove(&key).expect("active run key must exist");
+            // 1. 立即 abort，不 await 任务收尾，避免上游 SSE 挂起时 stop API 阻塞
             current.handle.abort();
             let info = current.info.clone();
             drop(active);
-            let _ = current.handle.await;
             self.checkpoints.update_interruption(run_id, false, None)?;
             if let Some(journal) = self.journal(run_id).await {
                 journal.publish(WebEvent::new(
@@ -461,7 +461,7 @@ async fn run_agent(
                 &info.workspace_id,
                 &info.session_id,
                 "run.failed",
-                json!({ "message": error.to_string(), "detail": format!("{error:#}") }),
+                json!({ "message": error.to_string(), "detail": crate::llm::error_detail_text(&error) }),
             ));
             return RunCheckpointStatus::Failed;
         }
@@ -506,7 +506,7 @@ async fn run_agent(
                 &info.workspace_id,
                 &info.session_id,
                 "run.failed",
-                json!({ "message": error.to_string(), "detail": format!("{error:#}") }),
+                json!({ "message": error.to_string(), "detail": crate::llm::error_detail_text(&error) }),
             ));
             return RunCheckpointStatus::Failed;
         }
@@ -521,7 +521,7 @@ async fn run_agent(
             &info.workspace_id,
             &info.session_id,
             "run.failed",
-            json!({ "message": error.to_string(), "detail": format!("{error:#}") }),
+            json!({ "message": error.to_string(), "detail": crate::llm::error_detail_text(&error) }),
         ));
         return RunCheckpointStatus::Failed;
     }

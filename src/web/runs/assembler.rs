@@ -11,6 +11,8 @@ pub(super) struct EventAssembler {
     workspace_id: String,
     session_id: String,
     status: Option<&'static str>,
+    /// 是否已进入正文输出阶段；进入后不再回退到 thinking
+    content_started: bool,
     tool_ids_by_index: HashMap<usize, String>,
     prepared_tools: VecDeque<PreparedTool>,
     active_tools_by_name: HashMap<String, VecDeque<String>>,
@@ -39,6 +41,7 @@ impl EventAssembler {
             workspace_id: workspace_id.to_string(),
             session_id: session_id.to_string(),
             status: None,
+            content_started: false,
             tool_ids_by_index: HashMap::new(),
             prepared_tools: VecDeque::new(),
             active_tools_by_name: HashMap::new(),
@@ -126,7 +129,14 @@ impl EventAssembler {
         match event {
             AgentEvent::Chunk(chunk) => {
                 let (status, kind) = match chunk.kind {
-                    ChatStreamKind::Content => ("working", "message.content.delta"),
+                    ChatStreamKind::Content => {
+                        self.content_started = true;
+                        ("working", "message.content.delta")
+                    }
+                    // 正文已开始后，晚到的推理增量不再把状态打回 thinking
+                    ChatStreamKind::Reasoning if self.content_started => {
+                        ("working", "message.reasoning.delta")
+                    }
                     ChatStreamKind::Reasoning => ("thinking", "message.reasoning.delta"),
                 };
                 let mut events = self.status_event(status);
@@ -476,6 +486,35 @@ mod tests {
         }));
 
         assert!(events.iter().all(|event| event.kind != "tool.progress"));
+    }
+
+    #[test]
+    fn does_not_return_to_thinking_after_content() {
+        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let first = assembler.map(RunnerEvent::Agent(AgentEvent::Chunk(
+            crate::llm::ChatStreamChunk {
+                kind: ChatStreamKind::Content,
+                text: "answer".to_string(),
+            },
+        )));
+        let second = assembler.map(RunnerEvent::Agent(AgentEvent::Chunk(
+            crate::llm::ChatStreamChunk {
+                kind: ChatStreamKind::Reasoning,
+                text: "late".to_string(),
+            },
+        )));
+        assert_eq!(
+            first
+                .iter()
+                .filter(|event| event.kind == "status.changed")
+                .map(|event| event.payload["status"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["working"]
+        );
+        assert!(second
+            .iter()
+            .filter(|event| event.kind == "status.changed")
+            .all(|event| event.payload["status"] != "thinking"));
     }
 
     #[test]

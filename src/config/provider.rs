@@ -37,6 +37,7 @@ impl ProviderConfig {
             thinking_format: default_thinking_format(),
             extra_body: String::new(),
             extra_headers: HashMap::new(),
+            user_agent: String::new(),
             client_style: default_client_style(),
         }
     }
@@ -59,6 +60,7 @@ impl ProviderConfig {
             thinking_format: default_thinking_format(),
             extra_body: String::new(),
             extra_headers: HashMap::new(),
+            user_agent: String::new(),
             client_style: default_client_style(),
         }
     }
@@ -85,6 +87,7 @@ impl ProviderConfig {
             thinking_format: default_thinking_format(),
             extra_body: String::new(),
             extra_headers: HashMap::new(),
+            user_agent: String::new(),
             client_style: default_client_style(),
         }
     }
@@ -131,6 +134,7 @@ impl ProviderConfig {
             thinking_format: default_thinking_format(),
             extra_body: String::new(),
             extra_headers: HashMap::new(),
+            user_agent: String::new(),
             client_style: default_client_style(),
         }
     }
@@ -140,6 +144,24 @@ impl ProviderConfig {
         provider.models.clear();
         provider.default_model.clear();
         provider
+    }
+
+    /// 解析本供应商 HTTP 请求使用的 User-Agent。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 自定义 UA；未配置时 Codex 模式返回 Codex CLI UA，否则返回 sai 默认 UA
+    pub fn effective_user_agent(&self) -> String {
+        let custom = self.user_agent.trim();
+        if !custom.is_empty() {
+            return custom.to_string();
+        }
+        if self.client_style.trim().eq_ignore_ascii_case("codex") {
+            return super::defaults::CODEX_CLI_USER_AGENT.to_string();
+        }
+        super::defaults::DEFAULT_HTTP_USER_AGENT.to_string()
     }
 
     pub fn resolved_api_key(&self, paths: &SaiPaths) -> Result<String> {

@@ -642,6 +642,7 @@ mod tests {
             thinking_format: "auto".to_string(),
             extra_body: String::new(),
             extra_headers: std::collections::HashMap::new(),
+            user_agent: String::new(),
             client_style: "auto".to_string(),
         }
     }

@@ -1,19 +1,25 @@
 use super::{is_table_separator, render_table};
 use crate::render::markdown_inline::render_table_cell_content;
-use crate::render::streaming_replace::{clear_rendered_rows, raw_visual_rows};
+use crate::render::streaming_replace::{clear_rendered_rows, raw_visual_rows, rendered_visual_rows};
 
 /// Markdown 表格在不同输出表面中的预览策略。
 #[derive(Clone, Copy)]
 enum PreviewMode {
+    /// CLI 实时终端：确认后逐行清屏并以最新列宽重绘整表。
     ReplaceTerminalRows,
-    SourcePreview,
+    /// 仅缓冲，结束时一次输出最终表格（history / 稳定重放）。
     StableFinal,
+    /// 全量重绘表面（TUI live）：缓冲；调用方通过 snapshot 取当前最优渲染。
+    Snapshot,
 }
 
 /// Markdown 表格流式替换状态。
 pub(crate) struct StreamingTable {
     lines: Vec<String>,
+    /// 尚未确认表格时，已写出的原始 Markdown 视觉行数。
     raw_visual_rows: usize,
+    /// 确认后最近一次预览表格占用的视觉行数（CLI 清屏用）。
+    preview_visual_rows: usize,
     preview_mode: PreviewMode,
 }
 
@@ -26,13 +32,14 @@ impl StreamingTable {
         Self {
             lines: Vec::new(),
             raw_visual_rows: 0,
+            preview_visual_rows: 0,
             preview_mode: PreviewMode::ReplaceTerminalRows,
         }
     }
 
-    /// 创建 source-backed 表格状态。
+    /// 创建稳定重放表格状态。
     ///
-    /// REPL 在表格未结束时展示原始 Markdown，结束后由可变尾部整体替换为最终表格。
+    /// 表格在闭合前保持缓冲，结束后输出按全表列宽计算的最终表格。
     ///
     /// 返回:
     /// - 不包含光标回退序列的表格状态
@@ -40,21 +47,23 @@ impl StreamingTable {
         Self {
             lines: Vec::new(),
             raw_visual_rows: 0,
+            preview_visual_rows: 0,
             preview_mode: PreviewMode::StableFinal,
         }
     }
 
-    /// 创建 source-backed 实时预览状态。
+    /// 创建全量重绘用的表格状态（TUI live 等）。
     ///
-    /// 该模式只展示原始 Markdown，最终 history cell 会使用稳定模式重新计算表格。
+    /// 不输出光标控制序列；未结束表格通过 `snapshot` 按当前行集合重算列宽。
     ///
     /// 返回:
-    /// - 不包含终端回退序列的原文预览状态
+    /// - snapshot 模式表格状态
     pub(crate) fn new_source_preview() -> Self {
         Self {
             lines: Vec::new(),
             raw_visual_rows: 0,
-            preview_mode: PreviewMode::SourcePreview,
+            preview_visual_rows: 0,
+            preview_mode: PreviewMode::Snapshot,
         }
     }
 
@@ -83,44 +92,86 @@ impl StreamingTable {
     /// - `line`: 当前 Markdown 行
     ///
     /// 返回:
-    /// - 当前输出表面应立即展示的原始行
+    /// - 当前输出表面应立即展示的文本（可能含清屏重绘）
     pub(crate) fn push_line(&mut self, line: &str) -> String {
+        let was_confirmed = self.is_confirmed();
         self.lines.push(line.to_string());
-        self.raw_visual_rows += raw_visual_rows(line);
+        let now_confirmed = self.is_confirmed();
+
         match self.preview_mode {
-            PreviewMode::ReplaceTerminalRows | PreviewMode::SourcePreview => format!("{line}\n"),
-            PreviewMode::StableFinal => String::new(),
+            // 1. CLI：未确认前输出原文；确认后（含刚确认）按全表列宽清屏重绘
+            PreviewMode::ReplaceTerminalRows => {
+                if !now_confirmed {
+                    self.raw_visual_rows += raw_visual_rows(line);
+                    return format!("{line}\n");
+                }
+                // 刚确认时也需清掉已输出的原文行；后续行清掉上一帧表格预览
+                let clear_existing = was_confirmed || self.raw_visual_rows > 0 || self.preview_visual_rows > 0;
+                self.redraw_cli_preview(clear_existing)
+            }
+            // 2. 稳定/快照：只缓冲，由 finish/snapshot 输出
+            PreviewMode::StableFinal | PreviewMode::Snapshot => String::new(),
         }
     }
 
     /// 结束当前表格并返回最终渲染。
     ///
     /// 返回:
-    /// - 确认表格的替换文本，非表格返回空
+    /// - 确认表格的替换/最终文本；非表格时按模式恢复原文或保持已输出原文
     pub(crate) fn finish(&mut self) -> String {
         let output = match self.preview_mode {
-            PreviewMode::SourcePreview => String::new(),
-            PreviewMode::ReplaceTerminalRows | PreviewMode::StableFinal if self.is_confirmed() => {
-                self.render_current()
-            }
-            PreviewMode::StableFinal => self.render_raw_source(),
+            PreviewMode::ReplaceTerminalRows if self.is_confirmed() => self.redraw_cli_preview(true),
             PreviewMode::ReplaceTerminalRows => String::new(),
+            PreviewMode::StableFinal | PreviewMode::Snapshot if self.is_confirmed() => {
+                render_table(&self.lines, render_table_cell_content)
+            }
+            PreviewMode::StableFinal | PreviewMode::Snapshot => self.render_raw_source(),
         };
         self.lines.clear();
         self.raw_visual_rows = 0;
+        self.preview_visual_rows = 0;
         output
     }
 
-    /// 按全部已知行计算列宽并生成最终表格。
+    /// 非破坏性预览当前缓冲（供 TUI 全量重绘在未闭合表格时使用）。
     ///
     /// 返回:
-    /// - 普通 CLI 包含清除序列，REPL 仅包含最终表格
-    fn render_current(&self) -> String {
-        let mut output = match self.preview_mode {
-            PreviewMode::ReplaceTerminalRows => clear_rendered_rows(self.raw_visual_rows),
-            PreviewMode::SourcePreview | PreviewMode::StableFinal => String::new(),
-        };
-        output.push_str(&render_table(&self.lines, render_table_cell_content));
+    /// - 已确认：按当前行集合重算列宽后的表格
+    /// - 未确认：原始 Markdown 候选行
+    /// - 无缓冲：空串
+    pub(crate) fn snapshot(&self) -> String {
+        if self.lines.is_empty() {
+            return String::new();
+        }
+        if self.is_confirmed() {
+            render_table(&self.lines, render_table_cell_content)
+        } else {
+            self.render_raw_source()
+        }
+    }
+
+    /// CLI 模式下清除旧预览并以最新列宽重绘整表。
+    ///
+    /// 参数:
+    /// - `clear_existing_preview`: 是否清除上一帧预览/原文占用行
+    ///
+    /// 返回:
+    /// - 清屏序列 + 最新表格文本
+    fn redraw_cli_preview(&mut self, clear_existing_preview: bool) -> String {
+        let mut output = String::new();
+        if clear_existing_preview {
+            // 1. 优先清已渲染表格预览；若刚从原文切到确认表，清 raw 行
+            let rows = if self.preview_visual_rows > 0 {
+                self.preview_visual_rows
+            } else {
+                self.raw_visual_rows
+            };
+            output.push_str(&clear_rendered_rows(rows));
+        }
+        let table = render_table(&self.lines, render_table_cell_content);
+        self.preview_visual_rows = rendered_visual_rows(&table);
+        self.raw_visual_rows = 0;
+        output.push_str(&table);
         output
     }
 
@@ -138,15 +189,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn streams_raw_rows_before_final_render() {
+    fn streams_raw_rows_before_table_is_confirmed() {
         let mut table = StreamingTable::new();
 
         assert_eq!(table.push_line("| a | b |"), "| a | b |\n");
-        assert_eq!(table.push_line("| - | - |"), "| - | - |\n");
+        // 分隔行到达后确认表格，应清掉原文并绘出带边框的表
+        let confirmed = table.push_line("| - | - |");
+        assert!(confirmed.contains('\u{250c}') || confirmed.contains('┌'));
+        assert!(confirmed.contains("\x1b[1A\r\x1b[2K"));
     }
 
     #[test]
-    fn replaces_raw_rows_with_rendered_table_on_finish() {
+    fn progressive_rows_redraw_with_latest_widths() {
+        let mut table = StreamingTable::new();
+
+        table.push_line("| 软件 | 命令 |");
+        table.push_line("|---|---|");
+        let first = table.push_line("| Arch | `pacman` |");
+        assert!(first.contains('┌'));
+        let second = table.push_line("| Neovim | `sudo pacman -S neovim` |");
+        // 1. 新行触发清屏重绘
+        assert!(second.contains("\x1b[1A\r\x1b[2K"));
+        // 2. 列宽吸收更长单元格
+        assert!(second.contains("sudo pacman -S neovim"));
+    }
+
+    #[test]
+    fn replaces_preview_with_final_table_on_finish() {
         let mut table = StreamingTable::new();
 
         table.push_line("| 软件 | 命令 |");
@@ -154,21 +223,22 @@ mod tests {
         table.push_line("| Neovim | `sudo pacman -S neovim` |");
         let output = table.finish();
 
-        assert!(output.starts_with("\x1b[1A\r\x1b[2K"));
         assert!(output.contains("sudo pacman -S neovim"));
+        assert!(output.contains('┌'));
     }
 
     #[test]
-    fn source_backed_table_previews_raw_rows_without_cursor_replacement() {
+    fn snapshot_mode_buffers_and_previews_confirmed_table() {
         let mut table = StreamingTable::new_source_preview();
 
-        assert_eq!(table.push_line("| a | b |"), "| a | b |\n");
-        assert_eq!(table.push_line("| - | - |"), "| - | - |\n");
-        table.push_line("| 1 | 2 |");
-        let output = table.finish();
-
-        assert!(output.is_empty());
-        assert!(!output.contains("\x1b[1A"));
+        assert!(table.push_line("| a | b |").is_empty());
+        assert!(table.push_line("| - | - |").is_empty());
+        assert!(table.push_line("| 1 | 2 |").is_empty());
+        let snap = table.snapshot();
+        assert!(snap.contains('┌'));
+        assert!(snap.contains('1'));
+        let finished = table.finish();
+        assert!(finished.contains('┌'));
     }
 
     #[test]

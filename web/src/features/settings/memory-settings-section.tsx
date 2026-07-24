@@ -2,13 +2,22 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Brain, FileText, Plus, Search, Database, Trash2, Zap } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { api } from "../../api/client";
-import type { MemoryEntry, MemorySearchHit, MemoryStats } from "../../api/contracts";
+import type { AppConfig, MemoryEntry, MemorySearchHit, MemoryStats } from "../../api/contracts";
 import { useI18n } from "../i18n/use-i18n";
+import { SettingsGroup } from "./editor-layout";
+
+type MemorySettingsSectionProps = {
+  config?: AppConfig | null;
+  onConfigChange?: (config: AppConfig) => void;
+};
 
 /**
- * 记忆管理：统计（含 Markdown / FTS）、搜索、新增事实、删除条目。
+ * 记忆管理：启停、统计（含 Markdown / FTS）、搜索、新增事实、删除条目。
+ *
+ * @param props 可选 AppConfig（用于 plugins.memory.enabled）
+ * @returns 记忆设置区域
  */
-export function MemorySettingsSection() {
+export function MemorySettingsSection({ config, onConfigChange }: MemorySettingsSectionProps = {}) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
@@ -64,6 +73,45 @@ export function MemorySettingsSection() {
           )}
         </p>
       </header>
+
+      {config && onConfigChange && (
+        <SettingsGroup
+          title={t("Memory feature", "记忆功能")}
+          description={t(
+            "When disabled, long-term memory tools and automatic session memory extraction stay off. Default is enabled.",
+            "关闭后，长期记忆工具与自动会话记忆提取均不运行。默认开启。"
+          )}
+        >
+          <label className="settings-toggle-field">
+            <span>
+              <strong>{t("Enable memory", "启用记忆")}</strong>
+              <small>plugins.memory.enabled</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={((config.plugins?.memory as { enabled?: boolean } | undefined)?.enabled) !== false}
+              onChange={(event) => {
+                const plugins = config.plugins ?? {};
+                const prev = (plugins.memory as Record<string, unknown> | undefined) ?? {};
+                onConfigChange({
+                  ...config,
+                  plugins: {
+                    ...plugins,
+                    memory: {
+                      ...prev,
+                      enabled: event.target.checked
+                    }
+                  },
+                  memory: {
+                    ...(config.memory as Record<string, unknown> | undefined),
+                    enabled: event.target.checked
+                  }
+                });
+              }}
+            />
+          </label>
+        </SettingsGroup>
+      )}
 
       <div className="memory-storage-grid">
         <StorageCard

@@ -34,7 +34,6 @@ use crate::tools::{self, memes, ToolPermission, ToolRegistry};
 use anyhow::{bail, Result};
 use message_context::{runtime_context_message, system_messages_first};
 use model_context::selected_model_label;
-use system_prompt::build_base_system_prompt;
 use tokio::sync::mpsc;
 use tool_history::extract_persistable_tool_report;
 use tool_visibility::ToolVisibility;
@@ -43,6 +42,7 @@ pub(crate) use compaction::CompactionRunOutcome;
 pub use event::{AgentEvent, CompactionError};
 pub(crate) use external_events::{ExternalEventBatch, ExternalEventWake};
 pub use mode::AgentMode;
+pub(crate) use system_prompt::build_base_system_prompt;
 
 const MAX_QUESTION_ROUNDS_PER_TURN: usize = 8;
 pub struct Agent {

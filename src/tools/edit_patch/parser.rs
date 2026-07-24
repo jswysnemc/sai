@@ -10,7 +10,7 @@ use std::path::PathBuf;
 /// 返回:
 /// - 解析后的文件变更列表
 pub(crate) fn parse_patch(patch: &str) -> Result<ParsedPatch> {
-    let normalized = patch.replace("\r\n", "\n").replace('\r', "\n");
+    let normalized = normalize_codex_patch(patch)?;
     let lines = normalized.lines().collect::<Vec<_>>();
     if lines.is_empty() {
         bail!("patch is empty")
@@ -221,6 +221,153 @@ fn skip_blank_lines(lines: &[&str], mut index: usize) -> usize {
     index
 }
 
+/// 归一化模型常见的 Codex patch 变体。
+///
+/// 兼容处理:
+/// 1. 去掉 BOM / 首尾空白 / CR
+/// 2. 去掉整段 Markdown 代码围栏
+/// 3. 接受 `*** Begin Patch ***` / `*** End Patch ***` 等变体
+/// 4. 从夹杂说明文字中截取 Begin..End 信封
+/// 5. 仅有 section 头时自动补 Begin/End
+///
+/// 参数:
+/// - `patch`: 原始 patch 文本
+///
+/// 返回:
+/// - 标准 `*** Begin Patch` ... `*** End Patch` 文本
+pub(crate) fn normalize_codex_patch(patch: &str) -> Result<String> {
+    let mut text = patch.trim().trim_start_matches('\u{feff}').to_string();
+    if text.is_empty() {
+        bail!("patch is empty");
+    }
+    text = text.replace("\r\n", "\n").replace('\r', "\n");
+    text = strip_outer_code_fence(&text);
+
+    let lines = text.lines().collect::<Vec<_>>();
+    let begin_idx = lines.iter().position(|line| is_begin_patch_line(line));
+    let end_idx = lines.iter().rposition(|line| is_end_patch_line(line));
+
+    let body = match (begin_idx, end_idx) {
+        (Some(begin), Some(end)) if begin < end => {
+            lines[begin + 1..end].join("\n")
+        }
+        (Some(begin), None) => {
+            // 1. 有 Begin 无 End：若后续已是合法 section，补 End
+            let rest = lines[begin + 1..].join("\n");
+            if looks_like_patch_body(&rest) {
+                rest
+            } else {
+                bail!(
+                    "patch is missing *** End Patch; expected a complete Codex patch from *** Begin Patch through *** End Patch"
+                );
+            }
+        }
+        (None, Some(_)) => {
+            bail!("patch has *** End Patch without *** Begin Patch");
+        }
+        (None, None) => {
+            // 2. 完全无信封：整段看起来像 section 时自动包裹
+            if looks_like_patch_body(&text) {
+                text
+            } else {
+                bail!(
+                    "patch must start with *** Begin Patch (also accepted: surrounding code fences, *** Begin Patch ***, or bare *** Update/Add/Delete File sections)"
+                );
+            }
+        }
+        _ => bail!("invalid patch envelope"),
+    };
+
+    let body = body.trim_matches('\n');
+    if body.trim().is_empty() {
+        bail!("patch body is empty");
+    }
+    Ok(format!("*** Begin Patch\n{body}\n*** End Patch"))
+}
+
+/// 去掉整段外层 Markdown 代码围栏。
+///
+/// 参数:
+/// - `text`: 原始文本
+///
+/// 返回:
+/// - 去掉围栏后的文本
+fn strip_outer_code_fence(text: &str) -> String {
+    let trimmed = text.trim();
+    if !trimmed.starts_with("```") {
+        return trimmed.to_string();
+    }
+    let mut lines = trimmed.lines().collect::<Vec<_>>();
+    if lines.len() < 2 {
+        return trimmed.to_string();
+    }
+    // 1. 首行必须是 ``` 或 ```lang
+    let first = lines[0].trim();
+    if !first.starts_with("```") {
+        return trimmed.to_string();
+    }
+    // 2. 末行必须是单独的 ```
+    let last = lines[lines.len() - 1].trim();
+    if last != "```" {
+        return trimmed.to_string();
+    }
+    lines.remove(0);
+    lines.pop();
+    lines.join("\n")
+}
+
+/// 判断是否为 Begin Patch 行变体。
+///
+/// 参数:
+/// - `line`: 原始行
+///
+/// 返回:
+/// - 是否为 Begin 标记
+fn is_begin_patch_line(line: &str) -> bool {
+    let compact = line
+        .trim()
+        .trim_matches('*')
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase();
+    compact == "begin patch"
+}
+
+/// 判断是否为 End Patch 行变体。
+///
+/// 参数:
+/// - `line`: 原始行
+///
+/// 返回:
+/// - 是否为 End 标记
+fn is_end_patch_line(line: &str) -> bool {
+    let compact = line
+        .trim()
+        .trim_matches('*')
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase();
+    compact == "end patch"
+}
+
+/// 判断文本是否像合法的 Codex section 正文。
+///
+/// 参数:
+/// - `text`: 候选正文
+///
+/// 返回:
+/// - 是否像 patch body
+fn looks_like_patch_body(text: &str) -> bool {
+    text.lines().any(|line| {
+        let line = line.trim();
+        line.starts_with("*** Add File: ")
+            || line.starts_with("*** Delete File: ")
+            || line.starts_with("*** Update File: ")
+    })
+}
+
 /// 清理 patch 路径。
 ///
 /// 参数:
@@ -263,5 +410,31 @@ mod tests {
         .unwrap();
 
         assert_eq!(parsed.changes.len(), 3);
+    }
+
+    #[test]
+    fn normalizes_begin_end_variants_and_code_fence() {
+        let raw = "```\n*** Begin Patch ***\n*** Add File: a.txt\n+one\n*** End Patch ***\n```";
+        let parsed = parse_patch(raw).unwrap();
+        assert_eq!(parsed.changes.len(), 1);
+    }
+
+    #[test]
+    fn wraps_bare_update_section() {
+        let raw = "*** Update File: b.txt\n@@\n-old\n+new";
+        let parsed = parse_patch(raw).unwrap();
+        assert_eq!(parsed.changes.len(), 1);
+    }
+
+    #[test]
+    fn extracts_envelope_from_leading_noise() {
+        let raw = "here is the patch:\n*** Begin Patch\n*** Add File: a.txt\n+one\n*** End Patch\nthanks";
+        let parsed = parse_patch(raw).unwrap();
+        assert_eq!(parsed.changes.len(), 1);
+    }
+
+    #[test]
+    fn rejects_non_patch_text() {
+        assert!(parse_patch("not a patch").is_err());
     }
 }

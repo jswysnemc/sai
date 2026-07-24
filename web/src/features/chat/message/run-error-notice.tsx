@@ -50,6 +50,9 @@ export function RunErrorNotice({ message, detail, onRetry }: RunErrorNoticeProps
  * @returns 服务端原文或本地异常堆栈
  */
 export function errorDetailForDisplay(error: Error): string {
-  if (error instanceof ApiError) return error.rawMessage;
+  if (error instanceof ApiError) {
+    // 优先完整 detail，避免只显示本地化摘要
+    return error.detail?.trim() || error.rawMessage;
+  }
   return error.stack?.trim() || error.message;
 }

@@ -38,7 +38,7 @@ impl AgentMode {
     ///
     /// 返回:
     /// - 对应模式的静态提示词
-    pub(super) fn reminder(self) -> &'static str {
+    pub(crate) fn reminder(self) -> &'static str {
         match self {
             Self::Yolo => crate::prompts::YOLO_REMINDER,
             Self::Audited => crate::prompts::AUDITED_REMINDER,

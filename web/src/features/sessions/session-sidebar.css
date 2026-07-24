@@ -179,11 +179,78 @@
   background: color-mix(in srgb, var(--danger) 12%, var(--paper-raised));
 }
 
+/* 多选工具条：独占一行，避免挤进工作区标题右侧图标区 */
+.workspace-selection-bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 6px 6px 22px;
+  padding: 5px 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper-raised);
+}
+
 .workspace-selection-count {
-  align-self: center;
+  min-width: 0;
+  overflow: hidden;
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 11px;
+  text-align: center;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.workspace-selection-bar .selection-action,
+.workspace-selection-bar .selection-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.workspace-selection-bar .selection-action {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink-soft);
+}
+
+.workspace-selection-bar .selection-action:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--ink) 5%, var(--paper));
+  color: var(--ink);
+}
+
+.workspace-selection-bar .selection-delete {
+  border: 1px solid color-mix(in srgb, var(--danger) 50%, var(--line));
+  background: color-mix(in srgb, var(--danger) 10%, var(--paper));
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.workspace-selection-bar .selection-delete:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 18%, var(--paper));
+}
+
+.workspace-selection-bar .selection-delete.confirming {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 28%, transparent);
+}
+
+.workspace-selection-bar .selection-action:disabled,
+.workspace-selection-bar .selection-delete:disabled {
+  opacity: 0.42;
 }
 
 .workspace-menu-popover {

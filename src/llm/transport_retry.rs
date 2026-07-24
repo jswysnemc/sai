@@ -75,7 +75,7 @@ fn is_transient_message(message: &str) -> bool {
 /// - `error`: 原始错误
 ///
 /// 返回:
-/// - 面向用户的提示文本
+/// - 面向用户的摘要文本；完整错误链请用 `error_detail_text`
 pub(crate) fn disconnect_user_hint(error: &anyhow::Error) -> String {
     use crate::i18n::text as t;
     if is_transient_transport_error(error) {
@@ -89,8 +89,34 @@ pub(crate) fn disconnect_user_hint(error: &anyhow::Error) -> String {
             )
         )
     } else {
-        format!("{:#}", error)
+        simplify_one_line(error)
     }
+}
+
+/// 返回适合 UI 详情区展示的完整错误链。
+///
+/// 参数:
+/// - `error`: 原始错误
+///
+/// 返回:
+/// - 去重后的完整错误链文本
+pub(crate) fn error_detail_text(error: &anyhow::Error) -> String {
+    let mut lines = Vec::new();
+    for item in error.chain() {
+        let text = item.to_string();
+        let text = text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        if lines.last().map(String::as_str) == Some(text) {
+            continue;
+        }
+        lines.push(text.to_string());
+    }
+    if lines.is_empty() {
+        return error.to_string();
+    }
+    lines.join("\n")
 }
 
 /// 提取单行简化错误。
@@ -122,5 +148,17 @@ mod tests {
     fn classifies_502_as_transient() {
         let err = anyhow::anyhow!("chat completions stream request failed (502): bad gateway");
         assert!(is_transient_transport_error(&err));
+    }
+
+    #[test]
+    fn error_detail_text_keeps_full_chain() {
+        let err = anyhow::anyhow!("root cause")
+            .context("mid layer")
+            .context("outer layer");
+        let detail = error_detail_text(&err);
+        assert!(detail.contains("outer layer"));
+        assert!(detail.contains("mid layer"));
+        assert!(detail.contains("root cause"));
+        assert_ne!(disconnect_user_hint(&err), detail);
     }
 }

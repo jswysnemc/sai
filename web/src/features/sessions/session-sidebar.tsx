@@ -124,20 +124,39 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
     setConfirming(false);
   };
 
-  /** 切换全部可删除会话的选中状态。 */
+  /**
+   * 全选或取消全选当前工作区会话。
+   *
+   * @returns 无返回值
+   */
   const toggleAll = () => {
-    const ids = sessions.filter((session) => session.id !== "default").map((session) => session.id);
-    setSelected(selected.size === ids.length ? new Set() : new Set(ids));
+    const ids = sessions.map((session) => session.id);
+    const allSelected = ids.length > 0 && ids.every((id) => selected.has(id));
+    setSelected(allSelected ? new Set() : new Set(ids));
     setConfirming(false);
   };
 
-  /** 执行两阶段批量删除确认。 */
-  const requestBulkDelete = () => {
-    if (selected.size === 0) return;
-    if (!confirming) {
-      setConfirming(true);
-      return;
-    }
+  /**
+   * 删除所选会话；先弹出危险确认，避免误触。
+   *
+   * @returns 无返回值
+   */
+  const requestBulkDelete = async () => {
+    if (selected.size === 0 || removeMany.isPending) return;
+    setConfirming(true);
+    const count = selected.size;
+    const accepted = await confirm({
+      title: t("Delete sessions", "删除会话"),
+      description: t(
+        `Delete ${count} selected session(s)? This cannot be undone.`,
+        `删除已选的 ${count} 个会话？此操作不可撤销。`
+      ),
+      confirmLabel: t("Delete", "删除"),
+      cancelLabel: t("Cancel", "取消"),
+      danger: true
+    });
+    setConfirming(false);
+    if (!accepted) return;
     removeMany.mutate(Array.from(selected));
   };
 
@@ -148,10 +167,15 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
     setConfirming(false);
   };
 
-  /** 从当前工作区进入全选模式。 */
-  const selectWorkspaceSessions = () => {
+  /**
+   * 进入多选模式；不默认勾选任何会话。
+   *
+   * @returns 无返回值
+   */
+  const enterSelectionMode = () => {
     setSelecting(true);
-    toggleAll();
+    setSelected(new Set());
+    setConfirming(false);
   };
 
   /**
@@ -214,7 +238,6 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
     rename.mutate({ id: renaming, title });
   };
 
-  const manageableCount = sessions.filter((session) => session.id !== "default").length;
   const error = navigationError ?? tree.error ?? create.error ?? remove.error ?? removeMany.error ?? rename.error ?? removeWorkspace.error;
   const appMenuActive = location.pathname.startsWith("/settings")
     || location.pathname.startsWith("/gateways")
@@ -343,7 +366,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
             : workspace.sessions;
           const workspaceExpanded = query ? true : expanded.has(workspace.workspace_id);
           const workspaceRunning = sessions.some((session) => runningSessions.has(`${workspace.workspace_id}:${session.id}`));
-          const canSelect = workspace.active && manageableCount > 0;
+          const canSelect = workspace.active && sessions.length > 0;
           const canClose = (tree.data?.length ?? 0) > 1;
           return <div className="session-workspace" key={workspace.workspace_id}>
             <div className={`${workspace.active ? "workspace-tree-row active" : "workspace-tree-row"}${workspace.active && selecting ? " selecting" : ""}`}>
@@ -355,27 +378,56 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
               </button>
               <span className="workspace-tree-actions">
                 {!selecting && <button type="button" className="workspace-create-session" onClick={() => create.mutate(workspace.active ? undefined : workspace.workspace_id)} disabled={create.isPending} aria-label={t(`Create a session in ${workspaceName}`, `在 ${workspaceName} 新建会话`)} title={t("New session", "新建会话")}><Plus size={14} /></button>}
-                {workspace.active && selecting && <span className="workspace-selection-count">{t(`${selected.size} selected`, `已选择 ${selected.size} 项`)}</span>}
-                {workspace.active && selecting && <button type="button" className={confirming ? "danger confirming" : "danger"} onClick={requestBulkDelete} disabled={selected.size === 0 || removeMany.isPending} aria-label={confirming ? t(`Confirm deletion of ${selected.size} items`, `确认删除 ${selected.size} 项`) : t("Delete selected sessions", "删除所选会话")} title={confirming ? t(`Confirm deletion of ${selected.size} items`, `确认删除 ${selected.size} 项`) : t("Delete selected sessions", "删除所选会话")}><Trash2 size={14} /></button>}
-                {workspace.active && selecting && <button type="button" onClick={closeSelection} aria-label={t("Exit selection", "退出选择")} title={t("Exit selection", "退出选择")}><X size={14} /></button>}
                 {!(workspace.active && selecting) && (canSelect || canClose) && (
                   <button type="button" onClick={() => { setMenu(null); setWorkspaceMenu((value) => value === workspace.workspace_id ? null : workspace.workspace_id); }} aria-label={t(`Manage workspace ${workspaceName}`, `管理工作区 ${workspaceName}`)} title={t("Manage workspace", "管理工作区")}><MoreHorizontal size={14} /></button>
+                )}
+                {workspace.active && selecting && (
+                  <button type="button" onClick={closeSelection} aria-label={t("Exit selection", "退出选择")} title={t("Exit selection", "退出选择")}>
+                    <X size={14} />
+                  </button>
                 )}
               </span>
               {workspaceMenu === workspace.workspace_id && (
                 <div className="session-menu workspace-menu-popover" ref={menuRef}>
-                  {canSelect && <button type="button" onClick={() => { setWorkspaceMenu(null); selectWorkspaceSessions(); }}><CheckSquare2 size={14} /> {t("Select sessions", "多选会话")}</button>}
+                  {canSelect && <button type="button" onClick={() => { setWorkspaceMenu(null); enterSelectionMode(); }}><CheckSquare2 size={14} /> {t("Select sessions", "多选会话")}</button>}
                   {canClose && <button type="button" className="danger" onClick={() => { setWorkspaceMenu(null); void closeWorkspace(workspace.workspace_id, workspaceName, workspace.active); }}><X size={14} /> {t("Close workspace", "关闭工作区")}</button>}
                 </div>
               )}
             </div>
+            {workspace.active && selecting && (
+              <div className="workspace-selection-bar" role="toolbar" aria-label={t("Session selection", "会话多选")}>
+                <button
+                  type="button"
+                  className="selection-action"
+                  onClick={toggleAll}
+                  disabled={sessions.length === 0}
+                  aria-label={selected.size === sessions.length && sessions.length > 0 ? t("Clear selection", "取消全选") : t("Select all", "全选")}
+                  title={selected.size === sessions.length && sessions.length > 0 ? t("Clear selection", "取消全选") : t("Select all", "全选")}
+                >
+                  <CheckSquare2 size={13} />
+                  <span>{selected.size === sessions.length && sessions.length > 0 ? t("Clear", "取消全选") : t("Select all", "全选")}</span>
+                </button>
+                <span className="workspace-selection-count">{t(`${selected.size} selected`, `已选 ${selected.size}`)}</span>
+                <button
+                  type="button"
+                  className={confirming || removeMany.isPending ? "selection-delete confirming" : "selection-delete"}
+                  onClick={() => void requestBulkDelete()}
+                  disabled={selected.size === 0 || removeMany.isPending}
+                  aria-label={t("Delete selected sessions", "删除所选会话")}
+                  title={t("Delete selected sessions", "删除所选会话")}
+                >
+                  <Trash2 size={13} />
+                  <span>{removeMany.isPending ? t("Deleting", "删除中") : t("Delete", "删除")}</span>
+                </button>
+              </div>
+            )}
             {workspaceExpanded && <div className="workspace-session-children">{sessions.map((session) => {
           const checked = selected.has(session.id);
           const running = runningSessions.has(`${workspace.workspace_id}:${session.id}`);
           return (
             <div className={`${session.active ? "session-row active" : "session-row"}${checked ? " selected" : ""}${running ? " running" : ""}`} key={session.id}>
               {selecting && workspace.active && (
-                <button type="button" className="session-check" onClick={() => toggleSelected(session.id)} disabled={session.id === "default"} aria-label={t(`Select ${session.title}`, `选择 ${session.title}`)}>
+                <button type="button" className="session-check" onClick={() => toggleSelected(session.id)} aria-label={t(`Select ${session.title}`, `选择 ${session.title}`)}>
                   {checked ? <CheckSquare2 size={15} /> : <Square size={15} />}
                 </button>
               )}
@@ -399,7 +451,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
               ) : (
                 <button type="button" className="session-main" onClick={() => {
                   if (selecting && workspace.active) {
-                    if (session.id !== "default") toggleSelected(session.id);
+                    toggleSelected(session.id);
                     return;
                   }
                   void openSession(workspace.workspace_id, session.id, workspace.active, session.active);
@@ -412,7 +464,17 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
               {!selecting && menu === session.id && (
                 <div className="session-menu" ref={menuRef}>
                   <button type="button" onClick={() => startRename(session.id, session.title)}><Pencil size={14} /> {t("Rename", "重命名")}</button>
-                  <button type="button" className="danger" disabled={session.id === "default"} onClick={() => { remove.mutate(session.id); setMenu(null); }}><Trash2 size={14} /> {t("Delete", "删除")}</button>
+                  <button type="button" className="danger" onClick={() => { void (async () => {
+                    setMenu(null);
+                    const accepted = await confirm({
+                      title: t("Delete session", "删除会话"),
+                      description: t(`Delete “${session.title}”? This cannot be undone.`, `删除“${session.title}”？此操作不可撤销。`),
+                      confirmLabel: t("Delete", "删除"),
+                      cancelLabel: t("Cancel", "取消"),
+                      danger: true
+                    });
+                    if (accepted) remove.mutate(session.id);
+                  })(); }}><Trash2 size={14} /> {t("Delete", "删除")}</button>
                 </div>
               )}
             </div>

@@ -21,7 +21,8 @@ export function App() {
           <Routes>
             <Route element={<AppShell />}>
               <Route index element={<CodingPage />} />
-              <Route path="settings" element={<SettingsPage />} />
+              <Route path="settings" element={<Navigate to="/settings/providers" replace />} />
+              <Route path="settings/:sectionId" element={<SettingsPage />} />
               <Route path="gateways" element={<GatewaysPage />} />
               <Route path="cron-jobs" element={<CronJobsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />

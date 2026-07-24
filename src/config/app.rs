@@ -452,12 +452,13 @@ impl AppConfig {
     /// - 已应用记忆提取模型选择的独立配置副本
     pub fn session_memory_runtime_config(&self) -> Result<Self> {
         self.validate_session_memory_model()?;
-        if self.memory.extraction_provider_id.trim().is_empty() {
+        let memory = self.memory_config();
+        if memory.extraction_provider_id.trim().is_empty() {
             return Ok(self.clone());
         }
         let mut config = self.clone();
-        let provider_id = self.memory.extraction_provider_id.trim();
-        let model = self.memory.extraction_model.trim();
+        let provider_id = memory.extraction_provider_id.trim();
+        let model = memory.extraction_model.trim();
         config.set_active_provider_model(provider_id, model)?;
         Ok(config)
     }
@@ -470,8 +471,9 @@ impl AppConfig {
     /// 返回:
     /// - 配置合法时成功
     fn validate_session_memory_model(&self) -> Result<()> {
-        let provider_id = self.memory.extraction_provider_id.trim();
-        let model = self.memory.extraction_model.trim();
+        let memory = self.memory_config();
+        let provider_id = memory.extraction_provider_id.trim();
+        let model = memory.extraction_model.trim();
         match (provider_id.is_empty(), model.is_empty()) {
             (true, true) => Ok(()),
             (false, false) => {

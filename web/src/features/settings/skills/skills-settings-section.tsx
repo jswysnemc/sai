@@ -5,6 +5,8 @@ import { toDisplayError } from "../../../api/api-error";
 import type { ManagedSkill } from "../../../api/skill-contracts";
 import { SkillEditor } from "./skill-editor";
 import { SkillListPanel } from "./skill-list-panel";
+import type { AppConfig } from "../../../api/contracts";
+import { SkillBehaviorSettings } from "../runtime/skill-behavior-settings";
 import { useI18n } from "../../i18n/use-i18n";
 import "./skills-settings.css";
 
@@ -18,12 +20,18 @@ description: Describe when this Skill should be used
 Describe the workflow, constraints, and expected output.
 `;
 
+type SkillsSettingsSectionProps = {
+  config?: AppConfig | null;
+  onConfigChange?: (config: AppConfig) => void;
+};
+
 /**
- * 编排 Skills 扫描、读取、新增、编辑与启停操作。
+ * 编排 Skills 行为配置与文档扫描、读取、新增、编辑与启停。
  *
+ * @param props 可选 AppConfig（用于技能行为字段）
  * @returns Skills 设置页面
  */
-export function SkillsSettingsSection() {
+export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettingsSectionProps = {}) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: ["managed-skills"], queryFn: api.skills.managedList });
@@ -105,6 +113,10 @@ export function SkillsSettingsSection() {
   }
 
   return (
+    <div className="skills-settings-page">
+      {config && onConfigChange && (
+        <SkillBehaviorSettings config={config} onConfigChange={onConfigChange} />
+      )}
     <div className="settings-objects-layout skills-settings-layout">
       <SkillListPanel
         skills={skills}
@@ -127,6 +139,7 @@ export function SkillsSettingsSection() {
         onEnabledChange={(enabled) => selectedSkill && toggle.mutate({ id: selectedSkill.id, enabled })}
         onSave={() => void save.mutateAsync().catch(() => undefined)}
       />
+    </div>
     </div>
   );
 }

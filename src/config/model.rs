@@ -198,6 +198,9 @@ pub struct ProviderConfig {
     /// 附加到每次模型请求的自定义 HTTP 头（不含 Authorization）。
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub extra_headers: HashMap<String, String>,
+    /// 自定义 User-Agent；空时：`codex` 用 codex_cli_rs/0.144.0，其它用默认客户端 UA。
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub user_agent: String,
     /// 客户端模拟：`auto` | `default` | `codex`（Codex CLI 请求头与 Responses 形态）。
     #[serde(
         default = "default_client_style",

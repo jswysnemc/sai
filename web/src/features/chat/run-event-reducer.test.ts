@@ -7,6 +7,21 @@ function event(type: string, payload: Record<string, unknown>): WebEvent {
 }
 
 describe("runEventReducer", () => {
+  it("upgrades thinking status when content arrives without status.changed", () => {
+    const started = runEventReducer(initialRunState, { type: "start", runId: "run", sessionId: "session", userInput: "hello" });
+    const thinking = runEventReducer(started, { type: "event", event: event("status.changed", { status: "thinking" }) });
+    const content = runEventReducer(thinking, { type: "event", event: event("message.content.delta", { text: "answer" }) });
+    expect(content.status).toBe("working");
+    expect(content.content).toBe("answer");
+  });
+
+    it("ignores thinking status after content started", () => {
+    const started = runEventReducer(initialRunState, { type: "start", runId: "run", sessionId: "session", userInput: "hello" });
+    const content = runEventReducer(started, { type: "event", event: event("message.content.delta", { text: "answer" }) });
+    const thinking = runEventReducer(content, { type: "event", event: event("status.changed", { status: "thinking" }) });
+    expect(thinking.status).toBe("working");
+  });
+
   it("streams reasoning and content independently", () => {
     const started = runEventReducer(initialRunState, { type: "start", runId: "run", sessionId: "session", userInput: "hello" });
     const reasoning = runEventReducer(started, { type: "event", event: event("message.reasoning.delta", { text: "think" }) });

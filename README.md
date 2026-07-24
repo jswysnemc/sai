@@ -12,7 +12,7 @@ Multi-protocol LLM · 30+ built-in tools · Long-term memory · Chat platform ga
 [![CI Windows](https://img.shields.io/badge/CI-Windows-passing-success)](https://github.com/SHORiN-KiWATA/Sai/actions/workflows/windows.yml)
 [![CI macOS](https://img.shields.io/badge/CI-macOS-passing-success)](https://github.com/SHORiN-KiWATA/Sai/actions/workflows/macos.yml)
 
-[Why Sai](#why-sai) · [Core capabilities](#core-capabilities) · [Installation](#installation) · [Quick start](#quick-start) · [CLI reference](#cli-reference) · [Architecture](#architecture) · [Storage layout](#storage-layout) · [FAQ](#faq) · [Contributing](#contributing)
+[Why Sai](#why-sai) · [Screenshots](#screenshots) · [Core capabilities](#core-capabilities) · [Installation](#installation) · [Quick start](#quick-start) · [CLI reference](#cli-reference) · [Architecture](#architecture) · [Storage layout](#storage-layout) · [FAQ](#faq) · [Contributing](#contributing)
 
 ---
 
@@ -24,6 +24,37 @@ Sai is a terminal-native AI desktop assistant written in Rust. It fuses large la
 - **Triple-protocol adaptive** - OpenAI Chat / OpenAI Responses / Anthropic Messages auto-detected; any compatible provider works out of the box
 - **Personality with memory** - Cross-session long-term memory (facts / episodes), half-life forgetting and associative recall, isolated per persona
 - **Multiple entry points** - Terminal REPL, one-shot ask, web workbench, QQ / WeChat / WeCom gateways, all sharing one Agent core
+
+---
+
+## Screenshots
+
+Streaming REPL chat, built-in tool replies, the config TUI, plus the web workbench for subagents and Source Control.
+
+### Terminal REPL
+
+![Sai REPL greeting and streaming chat](pics/hello.png)
+
+![Config TUI for providers and models](pics/sai-config.png)
+
+### Built-in tools
+
+![Weather lookup](pics/get_weather.png)
+
+![Set an alarm](pics/set_alarm.png)
+
+![Fortune lot draw](pics/draw_fortune_lot.png)
+
+![Exchange rate lookup](pics/get_exchange_rate.png)
+
+![Image search](pics/search-image.png)
+
+### Web workbench
+
+![Multiple subagents running in parallel](pics/multi-subagents.png)
+
+![Source Control and model switching](pics/git-model.png)
+
 
 ---
 

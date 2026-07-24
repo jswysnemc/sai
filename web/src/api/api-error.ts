@@ -5,16 +5,20 @@ import { detectInitialLocale, type Locale } from "../features/i18n/locale";
  */
 export class ApiError extends Error {
   readonly rawMessage: string;
+  /** 服务端返回的完整诊断详情；缺省时与 rawMessage 相同 */
+  readonly detail: string;
 
   /**
    * 创建可动态本地化的 API 错误。
    *
-   * @param rawMessage 服务端返回的原始错误
+   * @param rawMessage 服务端返回的原始错误摘要
+   * @param detail 可选完整错误链/诊断详情
    */
-  constructor(rawMessage: string) {
+  constructor(rawMessage: string, detail?: string | null) {
     super();
     this.name = "ApiError";
     this.rawMessage = rawMessage;
+    this.detail = (detail ?? "").trim() || rawMessage;
     Object.defineProperty(this, "message", {
       configurable: true,
       get: () => localizeApiMessage(this.rawMessage, detectInitialLocale())

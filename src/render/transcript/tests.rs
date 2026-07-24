@@ -70,10 +70,12 @@ fn live_table_is_emitted_once_without_cursor_replacement_sequences() {
         "| Tool | Purpose |\n| --- | --- |\n| read_file | Read files |\n",
     ));
 
+    // live 全量重绘：已确认表格按当前行集合输出边框表，不用光标回退
     let preview = store.display_live_tail(80, &options());
     let preview = preview.iter().map(|line| line.as_str()).collect::<String>();
-    assert!(preview.contains("| Tool | Purpose |"));
-    assert!(!preview.contains('┌'));
+    assert!(preview.contains('┌'));
+    assert!(preview.contains("read_file"));
+    assert!(!preview.contains("\x1b[1A"));
 
     store.push_chunk(&chunk(ChatStreamKind::Content, "complete\n"));
     assert!(store.finalize_live_tail());

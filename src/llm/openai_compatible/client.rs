@@ -211,16 +211,19 @@ impl OpenAiCompatibleClient {
             "{}/chat/completions",
             self.provider.base_url.trim_end_matches('/')
         );
-        let headers = merge_provider_extra_headers(
-            bearer_request_headers(&self.api_key, &[]),
-            &self.provider,
-        );
+        let user_agent = resolve_provider_user_agent(&self.provider);
+        let mut base_headers = bearer_request_headers(&self.api_key, &[]);
+        base_headers.push(("User-Agent".to_string(), user_agent.clone()));
+        let headers = merge_provider_extra_headers(base_headers, &self.provider);
         let mut debug = self.start_http_debug("POST", &url, "openai-chat", &headers, &request);
         let response = with_provider_extra_headers(
-            self.client
-                .post(&url)
-                .bearer_auth(&self.api_key)
-                .json(&request),
+            apply_provider_user_agent(
+                self.client
+                    .post(&url)
+                    .bearer_auth(&self.api_key)
+                    .json(&request),
+                &self.provider,
+            ),
             &self.provider,
         )
         .send()
@@ -326,10 +329,10 @@ impl OpenAiCompatibleClient {
             ThinkingProtocol::Anthropic,
         )?;
         let url = format!("{}/messages", self.provider.base_url.trim_end_matches('/'));
-        let headers = merge_provider_extra_headers(
-            anthropic_request_headers(&self.api_key),
-            &self.provider,
-        );
+        let user_agent = resolve_provider_user_agent(&self.provider);
+        let mut base_headers = anthropic_request_headers(&self.api_key);
+        base_headers.push(("User-Agent".to_string(), user_agent));
+        let headers = merge_provider_extra_headers(base_headers, &self.provider);
         let mut debug = self.start_http_debug("POST", &url, "anthropic", &headers, &request);
         // 【Anthropic】【Messages 请求】1. 首先使用当前 thinking 配置发送请求
         let response = self.send_anthropic_request(&url, &request).await?;
@@ -454,12 +457,14 @@ impl OpenAiCompatibleClient {
         url: &str,
         request: &Value,
     ) -> Result<reqwest::Response> {
-        let builder = self
-            .client
-            .post(url)
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .json(request);
+        let builder = apply_provider_user_agent(
+            self.client
+                .post(url)
+                .header("x-api-key", &self.api_key)
+                .header("anthropic-version", "2023-06-01")
+                .json(request),
+            &self.provider,
+        );
         Ok(with_provider_extra_headers(builder, &self.provider)
             .send()
             .await?)
@@ -519,11 +524,14 @@ impl OpenAiCompatibleClient {
             ThinkingProtocol::OpenAiResponses,
         )?;
         let url = format!("{}/responses", self.provider.base_url.trim_end_matches('/'));
+        let user_agent = resolve_provider_user_agent(&self.provider);
         let headers = merge_provider_extra_headers(
             if codex {
-                codex_responses_request_headers(&self.api_key, &session_key)
+                codex_responses_request_headers(&self.api_key, &session_key, &user_agent)
             } else {
-                bearer_request_headers(&self.api_key, &[])
+                let mut headers = bearer_request_headers(&self.api_key, &[]);
+                headers.push(("User-Agent".to_string(), user_agent));
+                headers
             },
             &self.provider,
         );
@@ -531,14 +539,9 @@ impl OpenAiCompatibleClient {
         let mut req = self.client.post(&url).bearer_auth(&self.api_key).json(&request);
         if codex {
             // 额外 Codex 请求头（Authorization / Content-Type 由 bearer + json 处理）
-            req = req
-                .header("User-Agent", "codex_cli_rs/0.144.0")
-                .header("originator", "codex_cli_rs")
-                .header("OpenAI-Beta", "responses=experimental")
-                .header("version", "0.144.0")
-                .header("session_id", &session_key)
-                .header("Accept", "text/event-stream")
-                .header("x-client-request-id", &session_key);
+            req = apply_codex_response_headers(req, &self.provider, &session_key);
+        } else {
+            req = apply_provider_user_agent(req, &self.provider);
         }
         let response = with_provider_extra_headers(req, &self.provider).send().await?;
         let status = response.status();
@@ -568,8 +571,28 @@ impl OpenAiCompatibleClient {
         let mut content_started = false;
         let mut tool_calls = ResponsesToolAccumulator::default();
         let mut stream = response.bytes_stream();
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk?;
+        // Codex / 部分网关在正文结束后可能不发 response.completed 且保持连接；
+        // 正文已开始后，空闲超过阈值则按已收到内容收尾，避免前端永久 thinking。
+        let idle_limit = responses_stream_idle_timeout(self.provider.timeout_seconds);
+        loop {
+            let next = tokio::time::timeout(idle_limit, stream.next()).await;
+            let chunk = match next {
+                Ok(Some(chunk)) => chunk?,
+                Ok(None) => break,
+                Err(_) if content_started || !content.is_empty() || !reasoning.is_empty() => {
+                    // 已有输出且长时间无新字节：按成功结束处理
+                    break;
+                }
+                Err(_) => {
+                    bail!(
+                        "{}",
+                        t(
+                            "responses stream idle timeout before any output",
+                            "Responses 流在输出前空闲超时"
+                        )
+                    );
+                }
+            };
             for line in buffer.push(&chunk)? {
                 if let Some(debug) = debug.as_mut() {
                     debug.append_stream_line(&line);
@@ -610,6 +633,14 @@ impl OpenAiCompatibleClient {
                 &mut *on_event,
             )?;
         }
+        // 确保缓冲中的正文/推理全部推给上层，再组装结果
+        flush_responses_buffers(
+            &content,
+            &mut content_emitted,
+            &reasoning,
+            &mut reasoning_emitted,
+            &mut *on_event,
+        )?;
         let result = finalize_stream_result(content, reasoning, usage, tool_calls.finish())?;
         if let Some(debug) = debug.as_ref() {
             let _ = debug.finish_ok(&result);
@@ -630,6 +661,65 @@ impl OpenAiCompatibleClient {
                 &self.provider.client_style,
             )
     }
+}
+
+
+/// Responses 流空闲超时：正文阶段过久无新字节时收尾。
+///
+/// 参数:
+/// - `provider_timeout_seconds`: 供应商请求超时配置
+///
+/// 返回:
+/// - 空闲等待上限
+fn responses_stream_idle_timeout(provider_timeout_seconds: u64) -> Duration {
+    // 1. 默认 8 秒足够覆盖网关间歇；不超过供应商超时的一半
+    let half = provider_timeout_seconds.saturating_div(2).max(3);
+    Duration::from_secs(half.min(15).max(5))
+}
+
+/// 冲刷 Responses 流缓冲中尚未推送的文本。
+///
+/// 参数:
+/// - `content`: 已聚合正文
+/// - `content_emitted`: 已推送正文字节数
+/// - `reasoning`: 已聚合推理
+/// - `reasoning_emitted`: 已推送推理字节数
+/// - `on_event`: 流式事件回调
+///
+/// 返回:
+/// - 冲刷结果
+fn flush_responses_buffers<F>(
+    content: &str,
+    content_emitted: &mut usize,
+    reasoning: &str,
+    reasoning_emitted: &mut usize,
+    on_event: &mut F,
+) -> Result<()>
+where
+    F: FnMut(ChatStreamEvent) -> Result<()>,
+{
+    // 直接复用 stream_handlers 内部逻辑不可用（private）；此处补发剩余切片
+    if *content_emitted < content.len() {
+        let text = content[*content_emitted..].to_string();
+        *content_emitted = content.len();
+        if !text.is_empty() {
+            on_event(ChatStreamEvent::Chunk(ChatStreamChunk {
+                kind: ChatStreamKind::Content,
+                text,
+            }))?;
+        }
+    }
+    if *reasoning_emitted < reasoning.len() {
+        let text = reasoning[*reasoning_emitted..].to_string();
+        *reasoning_emitted = reasoning.len();
+        if !text.is_empty() {
+            on_event(ChatStreamEvent::Chunk(ChatStreamChunk {
+                kind: ChatStreamKind::Reasoning,
+                text,
+            }))?;
+        }
+    }
+    Ok(())
 }
 
 /// 拆分 Responses 请求的 instructions 与 input 消息。
@@ -676,12 +766,29 @@ fn split_responses_instructions(
     )
 }
 
+/// Codex CLI 默认 User-Agent。
+const CODEX_CLI_USER_AGENT: &str = "codex_cli_rs/0.144.0";
+/// 非 Codex 默认 User-Agent。
+const DEFAULT_HTTP_USER_AGENT: &str = "sai/0.1";
+
 /// 构造 Codex Responses 调试用请求头列表。
-fn codex_responses_request_headers(api_key: &str, session_id: &str) -> Vec<(String, String)> {
+///
+/// 参数:
+/// - `api_key`: API Key
+/// - `session_id`: 会话 UUID
+/// - `user_agent`: 解析后的 User-Agent
+///
+/// 返回:
+/// - 调试/日志用的头列表
+fn codex_responses_request_headers(
+    api_key: &str,
+    session_id: &str,
+    user_agent: &str,
+) -> Vec<(String, String)> {
     bearer_request_headers(
         api_key,
         &[
-            ("User-Agent", "codex_cli_rs/0.144.0"),
+            ("User-Agent", user_agent),
             ("originator", "codex_cli_rs"),
             ("OpenAI-Beta", "responses=experimental"),
             ("version", "0.144.0"),
@@ -689,6 +796,48 @@ fn codex_responses_request_headers(api_key: &str, session_id: &str) -> Vec<(Stri
             ("x-client-request-id", session_id),
         ],
     )
+}
+
+/// 解析供应商最终 User-Agent。
+///
+/// 参数:
+/// - `provider`: 供应商配置
+///
+/// 返回:
+/// - 自定义 UA；否则 Codex 风格用 Codex CLI UA，其它用 sai 默认 UA
+fn resolve_provider_user_agent(provider: &ProviderConfig) -> String {
+    let custom = provider.user_agent.trim();
+    if !custom.is_empty() {
+        return custom.to_string();
+    }
+    if provider.client_style.trim().eq_ignore_ascii_case("codex") {
+        return CODEX_CLI_USER_AGENT.to_string();
+    }
+    DEFAULT_HTTP_USER_AGENT.to_string()
+}
+
+/// 为非 Codex 请求附加 User-Agent。
+fn apply_provider_user_agent(
+    req: reqwest::RequestBuilder,
+    provider: &ProviderConfig,
+) -> reqwest::RequestBuilder {
+    req.header("User-Agent", resolve_provider_user_agent(provider))
+}
+
+/// 附加 Codex Responses 协议头（含可覆盖的 User-Agent）。
+fn apply_codex_response_headers(
+    req: reqwest::RequestBuilder,
+    provider: &ProviderConfig,
+    session_id: &str,
+) -> reqwest::RequestBuilder {
+    let user_agent = resolve_provider_user_agent(provider);
+    req.header("User-Agent", user_agent)
+        .header("originator", "codex_cli_rs")
+        .header("OpenAI-Beta", "responses=experimental")
+        .header("version", "0.144.0")
+        .header("session_id", session_id)
+        .header("Accept", "text/event-stream")
+        .header("x-client-request-id", session_id)
 }
 
 /// 将供应商自定义头合并进调试头列表。
@@ -733,13 +882,17 @@ fn with_provider_extra_headers(
     mut req: reqwest::RequestBuilder,
     provider: &ProviderConfig,
 ) -> reqwest::RequestBuilder {
+    let has_custom_ua = !provider.user_agent.trim().is_empty();
     for (name, value) in &provider.extra_headers {
         let key = name.trim();
         if key.is_empty() {
             continue;
         }
-        // 不覆盖 Authorization / Content-Type 由调用方控制的核心鉴权
+        // 不覆盖 Authorization；专用 user_agent 字段优先于 extra_headers 中的 User-Agent
         if key.eq_ignore_ascii_case("authorization") {
+            continue;
+        }
+        if has_custom_ua && key.eq_ignore_ascii_case("user-agent") {
             continue;
         }
         req = req.header(key, value);

@@ -25,6 +25,7 @@ export type {
   SessionTimelineTurn,
   SessionTimelineCompaction,
   SessionTimeline,
+  SessionContextPrompt,
   RunModelSelection,
   ThinkingLevel,
   RunInfo,

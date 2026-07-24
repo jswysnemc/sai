@@ -36,8 +36,8 @@ pub(crate) fn register(
     registry.register(ToolSpec::new_with_progress(
         "run_command",
         t(
-            "Run workspace shell commands for builds, tests, validation, export, inspection, and other command-line programs. Prefer edit_file with a Codex-style patch for source text edits, but shell redirection, tee, and heredocs are allowed when useful. A program's own -o/--output option may create build artifacts. Wait up to timeout_seconds (default 30, max 120). Use timeout_seconds=0 to start as a background task immediately. If the command is still running when the wait ends, it is promoted to a background task and task_id is returned; manage it with background_command action=list/output/stop/cleanup.",
-            "运行构建、测试、校验、导出、检查及其他命令行程序。源码文本修改优先使用 edit_file 的 Codex 补丁，但 shell 重定向、tee、heredoc 也允许使用。程序自身通过 -o/--output 生成构建产物属于允许用途。等待时间由 timeout_seconds 控制（默认 30，最大 120）。timeout_seconds=0 表示立即作为后台任务启动。若等待结束时命令仍在运行，会提升为后台任务并返回 task_id；随后用 background_command 的 list/output/stop/cleanup 管理。",
+            "Run workspace shell commands for builds, tests, validation, export, inspection, and other command-line programs. Prefer edit_file with a Codex-style patch for source text edits, but shell redirection, tee, and heredocs are allowed when useful. A program's own -o/--output option may create build artifacts. Wait up to timeout_seconds (default 30, max 120). Use timeout_seconds=0 to start as a background task immediately. If the command is still running when the wait ends, it is promoted to a background task and task_id is returned; manage it with background_command action=list/output/stop/cleanup. Commands that finish within the wait return mode=foreground with full stdout/stderr; any task_id there is audit-only and does not need background_command output or completion handling.",
+            "运行构建、测试、校验、导出、检查及其他命令行程序。源码文本修改优先使用 edit_file 的 Codex 补丁，但 shell 重定向、tee、heredoc 也允许使用。程序自身通过 -o/--output 生成构建产物属于允许用途。等待时间由 timeout_seconds 控制（默认 30，最大 120）。timeout_seconds=0 表示立即作为后台任务启动。若等待结束时命令仍在运行，会提升为后台任务并返回 task_id；随后用 background_command 的 list/output/stop/cleanup 管理。若在等待时间内结束，返回 mode=foreground 与完整 stdout/stderr；其中的 task_id 仅供审计，无需再 background_command output，也不会再推送完成回执。",
         ),
         json!({
             "type":"object",
@@ -272,15 +272,15 @@ async fn wait_managed_task(
         )?;
 
         // 2. 进程已退出：读取完整日志并返回前台结果
+        // 前台已完整消费输出，标记 completion_notified，避免再注入 external completion 回执
         if !process_exists(task.pid) {
             let store = BackgroundCommandStore::new(paths.state_dir.clone());
             let mut tasks = store.load()?;
             if let Some(existing) = tasks.iter_mut().find(|item| item.id == task.id) {
-                if existing.status == "running" {
-                    existing.status = "exited".to_string();
-                    existing.updated_at = super::store::unix_seconds();
-                    store.save(&tasks)?;
-                }
+                existing.status = "exited".to_string();
+                existing.completion_notified = true;
+                existing.updated_at = super::store::unix_seconds();
+                store.save(&tasks)?;
             }
             let stdout = read_log_text(&task.stdout_log)?;
             let stderr = read_log_text(&task.stderr_log)?;
@@ -291,7 +291,7 @@ async fn wait_managed_task(
                 "stdout": clip_output(&stdout),
                 "stderr": clip_output(&stderr),
                 "task_id": task.id,
-                "note": "Process finished; exact exit code is unavailable for managed wait mode.",
+                "note": "Process finished in foreground; stdout/stderr are complete. task_id is audit-only and needs no background_command output or completion handling.",
             }))?);
         }
 
@@ -757,6 +757,23 @@ mod tests {
         assert!(
             stdout.to_ascii_lowercase().contains("done"),
             "stdout should contain done, got: {stdout:?}"
+        );
+        let task_id = data["task_id"].as_str().expect("foreground managed finish keeps audit task_id");
+        let note = data["note"].as_str().unwrap_or_default();
+        assert!(
+            note.contains("audit-only"),
+            "foreground note should mark task_id as audit-only, got: {note}"
+        );
+        let store = BackgroundCommandStore::new(paths.state_dir.clone());
+        let tasks = store.load().unwrap();
+        let task = tasks
+            .iter()
+            .find(|item| item.id == task_id)
+            .expect("foreground finished task should remain for audit");
+        assert_eq!(task.status, "exited");
+        assert!(
+            task.completion_notified,
+            "foreground success must not emit external completion notices"
         );
     }
 }

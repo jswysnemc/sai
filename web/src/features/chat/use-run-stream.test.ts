@@ -43,4 +43,36 @@ describe("sessionRunsReducer", () => {
 
     expect(interrupted.runs).toEqual([]);
   });
+
+  it("marks a running turn completed when stop is applied locally", () => {
+    const started = sessionRunsReducer({ runs: [] }, {
+      type: "start",
+      run: {
+        run_id: "run-1",
+        workspace_id: "workspace",
+        session_id: "session",
+        input: "hello",
+        image_urls: [],
+        status: "running"
+      },
+      sessionId: "session",
+      userInput: "hello"
+    });
+    const thinking = sessionRunsReducer(started, {
+      type: "event",
+      event: {
+        sequence: 2,
+        run_id: "run-1",
+        workspace_id: "workspace",
+        session_id: "session",
+        timestamp: "now",
+        type: "status.changed",
+        payload: { status: "thinking" }
+      }
+    });
+    const stopped = sessionRunsReducer(thinking, { type: "stop-local", runId: "run-1" });
+    expect(stopped.runs).toHaveLength(1);
+    expect(stopped.runs[0].completed).toBe(true);
+    expect(stopped.runs[0].status).toBe("idle");
+  });
 });

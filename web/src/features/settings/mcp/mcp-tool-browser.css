@@ -1,0 +1,77 @@
+.mcp-tool-browser {
+  margin: 0.9rem 1rem 0;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  overflow: hidden;
+  background: var(--paper-raised);
+}
+
+.mcp-tool-browser-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.mcp-tool-browser-head > div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.mcp-tool-browser-head strong { font-size: 0.82rem; }
+.mcp-tool-browser-head small { color: var(--ink-soft); font-size: 0.72rem; }
+
+.mcp-tool-browser-body {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.78fr) minmax(0, 1.5fr);
+  min-height: 18rem;
+  max-height: 28rem;
+}
+
+.mcp-tool-list {
+  overflow: auto;
+  padding: 0.4rem;
+  border-right: 1px solid var(--line);
+}
+
+.mcp-tool-list button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: start;
+  padding: 0.55rem;
+  border: 0;
+  border-radius: 0.45rem;
+  color: var(--ink-soft);
+  background: transparent;
+  text-align: left;
+}
+
+.mcp-tool-list button:hover,
+.mcp-tool-list button.active {
+  color: var(--ink);
+  background: var(--paper-deep);
+}
+
+.mcp-tool-list span { min-width: 0; display: grid; gap: 0.16rem; }
+.mcp-tool-list strong { overflow: hidden; font-family: "Fira Code", monospace; font-size: 0.72rem; text-overflow: ellipsis; white-space: nowrap; }
+.mcp-tool-list small { display: -webkit-box; overflow: hidden; color: var(--ink-soft); font-size: 0.68rem; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+
+.mcp-tool-detail { min-width: 0; overflow: auto; padding: 0.8rem; }
+.mcp-tool-detail-title { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.mcp-tool-detail-title span { display: flex; min-width: 0; align-items: center; gap: 0.4rem; font-weight: 600; font-size: 0.82rem; }
+.mcp-tool-detail-title code { overflow: hidden; color: var(--ink-soft); font-size: 0.66rem; text-overflow: ellipsis; white-space: nowrap; }
+.mcp-tool-detail p { margin: 0.65rem 0; color: var(--ink-soft); font-size: 0.76rem; line-height: 1.55; }
+.mcp-tool-schema-title { display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.35rem; color: var(--ink-soft); font-size: 0.7rem; font-weight: 600; }
+.mcp-tool-detail pre { min-height: 9rem; margin: 0; padding: 0.7rem; overflow: auto; border: 1px solid var(--line); border-radius: 0.5rem; background: var(--code-surface); color: var(--code-text); font-family: "Fira Code", monospace; font-size: 0.68rem; line-height: 1.55; }
+.mcp-tool-empty { display: flex; min-height: 8rem; align-items: center; justify-content: center; gap: 0.5rem; padding: 1rem; color: var(--ink-soft); font-size: 0.76rem; }
+
+@media (max-width: 48rem) {
+  .mcp-tool-browser-head { align-items: stretch; flex-direction: column; }
+  .mcp-tool-browser-body { grid-template-columns: 1fr; max-height: none; }
+  .mcp-tool-list { max-height: 12rem; border-right: 0; border-bottom: 1px solid var(--line); }
+  .mcp-tool-detail-title { align-items: flex-start; flex-direction: column; }
+}

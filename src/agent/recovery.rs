@@ -137,6 +137,10 @@ impl Agent {
     /// 返回:
     /// - 无
     pub(super) fn spawn_session_memory_extraction(&self) {
+        // 1. 全局记忆关闭时跳过会话记忆提取
+        if !self.config.memory_config().enabled {
+            return;
+        }
         let state = self.state.clone();
         let paths = self.paths.clone();
         let context_char_budget = self.context_char_budget;

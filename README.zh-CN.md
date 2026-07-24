@@ -12,7 +12,7 @@
 [![CI Windows](https://img.shields.io/badge/CI-Windows-passing-success)](https://github.com/SHORiN-KiWATA/Sai/actions/workflows/windows.yml)
 [![CI macOS](https://img.shields.io/badge/CI-macOS-passing-success)](https://github.com/SHORiN-KiWATA/Sai/actions/workflows/macos.yml)
 
-[为什么是 Sai](#为什么是-sai) · [核心能力](#核心能力) · [安装](#安装) · [快速开始](#快速开始) · [CLI 命令](#cli-命令参考) · [架构总览](#架构总览) · [存储布局](#存储与目录布局) · [FAQ](#faq) · [贡献](#贡献)
+[为什么是 Sai](#为什么是-sai) · [界面预览](#界面预览) · [核心能力](#核心能力) · [安装](#安装) · [快速开始](#快速开始) · [CLI 命令](#cli-命令参考) · [架构总览](#架构总览) · [存储布局](#存储与目录布局) · [FAQ](#faq) · [贡献](#贡献)
 
 ---
 
@@ -24,6 +24,37 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 - **三协议自适应** - OpenAI Chat / OpenAI Responses / Anthropic Messages 三种协议自动识别,任意兼容供应商即插即用
 - **有人格有记忆** - 跨会话长期记忆(facts / episodes),半衰期遗忘与联想召回,按人格隔离
 - **多入口接入** - 终端 REPL、单轮 ask、Web 工作台、QQ / 微信 / 企业微信网关,同一套 Agent 内核
+
+---
+
+## 界面预览
+
+终端 REPL 的流式对话、内置工具回执、配置 TUI，以及 Web 工作台的子代理与源代码管理。
+
+### 终端 REPL
+
+![Sai REPL 问候与流式对话](pics/hello.png)
+
+![配置 TUI：供应商与模型设置](pics/sai-config.png)
+
+### 内置工具
+
+![查询天气](pics/get_weather.png)
+
+![设置闹钟](pics/set_alarm.png)
+
+![抽签占卜](pics/draw_fortune_lot.png)
+
+![查询汇率](pics/get_exchange_rate.png)
+
+![搜索图片](pics/search-image.png)
+
+### Web 工作台
+
+![并发调度多个子代理](pics/multi-subagents.png)
+
+![源代码管理与模型切换](pics/git-model.png)
+
 
 ---
 

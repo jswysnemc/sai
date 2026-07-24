@@ -8,7 +8,7 @@ mod transport_retry;
 pub use http_debug::SessionGuard as HttpDebugSessionGuard;
 pub use openai_compatible::OpenAiCompatibleClient;
 pub use stream_event::{ChatStreamEvent, ToolCallStreamProgress};
-pub(crate) use transport_retry::{disconnect_user_hint, is_transient_transport_error};
+pub(crate) use transport_retry::{disconnect_user_hint, error_detail_text, is_transient_transport_error};
 
 use serde::{Deserialize, Serialize};
 

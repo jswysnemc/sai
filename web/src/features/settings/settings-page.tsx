@@ -1,22 +1,9 @@
-import { ArrowLeft, Save } from "lucide-react";
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { AdvancedSettingsSection } from "./advanced-settings-section";
-import { AgentSettingsSection } from "./agents/agent-settings-section";
-import { AppearanceSettingsSection } from "./appearance-settings-section";
-import { GatewaySettingsSection } from "./gateway-settings-section";
-import { GitSettingsPanel } from "./git/git-settings-panel";
-import { ProviderSettingsSection } from "./provider-settings-section";
-import { PluginSettingsSection } from "./plugin-settings-section";
-import { RuntimeSettingsSection } from "./runtime-settings-section";
-import { MemorySettingsSection } from "./memory-settings-section";
-import { HooksSettingsSection } from "./hooks-settings-section";
-import { McpSettingsSection } from "./mcp-settings-section";
-import { SkillsSettingsSection } from "./skills/skills-settings-section";
-import { UsageStatsSection } from "./usage-stats-section";
-import { SaveStatusBadge } from "./save-status-badge";
-import { SETTINGS_SECTIONS } from "./settings-sections";
-import type { SettingsSectionId } from "./settings-types";
+import { ArrowLeft } from "lucide-react";
+import { Link, Navigate, useParams } from "react-router-dom";
+import { SettingsNav } from "./shell/settings-nav";
+import { SettingsSaveBar } from "./shell/settings-save-bar";
+import { SettingsSectionBody } from "./shell/settings-section-body";
+import { getSettingsSection, resolveSettingsSectionId } from "./settings-registry";
 import { useSettingsConfig } from "./use-settings-config";
 import { useTheme } from "../theme/theme";
 import { useI18n } from "../i18n/use-i18n";
@@ -26,62 +13,66 @@ import "./settings-catalog.css";
 import "./settings-sections.css";
 
 /**
- * 渲染应用配置页面，含紧凑吸顶标题条、分类导航和编辑区。
+ * 设置页壳层：顶栏、分组导航、按路由挂载 section。
  *
  * @returns 设置页面
  */
 export function SettingsPage() {
+  const params = useParams<{ sectionId?: string }>();
+  const requested = params.sectionId;
+  const section = resolveSettingsSectionId(requested);
+  const meta = getSettingsSection(section);
   const settings = useSettingsConfig();
   const theme = useTheme();
   const { t } = useI18n();
-  const [section, setSection] = useState<SettingsSectionId>("providers");
+
+  // 1. 未知 section 或裸 /settings 归一到默认路由
+  if (!requested || requested !== section) {
+    return <Navigate to={`/settings/${section}`} replace />;
+  }
 
   return (
     <div className="settings-page">
       <header className="settings-topbar">
         <div className="settings-topbar-inner">
-          <Link to="/" className="settings-back" aria-label={t("Back to workspace", "返回主界面")}><ArrowLeft size={15} /><span>{t("Back to workspace", "返回主界面")}</span></Link>
+          <Link to="/" className="settings-back" aria-label={t("Back to workspace", "返回主界面")}>
+            <ArrowLeft size={15} />
+            <span>{t("Back to workspace", "返回主界面")}</span>
+          </Link>
           <h1>{t("Settings", "设置")}</h1>
-          <p>{t("Manage models, plugins, agents, tools, gateways, and interface preferences.", "管理模型、插件、Agent、工具、网关和界面偏好。")}</p>
+          <p>
+            {meta
+              ? t(meta.descriptionEn, meta.descriptionZh)
+              : t(
+                  "Manage models, plugins, agents, tools, gateways, and interface preferences.",
+                  "管理模型、插件、Agent、工具、网关和界面偏好。"
+                )}
+          </p>
           <div className="settings-topbar-actions">
-            <SaveStatusBadge dirty={settings.dirty} saving={settings.saving} saveError={Boolean(settings.error)} loaded={Boolean(settings.config)} />
-            <button
-              type="button"
-              className="settings-save"
-              onClick={() => void settings.saveConfig()}
-              disabled={!settings.config || !settings.dirty || settings.saving}
-            >
-              <Save size={14} />{settings.saving ? t("Saving", "正在保存") : t("Save changes", "保存修改")}
-            </button>
+            <SettingsSaveBar
+              kind={meta?.kind ?? "app-config"}
+              sectionId={section}
+              dirty={settings.dirty}
+              saving={settings.saving}
+              saveError={Boolean(settings.error)}
+              loaded={Boolean(settings.config)}
+              onSave={() => void settings.saveConfig()}
+            />
           </div>
         </div>
       </header>
       <div className="settings-workspace">
-        <nav className="settings-navigation" aria-label={t("Settings categories", "设置分类")}>
-          <div className="settings-navigation-label">{t("Settings categories", "设置分类")}</div>
-          {SETTINGS_SECTIONS.map(({ id, labelEn, labelZh, descriptionEn, descriptionZh, icon: Icon }) => (
-            <button type="button" key={id} className={id === section ? "active" : ""} onClick={() => setSection(id)}>
-              <Icon size={15} />
-              <span><strong>{t(labelEn, labelZh)}</strong><small>{t(descriptionEn, descriptionZh)}</small></span>
-            </button>
-          ))}
-        </nav>
+        <SettingsNav activeSection={section} />
         <main className="settings-main">
-          {settings.loading && <div className="settings-state">{t("Loading configuration", "正在读取配置")}</div>}
-          {settings.config && section === "providers" && <ProviderSettingsSection config={settings.config} onConfigChange={settings.updateConfig} onProviderChange={settings.updateProvider} />}
-          {settings.config && section === "agents" && <AgentSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
-          {settings.config && section === "plugins" && <PluginSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
-          {settings.config && section === "runtime" && <RuntimeSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
-          {section === "skills" && <SkillsSettingsSection />}
-          {settings.config && section === "git" && <GitSettingsPanel config={settings.config} onConfigChange={settings.updateConfig} />}
-          {section === "appearance" && <AppearanceSettingsSection theme={theme.theme} onThemeChange={theme.setTheme} />}
-          {section === "memory" && <MemorySettingsSection />}
-          {settings.config && section === "hooks" && <HooksSettingsSection config={settings.config} onConfigChange={settings.updateConfig} />}
-          {section === "mcp" && <McpSettingsSection />}
-          {section === "usage" && <UsageStatsSection />}
-          {settings.config && section === "gateways" && <GatewaySettingsSection config={settings.config} dirty={settings.dirty} onGatewayChange={settings.updateGateway} onSave={settings.saveConfig} />}
-          {settings.config && section === "advanced" && <AdvancedSettingsSection value={settings.raw} onChange={settings.updateRaw} />}
-          {settings.error && <div className="settings-error">{settings.error.message}</div>}
+          <SettingsSectionBody
+            section={section}
+            settings={settings}
+            theme={theme.theme}
+            onThemeChange={theme.setTheme}
+          />
+          {settings.error && (meta?.kind === "app-config" || section === "skills" || section === "memory") && (
+            <div className="settings-error">{settings.error.message}</div>
+          )}
         </main>
       </div>
     </div>

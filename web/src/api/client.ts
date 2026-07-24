@@ -59,7 +59,8 @@ import type {
   WorkspaceList,
   WorkspaceSessions,
   UndoSessionResult,
-  WeixinLoginSnapshot
+  WeixinLoginSnapshot,
+  SessionContextPrompt
 } from "./contracts";
 import { ApiError } from "./api-error";
 import { detectInitialLocale, text } from "../features/i18n/locale";
@@ -93,8 +94,9 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
     }
   });
   if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new ApiError(body?.error ?? `HTTP ${response.status}`);
+    const body = (await response.json().catch(() => null)) as { error?: string; detail?: string } | null;
+    const message = body?.error ?? `HTTP ${response.status}`;
+    throw new ApiError(message, body?.detail ?? message);
   }
   return response.json() as Promise<T>;
 }
@@ -142,6 +144,13 @@ export const api = {
         body: JSON.stringify({ ids })
       }),
     timeline: (id: string) => apiRequest<SessionTimeline>(`/api/sessions/${id}/timeline?limit=500`),
+    contextPrompt: (id: string, agentId?: string, locale?: string) => {
+      const params = new URLSearchParams();
+      if (agentId) params.set("agent_id", agentId);
+      if (locale) params.set("locale", locale);
+      const query = params.toString();
+      return apiRequest<SessionContextPrompt>(`/api/sessions/${id}/context-prompt${query ? `?${query}` : ""}`);
+    },
     undo: (id: string) => apiRequest<UndoSessionResult>(`/api/sessions/${id}/undo`, { method: "POST" }),
     rollback: (id: string, turnId: string) =>
       apiRequest<ContextRollbackResult>(`/api/sessions/${id}/rollback`, {

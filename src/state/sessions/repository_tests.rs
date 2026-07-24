@@ -62,6 +62,21 @@ mod tests {
     }
 
     #[test]
+    fn allows_deleting_default_and_all_sessions() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path().to_path_buf());
+        let first = create_session(&paths, Some("First")).unwrap();
+        let default_id = DEFAULT_SESSION_ID.to_string();
+        let deleted = delete_sessions(&paths, &[first.id.clone(), default_id.clone()]).unwrap();
+        assert!(deleted.contains(&first.id));
+        assert!(deleted.contains(&default_id));
+        // 删空后 ensure 会补回空白默认会话
+        let active = ensure_active_session(&paths).unwrap();
+        assert_eq!(active.id, DEFAULT_SESSION_ID);
+        assert_eq!(list_sessions(&paths).unwrap().len(), 1);
+    }
+
+    #[test]
     fn deletes_multiple_sessions_with_one_index_update() {
         let temp = tempfile::tempdir().unwrap();
         let paths = test_paths(temp.path().to_path_buf());

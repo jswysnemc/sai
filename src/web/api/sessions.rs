@@ -65,6 +65,14 @@ struct HistoryQuery {
     limit: Option<usize>,
 }
 
+#[derive(Deserialize)]
+struct ContextPromptQuery {
+    /// 可选 Agent 档案；影响 live 组装路径
+    agent_id: Option<String>,
+    /// 界面语言（en / en-US / zh / zh-CN）；缺省跟随服务端环境语言
+    locale: Option<String>,
+}
+
 #[derive(Serialize)]
 struct DeleteResponse {
     deleted: bool,
@@ -101,8 +109,49 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/sessions/:id/undo", post(undo))
         .route("/api/sessions/:id/rollback", post(rollback))
         .route("/api/sessions/:id/permission-audit", get(permission_audit))
+        .route("/api/sessions/:id/context-prompt", get(context_prompt))
         .route("/api/sessions/:id/compact", post(compact))
         .route("/api/sessions/:id/fork", post(fork))
+}
+
+
+/// 返回指定会话的系统提示词预览（含 AGENT.md 等指令文件）。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `id`: 会话标识
+/// - `query`: 可选 agent_id / locale
+///
+/// 返回:
+/// - 会话 baseline 或当前配置即时组装的提示词
+async fn context_prompt(
+    State(state): State<WebAppState>,
+    Path(id): Path<String>,
+    Query(query): Query<ContextPromptQuery>,
+) -> WebResult<Json<super::super::services::context_prompt::SessionContextPrompt>> {
+    // 1. 校验会话存在
+    let sessions = crate::state::list_sessions(&state.paths).map_err(WebError::from)?;
+    if !sessions.iter().any(|session| session.id == id) {
+        return Err(WebError::not_found(format!("session not found: {id}")));
+    }
+    // 2. 在当前工作区路径下加载项目指令文件
+    let workspace = state.workspaces.active().map_err(WebError::from)?;
+    // 3. 解析界面语言；无法识别时回退服务端环境语言
+    let locale = query
+        .locale
+        .as_deref()
+        .and_then(crate::i18n::Locale::parse)
+        .unwrap_or_else(crate::i18n::locale);
+    let prompt = super::super::services::context_prompt::load_session_context_prompt(
+        &state.paths,
+        &id,
+        &workspace.path,
+        query.agent_id.as_deref(),
+        locale,
+    )
+    .await
+    .map_err(WebError::from)?;
+    Ok(Json(prompt))
 }
 
 /// 返回会话最近的权限审计事件。

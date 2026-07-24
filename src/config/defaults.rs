@@ -741,6 +741,12 @@ pub(super) fn default_context_chars() -> usize {
 }
 
 /// 默认客户端模拟风格。
+/// Codex CLI 默认 User-Agent（与探测报告 0.144.0 对齐）。
+pub(crate) const CODEX_CLI_USER_AGENT: &str = "codex_cli_rs/0.144.0";
+
+/// 非 Codex 模式下的默认 HTTP User-Agent。
+pub(crate) const DEFAULT_HTTP_USER_AGENT: &str = "sai/0.1";
+
 pub(super) fn default_client_style() -> String {
     "auto".to_string()
 }

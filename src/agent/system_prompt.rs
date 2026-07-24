@@ -14,7 +14,7 @@ use anyhow::Result;
 ///
 /// 返回:
 /// - 基础系统提示文本
-pub(super) fn build_base_system_prompt(
+pub(crate) fn build_base_system_prompt(
     config: &AppConfig,
     paths: &SaiPaths,
     tools_enabled: bool,

@@ -55,14 +55,21 @@ fn list_markers_use_tertiary_color() {
 #[test]
 fn streams_raw_table_rows_then_replaces_with_rendered_table() {
     let mut renderer = MarkdownStreamRenderer::new();
+    // 1. 首行未确认：输出原文
     assert_eq!(renderer.push("| a | b |\n"), "| a | b |\n");
-    assert_eq!(renderer.push("| - | - |\n"), "| - | - |\n");
+    // 2. 分隔行确认后：清屏并按当前列宽渲染表格
+    let confirmed = renderer.push("| - | - |\n");
+    assert!(confirmed.contains("\x1b[1A\r\x1b[2K"));
+    assert!(confirmed.contains('┌'));
 
+    // 3. 后续数据行：再次清屏并以最新列宽重绘整表
     let row = renderer.push("| 1 | 2 |\n");
-    assert_eq!(row, "| 1 | 2 |\n");
+    assert!(row.contains("\x1b[1A\r\x1b[2K"));
+    assert!(row.contains('┌'));
+    assert!(row.contains('1'));
 
     let output = renderer.push("done\n");
-    assert!(output.starts_with("\x1b[1A\r\x1b[2K"));
+    assert!(output.contains("\x1b[1A\r\x1b[2K") || output.contains('┌'));
     assert!(output.contains("\x1b[1ma\x1b[0m"));
     assert!(output.contains('┌'));
     assert!(output.contains('├'));
@@ -74,21 +81,37 @@ fn streams_raw_table_rows_then_replaces_with_rendered_table() {
 fn streaming_table_width_uses_later_rows() {
     let mut renderer = MarkdownStreamRenderer::new();
     assert_eq!(renderer.push("| 软件 | 命令 |\n"), "| 软件 | 命令 |\n");
-    assert_eq!(renderer.push("|---|---|\n"), "|---|---|\n");
-    assert_eq!(
-        renderer.push("| Arch | `pacman -Syu` |\n"),
-        "| Arch | `pacman -Syu` |\n"
-    );
-    assert_eq!(
-        renderer.push("| Neovim | `sudo pacman -S neovim` |\n"),
-        "| Neovim | `sudo pacman -S neovim` |\n"
-    );
+    let confirmed = renderer.push("|---|---|\n");
+    assert!(confirmed.contains('┌'));
+    let first = renderer.push("| Arch | `pacman -Syu` |\n");
+    assert!(first.contains("pacman -Syu"));
+    let second = renderer.push("| Neovim | `sudo pacman -S neovim` |\n");
+    // 更长单元格触发清屏重绘，列宽吸收后续行
+    assert!(second.contains("\x1b[1A\r\x1b[2K"));
+    assert!(second.contains("sudo pacman -S neovim"));
+    assert!(second.contains('┌'));
 
     let output = renderer.flush();
-    assert!(output.starts_with("\x1b[1A\r\x1b[2K"));
     assert!(output.contains("sudo pacman -S neovim"));
     assert!(output.contains('┌'));
     assert!(output.contains('└'));
+}
+
+#[test]
+fn source_preview_snapshots_open_table_with_latest_widths() {
+    let mut renderer = MarkdownStreamRenderer::new_source_preview();
+    assert!(renderer.push("| 软件 | 命令 |\n").is_empty());
+    assert!(renderer.push("|---|---|\n").is_empty());
+    assert!(renderer.push("| Arch | `pacman` |\n").is_empty());
+    let preview = renderer.snapshot_open_structures();
+    assert!(preview.contains('┌'));
+    assert!(preview.contains("pacman"));
+    assert!(renderer.push("| Neovim | `sudo pacman -S neovim` |\n").is_empty());
+    let wider = renderer.snapshot_open_structures();
+    assert!(wider.contains("sudo pacman -S neovim"));
+    let finished = renderer.flush();
+    assert!(finished.contains("sudo pacman -S neovim"));
+    assert!(finished.contains('└'));
 }
 
 #[test]

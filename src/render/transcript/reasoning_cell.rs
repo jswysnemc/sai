@@ -96,6 +96,22 @@ pub(crate) fn render_live(
     )
 }
 
+/// 思考 gutter 前缀显示宽度：`  └ ` / `    `
+const THINKING_GUTTER_WIDTH: usize = 4;
+
+/// 计算思考正文折行宽度（预留 gutter，避免拼前缀后超出终端列数）。
+///
+/// 参数:
+/// - `terminal_cols`: 终端列数
+///
+/// 返回:
+/// - 正文可用显示宽度
+fn thinking_body_wrap_width(terminal_cols: usize) -> usize {
+    terminal_cols
+        .saturating_sub(THINKING_GUTTER_WIDTH)
+        .max(8)
+}
+
 /// 将思考正文渲染为可折叠 gutter 块（CLI / TUI 共用）。
 ///
 /// 参数:
@@ -112,6 +128,33 @@ pub(crate) fn render_thinking_body(
     show_expand_hint: bool,
     duration: Option<Duration>,
 ) -> String {
+    render_thinking_body_with_cols(
+        source,
+        expanded,
+        show_expand_hint,
+        duration,
+        terminal_wrap_width(),
+    )
+}
+
+/// 按指定终端列数渲染思考正文（供测试固定宽度）。
+///
+/// 参数:
+/// - `source`: 思考原文
+/// - `expanded`: 是否展开全部
+/// - `show_expand_hint`: 是否显示 Ctrl+O 提示
+/// - `duration`: 可选思考耗时
+/// - `terminal_cols`: 终端列数
+///
+/// 返回:
+/// - 带 gutter 的 ANSI 文本
+fn render_thinking_body_with_cols(
+    source: &str,
+    expanded: bool,
+    show_expand_hint: bool,
+    duration: Option<Duration>,
+    terminal_cols: usize,
+) -> String {
     let tokens = token_counter::count(source);
     let title = format!(
         "\x1b[1m\x1b[36m•\x1b[0m \x1b[1m{}\x1b[0m\x1b[2m{}\x1b[0m",
@@ -122,8 +165,8 @@ pub(crate) fn render_thinking_body(
     if body.is_empty() {
         return title;
     }
-    // 1. 按终端实际显示宽度折行后计数，避免无换行长行挤占视野
-    let lines = wrap_display_lines(body, terminal_wrap_width());
+    // 1. 按「终端列数 - gutter」折行，再拼 `  └ `/`    `，保证最终行宽不超过终端
+    let lines = wrap_display_lines(body, thinking_body_wrap_width(terminal_cols));
     let (visible, omitted) = fold_display_lines(&lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
 
     let mut output = title;
@@ -251,5 +294,64 @@ mod tests {
         assert!(collapsed.contains('…'));
         let expanded = render_thinking_body(&source, true, true, None);
         assert!(!expanded.contains("Ctrl+O"));
+    }
+
+    #[test]
+    fn thinking_body_gutter_lines_fit_terminal_cols() {
+        // 1. 用固定 80 列复现「先满宽折行再加 gutter」会溢出的场景
+        let cols = 80usize;
+        let source = "These completion events are just finish receipts for the background tools/commands I launched during the commit, push, and CI monitoring workflow.";
+        let rendered = render_thinking_body_with_cols(&source, true, true, None, cols);
+        let plain = strip_ansi(&rendered);
+        let mut body_lines = plain.lines().skip(1);
+        let first = body_lines.next().expect("first gutter line");
+        assert!(first.starts_with("  └ "), "first body line should use tree gutter: {first}");
+        for line in std::iter::once(first).chain(body_lines) {
+            let width = visible_width(line);
+            assert!(
+                width <= cols,
+                "cols={cols} width={width} line={line:?}"
+            );
+        }
+        // 2. 续行保留 gutter 缩进，而不是被二次折行挤成无缩进碎片
+        let continuation = plain.lines().nth(2).expect("continuation line");
+        assert!(
+            continuation.starts_with("    "),
+            "continuation should keep gutter indent: {continuation}"
+        );
+    }
+
+    #[test]
+    fn thinking_body_wrap_width_reserves_gutter() {
+        assert_eq!(thinking_body_wrap_width(80), 76);
+        assert_eq!(thinking_body_wrap_width(10), 8);
+        assert_eq!(thinking_body_wrap_width(4), 8);
+    }
+
+    /// 去掉 ANSI 转义，便于断言纯文本布局。
+    fn strip_ansi(text: &str) -> String {
+        let mut out = String::new();
+        let mut escape = false;
+        for ch in text.chars() {
+            if ch == '\x1b' {
+                escape = true;
+                continue;
+            }
+            if escape {
+                if ch == 'm' {
+                    escape = false;
+                }
+                continue;
+            }
+            out.push(ch);
+        }
+        out
+    }
+
+    /// 计算纯文本显示宽度。
+    fn visible_width(text: &str) -> usize {
+        text.chars()
+            .map(|ch| unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0))
+            .sum()
     }
 }

@@ -71,6 +71,13 @@
   width: min(590px, calc(100vw - 24px));
   overflow: visible;
   z-index: 80;
+  /* 仅两个面板接收点击，网格空白区穿透以便关闭菜单 */
+  pointer-events: none;
+}
+
+.model-thinking-sections,
+.model-thinking-options {
+  pointer-events: auto;
 }
 
 .model-thinking-sections {

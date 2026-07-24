@@ -42,6 +42,7 @@ type SessionRunsAction =
   | { type: "attach"; runs: RunInfo[]; sessionId: string }
   | { type: "start"; run: RunInfo; sessionId: string; userInput: string; imageUrls?: string[] }
   | { type: "event"; event: WebEvent }
+  | { type: "stop-local"; runId: string }
   | { type: "relocalize" }
   | { type: "reset" };
 
@@ -88,6 +89,29 @@ export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsA
         ...next,
         status: action.run.status === "queued" ? "queued" : next.status
       }]
+    };
+  }
+  if (action.type === "stop-local") {
+    return {
+      runs: state.runs.map((run) => {
+        if (run.runId !== action.runId || run.completed) return run;
+        return runEventReducer(run, {
+          type: "event",
+          event: {
+            sequence: 0,
+            run_id: action.runId,
+            workspace_id: "",
+            session_id: run.sessionId ?? "",
+            timestamp: new Date().toISOString(),
+            type: "run.interrupted",
+            payload: {
+              discard_user_turn: false,
+              restore_input: null,
+              detail: "The user stopped this run before it completed."
+            }
+          }
+        }, locale);
+      })
     };
   }
   if (action.event.type === "run.interrupted" && action.event.payload.discard_user_turn === true) {
@@ -172,18 +196,32 @@ export function useRunStream(
       const MAX_RECONNECT = 5;
 
       const failDisconnected = () => {
+        const summary = text(locale, "Connection interrupted", "连接中断");
+        const detail = [
+          text(
+            locale,
+            "The run event stream disconnected after multiple reconnect attempts. You can retry this turn.",
+            "运行事件流在多次重连后仍断开。可点击重试本轮。"
+          ),
+          "",
+          text(locale, "Diagnostic context:", "诊断上下文："),
+          `run_id=${runId}`,
+          sessionId ? `session_id=${sessionId}` : null,
+          `last_sequence=${lastSequence}`,
+          `reconnect_attempts=${reconnectAttempts}`,
+          `max_reconnect=${MAX_RECONNECT}`,
+          `event_source_path=/api/runs/${runId}/events${lastSequence > 0 ? `?after=${lastSequence}` : ""}`,
+          `ready_state_note=${text(
+            locale,
+            "EventSource closed after retry budget was exhausted.",
+            "EventSource 在重试次数耗尽后关闭。"
+          )}`
+        ]
+          .filter((line): line is string => Boolean(line))
+          .join("\n");
         dispatch({
           type: "event",
-          event: runFailureEvent(
-            runId,
-            sessionId,
-            text(locale, "Connection interrupted", "连接中断"),
-            text(
-              locale,
-              "The run event stream disconnected after multiple reconnect attempts. You can retry this turn.",
-              "运行事件流在多次重连后仍断开。可点击重试本轮。"
-            )
-          )
+          event: runFailureEvent(runId, sessionId, summary, detail)
         });
         sourcesRef.current.delete(runId);
         onSettled();
@@ -328,9 +366,24 @@ export function useRunStream(
     dispatch({ type: "start", run, sessionId: targetSessionId, userInput: "" });
   };
 
-  /** 中断指定运行。 */
+  /**
+   * 中断指定运行。
+   *
+   * 1. 本地立即标记终态，避免事件流延迟时界面仍显示思考中
+   * 2. 请求服务端停止
+   *
+   * @param runId 运行标识
+   * @returns 停止完成后的 Promise
+   */
   const stop = async (runId: string) => {
-    await api.runs.stop(runId);
+    // 1. 先本地结束运行态，保证停止按钮立即生效
+    dispatch({ type: "stop-local", runId });
+    // 2. 再请求服务端中断；即使服务端已结束也保持本地终态
+    try {
+      await api.runs.stop(runId);
+    } catch {
+      // 服务端停止失败时仍保留本地终态，避免界面卡在思考中
+    }
   };
 
   return { states: state.runs, start, startGoal, startCompaction, stop, reset: () => dispatch({ type: "reset" }) };

@@ -58,7 +58,7 @@ pub(crate) fn fetch_models(
         let mut request = client
             .get(&url)
             .header("Accept", "application/json")
-            .header("User-Agent", "sai-web");
+            .header("User-Agent", provider.effective_user_agent());
         if !api_key.is_empty() {
             request = request.bearer_auth(&api_key);
         }

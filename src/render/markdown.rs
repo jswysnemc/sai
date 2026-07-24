@@ -36,9 +36,10 @@ impl MarkdownStreamRenderer {
         Self::with_table_replacement(false)
     }
 
-    /// 创建用于 source-backed 实时尾部的 Markdown 渲染器。
+    /// 创建用于全量重绘表面（TUI live）的 Markdown 渲染器。
     ///
-    /// 表格在流式阶段保留原始 Markdown，定稿 history cell 再替换为计算结果。
+    /// 表格在推入时缓冲；调用方在每次重绘末尾通过 `snapshot_open_structures`
+    /// 取当前最优列宽预览。闭合后 `finish` 输出最终表格，无光标回退序列。
     ///
     /// 返回:
     /// - 不生成光标回退序列的实时预览渲染器
@@ -94,6 +95,14 @@ impl MarkdownStreamRenderer {
         output.push_str(&self.line_renderer.flush());
         output
     }
+
+    /// 预览尚未闭合的表格等结构（全量重绘路径使用，不破坏缓冲）。
+    ///
+    /// 返回:
+    /// - 当前最优渲染；无开放结构时为空
+    pub(crate) fn snapshot_open_structures(&self) -> String {
+        self.line_renderer.snapshot_open()
+    }
 }
 
 struct MarkdownLineRenderer {
@@ -139,10 +148,10 @@ impl MarkdownLineRenderer {
         }
     }
 
-    /// 创建 source-backed 实时预览行渲染器。
+    /// 创建全量重绘用的行渲染器。
     ///
     /// 返回:
-    /// - 表格保留原文的行渲染器
+    /// - 表格走 snapshot 模式的行渲染器
     fn new_source_preview() -> Self {
         let mut renderer = Self::new(false);
         renderer.table = StreamingTable::new_source_preview();
@@ -277,6 +286,18 @@ impl MarkdownLineRenderer {
             let mut output = self.table.finish();
             output.push_str(&self.take_pending_blank_lines());
             output
+        }
+    }
+
+    /// 非破坏性预览开放中的表格。
+    ///
+    /// 返回:
+    /// - 表格预览文本；无开放表格时为空
+    fn snapshot_open(&self) -> String {
+        if self.table.is_active() {
+            self.table.snapshot()
+        } else {
+            String::new()
         }
     }
 

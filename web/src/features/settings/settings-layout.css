@@ -110,7 +110,8 @@
   text-transform: uppercase;
 }
 
-.settings-navigation button {
+.settings-navigation button,
+.settings-navigation a {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
@@ -122,13 +123,16 @@
   background: transparent;
   color: var(--ink-soft);
   text-align: left;
+  text-decoration: none;
 }
 
-.settings-navigation button > svg {
+.settings-navigation button > svg,
+.settings-navigation a > svg {
   color: var(--ink-soft);
 }
 
-.settings-navigation button > span {
+.settings-navigation button > span,
+.settings-navigation a > span {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -136,14 +140,17 @@
 
 .settings-navigation strong { color: inherit; font-size: 0.8125rem; font-weight: 500; }
 .settings-navigation small { overflow: hidden; color: var(--ink-soft); font-size: 0.6875rem; text-overflow: ellipsis; white-space: nowrap; }
-.settings-navigation button:hover { background: var(--paper-deep); color: var(--ink); }
+.settings-navigation button:hover,
+.settings-navigation a:hover { background: var(--paper-deep); color: var(--ink); }
 
-.settings-navigation button.active {
+.settings-navigation button.active,
+.settings-navigation a.active {
   background: var(--paper-deep);
   color: var(--ink);
 }
 
-.settings-navigation button.active > svg {
+.settings-navigation button.active > svg,
+.settings-navigation a.active > svg {
   color: var(--signal);
 }
 
@@ -433,6 +440,68 @@
 }
 
 /* 手机端：顶栏保持单行紧凑，分类导航降级为吸顶横向滚动页签 */
+
+/* 分组导航与搜索 */
+.settings-nav-search {
+  display: block;
+  margin: 0 0 10px;
+}
+.settings-nav-search input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.75rem;
+}
+.settings-nav-search input:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 1px;
+}
+.settings-nav-group {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.settings-nav-group-label {
+  margin: 4px 2px 4px;
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.settings-nav-empty {
+  margin: 8px 2px;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+.settings-save-hint {
+  display: inline-flex;
+  align-items: center;
+  max-width: 11rem;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 @media (max-width: 768px) {
   .settings-topbar-inner { gap: 8px; }
   .settings-topbar h1 { font-size: 1rem; }
@@ -462,7 +531,8 @@
   }
   .settings-navigation::-webkit-scrollbar { display: none; }
   .settings-navigation-label { display: none; }
-  .settings-navigation button {
+  .settings-navigation button,
+.settings-navigation a {
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
@@ -471,9 +541,29 @@
     padding: 6px 10px;
     white-space: nowrap;
   }
-  .settings-navigation button > span { display: block; }
-  .settings-navigation button small { display: none; }
+  .settings-navigation button > span,
+  .settings-navigation a > span { display: block; }
+  .settings-navigation button small,
+  .settings-navigation a small { display: none; }
   .settings-main { padding: 16px 12px 72px; }
   .management-hero { grid-template-columns: auto 1fr; gap: 12px; }
   .management-hero h1 { font-size: 1.25rem; }
+}
+
+.settings-inline-note {
+  margin: 0 0 12px;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+.settings-inline-note a {
+  color: var(--signal);
+  text-decoration: none;
+}
+.settings-inline-note a:hover {
+  text-decoration: underline;
+}
+.skills-settings-page {
+  display: grid;
+  gap: 16px;
 }

@@ -8,11 +8,14 @@ use serde::Serialize;
 pub(super) struct WebError {
     status: StatusCode,
     message: String,
+    detail: Option<String>,
 }
 
 #[derive(Serialize)]
 struct ErrorBody {
     error: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
 }
 
 impl WebError {
@@ -28,6 +31,28 @@ impl WebError {
         Self {
             status,
             message: message.into(),
+            detail: None,
+        }
+    }
+
+    /// 创建带详情的 API 错误。
+    ///
+    /// 参数:
+    /// - `status`: HTTP 状态码
+    /// - `message`: 用户可见摘要
+    /// - `detail`: 完整诊断详情
+    ///
+    /// 返回:
+    /// - Web API 错误
+    pub(super) fn with_detail(
+        status: StatusCode,
+        message: impl Into<String>,
+        detail: impl Into<String>,
+    ) -> Self {
+        Self {
+            status,
+            message: message.into(),
+            detail: Some(detail.into()),
         }
     }
 
@@ -59,6 +84,7 @@ impl IntoResponse for WebError {
             self.status,
             Json(ErrorBody {
                 error: self.message,
+                detail: self.detail,
             }),
         )
             .into_response()
@@ -66,9 +92,13 @@ impl IntoResponse for WebError {
 }
 
 impl From<anyhow::Error> for WebError {
-    /// 将内部错误转换为服务错误。
+    /// 将内部错误转换为服务错误，并透传完整错误链到 detail。
     fn from(error: anyhow::Error) -> Self {
-        Self::new(StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
+        Self::with_detail(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            error.to_string(),
+            crate::llm::error_detail_text(&error),
+        )
     }
 }
 
