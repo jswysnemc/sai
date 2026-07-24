@@ -7,18 +7,20 @@ Multi-protocol LLM · 30+ built-in tools · Long-term memory · Chat platform ga
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-stable-orange)](https://www.rust-lang.org/)
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-blueviolet)](https://github.com/SHORiN-KiWATA/Sai)
-[![CI Linux](https://img.shields.io/badge/CI-Linux-passing-success)](https://github.com/SHORiN-KiWATA/Sai/actions/workflows/linux.yml)
-[![CI Windows](https://img.shields.io/badge/CI-Windows-passing-success)](https://github.com/SHORiN-KiWATA/Sai/actions/workflows/windows.yml)
-[![CI macOS](https://img.shields.io/badge/CI-macOS-passing-success)](https://github.com/SHORiN-KiWATA/Sai/actions/workflows/macos.yml)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-blueviolet)](https://github.com/jswysnemc/sai)
+[![CI Linux](https://img.shields.io/github/actions/workflow/status/jswysnemc/sai/linux.yml?branch=main&label=CI%20Linux)](https://github.com/jswysnemc/sai/actions/workflows/linux.yml)
+[![CI Windows](https://img.shields.io/github/actions/workflow/status/jswysnemc/sai/windows.yml?branch=main&label=CI%20Windows)](https://github.com/jswysnemc/sai/actions/workflows/windows.yml)
+[![CI macOS](https://img.shields.io/github/actions/workflow/status/jswysnemc/sai/macos.yml?branch=main&label=CI%20macOS)](https://github.com/jswysnemc/sai/actions/workflows/macos.yml)
 
-[Why Sai](#why-sai) · [Screenshots](#screenshots) · [Core capabilities](#core-capabilities) · [Installation](#installation) · [Quick start](#quick-start) · [CLI reference](#cli-reference) · [Architecture](#architecture) · [Storage layout](#storage-layout) · [FAQ](#faq) · [Contributing](#contributing)
+[Why Sai](#why-sai) · [Screenshots](#screenshots) · [Core capabilities](#core-capabilities) · [Installation](#installation) · [Quick start](#quick-start) · [CLI reference](#cli-reference) · [Architecture](#architecture) · [Storage layout](#storage-layout) · [FAQ](#faq) · [Acknowledgments](#acknowledgments) · [Contributing](#contributing)
 
 ---
 
 ## Why Sai?
 
-Sai is a terminal-native AI desktop assistant written in Rust. It fuses large language model reasoning with local system tools, long-term memory, chat platform gateways, and a web workbench. Use it as a one-shot CLI问答 tool, an interactive REPL, a long-running service bridging QQ / WeChat / WeCom, or drive it from a browser.
+Sai is a terminal-native AI desktop assistant written in Rust. It fuses large language model reasoning with local system tools, long-term memory, chat platform gateways, and a web workbench. Use it as a one-shot CLI Q&A tool, an interactive REPL, a long-running service bridging QQ / WeChat / WeCom, or drive it from a browser.
+
+This project is a fork of [Miyu](https://github.com/SHORiN-KiWATA/Miyu). It continues the upstream architecture and capabilities while staying cross-platform. Some tools come directly from upstream and are Linux-only today (for example Arch package management, parts of system diagnostics, and game-compatibility helpers). On Windows and macOS, disable those tools in the Agent / tool configuration so the model does not call them.
 
 - **An assistant that acts** - Beyond conversation: read/write files, run commands, dispatch subagents, run deep research and system diagnostics
 - **Triple-protocol adaptive** - OpenAI Chat / OpenAI Responses / Anthropic Messages auto-detected; any compatible provider works out of the box
@@ -211,7 +213,7 @@ Requires Rust stable, Node.js 22, npm.
 
 ```bash
 # 1. Clone
-git clone https://github.com/SHORiN-KiWATA/Sai.git
+git clone https://github.com/jswysnemc/sai.git
 cd Sai
 
 # 2. Build web assets (web workbench)
@@ -250,7 +252,7 @@ sudo pacman -U ~/.cache/sai/packages/sai-<version>-1-x86_64.pkg.tar.zst
 
 ### Prebuilt binaries
 
-Every push to `main` triggers GitHub Actions to build Linux, Windows, and macOS binaries. Download the artifact for your platform from the [Actions](https://github.com/SHORiN-KiWATA/Sai/actions) page.
+Every push to `main` triggers GitHub Actions to build Linux, Windows, and macOS binaries. Download the artifact for your platform from the [Actions](https://github.com/jswysnemc/sai/actions) page.
 
 ---
 
@@ -508,6 +510,16 @@ No. The audit sandbox relies on Linux `bubblewrap`. On Windows and macOS, Audite
 **Do subagents pollute the main workspace?**
 
 No. Writable subagent tasks auto-create a `.sai-subagents` git worktree for isolation, then apply back and clean up only on success.
+
+**Are some tools unavailable on Windows / macOS?**
+
+Yes. Several tools inherited from upstream [Miyu](https://github.com/SHORiN-KiWATA/Miyu) are Linux-only. On other platforms, manually disable those tools in the Agent configuration so the model does not attempt to use them.
+
+---
+
+## Acknowledgments
+
+Sai is a fork of [Miyu](https://github.com/SHORiN-KiWATA/Miyu). Thanks to upstream author [SHORiN-KiWATA](https://github.com/SHORiN-KiWATA) for open-sourcing the architecture, Agent core, and many foundational capabilities that this repository continues to maintain and extend. Some tool implementations still follow upstream; their Linux-only adaptation is noted above.
 
 ---
 

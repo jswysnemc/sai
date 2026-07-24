@@ -7,18 +7,20 @@
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-stable-orange)](https://www.rust-lang.org/)
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-blueviolet)](https://github.com/SHORiN-KiWATA/Sai)
-[![CI Linux](https://img.shields.io/badge/CI-Linux-passing-success)](https://github.com/SHORiN-KiWATA/Sai/actions/workflows/linux.yml)
-[![CI Windows](https://img.shields.io/badge/CI-Windows-passing-success)](https://github.com/SHORiN-KiWATA/Sai/actions/workflows/windows.yml)
-[![CI macOS](https://img.shields.io/badge/CI-macOS-passing-success)](https://github.com/SHORiN-KiWATA/Sai/actions/workflows/macos.yml)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-blueviolet)](https://github.com/jswysnemc/sai)
+[![CI Linux](https://img.shields.io/github/actions/workflow/status/jswysnemc/sai/linux.yml?branch=main&label=CI%20Linux)](https://github.com/jswysnemc/sai/actions/workflows/linux.yml)
+[![CI Windows](https://img.shields.io/github/actions/workflow/status/jswysnemc/sai/windows.yml?branch=main&label=CI%20Windows)](https://github.com/jswysnemc/sai/actions/workflows/windows.yml)
+[![CI macOS](https://img.shields.io/github/actions/workflow/status/jswysnemc/sai/macos.yml?branch=main&label=CI%20macOS)](https://github.com/jswysnemc/sai/actions/workflows/macos.yml)
 
-[为什么是 Sai](#为什么是-sai) · [界面预览](#界面预览) · [核心能力](#核心能力) · [安装](#安装) · [快速开始](#快速开始) · [CLI 命令](#cli-命令参考) · [架构总览](#架构总览) · [存储布局](#存储与目录布局) · [FAQ](#faq) · [贡献](#贡献)
+[为什么是 Sai](#为什么是-sai) · [界面预览](#界面预览) · [核心能力](#核心能力) · [安装](#安装) · [快速开始](#快速开始) · [CLI 命令](#cli-命令参考) · [架构总览](#架构总览) · [存储布局](#存储与目录布局) · [FAQ](#faq) · [致谢](#致谢) · [贡献](#贡献)
 
 ---
 
 ## 为什么是 Sai?
 
 Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的推理能力与本地系统工具、长期记忆、聊天平台网关、Web 工作台深度整合,既能当 CLI 单轮问答工具,也能当交互式 REPL,还能作为常驻服务接入 QQ、微信、企业微信,或通过浏览器远程操控。
+
+本项目 fork 自 [Miyu](https://github.com/SHORiN-KiWATA/Miyu)，在上游架构与能力之上继续演进，并保持跨平台可用。部分工具直接来源于上游实现，目前仅适配 Linux（例如 Arch 包管理、部分系统诊断与游戏兼容性工具）；Windows 与 macOS 可在 Agent / 工具配置中手动关闭这些工具，避免误调用。
 
 - **能动手的助手** - 不止于对话:读写文件、执行命令、调度子代理、跑深度研究与系统诊断
 - **三协议自适应** - OpenAI Chat / OpenAI Responses / Anthropic Messages 三种协议自动识别,任意兼容供应商即插即用
@@ -211,7 +213,7 @@ Web 视图（Changes / Graph / Repositories / Diff / Merge Editor）
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/SHORiN-KiWATA/Sai.git
+git clone https://github.com/jswysnemc/sai.git
 cd Sai
 
 # 2. 构建前端资源(Web 工作台)
@@ -250,7 +252,7 @@ sudo pacman -U ~/.cache/sai/packages/sai-<version>-1-x86_64.pkg.tar.zst
 
 ### 预编译二进制
 
-每次推送到 `main` 分支会触发 GitHub Actions 构建 Linux、Windows 与 macOS 二进制，前往 [Actions](https://github.com/SHORiN-KiWATA/Sai/actions) 页面下载对应平台的 artifact。
+每次推送到 `main` 分支会触发 GitHub Actions 构建 Linux、Windows 与 macOS 二进制，前往 [Actions](https://github.com/jswysnemc/sai/actions) 页面下载对应平台的 artifact。
 
 ---
 
@@ -508,6 +510,16 @@ Linux `~/.local/share/sai` / macOS `~/Library/Application Support/sai` / Windows
 **子代理会污染主工作区吗?**
 
 不会。可写子代理任务在 git 仓库内自动创建 `.sai-subagents` worktree 隔离,完成后才 apply 回父工作区并清理。
+
+**部分工具在 Windows / macOS 上不可用吗?**
+
+是。部分继承自上游 [Miyu](https://github.com/SHORiN-KiWATA/Miyu) 的工具仅适配 Linux。其他平台可在 Agent 配置中手动关闭对应工具，避免模型调用到不可用能力。
+
+---
+
+## 致谢
+
+Sai fork 自 [Miyu](https://github.com/SHORiN-KiWATA/Miyu)。感谢上游作者 [SHORiN-KiWATA](https://github.com/SHORiN-KiWATA) 开源的架构、Agent 内核与大量基础能力；本仓库在此之上继续维护与扩展。部分工具逻辑仍沿用上游实现，其 Linux 侧适配与限制亦见上文说明。
 
 ---
 
