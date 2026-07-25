@@ -148,7 +148,15 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
   const defaultModelOptions = (provider.default_model && !models.includes(provider.default_model)
     ? [provider.default_model, ...models]
     : models
-  ).map((model) => ({ value: model, label: model, icon: createElement(ModelIcon, { model, size: 14 }) }));
+  ).map((model) => ({
+    value: model,
+    label: model,
+    icon: createElement(ModelIcon, {
+      model,
+      provider: remoteMetadata[model]?.provider,
+      size: 14
+    })
+  }));
   const emptyModelOptions = [{ value: "", label: t("Add models on the Models tab first", "先在模型页签添加模型") }];
   const protocolOptions = [
     { value: "auto", label: t("Auto detect", "自动检测") },

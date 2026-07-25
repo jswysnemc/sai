@@ -80,7 +80,9 @@ fn readable_tool_name_for_locale(name: &str, locale: Locale) -> &str {
             localized(locale, "Read online manual", "读取在线手册")
         }
         "moegirl_query" => localized(locale, "Query Moegirl", "查询萌娘百科"),
-        "calculate" | "calculator" => localized(locale, "Calculate", "计算"),
+        "calculate" | "calculator" | "scientific_calculator" => {
+            localized(locale, "Calculate", "计算")
+        }
         "calculate_hash" => localized(locale, "Calculate hash", "计算哈希"),
         "decode_encoded_text" => localized(locale, "Decode text", "解码文本"),
         "exchange_rate" | "get_exchange_rate" => localized(locale, "Exchange rate", "汇率查询"),

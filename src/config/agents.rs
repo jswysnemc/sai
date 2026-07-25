@@ -407,7 +407,19 @@ mod tests {
         let tui = apply_agent_override(config.clone(), None, AgentSurface::Tui).unwrap();
         let runtime = tui.agent_runtime.expect("code agent whitelist");
         assert!(runtime.enabled_tools.iter().any(|t| t == "edit_file"));
+        assert!(runtime.enabled_tools.iter().any(|t| t == "write_file"));
+        assert!(runtime.enabled_tools.iter().any(|t| t == "str_replace"));
+        assert!(runtime
+            .enabled_tools
+            .iter()
+            .any(|t| t == "scientific_calculator"));
+        assert!(runtime
+            .enabled_tools
+            .iter()
+            .any(|t| t == "online_man_search"));
         assert!(!runtime.enabled_tools.iter().any(|t| t == "show_meme"));
+        assert!(!runtime.enabled_tools.iter().any(|t| t == "calculate"));
+        assert!(!runtime.enabled_tools.iter().any(|t| t == "man_page_search"));
         assert!(tui
             .system_prompt
             .as_deref()
@@ -415,7 +427,15 @@ mod tests {
             .contains("核心铁律"));
         let gateway = apply_agent_override(config, None, AgentSurface::Gateway).unwrap();
         assert!(!gateway.load_instruction_files);
-        assert!(gateway.agent_runtime.is_some());
+        let gateway_tools = gateway.agent_runtime.expect("gateway whitelist").enabled_tools;
+        assert!(gateway_tools.iter().any(|t| t == "get_weather"));
+        assert!(gateway_tools.iter().any(|t| t == "get_exchange_rate"));
+        assert!(gateway_tools
+            .iter()
+            .any(|t| t == "query_deepseek_status"));
+        assert!(gateway_tools.iter().any(|t| t == "online_man_get_page"));
+        assert!(!gateway_tools.iter().any(|t| t == "query_weather"));
+        assert!(!gateway_tools.iter().any(|t| t == "convert_exchange_rate"));
     }
 
     #[test]
@@ -430,8 +450,47 @@ mod tests {
         let plan = apply_agent_override(config, Some(PLAN_AGENT_ID), AgentSurface::Web).unwrap();
         let tools = plan.agent_runtime.unwrap().enabled_tools;
         assert!(tools.iter().any(|t| t == "web_search"));
+        assert!(tools.iter().any(|t| t == "online_man_search"));
         assert!(!tools.iter().any(|t| t == "run_command"));
+        assert!(!tools.iter().any(|t| t == "fetch_url"));
         assert!(plan.system_prompt.as_deref().unwrap_or("").contains("Plan"));
+    }
+
+    /// 旧白名单工具名会展开为当前注册名。
+    #[test]
+    fn expands_legacy_enabled_tool_names() {
+        let mut config = crate::config::AppConfig::default();
+        config.agents.push(AgentProfile {
+            id: "legacy-tools".to_string(),
+            name: "旧工具".to_string(),
+            enabled_tools: vec![
+                "fetch_url".to_string(),
+                "query_weather".to_string(),
+                "convert_exchange_rate".to_string(),
+                "deepseek_status".to_string(),
+                "man_page_search".to_string(),
+                "man_page_read".to_string(),
+                "calculate".to_string(),
+                "edit_file".to_string(),
+            ],
+            ..AgentProfile::default()
+        });
+        let resolved =
+            apply_agent_override(config, Some("legacy-tools"), AgentSurface::Web).unwrap();
+        let tools = resolved.agent_runtime.unwrap().enabled_tools;
+        for name in [
+            "web_fetch",
+            "get_weather",
+            "get_exchange_rate",
+            "query_deepseek_status",
+            "online_man_search",
+            "online_man_get_page",
+            "scientific_calculator",
+            "str_replace",
+            "edit_file",
+        ] {
+            assert!(tools.iter().any(|tool| tool == name), "missing {name}");
+        }
     }
 
     /// 验证旧子 Agent 档案会进入统一 Agent 列表并保留暴露状态。

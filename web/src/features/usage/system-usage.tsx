@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Archive, Cpu, Gauge, HardDrive, TerminalSquare, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -20,6 +20,7 @@ import { useI18n } from "../i18n/use-i18n";
  */
 export function SystemUsage({ selection, onCompact, compactDisabled }: { selection: RunModelSelection | null; onCompact: () => Promise<void>; compactDisabled: boolean }) {
   const { locale, t } = useI18n();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -27,10 +28,14 @@ export function SystemUsage({ selection, onCompact, compactDisabled }: { selecti
   const usage = useQuery({
     queryKey: ["system-usage", selection?.providerId, selection?.model],
     queryFn: () => api.system.usage(selection),
-    refetchInterval: 5_000
+    refetchInterval: open ? 2_000 : 5_000
   });
   const compact = useMutation({
-    mutationFn: onCompact
+    mutationFn: onCompact,
+    onSettled: () => {
+      // 压缩启动或失败后都拉一次；真正降量仍依赖 compaction.finished 与后端清空旧 usage
+      void queryClient.invalidateQueries({ queryKey: ["system-usage"] });
+    }
   });
   const contextPercent = Math.round(Math.min(1, Math.max(0, usage.data?.session.context_token_ratio ?? 0)) * 100);
   const contextBreakdown = usage.data ? resolveContextBreakdown(usage.data.session, t) : null;

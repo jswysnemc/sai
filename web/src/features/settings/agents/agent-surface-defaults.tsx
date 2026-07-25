@@ -55,7 +55,7 @@ export function AgentSurfaceDefaults({ config, options, onConfigChange }: AgentS
         {surfaces.map((surface) => {
           const value = valueOf(surface.field);
           return (
-            <article key={surface.field} className="agent-surface-card">
+            <article key={surface.field} className="agent-surface-card" title={surface.description}>
               <header>
                 <strong>{surface.label}</strong>
                 <span>{nameOf(value)}</span>

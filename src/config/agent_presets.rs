@@ -16,10 +16,9 @@ const GATEWAY_AGENT_TOOLS: &[&str] = &[
     "run_command",
     "web_search",
     "web_fetch",
-    "query_weather",
     "get_weather",
-    "convert_exchange_rate",
-    "deepseek_status",
+    "get_exchange_rate",
+    "query_deepseek_status",
     "remember_fact",
     "recall_memories",
     "recall_past_events",
@@ -28,9 +27,9 @@ const GATEWAY_AGENT_TOOLS: &[&str] = &[
     "archlinux_official_package_query",
     "aur_search_packages",
     "aur_get_package_info",
-    "man_page_search",
-    "man_page_read",
-    "calculate",
+    "online_man_search",
+    "online_man_get_page",
+    "scientific_calculator",
     "calculate_hash",
     "decode_encoded_text",
     "set_alarm",
@@ -63,7 +62,6 @@ const CODE_AGENT_TOOLS: &[&str] = &[
     "ask_question",
     "web_search",
     "web_fetch",
-    "fetch_url",
     "remember_fact",
     "recall_memories",
     "recall_past_events",
@@ -81,10 +79,10 @@ const CODE_AGENT_TOOLS: &[&str] = &[
     "archlinux_official_package_query",
     "aur_search_packages",
     "aur_get_package_info",
-    "man_page_search",
-    "man_page_read",
+    "online_man_search",
+    "online_man_get_page",
     "review_aur_package",
-    "calculate",
+    "scientific_calculator",
     "calculate_hash",
     "decode_encoded_text",
     "mcp_manager",
@@ -98,14 +96,13 @@ const PLAN_AGENT_TOOLS: &[&str] = &[
     "grep",
     "web_search",
     "web_fetch",
-    "fetch_url",
     "ask_question",
     "archwiki_query",
     "archlinux_official_package_query",
     "aur_search_packages",
     "aur_get_package_info",
-    "man_page_search",
-    "man_page_read",
+    "online_man_search",
+    "online_man_get_page",
     "search_knowledge_base",
     "search_knowledge_base_by_name",
     "read_knowledge_base_file",
@@ -162,34 +159,57 @@ pub(super) fn resolve_enabled_tools(profile: &AgentProfile) -> Vec<String> {
     expand_legacy_enabled_tools(tools)
 }
 
-/// 将旧编辑工具名展开为当前可用工具。
+/// 将旧工具名展开为当前注册名，并补齐编辑工具组合。
 ///
 /// 参数:
 /// - `tools`: 配置中的白名单
 ///
 /// 返回:
-/// - 补齐 str_replace / edit_file 后的白名单
+/// - 与当前 ToolRegistry 名称对齐后的白名单
 fn expand_legacy_enabled_tools(mut tools: Vec<String>) -> Vec<String> {
     if tools.is_empty() {
         return tools;
     }
     let has = |tools: &[String], name: &str| tools.iter().any(|tool| tool == name);
+    let push_if_missing = |tools: &mut Vec<String>, name: &str| {
+        if !tools.iter().any(|tool| tool == name) {
+            tools.push(name.to_string());
+        }
+    };
     // 1. 旧局部替换工具映射到 str_replace
-    if has(&tools, "replace_file_lines") && !has(&tools, "str_replace") {
-        tools.push("str_replace".to_string());
+    if has(&tools, "replace_file_lines") {
+        push_if_missing(&mut tools, "str_replace");
     }
     // 2. 旧 apply_patch 映射到 edit_file，并保留 str_replace 作为局部编辑入口
     if has(&tools, "apply_patch") {
-        if !has(&tools, "edit_file") {
-            tools.push("edit_file".to_string());
-        }
-        if !has(&tools, "str_replace") {
-            tools.push("str_replace".to_string());
-        }
+        push_if_missing(&mut tools, "edit_file");
+        push_if_missing(&mut tools, "str_replace");
     }
     // 3. 具备 write_file / edit_file 的工程 Agent 默认补上 str_replace
-    if (has(&tools, "write_file") || has(&tools, "edit_file")) && !has(&tools, "str_replace") {
-        tools.push("str_replace".to_string());
+    if has(&tools, "write_file") || has(&tools, "edit_file") {
+        push_if_missing(&mut tools, "str_replace");
+    }
+    // 4. 网页读取、天气、汇率、DeepSeek、手册与计算器旧名映射到当前注册名
+    if has(&tools, "fetch_url") {
+        push_if_missing(&mut tools, "web_fetch");
+    }
+    if has(&tools, "query_weather") {
+        push_if_missing(&mut tools, "get_weather");
+    }
+    if has(&tools, "convert_exchange_rate") || has(&tools, "exchange_rate") {
+        push_if_missing(&mut tools, "get_exchange_rate");
+    }
+    if has(&tools, "deepseek_status") {
+        push_if_missing(&mut tools, "query_deepseek_status");
+    }
+    if has(&tools, "man_page_search") || has(&tools, "man_search") {
+        push_if_missing(&mut tools, "online_man_search");
+    }
+    if has(&tools, "man_page_read") || has(&tools, "man_read") {
+        push_if_missing(&mut tools, "online_man_get_page");
+    }
+    if has(&tools, "calculate") || has(&tools, "calculator") {
+        push_if_missing(&mut tools, "scientific_calculator");
     }
     tools
 }

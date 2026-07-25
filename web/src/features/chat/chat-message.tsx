@@ -45,17 +45,29 @@ export function HistoryTurn({
   actionBusy?: boolean;
 }) {
   const { t, locale } = useI18n();
+  // 失败轮仅有错误摘要时不把错误再当正文渲染一遍
+  const failureOnly =
+    turn.status === "failed"
+    && !turn.assistant.reasoning
+    && turn.tools.length === 0;
   return (
     <>
       {!turn.automatic && (
         <UserMessageBubble content={turn.user.content} timestamp={turn.user.timestamp} imageUrls={turn.user.image_urls} onRetry={onRetry} />
       )}
       <article className="message assistant-message">
-        <MessageParts parts={historyTurnParts(turn)} />
+        {!failureOnly && <MessageParts parts={historyTurnParts(turn)} />}
         {turn.status === "interrupted" && (
           <RunErrorNotice
             message={turn.assistant.content ? t("The response was interrupted; generated content was preserved", "响应已中断，已保留生成内容") : t("The run was interrupted", "运行已中断")}
             detail={historicalInterruptionDetail(turn, t)}
+          />
+        )}
+        {turn.status === "failed" && (
+          <RunErrorNotice
+            message={t("The run failed", "运行失败")}
+            detail={historicalFailureDetail(turn, t)}
+            onRetry={onRetry}
           />
         )}
         {typeof turn.duration_ms === "number" && turn.duration_ms > 0 && (
@@ -175,6 +187,26 @@ function historicalInterruptionDetail(
     "The user stopped this run before it completed.",
     "用户在运行完成前主动停止了本轮。"
   );
+}
+
+/**
+ * 从失败轮次提取可展示详情。
+ *
+ * @param turn 已持久化会话轮次
+ * @param t 本地化函数
+ * @returns 详情文本
+ */
+function historicalFailureDetail(
+  turn: SessionTimelineTurn,
+  t: (en: string, zh: string) => string
+): string {
+  for (let index = turn.tools.length - 1; index >= 0; index -= 1) {
+    const tool = turn.tools[index];
+    const detail = tool.error?.trim() || (tool.status === "failed" ? tool.output.trim() : "");
+    if (detail) return detail;
+  }
+  if (turn.assistant.content?.trim()) return turn.assistant.content.trim();
+  return t("The provider request failed before a response was produced.", "供应商请求在产生回复前失败。");
 }
 
 /**

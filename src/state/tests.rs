@@ -571,9 +571,10 @@ fn session_snapshot_includes_usage_and_compaction() {
     assert!(!snapshot.session_id.is_empty());
     assert_eq!(snapshot.usage.requests, 1);
     assert_eq!(snapshot.usage.total_tokens, 15);
-    assert_eq!(snapshot.context_prompt_tokens, 10);
+    // 压缩成功后清空 last_conversation_usage，上下文占用改走实时估算
+    assert!(snapshot.usage.last_conversation_usage.is_none());
+    assert!(snapshot.context_prompt_tokens > 0);
     assert_eq!(snapshot.context_window_tokens, 1_000);
-    assert_eq!(snapshot.context_token_ratio, 0.01);
     assert!(snapshot.compaction.is_some());
 }
 

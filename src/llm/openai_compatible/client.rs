@@ -216,7 +216,9 @@ impl OpenAiCompatibleClient {
         base_headers.push(("User-Agent".to_string(), user_agent.clone()));
         let headers = merge_provider_extra_headers(base_headers, &self.provider);
         let mut debug = self.start_http_debug("POST", &url, "openai-chat", &headers, &request);
-        let response = with_provider_extra_headers(
+        // 【OpenAI兼容】【聊天流式】1. 先按当前 thinking 配置发送
+        let mut request = request;
+        let mut response = with_provider_extra_headers(
             apply_provider_user_agent(
                 self.client
                     .post(&url)
@@ -228,19 +230,60 @@ impl OpenAiCompatibleClient {
         )
         .send()
         .await?;
-        let status = response.status();
+        let mut status = response.status();
         if let Some(debug) = debug.as_ref() {
             let _ = debug.write_response_headers(status.as_u16(), response.headers());
         }
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
-            if let Some(debug) = debug.as_ref() {
-                let _ = debug.finish_error(status.as_u16(), &body);
+            // 【OpenAI兼容】【Thinking 降级】2. 明确拒绝 thinking 时移除后重试一次
+            if request.get("thinking").is_some()
+                && openai_chat_thinking_unsupported(status.as_u16(), &body)
+            {
+                if let Some(object) = request.as_object_mut() {
+                    object.remove("thinking");
+                }
+                if let Some(debug) = debug.as_ref() {
+                    let _ = debug.finish_error(status.as_u16(), &body);
+                }
+                let retry_debug =
+                    self.start_http_debug("POST", &url, "openai-chat-thinking-fallback", &headers, &request);
+                response = with_provider_extra_headers(
+                    apply_provider_user_agent(
+                        self.client
+                            .post(&url)
+                            .bearer_auth(&self.api_key)
+                            .json(&request),
+                        &self.provider,
+                    ),
+                    &self.provider,
+                )
+                .send()
+                .await?;
+                status = response.status();
+                if let Some(debug) = retry_debug.as_ref() {
+                    let _ = debug.write_response_headers(status.as_u16(), response.headers());
+                }
+                if !status.is_success() {
+                    let retry_body = response.text().await.unwrap_or_default();
+                    if let Some(debug) = retry_debug.as_ref() {
+                        let _ = debug.finish_error(status.as_u16(), &retry_body);
+                    }
+                    bail!(
+                        "{} ({status}): {retry_body}",
+                        t("chat completions stream request failed", "聊天流式请求失败",)
+                    );
+                }
+                debug = retry_debug;
+            } else {
+                if let Some(debug) = debug.as_ref() {
+                    let _ = debug.finish_error(status.as_u16(), &body);
+                }
+                bail!(
+                    "{} ({status}): {body}",
+                    t("chat completions stream request failed", "聊天流式请求失败",)
+                );
             }
-            bail!(
-                "{} ({status}): {body}",
-                t("chat completions stream request failed", "聊天流式请求失败",)
-            );
         }
 
         // 按字节缓冲再按行解码，避免多字节 UTF-8 被 chunk 切断后变成 U+FFFD
@@ -945,20 +988,52 @@ fn claude_protocol_hint(provider: &ProviderConfig) -> &'static str {
 /// 返回:
 /// - 服务端明确拒绝 thinking 参数时返回 true
 fn anthropic_thinking_unsupported(status: u16, body: &str) -> bool {
+    thinking_parameter_rejected(status, body)
+}
+
+/// 判断 OpenAI Chat 兼容错误是否允许移除 thinking 后重试。
+///
+/// 参数:
+/// - `status`: HTTP 状态码
+/// - `body`: 服务端错误响应正文
+///
+/// 返回:
+/// - 服务端明确拒绝 thinking 参数时返回 true
+fn openai_chat_thinking_unsupported(status: u16, body: &str) -> bool {
+    thinking_parameter_rejected(status, body)
+}
+
+/// 判断错误正文是否为 thinking 参数校验失败。
+///
+/// 参数:
+/// - `status`: HTTP 状态码
+/// - `body`: 服务端错误响应正文
+///
+/// 返回:
+/// - 明确与 thinking 校验相关时返回 true
+fn thinking_parameter_rejected(status: u16, body: &str) -> bool {
     if !matches!(status, 400 | 422) {
         return false;
     }
     let body = body.to_ascii_lowercase();
-    body.contains("thinking")
-        && [
-            "unsupported",
-            "not supported",
-            "unknown",
-            "invalid",
-            "unrecognized",
-        ]
-        .iter()
-        .any(|marker| body.contains(marker))
+    if !body.contains("thinking") {
+        return false;
+    }
+    [
+        "unsupported",
+        "not supported",
+        "unknown",
+        "invalid",
+        "unrecognized",
+        "validation",
+        "unmarshal",
+        "must be a boolean",
+        "must be",
+        "cannot unmarshal",
+        "bad_response_status_code",
+    ]
+    .iter()
+    .any(|marker| body.contains(marker))
 }
 
 /// 按模型配置处理 Anthropic 网页搜索工具名称冲突。

@@ -130,7 +130,7 @@ pub fn readable_tool_name(name: &str) -> &str {
         "online_man_search" | "man_search" => "搜索在线手册",
         "online_man_get_page" | "man_read" => "读取在线手册",
         "moegirl_query" => "查询萌娘百科",
-        "calculate" | "calculator" => "计算",
+        "calculate" | "calculator" | "scientific_calculator" => "计算",
         "calculate_hash" => "计算哈希",
         "decode_encoded_text" => "解码文本",
         "exchange_rate" | "get_exchange_rate" => "汇率查询",

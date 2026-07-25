@@ -1,7 +1,7 @@
 import Editor, { loader } from "@monaco-editor/react";
 import { Braces, WandSparkles } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useTheme } from "../../../features/theme/theme";
+import { isDarkTheme, useTheme } from "../../../features/theme/theme";
 import { configureMonacoEnvironment } from "../../../features/workspace/monaco-environment";
 import "./json-code-editor.css";
 import { useI18n } from "../../../features/i18n/use-i18n";
@@ -37,7 +37,7 @@ export function JsonCodeEditor({ value, height = 420, ariaLabel, onChange }: Jso
     return () => { active = false; };
   }, []);
 
-  const dark = theme === "graphite" || theme === "ocean" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const dark = isDarkTheme(theme);
   return (
     <div className="json-code-editor" aria-label={resolvedAriaLabel}>
       <header><span><Braces size={13} />JSON</span><button type="button" onClick={() => void editor?.getAction("editor.action.formatDocument")?.run()} disabled={!editor}><WandSparkles size={13} />{t("Format", "格式化")}</button></header>

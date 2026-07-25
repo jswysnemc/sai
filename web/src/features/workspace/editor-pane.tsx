@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderTree, RefreshCw, Save } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
-import { useTheme } from "../theme/theme";
+import { isDarkTheme, useTheme } from "../theme/theme";
 import { EditorBreadcrumbs } from "./editor-breadcrumbs";
 import { EditorPreviewToggle } from "./editor-preview-toggle";
 import { configureMonacoEnvironment } from "./monaco-environment";
@@ -166,7 +166,7 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree 
             height="100%"
             onMount={handleEditorMount}
             onChange={(value) => setDocument((current) => updateDocumentContent(current, value ?? ""))}
-            theme={theme === "graphite" || theme === "ocean" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "vs-dark" : "light"}
+            theme={isDarkTheme(theme) ? "vs-dark" : "light"}
             options={{ minimap: { enabled: false }, fontFamily: "Fira Code", fontSize: 13, lineHeight: 21, padding: { top: 12 }, automaticLayout: false, scrollBeyondLastLine: false }}
           />
         )}

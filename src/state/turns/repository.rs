@@ -172,6 +172,43 @@ impl ConversationDb {
         Ok(())
     }
 
+    /// 标记指定轮次已失败。
+    ///
+    /// 参数:
+    /// - `turn_id`: 当前轮唯一标识
+    /// - `content`: 已生成的部分正文
+    /// - `reasoning`: 已生成的部分思考
+    /// - `error`: 失败原因摘要
+    ///
+    /// 返回:
+    /// - 更新是否成功
+    pub fn fail_turn(
+        &self,
+        turn_id: &str,
+        content: &str,
+        reasoning: Option<&str>,
+        error: &str,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let now = Utc::now().to_rfc3339();
+        // 1. 失败轮若无正文，把错误摘要写入助手内容，便于时间线展示
+        let assistant_content = if content.trim().is_empty() {
+            error.trim().to_string()
+        } else {
+            content.to_string()
+        };
+        conn.execute(
+            "UPDATE turns
+             SET assistant_content = ?1,
+                 assistant_reasoning = ?2,
+                 assistant_timestamp = ?3,
+                 status = 'failed'
+             WHERE turn_id = ?4 AND status = 'running'",
+            params![assistant_content, reasoning, now, turn_id],
+        )?;
+        Ok(())
+    }
+
     /// 附加当前轮工具报告上下文。
     ///
     /// 参数:

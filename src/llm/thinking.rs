@@ -47,7 +47,11 @@ fn apply_thinking_options(body: &mut Value, provider: &ProviderConfig, protocol:
         "string" => {
             body["thinking"] = json!(level);
         }
+        "boolean" => {
+            body["thinking"] = json!(level != "none");
+        }
         "object" => apply_generic_thinking_object(body, level),
+        "type-object" => apply_type_thinking(body, level),
         "deepseek-thinking" => apply_deepseek_thinking(body, level),
         "openai-chat-reasoning-effort" => {
             if level != "none" {
@@ -58,9 +62,7 @@ fn apply_thinking_options(body: &mut Value, provider: &ProviderConfig, protocol:
             body["reasoning"] = json!({ "effort": reasoning_effort(level) });
         }
         "anthropic-thinking" => apply_anthropic_thinking(body, level),
-        _ => {
-            body["thinking"] = json!(level);
-        }
+        _ => apply_type_thinking(body, level),
     }
 }
 
@@ -80,19 +82,23 @@ fn effective_format(provider: &ProviderConfig, protocol: ThinkingProtocol) -> &'
     if !configured.is_empty() && configured != "auto" {
         return match configured {
             "string" => "string",
+            "boolean" => "boolean",
             "object" => "object",
+            "type-object" | "type" => "type-object",
             "deepseek-thinking" => "deepseek-thinking",
             "openai-chat-reasoning-effort" => "openai-chat-reasoning-effort",
             "reasoning" => "reasoning",
             "anthropic-thinking" => "anthropic-thinking",
             "disabled" => "disabled",
-            _ => "string",
+            // 未知格式不再回退到字符串，避免多数 OpenAI 兼容网关 400
+            _ => "type-object",
         };
     }
     match protocol {
         ThinkingProtocol::OpenAiResponses => "reasoning",
         ThinkingProtocol::Anthropic => "anthropic-thinking",
-        ThinkingProtocol::OpenAiChat => "string",
+        // OpenAI Chat 兼容网关普遍要求 thinking 为 bool 或 {type:enabled|disabled|adaptive}
+        ThinkingProtocol::OpenAiChat => "type-object",
     }
 }
 
@@ -197,6 +203,22 @@ fn apply_generic_thinking_object(body: &mut Value, level: &str) {
         "level": level,
         "budget_tokens": thinking_budget(level),
     });
+}
+
+/// 写入 `{ "type": "enabled" | "disabled" }` 形式的 thinking。
+///
+/// 参数:
+/// - `body`: 待修改的请求体
+/// - `level`: 思考等级
+///
+/// 返回:
+/// - 无
+fn apply_type_thinking(body: &mut Value, level: &str) {
+    if level == "none" {
+        body["thinking"] = json!({ "type": "disabled" });
+        return;
+    }
+    body["thinking"] = json!({ "type": "enabled" });
 }
 
 /// 写入 DeepSeek OpenAI 兼容思考参数。
@@ -345,5 +367,27 @@ mod tests {
             .unwrap();
 
         assert_eq!(body["reasoning_effort"], json!("xhigh"));
+    }
+
+    #[test]
+    fn openai_chat_auto_uses_type_object_thinking() {
+        let mut provider = ProviderConfig::default_openai();
+        provider.thinking_level = "high".to_string();
+        provider.thinking_format = "auto".to_string();
+        let body = apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat)
+            .unwrap();
+
+        assert_eq!(body["thinking"], json!({"type": "enabled"}));
+        assert!(body.get("reasoning_effort").is_none());
+    }
+
+    #[test]
+    fn openai_chat_none_disables_type_object_thinking() {
+        let mut provider = ProviderConfig::default_openai();
+        provider.thinking_level = "none".to_string();
+        let body = apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat)
+            .unwrap();
+
+        assert_eq!(body["thinking"], json!({"type": "disabled"}));
     }
 }

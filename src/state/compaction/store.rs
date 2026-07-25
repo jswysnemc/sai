@@ -229,6 +229,9 @@ impl StateStore {
             source_turn_count,
             reason,
         )?;
+        // 1. 压缩后历史已变，旧的主对话 prompt_tokens 不再代表当前上下文
+        // 2. 清空后 session_snapshot / 系统用量会回退到基于投影历史的实时估算
+        self.clear_last_usage()?;
         if let Err(error) =
             super::save_summary(&self.compaction_summary_file(), summary, source_turn_count)
         {

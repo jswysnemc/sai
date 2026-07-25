@@ -44,10 +44,13 @@ pub(crate) fn group_for_tool(name: &str) -> &'static str {
         | "query_weather"
         | "get_weather"
         | "convert_exchange_rate"
-        | "deepseek_status" => "web",
+        | "get_exchange_rate"
+        | "exchange_rate"
+        | "deepseek_status"
+        | "query_deepseek_status" => "web",
         "search_web_images" | "print_image" | "generate_image" | "search_meme" | "show_meme"
         | "add_meme" | "update_meme" | "delete_meme" | "send_channel_image"
-        | "send_channel_file" | "send_channel_video" => "media",
+        | "send_channel_file" | "send_channel_video" | "send_channel_message" => "media",
         "deep_research"
         | "register_deep_research_topic_title"
         | "register_deep_research_reference"
@@ -61,11 +64,16 @@ pub(crate) fn group_for_tool(name: &str) -> &'static str {
         | "forget_memories" => "memory",
         "aur_search_packages"
         | "aur_get_package_info"
+        | "aur_check_status"
         | "archlinux_official_package_query"
         | "archlinux_news"
         | "archwiki_query"
         | "man_page_search"
         | "man_page_read"
+        | "man_search"
+        | "man_read"
+        | "online_man_search"
+        | "online_man_get_page"
         | "review_aur_package"
         | "install_aur_package"
         | "review_pkgbuild_directory" => "package",
@@ -84,6 +92,8 @@ pub(crate) fn group_for_tool(name: &str) -> &'static str {
         "calculate_hash"
         | "decode_encoded_text"
         | "calculate"
+        | "calculator"
+        | "scientific_calculator"
         | "calculate_expression"
         | "draw_zhouyi_hexagram"
         | "draw_tarot_card"

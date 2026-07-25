@@ -34,7 +34,7 @@ pub use failure_recovery::{FailureKind, RecoverySnapshot, RecoveryStatus};
 pub use pending_turn::PendingTurnGuard;
 #[allow(unused_imports)]
 pub use session_memory::summary::SessionMemorySummary;
-pub use session_snapshot::{ActiveRunSummary, SessionSnapshot};
+pub use session_snapshot::{context_ratio, ActiveRunSummary, SessionSnapshot};
 #[allow(unused_imports)]
 pub use session_timeline::{
     SessionTimeline, SessionTimelineCompaction, SessionTimelineTurn, TimelineMessage,
@@ -303,6 +303,29 @@ impl StateStore {
         reasoning: Option<&str>,
     ) -> Result<()> {
         self.conv_db.interrupt_turn(turn_id, content, reasoning)?;
+        self.settle_pending_tool_calls_for_turns(&[turn_id.to_string()])?;
+        Ok(())
+    }
+
+    /// 失败对话轮次。
+    ///
+    /// 参数:
+    /// - `turn_id`: 当前轮唯一标识
+    /// - `content`: 已生成的部分正文
+    /// - `reasoning`: 可选推理内容
+    /// - `error`: 失败原因
+    ///
+    /// 返回:
+    /// - 写入是否成功
+    pub fn fail_turn(
+        &self,
+        turn_id: &str,
+        content: &str,
+        reasoning: Option<&str>,
+        error: &str,
+    ) -> Result<()> {
+        self.conv_db
+            .fail_turn(turn_id, content, reasoning, error)?;
         self.settle_pending_tool_calls_for_turns(&[turn_id.to_string()])?;
         Ok(())
     }

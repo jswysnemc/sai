@@ -59,7 +59,7 @@ export type TimelineToolEntry = {
 export type SessionTimelineTurn = {
   turn_id: string;
   seq: number;
-  status: "running" | "completed" | "interrupted";
+  status: "running" | "completed" | "interrupted" | "failed";
   automatic: boolean;
   user: TimelineMessage;
   assistant: TimelineMessage;

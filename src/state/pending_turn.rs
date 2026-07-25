@@ -59,6 +59,21 @@ impl PendingTurnGuard {
         Ok(())
     }
 
+    /// 将当前轮次标记为失败，避免被误记为用户中断。
+    ///
+    /// 参数:
+    /// - `error`: 失败原因
+    ///
+    /// 返回:
+    /// - 写入是否成功
+    pub fn fail(mut self, error: &str) -> Result<()> {
+        if !self.completed {
+            self.persist_failure(error)?;
+            self.completed = true;
+        }
+        Ok(())
+    }
+
     /// 手动中断当前轮次。
     ///
     /// 返回:
@@ -83,6 +98,22 @@ impl PendingTurnGuard {
             &self.turn_id,
             &self.partial_content,
             (!self.partial_reasoning.trim().is_empty()).then_some(self.partial_reasoning.as_str()),
+        )
+    }
+
+    /// 将当前轮次保存为失败状态。
+    ///
+    /// 参数:
+    /// - `error`: 失败原因
+    ///
+    /// 返回:
+    /// - 写入是否成功
+    fn persist_failure(&self, error: &str) -> Result<()> {
+        self.state.fail_turn(
+            &self.turn_id,
+            &self.partial_content,
+            (!self.partial_reasoning.trim().is_empty()).then_some(self.partial_reasoning.as_str()),
+            error,
         )
     }
 }

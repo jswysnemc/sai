@@ -5,6 +5,7 @@ pub enum TurnStatus {
     Running,
     Completed,
     Interrupted,
+    Failed,
 }
 
 impl TurnStatus {
@@ -17,6 +18,7 @@ impl TurnStatus {
             Self::Running => "running",
             Self::Completed => "completed",
             Self::Interrupted => "interrupted",
+            Self::Failed => "failed",
         }
     }
 
@@ -31,6 +33,7 @@ impl TurnStatus {
         match value {
             "completed" => Self::Completed,
             "interrupted" => Self::Interrupted,
+            "failed" => Self::Failed,
             _ => Self::Running,
         }
     }

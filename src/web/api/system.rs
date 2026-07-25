@@ -133,6 +133,21 @@ async fn usage(
         Ok(value) => value,
         Err(_error) => super::super::services::context_breakdown::ContextUsageBreakdown::default(),
     };
+    // 1. 分项估算合计：无最近一次主对话 provider usage 时用作当前占用
+    // 2. 压缩会清空 last_conversation_usage；旧会话若仍残留压缩前 usage，也回退到分项估算
+    let breakdown_total = breakdown.system_prompt_tokens
+        + breakdown.tools_and_agents_tokens
+        + breakdown.conversation_tokens
+        + breakdown.connectors_and_mcp_tokens
+        + breakdown.skills_tokens;
+    let context_prompt_tokens = resolve_context_prompt_tokens(
+        snapshot.context_prompt_tokens,
+        snapshot.usage.last_conversation_usage.as_ref().map(|usage| usage.prompt_tokens as usize),
+        breakdown_total,
+        snapshot.checkpoint_count,
+    );
+    let context_window_tokens = snapshot.context_window_tokens;
+    let context_token_ratio = crate::state::context_ratio(context_prompt_tokens, context_window_tokens);
     Ok(Json(SystemUsageResponse {
         session: SessionUsageResponse {
             id: snapshot.session_id,
@@ -141,9 +156,9 @@ async fn usage(
             completion_tokens: snapshot.usage.completion_tokens,
             total_tokens: snapshot.usage.total_tokens,
             turn_count: snapshot.turn_count,
-            context_prompt_tokens: snapshot.context_prompt_tokens,
-            context_window_tokens: snapshot.context_window_tokens,
-            context_token_ratio: snapshot.context_token_ratio,
+            context_prompt_tokens,
+            context_window_tokens,
+            context_token_ratio,
             tool_calls: snapshot.tool_history.call_count,
             checkpoint_count: snapshot.checkpoint_count,
             compacted_turns: snapshot.checkpoint_covered_turns,
@@ -199,6 +214,37 @@ fn usage_context_window(config: &AppConfig, query: &SystemUsageQuery) -> Result<
     }
 }
 
+/// 选择用于顶栏展示的当前上下文占用。
+///
+/// 参数:
+/// - `snapshot_tokens`: 会话快照给出的占用
+/// - `last_conversation_tokens`: 最近一次主对话 provider prompt_tokens
+/// - `breakdown_total`: 实时分项估算合计
+/// - `checkpoint_count`: 已应用 checkpoint 数
+///
+/// 返回:
+/// - 展示用上下文 token 数
+fn resolve_context_prompt_tokens(
+    snapshot_tokens: usize,
+    last_conversation_tokens: Option<usize>,
+    breakdown_total: usize,
+    checkpoint_count: usize,
+) -> usize {
+    // 1. 无 provider 主对话 usage 时，优先分项估算
+    let Some(last_tokens) = last_conversation_tokens.filter(|tokens| *tokens > 0) else {
+        return breakdown_total.max(snapshot_tokens);
+    };
+    // 2. 已压缩且 provider 旧值显著高于实时估算时，判定为压缩前残留
+    if checkpoint_count > 0
+        && breakdown_total > 0
+        && last_tokens > breakdown_total.saturating_mul(3) / 2
+    {
+        return breakdown_total;
+    }
+    // 3. 其余情况沿用 provider / 快照值
+    last_tokens.max(snapshot_tokens)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -241,5 +287,21 @@ mod tests {
         assert!(error
             .to_string()
             .contains("provider_id and model must be provided together"));
+    }
+
+    #[test]
+    fn stale_post_compaction_usage_falls_back_to_breakdown() {
+        // 压缩后残留 314k，实时分项约 30k，应回退估算
+        assert_eq!(
+            resolve_context_prompt_tokens(314_900, Some(314_900), 29_700, 1),
+            29_700
+        );
+        // 无 checkpoint 时仍信 provider
+        assert_eq!(
+            resolve_context_prompt_tokens(40_000, Some(40_000), 29_700, 0),
+            40_000
+        );
+        // 无 usage 时用分项
+        assert_eq!(resolve_context_prompt_tokens(0, None, 12_000, 1), 12_000);
     }
 }

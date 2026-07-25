@@ -2,6 +2,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ModelMetadata, ProviderConfig } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
+import { ModelIcon } from "../../shared/ui/model-icon";
 import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
 
@@ -129,6 +130,7 @@ export function ModelMetadataEditor({ provider, onChange }: ModelMetadataEditorP
           {models.map((model) => (
             <div className={model === selected ? "model-chip active" : "model-chip"} key={model}>
               <Button className="model-chip-select" onClick={() => setSelected(model)}>
+                <ModelIcon model={model} size={14} />
                 {model}
               </Button>
               <Button

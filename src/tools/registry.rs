@@ -495,6 +495,13 @@ fn local_tool_name(name: &str) -> &str {
         "sai_web_search" => "web_search",
         "replace_file_lines" => "str_replace",
         "apply_patch" => "edit_file",
+        "fetch_url" => "web_fetch",
+        "query_weather" => "get_weather",
+        "convert_exchange_rate" | "exchange_rate" => "get_exchange_rate",
+        "deepseek_status" => "query_deepseek_status",
+        "man_page_search" | "man_search" => "online_man_search",
+        "man_page_read" | "man_read" => "online_man_get_page",
+        "calculate" | "calculator" => "scientific_calculator",
         _ => name,
     }
 }
@@ -510,6 +517,13 @@ fn legacy_tool_aliases(name: &str) -> &'static [&'static str] {
     match name {
         "replace_file_lines" => &["str_replace"],
         "apply_patch" => &["edit_file", "str_replace"],
+        "fetch_url" => &["web_fetch"],
+        "query_weather" => &["get_weather"],
+        "convert_exchange_rate" | "exchange_rate" => &["get_exchange_rate"],
+        "deepseek_status" => &["query_deepseek_status"],
+        "man_page_search" | "man_search" => &["online_man_search"],
+        "man_page_read" | "man_read" => &["online_man_get_page"],
+        "calculate" | "calculator" => &["scientific_calculator"],
         _ => &[],
     }
 }

@@ -119,6 +119,7 @@ fn status_name(status: TurnStatus) -> &'static str {
         TurnStatus::Running => "running",
         TurnStatus::Completed => "completed",
         TurnStatus::Interrupted => "interrupted",
+        TurnStatus::Failed => "failed",
     }
 }
 

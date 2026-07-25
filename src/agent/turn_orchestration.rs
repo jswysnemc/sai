@@ -142,6 +142,9 @@ impl Agent {
                     )
                     .await?
                 {
+                    // 恢复失败时按失败落库，避免 UI 显示为用户中断
+                    drop(emit_event);
+                    let _ = guard.fail(&err.to_string());
                     return Err(err);
                 }
                 messages = self.chat_messages_for_turn(
@@ -172,12 +175,23 @@ impl Agent {
                     Ok(result) => result,
                     Err(retry_err) if is_context_overflow_error(&retry_err) => {
                         self.record_overflow_retry_failed(&turn_id, &messages, &retry_err)?;
+                        drop(emit_event);
+                        let _ = guard.fail(&retry_err.to_string());
                         return Err(retry_err);
                     }
-                    Err(retry_err) => return Err(retry_err),
+                    Err(retry_err) => {
+                        drop(emit_event);
+                        let _ = guard.fail(&retry_err.to_string());
+                        return Err(retry_err);
+                    }
                 }
             }
-            Err(err) => return Err(err),
+            Err(err) => {
+                // 请求/工具链路失败：落失败状态，保留真实错误给时间线
+                drop(emit_event);
+                let _ = guard.fail(&err.to_string());
+                return Err(err);
+            }
         };
         emit_event.as_mut()(AgentEvent::FlushContent)?;
         perf.mark("final content flushed");

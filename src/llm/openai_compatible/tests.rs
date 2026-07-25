@@ -531,6 +531,19 @@ mod tests {
     }
 
     #[test]
+    fn openai_chat_thinking_validation_errors_are_retryable() {
+        assert!(openai_chat_thinking_unsupported(
+            400,
+            r#"{"error":{"message":"Validation: `thinking` must be a boolean or an object with `type` set to `enabled`, `disabled`, or `adaptive`"}}"#
+        ));
+        assert!(openai_chat_thinking_unsupported(
+            400,
+            r#"{"message":"failed to unmarshal request body: json: cannot unmarshal string into Go struct field ReqeustFeature.thinking of type dto.Thinking"}"#
+        ));
+        assert!(!openai_chat_thinking_unsupported(500, "thinking unavailable"));
+    }
+
+    #[test]
     fn anthropic_stream_emits_reasoning_content_and_usage() {
         let mut state = AnthropicStreamState::default();
         let mut chunks = Vec::new();
