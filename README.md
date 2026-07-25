@@ -12,7 +12,7 @@ Multi-protocol LLM · 30+ built-in tools · Long-term memory · Chat platform ga
 [![CI Windows](https://img.shields.io/github/actions/workflow/status/jswysnemc/sai/windows.yml?branch=main&label=CI%20Windows)](https://github.com/jswysnemc/sai/actions/workflows/windows.yml)
 [![CI macOS](https://img.shields.io/github/actions/workflow/status/jswysnemc/sai/macos.yml?branch=main&label=CI%20macOS)](https://github.com/jswysnemc/sai/actions/workflows/macos.yml)
 
-[Why Sai](#why-sai) · [Screenshots](#screenshots) · [Core capabilities](#core-capabilities) · [Installation](#installation) · [Quick start](#quick-start) · [CLI reference](#cli-reference) · [Architecture](#architecture) · [Storage layout](#storage-layout) · [FAQ](#faq) · [Acknowledgments](#acknowledgments) · [Contributing](#contributing)
+[Why Sai](#why-sai) · [Screenshots](#screenshots) · [Core capabilities](#core-capabilities) · [Installation](#installation) · [Quick start](#quick-start) · [CLI reference](#cli-reference) · [Architecture](#architecture) · [Storage layout](#storage-layout) · [FAQ](#faq) · [Acknowledgments](#acknowledgments) · [Friend links](#friend-links) · [Contributing](#contributing)
 
 ---
 
@@ -560,6 +560,12 @@ Yes. Several tools inherited from upstream [Miyu](https://github.com/SHORiN-KiWA
 ## Acknowledgments
 
 Sai is a fork of [Miyu](https://github.com/SHORiN-KiWATA/Miyu). Thanks to upstream author [SHORiN-KiWATA](https://github.com/SHORiN-KiWATA) for open-sourcing the architecture, Agent core, and many foundational capabilities that this repository continues to maintain and extend. Some tool implementations still follow upstream; their Linux-only adaptation is noted above.
+
+---
+
+## Friend links
+
+- [LINUX DO](https://linux.do/) - A next-generation Linux community
 
 ---
 

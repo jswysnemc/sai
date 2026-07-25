@@ -12,7 +12,7 @@
 [![CI Windows](https://img.shields.io/github/actions/workflow/status/jswysnemc/sai/windows.yml?branch=main&label=CI%20Windows)](https://github.com/jswysnemc/sai/actions/workflows/windows.yml)
 [![CI macOS](https://img.shields.io/github/actions/workflow/status/jswysnemc/sai/macos.yml?branch=main&label=CI%20macOS)](https://github.com/jswysnemc/sai/actions/workflows/macos.yml)
 
-[为什么是 Sai](#为什么是-sai) · [界面预览](#界面预览) · [核心能力](#核心能力) · [安装](#安装) · [快速开始](#快速开始) · [CLI 命令](#cli-命令参考) · [架构总览](#架构总览) · [存储布局](#存储与目录布局) · [FAQ](#faq) · [致谢](#致谢) · [贡献](#贡献)
+[为什么是 Sai](#为什么是-sai) · [界面预览](#界面预览) · [核心能力](#核心能力) · [安装](#安装) · [快速开始](#快速开始) · [CLI 命令](#cli-命令参考) · [架构总览](#架构总览) · [存储布局](#存储与目录布局) · [FAQ](#faq) · [致谢](#致谢) · [友链](#友链) · [贡献](#贡献)
 
 ---
 
@@ -560,6 +560,12 @@ Linux `~/.local/share/sai` / macOS `~/Library/Application Support/sai` / Windows
 ## 致谢
 
 Sai fork 自 [Miyu](https://github.com/SHORiN-KiWATA/Miyu)。感谢上游作者 [SHORiN-KiWATA](https://github.com/SHORiN-KiWATA) 开源的架构、Agent 内核与大量基础能力；本仓库在此之上继续维护与扩展。部分工具逻辑仍沿用上游实现，其 Linux 侧适配与限制亦见上文说明。
+
+---
+
+## 友链
+
+- [LINUX DO](https://linux.do/) - 新一代的 Linux 社区
 
 ---
 
