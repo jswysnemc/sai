@@ -20,11 +20,14 @@ import { bootstrapSession } from "./api/client";
 import { initializeTheme } from "./features/theme/theme";
 import { detectInitialLocale, text } from "./features/i18n/locale";
 import { configureMonacoEnvironment } from "./features/workspace/monaco-environment";
+import { enableAutoHideScrollbars } from "./shared/styles/auto-hide-scrollbar";
 
 async function start() {
   initializeTheme();
   // 尽早配置 Monaco，避免设置页 JSON 编辑器在未进代码页时触发 toUrl 报错
   configureMonacoEnvironment();
+  // 滚动条默认隐藏，滚动/悬停时短暂显示
+  enableAutoHideScrollbars();
   await bootstrapSession();
   const root = document.getElementById("root");
   if (!root) {

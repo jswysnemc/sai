@@ -1,8 +1,11 @@
 import { useMemo, useState } from "react";
-import { FileDiff, FolderTree, X } from "lucide-react";
+import { FileDiff, FolderTree, RotateCcw, X } from "lucide-react";
+import { api } from "../../../api/client";
+import { toDisplayError } from "../../../api/api-error";
 import { DiffView } from "../tool-renderers/diff-view";
 import { parseJsonRecord, stringField } from "../tool-renderers/tool-data";
 import { useI18n } from "../../i18n/use-i18n";
+import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import type { TurnFileChange } from "./collect-turn-file-changes";
 import "./turn-file-changes.css";
 
@@ -10,6 +13,12 @@ type TurnFileChangesProps = {
   changes: TurnFileChange[];
   /** 本轮工具列表，用于生成 diff 预览 */
   tools?: readonly ToolLike[];
+  /** 会话标识；有 turnId 时启用舍弃改动 */
+  sessionId?: string | null;
+  /** 轮次标识；有值时启用工作树恢复 */
+  turnId?: string | null;
+  /** 恢复成功后的回调，用于刷新侧栏 Git 状态 */
+  onRestored?: () => void;
 };
 
 type ToolLike = {
@@ -21,15 +30,25 @@ type ToolLike = {
 };
 
 /**
- * 展示本轮全部文件改动摘要，支持按单个文件展开 diff 并跳转文件树。
+ * 展示本轮全部文件改动摘要，支持按单个文件展开 diff、跳转文件树，以及舍弃改动。
  *
  * @param props 汇总后的改动列表与可选工具原始数据
  * @returns 改动组件；无改动时不渲染
  */
-export function TurnFileChanges({ changes, tools = [] }: TurnFileChangesProps) {
+export function TurnFileChanges({
+  changes,
+  tools = [],
+  sessionId,
+  turnId,
+  onRestored
+}: TurnFileChangesProps) {
   const { t } = useI18n();
+  const confirm = useConfirm();
   // 仅允许同时展开一个文件，避免多文件 diff 一股脑铺开
   const [activePath, setActivePath] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const canDiscard = Boolean(sessionId && turnId && changes.length > 0);
   const patchSource = useMemo(
     () => (activePath ? buildTurnDiffSource(tools, activePath) : ""),
     [tools, activePath]
@@ -61,6 +80,78 @@ export function TurnFileChanges({ changes, tools = [] }: TurnFileChangesProps) {
     );
   };
 
+  /**
+   * 舍弃本轮全部文件改动。
+   *
+   * @returns 无返回值
+   */
+  const discardAll = async () => {
+    if (!sessionId || !turnId) return;
+    const accepted = await confirm({
+      title: t("Discard all changes from this turn?", "舍弃本轮全部改动？"),
+      description: t(
+        `This restores ${changes.length} file(s) to the pre-turn worktree snapshot. This cannot be undone.`,
+        `将把 ${changes.length} 个文件恢复到本轮开始前的工作树快照，操作不可撤销。`
+      ),
+      confirmLabel: t("Discard all", "舍弃全部"),
+      danger: true
+    });
+    if (!accepted) return;
+    await restorePaths([]);
+  };
+
+  /**
+   * 舍弃单个文件的本轮改动。
+   *
+   * @param path 文件路径
+   * @returns 无返回值
+   */
+  const discardOne = async (path: string) => {
+    if (!sessionId || !turnId) return;
+    const accepted = await confirm({
+      title: t("Discard changes to this file?", "舍弃该文件的改动？"),
+      description: t(
+        `Restore “${path}” to the pre-turn worktree snapshot. This cannot be undone.`,
+        `将把“${path}”恢复到本轮开始前的工作树快照，操作不可撤销。`
+      ),
+      confirmLabel: t("Discard file", "舍弃该文件"),
+      danger: true
+    });
+    if (!accepted) return;
+    await restorePaths([path]);
+  };
+
+  /**
+   * 调用会话 API 恢复工作树。
+   *
+   * @param paths 目标路径；空数组表示整轮
+   * @returns 无返回值
+   */
+  const restorePaths = async (paths: string[]) => {
+    if (!sessionId || !turnId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api.sessions.restoreWorktree(sessionId, turnId, paths);
+      if (!result.restored) {
+        setError(t(
+          "No restorable worktree snapshot for this turn",
+          "本轮没有可恢复的工作树快照"
+        ));
+        return;
+      }
+      if (paths.length === 1 && activePath === paths[0]) {
+        setActivePath(null);
+      }
+      onRestored?.();
+      window.dispatchEvent(new CustomEvent("sai:workspace-refresh"));
+    } catch (err) {
+      setError(toDisplayError(err, "Failed to discard changes", "舍弃改动失败").message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="turn-file-changes" aria-label={t("Turn file changes", "本轮文件改动")}>
       <div className="turn-file-changes-head">
@@ -68,7 +159,20 @@ export function TurnFileChanges({ changes, tools = [] }: TurnFileChangesProps) {
         <strong>{t("Changes this turn", "本轮改动")}</strong>
         <span>{t(`${changes.length} files`, `${changes.length} 个文件`)}</span>
         <span className="turn-file-changes-stats"><b>+{added}</b><i>-{removed}</i></span>
+        {canDiscard && (
+          <button
+            type="button"
+            className="turn-file-discard-all"
+            disabled={busy}
+            onClick={() => void discardAll()}
+            title={t("Discard all changes this turn", "舍弃本轮全部改动")}
+          >
+            <RotateCcw size={12} aria-hidden />
+            <span>{t("Discard all", "舍弃全部")}</span>
+          </button>
+        )}
       </div>
+      {error && <div className="turn-file-changes-error" role="alert">{error}</div>}
       <ul className="turn-file-changes-list">
         {changes.map((change) => {
           const expanded = activePath === change.path;
@@ -86,28 +190,42 @@ export function TurnFileChanges({ changes, tools = [] }: TurnFileChangesProps) {
                   <span className="turn-file-path">{change.path}</span>
                   <span className="turn-file-changes-stats"><b>+{change.added}</b><i>-{change.removed}</i></span>
                 </button>
-                {expanded && (
-                  <div className="turn-file-change-actions">
+                <div className="turn-file-change-actions">
+                  {canDiscard && (
                     <button
                       type="button"
-                      className="turn-file-diff-icon-button"
-                      onClick={() => revealInTree(change.path)}
-                      title={t("Reveal in file tree", "在文件树中显示")}
-                      aria-label={t("Reveal in file tree", "在文件树中显示")}
+                      className="turn-file-diff-icon-button danger"
+                      disabled={busy}
+                      onClick={() => void discardOne(change.path)}
+                      title={t("Discard this file", "舍弃该文件改动")}
+                      aria-label={t("Discard this file", "舍弃该文件改动")}
                     >
-                      <FolderTree size={13} aria-hidden />
+                      <RotateCcw size={13} aria-hidden />
                     </button>
-                    <button
-                      type="button"
-                      className="turn-file-diff-icon-button"
-                      onClick={() => setActivePath(null)}
-                      title={t("Close diff", "关闭差异")}
-                      aria-label={t("Close diff", "关闭差异")}
-                    >
-                      <X size={13} aria-hidden />
-                    </button>
-                  </div>
-                )}
+                  )}
+                  {expanded && (
+                    <>
+                      <button
+                        type="button"
+                        className="turn-file-diff-icon-button"
+                        onClick={() => revealInTree(change.path)}
+                        title={t("Reveal in file tree", "在文件树中显示")}
+                        aria-label={t("Reveal in file tree", "在文件树中显示")}
+                      >
+                        <FolderTree size={13} aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        className="turn-file-diff-icon-button"
+                        onClick={() => setActivePath(null)}
+                        title={t("Close diff", "关闭差异")}
+                        aria-label={t("Close diff", "关闭差异")}
+                      >
+                        <X size={13} aria-hidden />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               {expanded && activeChange && (
                 <div className="turn-file-diff-panel" role="region" aria-label={t("File diff", "文件差异")}>

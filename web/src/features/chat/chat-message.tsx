@@ -35,11 +35,13 @@ export function HistoryMessage({ message }: { message: HistoryEntry }) {
  */
 export function HistoryTurn({
   turn,
+  sessionId,
   onRetry,
   onFork,
   actionBusy
 }: {
   turn: SessionTimelineTurn;
+  sessionId?: string | null;
   onRetry?: () => void;
   onFork?: () => void;
   actionBusy?: boolean;
@@ -77,7 +79,12 @@ export function HistoryTurn({
               : `Processing time ${formatTurnElapsed(turn.duration_ms, false)}`}
           </div>
         )}
-        <TurnFileChanges changes={collectTurnFileChanges(turn.tools)} tools={turn.tools} />
+        <TurnFileChanges
+          changes={collectTurnFileChanges(turn.tools)}
+          tools={turn.tools}
+          sessionId={sessionId}
+          turnId={turn.turn_id}
+        />
         {(turn.assistant.content || onFork) && (
           <MessageActions
             text={turn.assistant.content || turn.user.content}
@@ -99,11 +106,13 @@ export function HistoryTurn({
  */
 export function LiveRunMessage({
   state,
+  sessionId,
   running,
   onRetry,
   onRemoveFromQueue
 }: {
   state: LiveRunState;
+  sessionId?: string | null;
   running: boolean;
   onRetry?: () => void;
   /** 从会话队列取消排队中的运行 */
@@ -135,7 +144,12 @@ export function LiveRunMessage({
                     : `Processing time ${formatTurnElapsed(state.durationMs, false)}`}
                 </div>
               )}
-              <TurnFileChanges changes={collectTurnFileChanges(state.tools)} tools={state.tools} />
+              <TurnFileChanges
+                changes={collectTurnFileChanges(state.tools)}
+                tools={state.tools}
+                sessionId={sessionId}
+                turnId={state.runId}
+              />
             </>
           )}
           {state.error && (

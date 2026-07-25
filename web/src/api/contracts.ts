@@ -18,6 +18,7 @@ export type {
   Session,
   WorkspaceSessions,
   UndoSessionResult,
+  RestoreWorktreeResult,
   ContextRollbackResult,
   HistoryEntry,
   TimelineMessage,

@@ -9,11 +9,44 @@
 .turn-file-changes-head {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.4rem;
   padding: 0.45rem 0.6rem;
   border-bottom: 1px solid var(--line-soft, rgba(127, 127, 127, 0.18));
   font-size: 0.75rem;
   color: var(--ink-soft);
+}
+
+.turn-file-discard-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  min-height: 1.5rem;
+  padding: 0 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 36%, var(--line));
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+  font-size: 0.6875rem;
+  cursor: pointer;
+}
+
+.turn-file-discard-all:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+.turn-file-discard-all:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.turn-file-changes-error {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 24%, var(--line));
+  background: color-mix(in srgb, var(--danger) 7%, transparent);
+  color: var(--danger);
+  font-size: 0.72rem;
 }
 
 .turn-file-changes-head strong {
@@ -123,6 +156,21 @@
 .turn-file-diff-icon-button:hover {
   color: var(--ink);
   background: var(--paper-raised, rgba(127, 127, 127, 0.08));
+}
+
+.turn-file-diff-icon-button.danger {
+  border-color: color-mix(in srgb, var(--danger) 34%, var(--line));
+  color: var(--danger);
+}
+
+.turn-file-diff-icon-button.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.turn-file-diff-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .turn-file-diff-empty {

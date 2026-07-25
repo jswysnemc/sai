@@ -59,6 +59,7 @@ import type {
   WorkspaceList,
   WorkspaceSessions,
   UndoSessionResult,
+  RestoreWorktreeResult,
   WeixinLoginSnapshot,
   SessionContextPrompt
 } from "./contracts";
@@ -152,6 +153,11 @@ export const api = {
       return apiRequest<SessionContextPrompt>(`/api/sessions/${id}/context-prompt${query ? `?${query}` : ""}`);
     },
     undo: (id: string) => apiRequest<UndoSessionResult>(`/api/sessions/${id}/undo`, { method: "POST" }),
+    restoreWorktree: (id: string, turnId: string, paths: string[] = []) =>
+      apiRequest<RestoreWorktreeResult>(`/api/sessions/${id}/restore-worktree`, {
+        method: "POST",
+        body: JSON.stringify({ turn_id: turnId, paths })
+      }),
     rollback: (id: string, turnId: string) =>
       apiRequest<ContextRollbackResult>(`/api/sessions/${id}/rollback`, {
         method: "POST",

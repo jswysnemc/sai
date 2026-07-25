@@ -22,6 +22,10 @@ export type UndoSessionResult = {
   worktree_restored: boolean;
 };
 
+export type RestoreWorktreeResult = {
+  restored: boolean;
+};
+
 export type ContextRollbackResult = {
   removed: number;
   prompt?: string | null;

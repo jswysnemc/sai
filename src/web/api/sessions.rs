@@ -83,6 +83,18 @@ struct BulkDeleteResponse {
     deleted_ids: Vec<String>,
 }
 
+#[derive(Deserialize)]
+struct RestoreWorktreeRequest {
+    turn_id: String,
+    #[serde(default)]
+    paths: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct RestoreWorktreeResponse {
+    restored: bool,
+}
+
 #[derive(Serialize)]
 struct UndoSessionResponse {
     removed: usize,
@@ -107,6 +119,7 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/sessions/:id/messages", get(messages))
         .route("/api/sessions/:id/timeline", get(timeline))
         .route("/api/sessions/:id/undo", post(undo))
+        .route("/api/sessions/:id/restore-worktree", post(restore_worktree))
         .route("/api/sessions/:id/rollback", post(rollback))
         .route("/api/sessions/:id/permission-audit", get(permission_audit))
         .route("/api/sessions/:id/context-prompt", get(context_prompt))
@@ -477,6 +490,33 @@ async fn undo(
         prompt: outcome.prompt,
         worktree_restored: outcome.worktree_restored,
     }))
+}
+
+/// 恢复指定轮次的工作树快照，不删除对话。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `id`: 会话标识
+/// - `request`: 轮次与可选路径列表
+///
+/// 返回:
+/// - 是否恢复
+async fn restore_worktree(
+    State(state): State<WebAppState>,
+    Path(id): Path<String>,
+    Json(request): Json<RestoreWorktreeRequest>,
+) -> WebResult<Json<RestoreWorktreeResponse>> {
+    let _workspace_id = reject_session_run(&state, &id).await?;
+    let turn_id = request.turn_id.trim();
+    if turn_id.is_empty() {
+        return Err(WebError::bad_request("turn_id is required"));
+    }
+    let store = StateStore::for_session(&state.paths, &id)
+        .map_err(|error| WebError::not_found(error.to_string()))?;
+    let restored = store
+        .restore_turn_worktree(turn_id, &request.paths)
+        .map_err(|error| WebError::conflict(error.to_string()))?;
+    Ok(Json(RestoreWorktreeResponse { restored }))
 }
 
 /// 仅回滚指定会话最后一轮上下文，不恢复工作树。

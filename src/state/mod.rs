@@ -519,7 +519,21 @@ impl StateStore {
         })
     }
 
-    /// 回滚与预期标识匹配的最后一轮会话上下文。
+    /// 仅恢复指定轮次的工作树改动，不删除对话历史。
+///
+/// 参数:
+/// - `expected_turn_id`: 轮次标识
+/// - `paths`: 目标路径；空表示整轮
+///
+/// 返回:
+/// - 是否恢复了工作树
+pub fn restore_turn_worktree(&self, expected_turn_id: &str, paths: &[String]) -> Result<bool> {
+    let outcome =
+        worktree_undo::restore_snapshot_paths(&self.state_dir, expected_turn_id, paths)?;
+    Ok(outcome.restored)
+}
+
+/// 回滚与预期标识匹配的最后一轮会话上下文。
     ///
     /// 参数:
     /// - `expected_turn_id`: 准备重试的最后一轮标识

@@ -196,11 +196,25 @@ pub(super) async fn list_background_tasks(paths: &SaiPaths, config: &AppConfig) 
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
     let mut tasks = store.load()?;
     refresh_task_statuses(&mut tasks, config).await;
+    // 1. 回执已消费或前台已完整读取的终态任务不再展示
+    let mut pruned = false;
+    tasks.retain(|task| {
+        let drop = task.status != "running" && task.completion_notified;
+        if drop {
+            let _ = std::fs::remove_file(&task.stdout_log);
+            let _ = std::fs::remove_file(&task.stderr_log);
+            pruned = true;
+            false
+        } else {
+            true
+        }
+    });
     store.save(&tasks)?;
     let state = StateStore::new(paths)?;
     sync_runtime_tasks(&state, &tasks)?;
-    // 1. 网关进程由网关管理页独立管理，通用后台任务列表不展示
+    // 2. 网关进程由网关管理页独立管理，通用后台任务列表不展示
     tasks.retain(|task| !is_gateway_owned_task(task));
+    let _ = pruned;
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
         "tasks": tasks,
@@ -368,6 +382,7 @@ pub(super) async fn cleanup_background_tasks(
     let state = StateStore::new(paths)?;
     sync_runtime_tasks(&state, &tasks)?;
     let mut removed = Vec::new();
+    // 1. 手动清理：移除全部非运行中任务；可选删除日志
     tasks.retain(|task| {
         if task.status == "running" {
             return true;

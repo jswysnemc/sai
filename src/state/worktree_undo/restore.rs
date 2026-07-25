@@ -19,6 +19,23 @@ pub(crate) fn restore_latest_snapshot(
     state_dir: &Path,
     expected_turn_id: &str,
 ) -> Result<WorktreeUndoOutcome> {
+    restore_snapshot_paths(state_dir, expected_turn_id, &[])
+}
+
+/// 恢复指定轮次工作树快照；`paths` 非空时仅恢复这些路径。
+///
+/// 参数:
+/// - `state_dir`: 会话状态目录
+/// - `expected_turn_id`: 轮次标识
+/// - `paths`: 目标路径；空表示整轮
+///
+/// 返回:
+/// - 是否执行了恢复
+pub(crate) fn restore_snapshot_paths(
+    state_dir: &Path,
+    expected_turn_id: &str,
+    paths: &[String],
+) -> Result<WorktreeUndoOutcome> {
     let directory = snapshot_directory(state_dir, expected_turn_id);
     if !directory.exists() {
         return Ok(WorktreeUndoOutcome { restored: false });
@@ -29,24 +46,53 @@ pub(crate) fn restore_latest_snapshot(
     }
     let repository_root = PathBuf::from(&record.repository_root);
     validate_current_state(&repository_root, &record)?;
-    restore_tracked_files(&repository_root)?;
-    remove_current_untracked(&repository_root)?;
+    if paths.is_empty() {
+        restore_tracked_files(&repository_root)?;
+        remove_current_untracked(&repository_root)?;
+        apply_patch(
+            &repository_root,
+            &directory.join("before-index.patch"),
+            true,
+            &[],
+        )?;
+        restore_worktree_from_index(&repository_root)?;
+        apply_patch(
+            &repository_root,
+            &directory.join("before-worktree.patch"),
+            false,
+            &[],
+        )?;
+        restore_untracked(&repository_root, &directory, &record, &[])?;
+        if worktree_fingerprint(&repository_root)? != record.before_fingerprint {
+            bail!("worktree restore verification failed");
+        }
+        std::fs::remove_dir_all(directory)?;
+        return Ok(WorktreeUndoOutcome { restored: true });
+    }
+
+    // 1. 路径级恢复：先回到 HEAD，再套用运行前补丁中的目标路径
+    for path in paths {
+        restore_path_to_head(&repository_root, path)?;
+    }
     apply_patch(
         &repository_root,
         &directory.join("before-index.patch"),
         true,
+        paths,
     )?;
-    restore_worktree_from_index(&repository_root)?;
+    for path in paths {
+        let _ = Command::new("git")
+            .args(["restore", "--worktree", "--", path])
+            .current_dir(&repository_root)
+            .status();
+    }
     apply_patch(
         &repository_root,
         &directory.join("before-worktree.patch"),
         false,
+        paths,
     )?;
-    restore_untracked(&repository_root, &directory, &record)?;
-    if worktree_fingerprint(&repository_root)? != record.before_fingerprint {
-        bail!("worktree restore verification failed");
-    }
-    std::fs::remove_dir_all(directory)?;
+    restore_untracked(&repository_root, &directory, &record, paths)?;
     Ok(WorktreeUndoOutcome { restored: true })
 }
 
@@ -147,10 +193,16 @@ fn restore_worktree_from_index(repository_root: &Path) -> Result<()> {
 /// - `repository_root`: Git 仓库根目录
 /// - `patch_file`: 补丁文件路径
 /// - `cached`: 是否应用到索引
+/// - `paths`: 仅包含这些路径；空表示全部
 ///
 /// 返回:
 /// - 应用是否成功
-fn apply_patch(repository_root: &Path, patch_file: &Path, cached: bool) -> Result<()> {
+fn apply_patch(
+    repository_root: &Path,
+    patch_file: &Path,
+    cached: bool,
+    paths: &[String],
+) -> Result<()> {
     let patch = std::fs::read(patch_file)?;
     if patch.is_empty() {
         return Ok(());
@@ -159,6 +211,9 @@ fn apply_patch(repository_root: &Path, patch_file: &Path, cached: bool) -> Resul
     command.args(["apply", "--binary", "--whitespace=nowarn"]);
     if cached {
         command.arg("--cached");
+    }
+    for path in paths {
+        command.arg(format!("--include={path}"));
     }
     let mut child = command
         .arg("-")
@@ -171,7 +226,56 @@ fn apply_patch(repository_root: &Path, patch_file: &Path, cached: bool) -> Resul
         .context("git apply stdin is unavailable")?
         .write_all(&patch)?;
     if !child.wait()?.success() {
-        bail!("failed to apply the pre-turn worktree patch");
+        // 路径级恢复时补丁可能不含目标路径，忽略失败
+        if paths.is_empty() {
+            bail!("failed to apply the pre-turn worktree patch");
+        }
+    }
+    Ok(())
+}
+
+/// 将单个路径恢复到 HEAD 的索引与工作树状态；本轮新增文件则删除。
+///
+/// 参数:
+/// - `repository_root`: 仓库根目录
+/// - `path`: 相对路径
+///
+/// 返回:
+/// - 是否成功
+fn restore_path_to_head(repository_root: &Path, path: &str) -> Result<()> {
+    let absolute = repository_root.join(path);
+    let tracked = Command::new("git")
+        .args(["ls-files", "--error-unmatch", "--", path])
+        .current_dir(repository_root)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false);
+    if tracked {
+        let status = Command::new("git")
+            .args([
+                "restore",
+                "--source=HEAD",
+                "--staged",
+                "--worktree",
+                "--",
+                path,
+            ])
+            .current_dir(repository_root)
+            .status()?;
+        if !status.success() {
+            bail!("failed to restore path to HEAD: {path}");
+        }
+        return Ok(());
+    }
+    if absolute.exists() || std::fs::symlink_metadata(&absolute).is_ok() {
+        if absolute.is_dir() {
+            std::fs::remove_dir_all(&absolute)?;
+        } else {
+            std::fs::remove_file(&absolute)?;
+        }
+        prune_empty_parents(repository_root, absolute.parent())?;
     }
     Ok(())
 }
@@ -182,6 +286,7 @@ fn apply_patch(repository_root: &Path, patch_file: &Path, cached: bool) -> Resul
 /// - `repository_root`: Git 仓库根目录
 /// - `directory`: 快照目录
 /// - `record`: 快照记录
+/// - `paths`: 仅恢复这些路径；空表示全部
 ///
 /// 返回:
 /// - 恢复是否成功
@@ -189,8 +294,12 @@ fn restore_untracked(
     repository_root: &Path,
     directory: &Path,
     record: &SnapshotRecord,
+    paths: &[String],
 ) -> Result<()> {
     for entry in &record.untracked {
+        if !paths.is_empty() && !paths.iter().any(|path| path == &entry.path) {
+            continue;
+        }
         let source = directory.join("untracked").join(&entry.path);
         let target = repository_root.join(&entry.path);
         if let Some(parent) = target.parent() {

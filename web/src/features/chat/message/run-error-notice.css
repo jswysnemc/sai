@@ -55,6 +55,17 @@
   color: var(--signal);
 }
 
+/* 中断态重试按钮：浅底 + 信号色描边，避免 primary 深色底 */
+.run-error.is-interrupted .ui-button.run-error-retry {
+  border-color: color-mix(in srgb, var(--signal) 42%, var(--line));
+  background: color-mix(in srgb, var(--signal) 10%, var(--paper));
+  color: var(--signal);
+}
+
+.run-error.is-interrupted .ui-button.run-error-retry:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--signal) 16%, var(--paper));
+}
+
 .run-error .ui-button.run-error-retry {
   min-height: 1.875rem;
   padding: 0 0.625rem;

@@ -5,7 +5,7 @@ use crate::state::StateStore;
 use anyhow::Result;
 use std::path::Path;
 
-pub(crate) use restore::restore_latest_snapshot;
+pub(crate) use restore::{restore_latest_snapshot, restore_snapshot_paths};
 use snapshot::{discard_snapshot, finalize_snapshot, start_snapshot, PendingSnapshot};
 
 /// 工作树撤销结果。

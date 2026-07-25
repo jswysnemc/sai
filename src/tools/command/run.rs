@@ -271,19 +271,18 @@ async fn wait_managed_task(
             &progress,
         )?;
 
-        // 2. 进程已退出：读取完整日志并返回前台结果
-        // 前台已完整消费输出，标记 completion_notified，避免再注入 external completion 回执
+        // 2. 进程已退出：先读完整日志，再删除任务记录，避免后台任务面板堆积
         if !process_exists(task.pid) {
-            let store = BackgroundCommandStore::new(paths.state_dir.clone());
-            let mut tasks = store.load()?;
-            if let Some(existing) = tasks.iter_mut().find(|item| item.id == task.id) {
-                existing.status = "exited".to_string();
-                existing.completion_notified = true;
-                existing.updated_at = super::store::unix_seconds();
-                store.save(&tasks)?;
-            }
             let stdout = read_log_text(&task.stdout_log)?;
             let stderr = read_log_text(&task.stderr_log)?;
+            let store = BackgroundCommandStore::new(paths.state_dir.clone());
+            let mut tasks = store.load()?;
+            if let Some(index) = tasks.iter().position(|item| item.id == task.id) {
+                let finished = tasks.remove(index);
+                store.save(&tasks)?;
+                let _ = std::fs::remove_file(&finished.stdout_log);
+                let _ = std::fs::remove_file(&finished.stderr_log);
+            }
             return Ok(serde_json::to_string_pretty(&json!({
                 "mode": "foreground",
                 "success": true,
@@ -766,14 +765,9 @@ mod tests {
         );
         let store = BackgroundCommandStore::new(paths.state_dir.clone());
         let tasks = store.load().unwrap();
-        let task = tasks
-            .iter()
-            .find(|item| item.id == task_id)
-            .expect("foreground finished task should remain for audit");
-        assert_eq!(task.status, "exited");
         assert!(
-            task.completion_notified,
-            "foreground success must not emit external completion notices"
+            tasks.iter().all(|item| item.id != task_id),
+            "foreground finished tasks should be auto-removed after output is consumed"
         );
     }
 }

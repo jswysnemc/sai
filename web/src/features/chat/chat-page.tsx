@@ -401,6 +401,7 @@ export function ChatPage() {
               <section className="conversation-turn" data-overview-id={`turn-${turn.turn_id}`} key={turn.turn_id}>
                 <HistoryTurn
                   turn={turn}
+                  sessionId={activeSession?.id}
                   onRetry={turn.turn_id === lastTurnId && !running
                     ? () => void retry(turn.user.content, undefined, turn.turn_id)
                     : undefined}
@@ -413,6 +414,7 @@ export function ChatPage() {
               <section className="conversation-turn" data-overview-id={`live-${state.runId}`} key={state.runId}>
                 <LiveRunMessage
                   state={state}
+                  sessionId={activeSession?.id}
                   running={!state.completed}
                   onRetry={!running && state.completed
                     ? () => void retry(state.userInput, state.imageUrls, state.runId)
