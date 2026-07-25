@@ -1,30 +1,65 @@
-* {
-  scrollbar-color: color-mix(in srgb, var(--ink-soft) 42%, transparent) transparent;
-  scrollbar-width: thin;
+/* 全局滚动条外观：统一细滚动条，并彻底移除上下/左右三角步进按钮。
+ *
+ * 关键：标准 scrollbar-width/scrollbar-color 与 ::-webkit-scrollbar 自定义
+ * 同时存在时，Linux 经典滚动条模式下的 Blink 可能优先标准属性，从而忽略
+ * webkit 伪元素里的 button display:none，导致三角箭头残留。
+ * 因此标准属性仅对“不识别 webkit 滚动条伪元素”的内核（Firefox/Gecko）生效，
+ * Blink/Safari/Edge 完全走 webkit 自定义路径，确保箭头被隐藏。 */
+
+/* 1. Gecko 专用：用标准属性绘制细滚动条并抑制原生箭头 */
+@supports not selector(::-webkit-scrollbar-button) {
+  * {
+    scrollbar-color: color-mix(in srgb, var(--ink-soft) 48%, transparent) transparent;
+    scrollbar-width: thin;
+  }
 }
 
+/* 2. Webkit/Blink 自定义滚动条尺寸 */
 *::-webkit-scrollbar {
   width: 7px;
   height: 7px;
 }
 
-/* 去掉滚动条上下/左右三角步进按钮。 */
-*::-webkit-scrollbar-button {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  background: transparent;
-}
-
+/* 3. 隐藏滚动条两端的三角步进按钮，覆盖方向/位置/单双按钮的全部伪类组合 */
+*::-webkit-scrollbar-button,
+*::-webkit-scrollbar-button:vertical,
+*::-webkit-scrollbar-button:horizontal,
+*::-webkit-scrollbar-button:start,
+*::-webkit-scrollbar-button:end,
+*::-webkit-scrollbar-button:decrement,
+*::-webkit-scrollbar-button:increment,
 *::-webkit-scrollbar-button:start:decrement,
+*::-webkit-scrollbar-button:start:increment,
+*::-webkit-scrollbar-button:end:decrement,
 *::-webkit-scrollbar-button:end:increment,
+*::-webkit-scrollbar-button:vertical:start,
+*::-webkit-scrollbar-button:vertical:end,
+*::-webkit-scrollbar-button:horizontal:start,
+*::-webkit-scrollbar-button:horizontal:end,
 *::-webkit-scrollbar-button:vertical:start:decrement,
+*::-webkit-scrollbar-button:vertical:start:increment,
+*::-webkit-scrollbar-button:vertical:end:decrement,
 *::-webkit-scrollbar-button:vertical:end:increment,
 *::-webkit-scrollbar-button:horizontal:start:decrement,
-*::-webkit-scrollbar-button:horizontal:end:increment {
+*::-webkit-scrollbar-button:horizontal:start:increment,
+*::-webkit-scrollbar-button:horizontal:end:decrement,
+*::-webkit-scrollbar-button:horizontal:end:increment,
+*::-webkit-scrollbar-button:single-button,
+*::-webkit-scrollbar-button:double-button,
+*::-webkit-scrollbar-button:no-button {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  opacity: 0 !important;
 }
 
 *::-webkit-scrollbar-track {
@@ -34,15 +69,33 @@
 *::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--ink-soft) 42%, transparent);
+  background: color-mix(in srgb, var(--ink-soft) 48%, transparent);
   background-clip: padding-box;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--ink-soft) 68%, transparent);
+  background: color-mix(in srgb, var(--ink-soft) 72%, transparent);
   background-clip: padding-box;
 }
 
 *::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* 4. xterm 终端视口滚动条同样移除三角按钮 */
+.xterm .xterm-viewport::-webkit-scrollbar-button,
+.xterm .xterm-viewport::-webkit-scrollbar-button:vertical,
+.xterm .xterm-viewport::-webkit-scrollbar-button:vertical:start,
+.xterm .xterm-viewport::-webkit-scrollbar-button:vertical:end {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+.xterm .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ink-soft) 48%, transparent) transparent;
 }

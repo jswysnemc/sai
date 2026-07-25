@@ -139,7 +139,8 @@ export function useSettingsConfig(): SettingsConfigController {
     updateRaw,
     updateProvider,
     updateGateway,
-    saveConfig
+    saveConfig,
+    retry: () => void response.refetch()
   };
 }
 

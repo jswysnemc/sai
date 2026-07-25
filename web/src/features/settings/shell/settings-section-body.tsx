@@ -11,6 +11,8 @@ import { HooksSettingsSection } from "../hooks-settings-section";
 import { McpSettingsSection } from "../mcp-settings-section";
 import { SkillsSettingsSection } from "../skills/skills-settings-section";
 import { UsageStatsSection } from "../usage-stats-section";
+import { SettingsSkeleton } from "./settings-skeleton";
+import { SettingsErrorRecovery } from "./settings-error-recovery";
 import type { SettingsConfigController, SettingsSectionId } from "../settings-types";
 import type { ThemeId } from "../../theme/theme";
 import { useI18n } from "../../i18n/use-i18n";
@@ -37,12 +39,16 @@ export function SettingsSectionBody({
   const { t } = useI18n();
   const needsConfig = sectionNeedsAppConfig(section);
 
-  // 1. 依赖 AppConfig 的 section：加载中 / 缺失时给出状态
+  // 1. 依赖 AppConfig 的 section：加载中展示骨架屏
   if (needsConfig && settings.loading) {
-    return <div className="settings-state">{t("Loading configuration", "正在读取配置")}</div>;
+    return <SettingsSkeleton rows={5} />;
   }
+
+  // 2. 加载失败且无缓存配置时展示错误恢复面板
   if (needsConfig && !settings.config) {
-    return <div className="settings-state">{t("Configuration unavailable", "配置不可用")}</div>;
+    const message = settings.error?.message
+      ?? t("Configuration unavailable", "配置不可用");
+    return <SettingsErrorRecovery message={message} onRetry={settings.retry} />;
   }
 
   // 2. 按 id 渲染；独立面不要求 config

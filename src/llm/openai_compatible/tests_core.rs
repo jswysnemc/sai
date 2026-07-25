@@ -89,6 +89,74 @@
     }
 
     #[test]
+    fn stream_tool_calls_ignore_empty_id_from_bailian_chunks() {
+        // 1. 模拟百炼/DashScope：首个 chunk 给有效 id，后续 arguments chunk 带空字符串 id
+        let mut content = String::new();
+        let mut content_emitted = 0usize;
+        let mut reasoning = String::new();
+        let mut reasoning_emitted = 0usize;
+        let mut usage = None;
+        let mut tool_calls = ToolCallAccumulator::default();
+        let mut on_chunk = |_event| Ok(());
+        let lines = [
+            r#"data: {"choices":[{"delta":{"tool_calls":[{"id":"call_47f08af107c249a68db445ae","type":"function","index":0,"function":{"name":"check_os_info","arguments":""}}]}}]}"#,
+            r#"data: {"choices":[{"delta":{"tool_calls":[{"id":"","type":"function","index":0,"function":{"arguments":"{}"}}]}}]}"#,
+            r#"data: {"choices":[{"delta":{"tool_calls":[{"id":"call_22e15e90d261418e8209e033","type":"function","index":1,"function":{"name":"read_file","arguments":""}}]}}]}"#,
+            r#"data: {"choices":[{"delta":{"tool_calls":[{"id":"","type":"function","index":1,"function":{"arguments":"{\"path\":\"/tmp\"}"}}]}}]}"#,
+        ];
+        for line in lines {
+            handle_sse_line(
+                line,
+                &mut content,
+                &mut content_emitted,
+                &mut reasoning,
+                &mut reasoning_emitted,
+                &mut usage,
+                &mut tool_calls,
+                &mut on_chunk,
+            )
+            .unwrap();
+        }
+
+        // 2. 校验两个 call_id 都保留首个有效值，且 arguments 仍被拼接
+        let calls = tool_calls.finish();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].id, "call_47f08af107c249a68db445ae");
+        assert_eq!(calls[0].function.name, "check_os_info");
+        assert_eq!(calls[0].function.arguments, "{}");
+        assert_eq!(calls[1].id, "call_22e15e90d261418e8209e033");
+        assert_eq!(calls[1].function.name, "read_file");
+        assert_eq!(calls[1].function.arguments, r#"{"path":"/tmp"}"#);
+    }
+
+    #[test]
+    fn stream_tool_calls_generate_fallback_ids_when_upstream_omits_id() {
+        let mut tool_calls = ToolCallAccumulator::default();
+        tool_calls.push(ToolCallDelta {
+            index: 0,
+            id: None,
+            kind: Some("function".to_string()),
+            function: ToolCallFunctionDelta {
+                name: Some("check_os_info".to_string()),
+                arguments: Some("{}".to_string()),
+            },
+        });
+        tool_calls.push(ToolCallDelta {
+            index: 1,
+            id: Some(String::new()),
+            kind: Some("function".to_string()),
+            function: ToolCallFunctionDelta {
+                name: Some("read_file".to_string()),
+                arguments: Some(r#"{"path":"/tmp"}"#.to_string()),
+            },
+        });
+
+        let calls = tool_calls.finish();
+        assert_eq!(calls[0].id, "call-fallback-0");
+        assert_eq!(calls[1].id, "call-fallback-1");
+    }
+
+    #[test]
     fn taotoken_glm_request_enables_thinking() {
         let mut provider = test_provider("taotoken", "https://taotoken.net/api/v1");
         provider.default_model = "glm_for_coding".to_string();

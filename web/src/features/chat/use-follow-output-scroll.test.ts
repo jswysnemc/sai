@@ -31,6 +31,14 @@ describe("follow output scroll", () => {
     )).toEqual({ following: true, showJump: false });
   });
 
+  it("程序滚动和内容增长不会在用户上滚后恢复跟随", () => {
+    expect(resolveFollowOutputState(
+      { following: false, showJump: true },
+      { scrollTop: 400, scrollHeight: 1400, clientHeight: 300 },
+      false
+    )).toEqual({ following: false, showJump: true });
+  });
+
   it("将持续增长的输出区域滚动到最新位置", () => {
     const element = { scrollTop: 120, scrollHeight: 960 };
 

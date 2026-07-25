@@ -167,7 +167,10 @@ async fn run_git_once(
     command_timeout: Duration,
 ) -> Result<std::process::Output> {
     let mut command = Command::new("git");
+    // 注入 quotepath 配置，使 diff/show/log 等输出中文路径原文
     command
+        .arg("-c")
+        .arg("core.quotepath=false")
         .args(args)
         .current_dir(root)
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -203,7 +206,10 @@ async fn run_git_with_input_once(
     input: &[u8],
 ) -> Result<std::process::Output> {
     let mut command = Command::new("git");
+    // 注入 quotepath 配置，使 diff/show/log 等输出中文路径原文
     command
+        .arg("-c")
+        .arg("core.quotepath=false")
         .args(args)
         .current_dir(root)
         .env("GIT_TERMINAL_PROMPT", "0")

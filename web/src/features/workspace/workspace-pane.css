@@ -4,7 +4,7 @@
 .pane-tab { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--ink-soft); font-size: 12px; }
 .pane-tab:hover { color: var(--ink); }
 .pane-tab.active { border-bottom-color: var(--signal); color: var(--ink); }
-.pane-close { display: grid; width: 30px; height: 30px; margin: 0 0 3px auto; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--ink-soft); }
+.pane-close { display: grid; width: 30px; height: 30px; margin: 0 0 3px auto; padding: 0; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--ink-soft); }
 .pane-close:hover { background: var(--paper-raised); color: var(--ink); }
 .pane-control { display: grid; width: 30px; height: 30px; margin-bottom: 3px; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--ink-soft); }
 .pane-tab + .pane-control { margin-left: auto; }
@@ -90,6 +90,7 @@
   display: grid;
   width: 20px;
   height: 20px;
+  padding: 0;
   place-items: center;
   border: 0;
   border-radius: 5px;

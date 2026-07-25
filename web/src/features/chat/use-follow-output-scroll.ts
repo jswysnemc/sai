@@ -141,3 +141,100 @@ export function useFollowOutputScroll(
 
   return { showJump, jumpToBottom, pauseFollowing };
 }
+
+/**
+ * 管理嵌套输出区域（如长思考块）的底部跟随。
+ * 用户主动上滚查看历史时暂停；滚回底部后恢复自动跟随。
+ *
+ * @param scrollContainerRef 嵌套滚动容器引用
+ * @param contentSignal 内容增长信号
+ * @param enabled 是否启用跟随（通常为 live 且展开）
+ * @returns 无返回值
+ */
+export function useNestedFollowOutputScroll(
+  scrollContainerRef: RefObject<HTMLElement | null>,
+  contentSignal: unknown,
+  enabled: boolean
+): void {
+  const followingRef = useRef(true);
+  const userIntentDeadlineRef = useRef(0);
+
+  // 1. 重新启用时恢复跟随，避免上次上滚状态残留
+  useEffect(() => {
+    if (enabled) followingRef.current = true;
+  }, [enabled]);
+
+  useEffect(() => {
+    const element = scrollContainerRef.current;
+    if (!element || !enabled) return;
+
+    /**
+     * 在短时间窗口内标记滚动来自用户主动操作。
+     *
+     * @returns 无返回值
+     */
+    const markUserIntent = () => {
+      userIntentDeadlineRef.current = performance.now() + 700;
+    };
+
+    /**
+     * 根据当前位置更新是否继续跟随底部。
+     *
+     * @returns 无返回值
+     */
+    const onScroll = () => {
+      const userInitiated = performance.now() <= userIntentDeadlineRef.current;
+      const next = resolveFollowOutputState(
+        { following: followingRef.current, showJump: !followingRef.current },
+        {
+          scrollTop: element.scrollTop,
+          scrollHeight: element.scrollHeight,
+          clientHeight: element.clientHeight
+        },
+        userInitiated
+      );
+      followingRef.current = next.following;
+    };
+
+    /**
+     * 仅容器本身的指针操作可能是滚动条拖动。
+     *
+     * @param event 指针事件
+     * @returns 无返回值
+     */
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target === element) markUserIntent();
+    };
+
+    /**
+     * 键盘滚动视为用户意图。
+     *
+     * @param event 键盘事件
+     * @returns 无返回值
+     */
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) {
+        markUserIntent();
+      }
+    };
+
+    element.addEventListener("wheel", markUserIntent, { passive: true });
+    element.addEventListener("touchstart", markUserIntent, { passive: true });
+    element.addEventListener("pointerdown", onPointerDown, { passive: true });
+    element.addEventListener("keydown", onKeyDown);
+    element.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      element.removeEventListener("wheel", markUserIntent);
+      element.removeEventListener("touchstart", markUserIntent);
+      element.removeEventListener("pointerdown", onPointerDown);
+      element.removeEventListener("keydown", onKeyDown);
+      element.removeEventListener("scroll", onScroll);
+    };
+  }, [enabled, scrollContainerRef]);
+
+  // 2. 仅在跟随开启时把视口钉在最新内容
+  useLayoutEffect(() => {
+    if (!enabled || !followingRef.current) return;
+    scrollOutputToBottom(scrollContainerRef.current);
+  }, [contentSignal, enabled, scrollContainerRef]);
+}

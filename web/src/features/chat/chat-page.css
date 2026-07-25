@@ -1,54 +1,37 @@
 .chat-page {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
   width: 100%;
   height: 100%;
   min-height: 0;
 }
 
-.chat-page.empty-session {
-  grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, 1.25fr);
+/* 滚动区占满整列，滚动条随之贯通聊天列全高 */
+.message-scroll-region {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  container-type: inline-size;
 }
 
-.chat-page.empty-session .message-scroll-region {
-  display: none;
+/* 滚动容器用 flex 列布局：消息列吸收剩余高度，
+   内容不足一屏时问候语与输入区自然贴底，内容超出时正常滚动 */
+.message-scroll {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
 }
 
-.empty-session-greeting {
-  align-self: end;
-  justify-self: center;
-  width: min(100%, 820px);
-  padding: 0 18px 6px;
-  text-align: center;
-}
-
-.empty-session-context-prompt {
-  margin: 0 auto 14px;
-  max-width: 100%;
-  text-align: left;
-}
-
-.empty-session-greeting h2 {
-  margin: 0 0 6px;
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.empty-session-greeting p {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 12px;
-}
-
-.chat-page.empty-session > .composer-shell {
-  justify-self: center;
-  width: min(100%, 820px);
-  padding: 10px 18px 20px;
-}
-
+/* 头部与输入区吸在滚动容器两端，消息内容从其下方穿过，
+   滚动条因此覆盖整个视口高度而不是夹在两者之间 */
 .chat-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -56,6 +39,7 @@
   min-height: 44px;
   padding: 6px 16px;
   border-bottom: 1px solid var(--line);
+  background: var(--paper);
 }
 
 .chat-header h1 {
@@ -76,10 +60,40 @@
   display: none;
 }
 
-.message-scroll-region {
-  position: relative;
-  min-height: 0;
-  container-type: inline-size;
+/* 头部 `+` 面板菜单：头部已随滚动容器定位，菜单改用视口定位避免被滚动裁剪 */
+.chat-header-panel-menu {
+  position: fixed;
+  top: 50px;
+  right: 12px;
+  display: grid;
+  gap: 2px;
+  min-width: 148px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper-raised);
+  box-shadow: var(--shadow);
+  z-index: 40;
+}
+
+.chat-header-panel-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  text-align: left;
+}
+
+.chat-header-panel-menu button:hover {
+  background: var(--paper-deep);
+  color: var(--ink);
 }
 
 .conversation-turn {
@@ -90,15 +104,21 @@
   padding-bottom: 4px;
 }
 
-.message-scroll {
-  height: 100%;
-  min-height: 0;
-  overflow: auto;
+/* 输入区吸在滚动容器底部，顶部渐变让消息内容自然淡出 */
+.composer-shell {
+  position: sticky;
+  bottom: 0;
+  z-index: 15;
+  flex: 0 0 auto;
+  margin-top: -26px;
+  padding-top: 32px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
 }
 
 .jump-to-bottom {
   position: absolute;
-  bottom: 14px;
+  bottom: 140px;
   left: 50%;
   display: grid;
   width: 34px;
@@ -119,12 +139,44 @@
   color: var(--ink);
 }
 
+/* 消息列吸收滚动容器剩余高度：内容不足一屏时把问候语与输入区推到底部，
+   内容超出时正常撑高产生滚动 */
 .message-column {
+  /* flex-shrink 必须为 0：内容超出时撑高容器产生滚动，而不是被压缩 */
+  flex: 1 0 auto;
   width: min(100%, 820px);
   min-width: 0;
-  min-height: 100%;
   margin: 0 auto;
-  padding: 20px 18px 36px;
+  padding: 20px 18px 0;
+}
+
+/* 空会话问候语：位于消息列与输入区之间，空会话无滚动时自然贴在输入区上方 */
+.empty-session-greeting {
+  flex: 0 0 auto;
+  width: min(100%, 820px);
+  margin: 0 auto 22px;
+  padding: 0 18px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.empty-session-context-prompt {
+  margin: 0 auto 14px;
+  max-width: 100%;
+  text-align: left;
+}
+
+.empty-session-greeting h2 {
+  margin: 0 0 6px;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.empty-session-greeting p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
 }
 
 .message {
@@ -198,7 +250,7 @@
 @keyframes pulse { 50% { opacity: 0.35; } }
 
 @media (max-width: 760px) {
-  .message-column { padding: 18px 14px 34px; }
+  .message-column { padding: 18px 14px 0; }
 
   /* 移动端头部：左菜单按钮、居中标题、右 `+` 面板菜单 */
   .chat-header {
@@ -243,39 +295,8 @@
     align-self: center;
   }
 
-  .chat-header-panel-menu {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    display: grid;
-    gap: 2px;
-    min-width: 148px;
-    padding: 5px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: var(--paper-raised);
-    box-shadow: var(--shadow);
-    z-index: 40;
-  }
-
-  .chat-header-panel-menu button {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    min-height: 34px;
-    padding: 0 9px;
-    border: 0;
-    border-radius: 7px;
-    background: transparent;
-    color: var(--ink-soft);
-    font-size: 0.75rem;
-    text-align: left;
-  }
-
-  .chat-header-panel-menu button:hover {
-    background: var(--paper-deep);
-    color: var(--ink);
+  .jump-to-bottom {
+    bottom: 150px;
   }
 }
 
@@ -335,8 +356,3 @@
 .context-compaction-summary { width:100%; max-width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--control-surface); color:var(--ink-soft); font-size:12.5px; }
 .context-compaction-summary .markdown-body { font-size:inherit; color:inherit; }
 .conversation-compaction { width:100%; max-width:100%; margin: 4px 0 10px; }
-
-
-.chat-page {
-  /* keep existing; side panel uses grid when open */
-}

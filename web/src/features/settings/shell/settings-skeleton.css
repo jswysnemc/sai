@@ -1,0 +1,45 @@
+/* 设置页骨架屏动画与布局 */
+
+.settings-skeleton {
+  display: grid;
+  gap: 1.25rem;
+  padding: 0.5rem 0;
+}
+
+.skeleton-block {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.skeleton-line {
+  border-radius: var(--radius-sm);
+  background: var(--paper-deep);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-title {
+  width: 40%;
+  height: 1.25rem;
+}
+
+.skeleton-label {
+  width: 28%;
+  height: 0.75rem;
+}
+
+.skeleton-field {
+  width: 100%;
+  max-width: 26rem;
+  height: 2.25rem;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line {
+    animation: none;
+  }
+}

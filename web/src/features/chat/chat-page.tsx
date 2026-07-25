@@ -336,46 +336,46 @@ export function ChatPage() {
 
   return (
     <div className={emptySession ? "chat-page empty-session" : "chat-page"}>
-      <header className="chat-header">
-        <button
-          type="button"
-          className="chat-header-menu"
-          onClick={() => window.dispatchEvent(new Event(MOBILE_SIDEBAR_TOGGLE_EVENT))}
-          aria-label={t("Open session sidebar", "打开会话侧栏")}
-          title={t("Open session sidebar", "打开会话侧栏")}
-        >
-          <PanelLeft size={16} />
-        </button>
-        <h1>{activeSession?.title ?? t("Select a session", "选择会话")}</h1>
-        <div className="chat-header-panel" ref={panelMenuRef}>
-          <button
-            type="button"
-            className="chat-header-plus"
-            onClick={() => setPanelMenuOpen((value) => !value)}
-            aria-expanded={panelMenuOpen}
-            aria-haspopup="menu"
-            aria-label={t("Open workspace panel", "打开工作区面板")}
-            title={t("Open workspace panel", "打开工作区面板")}
-          >
-            <Plus size={16} />
-          </button>
-          {panelMenuOpen && (
-            <div className="chat-header-panel-menu" role="menu" aria-label={t("Choose panel", "选择面板")}>
-              {WORKSPACE_PANEL_OPTIONS.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button type="button" role="menuitem" key={item.type} onClick={() => openWorkspacePanel(item.type)}>
-                    <Icon size={14} />
-                    <span>{t(item.labelEn, item.labelZh)}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </header>
       <div className="message-scroll-region">
         <div className="message-scroll" ref={scrollRef}>
+          <header className="chat-header">
+            <button
+              type="button"
+              className="chat-header-menu"
+              onClick={() => window.dispatchEvent(new Event(MOBILE_SIDEBAR_TOGGLE_EVENT))}
+              aria-label={t("Open session sidebar", "打开会话侧栏")}
+              title={t("Open session sidebar", "打开会话侧栏")}
+            >
+              <PanelLeft size={16} />
+            </button>
+            <h1>{activeSession?.title ?? t("Select a session", "选择会话")}</h1>
+            <div className="chat-header-panel" ref={panelMenuRef}>
+              <button
+                type="button"
+                className="chat-header-plus"
+                onClick={() => setPanelMenuOpen((value) => !value)}
+                aria-expanded={panelMenuOpen}
+                aria-haspopup="menu"
+                aria-label={t("Open workspace panel", "打开工作区面板")}
+                title={t("Open workspace panel", "打开工作区面板")}
+              >
+                <Plus size={16} />
+              </button>
+              {panelMenuOpen && (
+                <div className="chat-header-panel-menu" role="menu" aria-label={t("Choose panel", "选择面板")}>
+                  {WORKSPACE_PANEL_OPTIONS.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button type="button" role="menuitem" key={item.type} onClick={() => openWorkspacePanel(item.type)}>
+                        <Icon size={14} />
+                        <span>{t(item.labelEn, item.labelZh)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </header>
           <div className="message-column">
             {timeline.isLoading && <div className="empty-chat">{t("Loading conversation history", "正在读取会话历史")}</div>}
             {activeSession && !timeline.isLoading && !emptySession && (
@@ -429,6 +429,52 @@ export function ChatPage() {
             {chatModel.error && <RunErrorNotice message={chatModel.error.message} detail={errorDetailForDisplay(chatModel.error)} />}
             {actionError && <RunErrorNotice message={actionError.message} detail={errorDetailForDisplay(actionError)} />}
           </div>
+          {emptySession && (
+            <div className="empty-session-greeting">
+              <h2>{t("Start a new conversation", "开始新的对话")}</h2>
+              <p>{t("Enter a task or question. Press Enter to send and Shift+Enter for a new line.", "输入任务或问题，Enter 发送，Shift+Enter 换行")}</p>
+            </div>
+          )}
+          <ChatComposer
+            value={input}
+            mode={mode}
+            attachments={composerAttachments.attachments}
+            historyEntries={historyEntries}
+            thinkingLevel={thinking.thinkingLevel}
+            choices={chatModel.choices}
+            selection={chatModel.selection}
+            modelLoading={chatModel.isLoading}
+            running={running}
+            runStatus={activeRun?.status ?? "idle"}
+            sessionAvailable={Boolean(activeSession)}
+            undoAvailable={Boolean(timeline.data?.turns.length)}
+            agentChoices={chatAgent.choices}
+            agentSelection={chatAgent.selection}
+            agentLoading={chatAgent.isLoading}
+            sessionId={activeSession?.id}
+            onChange={setInput}
+            onModeChange={setMode}
+            onThinkingLevelChange={thinking.setThinkingLevel}
+            onAddImages={addComposerImages}
+            onRemoveAttachment={composerAttachments.removeAttachment}
+            onModelSelect={chatModel.selectModel}
+            onSubmit={() => void submit()}
+            onStop={() => activeRun?.runId && void run.stop(activeRun.runId)}
+            onUndo={() => setUndoConfirmOpen(true)}
+            onAgentSelect={chatAgent.selectAgent}
+            onCompact={() => activeSession
+              ? run.startCompaction(activeSession.id, chatModel.selection ?? undefined)
+              : Promise.resolve()}
+            onContinueGoal={() => activeSession
+              ? run.startGoal(
+                  activeSession.id,
+                  mode,
+                  chatModel.selection ?? undefined,
+                  thinking.thinkingLevel,
+                  chatAgent.selection?.id
+                )
+              : Promise.resolve()}
+          />
         </div>
         <MessageOverviewRail
           scrollContainerRef={scrollRef}
@@ -441,52 +487,6 @@ export function ChatPage() {
           </button>
         )}
       </div>
-      {emptySession && (
-        <div className="empty-session-greeting">
-          <h2>{t("Start a new conversation", "开始新的对话")}</h2>
-          <p>{t("Enter a task or question. Press Enter to send and Shift+Enter for a new line.", "输入任务或问题，Enter 发送，Shift+Enter 换行")}</p>
-        </div>
-      )}
-      <ChatComposer
-        value={input}
-        mode={mode}
-        attachments={composerAttachments.attachments}
-        historyEntries={historyEntries}
-        thinkingLevel={thinking.thinkingLevel}
-        choices={chatModel.choices}
-        selection={chatModel.selection}
-        modelLoading={chatModel.isLoading}
-        running={running}
-        runStatus={activeRun?.status ?? "idle"}
-        sessionAvailable={Boolean(activeSession)}
-        undoAvailable={Boolean(timeline.data?.turns.length)}
-        agentChoices={chatAgent.choices}
-        agentSelection={chatAgent.selection}
-        agentLoading={chatAgent.isLoading}
-        sessionId={activeSession?.id}
-        onChange={setInput}
-        onModeChange={setMode}
-        onThinkingLevelChange={thinking.setThinkingLevel}
-        onAddImages={addComposerImages}
-        onRemoveAttachment={composerAttachments.removeAttachment}
-        onModelSelect={chatModel.selectModel}
-        onSubmit={() => void submit()}
-        onStop={() => activeRun?.runId && void run.stop(activeRun.runId)}
-        onUndo={() => setUndoConfirmOpen(true)}
-        onAgentSelect={chatAgent.selectAgent}
-        onCompact={() => activeSession
-          ? run.startCompaction(activeSession.id, chatModel.selection ?? undefined)
-          : Promise.resolve()}
-        onContinueGoal={() => activeSession
-          ? run.startGoal(
-              activeSession.id,
-              mode,
-              chatModel.selection ?? undefined,
-              thinking.thinkingLevel,
-              chatAgent.selection?.id
-            )
-          : Promise.resolve()}
-      />
       <Modal
         open={undoConfirmOpen}
         title={t("Undo the previous turn?", "撤销上一轮？")}

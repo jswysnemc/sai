@@ -142,10 +142,15 @@
 .settings-navigation small { overflow: hidden; color: var(--ink-soft); font-size: 0.6875rem; text-overflow: ellipsis; white-space: nowrap; }
 .settings-navigation button:hover,
 .settings-navigation a:hover { background: var(--paper-deep); color: var(--ink); }
+.settings-navigation button:focus-visible,
+.settings-navigation a:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: -2px;
+}
 
 .settings-navigation button.active,
 .settings-navigation a.active {
-  background: var(--paper-deep);
+  background: var(--signal-soft);
   color: var(--ink);
 }
 
@@ -465,14 +470,14 @@
 .settings-nav-group {
   display: grid;
   gap: 2px;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 .settings-nav-group-label {
-  margin: 4px 2px 4px;
+  margin: 6px 2px 6px;
   color: var(--ink-soft);
   font-size: 0.6875rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 .settings-nav-empty {
@@ -531,15 +536,24 @@
   }
   .settings-navigation::-webkit-scrollbar { display: none; }
   .settings-navigation-label { display: none; }
+  .settings-nav-search { display: none; }
+  .settings-nav-group { display: contents; }
+  .settings-nav-group-label { display: none; }
   .settings-navigation button,
-.settings-navigation a {
+  .settings-navigation a {
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     gap: 6px;
     width: auto;
     padding: 6px 10px;
+    border-radius: 999px;
     white-space: nowrap;
+  }
+  .settings-navigation button.active,
+  .settings-navigation a.active {
+    box-shadow: none;
+    background: var(--signal-soft);
   }
   .settings-navigation button > span,
   .settings-navigation a > span { display: block; }

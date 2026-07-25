@@ -13,6 +13,12 @@
   cursor: pointer;
 }
 
+/* 图标在按钮内不可压缩，且消除行内基线偏移 */
+.ui-button > svg {
+  flex-shrink: 0;
+  display: block;
+}
+
 .ui-button.primary { border-color: var(--graphite); background: var(--graphite); color: var(--paper); }
 .ui-button.danger { border-color: var(--danger); background: var(--danger); color: #fff; }
 .ui-button.secondary:hover { background: var(--paper-deep); }

@@ -252,8 +252,14 @@ impl ResponsesToolAccumulator {
         if item.kind != "function_call" {
             return None;
         }
+        // 1. 优先 call_id，其次 item id；都为空时先占位，finish 时再生成回退 id
+        let id = item
+            .call_id
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| item.id.filter(|value| !value.trim().is_empty()))
+            .unwrap_or_default();
         self.calls.push(PartialToolCall {
-            id: item.call_id.or(item.id).unwrap_or_default(),
+            id,
             kind: "function".to_string(),
             name: item.name.unwrap_or_default(),
             arguments: item.arguments.unwrap_or_default(),
@@ -291,8 +297,33 @@ impl ResponsesToolAccumulator {
         if item.kind != "function_call" {
             return None;
         }
-        let id = item.call_id.or(item.id).unwrap_or_default();
-        if let Some(index) = self.calls.iter().position(|call| call.id == id) {
+        // 1. 忽略空 id，避免覆盖已有有效 call_id
+        let id = item
+            .call_id
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| item.id.filter(|value| !value.trim().is_empty()))
+            .unwrap_or_default();
+        if !id.is_empty() {
+            if let Some(index) = self.calls.iter().position(|call| call.id == id) {
+                let call = &mut self.calls[index];
+                if let Some(name) = item.name {
+                    call.name = name;
+                }
+                if let Some(arguments) = item.arguments {
+                    call.arguments = arguments;
+                }
+                return self.progress.update(index, &call.name, &call.arguments);
+            }
+            return self.start(ResponsesStreamItem {
+                kind: "function_call".to_string(),
+                id: None,
+                call_id: Some(id),
+                name: item.name,
+                arguments: item.arguments,
+            });
+        }
+        // 2. 无 id 时更新最近一条未完成调用
+        if let Some(index) = self.calls.len().checked_sub(1) {
             let call = &mut self.calls[index];
             if let Some(name) = item.name {
                 call.name = name;
@@ -300,24 +331,22 @@ impl ResponsesToolAccumulator {
             if let Some(arguments) = item.arguments {
                 call.arguments = arguments;
             }
-            self.progress.update(index, &call.name, &call.arguments)
-        } else {
-            self.start(ResponsesStreamItem {
-                kind: "function_call".to_string(),
-                id: None,
-                call_id: Some(id),
-                name: item.name,
-                arguments: item.arguments,
-            })
+            return self.progress.update(index, &call.name, &call.arguments);
         }
+        None
     }
 
     fn finish(self) -> Vec<ToolCall> {
         self.calls
             .into_iter()
-            .filter(|call| !call.name.trim().is_empty())
-            .map(|call| ToolCall {
-                id: call.id,
+            .enumerate()
+            .filter(|(_, call)| !call.name.trim().is_empty())
+            .map(|(index, call)| ToolCall {
+                id: if call.id.trim().is_empty() {
+                    format!("call-fallback-{index}")
+                } else {
+                    call.id
+                },
                 kind: call.kind,
                 function: ToolCallFunction {
                     name: call.name,
@@ -348,11 +377,16 @@ impl ToolCallAccumulator {
             self.calls.push(PartialToolCall::default());
         }
         let call = &mut self.calls[delta.index];
+        // 1. 仅接受非空 id；百炼/DashScope 后续 chunk 常带 `"id":""`，不能覆盖首个有效 call_id
         if let Some(id) = delta.id {
-            call.id = id;
+            if !id.trim().is_empty() {
+                call.id = id;
+            }
         }
         if let Some(kind) = delta.kind {
-            call.kind = kind;
+            if !kind.trim().is_empty() {
+                call.kind = kind;
+            }
         }
         if let Some(name) = delta.function.name {
             call.name.push_str(&name);
@@ -367,9 +401,15 @@ impl ToolCallAccumulator {
     fn finish(self) -> Vec<ToolCall> {
         self.calls
             .into_iter()
-            .filter(|call| !call.name.trim().is_empty())
-            .map(|call| ToolCall {
-                id: call.id,
+            .enumerate()
+            .filter(|(_, call)| !call.name.trim().is_empty())
+            .map(|(index, call)| ToolCall {
+                // 2. 若上游始终未给 id，按 index 生成稳定回退，避免空 call_id 导致 tool result 碰撞
+                id: if call.id.trim().is_empty() {
+                    format!("call-fallback-{index}")
+                } else {
+                    call.id
+                },
                 kind: if call.kind.is_empty() {
                     "function".to_string()
                 } else {

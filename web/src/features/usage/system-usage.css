@@ -261,6 +261,7 @@
   display: grid;
   width: 22px;
   height: 22px;
+  padding: 0;
   place-items: center;
   border: 0;
   border-radius: 6px;

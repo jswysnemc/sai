@@ -4,10 +4,18 @@ import { Modal } from "../../shared/ui/dialog/modal";
 import { ModelIcon } from "../../shared/ui/model-icon";
 import { useI18n } from "../i18n/use-i18n";
 
+export type ImportModelMetadata = {
+  provider?: string | null;
+  context_chars?: number | null;
+  max_output_tokens?: number | null;
+  tags?: string[];
+};
+
 type ModelImportDialogProps = {
   open: boolean;
   models: string[];
   existingModels: string[];
+  metadata?: Record<string, ImportModelMetadata>;
   onClose: () => void;
   onImport: (models: string[]) => void;
 };
@@ -15,10 +23,17 @@ type ModelImportDialogProps = {
 /**
  * 渲染远端模型搜索、勾选和选择性导入弹层。
  *
- * @param props 远端模型、现有模型和操作回调
+ * @param props 远端模型、现有模型、元数据和操作回调
  * @returns 模型导入弹层
  */
-export function ModelImportDialog({ open, models, existingModels, onClose, onImport }: ModelImportDialogProps) {
+export function ModelImportDialog({
+  open,
+  models,
+  existingModels,
+  metadata = {},
+  onClose,
+  onImport
+}: ModelImportDialogProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
@@ -32,7 +47,11 @@ export function ModelImportDialog({ open, models, existingModels, onClose, onImp
     }
   }, [open]);
 
-  /** 切换远端模型选择状态。 */
+  /**
+   * 切换远端模型选择状态。
+   *
+   * @param model 模型标识
+   */
   const toggle = (model: string) => {
     if (existingModels.includes(model)) return;
     setSelected((current) => current.includes(model) ? current.filter((item) => item !== model) : [...current, model]);
@@ -53,11 +72,74 @@ export function ModelImportDialog({ open, models, existingModels, onClose, onImp
           {filtered.map((model) => {
             const existing = existingModels.includes(model);
             const active = selected.includes(model);
-            return <button type="button" className={active ? "active" : ""} disabled={existing} key={model} onClick={() => toggle(model)}><ModelIcon model={model} size={16}/><span><strong>{model}</strong><small>{existing ? t("Already added", "已经添加") : t("Available to import", "可导入")}</small></span>{(active || existing) && <Check size={14} />}</button>;
+            const item = metadata[model] ?? {};
+            const summary = formatModelMetadataSummary(item, t);
+            return (
+              <button
+                type="button"
+                className={active ? "active" : ""}
+                disabled={existing}
+                key={model}
+                onClick={() => toggle(model)}
+              >
+                <ModelIcon model={model} provider={item.provider} size={16} />
+                <span>
+                  <strong>{model}</strong>
+                  <small>{existing ? t("Already added", "已经添加") : summary || t("Available to import", "可导入")}</small>
+                </span>
+                {(active || existing) && <Check size={14} />}
+              </button>
+            );
           })}
           {filtered.length === 0 && <div className="model-import-empty">{t("No matching models", "没有匹配的模型")}</div>}
         </div>
       </div>
     </Modal>
   );
+}
+
+/**
+ * 将上下文、输出上限和标签整理为导入列表副标题。
+ *
+ * @param metadata 模型元数据
+ * @param t 双语翻译函数
+ * @returns 摘要文本；无元数据时返回空字符串
+ */
+function formatModelMetadataSummary(
+  metadata: ImportModelMetadata,
+  t: (en: string, zh: string) => string
+): string {
+  const parts: string[] = [];
+  if (metadata.context_chars) {
+    parts.push(`${t("Context", "上下文")} ${formatTokenCount(metadata.context_chars)}`);
+  }
+  if (metadata.max_output_tokens) {
+    parts.push(`${t("Max output", "最大输出")} ${formatTokenCount(metadata.max_output_tokens)}`);
+  }
+  if (metadata.tags?.length) {
+    parts.push(metadata.tags.join(", "));
+  }
+  return parts.join(" · ");
+}
+
+/**
+ * 将 token 数量格式化为紧凑展示。
+ *
+ * @param value token 数量
+ * @returns 如 128k / 1m 的文本
+ */
+function formatTokenCount(value: number): string {
+  if (value >= 1_000_000 && value % 1_000_000 === 0) {
+    return `${value / 1_000_000}m`;
+  }
+  if (value >= 1_000 && value % 1_000 === 0) {
+    return `${value / 1_000}k`;
+  }
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}m`;
+  }
+  if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  }
+  return String(value);
 }

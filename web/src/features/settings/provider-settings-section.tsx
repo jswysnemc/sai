@@ -319,7 +319,14 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
           </div>
         </div>}
       </section>
-      <ModelImportDialog open={importOpen} models={remoteModels} existingModels={models} onClose={() => setImportOpen(false)} onImport={importModels} />
+      <ModelImportDialog
+        open={importOpen}
+        models={remoteModels}
+        existingModels={models}
+        metadata={remoteMetadata}
+        onClose={() => setImportOpen(false)}
+        onImport={importModels}
+      />
     </div>
   );
 }

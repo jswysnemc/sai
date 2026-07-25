@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "../../features/i18n/use-i18n";
 
 type ModelIconProps = {
@@ -40,13 +40,23 @@ const PROVIDERS: Array<[RegExp, string]> = [
  */
 export function ModelIcon({ model, provider, size = 16 }: ModelIconProps) {
   const { t } = useI18n();
-  const [failed, setFailed] = useState(false);
-  const resolvedProvider =
-    normalizeProvider(provider)
-    || PROVIDERS.find(([pattern]) => pattern.test(model))?.[1]
-    || providerFromModelId(model);
+  // 1. 目录返回的供应商标识
+  // 2. 模型名正则推断
+  // 3. provider/model 前缀
+  const candidates = [
+    normalizeProvider(provider),
+    PROVIDERS.find(([pattern]) => pattern.test(model))?.[1],
+    providerFromModelId(model)
+  ].filter((item, index, list): item is string => Boolean(item) && list.indexOf(item) === index);
+  const candidateKey = candidates.join("|");
+  const [failedProviders, setFailedProviders] = useState<string[]>([]);
+  // 模型或候选供应商变化时清空失败记录，避免跨模型污染
+  useEffect(() => {
+    setFailedProviders([]);
+  }, [model, candidateKey]);
+  const resolvedProvider = candidates.find((item) => !failedProviders.includes(item));
 
-  if (resolvedProvider && !failed) {
+  if (resolvedProvider) {
     return (
       <img
         width={size}
@@ -54,7 +64,7 @@ export function ModelIcon({ model, provider, size = 16 }: ModelIconProps) {
         src={`https://models.dev/logos/${resolvedProvider}.svg`}
         alt=""
         aria-hidden="true"
-        onError={() => setFailed(true)}
+        onError={() => setFailedProviders((current) => current.includes(resolvedProvider) ? current : [...current, resolvedProvider])}
         style={{ objectFit: "contain" }}
       />
     );
@@ -105,11 +115,19 @@ function normalizeProvider(provider?: string | null): string | undefined {
     "zhipu": "zhipuai",
     "dashscope": "alibaba",
     "qwen": "alibaba",
+    "alibaba-token-plan": "alibaba",
+    "alibaba-token-plan-cn": "alibaba",
+    "alibaba-coding-plan": "alibaba",
+    "alibaba-coding-plan-cn": "alibaba",
+    "alibaba-cn": "alibaba",
     "moonshot": "moonshotai",
     "together_ai": "togetherai",
     "fireworks_ai": "fireworks-ai",
     "byteplus": "bytedance",
-    "volcengine": "bytedance"
+    "volcengine": "bytedance",
+    "nano-gpt": "openai",
+    "llmgateway": "openai",
+    "helicone": "openai"
   };
   return aliases[value] || value.replace(/[_\s]+/g, "-");
 }

@@ -80,10 +80,15 @@
   text-align: left;
 }
 
-.theme-preset:hover,
-.theme-preset.active {
-  border-color: color-mix(in srgb, var(--signal) 55%, var(--line));
+.theme-preset:hover {
+  border-color: color-mix(in srgb, var(--signal) 40%, var(--line));
   background: var(--paper-deep);
+}
+
+.theme-preset.active {
+  border-color: var(--signal);
+  background: color-mix(in srgb, var(--signal) 6%, var(--paper));
+  box-shadow: 0 0 0 1px var(--signal);
 }
 
 .theme-swatches {

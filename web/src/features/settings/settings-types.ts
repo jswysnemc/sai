@@ -51,6 +51,8 @@ export type SettingsConfigController = {
   updateProvider: (index: number, patch: Partial<ProviderConfig>) => void;
   updateGateway: (gateway: GatewayId, patch: Record<string, unknown>) => void;
   saveConfig: () => Promise<void>;
+  /** 重新拉取配置 */
+  retry: () => void;
 };
 
 /** 设置 section 注册项。 */
