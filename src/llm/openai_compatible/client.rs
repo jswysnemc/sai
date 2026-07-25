@@ -172,7 +172,8 @@ impl OpenAiCompatibleClient {
         let protocol = ProviderProtocol::from_provider(&self.provider)?;
         if protocol == ProviderProtocol::Anthropic
             || (protocol == ProviderProtocol::Auto
-                && provider_looks_official_anthropic(&self.provider))
+                && (provider_looks_official_anthropic(&self.provider)
+                    || provider_uses_claude_code_style(&self.provider)))
         {
             return self
                 .chat_anthropic_stream(messages, tools, &mut on_event)
@@ -353,6 +354,8 @@ impl OpenAiCompatibleClient {
     where
         F: FnMut(ChatStreamEvent) -> Result<()>,
     {
+        let claude = provider_uses_claude_code_style(&self.provider);
+        let session_id = uuid::Uuid::new_v4().to_string();
         let tools = prepare_anthropic_tools(&self.provider, tools);
         let request = AnthropicRequest {
             model: self.provider.default_model.clone(),
@@ -366,19 +369,42 @@ impl OpenAiCompatibleClient {
                 .unwrap_or(self.provider.anthropic_max_tokens),
             temperature: Some(self.provider.temperature),
         };
-        let request = apply_provider_body_options(
+        let mut request = apply_provider_body_options(
             serde_json::to_value(request)?,
             &self.provider,
             ThinkingProtocol::Anthropic,
         )?;
-        let url = format!("{}/messages", self.provider.base_url.trim_end_matches('/'));
+        // Claude Code 通道：system 数组 / metadata / adaptive thinking
+        if claude {
+            apply_claude_code_body_shape(
+                &mut request,
+                &session_id,
+                &self.provider.thinking_level,
+            );
+        }
+        let mut url = format!("{}/messages", self.provider.base_url.trim_end_matches('/'));
+        if claude {
+            url = claude_code_messages_url(&url);
+        }
         let user_agent = resolve_provider_user_agent(&self.provider);
-        let mut base_headers = anthropic_request_headers(&self.api_key);
-        base_headers.push(("User-Agent".to_string(), user_agent));
+        let base_headers = if claude {
+            claude_code_request_headers(
+                &self.api_key,
+                &session_id,
+                &user_agent,
+                self.provider.claude_1m_context,
+            )
+        } else {
+            let mut headers = anthropic_request_headers(&self.api_key);
+            headers.push(("User-Agent".to_string(), user_agent));
+            headers
+        };
         let headers = merge_provider_extra_headers(base_headers, &self.provider);
         let mut debug = self.start_http_debug("POST", &url, "anthropic", &headers, &request);
         // 【Anthropic】【Messages 请求】1. 首先使用当前 thinking 配置发送请求
-        let response = self.send_anthropic_request(&url, &request).await?;
+        let response = self
+            .send_anthropic_request(&url, &request, claude, &session_id)
+            .await?;
         let status = response.status();
         if let Some(debug) = debug.as_ref() {
             let _ = debug.write_response_headers(status.as_u16(), response.headers());
@@ -397,6 +423,15 @@ impl OpenAiCompatibleClient {
                 let mut fallback_request = request.clone();
                 if let Some(object) = fallback_request.as_object_mut() {
                     object.remove("thinking");
+                    // Claude Code 的 output_config.effort 与 thinking 成对
+                    if claude {
+                        if let Some(Value::Object(cfg)) = object.get_mut("output_config") {
+                            cfg.remove("effort");
+                            if cfg.is_empty() {
+                                object.remove("output_config");
+                            }
+                        }
+                    }
                 }
                 debug = self.start_http_debug(
                     "POST",
@@ -405,8 +440,9 @@ impl OpenAiCompatibleClient {
                     &headers,
                     &fallback_request,
                 );
-                let fallback_response =
-                    self.send_anthropic_request(&url, &fallback_request).await?;
+                let fallback_response = self
+                    .send_anthropic_request(&url, &fallback_request, claude, &session_id)
+                    .await?;
                 let fallback_status = fallback_response.status();
                 if let Some(debug) = debug.as_ref() {
                     let _ = debug.write_response_headers(
@@ -492,6 +528,8 @@ impl OpenAiCompatibleClient {
     /// 参数:
     /// - `url`: Messages API 地址
     /// - `request`: 已应用思考与自定义字段的请求体
+    /// - `claude`: 是否 Claude Code 模拟
+    /// - `session_id`: Claude Code 会话 UUID
     ///
     /// 返回:
     /// - HTTP 响应
@@ -499,18 +537,45 @@ impl OpenAiCompatibleClient {
         &self,
         url: &str,
         request: &Value,
+        claude: bool,
+        session_id: &str,
     ) -> Result<reqwest::Response> {
-        let builder = apply_provider_user_agent(
-            self.client
+        let builder = if claude {
+            // 【Claude】【Messages 请求头】1. 使用 Claude Code 通道头
+            let user_agent = resolve_provider_user_agent(&self.provider);
+            let req = self
+                .client
                 .post(url)
                 .header("x-api-key", &self.api_key)
                 .header("anthropic-version", "2023-06-01")
-                .json(request),
-            &self.provider,
-        );
-        Ok(with_provider_extra_headers(builder, &self.provider)
-            .send()
-            .await?)
+                .header(
+                    "anthropic-beta",
+                    claude_code_beta_header(self.provider.claude_1m_context),
+                )
+                .header("anthropic-dangerous-direct-browser-access", "true")
+                .header("User-Agent", user_agent)
+                .header("x-app", "cli")
+                .header("x-claude-code-session-id", session_id)
+                .header("x-stainless-lang", "js")
+                .header("x-stainless-package-version", "0.81.0")
+                .header("x-stainless-runtime", "node")
+                .header("x-stainless-runtime-version", "v24.3.0")
+                .header("x-stainless-retry-count", "0")
+                .json(request);
+            // 2. 再合并供应商自定义头
+            with_provider_extra_headers(req, &self.provider)
+        } else {
+            let builder = apply_provider_user_agent(
+                self.client
+                    .post(url)
+                    .header("x-api-key", &self.api_key)
+                    .header("anthropic-version", "2023-06-01")
+                    .json(request),
+                &self.provider,
+            );
+            with_provider_extra_headers(builder, &self.provider)
+        };
+        Ok(builder.send().await?)
     }
 
     async fn chat_responses_stream<F>(
@@ -703,365 +768,5 @@ impl OpenAiCompatibleClient {
                 &self.provider.base_url,
                 &self.provider.client_style,
             )
-    }
-}
-
-
-/// Responses 流空闲超时：正文阶段过久无新字节时收尾。
-///
-/// 参数:
-/// - `provider_timeout_seconds`: 供应商请求超时配置
-///
-/// 返回:
-/// - 空闲等待上限
-fn responses_stream_idle_timeout(provider_timeout_seconds: u64) -> Duration {
-    // 1. 默认 8 秒足够覆盖网关间歇；不超过供应商超时的一半
-    let half = provider_timeout_seconds.saturating_div(2).max(3);
-    Duration::from_secs(half.min(15).max(5))
-}
-
-/// 冲刷 Responses 流缓冲中尚未推送的文本。
-///
-/// 参数:
-/// - `content`: 已聚合正文
-/// - `content_emitted`: 已推送正文字节数
-/// - `reasoning`: 已聚合推理
-/// - `reasoning_emitted`: 已推送推理字节数
-/// - `on_event`: 流式事件回调
-///
-/// 返回:
-/// - 冲刷结果
-fn flush_responses_buffers<F>(
-    content: &str,
-    content_emitted: &mut usize,
-    reasoning: &str,
-    reasoning_emitted: &mut usize,
-    on_event: &mut F,
-) -> Result<()>
-where
-    F: FnMut(ChatStreamEvent) -> Result<()>,
-{
-    // 直接复用 stream_handlers 内部逻辑不可用（private）；此处补发剩余切片
-    if *content_emitted < content.len() {
-        let text = content[*content_emitted..].to_string();
-        *content_emitted = content.len();
-        if !text.is_empty() {
-            on_event(ChatStreamEvent::Chunk(ChatStreamChunk {
-                kind: ChatStreamKind::Content,
-                text,
-            }))?;
-        }
-    }
-    if *reasoning_emitted < reasoning.len() {
-        let text = reasoning[*reasoning_emitted..].to_string();
-        *reasoning_emitted = reasoning.len();
-        if !text.is_empty() {
-            on_event(ChatStreamEvent::Chunk(ChatStreamChunk {
-                kind: ChatStreamKind::Reasoning,
-                text,
-            }))?;
-        }
-    }
-    Ok(())
-}
-
-/// 拆分 Responses 请求的 instructions 与 input 消息。
-///
-/// 参数:
-/// - `messages`: 原始 Chat 消息
-///
-/// 返回:
-/// - (可选 instructions, 剩余消息)
-fn split_responses_instructions(
-    messages: Vec<ChatMessage>,
-) -> (Option<String>, Vec<ChatMessage>) {
-    let mut instructions = Vec::new();
-    let mut rest = Vec::new();
-    let mut past_system = false;
-    for message in messages {
-        if !past_system && message.role == "system" {
-            if let Some(text) = message.content.as_ref().map(|c| match c {
-                crate::llm::ChatContent::Text(t) => t.clone(),
-                crate::llm::ChatContent::Parts(parts) => parts
-                    .iter()
-                    .filter_map(|p| match p {
-                        crate::llm::ChatContentPart::Text { text } => Some(text.as_str()),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join(""),
-            }) {
-                if !text.trim().is_empty() {
-                    instructions.push(text);
-                }
-            }
-            continue;
-        }
-        past_system = true;
-        rest.push(message);
-    }
-    let joined = instructions.join("
-
-");
-    (
-        (!joined.trim().is_empty()).then_some(joined),
-        rest,
-    )
-}
-
-/// Codex CLI 默认 User-Agent。
-const CODEX_CLI_USER_AGENT: &str = "codex_cli_rs/0.144.0";
-/// 非 Codex 默认 User-Agent。
-const DEFAULT_HTTP_USER_AGENT: &str = "sai/0.1";
-
-/// 构造 Codex Responses 调试用请求头列表。
-///
-/// 参数:
-/// - `api_key`: API Key
-/// - `session_id`: 会话 UUID
-/// - `user_agent`: 解析后的 User-Agent
-///
-/// 返回:
-/// - 调试/日志用的头列表
-fn codex_responses_request_headers(
-    api_key: &str,
-    session_id: &str,
-    user_agent: &str,
-) -> Vec<(String, String)> {
-    bearer_request_headers(
-        api_key,
-        &[
-            ("User-Agent", user_agent),
-            ("originator", "codex_cli_rs"),
-            ("OpenAI-Beta", "responses=experimental"),
-            ("version", "0.144.0"),
-            ("session_id", session_id),
-            ("x-client-request-id", session_id),
-        ],
-    )
-}
-
-/// 解析供应商最终 User-Agent。
-///
-/// 参数:
-/// - `provider`: 供应商配置
-///
-/// 返回:
-/// - 自定义 UA；否则 Codex 风格用 Codex CLI UA，其它用 sai 默认 UA
-fn resolve_provider_user_agent(provider: &ProviderConfig) -> String {
-    let custom = provider.user_agent.trim();
-    if !custom.is_empty() {
-        return custom.to_string();
-    }
-    if provider.client_style.trim().eq_ignore_ascii_case("codex") {
-        return CODEX_CLI_USER_AGENT.to_string();
-    }
-    DEFAULT_HTTP_USER_AGENT.to_string()
-}
-
-/// 为非 Codex 请求附加 User-Agent。
-fn apply_provider_user_agent(
-    req: reqwest::RequestBuilder,
-    provider: &ProviderConfig,
-) -> reqwest::RequestBuilder {
-    req.header("User-Agent", resolve_provider_user_agent(provider))
-}
-
-/// 附加 Codex Responses 协议头（含可覆盖的 User-Agent）。
-fn apply_codex_response_headers(
-    req: reqwest::RequestBuilder,
-    provider: &ProviderConfig,
-    session_id: &str,
-) -> reqwest::RequestBuilder {
-    let user_agent = resolve_provider_user_agent(provider);
-    req.header("User-Agent", user_agent)
-        .header("originator", "codex_cli_rs")
-        .header("OpenAI-Beta", "responses=experimental")
-        .header("version", "0.144.0")
-        .header("session_id", session_id)
-        .header("Accept", "text/event-stream")
-        .header("x-client-request-id", session_id)
-}
-
-/// 将供应商自定义头合并进调试头列表。
-///
-/// 参数:
-/// - `headers`: 已有头
-/// - `provider`: 供应商配置
-///
-/// 返回:
-/// - 合并后的头列表
-fn merge_provider_extra_headers(
-    mut headers: Vec<(String, String)>,
-    provider: &ProviderConfig,
-) -> Vec<(String, String)> {
-    for (name, value) in &provider.extra_headers {
-        let key = name.trim();
-        if key.is_empty() {
-            continue;
-        }
-        // 自定义头覆盖同名项
-        if let Some(pos) = headers
-            .iter()
-            .position(|(existing, _)| existing.eq_ignore_ascii_case(key))
-        {
-            headers[pos] = (key.to_string(), value.clone());
-        } else {
-            headers.push((key.to_string(), value.clone()));
-        }
-    }
-    headers
-}
-
-/// 向 reqwest 请求附加供应商自定义头。
-///
-/// 参数:
-/// - `req`: 请求构建器
-/// - `provider`: 供应商配置
-///
-/// 返回:
-/// - 附带头后的构建器
-fn with_provider_extra_headers(
-    mut req: reqwest::RequestBuilder,
-    provider: &ProviderConfig,
-) -> reqwest::RequestBuilder {
-    let has_custom_ua = !provider.user_agent.trim().is_empty();
-    for (name, value) in &provider.extra_headers {
-        let key = name.trim();
-        if key.is_empty() {
-            continue;
-        }
-        // 不覆盖 Authorization；专用 user_agent 字段优先于 extra_headers 中的 User-Agent
-        if key.eq_ignore_ascii_case("authorization") {
-            continue;
-        }
-        if has_custom_ua && key.eq_ignore_ascii_case("user-agent") {
-            continue;
-        }
-        req = req.header(key, value);
-    }
-    req
-}
-
-/// 判断供应商是否指向官方 Anthropic API。
-///
-/// 参数:
-/// - `provider`: 供应商配置
-///
-/// 返回:
-/// - 仅官方 Anthropic 特征返回 true，Claude 代理不自动切换协议
-fn provider_looks_official_anthropic(provider: &ProviderConfig) -> bool {
-    provider.uses_official_anthropic_api()
-}
-
-/// 判断配置是否可能误把 Claude 当作 OpenAI Chat 协议。
-///
-/// 参数:
-/// - `provider`: 当前供应商配置
-///
-/// 返回:
-/// - 需要提示协议配置时返回英文提示，否则返回空字符串
-fn claude_protocol_hint(provider: &ProviderConfig) -> &'static str {
-    let protocol = provider.protocol.trim();
-    let model = provider.default_model.to_ascii_lowercase();
-    let claude_related = model.contains("claude")
-        || provider.id.to_ascii_lowercase().contains("claude")
-        || provider
-            .display_name
-            .to_ascii_lowercase()
-            .contains("claude");
-    if claude_related
-        && !provider_looks_official_anthropic(provider)
-        && matches!(protocol, "" | "auto" | "openai-chat")
-    {
-        return "\nHint: official Anthropic Claude requires protocol=anthropic and base_url=https://api.anthropic.com/v1; OpenAI-compatible Claude proxies should keep openai-chat or auto.";
-    }
-    ""
-}
-
-/// 判断 Anthropic 错误是否允许移除 thinking 后重试。
-///
-/// 参数:
-/// - `status`: HTTP 状态码
-/// - `body`: 服务端错误响应正文
-///
-/// 返回:
-/// - 服务端明确拒绝 thinking 参数时返回 true
-fn anthropic_thinking_unsupported(status: u16, body: &str) -> bool {
-    thinking_parameter_rejected(status, body)
-}
-
-/// 判断 OpenAI Chat 兼容错误是否允许移除 thinking 后重试。
-///
-/// 参数:
-/// - `status`: HTTP 状态码
-/// - `body`: 服务端错误响应正文
-///
-/// 返回:
-/// - 服务端明确拒绝 thinking 参数时返回 true
-fn openai_chat_thinking_unsupported(status: u16, body: &str) -> bool {
-    thinking_parameter_rejected(status, body)
-}
-
-/// 判断错误正文是否为 thinking 参数校验失败。
-///
-/// 参数:
-/// - `status`: HTTP 状态码
-/// - `body`: 服务端错误响应正文
-///
-/// 返回:
-/// - 明确与 thinking 校验相关时返回 true
-fn thinking_parameter_rejected(status: u16, body: &str) -> bool {
-    if !matches!(status, 400 | 422) {
-        return false;
-    }
-    let body = body.to_ascii_lowercase();
-    if !body.contains("thinking") {
-        return false;
-    }
-    [
-        "unsupported",
-        "not supported",
-        "unknown",
-        "invalid",
-        "unrecognized",
-        "validation",
-        "unmarshal",
-        "must be a boolean",
-        "must be",
-        "cannot unmarshal",
-        "bad_response_status_code",
-    ]
-    .iter()
-    .any(|marker| body.contains(marker))
-}
-
-/// 按模型配置处理 Anthropic 网页搜索工具名称冲突。
-///
-/// 参数:
-/// - `provider`: 当前供应商配置
-/// - `tools`: 当前可用工具
-///
-/// 返回:
-/// - 已隐藏或更名本地网页搜索工具的列表
-fn prepare_anthropic_tools(
-    provider: &ProviderConfig,
-    tools: Vec<ToolDefinition>,
-) -> Vec<ToolDefinition> {
-    match provider.model_web_search_tool_mode_for(&provider.default_model) {
-        WEB_SEARCH_TOOL_MODE_HIDE => tools
-            .into_iter()
-            .filter(|tool| tool.function.name != "web_search")
-            .collect(),
-        WEB_SEARCH_TOOL_MODE_RENAME => tools
-            .into_iter()
-            .map(|mut tool| {
-                if tool.function.name == "web_search" {
-                    tool.function.name = "sai_web_search".to_string();
-                }
-                tool
-            })
-            .collect(),
-        _ => tools,
     }
 }

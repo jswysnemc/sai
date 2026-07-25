@@ -44,6 +44,7 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
   const [tab, setTab] = useState<"connection" | "models" | "behavior" | "advanced">("connection");
   const selectedIndex = Math.max(0, config.providers.findIndex((provider) => provider.id === selectedId));
   const provider = config.providers[selectedIndex];
+  const claudeSimulation = isClaudeClientStyle(provider?.client_style);
 
   useEffect(() => {
     if (!config.providers.some((item) => item.id === selectedId)) {
@@ -70,6 +71,7 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
       thinking_level: "auto",
       thinking_format: "auto",
       client_style: "auto",
+      claude_1m_context: true,
       user_agent: "",
       extra_headers: {},
       extra_body: ""
@@ -224,7 +226,22 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
           <label className="settings-field"><span>Temperature</span><input type="number" min="0" max="2" step="0.1" value={provider.temperature ?? 0.7} onChange={(event) => onProviderChange(selectedIndex, { temperature: Number(event.target.value) })} /><small>{t("Model sampling temperature", "模型采样温度")}</small></label>
           <div className="settings-field"><span>{t("Thinking level", "思考等级")}</span><Select value={provider.thinking_level ?? "auto"} options={THINKING_OPTIONS} onChange={(value) => onProviderChange(selectedIndex, { thinking_level: value })} ariaLabel={t("Thinking level", "思考等级")} /><small>{t("Default reasoning intensity for the provider", "供应商默认推理强度")}</small></div>
           <div className="settings-field"><span>{t("Thinking format", "思考格式")}</span><Select value={provider.thinking_format ?? "auto"} options={thinkingFormatOptions} onChange={(value) => onProviderChange(selectedIndex, { thinking_format: value })} ariaLabel={t("Thinking format", "思考格式")} /><small>{t("Reasoning field in the response", "响应中的思考字段")}</small></div>
-          <label className="settings-field"><span>Anthropic max_tokens</span><input type="number" min="1" value={provider.anthropic_max_tokens ?? 8192} onChange={(event) => onProviderChange(selectedIndex, { anthropic_max_tokens: Number(event.target.value) })} /><small>{t("Used by Anthropic Messages only", "仅 Anthropic Messages 使用")}</small></label>
+          {claudeSimulation && (
+            <label className="settings-field">
+              <span>{t("Claude max output", "Claude 最大输出")}</span>
+              <input
+                type="number"
+                min="1"
+                value={provider.anthropic_max_tokens ?? 8192}
+                onChange={(event) =>
+                  onProviderChange(selectedIndex, {
+                    anthropic_max_tokens: Number(event.target.value),
+                  })
+                }
+              />
+              <small>{t("Anthropic Messages max_tokens for Claude simulation", "Claude 模拟时 Anthropic Messages 的 max_tokens")}</small>
+            </label>
+          )}
         </div>}
         {tab === "models" && <ModelMetadataEditor provider={provider} onChange={(patch) => onProviderChange(selectedIndex, patch)} />}
         {tab === "advanced" && <div className="provider-advanced-layout">
@@ -237,21 +254,45 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
                   { value: "auto", label: t("Auto", "自动") },
                   { value: "default", label: t("Default", "默认") },
                   { value: "codex", label: "Codex CLI" },
+                  { value: "claude", label: "Claude Code" },
                 ]}
                 onChange={(value) => onProviderChange(selectedIndex, { client_style: value })}
                 ariaLabel={t("Client style", "客户端模拟")}
               />
-              <small>{t("Codex forces Responses body and codex_cli_rs headers (originator, OpenAI-Beta, session_id). Use for new-api Codex gateways like gpt-5.6-sol.", "Codex 强制 Responses 请求体与 codex_cli_rs 头（originator、OpenAI-Beta、session_id）。适用于 new-api Codex 通道（如 gpt-5.6-sol）。")}</small>
+              <small>{t("Codex forces Responses body and codex_cli_rs headers. Claude forces Anthropic Messages with Claude Code headers (beta, x-app, session). Use for 1M-context Claude proxies.", "Codex 强制 Responses 与 codex_cli_rs 头。Claude 强制 Anthropic Messages 与 Claude Code 头（beta、x-app、session）。适用于 1M 上下文 Claude 代理。")}</small>
             </div>
+            {claudeSimulation && (
+              <div className="settings-field">
+                <span>{t("Claude 1M context", "Claude 启用 1M 上下文")}</span>
+                <Select
+                  value={provider.claude_1m_context === false ? "false" : "true"}
+                  options={[
+                    { value: "true", label: t("Enabled", "启用") },
+                    { value: "false", label: t("Disabled", "关闭") },
+                  ]}
+                  onChange={(value) =>
+                    onProviderChange(selectedIndex, { claude_1m_context: value === "true" })
+                  }
+                  ariaLabel={t("Claude 1M context", "Claude 启用 1M 上下文")}
+                />
+                <small>{t("Attach context-1m-2025-08-07 in anthropic-beta. Default enabled.", "在 anthropic-beta 中附加 context-1m-2025-08-07。默认启用。")}</small>
+              </div>
+            )}
             <label className="settings-field">
               <span>User-Agent</span>
               <input
                 value={provider.user_agent ?? ""}
                 onChange={(event) => onProviderChange(selectedIndex, { user_agent: event.target.value })}
                 spellCheck={false}
-                placeholder={provider.client_style === "codex" ? "codex_cli_rs/0.144.0" : "sai/0.1"}
+                placeholder={
+                  provider.client_style === "codex"
+                    ? "codex_cli_rs/0.144.0"
+                    : claudeSimulation
+                      ? "claude-cli/2.1.113 (external, cli)"
+                      : "sai/0.1"
+                }
               />
-              <small>{t("Empty uses Codex UA when Client style is Codex, otherwise sai/0.1. Overrides User-Agent in extra headers.", "留空时：客户端模拟为 Codex 则用 codex_cli_rs/0.144.0，否则 sai/0.1。优先于自定义请求头中的 User-Agent。")}</small>
+              <small>{t("Empty uses Codex/Claude CLI UA when Client style matches, otherwise sai/0.1. Overrides User-Agent in extra headers.", "留空时：客户端模拟为 Codex/Claude 则用对应 CLI UA，否则 sai/0.1。优先于自定义请求头中的 User-Agent。")}</small>
             </label>
           </div>
           <div className="provider-advanced-panels">
@@ -292,3 +333,14 @@ const THINKING_OPTIONS = [
   { value: "low", label: "low" },
   { value: "none", label: "none" }
 ];
+
+/**
+ * 判断客户端模拟是否为 Claude Code。
+ *
+ * @param style 客户端模拟配置
+ * @returns Claude 模拟时 true
+ */
+function isClaudeClientStyle(style?: string): boolean {
+  const normalized = (style ?? "auto").trim().toLowerCase();
+  return normalized === "claude" || normalized === "claude-code" || normalized === "claude_code";
+}

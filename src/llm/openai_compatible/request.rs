@@ -15,7 +15,7 @@ const RESPONSES_CALL_ID_MAX_CHARS: usize = 64;
 /// 参数:
 /// - `model`: 模型名
 /// - `base_url`: 供应商 base_url
-/// - `client_style`: 供应商客户端模拟（auto/default/codex）
+/// - `client_style`: 供应商客户端模拟（auto/default/codex/claude）
 ///
 /// 返回:
 /// - 需要 Codex 完整字段与请求头时 true
@@ -24,12 +24,17 @@ fn prefers_codex_responses_shape(model: &str, base_url: &str, client_style: &str
     if style == "codex" {
         return true;
     }
-    if style == "default" {
+    // Claude 模拟优先走 Anthropic Messages，不按 Codex Responses 推断
+    if matches!(style.as_str(), "default" | "claude" | "claude-code" | "claude_code") {
         return false;
     }
     // auto：按模型名 / 网关特征推断
     let model = model.to_ascii_lowercase();
     let url = base_url.to_ascii_lowercase();
+    // Claude 模型即使挂在 fcapp 代理上也不走 Codex 形态
+    if model.contains("claude") {
+        return false;
+    }
     model.contains("codex")
         || model.ends_with("-sol")
         || model.ends_with("-terra")

@@ -25,6 +25,7 @@ pub(super) fn edit_provider_form(
     stdout: &mut io::Stdout,
     provider: ProviderConfig,
 ) -> Result<Option<ProviderConfig>> {
+    let claude_simulation = is_claude_client_style(&provider.client_style);
     let mut fields = vec![
         Field::new(t("Config ID", "配置 ID"), provider.id.clone()),
         Field::new(t("Display name", "显示名称"), provider.display_name.clone()),
@@ -75,25 +76,71 @@ pub(super) fn edit_provider_form(
             t("Client style", "客户端模拟"),
             provider.client_style.clone(),
         )
-        .choices(&["auto", "default", "codex"]),
-        Field::new(
-            t("User-Agent", "User-Agent"),
-            provider.user_agent.clone(),
-        ),
-        Field::textarea(
-            t("Extra Headers JSON", "自定义请求头 JSON"),
-            if provider.extra_headers.is_empty() {
-                String::new()
-            } else {
-                serde_json::to_string_pretty(&provider.extra_headers).unwrap_or_default()
-            },
-        ),
+        .choices(&["auto", "default", "codex", "claude"]),
     ];
+    // 1. Claude 模拟专用字段仅在当前已是 Claude 时展示
+    if claude_simulation {
+        fields.push(
+            Field::new(
+                t("Claude 1M context", "Claude 启用 1M 上下文"),
+                if provider.claude_1m_context {
+                    "true".to_string()
+                } else {
+                    "false".to_string()
+                },
+            )
+            .choices(&["true", "false"]),
+        );
+        fields.push(Field::new(
+            t("Claude max output", "Claude 最大输出"),
+            provider.anthropic_max_tokens.to_string(),
+        ));
+    }
+    fields.push(Field::new(
+        t("User-Agent", "User-Agent"),
+        provider.user_agent.clone(),
+    ));
+    fields.push(Field::textarea(
+        t("Extra Headers JSON", "自定义请求头 JSON"),
+        if provider.extra_headers.is_empty() {
+            String::new()
+        } else {
+            serde_json::to_string_pretty(&provider.extra_headers).unwrap_or_default()
+        },
+    ));
     if !run_form(stdout, t(" EDIT PROVIDER ", " 编辑供应商 "), &mut fields)? {
         return Ok(None);
     }
     let extra_body = normalize_extra_body(&fields[9].value)?;
-    let extra_headers = normalize_extra_headers(&fields[12].value)?;
+    let client_style = fields[10].value.trim().to_string();
+    let (claude_1m_context, anthropic_max_tokens, user_agent_idx, headers_idx) =
+        if claude_simulation {
+            // 字段顺序：… client_style, 1m, max_output, user_agent, headers
+            (
+                parse_bool_field(&fields[11].value)?,
+                fields[12]
+                    .value
+                    .trim()
+                    .parse()
+                    .unwrap_or(provider.anthropic_max_tokens),
+                13usize,
+                14usize,
+            )
+        } else {
+            // 未展示 Claude 字段时保留原值；若本次切到 claude 则 1M 默认 true
+            let next_claude = is_claude_client_style(&client_style);
+            (
+                if next_claude {
+                    true
+                } else {
+                    provider.claude_1m_context
+                },
+                provider.anthropic_max_tokens,
+                11usize,
+                12usize,
+            )
+        };
+    let extra_headers = normalize_extra_headers(&fields[headers_idx].value)?;
     let updated = ProviderConfig {
         id: fields[0].value.trim().to_string(),
         display_name: fields[1].value.trim().to_string(),
@@ -106,15 +153,30 @@ pub(super) fn edit_provider_form(
         default_model: provider.default_model.clone(),
         timeout_seconds: fields[5].value.trim().parse().unwrap_or(60),
         temperature: fields[6].value.trim().parse().unwrap_or(0.7),
-        anthropic_max_tokens: provider.anthropic_max_tokens,
+        anthropic_max_tokens,
         thinking_level: fields[7].value.trim().to_string(),
         thinking_format: fields[8].value.trim().to_string(),
         extra_body,
         extra_headers,
-        user_agent: fields[11].value.trim().to_string(),
-        client_style: fields[10].value.trim().to_string(),
+        user_agent: fields[user_agent_idx].value.trim().to_string(),
+        client_style,
+        claude_1m_context,
     };
     Ok(Some(updated))
+}
+
+/// 判断客户端模拟是否为 Claude Code。
+///
+/// 参数:
+/// - `style`: client_style 字段
+///
+/// 返回:
+/// - Claude 模拟时 true
+fn is_claude_client_style(style: &str) -> bool {
+    matches!(
+        style.trim().to_ascii_lowercase().as_str(),
+        "claude" | "claude-code" | "claude_code"
+    )
 }
 
 /// 规范化并校验自定义 Body JSON。

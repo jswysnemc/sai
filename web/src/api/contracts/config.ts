@@ -17,6 +17,8 @@ export type ProviderConfig = {
   extra_headers?: Record<string, string>;
   user_agent?: string;
   client_style?: string;
+  /** Claude Code 模拟时是否启用 1M 上下文 beta */
+  claude_1m_context?: boolean;
   model_context_chars?: Record<string, number>;
   model_metadata?: Record<string, ModelMetadata>;
   [key: string]: unknown;

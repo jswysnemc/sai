@@ -744,7 +744,10 @@ pub(super) fn default_context_chars() -> usize {
 /// Codex CLI 默认 User-Agent（与探测报告 0.144.0 对齐）。
 pub(crate) const CODEX_CLI_USER_AGENT: &str = "codex_cli_rs/0.144.0";
 
-/// 非 Codex 模式下的默认 HTTP User-Agent。
+/// Claude Code CLI 默认 User-Agent（与抓包 2.1.113 对齐）。
+pub(crate) const CLAUDE_CLI_USER_AGENT: &str = "claude-cli/2.1.113 (external, cli)";
+
+/// 非 Codex / Claude 模式下的默认 HTTP User-Agent。
 pub(crate) const DEFAULT_HTTP_USER_AGENT: &str = "sai/0.1";
 
 pub(super) fn default_client_style() -> String {
@@ -754,4 +757,14 @@ pub(super) fn default_client_style() -> String {
 /// 是否为 auto 客户端风格（序列化时可省略）。
 pub(super) fn is_auto_client_style(value: &str) -> bool {
     value.trim().is_empty() || value.eq_ignore_ascii_case("auto")
+}
+
+/// Claude Code 模拟默认启用 1M 上下文 beta。
+pub(super) fn default_claude_1m_context() -> bool {
+    true
+}
+
+/// 是否为默认 1M 上下文开关（序列化时可省略）。
+pub(super) fn is_default_claude_1m_context(value: &bool) -> bool {
+    *value == default_claude_1m_context()
 }

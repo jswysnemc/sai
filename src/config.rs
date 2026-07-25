@@ -3,7 +3,7 @@ mod agents;
 mod app;
 mod app_prompts;
 mod app_validation;
-mod defaults;
+pub mod defaults;
 mod gateway_defaults;
 mod git;
 mod mcp_file;

@@ -39,6 +39,7 @@ impl ProviderConfig {
             extra_headers: HashMap::new(),
             user_agent: String::new(),
             client_style: default_client_style(),
+            claude_1m_context: default_claude_1m_context(),
         }
     }
 
@@ -62,6 +63,7 @@ impl ProviderConfig {
             extra_headers: HashMap::new(),
             user_agent: String::new(),
             client_style: default_client_style(),
+            claude_1m_context: default_claude_1m_context(),
         }
     }
 
@@ -89,6 +91,7 @@ impl ProviderConfig {
             extra_headers: HashMap::new(),
             user_agent: String::new(),
             client_style: default_client_style(),
+            claude_1m_context: default_claude_1m_context(),
         }
     }
 
@@ -136,6 +139,7 @@ impl ProviderConfig {
             extra_headers: HashMap::new(),
             user_agent: String::new(),
             client_style: default_client_style(),
+            claude_1m_context: default_claude_1m_context(),
         }
     }
 
@@ -152,14 +156,18 @@ impl ProviderConfig {
     /// - 无
     ///
     /// 返回:
-    /// - 自定义 UA；未配置时 Codex 模式返回 Codex CLI UA，否则返回 sai 默认 UA
+    /// - 自定义 UA；未配置时 Codex/Claude 模式返回对应 CLI UA，否则返回 sai 默认 UA
     pub fn effective_user_agent(&self) -> String {
         let custom = self.user_agent.trim();
         if !custom.is_empty() {
             return custom.to_string();
         }
-        if self.client_style.trim().eq_ignore_ascii_case("codex") {
+        let style = self.client_style.trim().to_ascii_lowercase();
+        if style == "codex" {
             return super::defaults::CODEX_CLI_USER_AGENT.to_string();
+        }
+        if matches!(style.as_str(), "claude" | "claude-code" | "claude_code") {
+            return super::defaults::CLAUDE_CLI_USER_AGENT.to_string();
         }
         super::defaults::DEFAULT_HTTP_USER_AGENT.to_string()
     }
