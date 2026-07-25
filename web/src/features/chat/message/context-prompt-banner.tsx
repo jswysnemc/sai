@@ -23,6 +23,120 @@ type CollapseAnchor = {
  * @param props 会话与 Agent 标识
  * @returns 可折叠的上下文提示词横幅
  */
+type ContextPromptMeta = {
+  source?: string;
+  has_instruction_files?: boolean;
+  has_skills?: boolean;
+  has_memory?: boolean;
+  has_dynamic?: boolean;
+  has_tools?: boolean;
+  tool_count?: number;
+  sections?: string[];
+};
+
+/**
+ * 组装上下文横幅标签，避免前端摘要标签与后端 sections 语义重复。
+ *
+ * @param data 会话上下文提示词元数据
+ * @param t 双语翻译函数
+ * @returns 去重后的标签列表
+ */
+export function buildContextPromptTags(
+  data: ContextPromptMeta | undefined,
+  t: (en: string, zh: string) => string
+): string[] {
+  if (!data) return [];
+  const tags: string[] = [];
+  // 1. 后端 sections 已按请求语言本地化，优先作为主体标签
+  for (const section of data.sections ?? []) {
+    if (section.trim() && !tags.includes(section)) tags.push(section);
+  }
+  // 2. 仅补充 sections 未覆盖的摘要信息
+  if (data.has_instruction_files && !tags.includes("AGENT.md")) {
+    tags.unshift(t("AGENT.md", "AGENT.md"));
+  }
+  if (data.has_skills && !tags.some((tag) => isSkillTag(tag))) {
+    tags.unshift(t("Skills", "技能目录"));
+  }
+  if (data.has_memory && !tags.some((tag) => isMemoryTag(tag))) {
+    tags.push(t("Memory", "关联记忆"));
+  }
+  if (data.has_dynamic && !tags.some((tag) => isDynamicTag(tag))) {
+    tags.push(t("Dynamic", "动态段"));
+  }
+  // 3. 工具定义已由 sections 提供时不再追加“工具 (n)”
+  if (data.has_tools && !tags.some((tag) => isToolTag(tag))) {
+    const count = data.tool_count ?? 0;
+    tags.push(count > 0 ? t(`Tools (${count})`, `工具 (${count})`) : t("Tools", "工具"));
+  }
+  if (data.source === "session_baseline" && !tags.some((tag) => isBaselineTag(tag))) {
+    tags.unshift(t("Session baseline", "会话 baseline"));
+  } else if (data.source === "live" && !tags.some((tag) => isLivePreviewTag(tag))) {
+    tags.unshift(t("Live preview", "实时预览"));
+  }
+  return tags.slice(0, 10);
+}
+
+/**
+ * 判断标签是否表示工具定义。
+ *
+ * @param tag 标签文本
+ * @returns 命中工具语义时返回 true
+ */
+function isToolTag(tag: string): boolean {
+  return /工具|tool/i.test(tag);
+}
+
+/**
+ * 判断标签是否表示技能目录。
+ *
+ * @param tag 标签文本
+ * @returns 命中技能语义时返回 true
+ */
+function isSkillTag(tag: string): boolean {
+  return /技能|skill/i.test(tag);
+}
+
+/**
+ * 判断标签是否表示关联记忆。
+ *
+ * @param tag 标签文本
+ * @returns 命中记忆语义时返回 true
+ */
+function isMemoryTag(tag: string): boolean {
+  return /记忆|memory/i.test(tag);
+}
+
+/**
+ * 判断标签是否表示动态系统段。
+ *
+ * @param tag 标签文本
+ * @returns 命中动态段语义时返回 true
+ */
+function isDynamicTag(tag: string): boolean {
+  return /动态|dynamic|模式提醒|mode reminder|当前模型|selected model|运行时|runtime|goal|压缩摘要|compaction/i.test(tag);
+}
+
+/**
+ * 判断标签是否表示会话 baseline。
+ *
+ * @param tag 标签文本
+ * @returns 命中 baseline 语义时返回 true
+ */
+function isBaselineTag(tag: string): boolean {
+  return /baseline/i.test(tag);
+}
+
+/**
+ * 判断标签是否表示实时预览。
+ *
+ * @param tag 标签文本
+ * @returns 命中实时预览语义时返回 true
+ */
+function isLivePreviewTag(tag: string): boolean {
+  return /实时预览|live preview/i.test(tag);
+}
+
 export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerProps) {
   const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -40,35 +154,10 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
     [locale, query.data?.content]
   );
 
-  const meta = useMemo(() => {
-    const tags: string[] = [];
-    if (query.data?.has_instruction_files) {
-      tags.push(t("AGENT.md", "AGENT.md"));
-    }
-    if (query.data?.has_skills) {
-      tags.push(t("Skills", "技能目录"));
-    }
-    if (query.data?.has_memory) {
-      tags.push(t("Memory", "关联记忆"));
-    }
-    if (query.data?.has_dynamic) {
-      tags.push(t("Dynamic", "动态段"));
-    }
-    if (query.data?.has_tools) {
-      const count = query.data.tool_count ?? 0;
-      tags.push(count > 0 ? t(`Tools (${count})`, `工具 (${count})`) : t("Tools", "工具"));
-    }
-    if (query.data?.source === "session_baseline") {
-      tags.push(t("Session baseline", "会话 baseline"));
-    } else if (query.data?.source === "live") {
-      tags.push(t("Live preview", "实时预览"));
-    }
-    // 后端 sections 已按请求语言本地化，作为补充标签（去重）
-    for (const section of query.data?.sections ?? []) {
-      if (!tags.includes(section)) tags.push(section);
-    }
-    return tags.slice(0, 10);
-  }, [query.data, t]);
+  const meta = useMemo(
+    () => buildContextPromptTags(query.data, t),
+    [query.data, t]
+  );
 
   const title = t("Loaded context", "已载入上下文");
   const subtitle = query.isLoading
