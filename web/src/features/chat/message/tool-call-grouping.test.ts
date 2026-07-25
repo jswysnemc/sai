@@ -8,13 +8,27 @@ import { groupCompletedToolCalls, toolCallGroupLabel } from "./tool-call-groupin
  * @param id 工具标识
  * @param status 工具状态
  * @param name 工具名称
+ * @param args 参数 JSON
  * @returns 工具消息部件
  */
-function toolPart(id: string, status: ToolLifecycle["status"], name = "run_command"): LiveMessagePart {
+function toolPart(
+  id: string,
+  status: ToolLifecycle["status"],
+  name = "run_command",
+  args = "{}"
+): LiveMessagePart {
   return {
     id,
     type: "tool",
-    tool: { id, name, status, arguments: "", argumentsPreview: "", progress: "", output: "" }
+    tool: {
+      id,
+      name,
+      status,
+      arguments: args,
+      argumentsPreview: args,
+      progress: "",
+      output: ""
+    }
   };
 }
 
@@ -54,12 +68,59 @@ describe("tool call grouping", () => {
     expect(grouped.map((item) => item.type)).toEqual(["part", "part", "part"]);
   });
 
-  it("uses a command-specific label only for command groups", () => {
-    const command = toolPart("a", "completed");
-    const edit = toolPart("b", "completed", "edit_file");
-    if (command.type !== "tool" || edit.type !== "tool") throw new Error("测试工具类型异常");
-    expect(toolCallGroupLabel([command.tool, command.tool])).toBe("运行了 2 个命令");
-    expect(toolCallGroupLabel([command.tool, edit.tool])).toBe("执行了 2 项操作");
+  it("lists concrete command targets instead of a bare count", () => {
+    const a = toolPart("a", "completed", "run_command", JSON.stringify({ command: "cargo test" }));
+    const b = toolPart("b", "completed", "run_command", JSON.stringify({ command: "npm run typecheck" }));
+    if (a.type !== "tool" || b.type !== "tool") throw new Error("测试工具类型异常");
+    expect(toolCallGroupLabel([a.tool, b.tool])).toBe("执行了 cargo test、npm run typecheck");
+  });
+
+  it("summarizes read and search tools as exploration targets", () => {
+    const a = toolPart("a", "completed", "read_file", JSON.stringify({ path: "src/main.rs" }));
+    const b = toolPart("b", "completed", "grep", JSON.stringify({ pattern: "toolCallGroupLabel" }));
+    const c = toolPart("c", "completed", "glob", JSON.stringify({ pattern: "**/*tool*" }));
+    if (a.type !== "tool" || b.type !== "tool" || c.type !== "tool") throw new Error("测试工具类型异常");
+    expect(toolCallGroupLabel([a.tool, b.tool, c.tool])).toBe(
+      "探索了 src/main.rs、toolCallGroupLabel、**/*tool* 等"
+    );
+  });
+
+  it("prefers workspace-relative paths in group labels", () => {
+    const a = toolPart(
+      "a",
+      "completed",
+      "read_file",
+      JSON.stringify({ path: "/home/snemc/workspace/sai/web/src/main.tsx" })
+    );
+    const b = toolPart(
+      "b",
+      "completed",
+      "read_file",
+      JSON.stringify({ path: "/home/snemc/workspace/sai/src/main.rs" })
+    );
+    if (a.type !== "tool" || b.type !== "tool") throw new Error("测试工具类型异常");
+    expect(toolCallGroupLabel([a.tool, b.tool], "zh-CN", "/home/snemc/workspace/sai")).toBe(
+      "探索了 web/src/main.tsx、src/main.rs"
+    );
+  });
+
+  it("does not dump raw complex regex patterns into the group title", () => {
+    const messy = "执行了|个命令|ran \\d+|commands? executed|tool.?summary|explored|探索了|tool.?fold";
+    const a = toolPart("a", "completed", "grep", JSON.stringify({ pattern: messy, path: "web/src" }));
+    const b = toolPart("b", "completed", "run_command", JSON.stringify({ command: "semble search foo" }));
+    if (a.type !== "tool" || b.type !== "tool") throw new Error("测试工具类型异常");
+    const label = toolCallGroupLabel([a.tool, b.tool]);
+    expect(label).toBe("探索并执行了 web/src、semble search foo");
+    expect(label).not.toContain("|");
+    expect(label).not.toContain("\\d");
+  });
+
+  it("falls back to a readable search label when only regex soup is available", () => {
+    const messy = "执行了|个命令|ran \\d+|commands? executed|tool.?fold";
+    const a = toolPart("a", "completed", "grep", JSON.stringify({ pattern: messy }));
+    const b = toolPart("b", "completed", "grep", JSON.stringify({ pattern: "explored|探索了|tool.?fold" }));
+    if (a.type !== "tool" || b.type !== "tool") throw new Error("测试工具类型异常");
+    expect(toolCallGroupLabel([a.tool, b.tool])).toBe("探索了 代码搜索");
   });
 
   it("groups consecutive completed todo calls with a plan label", () => {

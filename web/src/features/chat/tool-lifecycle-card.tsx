@@ -1,10 +1,13 @@
 import { Check, ChevronDown, CircleEllipsis, FilePenLine, FileSearch, Search, TerminalSquare, Wrench, X } from "lucide-react";
 import { type KeyboardEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../../api/client";
 import { usePersistedExpand } from "./message/tool-expand-state";
 import type { ToolLifecycle } from "./run-event-reducer";
 import { toolCardSummary } from "./tool-renderers/tool-card-summary";
 import { toolFilePath } from "./tool-renderers/tool-data";
 import { ToolFileReference } from "./tool-renderers/tool-file-reference";
+import { displayPath } from "./tool-renderers/tool-display-summary";
 import { ToolResultView } from "./tool-renderers/tool-result-view";
 import { TodoToolView } from "./tool-renderers/todo-tool-view";
 import "./tool-renderers/tool-renderers.css";
@@ -18,6 +21,8 @@ import { useI18n } from "../i18n/use-i18n";
  */
 export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
   const { locale, t } = useI18n();
+  const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list, staleTime: 30_000 });
+  const workspacePath = workspaces.data?.workspaces.find((item) => item.id === workspaces.data?.active_id)?.path ?? "";
   // 失败默认展开；用户展开后按 tool.id 记忆，流式更新不自动收缩
   const [expanded, setExpanded] = usePersistedExpand(tool.id, tool.status === "failed");
   // 1. todo 工具已完成时改用专门的清单卡片,不暴露原始 JSON
@@ -32,10 +37,13 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
   const argumentsText = tool.arguments || tool.argumentsPreview;
   const headerPath = toolFilePath(tool.name, argumentsText);
   const displayName = readableToolName(tool.name);
+  // 2. 优先工作区相对路径，其次可读摘要
+  const relativePath = headerPath ? displayPath(headerPath, workspacePath) : "";
   const summary = uniqueSummary(
-    toolCardSummary(tool.name, argumentsText, locale) || tool.progress || statusLabel(tool.status, t),
+    toolCardSummary(tool.name, argumentsText, locale, workspacePath) || tool.progress || statusLabel(tool.status, t),
     displayName
   );
+
   /**
    * 切换当前工具详情的展开状态。
    *
@@ -54,6 +62,7 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
     event.preventDefault();
     toggleExpanded();
   };
+
   return (
     <section className={`tool-card tool-inline-row ${tool.status}`}>
       <div className="tool-card-head" role="button" tabIndex={0} onClick={toggleExpanded} onKeyDown={handleHeaderKeyDown} aria-expanded={expanded}>
@@ -61,7 +70,9 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
         <span className="tool-card-copy">
           <strong className="tool-card-name">{displayName}</strong>
           <span className="tool-card-summary" title={headerPath || summary}>
-            {headerPath ? <ToolFileReference path={headerPath} className="tool-card-file" icon={false} /> : summary}
+            {headerPath
+              ? <ToolFileReference path={headerPath} label={relativePath || headerPath} className="tool-card-file" icon={false} />
+              : summary}
           </span>
         </span>
         <span className="tool-card-status" aria-hidden>{statusIcon}</span>

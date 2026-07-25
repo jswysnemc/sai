@@ -1,18 +1,6 @@
+/* 工具组：无矩形外框，仅保留行内触发条与展开后的列表层级 */
 .tool-call-group {
-  overflow: hidden;
-  border: 1px solid var(--technical-border);
-  border-radius: var(--radius-md);
-  background: var(--technical-surface);
   color: var(--technical-text);
-  transition: border-color 140ms ease;
-}
-
-.tool-call-group:hover {
-  border-color: color-mix(in srgb, var(--technical-border) 60%, var(--line-strong));
-}
-
-.tool-call-group.expanded {
-  background: var(--technical-surface-muted);
 }
 
 .tool-call-group-trigger {
@@ -21,9 +9,10 @@
   align-items: center;
   gap: 7px;
   width: 100%;
-  min-height: 38px;
-  padding: 8px 11px;
+  min-height: 32px;
+  padding: 4px 2px;
   border: 0;
+  border-radius: 6px;
   background: transparent;
   color: inherit;
   text-align: left;
@@ -59,10 +48,19 @@
 
 .tool-call-group-items {
   display: grid;
-  gap: 7px;
-  padding: 8px;
-  border-top: 1px solid var(--technical-border);
-  background: var(--technical-surface);
+  gap: 2px;
+  margin-top: 2px;
+  padding: 2px 0 0 4px;
+  border-left: 2px solid color-mix(in srgb, var(--line) 70%, transparent);
+  background: transparent;
+}
+
+.tool-call-group-items > .tool-card {
+  background: transparent;
+}
+
+.tool-call-group-items > .tool-card:hover {
+  background: color-mix(in srgb, var(--technical-text) 5%, transparent);
 }
 
 .tool-call-group-items > .tool-card:first-child {

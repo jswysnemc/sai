@@ -1,9 +1,18 @@
 import type { LiveMessagePart, ToolLifecycle } from "../run-event-reducer";
+import {
+  isCommandToolName,
+  isEditToolName,
+  isExploreToolName,
+  toolDisplaySummary
+} from "../tool-renderers/tool-display-summary";
 import { text, type Locale } from "../../i18n/locale";
 
 export type GroupedMessagePart =
   | { type: "part"; id: string; part: LiveMessagePart }
   | { type: "tool-group"; id: string; tools: ToolLifecycle[] };
+
+/** 组标题中最多展示的摘要条目数 */
+const MAX_SUMMARY_ITEMS = 3;
 
 /**
  * 聚合连续且已完成的工具调用，运行中和失败调用始终独立展示。
@@ -44,15 +53,124 @@ export function groupCompletedToolCalls(parts: LiveMessagePart[]): GroupedMessag
 }
 
 /**
- * 为工具组生成简短操作说明。
+ * 为工具组生成简短可读操作说明。
  *
  * @param tools 工具组中的完成项
- * @returns 命令组、计划组或通用操作组标题
+ * @param locale 界面语言
+ * @param workspacePath 当前工作区路径，用于相对路径展示
+ * @returns 探索/执行/计划类摘要标题
  */
-export function toolCallGroupLabel(tools: ToolLifecycle[], locale: Locale = "zh-CN"): string {
-  if (tools.every((tool) => tool.name === "todo")) return text(locale, `Updated the plan ${tools.length} times`, `更新了 ${tools.length} 次计划`);
-  const commandOnly = tools.every((tool) => tool.name === "run_command" || tool.name.includes("command"));
-  return commandOnly
-    ? text(locale, `Ran ${tools.length} commands`, `运行了 ${tools.length} 个命令`)
-    : text(locale, `Performed ${tools.length} operations`, `执行了 ${tools.length} 项操作`);
+export function toolCallGroupLabel(
+  tools: ToolLifecycle[],
+  locale: Locale = "zh-CN",
+  workspacePath = ""
+): string {
+  if (tools.every((tool) => tool.name === "todo")) {
+    return text(locale, `Updated the plan ${tools.length} times`, `更新了 ${tools.length} 次计划`);
+  }
+
+  const items = tools
+    .map((tool) =>
+      toolDisplaySummary(
+        tool.name,
+        tool.arguments || tool.argumentsPreview || "",
+        locale,
+        workspacePath
+      )
+    )
+    .filter(Boolean);
+  const unique = dedupePreserveOrder(items);
+  const listed = formatLabelList(unique, MAX_SUMMARY_ITEMS, locale);
+  if (!listed) {
+    return text(locale, `Performed ${tools.length} operations`, `执行了 ${tools.length} 项操作`);
+  }
+
+  const exploreOnly = tools.every((tool) => isExploreToolName(tool.name));
+  const commandOnly = tools.every((tool) => isCommandToolName(tool.name));
+  const editOnly = tools.every((tool) => isEditToolName(tool.name));
+  const hasExplore = tools.some((tool) => isExploreToolName(tool.name));
+  const hasCommand = tools.some((tool) => isCommandToolName(tool.name));
+
+  if (exploreOnly) {
+    return text(locale, `Explored ${listed}`, `探索了 ${listed}`);
+  }
+  if (commandOnly) {
+    return text(locale, `Ran ${listed}`, `执行了 ${listed}`);
+  }
+  if (editOnly) {
+    return text(locale, `Edited ${listed}`, `编辑了 ${listed}`);
+  }
+  if (hasExplore && hasCommand) {
+    return text(locale, `Explored and ran ${listed}`, `探索并执行了 ${listed}`);
+  }
+  if (hasExplore) {
+    return text(locale, `Explored ${listed}`, `探索了 ${listed}`);
+  }
+  return text(locale, `Performed ${listed}`, `执行了 ${listed}`);
+}
+
+/**
+ * 判断工具是否为阅读/搜索类探索操作。
+ *
+ * @param tool 工具生命周期
+ * @returns 探索类返回 true
+ */
+export function isExploreTool(tool: ToolLifecycle): boolean {
+  return isExploreToolName(tool.name);
+}
+
+/**
+ * 判断工具是否为 Shell / 后台命令。
+ *
+ * @param tool 工具生命周期
+ * @returns 命令类返回 true
+ */
+export function isCommandTool(tool: ToolLifecycle): boolean {
+  return isCommandToolName(tool.name);
+}
+
+/**
+ * 判断工具是否为文件编辑类。
+ *
+ * @param tool 工具生命周期
+ * @returns 编辑类返回 true
+ */
+export function isEditTool(tool: ToolLifecycle): boolean {
+  return isEditToolName(tool.name);
+}
+
+/**
+ * 去重并保持首次出现顺序。
+ *
+ * @param items 摘要列表
+ * @returns 去重后的列表
+ */
+function dedupePreserveOrder(items: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of items) {
+    const key = item.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
+
+/**
+ * 将摘要列表格式化为 “a、b、c 等”。
+ *
+ * @param items 去重后的摘要
+ * @param maxItems 最多展示条数
+ * @param locale 界面语言
+ * @returns 展示文本
+ */
+function formatLabelList(items: string[], maxItems: number, locale: Locale): string {
+  if (items.length === 0) return "";
+  const visible = items.slice(0, maxItems);
+  const joined = visible.join(locale.startsWith("zh") ? "、" : ", ");
+  if (items.length > maxItems || items.length >= 3) {
+    return text(locale, `${joined}, and more`, `${joined} 等`);
+  }
+  return joined;
 }

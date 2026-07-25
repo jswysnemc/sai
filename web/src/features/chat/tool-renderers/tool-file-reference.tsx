@@ -4,6 +4,8 @@ import { useI18n } from "../../i18n/use-i18n";
 
 type ToolFileReferenceProps = {
   path: string;
+  /** 展示文案；缺省使用 path */
+  label?: string;
   className?: string;
   icon?: boolean;
 };
@@ -11,10 +13,10 @@ type ToolFileReferenceProps = {
 /**
  * 渲染可在工作区编辑器中打开的文件路径。
  *
- * @param props path 为文件路径，className 为附加样式，icon 控制文件图标
+ * @param props path 为打开路径，label 为展示文案，className 为附加样式，icon 控制文件图标
  * @returns 文件路径按钮
  */
-export function ToolFileReference({ path, className = "", icon = true }: ToolFileReferenceProps) {
+export function ToolFileReference({ path, label, className = "", icon = true }: ToolFileReferenceProps) {
   const { t } = useI18n();
   /**
    * 派发工作区统一文件打开事件。
@@ -33,7 +35,7 @@ export function ToolFileReference({ path, className = "", icon = true }: ToolFil
     <span className={`tool-file-reference ${className}`.trim()}>
       {icon && <FileTypeIcon name={path} size={13} />}
       <button type="button" onClick={openFile} title={t("Open in editor", "在编辑器中打开")}>
-        {path}
+        {label || path}
       </button>
     </span>
   );

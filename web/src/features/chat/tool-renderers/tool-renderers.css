@@ -5,7 +5,7 @@
   min-width: 0;
   max-width: 100%;
   gap: 0;
-  background: var(--technical-surface);
+  background: transparent;
   color: var(--technical-text);
   font-family: var(--font-code);
 }
@@ -14,9 +14,9 @@
   display: grid;
   grid-template-columns: 0.75rem minmax(0, 1fr);
   gap: 0.5rem;
-  padding: 0.625rem 0.75rem;
-  border-bottom: 1px solid var(--technical-border);
-  background: var(--technical-surface-muted);
+  padding: 0.4rem 0.25rem 0.5rem;
+  border-bottom: 0;
+  background: transparent;
   color: var(--technical-text);
   font-size: 0.75rem;
   line-height: 1.55;
@@ -415,8 +415,8 @@
   align-items: center;
   gap: 9px;
   width: 100%;
-  min-height: 36px;
-  padding: 5px 10px;
+  min-height: 32px;
+  padding: 4px 2px;
   border: 0;
   background: transparent;
   text-align: left;
@@ -434,7 +434,7 @@
   height: 22px;
   place-items: center;
   border-radius: var(--radius-sm);
-  background: var(--technical-surface-muted);
+  background: transparent;
   color: var(--ink-soft);
 }
 

@@ -218,28 +218,44 @@
   gap: 10px;
 }
 
+/* 单条工具卡：无矩形外框，与工具组折叠条同一层级语言 */
 .tool-card {
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
-  border: 1px solid var(--technical-border);
-  border-radius: var(--radius-md);
-  background: var(--technical-surface);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
   color: var(--technical-text);
-  transition: border-color 140ms ease;
 }
 
 .tool-card:hover {
-  border-color: color-mix(in srgb, var(--technical-border) 60%, var(--line-strong));
+  background: color-mix(in srgb, var(--technical-text) 5%, transparent);
 }
 
 .tool-card.failed {
-  border-color: color-mix(in srgb, var(--danger) 40%, var(--technical-border));
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
 }
 
-.tool-detail { border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
-.tool-detail pre { max-height: 340px; margin: 0; border: 0; border-radius: 0; }
-.tool-output { border-top: 1px solid var(--technical-border) !important; color: var(--technical-muted) !important; }
+.tool-detail {
+  border-top: 0;
+  margin-top: 2px;
+  padding: 2px 0 0 4px;
+  border-left: 2px solid color-mix(in srgb, var(--line) 70%, transparent);
+  background: transparent;
+}
+
+.tool-detail pre {
+  max-height: 340px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.tool-output {
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent) !important;
+  color: var(--technical-muted) !important;
+}
 
 .inline-diff { overflow: auto; background: var(--technical-surface); color: var(--technical-text); font: 400 12px/1.55 var(--font-code); }
 .diff-line { min-width: max-content; padding: 1px 12px; white-space: pre; }
