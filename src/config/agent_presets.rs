@@ -50,6 +50,8 @@ const CODE_AGENT_TOOLS: &[&str] = &[
     "subagent",
     "todo",
     "edit_file",
+    "write_file",
+    "str_replace",
     "create_goal",
     "get_goal",
     "update_goal",
@@ -146,16 +148,50 @@ pub(super) fn builtin_agent_profiles() -> [AgentProfile; 5] {
 /// 返回:
 /// - 空向量表示全量工具；非空为白名单
 pub(super) fn resolve_enabled_tools(profile: &AgentProfile) -> Vec<String> {
-    if !profile.enabled_tools.is_empty() {
-        return profile.enabled_tools.clone();
+    let tools = if !profile.enabled_tools.is_empty() {
+        profile.enabled_tools.clone()
+    } else {
+        match profile.id.as_str() {
+            EXPLORE_AGENT_ID => tools_to_owned(EXPLORE_AGENT_TOOLS),
+            PLAN_AGENT_ID => tools_to_owned(PLAN_AGENT_TOOLS),
+            GATEWAY_AGENT_ID => tools_to_owned(GATEWAY_AGENT_TOOLS),
+            GENERAL_AGENT_ID => tools_to_owned(CODE_AGENT_TOOLS),
+            _ => Vec::new(),
+        }
+    };
+    expand_legacy_enabled_tools(tools)
+}
+
+/// 将旧编辑工具名展开为当前可用工具。
+///
+/// 参数:
+/// - `tools`: 配置中的白名单
+///
+/// 返回:
+/// - 补齐 str_replace / edit_file 后的白名单
+fn expand_legacy_enabled_tools(mut tools: Vec<String>) -> Vec<String> {
+    if tools.is_empty() {
+        return tools;
     }
-    match profile.id.as_str() {
-        EXPLORE_AGENT_ID => tools_to_owned(EXPLORE_AGENT_TOOLS),
-        PLAN_AGENT_ID => tools_to_owned(PLAN_AGENT_TOOLS),
-        GATEWAY_AGENT_ID => tools_to_owned(GATEWAY_AGENT_TOOLS),
-        GENERAL_AGENT_ID => tools_to_owned(CODE_AGENT_TOOLS),
-        _ => Vec::new(),
+    let has = |tools: &[String], name: &str| tools.iter().any(|tool| tool == name);
+    // 1. 旧局部替换工具映射到 str_replace
+    if has(&tools, "replace_file_lines") && !has(&tools, "str_replace") {
+        tools.push("str_replace".to_string());
     }
+    // 2. 旧 apply_patch 映射到 edit_file，并保留 str_replace 作为局部编辑入口
+    if has(&tools, "apply_patch") {
+        if !has(&tools, "edit_file") {
+            tools.push("edit_file".to_string());
+        }
+        if !has(&tools, "str_replace") {
+            tools.push("str_replace".to_string());
+        }
+    }
+    // 3. 具备 write_file / edit_file 的工程 Agent 默认补上 str_replace
+    if (has(&tools, "write_file") || has(&tools, "edit_file")) && !has(&tools, "str_replace") {
+        tools.push("str_replace".to_string());
+    }
+    tools
 }
 
 /// 将静态工具名称转换为配置持有的字符串。

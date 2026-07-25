@@ -156,22 +156,27 @@ export function ChatPage() {
     if ((!value && composerAttachments.attachments.length === 0) || !activeSession) return;
     const goalCommand = parseGoalCommand(value);
     if (goalCommand) {
-      if (!goalCommand.objective) {
+      if (!goalCommand.objective && composerAttachments.attachments.length === 0) {
         setActionError(new Error(t("Enter an objective after /goal", "请在 /goal 后输入目标内容")));
         return;
       }
       const originalInput = input;
       const currentAttachments = composerAttachments.attachments;
+      // 1. 保留 skill-mention / 文件原子，并把当前附件图片并入目标正文供展开查看
+      const objectiveWithMedia = [
+        goalCommand.objective.trim(),
+        ...currentAttachments.map((attachment, index) => `![goal-image-${index + 1}](${attachment.dataUrl})`)
+      ].filter(Boolean).join("\n\n");
       setActionError(null);
       setInput("");
       clearComposerDraft(activeSession.id);
       composerAttachments.clearAttachments();
       jumpToBottom();
       try {
-        // 1. 将命令后的完整输入保存为当前会话目标
-        const response = await api.goals.set(activeSession.id, goalCommand.objective);
+        // 2. 将命令后的完整输入（含技能标记与图片）保存为当前会话目标
+        const response = await api.goals.set(activeSession.id, objectiveWithMedia);
         queryClient.setQueryData(["goal", activeSession.id], response);
-        // 2. 目标保存成功后立即启动主动续轮
+        // 3. 目标保存成功后立即启动主动续轮
         await run.startGoal(
           activeSession.id,
           mode,

@@ -26,11 +26,22 @@ export function RunErrorNotice({ message, detail, onRetry }: RunErrorNoticeProps
     || text.includes("Connection interrupted")
     || text.includes("运行事件流已断开")
     || text.includes("event stream disconnected");
+  const interrupted =
+    text.includes("运行已中断")
+    || text.includes("The run was interrupted")
+    || text.includes("响应已中断")
+    || text.includes("The response was interrupted");
+  const detailText = detail?.trim() || "";
+  // 中断类提示直接露出说明，避免只剩标题、详情还要二次点击
+  const showInlineDetail = interrupted && Boolean(detailText);
   return (
-    <div className={`run-error${disconnect ? " is-disconnect" : ""}`} role="alert">
+    <div className={`run-error${disconnect ? " is-disconnect" : ""}${interrupted ? " is-interrupted" : ""}`} role="alert">
       <div className="run-error-summary">
         <CircleAlert size={14} aria-hidden />
-        <span className="run-error-text">{message}</span>
+        <div className="run-error-copy">
+          <span className="run-error-text">{message}</span>
+          {showInlineDetail && <span className="run-error-inline-detail">{detailText}</span>}
+        </div>
       </div>
       {onRetry && (
         <Button className="run-error-retry" variant="primary" onClick={onRetry}>
@@ -38,7 +49,7 @@ export function RunErrorNotice({ message, detail, onRetry }: RunErrorNoticeProps
           <span>{t("Retry", "重试")}</span>
         </Button>
       )}
-      {detail && <ErrorDetailToggle detail={detail} />}
+      {detailText && !showInlineDetail && <ErrorDetailToggle detail={detailText} />}
     </div>
   );
 }

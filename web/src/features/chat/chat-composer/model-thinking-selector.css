@@ -24,7 +24,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  box-sizing: border-box;
   max-width: 280px;
+  height: 28px;
   min-height: 28px;
   padding: 0 7px 0 2px;
   border: 0;
@@ -32,6 +34,12 @@
   background: transparent;
   color: var(--ink-soft);
   font-size: 12px;
+  line-height: 1;
+}
+
+.model-thinking-trigger > svg {
+  display: block;
+  flex: 0 0 auto;
 }
 
 .model-thinking-trigger:hover:not(:disabled) {

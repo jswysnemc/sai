@@ -252,7 +252,46 @@ sudo pacman -U ~/.cache/sai/packages/sai-<version>-1-x86_64.pkg.tar.zst
 
 ### Prebuilt binaries
 
-Every push to `main` triggers GitHub Actions to build Linux, Windows, and macOS binaries. Download the artifact for your platform from the [Actions](https://github.com/jswysnemc/sai/actions) page.
+Every push to `main` builds Linux, Windows, and macOS binaries. Download artifacts from [Actions](https://github.com/jswysnemc/sai/actions).
+
+Pushing a `v*` tag runs the **Release** workflow and publishes assets on [Releases](https://github.com/jswysnemc/sai/releases):
+
+- `sai-linux-x86_64`
+- `sai-windows-x86_64.exe`
+- `sai-macos-arm64`
+- matching `.sha256` checksums
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+You can also run the **Release** workflow manually from Actions and supply an existing tag.
+
+### Docker image
+
+Images are published to GitHub Container Registry:
+
+```bash
+# latest main
+docker pull ghcr.io/jswysnemc/sai:latest
+
+# version tag
+docker pull ghcr.io/jswysnemc/sai:0.1.0
+```
+
+Build locally:
+
+```bash
+docker build -t sai:local .
+docker run --rm -it \
+  -v "$HOME/.config/sai:/config/sai" \
+  -v "$PWD:/workspace" \
+  -p 4096:4096 \
+  sai:local web --port 4096 --no-open
+```
+
+On `main` / `v*` tags, the **Docker** workflow builds and pushes `ghcr.io/<owner>/sai` (PRs build only). Log in with `docker login ghcr.io` if the package is private.
 
 ---
 
@@ -425,6 +464,7 @@ Sai/
 ├── web/                  # Web workbench frontend (React + Vite)
 ├── assets/               # o200k tokenizer vocabulary
 ├── pics/                 # Screenshots and architecture overview
+├── Dockerfile            # container image
 ├── scripts/              # Packaging scripts (package-arch.sh)
 ├── .github/workflows/    # CI (linux.yml + windows.yml + macos.yml)
 ├── build.rs              # Build script

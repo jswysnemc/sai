@@ -245,6 +245,7 @@ mod tests {
                 permission: None,
             }],
             automatic: false,
+            duration_ms: 0,
         }
     }
 

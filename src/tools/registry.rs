@@ -316,6 +316,12 @@ impl ToolRegistry {
             if let Some(tool) = self.tools.get(*name) {
                 registry.register(tool.clone());
             }
+            // 1. 旧配置中的局部编辑工具名映射到当前 str_replace
+            for alias in legacy_tool_aliases(name) {
+                if let Some(tool) = self.tools.get(*alias) {
+                    registry.register(tool.clone());
+                }
+            }
         }
         registry
     }
@@ -485,10 +491,26 @@ fn parse_arguments(arguments: &str) -> Result<Value> {
 
 /// 将协议层工具别名还原为本地注册名称。
 fn local_tool_name(name: &str) -> &str {
-    if name == "sai_web_search" {
-        "web_search"
-    } else {
-        name
+    match name {
+        "sai_web_search" => "web_search",
+        "replace_file_lines" => "str_replace",
+        "apply_patch" => "edit_file",
+        _ => name,
+    }
+}
+
+/// 旧工具白名单名称映射到当前注册名。
+///
+/// 参数:
+/// - `name`: 配置中的工具名
+///
+/// 返回:
+/// - 需要一并纳入白名单的当前工具名
+fn legacy_tool_aliases(name: &str) -> &'static [&'static str] {
+    match name {
+        "replace_file_lines" => &["str_replace"],
+        "apply_patch" => &["edit_file", "str_replace"],
+        _ => &[],
     }
 }
 

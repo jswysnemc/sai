@@ -7,6 +7,8 @@ import { useI18n } from "../../i18n/use-i18n";
 type DiffViewProps = {
   source: string;
   headerPath?: string;
+  /** 为 true 时隐藏文件头，避免与外层文件行重复 */
+  hideHeader?: boolean;
 };
 
 /**
@@ -15,14 +17,19 @@ type DiffViewProps = {
  * @param props Diff 源文本
  * @returns 按文件分块、带双行号列的 Diff 视图
  */
-export function DiffView({ source, headerPath }: DiffViewProps) {
+export function DiffView({ source, headerPath, hideHeader = false }: DiffViewProps) {
   const { locale, t } = useI18n();
   const files = parseDiff(source, locale);
   if (files.length === 0) return null;
   return (
-    <div className="structured-diff" role="region" aria-label={t("File diff", "文件差异")}>
+    <div className={`structured-diff${hideHeader ? " is-compact" : ""}`} role="region" aria-label={t("File diff", "文件差异")}>
       {files.map((file, index) => (
-        <DiffFileBlock file={file} hidePath={files.length === 1 && file.path === headerPath} key={`${file.path}-${index}`} />
+        <DiffFileBlock
+          file={file}
+          hideHeader={hideHeader || (files.length === 1 && file.path === headerPath)}
+          hidePath={files.length === 1 && file.path === headerPath}
+          key={`${file.path}-${index}`}
+        />
       ))}
     </div>
   );
@@ -34,22 +41,26 @@ export function DiffView({ source, headerPath }: DiffViewProps) {
  * @param props 解析后的文件差异
  * @returns 文件差异块
  */
-function DiffFileBlock({ file, hidePath }: { file: DiffFile; hidePath: boolean }) {
+function DiffFileBlock({ file, hideHeader, hidePath }: { file: DiffFile; hideHeader: boolean; hidePath: boolean }) {
   const { t } = useI18n();
   const showOldLine = file.lines.some((line) => line.oldLine !== undefined);
   const showNewLine = file.lines.some((line) => line.newLine !== undefined);
   const gutterClass = showOldLine && showNewLine ? "double-gutter" : showOldLine || showNewLine ? "single-gutter" : "no-gutter";
+  // hideHeader 时完全不渲染路径/动作条，只保留 diff 行
+  const showHead = !hideHeader;
   return (
     <section className="diff-file">
-      <header className="diff-file-head">
-        {!hidePath && file.path && <ToolFileReference path={file.path} />}
-        {!file.path && <strong>{t("Change fragment", "变更片段")}</strong>}
-        <small>{file.action}</small>
-        <span className="diff-file-stats">
-          {file.added > 0 && <b>+{file.added}</b>}
-          {file.removed > 0 && <i>-{file.removed}</i>}
-        </span>
-      </header>
+      {showHead && (
+        <header className="diff-file-head">
+          {!hidePath && file.path && <ToolFileReference path={file.path} />}
+          {!file.path && <strong>{t("Change fragment", "变更片段")}</strong>}
+          <small>{file.action}</small>
+          <span className="diff-file-stats">
+            {file.added > 0 && <b>+{file.added}</b>}
+            {file.removed > 0 && <i>-{file.removed}</i>}
+          </span>
+        </header>
+      )}
       <div className={`diff-file-lines ${gutterClass}`}>
         {file.lines.map((line, index) => (
           <DiffLineRow line={line} language={languageOfPath(file.path)} showOldLine={showOldLine} showNewLine={showNewLine} key={index} />

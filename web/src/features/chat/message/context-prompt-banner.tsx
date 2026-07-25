@@ -1,6 +1,6 @@
-import { BookMarked, ChevronDown, FileText, Loader2 } from "lucide-react";
+import { BookMarked, ChevronDown, ChevronUp, FileText, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import { MarkdownRenderer } from "../markdown-renderer";
 import { useI18n } from "../../i18n/use-i18n";
@@ -12,6 +12,11 @@ type ContextPromptBannerProps = {
   agentId?: string | null;
 };
 
+type CollapseAnchor = {
+  top: number;
+  left: number;
+};
+
 /**
  * 在对话首条消息前展示可展开的系统提示词、指令文件与工具描述。
  *
@@ -21,6 +26,8 @@ type ContextPromptBannerProps = {
 export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerProps) {
   const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<CollapseAnchor | null>(null);
+  const markdownRef = useRef<HTMLDivElement | null>(null);
   const query = useQuery({
     queryKey: ["session-context-prompt", sessionId, agentId ?? "", locale],
     queryFn: () => api.sessions.contextPrompt(sessionId, agentId ?? undefined, locale),
@@ -73,6 +80,50 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
           "稳定系统提示、动态段、记忆与工具描述"
         );
 
+  /**
+   * 收起展开后的提示词正文。
+   */
+  const collapse = () => setOpen(false);
+
+  useEffect(() => {
+    if (!open) {
+      setAnchor(null);
+      return;
+    }
+
+    /**
+     * 1. 纵坐标相对视口固定在标题栏下方
+     * 2. 横坐标贴齐 Markdown 渲染区域右缘内侧
+     */
+    const syncAnchor = () => {
+      const markdown = markdownRef.current;
+      if (!markdown) return;
+      const rect = markdown.getBoundingClientRect();
+      const header = document.querySelector(".chat-header") as HTMLElement | null;
+      const headerBottom = header?.getBoundingClientRect().bottom ?? 44;
+      const buttonSize = 28;
+      const inset = 8;
+      setAnchor({
+        top: Math.max(headerBottom + 8, 12),
+        left: Math.max(8, rect.right - buttonSize - inset)
+      });
+    };
+
+    syncAnchor();
+    window.addEventListener("resize", syncAnchor);
+    // 消息区滚动时只更新横坐标（右缘可能随布局变化），纵坐标保持视口悬浮
+    window.addEventListener("scroll", syncAnchor, true);
+    const observer = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => syncAnchor())
+      : null;
+    if (observer && markdownRef.current) observer.observe(markdownRef.current);
+    return () => {
+      window.removeEventListener("resize", syncAnchor);
+      window.removeEventListener("scroll", syncAnchor, true);
+      observer?.disconnect();
+    };
+  }, [open, rendered]);
+
   return (
     <section className={`context-prompt-banner${open ? " open" : ""}`} data-overview-id="context-prompt">
       <button
@@ -119,7 +170,7 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
             </div>
           )}
           {rendered && (
-            <div className="context-prompt-banner-markdown">
+            <div ref={markdownRef} className="context-prompt-banner-markdown">
               <MarkdownRenderer source={rendered} />
             </div>
           )}
@@ -127,6 +178,18 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
             <div className="context-prompt-banner-status">
               {t("No system prompt content", "暂无系统提示词内容")}
             </div>
+          )}
+          {anchor && (
+            <button
+              type="button"
+              className="context-prompt-banner-collapse"
+              style={{ top: `${anchor.top}px`, left: `${anchor.left}px` }}
+              onClick={collapse}
+              title={t("Collapse", "收起")}
+              aria-label={t("Collapse context prompt", "收起上下文提示词")}
+            >
+              <ChevronUp size={14} aria-hidden />
+            </button>
           )}
         </div>
       )}

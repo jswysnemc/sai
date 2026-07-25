@@ -154,7 +154,7 @@ export function ChatComposer(props: ChatComposerProps) {
                 onModelSelect={props.onModelSelect}
                 onThinkingLevelChange={props.onThinkingLevelChange}
               />
-              <GoalControl sessionId={props.sessionId} running={props.running} onContinue={props.onContinueGoal} />
+              <GoalControl sessionId={props.sessionId} running={props.running} draftValue={props.value} onDraftChange={props.onChange} onContinue={props.onContinueGoal} />
               <div className="composer-mode">
                 <Select
                   value={props.mode}

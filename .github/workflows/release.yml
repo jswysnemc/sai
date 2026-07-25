@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish (for example v0.1.0). Leave empty to use the push ref."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.asset }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: sai-linux-x86_64
+            binary: target/release/sai
+            rename: target/release/sai-linux-x86_64
+          - os: windows-latest
+            asset: sai-windows-x86_64
+            binary: target/release/sai.exe
+            rename: target/release/sai-windows-x86_64.exe
+          - os: macos-latest
+            asset: sai-macos-arm64
+            binary: target/release/sai
+            rename: target/release/sai-macos-arm64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libasound2-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            pkg-config \
+            ripgrep
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install ripgrep
+
+      - name: Install Windows dependencies
+        if: runner.os == 'Windows'
+        run: choco install ripgrep --no-progress --yes
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build web assets
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-${{ matrix.os }}
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Prepare asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            cp "${{ matrix.binary }}" "${{ matrix.rename }}"
+          else
+            cp "${{ matrix.binary }}" "${{ matrix.rename }}"
+            chmod +x "${{ matrix.rename }}"
+          fi
+          # SHA256 sidecar for release consumers
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${{ matrix.rename }}" > "${{ matrix.rename }}.sha256"
+          else
+            shasum -a 256 "${{ matrix.rename }}" > "${{ matrix.rename }}.sha256"
+          fi
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: |
+            ${{ matrix.rename }}
+            ${{ matrix.rename }}.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Download all assets
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List assets
+        run: find dist -type f | sort
+
+      - name: Resolve tag name
+        id: tag
+        run: |
+          if [[ -n "${{ inputs.tag }}" ]]; then
+            echo "name=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: Sai ${{ steps.tag.outputs.name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(steps.tag.outputs.name, '-') }}
+          files: dist/*

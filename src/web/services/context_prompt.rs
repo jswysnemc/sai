@@ -494,15 +494,43 @@ fn build_tools_markdown_section(
         });
     }
 
-    // 1. 构建缓存 MCP 的注册表，并应用 Web Agent 工具过滤
+    // 1. 构建缓存 MCP 的注册表（与 Web 提交路径一致，避免拉起网络发现）
     let mut registry = build_tool_registry_with_cached_mcp(config, paths, AgentMode::Yolo)?;
+
+    // 2. 注册交互式会话工具：todo / subagent / ask_question
+    //    真实 Web run 在 build_submission_tool_registry 中完成，预览原先漏掉
+    tools::register_interactive_tools(
+        &mut registry,
+        config,
+        paths,
+        store.state_dir().display().to_string(),
+        store.session_id().to_string(),
+    );
+
+    // 3. 应用 Web Agent 工具白名单（并强制保留 subagent/todo/ask_question）
     apply_web_agent_tool_filter(config, &mut registry)?;
 
-    // 2. 渐进加载时仅展示初始工具 + 已加载工具
-    let loaded = store.load_loaded_tools().unwrap_or_default();
+    // 4. 与 Agent::new 对齐：过滤后再挂 goal 工具与渐进 load
+    //    create_goal / get_goal / update_goal / load 不依赖 enabled_tools 白名单
+    crate::goal::register_tools(&mut registry, store.goal_file());
     let progressive = config.tools.progressive_loading_enabled;
+    if progressive {
+        tools::register_progressive_loader(&mut registry);
+    }
+
+    // 5. 渐进加载时仅展示初始工具 + 已加载工具，并刷新 load 描述中的分组清单
+    let loaded = store.load_loaded_tools().unwrap_or_default();
+    let loaded_set: BTreeSet<String> = loaded.iter().cloned().collect();
     let visible_names = visible_tool_names(&registry, progressive, &loaded);
     let mut definitions = registry.definitions_for_names(&visible_names);
+    if progressive {
+        let load_description = tools::progressive::loader_description(&registry, &loaded_set);
+        for definition in &mut definitions {
+            if definition.function.name == tools::LOAD_NAME {
+                definition.function.description = load_description.clone();
+            }
+        }
+    }
     definitions.sort_by(|left, right| left.function.name.cmp(&right.function.name));
     if definitions.is_empty() {
         return Ok(ToolsMarkdownSection {
@@ -511,7 +539,7 @@ fn build_tools_markdown_section(
         });
     }
 
-    // 3. 渲染为可读 Markdown
+    // 6. 渲染为可读 Markdown
     let mut out = String::new();
     out.push_str(&format!(
         "## {}\n\n",
@@ -531,8 +559,8 @@ fn build_tools_markdown_section(
     ));
     if progressive {
         out.push_str(locale.text(
-            "Progressive loading is enabled: the list below shows currently visible tools (initial tools plus tools already loaded in this session).\n\n",
-            "渐进加载已开启：下列为当前可见工具（初始工具 + 本会话已 load 的工具）。\n\n",
+            "Progressive loading is enabled: the list below shows currently visible tools (initial tools plus tools already loaded in this session). Initial base tools include file/command tools, todo, goal tools, and load.\n\n",
+            "渐进加载已开启：下列为当前可见工具（初始工具 + 本会话已 load 的工具）。初始基础工具含文件/命令、todo、goal 工具与 load。\n\n",
         ));
     }
     for definition in &definitions {

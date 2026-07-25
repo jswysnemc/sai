@@ -5,6 +5,8 @@ pub(crate) const BASE_TOOL_NAMES: &[&str] = &[
     "todo",
     "cron",
     "edit_file",
+    "write_file",
+    "str_replace",
     "create_goal",
     "get_goal",
     "update_goal",

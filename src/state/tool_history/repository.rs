@@ -497,6 +497,18 @@ pub(in crate::state) fn settle_pending_tool_calls_for_turns(
     let now = Utc::now().to_rfc3339();
     let mut updated = 0usize;
     for turn_id in turn_ids {
+        // 1. 找出仍 pending 的工具，便于补写可展示的中断结果
+        let mut pending_stmt = conn.prepare(
+            "SELECT provider_call_id
+             FROM tool_calls
+             WHERE session_id = ?1 AND turn_id = ?2 AND status = 'pending'",
+        )?;
+        let pending_ids = pending_stmt
+            .query_map(params![session_id, turn_id], |row| row.get::<_, String>(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        drop(pending_stmt);
+
+        // 2. 将 pending 工具标记为 interrupted
         updated += conn.execute(
             "UPDATE tool_calls
              SET status = ?1, updated_at = ?2
@@ -508,6 +520,37 @@ pub(in crate::state) fn settle_pending_tool_calls_for_turns(
                 turn_id,
             ],
         )?;
+
+        // 3. 为每个中断工具写入结果记录，供时间线展示详情
+        let message = "tool call was interrupted before a result was recorded";
+        for provider_call_id in pending_ids {
+            conn.execute(
+                "INSERT OR IGNORE INTO tool_results (
+                    id, session_id, turn_id, provider_call_id, ok, result_preview,
+                    result_ref, error, original_chars, created_at, completed_at
+                 ) VALUES (
+                    lower(hex(randomblob(16))),
+                    ?1,
+                    ?2,
+                    ?3,
+                    0,
+                    ?4,
+                    NULL,
+                    ?4,
+                    ?5,
+                    ?6,
+                    ?6
+                 )",
+                params![
+                    session_id,
+                    turn_id,
+                    provider_call_id,
+                    message,
+                    message.chars().count() as i64,
+                    now,
+                ],
+            )?;
+        }
     }
     Ok(updated)
 }
@@ -661,10 +704,16 @@ mod tests {
         let updated =
             settle_pending_tool_calls_for_turns(&db, "default", &["turn_1".to_string()]).unwrap();
         let summary = summarize_tool_history(&db, "default").unwrap();
+        let exchanges = load_tool_exchanges_for_turn(&db, "default", "turn_1").unwrap();
 
         assert_eq!(updated, 1);
         assert_eq!(summary.pending_count, 0);
         assert_eq!(summary.error_count, 1);
         assert_eq!(summary.latest_status, Some(ToolCallStatus::Interrupted));
+        assert_eq!(summary.result_count, 1);
+        assert_eq!(
+            exchanges[0].result.as_ref().and_then(|result| result.error.as_deref()),
+            Some("tool call was interrupted before a result was recorded")
+        );
     }
 }

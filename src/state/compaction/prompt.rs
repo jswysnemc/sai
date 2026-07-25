@@ -139,6 +139,7 @@ mod tests {
             assistant_timestamp: Some("2026-01-01T00:00:01Z".to_string()),
             status: TurnStatus::Completed,
             tool_reports: Vec::new(),
+            duration_ms: 0,
         }
     }
 

@@ -49,9 +49,26 @@ pub(crate) fn estimate_context_breakdown(
     } else {
         ToolRegistry::new()
     };
-    apply_web_agent_tool_filter(config, &mut registry)?;
 
-    // 3. 按渐进式可见性选择当前工具定义
+    // 3. 与真实 Web 会话对齐：交互式工具 + agent 过滤 + goal + progressive load
+    if config.tools.enabled {
+        tools::register_interactive_tools(
+            &mut registry,
+            config,
+            paths,
+            store.state_dir().display().to_string(),
+            store.session_id().to_string(),
+        );
+    }
+    apply_web_agent_tool_filter(config, &mut registry)?;
+    if config.tools.enabled {
+        crate::goal::register_tools(&mut registry, store.goal_file());
+        if config.tools.progressive_loading_enabled {
+            tools::register_progressive_loader(&mut registry);
+        }
+    }
+
+    // 4. 按渐进式可见性选择当前工具定义
     let loaded = store.load_loaded_tools().unwrap_or_default();
     let progressive = config.tools.progressive_loading_enabled;
     let visible_names = visible_tool_names(&registry, progressive, &loaded);

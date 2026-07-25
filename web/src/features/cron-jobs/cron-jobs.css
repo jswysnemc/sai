@@ -52,7 +52,16 @@
 .cron-job-main dl div { min-width: 0; }
 .cron-job-main dt { margin-bottom: 2px; color: var(--ink-soft); font-size: 10px; }
 .cron-job-main dd { margin: 0; overflow: hidden; font: 400 10px var(--font-code); text-overflow: ellipsis; white-space: nowrap; }
-.cron-last-error { margin-top: 9px; padding: 7px 9px; border-left: 3px solid var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); color: var(--danger); font-size: 11px; line-height: 1.45; }
+.cron-last-error {
+  margin-top: 9px;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--danger) 36%, var(--line));
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 1.45;
+}
 .cron-job-actions { display: flex; gap: 5px; }
 .cron-job-actions button { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid var(--line); border-radius: 7px; background: var(--paper-raised); color: var(--ink-soft); }
 .cron-job-actions button:hover { border-color: var(--line-strong); color: var(--ink); }

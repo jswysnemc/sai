@@ -97,11 +97,35 @@
 
 /* 展开后完整铺开：不限制短高度，由消息列表自身滚动 */
 .context-prompt-banner-body {
+  position: relative;
   max-height: none;
   overflow: visible;
   border-top: 1px solid var(--line);
   padding: 14px 14px 16px;
   background: color-mix(in srgb, var(--paper) 88%, var(--control-surface));
+}
+
+/* 纵坐标 fixed 相对视口；横坐标由 JS 对齐 Markdown 右缘 */
+.context-prompt-banner-collapse {
+  position: fixed;
+  z-index: 40;
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0;
+  border: 1px solid var(--line-strong, var(--line));
+  border-radius: 999px;
+  background: var(--paper-raised, var(--paper));
+  color: var(--ink-soft);
+  box-shadow: 0 6px 20px rgb(20 28 23 / 14%);
+  cursor: pointer;
+}
+
+.context-prompt-banner-collapse:hover {
+  color: var(--ink);
+  border-color: var(--line-strong, var(--line));
+  background: var(--paper, #fff);
 }
 
 .context-prompt-banner-markdown {

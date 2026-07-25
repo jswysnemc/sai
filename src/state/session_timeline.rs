@@ -49,6 +49,9 @@ pub struct SessionTimelineTurn {
     pub assistant: TimelineMessage,
     pub tools: Vec<TimelineToolEntry>,
     pub automatic: bool,
+    /// 处理耗时毫秒；0 表示历史数据未记录
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub duration_ms: u64,
 }
 
 /// 会话时间线中展示的最新压缩摘要。
@@ -135,6 +138,7 @@ impl StateStore {
                     },
                     tools,
                     automatic,
+                    duration_ms: turn.duration_ms,
                 })
             })
             .collect()
@@ -230,6 +234,17 @@ fn turn_status(status: TurnStatus) -> &'static str {
         TurnStatus::Completed => "completed",
         TurnStatus::Interrupted => "interrupted",
     }
+}
+
+/// 判断 u64 是否为零，供 serde 跳过默认字段。
+///
+/// 参数:
+/// - `value`: 数值
+///
+/// 返回:
+/// - 是否为零
+fn is_zero_u64(value: &u64) -> bool {
+    *value == 0
 }
 
 #[cfg(test)]

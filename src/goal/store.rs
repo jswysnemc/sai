@@ -58,6 +58,11 @@ impl GoalStore {
             bail!("an unfinished goal already exists; update or clear it before creating another")
         }
         let now = Utc::now().to_rfc3339();
+        // 创建日志只保留可读摘要，禁止把附件 base64 写进 updates
+        let created_summary = format!(
+            "Goal created: {}",
+            summarize_objective_for_log(&objective)
+        );
         let goal = Goal {
             id: format!("goal_{}", uuid::Uuid::new_v4().simple()),
             objective: objective.clone(),
@@ -70,7 +75,7 @@ impl GoalStore {
             updates: vec![GoalUpdateEntry {
                 at: now,
                 kind: "status".to_string(),
-                message: format!("Goal created: {objective}"),
+                message: created_summary,
                 status: Some(GoalStatus::Active.as_str().to_string()),
                 tokens_used: Some(0),
             }],
@@ -314,7 +319,8 @@ fn push_update(goal: &mut Goal, kind: &str, message: &str, at: String) {
     goal.updates.push(GoalUpdateEntry {
         at,
         kind: kind.to_string(),
-        message: message.to_string(),
+        // 进度/状态日志同样剥离 data URL，避免执行更新区被 base64 撑爆
+        message: sanitize_update_message(message),
         status: Some(goal.status.as_str().to_string()),
         tokens_used: Some(goal.tokens_used),
     });
@@ -323,6 +329,56 @@ fn push_update(goal: &mut Goal, kind: &str, message: &str, at: String) {
         let drop = goal.updates.len() - MAX_UPDATES;
         goal.updates.drain(0..drop);
     }
+}
+
+/// 生成写入 updates 的目标摘要。
+///
+/// 参数:
+/// - `objective`: 完整目标正文
+///
+/// 返回:
+/// - 无 data URL、截断后的短摘要
+fn summarize_objective_for_log(objective: &str) -> String {
+    let text = objective_countable_text(objective)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if text.is_empty() {
+        return "attachment only".to_string();
+    }
+    const MAX_CHARS: usize = 160;
+    let count = text.chars().count();
+    if count <= MAX_CHARS {
+        return text;
+    }
+    let mut summary: String = text.chars().take(MAX_CHARS).collect();
+    summary.push('…');
+    summary
+}
+
+/// 清洗 updates 消息，去掉附件 data URL 并限制长度。
+///
+/// 参数:
+/// - `message`: 原始更新消息
+///
+/// 返回:
+/// - 可展示的短消息
+fn sanitize_update_message(message: &str) -> String {
+    let cleaned = objective_countable_text(message)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if cleaned.is_empty() {
+        return "Update recorded".to_string();
+    }
+    const MAX_CHARS: usize = 280;
+    let count = cleaned.chars().count();
+    if count <= MAX_CHARS {
+        return cleaned;
+    }
+    let mut summary: String = cleaned.chars().take(MAX_CHARS).collect();
+    summary.push('…');
+    summary
 }
 
 fn read_goal(path: &Path) -> Result<Option<Goal>> {
@@ -363,16 +419,114 @@ fn write_goal(path: &Path, goal: &Goal) -> Result<()> {
 /// - `objective`: 原始目标文本
 ///
 /// 返回:
-/// - 归一化目标文本
+/// - 归一化目标文本（附件 data URL 仍完整保留，但不计入长度上限）
 fn validate_objective(objective: &str) -> Result<String> {
     let objective = objective.trim();
     if objective.is_empty() {
         bail!("goal objective cannot be empty")
     }
-    if objective.chars().count() > MAX_GOAL_OBJECTIVE_CHARS {
+    // 附件会以 Markdown 图片 data URL 形式并入目标正文，长度校验只看文本本体
+    let countable = objective_countable_text(objective);
+    if countable.chars().count() > MAX_GOAL_OBJECTIVE_CHARS {
         bail!("goal objective is too long")
     }
     Ok(objective.to_string())
+}
+
+/// 去掉附件 data URL 后用于长度统计的目标文本。
+///
+/// 参数:
+/// - `objective`: 完整目标正文
+///
+/// 返回:
+/// - 剔除 Markdown 图片 data URL 与裸 data URL 后的文本
+fn objective_countable_text(objective: &str) -> String {
+    // 1. 去掉 `![alt](data:...)` 形式的附件图片
+    let without_md_images = strip_markdown_data_images(objective);
+    // 2. 去掉残留的裸 `data:` URL，避免长度仍被 base64 撑爆
+    strip_bare_data_urls(&without_md_images)
+}
+
+/// 移除 Markdown 图片中的 data URL 附件。
+///
+/// 参数:
+/// - `text`: 原始文本
+///
+/// 返回:
+/// - 移除后的文本
+fn strip_markdown_data_images(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'!' && bytes.get(index + 1) == Some(&b'[') {
+            if let Some((end, consumed)) = find_markdown_data_image_end(text, index) {
+                // 命中附件图片：跳过整段 `![...](data:...)`
+                let _ = end;
+                index = consumed;
+                continue;
+            }
+        }
+        let ch = text[index..].chars().next().unwrap_or('\0');
+        out.push(ch);
+        index += ch.len_utf8();
+    }
+    out
+}
+
+/// 定位从 `![` 开始的 Markdown data 图片结束位置。
+///
+/// 参数:
+/// - `text`: 完整文本
+/// - `start`: `!` 起始下标
+///
+/// 返回:
+/// - `(内容结束, 消费到的下标)`；非 data 图片返回空
+fn find_markdown_data_image_end(text: &str, start: usize) -> Option<(usize, usize)> {
+    // start 指向 '!'，其后必须是 '['
+    let after_bang = start + 1;
+    if !text[after_bang..].starts_with('[') {
+        return None;
+    }
+    let alt_close = text[after_bang + 1..].find(']')? + after_bang + 1;
+    if !text[alt_close + 1..].starts_with('(') {
+        return None;
+    }
+    let url_start = alt_close + 2;
+    let rest = &text[url_start..];
+    if !rest.starts_with("data:") {
+        return None;
+    }
+    // data URL 在 Markdown 图片里以第一个未转义 `)` 结束
+    let url_end_rel = rest.find(')')?;
+    let consumed = url_start + url_end_rel + 1;
+    Some((url_start + url_end_rel, consumed))
+}
+
+/// 移除文本中的裸 data URL。
+///
+/// 参数:
+/// - `text`: 原始文本
+///
+/// 返回:
+/// - 移除后的文本
+fn strip_bare_data_urls(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find("data:") {
+        out.push_str(&rest[..start]);
+        let after = &rest[start..];
+        // data URL 遇到空白或常见 Markdown/括号分隔符即结束
+        let end = after
+            .char_indices()
+            .skip("data:".len())
+            .find(|(_, ch)| ch.is_whitespace() || matches!(ch, ')' | ']' | '<' | '>' | '"' | '\''))
+            .map(|(idx, _)| idx)
+            .unwrap_or(after.len());
+        rest = &after[end..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// 校验可选 Token 预算。
@@ -433,5 +587,57 @@ mod tests {
         assert_eq!(updated.tokens_used, 40);
         assert_eq!(updated.time_used_seconds, 3);
         assert_eq!(updated.id, goal.id);
+    }
+
+    #[test]
+    fn objective_length_ignores_attachment_data_urls() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = GoalStore::new(temp.path().join("goal.json"));
+        let payload = "A".repeat(40_000);
+        let objective = format!("修按钮布局\n\n![goal-image-1](data:image/png;base64,{payload})");
+
+        let goal = store.replace(&objective, None, true).unwrap();
+
+        assert!(goal.objective.contains("data:image/png;base64,"));
+        assert!(goal.objective.contains("修按钮布局"));
+    }
+
+    #[test]
+    fn objective_text_still_rejects_overlong_content() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = GoalStore::new(temp.path().join("goal.json"));
+        let objective = "文".repeat(MAX_GOAL_OBJECTIVE_CHARS + 1);
+
+        let error = store.replace(&objective, None, true).unwrap_err();
+
+        assert!(error.to_string().contains("too long"));
+    }
+
+    #[test]
+    fn attachment_only_objective_is_allowed() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = GoalStore::new(temp.path().join("goal.json"));
+        let payload = "B".repeat(50_000);
+        let objective = format!("![goal-image-1](data:image/jpeg;base64,{payload})");
+
+        let goal = store.replace(&objective, None, true).unwrap();
+
+        assert_eq!(goal.objective, objective);
+    }
+
+    #[test]
+    fn create_update_log_excludes_attachment_base64() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = GoalStore::new(temp.path().join("goal.json"));
+        let payload = "C".repeat(8_000);
+        let objective = format!("修中断提示\n\n![goal-image-1](data:image/png;base64,{payload})");
+
+        let goal = store.replace(&objective, None, true).unwrap();
+        let message = &goal.updates[0].message;
+
+        assert!(message.contains("修中断提示"));
+        assert!(!message.contains("base64"));
+        assert!(!message.contains(&payload[..32]));
+        assert!(goal.objective.contains("data:image/png;base64,"));
     }
 }

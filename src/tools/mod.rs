@@ -11,6 +11,8 @@ mod deepseek_status;
 mod default_tools;
 mod diagnostics;
 mod edit_file;
+mod write_file;
+mod str_replace;
 pub(crate) mod edit_patch;
 mod exchange_rate;
 mod fcitx_wiki;
@@ -75,6 +77,8 @@ pub fn readable_tool_name(name: &str) -> &str {
         "cron" => "定时任务",
         "read_file" => "读取文件",
         "edit_file" => "编辑文件",
+        "write_file" => "写入文件",
+        "str_replace" => "字符串替换",
         "create_goal" => "创建目标",
         "get_goal" => "查看目标",
         "update_goal" => "更新目标",

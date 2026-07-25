@@ -59,6 +59,9 @@ export function toolSummary(name: string, argumentsText: string, locale: Locale 
     return patch.split("\n").find((line) => line.startsWith("*** ") && line.includes(" File: "))?.split(" File: ")[1]
       ?? text(locale, "File edit", "文件修改");
   }
+  if (name === "write_file" || name === "str_replace") {
+    return stringField(args, "path") || text(locale, "File edit", "文件修改");
+  }
   if (name === "read_file") return stringField(args, "path") || text(locale, "Batch read", "批量读取");
   if (name === "grep") return stringField(args, "pattern");
   if (name === "glob") return stringField(args, "pattern");
@@ -74,7 +77,7 @@ export function toolSummary(name: string, argumentsText: string, locale: Locale 
  */
 export function toolFilePath(name: string, argumentsText: string): string {
   const args = parseJsonRecord(argumentsText);
-  if (name === "read_file") return stringField(args, "path");
+  if (name === "read_file" || name === "write_file" || name === "str_replace") return stringField(args, "path");
   if (name !== "edit_file") return "";
   const paths = stringField(args, "patch")
     .split("\n")

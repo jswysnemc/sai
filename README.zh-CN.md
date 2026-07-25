@@ -252,7 +252,46 @@ sudo pacman -U ~/.cache/sai/packages/sai-<version>-1-x86_64.pkg.tar.zst
 
 ### 预编译二进制
 
-每次推送到 `main` 分支会触发 GitHub Actions 构建 Linux、Windows 与 macOS 二进制，前往 [Actions](https://github.com/jswysnemc/sai/actions) 页面下载对应平台的 artifact。
+每次推送到 `main` 会构建 Linux、Windows 与 macOS 二进制，可在 [Actions](https://github.com/jswysnemc/sai/actions) 下载 artifact。
+
+推送 `v*` 标签会触发 **Release** 工作流，在 [Releases](https://github.com/jswysnemc/sai/releases) 发布：
+
+- `sai-linux-x86_64`
+- `sai-windows-x86_64.exe`
+- `sai-macos-arm64`
+- 各文件对应的 `.sha256` 校验和
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+也可在 Actions 中手动运行 **Release** 工作流，并填写已有标签。
+
+### Docker 镜像
+
+镜像发布到 GitHub Container Registry：
+
+```bash
+# 最新 main
+docker pull ghcr.io/jswysnemc/sai:latest
+
+# 指定版本
+docker pull ghcr.io/jswysnemc/sai:0.1.0
+```
+
+本地构建：
+
+```bash
+docker build -t sai:local .
+docker run --rm -it \
+  -v "$HOME/.config/sai:/config/sai" \
+  -v "$PWD:/workspace" \
+  -p 4096:4096 \
+  sai:local web --port 4096 --no-open
+```
+
+推送到 `main` / `v*` 标签时，**Docker** 工作流会构建并推送 `ghcr.io/<owner>/sai`（PR 仅构建不推送）。首次拉取私有包需 `docker login ghcr.io`。
 
 ---
 
@@ -425,6 +464,7 @@ Sai/
 ├── web/                  # Web 工作台前端(React + Vite)
 ├── assets/               # o200k tokenizer 词表
 ├── pics/                 # 截图与架构总览图
+├── Dockerfile            # container image
 ├── scripts/              # 打包脚本(package-arch.sh)
 ├── .github/workflows/    # CI(linux.yml + windows.yml + macos.yml)
 ├── build.rs              # 构建脚本

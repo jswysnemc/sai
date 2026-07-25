@@ -275,6 +275,20 @@ impl StateStore {
         Ok(())
     }
 
+    /// 将耗时写入最近一轮对话。
+    ///
+    /// 参数:
+    /// - `duration_ms`: 处理耗时毫秒
+    ///
+    /// 返回:
+    /// - 写入是否成功
+    pub fn set_last_turn_duration_ms(&self, duration_ms: u64) -> Result<()> {
+        let Some((turn_id, _)) = self.conv_db.last_turn_identity()? else {
+            return Ok(());
+        };
+        self.conv_db.set_turn_duration_ms(&turn_id, duration_ms)
+    }
+
     /// 中断对话轮次。
     ///
     /// 参数:

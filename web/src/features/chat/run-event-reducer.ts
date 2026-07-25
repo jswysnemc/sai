@@ -212,16 +212,30 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
         completed: true
       };
     }
-    case "run.interrupted":
+    case "run.interrupted": {
+      // 1. 优先使用事件 detail
+      // 2. 缺省时给出可展开的中断说明，避免历史/实时都只剩标题
+      const fallbackDetail = state.content
+        ? text(
+            locale,
+            "Generation stopped before the response finished. Partial content above was preserved.",
+            "生成在完整结束前被停止，上方已保留部分内容。"
+          )
+        : text(
+            locale,
+            "The user stopped this run before it completed.",
+            "用户在运行完成前主动停止了本轮。"
+          );
       return {
         ...closeActiveReasoning(state, event.timestamp),
         error: state.content
           ? text(locale, "The response was interrupted; generated content was preserved", "响应已中断，已保留生成内容")
           : text(locale, "The run was interrupted", "运行已中断"),
-        errorDetail: nonEmptyDetail(payload.detail),
+        errorDetail: nonEmptyDetail(payload.detail) ?? fallbackDetail,
         status: "idle",
         completed: true
       };
+    }
     case "run.completed": {
       const durationMs = typeof payload.duration_ms === "number" ? payload.duration_ms : state.durationMs;
       return {

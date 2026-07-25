@@ -46,6 +46,7 @@ describe("HistoryTurn", () => {
     const html = renderToStaticMarkup(<HistoryTurn turn={turn} />);
 
     expect(html).toContain("运行已中断");
+    expect(html).toContain("用户在运行完成前主动停止了本轮");
   });
 
 
@@ -107,7 +108,8 @@ describe("HistoryTurn", () => {
 
     const html = renderToStaticMarkup(<HistoryTurn turn={turn} />);
 
-    expect(html).toContain("查看错误详情");
+    expect(html).toContain("运行已中断");
+    expect(html).toContain("command timed out after 30 seconds");
   });
 
   it("hides the internal goal continuation prompt", () => {

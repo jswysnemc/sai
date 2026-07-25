@@ -1,26 +1,285 @@
 .goal-control {
+  position: relative;
   display: inline-flex;
-  min-width: 0;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 0;
+  align-self: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+  height: 28px;
 }
 
+/* 旁路操作：与其他 28px 图标按钮一致 */
 .composer-footer .goal-control .ui-button.goal-control-action,
 .composer-context-strip .ui-button.goal-control-action {
-  width: 1.75rem;
-  min-width: 1.75rem;
+  display: grid;
+  flex: 0 0 28px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
   padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
 }
 
-.goal-control.status-active .goal-control-trigger {
-  color: var(--signal);
-  background: color-mix(in srgb, var(--signal) 8%, transparent);
+/*
+ * 与 model-thinking-trigger 同规格：
+ * 28px 高、无边框、12px 字、左右 padding 对齐
+ */
+.goal-control-trigger.composer-rail-button,
+.composer-footer .goal-control-trigger.composer-rail-button,
+.composer-context-strip .goal-control-trigger.composer-rail-button {
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  box-sizing: border-box;
+  width: 28px;
+  min-width: 28px;
+  max-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 8px;
+  outline: none;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ink-soft);
+  font: 400 12px/1 var(--font-ui, inherit);
+  letter-spacing: normal;
+  cursor: pointer;
+  place-items: center;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
-.goal-control.status-blocked .goal-control-trigger,
-.goal-control.status-budget_limited .goal-control-trigger {
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 8%, transparent);
+.goal-control-trigger.composer-rail-button.has-goal {
+  justify-content: flex-start;
+  gap: 6px;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: min(10rem, 34vw);
+  height: 28px;
+  min-height: 28px;
+  /* 与 .model-thinking-trigger 相同左右留白 */
+  padding: 0 7px 0 2px;
+}
+
+.goal-control-trigger.composer-rail-button > svg {
+  display: block;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+}
+
+.goal-control-trigger:hover:not(:disabled),
+.goal-control-trigger[aria-expanded="true"]:not(:disabled) {
+  border: 0 !important;
+  background: color-mix(in srgb, var(--ink) 7%, transparent) !important;
+  box-shadow: none !important;
+  color: var(--ink);
+}
+
+/* goal 模式激活：仅文字色提示，不做胶囊描边 */
+.goal-control-trigger.is-active,
+.goal-control-trigger.has-goal.is-active {
+  color: var(--signal, #3b82f6);
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.goal-control-trigger.is-active:hover:not(:disabled),
+.goal-control-trigger.has-goal.is-active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 7%, transparent) !important;
+}
+
+/* 有目标时状态只体现在文案色，不画边框/底色 */
+.goal-control.status-active .goal-control-trigger.has-goal {
+  color: var(--signal, #3b82f6);
+}
+
+.goal-control.status-blocked .goal-control-trigger.has-goal,
+.goal-control.status-budget_limited .goal-control-trigger.has-goal,
+.goal-control.status-usage_limited .goal-control-trigger.has-goal {
+  color: var(--danger, #dc2626);
+}
+
+.goal-control.status-complete .goal-control-trigger.has-goal,
+.goal-control.status-paused .goal-control-trigger.has-goal {
+  color: var(--ink-soft);
+}
+
+.goal-control-trigger:focus,
+.goal-control-trigger:focus-visible {
+  outline: none;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.goal-marker {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  align-self: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+  height: 28px;
+}
+
+.goal-marker-label {
+  display: block;
+  min-width: 0;
+  max-width: 5.5rem;
+  overflow: hidden;
+  color: inherit;
+  font: 400 12px/1 var(--font-ui, inherit);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.goal-marker-chevron {
+  display: block;
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  opacity: 0.55;
+  transition: transform 0.15s ease;
+}
+
+.goal-marker-chevron.rotate {
+  transform: rotate(180deg);
+}
+
+.goal-marker-panel {
+  position: absolute;
+  left: 0;
+  right: auto;
+  bottom: calc(100% + 8px);
+  z-index: 40;
+  display: grid;
+  gap: 0.65rem;
+  width: min(22rem, 82vw);
+  max-height: min(24rem, 60vh);
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--line, rgba(127, 127, 127, 0.28));
+  border-radius: 0.75rem;
+  background: var(--control-surface, var(--paper, #fff));
+  color: var(--ink);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--ink) 16%, transparent);
+}
+
+@media (max-width: 40rem) {
+  .goal-control-trigger.composer-rail-button.has-goal {
+    max-width: min(8.5rem, 40vw);
+  }
+
+  .goal-marker-label {
+    max-width: 4rem;
+  }
+
+  .goal-marker-panel {
+    left: auto;
+    right: 0;
+  }
+}
+
+.goal-marker-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.goal-marker-panel-head strong {
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.goal-status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.35rem;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.goal-status-badge.status-active {
+  color: var(--signal, #3b82f6);
+  background: color-mix(in srgb, var(--signal, #3b82f6) 12%, transparent);
+}
+
+.goal-status-badge.status-complete {
+  color: var(--ink-soft);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.goal-status-badge.status-blocked,
+.goal-status-badge.status-budget_limited,
+.goal-status-badge.status-usage_limited {
+  color: var(--danger, #dc2626);
+  background: color-mix(in srgb, var(--danger, #dc2626) 10%, transparent);
+}
+
+.goal-marker-close {
+  margin-left: auto;
+}
+
+.goal-marker-objective {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.goal-marker-objective p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.goal-marker-chip {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.35rem;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink-soft);
+  font: 500 0.7rem/1.2 var(--font-code, monospace);
+}
+
+.goal-marker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.goal-marker-actions .ui-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
 }
 
 .goal-control-form {
@@ -123,6 +382,7 @@
 }
 
 .goal-updates > header strong {
+  color: var(--ink);
   font-size: 0.8125rem;
   font-weight: 600;
 }
@@ -151,13 +411,19 @@
   list-style: none;
 }
 
+.goal-updates.compact .goal-updates-list {
+  max-height: 9.5rem;
+  overflow: auto;
+}
+
 .goal-update {
   display: grid;
-  gap: 0.25rem;
-  padding: 0.55rem 0.65rem;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.45rem 0.55rem;
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
-  background: var(--paper);
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--paper, #fff) 88%, var(--control-surface, transparent));
 }
 
 .goal-update-head {
@@ -165,13 +431,35 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  min-width: 0;
   color: var(--ink-soft);
   font-size: 0.6875rem;
 }
 
 .goal-update-kind {
+  flex: 0 0 auto;
   font-weight: 600;
-  color: var(--signal);
+  color: var(--signal, #3b82f6);
+}
+
+.goal-update-head time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.goal-update p {
+  margin: 0;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 
 .goal-update.kind-status .goal-update-kind {
@@ -195,4 +483,18 @@
   color: var(--danger);
   font-size: 0.75rem;
   overflow-wrap: anywhere;
+}
+
+.goal-marker-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.goal-marker-images img {
+  width: 4.5rem;
+  height: 4.5rem;
+  object-fit: cover;
+  border-radius: 0.45rem;
+  border: 1px solid var(--line-soft, rgba(127, 127, 127, 0.25));
 }

@@ -49,6 +49,8 @@ pub struct Turn {
     pub assistant_timestamp: Option<String>,
     pub status: TurnStatus,
     pub tool_reports: Vec<String>,
+    /// 本轮处理耗时（毫秒），0 表示未知或未记录
+    pub duration_ms: u64,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

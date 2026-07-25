@@ -24,10 +24,35 @@
   margin-top: 0.125rem;
 }
 
+.run-error-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
 .run-error-text {
   min-width: 0;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.run-error-inline-detail {
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.run-error.is-interrupted {
+  border-color: color-mix(in srgb, var(--signal) 30%, var(--line));
+  background: color-mix(in srgb, var(--signal) 7%, transparent);
+  color: var(--ink);
+}
+
+.run-error.is-interrupted .run-error-summary > svg,
+.run-error.is-interrupted .run-error-text {
+  color: var(--signal);
 }
 
 .run-error .ui-button.run-error-retry {

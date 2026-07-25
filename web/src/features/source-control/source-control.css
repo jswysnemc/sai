@@ -394,7 +394,6 @@
 .git-review .pane-error,
 .git-review .pane-notice {
   border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
-  border-left-width: 1px;
   border-radius: 0.375rem;
 }
 

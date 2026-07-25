@@ -602,13 +602,31 @@
 .workspace-diff .diff-line { padding: 0 12px; }
 .workspace-diff .hunk { background: var(--diff-hunk-bg); color: var(--diff-hunk-text); }
 .workspace-diff .section { padding-top: 8px; color: var(--code-comment); font-weight: 500; }
-.pane-notice { margin: 10px; padding: 9px; border-left: 3px solid var(--signal); color: var(--ink-soft); font-size: 12px; }
+.pane-notice {
+  margin: 10px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--signal) 34%, var(--line));
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--signal) 8%, transparent);
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
 
 @media (max-width: 980px) {
   .files-layout.file-tree-open { grid-template-columns: minmax(0, 1fr) 11.875rem; }
   .git-manager-body { grid-template-columns: 240px minmax(0, 1fr); }
 }
-.pane-error { margin: 10px; padding: 9px; border-left: 3px solid var(--danger); color: var(--danger); font-size: 12px; }
+.pane-error {
+  margin: 10px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 36%, var(--line));
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.45;
+}
 
 .branch-chip {
   display: inline-flex;

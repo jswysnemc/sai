@@ -1,0 +1,29 @@
+# VCS / IDE
+.git
+.github
+.idea
+.vscode
+.qoder
+.doc
+.ace-tool
+
+# Build outputs
+target
+web/node_modules
+web/dist
+node_modules
+**/tsconfig.*.tsbuildinfo
+
+# Docs and media not needed for build
+pics
+docs
+*.md
+!web/**/*.md
+
+# Local / packaging noise
+*.log
+*.tmp
+*.bak
+*.pkg.tar.zst
+scripts/tui_smoke.py
+.AGENT.md

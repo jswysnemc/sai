@@ -64,6 +64,8 @@ export type SessionTimelineTurn = {
   user: TimelineMessage;
   assistant: TimelineMessage;
   tools: TimelineToolEntry[];
+  /** 处理耗时毫秒；历史未记录时可能缺失 */
+  duration_ms?: number | null;
 };
 
 export type SessionTimelineCompaction = {

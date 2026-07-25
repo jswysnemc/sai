@@ -128,6 +128,23 @@ impl ConversationDb {
         Ok(())
     }
 
+    /// 写入轮次处理耗时。
+    ///
+    /// 参数:
+    /// - `turn_id`: 当前轮唯一标识
+    /// - `duration_ms`: 处理耗时毫秒
+    ///
+    /// 返回:
+    /// - 更新是否成功
+    pub fn set_turn_duration_ms(&self, turn_id: &str, duration_ms: u64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE turns SET duration_ms = ?1 WHERE turn_id = ?2",
+            params![duration_ms as i64, turn_id],
+        )?;
+        Ok(())
+    }
+
     /// 标记指定轮次已中断。
     ///
     /// 参数:
@@ -193,7 +210,7 @@ impl ConversationDb {
         load_turns_with_sql(
             &conn,
             "SELECT turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
-                    assistant_reasoning, assistant_timestamp, status, tool_reports
+                    assistant_reasoning, assistant_timestamp, status, tool_reports, duration_ms
              FROM turns ORDER BY seq ASC",
             [],
         )
@@ -217,7 +234,7 @@ impl ConversationDb {
             Some(turn_id) => {
                 let mut stmt = conn.prepare(
                     "SELECT turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
-                            assistant_reasoning, assistant_timestamp, status, tool_reports
+                            assistant_reasoning, assistant_timestamp, status, tool_reports, duration_ms
                      FROM turns WHERE seq > ?1 AND turn_id != ?2 ORDER BY seq ASC",
                 )?;
                 let turns = stmt
@@ -228,7 +245,7 @@ impl ConversationDb {
             None => load_turns_with_sql(
                 &conn,
                 "SELECT turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
-                        assistant_reasoning, assistant_timestamp, status, tool_reports
+                        assistant_reasoning, assistant_timestamp, status, tool_reports, duration_ms
                  FROM turns WHERE seq > ?1 ORDER BY seq ASC",
                 params![after_seq],
             ),
@@ -510,5 +527,6 @@ fn map_turn(row: &Row<'_>) -> rusqlite::Result<Turn> {
         assistant_timestamp: row.get(7)?,
         status: TurnStatus::from_str(&status),
         tool_reports,
+        duration_ms: row.get::<_, i64>(10).unwrap_or(0).max(0) as u64,
     })
 }

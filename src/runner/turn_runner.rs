@@ -120,6 +120,11 @@ impl<'agent> TurnRunner<'agent> {
             let result = match result {
                 Ok(mut result) => {
                     result.duration_ms = duration_ms.max(1);
+                    // 1. 将处理耗时写入会话数据库，供时间线恢复展示
+                    let _ = self
+                        .agent
+                        .state()
+                        .set_last_turn_duration_ms(result.duration_ms);
                     result
                 }
                 Err(error) => {

@@ -91,7 +91,7 @@ function uniqueSummary(summary: string, displayName: string): string {
  */
 function ToolIcon({ name }: { name: string }) {
   if (name === "run_command" || name.includes("command")) return <TerminalSquare size={15} />;
-  if (name === "edit_file") return <FilePenLine size={15} />;
+  if (name === "edit_file" || name === "write_file" || name === "str_replace") return <FilePenLine size={15} />;
   if (name === "read_file") return <FileSearch size={15} />;
   if (name === "grep" || name === "glob") return <Search size={15} />;
   return <Wrench size={15} />;
@@ -107,6 +107,8 @@ function readableToolName(name: string): string {
   const labels: Record<string, string> = {
     run_command: "Shell",
     edit_file: "Edit",
+    write_file: "Write",
+    str_replace: "Replace",
     read_file: "Read",
     grep: "Search",
     glob: "Files",

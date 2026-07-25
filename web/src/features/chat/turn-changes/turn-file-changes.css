@@ -1,0 +1,174 @@
+.turn-file-changes {
+  margin-top: 8px;
+  border: 1px solid var(--line-soft, rgba(127, 127, 127, 0.24));
+  border-radius: 0.65rem;
+  background: var(--surface-soft, rgba(127, 127, 127, 0.06));
+  overflow: hidden;
+}
+
+.turn-file-changes-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--line-soft, rgba(127, 127, 127, 0.18));
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.turn-file-changes-head strong {
+  color: var(--ink, inherit);
+  font-weight: 600;
+}
+
+.turn-file-changes-head-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.turn-file-changes-head-button:hover {
+  background: color-mix(in srgb, var(--paper-raised, #fff) 55%, transparent);
+}
+
+.turn-file-change-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 0 0.35rem 0 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.turn-file-change-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0.28rem 0.35rem 0.28rem 0.6rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.turn-file-change-row:hover,
+.turn-file-change-row.active {
+  background: color-mix(in srgb, var(--paper-raised, #fff) 70%, transparent);
+}
+
+.turn-file-change-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+  padding-right: 0.15rem;
+}
+
+.turn-file-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-code, monospace);
+  font-size: 0.75rem;
+}
+
+.turn-file-changes-list li.is-expanded {
+  border-top: 1px solid var(--line-soft, rgba(127, 127, 127, 0.12));
+  border-bottom: 1px solid var(--line-soft, rgba(127, 127, 127, 0.12));
+  background: color-mix(in srgb, var(--paper, #fff) 70%, transparent);
+}
+
+.turn-file-diff-panel {
+  margin: 0 0.5rem 0.45rem;
+  border: 1px solid var(--line-soft, rgba(127, 127, 127, 0.18));
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--paper, #fff) 92%, transparent);
+  overflow: hidden;
+}
+
+.turn-file-diff-panel .structured-diff.is-compact,
+.turn-file-diff-panel .structured-diff.is-compact .diff-file {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.turn-file-diff-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--line-soft, rgba(127, 127, 127, 0.2));
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.turn-file-diff-icon-button:hover {
+  color: var(--ink);
+  background: var(--paper-raised, rgba(127, 127, 127, 0.08));
+}
+
+.turn-file-diff-empty {
+  padding: 0.75rem 0.7rem;
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+}
+
+.turn-file-changes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.turn-file-changes-list li {
+  padding: 0;
+  font-size: 0.78rem;
+}
+
+.turn-file-action {
+  font: 600 0.68rem/1 var(--font-code, monospace);
+  color: var(--ink-soft);
+}
+
+.turn-file-action.action-added {
+  color: #16a34a;
+}
+
+.turn-file-action.action-deleted {
+  color: #dc2626;
+}
+
+.turn-file-changes-stats {
+  display: inline-flex;
+  gap: 0.35rem;
+  font: 600 0.7rem/1 var(--font-code, monospace);
+}
+
+.turn-file-changes-stats b {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.turn-file-changes-stats i {
+  color: #dc2626;
+  font-style: normal;
+  font-weight: 600;
+}

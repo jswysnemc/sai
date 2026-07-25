@@ -23,7 +23,7 @@ export function ToolResultView({ name, argumentsText, output, headerPath }: Tool
   if (name === "read_file") {
     return <ReadToolView argumentsText={argumentsText} output={output} headerPath={headerPath} />;
   }
-  if (name === "edit_file") {
+  if (name === "edit_file" || name === "write_file" || name === "str_replace") {
     return <EditToolView argumentsText={argumentsText} output={output} headerPath={headerPath} />;
   }
   return <GenericToolView argumentsText={argumentsText} output={output} />;

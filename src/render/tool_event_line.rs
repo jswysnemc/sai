@@ -122,6 +122,8 @@ fn tool_action(name: &str) -> &'static str {
     match name {
         "run_command" => "Run",
         "edit_file" => "Edit",
+        "write_file" => "Write",
+        "str_replace" => "Replace",
         "read_file" => "Read",
         "trash_path" => "Trash",
         "glob" | "find_files" => "Find",

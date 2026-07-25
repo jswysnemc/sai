@@ -215,6 +215,7 @@ mod tests {
                 permission: None,
             }],
             automatic,
+            duration_ms: 0,
         }
     }
 

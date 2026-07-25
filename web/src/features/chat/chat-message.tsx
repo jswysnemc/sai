@@ -7,6 +7,8 @@ import { MessageParts } from "./message/message-parts";
 import { UserMessageBubble } from "./message/user-message-bubble";
 import { RunErrorNotice } from "./message/run-error-notice";
 import { useI18n } from "../i18n/use-i18n";
+import { collectTurnFileChanges } from "./turn-changes/collect-turn-file-changes";
+import { TurnFileChanges } from "./turn-changes/turn-file-changes";
 import "./turn-duration-meta.css";
 
 /**
@@ -42,7 +44,7 @@ export function HistoryTurn({
   onFork?: () => void;
   actionBusy?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   return (
     <>
       {!turn.automatic && (
@@ -53,9 +55,17 @@ export function HistoryTurn({
         {turn.status === "interrupted" && (
           <RunErrorNotice
             message={turn.assistant.content ? t("The response was interrupted; generated content was preserved", "响应已中断，已保留生成内容") : t("The run was interrupted", "运行已中断")}
-            detail={historicalInterruptionDetail(turn)}
+            detail={historicalInterruptionDetail(turn, t)}
           />
         )}
+        {typeof turn.duration_ms === "number" && turn.duration_ms > 0 && (
+          <div className="turn-duration-meta" role="status">
+            {locale.startsWith("zh")
+              ? `处理用时${formatTurnElapsed(turn.duration_ms, true)}`
+              : `Processing time ${formatTurnElapsed(turn.duration_ms, false)}`}
+          </div>
+        )}
+        <TurnFileChanges changes={collectTurnFileChanges(turn.tools)} tools={turn.tools} />
         {(turn.assistant.content || onFork) && (
           <MessageActions
             text={turn.assistant.content || turn.user.content}
@@ -104,10 +114,17 @@ export function LiveRunMessage({
         <article className="message assistant-message live-message">
           <MessageParts parts={state.parts} live={running} />
           {running && !compacting && <LiveRunIndicator status={state.status} startedAtMs={state.startedAtMs} />}
-          {!running && state.completed && state.durationMs != null && state.durationMs > 0 && (
-            <div className="turn-duration-meta" role="status">
-              {t("Turn", "本轮")} · {formatTurnElapsed(state.durationMs, locale.startsWith("zh"))}
-            </div>
+          {!running && state.completed && (
+            <>
+              {state.durationMs != null && state.durationMs > 0 && (
+                <div className="turn-duration-meta" role="status">
+                  {locale.startsWith("zh")
+                    ? `处理用时${formatTurnElapsed(state.durationMs, true)}`
+                    : `Processing time ${formatTurnElapsed(state.durationMs, false)}`}
+                </div>
+              )}
+              <TurnFileChanges changes={collectTurnFileChanges(state.tools)} tools={state.tools} />
+            </>
           )}
           {state.error && (
             <RunErrorNotice
@@ -124,18 +141,40 @@ export function LiveRunMessage({
 }
 
 /**
- * 从中断轮次最后一个失败工具中提取可展示详情。
+ * 从中断轮次提取可展示详情。
+ *
+ * 1. 优先使用最后一个失败/中断工具的错误或输出
+ * 2. 无工具错误时回退到用户主动中断的说明，避免只显示标题
  *
  * @param turn 已持久化会话轮次
- * @returns 原始工具错误或失败输出
+ * @param t 本地化函数
+ * @returns 详情文本
  */
-function historicalInterruptionDetail(turn: SessionTimelineTurn): string | null {
+function historicalInterruptionDetail(
+  turn: SessionTimelineTurn,
+  t: (en: string, zh: string) => string
+): string {
   for (let index = turn.tools.length - 1; index >= 0; index -= 1) {
     const tool = turn.tools[index];
     const detail = tool.error?.trim() || (tool.status === "failed" ? tool.output.trim() : "");
     if (detail) return detail;
   }
-  return null;
+  if (turn.assistant.content?.trim()) {
+    return t(
+      "Generation stopped before the response finished. Partial content above was preserved.",
+      "生成在完整结束前被停止，上方已保留部分内容。"
+    );
+  }
+  if (turn.tools.length > 0) {
+    return t(
+      "The run was stopped while tools were still in progress. Pending tool calls may be incomplete.",
+      "运行在工具执行过程中被停止，未完成的工具调用可能未写回结果。"
+    );
+  }
+  return t(
+    "The user stopped this run before it completed.",
+    "用户在运行完成前主动停止了本轮。"
+  );
 }
 
 /**
