@@ -104,6 +104,47 @@ fn renders_patch_delete_as_deleted() {
     assert!(plain.contains("  2 -  text"));
 }
 
+#[test]
+fn renders_write_file_add_as_added() {
+    let cwd = crate::runtime_cwd::current_dir().unwrap();
+    let temp = tempfile::tempdir_in(cwd).unwrap();
+    let path = temp.path().join("created.txt");
+    let args = json!({
+        "path": path.display().to_string(),
+        "content": "one\ntwo\n"
+    })
+    .to_string();
+
+    let output = render_for_test(&args).unwrap();
+    let plain = strip_ansi_for_test(&output);
+
+    assert!(plain.contains("Added"));
+    assert!(plain.contains("(+2 -0)"));
+    assert!(plain.contains("  1 +  one"));
+    assert!(plain.contains("  2 +  two"));
+}
+
+#[test]
+fn renders_str_replace_as_edited() {
+    let cwd = crate::runtime_cwd::current_dir().unwrap();
+    let temp = tempfile::tempdir_in(cwd).unwrap();
+    let path = temp.path().join("sample.rs");
+    std::fs::write(&path, "fn main() {\n    old();\n}\n").unwrap();
+    let args = json!({
+        "path": path.display().to_string(),
+        "old_string": "    old();\n",
+        "new_string": "    new();\n"
+    })
+    .to_string();
+
+    let output = render_for_test(&args).unwrap();
+    let plain = strip_ansi_for_test(&output);
+
+    assert!(plain.contains("Edited"));
+    assert!(plain.contains("old()"));
+    assert!(plain.contains("new()"));
+}
+
 /// 去除 ANSI 转义序列，方便断言可见文本。
 ///
 /// 参数:

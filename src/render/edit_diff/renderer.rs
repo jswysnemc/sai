@@ -13,7 +13,7 @@ use std::path::Path;
 ///
 /// 参数:
 /// - `stdout`: 标准输出句柄
-/// - `arguments`: `edit_file` 工具参数
+/// - `arguments`: `edit_file` / `write_file` / `str_replace` 工具参数
 ///
 /// 返回:
 /// - 是否成功渲染 diff 视图
@@ -28,7 +28,7 @@ pub(crate) fn write_edit_file_diff_block(stdout: &mut io::Stdout, arguments: &st
 /// 渲染编辑文件 diff 视图。
 ///
 /// 参数:
-/// - `arguments`: `edit_file` 工具参数
+/// - `arguments`: `edit_file` / `write_file` / `str_replace` 工具参数
 ///
 /// 返回:
 /// - Codex 风格 diff 文本
