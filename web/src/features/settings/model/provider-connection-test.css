@@ -1,0 +1,125 @@
+.provider-probe {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.provider-probe-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.provider-probe-run.ui-button {
+  min-height: 1.875rem;
+  gap: var(--space-2xs);
+  font-size: var(--text-xs);
+}
+
+.provider-probe-spin {
+  animation: provider-probe-spin var(--duration-slower) linear infinite;
+}
+
+@keyframes provider-probe-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .provider-probe-spin {
+    animation: none;
+  }
+}
+
+.provider-probe-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.provider-probe-verdict em {
+  color: var(--ink-soft);
+  font-style: normal;
+  font-family: var(--font-code);
+}
+
+.provider-probe-verdict.ok {
+  color: var(--signal);
+}
+
+.provider-probe-verdict.failed {
+  color: var(--danger);
+}
+
+/* 阶段列表：名称固定宽度，详情自适应并在超长时截断 */
+.provider-probe-stages {
+  display: grid;
+  gap: var(--space-3xs);
+  margin: 0;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper);
+  list-style: none;
+}
+
+.provider-probe-stages li {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+  gap: var(--space-sm);
+  align-items: center;
+  font-size: var(--text-xs);
+}
+
+.provider-probe-stage-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  white-space: nowrap;
+}
+
+.provider-probe-stages li.ok .provider-probe-stage-name {
+  color: var(--signal);
+}
+
+.provider-probe-stages li.failed .provider-probe-stage-name {
+  color: var(--danger);
+}
+
+.provider-probe-stage-detail {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-family: var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-probe-stages em {
+  color: var(--ink-soft);
+  font-style: normal;
+  font-family: var(--font-code);
+}
+
+.provider-probe-note,
+.provider-probe-error {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.provider-probe-error {
+  color: var(--danger);
+}
+
+@media (max-width: 40rem) {
+  .provider-probe-stages li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .provider-probe-stage-detail {
+    grid-column: 1 / -1;
+  }
+}

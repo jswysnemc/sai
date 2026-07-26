@@ -33,6 +33,7 @@ import type {
   PermissionRequest,
   ProviderConfig,
   ProviderModelsResponse,
+  ProviderProbeReport,
   RunMode,
   RunModelSelection,
   ThinkingLevel,
@@ -406,6 +407,11 @@ export const api = {
       apiRequest<ProviderModelsResponse>("/api/providers/models", {
         method: "POST",
         body: JSON.stringify({ provider })
+      }),
+    test: (provider: ProviderConfig, model?: string) =>
+      apiRequest<ProviderProbeReport>("/api/providers/test", {
+        method: "POST",
+        body: JSON.stringify({ provider, model })
       })
   },
   prompts: {

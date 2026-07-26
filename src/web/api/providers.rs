@@ -23,7 +23,42 @@ struct FetchModelsResponse {
 /// 返回:
 /// - 供应商 API 路由
 pub(super) fn routes() -> Router<WebAppState> {
-    Router::new().route("/api/providers/models", post(fetch_models))
+    Router::new()
+        .route("/api/providers/models", post(fetch_models))
+        .route("/api/providers/test", post(test_provider))
+}
+
+#[derive(Deserialize)]
+struct TestProviderRequest {
+    provider: ProviderConfig,
+    #[serde(default)]
+    model: Option<String>,
+}
+
+/// 探测供应商连通性。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `request`: 供应商配置与待测模型
+///
+/// 返回:
+/// - 分阶段的探测报告；探测失败不作为 HTTP 错误，而是写进报告
+async fn test_provider(
+    State(state): State<WebAppState>,
+    Json(request): Json<TestProviderRequest>,
+) -> WebResult<Json<crate::web::services::provider_probe::ProviderProbeReport>> {
+    let provider = provider_models::restore_provider_secret(&state.paths, request.provider)
+        .map_err(WebError::from)?;
+    let config = crate::config::AppConfig::load_or_default(&state.paths).unwrap_or_default();
+    let report = crate::web::services::provider_probe::probe_provider(
+        &state.paths,
+        &config,
+        &provider,
+        request.model.as_deref(),
+    )
+    .await
+    .map_err(WebError::from)?;
+    Ok(Json(report))
 }
 
 /// 使用服务端凭据获取指定供应商模型列表。

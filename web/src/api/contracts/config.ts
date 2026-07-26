@@ -207,6 +207,36 @@ export type ProviderModelsResponse = {
   }>;
 };
 
+/** 连通性探测的失败归类，决定前端给出的修复建议。 */
+export type ProviderProbeErrorKind =
+  | "network"
+  | "timeout"
+  | "auth"
+  | "not_found"
+  | "rate_limit"
+  | "server"
+  | "protocol"
+  | "unknown";
+
+/** 探测阶段：catalog 验证地址与凭据，completion 验证模型可用。 */
+export type ProviderProbeStage = {
+  stage: "catalog" | "completion";
+  ok: boolean;
+  duration_ms: number;
+  detail: string;
+  error_kind?: ProviderProbeErrorKind;
+};
+
+export type ProviderProbeReport = {
+  ok: boolean;
+  provider_id: string;
+  model: string;
+  total_ms: number;
+  stages: ProviderProbeStage[];
+  error_kind?: ProviderProbeErrorKind;
+  tokens?: number;
+};
+
 export type HookHttpRequest = {
   id?: string;
   url: string;

@@ -4,6 +4,7 @@ import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { AppConfig, ProviderConfig } from "../../api/contracts";
 import { EditorHeader } from "./editor-layout";
+import { ProviderConnectionTest } from "./model/provider-connection-test";
 import { ModelMetadataEditor } from "./model-metadata-editor";
 import { ModelImportDialog } from "./model-import-dialog";
 import { ObjectListPanel } from "./object-list-panel";
@@ -220,6 +221,11 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
             <small>{models.length > 0 ? t("Used when no model is selected manually", "未手动切换时使用") : t("Add models on the Models tab first", "先在模型页签添加模型")}</small>
           </div>
           <div className="settings-field full"><span>API Key</span><PasswordField value={provider.api_key ?? ""} onChange={(value) => onProviderChange(selectedIndex, { api_key: value })} /><small>{t("Environment variables can be referenced with `$env:VARIABLE_NAME`", "支持使用 `$env:VARIABLE_NAME` 引用环境变量")}</small></div>
+          <div className="settings-field full">
+            <span>{t("Connectivity", "连通性")}</span>
+            <ProviderConnectionTest provider={provider} model={provider.default_model || undefined} />
+            <small>{t("Verifies the endpoint and credentials first, then sends a minimal request to the default model", "先验证地址与凭据，再向默认模型发送一次最小请求")}</small>
+          </div>
         </div>}
         {tab === "behavior" && <div className="settings-form-grid">
           <label className="settings-field"><span>{t("Request timeout", "请求超时")}</span><input type="number" min="1" value={provider.timeout_seconds ?? 120} onChange={(event) => onProviderChange(selectedIndex, { timeout_seconds: Number(event.target.value) })} /><small>{t("Seconds", "单位为秒")}</small></label>
