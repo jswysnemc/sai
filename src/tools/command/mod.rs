@@ -7,6 +7,7 @@ pub(crate) mod background_timeout;
 mod goal_completions;
 mod process;
 mod progress;
+mod rtk_filter;
 mod run;
 mod store;
 

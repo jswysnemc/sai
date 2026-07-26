@@ -175,6 +175,14 @@ async fn run_command(
         bail!("{}", t("command execution is disabled; set skills.allow_command_execution=true in config.jsonc to enable run_command", "命令执行已禁用；请在 config.jsonc 中设置 skills.allow_command_execution=true 以启用 run_command"));
     }
     let command = required(&args, "command")?;
+    // rtk 输出过滤：白名单命令改写为 rtk 代理，压缩进入上下文的命令输出
+    let rewritten = super::rtk_filter::rewrite_command(&command, &config.tools.command_filter);
+    let filtered = rewritten.is_some();
+    let command = rewritten.unwrap_or(command);
+    let mut args = args;
+    if filtered {
+        args["command"] = json!(command);
+    }
     let wait_seconds = foreground_wait_seconds(&args);
     let sandboxed = args
         .get("_sai_sandbox")
@@ -195,7 +203,7 @@ async fn run_command(
         let output =
             super::process::run_shell_command_with_progress(&command, wait_seconds, shell.as_str(), true, progress)
                 .await?;
-        return foreground_output(output);
+        return foreground_output(output).map(|result| finalize_filtered(result, filtered));
     }
 
     // 2. 后台命令未启用时保持同步管道执行
@@ -217,7 +225,7 @@ async fn run_command(
             progress,
         )
         .await?;
-        return foreground_output(output);
+        return foreground_output(output).map(|result| finalize_filtered(result, filtered));
     }
 
     // 3. 托管 spawn：超时不杀进程，返回后台 task_id
@@ -232,7 +240,25 @@ async fn run_command(
     if wait_seconds == 0 {
         return background_result(&task, 0, "", "");
     }
-    wait_managed_task(task, wait_seconds, config, paths, progress).await
+    wait_managed_task(task, wait_seconds, config, paths, progress)
+        .await
+        .map(|result| finalize_filtered(result, filtered))
+}
+
+/// 对经 rtk 改写的命令结果附加过滤标记。
+///
+/// 参数:
+/// - `result`: 命令结果 JSON 文本
+/// - `filtered`: 命令是否被改写
+///
+/// 返回:
+/// - 必要时附带 filtered_by 字段的结果
+fn finalize_filtered(result: String, filtered: bool) -> String {
+    if filtered {
+        super::rtk_filter::tag_filtered_result(result)
+    } else {
+        result
+    }
 }
 
 /// 等待托管任务完成或超时提升。

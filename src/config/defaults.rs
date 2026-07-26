@@ -305,6 +305,7 @@ impl Default for ToolsConfig {
             enabled: default_true(),
             max_rounds: 0,
             command_shell: String::new(),
+            command_filter: default_command_filter(),
             progressive_loading_enabled: false,
             background_commands_enabled: default_true(),
             background_command_timeout_seconds: default_background_command_timeout_seconds(),
@@ -397,6 +398,11 @@ impl Default for ContextConfig {
 
 pub(super) fn default_timeout() -> u64 {
     60
+}
+
+/// 命令输出过滤器默认档位：探测到 rtk 时自动启用。
+pub(super) fn default_command_filter() -> String {
+    "auto".to_string()
 }
 
 pub(super) fn default_background_command_timeout_seconds() -> u64 {

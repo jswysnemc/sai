@@ -64,6 +64,14 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
             ),
             config.tools.command_shell.clone(),
         ),
+        Field::new(
+            t(
+                "Command output filter (rtk proxy)",
+                "命令输出过滤器（rtk 代理）",
+            ),
+            config.tools.command_filter.clone(),
+        )
+        .choices(&["auto", "rtk", "off"]),
         Field::boolean(
             t("Progressive tool loading", "渐进式工具加载"),
             config.tools.progressive_loading_enabled,
@@ -153,7 +161,7 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
 /// 返回:
 /// - 全部字段解析成功时写入配置；否则返回首个解析错误
 fn apply_settings_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> {
-    let [tui_mode, cli_mode, terminal_shell, context_tokens, compaction_model, tools_enabled, tool_max_rounds, command_shell, progressive_loading, background_commands, background_timeout, background_log_max, background_stop_grace, skills_enabled, skill_commands, reasoning, tool_calls, readable_names, wait_model, wait_thinking, transcript_rows] =
+    let [tui_mode, cli_mode, terminal_shell, context_tokens, compaction_model, tools_enabled, tool_max_rounds, command_shell, command_filter, progressive_loading, background_commands, background_timeout, background_log_max, background_stop_grace, skills_enabled, skill_commands, reasoning, tool_calls, readable_names, wait_model, wait_thinking, transcript_rows] =
         fields
     else {
         unreachable!("global settings field layout must remain complete")
@@ -194,6 +202,7 @@ fn apply_settings_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()>
     config.tools.enabled = tools_enabled;
     config.tools.max_rounds = max_rounds;
     config.tools.command_shell = command_shell.value.trim().to_string();
+    config.tools.command_filter = command_filter.value.trim().to_string();
     config.tools.progressive_loading_enabled = progressive_loading;
     config.tools.background_commands_enabled = background_commands;
     config.tools.background_command_timeout_seconds = timeout_seconds;

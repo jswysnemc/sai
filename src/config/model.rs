@@ -312,6 +312,9 @@ pub struct ToolsConfig {
     pub command_shell: String,
     #[serde(default)]
     pub progressive_loading_enabled: bool,
+    /// 命令输出过滤器：auto（探测到 rtk 时启用）/ rtk（强制）/ off（关闭）。
+    #[serde(default = "default_command_filter")]
+    pub command_filter: String,
     #[serde(default = "default_true")]
     pub background_commands_enabled: bool,
     #[serde(default = "default_background_command_timeout_seconds")]
