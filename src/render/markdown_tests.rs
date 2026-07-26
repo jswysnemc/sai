@@ -1,8 +1,8 @@
 use super::*;
 use crate::render::style::{
     BOLD_STYLE, CODE_BLOCK_FRAME_STYLE, CODE_FUNCTION_STYLE, CODE_KEYWORD_STYLE, CODE_TOKEN_RESET,
-    HEADER_STYLE, IMAGE_STYLE, INLINE_CODE_STYLE, ITALIC_STYLE, LINK_LABEL_STYLE, PRIMARY_STYLE,
-    RESET, STRIKE_STYLE, TERTIARY_STYLE, URL_STYLE,
+    FOOTNOTE_DEF_STYLE, FOOTNOTE_REF_STYLE, HEADER_STYLE, IMAGE_STYLE, INLINE_CODE_STYLE,
+    ITALIC_STYLE, LINK_LABEL_STYLE, PRIMARY_STYLE, RESET, STRIKE_STYLE, TERTIARY_STYLE, URL_STYLE,
 };
 use crate::render::table;
 use std::sync::Mutex;
@@ -133,6 +133,33 @@ fn blockquote_keeps_dim_after_inline_styles() {
     // 行内加粗的 reset 之后补回 dim，尾部文本保持引用观感
     assert!(output.contains("\x1b[0m\x1b[2m"));
     assert!(output.contains("tail"));
+}
+
+#[test]
+fn footnote_definition_highlights_marker() {
+    let output = render_markdown_line("[^1]: Fowler, M. *Inversion of Control*. 2004.");
+    // 定义行的标记加粗着色作为锚点；去掉原始 `^` 噪音，正文仍按行内规则渲染
+    assert!(output.contains(&format!("{FOOTNOTE_DEF_STYLE}[1]{RESET}")));
+    assert!(output.contains("Fowler, M."));
+    assert!(output.contains(ITALIC_STYLE));
+}
+
+#[test]
+fn inline_footnote_reference_is_styled() {
+    let output = render_markdown_line("依赖注入是控制反转的一种实现[^1]。");
+    // 正文引用与定义行标记形式一致，便于对照
+    assert!(output.contains(&format!("{FOOTNOTE_REF_STYLE}[1]{RESET}")));
+    assert!(output.contains("依赖注入"));
+}
+
+#[test]
+fn bracket_text_is_not_treated_as_footnote() {
+    // 普通方括号文本与含空白的标签不应被当作脚注
+    let plain = render_markdown_line("见 [^ 注 意] 与 [参考]");
+    assert!(!plain.contains(FOOTNOTE_REF_STYLE));
+    let link = render_markdown_line("[label](https://example.com)");
+    assert!(!link.contains(FOOTNOTE_REF_STYLE));
+    assert!(link.contains(LINK_LABEL_STYLE));
 }
 
 #[test]

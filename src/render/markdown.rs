@@ -8,7 +8,7 @@ pub(crate) use crate::render::markdown_inline::render_table_cell;
 pub(crate) use crate::render::markdown_inline::render_table_cell_content;
 use crate::render::markdown_inline::{render_inline_with_math_mode, InlineMathMode};
 use crate::render::streaming_asset_block::StreamingAssetBlock;
-use crate::render::style::{HEADER_STYLE, RESET, TERTIARY_STYLE};
+use crate::render::style::{FOOTNOTE_DEF_STYLE, HEADER_STYLE, RESET, TERTIARY_STYLE};
 use crate::render::table;
 use crate::render::table::streaming::StreamingTable;
 
@@ -336,6 +336,13 @@ fn render_markdown_line_with_math_mode(line: &str, math_mode: InlineMathMode) ->
     if let Some(header) = render_header(trimmed, math_mode) {
         return header;
     }
+    if let Some((label, rest)) = parse_footnote_definition(trimmed) {
+        // 脚注定义：标记加粗着色作为锚点，正文按行内规则渲染
+        return format!(
+            "{indent}{FOOTNOTE_DEF_STYLE}[{label}]{RESET} {}",
+            render_inline_for_mode(rest, math_mode)
+        );
+    }
     if let Some((depth, rest)) = parse_blockquote(trimmed) {
         // 引用条：左侧绿色实心竖条（嵌套层级叠加）+ dim 正文；
         // 行内样式的 reset 会中断 dim，重置后补回保持整行统一
@@ -385,6 +392,24 @@ fn render_inline_for_mode(text: &str, math_mode: InlineMathMode) -> String {
         InlineMathMode::TerminalImage => render_inline(text),
         InlineMathMode::Source => render_inline_with_math_mode(text, math_mode),
     }
+}
+
+/// 解析脚注定义行。
+///
+/// 参数:
+/// - `line`: 去除缩进后的行
+///
+/// 返回:
+/// - 命中时返回 `(标签, 正文)`；标签不含 `^` 前缀
+fn parse_footnote_definition(line: &str) -> Option<(&str, &str)> {
+    let rest = line.strip_prefix("[^")?;
+    let close = rest.find("]:")?;
+    let label = &rest[..close];
+    if !crate::render::markdown_inline::is_footnote_label(label) {
+        return None;
+    }
+    let body = rest[close + 2..].trim_start();
+    Some((label, body))
 }
 
 /// 解析 Markdown 引用层级。

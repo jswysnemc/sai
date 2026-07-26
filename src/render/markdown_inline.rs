@@ -1,7 +1,7 @@
 use crate::render::asset_block;
 use crate::render::style::{
-    BOLD_STYLE, IMAGE_STYLE, INLINE_CODE_STYLE, ITALIC_STYLE, LINK_LABEL_STYLE, RESET,
-    STRIKE_STYLE, URL_STYLE,
+    BOLD_STYLE, FOOTNOTE_REF_STYLE, IMAGE_STYLE, INLINE_CODE_STYLE, ITALIC_STYLE, LINK_LABEL_STYLE,
+    RESET, STRIKE_STYLE, URL_STYLE,
 };
 use crate::render::table::CellContent;
 
@@ -137,6 +137,21 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
                     output.extend(chars[index + 1..end].iter());
                     output.push_str(RESET);
                     index = end + 1;
+                    continue;
+                }
+            }
+        }
+        // 脚注引用 `[^label]`：标记着色，与普通链接区分
+        if chars[index] == '[' && chars.get(index + 1) == Some(&'^') {
+            if let Some(label_end) = find_marker(&chars, index + 2, ']') {
+                let label = chars[index + 2..label_end].iter().collect::<String>();
+                if is_footnote_label(&label) {
+                    output.push_str(FOOTNOTE_REF_STYLE);
+                    output.push('[');
+                    output.push_str(&label);
+                    output.push(']');
+                    output.push_str(RESET);
+                    index = label_end + 1;
                     continue;
                 }
             }
@@ -488,6 +503,23 @@ fn render_html_tag(tag: &str) -> Option<String> {
         "br" | "br/" | "br /" => Some("\n".to_string()),
         _ => None,
     }
+}
+
+/// 判断是否为合法脚注标签。
+///
+/// 脚注标签不含空白与嵌套括号，借此与普通方括号文本区分。
+///
+/// 参数:
+/// - `label`: `[^` 与 `]` 之间的文本
+///
+/// 返回:
+/// - 可作为脚注标签时返回 true
+pub(crate) fn is_footnote_label(label: &str) -> bool {
+    !label.is_empty()
+        && label.len() <= 64
+        && !label
+            .chars()
+            .any(|ch| ch.is_whitespace() || ch == '[' || ch == ']')
 }
 
 /// 查找单字符标记。
