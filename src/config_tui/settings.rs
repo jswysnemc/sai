@@ -80,13 +80,20 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
             config.tools.command_filter.clone(),
         )
         .choices(&["auto", "rtk", "off"]),
-        Field::new(
-            t(
-                "rtk allowlist, comma separated; empty uses builtin (git/cargo/pytest...)",
-                "rtk 改写白名单，逗号分隔；留空用内置（git/cargo/pytest 等）",
-            ),
-            config.tools.command_filter_allowlist.join(", "),
-        ),
+        {
+            // 表单字段是单行且会按终端宽度截断，rtk 能代理的命令有数十项塞不下；
+            // 这里只给出可代理的条目数，完整清单在 Web 设置页展示。label 需 'static，缓存一次
+            static DENYLIST_LABEL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+            let label = DENYLIST_LABEL.get_or_init(|| {
+                let count = crate::tools::command::rtk_proxy_commands().len();
+                if crate::i18n::is_zh() {
+                    format!("不走 rtk 的命令（rtk 现可代理 {count} 项），逗号分隔")
+                } else {
+                    format!("commands kept out of rtk (rtk proxies {count}), comma separated")
+                }
+            });
+            Field::new(label, config.tools.command_filter_denylist.join(", "))
+        },
         Field::boolean(
             t("Progressive tool loading", "渐进式工具加载"),
             config.tools.progressive_loading_enabled,
@@ -176,7 +183,7 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
 /// 返回:
 /// - 全部字段解析成功时写入配置；否则返回首个解析错误
 fn apply_settings_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> {
-    let [tui_mode, cli_mode, terminal_shell, context_tokens, compaction_model, tools_enabled, tool_max_rounds, command_shell, command_filter, command_filter_allowlist, progressive_loading, background_commands, background_timeout, background_log_max, background_stop_grace, skills_enabled, skill_commands, reasoning, tool_calls, readable_names, wait_model, wait_thinking, transcript_rows] =
+    let [tui_mode, cli_mode, terminal_shell, context_tokens, compaction_model, tools_enabled, tool_max_rounds, command_shell, command_filter, command_filter_denylist, progressive_loading, background_commands, background_timeout, background_log_max, background_stop_grace, skills_enabled, skill_commands, reasoning, tool_calls, readable_names, wait_model, wait_thinking, transcript_rows] =
         fields
     else {
         unreachable!("global settings field layout must remain complete")
@@ -218,7 +225,7 @@ fn apply_settings_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()>
     config.tools.max_rounds = max_rounds;
     config.tools.command_shell = command_shell.value.trim().to_string();
     config.tools.command_filter = command_filter.value.trim().to_string();
-    config.tools.command_filter_allowlist = command_filter_allowlist
+    config.tools.command_filter_denylist = command_filter_denylist
         .value
         .split(',')
         .map(|item| item.trim().to_string())

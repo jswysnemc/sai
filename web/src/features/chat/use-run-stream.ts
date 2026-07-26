@@ -25,6 +25,7 @@ const EVENT_TYPES = [
   "question.resolved",
   "workspace.changed",
   "content.flushed",
+  "engine.ready",
   "compaction.started",
   "compaction.delta",
   "compaction.finished",

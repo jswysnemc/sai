@@ -1,0 +1,51 @@
+/*
+ * 对话内核设置
+ *
+ * 换内核会静默停掉一批功能，提示块因此不做成可忽略的浅色注记，
+ * 而是用告警色的左导轨明确标出——但仍克制在一条竖线，不铺整块底色。
+ */
+
+.agent-engine-settings {
+  display: grid;
+  gap:var(--space-2xl);
+  min-width: 0;
+}
+
+.agent-engine-warning {
+  display: grid;
+  gap:var(--space-sm);
+  padding:var(--space-md) var(--space-lg);
+  border-left: 2px solid color-mix(in srgb, var(--warning) 60%, transparent);
+  border-radius:0 var(--radius-2) var(--radius-2) 0;
+  background: color-mix(in srgb, var(--warning) 6%, transparent);
+}
+
+.agent-engine-warning-head {
+  display: flex;
+  align-items: center;
+  gap:var(--space-xs);
+  color: var(--warning);
+  font-size:var(--text-sm);
+  font-weight: 600;
+}
+
+.agent-engine-warning-head svg {
+  flex: 0 0 auto;
+}
+
+/* 停用项按两列排布：条目短，单列会拉出一条过长的空白 */
+.agent-engine-warning ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap:var(--space-2xs) var(--space-lg);
+  margin: 0;
+  padding-left:var(--space-2xl);
+  color: var(--ink);
+  font-size:var(--text-xs);
+}
+
+.agent-engine-warning small {
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+  line-height: 1.5;
+}

@@ -69,7 +69,7 @@
 
 .git-selectable-diff {
   overflow: auto;
-  font:400 var(--text-xs)/1.5 var(--font-code);
+  font:400 var(--text-sm)/1.5 var(--font-code);
 }
 
 .git-selectable-diff-line {

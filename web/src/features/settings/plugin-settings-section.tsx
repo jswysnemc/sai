@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { AppConfig } from "../../api/contracts";
 import { EditorHeader } from "./editor-layout";
 import { ObjectListPanel } from "./object-list-panel";
-import { StructuredConfigFields } from "./structured-config-fields";
+import { PluginConfigEditor } from "./plugins/plugin-config-editor";
 import { useI18n } from "../i18n/use-i18n";
 import type { Locale } from "../i18n/locale";
 
@@ -46,8 +46,8 @@ export function PluginSettingsSection({ config, onConfigChange }: PluginSettings
       />
       <section className="settings-editor">
         <EditorHeader kicker={t("Plugin capabilities", "插件能力")} title={pluginLabel(selected, locale)} description={t("Configure switches, service endpoints, credentials, and plugin runtime parameters.", "配置开关、服务地址、凭据和插件运行参数。")} />
-        <StructuredConfigFields
-          value={plugin}
+        <PluginConfigEditor
+          config={plugin}
           onChange={(next) => onConfigChange({ ...config, plugins: { ...plugins, [selected]: next } })}
         />
       </section>

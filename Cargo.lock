@@ -3435,6 +3435,7 @@ dependencies = [
  "aes",
  "anyhow",
  "arboard",
+ "async-trait",
  "axum",
  "base64",
  "blake2",

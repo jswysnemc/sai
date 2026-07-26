@@ -40,6 +40,7 @@ impl WorkStatus {
             AgentEvent::CompactionStarted { .. } => Some(Self::Compacting),
             AgentEvent::CompactionDelta { .. }
             | AgentEvent::CompactionFinished { .. }
+            | AgentEvent::EngineReady { .. }
             | AgentEvent::FlushContent
             | AgentEvent::ExternalOutput => None,
         }

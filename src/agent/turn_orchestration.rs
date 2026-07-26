@@ -63,6 +63,13 @@ impl Agent {
         let mut perf = PerfTrace::new("agent");
         perf.mark("start turn");
         let turn_id = turn_id.unwrap_or_else(new_turn_id);
+        // 配置了外部内核时整轮交出去执行；下方全部是 sai 自带内核的路径，
+        // 两者只在这一处分流，原生行为不受影响
+        if self.uses_external_engine() {
+            return self
+                .run_external_turn(&input, image_urls, turn_id, on_event)
+                .await;
+        }
         self.state
             .start_turn_with_images(&turn_id, &input, &image_urls)?;
         perf.mark("state start_turn");

@@ -1,6 +1,6 @@
 use super::progress::{CommandOutputBatch, CommandOutputStream};
 use crate::tools::ToolProgress;
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use std::io::ErrorKind;
 use std::process::{Output, Stdio};
 use std::time::Duration;
@@ -362,6 +362,30 @@ fn shell_commands(
         ("powershell".to_string(), inherit_env(powershell)),
         ("cmd".to_string(), inherit_env(cmd)),
     ])
+}
+
+/// 构造一条按需沙箱化的 shell 命令。
+///
+/// 对外开放同一套构造逻辑，供 ACP 客户端的终端能力复用：
+/// 外部内核执行命令时走的沙箱与 sai 自带的 run_command 必须完全一致，
+/// 各写一份迟早会分叉出治理缺口。
+///
+/// 参数:
+/// - `command`: 待执行命令
+/// - `configured_shell`: 配置的 shell
+/// - `sandboxed`: 是否启用沙箱
+///
+/// 返回:
+/// - 首选的 `(程序名, 命令)`
+pub(crate) fn build_shell_command(
+    command: &str,
+    configured_shell: &str,
+    sandboxed: bool,
+) -> Result<(String, Command)> {
+    shell_commands(command, configured_shell, sandboxed)?
+        .into_iter()
+        .next()
+        .context("no shell command candidate was produced")
 }
 
 #[cfg(target_os = "linux")]

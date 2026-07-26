@@ -36,23 +36,53 @@ pub(crate) enum PermissionDecision {
         /// 允许来源；缺省为人工
         #[serde(default)]
         source: PermissionAllowSource,
+        /// 放行理由，仅自动审核会给出；纯展示用，不回传给模型
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
     },
     Deny { reply: Option<String> },
 }
 
 impl PermissionDecision {
     /// 构造人工允许一次。
+    ///
+    /// 返回:
+    /// - 人工来源、无理由的允许决定
     pub(crate) fn allow_once() -> Self {
         Self::Allow {
             source: PermissionAllowSource::Human,
+            reason: None,
         }
     }
 
     /// 构造 LLM 自动允许一次。
-    pub(crate) fn auto_allow_once() -> Self {
+    ///
+    /// 参数:
+    /// - `reason`: 审核模型给出的放行理由，空白会被丢弃
+    ///
+    /// 返回:
+    /// - 自动审核来源的允许决定
+    pub(crate) fn auto_allow_once(reason: Option<String>) -> Self {
         Self::Allow {
             source: PermissionAllowSource::AutoAudit,
+            reason: reason
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty()),
         }
+    }
+
+    /// 读取决定附带的说明文本。
+    ///
+    /// 允许时是自动审核给出的放行理由，拒绝时是回复给模型的原因。
+    ///
+    /// 返回:
+    /// - 非空说明文本，没有时返回 `None`
+    pub(crate) fn detail(&self) -> Option<&str> {
+        let value = match self {
+            Self::Allow { reason, .. } => reason.as_deref(),
+            Self::Deny { reply } => reply.as_deref(),
+        };
+        value.map(str::trim).filter(|value| !value.is_empty())
     }
 
     /// 是否为允许决定。
@@ -67,7 +97,8 @@ impl PermissionDecision {
         matches!(
             self,
             Self::Allow {
-                source: PermissionAllowSource::AutoAudit
+                source: PermissionAllowSource::AutoAudit,
+                ..
             }
         )
     }

@@ -4,6 +4,7 @@ mod context_projection;
 mod conversation;
 mod event;
 mod external_events;
+mod external_turn;
 mod instruction_files;
 mod lifecycle;
 mod load_request;
@@ -66,6 +67,8 @@ pub struct Agent {
     config: AppConfig,
     paths: SaiPaths,
     last_dynamic_sources: Vec<DynamicContextSource>,
+    /// 外部对话内核；为空时使用 sai 自带循环
+    external_engine: Option<Box<dyn crate::agent_engine::ExternalTurnEngine>>,
 }
 
 impl Agent {
@@ -503,11 +506,14 @@ impl Agent {
                         request_id,
                         decision: decision.clone(),
                     })?;
+                    // 自动审核的放行理由写入审计日志，人工批准没有说明
+                    let approval_detail = decision.detail().map(str::to_string);
                     match decision {
                         crate::permission::PermissionDecision::Allow { .. } => {
                             self.tools.record_permission_approved(
                                 &call.function.name,
                                 &call.function.arguments,
+                                approval_detail.as_deref(),
                             )?;
                         }
                         crate::permission::PermissionDecision::Deny { reply } => {

@@ -18,12 +18,13 @@
   border-bottom: 0;
   background: transparent;
   color: var(--technical-text);
-  font-size:var(--text-sm);
+  /* 命令本身是这张卡的主信息，字号取界面正文基准 */
+  font-size:var(--text-base);
   line-height: 1.55;
 }
 
 .shell-command-line > span {
-  color: color-mix(in srgb, #c4a7e7 88%, white);
+  color: var(--shell-prompt);
   font-weight: 600;
   user-select: none;
 }
@@ -64,7 +65,8 @@
   border: 0;
   background: transparent;
   color: color-mix(in srgb, var(--technical-text) 78%, transparent);
-  font:400 var(--text-xs)/1.65 var(--font-code);
+  /* 命令输出是需要逐行读的长文本，字号取密集列表档而非元信息档 */
+  font:400 var(--text-sm)/1.65 var(--font-code);
   white-space: pre-wrap;
   border-left: 2px solid color-mix(in srgb, var(--technical-border) 80%, transparent);
   margin-left:var(--space-lg);
@@ -73,139 +75,7 @@
 .shell-output.stderr {
   border-top: 1px solid var(--technical-border);
   border-left-color: color-mix(in srgb, var(--danger) 55%, transparent);
-  color: color-mix(in srgb, var(--danger) 88%, white);
-}
-
-.structured-diff {
-  min-width: 0;
-  max-width: 100%;
-  max-height: 460px;
-  overflow: auto;
-  background: var(--technical-surface);
-  color: var(--technical-text);
-  font:400 var(--text-xs)/1.55 var(--font-code);
-}
-
-.diff-file + .diff-file {
-  border-top: 1px solid var(--technical-border);
-}
-
-.diff-file-head {
-  position: sticky;
-  left: 0;
-  display: flex;
-  align-items: center;
-  gap:var(--space-sm);
-  padding:var(--space-sm) var(--space-lg);
-  border-bottom: 1px solid var(--technical-border);
-  background: var(--technical-surface-muted);
-}
-
-.diff-file-head .tool-file-reference {
-  min-width: 0;
-}
-
-.diff-file-head strong {
-  overflow: hidden;
-  color: var(--technical-text);
-  font-size:var(--text-xs);
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.diff-file-head small {
-  color: var(--technical-muted);
-  font-size:var(--text-2xs);
-}
-
-.diff-file-stats {
-  display: flex;
-  gap:var(--space-xs);
-  margin-left: auto;
-  font-size:var(--text-2xs);
-}
-
-.diff-file-stats b {
-  padding:1px var(--space-2xs);
-  border-radius:var(--radius-1);
-  background: var(--diff-added-bg);
-  color: var(--diff-added-text);
-  font-weight: 500;
-}
-
-.diff-file-stats i {
-  padding:1px var(--space-2xs);
-  border-radius:var(--radius-1);
-  background: var(--diff-removed-bg);
-  color: var(--diff-removed-text);
-  font-style: normal;
-}
-
-.diff-file-lines {
-  overflow-x: auto;
-}
-
-.diff-row {
-  display: grid;
-  grid-template-columns: 38px 38px minmax(max-content, 1fr);
-  min-width: max-content;
-}
-
-.diff-file-lines.single-gutter .diff-row {
-  grid-template-columns: 38px minmax(max-content, 1fr);
-}
-
-.diff-file-lines.no-gutter .diff-row {
-  grid-template-columns: minmax(max-content, 1fr);
-}
-
-.diff-gutter {
-  padding:1px var(--space-sm) 1px var(--space-2xs);
-  border-right: 1px solid var(--technical-border);
-  color: var(--technical-muted);
-  font-size:var(--text-2xs);
-  text-align: right;
-  user-select: none;
-}
-
-.diff-row code {
-  padding:1px var(--space-lg) 1px var(--space-xs);
-  font-family: var(--font-code);
-  white-space: pre;
-}
-
-.diff-marker {
-  display: inline-block;
-  width: 12px;
-  user-select: none;
-}
-
-.diff-row.added {
-  border-left: 3px solid var(--diff-added-text);
-  background: var(--diff-added-bg);
-  color: var(--diff-added-text);
-}
-
-.diff-row.removed {
-  border-left: 3px solid var(--diff-removed-text);
-  background: var(--diff-removed-bg);
-  color: var(--diff-removed-text);
-}
-
-.diff-row.context,
-.diff-row.hunk {
-  border-left: 3px solid transparent;
-}
-
-.diff-row.hunk {
-  background: var(--diff-hunk-bg);
-  color: var(--diff-hunk-text);
-}
-
-.diff-row.hunk code {
-  font-size:var(--text-2xs);
-  opacity: 0.85;
+  color: color-mix(in srgb, var(--danger) 88%, var(--paper));
 }
 
 .read-tool-view {
@@ -297,7 +167,7 @@
   border: 0;
   background: transparent;
   color: var(--technical-text);
-  font:400 var(--text-xs)/1.65 var(--font-code);
+  font:400 var(--text-sm)/1.65 var(--font-code);
   white-space: pre;
 }
 
@@ -404,102 +274,7 @@
   color: var(--danger);
 }
 
-.tool-card.failed .shell-output,
-.tool-card.failed .generic-tool-block.result {
-  color: var(--danger);
-}
-
-.tool-card-head {
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) auto 14px;
-  align-items: center;
-  gap:var(--space-sm);
-  width: 100%;
-  min-height: 32px;
-  padding:var(--space-2xs) var(--space-3xs);
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-
-.tool-card-head:focus-visible {
-  outline: 1px solid var(--signal);
-  outline-offset: -2px;
-}
-
-.tool-icon {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  border-radius: var(--radius-2);
-  background: transparent;
-  color: var(--ink-soft);
-}
-
-.tool-icon svg {
-  width: 13px;
-  height: 13px;
-}
-
-.tool-card.completed .tool-icon { color: var(--signal); }
-.tool-card.failed .tool-icon { color: var(--danger); }
-
-.tool-card-copy {
-  display: flex;
-  align-items: baseline;
-  gap:var(--space-sm);
-  min-width: 0;
-}
-
-.tool-card-name {
-  flex-shrink: 0;
-  font:500 var(--text-xs) var(--font-code);
-  white-space: nowrap;
-}
-
-.tool-card-summary {
-  flex: 1;
-  overflow: hidden;
-  min-width: 0;
-  color: var(--ink-soft);
-  font:400 var(--text-2xs) var(--font-code);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tool-card-file {
-  min-width: 0;
-}
-
-.tool-card-file button {
-  max-width: 100%;
-  color: inherit;
-  font: inherit;
-}
-
-.tool-card-status {
-  display: flex;
-  align-items: center;
-  color: var(--ink-soft);
-}
-
-.tool-card-status svg {
-  width: 12px;
-  height: 12px;
-}
-
-.tool-card-expand {
-  justify-self: end;
-  flex-shrink: 0;
-  color: var(--ink-soft);
-}
-
-.tool-card.completed .tool-card-status {
-  color: var(--signal);
-}
-
-.tool-card.failed .tool-card-status {
+.tool-shell.tone-danger .shell-output,
+.tool-shell.tone-danger .generic-tool-block.result {
   color: var(--danger);
 }

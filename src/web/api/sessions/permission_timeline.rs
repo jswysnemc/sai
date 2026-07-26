@@ -44,19 +44,25 @@ pub(super) fn attach_permission_decisions(
                 if let Some(count) = pending.get_mut(&key) {
                     *count -= 1;
                 }
+                let approved = event.decision == "approved";
+                let detail = event
+                    .detail
+                    .filter(|value| !value.trim().is_empty());
+                // 批准事件只有自动审核会带说明，据此还原来源与理由
+                let auto_audited = approved && detail.is_some();
                 resolved
                     .entry(key)
                     .or_default()
                     .push_back(TimelinePermissionDecision {
-                        decision: if event.decision == "approved" {
+                        decision: if approved {
                             "allow".to_string()
                         } else {
                             "deny".to_string()
                         },
-                        reply: (event.decision == "denied")
-                            .then_some(event.detail)
-                            .flatten()
-                            .filter(|value| !value.trim().is_empty()),
+                        reply: (!approved).then(|| detail.clone()).flatten(),
+                        source: approved
+                            .then(|| if auto_audited { "auto_audit" } else { "human" }.to_string()),
+                        reason: approved.then(|| detail.clone()).flatten(),
                     });
             }
             _ => {}
@@ -166,5 +172,98 @@ mod tests {
         let permission = timeline[0].tools[0].permission.as_ref().unwrap();
         assert_eq!(permission.decision, "deny");
         assert_eq!(permission.reply.as_deref(), Some("保留文件"));
+    }
+
+    /// 验证自动审核放行的理由能从审计日志还原，并标出自动来源。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn attaches_auto_audit_reason_to_completed_timeline() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
+        store.start_turn("turn", "inspect").unwrap();
+        store
+            .record_tool_call_started("turn", 0, "call", "run_command", r#"{"command":"git status"}"#)
+            .unwrap();
+        store
+            .record_tool_result_completed("turn", "call", true, "ok", None, None, 2)
+            .unwrap();
+        store.complete_turn("turn", "done", None).unwrap();
+        let audit = PermissionAuditLog::new(
+            store.state_dir().join("permission-audit.jsonl"),
+            store.session_id(),
+        );
+        let arguments = serde_json::json!({"command":"git status"});
+        audit
+            .append(
+                "auto_audit",
+                "run_command",
+                AuditDecision::Requested,
+                &arguments,
+                None,
+            )
+            .unwrap();
+        audit
+            .append(
+                "auto_audit",
+                "run_command",
+                AuditDecision::Approved,
+                &arguments,
+                Some("只读查询，无副作用"),
+            )
+            .unwrap();
+        let mut timeline = store.session_timeline(10).unwrap();
+
+        attach_permission_decisions(&store, &mut timeline).unwrap();
+
+        let permission = timeline[0].tools[0].permission.as_ref().unwrap();
+        assert_eq!(permission.decision, "allow");
+        assert_eq!(permission.source.as_deref(), Some("auto_audit"));
+        assert_eq!(permission.reason.as_deref(), Some("只读查询，无副作用"));
+        assert!(permission.reply.is_none());
+    }
+
+    /// 验证人工批准不会被误判为自动审核。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn marks_human_approval_without_reason() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
+        store.start_turn("turn", "inspect").unwrap();
+        store
+            .record_tool_call_started("turn", 0, "call", "edit_file", r#"{"path":"b.rs"}"#)
+            .unwrap();
+        store
+            .record_tool_result_completed("turn", "call", true, "ok", None, None, 2)
+            .unwrap();
+        store.complete_turn("turn", "done", None).unwrap();
+        let audit = PermissionAuditLog::new(
+            store.state_dir().join("permission-audit.jsonl"),
+            store.session_id(),
+        );
+        let arguments = serde_json::json!({"path":"b.rs"});
+        audit
+            .append("audited", "edit_file", AuditDecision::Requested, &arguments, None)
+            .unwrap();
+        audit
+            .append("audited", "edit_file", AuditDecision::Approved, &arguments, None)
+            .unwrap();
+        let mut timeline = store.session_timeline(10).unwrap();
+
+        attach_permission_decisions(&store, &mut timeline).unwrap();
+
+        let permission = timeline[0].tools[0].permission.as_ref().unwrap();
+        assert_eq!(permission.decision, "allow");
+        assert_eq!(permission.source.as_deref(), Some("human"));
+        assert!(permission.reason.is_none());
     }
 }

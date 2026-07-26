@@ -1,0 +1,50 @@
+/*
+ * 通用骨架屏
+ *
+ * 骨架条的底色比页面沉一档，靠透明度呼吸表达"还在读"，不引入额外色相。
+ * 减少动效偏好开启时停用动画，只保留静态占位。
+ */
+
+.ui-skeleton {
+  display: block;
+  border-radius: var(--radius-2);
+  background: var(--paper-deep);
+  animation: ui-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+/* 成组骨架之间的纵向节奏 */
+.ui-skeleton-group {
+  display: grid;
+  gap:var(--space-sm);
+}
+
+/* 段落骨架：末行收窄，读起来像一段自然断行的文字而不是色块 */
+.ui-skeleton-text > .ui-skeleton:last-child {
+  width: 62%;
+}
+
+/* 列表骨架：每项一条主行加一条次行，对应标题与摘要 */
+.ui-skeleton-list {
+  display: grid;
+  gap:var(--space-lg);
+}
+
+.ui-skeleton-list-item {
+  display: grid;
+  gap:var(--space-2xs);
+}
+
+.ui-skeleton-list-item > .ui-skeleton:last-child {
+  width: 48%;
+}
+
+@keyframes ui-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-skeleton {
+    animation: none;
+  }
+}

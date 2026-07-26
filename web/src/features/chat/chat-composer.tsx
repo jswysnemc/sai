@@ -1,4 +1,4 @@
-import { Activity, ArrowRight, Bot, GitBranch, Paperclip, Square, Undo2 } from "lucide-react";
+import { Activity, ArrowRight, Bot, Cpu, GitBranch, Paperclip, Square, Undo2 } from "lucide-react";
 import { useRef, useEffect, useState, useMemo } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import type { RunMode, RunModelSelection, ThinkingLevel } from "../../api/contracts";
@@ -64,6 +64,12 @@ type ChatComposerProps = {
  */
 export function ChatComposer(props: ChatComposerProps) {
   const { t, locale } = useI18n();
+  // 外部内核下模型与思考等级不生效，据此标注并禁用选择器
+  const engineStatus = useQuery({
+    queryKey: ["engine-status"],
+    queryFn: api.config.engineStatus,
+    staleTime: 60_000
+  });
   const [tipNow, setTipNow] = useState(() => Date.now());
   // 1. 空输入时轮询展示操作小技巧；每次页面加载起点不同
   useEffect(() => {
@@ -145,12 +151,25 @@ export function ChatComposer(props: ChatComposerProps) {
         <div className="composer-footer">
           <div className="composer-toolrail">
             <div className="composer-model-group">
+              {/* 外部内核用自己的模型，这里的选择对本轮不生效，标注出来避免误导 */}
+              {engineStatus.data?.external ? (
+                <span
+                  className="composer-engine-badge"
+                  title={t(
+                    `Handled by ${engineStatus.data.label}; the model and thinking level below do not apply`,
+                    `由 ${engineStatus.data.label} 执行，下方的模型与思考等级不生效`
+                  )}
+                >
+                  <Cpu size={12} aria-hidden />
+                  {engineStatus.data.label}
+                </span>
+              ) : null}
               <ModelThinkingSelector
                 choices={props.choices}
                 selection={props.selection}
                 thinkingLevel={props.thinkingLevel}
                 loading={props.modelLoading}
-                disabled={props.running}
+                disabled={props.running || Boolean(engineStatus.data?.external)}
                 onModelSelect={props.onModelSelect}
                 onThinkingLevelChange={props.onThinkingLevelChange}
               />

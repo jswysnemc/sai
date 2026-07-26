@@ -18,7 +18,7 @@
 .background-task-detail { min-width: 0; min-height: 0; overflow: hidden; }
 .background-task-detail > header { display: grid; gap:var(--space-3xs); padding:var(--space-sm) var(--space-lg); border-bottom: 1px solid var(--terminal-line); }
 .background-task-detail header code { overflow: hidden; color: var(--terminal-muted); font:400 var(--text-2xs) var(--font-code); text-overflow: ellipsis; white-space: nowrap; }
-.background-task-detail pre { height: calc(100% - 52px); margin: 0; overflow: auto; padding:var(--space-lg); color: var(--terminal-text); font:400 var(--text-2xs)/1.6 var(--font-code); white-space: pre-wrap; overflow-wrap: anywhere; }
+.background-task-detail pre { height: calc(100% - 52px); margin: 0; overflow: auto; padding:var(--space-lg); color: var(--terminal-text); font:400 var(--text-sm)/1.6 var(--font-code); white-space: pre-wrap; overflow-wrap: anywhere; }
 .background-task-detail > p, .background-task-empty { color: var(--terminal-muted); font-size:var(--text-xs); text-align: center; }
 .background-task-error { position: absolute; right: 10px; bottom: 10px; }
 @media (max-width: 48rem) { .background-task-layout { grid-template-columns: 1fr; } .background-task-detail { display: none; } }

@@ -6,6 +6,7 @@ mod command_output;
 mod command_result_block;
 mod edit_diff;
 mod error;
+mod engine_notice;
 pub(crate) mod expandable;
 pub(crate) mod fold_text;
 mod live_tool_status;
@@ -43,8 +44,10 @@ pub(crate) mod work_status;
 pub(crate) use command_result_block::command_result_streams;
 pub(crate) use error::write_chat_error;
 pub(crate) use expandable::render_expandable_body;
+pub(crate) use engine_notice::engine_notice;
 pub(crate) use permission::{
     render_auto_audit_status, render_permission_controls, render_permission_decision,
+    render_permission_decision_for, PermissionView,
     render_permission_title, PermissionChoice,
 };
 pub use session_summary::print_session_summary;

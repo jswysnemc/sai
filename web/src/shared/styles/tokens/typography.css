@@ -33,9 +33,31 @@
   --tracking-wide: 0.02em;
   --tracking-wider: 0.06em;
 
-  /* 字族 */
-  --font-ui: "Fira Sans", sans-serif;
-  --font-code: "Fira Code", monospace;
+  /*
+   * 字族
+   *
+   * fontsource 只加载了 Fira Sans / Fira Code 的 latin 子集，中文字形必然回退。
+   * 若回退栈止于 sans-serif，中文将交给浏览器默认字族（Linux 上常是 DejaVu Sans），
+   * 与 Fira Sans 的字面高度和字重感知都不匹配，中英混排会出现两种字面。
+   * 因此显式给出各平台的 CJK 首选：macOS 苹方、Windows 微软雅黑、Linux 思源/Noto，
+   * 让西文走 Fira、中文走系统里视觉最接近的无衬线体。
+   *
+   * 西文回退排在 CJK 之前：字体匹配逐字进行，西文字符命中前面的西文字族，
+   * 落不到字形的 CJK 字符才继续向后寻找，两段互不干扰。
+   */
+  --font-cjk: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC",
+    "Source Han Sans SC", "WenQuanYi Micro Hei";
+  /*
+   * 等宽场景的 CJK 另起一栈：代码块与 diff 靠列对齐传达结构，
+   * 比例字族的标点与拉丁部分会让含中文注释的行错位，因此优先取真正的等宽 CJK，
+   * 系统没有装时才退回上面的比例字族——至少字形正确。
+   */
+  --font-cjk-mono: "Sarasa Mono SC", "Noto Sans Mono CJK SC", "Source Han Mono SC",
+    var(--font-cjk);
+  --font-ui: "Fira Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    var(--font-cjk), sans-serif;
+  --font-code: "Fira Code", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", var(--font-cjk-mono), monospace;
 }
 
 /*

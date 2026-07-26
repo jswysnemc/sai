@@ -81,11 +81,11 @@
 }
 
 .git-lane-color-0 { color: var(--signal); }
-.git-lane-color-1 { color: #3974a8; }
-.git-lane-color-2 { color: #b4691f; }
-.git-lane-color-3 { color: #2e8b68; }
-.git-lane-color-4 { color: #a44d73; }
-.git-lane-color-5 { color: #7164ad; }
+.git-lane-color-1 { color: var(--chart-1); }
+.git-lane-color-2 { color: var(--chart-3); }
+.git-lane-color-3 { color: var(--chart-2); }
+.git-lane-color-4 { color: var(--magenta); }
+.git-lane-color-5 { color: var(--violet); }
 
 .git-graph-content {
   display: grid;
@@ -152,7 +152,7 @@
 }
 
 .git-graph-direction i {
-  color: #3974a8;
+  color: var(--chart-1);
 }
 
 .git-commit-context-menu {

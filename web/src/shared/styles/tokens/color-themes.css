@@ -19,6 +19,16 @@
 }
 
 /*
+ * 扩展色相：7 套主题各自只给出 signal / danger / warning / blue 四个色相，
+ * 界面里还需要紫与玫红做区分度。这两个由既有色相混出，
+ * 亮暗主题下的明度自动跟随，不必在每套主题里重复定义。
+ */
+:root {
+  --violet: color-mix(in srgb, var(--blue) 55%, var(--danger) 45%);
+  --magenta: color-mix(in srgb, var(--danger) 62%, var(--blue) 38%);
+}
+
+/*
  * 图表序列色：由主题语义色派生，切换主题时自动跟随。
  * 顺序按可辨识度排列，超过 6 项的序列循环取用。
  */
@@ -29,6 +39,36 @@
   --chart-4: var(--danger);
   --chart-5: color-mix(in srgb, var(--blue) 55%, var(--ink));
   --chart-6: color-mix(in srgb, var(--signal) 50%, var(--ink-soft));
+}
+
+/*
+ * 提及原子色：输入框与用户气泡里的 @文件 / @技能 / @目标 / @终端 四类胶囊，
+ * 两处此前各写死一份等值实色，暗色主题下既不换色也不同步。
+ * 统一到这里后两处共用同一语义，改色只需改本文件。
+ */
+:root {
+  --mention-file: var(--blue);
+  --mention-skill: var(--signal);
+  --mention-goal: var(--warning);
+  --mention-terminal: var(--magenta);
+}
+
+/*
+ * 运行模式标识色：yolo 放行、audit 审计、plan 规划、auto 自动。
+ * 语义上分别对应告警、安全、信息、自动化四种含义。
+ */
+:root {
+  --run-mode-yolo: var(--warning);
+  --run-mode-audit: var(--signal);
+  --run-mode-plan: var(--blue);
+  --run-mode-auto: var(--violet);
+}
+
+/*
+ * 终端提示符色：shell 工具卡行首的 `$`，需要与命令正文拉开但不抢焦点。
+ */
+:root {
+  --shell-prompt: var(--violet);
 }
 :root {
   color-scheme: light;

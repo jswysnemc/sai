@@ -41,16 +41,22 @@ export function LiveRunIndicator({
   const elapsed = startedAtMs
     ? formatTurnElapsed(Math.max(0, nowMs - startedAtMs), locale.startsWith("zh"))
     : null;
+  // 2. 等待用户决定的两个阶段球在用户这边，不做流动动效，避免暗示系统正在推进
+  const tone = AWAITING_USER_STATUSES.has(status) ? "awaiting" : "busy";
   return (
-    <div className={`live-run-indicator ${status}`} role="status" aria-live="polite">
-      <span className="live-run-motion" aria-hidden="true"><i /><i /><i /></span>
-      <span>
-        {labels[status]}
-        {elapsed ? <span className="live-run-elapsed">({elapsed})</span> : null}
-      </span>
+    <div className={`live-run-indicator ${status} ${tone}`} role="status" aria-live="polite">
+      <span className="live-run-dot" aria-hidden="true" />
+      <span className="live-run-label">{labels[status]}</span>
+      {elapsed ? <span className="live-run-elapsed tnum">{elapsed}</span> : null}
     </div>
   );
 }
+
+/** 等待用户操作的阶段，指示器保持静态 */
+const AWAITING_USER_STATUSES = new Set<LiveRunState["status"]>([
+  "waiting_permission",
+  "waiting_question"
+]);
 
 /**
  * 格式化本轮已用时长。

@@ -166,6 +166,13 @@ impl ReplRuntime {
                 );
                 self.sync_transcript(true)
             }
+            AgentEvent::EngineReady { engine, version } => {
+                self.transcript.push_meta(format!(
+                    "{} {engine} {version}",
+                    crate::render::terminal_text("connected to", "已连接")
+                ));
+                self.sync_transcript(true)
+            }
             AgentEvent::FlushContent => {
                 self.transcript.finalize_live_tail();
                 self.sync_transcript(true)

@@ -8,6 +8,7 @@ description = "Command-line AI assistant"
 
 [dependencies]
 anyhow = "1.0"
+async-trait = "0.1"
 arboard = { version = "3.6.1", features = ["wayland-data-control"] }
 aes = "0.8"
 axum = { version = "0.7", features = ["ws"] }

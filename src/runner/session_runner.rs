@@ -487,8 +487,32 @@ mod tests {
             )
             .unwrap();
             assert!(!registry.contains("subagent"), "source: {source:?}");
-            assert!(!registry.contains("todo"), "source: {source:?}");
         }
+
+        // 3. 命令行入口虽非交互式，但多步任务同样需要计划，因此保留 todo；
+        //    网关没有人查看计划，仍然不提供
+        for source in [SubmissionSource::Command, SubmissionSource::ShellIntercept] {
+            let registry = build_submission_tool_registry(
+                &config,
+                &paths,
+                source,
+                AgentMode::Yolo,
+                "command-session",
+                std::path::Path::new("."),
+            )
+            .unwrap();
+            assert!(registry.contains("todo"), "source: {source:?}");
+        }
+        let gateway = build_submission_tool_registry(
+            &config,
+            &paths,
+            SubmissionSource::Gateway,
+            AgentMode::Yolo,
+            "gateway-session",
+            std::path::Path::new("."),
+        )
+        .unwrap();
+        assert!(!gateway.contains("todo"));
     }
 
     /// 验证短生命周期命令入口不会在模型请求前同步发现 MCP。

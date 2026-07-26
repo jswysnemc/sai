@@ -15,6 +15,14 @@ export type GroupedMessagePart =
 const MAX_SUMMARY_ITEMS = 3;
 
 /**
+ * 单项摘要的最大字符数。
+ *
+ * 组标题要在一行内读完，而个别工具的摘要可能是一整句任务描述
+ * （例如 subagent 的目标说明），不限长会把整行撑爆并挤掉其余条目。
+ */
+const MAX_SUMMARY_CHARS = 24;
+
+/**
  * 聚合连续且已完成的工具调用，运行中和失败调用始终独立展示。
  *
  * @param parts 原始消息部件
@@ -71,11 +79,13 @@ export function toolCallGroupLabel(
 
   const items = tools
     .map((tool) =>
-      toolDisplaySummary(
-        tool.name,
-        tool.arguments || tool.argumentsPreview || "",
-        locale,
-        workspacePath
+      clampSummary(
+        toolDisplaySummary(
+          tool.name,
+          tool.arguments || tool.argumentsPreview || "",
+          locale,
+          workspacePath
+        )
       )
     )
     .filter(Boolean);
@@ -173,4 +183,23 @@ function formatLabelList(items: string[], maxItems: number, locale: Locale): str
     return text(locale, `${joined}, and more`, `${joined} 等`);
   }
   return joined;
+}
+
+/**
+ * 截断过长的单项摘要。
+ *
+ * 优先在分隔符处断开，读起来像完整短语而不是被硬切一半。
+ *
+ * @param summary 原始摘要
+ * @returns 不超过上限的摘要
+ */
+function clampSummary(summary: string): string {
+  const trimmed = summary.trim();
+  if (trimmed.length <= MAX_SUMMARY_CHARS) return trimmed;
+  // 1. 优先在分隔符处断开，保留语义完整的前半段
+  const head = trimmed.slice(0, MAX_SUMMARY_CHARS);
+  const cut = Math.max(head.lastIndexOf(" - "), head.lastIndexOf("："), head.lastIndexOf(": "));
+  if (cut > MAX_SUMMARY_CHARS / 2) return `${head.slice(0, cut).trim()}…`;
+  // 2. 没有合适的断点时直接截断
+  return `${head.trim()}…`;
 }

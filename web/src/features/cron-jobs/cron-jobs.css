@@ -12,7 +12,7 @@
 .cron-primary-button:disabled { cursor: not-allowed; opacity: 0.5; }
 .cron-layout { display: grid; grid-template-columns: minmax(300px, 0.78fr) minmax(420px, 1.22fr); align-items: start; gap:var(--space-2xl); max-width: 1180px; margin: 0 auto; }
 .cron-form,
-.cron-list-panel { display: grid; gap:var(--space-2xl); padding:var(--space-3xl); border: 1px solid var(--line); border-radius:var(--radius-3); background: var(--paper-raised); box-shadow: 0 8px 30px rgb(20 28 23 / 5%); }
+.cron-list-panel { display: grid; gap:var(--space-2xl); padding:var(--space-3xl); border: 1px solid var(--line); border-radius:var(--radius-3); background: var(--paper-raised); box-shadow: var(--elevation-3); }
 .cron-section-heading { display: flex; align-items: flex-start; gap:var(--space-md); }
 .cron-section-heading > svg { margin-top:var(--space-3xs); color: var(--signal); }
 .cron-section-heading h2 { margin: 0; font-size:var(--text-2xl); letter-spacing: 0; }
@@ -35,7 +35,7 @@
 .cron-schedule-field { display: grid; grid-column: 1 / -1; gap:var(--space-xs); min-width: 0; margin: 0; padding: 0; border: 0; }
 .cron-segmented { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding:var(--space-3xs); border: 1px solid var(--line); border-radius:var(--radius-2); background: var(--paper-deep); }
 .cron-segmented button { min-height: 32px; border: 0; border-radius:var(--radius-1); background: transparent; color: var(--ink-soft); }
-.cron-segmented button.active { background: var(--paper-raised); color: var(--ink); box-shadow: 0 1px 5px rgb(20 28 23 / 10%); }
+.cron-segmented button.active { background: var(--paper-raised); color: var(--ink); box-shadow: var(--elevation-1); }
 .cron-job-list { display: grid; gap:var(--space-md); }
 .cron-job-row { display: grid; grid-template-columns: 86px minmax(0, 1fr) auto; align-items: start; gap:var(--space-xl); padding:var(--space-xl); border: 1px solid var(--line); border-radius:var(--radius-3); background: var(--paper); }
 .cron-job-row.enabled { border-color: color-mix(in srgb, var(--signal) 35%, var(--line)); }

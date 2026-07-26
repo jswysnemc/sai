@@ -319,6 +319,24 @@ pub(crate) fn register_interactive_tools(
     register_ask_question(registry);
 }
 
+/// 注册会话级 TODO 工具。
+///
+/// 交互式会话经 `register_interactive_tools` 一并注册；
+/// CLI 单次对话只需要 todo 而不需要 subagent 等长生命周期工具，因此单独开放这个入口。
+///
+/// 参数:
+/// - `registry`: 工具注册表
+/// - `state_dir`: 会话状态目录，TODO 状态文件落在其下
+///
+/// 返回:
+/// - 无
+pub(crate) fn register_todo(registry: &mut ToolRegistry, state_dir: &std::path::Path) {
+    if registry.contains("todo") {
+        return;
+    }
+    todo::register(registry, state_dir.join("todos.json"));
+}
+
 /// 注册结构化提问工具。
 ///
 /// 参数:

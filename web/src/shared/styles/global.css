@@ -16,6 +16,26 @@ body {
   color: var(--ink);
   font-family: var(--font-ui);
   font-size:var(--text-xl);
+  /* 字重渲染：关闭次像素加粗，中英混排时两段字族的观感字重才一致 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/*
+ * 全局选中态：默认的浏览器蓝与 7 套主题都不搭，改用主题信号色的浅色叠加。
+ * 用半透明而非实色，选中代码块与 diff 时底层的语法高亮仍然可读。
+ */
+::selection {
+  background: color-mix(in srgb, var(--signal) 26%, transparent);
+  color: var(--ink);
+}
+
+/*
+ * 数字等宽：计时器、token 计数、百分比等持续变化的数值统一挂这个类，
+ * 避免逐帧刷新时字宽变化带来的横向抖动。
+ */
+.tnum {
+  font-variant-numeric: tabular-nums;
 }
 
 button,
@@ -30,12 +50,27 @@ button {
   cursor: pointer;
 }
 
+/*
+ * 键盘聚焦指示
+ *
+ * 改造前统一用 2px 信号色 outline 加 2px 偏移：在输入框上会与控件自身的边框
+ * 叠成一深一浅两圈绿框，尺寸也比控件大一圈，观感突兀。
+ *
+ * 现按控件类型分开处理：
+ *   - 文本输入类本身有闪烁光标标明焦点，只需把边框换成信号色，不再外挂一圈
+ *   - 按钮、选择框没有光标，保留环但收细贴合，并用半透明色降低存在感
+ */
 button:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--signal) 70%, transparent);
+  outline-offset: 1px;
+}
+
 input:focus-visible,
-textarea:focus-visible,
-select:focus-visible {
-  outline: 2px solid var(--signal);
-  outline-offset: 2px;
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--signal);
 }
 
 /* 去掉 number 输入框上下三角步进按钮。 */

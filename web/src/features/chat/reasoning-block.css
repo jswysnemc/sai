@@ -36,7 +36,8 @@
   padding:var(--space-2xs) 0 var(--space-2xs) var(--space-xl);
   border-left: 1px solid var(--line);
   color: var(--ink-soft);
-  font-size:var(--text-sm);
+  /* 思考内容是成段正文，与助手正文同档阅读 */
+  font-size:var(--text-base);
   line-height: 1.72;
   white-space: pre-wrap;
 }

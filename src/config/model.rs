@@ -12,6 +12,9 @@ use std::collections::HashMap;
 pub struct AppConfig {
     pub active_provider: String,
     pub providers: Vec<ProviderConfig>,
+    /// 执行对话轮次的内核：sai 自带或外部 ACP agent
+    #[serde(default)]
+    pub agent: crate::config::AgentEngineConfig,
     #[serde(default)]
     pub permission: PermissionConfig,
     #[serde(default)]
@@ -315,9 +318,15 @@ pub struct ToolsConfig {
     /// 命令输出过滤器：auto（探测到 rtk 时启用）/ rtk（强制）/ off（关闭）。
     #[serde(default = "default_command_filter")]
     pub command_filter: String,
-    /// 参与 rtk 改写的命令族白名单；留空使用内置默认列表。
+    /// 不交给 rtk 接管的命令；留空表示 rtk 能代理的命令全部交给它。
+    ///
+    /// 代理范围由 rtk 自身决定（运行时探测其子命令并逐条询问映射），
+    /// 本列表只用于把个别命令排除在外。
+    ///
+    /// 语义与旧的 `command_filter_allowlist` 相反，因此不做字段别名兼容：
+    /// 沿用旧字段值会把「只让这些走 rtk」误读成「这些不走 rtk」。
     #[serde(default)]
-    pub command_filter_allowlist: Vec<String>,
+    pub command_filter_denylist: Vec<String>,
     #[serde(default = "default_true")]
     pub background_commands_enabled: bool,
     #[serde(default = "default_background_command_timeout_seconds")]

@@ -1,6 +1,14 @@
 import type { ITerminalOptions, ITheme } from "@xterm/xterm";
 
-export const TERMINAL_FONT_FAMILY = '"Fira Code", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace';
+/**
+ * 终端字体栈。
+ *
+ * xterm 按字符单元格排版，CJK 占两个单元格宽，因此 CJK 回退必须是真正的等宽字族；
+ * 换成比例字族会让含中文的行与光标位置错开。这里只补等宽 CJK，未安装时退回 monospace。
+ */
+export const TERMINAL_FONT_FAMILY =
+  '"Fira Code", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, ' +
+  '"Sarasa Mono SC", "Noto Sans Mono CJK SC", monospace';
 
 /**
  * 创建终端显示和交互选项。

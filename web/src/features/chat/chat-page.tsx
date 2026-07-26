@@ -5,6 +5,7 @@ import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { RunMode } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
+import { SkeletonText } from "../../shared/ui/skeleton/skeleton";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { useChatAgentContext } from "../agents/chat-agent-context";
 import { ChatComposer } from "./chat-composer";
@@ -211,6 +212,13 @@ export function ChatPage() {
         thinking.thinkingLevel,
         chatAgent.selection?.id
       );
+      // 记录原始输入而非技能展开后的文本：上下键翻回来的应当是用户当初打的内容
+      if (value) {
+        void api.inputHistory
+          .append(value)
+          .then((response) => queryClient.setQueryData(["input-history"], response))
+          .catch(() => undefined);
+      }
     } catch (error) {
       setInput(originalInput);
       writeComposerDraft(activeSession.id, originalInput);
@@ -240,9 +248,13 @@ export function ChatPage() {
   const runningStates = run.states.filter((state) => !state.completed);
   const activeRun = runningStates.find((state) => state.status !== "queued") ?? runningStates[0];
   const running = runningStates.length > 0;
-  const historyEntries = timeline.data?.turns
-    .filter((turn) => !turn.automatic)
-    .map((turn) => turn.user.content) ?? [];
+  // 输入历史与 TUI 共用同一份跨会话存储，切换会话后仍可翻到之前输入过的内容
+  const inputHistory = useQuery({
+    queryKey: ["input-history"],
+    queryFn: api.inputHistory.list,
+    staleTime: 30_000
+  });
+  const historyEntries = inputHistory.data?.entries ?? [];
 
   /**
    * 撤销最后一轮对话及该轮造成的工作树修改，并恢复用户输入。
@@ -377,7 +389,11 @@ export function ChatPage() {
             </div>
           </header>
           <div className="message-column">
-            {timeline.isLoading && <div className="empty-chat">{t("Loading conversation history", "正在读取会话历史")}</div>}
+            {timeline.isLoading && (
+              <div className="chat-timeline-skeleton">
+                <SkeletonText label={t("Loading conversation history", "正在读取会话历史")} lines={4} />
+              </div>
+            )}
             {activeSession && !timeline.isLoading && !emptySession && (
               <ContextPromptBanner sessionId={activeSession.id} agentId={chatAgent.selection?.id} />
             )}

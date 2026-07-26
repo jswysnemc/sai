@@ -22,6 +22,8 @@ pub(crate) struct SessionContextPrompt {
     pub content: String,
     /// 字符数
     pub char_count: usize,
+    /// 预估 token 数，与实际送入模型的口径一致（tiktoken o200k_base）
+    pub token_count: usize,
     /// 是否包含 instruction-files 片段
     pub has_instruction_files: bool,
     /// 是否包含技能目录片段
@@ -622,10 +624,13 @@ fn summarize_prompt(
         || content.contains("工具定义")
         || content.contains("Tool definitions");
     let char_count = content.chars().count();
+    // 与预算计算同一口径估算，界面显示的数值可直接对上上下文窗口占用
+    let token_count = crate::token_estimate::estimate_tokens(&content);
     SessionContextPrompt {
         source: source.to_string(),
         content,
         char_count,
+        token_count,
         has_instruction_files,
         has_skills,
         has_tools,

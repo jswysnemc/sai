@@ -1,0 +1,30 @@
+/*
+ * 外部内核连接提示
+ *
+ * 这是运行时证据而非常规内容，因此排版上刻意低调：一行、次要色、无边框，
+ * 只在本轮真正交给外部内核时出现一次。
+ */
+
+.engine-ready-part {
+  display: inline-flex;
+  align-items: center;
+  gap:var(--space-xs);
+  padding:var(--space-2xs) 0;
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+}
+
+.engine-ready-part svg {
+  flex: 0 0 auto;
+  color: var(--signal);
+}
+
+.engine-ready-part strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.engine-ready-part code {
+  color: var(--ink-soft);
+  font:400 var(--text-2xs) var(--font-code);
+}

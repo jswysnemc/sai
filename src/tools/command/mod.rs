@@ -8,6 +8,7 @@ mod goal_completions;
 mod process;
 mod progress;
 mod rtk_filter;
+mod rtk_probe;
 mod run;
 mod store;
 
@@ -17,7 +18,8 @@ use crate::tools::ToolRegistry;
 
 use background_tasks::BackgroundRuntimeOwner;
 
-pub(crate) use rtk_filter::rtk_available;
+pub(crate) use rtk_probe::{rtk_available, rtk_proxy_commands};
+pub(crate) use process::build_shell_command;
 
 pub(crate) use background::{
     cleanup_background_tasks_for_user, list_background_tasks_for_user,

@@ -389,11 +389,26 @@ export const api = {
         body: JSON.stringify({ repo_root: repoRoot })
       })
   },
+  inputHistory: {
+    /** 读取跨会话输入历史，与 TUI 共用同一份存储 */
+    list: () => apiRequest<import("./contracts").InputHistoryResponse>("/api/input-history"),
+    /** 记录一条输入历史并返回更新后的列表 */
+    append: (entry: string) =>
+      apiRequest<import("./contracts").InputHistoryResponse>("/api/input-history", {
+        method: "POST",
+        body: JSON.stringify({ entry })
+      })
+  },
+
   config: {
     load: () => apiRequest<ConfigResponse>("/api/config"),
     save: (config: Record<string, unknown>) =>
       apiRequest<ConfigResponse>("/api/config", { method: "PUT", body: JSON.stringify(config) }),
     loadMcp: () => apiRequest<McpConfigResponse>("/api/config/mcp"),
+    rtkStatus: () => apiRequest<import("./contracts").RtkStatusResponse>("/api/config/rtk-status"),
+    /** 读取当前对话内核状态，供界面标注失效信息 */
+    engineStatus: () =>
+      apiRequest<import("./contracts").EngineStatusResponse>("/api/config/engine-status"),
     saveMcp: (config: McpConfig) =>
       apiRequest<McpConfigResponse>("/api/config/mcp", { method: "PUT", body: JSON.stringify(config) }),
     scanMcpTools: (server: import("./contracts").McpServerConfig) =>

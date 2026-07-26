@@ -23,7 +23,9 @@
 }
 
 .markdown-body h1 { margin:var(--space-2xl) 0 var(--space-sm); padding-bottom:var(--space-xs); border-bottom: 1px solid var(--line); font-size: 1.5em; }
-.markdown-body h2 { margin:var(--space-2xl) 0 var(--space-xs); padding-bottom:var(--space-2xs); border-bottom: 1px solid var(--line); font-size: 1.32em; }
+/* h2 不再画下划线：聊天回复里每个小节都画一条会与代码块、表格的线连成栅格，
+   层级由字号、字重与上方留白表达已经足够 */
+.markdown-body h2 { margin:var(--space-2xl) 0 var(--space-xs); font-size: 1.32em; }
 .markdown-body h3 { margin:var(--space-xl) 0 var(--space-xs); font-size: 1.16em; }
 .markdown-body h4 { margin:var(--space-lg) 0 var(--space-2xs); font-size: 1.08em; }
 .markdown-body h5 { margin:var(--space-md) 0 var(--space-2xs); font-size: 1em; }
@@ -49,12 +51,15 @@
   accent-color: var(--signal);
 }
 
+/*
+ * 引用块：只保留左侧竖条一种区分手段。
+ * 改造前同时用了左条、背景色与圆角三层，与代码块、表格的外框叠在同一屏时框线过密；
+ * 竖条加降级的文字颜色已经足够表达"这是引证内容"，与 TUI 侧的绿色竖条语言一致。
+ */
 .markdown-body blockquote {
   margin:var(--space-md) 0;
-  padding:var(--space-xs) var(--space-lg);
-  border-left: 3px solid var(--line-strong);
-  border-radius:0 var(--radius-2) var(--radius-2) 0;
-  background: color-mix(in srgb, var(--paper-deep) 70%, transparent);
+  padding:var(--space-2xs) 0 var(--space-2xs) var(--space-lg);
+  border-left: 2px solid color-mix(in srgb, var(--signal) 55%, var(--line));
   color: var(--ink-soft);
 }
 
@@ -93,20 +98,27 @@
   background: var(--paper-deep);
 }
 
+/* 行内代码：底色已足够区分，去掉描边，行内不再出现一圈细框打断阅读节奏 */
 .inline-code {
   padding:var(--space-3xs) var(--space-xs);
-  border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
   border-radius:var(--radius-1);
   background: var(--paper-deep);
+  color: var(--code-text);
   font: 500 0.88em/1.5 var(--font-code);
 }
 
+/*
+ * 表格：去掉外框与竖向格线，只留表头下的一条实线与行间的浅分隔线。
+ *
+ * 改造前用了外框、全格线、表头底色、斑马纹四种手段做同一件事——区分单元格，
+ * 结果是一屏里最重的一块视觉噪音。列对齐本身由 padding 保证，竖线是冗余的；
+ * 行区分保留极淡的下边线一种，斑马纹取消，暗色主题下不再出现色带。
+ * 首列左侧不留 padding，表格因此与正文左边缘对齐。
+ */
 .markdown-table-wrap {
   max-width: 100%;
   margin:var(--space-lg) 0;
   overflow-x: auto;
-  border: 1px solid var(--line);
-  border-radius:var(--radius-3);
 }
 
 .markdown-body table {
@@ -118,18 +130,34 @@
 
 .markdown-body th,
 .markdown-body td {
-  padding:var(--space-sm) var(--space-md);
-  border-right: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  padding:var(--space-sm) var(--space-lg) var(--space-sm) 0;
   text-align: left;
 }
 
-.markdown-body th:last-child,
-.markdown-body td:last-child { border-right: 0; }
-.markdown-body tr:last-child td { border-bottom: 0; }
-.markdown-body th { background: var(--paper-deep); font-weight: 600; }
-.markdown-body tbody tr:nth-child(even) { background: color-mix(in srgb, var(--paper-deep) 40%, transparent); }
+.markdown-body th {
+  border-bottom: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+  font-weight: 600;
+}
 
+.markdown-body td {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+
+.markdown-body tr:last-child td { border-bottom: 0; }
+.markdown-body th:last-child,
+.markdown-body td:last-child { padding-right: 0; }
+
+/*
+ * 代码块：以底色作为唯一的区块边界，去掉外框与头栏分隔线。
+ * 原先外框、头栏底色、头栏下边线三层同时存在，块与块相邻时会连出四条平行线。
+ * 头栏改为与代码同底，靠字号与颜色降级区分，块整体读起来是一整片而不是一个盒子。
+ *
+ * 底色同时从 --code-surface 换成 --paper-deep：前者在亮色主题下比页面底还亮
+ * （#fcfdfd vs #f3f5f5），去掉边框后几乎读不出边界；--paper-deep 在 7 套主题下
+ * 都定义为比页面更沉的一档，明暗主题都能只靠底色划出区块。
+ */
 .markdown-code-block,
 .mermaid-wrapper {
   min-width: 0;
@@ -137,9 +165,8 @@
   max-width: 100%;
   margin:var(--space-lg) 0;
   overflow: hidden;
-  border: 1px solid var(--line);
   border-radius:var(--radius-3);
-  background: var(--code-surface);
+  background: var(--paper-deep);
 }
 
 .markdown-code-head,
@@ -147,12 +174,11 @@
   display: flex;
   align-items: center;
   gap:var(--space-sm);
-  min-height: 35px;
-  padding:var(--space-2xs) var(--space-sm) var(--space-2xs) var(--space-lg);
-  border-bottom: 1px solid var(--line);
-  background: var(--code-head);
+  min-height: 32px;
+  padding:var(--space-2xs) var(--space-sm) 0 var(--space-xl);
+  background: transparent;
   color: var(--ink-soft);
-  font:500 var(--text-2xs) var(--font-code);
+  font:500 var(--text-xs) var(--font-code);
   user-select: none;
 }
 
@@ -173,13 +199,14 @@
   border-radius:var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
-  font:400 var(--text-2xs) var(--font-ui);
+  font:400 var(--text-xs) var(--font-ui);
 }
 
+/* 头栏已改为与代码同底，hover 底色改用 ink 混色，避免与区块底色撞色 */
 .markdown-code-head button:hover,
 .mermaid-toolbar button:hover,
 .mermaid-toolbar button.active {
-  background: var(--paper-raised);
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
   color: var(--ink);
 }
 
@@ -190,12 +217,12 @@
   max-width: 100%;
   margin: 0;
   overflow: auto;
-  padding:var(--space-xl);
+  padding:var(--space-sm) var(--space-xl) var(--space-xl);
   border: 0;
   border-radius: 0;
-  background: var(--code-surface);
+  background: transparent;
   color: var(--code-text);
-  font:400 var(--text-sm)/1.62 var(--font-code);
+  font:400 var(--text-base)/1.62 var(--font-code);
   tab-size: 2;
 }
 
@@ -235,14 +262,14 @@
 .hljs-emphasis { font-style: italic; }
 .hljs-strong { font-weight: 600; }
 
+/* 分段控件位于 --paper-deep 的区块内，底色改用 ink 混色才与区块拉开 */
 .mermaid-view-switcher {
   display: inline-flex;
   align-items: center;
   gap:var(--space-3xs);
   padding:var(--space-3xs);
-  border: 1px solid var(--line);
   border-radius:var(--radius-2);
-  background: var(--paper-deep);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
 }
 
 .mermaid-toolbar .mermaid-view-switcher button {
@@ -255,12 +282,17 @@
   margin-left:var(--space-3xs);
 }
 
+/*
+ * 图预览：底色跟随区块，不再固定为浅色。
+ * mermaid 已按明暗外观选择内置主题（见 mermaid-diagram.tsx），
+ * 暗色主题下图形自带浅色前景，固定浅底反而会在暗色界面里留一块刺眼白板。
+ */
 .mermaid-preview {
   max-width: 100%;
   min-height: 80px;
   overflow: auto;
   padding:var(--space-xl);
-  background: #f8f8f4;
+  background: transparent;
 }
 
 .mermaid-preview svg {

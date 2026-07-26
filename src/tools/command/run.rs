@@ -179,7 +179,7 @@ async fn run_command(
     let rewritten = super::rtk_filter::rewrite_command(
         &command,
         &config.tools.command_filter,
-        &config.tools.command_filter_allowlist,
+        &config.tools.command_filter_denylist,
     );
     let filtered = rewritten.is_some();
     let command = rewritten.unwrap_or(command);

@@ -51,4 +51,12 @@ pub enum AgentEvent {
     },
     FlushContent,
     ExternalOutput,
+    /// 外部对话内核已连接。
+    ///
+    /// 名称与版本来自 ACP 握手响应里的 agentInfo，只有真正连上子进程才拿得到，
+    /// 因此这是「本轮由谁执行」的运行时证据，而不是配置读数的复述。
+    EngineReady {
+        engine: String,
+        version: String,
+    },
 }

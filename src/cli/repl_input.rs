@@ -349,13 +349,27 @@ pub(super) fn read_repl_input(
                         clear_repl_input(&mut stdout, input_row, rendered_rows)?;
                         runtime.end_composer()?;
                         terminal_guard.finish(&mut stdout)?;
-                        match edit_input_buffer(&input) {
+                        // 长文本占位块展开为正文进入编辑器，图片占位块先摘出，退出后按锚点复位
+                        let editor_buffer = super::repl_editor_buffer::prepare_editor_buffer(
+                            &input,
+                            &clipboard_state,
+                        );
+                        let had_text_blocks = clipboard_state.has_text_blocks(&input);
+                        match edit_input_buffer(&editor_buffer.text) {
                             Ok(edited) => {
-                                input = strip_terminal_control_sequences(&edited);
+                                let cleaned = strip_terminal_control_sequences(&edited);
+                                input = super::repl_editor_buffer::restore_editor_buffer(
+                                    &editor_buffer,
+                                    &cleaned,
+                                );
                                 cursor = input.chars().count();
                                 slash_selection = 0;
                                 history_clean_index = None;
-                                clipboard_state.clear();
+                                // 长文本已在编辑器里展开成正文，对应的占位块不再有承载对象；
+                                // 只有图片占位块需要保留登记，否则提交时取不到图片数据
+                                if had_text_blocks {
+                                    clipboard_state.forget_text_blocks();
+                                }
                             }
                             Err(err) => {
                                 eprintln!("{err}");

@@ -1,0 +1,193 @@
+/*
+ * 工具卡外壳
+ *
+ * 改造前工具卡、权限卡、清单卡各有一套头部：有的带外框有的不带，
+ * 状态被表达三次（图标变色 + 状态图标 + "执行完成"文字），标题格式也各不相同。
+ * 现在三者共用这一套结构，差异只体现在色调 token 上。
+ *
+ * 视觉规则：
+ *   - 不用外框。区块边界由展开体的左导轨表达，与左侧图标中心对齐
+ *   - 状态只在图标与状态标记上表达，文字不再重复
+ *   - 失败态只染图标与导轨，不铺红底，避免长对话里出现大面积色块
+ */
+
+.tool-shell {
+  /* 色调变量由 tone-* 覆盖，头部与导轨统一引用 */
+  --tool-tone: var(--ink-soft);
+  --tool-rail: color-mix(in srgb, var(--line) 70%, transparent);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tool-shell.tone-running { --tool-tone: var(--signal); }
+.tool-shell.tone-success { --tool-tone: var(--signal); }
+.tool-shell.tone-danger {
+  --tool-tone: var(--danger);
+  --tool-rail: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+.tool-shell.tone-attention {
+  --tool-tone: var(--warning);
+  --tool-rail: color-mix(in srgb, var(--warning) 45%, transparent);
+}
+
+/*
+ * 头部：图标 · 名称 · 对象 · 元信息 · 状态 · 箭头
+ * 对象列吸收剩余宽度并单行截断，其余列按内容宽度排布，
+ * 因此不同工具的卡片在同一列位置上始终对齐。
+ */
+.tool-shell-head {
+  display: grid;
+  grid-template-columns: 20px auto minmax(0, 1fr) auto auto 14px;
+  align-items: center;
+  gap:var(--space-sm);
+  min-height: 30px;
+  padding:var(--space-2xs) var(--space-2xs);
+  border-radius:var(--radius-2);
+  cursor: pointer;
+}
+
+.tool-shell-head:hover {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+.tool-shell-head:focus-visible {
+  outline: 1px solid var(--tool-tone);
+  outline-offset: -1px;
+}
+
+.tool-shell-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  color: var(--tool-tone);
+}
+
+.tool-shell-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tool-shell-title {
+  color: var(--ink);
+  font:500 var(--text-sm)/1.3 var(--font-ui);
+  white-space: nowrap;
+}
+
+/* 对象用等宽字体：路径与命令按字符对齐更易扫读 */
+.tool-shell-target {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font:400 var(--text-xs)/1.4 var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 对象位置嵌入的文件引用按钮继承同一字体，不自带下划线与配色 */
+.tool-shell-target .tool-file-reference,
+.tool-shell-target button {
+  max-width: 100%;
+  color: inherit;
+  font: inherit;
+}
+
+.tool-shell-meta {
+  color: var(--ink-soft);
+  font:400 var(--text-2xs)/1.3 var(--font-code);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tool-shell-status {
+  display: grid;
+  place-items: center;
+  color: var(--tool-tone);
+}
+
+.tool-shell-status svg {
+  width: 13px;
+  height: 13px;
+}
+
+.tool-shell-chevron {
+  justify-self: end;
+  color: var(--ink-soft);
+  transition:transform var(--duration-base) var(--ease-standard);
+}
+
+.tool-shell.is-open .tool-shell-chevron {
+  transform: rotate(180deg);
+}
+
+/*
+ * 展开体：左导轨从图标中心延伸下来，视觉上把详情挂在这次操作下面。
+ * 导轨位置 = 头部左内边距 + 图标半宽，因此与图标严格对齐。
+ */
+.tool-shell-body {
+  margin-left: calc(var(--space-2xs) + 9px);
+  padding-left:var(--space-lg);
+  border-left: 1px solid var(--tool-rail);
+}
+
+.tool-shell-body > * {
+  margin-block: 0;
+}
+
+/* 运行中的图标做呼吸，与底部运行指示器同一套语言 */
+.tool-shell.tone-running .tool-shell-icon {
+  animation: tool-shell-breathe 1.8s var(--ease-in-out) infinite;
+}
+
+@keyframes tool-shell-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-shell.tone-running .tool-shell-icon {
+    animation: none;
+  }
+}
+
+/*
+ * 权限徽章：权限已并入工具卡，头部只用一枚小徽章表明这次调用是被批准的。
+ * 自动放行用信号色，人工批准用中性色——前者是无人值守的结果，值得多一分注意。
+ */
+.tool-permission-badge {
+  display: inline-flex;
+  align-items: center;
+  gap:var(--space-3xs);
+  padding:0 var(--space-xs);
+  height: 1.125rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink-soft);
+  font:500 var(--text-2xs)/1 var(--font-ui);
+  white-space: nowrap;
+}
+
+.tool-permission-badge.auto {
+  background: color-mix(in srgb, var(--signal) 12%, transparent);
+  color: var(--signal);
+}
+
+.tool-permission-badge svg {
+  width: 11px;
+  height: 11px;
+}
+
+/* 审核理由：展开区首行，标签在上正文可换行 */
+.tool-permission-reason {
+  display: grid;
+  gap:var(--space-3xs);
+  margin-bottom:var(--space-sm);
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+  line-height: 1.5;
+}
+
+.tool-permission-reason span {
+  color: color-mix(in srgb, var(--ink-soft) 75%, transparent);
+  font-size:var(--text-2xs);
+}

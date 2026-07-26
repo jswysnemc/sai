@@ -1,11 +1,19 @@
-.markdown-code-block,
-.mermaid-wrapper,
+/*
+ * 技术面板统一表面色
+ *
+ * 覆盖终端、diff、工具卡这类"机器输出"区域，它们共用一套独立于页面配色的表面。
+ *
+ * markdown 正文里的代码块、mermaid 区块与聊天流里的差异视图不在此列：
+ * 它们是阅读内容的一部分，表面分别由 markdown-renderer.css 与 diff-view.css
+ * 按 --paper-deep 统一处理。此前两处都参与，谁生效取决于打包后的样式顺序，
+ * 底色因此不稳定。
+ */
+
 .tool-card,
 .tool-detail,
 .shell-tool-view,
 .edit-tool-view,
 .generic-tool-view,
-.structured-diff,
 .workspace-diff,
 .terminal-pane,
 .terminal-dock {
@@ -14,12 +22,9 @@
   color: var(--technical-text);
 }
 
-.markdown-code-block pre,
-.mermaid-source,
 .shell-command-line,
 .shell-output,
 .generic-tool-block,
-.structured-diff,
 .workspace-diff,
 .terminal-pane,
 .terminal-dock,
@@ -28,8 +33,6 @@
   color: var(--technical-text);
 }
 
-.markdown-code-head,
-.mermaid-toolbar,
 .tool-card-head,
 .changed-file,
 .legacy-edit-path,

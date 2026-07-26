@@ -40,6 +40,24 @@ impl StreamRenderer {
             None
         };
         let command_block_result = self.command_block_tools.remove(name);
+        // todo 结果是整份清单快照，直接按 JSON 打印读不出计划状态。
+        // 这里始终按 Full 渲染成清单：TUI 有沉底面板常驻展示计划，历史区只留摘要即可，
+        // CLI 是线性输出没有面板，摘要之外必须把条目本身写出来，否则计划无从查看。
+        if name == "todo" && ok {
+            if let Some(rendered) = crate::render::tool_view::render_todo_output(
+                &event_label,
+                output,
+                ok,
+                ToolCallDisplayMode::Full,
+            ) {
+                self.finish_live_tool_status()?;
+                let mut stdout = io::stdout();
+                writeln!(stdout, "{rendered}")?;
+                stdout.flush()?;
+                self.resume_work_spinner()?;
+                return Ok(());
+            }
+        }
         if self.tool_call_mode == ToolCallDisplayMode::Summary {
             if tool_call_has_visible_block(name) || command_block_result {
                 if name == "run_command" {

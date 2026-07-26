@@ -261,3 +261,26 @@
 .composer-footer .ui-button.composer-rail-button:focus-visible {
   box-shadow: var(--ring-focus);
 }
+
+/*
+ * 外部内核标识
+ *
+ * 只在对话交给外部 ACP 内核时出现，提示旁边的模型与思考等级不生效。
+ * 用信号色的浅底胶囊，与运行模式选择器同排但不抢焦点。
+ */
+.composer-engine-badge {
+  display: inline-flex;
+  align-items: center;
+  gap:var(--space-3xs);
+  height: 1.375rem;
+  padding:0 var(--space-xs);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--signal) 12%, transparent);
+  color: var(--signal);
+  font:500 var(--text-2xs)/1 var(--font-ui);
+  white-space: nowrap;
+}
+
+.composer-engine-badge svg {
+  flex: 0 0 auto;
+}

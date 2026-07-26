@@ -5,6 +5,8 @@
   display: grid;
   place-items: center;
   overflow: hidden;
+  /* 灯箱恒定为近黑遮罩，其上的控件同样用固定的浅色描边与前景：
+     看图场景需要屏蔽界面配色干扰，因此整套颜色不跟随主题 */
   background: rgb(10 12 11 / 82%);
   backdrop-filter: blur(6px);
 }

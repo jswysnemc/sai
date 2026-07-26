@@ -134,4 +134,31 @@ describe("tool call grouping", () => {
     if (grouped[0].type !== "tool-group") throw new Error("测试分组类型异常");
     expect(toolCallGroupLabel(grouped[0].tools)).toBe("更新了 3 次计划");
   });
+
+  it("clamps an overlong single summary so the group title stays on one line", () => {
+    const long = {
+      id: "t1",
+      name: "subagent",
+      arguments: JSON.stringify({
+        task: "测试 subagent 工具 - 读取并汇报文件内容，另外还要顺便检查若干细节"
+      }),
+      argumentsPreview: "",
+      progress: "",
+      output: "",
+      status: "completed" as const
+    };
+    const short = {
+      ...long,
+      id: "t2",
+      name: "run_command",
+      arguments: JSON.stringify({ command: "git status" })
+    };
+
+    const label = toolCallGroupLabel([long, short]);
+
+    // 长摘要被截断并加省略号，短摘要完整保留
+    expect(label).toContain("…");
+    expect(label).toContain("git status");
+    expect(label.length).toBeLessThan(60);
+  });
 });

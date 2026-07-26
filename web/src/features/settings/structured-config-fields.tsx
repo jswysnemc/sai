@@ -86,9 +86,9 @@ function fieldLabel(name: string, t: (en: string, zh: string) => string): string
     max_rounds: t("Maximum tool rounds", "最大工具轮次"),
     command_shell: t("Command Shell", "命令 Shell"),
     command_filter: t("Command output filter: auto / rtk / off", "命令输出过滤器：auto / rtk / off"),
-    command_filter_allowlist: t(
-      "rtk rewrite allowlist, empty uses builtin (git/cargo/pytest...)",
-      "rtk 改写白名单，留空使用内置（git/cargo/pytest 等）",
+    command_filter_denylist: t(
+      "Commands kept out of rtk, added on top of the builtin list (cat/grep/ls...)",
+      "不走 rtk 的命令，在内置列表（cat/grep/ls 等）之外追加",
     ),
     progressive_loading_enabled: t("Progressive loading", "渐进式加载"),
     background_commands_enabled: t("Allow background commands", "允许后台命令"),

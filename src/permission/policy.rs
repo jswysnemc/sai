@@ -82,17 +82,18 @@ impl PermissionProfile {
         self.record(tool, AuditDecision::Requested, arguments, None);
     }
 
-    /// 记录用户批准的权限请求。
+    /// 记录批准的权限请求。
     ///
     /// 参数:
     /// - `tool`: 工具名称
     /// - `arguments`: 工具参数
+    /// - `detail`: 批准说明；自动审核会给出放行理由，人工批准为 `None`
     ///
     /// 返回:
     /// - 无
-    pub(crate) fn record_approved(&self, tool: &str, arguments: &Value) {
+    pub(crate) fn record_approved(&self, tool: &str, arguments: &Value, detail: Option<&str>) {
         self.approve_once(tool, arguments);
-        self.record(tool, AuditDecision::Approved, arguments, None);
+        self.record(tool, AuditDecision::Approved, arguments, detail);
     }
 
     /// 记录用户拒绝的权限请求。
@@ -500,7 +501,7 @@ mod tests {
             None,
         );
         let args = json!({"patch":"*** Begin Patch\n*** Update File: ../secret\n@@\n-old\n+new\n*** End Patch"});
-        profile.record_approved("edit_file", &args);
+        profile.record_approved("edit_file", &args, None);
         assert!(profile
             .authorize("edit_file", ToolPermission::Writes, &args)
             .is_ok());
@@ -522,7 +523,7 @@ mod tests {
         assert!(profile
             .authorize("read_file", ToolPermission::ReadOnly, &args)
             .is_err());
-        profile.record_approved("read_file", &args);
+        profile.record_approved("read_file", &args, None);
         assert!(profile
             .authorize("read_file", ToolPermission::ReadOnly, &args)
             .is_ok());
@@ -537,7 +538,7 @@ mod tests {
             None,
         );
         let args = json!({"action":"start", "command":"sleep 1"});
-        profile.record_approved("background_command", &args);
+        profile.record_approved("background_command", &args, None);
         assert!(profile
             .authorize("background_command", ToolPermission::Writes, &args)
             .is_ok());
@@ -636,7 +637,7 @@ mod tests {
         );
         let args = json!({"command":"curl https://example.com"});
 
-        profile.record_approved("run_command", &args);
+        profile.record_approved("run_command", &args, None);
 
         assert!(!profile
             .authorize("run_command", ToolPermission::Writes, &args)

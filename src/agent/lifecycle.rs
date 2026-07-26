@@ -70,6 +70,17 @@ impl Agent {
             });
         live_mode.store(mode.as_u8(), std::sync::atomic::Ordering::SeqCst);
         tools.set_permission_mode(mode.permission_profile_mode());
+        // 配置指定外部内核时在此构建；构建失败直接报错而不是静默退回原生，
+        // 否则用户以为换了内核，实际仍在用 sai 自己的循环
+        // 外部内核与自带工具共用同一份权限配置，换内核不会绕过治理
+        let governance = crate::acp::AcpGovernance::new(
+            crate::runtime_cwd::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+            tools.permission_profile(),
+            config.clone(),
+            state.session_id().to_string(),
+        );
+        let external_engine = crate::agent_engine::build_external_engine(&config.agent, governance)
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
         Ok(Self {
             state,
             client,
@@ -87,6 +98,7 @@ impl Agent {
             config,
             paths: paths.clone(),
             last_dynamic_sources: Vec::new(),
+            external_engine,
         })
     }
 

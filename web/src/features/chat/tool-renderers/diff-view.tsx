@@ -3,6 +3,7 @@ import { parseDiff } from "./diff-parser";
 import type { DiffFile, DiffLine } from "./diff-parser";
 import { ToolFileReference } from "./tool-file-reference";
 import { useI18n } from "../../i18n/use-i18n";
+import "./diff-view.css";
 
 type DiffViewProps = {
   source: string;

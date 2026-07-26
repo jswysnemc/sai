@@ -1,0 +1,112 @@
+/* rtk 命令输出过滤器配置区域 */
+
+.rtk-filter-settings {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.rtk-filter-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.rtk-status-badge {
+  padding: var(--space-3xs) var(--space-md);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.rtk-status-badge.ok { background: var(--signal-soft); color: var(--signal); }
+
+.rtk-status-badge.missing { background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--warning); }
+
+.rtk-status-badge.unknown { background: var(--paper); color: var(--ink-soft); border: 1px solid var(--line); }
+
+.rtk-status-note {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+/*
+ * 排除项标签区：内置项与自定义项同区展示，条目数在 40 以上，
+ * 限高滚动避免撑开整个设置页；到达上下边界时用渐隐提示还有内容。
+ */
+.rtk-command-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  max-height: 9.5rem;
+  padding:var(--space-2xs);
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius:var(--radius-3);
+  background: var(--paper);
+}
+
+.rtk-command-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding: var(--space-3xs) var(--space-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--paper);
+  color: var(--ink);
+  font: 500 var(--text-sm) var(--font-code);
+  cursor: pointer;
+  transition: border-color var(--transition-base), color var(--transition-base);
+}
+
+.rtk-command-tag:hover { border-color: var(--line-strong); background: var(--paper-deep); }
+
+.rtk-command-tag span { color: var(--ink-soft); }
+
+.rtk-command-tag:hover span { color: var(--danger); }
+
+.rtk-denylist-input {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.rtk-denylist-input input { flex: 1; min-width: 0; }
+
+/* 空态提示与内置列表折叠入口 */
+.rtk-denylist-empty {
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+}
+
+.rtk-builtin-toggle {
+  justify-self: start;
+  padding:var(--space-2xs) 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--ink-soft) 40%, transparent);
+  text-underline-offset: 3px;
+}
+
+.rtk-builtin-toggle:hover {
+  color: var(--ink);
+}
+
+/* 被排除的命令：划掉并降低对比，一眼能看出哪些没走 rtk */
+.rtk-command-tag.excluded {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--line-strong) 70%, transparent);
+  background: transparent;
+  color: var(--ink-soft);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--ink-soft) 60%, transparent);
+}
+
+.rtk-command-tag.excluded:hover {
+  border-color: var(--signal);
+  color: var(--ink);
+  text-decoration: none;
+}

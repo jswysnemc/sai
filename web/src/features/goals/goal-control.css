@@ -92,7 +92,7 @@
 /* goal 模式激活：仅文字色提示，不做胶囊描边 */
 .goal-control-trigger.is-active,
 .goal-control-trigger.has-goal.is-active {
-  color: var(--signal, #3b82f6);
+  color: var(--signal);
   background: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
@@ -105,13 +105,13 @@
 
 /* 有目标时状态只体现在文案色，不画边框/底色 */
 .goal-control.status-active .goal-control-trigger.has-goal {
-  color: var(--signal, #3b82f6);
+  color: var(--signal);
 }
 
 .goal-control.status-blocked .goal-control-trigger.has-goal,
 .goal-control.status-budget_limited .goal-control-trigger.has-goal,
 .goal-control.status-usage_limited .goal-control-trigger.has-goal {
-  color: var(--danger, #dc2626);
+  color: var(--danger);
 }
 
 .goal-control.status-complete .goal-control-trigger.has-goal,
@@ -174,9 +174,9 @@
   max-height: min(24rem, 60vh);
   overflow: auto;
   padding:var(--space-lg);
-  border: 1px solid var(--line, rgba(127, 127, 127, 0.28));
+  border: 1px solid var(--line);
   border-radius:var(--radius-5);
-  background: var(--control-surface, var(--paper, #fff));
+  background: var(--control-surface);
   color: var(--ink);
   box-shadow: 0 10px 28px color-mix(in srgb, var(--ink) 16%, transparent);
 }
@@ -221,8 +221,8 @@
 }
 
 .goal-status-badge.status-active {
-  color: var(--signal, #3b82f6);
-  background: color-mix(in srgb, var(--signal, #3b82f6) 12%, transparent);
+  color: var(--signal);
+  background: color-mix(in srgb, var(--signal) 12%, transparent);
 }
 
 .goal-status-badge.status-complete {
@@ -233,8 +233,8 @@
 .goal-status-badge.status-blocked,
 .goal-status-badge.status-budget_limited,
 .goal-status-badge.status-usage_limited {
-  color: var(--danger, #dc2626);
-  background: color-mix(in srgb, var(--danger, #dc2626) 10%, transparent);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
 
 .goal-marker-close {
@@ -423,7 +423,7 @@
   padding:var(--space-sm) var(--space-sm);
   border: 1px solid var(--line);
   border-radius:var(--radius-3);
-  background: color-mix(in srgb, var(--paper, #fff) 88%, var(--control-surface, transparent));
+  background: color-mix(in srgb, var(--paper) 88%, var(--control-surface));
 }
 
 .goal-update-head {
@@ -439,7 +439,7 @@
 .goal-update-kind {
   flex: 0 0 auto;
   font-weight: 600;
-  color: var(--signal, #3b82f6);
+  color: var(--signal);
 }
 
 .goal-update-head time {

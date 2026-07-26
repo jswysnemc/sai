@@ -9,7 +9,6 @@ use crate::agent::Agent;
 mod session_support;
 mod submission_queue;
 
-pub(super) use session_support::load_repl_input_history;
 use session_support::{
     apply_ready_tool_registry, record_repl_history, reload_repl_agent, repl_welcome_model,
 };
@@ -33,7 +32,8 @@ pub(super) async fn run_repl(
     state.init_files()?;
     let mut client = OpenAiCompatibleClient::from_config(&config, paths)?;
     let mut mode = initial_mode;
-    let mut input_history = load_repl_input_history(&state)?;
+    // 输入历史跨会话共享：切换或新建会话都不清空，上限见 INPUT_HISTORY_LIMIT
+    let mut input_history = crate::state::input_history::load_input_history(paths)?;
     let mut prefill = None::<String>;
     let mut prefill_clipboard = None;
     let initial_transcript_options = render::transcript::TranscriptRenderOptions {
@@ -66,6 +66,11 @@ pub(super) async fn run_repl(
         )
         .to_string(),
     )?;
+    // 使用外部内核时明确告知：对话交给了谁、哪些 sai 功能因此停用，
+    // 否则压缩与记忆静默失效，用起来像是出了故障
+    if let Some(notice) = crate::render::engine_notice(&config.agent) {
+        runtime.record_meta(notice)?;
+    }
     record_repl_history(&mut runtime, &state)?;
     // 1. 重量级初始化前先呈现输入框，避免版本信息后长时间没有输入区
     {
@@ -223,7 +228,6 @@ pub(super) async fn run_repl(
                         state = StateStore::new(paths)?;
                         state.init_files()?;
                         agent.replace_state(state.clone())?;
-                        input_history = load_repl_input_history(&state)?;
                         prefill = None;
                         runtime.clear()?;
                         runtime.record_meta(message)?;
@@ -249,8 +253,7 @@ pub(super) async fn run_repl(
                                 state = StateStore::new(paths)?;
                                 state.init_files()?;
                                 agent.replace_state(state.clone())?;
-                                input_history = load_repl_input_history(&state)?;
-                                prefill = None;
+                                        prefill = None;
                                 runtime.clear()?;
                                 runtime.record_meta(message)?;
                                 record_repl_history(&mut runtime, &state)?;
@@ -309,11 +312,10 @@ pub(super) async fn run_repl(
                         };
                         runtime.finish_stream()?;
                         result?;
-                        input_history = load_repl_input_history(&state)?;
                     }
                     crate::control_commands::ControlCommand::Clear { all } => {
                         let message = crate::control_commands::clear_state(paths, all)?;
-                        input_history.clear();
+                        // 清理的是会话状态，跨会话输入历史保留
                         // 3. 会话清空后刷新 Agent 状态；all 时重建记忆
                         state = StateStore::new(paths)?;
                         state.init_files()?;
@@ -542,6 +544,8 @@ pub(super) async fn run_repl(
         }
         if !goal_continuation && !input.trim().is_empty() {
             input_history.push(input.to_string());
+            // 落盘失败不影响本轮对话，历史只是辅助功能
+            let _ = crate::state::input_history::append_input_history(paths, input);
         }
         if !goal_continuation {
             runtime.record_user(mode, input.to_string())?;

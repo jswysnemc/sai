@@ -4,7 +4,6 @@ use crate::cli::build_repl_tool_registry;
 use crate::cli::build_repl_tool_registry_for_session;
 use crate::cli::providers::apply_thinking_override;
 use crate::cli::repl_runtime::ReplRuntime;
-use crate::cli::repl_text::strip_terminal_control_sequences;
 use crate::cli::repl_tool_warmup::ReplToolWarmup;
 use crate::config::AppConfig;
 use crate::i18n::text as t;
@@ -134,6 +133,11 @@ pub(super) fn apply_ready_tool_registry(
 /// 返回:
 /// - 当前模型名称，未配置时返回占位符
 pub(super) fn repl_welcome_model(config: &AppConfig) -> String {
+    // 外部内核用它自己的模型，sai 的 provider 配置对本轮完全不生效。
+    // 这里显示内核名而不是 sai 的模型名，避免让人以为对话仍走这个模型。
+    if config.agent.engine.is_external() {
+        return config.agent.engine.display_label().to_string();
+    }
     config
         .provider(None)
         .ok()
@@ -174,26 +178,6 @@ pub(super) fn reload_repl_agent(
     Ok(())
 }
 
-/// 读取可供 REPL 浏览的用户输入历史。
-///
-/// 参数:
-/// - `state`: 当前会话状态存储
-///
-/// 返回:
-/// - 已清理终端控制序列的用户输入列表
-pub(in crate::cli) fn load_repl_input_history(state: &StateStore) -> Result<Vec<String>> {
-    Ok(state
-        .load_conversation()?
-        .into_iter()
-        .filter(|entry| {
-            entry.role == "user"
-                && !entry.content.trim().is_empty()
-                && !crate::goal::is_continuation_input(&entry.content)
-        })
-        .map(|entry| strip_terminal_control_sequences(&entry.content))
-        .filter(|content| !content.trim().is_empty())
-        .collect())
-}
 
 #[cfg(test)]
 mod tests {

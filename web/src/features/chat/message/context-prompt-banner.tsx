@@ -160,6 +160,8 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
   );
 
   const title = t("Loaded context", "已载入上下文");
+  // token 数是这张卡最该被看到的量，放在标题右侧，不与内容标签混在一起
+  const tokenCount = query.data?.token_count;
   const subtitle = query.isLoading
     ? t("Loading system prompt, tools and instruction files", "正在读取系统提示词、工具与指令文件")
     : query.error
@@ -226,7 +228,14 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
           {query.isLoading ? <Loader2 size={14} className="spin" /> : <BookMarked size={14} />}
         </span>
         <span className="context-prompt-banner-copy">
-          <span className="context-prompt-banner-title">{title}</span>
+          <span className="context-prompt-banner-title">
+            {title}
+            {typeof tokenCount === "number" && (
+              <span className="context-prompt-banner-tokens tnum">
+                {t(`~${formatTokenCount(tokenCount)} tokens`, `约 ${formatTokenCount(tokenCount)} tokens`)}
+              </span>
+            )}
+          </span>
           <span className="context-prompt-banner-subtitle">{subtitle}</span>
           {meta.length > 0 && (
             <span className="context-prompt-banner-tags">
@@ -236,11 +245,6 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
                   {tag}
                 </span>
               ))}
-              {typeof query.data?.char_count === "number" && (
-                <span className="context-prompt-banner-tag muted">
-                  {t(`${query.data.char_count} chars`, `${query.data.char_count} 字符`)}
-                </span>
-              )}
             </span>
           )}
         </span>
@@ -284,4 +288,17 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
       )}
     </section>
   );
+}
+
+/**
+ * 压缩 token 数的显示位数。
+ *
+ * 上下文动辄数万 token，完整数字读起来费力，超过一万后改用 k 表示。
+ *
+ * @param count 预估 token 数
+ * @returns 用于展示的字符串
+ */
+function formatTokenCount(count: number): string {
+  if (count < 10_000) return String(count);
+  return `${(count / 1000).toFixed(count < 100_000 ? 1 : 0)}k`;
 }

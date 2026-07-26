@@ -271,6 +271,10 @@ impl EventAssembler {
                     json!({ "applied": applied, "summary": summary, "error": error }),
                 )]
             }
+            AgentEvent::EngineReady { engine, version } => vec![self.event(
+                "engine.ready",
+                json!({ "engine": engine, "version": version }),
+            )],
             AgentEvent::FlushContent => vec![self.event("content.flushed", json!({}))],
             AgentEvent::ExternalOutput => vec![self.event("external.output", json!({}))],
         }

@@ -7,7 +7,7 @@
 .editor-breadcrumb-part button:hover,
 .editor-breadcrumb-part button.active { background: var(--paper-deep); color: var(--ink); }
 .editor-breadcrumb-part button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.editor-breadcrumb-menu { position: absolute; z-index: 20; top: calc(100% + 3px); left: 0; display: grid; width: min(370px, calc(100vw - 48px)); max-height: 310px; overflow-y: auto; padding:var(--space-2xs); border: 1px solid var(--line); border-radius:var(--radius-3); background: var(--paper); box-shadow: 0 12px 32px rgb(0 0 0 / 14%); }
+.editor-breadcrumb-menu { position: absolute; z-index: 20; top: calc(100% + 3px); left: 0; display: grid; width: min(370px, calc(100vw - 48px)); max-height: 310px; overflow-y: auto; padding:var(--space-2xs); border: 1px solid var(--line); border-radius:var(--radius-3); background: var(--paper); box-shadow: var(--elevation-4); }
 .editor-breadcrumb-menu-item { display: grid; grid-template-columns: 12px 18px minmax(0, 1fr); align-items: center; gap:var(--space-2xs); width: 100%; min-height: 29px; padding:0 var(--space-xs); overflow: hidden; border: 0; border-radius:var(--radius-1); background: transparent; color: var(--ink-soft); text-align: left; }
 .editor-breadcrumb-menu-item:hover { background: var(--paper-raised); color: var(--ink); }
 .editor-breadcrumb-menu-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -15,3 +15,15 @@
 .editor-breadcrumb-folder-chevron.open { transform: rotate(90deg); }
 .editor-breadcrumb-file-spacer { width: 12px; }
 .editor-breadcrumb-empty { padding:var(--space-lg) var(--space-sm); color: var(--ink-soft); font-size:var(--text-2xs); }
+
+/*
+ * 浮层材质：底色留出一点透明度并模糊背景。
+ * 浮层与页面之间因此有深度关系，而不是一块贴上去的实色板；
+ * 不支持 backdrop-filter 的环境自动退回上面声明的实色底，观感不受影响。
+ */
+@supports (backdrop-filter: blur(1px)) {
+  .editor-breadcrumb-menu {
+    background: color-mix(in srgb, var(--paper-raised) 88%, transparent);
+    backdrop-filter: blur(14px) saturate(140%);
+  }
+}

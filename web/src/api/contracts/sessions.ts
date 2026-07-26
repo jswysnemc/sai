@@ -122,6 +122,8 @@ export type SessionContextPrompt = {
   source: "session_baseline" | "live" | string;
   content: string;
   char_count: number;
+  /** 预估 token 数，与后端预算口径一致 */
+  token_count?: number;
   has_instruction_files: boolean;
   has_skills: boolean;
   has_tools: boolean;
@@ -132,3 +134,11 @@ export type SessionContextPrompt = {
   sections: string[];
 };
 
+
+/** 跨会话共享的输入历史 */
+export type InputHistoryResponse = {
+  /** 按时间正序排列，末项为最近一次输入 */
+  entries: string[];
+  /** 服务端保留的条数上限 */
+  limit: number;
+};

@@ -196,6 +196,105 @@ describe("runEventReducer", () => {
     ]);
   });
 
+  it("merges a granted permission into the tool card it authorized", () => {
+    const request = {
+      id: "permission",
+      session_id: "session",
+      tool: "run_command",
+      arguments: "{\"command\":\"rm -rf tmp\"}"
+    };
+    const waiting = runEventReducer(initialRunState, {
+      type: "event",
+      event: event("permission.requested", request)
+    });
+    const granted = runEventReducer(waiting, {
+      type: "event",
+      event: event("permission.resolved", {
+        request_id: request.id,
+        decision: { decision: "allow", source: "auto_audit", reason: "只读查询" }
+      })
+    });
+    const called = runEventReducer(granted, {
+      type: "event",
+      event: event("tool.call.started", { tool_id: "call-1", name: "run_command", arguments: request.arguments })
+    });
+
+    // 同一次操作只留一张卡：独立权限卡消失，决定挂到工具上
+    expect(called.parts.filter((part) => part.type === "permission")).toHaveLength(0);
+    const toolPart = called.parts.find((part) => part.type === "tool");
+    expect(toolPart).toMatchObject({
+      type: "tool",
+      tool: {
+        name: "run_command",
+        permission: { decision: "allow", source: "auto_audit", reason: "只读查询" }
+      }
+    });
+  });
+
+  it("keeps a denied permission as its own card since no tool runs", () => {
+    const request = {
+      id: "permission",
+      session_id: "session",
+      tool: "run_command",
+      arguments: "{\"command\":\"rm -rf /\"}"
+    };
+    const waiting = runEventReducer(initialRunState, {
+      type: "event",
+      event: event("permission.requested", request)
+    });
+    const denied = runEventReducer(waiting, {
+      type: "event",
+      event: event("permission.resolved", {
+        request_id: request.id,
+        decision: { decision: "deny", reply: "风险过高" }
+      })
+    });
+
+    expect(denied.parts.filter((part) => part.type === "permission")).toHaveLength(1);
+  });
+
+  it("does not attach a granted permission to an unrelated tool", () => {
+    const request = {
+      id: "permission",
+      session_id: "session",
+      tool: "run_command",
+      arguments: "{\"command\":\"ls\"}"
+    };
+    const waiting = runEventReducer(initialRunState, {
+      type: "event",
+      event: event("permission.requested", request)
+    });
+    const granted = runEventReducer(waiting, {
+      type: "event",
+      event: event("permission.resolved", {
+        request_id: request.id,
+        decision: { decision: "allow", source: "human" }
+      })
+    });
+    const other = runEventReducer(granted, {
+      type: "event",
+      event: event("tool.call.started", { tool_id: "call-1", name: "read_file", arguments: "{}" })
+    });
+
+    // 工具名不符时宁可保留独立权限卡，也不做错误关联
+    expect(other.parts.filter((part) => part.type === "permission")).toHaveLength(1);
+    const toolPart = other.parts.find((part) => part.type === "tool");
+    expect(toolPart?.type).toBe("tool");
+    expect(toolPart?.type === "tool" ? toolPart.tool.permission : "missing").toBeUndefined();
+  });
+
+  /// 外部内核连上后要留下可见证据，否则用户无法分辨本轮由谁执行。
+  it("records which engine took over the turn", () => {
+    const state = runEventReducer(initialRunState, {
+      type: "event",
+      event: event("engine.ready", { engine: "Codex", version: "1.1.7" })
+    });
+
+    expect(state.parts).toEqual([
+      expect.objectContaining({ type: "engine_ready", engine: "Codex", version: "1.1.7" })
+    ]);
+  });
+
   it("keeps partial assistant content when a run is interrupted", () => {
     const content = runEventReducer(initialRunState, {
       type: "event",

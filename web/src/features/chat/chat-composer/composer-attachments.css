@@ -42,6 +42,8 @@
   padding: 0;
   border: 0;
   border-radius: var(--radius-pill);
+  /* 删除按钮叠在用户上传的任意图片上，底色须恒定为深、前景恒定为浅，
+     跟随主题会在浅色图片上失去对比 */
   background: rgb(16 22 18 / 78%);
   color: #f2f5f3;
   line-height: 0;

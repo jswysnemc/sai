@@ -41,7 +41,9 @@ export type PermissionRequest = {
 export type PermissionAllowSource = "human" | "auto_audit";
 
 export type PermissionDecision =
-  | { decision: "allow"; source?: PermissionAllowSource }
+  /** 允许；reason 仅自动审核给出，是模型的放行理由，不回传给模型 */
+  | { decision: "allow"; source?: PermissionAllowSource; reason?: string | null }
+  /** 拒绝；reply 会作为工具输出回传给模型 */
   | { decision: "deny"; reply?: string | null };
 
 export type QuestionOption = {

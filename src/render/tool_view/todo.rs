@@ -34,9 +34,34 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
         return Some(tool_event_text(&label, "run"));
     }
     let outcome = view.outcome.as_ref()?;
-    let result = serde_json::from_str::<TodoResultView>(&outcome.output).ok()?;
     let label = tool_event_label("todo", Some(&view.arguments));
-    let mut output = tool_event_text(&label, if outcome.ok { "ok" } else { "err" });
+    render_todo_output(&label, &outcome.output, outcome.ok, mode)
+}
+
+/// 从 todo 工具的原始结果渲染清单。
+///
+/// 不依赖 TUI 的工具视图模型，CLI 的流式输出路径可以直接调用。
+/// 标签由调用方给出：流式路径只缓存了标签，拿不到工具参数原文。
+///
+/// 参数:
+/// - `label`: 已生成的工具事件标签
+/// - `result_json`: todo 工具结果 JSON
+/// - `ok`: 工具是否执行成功
+/// - `mode`: 工具展示模式
+///
+/// 返回:
+/// - 结果可解析时返回清单文本
+pub(crate) fn render_todo_output(
+    label: &str,
+    result_json: &str,
+    ok: bool,
+    mode: ToolCallDisplayMode,
+) -> Option<String> {
+    if mode == ToolCallDisplayMode::Hidden {
+        return Some(String::new());
+    }
+    let result = serde_json::from_str::<TodoResultView>(result_json).ok()?;
+    let mut output = tool_event_text(label, if ok { "ok" } else { "err" });
 
     let total = result.items.len();
     let completed = result
@@ -150,6 +175,47 @@ fn colorize_item(status: &str, text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// CLI 没有沉底面板，Full 渲染必须把每个条目都写出来，
+    /// 否则计划只剩一行统计，用户无从查看。
+    #[test]
+    fn full_mode_lists_every_item_for_cli() {
+        let result = r#"{"ok":true,"items":[
+            {"text":"读取配置","status":"completed"},
+            {"text":"改写解析","status":"in_progress"},
+            {"text":"补测试","status":"pending"}
+        ]}"#;
+
+        let rendered =
+            render_todo_output("Todo", result, true, ToolCallDisplayMode::Full).unwrap();
+
+        assert!(rendered.contains("读取配置"));
+        assert!(rendered.contains("改写解析"));
+        assert!(rendered.contains("补测试"));
+        assert!(rendered.contains("1/3 done"));
+    }
+
+    /// Summary 模式供 TUI 使用：清单由沉底面板常驻，历史区只留进行中项。
+    #[test]
+    fn summary_mode_keeps_only_the_active_item() {
+        let result = r#"{"ok":true,"items":[
+            {"text":"读取配置","status":"completed"},
+            {"text":"改写解析","status":"in_progress"},
+            {"text":"补测试","status":"pending"}
+        ]}"#;
+
+        let rendered =
+            render_todo_output("Todo", result, true, ToolCallDisplayMode::Summary).unwrap();
+
+        assert!(rendered.contains("改写解析"));
+        assert!(!rendered.contains("补测试"));
+    }
+
+    /// 结果不是合法清单 JSON 时交回默认渲染，不吞掉输出。
+    #[test]
+    fn unparsable_result_falls_back() {
+        assert!(render_todo_output("Todo", "not json", true, ToolCallDisplayMode::Full).is_none());
+    }
 
     #[test]
     fn status_marker_covers_common_states() {

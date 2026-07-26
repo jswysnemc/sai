@@ -1,0 +1,95 @@
+/*
+ * 插件配置表单
+ *
+ * 改造前所有字段平铺在一个网格里：凭据、地址、数值、开关混排，
+ * 控件高度参差，也看不出哪些必须先填。现在分三层——
+ * 总开关独占顶部，其余按语义分组，组内才是原有的字段网格。
+ */
+
+.plugin-config-editor {
+  display: grid;
+  gap:var(--space-3xl);
+  min-width: 0;
+}
+
+/* 总开关：整行一块，与下方配置明确分开 */
+.plugin-enable-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap:var(--space-2xl);
+  padding:var(--space-lg) var(--space-2xl);
+  border: 1px solid var(--line);
+  border-radius:var(--radius-4);
+  background: var(--paper-raised);
+}
+
+/* 启用时用信号色描边表明当前生效 */
+.plugin-enable-row.is-on {
+  border-color: color-mix(in srgb, var(--signal) 34%, var(--line));
+  background: color-mix(in srgb, var(--signal) 4%, var(--paper-raised));
+}
+
+.plugin-enable-copy {
+  display: grid;
+  gap:var(--space-3xs);
+  min-width: 0;
+}
+
+.plugin-enable-copy strong {
+  font-size:var(--text-base);
+  font-weight: 600;
+}
+
+.plugin-enable-copy small {
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+  line-height: 1.45;
+}
+
+.plugin-enable-row input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: var(--signal);
+}
+
+.plugin-config-group {
+  display: grid;
+  gap:var(--space-lg);
+  min-width: 0;
+}
+
+/*
+ * 组标题：一条与标题同高的信号色短竖条替代整行分隔线。
+ * 分隔线会与字段网格里的输入框边框叠成多层横线，短竖条只标记起点。
+ */
+.plugin-config-group-head {
+  display: grid;
+  gap:var(--space-3xs);
+  padding-left:var(--space-md);
+  border-left: 2px solid color-mix(in srgb, var(--signal) 45%, transparent);
+}
+
+.plugin-config-group-head h4 {
+  margin: 0;
+  font-size:var(--text-base);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.plugin-config-group-head small {
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+  line-height: 1.45;
+}
+
+@media (max-width: 48rem) {
+  .plugin-config-editor {
+    gap:var(--space-2xl);
+  }
+
+  .plugin-enable-row {
+    padding:var(--space-md) var(--space-lg);
+  }
+}

@@ -55,10 +55,56 @@ const LANGUAGE_ALIASES: Record<string, string> = {
  */
 export function SyntaxHighlighter({ language, source }: { language?: string; source: string }) {
   const normalized = normalizeLanguage(language);
-  const result = normalized && hljs.getLanguage(normalized)
-    ? hljs.highlight(source, { language: normalized, ignoreIllegals: true })
-    : hljs.highlightAuto(source);
-  return <code className={`hljs${normalized ? ` language-${normalized}` : ""}`} dangerouslySetInnerHTML={{ __html: result.value }} />;
+  const resolved = normalized && hljs.getLanguage(normalized) ? normalized : detectLanguage(source);
+  const result = resolved
+    ? hljs.highlight(source, { language: resolved, ignoreIllegals: true })
+    : hljs.highlightAuto(source, AUTO_DETECT_LANGUAGES);
+  return <code className={`hljs${resolved ? ` language-${resolved}` : ""}`} dangerouslySetInnerHTML={{ __html: result.value }} />;
+}
+
+/**
+ * 自动检测时允许参与的语言。
+ *
+ * 刻意排除 diff：它的特征是"行首是 + 或 -"，几乎任何缩进文本都能碰上，
+ * 一旦误判，整段内容会被套上 hljs-addition 的绿色底纹（读文件结果曾因此长满色块）。
+ * 无扩展名的路径本来就走自动检测，所以必须在候选集合这一层挡掉。
+ */
+const AUTO_DETECT_LANGUAGES = [
+  "json",
+  "bash",
+  "yaml",
+  "typescript",
+  "javascript",
+  "python",
+  "rust",
+  "go",
+  "xml",
+  "markdown"
+];
+
+/**
+ * 在没有可靠语言标识时按内容特征判定语言。
+ *
+ * 只处理能确定的情况，判不出来时返回空串交给受限的自动检测。
+ *
+ * @param source 待着色的源码
+ * @returns 语言标识，无法判定时返回空串
+ */
+function detectLanguage(source: string): string {
+  const head = source.trimStart();
+  if (!head) return "";
+  // 1. 成对的花括号或方括号且能解析，按 JSON 处理
+  if (head.startsWith("{") || head.startsWith("[")) {
+    try {
+      JSON.parse(source);
+      return "json";
+    } catch {
+      return "";
+    }
+  }
+  // 2. 统一 diff 的头部标记明确，可以直接确认
+  if (head.startsWith("diff --git") || head.startsWith("--- ") || head.startsWith("@@ ")) return "diff";
+  return "";
 }
 
 /**

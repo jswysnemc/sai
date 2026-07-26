@@ -283,7 +283,7 @@ function buildTurnDiffSource(tools: readonly ToolLike[], path: string | null): s
       continue;
     }
     const filePath = stringField(args, "path");
-    if (!filePath || (path && filePath !== path)) continue;
+    if (!filePath || (path && !pathsMatch(filePath, path))) continue;
     const content = stringField(args, "content");
     const oldString = stringField(args, "old_string");
     const newString = stringField(args, "new_string");
@@ -292,6 +292,33 @@ function buildTurnDiffSource(tools: readonly ToolLike[], path: string | null): s
     }
   }
   return chunks.filter(Boolean).join("\n");
+}
+
+/**
+ * 判断两个路径是否指向同一文件。
+ *
+ * changed_files 常返回绝对路径，而工具参数多为工作区相对路径，
+ * 因此在归一化分隔符后按后缀对齐。
+ *
+ * @param left 路径一
+ * @param right 路径二
+ * @returns 是否匹配
+ */
+function pathsMatch(left: string, right: string): boolean {
+  const a = normalizePath(left);
+  const b = normalizePath(right);
+  if (a === b) return true;
+  return a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
+}
+
+/**
+ * 归一化路径分隔符并去掉开头的 ./ 前缀。
+ *
+ * @param path 原始路径
+ * @returns 归一化路径
+ */
+function normalizePath(path: string): string {
+  return path.replaceAll("\\", "/").replace(/^\.\//, "");
 }
 
 /**
@@ -306,7 +333,7 @@ function patchIncludesPath(patch: string, path: string): boolean {
     line.startsWith("*** Add File: ") ||
     line.startsWith("*** Delete File: ") ||
     line.startsWith("*** Update File: ")
-      ? line.slice(line.indexOf(": ") + 2).trim() === path
+      ? pathsMatch(line.slice(line.indexOf(": ") + 2).trim(), path)
       : false
   );
 }
@@ -325,7 +352,7 @@ function extractPatchForPath(patch: string, path: string): string {
   for (const line of lines) {
     if (/^\*\*\* (Add|Delete|Update) File: /.test(line)) {
       const filePath = line.slice(line.indexOf(": ") + 2).trim();
-      capturing = filePath === path;
+      capturing = pathsMatch(filePath, path);
       if (capturing) result.push(line);
       continue;
     }

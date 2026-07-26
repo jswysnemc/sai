@@ -1,0 +1,159 @@
+/*
+ * 差异视图
+ *
+ * 改造前每一行同时用了三种手段表达增删：3px 左色条、整行背景、整行文字染色。
+ * 三者叠加的结果是——语法高亮被行级 color 覆盖掉（代码里明明接了高亮器），
+ * 一屏 diff 变成两片纯绿纯红的色块，行首还多出一列色条与行号列的竖线并排。
+ *
+ * 现在只保留一种手段：极淡的行背景 + 行首标记符号着色。
+ * 代码本身交回语法高亮，读 diff 时看到的是代码，不是色块。
+ */
+
+.structured-diff {
+  min-width: 0;
+  max-width: 100%;
+  max-height: 460px;
+  overflow: auto;
+  border-radius:var(--radius-3);
+  background: var(--paper-deep);
+  color: var(--technical-text);
+  font:400 var(--text-sm)/1.6 var(--font-code);
+}
+
+.diff-file + .diff-file {
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+
+/*
+ * 文件头：与代码同底，靠字重与颜色分层，不再压一条深色条。
+ * 横向滚动时贴左，长路径滚动过程中始终可见。
+ */
+.diff-file-head {
+  position: sticky;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap:var(--space-sm);
+  padding:var(--space-sm) var(--space-lg) var(--space-2xs);
+  background: transparent;
+}
+
+.diff-file-head .tool-file-reference {
+  min-width: 0;
+}
+
+.diff-file-head strong {
+  overflow: hidden;
+  color: var(--technical-text);
+  font-size:var(--text-xs);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-file-head small {
+  color: var(--ink-soft);
+  font-size:var(--text-2xs);
+}
+
+/* 增删统计：纯文字着色，不再套两个小色块 */
+.diff-file-stats {
+  display: flex;
+  gap:var(--space-sm);
+  margin-left: auto;
+  font:500 var(--text-2xs) var(--font-code);
+  font-variant-numeric: tabular-nums;
+}
+
+.diff-file-stats b {
+  color: var(--diff-added-text);
+  font-weight: 600;
+}
+
+.diff-file-stats i {
+  color: var(--diff-removed-text);
+  font-style: normal;
+  font-weight: 600;
+}
+
+.diff-file-lines {
+  overflow-x: auto;
+  padding-bottom:var(--space-2xs);
+}
+
+.diff-row {
+  display: grid;
+  grid-template-columns: 3rem 3rem minmax(max-content, 1fr);
+  min-width: max-content;
+}
+
+.diff-file-lines.single-gutter .diff-row {
+  grid-template-columns: 3rem minmax(max-content, 1fr);
+}
+
+.diff-file-lines.no-gutter .diff-row {
+  grid-template-columns: minmax(max-content, 1fr);
+}
+
+/* 行号列：去掉竖分隔线，靠右对齐与降低对比就足以和代码分开 */
+.diff-gutter {
+  padding:0 var(--space-sm) 0 var(--space-2xs);
+  color: color-mix(in srgb, var(--ink-soft) 70%, transparent);
+  font-size:var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  user-select: none;
+}
+
+.diff-row code {
+  padding:0 var(--space-lg) 0 0;
+  font-family: var(--font-code);
+  white-space: pre;
+}
+
+/* 行首标记：增删的唯一色彩来源，宽度固定让代码列始终对齐 */
+.diff-marker {
+  display: inline-block;
+  width: 1.25rem;
+  color: var(--ink-soft);
+  text-align: center;
+  user-select: none;
+}
+
+/*
+ * 增删行：只铺极淡的底色，不覆盖文字颜色。
+ * 语法高亮因此保持有效，diff 读起来仍然是代码。
+ */
+.diff-row.added {
+  background: color-mix(in srgb, var(--diff-added-bg) 60%, transparent);
+}
+
+.diff-row.added .diff-marker {
+  color: var(--diff-added-text);
+  font-weight: 600;
+}
+
+.diff-row.removed {
+  background: color-mix(in srgb, var(--diff-removed-bg) 60%, transparent);
+}
+
+.diff-row.removed .diff-marker {
+  color: var(--diff-removed-text);
+  font-weight: 600;
+}
+
+/* hunk 分隔行：只降对比不铺色，它是分节标记而非内容 */
+.diff-row.hunk {
+  color: var(--ink-soft);
+}
+
+.diff-row.hunk code {
+  font-size:var(--text-2xs);
+  opacity: 0.75;
+}
+
+/* 紧凑模式：嵌在工具卡展开区时去掉圆角与底色，跟随外层导轨 */
+.structured-diff.is-compact {
+  border-radius: 0;
+  background: transparent;
+}

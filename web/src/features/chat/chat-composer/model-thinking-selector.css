@@ -275,3 +275,16 @@
   border-color: var(--signal);
   box-shadow: var(--ring-focus);
 }
+
+/*
+ * 浮层材质：底色留出一点透明度并模糊背景。
+ * 浮层与页面之间因此有深度关系，而不是一块贴上去的实色板；
+ * 不支持 backdrop-filter 的环境自动退回上面声明的实色底，观感不受影响。
+ */
+@supports (backdrop-filter: blur(1px)) {
+  .model-thinking-sections,
+  .model-thinking-options {
+    background: color-mix(in srgb, var(--paper-raised) 88%, transparent);
+    backdrop-filter: blur(14px) saturate(140%);
+  }
+}

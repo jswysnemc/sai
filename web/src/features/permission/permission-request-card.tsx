@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ShieldAlert, X } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
@@ -7,6 +7,8 @@ import { Button } from "../../shared/ui/button/button";
 import { TextArea } from "../../shared/ui/form/text-area";
 import { toolCardSummary } from "../chat/tool-renderers/tool-card-summary";
 import { PermissionArgumentDetails } from "./permission-argument-details";
+import { ToolCardShell } from "../chat/tool-renderers/tool-card-shell";
+import { ToolStatusMark, toneOfState, type ToolCardState } from "../chat/tool-renderers/tool-icon";
 import "./permission-request-card.css";
 import { useI18n } from "../i18n/use-i18n";
 
@@ -27,7 +29,7 @@ type PermissionCardStatus = "pending" | "allowed" | "auto_allowed" | "denied";
 export function PermissionRequestCard({ request, decision, active = true }: PermissionRequestCardProps) {
   const { t } = useI18n();
   const [status, setStatus] = useState<PermissionCardStatus>(() => decisionStatus(decision));
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(() => shouldStayExpanded(decision));
   const [replyOpen, setReplyOpen] = useState(false);
   const [reply, setReply] = useState(() => decision?.decision === "deny" ? decision.reply ?? "" : "");
   const [submitting, setSubmitting] = useState<"allow" | "deny" | null>(null);
@@ -36,7 +38,7 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
 
   useEffect(() => {
     setStatus(decisionStatus(decision));
-    setExpanded(true);
+    setExpanded(shouldStayExpanded(decision));
     setReplyOpen(false);
     setReply(decision?.decision === "deny" ? decision.reply ?? "" : "");
     setSubmitting(null);
@@ -66,23 +68,31 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
 
   const resolved = status !== "pending";
   const interactive = !resolved && active;
+  // 自动审核放行时模型会给出理由，人工放行没有说明
+  const auditReason = decision?.decision === "allow" ? decision.reason?.trim() ?? "" : "";
+  // 权限卡与工具卡共用外壳：同一套头部顺序与状态色，差异只在色调与附加的理由行
+  const cardState: ToolCardState = status === "auto_allowed" ? "allowed" : status;
   return (
-    <section className={`permission-request-card is-${status}`}>
-      <Button className="permission-request-head" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
-        <span className="permission-request-icon" aria-hidden>
-          {status === "allowed" || status === "auto_allowed" ? <Check size={14} /> : status === "denied" ? <X size={14} /> : <ShieldAlert size={14} />}
-        </span>
-        <span className="permission-request-copy">
-          <strong>{statusLabel(status, active, t)}</strong>
-          <span title={summary}>{actionLabel(request.tool, t)} · {summary}</span>
-          {status === "pending" && request.auto_audit ? (
-            <span className="permission-auto-audit-badge">{t("Auto audit running", "自动审核进行中")}</span>
-          ) : null}
-        </span>
-        <ChevronDown size={14} className={expanded ? "rotate" : ""} aria-hidden />
-      </Button>
-      {expanded && (
-        <div className="permission-request-body">
+    <ToolCardShell
+      className="permission-shell"
+      tone={toneOfState(cardState)}
+      icon={<ShieldAlert size={14} />}
+      title={statusLabel(status, active, t)}
+      target={`${actionLabel(request.tool, t)} · ${summary}`}
+      targetTitle={summary}
+      meta={status === "pending" && request.auto_audit ? t("Auto audit", "自动审核中") : undefined}
+      status={<ToolStatusMark state={cardState} />}
+      expanded={expanded}
+      onToggle={() => setExpanded((value) => !value)}
+    >
+      <div className="permission-request-body">
+        {/* 自动审核无人值守，理由要能直接读到 */}
+        {auditReason ? (
+          <div className="permission-request-reason">
+            <span>{t("Auto-audit reason", "自动审核理由")}</span>
+            {auditReason}
+          </div>
+        ) : null}
           {status === "pending" && request.auto_audit ? (
             <div className="permission-auto-audit-hint">{t("LLM auto-audit is running in parallel. Your decision wins if submitted first; auto-audit timeout falls back to human review silently.", "LLM 自动审核并行进行中。人工先提交则优先生效；自动审核超时将静默回退人工审核。")}</div>
           ) : null}
@@ -107,11 +117,27 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
             </div>
           )}
           {!resolved && !active && <div className="permission-request-ended">{t("The permission request ended with this run", "权限请求已随本轮运行结束")}</div>}
-          {resolved && reply.trim() && status === "denied" && <div className="permission-resolved-reply"><span>{t("Reply", "回复")}</span>{reply.trim()}</div>}
-        </div>
-      )}
-    </section>
+        {resolved && reply.trim() && status === "denied" && <div className="permission-resolved-reply"><span>{t("Reply", "回复")}</span>{reply.trim()}</div>}
+      </div>
+    </ToolCardShell>
   );
+}
+
+/**
+ * 判断权限卡在当前决定下是否应保持展开。
+ *
+ * 待审核时展开，用户要看清参数才能决定；
+ * 批准后收起——结论行加徽章已说明一切，展开的参数块是纯噪音，
+ * 自动审核连续放行时尤其明显；
+ * 拒绝后保持展开——回复会作为工具输出回传给模型、影响后续行为，
+ * 属于必须看到的信息，收起会把它藏起来。
+ *
+ * @param decision 当前权限决定
+ * @returns 是否保持展开
+ */
+function shouldStayExpanded(decision?: PermissionDecision): boolean {
+  if (!decision) return true;
+  return decision.decision === "deny";
 }
 
 /**

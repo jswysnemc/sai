@@ -9,6 +9,14 @@ export type ToolLifecycle = {
   progress: string;
   output: string;
   status: "preparing" | "running" | "completed" | "failed";
+  /**
+   * 本次调用获批的权限决定。
+   *
+   * 权限请求与随后的工具调用是同一次操作，分成两张卡片会让信息重复、
+   * 还会打断相邻工具卡的分组折叠，因此获批后并入工具卡一起展示。
+   * 被拒绝的请求不会产生工具调用，仍以独立的权限卡呈现。
+   */
+  permission?: PermissionDecision;
 };
 
 export type LiveMessagePart =
@@ -17,6 +25,7 @@ export type LiveMessagePart =
   | { id: string; type: "automatic_input"; kind: string; source: string }
   | { id: string; type: "tool"; tool: ToolLifecycle }
   | { id: string; type: "permission"; request: PermissionRequest; decision?: PermissionDecision }
+  | { id: string; type: "engine_ready"; engine: string; version: string }
   | { id: string; type: "question"; pending: PendingQuestion; response?: QuestionResponse }
   | { id: string; type: "compaction"; status: "running" | "completed"; turnCount: number; model?: string; applied?: boolean; summary?: string; error?: RunErrorDetail };
 
@@ -42,6 +51,13 @@ export type LiveRunState = {
   completed: boolean;
   /** 本轮耗时（毫秒），从首次思考/正文到结束 */
   durationMs: number | null;
+  /**
+   * 已获批但尚未并入工具卡的权限决定。
+   *
+   * agent 的事件顺序是 permission.resolved 先于 tool.call，
+   * 这里暂存到对应工具调用创建为止。
+   */
+  grantedPermission?: { requestId: string; tool: string; decision: PermissionDecision };
 };
 
 export type RunAction =
@@ -160,6 +176,18 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
         output: String(payload.output ?? ""),
         status: payload.ok === false ? "failed" : "completed"
       });
+    case "engine.ready":
+      // 外部内核连上后的运行时证据：名称与版本来自 ACP 握手响应，
+      // 只有真正拉起子进程才拿得到，用来分辨本轮由谁执行
+      return {
+        ...state,
+        parts: [...state.parts, {
+          id: `engine-${event.sequence}`,
+          type: "engine_ready",
+          engine: String(payload.engine ?? "ACP agent"),
+          version: String(payload.version ?? "")
+        }]
+      };
     case "permission.requested":
       return upsertPermissionPart({
         ...closeActiveReasoning(state, event.timestamp),
@@ -288,11 +316,57 @@ function markFirstOutput(state: LiveRunState, timestamp: string): LiveRunState {
 
 
 function resolvePermissionPart(state: LiveRunState, requestId: string, decision: PermissionDecision): LiveRunState {
-  return {
+  const next = {
     ...state,
     parts: state.parts.map((part) => part.type === "permission" && part.request.id === requestId
       ? { ...part, decision }
       : part)
+  };
+  // 1. 拒绝不会产生工具调用，权限卡独立保留展示结论
+  if (decision.decision !== "allow") return next;
+  // 2. 放行后紧接着就是对应的工具调用，暂存决定等待并入
+  const granted = next.parts.find(
+    (part) => part.type === "permission" && part.request.id === requestId
+  );
+  if (granted?.type !== "permission") return next;
+  return {
+    ...next,
+    grantedPermission: { requestId, tool: granted.request.tool, decision }
+  };
+}
+
+/**
+ * 把已获批的权限并入刚创建的工具调用。
+ *
+ * 仅在工具名一致时并入：agent 的事件顺序是先请求权限再调用同一个工具，
+ * 名称不符说明中间插入了别的调用，此时宁可保留独立权限卡也不错误关联。
+ *
+ * @param state 当前运行状态
+ * @param toolId 新建工具调用的标识
+ * @param toolName 新建工具调用的名称
+ * @returns 并入结果；无待并入权限时原样返回
+ */
+function attachGrantedPermission(
+  state: LiveRunState,
+  toolId: string,
+  toolName: string
+): LiveRunState {
+  const granted = state.grantedPermission;
+  if (!granted || granted.tool !== toolName) return state;
+  return {
+    ...state,
+    grantedPermission: undefined,
+    tools: state.tools.map((tool) =>
+      tool.id === toolId ? { ...tool, permission: granted.decision } : tool
+    ),
+    // 权限已并入工具卡，移除独立的权限 part 避免同一次操作出现两张卡
+    parts: state.parts
+      .filter((part) => !(part.type === "permission" && part.request.id === granted.requestId))
+      .map((part) =>
+        part.type === "tool" && part.tool.id === toolId
+          ? { ...part, tool: { ...part.tool, permission: granted.decision } }
+          : part
+      )
   };
 }
 
@@ -380,7 +454,12 @@ function upsertTool(state: LiveRunState, id: string, patch: Partial<ToolLifecycl
   };
   if (index === -1) {
     const tool = { ...base, ...patch };
-    return { ...state, tools: [...state.tools, tool], parts: [...state.parts, { id: `tool-${id}`, type: "tool", tool }] };
+    const created = {
+      ...state,
+      tools: [...state.tools, tool],
+      parts: [...state.parts, { id: `tool-${id}`, type: "tool" as const, tool }]
+    };
+    return attachGrantedPermission(created, id, tool.name);
   }
   const existing = state.tools[index];
   if (patch.name && existing.name !== "tool" && patch.name !== existing.name) {

@@ -3,7 +3,7 @@
   flex-direction: column;
   align-items: center;
   gap:var(--space-2xs);
-  padding:var(--space-xs) var(--space-2xl) var(--space-lg);
+  padding:var(--space-xs) var(--chat-column-gutter) var(--space-lg);
   background: var(--paper);
 }
 
@@ -13,7 +13,7 @@
   flex-direction: column;
   gap:var(--space-xs);
   width: 100%;
-  max-width: 784px;
+  max-width: var(--chat-content-width);
   min-height: 58px;
   padding:var(--space-sm) var(--space-md) var(--space-xs);
   border: 1px solid transparent;
@@ -33,7 +33,7 @@
   align-items: center;
   gap:var(--space-3xs);
   width: 100%;
-  max-width: 784px;
+  max-width: var(--chat-content-width);
   min-height: 28px;
   padding:0 var(--space-3xs);
   overflow-x: auto;
@@ -164,19 +164,19 @@
 }
 
 .composer-file-mention {
-  --atom-color: #3975a6;
+  --atom-color: var(--mention-file);
 }
 
 .composer-skill-mention {
-  --atom-color: #167d66;
+  --atom-color: var(--mention-skill);
 }
 
 .composer-goal-mention {
-  --atom-color: #9a6700;
+  --atom-color: var(--mention-goal);
 }
 
 .composer-terminal-mention {
-  --atom-color: #a1425f;
+  --atom-color: var(--mention-terminal);
   overflow: visible;
 }
 

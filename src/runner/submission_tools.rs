@@ -41,6 +41,9 @@ pub(super) fn build_submission_tool_registry(
         && config.tools.enabled
     {
         tools::register_ask_question(&mut registry);
+        // 单次对话同样会遇到多步任务，计划要能落到会话状态里；
+        // todo 与会话绑定，同一会话的后续命令能接着读到上一轮的计划
+        tools::register_todo(&mut registry, state_dir);
     }
     if mode != AgentMode::Plan && should_apply_command_mode_exit_policy(source) {
         tools::register_command_mode_background(&mut registry, config, paths, session_id);

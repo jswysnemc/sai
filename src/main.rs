@@ -1,4 +1,6 @@
+mod acp;
 mod agent;
+mod agent_engine;
 mod assistants;
 mod alarm;
 mod reply_notify;

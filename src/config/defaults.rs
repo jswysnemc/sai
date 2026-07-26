@@ -12,6 +12,7 @@ impl Default for AppConfig {
         Self {
             active_provider: OPENCODE_PROVIDER_ID.to_string(),
             providers: ProviderConfig::default_templates(),
+            agent: crate::config::AgentEngineConfig::default(),
             permission: PermissionConfig::default(),
             session: SessionConfig::default(),
             notification: crate::config::NotificationConfig::default(),
@@ -306,7 +307,7 @@ impl Default for ToolsConfig {
             max_rounds: 0,
             command_shell: String::new(),
             command_filter: default_command_filter(),
-            command_filter_allowlist: Vec::new(),
+            command_filter_denylist: Vec::new(),
             progressive_loading_enabled: false,
             background_commands_enabled: default_true(),
             background_command_timeout_seconds: default_background_command_timeout_seconds(),

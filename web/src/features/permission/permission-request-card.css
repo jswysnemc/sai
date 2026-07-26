@@ -1,87 +1,36 @@
-.permission-request-card {
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--signal) 34%, var(--technical-border));
-  border-radius: var(--radius-4);
-  background: color-mix(in srgb, var(--signal) 4%, var(--technical-surface));
-  color: var(--technical-text);
-}
+/*
+ * 权限卡正文
+ *
+ * 头部（图标、标题、对象、状态、箭头）已统一到 tool-card-shell，
+ * 本文件只负责展开体：审核理由、参数详情与决策按钮。
+ */
 
-.permission-request-card.is-allowed {
-  border-color: color-mix(in srgb, var(--signal) 24%, var(--technical-border));
-  background: var(--technical-surface);
-}
-
-.permission-request-card.is-denied {
-  border-color: color-mix(in srgb, var(--danger) 30%, var(--technical-border));
-  background: color-mix(in srgb, var(--danger) 3%, var(--technical-surface));
-}
-
-.permission-request-head {
+/* 权限需要用户处理，展开体比普通工具卡多一档留白 */
+.permission-shell .tool-shell-body {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 14px;
-  align-items: center;
-  gap:var(--space-sm);
-  width: 100%;
-  min-height: 42px;
-  padding:var(--space-xs) var(--space-md);
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.permission-request-head:focus-visible {
-  outline: 1px solid var(--signal);
-  outline-offset: -2px;
-}
-
-.permission-request-icon {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border-radius:var(--radius-2);
-  background: color-mix(in srgb, var(--signal) 10%, var(--technical-surface-muted));
-  color: var(--signal);
-}
-
-.permission-request-card.is-denied .permission-request-icon {
-  background: color-mix(in srgb, var(--danger) 9%, var(--technical-surface-muted));
-  color: var(--danger);
-}
-
-.permission-request-copy {
-  display: flex;
-  align-items: baseline;
-  gap:var(--space-sm);
-  min-width: 0;
-}
-
-.permission-request-copy strong {
-  flex-shrink: 0;
-  font-size:var(--text-sm);
-  font-weight: 600;
-}
-
-.permission-request-copy span {
-  overflow: hidden;
-  color: var(--ink-soft);
-  font:400 var(--text-2xs) var(--font-code);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.permission-request-head > svg {
-  color: var(--ink-soft);
-  transition:transform var(--duration-base) ease;
+  gap:var(--space-md);
+  padding-top:var(--space-2xs);
+  padding-bottom:var(--space-xs);
 }
 
 .permission-request-body {
   display: grid;
   gap:var(--space-md);
-  padding:var(--space-md);
-  border-top: 1px solid color-mix(in srgb, var(--technical-border) 72%, transparent);
+  min-width: 0;
+}
+
+/* 自动审核理由：标签在上，正文可换行完整展示 */
+.permission-request-reason {
+  display: grid;
+  gap:var(--space-3xs);
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+  line-height: 1.5;
+}
+
+.permission-request-reason span {
+  color: color-mix(in srgb, var(--ink-soft) 78%, transparent);
+  font-size:var(--text-2xs);
 }
 
 .permission-request-body .shell-tool-view,
@@ -172,19 +121,6 @@
 .permission-resolved-reply span {
   color: var(--ink-soft);
   font-size:var(--text-xs);
-}
-
-.permission-auto-audit-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-left:var(--space-xs);
-  padding:1px var(--space-xs);
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--signal) 14%, transparent);
-  color: var(--signal);
-  font-size:var(--text-2xs);
-  font-weight: 500;
-  white-space: nowrap;
 }
 
 .permission-auto-audit-hint {

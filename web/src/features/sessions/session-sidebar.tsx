@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Cable, CalendarClock, CheckSquare2, ChevronDown, ChevronRight, FolderGit2, FolderOpen, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus, RefreshCw, Search, Settings, Square, Trash2, X } from "lucide-react";
+import { Cable, CalendarClock, CheckSquare2, ChevronDown, ChevronRight, FolderGit2, FolderOpen, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Square, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { localizeApiMessage, toDisplayError } from "../../api/api-error";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
+import { SkeletonList } from "../../shared/ui/skeleton/skeleton";
 import { SaiLogo } from "../../shared/ui/sai-logo";
 import { switchWithTerminalConfirm } from "../workspaces/workspace-switcher";
 import { ServerDirectoryDialog } from "../workspaces/server-directory-dialog";
@@ -352,7 +353,11 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
         )}
       </label>
       <div className="session-list">
-        {tree.isLoading && <div className="sidebar-state"><RefreshCw size={15} className="spin" /> {t("Loading sessions", "读取会话")}</div>}
+        {tree.isLoading && (
+          <div className="sidebar-skeleton">
+            <SkeletonList items={6} label={t("Loading sessions", "读取会话")} />
+          </div>
+        )}
         {!tree.isLoading && query && visibleWorkspaces.length === 0 && (
           <div className="sidebar-state">{t(`No sessions match “${sessionSearch.trim()}”`, `没有匹配“${sessionSearch.trim()}”的会话`)}</div>
         )}

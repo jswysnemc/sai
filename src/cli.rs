@@ -52,6 +52,7 @@ mod repl_chrome;
 mod repl_clipboard;
 mod repl_commands;
 mod repl_editor;
+mod repl_editor_buffer;
 mod repl_external_events;
 mod repl_input;
 mod repl_input_navigation;
@@ -357,9 +358,15 @@ async fn run_tool(paths: &SaiPaths, mode: AgentMode, args: ToolArgs) -> Result<(
             crate::permission::request_permission("cli-tool", &args.name, arguments);
         prompt_permission_request(&request)?;
         // 2. 只有批准后才进入工具注册表执行路径
-        match receiver.await? {
+        let decision = receiver.await?;
+        let approval_detail = decision.detail().map(str::to_string);
+        match decision {
             crate::permission::PermissionDecision::Allow { .. } => {
-                registry.record_permission_approved(&args.name, arguments)?;
+                registry.record_permission_approved(
+                    &args.name,
+                    arguments,
+                    approval_detail.as_deref(),
+                )?;
             }
             crate::permission::PermissionDecision::Deny { reply } => {
                 registry.record_permission_denied(&args.name, arguments, reply.as_deref())?;
@@ -590,7 +597,13 @@ fn handle_agent_event(renderer: &mut render::StreamRenderer, event: AgentEvent) 
         }
         AgentEvent::PermissionResolved { decision, .. } => {
             // 人工与自动审核统一在此打印结果（prompt 不再打印，避免竞态重复）
-            println!("{}", crate::render::render_permission_decision(&decision));
+            println!(
+                "{}",
+                crate::render::render_permission_decision_for(
+                    &decision,
+                    crate::render::PermissionView::Cli
+                )
+            );
             Ok(())
         }
         AgentEvent::QuestionRequested(pending) => {
@@ -605,6 +618,14 @@ fn handle_agent_event(renderer: &mut render::StreamRenderer, event: AgentEvent) 
         AgentEvent::CompactionDelta { text } => renderer.write_compaction_delta(text),
         AgentEvent::CompactionFinished { applied, error, .. } => {
             renderer.write_compaction_finished(applied, error.as_ref())
+        }
+        AgentEvent::EngineReady { engine, version } => {
+            renderer.prepare_for_external_output()?;
+            println!(
+                "\x1b[2m• {} {engine} {version}\x1b[0m",
+                crate::render::terminal_text("connected to", "已连接")
+            );
+            Ok(())
         }
         AgentEvent::FlushContent => renderer.flush_content(),
         AgentEvent::ExternalOutput => renderer.prepare_for_external_output(),

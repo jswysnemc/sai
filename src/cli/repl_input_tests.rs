@@ -1,7 +1,6 @@
 use super::args::Cli;
 use super::chat::drain_stdin;
 use super::input_flags::parse_message_input_flags;
-use super::repl::load_repl_input_history;
 use super::repl_input::{repl_history_is_clean, repl_should_browse_history};
 use super::repl_input_render::*;
 use super::repl_text::*;
@@ -300,30 +299,3 @@ fn strips_terminal_control_sequences_from_repl_text() {
     );
 }
 
-#[test]
-fn repl_history_loads_user_messages_from_state() {
-    let temp = tempfile::tempdir().unwrap();
-    let paths = SaiPaths {
-        config_dir: PathBuf::new(),
-        config_file: PathBuf::new(),
-        secrets_file: PathBuf::new(),
-        skills_dir: PathBuf::new(),
-        data_dir: PathBuf::new(),
-        cache_dir: PathBuf::new(),
-        state_dir: temp.path().to_path_buf(),
-        pictures_dir: PathBuf::new(),
-        fish_hook_file: PathBuf::new(),
-        bash_hook_file: PathBuf::new(),
-        zsh_hook_file: PathBuf::new(),
-        powershell_hook_file: PathBuf::new(),
-    };
-    let state = StateStore::new(&paths).unwrap();
-    state.append_message("user", "first").unwrap();
-    state.append_assistant_message("reply", None).unwrap();
-    state.append_message("user", "\x1b[Esecond").unwrap();
-
-    assert_eq!(
-        load_repl_input_history(&state).unwrap(),
-        vec!["first".to_string(), "second".to_string()]
-    );
-}

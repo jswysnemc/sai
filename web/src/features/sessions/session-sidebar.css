@@ -790,3 +790,7 @@
   border-color: var(--signal);
   box-shadow: var(--ring-focus);
 }
+/* 会话列表加载骨架：内边距与真实列表项对齐，加载完成后条目不位移 */
+.sidebar-skeleton {
+  padding:var(--space-lg) var(--space-sm);
+}

@@ -3,6 +3,7 @@ mod compaction;
 mod context_epoch;
 pub(crate) mod failure_recovery;
 mod goals;
+pub(crate) mod input_history;
 mod loaded_tools;
 mod pending_turn;
 pub(crate) mod request_projection;

@@ -138,19 +138,19 @@
 }
 
 .user-file-atom {
-  --atom-color: #3975a6;
+  --atom-color: var(--mention-file);
 }
 
 .user-skill-atom {
-  --atom-color: #167d66;
+  --atom-color: var(--mention-skill);
 }
 
 .user-goal-atom {
-  --atom-color: #9a6700;
+  --atom-color: var(--mention-goal);
 }
 
 .user-terminal-atom {
-  --atom-color: #a1425f;
+  --atom-color: var(--mention-terminal);
   overflow: visible;
 }
 
@@ -188,11 +188,11 @@
 }
 
 .user-skill-preview {
-  --atom-color: #167d66;
+  --atom-color: var(--mention-skill);
 }
 
 .user-goal-preview {
-  --atom-color: #9a6700;
+  --atom-color: var(--mention-goal);
 }
 
 .user-atom-preview-header {

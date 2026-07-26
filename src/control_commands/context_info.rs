@@ -43,14 +43,42 @@ pub fn context_info_text(paths: &SaiPaths) -> Result<String> {
             t("checkpoints", "检查点"),
             snapshot.checkpoint_count
         ),
-        format!("{}: {model} ({thinking})", t("model", "模型")),
         format!(
-            "{}: {} / {} tokens ({:.1}%)",
-            t("context window", "上下文窗口"),
-            snapshot.context_prompt_tokens,
-            snapshot.context_window_tokens,
-            (snapshot.context_token_ratio * 100.0).clamp(0.0, 999.9)
+            "{}: {}",
+            t("engine", "对话内核"),
+            config.agent.engine.display_label()
         ),
+        // 外部内核自带模型与上下文管理，sai 这边的数值不代表实际用量
+        if config.agent.engine.is_external() {
+            format!(
+                "{}: {}",
+                t("model", "模型"),
+                t(
+                    "managed by the external engine",
+                    "由外部内核自行管理"
+                )
+            )
+        } else {
+            format!("{}: {model} ({thinking})", t("model", "模型"))
+        },
+        if config.agent.engine.is_external() {
+            format!(
+                "{}: {}",
+                t("context window", "上下文窗口"),
+                t(
+                    "managed by the external engine",
+                    "由外部内核自行管理"
+                )
+            )
+        } else {
+            format!(
+                "{}: {} / {} tokens ({:.1}%)",
+                t("context window", "上下文窗口"),
+                snapshot.context_prompt_tokens,
+                snapshot.context_window_tokens,
+                (snapshot.context_token_ratio * 100.0).clamp(0.0, 999.9)
+            )
+        },
         format!(
             "{}: {} {} · {} prompt · {} completion",
             t("session usage", "会话用量"),
@@ -67,6 +95,15 @@ pub fn context_info_text(paths: &SaiPaths) -> Result<String> {
             t("compaction", "压缩"),
             compaction.compacted_turns,
             t("turns compacted", "轮已压缩")
+        ));
+    }
+    // 2. 外部内核会让一批 sai 功能停用，在这里说清楚而不是让用户自己发现
+    let unavailable = config.agent.engine.unavailable_features();
+    if !unavailable.is_empty() {
+        lines.push(format!(
+            "{}: {}",
+            t("disabled by engine", "内核导致停用"),
+            unavailable.join("、")
         ));
     }
     lines.push(format!("{}: {directory}", t("directory", "工作目录")));

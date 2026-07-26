@@ -5,7 +5,8 @@
 
 .tool-call-group-trigger {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) 18px 16px;
+  /* 图标 · 标题 · 审核徽标(可缺席) · 状态 · 箭头 */
+  grid-template-columns: 22px minmax(0, 1fr) auto 18px 16px;
   align-items: center;
   gap:var(--space-xs);
   width: 100%;
@@ -55,14 +56,26 @@
   background: transparent;
 }
 
-.tool-call-group-items > .tool-card {
-  background: transparent;
-}
-
-.tool-call-group-items > .tool-card:hover {
-  background: color-mix(in srgb, var(--technical-text) 5%, transparent);
-}
-
-.tool-call-group-items > .tool-card:first-child {
+/* 组内卡片的悬停反馈由外壳的头部负责，这里不再重复铺底色 */
+.tool-call-group-items > .tool-shell:first-child {
   margin-top: 0;
+}
+
+/* 审核计数徽标：折叠态也能看出这批操作里有多少项动过权限 */
+.tool-call-group-audited {
+  display: inline-flex;
+  align-items: center;
+  gap:var(--space-3xs);
+  padding:0 var(--space-xs);
+  height: 1.125rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--signal) 12%, transparent);
+  color: var(--signal);
+  font:500 var(--text-2xs)/1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.tool-call-group-audited svg {
+  width: 11px;
+  height: 11px;
 }

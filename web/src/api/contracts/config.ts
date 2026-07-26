@@ -109,6 +109,8 @@ export type AppConfig = {
   active_provider: string;
   providers: ProviderConfig[];
   permission?: PermissionConfig;
+  /** 执行对话轮次的内核 */
+  agent?: AgentEngineConfig;
   session?: SessionConfig;
   notification?: NotificationConfig;
   gateways: GatewayConfig;
@@ -197,6 +199,13 @@ export type ConfigResponse = {
   secret_sentinel: string;
 };
 
+/** rtk 命令输出过滤器的服务端探测状态。 */
+export type RtkStatusResponse = {
+  available: boolean;
+  /** rtk 当前版本可代理的命令，由服务端运行时探测 */
+  proxy_commands: string[];
+};
+
 export type ProviderModelsResponse = {
   models: string[];
   metadata: Record<string, {
@@ -283,4 +292,29 @@ export type McpConfigResponse = {
   config: McpConfig;
   path: string;
   secret_sentinel: string;
+};
+
+/** 执行对话轮次的内核标识 */
+export type AgentEngineKind = "native" | "claude_code" | "codex" | "custom";
+
+/** 外部 ACP 内核的启动配置 */
+export type AcpEngineConfig = {
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  startup_timeout_seconds?: number;
+};
+
+/** 对话内核配置 */
+export type AgentEngineConfig = {
+  engine?: AgentEngineKind;
+  acp?: AcpEngineConfig;
+};
+
+/** 当前对话内核状态 */
+export type EngineStatusResponse = {
+  engine: AgentEngineKind;
+  label: string;
+  external: boolean;
+  unavailable_features: string[];
 };

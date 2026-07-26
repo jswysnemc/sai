@@ -36,7 +36,15 @@ pub struct TimelineToolEntry {
 #[derive(Debug, Clone, Serialize)]
 pub struct TimelinePermissionDecision {
     pub decision: String,
+    /// 拒绝时回复给模型的原因
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reply: Option<String>,
+    /// 允许来源；`auto_audit` 表示由审核模型放行
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// 自动审核给出的放行理由
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 /// 按轮次组织的会话时间线。

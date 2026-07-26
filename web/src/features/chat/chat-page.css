@@ -1,3 +1,16 @@
+/*
+ * 聊天列宽
+ *
+ * 消息列与输入框此前各写各的宽度（820 减两侧 16 的内边距 = 788，输入框 784），
+ * 居中后左右各差 2px，正文与输入框的边缘对不齐。
+ * 现由同一组变量导出：输入框宽度 = 列宽 - 两侧留白，两者内容边缘严格重合。
+ */
+:root {
+  --chat-column-width: 820px;
+  --chat-column-gutter: var(--space-2xl);
+  --chat-content-width: calc(var(--chat-column-width) - var(--chat-column-gutter) * 2);
+}
+
 .chat-page {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -112,6 +125,7 @@
   flex: 0 0 auto;
   margin-top: -26px;
   padding-top:var(--space-5xl);
+  /* mask 的颜色只用于 alpha 通道，与主题配色无关 */
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
   mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
 }
@@ -144,18 +158,18 @@
 .message-column {
   /* flex-shrink 必须为 0：内容超出时撑高容器产生滚动，而不是被压缩 */
   flex: 1 0 auto;
-  width: min(100%, 820px);
+  width: min(100%, var(--chat-column-width));
   min-width: 0;
   margin: 0 auto;
-  padding:var(--space-3xl) var(--space-2xl) 0;
+  padding:var(--space-3xl) var(--chat-column-gutter) 0;
 }
 
 /* 空会话问候语：位于消息列与输入区之间，空会话无滚动时自然贴在输入区上方 */
 .empty-session-greeting {
   flex: 0 0 auto;
-  width: min(100%, 820px);
+  width: min(100%, var(--chat-column-width));
   margin:0 auto var(--space-3xl);
-  padding:0 var(--space-2xl);
+  padding:0 var(--chat-column-gutter);
   text-align: center;
   pointer-events: none;
 }
@@ -195,7 +209,6 @@
   min-height: 40px;
 }
 
-.tool-detail pre,
 .asset-source {
   position: relative;
   overflow: auto;
@@ -205,7 +218,7 @@
   border-radius:var(--radius-3);
   background: var(--technical-surface);
   color: var(--technical-text);
-  font-size:var(--text-sm);
+  font-size:var(--text-base);
   line-height: 1.65;
 }
 
@@ -218,38 +231,21 @@
   gap:var(--space-md);
 }
 
-/* 单条工具卡：无矩形外框，与工具组折叠条同一层级语言 */
-.tool-card {
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  border: 0;
-  border-radius:var(--radius-2);
-  background: transparent;
-  color: var(--technical-text);
-}
-
-.tool-card:hover {
-  background: color-mix(in srgb, var(--technical-text) 5%, transparent);
-}
-
-.tool-card.failed {
-  background: color-mix(in srgb, var(--danger) 6%, transparent);
-}
-
-.tool-detail {
-  border-top: 0;
-  margin-top:var(--space-3xs);
-  padding:var(--space-3xs) 0 0 var(--space-2xs);
-  border-left: 2px solid color-mix(in srgb, var(--line) 70%, transparent);
-  background: transparent;
-}
-
-.tool-detail pre {
+/*
+ * 工具卡的外框、悬停与导轨已统一到 tool-card-shell。
+ * 详情里的代码块不再自带外框：区块边界由外壳的左导轨表达，
+ * 再套一层框会重新回到改造前"框中框"的观感。
+ */
+.tool-shell-body pre {
   max-height: 340px;
   margin: 0;
+  padding:var(--space-sm) 0;
   border: 0;
   border-radius: 0;
+  background: transparent;
+  color: var(--technical-text);
+  font-size:var(--text-sm);
+  line-height: 1.65;
 }
 
 .tool-output {
@@ -257,7 +253,7 @@
   color: var(--technical-muted) !important;
 }
 
-.inline-diff { overflow: auto; background: var(--technical-surface); color: var(--technical-text); font:400 var(--text-sm)/1.55 var(--font-code); }
+.inline-diff { overflow: auto; background: var(--technical-surface); color: var(--technical-text); font:400 var(--text-base)/1.55 var(--font-code); }
 .diff-line { min-width: max-content; padding:1px var(--space-lg); white-space: pre; }
 .diff-line.added { background: var(--diff-added-bg); color: var(--diff-added-text); }
 .diff-line.removed { background: var(--diff-removed-bg); color: var(--diff-removed-text); }
@@ -266,7 +262,12 @@
 @keyframes pulse { 50% { opacity: 0.35; } }
 
 @media (max-width: 48rem) {
-  .message-column { padding:var(--space-2xl) var(--space-xl) 0; }
+  /* 窄屏收紧两侧留白：改的是变量本身，输入框宽度随之跟随，对齐关系不破坏 */
+  :root {
+    --chat-column-gutter: var(--space-xl);
+  }
+
+  .message-column { padding-top:var(--space-2xl); }
 
   /* 移动端头部：左菜单按钮、居中标题、右 `+` 面板菜单 */
   .chat-header {
@@ -372,3 +373,20 @@
 .context-compaction-summary { width:100%; max-width:100%; padding:var(--space-md) var(--space-lg); border:1px solid var(--line); border-radius:var(--radius-4); background:var(--control-surface); color:var(--ink-soft); font-size:var(--text-sm); }
 .context-compaction-summary .markdown-body { font-size:inherit; color:inherit; }
 .conversation-compaction { width:100%; max-width:100%; margin:var(--space-2xs) 0 var(--space-md); }
+
+/* 历史加载骨架：占位宽度与助手正文一致，加载完成后不产生横向跳动 */
+.chat-timeline-skeleton {
+  padding:var(--space-3xl) 0;
+}
+
+/*
+ * 浮层材质：底色留出一点透明度并模糊背景。
+ * 浮层与页面之间因此有深度关系，而不是一块贴上去的实色板；
+ * 不支持 backdrop-filter 的环境自动退回上面声明的实色底，观感不受影响。
+ */
+@supports (backdrop-filter: blur(1px)) {
+  .chat-header-panel-menu {
+    background: color-mix(in srgb, var(--paper-raised) 88%, transparent);
+    backdrop-filter: blur(14px) saturate(140%);
+  }
+}

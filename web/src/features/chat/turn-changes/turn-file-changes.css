@@ -64,7 +64,7 @@
 }
 
 .turn-file-changes-head-button:hover {
-  background: color-mix(in srgb, var(--paper-raised, #fff) 55%, transparent);
+  background: color-mix(in srgb, var(--paper-raised) 55%, transparent);
 }
 
 .turn-file-change-row {
@@ -99,7 +99,7 @@
 
 .turn-file-change-row:hover,
 .turn-file-change-row.active {
-  background: color-mix(in srgb, var(--paper-raised, #fff) 70%, transparent);
+  background: color-mix(in srgb, var(--paper-raised) 70%, transparent);
 }
 
 .turn-file-change-actions {
@@ -122,14 +122,14 @@
 .turn-file-changes-list li.is-expanded {
   border-top: 1px solid var(--line-soft);
   border-bottom: 1px solid var(--line-soft);
-  background: color-mix(in srgb, var(--paper, #fff) 70%, transparent);
+  background: color-mix(in srgb, var(--paper) 70%, transparent);
 }
 
 .turn-file-diff-panel {
   margin:0 var(--space-sm) var(--space-sm);
   border: 1px solid var(--line-soft);
   border-radius:var(--radius-3);
-  background: color-mix(in srgb, var(--paper, #fff) 92%, transparent);
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
   overflow: hidden;
 }
 
@@ -155,7 +155,7 @@
 
 .turn-file-diff-icon-button:hover {
   color: var(--ink);
-  background: var(--paper-raised, rgba(127, 127, 127, 0.08));
+  background: var(--paper-raised);
 }
 
 .turn-file-diff-icon-button.danger {
@@ -198,11 +198,11 @@
 }
 
 .turn-file-action.action-added {
-  color: #16a34a;
+  color: var(--diff-added-text);
 }
 
 .turn-file-action.action-deleted {
-  color: #dc2626;
+  color: var(--diff-removed-text);
 }
 
 .turn-file-changes-stats {
@@ -212,12 +212,12 @@
 }
 
 .turn-file-changes-stats b {
-  color: #16a34a;
+  color: var(--diff-added-text);
   font-weight: 600;
 }
 
 .turn-file-changes-stats i {
-  color: #dc2626;
+  color: var(--diff-removed-text);
   font-style: normal;
   font-weight: 600;
 }

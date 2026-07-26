@@ -297,7 +297,7 @@
   max-height: 15rem;
   overflow: auto;
   font-size:var(--text-sm);
-  background: color-mix(in srgb, var(--technical-surface) 90%, black);
+  background: color-mix(in srgb, var(--technical-surface) 90%, var(--ink));
   padding:var(--space-sm);
   border-radius:var(--radius-3);
 }

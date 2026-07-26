@@ -250,11 +250,11 @@
 
 
 .context-usage-card {
-  --context-system: #34d399;
-  --context-tools: #fbbf24;
-  --context-conversation: #a78bfa;
-  --context-connectors: #38bdf8;
-  --context-skills: #60a5fa;
+  --context-system: var(--chart-2);
+  --context-tools: var(--chart-3);
+  --context-conversation: var(--violet);
+  --context-connectors: var(--chart-1);
+  --context-skills: var(--chart-5);
 }
 
 .context-usage-close {

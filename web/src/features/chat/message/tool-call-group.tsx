@@ -1,4 +1,4 @@
-import { Check, ChevronDown, FilePenLine, ListChecks, Search, TerminalSquare, Wrench } from "lucide-react";
+import { Check, ChevronDown, FilePenLine, ListChecks, Search, ShieldCheck, TerminalSquare, Wrench } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../api/client";
 import { groupHasExpandedTool, usePersistedExpand } from "./tool-expand-state";
@@ -20,7 +20,7 @@ import "./tool-call-group.css";
  * @returns 工具组标题和可展开原始卡片
  */
 export function ToolCallGroup({ tools }: { tools: ToolLifecycle[] }) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list, staleTime: 30_000 });
   const workspacePath = workspaces.data?.workspaces.find((item) => item.id === workspaces.data?.active_id)?.path ?? "";
   // 组 id 用首项稳定；若用户已展开组内任一工具则保持展开
@@ -34,6 +34,8 @@ export function ToolCallGroup({ tools }: { tools: ToolLifecycle[] }) {
   const commandOnly = tools.every(isCommandTool);
   const editOnly = tools.every(isEditTool);
   const label = toolCallGroupLabel(tools, locale, workspacePath);
+  // 组内经过权限审核的项数：折叠态也要能看出这批操作动过权限
+  const auditedCount = tools.filter((tool) => tool.permission).length;
   const icon = todoOnly
     ? <ListChecks size={15} />
     : exploreOnly
@@ -48,6 +50,15 @@ export function ToolCallGroup({ tools }: { tools: ToolLifecycle[] }) {
       <button type="button" className="tool-call-group-trigger" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
         <span className="tool-call-group-icon">{icon}</span>
         <strong title={label}>{label}</strong>
+        {auditedCount > 0 && (
+          <span
+            className="tool-call-group-audited"
+            title={t(`${auditedCount} of them required a permission decision`, `其中 ${auditedCount} 项经过权限审核`)}
+          >
+            <ShieldCheck size={11} aria-hidden />
+            {auditedCount}
+          </span>
+        )}
         <span className="tool-call-group-status"><Check size={14} /></span>
         <ChevronDown size={14} className={expanded ? "rotate" : ""} aria-hidden />
       </button>

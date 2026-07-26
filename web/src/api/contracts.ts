@@ -32,6 +32,7 @@ export type {
   RunInfo,
   ActiveRunsResponse,
   WebEvent,
+  InputHistoryResponse,
 } from "./contracts/sessions";
 
 export type {
@@ -102,6 +103,10 @@ export type {
   SubagentProfileConfig,
   SubagentConfig,
   ConfigResponse,
+  RtkStatusResponse,
+  EngineStatusResponse,
+  AgentEngineKind,
+  AgentEngineConfig,
   ProviderModelsResponse,
   ProviderProbeErrorKind,
   ProviderProbeReport,

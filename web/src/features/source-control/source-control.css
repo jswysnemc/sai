@@ -13,7 +13,7 @@
   gap:var(--space-md);
   padding:var(--space-sm);
   border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, #c47b1a 8%, var(--paper));
+  background: color-mix(in srgb, var(--warning) 8%, var(--paper));
 }
 
 .git-operation-bar > span {
@@ -118,8 +118,13 @@
   border-radius:var(--radius-1);
 }
 
+/* 与文件行同一套反馈：轻量 ink 混色加过渡，不用实色铺满 */
+.git-resource-row {
+  transition:background var(--duration-fast) var(--ease-standard);
+}
+
 .git-resource-row:hover {
-  background: var(--paper-deep);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
 }
 
 .git-resource-row > span {
@@ -257,8 +262,8 @@
 }
 
 .git-section-merge .git-change-head {
-  background: color-mix(in srgb, #c47b1a 7%, var(--paper));
-  color: color-mix(in srgb, #c47b1a 80%, var(--ink));
+  background: color-mix(in srgb, var(--warning) 7%, var(--paper));
+  color: color-mix(in srgb, var(--warning) 80%, var(--ink));
 }
 
 .git-section-toggle.ui-button {

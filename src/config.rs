@@ -1,3 +1,4 @@
+mod agent_engine;
 mod agent_presets;
 mod agents;
 mod app;
@@ -20,6 +21,8 @@ mod session;
 #[cfg(test)]
 mod tests;
 
+#[allow(unused_imports)]
+pub use agent_engine::{AcpEngineConfig, AgentEngineConfig, AgentEngineKind};
 #[allow(unused_imports)]
 pub use agent_presets::{ensure_surface_agent_defaults, seed_default_agent_profiles};
 #[allow(unused_imports)]

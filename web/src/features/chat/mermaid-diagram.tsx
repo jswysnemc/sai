@@ -4,9 +4,20 @@ import { toDisplayError } from "../../api/api-error";
 import { ImageLightbox } from "../../shared/ui/image-lightbox";
 import { SegmentedControl, type SegmentedControlOption } from "../../shared/ui/segmented-control";
 import { useI18n } from "../i18n/use-i18n";
+import { useThemeAppearance, type ThemeAppearance } from "../theme/use-theme-appearance";
 
-/** Mermaid 初始化主题标识，参与缓存键，主题变化时不会命中旧缓存 */
-const MERMAID_THEME = "neutral";
+/**
+ * 按界面明暗外观选择 mermaid 内置主题。
+ *
+ * mermaid 把配色烘焙进渲染出的 SVG，无法用 CSS 变量事后覆盖，
+ * 因此必须在渲染时就按明暗选定；返回值参与缓存键，切换主题时不会命中旧 SVG。
+ *
+ * @param appearance 当前明暗外观
+ * @returns mermaid 主题标识
+ */
+function mermaidTheme(appearance: ThemeAppearance): "neutral" | "dark" {
+  return appearance === "dark" ? "dark" : "neutral";
+}
 
 /** 渲染结果缓存上限，超出时丢弃最旧条目 */
 const CACHE_LIMIT = 50;
@@ -85,7 +96,9 @@ function toSvgDataUrl(svg: string): string | null {
 export const MermaidDiagram = memo(function MermaidDiagram({ source }: { source: string }) {
   const { t } = useI18n();
   const reactId = useId().replace(/:/g, "");
-  const cacheKey = `${MERMAID_THEME}\u0000${source}`;
+  const appearance = useThemeAppearance();
+  const theme = mermaidTheme(appearance);
+  const cacheKey = `${theme}\u0000${source}`;
   const [svg, setSvg] = useState(() => readCache(cacheKey) ?? "");
   const [error, setError] = useState<Error | null>(null);
   const [view, setView] = useState<"preview" | "source">("preview");
@@ -108,7 +121,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source }: { source:
     let active = true;
     const timer = window.setTimeout(() => {
       import("mermaid").then(({ default: mermaid }) => {
-        mermaid.initialize({ startOnLoad: false, theme: MERMAID_THEME, securityLevel: "strict" });
+        mermaid.initialize({ startOnLoad: false, theme, securityLevel: "strict" });
         return mermaid.render(`sai-mermaid-${reactId}`, source);
       })
         .then((result) => {
@@ -126,7 +139,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source }: { source:
       active = false;
       window.clearTimeout(timer);
     };
-  }, [cacheKey, reactId, source, t]);
+  }, [cacheKey, reactId, source, t, theme]);
 
   useEffect(() => {
     if (!copied) return;

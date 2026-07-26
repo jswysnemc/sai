@@ -6,6 +6,8 @@
   display: grid;
   place-items: center;
   padding:var(--space-4xl);
+  /* 遮罩恒定为半透明深色：亮色主题下压暗背景内容，暗色主题下同样需要压暗，
+     跟随 --paper 会让暗色主题失去遮蔽效果 */
   background: rgb(24 30 31 / 34%);
   backdrop-filter: blur(3px);
   z-index: 200;

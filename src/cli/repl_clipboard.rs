@@ -102,6 +102,66 @@ impl ReplClipboardState {
         spans
     }
 
+    /// 把输入中的长文本占位块替换回完整正文，并按顺序摘出图片占位块。
+    ///
+    /// 供外部编辑器使用：折叠的长文本进编辑器后要能直接读写，
+    /// 图片则是 base64 data URL，塞进编辑器只会刷屏，必须先摘出去。
+    ///
+    /// 参数:
+    /// - `input`: 当前输入内容
+    ///
+    /// 返回:
+    /// - `(展开长文本并去掉图片后的正文, 按出现顺序排列的 (锚点字符位置, 图片占位符))`
+    ///   锚点以返回正文的字符位置计量
+    pub(super) fn expand_for_editor(&self, input: &str) -> (String, Vec<(usize, String)>) {
+        let mut text = input.to_string();
+        // 1. 长文本占位块替换为完整正文，编辑器里可直接修改
+        for item in &self.items {
+            if let ReplClipboardItem::Text { marker, text: body } = item {
+                if text.contains(marker.as_str()) {
+                    text = replace_once(&text, marker, body);
+                }
+            }
+        }
+        // 2. 图片占位块摘出，记录其在剩余正文中的字符位置
+        let mut images = Vec::new();
+        for item in &self.items {
+            let ReplClipboardItem::Image { marker, .. } = item else {
+                continue;
+            };
+            let Some(start_byte) = text.find(marker.as_str()) else {
+                continue;
+            };
+            let anchor = text[..start_byte].chars().count();
+            text = replace_once(&text, marker, "");
+            images.push((anchor, marker.clone()));
+        }
+        images.sort_by_key(|(anchor, _)| *anchor);
+        (text, images)
+    }
+
+    /// 判断输入中是否存在折叠的长文本占位块。
+    ///
+    /// 参数:
+    /// - `input`: 当前输入内容
+    ///
+    /// 返回:
+    /// - 存在长文本占位块时为 true
+    pub(super) fn has_text_blocks(&self, input: &str) -> bool {
+        self.items.iter().any(|item| {
+            matches!(item, ReplClipboardItem::Text { .. }) && input.contains(item.marker())
+        })
+    }
+
+    /// 丢弃全部长文本占位块的登记，图片登记保持不变。
+    ///
+    /// 外部编辑器已把长文本展开成正文，占位块不再对应输入中的任何片段；
+    /// 若继续保留，提交时会按 marker 二次展开，正文出现重复。
+    pub(super) fn forget_text_blocks(&mut self) {
+        self.items
+            .retain(|item| !matches!(item, ReplClipboardItem::Text { .. }));
+    }
+
     /// 删除光标前方的完整剪贴板占位块。
     ///
     /// 参数:

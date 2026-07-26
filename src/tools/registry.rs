@@ -243,6 +243,17 @@ impl ToolRegistry {
         self.permission_profile = Some(profile);
     }
 
+    /// 返回当前权限配置的副本。
+    ///
+    /// 外部对话内核需要用同一份配置校验它自己发起的文件写入与命令执行，
+    /// 否则治理只覆盖 sai 自带工具，换内核后就出现缺口。
+    ///
+    /// 返回:
+    /// - 权限配置；YOLO 等未绑定审计的场景为 None
+    pub(crate) fn permission_profile(&self) -> Option<PermissionProfile> {
+        self.permission_profile.clone()
+    }
+
     /// 立即更新权限模式（热切换，无需重建注册表）。
     ///
     /// 参数:
@@ -387,10 +398,15 @@ impl ToolRegistry {
     ///
     /// 返回:
     /// - 参数解析和审计写入结果
-    pub(crate) fn record_permission_approved(&self, name: &str, arguments: &str) -> Result<()> {
+    pub(crate) fn record_permission_approved(
+        &self,
+        name: &str,
+        arguments: &str,
+        detail: Option<&str>,
+    ) -> Result<()> {
         let arguments = parse_arguments(arguments)?;
         if let Some(profile) = &self.permission_profile {
-            profile.record_approved(local_tool_name(name), &arguments);
+            profile.record_approved(local_tool_name(name), &arguments, detail);
         }
         Ok(())
     }
@@ -578,7 +594,7 @@ mod tests {
         let arguments = r#"{"command":"curl https://example.com"}"#;
 
         registry
-            .record_permission_approved("run_command", arguments)
+            .record_permission_approved("run_command", arguments, None)
             .unwrap();
         registry.call("run_command", arguments).await.unwrap();
 

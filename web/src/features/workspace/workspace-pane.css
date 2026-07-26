@@ -437,22 +437,65 @@
 .git-change-head button:not(.git-section-toggle),
 .git-file-actions button { display: grid; width: 24px; height: 24px; padding: 0; place-items: center; border: 0; border-radius:var(--radius-1); background: transparent; color: var(--ink-soft); }
 .git-change-head button:not(.git-section-toggle):hover,
-.git-file-actions button:hover { background: var(--paper-deep); color: var(--ink); }
+/* 行内操作按钮：hover 比整行的反馈更深一档，叠加时仍能分出层次 */
+.git-file-actions button:hover { background: color-mix(in srgb, var(--ink) 14%, transparent); color: var(--ink); }
 .git-file-list { min-height: 0; padding:var(--space-2xs); }
-.git-file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; min-height: 33px; padding:0 var(--space-3xs) 0 0; border-radius:var(--radius-1); }
+/*
+ * 文件行与历史行
+ *
+ * 改造前 hover 与 active 共用 --paper-deep 一个实色：鼠标划过时选中项被同色淹没，
+ * 看不出当前打开的是哪一个。现在分成两层——
+ *   hover  轻量的 ink 混色，只表示"指针在这里"
+ *   active 信号色淡底加左侧指示条，表示"当前打开的是它"
+ * 两者可以同时成立且互不遮盖。
+ */
+.git-file-row,
+.git-history-row {
+  position: relative;
+  transition:background var(--duration-fast) var(--ease-standard);
+}
+
+.git-file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 33px;
+  padding:0 var(--space-3xs) 0 0;
+  border-radius:var(--radius-2);
+}
+
 .git-file-row:hover,
+.git-history-row:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
 .git-file-row.active,
-.git-history-row:hover,
-.git-history-row.active { background: var(--paper-deep); }
+.git-history-row.active {
+  background: color-mix(in srgb, var(--signal) 10%, transparent);
+}
+
+/* 选中指示条：贴左内缘的圆角竖条，比整行换色更克制也更明确 */
+.git-file-row.active::before,
+.git-history-row.active::before {
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  left: 0;
+  width: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--signal);
+  content: "";
+}
 .git-file-main { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; min-width: 0; min-height: 33px; padding:0 var(--space-2xs); border: 0; background: transparent; text-align: left; color: inherit; }
 .git-file-status { color: var(--signal); font:500 var(--text-2xs) var(--font-code); }
 .git-file-status.tone-added { color: var(--signal); }
 .git-file-status.tone-deleted { color: var(--danger); }
 .git-file-status.tone-untracked { color: var(--ink-soft); }
-.git-file-status.tone-conflict { color: #c47b1a; }
+.git-file-status.tone-conflict { color: var(--warning); }
 .git-file-main > span:last-child { overflow: hidden; font:400 var(--text-xs) var(--font-code); text-overflow: ellipsis; white-space: nowrap; }
-.git-file-actions { display: flex; opacity: 0; }
+.git-file-actions { display: flex; opacity: 0; transition:opacity var(--duration-fast) var(--ease-standard); }
 .git-file-row:hover .git-file-actions,
+.git-file-row:focus-within .git-file-actions,
 .git-file-row.active .git-file-actions { opacity: 1; }
 .git-history-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap:var(--space-xs); width: 100%; min-height: 48px; padding:var(--space-xs) var(--space-sm); border: 0; border-radius:var(--radius-2); background: transparent; color: var(--ink); text-align: left; }
 .git-history-row span { display: grid; min-width: 0; gap:var(--space-3xs); }

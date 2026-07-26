@@ -361,8 +361,8 @@
 }
 
 .agent-skill-permission-name em[data-permission="named"] {
-  background: color-mix(in srgb, var(--warning, #c28b2a) 16%, transparent);
-  color: var(--warning, #c28b2a);
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+  color: var(--warning);
 }
 
 .agent-skill-permission-name em[data-permission="off"] {

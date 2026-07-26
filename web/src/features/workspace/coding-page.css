@@ -161,6 +161,7 @@
     inset: 0;
     display: block;
     border: 0;
+    /* 移动端侧栏遮罩，与对话框遮罩同理，恒定为半透明深色 */
     background: rgb(12 18 15 / 38%);
     z-index: 50;
   }

@@ -16,8 +16,12 @@
   text-align: left;
 }
 
+.git-tree-directory.ui-button {
+  transition:background var(--duration-fast) var(--ease-standard);
+}
+
 .git-tree-directory.ui-button:hover {
-  background: var(--paper-deep);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
   color: var(--ink);
 }
 
@@ -46,8 +50,9 @@
   text-align: center;
 }
 
+/* 多选态：比 active 更淡，两者叠加时仍能看出哪一个是当前打开的 */
 .git-file-row.selected:not(.active) {
-  background: color-mix(in srgb, var(--signal) 8%, var(--paper));
+  background: color-mix(in srgb, var(--signal) 6%, transparent);
 }
 
 .git-change-context-menu {
