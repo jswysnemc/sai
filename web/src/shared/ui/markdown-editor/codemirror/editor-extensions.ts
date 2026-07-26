@@ -1,6 +1,7 @@
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { defaultHighlightStyle, indentOnInput, syntaxHighlighting } from "@codemirror/language";
+import { languages } from "@codemirror/language-data";
 import { EditorState, type Extension } from "@codemirror/state";
 import {
   drawSelection,
@@ -11,6 +12,7 @@ import {
   rectangularSelection,
 } from "@codemirror/view";
 import { editorTheme } from "./editor-theme";
+import { wysiwygBlockDecorations } from "./wysiwyg-block-decorations";
 import { wysiwygDecorations } from "./wysiwyg-decorations";
 
 /**
@@ -28,8 +30,9 @@ export function baseExtensions(onChange: (value: string) => void): Extension[] {
     indentOnInput(),
     EditorView.lineWrapping,
     keymap.of([...defaultKeymap, ...historyKeymap]),
-    // 2. Markdown 语法解析，GFM 扩展随 markdownLanguage 一并启用
-    markdown({ base: markdownLanguage, codeLanguages: [] }),
+    // 2. Markdown 语法解析，GFM 扩展随 markdownLanguage 一并启用；
+    //    codeLanguages 让围栏代码块按语言标识做嵌套解析，语言包按需异步加载
+    markdown({ base: markdownLanguage, codeLanguages: languages }),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     // 3. 变更派发
     EditorView.updateListener.of((update) => {
@@ -60,7 +63,9 @@ type PresentationOptions = {
 export function presentationExtensions({ live, dark, readOnly }: PresentationOptions): Extension[] {
   return [
     editorTheme(dark, live),
-    live ? wysiwygDecorations : [lineNumbers(), highlightActiveLineGutter()],
+    live
+      ? [wysiwygDecorations, wysiwygBlockDecorations]
+      : [lineNumbers(), highlightActiveLineGutter()],
     EditorState.readOnly.of(readOnly),
     EditorView.editable.of(!readOnly),
   ];

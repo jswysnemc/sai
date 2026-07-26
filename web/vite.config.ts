@@ -21,6 +21,10 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes("monaco-editor")) return "monaco";
+          // 语言高亮包由 language-data 按需异步加载，交给 Rollup 自动拆分，
+          // 并入核心分包会让全部语言随编辑器一次性加载
+          if (/@codemirror\/(lang-(?!markdown|html)|legacy-modes)/.test(id)) return undefined;
+          if (/@lezer\/(?!common|highlight|lr|markdown)/.test(id)) return undefined;
           if (id.includes("@codemirror") || id.includes("@lezer")) return "codemirror";
           if (id.includes("mermaid")) return "mermaid";
           if (id.includes("@xterm")) return "terminal";

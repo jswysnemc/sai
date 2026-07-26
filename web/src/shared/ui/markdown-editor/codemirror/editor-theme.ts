@@ -41,7 +41,7 @@ const baseTheme = EditorView.theme({
 /** 所见即所得模式：正文字体、居中版心，读起来接近成稿。 */
 const liveTheme = EditorView.theme({
   "&": { fontSize: "var(--text-base)" },
-  ".cm-scroller": { fontFamily: "var(--font-sans)" },
+  ".cm-scroller": { fontFamily: "var(--font-ui)" },
   ".cm-content": {
     maxWidth: "48rem",
     margin: "0 auto",
@@ -59,9 +59,12 @@ const sourceTheme = EditorView.theme({
 /** 围栏代码块内部的语法着色，沿用代码视图的同一组令牌。 */
 const codeHighlight = HighlightStyle.define([
   { tag: tags.keyword, color: "var(--code-keyword)" },
-  { tag: tags.string, color: "var(--code-string)" },
-  { tag: tags.number, color: "var(--code-number)" },
+  { tag: [tags.string, tags.special(tags.string), tags.regexp], color: "var(--code-string)" },
+  { tag: [tags.number, tags.bool, tags.atom, tags.null], color: "var(--code-number)" },
   { tag: tags.comment, color: "var(--code-comment)", fontStyle: "italic" },
+  { tag: [tags.typeName, tags.className, tags.attributeName], color: "var(--code-number)" },
+  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: "var(--blue)" },
+  { tag: [tags.propertyName, tags.tagName], color: "var(--code-keyword)" },
   { tag: tags.invalid, color: "var(--code-danger)" },
 ]);
 

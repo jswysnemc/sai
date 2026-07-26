@@ -97,6 +97,46 @@
   font-weight: 600;
 }
 
+.markdown-cm.live .cm-md-table-delimiter,
+.markdown-cm.live .cm-md-code-info {
+  color: var(--ink-soft);
+}
+
+/* 代码块：围栏隐藏后由行级底色拼成整块，首末行补圆角 */
+.markdown-cm.live .cm-line.cm-md-codeline {
+  padding: 0 var(--space-sm);
+  background: var(--code-surface);
+  border-right: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  font-family: var(--font-code);
+  font-size: 0.875em;
+}
+
+.markdown-cm.live .cm-line.cm-md-codeline-first {
+  padding-top: var(--space-2xs);
+  border-top: 1px solid var(--line);
+  border-top-left-radius: var(--radius-2);
+  border-top-right-radius: var(--radius-2);
+}
+
+.markdown-cm.live .cm-line.cm-md-codeline-last {
+  padding-bottom: var(--space-2xs);
+  border-bottom: 1px solid var(--line);
+  border-bottom-left-radius: var(--radius-2);
+  border-bottom-right-radius: var(--radius-2);
+}
+
+/* 语言角标：围栏隐藏后挂在首行右侧 */
+.markdown-cm.live .cm-line.cm-md-codeline-first[data-md-lang]::before {
+  content: attr(data-md-lang);
+  float: right;
+  margin-left: var(--space-sm);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  user-select: none;
+}
+
 /* 内联部件 */
 .markdown-cm .cm-md-image img {
   display: block;
@@ -115,6 +155,35 @@
   margin: var(--space-sm) 0;
   border: none;
   border-top: 1px solid var(--line);
+}
+
+/* 表格部件：光标在外时以真实表格呈现，点击单元格回到源码 */
+.markdown-cm .cm-md-table {
+  padding: var(--space-2xs) 0;
+  overflow-x: auto;
+}
+
+.markdown-cm .cm-md-table table {
+  min-width: 50%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.markdown-cm .cm-md-table th,
+.markdown-cm .cm-md-table td {
+  padding: var(--space-2xs) var(--space-sm);
+  border: 1px solid var(--line);
+  text-align: left;
+  cursor: text;
+}
+
+.markdown-cm .cm-md-table th {
+  background: var(--paper-deep);
+  font-weight: 600;
+}
+
+.markdown-cm .cm-md-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--paper-deep) 45%, transparent);
 }
 
 .markdown-cm .cm-md-task {

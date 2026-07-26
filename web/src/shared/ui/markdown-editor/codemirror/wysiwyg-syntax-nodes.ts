@@ -41,6 +41,8 @@ export const CONTENT_STYLE_CLASSES: Record<string, string> = {
   URL: "cm-md-url",
   Link: "cm-md-link",
   TableHeader: "cm-md-table-header",
+  TableDelimiter: "cm-md-table-delimiter",
+  CodeInfo: "cm-md-code-info",
 };
 
 /**
