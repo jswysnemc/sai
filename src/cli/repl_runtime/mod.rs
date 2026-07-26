@@ -61,6 +61,8 @@ pub(super) struct ReplRuntime {
     last_chrome: Option<ReplChrome>,
     /// 底部主/子 agent 切换面板状态
     agent_panel: agent_panel::AgentPanelState,
+    /// 最近一次 composer 绘制后的光标屏幕行（高度变化重锚探测用）
+    last_cursor_row: Option<u16>,
 }
 
 /// 运行期间底部输入框草稿。
@@ -114,6 +116,7 @@ impl ReplRuntime {
             live_session_id: None,
             last_chrome: None,
             agent_panel: agent_panel::AgentPanelState::default(),
+            last_cursor_row: None,
         }
     }
 
@@ -604,16 +607,19 @@ impl ReplRuntime {
     /// 清屏范围内从 source 重新铺设当前宽度的可视历史。
     fn replay(&mut self, streaming: bool) -> Result<()> {
         let size = TerminalSize::current();
-        // 终端尺寸变化后旧 origin 不可信（终端可能已自行上滚内容且未被记账）：
-        // 清空 scrollback 后从屏幕顶部全量重放，避免与终端自动滚入的行形成双份
-        let resized = size != self.viewport.size();
-        if resized {
+        let previous = self.viewport.size();
+        // 1. 分层重锚：仅高度变化时折行不变，scrollback 内容依旧有效，
+        //    用光标位移只修正记账即可保留回滚历史与用户滚动进度；
+        //    宽度变化或探测失败才清空 scrollback 全量重建
+        let full_reanchor = size != previous
+            && !(size.cols == previous.cols && self.reanchor_for_height_change(size));
+        if full_reanchor {
             self.viewport.restart_at(size, 0);
         }
         let width = usize::from(size.cols);
-        // 重放窗口至少覆盖屏幕，同时尊重配置的 row cap 上限；
-        // 重锚重放会重建 scrollback，因此取完整 row cap 保留回滚历史
-        let min_rows = if resized {
+        // 2. 重放窗口至少覆盖屏幕，同时尊重配置的 row cap 上限；
+        //    全量重锚会重建 scrollback，因此取完整 row cap 保留回滚历史
+        let min_rows = if full_reanchor {
             self.transcript.row_cap().max(usize::from(size.rows))
         } else {
             usize::from(size.rows)
@@ -633,7 +639,7 @@ impl ReplRuntime {
         self.viewport
             .update(size, self.composer_height_for(size), window.total);
         let mut stdout = io::stdout();
-        let painted = if resized {
+        let painted = if full_reanchor {
             reflow::replay_full(&mut stdout, &self.viewport, &window.lines)?
         } else {
             reflow::replay(&mut stdout, &self.viewport, &window.lines)?
@@ -643,6 +649,44 @@ impl ReplRuntime {
         self.reflow.clear_pending();
         self.reflow.mark_reflowed(size, streaming);
         Ok(())
+    }
+
+    /// 仅高度变化时按光标位移修正锚点记账。
+    ///
+    /// 终端缩放会保持光标可见：变矮把内容上滚（顶部行进入 scrollback），
+    /// 变高可能把 scrollback 行拉回屏幕。比较上次绘制的光标行与当前实际
+    /// 光标行即可得到内容位移量，同步 origin 与 offscreen 记账。
+    ///
+    /// 参数:
+    /// - `size`: 新终端尺寸
+    ///
+    /// 返回:
+    /// - 是否成功重锚（失败时调用方退回全量重建）
+    fn reanchor_for_height_change(&mut self, size: TerminalSize) -> bool {
+        // 测试环境无真实终端，光标查询会阻塞
+        if cfg!(test) {
+            return false;
+        }
+        let Some(expected) = self.last_cursor_row else {
+            return false;
+        };
+        let Ok((_, actual)) = crossterm::cursor::position() else {
+            return false;
+        };
+        let delta = i32::from(expected) - i32::from(actual);
+        if delta > 0 {
+            // 1. 变矮：内容上移 delta 行；越过 origin 的部分已滚入 scrollback
+            let delta = delta.min(i32::from(u16::MAX)) as u16;
+            let absorbed = delta.min(self.viewport.origin_row());
+            self.viewport.apply_terminal_scroll(delta);
+            self.stream.note_scrolled(delta.saturating_sub(absorbed));
+        } else if delta < 0 {
+            // 2. 变高：scrollback 行被拉回，受管区起点下移且拉回行重新可修补
+            let rise = (-delta).min(i32::from(u16::MAX)) as u16;
+            self.viewport.shift_origin_down(rise, size);
+            self.stream.note_unscrolled(usize::from(rise));
+        }
+        true
     }
 
     /// 外部程序写过终端后，从当前光标行重启受管区域。
@@ -663,6 +707,29 @@ impl ReplRuntime {
         self.viewport.restart_at(size, origin);
         self.stream.mark_all_offscreen();
         Ok(())
+    }
+
+    /// 按指定宽度渲染完整 transcript（供备用屏浏览模式使用）。
+    ///
+    /// 参数:
+    /// - `width`: 目标终端列数
+    ///
+    /// 返回:
+    /// - row cap 范围内的预折行 ANSI 行
+    pub(in crate::cli) fn transcript_pager_lines(&mut self, width: usize) -> Vec<String> {
+        let min_rows = self.transcript.row_cap();
+        let window = self.transcript.display_window_with_live_cap(
+            width.max(8),
+            &self.options,
+            min_rows,
+            usize::MAX,
+            usize::MAX,
+        );
+        window
+            .lines
+            .iter()
+            .map(|line| line.as_str().to_string())
+            .collect()
     }
 
     /// 计算当前终端尺寸下 composer 需要保留的行数。

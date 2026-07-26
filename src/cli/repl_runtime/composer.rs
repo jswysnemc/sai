@@ -132,11 +132,14 @@ impl ReplRuntime {
     ///
     /// 返回:
     /// - 绘制结果
-    pub(in crate::cli) fn draw_composer(&self, stdout: &mut io::Stdout) -> Result<()> {
+    pub(in crate::cli) fn draw_composer(&mut self, stdout: &mut io::Stdout) -> Result<()> {
         let Some(composer) = &self.composer else {
             return Ok(());
         };
-        composer.draw(stdout, &self.viewport)
+        // 记录光标最终行：终端高度变化时以此探测内容位移
+        let cursor_row = composer.draw(stdout, &self.viewport)?;
+        self.last_cursor_row = Some(cursor_row);
+        Ok(())
     }
 
     /// 返回运行期间输入草稿的可变引用。

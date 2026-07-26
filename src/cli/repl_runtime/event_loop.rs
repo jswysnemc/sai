@@ -107,14 +107,15 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                 runtime.redraw_stream_composer()?;
             }
             Event::Key(key) if key.kind != KeyEventKind::Release => {
-                if matches!(key.code, KeyCode::Char('o'))
-                    && key.modifiers.contains(KeyModifiers::CONTROL)
+                if (matches!(key.code, KeyCode::Char('o'))
+                    && key.modifiers.contains(KeyModifiers::CONTROL))
+                    || matches!(key.code, KeyCode::PageUp)
                 {
-                    // 1. 流式期间不打开阻塞式输出面板：pager 会同步占住事件循环，
+                    // 1. 流式期间不打开阻塞式浏览面板：pager 会同步占住事件循环，
                     //    模型流无人读取、工具子进程管道写满后挂起
                     runtime.record_meta(crate::i18n::text(
-                        "output pager is available after this turn finishes",
-                        "输出面板需等本轮结束后再打开",
+                        "transcript pager is available after this turn finishes",
+                        "会话浏览面板需等本轮结束后再打开",
                     ).to_string())?;
                     continue;
                 }

@@ -109,6 +109,18 @@ impl InlineViewport {
             .min(max_history_height);
     }
 
+    /// 终端把 scrollback 行拉回屏幕后，受管区域起点整体下移。
+    ///
+    /// 参数:
+    /// - `rows`: 下移行数
+    /// - `size`: 当前终端尺寸
+    pub(super) fn shift_origin_down(&mut self, rows: u16, size: TerminalSize) {
+        self.origin_row = self
+            .origin_row
+            .saturating_add(rows)
+            .min(size.rows.saturating_sub(1));
+    }
+
     /// 外部程序写入终端后，从指定行重新开始受管区域。
     ///
     /// 参数:

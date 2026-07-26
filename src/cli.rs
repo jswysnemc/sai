@@ -59,6 +59,7 @@ mod repl_input_render;
 #[cfg(test)]
 mod repl_input_tests;
 mod repl_pager;
+mod repl_transcript_pager;
 mod repl_runtime;
 mod repl_shell;
 mod repl_text;

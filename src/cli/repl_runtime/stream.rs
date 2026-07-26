@@ -61,6 +61,19 @@ impl StreamState {
         self.offscreen = (self.offscreen + usize::from(rows)).min(self.total);
     }
 
+    /// 记录终端把 scrollback 行拉回屏幕（终端变高时的自动行为）。
+    ///
+    /// 拉回的行重新进入可修补区域。
+    ///
+    /// 参数:
+    /// - `rows`: 拉回行数
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn note_unscrolled(&mut self, rows: usize) {
+        self.offscreen = self.offscreen.saturating_sub(rows);
+    }
+
     /// 将全部受管行标记为已滚出（外部程序写入终端后调用）。
     ///
     /// 参数:

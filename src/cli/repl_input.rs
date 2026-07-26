@@ -158,6 +158,15 @@ pub(super) fn read_repl_input(
                     redraw_input!()?;
                     continue;
                 }
+                // PageUp：进入备用屏 transcript 浏览（进度自管理，回看不丢位置）
+                if code == KeyCode::PageUp {
+                    super::repl_transcript_pager::open_transcript_pager(runtime)?;
+                    runtime.resync_after_overlay()?;
+                    input_row = 0;
+                    rendered_rows = 0;
+                    redraw_input!()?;
+                    continue;
+                }
                 match code {
                     KeyCode::BackTab => {
                         // 部分终端把 Shift+Tab 发成 BackTab

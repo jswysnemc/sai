@@ -107,8 +107,8 @@ impl ComposerFrame {
     /// - `viewport`: 当前历史与 composer 分区
     ///
     /// 返回:
-    /// - 绘制是否成功
-    pub(super) fn draw<W: Write>(&self, output: &mut W, viewport: &InlineViewport) -> Result<()> {
+    /// - 光标最终所在的屏幕行（供高度变化重锚时探测位移）
+    pub(super) fn draw<W: Write>(&self, output: &mut W, viewport: &InlineViewport) -> Result<u16> {
         let cols = usize::from(viewport.size().cols);
         let top = viewport.composer_top();
         let height = viewport.composer_height();
@@ -156,16 +156,10 @@ impl ComposerFrame {
         }
 
         // 5. 历史插入会移动终端光标，最后必须把它放回可继续编辑的位置
-        queue!(
-            output,
-            MoveTo(
-                layout.cursor_col,
-                input_start_row.saturating_add(layout.cursor_row_offset)
-            ),
-            Show
-        )?;
+        let cursor_row = input_start_row.saturating_add(layout.cursor_row_offset);
+        queue!(output, MoveTo(layout.cursor_col, cursor_row), Show)?;
         output.flush()?;
-        Ok(())
+        Ok(cursor_row)
     }
 
     /// 根据当前列数计算输入、补全和光标布局。
