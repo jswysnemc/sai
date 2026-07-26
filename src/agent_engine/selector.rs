@@ -69,6 +69,8 @@ mod tests {
             None,
             AppConfig::default(),
             "test-session".to_string(),
+            None,
+            None,
         )
     }
 

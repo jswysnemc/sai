@@ -362,6 +362,8 @@ mod tests {
             None,
             crate::config::AppConfig::default(),
             "test-session".to_string(),
+            None,
+        None,
         );
         let registry = TerminalRegistry::default();
 

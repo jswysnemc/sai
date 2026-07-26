@@ -7,6 +7,7 @@ mod live_tests;
 mod event_bridge;
 mod protocol;
 mod session;
+mod session_store;
 mod transport;
 
 pub(crate) use governance::AcpGovernance;

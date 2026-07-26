@@ -147,6 +147,17 @@ impl PermissionProfile {
         self.mode.clone()
     }
 
+    /// 判断当前是否为自动审核模式。
+    ///
+    /// 外部内核走的是另一条审核路径，需要据此决定是否并行发起 LLM 审核，
+    /// 否则用户配了自动审核却只在自带内核下生效，行为不一致。
+    ///
+    /// 返回:
+    /// - 处于 AutoAudit 模式时为 true
+    pub(crate) fn is_auto_audit(&self) -> bool {
+        self.current_mode() == PermissionProfileMode::AutoAudit
+    }
+
     /// 读取当前权限模式。
     fn current_mode(&self) -> PermissionProfileMode {
         PermissionProfileMode::from_u8(self.mode.load(Ordering::SeqCst))
@@ -248,14 +259,13 @@ impl PermissionProfile {
         }
         // 5. 写入工具必须先通过工作区路径边界检查，批准的外部写入放行一次
         if permission == ToolPermission::Writes && !approved {
-            self.ensure_workspace_paths(arguments).map_err(|error| {
+            self.ensure_workspace_paths(arguments).inspect_err(|error| {
                 self.record(
                     tool,
                     AuditDecision::Denied,
                     arguments,
                     Some(&error.to_string()),
                 );
-                error
             })?;
         }
         // 6. 需要逃逸沙箱但未获批准时拒绝，避免沙箱内静默失败

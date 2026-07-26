@@ -18,6 +18,10 @@ pub(crate) struct AcpGovernance {
     config: AppConfig,
     /// 会话标识；权限卡按此归属，缺了它 Web 端按会话查不到待审请求
     session_id: String,
+    /// 自动审核运行时；仅在 auto_audit 模式且客户端可用时存在
+    auto_audit: Option<super::audit::AutoAuditRuntime>,
+    /// ACP 会话标识存储；无状态目录时为 None
+    session_store: Option<super::session_store::AcpSessionStore>,
 }
 
 impl AcpGovernance {
@@ -28,6 +32,8 @@ impl AcpGovernance {
     /// - `profile`: 权限配置；YOLO 模式下没有
     /// - `config`: 应用配置，提供 shell 与输出过滤设置
     /// - `session_id`: 当前会话标识
+    /// - `paths`: Sai 路径，用于构造自动审核客户端
+    /// - `state_dir`: 会话状态目录，用于记住外部 agent 的会话标识
     ///
     /// 返回:
     /// - 治理句柄
@@ -36,13 +42,42 @@ impl AcpGovernance {
         profile: Option<PermissionProfile>,
         config: AppConfig,
         session_id: String,
+        paths: Option<&crate::paths::SaiPaths>,
+        state_dir: Option<&std::path::Path>,
     ) -> Self {
+        // 自动审核模式下预备审核客户端；构造失败时静默退回人工审核，
+        // 与自带内核的处理一致，不因为审核模型不可用就阻断会话
+        let auto_audit = match (&profile, paths) {
+            (Some(profile), Some(paths)) if profile.is_auto_audit() => {
+                crate::permission::resolve_auto_audit_client(&config, paths)
+                    .ok()
+                    .map(|client| super::audit::AutoAuditRuntime {
+                        client,
+                        context: crate::i18n::text(
+                            "The operation comes from an external ACP agent running in this workspace.",
+                            "该操作来自在本工作区运行的外部 ACP 内核。",
+                        )
+                        .to_string(),
+                    })
+            }
+            _ => None,
+        };
         Self {
             workspace,
             profile,
             config,
             session_id,
+            auto_audit,
+            session_store: state_dir.map(super::session_store::AcpSessionStore::new),
         }
+    }
+
+    /// 返回 ACP 会话标识存储。
+    ///
+    /// 返回:
+    /// - 存储句柄；无会话状态目录时为 None
+    pub(crate) fn session_store(&self) -> Option<&super::session_store::AcpSessionStore> {
+        self.session_store.as_ref()
     }
 
     /// 校验一次文件写入是否允许。
@@ -70,6 +105,7 @@ impl AcpGovernance {
             &arguments,
             ToolPermission::Writes,
             events,
+            self.auto_audit.as_ref(),
         )
         .await?;
         // 2. 再做静态边界校验：工作区外与符号链接逃逸即便获批也不放行
@@ -106,6 +142,7 @@ impl AcpGovernance {
             &arguments,
             ToolPermission::Writes,
             events,
+            self.auto_audit.as_ref(),
         )
         .await?;
         let sandboxed = profile

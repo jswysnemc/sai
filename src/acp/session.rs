@@ -21,6 +21,8 @@ pub(crate) struct AcpEngine {
     terminals: TerminalRegistry,
     /// 握手响应里的 agentInfo，作为「确实连上了外部内核」的运行时证据
     agent_info: Option<(String, String)>,
+    /// agent 是否支持 session/load；不支持时不做恢复尝试
+    load_session: bool,
 }
 
 impl AcpEngine {
@@ -57,10 +59,12 @@ impl AcpEngine {
             governance,
             terminals: TerminalRegistry::default(),
             agent_info: None,
+            load_session: false,
         };
-        let agent_info = engine.initialize().await?;
+        let (agent_info, load_session) = engine.initialize().await?;
         Ok(Self {
             agent_info: Some(agent_info),
+            load_session,
             ..engine
         })
     }
@@ -71,8 +75,8 @@ impl AcpEngine {
     /// 从而让外部内核的每次落盘与执行都经过 sai 的权限与沙箱。
     ///
     /// 返回:
-    /// - agent 名称与版本
-    async fn initialize(&self) -> Result<(String, String)> {
+    /// - `(agent 名称与版本, 是否支持 session/load)`
+    async fn initialize(&self) -> Result<((String, String), bool)> {
         let params = json!({
             "protocolVersion": PROTOCOL_VERSION,
             "clientInfo": { "name": "sai", "version": env!("CARGO_PKG_VERSION") },
@@ -113,7 +117,12 @@ impl AcpEngine {
             .and_then(Value::as_str)
             .unwrap_or("-")
             .to_string();
-        Ok((name, version))
+        let load_session = response
+            .get("agentCapabilities")
+            .and_then(|caps| caps.get("loadSession"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        Ok(((name, version), load_session))
     }
 
     /// 取出握手得到的 agent 名称与版本。
@@ -135,6 +144,41 @@ impl AcpEngine {
         if let Some(session_id) = &self.session_id {
             return Ok(session_id.clone());
         }
+        // 1. 先尝试接回上次的会话：外部 agent 自管历史，
+        //    新建会话意味着丢掉全部上下文，与 sai 会话列表里的历史对不上
+        if self.load_session {
+            if let Some(stored) = self
+                .governance
+                .session_store()
+                .and_then(|store| store.load(&self.name))
+            {
+                let loaded = self
+                    .transport
+                    .request(
+                        "session/load",
+                        json!({
+                            "sessionId": stored,
+                            "cwd": cwd.display().to_string(),
+                            "mcpServers": [],
+                        }),
+                    )
+                    .await;
+                match loaded {
+                    Ok(_) => {
+                        self.session_id = Some(stored.clone());
+                        return Ok(stored);
+                    }
+                    Err(_) => {
+                        // 标识已失效（会话被对端清理等），丢弃后新建，
+                        // 否则每次启动都拿同一个坏标识去试
+                        if let Some(store) = self.governance.session_store() {
+                            store.clear();
+                        }
+                    }
+                }
+            }
+        }
+        // 2. 没有可恢复的会话时新建，并记下标识供下次接回
         let response = self
             .transport
             .request(
@@ -147,6 +191,9 @@ impl AcpEngine {
             .and_then(Value::as_str)
             .context("session/new did not return a sessionId")?
             .to_string();
+        if let Some(store) = self.governance.session_store() {
+            let _ = store.save(&self.name, &session_id);
+        }
         self.session_id = Some(session_id.clone());
         Ok(session_id)
     }

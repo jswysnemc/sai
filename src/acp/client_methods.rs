@@ -294,6 +294,8 @@ mod tests {
             Some(profile),
             crate::config::AppConfig::default(),
             session_id.to_string(),
+            None,
+            None,
         )
     }
 
@@ -369,6 +371,50 @@ mod tests {
         assert!(!target.exists(), "被拒的写入不应留下文件");
     }
 
+    /// 自动审核抢答后无需人工介入，写入照常发生。
+    ///
+    /// 针对的缺口是：auto_audit 模式下 ACP 路径此前只走人工审核，
+    /// 用户配了自动审核却一直卡着等人点。
+    #[tokio::test]
+    async fn auto_audit_decision_unblocks_the_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = dir.path().canonicalize().unwrap();
+        let target = workspace.join("auto.md");
+        let governance = audited_governance(&workspace, "auto-session");
+        let (events, mut received) = tokio::sync::mpsc::unbounded_channel();
+
+        let write = tokio::spawn({
+            let params = json!({ "path": target.display().to_string(), "content": "auto" });
+            let governance = governance.clone();
+            async move { write_text_file(&params, &governance, &events).await }
+        });
+
+        let request_id = match received.recv().await.unwrap() {
+            crate::agent::AgentEvent::PermissionRequested(request) => request.id,
+            other => panic!("expected a permission request, got {other:?}"),
+        };
+        // 模拟审核模型抢先给出放行结论
+        crate::permission::decide_permission(
+            &request_id,
+            crate::permission::PermissionDecision::auto_allow_once(Some(
+                "工作区内的常规写入".to_string(),
+            )),
+        )
+        .unwrap();
+        write.await.unwrap().unwrap();
+
+        // 决定事件要标出自动来源，界面才能与人工批准区分
+        let resolved = received.recv().await.unwrap();
+        match resolved {
+            crate::agent::AgentEvent::PermissionResolved { decision, .. } => {
+                assert!(decision.is_auto_allow(), "决定应标记为自动审核放行");
+                assert_eq!(decision.detail(), Some("工作区内的常规写入"));
+            }
+            other => panic!("expected a resolution, got {other:?}"),
+        }
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "auto");
+    }
+
     /// YOLO 会话不绑定权限配置，此时不额外设限，与自带工具行为一致。
     #[tokio::test]
     async fn yolo_session_does_not_add_restrictions() {
@@ -379,6 +425,8 @@ mod tests {
             None,
             crate::config::AppConfig::default(),
             "yolo-session".to_string(),
+            None,
+        None,
         );
         let (events, _received) = tokio::sync::mpsc::unbounded_channel();
 

@@ -1,4 +1,5 @@
 use crate::agent::AgentEvent;
+use crate::llm::OpenAiCompatibleClient;
 use crate::agent_engine::EventSender;
 use crate::permission::{PermissionDecision, PermissionProfile};
 use crate::tools::ToolPermission;
@@ -21,6 +22,7 @@ use serde_json::Value;
 /// - `arguments`: 工具参数
 /// - `permission`: 工具的权限等级
 /// - `events`: 事件发送端，用于把权限卡呈现到界面
+/// - `auto_audit`: 自动审核所需的运行时；非自动审核模式为 None
 ///
 /// 返回:
 /// - 获准或无需审核时为 Ok；被拒时返回错误
@@ -31,6 +33,7 @@ pub(crate) async fn ensure_authorized(
     arguments: &Value,
     permission: ToolPermission,
     events: &EventSender,
+    auto_audit: Option<&AutoAuditRuntime>,
 ) -> Result<()> {
     // 1. 不需要交互式审核的操作直接放行，避免为只读操作打扰用户
     if !profile.requires_interactive_audit(tool, permission, arguments) {
@@ -38,10 +41,34 @@ pub(crate) async fn ensure_authorized(
     }
     profile.record_requested(tool, arguments);
     let arguments_text = serde_json::to_string(arguments).unwrap_or_else(|_| "{}".to_string());
-    let (request, receiver) =
-        crate::permission::request_permission(session_id, tool, &arguments_text);
+    // 2. 自动审核与人工审核并行抢答，与自带内核的行为一致
+    let auto_active = auto_audit.is_some();
+    let (request, receiver) = crate::permission::request_permission_with_auto_audit(
+        session_id,
+        tool,
+        &arguments_text,
+        auto_active,
+    );
     let request_id = request.id.clone();
-    // 2. 权限卡送到界面，等待人工决定
+    let auto_task = auto_audit.map(|runtime| {
+        let client = runtime.client.clone();
+        let context = runtime.context.clone();
+        let request_id = request_id.clone();
+        let tool = tool.to_string();
+        let arguments_text = arguments_text.clone();
+        tokio::spawn(async move {
+            // 失败或超时静默回退人工审核，与自带内核一致
+            let _ = crate::permission::run_auto_audit(
+                &client,
+                &request_id,
+                &tool,
+                &arguments_text,
+                &context,
+            )
+            .await;
+        })
+    });
+    // 3. 权限卡送到界面，等待人工或自动审核给出结论
     let _ = events.send(AgentEvent::PermissionRequested(request));
     let decision = match receiver.await {
         Ok(decision) => decision,
@@ -51,6 +78,10 @@ pub(crate) async fn ensure_authorized(
             bail!("permission request was dropped before a decision")
         }
     };
+    // 已有结论，未完成的自动审核不再需要
+    if let Some(task) = auto_task {
+        task.abort();
+    }
     let _ = events.send(AgentEvent::PermissionResolved {
         request_id,
         decision: decision.clone(),
@@ -72,4 +103,16 @@ pub(crate) async fn ensure_authorized(
             bail!(message)
         }
     }
+}
+
+/// 自动审核所需的运行时。
+///
+/// 外部内核没有 sai 的对话历史，`context` 由调用方给出简要说明，
+/// 让审核模型至少知道这次操作发生在什么场景下。
+#[derive(Clone)]
+pub(crate) struct AutoAuditRuntime {
+    /// 审核模型客户端
+    pub(crate) client: OpenAiCompatibleClient,
+    /// 供审核模型参考的上下文摘要
+    pub(crate) context: String,
 }

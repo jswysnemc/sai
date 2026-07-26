@@ -76,6 +76,8 @@ async fn acp_live_reports_agent_info() {
         None,
         crate::config::AppConfig::default(),
         "live-test".to_string(),
+        None,
+        None,
     );
 
     let engine = super::AcpEngine::connect(
@@ -116,6 +118,8 @@ async fn acp_live_runs_a_real_turn() {
         None,
         crate::config::AppConfig::default(),
         "live-turn".to_string(),
+        None,
+        None,
     );
 
     let mut engine = super::AcpEngine::connect(

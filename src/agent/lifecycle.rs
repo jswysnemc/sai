@@ -78,6 +78,8 @@ impl Agent {
             tools.permission_profile(),
             config.clone(),
             state.session_id().to_string(),
+            Some(paths),
+            Some(state.state_dir()),
         );
         let external_engine = crate::agent_engine::build_external_engine(&config.agent, governance)
             .map_err(|error| anyhow::anyhow!("{error}"))?;
