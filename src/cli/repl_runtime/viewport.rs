@@ -16,6 +16,11 @@ impl TerminalSize {
     /// 返回:
     /// - 至少为一行一列的终端尺寸
     pub(super) fn current() -> Self {
+        // 测试环境固定尺寸：CI console（尤其 Windows）可能报出真实尺寸，
+        // 与 InlineViewport::new 的固定值不一致会误触发 resize 冻结分支
+        if cfg!(test) {
+            return Self { cols: 80, rows: 24 };
+        }
         let (cols, rows) = terminal::size().unwrap_or((80, 24));
         Self {
             cols: cols.max(1),
