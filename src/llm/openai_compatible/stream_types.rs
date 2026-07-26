@@ -3,7 +3,54 @@ struct ChatStreamResponse {
     #[serde(default, deserialize_with = "null_as_default")]
     choices: Vec<ChatStreamChoice>,
     #[serde(default, deserialize_with = "null_as_default")]
-    usage: Option<Usage>,
+    usage: Option<ChatUsage>,
+}
+
+/// OpenAI Chat Completions 协议的用量字段。
+///
+/// 与领域模型 `Usage` 分开定义，避免把线格式的 `prompt_tokens_details`
+/// 结构泄漏进内部数据结构。
+#[derive(Debug, Deserialize)]
+struct ChatUsage {
+    #[serde(default)]
+    prompt_tokens: u64,
+    #[serde(default)]
+    completion_tokens: u64,
+    #[serde(default)]
+    total_tokens: u64,
+    #[serde(default, deserialize_with = "null_as_default")]
+    prompt_tokens_details: Option<PromptTokensDetails>,
+}
+
+/// OpenAI 系协议里输入令牌的细分构成。
+#[derive(Debug, Default, Deserialize)]
+struct PromptTokensDetails {
+    /// 命中提示词缓存的令牌数
+    #[serde(default)]
+    cached_tokens: u64,
+}
+
+impl ChatUsage {
+    /// 转换成领域用量模型。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 带缓存明细的用量；OpenAI 不区分缓存写入，写入量记为 0
+    fn into_usage(self) -> Usage {
+        let cache_read_tokens = self
+            .prompt_tokens_details
+            .map(|details| details.cached_tokens)
+            .unwrap_or_default();
+        Usage {
+            prompt_tokens: self.prompt_tokens,
+            completion_tokens: self.completion_tokens,
+            total_tokens: self.total_tokens,
+            cache_read_tokens,
+            cache_write_tokens: 0,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -101,6 +148,31 @@ struct ResponsesUsage {
     output_tokens: u64,
     #[serde(default)]
     total_tokens: u64,
+    #[serde(default, deserialize_with = "null_as_default")]
+    input_tokens_details: Option<PromptTokensDetails>,
+}
+
+impl ResponsesUsage {
+    /// 转换成领域用量模型。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 带缓存明细的用量；Responses 协议同样不区分缓存写入
+    fn into_usage(self) -> Usage {
+        let cache_read_tokens = self
+            .input_tokens_details
+            .map(|details| details.cached_tokens)
+            .unwrap_or_default();
+        Usage {
+            prompt_tokens: self.input_tokens,
+            completion_tokens: self.output_tokens,
+            total_tokens: self.total_tokens,
+            cache_read_tokens,
+            cache_write_tokens: 0,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]

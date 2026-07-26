@@ -2,6 +2,15 @@ use super::turns::pending_placeholder;
 use super::*;
 use crate::llm::ChatMessage;
 
+/// 测试用的单轮用量，累计口径与上下文口径取同一值。
+const TURN_USAGE: Usage = Usage {
+    prompt_tokens: 10,
+    completion_tokens: 5,
+    total_tokens: 15,
+    cache_read_tokens: 0,
+    cache_write_tokens: 0,
+};
+
 mod compaction_recovery;
 mod context_epoch;
 mod session_memory;
@@ -168,11 +177,7 @@ fn prompt_change_does_not_clear_conversation_state() {
         .save_loaded_tools(&["web_search".to_string()])
         .unwrap();
     store
-        .add_usage(&Usage {
-            prompt_tokens: 10,
-            completion_tokens: 5,
-            total_tokens: 15,
-        })
+        .add_turn_usage(&TURN_USAGE, &TURN_USAGE)
         .unwrap();
 
     store.reset_if_prompt_changed("updated prompt").unwrap();
@@ -480,11 +485,7 @@ fn session_summary_projection_matches_existing_snapshot_fields() {
             .unwrap();
     }
     store
-        .add_usage(&Usage {
-            prompt_tokens: 10,
-            completion_tokens: 5,
-            total_tokens: 15,
-        })
+        .add_turn_usage(&TURN_USAGE, &TURN_USAGE)
         .unwrap();
     let request = store
         .select_manual_compaction(0)
@@ -554,11 +555,7 @@ fn session_snapshot_includes_usage_and_compaction() {
             .unwrap();
     }
     store
-        .add_usage(&Usage {
-            prompt_tokens: 10,
-            completion_tokens: 5,
-            total_tokens: 15,
-        })
+        .add_turn_usage(&TURN_USAGE, &TURN_USAGE)
         .unwrap();
     let request = store
         .select_manual_compaction(0)

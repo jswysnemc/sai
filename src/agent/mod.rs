@@ -15,6 +15,7 @@ mod system_prompt;
 mod tool_attachments;
 mod tool_history;
 mod tool_visibility;
+mod turn_execution;
 mod turn_orchestration;
 
 use crate::config::AppConfig;
@@ -37,6 +38,7 @@ use model_context::selected_model_label;
 use tokio::sync::mpsc;
 use tool_history::extract_persistable_tool_report;
 use tool_visibility::ToolVisibility;
+use turn_execution::{TurnExecution, TurnUsageAccumulator};
 
 pub(crate) use compaction::CompactionRunOutcome;
 pub use event::{AgentEvent, CompactionError};
@@ -79,10 +81,11 @@ impl Agent {
         auto_meme_reminder: Option<&str>,
         on_event: &mut F,
         perf: &mut PerfTrace,
-    ) -> Result<ChatResult>
+    ) -> Result<TurnExecution>
     where
         F: FnMut(AgentEvent) -> Result<()>,
     {
+        let mut turn_usage = TurnUsageAccumulator::default();
         let mut tool_round = 0usize;
         let mut tool_event_seq = self.state.tool_call_count_for_turn(turn_id)?;
         let mut todo_reminder = self
@@ -120,13 +123,13 @@ impl Agent {
                     &hook_ctx,
                 )
                 .await;
-                return Ok(ChatResult {
+                return Ok(turn_usage.into_execution(ChatResult {
                     content,
                     reasoning: None,
                     usage: None,
                     tool_calls: Vec::new(),
                     duration_ms: 0,
-                });
+                }));
             }
             tool_round += 1;
             crate::hooks::dispatch(
@@ -236,6 +239,8 @@ impl Agent {
                 }
             };
             perf.mark(&format!("round {tool_round} model request done"));
+            // 每轮模型调用都要计入本轮用量，只记最后一轮会漏掉全部工具轮次
+            turn_usage.add(result.usage.as_ref());
             tool_attachments::remove_pending_model_attachments(messages);
             if result.tool_calls.is_empty() || !self.tools_enabled {
                 crate::hooks::dispatch(
@@ -256,7 +261,7 @@ impl Agent {
                     &hook_ctx,
                 )
                 .await;
-                return Ok(result);
+                return Ok(turn_usage.into_execution(result));
             }
             messages.push(ChatMessage::assistant(
                 result.content.clone(),

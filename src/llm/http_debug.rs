@@ -475,6 +475,7 @@ mod tests {
                 prompt_tokens: 1,
                 completion_tokens: 2,
                 total_tokens: 3,
+                ..Usage::default()
             }),
             tool_calls: Vec::new(),
             duration_ms: 0,

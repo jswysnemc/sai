@@ -10,7 +10,7 @@ import { MemorySettingsSection } from "../memory-settings-section";
 import { HooksSettingsSection } from "../hooks-settings-section";
 import { McpSettingsSection } from "../mcp-settings-section";
 import { SkillsSettingsSection } from "../skills/skills-settings-section";
-import { UsageStatsSection } from "../usage-stats-section";
+import { UsageStatsSection } from "../usage/usage-stats-section";
 import { SettingsSkeleton } from "./settings-skeleton";
 import { SettingsErrorRecovery } from "./settings-error-recovery";
 import type { SettingsConfigController, SettingsSectionId } from "../settings-types";

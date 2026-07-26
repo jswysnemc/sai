@@ -138,6 +138,12 @@ impl ChatMessage {
     }
 }
 
+/// 单次模型调用的令牌用量。
+///
+/// `prompt_tokens` 始终是输入侧总量（含命中缓存的部分），上下文预算判断依赖该口径。
+/// 缓存明细单独记录，因为供应商对缓存读写另有计价系数：
+/// 命中读取通常按 10% 计价，写入缓存通常按 125% 计价，
+/// 只看总量会与账单出现数量级差异。
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Usage {
     #[serde(default)]
@@ -146,6 +152,31 @@ pub struct Usage {
     pub completion_tokens: u64,
     #[serde(default)]
     pub total_tokens: u64,
+    /// `prompt_tokens` 中命中缓存读取的部分
+    #[serde(default)]
+    pub cache_read_tokens: u64,
+    /// `prompt_tokens` 中写入缓存的部分
+    #[serde(default)]
+    pub cache_write_tokens: u64,
+}
+
+impl Usage {
+    /// 累加另一次模型调用的用量。
+    ///
+    /// 参数:
+    /// - `other`: 待累加的用量
+    ///
+    /// 返回:
+    /// - 无；就地累加各字段
+    pub fn accumulate(&mut self, other: &Usage) {
+        self.prompt_tokens = self.prompt_tokens.saturating_add(other.prompt_tokens);
+        self.completion_tokens = self.completion_tokens.saturating_add(other.completion_tokens);
+        self.total_tokens = self.total_tokens.saturating_add(other.total_tokens);
+        self.cache_read_tokens = self.cache_read_tokens.saturating_add(other.cache_read_tokens);
+        self.cache_write_tokens = self
+            .cache_write_tokens
+            .saturating_add(other.cache_write_tokens);
+    }
 }
 
 #[derive(Debug, Clone)]

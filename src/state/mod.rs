@@ -551,16 +551,17 @@ pub fn restore_turn_worktree(&self, expected_turn_id: &str, paths: &[String]) ->
         Ok(ContextRollbackOutcome { removed, prompt })
     }
 
-    /// 累加用量统计。
+    /// 累加一个完整轮次的用量。
     ///
     /// 参数:
-    /// - `usage`: 模型用量
+    /// - `turn_usage`: 本轮全部模型调用的用量累计
+    /// - `context_usage`: 最后一次调用的用量，代表当前上下文占用
     ///
     /// 返回:
     /// - 写入是否成功
-    pub fn add_usage(&self, usage: &Usage) -> Result<()> {
+    pub fn add_turn_usage(&self, turn_usage: &Usage, context_usage: &Usage) -> Result<()> {
         self.init_files()?;
-        usage::add_usage(&self.usage_file(), usage)
+        usage::add_turn_usage(&self.usage_file(), turn_usage, context_usage)
     }
 
     /// 累加辅助模型用量。

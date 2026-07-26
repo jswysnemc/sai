@@ -1,5 +1,6 @@
 use super::message_context::clean_user_visible_text;
 use super::recovery::is_context_overflow_error;
+use super::turn_execution::TurnExecution;
 use super::{Agent, AgentEvent};
 use crate::llm::ChatResult;
 use crate::perf_trace::PerfTrace;
@@ -112,7 +113,7 @@ impl Agent {
         }
         let mut used_tools = Vec::new();
         let mut persisted_tool_reports = Vec::new();
-        let result = match self
+        let execution = match self
             .chat_with_tools(
                 &turn_id,
                 &mut messages,
@@ -127,7 +128,7 @@ impl Agent {
             )
             .await
         {
-            Ok(result) => result,
+            Ok(execution) => execution,
             Err(err) if is_context_overflow_error(&err) => {
                 if !self
                     .recover_after_provider_overflow(
@@ -172,7 +173,7 @@ impl Agent {
                     )
                     .await
                 {
-                    Ok(result) => result,
+                    Ok(execution) => execution,
                     Err(retry_err) if is_context_overflow_error(&retry_err) => {
                         self.record_overflow_retry_failed(&turn_id, &messages, &retry_err)?;
                         drop(emit_event);
@@ -193,6 +194,8 @@ impl Agent {
                 return Err(err);
             }
         };
+        // 拆出两种用量口径：turn_usage 计消耗，result.usage 表示当前上下文占用
+        let TurnExecution { result, turn_usage } = execution;
         emit_event.as_mut()(AgentEvent::FlushContent)?;
         perf.mark("final content flushed");
         if let Some(plan) = auto_meme_plan {
@@ -216,8 +219,10 @@ impl Agent {
         // 1. 会话级累计（顶栏）
         // 2. 全局 JSONL 历史（设置页统计）
         let started_at = chrono::Utc::now().timestamp();
-        if let Some(usage) = &result.usage {
-            self.state.add_usage(usage)?;
+        if let Some(usage) = &turn_usage {
+            // 上下文占用取最后一次调用；该次未上报时退回整轮累计
+            let context_usage = result.usage.as_ref().unwrap_or(usage);
+            self.state.add_turn_usage(usage, context_usage)?;
             let _ = crate::usage_history::record_model_call(
                 &self.paths,
                 crate::usage_history::UsageRecordInput {

@@ -77,7 +77,7 @@ where
         )
     })?;
     if let Some(next_usage) = response.usage {
-        *usage = Some(next_usage);
+        *usage = Some(next_usage.into_usage());
     }
     for choice in response.choices {
         let delta = choice.delta;
@@ -219,11 +219,7 @@ where
         }
         "response.completed" | "response.incomplete" => {
             if let Some(next_usage) = event.response.and_then(|response| response.usage) {
-                *usage = Some(Usage {
-                    prompt_tokens: next_usage.input_tokens,
-                    completion_tokens: next_usage.output_tokens,
-                    total_tokens: next_usage.total_tokens,
-                });
+                *usage = Some(next_usage.into_usage());
             }
             flush_buffer(
                 content,
@@ -423,14 +419,19 @@ fn merge_anthropic_usage(state: &mut AnthropicStreamState, usage: AnthropicUsage
     if let Some(value) = usage.output_tokens {
         state.output_tokens = Some(value);
     }
-    let prompt_tokens = state.input_tokens.unwrap_or_default()
-        + state.cache_creation_input_tokens.unwrap_or_default()
-        + state.cache_read_input_tokens.unwrap_or_default();
+    // Anthropic 把输入量拆成三段返回，prompt_tokens 取总和保持上下文预算口径不变，
+    // 缓存读写单独留存，供计费口径还原使用
+    let cache_write_tokens = state.cache_creation_input_tokens.unwrap_or_default();
+    let cache_read_tokens = state.cache_read_input_tokens.unwrap_or_default();
+    let prompt_tokens =
+        state.input_tokens.unwrap_or_default() + cache_write_tokens + cache_read_tokens;
     let completion_tokens = state.output_tokens.unwrap_or_default();
     state.usage = Some(Usage {
         prompt_tokens,
         completion_tokens,
         total_tokens: prompt_tokens + completion_tokens,
+        cache_read_tokens,
+        cache_write_tokens,
     });
 }
 
