@@ -718,13 +718,16 @@ impl ReplRuntime {
     /// - row cap 范围内的预折行 ANSI 行
     pub(in crate::cli) fn transcript_pager_lines(&mut self, width: usize) -> Vec<String> {
         let min_rows = self.transcript.row_cap();
-        let window = self.transcript.display_window_with_live_cap(
-            width.max(8),
-            &self.options,
-            min_rows,
-            usize::MAX,
-            usize::MAX,
-        );
+        // 回看场景展开全部折叠块（思考正文、命令输出等），绕过渲染缓存
+        let window = crate::render::render_expand::with_expanded_render(|| {
+            self.transcript.display_window_with_live_cap(
+                width.max(8),
+                &self.options,
+                min_rows,
+                usize::MAX,
+                usize::MAX,
+            )
+        });
         window
             .lines
             .iter()

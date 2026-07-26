@@ -60,6 +60,8 @@ pub(crate) fn fold_display_lines(
     tail: usize,
     expanded: bool,
 ) -> (Vec<String>, usize) {
+    // 展开渲染上下文（备用屏回看）：全部折叠块按展开输出
+    let expanded = expanded || crate::render::render_expand::expand_override();
     let keep = head.saturating_add(tail);
     if expanded || keep == 0 || lines.len() <= keep {
         return (lines.to_vec(), 0);

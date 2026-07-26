@@ -73,7 +73,7 @@ impl RenderCache {
         width: usize,
         options: &TranscriptRenderOptions,
     ) -> usize {
-        if is_live_subagent(cell) {
+        if is_live_subagent(cell) || crate::render::render_expand::expand_override() {
             return cell.display_lines(width, options).len();
         }
         while self.entries.len() <= index {
@@ -111,8 +111,9 @@ impl RenderCache {
         width: usize,
         options: &TranscriptRenderOptions,
     ) -> Vec<AnsiLine> {
-        // 1. 后台子智能体单元的渲染依赖进程内快照，禁止缓存以免展示过期状态
-        if is_live_subagent(cell) {
+        // 1. 后台子智能体单元依赖进程内快照，展开覆盖态与主屏折叠渲染不同，
+        //    两者都禁止读写缓存以免互相污染
+        if is_live_subagent(cell) || crate::render::render_expand::expand_override() {
             return cell.display_lines(width, options);
         }
         while self.entries.len() <= index {

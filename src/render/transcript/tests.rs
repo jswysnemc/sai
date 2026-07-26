@@ -200,6 +200,43 @@ fn reasoning_cell_lines_fit_display_width() {
 }
 
 #[test]
+fn expanded_render_context_unfolds_reasoning() {
+    // 备用屏回看：展开渲染上下文下折叠的思考正文全量输出，且不污染主屏缓存
+    let mut store = TranscriptStore::new(200);
+    let source = (1..=12)
+        .map(|n| format!("thinking line {n}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    store.push_chunk(&chunk(ChatStreamKind::Reasoning, &source));
+    store.finalize_live_tail();
+
+    let folded = store
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(!folded.contains("thinking line 6"), "默认应折叠中段");
+
+    let expanded = crate::render::render_expand::with_expanded_render(|| {
+        store
+            .display_tail(80, &options())
+            .iter()
+            .map(|line| line.as_str())
+            .collect::<String>()
+    });
+    assert!(expanded.contains("thinking line 6"));
+    assert!(!expanded.contains("Ctrl+O"));
+
+    // 退出展开上下文后主屏仍是折叠渲染（缓存未被展开结果污染）
+    let folded_again = store
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(!folded_again.contains("thinking line 6"));
+}
+
+#[test]
 fn subagent_view_switch_replaces_display_window() {
     let mut store = TranscriptStore::new(100);
     store.push_meta("主会话内容".to_string());

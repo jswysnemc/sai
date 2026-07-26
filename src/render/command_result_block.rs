@@ -5,6 +5,21 @@ use serde_json::Value;
 
 const COMMAND_PREVIEW_LINES: usize = 5;
 
+/// 计算命令输出的预览行数限制。
+///
+/// 参数:
+/// - `expanded`: 该输出块是否已被展开
+///
+/// 返回:
+/// - 折叠时的行数上限；展开或处于展开渲染上下文时为 None
+fn preview_line_limit(expanded: bool) -> Option<usize> {
+    if expanded || crate::render::render_expand::expand_override() {
+        None
+    } else {
+        Some(COMMAND_PREVIEW_LINES)
+    }
+}
+
 /// 按字符数量截断文本。
 ///
 /// 参数:
@@ -231,7 +246,7 @@ fn render_command_result_view_with_options(
 /// 返回:
 /// - 命令输出预览文本
 pub(crate) fn render_live_command_output(stdout: &str, stderr: &str, expanded: bool) -> String {
-    let line_limit = (!expanded).then_some(COMMAND_PREVIEW_LINES);
+    let line_limit = preview_line_limit(expanded);
     let mut blocks = Vec::new();
     if !stdout.is_empty() {
         blocks.push((t("output", "输出").to_string(), stdout.to_string()));
@@ -263,16 +278,16 @@ pub(crate) fn render_completed_command_output(
         return render_output_block_limited(
             t("err", "错误"),
             output,
-            (!expanded).then_some(COMMAND_PREVIEW_LINES),
+            preview_line_limit(expanded),
         );
     }
     if stdout.is_empty() && stderr.is_empty() {
         return render_command_result_view_with_limit(
             output,
-            (!expanded).then_some(COMMAND_PREVIEW_LINES),
+            preview_line_limit(expanded),
         );
     }
-    let line_limit = (!expanded).then_some(COMMAND_PREVIEW_LINES);
+    let line_limit = preview_line_limit(expanded);
     let mut blocks = Vec::new();
     if !stdout.is_empty() {
         blocks.push((t("output", "输出").to_string(), stdout.to_string()));

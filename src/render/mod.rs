@@ -13,6 +13,7 @@ mod markdown;
 mod markdown_blocks;
 mod markdown_inline;
 mod permission;
+pub(crate) mod render_expand;
 pub(crate) mod render_width;
 pub(crate) mod session_summary;
 #[cfg(test)]
