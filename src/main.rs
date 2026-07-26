@@ -40,5 +40,12 @@ use anyhow::Result;
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = cli::parse();
-    cli::run(cli).await
+    match cli::run(cli).await {
+        Ok(()) => Ok(()),
+        // 已展示过的错误只透传退出码，避免 stderr 上重复打印错误链
+        Err(err) => match err.downcast_ref::<cli::SilentExit>() {
+            Some(exit) => std::process::exit(exit.code),
+            None => Err(err),
+        },
+    }
 }

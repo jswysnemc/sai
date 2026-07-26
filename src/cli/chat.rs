@@ -139,6 +139,56 @@ pub(super) fn drain_stdin() {
 #[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn drain_stdin() {}
 
+/// 把管道 stdin 的内容并入消息文本。
+///
+/// 参数:
+/// - `message`: 命令行携带的消息，可为空
+///
+/// 返回:
+/// - 合并后的消息；stdin 为终端时原样返回
+fn merge_piped_stdin_message(message: String) -> Result<String> {
+    if io::stdin().is_terminal() {
+        return Ok(message);
+    }
+    let mut piped = String::new();
+    io::stdin().read_to_string(&mut piped)?;
+    let piped = piped.trim();
+    if piped.is_empty() {
+        return Ok(message);
+    }
+    if message.is_empty() {
+        return Ok(piped.to_string());
+    }
+    // 命令行消息作为指令，管道内容作为其处理对象附在其后
+    Ok(format!("{message}\n\n{piped}"))
+}
+
+/// 校验交互 REPL 所需的终端环境。
+///
+/// 返回:
+/// - stdin 或 stdout 不是终端时返回可操作错误
+pub(super) fn ensure_interactive_terminal_for_repl() -> Result<()> {
+    if !io::stdin().is_terminal() {
+        bail!(
+            "{}",
+            t(
+                "stdin is not a terminal and carried no input; pass a message: sai \"question\" or echo \"question\" | sai",
+                "stdin 不是终端且没有输入内容；请直接传入消息：sai \"问题\" 或 echo \"问题\" | sai"
+            )
+        );
+    }
+    if !io::stdout().is_terminal() {
+        bail!(
+            "{}",
+            t(
+                "interactive mode needs a terminal on stdout; pass a message for one-shot output: sai \"question\"",
+                "交互模式需要 stdout 是终端；重定向输出请改用一次性调用：sai \"问题\""
+            )
+        );
+    }
+    Ok(())
+}
+
 /// 单次命令聊天执行选项。
 pub(super) struct ChatRunOptions {
     pub(super) message: String,
@@ -172,8 +222,20 @@ pub(super) async fn run_chat_with_options(paths: &SaiPaths, options: ChatRunOpti
         thinking_override,
         show_final_summary,
     } = options;
+    // 1. 管道输入读作消息内容：echo "问题" | sai 与 sai "指令" < 文件 均可用
+    let message = merge_piped_stdin_message(message)?;
     if message.is_empty() && !clipb && !web_search {
+        ensure_interactive_terminal_for_repl()?;
         return run_repl(paths, mode, thinking_override).await;
+    }
+    if message.is_empty() && web_search && !clipb {
+        bail!(
+            "{}",
+            t(
+                "web search needs a message, e.g. sai -w \"latest rust release\"",
+                "网络搜索需要同时提供消息内容，例如 sai -w \"rust 最新版本\""
+            )
+        );
     }
     AppConfig::init_files(paths)?;
     let mut config = AppConfig::load_or_default(paths)?;
@@ -252,8 +314,9 @@ pub(super) async fn run_chat_with_options(paths: &SaiPaths, options: ChatRunOpti
     };
     renderer.finish()?;
     if let Err(err) = result {
+        // 错误已完整展示给用户，向上返回静默退出标记避免主入口再打印一遍
         render::write_chat_error(&err, plain)?;
-        return Err(err);
+        return Err(anyhow::Error::new(super::SilentExit { code: 1 }));
     }
     if let Some(snapshot) = final_summary {
         render::print_session_summary(&snapshot)?;

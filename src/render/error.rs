@@ -13,7 +13,8 @@ use std::io::{self, Write};
 /// 返回:
 /// - 输出是否成功
 pub(crate) fn write_chat_error(error: &Error, plain: bool) -> Result<()> {
-    let mut stdout = io::stdout();
+    // 错误走 stderr：stdout 可能被重定向为可解析输出，不能混入错误文本
+    let mut stderr = io::stderr();
     let disconnect = crate::llm::is_transient_transport_error(error);
     let lines = error_chain_lines(error);
     let title = if disconnect {
@@ -22,23 +23,23 @@ pub(crate) fn write_chat_error(error: &Error, plain: bool) -> Result<()> {
         t("request failed", "请求失败")
     };
     if plain {
-        writeln!(stdout, "{title}: {}", lines.join(": "))?;
+        writeln!(stderr, "{title}: {}", lines.join(": "))?;
         if disconnect {
             writeln!(
-                stdout,
+                stderr,
                 "{}",
                 t("You can retry this turn.", "可重试本轮请求。")
             )?;
         }
         return Ok(());
     }
-    writeln!(stdout, "{ASSET_ERROR_STYLE}{TOOL_BULLET} {title}{RESET}")?;
+    writeln!(stderr, "{ASSET_ERROR_STYLE}{TOOL_BULLET} {title}{RESET}")?;
     for line in lines {
-        writeln!(stdout, "  {ASSET_ERROR_STYLE}{line}{RESET}")?;
+        writeln!(stderr, "  {ASSET_ERROR_STYLE}{line}{RESET}")?;
     }
     if disconnect {
         writeln!(
-            stdout,
+            stderr,
             "  {ASSET_ERROR_STYLE}{}{RESET}",
             t("You can retry this turn.", "可重试本轮请求。")
         )?;

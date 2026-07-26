@@ -41,10 +41,15 @@ pub(super) fn run_init(paths: &SaiPaths, kind: InitKind) -> Result<()> {
     )?;
     if interactive {
         println!("\n{}\n", t("Initialization complete.", "初始化完成。"));
-        std::thread::sleep(Duration::from_millis(420));
-        prompt_shell_init_menu(paths)?;
+        // 首次运行由任意命令隐式触发，不再插入 shell 集成菜单打断原命令；
+        // 集成入口保留在显式的 sai init
+        if matches!(kind, InitKind::Explicit) {
+            std::thread::sleep(Duration::from_millis(420));
+            prompt_shell_init_menu(paths)?;
+        }
     } else {
-        println!(
+        // 隐式初始化提示走 stderr，避免污染 sai history --raw 等可解析输出
+        eprintln!(
             "{} {}",
             t("initialized Sai at", "Sai 已初始化于"),
             paths.config_dir.display()

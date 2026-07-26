@@ -53,6 +53,16 @@ pub(super) fn run_resume(paths: &SaiPaths, args: ResumeArgs) -> Result<()> {
 /// 返回:
 /// - 选中的会话 ID；取消时返回错误说明已取消
 pub(super) fn select_session_id_interactively(paths: &SaiPaths) -> Result<String> {
+    // 模糊选择器需要真实终端；管道或重定向下直接给出可操作错误
+    if !(io::stdin().is_terminal() && io::stdout().is_terminal()) {
+        bail!(
+            "{}",
+            t(
+                "session picker needs an interactive terminal; pass an id instead: sai resume <id>",
+                "会话选择器需要交互终端；请直接指定会话：sai resume <id>"
+            )
+        );
+    }
     let choices = crate::control_commands::session_resume_choices(paths)?;
     let labels = choices
         .iter()
