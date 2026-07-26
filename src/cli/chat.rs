@@ -217,6 +217,14 @@ pub(super) async fn run_chat_with_options(paths: &SaiPaths, options: ChatRunOpti
         .with_final_summary(show_final_summary && !plain);
     let mut renderer =
         render::StreamRenderer::new(reasoning_mode, tool_call_mode, plain, render_options);
+    // 一次性模式没有 raw mode，Ctrl+C 由默认信号处理直接终止进程，
+    // 渲染器 Drop 不执行会把隐藏的光标留在终端；接管后先恢复再退出
+    tokio::spawn(async {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            super::terminal_restore::emergency_restore();
+            std::process::exit(130);
+        }
+    });
     renderer.start_waiting()?;
     let mut runner_output = crate::runner::RunnerOutput::default();
     let mut final_summary = None;

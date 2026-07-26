@@ -1,4 +1,3 @@
-use super::keyboard_enhancement::KeyboardEnhancementState;
 use super::repl_chrome::ReplChrome;
 use super::repl_clipboard::ReplClipboardState;
 use super::repl_external_events::ReplExternalEvents;
@@ -28,43 +27,6 @@ pub(super) enum ReplInputEvent {
 pub(super) struct ReplInputDraft {
     pub(super) text: String,
     pub(super) clipboard_state: ReplClipboardState,
-}
-
-/// 启用 REPL 原始输入模式并确保编辑光标可见。
-///
-/// 参数:
-/// - `stdout`: 终端输出
-///
-/// 返回:
-/// - 启用是否成功
-pub(super) fn enable_repl_terminal_input(
-    stdout: &mut io::Stdout,
-) -> Result<KeyboardEnhancementState> {
-    terminal::enable_raw_mode()?;
-    if let Err(err) = execute!(stdout, Show, EnableBracketedPaste) {
-        let _ = terminal::disable_raw_mode();
-        return Err(err.into());
-    }
-    Ok(KeyboardEnhancementState::enable(stdout))
-}
-
-/// 恢复 REPL 输入终端模式。
-///
-/// 参数:
-/// - `stdout`: 终端输出
-///
-/// 返回:
-/// - 恢复是否成功
-pub(super) fn disable_repl_terminal_input(
-    stdout: &mut io::Stdout,
-    keyboard_enhancement: &mut KeyboardEnhancementState,
-) -> Result<()> {
-    let restore_result = execute!(stdout, DisableBracketedPaste);
-    keyboard_enhancement.disable(stdout);
-    let raw_result = terminal::disable_raw_mode();
-    restore_result?;
-    raw_result?;
-    Ok(())
 }
 
 /// 读取、编辑并提交 REPL 输入，同时在 debounce 到期时处理 resize 重放。
@@ -100,7 +62,7 @@ pub(super) fn read_repl_input(
     let mut last_ctrl_c = None::<Instant>;
     // 输入框由 composer 绝对定位绘制；这里禁止直接向终端写换行，
     // 否则屏幕底部会触发受管模型感知不到的滚动，吞掉上方内容
-    let mut keyboard_enhancement = enable_repl_terminal_input(&mut stdout)?;
+    let mut terminal_guard = super::terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
     let (_, mut input_row) = cursor::position()?;
     let mut rendered_rows = 0u16;
     let mut is_pasted = false;
@@ -123,7 +85,7 @@ pub(super) fn read_repl_input(
     redraw_input!()?;
     loop {
         if let Some(wake) = external_events.take_ready() {
-            disable_repl_terminal_input(&mut stdout, &mut keyboard_enhancement)?;
+            terminal_guard.finish(&mut stdout)?;
             return Ok(Some(ReplInputEvent::Automatic {
                 mode,
                 wake: wake?,
@@ -346,7 +308,7 @@ pub(super) fn read_repl_input(
                         is_pasted = false;
                         // 1. 提交后立即显示空 composer，流式输出始终插入其上方
                         redraw_input!()?;
-                        disable_repl_terminal_input(&mut stdout, &mut keyboard_enhancement)?;
+                        terminal_guard.finish(&mut stdout)?;
                         return Ok(Some(ReplInputEvent::User(ReplInputSubmission {
                             mode,
                             raw_input,
@@ -369,7 +331,7 @@ pub(super) fn read_repl_input(
                     KeyCode::Char('g') if modifiers.contains(KeyModifiers::CONTROL) => {
                         clear_repl_input(&mut stdout, input_row, rendered_rows)?;
                         runtime.end_composer()?;
-                        disable_repl_terminal_input(&mut stdout, &mut keyboard_enhancement)?;
+                        terminal_guard.finish(&mut stdout)?;
                         match edit_input_buffer(&input) {
                             Ok(edited) => {
                                 input = strip_terminal_control_sequences(&edited);
@@ -382,7 +344,7 @@ pub(super) fn read_repl_input(
                                 eprintln!("{err}");
                             }
                         }
-                        keyboard_enhancement = enable_repl_terminal_input(&mut stdout)?;
+                        terminal_guard = super::terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
                         input_row = 0;
                         rendered_rows = 0;
                         is_pasted = false;
@@ -395,7 +357,7 @@ pub(super) fn read_repl_input(
                         }) {
                             clear_repl_input(&mut stdout, input_row, rendered_rows)?;
                             runtime.end_composer()?;
-                            disable_repl_terminal_input(&mut stdout, &mut keyboard_enhancement)?;
+                            terminal_guard.finish(&mut stdout)?;
                             return Ok(None);
                         }
                         last_ctrl_c = Some(now);
@@ -412,7 +374,7 @@ pub(super) fn read_repl_input(
                     {
                         clear_repl_input(&mut stdout, input_row, rendered_rows)?;
                         runtime.end_composer()?;
-                        disable_repl_terminal_input(&mut stdout, &mut keyboard_enhancement)?;
+                        terminal_guard.finish(&mut stdout)?;
                         return Ok(None);
                     }
                     KeyCode::Char('l') if modifiers.contains(KeyModifiers::CONTROL) => {

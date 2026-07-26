@@ -1,3 +1,4 @@
+use super::terminal_restore::restore_stream_terminal_modes;
 use super::*;
 use crate::agent::{Agent, AgentEvent, ExternalEventBatch, ExternalEventWake};
 
@@ -131,11 +132,11 @@ pub(super) async fn execute_repl_turn(
                 .borrow_mut()
                 .record_permission_request(request.clone())?;
             prompt_permission_request_tui(request, &runtime)?;
-            crossterm::terminal::enable_raw_mode()?;
+            restore_stream_terminal_modes()?;
         }
         if let crate::runner::RunnerEvent::Agent(AgentEvent::QuestionRequested(pending)) = &event {
             prompt_question_request_tui(pending, &runtime)?;
-            crossterm::terminal::enable_raw_mode()?;
+            restore_stream_terminal_modes()?;
         }
         runtime.borrow_mut().record_runner_event(&event)
     };
@@ -152,7 +153,10 @@ pub(super) async fn execute_repl_turn(
     let mut interrupted = false;
     let mut resize_tick = tokio::time::interval(Duration::from_millis(25));
     resize_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    crossterm::terminal::enable_raw_mode()?;
+    // 流式阶段同样保持 bracketed paste 与键盘增强：否则粘贴多行会被
+    // 拆成逐字符按键，其中的回车逐条入队自动发送；光标由渲染器管理
+    let mut stream_terminal_guard =
+        super::terminal_restore::TerminalInputGuard::enable(&mut io::stdout(), false)?;
     let result: Result<()> = async {
         loop {
             tokio::select! {
@@ -169,7 +173,8 @@ pub(super) async fn execute_repl_turn(
         }
     }
     .await;
-    crossterm::terminal::disable_raw_mode()?;
+    // 终端模式恢复失败也不能跳过流状态清理，先记录结果最后上报
+    let guard_result = stream_terminal_guard.finish(&mut io::stdout());
     let leftover_draft = {
         let mut rt = runtime.borrow_mut();
         rt.clear_live_mode();
@@ -177,6 +182,7 @@ pub(super) async fn execute_repl_turn(
         let draft = rt.stream_draft().text.trim().to_string();
         (!draft.is_empty()).then_some(draft)
     };
+    guard_result?;
     // 1. 答复结束（完成 / 中断 / 失败）发送桌面通知
     let body = if interrupted {
         crate::i18n::text("Reply interrupted", "答复已中断")
