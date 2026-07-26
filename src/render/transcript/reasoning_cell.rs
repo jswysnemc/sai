@@ -89,11 +89,23 @@ pub(crate) fn render_live(
     }
     let pulse = STATUS_PULSE_FRAMES[frame % STATUS_PULSE_FRAMES.len()];
     let tokens = token_counter::count(source);
+    // 零耗时省略括号，与 CLI live 行、固化标题保持同一格式
     format!(
         "\x1b[2m\x1b[36m{pulse} {}{}\x1b[0m",
-        thinking_label(Some(elapsed)),
+        thinking_label(duration_label_value(elapsed)),
         format_tokens_suffix(tokens)
     )
+}
+
+/// 将已持续时长转换为标签用耗时（零值视为无耗时）。
+///
+/// 参数:
+/// - `elapsed`: 已持续时长
+///
+/// 返回:
+/// - 非零时长；零值返回 None
+pub(crate) fn duration_label_value(elapsed: Duration) -> Option<Duration> {
+    (!elapsed.is_zero()).then_some(elapsed)
 }
 
 /// 思考 gutter 前缀显示宽度：`  └ ` / `    `
@@ -192,14 +204,14 @@ fn render_thinking_body_with_cols(
     output
 }
 
-/// 生成思考标题（含可选耗时，与未开启正文时的状态行动效文案一致）。
+/// 生成思考标题（含可选耗时，CLI / TUI 各阶段共用的唯一实现）。
 ///
 /// 参数:
 /// - `duration`: 可选耗时
 ///
 /// 返回:
-/// - 如 `thinking(12s)` / `思考(12秒)`
-fn thinking_label(duration: Option<Duration>) -> String {
+/// - 如 `thinking (12s)`；无耗时则仅 `thinking`
+pub(crate) fn thinking_label(duration: Option<Duration>) -> String {
     let base = "thinking";
     match duration {
         // 固定英文：thinking (12s)，避免中文「秒」与英文标签混排
@@ -208,14 +220,14 @@ fn thinking_label(duration: Option<Duration>) -> String {
     }
 }
 
-/// 生成 token 计数后缀。
+/// 生成 token 计数后缀（CLI / TUI 各阶段共用的唯一实现）。
 ///
 /// 参数:
 /// - `tokens`: token 数
 ///
 /// 返回:
 /// - 如 ` · 12 tokens`
-fn format_tokens_suffix(tokens: usize) -> String {
+pub(crate) fn format_tokens_suffix(tokens: usize) -> String {
     format!(" · {tokens} tokens")
 }
 
@@ -232,8 +244,15 @@ mod tests {
             Duration::from_secs(12),
         );
         assert!(rendered.contains("tokens"));
-        assert!(rendered.contains("thinking") || rendered.contains("思考"));
-        assert!(rendered.contains("12s") || rendered.contains("12"));
+        assert!(rendered.contains("thinking (12s)"));
+    }
+
+    #[test]
+    fn live_reasoning_omits_zero_duration() {
+        // 零耗时与 CLI live 行一致：仅 thinking，不显示 (0s)
+        let rendered = render_live("hello", ReasoningDisplayMode::Summary, 0, Duration::ZERO);
+        assert!(rendered.contains("thinking"));
+        assert!(!rendered.contains("(0s)"));
     }
 
     #[test]

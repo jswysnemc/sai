@@ -69,7 +69,12 @@ impl ReplRuntime {
             AgentEvent::ToolCall { name, arguments } => {
                 self.transcript
                     .push_tool_call(name.clone(), arguments.clone());
-                self.sync_transcript(true)
+                self.sync_transcript(true)?;
+                // 新子 agent 出现时底部 agent 面板需要重组
+                if name == "subagent" {
+                    self.redraw_stream_composer()?;
+                }
+                Ok(())
             }
             // 参数预览是临时 source；完整 ToolCall 到达后会替换为定稿工具块
             AgentEvent::ToolCallProgress(progress) => {
@@ -79,7 +84,12 @@ impl ReplRuntime {
             AgentEvent::ToolResult { name, ok, output } => {
                 self.transcript
                     .push_tool_result(name.clone(), *ok, output.clone());
-                self.sync_transcript(true)
+                self.sync_transcript(true)?;
+                // todo 快照 / 子 agent 状态更新会改变沉底面板内容
+                if name == "todo" || name == "subagent" {
+                    self.redraw_stream_composer()?;
+                }
+                Ok(())
             }
             AgentEvent::ToolProgress { name, message } => {
                 // 工具声明将直接写终端时，下一次同步前从光标处重启受管区域
@@ -122,14 +132,15 @@ impl ReplRuntime {
                 self.transcript.finalize_live_tail();
                 self.sync_transcript(false)
             }
-            AgentEvent::QuestionResolved { .. } => Ok(()),
+            // match 前的统一处理已恢复 Working 状态与节拍，这里立即上屏
+            AgentEvent::QuestionResolved { .. } => self.sync_transcript(true),
             AgentEvent::CompactionStarted { turn_count, model } => {
                 self.transcript
                     .push_compaction_started(*turn_count, model.clone());
                 self.sync_transcript(true)
             }
             AgentEvent::CompactionDelta { text } => {
-                self.transcript.clear_work_status();
+                // 与正文 Chunk 一致：流式期间保留 Compacting 状态行，不熄灭动效
                 self.transcript.push_chunk(&crate::llm::ChatStreamChunk {
                     kind: crate::llm::ChatStreamKind::Content,
                     text: text.clone(),
@@ -141,7 +152,9 @@ impl ReplRuntime {
                 summary,
                 error,
             } => {
-                self.transcript.clear_work_status();
+                // 压缩结束后模型将继续请求：回到等待态而不是熄灭动效
+                self.transcript.set_work_status(WorkStatus::WaitingResponse);
+                self.arm_live_ticker();
                 self.transcript.push_compaction_finished(
                     *applied,
                     error.as_ref().map(|item| item.message.clone()),

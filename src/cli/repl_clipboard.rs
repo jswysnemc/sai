@@ -143,6 +143,45 @@ impl ReplClipboardState {
         false
     }
 
+    /// 计算光标左移一格后的位置（原子块整体跳过）。
+    ///
+    /// 参数:
+    /// - `input`: 当前输入内容
+    /// - `cursor`: 当前光标字符位置
+    ///
+    /// 返回:
+    /// - 新光标位置
+    pub(super) fn cursor_left(&self, input: &str, cursor: usize) -> usize {
+        let target = cursor.saturating_sub(1);
+        for span in self.block_spans(input) {
+            // 落点进入块内部时直接跳到块首，保持占位块的原子性
+            if target > span.start && target < span.end {
+                return span.start;
+            }
+        }
+        target
+    }
+
+    /// 计算光标右移一格后的位置（原子块整体跳过）。
+    ///
+    /// 参数:
+    /// - `input`: 当前输入内容
+    /// - `cursor`: 当前光标字符位置
+    ///
+    /// 返回:
+    /// - 新光标位置
+    pub(super) fn cursor_right(&self, input: &str, cursor: usize) -> usize {
+        let total = input.chars().count();
+        let target = cursor.saturating_add(1).min(total);
+        for span in self.block_spans(input) {
+            // 落点进入块内部时直接跳到块尾，保持占位块的原子性
+            if target > span.start && target < span.end {
+                return span.end;
+            }
+        }
+        target
+    }
+
     /// 将当前输入和附件组装为聊天输入。
     ///
     /// 参数:
@@ -472,6 +511,28 @@ mod tests {
 
         assert!(state.remove_block_at_cursor(&mut input, 1));
         assert_eq!(input, "x");
+    }
+
+    #[test]
+    fn cursor_moves_skip_whole_block() {
+        let mut state = ReplClipboardState::default();
+        let mut input = "x".to_string();
+        let mut cursor = 1;
+        state.insert_payload(
+            &mut input,
+            &mut cursor,
+            ClipboardPayload::Text("a".repeat(LONG_TEXT_CHARS + 1)),
+        );
+        let span = state.block_spans(&input)[0];
+        assert_eq!(cursor, span.end);
+
+        // 1. 从块尾左移：整体跳到块首
+        assert_eq!(state.cursor_left(&input, span.end), span.start);
+        // 2. 从块首右移：整体跳到块尾
+        assert_eq!(state.cursor_right(&input, span.start), span.end);
+        // 3. 块外移动仍逐字符
+        assert_eq!(state.cursor_left(&input, span.start), span.start - 1);
+        assert_eq!(state.cursor_right(&input, span.end), span.end.min(input.chars().count()));
     }
 
     #[test]

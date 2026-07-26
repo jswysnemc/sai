@@ -71,7 +71,11 @@ pub(crate) fn process_stream_tick(runtime: &mut ReplRuntime) -> Result<()> {
     runtime.observe_terminal_size(true)?;
     runtime.maybe_reflow_due(true)?;
     runtime.tick_live()?;
-    runtime.tick_subagents().map(|_| ())
+    if runtime.tick_subagents()? {
+        // 子 agent 状态变化会改变底部 agent 面板的计数与状态行
+        runtime.redraw_stream_composer()?;
+    }
+    Ok(())
 }
 
 /// 处理模型运行期间的非阻塞终端事件。
@@ -88,8 +92,9 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
         let input = event::read()?;
         match input {
             Event::Resize(cols, rows) => {
-                runtime.observe_input_resize(cols, rows);
-                runtime.redraw_stream_composer()?;
+                // 流式期间只登记（streaming 语义），由 25ms tick 的 debounce
+                // 到期重放统一重锚；立即重绘会用旧 origin 画错位置
+                runtime.observe_stream_resize(cols, rows);
             }
             Event::Paste(text) => {
                 let text = strip_control_sequences(&text);
@@ -119,7 +124,11 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                     // 2. Ctrl+C 中断当前轮
                     return Ok(true);
                 }
-                // 3. 其他键写入运行中输入框
+                // 3. 底部 agent 面板优先消费按键（↓ 进入、↑↓ 选择、Enter 应用）
+                if runtime.handle_agent_panel_key(key.code)? {
+                    continue;
+                }
+                // 4. 其他键写入运行中输入框
                 handle_stream_key(runtime, key.code, key.modifiers)?;
             }
             Event::Key(_) => {}
@@ -205,13 +214,14 @@ fn handle_stream_key(
             runtime.redraw_stream_composer()?;
         }
         KeyCode::Left => {
+            // 剪贴板占位块整体跳过，保持与删除一致的原子性
             let draft = runtime.stream_draft_mut();
-            draft.cursor = draft.cursor.saturating_sub(1);
+            draft.cursor = draft.clipboard.cursor_left(&draft.text, draft.cursor);
             runtime.redraw_stream_composer()?;
         }
         KeyCode::Right => {
             let draft = runtime.stream_draft_mut();
-            draft.cursor = (draft.cursor + 1).min(draft.text.chars().count());
+            draft.cursor = draft.clipboard.cursor_right(&draft.text, draft.cursor);
             runtime.redraw_stream_composer()?;
         }
         KeyCode::Home => {

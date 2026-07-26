@@ -276,6 +276,8 @@ impl StreamRenderer {
             }
         }
         stdout.flush()?;
+        // 压缩结束后本轮仍将继续：恢复末行等待动效，避免整段静止
+        self.set_work_status(WorkStatus::WaitingResponse, true)?;
         Ok(())
     }
 }

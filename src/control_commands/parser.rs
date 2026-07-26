@@ -12,6 +12,8 @@ pub enum ControlSurface {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ControlCommand {
     Help,
+    /// 查看当前会话的上下文信息
+    Context,
     New {
         title: String,
     },
@@ -51,6 +53,9 @@ pub fn parse_control_command(
     let name = name.to_ascii_lowercase();
     if matches_surface_alias(&name, surface, "help", &["帮助"]) {
         return Ok(Some(ControlCommand::Help));
+    }
+    if matches_surface_alias(&name, surface, "context", &["上下文"]) {
+        return Ok(Some(ControlCommand::Context));
     }
     if matches_surface_alias(&name, surface, "new", &["新建"]) {
         return Ok(Some(ControlCommand::New {

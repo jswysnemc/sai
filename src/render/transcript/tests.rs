@@ -161,6 +161,154 @@ fn work_status_is_replaced_without_becoming_history() {
 }
 
 #[test]
+fn reasoning_cell_lines_fit_display_width() {
+    // 渲染宽度上下文注入后，thinking 正文折行必须与 display 宽度一致，
+    // 不得产生被 wrap_block 二次折断的无缩进续行
+    let source = "The user is asking \"你好,你能做什么\" - which means \"Hello, what can you do?\" \
+                  in Chinese. This is a general question about my capabilities. Let me give a \
+                  concise but helpful overview of what I can do.";
+    let mut cell = crate::render::transcript::reasoning_cell::ReasoningCell::new(source.to_string());
+    cell.expanded = true;
+    let cell = super::cell::HistoryCell::Reasoning(cell);
+    for width in [40usize, 60, 81, 100] {
+        let lines = cell.display_lines(
+            width,
+            &TranscriptRenderOptions {
+                reasoning_mode: ReasoningDisplayMode::Full,
+                tool_call_mode: ToolCallDisplayMode::Summary,
+            },
+        );
+        for (index, line) in lines.iter().enumerate() {
+            let plain = strip_ansi(line.as_str());
+            let display_width: usize = plain
+                .chars()
+                .map(|ch| unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0))
+                .sum();
+            assert!(
+                display_width <= width,
+                "width={width} line {index} overflows: {plain:?}"
+            );
+            // 正文行必须带 gutter 缩进（`  └ ` 或四空格），否则就是二次折行产物
+            if index > 0 {
+                assert!(
+                    plain.starts_with("  └ ") || plain.starts_with("    "),
+                    "width={width} line {index} lost gutter: {plain:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn subagent_view_switch_replaces_display_window() {
+    let mut store = TranscriptStore::new(100);
+    store.push_meta("主会话内容".to_string());
+    store.push_tool_call("subagent".to_string(), r#"{"description":"检查项目"}"#.to_string());
+    // 绑定后台 ID：running 状态下 finish 只记录 ID
+    store.push_tool_result(
+        "subagent".to_string(),
+        true,
+        r#"{"subagent":{"id":"sub-test-1","status":"running"}}"#.to_string(),
+    );
+
+    // 1. 进入子智能体视图：窗口内容替换为其会话时间线
+    assert!(store.enter_subagent_view(1));
+    assert_eq!(store.viewing_subagent_id(), Some("sub-test-1"));
+    let view = store
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(view.contains("Subagent"));
+    assert!(!view.contains("主会话内容"));
+
+    // 2. 返回主视图：恢复主会话内容
+    assert!(store.exit_subagent_view());
+    assert!(!store.exit_subagent_view());
+    let main = store
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(main.contains("主会话内容"));
+}
+
+#[test]
+fn subagent_overview_lists_running_or_viewing_only() {
+    let mut store = TranscriptStore::new(100);
+    // 已结束且未在查看的子智能体不出现在面板
+    store.push_tool_call("subagent".to_string(), r#"{"description":"完成的"}"#.to_string());
+    store.push_tool_result("subagent".to_string(), true, "plain result".to_string());
+    assert!(store.subagent_overview().is_empty());
+}
+
+#[test]
+fn markdown_table_lines_fit_display_width() {
+    // 表格布局必须使用与折行相同的宽度：任何超宽行都会被 wrap_block
+    // 折成无缩进碎片，表现为重绘后的框线错乱
+    let source = "| 框架 | 类型 | 首次发布 | 维护方 | 热度指数 |\n\
+                  |---|---|---|---|---|\n\
+                  | React | 组件化库 | 2013 | Meta | 5 |\n\
+                  | Vue | 渐进式框架 | 2014 | 尤雨溪 / 社区 | 5 |\n\
+                  | Angular | 全栈框架 | 2010 | Google | 4 |";
+    let cell = super::cell::HistoryCell::markdown(source.to_string());
+    for width in [40usize, 60, 81, 120] {
+        let lines = cell.display_lines(width, &options());
+        for (index, line) in lines.iter().enumerate() {
+            let plain = strip_ansi(line.as_str());
+            let display_width: usize = plain
+                .chars()
+                .map(|ch| unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0))
+                .sum();
+            assert!(
+                display_width <= width,
+                "width={width} line {index} overflows: {plain:?}"
+            );
+        }
+    }
+}
+
+/// 去掉 ANSI 序列便于宽度断言。
+fn strip_ansi(text: &str) -> String {
+    let mut out = String::new();
+    let mut escape = false;
+    for ch in text.chars() {
+        if ch == '\x1b' {
+            escape = true;
+            continue;
+        }
+        if escape {
+            if ch.is_ascii_alphabetic() {
+                escape = false;
+            }
+            continue;
+        }
+        out.push(ch);
+    }
+    out
+}
+
+#[test]
+fn tool_result_keeps_work_status_alive() {
+    // 工具结果不得清除 work_status：工具后的模型思考期间动效必须常驻
+    let mut store = TranscriptStore::new(100);
+    assert!(store.set_work_status(WorkStatus::Working));
+    store.push_tool_call(
+        "read_file".to_string(),
+        r#"{"path":"README.md"}"#.to_string(),
+    );
+    store.push_tool_result("read_file".to_string(), true, "contents".to_string());
+
+    let live = store.display_live_tail(80, &options());
+    assert!(!live.is_empty(), "工具结果后工作动效行不应消失");
+    assert!(live
+        .iter()
+        .any(|line| line.as_str().contains(WorkStatus::Working.localized_label())));
+    // 动画持续推进（ticker 不熄火的前提）
+    assert!(store.advance_live_animation());
+}
+
+#[test]
 fn work_status_hidden_when_live_reasoning_exists() {
     use crate::llm::{ChatStreamChunk, ChatStreamKind};
 

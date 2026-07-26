@@ -13,10 +13,11 @@ mod markdown;
 mod markdown_blocks;
 mod markdown_inline;
 mod permission;
+pub(crate) mod render_width;
 pub(crate) mod session_summary;
 #[cfg(test)]
 mod session_summary_tests;
-mod status_style;
+pub(crate) mod status_style;
 mod stream;
 mod stream_config;
 mod stream_cursor;

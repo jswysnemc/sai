@@ -47,6 +47,8 @@ impl TranscriptStore {
             row_cap: row_cap.max(1),
             cache: RenderCache::default(),
             dirty_from_cell: None,
+            latest_todo: Vec::new(),
+            view: super::TranscriptView::Main,
         }
     }
 
@@ -432,7 +434,15 @@ impl TranscriptStore {
     /// 返回:
     /// - 无
     pub(crate) fn push_tool_result(&mut self, name: String, ok: bool, output: String) {
+        // work_status 生命周期由 runner 事件层管理（轮开始设置、轮结束清除），
+        // 工具结果不清除，否则工具后的模型思考期间动效整段消失
         self.finalize_live_tail();
+        // todo 工具结果携带全量清单快照：记录供沉底面板展示
+        if name == "todo" && ok {
+            if let Some(items) = super::todo_snapshot::parse_todo_snapshot(&output) {
+                self.latest_todo = items;
+            }
+        }
         if name == "subagent" && self.update_active_subagent(|cell| cell.finish(ok, output.clone()))
         {
             self.active_tool_index = None;
@@ -441,22 +451,16 @@ impl TranscriptStore {
         // 编辑类工具使用 DiffCell：在原 diff 上标记完成，避免再塞一个空结果 cell
         if crate::render::stream_text::is_file_edit_tool(&name) && self.finish_active_diff(ok) {
             self.active_tool_index = None;
-            self.work_status = None;
-            self.work_status_started = None;
             return;
         }
         if self.update_active_tool(&name, |view| view.finish(ok, output.clone())) {
             self.active_tool_index = None;
-            self.work_status = None;
-            self.work_status_started = None;
             return;
         }
         let mut view = ToolView::running(name, String::new());
         view.finish(ok, output);
         self.push_cell(HistoryCell::Tool(ToolCell::Invocation(view)));
         self.active_tool_index = None;
-        self.work_status = None;
-        self.work_status_started = None;
     }
 
     /// 记录工具进度。

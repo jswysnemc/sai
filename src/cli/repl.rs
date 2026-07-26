@@ -197,9 +197,26 @@ pub(super) async fn run_repl(
             Ok(Some(command)) => {
                 match command {
                     crate::control_commands::ControlCommand::Help => {
-                        runtime.record_meta(crate::control_commands::help_text(
-                            crate::control_commands::ControlSurface::Repl,
-                        ))?;
+                        // 帮助改为浮动居中面板展示，关闭后全量重放恢复底层内容
+                        center_panel::show_center_panel(
+                            t("Help", "帮助"),
+                            &crate::control_commands::help_text(
+                                crate::control_commands::ControlSurface::Repl,
+                            ),
+                        )?;
+                        runtime.redraw()?;
+                    }
+                    crate::control_commands::ControlCommand::Context => {
+                        match crate::control_commands::context_info_text(paths) {
+                            Ok(info) => {
+                                center_panel::show_center_panel(
+                                    t("Context", "上下文"),
+                                    &info,
+                                )?;
+                                runtime.redraw()?;
+                            }
+                            Err(err) => runtime.record_meta(err.to_string())?,
+                        }
                     }
                     crate::control_commands::ControlCommand::New { title } => {
                         let message = crate::control_commands::create_new_session(paths, &title)?;
@@ -214,13 +231,18 @@ pub(super) async fn run_repl(
                     crate::control_commands::ControlCommand::Resume { id } => {
                         let session_id = match id {
                             Some(id) => id,
-                            None => match sessions::select_session_id_interactively(paths) {
-                                Ok(id) => id,
-                                Err(err) => {
-                                    runtime.record_meta(err.to_string())?;
-                                    continue;
+                            None => {
+                                let picked = sessions::select_session_id_interactively(paths);
+                                // 内联选择 UI 退出后全量重放，清除其占用行的残留
+                                runtime.redraw()?;
+                                match picked {
+                                    Ok(id) => id,
+                                    Err(err) => {
+                                        runtime.record_meta(err.to_string())?;
+                                        continue;
+                                    }
                                 }
-                            },
+                            }
                         };
                         match crate::control_commands::resume_session(paths, &session_id) {
                             Ok(message) => {
@@ -310,13 +332,18 @@ pub(super) async fn run_repl(
                     crate::control_commands::ControlCommand::Model { selection } => {
                         let selection = match selection {
                             Some(index) => Some(index),
-                            None => match model_select::select_model_index_interactively(paths) {
-                                Ok(index) => index,
-                                Err(err) => {
-                                    runtime.record_meta(err.to_string())?;
-                                    continue;
+                            None => {
+                                let picked = model_select::select_model_index_interactively(paths);
+                                // 内联选择 UI 退出后全量重放，清除其占用行的残留
+                                runtime.redraw()?;
+                                match picked {
+                                    Ok(index) => index,
+                                    Err(err) => {
+                                        runtime.record_meta(err.to_string())?;
+                                        continue;
+                                    }
                                 }
-                            },
+                            }
                         };
                         let Some(selection) = selection else {
                             runtime.record_meta(
@@ -351,13 +378,18 @@ pub(super) async fn run_repl(
                     crate::control_commands::ControlCommand::Agent { selection } => {
                         let selection = match selection {
                             Some(index) => Some(index),
-                            None => match agent_select::select_agent_index_interactively(paths) {
-                                Ok(index) => index,
-                                Err(err) => {
-                                    runtime.record_meta(err.to_string())?;
-                                    continue;
+                            None => {
+                                let picked = agent_select::select_agent_index_interactively(paths);
+                                // 内联选择 UI 退出后全量重放，清除其占用行的残留
+                                runtime.redraw()?;
+                                match picked {
+                                    Ok(index) => index,
+                                    Err(err) => {
+                                        runtime.record_meta(err.to_string())?;
+                                        continue;
+                                    }
                                 }
-                            },
+                            }
                         };
                         let Some(selection) = selection else {
                             runtime.record_meta(

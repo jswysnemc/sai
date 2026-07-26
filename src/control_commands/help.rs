@@ -126,6 +126,10 @@ fn repl_only_help_lines() -> Vec<String> {
     vec![
         t("REPL:", "REPL:").to_string(),
         format!(
+            "  /context    {}",
+            t("show current context info", "查看当前上下文信息")
+        ),
+        format!(
             "  /providers  {}",
             t("switch provider or model", "切换 provider 或模型")
         ),

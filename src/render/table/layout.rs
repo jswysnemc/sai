@@ -1,5 +1,4 @@
 use super::CellContent;
-use crossterm::terminal;
 
 /// 根据列数量返回可读的最小列宽。
 ///
@@ -52,9 +51,8 @@ fn bounded_table_widths(rows: &[Vec<CellContent>], mut widths: Vec<usize>) -> Ve
     if widths.is_empty() {
         return widths;
     }
-    let terminal_width = terminal::size()
-        .map(|(width, _)| usize::from(width))
-        .unwrap_or(100)
+    // 统一走渲染宽度上下文：transcript 渲染时与外层折行宽度保持一致
+    let terminal_width = crate::render::fold_text::terminal_wrap_width()
         .saturating_sub(1)
         .max(20);
     let border_overhead = widths.len().saturating_mul(3).saturating_add(1);

@@ -24,6 +24,8 @@ pub(super) struct ComposerFrame {
     is_pasted: bool,
     clipboard_blocks: Vec<ReplClipboardBlockSpan>,
     slash_selection: usize,
+    /// 输入框上方的沉底面板行（todo 快照 / 排队消息 / agent 提示）
+    panel_lines: Vec<String>,
 }
 
 impl ComposerFrame {
@@ -54,7 +56,19 @@ impl ComposerFrame {
             is_pasted,
             clipboard_blocks,
             slash_selection,
+            panel_lines: Vec::new(),
         }
+    }
+
+    /// 设置输入框上方的沉底面板行。
+    ///
+    /// 参数:
+    /// - `lines`: 已按当前宽度截断的 ANSI 面板行
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn set_panel_lines(&mut self, lines: Vec<String>) {
+        self.panel_lines = lines;
     }
 
     /// 返回当前 composer 绑定的 chrome 状态。
@@ -74,12 +88,16 @@ impl ComposerFrame {
     /// - composer 所需视觉行数
     pub(super) fn height(&self, cols: usize) -> u16 {
         let layout = self.layout(cols);
+        let panel_rows = self.panel_lines.len().min(usize::from(u16::MAX)) as u16;
         if layout.slash_panel.is_visible() {
-            return 2u16
+            return panel_rows
+                .saturating_add(2)
                 .saturating_add(layout.input_rows)
                 .saturating_add(layout.slash_panel.height());
         }
-        chrome_fixed_rows() + layout.input_rows
+        panel_rows
+            .saturating_add(chrome_fixed_rows())
+            .saturating_add(layout.input_rows)
     }
 
     /// 将 composer 写入 viewport 底部并恢复输入光标位置。
@@ -106,7 +124,12 @@ impl ComposerFrame {
         }
 
         let mut row = top;
-        // 2. 顶线、输入正文、底线和状态栏均从 source 按当前宽度重新计算
+        // 2. 沉底面板（todo 快照 / 排队消息 / agent 提示）渲染在输入框顶线上方
+        for line in &self.panel_lines {
+            queue!(output, MoveTo(0, row), Print(line))?;
+            row = row.saturating_add(1);
+        }
+        // 3. 顶线、输入正文、底线和状态栏均从 source 按当前宽度重新计算
         queue!(output, MoveTo(0, row), Print(chrome_rule(cols)))?;
         row = row.saturating_add(1);
 
@@ -126,13 +149,13 @@ impl ComposerFrame {
             row.saturating_add(1)
         };
 
-        // 3. composer 是受管区域底部：面板收起或行数减少后下方残留一并清除；
+        // 4. composer 是受管区域底部：面板收起或行数减少后下方残留一并清除；
         //    贴底时无下方区域，跳过以免 MoveTo 越界被 clamp 到底行误清 footer
         if end_row < viewport.size().rows {
             queue!(output, MoveTo(0, end_row), Clear(ClearType::FromCursorDown))?;
         }
 
-        // 4. 历史插入会移动终端光标，最后必须把它放回可继续编辑的位置
+        // 5. 历史插入会移动终端光标，最后必须把它放回可继续编辑的位置
         queue!(
             output,
             MoveTo(
@@ -311,6 +334,35 @@ mod tests {
         assert!(output.matches('─').count() >= 2);
         assert!(output.contains("/"));
         assert!(!output.contains("120k"));
+    }
+
+    /// 验证沉底面板行渲染在输入框顶线上方并计入高度。
+    #[test]
+    fn panel_lines_render_above_chrome_and_extend_height() {
+        let chrome = ReplChrome {
+            mode: AgentMode::Yolo,
+            context_ratio: 0.0,
+            context_window_tokens: 120_000,
+            model: "gpt".to_string(),
+            thinking: "auto".to_string(),
+            directory: "/workspace".to_string(),
+        };
+        let mut frame = ComposerFrame::new(chrome, String::new(), 0, false, Vec::new(), 0);
+        let base_height = frame.height(72);
+        frame.set_panel_lines(vec![
+            "\x1b[2m• 任务清单 1/3\x1b[0m".to_string(),
+            "\x1b[2m  › current\x1b[0m".to_string(),
+        ]);
+        assert_eq!(frame.height(72), base_height + 2);
+
+        let mut viewport = InlineViewport::new();
+        viewport.update(TerminalSize { cols: 72, rows: 24 }, frame.height(72), 4);
+        let mut output = Vec::new();
+        frame.draw(&mut output, &viewport).unwrap();
+        let output = String::from_utf8(output).unwrap();
+        let panel_at = output.find("任务清单").unwrap();
+        let rule_at = output.find('─').unwrap();
+        assert!(panel_at < rule_at, "面板行必须渲染在顶线之前");
     }
 
     /// 验证空输入框显示灰色轮询提示。

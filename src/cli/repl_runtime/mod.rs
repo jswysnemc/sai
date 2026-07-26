@@ -1,3 +1,5 @@
+mod agent_panel;
+mod bottom_panel;
 mod composer;
 mod composer_frame;
 mod event_loop;
@@ -57,6 +59,8 @@ pub(super) struct ReplRuntime {
     live_session_id: Option<String>,
     /// 最近一次 composer chrome，供流式阶段重建输入框
     last_chrome: Option<ReplChrome>,
+    /// 底部主/子 agent 切换面板状态
+    agent_panel: agent_panel::AgentPanelState,
 }
 
 /// 运行期间底部输入框草稿。
@@ -109,6 +113,7 @@ impl ReplRuntime {
             live_mode_handle: None,
             live_session_id: None,
             last_chrome: None,
+            agent_panel: agent_panel::AgentPanelState::default(),
         }
     }
 
@@ -226,13 +231,6 @@ impl ReplRuntime {
         self.sync_transcript(false)
     }
 
-    /// 将已保存的会话历史渲染到当前 TUI transcript。
-    ///
-    /// 参数:
-    /// - `turns`: 按时间顺序排列的历史轮次
-    ///
-    /// 返回:
-    /// - transcript 同步结果
     /// 将已保存的会话历史与压缩摘要渲染到当前 TUI transcript。
     ///
     /// 参数:
@@ -434,6 +432,7 @@ impl ReplRuntime {
         self.pending_input_events.clear();
         self.stream_draft = StreamComposerDraft::default();
         self.submission_queue.clear();
+        self.agent_panel.deactivate();
         self.replay(false)
     }
 
@@ -452,13 +451,9 @@ impl ReplRuntime {
         }
         let previous = self.viewport.size();
         let size = TerminalSize::current();
-        // 2. 尺寸变了：全量重放；否则仅重绘 composer 恢复光标
+        // 2. 尺寸变了：全量重放（replay 检测到尺寸差异后自动重锚）；
+        //    否则仅重绘 composer 恢复光标
         if size != previous {
-            self.viewport.update(
-                size,
-                self.composer_height_for(size),
-                self.stream.on_screen(),
-            );
             self.replay(false)?;
         }
         self.redraw_stream_composer()?;
@@ -529,24 +524,37 @@ impl ReplRuntime {
     }
 
     /// 记录终端尺寸变化并安排 resize reflow。
+    ///
+    /// 只登记观察，不动 viewport 记账：resize 后旧 origin 不可信，
+    /// 统一交给 debounce 到期后的 replay 重新锚定。
     fn observe_size(&mut self, size: TerminalSize, streaming: bool) {
-        self.viewport.update(
-            size,
-            self.composer_height_for(size),
-            self.stream.on_screen(),
-        );
         self.reflow.observe(size, streaming);
     }
 
     /// 将 transcript 与终端已写内容做增量协调。
     ///
     /// 稳定前缀不触碰；变化行按行修补；新增行走真实滚动进入原生
-    /// scrollback；行数收缩时清理尾部。只有终端尺寸变化才整区重放。
+    /// scrollback；行数收缩时清理尾部。resize 未收敛期间冻结增量。
     fn sync_transcript(&mut self, streaming: bool) -> Result<()> {
         if self.desynced {
             self.restart_after_external()?;
         }
-        let size = self.viewport.size();
+        // 1. resize 未收敛：冻结增量修补，等 debounce 到期后整区重锚。
+        //    新宽度渲染 + 旧宽度定位会交叉折行画花屏幕
+        let current = TerminalSize::current();
+        if current != self.viewport.size() {
+            self.reflow.observe(current, streaming);
+            if self.reflow.pending_until().is_none() {
+                self.reflow.schedule_immediate();
+            }
+            self.live_sync_pending = true;
+            return Ok(());
+        }
+        if self.reflow.pending_until().is_some() {
+            self.live_sync_pending = true;
+            return Ok(());
+        }
+        let size = current;
         let width = usize::from(size.cols);
         let min_rows = usize::from(size.rows).saturating_mul(2).max(64);
         let window =
@@ -559,9 +567,6 @@ impl ReplRuntime {
             self.composer_height_for(size),
             window.total.saturating_sub(self.stream.offscreen()),
         );
-        if size != previous_viewport.size() {
-            return self.replay(streaming);
-        }
         match self.stream.sync(&window) {
             SyncPlan::Unchanged => Ok(()),
             SyncPlan::Delta {
@@ -595,6 +600,11 @@ impl ReplRuntime {
     /// 清屏范围内从 source 重新铺设当前宽度的可视历史。
     fn replay(&mut self, streaming: bool) -> Result<()> {
         let size = TerminalSize::current();
+        // 终端尺寸变化后旧 origin 不可信（终端可能已自行上滚内容）：
+        // 从屏幕顶部重新锚定，逐行清写 + 尾部清底覆盖整个可见屏
+        if size != self.viewport.size() {
+            self.viewport.restart_at(size, 0);
+        }
         let width = usize::from(size.cols);
         // 重放窗口至少覆盖屏幕，同时尊重配置的 row cap 上限
         let min_rows = usize::from(size.rows)
@@ -612,6 +622,7 @@ impl ReplRuntime {
         let painted = reflow::replay(&mut stdout, &self.viewport, &window.lines)?;
         self.draw_composer(&mut stdout)?;
         self.stream.reset(&window, painted);
+        self.reflow.clear_pending();
         self.reflow.mark_reflowed(size, streaming);
         Ok(())
     }

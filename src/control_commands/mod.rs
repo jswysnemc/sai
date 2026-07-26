@@ -1,6 +1,7 @@
 pub mod catalog;
 
 pub mod agent;
+mod context_info;
 mod goal;
 mod help;
 mod model;
@@ -9,6 +10,7 @@ mod reset;
 mod session;
 
 pub use agent::run_agent_command;
+pub use context_info::context_info_text;
 pub use goal::{execute_goal_command, GoalCommand};
 pub use help::help_text;
 pub use model::run_model_command;

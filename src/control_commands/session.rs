@@ -64,13 +64,65 @@ pub fn session_resume_choices(paths: &SaiPaths) -> Result<Vec<(String, String)>>
         .into_iter()
         .map(|session| {
             let marker = if session.id == active.id { "*" } else { " " };
+            // 选择列表用短 ID 与相对时间，完整 ID 仍作为返回值供切换使用
             let label = format!(
-                "{marker} {}  {}  {}",
-                session.id, session.updated_at, session.title
+                "{marker} {:<8}  {:<10}  {}",
+                short_session_id(&session.id),
+                relative_time(&session.updated_at),
+                session.title
             );
             (session.id, label)
         })
         .collect())
+}
+
+/// 生成会话短 ID（取 ID 尾段）。
+///
+/// 参数:
+/// - `id`: 完整会话 ID，如 `session_1785067284416_32368`
+///
+/// 返回:
+/// - 如 `#32368`；无下划线分段时原样返回
+fn short_session_id(id: &str) -> String {
+    match id.rsplit('_').next() {
+        Some(tail) if tail != id => format!("#{tail}"),
+        _ => id.to_string(),
+    }
+}
+
+/// 将 RFC3339 时间转为相对时间描述。
+///
+/// 参数:
+/// - `updated_at`: RFC3339 时间文本
+///
+/// 返回:
+/// - 如 `3 小时前`；解析失败时原样返回
+fn relative_time(updated_at: &str) -> String {
+    let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(updated_at) else {
+        return updated_at.to_string();
+    };
+    let delta = chrono::Utc::now().signed_duration_since(parsed.with_timezone(&chrono::Utc));
+    let seconds = delta.num_seconds();
+    if seconds < 0 {
+        return updated_at.chars().take(10).collect();
+    }
+    if seconds < 60 {
+        return t("just now", "刚刚").to_string();
+    }
+    let minutes = seconds / 60;
+    if minutes < 60 {
+        return format!("{minutes} {}", t("min ago", "分钟前"));
+    }
+    let hours = minutes / 60;
+    if hours < 24 {
+        return format!("{hours} {}", t("hr ago", "小时前"));
+    }
+    let days = hours / 24;
+    if days < 30 {
+        return format!("{days} {}", t("days ago", "天前"));
+    }
+    // 超过一个月直接显示日期，避免不精确的月/年换算
+    updated_at.chars().take(10).collect()
 }
 
 #[cfg(test)]
@@ -118,5 +170,18 @@ mod tests {
         let choices = session_resume_choices(&paths).unwrap();
         assert!(choices.iter().any(|(_, label)| label.starts_with('*')));
         assert!(choices.len() >= 2);
+    }
+
+    #[test]
+    fn short_id_and_relative_time_render_compactly() {
+        assert_eq!(short_session_id("session_1785067284416_32368"), "#32368");
+        assert_eq!(short_session_id("default"), "default");
+
+        let recent = chrono::Utc::now() - chrono::Duration::minutes(5);
+        let rendered = relative_time(&recent.to_rfc3339());
+        assert!(rendered.contains('5'));
+        assert!(rendered.contains("分钟前") || rendered.contains("min ago"));
+        // 无法解析的时间原样返回
+        assert_eq!(relative_time("not-a-date"), "not-a-date");
     }
 }

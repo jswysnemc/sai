@@ -73,11 +73,14 @@ pub(crate) fn fold_display_lines(
     (visible, omitted)
 }
 
-/// 查询当前终端列宽，失败时回退 96。
+/// 查询当前渲染宽度：优先使用渲染上下文注入值，否则实时查询终端。
 ///
 /// 返回:
-/// - 可用列宽
+/// - 可用列宽（失败时回退 96）
 pub(crate) fn terminal_wrap_width() -> usize {
+    if let Some(width) = crate::render::render_width::render_width_override() {
+        return width;
+    }
     crossterm::terminal::size()
         .map(|(cols, _)| cols as usize)
         .unwrap_or(96)

@@ -30,7 +30,7 @@ impl ReplRuntime {
         slash_selection: usize,
     ) -> Result<(u16, u16)> {
         let size = TerminalSize::current();
-        let frame = ComposerFrame::new(
+        let mut frame = ComposerFrame::new(
             chrome.clone(),
             input.to_string(),
             cursor,
@@ -38,8 +38,17 @@ impl ReplRuntime {
             clipboard_blocks,
             slash_selection,
         );
+        frame.set_panel_lines(self.bottom_panel_lines(usize::from(size.cols)));
         self.last_chrome = Some(chrome.clone());
         self.composer = Some(frame);
+        // 终端尺寸已变化：旧 origin 上的 reserve 计算全部失效，
+        // 直接触发 source-backed 重锚重放（replay 内部会绘制新 composer）
+        if size != self.viewport.size() {
+            self.reflow.observe(size, false);
+            self.reflow.schedule_immediate();
+            self.maybe_reflow_due(false)?;
+            return Ok((self.viewport.composer_top(), self.viewport.composer_height()));
+        }
         let previous_size = self.viewport.size();
         let previous_history = self.viewport.history_height();
         let composer_height = self.composer_height_for(size);
@@ -52,6 +61,26 @@ impl ReplRuntime {
             self.maybe_reflow_due(false)?;
         }
         Ok((self.viewport.composer_top(), composer_height))
+    }
+
+    /// 组装当前沉底面板行（todo 快照 + 排队消息 + agent 面板）。
+    ///
+    /// 参数:
+    /// - `cols`: 终端列数
+    ///
+    /// 返回:
+    /// - 面板 ANSI 行；无内容时为空
+    fn bottom_panel_lines(&self, cols: usize) -> Vec<String> {
+        let queued: Vec<QueuedSubmission> = self.submission_queue.iter().cloned().collect();
+        let agent_lines = self
+            .agent_panel
+            .panel_lines(&self.transcript.subagent_overview());
+        super::bottom_panel::render_panel_lines(
+            self.transcript.latest_todo_items(),
+            &queued,
+            &agent_lines,
+            cols,
+        )
     }
 
     /// 在内容尾部与屏幕底部之间为 composer 腾出足够行数。
@@ -167,12 +196,7 @@ impl ReplRuntime {
             mode: Some(mode),
             ..StreamComposerDraft::default()
         };
-        // 1. 反馈队列长度
-        let len = self.submission_queue.len();
-        self.transcript.push_meta(format!(
-            "{} ({len})",
-            crate::i18n::text("Queued for next turn", "已加入下一轮队列")
-        ));
+        // 队列内容由沉底面板常驻展示，无需再向历史区插入提示
         self.redraw_stream_composer()?;
         self.sync_transcript(false)?;
         Ok(true)
@@ -240,6 +264,13 @@ impl ReplRuntime {
     pub(in crate::cli) fn end_composer(&mut self) -> Result<()> {
         self.composer = None;
         let size = TerminalSize::current();
+        // 尺寸已变化：交给 replay 重锚，不能先污染 viewport 记账
+        if size != self.viewport.size() {
+            self.reflow.observe(size, false);
+            self.reflow.schedule_immediate();
+            self.maybe_reflow_due(false)?;
+            return Ok(());
+        }
         let previous_size = self.viewport.size();
         let previous_history = self.viewport.history_height();
         self.viewport.update(size, 0, self.stream.on_screen());
@@ -281,6 +312,26 @@ impl ReplRuntime {
                 rows: rows.max(1),
             },
             false,
+        );
+    }
+
+    /// 处理流式阶段的 Resize 事件。
+    ///
+    /// 以 streaming 语义登记，保证本轮结束后触发补偿性整区重放。
+    ///
+    /// 参数:
+    /// - `cols`: 新终端列数
+    /// - `rows`: 新终端行数
+    ///
+    /// 返回:
+    /// - 无
+    pub(in crate::cli) fn observe_stream_resize(&mut self, cols: u16, rows: u16) {
+        self.observe_size(
+            TerminalSize {
+                cols: cols.max(1),
+                rows: rows.max(1),
+            },
+            true,
         );
     }
 }

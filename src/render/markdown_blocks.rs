@@ -25,8 +25,11 @@ pub(crate) fn is_horizontal_rule(line: &str) -> bool {
 /// 计算水平分隔线宽度。
 ///
 /// 返回:
-/// - 当前终端列宽，无法读取时回退到 100
+/// - 当前渲染宽度（渲染上下文注入值优先，失败时回退终端查询）
 pub(crate) fn horizontal_rule_width() -> usize {
+    if let Some(width) = crate::render::render_width::render_width_override() {
+        return width;
+    }
     terminal::size()
         .map(|(width, _)| usize::from(width))
         .unwrap_or(HORIZONTAL_RULE_WIDTH)

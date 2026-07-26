@@ -9,6 +9,7 @@ mod render_cache;
 mod shell_cell;
 mod store;
 mod subagent_cell;
+mod subagent_view;
 mod tool_cell;
 mod user_echo_cell;
 mod welcome_cell;
@@ -21,6 +22,8 @@ mod tests;
 pub(crate) use cell::TranscriptMode;
 pub(crate) use command_output::{ExpandableBlock, ExpandableBlockKind};
 pub(crate) use line::AnsiLine;
-pub(crate) use store::{TranscriptRenderOptions, TranscriptStore};
+pub(crate) use store::{
+    SubagentOverviewEntry, TodoSnapshotItem, TranscriptRenderOptions, TranscriptStore,
+};
 pub(crate) use welcome_cell::WelcomeCell;
 pub(crate) use window::DisplayWindow;

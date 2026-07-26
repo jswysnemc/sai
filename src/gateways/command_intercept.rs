@@ -27,6 +27,7 @@ pub(crate) async fn handle_gateway_command(
     };
     Ok(Some(match command {
         ControlCommand::Help => crate::control_commands::help_text(ControlSurface::Gateway),
+        ControlCommand::Context => crate::control_commands::context_info_text(paths)?,
         ControlCommand::New { title } => {
             crate::control_commands::create_new_session(paths, &title)?
         }

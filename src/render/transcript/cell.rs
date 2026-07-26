@@ -47,7 +47,9 @@ impl HistoryCell {
         if let Self::Welcome(cell) = self {
             return welcome_cell::display_lines(cell, width);
         }
-        let rendered = match self {
+        // 渲染与折行必须共用同一宽度：注入渲染宽度上下文，
+        // cell 内部的表格布局 / 水平线 / 折行查询全部对齐 width
+        let rendered = crate::render::render_width::with_render_width(width, || match self {
             Self::UserEcho(cell) => user_echo_cell::render(cell),
             Self::Markdown(cell) => markdown_cell::render(cell),
             Self::Reasoning(cell) => reasoning_cell::render(cell, options.reasoning_mode),
@@ -56,7 +58,7 @@ impl HistoryCell {
             Self::Diff(cell) => diff_cell::render(cell),
             Self::Meta(cell) => meta_cell::render(cell),
             Self::Welcome(_) => unreachable!("welcome cell is handled before plain rendering"),
-        };
+        });
         if rendered.is_empty() {
             Vec::new()
         } else {

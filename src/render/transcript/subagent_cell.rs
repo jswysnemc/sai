@@ -46,6 +46,31 @@ impl SubagentCell {
         }
     }
 
+    /// 返回后台子智能体 ID（尚未绑定时为 None）。
+    ///
+    /// 返回:
+    /// - 子智能体 ID
+    pub(crate) fn subagent_id(&self) -> Option<&str> {
+        self.subagent_id.as_deref()
+    }
+
+    /// 返回底部 agent 面板需要的概览信息。
+    ///
+    /// 返回:
+    /// - `(展示名称, 状态键, 是否运行中)`；状态键为 ok/err/run
+    pub(crate) fn overview(&self) -> (String, &'static str, bool) {
+        let snapshot = self
+            .subagent_id
+            .as_deref()
+            .and_then(|id| crate::tools::subagent_state::subagent_snapshot(id).ok());
+        let label = snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.description.clone())
+            .unwrap_or_else(|| tool_event_label("subagent", Some(&self.arguments)));
+        let status = status_key(self, snapshot.as_ref());
+        (label, status, status == "run")
+    }
+
     /// 记录一条子智能体进度。
     ///
     /// 参数:
@@ -150,8 +175,27 @@ pub(super) fn render(cell: &SubagentCell, mode: ToolCallDisplayMode) -> String {
         .as_ref()
         .map(|snapshot| format!("Subagent {}", snapshot.description))
         .unwrap_or_else(|| tool_event_label("subagent", Some(&cell.arguments)));
-    let status = snapshot
-        .as_ref()
+    let status = status_key(cell, snapshot.as_ref());
+    let mut output = tool_event_text(&label, status);
+    // 子 agent 响应不进入 transcript，避免与主 agent 流式渲染竞态；
+    // 完整会话通过底部 agent 面板切换到子智能体视图查看
+    if let Some(summary) = compact_subagent_summary(cell, snapshot.as_ref()) {
+        output.push_str(&format!("\n\x1b[2m  └─ {summary}\x1b[0m"));
+    }
+    let _ = mode;
+    output
+}
+
+/// 计算子智能体的展示状态键。
+///
+/// 参数:
+/// - `cell`: 子智能体单元
+/// - `snapshot`: 可选后台快照
+///
+/// 返回:
+/// - ok / err / run
+fn status_key(cell: &SubagentCell, snapshot: Option<&SubagentSnapshot>) -> &'static str {
+    snapshot
         .map(|snapshot| match snapshot.status.as_str() {
             "completed" => "ok",
             "failed" | "cancelled" => "err",
@@ -161,14 +205,7 @@ pub(super) fn render(cell: &SubagentCell, mode: ToolCallDisplayMode) -> String {
             Some((true, _)) => "ok",
             Some((false, _)) => "err",
             None => "run",
-        });
-    let mut output = tool_event_text(&label, status);
-    // 子 agent 响应不进入 transcript，避免与主 agent 流式渲染竞态；详情见底栏状态
-    if let Some(summary) = compact_subagent_summary(cell, snapshot.as_ref()) {
-        output.push_str(&format!("\n\x1b[2m  └─ {summary}\x1b[0m"));
-    }
-    let _ = mode;
-    output
+        })
 }
 
 /// 生成子智能体的一行简要状态。
@@ -183,24 +220,28 @@ fn compact_subagent_summary(
     cell: &SubagentCell,
     snapshot: Option<&SubagentSnapshot>,
 ) -> Option<String> {
+    use crate::i18n::text as t;
     if let Some(snapshot) = snapshot {
         let status = match snapshot.status.as_str() {
-            "running" => "运行中",
-            "completed" => "已完成",
-            "failed" => "失败",
-            "cancelled" => "已取消",
+            "running" => t("running", "运行中"),
+            "completed" => t("completed", "已完成"),
+            "failed" => t("failed", "失败"),
+            "cancelled" => t("cancelled", "已取消"),
             other => other,
         };
         return Some(match snapshot.last_tool.as_deref() {
-            Some(tool) if !tool.is_empty() => format!("{status} · 最近工具 {tool}"),
+            Some(tool) if !tool.is_empty() => {
+                format!("{status} · {} {tool}", t("last tool", "最近工具"))
+            }
             _ => format!("{status} · {}", snapshot.description),
         });
     }
     if cell.outcome.is_some() {
-        return Some("已结束".to_string());
+        return Some(t("finished", "已结束").to_string());
     }
-    Some("运行中".to_string())
+    Some(t("running", "运行中").to_string())
 }
+
 
 /// 从 subagent 工具结果中读取子智能体 ID 和状态。
 ///
@@ -275,8 +316,17 @@ mod tests {
         let rendered = render(&cell, ToolCallDisplayMode::Full);
 
         assert!(rendered.contains("subagent") || rendered.contains("Subagent"));
-        assert!(rendered.contains("运行中") || rendered.contains("已结束"));
+        assert!(rendered.contains("运行中") || rendered.contains("running"));
         assert!(!rendered.contains("先检查文件"));
         assert!(!rendered.contains("done"));
+    }
+
+    #[test]
+    fn overview_reports_label_and_running_state() {
+        let cell = SubagentCell::new(r#"{"description":"检查项目"}"#.to_string());
+        let (label, status, running) = cell.overview();
+        assert!(!label.is_empty());
+        assert_eq!(status, "run");
+        assert!(running);
     }
 }

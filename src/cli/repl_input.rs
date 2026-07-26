@@ -151,6 +151,13 @@ pub(super) fn read_repl_input(
                 {
                     last_ctrl_c = None;
                 }
+                // 底部 agent 面板：面板焦点态全键拦截；空输入时 ↓ 进入面板
+                if (runtime.agent_panel_active() || input.is_empty())
+                    && runtime.handle_agent_panel_idle_key(code)?
+                {
+                    redraw_input!()?;
+                    continue;
+                }
                 match code {
                     KeyCode::BackTab => {
                         // 部分终端把 Shift+Tab 发成 BackTab
@@ -197,11 +204,12 @@ pub(super) fn read_repl_input(
                         }
                     }
                     KeyCode::Left => {
-                        cursor = cursor.saturating_sub(1);
+                        // 剪贴板占位块整体跳过，保持与删除一致的原子性
+                        cursor = clipboard_state.cursor_left(&input, cursor);
                         redraw_input!()?;
                     }
                     KeyCode::Right => {
-                        cursor = (cursor + 1).min(input.chars().count());
+                        cursor = clipboard_state.cursor_right(&input, cursor);
                         redraw_input!()?;
                     }
                     KeyCode::Home => {

@@ -50,6 +50,20 @@ impl TranscriptStore {
         min_rows: usize,
         max_start: usize,
     ) -> DisplayWindow {
+        // 子智能体视图：整个 transcript 切换为该子智能体的会话时间线
+        if let super::store::TranscriptView::Subagent { id, label } = self.view.clone() {
+            let lines =
+                super::subagent_view::render_view_lines(&id, &label, width, self.live_animation_frame);
+            let total = lines.len();
+            let start = total.saturating_sub(min_rows).min(max_start).min(total);
+            return DisplayWindow {
+                total,
+                start,
+                lines: lines.into_iter().skip(start).collect(),
+                // 视图内容整体可变：全窗口参与 diff
+                dirty_from: start,
+            };
+        }
         let live = self.display_live_tail(width, options);
         // 1. 统计每个 cell 的行数（缓存命中时只读长度，不重新渲染）
         let mut counts = Vec::with_capacity(self.cells.len());
@@ -133,22 +147,25 @@ impl TranscriptStore {
             .as_ref()
             .is_some_and(|tail| tail.kind == ChatStreamKind::Reasoning && !tail.source.is_empty());
         if let Some(tail) = &self.live_tail {
-            let rendered = match tail.kind {
-                ChatStreamKind::Content => markdown_cell::render_completed(&tail.source),
-                // reasoning 在定稿前显示节流的字符计数与跳动标记，结束后再按配置完整固化
-                ChatStreamKind::Reasoning => {
-                    let elapsed = self
-                        .work_status_started
-                        .map(|started| started.elapsed())
-                        .unwrap_or_default();
-                    reasoning_cell::render_live(
-                        &tail.source,
-                        options.reasoning_mode,
-                        self.live_animation_frame,
-                        elapsed,
-                    )
+            // live 渲染同样注入宽度上下文，保证流式表格预览与折行宽度一致
+            let rendered = crate::render::render_width::with_render_width(width, || {
+                match tail.kind {
+                    ChatStreamKind::Content => markdown_cell::render_completed(&tail.source),
+                    // reasoning 在定稿前显示节流的字符计数与跳动标记，结束后再按配置完整固化
+                    ChatStreamKind::Reasoning => {
+                        let elapsed = self
+                            .work_status_started
+                            .map(|started| started.elapsed())
+                            .unwrap_or_default();
+                        reasoning_cell::render_live(
+                            &tail.source,
+                            options.reasoning_mode,
+                            self.live_animation_frame,
+                            elapsed,
+                        )
+                    }
                 }
-            };
+            });
             if !rendered.is_empty() {
                 lines.extend(AnsiLine::wrap_block(&rendered, width));
             }

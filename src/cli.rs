@@ -27,6 +27,7 @@ mod agent_select;
 mod alarm_worker;
 mod args;
 mod background_commands;
+mod center_panel;
 mod chat;
 mod compaction;
 mod composer_tips;

@@ -31,12 +31,7 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
     // 运行中但尚无结果：展示操作意图
     if view.outcome.is_none() {
         let label = tool_event_label("todo", Some(&view.arguments));
-        let status = if view.arguments.trim().is_empty() {
-            "run"
-        } else {
-            "run"
-        };
-        return Some(tool_event_text(&label, status));
+        return Some(tool_event_text(&label, "run"));
     }
     let outcome = view.outcome.as_ref()?;
     let result = serde_json::from_str::<TodoResultView>(&outcome.output).ok()?;
@@ -74,7 +69,24 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
     }
     output.push_str("\x1b[0m");
 
-    // 条目：当前进行中优先，其次待办，再完成/取消
+    // Summary 模式：清单已由沉底面板常驻展示，历史区只保留摘要与当前进行中项，
+    // 避免每次 todo 调用都在历史里重复整份清单
+    if mode == ToolCallDisplayMode::Summary {
+        if let Some(active) = result
+            .items
+            .iter()
+            .find(|item| item.status == "in_progress")
+        {
+            output.push_str(&format!(
+                "\n  \x1b[2m└─\x1b[0m {} {}",
+                status_marker(&active.status),
+                colorize_item(&active.status, &active.text)
+            ));
+        }
+        return Some(output);
+    }
+
+    // Full 模式：条目全量展示，当前进行中优先，其次待办，再完成/取消
     let mut items = result.items;
     items.sort_by_key(|item| status_rank(&item.status));
 
