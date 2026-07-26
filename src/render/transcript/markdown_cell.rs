@@ -31,10 +31,26 @@ pub(crate) fn render(cell: &MarkdownCell) -> String {
 /// 返回:
 /// - 可安全展示在 live 区的 ANSI 文本
 pub(crate) fn render_completed(source: &str) -> String {
+    render_completed_parts(source).0
+}
+
+/// 渲染流式 Markdown，并报告尾部是否仍有开放结构。
+///
+/// 开放表格的列宽会随后续行回溯变化，其已渲染行属于「随时会变」的
+/// 临时内容；普通正文的前缀渲染稳定，可以安全滚入 scrollback。
+///
+/// 参数:
+/// - `source`: 当前完整 Markdown 流式源
+///
+/// 返回:
+/// - `(ANSI 文本, 是否存在开放结构)`
+pub(crate) fn render_completed_parts(source: &str) -> (String, bool) {
     let mut renderer = MarkdownStreamRenderer::new_source_preview();
     // 1. 推入已完成行（闭合表格会在后续非表格行/空行时 finish）
     let mut output = renderer.push(source);
     // 2. 末尾仍开放的表格：按当前行集合重算列宽预览
-    output.push_str(&renderer.snapshot_open_structures());
-    output.trim_end_matches('\n').to_string()
+    let open = renderer.snapshot_open_structures();
+    let transient = !open.is_empty();
+    output.push_str(&open);
+    (output.trim_end_matches('\n').to_string(), transient)
 }

@@ -200,6 +200,56 @@ fn reasoning_cell_lines_fit_display_width() {
 }
 
 #[test]
+fn streaming_content_grows_without_live_cap() {
+    // 普通正文流式渲染稳定：必须完整进入窗口并随内容增长，
+    // 不能被 live 上限困在固定高度内反复重绘
+    let mut store = TranscriptStore::new(500);
+    // 末行需带换行：流式渲染只输出完整行
+    let body = (1..=60)
+        .map(|n| format!("正文第 {n} 行\n"))
+        .collect::<String>();
+    store.push_chunk(&chunk(ChatStreamKind::Content, &body));
+
+    let window = store.display_window_with_live_cap(80, &options(), 64, usize::MAX, 12);
+    assert!(
+        window.total >= 60,
+        "稳定正文不应被截断到 live 上限: total={}",
+        window.total
+    );
+    let rendered = window
+        .lines
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(rendered.contains("正文第 1 行"), "首行必须仍在窗口内");
+    assert!(rendered.contains("正文第 60 行"));
+
+    // 追加内容后总行数继续增长
+    store.push_chunk(&chunk(ChatStreamKind::Content, "正文第 61 行\n"));
+    let grown = store.display_window_with_live_cap(80, &options(), 64, usize::MAX, 12);
+    assert!(grown.total > window.total, "追加正文后窗口总行数应增长");
+}
+
+#[test]
+fn open_table_preview_stays_capped() {
+    // 未闭合表格的列宽会回溯变化：其预览必须受 live 上限约束，
+    // 避免中间帧被滚入 scrollback 成为残留
+    let mut store = TranscriptStore::new(500);
+    let mut source = String::from("| 列一 | 列二 |\n|---|---|\n");
+    for n in 1..=40 {
+        source.push_str(&format!("| 行{n} | 值{n} |\n"));
+    }
+    store.push_chunk(&chunk(ChatStreamKind::Content, &source));
+
+    let window = store.display_window_with_live_cap(80, &options(), 64, usize::MAX, 12);
+    assert!(
+        window.total <= 12,
+        "开放表格预览应截断到 live 上限: total={}",
+        window.total
+    );
+}
+
+#[test]
 fn expanded_render_context_unfolds_reasoning() {
     // 备用屏回看：展开渲染上下文下折叠的思考正文全量输出，且不污染主屏缓存
     let mut store = TranscriptStore::new(200);

@@ -54,11 +54,12 @@ impl TranscriptStore {
         self.display_window_with_live_cap(width, options, min_rows, max_start, usize::MAX)
     }
 
-    /// 渲染尾部窗口，并限制 live 预览行数。
+    /// 渲染尾部窗口，并对临时 live 预览限制行数。
     ///
-    /// live 预览（流式表格等）每帧内容都会变化；一旦被真实滚动推入
-    /// 原生 scrollback 就无法再修补，成为永久残留。截断为尾部 `live_cap`
-    /// 行可保证滚入 scrollback 的只有定稿内容。
+    /// 未闭合表格的列宽随后续行回溯变化，已渲染行一旦被真实滚动推入
+    /// 原生 scrollback 就无法再修补，成为永久残留；这类临时预览截断为
+    /// 尾部 `live_cap` 行。普通流式正文渲染稳定，**不截断**，
+    /// 否则正文会被困在固定高度内反复重绘而无法向下增长。
     ///
     /// 参数:
     /// - `width`: 当前终端列数
@@ -91,9 +92,14 @@ impl TranscriptStore {
                 dirty_from: start,
             };
         }
-        let live_full = self.display_live_tail(width, options);
-        // 截断 live 预览到尾部 live_cap 行（用户关注最新内容）
-        let live_skip = live_full.len().saturating_sub(live_cap.max(1));
+        let (live_full, transient) = self.display_live_tail_parts(width, options);
+        // 仅临时结构（未闭合表格预览）截断到尾部 live_cap 行；
+        // 稳定正文必须完整参与窗口，才能正常增长并滚入 scrollback
+        let live_skip = if transient {
+            live_full.len().saturating_sub(live_cap.max(1))
+        } else {
+            0
+        };
         let live: Vec<AnsiLine> = live_full.into_iter().skip(live_skip).collect();
         // 1. 统计每个 cell 的行数（缓存命中时只读长度，不重新渲染）
         let mut counts = Vec::with_capacity(self.cells.len());
@@ -170,7 +176,24 @@ impl TranscriptStore {
         width: usize,
         options: &TranscriptRenderOptions,
     ) -> Vec<AnsiLine> {
+        self.display_live_tail_parts(width, options).0
+    }
+
+    /// 渲染 live 尾部，并报告其中是否含随后续内容回溯变化的临时结构。
+    ///
+    /// 参数:
+    /// - `width`: 当前终端列数
+    /// - `options`: transcript 渲染选项
+    ///
+    /// 返回:
+    /// - `(预换行 ANSI 行, 是否含临时结构)`
+    fn display_live_tail_parts(
+        &self,
+        width: usize,
+        options: &TranscriptRenderOptions,
+    ) -> (Vec<AnsiLine>, bool) {
         let mut lines = Vec::new();
+        let mut transient = false;
         // 有思考内容时只显示 reasoning 动效，不再叠一层 working/thinking 文案
         let has_live_reasoning = self
             .live_tail
@@ -180,7 +203,11 @@ impl TranscriptStore {
             // live 渲染同样注入宽度上下文，保证流式表格预览与折行宽度一致
             let rendered = crate::render::render_width::with_render_width(width, || {
                 match tail.kind {
-                    ChatStreamKind::Content => markdown_cell::render_completed(&tail.source),
+                    ChatStreamKind::Content => {
+                        let (text, open) = markdown_cell::render_completed_parts(&tail.source);
+                        transient = open;
+                        text
+                    }
                     // reasoning 在定稿前显示节流的字符计数与跳动标记，结束后再按配置完整固化
                     ChatStreamKind::Reasoning => {
                         let elapsed = self
@@ -222,6 +249,6 @@ impl TranscriptStore {
                 ));
             }
         }
-        lines
+        (lines, transient)
     }
 }
