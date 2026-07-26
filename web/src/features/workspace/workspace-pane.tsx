@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { DiffPane } from "./diff-pane";
+import { ErrorBoundary } from "../../shared/ui/error-boundary/error-boundary";
 import { EditorPane } from "./editor-pane";
 import { FileTree } from "./file-tree";
 import { TerminalDock } from "../terminal/terminal-dock";
@@ -213,6 +214,7 @@ export function WorkspacePane({
         onToggleMaximized={onToggleMaximized}
         onCollapse={onCollapse}
       />
+      <ErrorBoundary key={activeTab?.id ?? "empty"} label={t("This panel failed to render", "该面板渲染失败")}>
       <div className="pane-body">
         {!activeTab && (
           <div className="workspace-pane-empty">
@@ -245,6 +247,7 @@ export function WorkspacePane({
         {activeTab?.type === "tasks" && <BackgroundTasksPanel />}
         {activeTab?.type === "subagents" && <SubagentWorkspace />}
       </div>
+      </ErrorBoundary>
     </div>
   );
 }

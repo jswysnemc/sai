@@ -1,0 +1,60 @@
+.markdown-editor-surface {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 预览容器只约束尺寸，滚动与留白交给调用方注入的渲染器 */
+.markdown-editor-preview {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 三态切换：分段控件，与编辑器头部其余按钮同高 */
+.markdown-mode-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 0.125rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--control-surface);
+}
+
+.markdown-mode-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3xs);
+  padding: 0 var(--space-xs);
+  min-height: 1.5rem;
+  border: none;
+  border-radius: var(--radius-1);
+  background: none;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.markdown-mode-toggle button:hover {
+  color: var(--ink);
+}
+
+.markdown-mode-toggle button.active {
+  background: var(--paper-raised);
+  color: var(--ink);
+}
+
+/* 窄屏只留图标，避免头部换行 */
+@media (max-width: 48rem) {
+  .markdown-mode-toggle button span {
+    display: none;
+  }
+
+  .markdown-mode-toggle button {
+    padding: 0 var(--space-2xs);
+  }
+}

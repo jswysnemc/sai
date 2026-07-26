@@ -21,6 +21,7 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes("monaco-editor")) return "monaco";
+          if (id.includes("@codemirror") || id.includes("@lezer")) return "codemirror";
           if (id.includes("mermaid")) return "mermaid";
           if (id.includes("@xterm")) return "terminal";
           if (id.includes("react") || id.includes("scheduler")) return "react";

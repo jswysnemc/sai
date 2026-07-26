@@ -1,0 +1,125 @@
+/*
+ * 所见即所得模式的排版。
+ *
+ * 目标是让编辑区读起来接近成稿：标题分级、引用缩进、代码块有底色。
+ * 选择器统一挂在 .markdown-cm 下，特异性高于 CodeMirror 注入的单类样式。
+ */
+
+.markdown-cm {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.markdown-cm .cm-editor {
+  height: 100%;
+}
+
+.markdown-cm .cm-scroller {
+  overflow: auto;
+}
+
+/* 标题：逐级递减，末两级回到正文字号只保留字重 */
+.markdown-cm.live .cm-md-heading {
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.markdown-cm.live .cm-md-h1 {
+  font-size: var(--text-3xl);
+}
+
+.markdown-cm.live .cm-md-h2 {
+  font-size: var(--text-2xl);
+}
+
+.markdown-cm.live .cm-md-h3 {
+  font-size: var(--text-xl);
+}
+
+.markdown-cm.live .cm-md-h4 {
+  font-size: var(--text-lg);
+}
+
+.markdown-cm.live .cm-md-h5,
+.markdown-cm.live .cm-md-h6 {
+  font-size: var(--text-base);
+  color: var(--ink-soft);
+}
+
+.markdown-cm.live .cm-md-strong {
+  font-weight: 700;
+}
+
+.markdown-cm.live .cm-md-emphasis {
+  font-style: italic;
+}
+
+.markdown-cm.live .cm-md-strikethrough {
+  text-decoration: line-through;
+  color: var(--ink-soft);
+}
+
+.markdown-cm.live .cm-md-inline-code {
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-1);
+  background: var(--code-head);
+  color: var(--code-text);
+  font-family: var(--font-code);
+  font-size: 0.9em;
+}
+
+.markdown-cm.live .cm-md-fenced-code,
+.markdown-cm.live .cm-md-code-text {
+  font-family: var(--font-code);
+  font-size: 0.9em;
+}
+
+.markdown-cm.live .cm-md-blockquote {
+  display: inline-block;
+  width: 100%;
+  padding-left: var(--space-sm);
+  border-left: 2px solid var(--line-strong);
+  color: var(--ink-soft);
+}
+
+.markdown-cm.live .cm-md-link {
+  color: var(--blue);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.markdown-cm.live .cm-md-url {
+  color: var(--blue);
+}
+
+.markdown-cm.live .cm-md-table-header {
+  font-weight: 600;
+}
+
+/* 内联部件 */
+.markdown-cm .cm-md-image img {
+  display: block;
+  max-width: 100%;
+  margin: var(--space-xs) 0;
+  border-radius: var(--radius-2);
+}
+
+.markdown-cm .cm-md-rule {
+  display: inline-block;
+  width: 100%;
+  vertical-align: middle;
+}
+
+.markdown-cm .cm-md-rule hr {
+  margin: var(--space-sm) 0;
+  border: none;
+  border-top: 1px solid var(--line);
+}
+
+.markdown-cm .cm-md-task {
+  margin-right: var(--space-2xs);
+  vertical-align: middle;
+  accent-color: var(--signal);
+  cursor: pointer;
+}

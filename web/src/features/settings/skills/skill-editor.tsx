@@ -1,8 +1,12 @@
-import { Eye, FileCode2, Save, Sparkles } from "lucide-react";
+import { Save, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ManagedSkill } from "../../../api/skill-contracts";
 import { Button } from "../../../shared/ui/button/button";
+import { MarkdownEditor } from "../../../shared/ui/markdown-editor/markdown-editor";
+import type { MarkdownEditorMode } from "../../../shared/ui/markdown-editor/markdown-editor-mode";
+import { MarkdownModeToggle } from "../../../shared/ui/markdown-editor/markdown-mode-toggle";
 import { MarkdownRenderer } from "../../chat/markdown-renderer";
+import { isDarkTheme, useTheme } from "../../theme/theme";
 import { EditorHeader, SettingsGroup } from "../editor-layout";
 import { useI18n } from "../../i18n/use-i18n";
 import { composeSkillDocument, parseSkillDocument } from "./skill-document";
@@ -22,19 +26,20 @@ type SkillEditorProps = {
   onSave: () => void;
 };
 
-type EditorView = "edit" | "preview";
-
 /**
  * 编辑新建或已安装 Skill 的完整 SKILL.md。
- * 名称与描述独立字段展示，正文区放大编辑，并支持 Markdown 预览。
+ *
+ * 名称与描述独立字段展示，正文区复用三态 Markdown 编辑器，
+ * 可在源码、所见即所得与预览之间切换。
  *
  * @param props 当前条目、文档内容、保存状态与更新回调
  * @returns Skill 文档编辑区
  */
 export function SkillEditor(props: SkillEditorProps) {
   const { t } = useI18n();
+  const { theme } = useTheme();
   const { skill, content, directoryName, creating, dirty, saving, error } = props;
-  const [view, setView] = useState<EditorView>("edit");
+  const [mode, setMode] = useState<MarkdownEditorMode>("wysiwyg");
   const parsed = useMemo(() => parseSkillDocument(content), [content]);
 
   /**
@@ -116,48 +121,29 @@ export function SkillEditor(props: SkillEditorProps) {
             </div>
 
             <div className="skill-doc-toolbar">
-              <div className="skill-view-tabs" role="tablist" aria-label={t("Document view", "文档视图")}>
-                <Button
-                  className={`settings-secondary${view === "edit" ? " active" : ""}`}
-                  onClick={() => setView("edit")}
-                  aria-selected={view === "edit"}
-                >
-                  <FileCode2 size={13} />
-                  {t("Edit body", "编辑正文")}
-                </Button>
-                <Button
-                  className={`settings-secondary${view === "preview" ? " active" : ""}`}
-                  onClick={() => setView("preview")}
-                  aria-selected={view === "preview"}
-                >
-                  <Eye size={13} />
-                  {t("Preview", "预览")}
-                </Button>
-              </div>
+              <MarkdownModeToggle mode={mode} onChange={setMode} t={t} />
               <span className="skill-doc-hint">SKILL.md · body</span>
             </div>
 
-            {view === "edit" ? (
-              <label className="settings-field full skill-content-field">
-                <span className="sr-only">{t("Skill Markdown body", "Skill Markdown 正文")}</span>
-                <textarea
-                  value={parsed.body}
-                  onChange={(event) => updateDocument({ body: event.target.value })}
-                  spellCheck={false}
-                  aria-label={t("Skill Markdown body", "Skill Markdown 正文")}
-                />
-              </label>
-            ) : (
-              <div className="skill-markdown-preview" aria-label={t("Skill Markdown preview", "Skill Markdown 预览")}>
-                <header className="skill-preview-meta">
-                  <strong>{parsed.name || t("Unnamed skill", "未命名 Skill")}</strong>
-                  <p>{parsed.description || t("No description", "暂无描述")}</p>
-                </header>
-                {parsed.body.trim()
-                  ? <MarkdownRenderer source={parsed.body} />
-                  : <div className="skill-preview-empty">{t("Nothing to preview yet", "暂无预览内容")}</div>}
-              </div>
-            )}
+            <div className="skill-content-editor" aria-label={t("Skill Markdown body", "Skill Markdown 正文")}>
+              <MarkdownEditor
+                value={parsed.body}
+                onChange={(body) => updateDocument({ body })}
+                mode={mode}
+                dark={isDarkTheme(theme)}
+                renderPreview={(source) => (
+                  <div className="skill-markdown-preview">
+                    <header className="skill-preview-meta">
+                      <strong>{parsed.name || t("Unnamed skill", "未命名 Skill")}</strong>
+                      <p>{parsed.description || t("No description", "暂无描述")}</p>
+                    </header>
+                    {source.trim()
+                      ? <MarkdownRenderer source={source} />
+                      : <div className="skill-preview-empty">{t("Nothing to preview yet", "暂无预览内容")}</div>}
+                  </div>
+                )}
+              />
+            </div>
           </SettingsGroup>
           <div className="skill-editor-actions">
             <span>{skill ? `${skill.scope} / ${skill.directory_name}` : t("Global Skill", "全局 Skill")}</span>
