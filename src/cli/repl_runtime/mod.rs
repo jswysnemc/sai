@@ -557,9 +557,13 @@ impl ReplRuntime {
         let size = current;
         let width = usize::from(size.cols);
         let min_rows = usize::from(size.rows).saturating_mul(2).max(64);
-        let window =
-            self.transcript
-                .display_window(width, &self.options, min_rows, self.stream.offscreen());
+        let window = self.transcript.display_window_with_live_cap(
+            width,
+            &self.options,
+            min_rows,
+            self.stream.offscreen(),
+            live_preview_cap(size),
+        );
         self.transcript.clear_dirty();
         let previous_viewport = self.viewport;
         self.viewport.update(
@@ -600,26 +604,40 @@ impl ReplRuntime {
     /// 清屏范围内从 source 重新铺设当前宽度的可视历史。
     fn replay(&mut self, streaming: bool) -> Result<()> {
         let size = TerminalSize::current();
-        // 终端尺寸变化后旧 origin 不可信（终端可能已自行上滚内容）：
-        // 从屏幕顶部重新锚定，逐行清写 + 尾部清底覆盖整个可见屏
-        if size != self.viewport.size() {
+        // 终端尺寸变化后旧 origin 不可信（终端可能已自行上滚内容且未被记账）：
+        // 清空 scrollback 后从屏幕顶部全量重放，避免与终端自动滚入的行形成双份
+        let resized = size != self.viewport.size();
+        if resized {
             self.viewport.restart_at(size, 0);
         }
         let width = usize::from(size.cols);
-        // 重放窗口至少覆盖屏幕，同时尊重配置的 row cap 上限
-        let min_rows = usize::from(size.rows)
-            .saturating_mul(2)
-            .max(64)
-            .min(self.transcript.row_cap())
-            .max(usize::from(size.rows));
-        let window = self
-            .transcript
-            .display_window(width, &self.options, min_rows, usize::MAX);
+        // 重放窗口至少覆盖屏幕，同时尊重配置的 row cap 上限；
+        // 重锚重放会重建 scrollback，因此取完整 row cap 保留回滚历史
+        let min_rows = if resized {
+            self.transcript.row_cap().max(usize::from(size.rows))
+        } else {
+            usize::from(size.rows)
+                .saturating_mul(2)
+                .max(64)
+                .min(self.transcript.row_cap())
+                .max(usize::from(size.rows))
+        };
+        let window = self.transcript.display_window_with_live_cap(
+            width,
+            &self.options,
+            min_rows,
+            usize::MAX,
+            live_preview_cap(size),
+        );
         self.transcript.clear_dirty();
         self.viewport
             .update(size, self.composer_height_for(size), window.total);
         let mut stdout = io::stdout();
-        let painted = reflow::replay(&mut stdout, &self.viewport, &window.lines)?;
+        let painted = if resized {
+            reflow::replay_full(&mut stdout, &self.viewport, &window.lines)?
+        } else {
+            reflow::replay(&mut stdout, &self.viewport, &window.lines)?
+        };
         self.draw_composer(&mut stdout)?;
         self.stream.reset(&window, painted);
         self.reflow.clear_pending();
@@ -661,6 +679,20 @@ impl ReplRuntime {
             .unwrap_or(0)
             .min(size.rows)
     }
+}
+
+/// 计算 live 预览允许占用的最大行数。
+///
+/// live 预览行一旦被真实滚动推入原生 scrollback 便无法修补，
+/// 上限保证滚入 scrollback 的只有定稿内容。
+///
+/// 参数:
+/// - `size`: 当前终端尺寸
+///
+/// 返回:
+/// - live 预览行数上限
+fn live_preview_cap(size: TerminalSize) -> usize {
+    (usize::from(size.rows) / 2).max(8)
 }
 
 /// 将 AgentMode 映射为 transcript 输入模式。

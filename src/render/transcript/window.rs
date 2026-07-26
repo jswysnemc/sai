@@ -50,6 +50,32 @@ impl TranscriptStore {
         min_rows: usize,
         max_start: usize,
     ) -> DisplayWindow {
+        self.display_window_with_live_cap(width, options, min_rows, max_start, usize::MAX)
+    }
+
+    /// 渲染尾部窗口，并限制 live 预览行数。
+    ///
+    /// live 预览（流式表格等）每帧内容都会变化；一旦被真实滚动推入
+    /// 原生 scrollback 就无法再修补，成为永久残留。截断为尾部 `live_cap`
+    /// 行可保证滚入 scrollback 的只有定稿内容。
+    ///
+    /// 参数:
+    /// - `width`: 当前终端列数
+    /// - `options`: transcript 渲染选项
+    /// - `min_rows`: 窗口至少覆盖的行数
+    /// - `max_start`: 窗口首行不得晚于该全局行号
+    /// - `live_cap`: live 预览最多保留的尾部行数
+    ///
+    /// 返回:
+    /// - 增量同步视图
+    pub(crate) fn display_window_with_live_cap(
+        &mut self,
+        width: usize,
+        options: &TranscriptRenderOptions,
+        min_rows: usize,
+        max_start: usize,
+        live_cap: usize,
+    ) -> DisplayWindow {
         // 子智能体视图：整个 transcript 切换为该子智能体的会话时间线
         if let super::store::TranscriptView::Subagent { id, label } = self.view.clone() {
             let lines =
@@ -64,7 +90,10 @@ impl TranscriptStore {
                 dirty_from: start,
             };
         }
-        let live = self.display_live_tail(width, options);
+        let live_full = self.display_live_tail(width, options);
+        // 截断 live 预览到尾部 live_cap 行（用户关注最新内容）
+        let live_skip = live_full.len().saturating_sub(live_cap.max(1));
+        let live: Vec<AnsiLine> = live_full.into_iter().skip(live_skip).collect();
         // 1. 统计每个 cell 的行数（缓存命中时只读长度，不重新渲染）
         let mut counts = Vec::with_capacity(self.cells.len());
         let mut cell_rows = 0usize;
