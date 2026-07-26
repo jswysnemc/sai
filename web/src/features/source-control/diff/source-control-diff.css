@@ -1,14 +1,14 @@
 .git-partial-diff {
   display: grid;
-  gap: 0.5rem;
-  padding: 0.5rem;
+  gap:var(--space-sm);
+  padding:var(--space-sm);
 }
 
 .git-patch-hunk {
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 0.375rem;
+  border-radius:var(--radius-2);
   background: var(--code-surface);
 }
 
@@ -16,29 +16,29 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap:var(--space-sm);
   min-height: 2rem;
-  padding: 0.25rem 0.375rem 0.25rem 0.625rem;
+  padding:var(--space-2xs) var(--space-xs) var(--space-2xs) var(--space-md);
   border-bottom: 1px solid var(--line);
   background: var(--paper);
 }
 
 .git-patch-hunk > header > span {
   color: var(--ink-soft);
-  font-size: 0.625rem;
+  font-size:var(--text-2xs);
   font-weight: 600;
 }
 
 .git-patch-hunk > header > div {
   display: flex;
-  gap: 0.25rem;
+  gap:var(--space-2xs);
 }
 
 .git-patch-hunk > header .ui-button,
 .git-line-selection-toolbar .ui-button {
   min-height: 1.5rem;
-  padding: 0 0.4375rem;
-  font-size: 0.625rem;
+  padding:0 var(--space-xs);
+  font-size:var(--text-2xs);
 }
 
 .git-patch-hunk .structured-diff {
@@ -53,9 +53,9 @@
 .git-line-selection-toolbar {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap:var(--space-2xs);
   min-height: 2rem;
-  padding: 0.25rem 0.375rem;
+  padding:var(--space-2xs) var(--space-xs);
   border-bottom: 1px solid var(--line);
   background: var(--paper);
 }
@@ -64,12 +64,12 @@
   flex: 1;
   min-width: 5rem;
   color: var(--ink-soft);
-  font-size: 0.625rem;
+  font-size:var(--text-2xs);
 }
 
 .git-selectable-diff {
   overflow: auto;
-  font: 400 0.6875rem/1.5 var(--font-code);
+  font:400 var(--text-xs)/1.5 var(--font-code);
 }
 
 .git-selectable-diff-line {
@@ -107,7 +107,7 @@
   min-height: 1.375rem;
   padding: 0;
   border: 0;
-  border-radius: 0.25rem;
+  border-radius:var(--radius-1);
   color: currentColor;
 }
 
@@ -116,7 +116,7 @@
 }
 
 .git-line-number {
-  padding: 0 0.375rem;
+  padding:0 var(--space-xs);
   border-right: 1px solid var(--line);
   color: var(--code-comment);
   text-align: right;
@@ -124,7 +124,7 @@
 }
 
 .git-selectable-diff-line code {
-  padding: 0 0.75rem 0 0.5rem;
+  padding:0 var(--space-lg) 0 var(--space-sm);
   white-space: pre;
 }
 
@@ -135,12 +135,12 @@
 }
 
 .git-line-selection-unavailable {
-  padding: 0.625rem;
+  padding:var(--space-md);
   color: var(--ink-soft);
-  font-size: 0.625rem;
+  font-size:var(--text-2xs);
 }
 
-@media (max-width: 44rem) {
+@media (max-width: 48rem) {
   .git-line-selection-toolbar {
     align-items: flex-start;
     flex-wrap: wrap;

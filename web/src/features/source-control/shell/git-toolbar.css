@@ -1,0 +1,77 @@
+/*
+ * Git 面板工具栏。
+ *
+ * 分三区：左侧分支切换、中部视图切换、右侧同步动作。
+ * 早先九个按钮平铺在一行，主次不分且窄屏必然溢出。
+ */
+
+.git-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: 2.875rem;
+  padding: var(--space-xs) var(--space-md);
+  border-bottom: 1px solid var(--line);
+}
+
+.git-toolbar-views {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-3xs);
+  min-width: 0;
+  padding: 0.125rem;
+  border-radius: var(--radius-2);
+  background: var(--control-surface);
+}
+
+.git-toolbar-view {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-height: 1.625rem;
+  padding: 0 var(--space-sm);
+  border: none;
+  border-radius: var(--radius-1);
+  background: none;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.git-toolbar-view:hover {
+  color: var(--ink);
+}
+
+.git-toolbar-view.active {
+  background: var(--paper-raised);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.git-toolbar-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-3xs);
+}
+
+/* 窄屏收起视图文案，只保留图标与计数 */
+@media (max-width: 56rem) {
+  .git-toolbar {
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+  }
+
+  .git-toolbar-view span {
+    display: none;
+  }
+
+  .git-toolbar-view {
+    padding: 0 var(--space-xs);
+  }
+}

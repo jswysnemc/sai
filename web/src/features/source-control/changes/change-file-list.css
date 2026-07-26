@@ -8,9 +8,9 @@
   justify-content: stretch;
   width: 100%;
   min-height: 1.75rem;
-  padding-inline-end: 0.25rem;
+  padding-inline-end:var(--space-2xs);
   border: 0;
-  border-radius: 0.3125rem;
+  border-radius:var(--radius-1);
   background: transparent;
   color: var(--ink-soft);
   text-align: left;
@@ -22,7 +22,7 @@
 }
 
 .git-tree-directory > svg:first-child {
-  transition: transform 140ms ease;
+  transition:transform var(--duration-base) ease;
 }
 
 .git-tree-directory > svg:first-child.open {
@@ -31,18 +31,18 @@
 
 .git-tree-directory > span {
   overflow: hidden;
-  font: 500 0.6875rem var(--font-code);
+  font:500 var(--text-xs) var(--font-code);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .git-view-count-badge {
   min-width: 1rem;
-  padding: 0.0625rem 0.25rem;
-  border-radius: 0.625rem;
+  padding:0.0625rem var(--space-2xs);
+  border-radius:var(--radius-4);
   background: color-mix(in srgb, var(--signal) 14%, transparent);
   color: var(--signal);
-  font: 600 0.5625rem var(--font-code);
+  font:600 var(--text-2xs) var(--font-code);
   text-align: center;
 }
 
@@ -57,43 +57,48 @@
   width: min(17rem, calc(100vw - 1rem));
   max-height: min(24rem, calc(100vh - 1rem));
   overflow: auto;
-  padding: 0.25rem;
+  padding:var(--space-2xs);
   border: 1px solid var(--line);
-  border-radius: 0.4375rem;
+  border-radius:var(--radius-2);
   background: var(--paper-raised);
   box-shadow: var(--shadow);
 }
 
 .git-change-context-menu > span {
-  padding: 0.4375rem 0.5rem 0.1875rem;
+  padding:var(--space-xs) var(--space-sm) var(--space-3xs);
   color: var(--ink-soft);
-  font-size: 0.625rem;
+  font-size:var(--text-2xs);
   font-weight: 600;
 }
 
 .git-change-context-menu .ui-button {
   justify-content: flex-start;
   min-height: 1.875rem;
-  padding: 0 0.5rem;
+  padding:0 var(--space-sm);
   border: 0;
-  font-size: 0.6875rem;
-}
-
-.git-change-context-menu .ui-button.danger,
-.git-change-context-menu .ui-button.tone-danger {
-  border: 0;
-  background: transparent;
-  color: var(--danger);
-}
-
-.git-change-context-menu .ui-button.danger:hover:not(:disabled),
-.git-change-context-menu .ui-button.tone-danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  font-size:var(--text-xs);
 }
 
 @media (max-width: 40rem) {
   .git-view-count-badge {
     min-width: 0.875rem;
-    padding-inline: 0.1875rem;
+    padding-inline:var(--space-3xs);
   }
+}
+
+/* 超出渲染上限时的展开入口 */
+.git-file-list-more.ui-button {
+  width: 100%;
+  min-height: 1.75rem;
+  margin-top:var(--space-3xs);
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size:var(--text-2xs);
+}
+
+.git-file-list-more.ui-button:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: var(--paper-deep);
+  color: var(--ink);
 }
