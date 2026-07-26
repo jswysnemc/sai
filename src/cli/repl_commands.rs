@@ -17,15 +17,42 @@ pub(super) fn repl_command_suggestions(input: &str) -> Vec<ReplCommandSuggestion
     if !input.starts_with('/') {
         return Vec::new();
     }
+    // 前缀匹配大小写不敏感，与执行侧的 eq_ignore_ascii_case 口径一致
+    let lowered = input.to_ascii_lowercase();
     repl_commands()
         .iter()
         .copied()
-        .filter(|command| command.starts_with(input))
+        .filter(|command| command.starts_with(&lowered))
         .map(|command| ReplCommandSuggestion {
             command,
             description: command_description(command),
         })
         .collect()
+}
+
+/// 为命令形态的未知输入生成提示。
+///
+/// 参数:
+/// - `input`: 已去除首尾空白的输入
+///
+/// 返回:
+/// - 命令形态但未被任何分发命中时返回提示文本；路径等普通文本返回空
+pub(super) fn unknown_slash_command_hint(input: &str) -> Option<String> {
+    let candidate = input.strip_prefix('/')?;
+    let token = candidate.split_whitespace().next().unwrap_or_default();
+    // 只拦截命令形态的词：/home/user 这类路径按普通消息放行
+    if token.is_empty()
+        || !token
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+    {
+        return None;
+    }
+    Some(if crate::i18n::is_zh() {
+        format!("未识别的命令用法：/{token}；输入 /help 查看可用命令")
+    } else {
+        format!("unrecognized command usage: /{token}; run /help to list commands")
+    })
 }
 
 /// 根据当前输入生成面板可见的斜杠菜单建议。
@@ -81,6 +108,8 @@ fn command_description(command: &str) -> &'static str {
         "/plan" => "switch to read-only planning mode",
         "/audit" => "switch to audited workspace sandbox mode",
         "/yolo" => "switch to YOLO mode",
+        "/auto" | "/auto-audit" => "switch to auto-audit mode",
+        "/goal" => "manage long-running goals",
         "/undo" => "undo the last turn and restore input",
         "/exit" => "leave the REPL",
         _ => "",

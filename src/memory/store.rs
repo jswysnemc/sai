@@ -32,6 +32,17 @@ impl MemoryStore {
         }
     }
 
+    /// 返回记忆功能是否启用。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 配置中记忆开关的当前值
+    pub fn is_enabled(&self) -> bool {
+        self.config.enabled
+    }
+
     pub fn init(&self) -> Result<()> {
         if let Some(parent) = self.data_db.parent() {
             std::fs::create_dir_all(parent)?;

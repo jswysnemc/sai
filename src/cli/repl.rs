@@ -399,12 +399,6 @@ pub(super) async fn run_repl(
                 continue;
             }
         }
-        if input.eq_ignore_ascii_case("/help") {
-            runtime.record_meta(crate::control_commands::help_text(
-                crate::control_commands::ControlSurface::Repl,
-            ))?;
-            continue;
-        }
         if input.eq_ignore_ascii_case("/plan") {
             mode = AgentMode::Plan;
             runtime.record_meta(format!("{}: {}", t("mode", "模式"), mode.label()))?;
@@ -461,25 +455,6 @@ pub(super) async fn run_repl(
             prefill = outcome.prompt;
             continue;
         }
-        if input.eq_ignore_ascii_case("/clear") {
-            run_reset(paths, None, false)?;
-            input_history.clear();
-            state = StateStore::new(paths)?;
-            state.init_files()?;
-            agent.replace_state(state.clone())?;
-            runtime.clear()?;
-            continue;
-        }
-        if input.eq_ignore_ascii_case("/clear all") {
-            run_reset(paths, Some("all"), false)?;
-            input_history.clear();
-            state = StateStore::new(paths)?;
-            state.init_files()?;
-            agent.replace_state(state.clone())?;
-            agent.reset_memory()?;
-            runtime.clear()?;
-            continue;
-        }
         if let Some(rest) = repl_command_rest(input, "/thinking") {
             let level = rest
                 .split_whitespace()
@@ -502,6 +477,12 @@ pub(super) async fn run_repl(
         }
         if input.eq_ignore_ascii_case("/ps") {
             run_repl_background_manager(paths, &config).await?;
+            continue;
+        }
+        // 剩余的 / 开头命令形态输入不再静默发给模型：拼错的命令、
+        // 带多余参数的已知命令都在这里拦截并提示
+        if let Some(hint) = unknown_slash_command_hint(input) {
+            runtime.record_meta(hint)?;
             continue;
         }
         if input.is_empty() {

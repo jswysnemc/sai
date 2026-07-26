@@ -6,6 +6,12 @@ pub(super) fn run_memory(paths: &SaiPaths, args: MemoryArgs) -> Result<()> {
     match args.command {
         MemoryCommand::Stats => println!("{}", store.stats()?),
         MemoryCommand::Reset(args) => {
+            if !confirm::confirm_destructive(
+                t("clear assistant memory", "清空助手记忆"),
+                args.yes,
+            )? {
+                return Ok(());
+            }
             println!("{}", clear_memory(paths, args.include_skills)?);
         }
         MemoryCommand::Search(args) => {
@@ -15,6 +21,19 @@ pub(super) fn run_memory(paths: &SaiPaths, args: MemoryArgs) -> Result<()> {
         }
         MemoryCommand::Remember(args) => {
             let content = join_message(args.content);
+            // 空内容与功能关闭都写不进去，必须报错而不是打印一个假 ID
+            if content.trim().is_empty() {
+                bail!("{}", t("memory content is empty", "记忆内容为空"));
+            }
+            if !store.is_enabled() {
+                bail!(
+                    "{}",
+                    t(
+                        "memory is disabled; enable it in config first",
+                        "记忆功能已关闭；请先在配置中启用"
+                    )
+                );
+            }
             let id = store.remember_fact(&content, &args.source)?;
             println!("{}: {id}", t("remembered fact", "已记住事实"));
         }

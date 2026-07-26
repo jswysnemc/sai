@@ -156,17 +156,21 @@ fn print_current_session(paths: &SaiPaths) -> Result<()> {
 ///
 /// 返回:
 /// - 删除是否成功
-fn delete_current_session(paths: &SaiPaths, args: SessionIdArgs) -> Result<()> {
+fn delete_current_session(paths: &SaiPaths, args: SessionDeleteArgs) -> Result<()> {
+    let action = if is_zh() {
+        format!("删除会话 {}", args.id)
+    } else {
+        format!("delete session {}", args.id)
+    };
+    if !confirm::confirm_destructive(&action, args.yes)? {
+        return Ok(());
+    }
     let deleted = crate::state::delete_session(paths, &args.id)?;
-    println!(
-        "{}: {}",
-        if deleted {
-            t("deleted session", "已删除会话")
-        } else {
-            t("session not found", "未找到会话")
-        },
-        args.id
-    );
+    // 目标不存在按失败处理，脚本才能凭退出码判断删除是否生效
+    if !deleted {
+        bail!("{}: {}", t("session not found", "未找到会话"), args.id);
+    }
+    println!("{}: {}", t("deleted session", "已删除会话"), args.id);
     Ok(())
 }
 

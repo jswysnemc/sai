@@ -35,6 +35,14 @@ pub(super) fn run_skills(paths: &SaiPaths, args: SkillsArgs) -> Result<()> {
         }
         SkillsCommand::Remove(args) => {
             let dir = skill_dir(paths, &args.name)?;
+            let action = if is_zh() {
+                format!("删除 skill {}", args.name)
+            } else {
+                format!("remove skill {}", args.name)
+            };
+            if !confirm::confirm_destructive(&action, args.yes)? {
+                return Ok(());
+            }
             std::fs::remove_dir_all(dir)?;
             println!("{}: {}", t("removed skill", "已移除 skill"), args.name);
         }

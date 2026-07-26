@@ -36,16 +36,18 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
                     clear_inline_fuzzy(&mut session.stdout, anchor_y, menu_lines)?;
                     return Ok(None);
                 }
-                KeyCode::Char('q') if query.is_empty() => {
-                    clear_inline_fuzzy(&mut session.stdout, anchor_y, menu_lines)?;
-                    return Ok(None);
-                }
                 KeyCode::Enter => {
                     clear_inline_fuzzy(&mut session.stdout, anchor_y, menu_lines)?;
                     return Ok(matches.get(selected).map(|(_, index)| *index));
                 }
-                KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
-                KeyCode::Down | KeyCode::Char('j') => {
+                // 导航只用方向键与 Ctrl 组合：q/j/k 必须留给搜索输入，
+                // 否则 qwen、kimi 这类常见词根本打不进查询框
+                KeyCode::Up => selected = selected.saturating_sub(1),
+                KeyCode::Down => selected = (selected + 1).min(matches.len().saturating_sub(1)),
+                KeyCode::Char('p') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    selected = selected.saturating_sub(1);
+                }
+                KeyCode::Char('n') if modifiers.contains(KeyModifiers::CONTROL) => {
                     selected = (selected + 1).min(matches.len().saturating_sub(1));
                 }
                 KeyCode::Backspace => {
@@ -135,8 +137,8 @@ fn draw_inline_fuzzy(
         MoveTo(0, anchor_y + menu_lines.saturating_sub(1)),
         Print(truncate_display(
             t(
-                "[type] search  [j/k] move  [enter] select  [esc/q] cancel",
-                "[输入] 搜索  [j/k] 移动  [enter] 选择  [esc/q] 取消",
+                "[type] search  [up/down] move  [enter] select  [esc] cancel",
+                "[输入] 搜索  [上/下] 移动  [enter] 选择  [esc] 取消",
             ),
             width
         ))

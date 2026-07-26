@@ -132,6 +132,10 @@ pub struct ClearArgs {
     #[arg(long, conflicts_with = "scope")]
     pub memory: bool,
 
+    /// 跳过破坏性操作确认
+    #[arg(long)]
+    pub yes: bool,
+
     pub scope: Option<String>,
 }
 
@@ -176,7 +180,8 @@ pub struct ToolArgs {
 
 #[derive(Debug, Args)]
 pub struct WebArgs {
-    #[arg(long, visible_alias = "prot", default_value_t = 4096)]
+    // 历史拼写误植的别名保留兼容，但不再出现在 --help 中
+    #[arg(long, alias = "prot", default_value_t = 4096)]
     pub port: u16,
 
     #[arg(long)]
@@ -218,8 +223,17 @@ pub enum SessionsCommand {
     /// 交互选择或按 ID 恢复会话
     Resume(ResumeArgs),
     Current,
-    Delete(SessionIdArgs),
+    Delete(SessionDeleteArgs),
     Rename(SessionRenameArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct SessionDeleteArgs {
+    pub id: String,
+
+    /// 跳过破坏性操作确认
+    #[arg(long)]
+    pub yes: bool,
 }
 
 #[derive(Debug, Args)]
@@ -275,6 +289,10 @@ pub enum MemoryCommand {
 pub struct MemoryResetArgs {
     #[arg(long)]
     pub include_skills: bool,
+
+    /// 跳过破坏性操作确认
+    #[arg(long)]
+    pub yes: bool,
 }
 
 #[derive(Debug, Args)]
@@ -314,7 +332,8 @@ mod tests {
             cli.command,
             Some(Command::Clear(ClearArgs {
                 memory: true,
-                scope: None
+                scope: None,
+                ..
             }))
         ));
     }
@@ -412,7 +431,7 @@ pub enum SkillsCommand {
     Show(SkillNameArgs),
     Enable(SkillNameArgs),
     Disable(SkillNameArgs),
-    Remove(SkillNameArgs),
+    Remove(SkillRemoveArgs),
     Stats,
     Prune,
 }
@@ -420,6 +439,15 @@ pub enum SkillsCommand {
 #[derive(Debug, Args)]
 pub struct SkillNameArgs {
     pub name: String,
+}
+
+#[derive(Debug, Args)]
+pub struct SkillRemoveArgs {
+    pub name: String,
+
+    /// 跳过破坏性操作确认
+    #[arg(long)]
+    pub yes: bool,
 }
 
 #[derive(Debug, Subcommand)]
