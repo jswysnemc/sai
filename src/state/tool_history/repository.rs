@@ -136,16 +136,7 @@ impl StateStore {
         if raw_output == context_output {
             return Ok(None);
         }
-        let output_dir = self.state_dir.join("tool-results");
-        std::fs::create_dir_all(&output_dir)?;
-        let file_name = format!(
-            "{}_{}.txt",
-            sanitize_reference_id(provider_call_id),
-            short_reference_hash(provider_call_id)
-        );
-        let output_path = output_dir.join(&file_name);
-        std::fs::write(&output_path, raw_output)?;
-        let result_ref = format!("tool-results/{file_name}");
+        let result_ref = self.write_tool_result_archive(provider_call_id, raw_output)?;
         upsert_tool_output_replacement(
             &self.conv_db,
             NewToolOutputReplacement {
@@ -158,6 +149,31 @@ impl StateStore {
             },
         )?;
         Ok(Some(result_ref))
+    }
+
+    /// 把完整工具输出写入会话归档目录。
+    ///
+    /// 参数:
+    /// - `provider_call_id`: provider 工具调用标识
+    /// - `raw_output`: 待归档的完整输出
+    ///
+    /// 返回:
+    /// - 相对于会话目录的归档引用
+    pub(crate) fn write_tool_result_archive(
+        &self,
+        provider_call_id: &str,
+        raw_output: &str,
+    ) -> Result<String> {
+        let output_dir = self.state_dir.join("tool-results");
+        std::fs::create_dir_all(&output_dir)?;
+        let file_name = format!(
+            "{}_{}.txt",
+            sanitize_reference_id(provider_call_id),
+            short_reference_hash(provider_call_id)
+        );
+        let output_path = output_dir.join(&file_name);
+        std::fs::write(&output_path, raw_output)?;
+        Ok(format!("tool-results/{file_name}"))
     }
 
     /// 读取当前会话目录中的完整工具结果引用。

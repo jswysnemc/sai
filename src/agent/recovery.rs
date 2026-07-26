@@ -1,19 +1,29 @@
 use super::{Agent, AgentEvent};
 use crate::llm::{ChatMessage, OpenAiCompatibleClient};
 use crate::perf_trace::PerfTrace;
-use crate::state::request_projection::project_provider_turn_from_messages;
-use crate::state::{FailureKind, RecoveryStatus, StateStore};
+use crate::state::request_projection::{
+    estimate_projected_request_chars, project_provider_turn_from_messages,
+};
+use crate::state::{
+    classify_context_pressure, compaction_trigger_chars, ContextPressure, FailureKind,
+    RecoveryStatus, StateStore, ToolResultMaintenanceMode,
+};
 use anyhow::Result;
 
 impl Agent {
-    /// 按当前请求上下文估算自动压缩旧会话。
+    /// 按上下文压力分级维护会话：先免费改写陈旧工具结果，仍超限再摘要压缩。
+    ///
+    /// 分级策略参考 DeepSeek-Reasonix：陈旧工具结果可以重新获取，改写它们
+    /// 不需要调用摘要模型，是免费的上下文回收。六成压力先裁剪首尾；九成
+    /// 压力先整体折叠，折叠省出的空间足够回落到阈值以下时，本轮的付费摘要
+    /// 调用被完全跳过。
     ///
     /// 参数:
     /// - `turn_id`: 当前运行中轮次标识
     /// - `messages`: 当前即将发送给模型的消息列表
     ///
     /// 返回:
-    /// - 是否执行了压缩
+    /// - 历史是否被改写（改写后调用方需重建消息）
     pub(super) async fn compact_conversation_if_needed(
         &self,
         turn_id: &str,
@@ -24,14 +34,41 @@ impl Agent {
         if !self.state.should_attempt_auto_compaction()? {
             return Ok(false);
         }
+        let context_chars = estimate_projected_request_chars(&projection);
+        let context_limit_chars = projection.estimate.context_limit_chars;
+        let maintained = match classify_context_pressure(context_chars, context_limit_chars) {
+            ContextPressure::Relaxed => return Ok(false),
+            ContextPressure::SnipStale => {
+                // 1. 免费档：只裁剪，不触发摘要压缩
+                let stats = self
+                    .state
+                    .maintain_stale_tool_results(ToolResultMaintenanceMode::Snip)?;
+                return Ok(stats.rewritten > 0);
+            }
+            ContextPressure::Compact => {
+                // 2. 压缩档：先折叠陈旧结果，省够空间就跳过付费摘要
+                let stats = self
+                    .state
+                    .maintain_stale_tool_results(ToolResultMaintenanceMode::Prune)?;
+                if stats.rewritten > 0
+                    && context_chars.saturating_sub(stats.saved_chars)
+                        < compaction_trigger_chars(context_limit_chars)
+                {
+                    return Ok(true);
+                }
+                stats.rewritten > 0
+            }
+        };
         let Some(request) = self
             .state
             .select_compaction_for_projection(&projection, false)?
         else {
-            return Ok(false);
+            return Ok(maintained);
         };
-        self.execute_compaction(&request, &projection, Some(turn_id), false, on_event)
-            .await
+        let applied = self
+            .execute_compaction(&request, &projection, Some(turn_id), false, on_event)
+            .await?;
+        Ok(applied || maintained)
     }
 
     /// provider 上下文溢出后尝试一次压缩恢复。

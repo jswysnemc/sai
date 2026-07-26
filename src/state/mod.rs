@@ -28,7 +28,10 @@ use std::sync::Arc;
 
 pub(crate) use compaction::{summary_char_limit, validate_summary};
 #[allow(unused_imports)]
-pub use compaction::{CompactionApplyOutcome, CompactionRequest, CompactionSummary};
+pub use compaction::{
+    classify_context_pressure, compaction_trigger_chars, CompactionApplyOutcome,
+    CompactionRequest, CompactionSummary, ContextPressure,
+};
 pub use context_epoch::{ContextEpochProjection, ContextEpochSummary, ContextSourceInput};
 pub use failure_recovery::{FailureKind, RecoverySnapshot, RecoveryStatus};
 pub use pending_turn::PendingTurnGuard;
@@ -50,7 +53,9 @@ pub use sessions::{
     workspace_id_for_path,
 };
 #[allow(unused_imports)]
-pub use tool_history::{ToolCallStatus, ToolHistorySummary};
+pub use tool_history::{
+    ToolCallStatus, ToolHistorySummary, ToolResultMaintenanceMode, ToolResultMaintenanceStats,
+};
 #[cfg(test)]
 pub use turns::TurnStatus;
 pub use turns::{turns_to_entries, ConversationDb, StoredConversationEntry, Turn};
