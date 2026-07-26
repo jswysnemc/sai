@@ -72,9 +72,11 @@ pub(super) struct StreamComposerDraft {
 
 /// 队列中的下一条用户提交。
 #[derive(Clone, Debug)]
-pub(super) struct QueuedSubmission {
-    pub(super) mode: AgentMode,
-    pub(super) text: String,
+pub(in crate::cli) struct QueuedSubmission {
+    pub(in crate::cli) mode: AgentMode,
+    pub(in crate::cli) text: String,
+    /// 草稿携带的剪贴板附件；缺失时占位符会以字面文本发给模型
+    pub(in crate::cli) clipboard: ReplClipboardState,
 }
 
 impl ReplRuntime {

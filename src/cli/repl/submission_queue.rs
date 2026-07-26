@@ -27,17 +27,21 @@ pub(super) fn apply_stream_mode(runtime: &ReplRuntime, mode: &mut AgentMode) {
 /// - `runtime`: TUI 运行期
 ///
 /// 返回:
-/// - 非空草稿文本
-pub(super) fn take_stream_draft_prefill(runtime: &mut ReplRuntime) -> Option<String> {
+/// - 非空草稿文本与其剪贴板附件
+pub(super) fn take_stream_draft_prefill(
+    runtime: &mut ReplRuntime,
+) -> Option<(String, crate::cli::repl_clipboard::ReplClipboardState)> {
     let text = runtime.stream_draft().text.trim().to_string();
     if text.is_empty() {
         return None;
     }
     let mode = runtime.stream_draft().mode;
     let draft = runtime.stream_draft_mut();
+    // 附件随文本一起交还输入框，否则占位符会退化成字面文本
+    let clipboard = std::mem::take(&mut draft.clipboard);
     *draft = Default::default();
     draft.mode = mode;
-    Some(text)
+    Some((text, clipboard))
 }
 
 /// 依次执行运行期间 Tab 入队的用户消息。
@@ -69,10 +73,13 @@ pub(super) async fn drain_submission_queue(
         if queued.is_empty() {
             break;
         }
-        for item in queued {
+        let mut pending = queued.into_iter();
+        while let Some(item) = pending.next() {
             *mode = item.mode;
             let text = item.text.trim().to_string();
-            if text.is_empty() {
+            // 剪贴板附件在此还原：图片与长文本占位块换回真实内容
+            let chat_input = item.clipboard.to_chat_input(&text);
+            if chat_input.message.trim().is_empty() && chat_input.image_url.is_none() {
                 continue;
             }
             // 控制命令和 shell 在队列中仅作为用户消息处理
@@ -85,10 +92,6 @@ pub(super) async fn drain_submission_queue(
             agent.prepare_for_turn()?;
             // 用户主动发话：清除历史未消费回执，避免上一轮积压整包注入
             agent.discard_stale_external_completion_notices()?;
-            let chat_input = crate::clipboard::ClipboardChatInput {
-                message: text.clone(),
-                image_url: None,
-            };
             let runner_submission = repl_runner_submission(
                 chat_input,
                 *mode,
@@ -100,27 +103,45 @@ pub(super) async fn drain_submission_queue(
             let outcome =
                 execute_repl_turn(paths, config, agent, runtime, runner_submission).await?;
             apply_stream_mode(runtime, mode);
-            if outcome.interrupted {
-                restore_leftover_draft(runtime, outcome.leftover_draft);
-                return Ok(());
-            }
-            if let Err(error) = outcome.result {
-                runtime.record_meta(error.to_string())?;
-                restore_leftover_draft(runtime, outcome.leftover_draft);
-                return Ok(());
-            }
-            // 队列下一项会清空草稿，因此先把残留文本插回队首
-            if let Some(draft) = outcome.leftover_draft {
-                let text = draft.trim().to_string();
-                if !text.is_empty() {
-                    let queued_mode = runtime.stream_mode(*mode);
-                    runtime.prepend_submission(queued_mode, text);
+            if outcome.interrupted || outcome.result.is_err() {
+                if let Err(error) = outcome.result {
+                    runtime.record_meta(error.to_string())?;
                 }
+                restore_leftover_draft(runtime, outcome.leftover_draft);
+                discard_remaining_queue(runtime, pending)?;
+                return Ok(());
             }
+            // 半截草稿只回填输入框等待用户提交，不再作为正式消息自动发送
+            restore_leftover_draft(runtime, outcome.leftover_draft);
             // 本轮执行中新入队的项目由外层循环继续处理
         }
     }
     Ok(())
+}
+
+/// 丢弃中断或失败后剩余的排队项，并向用户说明数量。
+///
+/// 参数:
+/// - `runtime`: TUI 运行期
+/// - `remaining`: 尚未执行的排队项
+///
+/// 返回:
+/// - 记录是否成功
+fn discard_remaining_queue(
+    runtime: &mut ReplRuntime,
+    remaining: impl Iterator<Item = crate::cli::repl_runtime::QueuedSubmission>,
+) -> Result<()> {
+    let count = remaining.count();
+    if count == 0 {
+        return Ok(());
+    }
+    // 中断意图是停止一切，滞留的旧队列在下次对话后自动触发反而更意外；
+    // 丢弃但必须留痕，用户可自行重新提交
+    runtime.record_meta(if crate::i18n::is_zh() {
+        format!("已丢弃 {count} 条未执行的排队消息")
+    } else {
+        format!("discarded {count} queued messages that had not run yet")
+    })
 }
 
 /// 恢复中断或失败后留下的流式草稿。

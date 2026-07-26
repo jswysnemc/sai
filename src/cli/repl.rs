@@ -163,8 +163,9 @@ pub(super) async fn run_repl(
                     transcript_options.tool_call_mode,
                 )
                 .await?;
-                if let Some(draft) = take_stream_draft_prefill(&mut runtime) {
+                if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
                     prefill = Some(draft);
+                    prefill_clipboard = Some(clipboard);
                 }
                 continue;
             }
@@ -256,21 +257,33 @@ pub(super) async fn run_repl(
                             let mut resize_tick = tokio::time::interval(Duration::from_millis(25));
                             resize_tick
                                 .set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-                            let ctrl_c = tokio::signal::ctrl_c();
-                            tokio::pin!(ctrl_c);
-                            loop {
+                            // 用 raw 模式轮询按键取消，而不是 tokio 的 ctrl_c：
+                            // 后者首次 poll 即永久接管 SIGINT，会让 cooked 段的
+                            // Ctrl+C 行为在使用 /compact 前后不一致
+                            let mut compact_guard =
+                                terminal_restore::TerminalInputGuard::enable(
+                                    &mut io::stdout(),
+                                    false,
+                                )?;
+                            let compact_result = loop {
                                 tokio::select! {
                                     result = &mut compact => break result.map(|_| ()),
-                                    signal = &mut ctrl_c => {
-                                        signal?;
-                                        break Ok(());
-                                    }
                                     _ = resize_tick.tick() => {
                                         let mut runtime_ref = runtime.borrow_mut();
                                         process_stream_tick(&mut *runtime_ref)?;
+                                        drop(runtime_ref);
+                                        if poll_compact_cancel()? {
+                                            runtime.borrow_mut().record_meta(
+                                                t("compaction cancelled", "已取消压缩")
+                                                    .to_string(),
+                                            )?;
+                                            break Ok(());
+                                        }
                                     }
                                 }
-                            }
+                            };
+                            let guard_result = compact_guard.finish(&mut io::stdout());
+                            compact_result.and(guard_result)
                         };
                         runtime.finish_stream()?;
                         result?;
@@ -476,7 +489,10 @@ pub(super) async fn run_repl(
             continue;
         }
         if input.eq_ignore_ascii_case("/ps") {
-            run_repl_background_manager(paths, &config).await?;
+            // 面板内的操作失败只提示，不能让整个 REPL 退出
+            if let Err(err) = run_repl_background_manager(paths, &config).await {
+                runtime.record_meta(err.to_string())?;
+            }
             continue;
         }
         // 剩余的 / 开头命令形态输入不再静默发给模型：拼错的命令、
@@ -538,8 +554,9 @@ pub(super) async fn run_repl(
                 transcript_options.tool_call_mode,
             )
             .await?;
-            if let Some(draft) = take_stream_draft_prefill(&mut runtime) {
+            if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
                 prefill = Some(draft);
+                prefill_clipboard = Some(clipboard);
             }
             continue;
         }
@@ -569,9 +586,33 @@ pub(super) async fn run_repl(
             transcript_options.tool_call_mode,
         )
         .await?;
-        if let Some(draft) = take_stream_draft_prefill(&mut runtime) {
+        if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
             prefill = Some(draft);
+            prefill_clipboard = Some(clipboard);
         }
     }
     Ok(())
+}
+
+/// 轮询 /compact 执行期间的取消按键。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 收到 Ctrl+C 或 Esc 时返回 true
+fn poll_compact_cancel() -> Result<bool> {
+    while event::poll(Duration::ZERO)? {
+        if let Event::Key(key) = event::read()? {
+            if key.kind == KeyEventKind::Release {
+                continue;
+            }
+            let ctrl_c = matches!(key.code, KeyCode::Char('c'))
+                && key.modifiers.contains(KeyModifiers::CONTROL);
+            if ctrl_c || matches!(key.code, KeyCode::Esc) {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
 }

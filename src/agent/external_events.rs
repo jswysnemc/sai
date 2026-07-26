@@ -222,7 +222,10 @@ impl Agent {
         }
     }
 
-    /// 再次确认外部完成事件（投递时通常已 claim；此处幂等，防止旧路径重复标记）。
+    /// 确认外部完成事件已被成功消费。
+    ///
+    /// 这是通知的唯一清除点：轮次被中断或失败时不确认，
+    /// 下一次等待会重新投递同一批完成回执。
     ///
     /// 参数:
     /// - `batch`: 已消费事件批次
@@ -422,7 +425,12 @@ where
     Ok(())
 }
 
-/// 构造完成事件批次，并在投递前立即确认（消费后清除，避免历史回执再次注入）。
+/// 构造完成事件批次。
+///
+/// 通知的清除延后到消费方成功处理后（acknowledge_external_events）：
+/// 投递即清除会让"自动轮次刚开始就被 Ctrl+C 中断"的完成回执永久丢失，
+/// 模型再也收不到该次后台工作的结果。用户主动发话时的积压回执由
+/// discard_stale_external_completion_notices 显式清理，不会整包重放。
 ///
 /// 参数:
 /// - `paths`: Sai 路径
@@ -433,7 +441,7 @@ where
 /// - `goal_continuation`: 是否 Goal 续轮
 ///
 /// 返回:
-/// - 已确认投递的事件批次
+/// - 待消费的事件批次
 fn take_event_batch(
     paths: &SaiPaths,
     session_id: &str,
@@ -442,11 +450,13 @@ fn take_event_batch(
     background: &[BackgroundCompletionNotice],
     goal_continuation: bool,
 ) -> Result<ExternalEventBatch> {
-    let batch = build_event_batch(owner_key, subagents, background, goal_continuation);
-    // 1. 投递即消费：标记完成通知已清除，防止积压回执在后续轮次整包重放
-    acknowledge_background_completions(paths, session_id, &batch.background_task_ids)?;
-    acknowledge_finished_notices(owner_key, &batch.subagent_ids);
-    Ok(batch)
+    let _ = (paths, session_id);
+    Ok(build_event_batch(
+        owner_key,
+        subagents,
+        background,
+        goal_continuation,
+    ))
 }
 
 /// 构造一批统一外部完成事件。

@@ -156,8 +156,13 @@ impl ReplRuntime {
             return Ok(false);
         }
         let mode = self.stream_draft.mode.unwrap_or(fallback_mode);
-        self.submission_queue
-            .push_back(QueuedSubmission { mode, text });
+        // 剪贴板附件随草稿一起入队，执行时还原为真实图片或长文本
+        let clipboard = std::mem::take(&mut self.stream_draft.clipboard);
+        self.submission_queue.push_back(QueuedSubmission {
+            mode,
+            text,
+            clipboard,
+        });
         self.stream_draft = StreamComposerDraft {
             mode: Some(mode),
             ..StreamComposerDraft::default()
@@ -181,22 +186,6 @@ impl ReplRuntime {
         self.submission_queue.drain(..).collect()
     }
 
-    /// 将一条提交插入队列最前。
-    ///
-    /// 参数:
-    /// - `mode`: 执行模式
-    /// - `text`: 用户输入
-    ///
-    /// 返回:
-    /// - 无
-    pub(in crate::cli) fn prepend_submission(&mut self, mode: AgentMode, text: String) {
-        let text = text.trim().to_string();
-        if text.is_empty() {
-            return;
-        }
-        self.submission_queue
-            .push_front(QueuedSubmission { mode, text });
-    }
 
     /// 开始一轮流式输出前重置草稿，保留空 composer 供运行期间输入。
     ///

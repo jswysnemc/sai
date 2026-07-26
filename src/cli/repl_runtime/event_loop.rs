@@ -105,8 +105,12 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                 if matches!(key.code, KeyCode::Char('o'))
                     && key.modifiers.contains(KeyModifiers::CONTROL)
                 {
-                    // 1. 允许展开或收起最近命令输出 / 思考段落
-                    runtime.toggle_command_output()?;
+                    // 1. 流式期间不打开阻塞式输出面板：pager 会同步占住事件循环，
+                    //    模型流无人读取、工具子进程管道写满后挂起
+                    runtime.record_meta(crate::i18n::text(
+                        "output pager is available after this turn finishes",
+                        "输出面板需等本轮结束后再打开",
+                    ).to_string())?;
                     continue;
                 }
                 if matches!(key.code, KeyCode::Char('c'))

@@ -15,11 +15,12 @@ pub(super) fn run_alarm_worker(args: AlarmWorkerArgs) -> Result<()> {
     std::thread::sleep(Duration::from_secs(seconds));
     let _ = crate::alarm::update_status(&paths, &args.id, crate::alarm::AlarmStatus::Ringing);
     let _ = append_alarm_log(&paths, &format!("{}: playback starting\n", args.id));
-    let result = play_alarm_once(args.audio_file.as_deref()).or_else(|err| {
-        append_alarm_log(
+    let result = play_alarm_once(args.audio_file.as_deref()).or_else(|err: anyhow::Error| {
+        // 日志写入失败不能连累回退铃声：先响铃保证闹钟可闻，日志尽力而为
+        let _ = append_alarm_log(
             &paths,
             &format!("{}: audio playback failed: {err}\n", args.id),
-        )?;
+        );
         terminal_bell_fallback();
         Ok(())
     });

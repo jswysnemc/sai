@@ -141,7 +141,7 @@ impl<'agent> TurnRunner<'agent> {
                     return Err(error);
                 }
             };
-            // 2. 外部完成回执在 take_event_batch 时已 claim 清除；此处幂等确认旧路径残留
+            // 2. 轮次成功才确认外部完成回执；失败路径已提前返回，回执保留待重投
             if let Some(batch) = pending_external_events.take() {
                 let _ = self.agent.acknowledge_external_events(&batch);
             }
