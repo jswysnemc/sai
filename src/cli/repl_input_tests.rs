@@ -248,20 +248,44 @@ fn long_paste_visible_lines_are_collapsed() {
         .collect::<Vec<_>>();
     let visible = repl_visible_input_lines("[YOLO] > ", &lines, 12, true);
 
-    assert_eq!(visible.len(), 3);
-    assert_eq!(visible[0], "line 0");
-    assert!(visible[1].contains("18") || visible[1].contains("已隐藏 18"));
-    assert_eq!(visible[2], "line 19");
+    assert!(visible.collapsed);
+    assert_eq!(visible.lines.len(), 3);
+    assert_eq!(visible.lines[0], "line 0");
+    assert!(visible.lines[1].contains("18") || visible.lines[1].contains("已隐藏 18"));
+    assert_eq!(visible.lines[2], "line 19");
     assert_eq!(lines.len(), 20);
+}
+
+#[test]
+fn manual_multiline_input_collapses_when_over_visible_rows() {
+    // 非粘贴输入超过可见行上限时同样收缩，否则 composer 会被顶出屏幕
+    let lines = (0..20)
+        .map(|index| format!("line {index}"))
+        .collect::<Vec<_>>();
+    let visible = repl_visible_input_lines("", &lines, 12, false);
+
+    assert!(visible.collapsed);
+    assert_eq!(visible.lines.len(), 3);
+}
+
+#[test]
+fn three_line_input_is_not_misdetected_as_collapsed() {
+    // 恰好 3 行且未超限：显示行数与折叠输出长度相同，标志必须为未折叠
+    let lines = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+    let visible = repl_visible_input_lines("", &lines, 12, false);
+
+    assert!(!visible.collapsed);
+    assert_eq!(visible.lines, lines);
 }
 
 #[test]
 fn long_single_line_paste_visible_is_collapsed() {
     let lines = vec!["x".repeat(400)];
     let visible = repl_visible_input_lines("", &lines, 12, true);
-    assert_eq!(visible.len(), 2);
-    assert!(visible[0].ends_with('…') || visible[0].ends_with("…"));
-    assert!(visible[1].contains("hidden") || visible[1].contains("已隐藏"));
+    assert!(visible.collapsed);
+    assert_eq!(visible.lines.len(), 2);
+    assert!(visible.lines[0].ends_with('…'));
+    assert!(visible.lines[1].contains("hidden") || visible.lines[1].contains("已隐藏"));
 }
 
 #[test]

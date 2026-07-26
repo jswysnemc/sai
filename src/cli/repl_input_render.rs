@@ -51,23 +51,37 @@ pub(super) fn render_repl_input(
     Ok(())
 }
 
+/// 输入框可见行的计算结果。
+pub(super) struct VisibleInputLines {
+    pub(super) lines: Vec<String>,
+    /// 是否已收缩；布局层依赖该标志判定光标走原文还是折叠路径，
+    /// 不能再用显示行数与原始行数相等来猜测（恰好 3 行时会误判）
+    pub(super) collapsed: bool,
+}
+
 pub(super) fn repl_visible_input_lines(
     prefix: &str,
     lines: &[String],
     max_rows: u16,
     is_pasted: bool,
-) -> Vec<String> {
+) -> VisibleInputLines {
+    const LONG_PASTE_VISIBLE_CHARS: usize = 240;
+    // 收缩后保留的首尾行最大字符数，保证收缩结果本身不会再撑高 composer
+    const COLLAPSED_EDGE_CHARS: usize = 160;
     let total_rows = repl_prompt_rows(prefix, lines);
     let total_chars: usize = lines.iter().map(|line| line.chars().count()).sum();
-    // 粘贴内容：行数或字符数超限时收缩；单行巨长文本也收缩（不再要求 lines>2）
-    const LONG_PASTE_VISIBLE_CHARS: usize = 240;
-    let should_collapse = is_pasted
-        && !lines.is_empty()
+    // 超过可见行数上限时无论内容来源一律收缩，否则手动多行输入会把
+    // composer 顶出屏幕、底部区域相互覆盖；粘贴内容额外按字符阈值提前收缩
+    let should_collapse = !lines.is_empty()
         && (total_rows > max_rows
-            || total_chars > LONG_PASTE_VISIBLE_CHARS
-            || lines.iter().any(|line| line.chars().count() > 160));
+            || (is_pasted
+                && (total_chars > LONG_PASTE_VISIBLE_CHARS
+                    || lines.iter().any(|line| line.chars().count() > 160))));
     if !should_collapse {
-        return lines.to_vec();
+        return VisibleInputLines {
+            lines: lines.to_vec(),
+            collapsed: false,
+        };
     }
 
     if lines.len() == 1 {
@@ -76,20 +90,46 @@ pub(super) fn repl_visible_input_lines(
         let head: String = line.chars().take(48).collect();
         let omitted = chars.saturating_sub(head.chars().count());
         let note = if is_zh() {
-            format!("... 已隐藏 {omitted} 字符粘贴内容 ...")
+            format!("... 已隐藏 {omitted} 字符输入内容 ...")
         } else {
-            format!("... {omitted} pasted chars hidden ...")
+            format!("... {omitted} input chars hidden ...")
         };
-        return vec![format!("{head}…"), note];
+        return VisibleInputLines {
+            lines: vec![format!("{head}…"), note],
+            collapsed: true,
+        };
     }
 
     let omitted_lines = lines.len().saturating_sub(2);
     let omitted = if is_zh() {
-        format!("... 已隐藏 {omitted_lines} 行粘贴内容 ...")
+        format!("... 已隐藏 {omitted_lines} 行输入内容 ...")
     } else {
-        format!("... {omitted_lines} pasted lines hidden ...")
+        format!("... {omitted_lines} input lines hidden ...")
     };
-    vec![lines[0].clone(), omitted, lines[lines.len() - 1].clone()]
+    VisibleInputLines {
+        lines: vec![
+            clip_collapsed_edge(&lines[0], COLLAPSED_EDGE_CHARS),
+            omitted,
+            clip_collapsed_edge(&lines[lines.len() - 1], COLLAPSED_EDGE_CHARS),
+        ],
+        collapsed: true,
+    }
+}
+
+/// 截断收缩后保留的首尾行。
+///
+/// 参数:
+/// - `line`: 原始行文本
+/// - `max_chars`: 保留的最大字符数
+///
+/// 返回:
+/// - 截断后的行；超长时以省略号结尾
+fn clip_collapsed_edge(line: &str, max_chars: usize) -> String {
+    if line.chars().count() <= max_chars {
+        return line.to_string();
+    }
+    let head: String = line.chars().take(max_chars).collect();
+    format!("{head}…")
 }
 
 /// 清除 REPL 可编辑输入区。

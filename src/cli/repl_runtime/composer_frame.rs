@@ -155,16 +155,20 @@ impl ComposerFrame {
     fn layout(&self, cols: usize) -> ComposerLayout {
         let cols = cols.max(1);
         let lines = repl_input_lines(&self.input);
-        let display_lines = if self.input.is_empty() {
-            vec![placeholder_text()]
+        let (display_lines, collapsed) = if self.input.is_empty() {
+            (vec![placeholder_text()], false)
         } else {
-            repl_visible_input_lines("", &lines, REPL_MAX_VISIBLE_INPUT_ROWS, self.is_pasted)
+            let visible =
+                repl_visible_input_lines("", &lines, REPL_MAX_VISIBLE_INPUT_ROWS, self.is_pasted);
+            (visible.lines, visible.collapsed)
         };
         let styled_display_lines =
-            style_display_lines(&display_lines, &lines, &self.clipboard_blocks);
+            style_display_lines(&display_lines, &lines, collapsed, &self.clipboard_blocks);
         let input_rows = repl_prompt_rows_for_cols("", &display_lines, cols).max(1);
         let slash_panel = SlashPanel::new(&self.input, self.slash_selection);
-        let (cursor_col, cursor_row_offset) = if display_lines.len() == lines.len() {
+        // 折叠判定用显式标志：原文恰好 3 行时显示行数与原始行数相等，
+        // 按长度比较会走错分支，把光标画到 composer 边框之外
+        let (cursor_col, cursor_row_offset) = if !collapsed {
             repl_cursor_position_for_cols("", &self.input, self.cursor, cols)
         } else {
             let last_line = display_lines.last().map(String::as_str).unwrap_or_default();
@@ -206,6 +210,7 @@ struct ComposerLayout {
 fn style_display_lines(
     display_lines: &[String],
     raw_lines: &[String],
+    collapsed: bool,
     spans: &[ReplClipboardBlockSpan],
 ) -> Vec<String> {
     let mut offsets = Vec::with_capacity(raw_lines.len());
@@ -214,7 +219,7 @@ fn style_display_lines(
         offsets.push(offset);
         offset += line.chars().count() + usize::from(index + 1 < raw_lines.len());
     }
-    if display_lines.len() == raw_lines.len() {
+    if !collapsed {
         return display_lines
             .iter()
             .enumerate()
