@@ -35,9 +35,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap:var(--space-md);
   min-height: 44px;
-  padding: 6px 16px;
+  padding:var(--space-xs) var(--space-2xl);
   border-bottom: 1px solid var(--line);
   background: var(--paper);
 }
@@ -46,7 +46,7 @@
   max-width: 46vw;
   margin: 0;
   overflow: hidden;
-  font-size: 14px;
+  font-size:var(--text-lg);
   font-weight: 600;
   letter-spacing: -0.02em;
   text-overflow: ellipsis;
@@ -66,11 +66,11 @@
   top: 50px;
   right: 12px;
   display: grid;
-  gap: 2px;
+  gap:var(--space-3xs);
   min-width: 148px;
-  padding: 5px;
+  padding:var(--space-2xs);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius:var(--radius-4);
   background: var(--paper-raised);
   box-shadow: var(--shadow);
   z-index: 40;
@@ -79,15 +79,15 @@
 .chat-header-panel-menu button {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap:var(--space-sm);
   width: 100%;
   min-height: 34px;
-  padding: 0 9px;
+  padding:0 var(--space-sm);
   border: 0;
-  border-radius: 7px;
+  border-radius:var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
   text-align: left;
 }
 
@@ -100,8 +100,8 @@
   display: flow-root;
   min-width: 0;
   max-width: 100%;
-  margin: 14px 0 18px;
-  padding-bottom: 4px;
+  margin:var(--space-xl) 0 var(--space-2xl);
+  padding-bottom:var(--space-2xs);
 }
 
 /* 输入区吸在滚动容器底部，顶部渐变让消息内容自然淡出 */
@@ -111,7 +111,7 @@
   z-index: 15;
   flex: 0 0 auto;
   margin-top: -26px;
-  padding-top: 32px;
+  padding-top:var(--space-5xl);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
   mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
 }
@@ -125,10 +125,10 @@
   height: 34px;
   place-items: center;
   border: 1px solid var(--line);
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   background: var(--paper-raised);
   color: var(--ink-soft);
-  box-shadow: 0 6px 20px rgb(20 28 23 / 14%);
+  box-shadow: var(--elevation-3);
   transform: translateX(-50%);
   cursor: pointer;
   z-index: 5;
@@ -147,28 +147,28 @@
   width: min(100%, 820px);
   min-width: 0;
   margin: 0 auto;
-  padding: 20px 18px 0;
+  padding:var(--space-3xl) var(--space-2xl) 0;
 }
 
 /* 空会话问候语：位于消息列与输入区之间，空会话无滚动时自然贴在输入区上方 */
 .empty-session-greeting {
   flex: 0 0 auto;
   width: min(100%, 820px);
-  margin: 0 auto 22px;
-  padding: 0 18px;
+  margin:0 auto var(--space-3xl);
+  padding:0 var(--space-2xl);
   text-align: center;
   pointer-events: none;
 }
 
 .empty-session-context-prompt {
-  margin: 0 auto 14px;
+  margin:0 auto var(--space-xl);
   max-width: 100%;
   text-align: left;
 }
 
 .empty-session-greeting h2 {
-  margin: 0 0 6px;
-  font-size: 19px;
+  margin:0 0 var(--space-xs);
+  font-size:var(--text-3xl);
   font-weight: 600;
   letter-spacing: -0.02em;
 }
@@ -176,13 +176,13 @@
 .empty-session-greeting p {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size:var(--text-sm);
 }
 
 .message {
   min-width: 0;
   max-width: 100%;
-  margin: 0 0 22px;
+  margin:0 0 var(--space-3xl);
 }
 
 .assistant-message {
@@ -199,13 +199,13 @@
 .asset-source {
   position: relative;
   overflow: auto;
-  margin: 14px 0;
-  padding: 16px;
+  margin:var(--space-xl) 0;
+  padding:var(--space-2xl);
   border: 1px solid var(--technical-border);
-  border-radius: 9px;
+  border-radius:var(--radius-3);
   background: var(--technical-surface);
   color: var(--technical-text);
-  font-size: 12px;
+  font-size:var(--text-sm);
   line-height: 1.65;
 }
 
@@ -215,7 +215,7 @@
   display: grid;
   min-width: 0;
   max-width: 100%;
-  gap: 10px;
+  gap:var(--space-md);
 }
 
 /* 单条工具卡：无矩形外框，与工具组折叠条同一层级语言 */
@@ -224,7 +224,7 @@
   max-width: 100%;
   overflow: hidden;
   border: 0;
-  border-radius: 6px;
+  border-radius:var(--radius-2);
   background: transparent;
   color: var(--technical-text);
 }
@@ -239,8 +239,8 @@
 
 .tool-detail {
   border-top: 0;
-  margin-top: 2px;
-  padding: 2px 0 0 4px;
+  margin-top:var(--space-3xs);
+  padding:var(--space-3xs) 0 0 var(--space-2xs);
   border-left: 2px solid color-mix(in srgb, var(--line) 70%, transparent);
   background: transparent;
 }
@@ -257,30 +257,30 @@
   color: var(--technical-muted) !important;
 }
 
-.inline-diff { overflow: auto; background: var(--technical-surface); color: var(--technical-text); font: 400 12px/1.55 var(--font-code); }
-.diff-line { min-width: max-content; padding: 1px 12px; white-space: pre; }
+.inline-diff { overflow: auto; background: var(--technical-surface); color: var(--technical-text); font:400 var(--text-sm)/1.55 var(--font-code); }
+.diff-line { min-width: max-content; padding:1px var(--space-lg); white-space: pre; }
 .diff-line.added { background: var(--diff-added-bg); color: var(--diff-added-text); }
 .diff-line.removed { background: var(--diff-removed-bg); color: var(--diff-removed-text); }
 
 .pulse { animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.35; } }
 
-@media (max-width: 760px) {
-  .message-column { padding: 18px 14px 0; }
+@media (max-width: 48rem) {
+  .message-column { padding:var(--space-2xl) var(--space-xl) 0; }
 
   /* 移动端头部：左菜单按钮、居中标题、右 `+` 面板菜单 */
   .chat-header {
     display: grid;
     grid-template-columns: 32px minmax(0, 1fr) 32px;
-    gap: 6px;
+    gap:var(--space-xs);
     min-height: 46px;
-    padding: 6px 10px;
+    padding:var(--space-xs) var(--space-md);
   }
 
   .chat-header h1 {
     max-width: none;
     align-self: center;
-    font-size: 0.875rem;
+    font-size:var(--text-lg);
     text-align: center;
   }
 
@@ -293,7 +293,7 @@
     align-self: center;
     padding: 0;
     border: 0;
-    border-radius: 8px;
+    border-radius:var(--radius-3);
     background: transparent;
     color: var(--ink-soft);
   }
@@ -320,11 +320,11 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap:var(--space-sm);
   min-height: 22px;
-  margin-top: 3px;
+  margin-top:var(--space-3xs);
   opacity: 0;
-  transition: opacity 140ms ease;
+  transition:opacity var(--duration-base) ease;
 }
 
 .user-message-stack:hover .message-actions,
@@ -340,12 +340,12 @@
 
 .assistant-message .message-actions {
   justify-content: flex-start;
-  margin-top: 6px;
+  margin-top:var(--space-xs);
 }
 
 .message-timestamp {
   color: var(--ink-soft);
-  font: 400 10px var(--font-code);
+  font:400 var(--text-2xs) var(--font-code);
 }
 
 .message-copy {
@@ -354,7 +354,7 @@
   height: 22px;
   place-items: center;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius:var(--radius-2);
   background: var(--paper-raised);
   color: var(--ink-soft);
   cursor: pointer;
@@ -363,12 +363,12 @@
 .message-copy:hover {
   color: var(--ink);
 }
-.context-compaction-block { display:flex; flex-direction:column; gap:8px; width:100%; max-width:100%; margin:7px 0; }
-.context-compaction-part { display:flex; align-items:center; gap:7px; width:max-content; max-width:100%; padding:5px 9px; border:1px solid var(--line); border-radius:8px; color:var(--ink-muted); background:var(--control-surface); font-size:12px; }
+.context-compaction-block { display:flex; flex-direction:column; gap:var(--space-sm); width:100%; max-width:100%; margin:var(--space-xs) 0; }
+.context-compaction-part { display:flex; align-items:center; gap:var(--space-xs); width:max-content; max-width:100%; padding:var(--space-2xs) var(--space-sm); border:1px solid var(--line); border-radius:var(--radius-3); color:var(--ink-soft); background:var(--control-surface); font-size:var(--text-sm); }
 .context-compaction-block.running .context-compaction-part { color:var(--signal); border-color:color-mix(in srgb, var(--signal) 30%, var(--line)); }
-.context-compaction-divider { display:flex; align-items:center; gap:10px; width:100%; margin:2px 0; color:var(--ink-muted); font-size:11px; user-select:none; }
+.context-compaction-divider { display:flex; align-items:center; gap:var(--space-md); width:100%; margin:var(--space-3xs) 0; color:var(--ink-soft); font-size:var(--text-xs); user-select:none; }
 .context-compaction-divider-line { flex:1 1 auto; height:1px; background:var(--line); }
 .context-compaction-divider-label { flex:0 0 auto; letter-spacing:0.02em; }
-.context-compaction-summary { width:100%; max-width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--control-surface); color:var(--ink-soft); font-size:12.5px; }
+.context-compaction-summary { width:100%; max-width:100%; padding:var(--space-md) var(--space-lg); border:1px solid var(--line); border-radius:var(--radius-4); background:var(--control-surface); color:var(--ink-soft); font-size:var(--text-sm); }
 .context-compaction-summary .markdown-body { font-size:inherit; color:inherit; }
-.conversation-compaction { width:100%; max-width:100%; margin: 4px 0 10px; }
+.conversation-compaction { width:100%; max-width:100%; margin:var(--space-2xs) 0 var(--space-md); }

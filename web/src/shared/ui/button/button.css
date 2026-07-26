@@ -2,15 +2,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  min-height: 34px;
-  padding: 0 12px;
+  gap: var(--space-xs);
+  min-height: 2.125rem;
+  padding: 0 var(--space-lg);
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--radius-2);
   background: transparent;
   color: var(--ink);
-  font-size: 11px;
+  font-size: var(--text-xs);
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 /* 图标在按钮内不可压缩，且消除行内基线偏移 */
@@ -19,7 +23,81 @@
   display: block;
 }
 
-.ui-button.primary { border-color: var(--graphite); background: var(--graphite); color: var(--paper); }
-.ui-button.danger { border-color: var(--danger); background: var(--danger); color: #fff; }
-.ui-button.secondary:hover { background: var(--paper-deep); }
-.ui-button:disabled { cursor: not-allowed; opacity: 0.42; }
+.ui-button:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+
+.ui-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.ui-button.secondary:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: var(--paper-deep);
+}
+
+.ui-button.secondary:active:not(:disabled) {
+  background: var(--control-surface);
+}
+
+.ui-button.primary {
+  border-color: var(--graphite);
+  background: var(--graphite);
+  color: var(--paper);
+}
+
+.ui-button.primary:hover:not(:disabled) {
+  border-color: var(--graphite-soft);
+  background: var(--graphite-soft);
+}
+
+.ui-button.primary:active:not(:disabled) {
+  background: var(--graphite);
+}
+
+/* 实心危险：用于对话框确认等需要明确警示的主操作 */
+.ui-button.danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--paper-raised);
+}
+
+.ui-button.danger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--danger) 82%, var(--ink));
+  background: color-mix(in srgb, var(--danger) 82%, var(--ink));
+}
+
+.ui-button.danger:active:not(:disabled) {
+  background: var(--danger);
+}
+
+.ui-button.danger:focus-visible {
+  box-shadow: var(--ring-danger);
+}
+
+/*
+ * 幽灵危险：透明底红字，hover 才浮出浅红底。
+ *
+ * 用于列表与工具栏里的破坏性动作。这类位置本就密集，实心红底会喧宾夺主；
+ * 早先各处靠局部选择器压制 .ui-button.danger 的实心样式，同一个变体在不同
+ * 容器里表现并不一致，这里收敛成正式变体。
+ */
+.ui-button.ghost-danger {
+  border-color: transparent;
+  background: transparent;
+  color: var(--danger);
+}
+
+.ui-button.ghost-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 12%, var(--paper));
+}
+
+.ui-button.ghost-danger:active:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 18%, var(--paper));
+}
+
+.ui-button.ghost-danger:focus-visible {
+  box-shadow: var(--ring-danger);
+}

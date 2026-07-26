@@ -1,6 +1,6 @@
 .todo-markdown-view {
   min-width: 0;
-  margin: 8px 0 20px;
+  margin:var(--space-sm) 0 var(--space-3xl);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
@@ -8,7 +8,7 @@
 .todo-markdown-bar {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap:var(--space-3xs);
   min-width: 0;
 }
 
@@ -19,7 +19,7 @@
   height: 28px;
   place-items: center;
   border: 0;
-  border-radius: 7px;
+  border-radius:var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
 }
@@ -42,12 +42,12 @@
   width: 100%;
   min-height: 38px;
   align-items: center;
-  gap: 8px;
+  gap:var(--space-sm);
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--ink);
-  font-size: 12px;
+  font-size:var(--text-sm);
   text-align: left;
 }
 
@@ -62,14 +62,14 @@
   display: grid;
   flex: 1;
   min-width: 0;
-  gap: 4px;
+  gap:var(--space-2xs);
 }
 
 .todo-trigger-line {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap:var(--space-sm);
   min-width: 0;
 }
 
@@ -82,29 +82,29 @@
 
 .todo-trigger-count {
   flex-shrink: 0;
-  font: 400 10px var(--font-code);
+  font:400 var(--text-2xs) var(--font-code);
   color: var(--ink-soft);
 }
 
 .todo-trigger-track {
   height: 3px;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--control-surface);
 }
 
 .todo-trigger-fill {
   display: block;
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--signal);
-  transition: width 320ms ease;
+  transition:width var(--duration-slower) ease;
 }
 
 .todo-markdown-trigger > svg {
   flex-shrink: 0;
   color: var(--ink-soft);
-  transition: transform 140ms ease;
+  transition:transform var(--duration-base) ease;
 }
 
 .todo-markdown-trigger > svg.open {
@@ -113,9 +113,9 @@
 
 .todo-markdown-list {
   display: grid;
-  gap: 4px;
+  gap:var(--space-2xs);
   margin: 0;
-  padding: 0 0 10px;
+  padding:0 0 var(--space-md);
   list-style: none;
 }
 
@@ -123,10 +123,10 @@
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
-  gap: 7px;
+  gap:var(--space-xs);
   min-height: 27px;
   color: var(--ink);
-  font-size: 12px;
+  font-size:var(--text-sm);
 }
 
 .todo-markdown-item svg {
@@ -170,10 +170,10 @@
   min-width: 0;
   max-width: 220px;
   min-height: 28px;
-  gap: 5px;
-  padding: 0 6px;
+  gap:var(--space-2xs);
+  padding:0 var(--space-xs);
   border: 0;
-  border-radius: 7px;
+  border-radius:var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
 }
@@ -191,16 +191,16 @@
 }
 
 .todo-markdown-view.compact .todo-trigger-body {
-  gap: 2px;
+  gap:var(--space-3xs);
 }
 
 .todo-markdown-view.compact .todo-trigger-line strong {
-  font-size: 11px;
+  font-size:var(--text-xs);
   font-weight: 500;
 }
 
 .todo-markdown-view.compact .todo-trigger-count {
-  font-size: 10px;
+  font-size:var(--text-2xs);
   color: inherit;
   opacity: 0.68;
 }
@@ -218,14 +218,14 @@
 /* Portal 到 body 后不再在 .todo-markdown-view.compact 内，必须用独立类名保留卡片样式。 */
 .todo-markdown-popover {
   display: grid;
-  gap: 4px;
+  gap:var(--space-2xs);
   width: min(300px, calc(100vw - 24px));
   max-height: 300px;
   margin: 0;
   overflow: auto;
-  padding: 10px;
+  padding:var(--space-md);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius:var(--radius-3);
   background: var(--paper-raised);
   box-shadow: var(--shadow);
   list-style: none;
@@ -234,8 +234,8 @@
 
 .todo-markdown-popover .todo-markdown-item {
   min-height: 28px;
-  padding: 2px 4px;
-  border-radius: 6px;
+  padding:var(--space-3xs) var(--space-2xs);
+  border-radius:var(--radius-2);
 }
 
 .todo-markdown-popover .todo-markdown-item:hover {
@@ -247,13 +247,13 @@
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) 28px;
   align-items: center;
-  gap: 4px;
+  gap:var(--space-2xs);
   min-height: 30px;
-  margin-bottom: 4px;
-  padding-bottom: 6px;
+  margin-bottom:var(--space-2xs);
+  padding-bottom:var(--space-xs);
   border-bottom: 1px solid var(--line);
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size:var(--text-xs);
 }
 
 .todo-plan-switcher span {
@@ -266,7 +266,7 @@
 .todo-plan-switcher small {
   overflow: hidden;
   color: var(--ink-soft);
-  font: 400 10px var(--font-code);
+  font:400 var(--text-2xs) var(--font-code);
   text-overflow: ellipsis;
   white-space: nowrap;
   opacity: 0.8;
@@ -278,7 +278,7 @@
   height: 28px;
   place-items: center;
   border: 0;
-  border-radius: 6px;
+  border-radius:var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
 }

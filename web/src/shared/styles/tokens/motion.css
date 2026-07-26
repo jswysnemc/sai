@@ -1,0 +1,23 @@
+/*
+ * 动效尺度
+ *
+ * 时长阶梯吸收原先散写的 80/120/130/140/150/180/320ms。
+ * 缓动沿用原有的 ease，避免改造过程中改变既有交互手感；
+ * 需要更强方向感的新动效可以选用 --ease-out / --ease-in-out。
+ */
+:root {
+  --duration-instant: 80ms; /* 按压反馈 */
+  --duration-fast: 120ms; /* 透明度、颜色过渡 */
+  --duration-base: 140ms; /* 常规位移与形变 */
+  --duration-slow: 180ms; /* 展开、折叠 */
+  --duration-slower: 320ms; /* 侧栏宽度、大面积布局变化 */
+
+  --ease-standard: ease;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* 常用组合，避免在各处重复拼写 */
+  --transition-fast: var(--duration-fast) var(--ease-standard);
+  --transition-base: var(--duration-base) var(--ease-standard);
+  --transition-slow: var(--duration-slow) var(--ease-standard);
+}

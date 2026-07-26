@@ -2,15 +2,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap:var(--space-2xs);
   min-width: 42px;
   min-height: 34px;
-  padding: 0 10px;
+  padding:0 var(--space-md);
   border: 0;
-  border-radius: 8px;
+  border-radius:var(--radius-3);
   background: transparent;
   color: var(--ink-soft);
-  font: 600 11px var(--font-code);
+  font:600 var(--text-xs) var(--font-code);
   letter-spacing: 0.04em;
   cursor: pointer;
 }

@@ -1,0 +1,51 @@
+/*
+ * 排版尺度
+ *
+ * 根字号沿用浏览器默认 16px，界面字号一律用 rem 表达，
+ * 用户在浏览器里调整字号时整个工作台可以整体缩放。
+ * 阶梯覆盖 10px 到 22px，界面基准为 --text-base(13px)，body 使用 --text-xl(15px)。
+ */
+:root {
+  /* 字号阶梯，注释里的 px 以 16px 根字号换算 */
+  --text-2xs: 0.625rem; /* 10px 角标、极密集标签 */
+  --text-xs: 0.6875rem; /* 11px 元信息、次级标签 */
+  --text-sm: 0.75rem; /* 12px 密集列表、按钮 */
+  --text-base: 0.8125rem; /* 13px 界面正文基准 */
+  --text-lg: 0.875rem; /* 14px 强调正文 */
+  --text-xl: 0.9375rem; /* 15px 全局 body、区块标题 */
+  --text-2xl: 1rem; /* 16px 面板标题 */
+  --text-3xl: 1.125rem; /* 18px 页面标题 */
+  --text-4xl: 1.375rem; /* 22px 主标题、空状态标题 */
+
+  /* 行高，紧凑用于单行标签，宽松用于长段落 */
+  --leading-tight: 1.25;
+  --leading-snug: 1.4;
+  --leading-normal: 1.55;
+  --leading-relaxed: 1.7;
+
+  /* 字重，与 fontsource 已加载的 400/500/600 三档对应 */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* 字距，仅用于全大写的小标签 */
+  --tracking-normal: 0;
+  --tracking-wide: 0.02em;
+  --tracking-wider: 0.06em;
+
+  /* 字族 */
+  --font-ui: "Fira Sans", sans-serif;
+  --font-code: "Fira Code", monospace;
+}
+
+/*
+ * 窄屏排版收敛：只压缩大字号，正文与元信息字号保持不变。
+ * 小字号继续缩小会跌破可读下限，因此不参与响应式收敛。
+ */
+@media (max-width: 48rem) {
+  :root {
+    --text-4xl: 1.125rem; /* 22px -> 18px */
+    --text-3xl: 1rem; /* 18px -> 16px */
+    --text-2xl: 0.9375rem; /* 16px -> 15px */
+  }
+}

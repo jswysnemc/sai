@@ -1,8 +1,8 @@
 .automatic-input-part {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
-  margin: 0.75rem 0;
+  gap:var(--space-sm);
+  margin:var(--space-lg) 0;
   color: var(--ink-soft);
 }
 
@@ -10,8 +10,8 @@
   flex: 0 0 auto;
   width: 0.5rem;
   height: 0.5rem;
-  margin-top: 0.45rem;
-  border-radius: 50%;
+  margin-top:var(--space-sm);
+  border-radius: var(--radius-circle);
   background: var(--blue);
 }
 

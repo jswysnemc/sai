@@ -1,5 +1,21 @@
 /* 设置页基础表单：编辑区标题、分组、按钮、页签、表单栅格和字段控件 */
 
+/*
+ * 开关规格。
+ *
+ * 设置页里有两处开关：字段行内的 .settings-toggle-field，
+ * 以及网关区的 .settings-switch。两者原先尺寸并不一致，
+ * 这里抽成变量作为唯一来源。
+ */
+.settings-editor,
+.settings-page {
+  --switch-track-width: 2.375rem;
+  --switch-track-height: 1.3125rem;
+  --switch-thumb-size: 0.9375rem;
+  --switch-thumb-inset: 0.1875rem;
+  --switch-thumb-travel: 1.0625rem;
+}
+
 /* ---------- 编辑区标题行 ---------- */
 
 .settings-editor {
@@ -10,35 +26,35 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding-bottom: 0.75rem;
-  margin-bottom: 0.75rem;
+  gap:var(--space-lg);
+  padding-bottom:var(--space-lg);
+  margin-bottom:var(--space-lg);
   border-bottom: 1px solid var(--line);
 }
 
 .editor-header-copy {
   display: grid;
-  gap: 3px;
+  gap:var(--space-3xs);
   min-width: 0;
 }
 
 .settings-kicker {
   color: var(--signal);
-  font: 500 0.625rem var(--font-code);
+  font:500 var(--text-2xs) var(--font-code);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .editor-header h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size:var(--text-2xl);
   letter-spacing: -0.02em;
 }
 
 .editor-header p {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
   line-height: 1.4;
 }
 
@@ -46,22 +62,22 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  gap: 8px;
+  gap:var(--space-sm);
 }
 
 .editor-header-actions .settings-danger {
-  margin-left: 16px;
+  margin-left:var(--space-2xl);
 }
 
 /* ---------- 分组标题与分隔线 ---------- */
 
 .settings-group {
   min-width: 0;
-  padding-bottom: 0.875rem;
+  padding-bottom:var(--space-xl);
 }
 
 .settings-group + .settings-group {
-  padding-top: 0.875rem;
+  padding-top:var(--space-xl);
   border-top: 1px solid var(--line);
 }
 
@@ -69,27 +85,31 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding-bottom: 0.5rem;
-  margin-bottom: 0.75rem;
+  gap:var(--space-lg);
+  padding-bottom:var(--space-sm);
+  margin-bottom:var(--space-lg);
   border-bottom: 1px solid var(--line);
 }
 
 .settings-group-head h3 {
-  margin: 0 0 2px;
-  font-size: 0.875rem;
+  margin:0 0 var(--space-3xs);
+  font-size:var(--text-lg);
   letter-spacing: -0.01em;
 }
 
 .settings-group-head p {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
   line-height: 1.5;
 }
 
 /* ---------- 按钮 ---------- */
 
+/*
+ * 这几个类既用在原生 button 上，也用在 Button 组件上，
+ * 因此选择器不加 .ui-button 前缀，两种写法共用同一份定义。
+ */
 .settings-save,
 .settings-secondary,
 .settings-danger,
@@ -97,19 +117,40 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 12px;
-  border-radius: 8px;
-  font-size: 0.75rem;
+  gap:var(--space-xs);
+  height: 2.125rem;
+  padding:0 var(--space-lg);
+  border-radius:var(--radius-3);
+  font-size:var(--text-sm);
   font-weight: 500;
   white-space: nowrap;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.settings-save:focus-visible,
+.settings-secondary:focus-visible,
+.gateway-runtime-button:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+
+.settings-danger:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-danger);
 }
 
 .settings-save {
-  border: 0;
+  border: 1px solid var(--signal);
   background: var(--signal);
-  color: #fff;
+  color: var(--paper-raised);
+}
+
+.settings-save:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--signal) 82%, var(--ink));
+  background: color-mix(in srgb, var(--signal) 82%, var(--ink));
 }
 
 .settings-secondary {
@@ -132,17 +173,6 @@
   background: color-mix(in srgb, var(--danger) 8%, transparent);
 }
 
-.ui-button.settings-danger {
-  border-color: color-mix(in srgb, var(--danger) 55%, var(--line));
-  background: transparent;
-  color: var(--danger);
-}
-
-.ui-button.settings-danger:hover:not(:disabled) {
-  border-color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 8%, transparent);
-}
-
 .settings-save:disabled,
 .settings-secondary:disabled,
 .settings-danger:disabled,
@@ -155,8 +185,8 @@
 
 .settings-tabs {
   display: flex;
-  gap: 4px;
-  margin-bottom: 16px;
+  gap:var(--space-2xs);
+  margin-bottom:var(--space-2xl);
   overflow-x: auto;
   border-bottom: 1px solid var(--line);
   scrollbar-width: none;
@@ -166,14 +196,14 @@
 
 .settings-tabs button {
   flex: 0 0 auto;
-  height: 34px;
-  padding: 0 12px;
+  height: 2.125rem;
+  padding:0 var(--space-lg);
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
   background: transparent;
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size:var(--text-base);
   white-space: nowrap;
 }
 
@@ -185,53 +215,55 @@
 
 .settings-form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(18.75rem, 100%), 1fr));
+  gap:var(--space-2xl);
 }
 
 .settings-field {
   display: grid;
   align-content: start;
-  gap: 6px;
+  gap:var(--space-xs);
   min-width: 0;
 }
 
 .settings-field.full { grid-column: 1 / -1; }
-.settings-field > span { color: var(--ink); font-size: 0.75rem; font-weight: 600; }
-.settings-field > small { color: var(--ink-soft); font-size: 0.75rem; line-height: 1.45; }
+.settings-field > span { color: var(--ink); font-size:var(--text-sm); font-weight: 600; }
+.settings-field > small { color: var(--ink-soft); font-size:var(--text-sm); line-height: 1.45; }
 
 .settings-field input,
 .settings-field textarea {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius:var(--radius-3);
   background: var(--paper);
   color: var(--ink);
-  font: 400 0.8125rem var(--font-code);
+  font:400 var(--text-base) var(--font-code);
 }
 
 .settings-field input {
-  height: 40px;
-  padding: 0 11px;
+  height: 2.5rem;
+  padding:0 var(--space-md);
 }
 
 .settings-field textarea {
-  min-height: 120px;
-  padding: 10px 11px;
+  min-height: 7.5rem;
+  padding:var(--space-md) var(--space-md);
   resize: vertical;
   line-height: 1.55;
 }
 
+/* 去掉浏览器默认 outline 后必须补焦点环，否则键盘操作看不出焦点在哪 */
 .settings-field input:focus,
 .settings-field textarea:focus {
   border-color: var(--signal);
   outline: none;
+  box-shadow: var(--ring-focus);
 }
 
 .settings-field .ui-select > button,
 .settings-field .ui-password-field input {
-  min-height: 40px;
-  font-size: 0.8125rem;
+  min-height: 2.5rem;
+  font-size:var(--text-base);
 }
 
 /* ---------- 布尔和嵌套结构化字段 ---------- */
@@ -240,39 +272,94 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  min-height: 56px;
-  padding: 8px 11px;
+  gap:var(--space-2xl);
+  min-height: 3.5rem;
+  padding:var(--space-sm) var(--space-md);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius:var(--radius-3);
 }
 
-.settings-toggle-field > span { display: grid; gap: 3px; min-width: 0; }
-.settings-toggle-field strong { font-size: 0.8125rem; font-weight: 500; }
-.settings-toggle-field small { color: var(--ink-soft); font: 400 0.6875rem var(--font-code); overflow-wrap: anywhere; }
-.settings-toggle-field input { flex-shrink: 0; width: 34px; height: 18px; accent-color: var(--signal); }
+.settings-toggle-field > span { display: grid; gap:var(--space-3xs); min-width: 0; }
+.settings-toggle-field strong { font-size:var(--text-base); font-weight: 500; }
+.settings-toggle-field small { color: var(--ink-soft); font:400 var(--text-xs) var(--font-code); overflow-wrap: anywhere; }
+/*
+ * 开关自绘。
+ *
+ * 原先是把原生 checkbox 拉伸成 34×18 再靠 accent-color 上色，
+ * 但各浏览器对拉伸后的原生控件渲染不同：Chromium 是压扁的方框，
+ * Firefox 干脆保持原尺寸居中，跨端表现对不上。
+ */
+.settings-toggle-field input[type="checkbox"] {
+  position: relative;
+  flex-shrink: 0;
+  appearance: none;
+  width: var(--switch-track-width);
+  height: var(--switch-track-height);
+  margin: 0;
+  border-radius: var(--radius-pill);
+  background: var(--line-strong);
+  cursor: pointer;
+  transition: background var(--transition-base);
+}
+
+.settings-toggle-field input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: var(--switch-thumb-inset);
+  left: var(--switch-thumb-inset);
+  width: var(--switch-thumb-size);
+  height: var(--switch-thumb-size);
+  border-radius: var(--radius-circle);
+  background: var(--paper-raised);
+  box-shadow: var(--elevation-1);
+  transition: transform var(--transition-base);
+}
+
+.settings-toggle-field input[type="checkbox"]:checked {
+  background: var(--signal);
+}
+
+.settings-toggle-field input[type="checkbox"]:checked::after {
+  transform: translateX(var(--switch-thumb-travel));
+}
+
+.settings-toggle-field input[type="checkbox"]:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+
+.settings-toggle-field input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-toggle-field input[type="checkbox"]::after {
+    transition: none;
+  }
+}
 
 .settings-nested-field {
   grid-column: 1 / -1;
   min-width: 0;
   margin: 0;
-  padding: 12px;
+  padding:var(--space-lg);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius:var(--radius-3);
 }
 
 .settings-nested-field legend {
-  padding: 0 6px;
+  padding:0 var(--space-xs);
   color: var(--ink-soft);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
 }
 
 /* ---------- 响应式 ---------- */
 
-@media (max-width: 768px) {
-  .editor-header { flex-direction: column; gap: 10px; }
+@media (max-width: 48rem) {
+  .editor-header { flex-direction: column; gap:var(--space-md); }
   .editor-header-actions { flex-wrap: wrap; }
   .editor-header-actions .settings-danger { margin-left: 0; }
-  .settings-group-head { flex-direction: column; gap: 8px; }
-  .settings-toggle-field { gap: 10px; }
+  .settings-group-head { flex-direction: column; gap:var(--space-sm); }
+  .settings-toggle-field { gap:var(--space-md); }
 }

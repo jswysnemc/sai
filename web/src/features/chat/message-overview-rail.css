@@ -39,9 +39,9 @@
   padding: 0;
   place-items: center;
   border: 0;
-  border-radius: 5px;
+  border-radius:var(--radius-1);
   background: transparent;
-  color: color-mix(in srgb, var(--ink-faint) 62%, transparent);
+  color: color-mix(in srgb, var(--ink-soft) 62%, transparent);
   transform: translateY(-50%);
   cursor: pointer;
 }
@@ -50,7 +50,7 @@
   width: 7px;
   height: 1px;
   background: currentColor;
-  transition: width 140ms ease, height 140ms ease, color 140ms ease;
+  transition:width var(--duration-base) ease, height var(--duration-base) ease, color var(--duration-base) ease;
 }
 
 .message-overview-marker:hover,
@@ -78,17 +78,17 @@
   width: min(320px, calc(100vw - 100px));
   max-height: 180px;
   overflow: hidden;
-  padding: 11px 12px;
+  padding:var(--space-md) var(--space-lg);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius:var(--radius-4);
   background: color-mix(in srgb, var(--paper-raised) 94%, transparent);
   color: var(--ink);
-  box-shadow: 0 12px 30px rgb(20 28 23 / 14%);
+  box-shadow: var(--elevation-3);
   opacity: 0;
   transform: translateY(-50%) translateX(-5px);
   visibility: hidden;
   pointer-events: none;
-  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+  transition:opacity var(--duration-fast) ease, transform var(--duration-fast) ease, visibility var(--duration-fast) ease;
   backdrop-filter: blur(14px);
 }
 
@@ -102,10 +102,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 5px;
-  color: var(--ink-faint);
-  font-size: 11px;
+  gap:var(--space-md);
+  margin-bottom:var(--space-2xs);
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
 }
 
 .message-overview-preview-label,
@@ -122,7 +122,7 @@
 .message-overview-preview strong {
   display: block;
   overflow: hidden;
-  font-size: 13px;
+  font-size:var(--text-base);
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -131,9 +131,9 @@
 .message-overview-preview p {
   display: -webkit-box;
   overflow: hidden;
-  margin: 5px 0 8px;
+  margin:var(--space-2xs) 0 var(--space-sm);
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size:var(--text-sm);
   line-height: 1.5;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -142,10 +142,10 @@
 .message-overview-preview-tags {
   display: flex;
   min-width: 0;
-  gap: 7px;
+  gap:var(--space-xs);
   overflow: hidden;
-  color: var(--ink-faint);
-  font-size: 11px;
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
 }
 
 .message-overview-preview-tags span {
@@ -156,7 +156,7 @@
   white-space: nowrap;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 48rem) {
   .message-overview-rail {
     display: none;
   }

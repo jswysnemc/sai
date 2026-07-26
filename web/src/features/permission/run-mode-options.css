@@ -4,7 +4,7 @@
   width: 18px;
   height: 18px;
   place-items: center;
-  border-radius: 5px;
+  border-radius:var(--radius-1);
 }
 
 .run-mode-icon.yolo {

@@ -14,13 +14,13 @@
 .composer-mode .ui-select > button {
   min-height: 28px;
   max-width: 88px;
-  gap: 4px;
-  padding: 0 6px;
+  gap:var(--space-2xs);
+  padding:0 var(--space-xs);
   border: 0;
-  border-radius: 7px;
+  border-radius:var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size:var(--text-xs);
 }
 
 .composer-mode .ui-select > button:hover:not(:disabled),
@@ -46,7 +46,7 @@
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 2px;
+  gap:var(--space-3xs);
   margin-left: auto;
 }
 
@@ -58,7 +58,7 @@
   padding: 0;
   place-items: center;
   border: 0;
-  border-radius: 7px;
+  border-radius:var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
 }
@@ -88,12 +88,12 @@
   display: grid;
   min-width: 14px;
   height: 14px;
-  padding: 0 3px;
+  padding:0 var(--space-3xs);
   place-items: center;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--signal);
   color: var(--paper);
-  font: 600 9px/1 var(--font-code);
+  font:600 var(--text-2xs)/1 var(--font-code);
 }
 
 .composer-icon-button,
@@ -103,7 +103,7 @@
   height: 30px;
   place-items: center;
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
 }
 
 .composer-icon-button {
@@ -136,19 +136,20 @@
   opacity: 0.38;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 48rem) {
   .composer-shell {
-    padding: 8px 10px calc(12px + env(safe-area-inset-bottom, 0px));
+    padding: var(--space-sm) var(--space-md)
+      calc(var(--space-lg) + env(safe-area-inset-bottom, 0px));
   }
 
   .composer {
-    padding: 9px 10px 8px 14px;
-    gap: 8px;
+    padding:var(--space-sm) var(--space-md) var(--space-sm) var(--space-xl);
+    gap:var(--space-sm);
   }
 
   .model-thinking-trigger {
     max-width: 170px;
-    font-size: 11px;
+    font-size:var(--text-xs);
   }
 
   .model-thinking-menu {
@@ -157,11 +158,11 @@
 
   .composer-mode .ui-select > button {
     max-width: 72px;
-    padding: 0 4px;
+    padding:0 var(--space-2xs);
   }
 
   .composer-context-strip .agent-selector {
-    margin-right: 4px;
+    margin-right:var(--space-2xs);
   }
 }
 
@@ -171,7 +172,7 @@
 .composer-model-group {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap:var(--space-2xs);
   min-width: 0;
   min-height: 28px;
   flex-wrap: wrap;
@@ -201,7 +202,7 @@
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 2px;
+  gap:var(--space-3xs);
   min-width: 0;
   max-width: 100%;
   height: 28px;
@@ -221,7 +222,7 @@
   background: transparent;
   box-shadow: none;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size:var(--text-sm);
 }
 
 .composer-footer .ui-button.composer-rail-button:hover:not(:disabled) {
@@ -232,17 +233,17 @@
 .composer-footer .composer-mode .ui-select > button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap:var(--space-xs);
   width: auto;
   height: 28px;
   min-height: 28px;
-  padding: 0 7px 0 2px;
+  padding:0 var(--space-xs) 0 var(--space-3xs);
   border: 0;
-  border-radius: 8px;
+  border-radius:var(--radius-3);
   background: transparent;
   box-shadow: none;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size:var(--text-sm);
   line-height: 1;
 }
 
@@ -251,4 +252,12 @@
   border: 0;
   background: color-mix(in srgb, var(--ink) 7%, transparent);
   color: var(--ink);
+}
+
+/*
+ * 该选择器为压平外观写了 box-shadow: none，特异性高于 .ui-button:focus-visible，
+ * 会把全局焦点环一并屏蔽，这里按同等特异性补回。
+ */
+.composer-footer .ui-button.composer-rail-button:focus-visible {
+  box-shadow: var(--ring-focus);
 }

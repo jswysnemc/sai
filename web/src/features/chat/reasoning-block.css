@@ -1,18 +1,18 @@
 .reasoning-block {
   min-width: 0;
   max-width: 100%;
-  margin: 2px 0 6px;
+  margin:var(--space-3xs) 0 var(--space-xs);
 }
 
 .reasoning-block > button {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 0 0 8px;
+  gap:var(--space-xs);
+  padding:0 0 var(--space-sm);
   border: 0;
   background: transparent;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size:var(--text-xs);
 }
 
 .reasoning-block:not(.open) {
@@ -24,7 +24,7 @@
 }
 
 .reasoning-block.open > button {
-  padding-bottom: 5px;
+  padding-bottom:var(--space-2xs);
 }
 
 .reasoning-content {
@@ -33,10 +33,10 @@
   max-height: 260px;
   overflow: auto;
   margin: 0;
-  padding: 5px 0 5px 14px;
+  padding:var(--space-2xs) 0 var(--space-2xs) var(--space-xl);
   border-left: 1px solid var(--line);
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size:var(--text-sm);
   line-height: 1.72;
   white-space: pre-wrap;
 }

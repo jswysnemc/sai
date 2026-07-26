@@ -12,10 +12,10 @@
 .image-lightbox-image {
   max-width: 88vw;
   max-height: 88vh;
-  border-radius: 6px;
+  border-radius:var(--radius-2);
   box-shadow: 0 24px 64px rgb(0 0 0 / 45%);
   cursor: grab;
-  transition: transform 80ms linear;
+  transition:transform var(--duration-instant) linear;
   user-select: none;
   touch-action: none;
 }
@@ -37,7 +37,7 @@
   height: 2.25rem;
   padding: 0;
   border: 1px solid rgb(255 255 255 / 22%);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(255 255 255 / 12%);
   color: #fff;
   line-height: 0;

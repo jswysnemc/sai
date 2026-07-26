@@ -3,16 +3,16 @@
 .settings-error-recovery {
   display: grid;
   justify-items: start;
-  gap: 1rem;
-  padding: 1.5rem;
+  gap:var(--space-2xl);
+  padding:var(--space-4xl);
   border: 1px solid color-mix(in srgb, var(--danger) 24%, transparent);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-4);
   background: color-mix(in srgb, var(--danger) 6%, transparent);
 }
 
 .settings-error-recovery-message {
   margin: 0;
   color: var(--danger);
-  font-size: 0.8125rem;
+  font-size:var(--text-base);
   line-height: 1.5;
 }

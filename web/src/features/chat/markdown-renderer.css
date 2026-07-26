@@ -9,7 +9,7 @@
 
 .markdown-body > :first-child { margin-top: 0; }
 .markdown-body > :last-child { margin-bottom: 0; }
-.markdown-body p { margin: 6px 0; line-height: 1.72; }
+.markdown-body p { margin:var(--space-xs) 0; line-height: 1.72; }
 
 .markdown-body h1,
 .markdown-body h2,
@@ -22,44 +22,44 @@
   line-height: 1.28;
 }
 
-.markdown-body h1 { margin: 18px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); font-size: 1.5em; }
-.markdown-body h2 { margin: 16px 0 7px; padding-bottom: 5px; border-bottom: 1px solid var(--line); font-size: 1.32em; }
-.markdown-body h3 { margin: 14px 0 6px; font-size: 1.16em; }
-.markdown-body h4 { margin: 12px 0 5px; font-size: 1.08em; }
-.markdown-body h5 { margin: 10px 0 4px; font-size: 1em; }
-.markdown-body h6 { margin: 10px 0 4px; color: var(--ink-soft); font-size: 0.92em; }
+.markdown-body h1 { margin:var(--space-2xl) 0 var(--space-sm); padding-bottom:var(--space-xs); border-bottom: 1px solid var(--line); font-size: 1.5em; }
+.markdown-body h2 { margin:var(--space-2xl) 0 var(--space-xs); padding-bottom:var(--space-2xs); border-bottom: 1px solid var(--line); font-size: 1.32em; }
+.markdown-body h3 { margin:var(--space-xl) 0 var(--space-xs); font-size: 1.16em; }
+.markdown-body h4 { margin:var(--space-lg) 0 var(--space-2xs); font-size: 1.08em; }
+.markdown-body h5 { margin:var(--space-md) 0 var(--space-2xs); font-size: 1em; }
+.markdown-body h6 { margin:var(--space-md) 0 var(--space-2xs); color: var(--ink-soft); font-size: 0.92em; }
 
 .markdown-body ul,
 .markdown-body ol {
-  margin: 7px 0;
-  padding-left: 23px;
+  margin:var(--space-xs) 0;
+  padding-left:var(--space-4xl);
 }
 
 .markdown-body li {
-  margin: 3px 0;
+  margin:var(--space-3xs) 0;
   line-height: 1.68;
 }
 
 .markdown-body li > p {
-  margin: 2px 0;
+  margin:var(--space-3xs) 0;
 }
 
 .markdown-body input[type="checkbox"] {
-  margin: 0 7px 0 -18px;
+  margin:0 var(--space-xs) 0 -18px;
   accent-color: var(--signal);
 }
 
 .markdown-body blockquote {
-  margin: 10px 0;
-  padding: 6px 12px;
+  margin:var(--space-md) 0;
+  padding:var(--space-xs) var(--space-lg);
   border-left: 3px solid var(--line-strong);
-  border-radius: 0 7px 7px 0;
+  border-radius:0 var(--radius-2) var(--radius-2) 0;
   background: color-mix(in srgb, var(--paper-deep) 70%, transparent);
   color: var(--ink-soft);
 }
 
 .markdown-body blockquote p {
-  margin: 3px 0;
+  margin:var(--space-3xs) 0;
 }
 
 .markdown-body a {
@@ -75,7 +75,7 @@
 
 .markdown-body hr {
   height: 1px;
-  margin: 18px 0;
+  margin:var(--space-2xl) 0;
   border: 0;
   background: var(--line);
 }
@@ -87,38 +87,38 @@
   height: auto;
   max-height: 14rem;
   object-fit: contain;
-  margin: 10px 0;
+  margin:var(--space-md) 0;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius:var(--radius-4);
   background: var(--paper-deep);
 }
 
 .inline-code {
-  padding: 2px 6px;
+  padding:var(--space-3xs) var(--space-xs);
   border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
-  border-radius: 5px;
+  border-radius:var(--radius-1);
   background: var(--paper-deep);
   font: 500 0.88em/1.5 var(--font-code);
 }
 
 .markdown-table-wrap {
   max-width: 100%;
-  margin: 12px 0;
+  margin:var(--space-lg) 0;
   overflow-x: auto;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius:var(--radius-3);
 }
 
 .markdown-body table {
   width: 100%;
   min-width: 460px;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size:var(--text-base);
 }
 
 .markdown-body th,
 .markdown-body td {
-  padding: 8px 11px;
+  padding:var(--space-sm) var(--space-md);
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   text-align: left;
@@ -135,10 +135,10 @@
   min-width: 0;
   width: 100%;
   max-width: 100%;
-  margin: 12px 0;
+  margin:var(--space-lg) 0;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius:var(--radius-3);
   background: var(--code-surface);
 }
 
@@ -146,13 +146,13 @@
 .mermaid-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap:var(--space-sm);
   min-height: 35px;
-  padding: 5px 9px 5px 13px;
+  padding:var(--space-2xs) var(--space-sm) var(--space-2xs) var(--space-lg);
   border-bottom: 1px solid var(--line);
   background: var(--code-head);
   color: var(--ink-soft);
-  font: 500 10px var(--font-code);
+  font:500 var(--text-2xs) var(--font-code);
   user-select: none;
 }
 
@@ -166,14 +166,14 @@
 .mermaid-toolbar button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap:var(--space-2xs);
   min-height: 25px;
-  padding: 0 7px;
+  padding:0 var(--space-xs);
   border: 0;
-  border-radius: 6px;
+  border-radius:var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
-  font: 400 10px var(--font-ui);
+  font:400 var(--text-2xs) var(--font-ui);
 }
 
 .markdown-code-head button:hover,
@@ -190,12 +190,12 @@
   max-width: 100%;
   margin: 0;
   overflow: auto;
-  padding: 14px;
+  padding:var(--space-xl);
   border: 0;
   border-radius: 0;
   background: var(--code-surface);
   color: var(--code-text);
-  font: 400 12px/1.62 var(--font-code);
+  font:400 var(--text-sm)/1.62 var(--font-code);
   tab-size: 2;
 }
 
@@ -238,28 +238,28 @@
 .mermaid-view-switcher {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
+  gap:var(--space-3xs);
+  padding:var(--space-3xs);
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius:var(--radius-2);
   background: var(--paper-deep);
 }
 
 .mermaid-toolbar .mermaid-view-switcher button {
   min-height: 22px;
-  padding: 0 6px;
-  border-radius: 5px;
+  padding:0 var(--space-xs);
+  border-radius:var(--radius-1);
 }
 
 .mermaid-copy {
-  margin-left: 2px;
+  margin-left:var(--space-3xs);
 }
 
 .mermaid-preview {
   max-width: 100%;
   min-height: 80px;
   overflow: auto;
-  padding: 14px;
+  padding:var(--space-xl);
   background: #f8f8f4;
 }
 
@@ -271,19 +271,19 @@
 }
 
 .mermaid-error {
-  padding: 8px 12px;
+  padding:var(--space-sm) var(--space-lg);
   border-top: 1px solid var(--line);
   color: var(--danger);
-  font-size: 11px;
+  font-size:var(--text-xs);
 }
 
-@media (max-width: 760px) {
+@media (max-width: 48rem) {
   .markdown-code-head,
   .mermaid-toolbar {
-    padding-right: 6px;
+    padding-right:var(--space-xs);
   }
 
   .mermaid-toolbar button {
-    padding: 0 5px;
+    padding:0 var(--space-2xs);
   }
 }

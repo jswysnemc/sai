@@ -3,14 +3,14 @@
   width: calc(100% - 1rem);
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  margin: 0 0.5rem 0.45rem;
-  padding: 0.42rem 0.6rem;
+  gap:var(--space-xs);
+  margin:0 var(--space-sm) var(--space-sm);
+  padding:var(--space-xs) var(--space-md);
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
+  border-radius:var(--radius-3);
   color: var(--ink-soft);
   background: var(--paper-raised);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
 }
 
 .skills-scan-button:hover:not(:disabled) {
@@ -18,31 +18,31 @@
   border-color: var(--line-strong);
 }
 
-.skill-content-field textarea {
-  min-height: min(40rem, calc(100dvh - 18rem));
+/* 正文编辑区：给三态编辑器一个确定高度，CodeMirror 的 100% 才有参照 */
+.skill-content-editor {
   height: min(44rem, calc(100dvh - 16rem));
-  resize: vertical;
-  font-family: "Fira Code", monospace;
-  font-size: 0.8125rem;
-  line-height: 1.55;
-  tab-size: 2;
+  min-height: 20rem;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius:var(--radius-3);
+  background: var(--paper);
 }
 
 .skill-directory-field {
   max-width: 28rem;
-  margin-bottom: 0.8rem;
+  margin-bottom:var(--space-lg);
 }
 
 .skill-editor-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.8rem 1rem;
+  gap:var(--space-lg);
+  padding:var(--space-lg) var(--space-2xl);
   border-top: 1px solid var(--line);
   color: var(--ink-soft);
   font-family: "Fira Code", monospace;
-  font-size: 0.7rem;
+  font-size:var(--text-xs);
 }
 
 .is-spinning {
@@ -77,86 +77,71 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.55rem;
-}
-
-.skill-view-tabs {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.skill-view-tabs .ui-button {
-  min-height: 1.75rem;
-  gap: 0.25rem;
-  font-size: 0.75rem;
+  gap:var(--space-lg);
+  margin-bottom:var(--space-sm);
 }
 
 .skill-doc-hint {
   color: var(--ink-soft);
-  font: 500 0.7rem var(--font-code);
+  font:500 var(--text-xs) var(--font-code);
 }
 
 .skill-markdown-preview {
-  min-height: min(40rem, calc(100dvh - 18rem));
-  max-height: min(48rem, calc(100dvh - 14rem));
+  height: 100%;
   overflow: auto;
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--line);
-  border-radius: 0.5rem;
+  padding:var(--space-xl) var(--space-2xl);
   background: var(--paper);
 }
 
 .skill-meta-grid {
   display: grid;
-  gap: 0.75rem;
-  margin-bottom: 0.9rem;
+  gap:var(--space-lg);
+  margin-bottom:var(--space-xl);
 }
 
 .skill-name-field input {
-  font: 500 0.875rem var(--font-code);
+  font:500 var(--text-lg) var(--font-code);
 }
 
 .skill-description-field textarea {
   min-height: 4.5rem;
   resize: vertical;
   line-height: 1.45;
-  font-size: 0.8125rem;
+  font-size:var(--text-base);
 }
 
 .skill-preview-meta {
   display: grid;
-  gap: 0.35rem;
-  margin-bottom: 0.9rem;
-  padding-bottom: 0.75rem;
+  gap:var(--space-xs);
+  margin-bottom:var(--space-xl);
+  padding-bottom:var(--space-lg);
   border-bottom: 1px solid var(--line);
 }
 
 .skill-preview-meta strong {
-  font-size: 1rem;
+  font-size:var(--text-2xl);
   font-weight: 600;
 }
 
 .skill-preview-meta p {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size:var(--text-base);
   line-height: 1.45;
   white-space: pre-wrap;
 }
 
 .skill-preview-empty {
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size:var(--text-base);
   text-align: center;
-  padding: 2rem 1rem;
+  padding:var(--space-5xl) var(--space-2xl);
 }
 
 .skill-editor-actions .ui-button {
   min-height: 1.875rem;
-  gap: 0.25rem;
-  font-size: 0.75rem;
+  gap:var(--space-2xs);
+  font-size:var(--text-sm);
 }
 
 .skills-scan-button.ui-button,
@@ -165,16 +150,16 @@
   width: calc(100% - 1rem);
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  margin: 0 0.5rem 0.45rem;
+  gap:var(--space-xs);
+  margin:0 var(--space-sm) var(--space-sm);
   min-height: 1.875rem;
-  padding: 0.42rem 0.6rem;
+  padding:var(--space-xs) var(--space-md);
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
+  border-radius:var(--radius-3);
   color: var(--ink-soft);
   background: var(--paper-raised);
   box-shadow: none;
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
 }
 
 .sr-only {
@@ -187,4 +172,13 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/*
+ * 该选择器为压平外观写了 box-shadow: none，特异性高于 .ui-button:focus-visible，
+ * 会把全局焦点环一并屏蔽，这里按同等特异性补回。
+ */
+.skills-scan-button.ui-button:focus-visible,
+.skills-scan-button:focus-visible {
+  box-shadow: var(--ring-focus);
 }

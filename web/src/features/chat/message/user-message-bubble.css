@@ -8,7 +8,7 @@
   width: fit-content;
   max-width: min(82%, 42.5rem);
   justify-items: end;
-  gap: 0.1875rem;
+  gap:var(--space-3xs);
 }
 
 .user-bubble {
@@ -17,13 +17,13 @@
   width: fit-content;
   min-width: 0;
   max-width: 100%;
-  gap: 0.5rem;
+  gap:var(--space-sm);
   justify-items: stretch;
-  padding: 0.6875rem 0.875rem;
+  padding:var(--space-md) var(--space-xl);
   border: 1px solid var(--line);
-  border-radius: 0.875rem 0.875rem 0.25rem 0.875rem;
+  border-radius:0.875rem 0.875rem var(--radius-1) 0.875rem;
   background: var(--paper-raised);
-  box-shadow: 0 0.25rem 1.125rem rgb(20 28 23 / 5%);
+  box-shadow: var(--elevation-2);
 }
 
 .user-message .message-content {
@@ -39,7 +39,7 @@
 .user-attachments {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4375rem;
+  gap:var(--space-xs);
   width: 100%;
 }
 
@@ -53,7 +53,7 @@
   max-width: 7.5rem;
   max-height: 7.5rem;
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
+  border-radius:var(--radius-3);
   object-fit: cover;
   object-position: center;
   background: var(--paper-deep);
@@ -81,10 +81,10 @@
 .user-bubble .ui-button.bubble-expand {
   min-height: 1.625rem;
   justify-self: end;
-  padding: 0 0.5rem;
+  padding:0 var(--space-sm);
   border: 0;
   color: var(--signal);
-  font-size: 0.6875rem;
+  font-size:var(--text-xs);
 }
 
 .user-message-content {
@@ -98,16 +98,16 @@
   max-width: min(22.5rem, 68vw);
   height: 1.25rem;
   min-height: 1.25rem;
-  margin: 0 0.125rem;
+  margin:0 var(--space-3xs);
   align-items: center;
-  gap: 0.25rem;
-  padding: 0 0.375rem;
+  gap:var(--space-2xs);
+  padding:0 var(--space-xs);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--atom-color) 28%, var(--line));
-  border-radius: 0.3125rem;
+  border-radius:var(--radius-1);
   background: color-mix(in srgb, var(--atom-color) 9%, var(--paper-raised));
   color: var(--atom-color);
-  font: 500 0.75rem/1 var(--font-code);
+  font:500 var(--text-sm)/1 var(--font-code);
   vertical-align: middle;
   white-space: nowrap;
 }
@@ -115,8 +115,8 @@
 .ui-button.user-message-atom {
   min-height: 1.25rem;
   height: 1.25rem;
-  padding: 0 0.375rem;
-  border-radius: 0.3125rem;
+  padding:0 var(--space-xs);
+  border-radius:var(--radius-1);
   box-shadow: none;
   cursor: pointer;
 }
@@ -161,15 +161,15 @@
   display: none;
   width: min(26.25rem, 72vw);
   max-height: 11.25rem;
-  padding: 0.5rem 0.5625rem;
+  padding:var(--space-sm) var(--space-sm);
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 0.375rem;
+  border-radius:var(--radius-2);
   background: var(--paper-raised);
   box-shadow: var(--shadow);
   color: var(--ink);
   content: attr(data-preview);
-  font: 400 0.625rem/1.5 var(--font-code);
+  font:400 var(--text-2xs)/1.5 var(--font-code);
   text-align: left;
   white-space: pre-wrap;
   z-index: 90;
@@ -181,9 +181,9 @@
 
 .user-atom-preview {
   display: grid;
-  gap: 0.5rem;
-  margin-top: 0.625rem;
-  padding-top: 0.625rem;
+  gap:var(--space-sm);
+  margin-top:var(--space-md);
+  padding-top:var(--space-md);
   border-top: 1px solid color-mix(in srgb, var(--atom-color) 28%, var(--line));
 }
 
@@ -199,9 +199,9 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 0.375rem;
+  gap:var(--space-xs);
   color: var(--atom-color);
-  font: 600 0.75rem/1.4 var(--font-code);
+  font:600 var(--text-sm)/1.4 var(--font-code);
 }
 
 .user-atom-preview-header > span {
@@ -224,7 +224,7 @@
   max-height: 20rem;
   overflow: auto;
   color: var(--ink-soft);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
 }
 
 .user-atom-preview-body > p {
@@ -232,7 +232,7 @@
   white-space: pre-wrap;
 }
 
-@media (max-width: 47.5rem) {
+@media (max-width: 48rem) {
   .user-message-stack {
     max-width: min(92%, 42.5rem);
   }
@@ -254,11 +254,11 @@
   position: absolute;
   top: 0.375rem;
   left: 0.5rem;
-  padding: 0.0625rem 0.375rem;
-  border-radius: 999px;
+  padding:0.0625rem var(--space-xs);
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--signal) 12%, var(--paper-deep));
   color: var(--signal);
-  font: 500 0.625rem/1.4 var(--font-code);
+  font:500 var(--text-2xs)/1.4 var(--font-code);
   letter-spacing: 0.02em;
 }
 
@@ -272,7 +272,7 @@
   padding: 0;
   place-items: center;
   border: 1px solid var(--line);
-  border-radius: 0.375rem;
+  border-radius:var(--radius-2);
   background: color-mix(in srgb, var(--paper-raised) 88%, transparent);
   color: var(--ink-soft);
   cursor: pointer;
@@ -292,4 +292,12 @@
 .user-queue-remove:focus-visible {
   outline: 1px solid var(--signal);
   outline-offset: 1px;
+}
+
+/*
+ * 该选择器为压平外观写了 box-shadow: none，特异性高于 .ui-button:focus-visible，
+ * 会把全局焦点环一并屏蔽，这里按同等特异性补回。
+ */
+.ui-button.user-message-atom:focus-visible {
+  box-shadow: var(--ring-focus);
 }

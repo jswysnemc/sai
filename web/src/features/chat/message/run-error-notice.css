@@ -2,32 +2,32 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.5rem 0.75rem;
-  margin: 0.625rem 0;
-  padding: 0.625rem 0.75rem;
+  gap:var(--space-sm) var(--space-lg);
+  margin:var(--space-md) 0;
+  padding:var(--space-md) var(--space-lg);
   border: 1px solid color-mix(in srgb, var(--danger) 32%, var(--line));
-  border-radius: 0.5rem;
+  border-radius:var(--radius-3);
   background: color-mix(in srgb, var(--danger) 8%, transparent);
   color: var(--danger);
-  font-size: 0.8125rem;
+  font-size:var(--text-base);
 }
 
 .run-error-summary {
   display: flex;
   min-width: 0;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap:var(--space-sm);
 }
 
 .run-error-summary > svg {
   flex: none;
-  margin-top: 0.125rem;
+  margin-top:var(--space-3xs);
 }
 
 .run-error-copy {
   display: grid;
   min-width: 0;
-  gap: 0.2rem;
+  gap:var(--space-2xs);
 }
 
 .run-error-text {
@@ -39,7 +39,7 @@
 .run-error-inline-detail {
   min-width: 0;
   color: var(--ink-soft);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -66,40 +66,64 @@
   background: color-mix(in srgb, var(--signal) 16%, var(--paper));
 }
 
+/* 失败态重试按钮：与卡片同为危险色系的浅底描边，不用 primary 的深色底 */
 .run-error .ui-button.run-error-retry {
   min-height: 1.875rem;
-  padding: 0 0.625rem;
+  padding:0 var(--space-md);
   border-color: color-mix(in srgb, var(--danger) 38%, var(--line));
+  background: color-mix(in srgb, var(--danger) 10%, var(--paper));
   color: var(--danger);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
+}
+
+.run-error .ui-button.run-error-retry:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 17%, var(--paper));
+}
+
+/*
+ * 焦点环跟随卡片语义：全局焦点环是信号色，落在红色失败卡片上会串色。
+ * 中断态与断连态本身就是信号色卡片，沿用全局绿色即可。
+ */
+.run-error .ui-button:focus-visible {
+  outline-color: var(--danger);
+}
+
+.run-error.is-interrupted .ui-button:focus-visible,
+.run-error.is-disconnect .ui-button:focus-visible {
+  outline-color: var(--signal);
 }
 
 .run-error-detail {
   display: grid;
   grid-column: 1 / -1;
-  gap: 0.4rem;
+  gap:var(--space-xs);
   width: 100%;
 }
 
 .run-error-detail .ui-button.run-error-detail-toggle {
   min-height: 1.75rem;
   justify-self: start;
-  padding: 0 0.5rem;
+  padding:0 var(--space-sm);
   border-color: color-mix(in srgb, var(--danger) 28%, var(--line));
+  background: color-mix(in srgb, var(--danger) 6%, var(--paper));
   color: var(--danger);
-  font-size: 0.6875rem;
+  font-size:var(--text-xs);
+}
+
+.run-error-detail .ui-button.run-error-detail-toggle:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 12%, var(--paper));
 }
 
 .run-error-detail pre {
   max-height: 12rem;
   margin: 0;
-  padding: 0.625rem 0.75rem;
+  padding:var(--space-md) var(--space-lg);
   overflow: auto;
   border: 1px solid color-mix(in srgb, var(--danger) 24%, var(--line));
-  border-radius: 0.5rem;
+  border-radius:var(--radius-3);
   background: color-mix(in srgb, var(--danger) 5%, var(--paper));
   color: var(--ink-soft);
-  font: 400 0.6875rem/1.5 var(--font-code);
+  font:400 var(--text-xs)/1.5 var(--font-code);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }

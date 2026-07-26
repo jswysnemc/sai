@@ -20,13 +20,13 @@
 .agent-selector .ui-select > button {
   min-height: 28px;
   max-width: 148px;
-  gap: 4px;
-  padding: 0 6px;
+  gap:var(--space-2xs);
+  padding:0 var(--space-xs);
   border: 0;
-  border-radius: 7px;
+  border-radius:var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size:var(--text-xs);
 }
 
 .agent-selector .ui-select > button:hover:not(:disabled),
@@ -55,7 +55,7 @@
   height: 28px;
   place-items: center;
   border: 0;
-  border-radius: 7px;
+  border-radius:var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
 }
@@ -65,7 +65,7 @@
   background: color-mix(in srgb, var(--ink) 7%, transparent);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 60rem) {
   .agent-selector > svg {
     display: none;
   }
@@ -75,9 +75,9 @@
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 48rem) {
   .agent-selector .ui-select > button {
     max-width: 96px;
-    padding: 0 4px;
+    padding:0 var(--space-2xs);
   }
 }

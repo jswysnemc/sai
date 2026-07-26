@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 6px 18px 12px;
+  gap:var(--space-2xs);
+  padding:var(--space-xs) var(--space-2xl) var(--space-lg);
   background: var(--paper);
 }
 
@@ -11,16 +11,16 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap:var(--space-xs);
   width: 100%;
   max-width: 784px;
   min-height: 58px;
-  padding: 9px 10px 7px;
+  padding:var(--space-sm) var(--space-md) var(--space-xs);
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius:var(--radius-5);
   background: var(--control-surface);
   box-shadow: none;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  transition:border-color var(--duration-base) ease, box-shadow var(--duration-base) ease;
 }
 
 .composer:focus-within {
@@ -31,11 +31,11 @@
 .composer-context-strip {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap:var(--space-3xs);
   width: 100%;
   max-width: 784px;
   min-height: 28px;
-  padding: 0 2px;
+  padding:0 var(--space-3xs);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -52,13 +52,13 @@
   display: inline-flex;
   min-width: 0;
   align-items: center;
-  gap: 4px;
+  gap:var(--space-2xs);
   max-width: 120px;
   height: 28px;
-  padding: 0 6px;
-  border-radius: 7px;
+  padding:0 var(--space-xs);
+  border-radius:var(--radius-2);
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size:var(--text-xs);
 }
 
 .composer-context-chip span {
@@ -73,7 +73,7 @@
   background: transparent;
   box-shadow: none;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size:var(--text-xs);
 }
 
 .composer-context-strip .ui-button.composer-rail-button:hover:not(:disabled) {
@@ -91,9 +91,9 @@
   width: 100%;
   min-height: 32px;
   max-height: 166px;
-  padding: 5px 2px;
+  padding:var(--space-2xs) var(--space-3xs);
   box-sizing: border-box;
-  font: 400 14px/22px var(--font-ui);
+  font:400 var(--text-lg)/22px var(--font-ui);
   letter-spacing: normal;
   overflow-y: auto;
   overflow-wrap: anywhere;
@@ -124,16 +124,16 @@
   position: relative;
   max-width: min(360px, 72vw);
   height: 1.25rem;
-  margin: 0 2px;
+  margin:0 var(--space-3xs);
   align-items: center;
-  gap: 4px;
-  padding: 0 6px 0 4px;
+  gap:var(--space-2xs);
+  padding:0 var(--space-xs) 0 var(--space-2xs);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--atom-color) 28%, var(--line));
-  border-radius: 5px;
+  border-radius:var(--radius-1);
   background: color-mix(in srgb, var(--atom-color) 9%, var(--paper-raised));
   color: var(--atom-color);
-  font: 500 12px/1 var(--font-code);
+  font:500 var(--text-sm)/1 var(--font-code);
   vertical-align: middle;
   white-space: nowrap;
   user-select: all;
@@ -191,15 +191,15 @@
   display: none;
   width: min(420px, 72vw);
   max-height: 180px;
-  padding: 8px 9px;
+  padding:var(--space-sm) var(--space-sm);
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius:var(--radius-2);
   background: var(--paper-raised);
   box-shadow: var(--shadow);
   color: var(--ink);
   content: attr(data-preview);
-  font: 400 10px/1.5 var(--font-code);
+  font:400 var(--text-2xs)/1.5 var(--font-code);
   text-align: left;
   white-space: pre-wrap;
   z-index: 90;
@@ -216,3 +216,10 @@
   background: color-mix(in srgb, var(--atom-color) 28%, transparent);
 }
 
+/*
+ * 该选择器为压平外观写了 box-shadow: none，特异性高于 .ui-button:focus-visible，
+ * 会把全局焦点环一并屏蔽，这里按同等特异性补回。
+ */
+.composer-context-strip .ui-button.composer-rail-button:focus-visible {
+  box-shadow: var(--ring-focus);
+}

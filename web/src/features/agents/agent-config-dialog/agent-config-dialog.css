@@ -1,42 +1,42 @@
 .agent-config-body {
   display: grid;
-  gap: 1rem;
+  gap:var(--space-2xl);
 }
 
 .agent-config-section {
   display: grid;
-  gap: 0.5rem;
-  padding: 0.875rem 1rem;
+  gap:var(--space-sm);
+  padding:var(--space-xl) var(--space-2xl);
   border: 1px solid var(--line);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-4);
   background: var(--paper-raised);
 }
 
 .agent-config-section h3 {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size:var(--text-base);
   font-weight: 600;
   color: var(--ink);
 }
 
 .agent-config-section > p {
   margin: 0;
-  font-size: 0.6875rem;
+  font-size:var(--text-xs);
   line-height: 1.4;
   color: var(--ink-soft);
 }
 
 .agent-config-loading {
-  padding: 1.25rem 0;
+  padding:var(--space-3xl) 0;
   color: var(--ink-soft);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
   text-align: center;
 }
 
 .agent-config-footer {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
+  gap:var(--space-md);
 }
 
 .agent-config-error {
@@ -44,19 +44,19 @@
   min-width: 0;
   overflow: hidden;
   color: var(--danger);
-  font-size: 0.6875rem;
+  font-size:var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .agent-config-footer .agent-config-cancel {
   margin-left: auto;
-  padding: 0.4375rem 0.875rem;
+  padding:var(--space-xs) var(--space-xl);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-2);
   background: var(--control-surface);
   color: var(--ink-soft);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
 }
 
 .agent-config-cancel:hover {
@@ -65,12 +65,12 @@
 }
 
 .agent-config-save {
-  padding: 0.4375rem 1rem;
+  padding:var(--space-xs) var(--space-2xl);
   border: 1px solid var(--signal);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-2);
   background: var(--signal);
   color: var(--paper);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
   font-weight: 500;
 }
 

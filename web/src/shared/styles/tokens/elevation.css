@@ -1,0 +1,34 @@
+/*
+ * 层次尺度
+ *
+ * 改造前全局只有一个 --shadow，其余浮起效果各写各的，13 处一次性阴影全部把颜色
+ * 写死成 rgb(20 28 23 / X%)，暗色主题下既不换色也不加深，层次因此塌陷。
+ * 现按抬升高度分成 5 档，偏移与模糊半径全局统一，颜色与浓度交给两个变量：
+ *   --shadow-hue   阴影基色，由各主题在 color-themes.css 里给出
+ *   --shadow-boost 不透明度倍率，暗色主题需要更重的阴影才能拉开层次
+ * 阶梯的不透明度按改造前各档的主力取值校准，因此亮色主题下观感基本不变。
+ *
+ * --shadow 是历史别名，独立保留改造前的精确数值，20 处既有引用零回归。
+ */
+:root {
+  --elevation-0: none;
+  /* 微起：悬停反馈、贴边工具条 */
+  --elevation-1: 0 1px 3px rgb(var(--shadow-hue) / calc(5% * var(--shadow-boost)));
+  /* 卡片：列表项、消息气泡、区块容器 */
+  --elevation-2: 0 2px 8px rgb(var(--shadow-hue) / calc(8% * var(--shadow-boost)));
+  /* 浮层：下拉菜单、悬浮提示条、导航轨 */
+  --elevation-3: 0 6px 20px rgb(var(--shadow-hue) / calc(12% * var(--shadow-boost)));
+  /* 弹出面板：模型选择器、附件面板 */
+  --elevation-4: 0 16px 44px rgb(var(--shadow-hue) / calc(16% * var(--shadow-boost)));
+  /* 对话框：需要盖住整页内容的最高层 */
+  --elevation-5: 0 24px 72px rgb(var(--shadow-hue) / calc(22% * var(--shadow-boost)));
+
+  /* 状态光晕：运行中指示灯外扩的一圈信号色 */
+  --ring-signal: 0 0 0 4px var(--signal-soft);
+  /* 焦点环与危险态环，与 :focus-visible 的 outline 配合使用 */
+  --ring-focus: 0 0 0 2px color-mix(in srgb, var(--signal) 45%, transparent);
+  --ring-danger: 0 0 0 2px color-mix(in srgb, var(--danger) 28%, transparent);
+
+  /* 历史别名，数值与改造前一致，新代码请使用 elevation 档位 */
+  --shadow: 0 16px 42px rgb(var(--shadow-hue) / calc(10% * var(--shadow-boost)));
+}

@@ -1,7 +1,7 @@
 .permission-request-card {
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--signal) 34%, var(--technical-border));
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-4);
   background: color-mix(in srgb, var(--signal) 4%, var(--technical-surface));
   color: var(--technical-text);
 }
@@ -20,10 +20,10 @@
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) 14px;
   align-items: center;
-  gap: 9px;
+  gap:var(--space-sm);
   width: 100%;
   min-height: 42px;
-  padding: 6px 10px;
+  padding:var(--space-xs) var(--space-md);
   border: 0;
   background: transparent;
   color: inherit;
@@ -41,7 +41,7 @@
   width: 24px;
   height: 24px;
   place-items: center;
-  border-radius: 7px;
+  border-radius:var(--radius-2);
   background: color-mix(in srgb, var(--signal) 10%, var(--technical-surface-muted));
   color: var(--signal);
 }
@@ -54,33 +54,33 @@
 .permission-request-copy {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap:var(--space-sm);
   min-width: 0;
 }
 
 .permission-request-copy strong {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size:var(--text-sm);
   font-weight: 600;
 }
 
 .permission-request-copy span {
   overflow: hidden;
   color: var(--ink-soft);
-  font: 400 10px var(--font-code);
+  font:400 var(--text-2xs) var(--font-code);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .permission-request-head > svg {
   color: var(--ink-soft);
-  transition: transform 140ms ease;
+  transition:transform var(--duration-base) ease;
 }
 
 .permission-request-body {
   display: grid;
-  gap: 10px;
-  padding: 10px;
+  gap:var(--space-md);
+  padding:var(--space-md);
   border-top: 1px solid color-mix(in srgb, var(--technical-border) 72%, transparent);
 }
 
@@ -88,25 +88,25 @@
 .permission-request-body .edit-tool-view {
   overflow: hidden;
   border: 1px solid var(--technical-border);
-  border-radius: 8px;
+  border-radius:var(--radius-3);
 }
 
 .permission-argument-list {
   display: grid;
-  gap: 8px;
+  gap:var(--space-sm);
   margin: 0;
 }
 
 .permission-argument-list > div {
   display: grid;
   grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
-  gap: 12px;
+  gap:var(--space-lg);
   align-items: start;
 }
 
 .permission-argument-list dt {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size:var(--text-xs);
 }
 
 .permission-argument-list dd {
@@ -114,34 +114,34 @@
   margin: 0;
   overflow-wrap: anywhere;
   color: var(--technical-text);
-  font: 11px/1.5 var(--font-code);
+  font:var(--text-xs)/1.5 var(--font-code);
   white-space: pre-wrap;
 }
 
 .permission-request-actions {
   display: grid;
-  gap: 8px;
-  padding-top: 2px;
+  gap:var(--space-sm);
+  padding-top:var(--space-3xs);
 }
 
 .permission-request-buttons {
   display: flex;
   justify-content: flex-end;
-  gap: 7px;
+  gap:var(--space-xs);
   flex-wrap: wrap;
 }
 
 .permission-action,
 .permission-reply-submit {
   min-height: 28px;
-  padding: 4px 10px;
+  padding:var(--space-2xs) var(--space-md);
 }
 
 .permission-request-inline-reply {
   display: grid;
-  gap: 5px;
+  gap:var(--space-2xs);
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size:var(--text-xs);
 }
 
 .permission-reply-submit {
@@ -149,50 +149,50 @@
 }
 
 .permission-request-error {
-  padding: 7px 9px;
+  padding:var(--space-xs) var(--space-sm);
   border: 1px solid color-mix(in srgb, var(--danger) 25%, var(--line));
-  border-radius: 7px;
+  border-radius:var(--radius-2);
   color: var(--danger);
-  font-size: 11px;
+  font-size:var(--text-xs);
 }
 
 .permission-request-ended {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size:var(--text-xs);
 }
 
 .permission-resolved-reply {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 9px;
+  gap:var(--space-sm);
   color: var(--technical-text);
-  font-size: 12px;
+  font-size:var(--text-sm);
 }
 
 .permission-resolved-reply span {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size:var(--text-xs);
 }
 
 .permission-auto-audit-badge {
   display: inline-flex;
   align-items: center;
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: 999px;
+  margin-left:var(--space-xs);
+  padding:1px var(--space-xs);
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--signal) 14%, transparent);
   color: var(--signal);
-  font-size: 10px;
+  font-size:var(--text-2xs);
   font-weight: 500;
   white-space: nowrap;
 }
 
 .permission-auto-audit-hint {
-  margin: 0 0 8px;
-  padding: 6px 8px;
-  border-radius: 7px;
+  margin:0 0 var(--space-sm);
+  padding:var(--space-xs) var(--space-sm);
+  border-radius:var(--radius-2);
   background: color-mix(in srgb, var(--signal) 8%, transparent);
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size:var(--text-xs);
   line-height: 1.45;
 }

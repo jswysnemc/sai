@@ -1,9 +1,9 @@
 .context-prompt-banner {
   width: 100%;
   max-width: 100%;
-  margin: 4px 0 12px;
+  margin:var(--space-2xs) 0 var(--space-lg);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius:var(--radius-4);
   background: var(--control-surface);
   overflow: hidden;
 }
@@ -11,10 +11,10 @@
 .context-prompt-banner-head {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap:var(--space-md);
   width: 100%;
   margin: 0;
-  padding: 10px 12px;
+  padding:var(--space-md) var(--space-lg);
   border: 0;
   background: transparent;
   color: inherit;
@@ -32,8 +32,8 @@
   height: 22px;
   margin-top: 1px;
   place-items: center;
-  border-radius: 6px;
-  color: var(--ink-muted);
+  border-radius:var(--radius-2);
+  color: var(--ink-soft);
   background: color-mix(in srgb, var(--paper-raised) 80%, var(--line));
   flex: 0 0 auto;
 }
@@ -42,53 +42,53 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 2px;
+  gap:var(--space-3xs);
   min-width: 0;
 }
 
 .context-prompt-banner-title {
-  font-size: 0.8125rem;
+  font-size:var(--text-base);
   font-weight: 600;
   color: var(--ink);
   letter-spacing: -0.01em;
 }
 
 .context-prompt-banner-subtitle {
-  font-size: 0.75rem;
-  color: var(--ink-muted);
+  font-size:var(--text-sm);
+  color: var(--ink-soft);
   line-height: 1.35;
 }
 
 .context-prompt-banner-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
+  gap:var(--space-xs);
+  margin-top:var(--space-xs);
 }
 
 .context-prompt-banner-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap:var(--space-2xs);
   max-width: 100%;
-  padding: 2px 7px;
+  padding:var(--space-3xs) var(--space-xs);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--paper-raised);
   color: var(--ink-soft);
-  font-size: 0.6875rem;
+  font-size:var(--text-xs);
   line-height: 1.3;
 }
 
 .context-prompt-banner-tag.muted {
-  color: var(--ink-muted);
+  color: var(--ink-soft);
 }
 
 .context-prompt-banner-chevron {
   flex: 0 0 auto;
-  margin-top: 4px;
-  color: var(--ink-muted);
-  transition: transform 0.15s ease;
+  margin-top:var(--space-2xs);
+  color: var(--ink-soft);
+  transition:transform var(--duration-base) ease;
 }
 
 .context-prompt-banner-chevron.rotate {
@@ -101,7 +101,7 @@
   max-height: none;
   overflow: visible;
   border-top: 1px solid var(--line);
-  padding: 14px 14px 16px;
+  padding:var(--space-xl) var(--space-xl) var(--space-2xl);
   background: color-mix(in srgb, var(--paper) 88%, var(--control-surface));
 }
 
@@ -115,10 +115,10 @@
   height: 1.75rem;
   margin: 0;
   border: 1px solid var(--line-strong, var(--line));
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--paper-raised, var(--paper));
   color: var(--ink-soft);
-  box-shadow: 0 6px 20px rgb(20 28 23 / 14%);
+  box-shadow: var(--elevation-3);
   cursor: pointer;
 }
 
@@ -131,7 +131,7 @@
 .context-prompt-banner-markdown {
   min-width: 0;
   color: var(--ink-soft);
-  font-size: 0.875rem;
+  font-size:var(--text-lg);
   line-height: 1.65;
 }
 
@@ -152,11 +152,11 @@
 .context-prompt-banner-markdown .markdown-body h2 {
   padding-bottom: 0.35em;
   border-bottom: 1px solid var(--line);
-  font-size: 1.05rem;
+  font-size:var(--text-2xl);
 }
 
 .context-prompt-banner-markdown .markdown-body h3 {
-  font-size: 0.95rem;
+  font-size:var(--text-xl);
   color: var(--ink);
 }
 
@@ -184,24 +184,24 @@
 }
 
 .context-prompt-banner-status {
-  color: var(--ink-muted);
-  font-size: 0.75rem;
+  color: var(--ink-soft);
+  font-size:var(--text-sm);
 }
 
 .context-prompt-banner-status.error {
   color: var(--danger, #b42318);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 48rem) {
   .context-prompt-banner-head {
-    padding: 9px 10px;
+    padding:var(--space-sm) var(--space-md);
   }
 
   .context-prompt-banner-body {
-    padding: 12px 10px 14px;
+    padding:var(--space-lg) var(--space-md) var(--space-xl);
   }
 
   .context-prompt-banner-markdown {
-    font-size: 0.8125rem;
+    font-size:var(--text-base);
   }
 }

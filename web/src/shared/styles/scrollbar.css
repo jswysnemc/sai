@@ -74,7 +74,7 @@
 /* 4. 默认隐藏滑块，悬停容器或滚动中显示 */
 *::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   background-clip: padding-box;
 }

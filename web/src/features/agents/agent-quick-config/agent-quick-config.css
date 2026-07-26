@@ -1,19 +1,19 @@
 .agent-quick-grid {
   display: grid;
-  gap: 0.875rem;
+  gap:var(--space-xl);
 }
 
 .agent-quick-field {
   display: grid;
-  gap: 0.375rem;
+  gap:var(--space-xs);
 }
 
 .agent-quick-field > span {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap:var(--space-xs);
   color: var(--ink-soft);
-  font-size: 0.6875rem;
+  font-size:var(--text-xs);
   font-weight: 500;
 }
 
@@ -26,15 +26,15 @@
 .agent-quick-error {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.6875rem;
+  font-size:var(--text-xs);
   line-height: 1.5;
 }
 
 .agent-quick-state,
 .agent-quick-error {
-  padding: 0.75rem;
+  padding:var(--space-lg);
   border: 1px solid var(--line);
-  border-radius: 0.4375rem;
+  border-radius:var(--radius-2);
   background: var(--paper-deep);
 }
 
@@ -45,6 +45,6 @@
 
 @media (max-width: 40rem) {
   .agent-quick-grid {
-    gap: 0.75rem;
+    gap:var(--space-lg);
   }
 }

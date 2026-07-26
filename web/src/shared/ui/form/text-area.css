@@ -1,14 +1,18 @@
 .ui-text-area {
   width: 100%;
-  min-height: 66px;
-  padding: 8px 9px;
+  min-height: 4.125rem;
+  padding:var(--space-sm) var(--space-sm);
   resize: vertical;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius:var(--radius-3);
   outline: 0;
   background: var(--paper-raised);
   color: var(--ink);
-  font: 12px/1.5 var(--font-sans);
+  font:var(--text-sm)/1.5 var(--font-ui);
 }
 
-.ui-text-area:focus { border-color: var(--line-strong); }
+/* 边框加深一档不足以标示焦点，配合焦点环才能在键盘操作时看清落点 */
+.ui-text-area:focus {
+  border-color: var(--signal);
+  box-shadow: var(--ring-focus);
+}

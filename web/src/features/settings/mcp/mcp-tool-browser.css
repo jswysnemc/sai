@@ -1,7 +1,7 @@
 .mcp-tool-browser {
-  margin: 0.9rem 1rem 0;
+  margin:var(--space-xl) var(--space-2xl) 0;
   border: 1px solid var(--line);
-  border-radius: 0.65rem;
+  border-radius:var(--radius-4);
   overflow: hidden;
   background: var(--paper-raised);
 }
@@ -10,18 +10,18 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem;
+  gap:var(--space-2xl);
+  padding:var(--space-lg);
   border-bottom: 1px solid var(--line);
 }
 
 .mcp-tool-browser-head > div {
   display: grid;
-  gap: 0.18rem;
+  gap:var(--space-3xs);
 }
 
-.mcp-tool-browser-head strong { font-size: 0.82rem; }
-.mcp-tool-browser-head small { color: var(--ink-soft); font-size: 0.72rem; }
+.mcp-tool-browser-head strong { font-size:var(--text-base); }
+.mcp-tool-browser-head small { color: var(--ink-soft); font-size:var(--text-sm); }
 
 .mcp-tool-browser-body {
   display: grid;
@@ -32,7 +32,7 @@
 
 .mcp-tool-list {
   overflow: auto;
-  padding: 0.4rem;
+  padding:var(--space-xs);
   border-right: 1px solid var(--line);
 }
 
@@ -40,11 +40,11 @@
   display: grid;
   width: 100%;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.5rem;
+  gap:var(--space-sm);
   align-items: start;
-  padding: 0.55rem;
+  padding:var(--space-sm);
   border: 0;
-  border-radius: 0.45rem;
+  border-radius:var(--radius-3);
   color: var(--ink-soft);
   background: transparent;
   text-align: left;
@@ -56,18 +56,18 @@
   background: var(--paper-deep);
 }
 
-.mcp-tool-list span { min-width: 0; display: grid; gap: 0.16rem; }
-.mcp-tool-list strong { overflow: hidden; font-family: "Fira Code", monospace; font-size: 0.72rem; text-overflow: ellipsis; white-space: nowrap; }
-.mcp-tool-list small { display: -webkit-box; overflow: hidden; color: var(--ink-soft); font-size: 0.68rem; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.mcp-tool-list span { min-width: 0; display: grid; gap:var(--space-3xs); }
+.mcp-tool-list strong { overflow: hidden; font-family: "Fira Code", monospace; font-size:var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
+.mcp-tool-list small { display: -webkit-box; overflow: hidden; color: var(--ink-soft); font-size:var(--text-xs); line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 
-.mcp-tool-detail { min-width: 0; overflow: auto; padding: 0.8rem; }
-.mcp-tool-detail-title { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
-.mcp-tool-detail-title span { display: flex; min-width: 0; align-items: center; gap: 0.4rem; font-weight: 600; font-size: 0.82rem; }
-.mcp-tool-detail-title code { overflow: hidden; color: var(--ink-soft); font-size: 0.66rem; text-overflow: ellipsis; white-space: nowrap; }
-.mcp-tool-detail p { margin: 0.65rem 0; color: var(--ink-soft); font-size: 0.76rem; line-height: 1.55; }
-.mcp-tool-schema-title { display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.35rem; color: var(--ink-soft); font-size: 0.7rem; font-weight: 600; }
-.mcp-tool-detail pre { min-height: 9rem; margin: 0; padding: 0.7rem; overflow: auto; border: 1px solid var(--line); border-radius: 0.5rem; background: var(--code-surface); color: var(--code-text); font-family: "Fira Code", monospace; font-size: 0.68rem; line-height: 1.55; }
-.mcp-tool-empty { display: flex; min-height: 8rem; align-items: center; justify-content: center; gap: 0.5rem; padding: 1rem; color: var(--ink-soft); font-size: 0.76rem; }
+.mcp-tool-detail { min-width: 0; overflow: auto; padding:var(--space-lg); }
+.mcp-tool-detail-title { display: flex; align-items: center; justify-content: space-between; gap:var(--space-lg); }
+.mcp-tool-detail-title span { display: flex; min-width: 0; align-items: center; gap:var(--space-xs); font-weight: 600; font-size:var(--text-base); }
+.mcp-tool-detail-title code { overflow: hidden; color: var(--ink-soft); font-size:var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.mcp-tool-detail p { margin:var(--space-md) 0; color: var(--ink-soft); font-size:var(--text-sm); line-height: 1.55; }
+.mcp-tool-schema-title { display: flex; align-items: center; gap:var(--space-xs); margin-bottom:var(--space-xs); color: var(--ink-soft); font-size:var(--text-xs); font-weight: 600; }
+.mcp-tool-detail pre { min-height: 9rem; margin: 0; padding:var(--space-lg); overflow: auto; border: 1px solid var(--line); border-radius:var(--radius-3); background: var(--code-surface); color: var(--code-text); font-family: "Fira Code", monospace; font-size:var(--text-xs); line-height: 1.55; }
+.mcp-tool-empty { display: flex; min-height: 8rem; align-items: center; justify-content: center; gap:var(--space-sm); padding:var(--space-2xl); color: var(--ink-soft); font-size:var(--text-sm); }
 
 @media (max-width: 48rem) {
   .mcp-tool-browser-head { align-items: stretch; flex-direction: column; }

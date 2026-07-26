@@ -1,6 +1,6 @@
 .agent-permissions-panel {
   display: grid;
-  gap: 0.625rem;
+  gap:var(--space-md);
   min-width: 0;
   min-height: 0;
 }
@@ -8,7 +8,7 @@
 .agent-permissions-toolbar {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap:var(--space-sm);
   min-width: 0;
 }
 
@@ -16,12 +16,12 @@
   display: flex;
   flex: 1 1 14rem;
   align-items: center;
-  gap: 0.4375rem;
+  gap:var(--space-xs);
   min-width: 10rem;
   height: 2rem;
-  padding: 0 0.625rem;
+  padding:0 var(--space-md);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-2);
   background: var(--paper);
   color: var(--ink-soft);
 }
@@ -38,7 +38,7 @@
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
 }
 
 .agent-permissions-search input::placeholder {
@@ -48,7 +48,7 @@
 .agent-permissions-summary {
   flex: 0 0 auto;
   color: var(--ink-soft);
-  font-size: 0.6875rem;
+  font-size:var(--text-xs);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -56,22 +56,22 @@
 .agent-permissions-actions {
   display: flex;
   flex: 0 0 auto;
-  gap: 0.375rem;
+  gap:var(--space-xs);
 }
 
 .agent-permissions-actions button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.3125rem;
+  gap:var(--space-2xs);
   min-height: 2rem;
-  padding: 0 0.625rem;
+  padding:0 var(--space-md);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-2);
   background: var(--control-surface);
   color: var(--ink);
   font: inherit;
-  font-size: 0.6875rem;
+  font-size:var(--text-xs);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -96,9 +96,9 @@
   min-height: 5rem;
   margin: 0;
   border: 1px dashed var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-2);
   color: var(--ink-soft);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
 }
 
 .agent-tool-permission-groups {
@@ -106,26 +106,26 @@
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
   grid-auto-rows: max-content;
   align-content: start;
-  gap: 0.625rem;
+  gap:var(--space-md);
   max-height: min(28rem, 52vh);
   overflow: auto;
-  padding-right: 0.125rem;
+  padding-right:var(--space-3xs);
 }
 
 .agent-tool-permission-group {
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-2);
   background: var(--paper);
 }
 
 .agent-tool-permission-group-head {
   display: flex;
   align-items: center;
-  gap: 0.4375rem;
+  gap:var(--space-xs);
   min-height: 2rem;
-  padding: 0 0.625rem;
+  padding:0 var(--space-md);
   border-bottom: 1px solid var(--line);
   background: var(--control-surface);
 }
@@ -134,28 +134,28 @@
 .agent-tool-permission-group-head span {
   margin-left: auto;
   color: var(--ink-soft);
-  font-size: 0.6875rem;
+  font-size:var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 
 .agent-tool-permission-items {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 0.125rem;
-  padding: 0.375rem;
+  gap:var(--space-3xs);
+  padding:var(--space-xs);
 }
 
 .agent-tool-permission-item {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap:var(--space-sm);
   min-width: 0;
   min-height: 2.25rem;
-  padding: 0.375rem 0.5rem;
+  padding:var(--space-xs) var(--space-sm);
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-2);
   color: var(--ink);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
   cursor: pointer;
 }
 
@@ -170,14 +170,14 @@
 
 .agent-tool-permission-copy {
   display: grid;
-  gap: 0.125rem;
+  gap:var(--space-3xs);
   min-width: 0;
 }
 
 .agent-tool-permission-copy strong {
   overflow: hidden;
   font-family: var(--font-code);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -186,7 +186,7 @@
 .agent-tool-permission-copy small {
   overflow: hidden;
   color: var(--ink-soft);
-  font-size: 0.6875rem;
+  font-size:var(--text-xs);
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -201,7 +201,7 @@
 .agent-tool-permission-group-title strong {
   overflow: hidden;
   color: var(--ink);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -209,7 +209,7 @@
 .agent-tool-permission-group-title small {
   overflow: hidden;
   color: var(--ink-soft);
-  font-size: 0.625rem;
+  font-size:var(--text-2xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -235,7 +235,7 @@
   max-height: min(28rem, 52vh);
   overflow: auto;
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-2);
   background: var(--paper);
 }
 
@@ -243,9 +243,9 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 9rem;
   align-items: center;
-  gap: 0.75rem;
+  gap:var(--space-lg);
   min-height: 3.25rem;
-  padding: 0.4375rem 0.625rem;
+  padding:var(--space-xs) var(--space-md);
 }
 
 .agent-skill-permission-row + .agent-skill-permission-row {
@@ -258,7 +258,7 @@
 
 .agent-skill-permission-main {
   display: grid;
-  gap: 0.1875rem;
+  gap:var(--space-3xs);
   min-width: 0;
 }
 
@@ -266,7 +266,7 @@
   overflow: hidden;
   color: var(--ink);
   font-family: var(--font-code);
-  font-size: 0.75rem;
+  font-size:var(--text-sm);
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -275,7 +275,7 @@
 .agent-skill-permission-main span {
   overflow: hidden;
   color: var(--ink-soft);
-  font-size: 0.6875rem;
+  font-size:var(--text-xs);
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -285,7 +285,7 @@
   width: 9rem;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 48rem) {
   .agent-permissions-toolbar {
     flex-wrap: wrap;
   }
@@ -308,7 +308,7 @@
   }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 36rem) {
   .agent-permissions-search {
     flex-basis: 100%;
   }
@@ -331,7 +331,7 @@
 
   .agent-skill-permission-row {
     grid-template-columns: minmax(0, 1fr);
-    gap: 0.375rem;
+    gap:var(--space-xs);
   }
 
   .agent-skill-permission-select {
@@ -343,15 +343,15 @@
 .agent-skill-permission-name {
   display: flex;
   align-items: center;
-  gap: 0.4375rem;
+  gap:var(--space-xs);
   min-width: 0;
 }
 
 .agent-skill-permission-name em {
   flex: 0 0 auto;
-  padding: 0.0625rem 0.375rem;
-  border-radius: 999px;
-  font: 500 0.625rem/1.3 var(--font-code);
+  padding:0.0625rem var(--space-xs);
+  border-radius: var(--radius-pill);
+  font:500 var(--text-2xs)/1.3 var(--font-code);
   font-style: normal;
 }
 
@@ -372,4 +372,10 @@
 
 .agent-skill-permission-row[data-permission="full"] {
   background: color-mix(in srgb, var(--signal) 5%, transparent);
+}
+
+/* 去掉默认轮廓后补焦点环，键盘操作才看得出焦点落点 */
+.agent-permissions-search:focus-within {
+  border-color: var(--signal);
+  box-shadow: var(--ring-focus);
 }

@@ -2,17 +2,17 @@
 
 .settings-skeleton {
   display: grid;
-  gap: 1.25rem;
-  padding: 0.5rem 0;
+  gap:var(--space-3xl);
+  padding:var(--space-sm) 0;
 }
 
 .skeleton-block {
   display: grid;
-  gap: 0.5rem;
+  gap:var(--space-sm);
 }
 
 .skeleton-line {
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-2);
   background: var(--paper-deep);
   animation: skeleton-pulse 1.4s ease-in-out infinite;
 }

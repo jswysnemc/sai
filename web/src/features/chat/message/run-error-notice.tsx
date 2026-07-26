@@ -46,7 +46,7 @@ export function RunErrorNotice({ message, detail, onRetry }: RunErrorNoticeProps
       {onRetry && (
         <Button
           className="run-error-retry"
-          variant={interrupted || disconnect ? "secondary" : "primary"}
+          variant="secondary"
           onClick={onRetry}
         >
           <RotateCcw size={12} />
