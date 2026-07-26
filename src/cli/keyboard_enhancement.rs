@@ -26,6 +26,20 @@ pub(super) const fn strategy_for_platform(is_windows: bool) -> KeyboardEnhanceme
     }
 }
 
+/// 探测并缓存终端对键盘增强协议的支持情况。
+///
+/// 探测需要往返查询终端，进程内只做一次；必须在 raw mode 下调用，
+/// 当前唯一入口（TerminalInputGuard 启用序列）满足该前提。
+///
+/// 返回:
+/// - 终端是否支持 kitty 键盘增强协议
+fn terminal_supports_enhancement() -> bool {
+    use std::sync::OnceLock;
+    static SUPPORTED: OnceLock<bool> = OnceLock::new();
+    *SUPPORTED
+        .get_or_init(|| crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false))
+}
+
 /// 记录当前终端是否成功启用了键盘增强协议。
 #[derive(Debug, Default)]
 pub(super) struct KeyboardEnhancementState {
@@ -44,7 +58,11 @@ impl KeyboardEnhancementState {
         if strategy_for_platform(cfg!(windows)) == KeyboardEnhancementStrategy::Skip {
             return Self::default();
         }
-
+        // 真实探测终端能力：写入 push 序列几乎总是"成功"，
+        // 不能作为支持与否的依据；不支持的终端不写入任何协议序列
+        if !terminal_supports_enhancement() {
+            return Self::default();
+        }
         let active = execute!(
             writer,
             PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)

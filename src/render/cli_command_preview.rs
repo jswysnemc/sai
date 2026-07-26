@@ -86,7 +86,7 @@ impl CliCommandPreview {
     /// 清除当前实时摘要并释放终端行。
     pub(crate) fn clear(&mut self) -> Result<()> {
         self.stop_animation();
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         state.active = false;
         if state.rendered_rows == 0 {
             return Ok(());
@@ -128,7 +128,7 @@ impl CliCommandPreview {
 
     #[cfg(test)]
     pub(super) fn display_texts(&self) -> (String, String) {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         (
             state.stdout.display_text().into_owned(),
             state.stderr.display_text().into_owned(),
@@ -144,7 +144,7 @@ impl Drop for CliCommandPreview {
 
 /// 重绘命令输出与内嵌 working 动效行。
 fn redraw_preview(state: &Arc<Mutex<PreviewState>>) -> Result<bool> {
-    let mut guard = state.lock().unwrap();
+    let mut guard = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     if !guard.active {
         return Ok(false);
     }
@@ -185,7 +185,7 @@ mod tests {
     fn begin_resets_previous_command_buffers() {
         let mut preview = CliCommandPreview::new();
         {
-            let mut state = preview.state.lock().unwrap();
+            let mut state = preview.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             state.stdout.append(b"first", 0);
             state.stderr.append(b"error", 0);
         }

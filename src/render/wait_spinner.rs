@@ -57,6 +57,8 @@ struct WaitSpinnerState {
     seed: u64,
     anchor_row: u16,
     lines_rendered: u16,
+    /// 启动时预留的行数；运行中新增的副状态不得超出该预留
+    reserved_lines: u16,
     style: SpinnerStyle,
 }
 
@@ -102,7 +104,8 @@ impl WaitSpinner {
         sub_phase: Option<String>,
         started_at: Instant,
     ) -> Self {
-        let anchor_row = reserve_spinner_rows(spinner_line_count(sub_phase.as_deref()));
+        let reserved_lines = spinner_line_count(sub_phase.as_deref());
+        let anchor_row = reserve_spinner_rows(reserved_lines);
         let state = Arc::new(Mutex::new(WaitSpinnerState {
             phase,
             sub_phase,
@@ -110,6 +113,7 @@ impl WaitSpinner {
             seed: spinner_seed(),
             anchor_row,
             lines_rendered: 0,
+            reserved_lines,
             style,
         }));
         let running = Arc::new(AtomicBool::new(true));
@@ -247,8 +251,17 @@ fn render_frame(frame: usize, state: &WaitSpinnerState) -> (String, u16) {
     };
     match &state.sub_phase {
         Some(sub_phase) if !sub_phase.trim().is_empty() => {
-            let sub_line = format!("  {}", paint_secondary(sub_phase));
-            (format!("{main_line}\n{sub_line}"), 2)
+            // 启动后才出现的副状态并入主行：预留只有一行时强写第二行
+            // 会覆盖未预留的下一行内容，锚点贴底时还会越界重叠
+            if state.reserved_lines >= 2 {
+                let sub_line = format!("  {}", paint_secondary(sub_phase));
+                (format!("{main_line}\n{sub_line}"), 2)
+            } else {
+                (
+                    format!("{main_line} {}", paint_secondary(sub_phase)),
+                    1,
+                )
+            }
         }
         _ => (main_line, 1),
     }
@@ -655,8 +668,22 @@ mod tests {
             seed: 0,
             anchor_row: 0,
             lines_rendered: 0,
+            reserved_lines: spinner_line_count(sub_phase),
             style,
         }
+    }
+
+    /// 验证启动后新增的副状态并入主行，不超出启动时预留的一行。
+    #[test]
+    fn late_sub_phase_stays_within_reserved_single_line() {
+        let mut state = make_state("等待", None, SpinnerStyle::Scanner);
+        state.sub_phase = Some("模型 gpt".to_string());
+
+        let (frame, lines) = render_frame(0, &state);
+
+        assert_eq!(lines, 1);
+        assert!(!frame.contains('\n'));
+        assert!(frame.contains("模型 gpt"));
     }
 
     #[test]

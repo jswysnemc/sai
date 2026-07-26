@@ -38,6 +38,9 @@ impl StreamRenderer {
             // Summary 模式：一开始就显示思考块，并随 chunk 更新行数/字符数
             self.finish_live_tool_status()?;
             self.finalize_tools_summary()?;
+            // 先停掉等待动画再写思考行：顺序颠倒时 spinner 清理会把
+            // 刚写下的思考行当作锚点行一并擦掉，表现为首个思考片段闪失
+            self.set_work_status(WorkStatus::Thinking, false)?;
             if self.mode != Some(ChatStreamKind::Reasoning) {
                 self.reasoning_started = Some(Instant::now());
             }
@@ -48,8 +51,6 @@ impl StreamRenderer {
             self.summary
                 .add_reasoning_text_with_elapsed(&text, elapsed)?;
             self.mode = Some(ChatStreamKind::Reasoning);
-            // 有思考内容时不显示 working 文案
-            self.set_work_status(WorkStatus::Thinking, false)?;
             return Ok(());
         }
         // 流式正文/思考期间不在末行叠状态；工具间隙再恢复
