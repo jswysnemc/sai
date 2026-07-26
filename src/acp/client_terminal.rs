@@ -52,24 +52,51 @@ impl TerminalRegistry {
             .and_then(Value::as_str)
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| governance.workspace().to_path_buf());
-        // 2. 复用 sai 的 shell 构造，沙箱与自带 run_command 完全一致
-        let (_, mut builder) = crate::tools::command::build_shell_command(
+        // 2. 复用 sai 的 shell 构造，沙箱与自带 run_command 完全一致；
+        //    首选 shell 不存在时依次回退，与自带命令的行为保持一致
+        let candidates = crate::tools::command::build_shell_commands(
             &command,
             governance.command_shell(),
             sandboxed,
         )?;
-        builder
-            .current_dir(&cwd)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
-        for (key, value) in env_pairs(params) {
-            builder.env(key, value);
+        let env = env_pairs(params);
+        let mut spawned = None;
+        let mut last_error = None;
+        for (_, mut builder) in candidates {
+            builder
+                .current_dir(&cwd)
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .kill_on_drop(true);
+            for (key, value) in &env {
+                builder.env(key, value);
+            }
+            match builder.spawn() {
+                Ok(child) => {
+                    spawned = Some(child);
+                    break;
+                }
+                // 该 shell 不在这台机器上，换下一个候选
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    last_error = Some(error);
+                }
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("failed to start terminal command: {command}")
+                    })
+                }
+            }
         }
-        let mut child = builder
-            .spawn()
-            .with_context(|| format!("failed to start terminal command: {command}"))?;
+        let mut child = match spawned {
+            Some(child) => child,
+            None => {
+                let detail = last_error
+                    .map(|error| error.to_string())
+                    .unwrap_or_else(|| "no shell was available".to_string());
+                anyhow::bail!("failed to start terminal command: {command} ({detail})")
+            }
+        };
         let output = Arc::new(Mutex::new(String::new()));
         // 3. 标准输出与错误合并累积，读取端随时可取当前快照
         for stream in [
@@ -307,12 +334,23 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn sandboxed_commands_go_through_bwrap() {
-        let (program, _) =
-            crate::tools::command::build_shell_command("ls", "", true).unwrap();
-        assert_eq!(program, "bwrap");
+        let sandboxed = crate::tools::command::build_shell_commands("ls", "", true).unwrap();
+        assert_eq!(sandboxed[0].0, "bwrap");
 
-        let (plain, _) = crate::tools::command::build_shell_command("ls", "", false).unwrap();
-        assert_ne!(plain, "bwrap");
+        let plain = crate::tools::command::build_shell_commands("ls", "", false).unwrap();
+        assert_ne!(plain[0].0, "bwrap");
+    }
+
+    /// 候选列表必须非空，且在 Windows 上提供多个回退项。
+    ///
+    /// 首选 shell 不存在时要能换下一个，否则未装 pwsh 的机器上会出现
+    /// 「sai 自带命令能跑、外部内核跑不了」的割裂。
+    #[test]
+    fn shell_candidates_are_never_empty() {
+        let candidates = crate::tools::command::build_shell_commands("echo hi", "", false).unwrap();
+        assert!(!candidates.is_empty());
+        #[cfg(windows)]
+        assert!(candidates.len() > 1, "Windows 需要提供回退候选");
     }
 
     /// 终端生命周期：创建后可读输出、可等待退出、释放后不再可见。

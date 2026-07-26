@@ -1,6 +1,6 @@
 use super::progress::{CommandOutputBatch, CommandOutputStream};
 use crate::tools::ToolProgress;
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use std::io::ErrorKind;
 use std::process::{Output, Stdio};
 use std::time::Duration;
@@ -364,11 +364,15 @@ fn shell_commands(
     ])
 }
 
-/// 构造一条按需沙箱化的 shell 命令。
+/// 构造按需沙箱化的 shell 命令候选列表。
 ///
 /// 对外开放同一套构造逻辑，供 ACP 客户端的终端能力复用：
 /// 外部内核执行命令时走的沙箱与 sai 自带的 run_command 必须完全一致，
 /// 各写一份迟早会分叉出治理缺口。
+///
+/// 返回的是**候选列表**而非单条命令：Windows 上依次为 pwsh、powershell、cmd，
+/// 调用方要在首选不存在（`ErrorKind::NotFound`）时继续尝试下一个，
+/// 否则未装 pwsh 的机器上会出现「自带命令能跑、外部内核跑不了」的割裂。
 ///
 /// 参数:
 /// - `command`: 待执行命令
@@ -376,16 +380,17 @@ fn shell_commands(
 /// - `sandboxed`: 是否启用沙箱
 ///
 /// 返回:
-/// - 首选的 `(程序名, 命令)`
-pub(crate) fn build_shell_command(
+/// - 按优先级排列的 `(程序名, 命令)` 列表
+pub(crate) fn build_shell_commands(
     command: &str,
     configured_shell: &str,
     sandboxed: bool,
-) -> Result<(String, Command)> {
-    shell_commands(command, configured_shell, sandboxed)?
-        .into_iter()
-        .next()
-        .context("no shell command candidate was produced")
+) -> Result<Vec<(String, Command)>> {
+    let candidates = shell_commands(command, configured_shell, sandboxed)?;
+    if candidates.is_empty() {
+        bail!("no shell command candidate was produced")
+    }
+    Ok(candidates)
 }
 
 #[cfg(target_os = "linux")]
