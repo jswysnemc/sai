@@ -43,6 +43,7 @@ impl TranscriptStore {
     ///
     /// 返回:
     /// - 增量同步视图
+    #[cfg(test)]
     pub(crate) fn display_window(
         &mut self,
         width: usize,
