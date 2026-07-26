@@ -65,13 +65,28 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
             config.tools.command_shell.clone(),
         ),
         Field::new(
-            t(
-                "Command output filter (rtk proxy)",
-                "命令输出过滤器（rtk 代理）",
-            ),
+            // 标签同时展示 rtk 探测状态，便于判断 auto 档位是否会生效
+            if crate::tools::command::rtk_available() {
+                t(
+                    "Command output filter (rtk detected)",
+                    "命令输出过滤器（已检测到 rtk）",
+                )
+            } else {
+                t(
+                    "Command output filter (rtk not installed)",
+                    "命令输出过滤器（未检测到 rtk）",
+                )
+            },
             config.tools.command_filter.clone(),
         )
         .choices(&["auto", "rtk", "off"]),
+        Field::new(
+            t(
+                "rtk allowlist, comma separated; empty uses builtin (git/cargo/pytest...)",
+                "rtk 改写白名单，逗号分隔；留空用内置（git/cargo/pytest 等）",
+            ),
+            config.tools.command_filter_allowlist.join(", "),
+        ),
         Field::boolean(
             t("Progressive tool loading", "渐进式工具加载"),
             config.tools.progressive_loading_enabled,
@@ -161,7 +176,7 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
 /// 返回:
 /// - 全部字段解析成功时写入配置；否则返回首个解析错误
 fn apply_settings_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> {
-    let [tui_mode, cli_mode, terminal_shell, context_tokens, compaction_model, tools_enabled, tool_max_rounds, command_shell, command_filter, progressive_loading, background_commands, background_timeout, background_log_max, background_stop_grace, skills_enabled, skill_commands, reasoning, tool_calls, readable_names, wait_model, wait_thinking, transcript_rows] =
+    let [tui_mode, cli_mode, terminal_shell, context_tokens, compaction_model, tools_enabled, tool_max_rounds, command_shell, command_filter, command_filter_allowlist, progressive_loading, background_commands, background_timeout, background_log_max, background_stop_grace, skills_enabled, skill_commands, reasoning, tool_calls, readable_names, wait_model, wait_thinking, transcript_rows] =
         fields
     else {
         unreachable!("global settings field layout must remain complete")
@@ -203,6 +218,12 @@ fn apply_settings_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()>
     config.tools.max_rounds = max_rounds;
     config.tools.command_shell = command_shell.value.trim().to_string();
     config.tools.command_filter = command_filter.value.trim().to_string();
+    config.tools.command_filter_allowlist = command_filter_allowlist
+        .value
+        .split(',')
+        .map(|item| item.trim().to_string())
+        .filter(|item| !item.is_empty())
+        .collect();
     config.tools.progressive_loading_enabled = progressive_loading;
     config.tools.background_commands_enabled = background_commands;
     config.tools.background_command_timeout_seconds = timeout_seconds;

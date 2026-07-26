@@ -17,6 +17,8 @@ use crate::tools::ToolRegistry;
 
 use background_tasks::BackgroundRuntimeOwner;
 
+pub(crate) use rtk_filter::rtk_available;
+
 pub(crate) use background::{
     cleanup_background_tasks_for_user, list_background_tasks_for_user,
     read_background_task_output_for_user, start_background_task_for_user,

@@ -176,7 +176,11 @@ async fn run_command(
     }
     let command = required(&args, "command")?;
     // rtk 输出过滤：白名单命令改写为 rtk 代理，压缩进入上下文的命令输出
-    let rewritten = super::rtk_filter::rewrite_command(&command, &config.tools.command_filter);
+    let rewritten = super::rtk_filter::rewrite_command(
+        &command,
+        &config.tools.command_filter,
+        &config.tools.command_filter_allowlist,
+    );
     let filtered = rewritten.is_some();
     let command = rewritten.unwrap_or(command);
     let mut args = args;

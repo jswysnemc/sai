@@ -315,6 +315,9 @@ pub struct ToolsConfig {
     /// 命令输出过滤器：auto（探测到 rtk 时启用）/ rtk（强制）/ off（关闭）。
     #[serde(default = "default_command_filter")]
     pub command_filter: String,
+    /// 参与 rtk 改写的命令族白名单；留空使用内置默认列表。
+    #[serde(default)]
+    pub command_filter_allowlist: Vec<String>,
     #[serde(default = "default_true")]
     pub background_commands_enabled: bool,
     #[serde(default = "default_background_command_timeout_seconds")]

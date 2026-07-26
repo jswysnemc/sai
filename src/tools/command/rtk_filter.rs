@@ -1,10 +1,10 @@
 use serde_json::{json, Value};
 use std::sync::OnceLock;
 
-/// rtk 语义压缩收益明确的命令族白名单。
+/// rtk 语义压缩收益明确的内置命令族白名单。
 ///
 /// 读取类命令（ls/cat/grep）不改写：agent 常依赖其精确输出。
-const RTK_COMMAND_ALLOWLIST: &[&str] = &[
+pub(crate) const RTK_COMMAND_ALLOWLIST: &[&str] = &[
     "git", "cargo", "go", "npm", "pnpm", "yarn", "pytest", "jest", "tsc", "ruff", "docker",
     "kubectl",
 ];
@@ -17,10 +17,15 @@ const SHELL_META_CHARS: &[char] = &['|', '&', ';', '>', '<', '`', '$', '(', ')']
 /// 参数:
 /// - `command`: 原始命令文本
 /// - `mode`: 配置档位（auto / rtk / off）
+/// - `custom_allowlist`: 配置白名单；为空时使用内置默认列表
 ///
 /// 返回:
 /// - 需要改写时返回新命令；否则 None
-pub(super) fn rewrite_command(command: &str, mode: &str) -> Option<String> {
+pub(super) fn rewrite_command(
+    command: &str,
+    mode: &str,
+    custom_allowlist: &[String],
+) -> Option<String> {
     let mode = mode.trim().to_ascii_lowercase();
     if mode == "off" {
         return None;
@@ -31,18 +36,23 @@ pub(super) fn rewrite_command(command: &str, mode: &str) -> Option<String> {
     if !rtk_available() {
         return None;
     }
-    rewrite_with_availability(command, true)
+    rewrite_with_availability(command, custom_allowlist, true)
 }
 
 /// 判断命令是否满足改写条件并生成改写结果（探测结果由参数注入，便于测试）。
 ///
 /// 参数:
 /// - `command`: 原始命令文本
+/// - `custom_allowlist`: 配置白名单；为空时使用内置默认列表
 /// - `available`: rtk 是否可用
 ///
 /// 返回:
 /// - 需要改写时返回新命令
-fn rewrite_with_availability(command: &str, available: bool) -> Option<String> {
+fn rewrite_with_availability(
+    command: &str,
+    custom_allowlist: &[String],
+    available: bool,
+) -> Option<String> {
     if !available {
         return None;
     }
@@ -56,18 +66,23 @@ fn rewrite_with_availability(command: &str, available: bool) -> Option<String> {
     if first == "rtk" {
         return None;
     }
-    // 3. 仅白名单命令族改写：rtk 对它们有明确的语义压缩适配
-    if !RTK_COMMAND_ALLOWLIST.contains(&first) {
+    // 3. 仅白名单命令族改写：配置白名单优先，留空使用内置默认
+    let allowed = if custom_allowlist.is_empty() {
+        RTK_COMMAND_ALLOWLIST.contains(&first)
+    } else {
+        custom_allowlist.iter().any(|item| item.trim() == first)
+    };
+    if !allowed {
         return None;
     }
     Some(format!("rtk {trimmed}"))
 }
 
-/// 探测 rtk 是否可用（进程内缓存一次）。
+/// 探测 rtk 是否可用（进程内缓存一次，供工具与配置界面共用）。
 ///
 /// 返回:
 /// - PATH 中存在可执行 rtk 时返回 true
-fn rtk_available() -> bool {
+pub(crate) fn rtk_available() -> bool {
     static AVAILABLE: OnceLock<bool> = OnceLock::new();
     // 测试环境不依赖宿主机是否安装 rtk
     if cfg!(test) {
@@ -118,11 +133,11 @@ mod tests {
     #[test]
     fn rewrites_allowlisted_simple_commands() {
         assert_eq!(
-            rewrite_with_availability("git status", true),
+            rewrite_with_availability("git status", &[], true),
             Some("rtk git status".to_string())
         );
         assert_eq!(
-            rewrite_with_availability("  cargo test --lib  ", true),
+            rewrite_with_availability("  cargo test --lib  ", &[], true),
             Some("rtk cargo test --lib".to_string())
         );
     }
@@ -130,22 +145,33 @@ mod tests {
     #[test]
     fn skips_compound_and_unlisted_commands() {
         // 复合命令保持原样
-        assert_eq!(rewrite_with_availability("git status | head", true), None);
-        assert_eq!(rewrite_with_availability("cargo test && echo ok", true), None);
-        assert_eq!(rewrite_with_availability("git log > log.txt", true), None);
+        assert_eq!(rewrite_with_availability("git status | head", &[], true), None);
+        assert_eq!(rewrite_with_availability("cargo test && echo ok", &[], true), None);
+        assert_eq!(rewrite_with_availability("git log > log.txt", &[], true), None);
         // 非白名单命令不改写
-        assert_eq!(rewrite_with_availability("ls -la", true), None);
-        assert_eq!(rewrite_with_availability("cat src/main.rs", true), None);
+        assert_eq!(rewrite_with_availability("ls -la", &[], true), None);
+        assert_eq!(rewrite_with_availability("cat src/main.rs", &[], true), None);
         // 已是 rtk 调用不重复包装
-        assert_eq!(rewrite_with_availability("rtk git status", true), None);
+        assert_eq!(rewrite_with_availability("rtk git status", &[], true), None);
+    }
+
+    #[test]
+    fn custom_allowlist_overrides_builtin() {
+        let custom = vec!["mise".to_string(), "just".to_string()];
+        // 自定义白名单生效：内置条目不再改写，自定义条目改写
+        assert_eq!(rewrite_with_availability("git status", &custom, true), None);
+        assert_eq!(
+            rewrite_with_availability("just build", &custom, true),
+            Some("rtk just build".to_string())
+        );
     }
 
     #[test]
     fn unavailable_or_off_mode_disables_rewrite() {
-        assert_eq!(rewrite_with_availability("git status", false), None);
+        assert_eq!(rewrite_with_availability("git status", &[], false), None);
         // off / 未知档位直接关闭（探测都不触发）
-        assert_eq!(rewrite_command("git status", "off"), None);
-        assert_eq!(rewrite_command("git status", "unknown"), None);
+        assert_eq!(rewrite_command("git status", "off", &[]), None);
+        assert_eq!(rewrite_command("git status", "unknown", &[]), None);
     }
 
     #[test]

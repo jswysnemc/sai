@@ -306,6 +306,7 @@ impl Default for ToolsConfig {
             max_rounds: 0,
             command_shell: String::new(),
             command_filter: default_command_filter(),
+            command_filter_allowlist: Vec::new(),
             progressive_loading_enabled: false,
             background_commands_enabled: default_true(),
             background_command_timeout_seconds: default_background_command_timeout_seconds(),
