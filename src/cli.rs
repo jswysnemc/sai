@@ -12,10 +12,7 @@ use crate::state::StateStore;
 use crate::tools;
 use anyhow::{bail, Result};
 use crossterm::cursor::{self, Hide, MoveTo, Show};
-use crossterm::event::{
-    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEvent, KeyEventKind,
-    KeyModifiers,
-};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::style::{Attribute, Print, SetAttribute};
 use crossterm::terminal::{self, Clear, ClearType};
 use crossterm::{execute, queue};
@@ -34,6 +31,7 @@ mod chat;
 mod compaction;
 mod composer_tips;
 mod config_commands;
+mod confirm;
 mod fuzzy_select;
 mod history;
 mod init;
@@ -68,6 +66,7 @@ mod repl_turn;
 mod reset;
 mod sessions;
 mod skills_commands;
+mod terminal_restore;
 
 use alarm_worker::run_alarm_worker;
 pub(crate) use args::*;
@@ -91,7 +90,10 @@ use repl::run_repl;
 use repl_background::run_repl_background_manager;
 #[cfg(test)]
 use repl_commands::repl_command_suggestions;
-use repl_commands::{complete_repl_command, repl_command_rest, visible_repl_command_suggestions};
+use repl_commands::{
+    complete_repl_command, repl_command_rest, unknown_slash_command_hint,
+    visible_repl_command_suggestions,
+};
 use repl_editor::edit_input_buffer;
 use repl_input::read_repl_input;
 use repl_input_navigation::{move_cursor_down_by_visual_row, move_cursor_up_by_visual_row};
@@ -108,7 +110,32 @@ const REPL_ESC_CLEAR_WINDOW: Duration = Duration::from_millis(650);
 const REPL_CTRL_C_EXIT_WINDOW: Duration = Duration::from_millis(900);
 const THINKING_LEVELS: &[&str] = &["auto", "none", "low", "medium", "high", "xhigh", "max"];
 
+/// 已向用户完整展示过的失败。
+///
+/// 主入口捕获后只需以对应退出码结束进程，不再重复打印错误链。
+#[derive(Debug)]
+pub struct SilentExit {
+    pub code: i32,
+}
+
+impl std::fmt::Display for SilentExit {
+    /// 格式化为简短占位文本，仅在被意外打印时出现。
+    ///
+    /// 参数:
+    /// - `f`: 格式化器
+    ///
+    /// 返回:
+    /// - 格式化结果
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "exit code {}", self.code)
+    }
+}
+
+impl std::error::Error for SilentExit {}
+
 pub async fn run(cli: Cli) -> Result<()> {
+    // raw mode 或备用屏内 panic 时先恢复终端，否则用户 shell 不可用
+    terminal_restore::install_panic_hook();
     let paths = SaiPaths::new()?;
     let thinking_override = cli.thinking.clone();
     let mode_override = cli_mode_override(&cli);
@@ -208,11 +235,16 @@ pub async fn run(cli: Cli) -> Result<()> {
             .await
         }
         Some(Command::Set(args)) => run_set(&paths, args),
-        Some(Command::Clear(args)) => run_reset(&paths, args.scope.as_deref(), args.memory),
+        Some(Command::Clear(args)) => {
+            run_reset(&paths, args.scope.as_deref(), args.memory, args.yes)
+        }
         Some(Command::Compact(_)) => run_compaction(&paths).await,
         None => {
             let input = parse_message_input_flags(cli.message, cli.clipb, cli.web_search);
-            if input.message.is_empty() && !input.clipb && !input.web_search {
+            // 管道输入走一次性聊天路径，内容在 chat 层读作消息
+            let piped_stdin = !io::stdin().is_terminal();
+            if input.message.is_empty() && !input.clipb && !input.web_search && !piped_stdin {
+                chat::ensure_interactive_terminal_for_repl()?;
                 let mode = resolve_agent_mode(&paths, mode_override, PermissionSurface::Tui)?;
                 run_repl(&paths, mode, thinking_override.clone()).await
             } else {
@@ -613,12 +645,11 @@ fn prompt_permission_request_tui(
     runtime: &std::cell::RefCell<&mut ReplRuntime>,
 ) -> Result<()> {
     use crate::permission::{PermissionInteractionState, PermissionTransition};
-    use repl_input::{disable_repl_terminal_input, enable_repl_terminal_input};
 
     let mut state = PermissionInteractionState::new();
     let mut stdout = io::stdout();
     // 1. 独占 raw 输入，避免与主循环输入框事件竞争
-    let mut keyboard_enhancement = enable_repl_terminal_input(&mut stdout)?;
+    let mut terminal_guard = terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
     // 2. 选择项附着在工具视图下方（working 动效已在 sink 入口暂停）
     {
         let mut rt = runtime.borrow_mut();
@@ -690,7 +721,7 @@ fn prompt_permission_request_tui(
     })();
 
     // 3. 恢复终端模式，交回后续流式输出和下一轮输入
-    let _ = disable_repl_terminal_input(&mut stdout, &mut keyboard_enhancement);
+    let _ = terminal_guard.finish(&mut stdout);
     result
 }
 
@@ -719,11 +750,9 @@ fn prompt_question_request_tui(
     pending: &crate::question::PendingQuestion,
     runtime: &std::cell::RefCell<&mut ReplRuntime>,
 ) -> Result<()> {
-    use repl_input::{disable_repl_terminal_input, enable_repl_terminal_input};
-
     let mut stdout = io::stdout();
     // 1. 独占 raw 输入，避免与主循环输入框事件竞争
-    let mut keyboard_enhancement = enable_repl_terminal_input(&mut stdout)?;
+    let mut terminal_guard = terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
     {
         let mut rt = runtime.borrow_mut();
         rt.pause_for_permission_prompt()?;
@@ -733,7 +762,7 @@ fn prompt_question_request_tui(
         .unwrap_or_else(|err| crate::question::QuestionResponse::Unavailable(err.to_string()));
 
     // 2. 恢复终端模式；提问面板直接写过终端，受管区域需要在下次同步前重启
-    let _ = disable_repl_terminal_input(&mut stdout, &mut keyboard_enhancement);
+    let _ = terminal_guard.finish(&mut stdout);
     runtime.borrow_mut().mark_desynced();
     crate::question::resolve_question(&pending.id, response)
 }
