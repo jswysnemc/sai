@@ -171,6 +171,7 @@ impl TranscriptStore {
     ///
     /// 返回:
     /// - 当前 live 尾部的预换行 ANSI 行
+    #[cfg(test)]
     pub(crate) fn display_live_tail(
         &self,
         width: usize,
