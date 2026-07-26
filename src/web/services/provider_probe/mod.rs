@@ -10,7 +10,7 @@ use anyhow::Result;
 use std::time::Instant;
 
 /// 探测请求发送的最短提示词。
-const PROBE_PROMPT: &str = "ping";
+const PROBE_PROMPT: &str = "say hi";
 
 /// 探测允许的最大输出长度，够判断链路通即可。
 const PROBE_MAX_TOKENS: u32 = 16;
