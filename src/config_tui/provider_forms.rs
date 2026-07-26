@@ -11,7 +11,7 @@ use super::model_metadata_form::{
     apply_tools_enabled_field, apply_web_search_tool_mode_field, context_chars_field_value,
     max_output_tokens_field_value, tag_fields, tools_enabled_field, web_search_tool_mode_field,
 };
-use super::ui::draw_menu;
+use super::ui::{draw_menu, message};
 
 /// 编辑 provider 配置表单。
 ///
@@ -108,9 +108,32 @@ pub(super) fn edit_provider_form(
             serde_json::to_string_pretty(&provider.extra_headers).unwrap_or_default()
         },
     ));
-    if !run_form(stdout, t(" EDIT PROVIDER ", " 编辑供应商 "), &mut fields)? {
-        return Ok(None);
+    loop {
+        if !run_form(stdout, t(" EDIT PROVIDER ", " 编辑供应商 "), &mut fields)? {
+            return Ok(None);
+        }
+        // 校验失败时就地提示并重新打开表单，不让非法输入终止 TUI
+        match build_provider_from_fields(&provider, claude_simulation, &fields) {
+            Ok(updated) => return Ok(Some(updated)),
+            Err(err) => message(stdout, &format!("{}: {err}", t("Invalid input", "输入无效")))?,
+        }
     }
+}
+
+/// 根据表单字段组装 provider 配置。
+///
+/// 参数:
+/// - `provider`: 原 provider 配置
+/// - `claude_simulation`: 打开表单时是否展示 Claude 专用字段
+/// - `fields`: 表单字段
+///
+/// 返回:
+/// - 组装后的 provider 配置；JSON 或布尔字段非法时返回错误
+fn build_provider_from_fields(
+    provider: &ProviderConfig,
+    claude_simulation: bool,
+    fields: &[Field],
+) -> Result<ProviderConfig> {
     let extra_body = normalize_extra_body(&fields[9].value)?;
     let client_style = fields[10].value.trim().to_string();
     let (claude_1m_context, anthropic_max_tokens, user_agent_idx, headers_idx) =
@@ -162,7 +185,7 @@ pub(super) fn edit_provider_form(
         client_style,
         claude_1m_context,
     };
-    Ok(Some(updated))
+    Ok(updated)
 }
 
 /// 判断客户端模拟是否为 Claude Code。

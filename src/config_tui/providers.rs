@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use super::form::add_custom_model_form;
 use super::input::{read_key, read_key_with_timeout};
+use super::layout::three_column_widths;
 use super::provider_fetch::{fetch_models, FetchModelsResult};
 use super::provider_forms::{edit_model_form, edit_provider_form};
 use super::ui::{draw_column, draw_menu, message, truncate};
@@ -399,7 +400,7 @@ impl<'a> ProviderBrowser<'a> {
             return Ok(());
         };
         if provider.models.iter().any(|item| item == &model) {
-            self.status = format!("Model already exists: {model}");
+            self.status = format!("{}: {model}", t("Model already exists", "模型已存在"));
             return Ok(());
         }
         provider.models.push(model.clone());
@@ -415,7 +416,7 @@ impl<'a> ProviderBrowser<'a> {
             .iter()
             .position(|entry| entry.full == model)
             .unwrap_or(self.model_idx);
-        self.status = format!("Added custom model: {model}");
+        self.status = format!("{}: {model}", t("Added custom model", "已添加自定义模型"));
         Ok(())
     }
 
@@ -442,7 +443,7 @@ impl<'a> ProviderBrowser<'a> {
             .is_ok()
         {
             self.rebuild_models();
-            self.status = format!("Removed model: {model}");
+            self.status = format!("{}: {model}", t("Removed model", "已移除模型"));
         }
     }
 
@@ -452,13 +453,6 @@ impl<'a> ProviderBrowser<'a> {
         let inner_y = 0;
         let inner_w = cols;
         let inner_h = rows.saturating_sub(2);
-        let left_w = inner_w.saturating_mul(28).saturating_div(100).max(20);
-        let mid_w = inner_w.saturating_mul(22).saturating_div(100).max(16);
-        let right_w = inner_w
-            .saturating_sub(left_w)
-            .saturating_sub(mid_w)
-            .saturating_sub(2)
-            .max(18);
         let providers = self
             .config
             .providers
@@ -505,45 +499,70 @@ impl<'a> ProviderBrowser<'a> {
             })
             .collect::<Vec<_>>();
 
-        queue!(stdout, Clear(ClearType::All))?;
-        draw_column(
-            stdout,
-            inner_x,
-            inner_y,
-            left_w,
-            inner_h,
-            t(" PROVIDERS ", " 供应商 "),
-            &providers,
-            self.provider_idx,
-            self.active_col == 0,
-        )?;
-        draw_column(
-            stdout,
-            inner_x + left_w + 1,
-            inner_y,
-            mid_w,
-            inner_h,
-            t(" ORG ", " 组织 "),
-            &self.orgs,
-            self.org_idx,
-            self.active_col == 1,
-        )?;
-        let title = if self.filter.is_empty() {
+        let models_title = if self.filter.is_empty() {
             t(" MODELS ", " 模型 ").to_string()
         } else {
             format!("{} /{} ", t(" MODELS", " 模型"), self.filter)
         };
-        draw_column(
-            stdout,
-            inner_x + left_w + mid_w + 2,
-            inner_y,
-            right_w,
-            inner_h,
-            &title,
-            &models,
-            self.model_idx,
-            self.active_col == 2,
-        )?;
+        queue!(stdout, Clear(ClearType::All))?;
+        // 1. 终端够宽时绘制三栏；宽度之和不超过内容区，保证不重叠
+        if let Some((left_w, mid_w, right_w)) = three_column_widths(inner_w) {
+            draw_column(
+                stdout,
+                inner_x,
+                inner_y,
+                left_w,
+                inner_h,
+                t(" PROVIDERS ", " 供应商 "),
+                &providers,
+                self.provider_idx,
+                self.active_col == 0,
+            )?;
+            draw_column(
+                stdout,
+                inner_x + left_w + 1,
+                inner_y,
+                mid_w,
+                inner_h,
+                t(" ORG ", " 组织 "),
+                &self.orgs,
+                self.org_idx,
+                self.active_col == 1,
+            )?;
+            draw_column(
+                stdout,
+                inner_x + left_w + mid_w + 2,
+                inner_y,
+                right_w,
+                inner_h,
+                &models_title,
+                &models,
+                self.model_idx,
+                self.active_col == 2,
+            )?;
+        } else {
+            // 2. 窄终端降级为单栏，仅绘制当前激活栏
+            let (title, items, selected) = match self.active_col {
+                0 => (
+                    t(" PROVIDERS ", " 供应商 ").to_string(),
+                    &providers,
+                    self.provider_idx,
+                ),
+                1 => (t(" ORG ", " 组织 ").to_string(), &self.orgs, self.org_idx),
+                _ => (models_title, &models, self.model_idx),
+            };
+            draw_column(
+                stdout,
+                inner_x,
+                inner_y,
+                inner_w,
+                inner_h,
+                &title,
+                items,
+                selected,
+                true,
+            )?;
+        }
         let help = if self.filter_mode {
             format!(
                 "{}: {}_  {}",
@@ -641,6 +660,7 @@ pub(crate) fn select_active_provider(
                 .unwrap_or(false)
         })
         .unwrap_or(0);
+    let mut status = String::new();
     loop {
         if choices.is_empty() {
             message(
@@ -657,27 +677,38 @@ pub(crate) fn select_active_provider(
             .iter()
             .map(|choice| choice.label())
             .collect::<Vec<_>>();
+        let help = if status.is_empty() {
+            t(
+                "[Enter] select [d] remove [q] back",
+                "[Enter]选择 [d]移除 [q]返回",
+            )
+            .to_string()
+        } else {
+            status.clone()
+        };
         draw_menu(
             stdout,
             t(" SELECT PROVIDER/MODEL ", " 选择供应商/模型 "),
             &options,
             selected,
-            t(
-                "[Enter] select [d] remove [q] back",
-                "[Enter]选择 [d]移除 [q]返回",
-            ),
+            &help,
         )?;
         match read_key()? {
             KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
             KeyCode::Char('d') => {
-                // 移除当前高亮模型（含元数据），并刷新列表
+                // 移除当前高亮模型（含元数据），失败时在菜单内提示而不终止 TUI
                 let choice = &choices[selected];
                 let provider_id = choice.provider_id.clone();
                 let model = choice.model.clone();
-                config.remove_active_provider_model(&provider_id, &model)?;
-                choices = config.provider_model_choices();
+                match config.remove_active_provider_model(&provider_id, &model) {
+                    Ok(()) => {
+                        status.clear();
+                        choices = config.provider_model_choices();
+                    }
+                    Err(err) => status = err.to_string(),
+                }
             }
             KeyCode::Enter => {
                 config.set_active_provider_model(

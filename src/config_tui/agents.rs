@@ -10,7 +10,7 @@ use super::form::{
     parse_bool_field, parse_provider_model_choice, provider_model_choice_values, run_form, Field,
 };
 use super::input::read_key;
-use super::ui::draw_menu;
+use super::ui::{draw_menu, message};
 
 /// 编辑统一 Agent 档案和各运行入口默认项。
 ///
@@ -186,20 +186,34 @@ fn edit_agent_profile(
             profile.skills_named.join("\n"),
         ),
     ];
-    if run_form(stdout, t(" EDIT AGENT ", " 编辑 AGENT "), &mut fields)? {
+    loop {
+        if !run_form(stdout, t(" EDIT AGENT ", " 编辑 AGENT "), &mut fields)? {
+            return Ok(());
+        }
+        // 1. 先完成易失败的布尔解析，失败时就地提示并重新打开表单
+        let (register_to_main, load_instruction_files) = match parse_bool_field(&fields[4].value)
+            .and_then(|register| Ok((register, parse_bool_field(&fields[5].value)?)))
+        {
+            Ok(values) => values,
+            Err(err) => {
+                message(stdout, &format!("{}: {err}", t("Invalid input", "输入无效")))?;
+                continue;
+            }
+        };
+        // 2. 解析通过后统一写入档案并保存
         profile.name = fields[0].value.trim().to_string();
         profile.description = fields[1].value.trim().to_string();
         (profile.provider_id, profile.model) = parse_provider_model_choice(&fields[2].value);
         profile.thinking_level = fields[3].value.trim().to_string();
-        profile.register_to_main = parse_bool_field(&fields[4].value)?;
-        profile.load_instruction_files = parse_bool_field(&fields[5].value)?;
+        profile.register_to_main = register_to_main;
+        profile.load_instruction_files = load_instruction_files;
         profile.system_prompt = fields[6].value.trim().to_string();
         profile.enabled_tools = parse_lines(&fields[7].value);
         profile.skills_full = parse_lines(&fields[8].value);
         profile.skills_named = parse_lines(&fields[9].value);
         upsert_agent(config, profile);
+        return Ok(());
     }
-    Ok(())
 }
 
 /// 返回 TUI 可编辑的默认、内置和自定义 Agent。

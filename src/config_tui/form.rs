@@ -11,17 +11,34 @@ use std::io::{self, Write};
 use std::process::Command;
 
 use super::input::{read_key, read_key_event};
+use super::layout::panel_width;
 use super::ui::{display_width, draw_box, draw_menu, pad, truncate};
 
 struct FcitxState {
+    // 进入表单前输入法是否处于激活状态，退出时按此恢复
+    was_active: bool,
     last_state: Option<char>,
 }
 
 impl FcitxState {
+    /// 记录输入法当前状态并在导航期间临时关闭输入法。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 携带初始状态的输入法管理器
     pub(crate) fn new() -> Self {
-        run_fcitx5_remote("-c");
+        // 1. 查询进入表单前的输入法状态，输出 2 表示激活
+        let initial = fcitx5_state();
+        let was_active = initial == Some('2');
+        // 2. 仅在激活时关闭，避免导航按键被输入法拦截
+        if was_active {
+            run_fcitx5_remote("-c");
+        }
         Self {
-            last_state: Some('1'),
+            was_active,
+            last_state: initial,
         }
     }
 
@@ -37,13 +54,36 @@ impl FcitxState {
     }
 }
 
+impl Drop for FcitxState {
+    fn drop(&mut self) {
+        // 退出表单时恢复进入前的输入法激活状态
+        if self.was_active {
+            run_fcitx5_remote("-o");
+        }
+    }
+}
+
+/// 查询 fcitx5 输入法当前状态。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 状态字符，2 表示激活；命令不可用时返回空
 fn fcitx5_state() -> Option<char> {
     let output = Command::new("fcitx5-remote").output().ok()?;
     output.stdout.first().copied().map(char::from)
 }
 
+/// 同步执行 fcitx5-remote 子命令。
+///
+/// 参数:
+/// - `arg`: fcitx5-remote 参数
+///
+/// 返回:
+/// - 无；同步等待命令结束，避免遗留僵尸进程
 fn run_fcitx5_remote(arg: &str) {
-    let _ = Command::new("fcitx5-remote").arg(arg).spawn();
+    let _ = Command::new("fcitx5-remote").arg(arg).output();
 }
 
 pub(crate) fn run_form(stdout: &mut io::Stdout, title: &str, fields: &mut [Field]) -> Result<bool> {
@@ -94,8 +134,9 @@ pub(crate) fn run_form(stdout: &mut io::Stdout, title: &str, fields: &mut [Field
                 cursors[selected] = fields[selected].value.chars().count();
             }
             KeyCode::Enter if !editing && fields[selected].textarea => {
+                // 外部编辑器返回后回到表单继续编辑，由用户显式选择保存或取消
                 edit_textarea(stdout, &mut fields[selected].value)?;
-                return Ok(true);
+                cursors[selected] = fields[selected].value.chars().count();
             }
             KeyCode::Enter if !editing => {
                 if !fields[selected].boolean {
@@ -252,6 +293,23 @@ pub(crate) fn parse_provider_model_choice(value: &str) -> (String, String) {
     (value.to_string(), String::new())
 }
 
+/// 解析表单数字字段。
+///
+/// 参数:
+/// - `label`: 字段标签，用于组装错误提示
+/// - `value`: 字段文本值
+///
+/// 返回:
+/// - 解析后的数字；解析失败时返回带字段名的错误
+pub(crate) fn parse_number_field<T: std::str::FromStr>(label: &str, value: &str) -> Result<T> {
+    value.trim().parse::<T>().map_err(|_| {
+        anyhow::anyhow!(
+            "{label}: {} ({value})",
+            t("invalid number", "无效数字")
+        )
+    })
+}
+
 pub(crate) fn parse_bool_field(value: &str) -> Result<bool> {
     match value.trim().to_ascii_lowercase().as_str() {
         "true" | "yes" | "y" | "1" | "on" | "启用" | "是" => Ok(true),
@@ -297,7 +355,7 @@ fn draw_form(
     revealed_secrets: &[bool],
 ) -> Result<()> {
     let (cols, rows) = terminal::size()?;
-    let width = cols.saturating_sub(8).min(96).max(48);
+    let width = panel_width(96, 48, cols.saturating_sub(8));
     let height = (fields.len() as u16 + 8)
         .min(rows.saturating_sub(4))
         .max(10);
