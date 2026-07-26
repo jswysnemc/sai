@@ -28,10 +28,22 @@ struct TerminalSession {
 }
 
 impl TerminalSession {
+    /// 启动配置界面终端会话。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 初始化完成的终端会话；进入备用屏失败时回滚 raw mode 后返回错误
     fn start() -> Result<Self> {
+        // 1. 先开启 raw mode
         terminal::enable_raw_mode()?;
         let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen, Hide)?;
+        // 2. 进入备用屏失败时 Self 未构造、Drop 不会执行，须手工回滚 raw mode
+        if let Err(err) = execute!(stdout, EnterAlternateScreen, Hide) {
+            let _ = terminal::disable_raw_mode();
+            return Err(err.into());
+        }
         Ok(Self { stdout })
     }
 

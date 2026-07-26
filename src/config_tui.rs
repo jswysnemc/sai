@@ -3,6 +3,7 @@ mod form;
 mod gateways;
 mod input;
 mod knowledge;
+mod layout;
 mod model_metadata_form;
 mod plugin_fields;
 mod plugins;

@@ -11,7 +11,7 @@ use std::io;
 
 use super::form::{parse_bool_field, run_form, Field};
 use super::input::read_key;
-use super::ui::draw_menu;
+use super::ui::{draw_menu, message};
 
 /// 编辑渠道接入配置。
 ///
@@ -113,10 +113,11 @@ fn gateway_status_label(statuses: &[GatewayRuntimeStatus], gateway: ManagedGatew
         .as_ref()
         .map(|status| status.enabled)
         .unwrap_or(false);
-    let runtime = status
-        .as_ref()
-        .map(|status| status.status.as_str())
-        .unwrap_or("stopped");
+    // 运行状态映射为双语标签
+    let runtime = match status.as_ref().map(|status| status.status.as_str()) {
+        Some("running") => t("running", "运行中"),
+        _ => t("stopped", "已停止"),
+    };
     let pid = status
         .as_ref()
         .and_then(|status| status.pid)
@@ -131,7 +132,11 @@ fn gateway_status_label(statuses: &[GatewayRuntimeStatus], gateway: ManagedGatew
         "{} [{}] config={}{}{}",
         gateway.title(),
         runtime,
-        if enabled { "enabled" } else { "disabled" },
+        if enabled {
+            t("enabled", "已启用")
+        } else {
+            t("disabled", "已禁用")
+        },
         pid,
         task
     )
@@ -285,20 +290,31 @@ fn edit_qq_gateway(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()
         Field::new(t("AppID", "AppID"), qq.app_id.clone()),
         Field::new(t("AppSecret", "AppSecret"), qq.client_secret.clone()).secret(),
     ];
-    if run_form(
-        stdout,
-        t(" QQ OFFICIAL BOT ", " QQ 官方机器人 "),
-        &mut fields,
-    )? {
-        config.gateways.qq.enabled = parse_bool_field(&fields[0].value)?;
+    loop {
+        if !run_form(
+            stdout,
+            t(" QQ OFFICIAL BOT ", " QQ 官方机器人 "),
+            &mut fields,
+        )? {
+            return Ok(());
+        }
+        // 解析失败时就地提示并重新打开表单，不让非法输入终止 TUI
+        let enabled = match parse_bool_field(&fields[0].value) {
+            Ok(enabled) => enabled,
+            Err(err) => {
+                message(stdout, &format!("{}: {err}", t("Invalid input", "输入无效")))?;
+                continue;
+            }
+        };
+        config.gateways.qq.enabled = enabled;
         config.gateways.qq.transport = fields[1].value.trim().to_string();
         config.gateways.qq.listen = fields[2].value.trim().to_string();
         config.gateways.qq.base_url = fields[3].value.trim().to_string();
         config.gateways.qq.token = fields[4].value.trim().to_string();
         config.gateways.qq.app_id = fields[5].value.trim().to_string();
         config.gateways.qq.client_secret = fields[6].value.trim().to_string();
+        return Ok(());
     }
-    Ok(())
 }
 
 /// 编辑微信 iLink 机器人配置。
@@ -329,18 +345,29 @@ fn edit_weixin_gateway(stdout: &mut io::Stdout, config: &mut AppConfig) -> Resul
         Field::new(t("Saved account", "已保存账号"), weixin.account.clone()).secret(),
         Field::new(t("Bot agent", "Bot Agent"), weixin.bot_agent.clone()),
     ];
-    if run_form(
-        stdout,
-        t(" WEIXIN ILINK BOT ", " 微信 iLink 机器人 "),
-        &mut fields,
-    )? {
-        config.gateways.weixin.enabled = parse_bool_field(&fields[0].value)?;
+    loop {
+        if !run_form(
+            stdout,
+            t(" WEIXIN ILINK BOT ", " 微信 iLink 机器人 "),
+            &mut fields,
+        )? {
+            return Ok(());
+        }
+        // 解析失败时就地提示并重新打开表单，不让非法输入终止 TUI
+        let enabled = match parse_bool_field(&fields[0].value) {
+            Ok(enabled) => enabled,
+            Err(err) => {
+                message(stdout, &format!("{}: {err}", t("Invalid input", "输入无效")))?;
+                continue;
+            }
+        };
+        config.gateways.weixin.enabled = enabled;
         config.gateways.weixin.base_url = fields[1].value.trim().to_string();
         config.gateways.weixin.cdn_base_url = fields[2].value.trim().to_string();
         config.gateways.weixin.bot_type = fields[3].value.trim().to_string();
         config.gateways.weixin.token = fields[4].value.trim().to_string();
         config.gateways.weixin.account = fields[5].value.trim().to_string();
         config.gateways.weixin.bot_agent = fields[6].value.trim().to_string();
+        return Ok(());
     }
-    Ok(())
 }

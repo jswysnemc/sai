@@ -10,6 +10,7 @@ use std::io::{self, Write};
 
 use super::form::run_form;
 use super::input::read_key;
+use super::layout::panel_width;
 use super::plugin_fields::{apply_plugin_fields, plugin_fields};
 use super::ui::{display_width, draw_box, pad, truncate};
 
@@ -31,7 +32,8 @@ pub(crate) fn edit_plugins(stdout: &mut io::Stdout, config: &mut AppConfig) -> R
 
 fn draw_plugin_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usize) -> Result<()> {
     let (cols, rows) = terminal::size()?;
-    let width = cols.saturating_sub(4).max(60);
+    // 先取期望宽度再钳制到终端可用宽度，避免窄终端溢出换行
+    let width = panel_width(cols.saturating_sub(4), 60, cols.saturating_sub(4));
     let height = rows.saturating_sub(2).max(10);
     let x = 2;
     let y = 1;
