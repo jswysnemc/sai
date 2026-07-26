@@ -1,0 +1,54 @@
+/* 降级卡片：占满所在容器但不喧宾夺主，主要目的是保住其余区域可用 */
+.ui-error-boundary {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: var(--space-sm);
+  height: 100%;
+  min-height: 6rem;
+  padding: var(--space-2xl);
+  border: 1px dashed color-mix(in srgb, var(--danger) 40%, var(--line));
+  border-radius: var(--radius-3);
+  background: color-mix(in srgb, var(--danger) 4%, var(--paper));
+}
+
+.ui-error-boundary strong {
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.ui-error-boundary p {
+  margin: 0;
+  max-width: 40rem;
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+  font: 400 var(--text-xs) / 1.5 var(--font-code);
+}
+
+.ui-error-boundary button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-height: 1.875rem;
+  padding: 0 var(--space-md);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper-raised);
+  color: var(--ink);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.ui-error-boundary button:hover {
+  border-color: var(--line-strong);
+  background: var(--paper-deep);
+}
+
+.ui-error-boundary button:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}

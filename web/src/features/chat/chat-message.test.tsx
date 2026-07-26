@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderWithProviders } from "../../shared/testing/render-with-providers";
 import { describe, expect, it } from "vitest";
 import type { SessionTimelineTurn } from "../../api/contracts";
 import { HistoryTurn, LiveRunMessage } from "./chat-message";
@@ -25,7 +25,7 @@ describe("HistoryTurn", () => {
       }]
     };
 
-    const html = renderToStaticMarkup(<HistoryTurn turn={turn} />);
+    const html = renderWithProviders(<HistoryTurn turn={turn} />);
 
     expect(html).toContain("已拒绝");
     expect(html).toContain("保留文件");
@@ -43,7 +43,7 @@ describe("HistoryTurn", () => {
       tools: []
     };
 
-    const html = renderToStaticMarkup(<HistoryTurn turn={turn} />);
+    const html = renderWithProviders(<HistoryTurn turn={turn} />);
 
     expect(html).toContain("运行已中断");
     expect(html).toContain("用户在运行完成前主动停止了本轮");
@@ -51,7 +51,7 @@ describe("HistoryTurn", () => {
 
 
   it("shows remove control for queued live user messages", () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithProviders(
       <LiveRunMessage
         running
         state={{
@@ -71,7 +71,7 @@ describe("HistoryTurn", () => {
   });
 
   it("offers expandable details for live failures", () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithProviders(
       <LiveRunMessage
         running={false}
         state={{
@@ -106,7 +106,7 @@ describe("HistoryTurn", () => {
       }]
     };
 
-    const html = renderToStaticMarkup(<HistoryTurn turn={turn} />);
+    const html = renderWithProviders(<HistoryTurn turn={turn} />);
 
     expect(html).toContain("运行已中断");
     expect(html).toContain("command timed out after 30 seconds");
@@ -123,14 +123,14 @@ describe("HistoryTurn", () => {
       tools: []
     };
 
-    const html = renderToStaticMarkup(<HistoryTurn turn={turn} />);
+    const html = renderWithProviders(<HistoryTurn turn={turn} />);
 
     expect(html).not.toContain("goal-continuation");
     expect(html).toContain("继续完成目标");
   });
 
   it("keeps images and special skill rendering inside the user bubble", () => {
-    const html = renderToStaticMarkup(
+    const html = renderWithProviders(
       <UserMessageBubble
         content={'使用 <skill-reference name="research">\n# Research\nRead primary sources\n</skill-reference> 完成分析'}
         imageUrls={["data:image/png;base64,AA=="]}
