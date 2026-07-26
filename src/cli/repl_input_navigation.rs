@@ -88,6 +88,10 @@ struct CursorPosition {
 
 /// 生成每个字符索引对应的视觉光标位置。
 ///
+/// 单次遍历增量推进，与渲染层共用同一换行模拟规则
+/// （宽字符跨界整体下移、制表符止步右边界、整行填满后悬挂到下一行行首），
+/// 避免每个索引重扫全文的平方开销。
+///
 /// 参数:
 /// - `prefix`: 首行提示符文本
 /// - `input`: 当前输入内容
@@ -96,96 +100,47 @@ struct CursorPosition {
 /// 返回:
 /// - 光标位置列表
 fn cursor_positions(prefix: &str, input: &str, cols: usize) -> Vec<CursorPosition> {
-    let char_count = input.chars().count();
-    (0..=char_count)
-        .map(|cursor| {
-            let (col, row) = cursor_position_for_cols(prefix, input, cursor, cols);
-            CursorPosition { cursor, col, row }
-        })
-        .collect()
-}
-
-/// 计算指定字符索引在终端中的视觉位置。
-///
-/// 参数:
-/// - `prefix`: 首行提示符文本
-/// - `input`: 当前输入内容
-/// - `cursor`: 当前光标字符索引
-/// - `cols`: 终端列数
-///
-/// 返回:
-/// - 视觉列和视觉行
-fn cursor_position_for_cols(
-    prefix: &str,
-    input: &str,
-    cursor: usize,
-    cols: usize,
-) -> (usize, usize) {
     let cols = cols.max(1);
-    let before_cursor = input.chars().take(cursor).collect::<String>();
-    let lines = input_lines(&before_cursor);
-    let last_index = lines.len().saturating_sub(1);
-    let mut row_offset = 0usize;
-    for (index, line) in lines.iter().enumerate() {
-        let width = if index == 0 {
-            visible_width(prefix) + visible_width(line)
-        } else {
-            visible_width(line)
-        };
-        if index == last_index {
-            return (width % cols, row_offset + width / cols);
-        }
-        row_offset += width / cols + 1;
-    }
-    (visible_width(prefix), 0)
-}
-
-/// 按换行符拆分输入。
-///
-/// 参数:
-/// - `input`: 当前输入内容
-///
-/// 返回:
-/// - 输入行列表
-fn input_lines(input: &str) -> Vec<String> {
-    let mut lines = input
-        .replace("\r\n", "\n")
-        .replace('\r', "\n")
-        .split('\n')
-        .map(ToString::to_string)
-        .collect::<Vec<_>>();
-    if lines.is_empty() {
-        lines.push(String::new());
-    }
-    lines
-}
-
-/// 计算终端可见宽度。
-///
-/// 参数:
-/// - `value`: 输入文本
-///
-/// 返回:
-/// - 可见宽度
-fn visible_width(value: &str) -> usize {
-    let mut width = 0usize;
-    let mut escape = false;
-    for ch in value.chars() {
-        if escape {
-            if ch == 'm' {
-                escape = false;
+    let start = super::repl_text::wrapped_end_position(prefix, "", cols);
+    let mut positions = Vec::with_capacity(input.chars().count() + 1);
+    let mut col = start.col;
+    let mut row = start.row;
+    positions.push(CursorPosition { cursor: 0, col, row });
+    for (index, ch) in input.chars().enumerate() {
+        match ch {
+            // 1. 逻辑换行：新行从下一视觉行行首开始
+            '\n' | '\r' => {
+                row += 1;
+                col = 0;
             }
-            continue;
+            // 2. 制表符：前进到下一个 8 列制表位，止步于右边界
+            '\t' => {
+                col = ((col / 8 + 1) * 8).min(cols.saturating_sub(1));
+            }
+            _ => {
+                let width = super::repl_text::char_terminal_width(ch);
+                if width > 0 {
+                    // 3. 宽字符放不下行尾时整体移到下一行
+                    if col + width > cols {
+                        row += 1;
+                        col = 0;
+                    }
+                    col += width;
+                }
+            }
         }
-        if ch == '\x1b' {
-            escape = true;
-        } else if (ch as u32) >= 0x2e80 {
-            width += 2;
-        } else {
-            width += 1;
+        // 4. 恰好填满整行时光标悬挂到下一行行首，与渲染层归一化一致
+        if col >= cols {
+            row += 1;
+            col = 0;
         }
+        positions.push(CursorPosition {
+            cursor: index + 1,
+            col,
+            row,
+        });
     }
-    width
+    positions
 }
 
 #[cfg(test)]

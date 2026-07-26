@@ -178,9 +178,7 @@ pub(super) fn style_clipboard_line(
 }
 
 pub(super) fn repl_line_rows_for_cols(prefix: &str, line: &str, cols: usize) -> u16 {
-    let cols = cols.max(1);
-    let width = visible_width(prefix) + visible_width(line);
-    (width / cols + 1).min(u16::MAX as usize) as u16
+    wrapped_line_rows(prefix, line, cols).min(u16::MAX as usize) as u16
 }
 
 pub(super) fn repl_prompt_rows_for_cols(prefix: &str, lines: &[String], cols: usize) -> u16 {
@@ -201,27 +199,24 @@ pub(super) fn repl_cursor_position_for_cols(
     cursor: usize,
     cols: usize,
 ) -> (u16, u16) {
-    let cols = cols.max(1);
     let before_cursor = take_chars(input, cursor);
     let lines = repl_input_lines(&before_cursor);
     if lines.is_empty() {
         return (visible_width(prefix).min(u16::MAX as usize) as u16, 0);
     }
+    // 行数与光标共用同一换行模拟器，宽字符跨界时两者才不会脱节
     let last_index = lines.len().saturating_sub(1);
     let mut row_offset = 0usize;
     for (index, line) in lines.iter().enumerate() {
-        let width = if index == 0 {
-            visible_width(prefix) + visible_width(line)
-        } else {
-            visible_width(line)
-        };
+        let line_prefix = if index == 0 { prefix } else { "" };
         if index == last_index {
+            let end = wrapped_end_position(line_prefix, line, cols);
             return (
-                (width % cols).min(u16::MAX as usize) as u16,
-                (row_offset + width / cols).min(u16::MAX as usize) as u16,
+                end.col.min(u16::MAX as usize) as u16,
+                (row_offset + end.row).min(u16::MAX as usize) as u16,
             );
         }
-        row_offset += width / cols + 1;
+        row_offset += wrapped_line_rows(line_prefix, line, cols);
     }
     (visible_width(prefix).min(u16::MAX as usize) as u16, 0)
 }

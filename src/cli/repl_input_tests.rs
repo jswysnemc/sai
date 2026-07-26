@@ -30,6 +30,43 @@ fn cursor_position_wraps_at_terminal_width() {
 }
 
 #[test]
+fn wide_chars_wrap_as_whole_units() {
+    // 第 5 个宽字符在第 9 列放不下，整字符移到下一行并在行尾留空列：
+    // 纯模运算会把光标算在第 3 列，真实终端在第 4 列
+    assert_eq!(
+        repl_cursor_position_for_cols("", "a字字字字字字", 7, 10),
+        (4, 1)
+    );
+    assert_eq!(
+        repl_prompt_rows_for_cols("", &["a字字字字字字".into()], 10),
+        2
+    );
+}
+
+#[test]
+fn combining_marks_do_not_advance_cursor() {
+    // 组合变音符宽度为 0，不推进光标列
+    assert_eq!(visible_width("e\u{0301}"), 1);
+    assert_eq!(repl_cursor_position_for_cols("", "e\u{0301}x", 3, 10), (2, 0));
+}
+
+#[test]
+fn tabs_advance_to_next_tab_stop() {
+    // 制表符前进到下一个 8 列制表位，宽度不再按 1 计
+    assert_eq!(repl_cursor_position_for_cols("", "\tx", 2, 20), (9, 0));
+}
+
+#[test]
+fn strips_osc_sequences_without_residue() {
+    // OSC 标题序列整段清除，负载不残留进输入
+    assert_eq!(
+        strip_terminal_control_sequences("a\x1b]0;title\x07b"),
+        "ab"
+    );
+    assert_eq!(strip_terminal_control_sequences("a\x1bOPb"), "ab");
+}
+
+#[test]
 fn cli_parses_trailing_clipboard_flag_as_message_part() {
     let cli = Cli::try_parse_from(["sai", "总结", "-c"]).unwrap();
     let input = parse_message_input_flags(cli.message, cli.clipb, cli.web_search);
