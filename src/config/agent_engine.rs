@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 /// 执行对话轮次的内核。
 ///
@@ -11,7 +13,7 @@ pub enum AgentEngineKind {
     /// sai 自带内核
     #[default]
     Native,
-    /// Claude Code（@zed-industries/claude-code-acp）
+    /// Claude Code（Sai Sidecar / @agentclientprotocol/claude-agent-acp）
     ClaudeCode,
     /// Codex（@agentclientprotocol/codex-acp）
     Codex,
@@ -54,36 +56,37 @@ impl AgentEngineKind {
         }
     }
 
-    /// 返回该内核下不可用的 sai 功能。
+    /// 返回当前握手能力下不可用的 Sai 功能。
     ///
-    /// 外部内核自己维护对话历史与上下文，sai 在轮次里注入的那部分能力因此失效。
-    /// 这份清单是三端共用的事实来源：切换内核时要让用户知道换掉了什么，
-    /// 否则压缩与记忆静默停摆，用起来像是出了 bug。
+    /// 外部内核可以通过 initialize 的 `_sai.capabilities` 声明已经适配的
+    /// Sai 专属能力；未握手或未声明时保持保守禁用。
     ///
     /// 返回:
-    /// - 失效功能的说明；原生内核为空
-    pub fn unavailable_features(self) -> &'static [&'static str] {
+    /// - 当前不可用功能的本地化名称
+    pub fn unavailable_features(self) -> Vec<&'static str> {
         if !self.is_external() {
-            return &[];
+            return Vec::new();
         }
-        // 与 i18n::text 一样按当前语言给出，直接用于界面展示
-        if crate::i18n::is_zh() {
-            &[
-                "上下文压缩",
-                "记忆注入",
-                "目标续轮",
-                "子智能体",
-                "token 用量统计",
+        let capabilities = crate::acp::current_capabilities(self.as_str()).unwrap_or_default();
+        let candidates = if crate::i18n::is_zh() {
+            [
+                ("上下文压缩", capabilities.sai_context_compaction),
+                ("记忆注入", capabilities.sai_memory),
+                ("目标续轮", capabilities.sai_goal_continuation),
+                ("子智能体", capabilities.sai_subagents),
             ]
         } else {
-            &[
-                "context compaction",
-                "memory injection",
-                "goal continuation",
-                "subagents",
-                "token usage stats",
+            [
+                ("context compaction", capabilities.sai_context_compaction),
+                ("memory injection", capabilities.sai_memory),
+                ("goal continuation", capabilities.sai_goal_continuation),
+                ("subagents", capabilities.sai_subagents),
             ]
-        }
+        };
+        candidates
+            .into_iter()
+            .filter_map(|(name, available)| (!available).then_some(name))
+            .collect()
     }
 
     /// 返回预置内核的默认启动命令。
@@ -95,7 +98,7 @@ impl AgentEngineKind {
     /// - `(程序, 参数)`；原生与自定义内核没有预置命令
     pub fn preset_command(self) -> Option<(&'static str, &'static [&'static str])> {
         match self {
-            Self::ClaudeCode => Some(("npx", &["-y", "@zed-industries/claude-code-acp"])),
+            Self::ClaudeCode => Some(("npx", &["-y", "@agentclientprotocol/claude-agent-acp"])),
             Self::Codex => Some(("npx", &["-y", "@agentclientprotocol/codex-acp"])),
             Self::Native | Self::Custom => None,
         }
@@ -117,6 +120,24 @@ pub struct AcpEngineConfig {
     /// 握手超时秒数；首次运行要下载适配器，默认给得较宽
     #[serde(default = "default_startup_timeout_seconds")]
     pub startup_timeout_seconds: u64,
+    /// 传给 ACP 会话的附加工作区目录
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub additional_directories: Vec<PathBuf>,
+    /// initialize 后主动调用的 ACP 认证方式标识
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub auth_method: String,
+    /// 按 `model` 类别匹配并设置的模型值
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub model: String,
+    /// 按 `mode` 类别匹配并设置的权限模式值
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub permission_mode: String,
+    /// 按 `thought_level` 类别匹配并设置的思考等级值
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub thought_level: String,
+    /// 以配置项 id 为键的任意 ACP session configOptions 覆盖
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub config_options: BTreeMap<String, Value>,
 }
 
 impl Default for AcpEngineConfig {
@@ -126,6 +147,12 @@ impl Default for AcpEngineConfig {
             args: Vec::new(),
             env: BTreeMap::new(),
             startup_timeout_seconds: default_startup_timeout_seconds(),
+            additional_directories: Vec::new(),
+            auth_method: String::new(),
+            model: String::new(),
+            permission_mode: String::new(),
+            thought_level: String::new(),
+            config_options: BTreeMap::new(),
         }
     }
 }
@@ -161,6 +188,22 @@ impl AgentEngineConfig {
         if !command.is_empty() {
             return Some((command.to_string(), self.acp.args.clone()));
         }
+        if self.engine == AgentEngineKind::ClaudeCode {
+            let sidecar = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("sidecars")
+                .join("claude-agent-acp");
+            if sidecar.join("package.json").is_file() {
+                return Some((
+                    "npx".to_string(),
+                    vec![
+                        "-y".to_string(),
+                        "--package".to_string(),
+                        sidecar.display().to_string(),
+                        "sai-claude-agent-acp".to_string(),
+                    ],
+                ));
+            }
+        }
         let (program, args) = self.engine.preset_command()?;
         Some((
             program.to_string(),
@@ -187,7 +230,7 @@ mod tests {
             serde_json::from_str(r#"{"engine":"claude_code"}"#).unwrap();
         let (program, args) = config.resolved_command().unwrap();
         assert_eq!(program, "npx");
-        assert!(args.iter().any(|arg| arg.contains("claude-code-acp")));
+        assert!(args.iter().any(|arg| arg.contains("claude-agent-acp")));
 
         let codex: AgentEngineConfig = serde_json::from_str(r#"{"engine":"codex"}"#).unwrap();
         let (_, args) = codex.resolved_command().unwrap();

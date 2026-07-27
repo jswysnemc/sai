@@ -70,7 +70,9 @@ async fn acp_live_reports_agent_info() {
     }
     let config: crate::config::AgentEngineConfig =
         serde_json::from_str(r#"{"engine":"codex"}"#).unwrap();
-    let (program, args) = config.resolved_command().expect("codex has a preset command");
+    let (program, args) = config
+        .resolved_command()
+        .expect("codex has a preset command");
     let governance = crate::acp::AcpGovernance::new(
         std::env::temp_dir(),
         None,
@@ -162,7 +164,116 @@ async fn acp_live_runs_a_real_turn() {
         println!("{kind}");
     }
     println!("--- content ---\n{}", result.content);
-    assert!(!result.content.trim().is_empty(), "assistant reply is empty");
+    assert!(
+        !result.content.trim().is_empty(),
+        "assistant reply is empty"
+    );
+}
+
+/// 真实验证 Codex 会话恢复不会把历史正文计入新一轮结果。
+///
+/// 该场景要求销毁并重新连接适配器，因为 Web 每轮都会重新构造 Agent，
+/// `session/load` 的历史重放只会在第二次连接时出现。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[tokio::test]
+#[ignore = "requires Codex credentials and network access"]
+async fn acp_live_codex_resume_does_not_replay_history() {
+    if !live_enabled() {
+        return;
+    }
+    let config: crate::config::AgentEngineConfig =
+        serde_json::from_str(r#"{"engine":"codex"}"#).unwrap();
+    let (program, args) = config.resolved_command().expect("preset command");
+    let temp = tempfile::tempdir().unwrap();
+    let workspace = temp.path().join("workspace");
+    let state_dir = temp.path().join("state");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let governance = crate::acp::AcpGovernance::new(
+        workspace.clone(),
+        None,
+        crate::config::AppConfig::default(),
+        "live-codex-resume".to_string(),
+        None,
+        Some(&state_dir),
+    );
+
+    let first = run_codex_resume_turn(
+        &program,
+        &args,
+        &workspace,
+        governance.clone(),
+        "Reply with exactly: FIRST_RESUME_MARKER",
+    )
+    .await;
+    assert!(first.contains("FIRST_RESUME_MARKER"));
+
+    let second = run_codex_resume_turn(
+        &program,
+        &args,
+        &workspace,
+        governance,
+        "Reply with exactly: SECOND_RESUME_MARKER",
+    )
+    .await;
+    assert!(second.contains("SECOND_RESUME_MARKER"));
+    assert!(
+        !second.contains("FIRST_RESUME_MARKER"),
+        "restored history leaked into the new turn: {second}"
+    );
+}
+
+/// 启动一次 Codex ACP 连接并执行单轮提示。
+///
+/// 参数:
+/// - `program`: ACP 启动程序
+/// - `args`: ACP 启动参数
+/// - `workspace`: 临时工作区
+/// - `governance`: 带持久化会话标识的治理句柄
+/// - `input`: 本轮提示
+///
+/// 返回:
+/// - 本轮聚合正文
+async fn run_codex_resume_turn(
+    program: &str,
+    args: &[String],
+    workspace: &std::path::Path,
+    governance: crate::acp::AcpGovernance,
+    input: &str,
+) -> String {
+    let mut engine = super::AcpEngine::connect(
+        "codex",
+        program,
+        args,
+        &BTreeMap::new(),
+        workspace,
+        Duration::from_secs(180),
+        governance,
+    )
+    .await
+    .expect("connect failed");
+    let (events, _received) = tokio::sync::mpsc::unbounded_channel();
+    let request = crate::agent_engine::TurnRequest {
+        input: input.to_string(),
+        image_urls: Vec::new(),
+        cwd: workspace.to_path_buf(),
+    };
+    tokio::time::timeout(
+        Duration::from_secs(180),
+        <super::AcpEngine as crate::agent_engine::ExternalTurnEngine>::run_turn(
+            &mut engine,
+            request,
+            events,
+        ),
+    )
+    .await
+    .expect("turn timed out")
+    .expect("turn failed")
+    .content
 }
 
 /// 验证解析器能吃下适配器实际回出的报文。

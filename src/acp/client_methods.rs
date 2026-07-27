@@ -1,8 +1,13 @@
-use super::governance::AcpGovernance;
 use super::client_terminal::TerminalRegistry;
+use super::governance::AcpGovernance;
 use super::protocol::{RequestId, METHOD_NOT_FOUND};
 use super::transport::AcpTransport;
 use crate::agent_engine::EventSender;
+use agent_client_protocol::schema::v1::{
+    PermissionOption, PermissionOptionKind, ReadTextFileRequest, ReadTextFileResponse,
+    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
+    SelectedPermissionOutcome, WriteTextFileRequest, WriteTextFileResponse,
+};
 use anyhow::Result;
 use serde_json::{json, Value};
 
@@ -34,16 +39,21 @@ pub(crate) async fn handle_peer_request(
 ) -> Result<()> {
     match method {
         "session/request_permission" => {
-            let outcome = request_permission(params, events).await?;
-            transport.respond(id, json!({ "outcome": outcome })).await
+            let result = request_permission(params, events, governance.session_id())
+                .await
+                .and_then(|response| super::sdk::to_value(&response));
+            respond_with(transport, id, result).await
         }
         "fs/read_text_file" => {
-            respond_with(transport, id, read_text_file(params).map(|content| json!({ "content": content }))).await
+            let result = read_text_file(params, governance, events)
+                .await
+                .and_then(|content| super::sdk::to_value(&ReadTextFileResponse::new(content)));
+            respond_with(transport, id, result).await
         }
         "fs/write_text_file" => {
             let written = write_text_file(params, governance, events)
                 .await
-                .map(|_| json!({}));
+                .and_then(|_| super::sdk::to_value(&WriteTextFileResponse::new()));
             respond_with(transport, id, written).await
         }
         "terminal/create" => {
@@ -79,6 +89,10 @@ pub(crate) async fn handle_peer_request(
                 Ok(target) => terminals.release(&target).await.map(|_| json!({})),
                 Err(error) => Err(error),
             };
+            respond_with(transport, id, result).await
+        }
+        "elicitation/create" => {
+            let result = super::elicitation::handle(params, events, governance.session_id()).await;
             respond_with(transport, id, result).await
         }
         // 其余客户端能力尚未接入：明确回 method not found，
@@ -150,20 +164,13 @@ async fn write_text_file(
     governance: &AcpGovernance,
     events: &EventSender,
 ) -> Result<()> {
-    let path = params
-        .get("path")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow::anyhow!("fs/write_text_file requires an absolute path"))?;
-    let content = params
-        .get("content")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-    let path = std::path::Path::new(path);
-    governance.authorize_write(path, events).await?;
-    if let Some(parent) = path.parent() {
+    let request: WriteTextFileRequest =
+        super::sdk::from_value(params.clone(), "fs/write_text_file request")?;
+    governance.authorize_write(&request.path, events).await?;
+    if let Some(parent) = request.path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(path, content)?;
+    std::fs::write(&request.path, request.content)?;
     Ok(())
 }
 
@@ -178,38 +185,82 @@ const REQUEST_FAILED: i64 = -32000;
 /// 参数:
 /// - `params`: `session/request_permission` 参数
 /// - `events`: 事件发送端
+/// - `host_session_id`: Sai 宿主会话标识
 ///
 /// 返回:
-/// - ACP 的 outcome 取值
-async fn request_permission(params: &Value, events: &EventSender) -> Result<&'static str> {
-    let tool = params
-        .get("toolCall")
-        .and_then(|call| call.get("name").or_else(|| call.get("title")))
-        .and_then(Value::as_str)
-        .unwrap_or("tool")
-        .to_string();
-    let arguments = params
-        .get("toolCall")
-        .and_then(|call| call.get("input"))
+/// - 标准 ACP 权限响应
+async fn request_permission(
+    params: &Value,
+    events: &EventSender,
+    host_session_id: &str,
+) -> Result<RequestPermissionResponse> {
+    let request: RequestPermissionRequest =
+        super::sdk::from_value(params.clone(), "session/request_permission request")?;
+    let tool = request
+        .tool_call
+        .fields
+        .title
+        .clone()
+        .unwrap_or_else(|| "tool".to_string());
+    let arguments = request
+        .tool_call
+        .fields
+        .raw_input
+        .as_ref()
         .map(|input| serde_json::to_string(input).unwrap_or_default())
         .unwrap_or_else(|| "{}".to_string());
-    let (request, receiver) =
-        crate::permission::request_permission("acp", &tool, &arguments);
-    let request_id = request.id.clone();
-    let _ = events.send(crate::agent::AgentEvent::PermissionRequested(request));
+    let (pending, receiver) =
+        crate::permission::request_permission(host_session_id, &tool, &arguments);
+    let request_id = pending.id.clone();
+    let _ = events.send(crate::agent::AgentEvent::PermissionRequested(pending));
     let decision = match receiver.await {
         Ok(decision) => decision,
         // 通道关闭说明会话已结束，按取消处理让 agent 收敛
-        Err(_) => return Ok("cancelled"),
+        Err(_) => {
+            return Ok(RequestPermissionResponse::new(
+                RequestPermissionOutcome::Cancelled,
+            ))
+        }
     };
     let _ = events.send(crate::agent::AgentEvent::PermissionResolved {
         request_id,
         decision: decision.clone(),
     });
-    Ok(match decision {
-        crate::permission::PermissionDecision::Allow { .. } => "approved",
-        crate::permission::PermissionDecision::Deny { .. } => "denied",
-    })
+    let allowed = matches!(decision, crate::permission::PermissionDecision::Allow { .. });
+    let outcome = permission_outcome(&request.options, allowed);
+    Ok(RequestPermissionResponse::new(outcome))
+}
+
+/// 将 Sai 的允许或拒绝决定映射到 agent 提供的权限选项。
+///
+/// 参数:
+/// - `options`: agent 声明的可选权限决定
+/// - `allowed`: 用户是否允许本次操作
+///
+/// 返回:
+/// - 匹配到选项时返回 selected，否则返回 cancelled
+fn permission_outcome(
+    options: &[PermissionOption],
+    allowed: bool,
+) -> RequestPermissionOutcome {
+    let option = options.iter().find(|option| {
+        matches!(
+            (allowed, option.kind),
+            (
+                true,
+                PermissionOptionKind::AllowOnce | PermissionOptionKind::AllowAlways
+            ) | (
+                false,
+                PermissionOptionKind::RejectOnce | PermissionOptionKind::RejectAlways
+            )
+        )
+    });
+    match option {
+        Some(option) => RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(
+            option.option_id.clone(),
+        )),
+        None => RequestPermissionOutcome::Cancelled,
+    }
 }
 
 /// 读取文本文件。
@@ -219,15 +270,18 @@ async fn request_permission(params: &Value, events: &EventSender) -> Result<&'st
 ///
 /// 返回:
 /// - 文件内容
-fn read_text_file(params: &Value) -> Result<String> {
-    let path = params
-        .get("path")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow::anyhow!("fs/read_text_file requires an absolute path"))?;
-    let content = std::fs::read_to_string(path)?;
+async fn read_text_file(
+    params: &Value,
+    governance: &AcpGovernance,
+    events: &EventSender,
+) -> Result<String> {
+    let request: ReadTextFileRequest =
+        super::sdk::from_value(params.clone(), "fs/read_text_file request")?;
+    governance.authorize_read(&request.path, events).await?;
+    let content = std::fs::read_to_string(&request.path)?;
     // 按需截取行区间：协议的行号从 1 开始
-    let line = params.get("line").and_then(Value::as_u64);
-    let limit = params.get("limit").and_then(Value::as_u64);
+    let line = request.line.map(u64::from);
+    let limit = request.limit.map(u64::from);
     if line.is_none() && limit.is_none() {
         return Ok(content);
     }
@@ -243,36 +297,97 @@ fn read_text_file(params: &Value) -> Result<String> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn reads_whole_file_without_range() {
+    #[tokio::test]
+    async fn reads_whole_file_without_range() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("a.txt");
         std::fs::write(&path, "one\ntwo\nthree\n").unwrap();
 
-        let content =
-            read_text_file(&json!({ "path": path.display().to_string() })).unwrap();
+        let governance = AcpGovernance::new(
+            dir.path().to_path_buf(),
+            None,
+            crate::config::AppConfig::default(),
+            "session".to_string(),
+            None,
+            None,
+        );
+        let (events, _received) = tokio::sync::mpsc::unbounded_channel();
+        let content = read_text_file(
+            &json!({ "sessionId": "session", "path": path.display().to_string() }),
+            &governance,
+            &events,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(content, "one\ntwo\nthree\n");
     }
 
     /// 协议的行号从 1 开始，取第 2 行起两行应得到 two 与 three。
-    #[test]
-    fn reads_requested_line_range() {
+    #[tokio::test]
+    async fn reads_requested_line_range() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("a.txt");
         std::fs::write(&path, "one\ntwo\nthree\nfour\n").unwrap();
 
+        let governance = AcpGovernance::new(
+            dir.path().to_path_buf(),
+            None,
+            crate::config::AppConfig::default(),
+            "session".to_string(),
+            None,
+            None,
+        );
+        let (events, _received) = tokio::sync::mpsc::unbounded_channel();
         let content = read_text_file(
-            &json!({ "path": path.display().to_string(), "line": 2, "limit": 2 }),
+            &json!({
+                "sessionId": "session",
+                "path": path.display().to_string(),
+                "line": 2,
+                "limit": 2
+            }),
+            &governance,
+            &events,
         )
+        .await
         .unwrap();
 
         assert_eq!(content, "two\nthree");
     }
 
+    #[tokio::test]
+    async fn rejects_request_without_path() {
+        let governance = AcpGovernance::new(
+            std::env::temp_dir(),
+            None,
+            crate::config::AppConfig::default(),
+            "session".to_string(),
+            None,
+            None,
+        );
+        let (events, _received) = tokio::sync::mpsc::unbounded_channel();
+        assert!(read_text_file(&json!({}), &governance, &events).await.is_err());
+    }
+
+    /// 权限决定必须返回 agent 提供的 optionId，不能使用自造状态字符串。
     #[test]
-    fn rejects_request_without_path() {
-        assert!(read_text_file(&json!({})).is_err());
+    fn maps_permission_decision_to_advertised_option() {
+        let options = vec![
+            PermissionOption::new("deny", "Deny", PermissionOptionKind::RejectOnce),
+            PermissionOption::new("allow", "Allow", PermissionOptionKind::AllowOnce),
+        ];
+        let allowed = crate::acp::sdk::to_value(&RequestPermissionResponse::new(
+            permission_outcome(&options, true),
+        ))
+        .unwrap();
+        let denied = crate::acp::sdk::to_value(&RequestPermissionResponse::new(
+            permission_outcome(&options, false),
+        ))
+        .unwrap();
+
+        assert_eq!(allowed["outcome"]["outcome"], "selected");
+        assert_eq!(allowed["outcome"]["optionId"], "allow");
+        assert_eq!(denied["outcome"]["optionId"], "deny");
     }
 
     /// 构造带审计的治理句柄，模拟非 YOLO 会话。
@@ -312,13 +427,16 @@ mod tests {
         let (events, mut received) = tokio::sync::mpsc::unbounded_channel();
 
         let write = tokio::spawn({
-            let params = json!({ "path": target.display().to_string(), "content": "hello" });
+            let params = json!({ "sessionId": "session", "path": target.display().to_string(), "content": "hello" });
             let governance = governance.clone();
             async move { write_text_file(&params, &governance, &events).await }
         });
 
         // 1. 界面先收到权限卡
-        let requested = received.recv().await.expect("a permission card must be raised");
+        let requested = received
+            .recv()
+            .await
+            .expect("a permission card must be raised");
         let request_id = match requested {
             crate::agent::AgentEvent::PermissionRequested(request) => {
                 assert_eq!(request.session_id, "audit-session");
@@ -349,7 +467,7 @@ mod tests {
         let (events, mut received) = tokio::sync::mpsc::unbounded_channel();
 
         let write = tokio::spawn({
-            let params = json!({ "path": target.display().to_string(), "content": "nope" });
+            let params = json!({ "sessionId": "session", "path": target.display().to_string(), "content": "nope" });
             let governance = governance.clone();
             async move { write_text_file(&params, &governance, &events).await }
         });
@@ -384,7 +502,7 @@ mod tests {
         let (events, mut received) = tokio::sync::mpsc::unbounded_channel();
 
         let write = tokio::spawn({
-            let params = json!({ "path": target.display().to_string(), "content": "auto" });
+            let params = json!({ "sessionId": "session", "path": target.display().to_string(), "content": "auto" });
             let governance = governance.clone();
             async move { write_text_file(&params, &governance, &events).await }
         });
@@ -426,12 +544,12 @@ mod tests {
             crate::config::AppConfig::default(),
             "yolo-session".to_string(),
             None,
-        None,
+            None,
         );
         let (events, _received) = tokio::sync::mpsc::unbounded_channel();
 
         write_text_file(
-            &json!({ "path": target.display().to_string(), "content": "ok" }),
+            &json!({ "sessionId": "session", "path": target.display().to_string(), "content": "ok" }),
             &governance,
             &events,
         )

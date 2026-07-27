@@ -31,6 +31,10 @@ struct EngineStatusResponse {
     external: bool,
     /// 该内核下不可用的 sai 功能
     unavailable_features: Vec<String>,
+    /// 最近一次 ACP 握手能力；尚未启动外部内核时为空
+    acp_capabilities: Option<crate::acp::AcpCapabilities>,
+    /// 最近一次 ACP 握手及会话配置快照
+    acp_runtime: Option<crate::acp::AcpRuntimeState>,
 }
 
 /// 返回配置管理路由。
@@ -58,9 +62,11 @@ async fn engine_status(State(state): State<WebAppState>) -> WebResult<Json<Engin
         external: engine.is_external(),
         unavailable_features: engine
             .unavailable_features()
-            .iter()
-            .map(|item| item.to_string())
+            .into_iter()
+            .map(str::to_string)
             .collect(),
+        acp_capabilities: crate::acp::current_capabilities(engine.as_str()),
+        acp_runtime: crate::acp::current_runtime_state(engine.as_str()),
     }))
 }
 

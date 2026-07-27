@@ -16,6 +16,8 @@ pub(crate) struct AcpGovernance {
     workspace: PathBuf,
     profile: Option<PermissionProfile>,
     config: AppConfig,
+    /// Sai 路径，用于解析当前可见的 Skills
+    paths: Option<crate::paths::SaiPaths>,
     /// 会话标识；权限卡按此归属，缺了它 Web 端按会话查不到待审请求
     session_id: String,
     /// 自动审核运行时；仅在 auto_audit 模式且客户端可用时存在
@@ -66,6 +68,7 @@ impl AcpGovernance {
             workspace,
             profile,
             config,
+            paths: paths.cloned(),
             session_id,
             auto_audit,
             session_store: state_dir.map(super::session_store::AcpSessionStore::new),
@@ -78,6 +81,30 @@ impl AcpGovernance {
     /// - 存储句柄；无会话状态目录时为 None
     pub(crate) fn session_store(&self) -> Option<&super::session_store::AcpSessionStore> {
         self.session_store.as_ref()
+    }
+
+    /// 返回 ACP 会话上下文使用的应用配置。
+    ///
+    /// 返回:
+    /// - 当前 Agent 已应用运行期覆盖后的配置
+    pub(crate) fn config(&self) -> &AppConfig {
+        &self.config
+    }
+
+    /// 返回用于发现 Skills 的 Sai 路径。
+    ///
+    /// 返回:
+    /// - 正常会话中的路径；独立测试治理句柄为 None
+    pub(crate) fn paths(&self) -> Option<&crate::paths::SaiPaths> {
+        self.paths.as_ref()
+    }
+
+    /// 返回 Sai 会话标识。
+    ///
+    /// 返回:
+    /// - 权限与结构化提问使用的宿主会话标识
+    pub(crate) fn session_id(&self) -> &str {
+        &self.session_id
     }
 
     /// 校验一次文件写入是否允许。
@@ -111,10 +138,48 @@ impl AcpGovernance {
         // 2. 再做静态边界校验：工作区外与符号链接逃逸即便获批也不放行
         profile
             .authorize("write_file", ToolPermission::Writes, &arguments)
-            .with_context(|| {
-                format!("ACP agent write was blocked by sai: {}", path.display())
-            })?;
+            .with_context(|| format!("ACP agent write was blocked by sai: {}", path.display()))?;
         profile.record_result("write_file", &arguments, Ok(""));
+        Ok(())
+    }
+
+    /// 校验一次文件读取是否允许。
+    ///
+    /// 工作区外路径和敏感路径沿用内置 read_file 的交互审核规则，
+    /// 工作区内普通读取无需额外确认。
+    ///
+    /// 参数:
+    /// - `path`: 目标路径
+    /// - `events`: 事件发送端，用于呈现权限卡
+    ///
+    /// 返回:
+    /// - 允许时为 Ok；被拒时返回错误
+    pub(crate) async fn authorize_read(&self, path: &Path, events: &EventSender) -> Result<()> {
+        let Some(profile) = &self.profile else {
+            return Ok(());
+        };
+        let arguments = json!({ "path": path.display().to_string() });
+        // 1. 仅在策略要求时发起交互，普通工作区读取直接继续
+        if profile.requires_interactive_audit(
+            "read_file",
+            ToolPermission::ReadOnly,
+            &arguments,
+        ) {
+            super::audit::ensure_authorized(
+                profile,
+                &self.session_id,
+                "read_file",
+                &arguments,
+                ToolPermission::ReadOnly,
+                events,
+                self.auto_audit.as_ref(),
+            )
+            .await?;
+        }
+        // 2. 执行最终边界和敏感路径判定，并写入统一审计记录
+        profile
+            .authorize("read_file", ToolPermission::ReadOnly, &arguments)
+            .with_context(|| format!("ACP agent read was blocked by sai: {}", path.display()))?;
         Ok(())
     }
 
@@ -122,6 +187,7 @@ impl AcpGovernance {
     ///
     /// 参数:
     /// - `command`: 待执行命令
+    /// - `cwd`: 命令工作目录
     /// - `events`: 事件发送端，用于呈现权限卡
     ///
     /// 返回:
@@ -129,12 +195,16 @@ impl AcpGovernance {
     pub(crate) async fn authorize_command(
         &self,
         command: &str,
+        cwd: &Path,
         events: &EventSender,
     ) -> Result<bool> {
         let Some(profile) = &self.profile else {
             return Ok(false);
         };
-        let arguments = json!({ "command": command });
+        let arguments = json!({
+            "command": command,
+            "cwd": cwd.display().to_string()
+        });
         super::audit::ensure_authorized(
             profile,
             &self.session_id,

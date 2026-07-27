@@ -60,7 +60,11 @@ impl Agent {
         if tools_enabled && config.tools.progressive_loading_enabled {
             tools::register_progressive_loader(&mut tools);
         }
-        let tool_visibility = ToolVisibility::new(config.tools.progressive_loading_enabled);
+        let mut tool_visibility = ToolVisibility::new(config.tools.progressive_loading_enabled);
+        if config.tools.progressive_loading_enabled {
+            let loaded = state.load_loaded_tools()?;
+            tool_visibility.restore_loaded_tools(&tools, &loaded);
+        }
         let memory = MemoryStore::new(&config, paths);
         memory.init()?;
         let live_mode = tools
@@ -162,8 +166,13 @@ impl Agent {
     /// - `tools`: 与模式匹配的工具注册表
     ///
     /// 返回:
-    /// - 无
-    pub fn switch_mode(&mut self, mode: AgentMode, mut tools: ToolRegistry) {
+    /// - 模式切换与会话工具状态恢复结果
+    pub fn switch_mode(&mut self, mode: AgentMode, mut tools: ToolRegistry) -> Result<()> {
+        let loaded = if self.config.tools.progressive_loading_enabled {
+            self.state.load_loaded_tools()?
+        } else {
+            Vec::new()
+        };
         self.mode = mode;
         crate::goal::register_tools(&mut tools, self.state.goal_file());
         if self.tools_enabled && self.config.tools.progressive_loading_enabled {
@@ -181,8 +190,11 @@ impl Agent {
             .store(mode.as_u8(), std::sync::atomic::Ordering::SeqCst);
         self.tools
             .set_permission_mode(mode.permission_profile_mode());
-        // 1. 重置渐进加载可见性，避免跨模式残留
+        // 1. 按新模式注册表恢复会话已加载集合，不保留当前模式不存在的工具
         self.tool_visibility = ToolVisibility::new(self.config.tools.progressive_loading_enabled);
+        self.tool_visibility
+            .restore_loaded_tools(&self.tools, &loaded);
+        Ok(())
     }
 
     /// 替换工具注册表并保留当前模式和渐进加载状态。
@@ -332,3 +344,7 @@ impl Agent {
         self.last_dynamic_sources.clone()
     }
 }
+
+#[cfg(test)]
+#[path = "lifecycle_tests.rs"]
+mod tests;

@@ -1,7 +1,7 @@
 use super::protocol::{self, Incoming, JsonRpcError, RequestId};
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
@@ -29,7 +29,10 @@ pub(crate) enum PeerMessage {
         method: String,
         params: Value,
     },
-    Notification { method: String, params: Value },
+    Notification {
+        method: String,
+        params: Value,
+    },
 }
 
 /// 与 ACP agent 子进程的 stdio 连接。
@@ -54,6 +57,7 @@ pub(crate) struct AcpTransport {
 /// 对端主动发来的请求要并发推进，合在一个对象上会构成可变与不可变借用冲突。
 pub(crate) struct PeerReceiver {
     peer_rx: mpsc::UnboundedReceiver<PeerMessage>,
+    pending: VecDeque<PeerMessage>,
 }
 
 impl PeerReceiver {
@@ -62,7 +66,30 @@ impl PeerReceiver {
     /// 返回:
     /// - 消息；连接结束时返回 None
     pub(crate) async fn recv(&mut self) -> Option<PeerMessage> {
+        if let Some(message) = self.pending.pop_front() {
+            return Some(message);
+        }
         self.peer_rx.recv().await
+    }
+
+    /// 丢弃已经进入队列的会话更新，并保留其它对端消息。
+    ///
+    /// `session/load` 会重放完整历史，响应返回后这些通知已经进入接收队列。
+    /// 下一轮只需要新提示产生的更新，否则历史正文和工具调用会再次累计。
+    ///
+    /// 返回:
+    /// - 被丢弃的 `session/update` 数量
+    pub(crate) fn discard_session_updates(&mut self) -> usize {
+        let mut discarded = 0usize;
+        while let Ok(message) = self.peer_rx.try_recv() {
+            match &message {
+                PeerMessage::Notification { method, .. } if method == "session/update" => {
+                    discarded = discarded.saturating_add(1);
+                }
+                _ => self.pending.push_back(message),
+            }
+        }
+        discarded
     }
 }
 
@@ -139,6 +166,8 @@ impl AcpTransport {
                     }
                 }
             }
+            // 【ACP】【连接关闭】关闭全部等待通道，让请求立即返回连接错误
+            reader_pending.lock().await.clear();
         });
         Ok((
             Self {
@@ -147,7 +176,10 @@ impl AcpTransport {
                 next_id: AtomicI64::new(1),
                 pending,
             },
-            PeerReceiver { peer_rx },
+            PeerReceiver {
+                peer_rx,
+                pending: VecDeque::new(),
+            },
         ))
     }
 
@@ -252,6 +284,45 @@ impl AcpTransport {
 mod tests {
     use super::*;
 
+    /// 会话恢复产生的历史更新必须从下一轮队列移除，同时保留其它消息。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[tokio::test]
+    async fn discards_replayed_session_updates_without_losing_other_messages() {
+        let (peer_tx, peer_rx) = mpsc::unbounded_channel();
+        peer_tx
+            .send(PeerMessage::Notification {
+                method: "session/update".to_string(),
+                params: serde_json::json!({
+                    "update": {
+                        "sessionUpdate": "agent_message_chunk",
+                        "content": { "type": "text", "text": "上一轮" }
+                    }
+                }),
+            })
+            .unwrap();
+        peer_tx
+            .send(PeerMessage::Notification {
+                method: "custom/notification".to_string(),
+                params: serde_json::json!({ "value": 1 }),
+            })
+            .unwrap();
+        let mut receiver = PeerReceiver {
+            peer_rx,
+            pending: VecDeque::new(),
+        };
+
+        assert_eq!(receiver.discard_session_updates(), 1);
+        assert!(matches!(
+            receiver.recv().await,
+            Some(PeerMessage::Notification { method, .. }) if method == "custom/notification"
+        ));
+    }
+
     /// 宿主会话标记必须覆盖两家适配器的判定变量。
     ///
     /// 实测：在设置了 CLAUDECODE 的终端里启动 sai，claude-code-acp 会以
@@ -267,7 +338,13 @@ mod tests {
     /// 清理列表只针对会话标记，不应误伤凭据与代理等必要变量。
     #[test]
     fn does_not_strip_credentials_or_proxy_settings() {
-        for keep in ["HOME", "PATH", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "HTTPS_PROXY"] {
+        for keep in [
+            "HOME",
+            "PATH",
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "HTTPS_PROXY",
+        ] {
             assert!(
                 !HOST_SESSION_ENV_VARS.contains(&keep),
                 "{keep} 是适配器运行所需，不能清除"

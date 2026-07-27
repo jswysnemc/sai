@@ -242,6 +242,27 @@ pub(crate) fn allow_all_pending_for_session(session_id: &str) -> usize {
     allowed
 }
 
+/// 丢弃指定会话下全部待审权限并关闭等待通道。
+///
+/// ACP 轮次取消时需要以 cancelled 回包，直接关闭通道可让协议适配层
+/// 区分用户拒绝与整个轮次已经终止。
+///
+/// 参数:
+/// - `session_id`: 会话标识
+///
+/// 返回:
+/// - 被撤销的请求数量
+pub(crate) fn discard_pending_permissions_for_session(session_id: &str) -> usize {
+    let ids = pending_permissions(session_id)
+        .into_iter()
+        .map(|request| request.id)
+        .collect::<Vec<_>>();
+    let mut map = pending().lock().unwrap();
+    ids.into_iter()
+        .filter(|id| map.remove(id).is_some())
+        .count()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

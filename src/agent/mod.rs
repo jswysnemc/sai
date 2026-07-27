@@ -4,6 +4,7 @@ mod context_projection;
 mod conversation;
 mod event;
 mod external_events;
+mod external_tool_history;
 mod external_turn;
 mod instruction_files;
 mod lifecycle;

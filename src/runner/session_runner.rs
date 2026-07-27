@@ -203,7 +203,10 @@ impl<'paths> SessionRunner<'paths> {
             state.save_loaded_tools(&loaded_tools)?;
             sink.on_runner_event(RunnerEvent::LoadedToolsChanged(loaded_tools))?;
         }
+        // Web 与网关每轮重建 Agent，返回前显式关闭 ACP 会话与子进程
+        let shutdown_result = agent.shutdown_external_engine().await;
         let result = result?;
+        shutdown_result?;
         if should_apply_command_mode_exit_policy(submission.source) {
             state.apply_command_mode_runtime_exit_policy()?;
             perf.mark("runtime exit policy");

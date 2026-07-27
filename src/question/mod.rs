@@ -1,11 +1,11 @@
 mod broker;
 
 pub(crate) use broker::{
-    answer_question, cancel_question, pending_questions, request_question, resolve_question,
-    PendingQuestion,
+    answer_question, cancel_question, discard_pending_questions_for_session, pending_questions,
+    request_question, resolve_question, PendingQuestion,
 };
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -26,6 +26,38 @@ pub const MAX_CUSTOM_ANSWER_CHARS: usize = 4_000;
 pub struct QuestionOption {
     pub label: String,
     pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+}
+
+impl QuestionOption {
+    /// 返回提交给请求方的真实选项值。
+    ///
+    /// 返回:
+    /// - 显式值存在时返回该值，否则回退到展示名称
+    pub fn answer_value(&self) -> &str {
+        self.value.as_deref().unwrap_or(&self.label)
+    }
+}
+
+/// 结构化问题对自定义答案施加的基础约束。
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct QuestionValidation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub minimum: Option<serde_json::Number>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub maximum: Option<serde_json::Number>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_length: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_length: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pattern: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -38,6 +70,12 @@ pub struct QuestionPrompt {
     pub multiple: bool,
     #[serde(default = "default_true")]
     pub custom: bool,
+    #[serde(default = "default_true")]
+    pub required: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub default_answers: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation: Option<QuestionValidation>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -125,6 +163,7 @@ impl QuestionRequest {
                 );
             }
             let mut labels = BTreeSet::new();
+            let mut values = BTreeSet::new();
             for (option_index, option) in question.options.iter().enumerate() {
                 validate_text(
                     &option.label,
@@ -145,13 +184,24 @@ impl QuestionRequest {
                 if !labels.insert(option.label.trim()) {
                     bail!("questions[{question_index}] contains duplicate option labels");
                 }
+                let value = option.answer_value();
+                validate_text(value, "option value", question_index, MAX_LABEL_CHARS)?;
+                if !values.insert(value) {
+                    bail!("questions[{question_index}] contains duplicate option values");
+                }
             }
+            validate_question_constraints(question, question_index)?;
+            validate_question_answer(question, &question.default_answers, question_index)?;
         }
         Ok(())
     }
 
     pub fn needs_review(&self) -> bool {
-        self.questions.len() > 1 || self.questions.iter().any(|question| question.multiple)
+        self.questions.len() > 1
+            || self
+                .questions
+                .iter()
+                .any(|question| question.multiple || !question.required)
     }
 }
 
@@ -160,8 +210,11 @@ pub fn validate_answers(request: &QuestionRequest, answers: &QuestionAnswers) ->
         bail!("answer count does not match question count");
     }
     for (index, (question, answer)) in request.questions.iter().zip(answers).enumerate() {
-        if answer.is_empty() {
+        if answer.is_empty() && question.required {
             bail!("question {index} is unanswered");
+        }
+        if answer.is_empty() {
+            continue;
         }
         if !question.multiple && answer.len() != 1 {
             bail!("question {index} only accepts one answer");
@@ -169,7 +222,7 @@ pub fn validate_answers(request: &QuestionRequest, answers: &QuestionAnswers) ->
         let option_labels = question
             .options
             .iter()
-            .map(|option| option.label.as_str())
+            .map(QuestionOption::answer_value)
             .collect::<BTreeSet<_>>();
         let mut unique = BTreeSet::new();
         for value in answer {
@@ -187,6 +240,183 @@ pub fn validate_answers(request: &QuestionRequest, answers: &QuestionAnswers) ->
                 bail!("question {index} contains duplicate answers");
             }
         }
+        validate_question_answer(question, answer, index)?;
+    }
+    Ok(())
+}
+
+/// 校验问题声明的约束自身是否有效。
+///
+/// 参数:
+/// - `question`: 待校验问题
+/// - `index`: 问题序号
+///
+/// 返回:
+/// - 约束有效时返回空结果
+fn validate_question_constraints(question: &QuestionPrompt, index: usize) -> Result<()> {
+    let Some(validation) = &question.validation else {
+        return Ok(());
+    };
+    if validation
+        .minimum
+        .as_ref()
+        .and_then(serde_json::Number::as_f64)
+        .zip(
+            validation
+                .maximum
+                .as_ref()
+                .and_then(serde_json::Number::as_f64),
+        )
+        .is_some_and(|(min, max)| min > max)
+    {
+        bail!("question {index} minimum exceeds maximum");
+    }
+    if validation
+        .min_length
+        .zip(validation.max_length)
+        .is_some_and(|(min, max)| min > max)
+    {
+        bail!("question {index} min_length exceeds max_length");
+    }
+    if let Some(pattern) = &validation.pattern {
+        regex::Regex::new(pattern)
+            .with_context(|| format!("question {index} contains an invalid pattern"))?;
+    }
+    Ok(())
+}
+
+/// 按问题类型和范围校验一组答案。
+///
+/// 参数:
+/// - `question`: 约束来源
+/// - `answers`: 待校验答案
+/// - `index`: 问题序号
+///
+/// 返回:
+/// - 所有答案满足约束时返回空结果
+fn validate_question_answer(
+    question: &QuestionPrompt,
+    answers: &[String],
+    index: usize,
+) -> Result<()> {
+    let Some(validation) = &question.validation else {
+        return Ok(());
+    };
+    for answer in answers {
+        let length = answer.chars().count();
+        if validation
+            .min_length
+            .is_some_and(|minimum| length < minimum)
+        {
+            bail!("question {index} answer is shorter than the minimum length");
+        }
+        if validation
+            .max_length
+            .is_some_and(|maximum| length > maximum)
+        {
+            bail!("question {index} answer exceeds the maximum length");
+        }
+        if let Some(pattern) = &validation.pattern {
+            if !regex::Regex::new(pattern)?.is_match(answer) {
+                bail!("question {index} answer does not match the required pattern");
+            }
+        }
+        validate_typed_answer(validation, answer, index)?;
+    }
+    Ok(())
+}
+
+/// 校验单个答案的标量类型、数值范围和常见格式。
+///
+/// 参数:
+/// - `validation`: 问题约束
+/// - `answer`: 待校验答案
+/// - `index`: 问题序号
+///
+/// 返回:
+/// - 答案满足类型与格式时返回空结果
+fn validate_typed_answer(
+    validation: &QuestionValidation,
+    answer: &str,
+    index: usize,
+) -> Result<()> {
+    match validation.value_type.as_deref() {
+        Some("integer") => {
+            let value = answer
+                .parse::<i64>()
+                .with_context(|| format!("question {index} requires an integer"))?
+                as f64;
+            validate_number_range(validation, value, index)?;
+        }
+        Some("number") => {
+            let value = answer
+                .parse::<f64>()
+                .with_context(|| format!("question {index} requires a number"))?;
+            validate_number_range(validation, value, index)?;
+        }
+        Some("boolean") => {
+            answer
+                .parse::<bool>()
+                .with_context(|| format!("question {index} requires a boolean"))?;
+        }
+        _ => {}
+    }
+    match validation.format.as_deref() {
+        Some("date") => {
+            chrono::NaiveDate::parse_from_str(answer, "%Y-%m-%d")
+                .with_context(|| format!("question {index} requires an ISO date"))?;
+        }
+        Some("date-time") => {
+            chrono::DateTime::parse_from_rfc3339(answer)
+                .with_context(|| format!("question {index} requires an ISO date-time"))?;
+        }
+        Some("uri" | "url") => {
+            reqwest::Url::parse(answer)
+                .with_context(|| format!("question {index} requires an absolute URI"))?;
+        }
+        Some("ipv4") => {
+            answer
+                .parse::<std::net::Ipv4Addr>()
+                .with_context(|| format!("question {index} requires an IPv4 address"))?;
+        }
+        Some("ipv6") => {
+            answer
+                .parse::<std::net::Ipv6Addr>()
+                .with_context(|| format!("question {index} requires an IPv6 address"))?;
+        }
+        Some("email") if !answer.contains('@') => {
+            bail!("question {index} requires an email address");
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// 校验数值答案的上下界。
+///
+/// 参数:
+/// - `validation`: 数值约束
+/// - `value`: 已解析数值
+/// - `index`: 问题序号
+///
+/// 返回:
+/// - 数值位于范围内时返回空结果
+fn validate_number_range(validation: &QuestionValidation, value: f64, index: usize) -> Result<()> {
+    if validation
+        .minimum
+        .as_ref()
+        .and_then(serde_json::Number::as_f64)
+        .is_some_and(|minimum| value < minimum)
+    {
+        bail!("question {index} answer is below the minimum");
+    }
+    if validation
+        .maximum
+        .as_ref()
+        .and_then(serde_json::Number::as_f64)
+        .is_some_and(|maximum| value > maximum)
+    {
+        bail!("question {index} answer exceeds the maximum");
     }
     Ok(())
 }
@@ -285,9 +515,13 @@ mod tests {
                 options: vec![QuestionOption {
                     label: "全部".to_string(),
                     description: "修改全部相关文件".to_string(),
+                    value: None,
                 }],
                 multiple: false,
                 custom: true,
+                required: true,
+                default_answers: Vec::new(),
+                validation: None,
             }],
         }
     }
@@ -337,5 +571,16 @@ mod tests {
         let text = assistant_exchange_text(&exchange);
         assert!(text.contains("全部: 修改全部相关文件"));
         assert!(text.contains("可输入自定义答案"));
+    }
+
+    /// 选项提交值可以与展示名称不同。
+    #[test]
+    fn validates_explicit_option_values() {
+        let mut request = request();
+        request.questions[0].custom = false;
+        request.questions[0].options[0].value = Some("all".to_string());
+
+        assert!(validate_answers(&request, &vec![vec!["all".to_string()]]).is_ok());
+        assert!(validate_answers(&request, &vec![vec!["全部".to_string()]]).is_err());
     }
 }

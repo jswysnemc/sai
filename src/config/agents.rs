@@ -260,7 +260,11 @@ pub fn apply_agent_override(
 ) -> anyhow::Result<crate::config::AppConfig> {
     use anyhow::bail;
 
-    // 1. 显式选择优先，未指定时采用当前入口默认值
+    // 1. CLI 与 TUI 只使用内置内核，Web 与网关保留多内核能力
+    if matches!(surface, AgentSurface::Cli | AgentSurface::Tui) {
+        config.agent.engine = super::AgentEngineKind::Native;
+    }
+    // 2. 显式选择优先，未指定时采用当前入口默认值
     let explicit = agent_id.map(str::trim).filter(|value| !value.is_empty());
     let selected = explicit.map(str::to_string).or_else(|| {
         config
@@ -270,7 +274,7 @@ pub fn apply_agent_override(
     let Some(agent_id) = selected else {
         return Ok(config);
     };
-    // 2. 从统一列表解析内置、旧版迁移或自定义档案
+    // 3. 从统一列表解析内置、旧版迁移或自定义档案
     let profile = config
         .resolved_agent_profiles()
         .into_iter()
@@ -281,7 +285,7 @@ pub fn apply_agent_override(
         }
         bail!("agent not found: {agent_id}");
     };
-    // 3. 应用提示词、供应商、模型和思考等级覆盖
+    // 4. 应用提示词、供应商、模型和思考等级覆盖
     if !profile.system_prompt.trim().is_empty() {
         config.system_prompt_file = None;
         config.system_prompt = Some(profile.system_prompt.clone());
@@ -301,7 +305,7 @@ pub fn apply_agent_override(
             provider.thinking_level = profile.thinking_level.clone();
         }
     }
-    // 4. 工具白名单：空列表表示全量；内置 explore/plan/gateway/code 有默认白名单
+    // 5. 工具白名单：空列表表示全量；内置 explore/plan/gateway/code 有默认白名单
     let enabled_tools = resolve_enabled_tools(&profile);
     config.load_instruction_files = profile.load_instruction_files;
     config.agent_runtime = if enabled_tools.is_empty()
@@ -375,6 +379,21 @@ mod tests {
         let tui = apply_agent_override(config, None, AgentSurface::Tui).unwrap();
         assert_eq!(cli.system_prompt.as_deref(), Some("cli prompt"));
         assert_eq!(tui.system_prompt.as_deref(), Some("tui prompt"));
+    }
+
+    /// 验证终端入口强制使用内置内核，Web 仍保留外部内核。
+    #[test]
+    fn terminal_surfaces_force_native_engine_without_changing_web() {
+        let mut config = crate::config::AppConfig::default();
+        config.agent.engine = crate::config::AgentEngineKind::ClaudeCode;
+
+        let cli = apply_agent_override(config.clone(), None, AgentSurface::Cli).unwrap();
+        let tui = apply_agent_override(config.clone(), None, AgentSurface::Tui).unwrap();
+        let web = apply_agent_override(config, None, AgentSurface::Web).unwrap();
+
+        assert_eq!(cli.agent.engine, crate::config::AgentEngineKind::Native);
+        assert_eq!(tui.agent.engine, crate::config::AgentEngineKind::Native);
+        assert_eq!(web.agent.engine, crate::config::AgentEngineKind::ClaudeCode);
     }
 
     /// 内置代码 Agent 带有工程规范提示词；探索 Agent 为只读。

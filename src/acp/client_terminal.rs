@@ -12,9 +12,44 @@ use tokio::sync::Mutex;
 /// 一个受 sai 管理的终端。
 struct Terminal {
     child: Option<Child>,
+    /// 用户提交的原始命令，用于审计记录
+    command: String,
     /// 累积输出；ACP 允许多次 `terminal/output` 读取同一终端
-    output: Arc<Mutex<String>>,
+    output: Arc<Mutex<TerminalOutputCapture>>,
     exit_status: Option<i32>,
+}
+
+/// ACP 终端输出缓存。
+#[derive(Default)]
+struct TerminalOutputCapture {
+    text: String,
+    truncated: bool,
+    byte_limit: Option<usize>,
+}
+
+impl TerminalOutputCapture {
+    /// 追加一段终端输出，并按协议从开头截去超限内容。
+    ///
+    /// 参数:
+    /// - `chunk`: 新收到的 UTF-8 输出
+    ///
+    /// 返回:
+    /// - 无
+    fn push(&mut self, chunk: &str) {
+        self.text.push_str(chunk);
+        let Some(limit) = self.byte_limit else {
+            return;
+        };
+        if self.text.len() <= limit {
+            return;
+        }
+        let mut start = self.text.len().saturating_sub(limit);
+        while start < self.text.len() && !self.text.is_char_boundary(start) {
+            start = start.saturating_add(1);
+        }
+        self.text.drain(..start);
+        self.truncated = true;
+    }
 }
 
 /// 外部内核可用的终端集合。
@@ -45,16 +80,20 @@ impl TerminalRegistry {
         events: &crate::agent_engine::EventSender,
     ) -> Result<String> {
         let command = command_line(params)?;
-        // 1. 先过审核与权限：被拒或越界时直接失败，命令不会被启动
-        //    审核针对用户看得懂的原始命令，而不是改写后的 rtk 形式
-        let sandboxed = governance.authorize_command(&command, events).await?;
-        // 2. 再套用输出压缩，与自带 run_command 同一套判定
-        let command = governance.apply_output_filter(&command);
+        let original_command = command.clone();
         let cwd = params
             .get("cwd")
             .and_then(Value::as_str)
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| governance.workspace().to_path_buf());
+        if !cwd.is_absolute() {
+            anyhow::bail!("terminal/create cwd must be absolute");
+        }
+        // 1. 先过审核与权限：被拒或越界时直接失败，命令不会被启动
+        //    审核针对用户看得懂的原始命令，而不是改写后的 rtk 形式
+        let sandboxed = governance.authorize_command(&command, &cwd, events).await?;
+        // 2. 再套用输出压缩，与自带 run_command 同一套判定
+        let command = governance.apply_output_filter(&command);
         // 3. 复用 sai 的 shell 构造，沙箱与自带 run_command 完全一致；
         //    首选 shell 不存在时依次回退，与自带命令的行为保持一致
         let candidates = crate::tools::command::build_shell_commands(
@@ -100,7 +139,14 @@ impl TerminalRegistry {
                 anyhow::bail!("failed to start terminal command: {command} ({detail})")
             }
         };
-        let output = Arc::new(Mutex::new(String::new()));
+        let byte_limit = params
+            .get("outputByteLimit")
+            .and_then(Value::as_u64)
+            .map(|value| usize::try_from(value).unwrap_or(usize::MAX));
+        let output = Arc::new(Mutex::new(TerminalOutputCapture {
+            byte_limit,
+            ..Default::default()
+        }));
         // 3. 标准输出与错误合并累积，读取端随时可取当前快照
         for stream in [
             child.stdout.take().map(StreamKind::Stdout),
@@ -120,7 +166,7 @@ impl TerminalRegistry {
                         Ok(0) | Err(_) => break,
                         Ok(count) => {
                             let chunk = String::from_utf8_lossy(&buffer[..count]).to_string();
-                            sink.lock().await.push_str(&chunk);
+                            sink.lock().await.push(&chunk);
                             // 边收边推：长命令运行期间界面也能看到进度，
                             // 否则要等进程退出才一次性出现全部输出
                             let _ = progress.send(crate::agent::AgentEvent::ToolProgress {
@@ -137,6 +183,7 @@ impl TerminalRegistry {
             id.clone(),
             Terminal {
                 child: Some(child),
+                command: original_command,
                 output,
                 exit_status: None,
             },
@@ -156,10 +203,12 @@ impl TerminalRegistry {
         let terminal = terminals
             .get(terminal_id)
             .with_context(|| format!("unknown terminal: {terminal_id}"))?;
-        let output = terminal.output.lock().await.clone();
+        let output = terminal.output.lock().await;
+        let text = output.text.clone();
+        let truncated = output.truncated;
         Ok(json!({
-            "output": output,
-            "truncated": false,
+            "output": text,
+            "truncated": truncated,
             "exitStatus": terminal.exit_status.map(|code| json!({ "exitCode": code })),
         }))
     }
@@ -196,8 +245,8 @@ impl TerminalRegistry {
         let mut terminals = self.terminals.lock().await;
         if let Some(terminal) = terminals.get_mut(terminal_id) {
             terminal.exit_status = Some(code);
-            let output = terminal.output.lock().await.clone();
-            governance.record_command_result(terminal_id, &output);
+            let output = terminal.output.lock().await.text.clone();
+            governance.record_command_result(&terminal.command, &output);
         }
         Ok(json!({ "exitCode": code }))
     }
@@ -259,7 +308,7 @@ impl StreamKind {
 /// 从参数拼出完整命令行。
 ///
 /// ACP 用 `command` 加 `args` 描述命令，sai 的沙箱按整条 shell 命令构造，
-/// 因此在这里合并；带空白的参数补引号，避免被 shell 二次切分。
+/// 因此在这里合并；每个参数按当前平台转义，避免被 shell 二次解析。
 ///
 /// 参数:
 /// - `params`: `terminal/create` 参数
@@ -275,14 +324,34 @@ fn command_line(params: &Value) -> Result<String> {
     if let Some(args) = params.get("args").and_then(Value::as_array) {
         for arg in args.iter().filter_map(Value::as_str) {
             line.push(' ');
-            if arg.contains(char::is_whitespace) {
-                line.push_str(&format!("\"{arg}\""));
-            } else {
-                line.push_str(arg);
-            }
+            line.push_str(&quote_shell_arg(arg));
         }
     }
     Ok(line)
+}
+
+/// 将一个命令参数转义为 shell 中的单个参数。
+///
+/// 参数:
+/// - `argument`: 原始参数
+///
+/// 返回:
+/// - 可安全拼入命令行的参数文本
+#[cfg(not(windows))]
+fn quote_shell_arg(argument: &str) -> String {
+    format!("'{}'", argument.replace('\'', "'\\''"))
+}
+
+/// 将一个命令参数转义为 Windows shell 中的单个参数。
+///
+/// 参数:
+/// - `argument`: 原始参数
+///
+/// 返回:
+/// - 可安全拼入命令行的参数文本
+#[cfg(windows)]
+fn quote_shell_arg(argument: &str) -> String {
+    format!("\"{}\"", argument.replace('"', "\\\""))
 }
 
 /// 提取要注入子进程的环境变量。
@@ -316,7 +385,10 @@ mod tests {
     #[test]
     fn joins_command_with_args() {
         let line = command_line(&json!({ "command": "git", "args": ["status", "--short"] })).unwrap();
-        assert_eq!(line, "git status --short");
+        #[cfg(not(windows))]
+        assert_eq!(line, "git 'status' '--short'");
+        #[cfg(windows)]
+        assert_eq!(line, "git \"status\" \"--short\"");
     }
 
     /// 带空白的参数必须加引号，否则会被 shell 拆成多个参数。
@@ -324,7 +396,19 @@ mod tests {
     fn quotes_arguments_containing_whitespace() {
         let line =
             command_line(&json!({ "command": "git", "args": ["commit", "-m", "a b"] })).unwrap();
-        assert_eq!(line, "git commit -m \"a b\"");
+        #[cfg(not(windows))]
+        assert_eq!(line, "git 'commit' '-m' 'a b'");
+        #[cfg(windows)]
+        assert_eq!(line, "git \"commit\" \"-m\" \"a b\"");
+    }
+
+    /// shell 元字符只能作为参数内容，不能变成额外命令。
+    #[test]
+    fn quotes_shell_metacharacters_in_arguments() {
+        let line = command_line(&json!({ "command": "printf", "args": ["a; touch /tmp/x"] }))
+            .unwrap();
+        assert!(line.contains("a; touch /tmp/x"));
+        assert_ne!(line, "printf a; touch /tmp/x");
     }
 
     #[test]
@@ -336,6 +420,19 @@ mod tests {
     fn reads_env_pairs() {
         let pairs = env_pairs(&json!({ "env": [{ "name": "A", "value": "1" }] }));
         assert_eq!(pairs, vec![("A".to_string(), "1".to_string())]);
+    }
+
+    /// 输出上限按字节执行，但不得截断 UTF-8 字符。
+    #[test]
+    fn terminal_output_limit_keeps_utf8_valid() {
+        let mut capture = TerminalOutputCapture {
+            byte_limit: Some(5),
+            ..Default::default()
+        };
+        capture.push("ab中文");
+
+        assert_eq!(capture.text, "文");
+        assert!(capture.truncated);
     }
 
     /// 终端命令走的是 sai 自带 run_command 的同一套 shell 构造。

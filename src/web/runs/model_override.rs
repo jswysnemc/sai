@@ -25,6 +25,10 @@ pub(crate) fn resolve_run_config(
     }
     let mut config = AppConfig::load_or_default(paths)?;
     config = apply_agent_override(config, agent_id)?;
+    if config.agent.engine.is_external() {
+        apply_acp_overrides(&mut config, provider_id, model, thinking_level)?;
+        return Ok(Some(config));
+    }
     match (provider_id, model) {
         (Some(provider_id), Some(model)) => {
             config = apply_model_override(config, provider_id, model)?;
@@ -36,6 +40,43 @@ pub(crate) fn resolve_run_config(
         apply_thinking_override(&mut config, level)?;
     }
     Ok(Some(config))
+}
+
+/// 将 Web 单轮模型与思考选择映射到 ACP 标准配置类别。
+///
+/// 参数:
+/// - `config`: 已应用 Agent 覆盖的运行配置
+/// - `provider_id`: 前端 ACP 虚拟供应商标识
+/// - `model`: 可选 ACP 模型值
+/// - `thinking_level`: 可选 ACP 思考等级值
+///
+/// 返回:
+/// - 覆盖是否有效
+fn apply_acp_overrides(
+    config: &mut AppConfig,
+    provider_id: Option<&str>,
+    model: Option<&str>,
+    thinking_level: Option<&str>,
+) -> Result<()> {
+    match (provider_id, model) {
+        (Some(provider_id), Some(model)) => {
+            if provider_id != "__acp__" {
+                bail!("external ACP runs require provider_id __acp__");
+            }
+            config.agent.acp.model = model.trim().to_string();
+        }
+        (None, None) => {}
+        _ => bail!("provider_id and model must be provided together"),
+    }
+    if let Some(level) = thinking_level {
+        let level = level.trim();
+        config.agent.acp.thought_level = if level == "auto" {
+            String::new()
+        } else {
+            level.to_string()
+        };
+    }
+    Ok(())
 }
 
 /// 对当前供应商应用单轮思考等级覆盖。
@@ -111,5 +152,22 @@ mod tests {
         let mut config = AppConfig::default();
         apply_thinking_override(&mut config, "xhigh").unwrap();
         assert_eq!(config.provider(None).unwrap().thinking_level, "xhigh");
+    }
+
+    /// 外部内核的单轮选择必须写入 ACP 配置，而不是内置供应商。
+    #[test]
+    fn applies_external_model_and_thinking_to_acp() {
+        let mut config = AppConfig::default();
+        config.agent.engine = crate::config::AgentEngineKind::ClaudeCode;
+        apply_acp_overrides(
+            &mut config,
+            Some("__acp__"),
+            Some("claude-sonnet"),
+            Some("high"),
+        )
+        .unwrap();
+
+        assert_eq!(config.agent.acp.model, "claude-sonnet");
+        assert_eq!(config.agent.acp.thought_level, "high");
     }
 }

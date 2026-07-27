@@ -105,6 +105,24 @@ pub(crate) fn pending_questions(session_id: &str) -> Vec<PendingQuestion> {
         .collect()
 }
 
+/// 丢弃指定会话下全部待处理提问并关闭等待通道。
+///
+/// 参数:
+/// - `session_id`: 会话标识
+///
+/// 返回:
+/// - 被撤销的提问数量
+pub(crate) fn discard_pending_questions_for_session(session_id: &str) -> usize {
+    let ids = pending_questions(session_id)
+        .into_iter()
+        .map(|question| question.id)
+        .collect::<Vec<_>>();
+    let mut map = pending().lock().unwrap();
+    ids.into_iter()
+        .filter(|id| map.remove(id).is_some())
+        .count()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,9 +136,13 @@ mod tests {
                 options: vec![QuestionOption {
                     label: "全部".to_string(),
                     description: "全部相关文件".to_string(),
+                    value: None,
                 }],
                 multiple: false,
                 custom: true,
+                required: true,
+                default_answers: Vec::new(),
+                validation: None,
             }],
         }
     }

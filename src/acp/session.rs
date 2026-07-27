@@ -1,14 +1,44 @@
 use super::client_methods;
 use super::client_terminal::TerminalRegistry;
-use super::event_bridge::bridge_session_update;
+use super::config_options::AcpConfigOptions;
+use super::event_bridge::AcpEventBridge;
 use super::governance::AcpGovernance;
-use super::protocol::{self, PROTOCOL_VERSION};
+use super::protocol;
 use super::transport::{AcpTransport, PeerMessage, PeerReceiver};
 use crate::agent_engine::{EventSender, ExternalTurnEngine, TurnRequest};
 use crate::llm::ChatResult;
+use agent_client_protocol::schema::v1::{
+    AuthMethod, AuthenticateRequest, AuthenticateResponse, CloseSessionRequest,
+    CloseSessionResponse, ContentBlock, DeleteSessionRequest, DeleteSessionResponse, ImageContent,
+    ListSessionsRequest, ListSessionsResponse, LoadSessionRequest, LoadSessionResponse,
+    LogoutRequest, LogoutResponse, NewSessionRequest, NewSessionResponse, PromptRequest,
+    PromptResponse, ResumeSessionRequest, ResumeSessionResponse, SessionConfigOption, SessionInfo,
+    SessionModeState, SetSessionModeRequest, SetSessionModeResponse, TextContent,
+};
 use anyhow::{Context, Result};
-use serde_json::{json, Value};
+use serde_json::json;
 use std::time::{Duration, Instant};
+
+/// Codex app-server 保留的非来源客户端名称。
+///
+/// 使用该名称时，app-server 不会用 ACP 宿主覆盖默认的 `codex_cli_rs`
+/// 来源和 User-Agent，行为与 Sai 内置内核的 Codex 客户端兼容模式一致。
+const CODEX_APP_SERVER_NON_ORIGINATING_CLIENT: &str = "codex_app_server_daemon";
+
+/// 返回外部内核在 ACP 握手中声明的客户端名称。
+///
+/// 参数:
+/// - `engine_name`: 外部内核稳定名称
+///
+/// 返回:
+/// - 发送给 ACP agent 的 `clientInfo.name`
+pub(super) fn client_info_name(engine_name: &str) -> &'static str {
+    if engine_name == "codex" {
+        CODEX_APP_SERVER_NON_ORIGINATING_CLIENT
+    } else {
+        "sai"
+    }
+}
 
 /// 基于 ACP 的外部对话内核。
 pub(crate) struct AcpEngine {
@@ -19,10 +49,16 @@ pub(crate) struct AcpEngine {
     startup_timeout: Duration,
     governance: AcpGovernance,
     terminals: TerminalRegistry,
+    /// 维护 ACP 工具调用标识与展示名称的关联
+    event_bridge: AcpEventBridge,
     /// 握手响应里的 agentInfo，作为「确实连上了外部内核」的运行时证据
     agent_info: Option<(String, String)>,
     /// agent 是否支持 session/load；不支持时不做恢复尝试
-    load_session: bool,
+    capabilities: super::capabilities::AcpCapabilities,
+    /// 当前会话公开的标准配置项
+    config_options: AcpConfigOptions,
+    /// 当前连接是否执行过显式 authenticate
+    authenticated: bool,
 }
 
 impl AcpEngine {
@@ -58,13 +94,19 @@ impl AcpEngine {
             startup_timeout,
             governance,
             terminals: TerminalRegistry::default(),
+            event_bridge: AcpEventBridge::default(),
             agent_info: None,
-            load_session: false,
+            capabilities: Default::default(),
+            config_options: Default::default(),
+            authenticated: false,
         };
-        let (agent_info, load_session) = engine.initialize().await?;
+        let initialized = engine.initialize().await?;
+        let authenticated = engine.authenticate(&initialized.auth_methods).await?;
+        super::capabilities::publish(name, &initialized.capabilities, &initialized.auth_methods);
         Ok(Self {
-            agent_info: Some(agent_info),
-            load_session,
+            agent_info: Some((initialized.name, initialized.version)),
+            capabilities: initialized.capabilities,
+            authenticated,
             ..engine
         })
     }
@@ -75,16 +117,10 @@ impl AcpEngine {
     /// 从而让外部内核的每次落盘与执行都经过 sai 的权限与沙箱。
     ///
     /// 返回:
-    /// - `(agent 名称与版本, 是否支持 session/load)`
-    async fn initialize(&self) -> Result<((String, String), bool)> {
-        let params = json!({
-            "protocolVersion": PROTOCOL_VERSION,
-            "clientInfo": { "name": "sai", "version": env!("CARGO_PKG_VERSION") },
-            "clientCapabilities": {
-                "fs": { "readTextFile": true, "writeTextFile": true },
-                "terminal": true
-            }
-        });
+    /// - agent 名称、版本和协商后的能力
+    async fn initialize(&self) -> Result<super::capabilities::InitializedAgent> {
+        let client_name = client_info_name(&self.name);
+        let params = super::sdk::initialize_params(client_name)?;
         // 首次运行要下载适配器，握手超时给得比普通请求宽
         let response = tokio::time::timeout(
             self.startup_timeout,
@@ -97,32 +133,34 @@ impl AcpEngine {
                 self.startup_timeout.as_secs()
             )
         })??;
-        let version = response
-            .get("protocolVersion")
-            .and_then(Value::as_u64)
-            .unwrap_or(u64::from(PROTOCOL_VERSION));
-        if version != u64::from(PROTOCOL_VERSION) {
-            anyhow::bail!(
-                "ACP agent speaks protocol version {version}, sai supports {PROTOCOL_VERSION}"
-            );
+        super::capabilities::parse_initialize_response(response)
+    }
+
+    /// 按配置选择 agent 公布的认证方式。
+    ///
+    /// 参数:
+    /// - `methods`: initialize 响应中的认证方式
+    ///
+    /// 返回:
+    /// - 是否执行了显式认证
+    async fn authenticate(&self, methods: &[AuthMethod]) -> Result<bool> {
+        let method_id = self.governance.config().agent.acp.auth_method.trim();
+        if method_id.is_empty() {
+            return Ok(false);
         }
-        let info = response.get("agentInfo");
-        let name = info
-            .and_then(|info| info.get("title").or_else(|| info.get("name")))
-            .and_then(Value::as_str)
-            .unwrap_or("ACP agent")
-            .to_string();
-        let version = info
-            .and_then(|info| info.get("version"))
-            .and_then(Value::as_str)
-            .unwrap_or("-")
-            .to_string();
-        let load_session = response
-            .get("agentCapabilities")
-            .and_then(|caps| caps.get("loadSession"))
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        Ok(((name, version), load_session))
+        if !methods
+            .iter()
+            .any(|method| method.id().to_string() == method_id)
+        {
+            anyhow::bail!("ACP agent does not advertise auth method: {method_id}");
+        }
+        let request = AuthenticateRequest::new(method_id.to_string());
+        let response = self
+            .transport
+            .request("authenticate", super::sdk::to_value(&request)?)
+            .await?;
+        let _: AuthenticateResponse = super::sdk::from_value(response, "authenticate response")?;
+        Ok(true)
     }
 
     /// 取出握手得到的 agent 名称与版本。
@@ -146,25 +184,23 @@ impl AcpEngine {
         }
         // 1. 先尝试接回上次的会话：外部 agent 自管历史，
         //    新建会话意味着丢掉全部上下文，与 sai 会话列表里的历史对不上
-        if self.load_session {
+        if self.capabilities.resume_session || self.capabilities.load_session {
             if let Some(stored) = self
                 .governance
                 .session_store()
                 .and_then(|store| store.load(&self.name))
             {
-                let loaded = self
-                    .transport
-                    .request(
-                        "session/load",
-                        json!({
-                            "sessionId": stored,
-                            "cwd": cwd.display().to_string(),
-                            "mcpServers": [],
-                        }),
-                    )
-                    .await;
+                let loaded = self.restore_session(&stored, cwd).await;
                 match loaded {
-                    Ok(_) => {
+                    Ok(setup) => {
+                        // 【ACP】【会话恢复】session/load 会把历史内容作为 session/update 重放；
+                        // 响应已经说明恢复完成，这批通知不能进入下一轮增量
+                        self.peer.discard_session_updates();
+                        self.config_options.replace(setup.config_options);
+                        self.apply_config_options(&stored).await?;
+                        self.apply_legacy_mode(&stored, setup.modes.as_ref())
+                            .await?;
+                        self.publish_session_state(setup.modes.as_ref());
                         self.session_id = Some(stored.clone());
                         return Ok(stored);
                     }
@@ -179,23 +215,146 @@ impl AcpEngine {
             }
         }
         // 2. 没有可恢复的会话时新建，并记下标识供下次接回
+        let context = super::session_context::build(&self.governance, &self.capabilities)?;
+        let request = NewSessionRequest::new(cwd)
+            .mcp_servers(context.mcp_servers)
+            .additional_directories(context.additional_directories)
+            .meta(context.meta);
         let response = self
             .transport
-            .request(
-                "session/new",
-                json!({ "cwd": cwd.display().to_string(), "mcpServers": [] }),
-            )
+            .request("session/new", super::sdk::to_value(&request)?)
             .await?;
-        let session_id = response
-            .get("sessionId")
-            .and_then(Value::as_str)
-            .context("session/new did not return a sessionId")?
-            .to_string();
+        let response: NewSessionResponse =
+            super::sdk::from_value(response, "session/new response")?;
+        let session_id = response.session_id.to_string();
+        let modes = response.modes;
+        self.config_options.replace(response.config_options);
+        self.apply_config_options(&session_id).await?;
+        self.apply_legacy_mode(&session_id, modes.as_ref()).await?;
+        self.publish_session_state(modes.as_ref());
         if let Some(store) = self.governance.session_store() {
             let _ = store.save(&self.name, &session_id);
         }
         self.session_id = Some(session_id.clone());
         Ok(session_id)
+    }
+
+    /// 使用 agent 支持的最佳方法恢复持久化会话。
+    ///
+    /// 参数:
+    /// - `session_id`: 持久化的 ACP 会话标识
+    /// - `cwd`: 会话工作目录
+    ///
+    /// 返回:
+    /// - 恢复后的配置项与旧版模式
+    async fn restore_session(
+        &self,
+        session_id: &str,
+        cwd: &std::path::Path,
+    ) -> Result<RestoredSession> {
+        let context = super::session_context::build(&self.governance, &self.capabilities)?;
+        if self.capabilities.resume_session {
+            let request = ResumeSessionRequest::new(session_id.to_string(), cwd)
+                .mcp_servers(context.mcp_servers)
+                .additional_directories(context.additional_directories)
+                .meta(context.meta);
+            let response = self
+                .transport
+                .request("session/resume", super::sdk::to_value(&request)?)
+                .await?;
+            let response: ResumeSessionResponse =
+                super::sdk::from_value(response, "session/resume response")?;
+            return Ok(RestoredSession {
+                config_options: response.config_options,
+                modes: response.modes,
+            });
+        }
+        let request = LoadSessionRequest::new(session_id.to_string(), cwd)
+            .mcp_servers(context.mcp_servers)
+            .additional_directories(context.additional_directories)
+            .meta(context.meta);
+        let response = self
+            .transport
+            .request("session/load", super::sdk::to_value(&request)?)
+            .await?;
+        let response: LoadSessionResponse =
+            super::sdk::from_value(response, "session/load response")?;
+        Ok(RestoredSession {
+            config_options: response.config_options,
+            modes: response.modes,
+        })
+    }
+
+    /// 将配置文件中的 ACP 配置覆盖应用到当前会话。
+    ///
+    /// 参数:
+    /// - `session_id`: 当前 ACP 会话标识
+    ///
+    /// 返回:
+    /// - 配置更新结果
+    async fn apply_config_options(&mut self, session_id: &str) -> Result<()> {
+        let config = self.governance.config().agent.acp.clone();
+        self.config_options
+            .apply_configured_values(&self.transport, session_id, &config)
+            .await
+    }
+
+    /// 在 agent 仍使用旧版 modes 时应用权限模式配置。
+    ///
+    /// 参数:
+    /// - `session_id`: 当前 ACP 会话标识
+    /// - `modes`: agent 返回的旧版模式集合
+    ///
+    /// 返回:
+    /// - 模式设置结果
+    async fn apply_legacy_mode(
+        &self,
+        session_id: &str,
+        modes: Option<&SessionModeState>,
+    ) -> Result<()> {
+        let configured = self.governance.config().agent.acp.permission_mode.trim();
+        if configured.is_empty()
+            || self.config_options.options().iter().any(|option| {
+                matches!(
+                    option.category,
+                    Some(agent_client_protocol::schema::v1::SessionConfigOptionCategory::Mode)
+                )
+            })
+        {
+            return Ok(());
+        }
+        let Some(modes) = modes else {
+            return Ok(());
+        };
+        if !modes
+            .available_modes
+            .iter()
+            .any(|mode| mode.id.to_string() == configured)
+        {
+            anyhow::bail!("ACP agent does not expose session mode: {configured}");
+        }
+        if modes.current_mode_id.to_string() == configured {
+            return Ok(());
+        }
+        let request = SetSessionModeRequest::new(session_id.to_string(), configured.to_string());
+        let response = self
+            .transport
+            .request("session/set_mode", super::sdk::to_value(&request)?)
+            .await?;
+        let _: SetSessionModeResponse =
+            super::sdk::from_value(response, "session/set_mode response")?;
+        Ok(())
+    }
+
+    /// 发布当前会话的配置项与旧版模式，供前端动态构造控制项。
+    ///
+    /// 参数:
+    /// - `modes`: agent 返回的旧版模式集合
+    ///
+    /// 返回:
+    /// - 无
+    fn publish_session_state(&self, modes: Option<&SessionModeState>) {
+        super::runtime_state::publish_session(&self.name, self.config_options.options(), modes);
     }
 
     /// 驱动一轮提示，直到 agent 给出停止原因。
@@ -215,22 +374,27 @@ impl AcpEngine {
         session_id: &str,
         request: &TurnRequest,
         events: &EventSender,
-    ) -> Result<(String, String)> {
-        let prompt = json!({
-            "sessionId": session_id,
-            "prompt": prompt_blocks(request),
-        });
+    ) -> Result<(String, String, Option<crate::llm::Usage>)> {
+        let prompt = PromptRequest::new(
+            session_id.to_string(),
+            prompt_blocks(request, &self.capabilities)?,
+        );
         // 本轮 future 被丢弃时（用户中断、上游 abort）通知对端取消，
         // 否则外部 agent 仍在跑这一轮，下次提示会撞上残留状态
         let mut cancel_guard = CancelOnDrop {
             transport: std::sync::Arc::clone(&self.transport),
             session_id: session_id.to_string(),
+            host_session_id: self.governance.session_id().to_string(),
             finished: false,
         };
         // session/prompt 的响应要等整轮结束，因此与消息循环并发推进
-        let mut prompt_call = Box::pin(self.transport.request("session/prompt", prompt));
+        let mut prompt_call = Box::pin(
+            self.transport
+                .request("session/prompt", super::sdk::to_value(&prompt)?),
+        );
         let mut content = String::new();
         let mut reasoning = String::new();
+        let mut reported_usage = None;
         loop {
             tokio::select! {
                 // 优先处理对端消息，避免 prompt 先返回时丢掉尾部更新
@@ -241,7 +405,17 @@ impl AcpEngine {
                     };
                     match message {
                         PeerMessage::Notification { method, params } if method == "session/update" => {
-                            let bridged = bridge_session_update(&params);
+                            let bridged = self.event_bridge.bridge_session_update(&params);
+                            self.config_options.replace(bridged.config_options.clone());
+                            if let Some(options) = &bridged.config_options {
+                                super::runtime_state::update_config_options(&self.name, options);
+                            }
+                            if let Some(mode) = &bridged.current_mode {
+                                super::runtime_state::update_current_mode(&self.name, mode);
+                            }
+                            if bridged.usage.is_some() {
+                                reported_usage = bridged.usage.clone();
+                            }
                             content.push_str(&bridged.content_delta);
                             reasoning.push_str(&bridged.reasoning_delta);
                             for event in bridged.events {
@@ -250,21 +424,15 @@ impl AcpEngine {
                         }
                         PeerMessage::Notification { .. } => {}
                         PeerMessage::Request { id, method, params } => {
-                            client_methods::handle_peer_request(
-                                &self.transport,
-                                &id,
-                                &method,
-                                &params,
-                                events,
-                                &self.governance,
-                                &self.terminals,
-                            )
-                            .await?;
+                            self.dispatch_peer_request(id, method, params, events);
                         }
                     }
                 }
                 result = &mut prompt_call => {
-                    result?;
+                    let response: PromptResponse = super::sdk::from_value(
+                        result?,
+                        "session/prompt response",
+                    )?;
                     // prompt 已返回，把已到达的尾部更新排空后收尾
                     while let Ok(Some(message)) = tokio::time::timeout(
                         Duration::from_millis(50),
@@ -272,24 +440,152 @@ impl AcpEngine {
                     )
                     .await
                     {
-                        if let PeerMessage::Notification { method, params } = message {
-                            if method != "session/update" {
-                                continue;
+                        match message {
+                            PeerMessage::Notification { method, params } => {
+                                if method != "session/update" {
+                                    continue;
+                                }
+                                let bridged = self.event_bridge.bridge_session_update(&params);
+                                self.config_options.replace(bridged.config_options.clone());
+                                if let Some(options) = &bridged.config_options {
+                                    super::runtime_state::update_config_options(&self.name, options);
+                                }
+                                if let Some(mode) = &bridged.current_mode {
+                                    super::runtime_state::update_current_mode(&self.name, mode);
+                                }
+                                if bridged.usage.is_some() {
+                                    reported_usage = bridged.usage.clone();
+                                }
+                                content.push_str(&bridged.content_delta);
+                                reasoning.push_str(&bridged.reasoning_delta);
+                                for event in bridged.events {
+                                    let _ = events.send(event);
+                                }
                             }
-                            let bridged = bridge_session_update(&params);
-                            content.push_str(&bridged.content_delta);
-                            reasoning.push_str(&bridged.reasoning_delta);
-                            for event in bridged.events {
-                                let _ = events.send(event);
+                            PeerMessage::Request { id, method, params } => {
+                                self.dispatch_peer_request(id, method, params, events);
                             }
                         }
                     }
                     cancel_guard.finished = true;
-                    return Ok((content, reasoning));
+                    let usage = response.usage.map(convert_usage).or(reported_usage);
+                    return Ok((content, reasoning, usage));
                 }
             }
         }
     }
+
+    /// 并行处理 agent 反向发起的客户端请求。
+    ///
+    /// 权限与征询可能等待用户数分钟，不能阻塞 session/update、取消和其它终端请求。
+    ///
+    /// 参数:
+    /// - `id`: 对端请求标识
+    /// - `method`: ACP 方法名
+    /// - `params`: 请求参数
+    /// - `events`: 当前轮次事件发送端
+    ///
+    /// 返回:
+    /// - 无
+    fn dispatch_peer_request(
+        &self,
+        id: super::protocol::RequestId,
+        method: String,
+        params: serde_json::Value,
+        events: &EventSender,
+    ) {
+        let transport = std::sync::Arc::clone(&self.transport);
+        let governance = self.governance.clone();
+        let terminals = self.terminals.clone();
+        let events = events.clone();
+        tokio::spawn(async move {
+            let _ = client_methods::handle_peer_request(
+                &transport,
+                &id,
+                &method,
+                &params,
+                &events,
+                &governance,
+                &terminals,
+            )
+            .await;
+        });
+    }
+
+    /// 列出 agent 保存的会话。
+    ///
+    /// 参数:
+    /// - `cwd`: 可选工作目录过滤条件
+    /// - `cursor`: 可选分页游标
+    ///
+    /// 返回:
+    /// - 会话列表与下一页游标
+    #[allow(dead_code)]
+    pub(crate) async fn list_sessions(
+        &self,
+        cwd: Option<std::path::PathBuf>,
+        cursor: Option<String>,
+    ) -> Result<(Vec<SessionInfo>, Option<String>)> {
+        if !self.capabilities.list_sessions {
+            anyhow::bail!("ACP agent does not advertise session/list");
+        }
+        let request = ListSessionsRequest::new().cwd(cwd).cursor(cursor);
+        let response = self
+            .transport
+            .request("session/list", super::sdk::to_value(&request)?)
+            .await?;
+        let response: ListSessionsResponse =
+            super::sdk::from_value(response, "session/list response")?;
+        Ok((response.sessions, response.next_cursor))
+    }
+
+    /// 删除 agent 保存的会话。
+    ///
+    /// 参数:
+    /// - `session_id`: 待删除的 ACP 会话标识
+    ///
+    /// 返回:
+    /// - 删除结果
+    #[allow(dead_code)]
+    pub(crate) async fn delete_session(&self, session_id: &str) -> Result<()> {
+        if !self.capabilities.delete_session {
+            anyhow::bail!("ACP agent does not advertise session/delete");
+        }
+        let request = DeleteSessionRequest::new(session_id.to_string());
+        let response = self
+            .transport
+            .request("session/delete", super::sdk::to_value(&request)?)
+            .await?;
+        let _: DeleteSessionResponse = super::sdk::from_value(response, "session/delete response")?;
+        Ok(())
+    }
+
+    /// 退出 agent 维护的认证状态。
+    ///
+    /// 返回:
+    /// - agent 支持 logout 且当前连接显式认证过时发送请求
+    #[allow(dead_code)]
+    pub(crate) async fn logout(&mut self) -> Result<()> {
+        if !self.authenticated {
+            return Ok(());
+        }
+        if !self.capabilities.logout {
+            anyhow::bail!("ACP agent does not advertise logout");
+        }
+        let response = self
+            .transport
+            .request("logout", super::sdk::to_value(&LogoutRequest::new())?)
+            .await?;
+        let _: LogoutResponse = super::sdk::from_value(response, "logout response")?;
+        self.authenticated = false;
+        Ok(())
+    }
+}
+
+/// 会话恢复响应中的可配置状态。
+struct RestoredSession {
+    config_options: Option<Vec<SessionConfigOption>>,
+    modes: Option<SessionModeState>,
 }
 
 /// 轮次未正常结束时向对端发出取消。
@@ -300,6 +596,7 @@ impl AcpEngine {
 struct CancelOnDrop {
     transport: std::sync::Arc<AcpTransport>,
     session_id: String,
+    host_session_id: String,
     finished: bool,
 }
 
@@ -308,6 +605,8 @@ impl Drop for CancelOnDrop {
         if self.finished {
             return;
         }
+        crate::permission::discard_pending_permissions_for_session(&self.host_session_id);
+        crate::question::discard_pending_questions_for_session(&self.host_session_id);
         // Drop 不能 await，交给运行时另起任务发送；
         // 运行时正在关闭时拿不到句柄，此时子进程也会随之回收，无需再取消
         let Ok(handle) = tokio::runtime::Handle::try_current() else {
@@ -329,25 +628,31 @@ impl ExternalTurnEngine for AcpEngine {
         &self.name
     }
 
-    async fn run_turn(
-        &mut self,
-        request: TurnRequest,
-        events: EventSender,
-    ) -> Result<ChatResult> {
+    async fn run_turn(&mut self, request: TurnRequest, events: EventSender) -> Result<ChatResult> {
         let started = Instant::now();
         let session_id = self.ensure_session(&request.cwd).await?;
-        let (content, reasoning) = self.drive_prompt(&session_id, &request, &events).await?;
+        let (content, reasoning, usage) = self.drive_prompt(&session_id, &request, &events).await?;
         Ok(ChatResult {
             content,
             reasoning: (!reasoning.is_empty()).then_some(reasoning),
-            // ACP 的用量口径与 sai 的估算不同源，不混入本地统计
-            usage: None,
+            usage,
             tool_calls: Vec::new(),
             duration_ms: started.elapsed().as_millis() as u64,
         })
     }
 
     async fn shutdown(&mut self) -> Result<()> {
+        if self.capabilities.close_session {
+            if let Some(session_id) = self.session_id.take() {
+                let request = CloseSessionRequest::new(session_id);
+                let response = self
+                    .transport
+                    .request("session/close", super::sdk::to_value(&request)?)
+                    .await?;
+                let _: CloseSessionResponse =
+                    super::sdk::from_value(response, "session/close response")?;
+            }
+        }
         self.transport.shutdown().await
     }
 }
@@ -359,16 +664,39 @@ impl ExternalTurnEngine for AcpEngine {
 ///
 /// 返回:
 /// - content block 数组
-fn prompt_blocks(request: &TurnRequest) -> Value {
-    let mut blocks = vec![json!({ "type": "text", "text": request.input })];
+pub(super) fn prompt_blocks(
+    request: &TurnRequest,
+    capabilities: &super::capabilities::AcpCapabilities,
+) -> Result<Vec<ContentBlock>> {
+    let mut blocks = vec![ContentBlock::Text(TextContent::new(&request.input))];
+    if !request.image_urls.is_empty() && !capabilities.prompt_image {
+        anyhow::bail!("ACP agent does not advertise image prompt support");
+    }
     for image in &request.image_urls {
         // data URL 形如 `data:image/png;base64,xxxx`，ACP 要求分开给出 mime 与数据
         let Some((mime, data)) = split_data_url(image) else {
             continue;
         };
-        blocks.push(json!({ "type": "image", "mimeType": mime, "data": data }));
+        blocks.push(ContentBlock::Image(ImageContent::new(data, mime)));
     }
-    Value::Array(blocks)
+    Ok(blocks)
+}
+
+/// 将 ACP turn usage 转换为 Sai 的统一用量结构。
+///
+/// 参数:
+/// - `usage`: agent 在 prompt 响应中报告的用量
+///
+/// 返回:
+/// - Sai 统一用量
+fn convert_usage(usage: agent_client_protocol::schema::v1::Usage) -> crate::llm::Usage {
+    crate::llm::Usage {
+        prompt_tokens: usage.input_tokens,
+        completion_tokens: usage.output_tokens,
+        total_tokens: usage.total_tokens,
+        cache_read_tokens: usage.cached_read_tokens.unwrap_or_default(),
+        cache_write_tokens: usage.cached_write_tokens.unwrap_or_default(),
+    }
 }
 
 /// 拆分 data URL 的 MIME 类型与 base64 数据。
@@ -378,7 +706,7 @@ fn prompt_blocks(request: &TurnRequest) -> Value {
 ///
 /// 返回:
 /// - `(mime, base64)`；不是 base64 data URL 时返回 None
-fn split_data_url(url: &str) -> Option<(String, String)> {
+pub(super) fn split_data_url(url: &str) -> Option<(String, String)> {
     let rest = url.strip_prefix("data:")?;
     let (meta, data) = rest.split_once(',')?;
     let mime = meta.strip_suffix(";base64")?;
@@ -388,44 +716,3 @@ fn split_data_url(url: &str) -> Option<(String, String)> {
 /// 未实现方法的标准错误码，供客户端方法处理复用。
 #[allow(dead_code)]
 pub(crate) const METHOD_NOT_FOUND: i64 = protocol::METHOD_NOT_FOUND;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn prompt_carries_text_and_images() {
-        let request = TurnRequest {
-            input: "看这张图".to_string(),
-            image_urls: vec!["data:image/png;base64,AAAA".to_string()],
-            cwd: std::path::PathBuf::from("/tmp"),
-        };
-        let blocks = prompt_blocks(&request);
-        let array = blocks.as_array().unwrap();
-        assert_eq!(array[0]["type"], "text");
-        assert_eq!(array[0]["text"], "看这张图");
-        assert_eq!(array[1]["type"], "image");
-        assert_eq!(array[1]["mimeType"], "image/png");
-        assert_eq!(array[1]["data"], "AAAA");
-    }
-
-    /// 非 base64 的 data URL 无法拆成 ACP 需要的字段，跳过而不是发出坏数据。
-    #[test]
-    fn skips_unsupported_image_urls() {
-        let request = TurnRequest {
-            input: "问题".to_string(),
-            image_urls: vec!["https://example.com/a.png".to_string()],
-            cwd: std::path::PathBuf::from("/tmp"),
-        };
-        assert_eq!(prompt_blocks(&request).as_array().unwrap().len(), 1);
-    }
-
-    #[test]
-    fn splits_base64_data_urls() {
-        assert_eq!(
-            split_data_url("data:image/jpeg;base64,QUJD"),
-            Some(("image/jpeg".to_string(), "QUJD".to_string()))
-        );
-        assert!(split_data_url("data:text/plain,hello").is_none());
-    }
-}

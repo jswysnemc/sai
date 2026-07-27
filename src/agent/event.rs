@@ -15,13 +15,35 @@ pub enum AgentEvent {
         name: String,
         arguments: String,
     },
+    /// 带 provider 稳定标识的工具调用。
+    ///
+    /// ACP 的更新可能省略名称，但始终携带 `toolCallId`。保留该标识后，
+    /// Web 与历史存储不再依赖不稳定的标题关联生命周期。
+    ToolCallIdentified {
+        id: String,
+        name: String,
+        arguments: String,
+    },
     ToolCallProgress(ToolCallStreamProgress),
     ToolResult {
         name: String,
         ok: bool,
         output: String,
     },
+    /// 带 provider 稳定标识的工具结果。
+    ToolResultIdentified {
+        id: String,
+        name: String,
+        ok: bool,
+        output: String,
+    },
     ToolProgress {
+        name: String,
+        message: String,
+    },
+    /// 带 provider 稳定标识的工具进度。
+    ToolProgressIdentified {
+        id: String,
         name: String,
         message: String,
     },
