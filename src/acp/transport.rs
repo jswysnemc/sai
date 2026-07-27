@@ -9,6 +9,18 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{mpsc, oneshot, Mutex};
 
+/// 启动适配器前要清除的宿主会话标记。
+///
+/// 这些变量由外层 agent 的终端注入，用于标识「当前处在该 agent 的会话中」。
+/// sai 作为独立进程不属于那个会话，透传下去会让适配器误判为嵌套启动。
+const HOST_SESSION_ENV_VARS: &[&str] = &[
+    "CLAUDECODE",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_SSE_PORT",
+    "CODEX_SANDBOX",
+    "CODEX_SANDBOX_NETWORK_DISABLED",
+];
+
 /// 对端主动发来的消息：请求需要回包，通知不需要。
 #[derive(Debug)]
 pub(crate) enum PeerMessage {
@@ -80,6 +92,12 @@ impl AcpTransport {
             // stderr 交给父进程：适配器的下载进度与登录提示需要让用户看到
             .stderr(Stdio::inherit())
             .kill_on_drop(true);
+        // 清掉宿主留下的会话标记：sai 只是恰好可能从某个 agent 的终端里被启动，
+        // 它自己并不是那个会话。带着这些变量启动适配器会被判成嵌套会话而拒绝运行
+        // （claude-code-acp 见 CLAUDECODE 即报「cannot be launched inside another session」）
+        for key in HOST_SESSION_ENV_VARS {
+            command.env_remove(key);
+        }
         for (key, value) in env {
             command.env(key, value);
         }
@@ -227,5 +245,33 @@ impl AcpTransport {
         stdin.write_all(line.as_bytes()).await?;
         stdin.flush().await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 宿主会话标记必须覆盖两家适配器的判定变量。
+    ///
+    /// 实测：在设置了 CLAUDECODE 的终端里启动 sai，claude-code-acp 会以
+    /// 「cannot be launched inside another Claude Code session」拒绝运行，
+    /// 会话建立阶段直接失败。sai 不属于那个会话，这些变量不该透传。
+    #[test]
+    fn host_session_markers_cover_known_adapters() {
+        assert!(HOST_SESSION_ENV_VARS.contains(&"CLAUDECODE"));
+        assert!(HOST_SESSION_ENV_VARS.contains(&"CLAUDE_CODE_ENTRYPOINT"));
+        assert!(HOST_SESSION_ENV_VARS.contains(&"CODEX_SANDBOX"));
+    }
+
+    /// 清理列表只针对会话标记，不应误伤凭据与代理等必要变量。
+    #[test]
+    fn does_not_strip_credentials_or_proxy_settings() {
+        for keep in ["HOME", "PATH", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "HTTPS_PROXY"] {
+            assert!(
+                !HOST_SESSION_ENV_VARS.contains(&keep),
+                "{keep} 是适配器运行所需，不能清除"
+            );
+        }
     }
 }
