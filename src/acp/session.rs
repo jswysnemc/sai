@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 /// 基于 ACP 的外部对话内核。
 pub(crate) struct AcpEngine {
     name: String,
-    transport: AcpTransport,
+    transport: std::sync::Arc<AcpTransport>,
     peer: PeerReceiver,
     session_id: Option<String>,
     startup_timeout: Duration,
@@ -52,7 +52,7 @@ impl AcpEngine {
         let (transport, peer) = AcpTransport::spawn(program, args, env, cwd).await?;
         let engine = Self {
             name: name.to_string(),
-            transport,
+            transport: std::sync::Arc::new(transport),
             peer,
             session_id: None,
             startup_timeout,
@@ -220,6 +220,13 @@ impl AcpEngine {
             "sessionId": session_id,
             "prompt": prompt_blocks(request),
         });
+        // 本轮 future 被丢弃时（用户中断、上游 abort）通知对端取消，
+        // 否则外部 agent 仍在跑这一轮，下次提示会撞上残留状态
+        let mut cancel_guard = CancelOnDrop {
+            transport: std::sync::Arc::clone(&self.transport),
+            session_id: session_id.to_string(),
+            finished: false,
+        };
         // session/prompt 的响应要等整轮结束，因此与消息循环并发推进
         let mut prompt_call = Box::pin(self.transport.request("session/prompt", prompt));
         let mut content = String::new();
@@ -277,10 +284,42 @@ impl AcpEngine {
                             }
                         }
                     }
+                    cancel_guard.finished = true;
                     return Ok((content, reasoning));
                 }
             }
         }
+    }
+}
+
+/// 轮次未正常结束时向对端发出取消。
+///
+/// sai 的中断是直接 abort 承载轮次的 tokio 任务，future 就此被丢弃；
+/// 若不补发 `session/cancel`，外部 agent 会继续跑完这一轮，
+/// 其产生的工具调用与文件改动都不再受这边约束。
+struct CancelOnDrop {
+    transport: std::sync::Arc<AcpTransport>,
+    session_id: String,
+    finished: bool,
+}
+
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        if self.finished {
+            return;
+        }
+        // Drop 不能 await，交给运行时另起任务发送；
+        // 运行时正在关闭时拿不到句柄，此时子进程也会随之回收，无需再取消
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        let transport = std::sync::Arc::clone(&self.transport);
+        let session_id = self.session_id.clone();
+        handle.spawn(async move {
+            let _ = transport
+                .notify("session/cancel", json!({ "sessionId": session_id }))
+                .await;
+        });
     }
 }
 
@@ -344,21 +383,6 @@ fn split_data_url(url: &str) -> Option<(String, String)> {
     let (meta, data) = rest.split_once(',')?;
     let mime = meta.strip_suffix(";base64")?;
     Some((mime.to_string(), data.to_string()))
-}
-
-/// 结束会话时通知 agent 取消未完成的轮次。
-///
-/// 参数:
-/// - `transport`: 连接
-/// - `session_id`: 会话标识
-///
-/// 返回:
-/// - 通知结果
-#[allow(dead_code)]
-pub(crate) async fn cancel(transport: &AcpTransport, session_id: &str) -> Result<()> {
-    transport
-        .notify("session/cancel", json!({ "sessionId": session_id }))
-        .await
 }
 
 /// 未实现方法的标准错误码，供客户端方法处理复用。

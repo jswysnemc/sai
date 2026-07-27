@@ -28,10 +28,9 @@ pub(crate) enum PeerMessage {
 type PendingResponses = Arc<Mutex<HashMap<i64, oneshot::Sender<Result<Value, JsonRpcError>>>>>;
 
 pub(crate) struct AcpTransport {
-    /// 子进程句柄。字段本身不被读取，但必须持有：
-    /// 它设了 kill_on_drop，丢弃即回收子进程，提前 drop 会让 agent 变成孤儿进程
-    #[allow(dead_code)]
-    child: Child,
+    /// 子进程句柄。设了 kill_on_drop，丢弃即回收子进程；
+    /// 放进 Mutex 以便在共享引用下也能主动结束
+    child: Mutex<Child>,
     stdin: Arc<Mutex<ChildStdin>>,
     next_id: AtomicI64,
     pending: PendingResponses,
@@ -125,7 +124,7 @@ impl AcpTransport {
         });
         Ok((
             Self {
-                child,
+                child: Mutex::new(child),
                 stdin: Arc::new(Mutex::new(stdin)),
                 next_id: AtomicI64::new(1),
                 pending,
@@ -209,8 +208,8 @@ impl AcpTransport {
     /// 返回:
     /// - 关闭结果
     #[allow(dead_code)]
-    pub(crate) async fn shutdown(&mut self) -> Result<()> {
-        let _ = self.child.start_kill();
+    pub(crate) async fn shutdown(&self) -> Result<()> {
+        let _ = self.child.lock().await.start_kill();
         Ok(())
     }
 

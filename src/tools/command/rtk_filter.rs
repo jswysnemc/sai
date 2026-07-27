@@ -14,7 +14,7 @@ const SHELL_META_CHARS: &[char] = &['|', '&', ';', '>', '<', '`', '$', '(', ')']
 ///
 /// 返回:
 /// - 需要改写时返回新命令；否则 None
-pub(super) fn rewrite_command(command: &str, mode: &str, denylist: &[String]) -> Option<String> {
+pub(crate) fn rewrite_command(command: &str, mode: &str, denylist: &[String]) -> Option<String> {
     let mode = mode.trim().to_ascii_lowercase();
     if mode != "rtk" && mode != "auto" {
         return None;

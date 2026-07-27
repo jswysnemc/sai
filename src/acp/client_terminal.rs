@@ -46,13 +46,16 @@ impl TerminalRegistry {
     ) -> Result<String> {
         let command = command_line(params)?;
         // 1. 先过审核与权限：被拒或越界时直接失败，命令不会被启动
+        //    审核针对用户看得懂的原始命令，而不是改写后的 rtk 形式
         let sandboxed = governance.authorize_command(&command, events).await?;
+        // 2. 再套用输出压缩，与自带 run_command 同一套判定
+        let command = governance.apply_output_filter(&command);
         let cwd = params
             .get("cwd")
             .and_then(Value::as_str)
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| governance.workspace().to_path_buf());
-        // 2. 复用 sai 的 shell 构造，沙箱与自带 run_command 完全一致；
+        // 3. 复用 sai 的 shell 构造，沙箱与自带 run_command 完全一致；
         //    首选 shell 不存在时依次回退，与自带命令的行为保持一致
         let candidates = crate::tools::command::build_shell_commands(
             &command,
@@ -107,6 +110,8 @@ impl TerminalRegistry {
         .flatten()
         {
             let sink = Arc::clone(&output);
+            let progress = events.clone();
+            let label = command.clone();
             tokio::spawn(async move {
                 let mut buffer = [0u8; 4096];
                 let mut reader = stream.into_reader();
@@ -116,6 +121,12 @@ impl TerminalRegistry {
                         Ok(count) => {
                             let chunk = String::from_utf8_lossy(&buffer[..count]).to_string();
                             sink.lock().await.push_str(&chunk);
+                            // 边收边推：长命令运行期间界面也能看到进度，
+                            // 否则要等进程退出才一次性出现全部输出
+                            let _ = progress.send(crate::agent::AgentEvent::ToolProgress {
+                                name: label.clone(),
+                                message: chunk,
+                            });
                         }
                     }
                 }
@@ -384,6 +395,26 @@ mod tests {
 
         registry.release(&id).await.unwrap();
         assert!(registry.output(&id).await.is_err());
+    }
+
+    /// 输出压缩关闭时命令原样执行。
+    ///
+    /// 顺序上审核先于改写：权限卡里要显示用户看得懂的原始命令，
+    /// 而不是套了 rtk 前缀的形式。
+    #[test]
+    fn output_filter_is_off_by_default_in_tests() {
+        let dir = tempfile::tempdir().unwrap();
+        let governance = AcpGovernance::new(
+            dir.path().to_path_buf(),
+            None,
+            crate::config::AppConfig::default(),
+            "filter-session".to_string(),
+            None,
+            None,
+        );
+
+        // 测试环境探测不到 rtk，命令应原样返回
+        assert_eq!(governance.apply_output_filter("git status"), "git status");
     }
 
     /// 未知终端标识必须报错，而不是返回空结果让 agent 以为成功。

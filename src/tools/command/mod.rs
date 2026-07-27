@@ -20,6 +20,7 @@ use background_tasks::BackgroundRuntimeOwner;
 
 pub(crate) use rtk_probe::{rtk_available, rtk_proxy_commands};
 pub(crate) use process::build_shell_commands;
+pub(crate) use rtk_filter::rewrite_command;
 
 pub(crate) use background::{
     cleanup_background_tasks_for_user, list_background_tasks_for_user,

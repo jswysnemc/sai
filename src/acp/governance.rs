@@ -166,6 +166,25 @@ impl AcpGovernance {
         profile.record_result("run_command", &json!({ "command": command }), Ok(output));
     }
 
+    /// 按配置把命令改写为 rtk 代理形式。
+    ///
+    /// 外部内核的命令输出同样会进入上下文，不压缩的话长输出照样灌满窗口——
+    /// 与自带 run_command 用同一套判定，避免两条路径的压缩行为不一致。
+    ///
+    /// 参数:
+    /// - `command`: 原始命令
+    ///
+    /// 返回:
+    /// - 需要改写时返回新命令，否则返回原命令
+    pub(crate) fn apply_output_filter(&self, command: &str) -> String {
+        crate::tools::command::rewrite_command(
+            command,
+            &self.config.tools.command_filter,
+            &self.config.tools.command_filter_denylist,
+        )
+        .unwrap_or_else(|| command.to_string())
+    }
+
     /// 返回执行命令用的 shell 配置。
     ///
     /// 返回:
