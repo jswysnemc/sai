@@ -5,6 +5,7 @@ use super::qq_bot::webhook_server::{run_qq_bot_webhook_server, QqBotWebhookServe
 use super::qq_bot::websocket::{run_qq_bot_websocket, QqBotWebsocketConfig};
 use super::weixin_bot::client::default_cdn_base_url as default_weixin_cdn_base_url;
 use super::weixin_bot::login::{default_base_url as default_weixin_base_url, load_weixin_account};
+use super::feishu::{run_feishu_bot_server, FeishuBotServerConfig};
 use super::weixin_bot::server::{run_weixin_bot_server, WeixinBotServerConfig};
 use crate::config::{AppConfig, QqGatewayConfig, WeixinGatewayConfig};
 use crate::i18n::text as t;
@@ -17,6 +18,7 @@ enum ConfiguredGateway {
     QqWebsocket(QqBotWebsocketConfig),
     QqWebhook(QqBotWebhookServerConfig),
     Weixin(WeixinBotServerConfig),
+    Feishu(FeishuBotServerConfig),
 }
 
 impl ConfiguredGateway {
@@ -32,6 +34,7 @@ impl ConfiguredGateway {
             Self::QqWebsocket(_) => "qq-bot-websocket",
             Self::QqWebhook(_) => "qq-bot-webhook",
             Self::Weixin(_) => "weixin-server",
+            Self::Feishu(_) => "feishu-server",
         }
     }
 }
@@ -108,7 +111,39 @@ fn configured_gateways(
             verbose,
         )?);
     }
+    if config.gateways.feishu.enabled {
+        gateways.push(configured_feishu_gateway(&config.gateways.feishu, verbose)?);
+    }
     Ok(gateways)
+}
+
+/// 组装飞书机器人网关配置。
+///
+/// 参数:
+/// - `feishu`: 飞书渠道配置
+/// - `verbose`: 是否输出详细日志
+///
+/// 返回:
+/// - 已就绪的网关配置
+fn configured_feishu_gateway(
+    feishu: &crate::config::FeishuGatewayConfig,
+    verbose: bool,
+) -> Result<ConfiguredGateway> {
+    if feishu.app_id.trim().is_empty() || feishu.app_secret.trim().is_empty() {
+        anyhow::bail!(crate::i18n::text(
+            "the Feishu gateway requires gateways.feishu.app_id and app_secret",
+            "飞书网关需要配置 gateways.feishu.app_id 与 app_secret",
+        ))
+    }
+    Ok(ConfiguredGateway::Feishu(FeishuBotServerConfig {
+        listen: feishu.listen.clone(),
+        base_url: feishu.base_url.clone(),
+        app_id: feishu.app_id.clone(),
+        app_secret: feishu.app_secret.clone(),
+        verification_token: feishu.verification_token.clone(),
+        encrypt_key: feishu.encrypt_key.clone(),
+        verbose,
+    }))
 }
 
 /// 组装 QQ 官方机器人网关配置。
@@ -197,6 +232,7 @@ fn spawn_gateway(tasks: &mut JoinSet<Result<()>>, paths: SaiPaths, gateway: Conf
             ConfiguredGateway::QqWebsocket(config) => run_qq_bot_websocket(&paths, config).await,
             ConfiguredGateway::QqWebhook(config) => run_qq_bot_webhook_server(&paths, config).await,
             ConfiguredGateway::Weixin(config) => run_weixin_bot_server(&paths, config).await,
+            ConfiguredGateway::Feishu(config) => run_feishu_bot_server(&paths, config).await,
         }
     });
 }

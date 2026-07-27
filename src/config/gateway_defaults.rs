@@ -3,13 +3,14 @@ use super::defaults::{
     default_weixin_gateway_base_url, default_weixin_gateway_bot_type,
     default_weixin_gateway_cdn_base_url,
 };
-use super::model::{GatewayConfig, QqGatewayConfig, WeixinGatewayConfig};
+use super::model::{FeishuGatewayConfig, GatewayConfig, QqGatewayConfig, WeixinGatewayConfig};
 
 impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
             qq: QqGatewayConfig::default(),
             weixin: WeixinGatewayConfig::default(),
+            feishu: FeishuGatewayConfig::default(),
         }
     }
 }

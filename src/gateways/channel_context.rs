@@ -21,6 +21,14 @@ pub(crate) enum ChannelContext {
         to_user_id: String,
         context_token: Option<String>,
     },
+    #[serde(rename = "feishu")]
+    Feishu {
+        gateway: String,
+        /// 会话标识，回复时作为 receive_id
+        chat_id: String,
+        /// 触发消息标识，供后续串成话题
+        message_id: Option<String>,
+    },
 }
 
 impl ChannelContext {
@@ -35,6 +43,23 @@ impl ChannelContext {
         match self {
             Self::Qq { .. } => "qq",
             Self::Weixin { .. } => "weixin",
+            Self::Feishu { .. } => "feishu",
+        }
+    }
+
+    /// 创建飞书渠道上下文。
+    ///
+    /// 参数:
+    /// - `chat_id`: 会话标识
+    /// - `message_id`: 触发消息标识
+    ///
+    /// 返回:
+    /// - 飞书渠道上下文
+    pub(crate) fn feishu(chat_id: String, message_id: Option<String>) -> Self {
+        Self::Feishu {
+            gateway: "feishu-server".to_string(),
+            chat_id,
+            message_id,
         }
     }
 
@@ -89,6 +114,9 @@ impl ChannelContext {
             Self::Weixin { gateway, .. } => {
                 format!("[channel=weixin gateway={gateway}]")
             }
+            Self::Feishu { gateway, .. } => {
+                format!("[channel=feishu gateway={gateway}]")
+            }
         }
     }
 
@@ -103,6 +131,7 @@ impl ChannelContext {
         match self {
             Self::Qq { .. } => super::qq_bot::prompt::channel_prompt(),
             Self::Weixin { .. } => super::weixin_bot::prompt::channel_prompt(),
+            Self::Feishu { .. } => super::feishu::channel_prompt(),
         }
     }
 }
@@ -313,7 +342,7 @@ mod tests {
                 assert_eq!(target_id, "user-openid");
                 assert_eq!(msg_id.as_deref(), Some("msg-2"));
             }
-            ChannelContext::Weixin { .. } => panic!("expected QQ context"),
+            other => panic!("expected QQ context, got {other:?}"),
         }
     }
 

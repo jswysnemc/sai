@@ -42,6 +42,8 @@ fn gateway_session_id(context: &ChannelContext) -> String {
             ..
         } => ("qq", format!("{target_kind}:{target_id}")),
         ChannelContext::Weixin { to_user_id, .. } => ("weixin", to_user_id.clone()),
+        // 按会话而非发送者归组：飞书群里多人共用一条会话上下文
+        ChannelContext::Feishu { chat_id, .. } => ("feishu", chat_id.clone()),
     };
     let mut hasher = Sha256::new();
     hasher.update(target.as_bytes());
@@ -69,6 +71,9 @@ fn gateway_session_title(context: &ChannelContext) -> String {
         ),
         ChannelContext::Weixin { to_user_id, .. } => {
             format!("{} · {}", t("Weixin", "微信"), compact_target(to_user_id))
+        }
+        ChannelContext::Feishu { chat_id, .. } => {
+            format!("{} · {}", t("Feishu", "飞书"), compact_target(chat_id))
         }
     }
 }

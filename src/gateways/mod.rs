@@ -2,6 +2,7 @@ pub(crate) mod channel_context;
 pub(crate) mod channel_tools;
 pub(crate) mod cli;
 mod command_intercept;
+mod feishu;
 pub(crate) mod manager;
 mod media;
 mod message;

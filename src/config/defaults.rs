@@ -443,6 +443,16 @@ pub(super) fn default_qq_gateway_base_url() -> String {
     "https://api.sgroup.qq.com".to_string()
 }
 
+/// 飞书事件订阅默认监听地址。
+pub(super) fn default_feishu_gateway_listen() -> String {
+    "127.0.0.1:8790".to_string()
+}
+
+/// 飞书开放平台默认接口地址。
+pub(super) fn default_feishu_gateway_base_url() -> String {
+    "https://open.feishu.cn".to_string()
+}
+
 pub(super) fn default_weixin_gateway_base_url() -> String {
     "https://ilinkai.weixin.qq.com".to_string()
 }

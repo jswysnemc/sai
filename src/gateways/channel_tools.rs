@@ -115,6 +115,11 @@ pub(crate) async fn resolve_channel_target(
         } => {
             resolve_weixin_context_target(paths, config, to_user_id.clone(), context_token.clone())
         }
+        // 飞书暂未接主动推送工具：回复走网关自身的发送路径
+        ChannelContext::Feishu { .. } => bail!(t(
+            "the Feishu channel does not support proactive messages yet",
+            "飞书渠道暂不支持主动推送消息",
+        )),
     }
 }
 

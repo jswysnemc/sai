@@ -21,6 +21,7 @@ crc32fast = "1.4"
 crossterm = "0.28"
 directories = "5.0"
 dunce = "1.0"
+cbc = { version = "0.1", features = ["alloc"] }
 ecb = { version = "0.1", features = ["alloc"] }
 ed25519-dalek = "2.1"
 hex = "0.4"

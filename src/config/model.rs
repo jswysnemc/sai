@@ -238,6 +238,48 @@ pub struct GatewayConfig {
     pub qq: QqGatewayConfig,
     #[serde(default)]
     pub weixin: WeixinGatewayConfig,
+    #[serde(default)]
+    pub feishu: FeishuGatewayConfig,
+}
+
+/// 飞书（Lark）机器人网关配置。
+///
+/// 走开放平台的事件订阅：飞书把消息 POST 到这里，回复经 open-apis 发出。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeishuGatewayConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    /// 事件订阅监听地址
+    #[serde(default = "default_feishu_gateway_listen")]
+    pub listen: String,
+    /// 开放平台接口地址；私有化部署时改这里
+    #[serde(default = "default_feishu_gateway_base_url")]
+    pub base_url: String,
+    /// 应用凭据
+    #[serde(default)]
+    pub app_id: String,
+    #[serde(default)]
+    pub app_secret: String,
+    /// 事件订阅的验证 token；配置了才校验来源
+    #[serde(default)]
+    pub verification_token: String,
+    /// 事件加密密钥；开放平台开启加密时必填
+    #[serde(default)]
+    pub encrypt_key: String,
+}
+
+impl Default for FeishuGatewayConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            listen: default_feishu_gateway_listen(),
+            base_url: default_feishu_gateway_base_url(),
+            app_id: String::new(),
+            app_secret: String::new(),
+            verification_token: String::new(),
+            encrypt_key: String::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
