@@ -1,4 +1,4 @@
-import { Save, Sparkles } from "lucide-react";
+import { BookOpen, Save } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ManagedSkill } from "../../../api/skill-contracts";
 import { Button } from "../../../shared/ui/button/button";
@@ -10,6 +10,7 @@ import { isDarkTheme, useTheme } from "../../theme/theme";
 import { EditorHeader, SettingsGroup } from "../editor-layout";
 import { useI18n } from "../../i18n/use-i18n";
 import { composeSkillDocument, parseSkillDocument } from "./skill-document";
+import { skillScopeLabel } from "./skill-list-filter";
 import "../../chat/markdown-renderer.css";
 
 type SkillEditorProps = {
@@ -58,31 +59,39 @@ export function SkillEditor(props: SkillEditorProps) {
   return (
     <section className="settings-editor skill-editor">
       <EditorHeader
-        kicker="Skills"
+        kicker={creating ? t("Global Skill", "全局 Skill") : (skill ? skillScopeLabel(skill.scope, t) : "Skills")}
         title={creating ? t("New Skill", "新增 Skill") : (skill?.name ?? t("Skill manager", "Skill 管理"))}
         description={creating
           ? t("Create a global Skill directory with a complete SKILL.md document.", "在全局目录新增 Skill，并写入完整 SKILL.md。")
           : (skill ? skill.path : t("Select a Skill to inspect or edit its document.", "选择 Skill 后查看或编辑文档。"))}
-        actions={skill && !creating ? (
-          <label className="settings-switch">
-            <input type="checkbox" checked={skill.enabled} onChange={(event) => props.onEnabledChange(event.target.checked)} />
-            <span />
-            <strong>{skill.enabled ? t("Enabled", "已启用") : t("Disabled", "已禁用")}</strong>
-          </label>
+        actions={creating || skill ? (
+          <>
+            {skill && !creating && (
+              <label className="settings-switch skill-enabled-switch">
+                <input type="checkbox" checked={skill.enabled} onChange={(event) => props.onEnabledChange(event.target.checked)} />
+                <span />
+                <strong>{skill.enabled ? t("Enabled", "已启用") : t("Disabled", "已禁用")}</strong>
+              </label>
+            )}
+            <Button variant="primary" className="skill-save-button" disabled={!dirty || saving} onClick={props.onSave}>
+              <Save size={14} />
+              {saving ? t("Saving", "正在保存") : t("Save", "保存")}
+            </Button>
+          </>
         ) : undefined}
       />
 
       {error && <div className="settings-inline-error">{error}</div>}
       {!creating && !skill ? (
         <div className="settings-empty">
-          <Sparkles size={20} />
+          <BookOpen size={20} />
           <p>{t("Scan or select a Skill to manage it.", "扫描或选择一个 Skill 进行管理。")}</p>
         </div>
       ) : (
         <>
           <SettingsGroup
-            title={t("Skill document", "Skill 文档")}
-            description={t("Name and description are saved in YAML frontmatter; body is Markdown.", "名称与描述写入 YAML frontmatter，正文为 Markdown。")}
+            title={t("Metadata", "元数据")}
+            description={t("Name and description are stored in the YAML frontmatter.", "名称与说明保存在 YAML frontmatter 中。")}
           >
             {creating && (
               <label className="settings-field skill-directory-field">
@@ -120,9 +129,14 @@ export function SkillEditor(props: SkillEditorProps) {
               </label>
             </div>
 
+          </SettingsGroup>
+          <section className="skill-document-workspace">
             <div className="skill-doc-toolbar">
+              <div>
+                <h3>SKILL.md</h3>
+                <span>{t("Instruction body", "指令正文")}</span>
+              </div>
               <MarkdownModeToggle mode={mode} onChange={setMode} t={t} />
-              <span className="skill-doc-hint">SKILL.md · body</span>
             </div>
 
             <div className="skill-content-editor" aria-label={t("Skill Markdown body", "Skill Markdown 正文")}>
@@ -144,14 +158,7 @@ export function SkillEditor(props: SkillEditorProps) {
                 )}
               />
             </div>
-          </SettingsGroup>
-          <div className="skill-editor-actions">
-            <span>{skill ? `${skill.scope} / ${skill.directory_name}` : t("Global Skill", "全局 Skill")}</span>
-            <Button className="settings-secondary" disabled={!dirty || saving} onClick={props.onSave}>
-              <Save size={14} />
-              {saving ? t("Saving", "正在保存") : t("Save Skill", "保存 Skill")}
-            </Button>
-          </div>
+          </section>
         </>
       )}
     </section>

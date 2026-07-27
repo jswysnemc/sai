@@ -14,12 +14,12 @@
   display: grid;
   grid-template-columns: 0.75rem minmax(0, 1fr);
   gap:var(--space-sm);
-  padding:var(--space-xs) var(--space-2xs) var(--space-sm);
+  padding:var(--space-sm) var(--space-lg);
   border-bottom: 0;
   background: transparent;
   color: var(--technical-text);
   /* 命令本身是这张卡的主信息，字号取界面正文基准 */
-  font-size:var(--text-base);
+  font-size:var(--text-sm);
   line-height: 1.55;
 }
 
@@ -39,7 +39,8 @@
   display: inline-flex;
   align-items: center;
   gap:var(--space-2xs);
-  margin:var(--space-xs) var(--space-lg) 0;
+  margin:0;
+  padding:0 var(--space-lg) var(--space-xs);
   padding: 0;
   border: 0;
   background: transparent;
@@ -61,21 +62,31 @@
   max-height: 26.25rem;
   overflow: auto;
   margin: 0;
-  padding:var(--space-sm) var(--space-lg) var(--space-lg) 1.75rem;
+  padding:0 var(--space-lg) var(--space-md);
   border: 0;
   background: transparent;
   color: color-mix(in srgb, var(--technical-text) 78%, transparent);
   /* 命令输出是需要逐行读的长文本，字号取密集列表档而非元信息档 */
   font:400 var(--text-sm)/1.65 var(--font-code);
   white-space: pre-wrap;
-  border-left: 2px solid color-mix(in srgb, var(--technical-border) 80%, transparent);
-  margin-left:var(--space-lg);
+  border-left: 0;
+  margin-left: 0;
 }
 
 .shell-output.stderr {
+  padding-top:var(--space-sm);
   border-top: 1px solid var(--technical-border);
-  border-left-color: color-mix(in srgb, var(--danger) 55%, transparent);
   color: color-mix(in srgb, var(--danger) 88%, var(--paper));
+}
+
+/* 覆盖聊天页对通用 pre 的归零规则，保证详情框内文本与命令统一留白。 */
+.tool-shell-body .shell-output,
+.tool-shell-body .generic-tool-block {
+  padding:0 var(--space-lg) var(--space-md);
+}
+
+.tool-shell-body .shell-output.stderr {
+  padding-top:var(--space-sm);
 }
 
 .read-tool-view {

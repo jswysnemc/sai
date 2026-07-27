@@ -303,6 +303,12 @@ export type AcpEngineConfig = {
   args?: string[];
   env?: Record<string, string>;
   startup_timeout_seconds?: number;
+  additional_directories?: string[];
+  auth_method?: string;
+  model?: string;
+  permission_mode?: string;
+  thought_level?: string;
+  config_options?: Record<string, string | boolean>;
 };
 
 /** 对话内核配置 */
@@ -317,4 +323,24 @@ export type EngineStatusResponse = {
   label: string;
   external: boolean;
   unavailable_features: string[];
+  acp_capabilities?: {
+    load_session: boolean;
+    list_sessions: boolean;
+    delete_session: boolean;
+    resume_session: boolean;
+    close_session: boolean;
+    additional_directories: boolean;
+    mcp_http: boolean;
+    mcp_sse: boolean;
+    prompt_image: boolean;
+    prompt_audio: boolean;
+    embedded_context: boolean;
+    logout: boolean;
+  } | null;
+  acp_runtime?: {
+    capabilities: EngineStatusResponse["acp_capabilities"];
+    auth_methods: unknown;
+    config_options: unknown;
+    modes: unknown;
+  } | null;
 };

@@ -29,8 +29,6 @@ export type AnchoredPopoverPosition = {
 const DEFAULT_MAX_HEIGHT = 420;
 /** 向下弹出所需的最小空间,低于该值时翻转到触发器上方。 */
 const FLIP_THRESHOLD = 180;
-/** 弹层高度下限,避免在极小空间里被压扁。 */
-const MIN_HEIGHT = 120;
 
 /**
  * 计算固定定位弹层的视口内坐标。
@@ -73,7 +71,13 @@ export function calculateAnchoredPopoverPosition(
   };
 }
 
-/** 把期望高度夹取到可用空间内,并保留可用下限。 */
+/**
+ * 把期望高度限制在真实可用空间内。
+ *
+ * @param desired 期望最大高度
+ * @param space 当前展开方向的可用空间
+ * @returns 不超出视口的最大高度
+ */
 function clampHeight(desired: number, space: number): number {
-  return Math.min(desired, Math.max(space, MIN_HEIGHT));
+  return Math.min(Math.max(desired, 0), Math.max(space, 0));
 }

@@ -1,22 +1,15 @@
-import { AlertTriangle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../../../api/client";
 import type { AppConfig } from "../../../api/contracts";
 import { Select } from "../../../shared/ui/select/select";
 import { useI18n } from "../../i18n/use-i18n";
+import { AcpRuntimeConfigFields } from "./acp-runtime-config-fields";
 import "./agent-engine-settings.css";
 
 type AgentEngineSettingsProps = {
   config: AppConfig;
   onConfigChange: (config: AppConfig) => void;
 };
-
-/** 外部内核会让这些 sai 功能停用，与服务端 unavailable_features 保持一致 */
-const DISABLED_BY_EXTERNAL_ENGINE: [string, string][] = [
-  ["context compaction", "上下文压缩"],
-  ["memory injection", "记忆注入"],
-  ["goal continuation", "目标续轮"],
-  ["subagents", "子智能体"],
-  ["token usage stats", "token 用量统计"]
-];
 
 /**
  * 渲染对话内核选择。
@@ -35,6 +28,12 @@ export function AgentEngineSettings({ config, onConfigChange }: AgentEngineSetti
   const acp = (agent.acp as Record<string, unknown> | undefined) ?? {};
   const command = typeof acp.command === "string" ? acp.command : "";
   const isExternal = engine !== "native";
+  const engineStatus = useQuery({
+    queryKey: ["engine-status"],
+    queryFn: api.config.engineStatus,
+    enabled: isExternal
+  });
+  const runtime = engineStatus.data?.engine === engine ? engineStatus.data.acp_runtime : undefined;
 
   /**
    * 合并补丁并回写内核配置。
@@ -46,6 +45,16 @@ export function AgentEngineSettings({ config, onConfigChange }: AgentEngineSetti
     onConfigChange({ ...config, agent: { ...agent, ...patch } });
   };
 
+  /**
+   * 合并 ACP 配置补丁。
+   *
+   * @param patch ACP 字段补丁
+   * @returns 无返回值
+   */
+  const updateAcp = (patch: Record<string, unknown>) => {
+    updateAgent({ acp: { ...acp, ...patch } });
+  };
+
   const engineOptions = [
     {
       value: "native",
@@ -55,7 +64,7 @@ export function AgentEngineSettings({ config, onConfigChange }: AgentEngineSetti
     {
       value: "claude_code",
       label: "Claude Code",
-      description: t("Runs via @zed-industries/claude-code-acp", "经 @zed-industries/claude-code-acp 运行")
+      description: t("Runs via Sai Claude Agent ACP Sidecar", "经 Sai Claude Agent ACP Sidecar 运行")
     },
     {
       value: "codex",
@@ -87,22 +96,16 @@ export function AgentEngineSettings({ config, onConfigChange }: AgentEngineSetti
         </small>
       </div>
       {isExternal && (
-        <div className="agent-engine-warning" role="note">
-          <span className="agent-engine-warning-head">
-            <AlertTriangle size={14} aria-hidden />
-            {t("Disabled while this engine is active", "使用该内核期间以下功能停用")}
-          </span>
-          <ul>
-            {DISABLED_BY_EXTERNAL_ENGINE.map(([en, zh]) => (
-              <li key={en}>{t(en, zh)}</li>
-            ))}
-          </ul>
-          <small>
-            {t(
-              "These rely on sai assembling the context itself; an external engine maintains its own conversation history.",
-              "这些能力依赖 sai 自己组装上下文，而外部内核维护自己的对话历史。"
-            )}
-          </small>
+        <div className="settings-form-grid">
+          <AcpRuntimeConfigFields acp={acp} runtime={runtime} onChange={updateAcp} />
+          <label className="settings-field">
+            <span>{t("Additional directories", "附加目录")}</span>
+            <input
+              type="text"
+              value={Array.isArray(acp.additional_directories) ? acp.additional_directories.join(", ") : ""}
+              onChange={(event) => updateAcp({ additional_directories: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) })}
+            />
+          </label>
         </div>
       )}
       {engine === "custom" && (
@@ -117,9 +120,7 @@ export function AgentEngineSettings({ config, onConfigChange }: AgentEngineSetti
             onChange={(event) => {
               // 首段是程序，其余作为参数；预置内核留空即用内置命令
               const parts = event.target.value.split(/\s+/).filter(Boolean);
-              updateAgent({
-                acp: { ...acp, command: parts[0] ?? "", args: parts.slice(1) }
-              });
+              updateAcp({ command: parts[0] ?? "", args: parts.slice(1) });
             }}
           />
           <small>

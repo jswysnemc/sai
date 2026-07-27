@@ -30,6 +30,8 @@ import { errorDetailForDisplay, RunErrorNotice } from "./message/run-error-notic
 import { useI18n } from "../i18n/use-i18n";
 import { parseGoalCommand } from "../goals/goal-command";
 import { appendTerminalSelection, INSERT_TERMINAL_SELECTION_EVENT, type TerminalSelectionDetail } from "./composer/composer-events";
+import { RuntimeOverview } from "../runtime-overview/runtime-overview";
+import { QueuedMessageList } from "./queue/queued-message-list";
 
 /**
  * 渲染当前会话历史、实时运行事件和消息输入区。
@@ -92,9 +94,17 @@ export function ChatPage() {
     () => projectConversationDisplay(timeline.data?.turns ?? [], run.states),
     [timeline.data?.turns, run.states]
   );
+  const activeLiveRuns = useMemo(
+    () => display.liveRuns.filter((state) => state.status !== "queued"),
+    [display.liveRuns]
+  );
+  const queuedRuns = useMemo(
+    () => display.liveRuns.filter((state) => state.status === "queued"),
+    [display.liveRuns]
+  );
   const scrollContentSignal = useMemo(
-    () => [display.historyTurns, display.liveRuns],
-    [display.historyTurns, display.liveRuns]
+    () => [display.historyTurns, activeLiveRuns, queuedRuns],
+    [activeLiveRuns, display.historyTurns, queuedRuns]
   );
   const { showJump, jumpToBottom, pauseFollowing } = useFollowOutputScroll(scrollRef, scrollContentSignal, activeSession?.id);
 
@@ -283,9 +293,9 @@ export function ChatPage() {
   const overviewItems = useMemo(
     () => [
       ...createTimelineOverviewItems(display.historyTurns, undefined, locale),
-      ...display.liveRuns.map((state) => createLiveOverviewItem(state, locale)).filter((item) => item !== null)
+      ...activeLiveRuns.map((state) => createLiveOverviewItem(state, locale)).filter((item) => item !== null)
     ],
-    [display.historyTurns, display.liveRuns, locale]
+    [activeLiveRuns, display.historyTurns, locale]
   );
 
   /** 回滚被点击的持久化轮次，并使用原输入重新发起运行。 */
@@ -426,7 +436,7 @@ export function ChatPage() {
                 />
               </section>
             ))}
-            {display.liveRuns.map((state) => (
+            {activeLiveRuns.map((state) => (
               <section className="conversation-turn" data-overview-id={`live-${state.runId}`} key={state.runId}>
                 <LiveRunMessage
                   state={state}
@@ -435,14 +445,16 @@ export function ChatPage() {
                   onRetry={!running && state.completed
                     ? () => void retry(state.userInput, state.imageUrls, state.runId)
                     : undefined}
-                  onRemoveFromQueue={
-                    state.status === "queued" && state.runId
-                      ? () => void run.stop(state.runId!)
-                      : undefined
-                  }
                 />
               </section>
             ))}
+            <QueuedMessageList
+              runs={queuedRuns}
+              onUpdate={run.updateQueuedInput}
+              onMove={run.moveQueuedRun}
+              onRemove={run.removeQueuedRun}
+              onError={(error) => setActionError(toDisplayError(error, "Failed to update the message queue", "更新消息队列失败"))}
+            />
             {timeline.error && <RunErrorNotice message={timeline.error.message} detail={errorDetailForDisplay(timeline.error)} />}
             {chatModel.error && <RunErrorNotice message={chatModel.error.message} detail={errorDetailForDisplay(chatModel.error)} />}
             {actionError && <RunErrorNotice message={actionError.message} detail={errorDetailForDisplay(actionError)} />}
@@ -459,6 +471,7 @@ export function ChatPage() {
             attachments={composerAttachments.attachments}
             historyEntries={historyEntries}
             thinkingLevel={thinking.thinkingLevel}
+            thinkingLevels={chatModel.thinkingLevels}
             choices={chatModel.choices}
             selection={chatModel.selection}
             modelLoading={chatModel.isLoading}
@@ -499,6 +512,7 @@ export function ChatPage() {
           items={overviewItems}
           onNavigate={pauseFollowing}
         />
+        <RuntimeOverview sessionId={activeSession?.id} />
         {showJump && (
           <button type="button" className="jump-to-bottom" onClick={jumpToBottom} aria-label={t("Jump to bottom", "回到底部")} title={t("Jump to bottom", "回到底部")}>
             <ArrowDown size={16} />

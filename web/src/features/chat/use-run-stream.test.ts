@@ -75,4 +75,61 @@ describe("sessionRunsReducer", () => {
     expect(stopped.runs[0].completed).toBe(true);
     expect(stopped.runs[0].status).toBe("idle");
   });
+
+  it("updates queued input and moves the run to the requested queue position", () => {
+    const first = sessionRunsReducer({ runs: [] }, {
+      type: "start",
+      run: {
+        run_id: "run-1",
+        workspace_id: "workspace",
+        session_id: "session",
+        status: "queued"
+      },
+      sessionId: "session",
+      userInput: "first"
+    });
+    const second = sessionRunsReducer(first, {
+      type: "start",
+      run: {
+        run_id: "run-2",
+        workspace_id: "workspace",
+        session_id: "session",
+        status: "queued"
+      },
+      sessionId: "session",
+      userInput: "second"
+    });
+
+    const updated = sessionRunsReducer(second, {
+      type: "event",
+      event: {
+        sequence: 3,
+        run_id: "run-2",
+        workspace_id: "workspace",
+        session_id: "session",
+        timestamp: "now",
+        type: "run.queue.updated",
+        payload: { input: "edited", position: 0 }
+      }
+    });
+
+    expect(updated.runs.map((run) => run.runId)).toEqual(["run-2", "run-1"]);
+    expect(updated.runs[0].userInput).toBe("edited");
+  });
+
+  it("removes a queued run immediately after deletion succeeds", () => {
+    const queued = sessionRunsReducer({ runs: [] }, {
+      type: "start",
+      run: {
+        run_id: "run-q",
+        workspace_id: "workspace",
+        session_id: "session",
+        status: "queued"
+      },
+      sessionId: "session",
+      userInput: "delete me"
+    });
+
+    expect(sessionRunsReducer(queued, { type: "remove-queued", runId: "run-q" }).runs).toEqual([]);
+  });
 });

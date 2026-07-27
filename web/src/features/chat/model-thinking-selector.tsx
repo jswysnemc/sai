@@ -11,6 +11,7 @@ type ModelThinkingSelectorProps = {
   choices: ChatModelChoice[];
   selection: ChatModelChoice | null;
   thinkingLevel: ThinkingLevel;
+  thinkingLevels?: ThinkingLevel[];
   loading: boolean;
   disabled: boolean;
   onModelSelect: (selection: RunModelSelection) => void;
@@ -174,7 +175,11 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
                 onSelect={selectModel}
               />
             ) : (
-              <ThinkingOptions value={props.thinkingLevel} onSelect={selectThinkingLevel} />
+              <ThinkingOptions
+                value={props.thinkingLevel}
+                levels={props.thinkingLevels}
+                onSelect={selectThinkingLevel}
+              />
             )}
           </div>
         </div>,
@@ -221,12 +226,12 @@ function ModelOptions({ choices, selection, query, onQueryChange, onSelect }: { 
  * @param props 当前推理强度和选择回调
  * @returns 推理强度二级菜单
  */
-function ThinkingOptions({ value, onSelect }: { value: ThinkingLevel; onSelect: (level: ThinkingLevel) => void }) {
+function ThinkingOptions({ value, levels, onSelect }: { value: ThinkingLevel; levels?: ThinkingLevel[]; onSelect: (level: ThinkingLevel) => void }) {
   const { t } = useI18n();
   return (
     <div className="model-thinking-option-list thinking" role="listbox" aria-label={t("Choose reasoning effort", "选择推理强度")}>
       <div className="model-thinking-option-head"><BrainCircuit size={14} /><span>{t("Reasoning effort", "推理强度")}</span></div>
-      {THINKING_OPTIONS.map((option) => (
+      {THINKING_OPTIONS.filter((option) => !levels || levels.includes(option.value)).map((option) => (
         <button type="button" role="option" aria-selected={option.value === value} className={option.value === value ? "active" : ""} onClick={() => onSelect(option.value)} key={option.value}>
           <span className="model-thinking-option-copy"><strong>{option.label}</strong><small>{t(option.descriptionEn, option.descriptionZh)}</small></span>
           <Check size={14} />

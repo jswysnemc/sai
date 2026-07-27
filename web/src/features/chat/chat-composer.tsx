@@ -16,7 +16,6 @@ import { WorkspaceSwitcher } from "../workspaces/workspace-switcher";
 import { SystemUsage } from "../usage/system-usage";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
-import { TodoMarkdownView } from "../todo/todo-markdown-view";
 import { useRuntimeActivity } from "../runtime-activity/use-runtime-activity";
 import { createRunModeOptions } from "../permission/run-mode-options";
 import { Button } from "../../shared/ui/button/button";
@@ -31,6 +30,7 @@ type ChatComposerProps = {
   attachments: ComposerAttachment[];
   historyEntries: string[];
   thinkingLevel: ThinkingLevel;
+  thinkingLevels?: ThinkingLevel[];
   choices: ChatModelChoice[];
   selection: ChatModelChoice | null;
   modelLoading: boolean;
@@ -64,12 +64,14 @@ type ChatComposerProps = {
  */
 export function ChatComposer(props: ChatComposerProps) {
   const { t, locale } = useI18n();
-  // 外部内核下模型与思考等级不生效，据此标注并禁用选择器
+  // 外部内核下模型、思考等级与内置上下文统计均不生效
   const engineStatus = useQuery({
     queryKey: ["engine-status"],
     queryFn: api.config.engineStatus,
     staleTime: 60_000
   });
+  const externalEngine = engineStatus.data?.external === true ? engineStatus.data : null;
+  const engineStatusPending = engineStatus.isLoading && !engineStatus.data;
   const [tipNow, setTipNow] = useState(() => Date.now());
   // 1. 空输入时轮询展示操作小技巧；每次页面加载起点不同
   useEffect(() => {
@@ -120,7 +122,9 @@ export function ChatComposer(props: ChatComposerProps) {
       <div className="composer-context-strip">
         <WorkspaceSwitcher />
         {git.data?.status === "ready" && git.data.head && <span className="composer-context-chip" title={git.data.upstream || git.data.head}><GitBranch size={13}/><span>{git.data.head}</span></span>}
-        <SystemUsage selection={props.selection} onCompact={props.onCompact} compactDisabled={props.running} />
+        {!externalEngine && !engineStatusPending && (
+          <SystemUsage selection={props.selection} onCompact={props.onCompact} compactDisabled={props.running} />
+        )}
         <AgentSelector choices={props.agentChoices} selection={props.agentSelection} loading={props.agentLoading} disabled={props.running} onSelect={props.onAgentSelect} />
         <Button className="composer-rail-button" onClick={props.onUndo} disabled={!props.undoAvailable || props.running} title={t("Undo the last turn and its worktree changes", "撤销最后一轮及其工作树修改")} aria-label={t("Undo last turn", "撤销最后一轮")}><Undo2 size={14} /></Button>
         <button type="button" className={`composer-rail-button composer-activity-button${runtimeActivity.runningTasks > 0 ? " is-active" : ""}`} onClick={() => window.dispatchEvent(new Event("sai:open-tasks"))} title={runtimeActivity.runningTasks > 0 ? t(`${runtimeActivity.runningTasks} background tasks running`, `${runtimeActivity.runningTasks} 个后台任务进行中`) : t("Open background tasks", "打开后台任务")} aria-label={t("Open background tasks", "打开后台任务")}>
@@ -133,7 +137,6 @@ export function ChatComposer(props: ChatComposerProps) {
             <span className="composer-activity-badge">{runtimeActivity.runningSubagents}</span>
           </button>
         )}
-        <TodoMarkdownView sessionId={props.sessionId} compact />
       </div>
       <form className="composer" onSubmit={handleSubmit}>
         <AttachmentStrip attachments={props.attachments} onRemove={props.onRemoveAttachment} />
@@ -151,28 +154,34 @@ export function ChatComposer(props: ChatComposerProps) {
         <div className="composer-footer">
           <div className="composer-toolrail">
             <div className="composer-model-group">
-              {/* 外部内核用自己的模型，这里的选择对本轮不生效，标注出来避免误导 */}
-              {engineStatus.data?.external ? (
+              {externalEngine && props.choices.length === 0 ? (
                 <span
                   className="composer-engine-badge"
                   title={t(
-                    `Handled by ${engineStatus.data.label}; the model and thinking level below do not apply`,
-                    `由 ${engineStatus.data.label} 执行，下方的模型与思考等级不生效`
+                    `Handled by ${externalEngine.label}; model settings are managed by the external engine`,
+                    `由 ${externalEngine.label} 执行，模型设置由外部内核管理`
                   )}
                 >
                   <Cpu size={12} aria-hidden />
-                  {engineStatus.data.label}
+                  {externalEngine.label}
                 </span>
-              ) : null}
-              <ModelThinkingSelector
-                choices={props.choices}
-                selection={props.selection}
-                thinkingLevel={props.thinkingLevel}
-                loading={props.modelLoading}
-                disabled={props.running || Boolean(engineStatus.data?.external)}
-                onModelSelect={props.onModelSelect}
-                onThinkingLevelChange={props.onThinkingLevelChange}
-              />
+              ) : engineStatusPending ? (
+                <span className="composer-engine-badge">
+                  <Cpu size={12} aria-hidden />
+                  {t("Loading engine", "读取内核")}
+                </span>
+              ) : (
+                <ModelThinkingSelector
+                  choices={props.choices}
+                  selection={props.selection}
+                  thinkingLevel={props.thinkingLevel}
+                  thinkingLevels={props.thinkingLevels}
+                  loading={props.modelLoading}
+                  disabled={props.running}
+                  onModelSelect={props.onModelSelect}
+                  onThinkingLevelChange={props.onThinkingLevelChange}
+                />
+              )}
               <GoalControl sessionId={props.sessionId} running={props.running} draftValue={props.value} onDraftChange={props.onChange} onContinue={props.onContinueGoal} />
               <div className="composer-mode">
                 <Select
@@ -183,6 +192,7 @@ export function ChatComposer(props: ChatComposerProps) {
                   menuPreferredWidth={240}
                   menuMinimumWidth={200}
                   menuAlign="left"
+                  menuClassName="run-mode-menu"
                   onChange={props.onModeChange}
                 />
               </div>

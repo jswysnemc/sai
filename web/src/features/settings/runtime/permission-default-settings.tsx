@@ -130,12 +130,12 @@ export function PermissionDefaultSettings({ config, onConfigChange }: Permission
         <div className="settings-form-grid">
           <div className="settings-field">
             <span>{t("TUI default mode", "TUI 默认模式")}</span>
-            <Select value={tuiValue} options={permissionOptions} onChange={updateTuiMode} ariaLabel={t("TUI default permission mode", "TUI 默认权限模式")} menuPreferredWidth={330} />
+            <Select value={tuiValue} options={permissionOptions} onChange={updateTuiMode} ariaLabel={t("TUI default permission mode", "TUI 默认权限模式")} menuPreferredWidth={330} menuClassName="run-mode-menu" />
             <small>{t("Used by the interactive REPL and terminal interface when no mode option is provided.", "交互式 REPL / 终端界面未传模式参数时使用。")}</small>
           </div>
           <div className="settings-field">
             <span>{t("CLI default mode", "CLI 默认模式")}</span>
-            <Select value={cliValue} options={permissionOptions} onChange={updateCliMode} ariaLabel={t("CLI default permission mode", "CLI 默认权限模式")} menuPreferredWidth={330} />
+            <Select value={cliValue} options={permissionOptions} onChange={updateCliMode} ariaLabel={t("CLI default permission mode", "CLI 默认权限模式")} menuPreferredWidth={330} menuClassName="run-mode-menu" />
             <small>{t("Used by one-shot commands such as ask and tool when mode flags are omitted.", "ask / tool 等一次性命令未传模式参数时使用。")}</small>
           </div>
         </div>

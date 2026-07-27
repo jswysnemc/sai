@@ -26,7 +26,7 @@ export function ShellToolView({ argumentsText, output }: ShellToolViewProps) {
   return (
     <div className="shell-tool-view">
       <div className="shell-command-line"><span>$</span><code>{command}</code></div>
-      {result && (
+      {result && !success && (
         <div className={success ? "shell-exit success" : "shell-exit failed"}>
           {success ? "ok" : `err (${exitCode ?? t("Unknown", "未知")})`}
         </div>

@@ -1,10 +1,10 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
-use super::super::runs::{StartRunRequest, WebEvent, MAX_RUN_REQUEST_BYTES};
+use super::super::runs::{QueuedRunUpdate, StartRunRequest, WebEvent, MAX_RUN_REQUEST_BYTES};
 use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::HeaderMap;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 use futures_util::stream::{self, Stream, StreamExt};
 use serde::Deserialize;
@@ -37,6 +37,10 @@ pub(super) fn routes() -> Router<WebAppState> {
             get(interruption_recovery),
         )
         .route("/api/runs/:id", delete(stop))
+        .route(
+            "/api/runs/:id/queue",
+            patch(update_queue).layer(DefaultBodyLimit::max(MAX_RUN_REQUEST_BYTES)),
+        )
         .route("/api/runs/:id/events", get(events))
 }
 
@@ -97,6 +101,28 @@ async fn stop(State(state): State<WebAppState>, Path(id): Path<String>) -> WebRe
         .await
         .map_err(|error| WebError::bad_request(error.to_string()))?;
     Ok(Json(json!({ "stopped": stopped })))
+}
+
+/// 更新排队运行内容或等待顺序。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `id`: 排队运行标识
+/// - `update`: 新输入或目标位置
+///
+/// 返回:
+/// - 更新后的运行摘要
+async fn update_queue(
+    State(state): State<WebAppState>,
+    Path(id): Path<String>,
+    Json(update): Json<QueuedRunUpdate>,
+) -> WebResult<Json<Value>> {
+    let info = state
+        .runs
+        .update_queued(&id, update)
+        .await
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    Ok(Json(json!(info)))
 }
 
 /// 订阅运行事件并按事件序号补发遗漏内容。

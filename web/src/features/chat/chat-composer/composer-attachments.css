@@ -76,16 +76,16 @@
 }
 
 .file-mention-popover {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 8px);
-  left: 0;
+  display: flex;
+  min-height: 0;
+  box-sizing: border-box;
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius:var(--radius-4);
   background: var(--paper-raised);
   box-shadow: var(--elevation-4);
-  z-index: 60;
+  z-index: 100;
 }
 
 .file-mention-filter {
@@ -100,7 +100,8 @@
 }
 
 .file-mention-list {
-  max-height: 232px;
+  min-height: 0;
+  flex: 1 1 auto;
   overflow-y: auto;
   padding:var(--space-2xs);
 }

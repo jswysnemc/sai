@@ -8,6 +8,7 @@ import { SkillListPanel } from "./skill-list-panel";
 import type { AppConfig } from "../../../api/contracts";
 import { SkillBehaviorSettings } from "../runtime/skill-behavior-settings";
 import { useI18n } from "../../i18n/use-i18n";
+import { SkillsSettingsTabs, type SkillsSettingsView } from "./skills-settings-tabs";
 import "./skills-settings.css";
 
 const SKILL_TEMPLATE = `---
@@ -40,6 +41,7 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
   const [directoryName, setDirectoryName] = useState("");
   const [content, setContent] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [view, setView] = useState<SkillsSettingsView>("library");
 
   const skills = list.data?.skills ?? [];
   useEffect(() => {
@@ -108,38 +110,49 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
     ? toDisplayError(requestError, "Skills management error", "Skills 管理错误").message
     : null;
 
-  if (list.isLoading) {
-    return <div className="settings-state">{t("Scanning Skills", "正在扫描 Skills")}</div>;
-  }
-
   return (
     <div className="skills-settings-page">
-      {config && onConfigChange && (
-        <SkillBehaviorSettings config={config} onConfigChange={onConfigChange} />
+      <SkillsSettingsTabs
+        value={view}
+        total={skills.length}
+        enabled={skills.filter((skill) => skill.enabled).length}
+        onChange={setView}
+      />
+      {view === "behavior" ? (
+        <div id="skills-behavior-panel" className="skills-behavior-panel" role="tabpanel">
+          {config && onConfigChange
+            ? <SkillBehaviorSettings config={config} onConfigChange={onConfigChange} />
+            : <div className="settings-state">{t("Runtime policy is unavailable", "运行策略当前不可用")}</div>}
+        </div>
+      ) : list.isLoading ? (
+        <div id="skills-library-panel" className="skills-library-loading" role="tabpanel" aria-label={t("Scanning Skills", "正在扫描 Skills")}>
+          <span /><span /><span /><span />
+        </div>
+      ) : (
+        <div id="skills-library-panel" className="skills-settings-layout" role="tabpanel">
+          <SkillListPanel
+            skills={skills}
+            selectedId={selectedId}
+            scanning={list.isFetching}
+            onSelect={selectSkill}
+            onAdd={startCreating}
+            onScan={() => void list.refetch()}
+          />
+          <SkillEditor
+            skill={selectedSkill}
+            content={content}
+            directoryName={directoryName}
+            creating={creating}
+            dirty={dirty}
+            saving={save.isPending}
+            error={error}
+            onDirectoryNameChange={(value) => { setDirectoryName(value); setDirty(true); }}
+            onContentChange={(value) => { setContent(value); setDirty(true); save.reset(); }}
+            onEnabledChange={(enabled) => selectedSkill && toggle.mutate({ id: selectedSkill.id, enabled })}
+            onSave={() => void save.mutateAsync().catch(() => undefined)}
+          />
+        </div>
       )}
-    <div className="settings-objects-layout skills-settings-layout">
-      <SkillListPanel
-        skills={skills}
-        selectedId={selectedId}
-        scanning={list.isFetching}
-        onSelect={selectSkill}
-        onAdd={startCreating}
-        onScan={() => void list.refetch()}
-      />
-      <SkillEditor
-        skill={selectedSkill}
-        content={content}
-        directoryName={directoryName}
-        creating={creating}
-        dirty={dirty}
-        saving={save.isPending}
-        error={error}
-        onDirectoryNameChange={(value) => { setDirectoryName(value); setDirty(true); }}
-        onContentChange={(value) => { setContent(value); setDirty(true); save.reset(); }}
-        onEnabledChange={(enabled) => selectedSkill && toggle.mutate({ id: selectedSkill.id, enabled })}
-        onSave={() => void save.mutateAsync().catch(() => undefined)}
-      />
-    </div>
     </div>
   );
 }

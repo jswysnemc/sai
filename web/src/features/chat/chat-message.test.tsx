@@ -50,7 +50,7 @@ describe("HistoryTurn", () => {
   });
 
 
-  it("shows remove control for queued live user messages", () => {
+  it("does not render queued runs as user message bubbles", () => {
     const html = renderWithProviders(
       <LiveRunMessage
         running
@@ -62,12 +62,9 @@ describe("HistoryTurn", () => {
           startedAtMs: null,
           durationMs: null
         }}
-        onRemoveFromQueue={() => undefined}
       />
     );
-    expect(html).toContain("从队列移除");
-    expect(html).toContain("排队中");
-    expect(html).not.toContain("assistant-message");
+    expect(html).toBe("");
   });
 
   it("offers expandable details for live failures", () => {

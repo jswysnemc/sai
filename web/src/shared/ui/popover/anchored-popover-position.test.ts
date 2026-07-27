@@ -34,4 +34,13 @@ describe("anchored popover position", () => {
     expect(position.top).toBe(566);
     expect(position.maxHeight).toBe(222);
   });
+
+  it("极小视口中不使用虚构的最小高度", () => {
+    const position = calculateAnchoredPopoverPosition(
+      { left: 20, right: 180, top: 40, bottom: 60 },
+      { viewportWidth: 320, viewportHeight: 100, preferredWidth: 240, minimumWidth: 160, align: "left", maxHeight: 280 }
+    );
+    expect(position.top).toBe(66);
+    expect(position.maxHeight).toBe(22);
+  });
 });

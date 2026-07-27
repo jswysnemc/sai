@@ -1,12 +1,14 @@
 import { FileText } from "lucide-react";
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, RefObject } from "react";
 import { api } from "../../../api/client";
 import type { FileNode } from "../../../api/contracts";
 import { useI18n } from "../../i18n/use-i18n";
+import { MentionPopoverPortal } from "./mention-popover-portal";
 
 type FileMentionPopoverProps = {
   open: boolean;
+  anchorRef: RefObject<HTMLElement | null>;
   onSelect: (path: string) => void;
   onClose: () => void;
 };
@@ -45,7 +47,7 @@ function filterPaths(paths: string[], query: string): string[] {
  * @param props 打开状态、选中回调和关闭回调
  * @returns 文件引用浮层，关闭时返回 null
  */
-export const FileMentionPopover = forwardRef<HTMLDivElement, FileMentionPopoverProps>(function FileMentionPopover({ open, onSelect, onClose }, ref) {
+export const FileMentionPopover = forwardRef<HTMLDivElement, FileMentionPopoverProps>(function FileMentionPopover({ open, anchorRef, onSelect, onClose }, ref) {
   const { t } = useI18n();
   const [paths, setPaths] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -120,9 +122,13 @@ export const FileMentionPopover = forwardRef<HTMLDivElement, FileMentionPopoverP
     }
   };
 
-  if (!open) return null;
   return (
-    <div className="file-mention-popover" role="listbox" aria-label={t("Choose a referenced file", "选择引用文件")} ref={ref}>
+    <MentionPopoverPortal
+      ref={ref}
+      open={open}
+      anchorRef={anchorRef}
+      ariaLabel={t("Choose a referenced file", "选择引用文件")}
+    >
       <input
         ref={inputRef}
         className="file-mention-filter"
@@ -148,6 +154,6 @@ export const FileMentionPopover = forwardRef<HTMLDivElement, FileMentionPopoverP
         ))}
         {filtered.length === 0 && <div className="file-mention-empty">{loading ? t("Loading file tree", "正在加载文件树") : t("No matching files", "没有匹配的文件")}</div>}
       </div>
-    </div>
+    </MentionPopoverPortal>
   );
 });

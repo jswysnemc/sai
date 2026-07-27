@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { AppConfig } from "../../../api/contracts";
@@ -16,8 +17,11 @@ import { AgentEngineSettings } from "./agent-engine-settings";
  */
 function render(agent: Record<string, unknown>): string {
   const config = { agent } as unknown as AppConfig;
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return renderToStaticMarkup(
-    <AgentEngineSettings config={config} onConfigChange={() => undefined} />
+    <QueryClientProvider client={queryClient}>
+      <AgentEngineSettings config={config} onConfigChange={() => undefined} />
+    </QueryClientProvider>
   );
 }
 
@@ -28,13 +32,13 @@ describe("AgentEngineSettings", () => {
     expect(html).not.toContain("停用");
   });
 
-  /// 切到外部内核时，压缩与记忆会静默失效，界面必须说清楚。
-  it("lists the features an external engine disables", () => {
+  /// 外部内核配置应提供标准 ACP 配置入口，不再硬编码禁用能力。
+  it("shows ACP config options for an external engine", () => {
     const html = render({ engine: "codex" });
 
-    expect(html).toContain("停用");
-    expect(html).toContain("上下文压缩");
-    expect(html).toContain("记忆注入");
+    expect(html).toContain("ACP 模型");
+    expect(html).toContain("ACP 权限模式");
+    expect(html).not.toContain("上下文压缩");
   });
 
   it("asks for a launch command only on the custom engine", () => {

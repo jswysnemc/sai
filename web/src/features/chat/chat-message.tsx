@@ -108,31 +108,27 @@ export function LiveRunMessage({
   state,
   sessionId,
   running,
-  onRetry,
-  onRemoveFromQueue
+  onRetry
 }: {
   state: LiveRunState;
   sessionId?: string | null;
   running: boolean;
   onRetry?: () => void;
-  /** 从会话队列取消排队中的运行 */
-  onRemoveFromQueue?: () => void;
 }) {
   const { t, locale } = useI18n();
   const compacting = state.parts.some((part) => part.type === "compaction" && part.status === "running");
   const queued = state.status === "queued";
+  if (queued) return null;
   return (
     <>
       {(state.userInput || state.imageUrls.length > 0) && (
         <UserMessageBubble
           content={state.userInput}
           imageUrls={state.imageUrls}
-          onRetry={running || queued ? undefined : onRetry}
-          onRemoveFromQueue={queued ? onRemoveFromQueue : undefined}
+          onRetry={running ? undefined : onRetry}
         />
       )}
-      {!queued && (
-        <article className="message assistant-message live-message">
+      <article className="message assistant-message live-message">
           <MessageParts parts={state.parts} live={running} />
           {running && !compacting && <LiveRunIndicator status={state.status} startedAtMs={state.startedAtMs} />}
           {!running && state.completed && (
@@ -160,8 +156,7 @@ export function LiveRunMessage({
             />
           )}
           {!running && state.content && <MessageActions text={state.content} />}
-        </article>
-      )}
+      </article>
     </>
   );
 }

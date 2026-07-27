@@ -21,8 +21,11 @@ use tokio::sync::{oneshot, Mutex, RwLock};
 use tokio::task::JoinHandle;
 
 mod history;
+mod queue;
 #[cfg(test)]
 mod tests;
+
+pub(crate) use queue::QueuedRunUpdate;
 
 /// 启动一轮 Web 对话所需参数。
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -428,10 +428,17 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
 
   return (
     <div className="composer-text-wrap">
-      <FileMentionPopover ref={mentionPopoverRef} open={mentionOpen} onSelect={handleMentionSelect} onClose={() => dismissMention(true)} />
+      <FileMentionPopover
+        ref={mentionPopoverRef}
+        open={mentionOpen}
+        anchorRef={editorRef}
+        onSelect={handleMentionSelect}
+        onClose={() => dismissMention(true)}
+      />
       <SkillMentionPopover
         ref={skillPopoverRef}
         open={skillOpen}
+        anchorRef={editorRef}
         query={skillQuery}
         activeIndex={skillActiveIndex}
         onActiveIndexChange={setSkillActiveIndex}

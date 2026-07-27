@@ -58,7 +58,7 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
             ? <ToolPermissionBadge autoAudited={autoAudited} t={t} />
             : undefined
       }
-      status={<ToolStatusMark state={tool.status} />}
+      status={tool.status === "completed" ? undefined : <ToolStatusMark state={tool.status} />}
       expanded={expanded}
       onToggle={() => setExpanded((value) => !value)}
     >

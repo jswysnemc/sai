@@ -287,3 +287,130 @@ async fn queues_second_submission_for_same_session() {
         RunCheckpointStatus::Queued
     );
 }
+
+/// 验证队列编辑和排序同时更新内存与持久化检查点。
+#[tokio::test]
+async fn updates_queued_submission_and_restores_new_order() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = test_paths(temp.path().to_path_buf());
+    let manager = RunManager::new(&paths).unwrap();
+    let workspace = WorkspaceInfo {
+        id: "workspace".to_string(),
+        name: "workspace".to_string(),
+        path: temp.path().display().to_string(),
+        last_opened_at: String::new(),
+    };
+    let key = session_key(&workspace.id, "session");
+    manager.active.lock().await.insert(
+        key.clone(),
+        ActiveRun {
+            info: ActiveRunInfo {
+                run_id: "running".to_string(),
+                workspace_id: workspace.id.clone(),
+                session_id: "session".to_string(),
+                input: "active".to_string(),
+                image_urls: Vec::new(),
+                status: RunCheckpointStatus::Running,
+                discard_user_turn: false,
+                restore_input: None,
+            },
+            handle: tokio::spawn(std::future::pending::<()>()),
+        },
+    );
+
+    let mut queued_ids = Vec::new();
+    for input in ["first", "second", "third"] {
+        let info = manager
+            .start(
+                workspace.clone(),
+                StartRunRequest {
+                    kind: RunKind::Conversation,
+                    session_id: "session".to_string(),
+                    input: input.to_string(),
+                    agent_id: None,
+                    image_url: None,
+                    image_urls: Vec::new(),
+                    mode: None,
+                    provider_id: None,
+                    model: None,
+                    thinking_level: None,
+                },
+            )
+            .await
+            .unwrap();
+        queued_ids.push(info.run_id);
+    }
+
+    let moved_id = queued_ids[2].clone();
+    manager
+        .update_queued(
+            &moved_id,
+            QueuedRunUpdate {
+                input: Some("edited third".to_string()),
+                position: Some(0),
+            },
+        )
+        .await
+        .unwrap();
+
+    let expected = vec![
+        moved_id.clone(),
+        queued_ids[0].clone(),
+        queued_ids[1].clone(),
+    ];
+    let in_memory = manager
+        .queued
+        .lock()
+        .await
+        .get(&key)
+        .unwrap()
+        .iter()
+        .map(|run| run.info.run_id.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(in_memory, expected);
+    assert_eq!(
+        manager.checkpoints.get(&moved_id).unwrap().request.input,
+        "edited third"
+    );
+
+    let empty_error = manager
+        .update_queued(
+            &queued_ids[0],
+            QueuedRunUpdate {
+                input: Some("   ".to_string()),
+                position: None,
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(empty_error.to_string().contains("message cannot be empty"));
+    assert!(manager
+        .update_queued(
+            "running",
+            QueuedRunUpdate {
+                input: None,
+                position: Some(0),
+            },
+        )
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("queued run not found"));
+
+    drop(manager);
+    let restored = RunManager::new(&paths).unwrap();
+    let restored_ids = restored
+        .queued
+        .lock()
+        .await
+        .get(&key)
+        .unwrap()
+        .iter()
+        .map(|run| run.info.run_id.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(restored_ids, expected);
+    assert_eq!(
+        restored.checkpoints.get(&moved_id).unwrap().info.input,
+        "edited third"
+    );
+}

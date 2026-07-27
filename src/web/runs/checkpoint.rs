@@ -1,9 +1,9 @@
 use super::manager::{ActiveRunInfo, StartRunRequest};
 use crate::paths::SaiPaths;
 use crate::web::workspaces::WorkspaceInfo;
-use anyhow::Result;
+use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -99,6 +99,64 @@ impl RunCheckpointStore {
         self.save_locked(&records)?;
         drop(records);
         self.remove_journals(&removed)
+    }
+
+    /// 更新排队运行输入并同步同一会话的队列顺序。
+    ///
+    /// 参数:
+    /// - `run_id`: 被编辑或移动的运行标识
+    /// - `input`: 最新用户输入
+    /// - `ordered_run_ids`: 同一会话从前到后的排队运行标识
+    ///
+    /// 返回:
+    /// - 持久化结果
+    pub(crate) fn update_queued(
+        &self,
+        run_id: &str,
+        input: &str,
+        ordered_run_ids: &[String],
+    ) -> Result<()> {
+        let mut records = self
+            .records
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let selected = ordered_run_ids.iter().cloned().collect::<HashSet<_>>();
+        let original = records.clone();
+        let first_selected = original
+            .iter()
+            .position(|record| selected.contains(&record.info.run_id));
+        let Some(first_selected) = first_selected else {
+            bail!("queued checkpoint not found: {run_id}");
+        };
+        let insert_at = original[..first_selected]
+            .iter()
+            .filter(|record| !selected.contains(&record.info.run_id))
+            .count();
+        let mut selected_records = HashMap::new();
+        let mut retained = Vec::with_capacity(original.len());
+        for mut record in original {
+            if selected.contains(&record.info.run_id) {
+                if record.info.run_id == run_id {
+                    record.info.input = input.to_string();
+                    record.request.input = input.to_string();
+                    record.updated_at = chrono::Utc::now().to_rfc3339();
+                }
+                selected_records.insert(record.info.run_id.clone(), record);
+            } else {
+                retained.push(record);
+            }
+        }
+        if selected_records.len() != ordered_run_ids.len() {
+            bail!("queued checkpoint order is incomplete");
+        }
+        let reordered = ordered_run_ids
+            .iter()
+            .filter_map(|id| selected_records.remove(id))
+            .collect::<Vec<_>>();
+        retained.splice(insert_at..insert_at, reordered);
+        self.save_locked(&retained)?;
+        *records = retained;
+        Ok(())
     }
 
     /// 将运行标记为中断并保存输入恢复信息。
@@ -587,7 +645,9 @@ mod tests {
 
         assert!(store.get("run-0").is_none());
         assert!(!store.event_path("run-0").exists());
-        assert!(store.get(&format!("run-{RUN_HISTORY_CAPACITY}")).is_some());
+        assert!(store
+            .get(&format!("run-{RUN_HISTORY_CAPACITY}"))
+            .is_some());
         assert!(store
             .event_path(&format!("run-{RUN_HISTORY_CAPACITY}"))
             .exists());
@@ -609,9 +669,7 @@ mod tests {
 
         assert!(store.get("run-0").is_none());
         assert!(store.get("run-1").is_some());
-        assert!(store
-            .get(&format!("run-{RUN_HISTORY_CAPACITY}"))
-            .is_some());
+        assert!(store.get(&format!("run-{RUN_HISTORY_CAPACITY}")).is_some());
     }
 
     #[test]

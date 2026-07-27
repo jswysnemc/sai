@@ -49,6 +49,7 @@ export type PermissionDecision =
 export type QuestionOption = {
   label: string;
   description: string;
+  value?: string;
 };
 
 export type QuestionPrompt = {
@@ -57,6 +58,9 @@ export type QuestionPrompt = {
   options: QuestionOption[];
   multiple?: boolean;
   custom?: boolean;
+  required?: boolean;
+  default_answers?: string[];
+  validation?: Record<string, unknown>;
 };
 
 export type QuestionRequestPayload = {

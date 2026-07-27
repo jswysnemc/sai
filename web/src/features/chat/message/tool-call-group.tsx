@@ -1,6 +1,7 @@
-import { Check, ChevronDown, FilePenLine, ListChecks, Search, ShieldCheck, TerminalSquare, Wrench } from "lucide-react";
+import { ChevronDown, FilePenLine, ListChecks, Search, ShieldCheck, TerminalSquare, Wrench } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../api/client";
+import { Button } from "../../../shared/ui/button/button";
 import { groupHasExpandedTool, usePersistedExpand } from "./tool-expand-state";
 import type { ToolLifecycle } from "../run-event-reducer";
 import { ToolLifecycleCard } from "../tool-lifecycle-card";
@@ -47,7 +48,7 @@ export function ToolCallGroup({ tools }: { tools: ToolLifecycle[] }) {
           : <Wrench size={15} />;
   return (
     <section className={`tool-call-group${expanded ? " expanded" : ""}`}>
-      <button type="button" className="tool-call-group-trigger" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
+      <Button className="tool-call-group-trigger" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
         <span className="tool-call-group-icon">{icon}</span>
         <strong title={label}>{label}</strong>
         {auditedCount > 0 && (
@@ -59,9 +60,8 @@ export function ToolCallGroup({ tools }: { tools: ToolLifecycle[] }) {
             {auditedCount}
           </span>
         )}
-        <span className="tool-call-group-status"><Check size={14} /></span>
         <ChevronDown size={14} className={expanded ? "rotate" : ""} aria-hidden />
-      </button>
+      </Button>
       {expanded && (
         <div className="tool-call-group-items">
           {tools.map((tool) => <ToolLifecycleCard key={tool.id} tool={tool} />)}

@@ -5,8 +5,8 @@
 
 .tool-call-group-trigger {
   display: grid;
-  /* 图标 · 标题 · 审核徽标(可缺席) · 状态 · 箭头 */
-  grid-template-columns: 22px minmax(0, 1fr) auto 18px 16px;
+  /* 图标 · 标题 · 审核徽标(可缺席) · 箭头 */
+  grid-template-columns: 22px minmax(0, 1fr) auto 16px;
   align-items: center;
   gap:var(--space-xs);
   width: 100%;
@@ -31,18 +31,14 @@
   white-space: nowrap;
 }
 
-.tool-call-group-icon,
-.tool-call-group-status {
+.tool-call-group-icon {
   display: grid;
   place-items: center;
   color: var(--technical-muted);
 }
 
-.tool-call-group-status {
-  color: var(--signal);
-}
-
 .tool-call-group-trigger > svg {
+  grid-column: 4;
   color: var(--technical-muted);
   transition:transform var(--duration-base) ease;
 }
@@ -52,7 +48,7 @@
   gap:var(--space-3xs);
   margin-top:var(--space-3xs);
   padding:var(--space-3xs) 0 0 var(--space-2xs);
-  border-left: 2px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
   background: transparent;
 }
 

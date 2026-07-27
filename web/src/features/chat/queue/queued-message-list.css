@@ -1,0 +1,114 @@
+.queued-message-list {
+  width: 100%;
+  margin: var(--space-lg) 0 var(--space-2xl);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: color-mix(in srgb, var(--paper-deep) 72%, var(--paper));
+}
+
+.queued-message-row {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: var(--space-2xs) var(--space-sm);
+  transition: background var(--transition-fast), opacity var(--transition-fast);
+}
+
+.queued-message-row:hover,
+.queued-message-row:focus-within {
+  background: var(--control-surface);
+}
+
+.queued-message-row.is-dragging {
+  opacity: 0.55;
+}
+
+.queued-message-handle.ui-button,
+.queued-message-icon-action.ui-button {
+  width: 1.75rem;
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0;
+  border-color: transparent;
+  color: var(--ink-soft);
+}
+
+.queued-message-handle.ui-button {
+  cursor: grab;
+}
+
+.queued-message-handle.ui-button:active {
+  cursor: grabbing;
+}
+
+.queued-message-content {
+  min-width: 0;
+}
+
+.queued-message-content p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: var(--text-base);
+  line-height: var(--leading-snug);
+  white-space: pre-wrap;
+}
+
+.queued-message-editor.ui-text-area {
+  min-height: 3.75rem;
+  max-height: 12rem;
+  padding: var(--space-xs) var(--space-sm);
+  resize: vertical;
+  border-radius: var(--radius-2);
+  background: var(--paper-raised);
+  font-size: var(--text-base);
+}
+
+.queued-message-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2xs);
+  min-width: 0;
+}
+
+.queued-message-promote.ui-button {
+  min-height: 1.75rem;
+  padding: 0 var(--space-sm);
+  border-color: transparent;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.queued-message-promote.ui-button:hover:not(:disabled),
+.queued-message-icon-action.ui-button:hover:not(:disabled),
+.queued-message-handle.ui-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+  color: var(--ink);
+}
+
+@media (max-width: 30rem) {
+  .queued-message-row {
+    grid-template-columns: 1.75rem minmax(0, 1fr);
+    align-items: start;
+    padding: var(--space-xs) var(--space-sm);
+  }
+
+  .queued-message-content {
+    padding-top: var(--space-2xs);
+  }
+
+  .queued-message-actions {
+    grid-column: 2;
+  }
+
+  .queued-message-editor.ui-text-area {
+    min-height: 3.25rem;
+  }
+}

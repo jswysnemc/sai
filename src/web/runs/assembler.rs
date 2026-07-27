@@ -14,6 +14,7 @@ pub(super) struct EventAssembler {
     /// 是否已进入正文输出阶段；进入后不再回退到 thinking
     content_started: bool,
     tool_ids_by_index: HashMap<usize, String>,
+    tool_ids_by_provider_id: HashMap<String, String>,
     prepared_tools: VecDeque<PreparedTool>,
     active_tools_by_name: HashMap<String, VecDeque<String>>,
     next_tool_id: usize,
@@ -43,6 +44,7 @@ impl EventAssembler {
             status: None,
             content_started: false,
             tool_ids_by_index: HashMap::new(),
+            tool_ids_by_provider_id: HashMap::new(),
             prepared_tools: VecDeque::new(),
             active_tools_by_name: HashMap::new(),
             next_tool_id: 0,
@@ -187,6 +189,19 @@ impl EventAssembler {
                 ));
                 events
             }
+            AgentEvent::ToolCallIdentified {
+                id,
+                name,
+                arguments,
+            } => {
+                let mut events = self.status_event("working");
+                let tool_id = self.tool_id_for_provider_call(&id);
+                events.push(self.event(
+                    "tool.call.started",
+                    json!({ "tool_id": tool_id, "name": name, "arguments": arguments }),
+                ));
+                events
+            }
             AgentEvent::ToolProgress { name, message } => {
                 let mut events = self.status_event("working");
                 if name == "run_command"
@@ -201,9 +216,38 @@ impl EventAssembler {
                 ));
                 events
             }
+            AgentEvent::ToolProgressIdentified { id, name, message } => {
+                let mut events = self.status_event("working");
+                let tool_id = self.tool_id_for_provider_call(&id);
+                events.push(self.event(
+                    "tool.progress",
+                    json!({ "tool_id": tool_id, "name": name, "message": message }),
+                ));
+                events
+            }
             AgentEvent::ToolResult { name, ok, output } => {
                 let mut events = self.status_event("working");
                 let tool_id = self.finish_tool_id(&name);
+                events.push(self.event(
+                    "tool.result",
+                    json!({ "tool_id": tool_id, "name": name, "ok": ok, "output": output }),
+                ));
+                if ok && tool_can_mutate_workspace(&name) {
+                    events.push(self.event(
+                        "workspace.changed",
+                        json!({ "source": "tool", "tool_id": tool_id, "tool_name": name }),
+                    ));
+                }
+                events
+            }
+            AgentEvent::ToolResultIdentified {
+                id,
+                name,
+                ok,
+                output,
+            } => {
+                let mut events = self.status_event("working");
+                let tool_id = self.tool_id_for_provider_call(&id);
                 events.push(self.event(
                     "tool.result",
                     json!({ "tool_id": tool_id, "name": name, "ok": ok, "output": output }),
@@ -299,6 +343,23 @@ impl EventAssembler {
         id
     }
 
+    /// 返回 provider 调用标识对应的稳定 Web 工具标识。
+    ///
+    /// 参数:
+    /// - `provider_id`: provider 在工具生命周期中使用的调用标识
+    ///
+    /// 返回:
+    /// - 当前运行内稳定且唯一的 Web 工具标识
+    fn tool_id_for_provider_call(&mut self, provider_id: &str) -> String {
+        if let Some(id) = self.tool_ids_by_provider_id.get(provider_id) {
+            return id.clone();
+        }
+        let id = self.allocate_tool_id();
+        self.tool_ids_by_provider_id
+            .insert(provider_id.to_string(), id.clone());
+        id
+    }
+
     /// 返回下一正式工具调用的 ID。
     ///
     /// 参数:
@@ -388,11 +449,7 @@ impl EventAssembler {
 fn tool_can_mutate_workspace(name: &str) -> bool {
     matches!(
         name,
-        "edit_file"
-            | "run_command"
-            | "background_command"
-            | "trash_path"
-            | "subagent"
+        "edit_file" | "run_command" | "background_command" | "trash_path" | "subagent"
     )
 }
 

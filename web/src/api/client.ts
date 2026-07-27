@@ -243,7 +243,13 @@ export const api = {
           thinking_level: thinkingLevel
         })
       }),
-    stop: (id: string) => apiRequest<{ stopped: boolean }>(`/api/runs/${id}`, { method: "DELETE" })
+    stop: (id: string) => apiRequest<{ stopped: boolean }>(`/api/runs/${id}`, { method: "DELETE" }),
+    /** 更新排队运行的正文或等待位置。 */
+    updateQueue: (id: string, update: { input?: string; position?: number }) =>
+      apiRequest<RunInfo>(`/api/runs/${id}/queue`, {
+        method: "PATCH",
+        body: JSON.stringify(update)
+      })
   },
   agents: {
     runtimeProfiles: () => apiRequest<AgentRuntimeProfilesResponse>("/api/agents/runtime"),

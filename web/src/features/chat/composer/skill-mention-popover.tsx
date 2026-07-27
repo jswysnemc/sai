@@ -1,7 +1,8 @@
 import { BookOpen, Target } from "lucide-react";
-import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { api } from "../../../api/client";
 import { useI18n } from "../../i18n/use-i18n";
+import { MentionPopoverPortal } from "./mention-popover-portal";
 
 export type SkillOption = {
   name: string;
@@ -11,6 +12,7 @@ export type SkillOption = {
 
 type SkillMentionPopoverProps = {
   open: boolean;
+  anchorRef: RefObject<HTMLElement | null>;
   query: string;
   activeIndex: number;
   onActiveIndexChange: (index: number) => void;
@@ -43,7 +45,7 @@ export function filterSkills(skills: SkillOption[], query: string): SkillOption[
  * @returns skill 浮层；关闭时返回 null
  */
 export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopoverProps>(
-  function SkillMentionPopover({ open, query, activeIndex, onActiveIndexChange, onSelect, onOptionsChange }, ref) {
+  function SkillMentionPopover({ open, anchorRef, query, activeIndex, onActiveIndexChange, onSelect, onOptionsChange }, ref) {
     const { t } = useI18n();
     const [skills, setSkills] = useState<SkillOption[]>([]);
     const [loading, setLoading] = useState(false);
@@ -98,9 +100,14 @@ export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopove
       item?.scrollIntoView({ block: "nearest" });
     }, [activeIndex, filtered.length]);
 
-    if (!open) return null;
     return (
-      <div className="file-mention-popover skill-mention-popover" role="listbox" aria-label={t("Choose a Skill", "选择 Skill")} ref={ref}>
+      <MentionPopoverPortal
+        ref={ref}
+        open={open}
+        anchorRef={anchorRef}
+        className="skill-mention-popover"
+        ariaLabel={t("Choose a Skill", "选择 Skill")}
+      >
         <div className="file-mention-filter skill-mention-title">{t("Choose a Skill · ↑↓ navigate · Enter select · Esc close", "选择 Skill · ↑↓ 导航 · Enter 确认 · Esc 关闭")}</div>
         <div className="file-mention-list" ref={listRef}>
           {filtered.map((skill, index) => (
@@ -122,7 +129,7 @@ export const SkillMentionPopover = forwardRef<HTMLDivElement, SkillMentionPopove
             <div className="file-mention-empty">{loading ? t("Loading Skills", "正在加载 Skills") : t("No matching Skills", "没有匹配的 Skill")}</div>
           )}
         </div>
-      </div>
+      </MentionPopoverPortal>
     );
   }
 );

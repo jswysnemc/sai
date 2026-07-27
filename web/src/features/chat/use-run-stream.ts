@@ -9,6 +9,7 @@ import { notifyReplyComplete } from "../../shared/notify/reply-complete-notify";
 
 const EVENT_TYPES = [
   "run.queued",
+  "run.queue.updated",
   "run.dequeued",
   "run.started",
   "message.automatic.input",
@@ -43,6 +44,8 @@ type SessionRunsAction =
   | { type: "attach"; runs: RunInfo[]; sessionId: string }
   | { type: "start"; run: RunInfo; sessionId: string; userInput: string; imageUrls?: string[] }
   | { type: "event"; event: WebEvent }
+  | { type: "update-queued"; runId: string; input?: string; position?: number }
+  | { type: "remove-queued"; runId: string }
   | { type: "stop-local"; runId: string }
   | { type: "relocalize" }
   | { type: "reset" };
@@ -115,13 +118,61 @@ export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsA
       })
     };
   }
+  if (action.type === "remove-queued") {
+    return { runs: state.runs.filter((run) => run.runId !== action.runId) };
+  }
+  if (action.type === "update-queued") {
+    return updateQueuedRunState(state, action.runId, action.input, action.position);
+  }
   if (action.event.type === "run.interrupted" && action.event.payload.discard_user_turn === true) {
     return { runs: state.runs.filter((run) => run.runId !== action.event.run_id) };
+  }
+  if (action.event.type === "run.queue.updated") {
+    return updateQueuedRunState(
+      state,
+      action.event.run_id,
+      typeof action.event.payload.input === "string" ? action.event.payload.input : undefined,
+      typeof action.event.payload.position === "number" ? action.event.payload.position : undefined
+    );
   }
   return {
     runs: state.runs.map((run) => run.runId === action.event.run_id
       ? runEventReducer(run, { type: "event", event: action.event }, locale)
       : run)
+  };
+}
+
+/**
+ * 更新排队运行正文并在会话运行集合中调整位置。
+ *
+ * @param state 当前会话运行集合
+ * @param runId 待更新运行标识
+ * @param input 可选新正文
+ * @param position 可选目标位置
+ * @returns 更新后的会话运行集合
+ */
+export function updateQueuedRunState(
+  state: SessionRunsState,
+  runId: string,
+  input?: string,
+  position?: number
+): SessionRunsState {
+  const current = state.runs.findIndex((run) => run.runId === runId && run.status === "queued");
+  if (current < 0) return state;
+  const selected = {
+    ...state.runs[current],
+    userInput: input ?? state.runs[current].userInput
+  };
+  if (position === undefined) {
+    return { runs: state.runs.map((run, index) => index === current ? selected : run) };
+  }
+
+  // 1. 后端位置只针对同一会话的排队项，活动与终态运行保持原相对位置
+  const queued = state.runs.filter((run) => run.status === "queued" && run.runId !== runId);
+  queued.splice(Math.max(0, Math.min(position, queued.length)), 0, selected);
+  let queuedIndex = 0;
+  return {
+    runs: state.runs.map((run) => run.status === "queued" ? queued[queuedIndex++] : run)
   };
 }
 
@@ -250,7 +301,9 @@ export function useRunStream(
             lastSequence = event.sequence;
           }
           reconnectAttempts = 0;
-          if (event.type === "run.interrupted" && event.payload.discard_user_turn === true) {
+          if (event.type === "run.interrupted"
+            && event.payload.discard_user_turn === true
+            && event.payload.queued !== true) {
             onInterruptedWithoutReply?.(String(event.payload.restore_input ?? ""));
           }
           dispatch({ type: "event", event });
@@ -387,7 +440,61 @@ export function useRunStream(
     }
   };
 
-  return { states: state.runs, start, startGoal, startCompaction, stop, reset: () => dispatch({ type: "reset" }) };
+  /**
+   * 更新排队消息正文。
+   *
+   * @param runId 排队运行标识
+   * @param input 新消息正文
+   * @returns 更新完成后的 Promise
+   */
+  const updateQueuedInput = async (runId: string, input: string) => {
+    const info = await api.runs.updateQueue(runId, { input });
+    dispatch({ type: "update-queued", runId, input: info.input ?? input });
+  };
+
+  /**
+   * 移动排队消息。
+   *
+   * @param runId 排队运行标识
+   * @param position 从零开始的目标位置
+   * @returns 移动完成后的 Promise
+   */
+  const moveQueuedRun = async (runId: string, position: number) => {
+    await api.runs.updateQueue(runId, { position });
+    dispatch({ type: "update-queued", runId, position });
+  };
+
+  /**
+   * 将排队消息提升到当前会话队首。
+   *
+   * @param runId 排队运行标识
+   * @returns 移动完成后的 Promise
+   */
+  const promoteQueuedRun = (runId: string) => moveQueuedRun(runId, 0);
+
+  /**
+   * 删除尚未开始的排队消息。
+   *
+   * @param runId 排队运行标识
+   * @returns 删除完成后的 Promise
+   */
+  const removeQueuedRun = async (runId: string) => {
+    await api.runs.stop(runId);
+    dispatch({ type: "remove-queued", runId });
+  };
+
+  return {
+    states: state.runs,
+    start,
+    startGoal,
+    startCompaction,
+    stop,
+    updateQueuedInput,
+    moveQueuedRun,
+    promoteQueuedRun,
+    removeQueuedRun,
+    reset: () => dispatch({ type: "reset" })
+  };
 }
 
 /**

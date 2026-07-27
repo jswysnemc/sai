@@ -1,34 +1,75 @@
-/*
- * 运行模式图标：底色为同色相的低透明度铺垫，前景取该模式的语义色。
- *
- * 改造前四种模式各写死一份亮色主题的实色，另配三条 `[data-theme="dark"]` 修正规则。
- * 项目的主题标记是 graphite / ocean / dusk 等具名值，从来没有 `dark`，
- * 那三条规则始终不匹配，6 套暗色主题下一直沿用亮色主题的深色前景，对比度不足。
- * 现全部改走 --run-mode-* 语义色，各主题在 color-themes.css 里已给出明暗两套取值。
- */
+/* 运行模式使用同一组中性线性图标，语义差异由图形和文字共同表达。 */
 .run-mode-icon {
   display: inline-grid;
   flex: 0 0 18px;
   width: 18px;
   height: 18px;
   place-items: center;
-  border-radius:var(--radius-1);
-  background: color-mix(in srgb, var(--run-mode-tone) 14%, transparent);
-  color: var(--run-mode-tone);
+  color: var(--ink-soft);
 }
 
-.run-mode-icon.yolo {
-  --run-mode-tone: var(--run-mode-yolo);
+.run-mode-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.7;
 }
 
-.run-mode-icon.audit {
-  --run-mode-tone: var(--run-mode-audit);
+.run-mode-menu {
+  padding: var(--space-3xs);
+  border-radius: var(--radius-3);
 }
 
-.run-mode-icon.plan {
-  --run-mode-tone: var(--run-mode-plan);
+.run-mode-menu > button {
+  grid-template-columns: minmax(0, 1fr) 16px;
+  min-height: 56px;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-2);
 }
 
-.run-mode-icon.auto {
-  --run-mode-tone: var(--run-mode-auto);
+.run-mode-menu .ui-select-option-main {
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+.run-mode-menu .run-mode-icon {
+  margin-top: 2px;
+}
+
+.run-mode-menu .ui-select-option-main > span {
+  gap: var(--space-3xs);
+}
+
+.run-mode-menu strong {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.run-mode-menu small {
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  line-height: 1.35;
+}
+
+.run-mode-menu > button > svg {
+  align-self: start;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  color: var(--ink-soft);
+  stroke-width: 1.7;
+}
+
+.run-mode-menu > button:hover,
+.run-mode-menu > button.active {
+  background: color-mix(in srgb, var(--ink) 7%, var(--paper));
+}
+
+@media (max-width: 48rem) {
+  .run-mode-menu > button {
+    min-height: 52px;
+  }
 }
