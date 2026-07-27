@@ -62,7 +62,8 @@ pub(super) fn read_repl_input(
     let mut last_ctrl_c = None::<Instant>;
     // 输入框由 composer 绝对定位绘制；这里禁止直接向终端写换行，
     // 否则屏幕底部会触发受管模型感知不到的滚动，吞掉上方内容
-    let mut terminal_guard = super::terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
+    let mut terminal_guard =
+        super::terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
     let (_, mut input_row) = cursor::position()?;
     let mut rendered_rows = 0u16;
     let mut is_pasted = false;
@@ -150,6 +151,13 @@ pub(super) fn read_repl_input(
                 if !matches!(code, KeyCode::Char('c')) || !modifiers.contains(KeyModifiers::CONTROL)
                 {
                     last_ctrl_c = None;
+                }
+                if super::repl_transcript_pager::is_jump_to_output_bottom_key(code, modifiers) {
+                    runtime.jump_to_output_bottom(false)?;
+                    input_row = 0;
+                    rendered_rows = 0;
+                    redraw_input!()?;
+                    continue;
                 }
                 // 底部 agent 面板：面板焦点态全键拦截；空输入时 ↓ 进入面板
                 if (runtime.agent_panel_active() || input.is_empty())
@@ -375,7 +383,8 @@ pub(super) fn read_repl_input(
                                 eprintln!("{err}");
                             }
                         }
-                        terminal_guard = super::terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
+                        terminal_guard =
+                            super::terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
                         input_row = 0;
                         rendered_rows = 0;
                         is_pasted = false;

@@ -178,7 +178,6 @@ pub(super) fn reload_repl_agent(
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

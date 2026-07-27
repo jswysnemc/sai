@@ -6,6 +6,17 @@ use std::io::IsTerminal;
 use std::time::Duration;
 
 impl ReplRuntime {
+    /// 将主 TUI 重新定位到 transcript 最新输出。
+    ///
+    /// 参数:
+    /// - `streaming`: 当前是否处于模型流式输出阶段
+    ///
+    /// 返回:
+    /// - transcript 与 composer 重绘结果
+    pub(in crate::cli) fn jump_to_output_bottom(&mut self, streaming: bool) -> Result<()> {
+        self.replay(streaming)
+    }
+
     /// 保存模型运行期间收到的普通终端输入。
     ///
     /// 参数:
@@ -107,16 +118,26 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                 runtime.redraw_stream_composer()?;
             }
             Event::Key(key) if key.kind != KeyEventKind::Release => {
+                if super::super::repl_transcript_pager::is_jump_to_output_bottom_key(
+                    key.code,
+                    key.modifiers,
+                ) {
+                    runtime.jump_to_output_bottom(true)?;
+                    continue;
+                }
                 if (matches!(key.code, KeyCode::Char('o'))
                     && key.modifiers.contains(KeyModifiers::CONTROL))
                     || matches!(key.code, KeyCode::PageUp)
                 {
                     // 1. 流式期间不打开阻塞式浏览面板：pager 会同步占住事件循环，
                     //    模型流无人读取、工具子进程管道写满后挂起
-                    runtime.record_meta(crate::i18n::text(
-                        "transcript pager is available after this turn finishes",
-                        "会话浏览面板需等本轮结束后再打开",
-                    ).to_string())?;
+                    runtime.record_meta(
+                        crate::i18n::text(
+                            "transcript pager is available after this turn finishes",
+                            "会话浏览面板需等本轮结束后再打开",
+                        )
+                        .to_string(),
+                    )?;
                     continue;
                 }
                 if matches!(key.code, KeyCode::Char('c'))

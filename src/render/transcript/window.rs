@@ -229,13 +229,31 @@ impl TranscriptStore {
             }
         }
         if let Some(tool_call) = &self.live_tool_call {
-            let rendered = super::tool_cell::render_live_call(
-                &tool_call.name,
-                &tool_call.arguments_preview,
-                options.tool_call_mode,
-            );
+            let is_diff = crate::render::stream_text::is_file_edit_tool(&tool_call.name);
+            let content_width = if is_diff {
+                width
+                    .saturating_sub(crate::render::content_indent::DIFF_BLOCK_INSET)
+                    .max(1)
+            } else {
+                width
+            };
+            let rendered = crate::render::render_width::with_render_width(content_width, || {
+                super::tool_cell::render_live_call(
+                    &tool_call.name,
+                    &tool_call.arguments_preview,
+                    options.tool_call_mode,
+                )
+            });
             if !rendered.is_empty() {
-                lines.extend(AnsiLine::wrap_block(&rendered, width));
+                if is_diff {
+                    lines.extend(AnsiLine::wrap_block_with_right_margin(
+                        &rendered,
+                        content_width,
+                        crate::render::content_indent::DIFF_BLOCK_INSET,
+                    ));
+                } else {
+                    lines.extend(AnsiLine::wrap_block(&rendered, content_width));
+                }
             }
         }
         if let Some(status) = self.work_status {

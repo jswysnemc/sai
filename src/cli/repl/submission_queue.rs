@@ -87,7 +87,7 @@ pub(super) async fn drain_submission_queue(
             runtime.record_user(*mode, text.clone())?;
             if agent.mode() != *mode {
                 let registry = build_repl_tool_registry(config, paths, *mode)?;
-                agent.switch_mode(*mode, registry);
+                agent.switch_mode(*mode, registry)?;
             }
             agent.prepare_for_turn()?;
             // 用户主动发话：清除历史未消费回执，避免上一轮积压整包注入

@@ -1,5 +1,6 @@
 use crate::permission::PermissionDecision;
-use crate::render::edit_diff::render_edit_file_diff;
+use crate::render::content_indent::indent_diff_for_transcript;
+use crate::render::edit_diff::render_edit_file_diff_for_transcript;
 use crate::render::tool_event_line::{tool_event_label, tool_event_text};
 use crate::render::tool_view::PermissionAuditView;
 use crate::render::PermissionChoice;
@@ -22,7 +23,7 @@ impl DiffCell {
     /// 返回:
     /// - 不依赖后续文件状态的 diff cell
     pub(crate) fn from_arguments(arguments: String) -> Self {
-        let rendered = render_edit_file_diff(&arguments).unwrap_or_else(|| {
+        let rendered = render_edit_file_diff_for_transcript(&arguments).unwrap_or_else(|| {
             tool_event_text(&tool_event_label("edit_file", Some(&arguments)), "run")
         });
         Self {
@@ -157,15 +158,19 @@ pub(crate) fn render(cell: &DiffCell) -> String {
                 if !output.ends_with('\n') {
                     output.push('\n');
                 }
-                output.push_str(&crate::render::render_permission_decision(decision));
+                output.push_str(&indent_diff_for_transcript(
+                    &crate::render::render_permission_decision(decision),
+                ));
             }
             None => {
                 if !output.ends_with('\n') {
                     output.push('\n');
                 }
-                output.push_str(&crate::render::render_permission_controls(
-                    permission.selected,
-                    permission.reply_draft.as_deref(),
+                output.push_str(&indent_diff_for_transcript(
+                    &crate::render::render_permission_controls(
+                        permission.selected,
+                        permission.reply_draft.as_deref(),
+                    ),
                 ));
             }
         }
@@ -173,9 +178,9 @@ pub(crate) fn render(cell: &DiffCell) -> String {
     // 拒绝后的失败状态行与「已拒绝」重复，跳过
     if let Some(ok) = cell.completed.filter(|_| !denied) {
         let status = if ok { "ok" } else { "err" };
-        output.push_str(&format!(
-            "\n{}",
-            crate::render::tool_event_line::tool_event_text("Edit", status)
+        output.push('\n');
+        output.push_str(&indent_diff_for_transcript(
+            &crate::render::tool_event_line::tool_event_text("Edit", status),
         ));
     }
     output

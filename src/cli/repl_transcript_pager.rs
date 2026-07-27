@@ -69,6 +69,9 @@ fn run_pager_loop(runtime: &mut ReplRuntime) -> Result<()> {
                 KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     return Ok(())
                 }
+                KeyCode::Down if is_jump_to_output_bottom_key(key.code, key.modifiers) => {
+                    offset_from_bottom = 0;
+                }
                 KeyCode::Up | KeyCode::Char('k') => {
                     offset_from_bottom = offset_from_bottom.saturating_add(1);
                 }
@@ -105,6 +108,18 @@ fn run_pager_loop(runtime: &mut ReplRuntime) -> Result<()> {
     }
 }
 
+/// 判断按键是否为回到输出底部快捷键。
+///
+/// 参数:
+/// - `code`: 终端键码
+/// - `modifiers`: 修饰键集合
+///
+/// 返回:
+/// - `Ctrl+↓` 时返回 `true`
+pub(super) fn is_jump_to_output_bottom_key(code: KeyCode, modifiers: KeyModifiers) -> bool {
+    code == KeyCode::Down && modifiers.contains(KeyModifiers::CONTROL)
+}
+
 /// 绘制一帧视口内容与底部状态行。
 ///
 /// 参数:
@@ -138,13 +153,10 @@ fn draw_view(
     let position = if lines.len() <= view_height {
         t("all", "全部").to_string()
     } else {
-        format!(
-            "{}%",
-            (end.min(lines.len()) * 100) / lines.len().max(1)
-        )
+        format!("{}%", (end.min(lines.len()) * 100) / lines.len().max(1))
     };
     let status = format!(
-        "\x1b[7m {} {} · ↑↓/PgUp/PgDn {} · End {} · Esc {} \x1b[0m",
+        "\x1b[7m {} {} · ↑↓/PgUp/PgDn {} · Ctrl+↓/End {} · Esc {} \x1b[0m",
         t("transcript", "会话记录"),
         position,
         t("scroll", "滚动"),
@@ -199,7 +211,8 @@ fn clip_to_width(line: &str, cols: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::clip_to_width;
+    use super::{clip_to_width, is_jump_to_output_bottom_key};
+    use crossterm::event::{KeyCode, KeyModifiers};
 
     #[test]
     fn clip_preserves_ansi_and_limits_width() {
@@ -223,5 +236,22 @@ mod tests {
             width += unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
         }
         assert!(width <= 8, "width={width}");
+    }
+
+    /// 只有 Ctrl+下方向键触发回到底部，普通下方向键仍用于逐行滚动。
+    #[test]
+    fn recognizes_jump_to_bottom_shortcut() {
+        assert!(is_jump_to_output_bottom_key(
+            KeyCode::Down,
+            KeyModifiers::CONTROL
+        ));
+        assert!(!is_jump_to_output_bottom_key(
+            KeyCode::Down,
+            KeyModifiers::NONE
+        ));
+        assert!(!is_jump_to_output_bottom_key(
+            KeyCode::Up,
+            KeyModifiers::CONTROL
+        ));
     }
 }

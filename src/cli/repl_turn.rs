@@ -82,7 +82,7 @@ pub(super) async fn execute_automatic_repl_turn(
 ) -> Result<ReplTurnOutcome> {
     if agent.mode() != mode {
         let registry = build_repl_tool_registry(config, paths, mode)?;
-        agent.switch_mode(mode, registry);
+        agent.switch_mode(mode, registry)?;
     }
     agent.prepare_for_turn()?;
     let automatic = automatic_repl_submission(

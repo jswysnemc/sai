@@ -4,6 +4,7 @@ mod cli_command_preview;
 mod code_block;
 mod command_output;
 mod command_result_block;
+pub(crate) mod content_indent;
 mod edit_diff;
 mod error;
 mod engine_notice;

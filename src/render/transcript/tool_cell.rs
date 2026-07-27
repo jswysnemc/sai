@@ -1,5 +1,5 @@
 use super::subagent_cell::{self, SubagentCell};
-use crate::render::edit_diff::render_edit_file_diff;
+use crate::render::edit_diff::render_edit_file_diff_for_transcript;
 use crate::render::stream_text::is_file_edit_tool;
 use crate::render::terminal_text as t;
 use crate::render::tool_event_line::tool_event_text;
@@ -97,7 +97,7 @@ pub(crate) fn render_live_call(
 ) -> String {
     // 1. 编辑类工具在参数流阶段优先渲染 diff，与 CLI 流式预览一致
     if is_file_edit_tool(name) {
-        if let Some(diff) = render_edit_file_diff(arguments_preview) {
+        if let Some(diff) = render_edit_file_diff_for_transcript(arguments_preview) {
             return diff.trim_end().to_string();
         }
     }

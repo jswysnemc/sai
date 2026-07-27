@@ -41,7 +41,11 @@ pub(super) fn draw(
     if state.on_confirm(request) {
         for (question, selected) in request.questions.iter().zip(&state.answers) {
             let value = if selected.is_empty() {
-                format!("\x1b[31m{}\x1b[0m", t("unanswered", "未回答"))
+                if question.required {
+                    format!("\x1b[31m{}\x1b[0m", t("unanswered", "未回答"))
+                } else {
+                    format!("\x1b[2m{}\x1b[0m", t("skipped", "已跳过"))
+                }
             } else {
                 format!(
                     "\x1b[2m{}\x1b[0m",
@@ -63,7 +67,9 @@ pub(super) fn draw(
         top_lines.push(format!("\x1b[1m{}\x1b[0m", question.question.trim()));
         top_lines.push(String::new());
         for (index, option) in question.options.iter().enumerate() {
-            let picked = state.answers[state.tab].contains(&option.label);
+            let picked = state.answers[state.tab]
+                .iter()
+                .any(|answer| answer == option.answer_value());
             if state.selected[state.tab] == index {
                 focused_body_index = Some(body_lines.len());
             }

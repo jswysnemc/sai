@@ -3,6 +3,9 @@ use super::colors::{
     style_removed_line,
 };
 use super::model::preview_from_arguments;
+use crate::render::content_indent::{
+    clear_right_margin, indent_diff_for_cli, indent_diff_for_transcript, DIFF_BLOCK_INSET,
+};
 use crate::render::style::TOOL_BULLET;
 use crate::tools::edit_patch::{AppliedPatch, FileChange, LineChange, LineChangeKind};
 use anyhow::Result;
@@ -34,7 +37,34 @@ pub(crate) fn write_edit_file_diff_block(stdout: &mut io::Stdout, arguments: &st
 /// - Codex 风格 diff 文本
 pub(crate) fn render_edit_file_diff(arguments: &str) -> Option<String> {
     let preview = preview_from_arguments(arguments).ok()?;
-    Some(render_patch_preview(&preview))
+    let diff = indent_diff_for_cli(&render_patch_preview(&preview));
+    Some(inset_cli_diff_background(&diff))
+}
+
+/// 渲染供 TUI transcript 使用的编辑文件 diff 视图。
+///
+/// TUI 会在窗口层添加正文基线，本入口只增加 diff 的内部层级。
+///
+/// 参数:
+/// - `arguments`: `edit_file` / `write_file` / `str_replace` 工具参数
+///
+/// 返回:
+/// - 相对正文内收一列的 Codex 风格 diff 文本
+pub(crate) fn render_edit_file_diff_for_transcript(arguments: &str) -> Option<String> {
+    let preview = preview_from_arguments(arguments).ok()?;
+    Some(indent_diff_for_transcript(&render_patch_preview(&preview)))
+}
+
+/// 清除 CLI diff 色块右侧边距。
+///
+/// 参数:
+/// - `diff`: 已添加 CLI 左侧缩进的 diff 文本
+///
+/// 返回:
+/// - 色块右侧保留对称边距的 ANSI 文本
+fn inset_cli_diff_background(diff: &str) -> String {
+    let clear = clear_right_margin(DIFF_BLOCK_INSET);
+    diff.replace("\x1b[K\x1b[0m", &format!("\x1b[K\x1b[0m{clear}"))
 }
 
 /// 渲染 patch 预览。

@@ -30,9 +30,12 @@ impl WorkStatus {
             }
             AgentEvent::Chunk(_)
             | AgentEvent::ToolCall { .. }
+            | AgentEvent::ToolCallIdentified { .. }
             | AgentEvent::ToolCallProgress(_)
             | AgentEvent::ToolResult { .. }
+            | AgentEvent::ToolResultIdentified { .. }
             | AgentEvent::ToolProgress { .. }
+            | AgentEvent::ToolProgressIdentified { .. }
             | AgentEvent::PermissionResolved { .. }
             | AgentEvent::QuestionResolved { .. } => Some(Self::Working),
             // 权限/提问交互期间由专门 UI 接管，不进入 Working，避免与审核行重叠

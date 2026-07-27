@@ -17,6 +17,12 @@ fn renders_patch_update_as_edited() {
     let output = render_for_test(&args).unwrap();
     let plain = strip_ansi_for_test(&output);
 
+    let mut lines = output.lines();
+    let header = lines.next().expect("diff 标题");
+    assert!(header.starts_with("   ") && !header.starts_with("    "));
+    assert!(lines
+        .filter(|line| line.contains("\x1b[48;5;"))
+        .all(|line| line.starts_with("   \x1b[")));
     assert!(plain.contains("Edited"));
     assert!(plain.contains("(+1 -1)"));
     assert!(plain.contains("  2 -      old();"));
@@ -24,7 +30,7 @@ fn renders_patch_update_as_edited() {
 }
 
 #[test]
-fn repl_diff_keeps_terminal_erase_to_line_end() {
+fn repl_diff_keeps_symmetric_background_insets() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("sample.txt");
     std::fs::write(&path, "old\n").unwrap();
@@ -39,6 +45,7 @@ fn repl_diff_keeps_terminal_erase_to_line_end() {
     let output = render_for_test(&args).unwrap();
 
     assert!(output.contains("\x1b[K"));
+    assert!(output.contains("\x1b[2D\x1b[3X"));
 }
 
 #[test]

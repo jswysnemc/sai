@@ -214,10 +214,7 @@ pub(super) async fn run_repl(
                     crate::control_commands::ControlCommand::Context => {
                         match crate::control_commands::context_info_text(paths) {
                             Ok(info) => {
-                                center_panel::show_center_panel(
-                                    t("Context", "上下文"),
-                                    &info,
-                                )?;
+                                center_panel::show_center_panel(t("Context", "上下文"), &info)?;
                                 runtime.redraw()?;
                             }
                             Err(err) => runtime.record_meta(err.to_string())?,
@@ -253,7 +250,7 @@ pub(super) async fn run_repl(
                                 state = StateStore::new(paths)?;
                                 state.init_files()?;
                                 agent.replace_state(state.clone())?;
-                                        prefill = None;
+                                prefill = None;
                                 runtime.clear()?;
                                 runtime.record_meta(message)?;
                                 record_repl_history(&mut runtime, &state)?;
@@ -285,11 +282,10 @@ pub(super) async fn run_repl(
                             // 用 raw 模式轮询按键取消，而不是 tokio 的 ctrl_c：
                             // 后者首次 poll 即永久接管 SIGINT，会让 cooked 段的
                             // Ctrl+C 行为在使用 /compact 前后不一致
-                            let mut compact_guard =
-                                terminal_restore::TerminalInputGuard::enable(
-                                    &mut io::stdout(),
-                                    false,
-                                )?;
+                            let mut compact_guard = terminal_restore::TerminalInputGuard::enable(
+                                &mut io::stdout(),
+                                false,
+                            )?;
                             let compact_result = loop {
                                 tokio::select! {
                                     result = &mut compact => break result.map(|_| ()),
@@ -553,7 +549,7 @@ pub(super) async fn run_repl(
         // 4. 模式变化时换工具表；每轮只做轻量 prepare
         if agent.mode() != mode {
             let registry = build_repl_tool_registry(&config, paths, mode)?;
-            agent.switch_mode(mode, registry);
+            agent.switch_mode(mode, registry)?;
         }
         agent.prepare_for_turn()?;
         // 用户主动发话：清除历史未消费回执
@@ -627,6 +623,7 @@ pub(super) async fn run_repl(
             prefill_clipboard = Some(clipboard);
         }
     }
+    agent.shutdown_external_engine().await?;
     Ok(())
 }
 

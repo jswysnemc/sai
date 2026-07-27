@@ -49,20 +49,34 @@ impl HistoryCell {
         }
         // 渲染与折行必须共用同一宽度：注入渲染宽度上下文，
         // cell 内部的表格布局 / 水平线 / 折行查询全部对齐 width
-        let rendered = crate::render::render_width::with_render_width(width, || match self {
-            Self::UserEcho(cell) => user_echo_cell::render(cell),
-            Self::Markdown(cell) => markdown_cell::render(cell),
-            Self::Reasoning(cell) => reasoning_cell::render(cell, options.reasoning_mode),
-            Self::Shell(cell) => shell_cell::render(cell),
-            Self::Tool(cell) => tool_cell::render(cell, options.tool_call_mode),
-            Self::Diff(cell) => diff_cell::render(cell),
-            Self::Meta(cell) => meta_cell::render(cell),
-            Self::Welcome(_) => unreachable!("welcome cell is handled before plain rendering"),
-        });
+        let content_width = if matches!(self, Self::Diff(_)) {
+            width
+                .saturating_sub(crate::render::content_indent::DIFF_BLOCK_INSET)
+                .max(1)
+        } else {
+            width
+        };
+        let rendered =
+            crate::render::render_width::with_render_width(content_width, || match self {
+                Self::UserEcho(cell) => user_echo_cell::render(cell),
+                Self::Markdown(cell) => markdown_cell::render(cell),
+                Self::Reasoning(cell) => reasoning_cell::render(cell, options.reasoning_mode),
+                Self::Shell(cell) => shell_cell::render(cell),
+                Self::Tool(cell) => tool_cell::render(cell, options.tool_call_mode),
+                Self::Diff(cell) => diff_cell::render(cell),
+                Self::Meta(cell) => meta_cell::render(cell),
+                Self::Welcome(_) => unreachable!("welcome cell is handled before plain rendering"),
+            });
         if rendered.is_empty() {
             Vec::new()
+        } else if matches!(self, Self::Diff(_)) {
+            AnsiLine::wrap_block_with_right_margin(
+                &rendered,
+                content_width,
+                crate::render::content_indent::DIFF_BLOCK_INSET,
+            )
         } else {
-            AnsiLine::wrap_block(&rendered, width)
+            AnsiLine::wrap_block(&rendered, content_width)
         }
     }
 

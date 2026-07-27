@@ -195,8 +195,16 @@ impl QuestionState {
             tab: 0,
             selected: vec![0; request.questions.len()],
             scroll_starts: vec![0; request.questions.len() + usize::from(request.needs_review())],
-            answers: vec![Vec::new(); request.questions.len()],
-            custom_answers: vec![String::new(); request.questions.len()],
+            answers: request
+                .questions
+                .iter()
+                .map(|question| question.default_answers.clone())
+                .collect(),
+            custom_answers: request
+                .questions
+                .iter()
+                .map(default_custom_answer)
+                .collect(),
             editing: false,
             edit_buffer: String::new(),
             edit_cursor: 0,
@@ -301,9 +309,9 @@ impl QuestionState {
             ));
         };
         if question.multiple {
-            toggle_answer(&mut self.answers[self.tab], &option.label);
+            toggle_answer(&mut self.answers[self.tab], option.answer_value());
         } else {
-            self.answers[self.tab] = vec![option.label.clone()];
+            self.answers[self.tab] = vec![option.answer_value().to_string()];
             self.advance_after_single(request);
         }
         Ok(())
@@ -352,10 +360,36 @@ impl QuestionState {
     /// 返回:
     /// - 无
     fn go_to_first_unanswered(&mut self, request: &QuestionRequest) {
-        if let Some(index) = self.answers.iter().position(Vec::is_empty) {
+        if let Some(index) = self
+            .answers
+            .iter()
+            .enumerate()
+            .position(|(index, answers)| answers.is_empty() && request.questions[index].required)
+        {
             self.tab = index.min(request.questions.len().saturating_sub(1));
         }
     }
+}
+
+/// 返回不属于预设选项的默认自定义答案。
+///
+/// 参数:
+/// - `question`: 当前结构化问题
+///
+/// 返回:
+/// - 可放入自定义编辑器的默认答案
+fn default_custom_answer(question: &QuestionPrompt) -> String {
+    question
+        .default_answers
+        .iter()
+        .find(|answer| {
+            !question
+                .options
+                .iter()
+                .any(|option| option.answer_value() == answer.as_str())
+        })
+        .cloned()
+        .unwrap_or_default()
 }
 
 fn handle_editing_key(
@@ -434,7 +468,13 @@ fn submitted_answers(
     request: &QuestionRequest,
     state: &QuestionState,
 ) -> Result<Option<QuestionAnswers>> {
-    if state.editing || state.answers.iter().any(Vec::is_empty) {
+    if state.editing
+        || state
+            .answers
+            .iter()
+            .enumerate()
+            .any(|(index, answers)| answers.is_empty() && request.questions[index].required)
+    {
         return Ok(None);
     }
     if request.needs_review() && !state.on_confirm(request) {

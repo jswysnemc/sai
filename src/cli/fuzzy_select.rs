@@ -24,9 +24,15 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
             selected,
         )?;
         if let Event::Key(KeyEvent {
-            code, modifiers, ..
+            code,
+            modifiers,
+            kind,
+            ..
         }) = event::read()?
         {
+            if !should_process_inline_fuzzy_key(kind) {
+                continue;
+            }
             match code {
                 KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
                     clear_inline_fuzzy(&mut session.stdout, anchor_y, menu_lines)?;
@@ -62,6 +68,17 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
             }
         }
     }
+}
+
+/// 判断内联选择器是否应处理终端按键事件。
+///
+/// 参数:
+/// - `kind`: 终端上报的按键事件类型
+///
+/// 返回:
+/// - 按下或重复事件返回 true，释放事件返回 false
+fn should_process_inline_fuzzy_key(kind: KeyEventKind) -> bool {
+    kind != KeyEventKind::Release
 }
 
 fn fuzzy_matches(matcher: &SkimMatcherV2, items: &[String], query: &str) -> Vec<(i64, usize)> {
@@ -224,7 +241,26 @@ impl Drop for InlineRawMode {
 
 #[cfg(test)]
 mod tests {
-    use super::inline_fuzzy_scroll_offset;
+    use super::{inline_fuzzy_scroll_offset, should_process_inline_fuzzy_key};
+    use crossterm::event::KeyEventKind;
+
+    /// Windows 上报回车释放事件时，选择器不能将其解释为确认。
+    #[test]
+    fn fuzzy_selector_ignores_windows_enter_release_event() {
+        assert!(!should_process_inline_fuzzy_key(KeyEventKind::Release));
+    }
+
+    /// Windows 的一次回车按下与释放序列只能产生一次确认动作。
+    #[test]
+    fn fuzzy_selector_confirms_windows_enter_sequence_once() {
+        assert_eq!(
+            [KeyEventKind::Press, KeyEventKind::Release]
+                .into_iter()
+                .filter(|kind| should_process_inline_fuzzy_key(*kind))
+                .count(),
+            1
+        );
+    }
 
     #[test]
     fn fuzzy_selector_keeps_initial_items_visible() {

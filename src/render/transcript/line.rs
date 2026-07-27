@@ -40,16 +40,33 @@ impl AnsiLine {
     /// 返回:
     /// - 预换行后的终端行
     pub(crate) fn wrap_block(text: &str, width: usize) -> Vec<Self> {
+        Self::wrap_block_with_right_margin(text, width, 0)
+    }
+
+    /// 将 ANSI 文本块拆分到指定宽度，并清除带背景行的右侧边距。
+    ///
+    /// 参数:
+    /// - `text`: 原始 ANSI 文本块
+    /// - `width`: 已扣除右侧边距的内容宽度
+    /// - `right_margin`: 终端右侧需要恢复默认背景的列数
+    ///
+    /// 返回:
+    /// - 预换行并保留右侧背景边距的终端行
+    pub(crate) fn wrap_block_with_right_margin(
+        text: &str,
+        width: usize,
+        right_margin: usize,
+    ) -> Vec<Self> {
         let mut lines = Vec::new();
         for raw_line in text.split('\n') {
-            lines.extend(wrap_line(raw_line, width));
+            lines.extend(wrap_line(raw_line, width, right_margin));
         }
         lines
     }
 }
 
 /// 按显示宽度切分单行 ANSI 文本，并在续行恢复活动样式。
-fn wrap_line(text: &str, width: usize) -> Vec<AnsiLine> {
+fn wrap_line(text: &str, width: usize, right_margin: usize) -> Vec<AnsiLine> {
     let width = width.max(1);
     let mut lines = Vec::new();
     let mut current = String::new();
@@ -93,7 +110,12 @@ fn wrap_line(text: &str, width: usize) -> Vec<AnsiLine> {
             for _ in 0..spaces {
                 // 2. 逐列折行，避免终端再次解释制表符后破坏 pager 行数
                 if current_width >= width {
-                    lines.push(finish_line(&current, fill_to_end, &last_fill_sgr));
+                    lines.push(finish_line(
+                        &current,
+                        fill_to_end,
+                        &last_fill_sgr,
+                        right_margin,
+                    ));
                     current = active_sgr.clone();
                     current_width = 0;
                 }
@@ -106,7 +128,12 @@ fn wrap_line(text: &str, width: usize) -> Vec<AnsiLine> {
 
         let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
         if current_width > 0 && current_width.saturating_add(char_width) > width {
-            lines.push(finish_line(&current, fill_to_end, &last_fill_sgr));
+            lines.push(finish_line(
+                &current,
+                fill_to_end,
+                &last_fill_sgr,
+                right_margin,
+            ));
             current = active_sgr.clone();
             current_width = 0;
         }
@@ -116,7 +143,12 @@ fn wrap_line(text: &str, width: usize) -> Vec<AnsiLine> {
     }
 
     if !current.is_empty() || lines.is_empty() {
-        lines.push(finish_line(&current, fill_to_end, &last_fill_sgr));
+        lines.push(finish_line(
+            &current,
+            fill_to_end,
+            &last_fill_sgr,
+            right_margin,
+        ));
     }
     lines
 }
@@ -155,7 +187,7 @@ fn update_active_sgr(active_sgr: &mut String, sequence: &str) {
 }
 
 /// 结束预换行行；EL 必须在 reset 之前、背景色仍生效时执行。
-fn finish_line(text: &str, fill_to_end: bool, fill_sgr: &str) -> AnsiLine {
+fn finish_line(text: &str, fill_to_end: bool, fill_sgr: &str, right_margin: usize) -> AnsiLine {
     let mut output = text.to_string();
     // 去掉可能残留的尾部 reset
     while output.ends_with("\x1b[0m") {
@@ -171,6 +203,11 @@ fn finish_line(text: &str, fill_to_end: bool, fill_sgr: &str) -> AnsiLine {
         output.push_str("\x1b[K");
     }
     output.push_str("\x1b[0m");
+    if fill_to_end {
+        output.push_str(&crate::render::content_indent::clear_right_margin(
+            right_margin,
+        ));
+    }
     AnsiLine::new(output)
 }
 
@@ -196,5 +233,17 @@ mod tests {
 
         assert_eq!(lines.len(), 3);
         assert!(lines[2].as_str().starts_with('X'));
+    }
+
+    /// diff 折行应在每个带背景的物理行末清除右侧边距。
+    #[test]
+    fn wrapped_background_lines_keep_right_margin() {
+        let lines =
+            AnsiLine::wrap_block_with_right_margin("\x1b[48;5;22m123456\x1b[K\x1b[0m", 3, 3);
+
+        assert_eq!(lines.len(), 2);
+        assert!(lines
+            .iter()
+            .all(|line| line.as_str().contains("\x1b[2D\x1b[3X")));
     }
 }

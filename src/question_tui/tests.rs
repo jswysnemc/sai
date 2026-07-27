@@ -14,14 +14,19 @@ fn multi_request() -> QuestionRequest {
                 QuestionOption {
                     label: "代码".to_string(),
                     description: String::new(),
+                    value: None,
                 },
                 QuestionOption {
                     label: "文档".to_string(),
                     description: String::new(),
+                    value: None,
                 },
             ],
             multiple: true,
             custom: true,
+            required: true,
+            default_answers: Vec::new(),
+            validation: None,
         }],
     }
 }
@@ -88,6 +93,9 @@ fn existing_custom_answer_reopens_for_editing() {
             options: Vec::new(),
             multiple: false,
             custom: true,
+            required: true,
+            default_answers: Vec::new(),
+            validation: None,
         }],
     };
     let mut state = QuestionState::new(&request);
@@ -188,6 +196,9 @@ fn ctrl_j_inserts_custom_answer_newline() {
             options: Vec::new(),
             multiple: false,
             custom: true,
+            required: true,
+            default_answers: Vec::new(),
+            validation: None,
         }],
     };
     let mut state = QuestionState::new(&request);

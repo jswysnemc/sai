@@ -5,6 +5,7 @@ mod composer_frame;
 mod event_loop;
 mod history;
 mod history_insert;
+mod layout;
 mod reflow;
 mod reflow_state;
 mod runner_events;
@@ -18,9 +19,7 @@ mod tests;
 use crate::agent::AgentMode;
 use crate::cli::repl_chrome::ReplChrome;
 use crate::cli::repl_clipboard::ReplClipboardState;
-use crate::render::transcript::{
-    TranscriptMode, TranscriptRenderOptions, TranscriptStore, WelcomeCell,
-};
+use crate::render::transcript::{TranscriptRenderOptions, TranscriptStore, WelcomeCell};
 use crate::state::{SessionTimelineCompaction, SessionTimelineTurn};
 use anyhow::Result;
 use crossterm::event::Event;
@@ -230,7 +229,8 @@ impl ReplRuntime {
     /// 返回:
     /// - 操作是否成功
     pub(super) fn record_user(&mut self, mode: AgentMode, text: String) -> Result<()> {
-        self.transcript.push_user_echo(transcript_mode(mode), text);
+        self.transcript
+            .push_user_echo(layout::transcript_mode(mode), text);
         self.sync_transcript(false)
     }
 
@@ -560,12 +560,13 @@ impl ReplRuntime {
         let size = current;
         let width = usize::from(size.cols);
         let min_rows = usize::from(size.rows).saturating_mul(2).max(64);
-        let window = self.transcript.display_window_with_live_cap(
+        let window = layout::display_window(
+            &mut self.transcript,
             width,
             &self.options,
             min_rows,
             self.stream.offscreen(),
-            live_preview_cap(size),
+            layout::live_preview_cap(size),
         );
         self.transcript.clear_dirty();
         let previous_viewport = self.viewport;
@@ -628,12 +629,13 @@ impl ReplRuntime {
                 .min(self.transcript.row_cap())
                 .max(usize::from(size.rows))
         };
-        let window = self.transcript.display_window_with_live_cap(
+        let window = layout::display_window(
+            &mut self.transcript,
             width,
             &self.options,
             min_rows,
             usize::MAX,
-            live_preview_cap(size),
+            layout::live_preview_cap(size),
         );
         self.transcript.clear_dirty();
         self.viewport
@@ -707,69 +709,6 @@ impl ReplRuntime {
         self.viewport.restart_at(size, origin);
         self.stream.mark_all_offscreen();
         Ok(())
-    }
-
-    /// 按指定宽度渲染完整 transcript（供备用屏浏览模式使用）。
-    ///
-    /// 参数:
-    /// - `width`: 目标终端列数
-    ///
-    /// 返回:
-    /// - row cap 范围内的预折行 ANSI 行
-    pub(in crate::cli) fn transcript_pager_lines(&mut self, width: usize) -> Vec<String> {
-        let min_rows = self.transcript.row_cap();
-        // 回看场景展开全部折叠块（思考正文、命令输出等），绕过渲染缓存
-        let window = crate::render::render_expand::with_expanded_render(|| {
-            self.transcript.display_window_with_live_cap(
-                width.max(8),
-                &self.options,
-                min_rows,
-                usize::MAX,
-                usize::MAX,
-            )
-        });
-        window
-            .lines
-            .iter()
-            .map(|line| line.as_str().to_string())
-            .collect()
-    }
-
-    /// 计算当前终端尺寸下 composer 需要保留的行数。
-    ///
-    /// 参数:
-    /// - `size`: 当前终端尺寸
-    ///
-    /// 返回:
-    /// - 不超过终端高度的 composer 行数
-    fn composer_height_for(&self, size: TerminalSize) -> u16 {
-        self.composer
-            .as_ref()
-            .map(|composer| composer.height(usize::from(size.cols)))
-            .unwrap_or(0)
-            .min(size.rows)
-    }
-}
-
-/// 计算 live 预览允许占用的最大行数。
-///
-/// live 预览行一旦被真实滚动推入原生 scrollback 便无法修补，
-/// 上限保证滚入 scrollback 的只有定稿内容。
-///
-/// 参数:
-/// - `size`: 当前终端尺寸
-///
-/// 返回:
-/// - live 预览行数上限
-fn live_preview_cap(size: TerminalSize) -> usize {
-    (usize::from(size.rows) / 2).max(8)
-}
-
-/// 将 AgentMode 映射为 transcript 输入模式。
-fn transcript_mode(mode: AgentMode) -> TranscriptMode {
-    match mode {
-        AgentMode::Plan => TranscriptMode::Plan,
-        AgentMode::Audited | AgentMode::AutoAudit | AgentMode::Yolo => TranscriptMode::Yolo,
     }
 }
 

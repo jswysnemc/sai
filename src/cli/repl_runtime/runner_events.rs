@@ -66,7 +66,10 @@ impl ReplRuntime {
                 // 流式文本按固定节拍冲刷，避免长回复每个分片全量重排 markdown
                 self.throttled_live_sync()
             }
-            AgentEvent::ToolCall { name, arguments } => {
+            AgentEvent::ToolCall { name, arguments }
+            | AgentEvent::ToolCallIdentified {
+                name, arguments, ..
+            } => {
                 self.transcript
                     .push_tool_call(name.clone(), arguments.clone());
                 self.sync_transcript(true)?;
@@ -81,7 +84,10 @@ impl ReplRuntime {
                 self.transcript.push_tool_call_progress(progress);
                 self.throttled_live_sync()
             }
-            AgentEvent::ToolResult { name, ok, output } => {
+            AgentEvent::ToolResult { name, ok, output }
+            | AgentEvent::ToolResultIdentified {
+                name, ok, output, ..
+            } => {
                 self.transcript
                     .push_tool_result(name.clone(), *ok, output.clone());
                 self.sync_transcript(true)?;
@@ -91,7 +97,8 @@ impl ReplRuntime {
                 }
                 Ok(())
             }
-            AgentEvent::ToolProgress { name, message } => {
+            AgentEvent::ToolProgress { name, message }
+            | AgentEvent::ToolProgressIdentified { name, message, .. } => {
                 // 工具声明将直接写终端时，下一次同步前从光标处重启受管区域
                 if message == "__external_output__" {
                     self.transcript.finalize_live_tail();
