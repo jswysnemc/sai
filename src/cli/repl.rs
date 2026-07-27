@@ -531,7 +531,7 @@ pub(super) async fn run_repl(
         }
         // 剩余的 / 开头命令形态输入不再静默发给模型：拼错的命令、
         // 带多余参数的已知命令都在这里拦截并提示
-        if let Some(hint) = unknown_slash_command_hint(input) {
+        if let Some(hint) = unknown_slash_command_hint(input, config.agent.engine.is_external()) {
             runtime.record_meta(hint)?;
             continue;
         }

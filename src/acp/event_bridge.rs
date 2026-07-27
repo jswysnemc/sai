@@ -72,9 +72,36 @@ pub(crate) fn bridge_session_update(params: &Value) -> BridgedUpdate {
                 });
             }
         }
+        // 外部内核声明的斜杠命令：列出来让用户知道有什么可用，
+        // 命令本身作为普通输入发给内核，由它自己解析
+        "available_commands_update" => {
+            if let Some(names) = command_names(update) {
+                bridged.events.push(AgentEvent::ToolProgress {
+                    name: crate::i18n::text("engine commands", "内核命令").to_string(),
+                    message: names,
+                });
+            }
+        }
         _ => {}
     }
     bridged
+}
+
+/// 提取内核声明的可用命令名。
+///
+/// 参数:
+/// - `update`: 更新对象
+///
+/// 返回:
+/// - 以空格分隔的 `/命令` 列表；没有命令时返回 None
+fn command_names(update: &Value) -> Option<String> {
+    let commands = update.get("availableCommands")?.as_array()?;
+    let names = commands
+        .iter()
+        .filter_map(|command| command.get("name").and_then(Value::as_str))
+        .map(|name| format!("/{name}"))
+        .collect::<Vec<_>>();
+    (!names.is_empty()).then(|| names.join(" "))
 }
 
 /// 翻译工具状态更新。
@@ -340,6 +367,35 @@ mod tests {
             }
             other => panic!("expected a todo result, got {other:?}"),
         }
+    }
+
+    /// 内核声明的斜杠命令要能被列出，用户才知道有什么可用。
+    #[test]
+    fn maps_available_commands_to_a_readable_list() {
+        let bridged = bridge_session_update(&params(serde_json::json!({
+            "sessionUpdate": "available_commands_update",
+            "availableCommands": [
+                { "name": "review", "description": "review changes" },
+                { "name": "compact", "description": "compact context" }
+            ]
+        })));
+        match bridged.events.first() {
+            Some(AgentEvent::ToolProgress { message, .. }) => {
+                assert!(message.contains("/review"));
+                assert!(message.contains("/compact"));
+            }
+            other => panic!("expected a command list, got {other:?}"),
+        }
+    }
+
+    /// 空命令列表不产生噪音事件。
+    #[test]
+    fn ignores_empty_command_lists() {
+        let bridged = bridge_session_update(&params(serde_json::json!({
+            "sessionUpdate": "available_commands_update",
+            "availableCommands": []
+        })));
+        assert!(bridged.events.is_empty());
     }
 
     /// 协议仍在演进，未知更新类型不应中断对话。
