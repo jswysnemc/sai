@@ -6,6 +6,20 @@ pub(super) fn repl_commands() -> &'static [&'static str] {
     crate::control_commands::catalog::REPL_COMMANDS
 }
 
+/// 判断输入是否为退出 REPL 的命令。
+///
+/// 参数:
+/// - `input`: 已输入或提交的原始文本
+///
+/// 返回:
+/// - 匹配 `exit`、`quit` 或 `/exit` 时返回 true
+pub(super) fn is_repl_exit_command(input: &str) -> bool {
+    let input = input.trim();
+    input.eq_ignore_ascii_case("exit")
+        || input.eq_ignore_ascii_case("quit")
+        || input.eq_ignore_ascii_case("/exit")
+}
+
 /// 根据当前输入生成斜杠菜单补全建议。
 ///
 /// 参数:
@@ -148,6 +162,22 @@ pub(super) fn repl_command_rest<'a>(input: &'a str, command: &str) -> Option<&'a
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 验证退出命令匹配现有支持的写法，且不会误匹配相似文本。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn exit_command_matches_supported_spellings() {
+        assert!(is_repl_exit_command("exit"));
+        assert!(is_repl_exit_command("QUIT"));
+        assert!(is_repl_exit_command(" /Exit "));
+        assert!(!is_repl_exit_command("/quit"));
+        assert!(!is_repl_exit_command("exit now"));
+    }
 
     /// 自带内核下未知命令仍要拦住并提示，避免误当普通消息发出去。
     #[test]

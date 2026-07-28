@@ -179,10 +179,7 @@ pub(super) async fn run_repl(
         apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
         let input = submission.raw_input.trim();
         let mut submitted_input = input.to_string();
-        if input.eq_ignore_ascii_case("exit")
-            || input.eq_ignore_ascii_case("quit")
-            || input.eq_ignore_ascii_case("/exit")
-        {
+        if super::repl_commands::is_repl_exit_command(input) {
             break;
         }
         if let Some(command) = input.strip_prefix('!') {
