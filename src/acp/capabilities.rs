@@ -24,22 +24,6 @@ pub(crate) struct AcpCapabilities {
     pub(crate) sai_subagents: bool,
 }
 
-/// 记录指定外部内核最近一次握手能力。
-///
-/// 参数:
-/// - `engine`: Sai 外部内核稳定名称
-/// - `capabilities`: 握手协商结果
-///
-/// 返回:
-/// - 无
-pub(crate) fn publish(
-    engine: &str,
-    capabilities: &AcpCapabilities,
-    auth_methods: &[AuthMethod],
-) {
-    super::runtime_state::publish_handshake(engine, capabilities, auth_methods);
-}
-
 /// 查询指定外部内核最近一次握手能力。
 ///
 /// 参数:
@@ -58,6 +42,7 @@ pub(crate) struct InitializedAgent {
     pub(crate) version: String,
     pub(crate) capabilities: AcpCapabilities,
     pub(crate) auth_methods: Vec<AuthMethod>,
+    pub(crate) native_equivalents: Value,
 }
 
 /// 使用官方 SDK 解析握手响应并提取运行期能力。
@@ -75,11 +60,19 @@ pub(crate) fn parse_initialize_response(value: Value) -> Result<InitializedAgent
             response.protocol_version.as_u16()
         );
     }
-    let sai_features = response
+    let sai_metadata = response
         .meta
         .as_ref()
         .and_then(|meta| meta.get("_sai"))
+        .cloned();
+    let sai_features = sai_metadata
+        .as_ref()
         .and_then(|sai| sai.get("capabilities"));
+    let native_equivalents = sai_metadata
+        .as_ref()
+        .and_then(|sai| sai.get("native_equivalents"))
+        .cloned()
+        .unwrap_or(Value::Null);
     let sai_feature = |name: &str| {
         sai_features
             .and_then(|features| features.get(name))
@@ -121,6 +114,7 @@ pub(crate) fn parse_initialize_response(value: Value) -> Result<InitializedAgent
             sai_subagents: sai_feature("subagents"),
         },
         auth_methods,
+        native_equivalents,
     })
 }
 
@@ -175,5 +169,35 @@ mod tests {
         assert!(parsed.capabilities.embedded_context);
         assert!(parsed.capabilities.logout);
         assert_eq!(parsed.auth_methods[0].id().to_string(), "login");
+    }
+
+    /// Sai Sidecar 只能声明已经真实接通的宿主集成能力。
+    #[test]
+    fn parses_sai_integration_capabilities() {
+        let parsed = parse_initialize_response(serde_json::json!({
+            "protocolVersion": 1,
+            "agentCapabilities": {},
+            "_meta": {
+                "_sai": {
+                    "capabilities": {
+                        "context_compaction": true,
+                        "memory": true,
+                        "goal_continuation": true,
+                        "subagents": true
+                    },
+                    "native_equivalents": {
+                        "context_compaction": "codex",
+                        "subagents": "codex"
+                    }
+                }
+            }
+        }))
+        .unwrap();
+
+        assert!(parsed.capabilities.sai_context_compaction);
+        assert!(parsed.capabilities.sai_memory);
+        assert!(parsed.capabilities.sai_goal_continuation);
+        assert!(parsed.capabilities.sai_subagents);
+        assert_eq!(parsed.native_equivalents["context_compaction"], "codex");
     }
 }

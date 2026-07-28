@@ -4,6 +4,8 @@ import { api } from "../../api/client";
 import { usePersistedExpand } from "./message/tool-expand-state";
 import type { ToolLifecycle } from "./run-event-reducer";
 import { toolCardSummary } from "./tool-renderers/tool-card-summary";
+import { parseCodexSubagentActivity } from "./tool-renderers/codex-subagent-data";
+import { CodexSubagentToolView } from "./tool-renderers/codex-subagent-tool-view";
 import { toolFilePath } from "./tool-renderers/tool-data";
 import { ToolFileReference } from "./tool-renderers/tool-file-reference";
 import { displayPath } from "./tool-renderers/tool-display-summary";
@@ -31,15 +33,27 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
     return <TodoToolView toolId={tool.id} argumentsText={tool.arguments || tool.argumentsPreview} output={tool.output} />;
   }
   const argumentsText = tool.arguments || tool.argumentsPreview;
+  const subagentActivity = parseCodexSubagentActivity(argumentsText);
+  // 2. Codex 原生子智能体事件使用语义视图，不把协议参数作为唯一内容
+  if (subagentActivity) {
+    return (
+      <CodexSubagentToolView
+        tool={tool}
+        activity={subagentActivity}
+        expanded={expanded}
+        onToggle={() => setExpanded((value) => !value)}
+      />
+    );
+  }
   const headerPath = toolFilePath(tool.name, argumentsText);
-  // 2. 操作对象优先取工作区相对路径，其次是参数摘要；准备阶段没有对象时留空
+  // 3. 操作对象优先取工作区相对路径，其次是参数摘要；准备阶段没有对象时留空
   const relativePath = headerPath ? displayPath(headerPath, workspacePath) : "";
   const summary = headerPath ? "" : toolCardSummary(tool.name, argumentsText, locale, workspacePath) || tool.progress;
   const target = headerPath
     ? <ToolFileReference path={headerPath} label={relativePath || headerPath} className="tool-shell-file" icon={false} />
     : summary;
 
-  // 3. 权限已并入本卡：头部只留一枚徽章，理由放进展开区，不再单独占一张卡
+  // 4. 权限已并入本卡：头部只留一枚徽章，理由放进展开区，不再单独占一张卡
   const permission = tool.permission;
   const autoAudited = permission?.decision === "allow" && permission.source === "auto_audit";
   const auditReason = permission?.decision === "allow" ? permission.reason?.trim() ?? "" : "";

@@ -7,10 +7,18 @@ use anyhow::Result;
 
 pub(crate) use selector::build_external_engine;
 
+/// 通过 ACP 嵌入资源传给外部内核的 Sai 上下文。
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct AcpPromptContext {
+    /// 用于区分上下文来源的稳定 URI
+    pub(crate) uri: String,
+    /// 上下文正文
+    pub(crate) text: String,
+}
+
 /// 一轮对话的输入。
 ///
-/// 只携带外部内核真正需要的东西：它自己维护对话历史，
-/// sai 的消息组装、上下文压缩与记忆注入都不适用。
+/// 外部内核自行维护对话历史；Sai 只补充当前轮需要的记忆、目标与图片上下文。
 #[derive(Debug, Clone)]
 pub(crate) struct TurnRequest {
     /// 用户本轮输入
@@ -19,6 +27,8 @@ pub(crate) struct TurnRequest {
     pub(crate) image_urls: Vec<String>,
     /// 会话工作目录，作为 ACP 会话的根
     pub(crate) cwd: std::path::PathBuf,
+    /// 关联记忆、活动目标等 Sai 动态上下文
+    pub(crate) contexts: Vec<AcpPromptContext>,
 }
 
 /// 外部内核向 sai 投递事件的发送端。
@@ -49,8 +59,23 @@ pub(crate) trait ExternalTurnEngine: Send + Sync {
     ///
     /// 返回:
     /// - 本轮结果
-    async fn run_turn(&mut self, request: TurnRequest, events: EventSender)
-        -> Result<ChatResult>;
+    async fn run_turn(&mut self, request: TurnRequest, events: EventSender) -> Result<ChatResult>;
+
+    /// 立即压缩外部内核维护的当前会话。
+    ///
+    /// 参数:
+    /// - `cwd`: 当前会话工作目录
+    /// - `events`: 压缩生命周期事件发送端
+    ///
+    /// 返回:
+    /// - 外部内核报告的压缩结果
+    async fn compact(
+        &mut self,
+        _cwd: std::path::PathBuf,
+        _events: EventSender,
+    ) -> Result<crate::agent::CompactionRunOutcome> {
+        anyhow::bail!("external agent engine does not support context compaction")
+    }
 
     /// 结束会话并回收子进程。
     ///

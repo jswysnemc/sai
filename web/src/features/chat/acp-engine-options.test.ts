@@ -12,9 +12,14 @@ const status = {
   external: true,
   unavailable_features: [],
   acp_runtime: {
+    connected: true,
+    agent_name: "Claude Code",
+    agent_version: "1.0.0",
     capabilities: null,
     auth_methods: [],
     modes: null,
+    available_commands: [],
+    native_equivalents: {},
     config_options: [
       {
         id: "model",

@@ -1,0 +1,21 @@
+{
+  "name": "@sai/codex-agent-acp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sai capability bridge for the Codex ACP adapter",
+  "bin": {
+    "sai-codex-agent-acp": "./src/index.js"
+  },
+  "scripts": {
+    "check": "node --check src/index.js && node --check src/capability-extensions.js && node --test",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@agentclientprotocol/codex-acp": "1.1.7"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "Apache-2.0"
+}

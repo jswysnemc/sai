@@ -97,6 +97,25 @@ impl ExternalTurnEngine for LazyAcpEngine {
         engine.run_turn(request, events).await
     }
 
+    /// 延迟连接外部内核并压缩当前会话。
+    ///
+    /// 参数:
+    /// - `cwd`: 当前会话工作目录
+    /// - `events`: 压缩生命周期事件发送端
+    ///
+    /// 返回:
+    /// - 外部内核报告的压缩结果
+    async fn compact(
+        &mut self,
+        cwd: std::path::PathBuf,
+        events: EventSender,
+    ) -> Result<crate::agent::CompactionRunOutcome> {
+        self.ensure_connected(&cwd)
+            .await?
+            .compact(cwd, events)
+            .await
+    }
+
     async fn shutdown(&mut self) -> Result<()> {
         match self.inner.as_mut() {
             Some(engine) => engine.shutdown().await,

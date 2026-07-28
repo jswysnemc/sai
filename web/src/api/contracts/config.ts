@@ -336,11 +336,20 @@ export type EngineStatusResponse = {
     prompt_audio: boolean;
     embedded_context: boolean;
     logout: boolean;
+    sai_context_compaction: boolean;
+    sai_memory: boolean;
+    sai_goal_continuation: boolean;
+    sai_subagents: boolean;
   } | null;
   acp_runtime?: {
+    connected: boolean;
+    agent_name: string;
+    agent_version: string;
     capabilities: EngineStatusResponse["acp_capabilities"];
     auth_methods: unknown;
     config_options: unknown;
     modes: unknown;
+    available_commands: unknown;
+    native_equivalents: unknown;
   } | null;
 };

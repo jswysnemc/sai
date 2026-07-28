@@ -26,12 +26,11 @@ async fn acp_live_initialize_handshake() {
     if !live_enabled() {
         return;
     }
-    let args = vec![
-        "-y".to_string(),
-        "@agentclientprotocol/codex-acp".to_string(),
-    ];
+    let config: crate::config::AgentEngineConfig =
+        serde_json::from_str(r#"{"engine":"codex"}"#).unwrap();
+    let (program, args) = config.resolved_command().expect("codex preset command");
     let cwd = std::env::temp_dir();
-    let (transport, _peer) = AcpTransport::spawn("npx", &args, &BTreeMap::new(), &cwd)
+    let (transport, _peer) = AcpTransport::spawn("codex", &program, &args, &BTreeMap::new(), &cwd)
         .await
         .expect("failed to launch the ACP adapter");
 
@@ -55,6 +54,24 @@ async fn acp_live_initialize_handshake() {
 
     assert_eq!(response["protocolVersion"], protocol::PROTOCOL_VERSION);
     assert!(response["agentInfo"]["name"].is_string());
+    assert_eq!(
+        response["_meta"]["_sai"]["capabilities"]["context_compaction"],
+        true
+    );
+    assert_eq!(response["_meta"]["_sai"]["capabilities"]["memory"], true);
+    assert_eq!(
+        response["_meta"]["_sai"]["capabilities"]["goal_continuation"],
+        true
+    );
+    assert_eq!(response["_meta"]["_sai"]["capabilities"]["subagents"], true);
+    assert_eq!(
+        response["_meta"]["_sai"]["native_equivalents"]["context_compaction"],
+        "codex"
+    );
+    assert_eq!(
+        response["_meta"]["_sai"]["native_equivalents"]["subagents"],
+        "codex"
+    );
 }
 
 /// 端到端验证：连接真实适配器后能取到 agentInfo。
@@ -141,6 +158,7 @@ async fn acp_live_runs_a_real_turn() {
         input: "Reply with exactly: PONG".to_string(),
         image_urls: Vec::new(),
         cwd: workspace,
+        contexts: Vec::new(),
     };
 
     let result = tokio::time::timeout(
@@ -261,6 +279,7 @@ async fn run_codex_resume_turn(
         input: input.to_string(),
         image_urls: Vec::new(),
         cwd: workspace.to_path_buf(),
+        contexts: Vec::new(),
     };
     tokio::time::timeout(
         Duration::from_secs(180),

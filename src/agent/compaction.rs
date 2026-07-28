@@ -81,9 +81,12 @@ impl Agent {
     /// 返回:
     /// - 手动压缩轮次数量与应用状态
     pub async fn compact_conversation_now(
-        &self,
+        &mut self,
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<CompactionRunOutcome> {
+        if self.uses_external_engine() {
+            return self.compact_external_conversation(on_event).await;
+        }
         let base = self.chat_base_context_projection(None)?;
         let projection =
             project_provider_turn_from_messages(&base.messages, 0, self.context_char_budget);

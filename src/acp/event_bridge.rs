@@ -1,3 +1,4 @@
+use super::event_data::{command_names, plan_to_todo_snapshot};
 use crate::agent::AgentEvent;
 use crate::llm::{ChatStreamChunk, ChatStreamKind, Usage};
 use agent_client_protocol::schema::v1::{SessionConfigOption, SessionUpdate};
@@ -19,6 +20,12 @@ pub(crate) struct BridgedUpdate {
     pub(crate) config_options: Option<Vec<SessionConfigOption>>,
     /// agent 推送的旧版当前模式
     pub(crate) current_mode: Option<String>,
+    /// agent 推送的完整斜杠命令列表
+    pub(crate) available_commands: Option<Value>,
+    /// 本条更新报告的外部上下文压缩终态
+    pub(crate) compaction_applied: Option<bool>,
+    /// 本条更新是否启动了外部上下文压缩
+    pub(crate) compaction_started: bool,
 }
 
 /// ACP 会话更新桥接器。
@@ -75,6 +82,12 @@ impl AcpEventBridge {
                     }));
                 }
             }
+            "tool_call" if is_context_compaction(update) => {
+                self.bridge_context_compaction(update, true, &mut bridged)
+            }
+            "tool_call_update" if is_context_compaction(update) => {
+                self.bridge_context_compaction(update, false, &mut bridged)
+            }
             "tool_call" => self.bridge_tool_call(update, &mut bridged),
             "tool_call_update" => self.bridge_tool_update(update, &mut bridged),
             // plan 对应 sai 的待办清单：作为工具结果送进去，复用既有的清单渲染
@@ -90,6 +103,12 @@ impl AcpEventBridge {
             // 外部内核声明的斜杠命令：列出来让用户知道有什么可用，
             // 命令本身作为普通输入发给内核，由它自己解析
             "available_commands_update" => {
+                if let Some(commands) = update
+                    .get("availableCommands")
+                    .filter(|commands| commands.is_array())
+                {
+                    bridged.available_commands = Some(commands.clone());
+                }
                 if let Some(names) = command_names(update) {
                     bridged.events.push(AgentEvent::ToolProgress {
                         name: crate::i18n::text("engine commands", "内核命令").to_string(),
@@ -123,6 +142,55 @@ impl AcpEventBridge {
         bridged
     }
 
+    /// 将 Codex 的上下文压缩工具事件转换为 Sai 压缩生命周期。
+    ///
+    /// 参数:
+    /// - `update`: 带有 `contextCompaction` 元数据的 ACP 工具更新
+    /// - `initial`: 是否为首条 `tool_call`
+    /// - `bridged`: 当前通知的翻译结果
+    ///
+    /// 返回:
+    /// - 无
+    fn bridge_context_compaction(
+        &self,
+        update: &Value,
+        initial: bool,
+        bridged: &mut BridgedUpdate,
+    ) {
+        // 【ACP/Codex】【上下文压缩】1. 首条事件进入统一压缩运行态，不再展示普通工具卡
+        if initial {
+            bridged.compaction_started = true;
+            bridged.events.push(AgentEvent::CompactionStarted {
+                turn_count: 0,
+                model: "ACP".to_string(),
+            });
+        }
+        // 【ACP/Codex】【上下文压缩】2. 终态更新结束压缩卡，并把结果反馈给手动控制入口
+        let Some(applied) = terminal_tool_status(update) else {
+            return;
+        };
+        let detail = tool_output_text(update);
+        let error = (!applied).then(|| crate::agent::CompactionError {
+            message: crate::i18n::text("External context compaction failed", "外部上下文压缩失败")
+                .to_string(),
+            detail: if detail.trim().is_empty() {
+                crate::i18n::text(
+                    "The ACP agent reported a failed compaction without details.",
+                    "ACP 内核报告压缩失败，但没有提供详情。",
+                )
+                .to_string()
+            } else {
+                detail
+            },
+        });
+        bridged.events.push(AgentEvent::CompactionFinished {
+            applied,
+            summary: None,
+            error,
+        });
+        bridged.compaction_applied = Some(applied);
+    }
+
     /// 翻译工具调用开始，并处理首次事件已经是终态的情况。
     ///
     /// 参数:
@@ -141,6 +209,9 @@ impl AcpEventBridge {
             .unwrap_or_else(|| "{}".to_string());
         if let Some(locations) = update.get("locations") {
             arguments = merge_acp_metadata(&arguments, "locations", locations.clone());
+        }
+        if let Some(meta) = update.get("_meta") {
+            arguments = merge_acp_metadata(&arguments, "meta", meta.clone());
         }
         bridged.events.push(AgentEvent::ToolCallIdentified {
             id: id.clone(),
@@ -202,21 +273,19 @@ impl AcpEventBridge {
     }
 }
 
-/// 提取内核声明的可用命令名。
+/// 判断 ACP 工具更新是否表示 Codex 上下文压缩。
 ///
 /// 参数:
-/// - `update`: 更新对象
+/// - `update`: 工具更新对象
 ///
 /// 返回:
-/// - 以空格分隔的 `/命令` 列表；没有命令时返回 None
-fn command_names(update: &Value) -> Option<String> {
-    let commands = update.get("availableCommands")?.as_array()?;
-    let names = commands
-        .iter()
-        .filter_map(|command| command.get("name").and_then(Value::as_str))
-        .map(|name| format!("/{name}"))
-        .collect::<Vec<_>>();
-    (!names.is_empty()).then(|| names.join(" "))
+/// - `_meta.contextCompaction` 为 true 时返回 true
+fn is_context_compaction(update: &Value) -> bool {
+    update
+        .get("_meta")
+        .and_then(|meta| meta.get("contextCompaction"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
 }
 
 /// 读取工具状态是否已经结束。
@@ -397,37 +466,9 @@ fn value_to_arguments(value: &Value) -> String {
     }
 }
 
-/// 把 ACP 的计划条目转成 sai todo 工具的结果格式。
-///
-/// 复用既有的 todo 渲染：CLI 打印清单、TUI 落到沉底面板、Web 显示清单卡。
-///
-/// 参数:
-/// - `entries`: plan 的条目数组
-///
-/// 返回:
-/// - todo 工具结果 JSON
-fn plan_to_todo_snapshot(entries: &[Value]) -> String {
-    let items = entries
-        .iter()
-        .filter_map(|entry| {
-            let text = entry.get("content").and_then(Value::as_str)?.trim();
-            if text.is_empty() {
-                return None;
-            }
-            let status = match entry
-                .get("status")
-                .and_then(Value::as_str)
-                .unwrap_or("pending")
-            {
-                "in_progress" => "in_progress",
-                "completed" => "completed",
-                _ => "pending",
-            };
-            Some(serde_json::json!({ "text": text, "status": status }))
-        })
-        .collect::<Vec<_>>();
-    serde_json::json!({ "ok": true, "items": items }).to_string()
-}
+#[cfg(test)]
+#[path = "event_bridge_extension_tests.rs"]
+mod extension_tests;
 
 #[cfg(test)]
 mod tests {
@@ -589,35 +630,6 @@ mod tests {
             }
             other => panic!("expected a todo result, got {other:?}"),
         }
-    }
-
-    /// 内核声明的斜杠命令要能被列出，用户才知道有什么可用。
-    #[test]
-    fn maps_available_commands_to_a_readable_list() {
-        let bridged = bridge(serde_json::json!({
-            "sessionUpdate": "available_commands_update",
-            "availableCommands": [
-                { "name": "review", "description": "review changes" },
-                { "name": "compact", "description": "compact context" }
-            ]
-        }));
-        match bridged.events.first() {
-            Some(AgentEvent::ToolProgress { message, .. }) => {
-                assert!(message.contains("/review"));
-                assert!(message.contains("/compact"));
-            }
-            other => panic!("expected a command list, got {other:?}"),
-        }
-    }
-
-    /// 空命令列表不产生噪音事件。
-    #[test]
-    fn ignores_empty_command_lists() {
-        let bridged = bridge(serde_json::json!({
-            "sessionUpdate": "available_commands_update",
-            "availableCommands": []
-        }));
-        assert!(bridged.events.is_empty());
     }
 
     /// 标准 usage_update 应转换为 Sai 用量。

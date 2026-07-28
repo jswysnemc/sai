@@ -1,4 +1,5 @@
 use super::protocol::{self, Incoming, JsonRpcError, RequestId};
+use super::runtime_state::AcpConnectionTracker;
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
@@ -49,6 +50,7 @@ pub(crate) struct AcpTransport {
     stdin: Arc<Mutex<ChildStdin>>,
     next_id: AtomicI64,
     pending: PendingResponses,
+    connection: AcpConnectionTracker,
 }
 
 /// 对端消息接收端。
@@ -97,6 +99,7 @@ impl AcpTransport {
     /// 启动 ACP agent 子进程并接管其 stdio。
     ///
     /// 参数:
+    /// - `engine`: 内核稳定名称
     /// - `program`: 启动程序
     /// - `args`: 启动参数
     /// - `env`: 追加的环境变量
@@ -105,11 +108,13 @@ impl AcpTransport {
     /// 返回:
     /// - 已就绪的连接
     pub(crate) async fn spawn(
+        engine: &str,
         program: &str,
         args: &[String],
         env: &std::collections::BTreeMap<String, String>,
         cwd: &std::path::Path,
     ) -> Result<(Self, PeerReceiver)> {
+        let connection = AcpConnectionTracker::new(engine);
         let mut command = Command::new(program);
         command
             .args(args)
@@ -142,6 +147,7 @@ impl AcpTransport {
         let pending: PendingResponses = Arc::new(Mutex::new(HashMap::new()));
         let (peer_tx, peer_rx) = mpsc::unbounded_channel();
         let reader_pending = Arc::clone(&pending);
+        let reader_connection = connection.clone();
         // 读取任务随传输对象一起结束：Child 设了 kill_on_drop，管道关闭后循环自然退出
         tokio::spawn(async move {
             let mut lines = BufReader::new(stdout).lines();
@@ -168,6 +174,7 @@ impl AcpTransport {
             }
             // 【ACP】【连接关闭】关闭全部等待通道，让请求立即返回连接错误
             reader_pending.lock().await.clear();
+            reader_connection.disconnect();
         });
         Ok((
             Self {
@@ -175,12 +182,21 @@ impl AcpTransport {
                 stdin: Arc::new(Mutex::new(stdin)),
                 next_id: AtomicI64::new(1),
                 pending,
+                connection,
             },
             PeerReceiver {
                 peer_rx,
                 pending: VecDeque::new(),
             },
         ))
+    }
+
+    /// 返回当前子进程的连接状态追踪器。
+    ///
+    /// 返回:
+    /// - 与当前传输实例一一对应的连接追踪器
+    pub(crate) fn connection(&self) -> &AcpConnectionTracker {
+        &self.connection
     }
 
     /// 发送请求并等待响应。
@@ -260,6 +276,7 @@ impl AcpTransport {
     #[allow(dead_code)]
     pub(crate) async fn shutdown(&self) -> Result<()> {
         let _ = self.child.lock().await.start_kill();
+        self.connection.disconnect();
         Ok(())
     }
 
@@ -277,6 +294,13 @@ impl AcpTransport {
         stdin.write_all(line.as_bytes()).await?;
         stdin.flush().await?;
         Ok(())
+    }
+}
+
+impl Drop for AcpTransport {
+    /// 传输对象析构时补齐运行状态，并由子进程的 `kill_on_drop` 完成回收。
+    fn drop(&mut self) {
+        self.connection.disconnect();
     }
 }
 

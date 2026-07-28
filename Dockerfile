@@ -23,6 +23,7 @@ RUN apt-get update \
 
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY assets ./assets
+COPY sidecars ./sidecars
 COPY src ./src
 COPY --from=web /src/web/dist ./web/dist
 
@@ -30,7 +31,7 @@ RUN cargo build --release --locked \
     && strip target/release/sai
 
 # 3. 运行时镜像
-FROM debian:bookworm-slim
+FROM node:22-bookworm-slim
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \

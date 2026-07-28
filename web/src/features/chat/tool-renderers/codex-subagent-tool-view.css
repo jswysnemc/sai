@@ -1,0 +1,93 @@
+.codex-subagent-activity {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.125rem;
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--ink-soft);
+  font: 500 var(--text-2xs)/1 var(--font-ui);
+}
+
+.codex-subagent-activity.is-started,
+.codex-subagent-activity.is-interacted {
+  border-color: color-mix(in srgb, var(--signal) 24%, var(--line));
+  background: var(--signal-soft);
+  color: var(--signal);
+}
+
+.codex-subagent-activity.is-interrupted {
+  border-color: color-mix(in srgb, var(--warning) 28%, var(--line));
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  color: var(--warning);
+}
+
+.codex-subagent-tool-view {
+  display: grid;
+  gap: var(--space-md);
+  overflow: hidden;
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-3);
+  background: var(--technical-surface);
+}
+
+.codex-subagent-tool-view dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+}
+
+.codex-subagent-tool-view dl > div {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, 0.36fr) minmax(0, 1fr);
+  gap: var(--space-sm);
+  min-width: 0;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid color-mix(in srgb, var(--technical-border) 70%, transparent);
+}
+
+.codex-subagent-tool-view dt,
+.codex-subagent-output > span {
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+}
+
+.codex-subagent-tool-view dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.codex-subagent-tool-view code {
+  font: 400 var(--text-xs)/1.4 var(--font-code);
+}
+
+.codex-subagent-output {
+  display: grid;
+  gap: var(--space-xs);
+  padding: 0 var(--space-md) var(--space-md);
+}
+
+.codex-subagent-output pre {
+  max-height: 12rem;
+  margin: 0;
+  padding: var(--space-sm);
+  overflow: auto;
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-2);
+  background: var(--paper);
+  color: var(--ink-soft);
+  font: 400 var(--text-xs)/1.5 var(--font-code);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 48rem) {
+  .codex-subagent-tool-view dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../api/client";
-import type { AppConfig } from "../../../api/contracts";
+import type { AgentEngineKind, AppConfig } from "../../../api/contracts";
 import { Select } from "../../../shared/ui/select/select";
 import { useI18n } from "../../i18n/use-i18n";
+import { AcpCapabilityPanel } from "./acp-capability-panel";
 import { AcpRuntimeConfigFields } from "./acp-runtime-config-fields";
 import "./agent-engine-settings.css";
 
@@ -24,14 +25,17 @@ type AgentEngineSettingsProps = {
 export function AgentEngineSettings({ config, onConfigChange }: AgentEngineSettingsProps) {
   const { t } = useI18n();
   const agent = (config.agent as Record<string, unknown> | undefined) ?? {};
-  const engine = typeof agent.engine === "string" ? agent.engine : "native";
+  const engine: AgentEngineKind = typeof agent.engine === "string"
+    ? agent.engine as AgentEngineKind
+    : "native";
   const acp = (agent.acp as Record<string, unknown> | undefined) ?? {};
   const command = typeof acp.command === "string" ? acp.command : "";
   const isExternal = engine !== "native";
   const engineStatus = useQuery({
     queryKey: ["engine-status"],
     queryFn: api.config.engineStatus,
-    enabled: isExternal
+    enabled: isExternal,
+    refetchInterval: isExternal ? 2_000 : false
   });
   const runtime = engineStatus.data?.engine === engine ? engineStatus.data.acp_runtime : undefined;
 
@@ -95,6 +99,14 @@ export function AgentEngineSettings({ config, onConfigChange }: AgentEngineSetti
           )}
         </small>
       </div>
+      {isExternal && (
+        <AcpCapabilityPanel
+          engine={engine}
+          status={engineStatus.data}
+          loading={engineStatus.isLoading}
+          error={engineStatus.error}
+        />
+      )}
       {isExternal && (
         <div className="settings-form-grid">
           <AcpRuntimeConfigFields acp={acp} runtime={runtime} onChange={updateAcp} />

@@ -1,44 +1,25 @@
+use super::client_identity::client_info_name;
 use super::client_methods;
 use super::client_terminal::TerminalRegistry;
 use super::config_options::AcpConfigOptions;
 use super::event_bridge::AcpEventBridge;
 use super::governance::AcpGovernance;
+use super::prompt_state::{apply_bridged_update, PromptOutcome};
 use super::protocol;
 use super::transport::{AcpTransport, PeerMessage, PeerReceiver};
 use crate::agent_engine::{EventSender, ExternalTurnEngine, TurnRequest};
 use crate::llm::ChatResult;
 use agent_client_protocol::schema::v1::{
     AuthMethod, AuthenticateRequest, AuthenticateResponse, CloseSessionRequest,
-    CloseSessionResponse, ContentBlock, DeleteSessionRequest, DeleteSessionResponse, ImageContent,
-    ListSessionsRequest, ListSessionsResponse, LoadSessionRequest, LoadSessionResponse,
-    LogoutRequest, LogoutResponse, NewSessionRequest, NewSessionResponse, PromptRequest,
-    PromptResponse, ResumeSessionRequest, ResumeSessionResponse, SessionConfigOption, SessionInfo,
-    SessionModeState, SetSessionModeRequest, SetSessionModeResponse, TextContent,
+    CloseSessionResponse, DeleteSessionRequest, DeleteSessionResponse, ListSessionsRequest,
+    ListSessionsResponse, LoadSessionRequest, LoadSessionResponse, LogoutRequest, LogoutResponse,
+    NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse, ResumeSessionRequest,
+    ResumeSessionResponse, SessionConfigOption, SessionInfo, SessionModeState,
+    SetSessionModeRequest, SetSessionModeResponse,
 };
 use anyhow::{Context, Result};
 use serde_json::json;
 use std::time::{Duration, Instant};
-
-/// Codex app-server 保留的非来源客户端名称。
-///
-/// 使用该名称时，app-server 不会用 ACP 宿主覆盖默认的 `codex_cli_rs`
-/// 来源和 User-Agent，行为与 Sai 内置内核的 Codex 客户端兼容模式一致。
-const CODEX_APP_SERVER_NON_ORIGINATING_CLIENT: &str = "codex_app_server_daemon";
-
-/// 返回外部内核在 ACP 握手中声明的客户端名称。
-///
-/// 参数:
-/// - `engine_name`: 外部内核稳定名称
-///
-/// 返回:
-/// - 发送给 ACP agent 的 `clientInfo.name`
-pub(super) fn client_info_name(engine_name: &str) -> &'static str {
-    if engine_name == "codex" {
-        CODEX_APP_SERVER_NON_ORIGINATING_CLIENT
-    } else {
-        "sai"
-    }
-}
 
 /// 基于 ACP 的外部对话内核。
 pub(crate) struct AcpEngine {
@@ -85,7 +66,7 @@ impl AcpEngine {
         startup_timeout: Duration,
         governance: AcpGovernance,
     ) -> Result<Self> {
-        let (transport, peer) = AcpTransport::spawn(program, args, env, cwd).await?;
+        let (transport, peer) = AcpTransport::spawn(name, program, args, env, cwd).await?;
         let engine = Self {
             name: name.to_string(),
             transport: std::sync::Arc::new(transport),
@@ -102,7 +83,14 @@ impl AcpEngine {
         };
         let initialized = engine.initialize().await?;
         let authenticated = engine.authenticate(&initialized.auth_methods).await?;
-        super::capabilities::publish(name, &initialized.capabilities, &initialized.auth_methods);
+        super::runtime_state::publish_handshake(
+            engine.transport.connection(),
+            &initialized.name,
+            &initialized.version,
+            &initialized.capabilities,
+            &initialized.auth_methods,
+            &initialized.native_equivalents,
+        );
         Ok(Self {
             agent_info: Some((initialized.name, initialized.version)),
             capabilities: initialized.capabilities,
@@ -182,7 +170,7 @@ impl AcpEngine {
         if let Some(session_id) = &self.session_id {
             return Ok(session_id.clone());
         }
-        // 1. 先尝试接回上次的会话：外部 agent 自管历史，
+        // 【ACP】【会话恢复】1. 先尝试接回上次的会话：外部 agent 自管历史，
         //    新建会话意味着丢掉全部上下文，与 sai 会话列表里的历史对不上
         if self.capabilities.resume_session || self.capabilities.load_session {
             if let Some(stored) = self
@@ -214,7 +202,7 @@ impl AcpEngine {
                 }
             }
         }
-        // 2. 没有可恢复的会话时新建，并记下标识供下次接回
+        // 【ACP】【会话恢复】2. 没有可恢复的会话时新建，并记下标识供下次接回
         let context = super::session_context::build(&self.governance, &self.capabilities)?;
         let request = NewSessionRequest::new(cwd)
             .mcp_servers(context.mcp_servers)
@@ -368,16 +356,16 @@ impl AcpEngine {
     /// - `events`: 事件发送端
     ///
     /// 返回:
-    /// - 本轮累计的回复与推理
+    /// - 本轮累计正文、推理、用量与压缩观察结果
     async fn drive_prompt(
         &mut self,
         session_id: &str,
         request: &TurnRequest,
         events: &EventSender,
-    ) -> Result<(String, String, Option<crate::llm::Usage>)> {
+    ) -> Result<PromptOutcome> {
         let prompt = PromptRequest::new(
             session_id.to_string(),
-            prompt_blocks(request, &self.capabilities)?,
+            super::prompt::blocks(request, &self.capabilities)?,
         );
         // 本轮 future 被丢弃时（用户中断、上游 abort）通知对端取消，
         // 否则外部 agent 仍在跑这一轮，下次提示会撞上残留状态
@@ -392,9 +380,7 @@ impl AcpEngine {
             self.transport
                 .request("session/prompt", super::sdk::to_value(&prompt)?),
         );
-        let mut content = String::new();
-        let mut reasoning = String::new();
-        let mut reported_usage = None;
+        let mut outcome = PromptOutcome::default();
         loop {
             tokio::select! {
                 // 优先处理对端消息，避免 prompt 先返回时丢掉尾部更新
@@ -406,21 +392,13 @@ impl AcpEngine {
                     match message {
                         PeerMessage::Notification { method, params } if method == "session/update" => {
                             let bridged = self.event_bridge.bridge_session_update(&params);
-                            self.config_options.replace(bridged.config_options.clone());
-                            if let Some(options) = &bridged.config_options {
-                                super::runtime_state::update_config_options(&self.name, options);
-                            }
-                            if let Some(mode) = &bridged.current_mode {
-                                super::runtime_state::update_current_mode(&self.name, mode);
-                            }
-                            if bridged.usage.is_some() {
-                                reported_usage = bridged.usage.clone();
-                            }
-                            content.push_str(&bridged.content_delta);
-                            reasoning.push_str(&bridged.reasoning_delta);
-                            for event in bridged.events {
-                                let _ = events.send(event);
-                            }
+                            apply_bridged_update(
+                                &self.name,
+                                &mut self.config_options,
+                                bridged,
+                                &mut outcome,
+                                events,
+                            );
                         }
                         PeerMessage::Notification { .. } => {}
                         PeerMessage::Request { id, method, params } => {
@@ -446,21 +424,13 @@ impl AcpEngine {
                                     continue;
                                 }
                                 let bridged = self.event_bridge.bridge_session_update(&params);
-                                self.config_options.replace(bridged.config_options.clone());
-                                if let Some(options) = &bridged.config_options {
-                                    super::runtime_state::update_config_options(&self.name, options);
-                                }
-                                if let Some(mode) = &bridged.current_mode {
-                                    super::runtime_state::update_current_mode(&self.name, mode);
-                                }
-                                if bridged.usage.is_some() {
-                                    reported_usage = bridged.usage.clone();
-                                }
-                                content.push_str(&bridged.content_delta);
-                                reasoning.push_str(&bridged.reasoning_delta);
-                                for event in bridged.events {
-                                    let _ = events.send(event);
-                                }
+                                apply_bridged_update(
+                                    &self.name,
+                                    &mut self.config_options,
+                                    bridged,
+                                    &mut outcome,
+                                    events,
+                                );
                             }
                             PeerMessage::Request { id, method, params } => {
                                 self.dispatch_peer_request(id, method, params, events);
@@ -468,8 +438,11 @@ impl AcpEngine {
                         }
                     }
                     cancel_guard.finished = true;
-                    let usage = response.usage.map(convert_usage).or(reported_usage);
-                    return Ok((content, reasoning, usage));
+                    outcome.usage = response
+                        .usage
+                        .map(super::prompt::convert_usage)
+                        .or(outcome.usage);
+                    return Ok(outcome);
                 }
             }
         }
@@ -631,86 +604,103 @@ impl ExternalTurnEngine for AcpEngine {
     async fn run_turn(&mut self, request: TurnRequest, events: EventSender) -> Result<ChatResult> {
         let started = Instant::now();
         let session_id = self.ensure_session(&request.cwd).await?;
-        let (content, reasoning, usage) = self.drive_prompt(&session_id, &request, &events).await?;
+        let outcome = self.drive_prompt(&session_id, &request, &events).await?;
         Ok(ChatResult {
-            content,
-            reasoning: (!reasoning.is_empty()).then_some(reasoning),
-            usage,
+            content: outcome.content,
+            reasoning: (!outcome.reasoning.is_empty()).then_some(outcome.reasoning),
+            usage: outcome.usage,
             tool_calls: Vec::new(),
             duration_ms: started.elapsed().as_millis() as u64,
         })
     }
 
-    async fn shutdown(&mut self) -> Result<()> {
-        if self.capabilities.close_session {
-            if let Some(session_id) = self.session_id.take() {
-                let request = CloseSessionRequest::new(session_id);
-                let response = self
-                    .transport
-                    .request("session/close", super::sdk::to_value(&request)?)
-                    .await?;
-                let _: CloseSessionResponse =
-                    super::sdk::from_value(response, "session/close response")?;
-            }
+    /// 请求外部 ACP 内核压缩当前会话。
+    ///
+    /// 参数:
+    /// - `cwd`: 当前会话工作目录
+    /// - `events`: 压缩生命周期事件发送端
+    ///
+    /// 返回:
+    /// - 外部内核报告的压缩结果
+    async fn compact(
+        &mut self,
+        cwd: std::path::PathBuf,
+        events: EventSender,
+    ) -> Result<crate::agent::CompactionRunOutcome> {
+        // 【ACP】【上下文压缩】1. 校验能力并向当前会话发送 /compact
+        if !self.capabilities.sai_context_compaction {
+            anyhow::bail!("ACP agent does not advertise Sai context compaction support");
         }
-        self.transport.shutdown().await
-    }
-}
-
-/// 把本轮输入转成 ACP 的 content block 数组。
-///
-/// 参数:
-/// - `request`: 本轮输入
-///
-/// 返回:
-/// - content block 数组
-pub(super) fn prompt_blocks(
-    request: &TurnRequest,
-    capabilities: &super::capabilities::AcpCapabilities,
-) -> Result<Vec<ContentBlock>> {
-    let mut blocks = vec![ContentBlock::Text(TextContent::new(&request.input))];
-    if !request.image_urls.is_empty() && !capabilities.prompt_image {
-        anyhow::bail!("ACP agent does not advertise image prompt support");
-    }
-    for image in &request.image_urls {
-        // data URL 形如 `data:image/png;base64,xxxx`，ACP 要求分开给出 mime 与数据
-        let Some((mime, data)) = split_data_url(image) else {
-            continue;
+        let session_id = self.ensure_session(&cwd).await?;
+        let request = TurnRequest {
+            input: "/compact".to_string(),
+            image_urls: Vec::new(),
+            cwd,
+            contexts: Vec::new(),
         };
-        blocks.push(ContentBlock::Image(ImageContent::new(data, mime)));
+        let outcome = self.drive_prompt(&session_id, &request, &events).await?;
+        // 【ACP】【上下文压缩】2. 解析适配器终态，缺失时补齐失败生命周期
+        let applied = match outcome.compaction_applied {
+            Some(applied) => applied,
+            None => {
+                if !outcome.compaction_started {
+                    let _ = events.send(crate::agent::AgentEvent::CompactionStarted {
+                        turn_count: 0,
+                        model: "ACP".to_string(),
+                    });
+                }
+                let _ = events.send(crate::agent::AgentEvent::CompactionFinished {
+                    applied: false,
+                    summary: None,
+                    error: Some(crate::agent::CompactionError {
+                        message: crate::i18n::text(
+                            "External context compaction did not finish",
+                            "外部上下文压缩未完成",
+                        )
+                        .to_string(),
+                        detail: crate::i18n::text(
+                            "The ACP agent returned from /compact without a compaction result.",
+                            "ACP 内核执行 /compact 后没有返回压缩结果。",
+                        )
+                        .to_string(),
+                    }),
+                });
+                false
+            }
+        };
+        // 【ACP】【上下文压缩】3. 返回 Sai 统一压缩结果
+        Ok(crate::agent::CompactionRunOutcome {
+            turn_count: 0,
+            applied,
+        })
     }
-    Ok(blocks)
-}
 
-/// 将 ACP turn usage 转换为 Sai 的统一用量结构。
-///
-/// 参数:
-/// - `usage`: agent 在 prompt 响应中报告的用量
-///
-/// 返回:
-/// - Sai 统一用量
-fn convert_usage(usage: agent_client_protocol::schema::v1::Usage) -> crate::llm::Usage {
-    crate::llm::Usage {
-        prompt_tokens: usage.input_tokens,
-        completion_tokens: usage.output_tokens,
-        total_tokens: usage.total_tokens,
-        cache_read_tokens: usage.cached_read_tokens.unwrap_or_default(),
-        cache_write_tokens: usage.cached_write_tokens.unwrap_or_default(),
+    /// 关闭当前 ACP 会话和子进程，并更新运行连接状态。
+    ///
+    /// 返回:
+    /// - 会话关闭与子进程回收结果
+    async fn shutdown(&mut self) -> Result<()> {
+        // 【ACP】【会话关闭】1. 尝试按协议关闭会话
+        let close_result: Result<()> = async {
+            if self.capabilities.close_session {
+                if let Some(session_id) = self.session_id.take() {
+                    let request = CloseSessionRequest::new(session_id);
+                    let response = self
+                        .transport
+                        .request("session/close", super::sdk::to_value(&request)?)
+                        .await?;
+                    let _: CloseSessionResponse =
+                        super::sdk::from_value(response, "session/close response")?;
+                }
+            }
+            Ok(())
+        }
+        .await;
+        // 【ACP】【会话关闭】2. 即使协议关闭失败也回收子进程并更新连接状态
+        let shutdown_result = self.transport.shutdown().await;
+        close_result?;
+        shutdown_result
     }
-}
-
-/// 拆分 data URL 的 MIME 类型与 base64 数据。
-///
-/// 参数:
-/// - `url`: data URL
-///
-/// 返回:
-/// - `(mime, base64)`；不是 base64 data URL 时返回 None
-pub(super) fn split_data_url(url: &str) -> Option<(String, String)> {
-    let rest = url.strip_prefix("data:")?;
-    let (meta, data) = rest.split_once(',')?;
-    let mime = meta.strip_suffix(";base64")?;
-    Some((mime.to_string(), data.to_string()))
 }
 
 /// 未实现方法的标准错误码，供客户端方法处理复用。

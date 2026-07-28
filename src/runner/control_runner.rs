@@ -44,7 +44,7 @@ where
     )?;
     state.init_files()?;
     let client = OpenAiCompatibleClient::from_config(&config, paths)?;
-    let agent = Agent::new(
+    let mut agent = Agent::new(
         config,
         paths,
         state.clone(),
@@ -53,7 +53,10 @@ where
         submission.mode,
     )?;
     sink.on_runner_event(RunnerEvent::Started)?;
-    execute_control(&agent, control, sink).await?;
+    let control_result = execute_control(&mut agent, control, sink).await;
+    let shutdown_result = agent.shutdown_external_engine().await;
+    control_result?;
+    shutdown_result?;
     let result = empty_result();
     sink.on_runner_event(RunnerEvent::Completed(result.clone()))?;
     if submission.show_final_summary {
@@ -77,7 +80,7 @@ where
 pub(super) async fn run_control_with_agent<S>(
     submission: &RunnerSubmission,
     control: ControlSubmission,
-    agent: &Agent,
+    agent: &mut Agent,
     sink: &mut S,
 ) -> Result<ChatResult>
 where
@@ -106,7 +109,7 @@ where
 /// 返回:
 /// - 压缩执行结果
 async fn execute_control<S>(
-    agent: &Agent,
+    agent: &mut Agent,
     control: ControlSubmission,
     sink: &mut S,
 ) -> Result<CompactionRunOutcome>

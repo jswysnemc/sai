@@ -3,6 +3,11 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+const CODEX_SIDECAR_INDEX_SOURCE: &str =
+    include_str!("../../sidecars/codex-agent-acp/src/index.js");
+const CODEX_SIDECAR_CAPABILITY_SOURCE: &str =
+    include_str!("../../sidecars/codex-agent-acp/src/capability-extensions.js");
+
 /// 执行对话轮次的内核。
 ///
 /// `Native` 是 sai 自带的 LLM 循环；其余取值把轮次交给外部 ACP agent 执行，
@@ -72,7 +77,7 @@ impl AgentEngineKind {
             [
                 ("上下文压缩", capabilities.sai_context_compaction),
                 ("记忆注入", capabilities.sai_memory),
-                ("目标续轮", capabilities.sai_goal_continuation),
+                ("活动目标延续", capabilities.sai_goal_continuation),
                 ("子智能体", capabilities.sai_subagents),
             ]
         } else {
@@ -91,15 +96,14 @@ impl AgentEngineKind {
 
     /// 返回预置内核的默认启动命令。
     ///
-    /// 版本不写死：适配器仍在快速迭代，交给 npx 解析最新版本，
-    /// 需要固定版本时用 `custom` 自行指定。
+    /// 预置命令固定经过验证的适配器版本。
     ///
     /// 返回:
     /// - `(程序, 参数)`；原生与自定义内核没有预置命令
     pub fn preset_command(self) -> Option<(&'static str, &'static [&'static str])> {
         match self {
             Self::ClaudeCode => Some(("npx", &["-y", "@agentclientprotocol/claude-agent-acp"])),
-            Self::Codex => Some(("npx", &["-y", "@agentclientprotocol/codex-acp"])),
+            Self::Codex => Some(("npx", &["-y", "@agentclientprotocol/codex-acp@1.1.7"])),
             Self::Native | Self::Custom => None,
         }
     }
@@ -204,12 +208,53 @@ impl AgentEngineConfig {
                 ));
             }
         }
+        if self.engine == AgentEngineKind::Codex {
+            let sidecar = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("sidecars")
+                .join("codex-agent-acp");
+            let entry = sidecar.join("src").join("index.js");
+            if entry.is_file() {
+                return Some(("node".to_string(), vec![entry.display().to_string()]));
+            }
+            return Some(embedded_codex_sidecar_command());
+        }
         let (program, args) = self.engine.preset_command()?;
         Some((
             program.to_string(),
             args.iter().map(|arg| arg.to_string()).collect(),
         ))
     }
+}
+
+/// 构造不依赖源码目录的内嵌 Codex Sidecar 启动命令。
+///
+/// 发布产物只包含 Sai 可执行文件，因此通过 Node data URL 载入编译时嵌入的
+/// Sidecar 模块；模块内部仍会下载固定版本的 Codex ACP 适配器。
+///
+/// 返回:
+/// - Node 程序与内嵌 Sidecar 参数
+fn embedded_codex_sidecar_command() -> (String, Vec<String>) {
+    // 【Codex ACP Sidecar】【发布回退】1. 将两个内嵌模块编码成可安全拼入脚本的字符串
+    let extension_source = Value::String(CODEX_SIDECAR_CAPABILITY_SOURCE.to_string()).to_string();
+    let index_source = Value::String(CODEX_SIDECAR_INDEX_SOURCE.to_string()).to_string();
+    // 【Codex ACP Sidecar】【发布回退】2. 通过 data URL 恢复模块依赖关系并启动 Sidecar
+    let script = format!(
+        "const extensionSource={extension_source};\n\
+         const extensionUrl='data:text/javascript;base64,'+Buffer.from(extensionSource).toString('base64');\n\
+         const indexSource={index_source}.replace('./capability-extensions.js',extensionUrl);\n\
+         const indexUrl='data:text/javascript;base64,'+Buffer.from(indexSource).toString('base64');\n\
+         const sidecar=await import(indexUrl);\n\
+         sidecar.main();"
+    );
+    // 【Codex ACP Sidecar】【发布回退】3. 使用 Node.js 模块模式执行内嵌启动脚本
+    (
+        "node".to_string(),
+        vec![
+            "--input-type=module".to_string(),
+            "--eval".to_string(),
+            script,
+        ],
+    )
 }
 
 #[cfg(test)]
@@ -233,8 +278,22 @@ mod tests {
         assert!(args.iter().any(|arg| arg.contains("claude-agent-acp")));
 
         let codex: AgentEngineConfig = serde_json::from_str(r#"{"engine":"codex"}"#).unwrap();
-        let (_, args) = codex.resolved_command().unwrap();
-        assert!(args.iter().any(|arg| arg.contains("codex-acp")));
+        let (program, args) = codex.resolved_command().unwrap();
+        assert_eq!(program, "node");
+        assert!(args
+            .iter()
+            .any(|arg| arg.contains("codex-agent-acp/src/index.js")));
+    }
+
+    /// 发布版内嵌命令必须同时保留 Sidecar 扩展和固定适配器版本。
+    #[test]
+    fn embedded_codex_sidecar_keeps_capabilities_and_pinned_version() {
+        let (program, args) = embedded_codex_sidecar_command();
+        let script = args.last().unwrap();
+
+        assert_eq!(program, "node");
+        assert!(script.contains("native_equivalents"));
+        assert!(script.contains("@agentclientprotocol/codex-acp@1.1.7"));
     }
 
     #[test]
