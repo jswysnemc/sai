@@ -38,77 +38,6 @@
   overflow: auto;
 }
 
-/* 头部与输入区吸在滚动容器两端，消息内容从其下方穿过，
-   滚动条因此覆盖整个视口高度而不是夹在两者之间 */
-.chat-header {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap:var(--space-md);
-  min-height: 44px;
-  padding:var(--space-xs) var(--space-2xl);
-  border-bottom: 1px solid var(--line);
-  background: var(--paper);
-}
-
-.chat-header h1 {
-  max-width: 46vw;
-  margin: 0;
-  overflow: hidden;
-  font-size:var(--text-lg);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 移动端头部控件：侧栏菜单与工作区面板 `+` 菜单，桌面端隐藏 */
-
-.chat-header-menu,
-.chat-header-panel {
-  display: none;
-}
-
-/* 头部 `+` 面板菜单：头部已随滚动容器定位，菜单改用视口定位避免被滚动裁剪 */
-.chat-header-panel-menu {
-  position: fixed;
-  top: 50px;
-  right: 12px;
-  display: grid;
-  gap:var(--space-3xs);
-  min-width: 148px;
-  padding:var(--space-2xs);
-  border: 1px solid var(--line);
-  border-radius:var(--radius-4);
-  background: var(--paper-raised);
-  box-shadow: var(--shadow);
-  z-index: 40;
-}
-
-.chat-header-panel-menu button {
-  display: flex;
-  align-items: center;
-  gap:var(--space-sm);
-  width: 100%;
-  min-height: 34px;
-  padding:0 var(--space-sm);
-  border: 0;
-  border-radius:var(--radius-2);
-  background: transparent;
-  color: var(--ink-soft);
-  font-size:var(--text-sm);
-  text-align: left;
-}
-
-.chat-header-panel-menu button:hover {
-  background: var(--paper-deep);
-  color: var(--ink);
-}
-
 .conversation-turn {
   display: flow-root;
   min-width: 0;
@@ -270,49 +199,6 @@
 
   .message-column { padding-top:var(--space-2xl); }
 
-  /* 移动端头部：左菜单按钮、居中标题、右 `+` 面板菜单 */
-  .chat-header {
-    display: grid;
-    grid-template-columns: 32px minmax(0, 1fr) 32px;
-    gap:var(--space-xs);
-    min-height: 46px;
-    padding:var(--space-xs) var(--space-md);
-  }
-
-  .chat-header h1 {
-    max-width: none;
-    align-self: center;
-    font-size:var(--text-lg);
-    text-align: center;
-  }
-
-  .chat-header-menu,
-  .chat-header-plus {
-    display: grid;
-    width: 32px;
-    height: 32px;
-    place-items: center;
-    align-self: center;
-    padding: 0;
-    border: 0;
-    border-radius:var(--radius-3);
-    background: transparent;
-    color: var(--ink-soft);
-  }
-
-  .chat-header-menu:hover,
-  .chat-header-plus:hover,
-  .chat-header-plus[aria-expanded="true"] {
-    background: var(--paper-deep);
-    color: var(--ink);
-  }
-
-  .chat-header-panel {
-    position: relative;
-    display: block;
-    align-self: center;
-  }
-
   .jump-to-bottom {
     bottom: 150px;
   }
@@ -378,16 +264,4 @@
 /* 历史加载骨架：占位宽度与助手正文一致，加载完成后不产生横向跳动 */
 .chat-timeline-skeleton {
   padding:var(--space-3xl) 0;
-}
-
-/*
- * 浮层材质：底色留出一点透明度并模糊背景。
- * 浮层与页面之间因此有深度关系，而不是一块贴上去的实色板；
- * 不支持 backdrop-filter 的环境自动退回上面声明的实色底，观感不受影响。
- */
-@supports (backdrop-filter: blur(1px)) {
-  .chat-header-panel-menu {
-    background: color-mix(in srgb, var(--paper-raised) 88%, transparent);
-    backdrop-filter: blur(14px) saturate(140%);
-  }
 }

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, PanelLeft, Plus } from "lucide-react";
+import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
@@ -9,6 +9,7 @@ import { SkeletonText } from "../../shared/ui/skeleton/skeleton";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { useChatAgentContext } from "../agents/chat-agent-context";
 import { ChatComposer } from "./chat-composer";
+import { ChatSessionHeader } from "./chat-session-header";
 import { HistoryTurn, LiveRunMessage } from "./chat-message";
 import { projectConversationDisplay, retryableTurnId } from "./conversation-display";
 import { MessageOverviewRail } from "./message-overview-rail";
@@ -19,10 +20,6 @@ import { useChatModel } from "./use-chat-model";
 import { useRunStream } from "./use-run-stream";
 import { useThinkingLevel } from "./use-thinking-level";
 import { useFollowOutputScroll } from "./use-follow-output-scroll";
-import { useOutsidePointerDown } from "../../shared/hooks/use-outside-pointer-down";
-import { MOBILE_SIDEBAR_TOGGLE_EVENT } from "../workspace/mobile-workbench-state";
-import { OPEN_WORKSPACE_PANEL_EVENT, WORKSPACE_PANEL_OPTIONS } from "../workspace/workspace-panel-options";
-import type { PaneTab } from "../workspace/workspace-tab";
 import "./chat-page.css";
 import { ContextCompactionPart } from "./message/context-compaction-part";
 import { ContextPromptBanner } from "./message/context-prompt-banner";
@@ -48,7 +45,16 @@ export function ChatPage() {
   const [actionError, setActionError] = useState<Error | null>(null);
   const sessions = useQuery({ queryKey: ["sessions"], queryFn: api.sessions.list });
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
+  const gitStatus = useQuery({
+    queryKey: ["runtime-overview", "git-status"],
+    queryFn: () => api.workspace.gitStatus(),
+    refetchInterval: 2500,
+    retry: false
+  });
   const activeSession = sessions.data?.find((session) => session.active);
+  const activeWorkspace = workspaces.data?.workspaces.find(
+    (workspace) => workspace.id === workspaces.data.active_id
+  );
   const timeline = useQuery({
     queryKey: ["timeline", activeSession?.id],
     queryFn: () => api.sessions.timeline(activeSession!.id),
@@ -86,10 +92,7 @@ export function ChatPage() {
   const thinking = useThinkingLevel(activeSession?.id);
   const [mode, setMode] = useState<RunMode>("yolo");
   const composerAttachments = useComposerAttachments(activeSession?.id);
-  const [panelMenuOpen, setPanelMenuOpen] = useState(false);
-  const panelMenuRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  useOutsidePointerDown(panelMenuRef, () => setPanelMenuOpen(false), panelMenuOpen);
   const display = useMemo(
     () => projectConversationDisplay(timeline.data?.turns ?? [], run.states),
     [timeline.data?.turns, run.states]
@@ -349,55 +352,15 @@ export function ChatPage() {
     }
   };
 
-
-  /** 通知工作台打开指定工作区面板，移动端会切换到全屏面板视图。 */
-  const openWorkspacePanel = (tab: PaneTab) => {
-    setPanelMenuOpen(false);
-    window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_PANEL_EVENT, { detail: { tab } }));
-  };
-
   return (
     <div className={emptySession ? "chat-page empty-session" : "chat-page"}>
       <div className="message-scroll-region">
         <div className="message-scroll" ref={scrollRef}>
-          <header className="chat-header">
-            <button
-              type="button"
-              className="chat-header-menu"
-              onClick={() => window.dispatchEvent(new Event(MOBILE_SIDEBAR_TOGGLE_EVENT))}
-              aria-label={t("Open session sidebar", "打开会话侧栏")}
-              title={t("Open session sidebar", "打开会话侧栏")}
-            >
-              <PanelLeft size={16} />
-            </button>
-            <h1>{activeSession?.title ?? t("Select a session", "选择会话")}</h1>
-            <div className="chat-header-panel" ref={panelMenuRef}>
-              <button
-                type="button"
-                className="chat-header-plus"
-                onClick={() => setPanelMenuOpen((value) => !value)}
-                aria-expanded={panelMenuOpen}
-                aria-haspopup="menu"
-                aria-label={t("Open workspace panel", "打开工作区面板")}
-                title={t("Open workspace panel", "打开工作区面板")}
-              >
-                <Plus size={16} />
-              </button>
-              {panelMenuOpen && (
-                <div className="chat-header-panel-menu" role="menu" aria-label={t("Choose panel", "选择面板")}>
-                  {WORKSPACE_PANEL_OPTIONS.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <button type="button" role="menuitem" key={item.type} onClick={() => openWorkspacePanel(item.type)}>
-                        <Icon size={14} />
-                        <span>{t(item.labelEn, item.labelZh)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </header>
+          <ChatSessionHeader
+            title={activeSession?.title ?? t("Select a session", "选择会话")}
+            workspace={activeWorkspace}
+            branch={gitStatus.data?.status === "ready" ? gitStatus.data.head : undefined}
+          />
           <div className="message-column">
             {timeline.isLoading && (
               <div className="chat-timeline-skeleton">
