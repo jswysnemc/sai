@@ -103,6 +103,7 @@ export type {
   SubagentProfileConfig,
   SubagentConfig,
   ConfigResponse,
+  ProviderSecretResponse,
   RtkStatusResponse,
   EngineStatusResponse,
   AgentEngineKind,

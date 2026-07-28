@@ -57,6 +57,7 @@ export function SettingsSectionBody({
       return (
         <ProviderSettingsSection
           config={settings.config!}
+          secretSentinel={settings.secretSentinel}
           onConfigChange={settings.updateConfig}
           onProviderChange={settings.updateProvider}
         />

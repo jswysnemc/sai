@@ -23,6 +23,24 @@ pub(crate) fn load_redacted(paths: &SaiPaths) -> Result<Value> {
     Ok(value)
 }
 
+/// 读取指定供应商实际使用的 API Key。
+///
+/// 参数:
+/// - `paths`: Sai 路径集合
+/// - `provider_id`: 供应商稳定标识
+///
+/// 返回:
+/// - 解析直接配置、环境变量或独立密钥文件后的真实 API Key
+pub(crate) fn load_provider_secret(paths: &SaiPaths, provider_id: &str) -> Result<String> {
+    let config = AppConfig::load_or_default(paths)?;
+    let provider = config
+        .providers
+        .iter()
+        .find(|provider| provider.id == provider_id)
+        .with_context(|| format!("provider {provider_id} not found"))?;
+    provider.resolved_api_key(paths)
+}
+
 /// 合并敏感字段保留标记并保存配置。
 ///
 /// 参数:
@@ -181,6 +199,49 @@ fn is_sensitive_key(key: &str) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::path::Path;
+
+    /// 创建仅供配置服务测试使用的临时路径集合。
+    ///
+    /// 参数:
+    /// - `root`: 临时目录根路径
+    ///
+    /// 返回:
+    /// - 指向临时目录的 Sai 路径集合
+    fn test_paths(root: &Path) -> SaiPaths {
+        SaiPaths {
+            config_dir: root.join("config"),
+            config_file: root.join("config/config.jsonc"),
+            secrets_file: root.join("config/secrets.jsonc"),
+            skills_dir: root.join("config/skills"),
+            data_dir: root.join("data"),
+            cache_dir: root.join("cache"),
+            state_dir: root.join("state"),
+            pictures_dir: root.join("pictures"),
+            fish_hook_file: root.join("fish/sai.fish"),
+            bash_hook_file: root.join("shell/bash-hook.sh"),
+            zsh_hook_file: root.join("shell/zsh-hook.zsh"),
+            powershell_hook_file: root.join("shell/sai.ps1"),
+        }
+    }
+
+    /// 真实密钥只允许通过按需读取入口返回，普通配置响应必须继续脱敏。
+    #[test]
+    fn reveals_provider_secret_without_changing_redacted_config() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path());
+        let mut config = AppConfig::default();
+        let provider = config.providers.first_mut().unwrap();
+        provider.id = "provider-a".to_string();
+        provider.api_key = Some("provider-secret".to_string());
+        config.save(&paths).unwrap();
+
+        let secret = load_provider_secret(&paths, "provider-a").unwrap();
+        let redacted = load_redacted(&paths).unwrap();
+
+        assert_eq!(secret, "provider-secret");
+        assert_eq!(redacted["providers"][0]["api_key"], SECRET_SENTINEL);
+    }
 
     #[test]
     fn redacts_and_restores_sensitive_values() {

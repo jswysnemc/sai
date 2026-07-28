@@ -19,6 +19,7 @@ import { KeyValueEditor } from "./key-value-editor";
 
 type ProviderSettingsSectionProps = {
   config: AppConfig;
+  secretSentinel: string;
   onConfigChange: (config: AppConfig) => void;
   onProviderChange: (index: number, patch: Partial<ProviderConfig>) => void;
 };
@@ -29,12 +30,18 @@ type ProviderSettingsSectionProps = {
  * @param props 应用配置和更新回调
  * @returns 供应商设置区域
  */
-export function ProviderSettingsSection({ config, onConfigChange, onProviderChange }: ProviderSettingsSectionProps) {
+export function ProviderSettingsSection({
+  config,
+  secretSentinel,
+  onConfigChange,
+  onProviderChange
+}: ProviderSettingsSectionProps) {
   const { t } = useI18n();
   const confirm = useConfirm();
   const [selectedId, setSelectedId] = useState(config.active_provider || config.providers[0]?.id || "");
   const [fetching, setFetching] = useState(false);
   const [fetchError, setFetchError] = useState<Error | null>(null);
+  const [secretError, setSecretError] = useState<Error | null>(null);
   const [remoteModels, setRemoteModels] = useState<string[]>([]);
   const [remoteMetadata, setRemoteMetadata] = useState<Record<string, {
     provider: string;
@@ -81,6 +88,7 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
     onConfigChange({ ...config, providers: [...config.providers, next] });
     setSelectedId(id);
     setFetchError(null);
+    setSecretError(null);
   };
 
   /** 获取当前供应商远端模型并打开导入弹层。 */
@@ -187,6 +195,22 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
     return <div className="settings-empty"><button type="button" className="settings-secondary" onClick={addProvider}><Plus size={14} />{t("Add provider", "新增供应商")}</button></div>;
   }
 
+  /**
+   * 【设置】【密钥查看】按需读取当前供应商实际使用的 API Key。
+   *
+   * @returns 服务端解析后的真实 API Key
+   */
+  const revealProviderApiKey = async (): Promise<string> => {
+    setSecretError(null);
+    try {
+      const response = await api.config.providerSecret(provider.id);
+      return response.api_key;
+    } catch (error) {
+      setSecretError(toDisplayError(error, "Failed to reveal API key", "读取 API Key 失败"));
+      throw error;
+    }
+  };
+
   const models = provider.models ?? [];
   // 1. 默认模型下拉选项来自已配置模型，历史值不在列表时保留为可选项
   const defaultModelOptions = (provider.default_model && !models.includes(provider.default_model)
@@ -229,7 +253,7 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
         selectedId={selectedId}
         searchPlaceholder={t("Search providers", "搜索供应商")}
         addLabel={t("Add provider", "新增供应商")}
-        onSelect={(id) => { setSelectedId(id); setFetchError(null); }}
+        onSelect={(id) => { setSelectedId(id); setFetchError(null); setSecretError(null); }}
         onAdd={addProvider}
       />
       <section className="settings-editor">
@@ -244,6 +268,7 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
           </>}
         />
         {fetchError && <div className="settings-inline-error">{fetchError.message}</div>}
+        {secretError && <div className="settings-inline-error">{secretError.message}</div>}
         <nav className="settings-tabs" aria-label={t("Provider configuration categories", "供应商配置分类")}>
           <button type="button" className={tab === "connection" ? "active" : ""} onClick={() => setTab("connection")}>{t("Connection", "连接")}</button>
           <button type="button" className={tab === "models" ? "active" : ""} onClick={() => setTab("models")}>{t("Models", "模型")}</button>
@@ -261,7 +286,21 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
               : <Select value="" options={emptyModelOptions} disabled onChange={() => undefined} ariaLabel={t("Default model", "默认模型")} />}
             <small>{models.length > 0 ? t("Used when no model is selected manually", "未手动切换时使用") : t("Add models on the Models tab first", "先在模型页签添加模型")}</small>
           </div>
-          <div className="settings-field full"><span>API Key</span><PasswordField value={provider.api_key ?? ""} onChange={(value) => onProviderChange(selectedIndex, { api_key: value })} /><small>{t("Environment variables can be referenced with `$env:VARIABLE_NAME`", "支持使用 `$env:VARIABLE_NAME` 引用环境变量")}</small></div>
+          <div className="settings-field full">
+            <span>API Key</span>
+            <PasswordField
+              key={provider.id}
+              value={provider.api_key ?? ""}
+              onReveal={secretSentinel.length > 0 && provider.api_key === secretSentinel
+                ? revealProviderApiKey
+                : undefined}
+              onChange={(value) => {
+                setSecretError(null);
+                onProviderChange(selectedIndex, { api_key: value });
+              }}
+            />
+            <small>{t("Environment variables can be referenced with `$env:VARIABLE_NAME`", "支持使用 `$env:VARIABLE_NAME` 引用环境变量")}</small>
+          </div>
           <div className="settings-field full">
             <span>{t("Connectivity", "连通性")}</span>
             <ProviderConnectionTest provider={provider} model={provider.default_model || undefined} />

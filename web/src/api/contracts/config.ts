@@ -199,6 +199,11 @@ export type ConfigResponse = {
   secret_sentinel: string;
 };
 
+/** 主动查看供应商密钥时返回的真实值。 */
+export type ProviderSecretResponse = {
+  api_key: string;
+};
+
 /** rtk 命令输出过滤器的服务端探测状态。 */
 export type RtkStatusResponse = {
   available: boolean;

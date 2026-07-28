@@ -139,6 +139,7 @@ export function useSettingsConfig(): SettingsConfigController {
 
   return {
     config: draftConfig,
+    secretSentinel: response.data?.secret_sentinel ?? "",
     raw,
     dirty,
     loading: response.isLoading,

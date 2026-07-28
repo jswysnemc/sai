@@ -40,6 +40,8 @@ export type GatewayId = "qq" | "weixin";
 
 export type SettingsConfigController = {
   config: AppConfig | null;
+  /** 服务端用于表示敏感字段未修改的占位符 */
+  secretSentinel: string;
   raw: string;
   dirty: boolean;
   loading: boolean;

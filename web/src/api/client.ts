@@ -33,6 +33,7 @@ import type {
   PermissionRequest,
   ProviderConfig,
   ProviderModelsResponse,
+  ProviderSecretResponse,
   ProviderProbeReport,
   RunMode,
   RunModelSelection,
@@ -410,6 +411,17 @@ export const api = {
     load: () => apiRequest<ConfigResponse>("/api/config"),
     save: (config: Record<string, unknown>) =>
       apiRequest<ConfigResponse>("/api/config", { method: "PUT", body: JSON.stringify(config) }),
+    /**
+     * 按需读取指定供应商真实 API Key，响应不会进入配置查询缓存。
+     *
+     * @param providerId 供应商稳定标识
+     * @returns 供应商当前实际使用的 API Key
+     */
+    providerSecret: (providerId: string) =>
+      apiRequest<ProviderSecretResponse>("/api/config/provider-secret", {
+        method: "POST",
+        body: JSON.stringify({ provider_id: providerId })
+      }),
     loadMcp: () => apiRequest<McpConfigResponse>("/api/config/mcp"),
     rtkStatus: () => apiRequest<import("./contracts").RtkStatusResponse>("/api/config/rtk-status"),
     /** 读取当前对话内核状态，供界面标注失效信息 */
