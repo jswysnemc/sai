@@ -145,7 +145,8 @@
   box-shadow: var(--elevation-3);
   transform: translateX(-50%);
   cursor: pointer;
-  z-index: 5;
+  /* 【Web 对话】【回底按钮】高于输入区遮罩，确保整个圆形区域都能接收点击 */
+  z-index: 16;
 }
 
 .jump-to-bottom:hover {
