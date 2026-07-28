@@ -13,7 +13,6 @@
 
 .composer-mode .ui-select > button {
   min-height: 28px;
-  max-width: 88px;
   gap:var(--space-2xs);
   padding:0 var(--space-xs);
   border: 0;
@@ -157,7 +156,6 @@
   }
 
   .composer-mode .ui-select > button {
-    max-width: 72px;
     padding:0 var(--space-2xs);
   }
 
