@@ -302,6 +302,42 @@ mod tests {
             .all(|line| line.as_str().contains("\x1b[2D\x1b[3X")));
     }
 
+    /// 【终端】【Diff 换行测试】验证 diff 自动换行后的续行仍保留内部缩进。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn wrapped_diff_rows_stay_right_of_visual_guide() {
+        let cwd = crate::runtime_cwd::current_dir().unwrap();
+        let temp = tempfile::tempdir_in(cwd).unwrap();
+        let path = temp.path().join("wrapped-diff.txt");
+        let old_line = "old";
+        let new_line = "new";
+        std::fs::write(&path, format!("{old_line}\n")).unwrap();
+        let arguments = serde_json::json!({
+            "path": path.display().to_string(),
+            "old_string": format!("{old_line}\n"),
+            "new_string": format!("{new_line}\n")
+        })
+        .to_string();
+        let mut transcript = TranscriptStore::new(100);
+        transcript.push_tool_call("edit_file".to_string(), arguments);
+
+        let window = display_window(&mut transcript, 30, &options(), 100, usize::MAX, usize::MAX);
+        assert!(window.lines.len() > 4, "测试数据必须触发 diff 自动换行");
+        for line in &window.lines {
+            assert!(
+                line.as_str().starts_with("   "),
+                "diff 续行进入视觉引导区: {:?}",
+                strip_ansi_for_test(line.as_str())
+            );
+            assert!(visible_width(line.as_str()) <= 30, "diff 续行超出终端宽度");
+        }
+    }
+
     /// 验证单列终端不增加留白，保留唯一的正文列。
     #[test]
     fn single_column_terminal_keeps_content_column() {

@@ -57,16 +57,54 @@ impl AnsiLine {
         width: usize,
         right_margin: usize,
     ) -> Vec<Self> {
+        Self::wrap_block_with_right_margin_and_continuation_indent(text, width, right_margin, 0)
+    }
+
+    /// 【终端】【Diff 换行】拆分 ANSI 文本，并为自动续行恢复内部缩进。
+    ///
+    /// 参数:
+    /// - `text`: 原始 ANSI 文本块
+    /// - `width`: 已扣除右侧边距的内容宽度
+    /// - `right_margin`: 终端右侧需要恢复默认背景的列数
+    /// - `continuation_indent`: 自动续行需要恢复的前导空格列数
+    ///
+    /// 返回:
+    /// - 预换行、保留续行缩进与右侧背景边距的终端行
+    pub(crate) fn wrap_block_with_right_margin_and_continuation_indent(
+        text: &str,
+        width: usize,
+        right_margin: usize,
+        continuation_indent: usize,
+    ) -> Vec<Self> {
         let mut lines = Vec::new();
         for raw_line in text.split('\n') {
-            lines.extend(wrap_line(raw_line, width, right_margin));
+            lines.extend(wrap_line(
+                raw_line,
+                width,
+                right_margin,
+                continuation_indent,
+            ));
         }
         lines
     }
 }
 
-/// 按显示宽度切分单行 ANSI 文本，并在续行恢复活动样式。
-fn wrap_line(text: &str, width: usize, right_margin: usize) -> Vec<AnsiLine> {
+/// 【终端】【ANSI 换行】按显示宽度切分单行，并恢复续行样式与缩进。
+///
+/// 参数:
+/// - `text`: 单个 ANSI 物理行
+/// - `width`: 当前内容区域列数
+/// - `right_margin`: 终端右侧需要恢复默认背景的列数
+/// - `continuation_indent`: 自动续行需要恢复的前导空格列数
+///
+/// 返回:
+/// - 已按显示宽度拆分的终端行
+fn wrap_line(
+    text: &str,
+    width: usize,
+    right_margin: usize,
+    continuation_indent: usize,
+) -> Vec<AnsiLine> {
     let width = width.max(1);
     let mut lines = Vec::new();
     let mut current = String::new();
@@ -116,8 +154,8 @@ fn wrap_line(text: &str, width: usize, right_margin: usize) -> Vec<AnsiLine> {
                         &last_fill_sgr,
                         right_margin,
                     ));
-                    current = active_sgr.clone();
-                    current_width = 0;
+                    (current, current_width) =
+                        continuation_line(&active_sgr, width, continuation_indent);
                 }
                 current.push(' ');
                 current_width += 1;
@@ -134,8 +172,7 @@ fn wrap_line(text: &str, width: usize, right_margin: usize) -> Vec<AnsiLine> {
                 &last_fill_sgr,
                 right_margin,
             ));
-            current = active_sgr.clone();
-            current_width = 0;
+            (current, current_width) = continuation_line(&active_sgr, width, continuation_indent);
         }
         current.push(ch);
         current_width = current_width.saturating_add(char_width);
@@ -151,6 +188,24 @@ fn wrap_line(text: &str, width: usize, right_margin: usize) -> Vec<AnsiLine> {
         ));
     }
     lines
+}
+
+/// 【终端】【ANSI 换行】创建自动续行的初始内容与显示宽度。
+///
+/// 参数:
+/// - `active_sgr`: 上一行末尾仍然生效的 ANSI 样式
+/// - `width`: 当前内容区域列数
+/// - `continuation_indent`: 期望恢复的前导空格列数
+///
+/// 返回:
+/// - `(续行初始文本, 已占用显示列数)`
+fn continuation_line(
+    active_sgr: &str,
+    width: usize,
+    continuation_indent: usize,
+) -> (String, usize) {
+    let indent = continuation_indent.min(width.saturating_sub(1));
+    (format!("{}{active_sgr}", " ".repeat(indent)), indent)
 }
 
 /// 判断 SGR 序列是否为 reset。
@@ -242,6 +297,30 @@ mod tests {
             AnsiLine::wrap_block_with_right_margin("\x1b[48;5;22m123456\x1b[K\x1b[0m", 3, 3);
 
         assert_eq!(lines.len(), 2);
+        assert!(lines
+            .iter()
+            .all(|line| line.as_str().contains("\x1b[2D\x1b[3X")));
+    }
+
+    /// 【终端】【Diff 换行测试】验证带背景的自动续行恢复 diff 内部缩进。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn wrapped_diff_lines_restore_continuation_indent() {
+        let lines = AnsiLine::wrap_block_with_right_margin_and_continuation_indent(
+            " \x1b[48;5;22m123456\x1b[K\x1b[0m",
+            4,
+            3,
+            1,
+        );
+
+        assert_eq!(lines.len(), 2);
+        assert!(lines.iter().all(|line| line.as_str().starts_with(' ')));
+        assert!(lines[1].as_str().starts_with(" \x1b[48;5;22m"));
         assert!(lines
             .iter()
             .all(|line| line.as_str().contains("\x1b[2D\x1b[3X")));

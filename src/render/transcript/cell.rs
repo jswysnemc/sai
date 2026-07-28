@@ -191,10 +191,11 @@ fn display_diff_lines(cell: &DiffCell, width: usize) -> Vec<AnsiLine> {
     if rendered.is_empty() {
         Vec::new()
     } else {
-        AnsiLine::wrap_block_with_right_margin(
+        AnsiLine::wrap_block_with_right_margin_and_continuation_indent(
             &rendered,
             content_width,
             crate::render::content_indent::DIFF_BLOCK_INSET,
+            crate::render::content_indent::DIFF_NESTED_INDENT,
         )
     }
 }
