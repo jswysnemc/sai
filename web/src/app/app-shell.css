@@ -14,28 +14,25 @@
 /*
  * 路由容器：以路径为 key 重新挂载，进场动画随之重放。
  *
- * 位移只有 4px 且时长取最快一档，读起来是内容"落位"而不是滑动，
- * 页面切换因此有方向感但不拖慢操作。
+ * 仅使用短暂透明度过渡，避免整页坐标变化造成导航与固定区域抖动。
  */
 .app-view {
   min-width: 0;
   min-height: 0;
   height: 100%;
-  animation: app-view-enter var(--duration-slow) var(--ease-out);
+  animation: app-view-enter var(--duration-base) var(--ease-out);
 }
 
 @keyframes app-view-enter {
   from {
-    opacity: 0;
-    transform: translateY(4px);
+    opacity: 0.88;
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 
-/* 减少动效偏好开启时直接呈现，不做位移与淡入 */
+/* 减少动效偏好开启时直接呈现，不做淡入 */
 @media (prefers-reduced-motion: reduce) {
   .app-view {
     animation: none;
