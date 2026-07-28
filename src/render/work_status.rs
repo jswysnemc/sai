@@ -1,9 +1,7 @@
 use crate::agent::AgentEvent;
 use crate::llm::ChatStreamKind;
+use crate::render::activity_animation::{render_activity_detail, render_activity_text};
 use std::time::Duration;
-
-/// 思考中/工作中共用的点跳动动效帧（与 reasoning live 一致）。
-pub(crate) const STATUS_PULSE_FRAMES: [&str; 4] = ["·  ", " · ", "  ·", " · "];
 
 /// 单轮请求的用户可见工作状态。
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -49,38 +47,44 @@ impl WorkStatus {
         }
     }
 
-    /// 返回统一英文状态名称。
+    /// 【终端】【工作状态】返回统一英文状态名称。
+    ///
+    /// 参数:
+    /// - 无
     ///
     /// 返回:
     /// - 工作状态文本
     #[allow(dead_code)]
     pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::WaitingResponse => "waiting",
-            Self::WaitingExternal => "waiting for external work",
-            Self::Thinking => "thinking",
-            Self::Working => "working",
-            Self::Compacting => "compacting",
+            Self::WaitingResponse => "Waiting",
+            Self::WaitingExternal => "Waiting for external work",
+            Self::Thinking => "Thinking",
+            Self::Working => "Working",
+            Self::Compacting => "Compacting",
         }
     }
 
-    /// 返回动效状态文案（固定英文短词，界面语言不影响）。
+    /// 【终端】【工作状态】返回动效状态文案。
+    ///
+    /// 参数:
+    /// - 无
     ///
     /// 返回:
     /// - 英文状态短语
     pub(crate) fn localized_label(self) -> &'static str {
         match self {
-            Self::WaitingResponse => "waiting",
-            Self::WaitingExternal => "waiting",
-            Self::Thinking => "thinking",
-            Self::Working => "working",
-            Self::Compacting => "compacting",
+            Self::WaitingResponse => "Waiting",
+            Self::WaitingExternal => "Waiting",
+            Self::Thinking => "Thinking",
+            Self::Working => "Working",
+            Self::Compacting => "Compacting",
         }
     }
 
-    /// 渲染适合历史区展示的动态状态行。
+    /// 【终端】【工作状态】渲染适合历史区展示的动态状态行。
     ///
-    /// 复用点跳动动效，只展示本轮已工作时长。
+    /// 状态文字使用从左向右的明暗扫光，并展示本轮整数秒时长。
     ///
     /// 参数:
     /// - `frame`: 动画帧序号
@@ -89,32 +93,25 @@ impl WorkStatus {
     /// 返回:
     /// - 带 ANSI 样式的状态行
     pub(crate) fn render_line(self, frame: usize, elapsed: Duration) -> String {
-        let pulse = STATUS_PULSE_FRAMES[frame % STATUS_PULSE_FRAMES.len()];
         format!(
-            "\x1b[2m\x1b[36m{pulse} {} ({})\x1b[0m",
-            self.localized_label(),
-            format_elapsed(elapsed)
+            "{} {}",
+            render_activity_text(self.localized_label(), frame),
+            render_activity_detail(&format_elapsed(elapsed))
         )
     }
 }
 
-/// 格式化工作时长（固定英文，与 thinking/waiting/working 标签一致）。
+/// 【终端】【工作状态】格式化工作时长。
 ///
 /// 参数:
 /// - `elapsed`: 已用时长
 ///
 /// 返回:
-/// - 如 `12s` / `1m05s` / `1.5s`
+/// - 如 `12s` / `1m05s`
 pub(crate) fn format_elapsed(elapsed: Duration) -> String {
     let total_secs = elapsed.as_secs();
     if total_secs < 60 {
-        // 整秒用 Ns；不足 1s 或需十分位时用 N.Ms
-        let tenths = elapsed.as_millis() / 100;
-        if tenths % 10 == 0 {
-            format!("{}s", tenths / 10)
-        } else {
-            format!("{}.{}s", tenths / 10, tenths % 10)
-        }
+        format!("{total_secs}s")
     } else {
         let mins = total_secs / 60;
         let secs = total_secs % 60;
@@ -126,7 +123,15 @@ pub(crate) fn format_elapsed(elapsed: Duration) -> String {
 mod tests {
     use super::*;
     use crate::llm::ChatStreamChunk;
+    use crate::render::activity_animation::strip_ansi_for_test;
 
+    /// 【终端】【工作状态测试】验证推理与正文事件映射到不同状态。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
     #[test]
     fn reasoning_and_content_map_to_distinct_states() {
         let reasoning = AgentEvent::Chunk(ChatStreamChunk {
@@ -148,16 +153,48 @@ mod tests {
         );
     }
 
+    /// 【终端】【工作状态测试】验证 Working 使用文字扫光和整数秒。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
     #[test]
-    fn working_reuses_thinking_pulse_animation() {
+    fn working_uses_text_sweep_and_integer_seconds() {
         let line = WorkStatus::Working.render_line(0, Duration::from_millis(1500));
-        assert!(line.contains(WorkStatus::Working.localized_label()));
-        assert!(line.contains("1.5s"));
-        assert!(line.contains(STATUS_PULSE_FRAMES[0]));
-        // 与思考 live 动效同色同款（dim cyan + pulse）
-        assert!(line.contains("\x1b[2m\x1b[36m") || line.contains("\x1b[2m") && line.contains("·"));
+        let plain = strip_ansi_for_test(&line);
+        assert!(plain.contains(WorkStatus::Working.localized_label()));
+        assert!(plain.contains("1s"));
+        assert!(!plain.contains("1.5s"));
+        assert!(!plain.contains('·'));
+        assert_ne!(
+            line,
+            WorkStatus::Working.render_line(1, Duration::from_millis(1500))
+        );
     }
 
+    /// 【终端】【工作状态测试】验证耗时格式不包含小数秒。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn elapsed_seconds_never_include_decimal_tenths() {
+        assert_eq!(format_elapsed(Duration::from_millis(999)), "0s");
+        assert_eq!(format_elapsed(Duration::from_millis(1500)), "1s");
+        assert_eq!(format_elapsed(Duration::from_secs(65)), "1m05s");
+    }
+
+    /// 【终端】【工作状态测试】验证权限交互不会切换到 Working。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
     #[test]
     fn permission_requested_does_not_enter_working() {
         let event = AgentEvent::PermissionRequested(crate::permission::PermissionRequest {

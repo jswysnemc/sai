@@ -35,7 +35,7 @@ impl StreamRenderer {
             println!();
         } else {
             let mut stdout = io::stdout();
-            write!(stdout, "{}", self.markdown.flush())?;
+            write!(stdout, "{}", self.flush_markdown_output())?;
             stdout.flush()?;
         }
         self.mode = None;
@@ -57,7 +57,7 @@ impl StreamRenderer {
         self.summary.clear_live_lines()?;
         if self.mode == Some(ChatStreamKind::Content) && !self.plain {
             let mut stdout = io::stdout();
-            write!(stdout, "{}", self.markdown.flush())?;
+            write!(stdout, "{}", self.flush_markdown_output())?;
             stdout.flush()?;
         }
         if self.mode == Some(ChatStreamKind::Reasoning)

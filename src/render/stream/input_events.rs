@@ -32,6 +32,7 @@ impl StreamRenderer {
         {
             return Ok(());
         }
+        self.finish_subagent_reasoning_line()?;
         if self.reasoning_mode == ReasoningDisplayMode::Summary
             && chunk.kind == ChatStreamKind::Reasoning
         {
@@ -72,7 +73,7 @@ impl StreamRenderer {
                 self.reasoning_started = Some(Instant::now());
             }
             self.reasoning_full_buffer.push_str(&text);
-            // live 行：动效 + tokens + thinking(耗时)
+            // 1. 【终端】【思考状态】live 行使用 Thinking 文字扫光、tokens 与整数秒耗时
             self.summary.add_reasoning_text_with_elapsed(
                 &text,
                 self.reasoning_started
@@ -93,7 +94,7 @@ impl StreamRenderer {
         if self.plain {
             write!(stdout, "{text}")?;
         } else {
-            write!(stdout, "{}", self.markdown.push(&text))?;
+            write!(stdout, "{}", self.render_markdown_delta(&text))?;
         }
         stdout.flush()?;
         Ok(())
@@ -111,6 +112,7 @@ impl StreamRenderer {
         if self.plain {
             return Ok(());
         }
+        self.finish_subagent_reasoning_line()?;
         self.set_work_status(WorkStatus::Working, false)?;
         let background_command_start =
             name == "background_command" && is_background_command_start(arguments);
@@ -144,7 +146,12 @@ impl StreamRenderer {
                 background_command_start,
                 &mut self.command_block_tools,
             )? {
-                self.resume_work_spinner()?;
+                if name == "run_command" {
+                    // 1. 【终端】【命令预览】命令块落盘后立即显示 Working，覆盖静默长命令
+                    self.command_preview.show_status()?;
+                } else {
+                    self.resume_work_spinner()?;
+                }
                 return Ok(());
             }
         }

@@ -25,7 +25,7 @@ use crate::render::tool_call_blocks::{
 };
 use crate::render::tool_event_line::{tool_event_label, tool_event_text};
 use crate::render::tool_view;
-use crate::render::wait_spinner::{SpinnerStyle, WaitSpinner};
+use crate::render::wait_spinner::WaitSpinner;
 use crate::render::work_status::WorkStatus;
 use anyhow::Result;
 use crossterm::execute;
@@ -70,6 +70,8 @@ pub struct StreamRenderer {
     reasoning_full_buffer: String,
     /// 当前思考段开始时间（用于 live 耗时）
     reasoning_started: Option<Instant>,
+    /// 【终端】【子智能体状态】推理增量是否位于新的物理行起点
+    subagent_reasoning_at_line_start: bool,
     command_preview: CliCommandPreview,
 }
 
@@ -111,6 +113,7 @@ impl StreamRenderer {
             work_started: None,
             reasoning_full_buffer: String::new(),
             reasoning_started: None,
+            subagent_reasoning_at_line_start: true,
             command_preview: CliCommandPreview::new(),
         }
     }

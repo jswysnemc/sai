@@ -1,7 +1,7 @@
 use super::*;
 
 impl StreamRenderer {
-    /// 写入子代理推理进度。
+    /// 【终端】【子智能体状态】写入子代理推理进度。
     ///
     /// 参数:
     /// - `name`: 父工具名称
@@ -11,29 +11,40 @@ impl StreamRenderer {
     /// - 写入是否成功
     pub(super) fn write_subagent_reasoning(&mut self, name: &str, text: &str) -> Result<()> {
         let text = normalize_stream_text(text);
-        if self.tool_call_mode == ToolCallDisplayMode::Hidden || text.trim().is_empty() {
-            return Ok(());
+        if self.tool_call_mode == ToolCallDisplayMode::Hidden || text.is_empty() {
+            return self.resume_work_spinner();
         }
         if self.tool_call_mode == ToolCallDisplayMode::Full {
             self.stop_waiting()?;
             self.end_active_stream_line()?;
             self.finalize_reasoning_summary()?;
+            let rendered = crate::render::content_indent::align_cli_text_delta(
+                &text,
+                &mut self.subagent_reasoning_at_line_start,
+            );
             let mut stdout = io::stdout();
             execute!(stdout, SetForegroundColor(Color::Green))?;
-            write!(stdout, "{text}")?;
+            write!(stdout, "{rendered}")?;
             execute!(stdout, ResetColor)?;
             stdout.flush()?;
+            // 1. 【终端】【子智能体状态】完整物理行之后恢复 Working，半行分片保持原位等待续写
+            if self.subagent_reasoning_at_line_start {
+                self.resume_work_spinner()?;
+            }
             return Ok(());
+        }
+        if text.trim().is_empty() {
+            return self.resume_work_spinner();
         }
         let line_count = text.matches('\n').count().max(1);
         self.summary.note_tool_progress(
             name,
             &format!("{} · {} {}", "subagent reasoning", line_count, "lines"),
         );
-        Ok(())
+        self.resume_work_spinner()
     }
 
-    /// 写入子工具调用进度。
+    /// 【终端】【子智能体状态】写入子工具调用进度。
     ///
     /// 参数:
     /// - `parent_name`: 父工具名称
@@ -49,6 +60,7 @@ impl StreamRenderer {
             .unwrap_or("unknown");
         let args = value.get("args").and_then(Value::as_str).unwrap_or("");
         if self.tool_call_mode == ToolCallDisplayMode::Full {
+            self.finish_subagent_reasoning_line()?;
             self.stop_waiting()?;
             self.end_active_stream_line()?;
             self.finalize_reasoning_summary()?;
@@ -79,10 +91,10 @@ impl StreamRenderer {
                 ),
             );
         }
-        Ok(())
+        self.resume_work_spinner()
     }
 
-    /// 写入子工具结果进度。
+    /// 【终端】【子智能体状态】写入子工具结果进度。
     ///
     /// 参数:
     /// - `parent_name`: 父工具名称
@@ -100,6 +112,7 @@ impl StreamRenderer {
         let output = value.get("output").and_then(Value::as_str).unwrap_or("");
         let status = if ok { "ok" } else { "err" };
         if self.tool_call_mode == ToolCallDisplayMode::Full {
+            self.finish_subagent_reasoning_line()?;
             self.stop_waiting()?;
             self.end_active_stream_line()?;
             self.finalize_reasoning_summary()?;
@@ -121,6 +134,24 @@ impl StreamRenderer {
                 ),
             );
         }
+        self.resume_work_spinner()
+    }
+
+    /// 【终端】【子智能体状态】结束尚未换行的推理正文。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 终端写入是否成功
+    pub(super) fn finish_subagent_reasoning_line(&mut self) -> Result<()> {
+        if self.subagent_reasoning_at_line_start {
+            return Ok(());
+        }
+        let mut stdout = io::stdout();
+        writeln!(stdout)?;
+        stdout.flush()?;
+        self.subagent_reasoning_at_line_start = true;
         Ok(())
     }
 }

@@ -1,7 +1,6 @@
 use super::line::AnsiLine;
 use super::{TranscriptMode, TranscriptRenderOptions, TranscriptStore};
 use crate::llm::{ChatStreamChunk, ChatStreamKind, ToolCallStreamProgress};
-use crate::render::work_status::WorkStatus;
 use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
 
 fn options() -> TranscriptRenderOptions {
@@ -88,21 +87,6 @@ fn live_table_is_emitted_once_without_cursor_replacement_sequences() {
 }
 
 #[test]
-fn live_reasoning_summary_animates_without_waiting_for_consolidation() {
-    let mut store = TranscriptStore::new(100);
-    store.push_chunk(&chunk(ChatStreamKind::Reasoning, "inspect resize"));
-
-    let first = store.display_live_tail(80, &options());
-    assert!(store.advance_live_animation());
-    let second = store.display_live_tail(80, &options());
-
-    assert_eq!(first.len(), 1);
-    assert_eq!(second.len(), 1);
-    assert_ne!(first, second);
-    assert!(second[0].as_str().contains("tokens"));
-}
-
-#[test]
 fn live_tool_argument_preview_is_visible_until_the_call_is_finalized() {
     let mut store = TranscriptStore::new(100);
     store.push_tool_call_progress(&ToolCallStreamProgress {
@@ -127,37 +111,6 @@ fn live_tool_argument_preview_is_visible_until_the_call_is_finalized() {
         .display_tail(80, &options())
         .iter()
         .any(|line| line.as_str().contains("README.md")));
-}
-
-#[test]
-fn work_status_is_replaced_without_becoming_history() {
-    let mut store = TranscriptStore::new(100);
-
-    assert!(store.set_work_status(WorkStatus::WaitingResponse));
-    let waiting = store.display_live_tail(80, &options());
-    assert!(!waiting.is_empty());
-    assert!(waiting[0].as_str().contains('·') || waiting[0].as_str().contains('s') || waiting[0].as_str().contains("秒"));
-
-    assert!(store.set_work_status(WorkStatus::Thinking));
-    let thinking = store.display_live_tail(80, &options());
-    assert!(!thinking.is_empty());
-    // 状态切换：waiting -> thinking，行内展示英文状态名与耗时
-    assert!(!thinking[0]
-        .as_str()
-        .contains(WorkStatus::WaitingResponse.localized_label()));
-    assert!(thinking[0]
-        .as_str()
-        .contains(WorkStatus::Thinking.localized_label()));
-
-    assert!(store.advance_live_animation());
-    let animated = store.display_live_tail(80, &options());
-    assert!(!animated.is_empty());
-    assert!(animated[0]
-        .as_str()
-        .contains(WorkStatus::Thinking.localized_label()));
-
-    assert!(store.clear_work_status());
-    assert!(store.display_live_tail(80, &options()).is_empty());
 }
 
 #[test]
@@ -373,43 +326,6 @@ fn strip_ansi(text: &str) -> String {
         out.push(ch);
     }
     out
-}
-
-#[test]
-fn tool_result_keeps_work_status_alive() {
-    // 工具结果不得清除 work_status：工具后的模型思考期间动效必须常驻
-    let mut store = TranscriptStore::new(100);
-    assert!(store.set_work_status(WorkStatus::Working));
-    store.push_tool_call(
-        "read_file".to_string(),
-        r#"{"path":"README.md"}"#.to_string(),
-    );
-    store.push_tool_result("read_file".to_string(), true, "contents".to_string());
-
-    let live = store.display_live_tail(80, &options());
-    assert!(!live.is_empty(), "工具结果后工作动效行不应消失");
-    assert!(live
-        .iter()
-        .any(|line| line.as_str().contains(WorkStatus::Working.localized_label())));
-    // 动画持续推进（ticker 不熄火的前提）
-    assert!(store.advance_live_animation());
-}
-
-#[test]
-fn work_status_hidden_when_live_reasoning_exists() {
-    use crate::llm::{ChatStreamChunk, ChatStreamKind};
-
-    let mut store = TranscriptStore::new(100);
-    assert!(store.set_work_status(WorkStatus::Thinking));
-    store.push_chunk(&ChatStreamChunk {
-        kind: ChatStreamKind::Reasoning,
-        text: "inspect plan".to_string(),
-    });
-
-    let live = store.display_live_tail(80, &options());
-    let joined = live.iter().map(|line| line.as_str()).collect::<String>();
-    assert!(!joined.contains(WorkStatus::Working.localized_label()));
-    assert!(joined.contains("thinking") || joined.contains("思考"));
 }
 
 #[test]

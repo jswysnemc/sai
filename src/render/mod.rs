@@ -1,4 +1,5 @@
 mod asset_block;
+pub(crate) mod activity_animation;
 mod background_command_event;
 mod cli_command_preview;
 mod code_block;

@@ -1,6 +1,7 @@
 use super::command_result_block::render_live_command_output_for_cli;
+use super::content_indent::align_to_guide_column;
 use super::streaming_replace::{clear_rendered_rows, rendered_visual_rows};
-use super::work_status::{format_elapsed, STATUS_PULSE_FRAMES};
+use super::work_status::WorkStatus;
 use crate::render::tool_view::command_output_buffer::CommandOutputBuffer;
 use crate::tools::command::{CommandOutputChunk, CommandOutputStream};
 use anyhow::Result;
@@ -67,7 +68,28 @@ impl CliCommandPreview {
         //    后台 clear_rendered_rows 会按相对位置上移并擦除后续正常输出
     }
 
-    /// 追加命令输出分块并重绘摘要（含工作动效行）。
+    /// 【终端】【命令预览】在命令块已经写入后显示 Working 状态。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 首帧状态写入是否成功
+    pub(crate) fn show_status(&mut self) -> Result<()> {
+        if !self.is_active() {
+            return Ok(());
+        }
+        self.redraw_and_start_animation()?;
+        Ok(())
+    }
+
+    /// 【终端】【命令预览】追加命令输出分块并重绘摘要。
+    ///
+    /// 参数:
+    /// - `chunk`: 新收到的 stdout 或 stderr 输出分块
+    ///
+    /// 返回:
+    /// - 当前预览是否已经重绘
     pub(crate) fn append(&mut self, chunk: &CommandOutputChunk) -> Result<bool> {
         if let Ok(mut state) = self.state.lock() {
             state.active = true;
@@ -77,10 +99,22 @@ impl CliCommandPreview {
             };
             target.append(&chunk.bytes, chunk.omitted_bytes);
         }
+        self.redraw_and_start_animation()
+    }
+
+    /// 【终端】【命令预览】重绘当前摘要并确保文字扫光线程运行。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 当前预览是否已经重绘
+    fn redraw_and_start_animation(&mut self) -> Result<bool> {
+        let redrawn = redraw_preview(&self.state)?;
         if !self.animating.load(Ordering::SeqCst) {
             self.start_animation();
         }
-        redraw_preview(&self.state)
+        Ok(redrawn)
     }
 
     /// 清除当前实时摘要并释放终端行。
@@ -152,11 +186,9 @@ fn redraw_preview(state: &Arc<Mutex<PreviewState>>) -> Result<bool> {
         &guard.stdout.display_text(),
         &guard.stderr.display_text(),
     );
-    // 1. 命令输出下方保留 working 动效，避免 WaitSpinner 锚点被 clear 冲掉
-    let pulse = STATUS_PULSE_FRAMES[guard.frame % STATUS_PULSE_FRAMES.len()];
-    let elapsed = format_elapsed(guard.started.elapsed());
-    let status = format!(
-        "\x1b[2m\x1b[36m{pulse} {elapsed}\x1b[0m"
+    // 1. 【终端】【命令预览】命令输出下方保留 Working 文字扫光
+    let status = align_to_guide_column(
+        &WorkStatus::Working.render_line(guard.frame, guard.started.elapsed()),
     );
     if rendered.trim().is_empty() {
         rendered = status;
@@ -194,6 +226,25 @@ mod tests {
         assert!(preview.is_active());
         // begin 不应立刻启动动画线程（否则会在命令块写入期间相对清屏）
         assert!(!preview.animating.load(Ordering::SeqCst));
+        preview.clear().unwrap();
+    }
+
+    /// 【终端】【命令预览测试】验证命令块之后可以立即显示 Working。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn show_status_starts_animation_without_command_output() {
+        let mut preview = CliCommandPreview::new();
+
+        preview.begin();
+        preview.show_status().unwrap();
+
+        assert!(preview.animating.load(Ordering::SeqCst));
+        assert!(preview.state.lock().unwrap().rendered_rows > 0);
         preview.clear().unwrap();
     }
 }

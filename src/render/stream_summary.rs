@@ -1,9 +1,10 @@
+use crate::render::content_indent::align_to_guide_column;
 use crate::render::status_style::{color_running, color_status};
 use crate::render::style::TOOL_BULLET;
 use crate::render::terminal_text as t;
 use crate::render::tool_names::readable_tool_name;
 use crate::render::transcript::reasoning_cell;
-use crate::render::work_status::STATUS_PULSE_FRAMES;
+use crate::render::ReasoningDisplayMode;
 use crate::token_counter;
 use anyhow::Result;
 use crossterm::execute;
@@ -123,46 +124,38 @@ impl StreamSummary {
         !self.tool_stats.is_empty()
     }
 
-    /// 生成推理摘要文本。
+    /// 【终端】【思考摘要】生成推理摘要文本。
+    ///
+    /// 参数:
+    /// - 无
     ///
     /// 返回:
     /// - 推理摘要文本
     pub(crate) fn reasoning_text(&self) -> String {
-        self.reasoning_text_with_pulse(false)
-    }
-
-    /// 生成推理摘要文本。
-    ///
-    /// 参数:
-    /// - `live`: 是否使用跳动前缀
-    ///
-    /// 返回:
-    /// - 推理摘要文本
-    fn reasoning_text_with_pulse(&self, live: bool) -> String {
-        // 1. label 与 token 后缀复用 reasoning_cell 的唯一实现，保证 live 行与固化块格式一致
+        // 1. 【终端】【思考摘要】复用 reasoning_cell 的标签与 token 格式
         let label = reasoning_cell::thinking_label(reasoning_cell::duration_label_value(
             self.reasoning_elapsed,
         ));
-        let prefix = if live {
-            STATUS_PULSE_FRAMES[self.reasoning_frame % STATUS_PULSE_FRAMES.len()]
-        } else {
-            TOOL_BULLET
-        };
         format!(
-            "{prefix} {label}{}",
+            "{TOOL_BULLET} {label}{}",
             reasoning_cell::format_tokens_suffix(self.reasoning_tokens)
         )
     }
 
-    /// 用当前计数覆盖终端上的思考摘要 live 行。
+    /// 【终端】【思考摘要】用当前计数覆盖终端上的思考摘要 live 行。
+    ///
+    /// 参数:
+    /// - 无
     ///
     /// 返回:
     /// - 渲染是否成功
     fn render_live_reasoning(&mut self) -> Result<()> {
-        let text = style_summary_text(
-            &self.reasoning_text_with_pulse(true),
-            SummaryStyle::Reasoning,
-        );
+        let text = align_to_guide_column(&reasoning_cell::render_live(
+            &self.reasoning_source,
+            ReasoningDisplayMode::Summary,
+            self.reasoning_frame,
+            self.reasoning_elapsed,
+        ));
         let mut stdout = io::stdout();
         execute!(stdout, Clear(ClearType::CurrentLine))?;
         write!(stdout, "\r{text}")?;
@@ -509,14 +502,14 @@ mod tests {
         let output = summary.reasoning_text();
 
         assert!(output.starts_with("• "));
-        assert!(output.contains("思考") || output.contains("thinking"));
+        assert!(output.contains("思考") || output.contains("Thinking"));
         assert!(summary.reasoning_live_active());
         assert!(output.contains("tokens"));
     }
 
     #[test]
     fn reasoning_summary_label_matches_transcript_cell_format() {
-        // 1. CLI live/固化行必须与 TUI 固化标题使用同一 label 格式：thinking (12s)
+        // 1. CLI live/固化行必须与 TUI 固化标题使用同一 label 格式：Thinking (12s)
         let mut summary = StreamSummary::new(false);
         summary
             .add_reasoning_text_with_elapsed("hello world", Duration::from_secs(12))
@@ -524,15 +517,15 @@ mod tests {
 
         let output = summary.reasoning_text();
 
-        assert!(output.contains("thinking (12s)"), "output={output:?}");
-        assert!(!output.contains("thinking(12s)"));
+        assert!(output.contains("Thinking (12s)"), "output={output:?}");
+        assert!(!output.contains("Thinking(12s)"));
         // 2. 零耗时省略括号，与 reasoning_cell 固化时 duration=None 行为一致
         let mut fresh = StreamSummary::new(false);
         fresh
             .add_reasoning_text_with_elapsed("hello", Duration::ZERO)
             .unwrap();
         let zero = fresh.reasoning_text();
-        assert!(zero.contains("thinking"));
+        assert!(zero.contains("Thinking"));
         assert!(!zero.contains('('));
     }
 

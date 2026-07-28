@@ -14,6 +14,7 @@ impl StreamRenderer {
         if self.plain {
             return Ok(());
         }
+        self.finish_subagent_reasoning_line()?;
         self.set_work_status(WorkStatus::Working, false)?;
         if name != "run_command" {
             self.stop_command_preview()?;
@@ -171,6 +172,7 @@ impl StreamRenderer {
         }
         self.set_work_status(WorkStatus::Working, false)?;
         if message == "__external_output__" {
+            self.finish_subagent_reasoning_line()?;
             self.prepare_for_external_output()?;
             return Ok(());
         }
@@ -194,6 +196,7 @@ impl StreamRenderer {
                 return Ok(());
             }
         }
+        self.finish_subagent_reasoning_line()?;
         self.stop_waiting()?;
         self.end_active_stream_line()?;
         self.finalize_reasoning_summary()?;

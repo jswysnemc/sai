@@ -33,12 +33,23 @@ pub fn print_assistant_response(response: &ChatResult, show_reasoning: bool) -> 
 ///
 /// 参数:
 /// - `markdown`: 原始 Markdown 文本
+///
+/// 返回:
+/// - 无
 pub fn print_markdown(markdown: &str) {
-    let mut renderer = MarkdownStreamRenderer::new();
+    let mut renderer = MarkdownStreamRenderer::new_stable();
     let markdown = markdown.trim_end();
+    let rendered = crate::render::render_width::with_render_width(
+        crate::render::content_indent::cli_content_width(),
+        || {
+            let mut rendered = renderer.push(markdown);
+            rendered.push_str(&renderer.flush());
+            rendered
+        },
+    );
+    let rendered = crate::render::content_indent::align_cli_stream_block(&rendered);
     let mut stdout = io::stdout();
-    let _ = write!(stdout, "{}", renderer.push(markdown));
-    let _ = write!(stdout, "{}", renderer.flush());
+    let _ = write!(stdout, "{rendered}");
     let _ = stdout.flush();
 }
 

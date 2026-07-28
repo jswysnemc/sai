@@ -1,11 +1,14 @@
 use crate::i18n::text as t;
+use crate::render::activity_animation::{render_activity_detail, render_activity_text};
 use crate::render::fold_text::{
     fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
 };
-use crate::render::work_status::{format_elapsed, STATUS_PULSE_FRAMES};
+use crate::render::work_status::format_elapsed;
 use crate::render::ReasoningDisplayMode;
 use crate::token_counter;
 use std::time::Duration;
+
+const THINKING_LABEL: &str = "Thinking";
 
 /// reasoning 内容的原始 source 数据。
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -68,12 +71,12 @@ pub(crate) fn render(cell: &ReasoningCell, mode: ReasoningDisplayMode) -> String
     }
 }
 
-/// 渲染流式阶段持续刷新的 reasoning 摘要。
+/// 【终端】【思考状态】渲染流式阶段持续刷新的 reasoning 摘要。
 ///
 /// 参数:
 /// - `source`: 当前累计的 reasoning 原文
 /// - `mode`: 当前 reasoning 展示模式
-/// - `frame`: 跳动动画帧序号
+/// - `frame`: 文字扫光动画帧序号
 /// - `elapsed`: 本段思考已持续时长
 ///
 /// 返回:
@@ -87,13 +90,17 @@ pub(crate) fn render_live(
     if mode == ReasoningDisplayMode::Hidden || source.is_empty() {
         return String::new();
     }
-    let pulse = STATUS_PULSE_FRAMES[frame % STATUS_PULSE_FRAMES.len()];
     let tokens = token_counter::count(source);
-    // 零耗时省略括号，与 CLI live 行、固化标题保持同一格式
-    format!(
-        "\x1b[2m\x1b[36m{pulse} {}{}\x1b[0m",
-        thinking_label(duration_label_value(elapsed)),
+    let detail = format!(
+        "{}{}",
+        duration_suffix(duration_label_value(elapsed)),
         format_tokens_suffix(tokens)
+    );
+    // 1. 【终端】【思考状态】仅状态文字执行从左向右的明暗扫光，耗时与 token 保持弱化
+    format!(
+        "{}{}",
+        render_activity_text(THINKING_LABEL, frame),
+        render_activity_detail(&detail)
     )
 }
 
@@ -210,13 +217,23 @@ fn render_thinking_body_with_cols(
 /// - `duration`: 可选耗时
 ///
 /// 返回:
-/// - 如 `thinking (12s)`；无耗时则仅 `thinking`
+/// - 如 `Thinking (12s)`；无耗时则仅 `Thinking`
 pub(crate) fn thinking_label(duration: Option<Duration>) -> String {
-    let base = "thinking";
+    format!("{THINKING_LABEL}{}", duration_suffix(duration))
+}
+
+/// 生成思考耗时后缀。
+///
+/// 参数:
+/// - `duration`: 可选思考耗时
+///
+/// 返回:
+/// - 如 ` (12s)`；无耗时则返回空字符串
+fn duration_suffix(duration: Option<Duration>) -> String {
     match duration {
-        // 固定英文：thinking (12s)，避免中文「秒」与英文标签混排
-        Some(elapsed) => format!("{base} ({})", format_elapsed(elapsed)),
-        None => base.to_string(),
+        // 固定英文格式，避免中文时间单位与英文状态文案混排
+        Some(elapsed) => format!(" ({})", format_elapsed(elapsed)),
+        None => String::new(),
     }
 }
 
@@ -234,6 +251,7 @@ pub(crate) fn format_tokens_suffix(tokens: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::render::activity_animation::strip_ansi_for_test;
 
     #[test]
     fn live_reasoning_reports_token_count() {
@@ -243,16 +261,18 @@ mod tests {
             0,
             Duration::from_secs(12),
         );
-        assert!(rendered.contains("tokens"));
-        assert!(rendered.contains("thinking (12s)"));
+        let plain = strip_ansi_for_test(&rendered);
+        assert!(plain.contains("tokens"));
+        assert!(plain.contains("Thinking (12s)"));
     }
 
     #[test]
     fn live_reasoning_omits_zero_duration() {
-        // 零耗时与 CLI live 行一致：仅 thinking，不显示 (0s)
+        // 零耗时与 CLI live 行一致：仅 Thinking，不显示 (0s)
         let rendered = render_live("hello", ReasoningDisplayMode::Summary, 0, Duration::ZERO);
-        assert!(rendered.contains("thinking"));
-        assert!(!rendered.contains("(0s)"));
+        let plain = strip_ansi_for_test(&rendered);
+        assert!(plain.contains("Thinking"));
+        assert!(!plain.contains("(0s)"));
     }
 
     #[test]
@@ -265,7 +285,7 @@ mod tests {
             },
             ReasoningDisplayMode::Full,
         );
-        assert!(rendered.contains("thinking") || rendered.contains("思考"));
+        assert!(rendered.contains("Thinking") || rendered.contains("思考"));
         assert!(rendered.contains("└"));
         assert!(rendered.contains("line one"));
         assert!(rendered.contains("line two"));
@@ -321,7 +341,7 @@ mod tests {
         let cols = 80usize;
         let source = "These completion events are just finish receipts for the background tools/commands I launched during the commit, push, and CI monitoring workflow.";
         let rendered = render_thinking_body_with_cols(&source, true, true, None, cols);
-        let plain = strip_ansi(&rendered);
+        let plain = strip_ansi_for_test(&rendered);
         let mut body_lines = plain.lines().skip(1);
         let first = body_lines.next().expect("first gutter line");
         assert!(first.starts_with("  └ "), "first body line should use tree gutter: {first}");
@@ -345,26 +365,6 @@ mod tests {
         assert_eq!(thinking_body_wrap_width(80), 76);
         assert_eq!(thinking_body_wrap_width(10), 8);
         assert_eq!(thinking_body_wrap_width(4), 8);
-    }
-
-    /// 去掉 ANSI 转义，便于断言纯文本布局。
-    fn strip_ansi(text: &str) -> String {
-        let mut out = String::new();
-        let mut escape = false;
-        for ch in text.chars() {
-            if ch == '\x1b' {
-                escape = true;
-                continue;
-            }
-            if escape {
-                if ch == 'm' {
-                    escape = false;
-                }
-                continue;
-            }
-            out.push(ch);
-        }
-        out
     }
 
     /// 计算纯文本显示宽度。

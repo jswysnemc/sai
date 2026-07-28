@@ -66,23 +66,19 @@ pub fn render_session_summary(snapshot: &SessionSnapshot) -> String {
     output
 }
 
-/// 将毫秒格式化为人类可读本轮耗时。
+/// 【终端】【会话摘要】将毫秒格式化为人类可读本轮耗时。
 ///
 /// 参数:
 /// - `ms`: 耗时毫秒
 ///
 /// 返回:
-/// - 如 `12.5s` / `12秒` / `1m05s`
+/// - 如 `12s` / `12秒` / `1m05s`
 pub(crate) fn format_turn_duration_ms(ms: u64) -> String {
     use crate::i18n::is_zh;
     let total_secs = ms / 1_000;
-    let tenths = (ms % 1_000) / 100;
     if is_zh() {
         if total_secs < 60 {
-            if tenths == 0 {
-                return format!("{total_secs}秒");
-            }
-            return format!("{total_secs}.{tenths}秒");
+            return format!("{total_secs}秒");
         }
         let mins = total_secs / 60;
         let secs = total_secs % 60;
@@ -94,7 +90,7 @@ pub(crate) fn format_turn_duration_ms(ms: u64) -> String {
         return format!("{hours}小时{remain_mins}分{secs:02}秒");
     }
     if total_secs < 60 {
-        return format!("{}.{}s", total_secs, tenths);
+        return format!("{total_secs}s");
     }
     let mins = total_secs / 60;
     let secs = total_secs % 60;

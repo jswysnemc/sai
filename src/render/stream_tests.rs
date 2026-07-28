@@ -101,6 +101,54 @@ fn wait_spinner_detail_line_omits_empty_values() {
     assert!(wait_spinner_detail_line(&options).is_none());
 }
 
+/// 【终端】【CLI 布局】验证流式 Markdown 正文位于视觉引导列右侧。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn streamed_markdown_uses_guide_content_column() {
+    let mut renderer = StreamRenderer::new(
+        ReasoningDisplayMode::Full,
+        ToolCallDisplayMode::Summary,
+        false,
+        StreamRenderOptions::default(),
+    );
+
+    assert!(renderer.render_markdown_delta("partial").is_empty());
+    let rendered = renderer.render_markdown_delta(" answer\n");
+
+    assert!(rendered.starts_with("  "), "rendered={rendered:?}");
+    assert!(rendered.contains("partial answer"));
+}
+
+/// 【终端】【子智能体状态测试】验证推理分片保留物理行边界状态。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn subagent_reasoning_tracks_fragmented_line_boundaries() {
+    let mut renderer = StreamRenderer::new(
+        ReasoningDisplayMode::Full,
+        ToolCallDisplayMode::Full,
+        false,
+        StreamRenderOptions::default(),
+    );
+
+    renderer
+        .write_subagent_reasoning("subagent", "partial")
+        .unwrap();
+    assert!(!renderer.subagent_reasoning_at_line_start);
+
+    renderer.write_subagent_reasoning("subagent", "\n").unwrap();
+    assert!(renderer.subagent_reasoning_at_line_start);
+}
+
 #[test]
 fn edit_progress_waits_for_renderable_diff_before_consuming_preview() {
     let temp = tempfile::tempdir().unwrap();

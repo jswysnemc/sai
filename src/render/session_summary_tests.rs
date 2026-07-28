@@ -55,6 +55,7 @@ fn renders_compact_session_summary_with_key_fields() {
     assert!(!output.contains("default"));
     assert!(output.contains("Turn") || output.contains("本轮"));
     assert!(output.contains("12") || output.contains("s") || output.contains("秒"));
+    assert!(!output.contains("12.5"));
     assert!(!output.contains("Checkpoint"));
     assert!(!output.contains("Compaction"));
 }

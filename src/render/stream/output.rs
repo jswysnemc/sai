@@ -1,6 +1,36 @@
 use super::*;
 
 impl StreamRenderer {
+    /// 【终端】【CLI 布局】渲染并对齐一段流式 Markdown 增量。
+    ///
+    /// 参数:
+    /// - `text`: 新收到的 Markdown 文本
+    ///
+    /// 返回:
+    /// - 正文位于视觉引导列右侧的 ANSI 文本
+    pub(super) fn render_markdown_delta(&mut self, text: &str) -> String {
+        let rendered = crate::render::render_width::with_render_width(
+            crate::render::content_indent::cli_content_width(),
+            || self.markdown.push(text),
+        );
+        crate::render::content_indent::align_cli_stream_block(&rendered)
+    }
+
+    /// 【终端】【CLI 布局】刷新并对齐 Markdown 渲染器剩余内容。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 正文位于视觉引导列右侧的 ANSI 文本
+    pub(super) fn flush_markdown_output(&mut self) -> String {
+        let rendered = crate::render::render_width::with_render_width(
+            crate::render::content_indent::cli_content_width(),
+            || self.markdown.flush(),
+        );
+        crate::render::content_indent::align_cli_stream_block(&rendered)
+    }
+
     /// 切换当前流式输出模式。
     ///
     /// 参数:
@@ -64,7 +94,7 @@ impl StreamRenderer {
             execute!(io::stdout(), ResetColor)?;
         } else if self.mode == Some(ChatStreamKind::Content) && !self.plain {
             let mut stdout = io::stdout();
-            write!(stdout, "{}", self.markdown.flush())?;
+            write!(stdout, "{}", self.flush_markdown_output())?;
             stdout.flush()?;
         }
         if self.mode.is_some() {
@@ -156,7 +186,6 @@ impl StreamRenderer {
         self.hide_cursor()?;
         self.wait_spinner = Some(WaitSpinner::start_with_clock(
             phase,
-            SpinnerStyle::Braille,
             sub_phase,
             started_at,
         ));

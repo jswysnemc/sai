@@ -18,6 +18,8 @@ mod work_status_cell;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod work_status_tests;
 
 pub(crate) use cell::TranscriptMode;
 pub(crate) use command_output::{ExpandableBlock, ExpandableBlockKind};

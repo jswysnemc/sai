@@ -1,8 +1,9 @@
 use super::line::AnsiLine;
 use super::{markdown_cell, reasoning_cell};
 use crate::i18n::text as t;
+use crate::render::activity_animation::render_activity_text;
 use crate::render::tool_event_line::tool_event_text;
-use crate::render::work_status::STATUS_PULSE_FRAMES;
+use crate::render::work_status::WorkStatus;
 use crate::tools::subagent_timeline::SubagentTimelineEntry;
 
 /// 渲染子智能体会话视图（标题 + 完整时间线）。
@@ -85,12 +86,12 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
             }
         }
     }
-    // 3. 运行中显示跳动状态行，随 150ms 子智能体节拍刷新
+    // 3. 【终端】【子智能体状态】运行中显示 Working 文字扫光
     if status == "run" {
-        let pulse = STATUS_PULSE_FRAMES[frame % STATUS_PULSE_FRAMES.len()];
-        output.push_str(&format!(
-            "\n\x1b[2m\x1b[36m{pulse} {}\x1b[0m",
-            t("working", "working")
+        output.push('\n');
+        output.push_str(&render_activity_text(
+            WorkStatus::Working.localized_label(),
+            frame,
         ));
     }
     output
@@ -99,6 +100,7 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::render::activity_animation::strip_ansi_for_test;
 
     #[test]
     fn view_renders_title_and_placeholder_without_snapshot() {
@@ -125,5 +127,24 @@ mod tests {
             let _ = width;
         }
         assert!(!lines.is_empty());
+    }
+
+    /// 【终端】【子智能体状态】验证运行状态只保留 Working 文字扫光。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn running_view_uses_working_text_sweep() {
+        let first = render_view_text("missing-id", "检查项目", 0);
+        let second = render_view_text("missing-id", "检查项目", 1);
+        let first_status = first.lines().last().unwrap_or_default();
+        let second_status = second.lines().last().unwrap_or_default();
+
+        assert_eq!(strip_ansi_for_test(first_status), "Working");
+        assert_eq!(strip_ansi_for_test(second_status), "Working");
+        assert_ne!(first_status, second_status);
     }
 }
