@@ -1,4 +1,4 @@
-import { Cpu } from "lucide-react";
+import { AgentEngineBrandIcon } from "../../../shared/ui/agent-engine-brand-icon/agent-engine-brand-icon";
 import { useI18n } from "../../i18n/use-i18n";
 import "./engine-ready-part.css";
 
@@ -23,7 +23,7 @@ export function EngineReadyPart({ engine, version }: EngineReadyPartProps) {
   const { t } = useI18n();
   return (
     <div className="engine-ready-part" role="note">
-      <Cpu size={12} aria-hidden />
+      <AgentEngineBrandIcon engine={engine} size={12} />
       <span>{t("Handed off to", "已交由")}</span>
       <strong>{engine}</strong>
       {version && <code>{version}</code>}

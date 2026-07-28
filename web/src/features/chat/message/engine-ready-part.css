@@ -14,7 +14,8 @@
   font-size:var(--text-xs);
 }
 
-.engine-ready-part svg {
+.engine-ready-part svg,
+.engine-ready-part img {
   flex: 0 0 auto;
   color: var(--signal);
 }
