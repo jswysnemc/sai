@@ -1,22 +1,8 @@
-use super::{TranscriptRenderOptions, TranscriptStore};
-use crate::llm::{ChatStreamChunk, ChatStreamKind};
+use super::test_support::{chunk, options};
+use super::TranscriptStore;
+use crate::llm::ChatStreamKind;
 use crate::render::activity_animation::strip_ansi_for_test;
 use crate::render::work_status::WorkStatus;
-use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
-
-/// 【终端】【工作状态测试】构造 transcript 渲染配置。
-///
-/// 参数:
-/// - 无
-///
-/// 返回:
-/// - 完整思考与摘要工具模式的渲染配置
-fn options() -> TranscriptRenderOptions {
-    TranscriptRenderOptions {
-        reasoning_mode: ReasoningDisplayMode::Full,
-        tool_call_mode: ToolCallDisplayMode::Summary,
-    }
-}
 
 /// 【终端】【工作状态测试】验证实时思考摘要持续推进文字扫光。
 ///
@@ -28,10 +14,7 @@ fn options() -> TranscriptRenderOptions {
 #[test]
 fn live_reasoning_summary_animates_without_waiting_for_consolidation() {
     let mut store = TranscriptStore::new(100);
-    store.push_chunk(&ChatStreamChunk {
-        kind: ChatStreamKind::Reasoning,
-        text: "inspect resize".to_string(),
-    });
+    store.push_chunk(&chunk(ChatStreamKind::Reasoning, "inspect resize"));
 
     let first = store.display_live_tail(80, &options());
     assert!(store.advance_live_animation());
@@ -115,10 +98,7 @@ fn tool_result_keeps_work_status_alive() {
 fn work_status_hidden_when_live_reasoning_exists() {
     let mut store = TranscriptStore::new(100);
     assert!(store.set_work_status(WorkStatus::Thinking));
-    store.push_chunk(&ChatStreamChunk {
-        kind: ChatStreamKind::Reasoning,
-        text: "inspect plan".to_string(),
-    });
+    store.push_chunk(&chunk(ChatStreamKind::Reasoning, "inspect plan"));
 
     let live = store.display_live_tail(80, &options());
     let joined = strip_ansi_for_test(

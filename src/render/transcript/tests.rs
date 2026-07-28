@@ -1,21 +1,8 @@
 use super::line::AnsiLine;
+use super::test_support::{chunk, options};
 use super::{TranscriptMode, TranscriptRenderOptions, TranscriptStore};
-use crate::llm::{ChatStreamChunk, ChatStreamKind, ToolCallStreamProgress};
+use crate::llm::{ChatStreamKind, ToolCallStreamProgress};
 use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
-
-fn options() -> TranscriptRenderOptions {
-    TranscriptRenderOptions {
-        reasoning_mode: ReasoningDisplayMode::Full,
-        tool_call_mode: ToolCallDisplayMode::Summary,
-    }
-}
-
-fn chunk(kind: ChatStreamKind, text: &str) -> ChatStreamChunk {
-    ChatStreamChunk {
-        kind,
-        text: text.to_string(),
-    }
-}
 
 #[test]
 fn ansi_lines_are_prewrapped_at_requested_width() {
@@ -293,7 +280,10 @@ fn markdown_table_lines_fit_display_width() {
                   | Angular | 全栈框架 | 2010 | Google | 4 |";
     let cell = super::cell::HistoryCell::markdown(source.to_string());
     for width in [40usize, 60, 81, 120] {
-        let lines = cell.display_lines(width, &options());
+        let content_width = width
+            .saturating_sub(crate::render::content_indent::CONTENT_LEFT_INDENT)
+            .max(1);
+        let lines = cell.display_lines(content_width, &options());
         for (index, line) in lines.iter().enumerate() {
             let plain = strip_ansi(line.as_str());
             let display_width: usize = plain

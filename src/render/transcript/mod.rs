@@ -1,3 +1,4 @@
+mod assistant_body;
 mod cell;
 pub(crate) mod command_output;
 mod diff_cell;
@@ -16,6 +17,10 @@ mod welcome_cell;
 mod window;
 mod work_status_cell;
 
+#[cfg(test)]
+mod assistant_body_tests;
+#[cfg(test)]
+mod test_support;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

@@ -43,6 +43,34 @@ pub(crate) fn align_to_guide_column(text: &str) -> String {
     format!("{}{text}", " ".repeat(indent))
 }
 
+/// 【终端】【响应式引导】按当前终端实际可用列数对齐视觉引导区。
+///
+/// 宽终端保留完整的“符号 + 间隔”两列；两列终端压缩为单个符号；
+/// 单列终端移除引导符号，优先保留正文内容。
+///
+/// 参数:
+/// - `text`: 已完成 ANSI 渲染的终端行
+/// - `guide_width`: 当前终端允许使用的视觉引导区列数
+///
+/// 返回:
+/// - 已按实际引导区宽度压缩或对齐的终端行
+pub(crate) fn align_to_guide_column_with_width(text: &str, guide_width: usize) -> String {
+    // 【终端】【响应式引导】1. 先按完整两列引导区完成基础对齐
+    let guide_width = guide_width.min(CONTENT_LEFT_INDENT);
+    let aligned = align_to_guide_column(text);
+    if guide_width == CONTENT_LEFT_INDENT {
+        return aligned;
+    }
+
+    // 【终端】【响应式引导】2. 引导符号行压缩符号与正文之间的间隔
+    let (_, first_visible) = visible_line_start(&aligned);
+    if matches!(first_visible, Some('●' | '•')) {
+        return compact_marker_guide(&aligned, guide_width);
+    }
+    // 【终端】【响应式引导】3. 普通正文与续行按目标引导区宽度移除前导空格
+    remove_leading_visible_spaces(&aligned, CONTENT_LEFT_INDENT - guide_width)
+}
+
 /// 【终端】【CLI 布局】将流式输出块放到与 TUI 相同的视觉引导列。
 ///
 /// 光标移动与清行序列继续从终端左边界执行；实际正文随后移动到引导列右侧，
@@ -155,7 +183,39 @@ fn indent_lines(text: &str, columns: usize) -> String {
         .collect()
 }
 
-/// 读取忽略 ANSI 控制序列后的行首空格与首个可见字符。
+/// 单个 ANSI 可见字符的字节位置。
+struct VisibleChar {
+    ch: char,
+    start: usize,
+    end: usize,
+}
+
+/// 【终端】【ANSI 遍历】定位指定位置后的下一个可见字符。
+///
+/// 参数:
+/// - `text`: 可能包含 ANSI 控制序列的终端行
+/// - `index`: 开始检索的字节位置
+///
+/// 返回:
+/// - 下一个可见字符及其字节范围；不存在时返回 None
+fn next_visible_char(text: &str, mut index: usize) -> Option<VisibleChar> {
+    while index < text.len() {
+        let ch = text[index..].chars().next().unwrap_or_default();
+        if ch == '\x1b' {
+            index = crate::render::terminal_image::escape_sequence_end(text, index)
+                .max(index + ch.len_utf8());
+            continue;
+        }
+        return Some(VisibleChar {
+            ch,
+            start: index,
+            end: index + ch.len_utf8(),
+        });
+    }
+    None
+}
+
+/// 【终端】【ANSI 遍历】读取行首空格数量与首个非空格可见字符。
 ///
 /// 参数:
 /// - `text`: ANSI 终端行
@@ -165,21 +225,101 @@ fn indent_lines(text: &str, columns: usize) -> String {
 fn visible_line_start(text: &str) -> (usize, Option<char>) {
     let mut index = 0usize;
     let mut leading_spaces = 0usize;
-    while index < text.len() {
-        let ch = text[index..].chars().next().unwrap_or_default();
-        if ch == '\x1b' {
-            index = crate::render::terminal_image::escape_sequence_end(text, index)
-                .max(index + ch.len_utf8());
-            continue;
-        }
-        if ch == ' ' {
+    while let Some(visible) = next_visible_char(text, index) {
+        index = visible.end;
+        if visible.ch == ' ' {
             leading_spaces += 1;
-            index += ch.len_utf8();
             continue;
         }
-        return (leading_spaces, Some(ch));
+        return (leading_spaces, Some(visible.ch));
     }
     (leading_spaces, None)
+}
+
+/// 【终端】【响应式引导】将符号引导区压缩到指定列数。
+///
+/// 参数:
+/// - `text`: 首个可见字符为引导符号的 ANSI 行
+/// - `guide_width`: 目标引导区列数，仅接受零或一列
+///
+/// 返回:
+/// - 单列时移除符号后的间隔，零列时移除符号及其样式前缀
+fn compact_marker_guide(text: &str, guide_width: usize) -> String {
+    let Some(marker) = first_non_space_visible_char(text) else {
+        return text.to_string();
+    };
+    let gap = marker_gap_span(text, marker.end);
+    match guide_width {
+        0 => {
+            let content_start = gap.map(|(_, end)| end).unwrap_or(marker.end);
+            text[content_start..].to_string()
+        }
+        1 => gap.map_or_else(
+            || text.to_string(),
+            |(start, end)| format!("{}{}", &text[..start], &text[end..]),
+        ),
+        _ => text.to_string(),
+    }
+}
+
+/// 【终端】【ANSI 遍历】定位首个非空格可见字符。
+///
+/// 参数:
+/// - `text`: 可能包含 ANSI 控制序列的终端行
+///
+/// 返回:
+/// - 首个非空格可见字符及其字节范围
+fn first_non_space_visible_char(text: &str) -> Option<VisibleChar> {
+    let mut index = 0usize;
+    while let Some(visible) = next_visible_char(text, index) {
+        index = visible.end;
+        if visible.ch == ' ' {
+            continue;
+        }
+        return Some(visible);
+    }
+    None
+}
+
+/// 【终端】【响应式引导】定位引导符号后的单列间隔。
+///
+/// 参数:
+/// - `text`: 包含引导符号的 ANSI 行
+/// - `marker_end`: 引导符号结束字节位置
+///
+/// 返回:
+/// - 存在间隔时返回其起止字节位置
+fn marker_gap_span(text: &str, marker_end: usize) -> Option<(usize, usize)> {
+    let visible = next_visible_char(text, marker_end)?;
+    (visible.ch == ' ').then_some((visible.start, visible.end))
+}
+
+/// 【终端】【响应式引导】移除行首指定数量的可见空格。
+///
+/// 参数:
+/// - `text`: 已对齐到完整两列引导区的 ANSI 行
+/// - `count`: 需要移除的可见空格数
+///
+/// 返回:
+/// - 压缩后的 ANSI 行
+fn remove_leading_visible_spaces(text: &str, count: usize) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut index = 0usize;
+    let mut remaining = count;
+    while remaining > 0 {
+        let Some(visible) = next_visible_char(text, index) else {
+            break;
+        };
+        output.push_str(&text[index..visible.start]);
+        if visible.ch != ' ' {
+            index = visible.start;
+            break;
+        }
+        remaining -= 1;
+        index = visible.end;
+    }
+    output.push_str(&text[index..]);
+    output
 }
 
 /// 【终端】【CLI 布局】对齐单个物理行，并保留开头的光标控制序列。
@@ -232,8 +372,9 @@ fn leading_cursor_control_end(text: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{
-        align_cli_stream_block, align_cli_text_delta, align_to_guide_column, clear_right_margin,
-        indent_diff_for_cli, indent_diff_for_transcript,
+        align_cli_stream_block, align_cli_text_delta, align_to_guide_column,
+        align_to_guide_column_with_width, clear_right_margin, indent_diff_for_cli,
+        indent_diff_for_transcript,
     };
 
     /// 引导符号保留在左侧，普通正文与续行位于右侧。
@@ -253,6 +394,29 @@ mod tests {
         );
         assert_eq!(indent_diff_for_transcript("a\nb"), " a\n b");
         assert_eq!(indent_diff_for_cli("a\nb"), "   a\n   b");
+    }
+
+    /// 【终端】【响应式引导测试】验证窄终端压缩间隔或移除符号后不吞正文。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn compacts_visual_guide_for_narrow_terminals() {
+        let marker = "\x1b[2m\x1b[36m•\x1b[0m answer";
+
+        assert_eq!(align_to_guide_column_with_width("answer", 1), " answer");
+        assert_eq!(
+            align_to_guide_column_with_width("  continuation", 1),
+            " continuation"
+        );
+        assert_eq!(
+            align_to_guide_column_with_width(marker, 1),
+            "\x1b[2m\x1b[36m•\x1b[0manswer"
+        );
+        assert_eq!(align_to_guide_column_with_width(marker, 0), "answer");
     }
 
     /// 右侧边距序列必须清除目标列数并恢复原光标。

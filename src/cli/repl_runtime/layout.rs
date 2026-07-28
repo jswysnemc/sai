@@ -26,6 +26,7 @@ pub(super) fn display_window(
     max_start: usize,
     live_cap: usize,
 ) -> DisplayWindow {
+    // 【终端】【响应式布局】1. 按终端总宽度计算实际引导区与正文净宽度
     let padding = left_padding_columns(width);
     let content_width = width.saturating_sub(padding).max(1);
     let mut window = transcript.display_window_with_live_cap(
@@ -35,16 +36,17 @@ pub(super) fn display_window(
         max_start,
         live_cap,
     );
-    if padding == 0 {
-        return window;
-    }
+    // 【终端】【响应式布局】2. 宽终端保留完整引导区，窄终端按可用列数压缩
     window.lines = window
         .lines
         .into_iter()
         .map(|line| {
-            AnsiLine::new(crate::render::content_indent::align_to_guide_column(
-                line.as_str(),
-            ))
+            AnsiLine::new(
+                crate::render::content_indent::align_to_guide_column_with_width(
+                    line.as_str(),
+                    padding,
+                ),
+            )
         })
         .collect();
     window
@@ -137,6 +139,8 @@ fn left_padding_columns(width: usize) -> usize {
 mod tests {
     use super::display_window;
     use crate::cli::repl_text::visible_width;
+    use crate::llm::{ChatStreamChunk, ChatStreamKind};
+    use crate::render::activity_animation::strip_ansi_for_test;
     use crate::render::transcript::{TranscriptRenderOptions, TranscriptStore};
     use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
 
@@ -190,6 +194,73 @@ mod tests {
 
         assert!(marker.as_str().starts_with("\x1b[38;5;208m●"));
         assert!(plain.as_str().starts_with("  "));
+    }
+
+    /// 【终端】【正文引导测试】验证真实 TUI 布局只扣除两列，并统一流式与定稿正文。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn assistant_body_uses_reserved_guide_columns() {
+        let mut transcript = TranscriptStore::new(100);
+        transcript.push_chunk(&ChatStreamChunk {
+            kind: ChatStreamKind::Content,
+            text: "abcdefgh\n".to_string(),
+        });
+
+        let live = display_window(&mut transcript, 6, &options(), 100, usize::MAX, usize::MAX);
+        let live_plain = live
+            .lines
+            .iter()
+            .map(|line| strip_ansi_for_test(line.as_str()))
+            .collect::<Vec<_>>();
+        assert_eq!(live_plain, vec!["• abcd", "  efgh"]);
+        assert!(live.lines.iter().all(|line| visible_width(line.as_str()) <= 6));
+
+        assert!(transcript.finalize_live_tail());
+        let finalized =
+            display_window(&mut transcript, 6, &options(), 100, usize::MAX, usize::MAX);
+        let finalized_plain = finalized
+            .lines
+            .iter()
+            .map(|line| strip_ansi_for_test(line.as_str()))
+            .collect::<Vec<_>>();
+        assert_eq!(finalized_plain, live_plain);
+    }
+
+    /// 【终端】【响应式引导测试】验证一至两列终端压缩引导区后不会超宽。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn assistant_body_compacts_guide_on_narrow_terminals() {
+        for width in [1usize, 2] {
+            let mut transcript = TranscriptStore::new(100);
+            transcript.push_chunk(&ChatStreamChunk {
+                kind: ChatStreamKind::Content,
+                text: "ab\n".to_string(),
+            });
+
+            let window = display_window(
+                &mut transcript,
+                width,
+                &options(),
+                100,
+                usize::MAX,
+                usize::MAX,
+            );
+
+            assert!(window
+                .lines
+                .iter()
+                .all(|line| visible_width(line.as_str()) <= width));
+        }
     }
 
     /// 验证 TUI diff 比正文再内收一列，并保留对称右边距。

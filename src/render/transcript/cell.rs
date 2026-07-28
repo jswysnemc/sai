@@ -1,3 +1,4 @@
+use super::assistant_body;
 use super::diff_cell::{self, DiffCell};
 use super::line::AnsiLine;
 use super::markdown_cell::{self, MarkdownCell};
@@ -44,39 +45,25 @@ impl HistoryCell {
         width: usize,
         options: &TranscriptRenderOptions,
     ) -> Vec<AnsiLine> {
-        if let Self::Welcome(cell) = self {
-            return welcome_cell::display_lines(cell, width);
-        }
-        // 渲染与折行必须共用同一宽度：注入渲染宽度上下文，
-        // cell 内部的表格布局 / 水平线 / 折行查询全部对齐 width
-        let content_width = if matches!(self, Self::Diff(_)) {
-            width
-                .saturating_sub(crate::render::content_indent::DIFF_BLOCK_INSET)
-                .max(1)
-        } else {
-            width
-        };
-        let rendered =
-            crate::render::render_width::with_render_width(content_width, || match self {
-                Self::UserEcho(cell) => user_echo_cell::render(cell),
-                Self::Markdown(cell) => markdown_cell::render(cell),
-                Self::Reasoning(cell) => reasoning_cell::render(cell, options.reasoning_mode),
-                Self::Shell(cell) => shell_cell::render(cell),
-                Self::Tool(cell) => tool_cell::render(cell, options.tool_call_mode),
-                Self::Diff(cell) => diff_cell::render(cell),
-                Self::Meta(cell) => meta_cell::render(cell),
-                Self::Welcome(_) => unreachable!("welcome cell is handled before plain rendering"),
-            });
-        if rendered.is_empty() {
-            Vec::new()
-        } else if matches!(self, Self::Diff(_)) {
-            AnsiLine::wrap_block_with_right_margin(
-                &rendered,
-                content_width,
-                crate::render::content_indent::DIFF_BLOCK_INSET,
-            )
-        } else {
-            AnsiLine::wrap_block(&rendered, content_width)
+        match self {
+            Self::Welcome(cell) => welcome_cell::display_lines(cell, width),
+            Self::Markdown(cell) => {
+                // 【终端】【正文引导】正文渲染与折行共用调用方传入的净宽度
+                let rendered = crate::render::render_width::with_render_width(width, || {
+                    markdown_cell::render(cell)
+                });
+                assistant_body::display_lines(&rendered, width)
+            }
+            Self::Diff(cell) => display_diff_lines(cell, width),
+            Self::UserEcho(cell) => display_rendered_lines(width, || user_echo_cell::render(cell)),
+            Self::Reasoning(cell) => display_rendered_lines(width, || {
+                reasoning_cell::render(cell, options.reasoning_mode)
+            }),
+            Self::Shell(cell) => display_rendered_lines(width, || shell_cell::render(cell)),
+            Self::Tool(cell) => display_rendered_lines(width, || {
+                tool_cell::render(cell, options.tool_call_mode)
+            }),
+            Self::Meta(cell) => display_rendered_lines(width, || meta_cell::render(cell)),
         }
     }
 
@@ -163,5 +150,51 @@ impl HistoryCell {
     /// - 启动信息 history cell
     pub(crate) fn welcome(cell: WelcomeCell) -> Self {
         Self::Welcome(cell)
+    }
+}
+
+/// 【终端】【会话渲染】按指定净宽度渲染并折行普通 transcript cell。
+///
+/// 参数:
+/// - `width`: 调用方已经扣除视觉引导区后的正文列数
+/// - `render`: 返回 ANSI 文本块的渲染函数
+///
+/// 返回:
+/// - 按正文净宽度完成折行的终端行
+fn display_rendered_lines<F>(width: usize, render: F) -> Vec<AnsiLine>
+where
+    F: FnOnce() -> String,
+{
+    let rendered = crate::render::render_width::with_render_width(width, render);
+    if rendered.is_empty() {
+        Vec::new()
+    } else {
+        AnsiLine::wrap_block(&rendered, width)
+    }
+}
+
+/// 【终端】【会话渲染】按 diff 对称边距渲染并折行编辑内容。
+///
+/// 参数:
+/// - `cell`: diff 源数据
+/// - `width`: 调用方已经扣除视觉引导区后的正文列数
+///
+/// 返回:
+/// - 保留左右边距的 diff 终端行
+fn display_diff_lines(cell: &DiffCell, width: usize) -> Vec<AnsiLine> {
+    let content_width = width
+        .saturating_sub(crate::render::content_indent::DIFF_BLOCK_INSET)
+        .max(1);
+    let rendered = crate::render::render_width::with_render_width(content_width, || {
+        diff_cell::render(cell)
+    });
+    if rendered.is_empty() {
+        Vec::new()
+    } else {
+        AnsiLine::wrap_block_with_right_margin(
+            &rendered,
+            content_width,
+            crate::render::content_indent::DIFF_BLOCK_INSET,
+        )
     }
 }

@@ -1,6 +1,6 @@
 use super::line::AnsiLine;
 use super::store::TranscriptStore;
-use super::{markdown_cell, reasoning_cell, TranscriptRenderOptions};
+use super::{assistant_body, markdown_cell, reasoning_cell, TranscriptRenderOptions};
 use crate::llm::ChatStreamKind;
 
 /// 一次增量同步所需的 transcript 视图数据。
@@ -201,32 +201,37 @@ impl TranscriptStore {
             .as_ref()
             .is_some_and(|tail| tail.kind == ChatStreamKind::Reasoning && !tail.source.is_empty());
         if let Some(tail) = &self.live_tail {
-            // live 渲染同样注入宽度上下文，保证流式表格预览与折行宽度一致
-            let rendered = crate::render::render_width::with_render_width(width, || {
-                match tail.kind {
-                    ChatStreamKind::Content => {
-                        let (text, open) = markdown_cell::render_completed_parts(&tail.source);
-                        transient = open;
-                        text
-                    }
-                    // reasoning 在定稿前显示节流的字符计数与跳动标记，结束后再按配置完整固化
-                    ChatStreamKind::Reasoning => {
-                        let elapsed = self
-                            .work_status_started
-                            .map(|started| started.elapsed())
-                            .unwrap_or_default();
+            // 【终端】【流式正文】1. 按内容类型选择渲染方式，避免宽度与折行分支漂移
+            let rendered_lines = match tail.kind {
+                ChatStreamKind::Content => {
+                    let (rendered, open) = crate::render::render_width::with_render_width(width, || {
+                        markdown_cell::render_completed_parts(&tail.source)
+                    });
+                    transient = open;
+                    // 【终端】【正文引导】2. Markdown 流式正文添加与定稿正文一致的引导区
+                    assistant_body::display_lines(&rendered, width)
+                }
+                ChatStreamKind::Reasoning => {
+                    let elapsed = self
+                        .work_status_started
+                        .map(|started| started.elapsed())
+                        .unwrap_or_default();
+                    let rendered = crate::render::render_width::with_render_width(width, || {
                         reasoning_cell::render_live(
                             &tail.source,
                             options.reasoning_mode,
                             self.live_animation_frame,
                             elapsed,
                         )
+                    });
+                    if rendered.is_empty() {
+                        Vec::new()
+                    } else {
+                        AnsiLine::wrap_block(&rendered, width)
                     }
                 }
-            });
-            if !rendered.is_empty() {
-                lines.extend(AnsiLine::wrap_block(&rendered, width));
-            }
+            };
+            lines.extend(rendered_lines);
         }
         if let Some(tool_call) = &self.live_tool_call {
             let is_diff = crate::render::stream_text::is_file_edit_tool(&tool_call.name);
