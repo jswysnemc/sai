@@ -1,7 +1,7 @@
 /*
  * 主题配色
  *
- * 7 套主题：默认亮色、graphite、ocean、amber、slate、rose、dusk，
+ * 9 套主题：默认亮色、graphite、ocean、amber、slate、rose、sage、dusk、ember，
  * 外加 system 跟随系统深浅色。每套主题给出同一组语义色 token，
  * 以及阴影基色 --shadow-hue 与不透明度倍率 --shadow-boost（见 elevation.css）。
  *
@@ -19,7 +19,7 @@
 }
 
 /*
- * 扩展色相：7 套主题各自只给出 signal / danger / warning / blue 四个色相，
+ * 扩展色相：9 套主题各自只给出 signal / danger / warning / blue 四个色相，
  * 界面里还需要紫与玫红做区分度。这两个由既有色相混出，
  * 亮暗主题下的明度自动跟随，不必在每套主题里重复定义。
  */
@@ -340,6 +340,51 @@
   --diff-hunk-text: #5d6f9c;
 }
 
+:root[data-theme="sage"] {
+  color-scheme: light;
+  --paper: #edf2ec;
+  --paper-raised: #f6f8f4;
+  --paper-deep: #dfe7de;
+  --control-surface: #d6e0d5;
+  --ink: #1f2923;
+  --ink-soft: #617068;
+  --line: #c4d0c3;
+  --line-strong: #93a492;
+  --graphite: #26352c;
+  --graphite-soft: #354a3d;
+  --signal: #46705a;
+  --signal-soft: #d2e3d8;
+  --danger: #ad3f38;
+  --warning: #906118;
+  --blue: #356b86;
+  --shadow-hue: 29 43 34;
+  --shadow-boost: 1;
+  --code-surface: #f8faf7;
+  --code-head: #e6ede5;
+  --code-text: #243029;
+  --code-comment: #637168;
+  --code-keyword: #356b86;
+  --code-string: #447343;
+  --code-number: #8d601d;
+  --code-danger: #ad3f38;
+  --terminal-surface: #f8faf7;
+  --terminal-selection: #d8e4da;
+  --terminal-line: #c4d0c3;
+  --terminal-text: #243029;
+  --terminal-muted: #637168;
+  --technical-surface: #f8faf7;
+  --technical-surface-muted: #e6ede5;
+  --technical-border: #c4d0c3;
+  --technical-text: #243029;
+  --technical-muted: #637168;
+  --diff-added-bg: #dcecdf;
+  --diff-added-text: #29623e;
+  --diff-removed-bg: #f5e1de;
+  --diff-removed-text: #96352f;
+  --diff-hunk-bg: #dceaf1;
+  --diff-hunk-text: #356b86;
+}
+
 :root[data-theme="dusk"] {
   color-scheme: dark;
   --paper: #17141f;
@@ -383,6 +428,51 @@
   --diff-removed-text: #ffc0ba;
   --diff-hunk-bg: rgb(88 70 150 / 24%);
   --diff-hunk-text: #c8b6ff;
+}
+
+:root[data-theme="ember"] {
+  color-scheme: dark;
+  --paper: #1b1715;
+  --paper-raised: #241e1b;
+  --paper-deep: #120f0e;
+  --control-surface: #2d2521;
+  --ink: #f0e8e1;
+  --ink-soft: #b6a69b;
+  --line: #4b3b34;
+  --line-strong: #786057;
+  --graphite: #0f0c0b;
+  --graphite-soft: #342924;
+  --signal: #df965f;
+  --signal-soft: #4a2f20;
+  --danger: #f0877f;
+  --warning: #e6b66e;
+  --blue: #8ab5d6;
+  --shadow-hue: 8 5 4;
+  --shadow-boost: 3.3;
+  --code-surface: #130f0e;
+  --code-head: #1d1714;
+  --code-text: #f0e8e1;
+  --code-comment: #9c8a80;
+  --code-keyword: #9ec4df;
+  --code-string: #a8c990;
+  --code-number: #e3ba82;
+  --code-danger: #f39a92;
+  --terminal-surface: #130f0e;
+  --terminal-selection: #382b25;
+  --terminal-line: #493a33;
+  --terminal-text: #f0e8e1;
+  --terminal-muted: #aa9a90;
+  --technical-surface: #130f0e;
+  --technical-surface-muted: #1d1714;
+  --technical-border: #493a33;
+  --technical-text: #f0e8e1;
+  --technical-muted: #9c8a80;
+  --diff-added-bg: rgb(42 121 72 / 25%);
+  --diff-added-text: #b9eec9;
+  --diff-removed-bg: rgb(174 66 55 / 25%);
+  --diff-removed-text: #ffc0b8;
+  --diff-hunk-bg: rgb(65 100 130 / 26%);
+  --diff-hunk-text: #b4d5ec;
 }
 
 @media (prefers-color-scheme: dark) {

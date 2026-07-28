@@ -10,7 +10,7 @@
  * 设计 token 聚合入口。
  *
  * 本文件只负责汇总，具体定义按维度拆分在 tokens/ 目录下：
- *   color-themes.css  7 套主题配色与阴影基色
+ *   color-themes.css  9 套主题配色与阴影基色
  *   typography.css    字号阶梯、行高、字重、字族
  *   spacing.css       间距阶梯
  *   radius.css        圆角阶梯

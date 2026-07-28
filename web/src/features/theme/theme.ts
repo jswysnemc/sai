@@ -8,7 +8,9 @@ export type ThemeId =
   | "amber"
   | "dusk"
   | "slate"
-  | "rose";
+  | "rose"
+  | "sage"
+  | "ember";
 
 export const THEME_PRESETS: Array<{
   id: ThemeId;
@@ -60,6 +62,14 @@ export const THEME_PRESETS: Array<{
     colors: ["#f8eef1", "#2a1f24", "#b45a78"]
   },
   {
+    id: "sage",
+    nameEn: "Sage",
+    nameZh: "苔绿",
+    descriptionEn: "Muted green-gray daylight workspace",
+    descriptionZh: "低饱和灰绿日光工作区",
+    colors: ["#edf2ec", "#1f2923", "#46705a"]
+  },
+  {
     id: "graphite",
     nameEn: "Graphite",
     nameZh: "石墨",
@@ -84,6 +94,15 @@ export const THEME_PRESETS: Array<{
     descriptionEn: "Violet-night coding workspace",
     descriptionZh: "紫夜编码工作区",
     colors: ["#17141f", "#ebe6f4", "#a78bfa"],
+    dark: true
+  },
+  {
+    id: "ember",
+    nameEn: "Ember",
+    nameZh: "余烬",
+    descriptionEn: "Warm charcoal with ember accents",
+    descriptionZh: "暖炭灰与余烬橙强调",
+    colors: ["#1b1715", "#f0e8e1", "#df965f"],
     dark: true
   }
 ];
