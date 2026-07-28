@@ -99,6 +99,7 @@ describe("ChatComposer engine model display", () => {
     const html = renderComposer();
 
     expect(html).toContain("Claude Code");
+    expect(html).toContain('data-agent-engine-brand="claude-code"');
     expect(html).not.toContain("native-model-selector");
     expect(html).not.toContain("native-system-usage");
     expect(html).not.toContain("gpt-native");

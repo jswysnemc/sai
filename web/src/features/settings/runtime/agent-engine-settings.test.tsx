@@ -38,7 +38,14 @@ describe("AgentEngineSettings", () => {
 
     expect(html).toContain("ACP 模型");
     expect(html).toContain("ACP 权限模式");
+    expect(html).toContain('data-agent-engine-brand="codex"');
     expect(html).not.toContain("上下文压缩");
+  });
+
+  it("shows the Claude Code brand icon when that engine is selected", () => {
+    const html = render({ engine: "claude_code" });
+
+    expect(html).toContain('data-agent-engine-brand="claude-code"');
   });
 
   it("asks for a launch command only on the custom engine", () => {

@@ -55,6 +55,7 @@ describe("AcpCapabilityPanel", () => {
 
     expect(html).toContain("已连接");
     expect(html).toContain("Codex");
+    expect(html).toContain('data-agent-engine-brand="codex"');
     expect(html).toContain("1.1.7");
     expect(html).toContain("标准 ACP 能力");
     expect(html).toContain("Sai 集成能力");

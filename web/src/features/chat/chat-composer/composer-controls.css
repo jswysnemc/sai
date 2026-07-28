@@ -281,6 +281,7 @@
   white-space: nowrap;
 }
 
-.composer-engine-badge svg {
+.composer-engine-badge svg,
+.composer-engine-badge img {
   flex: 0 0 auto;
 }

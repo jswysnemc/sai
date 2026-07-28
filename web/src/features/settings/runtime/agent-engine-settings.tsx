@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../api/client";
 import type { AgentEngineKind, AppConfig } from "../../../api/contracts";
 import { Select } from "../../../shared/ui/select/select";
+import { AgentEngineBrandIcon } from "../../../shared/ui/agent-engine-brand-icon/agent-engine-brand-icon";
 import { useI18n } from "../../i18n/use-i18n";
 import { AcpCapabilityPanel } from "./acp-capability-panel";
 import { AcpRuntimeConfigFields } from "./acp-runtime-config-fields";
@@ -63,22 +64,26 @@ export function AgentEngineSettings({ config, onConfigChange }: AgentEngineSetti
     {
       value: "native",
       label: t("Native", "内置内核"),
-      description: t("sai's own loop with full feature set", "sai 自带循环，功能完整")
+      description: t("sai's own loop with full feature set", "sai 自带循环，功能完整"),
+      icon: <AgentEngineBrandIcon engine="native" size={16} />
     },
     {
       value: "claude_code",
       label: "Claude Code",
-      description: t("Runs via Sai Claude Agent ACP Sidecar", "经 Sai Claude Agent ACP Sidecar 运行")
+      description: t("Runs via Sai Claude Agent ACP Sidecar", "经 Sai Claude Agent ACP Sidecar 运行"),
+      icon: <AgentEngineBrandIcon engine="claude_code" size={16} />
     },
     {
       value: "codex",
       label: "Codex",
-      description: t("Runs via @agentclientprotocol/codex-acp", "经 @agentclientprotocol/codex-acp 运行")
+      description: t("Runs via @agentclientprotocol/codex-acp", "经 @agentclientprotocol/codex-acp 运行"),
+      icon: <AgentEngineBrandIcon engine="codex" size={16} />
     },
     {
       value: "custom",
       label: t("Custom ACP agent", "自定义 ACP 内核"),
-      description: t("Provide your own launch command", "自行提供启动命令")
+      description: t("Provide your own launch command", "自行提供启动命令"),
+      icon: <AgentEngineBrandIcon engine="custom" size={16} />
     }
   ];
 

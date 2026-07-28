@@ -1,14 +1,13 @@
 import {
-  Bot,
   Check,
   CircleDashed,
-  Cpu,
   Loader2,
   TerminalSquare,
   X
 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { AgentEngineKind, EngineStatusResponse } from "../../../api/contracts";
+import { AgentEngineBrandIcon } from "../../../shared/ui/agent-engine-brand-icon/agent-engine-brand-icon";
 import type { Translate } from "../../i18n/i18n-context";
 import { useI18n } from "../../i18n/use-i18n";
 import {
@@ -47,7 +46,9 @@ export function AcpCapabilityPanel({ engine, status, loading, error }: AcpCapabi
     <section className={`acp-capability-panel state-${state}`} aria-live="polite">
       <header className="acp-capability-head">
         <div className="acp-capability-heading">
-          <span className="acp-capability-heading-icon" aria-hidden><Cpu size={15} /></span>
+          <span className="acp-capability-heading-icon" aria-hidden>
+            <AgentEngineBrandIcon engine={engine} size={15} />
+          </span>
           <span>
             <strong>{t("ACP runtime capabilities", "ACP 运行能力")}</strong>
             <small>{t("Reported by the latest initialize handshake", "来自最近一次 initialize 握手")}</small>
@@ -93,7 +94,7 @@ export function AcpCapabilityPanel({ engine, status, loading, error }: AcpCapabi
         <div className="acp-capability-content">
           <div className="acp-runtime-summary">
             <div className="acp-runtime-agent">
-              <Bot size={15} aria-hidden />
+              <AgentEngineBrandIcon engine={engine} size={15} />
               <span>
                 <strong>{runtime.agent_name || status?.label || t("ACP agent", "ACP 内核")}</strong>
                 <small>

@@ -19,6 +19,7 @@ import { api } from "../../api/client";
 import { useRuntimeActivity } from "../runtime-activity/use-runtime-activity";
 import { createRunModeOptions } from "../permission/run-mode-options";
 import { Button } from "../../shared/ui/button/button";
+import { AgentEngineBrandIcon } from "../../shared/ui/agent-engine-brand-icon/agent-engine-brand-icon";
 import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
 import { GoalControl } from "../goals/goal-control";
@@ -162,7 +163,7 @@ export function ChatComposer(props: ChatComposerProps) {
                     `由 ${externalEngine.label} 执行，模型设置由外部内核管理`
                   )}
                 >
-                  <Cpu size={12} aria-hidden />
+                  <AgentEngineBrandIcon engine={externalEngine.engine} size={12} />
                   {externalEngine.label}
                 </span>
               ) : engineStatusPending ? (

@@ -159,7 +159,7 @@
   gap: var(--space-sm);
 }
 
-.acp-runtime-agent > svg {
+.acp-runtime-agent > .agent-engine-brand-icon {
   flex: 0 0 auto;
   color: var(--technical-muted);
 }
