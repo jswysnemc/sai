@@ -252,6 +252,7 @@ impl AppConfig {
             bail!("tools.background_command_stop_grace_seconds must be greater than 0");
         }
         self.validate_gateways()?;
+        self.validate_new_session_defaults()?;
         self.validate_compaction_model()?;
         if self.plugins.print_image.width_percent == 0
             || self.plugins.print_image.width_percent > 100
@@ -553,6 +554,13 @@ impl AppConfig {
             self.context.compaction_provider_id.clear();
             self.context.compaction_model.clear();
         }
+        // 4. 【会话】【新会话默认值】清理已删除模型的默认引用
+        if self.session.new_session_provider_id == provider_id
+            && self.session.new_session_model == model
+        {
+            self.session.new_session_provider_id.clear();
+            self.session.new_session_model.clear();
+        }
         Ok(())
     }
 
@@ -587,6 +595,11 @@ impl AppConfig {
         if self.context.compaction_provider_id == removed.id {
             self.context.compaction_provider_id.clear();
             self.context.compaction_model.clear();
+        }
+        // 3. 【会话】【新会话默认值】清理已删除供应商的默认引用
+        if self.session.new_session_provider_id == removed.id {
+            self.session.new_session_provider_id.clear();
+            self.session.new_session_model.clear();
         }
         if self.plugins.vision.vision_provider_id == removed.id {
             self.plugins.vision.vision_provider_id.clear();

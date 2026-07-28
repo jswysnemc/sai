@@ -7,10 +7,12 @@ type AcpConfigOption = {
   options?: unknown;
 };
 
+export const ACP_PROVIDER_ID = "__acp__";
+
 const THINKING_LEVELS: ThinkingLevel[] = ["auto", "none", "low", "medium", "high", "xhigh", "max"];
 
 /**
- * 从 ACP 运行状态构造外部内核模型选项。
+ * 【ACP】【模型能力】从 ACP 运行状态构造外部内核模型选项。
  *
  * @param status 当前内核运行状态
  * @param config 应用配置，用于握手前的回退值
@@ -20,23 +22,34 @@ export function buildAcpModelChoices(
   status: EngineStatusResponse | undefined,
   config: AppConfig
 ): ChatModelChoice[] {
-  const modelOption = configOptions(status).find((option) => option.category === "model");
-  const values = selectValues(modelOption?.options);
-  if (values.length > 0) {
-    return values.map((option) => ({
-      providerId: "__acp__",
-      providerName: status?.label ?? "ACP",
-      model: option.value
-    }));
-  }
+  const advertised = advertisedAcpModelChoices(status);
+  if (advertised.length > 0) return advertised;
   const configured = config.agent?.acp?.model?.trim();
   return configured
-    ? [{ providerId: "__acp__", providerName: status?.label ?? "ACP", model: configured }]
+    ? [{ providerId: ACP_PROVIDER_ID, providerName: status?.label ?? "ACP", model: configured }]
     : [];
 }
 
 /**
- * 返回 ACP 当前模型值。
+ * 【ACP】【模型能力】返回当前运行时明确公布的模型选项。
+ *
+ * @param status 当前内核运行状态
+ * @returns ACP 运行时公布的模型选项；未公布时返回空数组
+ */
+export function advertisedAcpModelChoices(
+  status: EngineStatusResponse | undefined
+): ChatModelChoice[] {
+  const modelOption = configOptions(status).find((option) => option.category === "model");
+  const values = selectValues(modelOption?.options);
+  return values.map((option) => ({
+    providerId: ACP_PROVIDER_ID,
+    providerName: status?.label ?? "ACP",
+    model: option.value
+  }));
+}
+
+/**
+ * 【ACP】【模型能力】返回 ACP 当前模型值。
  *
  * @param status 当前内核运行状态
  * @returns agent 公布的当前模型值
@@ -47,7 +60,7 @@ export function currentAcpModel(status: EngineStatusResponse | undefined): strin
 }
 
 /**
- * 返回 ACP agent 实际支持的思考等级。
+ * 【ACP】【思考能力】返回 ACP 内核实际支持的思考等级。
  *
  * @param status 当前内核运行状态
  * @returns Sai 界面能够表示的思考等级

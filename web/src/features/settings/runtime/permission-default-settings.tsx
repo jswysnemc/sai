@@ -99,17 +99,16 @@ export function PermissionDefaultSettings({ config, onConfigChange }: Permission
   };
 
   /**
-   * 更新会话自动标题配置。
+   * 【设置】【会话配置】更新会话自动标题配置并保留新会话默认值。
    *
    * @param patch 会话配置局部更新
+   * @returns 无返回值
    */
   const patchSession = (patch: Partial<NonNullable<AppConfig["session"]>>) => {
     onConfigChange({
       ...config,
       session: {
-        auto_title_enabled: config.session?.auto_title_enabled ?? true,
-        auto_title_provider_id: config.session?.auto_title_provider_id,
-        auto_title_model: config.session?.auto_title_model,
+        ...config.session,
         ...patch
       }
     });

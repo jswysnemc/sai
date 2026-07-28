@@ -1,29 +1,49 @@
 import { useEffect, useState } from "react";
 import type { ThinkingLevel } from "../../api/contracts";
+import {
+  readStoredThinkingLevel,
+  writeStoredThinkingLevel
+} from "./session-preference-storage";
 
-const GLOBAL_KEY = "sai.thinking-level";
-const THINKING_LEVELS: ThinkingLevel[] = ["auto", "none", "low", "medium", "high", "xhigh", "max"];
-const sessionKey = (sessionId?: string) => (sessionId ? `sai.thinking-level.${sessionId}` : GLOBAL_KEY);
+type StoredThinkingPreference = {
+  sessionId?: string;
+  level: ThinkingLevel;
+};
 
 /**
- * 管理思考等级和按会话隔离的浏览器本地偏好。
+ * 【会话】【思考偏好】管理思考等级和按会话隔离的浏览器本地偏好。
+ *
+ * @param sessionId 当前会话 ID
+ * @returns 当前思考等级和更新方法
  */
 export function useThinkingLevel(sessionId?: string) {
-  const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>(() => loadThinkingLevel(sessionId));
+  const [storedPreference, setStoredPreference] = useState<StoredThinkingPreference>(() => ({
+    sessionId,
+    level: readStoredThinkingLevel(sessionId)
+  }));
+  const thinkingLevel = storedPreference.sessionId === sessionId
+    ? storedPreference.level
+    : readStoredThinkingLevel(sessionId);
 
   useEffect(() => {
-    setThinkingLevel(loadThinkingLevel(sessionId));
+    setStoredPreference((current) => current.sessionId === sessionId
+      ? current
+      : { sessionId, level: readStoredThinkingLevel(sessionId) });
   }, [sessionId]);
 
   useEffect(() => {
-    window.localStorage.setItem(sessionKey(sessionId), thinkingLevel);
+    writeStoredThinkingLevel(sessionId, thinkingLevel);
   }, [thinkingLevel, sessionId]);
 
-  return { thinkingLevel, setThinkingLevel };
-}
+  /**
+   * 【会话】【思考偏好】更新当前会话的思考等级。
+   *
+   * @param level 新思考等级
+   * @returns 无返回值
+   */
+  const setThinkingLevel = (level: ThinkingLevel) => {
+    setStoredPreference({ sessionId, level });
+  };
 
-function loadThinkingLevel(sessionId?: string): ThinkingLevel {
-  const stored = (window.localStorage.getItem(sessionKey(sessionId)) ??
-    (sessionId ? window.localStorage.getItem(GLOBAL_KEY) : null)) as ThinkingLevel | null;
-  return stored && THINKING_LEVELS.includes(stored) ? stored : "auto";
+  return { thinkingLevel, setThinkingLevel };
 }

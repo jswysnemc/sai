@@ -14,6 +14,7 @@ import { useSessionTree } from "./use-session-tree";
 import { LocaleSwitcher } from "../i18n/locale-switcher";
 import { useI18n } from "../i18n/use-i18n";
 import { formatRelativeTime } from "../../shared/format-relative-time";
+import { initializeNewSessionPreferences } from "./new-session-preferences";
 import "./session-sidebar.css";
 
 type SessionSidebarProps = {
@@ -76,7 +77,11 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [appMenuOpen, menu, workspaceMenu]);
 
-  /** 刷新会话列表和全部消息缓存。 */
+  /**
+   * 【会话】【缓存刷新】刷新会话列表和全部消息缓存。
+   *
+   * @returns 全部相关缓存刷新完成后返回
+   */
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ["sessions"] });
     await queryClient.invalidateQueries({ queryKey: ["session-tree"] });
@@ -84,7 +89,32 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
     await queryClient.invalidateQueries({ queryKey: ["timeline"] });
   };
 
-  const create = useMutation({ mutationFn: (workspaceId?: string) => api.sessions.create(undefined, workspaceId), onSuccess: refresh });
+  /**
+   * 【会话】【新会话默认值】创建会话并在列表刷新前写入专属模型与思考偏好。
+   *
+   * @param workspaceId 可选目标工作区 ID
+   * @returns 新建会话
+   */
+  const createSession = async (workspaceId?: string) => {
+    const response = await queryClient.ensureQueryData({
+      queryKey: ["config"],
+      queryFn: api.config.load
+    });
+    const engine = response.config.agent?.engine ?? "native";
+    // 1. 【会话】【新会话默认值】外部内核先读取当前能力，失败时按内核默认值创建
+    const status = engine === "native"
+      ? undefined
+      : await queryClient.fetchQuery({
+          queryKey: ["engine-status"],
+          queryFn: api.config.engineStatus
+        }).catch(() => undefined);
+    // 2. 【会话】【新会话默认值】服务端创建成功后立即建立会话专属偏好
+    const session = await api.sessions.create(undefined, workspaceId);
+    initializeNewSessionPreferences(session.id, response.config, status);
+    return session;
+  };
+
+  const create = useMutation({ mutationFn: createSession, onSuccess: refresh });
   const remove = useMutation({ mutationFn: api.sessions.remove, onSuccess: refresh });
   const rename = useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) => api.sessions.rename(id, title),

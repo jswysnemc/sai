@@ -58,4 +58,12 @@ describe("AgentEngineSettings", () => {
 
     expect(html).not.toContain("停用");
   });
+
+  it("shows model and reasoning defaults for future sessions", () => {
+    const html = render({ engine: "native" });
+
+    expect(html).toContain("新会话模型");
+    expect(html).toContain("新会话思考等级");
+    expect(html).toContain("跟随内核默认模型");
+  });
 });

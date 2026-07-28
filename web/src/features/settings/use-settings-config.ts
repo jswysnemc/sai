@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import type { AppConfig, ProviderConfig } from "../../api/contracts";
 import { api } from "../../api/client";
+import { renameNewSessionProviderReference } from "../sessions/new-session-preferences";
 import type { GatewayId, SettingsConfigController } from "./settings-types";
 
 /**
@@ -90,10 +91,11 @@ export function useSettingsConfig(): SettingsConfigController {
   };
 
   /**
-   * 更新指定供应商配置。
+   * 【设置】【供应商更新】更新指定供应商配置并同步关联引用。
    *
    * @param index 供应商索引
    * @param patch 供应商字段补丁
+   * @returns 无返回值
    */
   const updateProvider = (index: number, patch: Partial<ProviderConfig>) => {
     if (!draftConfig) return;
@@ -102,7 +104,10 @@ export function useSettingsConfig(): SettingsConfigController {
       providerIndex === index ? { ...provider, ...patch } : provider
     ));
     const activeProvider = patch.id && previousId === draftConfig.active_provider ? patch.id : draftConfig.active_provider;
-    updateConfig({ ...draftConfig, active_provider: activeProvider, providers });
+    const session = patch.id
+      ? renameNewSessionProviderReference(draftConfig.session, previousId, patch.id)
+      : draftConfig.session;
+    updateConfig({ ...draftConfig, active_provider: activeProvider, providers, session });
   };
 
   /**

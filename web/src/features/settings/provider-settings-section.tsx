@@ -14,6 +14,7 @@ import { Select } from "../../shared/ui/select/select";
 import { ModelIcon } from "../../shared/ui/model-icon";
 import { JsonCodeEditor } from "../../shared/ui/code-editor/json-code-editor";
 import { useI18n } from "../i18n/use-i18n";
+import { clearNewSessionModelReference } from "../sessions/new-session-preferences";
 import { KeyValueEditor } from "./key-value-editor";
 
 type ProviderSettingsSectionProps = {
@@ -126,7 +127,39 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
     setTab("models");
   };
 
-  /** 删除当前供应商并选择剩余首项。 */
+  /**
+   * 【设置】【供应商模型】更新模型目录，并在模型被移除时清理新会话引用。
+   *
+   * @param patch 模型目录局部更新
+   * @returns 无返回值
+   */
+  const updateModelConfiguration = (patch: Partial<ProviderConfig>) => {
+    if (!provider) return;
+    const nextProvider = { ...provider, ...patch };
+    const nextProviders = config.providers.map((item, index) => (
+      index === selectedIndex ? nextProvider : item
+    ));
+    const configuredModel = config.session?.new_session_model ?? "";
+    const availableModels = nextProvider.models?.length
+      ? nextProvider.models
+      : [nextProvider.default_model ?? ""];
+    const clearsNewSessionModel = config.session?.new_session_provider_id === provider.id
+      && Boolean(configuredModel)
+      && !availableModels.includes(configuredModel);
+    onConfigChange({
+      ...config,
+      providers: nextProviders,
+      session: clearsNewSessionModel
+        ? clearNewSessionModelReference(config.session)
+        : config.session
+    });
+  };
+
+  /**
+   * 【设置】【供应商删除】删除当前供应商并选择剩余首项。
+   *
+   * @returns 删除流程完成后返回
+   */
   const deleteProvider = async () => {
     if (!provider) return;
     const confirmed = await confirm({
@@ -138,7 +171,15 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
     if (!confirmed) return;
     const providers = config.providers.filter((_, index) => index !== selectedIndex);
     const activeProvider = config.active_provider === provider.id ? providers[0]?.id ?? "" : config.active_provider;
-    onConfigChange({ ...config, providers, active_provider: activeProvider });
+    const clearsNewSessionModel = config.session?.new_session_provider_id === provider.id;
+    onConfigChange({
+      ...config,
+      providers,
+      active_provider: activeProvider,
+      session: clearsNewSessionModel
+        ? clearNewSessionModelReference(config.session)
+        : config.session
+    });
     setSelectedId(activeProvider || providers[0]?.id || "");
   };
 
@@ -249,7 +290,7 @@ export function ProviderSettingsSection({ config, onConfigChange, onProviderChan
             </label>
           )}
         </div>}
-        {tab === "models" && <ModelMetadataEditor provider={provider} onChange={(patch) => onProviderChange(selectedIndex, patch)} />}
+        {tab === "models" && <ModelMetadataEditor provider={provider} onChange={updateModelConfiguration} />}
         {tab === "advanced" && <div className="provider-advanced-layout">
           <div className="provider-advanced-top">
             <div className="settings-field">

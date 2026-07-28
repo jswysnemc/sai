@@ -5,12 +5,18 @@ import { api } from "../../api/client";
 import { acpThinkingLevels, buildAcpModelChoices, currentAcpModel } from "./acp-engine-options";
 import { buildChatModelChoices, resolveChatModelSelection } from "./chat-model-options";
 import type { ChatModelChoice } from "./chat-model-options";
+import {
+  readStoredChatModelSelection,
+  writeStoredChatModelSelection
+} from "./session-preference-storage";
 
-const GLOBAL_KEY = "sai.chat-model";
-const sessionKey = (sessionId?: string) => (sessionId ? `sai.chat-model.${sessionId}` : GLOBAL_KEY);
+type StoredModelPreference = {
+  sessionId?: string;
+  selection: RunModelSelection | null;
+};
 
 /**
- * 管理输入区模型列表、当前选择和按会话隔离的本地偏好。
+ * 【会话】【模型偏好】管理输入区模型列表、当前选择和按会话隔离的本地偏好。
  *
  * @param sessionId 当前会话 ID；不同会话互不影响
  * @returns 模型查询状态、选项和选择方法
@@ -22,7 +28,13 @@ export function useChatModel(sessionId?: string) {
     queryFn: api.config.engineStatus,
     refetchInterval: (query) => query.state.data?.external && !query.state.data.acp_runtime ? 1_000 : false
   });
-  const [preferred, setPreferred] = useState<RunModelSelection | null>(() => loadStoredSelection(sessionId));
+  const [storedPreference, setStoredPreference] = useState<StoredModelPreference>(() => ({
+    sessionId,
+    selection: readStoredChatModelSelection(sessionId)
+  }));
+  const preferred = storedPreference.sessionId === sessionId
+    ? storedPreference.selection
+    : readStoredChatModelSelection(sessionId);
   const external = engineStatus.data?.external === true;
   const choices = response.data
     ? external
@@ -35,18 +47,27 @@ export function useChatModel(sessionId?: string) {
       : resolveChatModelSelection(response.data.config, preferred)
     : null;
 
-  // 切换会话时恢复该会话自己的模型偏好
+  // 1. 【会话】【模型偏好】切换会话时恢复该会话自己的模型偏好
   useEffect(() => {
-    setPreferred(loadStoredSelection(sessionId));
+    setStoredPreference((current) => current.sessionId === sessionId
+      ? current
+      : { sessionId, selection: readStoredChatModelSelection(sessionId) });
   }, [sessionId]);
 
   useEffect(() => {
     if (!selection) return;
-    window.localStorage.setItem(sessionKey(sessionId), JSON.stringify(selection));
+    writeStoredChatModelSelection(sessionId, selection);
   }, [selection?.providerId, selection?.model, sessionId]);
 
-  /** 更新当前会话使用的供应商和模型。 */
-  const selectModel = (next: RunModelSelection) => setPreferred(next);
+  /**
+   * 【会话】【模型偏好】更新当前会话使用的供应商和模型。
+   *
+   * @param next 新模型选择
+   * @returns 无返回值
+   */
+  const selectModel = (next: RunModelSelection) => {
+    setStoredPreference({ sessionId, selection: next });
+  };
 
   return {
     choices,
@@ -60,7 +81,7 @@ export function useChatModel(sessionId?: string) {
 }
 
 /**
- * 解析外部内核当前模型，优先使用本会话选择。
+ * 【ACP】【模型偏好】解析外部内核当前模型，优先使用本会话选择。
  *
  * @param choices agent 公布的模型
  * @param preferred 浏览器保存的会话偏好
@@ -76,17 +97,4 @@ function resolveExternalSelection(
     ?? choices.find((choice) => choice.model === current)
     ?? choices[0]
     ?? null;
-}
-
-function loadStoredSelection(sessionId?: string): RunModelSelection | null {
-  try {
-    const raw =
-      window.localStorage.getItem(sessionKey(sessionId)) ??
-      (sessionId ? window.localStorage.getItem(GLOBAL_KEY) : null);
-    const value = JSON.parse(raw ?? "null") as Partial<RunModelSelection> | null;
-    if (value?.providerId && value.model) return { providerId: value.providerId, model: value.model };
-  } catch {
-    return null;
-  }
-  return null;
 }

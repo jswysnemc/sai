@@ -72,10 +72,10 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     kind: "app-config",
     labelEn: "Runtime",
     labelZh: "运行时",
-    descriptionEn: "Permissions, notifications, terminal, and display",
-    descriptionZh: "权限、通知、终端与显示",
+    descriptionEn: "Sessions, permissions, notifications, terminal, and display",
+    descriptionZh: "会话、权限、通知、终端与显示",
     icon: SlidersHorizontal,
-    searchKeys: ["runtime", "permission", "notification", "terminal", "context", "display", "tools", "权限", "通知", "终端", "上下文"]
+    searchKeys: ["runtime", "session", "model", "thinking", "permission", "notification", "terminal", "context", "display", "tools", "会话", "模型", "思考", "权限", "通知", "终端", "上下文"]
   },
   {
     id: "appearance",

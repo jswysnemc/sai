@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../api/client";
 import type { AgentEngineKind, AppConfig } from "../../../api/contracts";
-import { Select } from "../../../shared/ui/select/select";
+import { Select, type SelectOption } from "../../../shared/ui/select/select";
 import { AgentEngineBrandIcon } from "../../../shared/ui/agent-engine-brand-icon/agent-engine-brand-icon";
 import { useI18n } from "../../i18n/use-i18n";
+import { resetNewSessionEnginePreferences } from "../../sessions/new-session-preferences";
 import { AcpCapabilityPanel } from "./acp-capability-panel";
 import { AcpRuntimeConfigFields } from "./acp-runtime-config-fields";
+import { NewSessionDefaultSettings } from "./new-session-default-settings";
 import "./agent-engine-settings.css";
 
 type AgentEngineSettingsProps = {
@@ -60,7 +62,21 @@ export function AgentEngineSettings({ config, onConfigChange }: AgentEngineSetti
     updateAgent({ acp: { ...acp, ...patch } });
   };
 
-  const engineOptions = [
+  /**
+   * 【设置】【对话内核切换】切换内核并重置相关的新会话默认值。
+   *
+   * @param value 新内核标识
+   * @returns 无返回值
+   */
+  const updateEngine = (value: AgentEngineKind) => {
+    onConfigChange({
+      ...config,
+      agent: { ...agent, engine: value },
+      session: resetNewSessionEnginePreferences(config.session)
+    });
+  };
+
+  const engineOptions: SelectOption<AgentEngineKind>[] = [
     {
       value: "native",
       label: t("Native", "内置内核"),
@@ -94,7 +110,7 @@ export function AgentEngineSettings({ config, onConfigChange }: AgentEngineSetti
         <Select
           value={engine}
           options={engineOptions}
-          onChange={(value) => updateAgent({ engine: value })}
+          onChange={updateEngine}
           ariaLabel={t("Conversation engine", "对话内核")}
         />
         <small>
@@ -148,6 +164,11 @@ export function AgentEngineSettings({ config, onConfigChange }: AgentEngineSetti
           </small>
         </div>
       )}
+      <NewSessionDefaultSettings
+        config={config}
+        status={engineStatus.data}
+        onConfigChange={onConfigChange}
+      />
     </div>
   );
 }

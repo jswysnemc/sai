@@ -1,3 +1,5 @@
+import type { ThinkingLevel } from "./sessions";
+
 export type RunMode = "plan" | "audited" | "auto_audit" | "yolo";
 
 export type PermissionConfig = {
@@ -9,6 +11,9 @@ export type PermissionConfig = {
 };
 
 export type SessionConfig = {
+  new_session_provider_id?: string;
+  new_session_model?: string;
+  new_session_thinking_level?: ThinkingLevel;
   auto_title_enabled?: boolean;
   auto_title_provider_id?: string;
   auto_title_model?: string;

@@ -44,6 +44,22 @@ fn legacy_app_config_defaults_web_terminal_shell() {
     assert_eq!(config.terminal.shell, TerminalConfig::default().shell);
 }
 
+/// 【会话】【配置兼容】验证旧版配置会补齐新会话模型与思考等级默认值。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn legacy_session_config_defaults_new_session_preferences() {
+    let session: SessionConfig = serde_json::from_str(r#"{"auto_title_enabled":false}"#).unwrap();
+
+    assert!(session.new_session_provider_id.is_empty());
+    assert!(session.new_session_model.is_empty());
+    assert_eq!(session.new_session_thinking_level, "auto");
+}
+
 /// 验证旧版应用配置会补齐 Git 与 Source Control 默认值。
 ///
 /// 参数:
@@ -156,6 +172,8 @@ fn remove_active_provider_model_clears_removed_current_model() {
     let provider_id = config.providers[0].id.clone();
     config.providers[0].models = vec!["old-model".to_string(), "next-model".to_string()];
     config.providers[0].default_model = "old-model".to_string();
+    config.session.new_session_provider_id = provider_id.clone();
+    config.session.new_session_model = "old-model".to_string();
     config.providers[0]
         .model_context_chars
         .insert("old-model".to_string(), 8192);
@@ -180,6 +198,8 @@ fn remove_active_provider_model_clears_removed_current_model() {
         .model_context_chars
         .contains_key("old-model"));
     assert!(!config.providers[0].model_metadata.contains_key("old-model"));
+    assert!(config.session.new_session_provider_id.is_empty());
+    assert!(config.session.new_session_model.is_empty());
 }
 
 #[test]
@@ -301,6 +321,8 @@ fn remove_provider_clears_all_associated_model_references() {
     config.subagent.model = "subagent-model".to_string();
     config.context.compaction_provider_id = removed_id.clone();
     config.context.compaction_model = "compaction-model".to_string();
+    config.session.new_session_provider_id = removed_id.clone();
+    config.session.new_session_model = config.providers[0].default_model.clone();
 
     let removed = config.remove_provider(&removed_id).unwrap();
 
@@ -318,6 +340,8 @@ fn remove_provider_clears_all_associated_model_references() {
     assert!(config.subagent.model.is_empty());
     assert!(config.context.compaction_provider_id.is_empty());
     assert!(config.context.compaction_model.is_empty());
+    assert!(config.session.new_session_provider_id.is_empty());
+    assert!(config.session.new_session_model.is_empty());
     assert!(config.validate().is_ok());
 }
 
@@ -356,6 +380,83 @@ fn validate_rejects_invalid_temperature_and_timeout() {
     config.providers[0].timeout_seconds = 60;
     config.providers[0].anthropic_max_tokens = 0;
     assert!(config.validate().is_err());
+}
+
+/// 【会话】【配置校验】验证内置内核的新会话默认值必须指向已配置模型。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn new_session_defaults_require_configured_native_model() {
+    let mut config = AppConfig::default();
+    let provider_id = config.providers[0].id.clone();
+    let model = config.providers[0].default_model.clone();
+    config.session.new_session_provider_id = provider_id.clone();
+    config.session.new_session_model = model;
+
+    assert!(config.validate().is_ok());
+
+    config.session.new_session_model = "missing-model".to_string();
+    let error = config.validate().unwrap_err();
+    assert!(error.to_string().contains("new-session model is not configured"));
+}
+
+/// 【会话】【配置校验】验证外部内核使用 ACP 虚拟供应商保存新会话模型。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn new_session_defaults_accept_acp_model_for_external_engine() {
+    let mut config = AppConfig::default();
+    config.agent.engine = AgentEngineKind::Codex;
+    config.session.new_session_provider_id = "__acp__".to_string();
+    config.session.new_session_model = "gpt-5.2-codex".to_string();
+
+    assert!(config.validate().is_ok());
+
+    config.session.new_session_provider_id = config.providers[0].id.clone();
+    let error = config.validate().unwrap_err();
+    assert!(error.to_string().contains("must be __acp__"));
+}
+
+/// 【会话】【配置校验】验证新会话思考等级拒绝未知值。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn new_session_defaults_reject_invalid_thinking_level() {
+    let mut config = AppConfig::default();
+    config.session.new_session_thinking_level = "extreme".to_string();
+
+    let error = config.validate().unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("session.new_session_thinking_level is invalid"));
+}
+
+/// 【会话】【配置校验】验证新会话供应商与模型不能只配置其中一项。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn new_session_defaults_require_complete_model_pair() {
+    let mut config = AppConfig::default();
+    config.session.new_session_provider_id = config.providers[0].id.clone();
+
+    let error = config.validate().unwrap_err();
+    assert!(error.to_string().contains("must be provided together"));
 }
 
 #[test]
