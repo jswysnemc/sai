@@ -12,7 +12,7 @@ use super::agents::edit_agents;
 use super::gateways::edit_gateways;
 use super::input::read_key;
 use super::knowledge::edit_knowledge_base;
-use super::plugins::edit_plugins;
+use super::plugins::{edit_cli_tools, edit_web_search};
 use super::providers::{select_active_provider, ProviderBrowser};
 use super::settings::edit_settings;
 use super::ui::draw_menu;
@@ -74,7 +74,8 @@ fn run_main_menu(
         let options = [
             format!("{} ({active})", t("Active configuration", "激活配置")),
             t("Providers and models", "供应商和模型").to_string(),
-            t("Plugin configuration", "插件配置").to_string(),
+            t("Web search", "Web 搜索").to_string(),
+            t("CLI assistant tools", "CLI 助手工具").to_string(),
             t("Knowledge base", "知识库管理").to_string(),
             t("Gateway channels", "渠道接入").to_string(),
             t("Agent configuration", "Agent 配置").to_string(),
@@ -90,12 +91,13 @@ fn run_main_menu(
             KeyCode::Enter => match selected {
                 0 => select_active_provider(stdout, config)?,
                 1 => ProviderBrowser::new(config).run(stdout)?,
-                2 => edit_plugins(stdout, config)?,
-                3 => edit_knowledge_base(stdout, paths, config)?,
-                4 => edit_gateways(stdout, paths, config)?,
-                5 => edit_agents(stdout, config)?,
-                6 => edit_settings(stdout, config)?,
-                7 => {
+                2 => edit_web_search(stdout, config)?,
+                3 => edit_cli_tools(stdout, config)?,
+                4 => edit_knowledge_base(stdout, paths, config)?,
+                5 => edit_gateways(stdout, paths, config)?,
+                6 => edit_agents(stdout, config)?,
+                7 => edit_settings(stdout, config)?,
+                8 => {
                     config.save(paths)?;
                     return Ok(true);
                 }

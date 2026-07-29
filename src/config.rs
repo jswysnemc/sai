@@ -4,6 +4,8 @@ mod agents;
 mod app;
 mod app_prompts;
 mod app_validation;
+mod cli_tool_defaults;
+mod cli_tools;
 pub mod defaults;
 mod gateway_defaults;
 mod git;
@@ -20,6 +22,8 @@ mod session;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod web_search_tests;
 
 #[allow(unused_imports)]
 pub use agent_engine::{AcpEngineConfig, AgentEngineConfig, AgentEngineKind};
@@ -27,6 +31,7 @@ pub use agent_engine::{AcpEngineConfig, AgentEngineConfig, AgentEngineKind};
 pub use agent_presets::{ensure_surface_agent_defaults, seed_default_agent_profiles};
 #[allow(unused_imports)]
 pub use agents::*;
+pub use cli_tools::*;
 #[allow(unused_imports)]
 pub use git::*;
 #[allow(unused_imports)]

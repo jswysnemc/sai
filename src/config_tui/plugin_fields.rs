@@ -7,44 +7,19 @@ use super::form::{
     provider_model_choice_values, vision_provider_value, Field,
 };
 use super::plugins::{plugin_enabled, toggle_plugin};
+use super::web_search_fields::{apply_web_search_fields, web_search_fields};
 
-/// 构造指定插件的配置字段。
+/// 构造指定 CLI 助手工具或 Web 搜索的配置字段。
 ///
 /// 参数:
 /// - `config`: 当前应用配置
-/// - `index`: 插件索引
+/// - `index`: 历史兼容配置索引，0 表示 Web 搜索
 ///
 /// 返回:
-/// - 插件配置表单字段
+/// - 工具配置表单字段
 pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
     match index {
-        0 => vec![
-            Field::boolean(t("Enabled", "启用"), config.plugins.web.enabled),
-            Field::textarea(
-                "TinyFish API Keys",
-                config.plugins.web.tinyfish_api_keys.join("\n"),
-            )
-            .secret(),
-            Field::textarea(
-                "Tavily API Keys",
-                config.plugins.web.tavily_api_keys.join("\n"),
-            )
-            .secret(),
-            Field::textarea(
-                "Firecrawl API Keys",
-                config.plugins.web.firecrawl_api_keys.join("\n"),
-            )
-            .secret(),
-            Field::textarea(
-                "AnySearch API Keys",
-                config.plugins.web.anysearch_api_keys.join("\n"),
-            )
-            .secret(),
-            Field::new(
-                t("SearXNG URL", "SearXNG 地址"),
-                config.plugins.web.searxng_base_url.clone(),
-            ),
-        ],
+        0 => web_search_fields(config),
         1 => vec![
             Field::boolean(t("Enabled", "启用"), config.plugins.deep_research.enabled),
             Field::new(
@@ -487,6 +462,18 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
                 config.plugins.diagnostics.max_stderr_chars.to_string(),
             ),
         ],
+        16 => vec![
+            Field::boolean(t("Enabled", "启用"), config.plugins.exchange_rate.enabled),
+            Field::new(
+                t("API key", "API 密钥"),
+                config.plugins.exchange_rate.api_key.clone(),
+            )
+            .secret(),
+            Field::boolean(
+                t("Free fallback", "免费接口回退"),
+                config.plugins.exchange_rate.free_fallback_enabled,
+            ),
+        ],
         _ => vec![Field::boolean(
             t("Enabled", "启用"),
             plugin_enabled(config, index),
@@ -494,11 +481,11 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
     }
 }
 
-/// 将插件表单字段写回配置。
+/// 将 CLI 助手工具或 Web 搜索表单字段写回配置。
 ///
 /// 参数:
 /// - `config`: 当前应用配置
-/// - `index`: 插件索引
+/// - `index`: 历史兼容配置索引，0 表示 Web 搜索
 /// - `fields`: 表单字段
 ///
 /// 返回:
@@ -509,15 +496,7 @@ pub(super) fn apply_plugin_fields(
     fields: &[Field],
 ) -> Result<()> {
     match index {
-        0 => {
-            config.plugins.web.enabled = parse_bool_field(&fields[0].value)?;
-            config.plugins.web.tinyfish_api_keys = parse_key_list(&fields[1].value);
-            config.plugins.web.tavily_api_keys = parse_key_list(&fields[2].value);
-            config.plugins.web.firecrawl_api_keys = parse_key_list(&fields[3].value);
-            config.plugins.web.anysearch_api_keys = parse_key_list(&fields[4].value);
-            config.plugins.web.searxng_base_url =
-                fields[5].value.trim().trim_end_matches('/').to_string();
-        }
+        0 => apply_web_search_fields(config, fields)?,
         1 => {
             config.plugins.deep_research.enabled = parse_bool_field(&fields[0].value)?;
             config.plugins.deep_research.output_dir = fields[1].value.trim().to_string();
@@ -670,6 +649,12 @@ pub(super) fn apply_plugin_fields(
             config.plugins.diagnostics.command_timeout_seconds = fields[1].value.trim().parse()?;
             config.plugins.diagnostics.max_stdout_chars = fields[2].value.trim().parse()?;
             config.plugins.diagnostics.max_stderr_chars = fields[3].value.trim().parse()?;
+        }
+        16 => {
+            config.plugins.exchange_rate.enabled = parse_bool_field(&fields[0].value)?;
+            config.plugins.exchange_rate.api_key = fields[1].value.trim().to_string();
+            config.plugins.exchange_rate.free_fallback_enabled =
+                parse_bool_field(&fields[2].value)?;
         }
         _ => {
             let value = parse_bool_field(&fields[0].value)?;

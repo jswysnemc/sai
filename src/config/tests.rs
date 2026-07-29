@@ -401,7 +401,9 @@ fn new_session_defaults_require_configured_native_model() {
 
     config.session.new_session_model = "missing-model".to_string();
     let error = config.validate().unwrap_err();
-    assert!(error.to_string().contains("new-session model is not configured"));
+    assert!(error
+        .to_string()
+        .contains("new-session model is not configured"));
 }
 
 /// 【会话】【配置校验】验证外部内核使用 ACP 虚拟供应商保存新会话模型。

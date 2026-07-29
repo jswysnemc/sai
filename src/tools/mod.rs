@@ -4,6 +4,7 @@ mod ask_question;
 mod calculator;
 mod catalog;
 pub(crate) mod command;
+mod configurable_cli_tools;
 mod context;
 mod deep_diagnose;
 mod deep_research;
@@ -11,8 +12,6 @@ mod deepseek_status;
 mod default_tools;
 mod diagnostics;
 mod edit_file;
-mod write_file;
-mod str_replace;
 pub(crate) mod edit_patch;
 mod exchange_rate;
 mod fcitx_wiki;
@@ -33,6 +32,7 @@ mod protondb_query;
 mod registry;
 mod skill_management;
 mod skills;
+mod str_replace;
 mod subagent;
 pub(crate) mod subagent_event;
 mod subagent_feed;
@@ -49,13 +49,16 @@ mod vision;
 mod weather;
 mod web;
 mod web_images;
+mod write_file;
 mod xuanxue;
 
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
 pub(crate) use catalog::{mcp_tool_catalog, tool_catalog, ToolCatalogEntry};
 pub(crate) use context::tool_output_for_context;
-pub(crate) use progressive::{is_initial_tool, register_loader as register_progressive_loader, LOAD_NAME};
+pub(crate) use progressive::{
+    is_initial_tool, register_loader as register_progressive_loader, LOAD_NAME,
+};
 pub use registry::{empty_parameters, ToolPermission, ToolProgress, ToolRegistry, ToolSpec};
 pub(crate) use registry::{ToolModelAttachment, ToolOutput};
 pub(crate) use skill_management::{
@@ -210,19 +213,14 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     alarm::register(&mut registry, paths.clone());
     web::register_fetch(&mut registry);
     fcitx_wiki::register(&mut registry);
-    weather::register(&mut registry);
     protondb_query::register(&mut registry);
-    exchange_rate::register(&mut registry, config.plugins.exchange_rate.clone());
-    xuanxue::register(&mut registry);
+    configurable_cli_tools::register(&mut registry, config);
     if config.plugins.archlinux.enabled {
         archlinux::register(&mut registry);
     }
     if config.plugins.man.enabled {
         man::register(&mut registry);
     }
-    moegirl::register(&mut registry);
-    hash_codec::register(&mut registry);
-    calculator::register(&mut registry);
     deepseek_status::register(&mut registry);
     vision::register_print(&mut registry, config.clone());
     if config.plugins.memes.enabled {

@@ -1,5 +1,34 @@
 use super::*;
 
+/// 验证 Web 搜索表单完整保留供应商详细配置。
+#[test]
+fn web_search_fields_round_trip_provider_settings() {
+    let mut config = AppConfig::default();
+    config.plugins.web.default_provider = "tavily".to_string();
+    config.plugins.web.max_results = 8;
+    config.plugins.web.timeout_seconds = 45;
+    config.plugins.web.tavily_search_depth = "advanced".to_string();
+    config.plugins.web.tavily_include_answer = true;
+    config.plugins.web.searxng_base_url = "https://search.example.test".to_string();
+    config.plugins.web.searxng_safe_search = 2;
+
+    let fields = plugin_fields(&config, 0);
+    let mut updated = AppConfig::default();
+    apply_plugin_fields(&mut updated, 0, &fields).unwrap();
+
+    assert_eq!(fields.len(), 27);
+    assert_eq!(updated.plugins.web.default_provider, "tavily");
+    assert_eq!(updated.plugins.web.max_results, 8);
+    assert_eq!(updated.plugins.web.timeout_seconds, 45);
+    assert_eq!(updated.plugins.web.tavily_search_depth, "advanced");
+    assert!(updated.plugins.web.tavily_include_answer);
+    assert_eq!(
+        updated.plugins.web.searxng_base_url,
+        "https://search.example.test"
+    );
+    assert_eq!(updated.plugins.web.searxng_safe_search, 2);
+}
+
 /// 验证记忆表单完整保留近期新增字段。
 #[test]
 fn memory_fields_round_trip_recent_settings() {

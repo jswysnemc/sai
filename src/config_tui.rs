@@ -13,5 +13,6 @@ mod providers;
 mod session;
 mod settings;
 mod ui;
+mod web_search_fields;
 
 pub use session::run;

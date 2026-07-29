@@ -1,11 +1,10 @@
 use super::agents::SubagentConfig;
+use super::cli_tools::PluginsConfig;
 use super::git::{GitConfig, ScmConfig};
 use super::model::*;
-use super::paths::persona_scope_name;
 use super::permission::PermissionConfig;
 use super::session::SessionConfig;
 use crate::default_models::OPENCODE_PROVIDER_ID;
-use std::collections::HashMap;
 
 impl Default for AppConfig {
     fn default() -> Self {
@@ -65,237 +64,6 @@ impl Default for DisplayConfig {
             wait_show_model: default_true(),
             wait_show_thinking_level: default_true(),
             repl_transcript_row_cap: default_repl_transcript_row_cap(),
-        }
-    }
-}
-
-impl Default for PluginsConfig {
-    fn default() -> Self {
-        Self {
-            weather: PluginEnabledConfig::default(),
-            web: WebPluginConfig::default(),
-            web_images: WebImagesPluginConfig::default(),
-            deep_research: DeepResearchPluginConfig::default(),
-            deep_diagnose: DeepDiagnosePluginConfig::default(),
-            vision: VisionPluginConfig::default(),
-            exchange_rate: ExchangeRatePluginConfig::default(),
-            xuanxue: PluginEnabledConfig::default(),
-            image_generation: ImageGenerationPluginConfig::default(),
-            print_image: PrintImagePluginConfig::default(),
-            memes: MemesPluginConfig::default(),
-            knowledge_base: KnowledgeBasePluginConfig::default(),
-            archlinux: PluginEnabledConfig::default(),
-            man: PluginEnabledConfig::default(),
-            moegirl: PluginEnabledConfig::default(),
-            hash_codec: PluginEnabledConfig::default(),
-            calculator: CalculatorPluginConfig::default(),
-            package_advisor: PluginEnabledConfig::default(),
-            linux_game_compatibility: LinuxGameCompatibilityConfig::default(),
-            diagnostics: DiagnosticsPluginConfig::default(),
-            memory: MemoryConfig::default(),
-        }
-    }
-}
-
-impl Default for PluginEnabledConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_true(),
-        }
-    }
-}
-
-impl Default for LinuxGameCompatibilityConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_true(),
-            max_tool_steps: default_subagent_max_tool_steps(),
-        }
-    }
-}
-
-impl Default for WebPluginConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_true(),
-            tinyfish_api_keys: Vec::new(),
-            tavily_api_keys: Vec::new(),
-            firecrawl_api_keys: Vec::new(),
-            anysearch_api_keys: Vec::new(),
-            searxng_base_url: String::new(),
-        }
-    }
-}
-
-impl Default for WebImagesPluginConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_true(),
-            max_results: default_web_images_max_results(),
-            max_download_mb: default_web_images_max_download_mb(),
-            safe_search: default_true(),
-            vision_screening_enabled: default_true(),
-            auto_preview: default_true(),
-            preview_count: default_web_images_preview_count(),
-            timeout_seconds: default_web_images_timeout(),
-        }
-    }
-}
-
-impl Default for DeepResearchPluginConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_true(),
-            output_dir: default_deep_research_dir(),
-            thinking_depth: default_deep_research_depth(),
-            max_review_revisions: default_deep_research_max_review_revisions(),
-            max_tool_steps_per_round: default_deep_research_max_tool_steps(),
-            max_final_answer_chars: 0,
-            tool_call_timeout_seconds: default_deep_research_tool_timeout(),
-            show_progress: default_true(),
-        }
-    }
-}
-
-impl Default for DeepDiagnosePluginConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_true(),
-            thinking_depth: default_deep_research_depth(),
-            max_review_revisions: default_deep_research_max_review_revisions(),
-            max_tool_steps_per_round: default_deep_research_max_tool_steps(),
-            max_final_answer_chars: 0,
-            tool_call_timeout_seconds: default_deep_research_tool_timeout(),
-            max_tool_steps: default_subagent_max_tool_steps(),
-            show_progress: default_true(),
-        }
-    }
-}
-
-impl Default for VisionPluginConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_true(),
-            prefer_current_multimodal_model: default_true(),
-            vision_provider_id: String::new(),
-            vision_model: String::new(),
-            preview_with_chafa: default_true(),
-        }
-    }
-}
-
-impl Default for ExchangeRatePluginConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            api_key: String::new(),
-            free_fallback_enabled: default_true(),
-        }
-    }
-}
-
-impl Default for ImageGenerationPluginConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            provider_type: default_image_generation_provider_type(),
-            base_url: default_openai_images_base_url(),
-            api_keys: Vec::new(),
-            model: default_image_generation_model(),
-            default_aspect_ratio: default_image_generation_aspect_ratio(),
-            default_resolution: default_image_generation_resolution(),
-            output_dir: default_image_generation_output_dir(),
-            auto_print: default_true(),
-            timeout_seconds: default_image_generation_timeout(),
-        }
-    }
-}
-
-impl Default for PrintImagePluginConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_true(),
-            width_percent: default_print_image_width_percent(),
-            height_percent: default_print_image_height_percent(),
-        }
-    }
-}
-
-impl Default for MemesPluginConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_true(),
-            persona_libraries: HashMap::new(),
-            width_percent: default_memes_width_percent(),
-            height_percent: default_memes_height_percent(),
-            max_image_mb: default_memes_max_image_mb(),
-            allow_gif_animation: false,
-            auto_send_enabled: true,
-            auto_send_probability: default_memes_auto_send_probability(),
-            auto_send_min_confidence: default_memes_auto_send_min_confidence(),
-        }
-    }
-}
-
-impl MemesPluginConfig {
-    pub fn library_for_persona(&self, persona: &str) -> String {
-        if persona.trim().is_empty() {
-            return self
-                .persona_libraries
-                .get("default")
-                .cloned()
-                .unwrap_or_else(|| "sai".to_string());
-        }
-        let persona = persona_scope_name(persona);
-        self.persona_libraries
-            .get(&persona)
-            .cloned()
-            .unwrap_or(persona)
-    }
-}
-
-impl Default for KnowledgeBasePluginConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_true(),
-            data_dir: String::new(),
-            max_search_results: default_kb_max_search_results(),
-            snippet_context_chars: default_kb_snippet_context_chars(),
-            proximity_window_chars: default_kb_proximity_window_chars(),
-            max_read_lines: default_kb_max_read_lines(),
-            max_file_size_kb: default_kb_max_file_size_kb(),
-            allowed_extensions: default_kb_allowed_extensions(),
-            allowed_filenames: default_kb_allowed_filenames(),
-            upload_tool_enabled: default_true(),
-            embedding_enabled: false,
-            embedding_provider_id: String::new(),
-            embedding_model: String::new(),
-            semantic_chunk_chars: default_kb_semantic_chunk_chars(),
-            semantic_chunk_overlap: default_kb_semantic_chunk_overlap(),
-            semantic_top_k: default_kb_semantic_top_k(),
-            semantic_min_score: default_kb_semantic_min_score(),
-            keyword_strong_score_threshold: default_kb_keyword_strong_score_threshold(),
-            embedding_timeout_seconds: default_kb_embedding_timeout_seconds(),
-        }
-    }
-}
-
-impl Default for CalculatorPluginConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            backend: default_calculator_backend(),
-        }
-    }
-}
-
-impl Default for DiagnosticsPluginConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_true(),
-            command_timeout_seconds: default_diagnostics_timeout(),
-            max_stdout_chars: default_diagnostics_max_stdout_chars(),
-            max_stderr_chars: default_diagnostics_max_stderr_chars(),
         }
     }
 }
@@ -606,6 +374,51 @@ pub(super) fn default_memes_auto_send_probability() -> f32 {
 
 pub(super) fn default_memes_auto_send_min_confidence() -> f32 {
     0.8
+}
+
+/// 返回 Web 搜索默认供应商路由模式。
+pub(super) fn default_web_search_provider() -> String {
+    "auto".to_string()
+}
+
+/// 返回 Web 搜索默认结果数量。
+pub(super) fn default_web_search_max_results() -> usize {
+    5
+}
+
+/// 返回 Web 搜索默认请求超时秒数。
+pub(super) fn default_web_search_timeout() -> u64 {
+    20
+}
+
+/// 返回 TinyFish 官方默认接口地址。
+pub(super) fn default_tinyfish_base_url() -> String {
+    "https://api.search.tinyfish.ai".to_string()
+}
+
+/// 返回 Tavily 官方默认搜索接口地址。
+pub(super) fn default_tavily_base_url() -> String {
+    "https://api.tavily.com/search".to_string()
+}
+
+/// 返回 Tavily 默认搜索深度。
+pub(super) fn default_tavily_search_depth() -> String {
+    "basic".to_string()
+}
+
+/// 返回 Firecrawl 官方默认搜索接口地址。
+pub(super) fn default_firecrawl_base_url() -> String {
+    "https://api.firecrawl.dev/v2/search".to_string()
+}
+
+/// 返回 AnySearch 官方默认搜索接口地址。
+pub(super) fn default_anysearch_base_url() -> String {
+    "https://api.anysearch.com/v1/search".to_string()
+}
+
+/// 返回 SearXNG 默认语言模式。
+pub(super) fn default_searxng_language() -> String {
+    "auto".to_string()
 }
 
 pub(super) fn default_web_images_max_results() -> usize {

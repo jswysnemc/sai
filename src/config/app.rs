@@ -128,6 +128,8 @@ impl AppConfig {
         {
             self.active_provider = OPENCODE_PROVIDER_ID.to_string();
         }
+        // 旧配置可能存有不带协议前缀的搜索地址，补齐后再进入校验
+        self.plugins.web.normalize_endpoints();
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -254,6 +256,7 @@ impl AppConfig {
         self.validate_gateways()?;
         self.validate_new_session_defaults()?;
         self.validate_compaction_model()?;
+        self.plugins.web.validate()?;
         if self.plugins.print_image.width_percent == 0
             || self.plugins.print_image.width_percent > 100
         {

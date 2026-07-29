@@ -1,17 +1,37 @@
+mod fetch;
+mod providers;
+
 use super::{ToolRegistry, ToolSpec};
-use crate::config::WebPluginConfig;
+use crate::config::WebSearchConfig;
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
-use std::{env, time::Duration};
+use std::time::Duration;
 
-const MAX_RESPONSE_SIZE: usize = 5 * 1024 * 1024;
-const DEFAULT_FETCH_MAX_CHARS: usize = 24_000;
-const MAX_FETCH_CHARS: usize = 80_000;
+use fetch::web_fetch;
+use providers::{
+    search_anysearch, search_duckduckgo, search_firecrawl, search_searxng, search_tavily,
+    search_tinyfish,
+};
 
-pub fn register(registry: &mut ToolRegistry, config: WebPluginConfig) {
+/// 【Web 搜索】【工具注册】注册 Web 搜索工具。
+///
+/// 参数:
+/// - `registry`: 工具注册表
+/// - `config`: Web 搜索与供应商配置
+///
+/// 返回:
+/// - 无返回值
+pub fn register(registry: &mut ToolRegistry, config: WebSearchConfig) {
     register_search_tool(registry, "web_search", config.clone());
 }
 
+/// 【网页读取】【工具注册】注册已知地址网页读取工具。
+///
+/// 参数:
+/// - `registry`: 工具注册表
+///
+/// 返回:
+/// - 无返回值
 pub fn register_fetch(registry: &mut ToolRegistry) {
     registry.register(ToolSpec::new(
         "web_fetch",
@@ -31,16 +51,25 @@ pub fn register_fetch(registry: &mut ToolRegistry) {
     ));
 }
 
-fn register_search_tool(registry: &mut ToolRegistry, name: &'static str, config: WebPluginConfig) {
+/// 【Web 搜索】【工具注册】按指定名称注册 Web 搜索工具定义。
+///
+/// 参数:
+/// - `registry`: 工具注册表
+/// - `name`: 工具名称
+/// - `config`: Web 搜索与供应商配置
+///
+/// 返回:
+/// - 无返回值
+fn register_search_tool(registry: &mut ToolRegistry, name: &'static str, config: WebSearchConfig) {
     registry.register(ToolSpec::new(
         name,
-        "Search the web. Prefer configured TinyFish, Tavily, Firecrawl, or AnySearch API keys; fallback to SearXNG, then built-in DuckDuckGo HTML search when providers fail.",
+        "Search the web with the configured provider. Auto mode tries enabled providers in order and uses DuckDuckGo HTML as the final built-in fallback.",
         json!({
             "type": "object",
             "properties": {
                 "query": { "type": "string", "description": "Search query." },
-                "max_results": { "type": "integer", "description": "Maximum results, default 5." },
-                "provider": { "type": "string", "enum": ["auto", "tinyfish", "tavily", "firecrawl", "anysearch", "searxng", "script"], "description": "Search provider." },
+                "max_results": { "type": "integer", "description": "Maximum results. Uses the configured default when omitted." },
+                "provider": { "type": "string", "enum": ["auto", "tinyfish", "tavily", "firecrawl", "anysearch", "searxng", "duckduckgo"], "description": "Search provider. Uses the configured default when omitted." },
                 "location": { "type": "string", "description": "Optional country code for TinyFish geo-targeted results, such as US or GB." },
                 "language": { "type": "string", "description": "Optional language code for TinyFish result language, such as en or fr." }
             },
@@ -54,7 +83,15 @@ fn register_search_tool(registry: &mut ToolRegistry, name: &'static str, config:
     ));
 }
 
-async fn web_search(args: Value, config: WebPluginConfig) -> Result<String> {
+/// 【Web 搜索】【请求路由】根据工具参数和供应商配置执行 Web 搜索。
+///
+/// 参数:
+/// - `args`: 查询词、结果数量、供应商和可选地域参数
+/// - `config`: Web 搜索与供应商配置
+///
+/// 返回:
+/// - 首个成功供应商返回的 Markdown 搜索结果
+async fn web_search(args: Value, config: WebSearchConfig) -> Result<String> {
     let query = args
         .get("query")
         .and_then(Value::as_str)
@@ -66,39 +103,33 @@ async fn web_search(args: Value, config: WebPluginConfig) -> Result<String> {
     let max_results = args
         .get("max_results")
         .and_then(Value::as_u64)
-        .unwrap_or(5)
+        .unwrap_or(config.max_results as u64)
         .clamp(1, 10) as usize;
     let provider = args
         .get("provider")
         .and_then(Value::as_str)
-        .unwrap_or("auto");
+        .unwrap_or(&config.default_provider);
     let location = args
         .get("location")
         .and_then(Value::as_str)
-        .unwrap_or_default()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or(&config.tinyfish_default_location)
         .trim()
         .to_string();
     let language = args
         .get("language")
         .and_then(Value::as_str)
-        .unwrap_or_default()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or(&config.tinyfish_default_language)
         .trim()
         .to_string();
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(20))
+        .timeout(Duration::from_secs(config.timeout_seconds))
         .build()?;
-    let order: Vec<&str> = if provider == "auto" {
-        vec![
-            "tinyfish",
-            "tavily",
-            "firecrawl",
-            "anysearch",
-            "searxng",
-            "script",
-        ]
-    } else {
-        vec![provider]
-    };
+    let order = provider_order(&config, provider);
+    if order.is_empty() {
+        bail!("web search provider is disabled or unknown: {provider}");
+    }
     for item in order {
         let result = match item {
             "tinyfish" => {
@@ -107,22 +138,58 @@ async fn web_search(args: Value, config: WebPluginConfig) -> Result<String> {
                     query,
                     max_results,
                     &config.tinyfish_api_keys,
+                    &config.tinyfish_base_url,
                     &location,
                     &language,
                 )
                 .await
             }
-            "tavily" => search_tavily(&client, query, max_results, &config.tavily_api_keys).await,
+            "tavily" => {
+                search_tavily(
+                    &client,
+                    query,
+                    max_results,
+                    &config.tavily_api_keys,
+                    &config.tavily_base_url,
+                    &config.tavily_search_depth,
+                    config.tavily_include_answer,
+                    config.tavily_include_raw_content,
+                )
+                .await
+            }
             "firecrawl" => {
-                search_firecrawl(&client, query, max_results, &config.firecrawl_api_keys).await
+                search_firecrawl(
+                    &client,
+                    query,
+                    max_results,
+                    &config.firecrawl_api_keys,
+                    &config.firecrawl_base_url,
+                    config.firecrawl_only_main_content,
+                )
+                .await
             }
             "anysearch" => {
-                search_anysearch(&client, query, max_results, &config.anysearch_api_keys).await
+                search_anysearch(
+                    &client,
+                    query,
+                    max_results,
+                    &config.anysearch_api_keys,
+                    &config.anysearch_base_url,
+                )
+                .await
             }
             "searxng" => {
-                search_searxng(&client, query, max_results, &config.searxng_base_url).await
+                search_searxng(
+                    &client,
+                    query,
+                    max_results,
+                    &config.searxng_base_url,
+                    &config.searxng_language,
+                    config.searxng_safe_search,
+                )
+                .await
             }
-            "script" => search_duckduckgo(&client, query, max_results).await,
+            "duckduckgo" => search_duckduckgo(&client, query, max_results).await,
             _ => continue,
         };
         if let Ok(output) = result {
@@ -131,480 +198,83 @@ async fn web_search(args: Value, config: WebPluginConfig) -> Result<String> {
             }
         }
     }
-    bail!("no web search provider succeeded; API keys missing/failed, SearXNG unavailable, and built-in DuckDuckGo fallback returned no results")
+    bail!("no enabled web search provider succeeded")
 }
 
-/// 使用 TinyFish Search API 执行网页搜索。
+/// 【Web 搜索】【供应商路由】生成当前请求允许尝试的供应商顺序。
 ///
 /// 参数:
-/// - `client`: 复用的 HTTP 客户端
-/// - `query`: 搜索关键词
-/// - `max_results`: 最多返回结果数
-/// - `keys`: 配置中的 TinyFish API Key 列表
-/// - `location`: 可选国家代码
-/// - `language`: 可选语言代码
+/// - `config`: Web 搜索配置
+/// - `requested`: 请求指定供应商或 auto
 ///
 /// 返回:
-/// - Markdown 格式的搜索结果
-async fn search_tinyfish(
-    client: &reqwest::Client,
-    query: &str,
-    max_results: usize,
-    keys: &[String],
-    location: &str,
-    language: &str,
-) -> Result<String> {
-    let Some(key) = first_api_key(keys, "TINYFISH_API_KEY") else {
-        bail!("missing TinyFish API key")
-    };
-    let mut params = vec![("query", query)];
-    if !location.is_empty() {
-        params.push(("location", location));
-    }
-    if !language.is_empty() {
-        params.push(("language", language));
-    }
-    let data: Value = client
-        .get("https://api.search.tinyfish.ai")
-        .header("X-API-Key", key)
-        .query(&params)
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
-    let results = data
-        .get("results")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default()
-        .into_iter()
-        .take(max_results)
-        .collect::<Vec<_>>();
-    if results.is_empty() {
-        bail!("TinyFish returned no results")
-    }
-    Ok(format_search_results(query, "TinyFish", results))
-}
-
-/// 读取第一个可用 API Key，配置为空时可回退到环境变量。
-///
-/// 参数:
-/// - `keys`: 配置中的 API Key 列表
-/// - `fallback_env`: 回退环境变量名称
-///
-/// 返回:
-/// - 可用 API Key
-fn first_api_key(keys: &[String], fallback_env: &str) -> Option<String> {
-    keys.iter()
-        .map(|key| key.trim())
-        .filter_map(|key| {
-            if let Some(env_name) = key.strip_prefix("$env:") {
-                env::var(env_name.trim()).ok()
-            } else {
-                Some(key.to_string())
-            }
-        })
-        .map(|key| key.trim().to_string())
-        .find(|key| !key.is_empty())
-        .or_else(|| {
-            env::var(fallback_env)
-                .ok()
-                .map(|key| key.trim().to_string())
-        })
-        .filter(|key| !key.is_empty())
-}
-
-async fn search_tavily(
-    client: &reqwest::Client,
-    query: &str,
-    max_results: usize,
-    keys: &[String],
-) -> Result<String> {
-    let Some(key) = keys.iter().find(|key| !key.trim().is_empty()) else {
-        bail!("missing Tavily API key")
-    };
-    let payload = json!({"query": query, "max_results": max_results.min(20), "search_depth": "basic", "include_answer": false, "include_raw_content": "markdown"});
-    let data: Value = client
-        .post("https://api.tavily.com/search")
-        .bearer_auth(key.trim())
-        .json(&payload)
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
-    Ok(format_search_results(
-        query,
-        "Tavily",
-        data.get("results")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default(),
-    ))
-}
-
-async fn search_firecrawl(
-    client: &reqwest::Client,
-    query: &str,
-    max_results: usize,
-    keys: &[String],
-) -> Result<String> {
-    let Some(key) = keys.iter().find(|key| !key.trim().is_empty()) else {
-        bail!("missing Firecrawl API key")
-    };
-    let payload = json!({"query": query, "limit": max_results.min(20), "sources": [{"type":"web"}], "scrapeOptions": {"formats": [{"type":"markdown"}], "onlyMainContent": true}});
-    let data: Value = client
-        .post("https://api.firecrawl.dev/v2/search")
-        .bearer_auth(key.trim())
-        .json(&payload)
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
-    let raw = data
-        .get("data")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    Ok(format_search_results(query, "Firecrawl", raw))
-}
-
-async fn search_anysearch(
-    client: &reqwest::Client,
-    query: &str,
-    max_results: usize,
-    keys: &[String],
-) -> Result<String> {
-    let Some(key) = keys.iter().find(|key| !key.trim().is_empty()) else {
-        bail!("missing AnySearch API key")
-    };
-    let payload = json!({"query": query, "max_results": max_results.min(20)});
-    let data: Value = client
-        .post("https://api.anysearch.com/v1/search")
-        .bearer_auth(key.trim())
-        .json(&payload)
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
-    Ok(format_search_results(
-        query,
-        "AnySearch",
-        data.get("results")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default(),
-    ))
-}
-
-async fn search_searxng(
-    client: &reqwest::Client,
-    query: &str,
-    max_results: usize,
-    base_url: &str,
-) -> Result<String> {
-    let base_url = base_url.trim().trim_end_matches('/');
-    if base_url.is_empty() {
-        bail!("missing SearXNG base URL")
-    }
-    let url = format!(
-        "{base_url}/search?q={}&format=json&language=auto&safesearch=0",
-        urlencoding::encode(query)
-    );
-    let data: Value = client
-        .get(url)
-        .header("Accept", "application/json")
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
-    let results = data
-        .get("results")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default()
-        .into_iter()
-        .take(max_results)
-        .collect::<Vec<_>>();
-    if results.is_empty() {
-        bail!("SearXNG returned no results")
-    }
-    Ok(format_search_results(query, "SearXNG", results))
-}
-
-async fn search_duckduckgo(
-    client: &reqwest::Client,
-    query: &str,
-    max_results: usize,
-) -> Result<String> {
-    let url = format!(
-        "https://html.duckduckgo.com/html/?q={}",
-        urlencoding::encode(query)
-    );
-    let html = client
-        .get(url)
-        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36")
-        .send()
-        .await?
-        .error_for_status()?
-        .text()
-        .await?;
-    let results = parse_duckduckgo_html(&html, max_results);
-    if results.is_empty() {
-        bail!("DuckDuckGo returned no parseable results");
-    }
-    let mut lines = vec![
-        format!("## Search results for: {query}"),
-        "**Provider**: DuckDuckGo HTML fallback\n".to_string(),
+/// - 已启用供应商的固定顺序；旧版 script 标识映射到 DuckDuckGo
+fn provider_order(config: &WebSearchConfig, requested: &str) -> Vec<&'static str> {
+    const AUTO_ORDER: [&str; 6] = [
+        "tinyfish",
+        "tavily",
+        "firecrawl",
+        "anysearch",
+        "searxng",
+        "duckduckgo",
     ];
-    for (index, (title, url, snippet)) in results.into_iter().enumerate() {
-        lines.push(format!("### {}. {title}", index + 1));
-        lines.push(format!("**URL**: {url}"));
-        if !snippet.is_empty() {
-            lines.push(format!("**Snippet**: {snippet}"));
-        }
-        lines.push(String::new());
-    }
-    Ok(lines.join("\n"))
-}
-
-fn parse_duckduckgo_html(html: &str, max_results: usize) -> Vec<(String, String, String)> {
-    let mut results = Vec::new();
-    let mut rest = html;
-    while let Some(link_pos) = rest.find("result__a") {
-        rest = &rest[link_pos..];
-        let Some(href_pos) = rest.find("href=\"") else {
-            break;
-        };
-        let href_start = href_pos + "href=\"".len();
-        let Some(href_end) = rest[href_start..].find('"') else {
-            break;
-        };
-        let raw_url = html_unescape(&rest[href_start..href_start + href_end]);
-        let Some(tag_end) = rest[href_start + href_end..].find('>') else {
-            break;
-        };
-        let title_start = href_start + href_end + tag_end + 1;
-        let Some(title_end) = rest[title_start..].find("</a>") else {
-            break;
-        };
-        let title = clean_html_text(&rest[title_start..title_start + title_end]);
-        let snippet =
-            if let Some(snippet_pos) = rest[title_start + title_end..].find("result__snippet") {
-                let snippet_rest = &rest[title_start + title_end + snippet_pos..];
-                if let Some(open_end) = snippet_rest.find('>') {
-                    if let Some(close) = snippet_rest[open_end + 1..].find("</") {
-                        clean_html_text(&snippet_rest[open_end + 1..open_end + 1 + close])
-                    } else {
-                        String::new()
-                    }
-                } else {
-                    String::new()
-                }
-            } else {
-                String::new()
-            };
-        if !title.is_empty() && !raw_url.is_empty() {
-            results.push((title, raw_url, snippet));
-        }
-        if results.len() >= max_results {
-            break;
-        }
-        rest = &rest[title_start + title_end..];
-    }
-    results
-}
-
-fn clean_html_text(value: &str) -> String {
-    html_unescape(&html2text::from_read(value.as_bytes(), 120))
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn html_unescape(value: &str) -> String {
-    value
-        .replace("&amp;", "&")
-        .replace("&quot;", "\"")
-        .replace("&#x27;", "'")
-        .replace("&#39;", "'")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-}
-
-fn format_search_results(query: &str, provider: &str, results: Vec<Value>) -> String {
-    let mut lines = vec![
-        format!("## Search results for: {query}"),
-        format!("**Provider**: {provider}\n"),
-    ];
-    for (index, item) in results.into_iter().enumerate() {
-        let title = item
-            .get("title")
-            .or_else(|| item.pointer("/metadata/title"))
-            .and_then(Value::as_str)
-            .unwrap_or("Untitled");
-        let url = item
-            .get("url")
-            .or_else(|| item.pointer("/metadata/sourceURL"))
-            .or_else(|| item.pointer("/metadata/url"))
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        let snippet = item
-            .get("content")
-            .or_else(|| item.get("snippet"))
-            .or_else(|| item.get("description"))
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        let raw = item
-            .get("raw_content")
-            .or_else(|| item.get("markdown"))
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        lines.push(format!("### {}. {title}", index + 1));
-        if !url.is_empty() {
-            lines.push(format!("**URL**: {url}"));
-        }
-        if !snippet.is_empty() {
-            lines.push(format!("**Snippet**: {}", clip(snippet, 500)));
-        }
-        if !raw.is_empty() {
-            lines.push(format!("**Content**: {}", clip(raw, 800)));
-        }
-        lines.push(String::new());
-    }
-    lines.join("\n")
-}
-
-fn clip(value: &str, max_chars: usize) -> String {
-    if value.chars().count() <= max_chars {
-        value.to_string()
+    let requested = if requested == "script" {
+        "duckduckgo"
     } else {
-        format!("{}...", value.chars().take(max_chars).collect::<String>())
-    }
-}
-
-async fn web_fetch(args: Value) -> Result<String> {
-    let url = args
-        .get("url")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .trim();
-    if !url.starts_with("http://") && !url.starts_with("https://") {
-        bail!("URL must start with http:// or https://");
-    }
-    let format = args
-        .get("format")
-        .and_then(Value::as_str)
-        .unwrap_or("markdown");
-    let timeout = args
-        .get("timeout")
-        .and_then(Value::as_u64)
-        .unwrap_or(30)
-        .min(120);
-    let max_chars = args
-        .get("max_chars")
-        .and_then(Value::as_u64)
-        .map(|value| value.clamp(1, MAX_FETCH_CHARS as u64) as usize)
-        .unwrap_or(DEFAULT_FETCH_MAX_CHARS);
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(timeout))
-        .build()?;
-    let accept = match format {
-        "text" => "text/plain;q=1.0, text/markdown;q=0.9, text/html;q=0.8, */*;q=0.1",
-        "html" => "text/html;q=1.0, application/xhtml+xml;q=0.9, text/plain;q=0.8, */*;q=0.1",
-        _ => "text/markdown;q=1.0, text/x-markdown;q=0.9, text/plain;q=0.8, text/html;q=0.7, */*;q=0.1",
+        requested
     };
-    let response = client
-        .get(url)
-        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36")
-        .header("Accept", accept)
-        .header("Accept-Language", "en-US,en;q=0.9")
-        .send()
-        .await?
-        .error_for_status()?;
-    if response.content_length().unwrap_or(0) > MAX_RESPONSE_SIZE as u64 {
-        bail!("response too large (exceeds 5MB limit)");
+    if requested == "auto" {
+        return AUTO_ORDER
+            .into_iter()
+            .filter(|provider| config.provider_enabled(provider))
+            .collect();
     }
-    let content_type = response
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or_default()
-        .to_string();
-    let bytes = response.bytes().await?;
-    if bytes.len() > MAX_RESPONSE_SIZE {
-        bail!("response too large (exceeds 5MB limit)");
-    }
-    let content = String::from_utf8_lossy(&bytes).to_string();
-    let output = if content_type.contains("text/html") {
-        match format {
-            "html" => content,
-            "text" => html2text::from_read(content.as_bytes(), 120),
-            _ => html2md::parse_html(&content),
-        }
-    } else {
-        content
-    };
-    Ok(clip_fetch_output(&output, max_chars))
-}
-
-fn clip_fetch_output(value: &str, max_chars: usize) -> String {
-    let total = value.chars().count();
-    if total <= max_chars {
-        return value.to_string();
-    }
-    let clipped = value.chars().take(max_chars).collect::<String>();
-    format!("{clipped}\n\n[content truncated from {total} chars to {max_chars} chars]")
+    AUTO_ORDER
+        .into_iter()
+        .find(|provider| *provider == requested && config.provider_enabled(provider))
+        .into_iter()
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// 【Web 搜索】【供应商顺序】验证自动模式跳过已停用供应商。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
     #[test]
-    fn clips_fetch_output_with_notice() {
-        let output = clip_fetch_output("abcdef", 3);
-
-        assert_eq!(output, "abc\n\n[content truncated from 6 chars to 3 chars]");
-    }
-
-    #[test]
-    fn keeps_short_fetch_output_unchanged() {
-        assert_eq!(clip_fetch_output("abc", 3), "abc");
-    }
-
-    #[test]
-    fn first_api_key_prefers_configured_key() {
-        let keys = vec![" configured-key ".to_string()];
+    fn auto_provider_order_skips_disabled_providers() {
+        let mut config = WebSearchConfig::default();
+        config.tinyfish_enabled = false;
+        config.firecrawl_enabled = false;
+        config.anysearch_enabled = false;
+        config.searxng_base_url = "https://search.example.test".to_string();
 
         assert_eq!(
-            first_api_key(&keys, "SAI_TINYFISH_UNUSED_KEY").as_deref(),
-            Some("configured-key")
+            provider_order(&config, "auto"),
+            vec!["tavily", "searxng", "duckduckgo"]
         );
     }
 
+    /// 【Web 搜索】【供应商顺序】验证显式选择已停用供应商时不执行请求。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
     #[test]
-    fn first_api_key_reads_env_reference() {
-        std::env::set_var("SAI_TINYFISH_ENV_REF_KEY", " env-ref-key ");
-        let keys = vec!["$env:SAI_TINYFISH_ENV_REF_KEY".to_string()];
+    fn explicit_provider_requires_enabled_provider() {
+        let mut config = WebSearchConfig::default();
+        config.tavily_enabled = false;
 
-        assert_eq!(
-            first_api_key(&keys, "SAI_TINYFISH_UNUSED_KEY").as_deref(),
-            Some("env-ref-key")
-        );
-    }
-
-    #[test]
-    fn first_api_key_falls_back_to_env() {
-        std::env::set_var("SAI_TINYFISH_FALLBACK_KEY", " fallback-key ");
-
-        assert_eq!(
-            first_api_key(&[], "SAI_TINYFISH_FALLBACK_KEY").as_deref(),
-            Some("fallback-key")
-        );
+        assert!(provider_order(&config, "tavily").is_empty());
+        assert_eq!(provider_order(&config, "duckduckgo"), vec!["duckduckgo"]);
+        assert_eq!(provider_order(&config, "script"), vec!["duckduckgo"]);
     }
 }
