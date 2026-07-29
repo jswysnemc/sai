@@ -280,8 +280,10 @@ mod tests {
         let codex: AgentEngineConfig = serde_json::from_str(r#"{"engine":"codex"}"#).unwrap();
         let (program, args) = codex.resolved_command().unwrap();
         assert_eq!(program, "node");
+        // 路径由 PathBuf::join 拼接，Windows 下分隔符为反斜杠，比较前先归一化
         assert!(args
             .iter()
+            .map(|arg| arg.replace('\\', "/"))
             .any(|arg| arg.contains("codex-agent-acp/src/index.js")));
     }
 
