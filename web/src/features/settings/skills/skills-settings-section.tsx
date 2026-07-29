@@ -3,12 +3,18 @@ import { useEffect, useState } from "react";
 import { api } from "../../../api/client";
 import { toDisplayError } from "../../../api/api-error";
 import type { ManagedSkill } from "../../../api/skill-contracts";
-import { SkillEditor } from "./skill-editor";
-import { SkillListPanel } from "./skill-list-panel";
 import type { AppConfig } from "../../../api/contracts";
 import { SkillBehaviorSettings } from "../runtime/skill-behavior-settings";
 import { useI18n } from "../../i18n/use-i18n";
+import { SkillDetailView } from "./skill-detail-view";
+import { SkillGrid } from "./skill-grid";
 import { SkillsSettingsTabs, type SkillsSettingsView } from "./skills-settings-tabs";
+import {
+  INITIAL_SKILL_LIBRARY_FILTERS,
+  normalizeSkillLibraryPage,
+  type SkillLibraryFilters,
+  type SkillLibraryPage
+} from "./skill-view-state";
 import "./skills-settings.css";
 
 const SKILL_TEMPLATE = `---
@@ -36,20 +42,21 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const list = useQuery({ queryKey: ["managed-skills"], queryFn: api.skills.managedList });
-  const [selectedId, setSelectedId] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [page, setPage] = useState<SkillLibraryPage>({ kind: "grid" });
+  const [filters, setFilters] = useState<SkillLibraryFilters>(INITIAL_SKILL_LIBRARY_FILTERS);
   const [directoryName, setDirectoryName] = useState("");
   const [content, setContent] = useState("");
   const [dirty, setDirty] = useState(false);
   const [view, setView] = useState<SkillsSettingsView>("library");
 
   const skills = list.data?.skills ?? [];
+  const selectedId = page.kind === "detail" ? page.skillId : "";
+  const creating = page.kind === "create";
+
   useEffect(() => {
-    if (creating) return;
-    if (!skills.some((skill) => skill.id === selectedId)) {
-      setSelectedId(skills[0]?.id ?? "");
-    }
-  }, [creating, selectedId, skills]);
+    if (!list.isFetched || list.isFetching) return;
+    setPage((current) => normalizeSkillLibraryPage(current, skills));
+  }, [list.isFetched, list.isFetching, skills]);
 
   const document = useQuery({
     queryKey: ["managed-skill", selectedId],
@@ -60,17 +67,32 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
   useEffect(() => {
     if (!document.data || dirty || creating) return;
     setContent(document.data.content);
-  }, [creating, dirty, document.data]);
+  }, [creating, dirty, document.data, selectedId]);
+
+  /**
+   * 将新增或更新后的 Skill 合并到技能库查询缓存。
+   *
+   * @param skill 后端返回的最新 Skill
+   * @returns 无返回值
+   */
+  const cacheManagedSkill = (skill: ManagedSkill) => {
+    queryClient.setQueryData<{ skills: ManagedSkill[] }>(["managed-skills"], (current) => {
+      if (!current) return { skills: [skill] };
+      const index = current.skills.findIndex((item) => item.id === skill.id);
+      if (index < 0) return { skills: [...current.skills, skill] };
+      return { skills: current.skills.map((item) => item.id === skill.id ? skill : item) };
+    });
+  };
 
   const save = useMutation({
     mutationFn: () => creating
       ? api.skills.create(directoryName.trim(), content)
       : api.skills.update(selectedId, content),
     onSuccess: async (saved) => {
-      setCreating(false);
       setDirty(false);
-      setSelectedId(saved.skill.id);
+      setPage({ kind: "detail", skillId: saved.skill.id });
       setContent(saved.content);
+      cacheManagedSkill(saved.skill);
       queryClient.setQueryData(["managed-skill", saved.skill.id], saved);
       await queryClient.invalidateQueries({ queryKey: ["managed-skills"] });
     }
@@ -79,6 +101,7 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
   const toggle = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => api.skills.setEnabled(id, enabled),
     onSuccess: async (saved) => {
+      cacheManagedSkill(saved.skill);
       queryClient.setQueryData(["managed-skill", saved.skill.id], saved);
       await queryClient.invalidateQueries({ queryKey: ["managed-skills"] });
     }
@@ -86,28 +109,46 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
 
   /** 进入新建状态并填充最小有效模板。 */
   const startCreating = () => {
-    setCreating(true);
-    setSelectedId("");
+    setPage({ kind: "create" });
     setDirectoryName("");
     setContent(SKILL_TEMPLATE);
     setDirty(true);
     save.reset();
+    toggle.reset();
   };
 
-  /** 选择已有 Skill，并放弃当前未保存的新建草稿。 */
+  /**
+   * 打开已有 Skill 的详情设置界面。
+   *
+   * @param id Skill 唯一标识
+   * @returns 无返回值
+   */
   const selectSkill = (id: string) => {
-    setCreating(false);
-    setSelectedId(id);
+    setPage({ kind: "detail", skillId: id });
+    setContent("");
     setDirty(false);
     save.reset();
+    toggle.reset();
+  };
+
+  /** 返回技能库网格并清理当前编辑状态。 */
+  const returnToLibrary = () => {
+    setPage({ kind: "grid" });
+    setContent("");
+    setDirty(false);
+    save.reset();
+    toggle.reset();
   };
 
   const selectedSkill: ManagedSkill | null = creating
     ? null
     : (document.data?.skill ?? skills.find((skill) => skill.id === selectedId) ?? null);
-  const requestError = list.error ?? document.error ?? save.error ?? toggle.error;
-  const error = requestError
-    ? toDisplayError(requestError, "Skills management error", "Skills 管理错误").message
+  const listError = list.error
+    ? toDisplayError(list.error, "Skills scan error", "Skills 扫描错误").message
+    : null;
+  const editorRequestError = document.error ?? save.error ?? toggle.error;
+  const editorError = editorRequestError
+    ? toDisplayError(editorRequestError, "Skills management error", "Skills 管理错误").message
     : null;
 
   return (
@@ -126,26 +167,33 @@ export function SkillsSettingsSection({ config, onConfigChange }: SkillsSettings
         </div>
       ) : list.isLoading ? (
         <div id="skills-library-panel" className="skills-library-loading" role="tabpanel" aria-label={t("Scanning Skills", "正在扫描 Skills")}>
-          <span /><span /><span /><span />
+          <span /><span /><span /><span /><span /><span />
         </div>
-      ) : (
-        <div id="skills-library-panel" className="skills-settings-layout" role="tabpanel">
-          <SkillListPanel
+      ) : page.kind === "grid" ? (
+        <div id="skills-library-panel" role="tabpanel">
+          <SkillGrid
             skills={skills}
-            selectedId={selectedId}
+            filters={filters}
             scanning={list.isFetching}
-            onSelect={selectSkill}
+            error={listError}
+            onFiltersChange={setFilters}
+            onOpen={selectSkill}
             onAdd={startCreating}
             onScan={() => void list.refetch()}
           />
-          <SkillEditor
+        </div>
+      ) : (
+        <div id="skills-library-panel" role="tabpanel">
+          <SkillDetailView
             skill={selectedSkill}
             content={content}
             directoryName={directoryName}
             creating={creating}
             dirty={dirty}
             saving={save.isPending}
-            error={error}
+            loading={!creating && document.isLoading}
+            error={editorError}
+            onBack={returnToLibrary}
             onDirectoryNameChange={(value) => { setDirectoryName(value); setDirty(true); }}
             onContentChange={(value) => { setContent(value); setDirty(true); save.reset(); }}
             onEnabledChange={(enabled) => selectedSkill && toggle.mutate({ id: selectedSkill.id, enabled })}
