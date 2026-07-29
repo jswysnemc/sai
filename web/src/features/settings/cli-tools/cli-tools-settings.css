@@ -1,0 +1,127 @@
+.cli-tools-layout {
+  grid-template-columns: minmax(16rem, 18.5rem) minmax(0, 1fr);
+}
+
+.cli-tool-filter {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3xs);
+  margin-bottom: var(--space-sm);
+  padding: var(--space-3xs);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--paper-deep);
+}
+
+.cli-tool-filter .ui-button {
+  min-width: 0;
+  min-height: 1.875rem;
+  height: 1.875rem;
+  padding: 0 var(--space-xs);
+  border-color: transparent;
+  background: transparent;
+}
+
+.cli-tool-filter .ui-button.active {
+  border-color: var(--line);
+  background: var(--paper-raised);
+  color: var(--ink);
+  box-shadow: var(--elevation-1);
+}
+
+.cli-tool-id {
+  max-width: 18rem;
+  padding: var(--space-2xs) var(--space-sm);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+  font: 400 var(--text-xs) var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cli-tool-config-editor {
+  display: grid;
+  gap: var(--space-2xl);
+  min-width: 0;
+}
+
+.cli-tool-enable-row {
+  background: color-mix(in srgb, var(--paper-deep) 62%, transparent);
+}
+
+.cli-tool-config-groups {
+  display: grid;
+  gap: var(--space-3xl);
+  min-width: 0;
+  transition: opacity var(--transition-base);
+}
+
+.cli-tool-config-editor.is-disabled .cli-tool-config-groups {
+  opacity: 0.68;
+}
+
+.cli-tool-config-group {
+  display: grid;
+  gap: var(--space-lg);
+  min-width: 0;
+}
+
+.cli-tool-config-group + .cli-tool-config-group {
+  padding-top: var(--space-xl);
+  border-top: 1px solid var(--line);
+}
+
+.cli-tool-config-group-head {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+.cli-tool-config-group-head h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.cli-tool-config-group-head p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.cli-tool-empty-options {
+  margin-top: 0;
+  border: 1px dashed var(--line);
+}
+
+@media (max-width: 75rem) {
+  .cli-tools-layout {
+    grid-template-columns: minmax(15rem, 17rem) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 60rem) {
+  .cli-tools-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 48rem) {
+  .cli-tool-id {
+    max-width: 100%;
+  }
+
+  .cli-tool-config-groups {
+    gap: var(--space-2xl);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cli-tool-config-groups {
+    transition: none;
+  }
+}

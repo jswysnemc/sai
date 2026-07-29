@@ -7,10 +7,11 @@ import {
   GitBranch,
   KeyRound,
   Palette,
-  Plug,
+  Search,
   Server,
   SlidersHorizontal,
   Sparkles,
+  Wrench,
   Webhook
 } from "lucide-react";
 import type {
@@ -89,15 +90,26 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     searchKeys: ["theme", "language", "locale", "appearance", "主题", "语言", "配色"]
   },
   {
-    id: "plugins",
+    id: "cli-tools",
     group: "integrations",
     kind: "app-config",
-    labelEn: "Plugins",
-    labelZh: "插件",
-    descriptionEn: "Search, vision, knowledge, and memory",
-    descriptionZh: "搜索、视觉、知识库和记忆",
-    icon: Plug,
-    searchKeys: ["plugin", "search", "vision", "knowledge", "插件"]
+    labelEn: "CLI assistant tools",
+    labelZh: "CLI 助手工具",
+    descriptionEn: "Optional tools exposed to CLI assistants",
+    descriptionZh: "配置 CLI 助手可使用的可选工具",
+    icon: Wrench,
+    searchKeys: ["cli", "assistant", "tool", "optional", "plugin", "助手", "工具", "可选工具", "插件"]
+  },
+  {
+    id: "web-search",
+    group: "integrations",
+    kind: "app-config",
+    labelEn: "Web search",
+    labelZh: "Web 搜索",
+    descriptionEn: "Provider credentials, endpoints, and search behavior",
+    descriptionZh: "搜索供应商、凭据、服务地址与检索行为",
+    icon: Search,
+    searchKeys: ["web", "search", "provider", "tinyfish", "tavily", "firecrawl", "anysearch", "searxng", "网页", "搜索", "供应商"]
   },
   {
     id: "skills",
@@ -197,6 +209,8 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
  */
 export function resolveSettingsSectionId(value: string | undefined | null): SettingsSectionId {
   if (!value) return DEFAULT_SETTINGS_SECTION;
+  // 1. 兼容旧版插件设置地址，并统一迁移到 CLI 助手工具语义
+  if (value === "plugins") return "cli-tools";
   const match = SETTINGS_SECTIONS.find((item) => item.id === value);
   return match?.id ?? DEFAULT_SETTINGS_SECTION;
 }

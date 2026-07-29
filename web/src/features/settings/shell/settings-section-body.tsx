@@ -4,7 +4,8 @@ import { AppearanceSettingsSection } from "../appearance-settings-section";
 import { GatewaySettingsSection } from "../gateway-settings-section";
 import { GitSettingsPanel } from "../git/git-settings-panel";
 import { ProviderSettingsSection } from "../provider-settings-section";
-import { PluginSettingsSection } from "../plugin-settings-section";
+import { CliToolsSettingsSection } from "../cli-tools/cli-tools-settings-section";
+import { WebSearchSettingsSection } from "../web-search/web-search-settings-section";
 import { RuntimeSettingsSection } from "../runtime-settings-section";
 import { MemorySettingsSection } from "../memory-settings-section";
 import { HooksSettingsSection } from "../hooks-settings-section";
@@ -69,10 +70,19 @@ export function SettingsSectionBody({
           onConfigChange={settings.updateConfig}
         />
       );
-    case "plugins":
+    case "cli-tools":
       return (
-        <PluginSettingsSection
+        <CliToolsSettingsSection
           config={settings.config!}
+          secretSentinel={settings.secretSentinel}
+          onConfigChange={settings.updateConfig}
+        />
+      );
+    case "web-search":
+      return (
+        <WebSearchSettingsSection
+          config={settings.config!}
+          secretSentinel={settings.secretSentinel}
           onConfigChange={settings.updateConfig}
         />
       );
@@ -153,7 +163,8 @@ function sectionNeedsAppConfig(section: SettingsSectionId): boolean {
   return (
     section === "providers"
     || section === "agents"
-    || section === "plugins"
+    || section === "cli-tools"
+    || section === "web-search"
     || section === "runtime"
     || section === "git"
     || section === "hooks"

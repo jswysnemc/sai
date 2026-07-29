@@ -23,6 +23,7 @@ describe("settings registry", () => {
   it("resolves route params with fallback", () => {
     expect(resolveSettingsSectionId(undefined)).toBe(DEFAULT_SETTINGS_SECTION);
     expect(resolveSettingsSectionId("mcp")).toBe("mcp");
+    expect(resolveSettingsSectionId("plugins")).toBe("cli-tools");
     expect(resolveSettingsSectionId("not-a-section")).toBe(DEFAULT_SETTINGS_SECTION);
   });
 
@@ -31,6 +32,8 @@ describe("settings registry", () => {
     expect(byMcp.some((item) => item.id === "mcp")).toBe(true);
     const byZh = filterSettingsSections("用量");
     expect(byZh.some((item) => item.id === "usage")).toBe(true);
+    const bySearchProvider = filterSettingsSections("tavily");
+    expect(bySearchProvider.some((item) => item.id === "web-search")).toBe(true);
   });
 
   it("groups sections and skips empty groups when filtered", () => {

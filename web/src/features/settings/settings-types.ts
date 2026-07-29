@@ -5,7 +5,8 @@ import type { LucideIcon } from "lucide-react";
 export type SettingsSectionId =
   | "providers"
   | "agents"
-  | "plugins"
+  | "cli-tools"
+  | "web-search"
   | "runtime"
   | "skills"
   | "git"

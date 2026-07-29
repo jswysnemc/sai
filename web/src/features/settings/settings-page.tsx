@@ -44,8 +44,8 @@ export function SettingsPage() {
             {meta
               ? t(meta.descriptionEn, meta.descriptionZh)
               : t(
-                  "Manage models, plugins, agents, tools, gateways, and interface preferences.",
-                  "管理模型、插件、Agent、工具、网关和界面偏好。"
+                  "Manage models, CLI assistant tools, agents, gateways, and interface preferences.",
+                  "管理模型、CLI 助手工具、Agent、网关和界面偏好。"
                 )}
           </p>
           <div className="settings-topbar-actions">
