@@ -39,7 +39,8 @@ fn renders_compact_session_summary_with_key_fields() {
 
     let output = render_session_summary(&snapshot);
 
-    assert!(output.starts_with("▸ "));
+    assert!(!output.starts_with("▸"));
+    assert!(output.starts_with("Context") || output.starts_with("上下文"));
     assert!(output.contains("Context") || output.contains("上下文"));
     assert!(output.contains("8.0k"));
     assert!(output.contains("1000k"));

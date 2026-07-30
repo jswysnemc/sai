@@ -25,8 +25,9 @@ pub fn print_session_summary(snapshot: &SessionSnapshot) -> Result<()> {
 /// - 上下文占用与本轮耗时摘要（不含会话 ID）
 pub fn render_session_summary(snapshot: &SessionSnapshot) -> String {
     observe_non_display_fields(snapshot);
+    // 摘要作为普通正文对齐到视觉引导线内侧，不再自带行首引导符号
     let mut output = format!(
-        "▸ {}: {} / {} {} ({:.1}%)",
+        "{}: {} / {} {} ({:.1}%)",
         t("Context", "上下文"),
         format_k(snapshot.context_prompt_tokens),
         format_k(snapshot.context_window_tokens),
