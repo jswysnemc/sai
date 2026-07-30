@@ -197,11 +197,15 @@ impl ReplRuntime {
                 .has_running_subagents()
                 .then_some(SUBAGENT_REFRESH_INTERVAL)
         };
-        match (reflow_wait, subagent_wait) {
-            (Some(left), Some(right)) => Some(left.min(right)),
-            (Some(wait), None) | (None, Some(wait)) => Some(wait),
-            (None, None) => None,
-        }
+        // 子智能体视图的扫光按 live 节拍唤醒，与主 agent 动效保持同一帧率
+        let animation_wait = self
+            .transcript
+            .viewing_running_subagent()
+            .then_some(LIVE_REFRESH_INTERVAL);
+        [reflow_wait, subagent_wait, animation_wait]
+            .into_iter()
+            .flatten()
+            .min()
     }
 
     /// 重放已经到期的 resize 请求。
@@ -523,7 +527,12 @@ impl ReplRuntime {
     pub(super) fn process_idle_tick(&mut self) -> Result<bool> {
         let reflowed = self.maybe_reflow_due(false)?;
         let subagents = self.tick_subagents()?;
-        Ok(reflowed || subagents)
+        // 停留在运行中的子智能体视图时，空闲期也要驱动 Working 扫光
+        if self.transcript.viewing_running_subagent() && self.next_live_refresh.is_none() {
+            self.next_live_refresh = Some(Instant::now());
+        }
+        let animated = self.tick_live()?;
+        Ok(reflowed || subagents || animated)
     }
 
     /// 记录终端尺寸变化并安排 resize reflow。

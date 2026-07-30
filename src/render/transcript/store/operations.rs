@@ -690,11 +690,24 @@ impl TranscriptStore {
             .as_ref()
             .is_some_and(|tail| tail.kind == ChatStreamKind::Reasoning && !tail.source.is_empty());
         let has_work_status = self.work_status.is_some();
-        if !has_reasoning && !has_work_status {
+        // 子智能体视图在主 agent 空闲时仍需推进帧，否则 Working 扫光会冻结成静态图
+        if !has_reasoning && !has_work_status && !self.viewing_running_subagent() {
             return false;
         }
         self.live_animation_frame = self.live_animation_frame.wrapping_add(1);
         true
+    }
+
+    /// 判断当前是否停留在仍在运行的子智能体视图。
+    ///
+    /// 返回:
+    /// - 子智能体视图且该子智能体运行中时返回 true
+    pub(crate) fn viewing_running_subagent(&self) -> bool {
+        let TranscriptView::Subagent { id, .. } = &self.view else {
+            return false;
+        };
+        crate::tools::subagent_state::subagent_snapshot(id)
+            .is_ok_and(|snapshot| snapshot.status == "running")
     }
 
     /// 判断 transcript 中是否有仍在更新的后台子智能体。

@@ -110,3 +110,40 @@ fn work_status_hidden_when_live_reasoning_exists() {
     assert!(!joined.contains(WorkStatus::Working.localized_label()));
     assert!(joined.contains("Thinking") || joined.contains("思考"));
 }
+
+/// 【终端】【子智能体动效】验证主 agent 空闲时子智能体视图仍推进扫光帧。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn subagent_view_animates_while_main_agent_is_idle() {
+    let (subagent, _cancel) = crate::tools::subagent_state::create_subagent(
+        "检查项目".to_string(),
+        "explore".to_string(),
+        3,
+    );
+    let mut store = TranscriptStore::new(100);
+    store.push_tool_call("subagent".to_string(), r#"{"description":"检查项目"}"#.to_string());
+    store.push_tool_result(
+        "subagent".to_string(),
+        true,
+        format!(
+            r#"{{"subagent":{{"id":"{}","status":"running"}}}}"#,
+            subagent.id
+        ),
+    );
+
+    // 主 agent 空闲：既无 work_status 也无 reasoning live tail
+    assert!(!store.viewing_running_subagent());
+    assert!(!store.advance_live_animation());
+
+    assert!(store.enter_subagent_view(0), "子智能体视图应能进入");
+    assert!(store.viewing_running_subagent());
+    assert!(
+        store.advance_live_animation(),
+        "运行中的子智能体视图必须持续推进动画帧"
+    );
+}
