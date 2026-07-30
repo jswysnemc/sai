@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <defs>
-    <linearGradient id="sai-tile" x1="4" y1="4" x2="28" y2="30" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#5b8f80"/>
-      <stop offset="100%" stop-color="#3a7264"/>
-    </linearGradient>
-  </defs>
-  <rect x="1" y="1" width="30" height="30" rx="8.5" fill="url(#sai-tile)"/>
-  <path d="M22.5 8.8 H13.2 a3.6 3.6 0 0 0 0 7.2 H19 a3.6 3.6 0 0 1 0 7.2 H9.5" fill="none" stroke="#f7fbf9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="24.9" y="7.3" width="3" height="3" rx="0.9" fill="#f7fbf9" opacity="0.95"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <rect width="32" height="32" fill="#3a7264"/>
+  <g fill="#f7fbf9">
+    <rect x="4" y="6" width="16" height="4"/>
+    <rect x="4" y="10" width="4" height="4"/>
+    <rect x="4" y="14" width="16" height="4"/>
+    <rect x="16" y="18" width="4" height="4"/>
+    <rect x="4" y="22" width="16" height="4"/>
+    <rect x="24" y="18" width="4" height="8"/>
+  </g>
 </svg>

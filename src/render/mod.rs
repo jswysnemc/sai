@@ -1,6 +1,7 @@
 mod asset_block;
 pub(crate) mod activity_animation;
 mod background_command_event;
+pub(crate) mod brand_logo;
 mod cli_command_preview;
 mod code_block;
 mod command_output;
