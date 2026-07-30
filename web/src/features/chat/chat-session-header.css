@@ -77,15 +77,20 @@
   max-width: 16rem;
 }
 
-.chat-header-menu,
+.chat-header-menu {
+  display: none;
+}
+
 .chat-header-panel {
+  /* 弹出菜单相对本容器定位，因此定位上下文与显示状态解耦 */
+  position: relative;
   display: none;
 }
 
 .chat-header-panel-menu {
-  position: fixed;
-  top: 3.75rem;
-  right: var(--space-md);
+  position: absolute;
+  top: calc(100% + var(--space-2xs));
+  right: 0;
   display: grid;
   gap: var(--space-3xs);
   min-width: 9.25rem;
@@ -180,9 +185,11 @@
   }
 
   .chat-header-panel {
-    position: relative;
-    display: block;
-    align-self: center;
+    /* 容器高度会被左侧两行标题撑开，用 grid 居中让按钮跟随行高对齐 */
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    align-self: stretch;
   }
 }
 
