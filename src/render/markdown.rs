@@ -344,9 +344,9 @@ fn render_markdown_line_with_math_mode(line: &str, math_mode: InlineMathMode) ->
         );
     }
     if let Some((depth, rest)) = parse_blockquote(trimmed) {
-        // 引用条：左侧绿色实心竖条（嵌套层级叠加）+ dim 正文；
+        // 引用条：左侧绿色细竖条（嵌套层级叠加）+ dim 正文；
         // 行内样式的 reset 会中断 dim，重置后补回保持整行统一
-        let bars = "▌".repeat(depth);
+        let bars = "▏".repeat(depth);
         let body = render_inline_for_mode(rest, math_mode)
             .replace(RESET, &format!("{RESET}\x1b[2m"));
         return format!("{indent}\x1b[32m{bars}\x1b[0m \x1b[2m{body}\x1b[0m");

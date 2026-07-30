@@ -119,7 +119,7 @@ fn blockquote_is_visually_distinct() {
     let mut renderer = MarkdownStreamRenderer::new();
     let output = renderer.push(">> quoted\n");
     // 嵌套引用：绿色实心竖条按层级叠加，正文 dim
-    assert!(output.contains("\x1b[32m▌▌\x1b[0m"));
+    assert!(output.contains("\x1b[32m▏▏\x1b[0m"));
     assert!(output.contains("\x1b[2mquoted"));
     assert!(!output.contains("| "));
     assert!(!output.contains("48;5;236"));
@@ -129,7 +129,7 @@ fn blockquote_is_visually_distinct() {
 fn blockquote_keeps_dim_after_inline_styles() {
     let mut renderer = MarkdownStreamRenderer::new();
     let output = renderer.push("> plain **bold** tail\n");
-    assert!(output.contains("\x1b[32m▌\x1b[0m"));
+    assert!(output.contains("\x1b[32m▏\x1b[0m"));
     // 行内加粗的 reset 之后补回 dim，尾部文本保持引用观感
     assert!(output.contains("\x1b[0m\x1b[2m"));
     assert!(output.contains("tail"));
