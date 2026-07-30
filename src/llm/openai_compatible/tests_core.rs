@@ -25,6 +25,7 @@
             anthropic_max_tokens: 4096,
             thinking_level: "auto".to_string(),
             thinking_format: "auto".to_string(),
+            preserve_thinking: false,
             extra_body: String::new(),
             extra_headers: std::collections::HashMap::new(),
             user_agent: String::new(),

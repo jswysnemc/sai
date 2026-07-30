@@ -197,6 +197,13 @@ pub struct ProviderConfig {
         skip_serializing_if = "is_auto_thinking_format"
     )]
     pub thinking_format: String,
+    /// 是否在多轮对话中回传历史思考内容（Moonshot 的 Preserved Thinking）。
+    ///
+    /// kimi-k2.7-code 等模型强制开启该行为，多轮请求必须原样带回历史
+    /// `reasoning_content`，否则服务端报错；kimi-k2.6 通过 `thinking.keep`
+    /// 显式开启。默认关闭，避免给不支持的供应商发出多余字段。
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub preserve_thinking: bool,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub extra_body: String,
     /// 附加到每次模型请求的自定义 HTTP 头（不含 Authorization）。

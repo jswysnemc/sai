@@ -240,6 +240,7 @@ export function ProviderSettingsSection({
     { value: "reasoning", label: "reasoning" },
     { value: "anthropic-thinking", label: "anthropic-thinking" },
     { value: "deepseek-thinking", label: "deepseek-thinking" },
+    { value: "moonshot-thinking", label: "moonshot-thinking" },
     { value: "string", label: "string" },
     { value: "object", label: "object" },
     { value: "disabled", label: t("Disabled", "停用") }
@@ -318,6 +319,20 @@ export function ProviderSettingsSection({
           <label className="settings-field"><span>Temperature</span><input type="number" min="0" max="2" step="0.1" value={provider.temperature ?? 0.7} onChange={(event) => onProviderChange(selectedIndex, { temperature: Number(event.target.value) })} /><small>{t("Model sampling temperature", "模型采样温度")}</small></label>
           <div className="settings-field"><span>{t("Thinking level", "思考等级")}</span><Select value={provider.thinking_level ?? "auto"} options={THINKING_OPTIONS} onChange={(value) => onProviderChange(selectedIndex, { thinking_level: value })} ariaLabel={t("Thinking level", "思考等级")} /><small>{t("Default reasoning intensity for the provider", "供应商默认推理强度")}</small></div>
           <div className="settings-field"><span>{t("Thinking format", "思考格式")}</span><Select value={provider.thinking_format ?? "auto"} options={thinkingFormatOptions} onChange={(value) => onProviderChange(selectedIndex, { thinking_format: value })} ariaLabel={t("Thinking format", "思考格式")} /><small>{t("Reasoning field in the response", "响应中的思考字段")}</small></div>
+          <label className="settings-toggle-field">
+            <span>
+              <strong>{t("Preserve thinking", "回传历史思考")}</strong>
+              <small>{t(
+                "Send previous reasoning_content back in multi-turn requests; required by models such as kimi-k2.7-code.",
+                "多轮请求回传历史 reasoning_content；kimi-k2.7-code 一类模型要求开启。"
+              )}</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={provider.preserve_thinking === true}
+              onChange={(event) => onProviderChange(selectedIndex, { preserve_thinking: event.target.checked })}
+            />
+          </label>
           {claudeSimulation && (
             <label className="settings-field">
               <span>{t("Claude max output", "Claude 最大输出")}</span>

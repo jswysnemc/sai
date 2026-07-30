@@ -181,6 +181,7 @@ impl AppConfig {
                 | "string"
                 | "object"
                 | "deepseek-thinking"
+                | "moonshot-thinking"
                 | "openai-chat-reasoning-effort"
                 | "reasoning"
                 | "anthropic-thinking"

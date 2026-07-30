@@ -54,6 +54,7 @@ fn apply_thinking_options(body: &mut Value, provider: &ProviderConfig, protocol:
         "type-object" => apply_type_thinking(body, level),
         "chat-auto" => apply_chat_auto_thinking(body, level),
         "deepseek-thinking" => apply_deepseek_thinking(body, level),
+        "moonshot-thinking" => apply_moonshot_thinking(body, level, provider.preserve_thinking),
         "openai-chat-reasoning-effort" => {
             if level != "none" {
                 body["reasoning_effort"] = json!(reasoning_effort(level));
@@ -89,6 +90,7 @@ fn effective_format(provider: &ProviderConfig, protocol: ThinkingProtocol) -> &'
             "object" => "object",
             "type-object" | "type" => "type-object",
             "deepseek-thinking" => "deepseek-thinking",
+            "moonshot-thinking" => "moonshot-thinking",
             "openai-chat-reasoning-effort" => "openai-chat-reasoning-effort",
             "reasoning" => "reasoning",
             "anthropic-thinking" => "anthropic-thinking",
@@ -249,6 +251,50 @@ fn apply_chat_auto_thinking(body: &mut Value, level: &str) {
     }
     body["thinking"] = json!({ "type": "enabled" });
     body["reasoning_effort"] = json!(reasoning_effort(level));
+}
+
+/// 写入 Moonshot（Kimi）OpenAI 兼容思考参数。
+///
+/// Kimi 的思考等级只接受 low / high / max 三档，其余等级必须先折叠，
+/// 否则服务端拒绝请求。多轮回传历史思考需要 `thinking.keep = "all"`，
+/// kimi-k2.7-code 一类模型强制要求该行为。
+///
+/// 参数:
+/// - `body`: 待修改的请求体
+/// - `level`: 思考等级
+/// - `preserve`: 是否开启 Preserved Thinking
+///
+/// 返回:
+/// - 无
+fn apply_moonshot_thinking(body: &mut Value, level: &str, preserve: bool) {
+    if level == "none" {
+        body["thinking"] = json!({ "type": "disabled" });
+        if let Some(object) = body.as_object_mut() {
+            object.remove("reasoning_effort");
+        }
+        return;
+    }
+    body["thinking"]["type"] = json!("enabled");
+    if preserve {
+        body["thinking"]["keep"] = json!("all");
+    }
+    body["reasoning_effort"] = json!(moonshot_effort(level));
+}
+
+/// 映射为 Moonshot 支持的 reasoning_effort。
+///
+/// 参数:
+/// - `level`: 思考等级
+///
+/// 返回:
+/// - low / high / max 三档之一
+fn moonshot_effort(level: &str) -> &'static str {
+    match level {
+        "low" => "low",
+        "max" | "xhigh" => "max",
+        // medium 与 high 都落到 high：Kimi 不提供中间档
+        _ => "high",
+    }
 }
 
 /// 写入 DeepSeek OpenAI 兼容思考参数。
@@ -458,6 +504,87 @@ mod tests {
 
         assert_eq!(body["reasoning"]["effort"], json!("high"));
         assert_eq!(body["reasoning"]["summary"], json!("auto"), "summary 不应被覆盖");
+    }
+
+    /// 【协议】【Moonshot】验证等级折叠到 low/high/max 三档。
+    ///
+    /// Kimi 只接受这三档，发送 medium/xhigh 会被服务端拒绝。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn moonshot_folds_levels_into_three_tiers() {
+        let mut provider = ProviderConfig::default_openai();
+        provider.thinking_format = "moonshot-thinking".to_string();
+
+        for (level, expected) in [
+            ("low", "low"),
+            ("medium", "high"),
+            ("high", "high"),
+            ("xhigh", "max"),
+            ("max", "max"),
+        ] {
+            provider.thinking_level = level.to_string();
+            let body =
+                apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat)
+                    .unwrap();
+            assert_eq!(
+                body["reasoning_effort"],
+                json!(expected),
+                "{level} 应折叠为 {expected}"
+            );
+            assert_eq!(body["thinking"]["type"], json!("enabled"));
+        }
+    }
+
+    /// 【协议】【Moonshot】验证 Preserved Thinking 只在开启时写出。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn moonshot_keeps_history_only_when_enabled() {
+        let mut provider = ProviderConfig::default_openai();
+        provider.thinking_format = "moonshot-thinking".to_string();
+        provider.thinking_level = "high".to_string();
+
+        let without =
+            apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat).unwrap();
+        assert!(
+            without["thinking"].get("keep").is_none(),
+            "未开启时不应发送 keep"
+        );
+
+        provider.preserve_thinking = true;
+        let with =
+            apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat).unwrap();
+        assert_eq!(with["thinking"]["keep"], json!("all"));
+    }
+
+    /// 【协议】【Moonshot】验证关闭思考时移除等级字段。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn moonshot_disables_thinking_without_effort() {
+        let mut provider = ProviderConfig::default_openai();
+        provider.thinking_format = "moonshot-thinking".to_string();
+        provider.thinking_level = "none".to_string();
+        provider.preserve_thinking = true;
+
+        let body =
+            apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat).unwrap();
+
+        assert_eq!(body["thinking"], json!({ "type": "disabled" }));
+        assert!(body.get("reasoning_effort").is_none());
     }
 
     #[test]

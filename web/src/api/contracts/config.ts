@@ -10,6 +10,8 @@ export type ProviderConfig = {
   default_model?: string;
   thinking_level?: string;
   thinking_format?: string;
+  /** 多轮回传历史思考内容（Moonshot Preserved Thinking） */
+  preserve_thinking?: boolean;
   timeout_seconds?: number;
   temperature?: number;
   anthropic_max_tokens?: number;
