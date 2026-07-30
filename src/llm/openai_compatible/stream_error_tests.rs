@@ -48,4 +48,36 @@ mod stream_error_tests {
         );
         assert!(chat_stream_error_message("[DONE]").is_none());
     }
+
+    /// 【协议】【思考回传】验证只有开启的供应商才携带历史思考。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn preserved_thinking_is_stripped_unless_enabled() {
+        use super::apply_preserved_thinking;
+        use crate::llm::ChatMessage;
+
+        let history = vec![
+            ChatMessage::plain("user".to_string(), "question".to_string()),
+            ChatMessage::plain("assistant".to_string(), "answer".to_string())
+                .with_reasoning(Some("considered options".to_string())),
+        ];
+
+        let stripped = apply_preserved_thinking(history.clone(), false);
+        assert!(
+            stripped.iter().all(|message| message.reasoning_content.is_none()),
+            "未开启时不应发送历史思考"
+        );
+
+        let kept = apply_preserved_thinking(history, true);
+        assert_eq!(
+            kept[1].reasoning_content.as_deref(),
+            Some("considered options")
+        );
+    }
+
 }

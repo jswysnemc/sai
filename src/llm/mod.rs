@@ -21,6 +21,12 @@ pub struct ChatMessage {
     pub tool_call_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
+    /// 上一轮的思考内容；仅在供应商要求回传历史思考时序列化。
+    ///
+    /// Moonshot 的 Preserved Thinking 要求多轮请求原样带回历史
+    /// `reasoning_content`，否则 kimi-k2.7-code 一类模型会报错。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,6 +85,7 @@ impl ChatMessage {
             content: Some(ChatContent::Text(content.into())),
             tool_call_id: None,
             tool_calls: None,
+            reasoning_content: None,
         }
     }
 
@@ -88,7 +95,20 @@ impl ChatMessage {
             content: Some(ChatContent::Text(content.into())),
             tool_call_id: None,
             tool_calls,
+            reasoning_content: None,
         }
+    }
+
+    /// 附加上一轮的思考内容。
+    ///
+    /// 参数:
+    /// - `reasoning`: 历史思考文本；空值表示该轮没有思考
+    ///
+    /// 返回:
+    /// - 已附加思考内容的消息
+    pub fn with_reasoning(mut self, reasoning: Option<String>) -> Self {
+        self.reasoning_content = reasoning.filter(|text| !text.trim().is_empty());
+        self
     }
 
     pub fn tool(tool_call_id: impl Into<String>, content: impl Into<String>) -> Self {
@@ -97,6 +117,7 @@ impl ChatMessage {
             content: Some(ChatContent::Text(content.into())),
             tool_call_id: Some(tool_call_id.into()),
             tool_calls: None,
+            reasoning_content: None,
         }
     }
 
@@ -106,6 +127,7 @@ impl ChatMessage {
             content: Some(ChatContent::Text(content.into())),
             tool_call_id: None,
             tool_calls: None,
+            reasoning_content: None,
         }
     }
 
@@ -134,6 +156,7 @@ impl ChatMessage {
             content: Some(ChatContent::Parts(parts)),
             tool_call_id: None,
             tool_calls: None,
+            reasoning_content: None,
         }
     }
 }

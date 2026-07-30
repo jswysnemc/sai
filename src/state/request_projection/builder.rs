@@ -244,7 +244,11 @@ fn entries_to_history_messages(entries: Vec<StoredConversationEntry>) -> Vec<Cha
     entries
         .into_iter()
         .filter(|entry| entry.role == "user" || entry.role == "assistant")
-        .map(|entry| ChatMessage::plain(entry.role, entry.content))
+        .map(|entry| {
+            // 历史思考随消息一并带出；是否真正发给供应商由请求组装阶段按开关决定
+            let reasoning = entry.reasoning.clone();
+            ChatMessage::plain(entry.role, entry.content).with_reasoning(reasoning)
+        })
         .collect()
 }
 
@@ -394,6 +398,61 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(sources, [("image_1", image_url.chars().count())]);
+    }
+
+    /// 【投影】【思考回传】验证历史思考随消息带出，供请求层按开关决定是否发送。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn history_messages_carry_previous_reasoning() {
+        let entries = vec![
+            StoredConversationEntry {
+                timestamp: "1".to_string(),
+                role: "user".to_string(),
+                content: "question".to_string(),
+                reasoning: None,
+            },
+            StoredConversationEntry {
+                timestamp: "2".to_string(),
+                role: "assistant".to_string(),
+                content: "answer".to_string(),
+                reasoning: Some("weighed two options".to_string()),
+            },
+        ];
+
+        let messages = entries_to_history_messages(entries);
+
+        assert_eq!(messages.len(), 2);
+        assert!(messages[0].reasoning_content.is_none(), "用户消息没有思考");
+        assert_eq!(
+            messages[1].reasoning_content.as_deref(),
+            Some("weighed two options")
+        );
+    }
+
+    /// 【投影】【思考回传】验证空白思考不会占位。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn blank_reasoning_is_dropped() {
+        let entries = vec![StoredConversationEntry {
+            timestamp: "1".to_string(),
+            role: "assistant".to_string(),
+            content: "answer".to_string(),
+            reasoning: Some("   ".to_string()),
+        }];
+
+        let messages = entries_to_history_messages(entries);
+
+        assert!(messages[0].reasoning_content.is_none());
     }
 
     #[test]

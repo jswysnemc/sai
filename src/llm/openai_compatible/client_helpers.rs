@@ -368,3 +368,27 @@ fn prepare_anthropic_tools(
         _ => tools,
     }
 }
+
+/// 【协议】【思考回传】按供应商开关决定是否携带历史思考。
+///
+/// 只有声明支持 Preserved Thinking 的供应商才接受消息里的 `reasoning_content`；
+/// 其余供应商收到未知字段可能直接报错，因此默认剥离。
+///
+/// 参数:
+/// - `messages`: 待发送的消息序列
+/// - `preserve`: 供应商是否要求回传历史思考
+///
+/// 返回:
+/// - 已按开关处理的消息序列
+fn apply_preserved_thinking(messages: Vec<ChatMessage>, preserve: bool) -> Vec<ChatMessage> {
+    if preserve {
+        return messages;
+    }
+    messages
+        .into_iter()
+        .map(|message| ChatMessage {
+            reasoning_content: None,
+            ..message
+        })
+        .collect()
+}

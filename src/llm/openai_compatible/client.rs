@@ -192,6 +192,7 @@ impl OpenAiCompatibleClient {
                 bail!("OpenAI Responses protocol is not supported by this provider");
             }
         }
+        let messages = apply_preserved_thinking(messages, self.provider.preserve_thinking);
         let request = ChatRequest {
             model: self.provider.default_model.clone(),
             messages,
