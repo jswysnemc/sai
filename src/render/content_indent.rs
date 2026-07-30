@@ -23,12 +23,15 @@ pub(crate) fn align_to_guide_column(text: &str) -> String {
     if matches!(first_visible, Some('●' | '•')) && leading_spaces == 0 {
         return text.to_string();
     }
+    // diff 块内三类行（上下文、新增、删除）经 renderer 输出时结构已一致
+    // （`行号 标记  正文`，上下文行的标记为空格），因此必须统一补同一宽度。
+    // 按前导空格数推断层级会把上下文行的空格标记误判为额外缩进，使其正文
+    // 相对增删行右移一列
     if text.contains("\x1b[K") {
-        let raw_indent = text.bytes().take_while(|byte| *byte == b' ').count();
-        let indent = if raw_indent == 0 {
-            DIFF_BLOCK_INSET
-        } else {
+        let indent = if has_diff_block_indent(text) {
             CONTENT_LEFT_INDENT
+        } else {
+            DIFF_BLOCK_INSET
         };
         return format!("{}{text}", " ".repeat(indent));
     }
@@ -41,6 +44,29 @@ pub(crate) fn align_to_guide_column(text: &str) -> String {
         _ => 0,
     };
     format!("{}{text}", " ".repeat(indent))
+}
+
+/// 【终端】【diff 对齐】判断 diff 行是否已带块内缩进。
+///
+/// 块缩进由 `indent_diff_for_transcript` 补在行首（样式序列之前），
+/// 而 CLI 路径的裸 diff 行没有该缩进。只统计原始前导空格即可区分两者：
+/// 增删行的行号填充位于样式序列之后，不会计入。
+///
+/// 参数:
+/// - `text`: 已完成样式渲染的 diff 行
+///
+/// 返回:
+/// - 已带块缩进时返回 true
+fn has_diff_block_indent(text: &str) -> bool {
+    // 块缩进补在样式序列之前，因此只统计首个样式序列之前的空格；
+    // 上下文行没有样式前缀，其行首空格同时含块缩进与行号填充，
+    // 故以是否达到块缩进宽度为准即可区分 CLI 裸行与 transcript 行
+    let prefix_end = text.find('\x1b').unwrap_or(text.len());
+    text[..prefix_end]
+        .bytes()
+        .take_while(|byte| *byte == b' ')
+        .count()
+        >= DIFF_NESTED_INDENT
 }
 
 /// 【终端】【响应式引导】按当前终端实际可用列数对齐视觉引导区。
@@ -396,6 +422,125 @@ mod tests {
         assert_eq!(indent_diff_for_cli("a\nb"), "   a\n   b");
     }
 
+    /// 【终端】【diff 对齐】验证同一 diff 块内三类行的正文落在同一列。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn diff_lines_share_one_content_column() {
+        // 变更落在第 19 行附近，使行号为 2 位而列宽为 3，暴露填充空格位置差异
+        let mut body = (1..=22)
+            .map(|number| format!("line{number}"))
+            .collect::<Vec<_>>();
+        body[18] = "  \"npm:pi-markdown-preview\"".to_string();
+        let rendered = render_transcript_diff(
+            &body.join("\n"),
+            "@@\n line17\n line18\n-  \"npm:pi-markdown-preview\"\n+  \"npm:pi-markdown-preview\",\n+  \"npm:pi-readseek\"\n line20\n line21",
+        );
+
+        let columns = diff_body_columns(&rendered);
+        assert!(columns.len() >= 5, "样例应同时包含上下文行与增删行");
+        assert!(
+            columns.windows(2).all(|pair| pair[0] == pair[1]),
+            "diff 块内所有行的正文必须落在同一列: {columns:?}"
+        );
+    }
+
+    /// 【终端】【diff 对齐】验证行号位数跨越十位时正文列不漂移。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn diff_content_column_is_stable_across_line_number_widths() {
+        // 上下文覆盖第 9 到第 11 行，行号同时出现 1 位与 2 位
+        let body = (1..=14)
+            .map(|number| format!("line{number}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let rendered = render_transcript_diff(
+            &body,
+            "@@\n line8\n line9\n-line10\n+changed10\n line11\n line12",
+        );
+
+        let columns = diff_body_columns(&rendered);
+        assert!(columns.len() >= 5, "样例应跨越行号位数变化");
+        assert!(
+            columns.windows(2).all(|pair| pair[0] == pair[1]),
+            "行号位数变化不应改变正文列: {columns:?}"
+        );
+    }
+
+    /// 按 transcript 路径渲染一次 diff。
+    ///
+    /// 参数:
+    /// - `original`: 变更前的文件内容
+    /// - `hunk`: patch hunk 文本
+    ///
+    /// 返回:
+    /// - 已补齐块缩进的 diff 文本
+    fn render_transcript_diff(original: &str, hunk: &str) -> String {
+        let temp = tempfile::tempdir().expect("临时目录");
+        let path = temp.path().join("settings.json");
+        std::fs::write(&path, format!("{original}\n")).expect("写入样例文件");
+        let arguments = serde_json::json!({
+            "patch": format!(
+                "*** Begin Patch\n*** Update File: {}\n{hunk}\n*** End Patch",
+                path.display()
+            )
+        })
+        .to_string();
+        crate::render::edit_diff::render_edit_file_diff_for_transcript(&arguments)
+            .expect("diff 应能渲染")
+    }
+
+    /// 提取 diff 正文行经引导对齐后的首内容列。
+    ///
+    /// 参数:
+    /// - `rendered`: 渲染完成的 diff 文本块
+    ///
+    /// 返回:
+    /// - 每个正文行的首内容列，跳过标题行
+    fn diff_body_columns(rendered: &str) -> Vec<usize> {
+        rendered
+            .lines()
+            .filter(|line| line.contains("\x1b[K"))
+            .map(|line| first_content_column(&align_to_guide_column(line)))
+            .collect()
+    }
+
+    /// 计算行首到首个可见非空格字符的显示列数。
+    ///
+    /// 参数:
+    /// - `text`: 带 ANSI 样式的终端行
+    ///
+    /// 返回:
+    /// - 首个可见非空格字符所在列
+    fn first_content_column(text: &str) -> usize {
+        let mut column = 0usize;
+        let mut chars = text.chars().peekable();
+        while let Some(ch) = chars.next() {
+            if ch == '\x1b' {
+                for next in chars.by_ref() {
+                    if ('@'..='~').contains(&next) {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if ch != ' ' {
+                return column;
+            }
+            column += 1;
+        }
+        column
+    }
+
     /// 【终端】【响应式引导测试】验证窄终端压缩间隔或移除符号后不吞正文。
     ///
     /// 参数:
@@ -485,3 +630,4 @@ mod tests {
         assert!(at_line_start);
     }
 }
+

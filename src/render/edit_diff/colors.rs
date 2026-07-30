@@ -30,6 +30,10 @@ impl Default for DiffPalette {
 
 /// 给 diff 上下文行添加样式。
 ///
+/// 行首以一个空样式序列开头、行尾附加 `EL`，使上下文行与增删行的 ANSI
+/// 前缀结构一致。否则代码高亮器会把行号右对齐的填充空格留在样式序列之前，
+/// 而增删行的同一批空格位于背景序列之后，两者在引导对齐时相差一列。
+///
 /// 参数:
 /// - `path`: 文件路径
 /// - `line`: diff 行文本
@@ -37,7 +41,10 @@ impl Default for DiffPalette {
 /// 返回:
 /// - 带 ANSI 样式的上下文行
 pub(crate) fn style_context_line(path: &Path, line: &str) -> String {
-    highlight_code_line(language_from_path(path), line)
+    format!(
+        "\x1b[m{}\x1b[K",
+        highlight_code_line(language_from_path(path), line)
+    )
 }
 
 /// 给 diff 删除行添加样式。
@@ -179,11 +186,14 @@ mod tests {
         assert!(output.ends_with("\x1b[0m") || output.contains("\x1b[K\x1b[0m"));
     }
 
+    /// 上下文行不设背景色，但保留与增删行一致的 ANSI 前后缀结构。
     #[test]
     fn context_lines_keep_terminal_default_background() {
         let output = style_context_line(Path::new("hello.rs"), "  1    fn main() {}");
 
         assert!(!output.contains("\x1b[48;5;"));
-        assert!(!output.contains("\x1b[K"));
+        // 前缀与行尾序列用于和增删行对齐，不引入任何颜色
+        assert!(output.starts_with("\x1b[m"));
+        assert!(output.ends_with("\x1b[K"));
     }
 }
