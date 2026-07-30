@@ -32,13 +32,17 @@ describe("AgentEngineSettings", () => {
     expect(html).not.toContain("停用");
   });
 
-  /// 外部内核配置应提供标准 ACP 配置入口，不再硬编码禁用能力。
-  it("shows ACP config options for an external engine", () => {
+  /// 外部内核设置页只保留连接类配置，运行参数已移到输入区。
+  it("keeps only connection settings for an external engine", () => {
     const html = render({ engine: "codex" });
 
-    expect(html).toContain("ACP 模型");
-    expect(html).toContain("ACP 权限模式");
+    expect(html).toContain("ACP 认证方式");
+    expect(html).toContain("附加目录");
     expect(html).toContain('data-agent-engine-brand="codex"');
+    // 模型、思考等级与权限模式改由输入区调整，不再挤占设置页
+    expect(html).not.toContain("ACP 模型");
+    expect(html).not.toContain("ACP 权限模式");
+    expect(html).not.toContain("ACP 思考等级");
     expect(html).not.toContain("上下文压缩");
   });
 

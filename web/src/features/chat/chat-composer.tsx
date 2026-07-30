@@ -16,6 +16,7 @@ import { WorkspaceSwitcher } from "../workspaces/workspace-switcher";
 import { SystemUsage } from "../usage/system-usage";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
+import { AcpRuntimeControls } from "./acp-runtime/acp-runtime-controls";
 import { EngineConnectionBadge } from "./engine-connection/engine-connection-badge";
 import { useRuntimeActivity } from "../runtime-activity/use-runtime-activity";
 import { createRunModeOptions } from "../permission/run-mode-options";
@@ -173,6 +174,9 @@ export function ChatComposer(props: ChatComposerProps) {
                   onModelSelect={props.onModelSelect}
                   onThinkingLevelChange={props.onThinkingLevelChange}
                 />
+              )}
+              {externalEngine && props.choices.length > 0 && (
+                <AcpRuntimeControls status={externalEngine} running={props.running} />
               )}
               <GoalControl sessionId={props.sessionId} running={props.running} draftValue={props.value} onDraftChange={props.onChange} onContinue={props.onContinueGoal} />
               <div className="composer-mode">

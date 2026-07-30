@@ -6,7 +6,7 @@ import { AgentEngineBrandIcon } from "../../../shared/ui/agent-engine-brand-icon
 import { useI18n } from "../../i18n/use-i18n";
 import { resetNewSessionEnginePreferences } from "../../sessions/new-session-preferences";
 import { AcpCapabilityPanel } from "./acp-capability-panel";
-import { AcpRuntimeConfigFields } from "./acp-runtime-config-fields";
+import { AcpConnectionFields } from "./acp-connection-fields";
 import { NewSessionDefaultSettings } from "./new-session-default-settings";
 import "./agent-engine-settings.css";
 
@@ -130,7 +130,7 @@ export function AgentEngineSettings({ config, onConfigChange }: AgentEngineSetti
       )}
       {isExternal && (
         <div className="settings-form-grid">
-          <AcpRuntimeConfigFields acp={acp} runtime={runtime} onChange={updateAcp} />
+          <AcpConnectionFields acp={acp} runtime={runtime} onChange={updateAcp} />
           <label className="settings-field">
             <span>{t("Additional directories", "附加目录")}</span>
             <input
