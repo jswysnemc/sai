@@ -3,7 +3,8 @@ import { MarkdownRenderer } from "../markdown-renderer";
 import { ReasoningBlock } from "../reasoning-block";
 import { ToolLifecycleCard } from "../tool-lifecycle-card";
 import { ToolCallGroup } from "./tool-call-group";
-import { groupCompletedToolCalls } from "./tool-call-grouping";
+import { StepGroupCard } from "./step-group";
+import { groupIntoSteps } from "./step-grouping";
 import { ContextCompactionPart } from "./context-compaction-part";
 import { PermissionRequestCard } from "../../permission/permission-request-card";
 import { QuestionRequestCard } from "../../question/question-request-card";
@@ -17,10 +18,21 @@ import { EngineReadyPart } from "./engine-ready-part";
  * @returns 嵌入同一助手消息中的部件列表
  */
 export function MessageParts({ parts, live }: { parts: LiveMessagePart[]; live?: boolean }) {
-  const groupedParts = groupCompletedToolCalls(parts);
+  // 先按「思考 + 工具」步骤聚合，未成步骤的部件回落到相邻工具分组
+  const groupedParts = groupIntoSteps(parts);
   return (
     <div className="message-parts">
       {groupedParts.map((item) => {
+        if (item.type === "step") {
+          return (
+            <StepGroupCard
+              key={item.id}
+              id={item.id}
+              reasoning={item.reasoning}
+              tools={item.tools}
+            />
+          );
+        }
         if (item.type === "tool-group") return <ToolCallGroup key={item.id} tools={item.tools} />;
         const part = item.part;
         if (part.type === "reasoning") {

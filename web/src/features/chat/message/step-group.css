@@ -1,0 +1,80 @@
+/* 步骤组：与工具组同一套触发条语汇，只在图标与导轨上做区分 */
+.step-group {
+  color: var(--technical-text);
+}
+
+.step-group-trigger {
+  display: grid;
+  /* 图标 · 标题 · 审核徽标(可缺席) · 箭头 */
+  grid-template-columns: 22px minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  min-height: 32px;
+  padding: var(--space-2xs) var(--space-3xs);
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.step-group-trigger:hover {
+  background: color-mix(in srgb, var(--technical-text) 5%, transparent);
+}
+
+.step-group-trigger strong {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.step-group-icon {
+  display: grid;
+  place-items: center;
+  color: var(--technical-muted);
+}
+
+.step-group-trigger > svg {
+  grid-column: 4;
+  color: var(--technical-muted);
+  transition: transform var(--duration-base) ease;
+}
+
+.step-group-trigger > svg.rotate {
+  transform: rotate(180deg);
+}
+
+.step-group-items {
+  display: grid;
+  gap: var(--space-2xs);
+  margin-top: var(--space-3xs);
+  padding: var(--space-3xs) 0 0 var(--space-2xs);
+  border-left: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  background: transparent;
+}
+
+.step-group-items > .tool-shell:first-child {
+  margin-top: 0;
+}
+
+/* 审核计数徽标：折叠态也能看出这批操作里有多少项动过权限 */
+.step-group-audited {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3xs);
+  padding: 0 var(--space-xs);
+  height: 1.125rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--signal) 12%, transparent);
+  color: var(--signal);
+  font: 500 var(--text-2xs)/1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.step-group-audited svg {
+  width: 11px;
+  height: 11px;
+}

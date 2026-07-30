@@ -13,13 +13,16 @@ import { useI18n } from "../i18n/use-i18n";
 export function ReasoningBlock({ source, live, startedAt, endedAt }: { source: string; live?: boolean; startedAt?: string; endedAt?: string }) {
   const { locale, t } = useI18n();
   const [open, setOpen] = useState(Boolean(live));
+  // 用户手动开合后不再跟随流式状态，否则一轮结束会把展开的内容强制收起
+  const [userToggled, setUserToggled] = useState(false);
   const [clock, setClock] = useState(() => Date.now());
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // 1. 流式输出时自动展开，结束或历史加载时自动收起
+  // 1. 流式输出时自动展开，结束或历史加载时自动收起；用户已表态则保持其选择
   useEffect(() => {
+    if (userToggled) return;
     setOpen(Boolean(live));
-  }, [live]);
+  }, [live, userToggled]);
 
   // 2. 流式期间每秒刷新耗时显示
   useEffect(() => {
@@ -35,7 +38,13 @@ export function ReasoningBlock({ source, live, startedAt, endedAt }: { source: s
   const duration = reasoningDuration(startedAt, endedAt, clock, locale);
   return (
     <section className={`reasoning-block${open ? " open" : ""}`}>
-      <button type="button" onClick={() => setOpen((value) => !value)}>
+      <button
+        type="button"
+        onClick={() => {
+          setUserToggled(true);
+          setOpen((value) => !value);
+        }}
+      >
         <span>{live ? t("Thinking", "正在思考") : t("Reasoning", "思考过程")}{duration ? t(` (${duration})`, `（用时 ${duration}）`) : ""}</span>
         <ChevronDown size={14} className={open ? "rotate" : ""} />
       </button>
@@ -52,7 +61,7 @@ export function ReasoningBlock({ source, live, startedAt, endedAt }: { source: s
  * @param clock 实时计时参考值
  * @returns 人类可读耗时，时间无效时返回空文本
  */
-function reasoningDuration(startedAt: string | undefined, endedAt: string | undefined, clock: number, locale: "en-US" | "zh-CN"): string {
+export function reasoningDuration(startedAt: string | undefined, endedAt: string | undefined, clock: number, locale: "en-US" | "zh-CN"): string {
   if (!startedAt) return "";
   const start = Date.parse(startedAt);
   const end = endedAt ? Date.parse(endedAt) : clock;
