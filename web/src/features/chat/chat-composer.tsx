@@ -16,10 +16,10 @@ import { WorkspaceSwitcher } from "../workspaces/workspace-switcher";
 import { SystemUsage } from "../usage/system-usage";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
+import { EngineConnectionBadge } from "./engine-connection/engine-connection-badge";
 import { useRuntimeActivity } from "../runtime-activity/use-runtime-activity";
 import { createRunModeOptions } from "../permission/run-mode-options";
 import { Button } from "../../shared/ui/button/button";
-import { AgentEngineBrandIcon } from "../../shared/ui/agent-engine-brand-icon/agent-engine-brand-icon";
 import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
 import { GoalControl } from "../goals/goal-control";
@@ -156,16 +156,7 @@ export function ChatComposer(props: ChatComposerProps) {
           <div className="composer-toolrail">
             <div className="composer-model-group">
               {externalEngine && props.choices.length === 0 ? (
-                <span
-                  className="composer-engine-badge"
-                  title={t(
-                    `Handled by ${externalEngine.label}; model settings are managed by the external engine`,
-                    `由 ${externalEngine.label} 执行，模型设置由外部内核管理`
-                  )}
-                >
-                  <AgentEngineBrandIcon engine={externalEngine.engine} size={12} />
-                  {externalEngine.label}
-                </span>
+                <EngineConnectionBadge status={externalEngine} running={props.running} />
               ) : engineStatusPending ? (
                 <span className="composer-engine-badge">
                   <Cpu size={12} aria-hidden />

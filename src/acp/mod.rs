@@ -21,8 +21,12 @@ mod session_store;
 #[cfg(test)]
 mod session_tests;
 mod transport;
+mod warmup;
 
 pub(crate) use capabilities::{current as current_capabilities, AcpCapabilities};
 pub(crate) use governance::AcpGovernance;
-pub(crate) use runtime_state::{current as current_runtime_state, AcpRuntimeState};
+pub(crate) use runtime_state::{
+    clear as clear_runtime_state, current as current_runtime_state, AcpRuntimeState,
+};
 pub(crate) use session::AcpEngine;
+pub(crate) use warmup::{warm_up, AcpWarmupOutcome};

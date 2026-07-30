@@ -1,0 +1,53 @@
+.engine-connection-badge {
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background var(--transition-base),
+    border-color var(--transition-base),
+    color var(--transition-base);
+}
+
+.engine-connection-badge:disabled {
+  cursor: default;
+}
+
+/* 未连接：以描边提示这是一个可点击的入口，而非只读标签 */
+.engine-connection-badge.is-idle {
+  border-color: color-mix(in srgb, var(--signal) 34%, transparent);
+  background: transparent;
+}
+
+.engine-connection-badge.is-idle:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--signal) 14%, transparent);
+  border-color: color-mix(in srgb, var(--signal) 52%, transparent);
+}
+
+.engine-connection-badge.is-connecting {
+  background: color-mix(in srgb, var(--signal) 12%, transparent);
+}
+
+.engine-connection-badge.is-failed {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  color: var(--danger);
+}
+
+.engine-connection-badge.is-failed:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+.engine-connection-spinner {
+  animation: engine-connection-spin 900ms linear infinite;
+}
+
+@keyframes engine-connection-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .engine-connection-spinner {
+    animation-duration: 2400ms;
+  }
+}

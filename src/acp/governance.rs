@@ -75,6 +75,41 @@ impl AcpGovernance {
         }
     }
 
+    /// 创建仅用于预热握手的治理句柄。
+    ///
+    /// 预热只执行 initialize / authenticate / new_session 三步，不应产生任何
+    /// 落盘或命令执行，因此固定使用 Plan 模式档案把写操作挡在外面（传 None
+    /// 等价于 YOLO 放行，不适合这里）；同时不接入会话标识存储，避免一次性
+    /// 会话覆盖真实对话记住的 ACP 会话。
+    ///
+    /// 参数:
+    /// - `workspace`: 工作区根目录
+    /// - `config`: 应用配置，提供内核启动参数
+    /// - `paths`: Sai 路径，用于解析可见 Skills
+    ///
+    /// 返回:
+    /// - 仅允许只读探测的治理句柄
+    pub(crate) fn for_warmup(
+        workspace: PathBuf,
+        config: AppConfig,
+        paths: &crate::paths::SaiPaths,
+    ) -> Self {
+        let profile = PermissionProfile::new(
+            crate::permission::PermissionProfileMode::Plan,
+            workspace.clone(),
+            None,
+        );
+        Self {
+            workspace,
+            profile: Some(profile),
+            config,
+            paths: Some(paths.clone()),
+            session_id: String::new(),
+            auto_audit: None,
+            session_store: None,
+        }
+    }
+
     /// 返回 ACP 会话标识存储。
     ///
     /// 返回:

@@ -267,6 +267,20 @@ pub(crate) fn current(engine: &str) -> Option<AcpRuntimeState> {
     states().lock().unwrap().get(engine).cloned()
 }
 
+/// 丢弃指定内核缓存的运行状态。
+///
+/// 手动断开连接后界面应回到未连接展示，因此清掉能力快照；
+/// 下一次预热或对话会重新写入。
+///
+/// 参数:
+/// - `engine`: 内核稳定名称
+///
+/// 返回:
+/// - 无
+pub(crate) fn clear(engine: &str) {
+    states().lock().unwrap().remove(engine);
+}
+
 /// 将 SDK 类型转换成可直接返回给前端的 JSON。
 ///
 /// 参数:

@@ -106,6 +106,7 @@ export type {
   ProviderSecretResponse,
   RtkStatusResponse,
   EngineStatusResponse,
+  EngineConnectResponse,
   AgentEngineKind,
   AgentEngineConfig,
   ProviderModelsResponse,

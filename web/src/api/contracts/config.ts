@@ -358,3 +358,9 @@ export type EngineStatusResponse = {
     native_equivalents: unknown;
   } | null;
 };
+
+/** 主动握手外部内核后返回的 agent 身份 */
+export type EngineConnectResponse = {
+  agent: string;
+  version: string;
+};

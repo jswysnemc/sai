@@ -553,6 +553,29 @@ impl AcpEngine {
         self.authenticated = false;
         Ok(())
     }
+
+    /// 【ACP】【预热连接】建立一次性会话以获取内核公布的运行时能力。
+    ///
+    /// 对话内核默认延迟启动，因此在首轮对话之前无法得知 agent 支持哪些模型
+    /// 与思考等级。本方法拉起进程、完成握手与建会话，把能力写入全局运行状态
+    /// 后立即回收进程；随后真正的对话仍走各自的延迟启动路径。
+    ///
+    /// 参数:
+    /// - `cwd`: 会话工作目录
+    ///
+    /// 返回:
+    /// - 握手成功时返回 agent 名称与版本
+    pub(crate) async fn warm_up_runtime_state(
+        &mut self,
+        cwd: &std::path::Path,
+    ) -> Result<Option<(String, String)>> {
+        // 1. 建会话后 config_options 才会写入全局状态，仅握手拿不到模型列表
+        self.ensure_session(cwd).await?;
+        let info = self.agent_info.clone();
+        // 2. 预热只为读取能力，随即回收进程，避免占用一个空闲 agent
+        <Self as super::super::agent_engine::ExternalTurnEngine>::shutdown(self).await?;
+        Ok(info)
+    }
 }
 
 /// 会话恢复响应中的可配置状态。

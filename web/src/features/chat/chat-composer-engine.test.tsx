@@ -16,7 +16,9 @@ vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey }: { queryKey?: readonly unknown[] }) => ({
     data: queryKey?.[0] === "engine-status" ? queryState.engineStatus : null,
     isLoading: false
-  })
+  }),
+  useQueryClient: () => ({ invalidateQueries: () => Promise.resolve() }),
+  useMutation: () => ({ mutate: () => {}, isPending: false })
 }));
 
 vi.mock("./model-thinking-selector", () => ({
@@ -88,7 +90,7 @@ describe("ChatComposer engine model display", () => {
     expect(html).toContain("native-system-usage");
   });
 
-  it("hides the native model selector for the Claude external engine", () => {
+  it("offers a connect entry for the Claude external engine before handshake", () => {
     queryState.engineStatus = {
       engine: "claude_code",
       label: "Claude Code",
@@ -98,10 +100,36 @@ describe("ChatComposer engine model display", () => {
 
     const html = renderComposer();
 
+    // 未握手时徽标是连接入口，尚不展示品牌图标
     expect(html).toContain("Claude Code");
-    expect(html).toContain('data-agent-engine-brand="claude-code"');
+    expect(html).toContain("engine-connection-badge is-idle");
     expect(html).not.toContain("native-model-selector");
     expect(html).not.toContain("native-system-usage");
     expect(html).not.toContain("gpt-native");
+  });
+
+  it("marks the badge as connected once the engine reports runtime state", () => {
+    queryState.engineStatus = {
+      engine: "claude_code",
+      label: "Claude Code",
+      external: true,
+      unavailable_features: ["context compaction"],
+      acp_runtime: {
+        connected: true,
+        agent_name: "claude-code",
+        agent_version: "1.0.0",
+        capabilities: undefined,
+        auth_methods: null,
+        config_options: [],
+        modes: null,
+        available_commands: null,
+        native_equivalents: null
+      }
+    };
+
+    const html = renderComposer();
+
+    expect(html).toContain("engine-connection-badge is-connected");
+    expect(html).toContain('data-agent-engine-brand="claude-code"');
   });
 });

@@ -2,6 +2,7 @@ mod agent_options;
 mod agents;
 mod background_tasks;
 mod config;
+mod engine_connection;
 mod input_history;
 mod cron_jobs;
 mod gateway_weixin_login;
@@ -43,6 +44,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
     let protected = Router::new()
         .merge(workspaces::routes())
         .merge(config::routes())
+        .merge(engine_connection::routes())
         .merge(input_history::routes())
         .merge(mcp_config::routes())
         .merge(agent_options::routes())

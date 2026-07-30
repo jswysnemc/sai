@@ -427,6 +427,14 @@ export const api = {
     /** 读取当前对话内核状态，供界面标注失效信息 */
     engineStatus: () =>
       apiRequest<import("./contracts").EngineStatusResponse>("/api/config/engine-status"),
+    /** 主动握手外部内核，让界面在首轮对话前拿到可选模型与思考等级 */
+    engineConnect: () =>
+      apiRequest<import("./contracts").EngineConnectResponse>("/api/config/engine-connect", {
+        method: "POST"
+      }),
+    /** 丢弃已缓存的外部内核能力，界面回到未连接展示 */
+    engineDisconnect: () =>
+      apiRequest<{ cleared: boolean }>("/api/config/engine-disconnect", { method: "POST" }),
     saveMcp: (config: McpConfig) =>
       apiRequest<McpConfigResponse>("/api/config/mcp", { method: "PUT", body: JSON.stringify(config) }),
     scanMcpTools: (server: import("./contracts").McpServerConfig) =>
