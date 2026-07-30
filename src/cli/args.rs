@@ -81,6 +81,9 @@ pub enum Command {
     Init,
     Paths,
     Config(ConfigArgs),
+    /// 交互式选择模型与思考等级
+    #[command(alias = "model")]
+    Models,
     Providers(ProvidersArgs),
     FishInit,
     BashInit,

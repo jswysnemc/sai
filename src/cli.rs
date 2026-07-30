@@ -45,6 +45,7 @@ mod memory_commands;
 mod message;
 mod model_select;
 mod permission_prompt;
+mod models_picker;
 mod providers;
 mod render_options;
 mod repl;
@@ -218,6 +219,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             Ok(())
         }
         Some(Command::Config(args)) => run_config(&paths, args).await,
+        Some(Command::Models) => models_picker::run(&paths),
         Some(Command::Providers(args)) => run_providers(&paths, args),
         Some(Command::FishInit) => shell::fish::install(&paths),
         Some(Command::BashInit) => shell::bash::install(&paths),
