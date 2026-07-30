@@ -191,11 +191,13 @@ fn display_diff_lines(cell: &DiffCell, width: usize) -> Vec<AnsiLine> {
     if rendered.is_empty() {
         Vec::new()
     } else {
+        // 续行缩进到 diff 正文列，长行折行后才不会顶到最左侧与行号列错位
+        let body_column = crate::render::edit_diff::diff_body_start_column(&rendered);
         AnsiLine::wrap_block_with_right_margin_and_continuation_indent(
             &rendered,
             content_width,
             crate::render::content_indent::DIFF_BLOCK_INSET,
-            crate::render::content_indent::DIFF_NESTED_INDENT,
+            body_column.max(crate::render::content_indent::DIFF_NESTED_INDENT),
         )
     }
 }

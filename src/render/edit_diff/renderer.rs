@@ -55,6 +55,79 @@ pub(crate) fn render_edit_file_diff_for_transcript(arguments: &str) -> Option<St
     Some(indent_diff_for_transcript(&render_patch_preview(&preview)))
 }
 
+/// 【终端】【Diff 换行】推导 diff 正文相对行首的起始列。
+///
+/// 每个 diff 正文行的格式是 `行号 标记  内容`，行号列宽在同一份 diff 内一致。
+/// 长行折行时续行需要缩进到该列，否则会顶到最左侧、与行号列错位。
+///
+/// 参数:
+/// - `rendered`: 已渲染的 diff 文本块
+///
+/// 返回:
+/// - 正文起始列；无法识别时返回 0
+pub(crate) fn diff_body_start_column(rendered: &str) -> usize {
+    rendered
+        .lines()
+        .filter_map(body_start_column_of_line)
+        .next()
+        .unwrap_or(0)
+}
+
+/// 【终端】【Diff 换行】解析单行的正文起始列。
+///
+/// 参数:
+/// - `line`: 带 ANSI 样式的 diff 行
+///
+/// 返回:
+/// - 该行正文起始列；不是正文行时返回 None
+fn body_start_column_of_line(line: &str) -> Option<usize> {
+    // 只统计可见字符：行号右对齐填充、标记与两列间隔都在正文之前
+    let visible = strip_ansi_sequences(line);
+    // 标题行以 TOOL_BULLET 开头，其中的增删计数也含数字，必须先排除
+    if visible.contains(TOOL_BULLET) {
+        return None;
+    }
+    let digits_end = visible.find(|ch: char| ch.is_ascii_digit())?;
+    // 行号之前只允许右对齐填充空格
+    if !visible[..digits_end].chars().all(|ch| ch == ' ') {
+        return None;
+    }
+    let rest = &visible[digits_end..];
+    let digit_count = rest.chars().take_while(|ch| ch.is_ascii_digit()).count();
+    let after_digits = &rest[digit_count..];
+    // 行号后依次是一列空格、一列标记、两列间隔
+    let marker_offset = after_digits.strip_prefix(' ')?;
+    let marker = marker_offset.chars().next()?;
+    if !matches!(marker, '+' | '-' | ' ') {
+        return None;
+    }
+    Some(digits_end + digit_count + 4)
+}
+
+/// 【终端】【Diff 换行】移除 ANSI 控制序列。
+///
+/// 参数:
+/// - `text`: 带样式的终端行
+///
+/// 返回:
+/// - 仅含可见字符的文本
+fn strip_ansi_sequences(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut index = 0usize;
+    while index < text.len() {
+        if text[index..].starts_with('\x1b') {
+            // 交由统一的转义扫描定位序列结束，自行判断终止符会把 `[` 误判为结尾
+            index = crate::render::terminal_image::escape_sequence_end(text, index)
+                .max(index + 1);
+            continue;
+        }
+        let ch = text[index..].chars().next().unwrap_or_default();
+        output.push(ch);
+        index += ch.len_utf8();
+    }
+    output
+}
+
 /// 清除 CLI diff 色块右侧边距。
 ///
 /// 参数:

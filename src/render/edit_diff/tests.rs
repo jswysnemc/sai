@@ -176,3 +176,28 @@ fn strip_ansi_for_test(text: &str) -> String {
     }
     output
 }
+
+/// 【终端】【Diff 换行】验证正文起始列随行号位数变化并覆盖三类行。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn body_start_column_tracks_line_number_width() {
+    use super::renderer::diff_body_start_column;
+
+    // 行号列宽固定为 3 时：3 位行号 + 1 空格 + 1 标记 + 2 间隔 = 7，
+    // 再加上 transcript 的 1 列块缩进
+    let short = " \x1b[48;5;22m  1 +  body\x1b[K\x1b[0m";
+    assert_eq!(diff_body_start_column(short), 8);
+
+    // 行号变成 4 位时正文整体右移一列
+    let wide = " \x1b[48;5;22m1234 +  body\x1b[K\x1b[0m";
+    assert_eq!(diff_body_start_column(wide), 9);
+
+    // 上下文行的标记是空格，同样要能识别
+    let context = " \x1b[m  2    body\x1b[K";
+    assert_eq!(diff_body_start_column(context), 8);
+}
