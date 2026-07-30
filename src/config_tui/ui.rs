@@ -10,6 +10,10 @@ use std::io::{self, Write};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use super::input::read_key;
+use super::theme::{
+    selection_marks, BOLD, BRAND, CORNER_BOTTOM_LEFT, CORNER_BOTTOM_RIGHT,
+    CORNER_TOP_LEFT, CORNER_TOP_RIGHT, LINE_HORIZONTAL, LINE_VERTICAL, MUTED, RESET,
+};
 use super::layout::{panel_width, scroll_start};
 
 pub(crate) fn draw_menu(
@@ -42,12 +46,10 @@ pub(crate) fn draw_menu(
     queue!(
         stdout,
         MoveTo(x + 2, y + height - 1),
-        SetAttribute(Attribute::Dim),
-        Print(truncate(
-            menu_help(status),
-            width.saturating_sub(4) as usize
-        )),
-        SetAttribute(Attribute::Reset)
+        Print(format!(
+            " {MUTED}{}{RESET} ",
+            truncate(menu_help(status), width.saturating_sub(6) as usize)
+        ))
     )?;
     // 3. 选项数超过可见高度时按选中项滚动，避免溢出项堆积在底行
     let visible_rows = height.saturating_sub(4).max(1) as usize;
@@ -58,19 +60,9 @@ pub(crate) fn draw_menu(
             break;
         }
         queue!(stdout, MoveTo(x + 2, y + row as u16 + 2))?;
-        if index == selected {
-            queue!(
-                stdout,
-                SetAttribute(Attribute::Reverse),
-                Print(pad(&options[index], width.saturating_sub(4) as usize)),
-                SetAttribute(Attribute::Reset)
-            )?;
-        } else {
-            queue!(
-                stdout,
-                Print(pad(&options[index], width.saturating_sub(4) as usize))
-            )?;
-        }
+        let (bar, style) = selection_marks(index == selected);
+        let label = pad(&options[index], width.saturating_sub(6) as usize);
+        queue!(stdout, Print(format!("{bar} {style}{label}{RESET}")))?;
     }
     stdout.flush()?;
     Ok(())
@@ -95,12 +87,13 @@ pub(crate) fn draw_box(
     height: u16,
     title: &str,
 ) -> Result<()> {
+    let inner = width.saturating_sub(2) as usize;
+    let horizontal = LINE_HORIZONTAL.to_string().repeat(inner);
     queue!(
         stdout,
         MoveTo(x, y),
         Print(format!(
-            "┌{}┐",
-            "─".repeat(width.saturating_sub(2) as usize)
+            "{MUTED}{CORNER_TOP_LEFT}{horizontal}{CORNER_TOP_RIGHT}{RESET}"
         ))
     )?;
     for row in 1..height.saturating_sub(1) {
@@ -108,8 +101,8 @@ pub(crate) fn draw_box(
             stdout,
             MoveTo(x, y + row),
             Print(format!(
-                "│{}│",
-                " ".repeat(width.saturating_sub(2) as usize)
+                "{MUTED}{LINE_VERTICAL}{RESET}{}{MUTED}{LINE_VERTICAL}{RESET}",
+                " ".repeat(inner)
             ))
         )?;
     }
@@ -117,16 +110,14 @@ pub(crate) fn draw_box(
         stdout,
         MoveTo(x, y + height.saturating_sub(1)),
         Print(format!(
-            "└{}┘",
-            "─".repeat(width.saturating_sub(2) as usize)
+            "{MUTED}{CORNER_BOTTOM_LEFT}{horizontal}{CORNER_BOTTOM_RIGHT}{RESET}"
         ))
     )?;
+    // 标题嵌在顶边框上，两侧留一格空白与边框线断开
     queue!(
         stdout,
         MoveTo(x + 2, y),
-        SetAttribute(Attribute::Bold),
-        Print(title),
-        SetAttribute(Attribute::Reset)
+        Print(format!(" {BRAND}{BOLD}{title}{RESET} "))
     )?;
     Ok(())
 }

@@ -12,6 +12,7 @@ mod provider_forms;
 mod providers;
 mod session;
 mod settings;
+mod theme;
 mod ui;
 mod web_search_fields;
 
