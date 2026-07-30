@@ -39,8 +39,9 @@ fn renders_compact_session_summary_with_key_fields() {
 
     let output = render_session_summary(&snapshot);
 
-    assert!(!output.starts_with("▸"));
-    assert!(output.starts_with("Context") || output.starts_with("上下文"));
+    // 行首是与助手正文同款的引导点，而非另一套 ▸ 符号
+    assert!(!output.contains('▸'));
+    assert!(output.starts_with("\x1b[2m•\x1b[0m "));
     assert!(output.contains("Context") || output.contains("上下文"));
     assert!(output.contains("8.0k"));
     assert!(output.contains("1000k"));
