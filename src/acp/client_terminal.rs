@@ -16,6 +16,8 @@ struct Terminal {
     command: String,
     /// 累积输出；ACP 允许多次 `terminal/output` 读取同一终端
     output: Arc<Mutex<TerminalOutputCapture>>,
+    /// 标准输出与错误的读取任务；进程退出后要等它们收完剩余数据
+    readers: Vec<tokio::task::JoinHandle<()>>,
     exit_status: Option<i32>,
 }
 
@@ -148,6 +150,7 @@ impl TerminalRegistry {
             ..Default::default()
         }));
         // 3. 标准输出与错误合并累积，读取端随时可取当前快照
+        let mut readers = Vec::new();
         for stream in [
             child.stdout.take().map(StreamKind::Stdout),
             child.stderr.take().map(StreamKind::Stderr),
@@ -158,7 +161,7 @@ impl TerminalRegistry {
             let sink = Arc::clone(&output);
             let progress = events.clone();
             let label = command.clone();
-            tokio::spawn(async move {
+            readers.push(tokio::spawn(async move {
                 let mut buffer = [0u8; 4096];
                 let mut reader = stream.into_reader();
                 loop {
@@ -176,7 +179,7 @@ impl TerminalRegistry {
                         }
                     }
                 }
-            });
+            }));
         }
         let id = format!("term-{}", self.next_id.fetch_add(1, Ordering::SeqCst));
         self.terminals.lock().await.insert(
@@ -185,6 +188,7 @@ impl TerminalRegistry {
                 child: Some(child),
                 command: original_command,
                 output,
+                readers,
                 exit_status: None,
             },
         );
@@ -242,6 +246,18 @@ impl TerminalRegistry {
         };
         let status = child.wait().await?;
         let code = status.code().unwrap_or(-1);
+        // 进程退出不等于输出读完：管道里可能还有未读数据，
+        // 必须等读取任务自然结束，否则 output 会返回不完整内容
+        let readers = {
+            let mut terminals = self.terminals.lock().await;
+            terminals
+                .get_mut(terminal_id)
+                .map(|terminal| std::mem::take(&mut terminal.readers))
+                .unwrap_or_default()
+        };
+        for reader in readers {
+            let _ = reader.await;
+        }
         let mut terminals = self.terminals.lock().await;
         if let Some(terminal) = terminals.get_mut(terminal_id) {
             terminal.exit_status = Some(code);
@@ -280,6 +296,10 @@ impl TerminalRegistry {
         if let Some(mut terminal) = terminals.remove(terminal_id) {
             if let Some(child) = terminal.child.as_mut() {
                 let _ = child.start_kill();
+            }
+            // 未等待退出就释放时读取任务仍在运行，主动中止避免任务泄漏
+            for reader in terminal.readers.drain(..) {
+                reader.abort();
             }
         }
         Ok(())
@@ -492,6 +512,48 @@ mod tests {
 
         registry.release(&id).await.unwrap();
         assert!(registry.output(&id).await.is_err());
+    }
+
+    /// 【ACP】【终端输出】验证退出后能读到全部输出，不受管道读取时序影响。
+    ///
+    /// child.wait() 只保证进程结束，管道里可能仍有未读数据；输出量较大时
+    /// 更容易暴露该竞态。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[tokio::test]
+    async fn output_is_complete_after_exit() {
+        let dir = tempfile::tempdir().unwrap();
+        let governance = AcpGovernance::new(
+            dir.path().to_path_buf(),
+            None,
+            crate::config::AppConfig::default(),
+            "output-session".to_string(),
+            None,
+            None,
+        );
+        let registry = TerminalRegistry::default();
+        let (events, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        // 输出多行以跨越单次读取缓冲，放大时序差异
+        let id = registry
+            .create(
+                &json!({ "command": "seq", "args": ["1", "500"] }),
+                &governance,
+                &events,
+            )
+            .await
+            .unwrap();
+        registry.wait_for_exit(&id, &governance).await.unwrap();
+        let output = registry.output(&id).await.unwrap();
+        let text = output["output"].as_str().unwrap();
+
+        assert!(text.contains('1'), "应包含首行");
+        assert!(text.contains("500"), "退出后必须已读到末行: 实际 {} 字节", text.len());
+        registry.release(&id).await.unwrap();
     }
 
     /// 输出压缩关闭时命令原样执行。
