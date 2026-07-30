@@ -52,6 +52,7 @@ fn apply_thinking_options(body: &mut Value, provider: &ProviderConfig, protocol:
         }
         "object" => apply_generic_thinking_object(body, level),
         "type-object" => apply_type_thinking(body, level),
+        "chat-auto" => apply_chat_auto_thinking(body, level),
         "deepseek-thinking" => apply_deepseek_thinking(body, level),
         "openai-chat-reasoning-effort" => {
             if level != "none" {
@@ -59,7 +60,9 @@ fn apply_thinking_options(body: &mut Value, provider: &ProviderConfig, protocol:
             }
         }
         "reasoning" => {
-            body["reasoning"] = json!({ "effort": reasoning_effort(level) });
+            // 只覆盖 effort：调用方可能已经设置了 summary 等同级字段，
+            // 整体赋值会把它们一并丢弃
+            body["reasoning"]["effort"] = json!(reasoning_effort(level));
         }
         "anthropic-thinking" => apply_anthropic_thinking(body, level),
         _ => apply_type_thinking(body, level),
@@ -97,8 +100,9 @@ fn effective_format(provider: &ProviderConfig, protocol: ThinkingProtocol) -> &'
     match protocol {
         ThinkingProtocol::OpenAiResponses => "reasoning",
         ThinkingProtocol::Anthropic => "anthropic-thinking",
-        // OpenAI Chat 兼容网关普遍要求 thinking 为 bool 或 {type:enabled|disabled|adaptive}
-        ThinkingProtocol::OpenAiChat => "type-object",
+        // OpenAI Chat 兼容网关普遍要求 thinking 为 bool 或 {type:enabled|disabled|adaptive}，
+        // 但仅有开关无法表达等级，因此同时写出 reasoning_effort
+        ThinkingProtocol::OpenAiChat => "chat-auto",
     }
 }
 
@@ -149,7 +153,9 @@ fn reasoning_effort(level: &str) -> &'static str {
         "none" => "minimal",
         "low" => "low",
         "medium" => "medium",
-        "xhigh" | "max" => "xhigh",
+        "xhigh" => "xhigh",
+        // 已有模型支持 max，不再折叠到 xhigh
+        "max" => "max",
         _ => "high",
     }
 }
@@ -219,6 +225,30 @@ fn apply_type_thinking(body: &mut Value, level: &str) {
         return;
     }
     body["thinking"] = json!({ "type": "enabled" });
+}
+
+/// 写入 OpenAI Chat 自动格式的思考参数。
+///
+/// 兼容网关普遍要求 `thinking` 为开关对象，但开关无法表达等级——只写开关时
+/// low 与 max 会产生完全相同的请求体，界面上的等级设置形同失效。因此在开关
+/// 之外同时写出 chat 协议通用的 `reasoning_effort`，与 DeepSeek 分支一致。
+///
+/// 参数:
+/// - `body`: 待修改的请求体
+/// - `level`: 思考等级
+///
+/// 返回:
+/// - 无
+fn apply_chat_auto_thinking(body: &mut Value, level: &str) {
+    if level == "none" {
+        body["thinking"] = json!({ "type": "disabled" });
+        if let Some(object) = body.as_object_mut() {
+            object.remove("reasoning_effort");
+        }
+        return;
+    }
+    body["thinking"] = json!({ "type": "enabled" });
+    body["reasoning_effort"] = json!(reasoning_effort(level));
 }
 
 /// 写入 DeepSeek OpenAI 兼容思考参数。
@@ -358,27 +388,76 @@ mod tests {
         assert_eq!(body["reasoning"], json!({"effort":"xhigh"}));
     }
 
+    /// 【协议】【思考等级】验证 max 保留为独立等级，不再折叠到 xhigh。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
     #[test]
-    fn openai_reasoning_maps_max_to_xhigh_effort() {
+    fn openai_reasoning_keeps_max_effort_distinct() {
         let mut provider = ProviderConfig::default_openai();
-        provider.thinking_level = "max".to_string();
         provider.thinking_format = "openai-chat-reasoning-effort".to_string();
-        let body = apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat)
+
+        provider.thinking_level = "max".to_string();
+        let max = apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat)
+            .unwrap();
+        provider.thinking_level = "xhigh".to_string();
+        let xhigh = apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat)
             .unwrap();
 
-        assert_eq!(body["reasoning_effort"], json!("xhigh"));
+        assert_eq!(max["reasoning_effort"], json!("max"));
+        assert_eq!(xhigh["reasoning_effort"], json!("xhigh"));
     }
 
+    /// 【协议】【思考等级】验证 chat 自动格式在开关之外带上等级。
+    ///
+    /// 仅写 thinking 开关时 low 与 max 的请求体完全相同，界面设置形同失效。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
     #[test]
-    fn openai_chat_auto_uses_type_object_thinking() {
+    fn openai_chat_auto_carries_reasoning_effort() {
         let mut provider = ProviderConfig::default_openai();
-        provider.thinking_level = "high".to_string();
         provider.thinking_format = "auto".to_string();
-        let body = apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat)
+
+        provider.thinking_level = "high".to_string();
+        let high = apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat)
+            .unwrap();
+        provider.thinking_level = "low".to_string();
+        let low = apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat)
             .unwrap();
 
-        assert_eq!(body["thinking"], json!({"type": "enabled"}));
-        assert!(body.get("reasoning_effort").is_none());
+        assert_eq!(high["thinking"], json!({"type": "enabled"}));
+        assert_eq!(high["reasoning_effort"], json!("high"));
+        assert_eq!(low["reasoning_effort"], json!("low"));
+        assert_ne!(high, low, "不同等级必须产生不同请求体");
+    }
+
+    /// 【协议】【思考等级】验证 responses 协议只覆盖 effort，保留同级字段。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn openai_responses_preserves_sibling_reasoning_fields() {
+        let mut provider = ProviderConfig::default_openai();
+        provider.thinking_level = "high".to_string();
+        let body = apply_provider_body_options(
+            json!({ "reasoning": { "summary": "auto" } }),
+            &provider,
+            ThinkingProtocol::OpenAiResponses,
+        )
+        .unwrap();
+
+        assert_eq!(body["reasoning"]["effort"], json!("high"));
+        assert_eq!(body["reasoning"]["summary"], json!("auto"), "summary 不应被覆盖");
     }
 
     #[test]

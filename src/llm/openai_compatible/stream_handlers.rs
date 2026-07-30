@@ -66,6 +66,15 @@ where
         )?;
         return Ok(Some(true));
     }
+    // 上游可能在流中途改发错误对象；ChatStreamResponse 的 choices 带 default，
+    // 不先行拦截会解析成空响应被忽略，最终只报"响应为空"而丢掉真实原因
+    if let Some(message) = chat_stream_error_message(data) {
+        bail!(
+            "{}: {}",
+            t("chat completions stream failed", "聊天流式响应失败"),
+            message
+        );
+    }
     let response: ChatStreamResponse = serde_json::from_str(data).with_context(|| {
         format!(
             "{}: {}",
@@ -106,6 +115,25 @@ where
         }
     }
     Ok(Some(false))
+}
+
+/// 【协议】【流式错误】提取 chat 流中途下发的错误说明。
+///
+/// 参数:
+/// - `data`: 单条 SSE data 载荷
+///
+/// 返回:
+/// - 载荷携带 error 对象时返回可展示的说明，否则返回 None
+fn chat_stream_error_message(data: &str) -> Option<String> {
+    let value = serde_json::from_str::<serde_json::Value>(data).ok()?;
+    let error = value.get("error")?;
+    // 优先取 message，缺失时回落到整个 error 对象，避免报出空原因
+    let message = error
+        .get("message")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_else(|| error.to_string());
+    Some(clean_plain_text(message))
 }
 
 fn handle_responses_sse_line<F>(

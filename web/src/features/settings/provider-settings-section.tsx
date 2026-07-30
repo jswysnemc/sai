@@ -232,11 +232,17 @@ export function ProviderSettingsSection({
     { value: "openai-responses", label: "OpenAI Responses" },
     { value: "anthropic", label: "Anthropic Messages" }
   ];
+  // 取值必须与后端白名单（src/config/app.rs 的 thinking_format 校验）一致，
+  // 否则保存时会被拒绝
   const thinkingFormatOptions = [
     { value: "auto", label: t("Automatic", "自动") },
-    { value: "reasoning_content", label: "reasoning_content" },
+    { value: "openai-chat-reasoning-effort", label: "openai-chat-reasoning-effort" },
     { value: "reasoning", label: "reasoning" },
-    { value: "thinking", label: "thinking" }
+    { value: "anthropic-thinking", label: "anthropic-thinking" },
+    { value: "deepseek-thinking", label: "deepseek-thinking" },
+    { value: "string", label: "string" },
+    { value: "object", label: "object" },
+    { value: "disabled", label: t("Disabled", "停用") }
   ];
 
   return (
