@@ -1,19 +1,20 @@
-/// Sai 品牌标志的单位网格：5 行 6 列，1 表示实心块。
+/// Sai 品牌标志的单位网格：5 行 11 列，1 表示实心块。
 ///
-/// 前 4 列构成正交实心 S，第 5 列为间隙，第 6 列是与主体分离的方形光标。
-/// 与 Web 端 `sai-logo.tsx` 使用同一套网格坐标，两端形状严格一致。
-const LOGO_GRID: [[u8; 6]; 5] = [
-    [1, 1, 1, 1, 0, 0],
-    [1, 0, 0, 0, 0, 0],
-    [1, 1, 1, 1, 0, 0],
-    [0, 0, 0, 1, 0, 1],
-    [1, 1, 1, 1, 0, 1],
+/// 依次为字母 S、A、I（各占 3、3、1 列，字母间留 1 列间隙），
+/// 末列是与字身分离的方形光标。与 Web 端 `sai-logo.tsx` 使用同一套
+/// 网格坐标，两端形状严格一致。
+const LOGO_GRID: [[u8; 11]; 5] = [
+    [1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 0],
+    [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0],
+    [1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 0],
+    [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+    [1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
 ];
 
 /// 每个网格单位在终端中占用的字符列数。
 ///
-/// 终端字符高度约为宽度的两倍，横向取 2 列可让单位块接近正方形。
-const CELL_COLUMNS: usize = 2;
+/// 字身已含 11 列，取 1 列可让整体宽度控制在窄终端也能容纳的范围内。
+const CELL_COLUMNS: usize = 1;
 
 /// 标志渲染所需的字符列数。
 pub(crate) const LOGO_WIDTH: usize = LOGO_GRID[0].len() * CELL_COLUMNS;
@@ -44,7 +45,7 @@ pub(crate) fn logo_lines(style: &str) -> Vec<String> {
 ///
 /// 返回:
 /// - 定宽的 ANSI 文本行
-fn render_logo_row(row: &[u8; 6], style: &str) -> String {
+fn render_logo_row(row: &[u8; 11], style: &str) -> String {
     let mut output = String::new();
     let mut filled = false;
     for cell in row {
@@ -92,9 +93,10 @@ mod tests {
                 "标志每行必须等宽"
             );
         }
-        // S 的左竖只在首列，右竖只在第 4 列，光标块与主体之间必须留有间隙
-        assert_eq!(strip_ansi(&lines[1]), "██          ");
-        assert_eq!(strip_ansi(&lines[3]), "      ██  ██");
+        // S 的中段缺口、A 的碗心以及 I 的独立竖笔共同构成可辨认的字身
+        assert_eq!(strip_ansi(&lines[1]), "█   █ █ █  ");
+        // 光标块位于末列，与 I 之间保留一列间隙
+        assert_eq!(strip_ansi(&lines[3]), "  █ █ █ █ █");
     }
 
     /// 【终端】【品牌标志】验证样式在实心段结束后复位，不污染后续输出。
