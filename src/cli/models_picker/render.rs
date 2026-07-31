@@ -319,7 +319,7 @@ mod tests {
         let rendered = render(&state()).join("\n");
 
         assert!(!rendered.contains("███"));
-        assert!(rendered.contains("模型"));
+        assert!(rendered.contains(t("Model selection", "模型选择")));
     }
 
     /// 【CLI】【模型选择】验证模型标签包含供应商并展示过滤文本。
@@ -336,7 +336,7 @@ mod tests {
         let rendered = render(&picker).join("\n");
 
         assert!(rendered.contains("DeepSeek / deepseek-chat"));
-        assert!(rendered.contains("过滤"));
+        assert!(rendered.contains(t("Filter", "过滤")));
         assert!(rendered.contains("1/2"));
     }
 }
