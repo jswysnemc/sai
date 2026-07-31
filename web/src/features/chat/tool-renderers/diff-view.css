@@ -157,3 +157,42 @@
   border-radius: 0;
   background: transparent;
 }
+
+/* 字符级改动：在整行底色之上再点出具体改了哪几个字符 */
+.diff-inline {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: color-mix(in srgb, currentColor 22%, transparent);
+  color: inherit;
+  font-weight: 600;
+}
+
+/* hunk 边界：提示中间跳过了未变更的区段 */
+.diff-row.hunk {
+  padding: var(--space-3xs) var(--space-xs);
+  color: var(--technical-muted);
+  font: 400 var(--text-2xs)/1.4 var(--font-code);
+  opacity: 0.8;
+}
+
+/* 无换行标记不是文件内容，弱化到不与代码行混淆 */
+.diff-row.no-newline {
+  padding: 0 var(--space-xs);
+  color: var(--technical-muted);
+  font: 400 var(--text-2xs)/1.4 var(--font-code);
+  font-style: italic;
+}
+
+/* 重命名与二进制等文件级说明 */
+.diff-file-note {
+  margin: 0;
+  padding: var(--space-2xs) var(--space-xs);
+  color: var(--technical-muted);
+  font: 400 var(--text-xs)/1.4 var(--font-ui);
+}
+
+/* 长 diff 的渲染开销随视口收敛，无需引入虚拟滚动库 */
+.diff-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 1.4em;
+}
