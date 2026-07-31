@@ -281,9 +281,16 @@ impl Agent {
                 question_call_count == 1 && question_rounds <= MAX_QUESTION_ROUNDS_PER_TURN;
             let defer_sibling_tools = question_call_count == 1 && result.tool_calls.len() > 1;
             let mut round_model_attachments = Vec::new();
+            let assistant_round = tool_event_seq.saturating_add(1);
             for call in result.tool_calls {
                 tool_event_seq += 1;
-                self.record_tool_call_started(turn_id, tool_event_seq, &call)?;
+                self.record_tool_call_started(
+                    turn_id,
+                    tool_event_seq,
+                    assistant_round,
+                    result.reasoning.as_deref(),
+                    &call,
+                )?;
                 used_tools.push(call.function.name.clone());
                 perf.mark(&format!("tool {} call recorded", call.function.name));
                 on_event(AgentEvent::ToolCall {

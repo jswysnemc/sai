@@ -1,5 +1,6 @@
 mod model;
 mod repository;
+mod repository_paths;
 mod workspace;
 mod workspace_repository;
 

@@ -1,5 +1,10 @@
 use base64::Engine;
 
+pub(crate) mod template;
+
+#[cfg(test)]
+mod template_tests;
+
 include!(concat!(env!("OUT_DIR"), "/default_sai_prompt.rs"));
 
 pub const YOLO_REMINDER: &str = include_str!("prompts/yolo.md");

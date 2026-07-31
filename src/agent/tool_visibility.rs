@@ -8,7 +8,8 @@ use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) struct ToolVisibility {
-    progressive: bool,
+    /// 需要模型调用 load 后才暴露的工具名，可含通配符；为空表示不做渐进加载
+    deferred: Vec<String>,
     loaded: BTreeSet<String>,
 }
 
@@ -16,15 +17,37 @@ impl ToolVisibility {
     /// 创建工具可见性状态。
     ///
     /// 参数:
-    /// - `progressive`: 是否启用渐进式工具加载
+    /// - `deferred`: 当前 Agent 需要 load 才暴露的工具名，空表示全部初始可见
     ///
     /// 返回:
     /// - 新的工具可见性状态
-    pub(crate) fn new(progressive: bool) -> Self {
+    pub(crate) fn new(deferred: Vec<String>) -> Self {
         Self {
-            progressive,
+            deferred,
             loaded: BTreeSet::new(),
         }
+    }
+
+    /// 按运行期 Agent 覆盖创建工具可见性状态。
+    ///
+    /// 参数:
+    /// - `config`: 当前应用配置
+    ///
+    /// 返回:
+    /// - 依据 `agent_runtime.deferred_tools` 构造的可见性状态
+    pub(crate) fn from_config(config: &AppConfig) -> Self {
+        Self::new(config.agent_deferred_tools().to_vec())
+    }
+
+    /// 判断当前 Agent 是否启用了渐进式加载。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 延迟集合非空时返回 true
+    pub(crate) fn is_progressive(&self) -> bool {
+        !self.deferred.is_empty()
     }
 
     /// 计算当前应暴露给模型的工具定义。
@@ -35,20 +58,15 @@ impl ToolVisibility {
     /// 返回:
     /// - 当前可见的工具定义列表
     pub(crate) fn definitions(&self, registry: &ToolRegistry) -> Vec<ToolDefinition> {
-        if !self.progressive {
+        if !self.is_progressive() {
             return registry.definitions();
         }
-        let names = registry
-            .tool_infos()
-            .into_iter()
-            .filter(|info| self.is_visible(&info.name))
-            .map(|info| info.name)
-            .collect::<BTreeSet<_>>();
+        let names = tools::progressive::visible_tool_names(registry, &self.deferred, &self.loaded);
         let mut definitions = registry.definitions_for_names(&names);
         for definition in &mut definitions {
             if definition.function.name == tools::LOAD_NAME {
                 definition.function.description =
-                    tools::progressive::loader_description(registry, &self.loaded);
+                    tools::progressive::loader_description(registry, &self.deferred, &self.loaded);
             }
         }
         definitions
@@ -62,7 +80,10 @@ impl ToolVisibility {
     /// 返回:
     /// - 当前是否可见并允许调用
     pub(crate) fn is_visible(&self, name: &str) -> bool {
-        !self.progressive || tools::progressive::is_initial_tool(name) || self.loaded.contains(name)
+        !self.is_progressive()
+            || name == tools::LOAD_NAME
+            || !crate::config::is_deferred(&self.deferred, name)
+            || self.loaded.contains(name)
     }
 
     /// 判断当前工具调用是否为加载工具调用。
@@ -73,7 +94,7 @@ impl ToolVisibility {
     /// 返回:
     /// - 是否为 `load`
     pub(crate) fn is_loader_call(&self, name: &str) -> bool {
-        self.progressive && name == tools::LOAD_NAME
+        self.is_progressive() && name == tools::LOAD_NAME
     }
 
     /// 恢复已经加载过的工具集合。
@@ -86,14 +107,25 @@ impl ToolVisibility {
     /// - 无
     pub(crate) fn restore_loaded_tools(&mut self, registry: &ToolRegistry, names: &[String]) {
         self.loaded.clear();
-        if !self.progressive {
+        if !self.is_progressive() {
             return;
         }
         for name in names {
-            if registry.contains(name) && !tools::progressive::is_initial_tool(name) {
+            if registry.contains(name) && self.is_deferred_tool(name) {
                 self.loaded.insert(name.clone());
             }
         }
+    }
+
+    /// 判断工具是否属于当前 Agent 的延迟集合。
+    ///
+    /// 参数:
+    /// - `name`: 工具名称
+    ///
+    /// 返回:
+    /// - 是否需要 load 后才暴露
+    fn is_deferred_tool(&self, name: &str) -> bool {
+        name != tools::LOAD_NAME && crate::config::is_deferred(&self.deferred, name)
     }
 
     /// 获取已经额外加载的工具名称。
@@ -115,7 +147,7 @@ impl ToolVisibility {
     /// 返回:
     /// - 已载入工具提示，未启用渐进式加载或尚未载入工具时返回空
     pub(crate) fn loaded_context_prompt(&self, registry: &ToolRegistry) -> Option<String> {
-        if !self.progressive || self.loaded.is_empty() {
+        if !self.is_progressive() || self.loaded.is_empty() {
             return None;
         }
         let mut text = String::from("<loaded_tools>\n");
@@ -247,7 +279,7 @@ impl ToolVisibility {
         // 2. 按请求顺序更新状态并生成分类结果
         let mut result = ToolLoadResult::default();
         for name in names {
-            if tools::progressive::is_initial_tool(name) || !self.loaded.insert(name.clone()) {
+            if !self.is_deferred_tool(name) || !self.loaded.insert(name.clone()) {
                 result.already_loaded_tools.push(name.clone());
             } else {
                 result.newly_loaded_tools.push(name.clone());
@@ -266,7 +298,7 @@ impl ToolVisibility {
     fn loaded_group_names(&self, registry: &ToolRegistry) -> Vec<String> {
         let mut groups = BTreeMap::<&'static str, (usize, usize)>::new();
         for info in registry.tool_infos() {
-            if tools::progressive::is_initial_tool(&info.name) {
+            if !self.is_deferred_tool(&info.name) {
                 continue;
             }
             let group = tools::progressive::tool_group(&info.name);
@@ -317,8 +349,8 @@ mod tests {
     #[test]
     fn progressive_visibility_starts_with_base_and_loader() {
         let mut registry = test_registry();
-        tools::register_progressive_loader(&mut registry);
-        let visibility = ToolVisibility::new(true);
+        tools::register_progressive_loader(&mut registry, &wildcard_deferred());
+        let visibility = ToolVisibility::new(wildcard_deferred());
         let names = definition_names(visibility.definitions(&registry));
 
         assert!(names.contains(&"read_file".to_string()));
@@ -329,8 +361,8 @@ mod tests {
     #[test]
     fn progressive_visibility_loads_individual_tools() {
         let mut registry = test_registry();
-        tools::register_progressive_loader(&mut registry);
-        let mut visibility = ToolVisibility::new(true);
+        tools::register_progressive_loader(&mut registry, &wildcard_deferred());
+        let mut visibility = ToolVisibility::new(wildcard_deferred());
 
         load_args(
             &mut visibility,
@@ -346,8 +378,8 @@ mod tests {
     #[test]
     fn progressive_visibility_reports_duplicate_tool_load() {
         let mut registry = test_registry();
-        tools::register_progressive_loader(&mut registry);
-        let mut visibility = ToolVisibility::new(true);
+        tools::register_progressive_loader(&mut registry, &wildcard_deferred());
+        let mut visibility = ToolVisibility::new(wildcard_deferred());
 
         let first = load_args(
             &mut visibility,
@@ -375,8 +407,8 @@ mod tests {
     #[test]
     fn progressive_visibility_updates_loader_description() {
         let mut registry = test_registry();
-        tools::register_progressive_loader(&mut registry);
-        let mut visibility = ToolVisibility::new(true);
+        tools::register_progressive_loader(&mut registry, &wildcard_deferred());
+        let mut visibility = ToolVisibility::new(wildcard_deferred());
 
         load_args(
             &mut visibility,
@@ -415,8 +447,8 @@ mod tests {
             json!({"type":"object","properties":{},"additionalProperties":false}),
             |_| async { Ok("ok".to_string()) },
         ));
-        tools::register_progressive_loader(&mut registry);
-        let visibility = ToolVisibility::new(true);
+        tools::register_progressive_loader(&mut registry, &wildcard_deferred());
+        let visibility = ToolVisibility::new(wildcard_deferred());
         let description = visibility
             .definitions(&registry)
             .into_iter()
@@ -444,7 +476,7 @@ mod tests {
         .unwrap();
         let registry = test_registry();
         let config = AppConfig::default();
-        let mut visibility = ToolVisibility::new(true);
+        let mut visibility = ToolVisibility::new(wildcard_deferred());
 
         let output = visibility
             .load_from_arguments(
@@ -472,7 +504,7 @@ mod tests {
         let registry = test_registry();
         let mut config = AppConfig::default();
         config.skills.enabled = false;
-        let mut visibility = ToolVisibility::new(true);
+        let mut visibility = ToolVisibility::new(wildcard_deferred());
 
         let err = visibility
             .load_from_arguments(
@@ -489,8 +521,8 @@ mod tests {
     #[test]
     fn progressive_visibility_restores_loaded_tools() {
         let mut registry = test_registry();
-        tools::register_progressive_loader(&mut registry);
-        let mut visibility = ToolVisibility::new(true);
+        tools::register_progressive_loader(&mut registry, &wildcard_deferred());
+        let mut visibility = ToolVisibility::new(wildcard_deferred());
 
         visibility.restore_loaded_tools(
             &registry,
@@ -509,6 +541,17 @@ mod tests {
             visibility.loaded_tool_names(),
             vec!["web_search".to_string()]
         );
+    }
+
+    /// 构造「非基础工具一律需要 load」的延迟集合。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 只含通配符的延迟工具集合
+    fn wildcard_deferred() -> Vec<String> {
+        vec![crate::config::DEFERRED_ALL_NON_BASE.to_string()]
     }
 
     fn test_registry() -> ToolRegistry {

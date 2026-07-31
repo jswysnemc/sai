@@ -92,6 +92,17 @@ use support::*;
 pub(crate) use watcher::{GitWatchEvent, RepositoryWatcher};
 use worktrees::{add_worktree, git_worktrees, remove_worktree};
 
+/// 判断目录是否位于可用的 Git 工作树内。
+///
+/// 参数:
+/// - `root`: 待检查目录
+///
+/// 返回:
+/// - Git 可以发现仓库根目录时返回 true，命令失败或目录不是仓库时返回 false
+pub(crate) async fn is_git_repository(root: &Path) -> bool {
+    matches!(discover_repo(root).await, Ok(Some(_)))
+}
+
 #[cfg(test)]
 #[path = "git_tests.rs"]
 mod tests;

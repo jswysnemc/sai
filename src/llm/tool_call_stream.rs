@@ -311,7 +311,11 @@ mod tests {
         assert_eq!(started.arguments_preview, r#"{"patch":"*** Begin Pa"#);
 
         let target = tracker
-            .update(0, "edit_file", r#"{"patch":"*** Begin Patch\n*** End Patch","extra":""#)
+            .update(
+                0,
+                "edit_file",
+                r#"{"patch":"*** Begin Patch\n*** End Patch","extra":""#,
+            )
             .unwrap();
         assert_eq!(
             target.arguments_preview,

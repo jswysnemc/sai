@@ -43,7 +43,8 @@
     color var(--transition-fast);
 }
 
-.git-toolbar-view:hover {
+.git-toolbar-view:hover:not(.active) {
+  background: color-mix(in srgb, var(--ink) 7%, var(--control-surface));
   color: var(--ink);
 }
 

@@ -12,12 +12,35 @@ use std::sync::OnceLock;
 /// `cat a.txt` 被 rtk 映射为 `rtk read a.txt` 是正确的，read 作为**目标**合法。
 const RTK_OWN_COMMANDS: &[&str] = &[
     // 管理与统计入口
-    "init", "config", "gain", "cc-economics", "discover", "session", "telemetry", "learn",
-    "trust", "untrust", "verify", "hook", "hook-audit", "rewrite",
+    "init",
+    "config",
+    "gain",
+    "cc-economics",
+    "discover",
+    "session",
+    "telemetry",
+    "learn",
+    "trust",
+    "untrust",
+    "verify",
+    "hook",
+    "hook-audit",
+    "rewrite",
     // 执行器：套在别的命令外面，不能再被自动套一层
-    "run", "proxy", "pipe",
+    "run",
+    "proxy",
+    "pipe",
     // 与 shell 内建或常见脚本名冲突
-    "test", "read", "smart", "summary", "err", "deps", "json", "log", "lint", "format",
+    "test",
+    "read",
+    "smart",
+    "summary",
+    "err",
+    "deps",
+    "json",
+    "log",
+    "lint",
+    "format",
 ];
 
 /// 返回 rtk 的全部合法子命令（进程内探测一次）。

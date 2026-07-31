@@ -174,8 +174,18 @@ fn edit_agent_profile(
             profile.system_prompt.clone(),
         ),
         Field::textarea(
-            t("Enabled tools, one per line (empty = all)", "启用工具，每行一个（空=全量）"),
+            t(
+                "Enabled tools, one per line (empty = all)",
+                "启用工具，每行一个（空=全量）",
+            ),
             profile.enabled_tools.join("\n"),
+        ),
+        Field::textarea(
+            t(
+                "Tools requiring load, one per line (* = all non-base)",
+                "需要 load 的工具，每行一个（* = 全部非基础工具）",
+            ),
+            profile.deferred_tools.join("\n"),
         ),
         Field::textarea(
             t("Full Skills, one per line", "完整 Skills，每行一个"),
@@ -196,7 +206,10 @@ fn edit_agent_profile(
         {
             Ok(values) => values,
             Err(err) => {
-                message(stdout, &format!("{}: {err}", t("Invalid input", "输入无效")))?;
+                message(
+                    stdout,
+                    &format!("{}: {err}", t("Invalid input", "输入无效")),
+                )?;
                 continue;
             }
         };
@@ -209,8 +222,13 @@ fn edit_agent_profile(
         profile.load_instruction_files = load_instruction_files;
         profile.system_prompt = fields[6].value.trim().to_string();
         profile.enabled_tools = parse_lines(&fields[7].value);
-        profile.skills_full = parse_lines(&fields[8].value);
-        profile.skills_named = parse_lines(&fields[9].value);
+        // 延迟集合必须落在启用白名单内，否则配置读起来自相矛盾
+        profile.deferred_tools = crate::config::normalize_deferred_tools(
+            &profile.enabled_tools,
+            &parse_lines(&fields[8].value),
+        );
+        profile.skills_full = parse_lines(&fields[9].value);
+        profile.skills_named = parse_lines(&fields[10].value);
         upsert_agent(config, profile);
         return Ok(());
     }

@@ -53,13 +53,71 @@ const LANGUAGE_ALIASES: Record<string, string> = {
  * @param props 代码语言和源代码
  * @returns 带语法分类的代码元素
  */
-export function SyntaxHighlighter({ language, source }: { language?: string; source: string }) {
+export function SyntaxHighlighter({
+  language,
+  source,
+  showLineNumbers = false
+}: {
+  language?: string;
+  source: string;
+  showLineNumbers?: boolean;
+}) {
   const normalized = normalizeLanguage(language);
   const resolved = normalized && hljs.getLanguage(normalized) ? normalized : detectLanguage(source);
   const result = resolved
     ? hljs.highlight(source, { language: resolved, ignoreIllegals: true })
     : hljs.highlightAuto(source, AUTO_DETECT_LANGUAGES);
-  return <code className={`hljs${resolved ? ` language-${resolved}` : ""}`} dangerouslySetInnerHTML={{ __html: result.value }} />;
+  const className = `hljs${resolved ? ` language-${resolved}` : ""}`;
+  if (!showLineNumbers) {
+    return <code className={className} dangerouslySetInnerHTML={{ __html: result.value }} />;
+  }
+  return (
+    <code className={`${className} syntax-lines`}>
+      {splitHighlightedLines(result.value).map((line, index) => (
+        <span className="syntax-line" key={index}>
+          <span className="syntax-line-number" aria-hidden="true">{index + 1}</span>
+          <span
+            className="syntax-line-content"
+            dangerouslySetInnerHTML={{ __html: line || "&#8203;" }}
+          />
+        </span>
+      ))}
+    </code>
+  );
+}
+
+/**
+ * 按换行符拆分 Highlight.js 标记，并在每一行闭合后重新打开跨行标签。
+ *
+ * @param html Highlight.js 生成的安全高亮标记
+ * @returns 每行可独立渲染的闭合标记
+ */
+export function splitHighlightedLines(html: string): string[] {
+  const tokens = html.split(/(<span\b[^>]*>|<\/span>|\r?\n)/gu);
+  const lines = [""];
+  const openTags: string[] = [];
+
+  tokens.forEach((token) => {
+    if (!token) return;
+    if (token === "\n" || token === "\r\n") {
+      lines[lines.length - 1] += "</span>".repeat(openTags.length);
+      lines.push(openTags.join(""));
+      return;
+    }
+    if (token.startsWith("<span")) {
+      openTags.push(token);
+      lines[lines.length - 1] += token;
+      return;
+    }
+    if (token === "</span>") {
+      openTags.pop();
+      lines[lines.length - 1] += token;
+      return;
+    }
+    lines[lines.length - 1] += token;
+  });
+
+  return lines;
 }
 
 /**

@@ -1,5 +1,7 @@
 use crate::render::code_block::highlight_code_line;
-use crate::render::fold_text::{fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES};
+use crate::render::fold_text::{
+    fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
+};
 use crate::render::style::TOOL_BULLET;
 use crate::render::terminal_text as t;
 
@@ -71,7 +73,8 @@ fn fold_display_text(text: &str, expanded: bool) -> Vec<String> {
     // 命令与输出：显示宽按 72 列计，前 2 后 4
     let wrap = terminal_wrap_width().saturating_sub(6).min(72).max(24);
     let wrapped = wrap_display_lines(text, wrap);
-    let (visible, omitted) = fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
+    let (visible, omitted) =
+        fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
     visible
         .into_iter()
         .map(|line| {
@@ -138,7 +141,10 @@ mod tests {
 
     #[test]
     fn folds_long_output_body() {
-        let output = (0..40).map(|i| format!("line-{i}")).collect::<Vec<_>>().join("\n");
+        let output = (0..40)
+            .map(|i| format!("line-{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
         let rendered = render(&ShellCell {
             command: "seq".to_string(),
             output,

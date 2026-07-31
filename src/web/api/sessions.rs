@@ -23,6 +23,7 @@ struct WorkspaceSessionsResponse {
     workspace_id: String,
     workspace_name: String,
     workspace_path: String,
+    is_git_repository: bool,
     active: bool,
     sessions: Vec<SessionResponse>,
 }
@@ -127,7 +128,6 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/sessions/:id/fork", post(fork))
 }
 
-
 /// 返回指定会话的系统提示词预览（含 AGENT.md 等指令文件）。
 ///
 /// 参数:
@@ -212,6 +212,7 @@ async fn tree(State(state): State<WebAppState>) -> WebResult<Json<Vec<WorkspaceS
     let mut result = Vec::with_capacity(workspaces.len());
     for workspace in workspaces {
         let path = FilePath::new(&workspace.path);
+        let is_git_repository = crate::web::workspace::is_git_repository(path).await;
         let active_session_id = crate::state::active_session_id_for_workspace(&state.paths, path)
             .map_err(WebError::from)?;
         let sessions = crate::state::list_sessions_for_workspace(&state.paths, path)
@@ -230,6 +231,7 @@ async fn tree(State(state): State<WebAppState>) -> WebResult<Json<Vec<WorkspaceS
             workspace_id: workspace.id,
             workspace_name: workspace.name,
             workspace_path: workspace.path,
+            is_git_repository,
             sessions,
         });
     }
@@ -631,5 +633,31 @@ mod tests {
             assert_eq!(actual, expected);
         })
         .await;
+    }
+
+    /// 【Web会话】【Git 工作区】验证嵌套目录可识别上级 Git 仓库。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[tokio::test]
+    async fn workspace_git_flag_detects_repository_ancestors() {
+        let temp = tempfile::tempdir().unwrap();
+        let repository = temp.path().join("repository");
+        let nested = repository.join("nested");
+        let ordinary = temp.path().join("ordinary");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::create_dir_all(&ordinary).unwrap();
+        let status = std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&repository)
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        assert!(crate::web::workspace::is_git_repository(&nested).await);
+        assert!(!crate::web::workspace::is_git_repository(&ordinary).await);
     }
 }

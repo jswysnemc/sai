@@ -10,11 +10,11 @@ use std::io::{self, Write};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use super::input::read_key;
-use super::theme::{
-    selection_marks, BOLD, BRAND, CORNER_BOTTOM_LEFT, CORNER_BOTTOM_RIGHT,
-    CORNER_TOP_LEFT, CORNER_TOP_RIGHT, LINE_HORIZONTAL, LINE_VERTICAL, MUTED, RESET,
-};
 use super::layout::{panel_width, scroll_start};
+use super::theme::{
+    selection_marks, BOLD, BRAND, CORNER_BOTTOM_LEFT, CORNER_BOTTOM_RIGHT, CORNER_TOP_LEFT,
+    CORNER_TOP_RIGHT, LINE_HORIZONTAL, LINE_VERTICAL, MUTED, RESET,
+};
 
 pub(crate) fn draw_menu(
     stdout: &mut io::Stdout,

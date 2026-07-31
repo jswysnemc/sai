@@ -1,4 +1,6 @@
-use crate::render::fold_text::{fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES};
+use crate::render::fold_text::{
+    fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
+};
 use crate::render::style::TOOL_BULLET;
 use crate::render::terminal_text as t;
 use serde_json::Value;
@@ -275,17 +277,10 @@ pub(crate) fn render_completed_command_output(
 ) -> String {
     let result = parse_command_result(output);
     if result.is_none() {
-        return render_output_block_limited(
-            t("err", "错误"),
-            output,
-            preview_line_limit(expanded),
-        );
+        return render_output_block_limited(t("err", "错误"), output, preview_line_limit(expanded));
     }
     if stdout.is_empty() && stderr.is_empty() {
-        return render_command_result_view_with_limit(
-            output,
-            preview_line_limit(expanded),
-        );
+        return render_command_result_view_with_limit(output, preview_line_limit(expanded));
     }
     let line_limit = preview_line_limit(expanded);
     let mut blocks = Vec::new();
@@ -510,12 +505,8 @@ fn limited_output_text(text: &str, line_limit: Option<usize>) -> (String, usize)
     }
     // 预览折叠固定前 2 后 4；line_limit 仅用于决定是否折叠（Some 即折叠）
     let _ = limit;
-    let (kept, omitted) = fold_display_lines(
-        &display_lines,
-        FOLD_HEAD_LINES,
-        FOLD_TAIL_LINES,
-        false,
-    );
+    let (kept, omitted) =
+        fold_display_lines(&display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES, false);
     (kept.join("\n"), omitted)
 }
 
@@ -579,9 +570,7 @@ mod tests {
             .any(|line| line.trim_end() == "six" || line.ends_with(" six")));
         // 中间省略 6 行（12 - 2 - 4）
         assert!(
-            plain.contains("… +6 lines")
-                || plain.contains("+6 lines")
-                || plain.contains("…"),
+            plain.contains("… +6 lines") || plain.contains("+6 lines") || plain.contains("…"),
             "expected fold ellipsis: {plain}"
         );
         assert!(plain.contains("nine") || plain.contains("twelve"));

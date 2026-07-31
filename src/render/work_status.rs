@@ -1,8 +1,6 @@
 use crate::agent::AgentEvent;
 use crate::llm::ChatStreamKind;
-use crate::render::activity_animation::{
-    render_activity_detail, render_activity_guide, render_activity_text,
-};
+use crate::render::activity_animation::render_activity_line;
 use std::time::Duration;
 
 /// 单轮请求的用户可见工作状态。
@@ -96,12 +94,7 @@ impl WorkStatus {
     /// 返回:
     /// - 带 ANSI 样式的状态行
     pub(crate) fn render_line(self, frame: usize, elapsed: Duration) -> String {
-        format!(
-            "{} {} {}",
-            render_activity_guide(frame),
-            render_activity_text(self.localized_label(), frame),
-            render_activity_detail(&format_elapsed(elapsed))
-        )
+        render_activity_line(self.localized_label(), &format_elapsed(elapsed), frame)
     }
 }
 

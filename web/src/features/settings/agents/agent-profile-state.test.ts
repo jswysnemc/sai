@@ -21,6 +21,7 @@ describe("主 Agent 档案状态", () => {
       description: "",
       system_prompt: "",
       enabled_tools: [],
+      deferred_tools: [],
       skills_full: [],
       skills_named: [],
       provider_id: "",

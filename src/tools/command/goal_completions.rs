@@ -159,7 +159,6 @@ fn owned_by_goal(task: &BackgroundCommandTask, session_id: &str, goal_id: &str) 
     owned_by_session(task, session_id) && task.goal_id.as_deref() == Some(goal_id)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

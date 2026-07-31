@@ -258,10 +258,7 @@ fn resolve_context_prompt_tokens(
         return breakdown_total.max(snapshot_tokens);
     };
     // 2. 已压缩且 provider 旧值显著高于实时估算时，判定为压缩前残留
-    if checkpoint_count > 0
-        && breakdown_total > 0
-        && last_tokens > breakdown_total.saturating_mul(3) / 2
-    {
+    if provider_context_usage_is_stale(last_tokens, breakdown_total, checkpoint_count) {
         return breakdown_total;
     }
     // 3. 其余情况沿用 provider / 快照值
@@ -285,9 +282,26 @@ fn provider_context_usage_is_current(
     let Some(last_tokens) = last_conversation_tokens.filter(|tokens| *tokens > 0) else {
         return false;
     };
-    !(checkpoint_count > 0
+    !provider_context_usage_is_stale(last_tokens, breakdown_total, checkpoint_count)
+}
+
+/// 判断 provider 上下文用量是否为压缩前残留值。
+///
+/// 参数:
+/// - `last_tokens`: 最近一次主对话 provider prompt_tokens
+/// - `breakdown_total`: 实时分项估算合计
+/// - `checkpoint_count`: 已应用 checkpoint 数
+///
+/// 返回:
+/// - 已压缩且 provider 值显著高于实时估算时返回 true
+fn provider_context_usage_is_stale(
+    last_tokens: usize,
+    breakdown_total: usize,
+    checkpoint_count: usize,
+) -> bool {
+    checkpoint_count > 0
         && breakdown_total > 0
-        && last_tokens > breakdown_total.saturating_mul(3) / 2)
+        && last_tokens > breakdown_total.saturating_mul(3) / 2
 }
 
 /// 构造当前上下文的缓存命中统计。

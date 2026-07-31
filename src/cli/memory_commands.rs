@@ -6,10 +6,8 @@ pub(super) fn run_memory(paths: &SaiPaths, args: MemoryArgs) -> Result<()> {
     match args.command {
         MemoryCommand::Stats => println!("{}", store.stats()?),
         MemoryCommand::Reset(args) => {
-            if !confirm::confirm_destructive(
-                t("clear assistant memory", "清空助手记忆"),
-                args.yes,
-            )? {
+            if !confirm::confirm_destructive(t("clear assistant memory", "清空助手记忆"), args.yes)?
+            {
                 return Ok(());
             }
             println!("{}", clear_memory(paths, args.include_skills)?);

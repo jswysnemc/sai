@@ -62,9 +62,7 @@ pub(super) fn open_blocks_pager(blocks: &[ExpandableBlock], start_index: usize) 
             let header_prefix = format!("[{}/{}]", index + 1, blocks.len());
             let header_rows = 1usize; // 仅块序号
             let footer_rows = 2usize; // 进度条 + 快捷键
-            let view_h = rows
-                .saturating_sub(header_rows + footer_rows)
-                .max(1);
+            let view_h = rows.saturating_sub(header_rows + footer_rows).max(1);
             // 3. 滚动窗口内容 = 完整命令标题 + 空行 + 正文
             let body_width = cols.saturating_sub(1).max(1);
             let mut content_lines = AnsiLine::wrap_block(&block.title, body_width);
@@ -89,7 +87,12 @@ pub(super) fn open_blocks_pager(blocks: &[ExpandableBlock], start_index: usize) 
                 let idx = scroll + row;
                 let line = content_lines.get(idx).map(AnsiLine::as_str).unwrap_or("");
                 let bar = scrollbar.get(row).copied().unwrap_or(' ');
-                write!(stdout, "{}\x1b[2m{}\x1b[0m\r\n", pad_line(line, body_width), bar)?;
+                write!(
+                    stdout,
+                    "{}\x1b[2m{}\x1b[0m\r\n",
+                    pad_line(line, body_width),
+                    bar
+                )?;
             }
             // 7. 可拖动进度条（第二底栏上方的横向轨道）
             let end = (scroll + view_h).min(content_lines.len()).max(scroll);
@@ -532,7 +535,6 @@ fn truncate_visible(value: &str, width: usize) -> String {
     }
     out
 }
-
 
 #[cfg(test)]
 mod tests {

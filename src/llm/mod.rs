@@ -8,7 +8,9 @@ mod transport_retry;
 pub use http_debug::SessionGuard as HttpDebugSessionGuard;
 pub use openai_compatible::OpenAiCompatibleClient;
 pub use stream_event::{ChatStreamEvent, ToolCallStreamProgress};
-pub(crate) use transport_retry::{disconnect_user_hint, error_detail_text, is_transient_transport_error};
+pub(crate) use transport_retry::{
+    disconnect_user_hint, error_detail_text, is_transient_transport_error,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -193,9 +195,13 @@ impl Usage {
     /// - 无；就地累加各字段
     pub fn accumulate(&mut self, other: &Usage) {
         self.prompt_tokens = self.prompt_tokens.saturating_add(other.prompt_tokens);
-        self.completion_tokens = self.completion_tokens.saturating_add(other.completion_tokens);
+        self.completion_tokens = self
+            .completion_tokens
+            .saturating_add(other.completion_tokens);
         self.total_tokens = self.total_tokens.saturating_add(other.total_tokens);
-        self.cache_read_tokens = self.cache_read_tokens.saturating_add(other.cache_read_tokens);
+        self.cache_read_tokens = self
+            .cache_read_tokens
+            .saturating_add(other.cache_read_tokens);
         self.cache_write_tokens = self
             .cache_write_tokens
             .saturating_add(other.cache_write_tokens);

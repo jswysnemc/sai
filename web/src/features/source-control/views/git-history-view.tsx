@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import type { GitCommitDetailsResponse, GitDiffResponse, GitLogResponse } from "../../../api/contracts";
 import { useI18n } from "../../i18n/use-i18n";
 import { CommitGraph } from "../graph/commit-graph";
+import { SourceControlSplitView } from "../layout/source-control-split-view";
 import type { RunGitOperation } from "../types";
 import { GitCommitDetail } from "./git-commit-detail";
 import "./git-views.css";
@@ -34,7 +35,7 @@ export function GitHistoryView(props: GitHistoryViewProps) {
   const ahead = props.history?.history_ahead ?? 0;
   const behind = props.history?.history_behind ?? 0;
   return (
-    <div className="git-history-body">
+    <SourceControlSplitView className="git-history-body">
       <section className="git-history-panel">
         <div className="git-change-head">
           <span>{t(`Commit graph · ${commits.length}`, `提交图 · ${commits.length}`)}</span>
@@ -72,6 +73,6 @@ export function GitHistoryView(props: GitHistoryViewProps) {
           locale={props.locale}
         />
       </div>
-    </div>
+    </SourceControlSplitView>
   );
 }

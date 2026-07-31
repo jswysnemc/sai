@@ -81,9 +81,7 @@ impl AppConfig {
 
         // 2. 【会话】【新会话默认值】思考等级必须使用 Web 运行接口支持的稳定值
         match self.session.new_session_thinking_level.trim() {
-            "" | "auto" | "none" | "low" | "medium" | "high" | "xhigh" | "max" => {
-                Ok(())
-            }
+            "" | "auto" | "none" | "low" | "medium" | "high" | "xhigh" | "max" => Ok(()),
             value => bail!("session.new_session_thinking_level is invalid: {value}"),
         }
     }

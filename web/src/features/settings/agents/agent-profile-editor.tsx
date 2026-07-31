@@ -10,6 +10,7 @@ import { EditorHeader } from "../editor-layout";
 import type { AgentOptions } from "./agents-types";
 import { AgentSkillPermissions } from "./agent-skill-permissions";
 import { AgentToolPermissions } from "./agent-tool-permissions";
+import { DEFERRED_ALL_NON_BASE } from "./agent-tool-mode-state";
 import { AgentRuntimeFields } from "./agent-runtime-fields";
 
 type AgentEditorTab = "basic" | "tools" | "skills";
@@ -32,6 +33,11 @@ export function AgentProfileEditor({ config, profile, options, onChange, onRemov
   const { t } = useI18n();
   const [tab, setTab] = useState<AgentEditorTab>("basic");
   const skillCount = profile.skills_full.length + profile.skills_named.length;
+  const deferredTools = profile.deferred_tools ?? [];
+  // 通配符代表全部非基础工具，逐项计数时按实际非基础工具数量折算
+  const deferredCount = deferredTools.includes(DEFERRED_ALL_NON_BASE)
+    ? options.tools.filter((tool) => tool.group !== "base").length
+    : deferredTools.length;
   const isBuiltin = profile.id === DEFAULT_AGENT_ID || ["general", "explore"].includes(profile.id);
   const tabs: Array<{ id: AgentEditorTab; label: string; icon: typeof Settings2 }> = [
     { id: "basic", label: t("Basics", "基础配置"), icon: Settings2 },
@@ -89,6 +95,11 @@ export function AgentProfileEditor({ config, profile, options, onChange, onRemov
           <span>{t("Tools", "工具")}</span>
           <strong>{profile.enabled_tools.length}</strong>
           <small>/{options.tools.length || "—"}</small>
+        </div>
+        <div>
+          <span>{t("Load on demand", "按需加载")}</span>
+          <strong>{deferredCount}</strong>
+          <small>/{profile.enabled_tools.length || options.tools.length || "—"}</small>
         </div>
         <div>
           <span>{t("Skills", "技能")}</span>
@@ -158,7 +169,8 @@ export function AgentProfileEditor({ config, profile, options, onChange, onRemov
         <AgentToolPermissions
           tools={options.tools}
           enabled={profile.enabled_tools}
-          onChange={(enabledTools) => onChange({ enabled_tools: enabledTools })}
+          deferred={profile.deferred_tools ?? []}
+          onChange={(enabledTools, deferredTools) => onChange({ enabled_tools: enabledTools, deferred_tools: deferredTools })}
         />
       )}
       {tab === "skills" && (

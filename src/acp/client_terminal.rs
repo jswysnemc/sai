@@ -126,9 +126,8 @@ impl TerminalRegistry {
                     last_error = Some(error);
                 }
                 Err(error) => {
-                    return Err(error).with_context(|| {
-                        format!("failed to start terminal command: {command}")
-                    })
+                    return Err(error)
+                        .with_context(|| format!("failed to start terminal command: {command}"))
                 }
             }
         }
@@ -239,9 +238,7 @@ impl TerminalRegistry {
             match terminal.child.take() {
                 Some(child) => child,
                 // 已经等过一次，直接返回记录的退出码
-                None => {
-                    return Ok(json!({ "exitCode": terminal.exit_status.unwrap_or_default() }))
-                }
+                None => return Ok(json!({ "exitCode": terminal.exit_status.unwrap_or_default() })),
             }
         };
         let status = child.wait().await?;
@@ -404,7 +401,8 @@ mod tests {
 
     #[test]
     fn joins_command_with_args() {
-        let line = command_line(&json!({ "command": "git", "args": ["status", "--short"] })).unwrap();
+        let line =
+            command_line(&json!({ "command": "git", "args": ["status", "--short"] })).unwrap();
         #[cfg(not(windows))]
         assert_eq!(line, "git 'status' '--short'");
         #[cfg(windows)]
@@ -425,8 +423,8 @@ mod tests {
     /// shell 元字符只能作为参数内容，不能变成额外命令。
     #[test]
     fn quotes_shell_metacharacters_in_arguments() {
-        let line = command_line(&json!({ "command": "printf", "args": ["a; touch /tmp/x"] }))
-            .unwrap();
+        let line =
+            command_line(&json!({ "command": "printf", "args": ["a; touch /tmp/x"] })).unwrap();
         assert!(line.contains("a; touch /tmp/x"));
         assert_ne!(line, "printf a; touch /tmp/x");
     }
@@ -491,7 +489,7 @@ mod tests {
             crate::config::AppConfig::default(),
             "test-session".to_string(),
             None,
-        None,
+            None,
         );
         let registry = TerminalRegistry::default();
 
@@ -552,7 +550,11 @@ mod tests {
         let text = output["output"].as_str().unwrap();
 
         assert!(text.contains('1'), "应包含首行");
-        assert!(text.contains("500"), "退出后必须已读到末行: 实际 {} 字节", text.len());
+        assert!(
+            text.contains("500"),
+            "退出后必须已读到末行: 实际 {} 字节",
+            text.len()
+        );
         registry.release(&id).await.unwrap();
     }
 

@@ -28,6 +28,7 @@ export function EditorHeader({ kicker, title, description, actions }: EditorHead
 
 type SettingsGroupProps = {
   title: string;
+  icon?: ReactNode;
   description?: string;
   actions?: ReactNode;
   children: ReactNode;
@@ -36,14 +37,17 @@ type SettingsGroupProps = {
 /**
  * 渲染分组标题加分隔线的表单分组，替代嵌套圆角卡片。
  *
- * @param props 分组标题、说明、操作节点和分组内容
+ * @param props 分组标题、可选图标、说明、操作节点和分组内容
  * @returns 表单分组
  */
-export function SettingsGroup({ title, description, actions, children }: SettingsGroupProps) {
+export function SettingsGroup({ title, icon, description, actions, children }: SettingsGroupProps) {
   return (
     <section className="settings-group">
       <div className="settings-group-head">
-        <div><h3>{title}</h3>{description && <p>{description}</p>}</div>
+        <div>
+          <div className="settings-group-title">{icon}<h3>{title}</h3></div>
+          {description && <p>{description}</p>}
+        </div>
         {actions}
       </div>
       {children}

@@ -37,10 +37,7 @@ fn preview_from_value(value: &Value) -> Result<AppliedPatch> {
         if patch.is_empty() {
             bail!(t("patch is required", "必须提供 patch"));
         }
-        return crate::tools::edit_patch::preview_patch(
-            patch,
-            &crate::runtime_cwd::current_dir()?,
-        );
+        return crate::tools::edit_patch::preview_patch(patch, &crate::runtime_cwd::current_dir()?);
     }
     if let (Some(path), Some(content)) = (
         value.get("path").and_then(Value::as_str),

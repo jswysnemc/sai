@@ -56,9 +56,7 @@ use crate::config::AppConfig;
 use crate::paths::SaiPaths;
 pub(crate) use catalog::{mcp_tool_catalog, tool_catalog, ToolCatalogEntry};
 pub(crate) use context::tool_output_for_context;
-pub(crate) use progressive::{
-    is_initial_tool, register_loader as register_progressive_loader, LOAD_NAME,
-};
+pub(crate) use progressive::{register_loader as register_progressive_loader, LOAD_NAME};
 pub use registry::{empty_parameters, ToolPermission, ToolProgress, ToolRegistry, ToolSpec};
 pub(crate) use registry::{ToolModelAttachment, ToolOutput};
 pub(crate) use skill_management::{

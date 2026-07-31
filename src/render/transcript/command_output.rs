@@ -141,7 +141,6 @@ fn colorize_command_lines(command: &str) -> String {
         .join("\n")
 }
 
-
 /// 拼装命令工具的完整 stdout/stderr 正文。
 ///
 /// 参数:

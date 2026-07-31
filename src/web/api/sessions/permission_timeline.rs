@@ -45,9 +45,7 @@ pub(super) fn attach_permission_decisions(
                     *count -= 1;
                 }
                 let approved = event.decision == "approved";
-                let detail = event
-                    .detail
-                    .filter(|value| !value.trim().is_empty());
+                let detail = event.detail.filter(|value| !value.trim().is_empty());
                 // 批准事件只有自动审核会带说明，据此还原来源与理由
                 let auto_audited = approved && detail.is_some();
                 resolved
@@ -187,7 +185,13 @@ mod tests {
         let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
         store.start_turn("turn", "inspect").unwrap();
         store
-            .record_tool_call_started("turn", 0, "call", "run_command", r#"{"command":"git status"}"#)
+            .record_tool_call_started(
+                "turn",
+                0,
+                "call",
+                "run_command",
+                r#"{"command":"git status"}"#,
+            )
             .unwrap();
         store
             .record_tool_result_completed("turn", "call", true, "ok", None, None, 2)
@@ -252,10 +256,22 @@ mod tests {
         );
         let arguments = serde_json::json!({"path":"b.rs"});
         audit
-            .append("audited", "edit_file", AuditDecision::Requested, &arguments, None)
+            .append(
+                "audited",
+                "edit_file",
+                AuditDecision::Requested,
+                &arguments,
+                None,
+            )
             .unwrap();
         audit
-            .append("audited", "edit_file", AuditDecision::Approved, &arguments, None)
+            .append(
+                "audited",
+                "edit_file",
+                AuditDecision::Approved,
+                &arguments,
+                None,
+            )
             .unwrap();
         let mut timeline = store.session_timeline(10).unwrap();
 

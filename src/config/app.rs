@@ -257,6 +257,7 @@ impl AppConfig {
         self.validate_gateways()?;
         self.validate_new_session_defaults()?;
         self.validate_compaction_model()?;
+        super::prompt_templates::validate_prompt_templates(&self.prompt.templates)?;
         self.plugins.web.validate()?;
         if self.plugins.print_image.width_percent == 0
             || self.plugins.print_image.width_percent > 100

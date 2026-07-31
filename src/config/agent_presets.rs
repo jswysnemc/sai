@@ -1,3 +1,4 @@
+use super::agent_tool_modes::{normalize_deferred_tools, DEFERRED_ALL_NON_BASE};
 use super::agents::{
     AgentProfile, CLI_AGENT_ID, EXPLORE_AGENT_ID, GATEWAY_AGENT_ID, GENERAL_AGENT_ID, PLAN_AGENT_ID,
 };
@@ -120,6 +121,17 @@ const EXPLORE_AGENT_TOOLS: &[&str] = &[
     "web_fetch",
 ];
 
+/// 探索与 Plan Agent 的检索类工具保持初始可见。
+///
+/// 这两个 Agent 的核心动作就是检索，把 web_search / web_fetch 推到 load 后面
+/// 只会让每次调研都先多一轮加载。
+const SEARCH_KEEP_VISIBLE: &[&str] = &["web_search", "web_fetch"];
+
+/// 网关 Agent 需要保持初始可见的工具。
+///
+/// 渠道消息发送与定时任务是网关的固有职责，延迟加载没有收益。
+const GATEWAY_KEEP_VISIBLE: &[&str] = &["send_channel_message", "cron"];
+
 /// 返回所有内置 Agent 档案。
 ///
 /// 参数:
@@ -157,6 +169,41 @@ pub(super) fn resolve_enabled_tools(profile: &AgentProfile) -> Vec<String> {
         }
     };
     expand_legacy_enabled_tools(tools)
+}
+
+/// 解析 Agent 档案中需要 load 才暴露的工具列表。
+///
+/// 档案未显式配置时不做推断：旧配置升级后行为保持不变，
+/// 三段状态的默认划分只写在首次落盘的 seed 档案里。
+///
+/// 参数:
+/// - `profile`: Agent 档案
+/// - `enabled`: 已解析的启用工具白名单
+///
+/// 返回:
+/// - 收敛到白名单内的延迟工具名
+pub(super) fn resolve_deferred_tools(profile: &AgentProfile, enabled: &[String]) -> Vec<String> {
+    normalize_deferred_tools(enabled, &profile.deferred_tools)
+}
+
+/// 从白名单中划出默认需要 load 的工具。
+///
+/// 基础文件、命令与任务工具保持会话开始即可见；其余按用途分组的工具
+/// 交给模型按需 load，避免首轮就把全部工具描述塞进上下文。
+///
+/// 参数:
+/// - `tools`: Agent 工具白名单
+/// - `keep_visible`: 即使不属于基础工具也要保持初始可见的工具名
+///
+/// 返回:
+/// - 默认延迟加载的工具名
+fn deferred_from_whitelist(tools: &[&str], keep_visible: &[&str]) -> Vec<String> {
+    tools
+        .iter()
+        .filter(|name| !crate::tools::groups::is_base_tool(name))
+        .filter(|name| !keep_visible.contains(*name))
+        .map(|name| (*name).to_string())
+        .collect()
 }
 
 /// 将旧工具名展开为当前注册名，并补齐编辑工具组合。
@@ -239,6 +286,8 @@ fn builtin_cli_agent() -> AgentProfile {
         description: "人格化终端助手：工具全量开放，适合日常排障与对话".to_string(),
         system_prompt: CLI_AGENT_PROMPT.to_string(),
         enabled_tools: Vec::new(),
+        // 全量开放且无法穷举工具名，用通配符表达「基础工具直接可见，其余按需 load」
+        deferred_tools: vec![DEFERRED_ALL_NON_BASE.to_string()],
         thinking_level: "auto".to_string(),
         register_to_main: false,
         load_instruction_files: true,
@@ -260,6 +309,7 @@ fn builtin_general_agent() -> AgentProfile {
         description: "适合实现、测试、文档和常规工程任务；工具面向长程编程".to_string(),
         system_prompt: GENERAL_AGENT_PROMPT.to_string(),
         enabled_tools: tools_to_owned(CODE_AGENT_TOOLS),
+        deferred_tools: deferred_from_whitelist(CODE_AGENT_TOOLS, SEARCH_KEEP_VISIBLE),
         thinking_level: "auto".to_string(),
         register_to_main: true,
         load_instruction_files: true,
@@ -281,6 +331,7 @@ fn builtin_explore_agent() -> AgentProfile {
         description: "适合只读检索、代码定位和资料探索；返回证据与路径".to_string(),
         system_prompt: EXPLORE_AGENT_PROMPT.to_string(),
         enabled_tools: tools_to_owned(EXPLORE_AGENT_TOOLS),
+        deferred_tools: deferred_from_whitelist(EXPLORE_AGENT_TOOLS, SEARCH_KEEP_VISIBLE),
         thinking_level: "auto".to_string(),
         register_to_main: true,
         load_instruction_files: true,
@@ -302,6 +353,7 @@ fn builtin_plan_agent() -> AgentProfile {
         description: "只读调研与方案规划，不改系统状态".to_string(),
         system_prompt: PLAN_AGENT_PROMPT.to_string(),
         enabled_tools: tools_to_owned(PLAN_AGENT_TOOLS),
+        deferred_tools: deferred_from_whitelist(PLAN_AGENT_TOOLS, SEARCH_KEEP_VISIBLE),
         thinking_level: "auto".to_string(),
         register_to_main: true,
         load_instruction_files: true,
@@ -323,6 +375,7 @@ fn builtin_gateway_agent() -> AgentProfile {
         description: "适合 QQ/微信等即时通讯网关：短回复、排障与查询".to_string(),
         system_prompt: GATEWAY_AGENT_PROMPT.to_string(),
         enabled_tools: tools_to_owned(GATEWAY_AGENT_TOOLS),
+        deferred_tools: deferred_from_whitelist(GATEWAY_AGENT_TOOLS, GATEWAY_KEEP_VISIBLE),
         thinking_level: "auto".to_string(),
         register_to_main: false,
         load_instruction_files: false,

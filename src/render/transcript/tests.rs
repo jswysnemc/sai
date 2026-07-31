@@ -4,6 +4,9 @@ use super::{TranscriptMode, TranscriptRenderOptions, TranscriptStore};
 use crate::llm::{ChatStreamKind, ToolCallStreamProgress};
 use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
 
+#[path = "tests/diff_wrapping.rs"]
+mod diff_wrapping;
+
 #[test]
 fn ansi_lines_are_prewrapped_at_requested_width() {
     let lines = AnsiLine::wrap_block("\x1b[31mabcdef\x1b[0m", 3);
@@ -104,10 +107,12 @@ fn live_tool_argument_preview_is_visible_until_the_call_is_finalized() {
 fn reasoning_cell_lines_fit_display_width() {
     // 渲染宽度上下文注入后，thinking 正文折行必须与 display 宽度一致，
     // 不得产生被 wrap_block 二次折断的无缩进续行
-    let source = "The user is asking \"你好,你能做什么\" - which means \"Hello, what can you do?\" \
+    let source =
+        "The user is asking \"你好,你能做什么\" - which means \"Hello, what can you do?\" \
                   in Chinese. This is a general question about my capabilities. Let me give a \
                   concise but helpful overview of what I can do.";
-    let mut cell = crate::render::transcript::reasoning_cell::ReasoningCell::new(source.to_string());
+    let mut cell =
+        crate::render::transcript::reasoning_cell::ReasoningCell::new(source.to_string());
     cell.expanded = true;
     let cell = super::cell::HistoryCell::Reasoning(cell);
     for width in [40usize, 60, 81, 100] {
@@ -230,7 +235,10 @@ fn expanded_render_context_unfolds_reasoning() {
 fn subagent_view_switch_replaces_display_window() {
     let mut store = TranscriptStore::new(100);
     store.push_meta("主会话内容".to_string());
-    store.push_tool_call("subagent".to_string(), r#"{"description":"检查项目"}"#.to_string());
+    store.push_tool_call(
+        "subagent".to_string(),
+        r#"{"description":"检查项目"}"#.to_string(),
+    );
     // 绑定后台 ID：running 状态下 finish 只记录 ID
     store.push_tool_result(
         "subagent".to_string(),
@@ -264,7 +272,10 @@ fn subagent_view_switch_replaces_display_window() {
 fn subagent_overview_lists_running_or_viewing_only() {
     let mut store = TranscriptStore::new(100);
     // 已结束且未在查看的子智能体不出现在面板
-    store.push_tool_call("subagent".to_string(), r#"{"description":"完成的"}"#.to_string());
+    store.push_tool_call(
+        "subagent".to_string(),
+        r#"{"description":"完成的"}"#.to_string(),
+    );
     store.push_tool_result("subagent".to_string(), true, "plain result".to_string());
     assert!(store.subagent_overview().is_empty());
 }
@@ -519,7 +530,10 @@ fn permission_audit_stays_inside_existing_command_view() {
         .collect::<String>();
     assert!(reply.contains("请改为只读检查"));
     assert!(reply.contains("Enter submit"));
-    assert!(store.resolve_permission("permission", crate::permission::PermissionDecision::allow_once()));
+    assert!(store.resolve_permission(
+        "permission",
+        crate::permission::PermissionDecision::allow_once()
+    ));
 
     let rendered = store
         .display_tail(100, &options())
@@ -722,53 +736,4 @@ fn history_edit_file_restores_diff_cell() {
         rendered.contains('+') || rendered.contains('-') || rendered.contains("Edit"),
         "{rendered}"
     );
-}
-
-/// 【终端】【Diff 换行】验证长行折行后续行缩进到 diff 正文列。
-///
-/// 参数:
-/// - 无
-///
-/// 返回:
-/// - 无
-#[test]
-fn diff_long_lines_wrap_with_body_column_indent() {
-    let temp = tempfile::tempdir().unwrap();
-    let path = temp.path().join("long.md");
-    std::fs::write(&path, "short\n").unwrap();
-    // 用不会出现在临时路径里的字符，否则标题行会被误判为长行的一部分
-    let long = "\u{4e2d}".repeat(160);
-    let args = serde_json::json!({
-        "patch": format!(
-            "*** Begin Patch\n*** Update File: {}\n@@\n-short\n+{long}\n*** End Patch",
-            path.display()
-        )
-    })
-    .to_string();
-
-    let mut store = TranscriptStore::new(100);
-    store.push_tool_call("edit_file".to_string(), args);
-    let lines = store.display_window(60, &options(), 40, usize::MAX);
-    let plain = lines
-        .lines
-        .iter()
-        .map(|line| strip_ansi(line.as_str()))
-        .filter(|line| line.contains('\u{4e2d}'))
-        .collect::<Vec<_>>();
-
-    assert!(plain.len() > 1, "长行应被折成多行: {plain:?}");
-    // 首行带行号与标记，其余是续行；续行必须缩进到正文列而非顶在最左侧
-    let continuations = plain
-        .iter()
-        .filter(|line| !line.contains('+'))
-        .collect::<Vec<_>>();
-    assert!(!continuations.is_empty(), "应存在续行: {plain:?}");
-    for line in continuations {
-        // 按字符数而非字节数统计，宽字符下两者不等
-        let indent = line.chars().take_while(|ch| *ch == ' ').count();
-        assert!(
-            indent >= 7,
-            "续行应缩进到 diff 正文列，实际缩进 {indent}: {line:?}"
-        );
-    }
 }

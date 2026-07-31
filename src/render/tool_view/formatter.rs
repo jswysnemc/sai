@@ -219,7 +219,8 @@ pub(crate) fn render_result(
 /// - Codex 风格的层级载荷块
 fn render_payload(label: &str, payload: &str) -> String {
     use crate::render::fold_text::{
-        fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
+        fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES,
+        FOLD_TAIL_LINES,
     };
     let formatted = serde_json::from_str::<Value>(payload)
         .ok()

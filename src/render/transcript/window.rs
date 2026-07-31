@@ -80,8 +80,12 @@ impl TranscriptStore {
     ) -> DisplayWindow {
         // 子智能体视图：整个 transcript 切换为该子智能体的会话时间线
         if let super::store::TranscriptView::Subagent { id, label } = self.view.clone() {
-            let lines =
-                super::subagent_view::render_view_lines(&id, &label, width, self.live_animation_frame);
+            let lines = super::subagent_view::render_view_lines(
+                &id,
+                &label,
+                width,
+                self.live_animation_frame,
+            );
             let total = lines.len();
             let start = total.saturating_sub(min_rows).min(max_start).min(total);
             return DisplayWindow {
@@ -204,9 +208,10 @@ impl TranscriptStore {
             // 【终端】【流式正文】1. 按内容类型选择渲染方式，避免宽度与折行分支漂移
             let rendered_lines = match tail.kind {
                 ChatStreamKind::Content => {
-                    let (rendered, open) = crate::render::render_width::with_render_width(width, || {
-                        markdown_cell::render_completed_parts(&tail.source)
-                    });
+                    let (rendered, open) =
+                        crate::render::render_width::with_render_width(width, || {
+                            markdown_cell::render_completed_parts(&tail.source)
+                        });
                     transient = open;
                     // 【终端】【正文引导】2. Markdown 流式正文添加与定稿正文一致的引导区
                     assistant_body::display_lines(&rendered, width)
@@ -222,6 +227,7 @@ impl TranscriptStore {
                             options.reasoning_mode,
                             self.live_animation_frame,
                             elapsed,
+                            tail.expanded,
                         )
                     });
                     if rendered.is_empty() {

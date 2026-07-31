@@ -97,17 +97,23 @@ impl ModelInfo {
             self.context_length
                 .or(self.context_window)
                 .or(self.max_model_len)
-                .or_else(|| self.top_provider.as_ref().and_then(|top| top.context_length)),
+                .or_else(|| {
+                    self.top_provider
+                        .as_ref()
+                        .and_then(|top| top.context_length)
+                }),
         )
     }
 
     fn resolved_max_output(&self) -> Option<u64> {
         positive_u64(
-            self.max_output_tokens.or(self.max_completion_tokens).or_else(|| {
-                self.top_provider
-                    .as_ref()
-                    .and_then(|top| top.max_completion_tokens)
-            }),
+            self.max_output_tokens
+                .or(self.max_completion_tokens)
+                .or_else(|| {
+                    self.top_provider
+                        .as_ref()
+                        .and_then(|top| top.max_completion_tokens)
+                }),
         )
     }
 

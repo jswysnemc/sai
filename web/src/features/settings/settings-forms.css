@@ -92,9 +92,16 @@
 }
 
 .settings-group-head h3 {
-  margin:0 0 var(--space-3xs);
+  margin: 0;
   font-size:var(--text-lg);
   letter-spacing: -0.01em;
+}
+
+.settings-group-title {
+  display: flex;
+  align-items: center;
+  gap:var(--space-xs);
+  margin-bottom:var(--space-3xs);
 }
 
 .settings-group-head p {

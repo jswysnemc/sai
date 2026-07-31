@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Cable, CalendarClock, CheckSquare2, ChevronDown, ChevronRight, FolderGit2, FolderOpen, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Square, Trash2, X } from "lucide-react";
+import { Cable, CalendarClock, CheckSquare2, ChevronDown, ChevronRight, FolderOpen, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Square, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
@@ -15,7 +15,9 @@ import { LocaleSwitcher } from "../i18n/locale-switcher";
 import { useI18n } from "../i18n/use-i18n";
 import { formatRelativeTime } from "../../shared/format-relative-time";
 import { initializeNewSessionPreferences } from "./new-session-preferences";
+import { SessionWorkspaceIcon } from "./session-workspace-icon";
 import "./session-sidebar.css";
+import "./session-sidebar-workspaces.css";
 
 type SessionSidebarProps = {
   collapsed: boolean;
@@ -90,6 +92,35 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
   };
 
   /**
+   * 切换工作区和会话，跨工作区时完成切换后重新载入工作台。
+   *
+   * @param workspaceId 目标工作区 ID
+   * @param sessionId 目标会话 ID
+   * @param workspaceActive 目标工作区是否已经激活
+   * @param sessionActive 目标会话是否已经激活
+   * @returns 切换流程完成后返回
+   */
+  const openSession = async (workspaceId: string, sessionId: string, workspaceActive: boolean, sessionActive: boolean) => {
+    setNavigationError(null);
+    try {
+      if (sessionActive) {
+        onNavigate?.();
+        return;
+      }
+      if (!workspaceActive) {
+        const switched = await switchWithTerminalConfirm(workspaceId, confirm, t);
+        if (!switched) return;
+      }
+      await api.sessions.switch(sessionId);
+      if (!workspaceActive) window.location.reload();
+      else await refresh();
+      onNavigate?.();
+    } catch (cause) {
+      setNavigationError(toDisplayError(cause, "Failed to open session", "打开会话失败"));
+    }
+  };
+
+  /**
    * 【会话】【新会话默认值】创建会话并在列表刷新前写入专属模型与思考偏好。
    *
    * @param workspaceId 可选目标工作区 ID
@@ -114,7 +145,17 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
     return session;
   };
 
-  const create = useMutation({ mutationFn: createSession, onSuccess: refresh });
+  const create = useMutation({
+    mutationFn: createSession,
+    onSuccess: async (session, workspaceId) => {
+      // 1. 先刷新会话树，使新会话立即出现在目标工作区
+      await refresh();
+      const targetWorkspaceId = workspaceId ?? activeWorkspace?.workspace_id;
+      if (!targetWorkspaceId) return;
+      // 2. 非活动工作区先切换工作区，再激活刚创建的会话
+      await openSession(targetWorkspaceId, session.id, workspaceId === undefined, session.active);
+    }
+  });
   const remove = useMutation({ mutationFn: api.sessions.remove, onSuccess: refresh });
   const rename = useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) => api.sessions.rename(id, title),
@@ -274,27 +315,6 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
     || location.pathname.startsWith("/gateways")
     || location.pathname.startsWith("/cron-jobs");
 
-  /** 切换工作区和会话，跨工作区时完成切换后重新载入工作台。 */
-  const openSession = async (workspaceId: string, sessionId: string, workspaceActive: boolean, sessionActive: boolean) => {
-    setNavigationError(null);
-    try {
-      if (sessionActive) {
-        onNavigate?.();
-        return;
-      }
-      if (!workspaceActive) {
-        const switched = await switchWithTerminalConfirm(workspaceId, confirm, t);
-        if (!switched) return;
-      }
-      await api.sessions.switch(sessionId);
-      if (!workspaceActive) window.location.reload();
-      else await refresh();
-      onNavigate?.();
-    } catch (cause) {
-      setNavigationError(toDisplayError(cause, "Failed to open session", "打开会话失败"));
-    }
-  };
-
   const query = sessionSearch.trim().toLowerCase();
   const visibleWorkspaces = (tree.data ?? []).filter((workspace) => {
     if (!query) return true;
@@ -407,8 +427,11 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
             <div className={`${workspace.active ? "workspace-tree-row active" : "workspace-tree-row"}${workspace.active && selecting ? " selecting" : ""}`}>
               <button type="button" className="workspace-tree-main" onClick={() => !query && toggleWorkspace(workspace.workspace_id)} aria-expanded={workspaceExpanded}>
                 {workspaceExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                <FolderGit2 size={14} />
-                <span><strong>{workspaceName}</strong><small>{t(`${sessions.length} sessions`, `${sessions.length} 个会话`)}</small></span>
+                <SessionWorkspaceIcon isGitRepository={workspace.is_git_repository} size={14} />
+                <span className="workspace-summary">
+                  <strong>{workspaceName}</strong>
+                  <small>{t(`${sessions.length} sessions`, `${sessions.length} 个会话`)}</small>
+                </span>
                 {workspaceRunning && <ActiveAgentIndicator />}
               </button>
               <span className="workspace-tree-actions">
@@ -491,7 +514,10 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
                   }
                   void openSession(workspace.workspace_id, session.id, workspace.active, session.active);
                 }}>
-                  <span><strong>{session.title}</strong><small title={new Date(session.updated_at).toLocaleString(locale)}>{formatRelativeTime(session.updated_at, locale, nowTick)}</small></span>
+                  <span className="session-summary">
+                    <strong>{session.title}</strong>
+                    <small title={new Date(session.updated_at).toLocaleString(locale)}>{formatRelativeTime(session.updated_at, locale, nowTick)}</small>
+                  </span>
                   {running && <ActiveAgentIndicator />}
                 </button>
               )}

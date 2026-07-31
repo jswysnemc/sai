@@ -644,6 +644,7 @@ mod tests {
         let mut config = AppConfig::default();
         config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
             enabled_tools: Vec::new(),
+            deferred_tools: Vec::new(),
             skills_full: Vec::new(),
             skills_named: Vec::new(),
         });

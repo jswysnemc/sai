@@ -159,7 +159,9 @@ fn update_goal(store: &GoalStore, args: &Value) -> Result<String> {
         };
         store.set_status(status)?
     } else {
-        store.get()?.ok_or_else(|| anyhow::anyhow!("no active goal"))?
+        store
+            .get()?
+            .ok_or_else(|| anyhow::anyhow!("no active goal"))?
     };
     Ok(serde_json::to_string_pretty(&goal)?)
 }

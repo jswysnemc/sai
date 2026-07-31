@@ -1,5 +1,5 @@
-use super::path_guard::{existing_path, mutable_existing_path, writable_path};
 use super::file_write_lock::with_file_write_lock;
+use super::path_guard::{existing_path, mutable_existing_path, writable_path};
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use std::fmt;

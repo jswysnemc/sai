@@ -1,6 +1,6 @@
 use crate::agent::AgentEvent;
-use crate::llm::OpenAiCompatibleClient;
 use crate::agent_engine::EventSender;
+use crate::llm::OpenAiCompatibleClient;
 use crate::permission::{PermissionDecision, PermissionProfile};
 use crate::tools::ToolPermission;
 use anyhow::{bail, Result};
@@ -98,7 +98,8 @@ pub(crate) async fn ensure_authorized(
             let message = reply
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(|| {
-                    crate::i18n::text("the user denied this operation", "用户拒绝了此操作").to_string()
+                    crate::i18n::text("the user denied this operation", "用户拒绝了此操作")
+                        .to_string()
                 });
             bail!(message)
         }

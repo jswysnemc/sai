@@ -53,10 +53,7 @@ pub fn context_info_text(paths: &SaiPaths) -> Result<String> {
             format!(
                 "{}: {}",
                 t("model", "模型"),
-                t(
-                    "managed by the external engine",
-                    "由外部内核自行管理"
-                )
+                t("managed by the external engine", "由外部内核自行管理")
             )
         } else {
             format!("{}: {model} ({thinking})", t("model", "模型"))
@@ -65,10 +62,7 @@ pub fn context_info_text(paths: &SaiPaths) -> Result<String> {
             format!(
                 "{}: {}",
                 t("context window", "上下文窗口"),
-                t(
-                    "managed by the external engine",
-                    "由外部内核自行管理"
-                )
+                t("managed by the external engine", "由外部内核自行管理")
             )
         } else {
             format!(

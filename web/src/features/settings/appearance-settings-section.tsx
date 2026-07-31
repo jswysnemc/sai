@@ -5,6 +5,8 @@ import type { ThemeId } from "../theme/theme";
 import { THEME_PRESETS } from "../theme/theme";
 import { useI18n } from "../i18n/use-i18n";
 import { Select } from "../../shared/ui/select/select";
+import { useMarkdownStylePreferences } from "../markdown/markdown-style-store";
+import { MarkdownStyleSettings } from "./markdown-style-settings";
 
 type AppearanceSettingsSectionProps = {
   theme: ThemeId;
@@ -19,12 +21,13 @@ type AppearanceSettingsSectionProps = {
  */
 export function AppearanceSettingsSection({ theme, onThemeChange }: AppearanceSettingsSectionProps) {
   const { locale, setLocale, t } = useI18n();
+  const markdownStyle = useMarkdownStylePreferences();
 
   return (
     <section className="settings-editor">
       <EditorHeader
         kicker={t("Interface", "界面外观")}
-        title={t("Language and appearance", "语言与主题")}
+        title={t("Language and appearance", "语言与外观")}
         description={t(
           "Preferences apply immediately and are stored in this browser without changing server configuration.",
           "界面偏好即时应用并保存在当前浏览器，不修改服务端配置。"
@@ -72,6 +75,12 @@ export function AppearanceSettingsSection({ theme, onThemeChange }: AppearanceSe
           ))}
         </div>
       </SettingsGroup>
+      <MarkdownStyleSettings
+        preferences={markdownStyle.preferences}
+        onTableChange={markdownStyle.updateTable}
+        onCodeBlockChange={markdownStyle.updateCodeBlock}
+        onReset={markdownStyle.reset}
+      />
     </section>
   );
 }

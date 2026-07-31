@@ -4,9 +4,9 @@ use crate::paths::SaiPaths;
 use crate::permission::{decide_permission, PermissionDecision};
 use crate::prompts;
 use anyhow::{bail, Context, Result};
+use serde::Deserialize;
 use std::time::Duration;
 use tokio::time::timeout;
-use serde::Deserialize;
 
 /// LLM 自动审核的结构化结果。
 #[derive(Debug, Clone, Deserialize)]
@@ -76,9 +76,7 @@ pub(crate) async fn run_auto_audit(
     context: &str,
 ) -> Result<bool> {
     // 1. 组装审核消息
-    let user = format!(
-        "Tool: {tool}\nArguments:\n{arguments}\n\nRecent context:\n{context}\n"
-    );
+    let user = format!("Tool: {tool}\nArguments:\n{arguments}\n\nRecent context:\n{context}\n");
     let messages = vec![
         ChatMessage::system(prompts::AUTO_AUDIT_SYSTEM_PROMPT),
         ChatMessage::plain("user", user),
@@ -93,7 +91,10 @@ pub(crate) async fn run_auto_audit(
     {
         Ok(Ok(result)) => result,
         Ok(Err(error)) => return Err(error).context("auto-audit model request failed"),
-        Err(_) => bail!("auto-audit timed out after {}s", AUTO_AUDIT_TIMEOUT.as_secs()),
+        Err(_) => bail!(
+            "auto-audit timed out after {}s",
+            AUTO_AUDIT_TIMEOUT.as_secs()
+        ),
     };
     let content = result.content.trim();
     let decision = parse_auto_audit_response(content)?;
@@ -219,10 +220,9 @@ mod tests {
             }
             _ => panic!("expected allow"),
         }
-        let deny = parse_auto_audit_response(
-            r#"prefix {"decision":"deny","reason":"risk"} suffix"#,
-        )
-        .unwrap();
+        let deny =
+            parse_auto_audit_response(r#"prefix {"decision":"deny","reason":"risk"} suffix"#)
+                .unwrap();
         match deny {
             PermissionDecision::Deny { reply } => assert_eq!(reply.as_deref(), Some("risk")),
             _ => panic!("expected deny"),

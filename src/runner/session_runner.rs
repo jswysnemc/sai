@@ -189,7 +189,7 @@ impl<'paths> SessionRunner<'paths> {
             input.mode,
             input.extra_system_prompt.as_deref(),
         )?;
-        if config.tools.progressive_loading_enabled {
+        if uses_progressive_loading(&config) {
             let loaded_tools = loaded_tools_for_submission(&state, submission.channel.as_ref())?;
             agent.restore_loaded_tools(&loaded_tools);
             sink.on_runner_event(RunnerEvent::LoadedToolsChanged(loaded_tools))?;
@@ -198,7 +198,7 @@ impl<'paths> SessionRunner<'paths> {
         let mut turn_runner = TurnRunner::for_source(&mut agent, submission.source);
         let result = turn_runner.run_user_input(&input, sink).await;
         perf.mark("turn runner done");
-        if config.tools.progressive_loading_enabled {
+        if uses_progressive_loading(&config) {
             let loaded_tools = agent.loaded_tools();
             state.save_loaded_tools(&loaded_tools)?;
             sink.on_runner_event(RunnerEvent::LoadedToolsChanged(loaded_tools))?;
@@ -262,7 +262,7 @@ impl<'paths> SessionRunner<'paths> {
         let mut turn_runner = TurnRunner::for_source(agent, submission.source);
         let result = turn_runner.run_user_input(&input, sink).await;
         perf.mark("turn runner done");
-        if config.tools.progressive_loading_enabled {
+        if uses_progressive_loading(&config) {
             let loaded_tools = agent.loaded_tools();
             // 3. 持久化渐进加载集合，供崩溃恢复
             agent.state().save_loaded_tools(&loaded_tools)?;
@@ -328,7 +328,11 @@ impl<'paths> SessionRunner<'paths> {
         if mode != AgentMode::Plan && source == SubmissionSource::Gateway {
             crate::cron::register_tool(&mut registry, self.paths.clone(), session_id.to_string());
         }
-        let mut selected = if let Some(runtime) = config.agent_runtime.as_ref() {
+        let mut selected = if let Some(runtime) = config
+            .agent_runtime
+            .as_ref()
+            .filter(|runtime| !runtime.enabled_tools.is_empty())
+        {
             let allowed = runtime
                 .enabled_tools
                 .iter()
@@ -366,9 +370,24 @@ impl<'paths> SessionRunner<'paths> {
     }
 }
 
+/// 判断当前运行期 Agent 是否启用了渐进式工具加载。
+///
+/// 参数:
+/// - `config`: 已应用 Agent 覆盖的运行期配置
+///
+/// 返回:
+/// - 存在延迟加载工具时返回 true
+fn uses_progressive_loading(config: &AppConfig) -> bool {
+    !config.agent_deferred_tools().is_empty()
+}
+
 #[cfg(test)]
 #[path = "session_runner_gateway_tests.rs"]
 mod gateway_tests;
+
+#[cfg(test)]
+#[path = "session_runner_tool_mode_tests.rs"]
+mod tool_mode_tests;
 
 #[cfg(test)]
 mod tests {
@@ -580,6 +599,7 @@ mod tests {
         let mut config = AppConfig::default();
         config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
             enabled_tools: vec!["read_file".to_string()],
+            deferred_tools: Vec::new(),
             skills_full: Vec::new(),
             skills_named: Vec::new(),
         });

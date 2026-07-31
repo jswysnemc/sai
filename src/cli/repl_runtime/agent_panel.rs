@@ -139,7 +139,11 @@ impl AgentPanelState {
         )];
         lines.push(selection_line(
             self.selected == 0,
-            &format!("{} {}", t("main agent", "主智能体"), t("(overview)", "(总览)")),
+            &format!(
+                "{} {}",
+                t("main agent", "主智能体"),
+                t("(overview)", "(总览)")
+            ),
             None,
         ));
         for (position, entry) in entries.iter().enumerate() {
@@ -211,10 +215,7 @@ impl super::ReplRuntime {
     ///
     /// 返回:
     /// - 按键被面板消费时返回 true
-    pub(in crate::cli) fn handle_agent_panel_key(
-        &mut self,
-        code: KeyCode,
-    ) -> anyhow::Result<bool> {
+    pub(in crate::cli) fn handle_agent_panel_key(&mut self, code: KeyCode) -> anyhow::Result<bool> {
         let was_active = self.agent_panel.is_active();
         let consumed = self.agent_panel_key_inner(code)?;
         // 面板退出（含转交普通处理）也要重绘一次，去掉列表行
@@ -285,8 +286,14 @@ mod tests {
         let mut panel = AgentPanelState::default();
         let entries = vec![entry(2, "one", true), entry(5, "two", false)];
         panel.activate(&entries);
-        assert_eq!(panel.handle_key(KeyCode::Down, &entries), AgentPanelAction::Consumed);
-        assert_eq!(panel.handle_key(KeyCode::Down, &entries), AgentPanelAction::Consumed);
+        assert_eq!(
+            panel.handle_key(KeyCode::Down, &entries),
+            AgentPanelAction::Consumed
+        );
+        assert_eq!(
+            panel.handle_key(KeyCode::Down, &entries),
+            AgentPanelAction::Consumed
+        );
         // 主(0) → one(1) → two(2)，Enter 应返回 two 的 cell_index
         assert_eq!(
             panel.handle_key(KeyCode::Enter, &entries),
@@ -300,7 +307,10 @@ mod tests {
         let mut panel = AgentPanelState::default();
         let entries = vec![entry(2, "one", true)];
         panel.activate(&entries);
-        assert_eq!(panel.handle_key(KeyCode::Enter, &entries), AgentPanelAction::Apply(None));
+        assert_eq!(
+            panel.handle_key(KeyCode::Enter, &entries),
+            AgentPanelAction::Apply(None)
+        );
     }
 
     #[test]
@@ -308,7 +318,10 @@ mod tests {
         let mut panel = AgentPanelState::default();
         let entries = vec![entry(2, "one", true)];
         panel.activate(&entries);
-        assert_eq!(panel.handle_key(KeyCode::Esc, &entries), AgentPanelAction::Consumed);
+        assert_eq!(
+            panel.handle_key(KeyCode::Esc, &entries),
+            AgentPanelAction::Consumed
+        );
         assert!(!panel.is_active());
         panel.activate(&entries);
         assert_eq!(

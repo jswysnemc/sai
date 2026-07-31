@@ -74,6 +74,27 @@ export type ContextConfig = {
   [key: string]: unknown;
 };
 
+export type PromptTemplateConfig = {
+  system: string;
+  user: string;
+};
+
+export type PromptTemplatesConfig = {
+  git_commit: PromptTemplateConfig;
+  session_title: PromptTemplateConfig;
+  compaction: PromptTemplateConfig;
+};
+
+export type PromptConfig = {
+  prompts_dir?: string;
+  identities_dir?: string;
+  user_identity_file?: string;
+  active_persona?: string;
+  active_identity?: string;
+  templates?: PromptTemplatesConfig;
+  [key: string]: unknown;
+};
+
 export type MemoryRuntimeConfig = {
   enabled?: boolean;
   extraction_provider_id?: string;
@@ -125,14 +146,7 @@ export type AppConfig = {
   mcp?: McpConfig;
   subagent?: SubagentConfig;
   plugins?: Record<string, Record<string, unknown>>;
-  prompt?: {
-    prompts_dir?: string;
-    identities_dir?: string;
-    user_identity_file?: string;
-    active_persona?: string;
-    active_identity?: string;
-    [key: string]: unknown;
-  };
+  prompt?: PromptConfig;
   terminal?: TerminalConfig;
   tools?: Record<string, unknown>;
   skills?: Record<string, unknown>;
@@ -150,6 +164,7 @@ export type AgentProfileConfig = {
   description?: string;
   system_prompt?: string;
   enabled_tools?: string[];
+  deferred_tools?: string[];
   skills_full?: string[];
   skills_named?: string[];
   provider_id?: string;

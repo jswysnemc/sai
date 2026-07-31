@@ -11,12 +11,12 @@
 .ui-select-menu { max-height: 280px; overflow-y: auto; padding:var(--space-2xs); border: 1px solid var(--line); border-radius:var(--radius-3); background: var(--paper); box-shadow: var(--shadow); z-index: 240; }
 .ui-select-menu > button { display: grid; grid-template-columns: minmax(0, 1fr) 18px; align-items: center; gap:var(--space-sm); width: 100%; min-height: 36px; padding:var(--space-xs) var(--space-sm); border: 0; border-radius:var(--radius-2); background: transparent; text-align: left; }
 .ui-select-menu > button:hover,
-.ui-select-menu > button.active { background: var(--paper-deep); }
+.ui-select-menu > button:focus-visible { background: var(--paper-deep); }
 .ui-select-option-main { display: flex; align-items: center; gap:var(--space-sm); min-width: 0; }
 .ui-select-option-main > span { display: grid; gap:var(--space-3xs); min-width: 0; }
 .ui-select-menu strong { font-size:var(--text-xs); font-weight: 500; }
 .ui-select-menu small { color: var(--ink-soft); font-size:var(--text-2xs); }
-.ui-select-menu > button > svg { visibility: hidden; color: var(--signal); }
+.ui-select-menu > button > svg { align-self: center; visibility: hidden; color: var(--signal); }
 .ui-select-menu .active > svg { visibility: visible; }
 
 /*

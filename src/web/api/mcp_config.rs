@@ -1,7 +1,9 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
 use super::super::services::config_service::{self, SECRET_SENTINEL};
-use crate::config::{load_mcp_config, save_mcp_config, McpConfig, McpServerConfig};
+use crate::config::{
+    load_mcp_config, parse_mcp_config_value, save_mcp_config, McpConfig, McpServerConfig,
+};
 use crate::mcp::{list_server_tools, McpToolInfo};
 use axum::extract::State;
 use axum::routing::get;
@@ -45,7 +47,12 @@ async fn save(
     let current = serde_json::to_value(load_mcp_config(&state.paths).map_err(WebError::from)?)
         .map_err(anyhow::Error::from)
         .map_err(WebError::from)?;
-    let mut submitted = submitted;
+    // 1. 先把标准 mcpServers 映射归一化为内部数组，再按服务 ID 恢复敏感字段
+    let normalized = parse_mcp_config_value(submitted)
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    let mut submitted = serde_json::to_value(normalized)
+        .map_err(anyhow::Error::from)
+        .map_err(WebError::from)?;
     config_service::merge_secret_sentinels_json(&mut submitted, &current);
     config_service::ensure_secret_sentinels_resolved(&submitted)
         .map_err(|error| WebError::bad_request(error.to_string()))?;

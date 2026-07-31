@@ -222,7 +222,10 @@ mod tests {
     #[test]
     fn str_replace_schema_requires_core_fields() {
         let schema = str_replace_parameters();
-        assert_eq!(schema["required"], json!(["path", "old_string", "new_string"]));
+        assert_eq!(
+            schema["required"],
+            json!(["path", "old_string", "new_string"])
+        );
     }
 
     #[test]

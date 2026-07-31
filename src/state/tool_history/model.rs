@@ -46,6 +46,8 @@ pub struct ToolCallRecord {
     pub session_id: String,
     pub turn_id: String,
     pub seq: usize,
+    pub assistant_round: usize,
+    pub assistant_reasoning: Option<String>,
     pub provider_call_id: String,
     pub tool_name: String,
     pub arguments: String,

@@ -3,6 +3,7 @@ use super::test_support::{chunk, options};
 use super::TranscriptStore;
 use crate::llm::ChatStreamKind;
 use crate::render::activity_animation::strip_ansi_for_test;
+use unicode_width::UnicodeWidthStr;
 
 /// 【终端】【正文引导测试】验证定稿正文首行显示引导符号，折行保留等宽引导区。
 ///
@@ -22,6 +23,9 @@ fn finalized_assistant_body_uses_visual_guide_and_aligned_wraps() {
         .collect::<Vec<_>>();
 
     assert_eq!(plain, vec!["• abcd", "  efgh"]);
+    assert!(plain
+        .iter()
+        .all(|line| UnicodeWidthStr::width(line.as_str()) <= 6));
 }
 
 /// 【终端】【正文引导测试】验证流式正文与定稿正文使用相同的引导布局。

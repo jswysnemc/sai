@@ -1,9 +1,8 @@
 mod acp;
 mod agent;
 mod agent_engine;
-mod assistants;
 mod alarm;
-mod reply_notify;
+mod assistants;
 mod cli;
 mod clipboard;
 mod config;
@@ -26,6 +25,7 @@ mod prompts;
 mod question;
 mod question_tui;
 mod render;
+mod reply_notify;
 mod runner;
 mod runtime_cwd;
 mod runtime_recovery;
@@ -33,8 +33,8 @@ mod shell;
 mod state;
 mod token_counter;
 mod token_estimate;
-mod usage_history;
 mod tools;
+mod usage_history;
 mod web;
 
 use anyhow::Result;

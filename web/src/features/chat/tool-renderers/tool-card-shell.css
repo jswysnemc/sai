@@ -150,7 +150,7 @@
 
 /* 运行中的图标做呼吸，与底部运行指示器同一套语言 */
 .tool-shell.tone-running .tool-shell-icon {
-  animation: tool-shell-breathe 1.8s var(--ease-in-out) infinite;
+  animation: tool-shell-breathe 1s var(--ease-in-out) infinite;
 }
 
 @keyframes tool-shell-breathe {

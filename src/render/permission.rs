@@ -204,10 +204,8 @@ mod tests {
     /// 验证人工与自动放行用不同色相，事后回看能分辨来源。
     #[test]
     fn human_and_auto_approval_use_distinct_colors() {
-        let human = render_permission_decision_for(
-            &PermissionDecision::allow_once(),
-            PermissionView::Tui,
-        );
+        let human =
+            render_permission_decision_for(&PermissionDecision::allow_once(), PermissionView::Tui);
         let auto = render_permission_decision_for(
             &PermissionDecision::auto_allow_once(Some("只读查询".to_string())),
             PermissionView::Tui,

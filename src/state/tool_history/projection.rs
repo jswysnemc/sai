@@ -86,27 +86,56 @@ fn append_turn_messages(
         append_interrupted_turn_marker(turn, messages);
         return Ok(());
     }
-    let tool_calls = exchanges
-        .iter()
-        .map(|exchange| ToolCall {
-            id: exchange.call.provider_call_id.clone(),
-            kind: "function".to_string(),
-            function: ToolCallFunction {
-                name: exchange.call.tool_name.clone(),
-                arguments: exchange.call.arguments.clone(),
-            },
-        })
-        .collect::<Vec<_>>();
-    messages.push(ChatMessage::assistant("", Some(tool_calls)));
-    for exchange in exchanges {
-        messages.push(ChatMessage::tool(
-            exchange.call.provider_call_id.clone(),
-            tool_result_content(&exchange),
-        ));
-    }
+    append_tool_exchange_messages(&exchanges, messages);
     append_assistant_context_messages(turn, messages);
     append_interrupted_turn_marker(turn, messages);
     Ok(())
+}
+
+/// 按原始模型子轮重建 assistant 工具调用与 tool 结果消息。
+///
+/// 参数:
+/// - `exchanges`: 当前对话轮次的工具交换记录
+/// - `messages`: 输出消息列表
+///
+/// 返回:
+/// - 无
+fn append_tool_exchange_messages(
+    exchanges: &[super::model::ToolExchangeRecord],
+    messages: &mut Vec<ChatMessage>,
+) {
+    let mut start = 0usize;
+    while start < exchanges.len() {
+        let assistant_round = exchanges[start].call.assistant_round;
+        let end = exchanges[start + 1..]
+            .iter()
+            .position(|exchange| exchange.call.assistant_round != assistant_round)
+            .map(|offset| start + 1 + offset)
+            .unwrap_or(exchanges.len());
+        let round = &exchanges[start..end];
+        // 1. 同一模型子轮的并行工具调用保持在一条 assistant 消息中
+        let tool_calls = round
+            .iter()
+            .map(|exchange| ToolCall {
+                id: exchange.call.provider_call_id.clone(),
+                kind: "function".to_string(),
+                function: ToolCallFunction {
+                    name: exchange.call.tool_name.clone(),
+                    arguments: exchange.call.arguments.clone(),
+                },
+            })
+            .collect::<Vec<_>>();
+        let reasoning = round[0].call.assistant_reasoning.clone();
+        messages.push(ChatMessage::assistant("", Some(tool_calls)).with_reasoning(reasoning));
+        // 2. assistant 工具调用后紧跟同一子轮的全部工具结果
+        for exchange in round {
+            messages.push(ChatMessage::tool(
+                exchange.call.provider_call_id.clone(),
+                tool_result_content(exchange),
+            ));
+        }
+        start = end;
+    }
 }
 
 /// 追加助手最终回复和旧工具报告。
@@ -173,7 +202,8 @@ fn tool_result_content(exchange: &super::model::ToolExchangeRecord) -> String {
 mod tests {
     use super::*;
     use crate::state::tool_history::repository::{
-        insert_tool_call, insert_tool_result, upsert_tool_output_replacement,
+        insert_tool_call, insert_tool_call_with_context, insert_tool_result,
+        upsert_tool_output_replacement,
     };
     use crate::state::tool_history::schema::create_tool_history_tables;
     use crate::state::tool_history::{
@@ -259,6 +289,59 @@ mod tests {
             Some(crate::llm::ChatContent::Text(text)) if text == "stable preview"
         ));
         assert_eq!(messages[3].role, "assistant");
+    }
+
+    /// 【会话历史】【DeepSeek】验证工具子轮按原始思考内容重建。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn projects_reasoning_for_each_tool_round() {
+        let (_temp, db) = db();
+        for (seq, round, call_id, reasoning) in [
+            (1, 1, "call_1", "先查询日期"),
+            (2, 2, "call_2", "再查询天气"),
+        ] {
+            insert_tool_call_with_context(
+                &db,
+                NewToolCallRecord {
+                    session_id: "default".to_string(),
+                    turn_id: "turn_1".to_string(),
+                    seq,
+                    provider_call_id: call_id.to_string(),
+                    tool_name: "read_file".to_string(),
+                    arguments: "{}".to_string(),
+                },
+                round,
+                Some(reasoning),
+            )
+            .unwrap();
+            insert_tool_result(
+                &db,
+                NewToolResultRecord {
+                    session_id: "default".to_string(),
+                    turn_id: "turn_1".to_string(),
+                    provider_call_id: call_id.to_string(),
+                    ok: true,
+                    result_preview: format!("result-{round}"),
+                    result_ref: None,
+                    error: None,
+                    original_chars: 8,
+                },
+            )
+            .unwrap();
+        }
+
+        let messages = project_turn_messages_with_tool_history(&db, "default", &[turn()]).unwrap();
+
+        assert_eq!(messages.len(), 6);
+        assert_eq!(messages[1].reasoning_content.as_deref(), Some("先查询日期"));
+        assert_eq!(messages[3].reasoning_content.as_deref(), Some("再查询天气"));
+        assert_eq!(messages[2].role, "tool");
+        assert_eq!(messages[4].role, "tool");
     }
 
     #[test]

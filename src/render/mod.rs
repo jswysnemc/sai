@@ -1,5 +1,5 @@
-mod asset_block;
 pub(crate) mod activity_animation;
+mod asset_block;
 mod background_command_event;
 pub(crate) mod brand_logo;
 mod cli_command_preview;
@@ -8,8 +8,8 @@ mod command_output;
 mod command_result_block;
 pub(crate) mod content_indent;
 mod edit_diff;
-mod error;
 mod engine_notice;
+mod error;
 pub(crate) mod expandable;
 pub(crate) mod fold_text;
 mod live_tool_status;
@@ -45,13 +45,12 @@ mod wait_spinner;
 pub(crate) mod work_status;
 
 pub(crate) use command_result_block::command_result_streams;
+pub(crate) use engine_notice::engine_notice;
 pub(crate) use error::write_chat_error;
 pub(crate) use expandable::render_expandable_body;
-pub(crate) use engine_notice::engine_notice;
 pub(crate) use permission::{
     render_auto_audit_status, render_permission_controls, render_permission_decision,
-    render_permission_decision_for, PermissionView,
-    render_permission_title, PermissionChoice,
+    render_permission_decision_for, render_permission_title, PermissionChoice, PermissionView,
 };
 pub use session_summary::print_session_summary;
 pub use stream::StreamRenderer;

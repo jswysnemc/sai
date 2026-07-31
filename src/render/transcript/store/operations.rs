@@ -20,6 +20,7 @@ impl LiveTail {
             ChatStreamKind::Reasoning => {
                 let mut cell =
                     crate::render::transcript::reasoning_cell::ReasoningCell::new(self.source);
+                cell.expanded = self.expanded;
                 cell.duration = duration;
                 HistoryCell::Reasoning(cell)
             }
@@ -306,6 +307,7 @@ impl TranscriptStore {
                 self.live_tail = Some(LiveTail {
                     kind: chunk.kind,
                     source: chunk.text.clone(),
+                    expanded: false,
                 });
             }
             None => {
@@ -313,6 +315,7 @@ impl TranscriptStore {
                 self.live_tail = Some(LiveTail {
                     kind: chunk.kind,
                     source: chunk.text.clone(),
+                    expanded: false,
                 });
             }
         }

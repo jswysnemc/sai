@@ -17,6 +17,8 @@ import { SettingsErrorRecovery } from "./settings-error-recovery";
 import type { SettingsConfigController, SettingsSectionId } from "../settings-types";
 import type { ThemeId } from "../../theme/theme";
 import { useI18n } from "../../i18n/use-i18n";
+import { PromptTemplateSettings } from "../prompts/prompt-template-settings";
+import { resolvePromptTemplates } from "../prompts/prompt-template-catalog";
 
 type SettingsSectionBodyProps = {
   section: SettingsSectionId;
@@ -93,6 +95,16 @@ export function SettingsSectionBody({
           onConfigChange={settings.updateConfig}
         />
       );
+    case "prompts":
+      return (
+        <PromptTemplateSettings
+          templates={resolvePromptTemplates(settings.config!.prompt?.templates)}
+          onChange={(templates) => settings.updateConfig({
+            ...settings.config!,
+            prompt: { ...settings.config!.prompt, templates }
+          })}
+        />
+      );
     case "skills":
       return (
         <SkillsSettingsSection
@@ -166,6 +178,7 @@ function sectionNeedsAppConfig(section: SettingsSectionId): boolean {
     || section === "cli-tools"
     || section === "web-search"
     || section === "runtime"
+    || section === "prompts"
     || section === "git"
     || section === "hooks"
     || section === "gateways"

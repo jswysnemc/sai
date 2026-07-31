@@ -1,7 +1,6 @@
 use agent_client_protocol::schema::v1::{
     SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory, SessionConfigOptionValue,
-    SessionConfigSelectOptions,
-    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
+    SessionConfigSelectOptions, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
 };
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
@@ -62,7 +61,8 @@ impl AcpConfigOptions {
                 .find(|option| option.id.to_string() == config_id)
                 .with_context(|| format!("ACP agent does not expose config option: {config_id}"))?
                 .clone();
-            self.set_value(transport, session_id, &option, value).await?;
+            self.set_value(transport, session_id, &option, value)
+                .await?;
         }
         Ok(())
     }
@@ -160,10 +160,7 @@ fn insert_category_value(
 ///
 /// 返回:
 /// - 标准 ACP 配置值
-fn config_value(
-    option: &SessionConfigOption,
-    value: Value,
-) -> Result<SessionConfigOptionValue> {
+fn config_value(option: &SessionConfigOption, value: Value) -> Result<SessionConfigOptionValue> {
     match (&option.kind, value) {
         (SessionConfigKind::Select(select), Value::String(value)) => {
             if !select_values(&select.options).any(|candidate| candidate == value) {
@@ -196,11 +193,9 @@ fn config_value(
 /// - 所有可选值的迭代器
 fn select_values(options: &SessionConfigSelectOptions) -> Box<dyn Iterator<Item = String> + '_> {
     match options {
-        SessionConfigSelectOptions::Ungrouped(options) => Box::new(
-            options
-                .iter()
-                .map(|option| option.value.to_string()),
-        ),
+        SessionConfigSelectOptions::Ungrouped(options) => {
+            Box::new(options.iter().map(|option| option.value.to_string()))
+        }
         SessionConfigSelectOptions::Grouped(groups) => Box::new(
             groups
                 .iter()
@@ -214,9 +209,7 @@ fn select_values(options: &SessionConfigSelectOptions) -> Box<dyn Iterator<Item 
 #[cfg(test)]
 mod tests {
     use super::config_value;
-    use agent_client_protocol::schema::v1::{
-        SessionConfigOption, SessionConfigSelectOption,
-    };
+    use agent_client_protocol::schema::v1::{SessionConfigOption, SessionConfigSelectOption};
 
     /// 配置项只接受协议支持的字符串和布尔值。
     #[test]

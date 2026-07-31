@@ -1,0 +1,60 @@
+.prompt-template-settings {
+  max-width: 68.75rem;
+}
+
+.prompt-template-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap:var(--space-lg);
+}
+
+.prompt-template-field textarea {
+  min-height: 9rem;
+  resize: vertical;
+  font:400 var(--text-sm)/1.55 var(--font-code);
+}
+
+.prompt-template-reset {
+  display: inline-flex;
+  align-items: center;
+  gap:var(--space-2xs);
+  min-height: 2rem;
+  padding:0 var(--space-md);
+  font-size:var(--text-sm);
+}
+
+.prompt-template-variables {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap:var(--space-sm) var(--space-md);
+  margin-top:var(--space-md);
+  color:var(--ink-soft);
+  font-size:var(--text-sm);
+}
+
+.prompt-template-variables > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap:var(--space-xs);
+}
+
+.prompt-template-variables code {
+  padding:var(--space-3xs) var(--space-xs);
+  border:1px solid var(--line);
+  border-radius:var(--radius-2);
+  background:var(--control-surface);
+  color:var(--ink);
+  font-size:var(--text-xs);
+}
+
+@media (max-width: 48rem) {
+  .prompt-template-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .prompt-template-field textarea {
+    min-height: 7.5rem;
+  }
+}

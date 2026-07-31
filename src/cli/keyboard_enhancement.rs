@@ -36,8 +36,7 @@ pub(super) const fn strategy_for_platform(is_windows: bool) -> KeyboardEnhanceme
 fn terminal_supports_enhancement() -> bool {
     use std::sync::OnceLock;
     static SUPPORTED: OnceLock<bool> = OnceLock::new();
-    *SUPPORTED
-        .get_or_init(|| crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false))
+    *SUPPORTED.get_or_init(|| crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false))
 }
 
 /// 记录当前终端是否成功启用了键盘增强协议。

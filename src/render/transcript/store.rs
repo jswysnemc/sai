@@ -1,3 +1,4 @@
+mod live_reasoning;
 mod operations;
 mod subagent_panel;
 mod todo_snapshot;
@@ -23,6 +24,7 @@ pub(crate) struct TranscriptRenderOptions {
 pub(super) struct LiveTail {
     pub(super) kind: ChatStreamKind,
     pub(super) source: String,
+    pub(super) expanded: bool,
 }
 
 /// 正在接收参数的工具调用预览。

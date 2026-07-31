@@ -204,14 +204,14 @@ impl Agent {
         request: &CompactionRequest,
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<String> {
-        let prompt = self
-            .state
-            .build_compaction_summary_prompt(request, self.context_char_budget)?;
+        let prompt = self.state.build_compaction_summary_prompt(
+            request,
+            self.context_char_budget,
+            &self.config.prompt.templates.compaction,
+        )?;
         let messages = vec![
-            ChatMessage::system(
-                "Summarize the supplied conversation for future turns. Return concise, faithful Markdown only and do not answer the user task.",
-            ),
-            ChatMessage::plain("user", prompt),
+            ChatMessage::system(prompt.system),
+            ChatMessage::plain("user", prompt.user),
         ];
         let summary = self
             .request_compaction_summary(messages, on_event)

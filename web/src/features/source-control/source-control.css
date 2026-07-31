@@ -63,7 +63,7 @@
 
 .git-toolbar-icon.ui-button:hover,
 .git-toolbar-icon.ui-button[aria-expanded="true"] {
-  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  background: var(--paper-deep);
   color: var(--ink);
 }
 
@@ -200,6 +200,15 @@
   background: var(--code-surface);
 }
 
+.git-commit-editor {
+  position: relative;
+}
+
+.git-commit-message.ui-text-area {
+  min-height: 5.75rem;
+  padding-bottom: 2.5rem;
+}
+
 .git-commit-actions {
   position: relative;
   display: grid;
@@ -272,6 +281,13 @@
   padding: 0;
   border: 0;
   border-radius: 0;
+}
+
+.git-section-toggle.ui-button:hover:not(:disabled),
+.git-icon-action.ui-button:hover:not(:disabled),
+.git-output-toggle.ui-button:hover:not(:disabled) {
+  background: var(--paper-deep);
+  color: var(--ink);
 }
 
 .git-icon-action.ui-button {
@@ -415,27 +431,33 @@
 
 }
 
-.git-commit-suggest-row {
-  display: flex;
-  justify-content: flex-end;
-  margin:var(--space-2xs) 0 var(--space-xs);
-}
-
 .ui-button.git-commit-suggest {
+  position: absolute;
+  right: var(--space-2xs);
+  bottom: var(--space-2xs);
   min-height: 1.75rem;
-  padding:0 var(--space-md);
+  padding:0 var(--space-sm);
   border: 1px solid var(--line);
   border-radius:var(--radius-2);
-  background: transparent;
+  background: color-mix(in srgb, var(--paper-raised) 92%, var(--signal));
   color: var(--signal);
-  font-size:var(--text-sm);
-  gap:var(--space-xs);
+  font-size:var(--text-xs);
+  gap:var(--space-2xs);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--ink) 12%, transparent);
 }
 
 .ui-button.git-commit-suggest:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--signal) 40%, var(--line));
-  background: color-mix(in srgb, var(--signal) 8%, transparent);
-  color: var(--signal);
+  border-color: color-mix(in srgb, var(--signal) 56%, var(--line));
+  background: color-mix(in srgb, var(--signal) 14%, var(--paper-raised));
+  color: color-mix(in srgb, var(--signal) 82%, var(--ink));
+}
+
+.git-more-actions-menu .ui-button:hover:not(:disabled),
+.git-commit-box .git-commit-menu .ui-button:hover:not(:disabled),
+.git-change-context-menu .ui-button:hover:not(:disabled),
+.git-commit-context-menu .ui-button:hover:not(:disabled) {
+  background: var(--paper-deep);
+  color: var(--ink);
 }
 
 /* 提交菜单项必须是次要/透明，不能吃到主色 */

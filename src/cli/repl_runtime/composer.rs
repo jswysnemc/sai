@@ -47,7 +47,10 @@ impl ReplRuntime {
             self.reflow.observe(size, false);
             self.reflow.schedule_immediate();
             self.maybe_reflow_due(false)?;
-            return Ok((self.viewport.composer_top(), self.viewport.composer_height()));
+            return Ok((
+                self.viewport.composer_top(),
+                self.viewport.composer_height(),
+            ));
         }
         let previous_size = self.viewport.size();
         let previous_history = self.viewport.history_height();
@@ -212,7 +215,6 @@ impl ReplRuntime {
     pub(in crate::cli) fn take_submission_queue(&mut self) -> Vec<QueuedSubmission> {
         self.submission_queue.drain(..).collect()
     }
-
 
     /// 开始一轮流式输出前重置草稿，保留空 composer 供运行期间输入。
     ///

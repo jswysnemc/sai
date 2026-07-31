@@ -260,7 +260,11 @@ fn strip_windows_verbatim(value: &str) -> Option<String> {
         return Some(out);
     }
     if let Some(rest) = value.strip_prefix("//?/") {
-        return Some(rest.chars().map(|ch| if ch == '/' { '\u{5c}' } else { ch }).collect());
+        return Some(
+            rest.chars()
+                .map(|ch| if ch == '/' { '\u{5c}' } else { ch })
+                .collect(),
+        );
     }
     None
 }

@@ -8,7 +8,12 @@ fn new_agent_restores_persisted_loaded_tools() {
     let temp = tempfile::tempdir().unwrap();
     let paths = test_paths(temp.path());
     let mut config = AppConfig::default();
-    config.tools.progressive_loading_enabled = true;
+    config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
+        enabled_tools: Vec::new(),
+        deferred_tools: vec![crate::config::DEFERRED_ALL_NON_BASE.to_string()],
+        skills_full: Vec::new(),
+        skills_named: Vec::new(),
+    });
     let state = StateStore::new(&paths).unwrap();
     state.init_files().unwrap();
     state
@@ -39,7 +44,12 @@ fn switch_mode_preserves_persisted_loaded_tools() {
     let temp = tempfile::tempdir().unwrap();
     let paths = test_paths(temp.path());
     let mut config = AppConfig::default();
-    config.tools.progressive_loading_enabled = true;
+    config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
+        enabled_tools: Vec::new(),
+        deferred_tools: vec![crate::config::DEFERRED_ALL_NON_BASE.to_string()],
+        skills_full: Vec::new(),
+        skills_named: Vec::new(),
+    });
     let state = StateStore::new(&paths).unwrap();
     state.init_files().unwrap();
     state

@@ -372,8 +372,9 @@ fn prepare_anthropic_tools(
 /// 【协议】【思考回传】根据供应商规则准备历史思考内容。
 ///
 /// 普通兼容网关移除 `reasoning_content`，避免因未知字段拒绝请求；DeepSeek
-/// 与显式开启 Preserved Thinking 的供应商保持原消息。DeepSeek 的旧工具历史
-/// 若缺少思考字段，则同时移除对应 assistant/tool 序列，避免服务端返回 400。
+/// 与显式开启 Preserved Thinking 的供应商保持原消息。DeepSeek 思考模式开启时，
+/// 旧工具历史若缺少思考字段，则同时移除对应 assistant/tool 序列，避免服务端返回 400。
+/// 关闭思考后保留普通工具历史，不再应用该限制。
 ///
 /// 参数:
 /// - `messages`: 待发送的消息序列
@@ -394,7 +395,7 @@ fn apply_preserved_thinking(
             })
             .collect();
     }
-    if !is_deepseek_provider(provider) {
+    if !deepseek_requires_tool_reasoning(provider) {
         return messages;
     }
     let mut output = Vec::with_capacity(messages.len());

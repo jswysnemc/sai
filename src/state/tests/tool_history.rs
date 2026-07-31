@@ -219,13 +219,14 @@ fn compaction_prompt_records_missing_tool_replacement() {
         store.complete_turn(&turn_id, "tail", None).unwrap();
     }
     let request = store.select_manual_compaction(0).unwrap().unwrap();
+    let template = crate::config::PromptTemplatesConfig::default().compaction;
 
     let prompt = store
-        .build_compaction_summary_prompt(&request, 10_000)
+        .build_compaction_summary_prompt(&request, 10_000, &template)
         .unwrap();
     let recovery = store.recovery_snapshot().unwrap();
 
-    assert!(prompt.contains("tool-results/call_1.txt"));
+    assert!(prompt.user.contains("tool-results/call_1.txt"));
     assert_eq!(
         recovery.latest.as_ref().unwrap().kind,
         FailureKind::ToolHistoryReplacementMissing
@@ -258,13 +259,14 @@ fn compaction_prompt_records_missing_tool_result_ref_file() {
         store.complete_turn(&turn_id, "tail", None).unwrap();
     }
     let request = store.select_manual_compaction(0).unwrap().unwrap();
+    let template = crate::config::PromptTemplatesConfig::default().compaction;
 
     let prompt = store
-        .build_compaction_summary_prompt(&request, 10_000)
+        .build_compaction_summary_prompt(&request, 10_000, &template)
         .unwrap();
     let recovery = store.recovery_snapshot().unwrap();
 
-    assert!(prompt.contains("tool-results/missing.txt"));
+    assert!(prompt.user.contains("tool-results/missing.txt"));
     assert!(recovery
         .latest
         .as_ref()
@@ -291,9 +293,10 @@ fn compaction_prompt_rejects_over_budget_history() {
         store.complete_turn(&turn_id, "tail", None).unwrap();
     }
     let request = store.select_manual_compaction(0).unwrap().unwrap();
+    let template = crate::config::PromptTemplatesConfig::default().compaction;
 
     let err = store
-        .build_compaction_summary_prompt(&request, 500)
+        .build_compaction_summary_prompt(&request, 500, &template)
         .unwrap_err();
 
     assert!(format!("{err:#}").contains("tool history summary prompt over budget"));

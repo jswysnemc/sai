@@ -243,7 +243,7 @@ fn build_dynamic_sections(
 
     // 3. 渐进加载已载入工具提示
     let loaded = store.load_loaded_tools().unwrap_or_default();
-    let progressive = config.tools.progressive_loading_enabled;
+    let progressive = !config.agent_deferred_tools().is_empty();
     let loaded_tools_context = if progressive && !loaded.is_empty() {
         format!(
             "<loaded_tools>\nThe following tools are already loaded in this conversation. Do not call load for them again; call the loaded tool directly. If one of these tools returns an error, treat it as an execution or workflow error, not as a loading error.\nLoaded tools: {}\n</loaded_tools>",
@@ -385,10 +385,7 @@ fn terminal_runtime_context(locale: Locale) -> String {
     let environment = if stdin_tty || stdout_tty || stderr_tty {
         locale.text("terminal session", "终端会话")
     } else {
-        locale.text(
-            "non-interactive or piped environment",
-            "非交互或管道环境",
-        )
+        locale.text("non-interactive or piped environment", "非交互或管道环境")
     };
     let shell = std::env::var("SHELL")
         .ok()
@@ -515,18 +512,20 @@ fn build_tools_markdown_section(
     // 4. 与 Agent::new 对齐：过滤后再挂 goal 工具与渐进 load
     //    create_goal / get_goal / update_goal / load 不依赖 enabled_tools 白名单
     crate::goal::register_tools(&mut registry, store.goal_file());
-    let progressive = config.tools.progressive_loading_enabled;
+    let deferred = config.agent_deferred_tools();
+    let progressive = !deferred.is_empty();
     if progressive {
-        tools::register_progressive_loader(&mut registry);
+        tools::register_progressive_loader(&mut registry, deferred);
     }
 
     // 5. 渐进加载时仅展示初始工具 + 已加载工具，并刷新 load 描述中的分组清单
     let loaded = store.load_loaded_tools().unwrap_or_default();
     let loaded_set: BTreeSet<String> = loaded.iter().cloned().collect();
-    let visible_names = visible_tool_names(&registry, progressive, &loaded);
+    let visible_names = tools::progressive::visible_tool_names(&registry, deferred, &loaded_set);
     let mut definitions = registry.definitions_for_names(&visible_names);
     if progressive {
-        let load_description = tools::progressive::loader_description(&registry, &loaded_set);
+        let load_description =
+            tools::progressive::loader_description(&registry, deferred, &loaded_set);
         for definition in &mut definitions {
             if definition.function.name == tools::LOAD_NAME {
                 definition.function.description = load_description.clone();
@@ -620,9 +619,8 @@ fn summarize_prompt(
     let has_skills = content.contains("<available-skills>")
         || content.contains("技能目录")
         || content.contains("Available skills");
-    let has_tools = tool_count > 0
-        || content.contains("工具定义")
-        || content.contains("Tool definitions");
+    let has_tools =
+        tool_count > 0 || content.contains("工具定义") || content.contains("Tool definitions");
     let char_count = content.chars().count();
     // 与预算计算同一口径估算，界面显示的数值可直接对上上下文窗口占用
     let token_count = crate::token_estimate::estimate_tokens(&content);
@@ -667,29 +665,4 @@ fn apply_web_agent_tool_filter(config: &AppConfig, registry: &mut ToolRegistry) 
     }
     *registry = filtered;
     Ok(())
-}
-
-/// 计算当前可见工具名集合。
-///
-/// 参数:
-/// - `registry`: 工具注册表
-/// - `progressive`: 是否渐进加载
-/// - `loaded`: 已加载工具
-///
-/// 返回:
-/// - 可见工具名集合
-fn visible_tool_names(
-    registry: &ToolRegistry,
-    progressive: bool,
-    loaded: &[String],
-) -> BTreeSet<String> {
-    let loaded_set: BTreeSet<String> = loaded.iter().cloned().collect();
-    registry
-        .tool_infos()
-        .into_iter()
-        .filter(|info| {
-            !progressive || tools::is_initial_tool(&info.name) || loaded_set.contains(&info.name)
-        })
-        .map(|info| info.name)
-        .collect()
 }

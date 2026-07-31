@@ -464,10 +464,7 @@ fn compact_terminal_checkpoint(record: &mut RunCheckpoint) -> bool {
 /// 返回:
 /// - 被淘汰的运行标识
 fn prune_terminal_records(records: &mut Vec<RunCheckpoint>) -> Vec<String> {
-    let terminal_count = records
-        .iter()
-        .filter(|record| is_terminal(record))
-        .count();
+    let terminal_count = records.iter().filter(|record| is_terminal(record)).count();
     let mut remaining = terminal_count.saturating_sub(RUN_HISTORY_CAPACITY);
     if remaining == 0 {
         return Vec::new();
@@ -645,9 +642,7 @@ mod tests {
 
         assert!(store.get("run-0").is_none());
         assert!(!store.event_path("run-0").exists());
-        assert!(store
-            .get(&format!("run-{RUN_HISTORY_CAPACITY}"))
-            .is_some());
+        assert!(store.get(&format!("run-{RUN_HISTORY_CAPACITY}")).is_some());
         assert!(store
             .event_path(&format!("run-{RUN_HISTORY_CAPACITY}"))
             .exists());

@@ -4,8 +4,8 @@ use std::path::Path;
 /// 规范化路径字符串，便于跨平台比较。
 fn path_key(path: impl AsRef<std::path::Path>) -> String {
     let path = path.as_ref();
-    let canonical = crate::platform::windows_path::canonicalize(path)
-        .unwrap_or_else(|_| path.to_path_buf());
+    let canonical =
+        crate::platform::windows_path::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let simplified = crate::platform::windows_path::simplified(&canonical);
     let value = simplified.display().to_string();
     #[cfg(windows)]

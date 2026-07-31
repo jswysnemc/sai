@@ -1,17 +1,9 @@
 /*
  * 变更视图与提交图视图的两栏布局。
  *
- * 左栏固定宽度承载列表与提交控件，右栏自适应承载差异；
+ * 左栏宽度由 source-control-split-view 管理，右栏自适应承载差异；
  * 左栏内部只有变更列表滚动，提交框与底部动作条保持常驻可见。
  */
-
-.git-changes-body,
-.git-history-body {
-  display: grid;
-  grid-template-columns: minmax(15.625rem, 20rem) minmax(0, 1fr);
-  min-height: 0;
-  height: 100%;
-}
 
 /*
  * 用 flex 而非固定行数的 grid：进行中操作条是条件渲染的，
@@ -62,6 +54,18 @@
   white-space: nowrap;
 }
 
+.git-diff-mode .ui-button:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.git-diff-mode .ui-button.active {
+  border-color: color-mix(in srgb, var(--signal) 32%, var(--line));
+  background: var(--signal-soft);
+  color: var(--signal);
+}
+
 .git-change-footer .git-discard-all {
   flex-shrink: 0;
   min-height: 1.625rem;
@@ -69,20 +73,7 @@
   font-size: var(--text-2xs);
 }
 
-@media (max-width: 56rem) {
-  .git-changes-body,
-  .git-history-body {
-    grid-template-columns: minmax(13.75rem, 17rem) minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 44rem) {
-  .git-changes-body,
-  .git-history-body {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  }
-
   .git-change-panel,
   .git-history-panel {
     border-right: none;

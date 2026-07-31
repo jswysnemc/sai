@@ -95,10 +95,6 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
             Field::new(label, config.tools.command_filter_denylist.join(", "))
         },
         Field::boolean(
-            t("Progressive tool loading", "渐进式工具加载"),
-            config.tools.progressive_loading_enabled,
-        ),
-        Field::boolean(
             t("Background commands enabled", "后台命令启用"),
             config.tools.background_commands_enabled,
         ),
@@ -169,7 +165,10 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
         // 解析失败时就地提示并重新打开表单，不让非法输入终止 TUI
         match apply_settings_fields(config, &fields) {
             Ok(()) => return Ok(()),
-            Err(err) => message(stdout, &format!("{}: {err}", t("Invalid input", "输入无效")))?,
+            Err(err) => message(
+                stdout,
+                &format!("{}: {err}", t("Invalid input", "输入无效")),
+            )?,
         }
     }
 }
@@ -183,7 +182,7 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
 /// 返回:
 /// - 全部字段解析成功时写入配置；否则返回首个解析错误
 fn apply_settings_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> {
-    let [tui_mode, cli_mode, terminal_shell, context_tokens, compaction_model, tools_enabled, tool_max_rounds, command_shell, command_filter, command_filter_denylist, progressive_loading, background_commands, background_timeout, background_log_max, background_stop_grace, skills_enabled, skill_commands, reasoning, tool_calls, readable_names, wait_model, wait_thinking, transcript_rows] =
+    let [tui_mode, cli_mode, terminal_shell, context_tokens, compaction_model, tools_enabled, tool_max_rounds, command_shell, command_filter, command_filter_denylist, background_commands, background_timeout, background_log_max, background_stop_grace, skills_enabled, skill_commands, reasoning, tool_calls, readable_names, wait_model, wait_thinking, transcript_rows] =
         fields
     else {
         unreachable!("global settings field layout must remain complete")
@@ -201,7 +200,6 @@ fn apply_settings_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()>
     let transcript_row_cap =
         parse_number_field::<usize>(transcript_rows.label, &transcript_rows.value)?;
     let tools_enabled = parse_bool_field(&tools_enabled.value)?;
-    let progressive_loading = parse_bool_field(&progressive_loading.value)?;
     let background_commands = parse_bool_field(&background_commands.value)?;
     let skills_enabled = parse_bool_field(&skills_enabled.value)?;
     let skill_commands = parse_bool_field(&skill_commands.value)?;
@@ -231,7 +229,6 @@ fn apply_settings_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()>
         .map(|item| item.trim().to_string())
         .filter(|item| !item.is_empty())
         .collect();
-    config.tools.progressive_loading_enabled = progressive_loading;
     config.tools.background_commands_enabled = background_commands;
     config.tools.background_command_timeout_seconds = timeout_seconds;
     config.tools.background_command_log_max_bytes = log_max_bytes;

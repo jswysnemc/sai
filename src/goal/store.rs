@@ -59,10 +59,7 @@ impl GoalStore {
         }
         let now = Utc::now().to_rfc3339();
         // 创建日志只保留可读摘要，禁止把附件 base64 写进 updates
-        let created_summary = format!(
-            "Goal created: {}",
-            summarize_objective_for_log(&objective)
-        );
+        let created_summary = format!("Goal created: {}", summarize_objective_for_log(&objective));
         let goal = Goal {
             id: format!("goal_{}", uuid::Uuid::new_v4().simple()),
             objective: objective.clone(),
@@ -117,12 +114,7 @@ impl GoalStore {
         self.update(|goal| {
             if let Some(objective) = objective {
                 if goal.objective != objective {
-                    push_update(
-                        goal,
-                        "status",
-                        "Objective updated",
-                        Utc::now().to_rfc3339(),
-                    );
+                    push_update(goal, "status", "Objective updated", Utc::now().to_rfc3339());
                 }
                 goal.objective = objective;
             }
@@ -180,17 +172,12 @@ impl GoalStore {
             bail!("progress message is empty");
         }
         self.update(|goal| {
-            push_update(
-                goal,
-                "progress",
-                message,
-                Utc::now().to_rfc3339(),
-            );
+            push_update(goal, "progress", message, Utc::now().to_rfc3339());
             Ok(())
         })
     }
 
-        pub(crate) fn set_status(&self, status: GoalStatus) -> Result<Goal> {
+    pub(crate) fn set_status(&self, status: GoalStatus) -> Result<Goal> {
         self.update(|goal| {
             let next = if status == GoalStatus::Active
                 && goal

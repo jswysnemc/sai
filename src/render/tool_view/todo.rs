@@ -186,8 +186,7 @@ mod tests {
             {"text":"补测试","status":"pending"}
         ]}"#;
 
-        let rendered =
-            render_todo_output("Todo", result, true, ToolCallDisplayMode::Full).unwrap();
+        let rendered = render_todo_output("Todo", result, true, ToolCallDisplayMode::Full).unwrap();
 
         assert!(rendered.contains("读取配置"));
         assert!(rendered.contains("改写解析"));

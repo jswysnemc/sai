@@ -2,6 +2,7 @@ import type { AgentProfileConfig, SubagentProfileConfig } from "../../../api/con
 import { buildDefaultAgent, DEFAULT_AGENT_ID } from "../../agents/agent-options";
 import type { AgentProfile } from "../../agents/agent-types";
 import type { AgentOptions } from "./agents-types";
+import { DEFERRED_ALL_NON_BASE } from "./agent-tool-mode-state";
 import { text, type Locale } from "../../i18n/locale";
 
 export const BUILTIN_AGENT_PROFILES: AgentProfileConfig[] = [
@@ -9,6 +10,8 @@ export const BUILTIN_AGENT_PROFILES: AgentProfileConfig[] = [
     id: "cli",
     name: "CLI 助手",
     description: "人格化终端助手：工具全量开放，适合日常排障与对话",
+    // 全量开放且工具名不可穷举，用通配符表达「基础工具直接可见，其余按需 load」
+    deferred_tools: [DEFERRED_ALL_NON_BASE],
     thinking_level: "auto",
     register_to_main: false,
     load_instruction_files: true
@@ -17,6 +20,7 @@ export const BUILTIN_AGENT_PROFILES: AgentProfileConfig[] = [
     id: "general",
     name: "代码 Agent",
     description: "适合实现、测试、文档和常规工程任务；工具面向长程编程",
+    deferred_tools: [DEFERRED_ALL_NON_BASE],
     thinking_level: "auto",
     register_to_main: true,
     load_instruction_files: true
@@ -26,6 +30,8 @@ export const BUILTIN_AGENT_PROFILES: AgentProfileConfig[] = [
     name: "探索 Agent",
     description: "适合只读检索、代码定位和资料探索；返回证据与路径",
     enabled_tools: ["check_os_info", "read_file", "glob", "grep", "web_search", "web_fetch"],
+    // 白名单全是基础工具与检索入口，没有需要延迟加载的项
+    deferred_tools: [],
     thinking_level: "auto",
     register_to_main: true,
     load_instruction_files: true
@@ -43,6 +49,7 @@ export const BUILTIN_AGENT_PROFILES: AgentProfileConfig[] = [
       "web_fetch",
       "ask_question"
     ],
+    deferred_tools: [],
     thinking_level: "auto",
     register_to_main: true,
     load_instruction_files: true
@@ -84,6 +91,33 @@ export const BUILTIN_AGENT_PROFILES: AgentProfileConfig[] = [
       "cron",
       "send_channel_message"
     ],
+    // 渠道消息与定时任务是网关固有职责，其余查询类工具按需 load
+    deferred_tools: [
+      "web_search",
+      "web_fetch",
+      "get_weather",
+      "get_exchange_rate",
+      "query_deepseek_status",
+      "remember_fact",
+      "recall_memories",
+      "recall_past_events",
+      "search_evicted_context",
+      "archwiki_query",
+      "archlinux_official_package_query",
+      "aur_search_packages",
+      "aur_get_package_info",
+      "online_man_search",
+      "online_man_get_page",
+      "scientific_calculator",
+      "calculate_hash",
+      "decode_encoded_text",
+      "set_alarm",
+      "list_alarms",
+      "cancel_alarm",
+      "search_knowledge_base",
+      "read_knowledge_base_file",
+      "search_knowledge_base_by_name"
+    ],
     thinking_level: "auto",
     register_to_main: false,
     load_instruction_files: false
@@ -108,6 +142,7 @@ export function normalizeAgentProfile(
     description: profile.description ?? defaults.description ?? "",
     system_prompt: profile.system_prompt ?? defaults.system_prompt ?? "",
     enabled_tools: copyList(profile.enabled_tools ?? defaults.enabled_tools),
+    deferred_tools: copyList(profile.deferred_tools ?? defaults.deferred_tools),
     skills_full: copyList(profile.skills_full ?? defaults.skills_full),
     skills_named: copyList(profile.skills_named ?? defaults.skills_named),
     provider_id: profile.provider_id ?? defaults.provider_id ?? "",
@@ -190,6 +225,8 @@ export function createUniqueAgentProfile(
     description: "",
     system_prompt: "",
     enabled_tools: options.tools.map((tool) => tool.name),
+    // 新建档案默认沿用「基础工具直接可见、其余按需 load」的策略
+    deferred_tools: [DEFERRED_ALL_NON_BASE],
     skills_full: options.skills.map((skill) => skill.name),
     skills_named: [],
     provider_id: "",

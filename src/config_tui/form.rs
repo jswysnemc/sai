@@ -302,12 +302,10 @@ pub(crate) fn parse_provider_model_choice(value: &str) -> (String, String) {
 /// 返回:
 /// - 解析后的数字；解析失败时返回带字段名的错误
 pub(crate) fn parse_number_field<T: std::str::FromStr>(label: &str, value: &str) -> Result<T> {
-    value.trim().parse::<T>().map_err(|_| {
-        anyhow::anyhow!(
-            "{label}: {} ({value})",
-            t("invalid number", "无效数字")
-        )
-    })
+    value
+        .trim()
+        .parse::<T>()
+        .map_err(|_| anyhow::anyhow!("{label}: {} ({value})", t("invalid number", "无效数字")))
 }
 
 pub(crate) fn parse_bool_field(value: &str) -> Result<bool> {

@@ -46,7 +46,10 @@ fn wide_chars_wrap_as_whole_units() {
 fn combining_marks_do_not_advance_cursor() {
     // 组合变音符宽度为 0，不推进光标列
     assert_eq!(visible_width("e\u{0301}"), 1);
-    assert_eq!(repl_cursor_position_for_cols("", "e\u{0301}x", 3, 10), (2, 0));
+    assert_eq!(
+        repl_cursor_position_for_cols("", "e\u{0301}x", 3, 10),
+        (2, 0)
+    );
 }
 
 #[test]
@@ -58,10 +61,7 @@ fn tabs_advance_to_next_tab_stop() {
 #[test]
 fn strips_osc_sequences_without_residue() {
     // OSC 标题序列整段清除，负载不残留进输入
-    assert_eq!(
-        strip_terminal_control_sequences("a\x1b]0;title\x07b"),
-        "ab"
-    );
+    assert_eq!(strip_terminal_control_sequences("a\x1b]0;title\x07b"), "ab");
     assert_eq!(strip_terminal_control_sequences("a\x1bOPb"), "ab");
 }
 
@@ -298,4 +298,3 @@ fn strips_terminal_control_sequences_from_repl_text() {
         "line1\nline2\tend"
     );
 }
-

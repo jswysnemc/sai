@@ -69,6 +69,19 @@ impl ReplRuntime {
         self.redraw_stream_composer()?;
         Ok(true)
     }
+
+    /// 切换当前实时思考块的展开状态并立即重绘。
+    ///
+    /// 返回:
+    /// - 找到实时思考块时返回 true
+    pub(in crate::cli) fn toggle_live_reasoning(&mut self) -> Result<bool> {
+        if !self.transcript.toggle_live_reasoning() {
+            return Ok(false);
+        }
+        self.sync_transcript(true)?;
+        self.redraw_stream_composer()?;
+        Ok(true)
+    }
 }
 
 /// 在流式事件循环 tick 中采样尺寸并执行到期 reflow 与 live 刷新。
@@ -125,10 +138,12 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                     runtime.jump_to_output_bottom(true)?;
                     continue;
                 }
-                if (matches!(key.code, KeyCode::Char('o'))
-                    && key.modifiers.contains(KeyModifiers::CONTROL))
-                    || matches!(key.code, KeyCode::PageUp)
-                {
+                let ctrl_o = matches!(key.code, KeyCode::Char('o'))
+                    && key.modifiers.contains(KeyModifiers::CONTROL);
+                if ctrl_o && runtime.toggle_live_reasoning()? {
+                    continue;
+                }
+                if ctrl_o || matches!(key.code, KeyCode::PageUp) {
                     // 1. 流式期间不打开阻塞式浏览面板：pager 会同步占住事件循环，
                     //    模型流无人读取、工具子进程管道写满后挂起
                     runtime.record_meta(

@@ -11,7 +11,8 @@ use crate::llm::http_debug::{
     anthropic_request_headers, bearer_request_headers, HttpDebugConfig, HttpDebugRecorder,
 };
 use crate::llm::thinking::{
-    apply_provider_body_options, is_deepseek_provider, should_preserve_reasoning, ThinkingProtocol,
+    apply_provider_body_options, deepseek_requires_tool_reasoning, is_deepseek_provider,
+    should_preserve_reasoning, ThinkingProtocol,
 };
 use crate::paths::SaiPaths;
 use anyhow::{bail, Context, Result};

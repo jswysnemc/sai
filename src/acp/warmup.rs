@@ -52,7 +52,8 @@ pub(crate) async fn warm_up(config: &AppConfig, paths: &SaiPaths) -> Result<AcpW
     )
     .await?;
     let info = engine.warm_up_runtime_state(&workspace).await?;
-    let (agent, version) = info.unwrap_or_else(|| (config.agent.engine.as_str().to_string(), String::new()));
+    let (agent, version) =
+        info.unwrap_or_else(|| (config.agent.engine.as_str().to_string(), String::new()));
     Ok(AcpWarmupOutcome { agent, version })
 }
 
@@ -86,12 +87,11 @@ mod tests {
             powershell_hook_file: root.join("shell/powershell-hook.ps1"),
         };
         let config = AppConfig::default();
-        assert!(
-            !config.agent.engine.is_external(),
-            "默认配置应使用自带内核"
-        );
+        assert!(!config.agent.engine.is_external(), "默认配置应使用自带内核");
 
-        let error = warm_up(&config, &paths).await.expect_err("自带内核应被拒绝");
+        let error = warm_up(&config, &paths)
+            .await
+            .expect_err("自带内核应被拒绝");
 
         let message = error.to_string();
         assert!(

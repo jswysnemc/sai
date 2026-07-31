@@ -183,16 +183,15 @@ impl Agent {
         let context_char_budget = self.context_char_budget;
         // 记忆提取可配置独立模型；未配置时沿用当前会话 client
         let client = match self.config.session_memory_runtime_config() {
-            Ok(runtime_config) => match crate::llm::OpenAiCompatibleClient::from_config(
-                &runtime_config,
-                &paths,
-            ) {
-                Ok(client) => client,
-                Err(err) => {
-                    eprintln!("[sai] session memory extraction client fallback: {err:#}");
-                    self.client.clone()
+            Ok(runtime_config) => {
+                match crate::llm::OpenAiCompatibleClient::from_config(&runtime_config, &paths) {
+                    Ok(client) => client,
+                    Err(err) => {
+                        eprintln!("[sai] session memory extraction client fallback: {err:#}");
+                        self.client.clone()
+                    }
                 }
-            },
+            }
             Err(err) => {
                 eprintln!("[sai] session memory extraction config fallback: {err:#}");
                 self.client.clone()

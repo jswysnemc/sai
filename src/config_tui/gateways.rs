@@ -302,7 +302,10 @@ fn edit_qq_gateway(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()
         let enabled = match parse_bool_field(&fields[0].value) {
             Ok(enabled) => enabled,
             Err(err) => {
-                message(stdout, &format!("{}: {err}", t("Invalid input", "输入无效")))?;
+                message(
+                    stdout,
+                    &format!("{}: {err}", t("Invalid input", "输入无效")),
+                )?;
                 continue;
             }
         };
@@ -357,7 +360,10 @@ fn edit_weixin_gateway(stdout: &mut io::Stdout, config: &mut AppConfig) -> Resul
         let enabled = match parse_bool_field(&fields[0].value) {
             Ok(enabled) => enabled,
             Err(err) => {
-                message(stdout, &format!("{}: {err}", t("Invalid input", "输入无效")))?;
+                message(
+                    stdout,
+                    &format!("{}: {err}", t("Invalid input", "输入无效")),
+                )?;
                 continue;
             }
         };

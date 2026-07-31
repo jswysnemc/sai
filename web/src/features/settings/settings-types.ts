@@ -8,6 +8,7 @@ export type SettingsSectionId =
   | "cli-tools"
   | "web-search"
   | "runtime"
+  | "prompts"
   | "skills"
   | "git"
   | "appearance"

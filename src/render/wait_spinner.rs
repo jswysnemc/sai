@@ -1,7 +1,6 @@
 use crate::render::activity_animation::{
-    activity_frame_count, render_activity_detail, render_activity_text, ACTIVITY_FRAME_INTERVAL,
+    activity_frame_count, render_activity_detail, render_activity_line, ACTIVITY_FRAME_INTERVAL,
 };
-use crate::render::content_indent::align_to_guide_column;
 use crate::render::work_status::format_elapsed;
 use anyhow::Result;
 use crossterm::cursor::{self, MoveTo};
@@ -205,9 +204,8 @@ fn render_initial_spinner_frame(state: &Arc<Mutex<WaitSpinnerState>>) {
 /// 返回:
 /// - ANSI 文本与占用行数
 fn render_frame(frame: usize, state: &WaitSpinnerState) -> (String, u16) {
-    let elapsed = render_activity_detail(&format_elapsed(state.start.elapsed()));
-    let phase = render_activity_text(&state.phase, frame);
-    let main_line = align_to_guide_column(&format!("{phase} {elapsed}"));
+    let main_line =
+        render_activity_line(&state.phase, &format_elapsed(state.start.elapsed()), frame);
     match &state.sub_phase {
         Some(sub_phase) if !sub_phase.trim().is_empty() => {
             if state.reserved_lines >= 2 {
@@ -365,7 +363,7 @@ mod tests {
         assert!(frame.contains("model gpt"));
     }
 
-    /// 【终端】【等待状态测试】验证状态文字使用 Codex 风格流光且不使用移动点。
+    /// 【终端】【等待状态测试】验证等待状态与工作状态共用白色流光和固定引导点。
     ///
     /// 参数:
     /// - 无
@@ -373,7 +371,7 @@ mod tests {
     /// 返回:
     /// - 无
     #[test]
-    fn render_frame_uses_white_shimmer_without_moving_dots() {
+    fn render_frame_uses_white_shimmer_with_fixed_guide() {
         let state = make_state("Thinking", None);
 
         let (first, lines) = render_frame(0, &state);
@@ -382,6 +380,7 @@ mod tests {
 
         assert!(plain.contains("Thinking"));
         assert!(plain.contains("0s"));
+        assert!(plain.starts_with("• "));
         assert!(!plain.contains('·'));
         assert_ne!(first, second);
         assert_eq!(lines, 1);

@@ -191,15 +191,19 @@ async fn run_turn(
     )?;
     let registry =
         crate::cli::build_tool_registry(&config, &state.paths, crate::agent::AgentMode::Yolo)?;
-    let user_input =
-        crate::runner::UserInputSubmission::new(message.text.clone(), crate::agent::AgentMode::Yolo);
+    let user_input = crate::runner::UserInputSubmission::new(
+        message.text.clone(),
+        crate::agent::AgentMode::Yolo,
+    );
     let channel = crate::runner::ChannelSubmission::new(context.channel())
         .with_inbound_marker(context.inbound_marker());
     let session_id = ensure_gateway_session(&state.paths, context)?;
-    let submission =
-        crate::runner::RunnerSubmission::user_input(crate::runner::SubmissionSource::Gateway, user_input)
-            .with_session_id(session_id)
-            .with_channel(channel);
+    let submission = crate::runner::RunnerSubmission::user_input(
+        crate::runner::SubmissionSource::Gateway,
+        user_input,
+    )
+    .with_session_id(session_id)
+    .with_channel(channel);
     let mut output = crate::runner::RunnerOutput::default();
     let mut sink = |event| {
         output.push_event(event);

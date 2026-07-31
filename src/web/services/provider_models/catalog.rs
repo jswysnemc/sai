@@ -225,15 +225,13 @@ pub(super) fn find_openrouter_model(catalog: &Value, model: &str) -> Option<Cata
         let Some(score) = match_score(&candidates, remote_id) else {
             continue;
         };
-        let context = positive_u64(
-            item.get("context_length")
-                .and_then(Value::as_u64)
-                .or_else(|| {
-                    item.get("top_provider")
-                        .and_then(|top| top.get("context_length"))
-                        .and_then(Value::as_u64)
-                }),
-        );
+        let context = positive_u64(item.get("context_length").and_then(Value::as_u64).or_else(
+            || {
+                item.get("top_provider")
+                    .and_then(|top| top.get("context_length"))
+                    .and_then(Value::as_u64)
+            },
+        ));
         let max_output_tokens = positive_u64(
             item.get("top_provider")
                 .and_then(|top| top.get("max_completion_tokens"))
@@ -326,7 +324,9 @@ pub(super) fn fetch_litellm_catalog(models: &[String]) -> Vec<(String, CatalogMe
     };
     models
         .iter()
-        .filter_map(|model| find_litellm_model(catalog, model).map(|metadata| (model.clone(), metadata)))
+        .filter_map(|model| {
+            find_litellm_model(catalog, model).map(|metadata| (model.clone(), metadata))
+        })
         .collect()
 }
 
@@ -378,7 +378,8 @@ pub(super) fn find_litellm_model(catalog: &Value, model: &str) -> Option<Catalog
                 .and_then(Value::as_u64)
                 .or_else(|| value.get("max_tokens").and_then(Value::as_u64)),
         );
-        let max_output_tokens = positive_u64(value.get("max_output_tokens").and_then(Value::as_u64));
+        let max_output_tokens =
+            positive_u64(value.get("max_output_tokens").and_then(Value::as_u64));
         let provider = value
             .get("litellm_provider")
             .and_then(Value::as_str)

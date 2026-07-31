@@ -1,0 +1,214 @@
+.session-workspace {
+  display: grid;
+  gap:var(--space-3xs);
+}
+
+.workspace-tree-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 34px;
+  border-radius:var(--radius-2);
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.workspace-tree-row:hover,
+.workspace-tree-row.active {
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.workspace-tree-main {
+  display: grid;
+  grid-template-columns: 14px 16px minmax(0, 1fr) 18px;
+  gap:var(--space-2xs);
+  align-items: center;
+  min-width: 0;
+  min-height: 34px;
+  padding:0 var(--space-xs);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.workspace-tree-main > span:not(.active-agent-indicator) {
+  display: grid;
+  min-width: 0;
+}
+
+.workspace-tree-main > .workspace-summary:not(.active-agent-indicator) {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap:var(--space-xs);
+}
+
+.workspace-tree-row strong {
+  overflow: hidden;
+  font-size:var(--text-sm);
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tree-row small {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font:400 var(--text-2xs) var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tree-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: none;
+  align-self: stretch;
+  align-items: center;
+  gap:var(--space-3xs);
+  padding-right:var(--space-2xs);
+  opacity: 0;
+}
+
+.workspace-tree-row:hover .workspace-tree-actions,
+.workspace-tree-row:focus-within .workspace-tree-actions,
+.workspace-tree-row.selecting .workspace-tree-actions {
+  opacity: 1;
+}
+
+.workspace-tree-row.selecting .workspace-tree-main {
+  padding-right:var(--space-2xs);
+}
+
+.workspace-tree-actions button {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border: 0;
+  border-radius:var(--radius-1);
+  background: transparent;
+  color: var(--ink-soft);
+  line-height: 0;
+}
+
+.workspace-tree-actions button svg {
+  display: block;
+}
+
+.workspace-tree-actions button:hover {
+  background: var(--paper-raised);
+  color: var(--ink);
+}
+
+.workspace-tree-actions button:disabled {
+  opacity: 0.4;
+}
+
+.workspace-tree-actions button.danger {
+  color: var(--danger);
+}
+
+.workspace-tree-actions button.confirming {
+  background: color-mix(in srgb, var(--danger) 12%, var(--paper-raised));
+}
+
+/* 多选工具条：独占一行，避免挤进工作区标题右侧图标区 */
+.workspace-selection-bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap:var(--space-sm);
+  margin:var(--space-3xs) var(--space-xs) var(--space-xs) var(--space-3xl);
+  padding:var(--space-2xs) var(--space-xs);
+  border: 1px solid var(--line);
+  border-radius:var(--radius-3);
+  background: var(--paper-raised);
+}
+
+.workspace-selection-count {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-selection-bar .selection-action,
+.workspace-selection-bar .selection-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap:var(--space-2xs);
+  width: auto;
+  min-width: 0;
+  height: 26px;
+  padding:0 var(--space-sm);
+  border-radius:var(--radius-2);
+  font-size:var(--text-xs);
+  white-space: nowrap;
+}
+
+.workspace-selection-bar .selection-action {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink-soft);
+}
+
+.workspace-selection-bar .selection-action:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--ink) 5%, var(--paper));
+  color: var(--ink);
+}
+
+.workspace-selection-bar .selection-delete {
+  border: 1px solid color-mix(in srgb, var(--danger) 50%, var(--line));
+  background: color-mix(in srgb, var(--danger) 10%, var(--paper));
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.workspace-selection-bar .selection-delete:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 18%, var(--paper));
+}
+
+.workspace-selection-bar .selection-delete.confirming {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--paper-raised);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 28%, transparent);
+}
+
+.workspace-selection-bar .selection-action:disabled,
+.workspace-selection-bar .selection-delete:disabled {
+  opacity: 0.42;
+}
+
+.workspace-menu-popover {
+  top: 32px;
+  right: 6px;
+}
+
+.workspace-session-children {
+  position: relative;
+  display: grid;
+  gap:var(--space-3xs);
+  margin-left:var(--space-lg);
+  padding-left:var(--space-sm);
+}
+
+.workspace-session-children::before {
+  position: absolute;
+  top: 0;
+  bottom: 4px;
+  left: 0;
+  width: 1px;
+  background: var(--line);
+  content: "";
+}

@@ -1,4 +1,5 @@
 use super::model::{SessionInfo, DEFAULT_SESSION_ID};
+use super::repository_paths::{current_session_file, sessions_file};
 use super::workspace::{current_workspace_scope, WorkspaceScope};
 use crate::paths::SaiPaths;
 use anyhow::{bail, Context, Result};
@@ -22,7 +23,6 @@ pub(super) use metadata::{sanitize_session_id, sort_sessions};
 pub fn title_from_message_public(message: &str, fallback: &str) -> String {
     title_from_message(message, fallback)
 }
-
 
 /// 创建新会话并设为当前会话。
 ///
@@ -710,28 +710,6 @@ pub(super) fn save_sessions_to_base(base_state_dir: &Path, sessions: &[SessionIn
         format!("{}\n", serde_json::to_string_pretty(sessions)?),
     )?;
     Ok(())
-}
-
-/// 返回会话索引文件路径。
-///
-/// 参数:
-/// - `base_state_dir`: 原始状态目录
-///
-/// 返回:
-/// - 会话索引文件路径
-fn sessions_file(base_state_dir: &Path) -> PathBuf {
-    base_state_dir.join("index.json")
-}
-
-/// 返回当前会话文件路径。
-///
-/// 参数:
-/// - `base_state_dir`: 原始状态目录
-///
-/// 返回:
-/// - 当前会话文件路径
-fn current_session_file(base_state_dir: &Path) -> PathBuf {
-    base_state_dir.join("current")
 }
 
 /// 返回会话状态目录。

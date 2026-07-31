@@ -210,8 +210,12 @@
 }
 
 .model-thinking-option-list > button:hover,
-.model-thinking-option-list > button.active {
+.model-thinking-option-list > button:focus-visible {
   background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.model-thinking-option-list > button.active {
   color: var(--ink);
 }
 
@@ -255,6 +259,7 @@
 }
 
 .model-thinking-option-list > button > svg {
+  align-self: center;
   visibility: hidden;
   color: var(--signal);
 }

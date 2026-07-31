@@ -1,0 +1,12 @@
+.gateway-brand-icon {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.gateway-brand-icon--qq {
+  color: var(--ink);
+}
+
+.gateway-brand-icon--weixin {
+  color: #07a95c;
+}

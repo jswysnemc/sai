@@ -2,6 +2,7 @@ import { useState } from "react";
 import { QrCode } from "lucide-react";
 import type { AppConfig, WeixinLoginAccount } from "../../api/contracts";
 import { GatewayRuntimeControl } from "../gateways/gateway-runtime-control";
+import { GatewayBrandIcon } from "../gateways/gateway-brand-icon";
 import { WeixinLoginDialog } from "../gateways/weixin-login-dialog";
 import { SettingsGroup } from "./editor-layout";
 import type { GatewayId } from "./settings-types";
@@ -43,6 +44,7 @@ export function GatewaySettingsSection({ config, dirty, onGatewayChange, onSave 
     <div className="settings-editor gateway-settings">
       <SettingsGroup
         title="QQ"
+        icon={<GatewayBrandIcon gatewayId="qq" size={19} />}
         description={t("Configure QQ bot transport and authentication.", "配置 QQ 机器人监听方式和认证信息。")}
         actions={<label className="settings-switch"><input type="checkbox" checked={qq.enabled} onChange={(event) => onGatewayChange("qq", { enabled: event.target.checked })} /><span /><strong>{qq.enabled ? t("Enabled", "已启用") : t("Disabled", "未启用")}</strong></label>}
       >
@@ -58,6 +60,7 @@ export function GatewaySettingsSection({ config, dirty, onGatewayChange, onSave 
       </SettingsGroup>
       <SettingsGroup
         title={t("Weixin", "微信")}
+        icon={<GatewayBrandIcon gatewayId="weixin" size={20} />}
         description={t("Configure the Weixin bot service, account, and access token.", "配置微信机器人服务、账户和访问令牌。")}
         actions={<label className="settings-switch"><input type="checkbox" checked={weixin.enabled} onChange={(event) => onGatewayChange("weixin", { enabled: event.target.checked })} /><span /><strong>{weixin.enabled ? t("Enabled", "已启用") : t("Disabled", "未启用")}</strong></label>}
       >

@@ -88,7 +88,11 @@ async fn update(
     if request.status.is_none()
         && request.objective.is_none()
         && request.token_budget.is_none()
-        && request.note.as_ref().map(|v| v.trim().is_empty()).unwrap_or(true)
+        && request
+            .note
+            .as_ref()
+            .map(|v| v.trim().is_empty())
+            .unwrap_or(true)
     {
         return Err(WebError::bad_request("goal update cannot be empty"));
     }
@@ -107,7 +111,8 @@ async fn update(
         ));
     }
     let store = session_state(&state, &id)?;
-    let goal = if request.objective.is_some() || request.token_budget.is_some() || status.is_some() {
+    let goal = if request.objective.is_some() || request.token_budget.is_some() || status.is_some()
+    {
         store
             .update_goal(request.objective.as_deref(), request.token_budget, status)
             .map_err(|error| WebError::bad_request(error.to_string()))?
@@ -117,7 +122,12 @@ async fn update(
             .map_err(WebError::from)?
             .ok_or_else(|| WebError::bad_request("no active goal".to_string()))?
     };
-    let goal = if let Some(note) = request.note.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+    let goal = if let Some(note) = request
+        .note
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
         store
             .append_goal_progress(note)
             .map_err(|error| WebError::bad_request(error.to_string()))?

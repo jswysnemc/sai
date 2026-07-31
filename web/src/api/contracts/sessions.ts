@@ -12,6 +12,7 @@ export type WorkspaceSessions = {
   workspace_id: string;
   workspace_name: string;
   workspace_path: string;
+  is_git_repository: boolean;
   active: boolean;
   sessions: Session[];
 };

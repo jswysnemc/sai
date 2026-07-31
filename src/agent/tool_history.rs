@@ -8,6 +8,8 @@ impl Agent {
     /// 参数:
     /// - `turn_id`: 当前轮次标识
     /// - `seq`: 当前轮内工具调用顺序
+    /// - `assistant_round`: 产生工具调用的模型子轮编号
+    /// - `assistant_reasoning`: 该子轮的思考内容
     /// - `call`: provider 工具调用
     ///
     /// 返回:
@@ -16,11 +18,15 @@ impl Agent {
         &self,
         turn_id: &str,
         seq: usize,
+        assistant_round: usize,
+        assistant_reasoning: Option<&str>,
         call: &ToolCall,
     ) -> Result<()> {
-        self.state.record_tool_call_started(
+        self.state.record_tool_call_started_with_context(
             turn_id,
             seq,
+            assistant_round,
+            assistant_reasoning,
             &call.id,
             &call.function.name,
             &call.function.arguments,

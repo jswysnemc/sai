@@ -474,7 +474,6 @@ async fn git_op(
     Ok(Json(result))
 }
 
-
 /// 使用小模型根据仓库改动生成 Conventional Commits 说明。
 ///
 /// 参数:
@@ -502,9 +501,14 @@ async fn suggest_commit_message(
     }
     let client = crate::assistants::resolve_commit_message_client(&config, &state.paths)
         .map_err(|error| WebError::bad_request(error.to_string()))?;
-    let message = crate::assistants::generate_commit_message(&client, &status, &diff)
-        .await
-        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    let message = crate::assistants::generate_commit_message(
+        &client,
+        &config.prompt.templates.git_commit,
+        &status,
+        &diff,
+    )
+    .await
+    .map_err(|error| WebError::bad_request(error.to_string()))?;
     if message.trim().is_empty() {
         return Err(WebError::bad_request("model returned empty commit message"));
     }

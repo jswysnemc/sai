@@ -140,4 +140,3 @@ pub(crate) fn context_epoch_projection_from_sources(
 pub(crate) fn load_baseline(db: &ConversationDb, session_id: &str) -> Result<Option<String>> {
     Ok(repository::load_epoch(db, session_id)?.map(|epoch| epoch.baseline))
 }
-

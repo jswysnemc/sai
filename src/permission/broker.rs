@@ -40,7 +40,9 @@ pub(crate) enum PermissionDecision {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
-    Deny { reply: Option<String> },
+    Deny {
+        reply: Option<String>,
+    },
 }
 
 impl PermissionDecision {
@@ -192,7 +194,6 @@ pub(crate) fn decide_permission(id: &str, decision: PermissionDecision) -> Resul
         .map_err(|_| anyhow::anyhow!("permission requester is no longer running"))
 }
 
-
 /// 判断权限请求是否仍在等待决定。
 ///
 /// 参数:
@@ -281,6 +282,9 @@ mod tests {
             .iter()
             .any(|item| item.id == request.id));
         decide_permission(&request.id, PermissionDecision::allow_once()).unwrap();
-        assert!(matches!(receiver.await.unwrap(), PermissionDecision::Allow { .. }));
+        assert!(matches!(
+            receiver.await.unwrap(),
+            PermissionDecision::Allow { .. }
+        ));
     }
 }

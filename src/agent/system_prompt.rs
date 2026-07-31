@@ -34,7 +34,8 @@ pub(crate) fn build_base_system_prompt(
 
     // 3. Skills 目录（渐进加载时仅 catalog）
     if tools_enabled && config.skills.enabled {
-        let prompt = if config.tools.progressive_loading_enabled {
+        let progressive = !config.agent_deferred_tools().is_empty();
+        let prompt = if progressive {
             tools::skills_catalog_prompt(config, paths)?
         } else {
             tools::skills_prompt(config, paths)?

@@ -55,7 +55,10 @@ impl FeishuClient {
                 return Ok(token.value.clone());
             }
         }
-        let url = format!("{}/open-apis/auth/v3/tenant_access_token/internal", self.base_url);
+        let url = format!(
+            "{}/open-apis/auth/v3/tenant_access_token/internal",
+            self.base_url
+        );
         let response = self
             .http
             .post(&url)
@@ -94,7 +97,10 @@ impl FeishuClient {
     /// - 发送结果
     pub(crate) async fn send_text(&self, chat_id: &str, text: &str) -> Result<()> {
         let token = self.tenant_token().await?;
-        let url = format!("{}/open-apis/im/v1/messages?receive_id_type=chat_id", self.base_url);
+        let url = format!(
+            "{}/open-apis/im/v1/messages?receive_id_type=chat_id",
+            self.base_url
+        );
         let response = self
             .http
             .post(&url)
@@ -151,8 +157,11 @@ mod tests {
     /// HTTP 200 不代表业务成功，非零 code 必须报错。
     #[test]
     fn rejects_a_business_error() {
-        let error = ensure_ok(&json!({ "code": 99991663, "msg": "app ticket invalid" }), "send")
-            .unwrap_err();
+        let error = ensure_ok(
+            &json!({ "code": 99991663, "msg": "app ticket invalid" }),
+            "send",
+        )
+        .unwrap_err();
         let text = format!("{error}");
         assert!(text.contains("app ticket invalid"));
         assert!(text.contains("99991663"));

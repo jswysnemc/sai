@@ -57,11 +57,12 @@ impl Agent {
         let compaction_runtime = compaction_model::resolve_compaction_runtime(&config, paths)?;
         let max_tool_rounds = config.tools.max_rounds;
         crate::goal::register_tools(&mut tools, state.goal_file());
-        if tools_enabled && config.tools.progressive_loading_enabled {
-            tools::register_progressive_loader(&mut tools);
+        // 渐进加载改由当前 Agent 的 deferred_tools 决定，没有延迟项就不注册 load
+        let mut tool_visibility = ToolVisibility::from_config(&config);
+        if tools_enabled && tool_visibility.is_progressive() {
+            tools::register_progressive_loader(&mut tools, config.agent_deferred_tools());
         }
-        let mut tool_visibility = ToolVisibility::new(config.tools.progressive_loading_enabled);
-        if config.tools.progressive_loading_enabled {
+        if tool_visibility.is_progressive() {
             let loaded = state.load_loaded_tools()?;
             tool_visibility.restore_loaded_tools(&tools, &loaded);
         }
@@ -69,9 +70,7 @@ impl Agent {
         memory.init()?;
         let live_mode = tools
             .permission_mode_handle()
-            .unwrap_or_else(|| {
-                std::sync::Arc::new(std::sync::atomic::AtomicU8::new(mode.as_u8()))
-            });
+            .unwrap_or_else(|| std::sync::Arc::new(std::sync::atomic::AtomicU8::new(mode.as_u8())));
         live_mode.store(mode.as_u8(), std::sync::atomic::Ordering::SeqCst);
         tools.set_permission_mode(mode.permission_profile_mode());
         // 配置指定外部内核时在此构建；构建失败直接报错而不是静默退回原生，
@@ -113,10 +112,7 @@ impl Agent {
     /// 返回:
     /// - 当前模式
     pub fn mode(&self) -> AgentMode {
-        AgentMode::from_u8(
-            self.live_mode
-                .load(std::sync::atomic::Ordering::SeqCst),
-        )
+        AgentMode::from_u8(self.live_mode.load(std::sync::atomic::Ordering::SeqCst))
     }
 
     /// 返回可在运行期热切换的模式句柄。
@@ -168,30 +164,29 @@ impl Agent {
     /// 返回:
     /// - 模式切换与会话工具状态恢复结果
     pub fn switch_mode(&mut self, mode: AgentMode, mut tools: ToolRegistry) -> Result<()> {
-        let loaded = if self.config.tools.progressive_loading_enabled {
-            self.state.load_loaded_tools()?
-        } else {
+        let deferred = self.config.agent_deferred_tools();
+        let loaded = if deferred.is_empty() {
             Vec::new()
+        } else {
+            self.state.load_loaded_tools()?
         };
         self.mode = mode;
         crate::goal::register_tools(&mut tools, self.state.goal_file());
-        if self.tools_enabled && self.config.tools.progressive_loading_enabled {
-            tools::register_progressive_loader(&mut tools);
+        if self.tools_enabled && !deferred.is_empty() {
+            tools::register_progressive_loader(&mut tools, deferred);
         }
         self.tools = tools;
         // 与工具权限配置共享原子模式，保证运行中 Shift+Tab 立即生效
         self.live_mode = self
             .tools
             .permission_mode_handle()
-            .unwrap_or_else(|| {
-                std::sync::Arc::new(std::sync::atomic::AtomicU8::new(mode.as_u8()))
-            });
+            .unwrap_or_else(|| std::sync::Arc::new(std::sync::atomic::AtomicU8::new(mode.as_u8())));
         self.live_mode
             .store(mode.as_u8(), std::sync::atomic::Ordering::SeqCst);
         self.tools
             .set_permission_mode(mode.permission_profile_mode());
         // 1. 按新模式注册表恢复会话已加载集合，不保留当前模式不存在的工具
-        self.tool_visibility = ToolVisibility::new(self.config.tools.progressive_loading_enabled);
+        self.tool_visibility = ToolVisibility::from_config(&self.config);
         self.tool_visibility
             .restore_loaded_tools(&self.tools, &loaded);
         Ok(())
@@ -206,9 +201,10 @@ impl Agent {
     /// - 无
     pub fn replace_tools(&mut self, mut tools: ToolRegistry) {
         let loaded = self.tool_visibility.loaded_tool_names();
+        let deferred = self.config.agent_deferred_tools();
         crate::goal::register_tools(&mut tools, self.state.goal_file());
-        if self.tools_enabled && self.config.tools.progressive_loading_enabled {
-            tools::register_progressive_loader(&mut tools);
+        if self.tools_enabled && !deferred.is_empty() {
+            tools::register_progressive_loader(&mut tools, deferred);
         }
         self.tools = tools;
         self.tool_visibility
@@ -258,16 +254,18 @@ impl Agent {
         self.compaction_client = compaction_runtime.client;
         self.compaction_model_label = compaction_runtime.label;
         self.mode = mode;
-        self.live_mode.store(mode.as_u8(), std::sync::atomic::Ordering::SeqCst);
+        self.live_mode
+            .store(mode.as_u8(), std::sync::atomic::Ordering::SeqCst);
         self.tools_enabled =
             self.config.tools.enabled && self.config.active_model_tools_enabled()?;
         crate::goal::register_tools(&mut tools, self.state.goal_file());
-        if self.tools_enabled && self.config.tools.progressive_loading_enabled {
-            tools::register_progressive_loader(&mut tools);
+        let deferred = self.config.agent_deferred_tools();
+        if self.tools_enabled && !deferred.is_empty() {
+            tools::register_progressive_loader(&mut tools, deferred);
         }
         self.tools = tools;
-        self.tool_visibility = ToolVisibility::new(self.config.tools.progressive_loading_enabled);
-        if self.config.tools.progressive_loading_enabled {
+        self.tool_visibility = ToolVisibility::from_config(&self.config);
+        if self.tool_visibility.is_progressive() {
             let loaded = self.state.load_loaded_tools()?;
             self.restore_loaded_tools(&loaded);
         }
@@ -286,8 +284,8 @@ impl Agent {
     pub fn replace_state(&mut self, state: StateStore) -> Result<()> {
         self.state = state;
         crate::goal::register_tools(&mut self.tools, self.state.goal_file());
-        self.tool_visibility = ToolVisibility::new(self.config.tools.progressive_loading_enabled);
-        if self.config.tools.progressive_loading_enabled {
+        self.tool_visibility = ToolVisibility::from_config(&self.config);
+        if self.tool_visibility.is_progressive() {
             let loaded = self.state.load_loaded_tools()?;
             self.restore_loaded_tools(&loaded);
         }

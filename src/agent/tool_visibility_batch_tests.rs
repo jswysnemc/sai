@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 #[test]
 fn loads_one_tool_with_public_argument() {
     let registry = test_registry();
-    let mut visibility = ToolVisibility::new(true);
+    let mut visibility = ToolVisibility::new(wildcard_deferred());
 
     let output = load(
         &mut visibility,
@@ -24,7 +24,7 @@ fn loads_one_tool_with_public_argument() {
 #[test]
 fn loads_multiple_tools_and_deduplicates_names() {
     let registry = test_registry();
-    let mut visibility = ToolVisibility::new(true);
+    let mut visibility = ToolVisibility::new(wildcard_deferred());
 
     let output = load(
         &mut visibility,
@@ -41,7 +41,7 @@ fn loads_multiple_tools_and_deduplicates_names() {
 #[test]
 fn classifies_mixed_multiple_tool_load() {
     let registry = test_registry();
-    let mut visibility = ToolVisibility::new(true);
+    let mut visibility = ToolVisibility::new(wildcard_deferred());
     load(
         &mut visibility,
         &registry,
@@ -68,7 +68,7 @@ fn rejects_invalid_keyword_arrays() {
         r#"{"type":"tool","keywords":["web_search",2]}"#,
         r#"{"type":"tool","keywords":["web_search",""]}"#,
     ] {
-        let mut visibility = ToolVisibility::new(true);
+        let mut visibility = ToolVisibility::new(wildcard_deferred());
         let error = load_error(&mut visibility, &registry, arguments);
 
         assert!(error.contains("keywords"));
@@ -79,7 +79,7 @@ fn rejects_invalid_keyword_arrays() {
 #[test]
 fn rejects_conflicting_keyword_sources() {
     let registry = test_registry();
-    let mut visibility = ToolVisibility::new(true);
+    let mut visibility = ToolVisibility::new(wildcard_deferred());
 
     let error = load_error(
         &mut visibility,
@@ -94,7 +94,7 @@ fn rejects_conflicting_keyword_sources() {
 #[test]
 fn rejects_unknown_batch_atomically() {
     let registry = test_registry();
-    let mut visibility = ToolVisibility::new(true);
+    let mut visibility = ToolVisibility::new(wildcard_deferred());
 
     let error = load_error(
         &mut visibility,
@@ -104,6 +104,17 @@ fn rejects_unknown_batch_atomically() {
 
     assert!(error.contains("unknown tool: missing_tool"));
     assert!(visibility.loaded_tool_names().is_empty());
+}
+
+/// 构造「非基础工具一律需要 load」的延迟集合。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 只含通配符的延迟工具集合
+fn wildcard_deferred() -> Vec<String> {
+    vec![crate::config::DEFERRED_ALL_NON_BASE.to_string()]
 }
 
 /// 创建覆盖基础、同组和跨组场景的工具注册表。

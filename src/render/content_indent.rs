@@ -601,10 +601,7 @@ mod tests {
     fn preserves_cursor_controls_before_aligned_content() {
         let block = "\x1b[1A\r\x1b[2Ktable\n";
 
-        assert_eq!(
-            align_cli_stream_block(block),
-            "\x1b[1A\r\x1b[2K  table\n"
-        );
+        assert_eq!(align_cli_stream_block(block), "\x1b[1A\r\x1b[2K  table\n");
     }
 
     /// 【终端】【CLI 布局测试】验证纯文本分片只在物理行起点缩进。
@@ -630,4 +627,3 @@ mod tests {
         assert!(at_line_start);
     }
 }
-

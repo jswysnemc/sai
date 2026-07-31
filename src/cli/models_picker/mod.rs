@@ -6,7 +6,7 @@ use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::{bail, Result};
 use crossterm::cursor::{Hide, Show};
-use crossterm::event::{self, Event, KeyCode, KeyEvent};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::terminal::{self, Clear, ClearType};
 use crossterm::{execute, queue};
 use state::PickerState;
@@ -48,44 +48,36 @@ pub(super) fn run(paths: &SaiPaths) -> Result<()> {
 
     // 1. 以当前生效的供应商与模型为起点
     let active = config.provider(None)?;
-    let provider_label = if active.display_name.trim().is_empty() {
-        active.id.clone()
-    } else {
-        active.display_name.clone()
-    };
+    let current_provider = active.id.clone();
     let current_model = active.default_model.clone();
     let current_level = active.thinking_level.clone();
-    let models = choices
-        .iter()
-        .filter(|choice| choice.provider_id == active.id)
-        .map(|choice| choice.model.clone())
-        .collect::<Vec<_>>();
     let mut picker = PickerState::new(
-        models,
+        choices,
         THINKING_LEVELS.to_vec(),
+        &current_provider,
         &current_model,
         normalized_level(&current_level),
     );
 
     // 2. 进入交互循环
-    let Some(()) = run_loop(&mut picker, &provider_label)? else {
+    let Some(()) = run_loop(&mut picker)? else {
         println!("{}", t("cancelled", "已取消"));
         return Ok(());
     };
 
     // 3. 保存所选取值
-    let provider_id = active.id.clone();
-    if let Some(model) = picker.selected_model() {
-        let model = model.to_string();
-        config.set_active_provider_model(&provider_id, &model)?;
-    }
+    let selected = picker
+        .selected_model()
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("{}", t("no matching model", "没有匹配的模型")))?;
+    config.set_active_provider_model(&selected.provider_id, &selected.model)?;
     let level = picker.selected_level();
-    apply_level(&mut config, &provider_id, level)?;
+    apply_level(&mut config, &selected.provider_id, level)?;
     config.save(paths)?;
     println!(
         "{}: {} · {}: {}",
         t("model", "模型"),
-        picker.selected_model().unwrap_or("-"),
+        selected.label(),
         t("thinking", "思考"),
         level
     );
@@ -96,11 +88,9 @@ pub(super) fn run(paths: &SaiPaths) -> Result<()> {
 ///
 /// 参数:
 /// - `picker`: 选择状态
-/// - `provider`: 供应商展示名
-///
 /// 返回:
 /// - 确认时返回 Some(())，取消时返回 None
-fn run_loop(picker: &mut PickerState, provider: &str) -> Result<Option<()>> {
+fn run_loop(picker: &mut PickerState) -> Result<Option<()>> {
     struct RawGuard;
     impl Drop for RawGuard {
         fn drop(&mut self) {
@@ -114,20 +104,33 @@ fn run_loop(picker: &mut PickerState, provider: &str) -> Result<Option<()>> {
     let _guard = RawGuard;
     let mut previous_rows = 0usize;
     loop {
-        let lines = render::render(picker, provider);
+        let lines = render::render(picker);
         draw(&mut stdout, &lines, previous_rows)?;
         previous_rows = lines.len();
 
         terminal::enable_raw_mode()?;
         let key = read_key();
         terminal::disable_raw_mode()?;
-        match key? {
-            KeyCode::Esc | KeyCode::Char('q') => return Ok(None),
-            KeyCode::Enter => return Ok(Some(())),
-            KeyCode::Up | KeyCode::Char('k') => picker.move_up(),
-            KeyCode::Down | KeyCode::Char('j') => picker.move_down(),
-            KeyCode::Left | KeyCode::Char('h') => picker.focus_model(),
-            KeyCode::Right | KeyCode::Char('l') => picker.focus_thinking(),
+        let key = key?;
+        match key.code {
+            KeyCode::Esc => return Ok(None),
+            KeyCode::Enter if picker.selected_model().is_some() => return Ok(Some(())),
+            KeyCode::Up => picker.move_up(),
+            KeyCode::Down => picker.move_down(),
+            KeyCode::Left => picker.focus_model(),
+            KeyCode::Right => picker.focus_thinking(),
+            KeyCode::Backspace => picker.pop_filter(),
+            KeyCode::Delete => picker.clear_filter(),
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                picker.clear_filter();
+            }
+            KeyCode::Char(ch)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                picker.push_filter(ch);
+            }
             _ => {}
         }
     }
@@ -157,11 +160,13 @@ fn draw(stdout: &mut io::Stdout, lines: &[String], previous_rows: usize) -> Resu
 /// 读取一次按键。
 ///
 /// 返回:
-/// - 按键码
-fn read_key() -> Result<KeyCode> {
+/// - 按键事件
+fn read_key() -> Result<KeyEvent> {
     loop {
-        if let Event::Key(KeyEvent { code, .. }) = event::read()? {
-            return Ok(code);
+        if let Event::Key(key) = event::read()? {
+            if key.kind != KeyEventKind::Release {
+                return Ok(key);
+            }
         }
     }
 }

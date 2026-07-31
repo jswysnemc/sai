@@ -6,6 +6,13 @@ import remarkMath from "remark-math";
 import { LightboxImage } from "../../shared/ui/image-lightbox";
 import { MarkdownCodeBlock } from "./markdown-code-block";
 import { MermaidDiagram } from "./mermaid-diagram";
+import { MarkdownSvgBlock } from "./markdown-svg-block";
+import { remarkSvgBlocks } from "./markdown-svg";
+import {
+  DEFAULT_MARKDOWN_STYLE_PREFERENCES,
+  type MarkdownStylePreferences
+} from "../markdown/markdown-style-preferences";
+import { useMarkdownStylePreferences } from "../markdown/markdown-style-store";
 import "./markdown-renderer.css";
 
 /**
@@ -20,23 +27,28 @@ function transformUrl(url: string): string {
 }
 
 /** 模块级插件常量，避免每次渲染创建新数组导致 ReactMarkdown 重新解析 */
-const remarkPlugins = [remarkGfm, remarkMath];
+const remarkPlugins = [remarkGfm, remarkMath, remarkSvgBlocks];
 const rehypePlugins = [rehypeKatex];
 const inlineAtomContext = createContext<readonly ReactNode[]>([]);
+const markdownStyleContext = createContext<MarkdownStylePreferences>(DEFAULT_MARKDOWN_STYLE_PREFERENCES);
 const INLINE_ATOM_PATTERN = /^sai-atom-(\d+)$/u;
 
 /** 模块级组件映射常量，保证子组件在父组件重渲染时不被卸载重建 */
 const markdownComponents: Components = {
   code({ className, children, ...props }) {
-    const language = /language-(\w+)/.exec(className ?? "")?.[1];
+    const language = /language-(\w+)/.exec(className ?? "")?.[1]?.toLowerCase();
     const text = String(children).replace(/\n$/, "");
     const inlineAtoms = useContext(inlineAtomContext);
+    const markdownStyle = useContext(markdownStyleContext);
     const atomIndex = !language ? INLINE_ATOM_PATTERN.exec(text)?.[1] : undefined;
     if (atomIndex !== undefined) {
       return <>{inlineAtoms[Number(atomIndex)] ?? children}</>;
     }
     if (language === "mermaid") return <MermaidDiagram source={text} />;
-    if (language || text.includes("\n")) return <MarkdownCodeBlock language={language} source={text} />;
+    if (language === "svg") return <MarkdownSvgBlock source={text} />;
+    if (language || text.includes("\n")) {
+      return <MarkdownCodeBlock language={language} source={text} style={markdownStyle.codeBlock} />;
+    }
     return <code className="inline-code" {...props}>{children}</code>;
   },
   a({ children, ...props }) {
@@ -52,30 +64,50 @@ const markdownComponents: Components = {
 };
 
 /**
- * 渲染支持 GFM、数学公式、代码块和 Mermaid 的 Markdown 内容。
+ * 渲染支持 GFM、数学公式、代码块、SVG 和 Mermaid 的 Markdown 内容。
  *
  * @param props Markdown 源文本
  * @returns Markdown 内容
  */
 export const MarkdownRenderer = memo(function MarkdownRenderer({
   source,
-  inlineAtoms = []
+  inlineAtoms = [],
+  stylePreferences
 }: {
   source: string;
   inlineAtoms?: readonly ReactNode[];
+  stylePreferences?: MarkdownStylePreferences;
 }) {
+  const storedStyle = useMarkdownStylePreferences();
+  const style = stylePreferences ?? storedStyle.preferences;
+
   return (
-    <inlineAtomContext.Provider value={inlineAtoms}>
-      <div className="markdown-body">
-        <ReactMarkdown
-          remarkPlugins={remarkPlugins}
-          rehypePlugins={rehypePlugins}
-          urlTransform={transformUrl}
-          components={markdownComponents}
+    <markdownStyleContext.Provider value={style}>
+      <inlineAtomContext.Provider value={inlineAtoms}>
+        <div
+          className="markdown-body"
+          data-table-border={style.table.borderStyle}
+          data-table-density={style.table.density}
+          data-table-width={style.table.fullWidth ? "full" : "content"}
+          data-table-striped={String(style.table.stripedRows)}
+          data-table-header={String(style.table.headerBackground)}
+          data-table-wrap={String(style.table.wrapCells)}
+          data-code-wrap={String(style.codeBlock.wrapLongLines)}
+          data-code-border={String(style.codeBlock.showBorder)}
+          data-code-font-size={style.codeBlock.fontSize}
+          data-code-tab-size={style.codeBlock.tabSize}
+          data-code-max-height={style.codeBlock.maxHeight}
         >
-          {source}
-        </ReactMarkdown>
-      </div>
-    </inlineAtomContext.Provider>
+          <ReactMarkdown
+            remarkPlugins={remarkPlugins}
+            rehypePlugins={rehypePlugins}
+            urlTransform={transformUrl}
+            components={markdownComponents}
+          >
+            {source}
+          </ReactMarkdown>
+        </div>
+      </inlineAtomContext.Provider>
+    </markdownStyleContext.Provider>
   );
 });

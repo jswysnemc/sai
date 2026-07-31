@@ -51,6 +51,7 @@ impl Default for PromptConfig {
             user_identity_file: default_user_identity_file(),
             active_persona: String::new(),
             active_identity: String::new(),
+            templates: super::PromptTemplatesConfig::default(),
         }
     }
 }
@@ -76,7 +77,6 @@ impl Default for ToolsConfig {
             command_shell: String::new(),
             command_filter: default_command_filter(),
             command_filter_denylist: Vec::new(),
-            progressive_loading_enabled: false,
             background_commands_enabled: default_true(),
             background_command_timeout_seconds: default_background_command_timeout_seconds(),
             background_command_log_max_bytes: default_background_command_log_max_bytes(),

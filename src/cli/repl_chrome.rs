@@ -103,8 +103,7 @@ impl ReplChrome {
         );
         // 1. 先在纯文本上裁剪，保证 left + 空格 + right 不超过终端列数
         //    禁止对 gap 强制 max(1)：贴满时再塞空格会变成 cols+1 并触发终端换行
-        let (left_text, right_text, gap) =
-            fit_status_segments(&left_plain, &self.directory, cols);
+        let (left_text, right_text, gap) = fit_status_segments(&left_plain, &self.directory, cols);
         // 2. 裁剪后再着色，避免 ANSI 干扰宽度计算
         let left = colorize_left_status(self.mode, &left_text, self.context_ratio);
         let right = if right_text.is_empty() {
@@ -114,7 +113,6 @@ impl ReplChrome {
         };
         format!("{left}{}{}", " ".repeat(gap), right)
     }
-
 }
 
 /// 给模型名称使用稳定的重点颜色。
@@ -203,7 +201,10 @@ fn colorize_left_status(mode: AgentMode, left_text: &str, context_ratio: f32) ->
     let mode_text = parts[0];
     let context = parts.get(1).copied().unwrap_or("");
     let model = parts.get(2).copied().unwrap_or("");
-    let thinking = parts.get(3..).map(|rest| rest.join("  ")).unwrap_or_default();
+    let thinking = parts
+        .get(3..)
+        .map(|rest| rest.join("  "))
+        .unwrap_or_default();
 
     let mode_colored = match mode {
         AgentMode::Yolo => format!("\x1b[38;5;208m{mode_text}\x1b[0m"),

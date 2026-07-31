@@ -4,6 +4,7 @@ export type AgentProfile = {
   description: string;
   system_prompt: string;
   enabled_tools: string[];
+  deferred_tools: string[];
   skills_full: string[];
   skills_named: string[];
   provider_id: string;

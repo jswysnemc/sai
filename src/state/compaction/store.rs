@@ -116,6 +116,7 @@ impl StateStore {
     /// 参数:
     /// - `request`: 压缩请求
     /// - `context_limit_chars`: 当前模型上下文窗口字符数
+    /// - `template`: 上下文压缩的系统提示词和输入模板
     ///
     /// 返回:
     /// - 可发送给压缩模型的提示词
@@ -123,13 +124,14 @@ impl StateStore {
         &self,
         request: &CompactionRequest,
         context_limit_chars: usize,
-    ) -> Result<String> {
-        let overhead = super::prompt::build_summary_prompt_from_history(
+        template: &crate::config::PromptTemplateConfig,
+    ) -> Result<crate::prompts::template::RenderedPrompt> {
+        let empty_prompt = super::prompt::render_summary_prompt(
+            template,
             request.previous_summary.as_deref(),
             "",
-        )
-        .chars()
-        .count();
+        )?;
+        let overhead = empty_prompt.total_chars();
         let history_budget = context_limit_chars
             .saturating_sub(overhead)
             .saturating_sub(super::summary_char_limit(context_limit_chars))
@@ -141,11 +143,12 @@ impl StateStore {
             &request.compact_turns,
             history_budget,
         )?;
-        let prompt = super::prompt::build_summary_prompt_from_history(
+        let prompt = super::prompt::render_summary_prompt(
+            template,
             request.previous_summary.as_deref(),
             &history.history,
-        );
-        let prompt_chars = prompt.chars().count();
+        )?;
+        let prompt_chars = prompt.total_chars();
         if history.replacement_missing_count > 0 {
             self.record_recovery_failure(
                 request.compact_turn_ids.last().map(String::as_str),

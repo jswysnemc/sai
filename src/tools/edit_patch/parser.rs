@@ -248,9 +248,7 @@ pub(crate) fn normalize_codex_patch(patch: &str) -> Result<String> {
     let end_idx = lines.iter().rposition(|line| is_end_patch_line(line));
 
     let body = match (begin_idx, end_idx) {
-        (Some(begin), Some(end)) if begin < end => {
-            lines[begin + 1..end].join("\n")
-        }
+        (Some(begin), Some(end)) if begin < end => lines[begin + 1..end].join("\n"),
         (Some(begin), None) => {
             // 1. 有 Begin 无 End：若后续已是合法 section，补 End
             let rest = lines[begin + 1..].join("\n");
@@ -428,7 +426,8 @@ mod tests {
 
     #[test]
     fn extracts_envelope_from_leading_noise() {
-        let raw = "here is the patch:\n*** Begin Patch\n*** Add File: a.txt\n+one\n*** End Patch\nthanks";
+        let raw =
+            "here is the patch:\n*** Begin Patch\n*** Add File: a.txt\n+one\n*** End Patch\nthanks";
         let parsed = parse_patch(raw).unwrap();
         assert_eq!(parsed.changes.len(), 1);
     }

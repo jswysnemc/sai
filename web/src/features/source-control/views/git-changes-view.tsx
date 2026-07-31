@@ -11,6 +11,7 @@ import { FileComparisonView } from "../diff/file-comparison-view";
 import { SourceControlDiff } from "../diff/source-control-diff";
 import type { useFileComparison } from "../diff/use-file-comparison";
 import { InProgressOperationBar } from "../operation/in-progress-operation-bar";
+import { SourceControlSplitView } from "../layout/source-control-split-view";
 import { PublishRepositoryControl } from "../remote/publish-repository-control";
 import type { RunGitOperation } from "../types";
 import "./git-views.css";
@@ -77,7 +78,7 @@ export function GitChangesView(props: GitChangesViewProps) {
   );
 
   return (
-    <div className="git-changes-body">
+    <SourceControlSplitView className="git-changes-body">
       <section className="git-change-panel">
         {state.operation && (
           <InProgressOperationBar
@@ -207,7 +208,7 @@ export function GitChangesView(props: GitChangesViewProps) {
           />
         )}
       </div>
-    </div>
+    </SourceControlSplitView>
   );
 }
 

@@ -1,8 +1,17 @@
-import { CheckCheck, Search, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { CheckCheck, Search, Timer, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
 import type { AgentToolOption } from "./agents-types";
+import {
+  countToolModes,
+  expandWildcard,
+  resolveToolMode,
+  updateToolModes,
+  type ToolMode,
+  type ToolModeSelection
+} from "./agent-tool-mode-state";
+import { AgentToolModeGroup, type ToolModeLabels } from "./agent-tool-mode-group";
 import "./agent-permissions.css";
 
 type AgentToolPermissionsProps = {
@@ -10,72 +19,63 @@ type AgentToolPermissionsProps = {
   tools: AgentToolOption[];
   /** 当前启用的工具名称 */
   enabled: string[];
+  /** 当前需要 load 才暴露的工具名称 */
+  deferred: string[];
   /** 工具权限变化回调 */
-  onChange: (enabledTools: string[]) => void;
+  onChange: (enabledTools: string[], deferredTools: string[]) => void;
 };
 
-type PermissionCheckboxProps = {
-  /** 是否全部选中 */
-  checked: boolean;
-  /** 是否部分选中 */
-  indeterminate: boolean;
-  /** 可访问名称 */
-  ariaLabel: string;
-  /** 选择状态变化回调 */
-  onChange: (checked: boolean) => void;
-};
+/** 状态筛选档位，all 表示不筛选 */
+type ToolStatusFilter = "all" | ToolMode;
 
 /**
- * 批量更新工具启用状态，同时保持原有顺序并移除重复项。
+ * 渲染可搜索、可分组批量设置的 Agent 工具三段权限面板。
  *
- * @param enabled 当前启用的工具名称
- * @param names 本次需要更新的工具名称
- * @param checked 是否启用
- * @returns 更新后的 enabled_tools 数组
- */
-export function updateEnabledTools(enabled: string[], names: string[], checked: boolean): string[] {
-  const targetNames = new Set(names);
-  const next = enabled.filter((name, index) => enabled.indexOf(name) === index && !targetNames.has(name));
-  if (checked) next.push(...names.filter((name, index) => names.indexOf(name) === index));
-  return next;
-}
-
-/**
- * 渲染支持部分选中状态的权限复选框。
+ * 三段语义：on 会话开始即暴露，load 由模型按需加载，off 完全不注册。
  *
- * @param props 选择状态、可访问名称和变化回调
- * @returns 权限复选框
- */
-function PermissionCheckbox({ checked, indeterminate, ariaLabel, onChange }: PermissionCheckboxProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (inputRef.current) inputRef.current.indeterminate = indeterminate;
-  }, [indeterminate]);
-
-  return (
-    <input
-      ref={inputRef}
-      type="checkbox"
-      checked={checked}
-      aria-label={ariaLabel}
-      onChange={(event) => onChange(event.target.checked)}
-    />
-  );
-}
-
-/**
- * 渲染可搜索、可分组批量选择的 Agent 工具权限面板。
- *
- * @param props 工具列表、当前启用项和变化回调
+ * @param props 工具列表、两类已启用名称和变化回调
  * @returns 工具权限面板
  */
-export function AgentToolPermissions({ tools, enabled, onChange }: AgentToolPermissionsProps) {
+export function AgentToolPermissions({ tools, enabled, deferred, onChange }: AgentToolPermissionsProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ToolStatusFilter>("all");
   const normalizedQuery = query.trim().toLocaleLowerCase();
+  const selection: ToolModeSelection = { enabled, deferred };
+  const allNames = tools.map((tool) => tool.name);
+  const nonBaseNames = tools.filter((tool) => tool.group !== "base").map((tool) => tool.name);
 
-  /** 按分组整理工具，并根据查询内容筛选可见分组。 */
+  const modeLabels: ToolModeLabels = [
+    { value: "on", label: t("On", "启用"), title: t("Exposed from the start of the session", "会话开始即暴露给模型") },
+    { value: "load", label: t("Load", "按需"), title: t("Exposed after the model calls load", "模型调用 load 后才暴露") },
+    { value: "off", label: t("Off", "关闭"), title: t("Never registered for this Agent", "完全不注册给该 Agent") }
+  ];
+
+  const statusFilters: Array<{ value: ToolStatusFilter; label: string }> = [
+    { value: "all", label: t("All", "全部") },
+    { value: "on", label: t("On", "启用") },
+    { value: "load", label: t("Load", "按需") },
+    { value: "off", label: t("Off", "关闭") }
+  ];
+
+  /**
+   * 应用一次状态变更，并在逐项调整时把通配符展开为具体名称。
+   *
+   * @param names 本次需要更新的工具名称
+   * @param mode 目标状态
+   */
+  const applyChange = (names: string[], mode: ToolMode) => {
+    const expanded = expandWildcard(selection, nonBaseNames);
+    const next = updateToolModes(expanded, names, mode, allNames);
+    onChange(next.enabled, next.deferred);
+  };
+
+  const isBase = useMemo(() => {
+    const baseNames = new Set(tools.filter((tool) => tool.group === "base").map((tool) => tool.name));
+    return (name: string) => baseNames.has(name);
+  }, [tools]);
+
+  /** 按分组整理工具，并根据搜索词与状态筛选可见项。 */
   const groups = useMemo(() => {
     const grouped = new Map<string, AgentToolOption[]>();
     for (const tool of tools) {
@@ -91,24 +91,26 @@ export function AgentToolPermissions({ tools, enabled, onChange }: AgentToolPerm
           group,
           label,
           allItems: items,
-          visibleItems: normalizedQuery.length === 0
-            ? items
-            : items.filter((tool) => (
-              tool.name.toLocaleLowerCase().includes(normalizedQuery)
+          visibleItems: items.filter((tool) => {
+            const matchesQuery = normalizedQuery.length === 0
+              || tool.name.toLocaleLowerCase().includes(normalizedQuery)
               || group.toLocaleLowerCase().includes(normalizedQuery)
               || (tool.group_label ?? "").toLocaleLowerCase().includes(normalizedQuery)
-              || (tool.description ?? "").toLocaleLowerCase().includes(normalizedQuery)
-            ))
+              || (tool.description ?? "").toLocaleLowerCase().includes(normalizedQuery);
+            const matchesStatus = statusFilter === "all"
+              || resolveToolMode(selection, tool.name, tool.group === "base") === statusFilter;
+            return matchesQuery && matchesStatus;
+          })
         };
       })
       .filter(({ visibleItems }) => visibleItems.length > 0);
-  }, [normalizedQuery, tools]);
+  }, [deferred, enabled, normalizedQuery, statusFilter, tools]);
 
   if (tools.length === 0) {
     return <p className="agent-permissions-empty">{t("No tools available.", "暂无可用工具。")}</p>;
   }
 
-  const enabledCount = tools.filter((tool) => enabled.includes(tool.name)).length;
+  const counts = countToolModes(selection, allNames, isBase);
 
   return (
     <div className="agent-permissions-panel agent-tool-permissions">
@@ -123,15 +125,38 @@ export function AgentToolPermissions({ tools, enabled, onChange }: AgentToolPerm
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
-        <span className="agent-permissions-summary">{t(`Enabled ${enabledCount}/${tools.length}`, `已启用 ${enabledCount}/${tools.length}`)}</span>
+        <div className="agent-tool-status-filter" role="radiogroup" aria-label={t("Filter tool status", "筛选工具状态")}>
+          {statusFilters.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              role="radio"
+              aria-checked={statusFilter === item.value}
+              data-active={statusFilter === item.value ? "true" : "false"}
+              onClick={() => setStatusFilter(item.value)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <span className="agent-permissions-summary">
+          {t(
+            `On ${counts.on} · Load ${counts.load} · Off ${counts.off}`,
+            `启用 ${counts.on} · 按需 ${counts.load} · 关闭 ${counts.off}`
+          )}
+        </span>
         <div className="agent-permissions-actions">
-          <Button onClick={() => onChange(tools.map((tool) => tool.name))}>
+          <Button onClick={() => applyChange(allNames, "on")}>
             <CheckCheck size={14} aria-hidden="true" />
-            {t("Enable all", "全部启用")}
+            {t("All on", "全部启用")}
           </Button>
-          <Button onClick={() => onChange([])} disabled={enabled.length === 0}>
+          <Button onClick={() => applyChange(nonBaseNames, "load")}>
+            <Timer size={14} aria-hidden="true" />
+            {t("Non-base to load", "非基础按需")}
+          </Button>
+          <Button onClick={() => onChange([], [])} disabled={enabled.length === 0 && deferred.length === 0}>
             <X size={14} aria-hidden="true" />
-            {t("Clear all", "全部清空")}
+            {t("Reset", "重置")}
           </Button>
         </div>
       </div>
@@ -140,49 +165,20 @@ export function AgentToolPermissions({ tools, enabled, onChange }: AgentToolPerm
         <p className="agent-permissions-empty">{t("No matching tools.", "没有匹配的工具。")}</p>
       ) : (
         <div className="agent-tool-permission-groups">
-          {groups.map(({ group, label, allItems, visibleItems }) => {
-            const groupNames = allItems.map((tool) => tool.name);
-            const checkedCount = groupNames.filter((name) => enabled.includes(name)).length;
-            return (
-              <section key={group} className="agent-tool-permission-group" data-group={group}>
-                <header className="agent-tool-permission-group-head">
-                  <PermissionCheckbox
-                    checked={checkedCount === groupNames.length}
-                    indeterminate={checkedCount > 0 && checkedCount < groupNames.length}
-                    ariaLabel={t(`Select all tools in the ${label} group`, `选择${label}分组的全部工具`)}
-                    onChange={(checked) => onChange(updateEnabledTools(enabled, groupNames, checked))}
-                  />
-                  <div className="agent-tool-permission-group-title">
-                    <strong>{label}</strong>
-                    {label !== group && <small>{group}</small>}
-                  </div>
-                  <span>{checkedCount}/{groupNames.length}</span>
-                </header>
-                <div className="agent-tool-permission-items">
-                  {visibleItems.map((tool) => {
-                    const checked = enabled.includes(tool.name);
-                    return (
-                      <label
-                        key={tool.name}
-                        className={checked ? "agent-tool-permission-item is-enabled" : "agent-tool-permission-item"}
-                        title={tool.description || tool.name}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(event) => onChange(updateEnabledTools(enabled, [tool.name], event.target.checked))}
-                        />
-                        <span className="agent-tool-permission-copy">
-                          <strong>{tool.name}</strong>
-                          {tool.description && <small>{tool.description}</small>}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })}
+          {groups.map(({ group, label, allItems, visibleItems }) => (
+            <AgentToolModeGroup
+              key={group}
+              group={group}
+              label={label}
+              allItems={allItems}
+              visibleItems={visibleItems}
+              selection={selection}
+              modeLabels={modeLabels}
+              groupAriaLabel={t(`Set permissions for the ${label} group`, `设置${label}分组的权限`)}
+              itemAriaLabel={(name) => t(`Set permissions for ${name}`, `设置 ${name} 的权限`)}
+              onChange={applyChange}
+            />
+          ))}
         </div>
       )}
     </div>

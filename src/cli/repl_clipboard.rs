@@ -321,16 +321,17 @@ impl ReplClipboardState {
     fn insert_text(&mut self, input: &mut String, cursor: &mut usize, text: String) -> bool {
         let trimmed = text.trim().to_string();
         let chars = trimmed.chars().count();
-        let lines = trimmed.lines().count().max(if trimmed.is_empty() { 0 } else { 1 });
+        let lines = trimmed
+            .lines()
+            .count()
+            .max(if trimmed.is_empty() { 0 } else { 1 });
         // 1. 任一行超长也按折叠处理，不再只看总行数
         let max_line_chars = trimmed
             .lines()
             .map(|line| line.chars().count())
             .max()
             .unwrap_or(chars);
-        if chars <= LONG_TEXT_CHARS
-            && lines <= LONG_TEXT_LINES
-            && max_line_chars <= LONG_LINE_CHARS
+        if chars <= LONG_TEXT_CHARS && lines <= LONG_TEXT_LINES && max_line_chars <= LONG_LINE_CHARS
         {
             insert_text_at_cursor(input, cursor, &trimmed);
             return false;
@@ -592,7 +593,10 @@ mod tests {
         assert_eq!(state.cursor_right(&input, span.start), span.end);
         // 3. 块外移动仍逐字符
         assert_eq!(state.cursor_left(&input, span.start), span.start - 1);
-        assert_eq!(state.cursor_right(&input, span.end), span.end.min(input.chars().count()));
+        assert_eq!(
+            state.cursor_right(&input, span.end),
+            span.end.min(input.chars().count())
+        );
     }
 
     #[test]

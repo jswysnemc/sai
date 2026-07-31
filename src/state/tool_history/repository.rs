@@ -5,11 +5,10 @@ use super::model::{
 };
 use crate::state::turns::ConversationDb;
 use crate::state::StateStore;
-use anyhow::{bail, Context, Result};
+use anyhow::Result;
 use chrono::Utc;
 use rusqlite::{params, OptionalExtension};
 use sha2::{Digest, Sha256};
-use std::path::{Component, Path};
 
 impl StateStore {
     /// 返回指定轮次已经持久化的工具调用数量。
@@ -58,6 +57,44 @@ impl StateStore {
                 tool_name: tool_name.to_string(),
                 arguments: arguments.to_string(),
             },
+        )
+    }
+
+    /// 记录携带 assistant 子轮上下文的工具调用开始事件。
+    ///
+    /// 参数:
+    /// - `turn_id`: 当前轮次标识
+    /// - `seq`: 当前轮内工具调用顺序
+    /// - `assistant_round`: 产生该工具调用的模型子轮编号
+    /// - `assistant_reasoning`: 该模型子轮返回的思考内容
+    /// - `provider_call_id`: provider 工具调用标识
+    /// - `tool_name`: 工具名称
+    /// - `arguments`: 工具参数 JSON 文本
+    ///
+    /// 返回:
+    /// - 写入是否成功
+    pub(crate) fn record_tool_call_started_with_context(
+        &self,
+        turn_id: &str,
+        seq: usize,
+        assistant_round: usize,
+        assistant_reasoning: Option<&str>,
+        provider_call_id: &str,
+        tool_name: &str,
+        arguments: &str,
+    ) -> Result<()> {
+        insert_tool_call_with_context(
+            &self.conv_db,
+            NewToolCallRecord {
+                session_id: self.session_id.clone(),
+                turn_id: turn_id.to_string(),
+                seq,
+                provider_call_id: provider_call_id.to_string(),
+                tool_name: tool_name.to_string(),
+                arguments: arguments.to_string(),
+            },
+            assistant_round,
+            assistant_reasoning,
         )
     }
 
@@ -175,36 +212,6 @@ impl StateStore {
         std::fs::write(&output_path, raw_output)?;
         Ok(format!("tool-results/{file_name}"))
     }
-
-    /// 读取当前会话目录中的完整工具结果引用。
-    ///
-    /// 参数:
-    /// - `result_ref`: 相对于当前会话目录的工具结果引用
-    ///
-    /// 返回:
-    /// - 完整工具结果文本；引用越界、缺失或不可读时返回错误
-    pub(crate) fn read_tool_result_ref(&self, result_ref: &str) -> Result<String> {
-        let reference = Path::new(result_ref);
-        if result_ref.trim().is_empty()
-            || reference.is_absolute()
-            || reference
-                .components()
-                .any(|component| !matches!(component, Component::Normal(_)))
-        {
-            bail!("工具结果引用必须是会话目录内的普通相对路径");
-        }
-
-        let state_root =
-            std::fs::canonicalize(&self.state_dir).context("无法解析当前会话状态目录")?;
-        let result_path = std::fs::canonicalize(self.state_dir.join(reference))
-            .with_context(|| format!("完整工具结果引用不存在: {result_ref}"))?;
-        if !result_path.starts_with(&state_root) || !result_path.is_file() {
-            bail!("工具结果引用超出当前会话目录: {result_ref}");
-        }
-
-        std::fs::read_to_string(&result_path)
-            .with_context(|| format!("无法读取完整工具结果引用: {result_ref}"))
-    }
 }
 
 /// 插入或更新工具调用记录。
@@ -219,16 +226,37 @@ pub(in crate::state) fn insert_tool_call(
     db: &ConversationDb,
     record: NewToolCallRecord,
 ) -> Result<()> {
+    insert_tool_call_with_context(db, record, 0, None)
+}
+
+/// 插入或更新携带 assistant 子轮上下文的工具调用记录。
+///
+/// 参数:
+/// - `db`: 对话数据库
+/// - `record`: 待写入工具调用
+/// - `assistant_round`: 产生工具调用的模型子轮编号
+/// - `assistant_reasoning`: 该子轮返回的思考内容
+///
+/// 返回:
+/// - 写入是否成功
+pub(in crate::state) fn insert_tool_call_with_context(
+    db: &ConversationDb,
+    record: NewToolCallRecord,
+    assistant_round: usize,
+    assistant_reasoning: Option<&str>,
+) -> Result<()> {
     let conn = db.conn.lock().unwrap();
     let now = Utc::now().to_rfc3339();
     conn.execute(
         "INSERT INTO tool_calls (
-            id, session_id, turn_id, seq, provider_call_id, tool_name,
-            arguments, status, created_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
+            id, session_id, turn_id, seq, assistant_round, assistant_reasoning,
+            provider_call_id, tool_name, arguments, status, created_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)
          ON CONFLICT(session_id, provider_call_id) DO UPDATE SET
             turn_id = excluded.turn_id,
             seq = excluded.seq,
+            assistant_round = excluded.assistant_round,
+            assistant_reasoning = excluded.assistant_reasoning,
             tool_name = excluded.tool_name,
             arguments = excluded.arguments,
             updated_at = excluded.updated_at",
@@ -241,6 +269,8 @@ pub(in crate::state) fn insert_tool_call(
             record.session_id,
             record.turn_id,
             record.seq as i64,
+            assistant_round as i64,
+            assistant_reasoning,
             record.provider_call_id,
             record.tool_name,
             record.arguments,
@@ -423,8 +453,9 @@ pub(in crate::state) fn load_tool_exchanges_for_turn(
     let conn = db.conn.lock().unwrap();
     let mut stmt = conn.prepare(
         "SELECT
-            c.id, c.session_id, c.turn_id, c.seq, c.provider_call_id,
-            c.tool_name, c.arguments, c.status, c.created_at, c.updated_at,
+            c.id, c.session_id, c.turn_id, c.seq, c.assistant_round,
+            c.assistant_reasoning, c.provider_call_id, c.tool_name, c.arguments,
+            c.status, c.created_at, c.updated_at,
             r.id, r.session_id, r.turn_id, r.provider_call_id, r.ok,
             r.result_preview, r.result_ref, r.error, r.original_chars,
             r.created_at, r.completed_at,
@@ -446,40 +477,42 @@ pub(in crate::state) fn load_tool_exchanges_for_turn(
             session_id: row.get(1)?,
             turn_id: row.get(2)?,
             seq: row.get::<_, i64>(3)? as usize,
-            provider_call_id: row.get(4)?,
-            tool_name: row.get(5)?,
-            arguments: row.get(6)?,
-            status: ToolCallStatus::from_str(&row.get::<_, String>(7)?),
-            created_at: row.get(8)?,
-            updated_at: row.get(9)?,
+            assistant_round: row.get::<_, i64>(4)? as usize,
+            assistant_reasoning: row.get(5)?,
+            provider_call_id: row.get(6)?,
+            tool_name: row.get(7)?,
+            arguments: row.get(8)?,
+            status: ToolCallStatus::from_str(&row.get::<_, String>(9)?),
+            created_at: row.get(10)?,
+            updated_at: row.get(11)?,
         };
-        let result_id: Option<String> = row.get(10)?;
+        let result_id: Option<String> = row.get(12)?;
         let result = match result_id {
             Some(id) => Some(ToolResultRecord {
                 id,
-                session_id: row.get(11)?,
-                turn_id: row.get(12)?,
-                provider_call_id: row.get(13)?,
-                ok: row.get::<_, i64>(14)? == 1,
-                result_preview: row.get(15)?,
-                result_ref: row.get(16)?,
-                error: row.get(17)?,
-                original_chars: row.get::<_, i64>(18)? as usize,
-                created_at: row.get(19)?,
-                completed_at: row.get(20)?,
+                session_id: row.get(13)?,
+                turn_id: row.get(14)?,
+                provider_call_id: row.get(15)?,
+                ok: row.get::<_, i64>(16)? == 1,
+                result_preview: row.get(17)?,
+                result_ref: row.get(18)?,
+                error: row.get(19)?,
+                original_chars: row.get::<_, i64>(20)? as usize,
+                created_at: row.get(21)?,
+                completed_at: row.get(22)?,
             }),
             None => None,
         };
-        let replacement_id: Option<String> = row.get(21)?;
+        let replacement_id: Option<String> = row.get(23)?;
         let replacement = match replacement_id {
             Some(provider_call_id) => Some(ToolOutputReplacement {
                 provider_call_id,
-                session_id: row.get(22)?,
-                replacement: row.get(23)?,
-                original_chars: row.get::<_, i64>(24)? as usize,
-                result_ref: row.get(25)?,
-                policy: row.get(26)?,
-                created_at: row.get(27)?,
+                session_id: row.get(24)?,
+                replacement: row.get(25)?,
+                original_chars: row.get::<_, i64>(26)? as usize,
+                result_ref: row.get(27)?,
+                policy: row.get(28)?,
+                created_at: row.get(29)?,
             }),
             None => None,
         };
@@ -609,127 +642,5 @@ fn short_reference_hash(value: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::state::tool_history::schema::create_tool_history_tables;
-    use std::path::PathBuf;
-    use std::sync::Arc;
-    use tempfile::TempDir;
-
-    fn test_db() -> (TempDir, ConversationDb) {
-        let temp = tempfile::tempdir().unwrap();
-        let db = ConversationDb::open(temp.path()).unwrap();
-        let conn = db.conn.lock().unwrap();
-        create_tool_history_tables(&conn).unwrap();
-        drop(conn);
-        (temp, db)
-    }
-
-    #[test]
-    fn records_call_and_result_summary() {
-        let (_temp, db) = test_db();
-        insert_tool_call(
-            &db,
-            NewToolCallRecord {
-                session_id: "default".to_string(),
-                turn_id: "turn_1".to_string(),
-                seq: 1,
-                provider_call_id: "call_1".to_string(),
-                tool_name: "read_file".to_string(),
-                arguments: "{}".to_string(),
-            },
-        )
-        .unwrap();
-        insert_tool_result(
-            &db,
-            NewToolResultRecord {
-                session_id: "default".to_string(),
-                turn_id: "turn_1".to_string(),
-                provider_call_id: "call_1".to_string(),
-                ok: true,
-                result_preview: "content".to_string(),
-                result_ref: None,
-                error: None,
-                original_chars: 7,
-            },
-        )
-        .unwrap();
-
-        let summary = summarize_tool_history(&db, "default").unwrap();
-        assert_eq!(summary.call_count, 1);
-        assert_eq!(summary.result_count, 1);
-        assert_eq!(summary.pending_count, 0);
-        assert_eq!(summary.error_count, 0);
-        assert_eq!(summary.latest_tool_name.as_deref(), Some("read_file"));
-        assert_eq!(summary.latest_status, Some(ToolCallStatus::Completed));
-    }
-
-    #[test]
-    fn clipped_output_writes_reference_and_replacement() {
-        let (temp, db) = test_db();
-        let store = StateStore {
-            base_state_dir: PathBuf::new(),
-            session_id: "default".to_string(),
-            state_dir: temp.path().to_path_buf(),
-            conv_db: Arc::new(db),
-        };
-
-        let result_ref = store
-            .save_clipped_tool_output_replacement("call/1", "full output", "preview")
-            .unwrap()
-            .expect("result ref");
-        store
-            .record_tool_result_completed(
-                "turn_1",
-                "call/1",
-                true,
-                "preview",
-                Some(&result_ref),
-                None,
-                "full output".chars().count(),
-            )
-            .unwrap();
-
-        assert!(result_ref.starts_with("tool-results/call_1_"));
-        assert!(result_ref.ends_with(".txt"));
-        assert_eq!(
-            std::fs::read_to_string(temp.path().join(&result_ref)).unwrap(),
-            "full output"
-        );
-        let summary = store.tool_history_summary().unwrap();
-        assert_eq!(summary.replacement_count, 1);
-        assert_eq!(summary.result_count, 1);
-    }
-
-    #[test]
-    fn settles_pending_tool_calls_for_turns() {
-        let (_temp, db) = test_db();
-        insert_tool_call(
-            &db,
-            NewToolCallRecord {
-                session_id: "default".to_string(),
-                turn_id: "turn_1".to_string(),
-                seq: 1,
-                provider_call_id: "call_1".to_string(),
-                tool_name: "read_file".to_string(),
-                arguments: "{}".to_string(),
-            },
-        )
-        .unwrap();
-
-        let updated =
-            settle_pending_tool_calls_for_turns(&db, "default", &["turn_1".to_string()]).unwrap();
-        let summary = summarize_tool_history(&db, "default").unwrap();
-        let exchanges = load_tool_exchanges_for_turn(&db, "default", "turn_1").unwrap();
-
-        assert_eq!(updated, 1);
-        assert_eq!(summary.pending_count, 0);
-        assert_eq!(summary.error_count, 1);
-        assert_eq!(summary.latest_status, Some(ToolCallStatus::Interrupted));
-        assert_eq!(summary.result_count, 1);
-        assert_eq!(
-            exchanges[0].result.as_ref().and_then(|result| result.error.as_deref()),
-            Some("tool call was interrupted before a result was recorded")
-        );
-    }
-}
+#[path = "repository_tests.rs"]
+mod tests;

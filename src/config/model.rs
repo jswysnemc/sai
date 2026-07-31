@@ -5,6 +5,7 @@ use super::git::{GitConfig, ScmConfig};
 use super::model_metadata::ModelMetadata;
 use super::notification::NotificationConfig;
 use super::permission::PermissionConfig;
+use super::prompt_templates::PromptTemplatesConfig;
 use super::session::SessionConfig;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
@@ -238,6 +239,9 @@ pub struct PromptConfig {
     pub active_persona: String,
     #[serde(default)]
     pub active_identity: String,
+    /// 提交说明、会话标题和上下文压缩使用的内部提示词
+    #[serde(default)]
+    pub templates: PromptTemplatesConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -326,7 +330,7 @@ pub struct WeixinGatewayConfig {
     pub bot_agent: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ProviderModelChoice {
     pub provider_id: String,
     pub provider_name: String,
@@ -334,12 +338,25 @@ pub struct ProviderModelChoice {
 }
 
 impl ProviderModelChoice {
+    /// 返回可用于稳定比较的供应商与模型组合值。
+    ///
+    /// 返回:
+    /// - 供应商标识与模型名称组合
     pub fn value(&self) -> String {
         format!("{}\t{}", self.provider_id, self.model)
     }
 
+    /// 返回包含供应商展示名的模型标签。
+    ///
+    /// 返回:
+    /// - `供应商 / 模型` 展示文本
     pub fn label(&self) -> String {
-        format!("{} / {}", self.provider_name, self.model)
+        let provider = if self.provider_name.trim().is_empty() {
+            &self.provider_id
+        } else {
+            &self.provider_name
+        };
+        format!("{provider} / {}", self.model)
     }
 }
 
@@ -363,8 +380,6 @@ pub struct ToolsConfig {
     pub max_rounds: usize,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub command_shell: String,
-    #[serde(default)]
-    pub progressive_loading_enabled: bool,
     /// 命令输出过滤器：auto（探测到 rtk 时启用）/ rtk（强制）/ off（关闭）。
     #[serde(default = "default_command_filter")]
     pub command_filter: String,

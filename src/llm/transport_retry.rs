@@ -95,10 +95,7 @@ pub(crate) fn disconnect_user_hint(error: &anyhow::Error) -> String {
             "{}: {}\n{}",
             t("Connection interrupted", "连接中断"),
             simplify_one_line(error),
-            t(
-                "You can retry this turn.",
-                "可重试本轮请求。",
-            )
+            t("You can retry this turn.", "可重试本轮请求。",)
         )
     } else {
         simplify_one_line(error)

@@ -552,15 +552,7 @@ impl<'a> ProviderBrowser<'a> {
                 _ => (models_title, &models, self.model_idx),
             };
             draw_column(
-                stdout,
-                inner_x,
-                inner_y,
-                inner_w,
-                inner_h,
-                &title,
-                items,
-                selected,
-                true,
+                stdout, inner_x, inner_y, inner_w, inner_h, &title, items, selected, true,
             )?;
         }
         let help = if self.filter_mode {

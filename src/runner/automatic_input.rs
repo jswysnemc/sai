@@ -71,12 +71,10 @@ impl AutomaticInput {
     /// 返回:
     /// - 简洁的自动消息文本
     pub(crate) fn display_text(&self, goal: Option<&Goal>) -> String {
-        self.display
-            .clone()
-            .unwrap_or_else(|| {
-                goal.map(|goal| format!("Goal 自动续轮：{}", goal.objective))
-                    .unwrap_or_else(|| "自动继续当前任务".to_string())
-            })
+        self.display.clone().unwrap_or_else(|| {
+            goal.map(|goal| format!("Goal 自动续轮：{}", goal.objective))
+                .unwrap_or_else(|| "自动继续当前任务".to_string())
+        })
     }
 
     /// 构造自动队列项发送给模型的用户输入。
@@ -88,9 +86,7 @@ impl AutomaticInput {
     /// - 用户输入文本；Goal 续轮缺少活动目标时返回空值
     pub(crate) fn prompt_text(&self, goal: Option<&Goal>) -> Option<String> {
         let mut prompt = match self.kind {
-            AutomaticInputKind::GoalContinuation => {
-                crate::goal::continuation_prompt(goal?)
-            }
+            AutomaticInputKind::GoalContinuation => crate::goal::continuation_prompt(goal?),
             AutomaticInputKind::ExternalCompletion => goal
                 .map(crate::goal::continuation_prompt)
                 .unwrap_or_default(),

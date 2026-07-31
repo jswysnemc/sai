@@ -30,12 +30,12 @@ use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub(crate) use compaction::{summary_char_limit, validate_summary};
 #[allow(unused_imports)]
 pub use compaction::{
-    classify_context_pressure, compaction_trigger_chars, CompactionApplyOutcome,
-    CompactionRequest, CompactionSummary, ContextPressure,
+    classify_context_pressure, compaction_trigger_chars, CompactionApplyOutcome, CompactionRequest,
+    CompactionSummary, ContextPressure,
 };
+pub(crate) use compaction::{summary_char_limit, validate_summary};
 pub use context_epoch::{ContextEpochProjection, ContextEpochSummary, ContextSourceInput};
 pub use failure_recovery::{FailureKind, RecoverySnapshot, RecoveryStatus};
 pub use pending_turn::PendingTurnGuard;
@@ -52,9 +52,9 @@ pub use sessions::{
     active_session_id_for_workspace, active_state_dir, create_session,
     create_session_for_workspace, delete_session, delete_sessions,
     ensure_active_session as active_session, ensure_workspace_session, fork_session_until_turn,
-    list_sessions, list_sessions_for_workspace, locate_session_dirs, rename_session, SessionInfo,
+    list_sessions, list_sessions_for_workspace, locate_session_dirs, rename_session,
     state_dir_for_workspace_session, switch_session, title_from_message_public,
-    workspace_id_for_path,
+    workspace_id_for_path, SessionInfo,
 };
 #[allow(unused_imports)]
 pub use tool_history::{
@@ -333,8 +333,7 @@ impl StateStore {
         reasoning: Option<&str>,
         error: &str,
     ) -> Result<()> {
-        self.conv_db
-            .fail_turn(turn_id, content, reasoning, error)?;
+        self.conv_db.fail_turn(turn_id, content, reasoning, error)?;
         self.settle_pending_tool_calls_for_turns(&[turn_id.to_string()])?;
         Ok(())
     }
@@ -529,20 +528,20 @@ impl StateStore {
     }
 
     /// 仅恢复指定轮次的工作树改动，不删除对话历史。
-///
-/// 参数:
-/// - `expected_turn_id`: 轮次标识
-/// - `paths`: 目标路径；空表示整轮
-///
-/// 返回:
-/// - 是否恢复了工作树
-pub fn restore_turn_worktree(&self, expected_turn_id: &str, paths: &[String]) -> Result<bool> {
-    let outcome =
-        worktree_undo::restore_snapshot_paths(&self.state_dir, expected_turn_id, paths)?;
-    Ok(outcome.restored)
-}
+    ///
+    /// 参数:
+    /// - `expected_turn_id`: 轮次标识
+    /// - `paths`: 目标路径；空表示整轮
+    ///
+    /// 返回:
+    /// - 是否恢复了工作树
+    pub fn restore_turn_worktree(&self, expected_turn_id: &str, paths: &[String]) -> Result<bool> {
+        let outcome =
+            worktree_undo::restore_snapshot_paths(&self.state_dir, expected_turn_id, paths)?;
+        Ok(outcome.restored)
+    }
 
-/// 回滚与预期标识匹配的最后一轮会话上下文。
+    /// 回滚与预期标识匹配的最后一轮会话上下文。
     ///
     /// 参数:
     /// - `expected_turn_id`: 准备重试的最后一轮标识

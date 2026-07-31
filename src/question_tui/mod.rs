@@ -1,10 +1,11 @@
 mod render;
+mod summary;
 mod text;
 
 use self::render::draw;
+use self::summary::answered_summary_lines;
 use self::text::{
-    display_inline, insert_text, remove_at_cursor, remove_before_cursor, reserve_space,
-    truncate_width,
+    insert_text, remove_at_cursor, remove_before_cursor, reserve_space, truncate_width,
 };
 use crate::i18n::text as t;
 use crate::question::{
@@ -564,38 +565,9 @@ impl QuestionSession {
             .panel_lines
             .saturating_sub(u16::from(keeps_blank_line))
             .max(1);
-        let answer_capacity = content_rows.saturating_sub(1) as usize;
-        let omitted = request.questions.len().saturating_sub(answer_capacity);
         let mut row = 0u16;
-        let heading = if omitted == 0 {
-            format!(
-                "{} {} {}",
-                t("Answered", "已回答"),
-                request.questions.len(),
-                t("questions", "个问题")
-            )
-        } else {
-            format!(
-                "{} {} {} · {} {}",
-                t("Answered", "已回答"),
-                request.questions.len(),
-                t("questions", "个问题"),
-                t("omitted", "省略"),
-                omitted
-            )
-        };
-        self.write_answered_line(row, &heading, content_width)?;
-        row += 1;
-        for (question, selected) in request.questions.iter().zip(answers).take(answer_capacity) {
-            self.write_answered_line(
-                row,
-                &format!(
-                    "{}: {}",
-                    question.header,
-                    display_inline(&selected.join(t(" / ", "、")))
-                ),
-                content_width,
-            )?;
+        for line in answered_summary_lines(request, answers, content_rows as usize) {
+            self.write_answered_line(row, &line, content_width)?;
             row += 1;
         }
         if keeps_blank_line {

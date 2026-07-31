@@ -122,6 +122,17 @@ pub(crate) fn is_deepseek_provider(provider: &ProviderConfig) -> bool {
     id.contains("deepseek") || base_url.contains("deepseek") || model.contains("deepseek")
 }
 
+/// 判断 DeepSeek 当前是否要求工具子轮回传思考内容。
+///
+/// 参数:
+/// - `provider`: 当前供应商配置
+///
+/// 返回:
+/// - DeepSeek 思考模式开启时返回 true
+pub(crate) fn deepseek_requires_tool_reasoning(provider: &ProviderConfig) -> bool {
+    is_deepseek_provider(provider) && normalized_level(&provider.thinking_level) != "none"
+}
+
 /// 判断当前供应商是否需要回传历史思考内容。
 ///
 /// 参数:
@@ -130,7 +141,7 @@ pub(crate) fn is_deepseek_provider(provider: &ProviderConfig) -> bool {
 /// 返回:
 /// - 需要保留 `reasoning_content` 时返回 true
 pub(crate) fn should_preserve_reasoning(provider: &ProviderConfig) -> bool {
-    provider.preserve_thinking || is_deepseek_provider(provider)
+    provider.preserve_thinking || deepseek_requires_tool_reasoning(provider)
 }
 
 /// 规范化思考等级。
@@ -437,6 +448,22 @@ mod tests {
         assert!(should_preserve_reasoning(&provider));
     }
 
+    /// 【协议】【DeepSeek】验证关闭思考后不再回传历史思考。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn deepseek_disabled_thinking_does_not_preserve_reasoning() {
+        let mut provider = ProviderConfig::default_openai();
+        provider.id = "deepseek".to_string();
+        provider.thinking_level = "none".to_string();
+
+        assert!(!should_preserve_reasoning(&provider));
+    }
+
     #[test]
     fn extra_body_overrides_thinking() {
         let mut provider = ProviderConfig::default_openai();
@@ -531,7 +558,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(body["reasoning"]["effort"], json!("high"));
-        assert_eq!(body["reasoning"]["summary"], json!("auto"), "summary 不应被覆盖");
+        assert_eq!(
+            body["reasoning"]["summary"],
+            json!("auto"),
+            "summary 不应被覆盖"
+        );
     }
 
     /// 【协议】【Moonshot】验证等级折叠到 low/high/max 三档。
@@ -582,15 +613,16 @@ mod tests {
         provider.thinking_level = "high".to_string();
 
         let without =
-            apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat).unwrap();
+            apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat)
+                .unwrap();
         assert!(
             without["thinking"].get("keep").is_none(),
             "未开启时不应发送 keep"
         );
 
         provider.preserve_thinking = true;
-        let with =
-            apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat).unwrap();
+        let with = apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat)
+            .unwrap();
         assert_eq!(with["thinking"]["keep"], json!("all"));
     }
 
@@ -608,8 +640,8 @@ mod tests {
         provider.thinking_level = "none".to_string();
         provider.preserve_thinking = true;
 
-        let body =
-            apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat).unwrap();
+        let body = apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat)
+            .unwrap();
 
         assert_eq!(body["thinking"], json!({ "type": "disabled" }));
         assert!(body.get("reasoning_effort").is_none());

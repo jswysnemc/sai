@@ -105,7 +105,11 @@ fn cursor_positions(prefix: &str, input: &str, cols: usize) -> Vec<CursorPositio
     let mut positions = Vec::with_capacity(input.chars().count() + 1);
     let mut col = start.col;
     let mut row = start.row;
-    positions.push(CursorPosition { cursor: 0, col, row });
+    positions.push(CursorPosition {
+        cursor: 0,
+        col,
+        row,
+    });
     for (index, ch) in input.chars().enumerate() {
         match ch {
             // 1. 逻辑换行：新行从下一视觉行行首开始

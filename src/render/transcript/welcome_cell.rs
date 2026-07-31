@@ -10,6 +10,10 @@ const LOGO_CONTENT_GAP: usize = 2;
 const PANEL_SIDE_PADDING: usize = 1;
 /// 信息列的最小可用宽度，低于该宽度就放弃标志改为纯信息面板。
 const MIN_CONTENT_WIDTH: usize = 28;
+/// 信息列的最大自然宽度，超长路径在框内截断，避免启动框横跨终端。
+const MAX_CONTENT_WIDTH: usize = 48;
+/// 启动框内展示的常用按键。
+const SHORTCUTS: &str = "Shift+Tab mode  Ctrl+O details  Ctrl+C stop";
 /// 边框样式
 const BORDER_STYLE: &str = "\x1b[2m";
 /// 字段标签样式
@@ -39,20 +43,22 @@ pub(crate) struct WelcomeCell {
 /// 返回:
 /// - 不需要再次换行的 ANSI 行
 pub(crate) fn display_lines(cell: &WelcomeCell, width: usize) -> Vec<AnsiLine> {
-    // 1. 先按可用宽度决定是否容得下框内标志
-    let inner_width = width.saturating_sub(2).clamp(24, 76);
+    // 1. 按内容自然宽度与终端上限决定面板宽度，不再固定铺到 76 列
+    let max_inner_width = width.saturating_sub(2).max(1);
     let logo_reserved = LOGO_WIDTH + LOGO_CONTENT_GAP;
-    let content_width = inner_width
-        .saturating_sub(PANEL_SIDE_PADDING * 2)
-        .saturating_sub(logo_reserved);
-    let show_logo = content_width >= MIN_CONTENT_WIDTH;
+    let show_logo = max_inner_width >= PANEL_SIDE_PADDING * 2 + logo_reserved + MIN_CONTENT_WIDTH;
+    let desired_content_width =
+        natural_content_width(cell).clamp(MIN_CONTENT_WIDTH, MAX_CONTENT_WIDTH);
+    let title_width = UnicodeWidthStr::width(format!("Sai (v{})", cell.version).as_str()) + 3;
+    let desired_inner_width =
+        PANEL_SIDE_PADDING * 2 + desired_content_width + if show_logo { logo_reserved } else { 0 };
+    let inner_width = desired_inner_width.max(title_width).min(max_inner_width);
 
     // 2. 生成信息列：标志占位后剩余宽度即为其可用宽度
-    let content_width = if show_logo {
-        content_width
-    } else {
-        inner_width.saturating_sub(PANEL_SIDE_PADDING * 2)
-    };
+    let content_width = inner_width
+        .saturating_sub(PANEL_SIDE_PADDING * 2)
+        .saturating_sub(if show_logo { logo_reserved } else { 0 })
+        .max(1);
     let rows = content_rows(cell, content_width);
 
     // 3. 逐行拼装边框、标志与信息列
@@ -66,7 +72,10 @@ pub(crate) fn display_lines(cell: &WelcomeCell, width: usize) -> Vec<AnsiLine> {
     let body_rows = rows.len().max(if show_logo { LOGO_HEIGHT } else { 0 });
     for index in 0..body_rows {
         let logo_cell = if show_logo {
-            let row = logo.get(index).cloned().unwrap_or_else(|| blank_logo.clone());
+            let row = logo
+                .get(index)
+                .cloned()
+                .unwrap_or_else(|| blank_logo.clone());
             format!("{row}{}", " ".repeat(LOGO_CONTENT_GAP))
         } else {
             String::new()
@@ -128,7 +137,7 @@ fn body_line(logo_cell: &str, content: &str, inner_width: usize) -> String {
 
 /// 生成信息列的每一行。
 ///
-/// 行数与标志高度对齐：首行留空作为视觉呼吸，随后依次是模型、目录与权限。
+/// 依次展示模型、目录、权限与常用快捷键；标志存在时由调用方补齐第五行。
 ///
 /// 参数:
 /// - `cell`: 启动信息 source
@@ -138,12 +147,48 @@ fn body_line(logo_cell: &str, content: &str, inner_width: usize) -> String {
 /// - 已截断到可用宽度的信息行
 fn content_rows(cell: &WelcomeCell, width: usize) -> Vec<String> {
     vec![
-        String::new(),
         field_row("model:", &cell.model, Some("/model to change"), width),
         field_row("directory:", &cell.directory, None, width),
         permission_row(&cell.permissions, width),
-        String::new(),
+        field_row("keys:", SHORTCUTS, None, width),
     ]
+}
+
+/// 计算启动信息列在不截断时需要的自然宽度。
+///
+/// 参数:
+/// - `cell`: 启动信息 source
+///
+/// 返回:
+/// - 模型、目录、权限和快捷键各行中的最大显示宽度
+fn natural_content_width(cell: &WelcomeCell) -> usize {
+    [
+        field_natural_width("model:", &cell.model, Some("/model to change")),
+        field_natural_width("directory:", &cell.directory, None),
+        field_natural_width("permissions:", &cell.permissions, None),
+        field_natural_width("keys:", SHORTCUTS, None),
+    ]
+    .into_iter()
+    .max()
+    .unwrap_or(MIN_CONTENT_WIDTH)
+}
+
+/// 计算单行字段在不截断时占用的显示宽度。
+///
+/// 参数:
+/// - `label`: 字段标签
+/// - `value`: 字段值
+/// - `hint`: 可选提示
+///
+/// 返回:
+/// - 标签、值和提示合计的显示宽度
+fn field_natural_width(label: &str, value: &str, hint: Option<&str>) -> usize {
+    UnicodeWidthStr::width(label)
+        + 1
+        + UnicodeWidthStr::width(value)
+        + hint
+            .map(|text| UnicodeWidthStr::width(text) + 2)
+            .unwrap_or(0)
 }
 
 /// 渲染一行普通字段。
@@ -304,6 +349,31 @@ mod tests {
         assert!(joined.contains("gpt-5"));
         assert!(joined.contains("permissions:"));
         assert!(joined.contains("Sai (v0.1.4)"));
+    }
+
+    /// 【终端】【启动面板】验证边框按内容收紧并展示常用快捷键。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn welcome_panel_fits_content_and_includes_shortcuts() {
+        let wide = display_lines(&sample("YOLO mode"), 120);
+        let narrow = display_lines(&sample("YOLO mode"), 40);
+        let joined = wide
+            .iter()
+            .map(|line| line.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let panel_width = visible_width(wide[0].as_str());
+
+        assert!(panel_width < 70, "启动框不应占满宽终端: {panel_width}");
+        assert!(joined.contains("keys:"));
+        assert!(joined.contains("Shift+Tab"));
+        assert!(joined.contains("Ctrl+O"));
+        assert!(narrow.len() < wide.len(), "无标志时高度应随内容收紧");
     }
 
     /// 【终端】【品牌标志】验证标志渲染在边框内部且每行宽度一致。

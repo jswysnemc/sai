@@ -6,8 +6,8 @@ mod control_runner;
 mod events;
 mod ownership;
 mod session_runner;
-mod submission_tools;
 mod submission;
+mod submission_tools;
 mod turn_runner;
 
 use crate::paths::SaiPaths;
@@ -159,8 +159,8 @@ mod tests {
             reasoning: None,
             usage: None,
             tool_calls: Vec::new(),
-        duration_ms: 0,
-    }));
+            duration_ms: 0,
+        }));
 
         assert_eq!(
             output

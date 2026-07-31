@@ -242,7 +242,6 @@ fn compact_subagent_summary(
     Some(t("running", "运行中").to_string())
 }
 
-
 /// 从 subagent 工具结果中读取子智能体 ID 和状态。
 ///
 /// 参数:

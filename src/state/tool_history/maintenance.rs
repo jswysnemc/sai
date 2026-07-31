@@ -73,7 +73,8 @@ impl StateStore {
             .collect::<Vec<_>>();
         let stale_len = non_running.len().saturating_sub(PRESERVED_RECENT_TURNS);
         for turn in &non_running[..stale_len] {
-            let exchanges = load_tool_exchanges_for_turn(&self.conv_db, &self.session_id, &turn.turn_id)?;
+            let exchanges =
+                load_tool_exchanges_for_turn(&self.conv_db, &self.session_id, &turn.turn_id)?;
             for exchange in &exchanges {
                 self.maintain_exchange(mode, exchange, &mut stats)?;
             }
@@ -454,7 +455,9 @@ mod tests {
         assert!(stats.saved_chars > 0);
         let replacement = replacement_of(&store, "turn_1", "call_stale").unwrap();
         assert_eq!(replacement.policy, POLICY_STALE_SNIP);
-        assert!(replacement.replacement.contains("snipped stale tool result"));
+        assert!(replacement
+            .replacement
+            .contains("snipped stale tool result"));
         assert!(replacement.replacement.contains("line 0"));
         assert!(replacement.replacement.contains("line 199"));
         assert!(replacement_of(&store, "turn_3", "call_recent").is_none());

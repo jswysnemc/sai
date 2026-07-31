@@ -1,4 +1,4 @@
-use super::agent_presets::{builtin_agent_profiles, resolve_enabled_tools};
+use super::agent_presets::{builtin_agent_profiles, resolve_deferred_tools, resolve_enabled_tools};
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_AGENT_ID: &str = "default";
@@ -22,6 +22,8 @@ pub enum AgentSurface {
 pub struct AgentRuntimeOverride {
     /// 允许使用的工具名称
     pub enabled_tools: Vec<String>,
+    /// 需要模型调用 load 后才暴露的工具名称，必须是 `enabled_tools` 的子集
+    pub deferred_tools: Vec<String>,
     /// 完整暴露的 skills
     pub skills_full: Vec<String>,
     /// 仅暴露名称的 skills
@@ -46,6 +48,9 @@ pub struct AgentProfile {
     /// 启用的工具，可填写工具名或工具分组名
     #[serde(default)]
     pub enabled_tools: Vec<String>,
+    /// 启用工具中需要模型调用 load 后才暴露的部分；其余启用工具会话开始即可见
+    #[serde(default)]
+    pub deferred_tools: Vec<String>,
     /// 完整启用的 skills：加载名称与描述
     #[serde(default)]
     pub skills_full: Vec<String>,
@@ -115,6 +120,7 @@ impl Default for AgentProfile {
             description: String::new(),
             system_prompt: String::new(),
             enabled_tools: Vec::new(),
+            deferred_tools: Vec::new(),
             skills_full: Vec::new(),
             skills_named: Vec::new(),
             provider_id: String::new(),
@@ -141,6 +147,7 @@ impl AgentProfile {
             description: profile.description,
             system_prompt: profile.system_prompt,
             enabled_tools: Vec::new(),
+            deferred_tools: Vec::new(),
             skills_full: Vec::new(),
             skills_named: Vec::new(),
             provider_id: profile.provider_id,
@@ -220,6 +227,20 @@ impl crate::config::AppConfig {
             AgentSurface::Gateway => self.gateway_agent.as_deref(),
         };
         value.map(str::trim).filter(|value| !value.is_empty())
+    }
+
+    /// 返回当前运行期 Agent 需要延迟加载的工具集合。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 需要模型调用 load 后才暴露的工具名；未配置运行期覆盖时返回空切片
+    pub(crate) fn agent_deferred_tools(&self) -> &[String] {
+        self.agent_runtime
+            .as_ref()
+            .map(|runtime| runtime.deferred_tools.as_slice())
+            .unwrap_or_default()
     }
 
     /// 解析主 Agent 可调用的已注册 Agent。
@@ -306,9 +327,12 @@ pub fn apply_agent_override(
         }
     }
     // 5. 工具白名单：空列表表示全量；内置 explore/plan/gateway/code 有默认白名单
+    //    延迟集合从白名单中划出需要 load 才暴露的部分，两者一起构成三段状态
     let enabled_tools = resolve_enabled_tools(&profile);
+    let deferred_tools = resolve_deferred_tools(&profile, &enabled_tools);
     config.load_instruction_files = profile.load_instruction_files;
     config.agent_runtime = if enabled_tools.is_empty()
+        && deferred_tools.is_empty()
         && profile.skills_full.is_empty()
         && profile.skills_named.is_empty()
     {
@@ -316,6 +340,7 @@ pub fn apply_agent_override(
     } else {
         Some(AgentRuntimeOverride {
             enabled_tools,
+            deferred_tools,
             skills_full: profile.skills_full,
             skills_named: profile.skills_named,
         })
@@ -420,7 +445,13 @@ mod tests {
         assert_eq!(config.default_agent.as_deref(), Some(GENERAL_AGENT_ID));
         assert_eq!(config.gateway_agent.as_deref(), Some(GATEWAY_AGENT_ID));
         let cli = apply_agent_override(config.clone(), None, AgentSurface::Cli).unwrap();
-        assert!(cli.agent_runtime.is_none(), "CLI 应继承全量工具");
+        let cli_runtime = cli.agent_runtime.expect("CLI 保留通配符延迟集合");
+        assert!(cli_runtime.enabled_tools.is_empty(), "CLI 应继承全量工具");
+        assert_eq!(
+            cli_runtime.deferred_tools,
+            vec![crate::config::DEFERRED_ALL_NON_BASE.to_string()],
+            "CLI 非基础工具应按需 load"
+        );
         assert!(cli.system_prompt.as_deref().unwrap_or("").contains("Sai"));
         assert!(cli.load_instruction_files);
         let tui = apply_agent_override(config.clone(), None, AgentSurface::Tui).unwrap();
@@ -446,12 +477,13 @@ mod tests {
             .contains("核心铁律"));
         let gateway = apply_agent_override(config, None, AgentSurface::Gateway).unwrap();
         assert!(!gateway.load_instruction_files);
-        let gateway_tools = gateway.agent_runtime.expect("gateway whitelist").enabled_tools;
+        let gateway_tools = gateway
+            .agent_runtime
+            .expect("gateway whitelist")
+            .enabled_tools;
         assert!(gateway_tools.iter().any(|t| t == "get_weather"));
         assert!(gateway_tools.iter().any(|t| t == "get_exchange_rate"));
-        assert!(gateway_tools
-            .iter()
-            .any(|t| t == "query_deepseek_status"));
+        assert!(gateway_tools.iter().any(|t| t == "query_deepseek_status"));
         assert!(gateway_tools.iter().any(|t| t == "online_man_get_page"));
         assert!(!gateway_tools.iter().any(|t| t == "query_weather"));
         assert!(!gateway_tools.iter().any(|t| t == "convert_exchange_rate"));

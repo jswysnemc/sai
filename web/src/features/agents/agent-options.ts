@@ -30,6 +30,8 @@ export function buildDefaultAgent(options: AgentOptions, locale: Locale = "zh-CN
     description: text(locale, "Inherit the current global configuration", "继承当前全局配置"),
     system_prompt: "",
     enabled_tools: options.tools.map((tool) => tool.name),
+    // 默认 Agent 继承全局配置，不额外划分延迟加载
+    deferred_tools: [],
     skills_full: options.skills.map((skill) => skill.name),
     skills_named: [],
     provider_id: "",

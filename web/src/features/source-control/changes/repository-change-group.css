@@ -35,6 +35,11 @@
   text-align: left;
 }
 
+.git-repository-changes-toggle.ui-button:hover:not(:disabled) {
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
 .git-repository-changes-toggle > svg:first-child {
   transition:transform var(--duration-base) ease;
 }

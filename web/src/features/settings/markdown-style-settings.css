@@ -1,0 +1,55 @@
+.markdown-style-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--space-lg);
+}
+
+.markdown-style-panel {
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-lg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+}
+
+.markdown-style-panel legend {
+  padding: 0 var(--space-xs);
+}
+
+.markdown-style-panel legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.markdown-style-panel legend svg {
+  color: var(--ink-soft);
+}
+
+.markdown-style-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+
+.markdown-style-fields .settings-field,
+.markdown-style-fields .settings-toggle-field {
+  min-width: 0;
+}
+
+@media (max-width: 72rem) {
+  .markdown-style-grid,
+  .markdown-style-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 48rem) {
+  .markdown-style-panel {
+    padding: var(--space-md);
+  }
+}

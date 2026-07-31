@@ -106,7 +106,9 @@ fn source_preview_snapshots_open_table_with_latest_widths() {
     let preview = renderer.snapshot_open_structures();
     assert!(preview.contains('┌'));
     assert!(preview.contains("pacman"));
-    assert!(renderer.push("| Neovim | `sudo pacman -S neovim` |\n").is_empty());
+    assert!(renderer
+        .push("| Neovim | `sudo pacman -S neovim` |\n")
+        .is_empty());
     let wider = renderer.snapshot_open_structures();
     assert!(wider.contains("sudo pacman -S neovim"));
     let finished = renderer.flush();

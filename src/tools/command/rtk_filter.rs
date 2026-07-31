@@ -187,7 +187,10 @@ mod tests {
     fn skips_commands_rtk_declines() {
         let subs = subcommands(&["git", "read"]);
         assert_eq!(rewrite_with("vim notes.md", &[], &subs, fake_suggest), None);
-        assert_eq!(rewrite_with("sed -n 1p a.txt", &[], &subs, fake_suggest), None);
+        assert_eq!(
+            rewrite_with("sed -n 1p a.txt", &[], &subs, fake_suggest),
+            None
+        );
     }
 
     /// 询问时命令按空白切分会丢引号，因此参数必须沿用原文。
@@ -203,10 +206,22 @@ mod tests {
     #[test]
     fn skips_compound_and_repeated_wrapping() {
         let subs = subcommands(&["git", "cargo"]);
-        assert_eq!(rewrite_with("git status | head", &[], &subs, fake_suggest), None);
-        assert_eq!(rewrite_with("cargo test && echo ok", &[], &subs, fake_suggest), None);
-        assert_eq!(rewrite_with("git log > log.txt", &[], &subs, fake_suggest), None);
-        assert_eq!(rewrite_with("rtk git status", &[], &subs, fake_suggest), None);
+        assert_eq!(
+            rewrite_with("git status | head", &[], &subs, fake_suggest),
+            None
+        );
+        assert_eq!(
+            rewrite_with("cargo test && echo ok", &[], &subs, fake_suggest),
+            None
+        );
+        assert_eq!(
+            rewrite_with("git log > log.txt", &[], &subs, fake_suggest),
+            None
+        );
+        assert_eq!(
+            rewrite_with("rtk git status", &[], &subs, fake_suggest),
+            None
+        );
     }
 
     #[test]
@@ -219,7 +234,10 @@ mod tests {
             Some("rtk git status".to_string())
         );
         // 带路径的命令同样匹配排除项
-        assert_eq!(rewrite_with("/bin/ls -la", &denylist, &subs, fake_suggest), None);
+        assert_eq!(
+            rewrite_with("/bin/ls -la", &denylist, &subs, fake_suggest),
+            None
+        );
     }
 
     #[test]

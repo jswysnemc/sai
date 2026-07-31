@@ -1,4 +1,4 @@
-use super::groups::{group_description, group_for_tool, is_base_tool};
+use super::groups::{group_description, group_for_tool};
 use super::{ToolPermission, ToolRegistry, ToolSpec};
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
@@ -9,11 +9,12 @@ pub(crate) const LOAD_NAME: &str = "load";
 ///
 /// 参数:
 /// - `registry`: 已注册完整工具处理器的工具注册表
+/// - `deferred`: 当前 Agent 需要 load 才暴露的工具名，可含通配符
 ///
 /// 返回:
 /// - 无
-pub(crate) fn register_loader(registry: &mut ToolRegistry) {
-    let description = loader_description(registry, &BTreeSet::new());
+pub(crate) fn register_loader(registry: &mut ToolRegistry, deferred: &[String]) {
+    let description = loader_description(registry, deferred, &BTreeSet::new());
     registry.register(ToolSpec::new(
         LOAD_NAME,
         description,
@@ -47,12 +48,39 @@ pub(crate) fn register_loader(registry: &mut ToolRegistry) {
 /// 判断工具是否应在渐进式模式启动时默认可见。
 ///
 /// 参数:
+/// - `deferred`: 当前 Agent 需要 load 才暴露的工具名，可含通配符
 /// - `name`: 工具名称
 ///
 /// 返回:
 /// - 是否为默认可见工具
-pub(crate) fn is_initial_tool(name: &str) -> bool {
-    name == LOAD_NAME || is_base_tool(name)
+pub(crate) fn is_initial_tool(deferred: &[String], name: &str) -> bool {
+    name == LOAD_NAME || !crate::config::is_deferred(deferred, name)
+}
+
+/// 计算当前应暴露给模型的工具名称集合。
+///
+/// 参数:
+/// - `registry`: 完整工具注册表
+/// - `deferred`: 当前 Agent 需要 load 才暴露的工具名，可含通配符
+/// - `loaded`: 当前会话已经额外加载的工具名
+///
+/// 返回:
+/// - 初始可见工具与已经加载工具组成的名称集合
+pub(crate) fn visible_tool_names(
+    registry: &ToolRegistry,
+    deferred: &[String],
+    loaded: &BTreeSet<String>,
+) -> BTreeSet<String> {
+    registry
+        .tool_infos()
+        .into_iter()
+        .filter(|info| {
+            deferred.is_empty()
+                || is_initial_tool(deferred, &info.name)
+                || loaded.contains(&info.name)
+        })
+        .map(|info| info.name)
+        .collect()
 }
 
 /// 获取工具所属用途分组。
@@ -68,22 +96,27 @@ pub(crate) fn tool_group(name: &str) -> &'static str {
 
 /// 生成加载工具描述。
 ///
-/// 描述内容只来自当前传入的 `registry`，因此当 agent 配置按
+/// 描述内容只来自当前传入的 `registry` 与该 Agent 的延迟集合，因此当 agent 配置按
 /// `enabled_tools` 过滤注册表后，`load` 只会列出该 agent 实际可加载的工具与分组。
 ///
 /// 参数:
 /// - `registry`: 当前会话可见/可注册的工具注册表（可已按 agent 配置过滤）
+/// - `deferred`: 当前 Agent 需要 load 才暴露的工具名，可含通配符
 /// - `loaded`: 本会话已额外加载的工具名
 ///
 /// 返回:
 /// - 包含可加载工具名和分组的工具描述
-pub(crate) fn loader_description(registry: &ToolRegistry, loaded: &BTreeSet<String>) -> String {
+pub(crate) fn loader_description(
+    registry: &ToolRegistry,
+    deferred: &[String],
+    loaded: &BTreeSet<String>,
+) -> String {
     let mut groups: BTreeMap<&'static str, Vec<String>> = BTreeMap::new();
     let mut group_totals = BTreeMap::<&'static str, usize>::new();
     let mut group_loaded = BTreeMap::<&'static str, usize>::new();
     let mut loaded_tools = Vec::new();
     for info in registry.tool_infos() {
-        if is_initial_tool(&info.name) {
+        if is_initial_tool(deferred, &info.name) {
             continue;
         }
         let group = group_for_tool(&info.name);

@@ -1,14 +1,7 @@
+use crate::config::PromptTemplateConfig;
+use crate::prompts::template::{render_prompt_pair, RenderedPrompt};
 use crate::state::tool_history::format_legacy_tool_reports;
 use crate::state::turns::{Turn, TurnStatus};
-
-const SUMMARY_TEMPLATE: &str = r#"Write concise Markdown that preserves only information needed by future turns.
-
-Prefer short headings and bullets for:
-- the current goal and user constraints;
-- completed work, current progress, blockers, and next steps;
-- key decisions, exact paths, commands, identifiers, and error messages.
-
-Omit empty sections, private reasoning, repeated discussion, and commentary about the summary process."#;
 
 const TOOL_REPORT_MAX_CHARS: usize = 2_000;
 
@@ -22,29 +15,38 @@ const TOOL_REPORT_MAX_CHARS: usize = 2_000;
 /// - 发送给模型的摘要提示词
 #[allow(dead_code)]
 pub fn build_summary_prompt(previous_summary: Option<&str>, turns: &[Turn]) -> String {
-    build_summary_prompt_from_history(previous_summary, &format_turns_for_summary(turns))
+    render_summary_prompt(
+        &crate::config::PromptTemplatesConfig::default().compaction,
+        previous_summary,
+        &format_turns_for_summary(turns),
+    )
+    .expect("default compaction prompt must be valid")
+    .user
 }
 
 /// 从已格式化历史构造压缩摘要提示词。
 ///
 /// 参数:
+/// - `template`: 压缩系统提示词和用户输入模板
 /// - `previous_summary`: 旧压缩摘要
 /// - `history`: 已格式化并完成预算控制的历史文本
 ///
 /// 返回:
-/// - 发送给模型的摘要提示词
-pub(in crate::state) fn build_summary_prompt_from_history(
+/// - 完成变量替换的系统提示词和用户提示词
+pub(in crate::state) fn render_summary_prompt(
+    template: &PromptTemplateConfig,
     previous_summary: Option<&str>,
     history: &str,
-) -> String {
-    let anchor = match previous_summary.map(str::trim).filter(|value| !value.is_empty()) {
-        Some(summary) => format!(
-            "Update the anchored summary below using the conversation history above.\nPreserve still-true details, remove stale details, and merge in the new facts.\n\n<previous-summary>\n{summary}\n</previous-summary>"
-        ),
-        None => "Create a new anchored summary from the conversation history above.".to_string(),
-    };
-    format!(
-        "{anchor}\n\n{SUMMARY_TEMPLATE}\n\n<conversation-history>\n{history}\n</conversation-history>"
+) -> anyhow::Result<RenderedPrompt> {
+    render_prompt_pair(
+        template,
+        &[
+            (
+                "previous_summary",
+                previous_summary.unwrap_or_default().trim(),
+            ),
+            ("history", history),
+        ],
     )
 }
 

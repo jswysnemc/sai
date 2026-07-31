@@ -87,7 +87,10 @@ fn clip_lines(text: &str, max_lines: usize) -> (String, bool) {
         return (text.to_string(), false);
     }
     let mut clipped = lines[..max_lines].join("\n");
-    clipped.push_str(&format!("\n… +{} lines truncated (raise max_lines to read more)", lines.len() - max_lines));
+    clipped.push_str(&format!(
+        "\n… +{} lines truncated (raise max_lines to read more)",
+        lines.len() - max_lines
+    ));
     (clipped, true)
 }
 

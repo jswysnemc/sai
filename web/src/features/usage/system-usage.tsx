@@ -80,10 +80,7 @@ export function SystemUsage({ selection, onCompact, compactDisabled }: { selecti
                 {contextCache && (
                   <div className="context-cache-summary">
                     <span>{t("Cache hit", "缓存命中")} <strong>{formatContextPercent(contextCache.hit_ratio)}</strong></span>
-                    <small>
-                      {formatTokenCount(contextCache.hit_tokens)} {t("hit", "命中")} · {formatTokenCount(contextCache.miss_tokens)} {t("miss", "未命中")}
-                      {contextCache.write_tokens > 0 && ` · ${formatTokenCount(contextCache.write_tokens)} ${t("write", "写入")}`}
-                    </small>
+                    <small>{formatContextCacheDetail(contextCache, t)}</small>
                   </div>
                 )}
                 <div className="context-usage-track context-usage-track-stacked" aria-hidden="true">
@@ -225,6 +222,20 @@ function formatContextPercent(ratio: number): string {
   const value = Math.min(100, Math.max(0, ratio * 100));
   if (value > 0 && value < 0.1) return "<0.1%";
   return `${value.toFixed(1).replace(/\.0$/, "")}%`;
+}
+
+/**
+ * 格式化上下文缓存命中、未命中和写入明细。
+ *
+ * @param cache 缓存 Token 明细
+ * @param t 中英文文案函数
+ * @returns 始终包含写入量的缓存明细
+ */
+export function formatContextCacheDetail(
+  cache: { hit_tokens: number; miss_tokens: number; write_tokens: number },
+  t: (en: string, zh: string) => string
+): string {
+  return `${formatTokenCount(cache.hit_tokens)} ${t("hit", "命中")} · ${formatTokenCount(cache.miss_tokens)} ${t("miss", "未命中")} · ${formatTokenCount(cache.write_tokens)} ${t("write", "写入")}`;
 }
 
 /**

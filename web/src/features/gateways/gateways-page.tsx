@@ -6,6 +6,7 @@ import type { GatewayStatus } from "../../api/contracts";
 import "../settings/settings-layout.css";
 import "./gateways-page.css";
 import { useI18n } from "../i18n/use-i18n";
+import { GatewayBrandIcon } from "./gateway-brand-icon";
 
 /**
  * 渲染网关管理页，顶部复用设置页风格的返回主界面条。
@@ -52,7 +53,7 @@ function GatewayCard({ gateway, pending, onStart, onStop }: { gateway: GatewaySt
   return (
     <article className={running ? "gateway-card running" : "gateway-card"}>
       <div className="gateway-card-top"><span className="gateway-index">{gateway.id.toUpperCase()}</span><span className={running ? "gateway-state running" : "gateway-state"}><i />{gatewayStatusLabel(gateway.status, t)}</span></div>
-      <h2>{gateway.title}</h2>
+      <h2><GatewayBrandIcon gatewayId={gateway.id} size={27} /><span>{gateway.title}</span></h2>
       <dl>
         <div><dt>{t("Configuration", "配置")}</dt><dd>{gateway.enabled ? t("Enabled", "已启用") : t("Disabled", "未启用")}</dd></div>
         <div><dt>{t("Task ID", "任务 ID")}</dt><dd>{gateway.task_id || t("None", "无")}</dd></div>

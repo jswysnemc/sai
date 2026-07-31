@@ -35,7 +35,7 @@ impl HistoryCell {
     /// 依据当前终端宽度预渲染 cell。
     ///
     /// 参数:
-    /// - `width`: 当前终端列数
+    /// - `width`: 视觉引导区右侧的正文净宽度
     /// - `options`: transcript 渲染选项
     ///
     /// 返回:
@@ -60,9 +60,9 @@ impl HistoryCell {
                 reasoning_cell::render(cell, options.reasoning_mode)
             }),
             Self::Shell(cell) => display_rendered_lines(width, || shell_cell::render(cell)),
-            Self::Tool(cell) => display_rendered_lines(width, || {
-                tool_cell::render(cell, options.tool_call_mode)
-            }),
+            Self::Tool(cell) => {
+                display_rendered_lines(width, || tool_cell::render(cell, options.tool_call_mode))
+            }
             Self::Meta(cell) => display_rendered_lines(width, || meta_cell::render(cell)),
         }
     }
@@ -185,9 +185,8 @@ fn display_diff_lines(cell: &DiffCell, width: usize) -> Vec<AnsiLine> {
     let content_width = width
         .saturating_sub(crate::render::content_indent::DIFF_BLOCK_INSET)
         .max(1);
-    let rendered = crate::render::render_width::with_render_width(content_width, || {
-        diff_cell::render(cell)
-    });
+    let rendered =
+        crate::render::render_width::with_render_width(content_width, || diff_cell::render(cell));
     if rendered.is_empty() {
         Vec::new()
     } else {

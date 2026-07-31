@@ -117,8 +117,7 @@ fn strip_ansi_sequences(text: &str) -> String {
     while index < text.len() {
         if text[index..].starts_with('\x1b') {
             // 交由统一的转义扫描定位序列结束，自行判断终止符会把 `[` 误判为结尾
-            index = crate::render::terminal_image::escape_sequence_end(text, index)
-                .max(index + 1);
+            index = crate::render::terminal_image::escape_sequence_end(text, index).max(index + 1);
             continue;
         }
         let ch = text[index..].chars().next().unwrap_or_default();

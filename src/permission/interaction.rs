@@ -107,7 +107,9 @@ impl PermissionInteractionState {
                 PermissionTransition::Continue
             }
             KeyCode::Enter => match self.selected {
-                PermissionChoice::Allow => PermissionTransition::Submit(PermissionDecision::allow_once()),
+                PermissionChoice::Allow => {
+                    PermissionTransition::Submit(PermissionDecision::allow_once())
+                }
                 PermissionChoice::Deny => {
                     PermissionTransition::Submit(PermissionDecision::Deny { reply: None })
                 }

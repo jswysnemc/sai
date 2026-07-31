@@ -1,7 +1,9 @@
 use super::{is_table_separator, render_table};
 use crate::render::content_indent::align_to_guide_column;
 use crate::render::markdown_inline::render_table_cell_content;
-use crate::render::streaming_replace::{clear_rendered_rows, raw_visual_rows, rendered_visual_rows};
+use crate::render::streaming_replace::{
+    clear_rendered_rows, raw_visual_rows, rendered_visual_rows,
+};
 
 /// Markdown 表格在不同输出表面中的预览策略。
 #[derive(Clone, Copy)]
@@ -107,7 +109,8 @@ impl StreamingTable {
                     return format!("{line}\n");
                 }
                 // 刚确认时也需清掉已输出的原文行；后续行清掉上一帧表格预览
-                let clear_existing = was_confirmed || self.raw_visual_rows > 0 || self.preview_visual_rows > 0;
+                let clear_existing =
+                    was_confirmed || self.raw_visual_rows > 0 || self.preview_visual_rows > 0;
                 self.redraw_cli_preview(clear_existing)
             }
             // 2. 稳定/快照：只缓冲，由 finish/snapshot 输出
@@ -121,7 +124,9 @@ impl StreamingTable {
     /// - 确认表格的替换/最终文本；非表格时按模式恢复原文或保持已输出原文
     pub(crate) fn finish(&mut self) -> String {
         let output = match self.preview_mode {
-            PreviewMode::ReplaceTerminalRows if self.is_confirmed() => self.redraw_cli_preview(true),
+            PreviewMode::ReplaceTerminalRows if self.is_confirmed() => {
+                self.redraw_cli_preview(true)
+            }
             PreviewMode::ReplaceTerminalRows => String::new(),
             PreviewMode::StableFinal | PreviewMode::Snapshot if self.is_confirmed() => {
                 render_table(&self.lines, render_table_cell_content)

@@ -27,7 +27,7 @@
 }
 
 .live-run-indicator.busy .live-run-dot {
-  animation: live-run-breathe 1.8s var(--ease-in-out) infinite;
+  animation: live-run-breathe 1s var(--ease-in-out) infinite;
 }
 
 .live-run-indicator.awaiting .live-run-dot {
@@ -51,7 +51,7 @@
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
-  animation: live-run-shimmer 2.6s linear infinite;
+  animation: live-run-shimmer 1.4s linear infinite;
 }
 
 .live-run-elapsed {

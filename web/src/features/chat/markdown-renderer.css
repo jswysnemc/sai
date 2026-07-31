@@ -149,6 +149,53 @@
 .markdown-body th:last-child,
 .markdown-body td:last-child { padding-right: 0; }
 
+.markdown-body[data-table-density="compact"] th,
+.markdown-body[data-table-density="compact"] td {
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+}
+
+.markdown-body[data-table-density="spacious"] th,
+.markdown-body[data-table-density="spacious"] td {
+  padding-top: var(--space-lg);
+  padding-bottom: var(--space-lg);
+}
+
+.markdown-body[data-table-width="content"] table {
+  width: max-content;
+  min-width: 0;
+}
+
+.markdown-body[data-table-wrap="false"] th,
+.markdown-body[data-table-wrap="false"] td {
+  white-space: nowrap;
+}
+
+.markdown-body[data-table-striped="true"] tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+.markdown-body[data-table-header="true"] th {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+.markdown-body[data-table-border="none"] th,
+.markdown-body[data-table-border="none"] td {
+  border: 0;
+}
+
+.markdown-body[data-table-border="grid"] table {
+  border: 1px solid var(--line);
+}
+
+.markdown-body[data-table-border="grid"] th,
+.markdown-body[data-table-border="grid"] td,
+.markdown-body[data-table-border="grid"] tr:last-child td {
+  padding-right: var(--space-lg);
+  padding-left: var(--space-lg);
+  border: 1px solid var(--line);
+}
+
 /*
  * 代码块：以底色作为唯一的区块边界，去掉外框与头栏分隔线。
  * 原先外框、头栏底色、头栏下边线三层同时存在，块与块相邻时会连出四条平行线。
@@ -159,7 +206,8 @@
  * 都定义为比页面更沉的一档，明暗主题都能只靠底色划出区块。
  */
 .markdown-code-block,
-.mermaid-wrapper {
+.mermaid-wrapper,
+.markdown-svg-block {
   min-width: 0;
   width: 100%;
   max-width: 100%;
@@ -170,7 +218,8 @@
 }
 
 .markdown-code-head,
-.mermaid-toolbar {
+.mermaid-toolbar,
+.markdown-svg-toolbar {
   display: flex;
   align-items: center;
   gap:var(--space-sm);
@@ -183,13 +232,15 @@
 }
 
 .markdown-code-head > span,
-.mermaid-toolbar > span {
+.mermaid-toolbar > span,
+.markdown-svg-toolbar > span {
   margin-right: auto;
   text-transform: lowercase;
 }
 
 .markdown-code-head button,
-.mermaid-toolbar button {
+.mermaid-toolbar button,
+.markdown-svg-toolbar button {
   display: inline-flex;
   align-items: center;
   gap:var(--space-2xs);
@@ -202,16 +253,23 @@
   font:400 var(--text-xs) var(--font-ui);
 }
 
+.markdown-code-head > button:first-child {
+  margin-left: auto;
+}
+
 /* 头栏已改为与代码同底，hover 底色改用 ink 混色，避免与区块底色撞色 */
 .markdown-code-head button:hover,
 .mermaid-toolbar button:hover,
-.mermaid-toolbar button.active {
+.mermaid-toolbar button.active,
+.markdown-svg-toolbar button:hover,
+.markdown-svg-toolbar button.active {
   background: color-mix(in srgb, var(--ink) 9%, transparent);
   color: var(--ink);
 }
 
 .markdown-code-block pre,
-.mermaid-source {
+.mermaid-source,
+.markdown-svg-source {
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -227,10 +285,83 @@
 }
 
 .markdown-code-block code,
-.mermaid-source code {
+.mermaid-source code,
+.markdown-svg-source code {
   display: block;
   min-width: max-content;
   font-family: var(--font-code);
+}
+
+.markdown-body[data-code-border="true"] .markdown-code-block {
+  border: 1px solid var(--line);
+}
+
+.markdown-body[data-code-font-size="small"] .markdown-code-block pre {
+  font-size: var(--text-sm);
+}
+
+.markdown-body[data-code-font-size="large"] .markdown-code-block pre {
+  font-size: var(--text-lg);
+}
+
+.markdown-body[data-code-tab-size="4"] .markdown-code-block pre {
+  tab-size: 4;
+}
+
+.markdown-body[data-code-tab-size="8"] .markdown-code-block pre {
+  tab-size: 8;
+}
+
+.markdown-body[data-code-max-height="medium"] .markdown-code-block pre {
+  max-height: 24rem;
+}
+
+.markdown-body[data-code-max-height="tall"] .markdown-code-block pre {
+  max-height: 36rem;
+}
+
+.syntax-lines {
+  min-width: max-content;
+}
+
+.syntax-line {
+  display: grid;
+  grid-template-columns: 3.25rem minmax(max-content, 1fr);
+  min-height: 1.62em;
+}
+
+.syntax-line-number {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  padding-right: var(--space-md);
+  background: var(--paper-deep);
+  color: color-mix(in srgb, var(--ink-soft) 62%, transparent);
+  text-align: right;
+  user-select: none;
+}
+
+.syntax-line-content {
+  display: block;
+  min-width: max-content;
+  padding-right: var(--space-xl);
+  white-space: pre;
+}
+
+.markdown-body[data-code-wrap="true"] .markdown-code-block pre {
+  overflow-x: hidden;
+}
+
+.markdown-body[data-code-wrap="true"] .markdown-code-block code,
+.markdown-body[data-code-wrap="true"] .syntax-lines,
+.markdown-body[data-code-wrap="true"] .syntax-line-content {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.markdown-body[data-code-wrap="true"] .syntax-line {
+  grid-template-columns: 3.25rem minmax(0, 1fr);
 }
 
 .hljs-comment,
@@ -263,7 +394,8 @@
 .hljs-strong { font-weight: 600; }
 
 /* 分段控件位于 --paper-deep 的区块内，底色改用 ink 混色才与区块拉开 */
-.mermaid-view-switcher {
+.mermaid-view-switcher,
+.markdown-svg-view-switcher {
   display: inline-flex;
   align-items: center;
   gap:var(--space-3xs);
@@ -272,7 +404,8 @@
   background: color-mix(in srgb, var(--ink) 7%, transparent);
 }
 
-.mermaid-toolbar .mermaid-view-switcher button {
+.mermaid-toolbar .mermaid-view-switcher button,
+.markdown-svg-toolbar .markdown-svg-view-switcher button {
   min-height: 22px;
   padding:0 var(--space-xs);
   border-radius:var(--radius-1);
@@ -302,6 +435,25 @@
   margin: 0 auto;
 }
 
+.markdown-svg-preview {
+  display: grid;
+  min-height: 5rem;
+  max-height: min(34rem, 70vh);
+  overflow: auto;
+  padding:var(--space-xl);
+  place-items: center;
+  background: transparent;
+}
+
+.markdown-svg-preview-image {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: min(30rem, 62vh);
+  margin: 0 auto;
+  cursor: zoom-in;
+}
+
 .mermaid-error {
   padding:var(--space-sm) var(--space-lg);
   border-top: 1px solid var(--line);
@@ -311,11 +463,13 @@
 
 @media (max-width: 48rem) {
   .markdown-code-head,
-  .mermaid-toolbar {
+  .mermaid-toolbar,
+  .markdown-svg-toolbar {
     padding-right:var(--space-xs);
   }
 
-  .mermaid-toolbar button {
+  .mermaid-toolbar button,
+  .markdown-svg-toolbar button {
     padding:0 var(--space-2xs);
   }
 }

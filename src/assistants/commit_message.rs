@@ -1,4 +1,4 @@
-use crate::config::AppConfig;
+use crate::config::{AppConfig, PromptTemplateConfig};
 use crate::llm::{ChatMessage, ChatStreamEvent, OpenAiCompatibleClient};
 use crate::paths::SaiPaths;
 use anyhow::{bail, Result};
@@ -44,6 +44,7 @@ fn commit_runtime_config(config: &AppConfig) -> Result<AppConfig> {
 ///
 /// 参数:
 /// - `client`: 模型客户端
+/// - `template`: Git 提交说明的系统提示词和输入模板
 /// - `status_summary`: `git status` 风格摘要
 /// - `diff_summary`: 已暂存或工作区 diff 摘要
 ///
@@ -51,19 +52,19 @@ fn commit_runtime_config(config: &AppConfig) -> Result<AppConfig> {
 /// - 提交说明正文
 pub(crate) async fn generate_commit_message(
     client: &OpenAiCompatibleClient,
+    template: &PromptTemplateConfig,
     status_summary: &str,
     diff_summary: &str,
 ) -> Result<String> {
-    let user = format!(
-        "Git status:\n{}\n\nDiff summary:\n{}\n",
-        truncate(status_summary, 2500),
-        truncate(diff_summary, 12000)
-    );
+    let status = truncate(status_summary, 2500);
+    let diff = truncate(diff_summary, 12000);
+    let prompt = crate::prompts::template::render_prompt_pair(
+        template,
+        &[("status", status.as_str()), ("diff", diff.as_str())],
+    )?;
     let messages = vec![
-        ChatMessage::system(
-            "You write Git commit messages. Output ONLY the commit message body using Conventional Commits (type(scope): subject). Prefer Chinese subject when the change descriptions are Chinese. Keep subject under 72 characters. Optionally add a short body after a blank line. No markdown fences, no quotes, no commentary.",
-        ),
-        ChatMessage::plain("user", user),
+        ChatMessage::system(prompt.system),
+        ChatMessage::plain("user", prompt.user),
     ];
     let result = match timeout(
         COMMIT_TIMEOUT,

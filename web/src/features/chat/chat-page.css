@@ -28,8 +28,7 @@
   container-type: inline-size;
 }
 
-/* 滚动容器用 flex 列布局：消息列吸收剩余高度，
-   内容不足一屏时问候语与输入区自然贴底，内容超出时正常滚动 */
+/* 滚动容器使用纵向布局，普通会话由消息列吸收剩余高度 */
 .message-scroll {
   display: flex;
   flex-direction: column;
@@ -94,7 +93,21 @@
   padding:var(--space-3xl) var(--chat-column-gutter) 0;
 }
 
-/* 空会话问候语：位于消息列与输入区之间，空会话无滚动时自然贴在输入区上方 */
+/* 空会话舞台吸收头部以外空间，问候语与输入区作为一个整体垂直居中 */
+.chat-page.empty-session .message-column {
+  flex: 0 0 auto;
+  padding-top: 0;
+}
+
+.empty-session-stage {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+  padding:var(--space-3xl) 0;
+}
+
 .empty-session-greeting {
   flex: 0 0 auto;
   width: min(100%, var(--chat-column-width));
@@ -102,6 +115,17 @@
   padding:0 var(--chat-column-gutter);
   text-align: center;
   pointer-events: none;
+}
+
+.empty-session-stage .composer-shell {
+  position: relative;
+  bottom: auto;
+  width: 100%;
+  margin-top: 0;
+  padding-top: 0;
+  background: transparent;
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 .empty-session-context-prompt {
@@ -198,6 +222,10 @@
   }
 
   .message-column { padding-top:var(--space-2xl); }
+
+  .empty-session-stage {
+    padding:var(--space-xl) 0;
+  }
 
   .jump-to-bottom {
     bottom: 150px;

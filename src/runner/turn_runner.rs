@@ -111,10 +111,7 @@ impl<'agent> TurnRunner<'agent> {
                     )
                     .await
             };
-            let output_started = first_output
-                .lock()
-                .unwrap()
-                .unwrap_or(started);
+            let output_started = first_output.lock().unwrap().unwrap_or(started);
             let duration_ms = output_started.elapsed().as_millis() as u64;
             let elapsed = started.elapsed().as_secs().max(1);
             let result = match result {

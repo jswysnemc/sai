@@ -116,7 +116,10 @@ pub(super) fn edit_provider_form(
         // 校验失败时就地提示并重新打开表单，不让非法输入终止 TUI
         match build_provider_from_fields(&provider, claude_simulation, &fields) {
             Ok(updated) => return Ok(Some(updated)),
-            Err(err) => message(stdout, &format!("{}: {err}", t("Invalid input", "输入无效")))?,
+            Err(err) => message(
+                stdout,
+                &format!("{}: {err}", t("Invalid input", "输入无效")),
+            )?,
         }
     }
 }

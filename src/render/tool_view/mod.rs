@@ -7,5 +7,5 @@ mod todo;
 mod tests;
 
 pub(crate) use formatter::{render, render_call, render_result};
-pub(crate) use todo::render_todo_output;
 pub(crate) use model::{PermissionAuditView, ToolView};
+pub(crate) use todo::render_todo_output;

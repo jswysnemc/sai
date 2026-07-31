@@ -48,9 +48,18 @@ pub(crate) fn group_for_tool(name: &str) -> &'static str {
         | "exchange_rate"
         | "deepseek_status"
         | "query_deepseek_status" => "web",
-        "search_web_images" | "print_image" | "generate_image" | "search_meme" | "show_meme"
-        | "add_meme" | "update_meme" | "delete_meme" | "send_channel_image"
-        | "send_channel_file" | "send_channel_video" | "send_channel_message" => "media",
+        "search_web_images"
+        | "print_image"
+        | "generate_image"
+        | "search_meme"
+        | "show_meme"
+        | "add_meme"
+        | "update_meme"
+        | "delete_meme"
+        | "send_channel_image"
+        | "send_channel_file"
+        | "send_channel_video"
+        | "send_channel_message" => "media",
         "deep_research"
         | "register_deep_research_topic_title"
         | "register_deep_research_reference"

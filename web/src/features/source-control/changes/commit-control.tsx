@@ -148,27 +148,30 @@ export function CommitControl(props: CommitControlProps) {
 
   return (
     <div className="git-commit-box" ref={rootRef}>
-      <TextArea
-        rows={3}
-        value={props.message}
-        onChange={(event) => props.onMessageChange(event.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={t("Message (Ctrl+Enter to commit)", "提交说明（Ctrl+Enter 提交）")}
-      />
-      {props.allowSuggestMessage && props.onSuggestMessage && (
-        <div className="git-commit-suggest-row">
+      <div className="git-commit-editor">
+        <TextArea
+          className="git-commit-message"
+          rows={3}
+          value={props.message}
+          onChange={(event) => props.onMessageChange(event.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={t("Message (Ctrl+Enter to commit)", "提交说明（Ctrl+Enter 提交）")}
+        />
+        {props.allowSuggestMessage && props.onSuggestMessage && (
           <Button
             className="git-commit-suggest"
             onClick={props.onSuggestMessage}
             disabled={props.busy || props.suggestingMessage || hasConflicts}
+            aria-label={t("Generate commit message", "生成提交说明")}
+            title={t("Generate commit message", "生成提交说明")}
           >
             <Sparkles size={12} />
             {props.suggestingMessage
               ? t("Generating…", "生成中…")
-              : t("Generate commit message", "生成提交说明")}
+              : t("Generate", "生成说明")}
           </Button>
-        </div>
-      )}
+        )}
+      </div>
       {props.showActionButton && <div className="git-commit-actions">
         <Button
           variant="primary"

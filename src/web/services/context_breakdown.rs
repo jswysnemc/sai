@@ -61,17 +61,19 @@ pub(crate) fn estimate_context_breakdown(
         );
     }
     apply_web_agent_tool_filter(config, &mut registry)?;
+    // 渐进加载由当前 Agent 的 deferred_tools 决定，与真实会话保持一致
+    let deferred = config.agent_deferred_tools();
     if config.tools.enabled {
         crate::goal::register_tools(&mut registry, store.goal_file());
-        if config.tools.progressive_loading_enabled {
-            tools::register_progressive_loader(&mut registry);
+        if !deferred.is_empty() {
+            tools::register_progressive_loader(&mut registry, deferred);
         }
     }
 
     // 4. 按渐进式可见性选择当前工具定义
     let loaded = store.load_loaded_tools().unwrap_or_default();
-    let progressive = config.tools.progressive_loading_enabled;
-    let visible_names = visible_tool_names(&registry, progressive, &loaded);
+    let loaded_set = loaded.iter().cloned().collect::<BTreeSet<_>>();
+    let visible_names = tools::progressive::visible_tool_names(&registry, deferred, &loaded_set);
     let definitions = registry.definitions_for_names(&visible_names);
 
     // 4. 工具定义拆成 MCP 与非 MCP
@@ -89,7 +91,7 @@ pub(crate) fn estimate_context_breakdown(
     // 5. 技能：优先用 baseline 中的目录；否则按当前配置重新生成目录估算
     let skills_text = if skills_from_baseline.trim().is_empty() {
         if config.tools.enabled && config.skills.enabled {
-            if config.tools.progressive_loading_enabled {
+            if !deferred.is_empty() {
                 tools::skills_catalog_prompt(config, paths).unwrap_or_default()
             } else {
                 tools::skills_prompt(config, paths).unwrap_or_default()
@@ -114,7 +116,7 @@ pub(crate) fn estimate_context_breakdown(
     }
 
     // 7. 已加载工具的动态系统提示（归入工具与子智能体）
-    let loaded_prompt = loaded_tools_prompt(progressive, &loaded, &registry);
+    let loaded_prompt = loaded_tools_prompt(deferred, &loaded, &registry);
 
     // 8. 模式/审计提醒（取最长模式文本作上界）、选中模型标签、运行时上下文
     let mode_reminder = [
@@ -247,44 +249,17 @@ fn apply_web_agent_tool_filter(config: &AppConfig, registry: &mut ToolRegistry) 
     Ok(())
 }
 
-/// 计算当前应暴露给模型的工具名集合。
-///
-/// 参数:
-/// - `registry`: 完整工具注册表
-/// - `progressive`: 是否渐进式加载
-/// - `loaded`: 会话已额外加载的工具名
-///
-/// 返回:
-/// - 可见工具名集合
-fn visible_tool_names(
-    registry: &ToolRegistry,
-    progressive: bool,
-    loaded: &[String],
-) -> BTreeSet<String> {
-    let loaded_set: BTreeSet<String> = loaded.iter().cloned().collect();
-    registry
-        .tool_infos()
-        .into_iter()
-        .filter(|info| {
-            !progressive
-                || tools::is_initial_tool(&info.name)
-                || loaded_set.contains(&info.name)
-        })
-        .map(|info| info.name)
-        .collect()
-}
-
 /// 生成已加载工具的动态系统提示。
 ///
 /// 参数:
-/// - `progressive`: 是否渐进式加载
+/// - `deferred`: 当前 Agent 需要 load 才暴露的工具名
 /// - `loaded`: 已加载工具名
 /// - `registry`: 工具注册表
 ///
 /// 返回:
 /// - 提示文本
-fn loaded_tools_prompt(progressive: bool, loaded: &[String], registry: &ToolRegistry) -> String {
-    if !progressive || loaded.is_empty() {
+fn loaded_tools_prompt(deferred: &[String], loaded: &[String], registry: &ToolRegistry) -> String {
+    if deferred.is_empty() || loaded.is_empty() {
         return String::new();
     }
     let names = loaded
@@ -312,7 +287,9 @@ fn serialize_tool_definition(definition: &ToolDefinition) -> String {
     serde_json::to_string(definition).unwrap_or_else(|_| {
         format!(
             "{}{}{}",
-            definition.function.name, definition.function.description, definition.function.parameters
+            definition.function.name,
+            definition.function.description,
+            definition.function.parameters
         )
     })
 }

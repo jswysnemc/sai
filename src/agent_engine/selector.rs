@@ -77,7 +77,10 @@ mod tests {
     #[test]
     fn native_engine_needs_no_external_process() {
         let config = AgentEngineConfig::default();
-        assert!(matches!(build_external_engine(&config, test_governance()), Ok(None)));
+        assert!(matches!(
+            build_external_engine(&config, test_governance()),
+            Ok(None)
+        ));
     }
 
     /// 取出构建错误；内核 trait object 不实现 Debug，因此不能用 unwrap_err。

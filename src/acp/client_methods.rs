@@ -226,7 +226,10 @@ async fn request_permission(
         request_id,
         decision: decision.clone(),
     });
-    let allowed = matches!(decision, crate::permission::PermissionDecision::Allow { .. });
+    let allowed = matches!(
+        decision,
+        crate::permission::PermissionDecision::Allow { .. }
+    );
     let outcome = permission_outcome(&request.options, allowed);
     Ok(RequestPermissionResponse::new(outcome))
 }
@@ -239,10 +242,7 @@ async fn request_permission(
 ///
 /// 返回:
 /// - 匹配到选项时返回 selected，否则返回 cancelled
-fn permission_outcome(
-    options: &[PermissionOption],
-    allowed: bool,
-) -> RequestPermissionOutcome {
+fn permission_outcome(options: &[PermissionOption], allowed: bool) -> RequestPermissionOutcome {
     let option = options.iter().find(|option| {
         matches!(
             (allowed, option.kind),
@@ -366,7 +366,9 @@ mod tests {
             None,
         );
         let (events, _received) = tokio::sync::mpsc::unbounded_channel();
-        assert!(read_text_file(&json!({}), &governance, &events).await.is_err());
+        assert!(read_text_file(&json!({}), &governance, &events)
+            .await
+            .is_err());
     }
 
     /// 权限决定必须返回 agent 提供的 optionId，不能使用自造状态字符串。

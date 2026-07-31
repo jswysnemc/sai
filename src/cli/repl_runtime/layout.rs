@@ -218,11 +218,13 @@ mod tests {
             .map(|line| strip_ansi_for_test(line.as_str()))
             .collect::<Vec<_>>();
         assert_eq!(live_plain, vec!["• abcd", "  efgh"]);
-        assert!(live.lines.iter().all(|line| visible_width(line.as_str()) <= 6));
+        assert!(live
+            .lines
+            .iter()
+            .all(|line| visible_width(line.as_str()) <= 6));
 
         assert!(transcript.finalize_live_tail());
-        let finalized =
-            display_window(&mut transcript, 6, &options(), 100, usize::MAX, usize::MAX);
+        let finalized = display_window(&mut transcript, 6, &options(), 100, usize::MAX, usize::MAX);
         let finalized_plain = finalized
             .lines
             .iter()

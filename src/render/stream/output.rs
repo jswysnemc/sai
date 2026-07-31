@@ -184,11 +184,7 @@ impl StreamRenderer {
             return Ok(());
         }
         self.hide_cursor()?;
-        self.wait_spinner = Some(WaitSpinner::start_with_clock(
-            phase,
-            sub_phase,
-            started_at,
-        ));
+        self.wait_spinner = Some(WaitSpinner::start_with_clock(phase, sub_phase, started_at));
         Ok(())
     }
 

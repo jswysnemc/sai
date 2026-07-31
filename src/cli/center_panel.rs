@@ -271,7 +271,10 @@ mod tests {
 
     #[test]
     fn layout_scrolls_when_body_exceeds_height() {
-        let body = (0..50).map(|n| format!("line {n}")).collect::<Vec<_>>().join("\n");
+        let body = (0..50)
+            .map(|n| format!("line {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
         let layout = PanelLayout::compute(80, 20, "t", &body);
         assert!(layout.max_offset() > 0);
     }

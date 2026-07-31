@@ -1,3 +1,4 @@
+use super::feishu::{run_feishu_bot_server, FeishuBotServerConfig};
 use super::qq_bot::config::{
     resolve_qq_credentials, resolve_qq_transport, QqBotCredentialOverrides, QqBotTransport,
 };
@@ -5,7 +6,6 @@ use super::qq_bot::webhook_server::{run_qq_bot_webhook_server, QqBotWebhookServe
 use super::qq_bot::websocket::{run_qq_bot_websocket, QqBotWebsocketConfig};
 use super::weixin_bot::client::default_cdn_base_url as default_weixin_cdn_base_url;
 use super::weixin_bot::login::{default_base_url as default_weixin_base_url, load_weixin_account};
-use super::feishu::{run_feishu_bot_server, FeishuBotServerConfig};
 use super::weixin_bot::server::{run_weixin_bot_server, WeixinBotServerConfig};
 use crate::config::{AppConfig, QqGatewayConfig, WeixinGatewayConfig};
 use crate::i18n::text as t;

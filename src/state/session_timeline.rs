@@ -335,7 +335,9 @@ mod tests {
                 "<external-completion-events>subagent done</external-completion-events>",
             )
             .unwrap();
-        store.complete_turn("turn_external", "continued", None).unwrap();
+        store
+            .complete_turn("turn_external", "continued", None)
+            .unwrap();
 
         let timeline = store.session_timeline(10).unwrap();
 

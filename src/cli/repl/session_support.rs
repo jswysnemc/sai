@@ -14,6 +14,8 @@ use crate::state::{SessionTimelineTurn, StateStore};
 use anyhow::Result;
 
 const REPL_HISTORY_TURN_LIMIT: usize = 50;
+const REPL_HISTORY_COMMAND_OUTPUT_FILE_LIMIT: usize = 12;
+const REPL_HISTORY_COMMAND_OUTPUT_BYTE_LIMIT: usize = 2 * 1024 * 1024;
 
 /// 读取当前会话最近的持久化轮次并渲染到 TUI。
 ///
@@ -25,8 +27,9 @@ const REPL_HISTORY_TURN_LIMIT: usize = 50;
 /// - 历史读取与渲染结果
 pub(super) fn record_repl_history(runtime: &mut ReplRuntime, state: &StateStore) -> Result<()> {
     let mut timeline = state.session_timeline_with_compaction(REPL_HISTORY_TURN_LIMIT)?;
-    restore_history_command_outputs(&mut timeline.turns, |result_ref| {
-        state.read_tool_result_ref(result_ref)
+    let reader = state.tool_result_ref_reader()?;
+    restore_history_command_outputs(&mut timeline.turns, |result_ref, max_bytes| {
+        reader.read_with_limit(result_ref, max_bytes)
     });
     runtime.record_history_with_compaction(&timeline.turns, timeline.compaction.as_ref())
 }
@@ -35,16 +38,20 @@ pub(super) fn record_repl_history(runtime: &mut ReplRuntime, state: &StateStore)
 ///
 /// 参数:
 /// - `turns`: 待补全的历史轮次
-/// - `read_result_ref`: 读取会话内结果引用的函数
+/// - `read_result_ref`: 按字节预算读取会话内结果引用的函数
 ///
 /// 返回:
 /// - 无；引用异常时直接写入可读提示
 fn restore_history_command_outputs<F>(turns: &mut [SessionTimelineTurn], mut read_result_ref: F)
 where
-    F: FnMut(&str) -> Result<String>,
+    F: FnMut(&str, usize) -> Result<Option<String>>,
 {
+    let mut remaining_files = REPL_HISTORY_COMMAND_OUTPUT_FILE_LIMIT;
+    let mut remaining_bytes = REPL_HISTORY_COMMAND_OUTPUT_BYTE_LIMIT;
+    // 1. 优先恢复最近轮次，有限预算首先服务用户最可能展开的命令
     for tool in turns
         .iter_mut()
+        .rev()
         .flat_map(|turn| turn.tools.iter_mut())
         .filter(|tool| tool.name == "run_command")
     {
@@ -58,12 +65,42 @@ where
             continue;
         };
 
-        tool.output = match read_result_ref(result_ref) {
-            Ok(output) if command_result_streams(&output).is_some() => output,
-            Ok(_) => unavailable_command_output(Some(result_ref), true),
+        // 2. 文件数量或字节预算用尽后不再访问磁盘，保证启动耗时有上界
+        if remaining_files == 0 || remaining_bytes == 0 {
+            tool.output = deferred_command_output(result_ref);
+            continue;
+        }
+        remaining_files -= 1;
+        tool.output = match read_result_ref(result_ref, remaining_bytes) {
+            Ok(Some(output)) if command_result_streams(&output).is_some() => {
+                remaining_bytes = remaining_bytes.saturating_sub(output.len());
+                output
+            }
+            Ok(Some(output)) => {
+                remaining_bytes = remaining_bytes.saturating_sub(output.len());
+                unavailable_command_output(Some(result_ref), true)
+            }
+            Ok(None) => deferred_command_output(result_ref),
             Err(_) => unavailable_command_output(Some(result_ref), false),
         };
     }
+}
+
+/// 生成启动预算未加载完整命令结果时的说明。
+///
+/// 参数:
+/// - `result_ref`: 持久化结果引用
+///
+/// 返回:
+/// - 可展示的延迟加载说明
+fn deferred_command_output(result_ref: &str) -> String {
+    format!(
+        "{} ({result_ref})",
+        t(
+            "Historical command output was not loaded during startup",
+            "历史命令完整输出未在启动阶段载入",
+        )
+    )
 }
 
 /// 生成人类可读的历史命令输出缺失提示。
@@ -182,6 +219,7 @@ pub(super) fn reload_repl_agent(
 mod tests {
     use super::*;
     use crate::state::{TimelineMessage, TimelineToolEntry};
+    use std::cell::Cell;
 
     /// 构造包含历史命令结果的最小轮次。
     ///
@@ -276,7 +314,7 @@ mod tests {
             full.chars().count(),
         )];
 
-        restore_history_command_outputs(&mut turns, |_| Ok(full.to_string()));
+        restore_history_command_outputs(&mut turns, |_, _| Ok(Some(full.to_string())));
 
         assert_eq!(turns[0].tools[0].output, full);
     }
@@ -290,7 +328,7 @@ mod tests {
             20_000,
         )];
 
-        restore_history_command_outputs(&mut turns, |_| anyhow::bail!("missing"));
+        restore_history_command_outputs(&mut turns, |_, _| anyhow::bail!("missing"));
 
         let output = &turns[0].tools[0].output;
         assert!(!output.trim_start().starts_with('{'));
@@ -306,8 +344,36 @@ mod tests {
             20_000,
         )];
 
-        restore_history_command_outputs(&mut turns, |_| unreachable!());
+        restore_history_command_outputs(&mut turns, |_, _| unreachable!());
 
         assert!(!turns[0].tools[0].output.trim_start().starts_with('{'));
+    }
+
+    /// 历史恢复必须限制完整结果文件读取次数，避免启动时间随命令数量线性增长。
+    #[test]
+    fn history_restore_bounds_full_result_reads() {
+        let mut turns = (0..20)
+            .map(|index| {
+                command_turn(
+                    r#"{"success":true,"stdout":"截断"#,
+                    Some(&format!("tool-results/call-{index}.txt")),
+                    20_000,
+                )
+            })
+            .collect::<Vec<_>>();
+        let reads = Cell::new(0usize);
+
+        restore_history_command_outputs(&mut turns, |_, _| {
+            reads.set(reads.get() + 1);
+            Ok(Some(
+                r#"{"success":true,"exit_code":0,"stdout":"完整输出","stderr":""}"#.to_string(),
+            ))
+        });
+
+        assert!(
+            reads.get() <= 12,
+            "启动阶段读取了 {} 个完整结果文件",
+            reads.get()
+        );
     }
 }

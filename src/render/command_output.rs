@@ -141,12 +141,14 @@ pub(crate) fn render_command_block_with_action(arguments: &str, action: &str) ->
 /// - 可见显示行（省略处为 `… +N lines`）
 fn fold_shell_command_lines(command: &str, expanded: bool) -> Vec<String> {
     use crate::render::fold_text::{
-        fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
+        fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES,
+        FOLD_TAIL_LINES,
     };
     // 命令行预览：前 2 后 4，过长时收缩
     let wrap = terminal_wrap_width().saturating_sub(6).min(72).max(24);
     let wrapped = wrap_display_lines(command, wrap);
-    let (visible, omitted) = fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
+    let (visible, omitted) =
+        fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
     visible
         .into_iter()
         .map(|line| {
@@ -186,7 +188,6 @@ fn append_command_display_line(output: &mut String, line: &str, is_first: bool) 
 ///
 /// 返回:
 /// - 命令行列表
-
 
 /// 格式化工具载荷并限制长度。
 ///
@@ -262,7 +263,10 @@ mod tests {
         let args = format!(r#"{{"command":"{long}"}}"#);
         let output = render_command_block_with_action(&args, "Run");
         let plain = strip_ansi_for_test(&output);
-        assert!(plain.contains("…") || plain.contains("lines"), "expected fold: {plain}");
+        assert!(
+            plain.contains("…") || plain.contains("lines"),
+            "expected fold: {plain}"
+        );
         assert!(plain.contains("Ran") || plain.contains("$"));
     }
 

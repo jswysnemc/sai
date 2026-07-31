@@ -129,4 +129,43 @@ mod stream_error_tests {
             Some("旧轮最终思考")
         );
     }
+
+    /// 【协议】【DeepSeek】验证关闭思考后保留普通工具历史。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn deepseek_disabled_thinking_keeps_tool_history_without_reasoning() {
+        use super::apply_preserved_thinking;
+        use crate::config::ProviderConfig;
+        use crate::llm::{ChatMessage, ToolCall, ToolCallFunction};
+
+        let history = vec![
+            ChatMessage::plain("user", "查询日期"),
+            ChatMessage::assistant(
+                "",
+                Some(vec![ToolCall {
+                    id: "call-1".to_string(),
+                    kind: "function".to_string(),
+                    function: ToolCallFunction {
+                        name: "get_date".to_string(),
+                        arguments: "{}".to_string(),
+                    },
+                }]),
+            ),
+            ChatMessage::tool("call-1", "2026-08-01"),
+        ];
+        let mut provider = ProviderConfig::default_openai();
+        provider.id = "deepseek".to_string();
+        provider.thinking_level = "none".to_string();
+
+        let prepared = apply_preserved_thinking(history, &provider);
+
+        assert_eq!(prepared.len(), 3);
+        assert!(prepared.iter().all(|message| message.reasoning_content.is_none()));
+        assert_eq!(prepared[2].role, "tool");
+    }
 }

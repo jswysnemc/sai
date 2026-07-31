@@ -3,8 +3,10 @@ use super::TranscriptStore;
 use crate::llm::ChatStreamKind;
 use crate::render::activity_animation::strip_ansi_for_test;
 use crate::render::work_status::WorkStatus;
+use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
+use unicode_width::UnicodeWidthStr;
 
-/// 【终端】【工作状态测试】验证实时思考摘要持续推进文字扫光。
+/// 【终端】【工作状态测试】验证实时思考正文与扫光标题同步渲染。
 ///
 /// 参数:
 /// - 无
@@ -12,18 +14,81 @@ use crate::render::work_status::WorkStatus;
 /// 返回:
 /// - 无
 #[test]
-fn live_reasoning_summary_animates_without_waiting_for_consolidation() {
+fn live_reasoning_body_animates_without_waiting_for_consolidation() {
     let mut store = TranscriptStore::new(100);
-    store.push_chunk(&chunk(ChatStreamKind::Reasoning, "inspect resize"));
+    store.push_chunk(&chunk(
+        ChatStreamKind::Reasoning,
+        "inspect resize\ncompare layout\n",
+    ));
 
     let first = store.display_live_tail(80, &options());
     assert!(store.advance_live_animation());
     let second = store.display_live_tail(80, &options());
 
-    assert_eq!(first.len(), 1);
-    assert_eq!(second.len(), 1);
+    assert!(first.len() > 1);
+    assert_eq!(first.len(), second.len());
     assert_ne!(first, second);
-    assert!(second[0].as_str().contains("tokens"));
+    let plain = second
+        .iter()
+        .map(|line| strip_ansi_for_test(line.as_str()))
+        .collect::<Vec<_>>();
+    assert!(plain[0].starts_with("• Thinking"));
+    assert!(plain[0].contains("tokens"));
+    assert!(plain.iter().any(|line| line.contains("inspect resize")));
+    assert!(plain.iter().any(|line| line.contains("compare layout")));
+    assert!(plain
+        .iter()
+        .all(|line| UnicodeWidthStr::width(line.as_str()) <= 80));
+}
+
+/// 【终端】【思考流式测试】验证实时与定稿思考共用折叠状态和正文布局。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn live_reasoning_preserves_fold_state_when_finalized() {
+    let mut store = TranscriptStore::new(100);
+    let source = (1..=12)
+        .map(|index| format!("reasoning line {index}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    store.push_chunk(&chunk(ChatStreamKind::Reasoning, &source));
+    let options = super::TranscriptRenderOptions {
+        reasoning_mode: ReasoningDisplayMode::Full,
+        tool_call_mode: ToolCallDisplayMode::Summary,
+    };
+
+    let folded = store
+        .display_live_tail(80, &options)
+        .iter()
+        .map(|line| strip_ansi_for_test(line.as_str()))
+        .collect::<Vec<_>>();
+    assert!(folded.iter().any(|line| line.contains("reasoning line 1")));
+    assert!(folded.iter().any(|line| line.contains("reasoning line 12")));
+    assert!(!folded.iter().any(|line| line.contains("reasoning line 6")));
+
+    assert!(store.toggle_live_reasoning());
+    let expanded_live = store
+        .display_live_tail(80, &options)
+        .iter()
+        .map(|line| strip_ansi_for_test(line.as_str()))
+        .collect::<Vec<_>>();
+    assert!(expanded_live
+        .iter()
+        .any(|line| line.contains("reasoning line 6")));
+
+    assert!(store.finalize_live_tail());
+    let finalized = store
+        .display_tail(80, &options)
+        .iter()
+        .map(|line| strip_ansi_for_test(line.as_str()))
+        .collect::<Vec<_>>();
+    assert!(finalized
+        .iter()
+        .any(|line| line.contains("reasoning line 6")));
 }
 
 /// 【终端】【工作状态测试】验证状态替换不会写入历史区。
@@ -54,8 +119,7 @@ fn work_status_is_replaced_without_becoming_history() {
     let animated = store.display_live_tail(80, &options());
     assert!(!animated.is_empty());
     assert!(
-        strip_ansi_for_test(animated[0].as_str())
-            .contains(WorkStatus::Thinking.localized_label())
+        strip_ansi_for_test(animated[0].as_str()).contains(WorkStatus::Thinking.localized_label())
     );
 
     assert!(store.clear_work_status());
@@ -101,12 +165,7 @@ fn work_status_hidden_when_live_reasoning_exists() {
     store.push_chunk(&chunk(ChatStreamKind::Reasoning, "inspect plan"));
 
     let live = store.display_live_tail(80, &options());
-    let joined = strip_ansi_for_test(
-        &live
-            .iter()
-            .map(|line| line.as_str())
-            .collect::<String>(),
-    );
+    let joined = strip_ansi_for_test(&live.iter().map(|line| line.as_str()).collect::<String>());
     assert!(!joined.contains(WorkStatus::Working.localized_label()));
     assert!(joined.contains("Thinking") || joined.contains("思考"));
 }
@@ -126,7 +185,10 @@ fn subagent_view_animates_while_main_agent_is_idle() {
         3,
     );
     let mut store = TranscriptStore::new(100);
-    store.push_tool_call("subagent".to_string(), r#"{"description":"检查项目"}"#.to_string());
+    store.push_tool_call(
+        "subagent".to_string(),
+        r#"{"description":"检查项目"}"#.to_string(),
+    );
     store.push_tool_result(
         "subagent".to_string(),
         true,

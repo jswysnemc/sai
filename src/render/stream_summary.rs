@@ -155,6 +155,7 @@ impl StreamSummary {
             ReasoningDisplayMode::Summary,
             self.reasoning_frame,
             self.reasoning_elapsed,
+            false,
         ));
         let mut stdout = io::stdout();
         execute!(stdout, Clear(ClearType::CurrentLine))?;

@@ -1,5 +1,5 @@
 use crate::i18n::text as t;
-use crate::render::activity_animation::{render_activity_detail, render_activity_text};
+use crate::render::activity_animation::render_activity_line;
 use crate::render::fold_text::{
     fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
 };
@@ -78,6 +78,7 @@ pub(crate) fn render(cell: &ReasoningCell, mode: ReasoningDisplayMode) -> String
 /// - `mode`: 当前 reasoning 展示模式
 /// - `frame`: 文字扫光动画帧序号
 /// - `elapsed`: 本段思考已持续时长
+/// - `expanded`: 当前实时思考是否展开
 ///
 /// 返回:
 /// - 可直接显示的 ANSI 摘要行
@@ -86,6 +87,7 @@ pub(crate) fn render_live(
     mode: ReasoningDisplayMode,
     frame: usize,
     elapsed: Duration,
+    expanded: bool,
 ) -> String {
     if mode == ReasoningDisplayMode::Hidden || source.is_empty() {
         return String::new();
@@ -95,13 +97,19 @@ pub(crate) fn render_live(
         "{}{}",
         duration_suffix(duration_label_value(elapsed)),
         format_tokens_suffix(tokens)
-    );
-    // 1. 【终端】【思考状态】仅状态文字执行从左向右的明暗扫光，耗时与 token 保持弱化
-    format!(
-        "{}{}",
-        render_activity_text(THINKING_LABEL, frame),
-        render_activity_detail(&detail)
     )
+    .trim_start()
+    .to_string();
+    // 1. 【终端】【思考状态】与 Working 共用完整状态行动效，保证节拍和视觉基线一致
+    let title = render_activity_line(THINKING_LABEL, &detail, frame);
+    match mode {
+        ReasoningDisplayMode::Hidden => String::new(),
+        ReasoningDisplayMode::Summary => title,
+        // 2. 【终端】【思考流式】正文与定稿块共用折行、折叠和展开提示
+        ReasoningDisplayMode::Full => {
+            render_thinking_body_with_title(source, expanded, true, terminal_wrap_width(), title)
+        }
+    }
 }
 
 /// 将已持续时长转换为标签用耗时（零值视为无耗时）。
@@ -126,9 +134,7 @@ const THINKING_GUTTER_WIDTH: usize = 4;
 /// 返回:
 /// - 正文可用显示宽度
 fn thinking_body_wrap_width(terminal_cols: usize) -> usize {
-    terminal_cols
-        .saturating_sub(THINKING_GUTTER_WIDTH)
-        .max(8)
+    terminal_cols.saturating_sub(THINKING_GUTTER_WIDTH).max(8)
 }
 
 /// 将思考正文渲染为可折叠 gutter 块（CLI / TUI 共用）。
@@ -180,6 +186,27 @@ fn render_thinking_body_with_cols(
         thinking_label(duration),
         format_tokens_suffix(tokens)
     );
+    render_thinking_body_with_title(source, expanded, show_expand_hint, terminal_cols, title)
+}
+
+/// 使用指定标题渲染统一的思考正文块。
+///
+/// 参数:
+/// - `source`: 思考原文
+/// - `expanded`: 是否展开全部
+/// - `show_expand_hint`: 是否显示 Ctrl+O 提示
+/// - `terminal_cols`: 终端列数
+/// - `title`: 已完成样式处理的标题行
+///
+/// 返回:
+/// - 带统一 gutter、折行和折叠状态的 ANSI 文本
+fn render_thinking_body_with_title(
+    source: &str,
+    expanded: bool,
+    show_expand_hint: bool,
+    terminal_cols: usize,
+    title: String,
+) -> String {
     let body = source.trim_end();
     if body.is_empty() {
         return title;
@@ -260,6 +287,7 @@ mod tests {
             ReasoningDisplayMode::Summary,
             0,
             Duration::from_secs(12),
+            false,
         );
         let plain = strip_ansi_for_test(&rendered);
         assert!(plain.contains("tokens"));
@@ -269,7 +297,13 @@ mod tests {
     #[test]
     fn live_reasoning_omits_zero_duration() {
         // 零耗时与 CLI live 行一致：仅 Thinking，不显示 (0s)
-        let rendered = render_live("hello", ReasoningDisplayMode::Summary, 0, Duration::ZERO);
+        let rendered = render_live(
+            "hello",
+            ReasoningDisplayMode::Summary,
+            0,
+            Duration::ZERO,
+            false,
+        );
         let plain = strip_ansi_for_test(&rendered);
         assert!(plain.contains("Thinking"));
         assert!(!plain.contains("(0s)"));
@@ -344,13 +378,13 @@ mod tests {
         let plain = strip_ansi_for_test(&rendered);
         let mut body_lines = plain.lines().skip(1);
         let first = body_lines.next().expect("first gutter line");
-        assert!(first.starts_with("  └ "), "first body line should use tree gutter: {first}");
+        assert!(
+            first.starts_with("  └ "),
+            "first body line should use tree gutter: {first}"
+        );
         for line in std::iter::once(first).chain(body_lines) {
             let width = visible_width(line);
-            assert!(
-                width <= cols,
-                "cols={cols} width={width} line={line:?}"
-            );
+            assert!(width <= cols, "cols={cols} width={width} line={line:?}");
         }
         // 2. 续行保留 gutter 缩进，而不是被二次折行挤成无缩进碎片
         let continuation = plain.lines().nth(2).expect("continuation line");

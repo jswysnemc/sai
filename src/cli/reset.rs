@@ -17,7 +17,8 @@ pub(super) fn run_reset(
     assume_yes: bool,
 ) -> Result<()> {
     if memory {
-        if !confirm::confirm_destructive(t("clear assistant memory", "清空助手记忆"), assume_yes)? {
+        if !confirm::confirm_destructive(t("clear assistant memory", "清空助手记忆"), assume_yes)?
+        {
             return Ok(());
         }
         println!("{}", clear_memory(paths, false)?);

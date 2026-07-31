@@ -55,16 +55,15 @@
 }
 
 .run-mode-menu > button > svg {
-  align-self: start;
+  align-self: center;
   width: 14px;
   height: 14px;
-  margin-top: 2px;
   color: var(--ink-soft);
   stroke-width: 1.7;
 }
 
 .run-mode-menu > button:hover,
-.run-mode-menu > button.active {
+.run-mode-menu > button:focus-visible {
   background: color-mix(in srgb, var(--ink) 7%, var(--paper));
 }
 

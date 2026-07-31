@@ -719,6 +719,7 @@ fn subagent_system_prompt(
     let mut config = context.config.clone();
     config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
         enabled_tools: profile.enabled_tools.clone(),
+        deferred_tools: profile.deferred_tools.clone(),
         skills_full: profile.skills_full.clone(),
         skills_named: profile.skills_named.clone(),
     });

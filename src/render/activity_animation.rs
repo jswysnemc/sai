@@ -71,6 +71,28 @@ pub(crate) fn render_activity_detail(text: &str) -> String {
     format!("\x1b[2m\x1b[37m{text}{RESET}")
 }
 
+/// 【终端】【状态动效】渲染统一的引导点、扫光标题与弱化详情。
+///
+/// 参数:
+/// - `label`: Waiting、Thinking、Working 等状态文字
+/// - `detail`: 耗时或 token 等辅助信息；空值时不追加间隔
+/// - `frame`: 当前动画帧序号
+///
+/// 返回:
+/// - 可直接显示的完整状态行
+pub(crate) fn render_activity_line(label: &str, detail: &str, frame: usize) -> String {
+    let mut output = format!(
+        "{} {}",
+        render_activity_guide(frame),
+        render_activity_text(label, frame)
+    );
+    if !detail.is_empty() {
+        output.push(' ');
+        output.push_str(&render_activity_detail(detail));
+    }
+    output
+}
+
 /// 【终端】【状态动效】返回一轮文字流光包含的帧数。
 ///
 /// 参数:

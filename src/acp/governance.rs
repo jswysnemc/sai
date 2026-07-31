@@ -195,11 +195,7 @@ impl AcpGovernance {
         };
         let arguments = json!({ "path": path.display().to_string() });
         // 1. 仅在策略要求时发起交互，普通工作区读取直接继续
-        if profile.requires_interactive_audit(
-            "read_file",
-            ToolPermission::ReadOnly,
-            &arguments,
-        ) {
+        if profile.requires_interactive_audit("read_file", ToolPermission::ReadOnly, &arguments) {
             super::audit::ensure_authorized(
                 profile,
                 &self.session_id,

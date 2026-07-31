@@ -106,8 +106,15 @@ fn render_queue_section(queued: &[QueuedSubmission], cols: usize, lines: &mut Ve
         cols,
     ));
     for submission in queued.iter().take(QUEUE_PREVIEW_LIMIT) {
-        let preview = submission.text.split_whitespace().collect::<Vec<_>>().join(" ");
-        lines.push(clip_line(&format!("\x1b[2m\x1b[3m  ↳ {preview}\x1b[0m"), cols));
+        let preview = submission
+            .text
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        lines.push(clip_line(
+            &format!("\x1b[2m\x1b[3m  ↳ {preview}\x1b[0m"),
+            cols,
+        ));
     }
     let hidden = queued.len().saturating_sub(QUEUE_PREVIEW_LIMIT);
     if hidden > 0 {
@@ -215,7 +222,12 @@ mod tests {
 
     #[test]
     fn queue_section_lists_previews_and_overflow() {
-        let queue = vec![queued("one"), queued("two"), queued("three"), queued("four")];
+        let queue = vec![
+            queued("one"),
+            queued("two"),
+            queued("three"),
+            queued("four"),
+        ];
         let lines = render_panel_lines(&[], &queue, &[], 80);
         let joined = lines.join("\n");
         assert!(joined.contains("(4)"));

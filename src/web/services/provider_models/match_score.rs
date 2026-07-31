@@ -92,31 +92,10 @@ pub(super) fn rank_catalog_match(score: usize, provider: &str) -> usize {
 fn official_provider_bonus(provider: &str) -> usize {
     let provider = provider.trim().to_ascii_lowercase();
     match provider.as_str() {
-        "openai"
-        | "anthropic"
-        | "google"
-        | "google-vertex"
-        | "deepseek"
-        | "alibaba"
-        | "alibaba-cn"
-        | "qwen"
-        | "dashscope"
-        | "zhipuai"
-        | "moonshotai"
-        | "moonshot"
-        | "mistral"
-        | "meta"
-        | "xai"
-        | "cohere"
-        | "perplexity"
-        | "minimax"
-        | "bytedance"
-        | "tencent"
-        | "baidu"
-        | "stepfun"
-        | "groq"
-        | "togetherai"
-        | "fireworks-ai" => 9,
+        "openai" | "anthropic" | "google" | "google-vertex" | "deepseek" | "alibaba"
+        | "alibaba-cn" | "qwen" | "dashscope" | "zhipuai" | "moonshotai" | "moonshot"
+        | "mistral" | "meta" | "xai" | "cohere" | "perplexity" | "minimax" | "bytedance"
+        | "tencent" | "baidu" | "stepfun" | "groq" | "togetherai" | "fireworks-ai" => 9,
         // 阿里系编码/Token 计划与官方标识相近，保留较高优先级
         "alibaba-token-plan"
         | "alibaba-token-plan-cn"

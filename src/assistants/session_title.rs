@@ -1,4 +1,4 @@
-use crate::config::AppConfig;
+use crate::config::{AppConfig, PromptTemplateConfig};
 use crate::llm::{ChatMessage, ChatStreamEvent, OpenAiCompatibleClient};
 use crate::paths::SaiPaths;
 use crate::state::{rename_session, SessionInfo};
@@ -16,7 +16,10 @@ const TITLE_TIMEOUT: Duration = Duration::from_secs(20);
 ///
 /// 返回:
 /// - 标题总结客户端
-pub(crate) fn resolve_title_client(config: &AppConfig, paths: &SaiPaths) -> Result<OpenAiCompatibleClient> {
+pub(crate) fn resolve_title_client(
+    config: &AppConfig,
+    paths: &SaiPaths,
+) -> Result<OpenAiCompatibleClient> {
     let runtime = title_runtime_config(config)?;
     OpenAiCompatibleClient::from_config(&runtime, paths)
 }
@@ -42,6 +45,7 @@ fn title_runtime_config(config: &AppConfig) -> Result<AppConfig> {
 ///
 /// 参数:
 /// - `client`: 模型客户端
+/// - `template`: 会话标题的系统提示词和输入模板
 /// - `user_message`: 首轮用户消息
 /// - `assistant_preview`: 可选助手回复摘要
 ///
@@ -49,24 +53,26 @@ fn title_runtime_config(config: &AppConfig) -> Result<AppConfig> {
 /// - 清洗后的标题（过长会截断）
 pub(crate) async fn summarize_session_title(
     client: &OpenAiCompatibleClient,
+    template: &PromptTemplateConfig,
     user_message: &str,
     assistant_preview: Option<&str>,
 ) -> Result<String> {
-    let user = {
-        let mut body = format!("User message:\n{}\n", truncate(user_message, 1200));
-        if let Some(preview) = assistant_preview.map(str::trim).filter(|s| !s.is_empty()) {
-            body.push_str(&format!(
-                "\nAssistant reply preview:\n{}\n",
-                truncate(preview, 800)
-            ));
-        }
-        body
-    };
+    let user_message = truncate(user_message, 1200);
+    let assistant_preview = assistant_preview
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| truncate(value, 800))
+        .unwrap_or_default();
+    let prompt = crate::prompts::template::render_prompt_pair(
+        template,
+        &[
+            ("user_message", user_message.as_str()),
+            ("assistant_preview", assistant_preview.as_str()),
+        ],
+    )?;
     let messages = vec![
-        ChatMessage::system(
-            "You name chat sessions. Reply with ONLY a short title (max 24 Chinese characters or 8 English words). No quotes, no punctuation wrappers, no explanation.",
-        ),
-        ChatMessage::plain("user", user),
+        ChatMessage::system(prompt.system),
+        ChatMessage::plain("user", prompt.user),
     ];
     let result = match timeout(
         TITLE_TIMEOUT,
@@ -113,12 +119,18 @@ pub(crate) async fn maybe_auto_title_session(
         return Ok(None);
     }
     let client = resolve_title_client(config, paths)?;
-    let title = match summarize_session_title(&client, user_message, assistant_preview).await {
+    let title = match summarize_session_title(
+        &client,
+        &config.prompt.templates.session_title,
+        user_message,
+        assistant_preview,
+    )
+    .await
+    {
         Ok(title) if !title.is_empty() => title,
         Ok(_) => return Ok(None),
         Err(_) => {
-            let fallback =
-                crate::state::title_from_message_public(user_message, current_title);
+            let fallback = crate::state::title_from_message_public(user_message, current_title);
             if fallback == current_title {
                 return Ok(None);
             }

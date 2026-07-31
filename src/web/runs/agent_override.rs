@@ -98,7 +98,10 @@ mod tests {
             ..AgentProfile::default()
         });
         let resolved = apply_agent_override(config, Some("code-agent")).unwrap();
-        assert_eq!(resolved.system_prompt.as_deref(), Some("code-agent-content"));
+        assert_eq!(
+            resolved.system_prompt.as_deref(),
+            Some("code-agent-content")
+        );
         assert!(resolved.system_prompt_file.is_none());
     }
 }

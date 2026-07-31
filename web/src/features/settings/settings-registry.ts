@@ -4,6 +4,7 @@ import {
   Brain,
   Braces,
   Cable,
+  FileText,
   GitBranch,
   KeyRound,
   Palette,
@@ -84,10 +85,21 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     kind: "client-pref",
     labelEn: "Appearance",
     labelZh: "外观",
-    descriptionEn: "Language, theme, and colors",
-    descriptionZh: "界面语言、主题和颜色方案",
+    descriptionEn: "Language, theme, colors, and Markdown rendering",
+    descriptionZh: "界面语言、主题、颜色与 Markdown 渲染",
     icon: Palette,
-    searchKeys: ["theme", "language", "locale", "appearance", "主题", "语言", "配色"]
+    searchKeys: ["theme", "language", "locale", "appearance", "markdown", "table", "code", "主题", "语言", "配色", "表格", "代码块"]
+  },
+  {
+    id: "prompts",
+    group: "general",
+    kind: "app-config",
+    labelEn: "Internal prompts",
+    labelZh: "内部提示词",
+    descriptionEn: "Commit messages, session titles, and context compaction",
+    descriptionZh: "提交说明、会话标题与上下文压缩",
+    icon: FileText,
+    searchKeys: ["prompt", "template", "commit", "title", "compaction", "variable", "提示词", "模板", "提交", "标题", "压缩", "变量"]
   },
   {
     id: "cli-tools",

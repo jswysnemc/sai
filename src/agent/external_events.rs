@@ -252,7 +252,8 @@ impl Agent {
         let session_id = self.state.session_id().to_string();
         // 1. 收集当前全部未确认完成项（不区分 Goal）
         let subagents = pending_finished_notices(&owner_key);
-        let store = crate::tools::command::BackgroundCommandStore::new(self.paths.state_dir.clone());
+        let store =
+            crate::tools::command::BackgroundCommandStore::new(self.paths.state_dir.clone());
         let tasks = store.load().unwrap_or_default();
         let background_ids = tasks
             .into_iter()

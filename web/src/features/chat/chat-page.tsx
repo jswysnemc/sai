@@ -29,6 +29,7 @@ import { parseGoalCommand } from "../goals/goal-command";
 import { appendTerminalSelection, INSERT_TERMINAL_SELECTION_EVENT, type TerminalSelectionDetail } from "./composer/composer-events";
 import { RuntimeOverview } from "../runtime-overview/runtime-overview";
 import { QueuedMessageList } from "./queue/queued-message-list";
+import { isConversationEmpty, shouldCenterEmptySession } from "./empty-session-layout";
 
 /**
  * 渲染当前会话历史、实时运行事件和消息输入区。
@@ -97,6 +98,7 @@ export function ChatPage() {
     () => projectConversationDisplay(timeline.data?.turns ?? [], run.states),
     [timeline.data?.turns, run.states]
   );
+  const [submittedEmptySessionId, setSubmittedEmptySessionId] = useState<string | null>(null);
   const activeLiveRuns = useMemo(
     () => display.liveRuns.filter((state) => state.status !== "queued"),
     [display.liveRuns]
@@ -104,6 +106,18 @@ export function ChatPage() {
   const queuedRuns = useMemo(
     () => display.liveRuns.filter((state) => state.status === "queued"),
     [display.liveRuns]
+  );
+  const hasHistoryCompaction = Boolean(timeline.data?.compaction?.summary?.trim());
+  const conversationEmpty = isConversationEmpty({
+    timelineLoading: timeline.isLoading,
+    historyTurnCount: display.historyTurns.length,
+    liveRunCount: display.liveRuns.length,
+    hasHistoryCompaction
+  });
+  const centerEmptySession = shouldCenterEmptySession(
+    conversationEmpty,
+    activeSession?.id,
+    submittedEmptySessionId
   );
   const scrollContentSignal = useMemo(
     () => [display.historyTurns, activeLiveRuns, queuedRuns],
@@ -115,7 +129,14 @@ export function ChatPage() {
   useEffect(() => {
     run.reset();
     setInput(readComposerDraft(activeSession?.id));
+    setSubmittedEmptySessionId(null);
   }, [activeSession?.id]);
+
+  // 首条消息进入时间线或实时状态后清理乐观布局标记
+  useEffect(() => {
+    if (conversationEmpty) return;
+    setSubmittedEmptySessionId((current) => current === activeSession?.id ? null : current);
+  }, [activeSession?.id, conversationEmpty]);
 
   // 输入变化时写入草稿，避免跳转设置/网关后丢失；同时把消息区滚到底部，方便看到最新上下文。
   useEffect(() => {
@@ -176,6 +197,7 @@ export function ChatPage() {
       }
       const originalInput = input;
       const currentAttachments = composerAttachments.attachments;
+      if (conversationEmpty) setSubmittedEmptySessionId(activeSession.id);
       // 1. 保留 skill-mention / 文件原子，并把当前附件图片并入目标正文供展开查看
       const objectiveWithMedia = [
         goalCommand.objective.trim(),
@@ -199,6 +221,7 @@ export function ChatPage() {
           chatAgent.selection?.id
         );
       } catch (error) {
+        setSubmittedEmptySessionId((current) => current === activeSession.id ? null : current);
         setInput(originalInput);
         writeComposerDraft(activeSession.id, originalInput);
         composerAttachments.restoreAttachments(currentAttachments);
@@ -206,16 +229,17 @@ export function ChatPage() {
       }
       return;
     }
-    await queryClient.invalidateQueries({ queryKey: ["timeline", activeSession.id] });
     const originalInput = input;
     const currentAttachments = composerAttachments.attachments;
-    const expanded = value ? await expandSkillsForSubmit(value) : value;
-    setActionError(null);
-    setInput("");
-    clearComposerDraft(activeSession.id);
-    composerAttachments.clearAttachments();
-    jumpToBottom();
+    if (conversationEmpty) setSubmittedEmptySessionId(activeSession.id);
     try {
+      await queryClient.invalidateQueries({ queryKey: ["timeline", activeSession.id] });
+      const expanded = value ? await expandSkillsForSubmit(value) : value;
+      setActionError(null);
+      setInput("");
+      clearComposerDraft(activeSession.id);
+      composerAttachments.clearAttachments();
+      jumpToBottom();
       await run.start(
         activeSession.id,
         expanded,
@@ -233,6 +257,7 @@ export function ChatPage() {
           .catch(() => undefined);
       }
     } catch (error) {
+      setSubmittedEmptySessionId((current) => current === activeSession.id ? null : current);
       setInput(originalInput);
       writeComposerDraft(activeSession.id, originalInput);
       composerAttachments.restoreAttachments(currentAttachments);
@@ -324,13 +349,6 @@ export function ChatPage() {
     }
   };
   const lastTurnId = timeline.data?.turns.filter((turn) => !turn.automatic).at(-1)?.turn_id;
-  const hasHistoryCompaction = Boolean(timeline.data?.compaction?.summary?.trim());
-  const emptySession =
-    !timeline.isLoading
-    && display.historyTurns.length === 0
-    && display.liveRuns.length === 0
-    && !hasHistoryCompaction;
-
   const forkFromTurn = async (turnId: string) => {
     if (!activeSession || actionBusy) return;
     setActionBusy(true);
@@ -352,8 +370,52 @@ export function ChatPage() {
     }
   };
 
+  const composer = (
+    <ChatComposer
+      value={input}
+      mode={mode}
+      attachments={composerAttachments.attachments}
+      historyEntries={historyEntries}
+      thinkingLevel={thinking.thinkingLevel}
+      thinkingLevels={chatModel.thinkingLevels}
+      choices={chatModel.choices}
+      selection={chatModel.selection}
+      modelLoading={chatModel.isLoading}
+      running={running}
+      runStatus={activeRun?.status ?? "idle"}
+      sessionAvailable={Boolean(activeSession)}
+      undoAvailable={Boolean(timeline.data?.turns.length)}
+      agentChoices={chatAgent.choices}
+      agentSelection={chatAgent.selection}
+      agentLoading={chatAgent.isLoading}
+      sessionId={activeSession?.id}
+      onChange={setInput}
+      onModeChange={setMode}
+      onThinkingLevelChange={thinking.setThinkingLevel}
+      onAddImages={addComposerImages}
+      onRemoveAttachment={composerAttachments.removeAttachment}
+      onModelSelect={chatModel.selectModel}
+      onSubmit={() => void submit()}
+      onStop={() => activeRun?.runId && void run.stop(activeRun.runId)}
+      onUndo={() => setUndoConfirmOpen(true)}
+      onAgentSelect={chatAgent.selectAgent}
+      onCompact={() => activeSession
+        ? run.startCompaction(activeSession.id, chatModel.selection ?? undefined)
+        : Promise.resolve()}
+      onContinueGoal={() => activeSession
+        ? run.startGoal(
+            activeSession.id,
+            mode,
+            chatModel.selection ?? undefined,
+            thinking.thinkingLevel,
+            chatAgent.selection?.id
+          )
+        : Promise.resolve()}
+    />
+  );
+
   return (
-    <div className={emptySession ? "chat-page empty-session" : "chat-page"}>
+    <div className={centerEmptySession ? "chat-page empty-session" : "chat-page"}>
       <div className="message-scroll-region">
         <div className="message-scroll" ref={scrollRef}>
           <ChatSessionHeader
@@ -367,7 +429,7 @@ export function ChatPage() {
                 <SkeletonText label={t("Loading conversation history", "正在读取会话历史")} lines={4} />
               </div>
             )}
-            {activeSession && !timeline.isLoading && !emptySession && (
+            {activeSession && !timeline.isLoading && !conversationEmpty && (
               <ContextPromptBanner sessionId={activeSession.id} agentId={chatAgent.selection?.id} />
             )}
             {timeline.data?.compaction && !run.states.some((state) =>
@@ -422,53 +484,17 @@ export function ChatPage() {
             {chatModel.error && <RunErrorNotice message={chatModel.error.message} detail={errorDetailForDisplay(chatModel.error)} />}
             {actionError && <RunErrorNotice message={actionError.message} detail={errorDetailForDisplay(actionError)} />}
           </div>
-          {emptySession && (
-            <div className="empty-session-greeting">
-              <h2>{t("Start a new conversation", "开始新的对话")}</h2>
-              <p>{t("Enter a task or question. Press Enter to send and Shift+Enter for a new line.", "输入任务或问题，Enter 发送，Shift+Enter 换行")}</p>
+          {centerEmptySession ? (
+            <div className="empty-session-stage">
+              <div className="empty-session-greeting">
+                <h2>{t("Start a new conversation", "开始新的对话")}</h2>
+                <p>{t("Enter a task or question. Press Enter to send and Shift+Enter for a new line.", "输入任务或问题，Enter 发送，Shift+Enter 换行")}</p>
+              </div>
+              {composer}
             </div>
+          ) : (
+            composer
           )}
-          <ChatComposer
-            value={input}
-            mode={mode}
-            attachments={composerAttachments.attachments}
-            historyEntries={historyEntries}
-            thinkingLevel={thinking.thinkingLevel}
-            thinkingLevels={chatModel.thinkingLevels}
-            choices={chatModel.choices}
-            selection={chatModel.selection}
-            modelLoading={chatModel.isLoading}
-            running={running}
-            runStatus={activeRun?.status ?? "idle"}
-            sessionAvailable={Boolean(activeSession)}
-            undoAvailable={Boolean(timeline.data?.turns.length)}
-            agentChoices={chatAgent.choices}
-            agentSelection={chatAgent.selection}
-            agentLoading={chatAgent.isLoading}
-            sessionId={activeSession?.id}
-            onChange={setInput}
-            onModeChange={setMode}
-            onThinkingLevelChange={thinking.setThinkingLevel}
-            onAddImages={addComposerImages}
-            onRemoveAttachment={composerAttachments.removeAttachment}
-            onModelSelect={chatModel.selectModel}
-            onSubmit={() => void submit()}
-            onStop={() => activeRun?.runId && void run.stop(activeRun.runId)}
-            onUndo={() => setUndoConfirmOpen(true)}
-            onAgentSelect={chatAgent.selectAgent}
-            onCompact={() => activeSession
-              ? run.startCompaction(activeSession.id, chatModel.selection ?? undefined)
-              : Promise.resolve()}
-            onContinueGoal={() => activeSession
-              ? run.startGoal(
-                  activeSession.id,
-                  mode,
-                  chatModel.selection ?? undefined,
-                  thinking.thinkingLevel,
-                  chatAgent.selection?.id
-                )
-              : Promise.resolve()}
-          />
         </div>
         <MessageOverviewRail
           scrollContainerRef={scrollRef}
