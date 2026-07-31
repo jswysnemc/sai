@@ -177,7 +177,7 @@ fn prompt_change_does_not_clear_conversation_state() {
         .save_loaded_tools(&["web_search".to_string()])
         .unwrap();
     store
-        .add_turn_usage(&TURN_USAGE, &TURN_USAGE)
+        .add_turn_usage(&TURN_USAGE, Some(&TURN_USAGE))
         .unwrap();
 
     store.reset_if_prompt_changed("updated prompt").unwrap();
@@ -485,7 +485,7 @@ fn session_summary_projection_matches_existing_snapshot_fields() {
             .unwrap();
     }
     store
-        .add_turn_usage(&TURN_USAGE, &TURN_USAGE)
+        .add_turn_usage(&TURN_USAGE, Some(&TURN_USAGE))
         .unwrap();
     let request = store
         .select_manual_compaction(0)
@@ -555,7 +555,7 @@ fn session_snapshot_includes_usage_and_compaction() {
             .unwrap();
     }
     store
-        .add_turn_usage(&TURN_USAGE, &TURN_USAGE)
+        .add_turn_usage(&TURN_USAGE, Some(&TURN_USAGE))
         .unwrap();
     let request = store
         .select_manual_compaction(0)

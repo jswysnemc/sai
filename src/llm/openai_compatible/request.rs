@@ -69,11 +69,33 @@ struct ChatRequest {
     temperature: f32,
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    stream_options: Option<ChatStreamOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<ToolDefinition>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     chat_template_kwargs: Option<ChatTemplateKwargs>,
+}
+
+/// OpenAI Chat 流式用量选项。
+#[derive(Debug, Serialize)]
+struct ChatStreamOptions {
+    /// 是否在结束块中返回完整 usage
+    include_usage: bool,
+}
+
+/// 【协议】【流式用量】生成供应商支持的流式用量选项。
+///
+/// 参数:
+/// - `provider`: 当前供应商配置
+///
+/// 返回:
+/// - DeepSeek 返回 `include_usage=true`，其它兼容供应商保持原请求体
+fn chat_stream_options(provider: &ProviderConfig) -> Option<ChatStreamOptions> {
+    is_deepseek_provider(provider).then_some(ChatStreamOptions {
+        include_usage: true,
+    })
 }
 
 #[derive(Debug, Serialize)]

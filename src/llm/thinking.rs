@@ -115,11 +115,22 @@ fn effective_format(provider: &ProviderConfig, protocol: ThinkingProtocol) -> &'
 ///
 /// 返回:
 /// - 是否匹配 DeepSeek
-fn is_deepseek_provider(provider: &ProviderConfig) -> bool {
+pub(crate) fn is_deepseek_provider(provider: &ProviderConfig) -> bool {
     let id = provider.id.to_ascii_lowercase();
     let base_url = provider.base_url.to_ascii_lowercase();
     let model = provider.default_model.to_ascii_lowercase();
     id.contains("deepseek") || base_url.contains("deepseek") || model.contains("deepseek")
+}
+
+/// 判断当前供应商是否需要回传历史思考内容。
+///
+/// 参数:
+/// - `provider`: 当前供应商配置
+///
+/// 返回:
+/// - 需要保留 `reasoning_content` 时返回 true
+pub(crate) fn should_preserve_reasoning(provider: &ProviderConfig) -> bool {
+    provider.preserve_thinking || is_deepseek_provider(provider)
 }
 
 /// 规范化思考等级。
@@ -407,6 +418,23 @@ mod tests {
 
         assert_eq!(body["thinking"], json!({"type":"enabled"}));
         assert_eq!(body["reasoning_effort"], json!("high"));
+    }
+
+    /// 【协议】【DeepSeek】验证 DeepSeek 默认回传历史思考。
+    ///
+    /// 含工具调用的 DeepSeek 请求必须完整回传上一子轮的 `reasoning_content`。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn deepseek_preserves_reasoning_history_by_default() {
+        let mut provider = ProviderConfig::default_openai();
+        provider.id = "deepseek".to_string();
+
+        assert!(should_preserve_reasoning(&provider));
     }
 
     #[test]

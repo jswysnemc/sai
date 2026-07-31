@@ -1,6 +1,7 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
 use crate::config::AppConfig;
+use crate::llm::Usage;
 use crate::state::StateStore;
 use anyhow::{bail, Result};
 use axum::extract::{Query, State};
@@ -32,6 +33,7 @@ struct SessionUsageResponse {
     context_prompt_tokens: usize,
     context_window_tokens: usize,
     context_token_ratio: f32,
+    context_cache: Option<ContextCacheUsageResponse>,
     tool_calls: usize,
     checkpoint_count: usize,
     compacted_turns: usize,
@@ -48,6 +50,14 @@ struct ContextUsageBreakdownResponse {
     conversation_tokens: usize,
     connectors_and_mcp_tokens: usize,
     skills_tokens: usize,
+}
+
+#[derive(Serialize)]
+struct ContextCacheUsageResponse {
+    hit_tokens: u64,
+    miss_tokens: u64,
+    write_tokens: u64,
+    hit_ratio: f32,
 }
 
 #[derive(Serialize)]
@@ -140,14 +150,26 @@ async fn usage(
         + breakdown.conversation_tokens
         + breakdown.connectors_and_mcp_tokens
         + breakdown.skills_tokens;
+    let last_conversation_usage = snapshot.usage.last_conversation_usage.as_ref();
+    let last_conversation_tokens =
+        last_conversation_usage.map(|usage| usage.prompt_tokens as usize);
     let context_prompt_tokens = resolve_context_prompt_tokens(
         snapshot.context_prompt_tokens,
-        snapshot.usage.last_conversation_usage.as_ref().map(|usage| usage.prompt_tokens as usize),
+        last_conversation_tokens,
         breakdown_total,
         snapshot.checkpoint_count,
     );
+    let context_cache = build_context_cache_usage(
+        last_conversation_usage,
+        provider_context_usage_is_current(
+            last_conversation_tokens,
+            breakdown_total,
+            snapshot.checkpoint_count,
+        ),
+    );
     let context_window_tokens = snapshot.context_window_tokens;
-    let context_token_ratio = crate::state::context_ratio(context_prompt_tokens, context_window_tokens);
+    let context_token_ratio =
+        crate::state::context_ratio(context_prompt_tokens, context_window_tokens);
     Ok(Json(SystemUsageResponse {
         session: SessionUsageResponse {
             id: snapshot.session_id,
@@ -159,6 +181,7 @@ async fn usage(
             context_prompt_tokens,
             context_window_tokens,
             context_token_ratio,
+            context_cache,
             tool_calls: snapshot.tool_history.call_count,
             checkpoint_count: snapshot.checkpoint_count,
             compacted_turns: snapshot.checkpoint_covered_turns,
@@ -245,6 +268,65 @@ fn resolve_context_prompt_tokens(
     last_tokens.max(snapshot_tokens)
 }
 
+/// 判断最近一次 provider 上下文用量是否仍可用于当前会话。
+///
+/// 参数:
+/// - `last_conversation_tokens`: 最近一次主对话 provider prompt_tokens
+/// - `breakdown_total`: 实时分项估算合计
+/// - `checkpoint_count`: 已应用 checkpoint 数
+///
+/// 返回:
+/// - provider 用量存在且不是压缩前残留时返回 true
+fn provider_context_usage_is_current(
+    last_conversation_tokens: Option<usize>,
+    breakdown_total: usize,
+    checkpoint_count: usize,
+) -> bool {
+    let Some(last_tokens) = last_conversation_tokens.filter(|tokens| *tokens > 0) else {
+        return false;
+    };
+    !(checkpoint_count > 0
+        && breakdown_total > 0
+        && last_tokens > breakdown_total.saturating_mul(3) / 2)
+}
+
+/// 构造当前上下文的缓存命中统计。
+///
+/// 参数:
+/// - `usage`: 最近一次主对话 provider 用量
+/// - `provider_usage_current`: 该用量是否仍代表当前上下文
+///
+/// 返回:
+/// - 缓存命中、未命中、写入量和命中率；无有效 provider 用量时返回 None
+fn build_context_cache_usage(
+    usage: Option<&Usage>,
+    provider_usage_current: bool,
+) -> Option<ContextCacheUsageResponse> {
+    if !provider_usage_current {
+        return None;
+    }
+    let usage = usage?;
+    if usage.prompt_tokens == 0 {
+        return None;
+    }
+    // 1. 异常上报先收敛到 prompt_tokens 范围内
+    let hit_tokens = usage.cache_read_tokens.min(usage.prompt_tokens);
+    let write_tokens = usage
+        .cache_write_tokens
+        .min(usage.prompt_tokens.saturating_sub(hit_tokens));
+    // 2. 剩余输入视为缓存未命中
+    let miss_tokens = usage
+        .prompt_tokens
+        .saturating_sub(hit_tokens)
+        .saturating_sub(write_tokens);
+    Some(ContextCacheUsageResponse {
+        hit_tokens,
+        miss_tokens,
+        write_tokens,
+        hit_ratio: hit_tokens as f32 / usage.prompt_tokens as f32,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,5 +385,43 @@ mod tests {
         );
         // 无 usage 时用分项
         assert_eq!(resolve_context_prompt_tokens(0, None, 12_000, 1), 12_000);
+    }
+
+    /// 【Web主界面】【上下文缓存】验证缓存率按当前 prompt 总量计算。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn context_cache_usage_reports_hit_and_miss() {
+        let usage = Usage {
+            prompt_tokens: 100,
+            completion_tokens: 20,
+            total_tokens: 120,
+            cache_read_tokens: 80,
+            cache_write_tokens: 0,
+        };
+
+        let cache = build_context_cache_usage(Some(&usage), true).unwrap();
+
+        assert_eq!(cache.hit_tokens, 80);
+        assert_eq!(cache.miss_tokens, 20);
+        assert_eq!(cache.write_tokens, 0);
+        assert!((cache.hit_ratio - 0.8).abs() < f32::EPSILON);
+    }
+
+    /// 【Web主界面】【上下文缓存】验证压缩前残留用量不进入缓存统计。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn stale_context_usage_hides_cache_metrics() {
+        assert!(!provider_context_usage_is_current(Some(314_900), 29_700, 1));
+        assert!(provider_context_usage_is_current(Some(40_000), 29_700, 0));
     }
 }

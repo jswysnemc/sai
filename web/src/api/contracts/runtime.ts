@@ -58,6 +58,12 @@ export type SystemUsage = {
     context_prompt_tokens: number;
     context_window_tokens: number;
     context_token_ratio: number;
+    context_cache?: {
+      hit_tokens: number;
+      miss_tokens: number;
+      write_tokens: number;
+      hit_ratio: number;
+    } | null;
     tool_calls: number;
     checkpoint_count: number;
     compacted_turns: number;

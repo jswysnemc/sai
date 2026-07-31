@@ -20,6 +20,12 @@ struct ChatUsage {
     total_tokens: u64,
     #[serde(default, deserialize_with = "null_as_default")]
     prompt_tokens_details: Option<PromptTokensDetails>,
+    /// DeepSeek 上下文缓存命中量
+    #[serde(default)]
+    prompt_cache_hit_tokens: u64,
+    /// DeepSeek 上下文缓存未命中量
+    #[serde(default)]
+    prompt_cache_miss_tokens: u64,
 }
 
 /// OpenAI 系协议里输入令牌的细分构成。
@@ -39,14 +45,27 @@ impl ChatUsage {
     /// 返回:
     /// - 带缓存明细的用量；OpenAI 不区分缓存写入，写入量记为 0
     fn into_usage(self) -> Usage {
-        let cache_read_tokens = self
+        let standard_cache_read_tokens = self
             .prompt_tokens_details
             .map(|details| details.cached_tokens)
             .unwrap_or_default();
+        let reported_prompt_tokens = self
+            .prompt_cache_hit_tokens
+            .saturating_add(self.prompt_cache_miss_tokens);
+        let prompt_tokens = if self.prompt_tokens > 0 {
+            self.prompt_tokens
+        } else {
+            reported_prompt_tokens
+        };
+        let cache_read_tokens = standard_cache_read_tokens
+            .max(self.prompt_cache_hit_tokens)
+            .min(prompt_tokens);
         Usage {
-            prompt_tokens: self.prompt_tokens,
+            prompt_tokens,
             completion_tokens: self.completion_tokens,
-            total_tokens: self.total_tokens,
+            total_tokens: self
+                .total_tokens
+                .max(prompt_tokens.saturating_add(self.completion_tokens)),
             cache_read_tokens,
             cache_write_tokens: 0,
         }

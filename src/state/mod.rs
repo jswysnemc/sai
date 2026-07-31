@@ -12,11 +12,14 @@ pub(crate) mod session_memory;
 mod session_snapshot;
 mod session_timeline;
 mod sessions;
+mod store_context_epoch;
+mod store_usage;
 pub(crate) mod tool_history;
 mod turns;
 mod usage;
 pub(crate) mod worktree_undo;
 
+#[cfg(test)]
 use crate::llm::Usage;
 use crate::paths::SaiPaths;
 use anyhow::Result;
@@ -555,110 +558,6 @@ pub fn restore_turn_worktree(&self, expected_turn_id: &str, paths: &[String]) ->
             worktree_undo::discard_turn_snapshot(self, expected_turn_id)?;
         }
         Ok(ContextRollbackOutcome { removed, prompt })
-    }
-
-    /// 累加一个完整轮次的用量。
-    ///
-    /// 参数:
-    /// - `turn_usage`: 本轮全部模型调用的用量累计
-    /// - `context_usage`: 最后一次调用的用量，代表当前上下文占用
-    ///
-    /// 返回:
-    /// - 写入是否成功
-    pub fn add_turn_usage(&self, turn_usage: &Usage, context_usage: &Usage) -> Result<()> {
-        self.init_files()?;
-        usage::add_turn_usage(&self.usage_file(), turn_usage, context_usage)
-    }
-
-    /// 累加辅助模型用量。
-    ///
-    /// 参数:
-    /// - `usage`: 辅助模型用量
-    ///
-    /// 返回:
-    /// - 写入是否成功
-    pub fn add_auxiliary_usage(&self, usage: &Usage) -> Result<()> {
-        self.init_files()?;
-        usage::add_auxiliary_usage(&self.usage_file(), usage)
-    }
-
-    /// 读取累计用量快照。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 累计用量快照
-    pub fn usage_snapshot(&self) -> Result<UsageSnapshot> {
-        usage::snapshot(&self.usage_file())
-    }
-
-    /// 读取当前会话 Context Epoch 摘要。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - Context Epoch 摘要
-    pub fn context_epoch_summary(&self) -> Result<Option<ContextEpochSummary>> {
-        context_epoch::context_epoch_summary(&self.conv_db, &self.session_id)
-    }
-
-    /// 读取当前会话 Context Epoch baseline 文本。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - baseline 文本；尚未初始化时返回 None
-    pub fn context_epoch_baseline(&self) -> Result<Option<String>> {
-        context_epoch::load_baseline(&self.conv_db, &self.session_id)
-    }
-
-    /// 构造当前会话 Context Epoch 投影。
-    ///
-    /// 参数:
-    /// - `system_prompt`: 当前稳定系统提示
-    ///
-    /// 返回:
-    /// - Context Epoch 投影
-    pub fn context_epoch_projection(&self, system_prompt: &str) -> Result<ContextEpochProjection> {
-        let result =
-            context_epoch::context_epoch_projection(&self.conv_db, &self.session_id, system_prompt);
-        self.record_context_epoch_projection_result(&result)?;
-        result
-    }
-
-    /// 从 Context Source 输入构造当前会话 Context Epoch 投影。
-    ///
-    /// 参数:
-    /// - `sources`: Context Source 输入集合
-    ///
-    /// 返回:
-    /// - Context Epoch 投影
-    #[allow(dead_code)]
-    pub fn context_epoch_projection_from_sources(
-        &self,
-        sources: Vec<ContextSourceInput>,
-    ) -> Result<ContextEpochProjection> {
-        let result = context_epoch::context_epoch_projection_from_sources(
-            &self.conv_db,
-            &self.session_id,
-            sources,
-        );
-        self.record_context_epoch_projection_result(&result)?;
-        result
-    }
-
-    /// 清空最近一次 provider usage。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 清空是否成功
-    fn clear_last_usage(&self) -> Result<()> {
-        usage::clear_last_usage(&self.usage_file())
     }
 
     /// 是否存在运行中轮次。

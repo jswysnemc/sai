@@ -369,26 +369,50 @@ fn prepare_anthropic_tools(
     }
 }
 
-/// 【协议】【思考回传】按供应商开关决定是否携带历史思考。
+/// 【协议】【思考回传】根据供应商规则准备历史思考内容。
 ///
-/// 只有声明支持 Preserved Thinking 的供应商才接受消息里的 `reasoning_content`；
-/// 其余供应商收到未知字段可能直接报错，因此默认剥离。
+/// 普通兼容网关移除 `reasoning_content`，避免因未知字段拒绝请求；DeepSeek
+/// 与显式开启 Preserved Thinking 的供应商保持原消息。DeepSeek 的旧工具历史
+/// 若缺少思考字段，则同时移除对应 assistant/tool 序列，避免服务端返回 400。
 ///
 /// 参数:
 /// - `messages`: 待发送的消息序列
-/// - `preserve`: 供应商是否要求回传历史思考
+/// - `provider`: 当前供应商配置
 ///
 /// 返回:
-/// - 已按开关处理的消息序列
-fn apply_preserved_thinking(messages: Vec<ChatMessage>, preserve: bool) -> Vec<ChatMessage> {
-    if preserve {
+/// - 已按供应商规则处理的消息序列
+fn apply_preserved_thinking(
+    messages: Vec<ChatMessage>,
+    provider: &ProviderConfig,
+) -> Vec<ChatMessage> {
+    if !should_preserve_reasoning(provider) {
+        return messages
+            .into_iter()
+            .map(|message| ChatMessage {
+                reasoning_content: None,
+                ..message
+            })
+            .collect();
+    }
+    if !is_deepseek_provider(provider) {
         return messages;
     }
-    messages
-        .into_iter()
-        .map(|message| ChatMessage {
-            reasoning_content: None,
-            ..message
-        })
-        .collect()
+    let mut output = Vec::with_capacity(messages.len());
+    let mut omit_tool_results = false;
+    for message in messages {
+        // 1. DeepSeek 要求带 tool_calls 的 assistant 消息同时携带 reasoning_content
+        if message.role == "assistant" {
+            omit_tool_results = message.tool_calls.is_some() && message.reasoning_content.is_none();
+            if omit_tool_results {
+                continue;
+            }
+        }
+        // 2. 被省略 assistant 消息对应的 tool 结果也不能孤立发送
+        if message.role == "tool" && omit_tool_results {
+            continue;
+        }
+        omit_tool_results = false;
+        output.push(message);
+    }
+    output
 }

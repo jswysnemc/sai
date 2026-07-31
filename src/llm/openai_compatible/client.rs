@@ -1,3 +1,4 @@
+use self::provider_routing::ProviderProtocol;
 use super::tool_call_stream::ToolCallProgressTracker;
 use super::{
     ChatMessage, ChatResult, ChatStreamChunk, ChatStreamEvent, ChatStreamKind, ToolCall,
@@ -9,7 +10,9 @@ use crate::i18n::text as t;
 use crate::llm::http_debug::{
     anthropic_request_headers, bearer_request_headers, HttpDebugConfig, HttpDebugRecorder,
 };
-use crate::llm::thinking::{apply_provider_body_options, ThinkingProtocol};
+use crate::llm::thinking::{
+    apply_provider_body_options, is_deepseek_provider, should_preserve_reasoning, ThinkingProtocol,
+};
 use crate::paths::SaiPaths;
 use anyhow::{bail, Context, Result};
 use futures_util::StreamExt;
@@ -17,27 +20,6 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::time::Duration;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ProviderProtocol {
-    Auto,
-    OpenAiChat,
-    OpenAiResponses,
-    Anthropic,
-}
-
-impl ProviderProtocol {
-    fn from_provider(provider: &ProviderConfig) -> Result<Self> {
-        match provider.protocol.trim().to_ascii_lowercase().as_str() {
-            "" | "auto" => Ok(Self::Auto),
-            "openai-chat" => Ok(Self::OpenAiChat),
-            "openai-responses" => Ok(Self::OpenAiResponses),
-            "anthropic" | "anthropic-messages" | "messages" | "claude" | "claude-code"
-            | "claude-messages" => Ok(Self::Anthropic),
-            protocol => bail!("unsupported provider protocol: {protocol}"),
-        }
-    }
-}
 
 #[derive(Clone)]
 pub struct OpenAiCompatibleClient {
@@ -192,12 +174,13 @@ impl OpenAiCompatibleClient {
                 bail!("OpenAI Responses protocol is not supported by this provider");
             }
         }
-        let messages = apply_preserved_thinking(messages, self.provider.preserve_thinking);
+        let messages = apply_preserved_thinking(messages, &self.provider);
         let request = ChatRequest {
             model: self.provider.default_model.clone(),
             messages,
             temperature: self.provider.temperature,
             stream: true,
+            stream_options: chat_stream_options(&self.provider),
             max_tokens: self
                 .provider
                 .model_max_output_tokens_for(&self.provider.default_model),
@@ -755,19 +738,5 @@ impl OpenAiCompatibleClient {
             let _ = debug.finish_ok(&result);
         }
         Ok(Some(result))
-    }
-
-    fn uses_openai_responses(&self) -> bool {
-        let model = self.provider.default_model.to_ascii_lowercase();
-        model.starts_with("gpt-5")
-            || model.contains("codex")
-            || model.starts_with("o1")
-            || model.starts_with("o3")
-            || model.starts_with("o4")
-            || prefers_codex_responses_shape(
-                &self.provider.default_model,
-                &self.provider.base_url,
-                &self.provider.client_style,
-            )
     }
 }

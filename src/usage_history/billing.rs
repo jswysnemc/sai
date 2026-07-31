@@ -24,6 +24,18 @@ pub const OPENAI_RATES: CacheRates = CacheRates {
     write: 1.0,
 };
 
+/// DeepSeek V4 Flash 口径：缓存命中输入价为未命中的 2%。
+pub const DEEPSEEK_V4_FLASH_RATES: CacheRates = CacheRates {
+    read: 0.02,
+    write: 1.0,
+};
+
+/// DeepSeek V4 Pro 口径：0.025 元相对 3 元未命中输入价。
+pub const DEEPSEEK_V4_PRO_RATES: CacheRates = CacheRates {
+    read: 0.008_333_333_333_333_333,
+    write: 1.0,
+};
+
 /// 按供应商标识推断缓存计价系数。
 ///
 /// 参数:
@@ -35,6 +47,12 @@ pub const OPENAI_RATES: CacheRates = CacheRates {
 ///   因为该口径差异最大，用它估算不会低估与账单的偏离程度
 pub fn rates_for(provider_id: &str, model: &str) -> CacheRates {
     let haystack = format!("{provider_id} {model}").to_ascii_lowercase();
+    if haystack.contains("deepseek-v4-flash") {
+        return DEEPSEEK_V4_FLASH_RATES;
+    }
+    if haystack.contains("deepseek-v4-pro") {
+        return DEEPSEEK_V4_PRO_RATES;
+    }
     if haystack.contains("gpt") || haystack.contains("openai") || haystack.contains("o1") {
         return OPENAI_RATES;
     }
@@ -132,5 +150,35 @@ mod tests {
         let record = record_with("openai", "gpt-4o", 1_000, 800, 0);
         // 200 原价 + 800 * 0.5 = 600
         assert_eq!(billable_input_tokens(&record), 600);
+    }
+
+    /// 【用量统计】【DeepSeek】验证 V4 Flash 使用官方缓存输入比例。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn uses_deepseek_v4_flash_cache_rate() {
+        let record = record_with("deepseek", "deepseek-v4-flash", 1_000, 800, 0);
+
+        // 200 未命中 + 800 * 0.02 = 216
+        assert_eq!(billable_input_tokens(&record), 216);
+    }
+
+    /// 【用量统计】【DeepSeek】验证 V4 Pro 使用官方缓存输入比例。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn uses_deepseek_v4_pro_cache_rate() {
+        let record = record_with("deepseek", "deepseek-v4-pro", 1_000, 800, 0);
+
+        // 200 未命中 + 800 * (0.025 / 3) ≈ 207
+        assert_eq!(billable_input_tokens(&record), 207);
     }
 }

@@ -227,9 +227,8 @@ impl Agent {
         // 2. 全局 JSONL 历史（设置页统计）
         let started_at = chrono::Utc::now().timestamp();
         if let Some(usage) = &turn_usage {
-            // 上下文占用取最后一次调用；该次未上报时退回整轮累计
-            let context_usage = result.usage.as_ref().unwrap_or(usage);
-            self.state.add_turn_usage(usage, context_usage)?;
+            // 最后一次调用未上报时不使用整轮累计量，交由上下文分项估算兜底
+            self.state.add_turn_usage(usage, result.usage.as_ref())?;
             let _ = crate::usage_history::record_model_call(
                 &self.paths,
                 crate::usage_history::UsageRecordInput {
@@ -248,6 +247,8 @@ impl Agent {
                 },
             );
         } else {
+            // 本轮没有 provider usage 时清除上一轮上下文口径，避免展示过期缓存率
+            self.state.clear_last_conversation_usage()?;
             let _ = crate::usage_history::record_model_call(
                 &self.paths,
                 crate::usage_history::UsageRecordInput {

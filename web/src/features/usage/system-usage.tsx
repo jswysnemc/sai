@@ -39,6 +39,7 @@ export function SystemUsage({ selection, onCompact, compactDisabled }: { selecti
   });
   const contextPercent = Math.round(Math.min(1, Math.max(0, usage.data?.session.context_token_ratio ?? 0)) * 100);
   const contextBreakdown = usage.data ? resolveContextBreakdown(usage.data.session, t) : null;
+  const contextCache = usage.data?.session.context_cache;
   const popoverStyle = useAnchoredPopover({ open, anchorRef: triggerRef, preferredWidth: 390, minimumWidth: 300, align: "right", maxHeight: 620 });
 
   useEffect(() => {
@@ -76,6 +77,15 @@ export function SystemUsage({ selection, onCompact, compactDisabled }: { selecti
                   <strong>{formatContextPercent(usage.data.session.context_token_ratio)}</strong>
                   <small>{t("Used", "已使用")} {formatTokenCount(usage.data.session.context_prompt_tokens)}/{formatTokenCount(usage.data.session.context_window_tokens)}</small>
                 </div>
+                {contextCache && (
+                  <div className="context-cache-summary">
+                    <span>{t("Cache hit", "缓存命中")} <strong>{formatContextPercent(contextCache.hit_ratio)}</strong></span>
+                    <small>
+                      {formatTokenCount(contextCache.hit_tokens)} {t("hit", "命中")} · {formatTokenCount(contextCache.miss_tokens)} {t("miss", "未命中")}
+                      {contextCache.write_tokens > 0 && ` · ${formatTokenCount(contextCache.write_tokens)} ${t("write", "写入")}`}
+                    </small>
+                  </div>
+                )}
                 <div className="context-usage-track context-usage-track-stacked" aria-hidden="true">
                   {contextBreakdown ? (
                     <>

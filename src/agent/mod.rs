@@ -40,7 +40,7 @@ use model_context::selected_model_label;
 use tokio::sync::mpsc;
 use tool_history::extract_persistable_tool_report;
 use tool_visibility::ToolVisibility;
-use turn_execution::{TurnExecution, TurnUsageAccumulator};
+use turn_execution::{assistant_tool_message, TurnExecution, TurnUsageAccumulator};
 
 pub(crate) use compaction::CompactionRunOutcome;
 pub use event::{AgentEvent, CompactionError};
@@ -267,10 +267,7 @@ impl Agent {
                 .await;
                 return Ok(turn_usage.into_execution(result));
             }
-            messages.push(ChatMessage::assistant(
-                result.content.clone(),
-                Some(result.tool_calls.clone()),
-            ));
+            messages.push(assistant_tool_message(&result));
             let ask_question_enabled = self.tools.contains("ask_question");
             let question_call_count = result
                 .tool_calls

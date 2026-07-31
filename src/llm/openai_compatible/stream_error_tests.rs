@@ -59,6 +59,7 @@ mod stream_error_tests {
     #[test]
     fn preserved_thinking_is_stripped_unless_enabled() {
         use super::apply_preserved_thinking;
+        use crate::config::ProviderConfig;
         use crate::llm::ChatMessage;
 
         let history = vec![
@@ -67,17 +68,65 @@ mod stream_error_tests {
                 .with_reasoning(Some("considered options".to_string())),
         ];
 
-        let stripped = apply_preserved_thinking(history.clone(), false);
+        let provider = ProviderConfig::default_openai();
+        let stripped = apply_preserved_thinking(history.clone(), &provider);
         assert!(
-            stripped.iter().all(|message| message.reasoning_content.is_none()),
+            stripped
+                .iter()
+                .all(|message| message.reasoning_content.is_none()),
             "未开启时不应发送历史思考"
         );
 
-        let kept = apply_preserved_thinking(history, true);
+        let mut preserved_provider = provider;
+        preserved_provider.preserve_thinking = true;
+        let kept = apply_preserved_thinking(history, &preserved_provider);
         assert_eq!(
             kept[1].reasoning_content.as_deref(),
             Some("considered options")
         );
     }
 
+    /// 【协议】【DeepSeek】验证缺少思考内容的旧工具历史不会产生孤立 tool 消息。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn deepseek_omits_incomplete_legacy_tool_history() {
+        use super::apply_preserved_thinking;
+        use crate::config::ProviderConfig;
+        use crate::llm::{ChatMessage, ToolCall, ToolCallFunction};
+
+        let history = vec![
+            ChatMessage::plain("user", "旧问题"),
+            ChatMessage::assistant(
+                "",
+                Some(vec![ToolCall {
+                    id: "call-1".to_string(),
+                    kind: "function".to_string(),
+                    function: ToolCallFunction {
+                        name: "get_date".to_string(),
+                        arguments: "{}".to_string(),
+                    },
+                }]),
+            ),
+            ChatMessage::tool("call-1", "2026-07-31"),
+            ChatMessage::plain("assistant", "旧回答")
+                .with_reasoning(Some("旧轮最终思考".to_string())),
+            ChatMessage::plain("user", "新问题"),
+        ];
+        let mut provider = ProviderConfig::default_openai();
+        provider.id = "deepseek".to_string();
+
+        let prepared = apply_preserved_thinking(history, &provider);
+
+        assert_eq!(prepared.len(), 3);
+        assert!(prepared.iter().all(|message| message.role != "tool"));
+        assert_eq!(
+            prepared[1].reasoning_content.as_deref(),
+            Some("旧轮最终思考")
+        );
+    }
 }
