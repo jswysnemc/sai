@@ -21,7 +21,7 @@ type ParserState = "header" | "hunk";
 export function parseDiff(source: string): DiffFile[] {
   const lines = source.replaceAll("\r\n", "\n").split("\n");
   const files: DiffFile[] = [];
-  let current: DiffFile | null = null;
+  let current: DiffFile | undefined;
   let state: ParserState = "header";
   let oldNumber: number | null = null;
   let newNumber: number | null = null;
@@ -32,12 +32,14 @@ export function parseDiff(source: string): DiffFile[] {
    * Codex patch 的内容行紧跟文件头，中间可能没有 `@@`，因此这类文件头之后
    * 直接进入正文状态；unified diff 还要先读完 index/mode 等元信息。
    */
-  const openFile = (path: string, status: DiffFileStatus, startAtOne: boolean) => {
-    current = { path, status, added: 0, removed: 0, lines: [] };
-    files.push(current);
+  const openFile = (path: string, status: DiffFileStatus, startAtOne: boolean): DiffFile => {
+    const file: DiffFile = { path, status, added: 0, removed: 0, lines: [] };
+    current = file;
+    files.push(file);
     state = startAtOne ? "hunk" : "header";
     oldNumber = startAtOne ? 1 : null;
     newNumber = startAtOne ? 1 : null;
+    return file;
   };
 
   for (const line of lines) {
@@ -59,10 +61,11 @@ export function parseDiff(source: string): DiffFile[] {
       if (current && consumeFileMetadata(current, line)) continue;
       if (line.startsWith("+++ ")) {
         const path = stripPathPrefix(line.slice(4));
-        if (!current) {
+        const active = current;
+        if (!active) {
           openFile(path, "modified", false);
-        } else if (path !== "/dev/null" && (!current.path || current.path === "/dev/null")) {
-          current.path = path;
+        } else if (path !== "/dev/null" && (!active.path || active.path === "/dev/null")) {
+          active.path = path;
         }
         continue;
       }
@@ -78,8 +81,7 @@ export function parseDiff(source: string): DiffFile[] {
 
     // 3. hunk 头：进入正文状态并同步行号
     if (line.startsWith("@@")) {
-      if (!current) openFile("", "modified", true);
-      const file = current as DiffFile;
+      const file = current ?? openFile("", "modified", true);
       const hunk = UNIFIED_HUNK.exec(line);
       if (hunk) {
         oldNumber = Number(hunk[1]);
@@ -100,11 +102,8 @@ export function parseDiff(source: string): DiffFile[] {
       continue;
     }
 
-    if (!current) {
-      if (!line.trim()) continue;
-      openFile("", "modified", true);
-    }
-    const file = current as DiffFile;
+    if (!current && !line.trim()) continue;
+    const file = current ?? openFile("", "modified", true);
 
     // 4. 无换行标记不是内容，不能占用行号
     if (line.startsWith("\\")) {
