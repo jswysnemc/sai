@@ -736,7 +736,8 @@ fn diff_long_lines_wrap_with_body_column_indent() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("long.md");
     std::fs::write(&path, "short\n").unwrap();
-    let long = "x".repeat(160);
+    // 用不会出现在临时路径里的字符，否则标题行会被误判为长行的一部分
+    let long = "\u{4e2d}".repeat(160);
     let args = serde_json::json!({
         "patch": format!(
             "*** Begin Patch\n*** Update File: {}\n@@\n-short\n+{long}\n*** End Patch",
@@ -752,7 +753,7 @@ fn diff_long_lines_wrap_with_body_column_indent() {
         .lines
         .iter()
         .map(|line| strip_ansi(line.as_str()))
-        .filter(|line| line.contains('x'))
+        .filter(|line| line.contains('\u{4e2d}'))
         .collect::<Vec<_>>();
 
     assert!(plain.len() > 1, "长行应被折成多行: {plain:?}");
@@ -763,7 +764,8 @@ fn diff_long_lines_wrap_with_body_column_indent() {
         .collect::<Vec<_>>();
     assert!(!continuations.is_empty(), "应存在续行: {plain:?}");
     for line in continuations {
-        let indent = line.len() - line.trim_start().len();
+        // 按字符数而非字节数统计，宽字符下两者不等
+        let indent = line.chars().take_while(|ch| *ch == ' ').count();
         assert!(
             indent >= 7,
             "续行应缩进到 diff 正文列，实际缩进 {indent}: {line:?}"
