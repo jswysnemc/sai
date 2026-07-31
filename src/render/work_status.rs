@@ -87,7 +87,7 @@ impl WorkStatus {
     /// 【终端】【工作状态】渲染适合历史区展示的动态状态行。
     ///
     /// 行首引导点与助手正文共用同一符号，因此状态行与正文落在同一条视觉基线上；
-    /// 状态文字使用从左向右的明暗扫光，并展示本轮整数秒时长。
+    /// 状态文字使用从左向右的白色余弦流光，并展示本轮整数秒时长。
     ///
     /// 参数:
     /// - `frame`: 动画帧序号
@@ -157,7 +157,7 @@ mod tests {
         );
     }
 
-    /// 【终端】【工作状态测试】验证 Working 使用文字扫光和整数秒。
+    /// 【终端】【工作状态测试】验证 Working 使用白色流光和整数秒。
     ///
     /// 参数:
     /// - 无
@@ -165,7 +165,7 @@ mod tests {
     /// 返回:
     /// - 无
     #[test]
-    fn working_uses_text_sweep_and_integer_seconds() {
+    fn working_uses_white_shimmer_and_integer_seconds() {
         let line = WorkStatus::Working.render_line(0, Duration::from_millis(1500));
         let plain = strip_ansi_for_test(&line);
         assert!(plain.contains(WorkStatus::Working.localized_label()));

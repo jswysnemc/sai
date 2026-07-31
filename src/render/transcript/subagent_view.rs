@@ -86,7 +86,7 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
             }
         }
     }
-    // 3. 【终端】【子智能体状态】运行中显示 Working 文字扫光
+    // 3. 【终端】【子智能体状态】运行中显示 Working 白色流光
     if status == "run" {
         output.push('\n');
         output.push_str(&render_activity_text(
@@ -129,7 +129,7 @@ mod tests {
         assert!(!lines.is_empty());
     }
 
-    /// 【终端】【子智能体状态】验证运行状态只保留 Working 文字扫光。
+    /// 【终端】【子智能体状态】验证运行状态只保留 Working 白色流光。
     ///
     /// 参数:
     /// - 无
@@ -137,7 +137,7 @@ mod tests {
     /// 返回:
     /// - 无
     #[test]
-    fn running_view_uses_working_text_sweep() {
+    fn running_view_uses_working_shimmer() {
         let first = render_view_text("missing-id", "检查项目", 0);
         let second = render_view_text("missing-id", "检查项目", 1);
         let first_status = first.lines().last().unwrap_or_default();

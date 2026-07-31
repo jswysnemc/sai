@@ -2,6 +2,7 @@ use super::command_result_block::render_live_command_output_for_cli;
 use super::content_indent::align_to_guide_column;
 use super::streaming_replace::{clear_rendered_rows, rendered_visual_rows};
 use super::work_status::WorkStatus;
+use crate::render::activity_animation::ACTIVITY_FRAME_INTERVAL;
 use crate::render::tool_view::command_output_buffer::CommandOutputBuffer;
 use crate::tools::command::{CommandOutputChunk, CommandOutputStream};
 use anyhow::Result;
@@ -9,7 +10,7 @@ use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// 保存普通 CLI 当前前台命令的有限实时输出，并内嵌 working 动效。
 pub(crate) struct CliCommandPreview {
@@ -120,7 +121,10 @@ impl CliCommandPreview {
     /// 清除当前实时摘要并释放终端行。
     pub(crate) fn clear(&mut self) -> Result<()> {
         self.stop_animation();
-        let mut state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         state.active = false;
         if state.rendered_rows == 0 {
             return Ok(());
@@ -132,6 +136,13 @@ impl CliCommandPreview {
         Ok(())
     }
 
+    /// 【终端】【命令预览】启动 Working 白色流光刷新线程。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
     fn start_animation(&mut self) {
         if self.animating.swap(true, Ordering::SeqCst) {
             return;
@@ -147,12 +158,19 @@ impl CliCommandPreview {
                     guard.frame = guard.frame.wrapping_add(1);
                 }
                 let _ = redraw_preview(&state);
-                thread::sleep(Duration::from_millis(120));
+                thread::sleep(ACTIVITY_FRAME_INTERVAL);
             }
             running.store(false, Ordering::SeqCst);
         }));
     }
 
+    /// 【终端】【命令预览】停止 Working 白色流光刷新线程。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
     fn stop_animation(&mut self) {
         self.animating.store(false, Ordering::SeqCst);
         if let Some(handle) = self.handle.take() {
@@ -162,7 +180,10 @@ impl CliCommandPreview {
 
     #[cfg(test)]
     pub(super) fn display_texts(&self) -> (String, String) {
-        let state = self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         (
             state.stdout.display_text().into_owned(),
             state.stderr.display_text().into_owned(),
@@ -176,9 +197,11 @@ impl Drop for CliCommandPreview {
     }
 }
 
-/// 重绘命令输出与内嵌 working 动效行。
+/// 重绘命令输出与内嵌 Working 白色流光行。
 fn redraw_preview(state: &Arc<Mutex<PreviewState>>) -> Result<bool> {
-    let mut guard = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut guard = state
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if !guard.active {
         return Ok(false);
     }
@@ -186,7 +209,7 @@ fn redraw_preview(state: &Arc<Mutex<PreviewState>>) -> Result<bool> {
         &guard.stdout.display_text(),
         &guard.stderr.display_text(),
     );
-    // 1. 【终端】【命令预览】命令输出下方保留 Working 文字扫光
+    // 1. 【终端】【命令预览】命令输出下方保留 Working 白色流光
     let status = align_to_guide_column(
         &WorkStatus::Working.render_line(guard.frame, guard.started.elapsed()),
     );
@@ -217,7 +240,10 @@ mod tests {
     fn begin_resets_previous_command_buffers() {
         let mut preview = CliCommandPreview::new();
         {
-            let mut state = preview.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut state = preview
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             state.stdout.append(b"first", 0);
             state.stderr.append(b"error", 0);
         }

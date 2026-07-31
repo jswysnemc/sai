@@ -19,6 +19,7 @@ mod tests;
 use crate::agent::AgentMode;
 use crate::cli::repl_chrome::ReplChrome;
 use crate::cli::repl_clipboard::ReplClipboardState;
+use crate::render::activity_animation::ACTIVITY_FRAME_INTERVAL;
 use crate::render::transcript::{TranscriptRenderOptions, TranscriptStore, WelcomeCell};
 use crate::state::{SessionTimelineCompaction, SessionTimelineTurn};
 use anyhow::Result;
@@ -33,7 +34,7 @@ use stream::{StreamState, SyncPlan};
 use viewport::{InlineViewport, TerminalSize};
 
 /// live 动效与流式文本的统一刷新周期。
-const LIVE_REFRESH_INTERVAL: Duration = Duration::from_millis(100);
+const LIVE_REFRESH_INTERVAL: Duration = ACTIVITY_FRAME_INTERVAL;
 const SUBAGENT_REFRESH_INTERVAL: Duration = Duration::from_millis(150);
 
 /// REPL 的 source-backed transcript、inline viewport 与增量协调运行期。

@@ -1,5 +1,5 @@
 use crate::render::activity_animation::{
-    activity_frame_count, render_activity_detail, render_activity_text,
+    activity_frame_count, render_activity_detail, render_activity_text, ACTIVITY_FRAME_INTERVAL,
 };
 use crate::render::content_indent::align_to_guide_column;
 use crate::render::work_status::format_elapsed;
@@ -11,9 +11,7 @@ use std::io::{self, IsTerminal, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
-
-const INTERVAL: Duration = Duration::from_millis(80);
+use std::time::Instant;
 
 pub(crate) struct WaitSpinner {
     state: Arc<Mutex<WaitSpinnerState>>,
@@ -171,7 +169,7 @@ fn run_spinner_loop(state: Arc<Mutex<WaitSpinnerState>>, running: Arc<AtomicBool
         if !output.is_empty() {
             let _ = write_spinner_lines(&output, anchor_row, prev_lines, lines);
         }
-        thread::sleep(INTERVAL);
+        thread::sleep(ACTIVITY_FRAME_INTERVAL);
         frame = (frame + 1) % frame_count.max(1);
     }
 }
@@ -284,12 +282,7 @@ fn spinner_row_overflow(row: u16, rows: u16, lines: u16) -> u16 {
 ///
 /// 返回:
 /// - 终端写入是否成功
-fn write_spinner_lines(
-    output: &str,
-    anchor_row: u16,
-    prev_lines: u16,
-    lines: u16,
-) -> Result<()> {
+fn write_spinner_lines(output: &str, anchor_row: u16, prev_lines: u16, lines: u16) -> Result<()> {
     let mut stdout = io::stdout();
     let rows_to_clear = prev_lines.max(lines).max(1);
     for row_offset in 0..rows_to_clear {
@@ -372,7 +365,7 @@ mod tests {
         assert!(frame.contains("model gpt"));
     }
 
-    /// 【终端】【等待状态测试】验证状态文字扫光不再使用移动点。
+    /// 【终端】【等待状态测试】验证状态文字使用 Codex 风格流光且不使用移动点。
     ///
     /// 参数:
     /// - 无
@@ -380,7 +373,7 @@ mod tests {
     /// 返回:
     /// - 无
     #[test]
-    fn render_frame_uses_text_sweep_without_moving_dots() {
+    fn render_frame_uses_white_shimmer_without_moving_dots() {
         let state = make_state("Thinking", None);
 
         let (first, lines) = render_frame(0, &state);
