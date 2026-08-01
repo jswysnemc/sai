@@ -7,6 +7,7 @@ import type {
 import { useI18n } from "../i18n/use-i18n";
 import { Button } from "../../shared/ui/button/button";
 import { Select } from "../../shared/ui/select/select";
+import { AppearancePreview } from "./appearance-preview/appearance-preview";
 import { SettingsGroup } from "./editor-layout";
 import "./markdown-style-settings.css";
 
@@ -222,6 +223,7 @@ export function MarkdownStyleSettings({
           </div>
         </fieldset>
       </div>
+      <AppearancePreview preferences={preferences} />
     </SettingsGroup>
   );
 }

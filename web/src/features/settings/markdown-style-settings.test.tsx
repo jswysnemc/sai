@@ -23,4 +23,43 @@ describe("MarkdownStyleSettings", () => {
     expect(html).toContain("制表符宽度");
     expect(html).toContain("最大高度");
   });
+
+  it("内嵌效果预览，并按当前配置渲染示例", () => {
+    const html = renderToStaticMarkup(
+      <MarkdownStyleSettings
+        preferences={DEFAULT_MARKDOWN_STYLE_PREFERENCES}
+        onTableChange={vi.fn()}
+        onCodeBlockChange={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    expect(html).toContain("效果预览");
+    // 示例内容随配置一起渲染，而不是静态截图
+    expect(html).toContain("deepseek-v4-pro");
+  });
+
+  it("预览跟随配置变化：关闭语言标签后不再出现语言名", () => {
+    const withLabel = renderToStaticMarkup(
+      <MarkdownStyleSettings
+        preferences={DEFAULT_MARKDOWN_STYLE_PREFERENCES}
+        onTableChange={vi.fn()}
+        onCodeBlockChange={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+    const withoutLabel = renderToStaticMarkup(
+      <MarkdownStyleSettings
+        preferences={{
+          ...DEFAULT_MARKDOWN_STYLE_PREFERENCES,
+          codeBlock: { ...DEFAULT_MARKDOWN_STYLE_PREFERENCES.codeBlock, showLanguageLabel: false }
+        }}
+        onTableChange={vi.fn()}
+        onCodeBlockChange={vi.fn()}
+        onReset={vi.fn()}
+      />
+    );
+
+    expect(withLabel).not.toEqual(withoutLabel);
+  });
 });
