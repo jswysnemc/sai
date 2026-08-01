@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, GitBranch } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
@@ -28,6 +28,8 @@ import { useI18n } from "../i18n/use-i18n";
 import { parseGoalCommand } from "../goals/goal-command";
 import { appendTerminalSelection, INSERT_TERMINAL_SELECTION_EVENT, type TerminalSelectionDetail } from "./composer/composer-events";
 import { RuntimeOverview } from "../runtime-overview/runtime-overview";
+import { TurnTreePanel } from "./turn-tree/turn-tree-panel";
+import { useTurnTree } from "./turn-tree/use-turn-tree";
 import { QueuedMessageList } from "./queue/queued-message-list";
 import { isConversationEmpty, shouldCenterEmptySession } from "./empty-session-layout";
 
@@ -53,6 +55,8 @@ export function ChatPage() {
     retry: false
   });
   const activeSession = sessions.data?.find((session) => session.active);
+  const [treeOpen, setTreeOpen] = useState(false);
+  const turnTree = useTurnTree(activeSession?.id);
   const activeWorkspace = workspaces.data?.workspaces.find(
     (workspace) => workspace.id === workspaces.data.active_id
   );
@@ -501,6 +505,26 @@ export function ChatPage() {
           items={overviewItems}
           onNavigate={pauseFollowing}
         />
+        {!treeOpen && (turnTree.tree.data?.branch_points ?? 0) > 0 && (
+          <button
+            type="button"
+            className="turn-tree-open"
+            onClick={() => setTreeOpen(true)}
+            aria-label={t("Show session branches", "查看会话分支")}
+            title={t("Show session branches", "查看会话分支")}
+          >
+            <GitBranch size={13} aria-hidden />
+            <span>{turnTree.tree.data?.branch_points}</span>
+          </button>
+        )}
+        {treeOpen && turnTree.tree.data && (
+          <TurnTreePanel
+            tree={turnTree.tree.data}
+            busy={turnTree.switchBranch.isPending || running}
+            onSelect={(turnId) => turnTree.switchBranch.mutate(turnId)}
+            onClose={() => setTreeOpen(false)}
+          />
+        )}
         <RuntimeOverview sessionId={activeSession?.id} />
         {showJump && (
           <button type="button" className="jump-to-bottom" onClick={jumpToBottom} aria-label={t("Jump to bottom", "回到底部")} title={t("Jump to bottom", "回到底部")}>

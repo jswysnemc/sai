@@ -555,7 +555,10 @@ async fn rollback(
 ///
 /// 返回:
 /// - 会话所属工作区标识
-async fn reject_session_run(state: &WebAppState, session_id: &str) -> WebResult<String> {
+pub(super) async fn reject_session_run(
+    state: &WebAppState,
+    session_id: &str,
+) -> WebResult<String> {
     let workspace_id = session_workspace_id(&state.paths, session_id)
         .map_err(|error| WebError::not_found(error.to_string()))?;
     if state

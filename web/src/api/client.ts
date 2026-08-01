@@ -1,3 +1,4 @@
+import type { BranchSwitchResult, SessionTurnTree } from "./turn-tree-contracts";
 import type {
   ConfigResponse,
   McpConfig,
@@ -166,6 +167,17 @@ export const api = {
         body: JSON.stringify({ turn_id: turnId })
       }),
     permissionAudit: (id: string) => apiRequest<PermissionAuditEvent[]>(`/api/sessions/${id}/permission-audit?limit=200`),
+    turnTree: (id: string) => apiRequest<SessionTurnTree>(`/api/sessions/${id}/turn-tree`),
+    switchBranch: (id: string, turnId: string) =>
+      apiRequest<BranchSwitchResult>(`/api/sessions/${id}/turn-tree/switch`, {
+        method: "POST",
+        body: JSON.stringify({ turn_id: turnId })
+      }),
+    undoToParent: (id: string, turnId: string) =>
+      apiRequest<BranchSwitchResult>(`/api/sessions/${id}/turn-tree/undo`, {
+        method: "POST",
+        body: JSON.stringify({ turn_id: turnId })
+      }),
     fork: (id: string, turnId: string, title?: string) =>
       apiRequest<Session>(`/api/sessions/${id}/fork`, {
         method: "POST",

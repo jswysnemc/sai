@@ -1,0 +1,43 @@
+.branch-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3xs);
+  padding: 0 var(--space-2xs);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+}
+
+.branch-switcher > svg {
+  opacity: 0.7;
+}
+
+.branch-switcher button {
+  display: grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: inherit;
+  line-height: 0;
+}
+
+.branch-switcher button:hover:not(:disabled) {
+  background: var(--paper-raised);
+  color: var(--ink);
+}
+
+.branch-switcher button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.branch-switcher-count {
+  min-width: 2rem;
+  font: var(--text-2xs)/1 var(--font-code);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}

@@ -172,3 +172,30 @@ fn history_projection_stays_on_the_active_branch() {
     assert!(text.contains("A=1"));
     assert!(!text.contains("B=2"), "被切走的分支不应进入投影: {text}");
 }
+
+/// 树视图能完整表达真实分叉：一个父轮次下挂多条分支。
+#[test]
+fn tree_view_reports_multiple_branches_under_one_parent() {
+    let temp = tempfile::tempdir().unwrap();
+    let db = open_db(temp.path());
+
+    let root = append_turn(&db, "t1", "根问题");
+    for (index, id) in ["t2", "t3", "t4"].iter().enumerate() {
+        db.switch_active_leaf(&root).unwrap();
+        append_turn(&db, id, &format!("第 {} 种问法", index + 1));
+    }
+
+    let tree = db.session_tree().unwrap();
+
+    assert_eq!(tree.total_turns, 4);
+    assert_eq!(tree.branch_points, 1);
+    assert_eq!(tree.roots.len(), 1);
+    assert_eq!(tree.roots[0].children.len(), 3, "根轮次下应有三条分支");
+    // 活动叶子停在最后一次提问的分支上
+    assert_eq!(tree.active_leaf_id.as_deref(), Some("t4"));
+    // 每条分支都能独立回溯
+    let branch = db.active_branch_turns().unwrap();
+    assert_eq!(branch.len(), 2);
+    assert_eq!(branch[0].turn_id, "t1");
+    assert_eq!(branch[1].turn_id, "t4");
+}
