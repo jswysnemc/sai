@@ -1,4 +1,6 @@
+mod limits;
 mod restore;
+mod retention;
 mod snapshot;
 
 use crate::state::StateStore;
@@ -6,7 +8,9 @@ use anyhow::Result;
 use std::path::Path;
 
 pub(crate) use restore::{restore_latest_snapshot, restore_snapshot_paths};
+pub(crate) use retention::cleanup_snapshot_root;
 use snapshot::{discard_snapshot, finalize_snapshot, start_snapshot, PendingSnapshot};
+pub(crate) use snapshot::snapshot_root;
 
 /// 工作树撤销结果。
 #[derive(Debug, Clone)]
@@ -93,6 +97,58 @@ mod tests {
         std::fs::write(root.join("tracked.txt"), "base").unwrap();
         git(root, &["add", "tracked.txt"]);
         git(root, &["commit", "--quiet", "-m", "test: baseline"]);
+    }
+
+    #[test]
+    /// 超过大小上限的未跟踪文件不进入快照，避免构建产物撑爆状态目录。
+    fn large_untracked_files_stay_out_of_the_snapshot() {
+        let temp = tempfile::tempdir().unwrap();
+        let repository_root = temp.path().join("repository");
+        let state_dir = temp.path().join("state");
+        std::fs::create_dir_all(&repository_root).unwrap();
+        repository(&repository_root);
+        // 一个小文件与一个超过上限的大文件同时未跟踪
+        std::fs::write(repository_root.join("small.txt"), "keep me").unwrap();
+        std::fs::write(
+            repository_root.join("huge.bin"),
+            vec![0u8; (limits::MAX_UNTRACKED_FILE_BYTES + 1) as usize],
+        )
+        .unwrap();
+
+        let pending = snapshot::start_snapshot(&state_dir, &repository_root, "turn-big")
+            .unwrap()
+            .unwrap();
+        snapshot::finalize_snapshot(pending).unwrap();
+
+        // 小文件进入快照，大文件只留登记不留内容
+        let snapshot_dir = snapshot::snapshot_directory(&state_dir, "turn-big");
+        let copied = walk_files(&snapshot_dir.join("untracked"));
+        let names = copied
+            .iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+        assert!(names.contains(&"small.txt".to_string()));
+        assert!(
+            !names.contains(&"huge.bin".to_string()),
+            "大文件不应被复制进快照: {names:?}"
+        );
+    }
+
+    /// 递归收集目录下的全部文件路径。
+    fn walk_files(root: &Path) -> Vec<std::path::PathBuf> {
+        let mut files = Vec::new();
+        let Ok(entries) = std::fs::read_dir(root) else {
+            return files;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                files.extend(walk_files(&path));
+            } else {
+                files.push(path);
+            }
+        }
+        files
     }
 
     #[test]

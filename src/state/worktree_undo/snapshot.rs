@@ -1,3 +1,4 @@
+use super::limits::{exceeds_snapshot_limit, SkippedEntry};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -6,6 +7,17 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const SNAPSHOT_DIR: &str = "worktree-undo";
+
+/// 返回会话状态目录下的快照根目录。
+///
+/// 参数:
+/// - `state_dir`: 会话状态目录
+///
+/// 返回:
+/// - 快照根目录路径
+pub(crate) fn snapshot_root(state_dir: &Path) -> PathBuf {
+    state_dir.join(SNAPSHOT_DIR)
+}
 
 #[derive(Debug)]
 pub(super) struct PendingSnapshot {
@@ -21,6 +33,9 @@ pub(super) struct SnapshotRecord {
     pub(super) after_fingerprint: String,
     pub(super) turn_id: String,
     pub(super) untracked: Vec<UntrackedEntry>,
+    /// 因超过大小上限而未纳入快照的未跟踪文件
+    #[serde(default)]
+    pub(super) skipped: Vec<SkippedEntry>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -67,7 +82,7 @@ pub(super) fn start_snapshot(
     let worktree_patch = git_bytes(&repository_root, &["diff", "--binary", "--"])?;
     std::fs::write(directory.join("before-index.patch"), index_patch)?;
     std::fs::write(directory.join("before-worktree.patch"), worktree_patch)?;
-    let untracked = snapshot_untracked(&repository_root, &directory.join("untracked"))?;
+    let (untracked, skipped) = snapshot_untracked(&repository_root, &directory.join("untracked"))?;
     let record = SnapshotRecord {
         repository_root: repository_root.display().to_string(),
         head,
@@ -75,6 +90,7 @@ pub(super) fn start_snapshot(
         after_fingerprint: String::new(),
         turn_id: turn_id.to_string(),
         untracked,
+        skipped,
     };
     save_record(&directory, &record)?;
     Ok(Some(PendingSnapshot {
@@ -241,15 +257,28 @@ fn current_head(repository_root: &Path) -> Result<Option<String>> {
 }
 
 /// 复制运行前全部未跟踪文件并记录类型。
-fn snapshot_untracked(repository_root: &Path, target: &Path) -> Result<Vec<UntrackedEntry>> {
+fn snapshot_untracked(
+    repository_root: &Path,
+    target: &Path,
+) -> Result<(Vec<UntrackedEntry>, Vec<SkippedEntry>)> {
     let mut entries = Vec::new();
+    let mut skipped = Vec::new();
     for path in untracked_paths(repository_root)? {
         let source = repository_root.join(&path);
+        let metadata = std::fs::symlink_metadata(&source)?;
+        // 1. 普通大文件不复制，只登记路径与体积，避免状态目录被构建产物撑爆
+        if !metadata.file_type().is_symlink() && exceeds_snapshot_limit(metadata.len()) {
+            skipped.push(SkippedEntry {
+                path,
+                bytes: metadata.len(),
+            });
+            continue;
+        }
         let destination = target.join(&path);
         if let Some(parent) = destination.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let metadata = std::fs::symlink_metadata(&source)?;
+        // 2. 软链接保存目标路径文本，普通文件整份复制
         let kind = if metadata.file_type().is_symlink() {
             std::fs::write(
                 &destination,
@@ -262,7 +291,7 @@ fn snapshot_untracked(repository_root: &Path, target: &Path) -> Result<Vec<Untra
         };
         entries.push(UntrackedEntry { path, kind });
     }
-    Ok(entries)
+    Ok((entries, skipped))
 }
 
 /// 读取全部未跟踪文件相对路径。

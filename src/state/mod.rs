@@ -106,9 +106,39 @@ impl StateStore {
             state_dir,
             conv_db,
         };
-        store.migrate_from_jsonl()?;
-        checkpoints::migrate_legacy_compaction_summary(&store)?;
+        store.prepare_after_open()?;
         Ok(store)
+    }
+
+    /// 打开会话状态后的统一收尾。
+    ///
+    /// 三个构造入口共用：迁移历史格式，并收敛上次运行遗留的撤销快照。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 迁移是否成功；快照清理失败不阻断打开
+    fn prepare_after_open(&self) -> Result<()> {
+        self.migrate_from_jsonl()?;
+        checkpoints::migrate_legacy_compaction_summary(self)?;
+        self.cleanup_worktree_snapshots();
+        Ok(())
+    }
+
+    /// 清理本会话的工作树撤销快照残留。
+    ///
+    /// 进程被强制结束时快照收尾不会执行，`pending_` 目录会永久留在磁盘上；
+    /// 已完成快照也需要按保留上限淘汰。清理失败不应阻断会话打开，因此忽略错误。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    fn cleanup_worktree_snapshots(&self) {
+        let root = worktree_undo::snapshot_root(&self.state_dir);
+        let _ = worktree_undo::cleanup_snapshot_root(&root);
     }
 
     /// 创建绑定到指定会话的状态存储，不修改全局当前会话。
@@ -128,8 +158,7 @@ impl StateStore {
             state_dir,
             conv_db,
         };
-        store.migrate_from_jsonl()?;
-        checkpoints::migrate_legacy_compaction_summary(&store)?;
+        store.prepare_after_open()?;
         Ok(store)
     }
 
@@ -156,8 +185,7 @@ impl StateStore {
             state_dir,
             conv_db,
         };
-        store.migrate_from_jsonl()?;
-        checkpoints::migrate_legacy_compaction_summary(&store)?;
+        store.prepare_after_open()?;
         Ok(store)
     }
 
