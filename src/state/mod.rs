@@ -450,7 +450,7 @@ impl StateStore {
     /// 返回:
     /// - 旧消息入口视图
     pub fn load_conversation(&self) -> Result<Vec<StoredConversationEntry>> {
-        Ok(turns_to_entries(self.conv_db.load_turns()?))
+        Ok(turns_to_entries(self.conv_db.active_branch_turns()?))
     }
 
     /// 判断最后一轮是否为指定输入对应的部分中断回复。
@@ -461,18 +461,31 @@ impl StateStore {
     /// 返回:
     /// - 最后一轮匹配且包含部分助手正文时返回 true
     pub(crate) fn latest_interrupted_turn_has_content(&self, input: &str) -> Result<bool> {
-        Ok(self.conv_db.load_turns()?.last().is_some_and(|turn| {
+        Ok(self.conv_db.active_branch_turns()?.last().is_some_and(|turn| {
             turn.status == turns::TurnStatus::Interrupted
                 && turn.user_content.trim() == input.trim()
                 && !turn.assistant_content.trim().is_empty()
         }))
     }
 
-    /// 读取完整对话轮次。
+    /// 读取当前活动分支上的对话轮次。
+    ///
+    /// 会话是一棵树，历史指的是从根到活动叶子的那一条路径。
+    /// 其它分支的轮次仍保存在库中，但不参与当前上下文。
     ///
     /// 返回:
-    /// - 轮次列表
+    /// - 活动分支轮次列表，按时间升序
     pub fn load_turns(&self) -> Result<Vec<Turn>> {
+        self.conv_db.active_branch_turns()
+    }
+
+    /// 读取会话内全部轮次，含所有分支。
+    ///
+    /// 仅用于树视图、清理与统计；构造对话上下文一律使用 `load_turns`。
+    ///
+    /// 返回:
+    /// - 全部轮次列表，按 seq 升序
+    pub fn load_all_turns(&self) -> Result<Vec<Turn>> {
         self.conv_db.load_turns()
     }
 

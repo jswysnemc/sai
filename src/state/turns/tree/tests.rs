@@ -107,3 +107,29 @@ fn switching_to_a_missing_turn_fails() {
         Some(first.as_str())
     );
 }
+
+/// 上下文投影只包含活动分支，其它分支不得混入。
+#[test]
+fn conversation_context_excludes_other_branches() {
+    let temp = tempfile::tempdir().unwrap();
+    let db = open_db(temp.path());
+
+    let first = append_turn(&db, "t1", "第一问");
+    append_turn(&db, "t2", "被放弃的问法");
+    db.switch_active_leaf(&first).unwrap();
+    append_turn(&db, "t3", "保留的问法");
+
+    let branch = db.active_branch_turns().unwrap();
+    let text: String = branch
+        .iter()
+        .map(|turn| turn.user_content.clone())
+        .collect::<Vec<_>>()
+        .join("|");
+
+    assert!(text.contains("第一问"));
+    assert!(text.contains("保留的问法"));
+    assert!(
+        !text.contains("被放弃的问法"),
+        "另一条分支不应进入上下文: {text}"
+    );
+}

@@ -73,7 +73,7 @@ impl StateStore {
     ) -> Result<Option<CompactionRequest>> {
         let current_context_tokens = estimate_projected_request_chars(projection);
         let context_limit_tokens = projection.estimate.context_limit_chars;
-        let turns = self.conv_db.load_turns()?;
+        let turns = self.conv_db.active_branch_turns()?;
         let previous_summary = self
             .load_authoritative_compaction_summary()?
             .map(|summary| summary.summary);
@@ -98,7 +98,7 @@ impl StateStore {
         &self,
         _legacy_keep_tail_turns: usize,
     ) -> Result<Option<CompactionRequest>> {
-        let turns = self.conv_db.load_turns()?;
+        let turns = self.conv_db.active_branch_turns()?;
         let previous_summary = self
             .load_authoritative_compaction_summary()?
             .map(|summary| summary.summary);

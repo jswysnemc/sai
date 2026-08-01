@@ -89,7 +89,7 @@ impl StateStore {
     /// 返回:
     /// - 按对话顺序排列的会话时间线
     pub fn session_timeline(&self, limit: usize) -> Result<Vec<SessionTimelineTurn>> {
-        let mut turns = self.conv_db.load_turns()?;
+        let mut turns = self.conv_db.active_branch_turns()?;
         let start = turns.len().saturating_sub(limit);
         let turns = turns.split_off(start);
         turns
