@@ -28,6 +28,7 @@ import { useI18n } from "../i18n/use-i18n";
 import { parseGoalCommand } from "../goals/goal-command";
 import { appendTerminalSelection, INSERT_TERMINAL_SELECTION_EVENT, type TerminalSelectionDetail } from "./composer/composer-events";
 import { RuntimeOverview } from "../runtime-overview/runtime-overview";
+import { BranchSwitcher } from "./turn-tree/branch-switcher";
 import { TurnTreePanel } from "./turn-tree/turn-tree-panel";
 import { useTurnTree } from "./turn-tree/use-turn-tree";
 import { QueuedMessageList } from "./queue/queued-message-list";
@@ -462,6 +463,14 @@ export function ChatPage() {
                     : undefined}
                   onFork={() => void forkFromTurn(turn.turn_id)}
                   actionBusy={actionBusy}
+                  branchSlot={(
+                    <BranchSwitcher
+                      tree={turnTree.tree.data}
+                      turnId={turn.turn_id}
+                      busy={turnTree.switchBranch.isPending || running}
+                      onSwitch={(target) => turnTree.switchBranch.mutate(target)}
+                    />
+                  )}
                 />
               </section>
             ))}

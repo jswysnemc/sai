@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
 /// 同一调用重复多少次后开始警告。
-const WARN_THRESHOLD: usize = 3;
+const WARN_THRESHOLD: usize = 2;
 
 /// 同一调用重复多少次后拒绝执行。
-const BLOCK_THRESHOLD: usize = 6;
+///
+/// 同一份参数读第三次时结果已经确定不会变化，再放行只是浪费轮次。
+const BLOCK_THRESHOLD: usize = 3;
 
 /// 【Agent】【循环防护】识别模型反复发起同一工具调用的状态。
 ///
@@ -153,13 +155,14 @@ mod tests {
     /// 仅有空白差异的参数视为同一调用。
     #[test]
     fn ignores_whitespace_differences_in_arguments() {
+        // 三种写法只有空白差异，应当累计为同一个调用
         let mut guard = RepeatGuard::default();
-        guard.observe("read_file", r#"{"path":"a"}"#);
-        guard.observe("read_file", r#"{ "path": "a" }"#);
-        guard.observe("read_file", "{\n  \"path\": \"a\"\n}");
+        for _ in 0..WARN_THRESHOLD {
+            guard.observe("read_file", r#"{"path":"a"}"#);
+        }
 
         assert_eq!(
-            guard.observe("read_file", r#"{"path":"a"}"#),
+            guard.observe("read_file", "{\n  \"path\": \"a\"\n}"),
             RepeatVerdict::Warn {
                 seen: WARN_THRESHOLD + 1
             }

@@ -334,7 +334,8 @@
 .session-row {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px;
+  /* 更多操作按钮绝对定位叠在右端，行内只保留主区一列 */
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   border-radius:var(--radius-3);
 }
@@ -446,6 +447,11 @@
 }
 
 .session-more {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  height: 100%;
   display: grid;
   width: 26px;
   height: 28px;
@@ -454,11 +460,33 @@
   border-radius:var(--radius-2);
   background: transparent;
   opacity: 0;
+  pointer-events: none;
 }
 
 .session-row:hover .session-more,
 .session-more:focus {
   opacity: 1;
+  pointer-events: auto;
+}
+
+/* 悬停时更多操作就地替换时间，两者不再并排相挤 */
+.session-row:hover .session-main small,
+.session-row:focus-within .session-main small {
+  opacity: 0;
+}
+
+.session-main small {
+  transition: opacity 120ms ease;
+}
+
+/* 运行指示器让位给操作按钮，避免图标重叠 */
+.session-row:hover .session-main .active-agent-indicator,
+.session-row:focus-within .session-main .active-agent-indicator {
+  opacity: 0;
+}
+
+.session-main .active-agent-indicator {
+  transition: opacity 120ms ease;
 }
 
 .session-menu {

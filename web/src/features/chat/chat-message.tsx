@@ -1,3 +1,4 @@
+import type React from "react";
 import type { HistoryEntry, SessionTimelineTurn, TimelineToolEntry } from "../../api/contracts";
 import type { LiveRunState } from "./run-event-reducer";
 import type { LiveMessagePart } from "./run-event-reducer";
@@ -38,13 +39,16 @@ export function HistoryTurn({
   sessionId,
   onRetry,
   onFork,
-  actionBusy
+  actionBusy,
+  branchSlot
 }: {
   turn: SessionTimelineTurn;
   sessionId?: string | null;
   onRetry?: () => void;
   onFork?: () => void;
   actionBusy?: boolean;
+  /** 该轮次存在同级分支时展示的版本切换器 */
+  branchSlot?: React.ReactNode;
 }) {
   const { t, locale } = useI18n();
   // 失败轮仅有错误摘要时不把错误再当正文渲染一遍
@@ -85,12 +89,13 @@ export function HistoryTurn({
           sessionId={sessionId}
           turnId={turn.turn_id}
         />
-        {(turn.assistant.content || onFork) && (
+        {(turn.assistant.content || onFork || branchSlot) && (
           <MessageActions
             text={turn.assistant.content || turn.user.content}
             timestamp={turn.assistant.timestamp}
             onFork={onFork}
             busy={actionBusy}
+            extra={branchSlot}
           />
         )}
       </article>

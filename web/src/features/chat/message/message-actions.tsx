@@ -1,4 +1,5 @@
 import { Check, Copy, GitBranch, RotateCcw } from "lucide-react";
+import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../i18n/use-i18n";
 
@@ -9,12 +10,14 @@ type MessageActionsProps = {
   onRetry?: () => void;
   onFork?: () => void;
   busy?: boolean;
+  /** 附加操作，例如分支版本切换 */
+  extra?: React.ReactNode;
 };
 
 /**
  * 消息操作行：时间、重试、分支、复制。
  */
-export function MessageActions({ text, className, timestamp, onRetry, onFork, busy }: MessageActionsProps) {
+export function MessageActions({ text, className, timestamp, onRetry, onFork, busy, extra }: MessageActionsProps) {
   const { locale, t } = useI18n();
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | null>(null);
@@ -37,6 +40,7 @@ export function MessageActions({ text, className, timestamp, onRetry, onFork, bu
   return (
     <div className={`message-actions${className ? ` ${className}` : ""}`}>
       {timestamp && <time className="message-timestamp">{formatTimestamp(timestamp, locale)}</time>}
+      {extra}
       {onRetry && (
         <button type="button" className="message-copy" onClick={onRetry} aria-label={t("Retry turn", "重试本轮")} title={t("Retry turn", "重试本轮")} disabled={busy}>
           <RotateCcw size={13} />
