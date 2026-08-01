@@ -117,3 +117,47 @@ fn test_paths(root: &std::path::Path) -> SaiPaths {
         powershell_hook_file: root.join("shell/powershell-hook.ps1"),
     }
 }
+
+/// 仅暴露名称的 skill 在重载后仍需保留加载器，否则切换模型会让它无法加载。
+#[test]
+fn reload_keeps_loader_for_named_only_skills() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = test_paths(temp.path());
+    let skill_dir = paths.skills_dir.join("named-skill");
+    std::fs::create_dir_all(&skill_dir).unwrap();
+    std::fs::write(
+        skill_dir.join("SKILL.md"),
+        "---\nname: named-skill\ndescription: demo\n---\n\nrun it.\n",
+    )
+    .unwrap();
+    let mut config = AppConfig::default();
+    // 没有延迟工具，只有仅暴露名称的 skill
+    config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
+        enabled_tools: Vec::new(),
+        deferred_tools: Vec::new(),
+        skills_full: Vec::new(),
+        skills_named: vec!["named-skill".to_string()],
+    });
+    let state = StateStore::new(&paths).unwrap();
+    state.init_files().unwrap();
+    let client = OpenAiCompatibleClient::from_config(&config, &paths).unwrap();
+    let mut agent = Agent::new(
+        config.clone(),
+        &paths,
+        state,
+        client.clone(),
+        ToolRegistry::new(),
+        AgentMode::Yolo,
+    )
+    .unwrap();
+    assert!(agent.tools.contains(crate::tools::LOAD_NAME));
+
+    agent
+        .reload(config, client, ToolRegistry::new(), AgentMode::Yolo)
+        .unwrap();
+
+    assert!(
+        agent.tools.contains(crate::tools::LOAD_NAME),
+        "重载后仍须保留 load，否则纯名称 skill 无法加载"
+    );
+}

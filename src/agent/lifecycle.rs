@@ -260,9 +260,12 @@ impl Agent {
         self.tools_enabled =
             self.config.tools.enabled && self.config.active_model_tools_enabled()?;
         crate::goal::register_tools(&mut tools, self.state.goal_file());
-        let deferred = self.config.agent_deferred_tools();
-        if self.tools_enabled && !deferred.is_empty() {
-            tools::register_progressive_loader(&mut tools, deferred);
+        // 与初始化保持一致：仅暴露名称的 skill 同样需要加载器
+        if self.tools_enabled
+            && (!self.config.agent_deferred_tools().is_empty()
+                || self.config.has_named_only_skills())
+        {
+            tools::register_progressive_loader(&mut tools, self.config.agent_deferred_tools());
         }
         self.tools = tools;
         self.tool_visibility = ToolVisibility::from_config(&self.config);
