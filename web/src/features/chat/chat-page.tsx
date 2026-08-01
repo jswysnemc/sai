@@ -29,6 +29,7 @@ import { parseGoalCommand } from "../goals/goal-command";
 import { appendTerminalSelection, INSERT_TERMINAL_SELECTION_EVENT, type TerminalSelectionDetail } from "./composer/composer-events";
 import { RuntimeOverview } from "../runtime-overview/runtime-overview";
 import { BranchSwitcher } from "./turn-tree/branch-switcher";
+import { TurnTreeOverview } from "./turn-tree/turn-tree-overview";
 import { TurnTreePanel } from "./turn-tree/turn-tree-panel";
 import { useTurnTree } from "./turn-tree/use-turn-tree";
 import { QueuedMessageList } from "./queue/queued-message-list";
@@ -57,6 +58,7 @@ export function ChatPage() {
   });
   const activeSession = sessions.data?.find((session) => session.active);
   const [treeOpen, setTreeOpen] = useState(false);
+  const [treeOverviewOpen, setTreeOverviewOpen] = useState(false);
   const turnTree = useTurnTree(activeSession?.id);
   const activeWorkspace = workspaces.data?.workspaces.find(
     (workspace) => workspace.id === workspaces.data.active_id
@@ -532,6 +534,7 @@ export function ChatPage() {
             busy={turnTree.switchBranch.isPending || running}
             onSelect={(turnId) => turnTree.switchBranch.mutate(turnId)}
             onClose={() => setTreeOpen(false)}
+            onOpenOverview={() => setTreeOverviewOpen(true)}
           />
         )}
         <RuntimeOverview sessionId={activeSession?.id} />
@@ -541,6 +544,24 @@ export function ChatPage() {
           </button>
         )}
       </div>
+      <Modal
+        open={treeOverviewOpen}
+        title={t("Branch overview", "分支总览")}
+        description={t("Click any turn to switch the conversation to that branch.", "点击任意轮次即可把对话切换到该分支。")}
+        size="large"
+        onClose={() => setTreeOverviewOpen(false)}
+      >
+        {turnTree.tree.data && (
+          <TurnTreeOverview
+            tree={turnTree.tree.data}
+            busy={turnTree.switchBranch.isPending || running}
+            onSelect={(turnId) => {
+              turnTree.switchBranch.mutate(turnId);
+              setTreeOverviewOpen(false);
+            }}
+          />
+        )}
+      </Modal>
       <Modal
         open={undoConfirmOpen}
         title={t("Undo the previous turn?", "撤销上一轮？")}

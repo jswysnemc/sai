@@ -1,0 +1,80 @@
+.turn-tree-overview {
+  position: relative;
+  min-width: 0;
+  padding: var(--space-sm);
+  overflow: auto;
+}
+
+.turn-tree-overview-canvas {
+  position: absolute;
+  top: var(--space-sm);
+  left: var(--space-sm);
+  pointer-events: none;
+}
+
+.turn-tree-overview-canvas .edge {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+/* 活动路径上的连线加重，一眼看出当前走的是哪一条 */
+.turn-tree-overview-canvas .edge.on-path {
+  stroke: var(--signal);
+  stroke-width: 1.5;
+}
+
+.turn-tree-overview-node {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  text-align: left;
+}
+
+.turn-tree-overview-node > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.turn-tree-overview-node:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.turn-tree-overview-node.on-path {
+  color: var(--ink);
+}
+
+.turn-tree-overview-node.is-active {
+  border-color: var(--signal);
+  background: color-mix(in srgb, var(--signal) 14%, var(--paper-raised));
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.turn-tree-overview-node.is-failed {
+  border-color: color-mix(in srgb, var(--danger) 50%, var(--line));
+}
+
+.turn-tree-overview-node.is-interrupted {
+  border-style: dashed;
+}
+
+.turn-tree-overview-node:disabled {
+  cursor: default;
+}
+
+.turn-tree-overview-empty {
+  margin: 0;
+  padding: var(--space-md);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}

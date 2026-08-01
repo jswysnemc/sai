@@ -1,4 +1,4 @@
-import { GitBranch, X } from "lucide-react";
+import { GitBranch, Maximize2, X } from "lucide-react";
 import type { SessionTurnTree } from "../../../api/turn-tree-contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
@@ -11,6 +11,8 @@ type TurnTreePanelProps = {
   busy?: boolean;
   onSelect: (turnId: string) => void;
   onClose: () => void;
+  /** 打开整树总览 */
+  onOpenOverview?: () => void;
 };
 
 /**
@@ -22,7 +24,7 @@ type TurnTreePanelProps = {
  * @param props 树数据、忙碌状态与回调
  * @returns 分支树面板
  */
-export function TurnTreePanel({ tree, busy, onSelect, onClose }: TurnTreePanelProps) {
+export function TurnTreePanel({ tree, busy, onSelect, onClose, onOpenOverview }: TurnTreePanelProps) {
   const { t } = useI18n();
   const rows = flattenTurnTree(tree);
 
@@ -37,6 +39,16 @@ export function TurnTreePanel({ tree, busy, onSelect, onClose }: TurnTreePanelPr
             `${tree.total_turns} 轮 · ${tree.branch_points} 处分叉`
           )}
         </small>
+        {onOpenOverview && (
+          <Button
+            className="turn-tree-close"
+            onClick={onOpenOverview}
+            aria-label={t("Open branch overview", "打开分支总览")}
+            title={t("Open branch overview", "打开分支总览")}
+          >
+            <Maximize2 size={13} />
+          </Button>
+        )}
         <Button
           className="turn-tree-close"
           onClick={onClose}
