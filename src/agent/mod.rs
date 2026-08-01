@@ -13,6 +13,7 @@ mod message_context;
 mod mode;
 mod model_context;
 mod recovery;
+mod repeat_guard;
 mod system_prompt;
 mod tool_attachments;
 mod tool_history;
@@ -91,6 +92,8 @@ impl Agent {
     {
         let mut turn_usage = TurnUsageAccumulator::default();
         let mut tool_round = 0usize;
+        // 跨轮累计同一工具调用的重复次数，防止模型对同一参数无限重复
+        let mut repeat_guard = repeat_guard::RepeatGuard::default();
         let mut tool_event_seq = self.state.tool_call_count_for_turn(turn_id)?;
         let mut todo_reminder = self
             .tools
@@ -623,6 +626,20 @@ impl Agent {
                     messages.push(ChatMessage::tool(call.id, context_output));
                     continue;
                 }
+                // 同一参数反复调用同一工具且结果不变时，先提醒、再拒绝，避免无限空转
+                let repeat_verdict =
+                    repeat_guard.observe(&call.function.name, &call.function.arguments);
+                if let repeat_guard::RepeatVerdict::Block { seen } = repeat_verdict {
+                    let output = repeat_guard::block_notice(&call.function.name, seen);
+                    on_event(AgentEvent::ToolResult {
+                        name: call.function.name.clone(),
+                        ok: false,
+                        output: output.clone(),
+                    })?;
+                    self.record_tool_result_completed(turn_id, &call, false, &output, &output)?;
+                    messages.push(ChatMessage::tool(call.id, output));
+                    continue;
+                }
                 let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
                 perf.mark(&format!("tool {} start", call.function.name));
                 let mut tool_hook_ctx = hook_ctx.clone();
@@ -694,6 +711,14 @@ impl Agent {
                     }
                 };
                 let context_output = tools::tool_output_for_context(&call.function.name, &output);
+                // 重复调用尚未到拒绝阈值时照常返回结果，但提醒模型结果没有变化
+                let context_output = match repeat_verdict {
+                    repeat_guard::RepeatVerdict::Warn { seen } => format!(
+                        "{context_output}{}",
+                        repeat_guard::warn_notice(&call.function.name, seen)
+                    ),
+                    _ => context_output,
+                };
                 self.record_tool_result_completed(
                     turn_id,
                     &call,
