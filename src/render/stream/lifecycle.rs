@@ -60,7 +60,12 @@ impl StreamRenderer {
             write!(stdout, "{}", self.flush_markdown_output())?;
             stdout.flush()?;
         }
+        // Full 思考在此把 live 块定格为折叠块，不能先 println 打断重绘锚点
         if self.mode == Some(ChatStreamKind::Reasoning)
+            && self.reasoning_mode == ReasoningDisplayMode::Full
+        {
+            self.flush_full_reasoning_block()?;
+        } else if self.mode == Some(ChatStreamKind::Reasoning)
             && self.reasoning_mode != ReasoningDisplayMode::Summary
         {
             execute!(io::stdout(), ResetColor)?;

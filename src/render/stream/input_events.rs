@@ -63,7 +63,7 @@ impl StreamRenderer {
             false,
         )?;
         self.finish_live_tool_status()?;
-        // Full 模式思考：缓存正文并刷新与 Summary 一致的 live 摘要行，结束时折叠输出
+        // Full 模式思考：正文随 chunk 实时重绘，段落结束时定格为折叠块
         if self.reasoning_mode == ReasoningDisplayMode::Full
             && chunk.kind == ChatStreamKind::Reasoning
         {
@@ -71,15 +71,13 @@ impl StreamRenderer {
                 self.mode = Some(ChatStreamKind::Reasoning);
                 self.reasoning_full_buffer.clear();
                 self.reasoning_started = Some(Instant::now());
+                self.reasoning_live_rows = 0;
+                // live 摘要行与 Full 正文块二选一，先让出终端行
+                self.summary.clear_live_lines()?;
             }
             self.reasoning_full_buffer.push_str(&text);
-            // 1. 【终端】【思考状态】live 行使用 Thinking 文字扫光、tokens 与整数秒耗时
-            self.summary.add_reasoning_text_with_elapsed(
-                &text,
-                self.reasoning_started
-                    .map(|s| s.elapsed())
-                    .unwrap_or_default(),
-            )?;
+            // 1. 【终端】【思考流式】正文随增量重绘，标题带扫光、tokens 与整数秒耗时
+            self.redraw_live_reasoning_block()?;
             return Ok(());
         }
         if self.mode != Some(chunk.kind) {

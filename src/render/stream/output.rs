@@ -104,7 +104,46 @@ impl StreamRenderer {
         Ok(())
     }
 
-    /// 将 Full 模式缓存的思考正文折叠输出到终端。
+    /// 【终端】【思考流式】按当前累计正文重绘 live 思考块。
+    ///
+    /// 先擦掉上一帧占用的视觉行，再写入新一帧，使正文随增量向下生长，
+    /// 而不是把整段思考攒到结束才一次性输出。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 重绘是否成功
+    pub(super) fn redraw_live_reasoning_block(&mut self) -> Result<()> {
+        if self.reasoning_full_buffer.trim().is_empty() {
+            return Ok(());
+        }
+        // 1. 生成本帧：标题带扫光动效，正文折叠为固定高度，避免长思考铺满屏幕
+        self.reasoning_frame = self.reasoning_frame.wrapping_add(1);
+        let elapsed = self
+            .reasoning_started
+            .map(|started| started.elapsed())
+            .unwrap_or_default();
+        let rendered = align_to_guide_column(&reasoning_cell::render_live(
+            &self.reasoning_full_buffer,
+            ReasoningDisplayMode::Full,
+            self.reasoning_frame,
+            elapsed,
+            false,
+        ));
+        // 2. 擦除上一帧再写入本帧，行数按终端折行后的视觉行计算
+        let mut stdout = io::stdout();
+        if self.reasoning_live_rows > 0 {
+            write!(stdout, "{}", clear_rendered_rows(self.reasoning_live_rows))?;
+        }
+        let block = format!("{rendered}\n");
+        write!(stdout, "{block}")?;
+        stdout.flush()?;
+        self.reasoning_live_rows = rendered_visual_rows(&block);
+        Ok(())
+    }
+
+    /// 将 Full 模式的 live 思考块定格为最终折叠块。
     ///
     /// 返回:
     /// - 是否成功
@@ -112,24 +151,30 @@ impl StreamRenderer {
         if self.reasoning_full_buffer.trim().is_empty() {
             self.mode = None;
             self.reasoning_started = None;
+            self.reasoning_live_rows = 0;
+            self.reasoning_frame = 0;
             let _ = self.summary.clear_live_lines();
             return Ok(());
         }
-        // 1. 先擦除 live 摘要行，再输出折叠正文
+        // 1. 擦除最后一帧 live 正文，改写为不含动效的定稿块
+        let mut stdout = io::stdout();
+        if self.reasoning_live_rows > 0 {
+            write!(stdout, "{}", clear_rendered_rows(self.reasoning_live_rows))?;
+            stdout.flush()?;
+            self.reasoning_live_rows = 0;
+        }
         let _ = self.summary.clear_live_lines();
         // 清空 summary 计数，避免后续 finalize 重复输出
         let _ = self.summary.finalize_reasoning_silent();
         let body = std::mem::take(&mut self.reasoning_full_buffer);
         let duration = self.reasoning_started.map(|started| started.elapsed());
         self.reasoning_started = None;
-        let rendered = crate::render::transcript::reasoning_cell::render_thinking_body(
-            &body, false, false, duration,
+        self.reasoning_frame = 0;
+        let rendered = align_to_guide_column(
+            &crate::render::transcript::reasoning_cell::render_thinking_body(
+                &body, false, false, duration,
+            ),
         );
-        let mut stdout = io::stdout();
-        if self.mode.is_some() {
-            // 与前序输出空一行
-            writeln!(stdout)?;
-        }
         writeln!(stdout, "{rendered}")?;
         stdout.flush()?;
         self.mode = None;

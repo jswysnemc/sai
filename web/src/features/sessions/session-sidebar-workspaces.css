@@ -59,6 +59,14 @@
   font:400 var(--text-2xs) var(--font-code);
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: opacity 120ms ease;
+}
+
+/* 悬停时让位给右侧操作按钮：会话计数淡出，避免两组信息并排相挤 */
+.workspace-tree-row:hover .workspace-summary small,
+.workspace-tree-row:focus-within .workspace-summary small,
+.workspace-tree-row.selecting .workspace-summary small {
+  opacity: 0;
 }
 
 .workspace-tree-actions {
@@ -71,6 +79,7 @@
   gap:var(--space-3xs);
   padding-right:var(--space-2xs);
   opacity: 0;
+  transition: opacity 120ms ease;
 }
 
 .workspace-tree-row:hover .workspace-tree-actions,

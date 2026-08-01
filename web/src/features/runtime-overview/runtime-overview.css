@@ -1,6 +1,6 @@
 .runtime-overview {
   position: absolute;
-  top: 54px;
+  top: calc(3.5rem + var(--space-xs));
   right: var(--space-md);
   z-index: 18;
   width: 278px;
@@ -223,7 +223,7 @@
 
 @container (max-width: 64rem) {
   .runtime-overview {
-    top: 52px;
+    top: calc(3.5rem + var(--space-xs));
     right: var(--space-sm);
     width: auto;
   }

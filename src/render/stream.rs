@@ -18,8 +18,11 @@ pub(crate) use crate::render::stream_text::{
     normalize_stream_text, tool_call_has_visible_block, wait_spinner_detail_line,
 };
 use crate::render::stream_tool_status::tool_start_status;
+use crate::render::streaming_replace::{clear_rendered_rows, rendered_visual_rows};
 use crate::render::style::TOOL_BULLET;
 use crate::render::terminal_text as t;
+use crate::render::content_indent::align_to_guide_column;
+use crate::render::transcript::reasoning_cell;
 use crate::render::tool_call_blocks::{
     write_command_tool_call_block, write_edit_tool_call_block, write_edit_tool_call_diff_block,
 };
@@ -70,6 +73,10 @@ pub struct StreamRenderer {
     reasoning_full_buffer: String,
     /// 当前思考段开始时间（用于 live 耗时）
     reasoning_started: Option<Instant>,
+    /// Full 模式 live 思考块当前占用的终端视觉行数（用于增量重绘）
+    reasoning_live_rows: usize,
+    /// Full 模式 live 思考块动效帧序号
+    reasoning_frame: usize,
     /// 【终端】【子智能体状态】推理增量是否位于新的物理行起点
     subagent_reasoning_at_line_start: bool,
     command_preview: CliCommandPreview,
@@ -113,6 +120,8 @@ impl StreamRenderer {
             work_started: None,
             reasoning_full_buffer: String::new(),
             reasoning_started: None,
+            reasoning_live_rows: 0,
+            reasoning_frame: 0,
             subagent_reasoning_at_line_start: true,
             command_preview: CliCommandPreview::new(),
         }

@@ -294,3 +294,73 @@ fn denied_tool_result_is_suppressed_once() {
     // 抑制标记一次性生效
     assert!(!renderer.suppressed_denied_results.contains("run_command"));
 }
+
+/// 【终端】【思考流式测试】验证 Full 模式思考正文随增量重绘而非攒到结束。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn full_reasoning_redraws_body_on_each_chunk() {
+    let mut renderer = StreamRenderer::new(
+        ReasoningDisplayMode::Full,
+        ToolCallDisplayMode::Summary,
+        false,
+        StreamRenderOptions::default(),
+    );
+
+    // 1. 首个分片到达后就应占用终端行，说明正文已经渲染而不是仅缓存
+    renderer
+        .write_chunk(ChatStreamChunk {
+            kind: ChatStreamKind::Reasoning,
+            text: "第一段思考".to_string(),
+        })
+        .unwrap();
+    let after_first = renderer.reasoning_live_rows;
+    assert!(after_first > 0, "首个思考分片应立即渲染并占用终端行");
+    assert_eq!(renderer.reasoning_full_buffer, "第一段思考");
+
+    // 2. 后续分片继续累积正文，并刷新动效帧
+    let frame_before = renderer.reasoning_frame;
+    renderer
+        .write_chunk(ChatStreamChunk {
+            kind: ChatStreamKind::Reasoning,
+            text: "\n第二段思考".to_string(),
+        })
+        .unwrap();
+    assert!(renderer.reasoning_frame > frame_before, "重绘应推进动效帧");
+    assert!(renderer.reasoning_full_buffer.contains("第二段思考"));
+    assert!(renderer.reasoning_live_rows > 0);
+
+    // 3. 定稿后释放 live 行计数，缓冲清空
+    renderer.flush_full_reasoning_block().unwrap();
+    assert_eq!(renderer.reasoning_live_rows, 0);
+    assert!(renderer.reasoning_full_buffer.is_empty());
+    assert_eq!(renderer.reasoning_frame, 0);
+    assert!(renderer.reasoning_started.is_none());
+}
+
+/// 【终端】【思考流式测试】验证空思考段定稿不会残留 live 行计数。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn empty_full_reasoning_flush_resets_live_rows() {
+    let mut renderer = StreamRenderer::new(
+        ReasoningDisplayMode::Full,
+        ToolCallDisplayMode::Summary,
+        false,
+        StreamRenderOptions::default(),
+    );
+
+    renderer.flush_full_reasoning_block().unwrap();
+
+    assert_eq!(renderer.reasoning_live_rows, 0);
+    assert_eq!(renderer.reasoning_frame, 0);
+    assert!(renderer.mode.is_none());
+}

@@ -85,6 +85,10 @@
   /* 弹出菜单相对本容器定位，因此定位上下文与显示状态解耦 */
   position: relative;
   display: none;
+  /* 左侧标题区可能是两行，按钮始终对齐到整行的垂直中线 */
+  align-self: stretch;
+  align-content: center;
+  justify-items: center;
 }
 
 .chat-header-panel-menu {

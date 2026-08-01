@@ -10,7 +10,10 @@ use std::process::Stdio;
 use tokio::process::Command;
 
 pub fn skills_prompt(config: &AppConfig, paths: &SaiPaths) -> Result<String> {
-    let entries = visible_skill_entries(config, paths)?
+    let visible = visible_skill_entries(config, paths)?;
+    // 仅暴露名称的 skill 需要模型主动 load，提示词里单独说明加载方式
+    let has_named_only = visible.iter().any(|(_, full)| !full);
+    let entries = visible
         .into_iter()
         .map(|(entry, full)| {
             if !full {
@@ -27,8 +30,14 @@ pub fn skills_prompt(config: &AppConfig, paths: &SaiPaths) -> Result<String> {
     if entries.is_empty() {
         return Ok(String::new());
     }
+    let named_hint = if has_named_only {
+        "\n只列出名称、没有说明的 skill 需要先加载：调用 load，设置 type 为 skill，并通过 keywords 数组传入名称。"
+    } else {
+        ""
+    };
     Ok(format!(
-        "<available-skills>\n这些是已安装的 skills。遇到匹配任务时主动参考。当前不支持创建、保存或自动生成新的 skill；不要把 skill 内容保存到知识库。\n{}\n</available-skills>",
+        "<available-skills>\n这些是已安装的 skills。遇到匹配任务时主动参考。当前不支持创建、保存或自动生成新的 skill；不要把 skill 内容保存到知识库。{}\n{}\n</available-skills>",
+        named_hint,
         entries.join("\n")
     ))
 }
@@ -540,13 +549,69 @@ fn strip_frontmatter(raw: &str) -> String {
     raw.to_string()
 }
 
+/// 把 skill 正文压成单行摘要。
+///
+/// 正文会与其它提示词一起进入 Markdown 渲染管线，压平后残留的 `#`、`*`、
+/// 反引号等结构标记会被重新解析成标题或强调，导致同一个 skill 在界面上
+/// 出现「简介行 + 巨大加粗正文」的重复观感。这里在压平的同时剥离这些标记。
+///
+/// 参数:
+/// - `body`: 去掉 frontmatter 的 skill 正文
+///
+/// 返回:
+/// - 不含 Markdown 结构标记的单行摘要，超长时截断
 fn compact_skill_body(body: &str) -> String {
-    let text = body.split_whitespace().collect::<Vec<_>>().join(" ");
+    let text = strip_markdown_markers(body);
     if text.chars().count() > 700 {
         format!("{}...", text.chars().take(697).collect::<String>())
     } else {
         text
     }
+}
+
+/// 去掉 Markdown 结构标记并压成单行。
+///
+/// 参数:
+/// - `body`: 原始正文
+///
+/// 返回:
+/// - 单行纯文本
+fn strip_markdown_markers(body: &str) -> String {
+    let mut words = Vec::new();
+    for raw_line in body.lines() {
+        let line = raw_line.trim();
+        // 1. 跳过代码围栏与分隔线，它们压平后只会留下噪声符号
+        if line.starts_with("```") || line.starts_with("~~~") || is_thematic_break(line) {
+            continue;
+        }
+        // 2. 去掉行首的标题井号、引用尖括号与列表符号
+        let line = line.trim_start_matches(['#', '>', '-', '*', '+']).trim();
+        if line.is_empty() {
+            continue;
+        }
+        // 3. 去掉行内强调与行内代码标记，保留文字本身
+        for word in line.split_whitespace() {
+            let word = word.trim_matches(['*', '_', '`']);
+            if !word.is_empty() {
+                words.push(word.to_string());
+            }
+        }
+    }
+    words.join(" ")
+}
+
+/// 判断是否为 Markdown 分隔线。
+///
+/// 参数:
+/// - `line`: 已去除首尾空白的单行
+///
+/// 返回:
+/// - 是否为 `---` / `***` / `___` 形式的分隔线
+fn is_thematic_break(line: &str) -> bool {
+    line.len() >= 3
+        && (line.chars().all(|ch| ch == '-')
+            || line.chars().all(|ch| ch == '*')
+            || line.chars().all(|ch| ch == '_'))
 }
 
 #[cfg(test)]
@@ -652,6 +717,80 @@ mod tests {
         let error = load_installed_skill("gpu-passthrough", &config, &paths).unwrap_err();
 
         assert!(error.to_string().contains("skill not found"));
+    }
+
+    #[test]
+    fn compact_skill_body_strips_markdown_markers() {
+        // 压平后残留的 ## 与 ** 会被前端 Markdown 渲染成大号标题，必须先剥离
+        let body = "## When to Use\n\nUse this **skill** when you need to:\n\n- Automate `things`\n\n```bash\nnpm install -g demo\n```\n\n---\n\nDone.";
+        let compact = compact_skill_body(body);
+
+        assert!(!compact.contains('#'));
+        assert!(!compact.contains("**"));
+        assert!(!compact.contains("```"));
+        assert!(!compact.contains('`'));
+        assert!(compact.contains("When to Use"));
+        assert!(compact.contains("Automate things"));
+        assert!(compact.contains("npm install -g demo"));
+        assert!(!compact.contains('\n'));
+    }
+
+    #[test]
+    fn skills_prompt_hints_load_for_named_only_skills() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path());
+        for name in ["full-skill", "named-skill"] {
+            let skill_dir = paths.skills_dir.join(name);
+            std::fs::create_dir_all(&skill_dir).unwrap();
+            std::fs::write(
+                skill_dir.join("SKILL.md"),
+                format!("---\nname: {name}\ndescription: demo\n---\n\n## Body\n\nrun it.\n"),
+            )
+            .unwrap();
+        }
+        let mut config = AppConfig::default();
+        config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
+            enabled_tools: Vec::new(),
+            deferred_tools: Vec::new(),
+            skills_full: vec!["full-skill".to_string()],
+            skills_named: vec!["named-skill".to_string()],
+        });
+
+        let prompt = skills_prompt(&config, &paths).unwrap();
+
+        // 仅给名称的 skill 需要提示模型用 load 加载
+        assert!(prompt.contains("- named-skill"));
+        assert!(prompt.contains("调用 load"));
+        assert!(prompt.contains("keywords"));
+        // 完整暴露的 skill 仍带描述与正文
+        assert!(prompt.contains("full-skill: demo"));
+        assert!(prompt.contains("run it."));
+    }
+
+    #[test]
+    fn skills_prompt_omits_load_hint_without_named_skills() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path());
+        let skill_dir = paths.skills_dir.join("full-skill");
+        std::fs::create_dir_all(&skill_dir).unwrap();
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: full-skill\ndescription: demo\n---\n\nrun it.\n",
+        )
+        .unwrap();
+        // 显式限定可见集合，避免扫描到运行机器上真实安装的三方 skill
+        let mut config = AppConfig::default();
+        config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
+            enabled_tools: Vec::new(),
+            deferred_tools: Vec::new(),
+            skills_full: vec!["full-skill".to_string()],
+            skills_named: Vec::new(),
+        });
+
+        let prompt = skills_prompt(&config, &paths).unwrap();
+
+        assert!(prompt.contains("full-skill: demo"));
+        assert!(!prompt.contains("调用 load"));
     }
 
     #[test]

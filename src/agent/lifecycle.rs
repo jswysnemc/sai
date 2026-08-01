@@ -57,9 +57,10 @@ impl Agent {
         let compaction_runtime = compaction_model::resolve_compaction_runtime(&config, paths)?;
         let max_tool_rounds = config.tools.max_rounds;
         crate::goal::register_tools(&mut tools, state.goal_file());
-        // 渐进加载改由当前 Agent 的 deferred_tools 决定，没有延迟项就不注册 load
+        // 渐进加载由当前 Agent 的 deferred_tools 决定；
+        // 另有仅暴露名称的 skill 时也必须注册 load，否则模型看得到名字却无从加载
         let mut tool_visibility = ToolVisibility::from_config(&config);
-        if tools_enabled && tool_visibility.is_progressive() {
+        if tools_enabled && (tool_visibility.is_progressive() || config.has_named_only_skills()) {
             tools::register_progressive_loader(&mut tools, config.agent_deferred_tools());
         }
         if tool_visibility.is_progressive() {
