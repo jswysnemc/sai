@@ -247,7 +247,8 @@ impl ConversationDb {
         load_turns_with_sql(
             &conn,
             "SELECT turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
-                    assistant_reasoning, assistant_timestamp, status, tool_reports, duration_ms
+                    assistant_reasoning, assistant_timestamp, status, tool_reports, duration_ms,
+                    parent_turn_id
              FROM turns ORDER BY seq ASC",
             [],
         )
@@ -271,7 +272,8 @@ impl ConversationDb {
             Some(turn_id) => {
                 let mut stmt = conn.prepare(
                     "SELECT turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
-                            assistant_reasoning, assistant_timestamp, status, tool_reports, duration_ms
+                            assistant_reasoning, assistant_timestamp, status, tool_reports, duration_ms,
+                    parent_turn_id
                      FROM turns WHERE seq > ?1 AND turn_id != ?2 ORDER BY seq ASC",
                 )?;
                 let turns = stmt
@@ -282,7 +284,8 @@ impl ConversationDb {
             None => load_turns_with_sql(
                 &conn,
                 "SELECT turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
-                        assistant_reasoning, assistant_timestamp, status, tool_reports, duration_ms
+                        assistant_reasoning, assistant_timestamp, status, tool_reports, duration_ms,
+                    parent_turn_id
                  FROM turns WHERE seq > ?1 ORDER BY seq ASC",
                 params![after_seq],
             ),
@@ -466,11 +469,14 @@ impl ConversationDb {
     }
 
     pub(super) fn insert_turn_locked(&self, conn: &Connection, turn: InsertTurn<'_>) -> Result<()> {
+        // 新轮次挂在当前活动叶子之后；从历史中间开分支时叶子已被切走，
+        // 因此这里不能用 seq 最大的轮次充当父节点
+        let parent = active_leaf_locked(conn)?;
         conn.execute(
             "INSERT INTO turns (
                 turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
-                assistant_reasoning, assistant_timestamp, status, tool_reports
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                assistant_reasoning, assistant_timestamp, status, tool_reports, parent_turn_id
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 turn.turn_id,
                 self.next_seq_locked(conn)?,
@@ -482,8 +488,11 @@ impl ConversationDb {
                 turn.assistant_timestamp,
                 turn.status.as_str(),
                 serde_json::to_string(turn.tool_reports)?,
+                parent,
             ],
         )?;
+        // 插入后活动叶子推进到新轮次
+        set_active_leaf_locked(conn, Some(turn.turn_id))?;
         Ok(())
     }
 }
@@ -565,5 +574,68 @@ fn map_turn(row: &Row<'_>) -> rusqlite::Result<Turn> {
         status: TurnStatus::from_str(&status),
         tool_reports,
         duration_ms: row.get::<_, i64>(10).unwrap_or(0).max(0) as u64,
+        parent_turn_id: row.get::<_, Option<String>>(11).unwrap_or(None),
     })
+}
+
+/// 读取当前活动叶子轮次。
+///
+/// 未显式设置时回退到 seq 最大的轮次，使升级前的线性会话行为不变。
+///
+/// 参数:
+/// - `conn`: SQLite 连接
+///
+/// 返回:
+/// - 活动叶子轮次标识；会话为空时返回 None
+pub(super) fn active_leaf_locked(conn: &Connection) -> Result<Option<String>> {
+    // 1. 优先取显式记录的叶子，并确认它仍然存在
+    let stored: Option<String> = conn
+        .query_row(
+            "SELECT value FROM session_tree_meta WHERE key = 'active_leaf'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten();
+    if let Some(leaf) = stored {
+        let exists: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM turns WHERE turn_id = ?1",
+            params![leaf],
+            |row| row.get(0),
+        )?;
+        if exists > 0 {
+            return Ok(Some(leaf));
+        }
+    }
+    // 2. 回退到 seq 最大的轮次，兼容尚未记录叶子的历史会话
+    Ok(conn
+        .query_row(
+            "SELECT turn_id FROM turns ORDER BY seq DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
+/// 写入当前活动叶子轮次。
+///
+/// 参数:
+/// - `conn`: SQLite 连接
+/// - `turn_id`: 目标叶子轮次；None 表示清空
+///
+/// 返回:
+/// - 写入是否成功
+pub(super) fn set_active_leaf_locked(conn: &Connection, turn_id: Option<&str>) -> Result<()> {
+    match turn_id {
+        Some(value) => conn.execute(
+            "INSERT INTO session_tree_meta (key, value) VALUES ('active_leaf', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![value],
+        )?,
+        None => conn.execute(
+            "DELETE FROM session_tree_meta WHERE key = 'active_leaf'",
+            [],
+        )?,
+    };
+    Ok(())
 }

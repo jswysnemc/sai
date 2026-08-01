@@ -37,6 +37,17 @@ impl TurnStatus {
             _ => Self::Running,
         }
     }
+
+    /// 返回可对外展示的状态文本。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 与数据库一致的状态文本
+    pub fn as_display_str(self) -> &'static str {
+        self.as_str()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -54,6 +65,8 @@ pub struct Turn {
     pub tool_reports: Vec<String>,
     /// 本轮处理耗时（毫秒），0 表示未知或未记录
     pub duration_ms: u64,
+    /// 父轮次标识；根轮次为空。同一父轮次下的多个子轮次构成分叉
+    pub parent_turn_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

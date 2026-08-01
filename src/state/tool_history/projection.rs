@@ -233,6 +233,7 @@ mod tests {
             status: TurnStatus::Completed,
             tool_reports: Vec::new(),
             duration_ms: 0,
+            parent_turn_id: None,
         }
     }
 
