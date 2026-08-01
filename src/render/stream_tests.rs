@@ -310,19 +310,30 @@ fn full_reasoning_redraws_body_on_each_chunk() {
         false,
         StreamRenderOptions::default(),
     );
+    // 逐帧重绘只在真实终端进行；重定向输出时控制序列不生效，会堆叠成重复正文
+    let interactive = WaitSpinner::supported();
 
-    // 1. 首个分片到达后就应占用终端行，说明正文已经渲染而不是仅缓存
+    // 1. 首个分片到达后正文即进入缓冲；终端环境下同时占用终端行
     renderer
         .write_chunk(ChatStreamChunk {
             kind: ChatStreamKind::Reasoning,
             text: "第一段思考".to_string(),
         })
         .unwrap();
-    let after_first = renderer.reasoning_live_rows;
-    assert!(after_first > 0, "首个思考分片应立即渲染并占用终端行");
     assert_eq!(renderer.reasoning_full_buffer, "第一段思考");
+    if interactive {
+        assert!(
+            renderer.reasoning_live_rows > 0,
+            "终端环境下首个思考分片应立即渲染"
+        );
+    } else {
+        assert_eq!(
+            renderer.reasoning_live_rows, 0,
+            "非终端环境不得逐帧重绘，否则输出重复"
+        );
+    }
 
-    // 2. 后续分片继续累积正文，并刷新动效帧
+    // 2. 后续分片继续累积正文；终端环境下推进动效帧
     let frame_before = renderer.reasoning_frame;
     renderer
         .write_chunk(ChatStreamChunk {
@@ -330,9 +341,13 @@ fn full_reasoning_redraws_body_on_each_chunk() {
             text: "\n第二段思考".to_string(),
         })
         .unwrap();
-    assert!(renderer.reasoning_frame > frame_before, "重绘应推进动效帧");
     assert!(renderer.reasoning_full_buffer.contains("第二段思考"));
-    assert!(renderer.reasoning_live_rows > 0);
+    if interactive {
+        assert!(renderer.reasoning_frame > frame_before, "重绘应推进动效帧");
+        assert!(renderer.reasoning_live_rows > 0);
+    } else {
+        assert_eq!(renderer.reasoning_frame, frame_before);
+    }
 
     // 3. 定稿后释放 live 行计数，缓冲清空
     renderer.flush_full_reasoning_block().unwrap();

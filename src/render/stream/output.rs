@@ -118,7 +118,12 @@ impl StreamRenderer {
         if self.reasoning_full_buffer.trim().is_empty() {
             return Ok(());
         }
-        // 1. 生成本帧：标题带扫光动效，正文折叠为固定高度，避免长思考铺满屏幕
+        // 1. 逐帧重绘依赖光标上移擦除上一帧，非终端环境下这些序列不生效，
+        //    每帧都会留在输出里堆叠成重复正文，因此只在真实终端上重绘
+        if !WaitSpinner::supported() {
+            return Ok(());
+        }
+        // 2. 生成本帧：标题带扫光动效，正文折叠为固定高度，避免长思考铺满屏幕
         self.reasoning_frame = self.reasoning_frame.wrapping_add(1);
         let elapsed = self
             .reasoning_started
@@ -131,7 +136,7 @@ impl StreamRenderer {
             elapsed,
             false,
         ));
-        // 2. 擦除上一帧再写入本帧，行数按终端折行后的视觉行计算
+        // 3. 擦除上一帧再写入本帧，行数按终端折行后的视觉行计算
         let mut stdout = io::stdout();
         if self.reasoning_live_rows > 0 {
             write!(stdout, "{}", clear_rendered_rows(self.reasoning_live_rows))?;
