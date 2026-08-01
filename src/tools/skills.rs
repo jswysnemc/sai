@@ -9,57 +9,74 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::process::Command;
 
-pub fn skills_prompt(config: &AppConfig, paths: &SaiPaths) -> Result<String> {
-    let visible = visible_skill_entries(config, paths)?;
-    // 仅暴露名称的 skill 需要模型主动 load，提示词里单独说明加载方式
-    let has_named_only = visible.iter().any(|(_, full)| !full);
-    let entries = visible
+/// 生成 skill 目录提示。
+///
+/// skill 的可见性分三档，由 Agent 档案决定：
+/// 1. 关闭——不在任何列表里，完全不出现在提示词中
+/// 2. 名称与描述——`skills_full`，给出 `- 名称: 描述`
+/// 3. 仅名称——`skills_named`，只给出 `- 名称`
+///
+/// 三档都不内联正文；模型需要完整流程时统一调用 `load` 读取。
+/// 正文一旦内联，几十个 skill 会在每轮对话里固定占掉大量上下文。
+///
+/// 参数:
+/// - `config`: 当前应用配置
+/// - `paths`: 应用目录路径集合
+/// - `with_source`: 是否在描述前标注来源目录
+///
+/// 返回:
+/// - `<available-skills>` 提示片段；没有可见 skill 时返回空串
+fn build_skills_prompt(
+    config: &AppConfig,
+    paths: &SaiPaths,
+    with_source: bool,
+) -> Result<String> {
+    let entries = visible_skill_entries(config, paths)?
         .into_iter()
         .map(|(entry, full)| {
+            // 1. 仅名称档不给描述，模型据名判断后再 load
             if !full {
                 return format!("- {}", entry.name);
             }
-            format!(
-                "- {}: {}\n  {}",
-                entry.name,
-                entry.description,
-                compact_skill_body(&entry.body)
-            )
+            // 2. 名称与描述档附带简介，便于判断是否值得加载
+            if with_source {
+                format!("- {} [{}]: {}", entry.name, entry.source, entry.description)
+            } else {
+                format!("- {}: {}", entry.name, entry.description)
+            }
         })
         .collect::<Vec<_>>();
     if entries.is_empty() {
         return Ok(String::new());
     }
-    let named_hint = if has_named_only {
-        "\n只列出名称、没有说明的 skill 需要先加载：调用 load，设置 type 为 skill，并通过 keywords 数组传入名称。"
-    } else {
-        ""
-    };
     Ok(format!(
-        "<available-skills>\n这些是已安装的 skills。遇到匹配任务时主动参考。当前不支持创建、保存或自动生成新的 skill；不要把 skill 内容保存到知识库。{}\n{}\n</available-skills>",
-        named_hint,
+        "<available-skills>\n这些是已安装的 skills 目录，只提供名称与简介。遇到匹配任务时，调用 load，设置 type 为 skill，并通过 keywords 数组传入名称，读取完整流程后再执行。当前不支持创建、保存或自动生成新的 skill；不要把 skill 内容保存到知识库。\n{}\n</available-skills>",
         entries.join("\n")
     ))
 }
 
+/// 生成 skill 目录提示（不含来源标注）。
+///
+/// 参数:
+/// - `config`: 当前应用配置
+/// - `paths`: 应用目录路径集合
+///
+/// 返回:
+/// - `<available-skills>` 提示片段
+pub fn skills_prompt(config: &AppConfig, paths: &SaiPaths) -> Result<String> {
+    build_skills_prompt(config, paths, false)
+}
+
+/// 生成带来源标注的 skill 目录提示。
+///
+/// 参数:
+/// - `config`: 当前应用配置
+/// - `paths`: 应用目录路径集合
+///
+/// 返回:
+/// - `<available-skills>` 提示片段
 pub fn skills_catalog_prompt(config: &AppConfig, paths: &SaiPaths) -> Result<String> {
-    let entries = visible_skill_entries(config, paths)?
-        .into_iter()
-        .map(|(entry, full)| {
-            if full {
-                format!("- {} [{}]: {}", entry.name, entry.source, entry.description)
-            } else {
-                format!("- {}", entry.name)
-            }
-        })
-        .collect::<Vec<_>>();
-    if entries.is_empty() {
-        return Ok(String::new());
-    }
-    Ok(format!(
-        "<available-skills>\n这些是已安装的 skills 目录。默认只提供名称和简介；需要使用完整流程时，调用 load，设置 type 为 skill，并通过 keywords 数组传入名称。\n{}\n</available-skills>",
-        entries.join("\n")
-    ))
+    build_skills_prompt(config, paths, true)
 }
 
 pub fn register_skills(
@@ -188,7 +205,6 @@ fn canonical_path(path: &std::path::Path) -> PathBuf {
 struct SkillEntry {
     name: String,
     description: String,
-    body: String,
     raw: String,
     source: &'static str,
     dir: PathBuf,
@@ -233,11 +249,9 @@ fn skill_entries(config: &AppConfig, paths: &SaiPaths) -> Result<Vec<SkillEntry>
                 continue;
             }
             let description = frontmatter_value(&raw, "description").unwrap_or_default();
-            let body = strip_frontmatter(&raw);
             entries.push(SkillEntry {
                 name,
                 description,
-                body,
                 raw,
                 source,
                 dir: skill_dir,
@@ -536,84 +550,6 @@ fn frontmatter_value(raw: &str, key: &str) -> Option<String> {
     None
 }
 
-fn strip_frontmatter(raw: &str) -> String {
-    let mut lines = raw.lines();
-    if lines.next() != Some("---") {
-        return raw.to_string();
-    }
-    for line in lines.by_ref() {
-        if line == "---" {
-            return lines.collect::<Vec<_>>().join("\n");
-        }
-    }
-    raw.to_string()
-}
-
-/// 把 skill 正文压成单行摘要。
-///
-/// 正文会与其它提示词一起进入 Markdown 渲染管线，压平后残留的 `#`、`*`、
-/// 反引号等结构标记会被重新解析成标题或强调，导致同一个 skill 在界面上
-/// 出现「简介行 + 巨大加粗正文」的重复观感。这里在压平的同时剥离这些标记。
-///
-/// 参数:
-/// - `body`: 去掉 frontmatter 的 skill 正文
-///
-/// 返回:
-/// - 不含 Markdown 结构标记的单行摘要，超长时截断
-fn compact_skill_body(body: &str) -> String {
-    let text = strip_markdown_markers(body);
-    if text.chars().count() > 700 {
-        format!("{}...", text.chars().take(697).collect::<String>())
-    } else {
-        text
-    }
-}
-
-/// 去掉 Markdown 结构标记并压成单行。
-///
-/// 参数:
-/// - `body`: 原始正文
-///
-/// 返回:
-/// - 单行纯文本
-fn strip_markdown_markers(body: &str) -> String {
-    let mut words = Vec::new();
-    for raw_line in body.lines() {
-        let line = raw_line.trim();
-        // 1. 跳过代码围栏与分隔线，它们压平后只会留下噪声符号
-        if line.starts_with("```") || line.starts_with("~~~") || is_thematic_break(line) {
-            continue;
-        }
-        // 2. 去掉行首的标题井号、引用尖括号与列表符号
-        let line = line.trim_start_matches(['#', '>', '-', '*', '+']).trim();
-        if line.is_empty() {
-            continue;
-        }
-        // 3. 去掉行内强调与行内代码标记，保留文字本身
-        for word in line.split_whitespace() {
-            let word = word.trim_matches(['*', '_', '`']);
-            if !word.is_empty() {
-                words.push(word.to_string());
-            }
-        }
-    }
-    words.join(" ")
-}
-
-/// 判断是否为 Markdown 分隔线。
-///
-/// 参数:
-/// - `line`: 已去除首尾空白的单行
-///
-/// 返回:
-/// - 是否为 `---` / `***` / `___` 形式的分隔线
-fn is_thematic_break(line: &str) -> bool {
-    line.len() >= 3
-        && (line.chars().all(|ch| ch == '-')
-            || line.chars().all(|ch| ch == '*')
-            || line.chars().all(|ch| ch == '_'))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -719,32 +655,17 @@ mod tests {
         assert!(error.to_string().contains("skill not found"));
     }
 
+    /// 【Skills】【三档可见性】验证名称+描述、仅名称与关闭三种状态。
     #[test]
-    fn compact_skill_body_strips_markdown_markers() {
-        // 压平后残留的 ## 与 ** 会被前端 Markdown 渲染成大号标题，必须先剥离
-        let body = "## When to Use\n\nUse this **skill** when you need to:\n\n- Automate `things`\n\n```bash\nnpm install -g demo\n```\n\n---\n\nDone.";
-        let compact = compact_skill_body(body);
-
-        assert!(!compact.contains('#'));
-        assert!(!compact.contains("**"));
-        assert!(!compact.contains("```"));
-        assert!(!compact.contains('`'));
-        assert!(compact.contains("When to Use"));
-        assert!(compact.contains("Automate things"));
-        assert!(compact.contains("npm install -g demo"));
-        assert!(!compact.contains('\n'));
-    }
-
-    #[test]
-    fn skills_prompt_hints_load_for_named_only_skills() {
+    fn skills_prompt_exposes_three_visibility_tiers() {
         let temp = tempfile::tempdir().unwrap();
         let paths = test_paths(temp.path());
-        for name in ["full-skill", "named-skill"] {
+        for name in ["described-skill", "named-skill", "hidden-skill"] {
             let skill_dir = paths.skills_dir.join(name);
             std::fs::create_dir_all(&skill_dir).unwrap();
             std::fs::write(
                 skill_dir.join("SKILL.md"),
-                format!("---\nname: {name}\ndescription: demo\n---\n\n## Body\n\nrun it.\n"),
+                format!("---\nname: {name}\ndescription: {name} demo\n---\n\n## Body\n\nrun it.\n"),
             )
             .unwrap();
         }
@@ -752,45 +673,43 @@ mod tests {
         config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
             enabled_tools: Vec::new(),
             deferred_tools: Vec::new(),
-            skills_full: vec!["full-skill".to_string()],
+            skills_full: vec!["described-skill".to_string()],
             skills_named: vec!["named-skill".to_string()],
         });
 
         let prompt = skills_prompt(&config, &paths).unwrap();
 
-        // 仅给名称的 skill 需要提示模型用 load 加载
-        assert!(prompt.contains("- named-skill"));
-        assert!(prompt.contains("调用 load"));
+        // 1. 第二档：名称与描述
+        assert!(prompt.contains("- described-skill: described-skill demo"));
+        // 2. 第三档：仅名称，不带描述
+        assert!(prompt.contains("- named-skill\n") || prompt.ends_with("- named-skill"));
+        assert!(!prompt.contains("named-skill: "));
+        // 3. 第一档：完全关闭，任何形态都不出现
+        assert!(!prompt.contains("hidden-skill"));
+        // 4. 三档都不内联正文，完整流程统一靠 load 读取
+        assert!(!prompt.contains("run it."));
+        assert!(prompt.contains("load"));
         assert!(prompt.contains("keywords"));
-        // 完整暴露的 skill 仍带描述与正文
-        assert!(prompt.contains("full-skill: demo"));
-        assert!(prompt.contains("run it."));
     }
 
+    /// 【Skills】【三档可见性】未配置运行期覆盖时全部 skill 按名称与描述暴露。
     #[test]
-    fn skills_prompt_omits_load_hint_without_named_skills() {
+    fn skills_prompt_without_runtime_override_exposes_every_skill() {
         let temp = tempfile::tempdir().unwrap();
         let paths = test_paths(temp.path());
-        let skill_dir = paths.skills_dir.join("full-skill");
+        let skill_dir = paths.skills_dir.join("solo-skill");
         std::fs::create_dir_all(&skill_dir).unwrap();
         std::fs::write(
             skill_dir.join("SKILL.md"),
-            "---\nname: full-skill\ndescription: demo\n---\n\nrun it.\n",
+            "---\nname: solo-skill\ndescription: solo demo\n---\n\nrun it.\n",
         )
         .unwrap();
-        // 显式限定可见集合，避免扫描到运行机器上真实安装的三方 skill
-        let mut config = AppConfig::default();
-        config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
-            enabled_tools: Vec::new(),
-            deferred_tools: Vec::new(),
-            skills_full: vec!["full-skill".to_string()],
-            skills_named: Vec::new(),
-        });
+        let config = AppConfig::default();
 
         let prompt = skills_prompt(&config, &paths).unwrap();
 
-        assert!(prompt.contains("full-skill: demo"));
-        assert!(!prompt.contains("调用 load"));
+        assert!(prompt.contains("- solo-skill: solo demo"));
+        assert!(!prompt.contains("run it."));
     }
 
     #[test]

@@ -6,7 +6,8 @@
 .workspace-tree-row {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* 操作按钮绝对定位叠在右端，行内只保留主区一列 */
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   min-height: 34px;
   border-radius:var(--radius-2);
@@ -62,7 +63,7 @@
   transition: opacity 120ms ease;
 }
 
-/* 悬停时让位给右侧操作按钮：会话计数淡出，避免两组信息并排相挤 */
+/* 悬停时操作按钮就地替换会话计数：计数淡出，按钮在同一位置淡入 */
 .workspace-tree-row:hover .workspace-summary small,
 .workspace-tree-row:focus-within .workspace-summary small,
 .workspace-tree-row.selecting .workspace-summary small {
@@ -70,15 +71,18 @@
 }
 
 .workspace-tree-actions {
-  position: relative;
+  /* 脱离网格叠在行右端，占位不再挤压左侧标题与计数 */
+  position: absolute;
+  top: 0;
+  right: 0;
   z-index: 1;
   display: flex;
-  flex: none;
-  align-self: stretch;
+  height: 100%;
   align-items: center;
   gap:var(--space-3xs);
   padding-right:var(--space-2xs);
   opacity: 0;
+  pointer-events: none;
   transition: opacity 120ms ease;
 }
 
@@ -86,6 +90,7 @@
 .workspace-tree-row:focus-within .workspace-tree-actions,
 .workspace-tree-row.selecting .workspace-tree-actions {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .workspace-tree-row.selecting .workspace-tree-main {

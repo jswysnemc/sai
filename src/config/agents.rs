@@ -243,20 +243,21 @@ impl crate::config::AppConfig {
             .unwrap_or_default()
     }
 
-    /// 判断当前 Agent 是否存在仅暴露名称的 skill。
+    /// 判断当前 Agent 是否配置了任何可见 skill。
     ///
-    /// 这类 skill 只在提示词里给出名称，需要模型主动调用 `load` 读取完整流程，
-    /// 因此即使没有延迟工具，也必须注册加载器。
+    /// skill 提示词只给名称与简介，完整流程一律靠 `load` 读取，
+    /// 因此只要有可见 skill 就必须注册加载器，否则模型看得到名字却无从加载。
+    /// 未配置运行期覆盖时全部 skill 可见，同样需要加载器。
     ///
     /// 参数:
     /// - 无
     ///
     /// 返回:
-    /// - 是否配置了 `skills_named`
-    pub fn has_named_only_skills(&self) -> bool {
-        self.agent_runtime
-            .as_ref()
-            .is_some_and(|runtime| !runtime.skills_named.is_empty())
+    /// - 是否存在可见 skill
+    pub fn has_visible_skills(&self) -> bool {
+        self.agent_runtime.as_ref().is_none_or(|runtime| {
+            !runtime.skills_full.is_empty() || !runtime.skills_named.is_empty()
+        })
     }
 
     /// 解析主 Agent 可调用的已注册 Agent。

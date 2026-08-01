@@ -118,9 +118,9 @@ fn test_paths(root: &std::path::Path) -> SaiPaths {
     }
 }
 
-/// 仅暴露名称的 skill 在重载后仍需保留加载器，否则切换模型会让它无法加载。
+/// skill 正文一律靠 load 读取，重载后必须保留加载器，否则切换模型会让 skill 失效。
 #[test]
-fn reload_keeps_loader_for_named_only_skills() {
+fn reload_keeps_loader_for_visible_skills() {
     let temp = tempfile::tempdir().unwrap();
     let paths = test_paths(temp.path());
     let skill_dir = paths.skills_dir.join("named-skill");
@@ -158,6 +158,6 @@ fn reload_keeps_loader_for_named_only_skills() {
 
     assert!(
         agent.tools.contains(crate::tools::LOAD_NAME),
-        "重载后仍须保留 load，否则纯名称 skill 无法加载"
+        "重载后仍须保留 load，否则 skill 正文无法读取"
     );
 }
