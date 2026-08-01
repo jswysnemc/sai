@@ -131,6 +131,7 @@ fn command_description(command: &str) -> &'static str {
         "/yolo" => "switch to YOLO mode",
         "/auto" | "/auto-audit" => "switch to auto-audit mode",
         "/goal" => "manage long-running goals",
+        "/tree" => "browse the session tree and switch branches",
         "/undo" => "undo the last turn and restore input",
         "/exit" => "leave the REPL",
         _ => "",

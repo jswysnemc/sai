@@ -26,6 +26,12 @@ pub(crate) async fn handle_gateway_command(
         return Ok(None);
     };
     Ok(Some(match command {
+        // 会话树需要交互式选择，网关渠道不提供
+        ControlCommand::Tree { .. } => t(
+            "session tree is only available in the terminal",
+            "会话树仅在终端可用",
+        )
+        .to_string(),
         ControlCommand::Help => crate::control_commands::help_text(ControlSurface::Gateway),
         ControlCommand::Context => crate::control_commands::context_info_text(paths)?,
         ControlCommand::New { title } => {

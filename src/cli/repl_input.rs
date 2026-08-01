@@ -247,6 +247,15 @@ pub(super) fn read_repl_input(
                         }
                     }
                     KeyCode::Left => {
+                        // 输入为空时左移光标没有意义，改为打开会话树
+                        if input.is_empty() {
+                            terminal_guard.finish(&mut stdout)?;
+                            return Ok(Some(ReplInputEvent::User(ReplInputSubmission {
+                                mode,
+                                raw_input: "/tree".to_string(),
+                                chat_input: clipboard_state.to_chat_input("/tree"),
+                            })));
+                        }
                         // 剪贴板占位块整体跳过，保持与删除一致的原子性
                         cursor = clipboard_state.cursor_left(&input, cursor);
                         redraw_input!()?;

@@ -44,6 +44,7 @@ mod localization;
 mod memory_commands;
 mod message;
 mod model_select;
+mod tree_select;
 mod models_picker;
 mod permission_prompt;
 mod providers;

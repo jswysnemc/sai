@@ -133,3 +133,42 @@ fn conversation_context_excludes_other_branches() {
         "另一条分支不应进入上下文: {text}"
     );
 }
+
+/// 历史投影同样只取活动分支，不能按 seq 区间跨分支取轮次。
+#[test]
+fn history_projection_stays_on_the_active_branch() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let paths = crate::paths::SaiPaths {
+        config_dir: root.join("config"),
+        config_file: root.join("config/config.jsonc"),
+        secrets_file: root.join("config/secrets.jsonc"),
+        skills_dir: root.join("config/skills"),
+        data_dir: root.join("data"),
+        cache_dir: root.join("cache"),
+        state_dir: root.join("state"),
+        pictures_dir: root.join("pictures"),
+        fish_hook_file: root.join("fish/sai.fish"),
+        bash_hook_file: root.join("shell/bash-hook.sh"),
+        zsh_hook_file: root.join("shell/zsh-hook.zsh"),
+        powershell_hook_file: root.join("shell/powershell-hook.ps1"),
+    };
+    let store = crate::state::StateStore::new(&paths).unwrap();
+
+    store.start_turn("t1", "记住 A=1").unwrap();
+    store.complete_turn("t1", "ok", None).unwrap();
+    store.start_turn("t2", "记住 B=2").unwrap();
+    store.complete_turn("t2", "ok", None).unwrap();
+    store.switch_active_leaf("t1").unwrap();
+
+    let history = store.project_history(None).unwrap();
+    let text = history
+        .messages
+        .iter()
+        .map(|message| format!("{:?}", message))
+        .collect::<Vec<_>>()
+        .join("|");
+
+    assert!(text.contains("A=1"));
+    assert!(!text.contains("B=2"), "被切走的分支不应进入投影: {text}");
+}

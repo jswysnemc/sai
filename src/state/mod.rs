@@ -62,7 +62,7 @@ pub use tool_history::{
 };
 #[cfg(test)]
 pub use turns::TurnStatus;
-pub use turns::{turns_to_entries, ConversationDb, StoredConversationEntry, Turn};
+pub use turns::{turns_to_entries, ConversationDb, SessionTree, StoredConversationEntry, Turn, TurnTreeNode};
 pub use usage::UsageSnapshot;
 /// 撤销最后一轮对话及其工作树修改后的结果。
 #[derive(Debug, Clone)]
@@ -477,6 +477,36 @@ impl StateStore {
     /// - 活动分支轮次列表，按时间升序
     pub fn load_turns(&self) -> Result<Vec<Turn>> {
         self.conv_db.active_branch_turns()
+    }
+
+    /// 读取当前会话树。
+    ///
+    /// 返回:
+    /// - 含全部分支与活动叶子的树视图
+    pub fn session_tree(&self) -> Result<turns::SessionTree> {
+        self.conv_db.session_tree()
+    }
+
+    /// 把活动叶子切换到指定轮次。
+    ///
+    /// 参数:
+    /// - `turn_id`: 目标轮次
+    ///
+    /// 返回:
+    /// - 切换是否成功
+    pub fn switch_active_leaf(&self, turn_id: &str) -> Result<()> {
+        self.conv_db.switch_active_leaf(turn_id)
+    }
+
+    /// 把活动叶子退回指定轮次的父轮次。
+    ///
+    /// 参数:
+    /// - `turn_id`: 要退出的轮次
+    ///
+    /// 返回:
+    /// - 退回后的活动叶子；已在根部时返回 None
+    pub fn move_leaf_to_parent(&self, turn_id: &str) -> Result<Option<String>> {
+        self.conv_db.move_leaf_to_parent(turn_id)
     }
 
     /// 读取会话内全部轮次，含所有分支。

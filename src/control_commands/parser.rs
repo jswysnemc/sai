@@ -32,6 +32,10 @@ pub enum ControlCommand {
     Agent {
         selection: Option<usize>,
     },
+    /// 打开会话树；`turn_id` 为空时交互选择
+    Tree {
+        turn_id: Option<String>,
+    },
     Goal(GoalCommand),
 }
 
@@ -93,6 +97,12 @@ pub fn parse_control_command(
     if matches_surface_alias(&name, surface, "agent", &["代理", "智能体"]) {
         return Ok(Some(ControlCommand::Agent {
             selection: parse_model_args(rest)?,
+        }));
+    }
+    if matches_surface_alias(&name, surface, "tree", &["树", "分支"]) {
+        let turn_id = rest.trim();
+        return Ok(Some(ControlCommand::Tree {
+            turn_id: (!turn_id.is_empty()).then(|| turn_id.to_string()),
         }));
     }
     if matches_surface_alias(&name, surface, "goal", &["目标"]) {

@@ -84,7 +84,14 @@ pub(in crate::state) fn project_history(
         .as_ref()
         .map(|checkpoint| checkpoint.compacted_to_seq)
         .unwrap_or_default();
-    let tail_turns = db.load_turns_after_seq(after_seq, exclude_turn_id)?;
+    // 会话是一棵树，尾部轮次必须限定在活动分支内：
+    // 按 seq 区间直接取会把其它分支的轮次一并带进上下文
+    let tail_turns = db
+        .active_branch_turns()?
+        .into_iter()
+        .filter(|turn| turn.seq > after_seq)
+        .filter(|turn| exclude_turn_id.is_none_or(|excluded| turn.turn_id != excluded))
+        .collect::<Vec<_>>();
     let messages = project_turn_messages_with_tool_history(db, session_id, &tail_turns)?;
     Ok(project_history_from_parts_with_messages(
         checkpoint,

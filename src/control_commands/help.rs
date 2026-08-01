@@ -164,6 +164,13 @@ fn repl_only_help_lines() -> Vec<String> {
             )
         ),
         format!(
+            "  /tree       {}",
+            t(
+                "browse the session tree and switch branches (or press Left on an empty prompt)",
+                "浏览会话树并切换分支（空输入时按左键同样可进入）"
+            )
+        ),
+        format!(
             "  /undo       {}",
             t(
                 "remove last turn and restore prompt",

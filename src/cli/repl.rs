@@ -370,6 +370,42 @@ pub(super) async fn run_repl(
                             Err(err) => runtime.record_meta(err.to_string())?,
                         }
                     }
+                    crate::control_commands::ControlCommand::Tree { turn_id } => {
+                        // 1. 未指定轮次时打开树界面交互选择
+                        let target = match turn_id {
+                            Some(id) => Some(id),
+                            None => {
+                                let picked = tree_select::select_turn_interactively(paths);
+                                // 内联选择 UI 退出后全量重放，清除其占用行的残留
+                                runtime.redraw()?;
+                                match picked {
+                                    Ok(target) => target,
+                                    Err(err) => {
+                                        runtime.record_meta(err.to_string())?;
+                                        continue;
+                                    }
+                                }
+                            }
+                        };
+                        let Some(target) = target else {
+                            runtime.record_meta(
+                                t("tree navigation cancelled", "已取消会话树切换").to_string(),
+                            )?;
+                            continue;
+                        };
+                        // 2. 切换活动叶子，随后清屏重放该分支历史
+                        match agent.state().switch_active_leaf(&target) {
+                            Ok(()) => {
+                                runtime.clear()?;
+                                record_repl_history(&mut runtime, agent.state())?;
+                                runtime.record_meta(
+                                    t("switched to the selected turn", "已切换到所选轮次")
+                                        .to_string(),
+                                )?;
+                            }
+                            Err(err) => runtime.record_meta(err.to_string())?,
+                        }
+                    }
                     crate::control_commands::ControlCommand::Agent { selection } => {
                         let selection = match selection {
                             Some(index) => Some(index),
