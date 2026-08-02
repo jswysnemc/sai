@@ -105,7 +105,11 @@ pub(super) async fn drain_submission_queue(
             apply_stream_mode(runtime, mode);
             if outcome.interrupted || outcome.result.is_err() {
                 if let Err(error) = outcome.result {
-                    runtime.record_meta(error.to_string())?;
+                    runtime.record_meta(if outcome.interrupted {
+                        super::super::repl_turn_failure::interrupted_failure_text(&error)
+                    } else {
+                        super::super::repl_turn_failure::turn_failure_text(&error)
+                    })?;
                 }
                 restore_leftover_draft(runtime, outcome.leftover_draft);
                 discard_remaining_queue(runtime, pending)?;

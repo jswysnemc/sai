@@ -1,8 +1,9 @@
+use super::file_edit::atomic_write::write_text_file;
+use super::fs_path::{expand_path, fs_error};
 use super::{ToolRegistry, ToolSpec};
 use crate::i18n::text as t;
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
-use std::path::{Path, PathBuf};
 
 /// 注册整文件写入工具。
 ///
@@ -82,7 +83,7 @@ fn write_file(args: Value) -> Result<String> {
         bail!("not a regular file: {}", path.display());
     }
     let old_content = if existed {
-        std::fs::read_to_string(&path)?
+        std::fs::read_to_string(&path).map_err(|error| fs_error("read file", &path, &error))?
     } else {
         String::new()
     };
@@ -129,47 +130,6 @@ fn required_string<'a>(args: &'a Value, key: &str) -> Result<&'a str> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .ok_or_else(|| anyhow::anyhow!("{key} is required"))
-}
-
-/// 展开 ~ 与相对路径。
-///
-/// 参数:
-/// - `value`: 路径文本
-///
-/// 返回:
-/// - 解析后的路径
-fn expand_path(value: &str) -> PathBuf {
-    let value = value.trim();
-    if let Some(rest) = value.strip_prefix("~/") {
-        if let Some(home) = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf()) {
-            return home.join(rest);
-        }
-    }
-    let path = Path::new(value);
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        crate::runtime_cwd::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(path)
-    }
-}
-
-/// 原子写入 UTF-8 文本。
-///
-/// 参数:
-/// - `path`: 目标路径
-/// - `content`: 文件内容
-///
-/// 返回:
-/// - 是否成功
-fn write_text_file(path: &Path, content: &str) -> Result<()> {
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    std::fs::create_dir_all(parent)?;
-    let temp = tempfile::NamedTempFile::new_in(parent)?;
-    std::fs::write(temp.path(), content.as_bytes())?;
-    temp.persist(path)?;
-    Ok(())
 }
 
 /// 粗略统计新旧文本的新增/删除行数。

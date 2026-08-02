@@ -1,3 +1,4 @@
+use super::fs_path::expand_path;
 use super::{ToolRegistry, ToolSpec};
 use crate::config::AppConfig;
 use crate::i18n::text as t;
@@ -448,23 +449,6 @@ fn optional_path(args: &Value) -> Option<PathBuf> {
         .and_then(Value::as_str)
         .filter(|value| !value.trim().is_empty())
         .map(expand_path)
-}
-
-fn expand_path(value: &str) -> PathBuf {
-    let value = value.trim();
-    if let Some(rest) = value.strip_prefix("~/") {
-        if let Some(home) = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf()) {
-            return home.join(rest);
-        }
-    }
-    let path = Path::new(value);
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        crate::runtime_cwd::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(path)
-    }
 }
 
 fn required(args: &Value, key: &str) -> Result<String> {

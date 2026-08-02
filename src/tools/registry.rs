@@ -300,6 +300,37 @@ impl ToolRegistry {
         self.tools.contains_key(name)
     }
 
+    /// 判断模型给出的工具名能否解析到已注册工具。
+    ///
+    /// 与 `contains` 的区别是先还原协议别名，模型使用 `apply_patch` 等别名时同样成立。
+    ///
+    /// 参数:
+    /// - `name`: 模型给出的工具名
+    ///
+    /// 返回:
+    /// - 能否解析到已注册工具
+    pub(crate) fn resolves(&self, name: &str) -> bool {
+        self.tools.contains_key(local_tool_name(name))
+    }
+
+    /// 校验工具参数是否为可解析的 JSON 对象。
+    ///
+    /// 流式返回被截断或模型拼错括号时参数无法解析，此处提前判定，
+    /// 让调用方把错误回传给模型而不是中断整轮。
+    ///
+    /// 参数:
+    /// - `arguments`: 原始参数文本，空字符串按空对象处理
+    ///
+    /// 返回:
+    /// - 参数合法时为 Ok，否则为可读的解析失败原因
+    pub(crate) fn check_arguments(&self, arguments: &str) -> Result<()> {
+        let parsed = parse_arguments(arguments)?;
+        if !parsed.is_object() {
+            bail!("arguments must be a JSON object, got {}", value_kind(&parsed))
+        }
+        Ok(())
+    }
+
     pub fn tool_infos(&self) -> Vec<ToolInfo> {
         let mut infos = self
             .tools
@@ -505,6 +536,24 @@ fn parse_arguments(arguments: &str) -> Result<Value> {
     }
 }
 
+/// 返回 JSON 值的类型名称，用于参数校验错误说明。
+///
+/// 参数:
+/// - `value`: 已解析的 JSON 值
+///
+/// 返回:
+/// - 类型名称
+fn value_kind(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "null",
+        Value::Bool(_) => "boolean",
+        Value::Number(_) => "number",
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
+    }
+}
+
 /// 将协议层工具别名还原为本地注册名称。
 fn local_tool_name(name: &str) -> &str {
     match name {
@@ -602,5 +651,40 @@ mod tests {
         assert!(received
             .as_ref()
             .is_some_and(|arguments| arguments.get("_sai_sandbox").is_none()));
+    }
+
+    /// 验证协议别名可以解析到本地注册工具。
+    #[test]
+    fn resolves_accepts_protocol_aliases() {
+        let mut registry = ToolRegistry::new();
+        registry.register(ToolSpec::new(
+            "str_replace",
+            "test",
+            empty_parameters(),
+            |_arguments| async move { Ok(String::new()) },
+        ));
+
+        assert!(registry.resolves("str_replace"));
+        assert!(registry.resolves("replace_file_lines"));
+        assert!(!registry.resolves("nonexistent_tool"));
+    }
+
+    /// 验证参数校验区分合法对象、畸形 JSON 和非对象值。
+    #[test]
+    fn check_arguments_rejects_malformed_and_non_object_values() {
+        let registry = ToolRegistry::new();
+
+        assert!(registry.check_arguments("{}").is_ok());
+        assert!(registry.check_arguments("").is_ok());
+        assert!(registry.check_arguments(r#"{"path":"/tmp/a"}"#).is_ok());
+
+        let truncated = registry.check_arguments(r#"{"path":"/tmp/a"#).unwrap_err();
+        assert!(!truncated.to_string().is_empty());
+
+        let array = registry.check_arguments("[1,2]").unwrap_err();
+        assert!(array.to_string().contains("got array"));
+
+        let scalar = registry.check_arguments("42").unwrap_err();
+        assert!(scalar.to_string().contains("got number"));
     }
 }

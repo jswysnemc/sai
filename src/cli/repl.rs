@@ -3,6 +3,7 @@ use super::repl_external_events::ReplExternalEvents;
 use super::repl_input::ReplInputEvent;
 use super::repl_tool_warmup::ReplToolWarmup;
 use super::repl_turn::{execute_automatic_repl_turn, execute_repl_turn};
+use super::repl_turn_failure::{interrupted_failure_text, turn_failure_text};
 use super::*;
 use crate::agent::Agent;
 
@@ -149,10 +150,10 @@ pub(super) async fn run_repl(
                 .await?;
                 if outcome.interrupted {
                     if let Some(error) = outcome.result.err() {
-                        runtime.record_meta(error.to_string())?;
+                        runtime.record_meta(interrupted_failure_text(&error))?;
                     }
                 } else if let Err(error) = outcome.result {
-                    runtime.record_meta(error.to_string())?;
+                    runtime.record_meta(turn_failure_text(&error))?;
                 }
                 if let Some(draft) = outcome.leftover_draft {
                     prefill = Some(draft);
@@ -626,9 +627,8 @@ pub(super) async fn run_repl(
             continue;
         }
         if let Err(error) = outcome.result {
-            // 断连类错误：展示可重试提示，并把用户输入回填便于 Enter 重试
-            let hint = crate::llm::disconnect_user_hint(&error);
-            runtime.record_meta(hint)?;
+            // 断连类错误保留可重试提示，其余错误展示完整错误链
+            runtime.record_meta(turn_failure_text(&error))?;
             if crate::llm::is_transient_transport_error(&error) {
                 prefill = Some(submitted_input.clone());
             } else if let Some(draft) = outcome.leftover_draft {

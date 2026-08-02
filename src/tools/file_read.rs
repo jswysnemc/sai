@@ -1,3 +1,4 @@
+use super::fs_path::{expand_path, fs_error};
 use super::{ToolModelAttachment, ToolOutput, ToolRegistry, ToolSpec};
 use crate::config::AppConfig;
 use crate::i18n::text as t;
@@ -244,7 +245,9 @@ async fn read_page(
     if request.path.is_dir() {
         return read_directory_page(request).map(ReadPage::text);
     }
-    let metadata = std::fs::metadata(&request.path)?;
+    // 路径不存在时补上展开后的绝对路径，模型才能判断相对路径拼到了哪里
+    let metadata = std::fs::metadata(&request.path)
+        .map_err(|error| fs_error("read file", &request.path, &error))?;
     if !metadata.is_file() {
         bail!(
             "not a regular file or directory: {}",
@@ -284,8 +287,10 @@ fn is_image_file(path: &Path) -> bool {
 /// - 目录分页 JSON
 fn read_directory_page(request: &ReadRequest) -> Result<Value> {
     let mut entries = Vec::new();
-    for entry in std::fs::read_dir(&request.path)? {
-        let entry = entry?;
+    let dir = std::fs::read_dir(&request.path)
+        .map_err(|error| fs_error("list directory", &request.path, &error))?;
+    for entry in dir {
+        let entry = entry.map_err(|error| fs_error("list directory", &request.path, &error))?;
         let suffix = if entry.file_type()?.is_dir() { "/" } else { "" };
         entries.push(format!("{}{}", entry.file_name().to_string_lossy(), suffix));
     }
@@ -318,7 +323,8 @@ fn read_directory_page(request: &ReadRequest) -> Result<Value> {
 /// 返回:
 /// - 文本分页 JSON
 fn read_text_page(request: &ReadRequest, byte_budget: usize) -> Result<Value> {
-    let file = std::fs::File::open(&request.path)?;
+    let file = std::fs::File::open(&request.path)
+        .map_err(|error| fs_error("read file", &request.path, &error))?;
     let reader = BufReader::new(file);
     let mut lines = Vec::new();
     let mut bytes = 0usize;
@@ -369,9 +375,12 @@ fn read_text_page(request: &ReadRequest, byte_budget: usize) -> Result<Value> {
 /// 返回:
 /// - 文件是否可作为文本读取
 fn ensure_not_binary_file(path: &Path) -> Result<()> {
-    let mut file = std::fs::File::open(path)?;
+    let mut file =
+        std::fs::File::open(path).map_err(|error| fs_error("read file", path, &error))?;
     let mut buffer = [0u8; 8192];
-    let read = file.read(&mut buffer)?;
+    let read = file
+        .read(&mut buffer)
+        .map_err(|error| fs_error("read file", path, &error))?;
     let sample = &buffer[..read];
     if sample.contains(&0) {
         bail!("cannot read binary file: {}", path.display())
@@ -404,30 +413,6 @@ fn path_arg(args: &Value, key: &str) -> Result<PathBuf> {
         bail!("{}: {key}", t("required argument missing", "缺少必需参数"))
     }
     Ok(expand_path(value))
-}
-
-/// 展开路径文本。
-///
-/// 参数:
-/// - `value`: 路径文本
-///
-/// 返回:
-/// - 绝对或当前目录相对路径
-fn expand_path(value: &str) -> PathBuf {
-    let value = value.trim();
-    if let Some(rest) = value.strip_prefix("~/") {
-        if let Some(home) = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf()) {
-            return home.join(rest);
-        }
-    }
-    let path = Path::new(value);
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        crate::runtime_cwd::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(path)
-    }
 }
 
 #[cfg(test)]
@@ -535,6 +520,51 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("cannot read binary file"));
+    }
+
+    /// 单文件读取缺失路径时错误必须带上展开后的绝对路径。
+    #[tokio::test]
+    async fn read_file_missing_path_error_includes_expanded_path() {
+        let cwd = crate::runtime_cwd::current_dir().unwrap();
+        let temp = tempfile::tempdir_in(cwd).unwrap();
+        let paths = test_paths(temp.path());
+        let missing = temp.path().join("nowhere.txt");
+
+        let error = read_file(
+            json!({"path": missing.display().to_string()}),
+            AppConfig::default(),
+            paths,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains(&missing.display().to_string()));
+        assert!(error.contains("does not exist"));
+        assert!(!error.contains("os error"));
+    }
+
+    /// 相对路径读取失败时错误展示的是拼接后的绝对路径。
+    #[tokio::test]
+    async fn read_file_relative_path_error_reports_joined_path() {
+        let cwd = crate::runtime_cwd::current_dir().unwrap();
+        let temp = tempfile::tempdir_in(cwd).unwrap();
+        let paths = test_paths(temp.path());
+        let workspace = temp.path().to_path_buf();
+
+        let error = crate::runtime_cwd::scope(workspace.clone(), async {
+            read_file(
+                json!({"path": "src/nowhere.rs"}),
+                AppConfig::default(),
+                paths,
+            )
+            .await
+            .unwrap_err()
+            .to_string()
+        })
+        .await;
+
+        assert!(error.contains(&workspace.join("src/nowhere.rs").display().to_string()));
     }
 
     #[tokio::test]

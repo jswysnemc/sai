@@ -16,6 +16,7 @@ mod recovery;
 mod repeat_guard;
 mod system_prompt;
 mod tool_attachments;
+mod tool_gate;
 mod tool_history;
 mod tool_visibility;
 mod turn_execution;
@@ -39,6 +40,7 @@ use anyhow::{bail, Result};
 use message_context::{runtime_context_message, system_messages_first};
 use model_context::selected_model_label;
 use tokio::sync::mpsc;
+use tool_gate::{evaluate_tool_gate, is_tool_error_output, tool_error_output, ToolGate};
 use tool_history::extract_persistable_tool_report;
 use tool_visibility::ToolVisibility;
 use turn_execution::{assistant_tool_message, TurnExecution, TurnUsageAccumulator};
@@ -413,6 +415,20 @@ impl Agent {
                     messages.push(ChatMessage::tool(call.id, output));
                     continue;
                 }
+                // 未知工具名、畸形参数、未加载工具等可恢复问题在执行前统一拦下，
+                // 按工具错误回传给模型自行纠正，不再让整轮对话失败
+                if let ToolGate::Reject(output) =
+                    evaluate_tool_gate(&self.tools, &self.tool_visibility, &call, &used_tools)
+                {
+                    self.record_tool_result_completed(turn_id, &call, false, &output, &output)?;
+                    on_event(AgentEvent::ToolResult {
+                        name: call.function.name.clone(),
+                        ok: false,
+                        output: output.clone(),
+                    })?;
+                    messages.push(ChatMessage::tool(call.id, output));
+                    continue;
+                }
                 if self.mode() == AgentMode::Plan
                     && self.tools.permission(&call.function.name)? != ToolPermission::ReadOnly
                 {
@@ -562,7 +578,7 @@ impl Agent {
                             output
                         }
                         Err(err) => {
-                            let output = format!("tool error: {err}");
+                            let output = tool_error_output(&err);
                             on_event(AgentEvent::ToolResult {
                                 name: call.function.name.clone(),
                                 ok: false,
@@ -576,50 +592,7 @@ impl Agent {
                     self.record_tool_result_completed(
                         turn_id,
                         &call,
-                        !context_output.starts_with("tool error:"),
-                        &output,
-                        &context_output,
-                    )?;
-                    messages.push(ChatMessage::tool(call.id, context_output));
-                    continue;
-                }
-                if !self.tool_visibility.is_visible(&call.function.name) {
-                    let output = format!(
-                        "tool error: tool {} is not loaded in the current visible tool set; call load with type=tool and a keywords array first. If this tool was loaded in a previous conversation, the loaded-tool session state was reset or is unavailable.",
-                        call.function.name
-                    );
-                    on_event(AgentEvent::ToolResult {
-                        name: call.function.name.clone(),
-                        ok: false,
-                        output: output.clone(),
-                    })?;
-                    let context_output =
-                        tools::tool_output_for_context(&call.function.name, &output);
-                    self.record_tool_result_completed(
-                        turn_id,
-                        &call,
-                        false,
-                        &output,
-                        &context_output,
-                    )?;
-                    messages.push(ChatMessage::tool(call.id, context_output));
-                    continue;
-                }
-                if call.function.name == "install_aur_package"
-                    && used_tools.iter().any(|name| name == "review_aur_package")
-                {
-                    let output = "tool error: install_aur_package cannot run in the same turn as review_aur_package. This is a workflow confirmation error, not a tool loading error. Do not call load again; ask the user to confirm installation in a new turn first.".to_string();
-                    on_event(AgentEvent::ToolResult {
-                        name: call.function.name.clone(),
-                        ok: false,
-                        output: output.clone(),
-                    })?;
-                    let context_output =
-                        tools::tool_output_for_context(&call.function.name, &output);
-                    self.record_tool_result_completed(
-                        turn_id,
-                        &call,
-                        false,
+                        !is_tool_error_output(&context_output),
                         &output,
                         &context_output,
                     )?;
