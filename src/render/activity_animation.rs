@@ -3,11 +3,20 @@ use std::time::Duration;
 /// 状态动效统一刷新节拍，与 Codex TUI 的帧率保持一致
 pub(crate) const ACTIVITY_FRAME_INTERVAL: Duration = Duration::from_millis(32);
 /// 亮带进入和离开文字前保留的字符位
-const SHIMMER_PADDING: usize = 10;
+///
+/// 留白过宽会让亮带长时间扫在文字之外，观感上只剩灰暗停顿；
+/// 取半宽附近即可保证亮带完整进出，又不至于空扫太久。
+const SHIMMER_PADDING: usize = 4;
 /// 余弦亮带的半宽度（字符位）
 const SHIMMER_BAND_HALF_WIDTH: f32 = 5.0;
 /// 两秒一轮对应的帧数
 const SHIMMER_CYCLE_FRAMES: usize = 63;
+
+/// 状态文字在亮带之外保持的基础亮度
+///
+/// 完全暗态会让字在大半个周期里近乎不可见；保留一档基础亮度后，
+/// 流光变成在既有文字上掠过，而不是把文字从黑暗中点亮再熄灭。
+const SHIMMER_BASE_INTENSITY: f32 = 0.45;
 
 /// 状态文字的中性灰暗态颜色
 const DIM_COLOR: (u8, u8, u8) = (88, 88, 88);
@@ -124,16 +133,17 @@ fn shimmer_intensity(char_count: usize, frame: usize, index: usize) -> f32 {
     let position = ((frame % SHIMMER_CYCLE_FRAMES) as f32 / SHIMMER_CYCLE_FRAMES as f32
         * period as f32
         + start_offset)
-        % period as f32;
-    // 2. 计算目标字符与亮带中心的距离，亮带范围外保持暗态
+        .rem_euclid(period as f32);
+    // 2. 计算目标字符与亮带中心的距离，亮带外保持基础亮度而非全暗
     let char_position = index.saturating_add(SHIMMER_PADDING) as f32;
     let distance = (char_position - position).abs();
     if distance > SHIMMER_BAND_HALF_WIDTH {
-        return 0.0;
+        return SHIMMER_BASE_INTENSITY;
     }
-    // 3. 使用余弦函数平滑衰减亮度
+    // 3. 使用余弦函数在基础亮度之上平滑叠加流光
     let phase = std::f32::consts::PI * (distance / SHIMMER_BAND_HALF_WIDTH);
-    0.5 * (1.0 + phase.cos())
+    let shimmer = 0.5 * (1.0 + phase.cos());
+    SHIMMER_BASE_INTENSITY + (1.0 - SHIMMER_BASE_INTENSITY) * shimmer
 }
 
 /// 【终端】【状态动效】按亮度插值生成前景色控制序列。
@@ -207,10 +217,11 @@ mod tests {
     fn adjacent_frames_change_smoothly() {
         // 1. 同一字符在相邻帧的色差应远小于暗亮两端的跨度
         let span = f32::from(BRIGHT_COLOR.2) - f32::from(DIM_COLOR.2);
-        // 2. 取仍处在余弦亮带内的字符，范围外恒为暗态、观测不到变化
+        // 2. 采样点取亮带斜坡而非峰顶：峰顶附近相邻帧都会收敛到纯白，观测不到变化
         let center = frame_for_index("Working", 1);
-        let first = channel_at("Working", center, 1);
-        let second = channel_at("Working", center + 1, 1);
+        let slope = center + SHIMMER_CYCLE_FRAMES / 12;
+        let first = channel_at("Working", slope, 1);
+        let second = channel_at("Working", slope + 1, 1);
 
         assert_ne!(first, second, "相邻帧必须有变化，否则动效停滞");
         assert!(
@@ -247,7 +258,7 @@ mod tests {
     #[test]
     fn guide_dot_uses_shimmer_cycle() {
         let samples = (0..SHIMMER_CYCLE_FRAMES)
-            .map(|frame| render_activity_guide(frame))
+            .map(render_activity_guide)
             .collect::<Vec<_>>();
 
         assert!(samples.iter().all(|dot| strip_ansi_for_test(dot) == "•"));
@@ -282,6 +293,67 @@ mod tests {
         assert_eq!(color, BRIGHT_COLOR);
     }
 
+    /// 【终端】【状态动效】验证文字在整个周期内始终保持可读亮度。
+    ///
+    /// 亮带只覆盖周期的一部分，若带外为全暗，用户看到灰暗态的时间会远多于
+    /// 明亮态，观感上像卡顿而非流光。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn text_stays_readable_across_the_whole_cycle() {
+        let dim_floor = channel(DIM_COLOR.2, BRIGHT_COLOR.2, SHIMMER_BASE_INTENSITY);
+        for frame in 0..SHIMMER_CYCLE_FRAMES {
+            for index in 0.."Working".chars().count() {
+                let value = channel_at("Working", frame, index);
+                assert!(
+                    value >= dim_floor,
+                    "第 {frame} 帧第 {index} 个字符暗于基线: {value} < {dim_floor}"
+                );
+            }
+        }
+    }
+
+    /// 【终端】【状态动效】验证亮态覆盖周期中足够大的比例。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn highlight_covers_a_reasonable_share_of_the_cycle() {
+        let span = f32::from(BRIGHT_COLOR.2) - f32::from(DIM_COLOR.2);
+        let threshold = f32::from(DIM_COLOR.2) + span * 0.75;
+        let lit = (0..SHIMMER_CYCLE_FRAMES)
+            .filter(|frame| {
+                (0.."Working".chars().count())
+                    .any(|index| f32::from(channel_at("Working", *frame, index)) >= threshold)
+            })
+            .count();
+
+        assert!(
+            lit * 2 >= SHIMMER_CYCLE_FRAMES,
+            "文字处于高亮的帧数偏少，观感会偏灰暗: {lit}/{SHIMMER_CYCLE_FRAMES}"
+        );
+    }
+
+    /// 按亮度插值单个颜色通道。
+    ///
+    /// 参数:
+    /// - `dim`: 暗态取值
+    /// - `bright`: 亮态取值
+    /// - `intensity`: 亮度比例
+    ///
+    /// 返回:
+    /// - 插值后的通道取值
+    fn channel(dim: u8, bright: u8, intensity: f32) -> u8 {
+        (f32::from(dim) + (f32::from(bright) - f32::from(dim)) * intensity).round() as u8
+    }
+
     /// 返回指定帧下亮度最高的字符下标。
     ///
     /// 参数:
@@ -306,11 +378,11 @@ mod tests {
     /// - 最接近目标字符中心的帧序号
     fn frame_for_index(text: &str, index: usize) -> usize {
         let period = text.chars().count().saturating_add(SHIMMER_PADDING * 2);
-        let start_offset = SHIMMER_PADDING - SHIMMER_BAND_HALF_WIDTH as usize;
-        let position = index
-            .saturating_add(SHIMMER_PADDING)
-            .saturating_sub(start_offset);
-        (position * SHIMMER_CYCLE_FRAMES + period / 2) / period.max(1)
+        // start_offset 可能为负，全程用有符号运算再收敛到非负帧号
+        let start_offset = SHIMMER_PADDING as f32 - SHIMMER_BAND_HALF_WIDTH;
+        let position = index as f32 + SHIMMER_PADDING as f32 - start_offset;
+        let frame = position * SHIMMER_CYCLE_FRAMES as f32 / period.max(1) as f32;
+        frame.round().rem_euclid(SHIMMER_CYCLE_FRAMES as f32) as usize
     }
 
     /// 读取指定字符在指定帧的蓝色通道值。

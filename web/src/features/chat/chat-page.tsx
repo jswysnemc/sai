@@ -26,11 +26,12 @@ import { ContextPromptBanner } from "./message/context-prompt-banner";
 import { errorDetailForDisplay, RunErrorNotice } from "./message/run-error-notice";
 import { useI18n } from "../i18n/use-i18n";
 import { parseGoalCommand } from "../goals/goal-command";
-import { appendTerminalSelection, INSERT_TERMINAL_SELECTION_EVENT, type TerminalSelectionDetail } from "./composer/composer-events";
+import { appendTerminalSelection, FOCUS_COMPOSER_EVENT, INSERT_TERMINAL_SELECTION_EVENT, type TerminalSelectionDetail } from "./composer/composer-events";
 import { RuntimeOverview } from "../runtime-overview/runtime-overview";
 import { BranchSwitcher } from "./turn-tree/branch-switcher";
 import { TurnTreeOverview } from "./turn-tree/turn-tree-overview";
 import { TurnTreePanel } from "./turn-tree/turn-tree-panel";
+import { useBranchActions } from "./turn-tree/use-branch-actions";
 import { useTurnTree } from "./turn-tree/use-turn-tree";
 import { QueuedMessageList } from "./queue/queued-message-list";
 import { isConversationEmpty, shouldCenterEmptySession } from "./empty-session-layout";
@@ -300,31 +301,34 @@ export function ChatPage() {
     staleTime: 30_000
   });
   const historyEntries = inputHistory.data?.entries ?? [];
+  // 基于会话树的分支动作：只移动活动叶子指针，不删除任何轮次
+  const branchActions = useBranchActions({
+    sessionId: activeSession?.id,
+    running,
+    onFocusComposer: () => window.dispatchEvent(new Event(FOCUS_COMPOSER_EVENT)),
+    onError: (error, fallbackEn, fallbackZh) =>
+      setActionError(toDisplayError(error, fallbackEn, fallbackZh))
+  });
 
   /**
-   * 撤销最后一轮对话及该轮造成的工作树修改，并恢复用户输入。
+   * 撤销上一轮：把对话位置退回父轮次，不删除任何内容。
+   *
+   * 与旧的删除式撤销不同，退出的轮次仍留在树中，可以随时切回对比。
    *
    * @returns 撤销完成后的 Promise
    */
-  const undo = async () => {
-    if (!activeSession || running) return;
+  const undoToPreviousTurn = async () => {
+    const turnId = timeline.data?.turns.filter((turn) => !turn.automatic).at(-1)?.turn_id;
+    if (!turnId) return;
     setUndoError(null);
     setUndoConfirmOpen(false);
-    try {
-      const outcome = await api.sessions.undo(activeSession.id);
-      setInput(outcome.prompt ?? "");
-      run.reset();
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["timeline", activeSession.id] }),
-        queryClient.invalidateQueries({ queryKey: ["sessions"] }),
-        queryClient.invalidateQueries({ queryKey: ["file-tree"] }),
-        queryClient.invalidateQueries({ queryKey: ["file"] }),
-        queryClient.invalidateQueries({ queryKey: ["workspace-diff"] })
-      ]);
-    } catch (error) {
-      setUndoError(toDisplayError(error, "Failed to undo the last turn", "撤销上一轮失败"));
-    }
+    // 退回后把该轮的用户输入放回输入框，便于直接改写重发
+    const prompt = timeline.data?.turns.find((turn) => turn.turn_id === turnId)?.user.content;
+    await branchActions.undoToParent(turnId);
+    run.reset();
+    setInput(prompt ?? "");
   };
+
   const overviewItems = useMemo(
     () => [
       ...createTimelineOverviewItems(display.historyTurns, undefined, locale),
@@ -333,7 +337,7 @@ export function ChatPage() {
     [activeLiveRuns, display.historyTurns, locale]
   );
 
-  /** 回滚被点击的持久化轮次，并使用原输入重新发起运行。 */
+  /** 把对话退回被点击轮次的父节点，并用原输入重新发起，旧回答保留为兄弟分支。 */
   const retry = async (content: string, liveImages: string[] | undefined, candidateTurnId: string | null) => {
     if (!activeSession || running) return;
     if (!content.trim() && !(liveImages && liveImages.length > 0)) return;
@@ -343,8 +347,8 @@ export function ChatPage() {
       const refreshedTimeline = await api.sessions.timeline(activeSession.id);
       queryClient.setQueryData(["timeline", activeSession.id], refreshedTimeline);
       const turnId = retryableTurnId(refreshedTimeline.turns, candidateTurnId);
-      // 2. 已持久化的旧轮先从上下文删除，工具产生的工作树副作用保持不变
-      if (turnId) await api.sessions.rollback(activeSession.id, turnId);
+      // 2. 只把对话位置退回父轮次；旧轮次保留在树里，新回答成为它的兄弟分支
+      if (turnId) await branchActions.moveToParentForRetry(turnId);
       // 3. 清理旧实时投影，避免旧轮和新轮同时渲染相同用户消息
       run.reset();
       await queryClient.invalidateQueries({ queryKey: ["timeline", activeSession.id] });
@@ -367,6 +371,7 @@ export function ChatPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["sessions"] }),
         queryClient.invalidateQueries({ queryKey: ["session-tree"] }),
+        queryClient.invalidateQueries({ queryKey: ["session-turn-tree"] }),
         queryClient.invalidateQueries({ queryKey: ["timeline"] }),
         queryClient.invalidateQueries({ queryKey: ["timeline", session.id] })
       ]);
@@ -463,8 +468,9 @@ export function ChatPage() {
                   onRetry={turn.turn_id === lastTurnId && !running
                     ? () => void retry(turn.user.content, undefined, turn.turn_id)
                     : undefined}
+                  onContinueFrom={!running ? () => void branchActions.continueFrom(turn.turn_id) : undefined}
                   onFork={() => void forkFromTurn(turn.turn_id)}
-                  actionBusy={actionBusy}
+                  actionBusy={actionBusy || branchActions.pending}
                   branchSlot={(
                     <BranchSwitcher
                       tree={turnTree.tree.data}
@@ -516,7 +522,7 @@ export function ChatPage() {
           items={overviewItems}
           onNavigate={pauseFollowing}
         />
-        {!treeOpen && (turnTree.tree.data?.branch_points ?? 0) > 0 && (
+        {!treeOpen && (turnTree.tree.data?.total_turns ?? 0) > 0 && (
           <button
             type="button"
             className="turn-tree-open"
@@ -525,7 +531,9 @@ export function ChatPage() {
             title={t("Show session branches", "查看会话分支")}
           >
             <GitBranch size={13} aria-hidden />
-            <span>{turnTree.tree.data?.branch_points}</span>
+            {(turnTree.tree.data?.branch_points ?? 0) > 0 && (
+              <span>{turnTree.tree.data?.branch_points}</span>
+            )}
           </button>
         )}
         {treeOpen && turnTree.tree.data && (
@@ -564,18 +572,18 @@ export function ChatPage() {
       </Modal>
       <Modal
         open={undoConfirmOpen}
-        title={t("Undo the previous turn?", "撤销上一轮？")}
-        description={t("The last turn will be deleted and its worktree changes will be rolled back when possible. The user input will return to the composer.", "将删除最后一轮对话，并尝试回滚该轮对工作树的修改；用户输入会恢复到输入框。")}
+        title={t("Step back to the previous turn?", "退回上一轮？")}
+        description={t("The conversation moves back one turn. Nothing is deleted — the turn you step out of stays in the branch tree and can be reached again.", "对话位置退回一轮。不会删除任何内容：退出的这一轮仍保留在分支树中，随时可以切回。")}
         size="small"
         onClose={() => setUndoConfirmOpen(false)}
         footer={(
           <>
             <Button onClick={() => setUndoConfirmOpen(false)}>{t("Cancel", "取消")}</Button>
-            <Button variant="danger" onClick={() => void undo()}>{t("Undo", "确认撤销")}</Button>
+            <Button onClick={() => void undoToPreviousTurn()}>{t("Step back", "确认退回")}</Button>
           </>
         )}
       >
-        <p>{t("This action cannot be restored with the same button. Undo may fail if the worktree changed again after this turn.", "此操作不可通过同一按钮再次恢复。若工作树在本轮后继续被改动，撤销可能失败。")}</p>
+        <p>{t("Worktree changes made by that turn are not rolled back. The user input returns to the composer so you can revise and resend.", "该轮对工作树的修改不会被回滚。用户输入会回到输入框，便于修改后重新发送。")}</p>
       </Modal>
       <Modal
         open={Boolean(undoError)}

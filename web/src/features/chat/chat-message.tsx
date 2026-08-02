@@ -31,13 +31,15 @@ export function HistoryMessage({ message }: { message: HistoryEntry }) {
 /**
  * 渲染一个包含结构化工具历史的完整对话轮次。
  *
- * @param props turn 为会话时间线轮次，onRetry 为可选的重试本轮回调，仅最后一轮传入
+ * @param props turn 为会话时间线轮次，onRetry 为可选的重试本轮回调，仅最后一轮传入；
+ *              onContinueFrom 把对话切回本轮以开新分支，onFork 复制为独立新会话
  * @returns 用户消息、工具调用和助手消息
  */
 export function HistoryTurn({
   turn,
   sessionId,
   onRetry,
+  onContinueFrom,
   onFork,
   actionBusy,
   branchSlot
@@ -45,6 +47,8 @@ export function HistoryTurn({
   turn: SessionTimelineTurn;
   sessionId?: string | null;
   onRetry?: () => void;
+  /** 把对话切回本轮，之后发送的消息成为本轮的新分支 */
+  onContinueFrom?: () => void;
   onFork?: () => void;
   actionBusy?: boolean;
   /** 该轮次存在同级分支时展示的版本切换器 */
@@ -89,10 +93,11 @@ export function HistoryTurn({
           sessionId={sessionId}
           turnId={turn.turn_id}
         />
-        {(turn.assistant.content || onFork || branchSlot) && (
+        {(turn.assistant.content || onContinueFrom || onFork || branchSlot) && (
           <MessageActions
             text={turn.assistant.content || turn.user.content}
             timestamp={turn.assistant.timestamp}
+            onContinueFrom={onContinueFrom}
             onFork={onFork}
             busy={actionBusy}
             extra={branchSlot}

@@ -1,4 +1,4 @@
-import { Check, Copy, GitBranch, RotateCcw } from "lucide-react";
+import { Check, Copy, CopyPlus, GitBranch, RotateCcw } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../i18n/use-i18n";
@@ -8,6 +8,9 @@ type MessageActionsProps = {
   className?: string;
   timestamp?: string;
   onRetry?: () => void;
+  /** 把对话切回本轮，之后发送的消息成为本轮的新分支 */
+  onContinueFrom?: () => void;
+  /** 复制整段对话到一个独立的新会话 */
   onFork?: () => void;
   busy?: boolean;
   /** 附加操作，例如分支版本切换 */
@@ -15,9 +18,18 @@ type MessageActionsProps = {
 };
 
 /**
- * 消息操作行：时间、重试、分支、复制。
+ * 消息操作行：时间、重试、从此处分支、复制为新会话、复制原文。
  */
-export function MessageActions({ text, className, timestamp, onRetry, onFork, busy, extra }: MessageActionsProps) {
+export function MessageActions({
+  text,
+  className,
+  timestamp,
+  onRetry,
+  onContinueFrom,
+  onFork,
+  busy,
+  extra
+}: MessageActionsProps) {
   const { locale, t } = useI18n();
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | null>(null);
@@ -46,9 +58,28 @@ export function MessageActions({ text, className, timestamp, onRetry, onFork, bu
           <RotateCcw size={13} />
         </button>
       )}
-      {onFork && (
-        <button type="button" className="message-copy" onClick={onFork} aria-label={t("Fork conversation", "分支对话")} title={t("Fork conversation", "分支对话")} disabled={busy}>
+      {onContinueFrom && (
+        <button
+          type="button"
+          className="message-copy"
+          onClick={onContinueFrom}
+          aria-label={t("Continue from this turn", "从这里继续")}
+          title={t("Continue from this turn as a new branch", "从这里继续，形成新分支")}
+          disabled={busy}
+        >
           <GitBranch size={13} />
+        </button>
+      )}
+      {onFork && (
+        <button
+          type="button"
+          className="message-copy"
+          onClick={onFork}
+          aria-label={t("Copy into a new session", "复制为新会话")}
+          title={t("Copy the conversation up to here into a new session", "把到此为止的对话复制为独立的新会话")}
+          disabled={busy}
+        >
+          <CopyPlus size={13} />
         </button>
       )}
       <button type="button" className="message-copy" onClick={onCopy} aria-label={t("Copy original message", "复制消息原文")} title={t("Copy original", "复制原文")}>

@@ -14,13 +14,15 @@
 }
 
 .chat-header-main {
-  display: grid;
+  /* 标题与工作区路径左右排列：标题占据需要的宽度，路径填充剩余空间并右对齐 */
+  display: flex;
   min-width: 0;
-  align-content: center;
-  gap: var(--space-3xs);
+  align-items: baseline;
+  gap: var(--space-md);
 }
 
 .chat-header h1 {
+  flex: 0 1 auto;
   min-width: 0;
   margin: 0;
   overflow: hidden;
@@ -34,9 +36,12 @@
 }
 
 .chat-header-context {
+  /* 路径与分支贴右侧显示，与标题之间留出可压缩的间距 */
   display: flex;
+  flex: 1 1 auto;
   min-width: 0;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-md);
   overflow: hidden;
   color: var(--ink-soft);
@@ -131,6 +136,9 @@
   }
 
   .chat-header-main {
+    /* 窄屏横排会把标题和路径互相挤到看不清，回到上下堆叠 */
+    display: grid;
+    align-content: center;
     gap: var(--space-3xs);
     text-align: center;
   }
