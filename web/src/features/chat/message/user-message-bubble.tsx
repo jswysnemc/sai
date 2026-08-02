@@ -11,17 +11,29 @@ type UserMessageBubbleProps = {
   timestamp?: string;
   imageUrls?: string[];
   onRetry?: () => void;
+  /** 把对话切回本轮，之后发送的消息成为本轮的新分支 */
+  onContinueFrom?: () => void;
+  /** 操作进行中时禁用分支按钮 */
+  actionBusy?: boolean;
 };
 
 const COLLAPSE_HEIGHT = 320;
 
 /**
- * 用户消息气泡，支持 Markdown 渲染、超高折叠、附件放大、复制和重试操作。
+ * 用户消息气泡，支持 Markdown 渲染、超高折叠、附件放大、复制、重试和开分支操作。
  *
- * @param props content 为消息原文，timestamp 为可选时间，imageUrls 为附件图片地址，onRetry 为可选的重试回调
+ * @param props content 为消息原文，timestamp 为可选时间，imageUrls 为附件图片地址，
+ *              onRetry 为可选的重试回调，onContinueFrom 为从本轮开新分支的回调
  * @returns 右对齐的用户消息气泡
  */
-export function UserMessageBubble({ content, timestamp, imageUrls, onRetry }: UserMessageBubbleProps) {
+export function UserMessageBubble({
+  content,
+  timestamp,
+  imageUrls,
+  onRetry,
+  onContinueFrom,
+  actionBusy
+}: UserMessageBubbleProps) {
   const { t } = useI18n();
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [collapsible, setCollapsible] = useState(false);
@@ -56,7 +68,14 @@ export function UserMessageBubble({ content, timestamp, imageUrls, onRetry }: Us
             </Button>
           )}
         </div>
-        <MessageActions className="user-message-actions" text={content} timestamp={timestamp} onRetry={onRetry} />
+        <MessageActions
+          className="user-message-actions"
+          text={content}
+          timestamp={timestamp}
+          onRetry={onRetry}
+          onContinueFrom={onContinueFrom}
+          busy={actionBusy}
+        />
       </div>
     </article>
   );

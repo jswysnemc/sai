@@ -139,7 +139,8 @@ mod tests {
     #[test]
     fn running_view_uses_working_shimmer() {
         let first = render_view_text("missing-id", "检查项目", 0);
-        let second = render_view_text("missing-id", "检查项目", 1);
+        // 亮带按字符位离散推进，相邻帧可能停在原位；跨过一个字符位再比较
+        let second = render_view_text("missing-id", "检查项目", 14);
         let first_status = first.lines().last().unwrap_or_default();
         let second_status = second.lines().last().unwrap_or_default();
 

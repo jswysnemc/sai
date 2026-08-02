@@ -39,6 +39,7 @@ pub(in crate::state) struct BudgetedSummaryHistory {
 ///
 /// 返回:
 /// - 已完成裁剪和统计的历史文本
+#[cfg(test)]
 pub(in crate::state) fn build_budgeted_summary_history(
     db: &ConversationDb,
     session_id: &str,

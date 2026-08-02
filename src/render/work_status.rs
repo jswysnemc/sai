@@ -165,9 +165,10 @@ mod tests {
         assert!(plain.contains("1s"));
         assert!(!plain.contains("1.5s"));
         assert!(!plain.contains('·'));
+        // 亮带按字符位离散推进，相邻帧可能停在原位；跨过一个字符位再比较
         assert_ne!(
             line,
-            WorkStatus::Working.render_line(1, Duration::from_millis(1500))
+            WorkStatus::Working.render_line(14, Duration::from_millis(1500))
         );
     }
 

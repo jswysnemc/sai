@@ -646,3 +646,132 @@ fn handoff_note_does_not_survive_as_user_input() {
         "交接笔记必须在下一次压缩时被排除，否则摘要会逐次嵌套"
     );
 }
+
+/// 在运行中轮次写入一条完整的工具调用与结果。
+///
+/// 参数:
+/// - `store`: 状态仓库
+/// - `turn_id`: 轮次标识
+/// - `seq`: 轮内序号
+/// - `round`: assistant 子轮编号
+/// - `output`: 工具结果正文
+///
+/// 返回:
+/// - 无
+fn insert_running_tool_call(
+    store: &StateStore,
+    turn_id: &str,
+    seq: usize,
+    round: usize,
+    output: &str,
+) {
+    let call_id = format!("call_{seq}");
+    store
+        .record_tool_call_started_with_context(
+            turn_id,
+            seq,
+            round,
+            None,
+            &call_id,
+            "read_file",
+            r#"{"path":"a.rs"}"#,
+        )
+        .unwrap();
+    store
+        .record_tool_result_completed(turn_id, &call_id, true, output, None, None, output.len())
+        .unwrap();
+}
+
+/// 验证运行中轮次的工具调用参与压缩，且压缩后不再回放。
+///
+/// 这是旧策略完全失效的场景：单个用户问题触发大量工具调用，历史里没有
+/// 足够的已完成轮次，压缩执行了却几乎没有节省。
+#[test]
+fn running_turn_tool_calls_are_compacted_and_dropped_from_context() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
+    store.start_turn("turn_1", "重构这个模块").unwrap();
+    // 1. 单轮内写入 12 条工具调用，每条一个独立子轮
+    let payload = "x".repeat(500);
+    for index in 1..=12 {
+        insert_running_tool_call(&store, "turn_1", index, index, &payload);
+    }
+    let before = store
+        .project_running_turn_tool_messages("turn_1")
+        .unwrap()
+        .len();
+
+    // 2. 触发压缩：运行中轮次必须被选中
+    let request = store.select_manual_compaction(0).unwrap().unwrap();
+    let running = request
+        .running_turn
+        .as_ref()
+        .expect("运行中轮次必须参与压缩");
+    assert_eq!(running.turn_id, "turn_1");
+    assert_eq!(
+        running.compacted_calls,
+        12 - crate::state::compaction::PRESERVED_RUNNING_TOOL_CALLS
+    );
+
+    store.apply_compaction(&request, "交接笔记正文").unwrap();
+    let after = store
+        .project_running_turn_tool_messages("turn_1")
+        .unwrap()
+        .len();
+
+    // 3. 压缩后回放的消息数必须显著下降
+    assert!(
+        after < before,
+        "压缩后运行轮次消息应减少: before={before}, after={after}"
+    );
+    assert_eq!(
+        after,
+        crate::state::compaction::PRESERVED_RUNNING_TOOL_CALLS * 2,
+        "只保留末尾若干条调用及其结果"
+    );
+}
+
+/// 验证压缩切点不会切断 assistant tool_calls 与 tool 结果的配对。
+#[test]
+fn compaction_never_splits_a_tool_call_round() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
+    store.start_turn("turn_1", "并行读取").unwrap();
+    // 每个子轮 3 条并行调用，切点若落在子轮中间会留下孤立的 tool 结果
+    let payload = "y".repeat(300);
+    let mut seq = 1;
+    for round in 1..=5 {
+        for _ in 0..3 {
+            insert_running_tool_call(&store, "turn_1", seq, round, &payload);
+            seq += 1;
+        }
+    }
+
+    let request = store.select_manual_compaction(0).unwrap().unwrap();
+    store.apply_compaction(&request, "笔记").unwrap();
+    let messages = store.project_running_turn_tool_messages("turn_1").unwrap();
+
+    // 首条必须是 assistant 而非孤立的 tool 结果
+    if let Some(first) = messages.first() {
+        assert_eq!(
+            first.role, "assistant",
+            "压缩后不得以孤立的 tool 结果开头"
+        );
+    }
+    // 每条 tool 结果都必须能在此前的 assistant 消息里找到对应的 tool_call
+    let mut declared = std::collections::BTreeSet::new();
+    for message in &messages {
+        if let Some(calls) = message.tool_calls.as_ref() {
+            for call in calls {
+                declared.insert(call.id.clone());
+            }
+        }
+        if message.role == "tool" {
+            let id = message.tool_call_id.as_deref().unwrap_or_default();
+            assert!(
+                declared.contains(id),
+                "tool 结果 {id} 没有配对的 tool_call"
+            );
+        }
+    }
+}

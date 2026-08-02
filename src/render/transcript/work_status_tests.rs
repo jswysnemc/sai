@@ -22,7 +22,10 @@ fn live_reasoning_body_animates_without_waiting_for_consolidation() {
     ));
 
     let first = store.display_live_tail(80, &options());
-    assert!(store.advance_live_animation());
+    // 亮带按字符位离散推进，单帧可能停在原位；推进到确实移动了一个字符位
+    for _ in 0..14 {
+        assert!(store.advance_live_animation());
+    }
     let second = store.display_live_tail(80, &options());
 
     assert!(first.len() > 1);

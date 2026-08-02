@@ -63,7 +63,14 @@ export function HistoryTurn({
   return (
     <>
       {!turn.automatic && (
-        <UserMessageBubble content={turn.user.content} timestamp={turn.user.timestamp} imageUrls={turn.user.image_urls} onRetry={onRetry} />
+        <UserMessageBubble
+          content={turn.user.content}
+          timestamp={turn.user.timestamp}
+          imageUrls={turn.user.image_urls}
+          onRetry={onRetry}
+          onContinueFrom={onContinueFrom}
+          actionBusy={actionBusy}
+        />
       )}
       <article className="message assistant-message">
         {!failureOnly && <MessageParts parts={historyTurnParts(turn)} />}
@@ -93,11 +100,10 @@ export function HistoryTurn({
           sessionId={sessionId}
           turnId={turn.turn_id}
         />
-        {(turn.assistant.content || onContinueFrom || onFork || branchSlot) && (
+        {(turn.assistant.content || onFork || branchSlot) && (
           <MessageActions
             text={turn.assistant.content || turn.user.content}
             timestamp={turn.assistant.timestamp}
-            onContinueFrom={onContinueFrom}
             onFork={onFork}
             busy={actionBusy}
             extra={branchSlot}

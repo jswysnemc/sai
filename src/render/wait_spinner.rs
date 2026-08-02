@@ -375,7 +375,8 @@ mod tests {
         let state = make_state("Thinking", None);
 
         let (first, lines) = render_frame(0, &state);
-        let (second, _) = render_frame(1, &state);
+        // 亮带按字符位离散推进，相邻帧可能停在原位；跨过一个字符位再比较
+        let (second, _) = render_frame(14, &state);
         let plain = strip_ansi_for_test(&first);
 
         assert!(plain.contains("Thinking"));
