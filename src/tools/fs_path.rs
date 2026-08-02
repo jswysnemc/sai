@@ -129,8 +129,9 @@ mod tests {
     /// 验证中间目录写错时提示最近的存在目录。
     #[test]
     fn missing_intermediate_directory_reports_nearest_ancestor() {
-        let root = std::env::temp_dir();
+        let root = tempfile::tempdir().unwrap();
         let path = root
+            .path()
             .join("sai-missing-dir-xyz")
             .join("nested")
             .join("sample.txt");
@@ -138,7 +139,10 @@ mod tests {
 
         let message = fs_error("read file", &path, &error).to_string();
 
-        assert!(message.contains(&format!("nearest existing directory: {}", root.display())));
+        assert!(message.contains(&format!(
+            "nearest existing directory: {}",
+            root.path().display()
+        )));
     }
 
     /// 验证非缺失类错误保留原始原因。
