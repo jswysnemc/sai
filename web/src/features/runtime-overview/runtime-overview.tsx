@@ -7,7 +7,8 @@ import {
   FileDiff,
   GitBranch,
   ListChecks,
-  Minimize2
+  Minimize2,
+  Terminal
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { TodoStatus } from "../../api/contracts";
@@ -15,6 +16,8 @@ import { Button } from "../../shared/ui/button/button";
 import { useI18n } from "../i18n/use-i18n";
 import { OPEN_WORKSPACE_PANEL_EVENT } from "../workspace/workspace-panel-options";
 import type { PaneTab } from "../workspace/workspace-tab";
+import type { ActivityPulse } from "./activity-pulse";
+import { useActivityPulse } from "./use-activity-pulse";
 import { useRuntimeOverviewData } from "./runtime-overview-data";
 import "./runtime-overview.css";
 
@@ -27,6 +30,13 @@ const todoIcons = {
   cancelled: Circle
 } satisfies Record<TodoStatus, typeof Circle>;
 
+/** 各类活动播报对应的图标 */
+const pulseIcons = {
+  task: Terminal,
+  todo: ListChecks,
+  subagent: Bot
+} satisfies Record<ActivityPulse["kind"], typeof Circle>;
+
 type RuntimeOverviewProps = {
   sessionId?: string;
 };
@@ -34,12 +44,16 @@ type RuntimeOverviewProps = {
 /**
  * 在聊天区右上角渲染 Git、Todo 和子智能体运行总览。
  *
+ * 常态展示 Git 改动；后台命令启停、Todo 推进、子智能体启停时，
+ * 胶囊会临时切换到对应播报，数秒后自动回到常态。
+ *
  * @param props 当前会话标识
  * @returns 可收缩的运行总览浮层
  */
 export function RuntimeOverview({ sessionId }: RuntimeOverviewProps) {
   const { t } = useI18n();
   const data = useRuntimeOverviewData(sessionId);
+  const pulse = useActivityPulse(data.snapshot);
   const [responsiveOpen, setResponsiveOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -51,11 +65,22 @@ export function RuntimeOverview({ sessionId }: RuntimeOverviewProps) {
     window.localStorage.setItem(COLLAPSED_STORAGE_KEY, String(collapsed));
   }, [collapsed]);
 
+  /** 胶囊内容：有活动播报时临时顶替常态的 Git 改动统计 */
+  const pillContent = pulse
+    ? <PulseContent pulse={pulse} />
+    : (
+      <>
+        <FileDiff size={14} aria-hidden />
+        <strong>{t("Changes", "更改")}</strong>
+        <ChangeStats added={data.git.added} removed={data.git.removed} />
+      </>
+    );
+
   if (collapsed) {
     return (
       <aside className="runtime-overview is-collapsed">
         <Button
-          className="runtime-overview-pill"
+          className={`runtime-overview-pill${pulse ? " is-pulsing" : ""}`}
           onClick={() => {
             setResponsiveOpen(true);
             setCollapsed(false);
@@ -63,9 +88,7 @@ export function RuntimeOverview({ sessionId }: RuntimeOverviewProps) {
           aria-label={t("Expand work overview", "展开工作概览")}
           title={t("Expand work overview", "展开工作概览")}
         >
-          <FileDiff size={14} aria-hidden />
-          <strong>{t("Changes", "更改")}</strong>
-          <ChangeStats added={data.git.added} removed={data.git.removed} />
+          {pillContent}
         </Button>
       </aside>
     );
@@ -74,18 +97,17 @@ export function RuntimeOverview({ sessionId }: RuntimeOverviewProps) {
   return (
     <aside className={`runtime-overview is-expanded${responsiveOpen ? " is-responsive-open" : ""}`} aria-label={t("Work overview", "工作概览")}>
       <Button
-        className="runtime-overview-pill runtime-overview-responsive-pill"
+        className={`runtime-overview-pill runtime-overview-responsive-pill${pulse ? " is-pulsing" : ""}`}
         onClick={() => setResponsiveOpen(true)}
         aria-label={t("Expand work overview", "展开工作概览")}
         title={t("Expand work overview", "展开工作概览")}
       >
-        <FileDiff size={14} aria-hidden />
-        <strong>{t("Changes", "更改")}</strong>
-        <ChangeStats added={data.git.added} removed={data.git.removed} />
+        {pillContent}
       </Button>
       <div className="runtime-overview-panel">
         <header className="runtime-overview-head">
           <strong>{t("Work overview", "工作概览")}</strong>
+          {pulse && <PulseContent pulse={pulse} className="runtime-overview-head-pulse" />}
           <Button
             className="runtime-overview-collapse"
             onClick={() => {
@@ -156,6 +178,22 @@ export function RuntimeOverview({ sessionId }: RuntimeOverviewProps) {
         </section>
       </div>
     </aside>
+  );
+}
+
+/**
+ * 渲染一条活动播报的图标与文字。
+ *
+ * @param props 播报内容与附加类名
+ * @returns 播报行
+ */
+function PulseContent({ pulse, className }: { pulse: ActivityPulse; className?: string }) {
+  const Icon = pulseIcons[pulse.kind];
+  return (
+    <span className={`runtime-overview-pulse is-${pulse.kind}${className ? ` ${className}` : ""}`} role="status">
+      <Icon size={14} aria-hidden />
+      <span>{pulse.message}</span>
+    </span>
   );
 }
 

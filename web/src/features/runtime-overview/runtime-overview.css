@@ -1,6 +1,10 @@
+/*
+ * 工作概览停在右上角，与左上角的分支面板左右对称。
+ * 顶部位置由眉头高度算出，两者共用同一变量，眉头改高时不会错位。
+ */
 .runtime-overview {
   position: absolute;
-  top: calc(3.5rem + var(--space-xs));
+  top: calc(var(--chat-header-height, 2.5rem) + var(--space-xs));
   right: var(--space-md);
   z-index: 18;
   width: 278px;
@@ -210,6 +214,65 @@
   border-color: var(--line);
   background: var(--paper-raised);
   box-shadow: var(--elevation-2);
+  transition:
+    border-color var(--transition-base),
+    background var(--transition-base);
+}
+
+/*
+ * 活动播报态：边框与底色转向信号色。
+ * 只改颜色不改尺寸，胶囊不会因为播报而跳动。
+ */
+.runtime-overview-pill.is-pulsing {
+  border-color: color-mix(in srgb, var(--signal) 45%, var(--line));
+  background: color-mix(in srgb, var(--signal) 8%, var(--paper-raised));
+}
+
+.runtime-overview-pulse {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--signal);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  /* 播报出现时轻微淡入上移，用一次极短的位移传达"刚发生" */
+  animation: runtime-overview-pulse-in var(--duration-slow) var(--ease-out);
+}
+
+.runtime-overview-pulse > svg {
+  flex: 0 0 auto;
+}
+
+.runtime-overview-pulse > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 面板展开时播报排在标题右侧，与收起按钮之间自动留白 */
+.runtime-overview-head-pulse {
+  margin-left: auto;
+  margin-right: var(--space-xs);
+  max-width: 60%;
+}
+
+@keyframes runtime-overview-pulse-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runtime-overview-pulse {
+    animation: none;
+  }
 }
 
 .runtime-overview-pill strong {
@@ -223,7 +286,7 @@
 
 @container (max-width: 64rem) {
   .runtime-overview {
-    top: calc(3.5rem + var(--space-xs));
+    top: calc(var(--chat-header-height, 2.5rem) + var(--space-xs));
     right: var(--space-sm);
     width: auto;
   }
