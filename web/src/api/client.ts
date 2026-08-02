@@ -178,11 +178,6 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ turn_id: turnId })
       }),
-    fork: (id: string, turnId: string, title?: string) =>
-      apiRequest<Session>(`/api/sessions/${id}/fork`, {
-        method: "POST",
-        body: JSON.stringify({ turn_id: turnId, title })
-      }),
     compact: (id: string, selection?: RunModelSelection) =>
       apiRequest<RunInfo>(`/api/sessions/${id}/compact`, {
         method: "POST",

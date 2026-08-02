@@ -45,12 +45,6 @@ struct BulkDeleteSessionsRequest {
 }
 
 #[derive(Deserialize)]
-struct ForkSessionRequest {
-    turn_id: String,
-    title: Option<String>,
-}
-
-#[derive(Deserialize)]
 struct CompactSessionRequest {
     provider_id: Option<String>,
     model: Option<String>,
@@ -125,7 +119,6 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/sessions/:id/permission-audit", get(permission_audit))
         .route("/api/sessions/:id/context-prompt", get(context_prompt))
         .route("/api/sessions/:id/compact", post(compact))
-        .route("/api/sessions/:id/fork", post(fork))
 }
 
 /// 返回指定会话的系统提示词预览（含 AGENT.md 等指令文件）。
@@ -295,28 +288,6 @@ async fn list(State(state): State<WebAppState>) -> WebResult<Json<Vec<SessionRes
             })
             .collect(),
     ))
-}
-
-/// 从指定轮次分支出新会话，源会话不变。
-async fn fork(
-    State(state): State<WebAppState>,
-    Path(id): Path<String>,
-    Json(request): Json<ForkSessionRequest>,
-) -> WebResult<Json<SessionResponse>> {
-    let session = crate::state::fork_session_until_turn(
-        &state.paths,
-        &id,
-        &request.turn_id,
-        request.title.as_deref(),
-    )
-    .map_err(|error| WebError::bad_request(error.to_string()))?;
-    Ok(Json(SessionResponse {
-        id: session.id,
-        title: session.title,
-        created_at: session.created_at,
-        updated_at: session.updated_at,
-        active: true,
-    }))
 }
 
 /// 创建并切换到新会话。
