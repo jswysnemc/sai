@@ -430,9 +430,9 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
                 <SessionWorkspaceIcon isGitRepository={workspace.is_git_repository} size={14} />
                 <span className="workspace-summary">
                   <strong>{workspaceName}</strong>
+                  {workspaceRunning && <ActiveAgentIndicator />}
                   <small>{t(`${sessions.length} sessions`, `${sessions.length} 个会话`)}</small>
                 </span>
-                {workspaceRunning && <ActiveAgentIndicator />}
               </button>
               <span className="workspace-tree-actions">
                 {!selecting && <button type="button" className="workspace-create-session" onClick={() => create.mutate(workspace.active ? undefined : workspace.workspace_id)} disabled={create.isPending} aria-label={t(`Create a session in ${workspaceName}`, `在 ${workspaceName} 新建会话`)} title={t("New session", "新建会话")}><Plus size={14} /></button>}
@@ -516,9 +516,9 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate }: Ses
                 }}>
                   <span className="session-summary">
                     <strong>{session.title}</strong>
+                    {running && <ActiveAgentIndicator />}
                     <small title={new Date(session.updated_at).toLocaleString(locale)}>{formatRelativeTime(session.updated_at, locale, nowTick)}</small>
                   </span>
-                  {running && <ActiveAgentIndicator />}
                 </button>
               )}
               {!selecting && workspace.active && renaming !== session.id && <button type="button" className="session-more" aria-label={t(`Manage ${session.title}`, `管理 ${session.title}`)} onClick={() => setMenu((value) => value === session.id ? null : session.id)}><MoreHorizontal size={15} /></button>}

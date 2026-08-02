@@ -23,16 +23,25 @@
 
 .workspace-tree-main {
   display: grid;
-  grid-template-columns: 14px 16px minmax(0, 1fr) 18px;
+  grid-template-columns: 14px 16px minmax(0, 1fr);
   gap:var(--space-2xs);
   align-items: center;
   min-width: 0;
   min-height: 34px;
-  padding:0 var(--space-xs);
+  /* 静止态会话计数贴右缘；悬停时右内边距扩大，为两颗按钮让位 */
+  padding:0 var(--space-xs) 0 var(--space-xs);
   border: 0;
   background: transparent;
   color: inherit;
   text-align: left;
+  transition: padding-right var(--duration-fast) ease;
+}
+
+/* 工作区行有两颗操作按钮，让位宽度是会话行的两倍 */
+.workspace-tree-row:hover .workspace-tree-main,
+.workspace-tree-row:focus-within .workspace-tree-main,
+.workspace-tree-row.selecting .workspace-tree-main {
+  padding-right: calc(var(--space-xs) + var(--sidebar-row-actions) * 2);
 }
 
 .workspace-tree-main > span:not(.active-agent-indicator) {
@@ -41,7 +50,8 @@
 }
 
 .workspace-tree-main > .workspace-summary:not(.active-agent-indicator) {
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* 名称吸收剩余宽度，运行指示灯与会话计数依次贴右 */
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap:var(--space-xs);
 }
@@ -58,16 +68,9 @@
   overflow: hidden;
   color: var(--ink-soft);
   font:400 var(--text-2xs) var(--font-code);
+  text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: opacity 120ms ease;
-}
-
-/* 悬停时操作按钮就地替换会话计数：计数淡出，按钮在同一位置淡入 */
-.workspace-tree-row:hover .workspace-summary small,
-.workspace-tree-row:focus-within .workspace-summary small,
-.workspace-tree-row.selecting .workspace-summary small {
-  opacity: 0;
 }
 
 .workspace-tree-actions {
@@ -91,10 +94,6 @@
 .workspace-tree-row.selecting .workspace-tree-actions {
   opacity: 1;
   pointer-events: auto;
-}
-
-.workspace-tree-row.selecting .workspace-tree-main {
-  padding-right:var(--space-2xs);
 }
 
 .workspace-tree-actions button {

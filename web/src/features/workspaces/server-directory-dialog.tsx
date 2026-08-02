@@ -1,6 +1,6 @@
-import { ArrowUp, Check, CornerDownLeft, Eye, EyeOff, Folder, FolderPlus, GitBranch, HardDrive } from "lucide-react";
+import { ArrowUp, Check, CornerDownLeft, Eye, EyeOff, Folder, FolderPlus, FolderSearch, GitBranch, HardDrive } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { DirectoryEntry } from "../../api/contracts";
@@ -8,6 +8,7 @@ import { Button } from "../../shared/ui/button/button";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { useI18n } from "../i18n/use-i18n";
 import { isAbsoluteFilesystemPath, normalizePathInput } from "./path-utils";
+import { parsePickedDirectory } from "./picked-directory";
 
 type ServerDirectoryDialogProps = {
   open: boolean;
@@ -37,6 +38,8 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
   const [newFolderName, setNewFolderName] = useState("");
   const [createError, setCreateError] = useState<Error | null>(null);
   const [submitError, setSubmitError] = useState<Error | null>(null);
+  const [pickError, setPickError] = useState<string | null>(null);
+  const pickerRef = useRef<HTMLInputElement>(null);
   const listing = useQuery({ queryKey: ["workspace-directories", path], queryFn: () => api.workspaces.browse(path), enabled: props.open });
   const filter = isAbsoluteFilesystemPath(draft) ? "" : draft.trim();
   const entries = useMemo(
@@ -57,6 +60,42 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
     setCreating(false);
     setCreateError(null);
     setSubmitError(null);
+    setPickError(null);
+  };
+
+  /**
+   * 处理浏览器目录选择的结果。
+   *
+   * 浏览器只交出相对路径，因此把选中的目录名拼到各允许根之下，
+   * 逐个探测哪一个在服务端真实存在，命中后直接跳转过去。
+   *
+   * @param files 目录选择器返回的文件列表
+   * @returns 无返回值
+   */
+  const handlePickedDirectory = async (files: File[]) => {
+    setPickError(null);
+    const roots = (listing.data?.roots ?? []).map((root) => root.path);
+    const picked = parsePickedDirectory(
+      files.map((file) => file.webkitRelativePath || file.name),
+      roots
+    );
+    if (!picked.name) return;
+    // 1. 逐个候选探测，命中第一个能列出内容的路径
+    for (const candidate of picked.candidates) {
+      try {
+        await api.workspaces.browse(candidate);
+        navigate(candidate);
+        setSelected(candidate);
+        return;
+      } catch {
+        // 该根下没有同名目录，继续试下一个
+      }
+    }
+    // 2. 全部落空：多半是选了允许根之外的目录，明确告知而不是静默无反应
+    setPickError(t(
+      `“${picked.name}” is not inside an allowed location. Browse to it below, or paste its absolute path.`,
+      `“${picked.name}”不在允许位置内。请在下方浏览，或直接粘贴它的绝对路径。`
+    ));
   };
 
   /** 处理路径输入框回车：POSIX 或 Windows 绝对路径才跳转。 */
@@ -127,6 +166,27 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
         <aside className="directory-roots">
           <span>{t("Allowed location", "允许位置")}</span>
           {listing.data?.roots.map((root) => <button type="button" key={root.path} onClick={() => navigate(root.path)}><HardDrive size={14} /><span><strong>{root.name}</strong><small>{root.path}</small></span></button>)}
+          {/* 浏览器目录选择：只交出相对路径，命中允许根之下的同名目录后跳转 */}
+          <input
+            ref={pickerRef}
+            type="file"
+            hidden
+            /* webkitdirectory 不在 React 的 JSX 属性表里，用 DOM 属性名透传 */
+            {...{ webkitdirectory: "", directory: "" }}
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              event.target.value = "";
+              if (files.length > 0) void handlePickedDirectory(files);
+            }}
+          />
+          <button type="button" className="directory-pick-local" onClick={() => pickerRef.current?.click()}>
+            <FolderSearch size={14} />
+            <span>
+              <strong>{t("Pick a folder", "选择文件夹")}</strong>
+              <small>{t("Locate it under an allowed location", "在允许位置下定位")}</small>
+            </span>
+          </button>
+          {pickError && <p className="directory-pick-error">{pickError}</p>}
         </aside>
         <section className="directory-browser">
           <header>

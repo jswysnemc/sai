@@ -555,6 +555,13 @@ fn build_repl_tool_registry_for_session_with_mcp(
             session_id.to_string(),
         );
     }
+    // TUI 复用 Agent 的热路径，不会经过 SessionRunner::load_tool_registry，
+    // 因此白名单必须在这里应用，否则档案禁用的工具仍会全量暴露给模型
+    registry = crate::runner::apply_enabled_tools_filter(
+        registry,
+        config,
+        crate::runner::SubmissionSource::Repl,
+    )?;
     let workspace = crate::runtime_cwd::current_dir()?;
     let audit = (mode != AgentMode::Yolo).then(|| {
         crate::permission::PermissionAuditLog::new(

@@ -328,35 +328,9 @@ impl<'paths> SessionRunner<'paths> {
         if mode != AgentMode::Plan && source == SubmissionSource::Gateway {
             crate::cron::register_tool(&mut registry, self.paths.clone(), session_id.to_string());
         }
-        let mut selected = if let Some(runtime) = config
-            .agent_runtime
-            .as_ref()
-            .filter(|runtime| !runtime.enabled_tools.is_empty())
-        {
-            let allowed = runtime
-                .enabled_tools
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>();
-            let mut filtered = registry.clone_filtered(&allowed);
-            let required = match source {
-                SubmissionSource::Repl | SubmissionSource::Web => {
-                    &["subagent", "todo", "ask_question"][..]
-                }
-                SubmissionSource::Gateway => &["cron", "send_channel_message"][..],
-                SubmissionSource::Command | SubmissionSource::ShellIntercept => {
-                    &["ask_question"][..]
-                }
-            };
-            for name in required {
-                if registry.contains(name) {
-                    filtered.register_from(&registry, name)?;
-                }
-            }
-            filtered
-        } else {
-            registry
-        };
+        // 白名单过滤与 TUI 共用同一份实现，避免两条路径语义漂移
+        let mut selected =
+            crate::runner::submission_tools::apply_enabled_tools_filter(registry, config, source)?;
         let workspace = crate::runtime_cwd::current_dir()?;
         let profile_mode = mode.permission_profile_mode();
         let audit = (mode != AgentMode::Yolo).then(|| {

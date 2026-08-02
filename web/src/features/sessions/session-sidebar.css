@@ -1,4 +1,12 @@
 .session-sidebar {
+  /*
+   * 悬停时行右侧让出的操作区宽度。
+   *
+   * 静止态元信息紧贴行右缘；悬停时右内边距扩到这个值，元信息整体左移，
+   * 恰好把操作按钮的位置空出来。两者因此始终共存：时间不会消失，
+   * 按钮也不会压在时间上。
+   */
+  --sidebar-row-actions: 1.875rem;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -381,14 +389,20 @@
 
 .session-main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 18px;
-  gap:var(--space-xs);
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
   min-width: 0;
-  padding:var(--space-sm) var(--space-2xs) var(--space-sm) var(--space-md);
+  /* 静止态元信息贴右缘；悬停时右内边距扩大，为按钮让位 */
+  padding:var(--space-sm) var(--space-md) var(--space-sm) var(--space-md);
   border: 0;
   background: transparent;
   text-align: left;
+  transition: padding-right var(--duration-fast) ease;
+}
+
+.session-row:hover .session-main,
+.session-row:focus-within .session-main {
+  padding-right: calc(var(--space-md) + var(--sidebar-row-actions));
 }
 
 .active-agent-indicator {
@@ -424,7 +438,8 @@
 
 .session-main .session-summary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* 标题吸收剩余宽度，运行指示灯与时间依次贴右 */
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap:var(--space-xs);
   min-width: 0;
@@ -442,16 +457,16 @@
   overflow: hidden;
   color: var(--ink-soft);
   font:400 var(--text-2xs) var(--font-code);
+  text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .session-more {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: 50%;
+  right: var(--space-2xs);
   z-index: 1;
-  height: 100%;
   display: grid;
   width: 26px;
   height: 28px;
@@ -459,8 +474,11 @@
   border: 0;
   border-radius:var(--radius-2);
   background: transparent;
+  color: var(--ink-soft);
+  transform: translateY(-50%);
   opacity: 0;
   pointer-events: none;
+  transition: opacity var(--duration-fast) ease;
 }
 
 .session-row:hover .session-more,
@@ -469,24 +487,9 @@
   pointer-events: auto;
 }
 
-/* 悬停时更多操作就地替换时间，两者不再并排相挤 */
-.session-row:hover .session-main small,
-.session-row:focus-within .session-main small {
-  opacity: 0;
-}
-
-.session-main small {
-  transition: opacity 120ms ease;
-}
-
-/* 运行指示器让位给操作按钮，避免图标重叠 */
-.session-row:hover .session-main .active-agent-indicator,
-.session-row:focus-within .session-main .active-agent-indicator {
-  opacity: 0;
-}
-
-.session-main .active-agent-indicator {
-  transition: opacity 120ms ease;
+.session-more:hover {
+  background: var(--paper-deep);
+  color: var(--ink);
 }
 
 .session-menu {
@@ -531,7 +534,7 @@
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
   min-width: 0;
-  padding:var(--space-sm) var(--space-2xs) var(--space-sm) var(--space-md);
+  padding:var(--space-sm) var(--space-md) var(--space-sm) var(--space-md);
 }
 
 .session-rename input {

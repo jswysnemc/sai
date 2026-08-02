@@ -22,6 +22,8 @@ pub(crate) use submission::{
     ChannelSubmission, ControlSubmission, RenderPolicy, RunnerSubmission, RunnerSubmissionKind,
     SubmissionSource, UserInputSubmission,
 };
+// 白名单过滤需被 cli 侧的 TUI 注册表构造复用，故提升为 crate 级可见
+pub(crate) use submission_tools::apply_enabled_tools_filter;
 pub(crate) use turn_runner::TurnRunner;
 
 /// 执行一条 runner submission。
