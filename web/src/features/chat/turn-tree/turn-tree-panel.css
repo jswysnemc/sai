@@ -1,33 +1,38 @@
+/*
+ * 分支面板从左上角展开，与右上角的工作概览左右对称。
+ * 宽度、圆角、阴影、最大高度都取自 runtime-overview，两者是一对镜像组件。
+ */
 .turn-tree-panel {
   position: absolute;
-  top: calc(3.5rem + var(--space-xs));
-  right: var(--space-md);
+  top: calc(var(--chat-header-height, 2.5rem) + var(--space-xs));
+  left: var(--space-md);
   z-index: 19;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  width: 20rem;
+  width: 278px;
   max-width: calc(100% - var(--space-xl));
-  max-height: min(28rem, calc(100vh - 12rem));
+  max-height: min(440px, calc(100vh - 190px));
   border: 1px solid var(--line);
   border-radius: var(--radius-3);
-  background: var(--paper-raised);
+  background: color-mix(in srgb, var(--paper-raised) 96%, transparent);
   box-shadow: var(--elevation-3);
+  backdrop-filter: blur(12px);
   overflow: hidden;
 }
 
 .turn-tree-head {
   display: flex;
-  min-height: 2.25rem;
+  min-height: 38px;
   align-items: center;
   gap: var(--space-xs);
-  padding: 0 var(--space-xs) 0 var(--space-sm);
+  padding: 0 var(--space-sm) 0 var(--space-md);
   border-bottom: 1px solid var(--line);
   color: var(--ink-soft);
 }
 
 .turn-tree-head > strong {
-  font-size: var(--text-sm);
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: 500;
 }
 
 .turn-tree-head > small {
@@ -36,8 +41,8 @@
 }
 
 .turn-tree-close {
-  width: 1.5rem;
-  min-height: 1.5rem;
+  width: 28px;
+  min-height: 28px;
   padding: 0;
   border-color: transparent;
   background: transparent;
@@ -149,37 +154,53 @@
 
 @media (max-width: 48rem) {
   .turn-tree-panel {
-    right: var(--space-sm);
-    width: min(20rem, calc(100vw - var(--space-xl)));
+    left: var(--space-sm);
+    width: min(278px, calc(100vw - var(--space-xl)));
   }
 }
 
-/* 有分叉时在聊天区右上角显示的入口按钮 */
+/*
+ * 有分叉时在聊天区左上角显示的入口按钮。
+ * 尺寸与右侧工作概览的收起态胶囊一致，两者是一对镜像入口。
+ */
 .turn-tree-open {
   position: absolute;
-  top: calc(3.5rem + var(--space-xs));
-  right: calc(var(--space-md) + 17.5rem);
+  top: calc(var(--chat-header-height, 2.5rem) + var(--space-xs));
+  left: var(--space-md);
   z-index: 18;
   display: inline-flex;
-  min-height: 1.75rem;
+  min-height: 34px;
   align-items: center;
-  gap: var(--space-3xs);
-  padding: 0 var(--space-xs);
+  gap: var(--space-xs);
+  padding: 0 var(--space-sm);
   border: 1px solid var(--line);
   border-radius: var(--radius-2);
   background: var(--paper-raised);
   box-shadow: var(--elevation-2);
-  color: var(--ink-soft);
-  font: var(--text-2xs)/1 var(--font-code);
+  color: var(--ink);
+  cursor: pointer;
 }
 
 .turn-tree-open:hover {
+  border-color: var(--line-strong);
   background: var(--paper-deep);
-  color: var(--ink);
 }
 
-@media (max-width: 64rem) {
+.turn-tree-open-label {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* 分叉数量：等宽数字，与文字拉开层次 */
+.turn-tree-open-count {
+  color: var(--ink-soft);
+  font: var(--text-2xs)/1 var(--font-code);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 48rem) {
   .turn-tree-open {
-    right: calc(var(--space-sm) + 7rem);
+    left: var(--space-sm);
   }
 }

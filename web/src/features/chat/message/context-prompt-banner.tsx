@@ -1,20 +1,17 @@
 import { BookMarked, ChevronDown, ChevronUp, FileText, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { api } from "../../../api/client";
+import { HoverRevealButton } from "../../../shared/ui/hover-reveal-button/hover-reveal-button";
 import { MarkdownRenderer } from "../markdown-renderer";
 import { useI18n } from "../../i18n/use-i18n";
 import { formatContextPromptMarkdown } from "./format-context-prompt-markdown";
+import { useCollapseAnchor } from "./use-collapse-anchor";
 import "./context-prompt-banner.css";
 
 type ContextPromptBannerProps = {
   sessionId: string;
   agentId?: string | null;
-};
-
-type CollapseAnchor = {
-  top: number;
-  left: number;
 };
 
 /**
@@ -140,8 +137,8 @@ function isLivePreviewTag(tag: string): boolean {
 export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerProps) {
   const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
-  const [anchor, setAnchor] = useState<CollapseAnchor | null>(null);
   const markdownRef = useRef<HTMLDivElement | null>(null);
+  const anchor = useCollapseAnchor(markdownRef, open);
   const query = useQuery({
     queryKey: ["session-context-prompt", sessionId, agentId ?? "", locale],
     queryFn: () => api.sessions.contextPrompt(sessionId, agentId ?? undefined, locale),
@@ -175,45 +172,6 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
    * 收起展开后的提示词正文。
    */
   const collapse = () => setOpen(false);
-
-  useEffect(() => {
-    if (!open) {
-      setAnchor(null);
-      return;
-    }
-
-    /**
-     * 1. 纵坐标相对视口固定在标题栏下方
-     * 2. 横坐标贴齐 Markdown 渲染区域右缘内侧
-     */
-    const syncAnchor = () => {
-      const markdown = markdownRef.current;
-      if (!markdown) return;
-      const rect = markdown.getBoundingClientRect();
-      const header = document.querySelector(".chat-header") as HTMLElement | null;
-      const headerBottom = header?.getBoundingClientRect().bottom ?? 44;
-      const buttonSize = 28;
-      const inset = 8;
-      setAnchor({
-        top: Math.max(headerBottom + 8, 12),
-        left: Math.max(8, rect.right - buttonSize - inset)
-      });
-    };
-
-    syncAnchor();
-    window.addEventListener("resize", syncAnchor);
-    // 消息区滚动时只更新横坐标（右缘可能随布局变化），纵坐标保持视口悬浮
-    window.addEventListener("scroll", syncAnchor, true);
-    const observer = typeof ResizeObserver !== "undefined"
-      ? new ResizeObserver(() => syncAnchor())
-      : null;
-    if (observer && markdownRef.current) observer.observe(markdownRef.current);
-    return () => {
-      window.removeEventListener("resize", syncAnchor);
-      window.removeEventListener("scroll", syncAnchor, true);
-      observer?.disconnect();
-    };
-  }, [open, rendered]);
 
   return (
     <section className={`context-prompt-banner${open ? " open" : ""}`} data-overview-id="context-prompt">
@@ -273,16 +231,13 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
             </div>
           )}
           {anchor && (
-            <button
-              type="button"
-              className="context-prompt-banner-collapse"
-              style={{ top: `${anchor.top}px`, left: `${anchor.left}px` }}
+            <HoverRevealButton
+              className="context-prompt-banner-collapse is-reversed"
+              style={{ top: `${anchor.top}px`, right: `${anchor.right}px` }}
+              icon={<ChevronUp size={14} />}
+              label={t("Collapse context prompt", "收起系统提示词")}
               onClick={collapse}
-              title={t("Collapse", "收起")}
-              aria-label={t("Collapse context prompt", "收起上下文提示词")}
-            >
-              <ChevronUp size={14} aria-hidden />
-            </button>
+            />
           )}
         </div>
       )}

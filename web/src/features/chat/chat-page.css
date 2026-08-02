@@ -9,6 +9,8 @@
   --chat-column-width: 820px;
   --chat-column-gutter: var(--space-2xl);
   --chat-content-width: calc(var(--chat-column-width) - var(--chat-column-gutter) * 2);
+  /* 会话眉头高度：分支入口、工作区 `+` 等悬浮元件都按它对齐 */
+  --chat-header-height: 2.5rem;
 }
 
 .chat-page {
@@ -62,24 +64,9 @@
   position: absolute;
   bottom: 140px;
   left: 50%;
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-circle);
-  background: var(--paper-raised);
-  color: var(--ink-soft);
-  box-shadow: var(--elevation-3);
   transform: translateX(-50%);
-  cursor: pointer;
-  /* 【Web 对话】【回底按钮】高于输入区遮罩，确保整个圆形区域都能接收点击 */
+  /* 【Web 对话】【回底按钮】高于输入区遮罩，确保整个按钮区域都能接收点击 */
   z-index: 16;
-}
-
-.jump-to-bottom:hover {
-  border-color: var(--line-strong);
-  color: var(--ink);
 }
 
 /* 消息列吸收滚动容器剩余高度：内容不足一屏时把问候语与输入区推到底部，

@@ -199,3 +199,52 @@ fn tree_view_reports_multiple_branches_under_one_parent() {
     assert_eq!(branch[0].turn_id, "t1");
     assert_eq!(branch[1].turn_id, "t4");
 }
+
+/// 退回到中间轮次的父节点后再提问，新轮次挂在该父节点下形成分叉。
+#[test]
+fn resend_after_undo_branches_from_the_parent() {
+    let temp = tempfile::tempdir().unwrap();
+    let db = open_db(temp.path());
+
+    let first = append_turn(&db, "t1", "第一问");
+    let second = append_turn(&db, "t2", "第二问");
+    let _third = append_turn(&db, "t3", "第三问");
+
+    // 编辑第二轮：先退回它的父节点，再以新内容发起
+    db.move_leaf_to_parent(&second).unwrap();
+    let edited = append_turn(&db, "t4", "改写后的第二问");
+
+    let turns = db.load_turns().unwrap();
+    let edited_turn = turns.iter().find(|turn| turn.turn_id == edited).unwrap();
+    assert_eq!(
+        edited_turn.parent_turn_id.as_deref(),
+        Some(first.as_str()),
+        "改写后的轮次应当挂在被编辑轮次的父节点下"
+    );
+}
+
+/// 编辑首轮时父节点为空，新轮次必须成为另一个根，而不是接到末尾。
+#[test]
+fn resend_after_editing_the_first_turn_creates_a_new_root() {
+    let temp = tempfile::tempdir().unwrap();
+    let db = open_db(temp.path());
+
+    let first = append_turn(&db, "t1", "第一问");
+    let last = append_turn(&db, "t2", "第二问");
+
+    // 编辑首轮：退回后活动叶子为空，代表"从头开始"
+    db.move_leaf_to_parent(&first).unwrap();
+    let edited = append_turn(&db, "t3", "改写后的第一问");
+
+    let turns = db.load_turns().unwrap();
+    let edited_turn = turns.iter().find(|turn| turn.turn_id == edited).unwrap();
+    assert_eq!(
+        edited_turn.parent_turn_id, None,
+        "改写首轮后应当成为新的根轮次，而不是挂到 seq 最大的 {last} 之后"
+    );
+
+    // 活动分支只剩改写后的这一轮
+    let branch = db.active_branch_turns().unwrap();
+    let ids: Vec<_> = branch.iter().map(|turn| turn.turn_id.clone()).collect();
+    assert_eq!(ids, vec![edited]);
+}

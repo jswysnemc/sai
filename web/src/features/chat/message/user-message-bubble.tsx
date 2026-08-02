@@ -4,15 +4,17 @@ import { Button } from "../../../shared/ui/button/button";
 import { MessageActions } from "./message-actions";
 import { useI18n } from "../../i18n/use-i18n";
 import { UserMessageContent } from "./user-message-content";
+import { UserMessageEditor } from "./user-message-editor";
 import "./user-message-bubble.css";
 
 type UserMessageBubbleProps = {
   content: string;
   timestamp?: string;
   imageUrls?: string[];
-  onRetry?: () => void;
   /** 把对话切回本轮，之后发送的消息成为本轮的新分支 */
   onContinueFrom?: () => void;
+  /** 改写本轮输入后作为新分支重新发送；未提供时不显示编辑入口 */
+  onEditResend?: (content: string, imageUrls: string[]) => void;
   /** 操作进行中时禁用分支按钮 */
   actionBusy?: boolean;
 };
@@ -20,24 +22,25 @@ type UserMessageBubbleProps = {
 const COLLAPSE_HEIGHT = 320;
 
 /**
- * 用户消息气泡，支持 Markdown 渲染、超高折叠、附件放大、复制、重试和开分支操作。
+ * 用户消息气泡，支持 Markdown 渲染、超高折叠、附件放大、复制、编辑重发和开分支操作。
  *
  * @param props content 为消息原文，timestamp 为可选时间，imageUrls 为附件图片地址，
- *              onRetry 为可选的重试回调，onContinueFrom 为从本轮开新分支的回调
+ *              onEditResend 为编辑后重新发送的回调，onContinueFrom 为从本轮开新分支的回调
  * @returns 右对齐的用户消息气泡
  */
 export function UserMessageBubble({
   content,
   timestamp,
   imageUrls,
-  onRetry,
   onContinueFrom,
+  onEditResend,
   actionBusy
 }: UserMessageBubbleProps) {
   const { t } = useI18n();
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [collapsible, setCollapsible] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   // 1. 内容变化时测量高度决定是否需要折叠
   useLayoutEffect(() => {
@@ -47,6 +50,25 @@ export function UserMessageBubble({
   }, [content]);
 
   const collapsed = collapsible && !expanded;
+
+  if (editing && onEditResend) {
+    return (
+      <article className="message user-message">
+        <div className="user-message-stack is-editing">
+          <UserMessageEditor
+            content={content}
+            imageUrls={imageUrls ?? []}
+            busy={actionBusy}
+            onCancel={() => setEditing(false)}
+            onSubmit={(nextContent, nextImageUrls) => {
+              setEditing(false);
+              onEditResend(nextContent, nextImageUrls);
+            }}
+          />
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article className="message user-message">
@@ -72,7 +94,7 @@ export function UserMessageBubble({
           className="user-message-actions"
           text={content}
           timestamp={timestamp}
-          onRetry={onRetry}
+          onEdit={onEditResend ? () => setEditing(true) : undefined}
           onContinueFrom={onContinueFrom}
           busy={actionBusy}
         />

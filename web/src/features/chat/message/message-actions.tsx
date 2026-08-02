@@ -1,4 +1,4 @@
-import { Check, Copy, CopyPlus, GitBranch, RotateCcw } from "lucide-react";
+import { Check, Copy, GitBranch, Pencil, RotateCcw } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../i18n/use-i18n";
@@ -10,15 +10,15 @@ type MessageActionsProps = {
   onRetry?: () => void;
   /** 把对话切回本轮，之后发送的消息成为本轮的新分支 */
   onContinueFrom?: () => void;
-  /** 复制整段对话到一个独立的新会话 */
-  onFork?: () => void;
+  /** 改写本轮用户输入并作为新分支重新发送 */
+  onEdit?: () => void;
   busy?: boolean;
   /** 附加操作，例如分支版本切换 */
   extra?: React.ReactNode;
 };
 
 /**
- * 消息操作行：时间、重试、从此处分支、复制为新会话、复制原文。
+ * 消息操作行：时间、重试、编辑重发、从此处分支、复制原文。
  */
 export function MessageActions({
   text,
@@ -26,7 +26,7 @@ export function MessageActions({
   timestamp,
   onRetry,
   onContinueFrom,
-  onFork,
+  onEdit,
   busy,
   extra
 }: MessageActionsProps) {
@@ -58,6 +58,18 @@ export function MessageActions({
           <RotateCcw size={13} />
         </button>
       )}
+      {onEdit && (
+        <button
+          type="button"
+          className="message-copy"
+          onClick={onEdit}
+          aria-label={t("Edit and resend", "编辑并重新发送")}
+          title={t("Edit this message and resend it as a new branch", "编辑本条消息并作为新分支重新发送")}
+          disabled={busy}
+        >
+          <Pencil size={13} />
+        </button>
+      )}
       {onContinueFrom && (
         <button
           type="button"
@@ -68,18 +80,6 @@ export function MessageActions({
           disabled={busy}
         >
           <GitBranch size={13} />
-        </button>
-      )}
-      {onFork && (
-        <button
-          type="button"
-          className="message-copy"
-          onClick={onFork}
-          aria-label={t("Copy into a new session", "复制为新会话")}
-          title={t("Copy the conversation up to here into a new session", "把到此为止的对话复制为独立的新会话")}
-          disabled={busy}
-        >
-          <CopyPlus size={13} />
         </button>
       )}
       <button type="button" className="message-copy" onClick={onCopy} aria-label={t("Copy original message", "复制消息原文")} title={t("Copy original", "复制原文")}>

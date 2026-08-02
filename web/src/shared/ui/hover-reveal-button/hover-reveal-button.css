@@ -1,0 +1,108 @@
+/*
+ * 悬停展开按钮
+ *
+ * 静止态是一个 --hover-reveal-size 的圆；悬停或聚焦时文字列由 0fr 过渡到 1fr，
+ * 按钮从圆形拉成胶囊。宽度由文字本身决定，因此各处复用不必写死展开尺寸。
+ */
+.hover-reveal-button {
+  --hover-reveal-size: 2.125rem;
+  display: inline-flex;
+  height: var(--hover-reveal-size);
+  min-width: var(--hover-reveal-size);
+  align-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  box-shadow: var(--elevation-3);
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.hover-reveal-button:hover,
+.hover-reveal-button:focus-visible {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.hover-reveal-button:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+
+.hover-reveal-button-icon {
+  display: grid;
+  width: calc(var(--hover-reveal-size) - 2px);
+  height: calc(var(--hover-reveal-size) - 2px);
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+/* 文字列：0fr 时完全不占宽度，展开时由内容撑开 */
+.hover-reveal-button-text {
+  display: grid;
+  grid-template-columns: 0fr;
+  overflow: hidden;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  transition:
+    grid-template-columns var(--duration-base) var(--ease-out),
+    padding-right var(--duration-base) var(--ease-out);
+}
+
+.hover-reveal-button-text > span {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.hover-reveal-button:hover .hover-reveal-button-text,
+.hover-reveal-button:focus-visible .hover-reveal-button-text {
+  grid-template-columns: 1fr;
+  padding-right: var(--space-md);
+}
+
+/* 触屏没有悬停态，直接常驻展开，避免文字永远不可见 */
+@media (hover: none), (pointer: coarse) {
+  .hover-reveal-button-text {
+    grid-template-columns: 1fr;
+    padding-right: var(--space-md);
+  }
+}
+
+/*
+ * 反向变体：文字排在图标左侧。
+ * 配合以 right 定位的浮动场景使用，图标位置保持不动，文字向左展开。
+ */
+.hover-reveal-button.is-reversed {
+  flex-direction: row-reverse;
+}
+
+.hover-reveal-button.is-reversed .hover-reveal-button-text {
+  transition:
+    grid-template-columns var(--duration-base) var(--ease-out),
+    padding-left var(--duration-base) var(--ease-out);
+}
+
+.hover-reveal-button.is-reversed:hover .hover-reveal-button-text,
+.hover-reveal-button.is-reversed:focus-visible .hover-reveal-button-text {
+  padding-right: 0;
+  padding-left: var(--space-md);
+}
+
+@media (hover: none), (pointer: coarse) {
+  .hover-reveal-button.is-reversed .hover-reveal-button-text {
+    padding-right: 0;
+    padding-left: var(--space-md);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hover-reveal-button,
+  .hover-reveal-button-text {
+    transition: none;
+  }
+}

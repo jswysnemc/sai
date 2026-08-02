@@ -57,47 +57,50 @@ export function TurnTreeOverview({ tree, busy, onSelect }: TurnTreeOverviewProps
 
   return (
     <div className="turn-tree-overview" role="group" aria-label={t("Branch overview", "分支总览")}>
-      <svg width={width} height={height} className="turn-tree-overview-canvas">
-        {/* 先画连线，节点覆盖其上，避免折线压住文字 */}
-        {nodes.map((node) => {
-          if (!node.parentTurnId) return null;
-          const parent = positions.get(node.parentTurnId);
-          if (!parent) return null;
-          return (
-            <path
-              key={`edge-${node.turnId}`}
-              className={node.onActivePath ? "edge on-path" : "edge"}
-              d={elbowPath(parent, node)}
-              fill="none"
-            />
-          );
-        })}
-      </svg>
-      {nodes.map((node) => (
-        <button
-          key={node.turnId}
-          type="button"
-          className={[
-            "turn-tree-overview-node",
-            node.isActive ? "is-active" : "",
-            node.onActivePath ? "on-path" : "",
-            `is-${node.status}`
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          style={{
-            left: node.column * COLUMN_WIDTH,
-            top: node.row * ROW_HEIGHT,
-            width: NODE_WIDTH,
-            height: NODE_HEIGHT
-          }}
-          disabled={busy || node.isActive}
-          onClick={() => onSelect(node.turnId)}
-          title={node.summary}
-        >
-          <span>{node.summary || t("(empty)", "（空）")}</span>
-        </button>
-      ))}
+      {/* 节点与连线都相对本层绝对定位，因此这层必须写死真实画布尺寸，否则容器高度会塌陷 */}
+      <div className="turn-tree-overview-stage" style={{ width, height }}>
+        <svg width={width} height={height} className="turn-tree-overview-canvas">
+          {/* 先画连线，节点覆盖其上，避免折线压住文字 */}
+          {nodes.map((node) => {
+            if (!node.parentTurnId) return null;
+            const parent = positions.get(node.parentTurnId);
+            if (!parent) return null;
+            return (
+              <path
+                key={`edge-${node.turnId}`}
+                className={node.onActivePath ? "edge on-path" : "edge"}
+                d={elbowPath(parent, node)}
+                fill="none"
+              />
+            );
+          })}
+        </svg>
+        {nodes.map((node) => (
+          <button
+            key={node.turnId}
+            type="button"
+            className={[
+              "turn-tree-overview-node",
+              node.isActive ? "is-active" : "",
+              node.onActivePath ? "on-path" : "",
+              `is-${node.status}`
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            style={{
+              left: node.column * COLUMN_WIDTH,
+              top: node.row * ROW_HEIGHT,
+              width: NODE_WIDTH,
+              height: NODE_HEIGHT
+            }}
+            disabled={busy || node.isActive}
+            onClick={() => onSelect(node.turnId)}
+            title={node.summary}
+          >
+            <span>{node.summary || t("(empty)", "（空）")}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

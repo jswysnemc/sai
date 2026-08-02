@@ -19,7 +19,7 @@ function renderHeader(branch?: string): string {
 }
 
 describe("ChatSessionHeader", () => {
-  it("在同一行内左右排列会话标题与项目上下文", () => {
+  it("把项目上下文紧跟在会话标题之后", () => {
     const html = renderHeader("main");
 
     expect(html).toContain("<h1");
@@ -27,7 +27,7 @@ describe("ChatSessionHeader", () => {
     expect(html).toContain("/home/snemc/workspace/sai");
     expect(html).toContain("main");
     expect(html).toContain('aria-label="项目上下文"');
-    // 标题与上下文是 chat-header-main 下的同级元素，由 CSS 决定左右排列
+    // 标题与上下文是 chat-header-main 下的同级元素，由 CSS 决定二者同排左对齐
     expect(html.indexOf("<h1")).toBeLessThan(html.indexOf("chat-header-context"));
   });
 

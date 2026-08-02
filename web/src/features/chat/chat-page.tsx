@@ -5,13 +5,14 @@ import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { RunMode } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
+import { HoverRevealButton } from "../../shared/ui/hover-reveal-button/hover-reveal-button";
 import { SkeletonText } from "../../shared/ui/skeleton/skeleton";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { useChatAgentContext } from "../agents/chat-agent-context";
 import { ChatComposer } from "./chat-composer";
 import { ChatSessionHeader } from "./chat-session-header";
 import { HistoryTurn, LiveRunMessage } from "./chat-message";
-import { projectConversationDisplay, retryableTurnId } from "./conversation-display";
+import { projectConversationDisplay } from "./conversation-display";
 import { MessageOverviewRail } from "./message-overview-rail";
 import { createLiveOverviewItem, createTimelineOverviewItems } from "./message-overview-utils";
 import { clearComposerDraft, readComposerDraft, writeComposerDraft } from "./composer-draft";
@@ -32,6 +33,7 @@ import { BranchSwitcher } from "./turn-tree/branch-switcher";
 import { TurnTreeOverview } from "./turn-tree/turn-tree-overview";
 import { TurnTreePanel } from "./turn-tree/turn-tree-panel";
 import { useBranchActions } from "./turn-tree/use-branch-actions";
+import { useResendActions } from "./turn-tree/use-resend-actions";
 import { useTurnTree } from "./turn-tree/use-turn-tree";
 import { QueuedMessageList } from "./queue/queued-message-list";
 import { isConversationEmpty, shouldCenterEmptySession } from "./empty-session-layout";
@@ -337,50 +339,48 @@ export function ChatPage() {
     [activeLiveRuns, display.historyTurns, locale]
   );
 
-  /** 把对话退回被点击轮次的父节点，并用原输入重新发起，旧回答保留为兄弟分支。 */
-  const retry = async (content: string, liveImages: string[] | undefined, candidateTurnId: string | null) => {
-    if (!activeSession || running) return;
-    if (!content.trim() && !(liveImages && liveImages.length > 0)) return;
-    setActionError(null);
-    try {
-      // 1. 主动读取最新时间线，避免终态事件和后台刷新之间的竞态
-      const refreshedTimeline = await api.sessions.timeline(activeSession.id);
-      queryClient.setQueryData(["timeline", activeSession.id], refreshedTimeline);
-      const turnId = retryableTurnId(refreshedTimeline.turns, candidateTurnId);
-      // 2. 只把对话位置退回父轮次；旧轮次保留在树里，新回答成为它的兄弟分支
-      if (turnId) await branchActions.moveToParentForRetry(turnId);
-      // 3. 清理旧实时投影，避免旧轮和新轮同时渲染相同用户消息
-      run.reset();
-      await queryClient.invalidateQueries({ queryKey: ["timeline", activeSession.id] });
-      // 4. 复用当前模式、模型与思考等级重新提交
-      await run.start(activeSession.id, content, mode, chatModel.selection ?? undefined, liveImages, thinking.thinkingLevel, chatAgent.selection?.id);
-    } catch (error) {
-      setInput(content);
-      setActionError(toDisplayError(error, "Failed to retry the run", "重试运行失败"));
-    }
-  };
-  const lastTurnId = timeline.data?.turns.filter((turn) => !turn.automatic).at(-1)?.turn_id;
-  const forkFromTurn = async (turnId: string) => {
-    if (!activeSession || actionBusy) return;
+  // 重试与编辑重发共用同一套分支语义，抽到 hook 内维护
+  const resend = useResendActions({
+    sessionId: activeSession?.id,
+    running,
+    mode,
+    selection: chatModel.selection ?? undefined,
+    thinkingLevel: thinking.thinkingLevel,
+    agentId: chatAgent.selection?.id,
+    moveToParent: branchActions.moveToParentForRetry,
+    resetRun: run.reset,
+    startRun: (content, imageUrls) => run.start(
+      activeSession!.id,
+      content,
+      mode,
+      chatModel.selection ?? undefined,
+      imageUrls,
+      thinking.thinkingLevel,
+      chatAgent.selection?.id
+    ),
+    onError: (error, fallbackEn, fallbackZh) =>
+      setActionError(toDisplayError(error, fallbackEn, fallbackZh))
+  });
+
+  /**
+   * 以改写后的内容重发某一轮，期间禁用相关操作按钮。
+   *
+   * @param turnId 被编辑的轮次标识
+   * @param content 改写后的正文
+   * @param imageUrls 改写后的图片列表
+   * @returns 重发完成的 Promise
+   */
+  const editAndResend = async (turnId: string | null, content: string, imageUrls: string[]) => {
+    if (actionBusy) return;
     setActionBusy(true);
-    setActionError(null);
     try {
-      // fork 后端已把新会话设为当前；再 switch 一次保证前端状态一致
-      const session = await api.sessions.fork(activeSession.id, turnId);
-      await api.sessions.switch(session.id);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["sessions"] }),
-        queryClient.invalidateQueries({ queryKey: ["session-tree"] }),
-        queryClient.invalidateQueries({ queryKey: ["session-turn-tree"] }),
-        queryClient.invalidateQueries({ queryKey: ["timeline"] }),
-        queryClient.invalidateQueries({ queryKey: ["timeline", session.id] })
-      ]);
-    } catch (error) {
-      setActionError(toDisplayError(error, "Failed to fork the conversation", "创建对话分支失败"));
+      await resend.editAndResend(turnId, content, imageUrls);
     } finally {
       setActionBusy(false);
     }
   };
+
+  const lastTurnId = timeline.data?.turns.filter((turn) => !turn.automatic).at(-1)?.turn_id;
 
   const composer = (
     <ChatComposer
@@ -466,10 +466,12 @@ export function ChatPage() {
                   turn={turn}
                   sessionId={activeSession?.id}
                   onRetry={turn.turn_id === lastTurnId && !running
-                    ? () => void retry(turn.user.content, undefined, turn.turn_id)
+                    ? () => void resend.retry(turn.user.content, turn.user.image_urls, turn.turn_id)
                     : undefined}
                   onContinueFrom={!running ? () => void branchActions.continueFrom(turn.turn_id) : undefined}
-                  onFork={() => void forkFromTurn(turn.turn_id)}
+                  onEditResend={!running
+                    ? (content, imageUrls) => void editAndResend(turn.turn_id, content, imageUrls)
+                    : undefined}
                   actionBusy={actionBusy || branchActions.pending}
                   branchSlot={(
                     <BranchSwitcher
@@ -489,8 +491,12 @@ export function ChatPage() {
                   sessionId={activeSession?.id}
                   running={!state.completed}
                   onRetry={!running && state.completed
-                    ? () => void retry(state.userInput, state.imageUrls, state.runId)
+                    ? () => void resend.retry(state.userInput, state.imageUrls, state.runId)
                     : undefined}
+                  onEditResend={!running && state.completed
+                    ? (content, imageUrls) => void editAndResend(state.runId, content, imageUrls)
+                    : undefined}
+                  actionBusy={actionBusy || branchActions.pending}
                 />
               </section>
             ))}
@@ -531,8 +537,9 @@ export function ChatPage() {
             title={t("Show session branches", "查看会话分支")}
           >
             <GitBranch size={13} aria-hidden />
+            <span className="turn-tree-open-label">{t("Branches", "会话分支")}</span>
             {(turnTree.tree.data?.branch_points ?? 0) > 0 && (
-              <span>{turnTree.tree.data?.branch_points}</span>
+              <span className="turn-tree-open-count">{turnTree.tree.data?.branch_points}</span>
             )}
           </button>
         )}
@@ -547,9 +554,12 @@ export function ChatPage() {
         )}
         <RuntimeOverview sessionId={activeSession?.id} />
         {showJump && (
-          <button type="button" className="jump-to-bottom" onClick={jumpToBottom} aria-label={t("Jump to bottom", "回到底部")} title={t("Jump to bottom", "回到底部")}>
-            <ArrowDown size={16} />
-          </button>
+          <HoverRevealButton
+            className="jump-to-bottom"
+            icon={<ArrowDown size={16} />}
+            label={t("Jump to bottom", "回到底部")}
+            onClick={jumpToBottom}
+          />
         )}
       </div>
       <Modal

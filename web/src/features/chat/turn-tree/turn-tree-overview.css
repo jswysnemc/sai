@@ -1,14 +1,24 @@
 .turn-tree-overview {
-  position: relative;
   min-width: 0;
   padding: var(--space-sm);
   overflow: auto;
 }
 
+/*
+ * 画布层：节点与连线都相对它绝对定位。
+ * 尺寸由 JS 按行列数算出并写在行内样式上，容器高度因此跟随树的规模，
+ * 不会像改造前那样因为子元素全部脱离文档流而塌成一条。
+ */
+.turn-tree-overview-stage {
+  position: relative;
+  /* 树很小时给弹层一个不至于显得残缺的下限 */
+  min-height: 11rem;
+}
+
 .turn-tree-overview-canvas {
   position: absolute;
-  top: var(--space-sm);
-  left: var(--space-sm);
+  top: 0;
+  left: 0;
   pointer-events: none;
 }
 

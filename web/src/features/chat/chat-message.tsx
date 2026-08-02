@@ -31,8 +31,8 @@ export function HistoryMessage({ message }: { message: HistoryEntry }) {
 /**
  * 渲染一个包含结构化工具历史的完整对话轮次。
  *
- * @param props turn 为会话时间线轮次，onRetry 为可选的重试本轮回调，仅最后一轮传入；
- *              onContinueFrom 把对话切回本轮以开新分支，onFork 复制为独立新会话
+ * @param props turn 为会话时间线轮次，onRetry 为可选的重试本轮回调，仅最后一轮传入且挂在助手回复上；
+ *              onEditResend 改写本轮用户输入并作为新分支重发，onContinueFrom 把对话切回本轮以开新分支
  * @returns 用户消息、工具调用和助手消息
  */
 export function HistoryTurn({
@@ -40,7 +40,7 @@ export function HistoryTurn({
   sessionId,
   onRetry,
   onContinueFrom,
-  onFork,
+  onEditResend,
   actionBusy,
   branchSlot
 }: {
@@ -49,7 +49,8 @@ export function HistoryTurn({
   onRetry?: () => void;
   /** 把对话切回本轮，之后发送的消息成为本轮的新分支 */
   onContinueFrom?: () => void;
-  onFork?: () => void;
+  /** 改写本轮用户输入后作为新分支重新发送 */
+  onEditResend?: (content: string, imageUrls: string[]) => void;
   actionBusy?: boolean;
   /** 该轮次存在同级分支时展示的版本切换器 */
   branchSlot?: React.ReactNode;
@@ -67,8 +68,8 @@ export function HistoryTurn({
           content={turn.user.content}
           timestamp={turn.user.timestamp}
           imageUrls={turn.user.image_urls}
-          onRetry={onRetry}
           onContinueFrom={onContinueFrom}
+          onEditResend={onEditResend}
           actionBusy={actionBusy}
         />
       )}
@@ -100,11 +101,11 @@ export function HistoryTurn({
           sessionId={sessionId}
           turnId={turn.turn_id}
         />
-        {(turn.assistant.content || onFork || branchSlot) && (
+        {(turn.assistant.content || onRetry || branchSlot) && (
           <MessageActions
             text={turn.assistant.content || turn.user.content}
             timestamp={turn.assistant.timestamp}
-            onFork={onFork}
+            onRetry={onRetry}
             busy={actionBusy}
             extra={branchSlot}
           />
@@ -117,19 +118,25 @@ export function HistoryTurn({
 /**
  * 渲染当前正在流式生成的用户输入和助手回复。
  *
- * @param props state 为运行状态，running 为运行标记，onRetry 为可选的重试本轮回调
+ * @param props state 为运行状态，running 为运行标记，onRetry 为可选的重试本轮回调，
+ *              onEditResend 改写本轮输入后作为新分支重发
  * @returns 当前运行消息组
  */
 export function LiveRunMessage({
   state,
   sessionId,
   running,
-  onRetry
+  onRetry,
+  onEditResend,
+  actionBusy
 }: {
   state: LiveRunState;
   sessionId?: string | null;
   running: boolean;
   onRetry?: () => void;
+  /** 改写本轮用户输入后作为新分支重新发送 */
+  onEditResend?: (content: string, imageUrls: string[]) => void;
+  actionBusy?: boolean;
 }) {
   const { t, locale } = useI18n();
   const compacting = state.parts.some((part) => part.type === "compaction" && part.status === "running");
@@ -141,7 +148,8 @@ export function LiveRunMessage({
         <UserMessageBubble
           content={state.userInput}
           imageUrls={state.imageUrls}
-          onRetry={running ? undefined : onRetry}
+          onEditResend={running ? undefined : onEditResend}
+          actionBusy={actionBusy}
         />
       )}
       <article className="message assistant-message live-message">
@@ -171,7 +179,9 @@ export function LiveRunMessage({
               onRetry={onRetry && state.completed ? onRetry : undefined}
             />
           )}
-          {!running && state.content && <MessageActions text={state.content} />}
+          {!running && (state.content || onRetry) && (
+            <MessageActions text={state.content} onRetry={onRetry} busy={actionBusy} />
+          )}
       </article>
     </>
   );

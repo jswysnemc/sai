@@ -105,27 +105,11 @@
   background: color-mix(in srgb, var(--paper) 88%, var(--control-surface));
 }
 
-/* 纵坐标 fixed 相对视口；横坐标由 JS 对齐 Markdown 右缘 */
+/* 纵坐标 fixed 相对视口；横坐标由 JS 对齐正文右缘，文字向左展开 */
 .context-prompt-banner-collapse {
   position: fixed;
   z-index: 40;
-  display: inline-grid;
-  place-items: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  margin: 0;
-  border: 1px solid var(--line-strong, var(--line));
-  border-radius: var(--radius-pill);
-  background: var(--paper-raised, var(--paper));
-  color: var(--ink-soft);
-  box-shadow: var(--elevation-3);
-  cursor: pointer;
-}
-
-.context-prompt-banner-collapse:hover {
-  color: var(--ink);
-  border-color: var(--line-strong, var(--line));
-  background: var(--paper);
+  --hover-reveal-size: 1.75rem;
 }
 
 .context-prompt-banner-markdown {

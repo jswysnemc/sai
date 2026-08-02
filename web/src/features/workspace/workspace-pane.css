@@ -249,7 +249,8 @@
 
 .workspace-reopen-anchor {
   position: absolute;
-  top: 8px;
+  /* 按钮浮在会话眉头之上，用眉头高度算出居中位置，眉头改高时不必再调这里 */
+  top: calc((var(--chat-header-height, 2.5rem) - 28px) / 2);
   right: 8px;
   z-index: 25;
 }

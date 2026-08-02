@@ -598,6 +598,11 @@ pub(super) fn active_leaf_locked(conn: &Connection) -> Result<Option<String>> {
         .optional()?
         .flatten();
     if let Some(leaf) = stored {
+        // 空串是「已显式退到根部」的哨兵：下一轮应当成为新的根，
+        // 不能落到第 2 步回退到 seq 最大的轮次，否则编辑首轮会接到会话末尾
+        if leaf.is_empty() {
+            return Ok(None);
+        }
         let exists: i64 = conn.query_row(
             "SELECT COUNT(*) FROM turns WHERE turn_id = ?1",
             params![leaf],
@@ -621,21 +626,17 @@ pub(super) fn active_leaf_locked(conn: &Connection) -> Result<Option<String>> {
 ///
 /// 参数:
 /// - `conn`: SQLite 连接
-/// - `turn_id`: 目标叶子轮次；None 表示清空
+/// - `turn_id`: 目标叶子轮次；None 表示显式退到根部
 ///
 /// 返回:
 /// - 写入是否成功
 pub(super) fn set_active_leaf_locked(conn: &Connection, turn_id: Option<&str>) -> Result<()> {
-    match turn_id {
-        Some(value) => conn.execute(
-            "INSERT INTO session_tree_meta (key, value) VALUES ('active_leaf', ?1)
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            params![value],
-        )?,
-        None => conn.execute(
-            "DELETE FROM session_tree_meta WHERE key = 'active_leaf'",
-            [],
-        )?,
-    };
+    // None 记为空串而不是删除记录：删除会与「老会话从未记录过叶子」混淆，
+    // 读取时便无法判断该回退到末尾还是该开新的根
+    conn.execute(
+        "INSERT INTO session_tree_meta (key, value) VALUES ('active_leaf', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![turn_id.unwrap_or("")],
+    )?;
     Ok(())
 }

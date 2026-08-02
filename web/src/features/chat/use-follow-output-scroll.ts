@@ -18,6 +18,9 @@ export interface OutputScrollTarget {
 
 const BOTTOM_THRESHOLD = 80;
 
+/** 回底动画时长，与距底远近无关，保证长短会话手感一致 */
+const JUMP_DURATION_MS = 180;
+
 /**
  * 判断滚动区域是否处于底部附近。
  *
@@ -125,13 +128,36 @@ export function useFollowOutputScroll(
     scrollOutputToBottom(scrollContainerRef.current);
   }, [commitState, resetSignal, scrollContainerRef]);
 
-  /** 平滑滚动到底部并恢复后续流式跟随。 */
+  /**
+   * 快速滚动到底部并恢复后续流式跟随。
+   *
+   * 浏览器原生 smooth 在长会话里会滚很久，这里改成固定时长的自定义缓动：
+   * 无论距底多远都在同一段时间内到位，长短会话的手感一致。
+   */
   const jumpToBottom = useCallback(() => {
     const element = scrollContainerRef.current;
     if (!element) return;
     commitState({ following: true, showJump: false });
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    element.scrollTo({ top: element.scrollHeight, behavior: reducedMotion ? "auto" : "smooth" });
+    const target = element.scrollHeight - element.clientHeight;
+    if (reducedMotion) {
+      element.scrollTop = target;
+      return;
+    }
+    const start = element.scrollTop;
+    const distance = target - start;
+    if (Math.abs(distance) < 1) return;
+    const startedAt = performance.now();
+    const step = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / JUMP_DURATION_MS);
+      // easeOutCubic：起步快、收尾稳，不会有 smooth 那种长尾
+      const eased = 1 - (1 - progress) ** 3;
+      element.scrollTop = start + distance * eased;
+      // 内容仍在流式增长时跟住新的底部
+      if (progress < 1) requestAnimationFrame(step);
+      else element.scrollTop = element.scrollHeight - element.clientHeight;
+    };
+    requestAnimationFrame(step);
   }, [commitState, scrollContainerRef]);
 
   /** 暂停自动跟随，供概览跳转等显式导航使用。 */

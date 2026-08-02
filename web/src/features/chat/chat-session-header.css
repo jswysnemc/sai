@@ -7,17 +7,22 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-md);
-  min-height: 3.5rem;
-  padding: var(--space-xs) var(--space-2xl);
+  min-height: 2.5rem;
+  padding: var(--space-3xs) var(--space-2xl);
   border-bottom: 1px solid var(--line);
   background: var(--paper);
 }
 
 .chat-header-main {
-  /* 标题与工作区路径左右排列：标题占据需要的宽度，路径填充剩余空间并右对齐 */
+  /*
+   * 标题与项目上下文同排左对齐。
+   *
+   * 这里必须用 center 而非 baseline：标题 14px、上下文 10px，
+   * 按基线对齐时小字的视觉重心会偏下，看上去没有居中。
+   */
   display: flex;
   min-width: 0;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-md);
 }
 
@@ -36,12 +41,12 @@
 }
 
 .chat-header-context {
-  /* 路径与分支贴右侧显示，与标题之间留出可压缩的间距 */
+  /* 紧跟标题左对齐：容器吸收行末空白，内容仍靠左，不再被推到行尾 */
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: var(--space-md);
   overflow: hidden;
   color: var(--ink-soft);
@@ -53,9 +58,12 @@
   min-width: 0;
   align-items: center;
   gap: var(--space-2xs);
+  /* 与标题同高，行内元素的基线偏移不再影响垂直位置 */
+  line-height: 1;
 }
 
 .chat-header-context-item > svg {
+  display: block;
   flex: 0 0 auto;
   opacity: 0.68;
 }
@@ -131,8 +139,8 @@
   .chat-header {
     grid-template-columns: 2rem minmax(0, 1fr) 2rem;
     gap: var(--space-xs);
-    min-height: 3.5rem;
-    padding: var(--space-xs) var(--space-md);
+    min-height: 3rem;
+    padding: var(--space-3xs) var(--space-md);
   }
 
   .chat-header-main {

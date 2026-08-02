@@ -11,6 +11,12 @@
   gap:var(--space-3xs);
 }
 
+/* 编辑态需要固定的编辑宽度，不再随正文长度收缩 */
+.user-message-stack.is-editing {
+  width: min(100%, 42.5rem);
+  justify-items: stretch;
+}
+
 .user-bubble {
   position: relative;
   display: grid;
@@ -235,6 +241,10 @@
 @media (max-width: 48rem) {
   .user-message-stack {
     max-width: min(92%, 42.5rem);
+  }
+
+  .user-message-stack.is-editing {
+    max-width: 100%;
   }
 
   .user-attachment,

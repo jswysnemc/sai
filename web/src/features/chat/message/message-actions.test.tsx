@@ -20,28 +20,27 @@ describe("MessageActions", () => {
     expect(html).toContain("形成新分支");
   });
 
-  it("把复制为新会话与分支区分开，避免术语混淆", () => {
-    const html = render({ onContinueFrom: () => {}, onFork: () => {} });
+  it("编辑重发排在开分支之前，二者都基于分支能力", () => {
+    const html = render({ onContinueFrom: () => {}, onEdit: () => {} });
 
+    expect(html).toContain('aria-label="编辑并重新发送"');
     expect(html).toContain('aria-label="从这里继续"');
-    expect(html).toContain('aria-label="复制为新会话"');
-    // 分支动作排在复制会话之前：前者是常用操作
-    expect(html.indexOf("从这里继续")).toBeLessThan(html.indexOf("复制为新会话"));
+    expect(html.indexOf("编辑并重新发送")).toBeLessThan(html.indexOf("从这里继续"));
   });
 
   it("未提供回调时不渲染对应按钮", () => {
     const html = render({});
 
     expect(html).not.toContain("从这里继续");
-    expect(html).not.toContain("复制为新会话");
+    expect(html).not.toContain("编辑并重新发送");
     expect(html).not.toContain("重试本轮");
     expect(html).toContain('aria-label="复制消息原文"');
   });
 
-  it("动作进行中时禁用分支按钮", () => {
-    const html = render({ onContinueFrom: () => {}, onFork: () => {}, busy: true });
+  it("动作进行中时禁用分支相关按钮", () => {
+    const html = render({ onContinueFrom: () => {}, onEdit: () => {}, busy: true });
 
-    // 两个分支相关按钮都要跟随 busy 禁用，避免并发切换活动叶子
+    // 编辑与开分支都会改动活动叶子，须一并跟随 busy 禁用
     expect(html.match(/disabled/gu)?.length).toBe(2);
   });
 });

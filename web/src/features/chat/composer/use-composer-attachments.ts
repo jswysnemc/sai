@@ -5,6 +5,7 @@ import {
   MAX_IMAGE_ATTACHMENTS,
   MAX_IMAGE_ATTACHMENT_BYTES
 } from "./attachment-limits";
+import { readImageAsDataUrl } from "./read-image-as-data-url";
 import {
   clearComposerAttachmentDraft,
   readComposerAttachmentDraft,
@@ -65,7 +66,7 @@ export function useComposerAttachments(sessionId?: string | null) {
     }
     const loaded = await Promise.all(images.map(async (file) => ({
       name: file.name || t(`pasted-image_${Date.now()}.png`, `粘贴图片_${Date.now()}.png`),
-      dataUrl: await readFileAsDataUrl(file, t)
+      dataUrl: await readImageAsDataUrl(file, () => new Error(t("Failed to read image", "读取图片失败")))
     })));
     const nextAttachments = [...attachments];
     for (const image of loaded) {
@@ -104,20 +105,4 @@ export function useComposerAttachments(sessionId?: string | null) {
   };
 
   return { attachments, addFiles, removeAttachment, clearAttachments, restoreAttachments };
-}
-
-/**
- * 将图片文件读取为 data URL。
- *
- * @param file 图片文件
- * @param t 双语文本选择方法
- * @returns 图片 data URL
- */
-function readFileAsDataUrl(file: File, t: (en: string, zh: string) => string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error(t("Failed to read image", "读取图片失败")));
-    reader.readAsDataURL(file);
-  });
 }
