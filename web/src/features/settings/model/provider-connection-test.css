@@ -9,6 +9,12 @@
   gap: var(--space-sm);
 }
 
+.provider-probe-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
 .provider-probe-run.ui-button {
   min-height: 1.875rem;
   gap: var(--space-2xs);

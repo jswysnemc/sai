@@ -3,6 +3,7 @@ import { api } from "../../api/client";
 import type { ProviderApiKey } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
 import { PasswordField } from "../../shared/ui/password-field";
+import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
 import "./provider-api-keys-field.css";
 
@@ -12,6 +13,7 @@ type ProviderApiKeysFieldProps = {
   selected?: string;
   balance: boolean;
   secretSentinel: string;
+  onRevealKey?: (keyId: string) => Promise<string>;
   onChange: (patch: {
     api_keys: ProviderApiKey[];
     api_key_selected?: string;
@@ -32,7 +34,7 @@ function nextKeyId(keys: ProviderApiKey[]): string {
 }
 
 /**
- * 渲染供应商的多密钥列表、负载均衡开关与选中项。
+ * 渲染供应商的多密钥列表、使用策略与工作或测试密钥。
  *
  * 每个密钥带稳定标识，服务端据此在脱敏回填时按 id 对齐，
  * 删除或重排后不会串用密钥。
@@ -46,9 +48,13 @@ export function ProviderApiKeysField({
   selected,
   balance,
   secretSentinel,
+  onRevealKey,
   onChange
 }: ProviderApiKeysFieldProps) {
   const { t } = useI18n();
+  const selectedId = selected && keys.some((key) => key.id === selected)
+    ? selected
+    : keys[0]?.id;
 
   /**
    * 以新列表更新，并在选中项被删除时回落到首个。
@@ -63,7 +69,11 @@ export function ProviderApiKeysField({
     onChange({ api_keys: next, api_key_selected: nextSelected, api_key_balance: balance });
   };
 
-  /** 追加一个空密钥并选中它。 */
+  /**
+   * 追加一个空密钥并选中它。
+   *
+   * @returns 无返回值
+   */
   const addKey = () => {
     const id = nextKeyId(keys);
     onChange({ api_keys: [...keys, { id, api_key: "", label: "" }], api_key_selected: id, api_key_balance: balance });
@@ -98,17 +108,20 @@ export function ProviderApiKeysField({
       </div>
       {keys.length === 0 && (
         <p className="provider-api-keys-empty">
-          {t("No extra keys. The single API Key above is used.", "暂无额外密钥，使用上方的单个 API Key。")}
+          {t("No API keys configured. Add a key to enable provider requests.", "尚未配置接口密钥，请添加密钥后使用该供应商。")}
         </p>
       )}
       <ul className="provider-api-keys-list">
-        {keys.map((key) => (
+        {keys.map((key, index) => (
           <li className="provider-api-key-row" key={key.id}>
             <div className="provider-api-key-value">
               <PasswordField
                 value={key.api_key}
+                placeholder={t(`API key ${index + 1}`, `接口密钥 ${index + 1}`)}
                 onReveal={secretSentinel.length > 0 && key.api_key === secretSentinel
-                  ? () => api.config.providerSecret(providerId, key.id).then((response) => response.api_key)
+                  ? () => onRevealKey
+                    ? onRevealKey(key.id)
+                    : api.config.providerSecret(providerId, key.id).then((response) => response.api_key)
                   : undefined}
                 onChange={(value) => updateKey(key.id, { api_key: value })}
               />
@@ -134,32 +147,48 @@ export function ProviderApiKeysField({
       </ul>
       {keys.length > 1 && (
         <div className="provider-api-keys-controls">
-          <label className="provider-api-keys-balance">
-            <input
-              type="checkbox"
-              checked={balance}
-              onChange={(event) => onChange({ api_keys: keys, api_key_selected: selected, api_key_balance: event.target.checked })}
+          <div className="provider-api-keys-strategy">
+            <span>{t("Key usage", "密钥使用方式")}</span>
+            <Select
+              value={balance ? "balance" : "selected"}
+              options={[
+                {
+                  value: "selected",
+                  label: t("Use selected key", "固定使用所选密钥"),
+                  description: t("Send every request with one key", "所有请求使用同一个密钥")
+                },
+                {
+                  value: "balance",
+                  label: t("Load balance", "负载均衡"),
+                  description: t("Rotate across all configured keys", "在全部已配置密钥间轮换")
+                }
+              ]}
+              onChange={(value) => onChange({
+                api_keys: keys,
+                api_key_selected: selectedId,
+                api_key_balance: value === "balance"
+              })}
+              ariaLabel={t("Key usage", "密钥使用方式")}
             />
-            <span>
-              <strong>{t("Load balance across keys", "在密钥间负载均衡")}</strong>
-              <small>{t("Round-robin a different key on each request", "每次请求轮换使用不同密钥")}</small>
-            </span>
-          </label>
-          {!balance && (
-            <label className="provider-api-keys-selected">
-              <span>{t("Active key", "当前选用")}</span>
-              <select
-                value={selected ?? ""}
-                onChange={(event) => onChange({ api_keys: keys, api_key_selected: event.target.value, api_key_balance: balance })}
-              >
-                {keys.map((key, index) => (
-                  <option value={key.id} key={key.id}>
-                    {key.label?.trim() || `${t("Key", "密钥")} ${index + 1}`}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          </div>
+          <div className="provider-api-keys-selected">
+            <span>{balance ? t("Test key", "测试密钥") : t("Working key", "工作密钥")}</span>
+            <Select
+              value={selectedId ?? ""}
+              options={keys.map((key, index) => ({
+                value: key.id,
+                label: key.label?.trim() || `${t("Key", "密钥")} ${index + 1}`
+              }))}
+              onChange={(value) => onChange({ api_keys: keys, api_key_selected: value, api_key_balance: balance })}
+              ariaLabel={balance ? t("API key used for tests", "用于测试的接口密钥") : t("Working API key", "工作接口密钥")}
+              menuMinimumWidth={180}
+            />
+            {balance && (
+              <small>
+                {t("Requests rotate across all keys; tests use this key.", "正式请求会在全部密钥间轮换；连通性测试使用这里选中的密钥。")}
+              </small>
+            )}
+          </div>
         </div>
       )}
     </div>

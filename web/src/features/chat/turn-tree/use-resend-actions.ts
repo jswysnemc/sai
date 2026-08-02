@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../api/client";
 import type { RunMode, RunModelSelection, ThinkingLevel } from "../../../api/contracts";
 import { retryableTurnId } from "../conversation-display";
+import { refreshSessionBranchQueries } from "./branch-query-cache";
 
 type ResendOptions = {
   sessionId?: string;
@@ -54,7 +55,6 @@ export function useResendActions(options: ResendOptions) {
     try {
       // 1. 主动读取最新时间线，避免终态事件与后台刷新之间的竞态
       const refreshed = await api.sessions.timeline(sessionId);
-      queryClient.setQueryData(["timeline", sessionId], refreshed);
       const turnId = retryableTurnId(refreshed.turns, candidateTurnId);
       // 2. 解析不到轮次时，编辑动作必须中止而不是静默追加到末尾
       if (!turnId && requireTurn) {
@@ -66,11 +66,12 @@ export function useResendActions(options: ResendOptions) {
         return;
       }
       // 3. 只移动活动叶子；旧轮次保留在树里，新回答成为它的兄弟分支
-      if (turnId) await options.moveToParent(turnId);
+      if (turnId && !(await options.moveToParent(turnId))) return;
       // 4. 清理旧实时投影，避免旧轮和新轮同时渲染相同的用户消息
       options.resetRun();
-      await queryClient.invalidateQueries({ queryKey: ["timeline", sessionId] });
-      // 5. 复用当前模式、模型与思考等级重新提交
+      // 5. 等待新活动分支进入缓存后再启动运行，避免回应挂到旧分支
+      await refreshSessionBranchQueries(queryClient, sessionId);
+      // 6. 复用当前模式、模型与思考等级重新提交
       await options.startRun(content, imageUrls);
     } catch (error) {
       options.onError(error, "Failed to resend the turn", "重新发送失败");

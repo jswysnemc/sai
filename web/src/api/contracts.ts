@@ -115,6 +115,7 @@ export type {
   AgentEngineConfig,
   ProviderModelsResponse,
   ProviderProbeErrorKind,
+  ProviderProbeMode,
   ProviderProbeReport,
   ProviderProbeStage,
   HookHttpRequest,

@@ -22,10 +22,6 @@
   cursor: pointer;
 }
 
-.context-prompt-banner-head:hover {
-  background: color-mix(in srgb, var(--paper-raised) 70%, transparent);
-}
-
 .context-prompt-banner-icon {
   display: grid;
   width: 22px;

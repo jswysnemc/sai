@@ -24,14 +24,11 @@ const PROBE_MAX_TOKENS: u32 = 16;
 /// 探测的整体超时上限（秒）。
 const PROBE_TIMEOUT_SECONDS: u64 = 20;
 
-/// 对一个供应商执行连通性探测。
+/// 对一个供应商执行普通连通性探测。
 ///
 /// 分两个阶段，任一阶段失败即停止：
 /// 1. catalog：拉取模型列表，验证地址可达与凭据有效
 /// 2. completion：发一条最小对话，验证该模型标识真能出结果
-///
-/// 分阶段是为了区分"连不上""密钥不对""模型名写错"这三类问题——
-/// 只发一次对话请求的话，三者返回的错误往往难以分辨。
 ///
 /// 参数:
 /// - `paths`: Sai 路径
@@ -48,41 +45,30 @@ pub async fn probe_provider(
     model: Option<&str>,
 ) -> Result<ProviderProbeReport> {
     let target_model = resolve_model(provider, model);
-    let mut stages = Vec::new();
-
-    // 1. 目录阶段：地址与凭据
-    let catalog_started = Instant::now();
-    let catalog = fetch_catalog(paths, provider).await;
-    let catalog_ms = catalog_started.elapsed().as_millis() as u64;
-    match &catalog {
-        Ok(models) => stages.push(ProbeStageResult::success(
-            "catalog",
-            catalog_ms,
-            catalog_detail(models, &target_model),
-        )),
-        Err(error) => {
-            stages.push(ProbeStageResult::failure("catalog", catalog_ms, error));
-            return Ok(ProviderProbeReport::from_stages(
-                provider.id.clone(),
-                target_model,
-                stages,
-                None,
-            ));
-        }
+    let catalog_stage = run_catalog_stage(paths, provider, &target_model).await;
+    let catalog_ok = catalog_stage.ok;
+    let mut stages = vec![catalog_stage];
+    if !catalog_ok {
+        return Ok(ProviderProbeReport::from_stages(
+            provider.id.clone(),
+            target_model,
+            stages,
+            None,
+        ));
     }
 
-    // 2. 推理阶段：该模型是否真的可用
+    // 1. 推理阶段：该模型是否真的可用
     let completion_started = Instant::now();
     let completion = run_completion(paths, config, provider, &target_model).await;
     let completion_ms = completion_started.elapsed().as_millis() as u64;
-    let (completion_ok, tokens) = match &completion {
+    let tokens = match &completion {
         Ok(outcome) => {
             stages.push(ProbeStageResult::success(
                 "completion",
                 completion_ms,
                 outcome.summary.clone(),
             ));
-            (true, outcome.tokens)
+            outcome.tokens
         }
         Err(error) => {
             stages.push(ProbeStageResult::failure(
@@ -90,24 +76,56 @@ pub async fn probe_provider(
                 completion_ms,
                 error,
             ));
-            (false, None)
+            None
         }
     };
 
-    // 3. 工具调用阶段：验证供应商是否支持 function calling
-    // 推理都失败时跳过，避免在断链上重复发请求
-    if completion_ok {
-        let tool_started = Instant::now();
-        let tool = run_tool_call(paths, config, provider, &target_model).await;
-        let tool_ms = tool_started.elapsed().as_millis() as u64;
-        match &tool {
-            Ok(detail) => {
-                stages.push(ProbeStageResult::success("tool_call", tool_ms, detail.clone()));
-            }
-            Err(error) => {
-                stages.push(ProbeStageResult::failure("tool_call", tool_ms, error));
-            }
-        }
+    Ok(ProviderProbeReport::from_stages(
+        provider.id.clone(),
+        target_model,
+        stages,
+        tokens,
+    ))
+}
+
+/// 对一个供应商执行独立的工具调用探测。
+///
+/// 先验证目录接口，再发送带最小工具定义的请求；不会执行模型返回的工具。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+/// - `config`: 当前应用配置
+/// - `provider`: 待探测的供应商配置
+/// - `model`: 待探测的模型标识；为空时使用供应商默认模型
+///
+/// 返回:
+/// - 工具调用探测报告
+pub async fn probe_provider_tools(
+    paths: &SaiPaths,
+    config: &AppConfig,
+    provider: &ProviderConfig,
+    model: Option<&str>,
+) -> Result<ProviderProbeReport> {
+    let target_model = resolve_model(provider, model);
+    let catalog_stage = run_catalog_stage(paths, provider, &target_model).await;
+    let catalog_ok = catalog_stage.ok;
+    let mut stages = vec![catalog_stage];
+    if !catalog_ok {
+        return Ok(ProviderProbeReport::from_stages(
+            provider.id.clone(),
+            target_model,
+            stages,
+            None,
+        ));
+    }
+
+    let tool_started = Instant::now();
+    let tool = run_tool_call(paths, config, provider, &target_model).await;
+    let tool_ms = tool_started.elapsed().as_millis() as u64;
+    let tokens = None;
+    match &tool {
+        Ok(detail) => stages.push(ProbeStageResult::success("tool_call", tool_ms, detail.clone())),
+        Err(error) => stages.push(ProbeStageResult::failure("tool_call", tool_ms, error)),
     }
 
     Ok(ProviderProbeReport::from_stages(
@@ -141,6 +159,30 @@ fn resolve_model(provider: &ProviderConfig, model: Option<&str>) -> String {
         return provider.default_model.clone();
     }
     provider.models.first().cloned().unwrap_or_default()
+}
+
+/// 请求模型目录并生成目录阶段结果。
+///
+/// @param paths Sai 路径
+/// @param provider 待探测的供应商配置
+/// @param target_model 待探测的模型标识
+/// @returns 目录阶段结果
+async fn run_catalog_stage(
+    paths: &SaiPaths,
+    provider: &ProviderConfig,
+    target_model: &str,
+) -> ProbeStageResult {
+    let catalog_started = Instant::now();
+    let catalog = fetch_catalog(paths, provider).await;
+    let catalog_ms = catalog_started.elapsed().as_millis() as u64;
+    match catalog {
+        Ok(models) => ProbeStageResult::success(
+            "catalog",
+            catalog_ms,
+            catalog_detail(&models, target_model),
+        ),
+        Err(error) => ProbeStageResult::failure("catalog", catalog_ms, &error),
+    }
 }
 
 /// 拉取模型目录。

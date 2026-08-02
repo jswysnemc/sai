@@ -15,11 +15,15 @@ export type ConversationDisplayProjection = {
  */
 export function projectConversationDisplay(
   turns: SessionTimelineTurn[],
-  runs: LiveRunState[]
+  runs: LiveRunState[],
+  sessionId?: string
 ): ConversationDisplayProjection {
+  const sessionRuns = sessionId
+    ? runs.filter((run) => run.sessionId === sessionId)
+    : runs;
   const historyById = new Map(turns.map((turn) => [turn.turn_id, turn]));
   const livePreferredIds = new Set(
-    runs
+    sessionRuns
       .filter((run) => {
         if (!run.runId) return false;
         const history = historyById.get(run.runId);
@@ -30,7 +34,7 @@ export function projectConversationDisplay(
 
   return {
     historyTurns: turns.filter((turn) => !livePreferredIds.has(turn.turn_id)),
-    liveRuns: runs.filter((run) => {
+    liveRuns: sessionRuns.filter((run) => {
       if (!run.runId || !run.completed) return true;
       const history = historyById.get(run.runId);
       return !history || history.status === "running";

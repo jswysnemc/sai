@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../api/client";
 import type { ApiError } from "../../../api/api-error";
+import { cancelSessionBranchQueries, refreshSessionBranchQueries } from "./branch-query-cache";
 
 type BranchActionsOptions = {
   /** 当前会话标识 */
@@ -10,6 +11,8 @@ type BranchActionsOptions = {
   running: boolean;
   /** 切换成功后聚焦输入框，提示用户可以从此处继续 */
   onFocusComposer?: () => void;
+  /** 分支切换成功后清除旧实时运行投影 */
+  resetRun?: () => void;
   /** 动作失败时上报，由调用方决定展示方式 */
   onError?: (error: unknown, fallbackEn: string, fallbackZh: string) => void;
 };
@@ -23,23 +26,9 @@ type BranchActionsOptions = {
  * @param options 会话标识、运行状态与回调
  * @returns 分支动作与进行中标记
  */
-export function useBranchActions({ sessionId, running, onFocusComposer, onError }: BranchActionsOptions) {
+export function useBranchActions({ sessionId, running, onFocusComposer, resetRun, onError }: BranchActionsOptions) {
   const queryClient = useQueryClient();
   const [pending, setPending] = useState(false);
-
-  /**
-   * 刷新分支改动后受影响的查询。
-   *
-   * @returns 刷新完成的 Promise
-   */
-  const invalidateAfterBranchChange = async () => {
-    if (!sessionId) return;
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["session-turn-tree", sessionId] }),
-      queryClient.invalidateQueries({ queryKey: ["timeline", sessionId] }),
-      queryClient.invalidateQueries({ queryKey: ["sessions"] })
-    ]);
-  };
 
   /**
    * 在同一次守卫与错误处理下执行一个分支动作。
@@ -74,8 +63,10 @@ export function useBranchActions({ sessionId, running, onFocusComposer, onError 
   const continueFrom = (turnId: string) =>
     runGuarded(
       async () => {
+        await cancelSessionBranchQueries(queryClient, sessionId);
         await api.sessions.switchBranch(sessionId ?? "", turnId);
-        await invalidateAfterBranchChange();
+        resetRun?.();
+        await refreshSessionBranchQueries(queryClient, sessionId);
         onFocusComposer?.();
       },
       "Failed to continue from this turn",
@@ -93,8 +84,10 @@ export function useBranchActions({ sessionId, running, onFocusComposer, onError 
   const undoToParent = (turnId: string) =>
     runGuarded(
       async () => {
+        await cancelSessionBranchQueries(queryClient, sessionId);
         await api.sessions.undoToParent(sessionId ?? "", turnId);
-        await invalidateAfterBranchChange();
+        resetRun?.();
+        await refreshSessionBranchQueries(queryClient, sessionId);
       },
       "Failed to undo to the previous turn",
       "退回上一轮失败"
@@ -110,8 +103,8 @@ export function useBranchActions({ sessionId, running, onFocusComposer, onError 
    */
   const moveToParentForRetry = async (turnId: string): Promise<boolean> => {
     if (!sessionId) return false;
+    await cancelSessionBranchQueries(queryClient, sessionId);
     await api.sessions.undoToParent(sessionId, turnId);
-    await queryClient.invalidateQueries({ queryKey: ["session-turn-tree", sessionId] });
     return true;
   };
 

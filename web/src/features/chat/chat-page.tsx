@@ -62,7 +62,6 @@ export function ChatPage() {
   const activeSession = sessions.data?.find((session) => session.active);
   const [treeOpen, setTreeOpen] = useState(false);
   const [treeOverviewOpen, setTreeOverviewOpen] = useState(false);
-  const turnTree = useTurnTree(activeSession?.id);
   const activeWorkspace = workspaces.data?.workspaces.find(
     (workspace) => workspace.id === workspaces.data.active_id
   );
@@ -75,6 +74,9 @@ export function ChatPage() {
     void Promise.all([
       activeSession?.id
         ? queryClient.invalidateQueries({ queryKey: ["timeline", activeSession.id] })
+        : Promise.resolve(),
+      activeSession?.id
+        ? queryClient.invalidateQueries({ queryKey: ["session-turn-tree", activeSession.id] })
         : Promise.resolve(),
       queryClient.invalidateQueries({ queryKey: ["sessions"] }),
       queryClient.invalidateQueries({ queryKey: ["todos"] }),
@@ -98,6 +100,7 @@ export function ChatPage() {
     onWorkspaceChanged,
     onInterruptedWithoutReply
   );
+  const turnTree = useTurnTree(activeSession?.id, { onBranchChanged: run.reset });
   const chatModel = useChatModel(activeSession?.id);
   const chatAgent = useChatAgentContext();
   const thinking = useThinkingLevel(activeSession?.id);
@@ -105,8 +108,8 @@ export function ChatPage() {
   const composerAttachments = useComposerAttachments(activeSession?.id);
   const scrollRef = useRef<HTMLDivElement>(null);
   const display = useMemo(
-    () => projectConversationDisplay(timeline.data?.turns ?? [], run.states),
-    [timeline.data?.turns, run.states]
+    () => projectConversationDisplay(timeline.data?.turns ?? [], run.states, activeSession?.id),
+    [activeSession?.id, timeline.data?.turns, run.states]
   );
   const [submittedEmptySessionId, setSubmittedEmptySessionId] = useState<string | null>(null);
   const activeLiveRuns = useMemo(
@@ -307,6 +310,7 @@ export function ChatPage() {
   const branchActions = useBranchActions({
     sessionId: activeSession?.id,
     running,
+    resetRun: run.reset,
     onFocusComposer: () => window.dispatchEvent(new Event(FOCUS_COMPOSER_EVENT)),
     onError: (error, fallbackEn, fallbackZh) =>
       setActionError(toDisplayError(error, fallbackEn, fallbackZh))
@@ -327,7 +331,6 @@ export function ChatPage() {
     // 退回后把该轮的用户输入放回输入框，便于直接改写重发
     const prompt = timeline.data?.turns.find((turn) => turn.turn_id === turnId)?.user.content;
     await branchActions.undoToParent(turnId);
-    run.reset();
     setInput(prompt ?? "");
   };
 

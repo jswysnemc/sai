@@ -9,6 +9,9 @@
   /* 操作按钮绝对定位叠在右端，行内只保留主区一列 */
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
+  justify-self: start;
+  width: fit-content;
+  max-width: 100%;
   min-height: 34px;
   border-radius:var(--radius-2);
   background: transparent;
@@ -26,6 +29,7 @@
   grid-template-columns: 14px 16px minmax(0, 1fr);
   gap:var(--space-2xs);
   align-items: center;
+  width: 100%;
   min-width: 0;
   min-height: 34px;
   /* 静止态会话计数贴右缘；悬停时右内边距扩大，为两颗按钮让位 */

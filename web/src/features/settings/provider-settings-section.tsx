@@ -2,14 +2,13 @@ import { Check, Cpu, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { createElement, useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
-import type { AppConfig, ProviderConfig } from "../../api/contracts";
+import type { AppConfig, ProviderApiKey, ProviderConfig } from "../../api/contracts";
 import { EditorHeader } from "./editor-layout";
 import { ProviderConnectionTest } from "./model/provider-connection-test";
 import { ModelMetadataEditor } from "./model-metadata-editor";
 import { ModelImportDialog } from "./model-import-dialog";
 import { ObjectListPanel } from "./object-list-panel";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
-import { PasswordField } from "../../shared/ui/password-field";
 import { Select } from "../../shared/ui/select/select";
 import { ModelIcon } from "../../shared/ui/model-icon";
 import { JsonCodeEditor } from "../../shared/ui/code-editor/json-code-editor";
@@ -24,6 +23,18 @@ type ProviderSettingsSectionProps = {
   onConfigChange: (config: AppConfig) => void;
   onProviderChange: (index: number, patch: Partial<ProviderConfig>) => void;
 };
+
+/**
+ * 将旧版单密钥配置转换为统一的密钥列表展示。
+ *
+ * @param provider 当前供应商配置
+ * @returns 用于编辑器展示的密钥列表
+ */
+function normalizedProviderApiKeys(provider: ProviderConfig): ProviderApiKey[] {
+  if (provider.api_keys && provider.api_keys.length > 0) return provider.api_keys;
+  if (!provider.api_key?.trim()) return [];
+  return [{ id: "key-1", api_key: provider.api_key, label: "" }];
+}
 
 /**
  * 渲染供应商列表和当前供应商编辑表单。
@@ -54,6 +65,8 @@ export function ProviderSettingsSection({
   const [tab, setTab] = useState<"connection" | "models" | "behavior" | "advanced">("connection");
   const selectedIndex = Math.max(0, config.providers.findIndex((provider) => provider.id === selectedId));
   const provider = config.providers[selectedIndex];
+  const providerKeys = provider ? normalizedProviderApiKeys(provider) : [];
+  const selectedProviderKey = provider?.api_key_selected ?? providerKeys[0]?.id;
   const claudeSimulation = isClaudeClientStyle(provider?.client_style);
 
   useEffect(() => {
@@ -201,10 +214,10 @@ export function ProviderSettingsSection({
    *
    * @returns 服务端解析后的真实 API Key
    */
-  const revealProviderApiKey = async (): Promise<string> => {
+  const revealProviderApiKey = async (keyId: string): Promise<string> => {
     setSecretError(null);
     try {
-      const response = await api.config.providerSecret(provider.id);
+      const response = await api.config.providerSecret(provider.id, provider.api_keys?.length ? keyId : undefined);
       return response.api_key;
     } catch (error) {
       setSecretError(toDisplayError(error, "Failed to reveal API key", "读取 API Key 失败"));
@@ -295,35 +308,31 @@ export function ProviderSettingsSection({
             <small>{models.length > 0 ? t("Used when no model is selected manually", "未手动切换时使用") : t("Add models on the Models tab first", "先在模型页签添加模型")}</small>
           </div>
           <div className="settings-field full">
-            <span>API Key</span>
-            <PasswordField
-              key={provider.id}
-              value={provider.api_key ?? ""}
-              onReveal={secretSentinel.length > 0 && provider.api_key === secretSentinel
-                ? revealProviderApiKey
-                : undefined}
-              onChange={(value) => {
-                setSecretError(null);
-                onProviderChange(selectedIndex, { api_key: value });
-              }}
-            />
-            <small>{t("Environment variables can be referenced with `$env:VARIABLE_NAME`", "支持使用 `$env:VARIABLE_NAME` 引用环境变量")}</small>
-          </div>
-          <div className="settings-field full">
             <ProviderApiKeysField
               providerId={provider.id}
-              keys={provider.api_keys ?? []}
-              selected={provider.api_key_selected}
+              keys={providerKeys}
+              selected={selectedProviderKey}
               balance={provider.api_key_balance === true}
               secretSentinel={secretSentinel}
-              onChange={(patch) => onProviderChange(selectedIndex, patch)}
+              onRevealKey={revealProviderApiKey}
+              onChange={(patch) => {
+                setSecretError(null);
+                onProviderChange(selectedIndex, {
+                  ...patch,
+                  api_key: ""
+                });
+              }}
             />
-            <small>{t("Add extra keys to switch between them or load-balance; when present they take precedence over the single key above.", "可添加多个密钥用于切换或负载均衡；存在时优先于上方单个密钥。")}</small>
+            <small>{t("Use one selected key by default, or enable load balancing when multiple keys are configured. Environment variables can be referenced with `$env:VARIABLE_NAME`.", "默认使用一个选中的密钥；配置多个密钥后可以启用负载均衡。支持使用 `$env:VARIABLE_NAME` 引用环境变量。")}</small>
           </div>
           <div className="settings-field full">
             <span>{t("Connectivity", "连通性")}</span>
-            <ProviderConnectionTest provider={provider} model={provider.default_model || undefined} />
-            <small>{t("Verifies the endpoint and credentials first, then sends a minimal request to the default model", "先验证地址与凭据，再向默认模型发送一次最小请求")}</small>
+            <ProviderConnectionTest
+              provider={provider}
+              model={provider.default_model || undefined}
+              selectedKeyId={selectedProviderKey}
+            />
+            <small>{t("Run a normal model response test or a separate tool-calling test with the selected key.", "可以使用当前选中的密钥分别测试普通模型响应和工具调用。")}</small>
           </div>
         </div>}
         {tab === "behavior" && <div className="settings-form-grid">

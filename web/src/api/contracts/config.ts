@@ -258,6 +258,9 @@ export type ProviderProbeErrorKind =
   | "protocol"
   | "unknown";
 
+/** 供应商探测类型。 */
+export type ProviderProbeMode = "connection" | "tools";
+
 /** 探测阶段：catalog 验证地址与凭据，completion 验证模型可用，tool_call 验证工具调用。 */
 export type ProviderProbeStage = {
   stage: "catalog" | "completion" | "tool_call";

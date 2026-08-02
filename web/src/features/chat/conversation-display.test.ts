@@ -79,6 +79,13 @@ describe("projectConversationDisplay", () => {
     expect(projection.historyTurns.map((item) => item.turn_id)).toEqual(["run-1"]);
     expect(projection.liveRuns.map((item) => item.runId)).toEqual(["run-2"]);
   });
+
+  it("does not project a run from another session", () => {
+    const otherSessionRun = { ...run("run-2", "other", false), sessionId: "other-session" };
+    const projection = projectConversationDisplay([], [otherSessionRun], "session");
+
+    expect(projection.liveRuns).toEqual([]);
+  });
 });
 
 describe("retryableTurnId", () => {

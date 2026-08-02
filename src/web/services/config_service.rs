@@ -149,6 +149,7 @@ fn redact_value(value: &mut Value, key: Option<&str>) {
 fn merge_secret_sentinels(submitted: &mut Value, current: &Value) {
     match (submitted, current) {
         (Value::Object(submitted), Value::Object(current)) => {
+            restore_legacy_provider_key_into_multi_keys(submitted, current);
             for (key, value) in submitted {
                 if let Some(current_value) = current.get(key) {
                     merge_secret_sentinels(value, current_value);
@@ -192,6 +193,50 @@ fn merge_secret_sentinels(submitted: &mut Value, current: &Value) {
             *value = current.as_str().unwrap_or_default().to_string();
         }
         _ => {}
+    }
+}
+
+/// 将旧版单密钥配置迁移到前端统一编辑的多密钥列表。
+///
+/// 旧配置只有 `api_key`，前端编辑列表后会把原密钥放到 `key-1` 并提交脱敏占位符；
+/// 当前配置没有多密钥数组时，按约定把旧字段的真实值回填到该位置。
+///
+/// 参数:
+/// - `submitted`: 浏览器提交的对象
+/// - `current`: 服务端保存的旧对象
+///
+/// 返回:
+/// - 无；直接修改提交对象
+fn restore_legacy_provider_key_into_multi_keys(
+    submitted: &mut serde_json::Map<String, Value>,
+    current: &serde_json::Map<String, Value>,
+) {
+    let has_current_multi_keys = current
+        .get("api_keys")
+        .and_then(Value::as_array)
+        .is_some_and(|keys| !keys.is_empty());
+    if has_current_multi_keys {
+        return;
+    }
+    let Some(legacy_key) = current.get("api_key").and_then(Value::as_str) else {
+        return;
+    };
+    if legacy_key.is_empty() {
+        return;
+    }
+    let Some(Value::Array(keys)) = submitted.get_mut("api_keys") else {
+        return;
+    };
+    for key in keys {
+        let is_legacy_slot = key.get("id").and_then(Value::as_str) == Some("key-1");
+        let keeps_legacy_secret =
+            key.get("api_key").and_then(Value::as_str) == Some(SECRET_SENTINEL);
+        if is_legacy_slot && keeps_legacy_secret {
+            if let Some(object) = key.as_object_mut() {
+                object.insert("api_key".to_string(), Value::String(legacy_key.to_string()));
+            }
+            break;
+        }
     }
 }
 
@@ -418,9 +463,15 @@ mod tests {
 
         redact_value(&mut value, None);
 
-        assert_eq!(value["providers"][0]["api_keys"][0]["api_key"], SECRET_SENTINEL);
+        assert_eq!(
+            value["providers"][0]["api_keys"][0]["api_key"],
+            SECRET_SENTINEL
+        );
         // 环境变量引用保持可见，便于用户在界面上看到自己写的变量名
-        assert_eq!(value["providers"][0]["api_keys"][1]["api_key"], "$env:BACKUP_KEY");
+        assert_eq!(
+            value["providers"][0]["api_keys"][1]["api_key"],
+            "$env:BACKUP_KEY"
+        );
         // 备注不是敏感字段，原样保留
         assert_eq!(value["providers"][0]["api_keys"][0]["label"], "主号");
     }
@@ -449,7 +500,46 @@ mod tests {
 
         merge_secret_sentinels(&mut submitted, &current);
 
-        assert_eq!(submitted["providers"][0]["api_keys"][0]["api_key"], "secret-2");
-        assert_eq!(submitted["providers"][0]["api_keys"][1]["api_key"], "secret-1");
+        assert_eq!(
+            submitted["providers"][0]["api_keys"][0]["api_key"],
+            "secret-2"
+        );
+        assert_eq!(
+            submitted["providers"][0]["api_keys"][1]["api_key"],
+            "secret-1"
+        );
+    }
+
+    /// 旧版单密钥编辑为多密钥列表时，原密钥必须继续保留。
+    #[test]
+    fn restores_legacy_single_key_when_migrating_to_multi_key_list() {
+        let current = json!({
+            "providers": [{
+                "id": "p",
+                "api_key": "legacy-secret"
+            }]
+        });
+        let mut submitted = json!({
+            "providers": [{
+                "id": "p",
+                "api_key": "",
+                "api_keys": [
+                    { "id": "key-1", "api_key": SECRET_SENTINEL, "label": "主号" },
+                    { "id": "key-2", "api_key": "new-secret", "label": "备用" }
+                ]
+            }]
+        });
+
+        merge_secret_sentinels(&mut submitted, &current);
+
+        assert_eq!(
+            submitted["providers"][0]["api_keys"][0]["api_key"],
+            "legacy-secret"
+        );
+        assert_eq!(
+            submitted["providers"][0]["api_keys"][1]["api_key"],
+            "new-secret"
+        );
+        assert!(ensure_secret_sentinels_resolved(&submitted).is_ok());
     }
 }

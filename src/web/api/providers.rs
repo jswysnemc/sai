@@ -8,6 +8,19 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ProviderProbeMode {
+    Connection,
+    Tools,
+}
+
+impl Default for ProviderProbeMode {
+    fn default() -> Self {
+        Self::Connection
+    }
+}
+
+#[derive(Deserialize)]
 struct FetchModelsRequest {
     provider: ProviderConfig,
 }
@@ -33,6 +46,8 @@ struct TestProviderRequest {
     provider: ProviderConfig,
     #[serde(default)]
     model: Option<String>,
+    #[serde(default)]
+    mode: ProviderProbeMode,
 }
 
 /// 探测供应商连通性。
@@ -50,13 +65,26 @@ async fn test_provider(
     let provider = provider_models::restore_provider_secret(&state.paths, request.provider)
         .map_err(WebError::from)?;
     let config = crate::config::AppConfig::load_or_default(&state.paths).unwrap_or_default();
-    let report = crate::web::services::provider_probe::probe_provider(
-        &state.paths,
-        &config,
-        &provider,
-        request.model.as_deref(),
-    )
-    .await
+    let report = match request.mode {
+        ProviderProbeMode::Connection => {
+            crate::web::services::provider_probe::probe_provider(
+                &state.paths,
+                &config,
+                &provider,
+                request.model.as_deref(),
+            )
+            .await
+        }
+        ProviderProbeMode::Tools => {
+            crate::web::services::provider_probe::probe_provider_tools(
+                &state.paths,
+                &config,
+                &provider,
+                request.model.as_deref(),
+            )
+            .await
+        }
+    }
     .map_err(WebError::from)?;
     Ok(Json(report))
 }
