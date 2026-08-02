@@ -50,19 +50,6 @@ pub(in crate::state) fn render_summary_prompt(
     )
 }
 
-/// 构造注入对话上下文的摘要消息。
-///
-/// 参数:
-/// - `summary`: 会话压缩摘要
-///
-/// 返回:
-/// - 系统上下文消息
-pub fn summary_context_message(summary: &str) -> String {
-    format!(
-        "<conversation-summary>\nThe following summary preserves earlier conversation context that is no longer present as raw messages.\n\n{}\n</conversation-summary>",
-        summary.trim()
-    )
-}
 /// 格式化轮次为摘要输入。
 ///
 /// 参数:
@@ -155,14 +142,6 @@ mod tests {
         assert!(prompt.contains("old summary"));
         assert!(prompt.contains("implement feature"));
         assert!(prompt.contains("implemented src/main.rs"));
-    }
-
-    #[test]
-    fn summary_context_uses_stable_wrapper() {
-        let message = summary_context_message("summary");
-
-        assert!(message.starts_with("<conversation-summary>"));
-        assert!(message.contains("summary"));
     }
 
     #[test]

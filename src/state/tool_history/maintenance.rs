@@ -48,10 +48,11 @@ struct SnipGeometry {
 const BALANCED_SNIP_TOOLS: &[&str] = &["run_command", "background_command", "subagent"];
 
 impl StateStore {
-    /// 改写保留尾部之前所有轮次中的陈旧工具结果。
+    /// 改写陈旧工具结果，覆盖已完成轮次与运行中轮次的较早部分。
     ///
-    /// 保留尾部与压缩选择器一致（最近 PRESERVED_RECENT_TURNS 个非运行轮次），
-    /// 两条路径对"最近"的口径相同，维护永远不会碰压缩也不会碰的轮次。
+    /// 与压缩选择器保持同一口径：已完成轮次全部参与，运行中轮次保留末尾若干条
+    /// 最新结果。单个用户问题触发大量工具调用时膨胀发生在轮次内部，
+    /// 只维护已完成轮次等于不维护。
     /// 幂等：已折叠的结果不再处理，已裁剪的结果只会被折叠模式升级。
     /// 错误结果保持原文，模型需要完整错误现场来避免重蹈覆辙。
     ///
@@ -65,17 +66,32 @@ impl StateStore {
         mode: ToolResultMaintenanceMode,
     ) -> Result<ToolResultMaintenanceStats> {
         let mut stats = ToolResultMaintenanceStats::default();
-        let non_running = self
-            .conv_db
-            .load_turns()?
-            .into_iter()
+        let turns = self.conv_db.load_turns()?;
+        let non_running = turns
+            .iter()
             .filter(|turn| turn.status != TurnStatus::Running)
+            .cloned()
             .collect::<Vec<_>>();
         let stale_len = non_running.len().saturating_sub(PRESERVED_RECENT_TURNS);
+        // 1. 已完成轮次的工具结果全部参与维护
         for turn in &non_running[..stale_len] {
             let exchanges =
                 load_tool_exchanges_for_turn(&self.conv_db, &self.session_id, &turn.turn_id)?;
             for exchange in &exchanges {
+                self.maintain_exchange(mode, exchange, &mut stats)?;
+            }
+        }
+        // 2. 运行中轮次同样参与，但保留末尾最新的若干条供模型继续使用
+        if let Some(running) = turns
+            .iter()
+            .find(|turn| turn.status == TurnStatus::Running)
+        {
+            let exchanges =
+                load_tool_exchanges_for_turn(&self.conv_db, &self.session_id, &running.turn_id)?;
+            let stale_len = exchanges
+                .len()
+                .saturating_sub(crate::state::compaction::PRESERVED_RUNNING_TOOL_CALLS);
+            for exchange in &exchanges[..stale_len] {
                 self.maintain_exchange(mode, exchange, &mut stats)?;
             }
         }
@@ -440,7 +456,7 @@ mod tests {
             .join("\n")
     }
 
-    /// 验证裁剪只作用于保留尾部之前的轮次，且幂等。
+    /// 验证已完成轮次的工具结果全部参与裁剪，且幂等。
     #[test]
     fn snip_rewrites_stale_results_and_preserves_recent_tail() {
         let (_temp, store) = store_with_turns();
@@ -451,7 +467,8 @@ mod tests {
             .maintain_stale_tool_results(ToolResultMaintenanceMode::Snip)
             .unwrap();
 
-        assert_eq!(stats.rewritten, 1);
+        // 方案 B：已完成轮次不再保留尾部，两条结果都会被裁剪
+        assert_eq!(stats.rewritten, 2);
         assert!(stats.saved_chars > 0);
         let replacement = replacement_of(&store, "turn_1", "call_stale").unwrap();
         assert_eq!(replacement.policy, POLICY_STALE_SNIP);
@@ -460,12 +477,50 @@ mod tests {
             .contains("snipped stale tool result"));
         assert!(replacement.replacement.contains("line 0"));
         assert!(replacement.replacement.contains("line 199"));
-        assert!(replacement_of(&store, "turn_3", "call_recent").is_none());
+        assert!(replacement_of(&store, "turn_3", "call_recent").is_some());
 
         let second = store
             .maintain_stale_tool_results(ToolResultMaintenanceMode::Snip)
             .unwrap();
         assert_eq!(second.rewritten, 0);
+    }
+
+    /// 验证运行中轮次的较早工具结果参与裁剪，末尾若干条保留。
+    ///
+    /// 这是旧策略完全失效的场景：单轮内大量工具调用撑爆上下文。
+    #[test]
+    fn snip_covers_running_turn_and_keeps_latest_calls() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = ConversationDb::open(temp.path()).unwrap();
+        db.start_turn("turn_running", "inspect").unwrap();
+        let store = StateStore {
+            base_state_dir: temp.path().to_path_buf(),
+            session_id: "default".to_string(),
+            state_dir: temp.path().to_path_buf(),
+            conv_db: std::sync::Arc::new(db),
+        };
+        let total = crate::state::compaction::PRESERVED_RUNNING_TOOL_CALLS + 3;
+        for index in 0..total {
+            insert_exchange(
+                &store,
+                "turn_running",
+                &format!("call_{index}"),
+                true,
+                &large_output(),
+            );
+        }
+
+        let stats = store
+            .maintain_stale_tool_results(ToolResultMaintenanceMode::Snip)
+            .unwrap();
+
+        assert_eq!(stats.rewritten, 3, "较早的三条被裁剪");
+        assert!(replacement_of(&store, "turn_running", "call_0").is_some());
+        let latest = format!("call_{}", total - 1);
+        assert!(
+            replacement_of(&store, "turn_running", &latest).is_none(),
+            "末尾最新的结果必须保留"
+        );
     }
 
     /// 验证折叠可以升级已裁剪结果，并保持幂等。

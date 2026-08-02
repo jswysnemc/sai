@@ -9,6 +9,11 @@ use std::path::{Path, PathBuf};
 const TOOL_ARGUMENT_MAX_CHARS: usize = 1_000;
 const TOOL_RESULT_MAX_CHARS: usize = 2_000;
 const TOOL_TURN_MAX_CHARS: usize = 6_000;
+/// 运行中轮次在摘要输入里的单轮上限。
+///
+/// 轮次内压缩的场景下，膨胀几乎全部来自这一个轮次；沿用已完成轮次的 6k 上限
+/// 会把最需要被摘要的内容截掉，导致摘要覆盖不到即将删除的工具结果。
+const RUNNING_TURN_MAX_CHARS: usize = 60_000;
 const MIN_TOTAL_HISTORY_BUDGET_CHARS: usize = 1_000;
 
 /// 压缩摘要历史预算结果。
@@ -41,13 +46,69 @@ pub(in crate::state) fn build_budgeted_summary_history(
     turns: &[Turn],
     total_budget_chars: usize,
 ) -> Result<BudgetedSummaryHistory> {
+    build_budgeted_summary_history_with_running(
+        db,
+        session_id,
+        state_dir,
+        turns,
+        None,
+        total_budget_chars,
+    )
+}
+
+/// 构造包含运行中轮次的压缩摘要历史文本。
+///
+/// 运行中轮次单独排在最后并使用更大的单轮预算：轮次内压缩时它承载了绝大部分
+/// 待摘要内容，与已完成轮次共用 6k 上限会把关键信息截掉。
+///
+/// 参数:
+/// - `db`: 对话数据库
+/// - `session_id`: 会话标识
+/// - `state_dir`: 可选会话状态目录
+/// - `turns`: 需要压缩的已完成轮次
+/// - `running`: 运行中轮次及其应被摘要覆盖的工具调用条数
+/// - `total_budget_chars`: 历史文本总预算
+///
+/// 返回:
+/// - 已完成裁剪和统计的历史文本
+pub(in crate::state) fn build_budgeted_summary_history_with_running(
+    db: &ConversationDb,
+    session_id: &str,
+    state_dir: Option<&Path>,
+    turns: &[Turn],
+    running: Option<(&Turn, usize, usize)>,
+    total_budget_chars: usize,
+) -> Result<BudgetedSummaryHistory> {
     let mut result = BudgetedSummaryHistory::default();
     if total_budget_chars < MIN_TOTAL_HISTORY_BUDGET_CHARS {
-        result.clipped_total_history = !turns.is_empty();
+        result.clipped_total_history = !turns.is_empty() || running.is_some();
         return Ok(result);
     }
     let mut remaining = total_budget_chars;
     let mut parts = Vec::new();
+    // 1. 运行中轮次优先占用预算：它是本次压缩要移除的主体
+    if let Some((turn, skip_before, take_count)) = running {
+        let exchanges = load_tool_exchanges_for_turn(db, session_id, &turn.turn_id)?;
+        let selected = exchanges
+            .into_iter()
+            .skip(skip_before)
+            .take(take_count)
+            .collect::<Vec<_>>();
+        if !selected.is_empty() {
+            let (mut text, stats) = format_turn_for_summary(turn, state_dir, &selected);
+            result.replacement_missing_count += stats.replacement_missing_count;
+            result.result_ref_missing_file_count += stats.result_ref_missing_file_count;
+            result.clipped_result_count += stats.clipped_result_count;
+            let running_budget = RUNNING_TURN_MAX_CHARS.min(remaining);
+            if text.chars().count() > running_budget {
+                text = truncate_chars(&text, running_budget);
+                result.clipped_turn_count += 1;
+            }
+            remaining = remaining.saturating_sub(text.chars().count());
+            parts.push(text);
+        }
+    }
+    // 2. 已完成轮次填充剩余预算
     for turn in turns {
         let exchanges = load_tool_exchanges_for_turn(db, session_id, &turn.turn_id)?;
         let (mut text, stats) = format_turn_for_summary(turn, state_dir, &exchanges);

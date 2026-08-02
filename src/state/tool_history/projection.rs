@@ -25,8 +25,18 @@ impl crate::state::StateStore {
         else {
             return Ok(Vec::new());
         };
-        let mut messages =
-            project_turn_messages_with_tool_history(&self.conv_db, &self.session_id, &[turn])?;
+        // 已被摘要覆盖的工具调用不再回放，否则轮次内压缩不会产生任何节省
+        let skip_calls = self
+            .running_turn_compaction_boundary()?
+            .filter(|(compacted_turn_id, _)| compacted_turn_id == turn_id)
+            .map(|(_, calls)| calls)
+            .unwrap_or_default();
+        let mut messages = project_turn_messages_with_tool_history_skipping(
+            &self.conv_db,
+            &self.session_id,
+            &[turn],
+            skip_calls,
+        )?;
         if messages
             .first()
             .is_some_and(|message| message.role == "user")
@@ -56,9 +66,28 @@ pub(in crate::state) fn project_turn_messages_with_tool_history(
     session_id: &str,
     turns: &[Turn],
 ) -> Result<Vec<ChatMessage>> {
+    project_turn_messages_with_tool_history_skipping(db, session_id, turns, 0)
+}
+
+/// 构造 provider 历史消息，并跳过已被摘要覆盖的工具调用。
+///
+/// 参数:
+/// - `db`: 对话数据库
+/// - `session_id`: 会话标识
+/// - `turns`: 待投影轮次
+/// - `skip_calls`: 从最早开始跳过的工具调用条数
+///
+/// 返回:
+/// - provider 可直接发送的历史消息
+pub(in crate::state) fn project_turn_messages_with_tool_history_skipping(
+    db: &ConversationDb,
+    session_id: &str,
+    turns: &[Turn],
+    skip_calls: usize,
+) -> Result<Vec<ChatMessage>> {
     let mut messages = Vec::new();
     for turn in turns {
-        append_turn_messages(db, session_id, turn, &mut messages)?;
+        append_turn_messages(db, session_id, turn, skip_calls, &mut messages)?;
     }
     Ok(messages)
 }
@@ -69,6 +98,7 @@ pub(in crate::state) fn project_turn_messages_with_tool_history(
 /// - `db`: 对话数据库
 /// - `session_id`: 会话标识
 /// - `turn`: 待投影轮次
+/// - `skip_calls`: 从最早开始跳过的工具调用条数
 /// - `messages`: 输出消息列表
 ///
 /// 返回:
@@ -77,19 +107,60 @@ fn append_turn_messages(
     db: &ConversationDb,
     session_id: &str,
     turn: &Turn,
+    skip_calls: usize,
     messages: &mut Vec<ChatMessage>,
 ) -> Result<()> {
     messages.push(ChatMessage::plain("user", turn.user_content.clone()));
     let exchanges = load_tool_exchanges_for_turn(db, session_id, &turn.turn_id)?;
+    // 跳过已压缩部分时必须落在 assistant 子轮边界上，否则会留下孤立的 tool 结果
+    let exchanges = skip_compacted_exchanges(&exchanges, skip_calls);
     if exchanges.is_empty() {
         append_assistant_context_messages(turn, messages);
         append_interrupted_turn_marker(turn, messages);
         return Ok(());
     }
-    append_tool_exchange_messages(&exchanges, messages);
+    append_tool_exchange_messages(exchanges, messages);
     append_assistant_context_messages(turn, messages);
     append_interrupted_turn_marker(turn, messages);
     Ok(())
+}
+
+/// 跳过已被摘要覆盖的工具交换，并把切点对齐到子轮边界。
+///
+/// provider 要求 assistant 的 tool_calls 与后续 tool 结果一一配对。若切点落在
+/// 子轮中间，剩余部分会以孤立的 tool 结果开头，请求直接被拒。这里把切点前移到
+/// 下一个完整子轮的起点。
+///
+/// 参数:
+/// - `exchanges`: 该轮次的全部工具交换，按发生顺序
+/// - `skip_calls`: 期望跳过的条数
+///
+/// 返回:
+/// - 剩余的工具交换切片
+fn skip_compacted_exchanges(
+    exchanges: &[super::model::ToolExchangeRecord],
+    skip_calls: usize,
+) -> &[super::model::ToolExchangeRecord] {
+    if skip_calls == 0 || exchanges.is_empty() {
+        return exchanges;
+    }
+    if skip_calls >= exchanges.len() {
+        return &[];
+    }
+    // 切点落在子轮中间时前移到下一个子轮起点，保证 tool_calls 与结果成套保留
+    let boundary_round = exchanges[skip_calls].call.assistant_round;
+    let starts_new_round = exchanges[skip_calls - 1].call.assistant_round != boundary_round;
+    if starts_new_round {
+        return &exchanges[skip_calls..];
+    }
+    match exchanges[skip_calls..]
+        .iter()
+        .position(|exchange| exchange.call.assistant_round != boundary_round)
+    {
+        Some(offset) => &exchanges[skip_calls + offset..],
+        // 切点之后全属同一子轮：整体丢弃，否则会留下没有 assistant 消息的孤立结果
+        None => &[],
+    }
 }
 
 /// 按原始模型子轮重建 assistant 工具调用与 tool 结果消息。

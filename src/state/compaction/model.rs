@@ -1,11 +1,25 @@
 use crate::state::turns::Turn;
 use serde::{Deserialize, Serialize};
 
+/// 运行中轮次的压缩范围。
+///
+/// 单个用户问题触发大量工具调用时，膨胀发生在轮次内部而非轮次之间。
+/// 这里记录该轮次里有多少条工具调用应被摘要覆盖，重建上下文时跳过它们。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunningTurnCompaction {
+    /// 运行中轮次标识
+    pub turn_id: String,
+    /// 应被摘要覆盖的工具调用条数，从该轮次最早的调用开始计数
+    pub compacted_calls: usize,
+}
+
 #[derive(Debug, Clone)]
 pub struct CompactionRequest {
     pub compact_turn_ids: Vec<String>,
     pub compact_turns: Vec<Turn>,
     pub previous_summary: Option<String>,
+    /// 本次同时压缩的运行中轮次范围
+    pub running_turn: Option<RunningTurnCompaction>,
 }
 
 impl CompactionRequest {
@@ -26,7 +40,52 @@ impl CompactionRequest {
             compact_turn_ids,
             compact_turns,
             previous_summary,
+            running_turn: None,
         }
+    }
+
+    /// 附加运行中轮次的压缩范围。
+    ///
+    /// 参数:
+    /// - `running_turn`: 运行中轮次范围；为空表示本次不压缩轮次内容
+    ///
+    /// 返回:
+    /// - 携带运行中轮次范围的压缩请求
+    pub fn with_running_turn(mut self, running_turn: Option<RunningTurnCompaction>) -> Self {
+        self.running_turn = running_turn;
+        self
+    }
+
+    /// 把运行中轮次的压缩边界推进到累计位置。
+    ///
+    /// selector 只看到"尚未压缩"的部分，写入 checkpoint 时必须换算成从该轮次
+    /// 开头算起的累计条数，否则第二次压缩会把边界退回上一次的起点。
+    ///
+    /// 参数:
+    /// - `offset`: 此前已被摘要覆盖的工具调用条数
+    ///
+    /// 返回:
+    /// - 边界已累加的压缩请求
+    pub fn with_compacted_call_offset(mut self, offset: usize) -> Self {
+        if let Some(running) = self.running_turn.as_mut() {
+            running.compacted_calls += offset;
+        }
+        self
+    }
+
+    /// 判断本次压缩是否有实际可压缩内容。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 存在待压缩轮次或运行中工具调用时返回 true
+    pub fn has_content(&self) -> bool {
+        !self.compact_turns.is_empty()
+            || self
+                .running_turn
+                .as_ref()
+                .is_some_and(|running| running.compacted_calls > 0)
     }
 
     /// 返回需要压缩的轮次数量。

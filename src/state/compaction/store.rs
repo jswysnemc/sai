@@ -3,7 +3,7 @@ use crate::llm::ChatMessage;
 use crate::state::request_projection::{
     estimate_projected_request_chars, project_provider_turn_from_messages, ProjectedRequest,
 };
-use crate::state::tool_history::build_budgeted_summary_history;
+use crate::state::tool_history::build_budgeted_summary_history_with_running;
 use crate::state::StateStore;
 use anyhow::{bail, Result};
 
@@ -77,13 +77,63 @@ impl StateStore {
         let previous_summary = self
             .load_authoritative_compaction_summary()?
             .map(|summary| summary.summary);
-        Ok(super::select_compaction(
+        // 运行中轮次的工具调用同样参与压缩，需要知道其中已记录多少条
+        let (running_turn_call_count, already_compacted) =
+            self.running_turn_call_counts(&turns)?;
+        let request = super::select_compaction(
             &turns,
             previous_summary,
+            running_turn_call_count,
             current_context_tokens,
             context_limit_tokens,
             force,
-        ))
+        );
+        // 压缩边界按累计记录：第二次压缩要接着上一次的位置往后推进
+        Ok(request.map(|request| request.with_compacted_call_offset(already_compacted)))
+    }
+
+    /// 统计运行中轮次的工具调用总数与已被摘要覆盖的条数。
+    ///
+    /// 参数:
+    /// - `turns`: 当前活动分支的全部轮次
+    ///
+    /// 返回:
+    /// - （尚未覆盖的调用条数，已覆盖的调用条数）；没有运行中轮次时均为 0
+    fn running_turn_call_counts(
+        &self,
+        turns: &[crate::state::turns::Turn],
+    ) -> Result<(usize, usize)> {
+        let Some(running) = turns
+            .iter()
+            .find(|turn| turn.status == crate::state::turns::TurnStatus::Running)
+        else {
+            return Ok((0, 0));
+        };
+        let total = self.tool_call_count_for_turn(&running.turn_id)?;
+        let already_compacted = self
+            .running_turn_compaction_boundary()?
+            .filter(|(turn_id, _)| turn_id == &running.turn_id)
+            .map(|(_, calls)| calls)
+            .unwrap_or_default();
+        Ok((total.saturating_sub(already_compacted), already_compacted))
+    }
+
+    /// 读取当前 checkpoint 记录的运行中轮次压缩边界。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 运行中轮次标识与已覆盖的工具调用条数
+    pub(crate) fn running_turn_compaction_boundary(&self) -> Result<Option<(String, usize)>> {
+        let conn = self.conv_db.conn.lock().unwrap();
+        let checkpoint = crate::state::checkpoints::load_latest_checkpoint(&conn)?;
+        drop(conn);
+        Ok(checkpoint.and_then(|checkpoint| {
+            checkpoint
+                .running_turn_id
+                .map(|turn_id| (turn_id, checkpoint.running_turn_compacted_calls))
+        }))
     }
 
     /// 测试用：使用统一手动策略选择旧轮次。
@@ -102,13 +152,16 @@ impl StateStore {
         let previous_summary = self
             .load_authoritative_compaction_summary()?
             .map(|summary| summary.summary);
+        let (running_turn_call_count, already_compacted) = self.running_turn_call_counts(&turns)?;
         Ok(super::select_compaction(
             &turns,
             previous_summary,
+            running_turn_call_count,
             0,
             1,
             true,
-        ))
+        )
+        .map(|request| request.with_compacted_call_offset(already_compacted)))
     }
 
     /// 构造带工具历史预算的压缩摘要提示词。
@@ -136,11 +189,16 @@ impl StateStore {
             .saturating_sub(overhead)
             .saturating_sub(super::summary_char_limit(context_limit_chars))
             .saturating_sub(SUMMARY_PROMPT_FIXED_RESERVE_CHARS);
-        let history = build_budgeted_summary_history(
+        // 运行中轮次的待压缩区间同样进入摘要输入，否则摘要覆盖不到即将删除的内容
+        let running_turn = self.running_turn_for_summary(request)?;
+        let history = build_budgeted_summary_history_with_running(
             &self.conv_db,
             &self.session_id,
             Some(&self.state_dir),
             &request.compact_turns,
+            running_turn
+                .as_ref()
+                .map(|(turn, skip, take)| (turn, *skip, *take)),
             history_budget,
         )?;
         let prompt = super::prompt::render_summary_prompt(
@@ -185,6 +243,38 @@ impl StateStore {
             );
         }
         Ok(prompt)
+    }
+
+    /// 解析运行中轮次在本次摘要输入中的区间。
+    ///
+    /// 参数:
+    /// - `request`: 压缩请求
+    ///
+    /// 返回:
+    /// - （轮次、跳过条数、覆盖条数）；本次不压缩运行轮次时为空
+    fn running_turn_for_summary(
+        &self,
+        request: &CompactionRequest,
+    ) -> Result<Option<(crate::state::turns::Turn, usize, usize)>> {
+        let Some(running) = request.running_turn.as_ref() else {
+            return Ok(None);
+        };
+        let Some(turn) = self
+            .conv_db
+            .active_branch_turns()?
+            .into_iter()
+            .find(|turn| turn.turn_id == running.turn_id)
+        else {
+            return Ok(None);
+        };
+        // 上一次压缩已覆盖的部分不再重复送入摘要
+        let already_compacted = self
+            .running_turn_compaction_boundary()?
+            .filter(|(turn_id, _)| turn_id == &running.turn_id)
+            .map(|(_, calls)| calls)
+            .unwrap_or_default();
+        let take = running.compacted_calls.saturating_sub(already_compacted);
+        Ok((take > 0).then_some((turn, already_compacted, take)))
     }
 
     /// 应用自动压缩结果。

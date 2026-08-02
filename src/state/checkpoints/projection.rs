@@ -93,12 +93,50 @@ pub(in crate::state) fn project_history(
         .filter(|turn| exclude_turn_id.is_none_or(|excluded| turn.turn_id != excluded))
         .collect::<Vec<_>>();
     let messages = project_turn_messages_with_tool_history(db, session_id, &tail_turns)?;
+    // 压缩过的会话只保留用户消息：assistant/tool 内容已由交接笔记覆盖，
+    // 全部回放会让压缩失去意义，也会让摘要与原始消息重复占用预算
+    let messages = if checkpoint.is_some() {
+        keep_user_messages_within_budget(messages)
+    } else {
+        messages
+    };
     Ok(project_history_from_parts_with_messages(
         checkpoint,
         tail_turns,
         messages,
         checkpoint_count,
     ))
+}
+
+/// 压缩后按预算保留用户消息，丢弃全部 assistant 与 tool 消息。
+///
+/// 这是方案 B 的落点：摘要已经覆盖了被移除内容，保留原始 assistant/tool 消息
+/// 只会重复占用预算。全部 tool 消息一并消失，因此不存在孤立 tool_call 的问题。
+///
+/// 参数:
+/// - `messages`: 压缩边界之后的历史消息
+///
+/// 返回:
+/// - 按预算保留的用户消息，超出预算时头尾之间插入省略标记
+fn keep_user_messages_within_budget(messages: Vec<ChatMessage>) -> Vec<ChatMessage> {
+    let pool = crate::state::compaction::collect_compactable_user_messages(&messages);
+    if pool.is_empty() {
+        return Vec::new();
+    }
+    let selection = crate::state::compaction::select_kept_user_messages(
+        &pool,
+        crate::state::compaction::KEPT_USER_MESSAGE_MAX_CHARS,
+        crate::state::compaction::KEPT_USER_MESSAGE_HEAD_CHARS,
+    );
+    let mut kept = selection.head;
+    if selection.elided {
+        kept.push(ChatMessage::plain(
+            "user",
+            crate::state::compaction::elision_marker_message(selection.omitted_chars),
+        ));
+    }
+    kept.extend(selection.tail);
+    kept
 }
 
 /// 构造 provider 可见 checkpoint 上下文。
@@ -176,6 +214,8 @@ mod tests {
             source_turn_count: 2,
             reason: CheckpointReason::Auto,
             created_at: "2026-01-01T00:00:00Z".to_string(),
+            running_turn_id: None,
+            running_turn_compacted_calls: 0,
         };
 
         let projected = project_history_from_parts(Some(checkpoint), vec![turn(3, "turn_3")]);

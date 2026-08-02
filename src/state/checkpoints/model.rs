@@ -22,6 +22,10 @@ pub(crate) struct CompactionCheckpoint {
     pub source_turn_count: usize,
     pub reason: CheckpointReason,
     pub created_at: String,
+    /// 被本次摘要覆盖的运行中轮次；为空表示只压缩了已完成轮次
+    pub running_turn_id: Option<String>,
+    /// 该运行中轮次里已被摘要覆盖的工具调用条数
+    pub running_turn_compacted_calls: usize,
 }
 
 /// checkpoint 投影统计。

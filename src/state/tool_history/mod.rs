@@ -8,7 +8,9 @@ mod projection;
 mod repository;
 mod result_reader;
 
-pub(in crate::state) use budget::build_budgeted_summary_history;
+pub(in crate::state) use budget::{
+    build_budgeted_summary_history, build_budgeted_summary_history_with_running,
+};
 pub(in crate::state) use legacy_reports::{
     format_legacy_tool_reports, project_legacy_tool_report_messages,
 };

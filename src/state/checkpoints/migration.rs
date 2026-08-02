@@ -44,6 +44,8 @@ pub(in crate::state) fn migrate_legacy_compaction_summary(store: &StateStore) ->
         source_turn_count: summary.compacted_turns,
         reason: CheckpointReason::Legacy,
         created_at: summary.updated_at,
+        running_turn_id: None,
+        running_turn_compacted_calls: 0,
     };
 
     apply_legacy_checkpoint_migration(store.conv_db.as_ref(), &checkpoint, boundary.delete_to_seq)?;

@@ -214,8 +214,9 @@ fn compaction_summary_is_applied_and_injected() {
     let turns = store.load_turns().unwrap();
     let context = store.compaction_summary_context().unwrap().unwrap();
 
-    assert_eq!(turns.len(), 2);
-    assert!(context.contains("<conversation-summary>"));
+    // 方案 B：已完成轮次全部参与压缩，用户消息由保留预算单独兜住
+    assert_eq!(turns.len(), 0);
+    assert!(context.contains("<conversation-handoff>"));
     assert!(context.contains("keep context"));
 }
 
@@ -374,9 +375,10 @@ fn compaction_writes_checkpoint_before_tail_projection() {
         .checkpoint_context
         .unwrap()
         .contains("stable checkpoint"));
-    assert_eq!(projected.stats.covered_turns, 2);
-    assert_eq!(projected.stats.tail_turns, 2);
-    assert_eq!(turns.len(), 2);
+    // 方案 B：4 个已完成轮次全部被压缩，不再保留尾部轮次
+    assert_eq!(projected.stats.covered_turns, 4);
+    assert_eq!(projected.stats.tail_turns, 0);
+    assert_eq!(turns.len(), 0);
 }
 
 #[test]
@@ -403,13 +405,14 @@ fn repeated_compaction_reports_cumulative_checkpoint_coverage() {
     let snapshot = store.session_snapshot(10_000).unwrap();
     let projected = store.project_history(None).unwrap();
 
+    // 方案 B：第一次压缩覆盖 6 轮，新增 turn_7 后第二次压缩再覆盖 1 轮
     assert_eq!(snapshot.turn_count, 7);
     assert_eq!(snapshot.checkpoint_count, 2);
-    assert_eq!(snapshot.checkpoint_covered_turns, 5);
-    assert_eq!(snapshot.tail_turns, 2);
+    assert_eq!(snapshot.checkpoint_covered_turns, 7);
+    assert_eq!(snapshot.tail_turns, 0);
     assert_eq!(projected.stats.checkpoint_count, 2);
-    assert_eq!(projected.stats.covered_turns, 5);
-    assert_eq!(projected.stats.tail_turns, 2);
+    assert_eq!(projected.stats.covered_turns, 7);
+    assert_eq!(projected.stats.tail_turns, 0);
 }
 
 #[test]
@@ -595,10 +598,11 @@ fn session_summary_reports_checkpoint_coverage() {
 
     let snapshot = store.session_snapshot(10_000).unwrap();
 
+    // 方案 B：4 个已完成轮次全部被 checkpoint 覆盖
     assert_eq!(snapshot.turn_count, 4);
     assert_eq!(snapshot.checkpoint_count, 1);
-    assert_eq!(snapshot.checkpoint_covered_turns, 2);
-    assert_eq!(snapshot.tail_turns, 2);
+    assert_eq!(snapshot.checkpoint_covered_turns, 4);
+    assert_eq!(snapshot.tail_turns, 0);
     assert!(snapshot.latest_checkpoint_at.is_some());
 }
 
@@ -642,3 +646,4 @@ fn session_summary_projection_handles_large_tool_reports_quickly() {
         "session summary projection took {elapsed:?}"
     );
 }
+

@@ -102,9 +102,8 @@ impl StateStore {
         request: &CompactionRequest,
         summary: &str,
     ) -> Result<CompactionCheckpoint> {
-        let (from_seq, to_seq) = request
-            .seq_range()
-            .ok_or_else(|| anyhow::anyhow!("compaction request has no turns"))?;
+        // 只压缩运行中轮次时没有已完成轮次的 seq 范围，用 0 表示不覆盖任何历史轮次
+        let (from_seq, to_seq) = request.seq_range().unwrap_or((0, 0));
         let previous_count = self
             .load_authoritative_compaction_summary()?
             .map(|summary| summary.compacted_turns)
@@ -119,6 +118,15 @@ impl StateStore {
             source_turn_count: request.source_turn_count_after_compaction(previous_count),
             reason: CheckpointReason::Auto,
             created_at: "1970-01-01T00:00:00Z".to_string(),
+            running_turn_id: request
+                .running_turn
+                .as_ref()
+                .map(|running| running.turn_id.clone()),
+            running_turn_compacted_calls: request
+                .running_turn
+                .as_ref()
+                .map(|running| running.compacted_calls)
+                .unwrap_or_default(),
         })
     }
 
