@@ -107,21 +107,21 @@ mod tests {
     /// 验证绝对路径原样保留。
     #[test]
     fn keeps_absolute_path() {
-        assert_eq!(
-            expand_path("/tmp/sai-absolute.txt"),
-            PathBuf::from("/tmp/sai-absolute.txt")
-        );
+        let path = std::env::temp_dir().join("sai-absolute.txt");
+        let input = path.to_string_lossy().into_owned();
+
+        assert_eq!(expand_path(&input), path);
     }
 
     /// 验证文件缺失错误带上展开后的完整路径。
     #[test]
     fn missing_file_error_reports_expanded_path() {
-        let path = Path::new("/tmp/sai-missing-file-xyz.txt");
+        let path = std::env::temp_dir().join("sai-missing-file-xyz.txt");
         let error = std::io::Error::from(std::io::ErrorKind::NotFound);
 
-        let message = fs_error("read file", path, &error).to_string();
+        let message = fs_error("read file", &path, &error).to_string();
 
-        assert!(message.contains("/tmp/sai-missing-file-xyz.txt"));
+        assert!(message.contains(&path.display().to_string()));
         assert!(message.contains("does not exist"));
         assert!(!message.contains("os error"));
     }
@@ -129,23 +129,27 @@ mod tests {
     /// 验证中间目录写错时提示最近的存在目录。
     #[test]
     fn missing_intermediate_directory_reports_nearest_ancestor() {
-        let path = Path::new("/tmp/sai-missing-dir-xyz/nested/sample.txt");
+        let root = std::env::temp_dir();
+        let path = root
+            .join("sai-missing-dir-xyz")
+            .join("nested")
+            .join("sample.txt");
         let error = std::io::Error::from(std::io::ErrorKind::NotFound);
 
-        let message = fs_error("read file", path, &error).to_string();
+        let message = fs_error("read file", &path, &error).to_string();
 
-        assert!(message.contains("nearest existing directory: /tmp"));
+        assert!(message.contains(&format!("nearest existing directory: {}", root.display())));
     }
 
     /// 验证非缺失类错误保留原始原因。
     #[test]
     fn other_errors_keep_original_reason() {
-        let path = Path::new("/tmp/sai-denied.txt");
+        let path = std::env::temp_dir().join("sai-denied.txt");
         let error = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
 
-        let message = fs_error("open file", path, &error).to_string();
+        let message = fs_error("open file", &path, &error).to_string();
 
-        assert!(message.contains("/tmp/sai-denied.txt"));
+        assert!(message.contains(&path.display().to_string()));
         assert!(message.contains("permission denied"));
     }
 }
