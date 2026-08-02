@@ -1,4 +1,4 @@
-import { ArrowUp, Check, CornerDownLeft, Eye, EyeOff, Folder, FolderPlus, GitBranch, HardDrive } from "lucide-react";
+import { ArrowUp, Check, CornerDownLeft, Eye, EyeOff, Folder, FolderOpen, FolderPlus, GitBranch, HardDrive } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
@@ -127,9 +127,18 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
         <aside className="directory-roots">
           <span>{t("Allowed location", "允许位置")}</span>
           {listing.data?.roots.map((root) => <button type="button" key={root.path} onClick={() => navigate(root.path)}><HardDrive size={14} /><span><strong>{root.name}</strong><small>{root.path}</small></span></button>)}
-          <p className="directory-server-only">
-            {t("Browse and choose a directory from the server list.", "请从右侧列表浏览并选择服务端目录。")}
-          </p>
+          <button
+            type="button"
+            className="directory-open-folder"
+            onClick={() => void submit()}
+            disabled={submitting || !listing.data}
+          >
+            <FolderOpen size={14} />
+            <span>
+              <strong>{t("Open folder", "打开文件夹")}</strong>
+              <small>{selected ? t("Open selected server folder", "打开选中的服务端文件夹") : t("Open current server folder", "打开当前服务端文件夹")}</small>
+            </span>
+          </button>
         </aside>
         <section className="directory-browser">
           <header>
