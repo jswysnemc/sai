@@ -286,7 +286,7 @@ mod tests {
         .unwrap();
 
         assert!(registry
-            .requires_permission("edit_file", r#"{"path":"src/main.rs","content":"x"}"#)
+            .requires_permission("str_replace", r#"{"path":"src/main.rs","content":"x"}"#)
             .unwrap());
         let sensitive_read = if cfg!(windows) {
             r#"{"path":"C:\\Windows\\System32\\drivers\\etc\\hosts"}"#

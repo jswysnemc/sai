@@ -279,7 +279,7 @@ mod tests {
         })
         .to_string();
         let mut transcript = TranscriptStore::new(100);
-        transcript.push_tool_call("edit_file".to_string(), arguments);
+        transcript.push_tool_call("str_replace".to_string(), arguments);
 
         let window = display_window(
             &mut transcript,
@@ -326,7 +326,7 @@ mod tests {
         })
         .to_string();
         let mut transcript = TranscriptStore::new(100);
-        transcript.push_tool_call("edit_file".to_string(), arguments);
+        transcript.push_tool_call("str_replace".to_string(), arguments);
 
         let window = display_window(&mut transcript, 30, &options(), 100, usize::MAX, usize::MAX);
         assert!(window.lines.len() > 4, "测试数据必须触发 diff 自动换行");

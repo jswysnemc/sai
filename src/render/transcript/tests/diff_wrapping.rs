@@ -15,15 +15,14 @@ fn diff_long_lines_wrap_with_body_column_indent() {
     // 用不会出现在临时路径里的字符，否则标题行会被误判为长行的一部分
     let long = "\u{4e2d}".repeat(160);
     let args = serde_json::json!({
-        "patch": format!(
-            "*** Begin Patch\n*** Update File: {}\n@@\n-short\n+{long}\n*** End Patch",
-            path.display()
-        )
+        "path": path.display().to_string(),
+        "old_string": "short",
+        "new_string": long
     })
     .to_string();
 
     let mut store = TranscriptStore::new(100);
-    store.push_tool_call("edit_file".to_string(), args);
+    store.push_tool_call("str_replace".to_string(), args);
     let lines = store.display_window(60, &options(), 40, usize::MAX);
     let plain = lines
         .lines

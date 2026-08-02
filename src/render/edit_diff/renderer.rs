@@ -7,7 +7,7 @@ use crate::render::content_indent::{
     clear_right_margin, indent_diff_for_cli, indent_diff_for_transcript, DIFF_BLOCK_INSET,
 };
 use crate::render::style::TOOL_BULLET;
-use crate::tools::edit_patch::{AppliedPatch, FileChange, LineChange, LineChangeKind};
+use crate::tools::file_change_model::{AppliedPatch, FileChange, LineChange, LineChangeKind};
 use anyhow::Result;
 use std::io::{self, Write};
 use std::path::Path;

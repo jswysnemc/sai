@@ -473,7 +473,6 @@ mod tests {
         assert!(cli.load_instruction_files);
         let tui = apply_agent_override(config.clone(), None, AgentSurface::Tui).unwrap();
         let runtime = tui.agent_runtime.expect("code agent whitelist");
-        assert!(runtime.enabled_tools.iter().any(|t| t == "edit_file"));
         assert!(runtime.enabled_tools.iter().any(|t| t == "write_file"));
         assert!(runtime.enabled_tools.iter().any(|t| t == "str_replace"));
         assert!(runtime
@@ -539,6 +538,7 @@ mod tests {
                 "man_page_search".to_string(),
                 "man_page_read".to_string(),
                 "calculate".to_string(),
+                // 已移除的 Codex patch 工具，应当映射到 str_replace
                 "edit_file".to_string(),
             ],
             ..AgentProfile::default()
@@ -555,7 +555,6 @@ mod tests {
             "online_man_get_page",
             "scientific_calculator",
             "str_replace",
-            "edit_file",
         ] {
             assert!(tools.iter().any(|tool| tool == name), "missing {name}");
         }

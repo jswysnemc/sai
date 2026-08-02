@@ -438,7 +438,8 @@ mod tests {
         body[18] = "  \"npm:pi-markdown-preview\"".to_string();
         let rendered = render_transcript_diff(
             &body.join("\n"),
-            "@@\n line17\n line18\n-  \"npm:pi-markdown-preview\"\n+  \"npm:pi-markdown-preview\",\n+  \"npm:pi-readseek\"\n line20\n line21",
+            "  \"npm:pi-markdown-preview\"",
+            "  \"npm:pi-markdown-preview\",\n  \"npm:pi-readseek\"",
         );
 
         let columns = diff_body_columns(&rendered);
@@ -463,10 +464,7 @@ mod tests {
             .map(|number| format!("line{number}"))
             .collect::<Vec<_>>()
             .join("\n");
-        let rendered = render_transcript_diff(
-            &body,
-            "@@\n line8\n line9\n-line10\n+changed10\n line11\n line12",
-        );
+        let rendered = render_transcript_diff(&body, "line10", "changed10");
 
         let columns = diff_body_columns(&rendered);
         assert!(columns.len() >= 5, "样例应跨越行号位数变化");
@@ -484,15 +482,14 @@ mod tests {
     ///
     /// 返回:
     /// - 已补齐块缩进的 diff 文本
-    fn render_transcript_diff(original: &str, hunk: &str) -> String {
+    fn render_transcript_diff(original: &str, old_string: &str, new_string: &str) -> String {
         let temp = tempfile::tempdir().expect("临时目录");
         let path = temp.path().join("settings.json");
         std::fs::write(&path, format!("{original}\n")).expect("写入样例文件");
         let arguments = serde_json::json!({
-            "patch": format!(
-                "*** Begin Patch\n*** Update File: {}\n{hunk}\n*** End Patch",
-                path.display()
-            )
+            "path": path.display().to_string(),
+            "old_string": old_string,
+            "new_string": new_string
         })
         .to_string();
         crate::render::edit_diff::render_edit_file_diff_for_transcript(&arguments)

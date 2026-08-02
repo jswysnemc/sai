@@ -1,5 +1,6 @@
 use super::{ToolRegistry, ToolSpec};
 use crate::i18n::text as t;
+use super::file_edit::line_endings::{materialize_model_text, to_model_text_view};
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -104,26 +105,31 @@ fn str_replace(args: Value) -> Result<String> {
     if !path.is_file() {
         bail!("not a regular file: {}", path.display());
     }
-    let content = std::fs::read_to_string(&path)?;
+    let raw = std::fs::read_to_string(&path)?;
+    // 2. 纯 CRLF 文件按 LF 视图比对，模型给出的 old_string 才能匹配上
+    let view = to_model_text_view(&raw);
+    let content = view.text.as_str();
     let matches = content.matches(old_string).count();
     if matches == 0 {
         bail!(
-            "String to replace not found in file. Read the exact region again and copy old_string verbatim, including whitespace and indentation.\nString: {old_string}"
+            "old_string not found in {}, the file contents may be out of date. Please read the file again and copy old_string verbatim, including whitespace and indentation.",
+            path.display()
         );
     }
     if matches > 1 && !replace_all {
         bail!(
-            "Found {matches} matches of old_string, but replace_all is false. Provide more surrounding context to make old_string unique, or set replace_all=true.\nString: {old_string}"
+            "old_string is not unique in {} (found {matches} occurrences). To replace every occurrence, set replace_all=true. To replace only one occurrence, include more surrounding context in old_string.",
+            path.display()
         );
     }
 
-    // 2. 替换并写回
+    // 3. 替换后按原行尾风格写回
     let updated = if replace_all {
         content.replace(old_string, new_string)
     } else {
         content.replacen(old_string, new_string, 1)
     };
-    write_text_file(&path, &updated)?;
+    write_text_file(&path, &materialize_model_text(&updated, view.line_ending_style))?;
 
     let replacements = if replace_all { matches } else { 1 };
     let old_lines = line_count(old_string) * replacements;
@@ -259,5 +265,81 @@ mod tests {
         .unwrap_err()
         .to_string();
         assert!(err.contains("replace_all"));
+    }
+
+    /// CRLF 文件按 LF 视图匹配，写回时还原 CRLF。
+    #[test]
+    fn replaces_inside_crlf_files_and_restores_line_endings() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("crlf.txt");
+        std::fs::write(&path, "alpha\r\nbeta\r\n").unwrap();
+
+        // 模型看到的是 LF 视图，因此 old_string 用 \n
+        let output = str_replace(json!({
+            "path": path.display().to_string(),
+            "old_string": "alpha\nbeta",
+            "new_string": "alpha\ngamma"
+        }))
+        .unwrap();
+
+        assert!(output.contains("\"ok\": true"));
+        let written = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(written, "alpha\r\ngamma\r\n", "写回必须保持 CRLF");
+    }
+
+    /// LF 文件保持 LF，不被意外转换。
+    #[test]
+    fn keeps_lf_files_unchanged() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("lf.txt");
+        std::fs::write(&path, "alpha\nbeta\n").unwrap();
+
+        str_replace(json!({
+            "path": path.display().to_string(),
+            "old_string": "beta",
+            "new_string": "gamma"
+        }))
+        .unwrap();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "alpha\ngamma\n");
+    }
+
+    /// 未命中时给出可操作的提示，说明文件内容可能已过期。
+    #[test]
+    fn missing_old_string_reports_stale_content() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("sample.txt");
+        std::fs::write(&path, "alpha\n").unwrap();
+
+        let error = str_replace(json!({
+            "path": path.display().to_string(),
+            "old_string": "missing",
+            "new_string": "x"
+        }))
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("old_string not found"));
+        assert!(error.contains("out of date"));
+    }
+
+    /// 多处命中且未设置 replace_all 时提示两种解法。
+    #[test]
+    fn ambiguous_old_string_suggests_both_options() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("dup.txt");
+        std::fs::write(&path, "x\nx\n").unwrap();
+
+        let error = str_replace(json!({
+            "path": path.display().to_string(),
+            "old_string": "x",
+            "new_string": "y"
+        }))
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("not unique"));
+        assert!(error.contains("replace_all=true"));
+        assert!(error.contains("more surrounding context"));
     }
 }

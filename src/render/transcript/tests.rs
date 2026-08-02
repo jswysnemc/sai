@@ -561,18 +561,17 @@ fn permission_audit_stays_inside_existing_diff_view() {
     let path = temp.path().join("audit.txt");
     std::fs::write(&path, "old\n").unwrap();
     let arguments = serde_json::json!({
-        "patch": format!(
-            "*** Begin Patch\n*** Update File: {}\n@@\n-old\n+new\n*** End Patch",
-            path.display()
-        )
+        "path": path.display().to_string(),
+        "old_string": "old",
+        "new_string": "new"
     })
     .to_string();
     let mut store = TranscriptStore::new(100);
-    store.push_tool_call("edit_file".to_string(), arguments.clone());
+    store.push_tool_call("str_replace".to_string(), arguments.clone());
     store.push_permission_request(crate::permission::PermissionRequest {
         id: "permission".to_string(),
         session_id: "session".to_string(),
-        tool: "edit_file".to_string(),
+        tool: "str_replace".to_string(),
         arguments: arguments,
         auto_audit: false,
     });
@@ -603,15 +602,14 @@ fn diff_cell_keeps_pre_edit_snapshot_after_file_changes() {
     let path = temp.path().join("snapshot.txt");
     std::fs::write(&path, "old\n").unwrap();
     let arguments = serde_json::json!({
-        "patch": format!(
-            "*** Begin Patch\n*** Update File: {}\n@@\n-old\n+new\n*** End Patch",
-            path.display()
-        )
+        "path": path.display().to_string(),
+        "old_string": "old",
+        "new_string": "new"
     })
     .to_string();
     let mut store = TranscriptStore::new(100);
 
-    store.push_tool_call("edit_file".to_string(), arguments);
+    store.push_tool_call("str_replace".to_string(), arguments);
     std::fs::write(&path, "new\n").unwrap();
     let rendered = store
         .display_tail(80, &options())
@@ -710,15 +708,14 @@ fn history_edit_file_restores_diff_cell() {
     let path = temp.path().join("history.txt");
     std::fs::write(&path, "old\n").unwrap();
     let arguments = serde_json::json!({
-        "patch": format!(
-            "*** Begin Patch\n*** Update File: {}\n@@\n-old\n+new\n*** End Patch",
-            path.display()
-        )
+        "path": path.display().to_string(),
+        "old_string": "old",
+        "new_string": "new"
     })
     .to_string();
     let mut store = TranscriptStore::new(100);
-    store.push_history_tool_call("edit_file".to_string(), arguments);
-    store.push_tool_result("edit_file".to_string(), true, r#"{"ok":true}"#.to_string());
+    store.push_history_tool_call("str_replace".to_string(), arguments);
+    store.push_tool_result("str_replace".to_string(), true, r#"{"ok":true}"#.to_string());
     let rendered = store
         .display_tail(80, &options())
         .iter()

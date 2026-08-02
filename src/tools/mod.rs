@@ -11,8 +11,7 @@ mod deep_research;
 mod deepseek_status;
 mod default_tools;
 mod diagnostics;
-mod edit_file;
-pub(crate) mod edit_patch;
+pub(crate) mod file_change_model;
 mod exchange_rate;
 mod fcitx_wiki;
 mod file_read;
@@ -32,6 +31,7 @@ mod protondb_query;
 mod registry;
 mod skill_management;
 mod skills;
+mod file_edit;
 mod str_replace;
 mod subagent;
 pub(crate) mod subagent_event;
@@ -77,7 +77,6 @@ pub fn readable_tool_name(name: &str) -> &str {
         "todo" => "任务清单",
         "cron" => "定时任务",
         "read_file" => "读取文件",
-        "edit_file" => "编辑文件",
         "write_file" => "写入文件",
         "str_replace" => "字符串替换",
         "create_goal" => "创建目标",

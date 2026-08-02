@@ -72,7 +72,7 @@ fn read_file_start_status_uses_progress_marker() {
 #[test]
 fn visible_tool_blocks_do_not_need_extra_start_events() {
     assert!(tool_call_has_visible_block("run_command"));
-    assert!(tool_call_has_visible_block("edit_file"));
+    assert!(tool_call_has_visible_block("str_replace"));
     assert!(!tool_call_has_visible_block("web_search"));
 }
 
@@ -164,26 +164,24 @@ fn edit_progress_waits_for_renderable_diff_before_consuming_preview() {
     renderer
         .write_tool_call_progress(&ToolCallStreamProgress {
             index: 0,
-            name: Some("edit_file".to_string()),
+            name: Some("str_replace".to_string()),
             arguments_chars: 0,
             arguments_bytes: 0,
-            arguments_preview: r#"{"patch":"*** Begin Patch"#.to_string(),
+            arguments_preview: r#"{"path":"partial"#.to_string(),
         })
         .unwrap();
 
+    // 字段尚未闭合时不应产生 diff 预览
     assert!(!renderer.streaming_edit_progress.contains(&0));
     assert_eq!(renderer.pending_streamed_edit_blocks, 0);
 
-    let patch = format!(
-        "*** Begin Patch\n*** Update File: {}\n@@\n-old\n+new\n*** End Patch",
-        path.display()
-    );
-    let patch_json = serde_json::to_string(&patch).unwrap();
-    let arguments_preview = format!(r#"{{"patch":{patch_json},"path":""#);
+    let path_json = serde_json::to_string(&path.display().to_string()).unwrap();
+    let arguments_preview =
+        format!(r#"{{"path":{path_json},"old_string":"old","new_string":"new","#);
     renderer
         .write_tool_call_progress(&ToolCallStreamProgress {
             index: 0,
-            name: Some("edit_file".to_string()),
+            name: Some("str_replace".to_string()),
             arguments_chars: arguments_preview.chars().count(),
             arguments_bytes: arguments_preview.len(),
             arguments_preview,

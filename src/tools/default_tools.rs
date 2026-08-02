@@ -15,7 +15,6 @@ const SEARCH_TIMEOUT_SECONDS: u64 = 30;
 
 pub fn register(registry: &mut ToolRegistry, config: &AppConfig, paths: &SaiPaths) {
     register_readonly(registry, config, paths);
-    super::edit_file::register(registry);
     super::write_file::register(registry);
     super::str_replace::register(registry);
 }

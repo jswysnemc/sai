@@ -49,7 +49,6 @@ const CODE_AGENT_TOOLS: &[&str] = &[
     "background_command",
     "subagent",
     "todo",
-    "edit_file",
     "write_file",
     "str_replace",
     "create_goal",
@@ -227,13 +226,13 @@ fn expand_legacy_enabled_tools(mut tools: Vec<String>) -> Vec<String> {
     if has(&tools, "replace_file_lines") {
         push_if_missing(&mut tools, "str_replace");
     }
-    // 2. 旧 apply_patch 映射到 edit_file，并保留 str_replace 作为局部编辑入口
-    if has(&tools, "apply_patch") {
-        push_if_missing(&mut tools, "edit_file");
+    // 2. 旧 apply_patch / edit_file 统一映射到 str_replace：
+    //    Codex patch 工具已移除，局部编辑与整文件写入分别由 str_replace 和 write_file 承担
+    if has(&tools, "apply_patch") || has(&tools, "edit_file") {
         push_if_missing(&mut tools, "str_replace");
     }
-    // 3. 具备 write_file / edit_file 的工程 Agent 默认补上 str_replace
-    if has(&tools, "write_file") || has(&tools, "edit_file") {
+    // 3. 具备 write_file 的工程 Agent 默认补上 str_replace
+    if has(&tools, "write_file") {
         push_if_missing(&mut tools, "str_replace");
     }
     // 4. 网页读取、天气、汇率、DeepSeek、手册与计算器旧名映射到当前注册名

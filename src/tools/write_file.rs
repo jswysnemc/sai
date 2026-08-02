@@ -44,8 +44,16 @@ fn write_file_parameters() -> Value {
             "content": {
                 "type": "string",
                 "description": t(
-                    "Full text content to write to the file.",
-                    "写入文件的完整文本内容。"
+                    "Raw full file content to write exactly as provided.",
+                    "按原样写入的完整文件内容。"
+                )
+            },
+            "mode": {
+                "type": "string",
+                "enum": ["overwrite", "append"],
+                "description": t(
+                    "Write mode. Defaults to overwrite. append adds content to the end exactly as provided and does not add a newline.",
+                    "写入模式，默认 overwrite。append 按原样追加到末尾，不额外补换行。"
                 )
             }
         },
@@ -78,16 +86,26 @@ fn write_file(args: Value) -> Result<String> {
     } else {
         String::new()
     };
-    // 2. 原子写入全文
-    write_text_file(&path, content)?;
-    let (added, removed) = if existed {
-        line_diff_counts(&old_content, content)
+    let append = args
+        .get("mode")
+        .and_then(Value::as_str)
+        .map(|mode| mode == "append")
+        .unwrap_or(false);
+    // 2. 追加模式接在原内容之后，覆盖模式整文件重写
+    let final_content = if append {
+        format!("{old_content}{content}")
     } else {
-        (line_count(content), 0)
+        content.to_string()
+    };
+    write_text_file(&path, &final_content)?;
+    let (added, removed) = if existed {
+        line_diff_counts(&old_content, &final_content)
+    } else {
+        (line_count(&final_content), 0)
     };
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
-        "mode": "write",
+        "mode": if append { "append" } else { "write" },
         "changed_files": [{
             "action": if existed { "Edited" } else { "Added" },
             "path": path.display().to_string(),
@@ -220,5 +238,43 @@ mod tests {
         let updated: Value = serde_json::from_str(&overwrite).unwrap();
         assert_eq!(updated["changed_files"][0]["action"], "Edited");
         assert_eq!(std::fs::read_to_string(path).unwrap(), "rewritten\n");
+    }
+
+    /// append 模式按原样追加，不额外补换行。
+    #[test]
+    fn appends_content_without_adding_a_newline() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("log.txt");
+        std::fs::write(&path, "first\n").unwrap();
+
+        let output = write_file(json!({
+            "path": path.display().to_string(),
+            "content": "second\n",
+            "mode": "append"
+        }))
+        .unwrap();
+
+        assert!(output.contains("\"mode\": \"append\""));
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "first\nsecond\n",
+            "追加不得丢失原内容"
+        );
+    }
+
+    /// 默认覆盖模式整文件重写。
+    #[test]
+    fn overwrites_by_default() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("log.txt");
+        std::fs::write(&path, "old content\n").unwrap();
+
+        write_file(json!({
+            "path": path.display().to_string(),
+            "content": "new\n"
+        }))
+        .unwrap();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "new\n");
     }
 }

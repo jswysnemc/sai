@@ -1,5 +1,5 @@
 use crate::render::terminal_text as t;
-use crate::tools::edit_patch::{AppliedPatch, FileChange, LineChange, LineChangeKind};
+use crate::tools::file_change_model::{AppliedPatch, FileChange, LineChange, LineChangeKind};
 use anyhow::{bail, Result};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -32,13 +32,6 @@ pub(crate) fn preview_from_arguments(arguments: &str) -> Result<AppliedPatch> {
 /// 返回:
 /// - 可渲染的变更预览
 fn preview_from_value(value: &Value) -> Result<AppliedPatch> {
-    if let Some(patch) = value.get("patch").and_then(Value::as_str) {
-        let patch = patch.trim();
-        if patch.is_empty() {
-            bail!(t("patch is required", "必须提供 patch"));
-        }
-        return crate::tools::edit_patch::preview_patch(patch, &crate::runtime_cwd::current_dir()?);
-    }
     if let (Some(path), Some(content)) = (
         value.get("path").and_then(Value::as_str),
         value.get("content").and_then(Value::as_str),
@@ -57,8 +50,8 @@ fn preview_from_value(value: &Value) -> Result<AppliedPatch> {
         return preview_str_replace(path, old_string, new_string, replace_all);
     }
     bail!(t(
-        "edit arguments require patch, or path+content, or path+old_string+new_string",
-        "编辑参数需要 patch，或 path+content，或 path+old_string+new_string"
+        "edit arguments require path+content, or path+old_string+new_string",
+        "编辑参数需要 path+content，或 path+old_string+new_string"
     ))
 }
 
@@ -70,14 +63,6 @@ fn preview_from_value(value: &Value) -> Result<AppliedPatch> {
 /// 返回:
 /// - 字段已闭合时返回预览；否则返回空
 fn preview_from_partial_arguments(raw: &str) -> Result<Option<AppliedPatch>> {
-    if let Some(patch) = string_field_from_partial(raw, "patch") {
-        if !patch.trim().is_empty() {
-            return Ok(Some(crate::tools::edit_patch::preview_patch(
-                &patch,
-                &crate::runtime_cwd::current_dir()?,
-            )?));
-        }
-    }
     if let (Some(path), Some(content)) = (
         string_field_from_partial(raw, "path"),
         string_field_from_partial(raw, "content"),
