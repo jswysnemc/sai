@@ -28,17 +28,50 @@ pub(crate) fn load_redacted(paths: &SaiPaths) -> Result<Value> {
 /// 参数:
 /// - `paths`: Sai 路径集合
 /// - `provider_id`: 供应商稳定标识
+/// - `key_id`: 多密钥场景下指定要查看的密钥标识；缺省返回单值密钥
 ///
 /// 返回:
 /// - 解析直接配置、环境变量或独立密钥文件后的真实 API Key
-pub(crate) fn load_provider_secret(paths: &SaiPaths, provider_id: &str) -> Result<String> {
+pub(crate) fn load_provider_secret(
+    paths: &SaiPaths,
+    provider_id: &str,
+    key_id: Option<&str>,
+) -> Result<String> {
     let config = AppConfig::load_or_default(paths)?;
     let provider = config
         .providers
         .iter()
         .find(|provider| provider.id == provider_id)
         .with_context(|| format!("provider {provider_id} not found"))?;
+    // 1. 指定了密钥标识时，按标识在多密钥列表中查找并解析
+    if let Some(key_id) = key_id {
+        let entry = provider
+            .api_keys
+            .iter()
+            .find(|entry| entry.id == key_id)
+            .with_context(|| format!("provider {provider_id} key {key_id} not found"))?;
+        return resolve_key_value(&entry.api_key);
+    }
     provider.resolved_api_key(paths)
+}
+
+/// 展开单个密钥值中的 `$env:` 引用。
+///
+/// 参数:
+/// - `value`: 原始密钥文本
+///
+/// 返回:
+/// - 解析后的密钥；空值返回错误
+fn resolve_key_value(value: &str) -> Result<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!("api key is empty");
+    }
+    if let Some(env_name) = trimmed.strip_prefix("$env:") {
+        return std::env::var(env_name)
+            .with_context(|| format!("environment variable {env_name} is not set"));
+    }
+    Ok(trimmed.to_string())
 }
 
 /// 合并敏感字段保留标记并保存配置。
@@ -236,7 +269,7 @@ mod tests {
         provider.api_key = Some("provider-secret".to_string());
         config.save(&paths).unwrap();
 
-        let secret = load_provider_secret(&paths, "provider-a").unwrap();
+        let secret = load_provider_secret(&paths, "provider-a", None).unwrap();
         let redacted = load_redacted(&paths).unwrap();
 
         assert_eq!(secret, "provider-secret");
@@ -368,5 +401,55 @@ mod tests {
             SECRET_SENTINEL
         );
         assert!(ensure_secret_sentinels_resolved(&submitted).is_err());
+    }
+
+    /// 多密钥数组里的密钥字段必须脱敏，避免明文随配置响应泄漏到浏览器。
+    #[test]
+    fn redacts_multi_key_values_inside_provider() {
+        let mut value = json!({
+            "providers": [{
+                "id": "p",
+                "api_keys": [
+                    { "id": "k1", "api_key": "secret-1", "label": "主号" },
+                    { "id": "k2", "api_key": "$env:BACKUP_KEY", "label": "备用" }
+                ]
+            }]
+        });
+
+        redact_value(&mut value, None);
+
+        assert_eq!(value["providers"][0]["api_keys"][0]["api_key"], SECRET_SENTINEL);
+        // 环境变量引用保持可见，便于用户在界面上看到自己写的变量名
+        assert_eq!(value["providers"][0]["api_keys"][1]["api_key"], "$env:BACKUP_KEY");
+        // 备注不是敏感字段，原样保留
+        assert_eq!(value["providers"][0]["api_keys"][0]["label"], "主号");
+    }
+
+    /// 多密钥哨兵按稳定 id 回填，删除或重排后不串用密钥。
+    #[test]
+    fn restores_multi_key_sentinels_by_stable_id() {
+        let current = json!({
+            "providers": [{
+                "id": "p",
+                "api_keys": [
+                    { "id": "k1", "api_key": "secret-1" },
+                    { "id": "k2", "api_key": "secret-2" }
+                ]
+            }]
+        });
+        let mut submitted = json!({
+            "providers": [{
+                "id": "p",
+                "api_keys": [
+                    { "id": "k2", "api_key": SECRET_SENTINEL },
+                    { "id": "k1", "api_key": SECRET_SENTINEL }
+                ]
+            }]
+        });
+
+        merge_secret_sentinels(&mut submitted, &current);
+
+        assert_eq!(submitted["providers"][0]["api_keys"][0]["api_key"], "secret-2");
+        assert_eq!(submitted["providers"][0]["api_keys"][1]["api_key"], "secret-1");
     }
 }

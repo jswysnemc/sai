@@ -16,6 +16,9 @@
             base_url: base_url.to_string(),
             protocol: "auto".to_string(),
             api_key: None,
+            api_keys: Vec::new(),
+            api_key_selected: None,
+            api_key_balance: false,
             models: Vec::new(),
             model_context_chars: std::collections::HashMap::new(),
             model_metadata: std::collections::HashMap::new(),
@@ -339,6 +342,8 @@
             client: reqwest::Client::new(),
             provider,
             api_key: "test".to_string(),
+            key_pool: Vec::new(),
+            key_cursor: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             http_debug: None,
         };
 
@@ -353,6 +358,8 @@
             client: reqwest::Client::new(),
             provider,
             api_key: "test".to_string(),
+            key_pool: Vec::new(),
+            key_cursor: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             http_debug: None,
         };
 

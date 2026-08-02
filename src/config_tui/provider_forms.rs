@@ -109,6 +109,23 @@ pub(super) fn edit_provider_form(
             serde_json::to_string_pretty(&provider.extra_headers).unwrap_or_default()
         },
     ));
+    // 多密钥管理：每行一个密钥，可在竖线后附备注；非空时优先于上面的单密钥字段。
+    // 注意：此处不能用 secret 掩码——textarea 的 value 会原样写回，掩码串将覆盖真实密钥。
+    fields.push(Field::textarea(
+        t("API keys (one per line; optional label after ' | ')", "接口密钥（每行一个，竖线后可加备注）"),
+        render_api_key_lines(&provider.api_keys),
+    ));
+    fields.push(
+        Field::new(
+            t("Balance API keys", "在密钥间负载均衡"),
+            provider.api_key_balance.to_string(),
+        )
+        .choices(&["true", "false"]),
+    );
+    fields.push(Field::new(
+        t("Selected key (1-based; blank = first)", "选用密钥序号（从 1 起，空为第一个）"),
+        render_selected_index(&provider),
+    ));
     loop {
         if !run_form(stdout, t(" EDIT PROVIDER ", " 编辑供应商 "), &mut fields)? {
             return Ok(None);
@@ -168,12 +185,19 @@ fn build_provider_from_fields(
             )
         };
     let extra_headers = normalize_extra_headers(&fields[headers_idx].value)?;
+    // 多密钥三字段固定在表单末尾：密钥列表、负载均衡开关、选中序号
+    let api_keys = parse_api_key_lines(&fields[fields.len() - 3].value, &provider.api_keys);
+    let api_key_balance = parse_bool_field(&fields[fields.len() - 2].value)?;
+    let api_key_selected = parse_selected_key(&fields[fields.len() - 1].value, &api_keys);
     let updated = ProviderConfig {
         id: fields[0].value.trim().to_string(),
         display_name: fields[1].value.trim().to_string(),
         base_url: normalize_base_url(&fields[2].value),
         protocol: fields[3].value.trim().to_string(),
         api_key: Some(fields[4].value.trim().to_string()).filter(|value| !value.is_empty()),
+        api_keys,
+        api_key_selected,
+        api_key_balance,
         models: provider.models.clone(),
         model_context_chars: provider.model_context_chars.clone(),
         model_metadata: provider.model_metadata.clone(),
@@ -402,4 +426,101 @@ fn normalize_base_url(value: &str) -> String {
         url.truncate(url.len() - "/chat/completions".len());
     }
     url
+}
+
+/// 把多密钥列表渲染成表单可编辑的多行文本。
+///
+/// 每行一个密钥，备注非空时以 ` | ` 分隔附在密钥之后。
+///
+/// 参数:
+/// - `keys`: 多密钥列表
+///
+/// 返回:
+/// - 多行文本；空列表返回空串
+fn render_api_key_lines(keys: &[crate::config::ProviderApiKey]) -> String {
+    keys.iter()
+        .map(|key| {
+            if key.label.is_empty() {
+                key.api_key.clone()
+            } else {
+                format!("{} | {}", key.api_key, key.label)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// 解析多行文本为多密钥列表，按密钥内容复用原标识以保持脱敏对齐。
+///
+/// 未在原列表出现的密钥分配新标识；空行被忽略。
+///
+/// 参数:
+/// - `text`: 表单多行文本
+/// - `original`: 原多密钥列表，用于按内容复用标识
+///
+/// 返回:
+/// - 解析后的多密钥列表
+fn parse_api_key_lines(text: &str, original: &[crate::config::ProviderApiKey]) -> Vec<crate::config::ProviderApiKey> {
+    let used: std::collections::HashSet<&str> = original.iter().map(|key| key.id.as_str()).collect();
+    let mut next_id = 1usize;
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(|line| {
+            // 1. 以首个 ` | ` 切分密钥与备注，密钥本身可能含竖线故只切第一段
+            let (value, label) = match line.split_once(" | ") {
+                Some((value, label)) => (value.trim().to_string(), label.trim().to_string()),
+                None => (line.to_string(), String::new()),
+            };
+            // 2. 内容未变则复用原标识，保证与 Web 脱敏回填对齐
+            let id = original
+                .iter()
+                .find(|key| key.api_key == value)
+                .map(|key| key.id.clone())
+                .unwrap_or_else(|| {
+                    while used.contains(format!("key-{next_id}").as_str()) {
+                        next_id += 1;
+                    }
+                    let fresh = format!("key-{next_id}");
+                    next_id += 1;
+                    fresh
+                });
+            crate::config::ProviderApiKey { id, api_key: value, label }
+        })
+        .collect()
+}
+
+/// 把当前选中密钥渲染成 1 基序号文本。
+///
+/// 参数:
+/// - `provider`: 当前供应商配置
+///
+/// 返回:
+/// - 命中时返回序号字符串，否则空串
+fn render_selected_index(provider: &ProviderConfig) -> String {
+    let Some(selected) = provider.api_key_selected.as_deref() else {
+        return String::new();
+    };
+    provider
+        .api_keys
+        .iter()
+        .position(|key| key.id == selected)
+        .map(|index| (index + 1).to_string())
+        .unwrap_or_default()
+}
+
+/// 解析 1 基序号为对应的密钥标识。
+///
+/// 越界或非数字时返回空，表示回落到首个密钥。
+///
+/// 参数:
+/// - `text`: 表单序号文本
+/// - `keys`: 多密钥列表
+///
+/// 返回:
+/// - 命中时返回密钥标识，否则 None
+fn parse_selected_key(text: &str, keys: &[crate::config::ProviderApiKey]) -> Option<String> {
+    let index: usize = text.trim().parse().ok()?;
+    keys.get(index.checked_sub(1)?)
+        .map(|key| key.id.clone())
 }

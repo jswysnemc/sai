@@ -16,6 +16,7 @@ import { JsonCodeEditor } from "../../shared/ui/code-editor/json-code-editor";
 import { useI18n } from "../i18n/use-i18n";
 import { clearNewSessionModelReference } from "../sessions/new-session-preferences";
 import { KeyValueEditor } from "./key-value-editor";
+import { ProviderApiKeysField } from "./provider-api-keys-field";
 
 type ProviderSettingsSectionProps = {
   config: AppConfig;
@@ -307,6 +308,17 @@ export function ProviderSettingsSection({
               }}
             />
             <small>{t("Environment variables can be referenced with `$env:VARIABLE_NAME`", "支持使用 `$env:VARIABLE_NAME` 引用环境变量")}</small>
+          </div>
+          <div className="settings-field full">
+            <ProviderApiKeysField
+              providerId={provider.id}
+              keys={provider.api_keys ?? []}
+              selected={provider.api_key_selected}
+              balance={provider.api_key_balance === true}
+              secretSentinel={secretSentinel}
+              onChange={(patch) => onProviderChange(selectedIndex, patch)}
+            />
+            <small>{t("Add extra keys to switch between them or load-balance; when present they take precedence over the single key above.", "可添加多个密钥用于切换或负载均衡；存在时优先于上方单个密钥。")}</small>
           </div>
           <div className="settings-field full">
             <span>{t("Connectivity", "连通性")}</span>

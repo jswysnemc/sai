@@ -164,6 +164,15 @@ pub struct ProviderConfig {
     pub protocol: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
+    /// 多密钥列表；非空时优先于 `api_key` 单值
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub api_keys: Vec<super::provider_keys::ProviderApiKey>,
+    /// 手动选中的密钥标识；负载均衡关闭时生效
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key_selected: Option<String>,
+    /// 手动开启负载均衡：在 `api_keys` 之间轮询
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub api_key_balance: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub models: Vec<String>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]

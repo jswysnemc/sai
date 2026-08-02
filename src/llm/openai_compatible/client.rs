@@ -20,6 +20,8 @@ use futures_util::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -27,6 +29,10 @@ pub struct OpenAiCompatibleClient {
     client: Client,
     provider: ProviderConfig,
     api_key: String,
+    /// 负载均衡候选密钥；长度大于 1 时按请求轮询，否则恒用 `api_key`
+    key_pool: Vec<String>,
+    /// 轮询游标，用 Arc 包裹使克隆出的客户端共享同一计数器，避免各自轮询失衡
+    key_cursor: Arc<AtomicUsize>,
     /// 可选 HTTP 调试落盘配置（`SAI_DEBUG_HTTP`）
     http_debug: Option<HttpDebugConfig>,
 }
@@ -71,12 +77,38 @@ impl OpenAiCompatibleClient {
             .connect_timeout(Duration::from_secs(provider.timeout_seconds.clamp(5, 30)))
             .build()?;
         let api_key = provider.resolved_api_key(paths)?;
+        // 仅在负载均衡开启且确有多密钥时建立候选池，单密钥场景不引入额外开销
+        let key_pool = if provider.api_key_balance {
+            provider.resolved_api_keys().unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         Ok(Self {
             client,
             provider: provider.clone(),
             api_key,
+            key_pool,
+            key_cursor: Arc::new(AtomicUsize::new(0)),
             http_debug: HttpDebugConfig::from_env(paths),
         })
+    }
+
+    /// 返回本次请求应使用的密钥。
+    ///
+    /// 负载均衡开启且候选池非空时按游标轮询，否则返回构造时解析的默认密钥。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 本次请求的密钥引用
+    fn request_api_key(&self) -> &str {
+        if self.key_pool.len() > 1 {
+            let index = self.key_cursor.fetch_add(1, Ordering::Relaxed) % self.key_pool.len();
+            &self.key_pool[index]
+        } else {
+            &self.api_key
+        }
     }
 
     /// 在调试开启时开始一次请求记录。
@@ -198,7 +230,9 @@ impl OpenAiCompatibleClient {
             self.provider.base_url.trim_end_matches('/')
         );
         let user_agent = resolve_provider_user_agent(&self.provider);
-        let mut base_headers = bearer_request_headers(&self.api_key, &[]);
+        // 负载均衡时本次请求轮询到的密钥；同一请求的重试沿用同一把，避免一次对话跨密钥
+        let api_key = self.request_api_key();
+        let mut base_headers = bearer_request_headers(api_key, &[]);
         base_headers.push(("User-Agent".to_string(), user_agent.clone()));
         let headers = merge_provider_extra_headers(base_headers, &self.provider);
         let mut debug = self.start_http_debug("POST", &url, "openai-chat", &headers, &request);
@@ -208,7 +242,7 @@ impl OpenAiCompatibleClient {
             apply_provider_user_agent(
                 self.client
                     .post(&url)
-                    .bearer_auth(&self.api_key)
+                    .bearer_auth(api_key)
                     .json(&request),
                 &self.provider,
             ),
@@ -238,7 +272,7 @@ impl OpenAiCompatibleClient {
                     apply_provider_user_agent(
                         self.client
                             .post(&url)
-                            .bearer_auth(&self.api_key)
+                            .bearer_auth(api_key)
                             .json(&request),
                         &self.provider,
                     ),
@@ -372,15 +406,17 @@ impl OpenAiCompatibleClient {
             url = claude_code_messages_url(&url);
         }
         let user_agent = resolve_provider_user_agent(&self.provider);
+        // 本次请求轮询到的密钥；Claude 与非 Claude 通道共用
+        let api_key = self.request_api_key();
         let base_headers = if claude {
             claude_code_request_headers(
-                &self.api_key,
+                api_key,
                 &session_id,
                 &user_agent,
                 self.provider.claude_1m_context,
             )
         } else {
-            let mut headers = anthropic_request_headers(&self.api_key);
+            let mut headers = anthropic_request_headers(api_key);
             headers.push(("User-Agent".to_string(), user_agent));
             headers
         };
@@ -388,7 +424,7 @@ impl OpenAiCompatibleClient {
         let mut debug = self.start_http_debug("POST", &url, "anthropic", &headers, &request);
         // 【Anthropic】【Messages 请求】1. 首先使用当前 thinking 配置发送请求
         let response = self
-            .send_anthropic_request(&url, &request, claude, &session_id)
+            .send_anthropic_request(&url, &request, claude, &session_id, api_key)
             .await?;
         let status = response.status();
         if let Some(debug) = debug.as_ref() {
@@ -426,7 +462,7 @@ impl OpenAiCompatibleClient {
                     &fallback_request,
                 );
                 let fallback_response = self
-                    .send_anthropic_request(&url, &fallback_request, claude, &session_id)
+                    .send_anthropic_request(&url, &fallback_request, claude, &session_id, api_key)
                     .await?;
                 let fallback_status = fallback_response.status();
                 if let Some(debug) = debug.as_ref() {
@@ -524,6 +560,7 @@ impl OpenAiCompatibleClient {
         request: &Value,
         claude: bool,
         session_id: &str,
+        api_key: &str,
     ) -> Result<reqwest::Response> {
         let builder = if claude {
             // 【Claude】【Messages 请求头】1. 使用 Claude Code 通道头
@@ -531,7 +568,7 @@ impl OpenAiCompatibleClient {
             let req = self
                 .client
                 .post(url)
-                .header("x-api-key", &self.api_key)
+                .header("x-api-key", api_key)
                 .header("anthropic-version", "2023-06-01")
                 .header(
                     "anthropic-beta",
@@ -553,7 +590,7 @@ impl OpenAiCompatibleClient {
             let builder = apply_provider_user_agent(
                 self.client
                     .post(url)
-                    .header("x-api-key", &self.api_key)
+                    .header("x-api-key", api_key)
                     .header("anthropic-version", "2023-06-01")
                     .json(request),
                 &self.provider,
@@ -618,18 +655,20 @@ impl OpenAiCompatibleClient {
         )?;
         let url = format!("{}/responses", self.provider.base_url.trim_end_matches('/'));
         let user_agent = resolve_provider_user_agent(&self.provider);
+        // 本次请求轮询到的密钥
+        let api_key = self.request_api_key();
         let headers = merge_provider_extra_headers(
             if codex {
-                codex_responses_request_headers(&self.api_key, &session_key, &user_agent)
+                codex_responses_request_headers(api_key, &session_key, &user_agent)
             } else {
-                let mut headers = bearer_request_headers(&self.api_key, &[]);
+                let mut headers = bearer_request_headers(api_key, &[]);
                 headers.push(("User-Agent".to_string(), user_agent));
                 headers
             },
             &self.provider,
         );
         let mut debug = self.start_http_debug("POST", &url, "openai-responses", &headers, &request);
-        let mut req = self.client.post(&url).bearer_auth(&self.api_key).json(&request);
+        let mut req = self.client.post(&url).bearer_auth(api_key).json(&request);
         if codex {
             // 额外 Codex 请求头（Authorization / Content-Type 由 bearer + json 处理）
             req = apply_codex_response_headers(req, &self.provider, &session_key);

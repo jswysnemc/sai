@@ -4,13 +4,19 @@ mod report;
 pub use report::{ProbeStageResult, ProviderProbeReport};
 
 use crate::config::{AppConfig, ProviderConfig};
-use crate::llm::{ChatMessage, OpenAiCompatibleClient};
+use crate::llm::{ChatMessage, OpenAiCompatibleClient, ToolDefinition};
 use crate::paths::SaiPaths;
 use anyhow::Result;
 use std::time::Instant;
 
 /// 探测请求发送的最短提示词。
 const PROBE_PROMPT: &str = "say hi";
+
+/// 工具调用阶段使用的工具名。
+const PROBE_TOOL_NAME: &str = "get_weather";
+
+/// 工具调用阶段的提示词：要求模型调用工具而非直接回答。
+const PROBE_TOOL_PROMPT: &str = "Use the get_weather tool to check the weather in Beijing. Do not answer directly, call the tool.";
 
 /// 探测允许的最大输出长度，够判断链路通即可。
 const PROBE_MAX_TOKENS: u32 = 16;
@@ -69,14 +75,14 @@ pub async fn probe_provider(
     let completion_started = Instant::now();
     let completion = run_completion(paths, config, provider, &target_model).await;
     let completion_ms = completion_started.elapsed().as_millis() as u64;
-    let tokens = match &completion {
+    let (completion_ok, tokens) = match &completion {
         Ok(outcome) => {
             stages.push(ProbeStageResult::success(
                 "completion",
                 completion_ms,
                 outcome.summary.clone(),
             ));
-            outcome.tokens
+            (true, outcome.tokens)
         }
         Err(error) => {
             stages.push(ProbeStageResult::failure(
@@ -84,9 +90,25 @@ pub async fn probe_provider(
                 completion_ms,
                 error,
             ));
-            None
+            (false, None)
         }
     };
+
+    // 3. 工具调用阶段：验证供应商是否支持 function calling
+    // 推理都失败时跳过，避免在断链上重复发请求
+    if completion_ok {
+        let tool_started = Instant::now();
+        let tool = run_tool_call(paths, config, provider, &target_model).await;
+        let tool_ms = tool_started.elapsed().as_millis() as u64;
+        match &tool {
+            Ok(detail) => {
+                stages.push(ProbeStageResult::success("tool_call", tool_ms, detail.clone()));
+            }
+            Err(error) => {
+                stages.push(ProbeStageResult::failure("tool_call", tool_ms, error));
+            }
+        }
+    }
 
     Ok(ProviderProbeReport::from_stages(
         provider.id.clone(),
@@ -194,6 +216,88 @@ async fn run_completion(
     })
 }
 
+/// 工具调用阶段允许的输出长度，比纯文本探测稍大，给模型留出"先思考再调用"的空间。
+const PROBE_TOOL_MAX_TOKENS: u32 = 64;
+
+/// 发送一次带工具定义的请求，验证供应商是否支持 function calling。
+///
+/// 模型若正确实现了工具调用，会在响应里返回对 `get_weather` 的调用，
+/// 而不是用纯文本回答天气。这里只判断"有没有发起工具调用"，
+/// 不执行工具本身，因此无需真实联网查天气。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+/// - `config`: 当前应用配置
+/// - `provider`: 供应商配置
+/// - `model`: 目标模型
+///
+/// 返回:
+/// - 成功摘要；模型未发起工具调用或链路不支持时报错
+async fn run_tool_call(
+    paths: &SaiPaths,
+    config: &AppConfig,
+    provider: &ProviderConfig,
+    model: &str,
+) -> Result<String> {
+    let mut probe_provider = provider.clone();
+    probe_provider.default_model = model.to_string();
+    probe_provider.timeout_seconds = probe_provider.timeout_seconds.min(PROBE_TIMEOUT_SECONDS);
+    probe_provider.anthropic_max_tokens = probe_provider.anthropic_max_tokens.min(PROBE_TOOL_MAX_TOKENS);
+    let client = OpenAiCompatibleClient::new(&probe_provider, config, paths)?;
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(PROBE_TIMEOUT_SECONDS),
+        client.chat_stream(
+            vec![ChatMessage::plain("user", PROBE_TOOL_PROMPT)],
+            vec![probe_weather_tool()],
+            |_| Ok(()),
+        ),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("tool-call probe timed out after {PROBE_TIMEOUT_SECONDS}s"))??;
+    // 1. 模型应当返回对 get_weather 的调用，而非纯文本
+    let called = result
+        .tool_calls
+        .iter()
+        .any(|call| call.function.name == PROBE_TOOL_NAME);
+    if called {
+        Ok(format!("model invoked {PROBE_TOOL_NAME}"))
+    } else if result.tool_calls.is_empty() {
+        anyhow::bail!("model answered without calling a tool; function calling may be unsupported")
+    } else {
+        let names = result
+            .tool_calls
+            .iter()
+            .map(|call| call.function.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        anyhow::bail!("model called unexpected tool(s): {names}")
+    }
+}
+
+/// 构造探测用的最小天气工具定义。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 仅含一个字符串参数的 get_weather 工具
+fn probe_weather_tool() -> ToolDefinition {
+    ToolDefinition {
+        kind: "function",
+        function: crate::llm::FunctionDefinition {
+            name: PROBE_TOOL_NAME.to_string(),
+            description: "Get the current weather for a city.".to_string(),
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "city": { "type": "string", "description": "City name" }
+                },
+                "required": ["city"]
+            }),
+        },
+    }
+}
+
 /// 把模型回复压成一行摘要。
 ///
 /// 参数:
@@ -225,6 +329,9 @@ mod tests {
             base_url: "https://example.test/v1".to_string(),
             protocol: "auto".to_string(),
             api_key: None,
+            api_keys: Vec::new(),
+            api_key_selected: None,
+            api_key_balance: false,
             models: models.iter().map(|model| model.to_string()).collect(),
             model_context_chars: std::collections::HashMap::new(),
             model_metadata: std::collections::HashMap::new(),

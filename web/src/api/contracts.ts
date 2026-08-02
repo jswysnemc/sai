@@ -86,6 +86,7 @@ export type {
 } from "./contracts/cron";
 
 export type {
+  ProviderApiKey,
   ProviderConfig,
   ModelMetadata,
   QqGatewayConfig,

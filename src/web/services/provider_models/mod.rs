@@ -28,15 +28,34 @@ pub(crate) fn restore_provider_secret(
     paths: &SaiPaths,
     mut provider: ProviderConfig,
 ) -> Result<ProviderConfig> {
-    if provider.api_key.as_deref() != Some(SECRET_SENTINEL) {
-        return Ok(provider);
-    }
     let current = AppConfig::load_or_default(paths)?;
-    provider.api_key = current
+    let current_provider = current
         .providers
         .into_iter()
-        .find(|item| item.id == provider.id)
-        .and_then(|item| item.api_key);
+        .find(|item| item.id == provider.id);
+    // 1. 单密钥哨兵回填
+    if provider.api_key.as_deref() == Some(SECRET_SENTINEL) {
+        provider.api_key = current_provider.as_ref().and_then(|item| item.api_key.clone());
+    }
+    // 2. 多密钥哨兵按稳定 id 回填，避免删除或重排后串用密钥
+    if provider.api_keys.iter().any(|key| key.api_key == SECRET_SENTINEL) {
+        let current_keys = current_provider
+            .as_ref()
+            .map(|item| &item.api_keys)
+            .cloned()
+            .unwrap_or_default();
+        let current_by_id: std::collections::HashMap<&str, &str> = current_keys
+            .iter()
+            .map(|key| (key.id.as_str(), key.api_key.as_str()))
+            .collect();
+        for key in &mut provider.api_keys {
+            if key.api_key == SECRET_SENTINEL {
+                if let Some(real) = current_by_id.get(key.id.as_str()) {
+                    key.api_key = (*real).to_string();
+                }
+            }
+        }
+    }
     Ok(provider)
 }
 

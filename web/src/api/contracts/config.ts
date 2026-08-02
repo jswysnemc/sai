@@ -1,10 +1,19 @@
 import type { NotificationConfig, PermissionConfig, SessionConfig } from "./permissions";
 
+export type ProviderApiKey = {
+  id: string;
+  api_key: string;
+  label?: string;
+};
+
 export type ProviderConfig = {
   id: string;
   display_name: string;
   base_url: string;
   api_key?: string;
+  api_keys?: ProviderApiKey[];
+  api_key_selected?: string;
+  api_key_balance?: boolean;
   protocol?: string;
   models?: string[];
   default_model?: string;
@@ -249,9 +258,9 @@ export type ProviderProbeErrorKind =
   | "protocol"
   | "unknown";
 
-/** 探测阶段：catalog 验证地址与凭据，completion 验证模型可用。 */
+/** 探测阶段：catalog 验证地址与凭据，completion 验证模型可用，tool_call 验证工具调用。 */
 export type ProviderProbeStage = {
-  stage: "catalog" | "completion";
+  stage: "catalog" | "completion" | "tool_call";
   ok: boolean;
   duration_ms: number;
   detail: string;

@@ -427,12 +427,13 @@ export const api = {
      * 按需读取指定供应商真实 API Key，响应不会进入配置查询缓存。
      *
      * @param providerId 供应商稳定标识
+     * @param keyId 多密钥场景下指定要查看的密钥标识；缺省返回单值密钥
      * @returns 供应商当前实际使用的 API Key
      */
-    providerSecret: (providerId: string) =>
+    providerSecret: (providerId: string, keyId?: string) =>
       apiRequest<ProviderSecretResponse>("/api/config/provider-secret", {
         method: "POST",
-        body: JSON.stringify({ provider_id: providerId })
+        body: JSON.stringify({ provider_id: providerId, key_id: keyId })
       }),
     loadMcp: () => apiRequest<McpConfigResponse>("/api/config/mcp"),
     rtkStatus: () => apiRequest<import("./contracts").RtkStatusResponse>("/api/config/rtk-status"),

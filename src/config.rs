@@ -19,6 +19,7 @@ mod paths;
 mod permission;
 mod prompt_templates;
 mod provider;
+mod provider_keys;
 mod secrets;
 mod session;
 
@@ -46,6 +47,7 @@ pub use mcp_file::{
 pub use model::*;
 pub use model_metadata::*;
 pub use model_units::*;
+pub use provider_keys::*;
 pub use notification::*;
 pub use permission::*;
 pub use prompt_templates::{PromptTemplateConfig, PromptTemplatesConfig};

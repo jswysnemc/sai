@@ -19,6 +19,8 @@ struct ConfigResponse {
 #[derive(Deserialize)]
 struct ProviderSecretRequest {
     provider_id: String,
+    /// 多密钥场景下指定要查看的密钥标识；缺省返回单值密钥
+    key_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -71,8 +73,12 @@ async fn provider_secret(
     State(state): State<WebAppState>,
     Json(request): Json<ProviderSecretRequest>,
 ) -> WebResult<Response> {
-    let api_key = config_service::load_provider_secret(&state.paths, &request.provider_id)
-        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    let api_key = config_service::load_provider_secret(
+        &state.paths,
+        &request.provider_id,
+        request.key_id.as_deref(),
+    )
+    .map_err(|error| WebError::bad_request(error.to_string()))?;
     let mut response = Json(ProviderSecretResponse { api_key }).into_response();
     response.headers_mut().insert(
         CACHE_CONTROL,
