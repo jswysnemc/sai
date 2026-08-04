@@ -3,31 +3,36 @@ import { SyntaxHighlighter } from "../syntax-highlighter";
 import { diffStatusLabel } from "./diff/diff-model";
 import type { DiffFile, DiffLine } from "./diff/diff-model";
 import { parseDiff } from "./diff/diff-parser";
+import { DiffSideBySideBlock } from "./diff-side-by-side";
 import { ToolFileReference } from "./tool-file-reference";
 import { useI18n } from "../../i18n/use-i18n";
 import "./diff-view.css";
+
+export type DiffLayout = "unified" | "side";
 
 type DiffViewProps = {
   source: string;
   headerPath?: string;
   /** 为 true 时隐藏文件头，避免与外层文件行重复 */
   hideHeader?: boolean;
+  /** 统一单栏或左右并排 */
+  layout?: DiffLayout;
 };
 
 /**
  * 以 IDE 风格渲染统一 Diff 或 Codex patch 文本。
  *
- * @param props Diff 源文本
+ * @param props Diff 源文本与布局
  * @returns 按文件分块、带双行号列的 Diff 视图
  */
-export function DiffView({ source, headerPath, hideHeader = false }: DiffViewProps) {
+export function DiffView({ source, headerPath, hideHeader = false, layout = "unified" }: DiffViewProps) {
   const { t } = useI18n();
   // 解析与字符级配对是纯计算，父组件重渲染时不应重跑
   const files = useMemo(() => parseDiff(source), [source]);
   if (files.length === 0) return null;
   return (
     <div
-      className={`structured-diff${hideHeader ? " is-compact" : ""}`}
+      className={`structured-diff${hideHeader ? " is-compact" : ""}${layout === "side" ? " is-side" : ""}`}
       role="region"
       aria-label={t("File diff", "文件差异")}
     >
@@ -36,6 +41,7 @@ export function DiffView({ source, headerPath, hideHeader = false }: DiffViewPro
           file={file}
           hideHeader={hideHeader || (files.length === 1 && file.path === headerPath)}
           hidePath={files.length === 1 && file.path === headerPath}
+          layout={layout}
           key={`${file.path}-${index}`}
         />
       ))}
@@ -52,11 +58,13 @@ export function DiffView({ source, headerPath, hideHeader = false }: DiffViewPro
 function DiffFileBlock({
   file,
   hideHeader,
-  hidePath
+  hidePath,
+  layout
 }: {
   file: DiffFile;
   hideHeader: boolean;
   hidePath: boolean;
+  layout: DiffLayout;
 }) {
   const { t } = useI18n();
   const status = diffStatusLabel(file.status);
@@ -90,19 +98,22 @@ function DiffFileBlock({
       {file.status === "binary" && (
         <p className="diff-file-note">{t("Binary file not shown", "二进制文件不展示内容")}</p>
       )}
-      {file.lines.length > 0 && (
-        <div className={`diff-file-lines ${gutterClass}`}>
-          {file.lines.map((line, index) => (
-            <DiffLineRow
-              line={line}
-              language={languageOfPath(file.path)}
-              showOldLine={showOldLine}
-              showNewLine={showNewLine}
-              key={index}
-            />
-          ))}
-        </div>
-      )}
+      {file.lines.length > 0 &&
+        (layout === "side" ? (
+          <DiffSideBySideBlock file={file} language={languageOfPath(file.path)} />
+        ) : (
+          <div className={`diff-file-lines ${gutterClass}`}>
+            {file.lines.map((line, index) => (
+              <DiffLineRow
+                line={line}
+                language={languageOfPath(file.path)}
+                showOldLine={showOldLine}
+                showNewLine={showNewLine}
+                key={index}
+              />
+            ))}
+          </div>
+        ))}
     </section>
   );
 }

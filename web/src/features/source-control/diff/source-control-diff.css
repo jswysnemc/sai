@@ -150,3 +150,39 @@
     flex-basis: 100%;
   }
 }
+
+/* 布局切换：meta 栏右侧的紧凑分段按钮 */
+.git-diff-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.git-diff-layout-toggle {
+  display: flex;
+  gap: var(--space-3xs);
+}
+
+.git-diff-layout-toggle button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.git-diff-layout-toggle button:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.git-diff-layout-toggle button.is-active {
+  background: var(--paper-deep);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}

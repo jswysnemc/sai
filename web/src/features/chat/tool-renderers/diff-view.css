@@ -196,3 +196,38 @@
   content-visibility: auto;
   contain-intrinsic-size: auto 1.4em;
 }
+
+/* 并排模式：左右两栏各占一半，删除在左、新增在右，块内按行对齐 */
+.diff-side-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-width: 0;
+}
+
+/* 并排单元只保留单行号列 */
+.diff-side-grid .diff-row {
+  grid-template-columns: 3rem minmax(0, 1fr);
+  min-width: 0;
+}
+
+.diff-side-grid .diff-row code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+/* hunk / no-newline 标记横跨两栏 */
+.diff-side-grid .diff-row.diff-span {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* 空槽：无内容但保留行高与底色，维持左右对齐 */
+.diff-side-grid .diff-row.empty {
+  background: color-mix(in srgb, var(--paper-deep) 40%, transparent);
+}
+
+/* 左右两栏之间的细分隔线 */
+.diff-side-grid .diff-row.right {
+  border-left: 1px solid var(--technical-border);
+}
