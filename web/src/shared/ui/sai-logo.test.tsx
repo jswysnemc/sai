@@ -12,13 +12,15 @@ function renderLogo(): string {
 }
 
 describe("SaiLogo", () => {
-  it("renders the shared SAI grid with a terminal cursor", () => {
+  it("renders the prompt glyph with a baseline cursor block", () => {
     const html = renderLogo();
 
     expect(html).toContain('aria-label="Sai"');
-    expect(html.match(/<rect/g)).toHaveLength(30);
-    expect(html).toContain('<rect x="12.25" y="9.75" width="2.5" height="2.5"></rect>');
-    expect(html).toContain('<rect x="27.25" y="17.25" width="2.5" height="2.5"></rect>');
+    // 双箭头提示符加 2x2 光标块，共 14 个实心格
+    expect(html.match(/<rect/g)).toHaveLength(14);
+    // 首格与右下角光标块的位置锚点
+    expect(html).toContain('<rect x="3.75" y="7.25" width="3.5" height="3.5"></rect>');
+    expect(html).toContain('<rect x="24.75" y="21.25" width="3.5" height="3.5"></rect>');
     expect(html).not.toContain("linearGradient");
   });
 });

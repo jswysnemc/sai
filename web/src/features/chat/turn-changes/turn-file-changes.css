@@ -221,3 +221,15 @@
   font-style: normal;
   font-weight: 600;
 }
+
+/* 大视图：Modal 内的并排对比，占满弹层并可独立滚动 */
+.turn-file-diff-maximized {
+  max-height: min(70vh, 44rem);
+  overflow: auto;
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-3);
+}
+
+.turn-file-diff-maximized .structured-diff {
+  border: 0;
+}

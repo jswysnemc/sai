@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { FileDiff, FolderTree, RotateCcw, X } from "lucide-react";
+import { FileDiff, FolderTree, Maximize2, RotateCcw, X } from "lucide-react";
 import { api } from "../../../api/client";
 import { toDisplayError } from "../../../api/api-error";
 import { DiffView } from "../tool-renderers/diff-view";
 import { parseJsonRecord, stringField } from "../tool-renderers/tool-data";
 import { useI18n } from "../../i18n/use-i18n";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
+import { Modal } from "../../../shared/ui/dialog/modal";
 import type { TurnFileChange } from "./collect-turn-file-changes";
 import "./turn-file-changes.css";
 
@@ -46,12 +47,18 @@ export function TurnFileChanges({
   const confirm = useConfirm();
   // 仅允许同时展开一个文件，避免多文件 diff 一股脑铺开
   const [activePath, setActivePath] = useState<string | null>(null);
+  // 大视图：IDEA 式左右双栏，由小视图的展开按钮打开
+  const [maximizedPath, setMaximizedPath] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canDiscard = Boolean(sessionId && turnId && changes.length > 0);
   const patchSource = useMemo(
     () => (activePath ? buildTurnDiffSource(tools, activePath) : ""),
     [tools, activePath]
+  );
+  const maximizedSource = useMemo(
+    () => (maximizedPath ? buildTurnDiffSource(tools, maximizedPath) : ""),
+    [tools, maximizedPath]
   );
   if (changes.length === 0) return null;
   const added = changes.reduce((sum, item) => sum + item.added, 0);
@@ -203,6 +210,15 @@ export function TurnFileChanges({
                       <RotateCcw size={13} aria-hidden />
                     </button>
                   )}
+                  <button
+                    type="button"
+                    className="turn-file-diff-icon-button"
+                    onClick={() => setMaximizedPath(change.path)}
+                    title={t("Open side-by-side comparison", "打开并排对比")}
+                    aria-label={t("Open side-by-side comparison", "打开并排对比")}
+                  >
+                    <Maximize2 size={13} aria-hidden />
+                  </button>
                   {expanded && (
                     <>
                       <button
@@ -242,6 +258,19 @@ export function TurnFileChanges({
           );
         })}
       </ul>
+      <Modal
+        open={maximizedPath !== null}
+        title={maximizedPath ?? ""}
+        description={t("Side-by-side comparison", "并排对比：左为改动前，右为改动后")}
+        size="large"
+        onClose={() => setMaximizedPath(null)}
+      >
+        <div className="turn-file-diff-maximized">
+          {maximizedSource
+            ? <DiffView source={maximizedSource} layout="side" />
+            : <div className="turn-file-diff-empty">{t("No patch preview available for this change", "该改动没有可预览的补丁内容")}</div>}
+        </div>
+      </Modal>
     </section>
   );
 }
