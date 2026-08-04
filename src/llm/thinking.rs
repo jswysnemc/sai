@@ -387,6 +387,12 @@ fn apply_extra_body(body: &mut Value, provider: &ProviderConfig) -> Result<()> {
 
 /// 深度合并 JSON 对象。
 ///
+/// 对象逐键递归合并；数组按追加处理，不整体替换。
+///
+/// 数组替换会让 extra_body 里的 `tools` 冲掉运行期已经装配好的函数工具——
+/// 用户想补一个 `{"type": "web_search"}`，结果丢掉了全部本地工具。
+/// 追加语义下补充项与既有项共存，重复项按内容去重。
+///
 /// 参数:
 /// - `target`: 被合并的目标 JSON
 /// - `patch`: 覆盖来源 JSON
@@ -405,6 +411,13 @@ fn merge_json(target: &mut Value, patch: Value) {
                 }
             }
         }
+        (Value::Array(target), Value::Array(patch)) => {
+            for value in patch {
+                if !target.contains(&value) {
+                    target.push(value);
+                }
+            }
+        }
         (target, patch) => {
             *target = patch;
         }
@@ -414,6 +427,65 @@ fn merge_json(target: &mut Value, patch: Value) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 验证 extra_body 里的工具补充项不会冲掉已装配的函数工具。
+    ///
+    /// DeepSeek 的 Responses API 支持在 tools 里混用 function 与 web_search。
+    /// 数组若按整体替换处理，用户补一个 web_search 就会丢掉全部本地工具。
+    #[test]
+    fn extra_body_appends_tools_instead_of_replacing_them() {
+        let mut body = serde_json::json!({
+            "model": "deepseek-chat",
+            "tools": [
+                {"type": "function", "name": "read_file"},
+                {"type": "function", "name": "run_command"}
+            ]
+        });
+
+        merge_json(
+            &mut body,
+            serde_json::json!({"tools": [{"type": "web_search"}]}),
+        );
+
+        let tools = body["tools"].as_array().expect("tools 应当仍是数组");
+        assert_eq!(tools.len(), 3, "补充项应当与既有工具共存");
+        assert!(tools.contains(&serde_json::json!({"type": "function", "name": "read_file"})));
+        assert!(tools.contains(&serde_json::json!({"type": "web_search"})));
+    }
+
+    /// 验证重复的数组项不会被追加两次。
+    #[test]
+    fn merging_an_identical_array_item_is_idempotent() {
+        let mut body = serde_json::json!({"tools": [{"type": "web_search"}]});
+
+        merge_json(
+            &mut body,
+            serde_json::json!({"tools": [{"type": "web_search"}]}),
+        );
+
+        assert_eq!(body["tools"].as_array().unwrap().len(), 1);
+    }
+
+    /// 验证嵌套对象仍然逐键合并。
+    #[test]
+    fn nested_objects_merge_key_by_key() {
+        let mut body = serde_json::json!({"thinking": {"type": "enabled", "budget": 1024}});
+
+        merge_json(&mut body, serde_json::json!({"thinking": {"budget": 4096}}));
+
+        assert_eq!(body["thinking"]["type"], "enabled", "未提及的键应当保留");
+        assert_eq!(body["thinking"]["budget"], 4096);
+    }
+
+    /// 验证标量仍然按覆盖处理。
+    #[test]
+    fn scalars_are_overwritten() {
+        let mut body = serde_json::json!({"temperature": 1.0});
+
+        merge_json(&mut body, serde_json::json!({"temperature": 0.2}));
+
+        assert_eq!(body["temperature"], 0.2);
+    }
 
     #[test]
     fn applies_deepseek_thinking() {
