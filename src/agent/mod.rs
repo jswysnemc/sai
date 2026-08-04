@@ -81,7 +81,6 @@ impl Agent {
         turn_id: &str,
         messages: &mut Vec<ChatMessage>,
         used_tools: &mut Vec<String>,
-        persisted_tool_reports: &mut Vec<(String, String)>,
         input: &str,
         image_urls: &[String],
         association_prompt: Option<&str>,
@@ -656,12 +655,17 @@ impl Agent {
                                         output: output.clone(),
                                     })?;
                                     perf.mark(&format!("tool {} result event", call.function.name));
+                                    // 回执必须在本次工具调用后立即落库：攒到轮末再写，
+                                    // 模型在同一轮内看不到已产生的结果，会重复发起同一调用
                                     if let Some(report) = extract_persistable_tool_report(
                                         &call.function.name,
                                         &output,
                                     ) {
-                                        persisted_tool_reports
-                                            .push((call.function.name.clone(), report));
+                                        self.state.append_tool_report_context(
+                                            turn_id,
+                                            &call.function.name,
+                                            &report,
+                                        )?;
                                     }
                                     output
                                 }

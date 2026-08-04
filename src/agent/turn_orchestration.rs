@@ -122,13 +122,11 @@ impl Agent {
             perf.mark("rebuild messages after compaction");
         }
         let mut used_tools = Vec::new();
-        let mut persisted_tool_reports = Vec::new();
         let execution = match self
             .chat_with_tools(
                 &turn_id,
                 &mut messages,
                 &mut used_tools,
-                &mut persisted_tool_reports,
                 &input,
                 &image_urls,
                 association_prompt.as_deref(),
@@ -173,7 +171,6 @@ impl Agent {
                         &turn_id,
                         &mut messages,
                         &mut used_tools,
-                        &mut persisted_tool_reports,
                         &input,
                         &image_urls,
                         association_prompt.as_deref(),
@@ -213,11 +210,6 @@ impl Agent {
             memes::render_auto_meme(&self.config, &self.paths, &plan.event).await?;
             memes::record_auto_meme_event(&self.config, &self.paths, &plan.event)?;
         }
-        for (tool_name, report) in persisted_tool_reports {
-            self.state
-                .append_tool_report_context(&turn_id, &tool_name, &report)?;
-        }
-        perf.mark("persist tool reports");
         drop(emit_event);
         worktree_undo.finish()?;
         guard.complete(&result.content, result.reasoning.as_deref())?;
