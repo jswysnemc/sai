@@ -264,11 +264,17 @@ pub(super) fn read_repl_input(
                         cursor = clipboard_state.cursor_right(&input, cursor);
                         redraw_input!()?;
                     }
-                    KeyCode::Home => {
+                    // Ctrl+A / Ctrl+E 与 Home / End 等价：Windows 终端与部分
+                    // 远程会话下 Home / End 未必能送达，emacs 键位是通用回退
+                    KeyCode::Home | KeyCode::Char('a')
+                        if code == KeyCode::Home || modifiers.contains(KeyModifiers::CONTROL) =>
+                    {
                         cursor = 0;
                         redraw_input!()?;
                     }
-                    KeyCode::End => {
+                    KeyCode::End | KeyCode::Char('e')
+                        if code == KeyCode::End || modifiers.contains(KeyModifiers::CONTROL) =>
+                    {
                         cursor = input.chars().count();
                         redraw_input!()?;
                     }
