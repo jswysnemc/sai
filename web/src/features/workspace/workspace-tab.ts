@@ -1,4 +1,4 @@
-export type PaneTab = "files" | "diff" | "terminal" | "tasks" | "subagents";
+export type PaneTab = "files" | "diff" | "terminal" | "tasks" | "subagents" | "sessions";
 
 export type WorkspacePanelTab = {
   id: string;
@@ -46,7 +46,8 @@ export function createWorkspacePanelTab(
   const defaults: Record<Exclude<PaneTab, "files" | "terminal">, string> = {
     diff: "Git",
     tasks: text(locale, "Background tasks", "后台任务"),
-    subagents: text(locale, "Subagents", "子智能体")
+    subagents: text(locale, "Subagents", "子智能体"),
+    sessions: text(locale, "Sessions", "会话")
   };
   return {
     id: `${type}:${crypto.randomUUID()}`,

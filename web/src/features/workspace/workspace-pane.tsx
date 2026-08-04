@@ -6,6 +6,7 @@ import { FileTree } from "./file-tree";
 import { TerminalDock } from "../terminal/terminal-dock";
 import { BackgroundTasksPanel } from "../background-tasks/background-tasks-panel";
 import { SubagentWorkspace } from "../subagents/subagent-workspace";
+import { SessionSidebar } from "../sessions/session-sidebar";
 import type { TerminalManager } from "../terminal/use-terminal-manager";
 import { createWorkspacePanelTab, type PaneTab, type WorkspacePanelTab } from "./workspace-tab";
 import { workspacePanelTitle } from "./workspace-panel-options";
@@ -246,6 +247,11 @@ export function WorkspacePane({
         )}
         {activeTab?.type === "tasks" && <BackgroundTasksPanel />}
         {activeTab?.type === "subagents" && <SubagentWorkspace />}
+        {activeTab?.type === "sessions" && (
+          <div className="workspace-sessions-pane">
+            <SessionSidebar collapsed={false} onToggleCollapsed={() => undefined} />
+          </div>
+        )}
       </div>
       </ErrorBoundary>
     </div>

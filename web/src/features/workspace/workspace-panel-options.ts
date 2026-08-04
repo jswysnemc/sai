@@ -1,4 +1,4 @@
-import { Activity, Bot, FileCode2, GitCompareArrows, SquareTerminal } from "lucide-react";
+import { Activity, Bot, FileCode2, GitCompareArrows, PanelLeft, SquareTerminal } from "lucide-react";
 import type { PaneTab } from "./workspace-tab";
 
 export type WorkspacePanelOption = {
@@ -19,7 +19,8 @@ export const WORKSPACE_PANEL_OPTIONS: WorkspacePanelOption[] = [
   { type: "diff", labelEn: "Git", labelZh: "Git", icon: GitCompareArrows },
   { type: "terminal", labelEn: "Terminal", labelZh: "终端", icon: SquareTerminal },
   { type: "tasks", labelEn: "Background tasks", labelZh: "后台任务", icon: Activity },
-  { type: "subagents", labelEn: "Subagents", labelZh: "子智能体", icon: Bot }
+  { type: "subagents", labelEn: "Subagents", labelZh: "子智能体", icon: Bot },
+  { type: "sessions", labelEn: "Sessions", labelZh: "会话", icon: PanelLeft }
 ];
 
 /** 请求打开某个工作区面板的自定义事件名。 */
