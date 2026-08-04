@@ -1,13 +1,14 @@
-/// Sai 品牌标志的单位网格：5 行 11 列，1 表示实心块。
+/// Sai 品牌标志的单位网格：5 行 7 列，1 表示实心块。
 ///
-/// 字身为大写 S、A、I，末列是下沉两格的终端光标。单格笔画和等宽留白
-/// 保证低分辨率终端仍能清楚识别 A，不再与 o 混淆。Web 端使用同一网格。
-const LOGO_GRID: [[u8; 11]; 5] = [
-    [1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 0],
-    [1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0],
-    [1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 0],
-    [0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-    [1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+/// 形态为双箭头（快进式提示符）加一枚落在基线上的实心光标块，
+/// 取代旧的像素字母 SAI。箭头指向右表示推进，光标块点明终端属性；
+/// 单格笔画保证低分辨率终端仍可识别。Web 端使用同一网格。
+const LOGO_GRID: [[u8; 7]; 5] = [
+    [1, 0, 1, 0, 0, 0, 0],
+    [0, 1, 0, 1, 0, 0, 0],
+    [0, 0, 1, 0, 1, 0, 0],
+    [0, 1, 0, 1, 0, 1, 1],
+    [1, 0, 1, 0, 0, 1, 1],
 ];
 
 /// 每个网格单位在终端中占用的字符列数。
@@ -44,7 +45,7 @@ pub(crate) fn logo_lines(style: &str) -> Vec<String> {
 ///
 /// 返回:
 /// - 定宽的 ANSI 文本行
-fn render_logo_row(row: &[u8; 11], style: &str) -> String {
+fn render_logo_row<const N: usize>(row: &[u8; N], style: &str) -> String {
     let mut output = String::new();
     let mut filled = false;
     for cell in row {
@@ -92,11 +93,12 @@ mod tests {
                 "标志每行必须等宽"
             );
         }
-        // 大写 A 使用完整顶横与开放字腔，避免在低分辨率下被识别成 o
-        assert_eq!(strip_ansi(&lines[0]), "███ ███ █  ");
-        assert_eq!(strip_ansi(&lines[1]), "█   █ █ █  ");
-        // 末列光标只在下两行出现，保留终端品牌特征但不干扰 SAI 识别
-        assert_eq!(strip_ansi(&lines[3]), "  █ █ █ █ █");
+        // 双箭头提示符：斜边逐行右移
+        assert_eq!(strip_ansi(&lines[0]), "█ █    ");
+        assert_eq!(strip_ansi(&lines[1]), " █ █   ");
+        // 光标块只落在基线两行，保留终端品牌特征
+        assert_eq!(strip_ansi(&lines[3]), " █ █ ██");
+        assert_eq!(strip_ansi(&lines[4]), "█ █  ██");
     }
 
     /// 【终端】【品牌标志】验证样式在实心段结束后复位，不污染后续输出。
