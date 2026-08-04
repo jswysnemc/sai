@@ -47,7 +47,6 @@ fn readable_tool_name_for_locale(name: &str, locale: Locale) -> &str {
         "add_meme" => localized(locale, "Add meme", "添加表情包"),
         "update_meme" => localized(locale, "Update meme", "更新表情包"),
         "delete_meme" => localized(locale, "Delete meme", "删除表情包"),
-        "deep_research" => localized(locale, "Deep research", "深度研究"),
         "upload_knowledge_base_file" | "upload_text_to_knowledge_base" => {
             localized(locale, "Import knowledge base", "导入知识库")
         }
@@ -129,10 +128,6 @@ mod tests {
 
     #[test]
     fn readable_tool_names_use_english() {
-        assert_eq!(
-            readable_tool_name_for_locale("deep_research", Locale::En),
-            "Deep research"
-        );
         assert_eq!(
             readable_tool_name_for_locale("read_file", Locale::En),
             "Read file"

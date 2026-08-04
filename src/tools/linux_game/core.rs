@@ -245,7 +245,7 @@ async fn chat_with_tools(
     progress: &GameProgress,
     stats: &mut GameStats,
 ) -> Result<ChatResult> {
-    let definitions = tools.definitions_except(&["linux_game_compatibility", "deep_research"]);
+    let definitions = tools.definitions_except(&["linux_game_compatibility"]);
     let mut steps = 0usize;
     loop {
         if max_tool_steps > 0 && steps >= max_tool_steps {

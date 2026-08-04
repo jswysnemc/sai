@@ -7,7 +7,6 @@ pub(crate) mod command;
 mod configurable_cli_tools;
 mod context;
 mod deep_diagnose;
-mod deep_research;
 mod deepseek_status;
 mod default_tools;
 mod diagnostics;
@@ -103,7 +102,6 @@ pub fn readable_tool_name(name: &str) -> &str {
         "add_meme" => "添加表情包",
         "update_meme" => "更新表情包",
         "delete_meme" => "删除表情包",
-        "deep_research" => "深度研究",
         "deep_diagnose" | "linux_input_method_diagnose" => "输入法诊断",
         "upload_knowledge_base_file" | "upload_text_to_knowledge_base" => "导入知识库",
         "read_knowledge_base_file" => "读取知识库",
@@ -150,9 +148,6 @@ pub fn readable_tool_name(name: &str) -> &str {
         "linux_game_compatibility" => "查询 Linux 游戏兼容性",
         "gather_linux_game_compatibility_signals" => "收集游戏兼容性",
         "register_linux_game_evidence" => "登记兼容性证据",
-        "register_deep_research_topic_title" => "注册研究标题",
-        "register_deep_research_reference" => "注册引用来源",
-        "remove_deep_research_reference" => "移除引用来源",
         "send_channel_image" => "发送渠道图片",
         "send_channel_file" => "发送渠道文件",
         "send_channel_video" => "发送渠道视频",
@@ -229,10 +224,6 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     }
     if config.plugins.web_images.enabled {
         web_images::register(&mut registry, config.clone(), paths.clone(), true);
-    }
-    if config.plugins.deep_research.enabled {
-        let research_tools = registry.clone();
-        deep_research::register(&mut registry, config.clone(), paths.clone(), research_tools);
     }
     if config.plugins.deep_diagnose.enabled {
         let diagnosis_tools = registry.clone();

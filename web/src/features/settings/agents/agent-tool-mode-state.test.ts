@@ -17,10 +17,10 @@ describe("resolveToolMode", () => {
   });
 
   it("白名单为空时代表全量开放", () => {
-    const selection = { enabled: [], deferred: ["deep_research"] };
+    const selection = { enabled: [], deferred: ["deep_diagnose"] };
 
     expect(resolveToolMode(selection, "show_meme", false)).toBe("on");
-    expect(resolveToolMode(selection, "deep_research", false)).toBe("load");
+    expect(resolveToolMode(selection, "deep_diagnose", false)).toBe("load");
   });
 
   it("通配符只覆盖非基础工具", () => {

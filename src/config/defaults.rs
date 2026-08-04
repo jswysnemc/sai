@@ -437,28 +437,19 @@ pub(super) fn default_web_images_timeout() -> u64 {
     20
 }
 
-pub(super) fn default_deep_research_dir() -> String {
-    if let Some(dirs) = directories::UserDirs::new() {
-        if let Some(documents) = dirs.document_dir() {
-            return documents.join("Sai/deep-thinking").display().to_string();
-        }
-    }
-    "~/Documents/Sai/deep-thinking".to_string()
-}
-
-pub(super) fn default_deep_research_depth() -> String {
+pub(super) fn default_deep_diagnose_depth() -> String {
     "high".to_string()
 }
 
-pub(super) fn default_deep_research_max_review_revisions() -> usize {
+pub(super) fn default_deep_diagnose_max_review_revisions() -> usize {
     0
 }
 
-pub(super) fn default_deep_research_max_tool_steps() -> usize {
+pub(super) fn default_deep_diagnose_max_tool_steps() -> usize {
     0
 }
 
-pub(super) fn default_deep_research_tool_timeout() -> u64 {
+pub(super) fn default_deep_diagnose_tool_timeout() -> u64 {
     90
 }
 

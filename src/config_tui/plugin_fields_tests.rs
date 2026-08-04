@@ -39,9 +39,9 @@ fn memory_fields_round_trip_recent_settings() {
     config.plugins.memory.learning_min_task_chars = 123;
     config.plugins.memory.learning_min_method_chars = 234;
 
-    let fields = plugin_fields(&config, 10);
+    let fields = plugin_fields(&config, 9);
     let mut updated = AppConfig::default();
-    apply_plugin_fields(&mut updated, 10, &fields).unwrap();
+    apply_plugin_fields(&mut updated, 9, &fields).unwrap();
 
     assert_eq!(fields.len(), 17);
     assert!(updated.plugins.memory.auto_skill_enabled);
@@ -56,8 +56,8 @@ fn memory_fields_round_trip_recent_settings() {
 fn recent_plugin_fields_keep_complete_layouts() {
     let config = AppConfig::default();
 
-    assert_eq!(plugin_fields(&config, 2).len(), 4);
-    assert_eq!(plugin_fields(&config, 7).len(), 18);
-    assert_eq!(plugin_fields(&config, 13).len(), 8);
-    assert_eq!(plugin_fields(&config, 14).len(), 4);
+    assert_eq!(plugin_fields(&config, 1).len(), 4);
+    assert_eq!(plugin_fields(&config, 6).len(), 18);
+    assert_eq!(plugin_fields(&config, 12).len(), 8);
+    assert_eq!(plugin_fields(&config, 13).len(), 4);
 }

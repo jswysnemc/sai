@@ -18,8 +18,6 @@ pub struct PluginsConfig {
     #[serde(default)]
     pub web_images: WebImagesPluginConfig,
     #[serde(default)]
-    pub deep_research: DeepResearchPluginConfig,
-    #[serde(default)]
     pub deep_diagnose: DeepDiagnosePluginConfig,
     #[serde(default)]
     pub vision: VisionPluginConfig,
@@ -276,38 +274,18 @@ pub struct WebImagesPluginConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeepResearchPluginConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    #[serde(default = "default_deep_research_dir")]
-    pub output_dir: String,
-    #[serde(default = "default_deep_research_depth")]
-    pub thinking_depth: String,
-    #[serde(default = "default_deep_research_max_review_revisions")]
-    pub max_review_revisions: usize,
-    #[serde(default = "default_deep_research_max_tool_steps")]
-    pub max_tool_steps_per_round: usize,
-    #[serde(default)]
-    pub max_final_answer_chars: usize,
-    #[serde(default = "default_deep_research_tool_timeout")]
-    pub tool_call_timeout_seconds: u64,
-    #[serde(default = "default_true")]
-    pub show_progress: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeepDiagnosePluginConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
-    #[serde(default = "default_deep_research_depth")]
+    #[serde(default = "default_deep_diagnose_depth")]
     pub thinking_depth: String,
-    #[serde(default = "default_deep_research_max_review_revisions")]
+    #[serde(default = "default_deep_diagnose_max_review_revisions")]
     pub max_review_revisions: usize,
-    #[serde(default = "default_deep_research_max_tool_steps")]
+    #[serde(default = "default_deep_diagnose_max_tool_steps")]
     pub max_tool_steps_per_round: usize,
     #[serde(default)]
     pub max_final_answer_chars: usize,
-    #[serde(default = "default_deep_research_tool_timeout")]
+    #[serde(default = "default_deep_diagnose_tool_timeout")]
     pub tool_call_timeout_seconds: u64,
     #[serde(default = "default_subagent_max_tool_steps")]
     pub max_tool_steps: usize,

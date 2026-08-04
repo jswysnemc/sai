@@ -21,54 +21,6 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
     match index {
         0 => web_search_fields(config),
         1 => vec![
-            Field::boolean(t("Enabled", "启用"), config.plugins.deep_research.enabled),
-            Field::new(
-                t("Output directory", "输出目录"),
-                config.plugins.deep_research.output_dir.clone(),
-            ),
-            Field::new(
-                t("Thinking depth", "思考深度"),
-                config.plugins.deep_research.thinking_depth.clone(),
-            )
-            .choices(&["minimal", "low", "medium", "high", "xhigh"]),
-            Field::new(
-                t("Max review revisions", "最大审视修正次数"),
-                config
-                    .plugins
-                    .deep_research
-                    .max_review_revisions
-                    .to_string(),
-            ),
-            Field::new(
-                t("Tool steps per round", "每轮工具步数"),
-                config
-                    .plugins
-                    .deep_research
-                    .max_tool_steps_per_round
-                    .to_string(),
-            ),
-            Field::new(
-                t("Final answer char limit", "最终字数上限"),
-                config
-                    .plugins
-                    .deep_research
-                    .max_final_answer_chars
-                    .to_string(),
-            ),
-            Field::new(
-                t("Tool timeout seconds", "工具超时秒数"),
-                config
-                    .plugins
-                    .deep_research
-                    .tool_call_timeout_seconds
-                    .to_string(),
-            ),
-            Field::boolean(
-                t("Show progress", "显示过程进度"),
-                config.plugins.deep_research.show_progress,
-            ),
-        ],
-        2 => vec![
             Field::boolean(t("Enabled", "启用"), config.plugins.vision.enabled),
             Field::boolean(
                 t("Prefer current multimodal model", "优先当前多模态模型"),
@@ -84,7 +36,7 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
                 config.plugins.vision.preview_with_chafa,
             ),
         ],
-        3 => vec![
+        2 => vec![
             Field::boolean(
                 t("Enabled", "启用"),
                 config.plugins.image_generation.enabled,
@@ -132,7 +84,7 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
                 config.plugins.image_generation.timeout_seconds.to_string(),
             ),
         ],
-        4 => vec![
+        3 => vec![
             Field::boolean(t("Enabled", "启用"), config.plugins.web_images.enabled),
             Field::boolean(
                 t("Vision model screening", "视觉模型审核"),
@@ -163,7 +115,7 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
                 config.plugins.web_images.timeout_seconds.to_string(),
             ),
         ],
-        5 => vec![
+        4 => vec![
             Field::boolean(t("Enabled", "启用"), config.plugins.print_image.enabled),
             Field::new(
                 t("Print width percent", "打印宽度百分比"),
@@ -174,7 +126,7 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
                 config.plugins.print_image.height_percent.to_string(),
             ),
         ],
-        6 => vec![
+        5 => vec![
             Field::boolean(t("Enabled", "启用"), config.plugins.memes.enabled),
             Field::new(
                 t("Send width percent", "发送宽度百分比"),
@@ -205,7 +157,7 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
                 config.plugins.memes.auto_send_min_confidence.to_string(),
             ),
         ],
-        7 => vec![
+        6 => vec![
             Field::boolean(t("Enabled", "启用"), config.plugins.knowledge_base.enabled),
             Field::new(
                 t("Knowledge base directory", "知识库目录"),
@@ -302,15 +254,15 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
                     .to_string(),
             ),
         ],
-        8 => vec![Field::boolean(
+        7 => vec![Field::boolean(
             t("Enabled", "启用"),
             config.plugins.archlinux.enabled,
         )],
-        9 => vec![Field::boolean(
+        8 => vec![Field::boolean(
             t("Enabled", "启用"),
             config.plugins.man.enabled,
         )],
-        10 => vec![
+        9 => vec![
             Field::boolean(t("Enabled", "启用"), config.plugins.memory.enabled),
             Field::boolean(
                 t("Evicted context cache", "上下文弹出缓存"),
@@ -377,11 +329,11 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
                 config.plugins.memory.learning_min_method_chars.to_string(),
             ),
         ],
-        11 => vec![Field::boolean(
+        10 => vec![Field::boolean(
             t("Enabled", "启用"),
             config.plugins.package_advisor.enabled,
         )],
-        12 => vec![
+        11 => vec![
             Field::boolean(
                 t("Enabled", "启用"),
                 config.plugins.linux_game_compatibility.enabled,
@@ -395,7 +347,7 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
                     .to_string(),
             ),
         ],
-        13 => vec![
+        12 => vec![
             Field::boolean(t("Enabled", "启用"), config.plugins.deep_diagnose.enabled),
             Field::new(
                 t("Thinking depth", "思考深度"),
@@ -443,7 +395,7 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
                 config.plugins.deep_diagnose.show_progress,
             ),
         ],
-        14 => vec![
+        13 => vec![
             Field::boolean(t("Enabled", "启用"), config.plugins.diagnostics.enabled),
             Field::new(
                 t("Command timeout seconds", "命令超时秒数"),
@@ -462,7 +414,7 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
                 config.plugins.diagnostics.max_stderr_chars.to_string(),
             ),
         ],
-        16 => vec![
+        15 => vec![
             Field::boolean(t("Enabled", "启用"), config.plugins.exchange_rate.enabled),
             Field::new(
                 t("API key", "API 密钥"),
@@ -498,18 +450,6 @@ pub(super) fn apply_plugin_fields(
     match index {
         0 => apply_web_search_fields(config, fields)?,
         1 => {
-            config.plugins.deep_research.enabled = parse_bool_field(&fields[0].value)?;
-            config.plugins.deep_research.output_dir = fields[1].value.trim().to_string();
-            config.plugins.deep_research.thinking_depth = fields[2].value.trim().to_string();
-            config.plugins.deep_research.max_review_revisions = fields[3].value.trim().parse()?;
-            config.plugins.deep_research.max_tool_steps_per_round =
-                fields[4].value.trim().parse()?;
-            config.plugins.deep_research.max_final_answer_chars = fields[5].value.trim().parse()?;
-            config.plugins.deep_research.tool_call_timeout_seconds =
-                fields[6].value.trim().parse()?;
-            config.plugins.deep_research.show_progress = parse_bool_field(&fields[7].value)?;
-        }
-        2 => {
             config.plugins.vision.enabled = parse_bool_field(&fields[0].value)?;
             config.plugins.vision.prefer_current_multimodal_model =
                 parse_bool_field(&fields[1].value)?;
@@ -518,7 +458,7 @@ pub(super) fn apply_plugin_fields(
             config.plugins.vision.vision_model = model;
             config.plugins.vision.preview_with_chafa = parse_bool_field(&fields[3].value)?;
         }
-        3 => {
+        2 => {
             config.plugins.image_generation.enabled = parse_bool_field(&fields[0].value)?;
             config.plugins.image_generation.provider_type = fields[1].value.trim().to_string();
             config.plugins.image_generation.base_url =
@@ -532,7 +472,7 @@ pub(super) fn apply_plugin_fields(
             config.plugins.image_generation.auto_print = parse_bool_field(&fields[8].value)?;
             config.plugins.image_generation.timeout_seconds = fields[9].value.trim().parse()?;
         }
-        4 => {
+        3 => {
             config.plugins.web_images.enabled = parse_bool_field(&fields[0].value)?;
             config.plugins.web_images.vision_screening_enabled =
                 parse_bool_field(&fields[1].value)?;
@@ -547,12 +487,12 @@ pub(super) fn apply_plugin_fields(
             config.plugins.web_images.timeout_seconds =
                 fields[7].value.trim().parse::<u64>()?.clamp(5, 120);
         }
-        5 => {
+        4 => {
             config.plugins.print_image.enabled = parse_bool_field(&fields[0].value)?;
             config.plugins.print_image.width_percent = fields[1].value.trim().parse::<u8>()?;
             config.plugins.print_image.height_percent = fields[2].value.trim().parse::<u8>()?;
         }
-        6 => {
+        5 => {
             config.plugins.memes.enabled = parse_bool_field(&fields[0].value)?;
             config.plugins.memes.width_percent =
                 fields[1].value.trim().parse::<u8>()?.clamp(1, 100);
@@ -567,7 +507,7 @@ pub(super) fn apply_plugin_fields(
             config.plugins.memes.auto_send_min_confidence =
                 fields[7].value.trim().parse::<f32>()?.clamp(0.0, 1.0);
         }
-        7 => {
+        6 => {
             config.plugins.knowledge_base.enabled = parse_bool_field(&fields[0].value)?;
             config.plugins.knowledge_base.data_dir = fields[1].value.trim().to_string();
             config.plugins.knowledge_base.max_search_results = fields[2].value.trim().parse()?;
@@ -593,13 +533,13 @@ pub(super) fn apply_plugin_fields(
             config.plugins.knowledge_base.embedding_timeout_seconds =
                 fields[17].value.trim().parse()?;
         }
-        8 => {
+        7 => {
             config.plugins.archlinux.enabled = parse_bool_field(&fields[0].value)?;
         }
-        9 => {
+        8 => {
             config.plugins.man.enabled = parse_bool_field(&fields[0].value)?;
         }
-        10 => {
+        9 => {
             config.plugins.memory.enabled = parse_bool_field(&fields[0].value)?;
             config.plugins.memory.evicted_context_enabled = parse_bool_field(&fields[1].value)?;
             config.plugins.memory.association_enabled = parse_bool_field(&fields[2].value)?;
@@ -624,15 +564,15 @@ pub(super) fn apply_plugin_fields(
             config.plugins.memory.learning_min_method_chars =
                 fields[16].value.trim().parse::<usize>()?;
         }
-        11 => {
+        10 => {
             config.plugins.package_advisor.enabled = parse_bool_field(&fields[0].value)?;
         }
-        12 => {
+        11 => {
             config.plugins.linux_game_compatibility.enabled = parse_bool_field(&fields[0].value)?;
             config.plugins.linux_game_compatibility.max_tool_steps =
                 fields[1].value.trim().parse::<usize>()?.clamp(1, 500);
         }
-        13 => {
+        12 => {
             config.plugins.deep_diagnose.enabled = parse_bool_field(&fields[0].value)?;
             config.plugins.deep_diagnose.thinking_depth = fields[1].value.trim().to_string();
             config.plugins.deep_diagnose.max_review_revisions = fields[2].value.trim().parse()?;
@@ -644,13 +584,13 @@ pub(super) fn apply_plugin_fields(
             config.plugins.deep_diagnose.max_tool_steps = fields[6].value.trim().parse()?;
             config.plugins.deep_diagnose.show_progress = parse_bool_field(&fields[7].value)?;
         }
-        14 => {
+        13 => {
             config.plugins.diagnostics.enabled = parse_bool_field(&fields[0].value)?;
             config.plugins.diagnostics.command_timeout_seconds = fields[1].value.trim().parse()?;
             config.plugins.diagnostics.max_stdout_chars = fields[2].value.trim().parse()?;
             config.plugins.diagnostics.max_stderr_chars = fields[3].value.trim().parse()?;
         }
-        16 => {
+        15 => {
             config.plugins.exchange_rate.enabled = parse_bool_field(&fields[0].value)?;
             config.plugins.exchange_rate.api_key = fields[1].value.trim().to_string();
             config.plugins.exchange_rate.free_fallback_enabled =

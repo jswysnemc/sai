@@ -269,10 +269,6 @@ impl AppConfig {
         {
             bail!("plugins.print_image.height_percent must be between 1 and 100");
         }
-        match self.plugins.deep_research.thinking_depth.as_str() {
-            "minimal" | "low" | "medium" | "high" | "xhigh" => {}
-            value => bail!("plugins.deep_research.thinking_depth is invalid: {value}"),
-        }
         match self.plugins.deep_diagnose.thinking_depth.as_str() {
             "minimal" | "low" | "medium" | "high" | "xhigh" => {}
             value => bail!("plugins.deep_diagnose.thinking_depth is invalid: {value}"),

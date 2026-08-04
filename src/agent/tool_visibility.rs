@@ -460,7 +460,7 @@ mod tests {
         assert!(description.contains("web_search"));
         assert!(description.contains("Available groups"));
         assert!(!description.contains("analyze_image"));
-        assert!(!description.contains("deep_research"));
+        assert!(!description.contains("deep_diagnose"));
     }
 
     #[test]

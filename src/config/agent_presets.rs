@@ -71,7 +71,6 @@ const CODE_AGENT_TOOLS: &[&str] = &[
     "read_knowledge_base_file",
     "upload_text_to_knowledge_base",
     "edit_knowledge_base_file",
-    "deep_research",
     "check_issue",
     "linux_input_method_diagnose",
     "linux_game_compatibility",

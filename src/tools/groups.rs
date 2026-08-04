@@ -60,10 +60,6 @@ pub(crate) fn group_for_tool(name: &str) -> &'static str {
         | "send_channel_file"
         | "send_channel_video"
         | "send_channel_message" => "media",
-        "deep_research"
-        | "register_deep_research_topic_title"
-        | "register_deep_research_reference"
-        | "remove_deep_research_reference" => "research",
         "remember_fact"
         | "search_evicted_context"
         | "recall_past_events"
@@ -128,7 +124,6 @@ pub(crate) fn group_description(group: &str) -> &'static str {
         "base" => "基础文件、命令和任务操作",
         "web" => "网页搜索、网页读取、天气和在线状态查询",
         "media" => "图片理解、图片生成和表情包操作",
-        "research" => "深度研究和引用管理",
         "memory" => "长期记忆、旧上下文和回忆",
         "package" => "Arch Linux、AUR、man 手册和包审查",
         "game" => "Linux 游戏兼容性查询",

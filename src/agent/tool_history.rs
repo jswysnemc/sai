@@ -81,7 +81,7 @@ impl Agent {
 pub(super) fn extract_persistable_tool_report(tool_name: &str, output: &str) -> Option<String> {
     let field = match tool_name {
         "linux_game_compatibility" => "final_report",
-        "linux_input_method_diagnose" | "deep_diagnose" | "deep_research" => "final_answer",
+        "linux_input_method_diagnose" | "deep_diagnose" => "final_answer",
         _ => return None,
     };
     serde_json::from_str::<serde_json::Value>(output)

@@ -16,7 +16,6 @@ impl Default for PluginsConfig {
             weather: PluginEnabledConfig::default(),
             web: WebSearchConfig::default(),
             web_images: WebImagesPluginConfig::default(),
-            deep_research: DeepResearchPluginConfig::default(),
             deep_diagnose: DeepDiagnosePluginConfig::default(),
             vision: VisionPluginConfig::default(),
             exchange_rate: ExchangeRatePluginConfig::default(),
@@ -132,28 +131,6 @@ impl Default for WebImagesPluginConfig {
     }
 }
 
-impl Default for DeepResearchPluginConfig {
-    /// 构造深度研究工具默认配置。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 默认研究深度、审阅轮数和超时参数
-    fn default() -> Self {
-        Self {
-            enabled: default_true(),
-            output_dir: default_deep_research_dir(),
-            thinking_depth: default_deep_research_depth(),
-            max_review_revisions: default_deep_research_max_review_revisions(),
-            max_tool_steps_per_round: default_deep_research_max_tool_steps(),
-            max_final_answer_chars: 0,
-            tool_call_timeout_seconds: default_deep_research_tool_timeout(),
-            show_progress: default_true(),
-        }
-    }
-}
-
 impl Default for DeepDiagnosePluginConfig {
     /// 构造深度诊断工具默认配置。
     ///
@@ -165,11 +142,11 @@ impl Default for DeepDiagnosePluginConfig {
     fn default() -> Self {
         Self {
             enabled: default_true(),
-            thinking_depth: default_deep_research_depth(),
-            max_review_revisions: default_deep_research_max_review_revisions(),
-            max_tool_steps_per_round: default_deep_research_max_tool_steps(),
+            thinking_depth: default_deep_diagnose_depth(),
+            max_review_revisions: default_deep_diagnose_max_review_revisions(),
+            max_tool_steps_per_round: default_deep_diagnose_max_tool_steps(),
             max_final_answer_chars: 0,
-            tool_call_timeout_seconds: default_deep_research_tool_timeout(),
+            tool_call_timeout_seconds: default_deep_diagnose_tool_timeout(),
             max_tool_steps: default_subagent_max_tool_steps(),
             show_progress: default_true(),
         }

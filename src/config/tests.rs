@@ -508,10 +508,6 @@ fn builtin_agents_defer_non_base_tools_by_default() {
     assert!(code
         .deferred_tools
         .iter()
-        .any(|tool| tool == "deep_research"));
-    assert!(code
-        .deferred_tools
-        .iter()
         .any(|tool| tool == "archwiki_query"));
 
     let cli = profiles

@@ -9,8 +9,8 @@ fn tool_status_prefers_running_for_single_active_call() {
         error: 0,
         progress: None,
     };
-    let output = tool_status_text("deep_research", &stats);
-    assert!(output.starts_with("deep_research×1 "));
+    let output = tool_status_text("deep_diagnose", &stats);
+    assert!(output.starts_with("deep_diagnose×1 "));
     assert!(output.contains("\x1b[33m"));
     assert!(output.contains("运行中") || output.contains("running"));
 }
@@ -23,8 +23,8 @@ fn tool_status_uses_simple_single_success() {
         error: 0,
         progress: None,
     };
-    let output = tool_status_text("deep_research", &stats);
-    assert!(output.starts_with("deep_research×1 "));
+    let output = tool_status_text("deep_diagnose", &stats);
+    assert!(output.starts_with("deep_diagnose×1 "));
     assert!(output.contains("\x1b[32mok\x1b[0m"));
 }
 

@@ -68,7 +68,7 @@ mod tests {
     #[test]
     fn empty_deferred_set_keeps_every_tool_visible() {
         assert!(!is_deferred(&[], "read_file"));
-        assert!(!is_deferred(&[], "deep_research"));
+        assert!(!is_deferred(&[], "deep_diagnose"));
     }
 
     /// 验证通配符把非基础工具整体推入延迟态。
@@ -100,7 +100,7 @@ mod tests {
     /// 验证白名单为空时保留全部延迟项。
     #[test]
     fn normalize_keeps_all_when_whitelist_is_empty() {
-        let deferred = vec!["deep_research".to_string(), "show_meme".to_string()];
+        let deferred = vec!["deep_diagnose".to_string(), "show_meme".to_string()];
 
         assert_eq!(normalize_deferred_tools(&[], &deferred), deferred);
     }

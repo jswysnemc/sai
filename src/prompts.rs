@@ -41,7 +41,7 @@ mod tests {
         assert!(!prompt.contains("review_aur_package"));
         assert!(!prompt.contains("install_aur_package"));
         assert!(!prompt.contains("inspect_issue"));
-        assert!(!prompt.contains("deep_research"));
+        assert!(!prompt.contains("deep_diagnose"));
         assert!(!prompt.contains("protondb_query"));
         assert!(!prompt.contains("linux_input_method_diagnose"));
         assert!(!prompt.contains("remember_fact"));

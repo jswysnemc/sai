@@ -162,16 +162,8 @@ fn cli_tool_row(state: &str, name: &str, description: &str, width: usize) -> Str
 ///
 /// 返回:
 /// - 历史配置标识、显示名称和说明组成的固定目录
-fn cli_tool_names() -> [(&'static str, &'static str, &'static str); 20] {
+fn cli_tool_names() -> [(&'static str, &'static str, &'static str); 19] {
     [
-        (
-            "deep_research",
-            t("Deep research", "深度研究"),
-            t(
-                "Long research tasks with Markdown output",
-                "长任务研究并输出 Markdown",
-            ),
-        ),
         (
             "vision",
             t("Vision", "识图"),
@@ -296,26 +288,25 @@ fn cli_tool_names() -> [(&'static str, &'static str, &'static str); 20] {
 pub(super) fn plugin_enabled(config: &AppConfig, index: usize) -> bool {
     match index {
         0 => config.plugins.web.enabled,
-        1 => config.plugins.deep_research.enabled,
-        2 => config.plugins.vision.enabled,
-        3 => config.plugins.image_generation.enabled,
-        4 => config.plugins.web_images.enabled,
-        5 => config.plugins.print_image.enabled,
-        6 => config.plugins.memes.enabled,
-        7 => config.plugins.knowledge_base.enabled,
-        8 => config.plugins.archlinux.enabled,
-        9 => config.plugins.man.enabled,
-        10 => config.plugins.memory.enabled,
-        11 => config.plugins.package_advisor.enabled,
-        12 => config.plugins.linux_game_compatibility.enabled,
-        13 => config.plugins.deep_diagnose.enabled,
-        14 => config.plugins.diagnostics.enabled,
-        15 => config.plugins.weather.enabled,
-        16 => config.plugins.exchange_rate.enabled,
-        17 => config.plugins.calculator.enabled,
-        18 => config.plugins.hash_codec.enabled,
-        19 => config.plugins.moegirl.enabled,
-        20 => config.plugins.xuanxue.enabled,
+        1 => config.plugins.vision.enabled,
+        2 => config.plugins.image_generation.enabled,
+        3 => config.plugins.web_images.enabled,
+        4 => config.plugins.print_image.enabled,
+        5 => config.plugins.memes.enabled,
+        6 => config.plugins.knowledge_base.enabled,
+        7 => config.plugins.archlinux.enabled,
+        8 => config.plugins.man.enabled,
+        9 => config.plugins.memory.enabled,
+        10 => config.plugins.package_advisor.enabled,
+        11 => config.plugins.linux_game_compatibility.enabled,
+        12 => config.plugins.deep_diagnose.enabled,
+        13 => config.plugins.diagnostics.enabled,
+        14 => config.plugins.weather.enabled,
+        15 => config.plugins.exchange_rate.enabled,
+        16 => config.plugins.calculator.enabled,
+        17 => config.plugins.hash_codec.enabled,
+        18 => config.plugins.moegirl.enabled,
+        19 => config.plugins.xuanxue.enabled,
         _ => false,
     }
 }
@@ -332,26 +323,25 @@ pub(super) fn toggle_plugin(config: &mut AppConfig, index: usize) {
     let value = !plugin_enabled(config, index);
     match index {
         0 => config.plugins.web.enabled = value,
-        1 => config.plugins.deep_research.enabled = value,
-        2 => config.plugins.vision.enabled = value,
-        3 => config.plugins.image_generation.enabled = value,
-        4 => config.plugins.web_images.enabled = value,
-        5 => config.plugins.print_image.enabled = value,
-        6 => config.plugins.memes.enabled = value,
-        7 => config.plugins.knowledge_base.enabled = value,
-        8 => config.plugins.archlinux.enabled = value,
-        9 => config.plugins.man.enabled = value,
-        10 => config.plugins.memory.enabled = value,
-        11 => config.plugins.package_advisor.enabled = value,
-        12 => config.plugins.linux_game_compatibility.enabled = value,
-        13 => config.plugins.deep_diagnose.enabled = value,
-        14 => config.plugins.diagnostics.enabled = value,
-        15 => config.plugins.weather.enabled = value,
-        16 => config.plugins.exchange_rate.enabled = value,
-        17 => config.plugins.calculator.enabled = value,
-        18 => config.plugins.hash_codec.enabled = value,
-        19 => config.plugins.moegirl.enabled = value,
-        20 => config.plugins.xuanxue.enabled = value,
+        1 => config.plugins.vision.enabled = value,
+        2 => config.plugins.image_generation.enabled = value,
+        3 => config.plugins.web_images.enabled = value,
+        4 => config.plugins.print_image.enabled = value,
+        5 => config.plugins.memes.enabled = value,
+        6 => config.plugins.knowledge_base.enabled = value,
+        7 => config.plugins.archlinux.enabled = value,
+        8 => config.plugins.man.enabled = value,
+        9 => config.plugins.memory.enabled = value,
+        10 => config.plugins.package_advisor.enabled = value,
+        11 => config.plugins.linux_game_compatibility.enabled = value,
+        12 => config.plugins.deep_diagnose.enabled = value,
+        13 => config.plugins.diagnostics.enabled = value,
+        14 => config.plugins.weather.enabled = value,
+        15 => config.plugins.exchange_rate.enabled = value,
+        16 => config.plugins.calculator.enabled = value,
+        17 => config.plugins.hash_codec.enabled = value,
+        18 => config.plugins.moegirl.enabled = value,
+        19 => config.plugins.xuanxue.enabled = value,
         _ => {}
     }
 }
@@ -403,11 +393,11 @@ mod tests {
     fn cli_tool_menu_excludes_web_search_and_maps_config_indices() {
         let tools = cli_tool_names();
 
-        assert_eq!(tools.len(), 20);
-        assert_eq!(tools[0].0, "deep_research");
+        assert_eq!(tools.len(), 19);
+        assert_eq!(tools[0].0, "vision");
         assert!(tools.iter().all(|(id, _, _)| *id != "web"));
         assert_eq!(cli_tool_config_index(0), 1);
-        assert_eq!(cli_tool_config_index(tools.len() - 1), 20);
+        assert_eq!(cli_tool_config_index(tools.len() - 1), 19);
     }
 
     /// 验证受开关控制的轻量工具都能在 TUI 中查看与切换。
