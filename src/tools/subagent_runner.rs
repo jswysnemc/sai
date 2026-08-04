@@ -282,6 +282,25 @@ pub(crate) fn finalization_prompt() -> &'static str {
     "<tool_budget_reached>工具预算已用尽。不要再请求工具。请只基于上面的任务描述和已执行工具结果输出最终结果；缺少信息的地方明确说明。</tool_budget_reached>"
 }
 
+/// 剩余时间低于该比例时开始提醒子代理收尾。
+const DEADLINE_REMINDER_RATIO: f64 = 0.2;
+
+/// 生成运行时限临近的提醒文本。
+///
+/// 与硬性拒绝不同，这条提醒只陈述剩余时间，工具仍然可用，
+/// 由子代理自行决定继续深入还是收敛输出。
+///
+/// 参数:
+/// - `remaining_seconds`: 剩余可用秒数
+///
+/// 返回:
+/// - 注入对话的提醒文本
+fn deadline_reminder(remaining_seconds: u64) -> String {
+    format!(
+        "<time_budget>本次子代理任务剩余约 {remaining_seconds} 秒。工具仍然可用，但请开始收敛：优先完成关键步骤，并确保在时限内给出可用的最终结果。</time_budget>"
+    )
+}
+
 pub(crate) struct SubagentRunner {
     client: OpenAiCompatibleClient,
     system_prompt: String,
@@ -289,6 +308,8 @@ pub(crate) struct SubagentRunner {
     excluded_tools: Vec<String>,
     max_steps: usize,
     timeout_seconds: u64,
+    /// 整体运行时限；到期前会先提醒子代理收尾，而不是等外层硬砍
+    session_deadline_seconds: u64,
     progress: SubagentProgress,
 }
 
@@ -316,8 +337,21 @@ impl SubagentRunner {
             excluded_tools: Vec::new(),
             max_steps: 0,
             timeout_seconds: 60,
+            session_deadline_seconds: 0,
             progress,
         }
+    }
+
+    /// 设置整体运行时限。
+    ///
+    /// 参数:
+    /// - `seconds`: 时限秒数，0 表示不设时限
+    ///
+    /// 返回:
+    /// - 更新后的执行器
+    pub(crate) fn session_deadline_seconds(mut self, seconds: u64) -> Self {
+        self.session_deadline_seconds = seconds;
+        self
     }
 
     /// 设置最大工具调用次数。
@@ -422,7 +456,21 @@ impl SubagentRunner {
             .collect::<Vec<_>>();
         let definitions = self.tools.definitions_except(&excluded);
         let mut steps = 0usize;
+        // 运行时限只提醒一次，避免每轮刷屏挤占上下文
+        let started = tokio::time::Instant::now();
+        let mut deadline_reminded = false;
         loop {
+            // 1. 时限临近时注入软提醒；工具不受限，由子代理自行收敛
+            if !deadline_reminded && self.session_deadline_seconds > 0 {
+                let elapsed = started.elapsed().as_secs();
+                let remaining = self.session_deadline_seconds.saturating_sub(elapsed);
+                let threshold =
+                    (self.session_deadline_seconds as f64 * DEADLINE_REMINDER_RATIO) as u64;
+                if remaining <= threshold {
+                    messages.push(ChatMessage::plain("user", deadline_reminder(remaining)));
+                    deadline_reminded = true;
+                }
+            }
             if self.max_steps > 0 && steps >= self.max_steps {
                 stats.budget_reached = true;
                 messages.push(ChatMessage::plain("user", finalization_prompt()));

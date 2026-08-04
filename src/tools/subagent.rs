@@ -19,8 +19,11 @@ use control::{stats_json, subagent_cancel, subagent_list, subagent_result, subag
 
 const EXPLORE_PROMPT: &str = include_str!("../prompts/subagent-explore.md");
 const GENERAL_PROMPT: &str = include_str!("../prompts/subagent-general.md");
-const DEFAULT_MAX_STEPS: usize = 20;
-const MAX_MAX_STEPS: usize = 80;
+/// 父代理显式传入 max_steps 时的上限；不传则不限制轮次。
+///
+/// 长程任务的工具轮数与任务规模相关，硬性上限会让子代理在半途被截断。
+/// 收敛交给 wall-clock 超时与单工具超时，这里只兜住明显失控的显式取值。
+const MAX_MAX_STEPS: usize = 400;
 const SUBAGENT_TIMEOUT_SECONDS: u64 = 1800;
 const TOOL_TIMEOUT_SECONDS: u64 = 120;
 const DESCRIPTION_MAX_CHARS: usize = 160;
@@ -41,7 +44,6 @@ const EXPLORE_ALLOWED: &[&str] = &[
 const GENERAL_EXCLUDED: &[&str] = &[
     "subagent",
     "background_command",
-    "deep_research",
     "deep_diagnose",
     "linux_input_method_diagnose",
     "linux_game_compatibility",
@@ -126,7 +128,7 @@ pub(crate) fn register(
                 },
                 "max_steps": {
                     "type": "integer",
-                    "description": t("Maximum tool calls for the subagent. Defaults to 20.", "子代理最大工具调用次数，默认 20。")
+                    "description": t("Optional cap on the subagent's tool calls. Omit it to let the subagent run until the task is done.", "子代理工具调用次数上限，可选。不传表示不限制，子代理跑到任务完成为止。")
                 },
                 "subagent_id": {
                     "type": "string",
@@ -214,12 +216,12 @@ async fn start_subagent(args: Value, context: SubagentContext) -> Result<String>
             }
         });
     let subagent_type = profile.id.clone();
+    // 不传 max_steps 时为 0，表示不限制工具轮次；显式传值才钳制到安全区间
     let max_steps = args
         .get("max_steps")
         .and_then(Value::as_u64)
-        .map(|value| value as usize)
-        .unwrap_or(DEFAULT_MAX_STEPS)
-        .clamp(1, MAX_MAX_STEPS);
+        .map(|value| (value as usize).clamp(1, MAX_MAX_STEPS))
+        .unwrap_or(0);
     let goal_id = crate::state::StateStore::for_session(&context.paths, &context.session_id)?
         .goal()?
         .filter(|goal| goal.status.accepts_external_wake())
@@ -611,6 +613,7 @@ async fn run_subagent(
     let runner = SubagentRunner::new(client, &system_prompt, tools, progress)
         .max_steps(max_steps)
         .timeout_seconds(TOOL_TIMEOUT_SECONDS)
+        .session_deadline_seconds(SUBAGENT_TIMEOUT_SECONDS)
         .excluded_tools(&excluded);
     let result = tokio::time::timeout(
         Duration::from_secs(SUBAGENT_TIMEOUT_SECONDS),
