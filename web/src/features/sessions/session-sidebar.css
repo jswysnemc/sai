@@ -345,9 +345,9 @@
   /* 更多操作按钮绝对定位叠在右端，行内只保留主区一列 */
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  justify-self: start;
-  width: fit-content;
-  max-width: 100%;
+  /* 行必须占满侧栏宽度：fit-content 会让行收缩到内容宽，
+     内部的时间无法贴右 */
+  width: 100%;
   border-radius:var(--radius-3);
 }
 
