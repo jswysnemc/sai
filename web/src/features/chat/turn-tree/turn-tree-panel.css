@@ -204,3 +204,15 @@
     left: var(--space-sm);
   }
 }
+
+/* 聊天区宽度不足时，分支入口收为纯图标，避免与右侧工作概览相撞 */
+@container (max-width: 40rem) {
+  .turn-tree-open .turn-tree-open-label,
+  .turn-tree-open .turn-tree-open-count {
+    display: none;
+  }
+
+  .turn-tree-open {
+    padding: 0 var(--space-xs);
+  }
+}

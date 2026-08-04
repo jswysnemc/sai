@@ -334,3 +334,15 @@
     scroll-behavior: auto;
   }
 }
+
+/* 聊天区宽度不足时，工作概览收起胶囊收为纯图标，避免与左侧分支入口相撞 */
+@container (max-width: 40rem) {
+  .runtime-overview-pill strong,
+  .runtime-overview-pill .runtime-overview-change-stats {
+    display: none;
+  }
+
+  .runtime-overview-pill {
+    padding: 0 var(--space-xs);
+  }
+}
