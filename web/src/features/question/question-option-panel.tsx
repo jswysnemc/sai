@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check, Circle, CircleDot } from "lucide-react";
 import type { KeyboardEvent } from "react";
 import type { QuestionPrompt } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
@@ -56,7 +56,13 @@ export function QuestionOptionPanel({
                 {option.description && <span>{option.description}</span>}
               </span>
               <span className="question-option-selection" aria-hidden>
-                {multiple && active ? <Check size={14} /> : null}
+                {multiple
+                  ? active
+                    ? <Check size={14} />
+                    : null
+                  : active
+                    ? <CircleDot size={14} />
+                    : <Circle size={14} />}
               </span>
             </Button>
           );

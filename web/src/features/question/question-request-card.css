@@ -12,6 +12,25 @@
   border-color: color-mix(in srgb, var(--danger) 24%, var(--technical-border));
 }
 
+/* 已回答的卡片用成功色描边，状态一眼可辨 */
+.question-request-card.is-answered {
+  border-color: color-mix(in srgb, var(--signal) 40%, var(--technical-border));
+}
+
+.question-request-card.is-answered .question-request-icon {
+  color: var(--signal);
+}
+
+/* 待回答的卡片图标用强调色，提示需要行动 */
+.question-request-card.is-pending .question-request-icon {
+  color: var(--signal);
+}
+
+.question-request-card.is-cancelled .question-request-icon,
+.question-request-card.is-unavailable .question-request-icon {
+  color: var(--danger);
+}
+
 .question-request-head {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr) 14px;
@@ -146,6 +165,11 @@
 .question-option:hover:not(:disabled),
 .question-option.is-selected {
   background: color-mix(in srgb, var(--ink) 6%, var(--technical-surface));
+}
+
+/* 选中项的指示器用强调色，未选中的保持弱化 */
+.question-option.is-selected .question-option-selection {
+  color: var(--signal);
 }
 
 .question-option:disabled {

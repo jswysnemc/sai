@@ -234,7 +234,8 @@
 }
 
 .settings-field.full { grid-column: 1 / -1; }
-.settings-field > span { color: var(--ink); font-size:var(--text-sm); font-weight: 600; }
+/* 标签用中等字重，与界面其余部分的 500 保持一致，避免局部过粗 */
+.settings-field > span { color: var(--ink); font-size:var(--text-sm); font-weight: 500; }
 .settings-field > small { color: var(--ink-soft); font-size:var(--text-sm); line-height: 1.45; }
 
 .settings-field input,
