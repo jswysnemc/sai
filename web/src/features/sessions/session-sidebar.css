@@ -441,12 +441,33 @@
 }
 
 .session-main .session-summary {
-  display: grid;
-  /* 标题吸收剩余宽度，运行指示灯与时间依次贴右 */
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  /* 运行指示灯是条件渲染的，用 flex + auto 外边距把时间推到右缘，
+     列数不随指示灯出现与否而改变 */
+  display: flex;
   align-items: center;
   gap:var(--space-xs);
   min-width: 0;
+}
+
+/* 标题吸收剩余宽度，时间与指示灯贴右 */
+.session-main .session-summary > strong {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.session-main .session-summary > small {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.session-main .session-summary > .active-agent-indicator {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* 指示灯存在时它先吃掉 auto 外边距，时间紧随其后 */
+.session-main .session-summary > .active-agent-indicator ~ small {
+  margin-left: 0;
 }
 
 .session-main strong {

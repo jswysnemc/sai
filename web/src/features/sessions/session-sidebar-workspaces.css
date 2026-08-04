@@ -49,15 +49,36 @@
 }
 
 .workspace-tree-main > span:not(.active-agent-indicator) {
-  display: grid;
+  display: flex;
   min-width: 0;
 }
 
 .workspace-tree-main > .workspace-summary:not(.active-agent-indicator) {
-  /* 名称吸收剩余宽度，运行指示灯与会话计数依次贴右 */
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  /* 运行指示灯是条件渲染的，用 flex + auto 外边距把计数推到右缘，
+     列数不随指示灯出现与否而改变 */
   align-items: center;
   gap:var(--space-xs);
+}
+
+/* 名称吸收剩余宽度，计数与指示灯贴右 */
+.workspace-tree-main > .workspace-summary > strong {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.workspace-tree-main > .workspace-summary > small {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.workspace-tree-main > .workspace-summary > .active-agent-indicator {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* 指示灯存在时它先吃掉 auto 外边距，计数紧随其后 */
+.workspace-tree-main > .workspace-summary > .active-agent-indicator ~ small {
+  margin-left: 0;
 }
 
 .workspace-tree-row strong {

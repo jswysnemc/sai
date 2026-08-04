@@ -118,6 +118,12 @@
   font-size:var(--text-2xs);
 }
 
+/* 路径吸收剩余宽度，读取范围贴右显示 */
+.read-file-head .read-file-range {
+  margin-left: auto;
+  font-family: var(--font-code);
+}
+
 .read-file-head.path-hidden {
   justify-content: flex-end;
 }

@@ -9,6 +9,12 @@ export type ReadTextPage = {
   path: string;
   offset: number | null;
   limit: number | null;
+  /** 本次读取实际返回的行数 */
+  lineCount: number;
+  /** 是否因预算截断，仍有后续内容 */
+  truncated: boolean;
+  /** 续读起始行号，未截断时为 null */
+  next: number | null;
   content: string;
   lines: ReadResultLine[];
 };
@@ -53,12 +59,17 @@ function parseTextPage(record: Record<string, unknown>): ReadTextPage | null {
   const rawContent = record.content;
   if (!path || typeof rawContent !== "string") return null;
   const content = rawContent;
+  const lines = parseReadLines(content);
   return {
     path,
     offset: numberField(record, "offset"),
     limit: numberField(record, "limit"),
+    // 空内容会被 split 成单个空串，按 0 行计
+    lineCount: content.length === 0 ? 0 : lines.length,
+    truncated: record.truncated === true,
+    next: numberField(record, "next"),
     content,
-    lines: parseReadLines(content)
+    lines
   };
 }
 

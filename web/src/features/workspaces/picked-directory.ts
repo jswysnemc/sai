@@ -57,3 +57,17 @@ export function parsePickedDirectory(relativePaths: string[], roots: string[]): 
   const name = pickedDirectoryName(relativePaths);
   return { name, candidates: resolveDirectoryCandidates(name, roots) };
 }
+
+/**
+ * 解析 File System Access API 交出的目录句柄名。
+ *
+ * 该 API 只给目录名，不给路径，因此与 `webkitdirectory` 走同一套还原逻辑。
+ *
+ * @param handleName 目录句柄名
+ * @param roots 服务端允许浏览的根目录路径
+ * @returns 目录名与候选绝对路径
+ */
+export function parsePickedDirectoryName(handleName: string, roots: string[]): PickedDirectory {
+  const name = handleName.trim();
+  return { name, candidates: resolveDirectoryCandidates(name, roots) };
+}

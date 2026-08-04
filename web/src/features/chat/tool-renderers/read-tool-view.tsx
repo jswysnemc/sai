@@ -39,12 +39,13 @@ export function ReadToolView({ output, headerPath }: ReadToolViewProps) {
 function ReadTextPageView({ page, hidePath }: { page: ReadTextPage; hidePath: boolean }) {
   const { t } = useI18n();
   const source = page.lines.map((line) => line.text).join("\n");
+  const range = formatReadRange(page, t);
   return (
     <section className="read-file-page">
-      {(!hidePath || page.offset !== null) && (
+      {(!hidePath || range !== null) && (
         <div className={`read-file-head${hidePath ? " path-hidden" : ""}`}>
           {!hidePath && <ToolFileReference path={page.path} />}
-          {page.offset !== null && <small>{t(`Starting at line ${page.offset}`, `第 ${page.offset} 行起`)}</small>}
+          {range !== null && <small className="read-file-range">{range}</small>}
         </div>
       )}
       <div className="read-file-content">
@@ -55,6 +56,42 @@ function ReadTextPageView({ page, hidePath }: { page: ReadTextPage; hidePath: bo
       </div>
     </section>
   );
+}
+
+/**
+ * 组装读取范围说明。
+ *
+ * 优先展示实际覆盖的行区间；请求 limit 与实际行数不一致时补充说明，
+ * 因截断而提前结束时给出续读起点。
+ *
+ * @param page 文本分页
+ * @param t 双语文本选择方法
+ * @returns 范围说明文本，无可展示信息时返回 null
+ */
+function formatReadRange(page: ReadTextPage, t: (en: string, zh: string) => string): string | null {
+  const parts: string[] = [];
+  const start = page.offset;
+  if (start !== null && page.lineCount > 0) {
+    const end = start + page.lineCount - 1;
+    parts.push(t(`L${start}–L${end}`, `第 ${start}–${end} 行`));
+  } else if (start !== null) {
+    parts.push(t(`From L${start}`, `第 ${start} 行起`));
+  }
+  if (page.lineCount > 0) {
+    parts.push(t(`${page.lineCount} lines`, `${page.lineCount} 行`));
+  }
+  // 请求上限与实际返回不一致时说明差异来源
+  if (page.limit !== null && page.limit !== page.lineCount) {
+    parts.push(t(`limit ${page.limit}`, `上限 ${page.limit}`));
+  }
+  if (page.truncated) {
+    parts.push(
+      page.next !== null
+        ? t(`truncated, resume at L${page.next}`, `已截断，续读第 ${page.next} 行`)
+        : t("truncated", "已截断")
+    );
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 /**

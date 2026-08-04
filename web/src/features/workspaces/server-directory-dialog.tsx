@@ -1,4 +1,4 @@
-import { ArrowUp, Check, CornerDownLeft, Eye, EyeOff, Folder, FolderOpen, FolderPlus, GitBranch, HardDrive } from "lucide-react";
+import { ArrowUp, Check, CornerDownLeft, Eye, EyeOff, Folder, FolderPlus, FolderSearch, GitBranch, HardDrive } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
@@ -8,6 +8,7 @@ import { Button } from "../../shared/ui/button/button";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { useI18n } from "../i18n/use-i18n";
 import { isAbsoluteFilesystemPath, normalizePathInput } from "./path-utils";
+import { useDirectoryPicker } from "./use-directory-picker";
 
 type ServerDirectoryDialogProps = {
   open: boolean;
@@ -44,6 +45,8 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
     [listing.data?.entries, showHidden, filter]
   );
   const hiddenCount = (listing.data?.entries.length ?? 0) - sortEntries(listing.data?.entries ?? [], false).length;
+  const roots = useMemo(() => listing.data?.roots.map((root) => root.path) ?? [], [listing.data?.roots]);
+  const picker = useDirectoryPicker(roots);
 
   useEffect(() => {
     if (props.open) setSubmitError(null);
@@ -129,16 +132,41 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
           {listing.data?.roots.map((root) => <button type="button" key={root.path} onClick={() => navigate(root.path)}><HardDrive size={14} /><span><strong>{root.name}</strong><small>{root.path}</small></span></button>)}
           <button
             type="button"
-            className="directory-open-folder"
-            onClick={() => void submit()}
-            disabled={submitting || !listing.data}
+            className="directory-pick-folder"
+            onClick={() => void picker.pick()}
+            disabled={picker.state.status === "picking"}
           >
-            <FolderOpen size={14} />
+            <FolderSearch size={14} />
             <span>
-              <strong>{t("Open folder", "打开文件夹")}</strong>
-              <small>{selected ? t("Open selected server folder", "打开选中的服务端文件夹") : t("Open current server folder", "打开当前服务端文件夹")}</small>
+              <strong>{t("Choose a folder", "选择文件夹")}</strong>
+              <small>{t("Open the system folder picker", "打开系统文件夹选择器")}</small>
             </span>
           </button>
+          <input
+            ref={picker.inputRef}
+            type="file"
+            className="directory-pick-input"
+            // React 的类型定义没有覆盖这两个非标准属性，用 ref 挂载时由浏览器识别
+            {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
+            onChange={picker.handleInputChange}
+          />
+          {picker.state.status === "resolved" && (
+            <div className="directory-pick-result">
+              <small>{t(`Selected “${picker.state.result.name}”`, `已选择“${picker.state.result.name}”`)}</small>
+              {picker.state.result.candidates.length === 0 ? (
+                <small className="directory-pick-hint">{t("No allowed root can host this folder", "没有允许根可以容纳该文件夹")}</small>
+              ) : (
+                picker.state.result.candidates.map((candidate) => (
+                  <button type="button" key={candidate} onClick={() => { navigate(candidate); picker.reset(); }}>
+                    <Folder size={13} /><span><small>{candidate}</small></span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+          {picker.state.status === "unsupported" && (
+            <small className="directory-pick-hint">{t("This browser cannot open a folder picker", "当前浏览器不支持文件夹选择器")}</small>
+          )}
         </aside>
         <section className="directory-browser">
           <header>

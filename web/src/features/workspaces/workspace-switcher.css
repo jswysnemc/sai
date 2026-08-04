@@ -234,9 +234,13 @@
 .directory-roots button > span { display: grid; min-width: 0; gap:var(--space-3xs); }
 .directory-roots strong { font-size:var(--text-xs); font-weight: 500; }
 .directory-roots small { overflow: hidden; color: var(--ink-soft); font: 400 8px var(--font-code); text-overflow: ellipsis; white-space: nowrap; }
-.directory-roots .directory-open-folder { margin-top:var(--space-xs); border: 1px solid var(--line); background: var(--paper-raised); color: var(--ink-soft); }
-.directory-roots .directory-open-folder:hover:not(:disabled) { border-color: var(--line-strong); background: var(--paper-deep); color: var(--ink); }
-.directory-roots .directory-open-folder:disabled { cursor: not-allowed; opacity: 0.55; }
+.directory-roots .directory-pick-folder { margin-top:var(--space-xs); border: 1px solid var(--line); background: var(--paper-raised); color: var(--ink-soft); }
+.directory-roots .directory-pick-folder:hover:not(:disabled) { border-color: var(--line-strong); background: var(--paper-deep); color: var(--ink); }
+.directory-roots .directory-pick-folder:disabled { cursor: not-allowed; opacity: 0.55; }
+.directory-pick-input { display: none; }
+.directory-pick-result { display: grid; gap:var(--space-3xs); margin-top:var(--space-2xs); }
+.directory-pick-result > small { color: var(--ink-soft); font-size:var(--text-2xs); }
+.directory-pick-hint { color: var(--ink-soft); font-size:var(--text-2xs); }
 .directory-browser { display: grid; grid-template-rows: 43px auto minmax(0, 1fr); min-width: 0; min-height: 0; }
 .directory-browser > header { display: flex; align-items: center; gap:var(--space-xs); padding:var(--space-xs) var(--space-md); border-bottom: 1px solid var(--line); }
 .directory-browser > header button { display: grid; flex: 0 0 29px; width: 29px; height: 29px; padding: 0; place-items: center; border: 0; border-radius:var(--radius-2); background: transparent; color: var(--ink-soft); }

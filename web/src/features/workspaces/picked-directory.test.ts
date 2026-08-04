@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parsePickedDirectory, pickedDirectoryName, resolveDirectoryCandidates } from "./picked-directory";
+import {
+  parsePickedDirectory,
+  parsePickedDirectoryName,
+  pickedDirectoryName,
+  resolveDirectoryCandidates
+} from "./picked-directory";
 
 describe("picked-directory", () => {
   it("从文件相对路径取出被选目录名", () => {
@@ -27,5 +32,19 @@ describe("picked-directory", () => {
   it("目录名为空时没有候选", () => {
     expect(resolveDirectoryCandidates("", ["/home/snemc"])).toEqual([]);
     expect(parsePickedDirectory([], ["/home/snemc"])).toEqual({ name: "", candidates: [] });
+  });
+
+  it("解析系统选择器交出的目录句柄名", () => {
+    expect(parsePickedDirectoryName("sandbox", ["/home/snemc", "/srv"]))
+      .toEqual({ name: "sandbox", candidates: ["/home/snemc/sandbox", "/srv/sandbox"] });
+  });
+
+  it("句柄名两端空白不影响解析", () => {
+    expect(parsePickedDirectoryName("  sandbox  ", ["/home/snemc"]))
+      .toEqual({ name: "sandbox", candidates: ["/home/snemc/sandbox"] });
+  });
+
+  it("没有允许根时句柄名解析出空候选", () => {
+    expect(parsePickedDirectoryName("sandbox", [])).toEqual({ name: "sandbox", candidates: [] });
   });
 });

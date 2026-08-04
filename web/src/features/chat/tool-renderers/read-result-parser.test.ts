@@ -34,5 +34,29 @@ describe("read result parser", () => {
     const pages = parseReadTextPages(JSON.stringify({ type: "text-page", path: "/tmp/empty.rs", content: "" }));
     expect(pages).toHaveLength(1);
     expect(pages[0].lines).toEqual([{ number: null, text: "" }]);
+    expect(pages[0].lineCount).toBe(0);
+  });
+
+  it("解析读取范围与截断信息", () => {
+    const pages = parseReadTextPages(JSON.stringify({
+      type: "text-page",
+      path: "/tmp/big.rs",
+      offset: 10,
+      limit: 500,
+      content: "10: a\n11: b",
+      truncated: true,
+      next: 12
+    }));
+    expect(pages[0].offset).toBe(10);
+    expect(pages[0].limit).toBe(500);
+    expect(pages[0].lineCount).toBe(2);
+    expect(pages[0].truncated).toBe(true);
+    expect(pages[0].next).toBe(12);
+  });
+
+  it("未截断时不产生续读起点", () => {
+    const pages = parseReadTextPages(JSON.stringify({ type: "text-page", path: "/tmp/a.rs", offset: 1, content: "1: a" }));
+    expect(pages[0].truncated).toBe(false);
+    expect(pages[0].next).toBeNull();
   });
 });
