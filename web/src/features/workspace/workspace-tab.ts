@@ -69,7 +69,8 @@ export function paneTabLabel(type: PaneTab, locale: Locale = "zh-CN"): string {
     diff: "Git",
     terminal: text(locale, "Terminal", "终端"),
     tasks: text(locale, "Background tasks", "后台任务"),
-    subagents: text(locale, "Subagents", "子智能体")
+    subagents: text(locale, "Subagents", "子智能体"),
+    sessions: text(locale, "Sessions", "会话")
   }[type];
 }
 import { text, type Locale } from "../i18n/locale";
