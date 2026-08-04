@@ -49,6 +49,10 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
     () => answers.every((item, index) => questions[index]?.required === false || item.length > 0),
     [answers, questions]
   );
+  const answeredCount = useMemo(
+    () => answers.filter((item, index) => (questions[index]?.required === false ? true : item.length > 0)).length,
+    [answers, questions]
+  );
 
   /**
    * 更新指定问题的预设选项答案。
@@ -151,6 +155,11 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
           <strong>{statusLabel(status, active, t)}</strong>
           <span>{t(`${questions.length} questions`, `${questions.length} 个问题`)} · {questions.map((item) => item.header).join(" / ")}</span>
         </span>
+        {status === "pending" && (
+          <span className="question-request-progress" aria-label={t(`${answeredCount} of ${questions.length} answered`, `已回答 ${answeredCount}/${questions.length}`)}>
+            {answeredCount}/{questions.length}
+          </span>
+        )}
         <ChevronDown size={14} className={expanded ? "rotate" : ""} aria-hidden />
       </Button>
       {expanded && (
@@ -164,6 +173,7 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
                   onClick={() => setTab(index)}
                 >
                   {question.header}
+                  {Boolean(answers[index]?.length) && <Check size={11} className="question-tab-check" aria-hidden />}
                 </Button>
               ))}
             </div>
