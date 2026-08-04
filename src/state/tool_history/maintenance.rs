@@ -334,7 +334,7 @@ fn snip_text(tool_name: &str, visible: &str, original_chars: usize, result_ref: 
 /// - 占位说明文本
 fn prune_text(tool_name: &str, original_chars: usize, result_ref: &str) -> String {
     format!(
-        "[elided stale tool result — {tool_name}, {original_chars} chars archived to {result_ref}; re-run the tool if the data is needed again]"
+        "[stale tool result elided — {tool_name} already ran and returned {original_chars} chars, archived to {result_ref}. This call is done; do not repeat it. Re-run only if the underlying state may have changed since.]"
     )
 }
 
@@ -539,7 +539,7 @@ mod tests {
         assert_eq!(stats.rewritten, 1);
         let replacement = replacement_of(&store, "turn_1", "call_stale").unwrap();
         assert_eq!(replacement.policy, POLICY_STALE_PRUNE);
-        assert!(replacement.replacement.contains("elided stale tool result"));
+        assert!(replacement.replacement.contains("stale tool result elided"));
 
         let second = store
             .maintain_stale_tool_results(ToolResultMaintenanceMode::Prune)

@@ -18,7 +18,7 @@ pub(crate) fn tool_output_for_context(tool_name: &str, output: &str) -> String {
     }
     let clipped = output.chars().take(limit).collect::<String>();
     format!(
-        "{clipped}\n\n[tool output clipped from {total} chars to {limit} chars for model context; rerun the tool with narrower query, pagination, or max_chars if more detail is needed]"
+        "{clipped}\n\n[tool output clipped from {total} chars to {limit} chars for model context. The call succeeded; this is the leading portion of a longer result. Do not repeat this call with the same arguments — narrow the query, paginate, or raise max_chars if more detail is needed]"
     )
 }
 

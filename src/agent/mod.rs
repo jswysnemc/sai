@@ -302,9 +302,26 @@ impl Agent {
                     name: call.function.name.clone(),
                     arguments: call.function.arguments.clone(),
                 })?;
+                // 重复统计覆盖全部分支：被门禁或权限挡下的调用同样占用轮次，
+                // 漏掉它们会让反复发起的幻觉工具名无限空转
+                let repeat_verdict =
+                    repeat_guard.observe(&call.function.name, &call.function.arguments);
+                if let repeat_guard::RepeatVerdict::Stop { seen } = repeat_verdict {
+                    let output = repeat_guard::stop_notice(&call.function.name, seen);
+                    on_event(AgentEvent::ToolResult {
+                        name: call.function.name.clone(),
+                        ok: false,
+                        output: output.clone(),
+                    })?;
+                    self.record_tool_result_completed(turn_id, &call, false, &output, &output)?;
+                    messages.push(ChatMessage::tool(call.id, output));
+                    continue;
+                }
                 if ask_question_enabled && call.function.name == "ask_question" {
                     if question_call_count > 1 {
                         let output = "tool error: only one ask_question call is allowed per tool batch; combine all questions into one call".to_string();
+                        repeat_guard
+                            .observe_rejected(&call.function.name, &call.function.arguments);
                         self.record_tool_result_completed(turn_id, &call, false, &output, &output)?;
                         on_event(AgentEvent::ToolResult {
                             name: call.function.name.clone(),
@@ -318,6 +335,8 @@ impl Agent {
                         let output = format!(
                             "tool error: ask_question exceeded the per-turn limit of {MAX_QUESTION_ROUNDS_PER_TURN}"
                         );
+                        repeat_guard
+                            .observe_rejected(&call.function.name, &call.function.arguments);
                         self.record_tool_result_completed(turn_id, &call, false, &output, &output)?;
                         on_event(AgentEvent::ToolResult {
                             name: call.function.name.clone(),
@@ -420,6 +439,8 @@ impl Agent {
                 if let ToolGate::Reject(output) =
                     evaluate_tool_gate(&self.tools, &self.tool_visibility, &call, &used_tools)
                 {
+                    // 门禁拒绝的调用重发多少次结果都一样，计入重复统计以便及时停止
+                    repeat_guard.observe_rejected(&call.function.name, &call.function.arguments);
                     self.record_tool_result_completed(turn_id, &call, false, &output, &output)?;
                     on_event(AgentEvent::ToolResult {
                         name: call.function.name.clone(),
@@ -597,20 +618,6 @@ impl Agent {
                         &context_output,
                     )?;
                     messages.push(ChatMessage::tool(call.id, context_output));
-                    continue;
-                }
-                // 同一参数反复调用同一工具且结果不变时，先提醒、再拒绝，避免无限空转
-                let repeat_verdict =
-                    repeat_guard.observe(&call.function.name, &call.function.arguments);
-                if let repeat_guard::RepeatVerdict::Block { seen } = repeat_verdict {
-                    let output = repeat_guard::block_notice(&call.function.name, seen);
-                    on_event(AgentEvent::ToolResult {
-                        name: call.function.name.clone(),
-                        ok: false,
-                        output: output.clone(),
-                    })?;
-                    self.record_tool_result_completed(turn_id, &call, false, &output, &output)?;
-                    messages.push(ChatMessage::tool(call.id, output));
                     continue;
                 }
                 let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
