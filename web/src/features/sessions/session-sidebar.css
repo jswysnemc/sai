@@ -446,12 +446,14 @@
   display: flex;
   align-items: center;
   gap:var(--space-xs);
+  /* 必须占满所在网格列，否则宽度收缩到内容宽，时间无法贴右 */
+  width: 100%;
   min-width: 0;
 }
 
 /* 标题吸收剩余宽度，时间与指示灯贴右 */
 .session-main .session-summary > strong {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
 }
 

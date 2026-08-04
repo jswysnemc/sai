@@ -50,6 +50,8 @@
 
 .workspace-tree-main > span:not(.active-agent-indicator) {
   display: flex;
+  /* 必须占满所在网格列，否则宽度收缩到内容宽，计数无法贴右 */
+  width: 100%;
   min-width: 0;
 }
 
@@ -62,7 +64,7 @@
 
 /* 名称吸收剩余宽度，计数与指示灯贴右 */
 .workspace-tree-main > .workspace-summary > strong {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
