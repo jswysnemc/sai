@@ -6,40 +6,75 @@ const PATCH = `diff --git a/src/a.ts b/src/a.ts
 index 1111111..2222222 100644
 --- a/src/a.ts
 +++ b/src/a.ts
-@@ -1,7 +1,7 @@
- same one
+@@ -1,9 +1,9 @@
+ ctx one
+ ctx two
+ ctx three
+ ctx four
 -old a line
 -old b line
 +new a line
- context mid
+ ctx mid one
+ ctx mid two
+ ctx mid three
+ ctx mid four
 +brand new line
  same tail
 `;
 
-describe("DiffView side-by-side", () => {
+describe("DiffView unified", () => {
   it("统一模式渲染单列行", () => {
     const html = renderToStaticMarkup(<DiffView source={PATCH} layout="unified" />);
     expect(html).toContain("diff-file-lines");
-    expect(html).not.toContain("diff-side-grid");
+    expect(html).not.toContain("diff-idea");
+  });
+});
+
+describe("DiffView idea side-by-side", () => {
+  it("渲染 IDEA 式查看器与变更块导航", () => {
+    const html = renderToStaticMarkup(<DiffView source={PATCH} layout="side" />);
+    expect(html).toContain("diff-idea");
+    expect(html).toContain("diff-idea-toolbar");
+    // 两处变更块
+    expect(html).toContain("2 处变更");
+    expect(html).toContain("1 / 2");
   });
 
-  it("并排模式渲染左右两栏且配对行同行", () => {
+  it("变更块带中间连接带且按增删着色", () => {
     const html = renderToStaticMarkup(<DiffView source={PATCH} layout="side" />);
-    expect(html).toContain("diff-side-grid");
-    // 配对行：左 old a / 右 new a 应同时出现
-    // 字符级高亮把改动词单独包进 mark，断言左右两栏各自的改动区间
+    // 第一块删除+新增混合，第二块纯新增
+    expect(html).toContain("diff-tone-mixed");
+    expect(html).toContain("diff-tone-added");
+    expect(html).toContain("diff-idea-band");
+  });
+
+  it("短上下文段直接铺开不折叠", () => {
+    const html = renderToStaticMarkup(<DiffView source={PATCH} layout="side" />);
+    // 各上下文段均不超过两倍边距，不产生折条
+    expect(html).not.toContain("diff-idea-fold");
+  });
+
+  it("长上下文段折叠为折条并可展开", () => {
+    const longContext = Array.from({ length: 12 }, (_, index) => `ctx ${index + 1}`).join("\n");
+    const longPatch = `diff --git a/src/b.ts b/src/b.ts
+--- a/src/b.ts
++++ b/src/b.ts
+@@ -1,14 +1,14 @@
+-old line
++new line
+${longContext}
+`;
+    const html = renderToStaticMarkup(<DiffView source={longPatch} layout="side" />);
+    // 13 行上下文超过两倍边距，中间 7 行折叠
+    expect(html).toContain("diff-idea-fold");
+    expect(html).toContain("展开 7 行未改动内容");
+  });
+
+  it("配对行左右同列且字符级高亮", () => {
+    const html = renderToStaticMarkup(<DiffView source={PATCH} layout="side" />);
     expect(html).toContain('diff-inline">old</mark>');
     expect(html).toContain('diff-inline">new</mark>');
-    // 孤立新增行左侧留空槽
-    expect(html).toContain("diff-row empty left");
-    // context 行左右同列，文本出现两次
-    const occurrences = html.split("same one").length - 1;
-    expect(occurrences).toBe(2);
-  });
-
-  it("并排模式行号分列显示", () => {
-    const html = renderToStaticMarkup(<DiffView source={PATCH} layout="side" />);
-    // 左栏显示旧行号 2，右栏显示新行号 3
+    // 左右行号分列
     expect(html).toMatch(/diff-row removed left/);
     expect(html).toMatch(/diff-row added right/);
   });

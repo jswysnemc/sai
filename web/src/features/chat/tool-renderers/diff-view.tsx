@@ -3,7 +3,7 @@ import { SyntaxHighlighter } from "../syntax-highlighter";
 import { diffStatusLabel } from "./diff/diff-model";
 import type { DiffFile, DiffLine } from "./diff/diff-model";
 import { parseDiff } from "./diff/diff-parser";
-import { DiffSideBySideBlock } from "./diff-side-by-side";
+import { DiffIdeaView } from "./diff-idea-view";
 import { ToolFileReference } from "./tool-file-reference";
 import { useI18n } from "../../i18n/use-i18n";
 import "./diff-view.css";
@@ -100,7 +100,7 @@ function DiffFileBlock({
       )}
       {file.lines.length > 0 &&
         (layout === "side" ? (
-          <DiffSideBySideBlock file={file} language={languageOfPath(file.path)} />
+          <DiffIdeaView file={file} language={languageOfPath(file.path)} />
         ) : (
           <div className={`diff-file-lines ${gutterClass}`}>
             {file.lines.map((line, index) => (

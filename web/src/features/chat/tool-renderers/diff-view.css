@@ -231,3 +231,158 @@
 .diff-side-grid .diff-row.right {
   border-left: 1px solid var(--technical-border);
 }
+
+/* ---------- IDEA 式查看器 ---------- */
+
+.diff-idea {
+  display: grid;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+/* 顶部工具栏：变更计数与导航 */
+.diff-idea-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-2xs) var(--space-xs);
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-2);
+  background: var(--technical-surface);
+}
+
+.diff-idea-count {
+  color: var(--technical-muted);
+  font: 400 var(--text-2xs) var(--font-code);
+}
+
+.diff-idea-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  color: var(--technical-muted);
+  font: 400 var(--text-2xs) var(--font-code);
+}
+
+.diff-idea-nav button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--technical-muted);
+}
+
+.diff-idea-nav button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--technical-text);
+}
+
+.diff-idea-nav button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 双栏主体：左栏 + 连接带 + 右栏 */
+.diff-idea-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr);
+  min-width: 0;
+}
+
+.diff-idea-cols .diff-row {
+  grid-template-columns: 3rem minmax(0, 1fr);
+  min-width: 0;
+}
+
+.diff-idea-cols .diff-row code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+/* 中间连接带：变更块整块着色，按增/删/混合区分 */
+.diff-idea-band {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+.diff-tone-added .diff-idea-band {
+  background: color-mix(in srgb, var(--diff-added, #2f9e63) 35%, transparent);
+}
+
+.diff-tone-removed .diff-idea-band {
+  background: color-mix(in srgb, var(--diff-removed, #d6604d) 35%, transparent);
+}
+
+.diff-tone-mixed .diff-idea-band {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--diff-removed, #d6604d) 35%, transparent),
+    color-mix(in srgb, var(--diff-added, #2f9e63) 35%, transparent)
+  );
+}
+
+/* 上下文行的平直细分隔 */
+.diff-idea-rowline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr);
+  min-width: 0;
+}
+
+.diff-idea-rowline .diff-row {
+  grid-template-columns: 3rem minmax(0, 1fr);
+  min-width: 0;
+}
+
+.diff-idea-rowline .diff-row code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+.diff-idea-band-flat {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+/* 折叠条：未改动区的展开/收起入口 */
+.diff-idea-fold {
+  grid-column: 1 / -1;
+  width: 100%;
+  padding: var(--space-3xs) var(--space-sm);
+  border: 0;
+  border-top: 1px solid var(--technical-border);
+  border-bottom: 1px solid var(--technical-border);
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+  color: var(--technical-muted);
+  font: 400 var(--text-2xs) var(--font-code);
+  text-align: center;
+  cursor: pointer;
+}
+
+.diff-idea-fold:hover {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--technical-text);
+}
+
+.diff-idea-empty {
+  padding: var(--space-lg);
+  color: var(--technical-muted);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+/* 左右两栏之间的细分隔线 */
+.diff-idea-cols .diff-row.right,
+.diff-idea-rowline .diff-row.right {
+  border-left: 1px solid var(--technical-border);
+}
+
+/* hunk 标记横跨三列 */
+.diff-idea .diff-row.diff-span {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr);
+}
