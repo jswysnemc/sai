@@ -83,10 +83,13 @@ impl Agent {
             memes::plan_auto_meme_before_reply(&self.config, &self.paths, &self.client, &input)
                 .await?;
         perf.mark("auto meme plan");
+        // 结构化记忆按当前工作区召回，相关度不足时不注入
+        let workspace = crate::runtime_cwd::current_dir()
+            .ok()
+            .map(|path| path.display().to_string());
         let association_prompt = self
             .memory
-            .association(&input)?
-            .map(|association| self.memory.format_association(&association));
+            .recall_for_turn(&input, workspace.as_deref())?;
         perf.mark("memory association");
         let auto_meme_reminder = auto_meme_plan.as_ref().map(|plan| plan.reminder.as_str());
         let mut messages = self.chat_messages_for_turn(
@@ -221,6 +224,8 @@ impl Agent {
         perf.mark("complete turn");
         self.spawn_session_memory_extraction();
         perf.mark("session memory extraction spawned");
+        // 长期记忆抽取要发模型请求，异步执行不阻塞用户可见的答复
+        self.spawn_memory_capture(&input, &result.content);
         self.memory.process_after_turn(&input, &result.content)?;
         perf.mark("memory process after turn");
         // 1. 会话级累计（顶栏）

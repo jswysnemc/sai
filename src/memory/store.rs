@@ -16,6 +16,8 @@ pub struct MemoryStore {
     /// Markdown memory source files (`facts/*.md`, `episodes/*.md`).
     files_dir: PathBuf,
     skills_dir: PathBuf,
+    /// 统一记忆库；结构化写入与作用域感知召回走这一路
+    library_db: PathBuf,
 }
 
 impl MemoryStore {
@@ -29,7 +31,52 @@ impl MemoryStore {
             state_db: state_dir.join("evicted_context.db"),
             files_dir: data_dir.join("files"),
             skills_dir: config.active_persona_skills_dir(paths),
+            library_db: data_dir.join("library.db"),
         }
+    }
+
+    /// 返回统一记忆库句柄。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 绑定当前人格与半衰期配置的记忆库
+    pub fn library(&self) -> crate::memory::MemoryLibrary {
+        crate::memory::MemoryLibrary::new(&self.library_db, self.config.forgetting_half_life_days)
+    }
+
+    /// 按当前输入召回结构化记忆并渲染为注入文本。
+    ///
+    /// 参数:
+    /// - `query`: 当前用户输入
+    /// - `workspace`: 当前工作区路径；无工作区时为 None
+    ///
+    /// 返回:
+    /// - 注入文本；没有足够相关的记忆时为 None
+    pub fn recall_for_turn(&self, query: &str, workspace: Option<&str>) -> Result<Option<String>> {
+        if !self.config.enabled || !self.config.association_enabled {
+            return Ok(None);
+        }
+        self.library()
+            .recall(query, workspace, crate::memory::now_days())
+    }
+
+    /// 写入一批抽取出的候选记忆。
+    ///
+    /// 参数:
+    /// - `candidates`: 抽取模型给出的候选
+    ///
+    /// 返回:
+    /// - 实际写入或更新的条数
+    pub fn capture_candidates(
+        &self,
+        candidates: Vec<crate::memory::MemoryCandidate>,
+    ) -> Result<usize> {
+        if !self.config.enabled {
+            return Ok(0);
+        }
+        self.library().capture(candidates, &now())
     }
 
     /// 返回记忆功能是否启用。
@@ -198,25 +245,20 @@ impl MemoryStore {
         Ok(id)
     }
 
-    pub fn remember_pending_event(
-        &self,
-        user_message: &str,
-        assistant_message: &str,
-    ) -> Result<()> {
-        if !self.config.enabled || !self.config.auto_diary_enabled {
-            return Ok(());
-        }
-        self.init()?;
-        self.data_conn()?.execute(
-            "INSERT INTO pending_events (user_message, assistant_message, created_at) VALUES (?1, ?2, ?3)",
-            params![user_message.trim(), assistant_message.trim(), now()],
-        )?;
-        Ok(())
-    }
-
-    pub fn process_after_turn(&self, user_message: &str, assistant_message: &str) -> Result<()> {
-        self.remember_pending_event(user_message, assistant_message)?;
-        self.flush_pending_events()?;
+    /// 轮次结束后的记忆维护。
+    ///
+    /// 长期记忆的写入已由 `spawn_memory_capture` 经统一记忆库完成——
+    /// 那条链路用模型判断什么值得记，而这里的 pending_events 是按字符串
+    /// 规则生成的对话流水账，两者并存只会污染召回。因此这里不再写入，
+    /// 只保留方法本身供旧调用点使用。
+    ///
+    /// 参数:
+    /// - `user_message`: 用户原文
+    /// - `assistant_message`: 助手回复原文
+    ///
+    /// 返回:
+    /// - 始终成功
+    pub fn process_after_turn(&self, _user_message: &str, _assistant_message: &str) -> Result<()> {
         Ok(())
     }
 
@@ -342,64 +384,6 @@ impl MemoryStore {
             {
                 std::fs::remove_dir_all(entry.path())?;
             }
-        }
-        Ok(())
-    }
-
-    fn flush_pending_events(&self) -> Result<()> {
-        if !self.config.enabled || !self.config.auto_diary_enabled {
-            return Ok(());
-        }
-        self.init()?;
-        let conn = self.data_conn()?;
-        let mut stmt = conn.prepare(
-            "SELECT id, user_message, assistant_message, created_at FROM pending_events WHERE processed_at IS NULL ORDER BY id LIMIT 20",
-        )?;
-        let rows = stmt.query_map([], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-            ))
-        })?;
-        for row in rows {
-            let (id, user, assistant, created_at) = row?;
-            // 1. 提炼日记摘要；寒暄/空内容不入库
-            let content = match summarize_episode(&created_at, &user, &assistant) {
-                Some(value) => value,
-                None => {
-                    conn.execute(
-                        "UPDATE pending_events SET processed_at=?1 WHERE id=?2",
-                        params![now(), id],
-                    )?;
-                    continue;
-                }
-            };
-            // 2. 写入 episodes + FTS + Markdown 源文件
-            conn.execute(
-                "INSERT INTO episodes (content, source, status, strength, recall_count, created_at, updated_at) VALUES (?1, 'episode', 'active', 1.0, 0, ?2, ?2)",
-                params![content, created_at],
-            )?;
-            let episode_id = conn.last_insert_rowid();
-            fts_upsert_row(&conn, "episodes", episode_id, &content)?;
-            write_memory_markdown(
-                &self.files_dir,
-                "episodes",
-                episode_id,
-                &content,
-                "episode",
-                "active",
-                None,
-                1.0,
-                &created_at,
-                &created_at,
-                "",
-            )?;
-            conn.execute(
-                "UPDATE pending_events SET processed_at=?1 WHERE id=?2",
-                params![now(), id],
-            )?;
         }
         Ok(())
     }
