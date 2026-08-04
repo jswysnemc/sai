@@ -396,17 +396,16 @@
   align-items: center;
   width: 100%;
   min-width: 0;
-  /* 静止态元信息贴右缘；悬停时右内边距扩大，为按钮让位 */
   padding:var(--space-sm) var(--space-md) var(--space-sm) var(--space-md);
   border: 0;
   background: transparent;
   text-align: left;
-  transition: padding-right var(--duration-fast) ease;
 }
 
-.session-row:hover .session-main,
-.session-row:focus-within .session-main {
-  padding-right: calc(var(--space-md) + var(--sidebar-row-actions));
+/* 悬停时更多按钮替换时间的位置，而不是把内容整体左移让位 */
+.session-row:hover .session-summary > small,
+.session-row:focus-within .session-summary > small {
+  visibility: hidden;
 }
 
 .active-agent-indicator {

@@ -32,20 +32,18 @@
   width: 100%;
   min-width: 0;
   min-height: 34px;
-  /* 静止态会话计数贴右缘；悬停时右内边距扩大，为两颗按钮让位 */
   padding:0 var(--space-xs) 0 var(--space-xs);
   border: 0;
   background: transparent;
   color: inherit;
   text-align: left;
-  transition: padding-right var(--duration-fast) ease;
 }
 
-/* 工作区行有两颗操作按钮，让位宽度是会话行的两倍 */
-.workspace-tree-row:hover .workspace-tree-main,
-.workspace-tree-row:focus-within .workspace-tree-main,
-.workspace-tree-row.selecting .workspace-tree-main {
-  padding-right: calc(var(--space-xs) + var(--sidebar-row-actions) * 2);
+/* 悬停时操作按钮替换计数的位置，而不是把内容整体左移让位 */
+.workspace-tree-row:hover .workspace-summary > small,
+.workspace-tree-row:focus-within .workspace-summary > small,
+.workspace-tree-row.selecting .workspace-summary > small {
+  visibility: hidden;
 }
 
 .workspace-tree-main > span:not(.active-agent-indicator) {
