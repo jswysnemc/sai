@@ -1,7 +1,7 @@
 use super::viewport::InlineViewport;
 use crate::render::transcript::AnsiLine;
 use anyhow::Result;
-use crossterm::cursor::MoveTo;
+use crossterm::cursor::{Hide, MoveTo};
 use crossterm::queue;
 use crossterm::style::Print;
 use crossterm::terminal::{Clear, ClearType};
@@ -31,6 +31,9 @@ pub(super) fn replay_lines(
     viewport: &InlineViewport,
     lines: &[AnsiLine],
 ) -> Result<usize> {
+    // 绘制期间隐藏光标：中途 flush 时若光标可见，Windows 终端会在
+    // 输出尾行与输入框之间来回闪动；最终位置由 composer 的 Show 恢复
+    queue!(stdout, Hide)?;
     let painted = replay_lines_to(stdout, viewport, lines)?;
     stdout.flush()?;
     Ok(painted)
@@ -61,6 +64,9 @@ pub(super) fn apply_delta<W: Write>(
     new_total: usize,
     offscreen: usize,
 ) -> Result<AppendOutcome> {
+    // 绘制期间隐藏光标：中途 flush 时若光标可见，Windows 终端会在
+    // 输出尾行与输入框之间来回闪动；最终位置由 composer 的 Show 恢复
+    queue!(output, Hide)?;
     queue!(output, Print(DISABLE_AUTOWRAP))?;
     // 1. 修补仍在屏幕上的变化行（坐标基于旧 viewport，修补不移动其他行）
     for (row, line) in patches {

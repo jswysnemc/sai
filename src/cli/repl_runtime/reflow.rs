@@ -2,7 +2,7 @@ use super::history_insert::replay_lines;
 use super::viewport::InlineViewport;
 use crate::render::transcript::AnsiLine;
 use anyhow::Result;
-use crossterm::cursor::MoveTo;
+use crossterm::cursor::{Hide, MoveTo};
 use crossterm::queue;
 use crossterm::style::Print;
 use crossterm::terminal::{Clear, ClearType};
@@ -63,6 +63,9 @@ pub(super) fn replay_full<W: Write>(
     let rows = usize::from(viewport.size().rows).max(1);
     let composer = usize::from(viewport.composer_height());
     let visible_budget = rows.saturating_sub(composer).max(1);
+    // 绘制期间隐藏光标：中途 flush 时若光标可见，Windows 终端会在
+    // 输出尾行与输入框之间来回闪动；最终位置由 composer 的 Show 恢复
+    queue!(output, Hide)?;
     // 1. 清空可见屏与 scrollback，从顶部开始顺序输出
     queue!(
         output,
