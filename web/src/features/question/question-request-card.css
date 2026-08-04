@@ -110,33 +110,38 @@
 
 .question-tabs {
   display: flex;
-  gap: 0;
+  gap: var(--space-3xs);
   overflow-x: auto;
-  border-bottom: 1px solid var(--technical-border);
 }
 
+/* 激活态用胶囊填充表达，不用下划引导线 */
 .question-tab {
   display: inline-flex;
   align-items: center;
   gap: var(--space-3xs);
   flex: 0 0 auto;
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--space-2xs) var(--space-md);
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--technical-muted);
   font-size: var(--text-xs);
   cursor: pointer;
 }
 
-/* 已回答的页签显示强调色对勾，进度一眼可辨 */
-.question-tab .question-tab-check {
-  color: var(--signal);
+.question-tab:hover:not(.is-active) {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--technical-text);
 }
 
 .question-tab.is-active {
-  border-bottom-color: var(--technical-text);
+  background: var(--signal-soft, color-mix(in srgb, var(--signal) 12%, transparent));
   color: var(--technical-text);
+}
+
+/* 已回答的页签显示强调色对勾，进度一眼可辨 */
+.question-tab .question-tab-check {
+  color: var(--signal);
 }
 
 .question-tab.is-answered:not(.is-active) {
@@ -245,12 +250,14 @@
 }
 
 .question-custom .ui-text-area {
-  min-height: 64px;
-  resize: vertical;
+  /* 单行高度起步，去掉原生 resize 手柄，视觉与项目输入控件一致 */
+  min-height: 2.25rem;
+  resize: none;
+  font: var(--text-sm)/1.5 var(--font-ui);
 }
 
 .question-custom-save {
-  align-self: end;
+  align-self: center;
   white-space: nowrap;
 }
 
