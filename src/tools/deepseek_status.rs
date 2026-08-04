@@ -62,20 +62,19 @@ async fn fetch_status_html_with_curl() -> Result<String> {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         bail!("curl exited with status {}: {stderr}", output.status)
     }
-    Ok(String::from_utf8(output.stdout)?)
+    Ok(super::http_body::decode_bytes(&output.stdout))
 }
 
 async fn fetch_status_html_with_reqwest() -> Result<String> {
-    Ok(reqwest::Client::builder()
+    let response = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
         .build()?
         .get(DEEPSEEK_STATUS_URL)
         .header(reqwest::header::ACCEPT, "text/html")
         .send()
         .await?
-        .error_for_status()?
-        .text()
-        .await?)
+        .error_for_status()?;
+    super::http_body::decode_body(response).await
 }
 
 fn parse_status_page(html: &str) -> Result<Value> {

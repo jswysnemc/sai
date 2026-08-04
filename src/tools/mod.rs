@@ -17,6 +17,7 @@ mod file_read;
 pub(crate) mod fs_path;
 pub(crate) mod groups;
 mod hash_codec;
+mod http_body;
 mod image_generation;
 pub mod knowledge_base;
 mod linux_game;

@@ -192,13 +192,10 @@ async fn fetch_json(client: &reqwest::Client, url: &str) -> Result<Value> {
 }
 
 async fn fetch_text(client: &reqwest::Client, url: &str) -> Result<String> {
-    Ok(client
-        .get(url)
-        .send()
-        .await?
-        .error_for_status()?
-        .text()
-        .await?)
+    super::http_body::decode_body(
+        client.get(url).send().await?.error_for_status()?,
+    )
+    .await
 }
 
 fn verdict(

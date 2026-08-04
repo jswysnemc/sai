@@ -302,14 +302,13 @@ pub(super) async fn search_duckduckgo(
         "https://html.duckduckgo.com/html/?q={}",
         urlencoding::encode(query)
     );
-    let html = client
+    let response = client
         .get(url)
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36")
         .send()
         .await?
-        .error_for_status()?
-        .text()
-        .await?;
+        .error_for_status()?;
+    let html = super::super::http_body::decode_body(response).await?;
     let results = parse_duckduckgo_html(&html, max_results);
     if results.is_empty() {
         bail!("DuckDuckGo returned no parseable results");

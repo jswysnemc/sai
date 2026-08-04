@@ -29,13 +29,10 @@ async fn get_weather(args: Value) -> Result<String> {
         format!("/{}", urlencoding::encode(location))
     };
     let url = format!("https://wttr.in{path}?format=%C+%t+%w+%l");
-    let text = reqwest::Client::new()
-        .get(url)
-        .send()
-        .await?
-        .error_for_status()?
-        .text()
-        .await?;
+    let text = super::http_body::decode_body(
+        reqwest::Client::new().get(url).send().await?.error_for_status()?,
+    )
+    .await?;
     let text = text.trim();
     if text.is_empty() {
         bail!("weather response was empty");

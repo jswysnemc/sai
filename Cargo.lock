@@ -3860,6 +3860,7 @@ dependencies = [
  "dunce",
  "ecb",
  "ed25519-dalek",
+ "encoding_rs",
  "fancy-regex 0.17.0",
  "flate2",
  "futures-util",

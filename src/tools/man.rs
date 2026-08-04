@@ -45,7 +45,7 @@ async fn search(args: Value) -> Result<String> {
     if !section.is_empty() {
         url.push_str(&format!("&section={}", urlencoding::encode(section)));
     }
-    let html = reqwest::get(url).await?.error_for_status()?.text().await?;
+    let html = super::http_body::decode_body(reqwest::get(url).await?.error_for_status()?).await?;
     let mut results = Vec::new();
     for line in html.lines() {
         if let Some(pos) = line.find("/man/") {
@@ -110,7 +110,7 @@ async fn get_page(args: Value) -> Result<String> {
 }
 
 async fn fetch_text(url: &str) -> Result<String> {
-    Ok(reqwest::get(url).await?.error_for_status()?.text().await?)
+    Ok(super::http_body::decode_body(reqwest::get(url).await?.error_for_status()?).await?)
 }
 
 fn required(args: &Value, key: &str) -> Result<String> {

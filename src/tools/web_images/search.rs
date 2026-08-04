@@ -32,15 +32,14 @@ async fn search_ddg_images(
         "https://duckduckgo.com/?q={}&iax=images&ia=images",
         urlencoding::encode(query)
     );
-    let html = client
+    let response = client
         .get("https://duckduckgo.com/")
         .query(&[("q", query), ("iax", "images"), ("ia", "images")])
         .headers(image_headers(""))
         .send()
         .await?
-        .error_for_status()?
-        .text()
-        .await?;
+        .error_for_status()?;
+    let html = super::http_body::decode_body(response).await?;
     let vqd = extract_ddg_vqd(&html).context("DuckDuckGo image page did not return vqd")?;
     let response = client
         .get("https://duckduckgo.com/i.js")
@@ -57,10 +56,9 @@ async fn search_ddg_images(
         .headers(image_headers(&page_url))
         .send()
         .await?
-        .error_for_status()?
-        .text()
-        .await?;
-    parse_ddg_results(&response, limit)
+        .error_for_status()?;
+    let body = super::http_body::decode_body(response).await?;
+    parse_ddg_results(&body, limit)
 }
 
 fn extract_ddg_vqd(html: &str) -> Option<String> {
@@ -133,7 +131,7 @@ async fn search_bing_images(
     if safe_search {
         request = request.query(&[("safeSearch", "Strict")]);
     }
-    let html = request.send().await?.error_for_status()?.text().await?;
+    let html = super::http_body::decode_body(request.send().await?.error_for_status()?).await?;
     Ok(parse_bing_results(&html, limit))
 }
 
