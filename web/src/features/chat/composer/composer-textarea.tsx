@@ -26,6 +26,7 @@ type ComposerTextareaProps = {
   value: string;
   historyEntries: string[];
   disabled: boolean;
+  autoFocus?: boolean;
   placeholder: string;
   onChange: (value: string) => void;
   onPasteImages: (files: File[], selectionStart: number, selectionEnd: number) => Promise<number | undefined>;
@@ -91,6 +92,10 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
   const [skillOpen, setSkillOpen] = useState(false);
   const [skillQuery, setSkillQuery] = useState("");
   const [skillActiveIndex, setSkillActiveIndex] = useState(0);
+
+  useEffect(() => {
+    if (props.autoFocus) requestAnimationFrame(() => editorRef.current?.focus());
+  }, [props.autoFocus]);
 
   useImperativeHandle(ref, () => ({
     /** 以当前选区为插入点打开文件引用浮层。 */

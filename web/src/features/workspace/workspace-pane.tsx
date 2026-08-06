@@ -15,6 +15,7 @@ import { ensureTerminalTab } from "../terminal/terminal-tab-state";
 import { WorkspaceEmptyState } from "./workspace-empty-state";
 import type { WorkspacePassiveDiff } from "./workspace-passive-diff";
 import { TargetedDiffPane } from "./targeted-diff-pane";
+import { SourceControlPane } from "../source-control/source-control-pane";
 import { WorkspaceFileSplit } from "./workspace-file-split";
 import { SideConversationPane } from "../side-conversation/side-conversation-pane";
 import type { SideConversationRequest } from "../side-conversation/side-conversation-events";
@@ -106,7 +107,7 @@ export function WorkspacePane({
 
   // 外部入口或重新打开时：已有则激活，没有则新建。
   useEffect(() => {
-    if (!activeType || activeType === "diff" || activeType === "side-chat") return;
+    if (!activeType || activeType === "side-chat" || (activeType === "diff" && passiveDiff)) return;
     if (activeType === "terminal") {
       setTabs((current) => {
         const existing = current.find((tab) => tab.type === "terminal" && tab.terminalId === terminalManager.activeId);
@@ -140,7 +141,7 @@ export function WorkspacePane({
       setActiveTabId(created.id);
       return [...current, created];
     });
-  }, [activeType, locale, terminalManager.activeId, terminalManager.terminals, t]);
+  }, [activeType, locale, passiveDiff, terminalManager.activeId, terminalManager.terminals, t]);
 
   useEffect(() => {
     if (!passiveDiff) return;
@@ -231,7 +232,7 @@ export function WorkspacePane({
       onActiveTypeChange("terminal");
       return;
     }
-    const existing = tabs.find((tab) => tab.type === type);
+    const existing = tabs.find((tab) => tab.type === type && (type !== "diff" || !tab.path));
     if (existing) {
       setActiveTabId(existing.id);
       onActiveTypeChange(type);
@@ -316,7 +317,9 @@ export function WorkspacePane({
           />
         )}
         {activeTab?.type === "diff" && (
-          <TargetedDiffPane path={activeTab.path ?? activeTab.title} source={activeTab.diffSource ?? ""} />
+          activeTab.path
+            ? <TargetedDiffPane path={activeTab.path} source={activeTab.diffSource ?? ""} />
+            : <SourceControlPane />
         )}
         {activeTab?.type === "terminal" && (
           <TerminalDock terminalId={activeTab.terminalId} title={activeTab.title} error={terminalManager.error} />

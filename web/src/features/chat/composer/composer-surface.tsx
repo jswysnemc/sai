@@ -2,6 +2,7 @@ import type { FormEvent, ReactNode } from "react";
 import { AttachmentStrip } from "./attachment-strip";
 import { ComposerTextarea } from "./composer-textarea";
 import type { ComposerAttachment } from "./use-composer-attachments";
+import "../chat-composer.css";
 import "./composer-surface.css";
 
 export type ComposerSurfaceVariant = "full" | "compact";
@@ -14,6 +15,7 @@ type ComposerSurfaceProps = {
   disabled: boolean;
   submitDisabled?: boolean;
   placeholder: string;
+  autoFocus?: boolean;
   attachments?: ComposerAttachment[];
   onChange: (value: string) => void;
   onPasteImages: (files: File[], selectionStart: number, selectionEnd: number) => Promise<number | undefined>;
@@ -36,6 +38,7 @@ export function ComposerSurface({
   disabled,
   submitDisabled = false,
   placeholder,
+  autoFocus = false,
   attachments,
   onChange,
   onPasteImages,
@@ -61,6 +64,7 @@ export function ComposerSurface({
         value={value}
         historyEntries={historyEntries}
         disabled={disabled}
+        autoFocus={autoFocus}
         placeholder={placeholder}
         onChange={onChange}
         onPasteImages={onPasteImages}

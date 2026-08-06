@@ -16,11 +16,16 @@
   max-width: var(--chat-content-width);
   min-height: 58px;
   padding:var(--space-sm) var(--space-md) var(--space-xs);
-  border: 1px solid var(--line-strong);
+  border: 1px solid transparent;
   border-radius:var(--radius-5);
   background: var(--control-surface);
   box-shadow: none;
   transition:border-color var(--duration-base) ease, box-shadow var(--duration-base) ease;
+}
+
+.composer:focus-within {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 4%, transparent);
 }
 
 .composer-context-strip {

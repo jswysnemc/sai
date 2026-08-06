@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Cable, CalendarClock, CheckSquare2, ChevronDown, ChevronRight, FolderOpen, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Settings, Square, Trash2, X } from "lucide-react";
+import { Cable, CalendarClock, CheckSquare2, ChevronDown, ChevronRight, FolderOpen, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Settings, Square, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
@@ -50,7 +50,6 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
   const [workspaceMenu, setWorkspaceMenu] = useState<string | null>(null);
   const [appMenuOpen, setAppMenuOpen] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
-  const [sessionSearch, setSessionSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -369,18 +368,10 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
     || location.pathname.startsWith("/gateways")
     || location.pathname.startsWith("/cron-jobs");
 
-  const query = sessionSearch.trim().toLowerCase();
   const searchableWorkspaces = sidebarView === "sessions"
     ? activeWorkspace ? [activeWorkspace] : []
     : tree.data ?? [];
-  const visibleWorkspaces = searchableWorkspaces.filter((workspace) => {
-    if (!query) return true;
-    if (workspace.workspace_name.toLowerCase().includes(query)) return true;
-    if (localizeApiMessage(workspace.workspace_name, locale).toLowerCase().includes(query)) return true;
-    return workspace.sessions.some(
-      (session) => session.title.toLowerCase().includes(query) || session.id.toLowerCase().includes(query)
-    );
-  });
+  const visibleWorkspaces = searchableWorkspaces;
 
   if (collapsed) {
     return (
@@ -482,26 +473,6 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
           onSkills={() => navigate("/settings/skills")}
         />
       )}
-      {sidebarView !== "files" && (
-        <label className="session-search">
-          <Search size={14} />
-          <input
-            value={sidebarView === "workspaces" ? "" : sessionSearch}
-            readOnly={sidebarView === "workspaces"}
-            onFocus={() => { if (sidebarView === "workspaces") setSearchOpen(true); }}
-            onClick={() => { if (sidebarView === "workspaces") setSearchOpen(true); }}
-            onChange={(event) => setSessionSearch(event.target.value)}
-            placeholder={sidebarView === "workspaces" ? t("Search", "搜索") : t("Search sessions", "搜索会话")}
-            aria-label={sidebarView === "workspaces" ? t("Search actions, tasks or files", "搜索操作、任务或文件") : t("Search sessions", "搜索会话")}
-            spellCheck={false}
-          />
-          {sidebarView !== "workspaces" && sessionSearch && (
-            <button type="button" className="session-search-clear" onClick={() => setSessionSearch("")} aria-label={t("Clear search", "清空搜索")}>
-              <X size={13} />
-            </button>
-          )}
-        </label>
-      )}
       {sidebarView === "files" ? (
         <div className="sidebar-file-tree-view">
           <FileTree
@@ -517,17 +488,12 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
             <SkeletonList items={6} label={t("Loading sessions", "读取会话")} />
           </div>
         )}
-        {!tree.isLoading && query && visibleWorkspaces.length === 0 && (
-          <div className="sidebar-state">{t(`No sessions match “${sessionSearch.trim()}”`, `没有匹配“${sessionSearch.trim()}”的会话`)}</div>
+        {!tree.isLoading && visibleWorkspaces.length === 0 && (
+          <div className="sidebar-state">{t("No sessions in this view", "当前视图没有内容")}</div>
         )}
         {visibleWorkspaces.map((workspace) => {
           const workspaceName = localizeApiMessage(workspace.workspace_name, locale);
-          const sessions = query
-            ? workspace.sessions.filter((session) =>
-                session.title.toLowerCase().includes(query)
-                || session.id.toLowerCase().includes(query)
-              )
-            : workspace.sessions;
+          const sessions = workspace.sessions;
           const workspaceExpanded = sidebarView === "sessions" ? true : false;
           const workspaceRunning = sessions.some((session) => runningSessions.has(`${workspace.workspace_id}:${session.id}`));
           const canSelect = workspace.active && sessions.length > 0;
@@ -537,7 +503,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
               <button type="button" className="workspace-tree-main" onClick={() => {
                 if (sidebarView === "workspaces") {
                   void openWorkspace(workspace.workspace_id, workspace.active);
-                } else if (!query) {
+                } else {
                   toggleWorkspace(workspace.workspace_id);
                 }
               }} aria-expanded={workspaceExpanded}>

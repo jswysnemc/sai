@@ -138,7 +138,8 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
     const openPanel = (tab: PaneTab) => {
       layout.openWorkspace();
       setPaneTab(tab);
-      if (tab !== "diff") setPassiveDiff(null);
+      // 显式打开面板时清除被动文件差异，Git 入口必须回到完整面板
+      setPassiveDiff(null);
       if (window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY).matches) {
         dispatchMobileLayout({ type: "show-pane", pane: tab === "terminal" ? "terminal" : "workspace" });
       }

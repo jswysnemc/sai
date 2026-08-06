@@ -694,56 +694,6 @@
 }
 
 
-.session-search {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap:var(--space-xs);
-  margin:0 var(--space-3xs) var(--space-sm);
-  min-height: 32px;
-  padding:0 var(--space-sm);
-  border: 1px solid var(--line);
-  border-radius:var(--radius-3);
-  background: var(--paper-deep);
-  color: var(--ink-soft);
-}
-
-.session-search input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--ink);
-  font-size:var(--text-sm);
-}
-
-.session-search input::placeholder {
-  color: var(--ink-soft);
-}
-
-.session-search-clear {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.session-search-clear:hover {
-  background: var(--paper-raised);
-  color: var(--ink);
-}
-
-/* 去掉默认轮廓后补焦点环，键盘操作才看得出焦点落点 */
-.session-search:focus-within {
-  border-color: var(--signal);
-  box-shadow: var(--ring-focus);
-}
 /* 会话列表加载骨架：内边距与真实列表项对齐，加载完成后条目不位移 */
 .sidebar-skeleton {
   padding:var(--space-lg) var(--space-sm);

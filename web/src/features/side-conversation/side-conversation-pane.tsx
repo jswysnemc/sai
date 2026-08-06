@@ -2,7 +2,6 @@ import { ArrowRight, MessageSquareText, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
-import { Button } from "../../shared/ui/button/button";
 import { LiveRunMessage } from "../chat/chat-message";
 import { ComposerSurface } from "../chat/composer/composer-surface";
 import { useRunStream } from "../chat/use-run-stream";
@@ -125,7 +124,7 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
       </div>
       <ComposerSurface
         variant="compact"
-        className="side-conversation-composer"
+        className="composer side-conversation-composer"
         value={input}
         historyEntries={[]}
         disabled={Boolean(activeRun)}
@@ -135,15 +134,20 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
         onPasteImages={async () => undefined}
         onSubmit={() => void submit()}
       >
-        {activeRun ? (
-          <Button className="side-conversation-send" onClick={() => activeRun.runId && void run.stop(activeRun.runId)} aria-label={t("Stop", "停止")} title={t("Stop", "停止")}>
-            <Square size={12} fill="currentColor" />
-          </Button>
-        ) : (
-          <Button className="side-conversation-send" variant="primary" type="submit" disabled={!input.trim()} aria-label={t("Send", "发送")} title={t("Send", "发送")}>
-            <ArrowRight size={16} />
-          </Button>
-        )}
+        <div className="composer-footer">
+          <div className="composer-toolrail" />
+          <div className="composer-actions">
+            {activeRun ? (
+              <button type="button" className="composer-send stop" onClick={() => activeRun.runId && void run.stop(activeRun.runId)} aria-label={t("Stop", "停止")} title={t("Stop", "停止")}>
+                <Square size={12} fill="currentColor" />
+              </button>
+            ) : (
+              <button className="composer-send" type="submit" disabled={!input.trim()} aria-label={t("Send", "发送")} title={t("Send", "发送")}>
+                <ArrowRight size={16} />
+              </button>
+            )}
+          </div>
+        </div>
       </ComposerSurface>
     </section>
   );

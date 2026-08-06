@@ -1,9 +1,9 @@
 import { Paperclip, SendHorizontal, X } from "lucide-react";
-import { useEffect, useRef } from "react";
-import type { ChangeEvent, ClipboardEvent, KeyboardEvent } from "react";
-import { Button } from "../../../shared/ui/button/button";
-import { TextArea } from "../../../shared/ui/form/text-area";
+import { useRef } from "react";
+import type { ChangeEvent } from "react";
 import { useI18n } from "../../i18n/use-i18n";
+import { ComposerSurface } from "../composer/composer-surface";
+import type { ComposerAttachment } from "../composer/use-composer-attachments";
 import { useUserMessageEditorState } from "./use-user-message-editor-state";
 import "./user-message-editor.css";
 
@@ -19,7 +19,7 @@ type UserMessageEditorProps = {
 };
 
 /**
- * 用户消息的就地编辑器：改写正文、增删图片后作为新分支重新发送。
+ * 用户消息的就地编辑器：复用主输入框外壳，省略模型与运行模式控制。
  *
  * @param props 原消息内容、忙碌状态与提交、取消回调
  * @returns 编辑表单
@@ -27,52 +27,12 @@ type UserMessageEditorProps = {
 export function UserMessageEditor({ content, imageUrls, busy, onCancel, onSubmit }: UserMessageEditorProps) {
   const { t } = useI18n();
   const editor = useUserMessageEditorState(content, imageUrls);
-  const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. 进入编辑态后聚焦并把光标放到正文末尾
-  useEffect(() => {
-    const node = textAreaRef.current;
-    if (!node) return;
-    node.focus();
-    node.setSelectionRange(node.value.length, node.value.length);
-  }, []);
-
-  /** 提交改写后的消息，正文与图片同时为空时不提交 */
+  /** 提交改写后的消息，正文与图片同时为空时不提交。 */
   const submit = () => {
     if (busy || !editor.submittable) return;
     onSubmit(editor.content.trim(), editor.imageUrls);
-  };
-
-  /**
-   * 处理编辑区快捷键：回车提交，Escape 退出编辑。
-   *
-   * @param event 键盘事件
-   * @returns 无返回值
-   */
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onCancel();
-      return;
-    }
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-      event.preventDefault();
-      submit();
-    }
-  };
-
-  /**
-   * 处理粘贴：剪贴板含图片时转为附件，否则交给浏览器插入文本。
-   *
-   * @param event 剪贴板事件
-   * @returns 无返回值
-   */
-  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
-    if (files.length === 0) return;
-    event.preventDefault();
-    void editor.addFiles(files);
   };
 
   /**
@@ -88,73 +48,69 @@ export function UserMessageEditor({ content, imageUrls, busy, onCancel, onSubmit
     void editor.addFiles(files);
   };
 
+  const attachments: ComposerAttachment[] = editor.images.map((image) => ({
+    id: image.id,
+    name: t("Attached image", "已附加图片"),
+    dataUrl: image.dataUrl
+  }));
+
   return (
-    <div className="user-message-editor">
-      {editor.images.length > 0 && (
-        <div className="user-message-editor-images">
-          {editor.images.map((image) => (
-            <div className="user-message-editor-image" key={image.id}>
-              <img src={image.dataUrl} alt={t("Attached image", "已附加图片")} />
-              <button
-                type="button"
-                className="user-message-editor-image-remove"
-                onClick={() => editor.removeImage(image.id)}
-                disabled={busy}
-                aria-label={t("Remove image", "移除图片")}
-                title={t("Remove image", "移除图片")}
-              >
-                <X size={13} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <TextArea
-        ref={textAreaRef}
-        className="user-message-editor-input"
-        value={editor.content}
-        disabled={busy}
-        rows={3}
-        spellCheck={false}
-        aria-label={t("Edit message", "编辑消息")}
-        placeholder={t("Edit the message; press Enter to resend", "修改消息内容，Enter 重新发送")}
-        onChange={(event) => editor.setContent(event.target.value)}
-        onKeyDown={handleKeyDown}
-        onPaste={handlePaste}
-      />
+    <ComposerSurface
+      variant="compact"
+      className="composer user-message-editor"
+      value={editor.content}
+      historyEntries={[]}
+      disabled={Boolean(busy)}
+      submitDisabled={Boolean(busy) || !editor.submittable}
+      autoFocus
+      placeholder={t("Edit the message; press Enter to resend", "修改消息内容，Enter 重新发送")}
+      attachments={attachments}
+      onChange={editor.setContent}
+      onPasteImages={async (files) => {
+        await editor.addFiles(files);
+        return undefined;
+      }}
+      onRemoveAttachment={editor.removeImage}
+      onSubmit={submit}
+    >
       {editor.error && <p className="user-message-editor-error">{editor.error}</p>}
-      <div className="user-message-editor-actions">
-        <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleFileChange} />
-        <Button
-          className="user-message-editor-attach"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={busy}
-          aria-label={t("Attach image", "附加图片")}
-          title={t("Attach image", "附加图片")}
-        >
-          <Paperclip size={15} />
-        </Button>
-        <span className="user-message-editor-spacer" />
-        <Button
-          className="user-message-editor-cancel"
-          onClick={onCancel}
-          disabled={busy}
-          aria-label={t("Cancel editing", "取消编辑")}
-          title={t("Cancel editing", "取消编辑")}
-        >
-          <X size={15} />
-        </Button>
-        <Button
-          variant="primary"
-          className="user-message-editor-submit"
-          onClick={submit}
-          disabled={busy || !editor.submittable}
-          aria-label={t("Resend as a new branch", "作为新分支重新发送")}
-          title={t("Undo to this message and resend as a new branch", "退回本条消息并作为新分支重新发送")}
-        >
-          <SendHorizontal size={15} />
-        </Button>
+      <div className="composer-footer user-message-editor-actions">
+        <div className="composer-toolrail">
+          <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleFileChange} />
+          <button
+            type="button"
+            className="composer-icon-button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
+            aria-label={t("Attach image", "附加图片")}
+            title={t("Attach image", "附加图片")}
+          >
+            <Paperclip size={18} />
+          </button>
+        </div>
+        <div className="composer-actions">
+          <button
+            type="button"
+            className="composer-icon-button"
+            onClick={onCancel}
+            disabled={busy}
+            aria-label={t("Cancel editing", "取消编辑")}
+            title={t("Cancel editing", "取消编辑")}
+          >
+            <X size={15} />
+          </button>
+          <button
+            type="button"
+            className="composer-send"
+            onClick={submit}
+            disabled={Boolean(busy) || !editor.submittable}
+            aria-label={t("Resend as a new branch", "作为新分支重新发送")}
+            title={t("Undo to this message and resend as a new branch", "退回本条消息并作为新分支重新发送")}
+          >
+            <SendHorizontal size={15} />
+          </button>
+        </div>
       </div>
-    </div>
+    </ComposerSurface>
   );
 }
