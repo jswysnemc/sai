@@ -110,7 +110,10 @@ mod tests {
     /// 纯 CRLF 文件对模型展示为 LF。
     #[test]
     fn normalizes_pure_crlf_for_the_model() {
-        assert_eq!(detect_line_ending_style("a\r\nb\r\n"), LineEndingStyle::Crlf);
+        assert_eq!(
+            detect_line_ending_style("a\r\nb\r\n"),
+            LineEndingStyle::Crlf
+        );
         let view = to_model_text_view("a\r\nb\r\n");
         assert_eq!(view.text, "a\nb\n");
     }
@@ -132,7 +135,10 @@ mod tests {
     /// CRLF 文件写回时还原行尾。
     #[test]
     fn restores_crlf_on_write_back() {
-        assert_eq!(materialize_model_text("a\nb\n", LineEndingStyle::Crlf), "a\r\nb\r\n");
+        assert_eq!(
+            materialize_model_text("a\nb\n", LineEndingStyle::Crlf),
+            "a\r\nb\r\n"
+        );
     }
 
     /// 还原不会把已有 CRLF 变成 \r\r\n。
@@ -147,7 +153,10 @@ mod tests {
     /// 非 CRLF 风格写回时保持原样。
     #[test]
     fn leaves_lf_content_unchanged_on_write_back() {
-        assert_eq!(materialize_model_text("a\nb\n", LineEndingStyle::Lf), "a\nb\n");
+        assert_eq!(
+            materialize_model_text("a\nb\n", LineEndingStyle::Lf),
+            "a\nb\n"
+        );
         assert_eq!(
             materialize_model_text("a\r\nb\n", LineEndingStyle::Mixed),
             "a\r\nb\n"

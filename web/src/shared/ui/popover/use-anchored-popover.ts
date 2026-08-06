@@ -30,7 +30,7 @@ export function useAnchoredPopover(options: UseAnchoredPopoverOptions): CSSPrope
         viewportWidth: window.innerWidth,
         viewportHeight: window.innerHeight,
         preferredWidth: options.preferredWidth ?? rect.width,
-        minimumWidth: options.minimumWidth ?? rect.width,
+        minimumWidth: Math.max(options.minimumWidth ?? 0, rect.width),
         align: options.align ?? "left",
         maxHeight: options.maxHeight
       });

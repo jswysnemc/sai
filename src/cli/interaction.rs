@@ -20,6 +20,13 @@ pub(super) fn handle_agent_event(
 ) -> Result<()> {
     match event {
         AgentEvent::Chunk(chunk) => renderer.write_chunk(chunk),
+        AgentEvent::InterMessage(message) => {
+            renderer.prepare_for_external_output()?;
+            println!("\x1b[38;5;39m●\x1b[0m {}", message.content);
+            Ok(())
+        }
+        AgentEvent::WaitingExternal => Ok(()),
+        AgentEvent::ContextUpdated(_) => Ok(()),
         AgentEvent::ToolCall { name, arguments } => renderer.write_tool_call(&name, &arguments),
         AgentEvent::ToolCallIdentified {
             name, arguments, ..

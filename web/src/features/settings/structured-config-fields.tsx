@@ -1,4 +1,5 @@
 import { PasswordField } from "../../shared/ui/password-field";
+import { Select, type SelectOption } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
 
 const SECRET_KEYS = ["api_key", "token", "secret", "password", "webhook"];
@@ -65,6 +66,21 @@ function StructuredField({
   if (typeof value === "number") {
     return <label className="settings-field"><span>{label}</span><input type="number" value={value} onChange={(event) => onChange(Number(event.target.value))} /><small>{name}</small></label>;
   }
+  const selectOptions = typeof value === "string" ? fieldSelectOptions(name, t) : null;
+  if (selectOptions) {
+    return (
+      <div className="settings-field">
+        <span>{label}</span>
+        <Select
+          value={String(value)}
+          options={selectOptions}
+          onChange={onChange}
+          ariaLabel={label}
+        />
+        <small>{name}</small>
+      </div>
+    );
+  }
   if (Array.isArray(value)) {
     const secret = isSecretField(name);
     const currentValues = value.map((item) => String(item ?? ""));
@@ -127,6 +143,34 @@ function StructuredField({
     );
   }
   return <label className="settings-field"><span>{label}</span><input type="text" value={String(value ?? "")} onChange={(event) => onChange(event.target.value)} spellCheck={false} autoComplete="off" /><small>{name}</small></label>;
+}
+
+/**
+ * 返回有限字符串配置对应的统一下拉选项。
+ *
+ * @param name 配置字段名称
+ * @param t 双语文本选择方法
+ * @returns 已知枚举的选项；普通字符串返回 null
+ */
+export function fieldSelectOptions(
+  name: string,
+  t: (en: string, zh: string) => string
+): SelectOption<string>[] | null {
+  if (name === "reasoning" || name === "tool_calls") {
+    return [
+      { value: "hidden", label: t("Hidden", "隐藏") },
+      { value: "summary", label: t("Summary", "摘要") },
+      { value: "full", label: t("Full", "完整") }
+    ];
+  }
+  if (name === "command_filter") {
+    return [
+      { value: "auto", label: t("Automatic", "自动") },
+      { value: "rtk", label: "rtk" },
+      { value: "off", label: t("Disabled", "关闭") }
+    ];
+  }
+  return null;
 }
 
 /**

@@ -6,26 +6,6 @@ use std::collections::BTreeSet;
 /// 因此用通配符表达「基础工具直接可见，其余一律延迟」。
 pub const DEFERRED_ALL_NON_BASE: &str = "*";
 
-/// 判断工具是否落在延迟集合内。
-///
-/// 工具的三段状态由两个集合共同决定：不在 `enabled_tools` 内为 off，
-/// 在其中且命中本函数为 load，其余为 on。调用方已经完成白名单过滤，
-/// 因此这里只判定 load 与 on 的边界。
-///
-/// 参数:
-/// - `deferred`: 延迟工具名，可含通配符
-/// - `name`: 待判定的工具名
-///
-/// 返回:
-/// - 是否需要 load 后才暴露
-pub fn is_deferred(deferred: &[String], name: &str) -> bool {
-    if deferred.iter().any(|tool| tool == name) {
-        return true;
-    }
-    deferred.iter().any(|tool| tool == DEFERRED_ALL_NON_BASE)
-        && !crate::tools::groups::is_base_tool(name)
-}
-
 /// 将延迟集合收敛到启用集合内部，并去重排序。
 ///
 /// 白名单收窄后残留的延迟项没有意义，保留下来只会让配置读起来自相矛盾。
@@ -53,33 +33,6 @@ pub fn normalize_deferred_tools(enabled: &[String], deferred: &[String]) -> Vec<
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// 验证显式列出的工具落入延迟态，未列出的保持初始可见。
-    #[test]
-    fn explicit_names_mark_deferred_tools() {
-        let deferred = vec!["web_search".to_string()];
-
-        assert!(is_deferred(&deferred, "web_search"));
-        assert!(!is_deferred(&deferred, "read_file"));
-        assert!(!is_deferred(&deferred, "show_meme"));
-    }
-
-    /// 验证延迟集合为空时全部工具初始可见。
-    #[test]
-    fn empty_deferred_set_keeps_every_tool_visible() {
-        assert!(!is_deferred(&[], "read_file"));
-        assert!(!is_deferred(&[], "deep_diagnose"));
-    }
-
-    /// 验证通配符把非基础工具整体推入延迟态。
-    #[test]
-    fn wildcard_defers_every_non_base_tool() {
-        let deferred = vec![DEFERRED_ALL_NON_BASE.to_string()];
-
-        assert!(!is_deferred(&deferred, "read_file"));
-        assert!(is_deferred(&deferred, "web_search"));
-        assert!(is_deferred(&deferred, "show_meme"));
-    }
 
     /// 验证归一化会去重并丢弃白名单外的延迟项。
     #[test]

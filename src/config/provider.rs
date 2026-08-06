@@ -254,8 +254,7 @@ impl ProviderConfig {
         let chosen = if self.api_key_balance {
             self.api_keys.first()
         } else {
-            self
-                .api_keys
+            self.api_keys
                 .iter()
                 .find(|entry| {
                     self.api_key_selected
@@ -301,7 +300,11 @@ mod tests {
     use super::*;
 
     /// 构造带多密钥的测试供应商。
-    fn provider_with_keys(balance: bool, selected: Option<&str>, keys: &[(&str, &str)]) -> ProviderConfig {
+    fn provider_with_keys(
+        balance: bool,
+        selected: Option<&str>,
+        keys: &[(&str, &str)],
+    ) -> ProviderConfig {
         let mut provider = ProviderConfig::default_openai();
         provider.api_keys = keys
             .iter()
@@ -337,7 +340,10 @@ mod tests {
     fn resolved_keys_lists_every_entry() {
         let provider = provider_with_keys(true, None, &[("a", "key-a"), ("b", "key-b")]);
 
-        assert_eq!(provider.resolved_api_keys().unwrap(), vec!["key-a", "key-b"]);
+        assert_eq!(
+            provider.resolved_api_keys().unwrap(),
+            vec!["key-a", "key-b"]
+        );
     }
 
     /// 多密钥为空时回落到单值字段。
@@ -346,7 +352,10 @@ mod tests {
         let mut provider = ProviderConfig::default_openai();
         provider.api_key = Some("plain-key".to_string());
 
-        assert_eq!(provider.resolved_api_key(&test_paths()).unwrap(), "plain-key");
+        assert_eq!(
+            provider.resolved_api_key(&test_paths()).unwrap(),
+            "plain-key"
+        );
     }
 
     /// 仅供测试使用的空路径集合。

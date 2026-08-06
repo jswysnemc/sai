@@ -253,6 +253,7 @@ mod tests {
             },
             tools: vec![TimelineToolEntry {
                 id: "call-1".to_string(),
+                seq: 1,
                 name: "run_command".to_string(),
                 arguments: r#"{"command":"printf long"}"#.to_string(),
                 status: "completed".to_string(),
@@ -265,6 +266,7 @@ mod tests {
                 completed_at: None,
                 permission: None,
             }],
+            messages: Vec::new(),
             automatic: false,
             duration_ms: 0,
         }

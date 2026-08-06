@@ -16,7 +16,7 @@ type GitSettingToggleProps = {
  */
 export function GitSettingToggle(props: GitSettingToggleProps) {
   return (
-    <label className="git-setting-toggle">
+    <label className="settings-toggle-field git-setting-toggle">
       <span><strong>{props.label}</strong><small>{props.description}</small></span>
       <input type="checkbox" checked={props.checked} onChange={(event) => props.onChange(event.target.checked)} />
     </label>

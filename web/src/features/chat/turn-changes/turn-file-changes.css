@@ -9,36 +9,92 @@
 .turn-file-changes-head {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap:var(--space-xs);
+  justify-content: space-between;
+  gap:var(--space-md);
   padding:var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--line-soft);
-  font-size:var(--text-sm);
   color: var(--ink-soft);
+}
+
+.turn-file-changes-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.turn-file-changes-mark {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-3);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+}
+
+.turn-file-changes-summary > div {
+  display: grid;
+  gap: var(--space-3xs);
+  min-width: 0;
+}
+
+.turn-file-changes-summary strong {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.turn-file-changes-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex: 0 0 auto;
 }
 
 .turn-file-discard-all {
   display: inline-flex;
   align-items: center;
   gap:var(--space-2xs);
-  margin-left: auto;
   min-height: 1.5rem;
-  padding:0 var(--space-sm);
-  border: 1px solid color-mix(in srgb, var(--danger) 36%, var(--line));
+  padding:0 var(--space-xs);
+  border: 0;
   border-radius:var(--radius-2);
-  background: color-mix(in srgb, var(--danger) 8%, transparent);
-  color: var(--danger);
+  background: transparent;
+  color: var(--ink-soft);
   font-size:var(--text-xs);
   cursor: pointer;
 }
 
 .turn-file-discard-all:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  background: var(--paper-deep);
+  color: var(--ink);
 }
 
 .turn-file-discard-all:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.turn-file-review {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-height: 1.75rem;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-3);
+  background: var(--paper-raised);
+  color: var(--ink);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.turn-file-review:hover {
+  border-color: var(--line-strong);
+  background: var(--paper-deep);
 }
 
 .turn-file-changes-error {
@@ -82,7 +138,7 @@
 
 .turn-file-change-main {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap:var(--space-sm);
   align-items: center;
   min-width: 0;
@@ -99,7 +155,7 @@
 
 .turn-file-change-row:hover,
 .turn-file-change-row.active {
-  background: color-mix(in srgb, var(--paper-raised) 70%, transparent);
+  background: var(--paper-raised);
 }
 
 .turn-file-change-actions {
@@ -108,6 +164,15 @@
   gap:var(--space-2xs);
   flex: 0 0 auto;
   padding-right:var(--space-3xs);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast) ease;
+}
+
+.turn-file-change-row:hover .turn-file-change-actions,
+.turn-file-change-row:focus-within .turn-file-change-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .turn-file-path {
@@ -173,6 +238,13 @@
   opacity: 0.5;
 }
 
+@media (hover: none), (pointer: coarse) {
+  .turn-file-change-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 .turn-file-diff-empty {
   padding:var(--space-lg) var(--space-lg);
   color: var(--ink-soft);
@@ -192,17 +264,25 @@
   font-size:var(--text-sm);
 }
 
-.turn-file-action {
-  font:600 var(--text-xs)/1 var(--font-code, monospace);
+.turn-file-changes-collapse {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  width: 100%;
+  min-height: 1.75rem;
+  padding: 0 var(--space-md);
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: transparent;
   color: var(--ink-soft);
+  font-size: var(--text-xs);
+  text-align: left;
+  cursor: pointer;
 }
 
-.turn-file-action.action-added {
-  color: var(--diff-added-text);
-}
-
-.turn-file-action.action-deleted {
-  color: var(--diff-removed-text);
+.turn-file-changes-collapse:hover {
+  background: var(--paper-raised);
+  color: var(--ink);
 }
 
 .turn-file-changes-stats {
@@ -232,4 +312,18 @@
 
 .turn-file-diff-maximized .structured-diff {
   border: 0;
+}
+
+@media (max-width: 36rem) {
+  .turn-file-changes-head {
+    flex-wrap: wrap;
+  }
+
+  .turn-file-changes-summary {
+    flex: 1 1 100%;
+  }
+
+  .turn-file-changes-head-actions {
+    margin-left: auto;
+  }
 }

@@ -29,4 +29,18 @@ describe("composer availability", () => {
   it("运行状态已到达但运行标记尚未同步时仍允许排队", () => {
     expect(resolveComposerAvailability({ sessionAvailable: true, runActive: false, runStatus: "thinking", hasDraft: true }).sendDisabled).toBe(false);
   });
+
+  it("分支切换期间保留草稿编辑但阻止提交", () => {
+    expect(resolveComposerAvailability({
+      sessionAvailable: true,
+      runActive: false,
+      runStatus: "idle",
+      hasDraft: true,
+      submitBlocked: true
+    })).toEqual({
+      inputDisabled: false,
+      sendDisabled: true,
+      showStop: false
+    });
+  });
 });

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { SessionTurnTree, TurnTreeNode } from "../../../api/turn-tree-contracts";
-import { collectActivePath, findSiblingBranches, flattenTurnTree } from "./turn-tree-rows";
+import {
+  collectActivePath,
+  findSiblingBranches,
+  flattenTurnTree,
+  preferredBranchLeafId
+} from "./turn-tree-rows";
 
 /** 构造测试节点。 */
 function node(id: string, parent: string | null, children: TurnTreeNode[] = []): TurnTreeNode {
@@ -95,5 +100,26 @@ describe("findSiblingBranches", () => {
     );
 
     expect(result).toBeNull();
+  });
+});
+
+describe("preferredBranchLeafId", () => {
+  it("切换到旧分支时恢复该分支序号最大的叶节点", () => {
+    const branch = node("t2", "t1", [
+      node("t4", "t2", [node("t6", "t4")]),
+      node("t5", "t2")
+    ]);
+
+    expect(preferredBranchLeafId(branch)).toBe("t6");
+  });
+
+  it("没有后代时返回分支节点自身", () => {
+    expect(preferredBranchLeafId(node("t3", "t1"))).toBe("t3");
+  });
+
+  it("迁移数据序号不单调时仍然返回叶节点", () => {
+    const branch = node("t99", "t1", [node("t3", "t99"), node("t4", "t99")]);
+
+    expect(preferredBranchLeafId(branch)).toBe("t4");
   });
 });

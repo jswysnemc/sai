@@ -240,10 +240,7 @@ impl OpenAiCompatibleClient {
         let mut request = request;
         let mut response = with_provider_extra_headers(
             apply_provider_user_agent(
-                self.client
-                    .post(&url)
-                    .bearer_auth(api_key)
-                    .json(&request),
+                self.client.post(&url).bearer_auth(api_key).json(&request),
                 &self.provider,
             ),
             &self.provider,
@@ -266,14 +263,16 @@ impl OpenAiCompatibleClient {
                 if let Some(debug) = debug.as_ref() {
                     let _ = debug.finish_error(status.as_u16(), &body);
                 }
-                let retry_debug =
-                    self.start_http_debug("POST", &url, "openai-chat-thinking-fallback", &headers, &request);
+                let retry_debug = self.start_http_debug(
+                    "POST",
+                    &url,
+                    "openai-chat-thinking-fallback",
+                    &headers,
+                    &request,
+                );
                 response = with_provider_extra_headers(
                     apply_provider_user_agent(
-                        self.client
-                            .post(&url)
-                            .bearer_auth(api_key)
-                            .json(&request),
+                        self.client.post(&url).bearer_auth(api_key).json(&request),
                         &self.provider,
                     ),
                     &self.provider,
@@ -374,8 +373,8 @@ impl OpenAiCompatibleClient {
         F: FnMut(ChatStreamEvent) -> Result<()>,
     {
         let claude = provider_uses_claude_code_style(&self.provider);
-        let session_id = uuid::Uuid::new_v4().to_string();
         let tools = prepare_anthropic_tools(&self.provider, tools);
+        let session_id = stable_request_cache_key(&self.provider.default_model, &messages, &tools);
         let request = AnthropicRequest {
             model: self.provider.default_model.clone(),
             system: lower_anthropic_system(&messages),
@@ -395,11 +394,7 @@ impl OpenAiCompatibleClient {
         )?;
         // Claude Code 通道：system 数组 / metadata / adaptive thinking
         if claude {
-            apply_claude_code_body_shape(
-                &mut request,
-                &session_id,
-                &self.provider.thinking_level,
-            );
+            apply_claude_code_body_shape(&mut request, &session_id, &self.provider.thinking_level);
         }
         let mut url = format!("{}/messages", self.provider.base_url.trim_end_matches('/'));
         if claude {
@@ -544,62 +539,6 @@ impl OpenAiCompatibleClient {
         Ok(result)
     }
 
-    /// 发送一次 Anthropic Messages 请求。
-    ///
-    /// 参数:
-    /// - `url`: Messages API 地址
-    /// - `request`: 已应用思考与自定义字段的请求体
-    /// - `claude`: 是否 Claude Code 模拟
-    /// - `session_id`: Claude Code 会话 UUID
-    ///
-    /// 返回:
-    /// - HTTP 响应
-    async fn send_anthropic_request(
-        &self,
-        url: &str,
-        request: &Value,
-        claude: bool,
-        session_id: &str,
-        api_key: &str,
-    ) -> Result<reqwest::Response> {
-        let builder = if claude {
-            // 【Claude】【Messages 请求头】1. 使用 Claude Code 通道头
-            let user_agent = resolve_provider_user_agent(&self.provider);
-            let req = self
-                .client
-                .post(url)
-                .header("x-api-key", api_key)
-                .header("anthropic-version", "2023-06-01")
-                .header(
-                    "anthropic-beta",
-                    claude_code_beta_header(self.provider.claude_1m_context),
-                )
-                .header("anthropic-dangerous-direct-browser-access", "true")
-                .header("User-Agent", user_agent)
-                .header("x-app", "cli")
-                .header("x-claude-code-session-id", session_id)
-                .header("x-stainless-lang", "js")
-                .header("x-stainless-package-version", "0.81.0")
-                .header("x-stainless-runtime", "node")
-                .header("x-stainless-runtime-version", "v24.3.0")
-                .header("x-stainless-retry-count", "0")
-                .json(request);
-            // 2. 再合并供应商自定义头
-            with_provider_extra_headers(req, &self.provider)
-        } else {
-            let builder = apply_provider_user_agent(
-                self.client
-                    .post(url)
-                    .header("x-api-key", api_key)
-                    .header("anthropic-version", "2023-06-01")
-                    .json(request),
-                &self.provider,
-            );
-            with_provider_extra_headers(builder, &self.provider)
-        };
-        Ok(builder.send().await?)
-    }
-
     async fn chat_responses_stream<F>(
         &self,
         messages: Vec<ChatMessage>,
@@ -609,6 +548,7 @@ impl OpenAiCompatibleClient {
     where
         F: FnMut(ChatStreamEvent) -> Result<()>,
     {
+        let session_key = stable_request_cache_key(&self.provider.default_model, &messages, &tools);
         // 1. 拆出 system 作为 instructions；其余消息进 input
         let (instructions, input_messages) = split_responses_instructions(messages);
         let codex = prefers_codex_responses_shape(
@@ -616,7 +556,6 @@ impl OpenAiCompatibleClient {
             &self.provider.base_url,
             &self.provider.client_style,
         );
-        let session_key = uuid::Uuid::new_v4().to_string();
         let request = ResponsesRequest {
             model: self.provider.default_model.clone(),
             input: lower_responses_messages(input_messages),
@@ -644,9 +583,7 @@ impl OpenAiCompatibleClient {
                 Some(self.provider.temperature)
             },
             prompt_cache_key: codex.then(|| session_key.clone()),
-            client_metadata: codex.then(|| {
-                serde_json::json!({ "session_id": session_key })
-            }),
+            client_metadata: codex.then(|| serde_json::json!({ "session_id": session_key })),
         };
         let request = apply_provider_body_options(
             serde_json::to_value(request)?,
@@ -675,7 +612,9 @@ impl OpenAiCompatibleClient {
         } else {
             req = apply_provider_user_agent(req, &self.provider);
         }
-        let response = with_provider_extra_headers(req, &self.provider).send().await?;
+        let response = with_provider_extra_headers(req, &self.provider)
+            .send()
+            .await?;
         let status = response.status();
         if let Some(debug) = debug.as_ref() {
             let _ = debug.write_response_headers(status.as_u16(), response.headers());

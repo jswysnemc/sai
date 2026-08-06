@@ -5,6 +5,8 @@ export type ComposerAvailabilityInput = {
   runActive: boolean;
   runStatus: LiveRunState["status"];
   hasDraft: boolean;
+  /** 会话分支正在切换等场景只阻止提交，不清空或禁用草稿。 */
+  submitBlocked?: boolean;
 };
 
 export type ComposerAvailability = {
@@ -22,7 +24,7 @@ export type ComposerAvailability = {
 export function resolveComposerAvailability(input: ComposerAvailabilityInput): ComposerAvailability {
   return {
     inputDisabled: !input.sessionAvailable,
-    sendDisabled: !input.sessionAvailable || !input.hasDraft,
+    sendDisabled: !input.sessionAvailable || !input.hasDraft || input.submitBlocked === true,
     showStop: input.runActive
   };
 }

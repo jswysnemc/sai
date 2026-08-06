@@ -178,7 +178,10 @@ mod tests {
     /// 验证空库直接新增。
     #[test]
     fn an_empty_store_always_inserts() {
-        assert_eq!(evaluate(&candidate("任意内容都可以"), &[]), DedupeOutcome::Insert);
+        assert_eq!(
+            evaluate(&candidate("任意内容都可以"), &[]),
+            DedupeOutcome::Insert
+        );
     }
 
     /// 验证中英文混排的正文可以切分比对。

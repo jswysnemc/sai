@@ -124,7 +124,11 @@ pub async fn probe_provider_tools(
     let tool_ms = tool_started.elapsed().as_millis() as u64;
     let tokens = None;
     match &tool {
-        Ok(detail) => stages.push(ProbeStageResult::success("tool_call", tool_ms, detail.clone())),
+        Ok(detail) => stages.push(ProbeStageResult::success(
+            "tool_call",
+            tool_ms,
+            detail.clone(),
+        )),
         Err(error) => stages.push(ProbeStageResult::failure("tool_call", tool_ms, error)),
     }
 
@@ -176,11 +180,9 @@ async fn run_catalog_stage(
     let catalog = fetch_catalog(paths, provider).await;
     let catalog_ms = catalog_started.elapsed().as_millis() as u64;
     match catalog {
-        Ok(models) => ProbeStageResult::success(
-            "catalog",
-            catalog_ms,
-            catalog_detail(&models, target_model),
-        ),
+        Ok(models) => {
+            ProbeStageResult::success("catalog", catalog_ms, catalog_detail(&models, target_model))
+        }
         Err(error) => ProbeStageResult::failure("catalog", catalog_ms, &error),
     }
 }
@@ -284,7 +286,9 @@ async fn run_tool_call(
     let mut probe_provider = provider.clone();
     probe_provider.default_model = model.to_string();
     probe_provider.timeout_seconds = probe_provider.timeout_seconds.min(PROBE_TIMEOUT_SECONDS);
-    probe_provider.anthropic_max_tokens = probe_provider.anthropic_max_tokens.min(PROBE_TOOL_MAX_TOKENS);
+    probe_provider.anthropic_max_tokens = probe_provider
+        .anthropic_max_tokens
+        .min(PROBE_TOOL_MAX_TOKENS);
     let client = OpenAiCompatibleClient::new(&probe_provider, config, paths)?;
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(PROBE_TIMEOUT_SECONDS),

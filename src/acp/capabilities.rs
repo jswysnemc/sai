@@ -3,6 +3,8 @@ use anyhow::{bail, Result};
 use serde::Serialize;
 use serde_json::Value;
 
+use super::protocol::PROTOCOL_VERSION;
+
 /// ACP 握手后可供运行期判断的能力集合。
 #[derive(Debug, Clone, Default, Eq, PartialEq, Serialize)]
 pub(crate) struct AcpCapabilities {
@@ -54,10 +56,11 @@ pub(crate) struct InitializedAgent {
 /// - agent 信息与能力集合
 pub(crate) fn parse_initialize_response(value: Value) -> Result<InitializedAgent> {
     let response: InitializeResponse = super::sdk::from_value(value, "initialize response")?;
-    if response.protocol_version.as_u16() != 1 {
+    if response.protocol_version.as_u16() != PROTOCOL_VERSION {
         bail!(
-            "ACP agent speaks protocol version {}, sai supports 1",
-            response.protocol_version.as_u16()
+            "ACP agent speaks protocol version {}, sai supports {}",
+            response.protocol_version.as_u16(),
+            PROTOCOL_VERSION
         );
     }
     let sai_metadata = response

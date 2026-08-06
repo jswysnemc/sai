@@ -1,13 +1,10 @@
-import { FolderGit2, GitBranch, PanelLeft, Plus } from "lucide-react";
-import { useRef, useState } from "react";
+import { FolderGit2, GitBranch, PanelLeft, PanelRightOpen } from "lucide-react";
 import type { Workspace } from "../../api/contracts";
 import { localizeApiMessage } from "../../api/api-error";
-import { useOutsidePointerDown } from "../../shared/hooks/use-outside-pointer-down";
 import { Button } from "../../shared/ui/button/button";
 import { useI18n } from "../i18n/use-i18n";
 import { MOBILE_SIDEBAR_TOGGLE_EVENT } from "../workspace/mobile-workbench-state";
-import { OPEN_WORKSPACE_PANEL_EVENT, WORKSPACE_PANEL_OPTIONS } from "../workspace/workspace-panel-options";
-import type { PaneTab } from "../workspace/workspace-tab";
+import { OPEN_WORKSPACE_SIDEBAR_EVENT } from "../workspace/workspace-passive-diff";
 import "./chat-session-header.css";
 
 type ChatSessionHeaderProps = {
@@ -24,25 +21,8 @@ type ChatSessionHeaderProps = {
  */
 export function ChatSessionHeader({ title, workspace, branch }: ChatSessionHeaderProps) {
   const { locale, t } = useI18n();
-  const [panelMenuOpen, setPanelMenuOpen] = useState(false);
-  const panelMenuRef = useRef<HTMLDivElement>(null);
   const workspaceName = workspace ? localizeApiMessage(workspace.name, locale) : "";
   const hasContext = Boolean(workspace?.path || branch);
-  useOutsidePointerDown(panelMenuRef, () => setPanelMenuOpen(false), panelMenuOpen);
-
-  /**
-   * 打开指定工作区面板，移动端会切换到全屏面板视图。
-   *
-   * @param tab 目标工作区面板
-  * @returns 无返回值
-  */
-  const openWorkspacePanel = (tab: PaneTab) => {
-    // 【Web 对话】【面板导航】1. 先关闭移动端面板菜单
-    setPanelMenuOpen(false);
-    // 【Web 对话】【面板导航】2. 再通知工作台切换到目标面板
-    window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_PANEL_EVENT, { detail: { tab } }));
-  };
-
   return (
     <header className="chat-header">
       <Button
@@ -84,30 +64,15 @@ export function ChatSessionHeader({ title, workspace, branch }: ChatSessionHeade
           </div>
         )}
       </div>
-      <div className="chat-header-panel" ref={panelMenuRef}>
+      <div className="chat-header-panel">
         <Button
           className="chat-header-plus"
-          onClick={() => setPanelMenuOpen((value) => !value)}
-          aria-expanded={panelMenuOpen}
-          aria-haspopup="menu"
-          aria-label={t("Open workspace panel", "打开工作区面板")}
-          title={t("Open workspace panel", "打开工作区面板")}
+          onClick={() => window.dispatchEvent(new Event(OPEN_WORKSPACE_SIDEBAR_EVENT))}
+          aria-label={t("Open side panel", "打开右侧栏")}
+          title={t("Open side panel", "打开右侧栏")}
         >
-          <Plus size={16} aria-hidden />
+          <PanelRightOpen size={16} aria-hidden />
         </Button>
-        {panelMenuOpen && (
-          <div className="chat-header-panel-menu" role="menu" aria-label={t("Choose panel", "选择面板")}>
-            {WORKSPACE_PANEL_OPTIONS.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Button role="menuitem" key={item.type} onClick={() => openWorkspacePanel(item.type)}>
-                  <Icon size={14} aria-hidden />
-                  <span>{t(item.labelEn, item.labelZh)}</span>
-                </Button>
-              );
-            })}
-          </div>
-        )}
       </div>
     </header>
   );

@@ -323,27 +323,31 @@ pub fn apply_agent_override(
         }
         bail!("agent not found: {agent_id}");
     };
-    // 4. 应用提示词、供应商、模型和思考等级覆盖
+    // 4. 内置档案的供应商、模型和思考等级为空时沿用全局选择；只有用户明确配置
+    //    过档案，或使用自定义档案时，才允许档案固定值覆盖当前选择
     if !profile.system_prompt.trim().is_empty() {
         config.system_prompt_file = None;
         config.system_prompt = Some(profile.system_prompt.clone());
     }
-    if !profile.provider_id.trim().is_empty() {
-        config.active_provider = profile.provider_id.clone();
-    }
-    if let Some(provider) = config
-        .providers
-        .iter_mut()
-        .find(|provider| provider.id == config.active_provider)
-    {
-        if !profile.model.trim().is_empty() {
-            provider.default_model = profile.model.clone();
+    if profile_pins_model_selection(&profile) {
+        if !profile.provider_id.trim().is_empty() {
+            config.active_provider = profile.provider_id.clone();
         }
-        if !profile.thinking_level.trim().is_empty() && profile.thinking_level != "auto" {
-            provider.thinking_level = profile.thinking_level.clone();
+        if let Some(provider) = config
+            .providers
+            .iter_mut()
+            .find(|provider| provider.id == config.active_provider)
+        {
+            // 5. 自定义档案的模型与思考等级覆盖当前供应商；空值继续沿用全局配置
+            if !profile.model.trim().is_empty() {
+                provider.default_model = profile.model.clone();
+            }
+            if !profile.thinking_level.trim().is_empty() && profile.thinking_level != "auto" {
+                provider.thinking_level = profile.thinking_level.clone();
+            }
         }
     }
-    // 5. 工具白名单：空列表表示全量；内置 explore/plan/gateway/code 有默认白名单
+    // 6. 工具白名单：空列表表示全量；内置 explore/plan/gateway/code 有默认白名单
     //    延迟集合从白名单中划出需要 load 才暴露的部分，两者一起构成三段状态
     let enabled_tools = resolve_enabled_tools(&profile);
     let deferred_tools = resolve_deferred_tools(&profile, &enabled_tools);
@@ -363,6 +367,29 @@ pub fn apply_agent_override(
         })
     };
     Ok(config)
+}
+
+/// 判断 Agent 档案是否明确固定了供应商、模型或思考等级。
+///
+/// 内置档案会写入配置文件，但其中的空选择字段只是“沿用全局选择”的默认值，
+/// 不能在每次配置重载时覆盖用户通过 `/model` 或模型选择器选择的结果。
+///
+/// 参数:
+/// - `profile`: 已解析的 Agent 档案
+///
+/// 返回:
+/// - 档案包含明确运行期选择时返回 true
+fn profile_pins_model_selection(profile: &AgentProfile) -> bool {
+    let Some(builtin) = builtin_agent_profiles()
+        .into_iter()
+        .find(|builtin| builtin.id == profile.id)
+    else {
+        // 自定义档案的显式选择应当生效；字段全为空时下面的覆盖逻辑不会改动配置
+        return true;
+    };
+    profile.provider_id != builtin.provider_id
+        || profile.model != builtin.model
+        || profile.thinking_level != builtin.thinking_level
 }
 
 fn default_agent_thinking_level() -> String {
@@ -503,6 +530,48 @@ mod tests {
         assert!(gateway_tools.iter().any(|t| t == "online_man_get_page"));
         assert!(!gateway_tools.iter().any(|t| t == "query_weather"));
         assert!(!gateway_tools.iter().any(|t| t == "convert_exchange_rate"));
+    }
+
+    /// 验证内置 Agent 不会在配置重载时覆盖用户刚选择的模型。
+    #[test]
+    fn builtin_agent_keeps_user_selected_model_after_reload() {
+        let mut config = crate::config::AppConfig::default();
+        crate::config::ensure_surface_agent_defaults(&mut config);
+        let provider_id = config.providers[0].id.clone();
+        let selected_model = "user-selected-model";
+        config
+            .set_active_provider_model(&provider_id, selected_model)
+            .unwrap();
+
+        let resolved = apply_agent_override(config, None, AgentSurface::Tui).unwrap();
+
+        assert_eq!(resolved.active_provider, provider_id);
+        assert_eq!(
+            resolved.provider(None).unwrap().default_model,
+            selected_model
+        );
+    }
+
+    /// 验证自定义 Agent 仍然可以固定供应商、模型和思考等级。
+    #[test]
+    fn custom_agent_can_pin_model_selection() {
+        let mut config = crate::config::AppConfig::default();
+        let provider_id = config.providers[0].id.clone();
+        config.agents.push(AgentProfile {
+            id: "pinned-agent".to_string(),
+            name: "固定模型".to_string(),
+            provider_id: provider_id.clone(),
+            model: "pinned-model".to_string(),
+            thinking_level: "high".to_string(),
+            ..AgentProfile::default()
+        });
+
+        let resolved =
+            apply_agent_override(config, Some("pinned-agent"), AgentSurface::Web).unwrap();
+        let provider = resolved.provider(None).unwrap();
+        assert_eq!(resolved.active_provider, provider_id);
+        assert_eq!(provider.default_model, "pinned-model");
+        assert_eq!(provider.thinking_level, "high");
     }
 
     #[test]

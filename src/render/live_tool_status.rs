@@ -1,6 +1,7 @@
+use crate::render::terminal_paint::paint_lock;
 use crate::render::tool_call_preview::tool_call_status_text;
 use anyhow::Result;
-use crossterm::execute;
+use crossterm::queue;
 use crossterm::terminal::{Clear, ClearType};
 use std::io::{self, Write};
 
@@ -36,8 +37,9 @@ impl LiveToolStatus {
     /// - 写入是否成功
     pub(crate) fn write(&mut self, name: &str, status: &str, final_line: bool) -> Result<()> {
         let text = tool_call_status_text(name, status);
+        let _paint = paint_lock();
         let mut stdout = io::stdout();
-        execute!(stdout, Clear(ClearType::CurrentLine))?;
+        queue!(stdout, Clear(ClearType::CurrentLine))?;
         write!(stdout, "\r\x1b[2m{text}\x1b[0m")?;
         if final_line {
             writeln!(stdout)?;
@@ -53,6 +55,7 @@ impl LiveToolStatus {
     /// - 写入是否成功
     pub(crate) fn finish(&mut self) -> Result<()> {
         if self.active {
+            let _paint = paint_lock();
             let mut stdout = io::stdout();
             writeln!(stdout)?;
             stdout.flush()?;
@@ -67,8 +70,9 @@ impl LiveToolStatus {
     /// - 写入是否成功
     pub(crate) fn clear(&mut self) -> Result<()> {
         if self.active {
+            let _paint = paint_lock();
             let mut stdout = io::stdout();
-            execute!(stdout, Clear(ClearType::CurrentLine))?;
+            queue!(stdout, Clear(ClearType::CurrentLine))?;
             write!(stdout, "\r")?;
             stdout.flush()?;
             self.active = false;

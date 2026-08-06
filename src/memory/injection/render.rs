@@ -74,7 +74,8 @@ mod tests {
     /// 这正是旧实现让召回失效的原因。
     #[test]
     fn the_wording_does_not_undermine_itself() {
-        let rendered = render_injection(&[hit(MemoryKind::Preference, "用户一律使用 pnpm")]).unwrap();
+        let rendered =
+            render_injection(&[hit(MemoryKind::Preference, "用户一律使用 pnpm")]).unwrap();
         assert!(!rendered.contains("可能相关"));
         assert!(!rendered.contains("不要强行"));
         assert!(rendered.contains("请在本轮中遵循"));

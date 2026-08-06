@@ -25,6 +25,7 @@ pub(super) fn open_connection(state_dir: &Path) -> Result<Connection> {
             turn_id             TEXT PRIMARY KEY,
             seq                 INTEGER NOT NULL UNIQUE,
             user_content        TEXT NOT NULL,
+            provider_user_content TEXT,
             user_timestamp      TEXT NOT NULL,
             assistant_content   TEXT NOT NULL,
             assistant_reasoning TEXT,
@@ -42,10 +43,12 @@ pub(super) fn open_connection(state_dir: &Path) -> Result<Connection> {
     crate::state::failure_recovery::schema::create_failure_recovery_tables(&conn)?;
     crate::state::session_memory::schema::create_session_memory_tables(&conn)?;
     crate::state::tool_history::schema::create_tool_history_tables(&conn)?;
+    crate::state::turn_messages::schema::create_turn_message_table(&conn)?;
     crate::runtime_recovery::schema::create_runtime_recovery_tables(&conn)?;
     ensure_user_image_urls_column(&conn)?;
     ensure_duration_ms_column(&conn)?;
     ensure_parent_turn_id_column(&conn)?;
+    ensure_provider_user_content_column(&conn)?;
     backfill_linear_parents(&conn)?;
     create_tree_meta_table(&conn)?;
     conn.execute_batch(
@@ -58,6 +61,30 @@ pub(super) fn open_connection(state_dir: &Path) -> Result<Connection> {
            );",
     )?;
     Ok(conn)
+}
+
+/// 确保 turns 表包含供应商用户消息列。
+///
+/// 参数:
+/// - `conn`: SQLite 连接
+///
+/// 返回:
+/// - 表结构补齐是否成功
+fn ensure_provider_user_content_column(conn: &Connection) -> Result<()> {
+    let column_count: i64 = conn.query_row(
+        "SELECT COUNT(*)
+         FROM pragma_table_info('turns')
+         WHERE name = 'provider_user_content'",
+        [],
+        |row| row.get(0),
+    )?;
+    if column_count == 0 {
+        conn.execute(
+            "ALTER TABLE turns ADD COLUMN provider_user_content TEXT",
+            [],
+        )?;
+    }
+    Ok(())
 }
 
 /// 确保 turns 表包含用户图片列。

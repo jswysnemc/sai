@@ -33,6 +33,26 @@ impl Agent {
         )
     }
 
+    /// 记录工具网关解包后的真实展示信息。
+    ///
+    /// 参数:
+    /// - `provider_call_id`: provider 工具调用标识
+    /// - `call`: 解包后的真实工具调用
+    ///
+    /// 返回:
+    /// - 写入是否成功
+    pub(super) fn record_tool_call_display(
+        &self,
+        provider_call_id: &str,
+        call: &ToolCall,
+    ) -> Result<()> {
+        self.state.record_tool_call_display(
+            provider_call_id,
+            &call.function.name,
+            &call.function.arguments,
+        )
+    }
+
     /// 记录工具调用结果事件。
     ///
     /// 参数:
@@ -67,6 +87,26 @@ impl Agent {
             error,
             raw_output.chars().count(),
         )
+    }
+
+    /// 记录无需区分原始输出与上下文输出的工具结果。
+    ///
+    /// 参数:
+    /// - `turn_id`: 当前轮次标识
+    /// - `call`: 供应商原始工具调用
+    /// - `ok`: 工具是否成功
+    /// - `output`: 同时用于持久化和模型上下文的输出
+    ///
+    /// 返回:
+    /// - 写入是否成功
+    pub(super) fn record_simple_tool_result(
+        &self,
+        turn_id: &str,
+        call: &ToolCall,
+        ok: bool,
+        output: &str,
+    ) -> Result<()> {
+        self.record_tool_result_completed(turn_id, call, ok, output, output)
     }
 }
 

@@ -12,6 +12,7 @@ import { HooksSettingsSection } from "../hooks-settings-section";
 import { McpSettingsSection } from "../mcp-settings-section";
 import { SkillsSettingsSection } from "../skills/skills-settings-section";
 import { UsageStatsSection } from "../usage/usage-stats-section";
+import { SessionDataSettings } from "../session-data/session-data-settings";
 import { SettingsSkeleton } from "./settings-skeleton";
 import { SettingsErrorRecovery } from "./settings-error-recovery";
 import type { SettingsConfigController, SettingsSectionId } from "../settings-types";
@@ -144,6 +145,8 @@ export function SettingsSectionBody({
       return <McpSettingsSection />;
     case "usage":
       return <UsageStatsSection />;
+    case "session-data":
+      return <SessionDataSettings />;
     case "gateways":
       return (
         <GatewaySettingsSection

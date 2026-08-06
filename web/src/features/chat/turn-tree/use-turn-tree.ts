@@ -5,6 +5,8 @@ import { cancelSessionBranchQueries, refreshSessionBranchQueries } from "./branc
 type TurnTreeOptions = {
   /** 分支指针变更成功后的本地状态清理回调 */
   onBranchChanged?: () => void;
+  /** 分支切换失败后的统一错误回调 */
+  onError?: (error: unknown) => void;
 };
 
 /**
@@ -30,6 +32,7 @@ export function useTurnTree(sessionId?: string, options: TurnTreeOptions = {}) {
     mutationFn: (turnId: string) => api.sessions.switchBranch(sessionId ?? "", turnId),
     onMutate: () => cancelSessionBranchQueries(queryClient, sessionId),
     onSuccess: () => options.onBranchChanged?.(),
+    onError: (error) => options.onError?.(error),
     onSettled: () => refreshSessionBranchQueries(queryClient, sessionId)
   });
 
@@ -37,6 +40,7 @@ export function useTurnTree(sessionId?: string, options: TurnTreeOptions = {}) {
     mutationFn: (turnId: string) => api.sessions.undoToParent(sessionId ?? "", turnId),
     onMutate: () => cancelSessionBranchQueries(queryClient, sessionId),
     onSuccess: () => options.onBranchChanged?.(),
+    onError: (error) => options.onError?.(error),
     onSettled: () => refreshSessionBranchQueries(queryClient, sessionId)
   });
 

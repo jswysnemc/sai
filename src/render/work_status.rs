@@ -27,6 +27,7 @@ impl WorkStatus {
                 Some(Self::Thinking)
             }
             AgentEvent::Chunk(_)
+            | AgentEvent::InterMessage(_)
             | AgentEvent::ToolCall { .. }
             | AgentEvent::ToolCallIdentified { .. }
             | AgentEvent::ToolCallProgress(_)
@@ -37,10 +38,12 @@ impl WorkStatus {
             | AgentEvent::PermissionResolved { .. }
             | AgentEvent::QuestionResolved { .. } => Some(Self::Working),
             // 权限/提问交互期间由专门 UI 接管，不进入 Working，避免与审核行重叠
+            AgentEvent::WaitingExternal => Some(Self::WaitingExternal),
             AgentEvent::PermissionRequested(_) | AgentEvent::QuestionRequested(_) => None,
             AgentEvent::CompactionStarted { .. } => Some(Self::Compacting),
             AgentEvent::CompactionDelta { .. }
             | AgentEvent::CompactionFinished { .. }
+            | AgentEvent::ContextUpdated(_)
             | AgentEvent::EngineReady { .. }
             | AgentEvent::FlushContent
             | AgentEvent::ExternalOutput => None,

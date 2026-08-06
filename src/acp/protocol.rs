@@ -5,7 +5,7 @@ use serde_json::Value;
 ///
 /// 规范文档把 `protocolVersion` 写成字符串，但实测 claude-code-acp 0.16 与
 /// codex-acp 1.1 都要求数字，传字符串直接回 `-32602 Invalid params`。
-pub(crate) const PROTOCOL_VERSION: u32 = 1;
+pub(crate) const PROTOCOL_VERSION: u16 = 1;
 
 /// JSON-RPC 请求标识。
 ///

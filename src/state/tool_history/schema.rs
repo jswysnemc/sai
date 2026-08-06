@@ -20,6 +20,8 @@ pub(in crate::state) fn create_tool_history_tables(conn: &Connection) -> Result<
             provider_call_id TEXT NOT NULL,
             tool_name        TEXT NOT NULL,
             arguments        TEXT NOT NULL,
+            display_tool_name TEXT,
+            display_arguments TEXT,
             status           TEXT NOT NULL,
             created_at       TEXT NOT NULL,
             updated_at       TEXT NOT NULL,
@@ -59,7 +61,7 @@ pub(in crate::state) fn create_tool_history_tables(conn: &Connection) -> Result<
         CREATE INDEX IF NOT EXISTS idx_tool_replacements_session
             ON tool_output_replacements(session_id);",
     )?;
-    ensure_tool_call_context_columns(conn)?;
+    ensure_tool_call_metadata_columns(conn)?;
     Ok(())
 }
 
@@ -70,7 +72,7 @@ pub(in crate::state) fn create_tool_history_tables(conn: &Connection) -> Result<
 ///
 /// 返回:
 /// - 数据库迁移是否成功
-fn ensure_tool_call_context_columns(conn: &Connection) -> Result<()> {
+fn ensure_tool_call_metadata_columns(conn: &Connection) -> Result<()> {
     let mut stmt = conn.prepare("PRAGMA table_info(tool_calls)")?;
     let columns = stmt
         .query_map([], |row| row.get::<_, String>(1))?
@@ -88,6 +90,19 @@ fn ensure_tool_call_context_columns(conn: &Connection) -> Result<()> {
     if !columns.iter().any(|column| column == "assistant_reasoning") {
         conn.execute(
             "ALTER TABLE tool_calls ADD COLUMN assistant_reasoning TEXT",
+            [],
+        )?;
+    }
+    // 3. 展示字段保存统一网关解包后的真实工具信息，不影响供应商消息投影
+    if !columns.iter().any(|column| column == "display_tool_name") {
+        conn.execute(
+            "ALTER TABLE tool_calls ADD COLUMN display_tool_name TEXT",
+            [],
+        )?;
+    }
+    if !columns.iter().any(|column| column == "display_arguments") {
+        conn.execute(
+            "ALTER TABLE tool_calls ADD COLUMN display_arguments TEXT",
             [],
         )?;
     }
@@ -153,5 +168,7 @@ mod tests {
             .unwrap();
         assert!(columns.iter().any(|column| column == "assistant_round"));
         assert!(columns.iter().any(|column| column == "assistant_reasoning"));
+        assert!(columns.iter().any(|column| column == "display_tool_name"));
+        assert!(columns.iter().any(|column| column == "display_arguments"));
     }
 }

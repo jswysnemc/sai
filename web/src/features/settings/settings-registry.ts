@@ -4,6 +4,7 @@ import {
   Brain,
   Braces,
   Cable,
+  Database,
   FileText,
   GitBranch,
   KeyRound,
@@ -188,6 +189,17 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     descriptionZh: "长期事实、往事和清空",
     icon: Brain,
     searchKeys: ["memory", "fact", "event", "记忆", "事实"]
+  },
+  {
+    id: "session-data",
+    group: "operations",
+    kind: "operations",
+    labelEn: "Session data",
+    labelZh: "会话数据",
+    descriptionEn: "Inspect, clear, and delete workspace sessions",
+    descriptionZh: "查看、清空和删除工作区会话",
+    icon: Database,
+    searchKeys: ["session", "data", "storage", "clear", "delete", "会话", "数据", "清空", "删除"]
   },
   {
     id: "usage",

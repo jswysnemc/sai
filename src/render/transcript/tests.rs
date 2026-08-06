@@ -715,7 +715,11 @@ fn history_edit_file_restores_diff_cell() {
     .to_string();
     let mut store = TranscriptStore::new(100);
     store.push_history_tool_call("str_replace".to_string(), arguments);
-    store.push_tool_result("str_replace".to_string(), true, r#"{"ok":true}"#.to_string());
+    store.push_tool_result(
+        "str_replace".to_string(),
+        true,
+        r#"{"ok":true}"#.to_string(),
+    );
     let rendered = store
         .display_tail(80, &options())
         .iter()

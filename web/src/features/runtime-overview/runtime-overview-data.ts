@@ -19,6 +19,16 @@ export function normalizeTodoItems(data: TodoSnapshot | TodoItem[] | undefined):
 }
 
 /**
+ * 选出工作概览需要渲染的计划条目。
+ *
+ * @param items 当前会话的全部计划条目
+ * @returns 工作概览中渲染的计划条目
+ */
+export function selectTodoOverviewItems(items: readonly TodoItem[]): TodoItem[] {
+  return [...items];
+}
+
+/**
  * 统计 Git 补丁中的新增与删除行数。
  *
  * @param patch Git unified diff 文本
@@ -33,6 +43,26 @@ export function countGitPatchLines(patch: string | undefined): GitLineStats {
     if (line.startsWith("-") && !line.startsWith("---")) removed += 1;
   }
   return { added, removed };
+}
+
+/**
+ * 排序工作概览中的子智能体。
+ *
+ * 1. 运行中任务优先，避免被大量历史终态任务挤出概览
+ * 2. 同一状态层级按最近更新时间倒序排列
+ *
+ * @param items 当前会话的全部子智能体
+ * @returns 排序后的完整子智能体列表
+ */
+export function sortSubagentOverviewItems(items: readonly Subagent[]): Subagent[] {
+  return [...items]
+    .sort((left, right) => {
+      const runningOrder = Number(right.status === "running") - Number(left.status === "running");
+      if (runningOrder !== 0) return runningOrder;
+      const updatedOrder = right.updated_at - left.updated_at;
+      if (updatedOrder !== 0) return updatedOrder;
+      return right.started_at - left.started_at;
+    });
 }
 
 /**
@@ -101,6 +131,7 @@ export function useRuntimeOverviewData(sessionId?: string) {
     },
     subagents: {
       items: subagentItems,
+      overviewItems: sortSubagentOverviewItems(subagentItems),
       running: runningSubagents,
       completed: subagentItems.filter((item) => item.status === "completed").length,
       loading: subagents.isLoading

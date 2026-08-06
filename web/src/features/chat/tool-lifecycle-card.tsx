@@ -66,9 +66,7 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
       target={target || undefined}
       targetTitle={headerPath || summary || undefined}
       meta={
-        tool.status === "preparing"
-          ? t("Preparing", "准备中")
-          : permission
+        permission
             ? <ToolPermissionBadge autoAudited={autoAudited} t={t} />
             : undefined
       }

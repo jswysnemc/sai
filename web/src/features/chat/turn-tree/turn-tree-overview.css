@@ -1,7 +1,18 @@
 .turn-tree-overview {
   min-width: 0;
-  padding: var(--space-sm);
+  min-height: 100%;
+  padding: var(--space-xs);
   overflow: auto;
+}
+
+/* 总览需要同时容纳多列分支；桌面端扩大画布，窄屏仍由弹层横向滚动 */
+.ui-modal.large.turn-tree-overview-modal {
+  width: min(1180px, calc(100vw - 32px));
+  max-height: min(900px, calc(100vh - 32px));
+}
+
+.turn-tree-overview-modal .ui-modal-body {
+  padding: var(--space-lg);
 }
 
 /*
@@ -12,7 +23,7 @@
 .turn-tree-overview-stage {
   position: relative;
   /* 树很小时给弹层一个不至于显得残缺的下限 */
-  min-height: 11rem;
+  min-height: 13rem;
 }
 
 .turn-tree-overview-canvas {
@@ -42,7 +53,7 @@
   border-radius: var(--radius-2);
   background: var(--paper-raised);
   color: var(--ink-soft);
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
   text-align: left;
 }
 
@@ -87,4 +98,15 @@
   padding: var(--space-md);
   color: var(--ink-soft);
   font-size: var(--text-xs);
+}
+
+@media (max-width: 48rem) {
+  .ui-modal.large.turn-tree-overview-modal {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 24px);
+  }
+
+  .turn-tree-overview-modal .ui-modal-body {
+    padding: var(--space-sm);
+  }
 }

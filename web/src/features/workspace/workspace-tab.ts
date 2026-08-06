@@ -7,6 +7,8 @@ export type WorkspacePanelTab = {
   path?: string;
   /** 终端会话 ID，仅 terminal 类型使用。 */
   terminalId?: string;
+  /** 被动打开的具体 Diff 内容，仅 diff 类型使用。 */
+  diffSource?: string;
   closable: boolean;
 };
 
@@ -19,7 +21,7 @@ export type WorkspacePanelTab = {
  */
 export function createWorkspacePanelTab(
   type: PaneTab,
-  options: { title?: string; path?: string; terminalId?: string; closable?: boolean } = {},
+  options: { title?: string; path?: string; terminalId?: string; diffSource?: string; closable?: boolean } = {},
   locale: Locale = "zh-CN"
 ): WorkspacePanelTab {
   const path = options.path;
@@ -43,8 +45,18 @@ export function createWorkspacePanelTab(
       closable: options.closable ?? true
     };
   }
+  if (type === "diff") {
+    return {
+      id: `diff:${options.path ?? crypto.randomUUID()}`,
+      type,
+      title: options.title ?? options.path?.split("/").filter(Boolean).at(-1) ?? "Diff",
+      path: options.path,
+      diffSource: options.diffSource ?? "",
+      closable: options.closable ?? true
+    };
+  }
   const defaults: Record<Exclude<PaneTab, "files" | "terminal">, string> = {
-    diff: "Git",
+    diff: "Diff",
     tasks: text(locale, "Background tasks", "后台任务"),
     subagents: text(locale, "Subagents", "子智能体"),
     sessions: text(locale, "Sessions", "会话")
@@ -66,7 +78,7 @@ export function createWorkspacePanelTab(
 export function paneTabLabel(type: PaneTab, locale: Locale = "zh-CN"): string {
   return {
     files: text(locale, "Editor", "编辑器"),
-    diff: "Git",
+    diff: "Diff",
     terminal: text(locale, "Terminal", "终端"),
     tasks: text(locale, "Background tasks", "后台任务"),
     subagents: text(locale, "Subagents", "子智能体"),

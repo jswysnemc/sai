@@ -9,6 +9,14 @@ import { FileTypeIcon } from "../../shared/ui/file-icon";
 import { filterFileNodes, findFileNode, parentFilePath } from "./file-tree-utils";
 import { WorkspaceFileSearch } from "./workspace-file-search";
 import { useI18n } from "../i18n/use-i18n";
+import { ChangeContextMenu } from "../source-control/changes/change-context-menu";
+import "../source-control/changes/change-file-list.css";
+import {
+  fileTreeGitSection,
+  fileTreeGitStatusLabel,
+  useFileTreeGit,
+  type FileTreeGitEntry
+} from "./use-file-tree-git";
 
 type FileTreeProps = {
   selectedFile: string | null;
@@ -18,6 +26,7 @@ type FileTreeProps = {
 };
 
 type FileAction = { kind: "file" | "directory" | "rename"; value: string } | null;
+type GitMenuState = { x: number; y: number; workspacePath: string; item: FileTreeGitEntry } | null;
 
 /**
  * 渲染支持创建、重命名和删除的工作区文件树。
@@ -29,11 +38,14 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
   const { t } = useI18n();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
+  const git = useFileTreeGit();
   const tree = useQuery({ queryKey: ["file-tree"], queryFn: () => api.workspace.tree(), refetchOnWindowFocus: true, refetchInterval: 15_000 });
   const [focusedPath, setFocusedPath] = useState<string | null>(selectedFile);
   const [action, setAction] = useState<FileAction>(null);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<Error | null>(null);
+  const [gitMenu, setGitMenu] = useState<GitMenuState>(null);
+  const [comparisonBase, setComparisonBase] = useState<FileTreeGitEntry | null>(null);
   const focusedNode = findFileNode(tree.data ?? [], focusedPath);
   const visibleNodes = filterFileNodes(tree.data ?? [], search);
 
@@ -120,19 +132,59 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
             <button type="button" onClick={() => setAction(null)} aria-label={t("Cancel", "取消")}><X size={12} /></button>
           </div>
         )}
-        {visibleNodes.map((node) => <TreeNode key={node.path} node={node} selectedFile={selectedFile} focusedPath={focusedPath} onFocus={setFocusedPath} onSelectFile={onSelectFile} depth={0} forceOpen={Boolean(search.trim())} />)}
+        {visibleNodes.map((node) => (
+          <TreeNode
+            key={node.path}
+            node={node}
+            selectedFile={selectedFile}
+            focusedPath={focusedPath}
+            gitEntries={git.entries}
+            onFocus={setFocusedPath}
+            onSelectFile={onSelectFile}
+            onGitContextMenu={(event, workspacePath, item) => {
+              event.preventDefault();
+              setFocusedPath(workspacePath);
+              setGitMenu({ x: event.clientX, y: event.clientY, workspacePath, item });
+            }}
+            depth={0}
+            forceOpen={Boolean(search.trim())}
+          />
+        ))}
         {tree.data && visibleNodes.length === 0 && <p className="file-tree-empty">{t("No matching files", "没有匹配的文件")}</p>}
-        {(tree.error || error) && <p className="pane-error">{error?.message || tree.error?.message}</p>}
+        {(tree.error || error || git.error) && <p className="pane-error">{error?.message || tree.error?.message || git.error?.message}</p>}
       </div>
+      {gitMenu && (
+        <ChangeContextMenu
+          x={gitMenu.x}
+          y={gitMenu.y}
+          repoRoot={gitMenu.item.repoRoot}
+          entries={[gitMenu.item.entry]}
+          primaryPath={gitMenu.item.entry.path}
+          section={fileTreeGitSection(gitMenu.item.entry)}
+          busy={git.busy}
+          runOperation={(action, options) => git.runOperation(action, {
+            ...options,
+            repo_root: gitMenu.item.repoRoot
+          })}
+          comparisonBasePath={comparisonBase?.entry.path ?? null}
+          onOpenChanges={(_path, section) => void git.openChanges(gitMenu.item, gitMenu.workspacePath, section)}
+          onSelectForCompare={() => setComparisonBase(gitMenu.item)}
+          onCompareWithSelected={() => {
+            if (comparisonBase) void git.compareFiles(comparisonBase, gitMenu.item, gitMenu.workspacePath);
+          }}
+          onClose={() => setGitMenu(null)}
+        />
+      )}
     </aside>
   );
 }
 
 /** 渲染单个递归文件树节点。 */
-function TreeNode({ node, selectedFile, focusedPath, onFocus, onSelectFile, depth, forceOpen }: { node: FileNode; selectedFile: string | null; focusedPath: string | null; onFocus: (path: string) => void; onSelectFile: (path: string) => void; depth: number; forceOpen: boolean }) {
+function TreeNode({ node, selectedFile, focusedPath, gitEntries, onFocus, onSelectFile, onGitContextMenu, depth, forceOpen }: { node: FileNode; selectedFile: string | null; focusedPath: string | null; gitEntries: ReadonlyMap<string, FileTreeGitEntry>; onFocus: (path: string) => void; onSelectFile: (path: string) => void; onGitContextMenu: (event: React.MouseEvent<HTMLButtonElement>, path: string, item: FileTreeGitEntry) => void; depth: number; forceOpen: boolean }) {
   const [open, setOpen] = useState(depth < 1);
   const directory = node.kind === "directory";
   const active = selectedFile === node.path || focusedPath === node.path;
+  const gitEntry = directory ? undefined : gitEntries.get(node.path);
   useEffect(() => {
     if (directory && selectedFile?.startsWith(`${node.path}/`)) setOpen(true);
   }, [directory, node.path, selectedFile]);
@@ -147,12 +199,16 @@ function TreeNode({ node, selectedFile, focusedPath, onFocus, onSelectFile, dept
           if (directory) setOpen((value) => !value);
           else onSelectFile(node.path);
         }}
+        onContextMenu={(event) => {
+          if (gitEntry) onGitContextMenu(event, node.path, gitEntry);
+        }}
       >
         {directory ? <ChevronRight size={12} className={open ? "tree-chevron open" : "tree-chevron"} /> : <span className="tree-spacer" />}
         {directory ? (open ? <FolderOpen size={14} /> : <Folder size={14} />) : <FileTypeIcon name={node.name} size={13} />}
-        <span>{node.name}</span>
+        <span className="tree-row-name">{node.name}</span>
+        {gitEntry && <span className="tree-row-git-status">{fileTreeGitStatusLabel(gitEntry.entry)}</span>}
       </button>
-      {directory && (open || forceOpen) && node.children.map((child) => <TreeNode key={child.path} node={child} selectedFile={selectedFile} focusedPath={focusedPath} onFocus={onFocus} onSelectFile={onSelectFile} depth={depth + 1} forceOpen={forceOpen} />)}
+      {directory && (open || forceOpen) && node.children.map((child) => <TreeNode key={child.path} node={child} selectedFile={selectedFile} focusedPath={focusedPath} gitEntries={gitEntries} onFocus={onFocus} onSelectFile={onSelectFile} onGitContextMenu={onGitContextMenu} depth={depth + 1} forceOpen={forceOpen} />)}
     </div>
   );
 }

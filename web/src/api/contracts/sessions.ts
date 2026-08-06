@@ -48,6 +48,8 @@ export type TimelineMessage = {
 
 export type TimelineToolEntry = {
   id: string;
+  /** 同一轮次中的工具调用顺序；旧历史响应可能缺失 */
+  seq?: number;
   name: string;
   arguments: string;
   status: "running" | "completed" | "failed";
@@ -61,6 +63,18 @@ export type TimelineToolEntry = {
   permission?: PermissionDecision | null;
 };
 
+export type TimelineTurnMessage = {
+  id: string;
+  seq: number;
+  after_tool_seq: number;
+  kind: "assistant" | "external_completion" | "goal_continuation" | "queued_user" | string;
+  role: "assistant" | "user" | string;
+  content: string;
+  reasoning?: string | null;
+  image_urls?: string[];
+  created_at: string;
+};
+
 export type SessionTimelineTurn = {
   turn_id: string;
   seq: number;
@@ -69,6 +83,8 @@ export type SessionTimelineTurn = {
   user: TimelineMessage;
   assistant: TimelineMessage;
   tools: TimelineToolEntry[];
+  /** 同一模型回合中插入的完成回执、Goal 续作和排队用户消息 */
+  messages?: TimelineTurnMessage[];
   /** 处理耗时毫秒；历史未记录时可能缺失 */
   duration_ms?: number | null;
 };

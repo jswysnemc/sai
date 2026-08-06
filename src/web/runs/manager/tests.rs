@@ -414,3 +414,93 @@ async fn updates_queued_submission_and_restores_new_order() {
         "edited third"
     );
 }
+
+/// 【消息队列】【间隙投递】验证排队消息逐条合并并保留后续队首。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[tokio::test]
+async fn message_queue_acknowledges_only_the_delivered_front_item() {
+    let temp = tempfile::tempdir().unwrap();
+    let manager = RunManager::new(&test_paths(temp.path().to_path_buf())).unwrap();
+    let workspace = WorkspaceInfo {
+        id: "workspace".to_string(),
+        name: "workspace".to_string(),
+        path: temp.path().display().to_string(),
+        last_opened_at: String::new(),
+    };
+    let key = session_key(&workspace.id, "session");
+    manager.active.lock().await.insert(
+        key.clone(),
+        ActiveRun {
+            info: ActiveRunInfo {
+                run_id: "active-run".to_string(),
+                workspace_id: workspace.id.clone(),
+                session_id: "session".to_string(),
+                input: "active".to_string(),
+                image_urls: Vec::new(),
+                status: RunCheckpointStatus::Running,
+                discard_user_turn: false,
+                restore_input: None,
+            },
+            handle: tokio::spawn(std::future::pending::<()>()),
+        },
+    );
+
+    let mut queued = Vec::new();
+    for input in ["first queued", "second queued"] {
+        queued.push(
+            manager
+                .start(
+                    workspace.clone(),
+                    StartRunRequest {
+                        kind: RunKind::Conversation,
+                        session_id: "session".to_string(),
+                        input: input.to_string(),
+                        agent_id: None,
+                        image_url: None,
+                        image_urls: Vec::new(),
+                        mode: None,
+                        provider_id: None,
+                        model: None,
+                        thinking_level: None,
+                    },
+                )
+                .await
+                .unwrap(),
+        );
+    }
+    let source = WebMessageQueue::new(manager.clone(), key.clone(), "active-run".to_string());
+
+    let first = source.peek().await.unwrap().unwrap();
+    assert_eq!(first.id, queued[0].run_id);
+    assert_eq!(first.display, "first queued");
+    source.acknowledge(&first.id).await.unwrap();
+
+    assert_eq!(
+        manager.checkpoints.get(&first.id).unwrap().status,
+        RunCheckpointStatus::Completed
+    );
+    let first_events = manager.journal(&first.id).await.unwrap().events_after(0);
+    assert!(first_events.iter().any(|event| {
+        event.kind == "run.merged" && event.payload["target_run_id"] == "active-run"
+    }));
+    let second = source.peek().await.unwrap().unwrap();
+    assert_eq!(second.id, queued[1].run_id);
+    assert_eq!(second.display, "second queued");
+    assert_eq!(manager.queued.lock().await[&key].len(), 1);
+
+    source.acknowledge(&second.id).await.unwrap();
+    assert!(source.peek().await.unwrap().is_none());
+    manager
+        .active
+        .lock()
+        .await
+        .remove(&key)
+        .unwrap()
+        .handle
+        .abort();
+}

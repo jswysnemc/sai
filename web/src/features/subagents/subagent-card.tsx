@@ -1,7 +1,6 @@
 import { Ban } from "lucide-react";
 import type { MouseEvent } from "react";
 import type { Subagent } from "../../api/contracts";
-import { SubagentProgress } from "./subagent-progress";
 import { SubagentStatusBadge } from "./subagent-status-badge";
 import { subagentDuration, subagentTypeLabel } from "./subagent-labels";
 import { useI18n } from "../i18n/use-i18n";
@@ -14,7 +13,7 @@ type SubagentCardProps = {
 };
 
 /**
- * 渲染单个子智能体卡片:状态、类型、实时进度与取消操作。
+ * 渲染单个子智能体卡片:状态、类型与取消操作。
  *
  * @param props 子智能体数据、选中态与操作回调
  * @returns 子智能体卡片
@@ -42,7 +41,6 @@ export function SubagentCard({ subagent, active = false, onSelect, onCancel }: S
         <div><dt>{t("Duration", "用时")}</dt><dd>{subagentDuration(subagent.started_at, subagent.updated_at)}</dd></div>
         {subagent.last_tool && !running && <div><dt>{t("Last step", "末步")}</dt><dd>{subagent.last_tool}</dd></div>}
       </dl>
-      <SubagentProgress subagent={subagent} />
       {subagent.error && <p className="subagent-error">{subagent.error}</p>}
       {running && (
         <button type="button" className="subagent-cancel" onClick={handleCancel}><Ban size={13} />{t("Cancel", "取消")}</button>

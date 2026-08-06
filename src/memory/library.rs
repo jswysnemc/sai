@@ -177,7 +177,11 @@ mod tests {
 
         let written = library
             .capture(
-                vec![candidate(MemoryKind::Episode, "帮用户看了一下配置文件", 0.3)],
+                vec![candidate(
+                    MemoryKind::Episode,
+                    "帮用户看了一下配置文件",
+                    0.3,
+                )],
                 NOW,
             )
             .unwrap();
@@ -211,10 +215,20 @@ mod tests {
         let library = library(&dir);
 
         library
-            .capture(vec![candidate(MemoryKind::Preference, "用户一律使用 pnpm", 0.8)], NOW)
+            .capture(
+                vec![candidate(MemoryKind::Preference, "用户一律使用 pnpm", 0.8)],
+                NOW,
+            )
             .unwrap();
         library
-            .capture(vec![candidate(MemoryKind::Preference, "用户一律使用 pnpm。", 0.6)], NOW)
+            .capture(
+                vec![candidate(
+                    MemoryKind::Preference,
+                    "用户一律使用 pnpm。",
+                    0.6,
+                )],
+                NOW,
+            )
             .unwrap();
 
         let conn = library.conn().unwrap();
@@ -234,8 +248,14 @@ mod tests {
 
         library.capture(vec![scoped], NOW).unwrap();
 
-        assert!(library.recall("构建改用什么", Some("/home/b"), TODAY).unwrap().is_none());
-        assert!(library.recall("构建改用什么", Some("/home/a"), TODAY).unwrap().is_some());
+        assert!(library
+            .recall("构建改用什么", Some("/home/b"), TODAY)
+            .unwrap()
+            .is_none());
+        assert!(library
+            .recall("构建改用什么", Some("/home/a"), TODAY)
+            .unwrap()
+            .is_some());
     }
 
     /// 验证无关输入不会触发注入。
@@ -246,10 +266,16 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let library = library(&dir);
         library
-            .capture(vec![candidate(MemoryKind::Preference, "用户一律使用 pnpm", 0.8)], NOW)
+            .capture(
+                vec![candidate(MemoryKind::Preference, "用户一律使用 pnpm", 0.8)],
+                NOW,
+            )
             .unwrap();
 
-        assert!(library.recall("今天天气怎么样", None, TODAY).unwrap().is_none());
+        assert!(library
+            .recall("今天天气怎么样", None, TODAY)
+            .unwrap()
+            .is_none());
     }
 
     /// 验证空候选列表不产生写入。

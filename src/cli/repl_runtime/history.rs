@@ -202,6 +202,7 @@ mod tests {
             },
             tools: vec![TimelineToolEntry {
                 id: "tool-1".to_string(),
+                seq: 1,
                 name: "read_file".to_string(),
                 arguments: "{\"path\":\"README.md\"}".to_string(),
                 status: "completed".to_string(),
@@ -214,6 +215,7 @@ mod tests {
                 completed_at: None,
                 permission: None,
             }],
+            messages: Vec::new(),
             automatic,
             duration_ms: 0,
         }

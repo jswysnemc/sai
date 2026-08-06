@@ -11,8 +11,7 @@ export type WorkspacePanelOption = {
 /**
  * 工作区可打开面板的统一配置。
  *
- * 桌面端收起态 `+` 菜单、工作区标签栏 `+` 菜单和移动端聊天头部
- * `+` 菜单共用此列表，避免多处维护同一组面板选项。
+ * 空侧栏引导页和工作区标签栏新增菜单共用此列表，避免多处维护同一组面板选项。
  */
 export const WORKSPACE_PANEL_OPTIONS: WorkspacePanelOption[] = [
   { type: "files", labelEn: "Editor", labelZh: "编辑器", icon: FileCode2 },
@@ -22,6 +21,11 @@ export const WORKSPACE_PANEL_OPTIONS: WorkspacePanelOption[] = [
   { type: "subagents", labelEn: "Subagents", labelZh: "子智能体", icon: Bot },
   { type: "sessions", labelEn: "Sessions", labelZh: "会话", icon: PanelLeft }
 ];
+
+/** 用户可从空侧栏或新增菜单主动打开的功能，具体 Diff 不出现在这里。 */
+export const ACTIVE_WORKSPACE_PANEL_OPTIONS = WORKSPACE_PANEL_OPTIONS.filter(
+  (option) => option.type !== "diff"
+);
 
 /** 请求打开某个工作区面板的自定义事件名。 */
 export const OPEN_WORKSPACE_PANEL_EVENT = "sai:open-workspace-panel";

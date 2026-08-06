@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
-import { FileDiff, FolderTree, Maximize2, RotateCcw, X } from "lucide-react";
+import { ChevronDown, ChevronUp, FileDiff, FolderTree, PanelRightOpen, RotateCcw, X } from "lucide-react";
 import { api } from "../../../api/client";
 import { toDisplayError } from "../../../api/api-error";
 import { DiffView } from "../tool-renderers/diff-view";
 import { parseJsonRecord, stringField } from "../tool-renderers/tool-data";
 import { useI18n } from "../../i18n/use-i18n";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
-import { Modal } from "../../../shared/ui/dialog/modal";
 import type { TurnFileChange } from "./collect-turn-file-changes";
+import { openWorkspaceDiff } from "../../workspace/workspace-passive-diff";
 import "./turn-file-changes.css";
 
 type TurnFileChangesProps = {
@@ -47,18 +47,13 @@ export function TurnFileChanges({
   const confirm = useConfirm();
   // 仅允许同时展开一个文件，避免多文件 diff 一股脑铺开
   const [activePath, setActivePath] = useState<string | null>(null);
-  // 大视图：IDEA 式左右双栏，由小视图的展开按钮打开
-  const [maximizedPath, setMaximizedPath] = useState<string | null>(null);
+  const [filesCollapsed, setFilesCollapsed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canDiscard = Boolean(sessionId && turnId && changes.length > 0);
   const patchSource = useMemo(
     () => (activePath ? buildTurnDiffSource(tools, activePath) : ""),
     [tools, activePath]
-  );
-  const maximizedSource = useMemo(
-    () => (maximizedPath ? buildTurnDiffSource(tools, maximizedPath) : ""),
-    [tools, maximizedPath]
   );
   if (changes.length === 0) return null;
   const added = changes.reduce((sum, item) => sum + item.added, 0);
@@ -85,6 +80,30 @@ export function TurnFileChanges({
         detail: { path, reveal: true }
       })
     );
+  };
+
+  /**
+   * 把指定文件差异发送到右侧栏显示。
+   *
+   * @param path 目标文件路径
+   * @returns 无返回值
+   */
+  const openDiffInSidebar = (path: string) => {
+    openWorkspaceDiff({
+      path,
+      source: buildTurnDiffSource(tools, path),
+      title: path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
+    });
+  };
+
+  /**
+   * 打开当前轮次的首个文件差异进行审阅。
+   *
+   * @returns 无返回值
+   */
+  const reviewChanges = () => {
+    const target = activeChange ?? changes[0];
+    if (target) openDiffInSidebar(target.path);
   };
 
   /**
@@ -162,115 +181,127 @@ export function TurnFileChanges({
   return (
     <section className="turn-file-changes" aria-label={t("Turn file changes", "本轮文件改动")}>
       <div className="turn-file-changes-head">
-        <FileDiff size={13} aria-hidden />
-        <strong>{t("Changes this turn", "本轮改动")}</strong>
-        <span>{t(`${changes.length} files`, `${changes.length} 个文件`)}</span>
-        <span className="turn-file-changes-stats"><b>+{added}</b><i>-{removed}</i></span>
-        {canDiscard && (
+        <div className="turn-file-changes-summary">
+          <span className="turn-file-changes-mark"><FileDiff size={16} aria-hidden /></span>
+          <div>
+            <strong>{t(`Edited ${changes.length} files`, `已编辑 ${changes.length} 个文件`)}</strong>
+            <span className="turn-file-changes-stats"><b>+{added}</b><i>-{removed}</i></span>
+          </div>
+        </div>
+        <div className="turn-file-changes-head-actions">
+          {canDiscard && (
+            <button
+              type="button"
+              className="turn-file-discard-all"
+              disabled={busy}
+              onClick={() => void discardAll()}
+              title={t("Undo all changes this turn", "撤销本轮全部改动")}
+            >
+              <RotateCcw size={13} aria-hidden />
+              <span>{t("Undo", "撤销")}</span>
+            </button>
+          )}
           <button
             type="button"
-            className="turn-file-discard-all"
-            disabled={busy}
-            onClick={() => void discardAll()}
-            title={t("Discard all changes this turn", "舍弃本轮全部改动")}
+            className="turn-file-review"
+            onClick={reviewChanges}
+            title={t("Review changes", "审阅改动")}
           >
-            <RotateCcw size={12} aria-hidden />
-            <span>{t("Discard all", "舍弃全部")}</span>
+            <PanelRightOpen size={13} aria-hidden />
+            <span>{t("Review", "审阅")}</span>
           </button>
-        )}
+        </div>
       </div>
       {error && <div className="turn-file-changes-error" role="alert">{error}</div>}
-      <ul className="turn-file-changes-list">
-        {changes.map((change) => {
-          const expanded = activePath === change.path;
-          return (
-            <li key={`${change.tool}:${change.path}`} className={expanded ? "is-expanded" : ""}>
-              {/* 1. 文件行即唯一标题 2. 展开后右侧放操作，不再叠第二层路径条 */}
-              <div className={`turn-file-change-row${expanded ? " active" : ""}`}>
-                <button
-                  type="button"
-                  className="turn-file-change-main"
-                  onClick={() => toggleDiff(change.path)}
-                  aria-expanded={expanded}
-                >
-                  <span className={`turn-file-action action-${change.action.toLowerCase()}`}>{actionLabel(change.action, t)}</span>
-                  <span className="turn-file-path">{change.path}</span>
-                  <span className="turn-file-changes-stats"><b>+{change.added}</b><i>-{change.removed}</i></span>
-                </button>
-                <div className="turn-file-change-actions">
-                  {canDiscard && (
-                    <button
-                      type="button"
-                      className="turn-file-diff-icon-button danger"
-                      disabled={busy}
-                      onClick={() => void discardOne(change.path)}
-                      title={t("Discard this file", "舍弃该文件改动")}
-                      aria-label={t("Discard this file", "舍弃该文件改动")}
-                    >
-                      <RotateCcw size={13} aria-hidden />
-                    </button>
-                  )}
+      {!filesCollapsed && (
+        <ul className="turn-file-changes-list">
+          {changes.map((change) => {
+            const expanded = activePath === change.path;
+            return (
+              <li key={`${change.tool}:${change.path}`} className={expanded ? "is-expanded" : ""}>
+                {/* 1. 文件行即唯一标题 2. 展开后右侧放操作，不再叠第二层路径条 */}
+                <div className={`turn-file-change-row${expanded ? " active" : ""}`}>
                   <button
                     type="button"
-                    className="turn-file-diff-icon-button"
-                    onClick={() => setMaximizedPath(change.path)}
-                    title={t("Open side-by-side comparison", "打开并排对比")}
-                    aria-label={t("Open side-by-side comparison", "打开并排对比")}
+                    className="turn-file-change-main"
+                    onClick={() => toggleDiff(change.path)}
+                    aria-expanded={expanded}
+                    title={actionLabel(change.action, t)}
                   >
-                    <Maximize2 size={13} aria-hidden />
+                    <span className="turn-file-path">{change.path}</span>
+                    <span className="turn-file-changes-stats"><b>+{change.added}</b><i>-{change.removed}</i></span>
                   </button>
-                  {expanded && (
-                    <>
+                  <div className="turn-file-change-actions">
+                    {canDiscard && (
                       <button
                         type="button"
-                        className="turn-file-diff-icon-button"
-                        onClick={() => revealInTree(change.path)}
-                        title={t("Reveal in file tree", "在文件树中显示")}
-                        aria-label={t("Reveal in file tree", "在文件树中显示")}
+                        className="turn-file-diff-icon-button danger"
+                        disabled={busy}
+                        onClick={() => void discardOne(change.path)}
+                        title={t("Discard this file", "舍弃该文件改动")}
+                        aria-label={t("Discard this file", "舍弃该文件改动")}
                       >
-                        <FolderTree size={13} aria-hidden />
+                        <RotateCcw size={13} aria-hidden />
                       </button>
-                      <button
-                        type="button"
-                        className="turn-file-diff-icon-button"
-                        onClick={() => setActivePath(null)}
-                        title={t("Close diff", "关闭差异")}
-                        aria-label={t("Close diff", "关闭差异")}
-                      >
-                        <X size={13} aria-hidden />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-              {expanded && activeChange && (
-                <div className="turn-file-diff-panel" role="region" aria-label={t("File diff", "文件差异")}>
-                  {patchSource
-                    ? <DiffView source={patchSource} headerPath={change.path} hideHeader />
-                    : (
-                      <div className="turn-file-diff-empty">
-                        {t("No patch preview available for this change", "该改动没有可预览的补丁内容")}
-                      </div>
                     )}
+                    <button
+                      type="button"
+                      className="turn-file-diff-icon-button"
+                      onClick={() => openDiffInSidebar(change.path)}
+                      title={t("Open diff in side panel", "在右侧栏打开差异")}
+                      aria-label={t("Open diff in side panel", "在右侧栏打开差异")}
+                    >
+                      <PanelRightOpen size={13} aria-hidden />
+                    </button>
+                    {expanded && (
+                      <>
+                        <button
+                          type="button"
+                          className="turn-file-diff-icon-button"
+                          onClick={() => revealInTree(change.path)}
+                          title={t("Reveal in file tree", "在文件树中显示")}
+                          aria-label={t("Reveal in file tree", "在文件树中显示")}
+                        >
+                          <FolderTree size={13} aria-hidden />
+                        </button>
+                        <button
+                          type="button"
+                          className="turn-file-diff-icon-button"
+                          onClick={() => setActivePath(null)}
+                          title={t("Close diff", "关闭差异")}
+                          aria-label={t("Close diff", "关闭差异")}
+                        >
+                          <X size={13} aria-hidden />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      <Modal
-        open={maximizedPath !== null}
-        title={maximizedPath ?? ""}
-        description={t("Side-by-side comparison", "并排对比：左为改动前，右为改动后")}
-        size="large"
-        onClose={() => setMaximizedPath(null)}
+                {expanded && activeChange && (
+                  <div className="turn-file-diff-panel" role="region" aria-label={t("File diff", "文件差异")}>
+                    {patchSource
+                      ? <DiffView source={patchSource} headerPath={change.path} hideHeader />
+                      : (
+                        <div className="turn-file-diff-empty">
+                          {t("No patch preview available for this change", "该改动没有可预览的补丁内容")}
+                        </div>
+                      )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <button
+        type="button"
+        className="turn-file-changes-collapse"
+        aria-expanded={!filesCollapsed}
+        onClick={() => setFilesCollapsed((current) => !current)}
       >
-        <div className="turn-file-diff-maximized">
-          {maximizedSource
-            ? <DiffView source={maximizedSource} layout="side" />
-            : <div className="turn-file-diff-empty">{t("No patch preview available for this change", "该改动没有可预览的补丁内容")}</div>}
-        </div>
-      </Modal>
+        <span>{filesCollapsed ? t("Show files", "展开文件") : t("Collapse files", "收起文件")}</span>
+        {filesCollapsed ? <ChevronDown size={14} aria-hidden /> : <ChevronUp size={14} aria-hidden />}
+      </button>
     </section>
   );
 }

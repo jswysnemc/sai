@@ -1,4 +1,11 @@
-use crate::llm::{ChatStreamChunk, ToolCallStreamProgress};
+use crate::llm::{ChatStreamChunk, ToolCallStreamProgress, Usage};
+
+/// 一次模型消息完成后的上下文用量更新。
+#[derive(Debug, Clone)]
+pub struct MessageContextUpdate {
+    pub usage: Option<Usage>,
+    pub context_window_tokens: usize,
+}
 
 /// 上下文压缩失败的用户可见信息。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -11,6 +18,12 @@ pub struct CompactionError {
 #[derive(Debug, Clone)]
 pub enum AgentEvent {
     Chunk(ChatStreamChunk),
+    /// 当前模型回合中插入的完成回执、Goal 续作或排队用户消息。
+    InterMessage(super::InterMessageEvent),
+    /// 当前模型回合正在等待后台工作产生下一条消息。
+    WaitingExternal,
+    /// 当前 provider 消息已经完成，上下文统计可以立即刷新。
+    ContextUpdated(MessageContextUpdate),
     ToolCall {
         name: String,
         arguments: String,

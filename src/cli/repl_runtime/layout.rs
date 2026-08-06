@@ -340,6 +340,43 @@ mod tests {
         }
     }
 
+    /// 【终端】【Diff 流式换行测试】验证参数预览阶段的续行同样退让到正文列。
+    #[test]
+    fn live_diff_preview_wraps_at_the_body_column() {
+        let cwd = crate::runtime_cwd::current_dir().unwrap();
+        let temp = tempfile::tempdir_in(cwd).unwrap();
+        let path = temp.path().join("live-wrapped-diff.txt");
+        std::fs::write(&path, "old\n").unwrap();
+        let arguments = serde_json::json!({
+            "path": path.display().to_string(),
+            "old_string": "old",
+            "new_string": "long-value-".repeat(12)
+        })
+        .to_string();
+        let mut transcript = TranscriptStore::new(100);
+        transcript.push_tool_call_progress(&crate::llm::ToolCallStreamProgress {
+            index: 0,
+            name: Some("str_replace".to_string()),
+            arguments_chars: arguments.chars().count(),
+            arguments_bytes: arguments.len(),
+            arguments_preview: arguments,
+        });
+
+        let window = display_window(&mut transcript, 30, &options(), 100, usize::MAX, usize::MAX);
+        let continuation = window
+            .lines
+            .iter()
+            .map(|line| strip_ansi_for_test(line.as_str()))
+            .filter(|line| line.contains("long-value") && !line.contains('+'))
+            .collect::<Vec<_>>();
+
+        assert!(!continuation.is_empty(), "流式 Diff 应产生续行");
+        for line in continuation {
+            assert!(line.starts_with("       "), "续行未退让到正文列: {line:?}");
+            assert!(visible_width(&line) <= 30, "续行超出终端宽度: {line:?}");
+        }
+    }
+
     /// 验证单列终端不增加留白，保留唯一的正文列。
     #[test]
     fn single_column_terminal_keeps_content_column() {

@@ -11,6 +11,7 @@ import {
   resolveConfiguredNewSessionPreferences
 } from "../../sessions/new-session-preferences";
 import { useI18n } from "../../i18n/use-i18n";
+import { modelSelectOption } from "../model-select-option";
 
 const DEFAULT_MODEL_VALUE = "";
 
@@ -49,14 +50,15 @@ export function NewSessionDefaultSettings({
         "使用当前对话内核配置的默认模型。"
       )
     },
-    ...modelChoices.map((choice) => ({
-      value: encodeModelChoice(choice.providerId, choice.model),
-      label: external ? choice.model : `${choice.providerName} / ${choice.model}`,
-      description: t(
+    ...modelChoices.map((choice) => modelSelectOption(
+      choice,
+      encodeModelChoice(choice.providerId, choice.model),
+      t(
         "Start each new session with this model.",
         "每个新会话初始使用此模型。"
-      )
-    }))
+      ),
+      external ? choice.model : undefined
+    ))
   ];
   const modelValue = modelOptions.some((option) => option.value === configuredModelValue)
     ? configuredModelValue

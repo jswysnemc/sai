@@ -90,8 +90,6 @@ pub(super) async fn drain_submission_queue(
                 agent.switch_mode(*mode, registry)?;
             }
             agent.prepare_for_turn()?;
-            // 用户主动发话：清除历史未消费回执，避免上一轮积压整包注入
-            agent.discard_stale_external_completion_notices()?;
             let runner_submission = repl_runner_submission(
                 chat_input,
                 *mode,

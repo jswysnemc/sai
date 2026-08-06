@@ -237,10 +237,8 @@ async fn chat_with_tools(
     progress: &DiagnosisProgress,
     stats: &mut DiagnosisStats,
 ) -> Result<ChatResult> {
-    let definitions = tools.definitions_except(&[
-        "linux_input_method_diagnose",
-        "linux_game_compatibility",
-    ]);
+    let definitions =
+        tools.definitions_except(&["linux_input_method_diagnose", "linux_game_compatibility"]);
     let mut steps = 0usize;
     loop {
         if max_tool_steps > 0 && steps >= max_tool_steps {

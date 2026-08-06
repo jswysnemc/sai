@@ -16,24 +16,33 @@ pub(super) fn with_mode_reminder(system_prompt: String, mode: AgentMode) -> Stri
     format!("{system_prompt}\n\n{}", mode.reminder())
 }
 
-/// 将系统消息合并为首条消息。
+/// 合并开头的系统消息，并把后续系统更新转为用户上下文。
 ///
 /// 参数:
 /// - `messages`: 待发送给模型的消息列表
 ///
 /// 返回:
-/// - 单条系统消息前置后的消息列表
+/// - 保持历史前缀稳定的消息列表
 pub(super) fn system_messages_first(messages: Vec<ChatMessage>) -> Vec<ChatMessage> {
     let mut system_parts = Vec::new();
     let mut other_messages = Vec::new();
+    let mut leading_system = true;
     for message in messages {
-        if message.role == "system" {
+        if leading_system && message.role == "system" {
             let text = chat_content_text(message.content);
             if !text.trim().is_empty() {
                 system_parts.push(text);
             }
         } else {
-            other_messages.push(message);
+            leading_system = false;
+            if message.role == "system" {
+                other_messages.push(ChatMessage::plain(
+                    "user",
+                    chat_content_text(message.content),
+                ));
+            } else {
+                other_messages.push(message);
+            }
         }
     }
     if system_parts.is_empty() {
@@ -196,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn system_messages_are_merged_before_history() {
+    fn dynamic_system_messages_stay_after_cached_history() {
         let messages = vec![
             ChatMessage::system("base"),
             ChatMessage::plain("user", "old input"),
@@ -216,9 +225,9 @@ mod tests {
             .map(|content| chat_content_text(Some(content)))
             .unwrap();
 
-        assert_eq!(roles, ["system", "user", "assistant", "user"]);
-        assert!(system_text.contains("base"));
-        assert!(system_text.contains("runtime"));
+        assert_eq!(roles, ["system", "user", "assistant", "user", "user"]);
+        assert_eq!(system_text, "base");
+        assert_eq!(chat_content_text(ordered[3].content.clone()), "runtime");
         assert_eq!(
             ordered
                 .into_iter()
@@ -226,6 +235,26 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn changing_runtime_context_preserves_the_cached_history_prefix() {
+        let build = |runtime: &str| {
+            system_messages_first(vec![
+                ChatMessage::system("base"),
+                ChatMessage::plain("user", "old input"),
+                ChatMessage::plain("assistant", "old reply"),
+                ChatMessage::system(runtime),
+                ChatMessage::plain("user", "new input"),
+            ])
+        };
+
+        let first = build("runtime one");
+        let second = build("runtime two");
+        let first_prefix = serde_json::to_value(&first[..3]).unwrap();
+        let second_prefix = serde_json::to_value(&second[..3]).unwrap();
+
+        assert_eq!(first_prefix, second_prefix);
     }
 
     #[test]

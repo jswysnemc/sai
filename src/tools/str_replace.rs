@@ -106,8 +106,8 @@ fn str_replace(args: Value) -> Result<String> {
     if !path.is_file() {
         bail!("not a regular file: {}", path.display());
     }
-    let raw = std::fs::read_to_string(&path)
-        .map_err(|error| fs_error("read file", &path, &error))?;
+    let raw =
+        std::fs::read_to_string(&path).map_err(|error| fs_error("read file", &path, &error))?;
     // 2. 纯 CRLF 文件按 LF 视图比对，模型给出的 old_string 才能匹配上
     let view = to_model_text_view(&raw);
     let content = view.text.as_str();
@@ -131,7 +131,10 @@ fn str_replace(args: Value) -> Result<String> {
     } else {
         content.replacen(old_string, new_string, 1)
     };
-    write_text_file(&path, &materialize_model_text(&updated, view.line_ending_style))?;
+    write_text_file(
+        &path,
+        &materialize_model_text(&updated, view.line_ending_style),
+    )?;
 
     let replacements = if replace_all { matches } else { 1 };
     let old_lines = line_count(old_string) * replacements;

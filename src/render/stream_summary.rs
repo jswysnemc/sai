@@ -1,13 +1,14 @@
 use crate::render::content_indent::align_to_guide_column;
 use crate::render::status_style::{color_running, color_status};
 use crate::render::style::TOOL_BULLET;
+use crate::render::terminal_paint::paint_lock;
 use crate::render::terminal_text as t;
 use crate::render::tool_names::readable_tool_name;
 use crate::render::transcript::reasoning_cell;
 use crate::render::ReasoningDisplayMode;
 use crate::token_counter;
 use anyhow::Result;
-use crossterm::execute;
+use crossterm::queue;
 use crossterm::terminal::{Clear, ClearType};
 use std::collections::BTreeMap;
 use std::io::{self, Write};
@@ -157,8 +158,9 @@ impl StreamSummary {
             self.reasoning_elapsed,
             false,
         ));
+        let _paint = paint_lock();
         let mut stdout = io::stdout();
-        execute!(stdout, Clear(ClearType::CurrentLine))?;
+        queue!(stdout, Clear(ClearType::CurrentLine))?;
         write!(stdout, "\r{text}")?;
         stdout.flush()?;
         self.reasoning_live = true;
@@ -189,10 +191,11 @@ impl StreamSummary {
             return Ok(());
         }
         let text = style_summary_text(&self.reasoning_text(), SummaryStyle::Reasoning);
+        let _paint = paint_lock();
         let mut stdout = io::stdout();
         if self.reasoning_live {
             // 1. 覆盖 live 行后换行定格
-            execute!(stdout, Clear(ClearType::CurrentLine))?;
+            queue!(stdout, Clear(ClearType::CurrentLine))?;
             write!(stdout, "\r{text}")?;
             writeln!(stdout)?;
         } else {
@@ -254,7 +257,10 @@ impl StreamSummary {
             return Ok(());
         }
         let text = self.tool_summary_text();
-        println!("{}", style_summary_text(&text, SummaryStyle::Tool));
+        let _paint = paint_lock();
+        let mut stdout = io::stdout();
+        writeln!(stdout, "{}", style_summary_text(&text, SummaryStyle::Tool))?;
+        stdout.flush()?;
         self.tool_stats.clear();
         Ok(())
     }
@@ -265,8 +271,9 @@ impl StreamSummary {
     /// - 清除是否成功
     pub(crate) fn clear_live_lines(&mut self) -> Result<()> {
         if self.reasoning_live {
+            let _paint = paint_lock();
             let mut stdout = io::stdout();
-            execute!(stdout, Clear(ClearType::CurrentLine))?;
+            queue!(stdout, Clear(ClearType::CurrentLine))?;
             write!(stdout, "\r")?;
             stdout.flush()?;
             self.reasoning_live = false;

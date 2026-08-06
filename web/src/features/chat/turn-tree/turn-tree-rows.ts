@@ -129,3 +129,24 @@ export function findSiblingBranches(
   visit(tree.roots);
   return result;
 }
+
+/**
+ * 找出分支中序号最大的叶节点。
+ *
+ * 版本切换面向完整分支，选择兄弟根节点会把该分支已有的后续对话隐藏。
+ *
+ * @param branch 目标分支根节点
+ * @returns 应恢复的叶节点标识
+ */
+export function preferredBranchLeafId(branch: TurnTreeNode): string {
+  const leaves: TurnTreeNode[] = [];
+  const visit = (node: TurnTreeNode) => {
+    if (node.children.length === 0) leaves.push(node);
+    node.children.forEach(visit);
+  };
+  visit(branch);
+  return leaves.reduce(
+    (preferred, node) => node.seq > preferred.seq ? node : preferred,
+    leaves[0] ?? branch
+  ).turn_id;
+}

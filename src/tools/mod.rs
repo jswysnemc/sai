@@ -10,9 +10,10 @@ mod deep_diagnose;
 mod deepseek_status;
 mod default_tools;
 mod diagnostics;
-pub(crate) mod file_change_model;
 mod exchange_rate;
 mod fcitx_wiki;
+pub(crate) mod file_change_model;
+mod file_edit;
 mod file_read;
 pub(crate) mod fs_path;
 pub(crate) mod groups;
@@ -32,7 +33,6 @@ mod protondb_query;
 mod registry;
 mod skill_management;
 mod skills;
-mod file_edit;
 mod str_replace;
 mod subagent;
 pub(crate) mod subagent_event;
@@ -40,6 +40,8 @@ mod subagent_feed;
 pub(crate) mod subagent_goal;
 mod subagent_persistence;
 mod subagent_runner;
+#[cfg(test)]
+mod subagent_runner_tests;
 mod subagent_runtime;
 pub(crate) mod subagent_state;
 pub(crate) mod subagent_timeline;
@@ -57,7 +59,9 @@ use crate::config::AppConfig;
 use crate::paths::SaiPaths;
 pub(crate) use catalog::{mcp_tool_catalog, tool_catalog, ToolCatalogEntry};
 pub(crate) use context::tool_output_for_context;
-pub(crate) use progressive::{register_loader as register_progressive_loader, LOAD_NAME};
+pub(crate) use progressive::{
+    register_loader as register_progressive_loader, INVOKE_NAME, LOAD_NAME,
+};
 pub use registry::{empty_parameters, ToolPermission, ToolProgress, ToolRegistry, ToolSpec};
 pub(crate) use registry::{ToolModelAttachment, ToolOutput};
 pub(crate) use skill_management::{

@@ -43,6 +43,9 @@ export function parseDiff(source: string): DiffFile[] {
   };
 
   for (const line of lines) {
+    // Codex patch 的结束标记可能紧跟在 hunk 正文之后，不能落入上下文行
+    if (line.startsWith("*** End Patch")) continue;
+
     // 1. 文件起始标记在任何状态下都要识别：多文件补丁里它紧跟上一个文件的正文
     const codexHead = CODEX_FILE.exec(line);
     if (codexHead) {

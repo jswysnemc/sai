@@ -112,7 +112,10 @@ pub(super) fn edit_provider_form(
     // 多密钥管理：每行一个密钥，可在竖线后附备注；非空时优先于上面的单密钥字段。
     // 注意：此处不能用 secret 掩码——textarea 的 value 会原样写回，掩码串将覆盖真实密钥。
     fields.push(Field::textarea(
-        t("API keys (one per line; optional label after ' | ')", "接口密钥（每行一个，竖线后可加备注）"),
+        t(
+            "API keys (one per line; optional label after ' | ')",
+            "接口密钥（每行一个，竖线后可加备注）",
+        ),
         render_api_key_lines(&provider.api_keys),
     ));
     fields.push(
@@ -123,7 +126,10 @@ pub(super) fn edit_provider_form(
         .choices(&["true", "false"]),
     );
     fields.push(Field::new(
-        t("Selected key (1-based; blank = first)", "选用密钥序号（从 1 起，空为第一个）"),
+        t(
+            "Selected key (1-based; blank = first)",
+            "选用密钥序号（从 1 起，空为第一个）",
+        ),
         render_selected_index(&provider),
     ));
     loop {
@@ -460,8 +466,12 @@ fn render_api_key_lines(keys: &[crate::config::ProviderApiKey]) -> String {
 ///
 /// 返回:
 /// - 解析后的多密钥列表
-fn parse_api_key_lines(text: &str, original: &[crate::config::ProviderApiKey]) -> Vec<crate::config::ProviderApiKey> {
-    let used: std::collections::HashSet<&str> = original.iter().map(|key| key.id.as_str()).collect();
+fn parse_api_key_lines(
+    text: &str,
+    original: &[crate::config::ProviderApiKey],
+) -> Vec<crate::config::ProviderApiKey> {
+    let used: std::collections::HashSet<&str> =
+        original.iter().map(|key| key.id.as_str()).collect();
     let mut next_id = 1usize;
     text.lines()
         .map(str::trim)
@@ -485,7 +495,11 @@ fn parse_api_key_lines(text: &str, original: &[crate::config::ProviderApiKey]) -
                     next_id += 1;
                     fresh
                 });
-            crate::config::ProviderApiKey { id, api_key: value, label }
+            crate::config::ProviderApiKey {
+                id,
+                api_key: value,
+                label,
+            }
         })
         .collect()
 }
@@ -521,6 +535,5 @@ fn render_selected_index(provider: &ProviderConfig) -> String {
 /// - 命中时返回密钥标识，否则 None
 fn parse_selected_key(text: &str, keys: &[crate::config::ProviderApiKey]) -> Option<String> {
     let index: usize = text.trim().parse().ok()?;
-    keys.get(index.checked_sub(1)?)
-        .map(|key| key.id.clone())
+    keys.get(index.checked_sub(1)?).map(|key| key.id.clone())
 }

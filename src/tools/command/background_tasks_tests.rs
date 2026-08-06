@@ -193,4 +193,10 @@ async fn output_read_records_runtime_event_and_output_cap_recovery() {
     );
     assert_eq!(failure.last_safe_seq, Some(1));
     assert_eq!(event_count, 1);
+    assert!(store
+        .load()
+        .unwrap()
+        .iter()
+        .find(|task| task.id == "task-1")
+        .is_some_and(|task| task.completion_notified));
 }

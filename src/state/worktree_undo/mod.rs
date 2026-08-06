@@ -9,8 +9,8 @@ use std::path::Path;
 
 pub(crate) use restore::{restore_latest_snapshot, restore_snapshot_paths};
 pub(crate) use retention::cleanup_snapshot_root;
-use snapshot::{discard_snapshot, finalize_snapshot, start_snapshot, PendingSnapshot};
 pub(crate) use snapshot::snapshot_root;
+use snapshot::{discard_snapshot, finalize_snapshot, start_snapshot, PendingSnapshot};
 
 /// 工作树撤销结果。
 #[derive(Debug, Clone)]

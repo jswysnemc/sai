@@ -1,3 +1,4 @@
+mod anthropic_transport;
 mod provider_routing;
 
 include!("openai_compatible/client.rs");

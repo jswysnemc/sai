@@ -3,7 +3,7 @@ use crate::tools::ToolRegistry;
 
 /// 工具执行前置判定结果。
 #[derive(Debug, Eq, PartialEq)]
-pub(super) enum ToolGate {
+pub(crate) enum ToolGate {
     /// 允许继续走权限审计与实际执行
     Proceed,
     /// 判定失败，把这段文本作为工具错误回传给模型
@@ -24,7 +24,7 @@ pub(super) enum ToolGate {
 ///
 /// 返回:
 /// - 允许继续执行，或需要回传给模型的错误说明
-pub(super) fn evaluate_tool_gate(
+pub(crate) fn evaluate_tool_gate(
     registry: &ToolRegistry,
     visibility: &super::tool_visibility::ToolVisibility,
     call: &ToolCall,
@@ -48,8 +48,8 @@ pub(super) fn evaluate_tool_gate(
             "tool error: tool {name} is not loaded in the current visible tool set; call load with type=tool and a keywords array first. If this tool was loaded in a previous conversation, the loaded-tool session state was reset or is unavailable."
         ));
     }
-    // 4. 参数必须是可解析的 JSON 对象，截断或畸形参数在这里拦下
-    if let Err(err) = registry.check_arguments(&call.function.arguments) {
+    // 4. 参数必须满足真实工具 Schema，统一外壳不能降低具体调用的校验强度
+    if let Err(err) = registry.validate_arguments(name, &call.function.arguments) {
         return ToolGate::Reject(invalid_arguments_notice(name, &err));
     }
     // 5. AUR 安装与审查必须分轮，避免同轮内跳过用户确认
@@ -71,7 +71,7 @@ pub(super) fn evaluate_tool_gate(
 /// - 回传给模型的错误说明
 fn invalid_arguments_notice(name: &str, error: &anyhow::Error) -> String {
     format!(
-        "tool error: invalid arguments for {name}: {error}. Arguments must be a single JSON object matching the tool schema; reissue the call with complete, valid JSON."
+        "tool error: invalid arguments for {name}: {error:#}. Arguments must be a single JSON object matching the tool schema; remove unexpected fields, correct invalid values, and reissue the call."
     )
 }
 
@@ -98,7 +98,9 @@ fn unknown_tool_notice(
     }
     let available = available_tool_names(registry, visibility);
     if available.is_empty() {
-        return format!("tool error: unknown tool: {name}. No tools are available in this session.");
+        return format!(
+            "tool error: unknown tool: {name}. No tools are available in this session."
+        );
     }
     format!(
         "tool error: unknown tool: {name}. Available tools: {available}. Pick one of these; do not retry this name."
@@ -242,6 +244,35 @@ mod tests {
         assert!(message.contains("invalid arguments for read_file"));
     }
 
+    /// 验证参数错误包含具体非法字段，供模型修正调用。
+    #[test]
+    fn schema_error_identifies_the_unexpected_argument() {
+        let mut registry = ToolRegistry::new();
+        registry.register(ToolSpec::new(
+            "read_file",
+            "test tool",
+            serde_json::json!({
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+                "additionalProperties": false
+            }),
+            |_args| async move { Ok(String::new()) },
+        ));
+        let visibility = super::super::tool_visibility::ToolVisibility::new(Vec::new());
+
+        let gate = evaluate_tool_gate(
+            &registry,
+            &visibility,
+            &call("read_file", r#"{"action":"read","path":"/tmp/a"}"#),
+            &[],
+        );
+
+        let ToolGate::Reject(message) = gate else {
+            panic!("unexpected argument must be rejected");
+        };
+        assert!(message.contains("action"), "{message}");
+    }
+
     /// 验证非对象参数被拒绝。
     #[test]
     fn non_object_arguments_are_rejected() {
@@ -284,9 +315,8 @@ mod tests {
     #[test]
     fn deferred_tool_asks_for_load_first() {
         let registry = registry_with("web_search");
-        let visibility = super::super::tool_visibility::ToolVisibility::new(vec![
-            "web_search".to_string(),
-        ]);
+        let visibility =
+            super::super::tool_visibility::ToolVisibility::new(vec!["web_search".to_string()]);
 
         let gate = evaluate_tool_gate(&registry, &visibility, &call("web_search", "{}"), &[]);
 
@@ -294,6 +324,17 @@ mod tests {
             panic!("deferred tool must be rejected before load");
         };
         assert!(message.contains("is not loaded in the current visible tool set"));
+    }
+
+    /// 验证通配延迟配置不会隐藏基础问题工具。
+    #[test]
+    fn wildcard_progressive_mode_keeps_base_question_tool_visible() {
+        let registry = registry_with("ask_question");
+        let visibility = super::super::tool_visibility::ToolVisibility::new(vec!["*".to_string()]);
+
+        let gate = evaluate_tool_gate(&registry, &visibility, &call("ask_question", "{}"), &[]);
+
+        assert_eq!(gate, ToolGate::Proceed);
     }
 
     /// 验证 AUR 安装与审查同轮调用被拒绝。

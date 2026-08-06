@@ -65,7 +65,8 @@ import type {
   UndoSessionResult,
   RestoreWorktreeResult,
   WeixinLoginSnapshot,
-  SessionContextPrompt
+  SessionContextPrompt,
+  SessionDataSummary
 } from "./contracts";
 import { ApiError } from "./api-error";
 import { detectInitialLocale, text } from "../features/i18n/locale";
@@ -186,6 +187,13 @@ export const api = {
           provider_id: selection?.providerId,
           model: selection?.model
         })
+      })
+  },
+  sessionData: {
+    list: () => apiRequest<SessionDataSummary[]>("/api/session-data"),
+    clear: (id: string) =>
+      apiRequest<{ cleared: boolean }>(`/api/session-data/${encodeURIComponent(id)}/clear`, {
+        method: "POST"
       })
   },
   goals: {

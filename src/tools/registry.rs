@@ -220,6 +220,8 @@ impl ToolSpec {
 #[derive(Default, Clone)]
 pub struct ToolRegistry {
     tools: HashMap<String, ToolSpec>,
+    /// 工具注册顺序；请求里的 tools 数组按它输出，保证前缀稳定以命中供应商缓存
+    order: Vec<String>,
     permission_profile: Option<PermissionProfile>,
 }
 
@@ -229,6 +231,9 @@ impl ToolRegistry {
     }
 
     pub fn register(&mut self, tool: ToolSpec) {
+        if !self.tools.contains_key(&tool.name) {
+            self.order.push(tool.name.clone());
+        }
         self.tools.insert(tool.name.clone(), tool);
     }
 
@@ -277,23 +282,45 @@ impl ToolRegistry {
     }
 
     pub fn definitions(&self) -> Vec<ToolDefinition> {
-        self.tools.values().map(ToolSpec::definition).collect()
+        self.ordered_tools().map(ToolSpec::definition).collect()
     }
 
     pub fn definitions_for_names(&self, names: &BTreeSet<String>) -> Vec<ToolDefinition> {
-        names
-            .iter()
-            .filter_map(|name| self.tools.get(name))
+        // 1. 按注册顺序输出，保持过滤前后工具定义的相对顺序
+        self.ordered_tools()
+            .filter(|tool| names.contains(&tool.name))
             .map(ToolSpec::definition)
             .collect()
     }
 
+    /// 返回指定工具的供应商定义。
+    ///
+    /// 参数:
+    /// - `name`: 本地工具名称
+    ///
+    /// 返回:
+    /// - 工具存在时返回完整定义，否则返回 None
+    pub(crate) fn definition(&self, name: &str) -> Option<ToolDefinition> {
+        let tool = self.tools.get(local_tool_name(name))?;
+        Some(tool.definition())
+    }
+
     pub fn definitions_except(&self, excluded: &[&str]) -> Vec<ToolDefinition> {
-        self.tools
-            .values()
+        self.ordered_tools()
             .filter(|tool| !excluded.iter().any(|name| *name == tool.name))
             .map(ToolSpec::definition)
             .collect()
+    }
+
+    /// 按注册顺序遍历工具。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 注册顺序的工具引用迭代器；顺序表缺失条目时跳过
+    fn ordered_tools(&self) -> impl Iterator<Item = &ToolSpec> {
+        self.order.iter().filter_map(|name| self.tools.get(name))
     }
 
     pub fn contains(&self, name: &str) -> bool {
@@ -326,9 +353,35 @@ impl ToolRegistry {
     pub(crate) fn check_arguments(&self, arguments: &str) -> Result<()> {
         let parsed = parse_arguments(arguments)?;
         if !parsed.is_object() {
-            bail!("arguments must be a JSON object, got {}", value_kind(&parsed))
+            bail!(
+                "arguments must be a JSON object, got {}",
+                value_kind(&parsed)
+            )
         }
         Ok(())
+    }
+
+    /// 按工具注册时的 JSON Schema 校验参数。
+    ///
+    /// 参数:
+    /// - `name`: 本地工具名称
+    /// - `arguments`: 原始 JSON 参数
+    ///
+    /// 返回:
+    /// - 参数满足真实工具契约时成功，否则返回具体校验错误
+    pub(crate) fn validate_arguments(&self, name: &str, arguments: &str) -> Result<()> {
+        let name = local_tool_name(name);
+        let tool = self
+            .tools
+            .get(name)
+            .with_context(|| format!("unknown tool: {name}"))?;
+        let instance = parse_arguments(arguments)?;
+        let validator = jsonschema::validator_for(&tool.parameters)
+            .with_context(|| format!("invalid registered schema for tool {name}"))?;
+        validator
+            .validate(&instance)
+            .map_err(|error| anyhow::anyhow!("{error}"))
+            .with_context(|| format!("arguments do not match schema for tool {name}"))
     }
 
     pub fn tool_infos(&self) -> Vec<ToolInfo> {
@@ -353,16 +406,40 @@ impl ToolRegistry {
     /// 返回:
     /// - 仅包含允许工具的新注册表
     pub fn clone_filtered(&self, allowed: &[&str]) -> ToolRegistry {
+        let wanted = allowed
+            .iter()
+            .copied()
+            .chain(
+                allowed
+                    .iter()
+                    .flat_map(|name| legacy_tool_aliases(name).iter().copied()),
+            )
+            .collect::<BTreeSet<_>>();
         let mut registry = ToolRegistry::new();
-        for name in allowed {
-            if let Some(tool) = self.tools.get(*name) {
+        // 1. 按来源注册顺序复制，避免过滤后的工具数组因白名单顺序变化而重排
+        for tool in self.ordered_tools() {
+            if wanted.contains(tool.name.as_str()) {
                 registry.register(tool.clone());
             }
-            // 1. 旧配置中的局部编辑工具名映射到当前 str_replace
-            for alias in legacy_tool_aliases(name) {
-                if let Some(tool) = self.tools.get(*alias) {
-                    registry.register(tool.clone());
-                }
+        }
+        registry
+    }
+
+    /// 克隆排除指定名称后的工具注册表。
+    ///
+    /// 参数:
+    /// - `excluded`: 不复制到新注册表的工具名称
+    ///
+    /// 返回:
+    /// - 保留原注册顺序和权限配置的新注册表
+    pub(crate) fn clone_excluding(&self, excluded: &[&str]) -> ToolRegistry {
+        let excluded = excluded.iter().copied().collect::<BTreeSet<_>>();
+        let mut registry = ToolRegistry::new();
+        registry.permission_profile = self.permission_profile.clone();
+        // 1. 按来源注册顺序复制，确保供应商工具定义顺序稳定
+        for tool in self.ordered_tools() {
+            if !excluded.contains(tool.name.as_str()) {
+                registry.register(tool.clone());
             }
         }
         registry
@@ -602,89 +679,9 @@ pub fn empty_parameters() -> Value {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::permission::{PermissionProfile, PermissionProfileMode};
-    use std::path::PathBuf;
-    use std::sync::Mutex;
+#[path = "registry_schema_tests.rs"]
+mod schema_tests;
 
-    /// 验证批准后的网络命令不会再注入沙箱标记。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 无
-    #[tokio::test]
-    async fn approved_network_command_reaches_handler_without_sandbox_marker() {
-        let received = Arc::new(Mutex::new(None));
-        let handler_received = Arc::clone(&received);
-        let mut registry = ToolRegistry::new();
-        registry.register(
-            ToolSpec::new(
-                "run_command",
-                "test",
-                empty_parameters(),
-                move |arguments| {
-                    let handler_received = Arc::clone(&handler_received);
-                    async move {
-                        *handler_received.lock().unwrap() = Some(arguments);
-                        Ok("ok".to_string())
-                    }
-                },
-            )
-            .writes(),
-        );
-        registry.set_permission_profile(PermissionProfile::new(
-            PermissionProfileMode::Audited,
-            PathBuf::from("/workspace/project"),
-            None,
-        ));
-        let arguments = r#"{"command":"curl https://example.com"}"#;
-
-        registry
-            .record_permission_approved("run_command", arguments, None)
-            .unwrap();
-        registry.call("run_command", arguments).await.unwrap();
-
-        let received = received.lock().unwrap();
-        assert!(received
-            .as_ref()
-            .is_some_and(|arguments| arguments.get("_sai_sandbox").is_none()));
-    }
-
-    /// 验证协议别名可以解析到本地注册工具。
-    #[test]
-    fn resolves_accepts_protocol_aliases() {
-        let mut registry = ToolRegistry::new();
-        registry.register(ToolSpec::new(
-            "str_replace",
-            "test",
-            empty_parameters(),
-            |_arguments| async move { Ok(String::new()) },
-        ));
-
-        assert!(registry.resolves("str_replace"));
-        assert!(registry.resolves("replace_file_lines"));
-        assert!(!registry.resolves("nonexistent_tool"));
-    }
-
-    /// 验证参数校验区分合法对象、畸形 JSON 和非对象值。
-    #[test]
-    fn check_arguments_rejects_malformed_and_non_object_values() {
-        let registry = ToolRegistry::new();
-
-        assert!(registry.check_arguments("{}").is_ok());
-        assert!(registry.check_arguments("").is_ok());
-        assert!(registry.check_arguments(r#"{"path":"/tmp/a"}"#).is_ok());
-
-        let truncated = registry.check_arguments(r#"{"path":"/tmp/a"#).unwrap_err();
-        assert!(!truncated.to_string().is_empty());
-
-        let array = registry.check_arguments("[1,2]").unwrap_err();
-        assert!(array.to_string().contains("got array"));
-
-        let scalar = registry.check_arguments("42").unwrap_err();
-        assert!(scalar.to_string().contains("got number"));
-    }
-}
+#[cfg(test)]
+#[path = "registry_tests.rs"]
+mod tests;

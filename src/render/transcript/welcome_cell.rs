@@ -12,8 +12,6 @@ const PANEL_SIDE_PADDING: usize = 1;
 const MIN_CONTENT_WIDTH: usize = 28;
 /// 信息列的最大自然宽度，超长路径在框内截断，避免启动框横跨终端。
 const MAX_CONTENT_WIDTH: usize = 48;
-/// 启动框内展示的常用按键。
-const SHORTCUTS: &str = "Shift+Tab mode  Ctrl+O details  Ctrl+C stop";
 /// 边框样式
 const BORDER_STYLE: &str = "\x1b[2m";
 /// 字段标签样式
@@ -70,6 +68,7 @@ pub(crate) fn display_lines(cell: &WelcomeCell, width: usize) -> Vec<AnsiLine> {
     };
     let blank_logo = " ".repeat(LOGO_WIDTH);
     let body_rows = rows.len().max(if show_logo { LOGO_HEIGHT } else { 0 });
+    let content_offset = body_rows.saturating_sub(rows.len()) / 2;
     for index in 0..body_rows {
         let logo_cell = if show_logo {
             let row = logo
@@ -80,7 +79,11 @@ pub(crate) fn display_lines(cell: &WelcomeCell, width: usize) -> Vec<AnsiLine> {
         } else {
             String::new()
         };
-        let content = rows.get(index).cloned().unwrap_or_default();
+        let content = index
+            .checked_sub(content_offset)
+            .and_then(|row| rows.get(row))
+            .cloned()
+            .unwrap_or_default();
         lines.push(AnsiLine::new(body_line(&logo_cell, &content, inner_width)));
     }
     lines.push(AnsiLine::new(bottom_border(inner_width)));
@@ -137,7 +140,7 @@ fn body_line(logo_cell: &str, content: &str, inner_width: usize) -> String {
 
 /// 生成信息列的每一行。
 ///
-/// 依次展示模型、目录、权限与常用快捷键；标志存在时由调用方补齐第五行。
+/// 依次展示模型、目录与权限；标志存在时由调用方在上下补齐等量留白。
 ///
 /// 参数:
 /// - `cell`: 启动信息 source
@@ -150,7 +153,6 @@ fn content_rows(cell: &WelcomeCell, width: usize) -> Vec<String> {
         field_row("model:", &cell.model, Some("/model to change"), width),
         field_row("directory:", &cell.directory, None, width),
         permission_row(&cell.permissions, width),
-        field_row("keys:", SHORTCUTS, None, width),
     ]
 }
 
@@ -160,13 +162,12 @@ fn content_rows(cell: &WelcomeCell, width: usize) -> Vec<String> {
 /// - `cell`: 启动信息 source
 ///
 /// 返回:
-/// - 模型、目录、权限和快捷键各行中的最大显示宽度
+/// - 模型、目录和权限各行中的最大显示宽度
 fn natural_content_width(cell: &WelcomeCell) -> usize {
     [
         field_natural_width("model:", &cell.model, Some("/model to change")),
         field_natural_width("directory:", &cell.directory, None),
         field_natural_width("permissions:", &cell.permissions, None),
-        field_natural_width("keys:", SHORTCUTS, None),
     ]
     .into_iter()
     .max()
@@ -351,7 +352,7 @@ mod tests {
         assert!(joined.contains("Sai (v0.1.4)"));
     }
 
-    /// 【终端】【启动面板】验证边框按内容收紧并展示常用快捷键。
+    /// 【终端】【启动面板】验证边框按内容收紧且不重复展示快捷键。
     ///
     /// 参数:
     /// - 无
@@ -359,7 +360,7 @@ mod tests {
     /// 返回:
     /// - 无
     #[test]
-    fn welcome_panel_fits_content_and_includes_shortcuts() {
+    fn welcome_panel_fits_content_without_duplicate_shortcuts() {
         let wide = display_lines(&sample("YOLO mode"), 120);
         let narrow = display_lines(&sample("YOLO mode"), 40);
         let joined = wide
@@ -370,10 +371,43 @@ mod tests {
         let panel_width = visible_width(wide[0].as_str());
 
         assert!(panel_width < 70, "启动框不应占满宽终端: {panel_width}");
-        assert!(joined.contains("keys:"));
-        assert!(joined.contains("Shift+Tab"));
-        assert!(joined.contains("Ctrl+O"));
+        assert!(!joined.contains("keys:"));
+        assert!(!joined.contains("Shift+Tab"));
+        assert!(!joined.contains("Ctrl+O"));
         assert!(narrow.len() < wide.len(), "无标志时高度应随内容收紧");
+    }
+
+    /// 【终端】【启动面板】验证三行状态在五行标志高度内垂直居中。
+    #[test]
+    fn runtime_details_are_vertically_centered_with_the_logo() {
+        let lines = display_lines(&sample("YOLO mode"), 80);
+        let visible = lines
+            .iter()
+            .map(|line| {
+                let raw = line.as_str();
+                let mut plain = String::new();
+                let mut chars = raw.chars().peekable();
+                while let Some(ch) = chars.next() {
+                    if ch == '\x1b' && chars.peek() == Some(&'[') {
+                        chars.next();
+                        for next in chars.by_ref() {
+                            if ('@'..='~').contains(&next) {
+                                break;
+                            }
+                        }
+                    } else {
+                        plain.push(ch);
+                    }
+                }
+                plain
+            })
+            .collect::<Vec<_>>();
+
+        assert!(visible[1].contains('█') && !visible[1].contains("model:"));
+        assert!(visible[2].contains("model:"));
+        assert!(visible[3].contains("directory:"));
+        assert!(visible[4].contains("permissions:"));
+        assert!(visible[5].contains('█') && !visible[5].contains("permissions:"));
     }
 
     /// 【终端】【品牌标志】验证标志渲染在边框内部且每行宽度一致。

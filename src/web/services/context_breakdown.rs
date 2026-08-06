@@ -8,7 +8,6 @@ use crate::token_estimate;
 use crate::tools::{self, ToolRegistry};
 use anyhow::Result;
 use serde::Serialize;
-use std::collections::BTreeSet;
 
 /// 上下文占用分项（与 Web 系统用量浮层图例对应）。
 #[derive(Debug, Clone, Serialize, Default)]
@@ -71,9 +70,7 @@ pub(crate) fn estimate_context_breakdown(
     }
 
     // 4. 按渐进式可见性选择当前工具定义
-    let loaded = store.load_loaded_tools().unwrap_or_default();
-    let loaded_set = loaded.iter().cloned().collect::<BTreeSet<_>>();
-    let visible_names = tools::progressive::visible_tool_names(&registry, deferred, &loaded_set);
+    let visible_names = tools::progressive::visible_tool_names(&registry, deferred);
     let definitions = registry.definitions_for_names(&visible_names);
 
     // 4. 工具定义拆成 MCP 与非 MCP
@@ -115,10 +112,7 @@ pub(crate) fn estimate_context_breakdown(
         }
     }
 
-    // 7. 已加载工具的动态系统提示（归入工具与子智能体）
-    let loaded_prompt = loaded_tools_prompt(deferred, &loaded, &registry);
-
-    // 8. 模式/审计提醒（取最长模式文本作上界）、选中模型标签、运行时上下文
+    // 7. 模式/审计提醒（取最长模式文本作上界）、选中模型标签、运行时上下文
     let mode_reminder = [
         crate::prompts::YOLO_REMINDER,
         crate::prompts::AUDITED_REMINDER,
@@ -166,7 +160,6 @@ pub(crate) fn estimate_context_breakdown(
         &tools_json_parts
             .iter()
             .map(String::as_str)
-            .chain(std::iter::once(loaded_prompt.as_str()))
             .collect::<Vec<_>>(),
     );
     let conversation_tokens = estimate_joined(
@@ -247,33 +240,6 @@ fn apply_web_agent_tool_filter(config: &AppConfig, registry: &mut ToolRegistry) 
     }
     *registry = filtered;
     Ok(())
-}
-
-/// 生成已加载工具的动态系统提示。
-///
-/// 参数:
-/// - `deferred`: 当前 Agent 需要 load 才暴露的工具名
-/// - `loaded`: 已加载工具名
-/// - `registry`: 工具注册表
-///
-/// 返回:
-/// - 提示文本
-fn loaded_tools_prompt(deferred: &[String], loaded: &[String], registry: &ToolRegistry) -> String {
-    if deferred.is_empty() || loaded.is_empty() {
-        return String::new();
-    }
-    let names = loaded
-        .iter()
-        .filter(|name| registry.contains(name))
-        .cloned()
-        .collect::<Vec<_>>();
-    if names.is_empty() {
-        return String::new();
-    }
-    format!(
-        "<loaded_tools>\nThe following tools are already loaded in this conversation. Do not call load for them again; call the loaded tool directly. If one of these tools returns an error, treat it as an execution or workflow error, not as a loading error.\nLoaded tools: {}\n</loaded_tools>",
-        names.join(", ")
-    )
 }
 
 /// 序列化工具定义为估算用 JSON 文本。

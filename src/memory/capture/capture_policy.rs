@@ -1,4 +1,6 @@
-use super::super::model::{MemoryCandidate, MemoryKind};
+use super::super::model::MemoryCandidate;
+#[cfg(test)]
+use super::super::model::MemoryKind;
 
 /// 记忆正文的最大字符数，超出说明抽取没有真正提炼。
 const MAX_CONTENT_CHARS: usize = 280;
@@ -87,17 +89,6 @@ fn is_conversational_noise(content: &str) -> bool {
         .any(|prefix| normalized.starts_with(&prefix.to_lowercase()))
 }
 
-/// 返回该类型的显著性门槛，供调用方展示与测试。
-///
-/// 参数:
-/// - `kind`: 记忆类型
-///
-/// 返回:
-/// - 显著性下限
-pub fn salience_floor(kind: MemoryKind) -> f64 {
-    kind.capture_floor()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,7 +135,11 @@ mod tests {
     #[test]
     fn the_floor_differs_by_kind() {
         assert_eq!(
-            evaluate(&candidate(MemoryKind::Preference, "用户偏好紧凑的界面布局", 0.5)),
+            evaluate(&candidate(
+                MemoryKind::Preference,
+                "用户偏好紧凑的界面布局",
+                0.5
+            )),
             CapturePolicyVerdict::Accept
         );
         assert_eq!(
@@ -180,15 +175,6 @@ mod tests {
         assert_eq!(
             evaluate(&candidate(MemoryKind::Fact, &long, 0.9)),
             CapturePolicyVerdict::Reject(RejectReason::ContentLength)
-        );
-    }
-
-    /// 验证门槛函数与类型定义一致。
-    #[test]
-    fn salience_floor_matches_the_kind_definition() {
-        assert_eq!(
-            salience_floor(MemoryKind::Episode),
-            MemoryKind::Episode.capture_floor()
         );
     }
 }

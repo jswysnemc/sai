@@ -66,6 +66,8 @@ pub(crate) struct ProjectedRequest {
 pub(crate) struct ProjectedBaseContext {
     pub messages: Vec<ChatMessage>,
     pub dynamic_sources: Vec<DynamicContextSource>,
+    /// 等待与当前用户输入合并的动态上下文
+    pub pending_user_contexts: Vec<String>,
 }
 
 /// 命令摘要投影视图。

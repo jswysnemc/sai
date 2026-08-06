@@ -40,12 +40,6 @@
   font:400 var(--text-2xs) var(--font-code);
 }
 
-.git-setting-toggle input {
-  width: 2.125rem;
-  height: 1.125rem;
-  accent-color: var(--signal);
-}
-
 .git-settings-safety-note,
 .git-settings-footer {
   display: flex;

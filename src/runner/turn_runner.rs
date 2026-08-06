@@ -1,16 +1,15 @@
-use super::{
-    AutomaticInputEvent, RunnerEvent, RunnerEventSink, SubmissionSource, UserInputSubmission,
-};
-use crate::agent::{Agent, ExternalEventBatch};
+use super::{RunnerEvent, RunnerEventSink, SubmissionSource, UserInputSubmission};
+use crate::agent::{Agent, InterMessageSource};
 use crate::llm::ChatResult;
 use anyhow::Result;
-use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::Instant;
 
 /// 单轮 runner，当前只包装现有 Agent 单轮调用。
 pub(crate) struct TurnRunner<'agent> {
     agent: &'agent mut Agent,
     wait_for_external_events: bool,
+    inter_message_source: Option<Arc<dyn InterMessageSource>>,
 }
 
 impl<'agent> TurnRunner<'agent> {
@@ -25,6 +24,7 @@ impl<'agent> TurnRunner<'agent> {
         Self {
             agent,
             wait_for_external_events: true,
+            inter_message_source: None,
         }
     }
 
@@ -40,7 +40,23 @@ impl<'agent> TurnRunner<'agent> {
         Self {
             agent,
             wait_for_external_events: source_waits_for_external_events(source),
+            inter_message_source: None,
         }
+    }
+
+    /// 设置当前活动回合可以消费的排队消息来源。
+    ///
+    /// 参数:
+    /// - `source`: 可选排队消息来源
+    ///
+    /// 返回:
+    /// - 更新后的 runner
+    pub(crate) fn with_inter_message_source(
+        mut self,
+        source: Option<Arc<dyn InterMessageSource>>,
+    ) -> Self {
+        self.inter_message_source = source;
+        self
     }
 
     /// 执行用户输入单轮对话。
@@ -59,163 +75,73 @@ impl<'agent> TurnRunner<'agent> {
     where
         S: RunnerEventSink,
     {
-        let mut queued_inputs = VecDeque::from([input.clone()]);
-        let mut pending_external_events = None::<ExternalEventBatch>;
-        loop {
-            let mut current = queued_inputs
-                .pop_front()
-                .ok_or_else(|| anyhow::anyhow!("automatic input queue is empty"))?;
-            // 1. 自动队列项每次读取最新目标，并在发送给模型前发布用户可见消息
-            let automatic = current.automatic_input.take();
-            if let Some(automatic) = automatic.as_ref() {
-                let goal_state = self
-                    .agent
-                    .state()
-                    .goal()?
-                    .filter(|goal| goal.status.is_active());
-                let goal = goal_state.as_ref();
-                current.input = automatic
-                    .prompt_text(goal)
-                    .ok_or_else(|| anyhow::anyhow!("no active goal to continue"))?;
-                current.image_urls.clear();
-                current.turn_id = None;
-                sink.on_runner_event(RunnerEvent::AutomaticInput(AutomaticInputEvent::new(
-                    automatic.kind,
-                    automatic.display_text(goal),
-                )))?;
-            }
-            let active_goal = self
-                .agent
-                .state()
-                .goal()?
-                .filter(|goal| goal.status.is_active());
-            let started = Instant::now();
-            // 本轮耗时从首次思考/正文输出开始；若无输出则从请求开始
-            let first_output = std::sync::Arc::new(std::sync::Mutex::new(None::<Instant>));
-            let result = {
-                let first_output_cb = std::sync::Arc::clone(&first_output);
-                self.agent
-                    .chat_stream_with_images(
-                        &current.input,
-                        current.image_urls.clone(),
-                        current.turn_id.clone(),
-                        |event| {
-                            if matches!(&event, crate::agent::AgentEvent::Chunk(_)) {
-                                let mut guard = first_output_cb.lock().unwrap();
-                                if guard.is_none() {
-                                    *guard = Some(Instant::now());
-                                }
+        let active_goal = self
+            .agent
+            .state()
+            .goal()?
+            .filter(|goal| goal.status.is_active());
+        let started = Instant::now();
+        // 1. 本轮耗时从首次思考或正文输出开始；没有输出时从请求开始
+        let first_output = std::sync::Arc::new(std::sync::Mutex::new(None::<Instant>));
+        let result = {
+            let first_output_cb = std::sync::Arc::clone(&first_output);
+            self.agent
+                .chat_stream_with_images_and_inter_messages(
+                    &input.input,
+                    input.image_urls.clone(),
+                    input.turn_id.clone(),
+                    self.inter_message_source.clone(),
+                    self.wait_for_external_events,
+                    |event| {
+                        if matches!(&event, crate::agent::AgentEvent::Chunk(_)) {
+                            let mut guard = first_output_cb.lock().unwrap();
+                            if guard.is_none() {
+                                *guard = Some(Instant::now());
                             }
-                            sink.on_runner_event(RunnerEvent::Agent(event))
-                        },
-                    )
-                    .await
-            };
-            let output_started = first_output.lock().unwrap().unwrap_or(started);
-            let duration_ms = output_started.elapsed().as_millis() as u64;
-            let elapsed = started.elapsed().as_secs().max(1);
-            let result = match result {
-                Ok(mut result) => {
-                    result.duration_ms = duration_ms.max(1);
-                    // 1. 将处理耗时写入会话数据库，供时间线恢复展示
+                        }
+                        sink.on_runner_event(RunnerEvent::Agent(event))
+                    },
+                )
+                .await
+        };
+        let output_started = first_output.lock().unwrap().unwrap_or(started);
+        let duration_ms = output_started.elapsed().as_millis() as u64;
+        let elapsed = started.elapsed().as_secs().max(1);
+        let mut result = match result {
+            Ok(result) => result,
+            Err(error) => {
+                if let Some(goal) = active_goal {
                     let _ = self
                         .agent
                         .state()
-                        .set_last_turn_duration_ms(result.duration_ms);
-                    result
-                }
-                Err(error) => {
-                    if let Some(goal) = active_goal {
-                        let _ = self
-                            .agent
-                            .state()
-                            .account_goal_progress(&goal.id, 0, elapsed);
-                        let _ = self
-                            .agent
-                            .state()
-                            .set_goal_status(crate::goal::GoalStatus::Blocked);
-                    }
-                    return Err(error);
-                }
-            };
-            // 2. 轮次成功才确认外部完成回执；失败路径已提前返回，回执保留待重投
-            if let Some(batch) = pending_external_events.take() {
-                let _ = self.agent.acknowledge_external_events(&batch);
-            }
-            // 3. 只把本轮开始时已经活动的目标计入使用量，避免倒算创建目标之前的消耗
-            if let Some(goal) = active_goal {
-                let tokens = result
-                    .usage
-                    .as_ref()
-                    .map(|usage| usage.total_tokens)
-                    .unwrap_or_default();
-                self.agent
-                    .state()
-                    .account_goal_progress(&goal.id, tokens, elapsed)?;
-            }
-            // 4. CLI 单次命令只返回当前模型结果，不等待后台工作完成
-            if !self.wait_for_external_events {
-                sink.on_runner_event(RunnerEvent::Completed(result.clone()))?;
-                return Ok(result);
-            }
-            // 5. Goal 处于活动或阻塞状态时，等待后台工作完成并主动发起完整续轮
-            if let Some(goal) = self.agent.state().goal()? {
-                if goal.status.accepts_external_wake() {
-                    let batch = self
+                        .account_goal_progress(&goal.id, 0, elapsed);
+                    let _ = self
                         .agent
-                        .wait_for_goal_events(|| sink.on_runner_event(RunnerEvent::WaitingExternal))
-                        .await?;
-                    let latest_goal = self.agent.state().goal()?;
-                    if let Some(batch) = batch {
-                        if latest_goal
-                            .as_ref()
-                            .is_some_and(|goal| goal.status.accepts_external_wake())
-                        {
-                            if latest_goal
-                                .as_ref()
-                                .is_some_and(|goal| goal.status == crate::goal::GoalStatus::Blocked)
-                            {
-                                self.agent
-                                    .state()
-                                    .set_goal_status(crate::goal::GoalStatus::Active)?;
-                            }
-                            let prompt = batch.prompt().to_string();
-                            let display = batch.display().to_string();
-                            pending_external_events = Some(batch);
-                            queued_inputs.push_back(
-                                UserInputSubmission::new(String::new(), input.mode)
-                                    .with_goal_event(prompt, display),
-                            );
-                            continue;
-                        }
-                    }
-                    if latest_goal.is_some_and(|goal| goal.status.is_active()) {
-                        queued_inputs.push_back(
-                            UserInputSubmission::new(String::new(), input.mode)
-                                .with_goal_continuation(),
-                        );
-                        continue;
-                    }
+                        .state()
+                        .set_goal_status(crate::goal::GoalStatus::Blocked);
                 }
+                return Err(error);
             }
-            // 6. 非 Goal 会话同样等待未绑定 Goal 的后台工作，并通过自动队列发起新轮次
-            if let Some(batch) = self
-                .agent
-                .wait_for_session_events(|| sink.on_runner_event(RunnerEvent::WaitingExternal))
-                .await?
-            {
-                let prompt = batch.prompt().to_string();
-                let display = batch.display().to_string();
-                pending_external_events = Some(batch);
-                queued_inputs.push_back(
-                    UserInputSubmission::new(String::new(), input.mode)
-                        .with_external_event(prompt, display),
-                );
-                continue;
-            }
-            sink.on_runner_event(RunnerEvent::Completed(result.clone()))?;
-            return Ok(result);
+        };
+        result.duration_ms = duration_ms.max(1);
+        // 2. 将处理耗时写入会话数据库，供时间线恢复展示
+        let _ = self
+            .agent
+            .state()
+            .set_last_turn_duration_ms(result.duration_ms);
+        // 3. 只把本轮开始时已经活动的目标计入使用量
+        if let Some(goal) = active_goal {
+            let tokens = result
+                .usage
+                .as_ref()
+                .map(|usage| usage.total_tokens)
+                .unwrap_or_default();
+            self.agent
+                .state()
+                .account_goal_progress(&goal.id, tokens, elapsed)?;
         }
+        sink.on_runner_event(RunnerEvent::Completed(result.clone()))?;
+        Ok(result)
     }
 }
 

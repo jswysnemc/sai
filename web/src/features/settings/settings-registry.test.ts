@@ -32,6 +32,8 @@ describe("settings registry", () => {
     expect(byMcp.some((item) => item.id === "mcp")).toBe(true);
     const byZh = filterSettingsSections("用量");
     expect(byZh.some((item) => item.id === "usage")).toBe(true);
+    const bySessionData = filterSettingsSections("会话数据");
+    expect(bySessionData.some((item) => item.id === "session-data")).toBe(true);
     const bySearchProvider = filterSettingsSections("tavily");
     expect(bySearchProvider.some((item) => item.id === "web-search")).toBe(true);
   });

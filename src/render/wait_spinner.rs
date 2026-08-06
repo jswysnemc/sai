@@ -1,10 +1,11 @@
 use crate::render::activity_animation::{
     activity_frame_count, render_activity_detail, render_activity_line, ACTIVITY_FRAME_INTERVAL,
 };
+use crate::render::terminal_paint::paint_lock;
 use crate::render::work_status::format_elapsed;
 use anyhow::Result;
 use crossterm::cursor::{self, MoveTo};
-use crossterm::execute;
+use crossterm::queue;
 use crossterm::terminal::{self, Clear, ClearType};
 use std::io::{self, IsTerminal, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -244,6 +245,7 @@ fn spinner_line_count(sub_phase: Option<&str>) -> u16 {
 /// 返回:
 /// - 动画锚点行
 fn reserve_spinner_rows(lines: u16) -> u16 {
+    let _paint = paint_lock();
     let row = cursor::position().map(|(_, row)| row).unwrap_or(0);
     let rows = terminal::size().map(|(_, rows)| rows.max(1)).unwrap_or(24);
     let overflow = spinner_row_overflow(row, rows, lines.max(1));
@@ -281,17 +283,18 @@ fn spinner_row_overflow(row: u16, rows: u16, lines: u16) -> u16 {
 /// 返回:
 /// - 终端写入是否成功
 fn write_spinner_lines(output: &str, anchor_row: u16, prev_lines: u16, lines: u16) -> Result<()> {
+    let _paint = paint_lock();
     let mut stdout = io::stdout();
     let rows_to_clear = prev_lines.max(lines).max(1);
     for row_offset in 0..rows_to_clear {
-        execute!(
+        queue!(
             stdout,
             MoveTo(0, anchor_row.saturating_add(row_offset)),
             Clear(ClearType::CurrentLine)
         )?;
     }
     for (index, line) in output.lines().enumerate() {
-        execute!(stdout, MoveTo(0, anchor_row.saturating_add(index as u16)))?;
+        queue!(stdout, MoveTo(0, anchor_row.saturating_add(index as u16)))?;
         write!(stdout, "{line}")?;
     }
     stdout.flush()?;
@@ -307,15 +310,16 @@ fn write_spinner_lines(output: &str, anchor_row: u16, prev_lines: u16, lines: u1
 /// 返回:
 /// - 终端清理是否成功
 fn clear_spinner_lines(anchor_row: u16, lines: u16) -> Result<()> {
+    let _paint = paint_lock();
     let mut stdout = io::stdout();
     for row_offset in 0..lines {
-        execute!(
+        queue!(
             stdout,
             MoveTo(0, anchor_row.saturating_add(row_offset)),
             Clear(ClearType::CurrentLine)
         )?;
     }
-    execute!(stdout, MoveTo(0, anchor_row))?;
+    queue!(stdout, MoveTo(0, anchor_row))?;
     stdout.flush()?;
     Ok(())
 }

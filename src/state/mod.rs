@@ -13,20 +13,16 @@ mod session_snapshot;
 mod session_timeline;
 mod sessions;
 mod store_context_epoch;
+mod store_lifecycle;
+mod store_provider_input;
 mod store_usage;
 pub(crate) mod tool_history;
+pub(crate) mod turn_messages;
 mod turns;
 mod usage;
 pub(crate) mod worktree_undo;
 
-#[cfg(test)]
-use crate::llm::Usage;
-use crate::paths::SaiPaths;
 use anyhow::Result;
-#[cfg(test)]
-use chrono::Utc;
-use sha2::{Digest, Sha256};
-use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -45,7 +41,7 @@ pub use session_snapshot::{context_ratio, ActiveRunSummary, SessionSnapshot};
 #[allow(unused_imports)]
 pub use session_timeline::{
     SessionTimeline, SessionTimelineCompaction, SessionTimelineTurn, TimelineMessage,
-    TimelinePermissionDecision, TimelineToolEntry,
+    TimelinePermissionDecision, TimelineToolEntry, TimelineTurnMessage,
 };
 #[allow(unused_imports)]
 pub use sessions::{
@@ -62,7 +58,9 @@ pub use tool_history::{
 };
 #[cfg(test)]
 pub use turns::TurnStatus;
-pub use turns::{turns_to_entries, ConversationDb, SessionTree, StoredConversationEntry, Turn, TurnTreeNode};
+pub use turns::{
+    turns_to_entries, ConversationDb, SessionTree, StoredConversationEntry, Turn, TurnTreeNode,
+};
 pub use usage::UsageSnapshot;
 /// 撤销最后一轮对话及其工作树修改后的结果。
 #[derive(Debug, Clone)]
@@ -88,172 +86,6 @@ pub struct StateStore {
 }
 
 impl StateStore {
-    /// 创建状态存储并迁移旧对话历史。
-    ///
-    /// 参数:
-    /// - `paths`: Sai 路径集合
-    ///
-    /// 返回:
-    /// - 状态存储
-    pub fn new(paths: &SaiPaths) -> Result<Self> {
-        let session = sessions::ensure_active_session(paths)?;
-        let base_state_dir = sessions::session_scope_dir(paths)?;
-        let state_dir = sessions::active_state_dir(paths)?;
-        let conv_db = Arc::new(ConversationDb::open(&state_dir)?);
-        let store = Self {
-            base_state_dir,
-            session_id: session.id,
-            state_dir,
-            conv_db,
-        };
-        store.prepare_after_open()?;
-        Ok(store)
-    }
-
-    /// 打开会话状态后的统一收尾。
-    ///
-    /// 三个构造入口共用：迁移历史格式，并收敛上次运行遗留的撤销快照。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 迁移是否成功；快照清理失败不阻断打开
-    fn prepare_after_open(&self) -> Result<()> {
-        self.migrate_from_jsonl()?;
-        checkpoints::migrate_legacy_compaction_summary(self)?;
-        self.cleanup_worktree_snapshots();
-        Ok(())
-    }
-
-    /// 清理本会话的工作树撤销快照残留。
-    ///
-    /// 进程被强制结束时快照收尾不会执行，`pending_` 目录会永久留在磁盘上；
-    /// 已完成快照也需要按保留上限淘汰。清理失败不应阻断会话打开，因此忽略错误。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 无
-    fn cleanup_worktree_snapshots(&self) {
-        let root = worktree_undo::snapshot_root(&self.state_dir);
-        let _ = worktree_undo::cleanup_snapshot_root(&root);
-    }
-
-    /// 创建绑定到指定会话的状态存储，不修改全局当前会话。
-    ///
-    /// 参数:
-    /// - `paths`: Sai 路径集合
-    /// - `session_id`: 会话 ID
-    ///
-    /// 返回:
-    /// - 指定会话状态存储
-    pub fn for_session(paths: &SaiPaths, session_id: &str) -> Result<Self> {
-        let (base_state_dir, state_dir) = sessions::locate_session_dirs(paths, session_id)?;
-        let conv_db = Arc::new(ConversationDb::open(&state_dir)?);
-        let store = Self {
-            base_state_dir,
-            session_id: session_id.trim().to_string(),
-            state_dir,
-            conv_db,
-        };
-        store.prepare_after_open()?;
-        Ok(store)
-    }
-
-    /// 创建绑定到指定工作区和会话的状态存储。
-    ///
-    /// 参数:
-    /// - `paths`: Sai 路径集合
-    /// - `workspace_path`: 工作区目录
-    /// - `session_id`: 会话 ID
-    ///
-    /// 返回:
-    /// - 指定会话状态存储
-    pub fn for_workspace_session(
-        paths: &SaiPaths,
-        workspace_path: &std::path::Path,
-        session_id: &str,
-    ) -> Result<Self> {
-        let (base_state_dir, state_dir) =
-            sessions::state_dir_for_workspace_session(paths, workspace_path, session_id)?;
-        let conv_db = Arc::new(ConversationDb::open(&state_dir)?);
-        let store = Self {
-            base_state_dir,
-            session_id: session_id.trim().to_string(),
-            state_dir,
-            conv_db,
-        };
-        store.prepare_after_open()?;
-        Ok(store)
-    }
-
-    /// 返回当前会话状态目录。
-    ///
-    /// 返回:
-    /// - 状态目录路径
-    pub(crate) fn state_dir(&self) -> &std::path::Path {
-        &self.state_dir
-    }
-
-    /// 初始化状态文件。
-    ///
-    /// 返回:
-    /// - 初始化是否成功
-    pub fn init_files(&self) -> Result<()> {
-        std::fs::create_dir_all(&self.state_dir)?;
-        if !self.usage_file().exists() {
-            std::fs::write(self.usage_file(), "{\n  \"requests\": 0,\n  \"prompt_tokens\": 0,\n  \"completion_tokens\": 0,\n  \"total_tokens\": 0\n}\n")?;
-        }
-        touch(self.log_file())?;
-        if !self.profile_file().exists() {
-            std::fs::write(self.profile_file(), "# Sai Profile\n\n")?;
-        }
-        Ok(())
-    }
-
-    /// 返回当前状态存储对应的会话 ID。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 会话 ID
-    pub fn session_id(&self) -> &str {
-        &self.session_id
-    }
-
-    /// 返回当前会话 TODO 状态文件。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - TODO 状态文件路径
-    pub(crate) fn todo_file(&self) -> PathBuf {
-        self.state_dir.join("todos.json")
-    }
-
-    /// 系统提示变化时重置会话。
-    ///
-    /// 参数:
-    /// - `system_prompt`: 当前系统提示
-    ///
-    /// 返回:
-    /// - 重置检查是否成功
-    pub fn reset_if_prompt_changed(&self, system_prompt: &str) -> Result<()> {
-        self.init_files()?;
-        let fingerprint = prompt_fingerprint(system_prompt);
-        let file = self.prompt_fingerprint_file();
-        let previous = std::fs::read_to_string(&file).unwrap_or_default();
-        context_epoch::prepare_context_epoch(&self.conv_db, &self.session_id, system_prompt)?;
-        if previous.trim() != fingerprint {
-            std::fs::write(file, format!("{fingerprint}\n"))?;
-        }
-        Ok(())
-    }
-
     /// 开始新对话轮次。
     ///
     /// 参数:
@@ -461,11 +293,15 @@ impl StateStore {
     /// 返回:
     /// - 最后一轮匹配且包含部分助手正文时返回 true
     pub(crate) fn latest_interrupted_turn_has_content(&self, input: &str) -> Result<bool> {
-        Ok(self.conv_db.active_branch_turns()?.last().is_some_and(|turn| {
-            turn.status == turns::TurnStatus::Interrupted
-                && turn.user_content.trim() == input.trim()
-                && !turn.assistant_content.trim().is_empty()
-        }))
+        Ok(self
+            .conv_db
+            .active_branch_turns()?
+            .last()
+            .is_some_and(|turn| {
+                turn.status == turns::TurnStatus::Interrupted
+                    && turn.user_content.trim() == input.trim()
+                    && !turn.assistant_content.trim().is_empty()
+            }))
     }
 
     /// 读取当前活动分支上的对话轮次。
@@ -516,6 +352,7 @@ impl StateStore {
     ///
     /// 返回:
     /// - 全部轮次列表，按 seq 升序
+    #[cfg(test)]
     pub fn load_all_turns(&self) -> Result<Vec<Turn>> {
         self.conv_db.load_turns()
     }
@@ -648,45 +485,6 @@ impl StateStore {
         self.conv_db.migrate_from_jsonl(&self.conversation_file())
     }
 
-    /// 兼容旧测试和辅助代码追加消息。
-    ///
-    /// 参数:
-    /// - `role`: 消息角色
-    /// - `content`: 消息内容
-    ///
-    /// 返回:
-    /// - 写入是否成功
-    #[cfg(test)]
-    pub fn append_message(&self, role: &str, content: &str) -> Result<()> {
-        match role {
-            "user" => self.start_turn(&compat_turn_id(), content),
-            "assistant" => self.append_assistant_message(content, None),
-            _ => Ok(()),
-        }
-    }
-
-    /// 兼容旧测试和辅助代码追加助手消息。
-    ///
-    /// 参数:
-    /// - `content`: 助手回复
-    /// - `reasoning`: 可选推理内容
-    ///
-    /// 返回:
-    /// - 写入是否成功
-    #[cfg(test)]
-    pub fn append_assistant_message(&self, content: &str, reasoning: Option<&str>) -> Result<()> {
-        if let Some(turn) = self
-            .conv_db
-            .load_turns()?
-            .into_iter()
-            .rev()
-            .find(|turn| turn.status == TurnStatus::Running)
-        {
-            self.complete_turn(&turn.turn_id, content, reasoning)?;
-        }
-        Ok(())
-    }
-
     /// 测试用：写入损坏的 Context Epoch snapshot。
     ///
     /// 参数: `snapshot_json` 是损坏的 snapshot JSON
@@ -700,72 +498,6 @@ impl StateStore {
         )?;
         Ok(())
     }
-
-    fn conversation_file(&self) -> PathBuf {
-        self.state_dir.join("conversation.jsonl")
-    }
-
-    fn usage_file(&self) -> PathBuf {
-        self.state_dir.join("usage.json")
-    }
-
-    fn loaded_tools_file(&self) -> PathBuf {
-        self.state_dir.join("loaded-tools.json")
-    }
-
-    fn log_file(&self) -> PathBuf {
-        self.state_dir.join("sai.log")
-    }
-
-    fn profile_file(&self) -> PathBuf {
-        self.state_dir.join("profile.md")
-    }
-
-    fn compaction_summary_file(&self) -> PathBuf {
-        self.state_dir.join("compaction-summary.json")
-    }
-
-    fn prompt_fingerprint_file(&self) -> PathBuf {
-        self.state_dir.join("prompt.sha256")
-    }
-}
-
-/// 计算系统提示指纹。
-///
-/// 参数:
-/// - `system_prompt`: 系统提示
-///
-/// 返回:
-/// - 十六进制指纹
-fn prompt_fingerprint(system_prompt: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(system_prompt.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
-
-/// 创建兼容写入使用的轮次标识。
-///
-/// 返回:
-/// - 轮次标识
-#[cfg(test)]
-fn compat_turn_id() -> String {
-    format!(
-        "compat_{}_{}",
-        Utc::now().timestamp_millis(),
-        rand::random::<u16>()
-    )
-}
-
-/// 确保文件存在。
-///
-/// 参数:
-/// - `path`: 文件路径
-///
-/// 返回:
-/// - 创建是否成功
-fn touch(path: PathBuf) -> Result<()> {
-    OpenOptions::new().create(true).append(true).open(path)?;
-    Ok(())
 }
 
 #[cfg(test)]

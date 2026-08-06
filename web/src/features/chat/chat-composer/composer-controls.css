@@ -35,10 +35,17 @@
   white-space: nowrap;
 }
 
-.composer-mode .ui-select > button svg {
+.composer-mode .ui-select > button > svg {
   width: 12px;
   height: 12px;
   opacity: 0.55;
+}
+
+/* 选择值中的运行模式图标不应继承下拉箭头的缩小与透明度 */
+.composer-mode .ui-select-value svg {
+  width: 14px;
+  height: 14px;
+  opacity: 1;
 }
 
 .composer-actions {

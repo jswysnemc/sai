@@ -11,6 +11,7 @@ pub(crate) struct BackgroundCompletionNotice {
     pub(crate) task_id: String,
     pub(crate) label: String,
     pub(crate) status: String,
+    pub(crate) updated_at: u64,
     #[allow(dead_code)]
     pub(crate) stdout: String,
     #[allow(dead_code)]
@@ -90,14 +91,20 @@ async fn poll_background_completions_matching(
             task_id: task.id.clone(),
             label: task.label.clone(),
             status: task.status.clone(),
+            updated_at: task.updated_at,
             stdout: String::new(),
             stderr: String::new(),
         });
     }
+    notices.sort_by(|left, right| {
+        left.updated_at
+            .cmp(&right.updated_at)
+            .then_with(|| left.task_id.cmp(&right.task_id))
+    });
     Ok((notices, running))
 }
 
-/// 确认后台命令完成通知已经交给 Agent，并清理对应终态任务记录。
+/// 确认后台命令完成通知已经交给 Agent。
 ///
 /// 参数:
 /// - `paths`: Sai 路径
@@ -116,36 +123,17 @@ pub(crate) fn acknowledge_background_completions(
     }
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
     let mut tasks = store.load()?;
-    let mut removed = Vec::new();
-    // 1. 回执已投递给模型后删除终态任务，避免后台任务面板堆积
-    tasks.retain(|task| {
-        let should_remove = task_ids.iter().any(|id| id == &task.id)
+    // 回执只确认投递状态，保留任务与日志供模型继续调用 output 读取
+    for task in &mut tasks {
+        if task_ids.iter().any(|id| id == &task.id)
             && owned_by_session(task, session_id)
-            && task.status != "running";
-        if should_remove {
-            removed.push(task.clone());
-            false
-        } else {
-            true
+            && task.status != "running"
+        {
+            task.completion_notified = true;
         }
-    });
-    store.save(&tasks)?;
-    for task in removed {
-        remove_task_logs(&task);
     }
+    store.save(&tasks)?;
     Ok(())
-}
-
-/// 删除后台任务关联的标准输出/错误日志文件。
-///
-/// 参数:
-/// - `task`: 待清理任务
-///
-/// 返回:
-/// - 无返回值
-fn remove_task_logs(task: &BackgroundCommandTask) {
-    let _ = std::fs::remove_file(&task.stdout_log);
-    let _ = std::fs::remove_file(&task.stderr_log);
 }
 
 /// 判断任务是否绑定到交互式会话。
@@ -263,10 +251,10 @@ mod tests {
         acknowledge_background_completions(&paths, "session-1", &["goal-task".to_string()])
             .unwrap();
         let remaining = store.load().unwrap();
-        assert!(
-            remaining.iter().all(|task| task.id != "goal-task"),
-            "acknowledged finished tasks should be removed from the store"
-        );
+        assert!(remaining
+            .iter()
+            .find(|task| task.id == "goal-task")
+            .is_some_and(|task| task.completion_notified));
         assert!(
             remaining.iter().any(|task| task.id == "session-task"),
             "unrelated finished tasks should remain until acknowledged"

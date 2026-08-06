@@ -3,7 +3,6 @@
 /// 旧实现用字符串裁剪冒充提炼：去填充词、找结论句、截断长度，产出的是
 /// 「时间：任务 → 结果」的对话流水账。这里改为让模型判断哪些信息值得长期
 /// 复用，并输出结构化候选。
-
 use super::super::model::{MemoryCandidate, MemoryKind, MemoryScope};
 use anyhow::Result;
 use serde_json::Value;
@@ -201,7 +200,10 @@ mod tests {
     fn project_scope_binds_to_the_current_workspace() {
         let raw = r#"{"memories":[{"kind":"decision","content":"构建改用 vite","salience":0.9,"scope":"project"}]}"#;
         let candidates = parse_extraction_output(raw, Some("/home/a")).unwrap();
-        assert_eq!(candidates[0].scope, MemoryScope::from_stored(Some("/home/a")));
+        assert_eq!(
+            candidates[0].scope,
+            MemoryScope::from_stored(Some("/home/a"))
+        );
     }
 
     /// 验证没有工作区时 project 作用域降级为全局。

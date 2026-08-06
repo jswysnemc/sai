@@ -35,6 +35,7 @@ mod streaming_replace;
 mod style;
 mod table;
 pub(crate) mod terminal_image;
+pub(crate) mod terminal_paint;
 mod tool_call_blocks;
 mod tool_call_preview;
 mod tool_event_line;

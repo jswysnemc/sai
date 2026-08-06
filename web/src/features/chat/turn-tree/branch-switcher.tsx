@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, GitBranch } from "lucide-react";
 import type { SessionTurnTree } from "../../../api/turn-tree-contracts";
 import { useI18n } from "../../i18n/use-i18n";
-import { findSiblingBranches } from "./turn-tree-rows";
+import { findSiblingBranches, preferredBranchLeafId } from "./turn-tree-rows";
 import "./branch-switcher.css";
 
 type BranchSwitcherProps = {
@@ -30,7 +30,7 @@ export function BranchSwitcher({ tree, turnId, busy, onSwitch }: BranchSwitcherP
   const { siblings, index } = group;
   const goTo = (target: number) => {
     const next = siblings[target];
-    if (next) onSwitch(next.turn_id);
+    if (next) onSwitch(preferredBranchLeafId(next));
   };
 
   return (

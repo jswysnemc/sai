@@ -8,6 +8,8 @@ type ModalProps = {
   title: string;
   description?: string;
   size?: "small" | "medium" | "large";
+  /** 追加到弹层根节点的自定义类名，供内容型弹层定制尺寸 */
+  className?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
   initialFocusRef?: RefObject<HTMLElement | null>;
@@ -20,7 +22,7 @@ type ModalProps = {
  * @param props 弹层状态、标题、内容和关闭回调
  * @returns Portal 弹层
  */
-export function Modal({ open, title, description, size = "medium", children, footer, initialFocusRef, onClose }: ModalProps) {
+export function Modal({ open, title, description, size = "medium", className, children, footer, initialFocusRef, onClose }: ModalProps) {
   const { t } = useI18n();
   const titleId = useId();
   const descriptionId = useId();
@@ -62,7 +64,7 @@ export function Modal({ open, title, description, size = "medium", children, foo
   if (!open) return null;
   return createPortal(
     <div className="ui-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section ref={dialogRef} className={`ui-modal ${size}`} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}>
+      <section ref={dialogRef} className={`ui-modal ${size}${className ? ` ${className}` : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}>
         <header className="ui-modal-header">
           <div><h2 id={titleId}>{title}</h2>{description && <p id={descriptionId}>{description}</p>}</div>
           <button type="button" onClick={onClose} aria-label={t("Close dialog", "关闭对话框")}><X size={16} /></button>

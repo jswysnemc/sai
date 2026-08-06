@@ -101,7 +101,10 @@ mod tests {
             .normalized()
             .expect("正文非空应当保留");
         assert_eq!(normalized.content, "用户偏好 pnpm");
-        assert_eq!(normalized.tags, vec!["pnpm".to_string(), "包管理".to_string()]);
+        assert_eq!(
+            normalized.tags,
+            vec!["pnpm".to_string(), "包管理".to_string()]
+        );
     }
 
     /// 验证空正文的候选被丢弃。

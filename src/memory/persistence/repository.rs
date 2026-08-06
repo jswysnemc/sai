@@ -63,6 +63,7 @@ pub fn update(conn: &Connection, id: i64, candidate: &MemoryCandidate, now: &str
 ///
 /// 返回:
 /// - 是否确实删除了记录
+#[cfg(test)]
 pub fn delete(conn: &Connection, id: i64) -> Result<bool> {
     for table in ["memories_fts", "memories_fts_tri"] {
         conn.execute(&format!("DELETE FROM {table} WHERE rowid=?1"), params![id])?;
@@ -103,6 +104,7 @@ pub fn list_by_kind_and_scope(
 ///
 /// 返回:
 /// - 记忆条目；不存在时为 None
+#[cfg(test)]
 pub fn find(conn: &Connection, id: i64) -> Result<Option<MemoryItem>> {
     let mut stmt = conn.prepare(
         "SELECT id, kind, scope_path, content, salience, tags, created_at, updated_at
@@ -201,7 +203,12 @@ mod tests {
     #[test]
     fn inserts_and_reads_back_a_memory() {
         let conn = conn();
-        let id = insert(&conn, &candidate(MemoryKind::Preference, "用户使用 pnpm", 0.8), NOW).unwrap();
+        let id = insert(
+            &conn,
+            &candidate(MemoryKind::Preference, "用户使用 pnpm", 0.8),
+            NOW,
+        )
+        .unwrap();
 
         let item = find(&conn, id).unwrap().expect("刚写入的记忆应当存在");
         assert_eq!(item.kind, MemoryKind::Preference);
@@ -215,7 +222,12 @@ mod tests {
     #[test]
     fn update_keeps_the_higher_salience() {
         let conn = conn();
-        let id = insert(&conn, &candidate(MemoryKind::Preference, "用户使用 pnpm", 0.9), NOW).unwrap();
+        let id = insert(
+            &conn,
+            &candidate(MemoryKind::Preference, "用户使用 pnpm", 0.9),
+            NOW,
+        )
+        .unwrap();
         update(
             &conn,
             id,
@@ -234,13 +246,19 @@ mod tests {
     #[test]
     fn lists_only_the_matching_kind_and_scope() {
         let conn = conn();
-        insert(&conn, &candidate(MemoryKind::Preference, "偏好一", 0.8), NOW).unwrap();
+        insert(
+            &conn,
+            &candidate(MemoryKind::Preference, "偏好一", 0.8),
+            NOW,
+        )
+        .unwrap();
         insert(&conn, &candidate(MemoryKind::Fact, "事实一", 0.8), NOW).unwrap();
         let mut scoped = candidate(MemoryKind::Preference, "项目偏好", 0.8);
         scoped.scope = MemoryScope::from_stored(Some("/home/a"));
         insert(&conn, &scoped, NOW).unwrap();
 
-        let global = list_by_kind_and_scope(&conn, MemoryKind::Preference, &MemoryScope::Global).unwrap();
+        let global =
+            list_by_kind_and_scope(&conn, MemoryKind::Preference, &MemoryScope::Global).unwrap();
         assert_eq!(global.len(), 1);
         assert_eq!(global[0].content, "偏好一");
 
@@ -258,12 +276,21 @@ mod tests {
     #[test]
     fn delete_removes_the_row_and_its_index_entry() {
         let conn = conn();
-        let id = insert(&conn, &candidate(MemoryKind::Fact, "用户使用 Arch Linux", 0.7), NOW).unwrap();
+        let id = insert(
+            &conn,
+            &candidate(MemoryKind::Fact, "用户使用 Arch Linux", 0.7),
+            NOW,
+        )
+        .unwrap();
 
         assert!(delete(&conn, id).unwrap());
         assert!(find(&conn, id).unwrap().is_none());
         let indexed: i64 = conn
-            .query_row("SELECT count(*) FROM memories_fts WHERE rowid=?1", params![id], |row| row.get(0))
+            .query_row(
+                "SELECT count(*) FROM memories_fts WHERE rowid=?1",
+                params![id],
+                |row| row.get(0),
+            )
             .unwrap();
         assert_eq!(indexed, 0);
     }
@@ -284,7 +311,11 @@ mod tests {
         insert(&conn, &item, NOW).unwrap();
 
         let hits: i64 = conn
-            .query_row("SELECT count(*) FROM memories_fts WHERE body MATCH 'pnpm'", [], |row| row.get(0))
+            .query_row(
+                "SELECT count(*) FROM memories_fts WHERE body MATCH 'pnpm'",
+                [],
+                |row| row.get(0),
+            )
             .unwrap();
         assert_eq!(hits, 1, "正文未出现的标签应当可以命中");
     }

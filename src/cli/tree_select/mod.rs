@@ -30,10 +30,7 @@ pub(super) fn select_turn_interactively(paths: &SaiPaths) -> Result<Option<Strin
         );
     }
     let rows = flatten_tree(&tree);
-    let labels = rows
-        .iter()
-        .map(|row| row.label.clone())
-        .collect::<Vec<_>>();
+    let labels = rows.iter().map(|row| row.label.clone()).collect::<Vec<_>>();
     let Some(index) = inline_fuzzy_select(&labels)? else {
         return Ok(None);
     };

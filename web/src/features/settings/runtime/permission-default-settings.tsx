@@ -4,6 +4,7 @@ import { buildChatModelChoices } from "../../chat/chat-model-options";
 import { createRunModeOptions } from "../../permission/run-mode-options";
 import { SettingsGroup } from "../editor-layout";
 import { useI18n } from "../../i18n/use-i18n";
+import { modelSelectOption } from "../model-select-option";
 
 const SESSION_MODEL_VALUE = "";
 
@@ -41,11 +42,11 @@ export function PermissionDefaultSettings({ config, onConfigChange }: Permission
         "每次自动审核使用当前会话实际选择的模型。"
       )
     },
-    ...buildChatModelChoices(config).map((choice) => ({
-      value: encodeModelChoice(choice.providerId, choice.model),
-      label: `${choice.providerName} / ${choice.model}`,
-      description: t("Always use this model for automatic permission audits", "始终使用该模型进行自动权限审核")
-    }))
+    ...buildChatModelChoices(config).map((choice) => modelSelectOption(
+      choice,
+      encodeModelChoice(choice.providerId, choice.model),
+      t("Always use this model for automatic permission audits", "始终使用该模型进行自动权限审核")
+    ))
   ];
 
   /**
@@ -114,7 +115,12 @@ export function PermissionDefaultSettings({ config, onConfigChange }: Permission
     });
   };
 
-  /** 更新自动标题模型。 */
+  /**
+   * 【设置】【会话标题】更新自动标题模型。
+   *
+   * @param value 选择器编码值；空值表示跟随会话模型
+   * @returns 无返回值
+   */
   const updateAutoTitleModel = (value: string) => {
     const [providerId = "", model = ""] = value ? value.split("\u0000", 2) : [];
     patchSession({
@@ -157,16 +163,18 @@ export function PermissionDefaultSettings({ config, onConfigChange }: Permission
       </SettingsGroup>
       <SettingsGroup title={t("Session title", "会话标题")} description={t("Automatically name a new session once after the first reply. Manual renames are kept.", "新建会话在首次回复后自动命名一次；手动重命名后不再覆盖。")}>
         <div className="settings-form-grid">
-          <label className="settings-field">
-            <span>{t("Auto title on first turn", "首轮自动标题")}</span>
-            <Select
-              value={autoTitleEnabled ? "on" : "off"}
-              options={[
-                { value: "on", label: t("Enabled", "启用") },
-                { value: "off", label: t("Disabled", "关闭") }
-              ]}
-              onChange={(value) => patchSession({ auto_title_enabled: value === "on" })}
-              ariaLabel={t("Auto title on first turn", "首轮自动标题")}
+          <label className="settings-toggle-field">
+            <span>
+              <strong>{t("Auto title on first turn", "首轮自动标题")}</strong>
+              <small>{t(
+                "Generate one title after the first assistant reply.",
+                "首次助手回复后生成一次会话标题。"
+              )}</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={autoTitleEnabled}
+              onChange={(event) => patchSession({ auto_title_enabled: event.target.checked })}
             />
           </label>
           <label className="settings-field full">
@@ -179,14 +187,15 @@ export function PermissionDefaultSettings({ config, onConfigChange }: Permission
                   label: t("Session model", "会话模型"),
                   description: t("Reuse the conversation model for title summarization.", "标题总结复用当前会话模型。")
                 },
-                ...buildChatModelChoices(config).map((choice) => ({
-                  value: encodeModelChoice(choice.providerId, choice.model),
-                  label: `${choice.providerName} / ${choice.model}`,
-                  description: t("Always use this model for session titles", "始终使用该模型生成会话标题")
-                }))
+                ...buildChatModelChoices(config).map((choice) => modelSelectOption(
+                  choice,
+                  encodeModelChoice(choice.providerId, choice.model),
+                  t("Always use this model for session titles", "始终使用该模型生成会话标题")
+                ))
               ]}
               onChange={updateAutoTitleModel}
               ariaLabel={t("Title model", "标题模型")}
+              disabled={!autoTitleEnabled}
               menuPreferredWidth={360}
               menuMinimumWidth={280}
             />

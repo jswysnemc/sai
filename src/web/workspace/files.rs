@@ -1,5 +1,7 @@
 use super::file_write_lock::with_file_write_lock;
-use super::path_guard::{existing_path, mutable_existing_path, writable_path};
+use super::path_guard::{
+    editor_existing_path, editor_writable_path, existing_path, mutable_existing_path, writable_path,
+};
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use std::fmt;
@@ -83,7 +85,7 @@ pub(crate) fn read_tree(root: &Path, relative: &str, depth: usize) -> Result<Vec
 
 /// 读取 UTF-8 文本文件。
 pub(crate) fn read_file(root: &Path, relative: &str) -> Result<FileContent> {
-    let path = existing_path(root, relative)?;
+    let path = editor_existing_path(root, relative)?;
     let metadata = std::fs::metadata(&path)?;
     if !metadata.is_file() {
         bail!("path is not a file");
@@ -119,7 +121,7 @@ pub(crate) fn read_file(root: &Path, relative: &str) -> Result<FileContent> {
 /// 返回:
 /// - 图像 MIME 与原始字节
 pub(crate) fn read_image(root: &Path, relative: &str) -> Result<ImageFile> {
-    let path = existing_path(root, relative)?;
+    let path = editor_existing_path(root, relative)?;
     let metadata = std::fs::metadata(&path)?;
     if !metadata.is_file() {
         bail!("path is not a file");
@@ -153,6 +155,21 @@ mod image_tests {
         assert_eq!(image.mime, "image/png");
         assert_eq!(image.bytes, bytes);
     }
+
+    /// 验证编辑器图像预览与文本编辑器共享工作区外文件边界。
+    #[test]
+    fn reads_existing_external_image_for_preview() {
+        let workspace = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let path = outside.path().join("preview.png");
+        let bytes = [0x89, b'P', b'N', b'G'];
+        std::fs::write(&path, bytes).unwrap();
+
+        let image = read_image(workspace.path(), path.to_str().unwrap()).unwrap();
+
+        assert_eq!(image.mime, "image/png");
+        assert_eq!(image.bytes, bytes);
+    }
 }
 
 /// 原子保存 UTF-8 文本文件。
@@ -174,7 +191,7 @@ pub(crate) fn write_file(
     if content.len() as u64 > MAX_FILE_BYTES {
         bail!("file exceeds {} bytes", MAX_FILE_BYTES);
     }
-    let path = writable_path(root, relative)?;
+    let path = editor_writable_path(root, relative)?;
     with_file_write_lock(&path, || {
         write_file_locked(root, relative, content, expected_version, &path)
     })
@@ -291,6 +308,27 @@ mod write_tests {
             std::fs::read_to_string(temp.path().join("file.txt")).unwrap(),
             "external"
         );
+    }
+
+    #[test]
+    fn editor_reads_and_saves_existing_external_file() {
+        let workspace = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let path = outside.path().join("external.txt");
+        std::fs::write(&path, "first").unwrap();
+        let path_text = path.to_string_lossy();
+        let original = read_file(workspace.path(), &path_text).unwrap();
+
+        let saved = write_file(
+            workspace.path(),
+            &path_text,
+            "second",
+            Some(&original.version),
+        )
+        .unwrap();
+
+        assert_eq!(saved.content, "second");
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "second");
     }
 
     #[test]

@@ -51,6 +51,8 @@ pub struct ToolCallRecord {
     pub provider_call_id: String,
     pub tool_name: String,
     pub arguments: String,
+    pub display_tool_name: Option<String>,
+    pub display_arguments: Option<String>,
     pub status: ToolCallStatus,
     pub created_at: String,
     pub updated_at: String,

@@ -65,6 +65,10 @@ pub(super) fn subagent_result(args: Value, owner_key: &str) -> Result<String> {
         *error = clipped;
         truncated |= did;
     }
+    if subagent.status != "running" {
+        // 显式读取已经把终态结果交给主模型，后续不再发送重复完成回执
+        subagent_state::acknowledge_finished_notices(owner_key, std::slice::from_ref(&subagent_id));
+    }
     Ok(serde_json::to_string_pretty(&json!({
         "ok": subagent.status == "completed",
         "subagent": subagent,
@@ -119,6 +123,7 @@ pub(super) fn subagent_list(owner_key: &str) -> Result<String> {
 pub(super) fn subagent_cancel(args: Value, owner_key: &str) -> Result<String> {
     let subagent_id = string_arg(&args, "subagent_id")?;
     let subagent = subagent_state::cancel_subagent_for_owner(owner_key, &subagent_id)?;
+    subagent_state::acknowledge_finished_notices(owner_key, std::slice::from_ref(&subagent_id));
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
         "subagent": subagent

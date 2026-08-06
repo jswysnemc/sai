@@ -9,7 +9,7 @@ use super::{
     ActiveRunGuard, ChannelSubmission, RunnerEvent, RunnerEventSink, RunnerSubmission,
     RunnerSubmissionKind, SessionOwner, SubmissionSource, TurnRunner, UserInputSubmission,
 };
-use crate::agent::{Agent, AgentMode};
+use crate::agent::{Agent, AgentMode, InterMessageSource};
 use crate::config::AppConfig;
 use crate::llm::OpenAiCompatibleClient;
 use crate::paths::SaiPaths;
@@ -18,6 +18,7 @@ use crate::permission::{PermissionAuditLog, PermissionProfile};
 use crate::state::StateStore;
 use crate::tools::ToolRegistry;
 use anyhow::{bail, Result};
+use std::sync::Arc;
 
 mod support;
 
@@ -26,6 +27,7 @@ pub(crate) struct SessionRunner<'paths> {
     paths: &'paths SaiPaths,
     config_override: Option<AppConfig>,
     tool_registry_override: Option<ToolRegistry>,
+    inter_message_source: Option<Arc<dyn InterMessageSource>>,
 }
 
 impl<'paths> SessionRunner<'paths> {
@@ -41,6 +43,7 @@ impl<'paths> SessionRunner<'paths> {
             paths,
             config_override: None,
             tool_registry_override: None,
+            inter_message_source: None,
         }
     }
 
@@ -65,6 +68,18 @@ impl<'paths> SessionRunner<'paths> {
     /// - 更新后的会话 runner
     pub(crate) fn with_tool_registry(mut self, registry: ToolRegistry) -> Self {
         self.tool_registry_override = Some(registry);
+        self
+    }
+
+    /// 设置活动模型回合使用的排队消息来源。
+    ///
+    /// 参数:
+    /// - `source`: 支持查看和确认的消息来源
+    ///
+    /// 返回:
+    /// - 更新后的会话 runner
+    pub(crate) fn with_inter_message_source(mut self, source: Arc<dyn InterMessageSource>) -> Self {
+        self.inter_message_source = Some(source);
         self
     }
 
@@ -195,7 +210,8 @@ impl<'paths> SessionRunner<'paths> {
             sink.on_runner_event(RunnerEvent::LoadedToolsChanged(loaded_tools))?;
         }
         sink.on_runner_event(RunnerEvent::Started)?;
-        let mut turn_runner = TurnRunner::for_source(&mut agent, submission.source);
+        let mut turn_runner = TurnRunner::for_source(&mut agent, submission.source)
+            .with_inter_message_source(self.inter_message_source.clone());
         let result = turn_runner.run_user_input(&input, sink).await;
         perf.mark("turn runner done");
         if uses_progressive_loading(&config) {
@@ -259,7 +275,8 @@ impl<'paths> SessionRunner<'paths> {
         sink.on_runner_event(RunnerEvent::Started)?;
         let input = with_channel_marker(input, submission.channel.as_ref());
         // 2. 执行单轮（Agent 已由 REPL 完成 prepare_for_turn / switch_mode）
-        let mut turn_runner = TurnRunner::for_source(agent, submission.source);
+        let mut turn_runner = TurnRunner::for_source(agent, submission.source)
+            .with_inter_message_source(self.inter_message_source.clone());
         let result = turn_runner.run_user_input(&input, sink).await;
         perf.mark("turn runner done");
         if uses_progressive_loading(&config) {

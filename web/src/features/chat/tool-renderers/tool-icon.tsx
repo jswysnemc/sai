@@ -55,7 +55,7 @@ export function ToolStatusMark({ state }: { state: ToolCardState }) {
   if (state === "completed" || state === "allowed") return <Check size={13} />;
   if (state === "failed" || state === "denied") return <X size={13} />;
   if (state === "pending") return <ShieldAlert size={13} />;
-  if (state === "preparing") return <CircleDashed size={13} />;
+  if (state === "preparing") return <CircleDashed className="tool-arguments-spinner" size={13} />;
   return null;
 }
 

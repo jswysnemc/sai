@@ -44,7 +44,6 @@ mod localization;
 mod memory_commands;
 mod message;
 mod model_select;
-mod tree_select;
 mod models_picker;
 mod permission_prompt;
 mod providers;
@@ -74,6 +73,7 @@ mod reset;
 mod sessions;
 mod skills_commands;
 mod terminal_restore;
+mod tree_select;
 
 use alarm_worker::run_alarm_worker;
 pub(crate) use args::*;

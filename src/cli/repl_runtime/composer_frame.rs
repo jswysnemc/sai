@@ -8,6 +8,7 @@ use crate::cli::repl_input_render::{
 };
 use crate::cli::repl_text::{repl_input_lines, visible_width};
 use crate::cli::REPL_MAX_VISIBLE_INPUT_ROWS;
+use crate::render::terminal_paint::paint_lock;
 use anyhow::Result;
 use crossterm::cursor::{MoveTo, Show};
 use crossterm::queue;
@@ -109,6 +110,7 @@ impl ComposerFrame {
     /// 返回:
     /// - 光标最终所在的屏幕行（供高度变化重锚时探测位移）
     pub(super) fn draw<W: Write>(&self, output: &mut W, viewport: &InlineViewport) -> Result<u16> {
+        let _paint = paint_lock();
         let cols = usize::from(viewport.size().cols);
         let top = viewport.composer_top();
         let height = viewport.composer_height();

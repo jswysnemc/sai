@@ -1,0 +1,239 @@
+.session-data-settings {
+  display: grid;
+  gap: var(--space-lg);
+  min-width: 0;
+}
+
+.session-data-header,
+.session-data-row-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.session-data-header {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.session-data-header h2 {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: 600;
+}
+
+.session-data-total {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-2xs);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.session-data-list {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.session-data-row {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--paper);
+}
+
+.session-data-row.active {
+  border-color: color-mix(in srgb, var(--signal) 40%, var(--line));
+}
+
+.session-data-row-main {
+  min-height: 3.75rem;
+  padding: var(--space-sm) var(--space-md);
+}
+
+.session-data-expand.ui-button {
+  width: 1.75rem;
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0;
+}
+
+.session-data-identity {
+  display: grid;
+  gap: var(--space-3xs);
+  min-width: 10rem;
+  flex: 1;
+}
+
+.session-data-identity > div {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.session-data-identity strong {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-data-identity > span,
+.session-data-active {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+.session-data-active {
+  flex-shrink: 0;
+  padding: 0 var(--space-xs);
+  border-radius: var(--radius-pill);
+  background: var(--signal-soft);
+  color: var(--signal);
+}
+
+.session-data-metrics,
+.session-data-detail-metrics {
+  display: grid;
+  margin: 0;
+}
+
+.session-data-metrics {
+  grid-template-columns: repeat(3, minmax(3.5rem, 1fr));
+  gap: var(--space-lg);
+}
+
+.session-data-metrics div,
+.session-data-detail-metrics div {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
+.session-data-metrics dt,
+.session-data-detail-metrics dt {
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+}
+
+.session-data-metrics dd,
+.session-data-detail-metrics dd {
+  margin: 0;
+  font: 500 var(--text-xs) var(--font-code);
+}
+
+.session-data-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.session-data-actions .ui-button,
+.session-data-header .ui-button {
+  min-height: 1.875rem;
+  padding: 0 var(--space-sm);
+}
+
+.session-data-details {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-top: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.session-data-detail-metrics {
+  grid-template-columns: repeat(4, minmax(5rem, 1fr));
+  gap: var(--space-md);
+}
+
+.session-data-table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper);
+}
+
+.session-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.session-data-table th,
+.session-data-table td {
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.session-data-table th {
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.session-data-table td:first-child {
+  width: 100%;
+  font-family: var(--font-code);
+}
+
+.session-data-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.session-data-empty,
+.session-data-error {
+  padding: var(--space-lg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.session-data-error {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
+  color: var(--danger);
+}
+
+@media (max-width: 50rem) {
+  .session-data-row-main {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .session-data-identity {
+    min-width: calc(100% - 3rem);
+  }
+
+  .session-data-metrics {
+    flex: 1;
+  }
+}
+
+@media (max-width: 36rem) {
+  .session-data-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .session-data-header .ui-button {
+    align-self: flex-start;
+  }
+
+  .session-data-metrics,
+  .session-data-detail-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .session-data-actions {
+    width: 100%;
+  }
+
+  .session-data-actions .ui-button {
+    flex: 1;
+  }
+}

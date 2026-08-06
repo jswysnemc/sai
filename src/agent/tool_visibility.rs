@@ -5,19 +5,22 @@ use crate::paths::SaiPaths;
 use crate::tools::{self, ToolRegistry};
 use anyhow::{bail, Result};
 use serde_json::json;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
+#[derive(Clone)]
 pub(crate) struct ToolVisibility {
-    /// 需要模型调用 load 后才暴露的工具名，可含通配符；为空表示不做渐进加载
+    /// 非空表示启用统一渐进网关；具体内容保留用于兼容现有 Agent 配置
     deferred: Vec<String>,
     loaded: BTreeSet<String>,
+    /// 工具首次被 load 的顺序，用于稳定持久化状态和加载结果
+    loaded_order: Vec<String>,
 }
 
 impl ToolVisibility {
     /// 创建工具可见性状态。
     ///
     /// 参数:
-    /// - `deferred`: 当前 Agent 需要 load 才暴露的工具名，空表示全部初始可见
+    /// - `deferred`: 当前 Agent 的渐进配置，非空时启用统一网关
     ///
     /// 返回:
     /// - 新的工具可见性状态
@@ -25,6 +28,7 @@ impl ToolVisibility {
         Self {
             deferred,
             loaded: BTreeSet::new(),
+            loaded_order: Vec::new(),
         }
     }
 
@@ -61,15 +65,9 @@ impl ToolVisibility {
         if !self.is_progressive() {
             return registry.definitions();
         }
-        let names = tools::progressive::visible_tool_names(registry, &self.deferred, &self.loaded);
-        let mut definitions = registry.definitions_for_names(&names);
-        for definition in &mut definitions {
-            if definition.function.name == tools::LOAD_NAME {
-                definition.function.description =
-                    tools::progressive::loader_description(registry, &self.deferred, &self.loaded);
-            }
-        }
-        definitions
+        // 1. 基础工具与未配置为延迟的工具保留原生 Schema，延迟工具通过固定网关调用
+        let names = tools::progressive::visible_tool_names(registry, &self.deferred);
+        registry.definitions_for_names(&names)
     }
 
     /// 判断工具当前是否允许被模型调用。
@@ -82,8 +80,20 @@ impl ToolVisibility {
     pub(crate) fn is_visible(&self, name: &str) -> bool {
         !self.is_progressive()
             || name == tools::LOAD_NAME
-            || !crate::config::is_deferred(&self.deferred, name)
+            || name == tools::INVOKE_NAME
+            || !self.requires_load(name)
             || self.loaded.contains(name)
+    }
+
+    /// 判断真实工具是否需要先通过 load 加载。
+    ///
+    /// 参数:
+    /// - `name`: 工具名称
+    ///
+    /// 返回:
+    /// - 当前配置下是否属于延迟工具
+    pub(crate) fn requires_load(&self, name: &str) -> bool {
+        self.is_progressive() && tools::progressive::is_deferred_tool(name, &self.deferred)
     }
 
     /// 判断当前工具调用是否为加载工具调用。
@@ -94,7 +104,18 @@ impl ToolVisibility {
     /// 返回:
     /// - 是否为 `load`
     pub(crate) fn is_loader_call(&self, name: &str) -> bool {
-        self.is_progressive() && name == tools::LOAD_NAME
+        name == tools::LOAD_NAME
+    }
+
+    /// 判断当前工具调用是否为统一调用外壳。
+    ///
+    /// 参数:
+    /// - `name`: 工具名称
+    ///
+    /// 返回:
+    /// - 渐进模式下是否为 `invoke_tool`
+    pub(crate) fn is_invoker_call(&self, name: &str) -> bool {
+        self.is_progressive() && name == tools::INVOKE_NAME
     }
 
     /// 恢复已经加载过的工具集合。
@@ -107,12 +128,15 @@ impl ToolVisibility {
     /// - 无
     pub(crate) fn restore_loaded_tools(&mut self, registry: &ToolRegistry, names: &[String]) {
         self.loaded.clear();
+        self.loaded_order.clear();
         if !self.is_progressive() {
             return;
         }
         for name in names {
-            if registry.contains(name) && self.is_deferred_tool(name) {
-                self.loaded.insert(name.clone());
+            if registry.contains(name) && self.is_loadable_tool(name) {
+                if self.loaded.insert(name.clone()) {
+                    self.loaded_order.push(name.clone());
+                }
             }
         }
     }
@@ -124,8 +148,8 @@ impl ToolVisibility {
     ///
     /// 返回:
     /// - 是否需要 load 后才暴露
-    fn is_deferred_tool(&self, name: &str) -> bool {
-        name != tools::LOAD_NAME && crate::config::is_deferred(&self.deferred, name)
+    fn is_loadable_tool(&self, name: &str) -> bool {
+        self.requires_load(name)
     }
 
     /// 获取已经额外加载的工具名称。
@@ -136,32 +160,7 @@ impl ToolVisibility {
     /// 返回:
     /// - 已加载工具名称列表
     pub(crate) fn loaded_tool_names(&self) -> Vec<String> {
-        self.loaded.iter().cloned().collect()
-    }
-
-    /// 生成当前已经载入工具的系统提示。
-    ///
-    /// 参数:
-    /// - `registry`: 完整工具注册表
-    ///
-    /// 返回:
-    /// - 已载入工具提示，未启用渐进式加载或尚未载入工具时返回空
-    pub(crate) fn loaded_context_prompt(&self, registry: &ToolRegistry) -> Option<String> {
-        if !self.is_progressive() || self.loaded.is_empty() {
-            return None;
-        }
-        let mut text = String::from("<loaded_tools>\n");
-        text.push_str("The following tools are already loaded in this conversation. Do not call load for them again; call the loaded tool directly. If one of these tools returns an error, treat it as an execution or workflow error, not as a loading error.\n");
-        text.push_str(&format!(
-            "Loaded tools: {}\n",
-            self.loaded_tool_names().join(", ")
-        ));
-        let groups = self.loaded_group_names(registry);
-        if !groups.is_empty() {
-            text.push_str(&format!("Loaded groups: {}\n", groups.join(", ")));
-        }
-        text.push_str("</loaded_tools>");
-        Some(text)
+        self.loaded_order.clone()
     }
 
     /// 按加载工具参数更新可见工具集合。
@@ -204,11 +203,11 @@ impl ToolVisibility {
         let result = self.load_tools(registry, keywords)?;
         let already_loaded = result.is_already_loaded_request();
         let instruction = if already_loaded {
-            "This request only targeted tools that were already loaded. Do not call load for this target again; call the tool directly."
+            "The requested schemas are available in this result. Do not call load for these targets again; call invoke_tool with the exact tool name and matching arguments."
         } else {
-            "The requested tools are now available. Call the loaded tool directly; do not reload it before use."
+            "The requested tool schemas are now available. Call invoke_tool with the exact tool name and arguments matching its returned schema; do not emit a direct call to the concrete tool."
         };
-        let tools = keywords
+        let definitions = keywords
             .iter()
             .map(|name| {
                 let status = if result.newly_loaded_tools.contains(name) {
@@ -216,12 +215,15 @@ impl ToolVisibility {
                 } else {
                     "already_loaded"
                 };
-                json!({"name": name, "status": status})
+                let definition = registry
+                    .definition(name)
+                    .expect("validated loaded tool must have a definition");
+                json!({"name": name, "status": status, "definition": definition})
             })
             .collect::<Vec<_>>();
         Ok(serde_json::to_string_pretty(&json!({
             "ok": true,
-            "tools": tools,
+            "tools": definitions,
             "already_loaded": already_loaded,
             "currently_loaded_tools": self.loaded_tool_names(),
             "instruction": instruction,
@@ -274,46 +276,25 @@ impl ToolVisibility {
             if !registry.contains(name) {
                 bail!("unknown tool: {name}");
             }
+            if name == tools::LOAD_NAME || name == tools::INVOKE_NAME {
+                bail!("tool cannot be loaded through the progressive gateway: {name}");
+            }
+            if !self.is_loadable_tool(name) {
+                bail!("tool {name} is already directly available; call it directly without load");
+            }
         }
 
         // 2. 按请求顺序更新状态并生成分类结果
         let mut result = ToolLoadResult::default();
         for name in names {
-            if !self.is_deferred_tool(name) || !self.loaded.insert(name.clone()) {
+            if !self.loaded.insert(name.clone()) {
                 result.already_loaded_tools.push(name.clone());
             } else {
+                self.loaded_order.push(name.clone());
                 result.newly_loaded_tools.push(name.clone());
             }
         }
         Ok(result)
-    }
-
-    /// 获取已经完整载入的分组名称。
-    ///
-    /// 参数:
-    /// - `registry`: 完整工具注册表
-    ///
-    /// 返回:
-    /// - 已完整载入的分组名称列表
-    fn loaded_group_names(&self, registry: &ToolRegistry) -> Vec<String> {
-        let mut groups = BTreeMap::<&'static str, (usize, usize)>::new();
-        for info in registry.tool_infos() {
-            if !self.is_deferred_tool(&info.name) {
-                continue;
-            }
-            let group = tools::progressive::tool_group(&info.name);
-            let entry = groups.entry(group).or_default();
-            entry.0 += 1;
-            if self.loaded.contains(&info.name) {
-                entry.1 += 1;
-            }
-        }
-        groups
-            .into_iter()
-            .filter_map(|(group, (total, loaded))| {
-                (total > 0 && total == loaded).then_some(group.to_string())
-            })
-            .collect()
     }
 }
 
@@ -347,19 +328,19 @@ mod tests {
     use serde_json::{json, Value};
 
     #[test]
-    fn progressive_visibility_starts_with_base_and_loader() {
+    fn progressive_visibility_starts_with_base_and_gateway_tools() {
         let mut registry = test_registry();
         tools::register_progressive_loader(&mut registry, &wildcard_deferred());
         let visibility = ToolVisibility::new(wildcard_deferred());
         let names = definition_names(visibility.definitions(&registry));
 
-        assert!(names.contains(&"read_file".to_string()));
-        assert!(names.contains(&tools::LOAD_NAME.to_string()));
-        assert!(!names.contains(&"web_search".to_string()));
+        assert_eq!(names, ["read_file", tools::LOAD_NAME, tools::INVOKE_NAME]);
+        assert!(visibility.is_visible("read_file"));
+        assert!(!visibility.is_visible("web_search"));
     }
 
     #[test]
-    fn progressive_visibility_loads_individual_tools() {
+    fn progressive_visibility_keeps_definitions_fixed_after_loading() {
         let mut registry = test_registry();
         tools::register_progressive_loader(&mut registry, &wildcard_deferred());
         let mut visibility = ToolVisibility::new(wildcard_deferred());
@@ -371,8 +352,71 @@ mod tests {
         );
         let names = definition_names(visibility.definitions(&registry));
 
-        assert!(names.contains(&"web_search".to_string()));
-        assert!(!names.contains(&"analyze_image".to_string()));
+        assert_eq!(names, ["read_file", tools::LOAD_NAME, tools::INVOKE_NAME]);
+        assert!(visibility.is_visible("web_search"));
+        assert!(!visibility.is_visible("analyze_image"));
+    }
+
+    /// 验证显式延迟配置只隐藏指定工具。
+    #[test]
+    fn explicit_deferred_list_keeps_other_tools_native() {
+        let deferred = vec!["web_search".to_string()];
+        let mut registry = test_registry();
+        tools::register_progressive_loader(&mut registry, &deferred);
+        let visibility = ToolVisibility::new(deferred);
+        let names = definition_names(visibility.definitions(&registry));
+
+        assert_eq!(
+            names,
+            [
+                "read_file",
+                "analyze_image",
+                tools::LOAD_NAME,
+                tools::INVOKE_NAME,
+            ]
+        );
+        assert!(!visibility.is_visible("web_search"));
+        assert!(visibility.is_visible("analyze_image"));
+    }
+
+    /// 验证加载任意工具后供应商工具数组保持逐字稳定。
+    #[test]
+    fn progressive_visibility_never_changes_provider_definitions() {
+        let deferred = vec!["deferred_first".to_string(), "deferred_second".to_string()];
+        let mut registry = ToolRegistry::new();
+        for name in ["read_file", "deferred_first", "grep", "deferred_second"] {
+            registry.register(ToolSpec::new(
+                name,
+                "test",
+                json!({"type":"object","properties":{},"additionalProperties":false}),
+                |_| async { Ok("ok".to_string()) },
+            ));
+        }
+        tools::register_progressive_loader(&mut registry, &deferred);
+        let mut visibility = ToolVisibility::new(deferred);
+
+        let initial_definitions = visibility.definitions(&registry);
+        assert_eq!(
+            definition_names(initial_definitions.clone()),
+            ["read_file", "grep", tools::LOAD_NAME, tools::INVOKE_NAME]
+        );
+        let initial = serde_json::to_value(initial_definitions).unwrap();
+
+        load_args(
+            &mut visibility,
+            &registry,
+            r#"{"type":"tool","keywords":["deferred_first"]}"#,
+        );
+        let after_first = serde_json::to_value(visibility.definitions(&registry)).unwrap();
+        assert_eq!(after_first, initial);
+
+        load_args(
+            &mut visibility,
+            &registry,
+            r#"{"type":"tool","keywords":["deferred_second"]}"#,
+        );
+        let after_second = serde_json::to_value(visibility.definitions(&registry)).unwrap();
+        assert_eq!(after_second, initial);
     }
 
     #[test]
@@ -396,6 +440,11 @@ mod tests {
 
         assert_eq!(first["already_loaded"], json!(false));
         assert_eq!(first["tools"][0]["name"], json!("web_search"));
+        assert_eq!(
+            first["tools"][0]["definition"]["function"]["name"],
+            json!("web_search")
+        );
+        assert!(first["tools"][0]["definition"]["function"]["parameters"].is_object());
         assert_eq!(second["already_loaded"], json!(true));
         assert_eq!(second["tools"][0]["status"], json!("already_loaded"));
         assert!(second["instruction"]
@@ -405,10 +454,18 @@ mod tests {
     }
 
     #[test]
-    fn progressive_visibility_updates_loader_description() {
+    fn progressive_visibility_keeps_loader_description_stable_after_loading() {
         let mut registry = test_registry();
         tools::register_progressive_loader(&mut registry, &wildcard_deferred());
         let mut visibility = ToolVisibility::new(wildcard_deferred());
+
+        let initial = visibility
+            .definitions(&registry)
+            .into_iter()
+            .find(|definition| definition.function.name == tools::LOAD_NAME)
+            .unwrap()
+            .function
+            .description;
 
         load_args(
             &mut visibility,
@@ -424,9 +481,10 @@ mod tests {
             .description
             .as_str();
 
-        assert!(description.contains("Already loaded tools"));
+        assert_eq!(description, initial.as_str());
+        assert!(!description.contains("Already loaded tools"));
+        assert!(description.contains("Available groups"));
         assert!(description.contains("web_search"));
-        assert!(description.contains("Already loaded groups"));
         assert!(description.contains("web"));
         assert!(description.contains("analyze_image"));
     }
@@ -459,6 +517,7 @@ mod tests {
 
         assert!(description.contains("web_search"));
         assert!(description.contains("Available groups"));
+        assert!(!description.contains("read_file"));
         assert!(!description.contains("analyze_image"));
         assert!(!description.contains("deep_diagnose"));
     }
@@ -534,9 +593,10 @@ mod tests {
         );
         let names = definition_names(visibility.definitions(&registry));
 
-        assert!(names.contains(&"web_search".to_string()));
-        assert!(names.contains(&"read_file".to_string()));
-        assert!(!names.contains(&"unknown_tool".to_string()));
+        assert_eq!(names, ["read_file", tools::LOAD_NAME, tools::INVOKE_NAME]);
+        assert!(visibility.is_visible("web_search"));
+        assert!(visibility.is_visible("read_file"));
+        assert!(!visibility.is_visible("unknown_tool"));
         assert_eq!(
             visibility.loaded_tool_names(),
             vec!["web_search".to_string()]

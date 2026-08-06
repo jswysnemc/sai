@@ -33,7 +33,8 @@ pub fn search(
     half_life_days: f64,
 ) -> Result<Vec<MemoryHit>> {
     // 两路检索各取所长：unicode61 命中西文词，trigram 命中中文子串
-    let mut best: std::collections::HashMap<i64, (MemoryItem, f64)> = std::collections::HashMap::new();
+    let mut best: std::collections::HashMap<i64, (MemoryItem, f64)> =
+        std::collections::HashMap::new();
     for (table, terms) in [
         ("memories_fts", word_terms(query)),
         ("memories_fts_tri", trigram_terms(query)),
@@ -134,8 +135,7 @@ fn query_index(conn: &Connection, table: &str, terms: &str) -> Result<Vec<(Memor
             rank,
         ))
     })?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .context("检索记忆失败")
+    rows.collect::<Result<Vec<_>, _>>().context("检索记忆失败")
 }
 
 /// 把 bm25 排名换算为 0 到 1 的相关度。
@@ -293,7 +293,13 @@ mod tests {
         conn
     }
 
-    fn write(conn: &Connection, kind: MemoryKind, scope: MemoryScope, content: &str, at: &str) -> i64 {
+    fn write(
+        conn: &Connection,
+        kind: MemoryKind,
+        scope: MemoryScope,
+        content: &str,
+        at: &str,
+    ) -> i64 {
         repository::insert(
             conn,
             &MemoryCandidate {
@@ -312,7 +318,13 @@ mod tests {
     #[test]
     fn recalls_chinese_content() {
         let conn = conn();
-        write(&conn, MemoryKind::Preference, MemoryScope::Global, "用户偏好紧凑的界面布局", NOW);
+        write(
+            &conn,
+            MemoryKind::Preference,
+            MemoryScope::Global,
+            "用户偏好紧凑的界面布局",
+            NOW,
+        );
 
         let hits = search(&conn, "界面布局怎么调", None, TODAY, 90.0).unwrap();
         assert_eq!(hits.len(), 1);
@@ -323,7 +335,13 @@ mod tests {
     #[test]
     fn recalls_ascii_keywords() {
         let conn = conn();
-        write(&conn, MemoryKind::Preference, MemoryScope::Global, "用户一律使用 pnpm", NOW);
+        write(
+            &conn,
+            MemoryKind::Preference,
+            MemoryScope::Global,
+            "用户一律使用 pnpm",
+            NOW,
+        );
 
         let hits = search(&conn, "该用 pnpm 还是 npm", None, TODAY, 90.0).unwrap();
         assert_eq!(hits.len(), 1);
@@ -351,9 +369,13 @@ mod tests {
             NOW,
         );
 
-        assert!(search(&conn, "构建改用什么", Some("/home/b"), TODAY, 90.0).unwrap().is_empty());
+        assert!(search(&conn, "构建改用什么", Some("/home/b"), TODAY, 90.0)
+            .unwrap()
+            .is_empty());
         assert_eq!(
-            search(&conn, "构建改用什么", Some("/home/a"), TODAY, 90.0).unwrap().len(),
+            search(&conn, "构建改用什么", Some("/home/a"), TODAY, 90.0)
+                .unwrap()
+                .len(),
             1
         );
     }
@@ -362,26 +384,57 @@ mod tests {
     #[test]
     fn global_memories_are_recalled_everywhere() {
         let conn = conn();
-        write(&conn, MemoryKind::Preference, MemoryScope::Global, "用户一律使用 pnpm", NOW);
+        write(
+            &conn,
+            MemoryKind::Preference,
+            MemoryScope::Global,
+            "用户一律使用 pnpm",
+            NOW,
+        );
 
-        assert_eq!(search(&conn, "pnpm", Some("/home/b"), TODAY, 90.0).unwrap().len(), 1);
+        assert_eq!(
+            search(&conn, "pnpm", Some("/home/b"), TODAY, 90.0)
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     /// 验证已衰减到遗忘阈值以下的记忆不再召回。
     #[test]
     fn forgotten_memories_are_not_recalled() {
         let conn = conn();
-        write(&conn, MemoryKind::Episode, MemoryScope::Global, "调整了界面布局", "2020-01-01T00:00:00Z");
+        write(
+            &conn,
+            MemoryKind::Episode,
+            MemoryScope::Global,
+            "调整了界面布局",
+            "2020-01-01T00:00:00Z",
+        );
 
-        assert!(search(&conn, "界面布局", None, TODAY, 30.0).unwrap().is_empty());
+        assert!(search(&conn, "界面布局", None, TODAY, 30.0)
+            .unwrap()
+            .is_empty());
     }
 
     /// 验证召回结果按综合得分降序排列。
     #[test]
     fn results_are_ordered_by_score() {
         let conn = conn();
-        write(&conn, MemoryKind::Preference, MemoryScope::Global, "用户偏好 pnpm 管理依赖", NOW);
-        write(&conn, MemoryKind::Episode, MemoryScope::Global, "曾经提到过 pnpm", "2026-01-01T00:00:00Z");
+        write(
+            &conn,
+            MemoryKind::Preference,
+            MemoryScope::Global,
+            "用户偏好 pnpm 管理依赖",
+            NOW,
+        );
+        write(
+            &conn,
+            MemoryKind::Episode,
+            MemoryScope::Global,
+            "曾经提到过 pnpm",
+            "2026-01-01T00:00:00Z",
+        );
 
         let hits = search(&conn, "pnpm", None, TODAY, 90.0).unwrap();
         assert_eq!(hits.len(), 2);
@@ -394,7 +447,13 @@ mod tests {
     #[test]
     fn recall_does_not_reinforce_the_memory() {
         let conn = conn();
-        let id = write(&conn, MemoryKind::Preference, MemoryScope::Global, "用户一律使用 pnpm", NOW);
+        let id = write(
+            &conn,
+            MemoryKind::Preference,
+            MemoryScope::Global,
+            "用户一律使用 pnpm",
+            NOW,
+        );
 
         for _ in 0..5 {
             search(&conn, "pnpm", None, TODAY, 90.0).unwrap();
@@ -409,7 +468,13 @@ mod tests {
     #[test]
     fn a_blank_query_returns_nothing() {
         let conn = conn();
-        write(&conn, MemoryKind::Fact, MemoryScope::Global, "用户使用 Arch Linux", NOW);
+        write(
+            &conn,
+            MemoryKind::Fact,
+            MemoryScope::Global,
+            "用户使用 Arch Linux",
+            NOW,
+        );
 
         assert!(search(&conn, "   ", None, TODAY, 90.0).unwrap().is_empty());
     }

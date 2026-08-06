@@ -4,6 +4,7 @@ use super::{QueuedSubmission, ReplRuntime, StreamComposerDraft};
 use crate::agent::AgentMode;
 use crate::cli::repl_chrome::ReplChrome;
 use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
+use crate::render::terminal_paint::paint_lock;
 use anyhow::Result;
 use std::io::{self, Write};
 
@@ -113,6 +114,7 @@ impl ReplRuntime {
         if deficit == 0 {
             return Ok(());
         }
+        let _paint = paint_lock();
         let mut stdout = io::stdout();
         crossterm::queue!(
             stdout,

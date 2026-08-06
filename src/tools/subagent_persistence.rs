@@ -41,6 +41,13 @@ pub(crate) fn save(owner_key: &str, records: &[PersistedSubagent]) -> Result<()>
     let Some(path) = state_file(owner_key) else {
         return Ok(());
     };
+    // 1. 空集合用文件缺失表示，避免只读查询或会话删除后重新创建状态目录
+    if records.is_empty() {
+        if path.is_file() {
+            std::fs::remove_file(path)?;
+        }
+        return Ok(());
+    }
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     std::fs::create_dir_all(parent)?;
     let temp = tempfile::NamedTempFile::new_in(parent)?;
@@ -98,5 +105,17 @@ mod tests {
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].snapshot.result.as_deref(), Some("done"));
         assert!(!loaded[0].finish_notified);
+    }
+
+    /// 验证保存空记录不会创建已经不存在的会话目录。
+    #[test]
+    fn empty_records_do_not_create_owner_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let owner = temp.path().join("removed-session");
+        let owner_key = owner.display().to_string();
+
+        save(&owner_key, &[]).unwrap();
+
+        assert!(!owner.exists());
     }
 }

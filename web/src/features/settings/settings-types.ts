@@ -16,6 +16,7 @@ export type SettingsSectionId =
   | "memory"
   | "hooks"
   | "mcp"
+  | "session-data"
   | "usage"
   | "advanced";
 

@@ -11,20 +11,20 @@ mod store;
 mod user_messages;
 mod validation;
 
+#[allow(unused_imports)]
+pub use budget::RESERVED_CONTEXT_CHARS;
 pub use budget::{
     classify_context_pressure, compaction_trigger_chars, should_compact_for_context_tokens,
     ContextPressure,
 };
-#[allow(unused_imports)]
-pub use budget::RESERVED_CONTEXT_CHARS;
 pub use estimate::{estimate_chat_messages_chars, estimate_chat_messages_tokens};
-pub use handoff::summary_context_message;
 pub(in crate::state) use handoff::elision_marker_message;
+pub use handoff::summary_context_message;
 #[allow(unused_imports)]
 pub(crate) use message_origin::is_real_user_input;
-pub use model::{CompactionRequest, CompactionSummary};
 #[allow(unused_imports)]
 pub use model::RunningTurnCompaction;
+pub use model::{CompactionRequest, CompactionSummary};
 pub use selector::select_compaction;
 #[allow(unused_imports)]
 pub(crate) use selector::{PRESERVED_RECENT_TURNS, PRESERVED_RUNNING_TOOL_CALLS};

@@ -15,6 +15,7 @@ pub(crate) struct CleanupReport {
     pub(crate) evicted: usize,
 }
 
+#[cfg(test)]
 impl CleanupReport {
     /// 判断本次清理是否有实际删除。
     ///

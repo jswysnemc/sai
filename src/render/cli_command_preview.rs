@@ -3,6 +3,7 @@ use super::content_indent::align_to_guide_column;
 use super::streaming_replace::{clear_rendered_rows, rendered_visual_rows};
 use super::work_status::WorkStatus;
 use crate::render::activity_animation::ACTIVITY_FRAME_INTERVAL;
+use crate::render::terminal_paint::paint_lock;
 use crate::render::tool_view::command_output_buffer::CommandOutputBuffer;
 use crate::tools::command::{CommandOutputChunk, CommandOutputStream};
 use anyhow::Result;
@@ -121,6 +122,7 @@ impl CliCommandPreview {
     /// 清除当前实时摘要并释放终端行。
     pub(crate) fn clear(&mut self) -> Result<()> {
         self.stop_animation();
+        let _paint = paint_lock();
         let mut state = self
             .state
             .lock()
@@ -199,6 +201,7 @@ impl Drop for CliCommandPreview {
 
 /// 重绘命令输出与内嵌 Working 白色流光行。
 fn redraw_preview(state: &Arc<Mutex<PreviewState>>) -> Result<bool> {
+    let _paint = paint_lock();
     let mut guard = state
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);

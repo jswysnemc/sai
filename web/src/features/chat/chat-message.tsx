@@ -265,10 +265,36 @@ function historyMessageParts(message: HistoryEntry): LiveMessagePart[] {
  */
 function historyTurnParts(turn: SessionTimelineTurn): LiveMessagePart[] {
   const parts: LiveMessagePart[] = [];
-  if (turn.assistant.reasoning) {
-    parts.push({ id: `${turn.turn_id}-reasoning`, type: "reasoning", source: turn.assistant.reasoning, startedAt: "" });
-  }
-  const tools = [...turn.tools].sort((left, right) => left.created_at.localeCompare(right.created_at));
+  const messages = [...(turn.messages ?? [])].sort((left, right) => left.seq - right.seq);
+  let messageIndex = 0;
+
+  /** 追加不晚于指定工具调用序号的轮次内消息。 */
+  const appendMessagesThrough = (toolSeq: number) => {
+    while (messageIndex < messages.length && messages[messageIndex].after_tool_seq <= toolSeq) {
+      const message = messages[messageIndex];
+      if (message.reasoning) {
+        parts.push({
+          id: `${message.id}-reasoning`,
+          type: "reasoning",
+          source: message.reasoning,
+          startedAt: message.created_at,
+          endedAt: message.created_at
+        });
+      }
+      if (message.content) {
+        parts.push(message.role === "assistant"
+          ? { id: `${message.id}-text`, type: "text", source: message.content }
+          : { id: `${message.id}-input`, type: "automatic_input", kind: message.kind, source: message.content });
+      }
+      messageIndex += 1;
+    }
+  };
+
+  appendMessagesThrough(0);
+  const tools = [...turn.tools].sort((left, right) => {
+    const sequenceOrder = (left.seq ?? Number.MAX_SAFE_INTEGER) - (right.seq ?? Number.MAX_SAFE_INTEGER);
+    return sequenceOrder || left.created_at.localeCompare(right.created_at);
+  });
   for (const tool of tools) {
     if (tool.permission) {
       parts.push({
@@ -284,6 +310,11 @@ function historyTurnParts(turn: SessionTimelineTurn): LiveMessagePart[] {
       });
     }
     parts.push({ id: `${turn.turn_id}-${tool.id}`, type: "tool", tool: timelineTool(tool) });
+    appendMessagesThrough(tool.seq ?? Number.MAX_SAFE_INTEGER);
+  }
+  appendMessagesThrough(Number.MAX_SAFE_INTEGER);
+  if (turn.assistant.reasoning) {
+    parts.push({ id: `${turn.turn_id}-reasoning`, type: "reasoning", source: turn.assistant.reasoning, startedAt: "" });
   }
   if (turn.assistant.content) parts.push({ id: `${turn.turn_id}-text`, type: "text", source: turn.assistant.content });
   return parts;

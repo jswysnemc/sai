@@ -132,4 +132,33 @@ describe("sessionRunsReducer", () => {
 
     expect(sessionRunsReducer(queued, { type: "remove-queued", runId: "run-q" }).runs).toEqual([]);
   });
+
+  it("removes a queued run after it is merged into the active model turn", () => {
+    const queued = sessionRunsReducer({ runs: [] }, {
+      type: "start",
+      run: {
+        run_id: "run-q",
+        workspace_id: "workspace",
+        session_id: "session",
+        status: "queued"
+      },
+      sessionId: "session",
+      userInput: "continue here"
+    });
+
+    const merged = sessionRunsReducer(queued, {
+      type: "event",
+      event: {
+        sequence: 2,
+        run_id: "run-q",
+        workspace_id: "workspace",
+        session_id: "session",
+        timestamp: "now",
+        type: "run.merged",
+        payload: { target_run_id: "run-active" }
+      }
+    });
+
+    expect(merged.runs).toEqual([]);
+  });
 });

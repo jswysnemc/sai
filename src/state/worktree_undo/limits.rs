@@ -34,6 +34,7 @@ pub(super) fn exceeds_snapshot_limit(bytes: u64) -> bool {
 ///
 /// 返回:
 /// - 说明文本；没有跳过项时返回空
+#[cfg(test)]
 pub(super) fn describe_skipped(skipped: &[SkippedEntry]) -> String {
     if skipped.is_empty() {
         return String::new();

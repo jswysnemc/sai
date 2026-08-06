@@ -7,10 +7,6 @@ pub(crate) enum FileChange {
         path: PathBuf,
         content: String,
     },
-    Delete {
-        path: PathBuf,
-        content: String,
-    },
     Update {
         path: PathBuf,
         move_path: Option<PathBuf>,
@@ -29,7 +25,7 @@ impl FileChange {
     /// - 当前变更主路径
     pub(crate) fn path(&self) -> &PathBuf {
         match self {
-            Self::Add { path, .. } | Self::Delete { path, .. } | Self::Update { path, .. } => path,
+            Self::Add { path, .. } | Self::Update { path, .. } => path,
         }
     }
 
@@ -43,7 +39,6 @@ impl FileChange {
     pub(crate) fn action_label(&self) -> &'static str {
         match self {
             Self::Add { .. } => "Added",
-            Self::Delete { .. } => "Deleted",
             Self::Update {
                 move_path: Some(_), ..
             } => "Renamed",
@@ -61,7 +56,6 @@ impl FileChange {
     pub(crate) fn line_counts(&self) -> (usize, usize) {
         match self {
             Self::Add { content, .. } => (line_count(content), 0),
-            Self::Delete { content, .. } => (0, line_count(content)),
             Self::Update { lines, .. } => {
                 let added = lines
                     .iter()
@@ -81,19 +75,6 @@ impl FileChange {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AppliedPatch {
     pub changes: Vec<FileChange>,
-}
-
-impl AppliedPatch {
-    /// 判断 patch 是否没有实际文件变更。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 是否为空 patch
-    pub(crate) fn is_empty(&self) -> bool {
-        self.changes.is_empty()
-    }
 }
 
 /// 单行 diff 变更。
@@ -122,37 +103,4 @@ pub(crate) enum LineChangeKind {
 /// - `lines()` 口径的行数
 fn line_count(content: &str) -> usize {
     content.lines().count()
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ParsedPatch {
-    pub changes: Vec<ParsedFileChange>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum ParsedFileChange {
-    Add {
-        path: PathBuf,
-        content: String,
-    },
-    Delete {
-        path: PathBuf,
-    },
-    Update {
-        path: PathBuf,
-        move_path: Option<PathBuf>,
-        hunks: Vec<PatchHunk>,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct PatchHunk {
-    pub lines: Vec<PatchLine>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum PatchLine {
-    Context(String),
-    Add(String),
-    Delete(String),
 }

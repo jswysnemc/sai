@@ -168,8 +168,15 @@ mod tests {
     fn skips_running_turn_below_preserved_calls() {
         let turns = vec![running_turn(1)];
 
-        assert!(select_compaction(&turns, None, PRESERVED_RUNNING_TOOL_CALLS, 900, 1_000, false)
-            .is_none());
+        assert!(select_compaction(
+            &turns,
+            None,
+            PRESERVED_RUNNING_TOOL_CALLS,
+            900,
+            1_000,
+            false
+        )
+        .is_none());
     }
 
     /// 验证手动压缩绕过占用阈值。

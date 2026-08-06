@@ -35,10 +35,16 @@ pub(crate) fn restore_provider_secret(
         .find(|item| item.id == provider.id);
     // 1. 单密钥哨兵回填
     if provider.api_key.as_deref() == Some(SECRET_SENTINEL) {
-        provider.api_key = current_provider.as_ref().and_then(|item| item.api_key.clone());
+        provider.api_key = current_provider
+            .as_ref()
+            .and_then(|item| item.api_key.clone());
     }
     // 2. 多密钥哨兵按稳定 id 回填，避免删除或重排后串用密钥
-    if provider.api_keys.iter().any(|key| key.api_key == SECRET_SENTINEL) {
+    if provider
+        .api_keys
+        .iter()
+        .any(|key| key.api_key == SECRET_SENTINEL)
+    {
         let current_keys = current_provider
             .as_ref()
             .map(|item| &item.api_keys)

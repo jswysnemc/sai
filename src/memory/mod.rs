@@ -9,7 +9,7 @@ mod store_types;
 
 pub use capture::extract_candidates;
 pub use library::{now_days, MemoryLibrary};
-pub use model::{MemoryCandidate, MemoryKind, MemoryScope};
+pub use model::MemoryCandidate;
 pub use store_types::{AssociationContext, EvictedTurn, MemoryHit};
 
 include!("store.rs");

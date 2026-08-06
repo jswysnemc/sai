@@ -24,10 +24,10 @@ type PlacedNode = {
   parentTurnId: string | null;
 };
 
-const COLUMN_WIDTH = 168;
-const ROW_HEIGHT = 44;
-const NODE_WIDTH = 148;
-const NODE_HEIGHT = 30;
+const COLUMN_WIDTH = 216;
+const ROW_HEIGHT = 54;
+const NODE_WIDTH = 196;
+const NODE_HEIGHT = 34;
 
 /**
  * 以节点图的形式总览整棵会话树。

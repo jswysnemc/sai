@@ -10,7 +10,6 @@ use crate::tools::{self, ToolRegistry};
 use anyhow::Result;
 use chrono::Local;
 use serde::Serialize;
-use std::collections::BTreeSet;
 use std::io::IsTerminal;
 
 /// 会话上下文提示词预览（稳定 baseline + 动态系统段 + 工具描述）。
@@ -117,13 +116,6 @@ pub(crate) async fn load_session_context_prompt(
             ));
             sections.push(locale.text("Selected model", "当前模型").to_string());
         }
-        if !dynamic.loaded_tools_context.trim().is_empty() {
-            parts.push(section_block(
-                locale.text("4. Loaded tools context", "4. 已加载工具上下文"),
-                &dynamic.loaded_tools_context,
-            ));
-            sections.push(locale.text("Loaded tools", "已加载工具").to_string());
-        }
         if !dynamic.goal_context.trim().is_empty() {
             parts.push(section_block(
                 locale.text("5. Goal context", "5. Goal 上下文"),
@@ -209,7 +201,6 @@ pub(crate) async fn load_session_context_prompt(
 struct DynamicSections {
     mode_reminder: String,
     selected_model: String,
-    loaded_tools_context: String,
     goal_context: String,
     compaction_summary: String,
     runtime_context: String,
@@ -241,35 +232,23 @@ fn build_dynamic_sections(
     // 2. 当前模型标签
     let selected_model = selected_model_label(config)?.unwrap_or_default();
 
-    // 3. 渐进加载已载入工具提示
-    let loaded = store.load_loaded_tools().unwrap_or_default();
-    let progressive = !config.agent_deferred_tools().is_empty();
-    let loaded_tools_context = if progressive && !loaded.is_empty() {
-        format!(
-            "<loaded_tools>\nThe following tools are already loaded in this conversation. Do not call load for them again; call the loaded tool directly. If one of these tools returns an error, treat it as an execution or workflow error, not as a loading error.\nLoaded tools: {}\n</loaded_tools>",
-            loaded.join(", ")
-        )
-    } else {
-        String::new()
-    };
-
-    // 4. Goal 上下文
+    // 3. Goal 上下文
     let goal_context = store
         .goal()?
         .map(|goal| crate::goal::system_context(&goal))
         .unwrap_or_default();
 
-    // 5. 压缩摘要 / checkpoint
+    // 4. 压缩摘要 / checkpoint
     let projected_history = store.project_history(None)?;
     let compaction_summary = projected_history
         .checkpoint_context
         .or(store.compaction_summary_context()?)
         .unwrap_or_default();
 
-    // 6. 运行时上下文（时间 / 工作目录 / 终端环境）
+    // 5. 运行时上下文（时间 / 工作目录 / 终端环境）
     let runtime_context = runtime_context_message(locale);
 
-    // 7. 关联记忆：用最近一条用户消息作为查询（真实请求按当前输入召回）
+    // 6. 关联记忆：用最近一条用户消息作为查询（真实请求按当前输入召回）
     let memory = config.memory_config();
     let memory_enabled = memory.enabled && memory.association_enabled;
     let associative_memory = if memory_enabled {
@@ -287,14 +266,13 @@ fn build_dynamic_sections(
         String::new()
     };
 
-    // 8. 最近自动表情包提醒
+    // 7. 最近自动表情包提醒
     let last_auto_meme =
         crate::tools::memes::last_auto_meme_reminder(config, paths)?.unwrap_or_default();
 
     let has_dynamic_system = [
         mode_reminder.as_str(),
         selected_model.as_str(),
-        loaded_tools_context.as_str(),
         goal_context.as_str(),
         compaction_summary.as_str(),
         runtime_context.as_str(),
@@ -307,7 +285,6 @@ fn build_dynamic_sections(
     Ok(DynamicSections {
         mode_reminder,
         selected_model,
-        loaded_tools_context,
         goal_context,
         compaction_summary,
         runtime_context,
@@ -518,21 +495,9 @@ fn build_tools_markdown_section(
         tools::register_progressive_loader(&mut registry, deferred);
     }
 
-    // 5. 渐进加载时仅展示初始工具 + 已加载工具，并刷新 load 描述中的分组清单
-    let loaded = store.load_loaded_tools().unwrap_or_default();
-    let loaded_set: BTreeSet<String> = loaded.iter().cloned().collect();
-    let visible_names = tools::progressive::visible_tool_names(&registry, deferred, &loaded_set);
-    let mut definitions = registry.definitions_for_names(&visible_names);
-    if progressive {
-        let load_description =
-            tools::progressive::loader_description(&registry, deferred, &loaded_set);
-        for definition in &mut definitions {
-            if definition.function.name == tools::LOAD_NAME {
-                definition.function.description = load_description.clone();
-            }
-        }
-    }
-    definitions.sort_by(|left, right| left.function.name.cmp(&right.function.name));
+    // 5. 渐进模式只展示固定网关，已加载状态不会改变供应商 tools 数组
+    let visible_names = tools::progressive::visible_tool_names(&registry, deferred);
+    let definitions = registry.definitions_for_names(&visible_names);
     if definitions.is_empty() {
         return Ok(ToolsMarkdownSection {
             markdown: String::new(),
@@ -560,8 +525,8 @@ fn build_tools_markdown_section(
     ));
     if progressive {
         out.push_str(locale.text(
-            "Progressive loading is enabled: the list below shows currently visible tools (initial tools plus tools already loaded in this session). Initial base tools include file/command tools, todo, goal tools, and load.\n\n",
-            "渐进加载已开启：下列为当前可见工具（初始工具 + 本会话已 load 的工具）。初始基础工具含文件/命令、todo、goal 工具与 load。\n\n",
+            "Progressive loading is enabled: the provider-visible tool list is fixed to load and invoke_tool. The load result returns the target schema; invoke_tool dispatches the validated real call.\n\n",
+            "渐进加载已开启：供应商可见工具固定为 load 与 invoke_tool。load 结果返回目标 Schema，invoke_tool 分派通过校验的真实调用。\n\n",
         ));
     }
     for definition in &definitions {

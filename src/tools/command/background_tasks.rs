@@ -267,10 +267,13 @@ pub(super) async fn read_background_task_output(
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
     let mut tasks = store.load()?;
     refresh_task_statuses(&mut tasks, config).await;
-    store.save(&tasks)?;
     let state = StateStore::new(paths)?;
     sync_runtime_tasks(&state, &tasks)?;
-    let task = find_task(&tasks, &task_id)?;
+    let task_index = tasks
+        .iter()
+        .position(|task| task.id == task_id)
+        .ok_or_else(|| anyhow::anyhow!("background command not found: {task_id}"))?;
+    let task = &tasks[task_index];
     let max_bytes = config.tools.background_command_log_max_bytes;
     let read_log = |path: &str| -> Result<LogTail> {
         if prefer_tail {
@@ -295,6 +298,12 @@ pub(super) async fn read_background_task_output(
     if let Some(output) = stderr.as_ref() {
         record_runtime_output_read(&state, task, "stderr", &task.stderr_log, output)?;
     }
+    // 显式读取终态输出已经完成结果交付，不再额外发送自动完成回执
+    if tasks[task_index].status != "running" {
+        tasks[task_index].completion_notified = true;
+    }
+    store.save(&tasks)?;
+    let task = &tasks[task_index];
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
         "task": task,
@@ -456,24 +465,6 @@ fn state_for_runtime_owner(
         }
         _ => StateStore::new(paths),
     }
-}
-
-/// 查找后台任务。
-///
-/// 参数:
-/// - `tasks`: 任务列表
-/// - `task_id`: 任务 ID
-///
-/// 返回:
-/// - 匹配任务
-fn find_task<'a>(
-    tasks: &'a [BackgroundCommandTask],
-    task_id: &str,
-) -> Result<&'a BackgroundCommandTask> {
-    tasks
-        .iter()
-        .find(|item| item.id == task_id)
-        .ok_or_else(|| anyhow::anyhow!("background command not found: {task_id}"))
 }
 
 /// 读取日志末尾若干行。

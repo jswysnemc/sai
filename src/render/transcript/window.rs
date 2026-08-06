@@ -257,11 +257,15 @@ impl TranscriptStore {
             });
             if !rendered.is_empty() {
                 if is_diff {
-                    lines.extend(AnsiLine::wrap_block_with_right_margin(
-                        &rendered,
-                        content_width,
-                        crate::render::content_indent::DIFF_BLOCK_INSET,
-                    ));
+                    let body_column = crate::render::edit_diff::diff_body_start_column(&rendered);
+                    lines.extend(
+                        AnsiLine::wrap_block_with_right_margin_and_continuation_indent(
+                            &rendered,
+                            content_width,
+                            crate::render::content_indent::DIFF_BLOCK_INSET,
+                            body_column.max(crate::render::content_indent::DIFF_NESTED_INDENT),
+                        ),
+                    );
                 } else {
                     lines.extend(AnsiLine::wrap_block(&rendered, content_width));
                 }

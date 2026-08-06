@@ -146,7 +146,9 @@ const DiffLineRow = memo(function DiffLineRow({
       {showNewLine && <span className="diff-gutter">{line.newLine ?? ""}</span>}
       <code>
         <span className="diff-marker">{marker}</span>
-        <DiffLineContent line={line} language={language} />
+        <span className="diff-code-content">
+          <DiffLineContent line={line} language={language} />
+        </span>
       </code>
     </div>
   );

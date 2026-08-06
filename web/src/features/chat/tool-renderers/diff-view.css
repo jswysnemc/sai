@@ -5,7 +5,7 @@
  * 三者叠加的结果是——语法高亮被行级 color 覆盖掉（代码里明明接了高亮器），
  * 一屏 diff 变成两片纯绿纯红的色块，行首还多出一列色条与行号列的竖线并排。
  *
- * 现在只保留一种手段：极淡的行背景 + 行首标记符号着色。
+ * 现在以极淡的行背景、固定的行首强调线和标记符号分层表达增删。
  * 代码本身交回语法高亮，读 diff 时看到的是代码，不是色块。
  */
 
@@ -105,10 +105,18 @@
   user-select: none;
 }
 
-.diff-row code {
+.diff-row > code {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  min-width: 0;
   padding:0 var(--space-lg) 0 0;
   font-family: var(--font-code);
   white-space: pre;
+}
+
+/* 内容单独成列，软换行时续行从正文起点开始，避免回到行首。 */
+.diff-code-content {
+  min-width: 0;
 }
 
 /* 行首标记：增删的唯一色彩来源，宽度固定让代码列始终对齐 */
@@ -126,6 +134,7 @@
  */
 .diff-row.added {
   background: color-mix(in srgb, var(--diff-added-bg) 60%, transparent);
+  border-left: 3px solid var(--diff-added-text);
 }
 
 .diff-row.added .diff-marker {
@@ -135,6 +144,7 @@
 
 .diff-row.removed {
   background: color-mix(in srgb, var(--diff-removed-bg) 60%, transparent);
+  border-left: 3px solid var(--diff-removed-text);
 }
 
 .diff-row.removed .diff-marker {
@@ -210,10 +220,9 @@
   min-width: 0;
 }
 
-.diff-side-grid .diff-row code {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: pre;
+.diff-side-grid .diff-row > code {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 /* hunk / no-newline 标记横跨两栏 */
@@ -238,6 +247,12 @@
   display: grid;
   gap: var(--space-xs);
   min-width: 0;
+}
+
+.diff-idea:focus-visible {
+  border-radius: var(--radius-2);
+  box-shadow: var(--ring-focus);
+  outline: none;
 }
 
 /* 顶部工具栏：变更计数与导航 */
@@ -287,46 +302,7 @@
   cursor: default;
 }
 
-/* 双栏主体：左栏 + 连接带 + 右栏 */
-.diff-idea-cols {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr);
-  min-width: 0;
-}
-
-.diff-idea-cols .diff-row {
-  grid-template-columns: 3rem minmax(0, 1fr);
-  min-width: 0;
-}
-
-.diff-idea-cols .diff-row code {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: pre;
-}
-
-/* 中间连接带：变更块整块着色，按增/删/混合区分 */
-.diff-idea-band {
-  background: color-mix(in srgb, var(--ink) 10%, transparent);
-}
-
-.diff-tone-added .diff-idea-band {
-  background: color-mix(in srgb, var(--diff-added, #2f9e63) 35%, transparent);
-}
-
-.diff-tone-removed .diff-idea-band {
-  background: color-mix(in srgb, var(--diff-removed, #d6604d) 35%, transparent);
-}
-
-.diff-tone-mixed .diff-idea-band {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--diff-removed, #d6604d) 35%, transparent),
-    color-mix(in srgb, var(--diff-added, #2f9e63) 35%, transparent)
-  );
-}
-
-/* 上下文行的平直细分隔 */
+/* 每一行共享同一网格，长行折叠后左右行高仍然保持一致。 */
 .diff-idea-rowline {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr);
@@ -338,14 +314,72 @@
   min-width: 0;
 }
 
-.diff-idea-rowline .diff-row code {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: pre;
+.diff-idea-rowline .diff-row > code {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* IDEA 视图默认软换行；正文列保持固定缩进，禁止长行以省略号隐藏。 */
+.diff-idea-rowline .diff-code-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .diff-idea-band-flat {
   background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+/* 中央关系线：删除指向左侧，新增指向右侧，混合变更保持直连。 */
+.diff-idea-connector {
+  align-self: stretch;
+  min-height: 1.6em;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+.diff-idea-connector-added {
+  background: color-mix(in srgb, var(--diff-added, #2f9e63) 44%, transparent);
+  clip-path: polygon(48% 0, 100% 0, 100% 100%, 48% 100%, 0 50%);
+}
+
+.diff-idea-connector-removed {
+  background: color-mix(in srgb, var(--diff-removed, #d6604d) 44%, transparent);
+  clip-path: polygon(0 0, 52% 0, 100% 50%, 52% 100%, 0 100%);
+}
+
+.diff-idea-connector-mixed {
+  background: color-mix(in srgb, var(--signal) 38%, transparent);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+}
+
+.diff-idea-connector-neutral {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+.diff-idea-change {
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: var(--radius-2);
+}
+
+.diff-idea-change.is-active {
+  border-color: color-mix(in srgb, var(--signal) 48%, var(--technical-border));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--signal) 12%, transparent);
+}
+
+.diff-idea-change-row .diff-row.right,
+.diff-idea-rowline .diff-row.right {
+  border-left: 1px solid var(--technical-border);
+}
+
+.diff-idea-change-row .diff-row.empty {
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      color-mix(in srgb, var(--paper-deep) 70%, transparent) 0,
+      color-mix(in srgb, var(--paper-deep) 70%, transparent) 1px,
+      transparent 1px,
+      transparent 6px
+    );
 }
 
 /* 折叠条：未改动区的展开/收起入口 */
@@ -375,14 +409,55 @@
   text-align: center;
 }
 
-/* 左右两栏之间的细分隔线 */
-.diff-idea-cols .diff-row.right,
-.diff-idea-rowline .diff-row.right {
-  border-left: 1px solid var(--technical-border);
-}
-
 /* hunk 标记横跨三列 */
 .diff-idea .diff-row.diff-span {
   grid-column: 1 / -1;
   grid-template-columns: minmax(0, 1fr);
+}
+
+/* 小屏幕改为单列阅读，保留增删标记并隐藏重复的上下文右栏。 */
+@media (max-width: 48rem) {
+  .diff-idea-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .diff-idea-count {
+    flex: 1 1 auto;
+  }
+
+  .diff-idea-rowline {
+    grid-template-columns: minmax(0, 1fr) 10px minmax(0, 1fr);
+  }
+
+  .diff-idea-rowline .diff-row {
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 36rem) {
+  .diff-idea-rowline {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .diff-idea-band,
+  .diff-idea-band-flat {
+    display: none;
+  }
+
+  .diff-idea-context .diff-row.right:not(.empty) {
+    display: none;
+  }
+
+  .diff-idea-change-row .diff-row.empty {
+    display: none;
+  }
+
+  .diff-idea-change-row .diff-row.right {
+    border-top: 1px solid var(--technical-border);
+    border-left: 0;
+  }
+
+  .diff-idea-rowline .diff-row {
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+  }
 }

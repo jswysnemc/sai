@@ -7,8 +7,6 @@ pub(crate) struct TreeRow {
     pub(crate) turn_id: String,
     /// 已经拼好装订线与摘要的展示文本
     pub(crate) label: String,
-    /// 是否为当前活动叶子
-    pub(crate) is_active: bool,
 }
 
 /// 把会话树压平成带装订线的行列表。
@@ -68,7 +66,6 @@ fn push_node(
     rows.push(TreeRow {
         turn_id: node.turn_id.clone(),
         label: render_label(node, ancestors, has_connector, is_last, is_active),
-        is_active,
     });
     // 1. 子层的祖先竖线：当前层若还有后续兄弟就要延续竖线
     let mut child_ancestors = ancestors.to_vec();
@@ -156,14 +153,18 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert!(rows[0].label.starts_with("○ "), "{}", rows[0].label);
         assert!(rows[1].label.contains("└─"), "{}", rows[1].label);
-        assert!(rows[1].is_active);
+        assert!(rows[1].label.contains('●'));
     }
 
     /// 分叉处前一个用 ├─，最后一个用 └─。
     #[test]
     fn branches_use_tee_and_corner_connectors() {
         let tree = SessionTree {
-            roots: vec![node("a", 1, vec![node("b", 2, vec![]), node("c", 3, vec![])])],
+            roots: vec![node(
+                "a",
+                1,
+                vec![node("b", 2, vec![]), node("c", 3, vec![])],
+            )],
             active_leaf_id: Some("c".to_string()),
             total_turns: 3,
             branch_points: 1,
@@ -183,7 +184,10 @@ mod tests {
             roots: vec![node(
                 "a",
                 1,
-                vec![node("b", 2, vec![node("d", 4, vec![])]), node("c", 3, vec![])],
+                vec![
+                    node("b", 2, vec![node("d", 4, vec![])]),
+                    node("c", 3, vec![]),
+                ],
             )],
             active_leaf_id: None,
             total_turns: 4,
@@ -210,6 +214,5 @@ mod tests {
         let rows = flatten_tree(&tree);
 
         assert!(rows[0].label.contains('●'));
-        assert!(rows[0].is_active);
     }
 }

@@ -9,6 +9,8 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
 
+use super::protocol::PROTOCOL_VERSION;
+
 /// 使用官方 ACP SDK 构造初始化参数。
 ///
 /// 参数:
@@ -29,7 +31,7 @@ pub(crate) fn initialize_params(client_name: &str) -> Result<Value> {
         .terminal(true)
         .session(session)
         .elicitation(elicitation);
-    let request = InitializeRequest::new(ProtocolVersion::V1)
+    let request = InitializeRequest::new(ProtocolVersion::from(PROTOCOL_VERSION))
         .client_info(Implementation::new(client_name, env!("CARGO_PKG_VERSION")))
         .client_capabilities(capabilities);
     to_value(&request)

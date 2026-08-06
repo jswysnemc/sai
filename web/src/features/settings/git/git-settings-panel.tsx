@@ -6,6 +6,7 @@ import { EditorHeader, SettingsGroup } from "../editor-layout";
 import { useI18n } from "../../i18n/use-i18n";
 import { DEFAULT_GIT_CONFIG, DEFAULT_SCM_CONFIG } from "../../source-control/state/use-git-settings";
 import { GitSettingNumber, GitSettingSelect, GitSettingToggle } from "./git-settings-fields";
+import { modelSelectOption } from "../model-select-option";
 import "./git-settings-panel.css";
 
 const SESSION_MODEL_VALUE = "";
@@ -56,11 +57,11 @@ export function GitSettingsPanel(props: GitSettingsPanelProps) {
       label: t("Active model", "当前模型"),
       description: t("Use the currently active provider model.", "使用当前活动供应商模型。")
     },
-    ...buildChatModelChoices(props.config).map((choice) => ({
-      value: `${choice.providerId}\u0000${choice.model}`,
-      label: `${choice.providerName} / ${choice.model}`,
-      description: t("Always use this model for commit messages", "始终使用该模型生成提交说明")
-    }))
+    ...buildChatModelChoices(props.config).map((choice) => modelSelectOption(
+      choice,
+      `${choice.providerId}\u0000${choice.model}`,
+      t("Always use this model for commit messages", "始终使用该模型生成提交说明")
+    ))
   ];
 
   return (

@@ -390,21 +390,22 @@ export function ProviderSettingsSection({
               <small>{t("Codex forces Responses body and codex_cli_rs headers. Claude forces Anthropic Messages with Claude Code headers (beta, x-app, session). Use for 1M-context Claude proxies.", "Codex 强制 Responses 与 codex_cli_rs 头。Claude 强制 Anthropic Messages 与 Claude Code 头（beta、x-app、session）。适用于 1M 上下文 Claude 代理。")}</small>
             </div>
             {claudeSimulation && (
-              <div className="settings-field">
-                <span>{t("Claude 1M context", "Claude 启用 1M 上下文")}</span>
-                <Select
-                  value={provider.claude_1m_context === false ? "false" : "true"}
-                  options={[
-                    { value: "true", label: t("Enabled", "启用") },
-                    { value: "false", label: t("Disabled", "关闭") },
-                  ]}
-                  onChange={(value) =>
-                    onProviderChange(selectedIndex, { claude_1m_context: value === "true" })
-                  }
-                  ariaLabel={t("Claude 1M context", "Claude 启用 1M 上下文")}
+              <label className="settings-toggle-field">
+                <span>
+                  <strong>{t("Claude 1M context", "Claude 启用 1M 上下文")}</strong>
+                  <small>{t(
+                    "Attach context-1m-2025-08-07 in anthropic-beta. Enabled by default.",
+                    "在 anthropic-beta 中附加 context-1m-2025-08-07，默认启用。"
+                  )}</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={provider.claude_1m_context !== false}
+                  onChange={(event) => onProviderChange(selectedIndex, {
+                    claude_1m_context: event.target.checked
+                  })}
                 />
-                <small>{t("Attach context-1m-2025-08-07 in anthropic-beta. Default enabled.", "在 anthropic-beta 中附加 context-1m-2025-08-07。默认启用。")}</small>
-              </div>
+              </label>
             )}
             <label className="settings-field">
               <span>User-Agent</span>

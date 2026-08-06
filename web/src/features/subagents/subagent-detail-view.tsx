@@ -2,7 +2,6 @@ import { ArrowLeft, Ban } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { Subagent } from "../../api/contracts";
 import { MessageParts } from "../chat/message/message-parts";
-import { SubagentProgress } from "./subagent-progress";
 import { SubagentStats } from "./subagent-stats";
 import { SubagentStatusBadge } from "./subagent-status-badge";
 import { subagentDuration, subagentTypeLabel } from "./subagent-labels";
@@ -17,7 +16,7 @@ type SubagentDetailViewProps = {
 };
 
 /**
- * 渲染子智能体详情:元信息、实时进度、流式时间线与 Markdown 结果输出。
+ * 渲染子智能体详情:元信息、状态、流式时间线与 Markdown 结果输出。
  *
  * 运行中通过 SSE 接收详情快照，时间线随执行增量出现；新内容到达时若视口
  * 停留在底部附近则自动跟随滚动。
@@ -63,9 +62,8 @@ export function SubagentDetailView({ subagent, onBack, onCancel }: SubagentDetai
           {current.last_tool && <div><dt>{t("Latest tool", "最近工具")}</dt><dd>{current.last_tool}</dd></div>}
         </dl>
         <SubagentStats subagent={current} />
-        <SubagentProgress subagent={current} />
         {parts.length > 0 ? <MessageParts parts={parts} live={running} /> : (
-          <p className="subagent-detail-pending">{running ? t("The subagent is running. Its progress will appear here in real time.", "子智能体正在运行，执行过程会在此实时显示。") : t("No output.", "没有输出。")}</p>
+          <p className="subagent-detail-pending">{running ? t("The subagent is running.", "子智能体正在运行。") : t("No output.", "没有输出。")}</p>
         )}
       </div>
     </section>

@@ -32,9 +32,9 @@ use persistence::{
 #[cfg(test)]
 pub(crate) use queries::take_finished_notices;
 pub(crate) use queries::{
-    acknowledge_finished_notices, cancel_subagent, cancel_subagent_for_owner, list_subagents,
-    list_subagents_for_owner, pending_finished_notices, subagent_snapshot,
-    subagent_snapshot_for_owner,
+    acknowledge_finished_notices, cancel_subagent, cancel_subagent_for_owner,
+    clear_subagents_for_owner, list_subagents, list_subagents_for_owner, pending_finished_notices,
+    subagent_snapshot, subagent_snapshot_for_owner,
 };
 use record_access::running_record;
 pub(crate) use timeline_queries::{subagent_event_stream, subagent_timeline};
@@ -101,4 +101,5 @@ pub(crate) struct FinishedSubagentNotice {
     pub(crate) goal_id: Option<String>,
     pub(crate) description: String,
     pub(crate) status: String,
+    pub(crate) updated_at: u64,
 }

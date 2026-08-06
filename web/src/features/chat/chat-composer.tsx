@@ -37,6 +37,8 @@ type ChatComposerProps = {
   selection: ChatModelChoice | null;
   modelLoading: boolean;
   running: boolean;
+  /** 分支切换等短暂过渡期仅禁止发送，草稿仍可编辑。 */
+  submitBlocked?: boolean;
   runStatus: LiveRunState["status"];
   sessionAvailable: boolean;
   undoAvailable: boolean;
@@ -115,7 +117,8 @@ export function ChatComposer(props: ChatComposerProps) {
     sessionAvailable: props.sessionAvailable,
     runActive: props.running,
     runStatus: props.runStatus,
-    hasDraft: Boolean(props.value.trim()) || props.attachments.length > 0
+    hasDraft: Boolean(props.value.trim()) || props.attachments.length > 0,
+    submitBlocked: props.submitBlocked
   });
   const runModeOptions = createRunModeOptions(t);
 

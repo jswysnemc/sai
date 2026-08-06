@@ -26,11 +26,7 @@ use tokio::process::Command;
 ///
 /// 返回:
 /// - `<available-skills>` 提示片段；没有可见 skill 时返回空串
-fn build_skills_prompt(
-    config: &AppConfig,
-    paths: &SaiPaths,
-    with_source: bool,
-) -> Result<String> {
+fn build_skills_prompt(config: &AppConfig, paths: &SaiPaths, with_source: bool) -> Result<String> {
     let entries = visible_skill_entries(config, paths)?
         .into_iter()
         .map(|(entry, full)| {
@@ -713,36 +709,6 @@ mod tests {
     }
 
     #[test]
-    fn python_launchers_match_platform_conventions() {
-        let labels = python_launchers()
-            .into_iter()
-            .map(PythonLauncher::label)
-            .collect::<Vec<_>>();
-        #[cfg(windows)]
-        assert_eq!(labels, vec!["py -3", "python", "python3"]);
-        #[cfg(not(windows))]
-        assert_eq!(labels, vec!["python3", "python"]);
-    }
-
-    #[test]
-    fn third_party_skill_roots_cover_common_agent_paths() {
-        let roots = third_party_skill_roots();
-        let scopes: std::collections::BTreeSet<_> = roots.iter().map(|(scope, _)| *scope).collect();
-        assert!(scopes.contains("claude") || scopes.contains("project_claude"));
-        assert!(scopes.contains("codex") || scopes.contains("project_codex"));
-        assert!(
-            scopes.contains("agents")
-                || scopes.contains("project_agents")
-                || scopes.contains("agent")
-        );
-        assert!(
-            scopes.contains("opencode")
-                || scopes.contains("opencode_home")
-                || scopes.contains("project_opencode")
-        );
-    }
-
-    #[test]
     fn skill_entries_dedupe_symlinked_roots() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path();
@@ -773,3 +739,7 @@ mod tests {
         assert_eq!(count, 1);
     }
 }
+
+#[cfg(test)]
+#[path = "skills_platform_tests.rs"]
+mod platform_tests;

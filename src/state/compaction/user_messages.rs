@@ -77,7 +77,11 @@ pub(crate) fn select_kept_user_messages(
     }
     // 4. 从最早往后填充头段，边界消息保留开头
     let head = take_head_within_budget(&head_candidates, head_budget);
-    let kept = head.iter().chain(tail.iter()).map(message_chars).sum::<usize>();
+    let kept = head
+        .iter()
+        .chain(tail.iter())
+        .map(message_chars)
+        .sum::<usize>();
     UserMessageSelection {
         head,
         tail,
@@ -265,7 +269,10 @@ mod tests {
         let selection = select_kept_user_messages(&messages, 400, 100);
 
         let head_text = message_text(&selection.head[0]).unwrap();
-        assert!(head_text.starts_with("HEADMARK"), "单条超大消息同时保住开头");
+        assert!(
+            head_text.starts_with("HEADMARK"),
+            "单条超大消息同时保住开头"
+        );
         let tail_text = message_text(selection.tail.last().unwrap()).unwrap();
         assert!(tail_text.ends_with("ENDMARK"), "同时保住结尾");
     }

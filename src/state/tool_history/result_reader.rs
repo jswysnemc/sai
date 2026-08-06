@@ -23,6 +23,7 @@ impl StateStore {
     ///
     /// 返回:
     /// - 完整工具结果文本；引用越界、缺失或不可读时返回错误
+    #[cfg(test)]
     pub(crate) fn read_tool_result_ref(&self, result_ref: &str) -> Result<String> {
         self.tool_result_ref_reader()?.read(result_ref)
     }
@@ -48,6 +49,7 @@ impl ToolResultRefReader {
     ///
     /// 返回:
     /// - 完整结果文本
+    #[cfg(test)]
     pub(crate) fn read(&self, result_ref: &str) -> Result<String> {
         let result_path = self.resolve(result_ref)?;
         std::fs::read_to_string(&result_path)

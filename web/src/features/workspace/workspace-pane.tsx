@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { DiffPane } from "./diff-pane";
 import { ErrorBoundary } from "../../shared/ui/error-boundary/error-boundary";
 import { EditorPane } from "./editor-pane";
 import { FileTree } from "./file-tree";
@@ -14,12 +13,21 @@ import { WorkspaceTabBar } from "./workspace-tab-bar";
 import "./workspace-pane.css";
 import { useI18n } from "../i18n/use-i18n";
 import { ensureTerminalTab } from "../terminal/terminal-tab-state";
+import { WorkspaceEmptyState } from "./workspace-empty-state";
+import type { WorkspacePassiveDiff } from "./workspace-passive-diff";
+import { TargetedDiffPane } from "./targeted-diff-pane";
+import { WorkspaceFileSplit } from "./workspace-file-split";
 
 type WorkspacePaneProps = {
   selectedFile: string | null;
-  activeType: PaneTab;
+  activeType: PaneTab | null;
+  passiveDiff: WorkspacePassiveDiff | null;
+  /** 每次递增都要求编辑器展开文件树。 */
+  fileTreeRequestId: number;
+  /** 文件树展开请求已经消费。 */
+  onFileTreeRequestHandled: () => void;
   maximized: boolean;
-  onActiveTypeChange: (tab: PaneTab) => void;
+  onActiveTypeChange: (tab: PaneTab | null) => void;
   onSelectFile: (path: string) => void;
   onClearFile: () => void;
   onToggleMaximized: () => void;
@@ -38,6 +46,9 @@ type WorkspacePaneProps = {
 export function WorkspacePane({
   selectedFile,
   activeType,
+  passiveDiff,
+  fileTreeRequestId,
+  onFileTreeRequestHandled,
   maximized,
   onActiveTypeChange,
   onSelectFile,
@@ -48,16 +59,16 @@ export function WorkspacePane({
 }: WorkspacePaneProps) {
   const { locale, t } = useI18n();
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
+  const [fileTreeOverlay, setFileTreeOverlay] = useState(false);
   // 初始不预开空编辑器；由 `+` 菜单、打开文件或外部入口创建标签。
   const [tabs, setTabs] = useState<WorkspacePanelTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
   useEffect(() => {
-    /** Source Control 请求定位文件时打开当前编辑器的文件树。 */
-    const revealFile = () => setFileTreeOpen(true);
-    window.addEventListener("sai:reveal-workspace-file", revealFile);
-    return () => window.removeEventListener("sai:reveal-workspace-file", revealFile);
-  }, []);
+    if (fileTreeRequestId <= 0) return;
+    setFileTreeOpen(true);
+    onFileTreeRequestHandled();
+  }, [fileTreeRequestId, onFileTreeRequestHandled]);
 
   useEffect(() => {
     if (!selectedFile) return;
@@ -90,6 +101,7 @@ export function WorkspacePane({
 
   // 外部入口或重新打开时：已有则激活，没有则新建。
   useEffect(() => {
+    if (!activeType || activeType === "diff") return;
     if (activeType === "terminal") {
       setTabs((current) => {
         const existing = current.find((tab) => tab.type === "terminal" && tab.terminalId === terminalManager.activeId);
@@ -126,6 +138,23 @@ export function WorkspacePane({
   }, [activeType, locale, terminalManager.activeId, terminalManager.terminals, t]);
 
   useEffect(() => {
+    if (!passiveDiff) return;
+    const created = createWorkspacePanelTab("diff", {
+      path: passiveDiff.path,
+      title: passiveDiff.title,
+      diffSource: passiveDiff.source
+    }, locale);
+    setTabs((current) => {
+      const existing = current.find((tab) => tab.id === created.id);
+      return existing
+        ? current.map((tab) => tab.id === existing.id ? created : tab)
+        : [...current, created];
+    });
+    setActiveTabId(created.id);
+    onActiveTypeChange("diff");
+  }, [locale, onActiveTypeChange, passiveDiff]);
+
+  useEffect(() => {
     setTabs((current) =>
       current.map((tab) => {
         if (tab.type !== "terminal" || !tab.terminalId) return tab;
@@ -138,6 +167,29 @@ export function WorkspacePane({
   }, [terminalManager.terminals, t]);
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
+
+  /**
+   * 从文件树打开文件；覆盖式抽屉在选择后自动收起。
+   *
+   * @param path 工作区内或已获准访问的外部文件路径
+   * @returns 无返回值
+   */
+  const selectFileFromTree = (path: string) => {
+    onSelectFile(path);
+    if (fileTreeOverlay) setFileTreeOpen(false);
+  };
+
+  /**
+   * 切换文件树，并在关闭时清理覆盖布局状态。
+   *
+   * @returns 无返回值
+   */
+  const toggleFileTree = () => {
+    setFileTreeOpen((current) => {
+      if (current) setFileTreeOverlay(false);
+      return !current;
+    });
+  };
 
   const addTab = async (type: PaneTab) => {
     if (type === "files") {
@@ -183,7 +235,7 @@ export function WorkspacePane({
       if (activeTabId === id) {
         const fallback = next[Math.max(0, index - 1)] ?? next[0] ?? null;
         setActiveTabId(fallback?.id ?? null);
-        if (fallback) onActiveTypeChange(fallback.type);
+        onActiveTypeChange(fallback?.type ?? null);
       }
       if (closing?.type === "files" && closing.path && closing.path === selectedFile) {
         const remainingFile = next.find((tab) => tab.type === "files" && tab.path);
@@ -218,30 +270,34 @@ export function WorkspacePane({
       <ErrorBoundary key={activeTab?.id ?? "empty"} label={t("This panel failed to render", "该面板渲染失败")}>
       <div className="pane-body">
         {!activeTab && (
-          <div className="workspace-pane-empty">
-            <p>{t("No panels are open", "没有打开的面板")}</p>
-            <span>{t("Use the + button above to choose a component", "点上方 + 选择要打开的组件")}</span>
-          </div>
+          <WorkspaceEmptyState onOpen={(type) => void addTab(type)} />
         )}
         {activeTab?.type === "files" && (
-          <div className={fileTreeOpen ? "files-layout file-tree-open" : "files-layout file-tree-closed"}>
-            <EditorPane
+          <WorkspaceFileSplit
+            open={fileTreeOpen}
+            onOverlayChange={setFileTreeOverlay}
+            editor={<EditorPane
               path={activeTab.path ?? selectedFile}
               onSelectFile={onSelectFile}
               fileTreeOpen={fileTreeOpen}
-              onToggleFileTree={() => setFileTreeOpen((value) => !value)}
-            />
-            {fileTreeOpen && (
+              onToggleFileTree={toggleFileTree}
+            />}
+            tree={fileTreeOpen ? (
               <FileTree
                 selectedFile={activeTab.path ?? selectedFile}
-                onSelectFile={onSelectFile}
+                onSelectFile={selectFileFromTree}
                 onClearFile={onClearFile}
-                onClose={() => setFileTreeOpen(false)}
+                onClose={() => {
+                  setFileTreeOpen(false);
+                  setFileTreeOverlay(false);
+                }}
               />
-            )}
-          </div>
+            ) : null}
+          />
         )}
-        {activeTab?.type === "diff" && <DiffPane />}
+        {activeTab?.type === "diff" && (
+          <TargetedDiffPane path={activeTab.path ?? activeTab.title} source={activeTab.diffSource ?? ""} />
+        )}
         {activeTab?.type === "terminal" && (
           <TerminalDock terminalId={activeTab.terminalId} title={activeTab.title} error={terminalManager.error} />
         )}

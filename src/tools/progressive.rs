@@ -1,9 +1,11 @@
-use super::groups::{group_description, group_for_tool};
+use super::groups::{group_description, group_for_tool, is_base_tool};
 use super::{ToolPermission, ToolRegistry, ToolSpec};
+use crate::config::DEFERRED_ALL_NON_BASE;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) const LOAD_NAME: &str = "load";
+pub(crate) const INVOKE_NAME: &str = "invoke_tool";
 
 /// 注册渐进式工具加载器。
 ///
@@ -14,7 +16,7 @@ pub(crate) const LOAD_NAME: &str = "load";
 /// 返回:
 /// - 无
 pub(crate) fn register_loader(registry: &mut ToolRegistry, deferred: &[String]) {
-    let description = loader_description(registry, deferred, &BTreeSet::new());
+    let description = loader_description(registry, deferred);
     registry.register(ToolSpec::new(
         LOAD_NAME,
         description,
@@ -43,18 +45,42 @@ pub(crate) fn register_loader(registry: &mut ToolRegistry, deferred: &[String]) 
             Ok("工具加载请求已收到。后续工具可见性由对话运行时更新。".to_string())
         },
     ));
+    if !deferred.is_empty() {
+        register_invoker(registry);
+    }
 }
 
-/// 判断工具是否应在渐进式模式启动时默认可见。
+/// 注册统一工具调用外壳。
 ///
 /// 参数:
-/// - `deferred`: 当前 Agent 需要 load 才暴露的工具名，可含通配符
-/// - `name`: 工具名称
+/// - `registry`: 已注册完整工具处理器的工具注册表
 ///
 /// 返回:
-/// - 是否为默认可见工具
-pub(crate) fn is_initial_tool(deferred: &[String], name: &str) -> bool {
-    name == LOAD_NAME || !crate::config::is_deferred(deferred, name)
+/// - 无
+fn register_invoker(registry: &mut ToolRegistry) {
+    registry.register(ToolSpec::new(
+        INVOKE_NAME,
+        "Invoke a tool whose full schema was returned by load. Pass the exact loaded tool name and an arguments object matching that schema. Concrete arguments are validated locally before the real tool enters its normal permission, audit, hook, progress, and execution pipeline.",
+        json!({
+            "type": "object",
+            "properties": {
+                "tool_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Exact name of a tool previously loaded with load."
+                },
+                "arguments": {
+                    "type": "object",
+                    "description": "Arguments matching the full schema returned by load."
+                }
+            },
+            "required": ["tool_name", "arguments"],
+            "additionalProperties": false
+        }),
+        |_| async move {
+            Ok("统一工具调用请求已收到。真实工具由对话运行时执行。".to_string())
+        },
+    ));
 }
 
 /// 计算当前应暴露给模型的工具名称集合。
@@ -62,36 +88,35 @@ pub(crate) fn is_initial_tool(deferred: &[String], name: &str) -> bool {
 /// 参数:
 /// - `registry`: 完整工具注册表
 /// - `deferred`: 当前 Agent 需要 load 才暴露的工具名，可含通配符
-/// - `loaded`: 当前会话已经额外加载的工具名
-///
 /// 返回:
-/// - 初始可见工具与已经加载工具组成的名称集合
-pub(crate) fn visible_tool_names(
-    registry: &ToolRegistry,
-    deferred: &[String],
-    loaded: &BTreeSet<String>,
-) -> BTreeSet<String> {
+/// - 非渐进模式返回完整注册表；渐进模式只返回固定网关
+pub(crate) fn visible_tool_names(registry: &ToolRegistry, deferred: &[String]) -> BTreeSet<String> {
     registry
         .tool_infos()
         .into_iter()
-        .filter(|info| {
-            deferred.is_empty()
-                || is_initial_tool(deferred, &info.name)
-                || loaded.contains(&info.name)
-        })
+        .filter(|info| !is_deferred_tool(&info.name, deferred))
         .map(|info| info.name)
         .collect()
 }
 
-/// 获取工具所属用途分组。
+/// 判断工具是否必须经过渐进网关加载。
+///
+/// 基础工具始终保留原生定义。通配符只延迟非基础工具；显式配置只延迟
+/// 对应的非基础工具，其他启用工具继续按原生 Schema 调用。
 ///
 /// 参数:
 /// - `name`: 工具名称
+/// - `deferred`: 当前 Agent 的延迟工具配置
 ///
 /// 返回:
-/// - 用途分组名称
-pub(crate) fn tool_group(name: &str) -> &'static str {
-    group_for_tool(name)
+/// - 工具是否需要先调用 load
+pub(crate) fn is_deferred_tool(name: &str, deferred: &[String]) -> bool {
+    if name == LOAD_NAME || name == INVOKE_NAME || is_base_tool(name) {
+        return false;
+    }
+    deferred
+        .iter()
+        .any(|configured| configured == DEFERRED_ALL_NON_BASE || configured == name)
 }
 
 /// 生成加载工具描述。
@@ -102,30 +127,16 @@ pub(crate) fn tool_group(name: &str) -> &'static str {
 /// 参数:
 /// - `registry`: 当前会话可见/可注册的工具注册表（可已按 agent 配置过滤）
 /// - `deferred`: 当前 Agent 需要 load 才暴露的工具名，可含通配符
-/// - `loaded`: 本会话已额外加载的工具名
-///
 /// 返回:
 /// - 包含可加载工具名和分组的工具描述
-pub(crate) fn loader_description(
-    registry: &ToolRegistry,
-    deferred: &[String],
-    loaded: &BTreeSet<String>,
-) -> String {
+pub(crate) fn loader_description(registry: &ToolRegistry, deferred: &[String]) -> String {
     let mut groups: BTreeMap<&'static str, Vec<String>> = BTreeMap::new();
-    let mut group_totals = BTreeMap::<&'static str, usize>::new();
-    let mut group_loaded = BTreeMap::<&'static str, usize>::new();
-    let mut loaded_tools = Vec::new();
     for info in registry.tool_infos() {
-        if is_initial_tool(deferred, &info.name) {
+        // 1. 只列出按配置需要延迟的工具，基础工具和其他原生工具不进入 load
+        if !is_deferred_tool(&info.name, deferred) {
             continue;
         }
         let group = group_for_tool(&info.name);
-        *group_totals.entry(group).or_default() += 1;
-        if loaded.contains(&info.name) {
-            *group_loaded.entry(group).or_default() += 1;
-            loaded_tools.push(info.name);
-            continue;
-        }
         let permission = match info.permission {
             ToolPermission::ReadOnly => "read",
             ToolPermission::Writes => "write",
@@ -143,17 +154,8 @@ pub(crate) fn loader_description(
             .push(format!("{} ({permission}) - {summary}", info.name));
     }
     let mut text = String::from(
-        "Load additional tools or full skill documents before using them. Set type to tool or skill and pass exact names in the keywords array, including when loading one item. Multiple tools or skills can be loaded in one call. Tools listed inside a group can be loaded individually. Initial tools are limited to base tools and this loader. Do not call load for already loaded tools; call the loaded tool directly. If a loaded tool returns an error, treat it as a tool execution or workflow error, not as a loading error.\n",
+        "Load deferred tool schemas or skill documents before using them. Only tools listed below require load; tools already present as native definitions must be called directly. Set type to tool or skill and pass exact names in the keywords array, including when loading one item. Multiple resources can be loaded in one call. After loading a deferred tool, call invoke_tool with its exact name and arguments matching the returned schema. Do not emit a direct call to that deferred tool. Do not reload an already loaded tool unless its schema is no longer present in the conversation.\n",
     );
-    if !loaded_tools.is_empty() {
-        let loaded_groups = fully_loaded_groups(&group_totals, &group_loaded);
-        text.push_str("\nAlready loaded tools:\n");
-        text.push_str(&format!("- {}\n", loaded_tools.join(", ")));
-        if !loaded_groups.is_empty() {
-            text.push_str("Already loaded groups:\n");
-            text.push_str(&format!("- {}\n", loaded_groups.join(", ")));
-        }
-    }
     text.push_str("\nAvailable groups:\n");
     if groups.is_empty() {
         text.push_str("- none. All additional tools are already loaded.\n");
@@ -167,25 +169,4 @@ pub(crate) fn loader_description(
         ));
     }
     text
-}
-
-/// 计算已经完整载入的工具分组。
-///
-/// 参数:
-/// - `group_totals`: 每个分组的工具总数
-/// - `group_loaded`: 每个分组已经载入的工具数量
-///
-/// 返回:
-/// - 已经完整载入的分组名称
-fn fully_loaded_groups(
-    group_totals: &BTreeMap<&'static str, usize>,
-    group_loaded: &BTreeMap<&'static str, usize>,
-) -> Vec<&'static str> {
-    group_totals
-        .iter()
-        .filter_map(|(group, total)| {
-            let loaded = group_loaded.get(group).copied().unwrap_or_default();
-            (*total > 0 && loaded == *total).then_some(*group)
-        })
-        .collect()
 }

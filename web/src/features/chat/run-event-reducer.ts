@@ -462,7 +462,7 @@ function upsertTool(state: LiveRunState, id: string, patch: Partial<ToolLifecycl
     return attachGrantedPermission(created, id, tool.name);
   }
   const existing = state.tools[index];
-  if (patch.name && existing.name !== "tool" && patch.name !== existing.name) {
+  if (patch.name && existing.name !== "tool" && existing.name !== "invoke_tool" && patch.name !== existing.name) {
     const forkedId = `${id}-${patch.name}`;
     return upsertTool(state, forkedId, patch);
   }

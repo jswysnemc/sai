@@ -2,7 +2,7 @@ use super::*;
 use crate::tools::ToolSpec;
 use serde_json::json;
 
-/// 会话已保存的工具必须在 Agent 初始化时同步到提示词与执行门禁。
+/// 会话已保存的工具必须在 Agent 初始化时同步到执行门禁，但不能生成动态系统提示。
 #[test]
 fn new_agent_restores_persisted_loaded_tools() {
     let temp = tempfile::tempdir().unwrap();
@@ -29,13 +29,13 @@ fn new_agent_restores_persisted_loaded_tools() {
     assert!(registry.contains("get_weather"));
 
     let agent = Agent::new(config, &paths, state, client, registry, AgentMode::Yolo).unwrap();
-    let prompt = agent
-        .tool_visibility
-        .loaded_context_prompt(&agent.tools)
-        .unwrap_or_default();
-
-    assert!(prompt.contains("Loaded tools: get_weather"));
     assert!(agent.tool_visibility.is_visible("get_weather"));
+    assert!(!agent
+        .chat_base_context_projection(None)
+        .unwrap()
+        .dynamic_sources
+        .iter()
+        .any(|source| source.key == "loaded_tools"));
 }
 
 /// 模式切换后必须恢复新注册表中仍然存在的会话已加载工具。

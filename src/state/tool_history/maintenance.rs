@@ -82,10 +82,7 @@ impl StateStore {
             }
         }
         // 2. 运行中轮次同样参与，但保留末尾最新的若干条供模型继续使用
-        if let Some(running) = turns
-            .iter()
-            .find(|turn| turn.status == TurnStatus::Running)
-        {
+        if let Some(running) = turns.iter().find(|turn| turn.status == TurnStatus::Running) {
             let exchanges =
                 load_tool_exchanges_for_turn(&self.conv_db, &self.session_id, &running.turn_id)?;
             let stale_len = exchanges

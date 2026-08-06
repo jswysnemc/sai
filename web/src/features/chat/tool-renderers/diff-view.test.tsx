@@ -45,7 +45,9 @@ describe("DiffView idea side-by-side", () => {
     // 第一块删除+新增混合，第二块纯新增
     expect(html).toContain("diff-tone-mixed");
     expect(html).toContain("diff-tone-added");
-    expect(html).toContain("diff-idea-band");
+    expect(html).toContain("diff-idea-connector-mixed");
+    expect(html).toContain("diff-idea-connector-added");
+    expect(html).toContain('aria-current="true"');
   });
 
   it("短上下文段直接铺开不折叠", () => {
@@ -77,5 +79,6 @@ ${longContext}
     // 左右行号分列
     expect(html).toMatch(/diff-row removed left/);
     expect(html).toMatch(/diff-row added right/);
+    expect(html).toContain("diff-code-content");
   });
 });

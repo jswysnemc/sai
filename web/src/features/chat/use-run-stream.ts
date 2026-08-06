@@ -10,12 +10,14 @@ import { notifyReplyComplete } from "../../shared/notify/reply-complete-notify";
 const EVENT_TYPES = [
   "run.queued",
   "run.queue.updated",
+  "run.merged",
   "run.dequeued",
   "run.started",
   "message.automatic.input",
   "status.changed",
   "message.content.delta",
   "message.reasoning.delta",
+  "context.updated",
   "tool.call.preparing",
   "tool.call.started",
   "tool.progress",
@@ -125,6 +127,9 @@ export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsA
     return updateQueuedRunState(state, action.runId, action.input, action.position);
   }
   if (action.event.type === "run.interrupted" && action.event.payload.discard_user_turn === true) {
+    return { runs: state.runs.filter((run) => run.runId !== action.event.run_id) };
+  }
+  if (action.event.type === "run.merged") {
     return { runs: state.runs.filter((run) => run.runId !== action.event.run_id) };
   }
   if (action.event.type === "run.queue.updated") {
@@ -317,11 +322,21 @@ export function useRunStream(
           if (event.type === "session.summary" || event.type === "run.completed") {
             void queryClient.invalidateQueries({ queryKey: ["system-usage"] });
           }
+          if (event.type === "context.updated") {
+            void queryClient.invalidateQueries({ queryKey: ["system-usage"] });
+          }
           if (event.type === "session.renamed") {
             void Promise.all([
               queryClient.invalidateQueries({ queryKey: ["sessions"] }),
               queryClient.invalidateQueries({ queryKey: ["session-tree"] })
             ]);
+          }
+          if (event.type === "run.merged") {
+            closedByClient = true;
+            source.onerror = null;
+            source.close();
+            sourcesRef.current.delete(runId);
+            return;
           }
           if (["run.completed", "run.interrupted", "run.failed"].includes(event.type)) {
             void Promise.all([

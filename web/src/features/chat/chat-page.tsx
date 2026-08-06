@@ -100,7 +100,14 @@ export function ChatPage() {
     onWorkspaceChanged,
     onInterruptedWithoutReply
   );
-  const turnTree = useTurnTree(activeSession?.id, { onBranchChanged: run.reset });
+  const turnTree = useTurnTree(activeSession?.id, {
+    onBranchChanged: run.reset,
+    onError: (error) => setActionError(toDisplayError(
+      error,
+      "Failed to switch the conversation branch",
+      "切换会话分支失败"
+    ))
+  });
   const chatModel = useChatModel(activeSession?.id);
   const chatAgent = useChatAgentContext();
   const thinking = useThinkingLevel(activeSession?.id);
@@ -200,6 +207,7 @@ export function ChatPage() {
 
   /** 提交当前输入内容和模型选择。 */
   const submit = async () => {
+    if (turnTree.switchBranch.isPending || branchActions.pending) return;
     const value = input.trim();
     if ((!value && composerAttachments.attachments.length === 0) || !activeSession) return;
     const goalCommand = parseGoalCommand(value);
@@ -315,6 +323,7 @@ export function ChatPage() {
     onError: (error, fallbackEn, fallbackZh) =>
       setActionError(toDisplayError(error, fallbackEn, fallbackZh))
   });
+  const branchTransitioning = turnTree.switchBranch.isPending || branchActions.pending;
 
   /**
    * 撤销上一轮：把对话位置退回父轮次，不删除任何内容。
@@ -397,9 +406,10 @@ export function ChatPage() {
       selection={chatModel.selection}
       modelLoading={chatModel.isLoading}
       running={running}
+      submitBlocked={branchTransitioning}
       runStatus={activeRun?.status ?? "idle"}
       sessionAvailable={Boolean(activeSession)}
-      undoAvailable={Boolean(timeline.data?.turns.length)}
+      undoAvailable={Boolean(timeline.data?.turns.length) && !branchTransitioning}
       agentChoices={chatAgent.choices}
       agentSelection={chatAgent.selection}
       agentLoading={chatAgent.isLoading}
@@ -439,15 +449,15 @@ export function ChatPage() {
             branch={gitStatus.data?.status === "ready" ? gitStatus.data.head : undefined}
           />
           <div className="message-column">
-            {timeline.isLoading && (
+            {(timeline.isLoading || branchTransitioning) && (
               <div className="chat-timeline-skeleton">
                 <SkeletonText label={t("Loading conversation history", "正在读取会话历史")} lines={4} />
               </div>
             )}
-            {activeSession && !timeline.isLoading && !conversationEmpty && (
+            {activeSession && !timeline.isLoading && !branchTransitioning && !conversationEmpty && (
               <ContextPromptBanner sessionId={activeSession.id} agentId={chatAgent.selection?.id} />
             )}
-            {timeline.data?.compaction && !run.states.some((state) =>
+            {!branchTransitioning && timeline.data?.compaction && !run.states.some((state) =>
               state.parts.some((part) => part.type === "compaction" && part.applied && part.summary)
             ) && (
               <div className="conversation-compaction" data-overview-id="history-compaction">
@@ -463,7 +473,7 @@ export function ChatPage() {
                 />
               </div>
             )}
-            {display.historyTurns.map((turn) => (
+            {!branchTransitioning && display.historyTurns.map((turn) => (
               <section className="conversation-turn" data-overview-id={`turn-${turn.turn_id}`} key={turn.turn_id}>
                 <HistoryTurn
                   turn={turn}
@@ -475,7 +485,7 @@ export function ChatPage() {
                   onEditResend={!running
                     ? (content, imageUrls) => void editAndResend(turn.turn_id, content, imageUrls)
                     : undefined}
-                  actionBusy={actionBusy || branchActions.pending}
+                  actionBusy={actionBusy || branchTransitioning}
                   branchSlot={(
                     <BranchSwitcher
                       tree={turnTree.tree.data}
@@ -487,7 +497,7 @@ export function ChatPage() {
                 />
               </section>
             ))}
-            {activeLiveRuns.map((state) => (
+            {!branchTransitioning && activeLiveRuns.map((state) => (
               <section className="conversation-turn" data-overview-id={`live-${state.runId}`} key={state.runId}>
                 <LiveRunMessage
                   state={state}
@@ -499,7 +509,7 @@ export function ChatPage() {
                   onEditResend={!running && state.completed
                     ? (content, imageUrls) => void editAndResend(state.runId, content, imageUrls)
                     : undefined}
-                  actionBusy={actionBusy || branchActions.pending}
+                  actionBusy={actionBusy || branchTransitioning}
                 />
               </section>
             ))}
@@ -570,6 +580,7 @@ export function ChatPage() {
         title={t("Branch overview", "分支总览")}
         description={t("Click any turn to switch the conversation to that branch.", "点击任意轮次即可把对话切换到该分支。")}
         size="large"
+        className="turn-tree-overview-modal"
         onClose={() => setTreeOverviewOpen(false)}
       >
         {turnTree.tree.data && (
@@ -577,8 +588,9 @@ export function ChatPage() {
             tree={turnTree.tree.data}
             busy={turnTree.switchBranch.isPending || running}
             onSelect={(turnId) => {
-              turnTree.switchBranch.mutate(turnId);
-              setTreeOverviewOpen(false);
+              turnTree.switchBranch.mutate(turnId, {
+                onSuccess: () => setTreeOverviewOpen(false)
+              });
             }}
           />
         )}

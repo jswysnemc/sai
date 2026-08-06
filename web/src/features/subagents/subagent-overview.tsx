@@ -12,7 +12,7 @@ type SubagentOverviewProps = {
 };
 
 /**
- * 渲染子智能体概览列表,展示运行计数、实时进度并支持选中查看详情。
+ * 渲染子智能体概览列表,展示状态计数并支持选中查看详情。
  *
  * @param props 选中项、选择与取消回调
  * @returns 子智能体概览
@@ -46,7 +46,7 @@ export function SubagentOverview({ selectedId, onSelect, onCancel }: SubagentOve
           <div className="subagent-overview-empty">
             <Bot size={26} />
             <p>{t("No subagents yet", "还没有子智能体")}</p>
-            <span>{t("Subagent progress appears here after the main conversation calls the task tool.", "主对话调用 task 工具后，子智能体会在这里实时显示进度")}</span>
+            <span>{t("Subagent status appears here after the main conversation starts a task.", "主对话启动任务后，子智能体状态会显示在这里")}</span>
           </div>
         )}
       </div>

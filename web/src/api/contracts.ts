@@ -157,3 +157,8 @@ export type {
   UsageStatsResponse,
   UsageStatsQuery,
 } from "./contracts/usage";
+
+export type {
+  SessionDataItem,
+  SessionDataSummary,
+} from "./contracts/session-data";

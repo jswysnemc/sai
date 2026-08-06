@@ -45,32 +45,22 @@ impl From<UsageState> for UsageSnapshot {
     }
 }
 
-/// 累加一个完整轮次的用量，并单独记录上下文占用口径。
-///
-/// 一个轮次可能包含多次模型调用，累计量与上下文占用量必须分开：
-/// 前者决定统计总量，后者决定上下文进度条。
+/// 累加一次主对话模型消息，并立即更新当前上下文口径。
 ///
 /// 参数:
 /// - `path`: 用量状态文件
-/// - `turn_usage`: 本轮全部模型调用的用量累计
-/// - `context_usage`: 最后一次调用的用量；缺失时清空 provider 上下文口径
+/// - `usage`: 本次 provider 请求上报的用量
 ///
 /// 返回:
 /// - 保存是否成功
-pub fn add_turn_usage(
-    path: &Path,
-    turn_usage: &Usage,
-    context_usage: Option<&Usage>,
-) -> Result<()> {
+pub fn add_conversation_message_usage(path: &Path, usage: &Usage) -> Result<()> {
     let mut state = load_state(path)?;
-    // 1. 总量按整轮累计，工具轮次不再漏计
     state.requests += 1;
-    state.prompt_tokens += turn_usage.prompt_tokens;
-    state.completion_tokens += turn_usage.completion_tokens;
-    state.total_tokens += turn_usage.total_tokens;
-    // 2. 最近用量保留整轮统计；上下文口径只接受最后一次 provider 明确上报
-    state.last_usage = Some(turn_usage.clone());
-    state.last_conversation_usage = context_usage.cloned();
+    state.prompt_tokens += usage.prompt_tokens;
+    state.completion_tokens += usage.completion_tokens;
+    state.total_tokens += usage.total_tokens;
+    state.last_usage = Some(usage.clone());
+    state.last_conversation_usage = Some(usage.clone());
     save_state(path, &state)
 }
 
@@ -206,7 +196,7 @@ mod tests {
             ..Usage::default()
         };
 
-        add_turn_usage(&path, &usage, Some(&usage)).unwrap();
+        add_conversation_message_usage(&path, &usage).unwrap();
         assert_eq!(last_usage(&path).unwrap().unwrap().total_tokens, 15);
         assert_eq!(
             snapshot(&path)
@@ -232,7 +222,7 @@ mod tests {
             total_tokens: 120,
             ..Usage::default()
         };
-        add_turn_usage(&path, &conversation, Some(&conversation)).unwrap();
+        add_conversation_message_usage(&path, &conversation).unwrap();
         add_auxiliary_usage(
             &path,
             &Usage {
@@ -250,7 +240,7 @@ mod tests {
         assert_eq!(snapshot.last_conversation_usage.unwrap().prompt_tokens, 100);
     }
 
-    /// 验证整轮累计计入总量，而上下文口径只取最后一次调用。
+    /// 验证逐消息累计总量，而上下文口径只取最后一次调用。
     ///
     /// 参数:
     /// - 无
@@ -258,15 +248,14 @@ mod tests {
     /// 返回:
     /// - 无；断言失败则测试不通过
     #[test]
-    fn turn_total_and_context_usage_stay_separate() {
+    fn message_totals_and_context_usage_stay_separate() {
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("usage.json");
-        // 三轮工具调用累计 30 万输入，最后一次调用的上下文占用为 12 万
-        let turn = Usage {
-            prompt_tokens: 300_000,
-            completion_tokens: 3_000,
-            total_tokens: 303_000,
-            cache_read_tokens: 280_000,
+        let first = Usage {
+            prompt_tokens: 180_000,
+            completion_tokens: 2_100,
+            total_tokens: 182_100,
+            cache_read_tokens: 165_000,
             cache_write_tokens: 0,
         };
         let context = Usage {
@@ -276,7 +265,8 @@ mod tests {
             cache_read_tokens: 115_000,
             cache_write_tokens: 0,
         };
-        add_turn_usage(&path, &turn, Some(&context)).unwrap();
+        add_conversation_message_usage(&path, &first).unwrap();
+        add_conversation_message_usage(&path, &context).unwrap();
 
         let snapshot = snapshot(&path).unwrap();
         assert_eq!(snapshot.prompt_tokens, 300_000);
@@ -287,7 +277,7 @@ mod tests {
         );
     }
 
-    /// 【状态】【上下文用量】验证最后一次调用未上报 usage 时不使用整轮累计量。
+    /// 【状态】【上下文用量】验证调用未上报 usage 时清空上下文口径。
     ///
     /// 参数:
     /// - 无
@@ -295,10 +285,10 @@ mod tests {
     /// 返回:
     /// - 无
     #[test]
-    fn missing_context_usage_does_not_reuse_turn_total() {
+    fn missing_context_usage_clears_context_total() {
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("usage.json");
-        let turn = Usage {
+        let usage = Usage {
             prompt_tokens: 300_000,
             completion_tokens: 3_000,
             total_tokens: 303_000,
@@ -306,7 +296,8 @@ mod tests {
             cache_write_tokens: 0,
         };
 
-        add_turn_usage(&path, &turn, None).unwrap();
+        add_conversation_message_usage(&path, &usage).unwrap();
+        clear_last_conversation_usage(&path).unwrap();
 
         let snapshot = snapshot(&path).unwrap();
         assert_eq!(snapshot.last_usage.unwrap().prompt_tokens, 300_000);
@@ -331,12 +322,40 @@ mod tests {
             cache_read_tokens: 100_000,
             cache_write_tokens: 0,
         };
-        add_turn_usage(&path, &usage, Some(&usage)).unwrap();
+        add_conversation_message_usage(&path, &usage).unwrap();
 
         clear_last_conversation_usage(&path).unwrap();
 
         let snapshot = snapshot(&path).unwrap();
         assert_eq!(snapshot.last_usage.unwrap().prompt_tokens, 120_000);
         assert!(snapshot.last_conversation_usage.is_none());
+    }
+
+    #[test]
+    fn records_each_conversation_message_immediately() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("usage.json");
+        let first = Usage {
+            prompt_tokens: 100,
+            completion_tokens: 20,
+            total_tokens: 120,
+            cache_read_tokens: 80,
+            cache_write_tokens: 0,
+        };
+        let second = Usage {
+            prompt_tokens: 180,
+            completion_tokens: 30,
+            total_tokens: 210,
+            cache_read_tokens: 150,
+            cache_write_tokens: 10,
+        };
+
+        add_conversation_message_usage(&path, &first).unwrap();
+        add_conversation_message_usage(&path, &second).unwrap();
+        let snapshot = snapshot(&path).unwrap();
+
+        assert_eq!(snapshot.requests, 2);
+        assert_eq!(snapshot.total_tokens, 330);
+        assert_eq!(snapshot.last_conversation_usage.unwrap().prompt_tokens, 180);
     }
 }

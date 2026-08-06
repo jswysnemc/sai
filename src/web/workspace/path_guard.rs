@@ -23,6 +23,48 @@ pub(super) fn existing_path(root: &Path, relative: &str) -> Result<PathBuf> {
     Ok(canonical)
 }
 
+/// 解析编辑器允许打开的现有路径。
+///
+/// 相对路径仍按工作区边界解析；绝对路径用于用户显式打开工作区外文件，
+/// 只接受可以规范化的现有普通文件。
+///
+/// 参数:
+/// - `root`: 工作区根目录
+/// - `requested`: 工作区相对路径或绝对文件路径
+///
+/// 返回:
+/// - 规范化后的绝对文件路径
+pub(super) fn editor_existing_path(root: &Path, requested: &str) -> Result<PathBuf> {
+    if !Path::new(requested.trim()).is_absolute() {
+        return existing_path(root, requested);
+    }
+    let path = Path::new(requested.trim())
+        .canonicalize()
+        .with_context(|| format!("path does not exist: {}", requested.trim()))?;
+    if !path.is_file() {
+        bail!("path is not a regular file");
+    }
+    Ok(path)
+}
+
+/// 解析编辑器允许保存的路径。
+///
+/// 工作区外只允许覆盖已经打开的现有普通文件，禁止通过编辑器保存接口创建
+/// 新的外部文件；工作区内继续沿用原有写入路径规则。
+///
+/// 参数:
+/// - `root`: 工作区根目录
+/// - `requested`: 工作区相对路径或绝对文件路径
+///
+/// 返回:
+/// - 可以进入版本校验和原子写入的绝对路径
+pub(super) fn editor_writable_path(root: &Path, requested: &str) -> Result<PathBuf> {
+    if !Path::new(requested.trim()).is_absolute() {
+        return writable_path(root, requested);
+    }
+    editor_existing_path(root, requested)
+}
+
 /// 解析允许创建的新文件路径。
 ///
 /// 参数:
@@ -146,5 +188,18 @@ mod tests {
         assert!(existing_path(temp.path(), inside.to_str().unwrap()).is_ok());
         // 2. 工作区外的绝对路径应被拒绝
         assert!(existing_path(temp.path(), outside.path().to_str().unwrap()).is_err());
+    }
+
+    #[test]
+    fn editor_accepts_existing_file_outside_workspace() {
+        let workspace = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let file = outside.path().join("external.txt");
+        std::fs::write(&file, "external").unwrap();
+
+        let resolved = editor_existing_path(workspace.path(), file.to_str().unwrap()).unwrap();
+
+        assert_eq!(resolved, file.canonicalize().unwrap());
+        assert!(editor_existing_path(workspace.path(), outside.path().to_str().unwrap()).is_err());
     }
 }

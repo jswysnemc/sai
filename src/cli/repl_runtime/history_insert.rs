@@ -1,4 +1,5 @@
 use super::viewport::InlineViewport;
+use crate::render::terminal_paint::paint_lock;
 use crate::render::transcript::AnsiLine;
 use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo};
@@ -64,6 +65,7 @@ pub(super) fn apply_delta<W: Write>(
     new_total: usize,
     offscreen: usize,
 ) -> Result<AppendOutcome> {
+    let _paint = paint_lock();
     // 绘制期间隐藏光标：中途 flush 时若光标可见，Windows 终端会在
     // 输出尾行与输入框之间来回闪动；最终位置由 composer 的 Show 恢复
     queue!(output, Hide)?;

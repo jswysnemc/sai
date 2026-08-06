@@ -130,9 +130,8 @@ pub(crate) fn activity_frame_count(text: &str) -> usize {
 fn shimmer_intensity(char_count: usize, frame: usize, index: usize) -> f32 {
     let period = char_count.saturating_add(SHIMMER_PADDING * 2).max(1);
     // 1. 亮带中心按帧在整个周期上匀速推进，与 Codex 的时间扫描等价
-    let position =
-        ((frame % SHIMMER_CYCLE_FRAMES) as f32 / SHIMMER_CYCLE_FRAMES as f32 * period as f32)
-            as isize;
+    let position = ((frame % SHIMMER_CYCLE_FRAMES) as f32 / SHIMMER_CYCLE_FRAMES as f32
+        * period as f32) as isize;
     // 2. 计算目标字符与亮带中心的距离，带外不做混合
     let char_position = index.saturating_add(SHIMMER_PADDING) as isize;
     let distance = (char_position - position).abs() as f32;

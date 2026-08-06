@@ -185,29 +185,6 @@ pub struct Usage {
     pub cache_write_tokens: u64,
 }
 
-impl Usage {
-    /// 累加另一次模型调用的用量。
-    ///
-    /// 参数:
-    /// - `other`: 待累加的用量
-    ///
-    /// 返回:
-    /// - 无；就地累加各字段
-    pub fn accumulate(&mut self, other: &Usage) {
-        self.prompt_tokens = self.prompt_tokens.saturating_add(other.prompt_tokens);
-        self.completion_tokens = self
-            .completion_tokens
-            .saturating_add(other.completion_tokens);
-        self.total_tokens = self.total_tokens.saturating_add(other.total_tokens);
-        self.cache_read_tokens = self
-            .cache_read_tokens
-            .saturating_add(other.cache_read_tokens);
-        self.cache_write_tokens = self
-            .cache_write_tokens
-            .saturating_add(other.cache_write_tokens);
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ChatResult {
     pub content: String,

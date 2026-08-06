@@ -98,6 +98,30 @@ impl StateStore {
         )
     }
 
+    /// 记录统一工具网关解包后的展示信息。
+    ///
+    /// 参数:
+    /// - `provider_call_id`: provider 工具调用标识
+    /// - `tool_name`: 真实工具名称
+    /// - `arguments`: 真实工具参数 JSON 文本
+    ///
+    /// 返回:
+    /// - 更新是否成功
+    pub(crate) fn record_tool_call_display(
+        &self,
+        provider_call_id: &str,
+        tool_name: &str,
+        arguments: &str,
+    ) -> Result<()> {
+        update_tool_call_display(
+            &self.conv_db,
+            &self.session_id,
+            provider_call_id,
+            tool_name,
+            arguments,
+        )
+    }
+
     /// 记录工具调用结果。
     ///
     /// 参数:
@@ -281,6 +305,40 @@ pub(in crate::state) fn insert_tool_call_with_context(
     Ok(())
 }
 
+/// 更新工具调用的界面展示信息。
+///
+/// 参数:
+/// - `db`: 对话数据库
+/// - `session_id`: 会话标识
+/// - `provider_call_id`: provider 工具调用标识
+/// - `tool_name`: 真实工具名称
+/// - `arguments`: 真实工具参数 JSON 文本
+///
+/// 返回:
+/// - 更新是否成功
+fn update_tool_call_display(
+    db: &ConversationDb,
+    session_id: &str,
+    provider_call_id: &str,
+    tool_name: &str,
+    arguments: &str,
+) -> Result<()> {
+    let conn = db.conn.lock().unwrap();
+    conn.execute(
+        "UPDATE tool_calls
+         SET display_tool_name = ?1, display_arguments = ?2, updated_at = ?3
+         WHERE session_id = ?4 AND provider_call_id = ?5",
+        params![
+            tool_name,
+            arguments,
+            Utc::now().to_rfc3339(),
+            session_id,
+            provider_call_id,
+        ],
+    )?;
+    Ok(())
+}
+
 /// 插入工具结果并更新调用状态。
 ///
 /// 参数:
@@ -417,7 +475,7 @@ pub(in crate::state) fn summarize_tool_history(
     )?;
     let latest = conn
         .query_row(
-            "SELECT tool_name, status FROM tool_calls
+            "SELECT COALESCE(display_tool_name, tool_name), status FROM tool_calls
              WHERE session_id = ?1
              ORDER BY updated_at DESC, seq DESC
              LIMIT 1",
@@ -455,7 +513,7 @@ pub(in crate::state) fn load_tool_exchanges_for_turn(
         "SELECT
             c.id, c.session_id, c.turn_id, c.seq, c.assistant_round,
             c.assistant_reasoning, c.provider_call_id, c.tool_name, c.arguments,
-            c.status, c.created_at, c.updated_at,
+            c.display_tool_name, c.display_arguments, c.status, c.created_at, c.updated_at,
             r.id, r.session_id, r.turn_id, r.provider_call_id, r.ok,
             r.result_preview, r.result_ref, r.error, r.original_chars,
             r.created_at, r.completed_at,
@@ -482,37 +540,39 @@ pub(in crate::state) fn load_tool_exchanges_for_turn(
             provider_call_id: row.get(6)?,
             tool_name: row.get(7)?,
             arguments: row.get(8)?,
-            status: ToolCallStatus::from_str(&row.get::<_, String>(9)?),
-            created_at: row.get(10)?,
-            updated_at: row.get(11)?,
+            display_tool_name: row.get(9)?,
+            display_arguments: row.get(10)?,
+            status: ToolCallStatus::from_str(&row.get::<_, String>(11)?),
+            created_at: row.get(12)?,
+            updated_at: row.get(13)?,
         };
-        let result_id: Option<String> = row.get(12)?;
+        let result_id: Option<String> = row.get(14)?;
         let result = match result_id {
             Some(id) => Some(ToolResultRecord {
                 id,
-                session_id: row.get(13)?,
-                turn_id: row.get(14)?,
-                provider_call_id: row.get(15)?,
-                ok: row.get::<_, i64>(16)? == 1,
-                result_preview: row.get(17)?,
-                result_ref: row.get(18)?,
-                error: row.get(19)?,
-                original_chars: row.get::<_, i64>(20)? as usize,
-                created_at: row.get(21)?,
-                completed_at: row.get(22)?,
+                session_id: row.get(15)?,
+                turn_id: row.get(16)?,
+                provider_call_id: row.get(17)?,
+                ok: row.get::<_, i64>(18)? == 1,
+                result_preview: row.get(19)?,
+                result_ref: row.get(20)?,
+                error: row.get(21)?,
+                original_chars: row.get::<_, i64>(22)? as usize,
+                created_at: row.get(23)?,
+                completed_at: row.get(24)?,
             }),
             None => None,
         };
-        let replacement_id: Option<String> = row.get(23)?;
+        let replacement_id: Option<String> = row.get(25)?;
         let replacement = match replacement_id {
             Some(provider_call_id) => Some(ToolOutputReplacement {
                 provider_call_id,
-                session_id: row.get(24)?,
-                replacement: row.get(25)?,
-                original_chars: row.get::<_, i64>(26)? as usize,
-                result_ref: row.get(27)?,
-                policy: row.get(28)?,
-                created_at: row.get(29)?,
+                session_id: row.get(26)?,
+                replacement: row.get(27)?,
+                original_chars: row.get::<_, i64>(28)? as usize,
+                result_ref: row.get(29)?,
+                policy: row.get(30)?,
+                created_at: row.get(31)?,
             }),
             None => None,
         };

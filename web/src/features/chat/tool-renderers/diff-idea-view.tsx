@@ -1,14 +1,18 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { ChevronDown, ChevronUp, UnfoldVertical } from "lucide-react";
 import type { DiffFile } from "./diff/diff-model";
 import { buildSideBySide, type SideBySideRow } from "./diff/side-by-side";
 import {
-  CONTEXT_MARGIN,
   foldPlan,
-  isContextRow,
   segmentRows,
   type RowSegment
 } from "./diff/diff-blocks";
+import {
+  changeSegmentIndexes,
+  changeTone,
+  clampChangeOrdinal
+} from "./diff/diff-change-blocks";
+import { DiffConnector } from "./diff/diff-connectors";
 import { SyntaxHighlighter } from "../syntax-highlighter";
 import { useI18n } from "../../i18n/use-i18n";
 import "./diff-view.css";
@@ -28,9 +32,10 @@ export function DiffIdeaView({ file, language }: { file: DiffFile; language?: st
   const { t } = useI18n();
   const rows = useMemo(() => buildSideBySide(file.lines), [file.lines]);
   const segments = useMemo(() => segmentRows(rows), [rows]);
-  const changeIndexes = useMemo(
-    () => segments.map((segment, index) => (segment.kind === "change" ? index : -1)).filter((index) => index >= 0),
-    [segments]
+  const changeIndexes = useMemo(() => changeSegmentIndexes(segments), [segments]);
+  const changeOrdinals = useMemo(
+    () => new Map(changeIndexes.map((segmentIndex, ordinal) => [segmentIndex, ordinal])),
+    [changeIndexes]
   );
   // 手动展开的上下文段；默认全部折叠
   const [unfolded, setUnfolded] = useState<ReadonlySet<number>>(new Set());
@@ -38,8 +43,22 @@ export function DiffIdeaView({ file, language }: { file: DiffFile; language?: st
   const blockRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const changeCount = changeIndexes.length;
+  const allFoldableIndexes = useMemo(
+    () => segments.flatMap((segment, index) => (segment.kind === "context" && foldPlan(segment.rows.length).foldCount > 0 ? [index] : [])),
+    [segments]
+  );
+  const allExpanded = allFoldableIndexes.length > 0 && allFoldableIndexes.every((index) => unfolded.has(index));
 
-  /** 展开或收起指定上下文段。 */
+  useEffect(() => {
+    setCurrent((previous) => clampChangeOrdinal(previous, changeCount));
+  }, [changeCount]);
+
+  /**
+   * 展开或收起指定上下文段。
+   *
+   * @param index 上下文段索引
+   * @returns 无
+   */
   const toggleFold = (index: number): void => {
     setUnfolded((prev) => {
       const next = new Set(prev);
@@ -49,12 +68,38 @@ export function DiffIdeaView({ file, language }: { file: DiffFile; language?: st
     });
   };
 
-  /** 跳转到第 n 个变更块并滚动到可见。 */
+  /**
+   * 跳转到第 n 个变更块并滚动到可见。
+   *
+   * @param ordinal 目标变更块序号，从零开始
+   * @returns 无
+   */
   const goToChange = (ordinal: number): void => {
-    const clamped = Math.min(Math.max(ordinal, 0), Math.max(changeCount - 1, 0));
+    const clamped = clampChangeOrdinal(ordinal, changeCount);
     setCurrent(clamped);
     const segmentIndex = changeIndexes[clamped];
-    blockRefs.current[segmentIndex]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    blockRefs.current[segmentIndex]?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  };
+
+  /**
+   * 处理 IDEA 风格的上一处/下一处变更快捷键。
+   *
+   * @param event 键盘事件
+   * @returns 无
+   */
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== "F7") return;
+    event.preventDefault();
+    goToChange(current + (event.shiftKey ? -1 : 1));
+  };
+
+  /**
+   * 展开或收起当前文件中的所有可折叠上下文。
+   *
+   * @returns 无
+   */
+  const toggleAllFolds = (): void => {
+    setUnfolded(allExpanded ? new Set() : new Set(allFoldableIndexes));
   };
 
   if (changeCount === 0) {
@@ -62,7 +107,12 @@ export function DiffIdeaView({ file, language }: { file: DiffFile; language?: st
   }
 
   return (
-    <div className="diff-idea">
+    <div
+      className="diff-idea"
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      aria-label={t("Diff changes", "差异变更")}
+    >
       <div className="diff-idea-toolbar">
         <span className="diff-idea-count">
           {t(`${changeCount} change blocks`, `${changeCount} 处变更`)}
@@ -89,9 +139,11 @@ export function DiffIdeaView({ file, language }: { file: DiffFile; language?: st
           </button>
           <button
             type="button"
-            onClick={() => setUnfolded(new Set(segments.map((_, index) => index)))}
-            title={t("Expand all folded regions", "展开全部折叠区")}
-            aria-label={t("Expand all folded regions", "展开全部折叠区")}
+            onClick={toggleAllFolds}
+            title={allExpanded ? t("Fold unchanged regions", "折叠未改动区域") : t("Expand all folded regions", "展开全部折叠区")}
+            aria-label={allExpanded ? t("Fold unchanged regions", "折叠未改动区域") : t("Expand all folded regions", "展开全部折叠区")}
+            aria-pressed={allExpanded}
+            disabled={allFoldableIndexes.length === 0}
           >
             <UnfoldVertical size={13} />
           </button>
@@ -104,8 +156,15 @@ export function DiffIdeaView({ file, language }: { file: DiffFile; language?: st
             segment={segment}
             index={index}
             unfolded={unfolded.has(index)}
+            active={changeOrdinals.get(index) === current}
+            ordinal={changeOrdinals.get(index)}
+            changeCount={changeCount}
             language={language}
             onToggleFold={() => toggleFold(index)}
+            onActivate={() => {
+              const ordinal = changeOrdinals.get(index);
+              if (ordinal !== undefined) setCurrent(ordinal);
+            }}
             refCallback={(element) => {
               blockRefs.current[index] = element;
             }}
@@ -121,8 +180,12 @@ type SegmentBlockProps = {
   segment: RowSegment;
   index: number;
   unfolded: boolean;
+  active: boolean;
+  ordinal?: number;
+  changeCount: number;
   language?: string;
   onToggleFold: () => void;
+  onActivate: () => void;
   refCallback: (element: HTMLDivElement | null) => void;
   t: (en: string, zh: string) => string;
 };
@@ -133,7 +196,19 @@ type SegmentBlockProps = {
  * @param props 段内容、折叠状态与回调
  * @returns 段元素
  */
-function SegmentBlock({ segment, index, unfolded, language, onToggleFold, refCallback, t }: SegmentBlockProps) {
+function SegmentBlock({
+  segment,
+  index,
+  unfolded,
+  active,
+  ordinal,
+  changeCount,
+  language,
+  onToggleFold,
+  onActivate,
+  refCallback,
+  t
+}: SegmentBlockProps) {
   // 1. 上下文段：短段直接铺开，长段折叠首尾之外的中间
   if (segment.kind === "context") {
     const plan = foldPlan(segment.rows.length);
@@ -163,24 +238,27 @@ function SegmentBlock({ segment, index, unfolded, language, onToggleFold, refCal
   }
 
   // 2. 变更段：按增/删/混合决定连接带颜色
-  const hasLeft = segment.rows.some((row) => row.left && row.left.kind === "removed");
-  const hasRight = segment.rows.some((row) => row.right && row.right.kind === "added");
-  const tone = hasLeft && hasRight ? "mixed" : hasRight ? "added" : "removed";
+  const tone = changeTone(segment.rows);
   return (
-    <div className={`diff-idea-change diff-tone-${tone}`} ref={refCallback}>
-      <div className="diff-idea-cols">
-        <div className="diff-idea-col left">
-          {segment.rows.map((row, rowIndex) => (
-            <IdeaCell line={row.left} side="left" language={language} key={rowIndex} />
-          ))}
+    <div
+      className={`diff-idea-change diff-tone-${tone}${active ? " is-active" : ""}`}
+      ref={refCallback}
+      role="group"
+      aria-label={
+        ordinal === undefined
+          ? t("Changed lines", "变更行")
+          : t(`Change ${ordinal + 1} of ${changeCount}`, `第 ${ordinal + 1} / ${changeCount} 处变更`)
+      }
+      aria-current={active ? "true" : undefined}
+      onClick={onActivate}
+    >
+      {segment.rows.map((row, rowIndex) => (
+        <div className="diff-idea-rowline diff-idea-change-row" key={rowIndex}>
+          <IdeaCell line={row.left} side="left" language={language} />
+          <DiffConnector row={row} />
+          <IdeaCell line={row.right} side="right" language={language} />
         </div>
-        <div className="diff-idea-band" aria-hidden />
-        <div className="diff-idea-col right">
-          {segment.rows.map((row, rowIndex) => (
-            <IdeaCell line={row.right} side="right" language={language} key={rowIndex} />
-          ))}
-        </div>
-      </div>
+      ))}
     </div>
   );
 }
@@ -227,7 +305,9 @@ function IdeaCell({
       <span className="diff-gutter">{side === "left" ? (line.oldLine ?? "") : (line.newLine ?? "")}</span>
       <code>
         <span className="diff-marker">{marker}</span>
-        <IdeaContent line={line} language={language} />
+        <span className="diff-code-content">
+          <IdeaContent line={line} language={language} />
+        </span>
       </code>
     </div>
   );

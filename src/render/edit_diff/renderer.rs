@@ -211,7 +211,6 @@ fn render_file_header(change: &FileChange) -> String {
 fn render_file_change(change: &FileChange) -> String {
     match change {
         FileChange::Add { path, content } => render_added_file(path, content),
-        FileChange::Delete { path, content } => render_deleted_file(path, content),
         FileChange::Update { path, lines, .. } => render_update_lines(path, lines),
     }
 }
@@ -231,27 +230,6 @@ fn render_added_file(path: &Path, content: &str) -> String {
         output.push_str(&style_added_line(
             path,
             &format!("{:>width$} +  {line}", index + 1),
-        ));
-        output.push('\n');
-    }
-    output
-}
-
-/// 渲染删除文件。
-///
-/// 参数:
-/// - `path`: 文件路径
-/// - `content`: 旧文件内容
-///
-/// 返回:
-/// - diff 文本
-fn render_deleted_file(path: &Path, content: &str) -> String {
-    let width = content.lines().count().max(1).to_string().len().max(3);
-    let mut output = String::new();
-    for (index, line) in content.lines().enumerate() {
-        output.push_str(&style_removed_line(
-            path,
-            &format!("{:>width$} -  {line}", index + 1),
         ));
         output.push('\n');
     }

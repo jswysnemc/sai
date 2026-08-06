@@ -106,7 +106,10 @@ mod tests {
     /// 验证大小写与空白不影响解析。
     #[test]
     fn parsing_ignores_case_and_whitespace() {
-        assert_eq!(MemoryKind::parse("  Preference "), Some(MemoryKind::Preference));
+        assert_eq!(
+            MemoryKind::parse("  Preference "),
+            Some(MemoryKind::Preference)
+        );
     }
 
     /// 验证未知标识不产生类型。

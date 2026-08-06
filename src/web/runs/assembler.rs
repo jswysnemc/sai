@@ -145,6 +145,26 @@ impl EventAssembler {
                 events.push(self.event(kind, json!({ "text": chunk.text })));
                 events
             }
+            AgentEvent::InterMessage(message) => {
+                let mut events = self.status_event("waiting_response");
+                events.push(self.event(
+                    "message.automatic.input",
+                    json!({
+                        "id": message.id,
+                        "kind": message.kind.as_str(),
+                        "content": message.content,
+                    }),
+                ));
+                events
+            }
+            AgentEvent::WaitingExternal => self.status_event("waiting_external"),
+            AgentEvent::ContextUpdated(update) => vec![self.event(
+                "context.updated",
+                json!({
+                    "usage": update.usage,
+                    "context_window_tokens": update.context_window_tokens,
+                }),
+            )],
             AgentEvent::ToolCallProgress(progress) => {
                 let mut events = self.status_event("working");
                 let tool_id = self.tool_id_for_index(progress.index);

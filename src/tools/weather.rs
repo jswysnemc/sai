@@ -30,7 +30,11 @@ async fn get_weather(args: Value) -> Result<String> {
     };
     let url = format!("https://wttr.in{path}?format=%C+%t+%w+%l");
     let text = super::http_body::decode_body(
-        reqwest::Client::new().get(url).send().await?.error_for_status()?,
+        reqwest::Client::new()
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?,
     )
     .await?;
     let text = text.trim();

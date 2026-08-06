@@ -1,6 +1,7 @@
 use super::turns::pending_placeholder;
 use super::*;
-use crate::llm::ChatMessage;
+use crate::llm::{ChatMessage, Usage};
+use crate::paths::SaiPaths;
 
 /// 测试用的单轮用量，累计口径与上下文口径取同一值。
 const TURN_USAGE: Usage = Usage {
@@ -16,6 +17,8 @@ mod context_epoch;
 mod session_memory;
 mod session_runtime;
 mod tool_history;
+mod tool_history_round_boundaries;
+mod turn_messages;
 
 fn test_paths(state_dir: PathBuf) -> SaiPaths {
     SaiPaths {
@@ -176,9 +179,7 @@ fn prompt_change_does_not_clear_conversation_state() {
     store
         .save_loaded_tools(&["web_search".to_string()])
         .unwrap();
-    store
-        .add_turn_usage(&TURN_USAGE, Some(&TURN_USAGE))
-        .unwrap();
+    store.add_conversation_message_usage(&TURN_USAGE).unwrap();
 
     store.reset_if_prompt_changed("updated prompt").unwrap();
 
@@ -487,9 +488,7 @@ fn session_summary_projection_matches_existing_snapshot_fields() {
             .complete_turn(&turn_id, &format!("assistant {index}"), None)
             .unwrap();
     }
-    store
-        .add_turn_usage(&TURN_USAGE, Some(&TURN_USAGE))
-        .unwrap();
+    store.add_conversation_message_usage(&TURN_USAGE).unwrap();
     let request = store
         .select_manual_compaction(0)
         .unwrap()
@@ -557,9 +556,7 @@ fn session_snapshot_includes_usage_and_compaction() {
             .complete_turn(&turn_id, &format!("assistant {index}"), None)
             .unwrap();
     }
-    store
-        .add_turn_usage(&TURN_USAGE, Some(&TURN_USAGE))
-        .unwrap();
+    store.add_conversation_message_usage(&TURN_USAGE).unwrap();
     let request = store
         .select_manual_compaction(0)
         .unwrap()
@@ -646,4 +643,3 @@ fn session_summary_projection_handles_large_tool_reports_quickly() {
         "session summary projection took {elapsed:?}"
     );
 }
-

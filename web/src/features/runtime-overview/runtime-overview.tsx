@@ -18,7 +18,8 @@ import { OPEN_WORKSPACE_PANEL_EVENT } from "../workspace/workspace-panel-options
 import type { PaneTab } from "../workspace/workspace-tab";
 import type { ActivityPulse } from "./activity-pulse";
 import { useActivityPulse } from "./use-activity-pulse";
-import { useRuntimeOverviewData } from "./runtime-overview-data";
+import { selectTodoOverviewItems, useRuntimeOverviewData } from "./runtime-overview-data";
+import { subagentStatusLabel } from "../subagents/subagent-labels";
 import "./runtime-overview.css";
 
 const COLLAPSED_STORAGE_KEY = "sai.runtime-overview.collapsed";
@@ -51,7 +52,7 @@ type RuntimeOverviewProps = {
  * @returns 可收缩的运行总览浮层
  */
 export function RuntimeOverview({ sessionId }: RuntimeOverviewProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const data = useRuntimeOverviewData(sessionId);
   const pulse = useActivityPulse(data.snapshot);
   const [responsiveOpen, setResponsiveOpen] = useState(false);
@@ -122,14 +123,14 @@ export function RuntimeOverview({ sessionId }: RuntimeOverviewProps) {
         </header>
 
         <section className="runtime-overview-section">
-          <Button className="runtime-overview-row git-row" onClick={() => openWorkspacePanel("diff")}>
+          <Button className="runtime-overview-row git-row" onClick={openGitFileTree}>
             <FileDiff size={14} aria-hidden />
             <strong>{t("Changes", "更改")}</strong>
             <span className="runtime-overview-count">{data.git.changedCount}</span>
             <ChangeStats added={data.git.added} removed={data.git.removed} />
           </Button>
           {data.git.branch && (
-            <Button className="runtime-overview-row branch-row" onClick={() => openWorkspacePanel("diff")}>
+            <Button className="runtime-overview-row branch-row" onClick={openGitFileTree}>
               <GitBranch size={14} aria-hidden />
               <span>{data.git.branch}</span>
               <ChevronRight size={13} aria-hidden />
@@ -144,7 +145,7 @@ export function RuntimeOverview({ sessionId }: RuntimeOverviewProps) {
             <small>{data.todos.completed}/{data.todos.items.length}</small>
           </div>
           <div className="runtime-overview-list">
-            {data.todos.items.slice(0, 4).map((item) => {
+            {selectTodoOverviewItems(data.todos.items).map((item) => {
               const Icon = todoIcons[item.status];
               return (
                 <div className={`runtime-overview-item is-${item.status}`} key={item.id}>
@@ -168,11 +169,11 @@ export function RuntimeOverview({ sessionId }: RuntimeOverviewProps) {
               : t(`${data.subagents.completed} completed`, `${data.subagents.completed} 已结束`)}</small>
             <ChevronRight size={13} aria-hidden />
           </Button>
-          {data.subagents.items.slice(0, 3).map((subagent) => (
+          {data.subagents.overviewItems.map((subagent) => (
             <Button className="runtime-overview-agent" key={subagent.id} onClick={() => openWorkspacePanel("subagents")}>
               <span className={`runtime-overview-agent-state is-${subagent.status}`} aria-hidden />
               <span>{subagent.description || subagent.subagent_type}</span>
-              <small>{subagent.status === "running" ? `${subagent.step}/${subagent.max_steps}` : subagent.status}</small>
+              <small>{subagentStatusLabel(subagent.status, locale)}</small>
             </Button>
           ))}
         </section>
@@ -216,8 +217,21 @@ function ChangeStats({ added, removed }: { added: number; removed: number }) {
  * 通知工作台打开指定面板。
  *
  * @param tab 目标工作区面板
+ * @param revealFileTree 是否同时展开编辑器文件树
  * @returns 无返回值
  */
-function openWorkspacePanel(tab: PaneTab): void {
-  window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_PANEL_EVENT, { detail: { tab } }));
+function openWorkspacePanel(tab: PaneTab, revealFileTree = false): void {
+  window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_PANEL_EVENT, {
+    detail: { tab, revealFileTree }
+  }));
+}
+
+/**
+ * 打开集成 Git 状态的文件树。
+ *
+ * 返回:
+ * - 无返回值
+ */
+function openGitFileTree(): void {
+  openWorkspacePanel("files", true);
 }

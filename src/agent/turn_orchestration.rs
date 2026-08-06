@@ -1,12 +1,12 @@
 use super::message_context::clean_user_visible_text;
 use super::recovery::is_context_overflow_error;
-use super::turn_execution::TurnExecution;
-use super::{Agent, AgentEvent};
+use super::{Agent, AgentEvent, InterMessageSource};
 use crate::llm::ChatResult;
 use crate::perf_trace::PerfTrace;
 use crate::state::PendingTurnGuard;
 use crate::tools::memes;
 use anyhow::Result;
+use std::sync::Arc;
 
 impl Agent {
     /// 发送一轮带可选图片的流式对话。
@@ -57,6 +57,36 @@ impl Agent {
     where
         F: FnMut(AgentEvent) -> Result<()>,
     {
+        self.chat_stream_with_images_and_inter_messages(
+            input, image_urls, turn_id, None, false, on_event,
+        )
+        .await
+    }
+
+    /// 发送一轮对话，并在 provider 消息间隙消费排队消息和外部回执。
+    ///
+    /// 参数:
+    /// - `input`: 用户文本输入
+    /// - `image_urls`: 当前轮图片
+    /// - `turn_id`: 可选稳定轮次标识
+    /// - `inter_message_source`: 可选用户排队消息来源
+    /// - `wait_for_external`: 最终回复后是否等待后台工作
+    /// - `on_event`: 流式事件回调
+    ///
+    /// 返回:
+    /// - 聊天结果
+    pub(crate) async fn chat_stream_with_images_and_inter_messages<F>(
+        &mut self,
+        input: &str,
+        image_urls: Vec<String>,
+        turn_id: Option<String>,
+        inter_message_source: Option<Arc<dyn InterMessageSource>>,
+        wait_for_external: bool,
+        on_event: F,
+    ) -> Result<ChatResult>
+    where
+        F: FnMut(AgentEvent) -> Result<()>,
+    {
         // HTTP 调试按会话落盘时绑定 session_id
         let _http_debug_session = crate::llm::HttpDebugSessionGuard::new(self.state.session_id());
         let input = clean_user_visible_text(input);
@@ -87,9 +117,7 @@ impl Agent {
         let workspace = crate::runtime_cwd::current_dir()
             .ok()
             .map(|path| path.display().to_string());
-        let association_prompt = self
-            .memory
-            .recall_for_turn(&input, workspace.as_deref())?;
+        let association_prompt = self.memory.recall_for_turn(&input, workspace.as_deref())?;
         perf.mark("memory association");
         let auto_meme_reminder = auto_meme_plan.as_ref().map(|plan| plan.reminder.as_str());
         let mut messages = self.chat_messages_for_turn(
@@ -131,6 +159,8 @@ impl Agent {
                 &image_urls,
                 association_prompt.as_deref(),
                 auto_meme_reminder,
+                inter_message_source.as_deref(),
+                wait_for_external,
                 &mut emit_event,
                 &mut perf,
             )
@@ -175,6 +205,8 @@ impl Agent {
                         &image_urls,
                         association_prompt.as_deref(),
                         auto_meme_reminder,
+                        inter_message_source.as_deref(),
+                        wait_for_external,
                         &mut emit_event,
                         &mut perf,
                     )
@@ -201,8 +233,7 @@ impl Agent {
                 return Err(err);
             }
         };
-        // 拆出两种用量口径：turn_usage 计消耗，result.usage 表示当前上下文占用
-        let TurnExecution { result, turn_usage } = execution;
+        let result = execution;
         emit_event.as_mut()(AgentEvent::FlushContent)?;
         perf.mark("final content flushed");
         if let Some(plan) = auto_meme_plan {
@@ -220,50 +251,6 @@ impl Agent {
         self.spawn_memory_capture(&input, &result.content);
         self.memory.process_after_turn(&input, &result.content)?;
         perf.mark("memory process after turn");
-        // 1. 会话级累计（顶栏）
-        // 2. 全局 JSONL 历史（设置页统计）
-        let started_at = chrono::Utc::now().timestamp();
-        if let Some(usage) = &turn_usage {
-            // 最后一次调用未上报时不使用整轮累计量，交由上下文分项估算兜底
-            self.state.add_turn_usage(usage, result.usage.as_ref())?;
-            let _ = crate::usage_history::record_model_call(
-                &self.paths,
-                crate::usage_history::UsageRecordInput {
-                    provider_id: self.client.provider_id(),
-                    provider_name: self.client.provider_name(),
-                    model: self.client.model(),
-                    source: "chat",
-                    operation: "turn",
-                    status: "success",
-                    usage: Some(usage),
-                    usage_source: "provider_reported",
-                    started_at,
-                    duration_ms: 0,
-                    session_id: Some(self.state.session_id()),
-                    error_kind: None,
-                },
-            );
-        } else {
-            // 本轮没有 provider usage 时清除上一轮上下文口径，避免展示过期缓存率
-            self.state.clear_last_conversation_usage()?;
-            let _ = crate::usage_history::record_model_call(
-                &self.paths,
-                crate::usage_history::UsageRecordInput {
-                    provider_id: self.client.provider_id(),
-                    provider_name: self.client.provider_name(),
-                    model: self.client.model(),
-                    source: "chat",
-                    operation: "turn",
-                    status: "success",
-                    usage: None,
-                    usage_source: "missing",
-                    started_at,
-                    duration_ms: 0,
-                    session_id: Some(self.state.session_id()),
-                    error_kind: None,
-                },
-            );
-        }
         perf.mark("usage saved");
         Ok(result)
     }

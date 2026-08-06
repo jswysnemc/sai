@@ -66,6 +66,19 @@ impl ReplRuntime {
                 // 流式文本按固定节拍冲刷，避免长回复每个分片全量重排 markdown
                 self.throttled_live_sync()
             }
+            AgentEvent::InterMessage(message) => {
+                self.transcript.finalize_live_tail();
+                self.transcript.push_automatic_echo(message.content.clone());
+                self.transcript.set_work_status(WorkStatus::WaitingResponse);
+                self.arm_live_ticker();
+                self.sync_transcript(true)
+            }
+            AgentEvent::WaitingExternal => {
+                self.transcript.set_work_status(WorkStatus::WaitingExternal);
+                self.arm_live_ticker();
+                self.sync_transcript(true)
+            }
+            AgentEvent::ContextUpdated(_) => Ok(()),
             AgentEvent::ToolCall { name, arguments }
             | AgentEvent::ToolCallIdentified {
                 name, arguments, ..

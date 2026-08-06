@@ -133,6 +133,7 @@ describe("diff parser", () => {
     expect(files[0].status).toBe("modified");
     expect(files[0].added).toBe(1);
     expect(files[0].removed).toBe(1);
+    expect(files[0].lines.some((line) => line.text.includes("End Patch"))).toBe(false);
   });
 
   it("assigns line numbers across multiple hunks", () => {

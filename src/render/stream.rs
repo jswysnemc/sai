@@ -7,6 +7,7 @@ use crate::render::command_output::{
     write_command_block_with_action, write_command_error_preview, write_command_result_preview,
     write_tool_payload,
 };
+use crate::render::content_indent::align_to_guide_column;
 use crate::render::edit_diff::write_edit_file_diff_block;
 use crate::render::live_tool_status::LiveToolStatus;
 use crate::render::markdown::MarkdownStreamRenderer;
@@ -21,13 +22,12 @@ use crate::render::stream_tool_status::tool_start_status;
 use crate::render::streaming_replace::{clear_rendered_rows, rendered_visual_rows};
 use crate::render::style::TOOL_BULLET;
 use crate::render::terminal_text as t;
-use crate::render::content_indent::align_to_guide_column;
-use crate::render::transcript::reasoning_cell;
 use crate::render::tool_call_blocks::{
     write_command_tool_call_block, write_edit_tool_call_block, write_edit_tool_call_diff_block,
 };
 use crate::render::tool_event_line::{tool_event_label, tool_event_text};
 use crate::render::tool_view;
+use crate::render::transcript::reasoning_cell;
 use crate::render::wait_spinner::WaitSpinner;
 use crate::render::work_status::WorkStatus;
 use anyhow::Result;

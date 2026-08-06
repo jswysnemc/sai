@@ -363,13 +363,29 @@ impl TodoStore {
 }
 
 /// 校验 TODO 必须按照列表顺序逐项推进。
+///
+/// 参数:
+/// - `items`: 当前活动 TODO 项
+/// - `index`: 准备更新的 0 起始下标
+/// - `next`: 准备写入的状态
+///
+/// 返回:
+/// - 状态顺序合法时成功，否则返回可供调用方修正的说明
 fn validate_transition(items: &[TodoItem], index: usize, next: TodoStatus) -> Result<()> {
-    if matches!(next, TodoStatus::InProgress | TodoStatus::Completed)
-        && items[..index]
+    if matches!(next, TodoStatus::InProgress | TodoStatus::Completed) {
+        if let Some((blocker_index, blocker)) = items[..index]
             .iter()
-            .any(|item| item.status.is_unfinished())
-    {
-        bail!("complete earlier todo items before advancing this item")
+            .enumerate()
+            .find(|(_, item)| item.status.is_unfinished())
+        {
+            bail!(
+                "todo item {} cannot advance before earlier item {} ({:?}) is completed or cancelled; update index {} first",
+                index + 1,
+                blocker_index + 1,
+                blocker.status,
+                blocker_index + 1
+            )
+        }
     }
     if next == TodoStatus::InProgress
         && items.iter().enumerate().any(|(other_index, item)| {
@@ -482,9 +498,12 @@ mod tests {
             .add_many(&["first".to_string(), "second".to_string()], None)
             .unwrap();
 
-        assert!(store
+        let error = store
             .update_at(1, None, Some(TodoStatus::InProgress))
-            .is_err());
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("item 2"), "{error}");
+        assert!(error.contains("update index 1 first"), "{error}");
         store
             .update_at(0, None, Some(TodoStatus::InProgress))
             .unwrap();

@@ -17,6 +17,11 @@ fn loads_one_tool_with_public_argument() {
     let output = serde_json::from_str::<Value>(&output).unwrap();
 
     assert_eq!(output["tools"][0]["name"], json!("web_search"));
+    assert_eq!(
+        output["tools"][0]["definition"]["function"]["name"],
+        json!("web_search")
+    );
+    assert!(output["tools"][0]["definition"]["function"]["parameters"].is_object());
     assert!(visibility.is_visible("web_search"));
     assert!(!visibility.is_visible("web_fetch"));
 }
@@ -103,6 +108,39 @@ fn rejects_unknown_batch_atomically() {
     );
 
     assert!(error.contains("unknown tool: missing_tool"));
+    assert!(visibility.loaded_tool_names().is_empty());
+}
+
+/// 验证批量加载包含网关工具时整体失败且不写入部分状态。
+#[test]
+fn rejects_gateway_target_atomically() {
+    let mut registry = test_registry();
+    crate::tools::register_progressive_loader(&mut registry, &wildcard_deferred());
+    let mut visibility = ToolVisibility::new(wildcard_deferred());
+
+    let error = load_error(
+        &mut visibility,
+        &registry,
+        r#"{"type":"tool","keywords":["web_search","invoke_tool"]}"#,
+    );
+
+    assert!(error.contains("cannot be loaded"));
+    assert!(visibility.loaded_tool_names().is_empty());
+}
+
+/// 验证基础工具已经原生可见，不能再通过 load 重复加载。
+#[test]
+fn rejects_loading_a_directly_visible_base_tool() {
+    let registry = test_registry();
+    let mut visibility = ToolVisibility::new(wildcard_deferred());
+
+    let error = load_error(
+        &mut visibility,
+        &registry,
+        r#"{"type":"tool","keywords":["read_file"]}"#,
+    );
+
+    assert!(error.contains("already directly available"), "{error}");
     assert!(visibility.loaded_tool_names().is_empty());
 }
 

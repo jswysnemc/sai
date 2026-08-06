@@ -1,5 +1,6 @@
 use super::history_insert::replay_lines;
 use super::viewport::InlineViewport;
+use crate::render::terminal_paint::paint_lock;
 use crate::render::transcript::AnsiLine;
 use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo};
@@ -32,6 +33,7 @@ pub(super) fn replay(
     viewport: &InlineViewport,
     lines: &[AnsiLine],
 ) -> Result<usize> {
+    let _paint = paint_lock();
     let painted = replay_lines(stdout, viewport, lines)?;
     // 重绘区域之后可能残留旧行或旧 composer，一并清除（composer 随后由调用方重绘）
     let end_row = viewport
@@ -60,6 +62,7 @@ pub(super) fn replay_full<W: Write>(
     viewport: &InlineViewport,
     lines: &[AnsiLine],
 ) -> Result<usize> {
+    let _paint = paint_lock();
     let rows = usize::from(viewport.size().rows).max(1);
     let composer = usize::from(viewport.composer_height());
     let visible_budget = rows.saturating_sub(composer).max(1);

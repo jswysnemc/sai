@@ -109,7 +109,9 @@ mod tests {
         // 2. 重复执行不得报错
         create_checkpoint_tables(&conn).unwrap();
 
-        let mut stmt = conn.prepare("PRAGMA table_info(compaction_checkpoints)").unwrap();
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(compaction_checkpoints)")
+            .unwrap();
         let columns = stmt
             .query_map([], |row| row.get::<_, String>(1))
             .unwrap()

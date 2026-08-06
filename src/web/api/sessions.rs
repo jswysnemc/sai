@@ -356,9 +356,11 @@ async fn remove(
     Path(id): Path<String>,
 ) -> WebResult<Json<DeleteResponse>> {
     let workspace_id = reject_session_run(&state, &id).await?;
+    let owner_key = super::session_runtime::reject_running_subagents(&state.paths, &id)?;
     let deleted = crate::state::delete_session(&state.paths, &id)
         .map_err(|error| WebError::bad_request(error.to_string()))?;
     if deleted {
+        super::session_runtime::clear_session_runtime_records(&owner_key, &id);
         state
             .runs
             .remove_session_history(&workspace_id, &id)
@@ -380,18 +382,20 @@ async fn remove_many(
     State(state): State<WebAppState>,
     Json(request): Json<BulkDeleteSessionsRequest>,
 ) -> WebResult<Json<BulkDeleteResponse>> {
-    let mut session_workspaces = std::collections::HashMap::new();
-    for id in &request.ids {
-        let workspace_id = reject_session_run(&state, id).await?;
-        session_workspaces.insert(id.clone(), workspace_id);
-    }
     if request.ids.is_empty() {
         return Err(WebError::bad_request("session ids cannot be empty"));
+    }
+    let mut session_scopes = std::collections::HashMap::new();
+    for id in &request.ids {
+        let workspace_id = reject_session_run(&state, id).await?;
+        let owner_key = super::session_runtime::reject_running_subagents(&state.paths, id)?;
+        session_scopes.insert(id.clone(), (workspace_id, owner_key));
     }
     let deleted_ids = crate::state::delete_sessions(&state.paths, &request.ids)
         .map_err(|error| WebError::bad_request(error.to_string()))?;
     for id in &deleted_ids {
-        if let Some(workspace_id) = session_workspaces.get(id) {
+        if let Some((workspace_id, owner_key)) = session_scopes.get(id) {
+            super::session_runtime::clear_session_runtime_records(owner_key, id);
             state
                 .runs
                 .remove_session_history(workspace_id, id)
@@ -526,10 +530,7 @@ async fn rollback(
 ///
 /// 返回:
 /// - 会话所属工作区标识
-pub(super) async fn reject_session_run(
-    state: &WebAppState,
-    session_id: &str,
-) -> WebResult<String> {
+pub(super) async fn reject_session_run(state: &WebAppState, session_id: &str) -> WebResult<String> {
     let workspace_id = session_workspace_id(&state.paths, session_id)
         .map_err(|error| WebError::not_found(error.to_string()))?;
     if state

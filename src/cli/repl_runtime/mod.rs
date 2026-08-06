@@ -20,6 +20,7 @@ use crate::agent::AgentMode;
 use crate::cli::repl_chrome::ReplChrome;
 use crate::cli::repl_clipboard::ReplClipboardState;
 use crate::render::activity_animation::ACTIVITY_FRAME_INTERVAL;
+use crate::render::terminal_paint::paint_lock;
 use crate::render::transcript::{TranscriptRenderOptions, TranscriptStore, WelcomeCell};
 use crate::state::{SessionTimelineCompaction, SessionTimelineTurn};
 use anyhow::Result;
@@ -706,6 +707,7 @@ impl ReplRuntime {
     /// 已有输出全部视作 scrollback 保留原样，后续内容从光标处追加。
     fn restart_after_external(&mut self) -> Result<()> {
         self.desynced = false;
+        let _paint = paint_lock();
         let mut stdout = io::stdout();
         let position = crossterm::cursor::position().unwrap_or((0, 0));
         if position.0 != 0 {

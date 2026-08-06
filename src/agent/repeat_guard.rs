@@ -16,7 +16,7 @@ const REJECTED_STOP_THRESHOLD: usize = 3;
 /// 模型。真正需要拦截的是必然失败的重复——幻觉的工具名、畸形参数、被门禁挡
 /// 下的调用，它们重发多少次结果都一样。
 #[derive(Default)]
-pub(super) struct RepeatGuard {
+pub(crate) struct RepeatGuard {
     counts: HashMap<(String, String), Observation>,
 }
 
@@ -30,8 +30,8 @@ struct Observation {
 }
 
 /// 重复检测结论。
-#[derive(Debug, Eq, PartialEq)]
-pub(super) enum RepeatVerdict {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum RepeatVerdict {
     /// 正常执行
     Allow,
     /// 执行，但在结果后追加提醒
@@ -49,7 +49,7 @@ impl RepeatGuard {
     ///
     /// 返回:
     /// - 本次调用应当放行、提醒还是停止
-    pub(super) fn observe(&mut self, name: &str, arguments: &str) -> RepeatVerdict {
+    pub(crate) fn observe(&mut self, name: &str, arguments: &str) -> RepeatVerdict {
         // 1. 参数按去空白后的文本比对，避免格式抖动导致漏判
         let entry = self.counts.entry(key_of(name, arguments)).or_default();
         entry.seen += 1;
@@ -77,7 +77,7 @@ impl RepeatGuard {
     ///
     /// 返回:
     /// - 无；仅累加拒绝计数
-    pub(super) fn observe_rejected(&mut self, name: &str, arguments: &str) {
+    pub(crate) fn observe_rejected(&mut self, name: &str, arguments: &str) {
         let entry = self.counts.entry(key_of(name, arguments)).or_default();
         entry.rejected += 1;
     }
@@ -117,7 +117,7 @@ fn normalize_arguments(arguments: &str) -> String {
 ///
 /// 返回:
 /// - 追加在工具结果后的提醒
-pub(super) fn warn_notice(name: &str, seen: usize) -> String {
+pub(crate) fn warn_notice(name: &str, seen: usize) -> String {
     format!(
         "\n\n[repeat guard] 本轮已用相同参数调用 {name} {seen} 次。若这次是在等待状态变化，继续即可；否则请基于已有结果推进任务。"
     )
@@ -131,7 +131,7 @@ pub(super) fn warn_notice(name: &str, seen: usize) -> String {
 ///
 /// 返回:
 /// - 代替工具结果返回给模型的提示
-pub(super) fn stop_notice(name: &str, seen: usize) -> String {
+pub(crate) fn stop_notice(name: &str, seen: usize) -> String {
     format!(
         "[repeat guard] 已停止执行：本轮用相同参数调用 {name} {seen} 次，每次都被拒绝，从未成功返回过结果。同样的调用不会有不同结果，请改用其它工具或其它参数完成任务。"
     )

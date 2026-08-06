@@ -30,6 +30,9 @@ impl Agent {
             0,
             self.context_char_budget,
         );
+        if let Some(content) = current_provider_user_content(&projection.messages) {
+            self.state.set_provider_user_content(turn_id, &content)?;
+        }
         self.last_dynamic_sources = projection.dynamic_sources.clone();
         self.state
             .enforce_provider_projection(Some(turn_id), &projection)?;
@@ -47,16 +50,11 @@ impl Agent {
         &self,
         exclude_turn_id: Option<&str>,
     ) -> Result<ProjectedBaseContext> {
-        let loaded_tools_context = self.tool_visibility.loaded_context_prompt(&self.tools);
         let goal_context = self
             .state
             .goal()?
             .map(|goal| crate::goal::system_context(&goal));
-        let dynamic_tool_context = [loaded_tools_context.as_deref(), goal_context.as_deref()]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>()
-            .join("\n\n");
+        let session_goal_context = goal_context.unwrap_or_default();
         let projected_history = self.state.project_history(exclude_turn_id)?;
         let compaction_summary_context = projected_history
             .checkpoint_context
@@ -70,11 +68,29 @@ impl Agent {
             &epoch.baseline,
             Some(self.mode().reminder()),
             selected_model_label(&self.config)?.as_deref(),
-            (!dynamic_tool_context.is_empty()).then_some(dynamic_tool_context.as_str()),
+            (!session_goal_context.is_empty()).then_some(session_goal_context.as_str()),
             compaction_summary_context.as_deref(),
             projected_history.messages,
             last_auto_meme_reminder.as_deref(),
             &runtime_context,
         ))
+    }
+}
+
+/// 提取当前请求末尾用户消息的文本部分。
+///
+/// 参数:
+/// - `messages`: 当前供应商请求消息
+///
+/// 返回:
+/// - 当前用户消息文本；消息缺失时返回空
+fn current_provider_user_content(messages: &[ChatMessage]) -> Option<String> {
+    let content = messages.last()?.content.as_ref()?;
+    match content {
+        crate::llm::ChatContent::Text(text) => Some(text.clone()),
+        crate::llm::ChatContent::Parts(parts) => parts.iter().find_map(|part| match part {
+            crate::llm::ChatContentPart::Text { text } => Some(text.clone()),
+            crate::llm::ChatContentPart::ImageUrl { .. } => None,
+        }),
     }
 }

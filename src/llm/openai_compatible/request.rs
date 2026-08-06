@@ -2,6 +2,34 @@ use sha2::{Digest, Sha256};
 
 const RESPONSES_CALL_ID_MAX_CHARS: usize = 64;
 
+/// 根据稳定请求前缀生成跨轮次复用的缓存键。
+///
+/// 参数:
+/// - `model`: 当前模型名称
+/// - `messages`: 已完成统一排序的消息列表
+/// - `tools`: 稳定注册的工具定义
+///
+/// 返回:
+/// - UUID 形式的确定性缓存键
+fn stable_request_cache_key(
+    model: &str,
+    messages: &[ChatMessage],
+    tools: &[ToolDefinition],
+) -> String {
+    let system_prefix = messages
+        .iter()
+        .take_while(|message| message.role == "system")
+        .collect::<Vec<_>>();
+    let payload = serde_json::to_vec(&(model, system_prefix, tools)).unwrap_or_default();
+    let digest = Sha256::digest(payload);
+    let mut bytes = [0u8; 16];
+    bytes.copy_from_slice(&digest[..16]);
+    // 1. 设置 UUID 版本与变体位，兼容要求 UUID 会话标识的网关
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    uuid::Uuid::from_bytes(bytes).to_string()
+}
+
 /// 判断是否应按 Codex 通道形态发 Responses（缺字段会 400 invalid codex request）。
 ///
 /// 参数:
@@ -25,7 +53,10 @@ fn prefers_codex_responses_shape(model: &str, base_url: &str, client_style: &str
         return true;
     }
     // Claude 模拟优先走 Anthropic Messages，不按 Codex Responses 推断
-    if matches!(style.as_str(), "default" | "claude" | "claude-code" | "claude_code") {
+    if matches!(
+        style.as_str(),
+        "default" | "claude" | "claude-code" | "claude_code"
+    ) {
         return false;
     }
     // auto：按模型名 / 网关特征推断

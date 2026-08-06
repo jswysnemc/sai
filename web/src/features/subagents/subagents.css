@@ -38,17 +38,6 @@
 .subagent-status.failed { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
 .subagent-status.cancelled { color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); }
 
-/* 实时进度 */
-.subagent-progress { display: grid; gap:var(--space-xs); }
-.subagent-progress-head { display: flex; align-items: center; gap:var(--space-xs); font-size:var(--text-xs); color: var(--ink-soft); }
-.subagent-progress-head .spin { flex-shrink: 0; color: var(--signal); }
-.subagent-progress-phase { flex: 1; min-width: 0; overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; }
-.subagent-progress-step { flex-shrink: 0; font:400 var(--text-2xs) var(--font-code); color: var(--ink-soft); }
-.subagent-progress-track { height: 4px; overflow: hidden; border-radius: var(--radius-pill); background: var(--control-surface); }
-.subagent-progress-fill { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--signal); transition:width var(--duration-slower) ease; }
-.spin { animation: subagent-spin 900ms linear infinite; }
-@keyframes subagent-spin { to { transform: rotate(360deg); } }
-
 /* 详情视图 */
 .subagent-detail-view { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .subagent-detail-head { display: flex; align-items: center; gap:var(--space-md); padding:var(--space-sm) var(--space-xl); border-bottom: 1px solid var(--line); }

@@ -1,8 +1,6 @@
 use super::builder::{build_tree, path_to_leaf};
 use super::model::SessionTree;
-use crate::state::turns::repository::{
-    active_leaf_locked, set_active_leaf_locked, ConversationDb,
-};
+use crate::state::turns::repository::{active_leaf_locked, set_active_leaf_locked, ConversationDb};
 use anyhow::{bail, Result};
 
 impl ConversationDb {

@@ -77,6 +77,7 @@ pub(crate) fn render_prompt_pair(
 ///
 /// 返回:
 /// - 模板合法时返回空结果
+#[cfg(test)]
 pub(crate) fn validate_template(template: &str, allowed: &[&str], required: &[&str]) -> Result<()> {
     validate_occurrences(&parse_occurrences(template)?, allowed, required)
 }

@@ -39,8 +39,14 @@ pub(crate) fn pending_finished_notices(owner_key: &str) -> Vec<FinishedSubagentN
             goal_id: record.snapshot.goal_id.clone(),
             description: record.snapshot.description.clone(),
             status: record.snapshot.status.clone(),
+            updated_at: record.snapshot.updated_at,
         });
     }
+    notices.sort_by(|left, right| {
+        left.updated_at
+            .cmp(&right.updated_at)
+            .then_with(|| left.id.cmp(&right.id))
+    });
     notices
 }
 
@@ -85,6 +91,22 @@ pub(crate) fn list_subagents_for_owner(owner_key: &str) -> Vec<SubagentSnapshot>
         .collect::<Vec<_>>();
     items.sort_by(|left, right| right.started_at.cmp(&left.started_at));
     items
+}
+
+/// 清除指定父会话的全部子智能体记录。
+///
+/// 参数:
+/// - `owner_key`: 父会话稳定作用域键
+///
+/// 返回:
+/// - 清除的记录数量
+pub(crate) fn clear_subagents_for_owner(owner_key: &str) -> usize {
+    ensure_owner_loaded(owner_key);
+    let mut subagents = subagents().lock().expect("subagent state lock");
+    let before = subagents.len();
+    subagents.retain(|_, record| record.owner_key != owner_key);
+    persist_owner_locked(&subagents, owner_key);
+    before.saturating_sub(subagents.len())
 }
 
 /// 读取后台子智能体快照。

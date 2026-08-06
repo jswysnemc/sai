@@ -1,6 +1,7 @@
 use super::repository::load_tool_exchanges_for_turn;
 use crate::llm::{ChatMessage, ToolCall, ToolCallFunction};
 use crate::state::tool_history::project_legacy_tool_report_messages;
+use crate::state::turn_messages::{load_turn_messages_for_turn, TurnMessageRecord};
 use crate::state::turns::{Turn, TurnStatus};
 use crate::state::ConversationDb;
 use anyhow::Result;
@@ -110,16 +111,27 @@ fn append_turn_messages(
     skip_calls: usize,
     messages: &mut Vec<ChatMessage>,
 ) -> Result<()> {
-    messages.push(ChatMessage::plain("user", turn.user_content.clone()));
+    let provider_user_content = db.provider_user_content(&turn.turn_id, &turn.user_content)?;
+    let user_message = if turn.user_image_urls.is_empty() {
+        ChatMessage::plain("user", provider_user_content)
+    } else {
+        ChatMessage::user_with_images(provider_user_content, turn.user_image_urls.clone())
+    };
+    messages.push(user_message);
     let exchanges = load_tool_exchanges_for_turn(db, session_id, &turn.turn_id)?;
+    let mut inter_messages = load_turn_messages_for_turn(db, &turn.turn_id)?;
     // 跳过已压缩部分时必须落在 assistant 子轮边界上，否则会留下孤立的 tool 结果
     let exchanges = skip_compacted_exchanges(&exchanges, skip_calls);
+    if skip_calls > 0 {
+        inter_messages.retain(|message| message.after_tool_seq > skip_calls);
+    }
     if exchanges.is_empty() {
+        append_turn_inter_messages(&inter_messages, messages);
         append_assistant_context_messages(turn, messages);
         append_interrupted_turn_marker(turn, messages);
         return Ok(());
     }
-    append_tool_exchange_messages(exchanges, messages);
+    append_tool_exchange_messages(exchanges, &inter_messages, messages);
     append_assistant_context_messages(turn, messages);
     append_interrupted_turn_marker(turn, messages);
     Ok(())
@@ -173,8 +185,11 @@ fn skip_compacted_exchanges(
 /// - 无
 fn append_tool_exchange_messages(
     exchanges: &[super::model::ToolExchangeRecord],
+    inter_messages: &[TurnMessageRecord],
     messages: &mut Vec<ChatMessage>,
 ) {
+    let mut message_index = 0usize;
+    append_inter_messages_through(inter_messages, &mut message_index, 0, messages);
     let mut start = 0usize;
     while start < exchanges.len() {
         let assistant_round = exchanges[start].call.assistant_round;
@@ -205,7 +220,61 @@ fn append_tool_exchange_messages(
                 tool_result_content(exchange),
             ));
         }
+        let boundary = round
+            .last()
+            .map(|exchange| exchange.call.seq)
+            .unwrap_or_default();
+        append_inter_messages_through(inter_messages, &mut message_index, boundary, messages);
         start = end;
+    }
+    append_turn_inter_messages(&inter_messages[message_index..], messages);
+}
+
+/// 追加不晚于指定工具序号的轮次内消息。
+///
+/// 参数:
+/// - `inter_messages`: 轮次内消息
+/// - `message_index`: 尚未追加消息的起始位置
+/// - `tool_seq`: 当前已经追加的最后一个工具序号
+/// - `messages`: provider 消息输出
+///
+/// 返回:
+/// - 无
+fn append_inter_messages_through(
+    inter_messages: &[TurnMessageRecord],
+    message_index: &mut usize,
+    tool_seq: usize,
+    messages: &mut Vec<ChatMessage>,
+) {
+    let start = *message_index;
+    while *message_index < inter_messages.len()
+        && inter_messages[*message_index].after_tool_seq <= tool_seq
+    {
+        *message_index += 1;
+    }
+    append_turn_inter_messages(&inter_messages[start..*message_index], messages);
+}
+
+/// 把持久化的轮次内消息转换为 provider 消息。
+///
+/// 参数:
+/// - `inter_messages`: 待追加消息
+/// - `messages`: provider 消息输出
+///
+/// 返回:
+/// - 无
+fn append_turn_inter_messages(
+    inter_messages: &[TurnMessageRecord],
+    messages: &mut Vec<ChatMessage>,
+) {
+    for message in inter_messages {
+        let projected = if message.kind.role() == "user" && !message.image_urls.is_empty() {
+            ChatMessage::user_with_images(message.model_content.clone(), message.image_urls.clone())
+        } else {
+            ChatMessage::plain(message.kind.role(), message.model_content.clone())
+        }
+        .with_reasoning(message.reasoning.clone());
+        messages.push(projected);
     }
 }
 
@@ -361,6 +430,31 @@ mod tests {
             Some(crate::llm::ChatContent::Text(text)) if text == "stable preview"
         ));
         assert_eq!(messages[3].role, "assistant");
+    }
+
+    /// 【上下文缓存】【供应商历史】验证内部上下文随用户消息稳定重放。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn projects_persisted_provider_user_content() {
+        let (_temp, db) = db();
+        db.start_turn("turn_1", "visible request").unwrap();
+        db.set_provider_user_content("turn_1", "runtime\n\nvisible request")
+            .unwrap();
+        db.complete_turn("turn_1", "done", None).unwrap();
+
+        let messages =
+            project_turn_messages_with_tool_history(&db, "default", &db.load_turns().unwrap())
+                .unwrap();
+
+        assert!(matches!(
+            messages[0].content.as_ref(),
+            Some(crate::llm::ChatContent::Text(text)) if text == "runtime\n\nvisible request"
+        ));
     }
 
     /// 【会话历史】【DeepSeek】验证工具子轮按原始思考内容重建。

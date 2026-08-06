@@ -1,13 +1,12 @@
-import { Plus } from "lucide-react";
+import { PanelRightOpen } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { CSSProperties } from "react";
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 import { api } from "../../api/client";
 import { ChatPage } from "../chat/chat-page";
 import { SessionSidebar } from "../sessions/session-sidebar";
 import { SessionSidebarResizeHandle } from "../sessions/session-sidebar-resize-handle";
 import { useSessionSidebarLayout } from "../sessions/use-session-sidebar-layout";
-import { useOutsidePointerDown } from "../../shared/hooks/use-outside-pointer-down";
 import { WorkspacePane } from "./workspace-pane";
 import { WorkspaceResizeHandle } from "./workspace-resize-handle";
 import { useWorkspaceLayout } from "./use-workspace-layout";
@@ -20,7 +19,12 @@ import {
   MOBILE_WORKBENCH_MEDIA_QUERY,
   reduceMobileWorkbenchState
 } from "./mobile-workbench-state";
-import { OPEN_WORKSPACE_PANEL_EVENT, WORKSPACE_PANEL_OPTIONS } from "./workspace-panel-options";
+import { OPEN_WORKSPACE_PANEL_EVENT } from "./workspace-panel-options";
+import {
+  OPEN_WORKSPACE_DIFF_EVENT,
+  OPEN_WORKSPACE_SIDEBAR_EVENT,
+  type WorkspacePassiveDiff
+} from "./workspace-passive-diff";
 import "./workspace-pane.css";
 import { useI18n } from "../i18n/use-i18n";
 
@@ -41,9 +45,9 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
   const layout = useWorkspaceLayout();
   const terminalManager = useTerminalManager();
   const sessionSidebar = useSessionSidebarLayout();
-  const [paneTab, setPaneTab] = useState<PaneTab>("files");
-  const [reopenMenuOpen, setReopenMenuOpen] = useState(false);
-  const reopenMenuRef = useRef<HTMLDivElement>(null);
+  const [paneTab, setPaneTab] = useState<PaneTab | null>(null);
+  const [passiveDiff, setPassiveDiff] = useState<WorkspacePassiveDiff | null>(null);
+  const [fileTreeRequestId, setFileTreeRequestId] = useState(0);
   const [mobileLayout, dispatchMobileLayout] = useReducer(reduceMobileWorkbenchState, initialMobileWorkbenchState);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY).matches);
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
@@ -62,8 +66,6 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
     mobileLayout.sidebarOpen ? "mobile-sidebar-open" : "mobile-sidebar-closed",
     `mobile-pane-${mobileLayout.pane}`
   ].filter(Boolean).join(" ");
-
-  useOutsidePointerDown(reopenMenuRef, () => setReopenMenuOpen(false), reopenMenuOpen);
 
   useEffect(() => {
     const media = window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY);
@@ -99,12 +101,9 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
       onSelectFile(relativePath);
       layout.openWorkspace();
       setPaneTab("files");
+      setPassiveDiff(null);
       if (detail.reveal) {
-        requestAnimationFrame(() => {
-          window.dispatchEvent(new CustomEvent("sai:reveal-workspace-file", {
-            detail: { path: relativePath }
-          }));
-        });
+        setFileTreeRequestId((current) => current + 1);
       }
       if (window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY).matches) {
         dispatchMobileLayout({ type: "show-pane", pane: "workspace" });
@@ -119,6 +118,7 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
     const openPanel = (tab: PaneTab) => {
       layout.openWorkspace();
       setPaneTab(tab);
+      if (tab !== "diff") setPassiveDiff(null);
       if (window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY).matches) {
         dispatchMobileLayout({ type: "show-pane", pane: tab === "terminal" ? "terminal" : "workspace" });
       }
@@ -126,19 +126,43 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
     const handleToggleTerminal = () => openPanel("terminal");
     const handleOpenTasks = () => openPanel("tasks");
     const handleOpenSubagents = () => openPanel("subagents");
+    const handleOpenSidebar = () => {
+      layout.openWorkspace();
+      setPaneTab(null);
+      setPassiveDiff(null);
+      if (window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY).matches) {
+        dispatchMobileLayout({ type: "show-pane", pane: "workspace" });
+      }
+    };
+    const handleOpenDiff = (event: Event) => {
+      const detail = (event as CustomEvent<WorkspacePassiveDiff>).detail;
+      if (!detail?.path) return;
+      layout.openWorkspace();
+      setPassiveDiff(detail);
+      setPaneTab("diff");
+      if (window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY).matches) {
+        dispatchMobileLayout({ type: "show-pane", pane: "workspace" });
+      }
+    };
     /** 响应移动端聊天头部 `+` 菜单发出的面板打开请求。 */
     const handleOpenPanel = (event: Event) => {
-      const tab = (event as CustomEvent<{ tab?: PaneTab }>).detail?.tab;
+      const detail = (event as CustomEvent<{ tab?: PaneTab; revealFileTree?: boolean }>).detail;
+      const tab = detail?.tab;
       if (tab) openPanel(tab);
+      if (detail?.revealFileTree) setFileTreeRequestId((current) => current + 1);
     };
     window.addEventListener("sai:toggle-terminal", handleToggleTerminal);
     window.addEventListener("sai:open-tasks", handleOpenTasks);
     window.addEventListener("sai:open-subagents", handleOpenSubagents);
+    window.addEventListener(OPEN_WORKSPACE_SIDEBAR_EVENT, handleOpenSidebar);
+    window.addEventListener(OPEN_WORKSPACE_DIFF_EVENT, handleOpenDiff);
     window.addEventListener(OPEN_WORKSPACE_PANEL_EVENT, handleOpenPanel);
     return () => {
       window.removeEventListener("sai:toggle-terminal", handleToggleTerminal);
       window.removeEventListener("sai:open-tasks", handleOpenTasks);
       window.removeEventListener("sai:open-subagents", handleOpenSubagents);
+      window.removeEventListener(OPEN_WORKSPACE_SIDEBAR_EVENT, handleOpenSidebar);
+      window.removeEventListener(OPEN_WORKSPACE_DIFF_EVENT, handleOpenDiff);
       window.removeEventListener(OPEN_WORKSPACE_PANEL_EVENT, handleOpenPanel);
     };
   }, [layout.openWorkspace]);
@@ -146,21 +170,23 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
   /** 关闭工作区，并在移动端回到聊天面板。 */
   const closeWorkspace = () => {
     layout.closeWorkspace();
-    setReopenMenuOpen(false);
+    setPaneTab(null);
+    setPassiveDiff(null);
     dispatchMobileLayout({ type: "show-pane", pane: "chat" });
   };
 
   /**
-   * 从收起态的 `+` 菜单打开指定面板。
+   * 从收起态直接打开空侧栏。
    *
-   * @param type 面板类型
+   * 返回:
+   * - 无返回值
    */
-  const openWorkspaceWith = (type: PaneTab) => {
-    setPaneTab(type);
+  const openEmptyWorkspace = () => {
+    setPaneTab(null);
+    setPassiveDiff(null);
     layout.openWorkspace();
-    setReopenMenuOpen(false);
     if (window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY).matches) {
-      dispatchMobileLayout({ type: "show-pane", pane: type === "terminal" ? "terminal" : "workspace" });
+      dispatchMobileLayout({ type: "show-pane", pane: "workspace" });
     }
   };
 
@@ -185,6 +211,9 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
             <WorkspacePane
               selectedFile={selectedFile}
               activeType={paneTab}
+              passiveDiff={passiveDiff}
+              fileTreeRequestId={fileTreeRequestId}
+              onFileTreeRequestHandled={() => setFileTreeRequestId(0)}
               maximized={layout.workspaceMaximized}
               onActiveTypeChange={setPaneTab}
               onSelectFile={onSelectFile}
@@ -196,36 +225,16 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
           </aside>
         )}
         {!layout.workspaceOpen && (
-          <div className="workspace-reopen-anchor" ref={reopenMenuRef}>
+          <div className="workspace-reopen-anchor">
             <button
               type="button"
               className="workspace-reopen"
-              onClick={() => setReopenMenuOpen((value) => !value)}
+              onClick={openEmptyWorkspace}
               title={t("Open workspace panel", "打开工作区")}
               aria-label={t("Open workspace panel", "打开工作区")}
-              aria-expanded={reopenMenuOpen}
-              aria-haspopup="menu"
             >
-              <Plus size={16} />
+              <PanelRightOpen size={16} />
             </button>
-            {reopenMenuOpen && (
-              <div className="workspace-reopen-menu" role="menu" aria-label={t("Choose panel", "选择面板")}>
-                {WORKSPACE_PANEL_OPTIONS.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      key={item.type}
-                      onClick={() => openWorkspaceWith(item.type)}
-                    >
-                      <Icon size={14} />
-                      <span>{t(item.labelEn, item.labelZh)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </div>
         )}
       </div>

@@ -99,6 +99,54 @@ impl ConversationDb {
         )
     }
 
+    /// 更新当前轮供应商实际接收的用户消息。
+    ///
+    /// 参数:
+    /// - `turn_id`: 当前轮唯一标识
+    /// - `content`: 合并动态上下文后的供应商用户消息
+    ///
+    /// 返回:
+    /// - 更新是否成功
+    pub(in crate::state) fn set_provider_user_content(
+        &self,
+        turn_id: &str,
+        content: &str,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE turns SET provider_user_content = ?1 WHERE turn_id = ?2",
+            params![content, turn_id],
+        )?;
+        Ok(())
+    }
+
+    /// 读取当前轮供应商用户消息，旧数据回退原始用户输入。
+    ///
+    /// 参数:
+    /// - `turn_id`: 当前轮唯一标识
+    /// - `fallback`: 原始用户输入
+    ///
+    /// 返回:
+    /// - 可重放的供应商用户消息
+    pub(in crate::state) fn provider_user_content(
+        &self,
+        turn_id: &str,
+        fallback: &str,
+    ) -> Result<String> {
+        let conn = self.conn.lock().unwrap();
+        let content = conn
+            .query_row(
+                "SELECT provider_user_content FROM turns WHERE turn_id = ?1",
+                params![turn_id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()?
+            .flatten()
+            .filter(|content| !content.trim().is_empty())
+            .unwrap_or_else(|| fallback.to_string());
+        Ok(content)
+    }
+
     /// 完成指定对话轮次。
     ///
     /// 参数:
@@ -499,6 +547,10 @@ impl ConversationDb {
 
 /// 删除指定轮次和关联工具历史。
 fn delete_turn_locked(conn: &Connection, turn_id: &str) -> Result<usize> {
+    conn.execute(
+        "DELETE FROM turn_messages WHERE turn_id = ?1",
+        params![turn_id],
+    )?;
     conn.execute(
         "DELETE FROM tool_output_replacements
          WHERE provider_call_id IN (

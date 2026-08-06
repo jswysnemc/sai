@@ -78,8 +78,7 @@ impl StateStore {
             .load_authoritative_compaction_summary()?
             .map(|summary| summary.summary);
         // 运行中轮次的工具调用同样参与压缩，需要知道其中已记录多少条
-        let (running_turn_call_count, already_compacted) =
-            self.running_turn_call_counts(&turns)?;
+        let (running_turn_call_count, already_compacted) = self.running_turn_call_counts(&turns)?;
         let request = super::select_compaction(
             &turns,
             previous_summary,

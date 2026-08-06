@@ -126,6 +126,45 @@ describe("HistoryTurn", () => {
     expect(html).toContain("继续完成目标");
   });
 
+  it("restores message-gap receipts after the timeline is reloaded", () => {
+    const turn: SessionTimelineTurn = {
+      turn_id: "message-gap-turn",
+      seq: 3,
+      status: "completed",
+      automatic: false,
+      user: { timestamp: "now", content: "执行并行检查" },
+      assistant: { timestamp: "later", content: "全部处理完成" },
+      tools: [],
+      messages: [
+        {
+          id: "intermediate",
+          seq: 1,
+          after_tool_seq: 0,
+          kind: "assistant",
+          role: "assistant",
+          content: "已启动子任务",
+          created_at: "middle"
+        },
+        {
+          id: "completion",
+          seq: 2,
+          after_tool_seq: 0,
+          kind: "external_completion",
+          role: "user",
+          content: "子智能体 A 已完成",
+          created_at: "middle"
+        }
+      ]
+    };
+
+    const html = renderWithProviders(<HistoryTurn turn={turn} />);
+
+    expect(html).toContain("已启动子任务");
+    expect(html).toContain("子智能体 A 已完成");
+    expect(html).toContain("全部处理完成");
+    expect(html.indexOf("已启动子任务")).toBeLessThan(html.indexOf("子智能体 A 已完成"));
+  });
+
   it("keeps images and special skill rendering inside the user bubble", () => {
     const html = renderWithProviders(
       <UserMessageBubble

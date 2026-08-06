@@ -36,11 +36,7 @@ pub async fn extract_candidates(
     assistant_message: &str,
     workspace: Option<&str>,
 ) -> Result<Vec<MemoryCandidate>> {
-    let input = build_extraction_input(
-        &clip(user_message),
-        &clip(assistant_message),
-        workspace,
-    );
+    let input = build_extraction_input(&clip(user_message), &clip(assistant_message), workspace);
     let messages = vec![
         ChatMessage::system(EXTRACTION_SYSTEM_PROMPT),
         ChatMessage::plain("user", input),

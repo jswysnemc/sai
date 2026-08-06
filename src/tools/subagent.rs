@@ -13,9 +13,11 @@ use std::time::Duration;
 #[path = "subagent_args.rs"]
 mod args;
 mod control;
+mod wait;
 
 use args::{optional_string_arg, string_arg, summarize_prompt};
 use control::{stats_json, subagent_cancel, subagent_list, subagent_result, subagent_status};
+use wait::wait_subagent;
 
 const EXPLORE_PROMPT: &str = include_str!("../prompts/subagent-explore.md");
 const GENERAL_PROMPT: &str = include_str!("../prompts/subagent-general.md");
@@ -27,11 +29,6 @@ const MAX_MAX_STEPS: usize = 400;
 const SUBAGENT_TIMEOUT_SECONDS: u64 = 1800;
 const TOOL_TIMEOUT_SECONDS: u64 = 120;
 const DESCRIPTION_MAX_CHARS: usize = 160;
-const WAIT_DEFAULT_SECONDS: u64 = 180;
-const WAIT_MAX_SECONDS: u64 = 600;
-const WAIT_POLL_MILLIS: u64 = 500;
-const WAIT_REPORT_EVERY_SECONDS: u64 = 5;
-
 const EXPLORE_ALLOWED: &[&str] = &[
     "check_os_info",
     "read_file",
@@ -47,7 +44,6 @@ const GENERAL_EXCLUDED: &[&str] = &[
     "deep_diagnose",
     "linux_input_method_diagnose",
     "linux_game_compatibility",
-    "load",
     "set_alarm",
     "list_alarms",
     "cancel_alarm",
@@ -273,89 +269,6 @@ async fn start_subagent(args: Value, context: SubagentContext) -> Result<String>
             "子智能体已启动；请继续自己的工作,需要结果时用 action=wait 等待。不要轮询 action=status:完成时会收到系统提醒"
         )
     }))?)
-}
-
-/// 阻塞等待子智能体进入终态。
-///
-/// 指定 subagent_id 时等待该子智能体;未指定时等待任意一个新完成的子智能体。
-/// 返回结果后仍由主模型请求确认投递，避免请求失败时丢失通知。
-///
-/// 参数:
-/// - `args`: 等待参数
-/// - `progress`: 主对话工具进度上报器
-/// - `owner_key`: 父会话稳定作用域键
-///
-/// 返回:
-/// - 完成子智能体的快照,或超时说明
-async fn wait_subagent(args: Value, progress: ToolProgress, owner_key: &str) -> Result<String> {
-    let subagent_id = optional_string_arg(&args, "subagent_id")?.filter(|id| !id.is_empty());
-    let timeout = args
-        .get("timeout_seconds")
-        .and_then(Value::as_u64)
-        .unwrap_or(WAIT_DEFAULT_SECONDS)
-        .clamp(5, WAIT_MAX_SECONDS);
-    let started = tokio::time::Instant::now();
-    let mut last_report = 0u64;
-    loop {
-        // 1. 指定 id:该子智能体进入终态即返回
-        if let Some(id) = &subagent_id {
-            let snapshot = subagent_state::subagent_snapshot_for_owner(owner_key, id)?;
-            if snapshot.status != "running" {
-                return Ok(serde_json::to_string_pretty(&json!({
-                    "ok": snapshot.status == "completed",
-                    "subagent": snapshot
-                }))?);
-            }
-        } else {
-            // 2. 未指定 id:任意新完成的子智能体即返回,并消费其通知事件
-            let notices = subagent_state::pending_finished_notices(owner_key);
-            if !notices.is_empty() {
-                let finished = notices
-                    .iter()
-                    .filter_map(|notice| subagent_state::subagent_snapshot(&notice.id).ok())
-                    .collect::<Vec<_>>();
-                return Ok(serde_json::to_string_pretty(&json!({
-                    "ok": true,
-                    "finished": finished
-                }))?);
-            }
-            let subagents = subagent_state::list_subagents_for_owner(owner_key);
-            if subagents
-                .iter()
-                .all(|snapshot| snapshot.status != "running")
-            {
-                return Ok(serde_json::to_string_pretty(&json!({
-                    "ok": true,
-                    "message": t(
-                        "no running subagents to wait for; results were already delivered",
-                        "没有运行中的子智能体可等待,结果此前已经送达"
-                    ),
-                    "subagents": subagents
-                }))?);
-            }
-        }
-        let elapsed = started.elapsed().as_secs();
-        if elapsed >= timeout {
-            return Ok(serde_json::to_string_pretty(&json!({
-                "ok": false,
-                "timeout": true,
-                "message": t(
-                    "wait timed out while subagents are still running; continue other work, a system-reminder arrives on finish",
-                    "等待超时,子智能体仍在运行;请先继续其他工作,完成时会收到系统提醒"
-                )
-            }))?);
-        }
-        // 3. 周期性上报等待进度,避免前端看起来卡死
-        if elapsed >= last_report + WAIT_REPORT_EVERY_SECONDS {
-            last_report = elapsed;
-            progress.report(if crate::i18n::is_zh() {
-                format!("等待子智能体完成,已等待 {elapsed} 秒")
-            } else {
-                format!("waiting for subagent, {elapsed}s elapsed")
-            });
-        }
-        tokio::time::sleep(Duration::from_millis(WAIT_POLL_MILLIS)).await;
-    }
 }
 
 /// 执行后台子智能体并写回状态。
@@ -602,6 +515,9 @@ async fn run_subagent(
             .collect::<Vec<_>>();
         default_tools.clone_filtered(&allowed)
     };
+    // 1. 渐进网关按子 Agent 的实际工具集合和延迟配置重建，避免沿用主 Agent 的描述
+    let mut tools = tools.clone_excluding(&[super::LOAD_NAME, super::INVOKE_NAME]);
+    super::progressive::register_loader(&mut tools, &profile.deferred_tools);
     let base_prompt = if profile.system_prompt.trim().is_empty() {
         default_prompt.to_string()
     } else {
@@ -611,6 +527,11 @@ async fn run_subagent(
     // 2. 以 Full 模式上报,时间线可拿到工具调用参数、结果与流式文本
     let progress = SubagentProgress::new(tool_progress, ProgressMode::Full, true);
     let runner = SubagentRunner::new(client, &system_prompt, tools, progress)
+        .progressive_loading(
+            profile.deferred_tools.clone(),
+            context.config.clone(),
+            context.paths.clone(),
+        )
         .max_steps(max_steps)
         .timeout_seconds(TOOL_TIMEOUT_SECONDS)
         .session_deadline_seconds(SUBAGENT_TIMEOUT_SECONDS)

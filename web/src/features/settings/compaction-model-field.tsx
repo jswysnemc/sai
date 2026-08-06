@@ -2,6 +2,7 @@ import type { AppConfig } from "../../api/contracts";
 import { Select } from "../../shared/ui/select/select";
 import { buildChatModelChoices } from "../chat/chat-model-options";
 import { useI18n } from "../i18n/use-i18n";
+import { modelSelectOption } from "./model-select-option";
 
 const INHERIT_VALUE = "";
 
@@ -28,11 +29,11 @@ export function CompactionModelField({ config, onConfigChange }: CompactionModel
       label: t("Follow conversation model", "跟随会话模型"),
       description: t("Use the model selected by the current conversation for each compaction", "每次压缩使用当前会话实际选择的模型")
     },
-    ...buildChatModelChoices(config).map((choice) => ({
-      value: encodeChoice(choice.providerId, choice.model),
-      label: `${choice.providerName} / ${choice.model}`,
-      description: t("Always use this model to generate compaction summaries", "始终使用该模型生成压缩摘要")
-    }))
+    ...buildChatModelChoices(config).map((choice) => modelSelectOption(
+      choice,
+      encodeChoice(choice.providerId, choice.model),
+      t("Always use this model to generate compaction summaries", "始终使用该模型生成压缩摘要")
+    ))
   ];
 
   /** 更新压缩模型配置。 */

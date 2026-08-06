@@ -4,17 +4,16 @@ use crate::llm::Usage;
 use anyhow::Result;
 
 impl StateStore {
-    /// 累加一个完整轮次的用量。
+    /// 记录一次主对话模型消息的用量。
     ///
     /// 参数:
-    /// - `turn_usage`: 本轮全部模型调用的用量累计
-    /// - `context_usage`: 最后一次调用的用量；未上报时为 None
+    /// - `usage`: 本次 provider 请求上报的用量
     ///
     /// 返回:
     /// - 写入是否成功
-    pub fn add_turn_usage(&self, turn_usage: &Usage, context_usage: Option<&Usage>) -> Result<()> {
+    pub(crate) fn add_conversation_message_usage(&self, usage: &Usage) -> Result<()> {
         self.init_files()?;
-        usage::add_turn_usage(&self.usage_file(), turn_usage, context_usage)
+        usage::add_conversation_message_usage(&self.usage_file(), usage)
     }
 
     /// 累加辅助模型用量。

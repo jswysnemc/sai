@@ -33,7 +33,7 @@ pub use agent_engine::{AcpEngineConfig, AgentEngineConfig, AgentEngineKind};
 #[allow(unused_imports)]
 pub use agent_presets::{ensure_surface_agent_defaults, seed_default_agent_profiles};
 #[allow(unused_imports)]
-pub use agent_tool_modes::{is_deferred, normalize_deferred_tools, DEFERRED_ALL_NON_BASE};
+pub use agent_tool_modes::{normalize_deferred_tools, DEFERRED_ALL_NON_BASE};
 #[allow(unused_imports)]
 pub use agents::*;
 pub use cli_tools::*;
@@ -47,9 +47,9 @@ pub use mcp_file::{
 pub use model::*;
 pub use model_metadata::*;
 pub use model_units::*;
-pub use provider_keys::*;
 pub use notification::*;
 pub use permission::*;
 pub use prompt_templates::{PromptTemplateConfig, PromptTemplatesConfig};
+pub use provider_keys::*;
 #[allow(unused_imports)]
 pub use session::SessionConfig;

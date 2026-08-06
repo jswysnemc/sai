@@ -1,10 +1,11 @@
 use self::history::RunJournals;
+use self::message_queue::WebMessageQueue;
 use super::assembler::EventAssembler;
 use super::checkpoint::{RunCheckpoint, RunCheckpointStatus, RunCheckpointStore};
 use super::model_override::resolve_run_config;
 use super::request_limits::validate_start_request;
 use super::{EventJournal, WebEvent};
-use crate::agent::AgentMode;
+use crate::agent::{AgentMode, InterMessageSource};
 use crate::paths::SaiPaths;
 use crate::runner::{
     ControlSubmission, RunnerSubmission, SessionRunner, SubmissionSource, UserInputSubmission,
@@ -21,6 +22,7 @@ use tokio::sync::{oneshot, Mutex, RwLock};
 use tokio::task::JoinHandle;
 
 mod history;
+mod message_queue;
 mod queue;
 #[cfg(test)]
 mod tests;
@@ -255,6 +257,11 @@ impl RunManager {
             let (start_tx, start_rx) = oneshot::channel();
             let manager = self.clone();
             let task_info = queued.info.clone();
+            let inter_message_source: Arc<dyn InterMessageSource> = Arc::new(WebMessageQueue::new(
+                self.clone(),
+                key.clone(),
+                task_info.run_id.clone(),
+            ));
             let workspace_path = std::path::PathBuf::from(&queued.workspace.path);
             let paths = self.paths.clone();
             let task_key = key.clone();
@@ -262,7 +269,13 @@ impl RunManager {
                 let _ = start_rx.await;
                 let terminal = crate::runtime_cwd::scope(
                     workspace_path,
-                    run_agent(paths, queued.request, task_info.clone(), journal.clone()),
+                    run_agent(
+                        paths,
+                        queued.request,
+                        task_info.clone(),
+                        journal.clone(),
+                        inter_message_source,
+                    ),
                 )
                 .await;
                 let _ = manager
@@ -455,6 +468,7 @@ async fn run_agent(
     request: StartRunRequest,
     info: ActiveRunInfo,
     journal: EventJournal,
+    inter_message_source: Arc<dyn InterMessageSource>,
 ) -> RunCheckpointStatus {
     let mode = match parse_mode(request.mode.as_deref()) {
         Ok(mode) => mode,
@@ -517,7 +531,8 @@ async fn run_agent(
     let runner = match run_config {
         Some(config) => SessionRunner::new(&paths).with_config(config),
         None => SessionRunner::new(&paths),
-    };
+    }
+    .with_inter_message_source(inter_message_source);
     if let Err(error) = runner.run_submission(submission, &mut sink).await {
         journal.publish(WebEvent::new(
             &info.run_id,

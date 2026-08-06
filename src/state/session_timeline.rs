@@ -18,6 +18,7 @@ pub struct TimelineMessage {
 #[derive(Debug, Clone, Serialize)]
 pub struct TimelineToolEntry {
     pub id: String,
+    pub seq: usize,
     pub name: String,
     pub arguments: String,
     pub status: String,
@@ -30,6 +31,21 @@ pub struct TimelineToolEntry {
     pub completed_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub permission: Option<TimelinePermissionDecision>,
+}
+
+/// 会话时间线中的轮次内消息。
+#[derive(Debug, Clone, Serialize)]
+pub struct TimelineTurnMessage {
+    pub id: String,
+    pub seq: usize,
+    pub after_tool_seq: usize,
+    pub kind: String,
+    pub role: String,
+    pub content: String,
+    pub reasoning: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub image_urls: Vec<String>,
+    pub created_at: String,
 }
 
 /// 历史工具调用对应的权限决定。
@@ -56,6 +72,8 @@ pub struct SessionTimelineTurn {
     pub user: TimelineMessage,
     pub assistant: TimelineMessage,
     pub tools: Vec<TimelineToolEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub messages: Vec<TimelineTurnMessage>,
     pub automatic: bool,
     /// 处理耗时毫秒；0 表示历史数据未记录
     #[serde(default, skip_serializing_if = "is_zero_u64")]
@@ -97,34 +115,62 @@ impl StateStore {
             .map(|turn| {
                 let exchanges =
                     load_tool_exchanges_for_turn(&self.conv_db, &self.session_id, &turn.turn_id)?;
+                let messages = self
+                    .turn_messages(&turn.turn_id)?
+                    .into_iter()
+                    .map(|message| TimelineTurnMessage {
+                        id: message.id,
+                        seq: message.seq,
+                        after_tool_seq: message.after_tool_seq,
+                        kind: message.kind.as_str().to_string(),
+                        role: message.kind.role().to_string(),
+                        content: message.display_content,
+                        reasoning: message.reasoning,
+                        image_urls: message.image_urls,
+                        created_at: message.created_at,
+                    })
+                    .collect();
                 let tools = exchanges
                     .into_iter()
-                    .map(|exchange| TimelineToolEntry {
-                        id: exchange.call.provider_call_id,
-                        name: exchange.call.tool_name,
-                        arguments: exchange.call.arguments,
-                        status: tool_status(&exchange.call.status).to_string(),
-                        output: exchange
-                            .result
-                            .as_ref()
-                            .map(|result| result.result_preview.clone())
-                            .unwrap_or_default(),
-                        ok: exchange.result.as_ref().map(|result| result.ok),
-                        error: exchange
-                            .result
-                            .as_ref()
-                            .and_then(|result| result.error.clone()),
-                        result_ref: exchange
-                            .result
-                            .as_ref()
-                            .and_then(|result| result.result_ref.clone()),
-                        original_chars: exchange
-                            .result
-                            .as_ref()
-                            .map(|result| result.original_chars),
-                        created_at: exchange.call.created_at,
-                        completed_at: exchange.result.map(|result| result.completed_at),
-                        permission: None,
+                    .map(|exchange| {
+                        let name = exchange
+                            .call
+                            .display_tool_name
+                            .clone()
+                            .unwrap_or_else(|| exchange.call.tool_name.clone());
+                        let arguments = exchange
+                            .call
+                            .display_arguments
+                            .clone()
+                            .unwrap_or_else(|| exchange.call.arguments.clone());
+                        TimelineToolEntry {
+                            id: exchange.call.provider_call_id,
+                            seq: exchange.call.seq,
+                            name,
+                            arguments,
+                            status: tool_status(&exchange.call.status).to_string(),
+                            output: exchange
+                                .result
+                                .as_ref()
+                                .map(|result| result.result_preview.clone())
+                                .unwrap_or_default(),
+                            ok: exchange.result.as_ref().map(|result| result.ok),
+                            error: exchange
+                                .result
+                                .as_ref()
+                                .and_then(|result| result.error.clone()),
+                            result_ref: exchange
+                                .result
+                                .as_ref()
+                                .and_then(|result| result.result_ref.clone()),
+                            original_chars: exchange
+                                .result
+                                .as_ref()
+                                .map(|result| result.original_chars),
+                            created_at: exchange.call.created_at,
+                            completed_at: exchange.result.map(|result| result.completed_at),
+                            permission: None,
+                        }
                     })
                     .collect();
                 let automatic = is_automatic_input(&turn.user_content);
@@ -145,6 +191,7 @@ impl StateStore {
                         image_urls: Vec::new(),
                     },
                     tools,
+                    messages,
                     automatic,
                     duration_ms: turn.duration_ms,
                 })
@@ -305,6 +352,45 @@ mod tests {
         assert_eq!(timeline[0].tools.len(), 1);
         assert_eq!(timeline[0].tools[0].name, "run_command");
         assert_eq!(timeline[0].tools[0].output, "ok");
+    }
+
+    /// 【工具历史】【渐进加载】验证界面显示真实工具且供应商投影保留统一网关。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn separates_display_tool_from_provider_gateway_call() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
+        store.start_turn("turn_1", "inspect").unwrap();
+        store
+            .record_tool_call_started(
+                "turn_1",
+                0,
+                "call_1",
+                "invoke_tool",
+                r#"{"tool_name":"read_file","arguments":{"path":"README.md"}}"#,
+            )
+            .unwrap();
+        store
+            .record_tool_call_display("call_1", "read_file", r#"{"path":"README.md"}"#)
+            .unwrap();
+        store
+            .record_tool_result_completed("turn_1", "call_1", true, "content", None, None, 7)
+            .unwrap();
+
+        let provider_messages = store.project_running_turn_tool_messages("turn_1").unwrap();
+        let provider_call = &provider_messages[0].tool_calls.as_ref().unwrap()[0];
+        assert_eq!(provider_call.function.name, "invoke_tool");
+        assert!(provider_call.function.arguments.contains("tool_name"));
+
+        store.complete_turn("turn_1", "done", None).unwrap();
+        let timeline = store.session_timeline(10).unwrap();
+        assert_eq!(timeline[0].tools[0].name, "read_file");
+        assert_eq!(timeline[0].tools[0].arguments, r#"{"path":"README.md"}"#);
     }
 
     #[test]

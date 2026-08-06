@@ -28,7 +28,11 @@ pub fn decode_bytes(bytes: &[u8]) -> String {
         return cow.into_owned();
     }
     // 非 UTF-8：按常见中文编码尝试，仍失败则逐字节兜底
-    for encoding in [encoding_rs::GBK, encoding_rs::BIG5, encoding_rs::WINDOWS_1252] {
+    for encoding in [
+        encoding_rs::GBK,
+        encoding_rs::BIG5,
+        encoding_rs::WINDOWS_1252,
+    ] {
         let (cow, _, had_errors) = encoding.decode(bytes);
         if !had_errors {
             return cow.into_owned();

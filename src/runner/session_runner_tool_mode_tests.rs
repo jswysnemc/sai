@@ -112,21 +112,12 @@ fn enabled_tools_whitelist_filters_out_disabled_tools() {
     register_test_tool(&mut registry, "ask_question");
     register_test_tool(&mut registry, "subagent");
 
-    let filtered = crate::runner::apply_enabled_tools_filter(
-        registry,
-        &config,
-        SubmissionSource::Repl,
-    )
-    .unwrap();
+    let filtered =
+        crate::runner::apply_enabled_tools_filter(registry, &config, SubmissionSource::Repl)
+            .unwrap();
 
     assert!(filtered.contains("read_file"), "白名单内的工具应保留");
-    assert!(
-        !filtered.contains("write_file"),
-        "白名单外的工具应被过滤"
-    );
-    assert!(
-        filtered.contains("ask_question"),
-        "交互工具应兜底保留"
-    );
+    assert!(!filtered.contains("write_file"), "白名单外的工具应被过滤");
+    assert!(filtered.contains("ask_question"), "交互工具应兜底保留");
     assert!(filtered.contains("subagent"), "子智能体应兜底保留");
 }

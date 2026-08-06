@@ -69,6 +69,13 @@ pub(crate) fn terminal_shell_invocation(configured_shell: &str) -> Option<ShellI
 pub(crate) fn editor_command(editor: &str, path: &Path) -> Command {
     #[cfg(windows)]
     {
+        // 1. notepad 等 GUI 编辑器经 shell 启动会立即返回而不等待窗口关闭，
+        //    调用方会在用户保存前读取并删除临时文件，编辑器保存时提示新建文件；
+        //    可直接执行的编辑器改为子进程启动，.status() 自然等待退出
+        if let Some(command) = direct_editor_command(editor, path) {
+            return command;
+        }
+        // 2. .cmd/.bat 等 shim 仍需 shell 解析，保持原包装方式
         let program = preferred_shell_program();
         let script = if is_powershell(&program) {
             format!("& {editor} {}", powershell_quote(path))
@@ -89,6 +96,38 @@ pub(crate) fn editor_command(editor: &str, path: &Path) -> Command {
             .arg(path);
         command
     }
+}
+
+/// 构造 Windows 下直接启动编辑器的命令。
+///
+/// 参数:
+/// - `editor`: 用户配置的编辑器命令，首段为可执行文件，其余为附加参数
+/// - `path`: 待编辑文件路径
+///
+/// 返回:
+/// - 直接启动命令；编辑器不是可直接执行文件（如 .cmd shim）时返回 None
+#[cfg(windows)]
+fn direct_editor_command(editor: &str, path: &Path) -> Option<Command> {
+    let mut parts = editor.split_whitespace();
+    let head = parts.next()?;
+    let executable = if head.contains('/') || head.contains('\\') {
+        let candidate = PathBuf::from(head);
+        if candidate.is_file() {
+            Some(candidate)
+        } else {
+            None
+        }
+    } else if head.to_ascii_lowercase().ends_with(".exe") {
+        executable_in_path(head)
+    } else {
+        executable_in_path(&format!("{head}.exe"))
+    }?;
+    let mut command = Command::new(executable);
+    for arg in parts {
+        command.arg(arg);
+    }
+    command.arg(path);
+    Some(command)
 }
 
 /// 返回当前平台默认编辑器命令。

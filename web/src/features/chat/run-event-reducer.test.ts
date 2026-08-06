@@ -42,6 +42,34 @@ describe("runEventReducer", () => {
     expect(completed.parts[0].type).toBe("tool");
   });
 
+  it("replaces the progressive gateway name without creating a second tool card", () => {
+    const preparing = runEventReducer(initialRunState, {
+      type: "event",
+      event: event("tool.call.preparing", {
+        tool_id: "call-1",
+        name: "invoke_tool",
+        arguments_preview: "{\"tool_name\":\"read_file\""
+      })
+    });
+    const running = runEventReducer(preparing, {
+      type: "event",
+      event: event("tool.call.started", {
+        tool_id: "call-1",
+        name: "read_file",
+        arguments: "{\"path\":\"README.md\"}"
+      })
+    });
+
+    expect(running.tools).toHaveLength(1);
+    expect(running.parts).toHaveLength(1);
+    expect(running.tools[0]).toMatchObject({
+      id: "call-1",
+      name: "read_file",
+      arguments: "{\"path\":\"README.md\"}",
+      status: "running"
+    });
+  });
+
   it("keeps a tool at its original position when later content arrives", () => {
     const first = runEventReducer(initialRunState, { type: "event", event: event("message.content.delta", { text: "before" }) });
     const tool = runEventReducer(first, { type: "event", event: event("tool.call.started", { tool_id: "tool", name: "run_command", arguments: "{}" }) });

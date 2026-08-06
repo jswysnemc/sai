@@ -2,6 +2,7 @@ import type { AppConfig } from "../../api/contracts";
 import { Select } from "../../shared/ui/select/select";
 import { buildChatModelChoices } from "../chat/chat-model-options";
 import { useI18n } from "../i18n/use-i18n";
+import { modelSelectOption } from "./model-select-option";
 
 const INHERIT_VALUE = "";
 
@@ -33,11 +34,11 @@ export function MemoryExtractionModelField({ config, onConfigChange }: MemoryExt
       label: t("Follow conversation model", "跟随会话模型"),
       description: t("Use the model selected by the current conversation for each memory extraction", "每次记忆提取使用当前会话实际选择的模型")
     },
-    ...buildChatModelChoices(config).map((choice) => ({
-      value: encodeChoice(choice.providerId, choice.model),
-      label: `${choice.providerName} / ${choice.model}`,
-      description: t("Always use this model to extract session memory points", "始终使用该模型提取会话记忆点")
-    }))
+    ...buildChatModelChoices(config).map((choice) => modelSelectOption(
+      choice,
+      encodeChoice(choice.providerId, choice.model),
+      t("Always use this model to extract session memory points", "始终使用该模型提取会话记忆点")
+    ))
   ];
 
   /** 更新记忆提取模型配置。 */
