@@ -1,9 +1,9 @@
-import { memo, useMemo } from "react";
-import { SyntaxHighlighter } from "../syntax-highlighter";
+import { useMemo } from "react";
 import { diffStatusLabel } from "./diff/diff-model";
-import type { DiffFile, DiffLine } from "./diff/diff-model";
+import type { DiffFile } from "./diff/diff-model";
 import { parseDiff } from "./diff/diff-parser";
 import { DiffIdeaView } from "./diff-idea-view";
+import { DiffUnifiedView } from "./diff-unified-view";
 import { ToolFileReference } from "./tool-file-reference";
 import { useI18n } from "../../i18n/use-i18n";
 import "./diff-view.css";
@@ -13,6 +13,8 @@ export type DiffLayout = "unified" | "side";
 type DiffViewProps = {
   source: string;
   headerPath?: string;
+  /** 仅渲染指定文件；工作区标签页用它避免展示整份补丁 */
+  onlyPath?: string;
   /** 为 true 时隐藏文件头，避免与外层文件行重复 */
   hideHeader?: boolean;
   /** 统一单栏或左右并排 */
@@ -25,10 +27,10 @@ type DiffViewProps = {
  * @param props Diff 源文本与布局
  * @returns 按文件分块、带双行号列的 Diff 视图
  */
-export function DiffView({ source, headerPath, hideHeader = false, layout = "unified" }: DiffViewProps) {
+export function DiffView({ source, headerPath, onlyPath, hideHeader = false, layout = "unified" }: DiffViewProps) {
   const { t } = useI18n();
   // 解析与字符级配对是纯计算，父组件重渲染时不应重跑
-  const files = useMemo(() => parseDiff(source), [source]);
+  const files = useMemo(() => selectDiffFiles(parseDiff(source), onlyPath), [onlyPath, source]);
   if (files.length === 0) return null;
   return (
     <div
@@ -50,6 +52,33 @@ export function DiffView({ source, headerPath, hideHeader = false, layout = "uni
 }
 
 /**
+ * 从补丁中选出目标文件，兼容绝对路径和 Git 的 a/、b/ 路径前缀。
+ *
+ * @param files 已解析的文件差异
+ * @param onlyPath 用户当前查看的文件路径
+ * @returns 匹配到目标时仅返回该文件，否则返回第一项以保持可用状态
+ */
+export function selectDiffFiles(files: DiffFile[], onlyPath?: string): DiffFile[] {
+  if (!onlyPath || files.length <= 1) return files;
+  const target = normalizeDiffPath(onlyPath);
+  const matched = files.find((file) => {
+    const path = normalizeDiffPath(file.path);
+    return path === target || target.endsWith(`/${path}`) || path.endsWith(`/${target}`);
+  });
+  return matched ? [matched] : files.slice(0, 1);
+}
+
+/**
+ * 归一化差异路径，便于比较工作区绝对路径和 Git 相对路径。
+ *
+ * @param value 原始文件路径
+ * @returns 去除 Git 前缀后的斜杠路径
+ */
+function normalizeDiffPath(value: string): string {
+  return value.replaceAll("\\", "/").replace(/^(?:a|b)\//u, "").replace(/^\.\//u, "");
+}
+
+/**
  * 渲染单个文件的差异块，含文件名条与增删统计徽标。
  *
  * @param props 解析后的文件差异
@@ -68,20 +97,17 @@ function DiffFileBlock({
 }) {
   const { t } = useI18n();
   const status = diffStatusLabel(file.status);
-  const showOldLine = file.lines.some((line) => line.oldLine !== undefined);
-  const showNewLine = file.lines.some((line) => line.newLine !== undefined);
-  const gutterClass =
-    showOldLine && showNewLine
-      ? "double-gutter"
-      : showOldLine || showNewLine
-        ? "single-gutter"
-        : "no-gutter";
   const showHead = !hideHeader;
   return (
     <section className="diff-file">
       {showHead && (
         <header className="diff-file-head">
-          {!hidePath && file.path && <ToolFileReference path={file.path} />}
+          {!hidePath && file.path && (
+            <span className="diff-file-title">
+              <ToolFileReference path={file.path} label={fileName(file.path)} />
+              {fileDirectory(file.path) && <span className="diff-file-directory">{fileDirectory(file.path)}</span>}
+            </span>
+          )}
           {!file.path && <strong>{t("Change fragment", "变更片段")}</strong>}
           <small>{t(status.en, status.zh)}</small>
           <span className="diff-file-stats">
@@ -102,85 +128,10 @@ function DiffFileBlock({
         (layout === "side" ? (
           <DiffIdeaView file={file} language={languageOfPath(file.path)} />
         ) : (
-          <div className={`diff-file-lines ${gutterClass}`}>
-            {file.lines.map((line, index) => (
-              <DiffLineRow
-                line={line}
-                language={languageOfPath(file.path)}
-                showOldLine={showOldLine}
-                showNewLine={showNewLine}
-                key={index}
-              />
-            ))}
-          </div>
+          <DiffUnifiedView file={file} language={languageOfPath(file.path)} />
         ))}
     </section>
   );
-}
-
-/**
- * 渲染一行差异内容，删除行显示旧行号、新增行显示新行号。
- *
- * @param props 解析后的差异行
- * @returns 差异行元素
- */
-const DiffLineRow = memo(function DiffLineRow({
-  line,
-  language,
-  showOldLine,
-  showNewLine
-}: {
-  line: DiffLine;
-  language?: string;
-  showOldLine: boolean;
-  showNewLine: boolean;
-}) {
-  // hunk 边界与无换行标记都不是代码，占满整行提示即可
-  if (line.kind === "hunk" || line.kind === "no-newline") {
-    return <div className={`diff-row ${line.kind}`}>{line.text}</div>;
-  }
-  const marker = line.kind === "added" ? "+" : line.kind === "removed" ? "-" : " ";
-  return (
-    <div className={`diff-row ${line.kind}`}>
-      {showOldLine && <span className="diff-gutter">{line.oldLine ?? ""}</span>}
-      {showNewLine && <span className="diff-gutter">{line.newLine ?? ""}</span>}
-      <code>
-        <span className="diff-marker">{marker}</span>
-        <span className="diff-code-content">
-          <DiffLineContent line={line} language={language} />
-        </span>
-      </code>
-    </div>
-  );
-});
-
-/**
- * 渲染行内容：已配对的行按字符级差异标出改动区间。
- *
- * @param props 差异行与着色语言
- * @returns 行内容元素
- */
-function DiffLineContent({ line, language }: { line: DiffLine; language?: string }) {
-  // 有字符级分段时优先展示改动区间，语法着色让位于差异定位
-  if (line.segments && line.segments.length > 0) {
-    return (
-      <>
-        {line.segments.map((segment, index) =>
-          segment.changed ? (
-            <mark className="diff-inline" key={index}>
-              {segment.text}
-            </mark>
-          ) : (
-            <span key={index}>{segment.text}</span>
-          )
-        )}
-      </>
-    );
-  }
-  if (line.text && language) {
-    return <SyntaxHighlighter language={language} source={line.text} />;
-  }
-  return <>{line.text || " "}</>;
 }
 
 /**
@@ -192,4 +143,26 @@ function DiffLineContent({ line, language }: { line: DiffLine; language?: string
 function languageOfPath(path: string): string | undefined {
   const name = path.split("/").pop() ?? "";
   return name.includes(".") ? name.split(".").pop() : undefined;
+}
+
+/**
+ * 从差异路径中提取文件名。
+ *
+ * @param path 文件路径
+ * @returns 文件名
+ */
+function fileName(path: string): string {
+  return path.split(/[\\/]/u).filter(Boolean).at(-1) ?? path;
+}
+
+/**
+ * 从差异路径中提取目录辅助文字。
+ *
+ * @param path 文件路径
+ * @returns 目录路径；没有目录时返回空
+ */
+function fileDirectory(path: string): string {
+  const normalized = path.replaceAll("\\", "/");
+  const slash = normalized.lastIndexOf("/");
+  return slash > -1 ? normalized.slice(0, slash) : "";
 }

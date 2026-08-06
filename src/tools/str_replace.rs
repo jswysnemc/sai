@@ -1,3 +1,4 @@
+use super::file_diff::unified_diff;
 use super::file_edit::atomic_write::write_text_file;
 use super::file_edit::line_endings::{materialize_model_text, to_model_text_view};
 use super::fs_path::{expand_path, fs_error};
@@ -150,7 +151,8 @@ fn str_replace(args: Value) -> Result<String> {
             "path": path.display().to_string(),
             "added": added,
             "removed": removed
-        }]
+        }],
+        "diff": unified_diff(path_text, content, &updated)
     }))?)
 }
 

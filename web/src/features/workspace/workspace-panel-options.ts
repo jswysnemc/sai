@@ -1,4 +1,4 @@
-import { Activity, Bot, FileCode2, GitCompareArrows, PanelLeft, SquareTerminal } from "lucide-react";
+import { Activity, Bot, FileCode2, GitCompareArrows, MessageSquarePlus, SquareTerminal } from "lucide-react";
 import type { PaneTab } from "./workspace-tab";
 
 export type WorkspacePanelOption = {
@@ -19,13 +19,11 @@ export const WORKSPACE_PANEL_OPTIONS: WorkspacePanelOption[] = [
   { type: "terminal", labelEn: "Terminal", labelZh: "终端", icon: SquareTerminal },
   { type: "tasks", labelEn: "Background tasks", labelZh: "后台任务", icon: Activity },
   { type: "subagents", labelEn: "Subagents", labelZh: "子智能体", icon: Bot },
-  { type: "sessions", labelEn: "Sessions", labelZh: "会话", icon: PanelLeft }
+  { type: "side-chat", labelEn: "Side conversation", labelZh: "旁路对话", icon: MessageSquarePlus }
 ];
 
-/** 用户可从空侧栏或新增菜单主动打开的功能，具体 Diff 不出现在这里。 */
-export const ACTIVE_WORKSPACE_PANEL_OPTIONS = WORKSPACE_PANEL_OPTIONS.filter(
-  (option) => option.type !== "diff"
-);
+/** 用户可从空侧栏或新增菜单主动打开的功能。 */
+export const ACTIVE_WORKSPACE_PANEL_OPTIONS = WORKSPACE_PANEL_OPTIONS;
 
 /** 请求打开某个工作区面板的自定义事件名。 */
 export const OPEN_WORKSPACE_PANEL_EVENT = "sai:open-workspace-panel";

@@ -1,0 +1,19 @@
+/* 两种 Composer 变体共享同一表单语义，外层尺寸由各自布局组件决定。 */
+.composer-surface {
+  position: relative;
+  border: 1px solid var(--line-strong);
+  background: var(--control-surface);
+  box-shadow: none;
+  transition:
+    border-color var(--duration-base) ease,
+    box-shadow var(--duration-base) ease;
+}
+
+.composer-surface:focus-within {
+  border-color: var(--signal);
+  box-shadow: var(--ring-focus);
+}
+
+.composer-surface-compact {
+  display: block;
+}

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState, type PointerEvent } from "react";
 import type { SessionTurnTree } from "../../../api/turn-tree-contracts";
 import { useI18n } from "../../i18n/use-i18n";
 import { flattenTurnTree } from "./turn-tree-rows";
@@ -24,10 +24,10 @@ type PlacedNode = {
   parentTurnId: string | null;
 };
 
-const COLUMN_WIDTH = 216;
-const ROW_HEIGHT = 54;
-const NODE_WIDTH = 196;
-const NODE_HEIGHT = 34;
+const COLUMN_WIDTH = 300;
+const ROW_HEIGHT = 76;
+const NODE_WIDTH = 276;
+const NODE_HEIGHT = 44;
 
 /**
  * 以节点图的形式总览整棵会话树。
@@ -40,6 +40,9 @@ const NODE_HEIGHT = 34;
  */
 export function TurnTreeOverview({ tree, busy, onSelect }: TurnTreeOverviewProps) {
   const { t } = useI18n();
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
   const nodes = useMemo(() => placeNodes(tree), [tree]);
   const positions = useMemo(
     () => new Map(nodes.map((node) => [node.turnId, node])),
@@ -55,10 +58,50 @@ export function TurnTreeOverview({ tree, busy, onSelect }: TurnTreeOverviewProps
   const width = columns * COLUMN_WIDTH;
   const height = rows * ROW_HEIGHT;
 
+  /** 在总览画布上按住空白处拖动，查看超出视口的分支。 */
+  const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest("button")) return;
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: offset.x,
+      originY: offset.y
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragging(true);
+  };
+
+  /** 更新拖动画布偏移量。 */
+  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    setOffset({
+      x: drag.originX + event.clientX - drag.startX,
+      y: drag.originY + event.clientY - drag.startY
+    });
+  };
+
+  /** 结束画布拖动。 */
+  const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    setDragging(false);
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
   return (
-    <div className="turn-tree-overview" role="group" aria-label={t("Branch overview", "分支总览")}>
+    <div
+      className={`turn-tree-overview${dragging ? " is-dragging" : ""}`}
+      role="group"
+      aria-label={t("Branch overview", "分支总览")}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+    >
       {/* 节点与连线都相对本层绝对定位，因此这层必须写死真实画布尺寸，否则容器高度会塌陷 */}
-      <div className="turn-tree-overview-stage" style={{ width, height }}>
+      <div className="turn-tree-overview-stage" style={{ width, height, transform: `translate(${offset.x}px, ${offset.y}px)` }}>
         <svg width={width} height={height} className="turn-tree-overview-canvas">
           {/* 先画连线，节点覆盖其上，避免折线压住文字 */}
           {nodes.map((node) => {

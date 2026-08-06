@@ -696,5 +696,12 @@
 }
 
 /* 会话页签：侧栏组件收纳进右面板时占满面板并自管滚动 */
-.workspace-sessions-pane { height: 100%; min-height: 0; overflow: auto; }
-.workspace-sessions-pane .session-sidebar { height: auto; min-height: 100%; }
+.workspace-side-chat-host {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.workspace-side-chat-host[hidden] {
+  display: none;
+}

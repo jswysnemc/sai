@@ -256,6 +256,16 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
           );
       return {
         ...closeActiveReasoning(state, event.timestamp),
+        // 中断事件可能先于工具结果到达，主动结束仍在加载的工具卡，避免界面继续旋转
+        tools: state.tools.map((tool) =>
+          tool.status === "preparing" || tool.status === "running"
+            ? {
+                ...tool,
+                status: "failed" as const,
+                output: tool.output || text(locale, "Tool call interrupted", "工具调用已中断")
+              }
+            : tool
+        ),
         error: state.content
           ? text(locale, "The response was interrupted; generated content was preserved", "响应已中断，已保留生成内容")
           : text(locale, "The run was interrupted", "运行已中断"),

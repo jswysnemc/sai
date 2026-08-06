@@ -1,6 +1,6 @@
 import { BookMarked, ChevronDown, ChevronUp, FileText, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import { HoverRevealButton } from "../../../shared/ui/hover-reveal-button/hover-reveal-button";
 import { MarkdownRenderer } from "../markdown-renderer";
@@ -137,6 +137,7 @@ function isLivePreviewTag(tag: string): boolean {
 export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerProps) {
   const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [pendingTag, setPendingTag] = useState<string | null>(null);
   const markdownRef = useRef<HTMLDivElement | null>(null);
   const anchor = useCollapseAnchor(markdownRef, open);
   const query = useQuery({
@@ -173,19 +174,42 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
    */
   const collapse = () => setOpen(false);
 
+  /**
+   * 展开上下文并定位到标签对应的 Markdown 标题。
+   *
+   * @param tag 用户点击的上下文标签
+   * @returns 无返回值
+   */
+  const revealTag = (tag: string) => {
+    setPendingTag(tag);
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open || !pendingTag || !rendered) return;
+    const frame = window.requestAnimationFrame(() => {
+      const heading = findContextHeading(markdownRef.current, pendingTag);
+      heading?.scrollIntoView({ block: "start", behavior: "smooth" });
+      setPendingTag(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, pendingTag, rendered]);
+
   return (
     <section className={`context-prompt-banner${open ? " open" : ""}`} data-overview-id="context-prompt">
-      <button
-        type="button"
-        className="context-prompt-banner-head"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-controls="context-prompt-body"
-      >
+      <div className="context-prompt-banner-head">
+        <button
+          type="button"
+          className="context-prompt-banner-toggle"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          aria-controls="context-prompt-body"
+          aria-label={title}
+        >
         <span className="context-prompt-banner-icon" aria-hidden>
           {query.isLoading ? <Loader2 size={14} className="spin" /> : <BookMarked size={14} />}
         </span>
-        <span className="context-prompt-banner-copy">
+          <span className="context-prompt-banner-copy">
           <span className="context-prompt-banner-title">
             {title}
             {typeof tokenCount === "number" && (
@@ -193,21 +217,37 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
                 {t(`~${formatTokenCount(tokenCount)} tokens`, `约 ${formatTokenCount(tokenCount)} tokens`)}
               </span>
             )}
-          </span>
-          <span className="context-prompt-banner-subtitle">{subtitle}</span>
-          {meta.length > 0 && (
-            <span className="context-prompt-banner-tags">
-              {meta.map((tag) => (
-                <span key={tag} className="context-prompt-banner-tag">
-                  <FileText size={11} aria-hidden />
-                  {tag}
-                </span>
-              ))}
             </span>
-          )}
-        </span>
-        <ChevronDown size={14} className={`context-prompt-banner-chevron${open ? " rotate" : ""}`} aria-hidden />
-      </button>
+            <span className="context-prompt-banner-subtitle">{subtitle}</span>
+          </span>
+        </button>
+        {meta.length > 0 && (
+          <span className="context-prompt-banner-tags" role="list" aria-label={t("Context sections", "上下文段落")}>
+            {meta.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                className="context-prompt-banner-tag"
+                onClick={() => revealTag(tag)}
+                aria-label={t(`Open ${tag}`, `打开${tag}`)}
+              >
+                <FileText size={11} aria-hidden />
+                {tag}
+              </button>
+            ))}
+          </span>
+        )}
+        <button
+          type="button"
+          className="context-prompt-banner-chevron-button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          aria-controls="context-prompt-body"
+          aria-label={title}
+        >
+          <ChevronDown size={14} className={`context-prompt-banner-chevron${open ? " rotate" : ""}`} aria-hidden />
+        </button>
+      </div>
       {open && (
         <div id="context-prompt-body" className="context-prompt-banner-body">
           {query.isLoading && (
@@ -243,6 +283,44 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
       )}
     </section>
   );
+}
+
+/** 将标签和 Markdown 标题归一化，忽略计数与中英文标点差异。 */
+function normalizeTagTarget(value: string): string {
+  return value
+    .replace(/\s*\([^)]*\)\s*$/u, "")
+    .replace(/[：:]/gu, "")
+    .replace(/[，,。.!！?？]/gu, "")
+    .trim()
+    .toLocaleLowerCase();
+}
+
+/**
+ * 根据顶部标签定位上下文中的标题，标签允许携带数量或产品侧的别名。
+ *
+ * @param root Markdown 内容根节点
+ * @param tag 顶部标签文本
+ * @returns 匹配到的标题节点
+ */
+export function findContextHeading(root: HTMLDivElement | null, tag: string): HTMLElement | null {
+  if (!root) return null;
+  const headings = Array.from(root.querySelectorAll<HTMLElement>("h2, h3"));
+  const target = normalizeTagTarget(tag);
+  if (target.includes("baseline")) return headings[0] ?? null;
+  const aliases: Record<string, string[]> = {
+    "工具定义": ["工具定义", "已加载工具", "工具"],
+    "技能目录": ["技能目录", "技能"],
+    "稳定系统提示": ["稳定系统提示", "系统提示"],
+    "模式提醒": ["模式提醒", "运行模式"],
+    "当前模型": ["当前模型", "模型"],
+    "运行时": ["运行时", "运行环境"],
+    "关联记忆": ["关联记忆", "记忆"]
+  };
+  const candidates = aliases[target] ?? [target];
+  return headings.find((heading) => {
+    const current = normalizeTagTarget(heading.textContent ?? "");
+    return candidates.some((candidate) => current === candidate || current.includes(candidate) || candidate.includes(current));
+  }) ?? null;
 }
 
 /**

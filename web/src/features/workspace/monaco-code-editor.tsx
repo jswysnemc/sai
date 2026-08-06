@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { isDarkTheme, useTheme } from "../theme/theme";
 import { configureMonacoEnvironment } from "./monaco-environment";
 import { languageForPath } from "./editor-language";
+import { FOCUS_COMPOSER_EVENT, INSERT_TERMINAL_SELECTION_EVENT } from "../chat/composer/composer-events";
+import { useI18n } from "../i18n/use-i18n";
 
 type MonacoCodeEditorProps = {
   path: string;
@@ -22,6 +24,7 @@ type MonacoCodeEditorProps = {
  * @returns 编辑器区域
  */
 export function MonacoCodeEditor({ path, value, onChange, loadingLabel }: MonacoCodeEditorProps) {
+  const { t } = useI18n();
   const { theme } = useTheme();
   const [ready, setReady] = useState(false);
   const areaRef = useRef<HTMLDivElement>(null);
@@ -70,12 +73,31 @@ export function MonacoCodeEditor({ path, value, onChange, loadingLabel }: Monaco
    * 保存 Monaco 实例并立即按容器尺寸布局。
    *
    * @param editor Monaco 编辑器实例
+   * @param monaco Monaco API
    * @returns 无
    */
-  const handleMount: OnMount = (editor) => {
+  const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     const area = areaRef.current;
     if (area) editor.layout({ width: area.clientWidth, height: area.clientHeight });
+    // 3. 把选区作为带来源的上下文原子发送到当前聊天输入区
+    editor.addAction({
+      id: "sai.send-selection-to-composer",
+      label: t("Send selection to chat input", "发送选区到输入区"),
+      precondition: "editorHasSelection",
+      contextMenuGroupId: "9_cutcopypaste",
+      contextMenuOrder: 4,
+      run: (instance) => {
+        const selection = instance.getSelection();
+        const model = instance.getModel();
+        if (!selection || selection.isEmpty() || !model) return;
+        const content = model.getValueInRange(selection);
+        window.dispatchEvent(new CustomEvent(INSERT_TERMINAL_SELECTION_EVENT, {
+          detail: { source: path, content }
+        }));
+        window.dispatchEvent(new Event(FOCUS_COMPOSER_EVENT));
+      }
+    });
   };
 
   return (

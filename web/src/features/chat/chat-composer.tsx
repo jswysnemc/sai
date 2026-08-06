@@ -1,10 +1,9 @@
-import { Activity, ArrowRight, Bot, Cpu, GitBranch, Paperclip, Square, Undo2 } from "lucide-react";
+import { Activity, ArrowRight, Bot, Cpu, GitBranch, Paperclip, Square, SquareTerminal, Undo2 } from "lucide-react";
 import { useRef, useEffect, useState, useMemo } from "react";
-import type { ChangeEvent, FormEvent } from "react";
+import type { ChangeEvent } from "react";
 import type { RunMode, RunModelSelection, ThinkingLevel } from "../../api/contracts";
 import type { ChatModelChoice } from "./chat-model-options";
-import { AttachmentStrip } from "./composer/attachment-strip";
-import { ComposerTextarea } from "./composer/composer-textarea";
+import { ComposerSurface } from "./composer/composer-surface";
 import { composerTipIntervalMs, currentComposerTip } from "./composer/composer-tips";
 import type { ComposerAttachment } from "./composer/use-composer-attachments";
 import { resolveComposerAvailability } from "./composer-availability";
@@ -91,17 +90,6 @@ export function ChatComposer(props: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   /**
-   * 提交当前输入内容。
-   *
-   * @param event 表单提交事件
-   */
-  const handleSubmit = (event: FormEvent) => {
-    event.preventDefault();
-    if (availability.sendDisabled) return;
-    props.onSubmit();
-  };
-
-  /**
    * 读取文件选择器中的全部图片。
    *
    * @param event 文件输入变更事件
@@ -136,6 +124,15 @@ export function ChatComposer(props: ChatComposerProps) {
           <Activity size={14} />
           {runtimeActivity.runningTasks > 0 && <span className="composer-activity-badge">{runtimeActivity.runningTasks}</span>}
         </button>
+        <button
+          type="button"
+          className="composer-rail-button"
+          onClick={() => window.dispatchEvent(new Event("sai:toggle-terminal"))}
+          title={t("Toggle bottom terminal", "切换底部终端")}
+          aria-label={t("Toggle bottom terminal", "切换底部终端")}
+        >
+          <SquareTerminal size={14} />
+        </button>
         {runtimeActivity.runningSubagents > 0 && (
           <button type="button" className="composer-rail-button composer-activity-button is-active" onClick={() => window.dispatchEvent(new Event("sai:open-subagents"))} title={t(`${runtimeActivity.runningSubagents} subagents running`, `${runtimeActivity.runningSubagents} 个子智能体运行中`)} aria-label={t("View subagents", "查看子智能体")}>
             <Bot size={14} />
@@ -143,19 +140,20 @@ export function ChatComposer(props: ChatComposerProps) {
           </button>
         )}
       </div>
-      <form className="composer" onSubmit={handleSubmit}>
-        <AttachmentStrip attachments={props.attachments} onRemove={props.onRemoveAttachment} />
-        <ComposerTextarea
-          value={props.value}
-          historyEntries={props.historyEntries}
-          disabled={availability.inputDisabled}
-          placeholder={props.sessionAvailable ? (rotatingPlaceholder ?? t("Type a message; press Enter to send", "输入消息，Enter 发送")) : t("Select a session first", "请先选择会话")}
-          onChange={props.onChange}
-          onPasteImages={props.onAddImages}
-          onSubmit={() => {
-            if (!availability.sendDisabled) props.onSubmit();
-          }}
-        />
+      <ComposerSurface
+        variant="full"
+        className="composer"
+        value={props.value}
+        historyEntries={props.historyEntries}
+        disabled={availability.inputDisabled}
+        submitDisabled={availability.sendDisabled}
+        placeholder={props.sessionAvailable ? (rotatingPlaceholder ?? t("Type a message; press Enter to send", "输入消息，Enter 发送")) : t("Select a session first", "请先选择会话")}
+        attachments={props.attachments}
+        onChange={props.onChange}
+        onPasteImages={props.onAddImages}
+        onRemoveAttachment={props.onRemoveAttachment}
+        onSubmit={props.onSubmit}
+      >
         <div className="composer-footer">
           <div className="composer-toolrail">
             <div className="composer-model-group">
@@ -207,7 +205,7 @@ export function ChatComposer(props: ChatComposerProps) {
             )}
           </div>
         </div>
-      </form>
+      </ComposerSurface>
     </div>
   );
 }

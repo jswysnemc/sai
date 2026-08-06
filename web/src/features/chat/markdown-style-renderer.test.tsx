@@ -4,6 +4,13 @@ import { DEFAULT_MARKDOWN_STYLE_PREFERENCES } from "../markdown/markdown-style-p
 import { MarkdownRenderer } from "./markdown-renderer";
 
 describe("MarkdownRenderer style preferences", () => {
+  it("将项目内文件路径渲染为轻量可点击引用", () => {
+    const html = renderToStaticMarkup(<MarkdownRenderer source="打开 `login-page/index.html` 查看页面。" />);
+    expect(html).toContain("inline-file-reference");
+    expect(html).toContain("lucide-file-code");
+    expect(html).toContain("login-page/index.html");
+  });
+
   it("将表格和代码块配置映射到实际渲染结构", () => {
     const stylePreferences = {
       table: {

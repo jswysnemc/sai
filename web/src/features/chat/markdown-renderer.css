@@ -107,6 +107,24 @@
   font: 500 0.88em/1.5 var(--font-code);
 }
 
+.inline-file-reference {
+  gap: var(--space-3xs);
+  padding: var(--space-3xs) var(--space-xs);
+  border-radius: var(--radius-1);
+  background: var(--paper-deep);
+  vertical-align: baseline;
+}
+
+.markdown-body .inline-file-reference button {
+  color: var(--blue);
+  font-size: 0.88em;
+  line-height: 1.5;
+}
+
+.markdown-body .inline-file-reference:hover {
+  background: color-mix(in srgb, var(--blue) 10%, var(--paper-deep));
+}
+
 /*
  * 表格：去掉外框与竖向格线，只留表头下的一条实线与行间的浅分隔线。
  *

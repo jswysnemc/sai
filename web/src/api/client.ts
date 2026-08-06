@@ -66,7 +66,8 @@ import type {
   RestoreWorktreeResult,
   WeixinLoginSnapshot,
   SessionContextPrompt,
-  SessionDataSummary
+  SessionDataSummary,
+  SessionDataSelection
 } from "./contracts";
 import { ApiError } from "./api-error";
 import { detectInitialLocale, text } from "../features/i18n/locale";
@@ -194,6 +195,11 @@ export const api = {
     clear: (id: string) =>
       apiRequest<{ cleared: boolean }>(`/api/session-data/${encodeURIComponent(id)}/clear`, {
         method: "POST"
+      }),
+    clearMany: (sessions: SessionDataSelection[]) =>
+      apiRequest<{ cleared: boolean; cleared_ids: string[] }>("/api/session-data/clear", {
+        method: "POST",
+        body: JSON.stringify({ sessions })
       })
   },
   goals: {

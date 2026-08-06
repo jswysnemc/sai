@@ -16,16 +16,11 @@
   max-width: var(--chat-content-width);
   min-height: 58px;
   padding:var(--space-sm) var(--space-md) var(--space-xs);
-  border: 1px solid transparent;
+  border: 1px solid var(--line-strong);
   border-radius:var(--radius-5);
   background: var(--control-surface);
   box-shadow: none;
   transition:border-color var(--duration-base) ease, box-shadow var(--duration-base) ease;
-}
-
-.composer:focus-within {
-  border-color: var(--line-strong);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 4%, transparent);
 }
 
 .composer-context-strip {
@@ -137,6 +132,32 @@
   vertical-align: middle;
   white-space: nowrap;
   user-select: all;
+}
+
+.composer-atom-remove {
+  display: inline-grid;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-fast) ease, background var(--duration-fast) ease;
+}
+
+.composer-atom:hover .composer-atom-remove,
+.composer-atom-remove:focus-visible {
+  opacity: 0.8;
+}
+
+.composer-atom-remove:hover {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  opacity: 1;
 }
 
 .composer-atom-icon {

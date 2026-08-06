@@ -50,7 +50,7 @@ describe("HistoryTurn", () => {
   });
 
 
-  it("does not render queued runs as user message bubbles", () => {
+  it("renders queued runs as user message bubbles", () => {
     const html = renderWithProviders(
       <LiveRunMessage
         running
@@ -64,7 +64,8 @@ describe("HistoryTurn", () => {
         }}
       />
     );
-    expect(html).toBe("");
+    expect(html).toContain("queued task");
+    expect(html).toContain('class="message user-message"');
   });
 
   it("offers expandable details for live failures", () => {

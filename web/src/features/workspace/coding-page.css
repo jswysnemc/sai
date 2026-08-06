@@ -30,6 +30,7 @@
   grid-column: 2;
   grid-row: 1;
   display: grid;
+  grid-template-rows: minmax(0, 1fr);
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -37,11 +38,24 @@
   background: var(--paper);
 }
 
-.workspace-open.chat-open:not(.workspace-maximized) .workbench-main {
+.workbench-content {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--paper);
+}
+
+.terminal-open .workbench-main {
+  grid-template-rows: minmax(0, 1fr) var(--terminal-panel-height, 280px);
+}
+
+.workspace-open.chat-open:not(.workspace-maximized) .workbench-content {
   grid-template-columns: minmax(360px, 1fr) 7px var(--workspace-panel-width);
 }
 
-.layout-swapped.workspace-open.chat-open:not(.workspace-maximized) .workbench-main {
+.layout-swapped.workspace-open.chat-open:not(.workspace-maximized) .workbench-content {
   grid-template-columns: var(--workspace-panel-width) 7px minmax(360px, 1fr);
 }
 
@@ -49,9 +63,9 @@
 .layout-swapped .workspace-resize-handle { order: 2; }
 .layout-swapped .coding-chat { order: 3; }
 
-.workspace-closed .workbench-main,
-.chat-closed .workbench-main,
-.workspace-maximized .workbench-main {
+.workspace-closed .workbench-content,
+.chat-closed .workbench-content,
+.workspace-maximized .workbench-content {
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -77,7 +91,7 @@
   display: none;
 }
 
-.workspace-maximized .workbench-main {
+.workspace-maximized .workbench-content {
   grid-column: 1;
 }
 
@@ -119,7 +133,7 @@
 }
 
 @media (max-width: 60rem) {
-  .workspace-open.chat-open:not(.workspace-maximized) .workbench-main {
+  .workspace-open.chat-open:not(.workspace-maximized) .workbench-content {
     grid-template-columns: minmax(280px, 1fr) 7px minmax(280px, 42vw);
   }
 }
@@ -174,9 +188,18 @@
   .workbench-main {
     grid-column: 1;
     grid-row: 1;
-    display: block;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
     width: 100%;
     height: 100%;
+  }
+
+  .terminal-open .workbench-main {
+    grid-template-rows: minmax(0, 1fr) minmax(12rem, 48vh);
+  }
+
+  .workbench-content {
+    display: block;
   }
 
   .coding-chat,

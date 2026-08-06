@@ -1,4 +1,6 @@
-export type PaneTab = "files" | "diff" | "terminal" | "tasks" | "subagents" | "sessions";
+import type { SideConversationRequest } from "../side-conversation/side-conversation-events";
+
+export type PaneTab = "files" | "diff" | "terminal" | "tasks" | "subagents" | "side-chat";
 
 export type WorkspacePanelTab = {
   id: string;
@@ -9,6 +11,8 @@ export type WorkspacePanelTab = {
   terminalId?: string;
   /** 被动打开的具体 Diff 内容，仅 diff 类型使用。 */
   diffSource?: string;
+  /** 冻结的主会话上下文，仅 side-chat 类型使用。 */
+  sideConversation?: SideConversationRequest;
   closable: boolean;
 };
 
@@ -21,7 +25,14 @@ export type WorkspacePanelTab = {
  */
 export function createWorkspacePanelTab(
   type: PaneTab,
-  options: { title?: string; path?: string; terminalId?: string; diffSource?: string; closable?: boolean } = {},
+  options: {
+    title?: string;
+    path?: string;
+    terminalId?: string;
+    diffSource?: string;
+    sideConversation?: SideConversationRequest;
+    closable?: boolean;
+  } = {},
   locale: Locale = "zh-CN"
 ): WorkspacePanelTab {
   const path = options.path;
@@ -55,11 +66,20 @@ export function createWorkspacePanelTab(
       closable: options.closable ?? true
     };
   }
+  if (type === "side-chat" && options.sideConversation) {
+    return {
+      id: `side-chat:${options.sideConversation.id}`,
+      type,
+      title: options.title ?? options.sideConversation.title,
+      sideConversation: options.sideConversation,
+      closable: options.closable ?? true
+    };
+  }
   const defaults: Record<Exclude<PaneTab, "files" | "terminal">, string> = {
     diff: "Diff",
     tasks: text(locale, "Background tasks", "后台任务"),
     subagents: text(locale, "Subagents", "子智能体"),
-    sessions: text(locale, "Sessions", "会话")
+    "side-chat": text(locale, "Side conversation", "旁路对话")
   };
   return {
     id: `${type}:${crypto.randomUUID()}`,
@@ -82,7 +102,7 @@ export function paneTabLabel(type: PaneTab, locale: Locale = "zh-CN"): string {
     terminal: text(locale, "Terminal", "终端"),
     tasks: text(locale, "Background tasks", "后台任务"),
     subagents: text(locale, "Subagents", "子智能体"),
-    sessions: text(locale, "Sessions", "会话")
+    "side-chat": text(locale, "Side conversation", "旁路对话")
   }[type];
 }
 import { text, type Locale } from "../i18n/locale";

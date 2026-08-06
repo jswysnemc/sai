@@ -1,3 +1,4 @@
+use super::file_diff::unified_diff;
 use super::file_edit::atomic_write::write_text_file;
 use super::fs_path::{expand_path, fs_error};
 use super::{ToolRegistry, ToolSpec};
@@ -112,7 +113,8 @@ fn write_file(args: Value) -> Result<String> {
             "path": path.display().to_string(),
             "added": added,
             "removed": removed
-        }]
+        }],
+        "diff": unified_diff(path_text, &old_content, &final_content)
     }))?)
 }
 

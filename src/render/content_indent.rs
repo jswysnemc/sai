@@ -1,4 +1,5 @@
 use crossterm::terminal;
+use unicode_width::UnicodeWidthChar;
 
 /// 终端视觉引导线占用的列宽。
 pub(crate) const GUIDE_COLUMN_WIDTH: usize = 1;
@@ -111,6 +112,46 @@ pub(crate) fn align_cli_stream_block(text: &str) -> String {
     text.split_inclusive('\n')
         .map(align_cli_stream_line)
         .collect()
+}
+
+/// 在 CLI 输出中显式软换行，确保续行重新进入正文列而不是落到引导线下方。
+///
+/// 参数:
+/// - `text`: 已完成 ANSI 渲染的文本块
+///
+/// 返回:
+/// - 按当前终端正文宽度插入软换行后的文本
+pub(crate) fn wrap_cli_stream_block(text: &str) -> String {
+    let width = cli_content_width();
+    let mut output = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        let (body, newline) = line
+            .strip_suffix('\n')
+            .map_or((line, ""), |body| (body, "\n"));
+        let mut visible_width = 0usize;
+        let mut index = 0usize;
+        while index < body.len() {
+            if body.as_bytes().get(index) == Some(&b'\x1b') {
+                let end = crate::render::terminal_image::escape_sequence_end(body, index);
+                if end > index {
+                    output.push_str(&body[index..end]);
+                    index = end;
+                    continue;
+                }
+            }
+            let ch = body[index..].chars().next().unwrap_or_default();
+            let char_width = ch.width().unwrap_or(0);
+            if char_width > 0 && visible_width > 0 && visible_width + char_width > width {
+                output.push('\n');
+                visible_width = 0;
+            }
+            output.push(ch);
+            visible_width = visible_width.saturating_add(char_width);
+            index += ch.len_utf8();
+        }
+        output.push_str(newline);
+    }
+    output
 }
 
 /// 【终端】【CLI 布局】对齐可能跨多个分片到达的纯文本正文。
@@ -400,7 +441,7 @@ mod tests {
     use super::{
         align_cli_stream_block, align_cli_text_delta, align_to_guide_column,
         align_to_guide_column_with_width, clear_right_margin, indent_diff_for_cli,
-        indent_diff_for_transcript,
+        indent_diff_for_transcript, wrap_cli_stream_block,
     };
 
     /// 引导符号保留在左侧，普通正文与续行位于右侧。
@@ -622,5 +663,14 @@ mod tests {
             " answer\n  next\n"
         );
         assert!(at_line_start);
+    }
+
+    /// 【终端】【CLI 换行】验证长行续行显式回到下一物理行。
+    #[test]
+    fn wraps_long_cli_lines_before_the_guide_alignment() {
+        let long = "a".repeat(110);
+        let wrapped = wrap_cli_stream_block(&long);
+        assert!(wrapped.contains('\n'));
+        assert!(wrapped.lines().all(|line| line.chars().count() <= 98));
     }
 }

@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { Paperclip, SendHorizontal, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { ChangeEvent, ClipboardEvent, KeyboardEvent } from "react";
 import { Button } from "../../../shared/ui/button/button";
@@ -129,15 +129,30 @@ export function UserMessageEditor({ content, imageUrls, busy, onCancel, onSubmit
           className="user-message-editor-attach"
           onClick={() => fileInputRef.current?.click()}
           disabled={busy}
+          aria-label={t("Attach image", "附加图片")}
+          title={t("Attach image", "附加图片")}
         >
-          {t("Add image", "添加图片")}
+          <Paperclip size={15} />
         </Button>
-        <span className="user-message-editor-hint">
-          {t("Enter to resend · Shift+Enter for a new line", "Enter 重新发送 · Shift+Enter 换行")}
-        </span>
-        <Button onClick={onCancel} disabled={busy}>{t("Cancel", "取消")}</Button>
-        <Button variant="primary" onClick={submit} disabled={busy || !editor.submittable}>
-          {t("Resend", "重新发送")}
+        <span className="user-message-editor-spacer" />
+        <Button
+          className="user-message-editor-cancel"
+          onClick={onCancel}
+          disabled={busy}
+          aria-label={t("Cancel editing", "取消编辑")}
+          title={t("Cancel editing", "取消编辑")}
+        >
+          <X size={15} />
+        </Button>
+        <Button
+          variant="primary"
+          className="user-message-editor-submit"
+          onClick={submit}
+          disabled={busy || !editor.submittable}
+          aria-label={t("Resend as a new branch", "作为新分支重新发送")}
+          title={t("Undo to this message and resend as a new branch", "退回本条消息并作为新分支重新发送")}
+        >
+          <SendHorizontal size={15} />
         </Button>
       </div>
     </div>

@@ -22,7 +22,7 @@ type FileTreeProps = {
   selectedFile: string | null;
   onSelectFile: (path: string) => void;
   onClearFile: () => void;
-  onClose: () => void;
+  onClose?: () => void;
 };
 
 type FileAction = { kind: "file" | "directory" | "rename"; value: string } | null;
@@ -119,7 +119,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
           <button type="button" onClick={beginRename} disabled={!focusedPath} aria-label={t("Rename", "重命名")}><Pencil size={12} /></button>
           <button type="button" onClick={() => void deleteFocused()} disabled={!focusedPath} aria-label={t("Delete", "删除")}><Trash2 size={12} /></button>
           <button type="button" onClick={() => void tree.refetch()} aria-label={t("Refresh file tree", "刷新文件树")}><RefreshCw size={12} /></button>
-          <button type="button" onClick={onClose} aria-label={t("Close file tree", "关闭文件树")}><PanelRightClose size={12} /></button>
+          {onClose && <button type="button" onClick={onClose} aria-label={t("Close file tree", "关闭文件树")}><PanelRightClose size={12} /></button>}
         </div>
       </div>
       <WorkspaceFileSearch value={search} onChange={setSearch} />

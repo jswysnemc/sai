@@ -40,6 +40,7 @@ export function HistoryTurn({
   sessionId,
   onRetry,
   onContinueFrom,
+  onSideConversation,
   onEditResend,
   actionBusy,
   branchSlot
@@ -49,6 +50,8 @@ export function HistoryTurn({
   onRetry?: () => void;
   /** 把对话切回本轮，之后发送的消息成为本轮的新分支 */
   onContinueFrom?: () => void;
+  /** 使用本轮助手回复打开旁路对话 */
+  onSideConversation?: () => void;
   /** 改写本轮用户输入后作为新分支重新发送 */
   onEditResend?: (content: string, imageUrls: string[]) => void;
   actionBusy?: boolean;
@@ -68,7 +71,6 @@ export function HistoryTurn({
           content={turn.user.content}
           timestamp={turn.user.timestamp}
           imageUrls={turn.user.image_urls}
-          onContinueFrom={onContinueFrom}
           onEditResend={onEditResend}
           actionBusy={actionBusy}
         />
@@ -101,11 +103,13 @@ export function HistoryTurn({
           sessionId={sessionId}
           turnId={turn.turn_id}
         />
-        {(turn.assistant.content || onRetry || branchSlot) && (
+        {(turn.assistant.content || onRetry || branchSlot || onSideConversation) && (
           <MessageActions
             text={turn.assistant.content || turn.user.content}
             timestamp={turn.assistant.timestamp}
             onRetry={onRetry}
+            onContinueFrom={onContinueFrom}
+            onSideConversation={onSideConversation}
             busy={actionBusy}
             extra={branchSlot}
           />
@@ -141,7 +145,14 @@ export function LiveRunMessage({
   const { t, locale } = useI18n();
   const compacting = state.parts.some((part) => part.type === "compaction" && part.status === "running");
   const queued = state.status === "queued";
-  if (queued) return null;
+  if (queued) {
+    return (
+      <UserMessageBubble
+        content={state.userInput}
+        imageUrls={state.imageUrls}
+      />
+    );
+  }
   return (
     <>
       {(state.userInput || state.imageUrls.length > 0) && (

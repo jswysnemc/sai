@@ -91,6 +91,50 @@
   flex: 1;
 }
 
+.sidebar-session-actions {
+  display: grid;
+  gap: var(--space-3xs);
+  margin: var(--space-xs) 0;
+}
+
+.sidebar-session-actions button {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 2rem;
+  padding: 0 var(--space-xs);
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.sidebar-session-actions button:hover {
+  background: var(--paper-raised);
+  color: var(--ink);
+}
+
+.sidebar-session-actions kbd {
+  color: var(--ink-soft);
+  font: var(--text-2xs) var(--font-code);
+}
+
+.sidebar-sessions-view > .session-workspace > .workspace-tree-row {
+  display: none;
+}
+
+.sidebar-sessions-view .workspace-session-children {
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.sidebar-sessions-view .workspace-session-children::before {
+  display: none;
+}
+
 
 .sidebar-footer {
   position: relative;
@@ -337,6 +381,52 @@
   gap:var(--space-3xs);
   min-height: 0;
   overflow: auto;
+}
+
+.sidebar-view-switcher {
+  display: flex;
+  gap: 2px;
+  margin: 0 var(--space-3xs) var(--space-sm);
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--paper-deep);
+}
+
+.sidebar-view-switcher button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 1.75rem;
+  padding: 0 var(--space-xs);
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+
+.sidebar-view-switcher button:hover {
+  color: var(--ink);
+}
+
+.sidebar-view-switcher button.active {
+  background: var(--paper-raised);
+  color: var(--ink);
+  box-shadow: var(--elevation-1);
+}
+
+.sidebar-file-tree-view {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  margin: 0 calc(var(--space-md) * -1);
+}
+
+.sidebar-file-tree-view > .file-tree {
+  flex: 1;
+  min-height: 0;
+  border-inline: 0;
 }
 
 .session-row {

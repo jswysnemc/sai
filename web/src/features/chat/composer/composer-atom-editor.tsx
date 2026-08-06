@@ -1,4 +1,4 @@
-import { BookOpen, FileText, SquareTerminal, Target, type LucideIcon } from "lucide-react";
+import { BookOpen, FileText, SquareTerminal, Target, X, type LucideIcon } from "lucide-react";
 import { createRoot, type Root } from "react-dom/client";
 import { parseComposerAtoms, type ComposerAtomSegment } from "./composer-atom-token";
 
@@ -206,6 +206,32 @@ function createAtom(segment: Exclude<ComposerAtomSegment, { type: "text" }>): HT
   label.className = "composer-atom-label";
   label.textContent = presentation.label;
   atom.append(icon, label);
+
+  if (segment.type === "terminal") {
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "composer-atom-remove";
+    remove.contentEditable = "false";
+    remove.setAttribute("aria-label", "Remove terminal selection");
+    remove.title = "Remove terminal selection";
+    remove.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    remove.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      atom.dispatchEvent(new CustomEvent("sai:remove-composer-atom", {
+        bubbles: true,
+        detail: { atom }
+      }));
+    });
+    remove.dataset.composerAtomIcon = "true";
+    atom.append(remove);
+    const removeRoot = createRoot(remove);
+    iconRoots.set(remove, removeRoot);
+    removeRoot.render(<X size={12} aria-hidden="true" />);
+  }
 
   const root = createRoot(icon);
   iconRoots.set(icon, root);

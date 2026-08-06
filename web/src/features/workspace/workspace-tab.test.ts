@@ -39,4 +39,22 @@ describe("createWorkspacePanelTab", () => {
     expect(first.id).toBe("files:one");
     expect(second.id).toBe("files:two");
   });
+
+  it("旁路对话标签使用请求标识且保留冻结上下文", () => {
+    const request = {
+      id: "question-one",
+      title: "解释当前回复",
+      workspaceId: "workspace-1",
+      sourceSessionId: "session-1",
+      sourceTurnId: "turn-1",
+      context: "上下文",
+      mode: "yolo" as const,
+      thinkingLevel: "auto" as const
+    };
+
+    const tab = createWorkspacePanelTab("side-chat", { sideConversation: request });
+
+    expect(tab.id).toBe("side-chat:question-one");
+    expect(tab.sideConversation).toBe(request);
+  });
 });

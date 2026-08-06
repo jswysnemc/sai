@@ -74,7 +74,7 @@
 
 .git-selectable-diff-line {
   display: grid;
-  grid-template-columns: 1.625rem 2.75rem 2.75rem minmax(max-content, 1fr);
+  grid-template-columns: 1.5rem 2.25rem 2.25rem minmax(max-content, 1fr);
   min-width: max-content;
   background: var(--code-surface);
   color: var(--code-text);

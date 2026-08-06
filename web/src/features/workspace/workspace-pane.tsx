@@ -5,7 +5,6 @@ import { FileTree } from "./file-tree";
 import { TerminalDock } from "../terminal/terminal-dock";
 import { BackgroundTasksPanel } from "../background-tasks/background-tasks-panel";
 import { SubagentWorkspace } from "../subagents/subagent-workspace";
-import { SessionSidebar } from "../sessions/session-sidebar";
 import type { TerminalManager } from "../terminal/use-terminal-manager";
 import { createWorkspacePanelTab, type PaneTab, type WorkspacePanelTab } from "./workspace-tab";
 import { workspacePanelTitle } from "./workspace-panel-options";
@@ -17,6 +16,8 @@ import { WorkspaceEmptyState } from "./workspace-empty-state";
 import type { WorkspacePassiveDiff } from "./workspace-passive-diff";
 import { TargetedDiffPane } from "./targeted-diff-pane";
 import { WorkspaceFileSplit } from "./workspace-file-split";
+import { SideConversationPane } from "../side-conversation/side-conversation-pane";
+import type { SideConversationRequest } from "../side-conversation/side-conversation-events";
 
 type WorkspacePaneProps = {
   selectedFile: string | null;
@@ -33,6 +34,8 @@ type WorkspacePaneProps = {
   onToggleMaximized: () => void;
   onCollapse: () => void;
   terminalManager: TerminalManager;
+  sideConversationRequest: SideConversationRequest | null;
+  onRequestSideConversation: () => void;
 };
 
 /**
@@ -55,7 +58,9 @@ export function WorkspacePane({
   onClearFile,
   onToggleMaximized,
   onCollapse,
-  terminalManager
+  terminalManager,
+  sideConversationRequest,
+  onRequestSideConversation
 }: WorkspacePaneProps) {
   const { locale, t } = useI18n();
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
@@ -101,7 +106,7 @@ export function WorkspacePane({
 
   // 外部入口或重新打开时：已有则激活，没有则新建。
   useEffect(() => {
-    if (!activeType || activeType === "diff") return;
+    if (!activeType || activeType === "diff" || activeType === "side-chat") return;
     if (activeType === "terminal") {
       setTabs((current) => {
         const existing = current.find((tab) => tab.type === "terminal" && tab.terminalId === terminalManager.activeId);
@@ -155,6 +160,17 @@ export function WorkspacePane({
   }, [locale, onActiveTypeChange, passiveDiff]);
 
   useEffect(() => {
+    if (!sideConversationRequest) return;
+    const created = createWorkspacePanelTab("side-chat", {
+      title: sideConversationRequest.title,
+      sideConversation: sideConversationRequest
+    }, locale);
+    setTabs((current) => [...current, created]);
+    setActiveTabId(created.id);
+    onActiveTypeChange("side-chat");
+  }, [locale, onActiveTypeChange, sideConversationRequest]);
+
+  useEffect(() => {
     setTabs((current) =>
       current.map((tab) => {
         if (tab.type !== "terminal" || !tab.terminalId) return tab;
@@ -192,6 +208,10 @@ export function WorkspacePane({
   };
 
   const addTab = async (type: PaneTab) => {
+    if (type === "side-chat") {
+      onRequestSideConversation();
+      return;
+    }
     if (type === "files") {
       const created = createWorkspacePanelTab("files", { title: t("Editor", "编辑器") }, locale);
       setTabs((current) => [...current, created]);
@@ -303,11 +323,15 @@ export function WorkspacePane({
         )}
         {activeTab?.type === "tasks" && <BackgroundTasksPanel />}
         {activeTab?.type === "subagents" && <SubagentWorkspace />}
-        {activeTab?.type === "sessions" && (
-          <div className="workspace-sessions-pane">
-            <SessionSidebar collapsed={false} onToggleCollapsed={() => undefined} />
+        {tabs.filter((tab) => tab.type === "side-chat" && tab.sideConversation).map((tab) => (
+          <div
+            className="workspace-side-chat-host"
+            hidden={activeTab?.id !== tab.id}
+            key={tab.id}
+          >
+            <SideConversationPane request={tab.sideConversation!} />
           </div>
-        )}
+        ))}
       </div>
       </ErrorBoundary>
     </div>

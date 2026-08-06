@@ -13,7 +13,9 @@ impl StreamRenderer {
             crate::render::content_indent::cli_content_width(),
             || self.markdown.push(text),
         );
-        crate::render::content_indent::align_cli_stream_block(&rendered)
+        crate::render::content_indent::align_cli_stream_block(
+            &crate::render::content_indent::wrap_cli_stream_block(&rendered),
+        )
     }
 
     /// 【终端】【CLI 布局】刷新并对齐 Markdown 渲染器剩余内容。
@@ -28,7 +30,9 @@ impl StreamRenderer {
             crate::render::content_indent::cli_content_width(),
             || self.markdown.flush(),
         );
-        crate::render::content_indent::align_cli_stream_block(&rendered)
+        crate::render::content_indent::align_cli_stream_block(
+            &crate::render::content_indent::wrap_cli_stream_block(&rendered),
+        )
     }
 
     /// 切换当前流式输出模式。

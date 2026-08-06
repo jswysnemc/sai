@@ -1,13 +1,21 @@
 .user-message-editor {
   display: grid;
-  gap:var(--space-sm);
+  gap: var(--space-xs);
   width: min(42.5rem, 100%);
-  padding:var(--space-md) var(--space-lg);
+  padding: var(--space-sm);
   border: 1px solid var(--line-strong);
-  border-radius:0.875rem 0.875rem var(--radius-1) 0.875rem;
+  border-radius: var(--radius-4);
   background: var(--paper-raised);
   box-shadow: var(--elevation-2);
   text-align: left;
+  transition:
+    border-color var(--duration-base) ease,
+    box-shadow var(--duration-base) ease;
+}
+
+.user-message-editor:focus-within {
+  border-color: var(--signal);
+  box-shadow: var(--ring-focus);
 }
 
 .user-message-editor-images {
@@ -59,10 +67,11 @@
 }
 
 .ui-text-area.user-message-editor-input {
-  min-height: 4.5rem;
+  min-height: 4rem;
   max-height: 18rem;
-  border-color: var(--line);
-  background: var(--paper);
+  border: 0;
+  box-shadow: none;
+  background: transparent;
   font-size:var(--text-base);
   line-height: 1.55;
 }
@@ -75,22 +84,46 @@
 
 .user-message-editor-actions {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap:var(--space-xs);
 }
 
-.user-message-editor-actions .ui-button {
+.user-message-editor-actions button {
+  display: grid;
+  width: 1.875rem;
+  height: 1.875rem;
   min-height: 1.875rem;
-  padding:0 var(--space-md);
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
 }
 
-/* 提示文本吸收中间空白，把取消与重新发送推到行尾 */
-.user-message-editor-hint {
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--ink-soft);
-  font-size:var(--text-2xs);
+.user-message-editor-actions button:hover:not(:disabled) {
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.user-message-editor-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.user-message-editor-spacer {
+  flex: 1;
+}
+
+.user-message-editor-actions .user-message-editor-submit {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.user-message-editor-actions .user-message-editor-submit:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 86%, transparent);
+  color: var(--paper);
 }
 
 @media (max-width: 48rem) {
@@ -98,12 +131,4 @@
     padding:var(--space-sm) var(--space-md);
   }
 
-  /* 窄屏隐藏快捷键提示，避免按钮被挤到换行 */
-  .user-message-editor-hint {
-    display: none;
-  }
-
-  .user-message-editor-actions {
-    justify-content: flex-end;
-  }
 }

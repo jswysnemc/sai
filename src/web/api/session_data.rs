@@ -7,8 +7,8 @@ use anyhow::{bail, Context, Result};
 use axum::extract::{Path, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Serialize;
-use std::path::Path as FilePath;
+use serde::{Deserialize, Serialize};
+use std::path::{Path as FilePath, PathBuf};
 
 /// 会话状态目录中的顶层数据项。
 #[derive(Debug, Serialize)]
@@ -22,6 +22,9 @@ struct SessionDataItem {
 /// 单个会话的数据摘要。
 #[derive(Debug, Serialize)]
 struct SessionDataSummary {
+    workspace_id: String,
+    workspace_name: String,
+    workspace_path: String,
     id: String,
     title: String,
     created_at: String,
@@ -39,9 +42,21 @@ struct SessionDataSummary {
     items: Vec<SessionDataItem>,
 }
 
+#[derive(Debug, Deserialize)]
+struct ClearSessionDataRequest {
+    sessions: Vec<SessionDataSelection>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+struct SessionDataSelection {
+    workspace_id: String,
+    session_id: String,
+}
+
 #[derive(Debug, Serialize)]
 struct ClearSessionDataResponse {
     cleared: bool,
+    cleared_ids: Vec<String>,
 }
 
 #[derive(Default)]
@@ -70,10 +85,11 @@ struct FileStats {
 pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
         .route("/api/session-data", get(list))
+        .route("/api/session-data/clear", post(clear_many))
         .route("/api/session-data/:id/clear", post(clear))
 }
 
-/// 列出当前工作区全部会话的数据摘要。
+/// 列出所有已登记工作区的会话数据摘要。
 ///
 /// 参数:
 /// - `state`: Web 应用状态
@@ -82,10 +98,14 @@ pub(super) fn routes() -> Router<WebAppState> {
 /// - 会话数据摘要列表
 async fn list(State(state): State<WebAppState>) -> WebResult<Json<Vec<SessionDataSummary>>> {
     let paths = state.paths.clone();
-    let summaries = tokio::task::spawn_blocking(move || collect_session_data(&paths))
-        .await
-        .map_err(|error| WebError::from(anyhow::anyhow!(error)))?
-        .map_err(WebError::from)?;
+    let active_workspace = state.workspaces.active().map_err(WebError::from)?;
+    let workspaces = state.workspaces.list().map_err(WebError::from)?;
+    let summaries = tokio::task::spawn_blocking(move || {
+        collect_session_data(&paths, &workspaces, &active_workspace.id)
+    })
+    .await
+    .map_err(|error| WebError::from(anyhow::anyhow!(error)))?
+    .map_err(WebError::from)?;
     Ok(Json(summaries))
 }
 
@@ -115,7 +135,127 @@ async fn clear(
         .remove_session_history(&workspace_id, &id)
         .await
         .map_err(WebError::from)?;
-    Ok(Json(ClearSessionDataResponse { cleared: true }))
+    Ok(Json(ClearSessionDataResponse {
+        cleared: true,
+        cleared_ids: vec![id],
+    }))
+}
+
+/// 清空多个工作区中的会话数据并保留会话条目。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `request`: 要清空的工作区和会话标识
+///
+/// 返回:
+/// - 已清空的会话标识
+async fn clear_many(
+    State(state): State<WebAppState>,
+    Json(request): Json<ClearSessionDataRequest>,
+) -> WebResult<Json<ClearSessionDataResponse>> {
+    clear_selected_sessions(state, request.sessions).await
+}
+
+/// 校验并执行一批跨工作区会话数据清理。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `selections`: 工作区与会话选择
+///
+/// 返回:
+/// - 清理结果
+async fn clear_selected_sessions(
+    state: WebAppState,
+    selections: Vec<SessionDataSelection>,
+) -> WebResult<Json<ClearSessionDataResponse>> {
+    let selections = dedupe_selections(selections);
+    if selections.is_empty() {
+        return Err(WebError::bad_request(
+            "at least one session must be selected",
+        ));
+    }
+    let workspaces = state.workspaces.list().map_err(WebError::from)?;
+    let workspace_paths = selections
+        .iter()
+        .map(|selection| {
+            let workspace = workspaces
+                .iter()
+                .find(|workspace| workspace.id == selection.workspace_id)
+                .ok_or_else(|| {
+                    WebError::not_found(format!("workspace not found: {}", selection.workspace_id))
+                })?;
+            Ok((selection.clone(), PathBuf::from(&workspace.path)))
+        })
+        .collect::<WebResult<Vec<_>>>()?;
+
+    let mut owners = Vec::with_capacity(selections.len());
+    for (selection, workspace_path) in &workspace_paths {
+        // 1. 按工作区路径定位，避免不同工作区的 default 等同名会话互相串线
+        let owner_key = super::session_runtime::reject_running_subagents_for_workspace(
+            &state.paths,
+            workspace_path,
+            &selection.session_id,
+        )?;
+        // 2. 运行状态同样使用请求中的工作区作用域检查
+        if state
+            .runs
+            .is_session_active(&selection.workspace_id, &selection.session_id)
+            .await
+        {
+            return Err(WebError::conflict(
+                "stop the session run before modifying it",
+            ));
+        }
+        owners.push((
+            selection.session_id.clone(),
+            selection.workspace_id.clone(),
+            owner_key,
+        ));
+    }
+
+    let paths = state.paths.clone();
+    let clear_inputs = workspace_paths.clone();
+    tokio::task::spawn_blocking(move || {
+        for (selection, workspace_path) in &clear_inputs {
+            clear_session_data_for_workspace(&paths, workspace_path, &selection.session_id)?;
+        }
+        Ok::<(), anyhow::Error>(())
+    })
+    .await
+    .map_err(|error| WebError::from(anyhow::anyhow!(error)))?
+    .map_err(|error| WebError::bad_request(error.to_string()))?;
+
+    for (session_id, workspace_id, owner_key) in owners {
+        super::session_runtime::clear_session_runtime_records(&owner_key, &session_id);
+        state
+            .runs
+            .remove_session_history(&workspace_id, &session_id)
+            .await
+            .map_err(WebError::from)?;
+    }
+    Ok(Json(ClearSessionDataResponse {
+        cleared: true,
+        cleared_ids: selections.into_iter().map(|item| item.session_id).collect(),
+    }))
+}
+
+/// 去重会话选择，保持用户首次选择的顺序。
+///
+/// 参数:
+/// - `selections`: 原始选择
+///
+/// 返回:
+/// - 去重后的选择
+fn dedupe_selections(selections: Vec<SessionDataSelection>) -> Vec<SessionDataSelection> {
+    let mut seen = std::collections::HashSet::new();
+    selections
+        .into_iter()
+        .filter(|item| {
+            !item.workspace_id.trim().is_empty()
+                && !item.session_id.trim().is_empty()
+                && seen.insert((item.workspace_id.clone(), item.session_id.clone()))
+        })
+        .collect()
 }
 
 /// 汇总当前工作区全部会话数据。
@@ -125,13 +265,33 @@ async fn clear(
 ///
 /// 返回:
 /// - 会话数据摘要列表
-fn collect_session_data(paths: &SaiPaths) -> Result<Vec<SessionDataSummary>> {
-    let sessions = crate::state::list_sessions(paths)?;
-    let active_id = crate::state::active_session(paths)?.id;
-    sessions
-        .into_iter()
-        .map(|session| summarize_session_data(paths, session, &active_id))
-        .collect()
+fn collect_session_data(
+    paths: &SaiPaths,
+    workspaces: &[super::super::workspaces::WorkspaceInfo],
+    active_workspace_id: &str,
+) -> Result<Vec<SessionDataSummary>> {
+    let mut summaries = Vec::new();
+    for workspace in workspaces {
+        let workspace_path = FilePath::new(&workspace.path);
+        let active_id = crate::state::active_session_id_for_workspace(paths, workspace_path)?;
+        let sessions = crate::state::list_sessions_for_workspace(paths, workspace_path)?;
+        for session in sessions {
+            summaries.push(summarize_session_data(
+                paths,
+                workspace,
+                workspace_path,
+                session,
+                active_workspace_id == workspace.id,
+                &active_id,
+            )?);
+        }
+    }
+    summaries.sort_by(|left, right| {
+        left.workspace_name
+            .cmp(&right.workspace_name)
+            .then_with(|| right.updated_at.cmp(&left.updated_at))
+    });
+    Ok(summaries)
 }
 
 /// 汇总单个会话的结构化状态与磁盘占用。
@@ -145,16 +305,23 @@ fn collect_session_data(paths: &SaiPaths) -> Result<Vec<SessionDataSummary>> {
 /// - 单会话数据摘要
 fn summarize_session_data(
     paths: &SaiPaths,
+    workspace: &super::super::workspaces::WorkspaceInfo,
+    workspace_path: &FilePath,
     session: SessionInfo,
+    workspace_active: bool,
     active_id: &str,
 ) -> Result<SessionDataSummary> {
-    let (_, state_dir) = crate::state::locate_session_dirs(paths, &session.id)?;
-    let metrics = collect_state_metrics(paths, &session.id, &state_dir);
+    let (_, state_dir) =
+        crate::state::state_dir_for_workspace_session(paths, workspace_path, &session.id)?;
+    let metrics = collect_state_metrics(paths, workspace_path, &session.id, &state_dir);
     let items = collect_top_level_items(&state_dir)?;
     let total_bytes = items.iter().map(|item| item.bytes).sum();
     let file_count = items.iter().map(|item| item.file_count).sum();
     Ok(SessionDataSummary {
-        active: session.id == active_id,
+        workspace_id: workspace.id.clone(),
+        workspace_name: workspace.name.clone(),
+        workspace_path: workspace.path.clone(),
+        active: workspace_active && session.id == active_id,
         id: session.id,
         title: session.title,
         created_at: session.created_at,
@@ -175,14 +342,20 @@ fn summarize_session_data(
 ///
 /// 参数:
 /// - `paths`: Sai 路径集合
+/// - `workspace_path`: 工作区目录
 /// - `session_id`: 会话标识
 /// - `state_dir`: 会话状态目录
 ///
 /// 返回:
 /// - 可用指标与逐项错误
-fn collect_state_metrics(paths: &SaiPaths, session_id: &str, state_dir: &FilePath) -> StateMetrics {
+fn collect_state_metrics(
+    paths: &SaiPaths,
+    workspace_path: &FilePath,
+    session_id: &str,
+    state_dir: &FilePath,
+) -> StateMetrics {
     let mut metrics = StateMetrics::default();
-    match StateStore::for_session(paths, session_id) {
+    match StateStore::for_workspace_session(paths, workspace_path, session_id) {
         Ok(store) => {
             match store.session_tree() {
                 Ok(tree) => {
@@ -300,13 +473,51 @@ fn collect_file_stats(path: &FilePath) -> Result<FileStats> {
 /// 返回:
 /// - 清理结果
 fn clear_session_data(paths: &SaiPaths, session_id: &str) -> Result<()> {
-    if !crate::state::list_sessions(paths)?
+    let (_, state_dir) = crate::state::locate_session_dirs(paths, session_id)?;
+    clear_state_directory(paths, session_id, &state_dir, None)
+}
+
+/// 清空指定工作区中的会话状态目录并重新初始化最小状态文件。
+///
+/// 参数:
+/// - `paths`: Sai 路径集合
+/// - `workspace_path`: 会话所属工作区目录
+/// - `session_id`: 会话标识
+///
+/// 返回:
+/// - 清理结果
+fn clear_session_data_for_workspace(
+    paths: &SaiPaths,
+    workspace_path: &FilePath,
+    session_id: &str,
+) -> Result<()> {
+    if !crate::state::list_sessions_for_workspace(paths, workspace_path)?
         .iter()
         .any(|session| session.id == session_id)
     {
-        bail!("session not found in current workspace: {session_id}");
+        bail!("session not found in workspace: {session_id}");
     }
-    let (_, state_dir) = crate::state::locate_session_dirs(paths, session_id)?;
+    let (_, state_dir) =
+        crate::state::state_dir_for_workspace_session(paths, workspace_path, session_id)?;
+    clear_state_directory(paths, session_id, &state_dir, Some(workspace_path))
+}
+
+/// 删除会话状态目录并使用对应工作区重新建立基础文件。
+///
+/// 参数:
+/// - `paths`: Sai 路径集合
+/// - `session_id`: 会话标识
+/// - `state_dir`: 待清理状态目录
+/// - `workspace_path`: 可选所属工作区，缺省按全局会话定位
+///
+/// 返回:
+/// - 清理结果
+fn clear_state_directory(
+    paths: &SaiPaths,
+    session_id: &str,
+    state_dir: &FilePath,
+    workspace_path: Option<&FilePath>,
+) -> Result<()> {
     // 1. 删除整个状态目录，避免辅助文件残留
     if state_dir.exists() {
         std::fs::remove_dir_all(&state_dir)
@@ -314,7 +525,10 @@ fn clear_session_data(paths: &SaiPaths, session_id: &str) -> Result<()> {
     }
     std::fs::create_dir_all(&state_dir)?;
     // 2. 重建数据库与基础文件，会话索引和标题保持不变
-    StateStore::for_session(paths, session_id)?.init_files()
+    match workspace_path {
+        Some(path) => StateStore::for_workspace_session(paths, path, session_id)?.init_files(),
+        None => StateStore::for_session(paths, session_id)?.init_files(),
+    }
 }
 
 #[cfg(test)]
@@ -356,7 +570,7 @@ mod tests {
         let workspace = temp.path().join("workspace");
         std::fs::create_dir_all(&workspace).unwrap();
 
-        crate::runtime_cwd::scope(workspace, async {
+        crate::runtime_cwd::scope(workspace.clone(), async {
             let session = crate::state::create_session(&paths, Some("managed")).unwrap();
             let store = StateStore::for_session(&paths, &session.id).unwrap();
             store.start_turn("turn-1", "question").unwrap();
@@ -364,7 +578,14 @@ mod tests {
             std::fs::write(store.state_dir().join("todos.json"), "[]").unwrap();
             drop(store);
 
-            let summaries = collect_session_data(&paths).unwrap();
+            let workspace_id = crate::state::workspace_id_for_path(&workspace);
+            let workspace_info = crate::web::workspaces::WorkspaceInfo {
+                id: workspace_id.clone(),
+                name: "managed".to_string(),
+                path: workspace.display().to_string(),
+                last_opened_at: String::new(),
+            };
+            let summaries = collect_session_data(&paths, &[workspace_info], &workspace_id).unwrap();
             let summary = summaries.iter().find(|item| item.id == session.id).unwrap();
 
             assert_eq!(summary.turn_count, Some(1));

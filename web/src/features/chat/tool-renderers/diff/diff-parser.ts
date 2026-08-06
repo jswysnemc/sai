@@ -43,8 +43,8 @@ export function parseDiff(source: string): DiffFile[] {
   };
 
   for (const line of lines) {
-    // Codex patch 的结束标记可能紧跟在 hunk 正文之后，不能落入上下文行
-    if (line.startsWith("*** End Patch")) continue;
+    // Codex patch 的边界标记可能紧跟在上一段 hunk 正文之后，不能落入上下文行
+    if (line.startsWith("*** Begin Patch") || line.startsWith("*** End Patch")) continue;
 
     // 1. 文件起始标记在任何状态下都要识别：多文件补丁里它紧跟上一个文件的正文
     const codexHead = CODEX_FILE.exec(line);
@@ -73,8 +73,6 @@ export function parseDiff(source: string): DiffFile[] {
         continue;
       }
       if (
-        line.startsWith("*** Begin Patch") ||
-        line.startsWith("*** End Patch") ||
         line.startsWith("--- ") ||
         line.startsWith("*** Move to:")
       ) {
@@ -86,21 +84,34 @@ export function parseDiff(source: string): DiffFile[] {
     if (line.startsWith("@@")) {
       const file = current ?? openFile("", "modified", true);
       const hunk = UNIFIED_HUNK.exec(line);
+      let hunkOldStart: number | null = null;
+      let hunkNewStart: number | null = null;
       if (hunk) {
-        oldNumber = Number(hunk[1]);
-        newNumber = Number(hunk[2]);
+        hunkOldStart = Number(hunk[1]);
+        hunkNewStart = Number(hunk[2]);
       } else {
         const range = CODEX_RANGE_HUNK.exec(line);
         if (range) {
-          oldNumber = Number(range[1]);
-          newNumber = Number(range[1]);
+          hunkOldStart = Number(range[1]);
+          hunkNewStart = Number(range[1]);
         } else {
-          oldNumber ??= 1;
-          newNumber ??= 1;
+          hunkOldStart = oldNumber ?? 1;
+          hunkNewStart = newNumber ?? 1;
         }
       }
-      // 保留 hunk 边界，否则不相邻的区段会连在一起看不出跳过了内容
-      if (file.lines.length > 0) file.lines.push({ kind: "hunk", text: line });
+      const skippedOld = hunkOldStart === null
+        ? 0
+        : Math.max(hunkOldStart - (oldNumber ?? 1), 0);
+      const skippedNew = hunkNewStart === null
+        ? 0
+        : Math.max(hunkNewStart - (newNumber ?? 1), 0);
+      const foldedCount = Math.max(skippedOld, skippedNew);
+      // 保留 hunk 边界；如果前后区段之间有省略行，把数量传给统一视图渲染折叠条
+      if (file.lines.length > 0 || foldedCount > 0) {
+        file.lines.push({ kind: "hunk", text: line, foldedCount: foldedCount || undefined });
+      }
+      oldNumber = hunkOldStart ?? oldNumber ?? 1;
+      newNumber = hunkNewStart ?? newNumber ?? 1;
       state = "hunk";
       continue;
     }

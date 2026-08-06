@@ -68,6 +68,11 @@ export function toolDisplaySummary(
     return text(locale, "File edit", "文件修改");
   }
 
+  if (name === "trash_path") {
+    const path = stringField(args, "path");
+    return path ? displayPath(path, workspacePath) : text(locale, "Trash", "回收站");
+  }
+
   if (name === "glob" || name === "find_files") {
     const path = stringField(args, "path");
     if (path) return displayPath(path, workspacePath);

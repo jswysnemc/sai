@@ -1,4 +1,4 @@
-import { Activity, Bot, ChevronLeft, FileCode2, GitCompareArrows, Maximize2, Minimize2, PanelLeft, PanelRightClose, Plus, SquareTerminal, X } from "lucide-react";
+import { Activity, Bot, ChevronLeft, FileCode2, GitCompareArrows, Maximize2, MessageSquarePlus, Minimize2, PanelRightClose, Plus, SquareTerminal, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { useOutsidePointerDown } from "../../shared/hooks/use-outside-pointer-down";
 import type { PaneTab, WorkspacePanelTab } from "./workspace-tab";
@@ -148,6 +148,6 @@ function TabIcon({ type }: { type: PaneTab }) {
   if (type === "terminal") return <SquareTerminal size={13} />;
   if (type === "tasks") return <Activity size={13} />;
   if (type === "subagents") return <Bot size={13} />;
-  if (type === "sessions") return <PanelLeft size={13} />;
+  if (type === "side-chat") return <MessageSquarePlus size={13} />;
   return <FileCode2 size={13} />;
 }

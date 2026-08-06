@@ -26,7 +26,7 @@ type SourceControlDiffProps = {
  */
 export function SourceControlDiff(props: SourceControlDiffProps) {
   const { t } = useI18n();
-  const [layout, setLayout] = useState<DiffLayout>("unified");
+  const [layout, setLayout] = useState<DiffLayout>("side");
   if (props.loading) {
     return <div className="git-clean diff-clean">{t("Loading diff...", "正在读取差异…")}</div>;
   }
@@ -66,7 +66,12 @@ export function SourceControlDiff(props: SourceControlDiffProps) {
       {props.data.stat && <pre className="git-diff-stat">{props.data.stat}</pre>}
       {layout === "side" ? (
         /* 并排是审阅模式：直接渲染整块对照视图；部分暂存留在统一视图 */
-        <DiffView source={props.data.patch} headerPath={props.selectedPath ?? undefined} layout="side" />
+        <DiffView
+          source={props.data.patch}
+          headerPath={props.selectedPath ?? undefined}
+          onlyPath={props.selectedPath ?? undefined}
+          layout="side"
+        />
       ) : hunks.length > 0 ? (
         <div className="git-partial-diff">
           {hunks.map((hunk, index) => (
@@ -81,7 +86,12 @@ export function SourceControlDiff(props: SourceControlDiffProps) {
           ))}
         </div>
       ) : (
-        <DiffView source={props.data.patch} headerPath={props.selectedPath ?? undefined} layout="unified" />
+        <DiffView
+          source={props.data.patch}
+          headerPath={props.selectedPath ?? undefined}
+          onlyPath={props.selectedPath ?? undefined}
+          layout="unified"
+        />
       )}
       {props.data.truncated && <div className="git-clean">{t("Diff truncated", "差异已截断")}</div>}
     </div>

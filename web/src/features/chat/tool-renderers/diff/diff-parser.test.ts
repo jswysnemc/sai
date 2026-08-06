@@ -108,6 +108,7 @@ describe("diff parser", () => {
     );
 
     expect(files[0].lines.filter((line) => line.kind === "hunk")).toHaveLength(1);
+    expect(files[0].lines.find((line) => line.kind === "hunk")?.foldedCount).toBe(48);
     const second = files[0].lines.find((line) => line.kind === "removed" && line.text === "fifty");
     expect(second?.oldLine).toBe(50);
   });
@@ -134,6 +135,24 @@ describe("diff parser", () => {
     expect(files[0].added).toBe(1);
     expect(files[0].removed).toBe(1);
     expect(files[0].lines.some((line) => line.text.includes("End Patch"))).toBe(false);
+  });
+
+  it("does not render a new patch boundary inside the previous hunk", () => {
+    const files = parseDiff([
+      "*** Update File: src/one.ts",
+      "@@ -1 +1 @@",
+      "-old",
+      "+new",
+      "*** Begin Patch",
+      "*** Update File: src/two.ts",
+      "@@ -1 +1 @@",
+      "-before",
+      "+after",
+      "*** End Patch"
+    ].join("\n"));
+
+    expect(files).toHaveLength(2);
+    expect(files.flatMap((file) => file.lines).some((line) => line.text.includes("Begin Patch"))).toBe(false);
   });
 
   it("assigns line numbers across multiple hunks", () => {

@@ -6,6 +6,9 @@ export type SessionDataItem = {
 };
 
 export type SessionDataSummary = {
+  workspace_id: string;
+  workspace_name: string;
+  workspace_path: string;
   id: string;
   title: string;
   created_at: string;
@@ -20,4 +23,9 @@ export type SessionDataSummary = {
   has_goal?: boolean | null;
   state_error?: string | null;
   items: SessionDataItem[];
+};
+
+export type SessionDataSelection = {
+  workspace_id: string;
+  session_id: string;
 };

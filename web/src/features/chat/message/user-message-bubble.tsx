@@ -11,8 +11,6 @@ type UserMessageBubbleProps = {
   content: string;
   timestamp?: string;
   imageUrls?: string[];
-  /** 把对话切回本轮，之后发送的消息成为本轮的新分支 */
-  onContinueFrom?: () => void;
   /** 改写本轮输入后作为新分支重新发送；未提供时不显示编辑入口 */
   onEditResend?: (content: string, imageUrls: string[]) => void;
   /** 操作进行中时禁用分支按钮 */
@@ -25,14 +23,13 @@ const COLLAPSE_HEIGHT = 320;
  * 用户消息气泡，支持 Markdown 渲染、超高折叠、附件放大、复制、编辑重发和开分支操作。
  *
  * @param props content 为消息原文，timestamp 为可选时间，imageUrls 为附件图片地址，
- *              onEditResend 为编辑后重新发送的回调，onContinueFrom 为从本轮开新分支的回调
+ *              onEditResend 为编辑后重新发送的回调
  * @returns 右对齐的用户消息气泡
  */
 export function UserMessageBubble({
   content,
   timestamp,
   imageUrls,
-  onContinueFrom,
   onEditResend,
   actionBusy
 }: UserMessageBubbleProps) {
@@ -95,7 +92,6 @@ export function UserMessageBubble({
           text={content}
           timestamp={timestamp}
           onEdit={onEditResend ? () => setEditing(true) : undefined}
-          onContinueFrom={onContinueFrom}
           busy={actionBusy}
         />
       </div>

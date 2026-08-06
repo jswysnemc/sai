@@ -15,7 +15,7 @@
   max-height: 460px;
   overflow: auto;
   border-radius:var(--radius-3);
-  background: var(--paper-deep);
+  background: var(--technical-surface);
   color: var(--technical-text);
   font:400 var(--text-sm)/1.6 var(--font-code);
 }
@@ -40,6 +40,25 @@
 
 .diff-file-head .tool-file-reference {
   min-width: 0;
+}
+
+.diff-file-title {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.diff-file-title .tool-file-reference {
+  flex: 0 0 auto;
+}
+
+.diff-file-directory {
+  overflow: hidden;
+  color: var(--technical-muted);
+  font: 400 var(--text-2xs) var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .diff-file-head strong {
@@ -83,21 +102,75 @@
 
 .diff-row {
   display: grid;
-  grid-template-columns: 3rem 3rem minmax(max-content, 1fr);
+  grid-template-columns: 2.25rem 2.25rem minmax(max-content, 1fr);
   min-width: max-content;
 }
 
 .diff-file-lines.single-gutter .diff-row {
-  grid-template-columns: 3rem minmax(max-content, 1fr);
+  grid-template-columns: 2.25rem minmax(max-content, 1fr);
 }
 
 .diff-file-lines.no-gutter .diff-row {
   grid-template-columns: minmax(max-content, 1fr);
 }
 
+/* 主消息区统一视图只保留一列行号，旧行号和新行号按行类型择一展示。 */
+.diff-unified-lines {
+  overflow-x: auto;
+  padding-bottom: var(--space-2xs);
+}
+
+.diff-unified-row {
+  grid-template-columns: 3rem minmax(max-content, 1fr);
+}
+
+.diff-unified-row > code {
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+}
+
+.diff-unified-context,
+.diff-unified-change {
+  min-width: max-content;
+}
+
+.diff-unified-fold {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  width: 100%;
+  min-height: 1.7rem;
+  padding: 0 var(--space-xs);
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--technical-border) 70%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--technical-border) 70%, transparent);
+  background: color-mix(in srgb, var(--technical-border) 22%, transparent);
+  color: var(--technical-muted);
+  font: 400 var(--text-2xs)/1 var(--font-code);
+  text-align: left;
+  cursor: pointer;
+}
+
+.diff-unified-fold:hover {
+  background: color-mix(in srgb, var(--technical-border) 36%, transparent);
+  color: var(--technical-text);
+}
+
+.diff-unified-marker {
+  min-width: max-content;
+  padding: var(--space-3xs) var(--space-xs);
+  color: var(--technical-muted);
+  font: 400 var(--text-2xs)/1.4 var(--font-code);
+}
+
+.diff-unified-hunk {
+  border-top: 1px solid color-mix(in srgb, var(--technical-border) 70%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--technical-border) 70%, transparent);
+  background: color-mix(in srgb, var(--technical-border) 16%, transparent);
+}
+
 /* 行号列：去掉竖分隔线，靠右对齐与降低对比就足以和代码分开 */
 .diff-gutter {
-  padding:0 var(--space-sm) 0 var(--space-2xs);
+  padding:0 var(--space-xs) 0 var(--space-3xs);
   color: color-mix(in srgb, var(--ink-soft) 70%, transparent);
   font-size:var(--text-2xs);
   font-variant-numeric: tabular-nums;
@@ -109,7 +182,7 @@
   display: grid;
   grid-template-columns: 1.25rem minmax(0, 1fr);
   min-width: 0;
-  padding:0 var(--space-lg) 0 0;
+  padding:0 var(--space-sm) 0 0;
   font-family: var(--font-code);
   white-space: pre;
 }
@@ -134,7 +207,6 @@
  */
 .diff-row.added {
   background: color-mix(in srgb, var(--diff-added-bg) 60%, transparent);
-  border-left: 3px solid var(--diff-added-text);
 }
 
 .diff-row.added .diff-marker {
@@ -144,7 +216,6 @@
 
 .diff-row.removed {
   background: color-mix(in srgb, var(--diff-removed-bg) 60%, transparent);
-  border-left: 3px solid var(--diff-removed-text);
 }
 
 .diff-row.removed .diff-marker {
@@ -305,12 +376,12 @@
 /* 每一行共享同一网格，长行折叠后左右行高仍然保持一致。 */
 .diff-idea-rowline {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
   min-width: 0;
 }
 
 .diff-idea-rowline .diff-row {
-  grid-template-columns: 3rem minmax(0, 1fr);
+  grid-template-columns: 2.25rem minmax(0, 1fr);
   min-width: 0;
 }
 
@@ -326,29 +397,27 @@
 }
 
 .diff-idea-band-flat {
-  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  background: var(--technical-border);
 }
 
 /* 中央关系线：删除指向左侧，新增指向右侧，混合变更保持直连。 */
 .diff-idea-connector {
   align-self: stretch;
   min-height: 1.6em;
-  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  background: var(--technical-border);
+  clip-path: none;
 }
 
 .diff-idea-connector-added {
-  background: color-mix(in srgb, var(--diff-added, #2f9e63) 44%, transparent);
-  clip-path: polygon(48% 0, 100% 0, 100% 100%, 48% 100%, 0 50%);
+  background: var(--diff-added-text);
 }
 
 .diff-idea-connector-removed {
-  background: color-mix(in srgb, var(--diff-removed, #d6604d) 44%, transparent);
-  clip-path: polygon(0 0, 52% 0, 100% 50%, 52% 100%, 0 100%);
+  background: var(--diff-removed-text);
 }
 
 .diff-idea-connector-mixed {
-  background: color-mix(in srgb, var(--signal) 38%, transparent);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  background: var(--signal);
 }
 
 .diff-idea-connector-neutral {
@@ -357,13 +426,12 @@
 
 .diff-idea-change {
   overflow: hidden;
-  border: 1px solid transparent;
-  border-radius: var(--radius-2);
+  border: 0;
+  border-radius: 0;
 }
 
 .diff-idea-change.is-active {
-  border-color: color-mix(in srgb, var(--signal) 48%, var(--technical-border));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--signal) 12%, transparent);
+  background: color-mix(in srgb, var(--signal) 5%, transparent);
 }
 
 .diff-idea-change-row .diff-row.right,
@@ -375,8 +443,8 @@
   background:
     repeating-linear-gradient(
       -45deg,
-      color-mix(in srgb, var(--paper-deep) 70%, transparent) 0,
-      color-mix(in srgb, var(--paper-deep) 70%, transparent) 1px,
+      color-mix(in srgb, var(--technical-border) 70%, transparent) 0,
+      color-mix(in srgb, var(--technical-border) 70%, transparent) 1px,
       transparent 1px,
       transparent 6px
     );
@@ -426,15 +494,19 @@
   }
 
   .diff-idea-rowline {
-    grid-template-columns: minmax(0, 1fr) 10px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
   }
 
   .diff-idea-rowline .diff-row {
-    grid-template-columns: 2.5rem minmax(0, 1fr);
+    grid-template-columns: 2rem minmax(0, 1fr);
   }
 }
 
 @media (max-width: 36rem) {
+  .diff-unified-row {
+    grid-template-columns: 2.5rem minmax(max-content, 1fr);
+  }
+
   .diff-idea-rowline {
     grid-template-columns: minmax(0, 1fr);
   }

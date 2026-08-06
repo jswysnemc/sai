@@ -36,8 +36,7 @@
  * 因此不同工具的卡片在同一列位置上始终对齐。
  */
 .tool-shell-head {
-  display: grid;
-  grid-template-columns: 20px auto minmax(0, 1fr) auto auto 14px;
+  display: flex;
   align-items: center;
   gap:var(--space-sm);
   min-height: 28px;
@@ -76,6 +75,8 @@
 
 /* 对象用等宽字体：路径与命令按字符对齐更易扫读 */
 .tool-shell-target {
+  flex: 0 1 auto;
+  max-width: min(52%, 42rem);
   min-width: 0;
   overflow: hidden;
   color: var(--ink-soft);
@@ -93,7 +94,7 @@
 }
 
 .tool-shell-meta {
-  grid-column: 4;
+  flex-shrink: 0;
   color: var(--ink-soft);
   font:400 var(--text-2xs)/1.3 var(--font-code);
   font-variant-numeric: tabular-nums;
@@ -101,7 +102,7 @@
 }
 
 .tool-shell-status {
-  grid-column: 5;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
   color: var(--tool-tone);
@@ -126,8 +127,7 @@
 }
 
 .tool-shell-chevron {
-  grid-column: 6;
-  justify-self: end;
+  flex-shrink: 0;
   color: var(--ink-soft);
   transition:transform var(--duration-base) var(--ease-standard);
 }

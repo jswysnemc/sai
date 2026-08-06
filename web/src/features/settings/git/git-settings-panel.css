@@ -12,12 +12,40 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+/* 同一设置组内的开关、下拉和数字字段使用同一张紧凑卡片，避免网格行被某一种控件撑高。 */
+.git-settings-grid.toggles > .settings-field {
+  display: grid;
+  align-content: center;
+  gap: var(--space-3xs);
+  min-height: 4.5rem;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  box-sizing: border-box;
+}
+
+.git-settings-grid.toggles > .settings-field > span {
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.git-settings-grid.toggles > .settings-field > small {
+  font: 400 var(--text-2xs) var(--font-code);
+}
+
+.git-settings-grid.toggles > .settings-field input,
+.git-settings-grid.toggles > .settings-field .ui-select > button {
+  min-height: 2rem;
+  height: 2rem;
+  padding-block: 0;
+}
+
 .git-setting-toggle {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 2.125rem;
   align-items: center;
   gap:var(--space-lg);
-  min-height: 3.25rem;
+  min-height: 4.5rem;
   padding:var(--space-sm) var(--space-md);
   border: 1px solid var(--line);
   border-radius:var(--radius-2);

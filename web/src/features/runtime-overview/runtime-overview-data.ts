@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import type { Subagent, TodoItem, TodoSnapshot } from "../../api/contracts";
+import type { Goal } from "../../api/goal-contracts";
 
 type GitLineStats = {
   added: number;
@@ -94,6 +95,12 @@ export function useRuntimeOverviewData(sessionId?: string) {
     enabled: Boolean(sessionId),
     refetchInterval: 1500
   });
+  const goal = useQuery({
+    queryKey: ["goal", sessionId],
+    queryFn: () => api.goals.read(sessionId!),
+    enabled: Boolean(sessionId),
+    refetchInterval: (query) => (query.state.data?.goal?.status === "active" ? 2_000 : false)
+  });
   const subagents = useQuery({
     queryKey: ["subagents"],
     queryFn: api.subagents.list,
@@ -109,6 +116,7 @@ export function useRuntimeOverviewData(sessionId?: string) {
   });
 
   const todoItems = normalizeTodoItems(todos.data);
+  const goalItem: Goal | null = goal.data?.goal ?? null;
   const subagentItems: Subagent[] = subagents.data ?? [];
   const changedCount = git.data?.entries.length ?? 0;
   const lineStats = countGitPatchLines(gitDiff.data?.patch);
@@ -128,6 +136,10 @@ export function useRuntimeOverviewData(sessionId?: string) {
       items: todoItems,
       completed: completedTodos,
       loading: todos.isLoading
+    },
+    goal: {
+      item: goalItem,
+      loading: goal.isLoading
     },
     subagents: {
       items: subagentItems,

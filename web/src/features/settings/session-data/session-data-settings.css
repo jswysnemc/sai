@@ -16,6 +16,13 @@
   align-items: flex-start;
 }
 
+.session-data-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+}
+
 .session-data-header h2 {
   margin: 0;
   font-size: var(--text-2xl);
@@ -36,6 +43,50 @@
   gap: var(--space-sm);
 }
 
+.session-data-workspace {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+.session-data-workspace-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: 0 var(--space-xs);
+}
+
+.session-data-workspace-header > div {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-3xs);
+}
+
+.session-data-workspace-header strong {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.session-data-workspace-header code {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font: var(--text-2xs) var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-data-workspace-header > span {
+  flex-shrink: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+.session-data-workspace-list {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
 .session-data-row {
   overflow: hidden;
   border: 1px solid var(--line);
@@ -50,6 +101,19 @@
 .session-data-row-main {
   min-height: 3.75rem;
   padding: var(--space-sm) var(--space-md);
+}
+
+.session-data-select {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.session-data-select input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--signal);
 }
 
 .session-data-expand.ui-button {
@@ -205,7 +269,7 @@
   }
 
   .session-data-identity {
-    min-width: calc(100% - 3rem);
+    min-width: calc(100% - 4.5rem);
   }
 
   .session-data-metrics {
@@ -221,6 +285,16 @@
 
   .session-data-header .ui-button {
     align-self: flex-start;
+  }
+
+  .session-data-header-actions {
+    justify-content: flex-start;
+  }
+
+  .session-data-workspace-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-3xs);
   }
 
   .session-data-metrics,

@@ -8,6 +8,7 @@ import { MarkdownCodeBlock } from "./markdown-code-block";
 import { MermaidDiagram } from "./mermaid-diagram";
 import { MarkdownSvgBlock } from "./markdown-svg-block";
 import { remarkSvgBlocks } from "./markdown-svg";
+import { ToolFileReference } from "./tool-renderers/tool-file-reference";
 import {
   DEFAULT_MARKDOWN_STYLE_PREFERENCES,
   type MarkdownStylePreferences
@@ -33,6 +34,15 @@ const inlineAtomContext = createContext<readonly ReactNode[]>([]);
 const markdownStyleContext = createContext<MarkdownStylePreferences>(DEFAULT_MARKDOWN_STYLE_PREFERENCES);
 const INLINE_ATOM_PATTERN = /^sai-atom-(\d+)$/u;
 
+/** 识别不需要文件系统查询即可判断为项目路径的短代码片段。 */
+function looksLikeProjectFilePath(value: string): boolean {
+  const path = value.trim().replaceAll("\\", "/");
+  if (!path || path.includes(" ") || path.includes("://") || path.startsWith("#")) return false;
+  if (!/^(?:\.?\.?\/)?[A-Za-z0-9_@.-]+(?:\/[A-Za-z0-9_@.-]+)+$|^[A-Za-z0-9_@.-]+\.[A-Za-z0-9]{1,12}$/u.test(path)) return false;
+  const basename = path.split("/").at(-1) ?? "";
+  return /\.[A-Za-z0-9]{1,12}$/u.test(basename) && !/^\d+(?:\.\d+)+$/u.test(basename);
+}
+
 /** 模块级组件映射常量，保证子组件在父组件重渲染时不被卸载重建 */
 const markdownComponents: Components = {
   code({ className, children, ...props }) {
@@ -48,6 +58,11 @@ const markdownComponents: Components = {
     if (language === "svg") return <MarkdownSvgBlock source={text} />;
     if (language || text.includes("\n")) {
       return <MarkdownCodeBlock language={language} source={text} style={markdownStyle.codeBlock} />;
+    }
+    if (looksLikeProjectFilePath(text)) {
+      return (
+        <ToolFileReference path={text} label={String(children)} className="inline-file-reference" />
+      );
     }
     return <code className="inline-code" {...props}>{children}</code>;
   },

@@ -1,0 +1,127 @@
+.bottom-terminal-panel {
+  position: relative;
+  display: grid;
+  grid-template-rows: 2rem minmax(0, 1fr);
+  min-height: 0;
+  height: var(--terminal-panel-height);
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.bottom-terminal-resize-handle {
+  position: absolute;
+  inset: -0.25rem 0 auto;
+  z-index: 2;
+  height: 0.5rem;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.bottom-terminal-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-raised);
+}
+
+.bottom-terminal-tabs {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  align-items: stretch;
+  overflow-x: auto;
+}
+
+.bottom-terminal-tab {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  border-right: 1px solid var(--line);
+}
+
+.bottom-terminal-tab > button:first-child {
+  display: inline-flex;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding: 0 var(--space-sm);
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.bottom-terminal-tab.active > button:first-child {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.bottom-terminal-tab-close,
+.bottom-terminal-new,
+.bottom-terminal-actions button {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  min-height: 0;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.bottom-terminal-tab-close:hover,
+.bottom-terminal-new:hover,
+.bottom-terminal-actions button:hover {
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.bottom-terminal-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-3xs);
+  padding: 0 var(--space-2xs);
+}
+
+.bottom-terminal-body {
+  min-height: 0;
+  overflow: hidden;
+  background: var(--code-surface, var(--paper));
+}
+
+.bottom-terminal-body .terminal-pane,
+.bottom-terminal-body .terminal-surface {
+  width: 100%;
+  height: 100%;
+}
+
+.bottom-terminal-empty {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 48rem) {
+  .bottom-terminal-panel {
+    height: min(var(--terminal-panel-height), 48vh);
+  }
+
+  .bottom-terminal-tab > button:first-child {
+    padding-inline: var(--space-xs);
+  }
+}

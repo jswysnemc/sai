@@ -37,6 +37,13 @@ describe("MessageActions", () => {
     expect(html).toContain('aria-label="复制消息原文"');
   });
 
+  it("助手回复可以打开旁路对话", () => {
+    const html = render({ onSideConversation: () => {} });
+
+    expect(html).toContain('aria-label="打开旁路对话"');
+    expect(html).toContain("不修改主会话");
+  });
+
   it("动作进行中时禁用分支相关按钮", () => {
     const html = render({ onContinueFrom: () => {}, onEdit: () => {}, busy: true });
 

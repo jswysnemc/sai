@@ -37,6 +37,8 @@ import { useResendActions } from "./turn-tree/use-resend-actions";
 import { useTurnTree } from "./turn-tree/use-turn-tree";
 import { QueuedMessageList } from "./queue/queued-message-list";
 import { isConversationEmpty, shouldCenterEmptySession } from "./empty-session-layout";
+import { createSideConversationRequest } from "../side-conversation/side-conversation-context";
+import { openSideConversation } from "../side-conversation/side-conversation-events";
 
 /**
  * 渲染当前会话历史、实时运行事件和消息输入区。
@@ -239,7 +241,8 @@ export function ChatPage() {
           mode,
           chatModel.selection ?? undefined,
           thinking.thinkingLevel,
-          chatAgent.selection?.id
+          chatAgent.selection?.id,
+          originalInput
         );
       } catch (error) {
         setSubmittedEmptySessionId((current) => current === activeSession.id ? null : current);
@@ -394,6 +397,27 @@ export function ChatPage() {
 
   const lastTurnId = timeline.data?.turns.filter((turn) => !turn.automatic).at(-1)?.turn_id;
 
+  /**
+   * 以指定已完成助手回复及此前上下文打开旁路对话。
+   *
+   * @param turnId 作为旁路上下文终点的轮次标识
+   * @returns 无返回值
+   */
+  const openTurnSideConversation = (turnId: string) => {
+    if (!activeSession || !activeWorkspace) return;
+    const request = createSideConversationRequest({
+      turns: timeline.data?.turns ?? [],
+      sourceTurnId: turnId,
+      workspaceId: activeWorkspace.id,
+      sourceSessionId: activeSession.id,
+      mode,
+      selection: chatModel.selection ?? undefined,
+      thinkingLevel: thinking.thinkingLevel,
+      agentId: chatAgent.selection?.id
+    });
+    if (request) openSideConversation(request);
+  };
+
   const composer = (
     <ChatComposer
       value={input}
@@ -482,6 +506,9 @@ export function ChatPage() {
                     ? () => void resend.retry(turn.user.content, turn.user.image_urls, turn.turn_id)
                     : undefined}
                   onContinueFrom={!running ? () => void branchActions.continueFrom(turn.turn_id) : undefined}
+                  onSideConversation={turn.status === "completed" && turn.assistant.content.trim()
+                    ? () => openTurnSideConversation(turn.turn_id)
+                    : undefined}
                   onEditResend={!running
                     ? (content, imageUrls) => void editAndResend(turn.turn_id, content, imageUrls)
                     : undefined}

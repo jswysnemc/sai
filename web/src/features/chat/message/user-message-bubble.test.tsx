@@ -13,11 +13,12 @@ describe("UserMessageBubble", () => {
     expect(withoutEdit).not.toContain("编辑并重新发送");
   });
 
-  it("用户气泡不再承载重试入口，重试挂在助手回复上", () => {
+  it("用户气泡不渲染重试与分支入口", () => {
     const html = renderWithProviders(
-      <UserMessageBubble content="原文" onEditResend={() => {}} onContinueFrom={() => {}} />
+      <UserMessageBubble content="原文" onEditResend={() => {}} />
     );
 
     expect(html).not.toContain("重试本轮");
+    expect(html).not.toContain("从这里继续");
   });
 });

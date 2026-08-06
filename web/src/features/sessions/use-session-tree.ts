@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
+import { isSideConversationSessionTitle } from "../side-conversation/side-conversation-events";
 
 const EXPANDED_STORAGE_KEY = "sai.session-tree-expanded";
 
@@ -10,7 +11,14 @@ const EXPANDED_STORAGE_KEY = "sai.session-tree-expanded";
  * @returns 会话树查询、展开操作和运行状态
  */
 export function useSessionTree() {
-  const tree = useQuery({ queryKey: ["session-tree"], queryFn: api.sessions.tree });
+  const tree = useQuery({
+    queryKey: ["session-tree"],
+    queryFn: api.sessions.tree,
+    select: (workspaces) => workspaces.map((workspace) => ({
+      ...workspace,
+      sessions: workspace.sessions.filter((session) => !isSideConversationSessionTitle(session.title))
+    }))
+  });
   const runs = useQuery({
     queryKey: ["active-runs"],
     queryFn: api.runs.active,

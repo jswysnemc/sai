@@ -13,6 +13,7 @@ import { useWorkspaceLayout } from "./use-workspace-layout";
 import { workspaceRelativePath } from "./workspace-path-utils";
 import type { PaneTab } from "./workspace-tab";
 import { useTerminalManager } from "../terminal/use-terminal-manager";
+import { BottomTerminalPanel } from "../terminal/bottom-terminal-panel";
 import {
   initialMobileWorkbenchState,
   MOBILE_SIDEBAR_TOGGLE_EVENT,
@@ -27,6 +28,15 @@ import {
 } from "./workspace-passive-diff";
 import "./workspace-pane.css";
 import { useI18n } from "../i18n/use-i18n";
+import { createSideConversationRequest } from "../side-conversation/side-conversation-context";
+import {
+  OPEN_SIDE_CONVERSATION_EVENT,
+  type SideConversationRequest
+} from "../side-conversation/side-conversation-events";
+import {
+  readStoredChatModelSelection,
+  readStoredThinkingLevel
+} from "../chat/session-preference-storage";
 
 type WorkspaceLayoutProps = {
   selectedFile: string | null;
@@ -48,13 +58,22 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
   const [paneTab, setPaneTab] = useState<PaneTab | null>(null);
   const [passiveDiff, setPassiveDiff] = useState<WorkspacePassiveDiff | null>(null);
   const [fileTreeRequestId, setFileTreeRequestId] = useState(0);
+  const [sideConversationRequest, setSideConversationRequest] = useState<SideConversationRequest | null>(null);
   const [mobileLayout, dispatchMobileLayout] = useReducer(reduceMobileWorkbenchState, initialMobileWorkbenchState);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY).matches);
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
+  const sessions = useQuery({ queryKey: ["sessions"], queryFn: api.sessions.list });
+  const activeSession = sessions.data?.find((session) => session.active);
+  const activeTimeline = useQuery({
+    queryKey: ["timeline", activeSession?.id],
+    queryFn: () => api.sessions.timeline(activeSession!.id),
+    enabled: Boolean(activeSession)
+  });
   const activeWorkspace = workspaces.data?.workspaces.find((workspace) => workspace.id === workspaces.data.active_id);
   const style = {
     "--session-sidebar-width": `${sessionSidebar.width}px`,
-    "--workspace-panel-width": `${layout.workspaceWidth}px`
+    "--workspace-panel-width": `${layout.workspaceWidth}px`,
+    "--terminal-panel-height": `${layout.terminalHeight}px`
   } as CSSProperties;
   const classes = [
     "coding-layout",
@@ -62,6 +81,7 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
     layout.chatOpen ? "chat-open" : "chat-closed",
     layout.workspaceMaximized ? "workspace-maximized" : "",
     layout.swapped ? "layout-swapped" : "",
+    layout.terminalOpen ? "terminal-open" : "terminal-closed",
     sessionSidebar.collapsed ? "sidebar-collapsed" : "sidebar-expanded",
     mobileLayout.sidebarOpen ? "mobile-sidebar-open" : "mobile-sidebar-closed",
     `mobile-pane-${mobileLayout.pane}`
@@ -123,7 +143,12 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
         dispatchMobileLayout({ type: "show-pane", pane: tab === "terminal" ? "terminal" : "workspace" });
       }
     };
-    const handleToggleTerminal = () => openPanel("terminal");
+    const handleToggleTerminal = () => {
+      layout.toggleTerminal();
+      if (window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY).matches) {
+        dispatchMobileLayout({ type: "show-pane", pane: "chat" });
+      }
+    };
     const handleOpenTasks = () => openPanel("tasks");
     const handleOpenSubagents = () => openPanel("subagents");
     const handleOpenSidebar = () => {
@@ -165,7 +190,42 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
       window.removeEventListener(OPEN_WORKSPACE_DIFF_EVENT, handleOpenDiff);
       window.removeEventListener(OPEN_WORKSPACE_PANEL_EVENT, handleOpenPanel);
     };
+  }, [layout.openWorkspace, layout.toggleTerminal]);
+
+  useEffect(() => {
+    /** 打开由助手回复指定的旁路对话标签。 */
+    const handleOpenSideConversation = (event: Event) => {
+      const request = (event as CustomEvent<SideConversationRequest>).detail;
+      if (!request?.context) return;
+      setSideConversationRequest(request);
+      setPaneTab("side-chat");
+      layout.openWorkspace();
+      if (window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY).matches) {
+        dispatchMobileLayout({ type: "show-pane", pane: "workspace" });
+      }
+    };
+    window.addEventListener(OPEN_SIDE_CONVERSATION_EVENT, handleOpenSideConversation);
+    return () => window.removeEventListener(OPEN_SIDE_CONVERSATION_EVENT, handleOpenSideConversation);
   }, [layout.openWorkspace]);
+
+  /**
+   * 使用主会话最后一条已完成回复新建旁路对话。
+   *
+   * @returns 无返回值
+   */
+  const openLatestSideConversation = () => {
+    if (!activeSession || !activeWorkspace) return;
+    const request = createSideConversationRequest({
+      turns: activeTimeline.data?.turns ?? [],
+      workspaceId: activeWorkspace.id,
+      sourceSessionId: activeSession.id,
+      selection: readStoredChatModelSelection(activeSession.id) ?? undefined,
+      thinkingLevel: readStoredThinkingLevel(activeSession.id)
+    });
+    if (!request) return;
+    setSideConversationRequest(request);
+    setPaneTab("side-chat");
+  };
 
   /** 关闭工作区，并在移动端回到聊天面板。 */
   const closeWorkspace = () => {
@@ -200,42 +260,61 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
           collapsed={sessionSidebar.collapsed}
           onToggleCollapsed={sessionSidebar.toggleCollapsed}
           onNavigate={() => dispatchMobileLayout({ type: "close-sidebar" })}
+          selectedFile={selectedFile}
+          onSelectFile={(path) => {
+            onSelectFile(path);
+            layout.openWorkspace();
+            dispatchMobileLayout({ type: "show-pane", pane: "workspace" });
+          }}
+          onClearFile={onClearFile}
         />
         {!sessionSidebar.collapsed && <SessionSidebarResizeHandle width={sessionSidebar.width} onResize={sessionSidebar.resize} />}
       </aside>
       <div className="workbench-main">
-        {layout.chatOpen && !layout.workspaceMaximized && <section className="coding-chat"><ChatPage /></section>}
-        {layout.workspaceOpen && layout.chatOpen && !layout.workspaceMaximized && <WorkspaceResizeHandle swapped={layout.swapped} onResize={layout.resizeWorkspace} />}
-        {layout.workspaceOpen && (
-          <aside className="coding-workspace">
-            <WorkspacePane
-              selectedFile={selectedFile}
-              activeType={paneTab}
-              passiveDiff={passiveDiff}
-              fileTreeRequestId={fileTreeRequestId}
-              onFileTreeRequestHandled={() => setFileTreeRequestId(0)}
-              maximized={layout.workspaceMaximized}
-              onActiveTypeChange={setPaneTab}
-              onSelectFile={onSelectFile}
-              onClearFile={onClearFile}
-              onToggleMaximized={layout.toggleWorkspaceMaximized}
-              onCollapse={closeWorkspace}
-              terminalManager={terminalManager}
-            />
-          </aside>
-        )}
-        {!layout.workspaceOpen && (
-          <div className="workspace-reopen-anchor">
-            <button
-              type="button"
-              className="workspace-reopen"
-              onClick={openEmptyWorkspace}
-              title={t("Open workspace panel", "打开工作区")}
-              aria-label={t("Open workspace panel", "打开工作区")}
-            >
-              <PanelRightOpen size={16} />
-            </button>
-          </div>
+        <div className="workbench-content">
+          {layout.chatOpen && !layout.workspaceMaximized && <section className="coding-chat"><ChatPage /></section>}
+          {layout.workspaceOpen && layout.chatOpen && !layout.workspaceMaximized && <WorkspaceResizeHandle swapped={layout.swapped} onResize={layout.resizeWorkspace} />}
+          {layout.workspaceOpen && (
+            <aside className="coding-workspace">
+              <WorkspacePane
+                selectedFile={selectedFile}
+                activeType={paneTab}
+                passiveDiff={passiveDiff}
+                fileTreeRequestId={fileTreeRequestId}
+                onFileTreeRequestHandled={() => setFileTreeRequestId(0)}
+                maximized={layout.workspaceMaximized}
+                onActiveTypeChange={setPaneTab}
+                onSelectFile={onSelectFile}
+                onClearFile={onClearFile}
+                onToggleMaximized={layout.toggleWorkspaceMaximized}
+                onCollapse={closeWorkspace}
+                terminalManager={terminalManager}
+                sideConversationRequest={sideConversationRequest}
+                onRequestSideConversation={openLatestSideConversation}
+              />
+            </aside>
+          )}
+          {!layout.workspaceOpen && (
+            <div className="workspace-reopen-anchor">
+              <button
+                type="button"
+                className="workspace-reopen"
+                onClick={openEmptyWorkspace}
+                title={t("Open workspace panel", "打开工作区")}
+                aria-label={t("Open workspace panel", "打开工作区")}
+              >
+                <PanelRightOpen size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+        {layout.terminalOpen && (
+          <BottomTerminalPanel
+            manager={terminalManager}
+            height={layout.terminalHeight}
+            onResize={layout.resizeTerminal}
+            onClose={layout.closeTerminal}
+          />
         )}
       </div>
     </div>

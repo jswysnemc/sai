@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, FileDiff, FolderTree, PanelRightOpen, RotateCcw, X } from "lucide-react";
+import { ChevronDown, ChevronUp, FileDiff, PanelRightOpen, RotateCcw } from "lucide-react";
 import { api } from "../../../api/client";
 import { toDisplayError } from "../../../api/api-error";
 import { DiffView } from "../tool-renderers/diff-view";
@@ -8,6 +8,7 @@ import { useI18n } from "../../i18n/use-i18n";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import type { TurnFileChange } from "./collect-turn-file-changes";
 import { openWorkspaceDiff } from "../../workspace/workspace-passive-diff";
+import { FileTypeIcon } from "../../../shared/ui/file-icon";
 import "./turn-file-changes.css";
 
 type TurnFileChangesProps = {
@@ -70,19 +71,6 @@ export function TurnFileChanges({
   };
 
   /**
-   * 从 diff 面板跳转到工作区文件树并定位文件。
-   *
-   * @param path 目标文件路径
-   */
-  const revealInTree = (path: string) => {
-    window.dispatchEvent(
-      new CustomEvent("sai:open-file", {
-        detail: { path, reveal: true }
-      })
-    );
-  };
-
-  /**
    * 把指定文件差异发送到右侧栏显示。
    *
    * @param path 目标文件路径
@@ -124,27 +112,6 @@ export function TurnFileChanges({
     });
     if (!accepted) return;
     await restorePaths([]);
-  };
-
-  /**
-   * 舍弃单个文件的本轮改动。
-   *
-   * @param path 文件路径
-   * @returns 无返回值
-   */
-  const discardOne = async (path: string) => {
-    if (!sessionId || !turnId) return;
-    const accepted = await confirm({
-      title: t("Discard changes to this file?", "舍弃该文件的改动？"),
-      description: t(
-        `Restore “${path}” to the pre-turn worktree snapshot. This cannot be undone.`,
-        `将把“${path}”恢复到本轮开始前的工作树快照，操作不可撤销。`
-      ),
-      confirmLabel: t("Discard file", "舍弃该文件"),
-      danger: true
-    });
-    if (!accepted) return;
-    await restorePaths([path]);
   };
 
   /**
@@ -228,54 +195,14 @@ export function TurnFileChanges({
                     aria-expanded={expanded}
                     title={actionLabel(change.action, t)}
                   >
-                    <span className="turn-file-path">{change.path}</span>
+                    <span className="turn-file-path" title={change.path}>
+                      <FileTypeIcon name={change.path} size={14} />
+                      <span className="turn-file-name">{fileName(change.path)}</span>
+                      {fileDirectory(change.path) && <span className="turn-file-directory">{fileDirectory(change.path)}</span>}
+                    </span>
                     <span className="turn-file-changes-stats"><b>+{change.added}</b><i>-{change.removed}</i></span>
+                    {expanded ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
                   </button>
-                  <div className="turn-file-change-actions">
-                    {canDiscard && (
-                      <button
-                        type="button"
-                        className="turn-file-diff-icon-button danger"
-                        disabled={busy}
-                        onClick={() => void discardOne(change.path)}
-                        title={t("Discard this file", "舍弃该文件改动")}
-                        aria-label={t("Discard this file", "舍弃该文件改动")}
-                      >
-                        <RotateCcw size={13} aria-hidden />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="turn-file-diff-icon-button"
-                      onClick={() => openDiffInSidebar(change.path)}
-                      title={t("Open diff in side panel", "在右侧栏打开差异")}
-                      aria-label={t("Open diff in side panel", "在右侧栏打开差异")}
-                    >
-                      <PanelRightOpen size={13} aria-hidden />
-                    </button>
-                    {expanded && (
-                      <>
-                        <button
-                          type="button"
-                          className="turn-file-diff-icon-button"
-                          onClick={() => revealInTree(change.path)}
-                          title={t("Reveal in file tree", "在文件树中显示")}
-                          aria-label={t("Reveal in file tree", "在文件树中显示")}
-                        >
-                          <FolderTree size={13} aria-hidden />
-                        </button>
-                        <button
-                          type="button"
-                          className="turn-file-diff-icon-button"
-                          onClick={() => setActivePath(null)}
-                          title={t("Close diff", "关闭差异")}
-                          aria-label={t("Close diff", "关闭差异")}
-                        >
-                          <X size={13} aria-hidden />
-                        </button>
-                      </>
-                    )}
-                  </div>
                 </div>
                 {expanded && activeChange && (
                   <div className="turn-file-diff-panel" role="region" aria-label={t("File diff", "文件差异")}>
@@ -321,6 +248,28 @@ function actionLabel(action: string, t: (en: string, zh: string) => string): str
 }
 
 /**
+ * 从路径中提取文件名，避免长绝对路径挤压统计列。
+ *
+ * @param path 文件路径
+ * @returns 文件名
+ */
+function fileName(path: string): string {
+  return path.split(/[\\/]/u).filter(Boolean).at(-1) ?? path;
+}
+
+/**
+ * 从路径中提取目录部分，作为低对比辅助信息展示。
+ *
+ * @param path 文件路径
+ * @returns 目录路径；没有目录时返回空字符串
+ */
+function fileDirectory(path: string): string {
+  const normalized = path.replaceAll("\\", "/");
+  const lastSlash = normalized.lastIndexOf("/");
+  return lastSlash > -1 ? normalized.slice(0, lastSlash) : "";
+}
+
+/**
  * 从本轮编辑工具参数/输出组装 Diff 源文本。
  *
  * @param tools 工具列表
@@ -332,6 +281,14 @@ function buildTurnDiffSource(tools: readonly ToolLike[], path: string | null): s
   for (const tool of tools) {
     if (!["edit_file", "write_file", "str_replace"].includes(tool.name)) continue;
     if (tool.status && tool.status !== "completed") continue;
+    // 1. 优先使用工具执行后返回的真实前后内容差异，避免把参数中的大范围替换误画成整文件改动
+    const output = parseJsonRecord(tool.output ?? "");
+    const actualDiff = output ? stringField(output, "diff") : "";
+    if (actualDiff && (!path || diffIncludesPath(actualDiff, path))) {
+      chunks.push(actualDiff);
+      continue;
+    }
+    // 2. 历史运行没有保存真实 diff 时才回退到旧参数预览
     const argsText = tool.arguments || tool.argumentsPreview || "";
     const args = parseJsonRecord(argsText);
     if (!args) continue;
@@ -352,6 +309,22 @@ function buildTurnDiffSource(tools: readonly ToolLike[], path: string | null): s
     }
   }
   return chunks.filter(Boolean).join("\n");
+}
+
+/**
+ * 判断 unified diff 是否属于指定文件。
+ *
+ * @param diff unified diff 文本
+ * @param path 目标文件路径
+ * @returns 是否匹配
+ */
+function diffIncludesPath(diff: string, path: string): boolean {
+  return diff.split("\n").some((line) => {
+    if (!line.startsWith("+++ ") && !line.startsWith("--- ")) return false;
+    const candidate = line.slice(4).trim();
+    if (candidate === "/dev/null") return false;
+    return pathsMatch(candidate.replace(/^[ab]\//, ""), path);
+  });
 }
 
 /**

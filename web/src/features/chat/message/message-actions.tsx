@@ -1,4 +1,4 @@
-import { Check, Copy, GitBranch, Pencil, RotateCcw } from "lucide-react";
+import { Check, Copy, GitBranch, MessageSquarePlus, Pencil, RotateCcw } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../i18n/use-i18n";
@@ -10,6 +10,8 @@ type MessageActionsProps = {
   onRetry?: () => void;
   /** 把对话切回本轮，之后发送的消息成为本轮的新分支 */
   onContinueFrom?: () => void;
+  /** 以本条助手回复及此前内容打开独立旁路对话 */
+  onSideConversation?: () => void;
   /** 改写本轮用户输入并作为新分支重新发送 */
   onEdit?: () => void;
   busy?: boolean;
@@ -26,6 +28,7 @@ export function MessageActions({
   timestamp,
   onRetry,
   onContinueFrom,
+  onSideConversation,
   onEdit,
   busy,
   extra
@@ -80,6 +83,18 @@ export function MessageActions({
           disabled={busy}
         >
           <GitBranch size={13} />
+        </button>
+      )}
+      {onSideConversation && (
+        <button
+          type="button"
+          className="message-copy"
+          onClick={onSideConversation}
+          aria-label={t("Open side conversation", "打开旁路对话")}
+          title={t("Ask about this response without changing the main conversation", "针对本条回复提问，不修改主会话")}
+          disabled={busy}
+        >
+          <MessageSquarePlus size={13} />
         </button>
       )}
       <button type="button" className="message-copy" onClick={onCopy} aria-label={t("Copy original message", "复制消息原文")} title={t("Copy original", "复制原文")}>

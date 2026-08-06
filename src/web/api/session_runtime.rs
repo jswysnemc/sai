@@ -25,6 +25,35 @@ pub(super) fn reject_running_subagents(paths: &SaiPaths, session_id: &str) -> We
     Ok(owner_key)
 }
 
+/// 校验指定工作区中的会话没有运行中的子智能体，并返回其稳定作用域键。
+///
+/// 参数:
+/// - `paths`: Sai 路径集合
+/// - `workspace_path`: 会话所属工作区目录
+/// - `session_id`: 会话标识
+///
+/// 返回:
+/// - 会话状态目录对应的稳定作用域键
+pub(super) fn reject_running_subagents_for_workspace(
+    paths: &SaiPaths,
+    workspace_path: &std::path::Path,
+    session_id: &str,
+) -> WebResult<String> {
+    let (_, state_dir) =
+        crate::state::state_dir_for_workspace_session(paths, workspace_path, session_id)
+            .map_err(|error| WebError::not_found(error.to_string()))?;
+    let owner_key = state_dir.display().to_string();
+    if list_subagents_for_owner(&owner_key)
+        .iter()
+        .any(|subagent| subagent.status == "running")
+    {
+        return Err(WebError::conflict(
+            "stop running subagents before modifying session data",
+        ));
+    }
+    Ok(owner_key)
+}
+
 /// 清除会话删除或重置后不应继续保留的瞬态运行状态。
 ///
 /// 参数:

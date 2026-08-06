@@ -47,7 +47,7 @@ export function TargetedDiffPane({ path, source }: TargetedDiffPaneProps) {
           </Button>
         </span>
       </header>
-      <DiffView source={source} headerPath={path} layout={layout} />
+      <DiffView source={source} headerPath={path} onlyPath={path} layout={layout} />
     </div>
   );
 }

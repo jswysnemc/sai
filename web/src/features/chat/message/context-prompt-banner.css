@@ -9,12 +9,25 @@
 }
 
 .context-prompt-banner-head {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(12rem, auto) minmax(0, 1fr) 1.75rem;
+  align-items: center;
   gap:var(--space-md);
   width: 100%;
   margin: 0;
   padding:var(--space-md) var(--space-lg);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.context-prompt-banner-toggle {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: 0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -59,7 +72,7 @@
   display: flex;
   flex-wrap: wrap;
   gap:var(--space-xs);
-  margin-top:var(--space-xs);
+  margin-top: 0;
 }
 
 .context-prompt-banner-tag {
@@ -74,6 +87,30 @@
   color: var(--ink-soft);
   font-size:var(--text-xs);
   line-height: 1.3;
+  cursor: pointer;
+}
+
+.context-prompt-banner-tag:hover,
+.context-prompt-banner-tag:focus-visible {
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--ink) 6%, var(--paper-raised));
+  color: var(--ink);
+}
+
+.context-prompt-banner-chevron-button {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.context-prompt-banner-chevron-button:hover {
+  background: var(--paper-deep);
 }
 
 .context-prompt-banner-tag.muted {
@@ -174,7 +211,13 @@
 
 @media (max-width: 48rem) {
   .context-prompt-banner-head {
+    grid-template-columns: minmax(0, 1fr) 1.75rem;
     padding:var(--space-sm) var(--space-md);
+  }
+
+  .context-prompt-banner-tags {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 
   .context-prompt-banner-body {

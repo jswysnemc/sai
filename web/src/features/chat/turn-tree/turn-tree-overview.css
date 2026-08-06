@@ -3,16 +3,22 @@
   min-height: 100%;
   padding: var(--space-xs);
   overflow: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+.turn-tree-overview.is-dragging {
+  cursor: grabbing;
 }
 
 /* 总览需要同时容纳多列分支；桌面端扩大画布，窄屏仍由弹层横向滚动 */
 .ui-modal.large.turn-tree-overview-modal {
-  width: min(1180px, calc(100vw - 32px));
-  max-height: min(900px, calc(100vh - 32px));
+  width: min(1440px, calc(100vw - 24px));
+  max-height: min(960px, calc(100vh - 24px));
 }
 
 .turn-tree-overview-modal .ui-modal-body {
-  padding: var(--space-lg);
+  padding: var(--space-md);
 }
 
 /*
@@ -54,6 +60,7 @@
   background: var(--paper-raised);
   color: var(--ink-soft);
   font-size: var(--text-xs);
+  line-height: 1.3;
   text-align: left;
 }
 

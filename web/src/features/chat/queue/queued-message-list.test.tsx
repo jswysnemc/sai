@@ -38,7 +38,7 @@ describe("QueuedMessageList", () => {
     expect(html).toContain("当前任务结束后立即执行");
     expect(html).toContain("编辑排队消息");
     expect(html).toContain("删除排队消息");
-    expect(html).not.toContain("user-message is-queued");
+    expect(html).toContain('class="message user-message"');
   });
 
   it("moves a queued message to the requested position without mutating input", () => {

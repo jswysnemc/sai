@@ -13,6 +13,7 @@ mod diagnostics;
 mod exchange_rate;
 mod fcitx_wiki;
 pub(crate) mod file_change_model;
+pub(crate) mod file_diff;
 mod file_edit;
 mod file_read;
 pub(crate) mod fs_path;

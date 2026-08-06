@@ -21,6 +21,8 @@ export type DiffLine = {
   text: string;
   oldLine?: number;
   newLine?: number;
+  /** hunk 之间被省略的连续未修改行数 */
+  foldedCount?: number;
   /** 与相邻行配对后得出的字符级差异；未配对时为空 */
   segments?: DiffSegment[];
 };

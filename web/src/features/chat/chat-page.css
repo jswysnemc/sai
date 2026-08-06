@@ -53,11 +53,11 @@
   bottom: 0;
   z-index: 15;
   flex: 0 0 auto;
-  margin-top: -26px;
-  padding-top:var(--space-5xl);
+  margin-top: 0;
+  padding-top:var(--space-lg);
   /* mask 的颜色只用于 alpha 通道，与主题配色无关 */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
 }
 
 .jump-to-bottom {

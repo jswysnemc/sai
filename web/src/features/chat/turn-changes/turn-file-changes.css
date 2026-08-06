@@ -1,8 +1,9 @@
 .turn-file-changes {
   margin-top:var(--space-sm);
   border: 1px solid var(--line-soft);
-  border-radius:var(--radius-4);
-  background: var(--surface-soft);
+  border-radius: var(--radius-3);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-xs);
   overflow: hidden;
 }
 
@@ -11,7 +12,8 @@
   align-items: center;
   justify-content: space-between;
   gap:var(--space-md);
-  padding:var(--space-sm) var(--space-md);
+  min-height: 2.25rem;
+  padding:var(--space-xs) 0;
   border-bottom: 1px solid var(--line-soft);
   color: var(--ink-soft);
 }
@@ -124,13 +126,11 @@
 }
 
 .turn-file-change-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap:var(--space-xs);
-  align-items: center;
+  position: relative;
+  display: block;
   width: 100%;
   margin: 0;
-  padding:0 var(--space-xs) 0 0;
+  padding:0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -138,13 +138,13 @@
 
 .turn-file-change-main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap:var(--space-sm);
   align-items: center;
   min-width: 0;
   width: 100%;
   margin: 0;
-  padding:var(--space-2xs) var(--space-xs) var(--space-2xs) var(--space-md);
+  padding:var(--space-2xs) 0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -158,30 +158,35 @@
   background: var(--paper-raised);
 }
 
-.turn-file-change-actions {
+.turn-file-path {
   display: inline-flex;
   align-items: center;
-  gap:var(--space-2xs);
-  flex: 0 0 auto;
-  padding-right:var(--space-3xs);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--transition-fast) ease;
-}
-
-.turn-file-change-row:hover .turn-file-change-actions,
-.turn-file-change-row:focus-within .turn-file-change-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.turn-file-path {
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-code, monospace);
   font-size:var(--text-sm);
+}
+
+.turn-file-path svg {
+  flex: 0 0 auto;
+  margin-right: var(--space-xs);
+  color: var(--technical-muted);
+}
+
+.turn-file-name {
+  overflow: hidden;
+  color: var(--technical-text);
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.turn-file-directory {
+  overflow: hidden;
+  margin-left: var(--space-xs);
+  color: var(--technical-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .turn-file-changes-list li.is-expanded {
@@ -191,10 +196,10 @@
 }
 
 .turn-file-diff-panel {
-  margin:0 var(--space-sm) var(--space-sm);
-  border: 1px solid var(--line-soft);
-  border-radius:var(--radius-3);
-  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  margin:0 0 var(--space-sm);
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--technical-surface);
   overflow: hidden;
 }
 
@@ -203,46 +208,6 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-}
-
-.turn-file-diff-icon-button {
-  display: inline-grid;
-  place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0;
-  border: 1px solid var(--line-soft);
-  border-radius:var(--radius-2);
-  background: transparent;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-
-.turn-file-diff-icon-button:hover {
-  color: var(--ink);
-  background: var(--paper-raised);
-}
-
-.turn-file-diff-icon-button.danger {
-  border-color: color-mix(in srgb, var(--danger) 34%, var(--line));
-  color: var(--danger);
-}
-
-.turn-file-diff-icon-button.danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-  color: var(--danger);
-}
-
-.turn-file-diff-icon-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-@media (hover: none), (pointer: coarse) {
-  .turn-file-change-actions {
-    opacity: 1;
-    pointer-events: auto;
-  }
 }
 
 .turn-file-diff-empty {
@@ -262,6 +227,11 @@
 .turn-file-changes-list li {
   padding: 0;
   font-size:var(--text-sm);
+  border-top: 1px solid var(--line-soft);
+}
+
+.turn-file-changes-list li:first-child {
+  border-top: 0;
 }
 
 .turn-file-changes-collapse {

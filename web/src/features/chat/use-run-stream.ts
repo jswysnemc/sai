@@ -391,6 +391,16 @@ export function useRunStream(
 
   /**
    * 提交一轮运行；同会话已有运行时由后端持久化排队。
+   *
+   * @param targetSessionId 目标会话标识
+   * @param input 发送给模型的完整输入
+   * @param mode 运行权限模式
+   * @param selection 可选模型选择
+   * @param imageUrls 可选图片列表
+   * @param thinkingLevel 可选思考等级
+   * @param agentId 可选智能体标识
+   * @param displayInput 可选界面显示正文，用于隐藏旁路上下文封装
+   * @returns 启动完成后的 Promise
    */
   const start = async (
     targetSessionId: string,
@@ -399,10 +409,13 @@ export function useRunStream(
     selection?: RunModelSelection,
     imageUrls?: string[],
     thinkingLevel?: ThinkingLevel,
-    agentId?: string
+    agentId?: string,
+    displayInput?: string
   ) => {
     const run = await api.runs.start(targetSessionId, input, mode, selection, imageUrls, thinkingLevel, agentId);
-    dispatch({ type: "start", run, sessionId: targetSessionId, userInput: input, imageUrls });
+    dispatch({ type: "start", run, sessionId: targetSessionId, userInput: displayInput ?? input, imageUrls });
+    // 运行创建后立即刷新分支树，先展示新用户轮次，不等待助手回复结束
+    void queryClient.invalidateQueries({ queryKey: ["session-turn-tree", targetSessionId] });
   };
 
   /**
@@ -413,6 +426,7 @@ export function useRunStream(
    * @param selection 可选模型选择
    * @param thinkingLevel 可选思考等级
    * @param agentId 可选智能体标识
+   * @param displayInput 可选界面显示正文；自动续轮不传入
    * @returns 启动完成后的 Promise
    */
   const startGoal = async (
@@ -420,10 +434,11 @@ export function useRunStream(
     mode: RunMode,
     selection?: RunModelSelection,
     thinkingLevel?: ThinkingLevel,
-    agentId?: string
+    agentId?: string,
+    displayInput?: string
   ) => {
     const run = await api.runs.startGoal(targetSessionId, mode, selection, thinkingLevel, agentId);
-    dispatch({ type: "start", run, sessionId: targetSessionId, userInput: "" });
+    dispatch({ type: "start", run, sessionId: targetSessionId, userInput: displayInput ?? "" });
   };
 
   /** 使用当前会话模型选择启动一次手动压缩。 */

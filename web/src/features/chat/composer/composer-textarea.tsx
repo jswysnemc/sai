@@ -111,6 +111,31 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
     return () => window.removeEventListener(FOCUS_COMPOSER_EVENT, focusComposer);
   }, []);
 
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    /** 删除悬停按钮指定的输入原子，并写回受控草稿。 */
+    const removeAtom = (event: Event) => {
+      const atom = (event as CustomEvent<{ atom?: HTMLElement }>).detail?.atom;
+      if (!atom || !editor.contains(atom)) return;
+      const current = serializeComposerAtomEditor(editor);
+      const value = atom.dataset.composerAtom ?? "";
+      const start = current.indexOf(value);
+      if (start < 0) return;
+      const next = `${current.slice(0, start)}${current.slice(start + value.length)}`;
+      const selection = { start, end: start };
+      editHistoryRef.current.record(lastSnapshotRef.current, { value: next, selection });
+      atom.remove();
+      editor.normalize();
+      lastSnapshotRef.current = { value: next, selection };
+      pendingSelectionRef.current = selection;
+      props.onChange(next);
+      requestAnimationFrame(() => editor.focus());
+    };
+    editor.addEventListener("sai:remove-composer-atom", removeAtom);
+    return () => editor.removeEventListener("sai:remove-composer-atom", removeAtom);
+  }, [props]);
+
   useOutsidePointerDown(mentionPopoverRef, () => dismissMention(false), mentionOpen);
   useOutsidePointerDown(skillPopoverRef, () => dismissSkill(false), skillOpen);
 

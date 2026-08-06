@@ -161,4 +161,5 @@ export type {
 export type {
   SessionDataItem,
   SessionDataSummary,
+  SessionDataSelection,
 } from "./contracts/session-data";

@@ -49,6 +49,19 @@
   min-width: 0;
 }
 
+.queued-message-content .user-message {
+  justify-content: flex-start;
+}
+
+.queued-message-content .user-message-stack {
+  max-width: 100%;
+  justify-items: start;
+}
+
+.queued-message-content .user-bubble {
+  padding: var(--space-sm) var(--space-md);
+}
+
 .queued-message-content p {
   margin: 0;
   overflow-wrap: anywhere;

@@ -36,6 +36,17 @@ describe("tool card summary", () => {
     expect(toolCardSummary("install_aur_package", JSON.stringify({ package: "paru", user_confirmed: true }))).toBe("paru");
   });
 
+  it("展示 Trash 工具的目标路径", () => {
+    expect(
+      toolCardSummary(
+        "trash_path",
+        JSON.stringify({ path: "/home/snemc/workspace/tmp/sandbox/ball-battle" }),
+        "zh-CN",
+        "/home/snemc/workspace/tmp/sandbox"
+      )
+    ).toBe("ball-battle");
+  });
+
   it("兼容尚未形成合法 JSON 的参数预览", () => {
     expect(toolCardSummary("custom_tool", "first\n  second")).toBe("first second");
   });

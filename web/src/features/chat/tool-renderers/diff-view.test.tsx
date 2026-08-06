@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { DiffView } from "./diff-view";
+import { DiffView, selectDiffFiles } from "./diff-view";
+import { parseDiff } from "./diff/diff-parser";
 
 const PATCH = `diff --git a/src/a.ts b/src/a.ts
 index 1111111..2222222 100644
@@ -26,7 +27,35 @@ describe("DiffView unified", () => {
   it("统一模式渲染单列行", () => {
     const html = renderToStaticMarkup(<DiffView source={PATCH} layout="unified" />);
     expect(html).toContain("diff-file-lines");
+    expect(html).toContain("diff-unified-row");
+    expect(html).not.toContain("double-gutter");
     expect(html).not.toContain("diff-idea");
+  });
+
+  it("统一模式把 hunk 之间的省略内容显示为未修改行折叠条", () => {
+    const source = [
+      "diff --git a/src/a.ts b/src/a.ts",
+      "--- a/src/a.ts",
+      "+++ b/src/a.ts",
+      "@@ -1,1 +1,1 @@",
+      "-old",
+      "+new",
+      "@@ -10,1 +10,1 @@",
+      "-before",
+      "+after"
+    ].join("\n");
+    const html = renderToStaticMarkup(<DiffView source={source} layout="unified" />);
+    expect(html).toContain("8 行未修改内容");
+    expect(html).toContain("diff-unified-hunk-fold");
+  });
+
+  it("标签页只保留用户选中的文件", () => {
+    const files = parseDiff(`${PATCH}\ndiff --git a/src/b.ts b/src/b.ts\n--- a/src/b.ts\n+++ b/src/b.ts\n@@ -1 +1 @@\n-old\n+new\n`);
+
+    const selected = selectDiffFiles(files, "/workspace/project/src/b.ts");
+
+    expect(selected).toHaveLength(1);
+    expect(selected[0].path).toBe("src/b.ts");
   });
 });
 

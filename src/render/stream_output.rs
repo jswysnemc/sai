@@ -47,6 +47,7 @@ pub fn print_markdown(markdown: &str) {
             rendered
         },
     );
+    let rendered = crate::render::content_indent::wrap_cli_stream_block(&rendered);
     let rendered = crate::render::content_indent::align_cli_stream_block(&rendered);
     let mut stdout = io::stdout();
     let _ = write!(stdout, "{rendered}");
