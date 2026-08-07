@@ -1,5 +1,6 @@
 use super::ReplRuntime;
 use crate::agent::AgentMode;
+use crate::cli::repl_windows_paste::WindowsPasteKey;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use std::io::IsTerminal;
@@ -123,6 +124,7 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
             Event::Paste(text) => {
                 let text = strip_control_sequences(&text);
                 let draft = runtime.stream_draft_mut();
+                draft.windows_paste.reset();
                 draft
                     .clipboard
                     .paste_text_into_input(&mut draft.text, &mut draft.cursor, text);
@@ -131,6 +133,15 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                 runtime.redraw_stream_composer()?;
             }
             Event::Key(key) if key.kind != KeyEventKind::Release => {
+                let replay_key = windows_paste_key(key.code, key.modifiers);
+                if replay_key.is_some_and(|candidate| {
+                    runtime
+                        .stream_draft_mut()
+                        .windows_paste
+                        .consume_key(candidate)
+                }) {
+                    continue;
+                }
                 if super::super::repl_transcript_pager::is_jump_to_output_bottom_key(
                     key.code,
                     key.modifiers,
@@ -160,6 +171,30 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                 {
                     // 2. Ctrl+C 中断当前轮
                     return Ok(true);
+                }
+                if matches!(key.code, KeyCode::Enter) && key.modifiers.is_empty() {
+                    let paste = {
+                        let draft = runtime.stream_draft_mut();
+                        let input_before_cursor: String =
+                            draft.text.chars().take(draft.cursor).collect();
+                        draft.windows_paste.begin_from_system_clipboard(
+                            &input_before_cursor,
+                            std::time::Instant::now(),
+                        )
+                    };
+                    if let Some(paste) = paste {
+                        let draft = runtime.stream_draft_mut();
+                        draft.clipboard.replace_recent_text_with_paste(
+                            &mut draft.text,
+                            &mut draft.cursor,
+                            paste.prefix_chars,
+                            paste.text,
+                        );
+                        draft.is_pasted = true;
+                        draft.slash_selection = 0;
+                        runtime.redraw_stream_composer()?;
+                        continue;
+                    }
                 }
                 // 3. 底部 agent 面板优先消费按键（↓ 进入、↑↓ 选择、Enter 应用）
                 if runtime.handle_agent_panel_key(key.code)? {
@@ -272,6 +307,7 @@ fn handle_stream_key(
         }
         KeyCode::Char('v') if modifiers.contains(KeyModifiers::CONTROL) => {
             let draft = runtime.stream_draft_mut();
+            draft.windows_paste.reset();
             draft.is_pasted = draft
                 .clipboard
                 .paste_into_input(&mut draft.text, &mut draft.cursor)?;
@@ -280,19 +316,43 @@ fn handle_stream_key(
         }
         KeyCode::Char(ch)
             if !modifiers.contains(KeyModifiers::CONTROL)
-                && !modifiers.contains(KeyModifiers::ALT) =>
+                && !modifiers.contains(KeyModifiers::ALT)
+                && !is_control_char(ch) =>
         {
-            if !is_control_char(ch) {
-                let draft = runtime.stream_draft_mut();
-                insert_char(&mut draft.text, &mut draft.cursor, ch);
-                draft.slash_selection = 0;
-                draft.is_pasted = false;
-                runtime.redraw_stream_composer()?;
-            }
+            let draft = runtime.stream_draft_mut();
+            draft
+                .windows_paste
+                .record_char(ch, std::time::Instant::now());
+            insert_char(&mut draft.text, &mut draft.cursor, ch);
+            draft.slash_selection = 0;
+            draft.is_pasted = false;
+            runtime.redraw_stream_composer()?;
         }
         _ => {}
     }
     Ok(())
+}
+
+/// 把终端按键转换为 Windows 粘贴回放可比较的字符。
+///
+/// 参数:
+/// - `code`: 终端键码
+/// - `modifiers`: 终端修饰键
+///
+/// 返回:
+/// - 可参与剪贴板回放匹配的按键
+fn windows_paste_key(code: KeyCode, modifiers: KeyModifiers) -> Option<WindowsPasteKey> {
+    match code {
+        KeyCode::Char(ch)
+            if !modifiers.contains(KeyModifiers::CONTROL)
+                && !modifiers.contains(KeyModifiers::ALT) =>
+        {
+            Some(WindowsPasteKey::Char(ch))
+        }
+        KeyCode::Enter if modifiers.is_empty() => Some(WindowsPasteKey::Enter),
+        KeyCode::Tab if modifiers.is_empty() => Some(WindowsPasteKey::Tab),
+        _ => None,
+    }
 }
 
 /// 循环切换 Agent 模式。

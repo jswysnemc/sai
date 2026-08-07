@@ -2,6 +2,7 @@ use super::repl_chrome::ReplChrome;
 use super::repl_clipboard::ReplClipboardState;
 use super::repl_external_events::ReplExternalEvents;
 use super::repl_runtime::ReplRuntime;
+use super::repl_windows_paste::{WindowsPasteKey, WindowsPasteState};
 use super::*;
 use crate::agent::ExternalEventWake;
 
@@ -93,6 +94,7 @@ pub(super) fn read_repl_input(
     let (_, mut input_row) = cursor::position()?;
     let mut rendered_rows = 0u16;
     let mut is_pasted = false;
+    let mut windows_paste = WindowsPasteState::default();
     macro_rules! redraw_input {
         () => {
             render_repl_input(
@@ -155,6 +157,7 @@ pub(super) fn read_repl_input(
             Event::Resize(cols, rows) => runtime.observe_input_resize(cols, rows),
             Event::Paste(text) => {
                 let text = strip_terminal_control_sequences(&text);
+                windows_paste.reset();
                 clipboard_state.paste_text_into_input(&mut input, &mut cursor, text);
                 slash_selection = 0;
                 history_clean_index = None;
@@ -169,6 +172,20 @@ pub(super) fn read_repl_input(
             }) => {
                 // 只处理按下与长按重复事件，避免重新进入原始模式后的释放事件覆盖新输入
                 if kind == KeyEventKind::Release {
+                    continue;
+                }
+                let replay_key = match code {
+                    KeyCode::Char(ch)
+                        if !modifiers.contains(KeyModifiers::CONTROL)
+                            && !modifiers.contains(KeyModifiers::ALT) =>
+                    {
+                        Some(WindowsPasteKey::Char(ch))
+                    }
+                    KeyCode::Enter if modifiers.is_empty() => Some(WindowsPasteKey::Enter),
+                    KeyCode::Tab if modifiers.is_empty() => Some(WindowsPasteKey::Tab),
+                    _ => None,
+                };
+                if replay_key.is_some_and(|key| windows_paste.consume_key(key)) {
                     continue;
                 }
                 if code != KeyCode::Esc {
@@ -359,6 +376,22 @@ pub(super) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Enter => {
+                        let input_before_cursor: String = input.chars().take(cursor).collect();
+                        if let Some(paste) = windows_paste
+                            .begin_from_system_clipboard(&input_before_cursor, Instant::now())
+                        {
+                            clipboard_state.replace_recent_text_with_paste(
+                                &mut input,
+                                &mut cursor,
+                                paste.prefix_chars,
+                                paste.text,
+                            );
+                            slash_selection = 0;
+                            history_clean_index = None;
+                            is_pasted = true;
+                            redraw_input!()?;
+                            continue;
+                        }
                         let suggestions = visible_repl_command_suggestions(&input);
                         if let Some(selected) = suggestions
                             .get(slash_selection.min(suggestions.len().saturating_sub(1)))
@@ -399,6 +432,7 @@ pub(super) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Char('v') if modifiers.contains(KeyModifiers::CONTROL) => {
+                        windows_paste.reset();
                         is_pasted = clipboard_state.paste_into_input(&mut input, &mut cursor)?;
                         slash_selection = 0;
                         history_clean_index = None;
@@ -535,6 +569,7 @@ pub(super) fn read_repl_input(
                     }
                     KeyCode::Char(ch) if !modifiers.contains(KeyModifiers::CONTROL) => {
                         if !is_disallowed_control_char(ch) {
+                            windows_paste.record_char(ch, Instant::now());
                             insert_char_at_cursor(&mut input, &mut cursor, ch);
                             history_clean_index = None;
                         }

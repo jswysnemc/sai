@@ -19,6 +19,7 @@ mod tests;
 use crate::agent::AgentMode;
 use crate::cli::repl_chrome::ReplChrome;
 use crate::cli::repl_clipboard::ReplClipboardState;
+use crate::cli::repl_windows_paste::WindowsPasteState;
 use crate::render::activity_animation::ACTIVITY_FRAME_INTERVAL;
 use crate::render::terminal_paint::paint_lock;
 use crate::render::transcript::{TranscriptRenderOptions, TranscriptStore, WelcomeCell};
@@ -73,6 +74,7 @@ pub(super) struct StreamComposerDraft {
     pub(super) cursor: usize,
     pub(super) is_pasted: bool,
     pub(super) clipboard: ReplClipboardState,
+    pub(super) windows_paste: WindowsPasteState,
     pub(super) slash_selection: usize,
     pub(super) mode: Option<AgentMode>,
 }

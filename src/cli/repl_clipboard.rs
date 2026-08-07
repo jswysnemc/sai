@@ -77,6 +77,32 @@ impl ReplClipboardState {
         self.insert_text(input, cursor, text)
     }
 
+    /// 用一次系统剪贴板粘贴替换已经被 Windows 终端逐字写入的首行。
+    ///
+    /// 参数:
+    /// - `input`: 当前输入内容
+    /// - `cursor`: 当前光标字符位置
+    /// - `prefix_chars`: 光标前需要替换的字符数
+    /// - `text`: 系统剪贴板的完整正文
+    ///
+    /// 返回:
+    /// - 是否生成了折叠原子块
+    pub(super) fn replace_recent_text_with_paste(
+        &mut self,
+        input: &mut String,
+        cursor: &mut usize,
+        prefix_chars: usize,
+        text: String,
+    ) -> bool {
+        if prefix_chars == 0 || prefix_chars > *cursor {
+            return false;
+        }
+        let start = cursor.saturating_sub(prefix_chars);
+        remove_char_range(input, start, *cursor);
+        *cursor = start;
+        self.insert_text(input, cursor, text)
+    }
+
     /// 返回当前输入中的剪贴板原子块区间。
     ///
     /// 参数:
@@ -514,6 +540,27 @@ mod tests {
         assert!(input.contains("[text 1 201 chars]"));
         assert!(chat.message.contains("<clipboard>"));
         assert!(chat.message.contains(&text));
+    }
+
+    #[test]
+    fn windows_key_stream_replaces_typed_first_line_with_one_marker() {
+        let mut state = ReplClipboardState::default();
+        let mut input = "前缀第一行".to_string();
+        let mut cursor = input.chars().count();
+        let text = format!("第一行\n{}", "第二行\n".repeat(80));
+
+        let folded = state.replace_recent_text_with_paste(
+            &mut input,
+            &mut cursor,
+            "第一行".chars().count(),
+            text.clone(),
+        );
+        let chat = state.to_chat_input(&input);
+
+        assert!(folded);
+        assert!(input.starts_with("前缀[text 1 "));
+        assert_eq!(input.matches("[text ").count(), 1);
+        assert!(chat.message.contains(text.trim()));
     }
 
     #[test]

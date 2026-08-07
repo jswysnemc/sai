@@ -69,6 +69,7 @@ mod repl_tool_warmup;
 mod repl_transcript_pager;
 mod repl_turn;
 mod repl_turn_failure;
+mod repl_windows_paste;
 mod reset;
 mod sessions;
 mod skills_commands;
