@@ -57,7 +57,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [navigationError, setNavigationError] = useState<Error | null>(null);
-  const [sidebarView, setSidebarView] = useState<SidebarView>("workspaces");
+  const [sidebarView, setSidebarView] = useState<SidebarView>("sessions");
   // 相对时间每分钟刷新一次
   const [nowTick, setNowTick] = useState(() => Date.now());
   useEffect(() => {

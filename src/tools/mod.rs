@@ -9,6 +9,7 @@ mod context;
 mod deep_diagnose;
 mod deepseek_status;
 mod default_tools;
+mod descriptions;
 mod diagnostics;
 mod exchange_rate;
 mod fcitx_wiki;

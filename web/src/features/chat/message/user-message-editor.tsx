@@ -1,4 +1,4 @@
-import { Paperclip, SendHorizontal, X } from "lucide-react";
+import { ArrowRight, Paperclip, X } from "lucide-react";
 import { useRef } from "react";
 import type { ChangeEvent } from "react";
 import { useI18n } from "../../i18n/use-i18n";
@@ -107,7 +107,7 @@ export function UserMessageEditor({ content, imageUrls, busy, onCancel, onSubmit
             aria-label={t("Resend as a new branch", "作为新分支重新发送")}
             title={t("Undo to this message and resend as a new branch", "退回本条消息并作为新分支重新发送")}
           >
-            <SendHorizontal size={15} />
+            <ArrowRight size={18} />
           </button>
         </div>
       </div>

@@ -2,8 +2,13 @@ import { ArrowRight, MessageSquareText, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
+import type { RunMode, RunModelSelection } from "../../api/contracts";
+import { Select } from "../../shared/ui/select/select";
 import { LiveRunMessage } from "../chat/chat-message";
 import { ComposerSurface } from "../chat/composer/composer-surface";
+import { ModelThinkingSelector } from "../chat/model-thinking-selector";
+import { createRunModeOptions } from "../permission/run-mode-options";
+import { useChatModel } from "../chat/use-chat-model";
 import { useRunStream } from "../chat/use-run-stream";
 import { useI18n } from "../i18n/use-i18n";
 import { composeSideConversationInput } from "./side-conversation-context";
@@ -25,9 +30,18 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState<string>();
   const [contextSent, setContextSent] = useState(false);
+  const [mode, setMode] = useState<RunMode>(request.mode);
+  const [thinkingLevel, setThinkingLevel] = useState(request.thinkingLevel);
+  const [modelSelection, setModelSelection] = useState<RunModelSelection | null>(request.selection ?? null);
   const [error, setError] = useState<string | null>(null);
   const sessionRef = useRef<string | undefined>(undefined);
   const activeRunRef = useRef<string | undefined>(undefined);
+  const modelPreferences = useChatModel(`side:${request.id}`);
+  const effectiveModelSelection = modelSelection ?? modelPreferences.selection;
+  const selectedModel = effectiveModelSelection
+    ? modelPreferences.choices.find((choice) => choice.providerId === effectiveModelSelection.providerId && choice.model === effectiveModelSelection.model) ?? null
+    : null;
+  const runModeOptions = createRunModeOptions(t);
   const run = useRunStream(request.workspaceId, sessionId, () => undefined);
   const activeRun = run.states.find((state) => !state.completed);
 
@@ -71,7 +85,6 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
   /**
    * 提交旁路问题；只有首轮附带冻结上下文。
    *
-   * @param event 表单提交事件
    * @returns 提交完成后的 Promise
    */
   const submit = async () => {
@@ -87,10 +100,10 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
       await run.start(
         targetSessionId,
         modelInput,
-        request.mode,
-        request.selection,
+        mode,
+        effectiveModelSelection ?? undefined,
         undefined,
-        request.thinkingLevel,
+        thinkingLevel,
         request.agentId,
         question
       );
@@ -135,7 +148,33 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
         onSubmit={() => void submit()}
       >
         <div className="composer-footer">
-          <div className="composer-toolrail" />
+          <div className="composer-toolrail">
+            <div className="composer-model-group">
+              <ModelThinkingSelector
+                choices={modelPreferences.choices}
+                selection={selectedModel}
+                thinkingLevel={thinkingLevel}
+                thinkingLevels={modelPreferences.thinkingLevels}
+                loading={modelPreferences.isLoading}
+                disabled={Boolean(activeRun)}
+                onModelSelect={setModelSelection}
+                onThinkingLevelChange={setThinkingLevel}
+              />
+              <div className="composer-mode">
+                <Select
+                  value={mode}
+                  options={runModeOptions}
+                  disabled={Boolean(activeRun)}
+                  ariaLabel={t("Run mode", "运行模式")}
+                  menuPreferredWidth={240}
+                  menuMinimumWidth={200}
+                  menuAlign="left"
+                  menuClassName="run-mode-menu"
+                  onChange={setMode}
+                />
+              </div>
+            </div>
+          </div>
           <div className="composer-actions">
             {activeRun ? (
               <button type="button" className="composer-send stop" onClick={() => activeRun.runId && void run.stop(activeRun.runId)} aria-label={t("Stop", "停止")} title={t("Stop", "停止")}>
@@ -143,7 +182,7 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
               </button>
             ) : (
               <button className="composer-send" type="submit" disabled={!input.trim()} aria-label={t("Send", "发送")} title={t("Send", "发送")}>
-                <ArrowRight size={16} />
+                <ArrowRight size={18} />
               </button>
             )}
           </div>

@@ -13,7 +13,7 @@
 }
 
 /* 同一设置组内的开关、下拉和数字字段使用同一张紧凑卡片，避免网格行被某一种控件撑高。 */
-.git-settings-grid.toggles > .settings-field {
+.git-settings-grid > .settings-field {
   display: grid;
   align-content: center;
   gap: var(--space-3xs);
@@ -24,19 +24,19 @@
   box-sizing: border-box;
 }
 
-.git-settings-grid.toggles > .settings-field > span {
+.git-settings-grid > .settings-field > span {
   font-size: var(--text-sm);
   font-weight: 500;
 }
 
-.git-settings-grid.toggles > .settings-field > small {
+.git-settings-grid > .settings-field > small {
   font: 400 var(--text-2xs) var(--font-code);
 }
 
-.git-settings-grid.toggles > .settings-field input,
-.git-settings-grid.toggles > .settings-field .ui-select > button {
-  min-height: 2rem;
-  height: 2rem;
+.git-settings-grid > .settings-field input,
+.git-settings-grid > .settings-field .ui-select > button {
+  min-height: 2.5rem;
+  height: 2.5rem;
   padding-block: 0;
 }
 

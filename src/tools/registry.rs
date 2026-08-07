@@ -1,3 +1,4 @@
+use super::descriptions::tool_description;
 use crate::llm::{FunctionDefinition, ToolDefinition};
 use crate::permission::PermissionProfile;
 use anyhow::{bail, Context, Result};
@@ -133,9 +134,12 @@ impl ToolSpec {
         F: Fn(Value) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<String>> + Send + 'static,
     {
+        let name = name.into();
+        let fallback_description = description.into();
+        let description = tool_description(&name, &fallback_description);
         Self {
-            name: name.into(),
-            description: description.into(),
+            name,
+            description,
             parameters,
             permission: ToolPermission::ReadOnly,
             handler: Arc::new(move |args, _progress| {
@@ -165,9 +169,12 @@ impl ToolSpec {
         F: Fn(Value) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<ToolOutput>> + Send + 'static,
     {
+        let name = name.into();
+        let fallback_description = description.into();
+        let description = tool_description(&name, &fallback_description);
         Self {
-            name: name.into(),
-            description: description.into(),
+            name,
+            description,
             parameters,
             permission: ToolPermission::ReadOnly,
             handler: Arc::new(move |args, _progress| Box::pin(handler(args))),
@@ -184,9 +191,12 @@ impl ToolSpec {
         F: Fn(Value, ToolProgress) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<String>> + Send + 'static,
     {
+        let name = name.into();
+        let fallback_description = description.into();
+        let description = tool_description(&name, &fallback_description);
         Self {
-            name: name.into(),
-            description: description.into(),
+            name,
+            description,
             parameters,
             permission: ToolPermission::ReadOnly,
             handler: Arc::new(move |args, progress| {
