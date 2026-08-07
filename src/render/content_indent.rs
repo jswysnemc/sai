@@ -122,7 +122,19 @@ pub(crate) fn align_cli_stream_block(text: &str) -> String {
 /// 返回:
 /// - 按当前终端正文宽度插入软换行后的文本
 pub(crate) fn wrap_cli_stream_block(text: &str) -> String {
-    let width = cli_content_width();
+    wrap_cli_stream_block_with_width(text, cli_content_width())
+}
+
+/// 【终端】【CLI 换行】按指定正文宽度插入软换行。
+///
+/// 参数:
+/// - `text`: 已完成 ANSI 渲染的文本块
+/// - `width`: 正文区域允许使用的列数
+///
+/// 返回:
+/// - 按指定宽度插入软换行后的文本
+fn wrap_cli_stream_block_with_width(text: &str, width: usize) -> String {
+    let width = width.max(1);
     let mut output = String::with_capacity(text.len());
     for line in text.split_inclusive('\n') {
         let (body, newline) = line
@@ -441,7 +453,7 @@ mod tests {
     use super::{
         align_cli_stream_block, align_cli_text_delta, align_to_guide_column,
         align_to_guide_column_with_width, clear_right_margin, indent_diff_for_cli,
-        indent_diff_for_transcript, wrap_cli_stream_block,
+        indent_diff_for_transcript, wrap_cli_stream_block_with_width,
     };
 
     /// 引导符号保留在左侧，普通正文与续行位于右侧。
@@ -669,7 +681,7 @@ mod tests {
     #[test]
     fn wraps_long_cli_lines_before_the_guide_alignment() {
         let long = "a".repeat(110);
-        let wrapped = wrap_cli_stream_block(&long);
+        let wrapped = wrap_cli_stream_block_with_width(&long, 98);
         assert!(wrapped.contains('\n'));
         assert!(wrapped.lines().all(|line| line.chars().count() <= 98));
     }
