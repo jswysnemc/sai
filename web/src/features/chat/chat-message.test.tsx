@@ -32,7 +32,7 @@ describe("HistoryTurn", () => {
     expect(html.indexOf("已拒绝")).toBeLessThan(html.indexOf("Edit"));
   });
 
-  it("renders an interruption notice for a durable interrupted turn", () => {
+  it("does not attribute a durable interruption to the user without evidence", () => {
     const turn: SessionTimelineTurn = {
       turn_id: "run-1",
       seq: 1,
@@ -46,7 +46,8 @@ describe("HistoryTurn", () => {
     const html = renderWithProviders(<HistoryTurn turn={turn} />);
 
     expect(html).toContain("运行已中断");
-    expect(html).toContain("用户在运行完成前主动停止了本轮");
+    expect(html).toContain("未收到可确认的中断原因");
+    expect(html).not.toContain("用户在运行完成前主动停止了本轮");
   });
 
 

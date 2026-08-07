@@ -202,7 +202,7 @@ export function LiveRunMessage({
  * 从中断轮次提取可展示详情。
  *
  * 1. 优先使用最后一个失败/中断工具的错误或输出
- * 2. 无工具错误时回退到用户主动中断的说明，避免只显示标题
+ * 2. 无工具错误时使用中性说明，避免在没有证据时归因给用户
  *
  * @param turn 已持久化会话轮次
  * @param t 本地化函数
@@ -230,8 +230,8 @@ function historicalInterruptionDetail(
     );
   }
   return t(
-    "The user stopped this run before it completed.",
-    "用户在运行完成前主动停止了本轮。"
+    "The run was interrupted before completion; no confirmed cause was reported.",
+    "运行在完成前中断，未收到可确认的中断原因。"
   );
 }
 

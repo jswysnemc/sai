@@ -242,7 +242,7 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
     }
     case "run.interrupted": {
       // 1. 优先使用事件 detail
-      // 2. 缺省时给出可展开的中断说明，避免历史/实时都只剩标题
+      // 2. 缺省时使用中性说明，避免在没有证据时归因给用户
       const fallbackDetail = state.content
         ? text(
             locale,
@@ -251,8 +251,8 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
           )
         : text(
             locale,
-            "The user stopped this run before it completed.",
-            "用户在运行完成前主动停止了本轮。"
+            "The run was interrupted before completion; no confirmed cause was reported.",
+            "运行在完成前中断，未收到可确认的中断原因。"
           );
       return {
         ...closeActiveReasoning(state, event.timestamp),

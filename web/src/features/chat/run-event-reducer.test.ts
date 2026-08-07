@@ -338,6 +338,17 @@ describe("runEventReducer", () => {
     expect(interrupted.error).toContain("已保留");
   });
 
+  it("does not attribute an interruption to the user when the event has no cause", () => {
+    const interrupted = runEventReducer(initialRunState, {
+      type: "event",
+      event: event("run.interrupted", {})
+    });
+
+    expect(interrupted.error).toBe("运行已中断");
+    expect(interrupted.errorDetail).toContain("未收到可确认的中断原因");
+    expect(interrupted.errorDetail).not.toContain("用户在运行完成前主动停止了本轮");
+  });
+
   it("keeps interruption details for the expandable error view", () => {
     const interrupted = runEventReducer(initialRunState, {
       type: "event",
