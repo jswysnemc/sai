@@ -78,6 +78,90 @@ fn switch_mode_preserves_persisted_loaded_tools() {
     assert!(agent.tool_visibility.is_visible("get_weather"));
 }
 
+/// 模式切换只更新稳定系统提示，不生成用户侧模式提醒。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn switch_mode_updates_context_epoch_without_user_mode_context() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = test_paths(temp.path());
+    let config = AppConfig::default();
+    let state = StateStore::new(&paths).unwrap();
+    let client = OpenAiCompatibleClient::from_config(&config, &paths).unwrap();
+    let mut agent = Agent::new(
+        config,
+        &paths,
+        state,
+        client,
+        ToolRegistry::new(),
+        AgentMode::Yolo,
+    )
+    .unwrap();
+
+    let yolo = agent.chat_base_context_projection(None).unwrap();
+    agent
+        .switch_mode(AgentMode::Audited, ToolRegistry::new())
+        .unwrap();
+    let audited = agent.chat_base_context_projection(None).unwrap();
+
+    let yolo_system = message_text(&yolo.messages[0]);
+    let audited_system = message_text(&audited.messages[0]);
+    assert!(yolo_system.contains("name=\"yolo\""));
+    assert!(audited_system.contains("name=\"audited\""));
+    assert!(!audited
+        .dynamic_sources
+        .iter()
+        .any(|source| source.key == "mode_reminder"));
+}
+
+/// 验证即时模式先变化时仍能识别工具注册表尚未切换。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn live_mode_change_does_not_mask_installed_tool_mode() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = test_paths(temp.path());
+    let config = AppConfig::default();
+    let state = StateStore::new(&paths).unwrap();
+    let client = OpenAiCompatibleClient::from_config(&config, &paths).unwrap();
+    let agent = Agent::new(
+        config,
+        &paths,
+        state,
+        client,
+        ToolRegistry::new(),
+        AgentMode::Yolo,
+    )
+    .unwrap();
+
+    agent.apply_live_mode(AgentMode::Plan);
+
+    assert_eq!(agent.mode(), AgentMode::Plan);
+    assert_eq!(agent.installed_mode(), AgentMode::Yolo);
+}
+
+/// 提取测试消息文本。
+///
+/// 参数:
+/// - `message`: 待读取消息
+///
+/// 返回:
+/// - 文本内容
+fn message_text(message: &ChatMessage) -> String {
+    match message.content.as_ref() {
+        Some(crate::llm::ChatContent::Text(text)) => text.clone(),
+        _ => String::new(),
+    }
+}
+
 /// 向测试注册表加入天气工具。
 ///
 /// 参数:

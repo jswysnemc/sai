@@ -13,6 +13,8 @@ struct TodoItemView {
 /// TODO 工具的结构化返回。
 #[derive(Deserialize)]
 struct TodoResultView {
+    #[serde(default)]
+    changed: Vec<TodoItemView>,
     items: Vec<TodoItemView>,
 }
 
@@ -61,7 +63,8 @@ pub(crate) fn render_todo_output(
         return Some(String::new());
     }
     let result = serde_json::from_str::<TodoResultView>(result_json).ok()?;
-    let mut output = tool_event_text(label, if ok { "ok" } else { "err" });
+    let display_label = changed_item_label(label, &result.changed);
+    let mut output = tool_event_text(&display_label, if ok { "ok" } else { "err" });
 
     let total = result.items.len();
     let completed = result
@@ -128,6 +131,32 @@ pub(crate) fn render_todo_output(
     Some(output)
 }
 
+/// 使用工具返回的变更条目替换内部 ID。
+///
+/// 参数:
+/// - `label`: 原始工具标签
+/// - `changed`: 本次修改的条目
+///
+/// 返回:
+/// - 包含条目状态和文本的可读标签
+fn changed_item_label(label: &str, changed: &[TodoItemView]) -> String {
+    let Some(action) = label
+        .strip_prefix("Todo ")
+        .and_then(|rest| rest.split_whitespace().next())
+        .filter(|action| matches!(*action, "update" | "remove"))
+    else {
+        return label.to_string();
+    };
+    let Some(item) = changed.first() else {
+        return label.to_string();
+    };
+    format!(
+        "Todo {action} {} {}",
+        status_marker(&item.status),
+        item.text
+    )
+}
+
 /// 状态排序：进行中 > 待办 > 完成 > 取消。
 fn status_rank(status: &str) -> u8 {
     match status {
@@ -192,6 +221,28 @@ mod tests {
         assert!(rendered.contains("改写解析"));
         assert!(rendered.contains("补测试"));
         assert!(rendered.contains("1/3 done"));
+    }
+
+    /// 更新结果使用条目内容和状态，不暴露内部 ID。
+    #[test]
+    fn update_summary_replaces_internal_id_with_changed_item() {
+        let result = r#"{"ok":true,"changed":[
+            {"id":"todo_1786108008960_2_34858","text":"补齐回归测试","status":"completed"}
+        ],"items":[
+            {"id":"todo_1786108008960_2_34858","text":"补齐回归测试","status":"completed"}
+        ]}"#;
+
+        let rendered = render_todo_output(
+            "Todo update todo_1786108008960_2_34858",
+            result,
+            true,
+            ToolCallDisplayMode::Summary,
+        )
+        .unwrap();
+
+        assert!(rendered.contains("补齐回归测试"));
+        assert!(rendered.contains('✓'));
+        assert!(!rendered.contains("todo_1786108008960_2_34858"));
     }
 
     /// Summary 模式供 TUI 使用：清单由沉底面板常驻，历史区只留进行中项。

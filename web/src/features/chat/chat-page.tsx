@@ -479,7 +479,12 @@ export function ChatPage() {
               </div>
             )}
             {activeSession && !timeline.isLoading && !branchTransitioning && !conversationEmpty && (
-              <ContextPromptBanner sessionId={activeSession.id} agentId={chatAgent.selection?.id} />
+              <ContextPromptBanner
+                sessionId={activeSession.id}
+                agentId={chatAgent.selection?.id}
+                mode={mode}
+                selection={chatModel.selection}
+              />
             )}
             {!branchTransitioning && timeline.data?.compaction && !run.states.some((state) =>
               state.parts.some((part) => part.type === "compaction" && part.applied && part.summary)

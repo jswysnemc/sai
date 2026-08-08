@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../api/client";
 import { localizeApiMessage } from "../../api/api-error";
-import type { RunModelSelection } from "../../api/contracts";
+import type { RunMode, RunModelSelection } from "../../api/contracts";
 import { useAnchoredPopover } from "../../shared/ui/popover/use-anchored-popover";
 import "./system-usage.css";
 import { useI18n } from "../i18n/use-i18n";
@@ -18,7 +18,13 @@ import { useI18n } from "../i18n/use-i18n";
  * @param selection 主界面当前选择的供应商和模型
  * @returns 系统用量组件
  */
-export function SystemUsage({ selection, onCompact, compactDisabled }: { selection: RunModelSelection | null; onCompact: () => Promise<void>; compactDisabled: boolean }) {
+export function SystemUsage({ selection, mode, agentId, onCompact, compactDisabled }: {
+  selection: RunModelSelection | null;
+  mode: RunMode;
+  agentId?: string | null;
+  onCompact: () => Promise<void>;
+  compactDisabled: boolean;
+}) {
   const { locale, t } = useI18n();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -26,8 +32,8 @@ export function SystemUsage({ selection, onCompact, compactDisabled }: { selecti
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const usage = useQuery({
-    queryKey: ["system-usage", selection?.providerId, selection?.model],
-    queryFn: () => api.system.usage(selection),
+    queryKey: ["system-usage", selection?.providerId, selection?.model, mode, agentId ?? ""],
+    queryFn: () => api.system.usage(selection, mode, agentId),
     refetchInterval: open ? 2_000 : 5_000
   });
   const compact = useMutation({

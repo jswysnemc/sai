@@ -5,8 +5,6 @@ use crate::render::transcript::TodoSnapshotItem;
 
 /// 沉底面板展示的排队消息上限。
 const QUEUE_PREVIEW_LIMIT: usize = 3;
-/// 沉底面板展示的 todo 条目上限（进行中 + 后续待办）。
-const TODO_PREVIEW_LIMIT: usize = 3;
 
 /// 组装 composer 上方的沉底面板行（todo 快照 + 排队消息 + agent 面板）。
 ///
@@ -34,7 +32,7 @@ pub(super) fn render_panel_lines(
     lines
 }
 
-/// 渲染 todo 快照区：一行摘要 + 进行中与临近待办条目。
+/// 渲染 todo 快照区：一行摘要 + 完整状态清单。
 ///
 /// 参数:
 /// - `todos`: 最新 todo 清单快照
@@ -51,14 +49,6 @@ fn render_todo_section(todos: &[TodoSnapshotItem], cols: usize, lines: &mut Vec<
         .iter()
         .filter(|item| item.status == "completed")
         .count();
-    let cancelled = todos
-        .iter()
-        .filter(|item| item.status == "cancelled")
-        .count();
-    // 1. 全部完成/取消后不再占用底部空间
-    if done + cancelled == todos.len() {
-        return;
-    }
     lines.push(clip_line(
         &format!(
             "\x1b[2m• {} {}/{}\x1b[0m",
@@ -68,19 +58,16 @@ fn render_todo_section(todos: &[TodoSnapshotItem], cols: usize, lines: &mut Vec<
         ),
         cols,
     ));
-    // 2. 只展示进行中与其后的待办，保持面板紧凑
-    let mut shown = 0usize;
+    // 完整展示全部条目，计划结束后仍可核对执行结果
     for item in todos {
-        if shown >= TODO_PREVIEW_LIMIT {
-            break;
-        }
         let rendered = match item.status.as_str() {
             "in_progress" => format!("\x1b[1m\x1b[36m  › {}\x1b[0m", item.text),
             "pending" => format!("\x1b[2m  ○ {}\x1b[0m", item.text),
-            _ => continue,
+            "completed" => format!("\x1b[2m\x1b[32m  ✓ {}\x1b[0m", item.text),
+            "cancelled" => format!("\x1b[2m\x1b[9m  × {}\x1b[0m", item.text),
+            _ => format!("\x1b[2m  ○ {}\x1b[0m", item.text),
         };
         lines.push(clip_line(&rendered, cols));
-        shown += 1;
     }
 }
 
@@ -208,16 +195,19 @@ mod tests {
         assert!(joined.contains("1/3"));
         assert!(joined.contains("current"));
         assert!(joined.contains("next"));
-        assert!(!joined.contains("done one"));
+        assert!(joined.contains("done one"));
     }
 
+    /// 全部完成后仍展示完整计划，便于沉底核对。
     #[test]
-    fn fully_completed_todo_hides_panel() {
+    fn fully_completed_todo_remains_visible() {
         let todos = vec![TodoSnapshotItem {
             status: "completed".to_string(),
             text: "done".to_string(),
         }];
-        assert!(render_panel_lines(&todos, &[], &[], 80).is_empty());
+        let rendered = render_panel_lines(&todos, &[], &[], 80).join("\n");
+        assert!(rendered.contains("1/1"));
+        assert!(rendered.contains("done"));
     }
 
     #[test]

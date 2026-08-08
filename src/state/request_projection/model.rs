@@ -58,6 +58,8 @@ pub(crate) struct ProjectedRequest {
     pub tool_count: usize,
     pub estimate: ProjectionEstimate,
     pub dynamic_sources: Vec<DynamicContextSource>,
+    /// 仅在存在持久状态事件时写入当前轮 provider 专用用户消息
+    pub provider_user_content: Option<String>,
     pub warnings: Vec<ProjectionWarning>,
 }
 
@@ -68,6 +70,8 @@ pub(crate) struct ProjectedBaseContext {
     pub dynamic_sources: Vec<DynamicContextSource>,
     /// 等待与当前用户输入合并的动态上下文
     pub pending_user_contexts: Vec<String>,
+    /// 需要随当前轮写入 provider 历史的状态事件
+    pub persistent_user_contexts: Vec<String>,
 }
 
 /// 命令摘要投影视图。

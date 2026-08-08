@@ -144,18 +144,47 @@ impl StateStore {
         Ok(())
     }
 
-    /// 将耗时写入最近一轮对话。
+    /// 保存指定轮次的耗时与汇总用量。
     ///
     /// 参数:
-    /// - `duration_ms`: 处理耗时毫秒
+    /// - `turn_id`: 当前轮次标识
+    /// - `duration_ms`: 从首次输出到完成的耗时毫秒
+    /// - `usage`: 同一轮全部模型请求的汇总用量
     ///
     /// 返回:
     /// - 写入是否成功
-    pub fn set_last_turn_duration_ms(&self, duration_ms: u64) -> Result<()> {
+    pub fn set_turn_metrics(
+        &self,
+        turn_id: &str,
+        duration_ms: u64,
+        usage: Option<&crate::llm::Usage>,
+    ) -> Result<()> {
+        // 1. 耗时独立保存，缺少供应商用量时仍可展示
+        self.conv_db.set_turn_duration_ms(turn_id, duration_ms)?;
+        // 2. 供应商未返回用量时不创建空记录
+        if let Some(usage) = usage {
+            self.conv_db.set_turn_usage(turn_id, usage)?;
+        }
+        Ok(())
+    }
+
+    /// 保存最近一轮的耗时与汇总用量。
+    ///
+    /// 参数:
+    /// - `duration_ms`: 从首次输出到完成的耗时毫秒
+    /// - `usage`: 同一轮全部模型请求的汇总用量
+    ///
+    /// 返回:
+    /// - 写入是否成功
+    pub fn set_last_turn_metrics(
+        &self,
+        duration_ms: u64,
+        usage: Option<&crate::llm::Usage>,
+    ) -> Result<()> {
         let Some((turn_id, _)) = self.conv_db.last_turn_identity()? else {
             return Ok(());
         };
-        self.conv_db.set_turn_duration_ms(&turn_id, duration_ms)
+        self.set_turn_metrics(&turn_id, duration_ms, usage)
     }
 
     /// 中断对话轮次。

@@ -432,7 +432,7 @@ mod tests {
         assert_eq!(messages[3].role, "assistant");
     }
 
-    /// 【上下文缓存】【供应商历史】验证内部上下文随用户消息稳定重放。
+    /// 【上下文缓存】【供应商历史】验证 provider 状态事件会重放且不修改原始用户输入。
     ///
     /// 参数:
     /// - 无
@@ -440,7 +440,7 @@ mod tests {
     /// 返回:
     /// - 无
     #[test]
-    fn projects_persisted_provider_user_content() {
+    fn projects_provider_state_content_separately_from_user_content() {
         let (_temp, db) = db();
         db.start_turn("turn_1", "visible request").unwrap();
         db.set_provider_user_content("turn_1", "runtime\n\nvisible request")
@@ -455,6 +455,7 @@ mod tests {
             messages[0].content.as_ref(),
             Some(crate::llm::ChatContent::Text(text)) if text == "runtime\n\nvisible request"
         ));
+        assert_eq!(db.load_turns().unwrap()[0].user_content, "visible request");
     }
 
     /// 【会话历史】【DeepSeek】验证工具子轮按原始思考内容重建。

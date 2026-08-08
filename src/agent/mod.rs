@@ -2,6 +2,7 @@ mod agent_state;
 mod compaction;
 mod compaction_model;
 mod context_projection;
+mod context_resources;
 mod conversation;
 mod event;
 mod external_events;
@@ -19,6 +20,7 @@ mod mode;
 mod model_context;
 mod recovery;
 pub(crate) mod repeat_guard;
+mod runtime_context;
 mod system_prompt;
 mod tool_attachments;
 mod tool_execution;
@@ -43,8 +45,9 @@ use crate::state::request_projection::{
 use crate::state::StateStore;
 use crate::tools::{self, memes, ToolPermission, ToolRegistry};
 use anyhow::Result;
-use message_context::{runtime_context_message, system_messages_first};
+use message_context::system_messages_first;
 use model_context::selected_model_label;
+pub(crate) use runtime_context::{context_state_update, RuntimeContextSnapshot};
 pub(crate) use tool_gate::{evaluate_tool_gate, ToolGate};
 use tool_gate::{is_tool_error_output, tool_error_output};
 pub(crate) use tool_visibility::ToolVisibility;
@@ -52,6 +55,7 @@ use turn_execution::assistant_tool_message;
 
 pub use agent_state::Agent;
 pub(crate) use compaction::CompactionRunOutcome;
+pub(crate) use context_resources::{combine_context_updates, context_resource_update};
 pub use event::{AgentEvent, CompactionError, MessageContextUpdate};
 pub(crate) use external_events::{ExternalEventBatch, ExternalEventWake};
 pub(crate) use inter_message::{
@@ -89,6 +93,7 @@ impl Agent {
             .then(|| tools::todo::TodoReminder::new(self.state.todo_file()));
         let mut question_rounds = 0usize;
         let mut pending_gap_delivery = None;
+        let mut turn_usage = None;
         let hook_ctx = crate::hooks::HookContext {
             session_id: self.state.session_id().to_string(),
             workdir: crate::runtime_cwd::current_dir()
@@ -140,7 +145,7 @@ impl Agent {
                 return Ok(ChatResult {
                     content,
                     reasoning: None,
-                    usage: None,
+                    usage: turn_usage,
                     tool_calls: Vec::new(),
                     duration_ms: 0,
                 });
@@ -185,7 +190,7 @@ impl Agent {
             self.state
                 .enforce_provider_projection(Some(turn_id), &projection)?;
             perf.mark(&format!("round {tool_round} provider projection"));
-            let result = match self
+            let mut result = match self
                 .request_model_round(ordered_messages, definitions, tool_round, on_event, perf)
                 .await
             {
@@ -203,6 +208,7 @@ impl Agent {
                     .await?;
             }
             self.record_message_usage(&result)?;
+            message_usage::accumulate_turn_usage(&mut turn_usage, result.usage.as_ref());
             on_event(AgentEvent::ContextUpdated(MessageContextUpdate {
                 usage: result.usage.clone(),
                 context_window_tokens: self.context_char_budget,
@@ -253,6 +259,7 @@ impl Agent {
                     &hook_ctx,
                 )
                 .await;
+                result.usage = turn_usage;
                 return Ok(result);
             }
             messages.push(assistant_tool_message(&result));

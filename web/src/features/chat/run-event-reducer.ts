@@ -1,4 +1,4 @@
-import type { PendingQuestion, PermissionDecision, PermissionRequest, QuestionResponse, WebEvent } from "../../api/contracts";
+import type { PendingQuestion, PermissionDecision, PermissionRequest, QuestionResponse, TurnUsage, WebEvent } from "../../api/contracts";
 import { text, type Locale } from "../i18n/locale";
 
 export type ToolLifecycle = {
@@ -51,6 +51,8 @@ export type LiveRunState = {
   completed: boolean;
   /** 本轮耗时（毫秒），从首次思考/正文到结束 */
   durationMs: number | null;
+  /** 本轮全部模型请求的汇总 token 与缓存用量 */
+  usage: TurnUsage | null;
   /**
    * 已获批但尚未并入工具卡的权限决定。
    *
@@ -80,7 +82,8 @@ export const initialRunState: LiveRunState = {
   error: null,
   errorDetail: null,
   completed: false,
-  durationMs: null
+  durationMs: null,
+  usage: null
 };
 
 /**
@@ -280,7 +283,8 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
         ...closeActiveReasoning(state, event.timestamp),
         status: "idle",
         completed: true,
-        durationMs: durationMs ?? null
+        durationMs: durationMs ?? null,
+        usage: parseTurnUsage(payload.usage)
       };
     }
     case "session.summary": {
@@ -290,6 +294,29 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
     default:
       return state;
   }
+}
+
+/**
+ * 校验运行完成事件中的单轮用量。
+ *
+ * @param value 事件载荷中的 usage 字段
+ * @returns 字段完整时返回单轮用量，否则返回空
+ */
+function parseTurnUsage(value: unknown): TurnUsage | null {
+  if (!value || typeof value !== "object") return null;
+  const usage = value as Record<string, unknown>;
+  const read = (key: string) => typeof usage[key] === "number" ? Math.max(0, Number(usage[key])) : 0;
+  const promptTokens = read("prompt_tokens");
+  const completionTokens = read("completion_tokens");
+  const totalTokens = read("total_tokens");
+  if (promptTokens === 0 && completionTokens === 0 && totalTokens === 0) return null;
+  return {
+    prompt_tokens: promptTokens,
+    completion_tokens: completionTokens,
+    total_tokens: totalTokens,
+    cache_read_tokens: read("cache_read_tokens"),
+    cache_write_tokens: read("cache_write_tokens")
+  };
 }
 
 /**

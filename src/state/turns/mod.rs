@@ -1,3 +1,4 @@
+mod metrics;
 mod migration;
 mod model;
 mod repository;

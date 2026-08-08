@@ -80,7 +80,7 @@ pub(super) async fn execute_automatic_repl_turn(
     tool_call_mode: render::ToolCallDisplayMode,
     wake: ExternalEventWake,
 ) -> Result<ReplTurnOutcome> {
-    if agent.mode() != mode {
+    if agent.installed_mode() != mode {
         let registry = build_repl_tool_registry(config, paths, mode)?;
         agent.switch_mode(mode, registry)?;
     }

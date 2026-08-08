@@ -46,7 +46,11 @@ pub(crate) fn build_base_system_prompt(
         }
     }
 
-    // 4. 调用方注入的额外系统提示
+    // 4. 状态覆盖契约固定在系统前缀中，具体状态通过后续 user 标签增量更新
+    base_system_prompt.push_str("\n\n");
+    base_system_prompt.push_str(super::runtime_context::CONTEXT_STATE_CONTRACT);
+
+    // 5. 调用方注入的额外系统提示
     if let Some(prompt) = extra_system_prompt
         .map(str::trim)
         .filter(|prompt| !prompt.is_empty())

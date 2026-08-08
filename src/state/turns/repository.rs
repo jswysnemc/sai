@@ -99,11 +99,11 @@ impl ConversationDb {
         )
     }
 
-    /// 更新当前轮供应商实际接收的用户消息。
+    /// 更新当前轮 provider 专用用户消息。
     ///
     /// 参数:
     /// - `turn_id`: 当前轮唯一标识
-    /// - `content`: 合并动态上下文后的供应商用户消息
+    /// - `content`: 状态事件与原始输入合并后的用户消息
     ///
     /// 返回:
     /// - 更新是否成功
@@ -120,14 +120,14 @@ impl ConversationDb {
         Ok(())
     }
 
-    /// 读取当前轮供应商用户消息，旧数据回退原始用户输入。
+    /// 读取当前轮 provider 用户消息，未设置时回退原始输入。
     ///
     /// 参数:
     /// - `turn_id`: 当前轮唯一标识
     /// - `fallback`: 原始用户输入
     ///
     /// 返回:
-    /// - 可重放的供应商用户消息
+    /// - 可重放的 provider 用户消息
     pub(in crate::state) fn provider_user_content(
         &self,
         turn_id: &str,

@@ -108,11 +108,13 @@
 }
 
 .inline-file-reference {
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-3xs);
   padding: var(--space-3xs) var(--space-xs);
   border-radius: var(--radius-1);
   background: var(--paper-deep);
-  vertical-align: baseline;
+  vertical-align: middle;
 }
 
 .markdown-body .inline-file-reference button {

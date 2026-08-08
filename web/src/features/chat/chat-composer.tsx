@@ -116,7 +116,13 @@ export function ChatComposer(props: ChatComposerProps) {
         <WorkspaceSwitcher />
         {git.data?.status === "ready" && git.data.head && <span className="composer-context-chip" title={git.data.upstream || git.data.head}><GitBranch size={13}/><span>{git.data.head}</span></span>}
         {!externalEngine && !engineStatusPending && (
-          <SystemUsage selection={props.selection} onCompact={props.onCompact} compactDisabled={props.running} />
+          <SystemUsage
+            selection={props.selection}
+            mode={props.mode}
+            agentId={props.agentSelection?.id}
+            onCompact={props.onCompact}
+            compactDisabled={props.running}
+          />
         )}
         <AgentSelector choices={props.agentChoices} selection={props.agentSelection} loading={props.agentLoading} disabled={props.running} onSelect={props.onAgentSelect} />
         <Button className="composer-rail-button" onClick={props.onUndo} disabled={!props.undoAvailable || props.running} title={t("Undo the last turn and its worktree changes", "撤销最后一轮及其工作树修改")} aria-label={t("Undo last turn", "撤销最后一轮")}><Undo2 size={14} /></Button>

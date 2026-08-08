@@ -46,7 +46,8 @@ function run(id: string, content: string, completed: boolean): LiveRunState {
     parts: [],
     error: null,
     errorDetail: null,
-    completed
+    completed,
+    usage: null
   };
 }
 

@@ -606,6 +606,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
               {!selecting && menu === session.id && (
                 <div className="session-menu" ref={menuRef}>
                   <button type="button" onClick={() => startRename(session.id, session.title)}><Pencil size={14} /> {t("Rename", "重命名")}</button>
+                  {workspace.active && <button type="button" onClick={() => { setMenu(null); enterSelectionMode(); }}><CheckSquare2 size={14} /> {t("Select sessions", "多选会话")}</button>}
                   <button type="button" className="danger" onClick={() => { void (async () => {
                     setMenu(null);
                     const accepted = await confirm({

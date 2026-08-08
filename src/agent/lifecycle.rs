@@ -49,10 +49,7 @@ impl Agent {
         let tools_enabled = config.tools.enabled && config.active_model_tools_enabled()?;
         let base_system_prompt =
             build_base_system_prompt(&config, paths, tools_enabled, extra_system_prompt)?;
-        if mode != AgentMode::Plan {
-            state.reset_if_prompt_changed(&base_system_prompt)?;
-            state.recover_stale_turns()?;
-        }
+        prepare_session_context(&state, &base_system_prompt)?;
         let context_char_budget = config.active_context_window_tokens()?;
         let compaction_runtime = compaction_model::resolve_compaction_runtime(&config, paths)?;
         let max_tool_rounds = config.tools.max_rounds;
@@ -117,6 +114,14 @@ impl Agent {
     /// - 当前模式
     pub fn mode(&self) -> AgentMode {
         AgentMode::from_u8(self.live_mode.load(std::sync::atomic::Ordering::SeqCst))
+    }
+
+    /// 返回当前工具注册表对应的模式。
+    ///
+    /// 返回:
+    /// - 已安装工具注册表使用的模式
+    pub fn installed_mode(&self) -> AgentMode {
+        self.mode
     }
 
     /// 返回可在运行期热切换的模式句柄。
@@ -224,11 +229,7 @@ impl Agent {
             self.config.tools.enabled && self.config.active_model_tools_enabled()?;
         self.base_system_prompt =
             build_base_system_prompt(&self.config, &self.paths, self.tools_enabled, None)?;
-        if self.mode != AgentMode::Plan {
-            self.state
-                .reset_if_prompt_changed(&self.base_system_prompt)?;
-            self.state.recover_stale_turns()?;
-        }
+        prepare_session_context(&self.state, &self.base_system_prompt)?;
         self.context_char_budget = self.config.active_context_window_tokens()?;
         self.max_tool_rounds = self.config.tools.max_rounds;
         Ok(())
@@ -297,11 +298,7 @@ impl Agent {
             self.restore_loaded_tools(&loaded);
         }
         self.last_dynamic_sources.clear();
-        if self.mode != AgentMode::Plan {
-            self.state
-                .reset_if_prompt_changed(&self.base_system_prompt)?;
-            self.state.recover_stale_turns()?;
-        }
+        prepare_session_context(&self.state, &self.base_system_prompt)?;
         Ok(())
     }
 
@@ -348,6 +345,20 @@ impl Agent {
     pub fn last_dynamic_sources(&self) -> Vec<DynamicContextSource> {
         self.last_dynamic_sources.clone()
     }
+}
+
+/// 同步当前模式的稳定系统提示并恢复过期轮次。
+///
+/// 参数:
+/// - `state`: 当前会话状态
+/// - `base_system_prompt`: 不含模式说明的基础系统提示
+///
+/// 返回:
+/// - 上下文同步与恢复结果
+fn prepare_session_context(state: &StateStore, base_system_prompt: &str) -> Result<()> {
+    state.reset_if_prompt_changed(base_system_prompt)?;
+    state.recover_stale_turns()?;
+    Ok(())
 }
 
 #[cfg(test)]

@@ -1,5 +1,3 @@
-# Auto Audit Mode
-
-Write tools and sensitive reads require approval. An automated LLM auditor runs in parallel with human review.
-If a human decides first, that decision wins and the LLM audit is discarded.
-Prefer precise, reversible workspace changes. Avoid destructive or out-of-scope operations without strong justification.
+<mode name="auto-audit">
+Sensitive reads and writes require approval. A parallel automated auditor may decide, but an earlier human decision wins. Prefer precise, reversible workspace changes; avoid destructive or out-of-scope operations without explicit authorization.
+</mode>

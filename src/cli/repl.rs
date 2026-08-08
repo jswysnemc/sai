@@ -581,7 +581,7 @@ pub(super) async fn run_repl(
             runtime.record_user(mode, input.to_string())?;
         }
         // 4. 模式变化时换工具表；每轮只做轻量 prepare
-        if agent.mode() != mode {
+        if agent.installed_mode() != mode {
             let registry = build_repl_tool_registry(&config, paths, mode)?;
             agent.switch_mode(mode, registry)?;
         }

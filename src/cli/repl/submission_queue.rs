@@ -85,7 +85,7 @@ pub(super) async fn drain_submission_queue(
             // 控制命令和 shell 在队列中仅作为用户消息处理
             input_history.push(text.clone());
             runtime.record_user(*mode, text.clone())?;
-            if agent.mode() != *mode {
+            if agent.installed_mode() != *mode {
                 let registry = build_repl_tool_registry(config, paths, *mode)?;
                 agent.switch_mode(*mode, registry)?;
             }

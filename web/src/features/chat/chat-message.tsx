@@ -2,7 +2,7 @@ import type React from "react";
 import type { HistoryEntry, SessionTimelineTurn, TimelineToolEntry } from "../../api/contracts";
 import type { LiveRunState } from "./run-event-reducer";
 import type { LiveMessagePart } from "./run-event-reducer";
-import { LiveRunIndicator, formatTurnElapsed } from "./live-run-indicator";
+import { LiveRunIndicator } from "./live-run-indicator";
 import { MessageActions } from "./message/message-actions";
 import { MessageParts } from "./message/message-parts";
 import { UserMessageBubble } from "./message/user-message-bubble";
@@ -10,6 +10,7 @@ import { RunErrorNotice } from "./message/run-error-notice";
 import { useI18n } from "../i18n/use-i18n";
 import { collectTurnFileChanges } from "./turn-changes/collect-turn-file-changes";
 import { TurnFileChanges } from "./turn-changes/turn-file-changes";
+import { TurnMetrics } from "./message/turn-metrics";
 import "./turn-duration-meta.css";
 
 /**
@@ -58,7 +59,7 @@ export function HistoryTurn({
   /** 该轮次存在同级分支时展示的版本切换器 */
   branchSlot?: React.ReactNode;
 }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   // 失败轮仅有错误摘要时不把错误再当正文渲染一遍
   const failureOnly =
     turn.status === "failed"
@@ -90,13 +91,7 @@ export function HistoryTurn({
             onRetry={onRetry}
           />
         )}
-        {typeof turn.duration_ms === "number" && turn.duration_ms > 0 && (
-          <div className="turn-duration-meta" role="status">
-            {locale.startsWith("zh")
-              ? `处理用时${formatTurnElapsed(turn.duration_ms, true)}`
-              : `Processing time ${formatTurnElapsed(turn.duration_ms, false)}`}
-          </div>
-        )}
+        <TurnMetrics durationMs={turn.duration_ms} usage={turn.usage} />
         <TurnFileChanges
           changes={collectTurnFileChanges(turn.tools)}
           tools={turn.tools}
@@ -142,7 +137,7 @@ export function LiveRunMessage({
   onEditResend?: (content: string, imageUrls: string[]) => void;
   actionBusy?: boolean;
 }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const compacting = state.parts.some((part) => part.type === "compaction" && part.status === "running");
   const queued = state.status === "queued";
   if (queued) {
@@ -168,13 +163,7 @@ export function LiveRunMessage({
           {running && !compacting && <LiveRunIndicator status={state.status} startedAtMs={state.startedAtMs} />}
           {!running && state.completed && (
             <>
-              {state.durationMs != null && state.durationMs > 0 && (
-                <div className="turn-duration-meta" role="status">
-                  {locale.startsWith("zh")
-                    ? `处理用时${formatTurnElapsed(state.durationMs, true)}`
-                    : `Processing time ${formatTurnElapsed(state.durationMs, false)}`}
-                </div>
-              )}
+              <TurnMetrics durationMs={state.durationMs} usage={state.usage} />
               <TurnFileChanges
                 changes={collectTurnFileChanges(state.tools)}
                 tools={state.tools}

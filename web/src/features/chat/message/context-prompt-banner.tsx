@@ -2,6 +2,7 @@ import { BookMarked, ChevronDown, ChevronUp, FileText, Loader2 } from "lucide-re
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../api/client";
+import type { RunMode, RunModelSelection, SessionContextPromptSection } from "../../../api/contracts";
 import { HoverRevealButton } from "../../../shared/ui/hover-reveal-button/hover-reveal-button";
 import { MarkdownRenderer } from "../markdown-renderer";
 import { useI18n } from "../../i18n/use-i18n";
@@ -12,6 +13,8 @@ import "./context-prompt-banner.css";
 type ContextPromptBannerProps = {
   sessionId: string;
   agentId?: string | null;
+  mode: RunMode;
+  selection: RunModelSelection | null;
 };
 
 /**
@@ -28,7 +31,12 @@ type ContextPromptMeta = {
   has_dynamic?: boolean;
   has_tools?: boolean;
   tool_count?: number;
-  sections?: string[];
+  sections?: SessionContextPromptSection[];
+};
+
+type ContextPromptTag = {
+  id: string;
+  label: string;
 };
 
 /**
@@ -41,35 +49,41 @@ type ContextPromptMeta = {
 export function buildContextPromptTags(
   data: ContextPromptMeta | undefined,
   t: (en: string, zh: string) => string
-): string[] {
+): ContextPromptTag[] {
   if (!data) return [];
-  const tags: string[] = [];
-  // 1. 后端 sections 已按请求语言本地化，优先作为主体标签
+  const tags: ContextPromptTag[] = [];
+  /** 添加标签并按稳定标识去重。 */
+  const pushTag = (id: string, label: string, prepend = false) => {
+    if (!id.trim() || !label.trim() || tags.some((tag) => tag.id === id)) return;
+    if (prepend) tags.unshift({ id, label });
+    else tags.push({ id, label });
+  };
+  // 1. 后端 sections 已按请求语言本地化，并提供稳定导航标识
   for (const section of data.sections ?? []) {
-    if (section.trim() && !tags.includes(section)) tags.push(section);
+    pushTag(section.id, section.label);
   }
   // 2. 仅补充 sections 未覆盖的摘要信息
-  if (data.has_instruction_files && !tags.includes("AGENT.md")) {
-    tags.unshift(t("AGENT.md", "AGENT.md"));
+  if (data.has_instruction_files && !tags.some((tag) => tag.label === "AGENT.md")) {
+    pushTag("baseline", t("AGENT.md", "AGENT.md"), true);
   }
-  if (data.has_skills && !tags.some((tag) => isSkillTag(tag))) {
-    tags.unshift(t("Skills", "技能目录"));
+  if (data.has_skills && !tags.some((tag) => isSkillTag(tag.label))) {
+    pushTag("baseline", t("Skills", "技能目录"), true);
   }
-  if (data.has_memory && !tags.some((tag) => isMemoryTag(tag))) {
-    tags.push(t("Memory", "关联记忆"));
+  if (data.has_memory && !tags.some((tag) => isMemoryTag(tag.label))) {
+    pushTag("memory", t("Memory", "关联记忆"));
   }
-  if (data.has_dynamic && !tags.some((tag) => isDynamicTag(tag))) {
-    tags.push(t("Dynamic", "动态段"));
+  if (data.has_dynamic && !tags.some((tag) => isDynamicTag(tag.label))) {
+    pushTag("runtime", t("Dynamic", "动态段"));
   }
   // 3. 工具定义已由 sections 提供时不再追加“工具 (n)”
-  if (data.has_tools && !tags.some((tag) => isToolTag(tag))) {
+  if (data.has_tools && !tags.some((tag) => isToolTag(tag.label))) {
     const count = data.tool_count ?? 0;
-    tags.push(count > 0 ? t(`Tools (${count})`, `工具 (${count})`) : t("Tools", "工具"));
+    pushTag("tools", count > 0 ? t(`Tools (${count})`, `工具 (${count})`) : t("Tools", "工具"));
   }
-  if (data.source === "session_baseline" && !tags.some((tag) => isBaselineTag(tag))) {
-    tags.unshift(t("Session baseline", "会话 baseline"));
-  } else if (data.source === "live" && !tags.some((tag) => isLivePreviewTag(tag))) {
-    tags.unshift(t("Live preview", "实时预览"));
+  if (data.source === "session_baseline" && !tags.some((tag) => isBaselineTag(tag.label))) {
+    pushTag("baseline", t("Session baseline", "会话 baseline"), true);
+  } else if (data.source === "live" && !tags.some((tag) => isLivePreviewTag(tag.label))) {
+    pushTag("baseline", t("Live preview", "实时预览"), true);
   }
   return tags.slice(0, 10);
 }
@@ -134,22 +148,47 @@ function isLivePreviewTag(tag: string): boolean {
   return /实时预览|live preview/i.test(tag);
 }
 
-export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerProps) {
+export function ContextPromptBanner({
+  sessionId,
+  agentId,
+  mode,
+  selection
+}: ContextPromptBannerProps) {
   const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
-  const [pendingTag, setPendingTag] = useState<string | null>(null);
+  const [pendingSectionId, setPendingSectionId] = useState<string | null>(null);
   const markdownRef = useRef<HTMLDivElement | null>(null);
   const anchor = useCollapseAnchor(markdownRef, open);
   const query = useQuery({
-    queryKey: ["session-context-prompt", sessionId, agentId ?? "", locale],
-    queryFn: () => api.sessions.contextPrompt(sessionId, agentId ?? undefined, locale),
+    queryKey: [
+      "session-context-prompt",
+      sessionId,
+      agentId ?? "",
+      mode,
+      selection?.providerId ?? "",
+      selection?.model ?? "",
+      locale
+    ],
+    queryFn: () => api.sessions.contextPrompt(sessionId, {
+      agentId: agentId ?? undefined,
+      mode,
+      selection,
+      locale
+    }),
     enabled: Boolean(sessionId),
     staleTime: 30_000
   });
 
-  const rendered = useMemo(
-    () => formatContextPromptMarkdown(query.data?.content ?? "", locale),
-    [locale, query.data?.content]
+  const renderedSections = useMemo(
+    () => (query.data?.sections ?? []).map((section) => ({
+      ...section,
+      rendered: formatContextPromptMarkdown(section.content, locale)
+    })),
+    [locale, query.data?.sections]
+  );
+  const renderedFallback = useMemo(
+    () => renderedSections.length > 0 ? "" : formatContextPromptMarkdown(query.data?.content ?? "", locale),
+    [locale, query.data?.content, renderedSections.length]
   );
 
   const meta = useMemo(
@@ -180,20 +219,20 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
    * @param tag 用户点击的上下文标签
    * @returns 无返回值
    */
-  const revealTag = (tag: string) => {
-    setPendingTag(tag);
+  const revealTag = (sectionId: string) => {
+    setPendingSectionId(sectionId);
     setOpen(true);
   };
 
   useEffect(() => {
-    if (!open || !pendingTag || !rendered) return;
+    if (!open || !pendingSectionId || renderedSections.length === 0) return;
     const frame = window.requestAnimationFrame(() => {
-      const heading = findContextHeading(markdownRef.current, pendingTag);
-      heading?.scrollIntoView({ block: "start", behavior: "smooth" });
-      setPendingTag(null);
+      const target = findContextSection(markdownRef.current, pendingSectionId);
+      target?.scrollIntoView({ block: "start", behavior: "smooth" });
+      setPendingSectionId(null);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [open, pendingTag, rendered]);
+  }, [open, pendingSectionId, renderedSections.length]);
 
   return (
     <section className={`context-prompt-banner${open ? " open" : ""}`} data-overview-id="context-prompt">
@@ -225,14 +264,14 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
           <span className="context-prompt-banner-tags" role="list" aria-label={t("Context sections", "上下文段落")}>
             {meta.map((tag) => (
               <button
-                key={tag}
+                key={`${tag.id}:${tag.label}`}
                 type="button"
                 className="context-prompt-banner-tag"
-                onClick={() => revealTag(tag)}
-                aria-label={t(`Open ${tag}`, `打开${tag}`)}
+                onClick={() => revealTag(tag.id)}
+                aria-label={t(`Open ${tag.label}`, `打开${tag.label}`)}
               >
                 <FileText size={11} aria-hidden />
-                {tag}
+                {tag.label}
               </button>
             ))}
           </span>
@@ -260,12 +299,17 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
               {query.error instanceof Error ? query.error.message : String(query.error)}
             </div>
           )}
-          {rendered && (
+          {(renderedSections.length > 0 || renderedFallback) && (
             <div ref={markdownRef} className="context-prompt-banner-markdown">
-              <MarkdownRenderer source={rendered} />
+              {renderedSections.map((section) => (
+                <section key={section.id} data-context-section={section.id}>
+                  <MarkdownRenderer source={section.rendered} />
+                </section>
+              ))}
+              {renderedFallback && <MarkdownRenderer source={renderedFallback} />}
             </div>
           )}
-          {!query.isLoading && !query.error && !rendered.trim() && (
+          {!query.isLoading && !query.error && renderedSections.length === 0 && !renderedFallback.trim() && (
             <div className="context-prompt-banner-status">
               {t("No system prompt content", "暂无系统提示词内容")}
             </div>
@@ -285,42 +329,17 @@ export function ContextPromptBanner({ sessionId, agentId }: ContextPromptBannerP
   );
 }
 
-/** 将标签和 Markdown 标题归一化，忽略计数与中英文标点差异。 */
-function normalizeTagTarget(value: string): string {
-  return value
-    .replace(/\s*\([^)]*\)\s*$/u, "")
-    .replace(/[：:]/gu, "")
-    .replace(/[，,。.!！?？]/gu, "")
-    .trim()
-    .toLocaleLowerCase();
-}
-
 /**
- * 根据顶部标签定位上下文中的标题，标签允许携带数量或产品侧的别名。
+ * 根据稳定分区标识定位上下文内容。
  *
  * @param root Markdown 内容根节点
- * @param tag 顶部标签文本
- * @returns 匹配到的标题节点
+ * @param sectionId 后端提供的稳定分区标识
+ * @returns 匹配到的分区节点
  */
-export function findContextHeading(root: HTMLDivElement | null, tag: string): HTMLElement | null {
+export function findContextSection(root: HTMLDivElement | null, sectionId: string): HTMLElement | null {
   if (!root) return null;
-  const headings = Array.from(root.querySelectorAll<HTMLElement>("h2, h3"));
-  const target = normalizeTagTarget(tag);
-  if (target.includes("baseline")) return headings[0] ?? null;
-  const aliases: Record<string, string[]> = {
-    "工具定义": ["工具定义", "已加载工具", "工具"],
-    "技能目录": ["技能目录", "技能"],
-    "稳定系统提示": ["稳定系统提示", "系统提示"],
-    "模式提醒": ["模式提醒", "运行模式"],
-    "当前模型": ["当前模型", "模型"],
-    "运行时": ["运行时", "运行环境"],
-    "关联记忆": ["关联记忆", "记忆"]
-  };
-  const candidates = aliases[target] ?? [target];
-  return headings.find((heading) => {
-    const current = normalizeTagTarget(heading.textContent ?? "");
-    return candidates.some((candidate) => current === candidate || current.includes(candidate) || candidate.includes(current));
-  }) ?? null;
+  return Array.from(root.querySelectorAll<HTMLElement>("[data-context-section]"))
+    .find((section) => section.dataset.contextSection === sectionId) ?? null;
 }
 
 /**

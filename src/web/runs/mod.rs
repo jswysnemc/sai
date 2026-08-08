@@ -6,7 +6,7 @@ mod event;
 mod identified_tool_tests;
 mod journal;
 mod manager;
-mod model_override;
+pub(crate) mod model_override;
 mod request_limits;
 
 pub(crate) use event::WebEvent;

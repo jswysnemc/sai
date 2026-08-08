@@ -64,6 +64,12 @@ struct HistoryQuery {
 struct ContextPromptQuery {
     /// 可选 Agent 档案；影响 live 组装路径
     agent_id: Option<String>,
+    /// 当前供应商；必须与 model 同时提供
+    provider_id: Option<String>,
+    /// 当前模型；必须与 provider_id 同时提供
+    model: Option<String>,
+    /// 当前运行模式
+    mode: Option<String>,
     /// 界面语言（en / en-US / zh / zh-CN）；缺省跟随服务端环境语言
     locale: Option<String>,
 }
@@ -126,7 +132,7 @@ pub(super) fn routes() -> Router<WebAppState> {
 /// 参数:
 /// - `state`: Web 应用状态
 /// - `id`: 会话标识
-/// - `query`: 可选 agent_id / locale
+/// - `query`: 可选 Agent、模型、模式与界面语言
 ///
 /// 返回:
 /// - 会话 baseline 或当前配置即时组装的提示词
@@ -148,11 +154,15 @@ async fn context_prompt(
         .as_deref()
         .and_then(crate::i18n::Locale::parse)
         .unwrap_or_else(crate::i18n::locale);
+    let mode = crate::agent::AgentMode::parse(query.mode.as_deref()).map_err(WebError::from)?;
     let prompt = super::super::services::context_prompt::load_session_context_prompt(
         &state.paths,
         &id,
         &workspace.path,
         query.agent_id.as_deref(),
+        query.provider_id.as_deref(),
+        query.model.as_deref(),
+        mode,
         locale,
     )
     .await

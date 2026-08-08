@@ -1,5 +1,6 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
+use crate::agent::AgentMode;
 use crate::config::AppConfig;
 use crate::llm::Usage;
 use crate::state::StateStore;
@@ -11,8 +12,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Deserialize)]
 struct SystemUsageQuery {
+    agent_id: Option<String>,
     provider_id: Option<String>,
     model: Option<String>,
+    mode: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -94,8 +97,12 @@ async fn usage(
     State(state): State<WebAppState>,
     Query(query): Query<SystemUsageQuery>,
 ) -> WebResult<Json<SystemUsageResponse>> {
-    let config = AppConfig::load_or_default(&state.paths).map_err(WebError::from)?;
-    let context_window_tokens = usage_context_window(&config, &query).map_err(WebError::from)?;
+    let base_config = AppConfig::load_or_default(&state.paths).map_err(WebError::from)?;
+    let context_window_tokens =
+        usage_context_window(&base_config, &query).map_err(WebError::from)?;
+    let config =
+        resolve_usage_config(&state.paths, &base_config, &query).map_err(WebError::from)?;
+    let mode = AgentMode::parse(query.mode.as_deref()).map_err(WebError::from)?;
     let store = StateStore::new(&state.paths).map_err(WebError::from)?;
     // 用量顶栏不应因瞬时 DB 忙碌打挂；快照失败时降级为零值并带警告
     let snapshot = match store.session_snapshot(context_window_tokens) {
@@ -135,21 +142,27 @@ async fn usage(
         .is_session_active(&workspace.id, &snapshot.session_id)
         .await;
     // 【Web主界面】【上下文分项】估算系统提示、工具、对话、MCP、技能占用
-    let breakdown = match super::super::services::context_breakdown::estimate_context_breakdown(
-        &config,
-        &state.paths,
-        &store,
-    ) {
-        Ok(value) => value,
-        Err(_error) => super::super::services::context_breakdown::ContextUsageBreakdown::default(),
-    };
+    let workspace_path = workspace.path.clone();
+    let breakdown =
+        match crate::runtime_cwd::scope(std::path::PathBuf::from(&workspace_path), async {
+            super::super::services::context_breakdown::estimate_context_breakdown(
+                &config,
+                &state.paths,
+                &store,
+                &workspace_path,
+                mode,
+            )
+        })
+        .await
+        {
+            Ok(value) => value,
+            Err(_error) => {
+                super::super::services::context_breakdown::ContextUsageBreakdown::default()
+            }
+        };
     // 1. 分项估算合计：无最近一次主对话 provider usage 时用作当前占用
     // 2. 压缩会清空 last_conversation_usage；旧会话若仍残留压缩前 usage，也回退到分项估算
-    let breakdown_total = breakdown.system_prompt_tokens
-        + breakdown.tools_and_agents_tokens
-        + breakdown.conversation_tokens
-        + breakdown.connectors_and_mcp_tokens
-        + breakdown.skills_tokens;
+    let breakdown_total = breakdown.total();
     let last_conversation_usage = snapshot.usage.last_conversation_usage.as_ref();
     let last_conversation_tokens =
         last_conversation_usage.map(|usage| usage.prompt_tokens as usize);
@@ -235,6 +248,30 @@ fn usage_context_window(config: &AppConfig, query: &SystemUsageQuery) -> Result<
         }
         _ => bail!("provider_id and model must be provided together"),
     }
+}
+
+/// 组装当前 Web 请求对应的临时配置。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+/// - `config`: 默认配置
+/// - `query`: Agent、供应商和模型覆盖
+///
+/// 返回:
+/// - 应用于当前请求的配置
+fn resolve_usage_config(
+    paths: &crate::paths::SaiPaths,
+    config: &AppConfig,
+    query: &SystemUsageQuery,
+) -> Result<AppConfig> {
+    Ok(crate::web::runs::model_override::resolve_run_config(
+        paths,
+        query.agent_id.as_deref(),
+        query.provider_id.as_deref(),
+        query.model.as_deref(),
+        None,
+    )?
+    .unwrap_or_else(|| config.clone()))
 }
 
 /// 选择用于顶栏展示的当前上下文占用。
@@ -366,6 +403,7 @@ mod tests {
         let query = SystemUsageQuery {
             provider_id: Some(provider_id),
             model: Some("large-model".to_string()),
+            ..SystemUsageQuery::default()
         };
 
         assert_eq!(usage_context_window(&config, &query).unwrap(), 256_000);
@@ -376,6 +414,7 @@ mod tests {
         let query = SystemUsageQuery {
             provider_id: Some("provider-a".to_string()),
             model: None,
+            ..SystemUsageQuery::default()
         };
 
         let error = usage_context_window(&AppConfig::default(), &query).unwrap_err();

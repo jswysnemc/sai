@@ -176,7 +176,7 @@ impl RunManager {
         {
             bail!("message cannot be empty");
         }
-        parse_mode(request.mode.as_deref())?;
+        AgentMode::parse(request.mode.as_deref())?;
         let _scheduling = self.scheduling.lock().await;
         let key = session_key(&workspace.id, &request.session_id);
         let has_active = self.active.lock().await.contains_key(&key);
@@ -470,7 +470,7 @@ async fn run_agent(
     journal: EventJournal,
     inter_message_source: Arc<dyn InterMessageSource>,
 ) -> RunCheckpointStatus {
-    let mode = match parse_mode(request.mode.as_deref()) {
+    let mode = match AgentMode::parse(request.mode.as_deref()) {
         Ok(mode) => mode,
         Err(error) => {
             journal.publish(WebEvent::new(
@@ -549,15 +549,4 @@ async fn run_agent(
 /// 生成工作区会话级调度键。
 fn session_key(workspace_id: &str, session_id: &str) -> String {
     format!("{workspace_id}:{session_id}")
-}
-
-/// 解析 Web 端运行模式。
-fn parse_mode(value: Option<&str>) -> Result<AgentMode> {
-    match value.unwrap_or("yolo").trim().to_ascii_lowercase().as_str() {
-        "plan" => Ok(AgentMode::Plan),
-        "audited" | "audit" => Ok(AgentMode::Audited),
-        "auto_audit" | "auto-audit" | "auto" => Ok(AgentMode::AutoAudit),
-        "yolo" | "" => Ok(AgentMode::Yolo),
-        value => bail!("unsupported run mode: {value}"),
-    }
 }

@@ -166,6 +166,7 @@ mod tests {
                 context_ratio: 0.0,
             },
             dynamic_sources: Vec::new(),
+            provider_user_content: None,
             warnings: Vec::new(),
         }
     }

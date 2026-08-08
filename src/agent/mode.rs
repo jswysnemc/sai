@@ -8,6 +8,23 @@ pub enum AgentMode {
 }
 
 impl AgentMode {
+    /// 解析外部传入的模式名称。
+    ///
+    /// 参数:
+    /// - `value`: 可选模式文本；缺省为 YOLO
+    ///
+    /// 返回:
+    /// - 合法 Agent 模式
+    pub(crate) fn parse(value: Option<&str>) -> anyhow::Result<Self> {
+        match value.unwrap_or("yolo").trim().to_ascii_lowercase().as_str() {
+            "plan" => Ok(Self::Plan),
+            "audited" | "audit" => Ok(Self::Audited),
+            "auto_audit" | "auto-audit" | "auto" => Ok(Self::AutoAudit),
+            "yolo" | "" => Ok(Self::Yolo),
+            value => anyhow::bail!("unsupported run mode: {value}"),
+        }
+    }
+
     /// 返回终端界面使用的模式标签。
     ///
     /// 返回:
@@ -18,6 +35,19 @@ impl AgentMode {
             Self::Audited => "AUDIT",
             Self::AutoAudit => "AUTO-AUDIT",
             Self::Plan => "PLAN",
+        }
+    }
+
+    /// 返回状态标签使用的稳定模式名称。
+    ///
+    /// 返回:
+    /// - 小写模式标识
+    pub(crate) fn key(self) -> &'static str {
+        match self {
+            Self::Yolo => "yolo",
+            Self::Audited => "audited",
+            Self::AutoAudit => "auto-audit",
+            Self::Plan => "plan",
         }
     }
 
@@ -84,6 +114,32 @@ impl From<crate::config::DefaultPermissionMode> for AgentMode {
             crate::config::DefaultPermissionMode::Audited => Self::Audited,
             crate::config::DefaultPermissionMode::AutoAudit => Self::AutoAudit,
             crate::config::DefaultPermissionMode::Plan => Self::Plan,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 验证各模式提示可识别且保持紧凑。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn mode_prompts_are_compact_and_identifiable() {
+        for (mode, name, max_chars) in [
+            (AgentMode::Yolo, "yolo", 500),
+            (AgentMode::Audited, "audited", 500),
+            (AgentMode::AutoAudit, "auto-audit", 400),
+            (AgentMode::Plan, "plan", 600),
+        ] {
+            let prompt = mode.reminder();
+            assert!(prompt.contains(&format!("name=\"{name}\"")));
+            assert!(prompt.chars().count() <= max_chars);
         }
     }
 }

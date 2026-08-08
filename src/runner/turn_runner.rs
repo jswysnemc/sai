@@ -124,11 +124,11 @@ impl<'agent> TurnRunner<'agent> {
             }
         };
         result.duration_ms = duration_ms.max(1);
-        // 2. 将处理耗时写入会话数据库，供时间线恢复展示
+        // 2. 将处理耗时与整轮用量写入会话数据库，供 TUI 和 Web 时间线恢复展示
         let _ = self
             .agent
             .state()
-            .set_last_turn_duration_ms(result.duration_ms);
+            .set_last_turn_metrics(result.duration_ms, result.usage.as_ref());
         // 3. 只把本轮开始时已经活动的目标计入使用量
         if let Some(goal) = active_goal {
             let tokens = result

@@ -29,6 +29,9 @@ export function toolDisplaySummary(
   }
 
   if (name === "load") {
+    const type = stringField(args, "type");
+    const keywords = stringListField(args, "keywords");
+    if (type && keywords) return compactText(`${type} · ${keywords}`);
     return (
       stringListField(args, "tool_names")
       || stringField(args, "tool_name")

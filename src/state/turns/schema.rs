@@ -45,6 +45,7 @@ pub(super) fn open_connection(state_dir: &Path) -> Result<Connection> {
     crate::state::tool_history::schema::create_tool_history_tables(&conn)?;
     crate::state::turn_messages::schema::create_turn_message_table(&conn)?;
     crate::runtime_recovery::schema::create_runtime_recovery_tables(&conn)?;
+    super::metrics::create_turn_metrics_table(&conn)?;
     ensure_user_image_urls_column(&conn)?;
     ensure_duration_ms_column(&conn)?;
     ensure_parent_turn_id_column(&conn)?;

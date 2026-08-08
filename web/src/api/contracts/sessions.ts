@@ -75,6 +75,15 @@ export type TimelineTurnMessage = {
   created_at: string;
 };
 
+/** 同一轮全部模型请求的汇总用量 */
+export type TurnUsage = {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+};
+
 export type SessionTimelineTurn = {
   turn_id: string;
   seq: number;
@@ -87,6 +96,8 @@ export type SessionTimelineTurn = {
   messages?: TimelineTurnMessage[];
   /** 处理耗时毫秒；历史未记录时可能缺失 */
   duration_ms?: number | null;
+  /** 同一轮全部模型请求的汇总用量；旧历史可能缺失 */
+  usage?: TurnUsage | null;
 };
 
 export type SessionTimelineCompaction = {
@@ -148,7 +159,17 @@ export type SessionContextPrompt = {
   has_dynamic: boolean;
   tool_count: number;
   agent_id?: string | null;
-  sections: string[];
+  sections: SessionContextPromptSection[];
+};
+
+/** 可独立渲染并按稳定标识导航的上下文分区 */
+export type SessionContextPromptSection = {
+  /** 不随语言和标题变化的导航标识 */
+  id: string;
+  /** 当前界面语言下的短标签 */
+  label: string;
+  /** 包含标题的 Markdown 正文 */
+  content: string;
 };
 
 

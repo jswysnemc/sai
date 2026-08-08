@@ -371,6 +371,31 @@ describe("runEventReducer", () => {
     expect(failed.errorDetail).toBe("upstream timeout");
   });
 
+  it("keeps completed turn usage for the message metrics", () => {
+    const completed = runEventReducer(initialRunState, {
+      type: "event",
+      event: event("run.completed", {
+        duration_ms: 5_000,
+        usage: {
+          prompt_tokens: 1_000,
+          completion_tokens: 200,
+          total_tokens: 1_200,
+          cache_read_tokens: 900,
+          cache_write_tokens: 10
+        }
+      })
+    });
+
+    expect(completed.durationMs).toBe(5_000);
+    expect(completed.usage).toEqual({
+      prompt_tokens: 1_000,
+      completion_tokens: 200,
+      total_tokens: 1_200,
+      cache_read_tokens: 900,
+      cache_write_tokens: 10
+    });
+  });
+
   it("relocalizes built-in run errors after the interface language changes", () => {
     expect(relocalizeRunError("运行已中断", "en-US")).toBe("The run was interrupted");
     expect(relocalizeRunError("Run failed", "zh-CN")).toBe("运行失败");

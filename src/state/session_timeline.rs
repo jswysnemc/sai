@@ -1,6 +1,7 @@
 use super::tool_history::load_tool_exchanges_for_turn;
 use super::turns::TurnStatus;
 use super::{StateStore, ToolCallStatus};
+use crate::llm::Usage;
 use anyhow::Result;
 use serde::Serialize;
 
@@ -78,6 +79,9 @@ pub struct SessionTimelineTurn {
     /// 处理耗时毫秒；0 表示历史数据未记录
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub duration_ms: u64,
+    /// 同一轮全部模型请求的汇总用量
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
 }
 
 /// 会话时间线中展示的最新压缩摘要。
@@ -113,6 +117,7 @@ impl StateStore {
         turns
             .into_iter()
             .map(|turn| {
+                let usage = self.conv_db.turn_usage(&turn.turn_id)?;
                 let exchanges =
                     load_tool_exchanges_for_turn(&self.conv_db, &self.session_id, &turn.turn_id)?;
                 let messages = self
@@ -194,6 +199,7 @@ impl StateStore {
                     messages,
                     automatic,
                     duration_ms: turn.duration_ms,
+                    usage,
                 })
             })
             .collect()

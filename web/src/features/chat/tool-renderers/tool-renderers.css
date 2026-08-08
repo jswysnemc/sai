@@ -133,15 +133,23 @@
   align-items: center;
   gap:var(--space-xs);
   min-width: 0;
+  vertical-align: middle;
+}
+
+.tool-file-reference svg {
+  display: block;
+  flex: 0 0 auto;
 }
 
 .tool-file-reference button {
+  display: inline-flex;
+  align-items: center;
   overflow: hidden;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--technical-text);
-  font:500 var(--text-xs) var(--font-code);
+  font:500 var(--text-xs)/1.25 var(--font-code);
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;

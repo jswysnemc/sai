@@ -36,9 +36,18 @@ pub fn render_session_summary(snapshot: &SessionSnapshot) -> String {
     );
     if snapshot.last_turn_duration_ms > 0 {
         output.push_str(&format!(
-            " · {}: {}",
+            " · {} {}",
             t("Turn", "本轮"),
             format_turn_duration_ms(snapshot.last_turn_duration_ms),
+        ));
+    }
+    if let Some(usage) = snapshot.usage.last_conversation_usage.as_ref() {
+        output.push_str(&format!(
+            " · \u{f090} {} · \u{f08b} {} · {} {:.1}%",
+            format_k_u64(usage.prompt_tokens),
+            format_k_u64(usage.completion_tokens),
+            t("cache", "缓存"),
+            turn_cache_hit_ratio(usage) * 100.0,
         ));
     }
     if snapshot.checkpoint_count > 0 {
@@ -183,4 +192,32 @@ fn format_k(value: usize) -> String {
     } else {
         value.to_string()
     }
+}
+
+/// 格式化单轮 token 数。
+///
+/// 参数:
+/// - `value`: provider 上报的 token 数
+///
+/// 返回:
+/// - 紧凑千单位文本
+fn format_k_u64(value: u64) -> String {
+    usize::try_from(value)
+        .map(format_k)
+        .unwrap_or_else(|_| value.to_string())
+}
+
+/// 计算单轮输入缓存命中占比。
+///
+/// 参数:
+/// - `usage`: 同一轮全部模型请求的汇总用量
+///
+/// 返回:
+/// - 0 到 1 之间的缓存读取占比
+fn turn_cache_hit_ratio(usage: &crate::llm::Usage) -> f64 {
+    if usage.prompt_tokens == 0 {
+        return 0.0;
+    }
+    (usage.cache_read_tokens.min(usage.prompt_tokens) as f64 / usage.prompt_tokens as f64)
+        .clamp(0.0, 1.0)
 }

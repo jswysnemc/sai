@@ -1,16 +1,17 @@
+use super::context_prompt_section::{
+    mode_preview, section, split_tagged_section, ContextPromptSection,
+};
+use super::context_runtime::project_context_runtime;
 use crate::agent::{build_base_system_prompt, AgentMode};
 use crate::cli::build_tool_registry_with_cached_mcp;
-use crate::config::{AgentSurface, AppConfig};
+use crate::config::AppConfig;
 use crate::i18n::Locale;
-use crate::llm::{ChatContent, ChatMessage, ToolDefinition};
-use crate::memory::MemoryStore;
+use crate::llm::ToolDefinition;
 use crate::paths::SaiPaths;
 use crate::state::StateStore;
 use crate::tools::{self, ToolRegistry};
 use anyhow::Result;
-use chrono::Local;
 use serde::Serialize;
-use std::io::IsTerminal;
 
 /// 会话上下文提示词预览（稳定 baseline + 动态系统段 + 工具描述）。
 #[derive(Debug, Clone, Serialize)]
@@ -37,8 +38,8 @@ pub(crate) struct SessionContextPrompt {
     pub tool_count: usize,
     /// 实际使用的 Agent 标识（若有）
     pub agent_id: Option<String>,
-    /// 各段标题，便于前端标签展示
-    pub sections: Vec<String>,
+    /// 带稳定 ID 的预览分区，供前端展示与导航
+    pub sections: Vec<ContextPromptSection>,
 }
 
 /// 读取指定会话的完整上下文提示词预览。
@@ -48,6 +49,9 @@ pub(crate) struct SessionContextPrompt {
 /// - `session_id`: 会话 ID
 /// - `workspace_path`: 工作区路径（用于加载项目 AGENT.md）
 /// - `agent_id`: 可选 Agent 档案覆盖
+/// - `provider_id`: 可选供应商覆盖
+/// - `model`: 可选模型覆盖
+/// - `mode`: 当前运行模式
 /// - `locale`: 界面语言（仅影响预览标题与说明文案，不改变模型侧稳定正文）
 ///
 /// 返回:
@@ -57,388 +61,191 @@ pub(crate) async fn load_session_context_prompt(
     session_id: &str,
     workspace_path: &str,
     agent_id: Option<&str>,
+    provider_id: Option<&str>,
+    model: Option<&str>,
+    mode: AgentMode,
     locale: Locale,
 ) -> Result<SessionContextPrompt> {
     let store = StateStore::for_session(paths, session_id)?;
     let workspace = std::path::PathBuf::from(workspace_path);
+    let workspace_path_owned = workspace_path.to_string();
     let agent_owned = agent_id.map(str::to_string);
     let paths_owned = paths.clone();
 
     crate::runtime_cwd::scope(workspace, async move {
-        let config = AppConfig::load_or_default(&paths_owned)?;
-        let config =
-            crate::config::apply_agent_override(config, agent_owned.as_deref(), AgentSurface::Web)?;
+        let config = crate::web::runs::model_override::resolve_run_config(
+            &paths_owned,
+            agent_owned.as_deref(),
+            provider_id,
+            model,
+            None,
+        )?
+        .unwrap_or(AppConfig::load_or_default(&paths_owned)?);
 
-        // 1. 稳定 baseline：会话 epoch 优先，否则 live 组装
+        // 1. 稳定系统提示不随模式变化；模式通过后续 user 状态标签载入
+        let tools_enabled = config.tools.enabled && config.active_model_tools_enabled()?;
+        let live_baseline =
+            build_base_system_prompt(&config, &paths_owned, tools_enabled, None)?;
         let (source, baseline) = match store.context_epoch_baseline()? {
-            Some(baseline) if !baseline.trim().is_empty() => {
+            Some(baseline) if baseline == live_baseline => {
                 ("session_baseline".to_string(), baseline)
             }
-            _ => (
-                "live".to_string(),
-                build_base_system_prompt(&config, &paths_owned, config.tools.enabled, None)?,
-            ),
+            _ => ("live".to_string(), live_baseline),
         };
 
         // 2. 动态系统段：与 chat_base_context_projection / turn 组装对齐
-        let dynamic = build_dynamic_sections(&config, &paths_owned, &store, locale)?;
+        let dynamic = project_context_runtime(
+            &config,
+            &paths_owned,
+            &store,
+            &workspace_path_owned,
+            mode,
+        )?;
 
         // 3. 工具定义（请求里作为 tools 参数，不是 system 文本；UI 一并展示）
-        let tools_section = build_tools_markdown_section(&config, &paths_owned, &store, locale)?;
+        let tools_section =
+            build_tools_markdown_section(&config, &paths_owned, &store, mode, locale)?;
 
-        // 4. 按真实请求顺序拼接可读预览（标题与说明按界面语言输出）
-        let mut parts = Vec::new();
+        // 4. 按真实请求顺序构造带稳定标识的可读分区
         let mut sections = Vec::new();
-        parts.push(section_block(
+        let (baseline_without_skills, skills_prompt) =
+            split_tagged_section(&baseline, "available-skills");
+        let (stable_prompt, instruction_files) =
+            split_tagged_section(&baseline_without_skills, "instruction-files");
+        sections.push(section(
+            "baseline",
+            locale.text("Session baseline", "会话 baseline"),
             locale.text(
                 "1. Stable system prompt (Context Epoch baseline)",
                 "1. 稳定系统提示（Context Epoch baseline）",
             ),
-            &baseline,
+            &stable_prompt,
         ));
-        sections.push(
-            locale
-                .text("Stable system prompt", "稳定系统提示")
-                .to_string(),
-        );
+        if !instruction_files.trim().is_empty() {
+            sections.push(section(
+                "instructions",
+                "AGENT.md",
+                locale.text("2. Instruction files", "2. 指令文件"),
+                &instruction_files,
+            ));
+        }
+        if !skills_prompt.trim().is_empty() {
+            sections.push(section(
+                "skills",
+                locale.text("Skills catalog", "技能目录"),
+                locale.text("3. Skills catalog", "3. 技能目录"),
+                &skills_prompt,
+            ));
+        }
 
-        if !dynamic.mode_reminder.trim().is_empty() {
-            parts.push(section_block(
-                locale.text("2. Mode reminder", "2. 模式提醒"),
-                &dynamic.mode_reminder,
-            ));
-            sections.push(locale.text("Mode reminder", "模式提醒").to_string());
-        }
-        if !dynamic.selected_model.trim().is_empty() {
-            parts.push(section_block(
-                locale.text("3. Selected model label", "3. 当前模型标签"),
-                &format!("`{}`", dynamic.selected_model.trim()),
-            ));
-            sections.push(locale.text("Selected model", "当前模型").to_string());
-        }
         if !dynamic.goal_context.trim().is_empty() {
-            parts.push(section_block(
-                locale.text("5. Goal context", "5. Goal 上下文"),
+            sections.push(section(
+                "goal",
+                "Goal",
+                locale.text("4. Goal context", "4. Goal 上下文"),
                 &dynamic.goal_context,
             ));
-            sections.push("Goal".to_string());
         }
         if !dynamic.compaction_summary.trim().is_empty() {
-            parts.push(section_block(
-                locale.text("6. Compaction summary / Checkpoint", "6. 压缩摘要 / Checkpoint"),
+            sections.push(section(
+                "checkpoint",
+                locale.text("Compaction summary", "压缩摘要"),
+                locale.text("5. Compaction summary / Checkpoint", "5. 压缩摘要 / Checkpoint"),
                 &dynamic.compaction_summary,
             ));
-            sections.push(locale.text("Compaction summary", "压缩摘要").to_string());
         }
         if !dynamic.runtime_context.trim().is_empty() {
-            parts.push(section_block(
-                locale.text("7. Runtime context", "7. 运行时上下文"),
+            sections.push(section(
+                "runtime",
+                locale.text("Runtime", "运行时"),
+                locale.text("6. Runtime context", "6. 运行时上下文"),
                 &dynamic.runtime_context,
             ));
-            sections.push(locale.text("Runtime", "运行时").to_string());
         }
+        sections.push(section(
+            "mode",
+            locale.text("Mode instructions", "模式说明"),
+            locale.text("7. Current mode instructions", "7. 当前模式说明"),
+            &mode_preview(mode, locale),
+        ));
         if !dynamic.associative_memory.trim().is_empty() {
-            parts.push(section_block(
+            sections.push(section(
+                "memory",
+                locale.text("Associative memory", "关联记忆"),
                 locale.text(
                     "8. Associative memory (recalled from latest user input)",
                     "8. 关联记忆（按最近用户输入召回）",
                 ),
                 &dynamic.associative_memory,
             ));
-            sections.push(locale.text("Associative memory", "关联记忆").to_string());
         } else if dynamic.memory_enabled {
-            parts.push(section_block(
+            sections.push(section(
+                "memory",
+                locale.text("Associative memory", "关联记忆"),
                 locale.text("8. Associative memory", "8. 关联记忆"),
                 locale.text(
                     "_Memory is enabled; no associative hits for the latest user input (recall changes every turn)._",
                     "_记忆已开启；当前无与最近用户输入匹配的联想结果（联想随每轮输入变化）。_",
                 ),
             ));
-            sections.push(locale.text("Associative memory", "关联记忆").to_string());
         } else {
-            parts.push(section_block(
+            sections.push(section(
+                "memory",
+                locale.text("Associative memory", "关联记忆"),
                 locale.text("8. Associative memory", "8. 关联记忆"),
                 locale.text("_Memory is disabled._", "_记忆功能已关闭。_"),
             ));
-            sections.push(locale.text("Associative memory", "关联记忆").to_string());
         }
         if !dynamic.last_auto_meme.trim().is_empty() {
-            parts.push(section_block(
+            sections.push(section(
+                "meme",
+                locale.text("Meme reminder", "表情包提醒"),
                 locale.text("9. Auto meme reminder", "9. 自动表情包提醒"),
                 &dynamic.last_auto_meme,
             ));
-            sections.push(locale.text("Meme reminder", "表情包提醒").to_string());
         }
         if !tools_section.markdown.trim().is_empty() {
-            parts.push(tools_section.markdown.trim().to_string());
-            sections.push(format!(
-                "{} ({})",
-                locale.text("Tool definitions", "工具定义"),
-                tools_section.tool_count
+            sections.push(section(
+                "tools",
+                format!(
+                    "{} ({})",
+                    locale.text("Tool definitions", "工具定义"),
+                    tools_section.tool_count
+                ),
+                locale.text(
+                    "10. Tool definitions (request tools parameter)",
+                    "10. 工具定义（请求 tools 参数）",
+                ),
+                &tools_section.markdown,
             ));
         }
 
-        let content = parts
-            .into_iter()
-            .filter(|part| !part.trim().is_empty())
+        let content = sections
+            .iter()
+            .map(|value| value.content.as_str())
             .collect::<Vec<_>>()
             .join("\n\n---\n\n");
+        let token_count = super::context_breakdown::estimate_context_breakdown_with_runtime(
+            &config,
+            &paths_owned,
+            &store,
+            mode,
+            &dynamic,
+        )?
+        .total();
 
         Ok(summarize_prompt(
             &source,
             content,
+            token_count,
             tools_section.tool_count,
             !dynamic.associative_memory.trim().is_empty(),
-            dynamic.has_dynamic_system,
+            dynamic.has_dynamic(),
             agent_owned,
             sections,
         ))
     })
     .await
-}
-
-/// 动态系统段集合。
-struct DynamicSections {
-    mode_reminder: String,
-    selected_model: String,
-    goal_context: String,
-    compaction_summary: String,
-    runtime_context: String,
-    associative_memory: String,
-    last_auto_meme: String,
-    memory_enabled: bool,
-    has_dynamic_system: bool,
-}
-
-/// 构造与 Agent 请求对齐的动态系统段。
-///
-/// 参数:
-/// - `config`: 已应用 Agent 覆盖的配置
-/// - `paths`: Sai 路径
-/// - `store`: 会话状态
-/// - `locale`: 界面语言
-///
-/// 返回:
-/// - 动态段集合
-fn build_dynamic_sections(
-    config: &AppConfig,
-    paths: &SaiPaths,
-    store: &StateStore,
-    locale: Locale,
-) -> Result<DynamicSections> {
-    // 1. Web 默认 YOLO 模式提醒（与真实 Web run 默认一致；用户切换模式后仍以当前会话最常见路径展示）
-    let mode_reminder = AgentMode::Yolo.reminder().to_string();
-
-    // 2. 当前模型标签
-    let selected_model = selected_model_label(config)?.unwrap_or_default();
-
-    // 3. Goal 上下文
-    let goal_context = store
-        .goal()?
-        .map(|goal| crate::goal::system_context(&goal))
-        .unwrap_or_default();
-
-    // 4. 压缩摘要 / checkpoint
-    let projected_history = store.project_history(None)?;
-    let compaction_summary = projected_history
-        .checkpoint_context
-        .or(store.compaction_summary_context()?)
-        .unwrap_or_default();
-
-    // 5. 运行时上下文（时间 / 工作目录 / 终端环境）
-    let runtime_context = runtime_context_message(locale);
-
-    // 6. 关联记忆：用最近一条用户消息作为查询（真实请求按当前输入召回）
-    let memory = config.memory_config();
-    let memory_enabled = memory.enabled && memory.association_enabled;
-    let associative_memory = if memory_enabled {
-        let query = latest_user_text(&projected_history.messages);
-        if query.trim().is_empty() {
-            String::new()
-        } else {
-            let memory = MemoryStore::new(config, paths);
-            memory
-                .association(&query)?
-                .map(|association| memory.format_association(&association))
-                .unwrap_or_default()
-        }
-    } else {
-        String::new()
-    };
-
-    // 7. 最近自动表情包提醒
-    let last_auto_meme =
-        crate::tools::memes::last_auto_meme_reminder(config, paths)?.unwrap_or_default();
-
-    let has_dynamic_system = [
-        mode_reminder.as_str(),
-        selected_model.as_str(),
-        goal_context.as_str(),
-        compaction_summary.as_str(),
-        runtime_context.as_str(),
-        associative_memory.as_str(),
-        last_auto_meme.as_str(),
-    ]
-    .iter()
-    .any(|part| !part.trim().is_empty());
-
-    Ok(DynamicSections {
-        mode_reminder,
-        selected_model,
-        goal_context,
-        compaction_summary,
-        runtime_context,
-        associative_memory,
-        last_auto_meme,
-        memory_enabled,
-        has_dynamic_system,
-    })
-}
-
-/// 构造当前配置的 provider/model 标签。
-///
-/// 参数:
-/// - `config`: 应用配置
-///
-/// 返回:
-/// - 当前 provider/model 标签
-fn selected_model_label(config: &AppConfig) -> Result<Option<String>> {
-    let provider = config.provider(None)?;
-    let model = provider.default_model.trim();
-    if model.is_empty() {
-        return Ok(None);
-    }
-    let provider_name = provider.display_name.trim();
-    let provider_label = if provider_name.is_empty() {
-        provider.id.trim()
-    } else {
-        provider_name
-    };
-    if provider_label.is_empty() {
-        Ok(Some(model.to_string()))
-    } else {
-        Ok(Some(format!("{provider_label}/{model}")))
-    }
-}
-
-/// 构造运行时上下文消息（对齐 agent::message_context，文案随界面语言切换）。
-///
-/// 参数:
-/// - `locale`: 界面语言
-///
-/// 返回:
-/// - 运行时 system-reminder 文本
-fn runtime_context_message(locale: Locale) -> String {
-    let cwd = crate::runtime_cwd::current_dir()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|_| "unknown".to_string());
-    let runtime = terminal_runtime_context(locale);
-    let now = if matches!(locale, Locale::Zh) {
-        Local::now().format("%Y年%m月%d日 %A %H:%M").to_string()
-    } else {
-        Local::now().format("%Y-%m-%d %A %H:%M").to_string()
-    };
-    match locale {
-        Locale::Zh => format!(
-            "<system-reminder>\n当前系统时间：{now}。用户询问当前时间时，优先使用这里的时间，不需要调用命令查询。\n当前工作目录：{cwd}。涉及相对路径、当前项目、文件操作时优先以此为准。\n{runtime}\n</system-reminder>"
-        ),
-        Locale::En => format!(
-            "<system-reminder>\nCurrent system time: {now}. When the user asks about the current time, prefer this value and do not run a command to query it.\nCurrent working directory: {cwd}. Prefer this path for relative paths, the current project, and file operations.\n{runtime}\n</system-reminder>"
-        ),
-    }
-}
-
-/// 构造终端运行环境描述。
-///
-/// 参数:
-/// - `locale`: 界面语言
-///
-/// 返回:
-/// - 终端环境说明
-fn terminal_runtime_context(locale: Locale) -> String {
-    let stdin_tty = std::io::stdin().is_terminal();
-    let stdout_tty = std::io::stdout().is_terminal();
-    let stderr_tty = std::io::stderr().is_terminal();
-    let environment = if stdin_tty || stdout_tty || stderr_tty {
-        locale.text("terminal session", "终端会话")
-    } else {
-        locale.text("non-interactive or piped environment", "非交互或管道环境")
-    };
-    let shell = std::env::var("SHELL")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| "unknown".to_string());
-    let mut terminal_parts = Vec::new();
-    for key in ["TERM_PROGRAM", "TERM", "COLORTERM"] {
-        if let Ok(value) = std::env::var(key) {
-            if !value.trim().is_empty() {
-                terminal_parts.push(format!("{key}={value}"));
-            }
-        }
-    }
-    let terminal = if terminal_parts.is_empty() {
-        "unknown".to_string()
-    } else {
-        terminal_parts.join(", ")
-    };
-    match locale {
-        Locale::Zh => format!(
-            "当前运行环境：{environment}。当前 shell：{shell}。当前终端标识：{terminal}。"
-        ),
-        Locale::En => format!(
-            "Current runtime environment: {environment}. Current shell: {shell}. Terminal identifiers: {terminal}."
-        ),
-    }
-}
-
-/// 提取历史中最近一条用户文本。
-///
-/// 参数:
-/// - `messages`: 投影历史消息
-///
-/// 返回:
-/// - 最近用户输入文本
-fn latest_user_text(messages: &[ChatMessage]) -> String {
-    messages
-        .iter()
-        .rev()
-        .find(|message| message.role == "user")
-        .map(|message| chat_content_text(message.content.as_ref()))
-        .unwrap_or_default()
-}
-
-/// 提取消息文本内容。
-///
-/// 参数:
-/// - `content`: 消息内容
-///
-/// 返回:
-/// - 纯文本
-fn chat_content_text(content: Option<&ChatContent>) -> String {
-    match content {
-        Some(ChatContent::Text(text)) => text.clone(),
-        Some(ChatContent::Parts(parts)) => parts
-            .iter()
-            .filter_map(|part| match part {
-                crate::llm::ChatContentPart::Text { text } => Some(text.as_str()),
-                crate::llm::ChatContentPart::ImageUrl { .. } => None,
-            })
-            .collect::<Vec<_>>()
-            .join("\n"),
-        None => String::new(),
-    }
-}
-
-/// 包装带标题的 Markdown 段。
-///
-/// 参数:
-/// - `title`: 段标题
-/// - `body`: 段正文
-///
-/// 返回:
-/// - Markdown 段
-fn section_block(title: &str, body: &str) -> String {
-    format!("## {title}\n\n{}", body.trim())
 }
 
 /// 工具 Markdown 片段。
@@ -453,6 +260,7 @@ struct ToolsMarkdownSection {
 /// - `config`: 已应用 Agent 覆盖的配置
 /// - `paths`: Sai 路径
 /// - `store`: 会话状态（用于已加载工具）
+/// - `mode`: 当前运行模式
 /// - `locale`: 界面语言
 ///
 /// 返回:
@@ -461,6 +269,7 @@ fn build_tools_markdown_section(
     config: &AppConfig,
     paths: &SaiPaths,
     store: &StateStore,
+    mode: AgentMode,
     locale: Locale,
 ) -> Result<ToolsMarkdownSection> {
     if !config.tools.enabled {
@@ -471,7 +280,7 @@ fn build_tools_markdown_section(
     }
 
     // 1. 构建缓存 MCP 的注册表（与 Web 提交路径一致，避免拉起网络发现）
-    let mut registry = build_tool_registry_with_cached_mcp(config, paths, AgentMode::Yolo)?;
+    let mut registry = build_tool_registry_with_cached_mcp(config, paths, mode)?;
 
     // 2. 注册交互式会话工具：todo / subagent / ask_question
     //    真实 Web run 在 build_submission_tool_registry 中完成，预览原先漏掉
@@ -507,13 +316,6 @@ fn build_tools_markdown_section(
 
     // 6. 渲染为可读 Markdown
     let mut out = String::new();
-    out.push_str(&format!(
-        "## {}\n\n",
-        locale.text(
-            "10. Tool definitions (request tools parameter)",
-            "10. 工具定义（请求 tools 参数）",
-        )
-    ));
     out.push_str(&format!(
         "{}\n\n",
         locale
@@ -560,22 +362,24 @@ fn format_tool_definition_markdown(definition: &ToolDefinition) -> String {
 /// 参数:
 /// - `source`: 数据来源标记
 /// - `content`: 提示词正文
+/// - `token_count`: 与请求分项一致的已加载上下文 token 数
 /// - `tool_count`: 工具数量
 /// - `has_memory`: 是否含关联记忆正文
 /// - `has_dynamic`: 是否含动态系统段
 /// - `agent_id`: 可选 Agent 标识
-/// - `sections`: 段标题列表
+/// - `sections`: 带稳定 ID 的预览分区
 ///
 /// 返回:
 /// - 带元信息的预览结构
 fn summarize_prompt(
     source: &str,
     content: String,
+    token_count: usize,
     tool_count: usize,
     has_memory: bool,
     has_dynamic: bool,
     agent_id: Option<String>,
-    sections: Vec<String>,
+    sections: Vec<ContextPromptSection>,
 ) -> SessionContextPrompt {
     let has_instruction_files = content.contains("<instruction-files>")
         || content.contains("## 指令文件")
@@ -587,8 +391,6 @@ fn summarize_prompt(
     let has_tools =
         tool_count > 0 || content.contains("工具定义") || content.contains("Tool definitions");
     let char_count = content.chars().count();
-    // 与预算计算同一口径估算，界面显示的数值可直接对上上下文窗口占用
-    let token_count = crate::token_estimate::estimate_tokens(&content);
     SessionContextPrompt {
         source: source.to_string(),
         content,

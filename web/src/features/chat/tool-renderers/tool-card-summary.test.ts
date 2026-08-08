@@ -7,6 +7,7 @@ describe("tool card summary", () => {
     expect(toolCardSummary("run_command", JSON.stringify({ command: "semble search foo bar" }))).toBe("semble search foo");
     expect(toolCardSummary("load", JSON.stringify({ skill_name: "drawio" }))).toBe("drawio");
     expect(toolCardSummary("load", JSON.stringify({ tool_names: ["web_search", "web_fetch"] }))).toBe("web_search, web_fetch");
+    expect(toolCardSummary("load", JSON.stringify({ type: "skill", keywords: ["cc-switch-ops"] }))).toBe("skill · cc-switch-ops");
   });
 
   it("展示批量读取的首个路径和数量", () => {

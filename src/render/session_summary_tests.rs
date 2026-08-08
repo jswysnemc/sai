@@ -1,4 +1,5 @@
 use super::session_summary::render_session_summary;
+use crate::llm::Usage;
 use crate::state::{SessionSnapshot, ToolHistorySummary, UsageSnapshot};
 
 #[test]
@@ -23,7 +24,13 @@ fn renders_compact_session_summary_with_key_fields() {
             completion_tokens: 4_000,
             total_tokens: 12_000,
             last_usage: None,
-            last_conversation_usage: None,
+            last_conversation_usage: Some(Usage {
+                prompt_tokens: 8_000,
+                completion_tokens: 4_000,
+                total_tokens: 12_000,
+                cache_read_tokens: 6_000,
+                cache_write_tokens: 0,
+            }),
         },
         compaction: None,
         recovery: crate::state::RecoverySnapshot::default(),
@@ -56,6 +63,9 @@ fn renders_compact_session_summary_with_key_fields() {
     assert!(!output.contains("Session ID") && !output.contains("会话 ID"));
     assert!(!output.contains("default"));
     assert!(output.contains("Turn") || output.contains("本轮"));
+    assert!(output.contains("75.0%"));
+    assert!(output.contains('\u{f090}'));
+    assert!(output.contains('\u{f08b}'));
     assert!(output.contains("12") || output.contains("s") || output.contains("秒"));
     assert!(!output.contains("12.5"));
     assert!(!output.contains("Checkpoint"));

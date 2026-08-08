@@ -30,12 +30,13 @@ impl Agent {
             0,
             self.context_char_budget,
         );
-        if let Some(content) = current_provider_user_content(&projection.messages) {
-            self.state.set_provider_user_content(turn_id, &content)?;
-        }
         self.last_dynamic_sources = projection.dynamic_sources.clone();
         self.state
             .enforce_provider_projection(Some(turn_id), &projection)?;
+        if let Some(provider_user_content) = projection.provider_user_content.as_deref() {
+            self.state
+                .set_provider_user_content(turn_id, provider_user_content)?;
+        }
         Ok(projection.messages)
     }
 
@@ -60,37 +61,36 @@ impl Agent {
             .checkpoint_context
             .or(self.state.compaction_summary_context()?);
         let last_auto_meme_reminder = memes::last_auto_meme_reminder(&self.config, &self.paths)?;
-        let runtime_context = runtime_context_message();
+        let selected_model = selected_model_label(&self.config)?;
+        let snapshot = RuntimeContextSnapshot::capture(selected_model.as_deref());
+        let runtime_update = context_state_update(
+            &snapshot,
+            self.mode(),
+            compaction_summary_context.as_deref(),
+            &projected_history.messages,
+        )?;
+        let goal_update = context_resources::context_resource_update(
+            "goal",
+            &session_goal_context,
+            compaction_summary_context.as_deref(),
+            &projected_history.messages,
+        )?;
+        let meme_update = context_resources::context_resource_update(
+            "last_auto_meme",
+            last_auto_meme_reminder.as_deref().unwrap_or_default(),
+            compaction_summary_context.as_deref(),
+            &projected_history.messages,
+        )?;
+        let state_update =
+            context_resources::combine_context_updates([runtime_update, goal_update, meme_update]);
         let epoch = self
             .state
             .context_epoch_projection(&self.base_system_prompt)?;
         Ok(project_provider_base_context_projection(
             &epoch.baseline,
-            Some(self.mode().reminder()),
-            selected_model_label(&self.config)?.as_deref(),
-            (!session_goal_context.is_empty()).then_some(session_goal_context.as_str()),
             compaction_summary_context.as_deref(),
             projected_history.messages,
-            last_auto_meme_reminder.as_deref(),
-            &runtime_context,
+            state_update.as_deref(),
         ))
-    }
-}
-
-/// 提取当前请求末尾用户消息的文本部分。
-///
-/// 参数:
-/// - `messages`: 当前供应商请求消息
-///
-/// 返回:
-/// - 当前用户消息文本；消息缺失时返回空
-fn current_provider_user_content(messages: &[ChatMessage]) -> Option<String> {
-    let content = messages.last()?.content.as_ref()?;
-    match content {
-        crate::llm::ChatContent::Text(text) => Some(text.clone()),
-        crate::llm::ChatContent::Parts(parts) => parts.iter().find_map(|part| match part {
-            crate::llm::ChatContentPart::Text { text } => Some(text.clone()),
-            crate::llm::ChatContentPart::ImageUrl { .. } => None,
-        }),
     }
 }

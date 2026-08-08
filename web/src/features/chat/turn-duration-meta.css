@@ -5,3 +5,23 @@
   /* 用时逐秒刷新，等宽数字避免行宽随数值变化左右抖动 */
   font-variant-numeric: tabular-nums;
 }
+
+.turn-metrics {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:var(--space-xs);
+}
+
+.turn-metrics > span + span::before {
+  content:"·";
+  margin-right:var(--space-xs);
+  color:var(--line-strong);
+}
+
+.turn-metric {
+  display:inline-flex;
+  align-items:center;
+  gap:0.2rem;
+  white-space:nowrap;
+}

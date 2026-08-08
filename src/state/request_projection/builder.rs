@@ -29,6 +29,7 @@ pub(crate) fn project_provider_turn_from_messages(
         tool_count,
         estimate: project_provider_turn_estimate(messages, context_limit_chars),
         dynamic_sources: Vec::new(),
+        provider_user_content: None,
         warnings: Vec::new(),
     };
     projection.warnings = validate_provider_projection(&projection);
@@ -39,36 +40,24 @@ pub(crate) fn project_provider_turn_from_messages(
 ///
 /// 参数:
 /// - `system_prompt`: 当前稳定 Context Epoch baseline
-/// - `mode_reminder`: 当前模式提醒
-/// - `selected_model`: 当前 provider/model 标签
-/// - `session_goal_context`: 当前持续目标上下文
 /// - `compaction_summary_context`: 会话压缩摘要上下文
 /// - `history_entries`: 已持久化的历史消息入口
-/// - `last_auto_meme_reminder`: 最近一次自动表情包提醒
-/// - `runtime_context`: 当前运行时上下文
+/// - `context_state_update`: 本轮需要持久化的状态变化
 ///
 /// 返回:
 /// - provider base 消息列表
 #[allow(dead_code)]
 pub(crate) fn project_provider_base_context(
     system_prompt: &str,
-    mode_reminder: Option<&str>,
-    selected_model: Option<&str>,
-    session_goal_context: Option<&str>,
     compaction_summary_context: Option<&str>,
     history_entries: Vec<StoredConversationEntry>,
-    last_auto_meme_reminder: Option<&str>,
-    runtime_context: &str,
+    context_state_update: Option<&str>,
 ) -> Vec<ChatMessage> {
     let mut projection = project_provider_base_context_projection(
         system_prompt,
-        mode_reminder,
-        selected_model,
-        session_goal_context,
         compaction_summary_context,
         entries_to_history_messages(history_entries),
-        last_auto_meme_reminder,
-        runtime_context,
+        context_state_update,
     );
     let context = combine_provider_user_content(&projection.pending_user_contexts, "");
     if !context.is_empty() {
@@ -83,35 +72,22 @@ pub(crate) fn project_provider_base_context(
 ///
 /// 参数:
 /// - `system_prompt`: 当前稳定 Context Epoch baseline
-/// - `mode_reminder`: 当前模式提醒
-/// - `selected_model`: 当前 provider/model 标签
-/// - `session_goal_context`: 当前持续目标上下文
 /// - `compaction_summary_context`: 会话压缩摘要上下文
 /// - `history_messages`: 已持久化的 provider 历史消息
-/// - `last_auto_meme_reminder`: 最近一次自动表情包提醒
-/// - `runtime_context`: 当前运行时上下文
+/// - `context_state_update`: 本轮需要持久化的状态变化
 ///
 /// 返回:
 /// - provider base context 投影视图
 pub(crate) fn project_provider_base_context_projection(
     system_prompt: &str,
-    mode_reminder: Option<&str>,
-    selected_model: Option<&str>,
-    session_goal_context: Option<&str>,
     compaction_summary_context: Option<&str>,
     history_messages: Vec<ChatMessage>,
-    last_auto_meme_reminder: Option<&str>,
-    runtime_context: &str,
+    context_state_update: Option<&str>,
 ) -> ProjectedBaseContext {
     let mut messages = vec![ChatMessage::system(system_prompt)];
     let mut dynamic_sources = Vec::new();
     let mut pending_user_contexts = Vec::new();
-    if let Some(reminder) = mode_reminder {
-        dynamic_sources.push(dynamic_source("mode_reminder", reminder));
-    }
-    if let Some(model) = selected_model {
-        dynamic_sources.push(dynamic_source("selected_model", model));
-    }
+    let mut persistent_user_contexts = Vec::new();
     if let Some(summary) = compaction_summary_context {
         messages.push(ChatMessage::system(summary));
     }
@@ -121,23 +97,16 @@ pub(crate) fn project_provider_base_context_projection(
         }
     }
     // 1. 所有每轮可变上下文只追加在历史末端，保持系统与历史前缀逐字稳定
-    if let Some(reminder) = mode_reminder {
-        pending_user_contexts.push(reminder.to_string());
+    if let Some(update) = context_state_update {
+        dynamic_sources.push(dynamic_source("context_state_update", update));
+        pending_user_contexts.push(update.to_string());
+        persistent_user_contexts.push(update.to_string());
     }
-    if let Some(prompt) = session_goal_context {
-        dynamic_sources.push(dynamic_source("session_goal", prompt));
-        pending_user_contexts.push(prompt.to_string());
-    }
-    if let Some(reminder) = last_auto_meme_reminder {
-        dynamic_sources.push(dynamic_source("last_auto_meme", reminder));
-        pending_user_contexts.push(reminder.to_string());
-    }
-    dynamic_sources.push(dynamic_source("runtime_context", runtime_context));
-    pending_user_contexts.push(runtime_context.to_string());
     ProjectedBaseContext {
         messages,
         dynamic_sources,
         pending_user_contexts,
+        persistent_user_contexts,
     }
 }
 
@@ -172,6 +141,7 @@ pub(crate) fn project_provider_turn_from_parts(
             messages: base_messages,
             dynamic_sources: Vec::new(),
             pending_user_contexts: Vec::new(),
+            persistent_user_contexts: Vec::new(),
         },
         input,
         &image_urls,
@@ -207,6 +177,7 @@ pub(crate) fn project_provider_turn_from_base_projection(
     let mut base_messages = base_projection.messages;
     let mut dynamic_sources = base_projection.dynamic_sources;
     let mut pending_user_contexts = base_projection.pending_user_contexts;
+    let persistent_user_contexts = base_projection.persistent_user_contexts;
     if let Some(prompt) = association_prompt {
         dynamic_sources.push(dynamic_source("memory_association", prompt));
         pending_user_contexts.push(prompt.to_string());
@@ -219,6 +190,8 @@ pub(crate) fn project_provider_turn_from_base_projection(
         dynamic_sources.push(dynamic_source(&format!("image_{}", index + 1), url));
     }
     let provider_user_content = combine_provider_user_content(&pending_user_contexts, input);
+    let persisted_user_content = (!persistent_user_contexts.is_empty())
+        .then(|| combine_provider_user_content(&persistent_user_contexts, input));
     let user_message = if image_urls.is_empty() {
         ChatMessage::plain("user", provider_user_content)
     } else {
@@ -228,6 +201,7 @@ pub(crate) fn project_provider_turn_from_base_projection(
     let mut projection =
         project_provider_turn_from_messages(&base_messages, tool_count, context_limit_chars);
     projection.dynamic_sources = dynamic_sources;
+    projection.provider_user_content = persisted_user_content;
     projection
 }
 
@@ -509,16 +483,8 @@ mod tests {
             },
         ];
 
-        let messages = project_provider_base_context(
-            "system",
-            Some("mode"),
-            None,
-            Some("loaded tools"),
-            Some("summary"),
-            history,
-            Some("last meme"),
-            "runtime",
-        );
+        let messages =
+            project_provider_base_context("system", Some("summary"), history, Some("runtime"));
 
         let roles = messages
             .iter()
@@ -529,13 +495,7 @@ mod tests {
         assert_eq!(roles, ["system", "system", "user", "assistant", "user"]);
         assert_eq!(
             texts,
-            [
-                "system",
-                "summary",
-                "old user",
-                "old assistant",
-                "mode\n\nloaded tools\n\nlast meme\n\nruntime",
-            ]
+            ["system", "summary", "old user", "old assistant", "runtime",]
         );
     }
 
@@ -543,13 +503,9 @@ mod tests {
     fn provider_base_context_records_dynamic_sources() {
         let projection = project_provider_base_context_projection(
             "system",
-            Some("mode"),
-            Some("provider/model"),
-            Some("loaded tools"),
             Some("summary"),
             Vec::new(),
-            Some("last meme"),
-            "runtime",
+            Some("runtime"),
         );
 
         let sources = projection
@@ -558,16 +514,8 @@ mod tests {
             .map(|source| (source.key.as_str(), source.chars))
             .collect::<Vec<_>>();
 
-        assert_eq!(
-            sources,
-            [
-                ("mode_reminder", 4),
-                ("selected_model", 14),
-                ("session_goal", 12),
-                ("last_auto_meme", 9),
-                ("runtime_context", 7),
-            ]
-        );
+        assert_eq!(sources, [("context_state_update", 7)]);
+        assert_eq!(projection.persistent_user_contexts, ["runtime"]);
     }
 
     #[test]
@@ -586,17 +534,13 @@ mod tests {
         let projection = project_provider_base_context_projection(
             "system",
             None,
-            None,
-            None,
-            None,
             vec![
                 ChatMessage::plain("user", "inspect"),
                 assistant,
                 ChatMessage::tool("call_1", "content"),
                 ChatMessage::plain("assistant", "done"),
             ],
-            None,
-            "runtime",
+            Some("runtime"),
         );
 
         let roles = projection
@@ -612,36 +556,10 @@ mod tests {
             Some("call_1")
         );
         assert_eq!(projection.pending_user_contexts, ["runtime"]);
+        assert_eq!(projection.persistent_user_contexts, ["runtime"]);
     }
 
-    #[test]
-    fn changing_goal_progress_preserves_the_stable_system_prefix() {
-        let project = |goal: &str| {
-            project_provider_base_context_projection(
-                "system",
-                Some("mode"),
-                None,
-                Some(goal),
-                Some("summary"),
-                vec![
-                    ChatMessage::plain("user", "old input"),
-                    ChatMessage::plain("assistant", "old reply"),
-                ],
-                None,
-                "runtime",
-            )
-        };
-        let first = project("tokens used: 10");
-        let second = project("tokens used: 20");
-
-        assert_eq!(
-            serde_json::to_value(&first.messages).unwrap(),
-            serde_json::to_value(&second.messages).unwrap()
-        );
-        assert_ne!(first.pending_user_contexts, second.pending_user_contexts);
-    }
-
-    /// 【上下文缓存】【跨轮前缀】验证上一轮实际用户消息可成为下一轮稳定前缀。
+    /// 【上下文缓存】【跨轮前缀】验证状态更新仅在变化轮次写入 provider 历史。
     ///
     /// 参数:
     /// - 无
@@ -649,17 +567,13 @@ mod tests {
     /// 返回:
     /// - 无
     #[test]
-    fn persisted_provider_input_preserves_cross_turn_prefix() {
+    fn state_update_persists_once_without_repeating_next_turn() {
         let first = project_provider_turn_from_base_projection(
             project_provider_base_context_projection(
                 "system",
-                Some("mode"),
-                None,
-                None,
                 None,
                 Vec::new(),
-                None,
-                "runtime one",
+                Some("runtime one"),
             ),
             "first request",
             &[],
@@ -668,20 +582,23 @@ mod tests {
             0,
             1_000,
         );
-        let first_provider_input = text_content(first.messages.last().unwrap());
+        assert_eq!(
+            text_content(first.messages.last().unwrap()),
+            "runtime one\n\nfirst request"
+        );
+        assert_eq!(
+            first.provider_user_content.as_deref(),
+            Some("runtime one\n\nfirst request")
+        );
         let second = project_provider_turn_from_base_projection(
             project_provider_base_context_projection(
                 "system",
-                Some("mode"),
-                None,
-                None,
                 None,
                 vec![
-                    ChatMessage::plain("user", first_provider_input),
+                    ChatMessage::plain("user", "runtime one\n\nfirst request"),
                     ChatMessage::plain("assistant", "first answer"),
                 ],
                 None,
-                "runtime two",
             ),
             "second request",
             &[],
@@ -692,8 +609,13 @@ mod tests {
         );
 
         assert_eq!(
-            serde_json::to_value(&first.messages).unwrap(),
-            serde_json::to_value(&second.messages[..first.messages.len()]).unwrap()
+            text_content(&second.messages[1]),
+            "runtime one\n\nfirst request"
         );
+        assert_eq!(
+            text_content(second.messages.last().unwrap()),
+            "second request"
+        );
+        assert!(second.provider_user_content.is_none());
     }
 }

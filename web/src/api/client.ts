@@ -151,10 +151,20 @@ export const api = {
         body: JSON.stringify({ ids })
       }),
     timeline: (id: string) => apiRequest<SessionTimeline>(`/api/sessions/${id}/timeline?limit=500`),
-    contextPrompt: (id: string, agentId?: string, locale?: string) => {
+    contextPrompt: (id: string, options?: {
+      agentId?: string;
+      locale?: string;
+      mode?: RunMode;
+      selection?: RunModelSelection | null;
+    }) => {
       const params = new URLSearchParams();
-      if (agentId) params.set("agent_id", agentId);
-      if (locale) params.set("locale", locale);
+      if (options?.agentId) params.set("agent_id", options.agentId);
+      if (options?.locale) params.set("locale", options.locale);
+      if (options?.mode) params.set("mode", options.mode);
+      if (options?.selection) {
+        params.set("provider_id", options.selection.providerId);
+        params.set("model", options.selection.model);
+      }
       const query = params.toString();
       return apiRequest<SessionContextPrompt>(`/api/sessions/${id}/context-prompt${query ? `?${query}` : ""}`);
     },
@@ -558,12 +568,18 @@ export const api = {
     cancel: (id: string) => apiRequest<Subagent>(`/api/subagents/${encodeURIComponent(id)}/cancel`, { method:"POST" })
   },
   system: {
-    usage: (selection?: RunModelSelection | null) => {
+    usage: (
+      selection?: RunModelSelection | null,
+      mode?: RunMode,
+      agentId?: string | null
+    ) => {
       const query = new URLSearchParams();
       if (selection) {
         query.set("provider_id", selection.providerId);
         query.set("model", selection.model);
       }
+      if (mode) query.set("mode", mode);
+      if (agentId) query.set("agent_id", agentId);
       const suffix = query.size > 0 ? `?${query.toString()}` : "";
       return apiRequest<SystemUsage>(`/api/system/usage${suffix}`);
     }

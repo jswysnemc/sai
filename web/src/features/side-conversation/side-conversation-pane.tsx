@@ -1,5 +1,6 @@
-import { ArrowRight, MessageSquareText, Square } from "lucide-react";
+import { ArrowRight, MessageSquareText, Paperclip, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { RunMode, RunModelSelection } from "../../api/contracts";
@@ -10,6 +11,7 @@ import { ModelThinkingSelector } from "../chat/model-thinking-selector";
 import { createRunModeOptions } from "../permission/run-mode-options";
 import { useChatModel } from "../chat/use-chat-model";
 import { useRunStream } from "../chat/use-run-stream";
+import { useComposerAttachments } from "../chat/composer/use-composer-attachments";
 import { useI18n } from "../i18n/use-i18n";
 import { composeSideConversationInput } from "./side-conversation-context";
 import { SIDE_CONVERSATION_SESSION_PREFIX, type SideConversationRequest } from "./side-conversation-events";
@@ -34,8 +36,10 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
   const [thinkingLevel, setThinkingLevel] = useState(request.thinkingLevel);
   const [modelSelection, setModelSelection] = useState<RunModelSelection | null>(request.selection ?? null);
   const [error, setError] = useState<string | null>(null);
+  const composerAttachments = useComposerAttachments(`side:${request.id}`);
   const sessionRef = useRef<string | undefined>(undefined);
   const activeRunRef = useRef<string | undefined>(undefined);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const modelPreferences = useChatModel(`side:${request.id}`);
   const effectiveModelSelection = modelSelection ?? modelPreferences.selection;
   const selectedModel = effectiveModelSelection
@@ -89,7 +93,8 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
    */
   const submit = async () => {
     const question = input.trim();
-    if (!question || activeRun) return;
+    const attachments = composerAttachments.attachments;
+    if ((!question && attachments.length === 0) || activeRun) return;
     setError(null);
     setInput("");
     try {
@@ -97,21 +102,38 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
       const modelInput = contextSent
         ? question
         : composeSideConversationInput(request.context, question);
+      const imageUrls = attachments.map((attachment) => attachment.dataUrl);
       await run.start(
         targetSessionId,
         modelInput,
         mode,
         effectiveModelSelection ?? undefined,
-        undefined,
+        imageUrls,
         thinkingLevel,
         request.agentId,
         question
       );
+      composerAttachments.clearAttachments();
       setContextSent(true);
     } catch (cause) {
       setInput(question);
       setError(toDisplayError(cause, "Failed to start side conversation", "旁路对话启动失败").message);
     }
+  };
+
+  /**
+   * 读取文件选择器中的图片并交给统一附件状态。
+   *
+   * @param event 文件输入变更事件
+   * @returns 无返回值
+   */
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (files.length === 0) return;
+    void composerAttachments.addFiles(files, input.length, input.length).catch((cause) => {
+      setError(toDisplayError(cause, "Failed to add image", "添加图片失败").message);
+    });
   };
 
   return (
@@ -141,10 +163,12 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
         value={input}
         historyEntries={[]}
         disabled={Boolean(activeRun)}
-        submitDisabled={!input.trim() || Boolean(activeRun)}
+        submitDisabled={(!input.trim() && composerAttachments.attachments.length === 0) || Boolean(activeRun)}
         placeholder={t("Ask a question about this response", "针对这条回复提问")}
+        attachments={composerAttachments.attachments}
         onChange={setInput}
-        onPasteImages={async () => undefined}
+        onPasteImages={composerAttachments.addFiles}
+        onRemoveAttachment={composerAttachments.removeAttachment}
         onSubmit={() => void submit()}
       >
         <div className="composer-footer">
@@ -176,6 +200,17 @@ export function SideConversationPane({ request }: SideConversationPaneProps) {
             </div>
           </div>
           <div className="composer-actions">
+            <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} hidden />
+            <button
+              type="button"
+              className="composer-icon-button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={Boolean(activeRun)}
+              aria-label={t("Add images", "添加图片")}
+              title={t("Add images", "添加图片")}
+            >
+              <Paperclip size={18} />
+            </button>
             {activeRun ? (
               <button type="button" className="composer-send stop" onClick={() => activeRun.runId && void run.stop(activeRun.runId)} aria-label={t("Stop", "停止")} title={t("Stop", "停止")}>
                 <Square size={12} fill="currentColor" />

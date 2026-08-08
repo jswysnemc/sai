@@ -218,6 +218,7 @@ mod tests {
             messages: Vec::new(),
             automatic,
             duration_ms: 0,
+            usage: None,
         }
     }
 

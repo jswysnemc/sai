@@ -1,4 +1,5 @@
-use crate::agent::AgentMode;
+use super::context_runtime::{project_context_runtime, ContextRuntimeProjection};
+use crate::agent::{build_base_system_prompt, AgentMode};
 use crate::cli::build_tool_registry_with_cached_mcp;
 use crate::config::AppConfig;
 use crate::llm::ToolDefinition;
@@ -12,7 +13,7 @@ use serde::Serialize;
 /// 上下文占用分项（与 Web 系统用量浮层图例对应）。
 #[derive(Debug, Clone, Serialize, Default)]
 pub(crate) struct ContextUsageBreakdown {
-    /// 系统提示词（含 epoch baseline 中除技能目录外的部分，以及模式提醒等）
+    /// 系统提示词（含 epoch baseline 中除技能目录外的部分，以及本轮动态段）
     pub system_prompt_tokens: usize,
     /// 可见工具定义与子智能体相关上下文
     pub tools_and_agents_tokens: usize,
@@ -24,12 +25,28 @@ pub(crate) struct ContextUsageBreakdown {
     pub skills_tokens: usize,
 }
 
+impl ContextUsageBreakdown {
+    /// 返回当前请求已加载上下文的分项合计。
+    ///
+    /// 返回:
+    /// - 不含尚未提交输入的上下文 token 数
+    pub(crate) fn total(&self) -> usize {
+        self.system_prompt_tokens
+            + self.tools_and_agents_tokens
+            + self.conversation_tokens
+            + self.connectors_and_mcp_tokens
+            + self.skills_tokens
+    }
+}
+
 /// 估算当前会话上下文各分项 token。
 ///
 /// 参数:
 /// - `config`: 应用配置（已按当前模型选择解析上下文窗口）
 /// - `paths`: Sai 路径
 /// - `store`: 当前会话状态仓储
+/// - `workspace_path`: 当前工作区路径
+/// - `mode`: 当前运行模式
 ///
 /// 返回:
 /// - 上下文分项估算
@@ -37,14 +54,43 @@ pub(crate) fn estimate_context_breakdown(
     config: &AppConfig,
     paths: &SaiPaths,
     store: &StateStore,
+    workspace_path: &str,
+    mode: AgentMode,
 ) -> Result<ContextUsageBreakdown> {
-    // 1. 读取已持久化的系统提示 baseline，并尽量拆出技能目录
-    let baseline = store.context_epoch_baseline()?.unwrap_or_default();
+    let dynamic = project_context_runtime(config, paths, store, workspace_path, mode)?;
+    estimate_context_breakdown_with_runtime(config, paths, store, mode, &dynamic)
+}
+
+/// 使用已生成的动态上下文估算请求分项，避免预览重复执行记忆召回。
+///
+/// 参数:
+/// - `config`: 当前运行配置
+/// - `paths`: Sai 路径
+/// - `store`: 当前会话状态仓储
+/// - `mode`: 当前运行模式
+/// - `dynamic`: 已生成的动态上下文投影
+///
+/// 返回:
+/// - 上下文分项估算
+pub(super) fn estimate_context_breakdown_with_runtime(
+    config: &AppConfig,
+    paths: &SaiPaths,
+    store: &StateStore,
+    mode: AgentMode,
+    dynamic: &ContextRuntimeProjection,
+) -> Result<ContextUsageBreakdown> {
+    // 1. 当前选择与已保存 epoch 一致时复用，否则按下一轮真实配置即时组装
+    let tools_enabled = config.tools.enabled && config.active_model_tools_enabled()?;
+    let live_baseline = build_base_system_prompt(config, paths, tools_enabled, None)?;
+    let baseline = match store.context_epoch_baseline()? {
+        Some(baseline) if baseline == live_baseline => baseline,
+        _ => live_baseline,
+    };
     let (system_core, skills_from_baseline) = split_skills_section(&baseline);
 
     // 2. 构建缓存 MCP 的工具注册表，避免轮询时触发网络发现
     let mut registry = if config.tools.enabled {
-        build_tool_registry_with_cached_mcp(config, paths, AgentMode::Yolo)?
+        build_tool_registry_with_cached_mcp(config, paths, mode)?
     } else {
         ToolRegistry::new()
     };
@@ -103,58 +149,16 @@ pub(crate) fn estimate_context_breakdown(
     // 6. 对话历史：压缩摘要 + 用户/助手/工具消息
     let history = store.project_history(None)?;
     let mut conversation_parts = Vec::new();
-    if let Some(context) = history.checkpoint_context.as_ref() {
-        conversation_parts.push(context.clone());
-    }
     for message in &history.messages {
         if let Ok(serialized) = serde_json::to_string(message) {
             conversation_parts.push(serialized);
         }
     }
 
-    // 7. 模式/审计提醒（取最长模式文本作上界）、选中模型标签、运行时上下文
-    let mode_reminder = [
-        crate::prompts::YOLO_REMINDER,
-        crate::prompts::AUDITED_REMINDER,
-        crate::prompts::AUTO_AUDIT_REMINDER,
-        crate::prompts::PLAN_REMINDER,
-    ]
-    .into_iter()
-    .max_by_key(|text| text.len())
-    .unwrap_or("");
-    let selected_model = config
-        .provider(None)
-        .ok()
-        .map(|provider| {
-            format!(
-                "<selected-model>{} / {}</selected-model>",
-                provider.display_name, provider.default_model
-            )
-        })
-        .unwrap_or_default();
-    let runtime_context = format!(
-        "<system-reminder>\n当前系统时间：runtime\n当前工作目录：{}\n</system-reminder>",
-        crate::runtime_cwd::current_dir()
-            .map(|path| path.display().to_string())
-            .unwrap_or_else(|_| "unknown".to_string())
-    );
-    // 会话标题 / Goal 上下文（若有）
-    let goal_context = store
-        .goal()
-        .ok()
-        .flatten()
-        .map(|goal| crate::goal::system_context(&goal))
-        .unwrap_or_default();
-    // 会话标题类：goal 上下文已计入；会话记忆摘要暂并入 conversation 难以拆分时略过正文读取
-    let session_memory = String::new();
-
     let system_prompt_tokens = estimate_joined(&[
         system_core.as_str(),
-        mode_reminder,
-        selected_model.as_str(),
-        runtime_context.as_str(),
-        goal_context.as_str(),
-        session_memory.as_str(),
+        dynamic.runtime_context.as_str(),
+        dynamic.associative_memory.as_str(),
     ]);
     let tools_and_agents_tokens = estimate_joined(
         &tools_json_parts
@@ -162,12 +166,13 @@ pub(crate) fn estimate_context_breakdown(
             .map(String::as_str)
             .collect::<Vec<_>>(),
     );
-    let conversation_tokens = estimate_joined(
-        &conversation_parts
-            .iter()
-            .map(String::as_str)
-            .collect::<Vec<_>>(),
-    );
+    // 压缩摘要在真实请求中位于历史前部，只能计入一次
+    let mut conversation_refs = Vec::with_capacity(conversation_parts.len() + 1);
+    if !dynamic.compaction_summary.trim().is_empty() {
+        conversation_refs.push(dynamic.compaction_summary.as_str());
+    }
+    conversation_refs.extend(conversation_parts.iter().map(String::as_str));
+    let conversation_tokens = estimate_joined(&conversation_refs);
     let connectors_and_mcp_tokens = estimate_joined(
         &mcp_json_parts
             .iter()
@@ -310,5 +315,18 @@ mod tests {
         let (system, skills) = split_skills_section("only system");
         assert_eq!(system, "only system");
         assert!(skills.is_empty());
+    }
+
+    /// 验证分项总量不会遗漏任何展示类别。
+    #[test]
+    fn total_sums_all_categories() {
+        let breakdown = ContextUsageBreakdown {
+            system_prompt_tokens: 1,
+            tools_and_agents_tokens: 2,
+            conversation_tokens: 3,
+            connectors_and_mcp_tokens: 4,
+            skills_tokens: 5,
+        };
+        assert_eq!(breakdown.total(), 15);
     }
 }
