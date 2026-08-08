@@ -1,5 +1,6 @@
 use super::*;
 use crate::llm::{ChatStreamChunk, ToolCallStreamProgress};
+use crate::render::activity_animation::activity_frame_at;
 use crate::render::tool_view::ToolView;
 use crate::render::transcript::cell::TranscriptMode;
 use crate::render::transcript::subagent_cell::SubagentCell;
@@ -41,7 +42,7 @@ impl TranscriptStore {
             cells: Vec::new(),
             live_tail: None,
             live_tool_call: None,
-            live_animation_frame: 0,
+            live_animation_started: None,
             active_tool_index: None,
             work_status: None,
             work_status_started: None,
@@ -303,7 +304,7 @@ impl TranscriptStore {
             Some(tail) if tail.kind == chunk.kind => tail.source.push_str(&chunk.text),
             Some(_) => {
                 self.finalize_live_tail();
-                self.live_animation_frame = 0;
+                self.live_animation_started = Some(Instant::now());
                 self.live_tail = Some(LiveTail {
                     kind: chunk.kind,
                     source: chunk.text.clone(),
@@ -311,7 +312,7 @@ impl TranscriptStore {
                 });
             }
             None => {
-                self.live_animation_frame = 0;
+                self.live_animation_started = Some(Instant::now());
                 self.live_tail = Some(LiveTail {
                     kind: chunk.kind,
                     source: chunk.text.clone(),
@@ -568,7 +569,7 @@ impl TranscriptStore {
         self.cells.clear();
         self.live_tail = None;
         self.live_tool_call = None;
-        self.live_animation_frame = 0;
+        self.live_animation_started = None;
         self.active_tool_index = None;
         self.cache.clear();
         self.dirty_from_cell = None;
@@ -680,25 +681,62 @@ impl TranscriptStore {
         true
     }
 
-    /// 推进 live reasoning 的跳动帧。
+    /// 维持 live 动效的计时并判断是否仍需刷新。
+    ///
+    /// 帧号由起点到当前的时长换算，这里只负责在动效首次出现时立起计时起点，
+    /// 因此调用频率不再影响动效速度——主循环快一点或慢一点，扫光都按同一节奏走。
     ///
     /// 参数:
     /// - 无
     ///
     /// 返回:
-    /// - 是否存在需要刷新的 reasoning live tail
+    /// - 是否存在需要刷新的 live 动效
     pub(crate) fn advance_live_animation(&mut self) -> bool {
         let has_reasoning = self
             .live_tail
             .as_ref()
             .is_some_and(|tail| tail.kind == ChatStreamKind::Reasoning && !tail.source.is_empty());
         let has_work_status = self.work_status.is_some();
-        // 子智能体视图在主 agent 空闲时仍需推进帧，否则 Working 扫光会冻结成静态图
+        // 子智能体视图在主 agent 空闲时仍需刷新，否则 Working 扫光会冻结成静态图
         if !has_reasoning && !has_work_status && !self.viewing_running_subagent() {
             return false;
         }
-        self.live_animation_frame = self.live_animation_frame.wrapping_add(1);
+        self.live_animation_started
+            .get_or_insert_with(Instant::now);
         true
+    }
+
+    /// 返回当前应当渲染的 live 动效帧序号。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 计时起点至今换算出的帧序号；动效尚未开始时返回 0
+    pub(crate) fn live_animation_frame(&self) -> usize {
+        self.live_animation_started
+            .map(|started| activity_frame_at(started.elapsed()))
+            .unwrap_or_default()
+    }
+
+    /// 【终端】【状态动效测试】把动效计时起点向前拨指定时长。
+    ///
+    /// 帧号由真实时间推导，测试无法靠反复调用推进它；这里直接回拨起点，
+    /// 等价于"已经过去了这么久"。
+    ///
+    /// 参数:
+    /// - `elapsed`: 需要模拟经过的时长
+    ///
+    /// 返回:
+    /// - 无
+    #[cfg(test)]
+    pub(crate) fn rewind_live_animation_for_test(&mut self, elapsed: std::time::Duration) {
+        let started = self
+            .live_animation_started
+            .unwrap_or_else(Instant::now)
+            .checked_sub(elapsed)
+            .unwrap_or_else(Instant::now);
+        self.live_animation_started = Some(started);
     }
 
     /// 判断当前是否停留在仍在运行的子智能体视图。

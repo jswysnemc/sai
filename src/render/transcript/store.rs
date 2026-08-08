@@ -56,7 +56,11 @@ pub(crate) struct TranscriptStore {
     pub(super) cells: Vec<HistoryCell>,
     pub(super) live_tail: Option<LiveTail>,
     pub(super) live_tool_call: Option<LiveToolCall>,
-    pub(super) live_animation_frame: usize,
+    /// 当前流式段的动效起点。
+    ///
+    /// 帧号由起点到当前的时长换算，而不是每次刷新加一：后者让动效速度
+    /// 取决于主循环的唤醒间隔，主循环一变动效就跟着快慢不定。
+    pub(super) live_animation_started: Option<Instant>,
     pub(super) active_tool_index: Option<usize>,
     pub(super) work_status: Option<WorkStatus>,
     pub(super) work_status_started: Option<Instant>,

@@ -484,6 +484,11 @@ impl ReplRuntime {
 
     /// 在固定节流周期内刷新动效帧并冲刷待同步的流式内容。
     ///
+    /// 下一次到期时间由上一次的计划时刻累加，而不是从本次实际唤醒时刻起算：
+    /// 主循环 25ms 一跳、刷新间隔 32ms，两者不整除，按唤醒时刻累加会让每轮
+    /// 都多等一个 tick，实际间隔被拉到 50ms。按计划时刻推进则只是对齐到
+    /// 最近的 tick，长期平均仍是 32ms。
+    ///
     /// 参数:
     /// - 无
     ///
@@ -503,8 +508,14 @@ impl ReplRuntime {
             self.next_live_refresh = None;
             return Ok(false);
         }
-        // 工作状态、reasoning 或未冲刷的正文仍在进行时保持节奏刷新
-        self.next_live_refresh = Some(now + LIVE_REFRESH_INTERVAL);
+        // 工作状态、reasoning 或未冲刷的正文仍在进行时保持节奏刷新；
+        // 落后超过一个周期时（如终端卡顿）重新对齐到当前时刻，不追补欠帧
+        let planned = next_refresh + LIVE_REFRESH_INTERVAL;
+        self.next_live_refresh = Some(if planned > now {
+            planned
+        } else {
+            now + LIVE_REFRESH_INTERVAL
+        });
         self.sync_transcript(true)?;
         Ok(true)
     }

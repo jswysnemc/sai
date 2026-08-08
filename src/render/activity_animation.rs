@@ -8,7 +8,6 @@ const SHIMMER_PADDING: usize = 10;
 const SHIMMER_BAND_HALF_WIDTH: f32 = 5.0;
 /// 两秒一轮对应的帧数
 const SHIMMER_CYCLE_FRAMES: usize = 63;
-
 /// 亮带峰值处朝高亮色混合的最大比例
 ///
 /// 与 Codex 一致保留一成底色，避免峰值处文字完全失去原有色相。
@@ -105,12 +104,16 @@ pub(crate) fn render_activity_line(label: &str, detail: &str, frame: usize) -> S
 
 /// 【终端】【状态动效】返回一轮文字流光包含的帧数。
 ///
+/// 帧号已改由时间换算，生产路径不再需要按周期取模，因此这里只服务于
+/// 校验循环周期的测试。
+///
 /// 参数:
 /// - `text`: 状态文字
 ///
 /// 返回:
 /// - 空文字返回 1，其余文字固定为约两秒一轮
-pub(crate) fn activity_frame_count(text: &str) -> usize {
+#[cfg(test)]
+fn activity_frame_count(text: &str) -> usize {
     if text.is_empty() {
         1
     } else {
@@ -118,7 +121,31 @@ pub(crate) fn activity_frame_count(text: &str) -> usize {
     }
 }
 
+/// 【终端】【状态动效】按已经过的真实时长换算动画帧序号。
+///
+/// 早先帧号靠"被唤醒一次加一"推进，于是动效速度取决于主循环的 tick 间隔：
+/// 主循环 25ms 一跳，而帧间隔要求 32ms，每次唤醒时都还差 7ms 不到期，
+/// 只能顺延到下一跳，实际帧间隔被量化成 50ms——动效以设计速度的六成在跑。
+/// 改由时间推导后，无论调用方多久唤醒一次、是否偶尔延迟，
+/// 单位时间推进的帧数都是恒定的，两条驱动路径也自然同速。
+///
+/// 参数:
+/// - `elapsed`: 动画开始至今经过的时长
+///
+/// 返回:
+/// - 当前应当渲染的帧序号
+pub(crate) fn activity_frame_at(elapsed: Duration) -> usize {
+    let interval = ACTIVITY_FRAME_INTERVAL.as_micros().max(1);
+    (elapsed.as_micros() / interval) as usize
+}
+
 /// 【终端】【状态动效】计算指定字符在当前帧的余弦亮带强度。
+///
+/// 亮带中心以浮点位置连续推进。早先这里把中心位置截断成整数字符位，
+/// 一轮 63 帧要走完 20 多个字符位，于是中心每 2 到 3 帧才跳一格，
+/// 而且停留 2 帧还是 3 帧取决于文字长度——Thinking 与 Working 字数不同，
+/// 两者的卡顿节奏因此对不上，看起来像两套动效各跑各的。
+/// 改用浮点距离后亮度逐帧连续变化，不同长度的文字也共用同一条推进曲线。
 ///
 /// 参数:
 /// - `char_count`: 状态文字字符数量
@@ -129,12 +156,12 @@ pub(crate) fn activity_frame_count(text: &str) -> usize {
 /// - 0 到 1 之间的亮度强度
 fn shimmer_intensity(char_count: usize, frame: usize, index: usize) -> f32 {
     let period = char_count.saturating_add(SHIMMER_PADDING * 2).max(1);
-    // 1. 亮带中心按帧在整个周期上匀速推进，与 Codex 的时间扫描等价
-    let position = ((frame % SHIMMER_CYCLE_FRAMES) as f32 / SHIMMER_CYCLE_FRAMES as f32
-        * period as f32) as isize;
+    // 1. 亮带中心按帧在整个周期上匀速推进，保留小数部分以获得连续位移
+    let position =
+        (frame % SHIMMER_CYCLE_FRAMES) as f32 / SHIMMER_CYCLE_FRAMES as f32 * period as f32;
     // 2. 计算目标字符与亮带中心的距离，带外不做混合
-    let char_position = index.saturating_add(SHIMMER_PADDING) as isize;
-    let distance = (char_position - position).abs() as f32;
+    let char_position = index.saturating_add(SHIMMER_PADDING) as f32;
+    let distance = (char_position - position).abs();
     if distance > SHIMMER_BAND_HALF_WIDTH {
         return 0.0;
     }
@@ -206,10 +233,10 @@ mod tests {
         assert!(later > early, "高亮应向右推进: {early} -> {later}");
     }
 
-    /// 【终端】【状态动效】验证亮带推进时亮度变化是平滑的。
+    /// 【终端】【状态动效】验证亮带推进时亮度逐帧连续变化。
     ///
-    /// 亮带中心按字符位取整推进，相邻帧可能停在同一位置；这里比较真正
-    /// 发生了移动的两帧，确认变化幅度不会一步跨过整个明暗区间。
+    /// 亮带中心以浮点位置推进，处在斜坡上的字符每一帧都应当改变亮度。
+    /// 早先中心按字符位取整，相继两三帧会停在同一位置，观感是一格一格跳。
     ///
     /// 参数:
     /// - 无
@@ -218,29 +245,63 @@ mod tests {
     /// - 无
     #[test]
     fn adjacent_frames_change_smoothly() {
-        // 1. 同一字符在相继位置上的色差应远小于常态到高亮的跨度
+        // 1. 同一字符在相继帧上的色差应远小于常态到高亮的跨度
         let span = f32::from(HIGHLIGHT_COLOR.2) - f32::from(BASE_COLOR.2);
-        // 2. 采样点取亮带斜坡而非峰顶：峰顶附近相继帧都收敛到同一颜色
+        // 2. 采样点取亮带斜坡而非峰顶：峰顶附近的余弦导数趋近于零
         let center = frame_for_index("Working", 1);
         let slope = center + SHIMMER_CYCLE_FRAMES / 12;
         let first = channel_at("Working", slope, 1);
-        // 3. 找到亮度真正发生变化的下一帧，跳过亮带停在原位的重复帧
-        let Some((next_frame, second)) = (slope + 1..slope + SHIMMER_CYCLE_FRAMES)
-            .map(|frame| (frame, channel_at("Working", frame, 1)))
-            .find(|(_, value)| *value != first)
-        else {
-            panic!("整个周期内亮度没有变化，动效停滞");
-        };
+        let second = channel_at("Working", slope + 1, 1);
 
-        assert!(
-            next_frame - slope <= 4,
-            "亮带停在同一位置过久，观感会卡顿: {} 帧未变化",
-            next_frame - slope
+        assert_ne!(
+            first, second,
+            "斜坡上的相继帧亮度未变化，亮带在原地停顿: {first}"
         );
         assert!(
             (f32::from(first) - f32::from(second)).abs() < span / 2.0,
             "相邻帧色差过大，过渡不平滑: {first} -> {second}"
         );
+    }
+
+    /// 【终端】【状态动效】验证不同长度的状态文字共用同一条推进节奏。
+    ///
+    /// Thinking 与 Working 字数不同，早先亮带按字符位取整推进时，
+    /// 两者停留 2 帧还是 3 帧的模式并不一致，看起来像两套动效各跑各的。
+    /// 现在两者在同一帧数上应当走过同等比例的行程。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn different_labels_advance_at_the_same_pace() {
+        for frame in 0..SHIMMER_CYCLE_FRAMES {
+            let thinking = band_center("Thinking", frame);
+            let working = band_center("Working", frame);
+
+            // 亮带中心占整个周期的比例只取决于帧号，与文字长度无关
+            assert!(
+                (thinking - working).abs() < 1e-4,
+                "第 {frame} 帧两种状态的推进进度不一致: {thinking} vs {working}"
+            );
+        }
+    }
+
+    /// 【终端】【状态动效】验证帧号由经过时长换算且速度恒定。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn frames_advance_with_real_time() {
+        assert_eq!(activity_frame_at(Duration::ZERO), 0);
+        assert_eq!(activity_frame_at(ACTIVITY_FRAME_INTERVAL), 1);
+        assert_eq!(activity_frame_at(ACTIVITY_FRAME_INTERVAL * 10), 10);
+        // 不足一帧的余量不推进，因此调用方多久轮询一次都不改变动效速度
+        assert_eq!(activity_frame_at(ACTIVITY_FRAME_INTERVAL * 3 / 2), 1);
     }
 
     /// 【终端】【状态动效】验证扫光末尾保留停顿并稳定循环。
@@ -353,6 +414,23 @@ mod tests {
             f32::from(peak) - f32::from(BASE_COLOR.2) > span * 0.5,
             "亮带峰值与常态差异过小，动效不明显: {peak}"
         );
+    }
+
+    /// 返回指定帧下亮带中心走过的行程比例。
+    ///
+    /// 位置除以周期得到比例，因此不同长度的文字可以直接比较推进节奏。
+    ///
+    /// 参数:
+    /// - `text`: 状态文字
+    /// - `frame`: 帧序号
+    ///
+    /// 返回:
+    /// - 0 到 1 之间的行程比例
+    fn band_center(text: &str, frame: usize) -> f32 {
+        let period = text.chars().count().saturating_add(SHIMMER_PADDING * 2).max(1);
+        let position =
+            (frame % SHIMMER_CYCLE_FRAMES) as f32 / SHIMMER_CYCLE_FRAMES as f32 * period as f32;
+        position / period as f32
     }
 
     /// 返回指定帧下亮度最高的字符下标。

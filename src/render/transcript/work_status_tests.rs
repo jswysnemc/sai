@@ -1,7 +1,7 @@
 use super::test_support::{chunk, options};
 use super::TranscriptStore;
 use crate::llm::ChatStreamKind;
-use crate::render::activity_animation::strip_ansi_for_test;
+use crate::render::activity_animation::{strip_ansi_for_test, ACTIVITY_FRAME_INTERVAL};
 use crate::render::work_status::WorkStatus;
 use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
 use unicode_width::UnicodeWidthStr;
@@ -22,10 +22,10 @@ fn live_reasoning_body_animates_without_waiting_for_consolidation() {
     ));
 
     let first = store.display_live_tail(80, &options());
-    // 亮带按字符位离散推进，单帧可能停在原位；推进到确实移动了一个字符位
-    for _ in 0..14 {
-        assert!(store.advance_live_animation());
-    }
+    // 帧号由真实时间推导，直接把计时起点回拨来模拟动效推进。
+    // 亮带起步于文字左侧的留白，回拨量需大到足以让它扫进文字区
+    assert!(store.advance_live_animation());
+    store.rewind_live_animation_for_test(ACTIVITY_FRAME_INTERVAL * 16);
     let second = store.display_live_tail(80, &options());
 
     assert!(first.len() > 1);

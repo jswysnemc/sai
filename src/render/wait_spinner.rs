@@ -1,5 +1,5 @@
 use crate::render::activity_animation::{
-    activity_frame_count, render_activity_detail, render_activity_line, ACTIVITY_FRAME_INTERVAL,
+    activity_frame_at, render_activity_detail, render_activity_line, ACTIVITY_FRAME_INTERVAL,
 };
 use crate::render::terminal_paint::paint_lock;
 use crate::render::work_status::format_elapsed;
@@ -142,6 +142,10 @@ impl Drop for WaitSpinner {
 
 /// 【终端】【等待状态】按固定节拍刷新文字扫光帧。
 ///
+/// 帧号由动画启动至今的时长换算，而不是每睡一轮加一：后者没有把渲染与写终端
+/// 的耗时算进去，实际间隔是 32ms 加上这段开销，扫光会比主 transcript 里的
+/// 同款动效慢一拍，两处并存时能看出速度不一致。
+///
 /// 参数:
 /// - `state`: 等待动画共享状态
 /// - `running`: 动画运行标记
@@ -149,28 +153,22 @@ impl Drop for WaitSpinner {
 /// 返回:
 /// - 无
 fn run_spinner_loop(state: Arc<Mutex<WaitSpinnerState>>, running: Arc<AtomicBool>) {
-    let mut frame = 1usize;
+    let started = Instant::now();
     while running.load(Ordering::SeqCst) {
-        let (output, anchor_row, prev_lines, lines, frame_count) = match state.lock() {
+        let frame = activity_frame_at(started.elapsed());
+        let (output, anchor_row, prev_lines, lines) = match state.lock() {
             Ok(mut guard) => {
                 let prev = guard.lines_rendered;
                 let (output, lines) = render_frame(frame, &guard);
                 guard.lines_rendered = lines;
-                (
-                    output,
-                    guard.anchor_row,
-                    prev,
-                    lines,
-                    activity_frame_count(&guard.phase),
-                )
+                (output, guard.anchor_row, prev, lines)
             }
-            Err(_) => (String::new(), 0, 0, 0, 1),
+            Err(_) => (String::new(), 0, 0, 0),
         };
         if !output.is_empty() {
             let _ = write_spinner_lines(&output, anchor_row, prev_lines, lines);
         }
         thread::sleep(ACTIVITY_FRAME_INTERVAL);
-        frame = (frame + 1) % frame_count.max(1);
     }
 }
 

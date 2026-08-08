@@ -84,7 +84,7 @@ impl TranscriptStore {
                 &id,
                 &label,
                 width,
-                self.live_animation_frame,
+                self.live_animation_frame(),
             );
             let total = lines.len();
             let start = total.saturating_sub(min_rows).min(max_start).min(total);
@@ -225,7 +225,7 @@ impl TranscriptStore {
                         reasoning_cell::render_live(
                             &tail.source,
                             options.reasoning_mode,
-                            self.live_animation_frame,
+                            self.live_animation_frame(),
                             elapsed,
                             tail.expanded,
                         )
@@ -278,7 +278,7 @@ impl TranscriptStore {
                     .map(|started| started.elapsed())
                     .unwrap_or_default();
                 lines.extend(AnsiLine::wrap_block(
-                    &super::work_status_cell::render(status, self.live_animation_frame, elapsed),
+                    &super::work_status_cell::render(status, self.live_animation_frame(), elapsed),
                     width,
                 ));
             }
