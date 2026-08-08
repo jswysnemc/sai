@@ -192,6 +192,10 @@ fn wrap_line(
 
 /// 【终端】【ANSI 换行】创建自动续行的初始内容与显示宽度。
 ///
+/// 样式序列写在缩进空格之前：diff 增删行靠背景色连成一个矩形色块，
+/// 若先输出裸空格再恢复背景，续行开头这几列会落在终端默认背景上，
+/// 整块颜色就在每个续行的行首缺一个口子。
+///
 /// 参数:
 /// - `active_sgr`: 上一行末尾仍然生效的 ANSI 样式
 /// - `width`: 当前内容区域列数
@@ -205,7 +209,7 @@ fn continuation_line(
     continuation_indent: usize,
 ) -> (String, usize) {
     let indent = continuation_indent.min(width.saturating_sub(1));
-    (format!("{}{active_sgr}", " ".repeat(indent)), indent)
+    (format!("{active_sgr}{}", " ".repeat(indent)), indent)
 }
 
 /// 判断 SGR 序列是否为 reset。
@@ -304,6 +308,9 @@ mod tests {
 
     /// 【终端】【Diff 换行测试】验证带背景的自动续行恢复 diff 内部缩进。
     ///
+    /// 缩进空格必须落在背景样式之后，否则续行开头这几列会用终端默认背景，
+    /// 增删行的整块色块在每个续行的行首缺一个口子。
+    ///
     /// 参数:
     /// - 无
     ///
@@ -319,8 +326,8 @@ mod tests {
         );
 
         assert_eq!(lines.len(), 2);
-        assert!(lines.iter().all(|line| line.as_str().starts_with(' ')));
-        assert!(lines[1].as_str().starts_with(" \x1b[48;5;22m"));
+        // 续行先恢复背景再补缩进，缩进列因此也带上 diff 背景色
+        assert!(lines[1].as_str().starts_with("\x1b[48;5;22m "));
         assert!(lines
             .iter()
             .all(|line| line.as_str().contains("\x1b[2D\x1b[3X")));
