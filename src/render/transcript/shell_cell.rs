@@ -1,6 +1,6 @@
 use crate::render::code_block::highlight_code_line;
 use crate::render::fold_text::{
-    fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
+    command_wrap_width, fold_display_lines, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
 };
 use crate::render::style::TOOL_BULLET;
 use crate::render::terminal_text as t;
@@ -70,8 +70,8 @@ pub(super) fn render(cell: &ShellCell) -> String {
 /// 返回:
 /// - 可见行（省略标记已本地化文案）
 fn fold_display_text(text: &str, expanded: bool) -> Vec<String> {
-    // 命令与输出：显示宽按 72 列计，前 2 后 4
-    let wrap = terminal_wrap_width().saturating_sub(6).min(72).max(24);
+    // 命令与输出共用同一套折行宽度：前 2 后 4 行做预览折叠
+    let wrap = command_wrap_width();
     let wrapped = wrap_display_lines(text, wrap);
     let (visible, omitted) =
         fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);

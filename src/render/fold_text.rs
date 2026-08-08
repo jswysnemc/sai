@@ -89,9 +89,59 @@ pub(crate) fn terminal_wrap_width() -> usize {
         .max(8)
 }
 
+/// 命令预览行首前缀占用的列数。
+///
+/// 首行为 `$ ` 加行首引导，续行缩进四列，取其中较大者留出余量。
+const COMMAND_PREFIX_COLUMNS: usize = 6;
+
+/// 命令预览折行后至少保留的列数。
+///
+/// 终端极窄时前缀几乎吃掉整行，仍需留出足以看清片段的宽度。
+const COMMAND_MIN_WRAP: usize = 24;
+
+/// 计算命令预览的折行宽度。
+///
+/// 早先这里额外压了一道 72 列上限，于是终端再宽命令也只用到 72 列，
+/// 右侧大片空白闲置而命令被提前折行。宽度只应受终端实际列数约束。
+///
+/// 返回:
+/// - 命令预览可用的折行列数
+pub(crate) fn command_wrap_width() -> usize {
+    terminal_wrap_width()
+        .saturating_sub(COMMAND_PREFIX_COLUMNS)
+        .max(COMMAND_MIN_WRAP)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::render::render_width::with_render_width;
+
+    /// 命令折行宽度跟随终端实际列数，不再压在固定上限上。
+    ///
+    /// 早先这里额外取 72 列的下界，宽终端上命令会在右侧仍有大片空白时折行。
+    #[test]
+    fn command_wrap_width_follows_the_terminal() {
+        assert_eq!(with_render_width(120, command_wrap_width), 114);
+        assert_eq!(with_render_width(200, command_wrap_width), 194);
+    }
+
+    /// 终端极窄时仍保留可读的最小宽度。
+    #[test]
+    fn command_wrap_width_keeps_a_readable_minimum() {
+        assert_eq!(with_render_width(10, command_wrap_width), COMMAND_MIN_WRAP);
+    }
+
+    /// 宽终端上，长度未超出可用列数的命令不应被折行。
+    #[test]
+    fn wide_terminals_keep_commands_on_one_line() {
+        let command = format!("cargo test --workspace {}", "-".repeat(60));
+        let lines = with_render_width(120, || {
+            wrap_display_lines(&command, command_wrap_width())
+        });
+
+        assert_eq!(lines.len(), 1, "命令未超出可用宽度却被折行: {lines:?}");
+    }
 
     #[test]
     fn wraps_long_line_by_display_width() {

@@ -141,11 +141,11 @@ pub(crate) fn render_command_block_with_action(arguments: &str, action: &str) ->
 /// - 可见显示行（省略处为 `… +N lines`）
 fn fold_shell_command_lines(command: &str, expanded: bool) -> Vec<String> {
     use crate::render::fold_text::{
-        fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES,
+        command_wrap_width, fold_display_lines, wrap_display_lines, FOLD_HEAD_LINES,
         FOLD_TAIL_LINES,
     };
     // 命令行预览：前 2 后 4，过长时收缩
-    let wrap = terminal_wrap_width().saturating_sub(6).min(72).max(24);
+    let wrap = command_wrap_width();
     let wrapped = wrap_display_lines(command, wrap);
     let (visible, omitted) =
         fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
