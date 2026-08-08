@@ -18,6 +18,12 @@ type ToolCardShellProps = {
   targetTitle?: string;
   /** 右侧次要信息，如耗时或退出码 */
   meta?: ReactNode;
+  /** 结果摘要，位于元信息之前，表达"结果如何"而非"做了什么" */
+  summary?: ReactNode;
+  /** 结果摘要是否按失败着色 */
+  summaryTone?: "neutral" | "danger";
+  /** 头部次级操作，常态隐藏，悬停或聚焦时出现 */
+  actions?: ReactNode;
   /** 状态标记，位于展开箭头左侧；不传则不占位 */
   status?: ReactNode;
   /** 是否展开详情 */
@@ -33,9 +39,11 @@ type ToolCardShellProps = {
 /**
  * 工具、权限与清单卡片共用的外壳。
  *
- * 统一三件事：头部的信息顺序（图标 → 名称 → 对象 → 元信息 → 状态 → 箭头）、
+ * 统一三件事：头部的信息顺序（图标 → 名称 → 对象 → 结果 → 元信息 → 状态 → 箭头）、
  * 状态的唯一表达位置（左侧图标与状态标记同色，不再用文字重复一遍），
  * 以及展开体的层级线索（一条与图标对齐的左导轨，不用外框）。
+ *
+ * 头部按"做了什么 → 结果如何 → 花了多久"排列，一行读完即可判断是否需要展开。
  *
  * @param props 卡片内容与展开控制
  * @returns 统一样式的可折叠卡片
@@ -47,6 +55,9 @@ export function ToolCardShell({
   target,
   targetTitle,
   meta,
+  summary,
+  summaryTone = "neutral",
+  actions,
   status,
   expanded,
   onToggle,
@@ -87,6 +98,12 @@ export function ToolCardShell({
         ) : (
           <span className="tool-shell-target" aria-hidden />
         )}
+        {actions}
+        {summary ? (
+          <span className={summaryTone === "danger" ? "tool-shell-summary is-danger" : "tool-shell-summary"}>
+            {summary}
+          </span>
+        ) : null}
         {meta ? <span className="tool-shell-meta">{meta}</span> : null}
         {status ? <span className="tool-shell-status" aria-hidden>{status}</span> : null}
         <ChevronDown size={14} className="tool-shell-chevron" aria-hidden />

@@ -10,6 +10,14 @@ export type ToolLifecycle = {
   output: string;
   status: "preparing" | "running" | "completed" | "failed";
   /**
+   * 调用开始与结束的毫秒时间戳。
+   *
+   * 取自事件自带的 timestamp，因此实时流与历史回放走同一套口径。
+   * 结束时间缺席表示仍在执行，折叠行据此在"已耗时"与"总耗时"之间切换。
+   */
+  startedAtMs?: number;
+  endedAtMs?: number;
+  /**
    * 本次调用获批的权限决定。
    *
    * 权限请求与随后的工具调用是同一次操作，分成两张卡片会让信息重复、
@@ -158,14 +166,16 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
       return upsertTool(closeActiveReasoning(state, event.timestamp), String(payload.tool_id), {
         name: String(payload.name ?? "tool"),
         argumentsPreview: String(payload.arguments_preview ?? ""),
-        status: "preparing"
+        status: "preparing",
+        startedAtMs: eventTimeMs(event.timestamp)
       });
     case "tool.call.started":
       return upsertTool(closeActiveReasoning(state, event.timestamp), String(payload.tool_id), {
         name: String(payload.name ?? "tool"),
         arguments: String(payload.arguments ?? ""),
         argumentsPreview: String(payload.arguments ?? ""),
-        status: "running"
+        status: "running",
+        startedAtMs: eventTimeMs(event.timestamp)
       });
     case "tool.progress":
       return upsertTool(closeActiveReasoning(state, event.timestamp), String(payload.tool_id), {
@@ -177,7 +187,8 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
       return upsertTool(closeActiveReasoning(state, event.timestamp), String(payload.tool_id), {
         name: String(payload.name ?? "tool"),
         output: String(payload.output ?? ""),
-        status: payload.ok === false ? "failed" : "completed"
+        status: payload.ok === false ? "failed" : "completed",
+        endedAtMs: eventTimeMs(event.timestamp)
       });
     case "engine.ready":
       // 外部内核连上后的运行时证据：名称与版本来自 ACP 握手响应，
@@ -471,8 +482,21 @@ function appendCompactionDelta(state: LiveRunState, text: string): LiveRunState 
   return state;
 }
 
-function parseRunError(value: unknown): RunErrorDetail | undefined {
-  if (!value || typeof value !== "object") return undefined;
+/**
+ * 将事件时间戳解析为毫秒数。
+ *
+ * 事件时间由后端统一写入，用它而非本地时钟，历史回放与实时流才有同一套口径。
+ *
+ * @param timestamp 事件时间戳字符串
+ * @returns 毫秒时间戳；无法解析时返回 undefined
+ */
+function eventTimeMs(timestamp: string | undefined): number | undefined {
+  if (!timestamp) return undefined;
+  const parsed = Date.parse(timestamp);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+function parseRunError(value: unknown): RunErrorDetail | undefined {  if (!value || typeof value !== "object") return undefined;
   const candidate = value as Record<string, unknown>;
   if (typeof candidate.message !== "string" || typeof candidate.detail !== "string") return undefined;
   return { message: candidate.message, detail: candidate.detail };
@@ -503,7 +527,10 @@ function upsertTool(state: LiveRunState, id: string, patch: Partial<ToolLifecycl
     const forkedId = `${id}-${patch.name}`;
     return upsertTool(state, forkedId, patch);
   }
-  const tools = state.tools.map((tool, toolIndex) => toolIndex === index ? { ...tool, ...patch } : tool);
+  // 开始时间只认第一次：preparing 已经打点后，started 事件不应把起点后移
+  const merged = { ...existing, ...patch };
+  if (existing.startedAtMs !== undefined) merged.startedAtMs = existing.startedAtMs;
+  const tools = state.tools.map((tool, toolIndex) => toolIndex === index ? merged : tool);
   return {
     ...state,
     tools,

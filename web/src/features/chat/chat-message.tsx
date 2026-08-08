@@ -327,6 +327,8 @@ function historyTurnParts(turn: SessionTimelineTurn): LiveMessagePart[] {
  * @returns 工具生命周期状态
  */
 function timelineTool(tool: TimelineToolEntry): LiveRunState["tools"][number] {
+  const startedAtMs = Date.parse(tool.created_at);
+  const endedAtMs = tool.completed_at ? Date.parse(tool.completed_at) : Number.NaN;
   return {
     id: tool.id,
     name: tool.name,
@@ -334,6 +336,8 @@ function timelineTool(tool: TimelineToolEntry): LiveRunState["tools"][number] {
     arguments: tool.arguments,
     progress: "",
     output: tool.output || tool.error || "",
-    status: tool.status
+    status: tool.status,
+    startedAtMs: Number.isNaN(startedAtMs) ? undefined : startedAtMs,
+    endedAtMs: Number.isNaN(endedAtMs) ? undefined : endedAtMs
   };
 }

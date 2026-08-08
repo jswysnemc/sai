@@ -1,0 +1,72 @@
+/*
+ * 长输出折叠
+ *
+ * 折叠态末行用渐隐收口而不是硬截断：硬截断会让人以为输出就到这里，
+ * 渐隐则明确表达"下面还有"。展开条贴在渐隐下方，与输出同宽。
+ */
+
+.collapsible-output {
+  display: grid;
+  min-width: 0;
+}
+
+/* 渐隐遮住最后两行，明确表达"下面还有"；遮罩不依赖背景色，因此不必逐主题配置 */
+.collapsible-output .is-clipped {
+  position: relative;
+  padding-bottom: var(--space-2xs);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 2.4em), transparent 100%);
+}
+
+.collapsible-output-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  width: 100%;
+  min-height: 1.75rem;
+  padding: 0 var(--space-lg) var(--space-sm);
+  border: 0;
+  background: transparent;
+  color: var(--technical-muted);
+  font: 500 var(--text-2xs)/1 var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.collapsible-output-toggle:hover {
+  color: var(--technical-text);
+}
+
+.collapsible-output-toggle svg {
+  flex-shrink: 0;
+  transition: transform var(--duration-base) var(--ease-standard);
+}
+
+.collapsible-output-toggle svg.rotate {
+  transform: rotate(180deg);
+}
+
+/*
+ * ANSI 前景色
+ *
+ * 色值全部来自主题派生的 --ansi-* 变量，因此 15 套主题下都跟随切换。
+ * 变暗用 opacity 而非另配一组浅色：SGR 的 dim 语义就是"同色更弱"。
+ */
+.ansi-fg-black { color: var(--ansi-black); }
+.ansi-fg-red { color: var(--ansi-red); }
+.ansi-fg-green { color: var(--ansi-green); }
+.ansi-fg-yellow { color: var(--ansi-yellow); }
+.ansi-fg-blue { color: var(--ansi-blue); }
+.ansi-fg-magenta { color: var(--ansi-magenta); }
+.ansi-fg-cyan { color: var(--ansi-cyan); }
+.ansi-fg-white { color: var(--ansi-white); }
+.ansi-fg-bright-black { color: var(--ansi-bright-black); }
+.ansi-fg-bright-red { color: var(--ansi-bright-red); }
+.ansi-fg-bright-green { color: var(--ansi-bright-green); }
+.ansi-fg-bright-yellow { color: var(--ansi-bright-yellow); }
+.ansi-fg-bright-blue { color: var(--ansi-bright-blue); }
+.ansi-fg-bright-magenta { color: var(--ansi-bright-magenta); }
+.ansi-fg-bright-cyan { color: var(--ansi-bright-cyan); }
+.ansi-fg-bright-white { color: var(--ansi-bright-white); }
+
+.ansi-bold { font-weight: 600; }
+.ansi-dim { opacity: 0.62; }

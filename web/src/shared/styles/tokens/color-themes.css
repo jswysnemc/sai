@@ -70,6 +70,36 @@
 :root {
   --shell-prompt: var(--violet);
 }
+
+/*
+ * ANSI 前景色板：命令输出里的 SGR 着色。
+ *
+ * 不引入第三方终端配色，全部由主题既有色相派生，切主题时自动跟随，
+ * 亮暗主题下的明度也随之调整——直接搬 xterm 的十六进制值会在亮色主题上
+ * 亮到读不清，在深色主题上又与背景撞色。
+ *
+ * 明亮档（bright-*）统一按"向 --ink 反向靠拢一档"处理：
+ * 亮色主题里更深、深色主题里更浅，两边都保持与背景的对比。
+ */
+:root {
+  --ansi-black: var(--ink);
+  --ansi-red: var(--danger);
+  --ansi-green: var(--signal);
+  --ansi-yellow: var(--warning);
+  --ansi-blue: var(--blue);
+  --ansi-magenta: var(--magenta);
+  --ansi-cyan: color-mix(in srgb, var(--blue) 70%, var(--signal) 30%);
+  --ansi-white: var(--ink-soft);
+
+  --ansi-bright-black: var(--ink-soft);
+  --ansi-bright-red: color-mix(in srgb, var(--danger) 78%, var(--ink));
+  --ansi-bright-green: color-mix(in srgb, var(--signal) 78%, var(--ink));
+  --ansi-bright-yellow: color-mix(in srgb, var(--warning) 78%, var(--ink));
+  --ansi-bright-blue: color-mix(in srgb, var(--blue) 78%, var(--ink));
+  --ansi-bright-magenta: color-mix(in srgb, var(--magenta) 78%, var(--ink));
+  --ansi-bright-cyan: color-mix(in srgb, var(--ansi-cyan) 78%, var(--ink));
+  --ansi-bright-white: var(--ink);
+}
 :root {
   color-scheme: light;
   --paper: #f3f5f5;

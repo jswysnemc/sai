@@ -1,3 +1,4 @@
+import { CollapsibleOutput } from "./collapsible-output";
 import { DiffView } from "./diff-view";
 import { parseJsonRecord, stringField } from "./tool-data";
 import { useI18n } from "../../i18n/use-i18n";
@@ -9,6 +10,10 @@ type ShellToolViewProps = {
 
 /**
  * 渲染 Shell 命令、退出码、标准输出和错误输出。
+ *
+ * 命令与输出之间加一条细分隔：两者都是等宽文本，不分隔时长命令与首行输出会连成一片。
+ * 输出走折叠渲染并解析 ANSI 着色，因此长构建日志不会撑开整屏，
+ * 编译器本来用颜色表达的错误分级也保留下来。
  *
  * @param props 工具参数与结果
  * @returns 终端风格工具结果
@@ -23,17 +28,21 @@ export function ShellToolView({ argumentsText, output }: ShellToolViewProps) {
   const exitCode = typeof result?.exit_code === "number" ? result.exit_code : null;
   const success = typeof result?.success === "boolean" ? result.success : exitCode === 0;
   const diffOutput = isDiffCommand(command, stdout);
+  const hasBody = Boolean(stdout || stderr || (!result && output));
   return (
     <div className="shell-tool-view">
-      <div className="shell-command-line"><span>$</span><code>{command}</code></div>
+      <div className={`shell-command-line${hasBody ? " has-body" : ""}`}>
+        <span>$</span>
+        <code>{command}</code>
+      </div>
       {result && !success && (
-        <div className={success ? "shell-exit success" : "shell-exit failed"}>
-          {success ? "ok" : `err (${exitCode ?? t("Unknown", "未知")})`}
+        <div className="shell-exit failed">
+          {t(`exit ${exitCode ?? "unknown"}`, `退出码 ${exitCode ?? "未知"}`)}
         </div>
       )}
-      {stdout && (diffOutput ? <DiffView source={stdout} /> : <pre className="shell-output"><code>{stdout}</code></pre>)}
-      {stderr && <pre className="shell-output stderr"><code>{stderr}</code></pre>}
-      {!result && output && <pre className="shell-output"><code>{output}</code></pre>}
+      {stdout && (diffOutput ? <DiffView source={stdout} /> : <CollapsibleOutput source={stdout} />)}
+      {stderr && <CollapsibleOutput source={stderr} className="shell-output stderr" />}
+      {!result && output && <CollapsibleOutput source={output} />}
     </div>
   );
 }

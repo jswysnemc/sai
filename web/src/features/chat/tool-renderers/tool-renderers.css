@@ -23,6 +23,18 @@
   line-height: 1.55;
 }
 
+/*
+ * 命令与输出之间的分隔。
+ *
+ * 两者都是等宽文本、同一种颜色，不分隔时长命令会与首行输出连成一片，
+ * 读的时候要先找到哪里是命令的结尾。用一条极淡的线而非留白：
+ * 留白在输出很长时会被整体节奏吞掉。
+ */
+.shell-command-line.has-body {
+  padding-bottom:var(--space-sm);
+  border-bottom: 1px solid color-mix(in srgb, var(--technical-border) 60%, transparent);
+}
+
 .shell-command-line > span {
   color: var(--shell-prompt);
   font-weight: 600;
@@ -35,32 +47,37 @@
   color: var(--technical-text);
 }
 
+/*
+ * 退出码：只在失败时出现，因此不需要成功态的配色。
+ * 用胶囊而非裸文字，避免它被误读成输出的第一行。
+ */
 .shell-exit {
   display: inline-flex;
+  justify-self: start;
   align-items: center;
   gap:var(--space-2xs);
-  margin:0;
-  padding:0 var(--space-lg) var(--space-xs);
-  padding: 0;
-  border: 0;
-  background: transparent;
-  font:500 var(--text-xs)/1.4 var(--font-code);
+  margin:var(--space-sm) var(--space-lg) 0;
+  padding:0 var(--space-xs);
+  height: 1.125rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  font:500 var(--text-2xs)/1 var(--font-code);
+  font-variant-numeric: tabular-nums;
 }
 
-.shell-exit.success {
-  color: var(--diff-added-text);
-}
-
-.shell-exit.failed {
-  color: var(--diff-removed-text);
-}
-
+/*
+ * 输出正文。
+ *
+ * 长度由 CollapsibleOutput 在渲染前按行数裁剪，因此这里不再设 max-height：
+ * 内嵌滚动区会让一屏对话出现多个独立滚动上下文，滚轮落到哪个全看指针位置。
+ * 横向仍允许滚动——命令输出的长行不该被强制折行打乱对齐。
+ */
 .shell-output,
 .generic-tool-block {
   min-width: 0;
   max-width: 100%;
-  max-height: 26.25rem;
-  overflow: auto;
+  overflow-x: auto;
   margin: 0;
   padding:0 var(--space-lg) var(--space-md);
   border: 0;
@@ -73,9 +90,24 @@
   margin-left: 0;
 }
 
+/*
+ * 首个输出块与命令分隔线之间的留白。
+ *
+ * 用通配相邻而非直接相邻：失败时命令与输出之间还夹着退出码胶囊，
+ * 写死 `.has-body + .shell-output` 在这条路径上不会命中。
+ */
+.shell-command-line.has-body ~ .shell-output,
+.shell-command-line.has-body ~ .collapsible-output .shell-output {
+  padding-top:var(--space-sm);
+}
+
+/*
+ * stderr：唯一需要与 stdout 区分的输出流。
+ * 只染文字不铺底色——错误输出经常很长，整块红底会盖过内容本身。
+ */
 .shell-output.stderr {
   padding-top:var(--space-sm);
-  border-top: 1px solid var(--technical-border);
+  border-top: 1px solid color-mix(in srgb, var(--technical-border) 60%, transparent);
   color: color-mix(in srgb, var(--danger) 88%, var(--paper));
 }
 
@@ -85,7 +117,9 @@
   padding:0 var(--space-lg) var(--space-md);
 }
 
-.tool-shell-body .shell-output.stderr {
+.tool-shell-body .shell-output.stderr,
+.tool-shell-body .shell-command-line.has-body ~ .shell-output,
+.tool-shell-body .shell-command-line.has-body ~ .collapsible-output .shell-output {
   padding-top:var(--space-sm);
 }
 
@@ -293,6 +327,58 @@
 
 .generic-tool-block.result {
   color: var(--technical-text);
+}
+
+/*
+ * 通用工具参数字段
+ *
+ * 短值与键名同行、长值另起一块。键名固定宽度并右对齐留白，
+ * 因此多个字段的值在同一条竖线上起始，扫读时不必逐行找值的起点。
+ */
+.tool-field-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding:var(--space-2xs) 0 var(--space-sm);
+}
+
+.tool-field {
+  display: grid;
+  grid-template-columns: minmax(4rem, 0.22fr) minmax(0, 1fr);
+  gap:var(--space-sm);
+  min-width: 0;
+  padding:var(--space-2xs) var(--space-lg);
+}
+
+.tool-field.is-block {
+  grid-template-columns: minmax(0, 1fr);
+  gap:var(--space-3xs);
+}
+
+.tool-field dt {
+  color: var(--technical-muted);
+  font:500 var(--text-2xs)/1.6 var(--font-code);
+  overflow-wrap: anywhere;
+}
+
+.tool-field dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--technical-text);
+  font:400 var(--text-xs)/1.6 var(--font-code);
+  overflow-wrap: anywhere;
+}
+
+/* 长值独占整块：保留原始缩进，横向溢出可滚动而不是强行折行 */
+.tool-field.is-block dd pre {
+  max-height: 16rem;
+  overflow: auto;
+  margin: 0;
+  padding:var(--space-sm) var(--space-md);
+  border-radius: var(--radius-2);
+  background: color-mix(in srgb, var(--technical-border) 20%, transparent);
+  font: inherit;
+  white-space: pre-wrap;
 }
 
 .generic-tool-block.tool-error-output {

@@ -38,14 +38,14 @@ export function ToolCallGroup({ tools }: { tools: ToolLifecycle[] }) {
   // 组内经过权限审核的项数：折叠态也要能看出这批操作动过权限
   const auditedCount = tools.filter((tool) => tool.permission).length;
   const icon = todoOnly
-    ? <ListChecks size={15} />
+    ? <ListChecks size={14} />
     : exploreOnly
-      ? <Search size={15} />
+      ? <Search size={14} />
       : commandOnly
-        ? <TerminalSquare size={15} />
+        ? <TerminalSquare size={14} />
         : editOnly
-          ? <FilePenLine size={15} />
-          : <Wrench size={15} />;
+          ? <FilePenLine size={14} />
+          : <Wrench size={14} />;
   return (
     <section className={`tool-call-group${expanded ? " expanded" : ""}`}>
       <Button className="tool-call-group-trigger" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>

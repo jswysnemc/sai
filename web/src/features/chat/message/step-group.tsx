@@ -58,7 +58,7 @@ export function StepGroupCard({ id, reasoning, tools }: StepGroupCardProps) {
         aria-expanded={expanded}
       >
         <span className="step-group-icon">
-          <Footprints size={15} />
+          <Footprints size={14} />
         </span>
         <strong title={label}>{label}</strong>
         {auditedCount > 0 && (

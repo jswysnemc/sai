@@ -1,4 +1,10 @@
-/* 工具组：无矩形外框，仅保留行内触发条与展开后的列表层级 */
+/*
+ * 工具组
+ *
+ * 触发条与单张工具卡的头部共用同一套度量：同样的最小高度、同样的图标尺寸与列间距，
+ * 因此折叠的一组和展开后的单卡在同一条视觉基线上，不会因为多包了一层分组而错位。
+ * 差别只在图标语义与标题字重——那是"这是一组"与"这是一项"的区别。
+ */
 .tool-call-group {
   color: var(--technical-text);
 }
@@ -6,11 +12,11 @@
 .tool-call-group-trigger {
   display: inline-flex;
   align-items: center;
-  gap:var(--space-xs);
+  gap:var(--space-sm);
   width: auto;
   max-width: 100%;
-  min-height: 32px;
-  padding:var(--space-2xs) var(--space-3xs);
+  min-height: 28px;
+  padding:var(--space-3xs) var(--space-2xs);
   border: 0;
   border-radius:var(--radius-2);
   background: transparent;
@@ -19,29 +25,39 @@
 }
 
 .tool-call-group-trigger:hover {
-  background: color-mix(in srgb, var(--technical-text) 5%, transparent);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
 }
 
 .tool-call-group-trigger strong {
   overflow: hidden;
   min-width: 0;
   max-width: min(48rem, 70vw);
-  font-size:var(--text-sm);
-  font-weight: 500;
+  font:500 var(--text-sm)/1.3 var(--font-ui);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .tool-call-group-icon {
   display: grid;
+  width: 20px;
+  height: 20px;
   place-items: center;
   color: var(--technical-muted);
 }
 
+.tool-call-group-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
 .tool-call-group-trigger > svg {
   flex-shrink: 0;
-  color: var(--technical-muted);
-  transition:transform var(--duration-base) ease;
+  color: var(--ink-soft);
+  transition:transform var(--duration-base) var(--ease-standard);
+}
+
+.tool-call-group-trigger > svg.rotate {
+  transform: rotate(180deg);
 }
 
 .tool-call-group-items {
@@ -51,6 +67,24 @@
   padding:var(--space-3xs) 0 0 var(--space-2xs);
   border-left: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
   background: transparent;
+  animation: tool-group-reveal var(--duration-slow) var(--ease-out);
+}
+
+@keyframes tool-group-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-0.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-call-group-items {
+    animation: none;
+  }
 }
 
 /* 组内卡片的悬停反馈由外壳的头部负责，这里不再重复铺底色 */

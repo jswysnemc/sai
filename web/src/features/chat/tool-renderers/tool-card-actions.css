@@ -1,0 +1,60 @@
+/*
+ * 工具卡次级操作
+ *
+ * 常态完全隐藏且不占位（宽度归零），因此不会在折叠行右侧留出一段空白。
+ * 悬停卡片、或按钮自身获得键盘焦点时展开——键盘用户看不到悬停，
+ * 必须靠 focus-within 才能触达这些操作。
+ */
+
+.tool-card-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-3xs);
+  overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+  transition:
+    max-width var(--duration-base) var(--ease-standard),
+    opacity var(--duration-base) var(--ease-standard);
+}
+
+.tool-shell-head:hover .tool-card-actions,
+.tool-shell-head:focus-within .tool-card-actions {
+  max-width: 4rem;
+  opacity: 1;
+}
+
+.tool-card-actions button {
+  display: grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.tool-card-actions button:hover {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+
+.tool-card-actions button:focus-visible {
+  outline: 1px solid var(--signal);
+  outline-offset: -1px;
+}
+
+/* 复制成功的对勾用信号色，与其余中性图标区分开 */
+.tool-card-actions button.is-copied {
+  color: var(--signal);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-card-actions {
+    transition: none;
+  }
+}

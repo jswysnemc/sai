@@ -101,6 +101,37 @@
   white-space: nowrap;
 }
 
+/*
+ * 结果摘要：折叠行右段唯一表达"结果如何"的位置。
+ *
+ * 与左侧的操作对象拉开对比——对象是这次做了什么，摘要是做出来什么结果。
+ * 因此摘要压到更小字号并降低对比，扫读时先看到对象、需要时才落到摘要。
+ */
+.tool-shell-summary {
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--ink-soft) 85%, transparent);
+  font:400 var(--text-2xs)/1.3 var(--font-code);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tool-shell-summary.is-danger {
+  color: var(--danger);
+}
+
+/* 增删统计：与 diff 文件头同一套着色，跨视图保持一致 */
+.tool-shell-summary b {
+  color: var(--diff-added-text);
+  font-weight: 600;
+}
+
+.tool-shell-summary i {
+  margin-left: var(--space-2xs);
+  color: var(--diff-removed-text);
+  font-style: normal;
+  font-weight: 600;
+}
+
 .tool-shell-status {
   flex-shrink: 0;
   display: grid;
@@ -139,11 +170,33 @@
 /*
  * 展开体：左导轨从图标中心延伸下来，视觉上把详情挂在这次操作下面。
  * 导轨位置 = 头部左内边距 + 图标半宽，因此与图标严格对齐。
+ *
+ * 入场做一次短促的下沉淡入：展开是用户主动触发的，没有过渡时内容凭空出现，
+ * 长对话里会让人分不清是自己展开的还是流式又追加了内容。
+ * 只做入场不做退场——收起时内容立即消失才符合"收起"的预期。
  */
 .tool-shell-body {
   margin:var(--space-3xs) 0 0;
   padding-left: 0;
   border-left: 0;
+  animation: tool-shell-reveal var(--duration-slow) var(--ease-out);
+}
+
+@keyframes tool-shell-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-0.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-shell-body {
+    animation: none;
+  }
 }
 
 .tool-shell-body > * {

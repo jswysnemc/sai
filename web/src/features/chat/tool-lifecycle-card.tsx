@@ -1,4 +1,5 @@
 import { ShieldCheck } from "lucide-react";
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import { usePersistedExpand } from "./message/tool-expand-state";
@@ -7,8 +8,12 @@ import { toolCardSummary } from "./tool-renderers/tool-card-summary";
 import { parseCodexSubagentActivity } from "./tool-renderers/codex-subagent-data";
 import { CodexSubagentToolView } from "./tool-renderers/codex-subagent-tool-view";
 import { toolFilePath } from "./tool-renderers/tool-data";
+import { ToolCardActions } from "./tool-renderers/tool-card-actions";
 import { ToolFileReference } from "./tool-renderers/tool-file-reference";
 import { displayPath } from "./tool-renderers/tool-display-summary";
+import { toolDiffStat, toolResultSummary } from "./tool-renderers/tool-result-summary";
+import { toolDurationLabel } from "./tool-renderers/tool-duration";
+import { useElapsedClock } from "./tool-renderers/use-elapsed-clock";
 import { ToolCardShell } from "./tool-renderers/tool-card-shell";
 import { ToolIcon, ToolStatusMark, toneOfState } from "./tool-renderers/tool-icon";
 import { ToolResultView } from "./tool-renderers/tool-result-view";
@@ -28,6 +33,9 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
   const workspacePath = workspaces.data?.workspaces.find((item) => item.id === workspaces.data?.active_id)?.path ?? "";
   // 失败默认展开；用户展开后按 tool.id 记忆，流式更新不自动收缩
   const [expanded, setExpanded] = usePersistedExpand(tool.id, tool.status === "failed");
+  // 执行中的卡片需要推进计时；结束后停表，历史卡片不占用任何定时器
+  const running = tool.status === "preparing" || tool.status === "running";
+  const now = useElapsedClock(running);
   // 1. todo 已完成时改用清单卡片，不暴露原始 JSON
   if (tool.name === "todo" && tool.status === "completed") {
     return <TodoToolView toolId={tool.id} argumentsText={tool.arguments || tool.argumentsPreview} output={tool.output} />;
@@ -58,6 +66,11 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
   const autoAudited = permission?.decision === "allow" && permission.source === "auto_audit";
   const auditReason = permission?.decision === "allow" ? permission.reason?.trim() ?? "" : "";
 
+  // 5. 折叠行右段依次表达"结果如何"与"花了多久"
+  const result = toolResultSummary(tool.name, tool.output, locale);
+  const diffStat = toolDiffStat(tool.name, tool.output);
+  const duration = toolDurationLabel(tool.startedAtMs, tool.endedAtMs, now);
+
   return (
     <ToolCardShell
       tone={toneOfState(tool.status)}
@@ -65,11 +78,10 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
       title={readableToolName(tool.name)}
       target={target || undefined}
       targetTitle={headerPath || summary || undefined}
-      meta={
-        permission
-            ? <ToolPermissionBadge autoAudited={autoAudited} t={t} />
-            : undefined
-      }
+      actions={<ToolCardActions target={copyableInput(argumentsText, headerPath)} output={tool.output} />}
+      summary={resultSummaryNode(result, diffStat)}
+      summaryTone={result?.tone ?? "neutral"}
+      meta={metaNode(permission ? <ToolPermissionBadge autoAudited={autoAudited} t={t} /> : null, duration)}
       status={tool.status === "completed" ? undefined : <ToolStatusMark state={tool.status} />}
       expanded={expanded}
       onToggle={() => setExpanded((value) => !value)}
@@ -83,6 +95,66 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
       <ToolResultView name={tool.name} argumentsText={argumentsText} output={tool.output} headerPath={headerPath} />
     </ToolCardShell>
   );
+}
+
+/**
+ * 组装折叠行的结果摘要内容。
+ *
+ * 编辑类工具的增删需要各自着色，因此与文字摘要分成两条路径，
+ * 不压成一个字符串。两者都缺席时返回 undefined，外壳据此不渲染摘要位，
+ * 避免在头部留下一个空节点撑开间距。
+ *
+ * @param result 文字摘要
+ * @param diffStat 增删统计
+ * @returns 摘要内容；无内容时返回 undefined
+ */
+function resultSummaryNode(
+  result: ReturnType<typeof toolResultSummary>,
+  diffStat: ReturnType<typeof toolDiffStat>
+): ReactNode {
+  if (diffStat) {
+    return (
+      <>
+        {diffStat.added > 0 && <b>+{diffStat.added}</b>}
+        {diffStat.removed > 0 && <i>-{diffStat.removed}</i>}
+      </>
+    );
+  }
+  return result?.label || undefined;
+}
+
+/**
+ * 组装折叠行的元信息内容。
+ *
+ * 权限徽章与耗时都可能缺席，全缺席时返回 undefined，
+ * 让外壳跳过这一位而不是渲染空容器。
+ *
+ * @param badge 权限徽章元素
+ * @param duration 耗时文本
+ * @returns 元信息内容；无内容时返回 undefined
+ */
+function metaNode(badge: ReactNode, duration: string): ReactNode {
+  if (!badge && !duration) return undefined;
+  return (
+    <>
+      {badge}
+      {duration}
+    </>
+  );
+}
+
+/**
+ * 选出适合复制的调用内容。
+ *
+ * 有明确文件路径时复制路径，否则退回原始参数文本——
+ * 前者是用户接下来最可能粘到别处的东西，后者至少保证不丢信息。
+ *
+ * @param argumentsText 参数文本
+ * @param headerPath 头部展示的文件路径
+ * @returns 待复制文本
+ */
+function copyableInput(argumentsText: string, headerPath: string): string {
+  return headerPath || argumentsText;
 }
 
 /**
