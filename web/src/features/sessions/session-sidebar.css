@@ -1,12 +1,11 @@
+/*
+ * 会话侧栏壳
+ *
+ * 只包含布局骨架：标题区、视图切换、操作条、页脚与折叠竖条。
+ * 会话行样式在 session-row.css，工作区行样式在 session-sidebar-workspaces.css。
+ */
+
 .session-sidebar {
-  /*
-   * 悬停时行右侧让出的操作区宽度。
-   *
-   * 静止态元信息紧贴行右缘；悬停时右内边距扩到这个值，元信息整体左移，
-   * 恰好把操作按钮的位置空出来。两者因此始终共存：时间不会消失，
-   * 按钮也不会压在时间上。
-   */
-  --sidebar-row-actions: 1.875rem;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -45,6 +44,10 @@
 
 .session-sidebar.collapsed .sidebar-rail-button:last-child {
   margin-top: auto;
+}
+
+.brand-rail {
+  margin-bottom:var(--space-2xs);
 }
 
 .session-sidebar-resize-handle {
@@ -87,8 +90,79 @@
   user-select: none;
 }
 
-.session-list {
-  flex: 1;
+.sidebar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap:var(--space-sm);
+  min-height: 40px;
+  padding:var(--space-3xs) var(--space-3xs) var(--space-md);
+}
+
+.sidebar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap:var(--space-sm);
+  min-width: 0;
+  min-height: 32px;
+  padding:0 var(--space-2xs);
+  border: 0;
+  border-radius:var(--radius-3);
+  background: transparent;
+  color: var(--ink);
+  font-size:var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+}
+
+.sidebar-brand:hover {
+  background: var(--paper-deep);
+}
+
+.sidebar-brand span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-heading-actions {
+  display: flex;
+  align-items: center;
+  gap:var(--space-3xs);
+}
+
+.sidebar-view-switcher {
+  display: flex;
+  gap: 2px;
+  margin: 0 var(--space-3xs) var(--space-sm);
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--paper-deep);
+}
+
+.sidebar-view-switcher button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 1.75rem;
+  padding: 0 var(--space-xs);
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+
+.sidebar-view-switcher button:hover {
+  color: var(--ink);
+}
+
+.sidebar-view-switcher button.active {
+  background: var(--paper-raised);
+  color: var(--ink);
+  box-shadow: var(--elevation-1);
 }
 
 .sidebar-session-actions {
@@ -122,19 +196,78 @@
   font: var(--text-2xs) var(--font-code);
 }
 
-.sidebar-sessions-view > .session-workspace > .workspace-tree-row {
-  display: none;
+.session-list {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  gap:var(--space-3xs);
+  min-height: 0;
+  overflow: auto;
 }
 
-.sidebar-sessions-view .workspace-session-children {
-  margin-left: 0;
-  padding-left: 0;
+/*
+ * 工作区标示行：会话列表顶部的上下文说明，不可点击。
+ * 会话视图不再渲染工作区行，多工作区并行时列表得有归属说明。
+ */
+.workspace-context-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 26px;
+  padding: 0 var(--space-sm);
+  color: var(--ink-soft);
 }
 
-.sidebar-sessions-view .workspace-session-children::before {
-  display: none;
+.workspace-context-row > svg {
+  flex: 0 0 auto;
 }
 
+.workspace-context-row strong {
+  overflow: hidden;
+  min-width: 0;
+  font: 500 var(--text-2xs)/1.3 var(--font-ui);
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.workspace-context-row small {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font: 400 var(--text-2xs) var(--font-code);
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-context-exit {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.workspace-context-exit:hover {
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.sidebar-file-tree-view {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  margin: 0 calc(var(--space-md) * -1);
+}
+
+.sidebar-file-tree-view > .file-tree {
+  flex: 1;
+  min-height: 0;
+  border-inline: 0;
+}
 
 .sidebar-footer {
   position: relative;
@@ -232,442 +365,6 @@
   margin-top: auto;
 }
 
-.sidebar-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap:var(--space-sm);
-  min-height: 40px;
-  padding:var(--space-3xs) var(--space-3xs) var(--space-md);
-}
-
-.sidebar-brand {
-  display: inline-flex;
-  align-items: center;
-  gap:var(--space-sm);
-  min-width: 0;
-  min-height: 32px;
-  padding:0 var(--space-2xs);
-  border: 0;
-  border-radius:var(--radius-3);
-  background: transparent;
-  color: var(--ink);
-  font-size:var(--text-lg);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  cursor: pointer;
-}
-
-.sidebar-brand:hover {
-  background: var(--paper-deep);
-}
-
-.sidebar-brand span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.brand-rail {
-  margin-bottom:var(--space-2xs);
-}
-
-.sidebar-heading-actions {
-  display: flex;
-  align-items: center;
-  gap:var(--space-3xs);
-}
-
-.sidebar-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding:var(--space-3xs) var(--space-xs) var(--space-lg);
-}
-
-.sidebar-heading-actions {
-  display: flex;
-  align-items: center;
-  gap:var(--space-2xs);
-}
-
-.new-session-button {
-  display: inline-flex;
-  align-items: center;
-  gap:var(--space-2xs);
-  min-height: 30px;
-  padding:0 var(--space-sm);
-  border: 0;
-  border-radius:var(--radius-2);
-  background: var(--graphite);
-  color: var(--paper-raised);
-  font-size:var(--text-xs);
-}
-
-.new-session-button:disabled {
-  opacity: 0.45;
-}
-
-.session-bulk-bar {
-  display: flex;
-  align-items: center;
-  gap:var(--space-xs);
-  height: 34px;
-  margin:0 0 var(--space-sm);
-  padding:0 var(--space-xs);
-  border: 1px solid var(--line);
-  border-radius:var(--radius-3);
-  background: var(--paper-raised);
-}
-
-.session-bulk-bar > span {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--ink-soft);
-  font-size:var(--text-2xs);
-  text-align: right;
-  white-space: nowrap;
-}
-
-.session-bulk-bar button {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap:var(--space-2xs);
-  height: 24px;
-  padding:0 var(--space-xs);
-  border: 0;
-  border-radius:var(--radius-1);
-  background: transparent;
-  color: var(--ink-soft);
-  font-size:var(--text-2xs);
-  white-space: nowrap;
-}
-
-.session-bulk-bar button:hover:not(:disabled) {
-  background: var(--paper-deep);
-  color: var(--ink);
-}
-
-.session-bulk-bar button.danger {
-  color: var(--danger);
-}
-
-.session-bulk-bar button:disabled {
-  opacity: 0.4;
-}
-
-.session-bulk-bar button.confirming {
-  background: color-mix(in srgb, var(--danger) 12%, var(--paper-raised));
-}
-
-.sidebar-heading h2 {
-  margin:var(--space-3xs) 0 0;
-  font-size:var(--text-3xl);
-  letter-spacing: -0.02em;
-}
-
-.eyebrow {
-  color: var(--ink-soft);
-  font:500 var(--text-2xs) var(--font-code);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.session-list {
-  display: grid;
-  align-content: start;
-  gap:var(--space-3xs);
-  min-height: 0;
-  overflow: auto;
-}
-
-.sidebar-view-switcher {
-  display: flex;
-  gap: 2px;
-  margin: 0 var(--space-3xs) var(--space-sm);
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-3);
-  background: var(--paper-deep);
-}
-
-.sidebar-view-switcher button {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 1.75rem;
-  padding: 0 var(--space-xs);
-  border: 0;
-  border-radius: var(--radius-2);
-  background: transparent;
-  color: var(--ink-soft);
-  font-size: var(--text-2xs);
-  white-space: nowrap;
-}
-
-.sidebar-view-switcher button:hover {
-  color: var(--ink);
-}
-
-.sidebar-view-switcher button.active {
-  background: var(--paper-raised);
-  color: var(--ink);
-  box-shadow: var(--elevation-1);
-}
-
-.sidebar-file-tree-view {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  margin: 0 calc(var(--space-md) * -1);
-}
-
-.sidebar-file-tree-view > .file-tree {
-  flex: 1;
-  min-height: 0;
-  border-inline: 0;
-}
-
-.session-row {
-  position: relative;
-  display: grid;
-  /* 更多操作按钮绝对定位叠在右端，行内只保留主区一列 */
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  /* 行必须占满侧栏宽度：fit-content 会让行收缩到内容宽，
-     内部的时间无法贴右 */
-  width: 100%;
-  border-radius:var(--radius-3);
-}
-
-.session-row:has(.session-check) {
-  grid-template-columns: 28px minmax(0, 1fr);
-}
-
-.session-row.selected {
-  background: var(--signal-soft);
-}
-
-.session-check {
-  display: grid;
-  width: 28px;
-  height: 34px;
-  place-items: center;
-  border: 0;
-  background: transparent;
-  color: var(--signal);
-}
-
-.session-check:disabled {
-  color: var(--line-strong);
-  opacity: 0.45;
-}
-
-.session-row:hover,
-.session-row.active {
-  background: var(--paper-raised);
-}
-
-.session-row.active::before {
-  position: absolute;
-  top: 9px;
-  bottom: 9px;
-  left: 0;
-  width: 3px;
-  border-radius:var(--radius-1);
-  background: var(--signal);
-  content: "";
-}
-
-.session-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  width: 100%;
-  min-width: 0;
-  padding:var(--space-sm) var(--space-md) var(--space-sm) var(--space-md);
-  border: 0;
-  background: transparent;
-  text-align: left;
-}
-
-/* 悬停时更多按钮替换时间的位置，而不是把内容整体左移让位 */
-.session-row:hover .session-summary > small,
-.session-row:focus-within .session-summary > small {
-  visibility: hidden;
-}
-
-.active-agent-indicator {
-  position: relative;
-  display: grid;
-  width: 16px;
-  height: 16px;
-  place-items: center;
-}
-
-.active-agent-indicator::before,
-.active-agent-indicator > span {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--radius-circle);
-  background: var(--signal);
-  content: "";
-}
-
-.active-agent-indicator::before {
-  position: absolute;
-  animation: agent-active-pulse 1.8s ease-out infinite;
-}
-
-@keyframes agent-active-pulse {
-  0% { opacity: 0.55; transform: scale(1); }
-  75%, 100% { opacity: 0; transform: scale(2.35); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .active-agent-indicator::before { animation: none; }
-}
-
-.session-main .session-summary {
-  /* 运行指示灯是条件渲染的，用 flex + auto 外边距把时间推到右缘，
-     列数不随指示灯出现与否而改变 */
-  display: flex;
-  align-items: center;
-  gap:var(--space-xs);
-  /* 必须占满所在网格列，否则宽度收缩到内容宽，时间无法贴右 */
-  width: 100%;
-  min-width: 0;
-}
-
-/* 标题吸收剩余宽度，时间与指示灯贴右 */
-.session-main .session-summary > strong {
-  flex: 0 1 auto;
-  min-width: 0;
-}
-
-.session-main .session-summary > small {
-  flex: 0 0 auto;
-  margin-left: auto;
-}
-
-.session-main .session-summary > .active-agent-indicator {
-  flex: 0 0 auto;
-  margin-left: auto;
-}
-
-/* 指示灯存在时它先吃掉 auto 外边距，时间紧随其后 */
-.session-main .session-summary > .active-agent-indicator ~ small {
-  margin-left: 0;
-}
-
-.session-main strong {
-  overflow: hidden;
-  font-size:var(--text-base);
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-main small {
-  overflow: hidden;
-  color: var(--ink-soft);
-  font:400 var(--text-2xs) var(--font-code);
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-more {
-  position: absolute;
-  top: 50%;
-  right: var(--space-2xs);
-  z-index: 1;
-  display: grid;
-  width: 26px;
-  height: 28px;
-  place-items: center;
-  border: 0;
-  border-radius:var(--radius-2);
-  background: transparent;
-  color: var(--ink-soft);
-  transform: translateY(-50%);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--duration-fast) ease;
-}
-
-.session-row:hover .session-more,
-.session-more:focus {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.session-more:hover {
-  background: var(--paper-deep);
-  color: var(--ink);
-}
-
-.session-menu {
-  position: absolute;
-  top: 36px;
-  right: 4px;
-  padding:var(--space-2xs);
-  border: 1px solid var(--line);
-  border-radius:var(--radius-3);
-  background: var(--paper-raised);
-  box-shadow: var(--shadow);
-  z-index: 20;
-}
-
-.session-menu button {
-  display: flex;
-  align-items: center;
-  gap:var(--space-xs);
-  min-width: 90px;
-  padding:var(--space-xs) var(--space-sm);
-  border: 0;
-  border-radius:var(--radius-1);
-  background: transparent;
-  color: var(--ink);
-}
-
-.session-menu button.danger {
-  color: var(--danger);
-}
-
-.session-menu button:hover {
-  background: var(--paper-deep);
-}
-
-.session-menu button:disabled {
-  opacity: 0.4;
-}
-
-.session-rename {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  min-width: 0;
-  padding:var(--space-sm) var(--space-md) var(--space-sm) var(--space-md);
-}
-
-.session-rename input {
-  min-width: 0;
-  height: 22px;
-  padding:0 var(--space-xs);
-  border: 1px solid var(--signal);
-  border-radius:var(--radius-1);
-  background: var(--paper-raised);
-  color: var(--ink);
-  font-size:var(--text-base);
-}
-
-.session-rename input:disabled {
-  opacity: 0.55;
-}
-
 .sidebar-state,
 .sidebar-error {
   padding:var(--space-lg) var(--space-sm);
@@ -685,16 +382,26 @@
   color: var(--danger);
 }
 
+/* 会话列表加载骨架：内边距与真实列表项对齐，加载完成后条目不位移 */
+.sidebar-skeleton {
+  padding:var(--space-lg) var(--space-sm);
+}
+
+/*
+ * 以下两个类历史上定义在本文件，被网关、定时任务等页面直接引用。
+ * 它们是全局公共样式的候选，搬走前保留在此，避免悄悄影响其他页面。
+ */
+.eyebrow {
+  color: var(--ink-soft);
+  font:500 var(--text-2xs) var(--font-code);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .spin {
   animation: spin 900ms linear infinite;
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-
-/* 会话列表加载骨架：内边距与真实列表项对齐，加载完成后条目不位移 */
-.sidebar-skeleton {
-  padding:var(--space-lg) var(--space-sm);
 }

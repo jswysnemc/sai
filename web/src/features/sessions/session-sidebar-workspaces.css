@@ -1,3 +1,10 @@
+/*
+ * 工作区行与多选工具条
+ *
+ * 工作区行只出现在工作区视图（平铺切换列表）；
+ * 多选工具条由会话视图复用，样式一并维护在此。
+ */
+
 .session-workspace {
   display: grid;
   gap:var(--space-3xs);
@@ -9,16 +16,18 @@
   /* 操作按钮绝对定位叠在右端，行内只保留主区一列 */
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  /* 行必须占满侧栏宽度：fit-content 会让行收缩到内容宽，
-     内部的 margin-left:auto 没有可分配的空间，计数无法贴右 */
   width: 100%;
-  min-height: 34px;
+  min-height: 30px;
   border-radius:var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
 }
 
-.workspace-tree-row:hover,
+.workspace-tree-row:hover {
+  background: var(--paper-raised);
+  color: var(--ink);
+}
+
 .workspace-tree-row.active {
   background: var(--paper-deep);
   color: var(--ink);
@@ -26,38 +35,34 @@
 
 .workspace-tree-main {
   display: grid;
-  grid-template-columns: 14px 16px minmax(0, 1fr);
-  gap:var(--space-2xs);
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap:var(--space-xs);
   align-items: center;
   width: 100%;
   min-width: 0;
-  min-height: 34px;
-  padding:0 var(--space-xs) 0 var(--space-xs);
+  min-height: 30px;
+  padding:0 var(--space-sm);
   border: 0;
   background: transparent;
   color: inherit;
   text-align: left;
+  /* 悬停时右内边距扩一档给操作按钮让位，计数左移但不消失 */
+  transition: padding-right var(--duration-fast) var(--ease-standard);
 }
 
-/* 悬停时操作按钮替换计数的位置，而不是把内容整体左移让位 */
-.workspace-tree-row:hover .workspace-summary > small,
-.workspace-tree-row:focus-within .workspace-summary > small,
-.workspace-tree-row.selecting .workspace-summary > small {
-  visibility: hidden;
+.workspace-tree-row:hover .workspace-tree-main,
+.workspace-tree-row:focus-within .workspace-tree-main {
+  padding-right: 3.75rem;
 }
 
-.workspace-tree-main > span:not(.active-agent-indicator) {
-  display: flex;
-  /* 必须占满所在网格列，否则宽度收缩到内容宽，计数无法贴右 */
-  width: 100%;
-  min-width: 0;
-}
-
-.workspace-tree-main > .workspace-summary:not(.active-agent-indicator) {
+.workspace-tree-main > .workspace-summary {
   /* 运行指示灯是条件渲染的，用 flex + auto 外边距把计数推到右缘，
      列数不随指示灯出现与否而改变 */
+  display: flex;
   align-items: center;
   gap:var(--space-xs);
+  width: 100%;
+  min-width: 0;
 }
 
 /* 名称吸收剩余宽度，计数与指示灯贴右 */
@@ -93,6 +98,7 @@
   overflow: hidden;
   color: var(--ink-soft);
   font:400 var(--text-2xs) var(--font-code);
+  font-variant-numeric: tabular-nums;
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -111,12 +117,11 @@
   padding-right:var(--space-2xs);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 120ms ease;
+  transition: opacity var(--duration-fast) ease;
 }
 
 .workspace-tree-row:hover .workspace-tree-actions,
-.workspace-tree-row:focus-within .workspace-tree-actions,
-.workspace-tree-row.selecting .workspace-tree-actions {
+.workspace-tree-row:focus-within .workspace-tree-actions {
   opacity: 1;
   pointer-events: auto;
 }
@@ -146,21 +151,13 @@
   opacity: 0.4;
 }
 
-.workspace-tree-actions button.danger {
-  color: var(--danger);
-}
-
-.workspace-tree-actions button.confirming {
-  background: color-mix(in srgb, var(--danger) 12%, var(--paper-raised));
-}
-
-/* 多选工具条：独占一行，避免挤进工作区标题右侧图标区 */
+/* 多选工具条：会话视图里独占一行，跟随列表左右缘 */
 .workspace-selection-bar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap:var(--space-sm);
-  margin:var(--space-3xs) var(--space-xs) var(--space-xs) var(--space-3xl);
+  margin:var(--space-3xs) 0 var(--space-2xs);
   padding:var(--space-2xs) var(--space-xs);
   border: 1px solid var(--line);
   border-radius:var(--radius-3);
@@ -233,20 +230,8 @@
   right: 6px;
 }
 
+/* 会话子列表：归属由顶部标示行表达，不再用缩进导轨叠一层层级 */
 .workspace-session-children {
-  position: relative;
   display: grid;
   gap:var(--space-3xs);
-  margin-left:var(--space-lg);
-  padding-left:var(--space-sm);
-}
-
-.workspace-session-children::before {
-  position: absolute;
-  top: 0;
-  bottom: 4px;
-  left: 0;
-  width: 1px;
-  background: var(--line);
-  content: "";
 }
