@@ -5,22 +5,13 @@ import {
   isExploreToolName,
   toolDisplaySummary
 } from "../tool-renderers/tool-display-summary";
+import { isReadOnlyShellCommand } from "../tool-renderers/read-only-command";
+import { parseJsonRecord, stringField } from "../tool-renderers/tool-data";
 import { text, type Locale } from "../../i18n/locale";
 
 export type GroupedMessagePart =
   | { type: "part"; id: string; part: LiveMessagePart }
   | { type: "tool-group"; id: string; tools: ToolLifecycle[] };
-
-/** 组标题中最多展示的摘要条目数 */
-const MAX_SUMMARY_ITEMS = 3;
-
-/**
- * 单项摘要的最大字符数。
- *
- * 组标题要在一行内读完，而个别工具的摘要可能是一整句任务描述
- * （例如 subagent 的目标说明），不限长会把整行撑爆并挤掉其余条目。
- */
-const MAX_SUMMARY_CHARS = 24;
 
 /**
  * 聚合连续且已完成的工具调用，运行中和失败调用始终独立展示。
@@ -61,12 +52,16 @@ export function groupCompletedToolCalls(parts: LiveMessagePart[]): GroupedMessag
 }
 
 /**
- * 为工具组生成简短可读操作说明。
+ * 为工具组生成分类计数式操作说明。
+ *
+ * 形如「探索了 3 个文件，运行了 2 个命令」——按探索/命令/编辑/其他分桶计数，
+ * 而不是罗列具体对象；对象细节交给展开态与折叠行轮播。
+ * 只读 shell 命令（cat、ls、grep 等）计入探索桶。
  *
  * @param tools 工具组中的完成项
  * @param locale 界面语言
- * @param workspacePath 当前工作区路径，用于相对路径展示
- * @returns 探索/执行/计划类摘要标题
+ * @param workspacePath 当前工作区路径，用于去重时归一路径
+ * @returns 分类计数标题
  */
 export function toolCallGroupLabel(
   tools: ToolLifecycle[],
@@ -77,66 +72,63 @@ export function toolCallGroupLabel(
     return text(locale, `Updated the plan ${tools.length} times`, `更新了 ${tools.length} 次计划`);
   }
 
-  const items = tools
-    .map((tool) =>
-      clampSummary(
-        toolDisplaySummary(
-          tool.name,
-          tool.arguments || tool.argumentsPreview || "",
-          locale,
-          workspacePath
-        )
-      )
-    )
-    .filter(Boolean);
-  const unique = dedupePreserveOrder(items);
-  const listed = formatLabelList(unique, MAX_SUMMARY_ITEMS, locale);
-  if (!listed) {
+  // 1. 按探索/命令/编辑/其他分桶；探索与编辑按对象去重，重复读写同一文件只算一个
+  const exploreTools: ToolLifecycle[] = [];
+  const editTools: ToolLifecycle[] = [];
+  let commands = 0;
+  let others = 0;
+  for (const tool of tools) {
+    if (isExploreTool(tool)) exploreTools.push(tool);
+    else if (isCommandTool(tool)) commands += 1;
+    else if (isEditTool(tool)) editTools.push(tool);
+    else others += 1;
+  }
+  const explores = uniqueTargetCount(exploreTools, locale, workspacePath);
+  const edits = uniqueTargetCount(editTools, locale, workspacePath);
+
+  // 2. 逐桶拼接计数段，空桶不占位
+  const segments: string[] = [];
+  if (explores > 0) {
+    segments.push(text(locale, `Explored ${explores} ${plural(explores, "file")}`, `探索了 ${explores} 个文件`));
+  }
+  if (commands > 0) {
+    segments.push(text(locale, `Ran ${commands} ${plural(commands, "command")}`, `运行了 ${commands} 个命令`));
+  }
+  if (edits > 0) {
+    segments.push(text(locale, `Edited ${edits} ${plural(edits, "file")}`, `编辑了 ${edits} 个文件`));
+  }
+  if (others > 0) {
+    segments.push(text(locale, `Used ${others} ${plural(others, "tool")}`, `执行了 ${others} 个工具`));
+  }
+  if (segments.length === 0) {
     return text(locale, `Performed ${tools.length} operations`, `执行了 ${tools.length} 项操作`);
   }
-
-  const exploreOnly = tools.every((tool) => isExploreToolName(tool.name));
-  const commandOnly = tools.every((tool) => isCommandToolName(tool.name));
-  const editOnly = tools.every((tool) => isEditToolName(tool.name));
-  const hasExplore = tools.some((tool) => isExploreToolName(tool.name));
-  const hasCommand = tools.some((tool) => isCommandToolName(tool.name));
-
-  if (exploreOnly) {
-    return text(locale, `Explored ${listed}`, `探索了 ${listed}`);
-  }
-  if (commandOnly) {
-    return text(locale, `Ran ${listed}`, `执行了 ${listed}`);
-  }
-  if (editOnly) {
-    return text(locale, `Edited ${listed}`, `编辑了 ${listed}`);
-  }
-  if (hasExplore && hasCommand) {
-    return text(locale, `Explored and ran ${listed}`, `探索并执行了 ${listed}`);
-  }
-  if (hasExplore) {
-    return text(locale, `Explored ${listed}`, `探索了 ${listed}`);
-  }
-  return text(locale, `Performed ${listed}`, `执行了 ${listed}`);
+  return segments.join(text(locale, ", ", "，"));
 }
 
 /**
  * 判断工具是否为阅读/搜索类探索操作。
  *
+ * 只读 shell 命令与 read/grep 工具同属探索行为，一并归入。
+ *
  * @param tool 工具生命周期
  * @returns 探索类返回 true
  */
 export function isExploreTool(tool: ToolLifecycle): boolean {
-  return isExploreToolName(tool.name);
+  if (isExploreToolName(tool.name)) return true;
+  return isCommandToolName(tool.name) && isReadOnlyShellCommand(commandTextOf(tool));
 }
 
 /**
- * 判断工具是否为 Shell / 后台命令。
+ * 判断工具是否为写操作类 Shell / 后台命令。
+ *
+ * 只读命令归探索桶，这里保持互斥，避免同一项被计两次。
  *
  * @param tool 工具生命周期
  * @returns 命令类返回 true
  */
 export function isCommandTool(tool: ToolLifecycle): boolean {
-  return isCommandToolName(tool.name);
+  return isCommandToolName(tool.name) && !isReadOnlyShellCommand(commandTextOf(tool));
 }
 
 /**
@@ -150,56 +142,51 @@ export function isEditTool(tool: ToolLifecycle): boolean {
 }
 
 /**
- * 去重并保持首次出现顺序。
+ * 提取命令类工具的完整命令文本。
  *
- * @param items 摘要列表
- * @returns 去重后的列表
+ * @param tool 工具生命周期
+ * @returns 参数中的 command/cmd 字段；缺失时返回空串
  */
-function dedupePreserveOrder(items: string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const item of items) {
-    const key = item.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(item);
-  }
-  return result;
+function commandTextOf(tool: ToolLifecycle): string {
+  const args = parseJsonRecord(tool.arguments || tool.argumentsPreview);
+  if (!args) return "";
+  return stringField(args, "command") || stringField(args, "cmd");
 }
 
 /**
- * 将摘要列表格式化为 “a、b、c 等”。
+ * 统计一组工具的去重操作对象数。
  *
- * @param items 去重后的摘要
- * @param maxItems 最多展示条数
+ * 以展示摘要作为去重键——read 与 grep 指向同一路径时摘要一致，自然并为一个；
+ * 提不出摘要的调用无法辨认对象，各算一个。
+ *
+ * @param tools 同一桶内的工具
  * @param locale 界面语言
- * @returns 展示文本
+ * @param workspacePath 当前工作区路径
+ * @returns 去重后的对象数
  */
-function formatLabelList(items: string[], maxItems: number, locale: Locale): string {
-  if (items.length === 0) return "";
-  const visible = items.slice(0, maxItems);
-  const joined = visible.join(locale.startsWith("zh") ? "、" : ", ");
-  if (items.length > maxItems || items.length >= 3) {
-    return text(locale, `${joined}, and more`, `${joined} 等`);
+function uniqueTargetCount(tools: ToolLifecycle[], locale: Locale, workspacePath: string): number {
+  const seen = new Set<string>();
+  let anonymous = 0;
+  for (const tool of tools) {
+    const summary = toolDisplaySummary(
+      tool.name,
+      tool.arguments || tool.argumentsPreview || "",
+      locale,
+      workspacePath
+    ).trim();
+    if (summary) seen.add(summary.toLowerCase());
+    else anonymous += 1;
   }
-  return joined;
+  return seen.size + anonymous;
 }
 
 /**
- * 截断过长的单项摘要。
+ * 返回英文名词的单复数形式。
  *
- * 优先在分隔符处断开，读起来像完整短语而不是被硬切一半。
- *
- * @param summary 原始摘要
- * @returns 不超过上限的摘要
+ * @param count 数量
+ * @param noun 单数名词
+ * @returns count 为 1 时原样返回，否则加 s
  */
-function clampSummary(summary: string): string {
-  const trimmed = summary.trim();
-  if (trimmed.length <= MAX_SUMMARY_CHARS) return trimmed;
-  // 1. 优先在分隔符处断开，保留语义完整的前半段
-  const head = trimmed.slice(0, MAX_SUMMARY_CHARS);
-  const cut = Math.max(head.lastIndexOf(" - "), head.lastIndexOf("："), head.lastIndexOf(": "));
-  if (cut > MAX_SUMMARY_CHARS / 2) return `${head.slice(0, cut).trim()}…`;
-  // 2. 没有合适的断点时直接截断
-  return `${head.trim()}…`;
+function plural(count: number, noun: string): string {
+  return count === 1 ? noun : `${noun}s`;
 }

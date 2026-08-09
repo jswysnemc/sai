@@ -68,24 +68,22 @@ describe("tool call grouping", () => {
     expect(grouped.map((item) => item.type)).toEqual(["part", "part", "part"]);
   });
 
-  it("lists concrete command targets instead of a bare count", () => {
+  it("counts commands instead of listing raw targets", () => {
     const a = toolPart("a", "completed", "run_command", JSON.stringify({ command: "cargo test" }));
     const b = toolPart("b", "completed", "run_command", JSON.stringify({ command: "npm run typecheck" }));
     if (a.type !== "tool" || b.type !== "tool") throw new Error("测试工具类型异常");
-    expect(toolCallGroupLabel([a.tool, b.tool])).toBe("执行了 cargo test、npm run typecheck");
+    expect(toolCallGroupLabel([a.tool, b.tool])).toBe("运行了 2 个命令");
   });
 
-  it("summarizes read and search tools as exploration targets", () => {
+  it("counts read and search tools as explored files", () => {
     const a = toolPart("a", "completed", "read_file", JSON.stringify({ path: "src/main.rs" }));
     const b = toolPart("b", "completed", "grep", JSON.stringify({ pattern: "toolCallGroupLabel" }));
     const c = toolPart("c", "completed", "glob", JSON.stringify({ pattern: "**/*tool*" }));
     if (a.type !== "tool" || b.type !== "tool" || c.type !== "tool") throw new Error("测试工具类型异常");
-    expect(toolCallGroupLabel([a.tool, b.tool, c.tool])).toBe(
-      "探索了 src/main.rs、toolCallGroupLabel、**/*tool* 等"
-    );
+    expect(toolCallGroupLabel([a.tool, b.tool, c.tool])).toBe("探索了 3 个文件");
   });
 
-  it("prefers workspace-relative paths in group labels", () => {
+  it("dedupes repeated reads of the same file", () => {
     const a = toolPart(
       "a",
       "completed",
@@ -96,12 +94,33 @@ describe("tool call grouping", () => {
       "b",
       "completed",
       "read_file",
+      JSON.stringify({ path: "/home/snemc/workspace/sai/web/src/main.tsx" })
+    );
+    const c = toolPart(
+      "c",
+      "completed",
+      "read_file",
       JSON.stringify({ path: "/home/snemc/workspace/sai/src/main.rs" })
     );
-    if (a.type !== "tool" || b.type !== "tool") throw new Error("测试工具类型异常");
-    expect(toolCallGroupLabel([a.tool, b.tool], "zh-CN", "/home/snemc/workspace/sai")).toBe(
-      "探索了 web/src/main.tsx、src/main.rs"
+    if (a.type !== "tool" || b.type !== "tool" || c.type !== "tool") throw new Error("测试工具类型异常");
+    expect(toolCallGroupLabel([a.tool, b.tool, c.tool], "zh-CN", "/home/snemc/workspace/sai")).toBe(
+      "探索了 2 个文件"
     );
+  });
+
+  it("treats read-only shell commands as exploration", () => {
+    const a = toolPart("a", "completed", "run_command", JSON.stringify({ command: "cat web/src/main.tsx" }));
+    const b = toolPart("b", "completed", "run_command", JSON.stringify({ command: "ls -la src" }));
+    if (a.type !== "tool" || b.type !== "tool") throw new Error("测试工具类型异常");
+    expect(toolCallGroupLabel([a.tool, b.tool])).toBe("探索了 2 个文件");
+  });
+
+  it("keeps mutating commands in the command bucket alongside reads", () => {
+    const read = toolPart("a", "completed", "run_command", JSON.stringify({ command: "git status" }));
+    const write = toolPart("b", "completed", "run_command", JSON.stringify({ command: "cargo build" }));
+    const file = toolPart("c", "completed", "read_file", JSON.stringify({ path: "src/main.rs" }));
+    if (read.type !== "tool" || write.type !== "tool" || file.type !== "tool") throw new Error("测试工具类型异常");
+    expect(toolCallGroupLabel([read.tool, write.tool, file.tool])).toBe("探索了 2 个文件，运行了 1 个命令");
   });
 
   it("does not dump raw complex regex patterns into the group title", () => {
@@ -110,17 +129,17 @@ describe("tool call grouping", () => {
     const b = toolPart("b", "completed", "run_command", JSON.stringify({ command: "semble search foo" }));
     if (a.type !== "tool" || b.type !== "tool") throw new Error("测试工具类型异常");
     const label = toolCallGroupLabel([a.tool, b.tool]);
-    expect(label).toBe("探索并执行了 web/src、semble search foo");
+    expect(label).toBe("探索了 1 个文件，运行了 1 个命令");
     expect(label).not.toContain("|");
     expect(label).not.toContain("\\d");
   });
 
-  it("falls back to a readable search label when only regex soup is available", () => {
+  it("counts unresolvable searches by call when only regex soup is available", () => {
     const messy = "执行了|个命令|ran \\d+|commands? executed|tool.?fold";
     const a = toolPart("a", "completed", "grep", JSON.stringify({ pattern: messy }));
     const b = toolPart("b", "completed", "grep", JSON.stringify({ pattern: "explored|探索了|tool.?fold" }));
     if (a.type !== "tool" || b.type !== "tool") throw new Error("测试工具类型异常");
-    expect(toolCallGroupLabel([a.tool, b.tool])).toBe("探索了 代码搜索");
+    expect(toolCallGroupLabel([a.tool, b.tool])).toBe("探索了 1 个文件");
   });
 
   it("groups consecutive completed todo calls with a plan label", () => {
@@ -135,7 +154,7 @@ describe("tool call grouping", () => {
     expect(toolCallGroupLabel(grouped[0].tools)).toBe("更新了 3 次计划");
   });
 
-  it("clamps an overlong single summary so the group title stays on one line", () => {
+  it("keeps other tools in their own bucket next to read-only commands", () => {
     const long = {
       id: "t1",
       name: "subagent",
@@ -156,9 +175,7 @@ describe("tool call grouping", () => {
 
     const label = toolCallGroupLabel([long, short]);
 
-    // 长摘要被截断并加省略号，短摘要完整保留
-    expect(label).toContain("…");
-    expect(label).toContain("git status");
-    expect(label.length).toBeLessThan(60);
+    // 只读的 git status 归入探索桶，subagent 落在其他工具桶
+    expect(label).toBe("探索了 1 个文件，执行了 1 个工具");
   });
 });
