@@ -6,6 +6,7 @@ import { api } from "../../api/client";
 import { localizeApiMessage } from "../../api/api-error";
 import type { RunMode, RunModelSelection } from "../../api/contracts";
 import { useAnchoredPopover } from "../../shared/ui/popover/use-anchored-popover";
+import { ContextDonut } from "./context-donut";
 import "./system-usage.css";
 import { useI18n } from "../i18n/use-i18n";
 
@@ -79,45 +80,45 @@ export function SystemUsage({ selection, mode, agentId, onCompact, compactDisabl
                     <X size={14} />
                   </button>
                 </div>
-                <div className="context-usage-summary">
-                  <strong>{formatContextPercent(usage.data.session.context_token_ratio)}</strong>
-                  <small>{t("Used", "已使用")} {formatTokenCount(usage.data.session.context_prompt_tokens)}/{formatTokenCount(usage.data.session.context_window_tokens)}</small>
-                </div>
+                {contextBreakdown ? (
+                  <div className="context-usage-chart">
+                    <ContextDonut
+                      segments={contextBreakdown.segments.map((segment) => ({
+                        key: segment.key,
+                        color: segment.color,
+                        share: segment.share,
+                        title: `${segment.label} ${formatTokenApprox(segment.tokens)} · ${Math.round(segment.share * 100)}%`
+                      }))}
+                      percentLabel={formatContextPercent(usage.data.session.context_token_ratio)}
+                      usedLabel={`${formatTokenCount(usage.data.session.context_prompt_tokens)}/${formatTokenCount(usage.data.session.context_window_tokens)}`}
+                      ariaLabel={t("Context usage breakdown", "上下文用量构成")}
+                    />
+                    <ul className="context-usage-legend">
+                      {contextBreakdown.segments.map((segment) => (
+                        <li key={segment.key}>
+                          <i style={{ background: segment.color }} />
+                          <span>{segment.label}</span>
+                          <strong>{formatTokenApprox(segment.tokens)}</strong>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <>
+                    <div className="context-usage-summary">
+                      <strong>{formatContextPercent(usage.data.session.context_token_ratio)}</strong>
+                      <small>{t("Used", "已使用")} {formatTokenCount(usage.data.session.context_prompt_tokens)}/{formatTokenCount(usage.data.session.context_window_tokens)}</small>
+                    </div>
+                    <div className="context-usage-track" aria-hidden="true">
+                      <span style={{ width: `${contextPercent}%` }} />
+                    </div>
+                  </>
+                )}
                 {contextCache && (
                   <div className="context-cache-summary">
                     <span>{t("Cache hit", "缓存命中")} <strong>{formatContextPercent(contextCache.hit_ratio)}</strong></span>
                     <small>{formatContextCacheDetail(contextCache, t)}</small>
                   </div>
-                )}
-                <div className="context-usage-track context-usage-track-stacked" aria-hidden="true">
-                  {contextBreakdown ? (
-                    <>
-                      {contextBreakdown.segments.map((segment) => (
-                        <span
-                          key={segment.key}
-                          className="context-usage-segment"
-                          style={{ width: `${segment.widthPercent}%`, background: segment.color }}
-                          title={`${segment.label} ${formatTokenApprox(segment.tokens)}`}
-                        />
-                      ))}
-                      {contextBreakdown.remainingPercent > 0.05 && (
-                        <span className="context-usage-segment context-usage-remaining" style={{ width: `${contextBreakdown.remainingPercent}%` }} />
-                      )}
-                    </>
-                  ) : (
-                    <span className="context-usage-segment" style={{ width: `${contextPercent}%`, background: "var(--signal)" }} />
-                  )}
-                </div>
-                {contextBreakdown && (
-                  <ul className="context-usage-legend">
-                    {contextBreakdown.segments.map((segment) => (
-                      <li key={segment.key}>
-                        <i style={{ background: segment.color }} />
-                        <span>{segment.label}</span>
-                        <strong>{formatTokenApprox(segment.tokens)}</strong>
-                      </li>
-                    ))}
-                  </ul>
                 )}
                 <div className="context-compaction-actions">
                   <span>{usage.data.session.checkpoint_count > 0 ? t(`Compacted ${usage.data.session.compacted_turns} turns · ${formatCompactionReason(usage.data.session.latest_checkpoint_reason, t)}`, `已压缩 ${usage.data.session.compacted_turns} 轮 · ${formatCompactionReason(usage.data.session.latest_checkpoint_reason, t)}`) : t("Not compacted", "尚未压缩")}</span>
@@ -173,20 +174,24 @@ type ContextLegendSegment = {
   label: string;
   tokens: number;
   color: string;
-  widthPercent: number;
+  /** 占分项总和的相对份额（0~1），供环形图分扇 */
+  share: number;
 };
 
 /**
- * 解析上下文分项并映射为图例与进度条分段。
+ * 解析上下文分项并映射为环形图扇区与图例。
+ *
+ * 份额分母是分项总和而非上下文窗口——整体占用很低时，
+ * 各分项在环形图上依然有可辨认的扇区。
  *
  * @param session 会话用量数据
  * @param t 中英文文案函数
- * @returns 图例分段与剩余空间占比；无分项时返回 null
+ * @returns 图例分段；无分项或分项全为零时返回 null
  */
 function resolveContextBreakdown(
   session: ContextBreakdownSession,
   t: (en: string, zh: string) => string
-): { segments: ContextLegendSegment[]; remainingPercent: number } | null {
+): { segments: ContextLegendSegment[] } | null {
   const raw = session.context_breakdown;
   if (!raw) return null;
   // 1. 固定分项顺序与配色，对齐参考图例
@@ -197,25 +202,20 @@ function resolveContextBreakdown(
     { key: "connectors", label: t("Connectors & MCP", "连接器及MCP"), tokens: raw.connectors_and_mcp_tokens, color: "var(--context-connectors)" },
     { key: "skills", label: t("Skills", "技能"), tokens: raw.skills_tokens, color: "var(--context-skills)" }
   ];
-  // 2. 进度条宽度按「已用 / 窗口」铺满；分项 token 保持估算值，仅用相对占比着色
-  const windowTokens = Math.max(0, session.context_window_tokens);
-  const usedTokens = Math.max(0, session.context_prompt_tokens);
+  // 2. 按分项总和求相对份额；全为零时退回单色摘要展示
   const estimatedTotal = items.reduce((sum, item) => sum + Math.max(0, item.tokens), 0);
-  const usedPercent = windowTokens > 0 ? Math.min(100, (usedTokens / windowTokens) * 100) : 0;
+  if (estimatedTotal <= 0) return null;
   const segments = items.map((item) => {
     const tokens = Math.max(0, item.tokens);
-    const share = estimatedTotal > 0 ? tokens / estimatedTotal : 0;
-    const widthPercent = usedPercent * share;
     return {
       key: item.key,
       label: item.label,
       tokens,
       color: item.color,
-      widthPercent
+      share: tokens / estimatedTotal
     };
   });
-  const remainingPercent = Math.max(0, 100 - usedPercent);
-  return { segments, remainingPercent };
+  return { segments };
 }
 
 /**
