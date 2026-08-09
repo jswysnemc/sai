@@ -53,6 +53,19 @@ describe("toolResultSummary", () => {
     });
   });
 
+  it("前台转后台的提升按中性去向摘要，不算失败", () => {
+    const output = JSON.stringify({
+      mode: "background",
+      ok: true,
+      task_id: "task-1",
+      partial_stdout: ""
+    });
+    expect(toolResultSummary("run_command", output)).toEqual({
+      label: "已转入后台",
+      tone: "neutral"
+    });
+  });
+
   it("英文界面下使用英文摘要", () => {
     const output = JSON.stringify({ stdout: "a.rs:1:x", truncated: false });
     expect(toolResultSummary("grep", output, "en-US")?.label).toBe("1 matches");

@@ -23,18 +23,26 @@ export function ShellToolView({ argumentsText, output }: ShellToolViewProps) {
   const args = parseJsonRecord(argumentsText);
   const result = parseJsonRecord(output);
   const command = stringField(args, "command") || argumentsText;
-  const stdout = stringField(result, "stdout");
-  const stderr = stringField(result, "stderr");
+  // 前台超时提升为后台任务：不是失败，展示去向与已产生的部分输出
+  const background = result?.mode === "background";
+  const stdout = stringField(result, "stdout") || stringField(result, "partial_stdout");
+  const stderr = stringField(result, "stderr") || stringField(result, "partial_stderr");
   const exitCode = typeof result?.exit_code === "number" ? result.exit_code : null;
-  const success = typeof result?.success === "boolean" ? result.success : exitCode === 0;
+  const success = background || (typeof result?.success === "boolean" ? result.success : exitCode === 0);
   const diffOutput = isDiffCommand(command, stdout);
-  const hasBody = Boolean(stdout || stderr || (!result && output));
+  const hasBody = Boolean(stdout || stderr || background || (!result && output));
   return (
     <div className="shell-tool-view">
       <div className={`shell-command-line${hasBody ? " has-body" : ""}`}>
         <span>$</span>
         <code>{command}</code>
       </div>
+      {background && (
+        <div className="shell-background-note">
+          {t("Promoted to background task", "已转入后台任务")}
+          {stringField(result, "task_id") && <code>{stringField(result, "task_id")}</code>}
+        </div>
+      )}
       {result && !success && (
         <div className="shell-exit failed">
           {t(`exit ${exitCode ?? "unknown"}`, `退出码 ${exitCode ?? "未知"}`)}

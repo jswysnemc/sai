@@ -132,17 +132,22 @@ function fileSummary(output: string, locale: Locale): ToolResultSummary | null {
 }
 
 /**
- * 提取命令的失败退出码。
+ * 提取命令的失败退出码或后台提升说明。
  *
- * 成功的命令不占用摘要位：退出码 0 是默认预期，写出来只会挤占空间。
+ * 前台超时会被提升为后台任务继续执行，这不是失败——结果里没有
+ * exit_code，按失败渲染会把一次正常的提升标成"退出码未知"。
+ * 成功的前台命令不占用摘要位：退出码 0 是默认预期，写出来只会挤占空间。
  *
  * @param output 命令结果 JSON
  * @param locale 界面语言
- * @returns 退出码摘要；命令成功时返回 null
+ * @returns 摘要；前台成功时返回 null
  */
 function commandSummary(output: string, locale: Locale): ToolResultSummary | null {
   const result = parseJsonRecord(output);
   if (!result) return null;
+  if (result.mode === "background") {
+    return { label: text(locale, "moved to background", "已转入后台"), tone: "neutral" };
+  }
   const exitCode = typeof result.exit_code === "number" ? result.exit_code : null;
   const success = typeof result.success === "boolean" ? result.success : exitCode === 0;
   if (success) return null;

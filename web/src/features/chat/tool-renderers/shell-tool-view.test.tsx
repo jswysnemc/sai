@@ -69,4 +69,19 @@ describe("ShellToolView", () => {
     expect(html).toContain("shell-output stderr");
     expect(html).toContain("compile error");
   });
+
+  it("前台转后台不按失败渲染并展示去向", () => {
+    const html = render("python3 -m http.server", {
+      mode: "background",
+      ok: true,
+      task_id: "task-9",
+      partial_stdout: "Serving HTTP on 127.0.0.1",
+      partial_stderr: ""
+    });
+    expect(html).toContain("已转入后台任务");
+    expect(html).toContain("task-9");
+    expect(html).toContain("Serving HTTP on 127.0.0.1");
+    expect(html).not.toContain("shell-exit");
+    expect(html).not.toContain("退出码");
+  });
 });

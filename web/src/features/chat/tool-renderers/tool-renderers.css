@@ -48,6 +48,24 @@
 }
 
 /*
+ * 后台提升提示：前台超时转为后台任务的去向说明。
+ * 中性表达——这是命令的正常延续，不是错误。
+ */
+.shell-background-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg) 0;
+  color: var(--technical-muted);
+  font: 400 var(--text-xs)/1.4 var(--font-ui);
+}
+
+.shell-background-note code {
+  color: var(--technical-text);
+  font: 400 var(--text-2xs)/1 var(--font-code);
+}
+
+/*
  * 退出码：只在失败时出现，因此不需要成功态的配色。
  * 用胶囊而非裸文字，避免它被误读成输出的第一行。
  */
