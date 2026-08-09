@@ -57,28 +57,41 @@ describe("inline diff", () => {
     expect(changedText(pair.after)).toBe("added");
   });
 
-  it("pairs runs positionally without a similarity gate", () => {
+  it("pairs runs positionally", () => {
     const lines: DiffLine[] = [
-      { kind: "removed", text: "one" },
-      { kind: "removed", text: "two" },
-      { kind: "added", text: "1" },
-      { kind: "added", text: "2" }
+      { kind: "removed", text: "count = one" },
+      { kind: "removed", text: "total = two" },
+      { kind: "added", text: "count = 1" },
+      { kind: "added", text: "total = 2" }
     ];
 
     const annotated = annotateInlineDiff(lines);
 
-    // 第 i 个删除与第 i 个新增配对，与内容相似度无关
+    // 第 i 个删除与第 i 个新增配对
     expect(changedText(annotated[0].segments)).toBe("one");
     expect(changedText(annotated[2].segments)).toBe("1");
     expect(changedText(annotated[1].segments)).toBe("two");
     expect(changedText(annotated[3].segments)).toBe("2");
   });
 
+  it("skips annotation when paired lines share almost nothing", () => {
+    const lines: DiffLine[] = [
+      { kind: "removed", text: "- /proc/mounts 未匹配到挂载条目" },
+      { kind: "added", text: "- 文件系统: /dev/nvme0n1p3（btrfs）" }
+    ];
+
+    const annotated = annotateInlineDiff(lines);
+
+    // 整行重写时行级背景已表达增删，字符级罩层只会把整行文字蒙住
+    expect(annotated[0].segments).toBeUndefined();
+    expect(annotated[1].segments).toBeUndefined();
+  });
+
   it("leaves unpaired lines without segments", () => {
     const lines: DiffLine[] = [
-      { kind: "removed", text: "gone" },
+      { kind: "removed", text: "gone fishing" },
       { kind: "removed", text: "also gone" },
-      { kind: "added", text: "kept" }
+      { kind: "added", text: "gone hiking" }
     ];
 
     const annotated = annotateInlineDiff(lines);

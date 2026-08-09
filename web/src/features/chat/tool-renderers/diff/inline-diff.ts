@@ -75,10 +75,20 @@ function buildSegments(graphemes: string[], head: number, tail: number): DiffSeg
 }
 
 /**
+ * 配对行保留字符级标注所需的最低相同占比。
+ *
+ * 两行几乎完全不同时，"改动区间"就是整行，字符级强调退化成把全行
+ * 再罩一层底色——行级背景已经表达了增删，这层罩子只会把文字蒙住。
+ * 相同部分不足此比例时按整行重写处理，不做字符级标注。
+ */
+const MIN_COMMON_RATIO = 0.2;
+
+/**
  * 为相邻的删除与新增行补齐字符级差异。
  *
  * 按位置配对：一段连续删除中的第 i 行与随后连续新增中的第 i 行成对。
- * 不做相似度筛选，配对完全由位置决定，行为可预测。
+ * 不做相似度筛选，配对完全由位置决定，行为可预测；
+ * 仅当两行相同部分过少时放弃标注，避免强调层盖住整行。
  *
  * @param lines 已解析的行序列
  * @returns 带字符级分段的行序列
@@ -104,10 +114,38 @@ export function annotateInlineDiff(lines: DiffLine[]): DiffLine[] {
     for (let offset = 0; offset < pairs; offset += 1) {
       const removed = result[removedStart + offset];
       const added = result[addedStart + offset];
+      if (!hasEnoughCommonText(removed.text, added.text)) continue;
       const segments = segmentLinePair(removed.text, added.text);
       removed.segments = segments.before;
       added.segments = segments.after;
     }
   }
   return result;
+}
+
+/**
+ * 判断配对两行是否有足够的相同部分值得做字符级标注。
+ *
+ * @param before 改动前文本
+ * @param after 改动后文本
+ * @returns 相同占比达到阈值时返回 true
+ */
+function hasEnoughCommonText(before: string, after: string): boolean {
+  const left = toGraphemes(before);
+  const right = toGraphemes(after);
+  const longest = Math.max(left.length, right.length);
+  if (longest === 0) return false;
+  let head = 0;
+  while (head < left.length && head < right.length && left[head] === right[head]) {
+    head += 1;
+  }
+  let tail = 0;
+  while (
+    tail < left.length - head &&
+    tail < right.length - head &&
+    left[left.length - 1 - tail] === right[right.length - 1 - tail]
+  ) {
+    tail += 1;
+  }
+  return (head + tail) / longest >= MIN_COMMON_RATIO;
 }

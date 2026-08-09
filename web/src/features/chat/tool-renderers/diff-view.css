@@ -243,13 +243,24 @@
   background: transparent;
 }
 
-/* 字符级改动：在整行底色之上再点出具体改了哪几个字符 */
+/*
+ * 字符级改动：在整行底色之上再点出具体改了哪几个字符。
+ * 强调色取各自的增删语义色，而不是 currentColor——
+ * 后者在普通正文色上混出来的是一块与增删无关的灰罩。
+ */
 .diff-inline {
   padding: 0 1px;
   border-radius: 2px;
-  background: color-mix(in srgb, currentColor 22%, transparent);
   color: inherit;
   font-weight: 600;
+}
+
+.diff-row.added .diff-inline {
+  background: color-mix(in srgb, var(--diff-added-text) 20%, transparent);
+}
+
+.diff-row.removed .diff-inline {
+  background: color-mix(in srgb, var(--diff-removed-text) 20%, transparent);
 }
 
 /* hunk 边界：提示中间跳过了未变更的区段 */
