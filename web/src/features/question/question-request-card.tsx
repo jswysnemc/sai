@@ -26,7 +26,8 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
   const { t } = useI18n();
   const questions = pending.request.questions;
   const [status, setStatus] = useState<CardStatus>(() => responseStatus(response));
-  const [expanded, setExpanded] = useState(true);
+  // 待回答时展开等待操作；已处理的退化成历史记录，默认收起
+  const [expanded, setExpanded] = useState(() => responseStatus(response) === "pending");
   const [tab, setTab] = useState(0);
   const [answers, setAnswers] = useState<QuestionAnswers>(() => initialAnswers(questions));
   const [customDrafts, setCustomDrafts] = useState<string[]>(() => initialCustomDrafts(questions));
@@ -36,7 +37,7 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
 
   useEffect(() => {
     setStatus(responseStatus(response));
-    setExpanded(true);
+    setExpanded(responseStatus(response) === "pending");
     setSubmitting(false);
     setError(null);
     setAnswers(initialAnswers(questions));
@@ -144,6 +145,10 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
 
   const resolved = status !== "pending";
   const interactive = !resolved && active;
+  // 折叠态用一行说明"问了什么"；已回答的直接给出选择结果，不必展开才能确认
+  const headline = resolved && resolvedSummary.some(Boolean)
+    ? resolvedSummary.filter(Boolean).join(" · ")
+    : questions.map((item) => item.header).join(" / ");
 
   return (
     <section className={`question-request-card is-${status}`}>
@@ -153,7 +158,11 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
         </span>
         <span className="question-request-copy">
           <strong>{statusLabel(status, active, t)}</strong>
-          <span>{t(`${questions.length} questions`, `${questions.length} 个问题`)} · {questions.map((item) => item.header).join(" / ")}</span>
+          <span title={headline}>
+            {status === "pending"
+              ? `${t(`${questions.length} questions`, `${questions.length} 个问题`)} · ${headline}`
+              : headline}
+          </span>
         </span>
         {status === "pending" && (
           <span className="question-request-progress" aria-label={t(`${answeredCount} of ${questions.length} answered`, `已回答 ${answeredCount}/${questions.length}`)}>

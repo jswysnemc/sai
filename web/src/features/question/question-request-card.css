@@ -1,28 +1,32 @@
+/*
+ * 结构化提问卡
+ *
+ * 只有待回答时才带边框：这类卡片在等用户行动，需要从一屏只读的工具卡里跳出来。
+ * 一旦回答或取消，它就退化成一条历史记录，改用与工具卡一致的无框形态，
+ * 长对话往回翻时不会被一串已完成的方框打断。
+ */
+
 .question-request-card {
-  overflow: hidden;
-  border: 1px solid var(--technical-border);
+  min-width: 0;
+  border: 1px solid transparent;
   border-radius: var(--radius-3);
-  background: var(--technical-surface);
   color: var(--technical-text);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 5%, transparent);
+  transition:
+    border-color var(--transition-base),
+    background-color var(--transition-base);
 }
 
-.question-request-card.is-cancelled,
-.question-request-card.is-unavailable {
-  border-color: color-mix(in srgb, var(--danger) 24%, var(--technical-border));
+/* 待回答：轻量边框加浅底，不用阴影——阴影会让它浮在对话流之上 */
+.question-request-card.is-pending {
+  border-color: color-mix(in srgb, var(--signal) 32%, var(--technical-border));
+  background: color-mix(in srgb, var(--signal) 4%, var(--technical-surface));
 }
 
-/* 已回答的卡片用成功色描边，状态一眼可辨 */
-.question-request-card.is-answered {
-  border-color: color-mix(in srgb, var(--signal) 40%, var(--technical-border));
-}
-
-.question-request-card.is-answered .question-request-icon {
+.question-request-card.is-pending .question-request-icon {
   color: var(--signal);
 }
 
-/* 待回答的卡片图标用强调色，提示需要行动 */
-.question-request-card.is-pending .question-request-icon {
+.question-request-card.is-answered .question-request-icon {
   color: var(--signal);
 }
 
@@ -33,69 +37,95 @@
 
 .question-request-head {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto 14px;
-  align-items: start;
-  gap: var(--space-xs);
+  grid-template-columns: 20px minmax(0, 1fr) auto 14px;
+  align-items: center;
+  gap: var(--space-sm);
   width: 100%;
-  min-height: 52px;
-  padding: var(--space-sm) var(--space-md);
+  min-height: 28px;
+  padding: var(--space-3xs) var(--space-2xs);
   border: 0;
-  border-radius: 0;
+  border-radius: var(--radius-2);
   background: transparent;
   color: inherit;
   text-align: left;
 }
 
+/* 待回答的卡片内部留白多一档：它是要被操作的，不是被扫读的 */
+.question-request-card.is-pending .question-request-head {
+  padding: var(--space-xs) var(--space-sm);
+}
+
 /* 回答进度徽标：待回答时显示 已答/总数，靠右在箭头前 */
 .question-request-progress {
   align-self: center;
-  padding: var(--space-3xs) var(--space-sm);
+  padding: 0 var(--space-xs);
+  height: 1.125rem;
+  display: inline-flex;
+  align-items: center;
   border-radius: var(--radius-pill);
-  background: var(--signal-soft, color-mix(in srgb, var(--signal) 12%, transparent));
+  background: color-mix(in srgb, var(--signal) 12%, transparent);
   color: var(--signal);
-  font: 500 var(--text-xs) var(--font-code);
+  font: 500 var(--text-2xs)/1 var(--font-code);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .question-request-head:hover:not(:disabled) {
-  border-color: transparent;
-  background: var(--paper-deep);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
 }
 
 .question-request-icon {
   display: grid;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   place-items: center;
-  margin-top: 1px;
   color: var(--technical-muted);
 }
 
+.question-request-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/*
+ * 标题区：折叠态压成单行，与工具卡的「名称 · 对象」同构。
+ * 待回答时才展开成两行，把问题概要完整给出。
+ */
 .question-request-copy {
-  display: grid;
-  gap: var(--space-3xs);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
   min-width: 0;
 }
 
+.question-request-card.is-pending .question-request-copy {
+  display: grid;
+  gap: var(--space-3xs);
+}
+
 .question-request-copy strong {
-  font-size: var(--text-sm);
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+  font: 400 var(--text-sm)/1.3 var(--font-ui);
+}
+
+.question-request-card.is-pending .question-request-copy strong {
+  color: var(--technical-text);
   font-weight: 500;
-  line-height: 1.3;
 }
 
 .question-request-copy span {
   overflow: hidden;
-  color: var(--technical-muted);
-  font-size: var(--text-xs);
-  line-height: 1.35;
+  min-width: 0;
+  color: var(--ink-soft);
+  font: 400 var(--text-xs)/1.4 var(--font-code);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .question-request-head > svg {
-  margin-top: 2px;
-  color: var(--technical-muted);
-  transition: transform var(--transition-fast);
+  color: var(--ink-soft);
+  transition: transform var(--duration-base) var(--ease-standard);
 }
 
 .question-request-head > svg.rotate {
@@ -105,7 +135,31 @@
 .question-request-body {
   display: grid;
   gap: var(--space-md);
-  padding: 0 var(--space-md) var(--space-md);
+  padding: var(--space-2xs) var(--space-sm) var(--space-sm);
+  animation: question-request-reveal var(--duration-slow) var(--ease-out);
+}
+
+/* 已处理的卡片展开后跟随工具卡的导轨缩进，不再自带内边距 */
+.question-request-card:not(.is-pending) .question-request-body {
+  padding: var(--space-2xs) 0 0 var(--space-2xs);
+  border-left: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+}
+
+@keyframes question-request-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-0.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .question-request-body {
+    animation: none;
+  }
 }
 
 .question-tabs {

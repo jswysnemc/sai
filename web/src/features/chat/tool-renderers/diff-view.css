@@ -26,16 +26,20 @@
 
 /*
  * 文件头：与代码同底，靠字重与颜色分层，不再压一条深色条。
- * 横向滚动时贴左，长路径滚动过程中始终可见。
+ * 双向吸附：横向滚动时贴左，长路径始终可见；纵向滚动时贴顶，
+ * 长 diff 滚到中段仍知道自己在看哪个文件。吸附时需要不透明底色，
+ * 否则代码行会从文字后面透出来。
  */
 .diff-file-head {
   position: sticky;
+  top: 0;
   left: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap:var(--space-sm);
   padding:var(--space-sm) var(--space-lg) var(--space-2xs);
-  background: transparent;
+  background: var(--technical-surface);
 }
 
 .diff-file-head .tool-file-reference {
@@ -71,7 +75,7 @@
 }
 
 .diff-file-head small {
-  color: var(--ink-soft);
+  color: var(--technical-muted);
   font-size:var(--text-2xs);
 }
 
@@ -358,7 +362,7 @@
   width: 20px;
   height: 20px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-2);
   background: transparent;
   color: var(--technical-muted);
 }

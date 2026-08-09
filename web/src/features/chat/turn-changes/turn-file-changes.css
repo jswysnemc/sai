@@ -1,10 +1,16 @@
+/*
+ * 本轮文件改动摘要
+ *
+ * 摘要行是文件列表的折叠开关，与工具卡「点头部展开详情」同一套语义。
+ * 容器只留一圈细边框，不用阴影——它是一条轮次结论，不是浮层。
+ */
+
 .turn-file-changes {
   margin-top:var(--space-sm);
+  overflow: hidden;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-3);
   background: var(--paper-raised);
-  box-shadow: var(--shadow-xs);
-  overflow: hidden;
 }
 
 .turn-file-changes-head {
@@ -12,41 +18,57 @@
   align-items: center;
   justify-content: space-between;
   gap:var(--space-md);
-  min-height: 2.25rem;
-  padding:var(--space-xs) 0;
+  min-height: 2rem;
+  padding:var(--space-3xs) var(--space-sm) var(--space-3xs) var(--space-2xs);
   border-bottom: 1px solid var(--line-soft);
   color: var(--ink-soft);
 }
 
+/* 摘要按钮：图标 · 结论 · 增删统计 · 箭头，与工具卡头部同构 */
 .turn-file-changes-summary {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: var(--space-sm);
+  padding: var(--space-3xs) var(--space-2xs);
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
+.turn-file-changes-summary:hover {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+/* 图标与工具卡同一档尺寸，不再套一层 2.25rem 的方框 */
 .turn-file-changes-mark {
   display: grid;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 20px;
+  height: 20px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-3);
-  background: var(--paper-raised);
   color: var(--ink-soft);
 }
 
-.turn-file-changes-summary > div {
-  display: grid;
-  gap: var(--space-3xs);
-  min-width: 0;
+.turn-file-changes-summary strong {
+  overflow: hidden;
+  color: var(--ink);
+  font: 500 var(--text-sm)/1.3 var(--font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.turn-file-changes-summary strong {
-  color: var(--ink);
-  font-size: var(--text-sm);
-  font-weight: 600;
+.turn-file-changes-summary > svg {
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+  transition: transform var(--duration-base) var(--ease-standard);
+}
+
+.turn-file-changes-summary > svg.rotate {
+  transform: rotate(180deg);
 }
 
 .turn-file-changes-head-actions {
@@ -84,10 +106,10 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2xs);
-  min-height: 1.75rem;
+  min-height: 1.5rem;
   padding: 0 var(--space-sm);
   border: 1px solid var(--line-soft);
-  border-radius: var(--radius-3);
+  border-radius: var(--radius-2);
   background: var(--paper-raised);
   color: var(--ink);
   font-size: var(--text-xs);
@@ -107,24 +129,6 @@
   font-size:var(--text-sm);
 }
 
-.turn-file-changes-head strong {
-  color: var(--ink, inherit);
-  font-weight: 600;
-}
-
-.turn-file-changes-head-button {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-
-.turn-file-changes-head-button:hover {
-  background: color-mix(in srgb, var(--paper-raised) 55%, transparent);
-}
-
 .turn-file-change-row {
   position: relative;
   display: block;
@@ -136,15 +140,16 @@
   color: inherit;
 }
 
+/* 文件行：路径吸收剩余宽度，动作标签与增删统计贴右，箭头收尾 */
 .turn-file-change-main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto 14px;
   gap:var(--space-sm);
   align-items: center;
   min-width: 0;
   width: 100%;
   margin: 0;
-  padding:var(--space-2xs) 0;
+  padding:var(--space-2xs) var(--space-sm);
   border: 0;
   background: transparent;
   color: inherit;
@@ -153,9 +158,18 @@
   font: inherit;
 }
 
+.turn-file-change-main > svg {
+  color: var(--ink-soft);
+  transition: transform var(--duration-base) var(--ease-standard);
+}
+
+.turn-file-change-main > svg.rotate {
+  transform: rotate(180deg);
+}
+
 .turn-file-change-row:hover,
 .turn-file-change-row.active {
-  background: var(--paper-raised);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
 }
 
 .turn-file-path {
@@ -187,6 +201,25 @@
   color: var(--technical-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/*
+ * 动作标签：只有新增、删除、重命名值得标出，默认修改不占位。
+ * 用文字着色而非底色胶囊，与增删统计同一分量。
+ */
+.turn-file-action {
+  flex: 0 0 auto;
+  font: 500 var(--text-2xs)/1.3 var(--font-ui);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.turn-file-action.is-added {
+  color: var(--diff-added-text);
+}
+
+.turn-file-action.is-deleted {
+  color: var(--diff-removed-text);
 }
 
 .turn-file-changes-list li.is-expanded {
@@ -222,6 +255,24 @@
   padding:var(--space-2xs) 0;
   max-height: none;
   overflow: visible;
+  animation: turn-file-changes-reveal var(--duration-slow) var(--ease-out);
+}
+
+@keyframes turn-file-changes-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-0.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn-file-changes-list {
+    animation: none;
+  }
 }
 
 .turn-file-changes-list li {
@@ -234,31 +285,11 @@
   border-top: 0;
 }
 
-.turn-file-changes-collapse {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2xs);
-  width: 100%;
-  min-height: 1.75rem;
-  padding: 0 var(--space-md);
-  border: 0;
-  border-top: 1px solid var(--line-soft);
-  background: transparent;
-  color: var(--ink-soft);
-  font-size: var(--text-xs);
-  text-align: left;
-  cursor: pointer;
-}
-
-.turn-file-changes-collapse:hover {
-  background: var(--paper-raised);
-  color: var(--ink);
-}
-
 .turn-file-changes-stats {
   display: inline-flex;
   gap:var(--space-xs);
   font:600 var(--text-xs)/1 var(--font-code, monospace);
+  font-variant-numeric: tabular-nums;
 }
 
 .turn-file-changes-stats b {
@@ -295,5 +326,6 @@
 
   .turn-file-changes-head-actions {
     margin-left: auto;
+    padding-bottom: var(--space-3xs);
   }
 }

@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, FileDiff, PanelRightOpen, RotateCcw } from "lucide-react";
+import { ChevronDown, FileDiff, PanelRightOpen, RotateCcw } from "lucide-react";
 import { api } from "../../../api/client";
 import { toDisplayError } from "../../../api/api-error";
 import { DiffView } from "../tool-renderers/diff-view";
-import { parseJsonRecord, stringField } from "../tool-renderers/tool-data";
 import { useI18n } from "../../i18n/use-i18n";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
 import type { TurnFileChange } from "./collect-turn-file-changes";
+import { buildTurnDiffSource, type DiffSourceTool } from "./build-turn-diff-source";
 import { openWorkspaceDiff } from "../../workspace/workspace-passive-diff";
 import { FileTypeIcon } from "../../../shared/ui/file-icon";
 import "./turn-file-changes.css";
@@ -14,7 +14,7 @@ import "./turn-file-changes.css";
 type TurnFileChangesProps = {
   changes: TurnFileChange[];
   /** 本轮工具列表，用于生成 diff 预览 */
-  tools?: readonly ToolLike[];
+  tools?: readonly DiffSourceTool[];
   /** 会话标识；有 turnId 时启用舍弃改动 */
   sessionId?: string | null;
   /** 轮次标识；有值时启用工作树恢复 */
@@ -23,16 +23,11 @@ type TurnFileChangesProps = {
   onRestored?: () => void;
 };
 
-type ToolLike = {
-  name: string;
-  arguments?: string;
-  argumentsPreview?: string;
-  output?: string;
-  status?: string;
-};
-
 /**
  * 展示本轮全部文件改动摘要，支持按单个文件展开 diff、跳转文件树，以及舍弃改动。
+ *
+ * 摘要行本身就是文件列表的折叠开关，与工具卡的头部语义一致；
+ * 新增、删除、重命名在文件行上直接标出，不必悬停才能得知。
  *
  * @param props 汇总后的改动列表与可选工具原始数据
  * @returns 改动组件；无改动时不渲染
@@ -148,13 +143,18 @@ export function TurnFileChanges({
   return (
     <section className="turn-file-changes" aria-label={t("Turn file changes", "本轮文件改动")}>
       <div className="turn-file-changes-head">
-        <div className="turn-file-changes-summary">
-          <span className="turn-file-changes-mark"><FileDiff size={16} aria-hidden /></span>
-          <div>
-            <strong>{t(`Edited ${changes.length} files`, `已编辑 ${changes.length} 个文件`)}</strong>
-            <span className="turn-file-changes-stats"><b>+{added}</b><i>-{removed}</i></span>
-          </div>
-        </div>
+        {/* 摘要行即折叠开关：与工具卡「点头部展开详情」同一套语义 */}
+        <button
+          type="button"
+          className="turn-file-changes-summary"
+          onClick={() => setFilesCollapsed((current) => !current)}
+          aria-expanded={!filesCollapsed}
+        >
+          <span className="turn-file-changes-mark" aria-hidden><FileDiff size={14} /></span>
+          <strong>{t(`Edited ${changes.length} files`, `已编辑 ${changes.length} 个文件`)}</strong>
+          <span className="turn-file-changes-stats"><b>+{added}</b><i>-{removed}</i></span>
+          <ChevronDown size={14} className={filesCollapsed ? "" : "rotate"} aria-hidden />
+        </button>
         <div className="turn-file-changes-head-actions">
           {canDiscard && (
             <button
@@ -186,22 +186,29 @@ export function TurnFileChanges({
             const expanded = activePath === change.path;
             return (
               <li key={`${change.tool}:${change.path}`} className={expanded ? "is-expanded" : ""}>
-                {/* 1. 文件行即唯一标题 2. 展开后右侧放操作，不再叠第二层路径条 */}
                 <div className={`turn-file-change-row${expanded ? " active" : ""}`}>
                   <button
                     type="button"
                     className="turn-file-change-main"
                     onClick={() => toggleDiff(change.path)}
                     aria-expanded={expanded}
-                    title={actionLabel(change.action, t)}
                   >
                     <span className="turn-file-path" title={change.path}>
                       <FileTypeIcon name={change.path} size={14} />
                       <span className="turn-file-name">{fileName(change.path)}</span>
                       {fileDirectory(change.path) && <span className="turn-file-directory">{fileDirectory(change.path)}</span>}
                     </span>
-                    <span className="turn-file-changes-stats"><b>+{change.added}</b><i>-{change.removed}</i></span>
-                    {expanded ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
+                    {/* 非常规修改（新增/删除/重命名）值得直接标出，默认修改不占位 */}
+                    {change.action !== "Edited" && (
+                      <span className={`turn-file-action is-${change.action.toLowerCase()}`}>
+                        {actionLabel(change.action, t)}
+                      </span>
+                    )}
+                    <span className="turn-file-changes-stats">
+                      {change.added > 0 && <b>+{change.added}</b>}
+                      {change.removed > 0 && <i>-{change.removed}</i>}
+                    </span>
+                    <ChevronDown size={14} className={expanded ? "rotate" : ""} aria-hidden />
                   </button>
                 </div>
                 {expanded && activeChange && (
@@ -220,15 +227,6 @@ export function TurnFileChanges({
           })}
         </ul>
       )}
-      <button
-        type="button"
-        className="turn-file-changes-collapse"
-        aria-expanded={!filesCollapsed}
-        onClick={() => setFilesCollapsed((current) => !current)}
-      >
-        <span>{filesCollapsed ? t("Show files", "展开文件") : t("Collapse files", "收起文件")}</span>
-        {filesCollapsed ? <ChevronDown size={14} aria-hidden /> : <ChevronUp size={14} aria-hidden />}
-      </button>
     </section>
   );
 }
@@ -267,153 +265,4 @@ function fileDirectory(path: string): string {
   const normalized = path.replaceAll("\\", "/");
   const lastSlash = normalized.lastIndexOf("/");
   return lastSlash > -1 ? normalized.slice(0, lastSlash) : "";
-}
-
-/**
- * 从本轮编辑工具参数/输出组装 Diff 源文本。
- *
- * @param tools 工具列表
- * @param path 可选目标路径过滤
- * @returns Codex / 合成 patch 文本
- */
-function buildTurnDiffSource(tools: readonly ToolLike[], path: string | null): string {
-  const chunks: string[] = [];
-  for (const tool of tools) {
-    if (!["edit_file", "write_file", "str_replace"].includes(tool.name)) continue;
-    if (tool.status && tool.status !== "completed") continue;
-    // 1. 优先使用工具执行后返回的真实前后内容差异，避免把参数中的大范围替换误画成整文件改动
-    const output = parseJsonRecord(tool.output ?? "");
-    const actualDiff = output ? stringField(output, "diff") : "";
-    if (actualDiff && (!path || diffIncludesPath(actualDiff, path))) {
-      chunks.push(actualDiff);
-      continue;
-    }
-    // 2. 历史运行没有保存真实 diff 时才回退到旧参数预览
-    const argsText = tool.arguments || tool.argumentsPreview || "";
-    const args = parseJsonRecord(argsText);
-    if (!args) continue;
-    if (tool.name === "edit_file") {
-      const patch = stringField(args, "patch");
-      if (!patch) continue;
-      if (path && !patchIncludesPath(patch, path)) continue;
-      chunks.push(path ? extractPatchForPath(patch, path) : patch);
-      continue;
-    }
-    const filePath = stringField(args, "path");
-    if (!filePath || (path && !pathsMatch(filePath, path))) continue;
-    const content = stringField(args, "content");
-    const oldString = stringField(args, "old_string");
-    const newString = stringField(args, "new_string");
-    if (content || oldString || newString) {
-      chunks.push(buildSyntheticPatch(filePath, oldString, newString || content, Boolean(content) && !oldString));
-    }
-  }
-  return chunks.filter(Boolean).join("\n");
-}
-
-/**
- * 判断 unified diff 是否属于指定文件。
- *
- * @param diff unified diff 文本
- * @param path 目标文件路径
- * @returns 是否匹配
- */
-function diffIncludesPath(diff: string, path: string): boolean {
-  return diff.split("\n").some((line) => {
-    if (!line.startsWith("+++ ") && !line.startsWith("--- ")) return false;
-    const candidate = line.slice(4).trim();
-    if (candidate === "/dev/null") return false;
-    return pathsMatch(candidate.replace(/^[ab]\//, ""), path);
-  });
-}
-
-/**
- * 判断两个路径是否指向同一文件。
- *
- * changed_files 常返回绝对路径，而工具参数多为工作区相对路径，
- * 因此在归一化分隔符后按后缀对齐。
- *
- * @param left 路径一
- * @param right 路径二
- * @returns 是否匹配
- */
-function pathsMatch(left: string, right: string): boolean {
-  const a = normalizePath(left);
-  const b = normalizePath(right);
-  if (a === b) return true;
-  return a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
-}
-
-/**
- * 归一化路径分隔符并去掉开头的 ./ 前缀。
- *
- * @param path 原始路径
- * @returns 归一化路径
- */
-function normalizePath(path: string): string {
-  return path.replaceAll("\\", "/").replace(/^\.\//, "");
-}
-
-/**
- * 判断 patch 是否包含指定路径。
- *
- * @param patch Codex patch
- * @param path 文件路径
- * @returns 是否包含
- */
-function patchIncludesPath(patch: string, path: string): boolean {
-  return patch.split("\n").some((line) =>
-    line.startsWith("*** Add File: ") ||
-    line.startsWith("*** Delete File: ") ||
-    line.startsWith("*** Update File: ")
-      ? pathsMatch(line.slice(line.indexOf(": ") + 2).trim(), path)
-      : false
-  );
-}
-
-/**
- * 从多文件 patch 中提取单个路径的片段。
- *
- * @param patch 完整 patch
- * @param path 目标路径
- * @returns 单文件 patch
- */
-function extractPatchForPath(patch: string, path: string): string {
-  const lines = patch.split("\n");
-  const result: string[] = ["*** Begin Patch"];
-  let capturing = false;
-  for (const line of lines) {
-    if (/^\*\*\* (Add|Delete|Update) File: /.test(line)) {
-      const filePath = line.slice(line.indexOf(": ") + 2).trim();
-      capturing = pathsMatch(filePath, path);
-      if (capturing) result.push(line);
-      continue;
-    }
-    if (line.startsWith("*** End Patch")) {
-      capturing = false;
-      continue;
-    }
-    if (capturing) result.push(line);
-  }
-  result.push("*** End Patch");
-  return result.length > 2 ? result.join("\n") : "";
-}
-
-/**
- * 将 write_file / str_replace 参数转成可预览的简易 patch。
- *
- * @param path 文件路径
- * @param oldText 旧文本
- * @param newText 新文本
- * @param isAdd 是否整文件新增/覆盖展示为 Add
- * @returns Codex 风格 patch 文本
- */
-function buildSyntheticPatch(path: string, oldText: string, newText: string, isAdd: boolean): string {
-  if (isAdd) {
-    const body = newText.split("\n").map((line) => `+${line}`).join("\n");
-    return `*** Begin Patch\n*** Add File: ${path}\n${body}\n*** End Patch`;
-  }
-  const removed = oldText ? oldText.split("\n").map((line) => `-${line}`).join("\n") : "";
-  const added = newText.split("\n").map((line) => `+${line}`).join("\n");
-  return `*** Begin Patch\n*** Update File: ${path}\n@@\n${removed}${removed && added ? "\n" : ""}${added}\n*** End Patch`;
 }

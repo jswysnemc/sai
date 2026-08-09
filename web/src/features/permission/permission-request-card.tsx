@@ -74,7 +74,7 @@ export function PermissionRequestCard({ request, decision, active = true }: Perm
   const cardState: ToolCardState = status === "auto_allowed" ? "allowed" : status;
   return (
     <ToolCardShell
-      className="permission-shell"
+      className={status === "pending" ? "permission-shell is-pending" : "permission-shell"}
       tone={toneOfState(cardState)}
       icon={<ShieldAlert size={14} />}
       title={statusLabel(status, active, t)}

@@ -328,7 +328,7 @@
   width: 24px;
   height: 22px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
 }

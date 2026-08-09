@@ -5,6 +5,36 @@
  * 本文件只负责展开体：审核理由、参数详情与决策按钮。
  */
 
+/*
+ * 待审核时给一圈轻量边框。
+ *
+ * 这张卡在等用户决定，需要从一屏只读的工具卡里跳出来；
+ * 决定作出后它就只是一条历史记录，边框随之撤掉，
+ * 长对话往回翻时不会被一串已处理的方框打断。
+ */
+.tool-shell.permission-shell {
+  border: 1px solid transparent;
+  border-radius: var(--radius-3);
+  transition:
+    border-color var(--transition-base),
+    background-color var(--transition-base);
+}
+
+.tool-shell.permission-shell.is-pending {
+  border-color: color-mix(in srgb, var(--warning) 34%, var(--technical-border));
+  background: color-mix(in srgb, var(--warning) 4%, transparent);
+}
+
+/* 待审核时内部留白多一档：它是要被操作的，不是被扫读的 */
+.tool-shell.permission-shell.is-pending > .tool-shell-head {
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.tool-shell.permission-shell.is-pending > .tool-shell-body {
+  padding-right: var(--space-sm);
+  padding-left: var(--space-sm);
+}
+
 /* 权限需要用户处理，展开体比普通工具卡多一档留白 */
 .permission-shell .tool-shell-body {
   display: grid;
