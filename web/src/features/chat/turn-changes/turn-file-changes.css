@@ -222,16 +222,19 @@
   color: var(--diff-removed-text);
 }
 
+/*
+ * 展开项只在顶部画分隔线。
+ * 底边的分隔交给下一行自带的 border-top 或容器边框——
+ * 面板、列表项、容器各画一道底线时，末尾会叠出三道平行线。
+ */
 .turn-file-changes-list li.is-expanded {
   border-top: 1px solid var(--line-soft);
-  border-bottom: 1px solid var(--line-soft);
   background: color-mix(in srgb, var(--paper) 70%, transparent);
 }
 
 .turn-file-diff-panel {
-  margin:0 0 var(--space-sm);
+  margin: 0;
   border-top: 1px solid var(--line-soft);
-  border-bottom: 1px solid var(--line-soft);
   background: var(--technical-surface);
   overflow: hidden;
 }
