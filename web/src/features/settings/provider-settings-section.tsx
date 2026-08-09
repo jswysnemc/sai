@@ -1,5 +1,6 @@
 import { Check, Cpu, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { createElement, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { AppConfig, ProviderApiKey, ProviderConfig } from "../../api/contracts";
@@ -19,6 +20,8 @@ import { ProviderApiKeysField } from "./provider-api-keys-field";
 
 type ProviderSettingsSectionProps = {
   config: AppConfig;
+  /** 当前子页：connection / models / behavior / advanced */
+  subview?: string;
   secretSentinel: string;
   onConfigChange: (config: AppConfig) => void;
   onProviderChange: (index: number, patch: Partial<ProviderConfig>) => void;
@@ -44,12 +47,16 @@ function normalizedProviderApiKeys(provider: ProviderConfig): ProviderApiKey[] {
  */
 export function ProviderSettingsSection({
   config,
+  subview,
   secretSentinel,
   onConfigChange,
   onProviderChange
 }: ProviderSettingsSectionProps) {
   const { t } = useI18n();
   const confirm = useConfirm();
+  const navigate = useNavigate();
+  // 子页由路由解析保证合法，此处仅作类型收窄的回落
+  const tab = (subview ?? "connection") as "connection" | "models" | "behavior" | "advanced";
   const [selectedId, setSelectedId] = useState(config.active_provider || config.providers[0]?.id || "");
   const [fetching, setFetching] = useState(false);
   const [fetchError, setFetchError] = useState<Error | null>(null);
@@ -62,7 +69,6 @@ export function ProviderSettingsSection({
     tags?: string[];
   }>>({});
   const [importOpen, setImportOpen] = useState(false);
-  const [tab, setTab] = useState<"connection" | "models" | "behavior" | "advanced">("connection");
   const selectedIndex = Math.max(0, config.providers.findIndex((provider) => provider.id === selectedId));
   const provider = config.providers[selectedIndex];
   const providerKeys = provider ? normalizedProviderApiKeys(provider) : [];
@@ -146,7 +152,7 @@ export function ProviderSettingsSection({
       default_model: provider.default_model || nextModels[0] || ""
     });
     setImportOpen(false);
-    setTab("models");
+    navigate("/settings/providers/models");
   };
 
   /**
@@ -290,12 +296,6 @@ export function ProviderSettingsSection({
         />
         {fetchError && <div className="settings-inline-error">{fetchError.message}</div>}
         {secretError && <div className="settings-inline-error">{secretError.message}</div>}
-        <nav className="settings-tabs" aria-label={t("Provider configuration categories", "供应商配置分类")}>
-          <button type="button" className={tab === "connection" ? "active" : ""} onClick={() => setTab("connection")}>{t("Connection", "连接")}</button>
-          <button type="button" className={tab === "models" ? "active" : ""} onClick={() => setTab("models")}>{t("Models", "模型")}</button>
-          <button type="button" className={tab === "behavior" ? "active" : ""} onClick={() => setTab("behavior")}>{t("Behavior", "行为")}</button>
-          <button type="button" className={tab === "advanced" ? "active" : ""} onClick={() => setTab("advanced")}>{t("Advanced", "高级")}</button>
-        </nav>
         {tab === "connection" && <div className="settings-form-grid">
           <label className="settings-field"><span>{t("Provider ID", "供应商 ID")}</span><input value={provider.id} onChange={(event) => { setSelectedId(event.target.value); onProviderChange(selectedIndex, { id: event.target.value }); }} /><small>{t("Stable identifier in the configuration file", "配置文件中的稳定标识")}</small></label>
           <label className="settings-field"><span>{t("Display name", "显示名称")}</span><input value={provider.display_name} onChange={(event) => onProviderChange(selectedIndex, { display_name: event.target.value })} /><small>{t("Used in model menus and status displays", "用于模型菜单和状态展示")}</small></label>

@@ -6,6 +6,7 @@ import {
   filterSettingsSections,
   groupSettingsSections,
   resolveSettingsSectionId,
+  resolveSettingsSubview,
   showsAppConfigSave
 } from "./settings-registry";
 
@@ -52,6 +53,18 @@ describe("settings registry", () => {
     expect(showsAppConfigSave("optional", true)).toBe(true);
     expect(showsAppConfigSave("none", false)).toBe(false);
     expect(showsAppConfigSave("none", true)).toBe(false);
+  });
+
+  it("resolves subviews with fallback to the first page", () => {
+    const runtime = SETTINGS_SECTIONS.find((item) => item.id === "runtime");
+    expect(resolveSettingsSubview(runtime, "notifications")).toBe("notifications");
+    // 缺失或非法的子页段回落到首个子页
+    expect(resolveSettingsSubview(runtime, undefined)).toBe("engine");
+    expect(resolveSettingsSubview(runtime, "not-a-subview")).toBe("engine");
+    // 无子页的分区始终返回 undefined
+    const git = SETTINGS_SECTIONS.find((item) => item.id === "git");
+    expect(resolveSettingsSubview(git, "anything")).toBeUndefined();
+    expect(resolveSettingsSubview(undefined, "anything")).toBeUndefined();
   });
 
   it("gives every non-required section a bilingual save hint", () => {

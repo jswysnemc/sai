@@ -26,6 +26,8 @@ import { resolvePromptTemplates } from "../prompts/prompt-template-catalog";
 
 type SettingsSectionBodyProps = {
   section: SettingsSectionId;
+  /** 当前二级子页；无子页分区为 undefined */
+  subview?: string;
   settings: SettingsConfigController;
   theme: ThemeId;
   onThemeChange: (theme: ThemeId) => void;
@@ -42,6 +44,7 @@ type SettingsSectionBodyProps = {
  */
 export function SettingsSectionBody({
   section,
+  subview,
   settings,
   theme,
   onThemeChange
@@ -60,9 +63,9 @@ export function SettingsSectionBody({
         ?? t("Configuration unavailable", "配置不可用");
       return <SettingsErrorRecovery message={message} onRetry={settings.retry} />;
     }
-    return renderAppConfigSection(section, settings.config, settings);
+    return renderAppConfigSection(section, subview, settings.config, settings);
   }
-  return renderStandaloneSection(section, settings, theme, onThemeChange);
+  return renderStandaloneSection(section, subview, settings, theme, onThemeChange);
 }
 
 /**
@@ -77,6 +80,7 @@ export function SettingsSectionBody({
  */
 function renderAppConfigSection(
   section: SettingsSectionId,
+  subview: string | undefined,
   config: AppConfig,
   settings: SettingsConfigController
 ): ReactNode {
@@ -85,6 +89,7 @@ function renderAppConfigSection(
       return (
         <ProviderSettingsSection
           config={config}
+          subview={subview}
           secretSentinel={settings.secretSentinel}
           onConfigChange={settings.updateConfig}
           onProviderChange={settings.updateProvider}
@@ -117,6 +122,7 @@ function renderAppConfigSection(
       return (
         <RuntimeSettingsSection
           config={config}
+          subview={subview}
           onConfigChange={settings.updateConfig}
         />
       );
@@ -179,6 +185,7 @@ function renderAppConfigSection(
  */
 function renderStandaloneSection(
   section: SettingsSectionId,
+  subview: string | undefined,
   settings: SettingsConfigController,
   theme: ThemeId,
   onThemeChange: (theme: ThemeId) => void
@@ -208,7 +215,7 @@ function renderStandaloneSection(
     case "mcp":
       return <McpSettingsSection />;
     case "usage":
-      return <UsageStatsSection />;
+      return <UsageStatsSection subview={subview} />;
     case "session-data":
       return <SessionDataSettings />;
     default:

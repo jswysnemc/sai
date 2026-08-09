@@ -56,7 +56,13 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     descriptionEn: "Endpoints, credentials, and model lists",
     descriptionZh: "接口、凭据和模型列表",
     icon: KeyRound,
-    searchKeys: ["provider", "model", "api_key", "base_url", "供应商", "模型", "凭据"]
+    searchKeys: ["provider", "model", "api_key", "base_url", "供应商", "模型", "凭据"],
+    subviews: [
+      { id: "connection", labelEn: "Connection", labelZh: "连接" },
+      { id: "models", labelEn: "Models", labelZh: "模型" },
+      { id: "behavior", labelEn: "Behavior", labelZh: "行为" },
+      { id: "advanced", labelEn: "Advanced", labelZh: "高级" }
+    ]
   },
   {
     id: "agents",
@@ -78,7 +84,15 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     descriptionEn: "Sessions, permissions, notifications, terminal, and display",
     descriptionZh: "会话、权限、通知、终端与显示",
     icon: SlidersHorizontal,
-    searchKeys: ["runtime", "session", "model", "thinking", "permission", "notification", "terminal", "context", "display", "tools", "会话", "模型", "思考", "权限", "通知", "终端", "上下文"]
+    searchKeys: ["runtime", "session", "model", "thinking", "permission", "notification", "terminal", "context", "display", "tools", "会话", "模型", "思考", "权限", "通知", "终端", "上下文"],
+    subviews: [
+      { id: "engine", labelEn: "Engine", labelZh: "对话内核" },
+      { id: "permissions", labelEn: "Permissions", labelZh: "权限" },
+      { id: "notifications", labelEn: "Notifications", labelZh: "通知" },
+      { id: "terminal", labelEn: "Terminal", labelZh: "终端" },
+      { id: "context", labelEn: "Context", labelZh: "上下文" },
+      { id: "tools", labelEn: "Tools and display", labelZh: "工具与显示" }
+    ]
   },
   {
     id: "appearance",
@@ -222,7 +236,13 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     descriptionEn: "Token trends, providers, models, and request logs",
     descriptionZh: "Token 趋势、供应商、模型与请求日志",
     icon: BarChart3,
-    searchKeys: ["usage", "token", "stats", "log", "用量", "统计"]
+    searchKeys: ["usage", "token", "stats", "log", "用量", "统计"],
+    subviews: [
+      { id: "overview", labelEn: "Overview", labelZh: "总览" },
+      { id: "providers", labelEn: "By provider", labelZh: "按供应商" },
+      { id: "models", labelEn: "By model", labelZh: "按模型" },
+      { id: "logs", labelEn: "Request logs", labelZh: "请求日志" }
+    ]
   },
   {
     id: "advanced",
@@ -259,6 +279,25 @@ export function resolveSettingsSectionId(value: string | undefined | null): Sett
  */
 export function getSettingsSection(id: SettingsSectionId): SettingsSectionMeta | undefined {
   return SETTINGS_SECTIONS.find((item) => item.id === id);
+}
+
+/**
+ * 解析二级子页路由段。
+ *
+ * 无子页的分区始终返回 undefined；有子页的分区在段非法或缺失时
+ * 回落到首个子页，保证 URL 总能归一到显式子页。
+ *
+ * @param meta 分区元数据
+ * @param value 路由中的子页段
+ * @returns 合法子页 id；分区无子页时 undefined
+ */
+export function resolveSettingsSubview(
+  meta: SettingsSectionMeta | undefined,
+  value: string | undefined | null
+): string | undefined {
+  const subviews = meta?.subviews;
+  if (!subviews || subviews.length === 0) return undefined;
+  return subviews.find((item) => item.id === value)?.id ?? subviews[0].id;
 }
 
 /**

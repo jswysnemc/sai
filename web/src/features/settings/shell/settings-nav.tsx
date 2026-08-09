@@ -46,7 +46,7 @@ export function SettingsNav({ activeSection }: SettingsNavProps) {
       {grouped.map(({ group, sections }) => (
         <div className="settings-nav-group" key={group.id}>
           <div className="settings-nav-group-label">{t(group.labelEn, group.labelZh)}</div>
-          {sections.map(({ id, labelEn, labelZh, descriptionEn, descriptionZh, icon: Icon }) => (
+          {sections.map(({ id, labelEn, labelZh, icon: Icon }) => (
             <NavLink
               key={id}
               to={`/settings/${id}`}
@@ -55,7 +55,6 @@ export function SettingsNav({ activeSection }: SettingsNavProps) {
               <Icon size={15} />
               <span>
                 <strong>{t(labelEn, labelZh)}</strong>
-                <small>{t(descriptionEn, descriptionZh)}</small>
               </span>
             </NavLink>
           ))}

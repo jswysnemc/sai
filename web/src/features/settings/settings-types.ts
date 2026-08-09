@@ -53,6 +53,14 @@ export type SettingsConfigController = {
   retry: () => void;
 };
 
+/** 设置分区二级子页注册项。 */
+export type SettingsSubviewMeta = {
+  /** 子页路由段，如 permissions */
+  id: string;
+  labelEn: string;
+  labelZh: string;
+};
+
 /** 设置 section 注册项。 */
 export type SettingsSectionMeta = {
   id: SettingsSectionId;
@@ -69,6 +77,8 @@ export type SettingsSectionMeta = {
   /** 顶栏保存提示（无待保存修改时展示，如「即时生效」「在本节内保存」） */
   saveHintEn?: string;
   saveHintZh?: string;
+  /** 二级子页；声明后子页进入 /settings/:sectionId/:subview 路由 */
+  subviews?: SettingsSubviewMeta[];
 };
 
 /** 侧栏分组元数据。 */

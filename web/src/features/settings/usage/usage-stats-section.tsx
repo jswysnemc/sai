@@ -5,14 +5,13 @@ import { api } from "../../../api/client";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
 import { UsageGroupTable } from "./usage-group-table";
-import { viewLabel, type UsageView } from "./usage-labels";
+import { type UsageView } from "./usage-labels";
 import { UsageLogsTable } from "./usage-logs-table";
 import { UsageOverview } from "./usage-overview";
 import { UsageStatsFilters, type UsageFilterState } from "./usage-stats-filters";
 import "./usage-stats.css";
 
 const LOG_PAGE_SIZE = 15;
-const VIEWS: UsageView[] = ["overview", "providers", "models", "logs"];
 
 const INITIAL_FILTERS: UsageFilterState = {
   range: "7d",
@@ -25,13 +24,16 @@ const INITIAL_FILTERS: UsageFilterState = {
 /**
  * 设置页用量统计面板：筛选、汇总、分组与请求日志。
  *
+ * 视图切换来自路由子页（/settings/usage/:subview），刷新后停留原视图。
+ *
+ * @param props subview 为当前子页
  * @returns 用量统计面板
  */
-export function UsageStatsSection() {
+export function UsageStatsSection({ subview }: { subview?: string }) {
   const { t, locale } = useI18n();
   const queryClient = useQueryClient();
+  const view = (subview ?? "overview") as UsageView;
   const [filters, setFilters] = useState<UsageFilterState>(INITIAL_FILTERS);
-  const [view, setView] = useState<UsageView>("overview");
   const [page, setPage] = useState(0);
 
   const stats = useQuery({
@@ -100,21 +102,6 @@ export function UsageStatsSection() {
       </header>
 
       <UsageStatsFilters value={filters} onChange={applyFilters} t={t} />
-
-      <div className="usage-tabs" role="tablist">
-        {VIEWS.map((item) => (
-          <button
-            key={item}
-            type="button"
-            role="tab"
-            aria-selected={view === item}
-            className={view === item ? "usage-tab active" : "usage-tab"}
-            onClick={() => setView(item)}
-          >
-            {viewLabel(item, t)}
-          </button>
-        ))}
-      </div>
 
       {stats.isLoading && <div className="usage-empty">{t("Loading usage", "正在读取用量")}</div>}
       {stats.error && <div className="usage-error">{stats.error.message}</div>}

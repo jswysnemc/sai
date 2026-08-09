@@ -3,7 +3,12 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import { SettingsNav } from "./shell/settings-nav";
 import { SettingsSaveBar } from "./shell/settings-save-bar";
 import { SettingsSectionBody } from "./shell/settings-section-body";
-import { getSettingsSection, resolveSettingsSectionId } from "./settings-registry";
+import { SettingsSubnav } from "./shell/settings-subnav";
+import {
+  getSettingsSection,
+  resolveSettingsSectionId,
+  resolveSettingsSubview
+} from "./settings-registry";
 import { useSettingsConfig } from "./use-settings-config";
 import { useTheme } from "../theme/theme";
 import { useI18n } from "../i18n/use-i18n";
@@ -13,22 +18,23 @@ import "./settings-catalog.css";
 import "./settings-sections.css";
 
 /**
- * 设置页壳层：顶栏、分组导航、按路由挂载 section。
+ * 设置页壳层：顶栏、分组导航、按路由挂载 section 与子页。
  *
  * @returns 设置页面
  */
 export function SettingsPage() {
-  const params = useParams<{ sectionId?: string }>();
+  const params = useParams<{ sectionId?: string; subview?: string }>();
   const requested = params.sectionId;
   const section = resolveSettingsSectionId(requested);
   const meta = getSettingsSection(section);
+  const subview = resolveSettingsSubview(meta, params.subview);
   const settings = useSettingsConfig();
   const theme = useTheme();
   const { t } = useI18n();
 
-  // 1. 未知 section 或裸 /settings 归一到默认路由
-  if (!requested || requested !== section) {
-    return <Navigate to={`/settings/${section}`} replace />;
+  // 1. 归一非法 section 与子页段：有子页的分区始终落在显式子页 URL 上
+  if (!requested || requested !== section || (params.subview ?? undefined) !== subview) {
+    return <Navigate to={subview ? `/settings/${section}/${subview}` : `/settings/${section}`} replace />;
   }
 
   return (
@@ -63,8 +69,12 @@ export function SettingsPage() {
       <div className="settings-workspace">
         <SettingsNav activeSection={section} />
         <main className="settings-main">
+          {meta?.subviews && (
+            <SettingsSubnav sectionId={section} subviews={meta.subviews} />
+          )}
           <SettingsSectionBody
             section={section}
+            subview={subview}
             settings={settings}
             theme={theme.theme}
             onThemeChange={theme.setTheme}
