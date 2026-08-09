@@ -73,10 +73,28 @@
   font-size: var(--text-2xs);
 }
 
-@media (max-width: 44rem) {
-  .git-change-panel,
-  .git-history-panel {
-    border-right: none;
-    border-bottom: 1px solid var(--line);
-  }
+/* 堆叠模式一次只呈现一侧，右侧分隔线在此形态下没有分隔对象 */
+.source-control-stacked .git-change-panel,
+.source-control-stacked .git-history-panel {
+  border-right: none;
+}
+
+.git-commit-link {
+  display: inline-flex;
+  align-items: center;
+  gap:var(--space-3xs);
+  margin-left:var(--space-sm);
+  color: var(--signal);
+  font: inherit;
+  text-decoration: none;
+}
+
+.git-commit-link:hover {
+  text-decoration: underline;
+}
+
+.git-commit-link:focus-visible {
+  border-radius:var(--radius-2);
+  box-shadow: var(--ring-focus);
+  outline: 0;
 }

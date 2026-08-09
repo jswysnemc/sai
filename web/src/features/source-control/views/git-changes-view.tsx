@@ -78,7 +78,11 @@ export function GitChangesView(props: GitChangesViewProps) {
   );
 
   return (
-    <SourceControlSplitView className="git-changes-body">
+    <SourceControlSplitView
+      className="git-changes-body"
+      detailKey={fileComparison.target?.headPath ?? scmState.selectedPath}
+      detailTitle={fileComparison.target?.headPath ?? scmState.selectedPath ?? undefined}
+    >
       <section className="git-change-panel">
         {state.operation && (
           <InProgressOperationBar

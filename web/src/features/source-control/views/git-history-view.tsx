@@ -35,7 +35,11 @@ export function GitHistoryView(props: GitHistoryViewProps) {
   const ahead = props.history?.history_ahead ?? 0;
   const behind = props.history?.history_behind ?? 0;
   return (
-    <SourceControlSplitView className="git-history-body">
+    <SourceControlSplitView
+      className="git-history-body"
+      detailKey={props.activeCommit}
+      detailTitle={props.details?.commit.subject ?? props.activeCommit ?? undefined}
+    >
       <section className="git-history-panel">
         <div className="git-change-head">
           <span>{t(`Commit graph · ${commits.length}`, `提交图 · ${commits.length}`)}</span>

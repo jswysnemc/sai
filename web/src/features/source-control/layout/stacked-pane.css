@@ -1,0 +1,108 @@
+.source-control-stacked {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.source-control-stacked-pane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* 列表与详情在分栏模式下由 grid 拉伸，堆叠后需自行占满剩余高度 */
+.source-control-stacked-pane > :not(.source-control-stacked-back) {
+  flex: 1;
+  min-height: 0;
+}
+
+.source-control-stacked.forward .source-control-stacked-pane {
+  animation: source-control-pane-forward var(--duration-base) var(--ease-out);
+}
+
+.source-control-stacked.back .source-control-stacked-pane {
+  animation: source-control-pane-back var(--duration-base) var(--ease-out);
+}
+
+.source-control-stacked-back {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap:var(--space-sm);
+  padding:var(--space-2xs) var(--space-sm);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.source-control-stacked-back button {
+  display: inline-flex;
+  align-items: center;
+  gap:var(--space-2xs);
+  min-height: 28px;
+  padding:0 var(--space-sm);
+  border: 1px solid var(--line);
+  border-radius:var(--radius-pill);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+}
+
+.source-control-stacked-back button:hover {
+  border-color: var(--line-strong);
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.source-control-stacked-back button:focus-visible {
+  box-shadow: var(--ring-focus);
+  outline: 0;
+}
+
+.source-control-stacked-back span {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes source-control-pane-forward {
+  from {
+    opacity: 0;
+    transform: translateX(1.25rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes source-control-pane-back {
+  from {
+    opacity: 0;
+    transform: translateX(-1.25rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .source-control-stacked.forward .source-control-stacked-pane,
+  .source-control-stacked.back .source-control-stacked-pane {
+    animation: none;
+  }
+}

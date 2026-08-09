@@ -1,0 +1,72 @@
+.git-remote-setup {
+  display: flex;
+  flex-direction: column;
+  gap:var(--space-md);
+}
+
+.git-remote-setup-meta {
+  display: grid;
+  gap:var(--space-xs);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 30rem) {
+
+  .git-remote-setup-meta {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.git-remote-setup-meta span {
+  overflow: hidden;
+  padding:var(--space-2xs) var(--space-sm);
+  border: 1px solid var(--line);
+  border-radius:var(--radius-2);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+  font:400 var(--text-xs) var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-remote-setup-field {
+  display: flex;
+  flex-direction: column;
+  gap:var(--space-2xs);
+}
+
+.git-remote-setup-field > span {
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+}
+
+.git-remote-setup-field input {
+  min-height: 32px;
+  padding:0 var(--space-sm);
+  border: 1px solid var(--line);
+  border-radius:var(--radius-2);
+  background: transparent;
+  color: var(--ink);
+  font:400 var(--text-xs) var(--font-code);
+}
+
+.git-remote-setup-field input:focus-visible {
+  border-color: var(--signal);
+  box-shadow: var(--ring-focus);
+  outline: 0;
+}
+
+.git-remote-setup-field input:disabled {
+  opacity: 0.6;
+}
+
+.git-remote-setup-error {
+  margin: 0;
+  padding:var(--space-xs) var(--space-sm);
+  border-radius:var(--radius-2);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+  font-size:var(--text-xs);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}

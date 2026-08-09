@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { localizeApiMessage, toDisplayError } from "../../api/api-error";
-import type { GitOperationOptions } from "../../api/git-contracts";
+import type { GitOperationAction, GitOperationOptions } from "../../api/git-contracts";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { useI18n } from "../i18n/use-i18n";
 import { switchWithTerminalConfirm } from "../workspaces/workspace-switcher";
@@ -10,7 +10,11 @@ import { groupGitChanges } from "./changes/change-groups";
 import { resolveGitReviewDiffMode } from "./diff/diff-mode";
 import { useFileComparison } from "./diff/use-file-comparison";
 import type { CloneRepositoryInput } from "./empty/clone-repository-dialog";
+import { GitOperationToast } from "./output/git-operation-toast";
 import { GitOutputPanel } from "./output/git-output-panel";
+import { buildOperationNotice, type OperationNotice } from "./output/operation-notice";
+import { RemoteSetupDialog } from "./remote/remote-setup-dialog";
+import { shouldPromptRemoteSetup, type RemoteDependentAction } from "./remote/remote-setup-trigger";
 import { RepositoriesView } from "./repositories/repositories-view";
 import { GitSetupView } from "./shell/git-setup-view";
 import { GitToolbar } from "./shell/git-toolbar";
@@ -21,6 +25,7 @@ import { useGitAutofetch } from "./state/use-git-autofetch";
 import { useGitOperations } from "./state/use-git-operations";
 import { useGitWorkspace } from "./state/use-git-workspace";
 import { resolveScmCountBadge } from "./state/scm-count-badge";
+import type { RunGitOperation } from "./types";
 import { GitChangesView } from "./views/git-changes-view";
 import { GitHistoryView } from "./views/git-history-view";
 import "./source-control.css";
@@ -55,7 +60,70 @@ export function SourceControlPane() {
     selectedRoot,
     onStateUpdated: workspace.repositoryStatuses.updateRepositoryStatus,
   });
-  const { runOperation, busy, error, setError, notice, setNotice } = operations;
+  const { runOperation: runRawOperation, busy, error, setError, notice, setNotice } = operations;
+
+  const [operationNotice, setOperationNotice] = useState<OperationNotice | null>(null);
+  const [remoteSetupAction, setRemoteSetupAction] = useState<RemoteDependentAction | null>(null);
+  const [remoteSetupUrl, setRemoteSetupUrl] = useState("");
+  const [remoteSetupError, setRemoteSetupError] = useState("");
+  const noticeSeqRef = useRef(0);
+
+  /**
+   * 执行 Git 操作并把结果转成浮出提示。
+   *
+   * 底部错误行与输出面板保持原样，这里只额外补一条短反馈；
+   * 远端相关操作因缺少远端而失败时，改为弹出配置引导。
+   *
+   * @param action 操作标识
+   * @param options 操作参数
+   * @returns 操作响应；被取消或失败时为 undefined
+   */
+  const runOperation = useCallback<RunGitOperation>(
+    async (action, options) => {
+      const result = await runRawOperation(action, options);
+      if (!result) return result;
+
+      // 1. 缺少远端时不提示失败，直接引导用户补配远端
+      const failureText = result.message || result.stderr;
+      if (!result.ok && shouldPromptRemoteSetup(action, failureText)) {
+        setRemoteSetupAction(action as RemoteDependentAction);
+        setRemoteSetupError("");
+        setOperationNotice(null);
+        return result;
+      }
+
+      // 2. 其余结果统一浮出成功或失败提示
+      noticeSeqRef.current += 1;
+      setOperationNotice(
+        buildOperationNotice(noticeSeqRef.current, result.ok ? "success" : "error", action, result.ok ? result.message : failureText)
+      );
+      return result;
+    },
+    [runRawOperation]
+  );
+
+  /**
+   * 保存远端地址，成功后重试触发引导的那次操作。
+   *
+   * @returns 无
+   */
+  const saveRemoteAndRetry = useCallback(async () => {
+    const action = remoteSetupAction;
+    if (!action) return;
+    setRemoteSetupError("");
+
+    // 1. 先写入远端地址，失败则把原因留在弹层内
+    const saved = await runRawOperation("set_remote", { remote_url: remoteSetupUrl });
+    if (!saved?.ok) {
+      setRemoteSetupError(saved?.message || saved?.stderr || t("Failed to save the remote", "保存远端失败"));
+      return;
+    }
+
+    // 2. 远端就绪后关闭弹层并重试原操作
+    setRemoteSetupAction(null);
+    setRemoteUrl(remoteSetupUrl);
+    await runOperation(action);
+  }, [remoteSetupAction, remoteSetupUrl, runOperation, runRawOperation, t]);
 
   const gitWatchError = useGitRepositoryEvents(selectedRoot, workspace.repositories.isSuccess, mode);
   const ready = state?.status === "ready";
@@ -113,7 +181,14 @@ export function SourceControlPane() {
     setBranchMenuOpen(false);
     setError(null);
     setNotice("");
+    setOperationNotice(null);
+    setRemoteSetupAction(null);
   }, [selectedRoot, setError, setNotice]);
+
+  useEffect(() => {
+    // 引导弹层打开时预填当前远端地址，多数情况下用户只需确认
+    if (remoteSetupAction) setRemoteSetupUrl(state?.remote_url ?? "");
+  }, [remoteSetupAction, state?.remote_url]);
 
   /**
    * 登记服务端目录并切换当前工作区。
@@ -290,6 +365,21 @@ export function SourceControlPane() {
 
   return (
     <section className="diff-pane git-manager git-review">
+      <GitOperationToast notice={operationNotice} onDismiss={() => setOperationNotice(null)} />
+      {remoteSetupAction && (
+        <RemoteSetupDialog
+          open
+          action={remoteSetupAction}
+          workdir={state.repo_root ?? selectedRoot ?? ""}
+          branch={state.head || t("Unresolved", "未确定")}
+          remoteUrl={remoteSetupUrl}
+          busy={busy}
+          error={remoteSetupError}
+          onRemoteUrlChange={setRemoteSetupUrl}
+          onClose={() => setRemoteSetupAction(null)}
+          onSubmit={() => void saveRemoteAndRetry()}
+        />
+      )}
       <GitToolbar
         state={state}
         branches={branches.data?.branches ?? []}

@@ -1,8 +1,10 @@
+import { ExternalLink } from "lucide-react";
 import type { GitCommitDetailsResponse, GitDiffResponse } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { DiffView } from "../../chat/tool-renderers/diff-view";
 import { useI18n } from "../../i18n/use-i18n";
 import { formatGitDate } from "../graph/graph-utils";
+import { gitHubCommitUrl } from "../links/github-url";
 
 type GitCommitDetailProps = {
   details?: GitCommitDetailsResponse;
@@ -24,12 +26,20 @@ export function GitCommitDetail({ details, diff, selectedPath, onSelectPath, loc
     return <div className="git-clean diff-clean">{t("Select a commit to view details", "选择一条提交查看详情")}</div>;
   }
   const commit = details.commit;
+  // 远端指向 GitHub 时给出网页入口，其他托管商留空不渲染
+  const commitUrl = gitHubCommitUrl(commit.remote_url, commit.sha);
   return (
     <div className="git-diff-shell">
       <div className="git-commit-meta">
         <h3>{commit.subject}</h3>
         <p>
           {commit.short_sha} · {commit.author_name} · {formatGitDate(commit.author_date, locale)}
+          {commitUrl && (
+            <a className="git-commit-link" href={commitUrl} target="_blank" rel="noreferrer noopener">
+              <ExternalLink size={11} />
+              {t("View on GitHub", "在 GitHub 查看")}
+            </a>
+          )}
         </p>
         {commit.body && <pre>{commit.body}</pre>}
         <div className="git-commit-files">

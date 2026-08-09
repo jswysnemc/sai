@@ -1,0 +1,91 @@
+.git-operation-toast {
+  position: absolute;
+  top:var(--space-md);
+  right:var(--space-md);
+  left:var(--space-md);
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  gap:var(--space-sm);
+  margin-left: auto;
+  max-width: 26rem;
+  padding:var(--space-sm) var(--space-md);
+  border: 1px solid var(--line);
+  border-radius:var(--radius-3);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow);
+  animation: git-operation-toast-in var(--duration-base) var(--ease-out);
+}
+
+.git-operation-toast.success {
+  border-color: color-mix(in srgb, var(--signal) 34%, var(--line));
+  color: var(--ink-soft);
+}
+
+.git-operation-toast.success > svg {
+  color: var(--signal);
+}
+
+.git-operation-toast.error {
+  border-color: color-mix(in srgb, var(--danger) 36%, var(--line));
+  color: var(--danger);
+}
+
+.git-operation-toast > svg {
+  flex: none;
+  margin-top: 0.0625rem;
+}
+
+.git-operation-toast p {
+  flex: 1;
+  margin: 0;
+  font-size:var(--text-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.git-operation-toast button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: 0;
+  border-radius:var(--radius-2);
+  background: transparent;
+  color: inherit;
+  opacity: 0.65;
+  cursor: pointer;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+
+.git-operation-toast button:hover {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  opacity: 1;
+}
+
+.git-operation-toast button:focus-visible {
+  box-shadow: var(--ring-focus);
+  opacity: 1;
+  outline: 0;
+}
+
+@keyframes git-operation-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .git-operation-toast {
+    animation: none;
+  }
+}
