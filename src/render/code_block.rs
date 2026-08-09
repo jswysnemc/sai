@@ -65,6 +65,15 @@ pub(crate) fn highlight_code_line(lang: &str, line: &str) -> String {
             output.push_str(CODE_TOKEN_RESET);
             return output;
         }
+        // 块注释：CSS 只有 /* */ 一种注释，C 系语言也常用；行内闭合后继续高亮后文
+        if supports_block_comment(&lang) && index + 1 < chars.len() && chars[index] == '/' && chars[index + 1] == '*' {
+            let close = find_block_comment_end(&chars, index + 2);
+            output.push_str(CODE_COMMENT_STYLE);
+            output.extend(chars[index..close].iter());
+            output.push_str(CODE_TOKEN_RESET);
+            index = close;
+            continue;
+        }
         if chars[index] == '"'
             || chars[index] == '\''
             || (chars[index] == '`'
@@ -159,7 +168,7 @@ fn code_keywords(lang: &str) -> &'static [&'static str] {
             "except", "finally", "for", "from", "if", "import", "in", "is", "lambda", "not", "or",
             "pass", "raise", "return", "try", "while", "with", "yield",
         ],
-        "js" | "ts" | "tsx" | "jsx" => &[
+        "js" | "ts" | "tsx" | "jsx" | "javascript" | "typescript" => &[
             "async", "await", "break", "case", "catch", "class", "const", "continue", "default",
             "else", "export", "extends", "finally", "for", "from", "function", "if", "import",
             "let", "new", "return", "switch", "throw", "try", "typeof", "var", "while",
@@ -171,6 +180,40 @@ fn code_keywords(lang: &str) -> &'static [&'static str] {
         "json" | "toml" | "yaml" | "yml" => &["true", "false", "null"],
         _ => &[],
     }
+}
+
+/// 判断语言是否支持 `/* */` 块注释。
+///
+/// 参数:
+/// - `lang`: 规范化后的语言标识
+///
+/// 返回:
+/// - 支持块注释时返回 true
+fn supports_block_comment(lang: &str) -> bool {
+    matches!(
+        lang,
+        "css" | "rs" | "rust" | "js" | "ts" | "tsx" | "jsx" | "javascript" | "typescript" | "c"
+            | "cpp" | "java" | "go"
+    )
+}
+
+/// 查找块注释的结束位置（含结束定界符）。
+///
+/// 参数:
+/// - `chars`: 当前行字符序列
+/// - `start`: 注释正文起始下标
+///
+/// 返回:
+/// - `*/` 之后的下标；行内未闭合时返回行尾
+fn find_block_comment_end(chars: &[char], start: usize) -> usize {
+    let mut index = start;
+    while index + 1 < chars.len() {
+        if chars[index] == '*' && chars[index + 1] == '/' {
+            return index + 2;
+        }
+        index += 1;
+    }
+    chars.len()
 }
 
 /// 判断字符是否可作为代码标识符起始。
@@ -208,4 +251,37 @@ fn next_non_space_is_open_paren(chars: &[char], mut index: usize) -> bool {
         index += 1;
     }
     chars.get(index) == Some(&'(')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// CSS 的块注释使用注释样式，行内闭合后继续高亮后文。
+    #[test]
+    fn css_block_comments_use_the_comment_style() {
+        let output = highlight_code_line("css", "/* 页头 */ .page { gap: 1.5rem; }");
+
+        assert!(output.starts_with(CODE_COMMENT_STYLE));
+        assert!(output.contains("页头"));
+        // 注释在行内闭合，后面的数值仍按数字着色
+        assert!(output.contains(&format!("{CODE_NUMBER_STYLE}1.5rem")));
+    }
+
+    /// 行内未闭合的块注释一路着色到行尾。
+    #[test]
+    fn unclosed_block_comments_extend_to_the_end_of_line() {
+        let output = highlight_code_line("css", "/* 卡片网格：默认三列");
+
+        assert!(output.starts_with(CODE_COMMENT_STYLE));
+        assert!(output.ends_with(CODE_TOKEN_RESET));
+    }
+
+    /// TypeScript 全名与缩写共享同一份关键字表。
+    #[test]
+    fn typescript_full_name_gets_keyword_highlighting() {
+        let output = highlight_code_line("typescript", "const total = 1;");
+
+        assert!(output.contains(&format!("{CODE_KEYWORD_STYLE}const")));
+    }
 }

@@ -8,11 +8,15 @@ use std::path::Path;
 /// 于是和代码里的数字同色——一列本该保持中性的坐标跟着语法变色。
 const LINE_NUMBER_COLOR: u8 = 244;
 
-/// 增删标记的前景色。
+/// 增删行内行号列的前景色，在深色底上要比上下文行号亮一档才可读。
+const FILL_LINE_NUMBER: u8 = 250;
+
+/// 增删行内代码正文的基准前景色。
 ///
-/// 标记与行号同属"这行发生了什么"的坐标信息，但需要比行号更醒目一档，
-/// 因此取行背景对应的前景色，由调用方按增删分别传入。
-const MARKER_DIM: u8 = 250;
+/// 早先整行正文被强制染成绿或红，语法高亮的 token 色一收尾就被拉回
+/// 统一色相，整块 diff 读起来是一片绿底绿字。增删语义交给背景与
+/// 行首标记表达，正文回到近白基准，让语法色叠加其上仍然可辨。
+const CODE_BASE_FG: u8 = 253;
 
 /// diff 行配色。
 #[derive(Debug, Clone, Copy)]
@@ -162,8 +166,9 @@ pub(crate) fn style_removed_count(count: usize) -> String {
 
 /// 给 diff 行添加背景和代码高亮。
 ///
-/// 行号与增删标记单独着中性色，只有代码正文交给语法高亮：
-/// 整行一起高亮会让行号被当成数字字面量，跟着代码里的字面量一起变色。
+/// 分层规则：增删语义只由整行背景与行首标记表达；行号压暗、
+/// 代码正文取近白基准色并叠加语法高亮。早先正文整行强制染成
+/// 绿或红，token 色一收尾就被拉回统一色相，diff 读起来是一片色块。
 ///
 /// 背景铺满策略：
 /// - 不使用「按当前终端宽度填充空格」。缩放后 scrollback reflow 会把
@@ -175,39 +180,44 @@ pub(crate) fn style_removed_count(count: usize) -> String {
 /// - `path`: 文件路径，用于推断语言
 /// - `line`: diff 行文本
 /// - `background`: ANSI 256 色背景
-/// - `foreground`: ANSI 256 色前景
+/// - `marker_color`: 行首增删标记的 ANSI 256 色前景
 ///
 /// 返回:
 /// - 带 ANSI 样式的 diff 行
-fn style_diff_line(path: &Path, line: &str, background: u8, foreground: u8) -> String {
+fn style_diff_line(path: &Path, line: &str, background: u8, marker_color: u8) -> String {
     let (prefix, body) = split_line_number(line);
     let highlighted = highlight_code_line(language_from_path(path), body);
-    let highlighted = keep_diff_background_after_reset(&highlighted, background, foreground);
-    // 行号列在同一背景上压暗，代码正文回到本行前景色
-    let numbered = if prefix.is_empty() {
-        highlighted
+    let highlighted = keep_diff_background_after_reset(&highlighted, background);
+    // 行首前缀固定以「标记字符 + 两个空格」结尾，据此切出行号段与标记段
+    let numbered = if prefix.len() >= 3 {
+        let (number_part, marker_part) = prefix.split_at(prefix.len() - 3);
+        format!(
+            "\x1b[38;5;{FILL_LINE_NUMBER}m{number_part}\x1b[38;5;{marker_color}m{marker_part}\x1b[38;5;{CODE_BASE_FG}m{highlighted}"
+        )
     } else {
-        format!("\x1b[38;5;{MARKER_DIM}m{prefix}\x1b[38;5;{foreground}m{highlighted}")
+        highlighted
     };
     // `\x1b[K` = Erase to end of line，在已设置的背景下铺满本行剩余列
     format!(
-        "\x1b[48;5;{background}m\x1b[38;5;{foreground}m{numbered}\x1b[48;5;{background}m\x1b[K\x1b[0m"
+        "\x1b[48;5;{background}m\x1b[38;5;{CODE_BASE_FG}m{numbered}\x1b[48;5;{background}m\x1b[K\x1b[0m"
     )
 }
 
-/// 在代码高亮 reset 后恢复 diff 背景。
+/// 在代码高亮 reset 后恢复 diff 背景与正文基准色。
+///
+/// 只恢复背景与近白基准，不再拉回增删色相——语法 token 收尾后的
+/// 文本应当继续以代码的样子呈现。
 ///
 /// 参数:
 /// - `text`: 已高亮的 diff 行
 /// - `background`: ANSI 256 色背景
-/// - `foreground`: ANSI 256 色前景
 ///
 /// 返回:
-/// - reset 后重新应用背景和前景的文本
-fn keep_diff_background_after_reset(text: &str, background: u8, foreground: u8) -> String {
+/// - reset 后重新应用背景的文本
+fn keep_diff_background_after_reset(text: &str, background: u8) -> String {
     text.replace(
         "\x1b[0m",
-        &format!("\x1b[0m\x1b[48;5;{background}m\x1b[38;5;{foreground}m"),
+        &format!("\x1b[0m\x1b[48;5;{background}m\x1b[38;5;{CODE_BASE_FG}m"),
     )
 }
 
@@ -226,11 +236,18 @@ fn language_from_path(path: &Path) -> &str {
     {
         "rs" => "rust",
         "ts" | "tsx" => "typescript",
-        "js" | "jsx" => "javascript",
+        "js" | "jsx" | "mjs" | "cjs" => "javascript",
         "py" => "python",
         "sh" | "bash" | "zsh" => "sh",
-        "json" => "json",
+        "json" | "jsonc" => "json",
         "toml" => "toml",
+        "yaml" | "yml" => "yaml",
+        "css" | "scss" | "less" => "css",
+        "html" | "htm" | "vue" | "svelte" => "html",
+        "c" | "h" => "c",
+        "cpp" | "cc" | "hpp" => "cpp",
+        "go" => "go",
+        "java" => "java",
         "md" => "markdown",
         _ => "",
     }
@@ -244,7 +261,8 @@ mod tests {
     fn restores_background_after_syntax_reset() {
         let output = style_added_line(Path::new("main.rs"), "  1 +  fn main() {}");
 
-        assert!(output.contains("\x1b[0m\x1b[48;5;22m\x1b[38;5;108m"));
+        // 语法 token 收尾后恢复背景与近白基准，不再拉回增删色相
+        assert!(output.contains("\x1b[0m\x1b[48;5;22m\x1b[38;5;253m"));
     }
 
     #[test]
@@ -276,16 +294,14 @@ mod tests {
         assert!(context.contains(&format!("\x1b[38;5;{LINE_NUMBER_COLOR}m 12    ")));
     }
 
-    /// 增删行的行号列压暗，代码正文回到本行前景色。
+    /// 增删行分层：行号压暗、标记取增删色、正文回到近白基准。
     #[test]
     fn changed_line_numbers_are_dimmed_within_the_row_background() {
         let palette = DiffPalette::default();
         let added = style_added_line(Path::new("main.rs"), "  7 +  let total = 42;");
 
-        assert!(added.contains(&format!("\x1b[38;5;{MARKER_DIM}m  7 +  ")));
-        // 行号之后立即恢复本行前景色，正文不沿用压暗色
         assert!(added.contains(&format!(
-            "\x1b[38;5;{MARKER_DIM}m  7 +  \x1b[38;5;{}m",
+            "\x1b[38;5;{FILL_LINE_NUMBER}m  7 \x1b[38;5;{}m+  \x1b[38;5;{CODE_BASE_FG}m",
             palette.add_foreground
         )));
     }
