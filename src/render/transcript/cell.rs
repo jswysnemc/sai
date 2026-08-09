@@ -138,7 +138,24 @@ impl HistoryCell {
     /// 返回:
     /// - 元信息 cell
     pub(crate) fn meta(text: String) -> Self {
-        Self::Meta(MetaCell { text })
+        Self::Meta(MetaCell {
+            text,
+            kind: meta_cell::MetaKind::Notice,
+        })
+    }
+
+    /// 构造失败提示 cell。
+    ///
+    /// 参数:
+    /// - `text`: 轮次失败或中断说明
+    ///
+    /// 返回:
+    /// - 失败提示 cell
+    pub(crate) fn failure(text: String) -> Self {
+        Self::Meta(MetaCell {
+            text,
+            kind: meta_cell::MetaKind::Failure,
+        })
     }
 
     /// 构造 REPL 启动信息 cell。

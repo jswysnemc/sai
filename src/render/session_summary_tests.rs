@@ -64,10 +64,52 @@ fn renders_compact_session_summary_with_key_fields() {
     assert!(!output.contains("default"));
     assert!(output.contains("Turn") || output.contains("本轮"));
     assert!(output.contains("75.0%"));
-    assert!(output.contains('\u{f090}'));
-    assert!(output.contains('\u{f08b}'));
+    // 上下行 token 使用简洁的方向箭头，不再依赖 Nerd Font 私有区图标
+    assert!(output.contains("↑8.0k"));
+    assert!(output.contains("↓4.0k"));
+    assert!(!output.contains('\u{f090}'));
+    assert!(!output.contains('\u{f08b}'));
+    // 低压力时占比随标签弱化，不抢正文注意力
+    assert!(output.contains("\x1b[2m(0.8%)"));
     assert!(output.contains("12") || output.contains("s") || output.contains("秒"));
     assert!(!output.contains("12.5"));
     assert!(!output.contains("Checkpoint"));
     assert!(!output.contains("Compaction"));
+}
+
+/// 验证上下文占比接近上限时数值升级为警示色。
+#[test]
+fn context_ratio_escalates_color_under_pressure() {
+    let mut snapshot = SessionSnapshot {
+        session_id: "default".to_string(),
+        turn_count: 1,
+        context_chars: 0,
+        context_limit_chars: 0,
+        context_ratio: 0.0,
+        context_prompt_tokens: 900_000,
+        context_window_tokens: 1_000_000,
+        context_token_ratio: 0.9,
+        checkpoint_count: 0,
+        checkpoint_covered_turns: 0,
+        tail_turns: 1,
+        latest_checkpoint_at: None,
+        latest_checkpoint_reason: None,
+        usage: UsageSnapshot::default(),
+        compaction: None,
+        recovery: crate::state::RecoverySnapshot::default(),
+        context_epoch: None,
+        session_memory: None,
+        tool_history: ToolHistorySummary::default(),
+        runtime_recovery: crate::runtime_recovery::RuntimeRecoverySummary::default(),
+        dynamic_sources: Vec::new(),
+        projection_warnings: Vec::new(),
+        active_run: None,
+        last_turn_duration_ms: 0,
+    };
+
+    assert!(render_session_summary(&snapshot).contains("\x1b[31m(90.0%)"));
+
+    snapshot.context_prompt_tokens = 700_000;
+    snapshot.context_token_ratio = 0.7;
+    assert!(render_session_summary(&snapshot).contains("\x1b[33m(70.0%)"));
 }

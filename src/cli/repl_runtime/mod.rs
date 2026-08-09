@@ -271,6 +271,18 @@ impl ReplRuntime {
         self.sync_transcript(false)
     }
 
+    /// 记录轮次失败或中断提示，带失败专属样式。
+    ///
+    /// 参数:
+    /// - `text`: 失败说明
+    ///
+    /// 返回:
+    /// - transcript 同步结果
+    pub(super) fn record_failure(&mut self, text: String) -> Result<()> {
+        self.transcript.push_failure(text);
+        self.sync_transcript(false)
+    }
+
     /// 记录等待用户处理的权限事件。
     ///
     /// 参数:

@@ -150,10 +150,10 @@ pub(super) async fn run_repl(
                 .await?;
                 if outcome.interrupted {
                     if let Some(error) = outcome.result.err() {
-                        runtime.record_meta(interrupted_failure_text(&error))?;
+                        runtime.record_failure(interrupted_failure_text(&error))?;
                     }
                 } else if let Err(error) = outcome.result {
-                    runtime.record_meta(turn_failure_text(&error))?;
+                    runtime.record_failure(turn_failure_text(&error))?;
                 }
                 if let Some(draft) = outcome.leftover_draft {
                     prefill = Some(draft);
@@ -626,7 +626,7 @@ pub(super) async fn run_repl(
         }
         if let Err(error) = outcome.result {
             // 断连类错误保留可重试提示，其余错误展示完整错误链
-            runtime.record_meta(turn_failure_text(&error))?;
+            runtime.record_failure(turn_failure_text(&error))?;
             if crate::llm::is_transient_transport_error(&error) {
                 prefill = Some(submitted_input.clone());
             } else if let Some(draft) = outcome.leftover_draft {

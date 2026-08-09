@@ -156,6 +156,17 @@ impl TranscriptStore {
         self.push_cell(HistoryCell::meta(text));
     }
 
+    /// 追加失败提示，行首带红色标记与正文区分。
+    ///
+    /// 参数:
+    /// - `text`: 轮次失败或中断说明
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn push_failure(&mut self, text: String) {
+        self.push_cell(HistoryCell::failure(text));
+    }
+
     /// 记录等待用户选择的权限事件。
     ///
     /// 参数:

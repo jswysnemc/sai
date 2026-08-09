@@ -44,12 +44,13 @@ impl ReplRuntime {
             }
             RunnerEvent::LoadedToolsChanged(_) => return Ok(()),
             RunnerEvent::FinalSummary(snapshot) => {
-                // 本轮结束后追加上下文与耗时摘要
+                // 本轮结束后追加上下文与耗时摘要；空行把总览和正文隔开，
+                // 否则数据行紧贴最后一段回答，读起来像正文的一部分
                 let summary = crate::render::session_summary::render_session_summary(snapshot);
                 if !summary.trim().is_empty() {
                     self.transcript.finalize_live_tail();
                     self.transcript.clear_work_status();
-                    self.transcript.push_meta(summary);
+                    self.transcript.push_meta(format!("\n{summary}"));
                     return self.sync_transcript(false);
                 }
                 return Ok(());

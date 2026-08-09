@@ -18,6 +18,10 @@ pub fn print_session_summary(snapshot: &SessionSnapshot) -> Result<()> {
 
 /// 渲染命令模式会话结束摘要。
 ///
+/// 视觉分层：标签与分隔符弱化，数值保持常规亮度并按语义着色——
+/// 上下文占比按压力从弱化渐进到黄、红，上行 token 青色、下行绿色，
+/// 缓存命中绿色。扫一眼只看到彩色数值，细读才需要标签。
+///
 /// 参数:
 /// - `snapshot`: 当前会话状态快照
 ///
@@ -26,24 +30,26 @@ pub fn print_session_summary(snapshot: &SessionSnapshot) -> Result<()> {
 pub fn render_session_summary(snapshot: &SessionSnapshot) -> String {
     observe_non_display_fields(snapshot);
     // 行首引导点与助手正文共用同一符号，摘要因此落在同一条视觉引导线上
+    let ratio = snapshot.context_token_ratio;
     let mut output = format!(
-        "\x1b[2m•\x1b[0m {}: {} / {} {} ({:.1}%)",
+        "\x1b[2m•\x1b[0m \x1b[2m{}:\x1b[0m {} / {} \x1b[2m{}\x1b[0m {}({:.1}%)\x1b[0m",
         t("Context", "上下文"),
         format_k(snapshot.context_prompt_tokens),
         format_k(snapshot.context_window_tokens),
         t("tokens", "token"),
-        snapshot.context_token_ratio * 100.0,
+        context_ratio_style(ratio),
+        ratio * 100.0,
     );
     if snapshot.last_turn_duration_ms > 0 {
         output.push_str(&format!(
-            " · {} {}",
+            " \x1b[2m· {}\x1b[0m {}",
             t("Turn", "本轮"),
             format_turn_duration_ms(snapshot.last_turn_duration_ms),
         ));
     }
     if let Some(usage) = snapshot.usage.last_conversation_usage.as_ref() {
         output.push_str(&format!(
-            " · \u{f090} {} · \u{f08b} {} · {} {:.1}%",
+            " \x1b[2m·\x1b[0m \x1b[36m↑{}\x1b[0m \x1b[2m·\x1b[0m \x1b[32m↓{}\x1b[0m \x1b[2m· {}\x1b[0m \x1b[32m{:.1}%\x1b[0m",
             format_k_u64(usage.prompt_tokens),
             format_k_u64(usage.completion_tokens),
             t("cache", "缓存"),
@@ -74,6 +80,26 @@ pub fn render_session_summary(snapshot: &SessionSnapshot) -> String {
         ));
     }
     output
+}
+
+/// 【终端】【会话摘要】按上下文压力选择占比数值的着色。
+///
+/// 低压力时占比是背景信息，随标签一起弱化；接近上限时逐级升黄、升红，
+/// 提醒该压缩或另起会话了。
+///
+/// 参数:
+/// - `ratio`: 0 到 1 之间的上下文占用比例
+///
+/// 返回:
+/// - 占比数值的 ANSI 前景样式
+fn context_ratio_style(ratio: f32) -> &'static str {
+    if ratio >= 0.85 {
+        "\x1b[31m"
+    } else if ratio >= 0.6 {
+        "\x1b[33m"
+    } else {
+        "\x1b[2m"
+    }
 }
 
 /// 【终端】【会话摘要】将毫秒格式化为人类可读本轮耗时。
