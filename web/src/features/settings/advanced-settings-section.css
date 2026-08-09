@@ -1,0 +1,18 @@
+/* 高级 JSON 分区 */
+
+.advanced-settings {
+  display: grid;
+  gap:var(--space-lg);
+}
+
+.advanced-settings .editor-header { margin-bottom: 0; }
+
+.advanced-settings-note {
+  padding:var(--space-sm) var(--space-md);
+  border: 1px solid color-mix(in srgb, var(--warning) 32%, transparent);
+  border-radius:var(--radius-3);
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+  color: var(--ink-soft);
+  font-size:var(--text-sm);
+  line-height: 1.5;
+}

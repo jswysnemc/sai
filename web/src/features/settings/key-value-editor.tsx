@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/use-i18n";
+import "./key-value-editor.css";
 
 type KeyValueEditorProps = {
   value: Record<string, string>;

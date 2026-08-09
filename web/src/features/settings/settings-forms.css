@@ -376,3 +376,60 @@
   .settings-group-head { flex-direction: column; gap:var(--space-sm); }
   .settings-toggle-field { gap:var(--space-md); }
 }
+
+/* 列表项启停滑块；轨道尺寸与 .settings-toggle-field 共用同一组变量 */
+.settings-switch {
+  display: grid;
+  grid-template-columns: var(--switch-track-width) auto;
+  align-items: center;
+  gap:var(--space-sm);
+  cursor: pointer;
+}
+
+.settings-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.settings-switch > span {
+  position: relative;
+  width: var(--switch-track-width);
+  height: var(--switch-track-height);
+  border-radius: var(--radius-pill);
+  background: var(--line-strong);
+  transition:background var(--transition-base);
+}
+
+.settings-switch > span::after {
+  position: absolute;
+  top: var(--switch-thumb-inset);
+  left: var(--switch-thumb-inset);
+  width: var(--switch-thumb-size);
+  height: var(--switch-thumb-size);
+  border-radius: var(--radius-circle);
+  background: var(--paper-raised);
+  box-shadow: var(--elevation-1);
+  content: "";
+  transition:transform var(--transition-base);
+}
+
+.settings-switch input:checked + span { background: var(--signal); }
+.settings-switch input:checked + span::after { transform: translateX(var(--switch-thumb-travel)); }
+.settings-switch input:focus-visible + span { box-shadow: var(--ring-focus); }
+.settings-switch strong { color: var(--ink-soft); font-size:var(--text-xs); font-weight: 500; }
+
+/* 编辑区空状态：原 layout 消息条与 sections 占位块两份定义的合并版 */
+.settings-empty {
+  display: grid;
+  justify-items: start;
+  align-content: center;
+  gap:var(--space-xl);
+  min-height: 280px;
+  margin-top:var(--space-2xl);
+  padding:var(--space-md) var(--space-lg);
+  border-radius:var(--radius-3);
+  color: var(--ink-soft);
+  font-size:var(--text-base);
+  line-height: 1.55;
+}

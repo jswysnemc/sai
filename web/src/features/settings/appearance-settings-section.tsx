@@ -7,6 +7,7 @@ import { useI18n } from "../i18n/use-i18n";
 import { Select } from "../../shared/ui/select/select";
 import { useMarkdownStylePreferences } from "../markdown/markdown-style-store";
 import { MarkdownStyleSettings } from "./markdown-style-settings";
+import "./appearance-settings-section.css";
 
 type AppearanceSettingsSectionProps = {
   theme: ThemeId;

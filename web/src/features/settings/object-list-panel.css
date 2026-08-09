@@ -1,0 +1,162 @@
+/* 对象列表中列：providers / hooks / mcp / agents / cli-tools 共用 */
+
+.object-list {
+  position: sticky;
+  top: 4.5rem;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  max-height: calc(100vh - 6rem);
+  border-right: 1px solid var(--line);
+  padding-right:var(--space-lg);
+}
+
+.object-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap:var(--space-sm);
+  padding:var(--space-3xs) var(--space-3xs) var(--space-md);
+}
+
+.object-list-title {
+  display: inline-flex;
+  align-items: center;
+  gap:var(--space-sm);
+  color: var(--ink);
+  font-size:var(--text-base);
+  font-weight: 600;
+}
+
+.object-list-title small {
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  padding:0 var(--space-2xs);
+  border-radius:var(--radius-2);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+  font:500 var(--text-xs) var(--font-code);
+}
+
+.object-list-add {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius:var(--radius-3);
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+}
+
+.object-list-add:hover { border-color: var(--line-strong); color: var(--ink); }
+
+.object-list-search {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap:var(--space-xs);
+  height: 2.125rem;
+  margin-bottom:var(--space-sm);
+  padding:0 var(--space-sm);
+  border: 1px solid var(--line);
+  border-radius:var(--radius-3);
+  background: var(--paper);
+  color: var(--ink-soft);
+}
+
+.object-list-search:focus-within { border-color: var(--line-strong); }
+
+.object-list-search input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size:var(--text-base);
+}
+
+.object-list-scroll {
+  display: grid;
+  align-content: start;
+  gap:var(--space-3xs);
+  min-height: 0;
+  overflow-y: auto;
+  padding:var(--space-3xs) var(--space-3xs) var(--space-sm);
+}
+
+.object-list-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap:var(--space-sm);
+  width: 100%;
+  padding:var(--space-sm) var(--space-sm);
+  border: 0;
+  border-radius:var(--radius-3);
+  background: transparent;
+  color: var(--ink-soft);
+  text-align: left;
+}
+
+.object-list-item:has(> .object-list-copy:first-child) {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.object-list-item:hover { background: var(--paper-deep); color: var(--ink); }
+.object-list-item.active { background: var(--signal-soft); color: var(--ink); }
+.object-list-item.active .object-list-icon { color: var(--signal); }
+
+.object-list-icon {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius:var(--radius-2);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+}
+
+.object-list-copy {
+  display: grid;
+  gap:var(--space-3xs);
+  min-width: 0;
+}
+
+.object-list-copy strong {
+  overflow-wrap: anywhere;
+  color: inherit;
+  font-size:var(--text-base);
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.object-list-copy small {
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+  font:400 var(--text-xs) var(--font-code);
+}
+
+.object-list-mark {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-circle);
+  background: var(--signal);
+}
+
+.object-list-empty {
+  padding:var(--space-3xl) var(--space-sm);
+  color: var(--ink-soft);
+  font-size:var(--text-sm);
+  text-align: center;
+}
+
+.object-list-toggle {
+  margin:0 0 var(--space-sm);
+}
+
+@media (max-width: 60rem) {
+  .object-list { position: static; max-height: 320px; padding-right: 0; padding-bottom:var(--space-lg); border-right: 0; border-bottom: 1px solid var(--line); }
+}

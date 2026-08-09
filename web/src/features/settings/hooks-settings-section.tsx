@@ -8,6 +8,7 @@ import { useI18n } from "../i18n/use-i18n";
 import { EditorHeader, SettingsGroup } from "./editor-layout";
 import { ObjectListPanel } from "./object-list-panel";
 import { KeyValueEditor } from "./key-value-editor";
+import "./hooks-settings-section.css";
 
 type HooksSettingsSectionProps = {
   config: AppConfig;

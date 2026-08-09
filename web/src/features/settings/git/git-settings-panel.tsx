@@ -70,9 +70,9 @@ export function GitSettingsPanel(props: GitSettingsPanelProps) {
       <EditorHeader
         kicker="Source Control"
         title={t("Git and Source Control", "Git 与源代码管理")}
-        hint={t("Configure repository detection, change presentation, commits, remote operations, and confirmations.", "配置仓库探测、变更展示、提交、远端操作和确认行为。")}
+        description={t("Configure repository detection, change presentation, commits, remote operations, and confirmations.", "配置仓库探测、变更展示、提交、远端操作和确认行为。")}
       />
-      <SettingsGroup title={t("Changes view", "变更视图")} hint={t("Control the default file layout and Source Control count badge.", "控制默认文件布局和源代码管理数量角标。")}>
+      <SettingsGroup title={t("Changes view", "变更视图")} description={t("Control the default file layout and Source Control count badge.", "控制默认文件布局和源代码管理数量角标。")}>
         <div className="git-settings-grid">
           <SelectFieldRow
             label={t("Default view mode", "默认视图模式")}
@@ -108,7 +108,7 @@ export function GitSettingsPanel(props: GitSettingsPanelProps) {
           />
         </div>
       </SettingsGroup>
-      <SettingsGroup title={t("Repository detection", "仓库探测")} hint={t("Limit filesystem scanning and worktree discovery in large workspaces.", "限制大型工作区中的文件系统扫描和 worktree 探测。")}>
+      <SettingsGroup title={t("Repository detection", "仓库探测")} description={t("Limit filesystem scanning and worktree discovery in large workspaces.", "限制大型工作区中的文件系统扫描和 worktree 探测。")}>
         <div className="git-settings-grid toggles">
           <ToggleRow label={t("Automatic repository detection", "自动探测仓库")} hint="git.auto_repository_detection" checked={git.auto_repository_detection} onChange={(value) => updateGit({ auto_repository_detection: value })} />
           <ToggleRow label={t("Detect worktrees", "探测 worktree")} hint="git.detect_worktrees" checked={git.detect_worktrees} onChange={(value) => updateGit({ detect_worktrees: value })} />
@@ -116,7 +116,7 @@ export function GitSettingsPanel(props: GitSettingsPanelProps) {
           <NumberFieldRow label={t("Worktree detection limit", "worktree 探测上限")} hint="git.detect_worktrees_limit" value={git.detect_worktrees_limit} min={1} max={128} onChange={(value) => updateGit({ detect_worktrees_limit: value })} />
         </div>
       </SettingsGroup>
-      <SettingsGroup title={t("Commit workflow", "提交流程")} hint={t("Configure Smart Commit, post-commit behavior, and action visibility.", "配置 Smart Commit、提交后动作和操作按钮显示。")}>
+      <SettingsGroup title={t("Commit workflow", "提交流程")} description={t("Configure Smart Commit, post-commit behavior, and action visibility.", "配置 Smart Commit、提交后动作和操作按钮显示。")}>
         <div className="git-settings-grid toggles">
           <ToggleRow label={t("Enable Smart Commit", "启用 Smart Commit")} hint="git.enable_smart_commit" checked={git.enable_smart_commit} onChange={(value) => updateGit({ enable_smart_commit: value })} />
           <ToggleRow label={t("Suggest Smart Commit", "提示 Smart Commit")} hint="git.suggest_smart_commit" checked={git.suggest_smart_commit} onChange={(value) => updateGit({ suggest_smart_commit: value })} />
@@ -132,13 +132,13 @@ export function GitSettingsPanel(props: GitSettingsPanelProps) {
             ]}
             onChange={(value) => updateGit({ post_commit_command: value })}
           />
-          <GitSettingToggle
+          <ToggleRow
             label={t("Generate branch name suggestions", "生成分支名称建议")}
             hint="git.branch_random_name.enable"
             checked={git.branch_random_name.enable}
             onChange={(value) => updateGit({ branch_random_name: { enable: value } })}
           />
-          <GitSettingToggle
+          <ToggleRow
             label={t("AI commit message", "AI 提交说明")}
             hint="git.auto_commit_message_enabled"
             checked={git.auto_commit_message_enabled ?? true}
@@ -164,7 +164,7 @@ export function GitSettingsPanel(props: GitSettingsPanelProps) {
           </label>
         </div>
       </SettingsGroup>
-      <SettingsGroup title={t("Safety confirmations", "安全确认")} hint={t("Keep explicit confirmation around remote rewriting, sync, and empty commits.", "为远端改写、同步和空提交保留明确确认。")}>
+      <SettingsGroup title={t("Safety confirmations", "安全确认")} description={t("Keep explicit confirmation around remote rewriting, sync, and empty commits.", "为远端改写、同步和空提交保留明确确认。")}>
         <div className="git-settings-grid toggles">
           <ToggleRow label={t("Confirm sync", "确认同步")} hint="git.confirm_sync" checked={git.confirm_sync} onChange={(value) => updateGit({ confirm_sync: value })} />
           <ToggleRow label={t("Confirm force push", "确认强制推送")} hint="git.confirm_force_push" checked={git.confirm_force_push} onChange={(value) => updateGit({ confirm_force_push: value })} />

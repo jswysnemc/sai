@@ -2,6 +2,7 @@ import { Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useI18n } from "../i18n/use-i18n";
+import "./object-list-panel.css";
 
 export type ObjectListItem = {
   id: string;

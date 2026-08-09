@@ -9,6 +9,7 @@ import { useI18n } from "../../i18n/use-i18n";
 import { transportMeta } from "./mcp-helpers";
 import { McpServerEditor } from "./mcp-server-editor";
 import { useMcpConfig } from "./use-mcp-config";
+import "./mcp-settings.css";
 
 /**
  * 渲染独立 MCP 配置（`~/.config/sai/mcp.jsonc`）。

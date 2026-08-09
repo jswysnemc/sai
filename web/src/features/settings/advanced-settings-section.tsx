@@ -1,6 +1,7 @@
 import { EditorHeader } from "./editor-layout";
 import { JsonCodeEditor } from "../../shared/ui/code-editor/json-code-editor";
 import { useI18n } from "../i18n/use-i18n";
+import "./advanced-settings-section.css";
 
 type AdvancedSettingsSectionProps = {
   value: string;

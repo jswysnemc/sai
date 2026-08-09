@@ -1,0 +1,40 @@
+/* 键值对编辑器（headers / env） */
+
+.key-value-editor {
+  display: grid;
+  gap:var(--space-sm);
+}
+
+.key-value-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 2.5rem;
+  gap:var(--space-sm);
+}
+
+.key-value-row input {
+  width: 100%;
+  height: 2.5rem;
+  padding:0 var(--space-md);
+  border: 1px solid var(--line);
+  border-radius:var(--radius-3);
+  background: var(--paper);
+  color: var(--ink);
+  font:400 var(--text-base) var(--font-code);
+}
+
+.key-value-row input:focus {
+  border-color: var(--line-strong);
+  outline: none;
+}
+
+.key-value-add {
+  justify-self: start;
+}
+
+.key-value-empty {
+  padding:var(--space-md) var(--space-lg);
+  border: 1px dashed var(--line);
+  border-radius:var(--radius-3);
+  color: var(--ink-soft);
+  font-size:var(--text-sm);
+}

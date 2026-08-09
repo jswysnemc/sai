@@ -15,7 +15,6 @@ import { useI18n } from "../i18n/use-i18n";
 import "./settings-layout.css";
 import "./settings-forms.css";
 import "./settings-catalog.css";
-import "./settings-sections.css";
 
 /**
  * 设置页壳层：顶栏、分组导航、按路由挂载 section 与子页。

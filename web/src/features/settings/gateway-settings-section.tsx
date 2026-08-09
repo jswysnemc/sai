@@ -9,6 +9,7 @@ import type { GatewayId } from "./settings-types";
 import { PasswordField } from "../../shared/ui/password-field";
 import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
+import "./gateway-settings-section.css";
 
 type GatewaySettingsSectionProps = {
   config: AppConfig;

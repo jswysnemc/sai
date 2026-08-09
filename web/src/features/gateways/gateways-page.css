@@ -21,3 +21,37 @@
 .gateway-config-link a { display: flex; align-items: center; gap:var(--space-xs); color: var(--signal); font-weight: 500; text-decoration: none; }
 .gateway-error { max-width: 1180px; margin-right: auto; margin-left: auto; }
 @media (max-width: 48rem) { .gateway-grid { grid-template-columns: 1fr; } .gateway-config-link { align-items: flex-start; flex-direction: column; } }
+
+/* 管理页骨架：原设置布局沿用类迁入 */
+
+.management-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.management-page-body {
+  min-height: 0;
+  overflow: auto;
+  padding:var(--space-4xl) clamp(var(--space-xl), 4vw, 64px) 60px;
+}
+
+.management-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap:var(--space-2xl);
+  max-width: 1180px;
+  margin:0 auto var(--space-4xl);
+}
+
+.management-hero h1 { margin:var(--space-3xs) 0 var(--space-2xs); font-size: clamp(1.25rem, 2vw, 1.5rem); letter-spacing: -0.02em; }
+.management-hero p { max-width: 680px; margin: 0; color: var(--ink-soft); font-size:var(--text-lg); line-height: 1.6; }
+.hero-icon { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; border-radius:var(--radius-4); background: var(--graphite); color: var(--paper-raised); box-shadow: var(--shadow); }
+
+@media (max-width: 48rem) {
+  .management-hero { grid-template-columns: auto 1fr; gap:var(--space-lg); }
+  .management-hero h1 { font-size: 1.25rem; }
+}

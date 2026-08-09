@@ -1,0 +1,75 @@
+/* 消息网关分区：凭据表单与运行控制 */
+
+.gateway-settings { max-width: 68.75rem; }
+
+.gateway-weixin-login-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap:var(--space-lg);
+  margin-top:var(--space-xl);
+}
+
+.gateway-weixin-login-button {
+  display: flex;
+  align-items: center;
+  gap:var(--space-xs);
+  min-height: 2.25rem;
+  padding:0 var(--space-xl);
+  border: 1px solid var(--line);
+  border-radius:var(--radius-3);
+  background: var(--paper-raised);
+  color: var(--ink);
+  font-size:var(--text-base);
+  font-weight: 500;
+}
+
+.gateway-weixin-login-button:hover {
+  border-color: color-mix(in srgb, var(--signal) 50%, var(--line));
+  color: var(--signal);
+}
+
+.gateway-weixin-login-row small {
+  color: var(--ink-soft);
+  font-size:var(--text-sm);
+}
+
+.gateway-runtime {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap:var(--space-lg);
+  margin-top:var(--space-2xl);
+  padding:var(--space-lg) var(--space-lg);
+  border: 1px solid var(--line);
+  border-radius:var(--radius-4);
+  background: color-mix(in srgb, var(--paper-deep) 62%, transparent);
+}
+
+.gateway-runtime-state {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap:var(--space-xs);
+  color: var(--ink-soft);
+  font-size:var(--text-sm);
+}
+
+.gateway-runtime-state i { width: 0.4375rem; height: 0.4375rem; border-radius: var(--radius-circle); background: var(--line-strong); }
+.gateway-runtime-state.running { color: var(--signal); }
+.gateway-runtime-state.running i { background: var(--signal); box-shadow: var(--ring-signal); }
+.gateway-runtime-state small { padding-left:var(--space-2xs); color: var(--ink-soft); font:400 var(--text-xs) var(--font-code); }
+
+.gateway-runtime-button {
+  border: 1px solid var(--signal);
+  background: var(--signal);
+  color: var(--paper-raised);
+}
+
+.gateway-runtime-button.stop { border-color: var(--danger); background: var(--danger); }
+.gateway-runtime-error { grid-column: 1 / -1; color: var(--danger); font-size:var(--text-xs); }
+
+@media (max-width: 48rem) {
+  .gateway-runtime { grid-template-columns: 1fr; }
+  .gateway-runtime-button { width: 100%; }
+}

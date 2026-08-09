@@ -1,0 +1,67 @@
+/* MCP 分区：表单/JSON 模式切换、JSON 布局与提示卡 */
+
+.mcp-mode-tabs {
+  display: inline-flex;
+  gap: 0;
+  margin: 0;
+  border-bottom: 0;
+}
+
+.mcp-mode-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap:var(--space-2xs);
+  min-height: 2rem;
+  padding:0 var(--space-md);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-size:var(--text-sm);
+}
+
+.mcp-mode-tabs button:first-child {
+  border-radius:var(--radius-3) 0 0 var(--radius-3);
+}
+
+.mcp-mode-tabs button:last-child {
+  border-left: 0;
+  border-radius:0 var(--radius-3) var(--radius-3) 0;
+}
+
+.mcp-mode-tabs button.active {
+  border-color: color-mix(in srgb, var(--signal) 45%, var(--line));
+  background: color-mix(in srgb, var(--signal) 10%, var(--paper));
+  color: var(--signal);
+}
+
+.mcp-json-layout {
+  display: grid;
+  min-height: calc(100vh - 10rem);
+}
+
+.settings-note-card {
+  display: grid;
+  grid-template-columns: 1.125rem minmax(0, 1fr);
+  gap:var(--space-md);
+  margin-top:var(--space-sm);
+  padding:var(--space-lg) var(--space-lg);
+  border: 1px solid var(--line);
+  border-radius:var(--radius-4);
+  background: color-mix(in srgb, var(--signal) 6%, var(--paper));
+  color: var(--ink-soft);
+}
+
+.settings-note-card strong {
+  display: block;
+  margin-bottom:var(--space-2xs);
+  color: var(--ink);
+  font-size:var(--text-base);
+  font-weight: 600;
+}
+
+.settings-note-card p {
+  margin: 0;
+  font-size:var(--text-sm);
+  line-height: 1.5;
+}

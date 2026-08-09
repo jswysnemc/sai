@@ -5,6 +5,7 @@ import { api } from "../../api/client";
 import type { AppConfig, MemoryEntry, MemorySearchHit, MemoryStats } from "../../api/contracts";
 import { useI18n } from "../i18n/use-i18n";
 import { SettingsGroup } from "./editor-layout";
+import "./memory-settings-section.css";
 
 type MemorySettingsSectionProps = {
   config?: AppConfig | null;
@@ -187,7 +188,7 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
       <MemoryList title={t("Facts", "事实")} items={facts} onRemove={(id) => remove.mutate({ kind: "fact", id })} />
       <MemoryList title={t("Events", "往事")} items={episodes} onRemove={(id) => remove.mutate({ kind: "episode", id })} />
       {(entries.error || stats.error || remember.error || remove.error || reset.error || search.error) && (
-        <div className="pane-error">
+        <div className="settings-inline-error">
           {((entries.error || stats.error || remember.error || remove.error || reset.error || search.error) as Error).message}
         </div>
       )}

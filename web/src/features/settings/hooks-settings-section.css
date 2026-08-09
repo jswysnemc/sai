@@ -1,0 +1,28 @@
+/* Hooks 分区：事件变量提示 */
+
+.settings-hint-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(13.75rem, 100%), 1fr));
+  gap:var(--space-sm);
+  margin-top:var(--space-lg);
+}
+
+.settings-hint-chip {
+  display: grid;
+  gap:var(--space-2xs);
+  padding:var(--space-md) var(--space-md);
+  border: 1px solid var(--line);
+  border-radius:var(--radius-3);
+  background: var(--paper);
+}
+
+.settings-hint-chip code {
+  color: var(--signal);
+  font:500 var(--text-sm) var(--font-code);
+}
+
+.settings-hint-chip span {
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+  line-height: 1.45;
+}

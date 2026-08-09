@@ -3,7 +3,6 @@ import { ArrowLeft, Cable, CircleStop, ExternalLink, Play, RefreshCw } from "luc
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 import type { GatewayStatus } from "../../api/contracts";
-import "../settings/settings-layout.css";
 import "./gateways-page.css";
 import { useI18n } from "../i18n/use-i18n";
 import { GatewayBrandIcon } from "./gateway-brand-icon";

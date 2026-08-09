@@ -61,34 +61,6 @@
 }
 
 /* 视图切换：下划线式分段控件，比按钮组更克制 */
-.usage-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-md);
-  border-bottom: 1px solid var(--line);
-}
-
-.usage-tab {
-  padding: var(--space-xs) var(--space-3xs);
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--ink-soft);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: color var(--transition-fast);
-}
-
-.usage-tab:hover {
-  color: var(--ink);
-}
-
-.usage-tab.active {
-  border-bottom-color: var(--signal);
-  color: var(--ink);
-}
-
 .usage-overview {
   display: grid;
   gap: var(--space-lg);
