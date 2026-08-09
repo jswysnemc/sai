@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GitStatusEntry } from "../../api/contracts";
-import { fileTreeGitSection, fileTreeGitStatusLabel } from "./use-file-tree-git";
+import { directoryGitTones, fileTreeGitSection, fileTreeGitStatusLabel } from "./use-file-tree-git";
 
 /**
  * 构造文件树 Git 映射测试使用的状态。
@@ -35,5 +35,47 @@ describe("file tree Git mapping", () => {
     expect(fileTreeGitStatusLabel(entry({ staged: true, index_status: "M" }))).toBe("M*");
     expect(fileTreeGitStatusLabel(entry({ index_status: "A", worktree_status: "." }))).toBe("A");
     expect(fileTreeGitStatusLabel(entry({ worktree_status: "D" }))).toBe("D");
+  });
+});
+
+describe("directoryGitTones", () => {
+  /**
+   * 构造指定状态形态的最小 Git 条目。
+   *
+   * @param overrides 状态字段覆盖
+   * @returns 文件树 Git 条目
+   */
+  const entryOf = (overrides: Partial<{ conflicted: boolean; untracked: boolean; index_status: string; worktree_status: string }>) => ({
+    repoRoot: "/repo",
+    entry: {
+      path: "x",
+      index_status: ".",
+      worktree_status: "M",
+      staged: false,
+      untracked: false,
+      conflicted: false,
+      ...overrides
+    }
+  }) as unknown as import("./use-file-tree-git").FileTreeGitEntry;
+
+  it("把文件状态冒泡到全部祖先目录", () => {
+    const tones = directoryGitTones(new Map([
+      ["web/src/app/main.tsx", entryOf({})]
+    ]));
+
+    expect(tones.get("web")).toBe("modified");
+    expect(tones.get("web/src")).toBe("modified");
+    expect(tones.get("web/src/app")).toBe("modified");
+    expect(tones.has("web/src/app/main.tsx")).toBe(false);
+  });
+
+  it("同目录多状态按优先级保留最高色调", () => {
+    const tones = directoryGitTones(new Map([
+      ["src/a.rs", entryOf({})],
+      ["src/b.rs", entryOf({ untracked: true })]
+    ]));
+
+    // 新增优先于修改
+    expect(tones.get("src")).toBe("added");
   });
 });

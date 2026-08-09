@@ -198,9 +198,51 @@ export function fileTreeGitStatusLabel(entry: GitStatusEntry): string {
  * 返回:
  * - added / deleted / conflicted / modified 之一
  */
-export function fileTreeGitStatusTone(entry: GitStatusEntry): "added" | "modified" | "deleted" | "conflicted" {
+export function fileTreeGitStatusTone(entry: GitStatusEntry): FileTreeGitTone {
   if (entry.conflicted) return "conflicted";
   if (entry.untracked || entry.index_status === "A") return "added";
   if (entry.index_status === "D" || entry.worktree_status === "D") return "deleted";
   return "modified";
+}
+
+export type FileTreeGitTone = "added" | "modified" | "deleted" | "conflicted";
+
+/** 色调聚合优先级：目录取子项中最高优先级的色调 */
+const TONE_PRIORITY: Record<FileTreeGitTone, number> = {
+  conflicted: 3,
+  added: 2,
+  modified: 1,
+  deleted: 0
+};
+
+/**
+ * 把文件级 Git 状态向上冒泡为目录色调。
+ *
+ * 折叠的目录也能看出内部有变更：每个文件条目为其全部祖先目录
+ * 记一笔，按优先级（冲突 > 新增 > 修改 > 删除）保留最高色调。
+ *
+ * 参数:
+ * - `entries`: 按工作区相对路径索引的文件状态
+ *
+ * 返回:
+ * - 目录路径到聚合色调的映射
+ */
+export function directoryGitTones(
+  entries: ReadonlyMap<string, FileTreeGitEntry>
+): Map<string, FileTreeGitTone> {
+  const tones = new Map<string, FileTreeGitTone>();
+  for (const [path, item] of entries) {
+    const tone = fileTreeGitStatusTone(item.entry);
+    // 1. 逐级向上累计祖先目录路径
+    const segments = path.split("/");
+    let prefix = "";
+    for (let index = 0; index < segments.length - 1; index += 1) {
+      prefix = prefix ? `${prefix}/${segments[index]}` : segments[index];
+      const current = tones.get(prefix);
+      if (!current || TONE_PRIORITY[tone] > TONE_PRIORITY[current]) {
+        tones.set(prefix, tone);
+      }
+    }
+  }
+  return tones;
 }

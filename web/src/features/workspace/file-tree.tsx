@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronRight, FilePlus2, FolderPlus, PanelRightClose, Pencil, RefreshCw, Trash2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { FileNode } from "../../api/contracts";
@@ -12,11 +12,13 @@ import { useI18n } from "../i18n/use-i18n";
 import { ChangeContextMenu } from "../source-control/changes/change-context-menu";
 import "../source-control/changes/change-file-list.css";
 import {
+  directoryGitTones,
   fileTreeGitSection,
   fileTreeGitStatusLabel,
   fileTreeGitStatusTone,
   useFileTreeGit,
-  type FileTreeGitEntry
+  type FileTreeGitEntry,
+  type FileTreeGitTone
 } from "./use-file-tree-git";
 
 type FileTreeProps = {
@@ -49,6 +51,8 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
   const [comparisonBase, setComparisonBase] = useState<FileTreeGitEntry | null>(null);
   const focusedNode = findFileNode(tree.data ?? [], focusedPath);
   const visibleNodes = filterFileNodes(tree.data ?? [], search);
+  // 文件状态向上冒泡：折叠目录也能看出内部有变更
+  const directoryTones = useMemo(() => directoryGitTones(git.entries), [git.entries]);
 
   useEffect(() => {
     if (selectedFile) setFocusedPath(selectedFile);
@@ -140,6 +144,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
             selectedFile={selectedFile}
             focusedPath={focusedPath}
             gitEntries={git.entries}
+            directoryTones={directoryTones}
             onFocus={setFocusedPath}
             onSelectFile={onSelectFile}
             onGitContextMenu={(event, workspacePath, item) => {
@@ -181,11 +186,12 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
 }
 
 /** 渲染单个递归文件树节点。 */
-function TreeNode({ node, selectedFile, focusedPath, gitEntries, onFocus, onSelectFile, onGitContextMenu, depth, forceOpen }: { node: FileNode; selectedFile: string | null; focusedPath: string | null; gitEntries: ReadonlyMap<string, FileTreeGitEntry>; onFocus: (path: string) => void; onSelectFile: (path: string) => void; onGitContextMenu: (event: React.MouseEvent<HTMLButtonElement>, path: string, item: FileTreeGitEntry) => void; depth: number; forceOpen: boolean }) {
+function TreeNode({ node, selectedFile, focusedPath, gitEntries, directoryTones, onFocus, onSelectFile, onGitContextMenu, depth, forceOpen }: { node: FileNode; selectedFile: string | null; focusedPath: string | null; gitEntries: ReadonlyMap<string, FileTreeGitEntry>; directoryTones: ReadonlyMap<string, FileTreeGitTone>; onFocus: (path: string) => void; onSelectFile: (path: string) => void; onGitContextMenu: (event: React.MouseEvent<HTMLButtonElement>, path: string, item: FileTreeGitEntry) => void; depth: number; forceOpen: boolean }) {
   const [open, setOpen] = useState(depth < 1);
   const directory = node.kind === "directory";
   const active = selectedFile === node.path || focusedPath === node.path;
   const gitEntry = directory ? undefined : gitEntries.get(node.path);
+  const directoryTone = directory ? directoryTones.get(node.path) : undefined;
   useEffect(() => {
     if (directory && selectedFile?.startsWith(`${node.path}/`)) setOpen(true);
   }, [directory, node.path, selectedFile]);
@@ -208,10 +214,14 @@ function TreeNode({ node, selectedFile, focusedPath, gitEntries, onFocus, onSele
         {directory
           ? <DirectoryIcon name={node.name} expanded={open} size={15} />
           : <FileTypeIcon name={node.name} size={15} />}
-        <span className={gitEntry ? `tree-row-name git-${fileTreeGitStatusTone(gitEntry.entry)}` : "tree-row-name"}>{node.name}</span>
+        <span className={gitEntry
+          ? `tree-row-name git-${fileTreeGitStatusTone(gitEntry.entry)}`
+          : directoryTone
+            ? `tree-row-name git-${directoryTone}`
+            : "tree-row-name"}>{node.name}</span>
         {gitEntry && <span className={`tree-row-git-status git-${fileTreeGitStatusTone(gitEntry.entry)}`}>{fileTreeGitStatusLabel(gitEntry.entry)}</span>}
       </button>
-      {directory && (open || forceOpen) && node.children.map((child) => <TreeNode key={child.path} node={child} selectedFile={selectedFile} focusedPath={focusedPath} gitEntries={gitEntries} onFocus={onFocus} onSelectFile={onSelectFile} onGitContextMenu={onGitContextMenu} depth={depth + 1} forceOpen={forceOpen} />)}
+      {directory && (open || forceOpen) && node.children.map((child) => <TreeNode key={child.path} node={child} selectedFile={selectedFile} focusedPath={focusedPath} gitEntries={gitEntries} directoryTones={directoryTones} onFocus={onFocus} onSelectFile={onSelectFile} onGitContextMenu={onGitContextMenu} depth={depth + 1} forceOpen={forceOpen} />)}
     </div>
   );
 }
