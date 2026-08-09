@@ -405,11 +405,17 @@
 .file-action-bar input { min-width: 0; padding:var(--space-3xs) var(--space-2xs); border: 0; outline: 0; background: transparent; font:400 var(--text-2xs) var(--font-code); }
 .file-action-bar button { display: grid; height: 22px; padding: 0; place-items: center; border: 0; border-radius:var(--radius-1); background: transparent; color: var(--ink-soft); }
 .file-action-bar button:hover { background: var(--paper-deep); color: var(--ink); }
-.tree-row { display: grid; grid-template-columns: 13px 15px minmax(0, 1fr) auto; align-items: center; gap:var(--space-2xs); width: 100%; height: 27px; padding-right:var(--space-2xs); overflow: hidden; border: 0; background: transparent; color: var(--ink-soft); text-align: left; white-space: nowrap; }
+.tree-row { display: grid; grid-template-columns: 13px 16px minmax(0, 1fr) auto; align-items: center; gap:var(--space-2xs); width: 100%; height: 26px; padding-right:var(--space-2xs); overflow: hidden; border: 0; background: transparent; color: var(--ink-soft); text-align: left; white-space: nowrap; }
+.tree-row img { display: block; margin: 0 auto; }
 .tree-row:hover,
 .tree-row.active { background: var(--paper-raised); color: var(--ink); }
 .tree-row-name { overflow: hidden; text-overflow: ellipsis; }
 .tree-row-git-status { min-width: 1rem; color: var(--signal); font: 500 var(--text-2xs)/1 var(--font-code); text-align: center; }
+/* Git 状态染色：文件名与状态字母同色，对齐编辑器习惯 */
+.tree-row-name.git-added, .tree-row-git-status.git-added { color: var(--signal); }
+.tree-row-name.git-modified, .tree-row-git-status.git-modified { color: var(--warning); }
+.tree-row-name.git-deleted, .tree-row-git-status.git-deleted { color: var(--danger); }
+.tree-row-name.git-conflicted, .tree-row-git-status.git-conflicted { color: var(--danger); }
 .tree-chevron { transition:transform var(--duration-fast) ease; }
 .tree-chevron.open { transform: rotate(90deg); }
 .tree-spacer { width: 12px; }

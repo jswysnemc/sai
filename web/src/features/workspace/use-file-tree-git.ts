@@ -188,3 +188,19 @@ export function fileTreeGitStatusLabel(entry: GitStatusEntry): string {
   if (entry.index_status === "D" || entry.worktree_status === "D") return "D";
   return "M";
 }
+
+/**
+ * 将 Git 状态归类为文件名染色色调。
+ *
+ * 参数:
+ * - `entry`: Git 状态条目
+ *
+ * 返回:
+ * - added / deleted / conflicted / modified 之一
+ */
+export function fileTreeGitStatusTone(entry: GitStatusEntry): "added" | "modified" | "deleted" | "conflicted" {
+  if (entry.conflicted) return "conflicted";
+  if (entry.untracked || entry.index_status === "A") return "added";
+  if (entry.index_status === "D" || entry.worktree_status === "D") return "deleted";
+  return "modified";
+}

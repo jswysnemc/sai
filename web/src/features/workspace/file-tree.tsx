@@ -1,11 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronRight, FilePlus2, Folder, FolderOpen, FolderPlus, PanelRightClose, Pencil, RefreshCw, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, FilePlus2, FolderPlus, PanelRightClose, Pencil, RefreshCw, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { FileNode } from "../../api/contracts";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
-import { FileTypeIcon } from "../../shared/ui/file-icon";
+import { DirectoryIcon, FileTypeIcon } from "../../shared/ui/file-icon";
 import { filterFileNodes, findFileNode, parentFilePath } from "./file-tree-utils";
 import { WorkspaceFileSearch } from "./workspace-file-search";
 import { useI18n } from "../i18n/use-i18n";
@@ -14,6 +14,7 @@ import "../source-control/changes/change-file-list.css";
 import {
   fileTreeGitSection,
   fileTreeGitStatusLabel,
+  fileTreeGitStatusTone,
   useFileTreeGit,
   type FileTreeGitEntry
 } from "./use-file-tree-git";
@@ -204,9 +205,11 @@ function TreeNode({ node, selectedFile, focusedPath, gitEntries, onFocus, onSele
         }}
       >
         {directory ? <ChevronRight size={12} className={open ? "tree-chevron open" : "tree-chevron"} /> : <span className="tree-spacer" />}
-        {directory ? (open ? <FolderOpen size={14} /> : <Folder size={14} />) : <FileTypeIcon name={node.name} size={13} />}
-        <span className="tree-row-name">{node.name}</span>
-        {gitEntry && <span className="tree-row-git-status">{fileTreeGitStatusLabel(gitEntry.entry)}</span>}
+        {directory
+          ? <DirectoryIcon name={node.name} expanded={open} size={15} />
+          : <FileTypeIcon name={node.name} size={15} />}
+        <span className={gitEntry ? `tree-row-name git-${fileTreeGitStatusTone(gitEntry.entry)}` : "tree-row-name"}>{node.name}</span>
+        {gitEntry && <span className={`tree-row-git-status git-${fileTreeGitStatusTone(gitEntry.entry)}`}>{fileTreeGitStatusLabel(gitEntry.entry)}</span>}
       </button>
       {directory && (open || forceOpen) && node.children.map((child) => <TreeNode key={child.path} node={child} selectedFile={selectedFile} focusedPath={focusedPath} gitEntries={gitEntries} onFocus={onFocus} onSelectFile={onSelectFile} onGitContextMenu={onGitContextMenu} depth={depth + 1} forceOpen={forceOpen} />)}
     </div>
