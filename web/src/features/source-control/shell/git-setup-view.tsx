@@ -77,7 +77,6 @@ export function GitSetupView(props: GitSetupViewProps) {
           "Choose the parent directory where Git will create the cloned repository folder.",
           "选择父目录，Git 将在其中创建克隆仓库文件夹。"
         )}
-        selectedLabel={t("Clone into selected directory", "克隆到所选目录")}
         currentLabel={t("Clone into current directory", "克隆到当前目录")}
         pendingLabel={t("Cloning Repository", "正在克隆仓库")}
         onClose={props.onCloneTargetClose}

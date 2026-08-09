@@ -1,20 +1,24 @@
-import { ArrowUp, Check, CornerDownLeft, Eye, EyeOff, Folder, FolderPlus, FolderSearch, GitBranch, HardDrive } from "lucide-react";
+import { ArrowUp, Folder, FolderPlus, GitBranch, HardDrive, Loader2, Plus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { DirectoryEntry } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { useI18n } from "../i18n/use-i18n";
-import { isAbsoluteFilesystemPath, normalizePathInput } from "./path-utils";
-import { useDirectoryPicker } from "./use-directory-picker";
+import {
+  directoryOfInput,
+  ensureTrailingSlash,
+  filterOfInput,
+  lastSegmentOf,
+  stripTrailingSlash
+} from "./directory-path-input";
 
 type ServerDirectoryDialogProps = {
   open: boolean;
   title?: string;
   description?: string;
-  selectedLabel?: string;
   currentLabel?: string;
   pendingLabel?: string;
   onClose: () => void;
@@ -22,78 +26,109 @@ type ServerDirectoryDialogProps = {
 };
 
 /**
- * 渲染服务端目录浏览和工作区选择对话框。
+ * 渲染服务端目录浏览和选择对话框。
  *
- * @param props 打开状态、关闭回调和目录选择回调
+ * 路径输入框即状态源：以 `/` 结尾的部分决定浏览目录，末段是
+ * 子目录过滤词，导航、跳转与搜索共用一个控件。列表行单击进入
+ * 目录，高亮行出现行内选择按钮；底部按钮作用于当前目录。
+ * 键盘：↑↓ 移动（含上级行）、→/Tab 进入、← 返回上级、Enter 选定、Esc 关闭。
+ *
+ * @param props 打开状态、文案覆盖、关闭与目录选择回调
  * @returns 服务端目录选择弹层
  */
 export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
   const { t } = useI18n();
-  const [path, setPath] = useState<string | undefined>();
-  const [draft, setDraft] = useState("");
-  const [selected, setSelected] = useState("");
-  const [showHidden, setShowHidden] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [input, setInput] = useState("");
+  // 高亮下标：-1 表示「上级目录」行
+  const [highlight, setHighlight] = useState(0);
   const [creating, setCreating] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [createError, setCreateError] = useState<Error | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<Error | null>(null);
-  const listing = useQuery({ queryKey: ["workspace-directories", path], queryFn: () => api.workspaces.browse(path), enabled: props.open });
-  const filter = isAbsoluteFilesystemPath(draft) ? "" : draft.trim();
-  const entries = useMemo(
-    () => filterEntries(sortEntries(listing.data?.entries ?? [], showHidden), filter),
-    [listing.data?.entries, showHidden, filter]
-  );
-  const hiddenCount = (listing.data?.entries.length ?? 0) - sortEntries(listing.data?.entries ?? [], false).length;
-  const roots = useMemo(() => listing.data?.roots.map((root) => root.path) ?? [], [listing.data?.roots]);
-  const picker = useDirectoryPicker(roots);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  // 返回上级后待高亮的来源目录名，列表加载完成后定位
+  const pendingSelectionRef = useRef<string | null>(null);
+
+  const directory = directoryOfInput(input);
+  const filter = filterOfInput(input).toLowerCase();
+  const listing = useQuery({
+    queryKey: ["workspace-directories", directory],
+    queryFn: () => api.workspaces.browse(directory ? stripTrailingSlash(directory) : undefined),
+    enabled: props.open
+  });
+  const entries = useMemo(() => {
+    const sorted = sortEntries(listing.data?.entries ?? []);
+    if (!filter) return sorted;
+    return sorted.filter((entry) => entry.name.toLowerCase().startsWith(filter));
+  }, [listing.data?.entries, filter]);
+  const parent = listing.data?.parent ?? null;
+  const currentPath = listing.data?.current ?? "";
 
   useEffect(() => {
-    if (props.open) setSubmitError(null);
-  }, [props.open]);
-
-  /** 切换当前浏览目录并清空过滤与选中状态。 */
-  const navigate = (nextPath: string) => {
-    setPath(nextPath);
-    setDraft("");
-    setSelected("");
+    // 1. 打开时重置；输入框初始为空，等首次 browse 返回默认目录
+    if (!props.open) return;
+    setInput("");
+    setHighlight(0);
     setCreating(false);
+    setNewFolderName("");
     setCreateError(null);
     setSubmitError(null);
-  };
+    pendingSelectionRef.current = null;
+    window.setTimeout(() => inputRef.current?.focus(), 50);
+  }, [props.open]);
 
-  /** 处理路径输入框回车：POSIX 或 Windows 绝对路径才跳转。 */
-  const handleDraftEnter = () => {
-    const value = normalizePathInput(draft);
-    if (isAbsoluteFilesystemPath(value)) navigate(value);
-  };
+  useEffect(() => {
+    // 2. 首次加载完成后把输入框同步为默认目录
+    if (!props.open || input || !listing.data) return;
+    setInput(ensureTrailingSlash(listing.data.current));
+  }, [props.open, input, listing.data]);
 
-  /** 在当前浏览目录下创建子目录，成功后刷新列表并选中新目录。 */
-  const createFolder = async () => {
-    const parent = listing.data?.current;
-    const name = newFolderName.trim();
-    if (!parent || !name) return;
-    setCreateError(null);
-    try {
-      // 1. 调用后端接口创建目录
-      const entry = await api.workspaces.createDirectory(parent, name);
-      // 2. 刷新目录列表并选中新目录
-      await listing.refetch();
-      setSelected(entry.path);
-      setCreating(false);
-      setNewFolderName("");
-    } catch (error) {
-      setCreateError(toDisplayError(error, "Failed to create directory", "创建目录失败"));
+  useEffect(() => {
+    // 3. 返回上级后把高亮定位回来源目录
+    if (!pendingSelectionRef.current) return;
+    const index = entries.findIndex((entry) => entry.name === pendingSelectionRef.current);
+    pendingSelectionRef.current = null;
+    setHighlight(index >= 0 ? index : 0);
+  }, [entries]);
+
+  useEffect(() => {
+    // 4. 高亮变化时保持行可见
+    const container = listRef.current;
+    const row = container?.querySelector<HTMLElement>(`[data-row-index="${highlight}"]`);
+    if (container && row) {
+      const top = row.offsetTop;
+      const bottom = top + row.offsetHeight;
+      if (top < container.scrollTop) container.scrollTop = top;
+      else if (bottom > container.scrollTop + container.clientHeight) {
+        container.scrollTop = bottom - container.clientHeight;
+      }
     }
+  }, [highlight, entries]);
+
+  /** 进入指定目录：改写输入框即触发浏览。 */
+  const enterDirectory = (path: string) => {
+    setInput(ensureTrailingSlash(path));
+    setHighlight(0);
+    setSubmitError(null);
+    inputRef.current?.focus();
+  };
+
+  /** 返回上级目录并记住来源目录名用于回位高亮。 */
+  const goToParent = () => {
+    if (!parent) return;
+    pendingSelectionRef.current = lastSegmentOf(ensureTrailingSlash(currentPath));
+    enterDirectory(parent);
   };
 
   /**
-   * 执行调用方指定的目录操作，并在弹层内保留可读错误。
+   * 提交选定目录并在弹层内保留可读错误。
    *
+   * @param target 目录绝对路径
    * @returns 无返回值
    */
-  const submit = async () => {
-    const target = selected || listing.data?.current;
+  const submit = async (target: string) => {
     if (!target) return;
     setSubmitting(true);
     setSubmitError(null);
@@ -106,6 +141,71 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
     }
   };
 
+  /** 在当前浏览目录下创建子目录，成功后刷新并进入。 */
+  const createFolder = async () => {
+    const name = newFolderName.trim();
+    if (!currentPath || !name) return;
+    setCreateError(null);
+    try {
+      const entry = await api.workspaces.createDirectory(currentPath, name);
+      await listing.refetch();
+      setCreating(false);
+      setNewFolderName("");
+      enterDirectory(entry.path);
+    } catch (error) {
+      setCreateError(toDisplayError(error, "Failed to create directory", "创建目录失败"));
+    }
+  };
+
+  /**
+   * 路径输入框键盘导航。
+   *
+   * @param event 键盘事件
+   * @returns 无返回值
+   */
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    const minIndex = parent ? -1 : 0;
+    const maxIndex = entries.length - 1;
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        setHighlight((value) => (value >= maxIndex ? minIndex : value + 1));
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        setHighlight((value) => (value <= minIndex ? maxIndex : value - 1));
+        break;
+      case "ArrowRight":
+      case "Tab":
+        if (highlight >= 0 && entries[highlight]) {
+          event.preventDefault();
+          enterDirectory(entries[highlight].path);
+        }
+        break;
+      case "ArrowLeft": {
+        const element = event.currentTarget;
+        const atStart = element.selectionStart === 0 && element.selectionEnd === 0;
+        if (atStart || input.endsWith("/")) {
+          event.preventDefault();
+          goToParent();
+        }
+        break;
+      }
+      case "Enter":
+        event.preventDefault();
+        if (highlight === -1) goToParent();
+        else if (entries[highlight]) void submit(entries[highlight].path);
+        else if (currentPath) void submit(stripTrailingSlash(ensureTrailingSlash(currentPath)));
+        break;
+      case "Escape":
+        event.preventDefault();
+        props.onClose();
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
     <Modal
       open={props.open}
@@ -113,136 +213,138 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
       description={props.description ?? t("Choose a directory on the server running Sai Web. Server configuration limits the browsing scope.", "选择运行 Sai Web 的服务器上的目录。浏览范围由服务端配置限制。")}
       size="large"
       onClose={props.onClose}
-      footer={(
-        <>
-          <Button onClick={props.onClose}>{t("Cancel", "取消")}</Button>
-          <Button variant="primary" onClick={() => void submit()} disabled={submitting || !listing.data}>
-            {submitting
-              ? props.pendingLabel ?? t("Opening", "正在打开")
-              : selected
-                ? props.selectedLabel ?? t("Open selected directory", "打开选中目录")
-                : props.currentLabel ?? t("Open current directory", "打开当前目录")}
-          </Button>
-        </>
-      )}
     >
       <div className="server-directory-dialog">
-        <aside className="directory-roots">
-          <span>{t("Allowed location", "允许位置")}</span>
-          {listing.data?.roots.map((root) => <button type="button" key={root.path} onClick={() => navigate(root.path)}><HardDrive size={14} /><span><strong>{root.name}</strong><small>{root.path}</small></span></button>)}
-          <button
-            type="button"
-            className="directory-pick-folder"
-            onClick={() => void picker.pick()}
-            disabled={picker.state.status === "picking"}
-          >
-            <FolderSearch size={14} />
-            <span>
-              <strong>{t("Choose a folder", "选择文件夹")}</strong>
-              <small>{t("Open the system folder picker", "打开系统文件夹选择器")}</small>
-            </span>
-          </button>
+        <div className="directory-input-shell">
+          <Folder size={15} aria-hidden />
           <input
-            ref={picker.inputRef}
-            type="file"
-            className="directory-pick-input"
-            // React 的类型定义没有覆盖这两个非标准属性，用 ref 挂载时由浏览器识别
-            {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
-            onChange={picker.handleInputChange}
+            ref={inputRef}
+            className="directory-path-input"
+            value={input}
+            placeholder={t("Type a path; the last segment filters subdirectories", "输入路径，最后一段作为子目录过滤词")}
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(event) => {
+              setInput(event.target.value);
+              setHighlight(0);
+            }}
+            onKeyDown={handleKeyDown}
           />
-          {picker.state.status === "resolved" && (
-            <div className="directory-pick-result">
-              <small>{t(`Selected “${picker.state.result.name}”`, `已选择“${picker.state.result.name}”`)}</small>
-              {picker.state.result.candidates.length === 0 ? (
-                <small className="directory-pick-hint">{t("No allowed root can host this folder", "没有允许根可以容纳该文件夹")}</small>
-              ) : (
-                picker.state.result.candidates.map((candidate) => (
-                  <button type="button" key={candidate} onClick={() => { navigate(candidate); picker.reset(); }}>
-                    <Folder size={13} /><span><small>{candidate}</small></span>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-          {picker.state.status === "unsupported" && (
-            <small className="directory-pick-hint">{t("This browser cannot open a folder picker", "当前浏览器不支持文件夹选择器")}</small>
-          )}
-        </aside>
-        <section className="directory-browser">
-          <header>
-            <button type="button" onClick={() => listing.data?.parent && navigate(listing.data.parent)} disabled={!listing.data?.parent} aria-label={t("Parent directory", "上级目录")}><ArrowUp size={14} /></button>
-            <input
-              className="directory-path-input"
-              value={draft}
-              placeholder={listing.data?.current ?? t("Enter a filter, or an absolute path (for example /home or C:\\Users) and press Enter", "输入过滤词，或输入绝对路径（如 /home 或 C:\\Users）后回车")}
-              spellCheck={false}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => { if (event.key === "Enter") handleDraftEnter(); }}
-            />
-            {isAbsoluteFilesystemPath(draft) && <button type="button" onClick={handleDraftEnter} aria-label={t("Go to entered path", "跳转到输入路径")}><CornerDownLeft size={14} /></button>}
-            <button type="button" onClick={() => { setCreating((value) => !value); setCreateError(null); }} disabled={!listing.data} aria-label={t("New folder", "新建文件夹")}><FolderPlus size={14} /></button>
-            <button type="button" onClick={() => setShowHidden((value) => !value)} aria-label={showHidden ? t("Hide dot directories", "隐藏点开头目录") : t("Show dot directories", "显示点开头目录")}>
-              {showHidden ? <EyeOff size={14} /> : <Eye size={14} />}
-            </button>
-          </header>
-          <div className="directory-current-path"><code>{listing.data?.current ?? "…"}</code></div>
-          <div className="directory-list">
-            {creating && (
-              <div className="directory-create-row">
-                <FolderPlus size={16} />
-                <input
-                  autoFocus
-                  value={newFolderName}
-                  placeholder={t("New folder name; press Enter to confirm or Escape to cancel", "新文件夹名称，回车确认，Esc 取消")}
-                  spellCheck={false}
-                  onChange={(event) => setNewFolderName(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") void createFolder();
-                    if (event.key === "Escape") { setCreating(false); setNewFolderName(""); setCreateError(null); }
-                  }}
-                />
-              </div>
-            )}
-            {createError && <div className="pane-error">{createError.message}</div>}
-            {submitError && <div className="pane-error">{submitError.message}</div>}
-            {entries.map((entry) => (
-              <button type="button" className={selected === entry.path ? "selected" : ""} key={entry.path} onDoubleClick={() => navigate(entry.path)} onClick={() => setSelected(entry.path)}>
-                <Folder size={16} /><span><strong>{entry.name}</strong><small>{entry.path}</small></span>{entry.git_repository && <span className="directory-git"><GitBranch size={12} />Git</span>}{selected === entry.path && <Check size={14} />}
+          {listing.isFetching && <Loader2 size={14} className="spin" aria-hidden />}
+        </div>
+        {(listing.data?.roots.length ?? 0) > 1 && (
+          <div className="directory-roots-row">
+            {listing.data?.roots.map((root) => (
+              <button type="button" key={root.path} onClick={() => enterDirectory(root.path)} title={root.path}>
+                <HardDrive size={12} aria-hidden />
+                {root.name}
               </button>
             ))}
-            {entries.length === 0 && <div className="directory-empty">{filter ? t(`No directories match “${filter}”`, `没有匹配“${filter}”的目录`) : hiddenCount > 0 ? t(`The current directory contains only ${hiddenCount} hidden directories`, `当前目录只有 ${hiddenCount} 个隐藏目录`) : t("The current directory has no browsable subdirectories", "当前目录没有可浏览的子目录")}</div>}
-            {!showHidden && entries.length > 0 && hiddenCount > 0 && !filter && <div className="directory-hidden-hint">{t(`${hiddenCount} dot directories collapsed`, `已折叠 ${hiddenCount} 个点开头目录`)}</div>}
-            {listing.error && <div className="pane-error">{listing.error.message}</div>}
           </div>
-        </section>
+        )}
+        <div className="directory-list" ref={listRef}>
+          {listing.error && <div className="directory-error">{listing.error.message}</div>}
+          {submitError && <div className="directory-error">{submitError.message}</div>}
+          {parent && (
+            <button
+              type="button"
+              data-row-index={-1}
+              className={highlight === -1 ? "directory-row highlighted" : "directory-row"}
+              onClick={goToParent}
+              onMouseEnter={() => setHighlight(-1)}
+            >
+              <ArrowUp size={14} aria-hidden />
+              <span className="directory-row-name">{t(".. (parent directory)", "..（上级目录）")}</span>
+            </button>
+          )}
+          {creating && (
+            <div className="directory-create-row">
+              <FolderPlus size={15} aria-hidden />
+              <input
+                autoFocus
+                value={newFolderName}
+                placeholder={t("New folder name; press Enter to confirm or Escape to cancel", "新文件夹名称，回车确认，Esc 取消")}
+                spellCheck={false}
+                onChange={(event) => setNewFolderName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void createFolder();
+                  if (event.key === "Escape") { setCreating(false); setNewFolderName(""); setCreateError(null); }
+                }}
+              />
+            </div>
+          )}
+          {createError && <div className="directory-error">{createError.message}</div>}
+          {entries.map((entry, index) => (
+            <button
+              type="button"
+              key={entry.path}
+              data-row-index={index}
+              className={highlight === index ? "directory-row highlighted" : "directory-row"}
+              onClick={() => enterDirectory(entry.path)}
+              onMouseEnter={() => setHighlight(index)}
+            >
+              <Folder size={14} aria-hidden />
+              <span className="directory-row-name">{entry.name}</span>
+              {entry.git_repository && <span className="directory-git"><GitBranch size={11} aria-hidden />Git</span>}
+              {highlight === index && (
+                <span
+                  role="button"
+                  tabIndex={-1}
+                  className="directory-row-select"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void submit(entry.path);
+                  }}
+                >
+                  <Plus size={11} aria-hidden />
+                  {t("Select", "选择")}
+                </span>
+              )}
+            </button>
+          ))}
+          {!listing.error && entries.length === 0 && !listing.isLoading && (
+            <div className="directory-empty">
+              {filter
+                ? t(`No directories match “${filterOfInput(input)}”`, `没有匹配“${filterOfInput(input)}”的目录`)
+                : t("The current directory has no browsable subdirectories", "当前目录没有可浏览的子目录")}
+            </div>
+          )}
+        </div>
+        <footer className="directory-footer">
+          <button
+            type="button"
+            className="directory-new-folder"
+            onClick={() => { setCreating((value) => !value); setCreateError(null); }}
+            disabled={!listing.data}
+            aria-label={t("New folder", "新建文件夹")}
+          >
+            <FolderPlus size={14} aria-hidden />
+          </button>
+          <code className="directory-footer-path">{currentPath || "…"}</code>
+          <Button
+            variant="primary"
+            onClick={() => void submit(stripTrailingSlash(ensureTrailingSlash(currentPath)))}
+            disabled={submitting || !currentPath}
+          >
+            <Plus size={13} aria-hidden />
+            {submitting
+              ? props.pendingLabel ?? t("Opening", "正在打开")
+              : props.currentLabel ?? t("Open current directory", "打开当前目录")}
+          </Button>
+        </footer>
       </div>
     </Modal>
   );
 }
 
 /**
- * 按过滤词做大小写不敏感的目录名子串匹配。
- *
- * @param entries 目录条目
- * @param filter 过滤词，空串时不过滤
- * @returns 匹配的目录条目
- */
-function filterEntries(entries: DirectoryEntry[], filter: string): DirectoryEntry[] {
-  if (!filter) return entries;
-  const lowered = filter.toLowerCase();
-  return entries.filter((entry) => entry.name.toLowerCase().includes(lowered));
-}
-
-/**
- * 过滤隐藏目录并把普通目录排在前面。
+ * 目录排序：普通目录在前、点开头目录靠后，同组按本地化名称排序。
  *
  * @param entries 服务端目录条目
- * @param showHidden 是否显示点开头目录
  * @returns 排序后的目录条目
  */
-function sortEntries(entries: DirectoryEntry[], showHidden: boolean): DirectoryEntry[] {
-  const visible = showHidden ? entries : entries.filter((entry) => !entry.name.startsWith("."));
-  return [...visible].sort((left, right) => {
+function sortEntries(entries: DirectoryEntry[]): DirectoryEntry[] {
+  return [...entries].sort((left, right) => {
     const leftHidden = left.name.startsWith(".") ? 1 : 0;
     const rightHidden = right.name.startsWith(".") ? 1 : 0;
     if (leftHidden !== rightHidden) return leftHidden - rightHidden;
