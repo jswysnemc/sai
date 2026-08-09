@@ -5,3 +5,6 @@ coverage/
 vite.config.js
 vite.config.d.ts
 public/material-icons/
+# 依赖锁文件统一为 package-lock.json，CI 与 Dockerfile 均使用 npm ci
+pnpm-lock.yaml
+yarn.lock

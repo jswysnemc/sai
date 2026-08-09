@@ -4,9 +4,11 @@
 FROM node:22-bookworm AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
-RUN npm ci
+# postinstall 需读取 src 下的图标映射，此处先跳过，待源码就位后再执行
+RUN npm ci --ignore-scripts
 COPY web/ ./
-RUN npm run build
+RUN node scripts/copy-material-icons.mjs \
+    && npm run build
 
 # 2. 编译 Sai 二进制（嵌入 web/dist）
 FROM rust:1-bookworm AS builder
