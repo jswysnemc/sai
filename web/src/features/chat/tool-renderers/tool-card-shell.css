@@ -38,11 +38,17 @@
 .tool-shell-head {
   display: flex;
   align-items: center;
-  gap:var(--space-sm);
+  gap: var(--space-sm);
   min-height: 28px;
-  padding:var(--space-3xs) var(--space-2xs);
-  border-radius:var(--radius-2);
+  padding: var(--space-3xs) var(--space-2xs);
+  border-radius: var(--radius-2);
   cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+/* 运行中的卡片头部铺一层信号色薄底：长对话流里一眼找到还在执行的那张 */
+.tool-shell.tone-running .tool-shell-head {
+  background: color-mix(in srgb, var(--signal) 4%, transparent);
 }
 
 .tool-shell-head:hover {
@@ -54,11 +60,17 @@
   outline-offset: -1px;
 }
 
+/*
+ * 图标徽章：tone 色淡底圆角芯片，让「是什么操作、状态如何」
+ * 在扫读时先于文字被捕获；色调变量天然带出成功/失败/注意的差异。
+ */
 .tool-shell-icon {
   display: grid;
   width: 20px;
   height: 20px;
   place-items: center;
+  border-radius: var(--radius-1);
+  background: color-mix(in srgb, var(--tool-tone) 10%, transparent);
   color: var(--tool-tone);
 }
 
@@ -212,15 +224,27 @@
   margin-block: 0;
 }
 
-/* 展开详情使用单一细边框内容块，折叠行本身不增加外框。 */
+/* 展开详情使用单一细边框内容块，折叠行本身不增加外框。
+ * position:relative 让详情块盖过分组时间线的导轨（导轨由组容器的 ::before 绘制）。 */
 .tool-shell-body > .shell-tool-view,
+.tool-shell-body > .bg-task-view,
 .tool-shell-body > .edit-tool-view,
 .tool-shell-body > .read-tool-view,
 .tool-shell-body > .generic-tool-view {
+  position: relative;
   overflow: hidden;
   border: 1px solid var(--technical-border);
   border-radius: var(--radius-3);
   background: var(--technical-surface);
+}
+
+/* 失败/需注意的调用：详情块边框染上对应色调，结果与细节在视觉上连成一体 */
+.tool-shell.tone-danger .tool-shell-body > :is(.shell-tool-view, .bg-task-view, .edit-tool-view, .read-tool-view, .generic-tool-view) {
+  border-color: color-mix(in srgb, var(--danger) 32%, var(--technical-border));
+}
+
+.tool-shell.tone-attention .tool-shell-body > :is(.shell-tool-view, .bg-task-view, .edit-tool-view, .read-tool-view, .generic-tool-view) {
+  border-color: color-mix(in srgb, var(--warning) 32%, var(--technical-border));
 }
 
 /* 运行中的图标做呼吸，与底部运行指示器同一套语言 */

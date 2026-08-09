@@ -139,10 +139,20 @@
   animation: question-request-reveal var(--duration-slow) var(--ease-out);
 }
 
-/* 已处理的卡片展开后跟随工具卡的导轨缩进，不再自带内边距 */
+/* 已处理的卡片展开后跟随工具卡的时间线：导轨落在头部图标中心，内容缩进到标题列 */
 .question-request-card:not(.is-pending) .question-request-body {
-  padding: var(--space-2xs) 0 0 var(--space-2xs);
-  border-left: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  position: relative;
+  padding: var(--space-2xs) 0 0 calc(var(--space-2xs) + 20px + var(--space-sm));
+}
+
+.question-request-card:not(.is-pending) .question-request-body::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--space-2xs) + 9.5px);
+  width: 1px;
+  background: color-mix(in srgb, var(--line) 78%, transparent);
 }
 
 @keyframes question-request-reveal {
@@ -162,44 +172,44 @@
   }
 }
 
-.question-tabs {
-  display: flex;
-  gap: var(--space-3xs);
-  overflow-x: auto;
-}
-
-/* 激活态用胶囊填充表达，不用下划引导线 */
-.question-tab {
+/* 多问题分页器：与问题文本同行靠右，箭头 + 「n / N」位置指示 */
+.question-pager {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: var(--space-3xs);
-  flex: 0 0 auto;
-  padding: var(--space-2xs) var(--space-md);
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
   color: var(--technical-muted);
-  font-size: var(--text-xs);
+}
+
+.question-pager-button {
+  display: grid;
+  width: 1.375rem;
+  height: 1.375rem;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: inherit;
   cursor: pointer;
 }
 
-.question-tab:hover:not(.is-active) {
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
+.question-pager-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
   color: var(--technical-text);
 }
 
-.question-tab.is-active {
-  background: var(--signal-soft, color-mix(in srgb, var(--signal) 12%, transparent));
-  color: var(--technical-text);
+.question-pager-button:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
-/* 已回答的页签显示强调色对勾，进度一眼可辨 */
-.question-tab .question-tab-check {
-  color: var(--signal);
-}
-
-.question-tab.is-answered:not(.is-active) {
-  color: var(--technical-text);
+.question-pager-position {
+  min-width: 2.75rem;
+  font: 500 var(--text-2xs)/1 var(--font-code);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .question-tab:focus-visible,
@@ -211,6 +221,13 @@
 .question-panel {
   display: grid;
   gap: var(--space-sm);
+}
+
+.question-text-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
 }
 
 .question-text {

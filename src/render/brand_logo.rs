@@ -1,25 +1,19 @@
-/// Sai 品牌标志的单位网格：5 行 7 列，1 表示实心块。
+/// Sai 品牌标志的静态文本行：半块字符（▀ ▄ █）拼出的 "Sai" 字母标。
 ///
-/// 形态为双箭头（快进式提示符）加一枚落在基线上的实心光标块，
-/// 取代旧的像素字母 SAI。箭头指向右表示推进，光标块点明终端属性；
-/// 单格笔画保证低分辨率终端仍可识别。Web 端使用同一网格。
-const LOGO_GRID: [[u8; 7]; 5] = [
-    [1, 0, 1, 0, 0, 0, 0],
-    [0, 1, 0, 1, 0, 0, 0],
-    [0, 0, 1, 0, 1, 0, 0],
-    [0, 1, 0, 1, 0, 1, 1],
-    [1, 0, 1, 0, 0, 1, 1],
+/// 大写 S 全高，小写 a/i 取 x 字高，i 带点与衬线基座；取代旧的双箭头
+/// 像素网格。每行固定 17 列，不足以空格补齐。Web 端 `sai-logo.tsx`
+/// 使用同一套字符网格。
+const LOGO_LINES: [&str; 4] = [
+    "▄▀▀▀▀▄        ▄  ",
+    "▀▄▄▄▄   ▀▀▀▀▄ ▄▄ ",
+    "     █ ▄▀▀▀▀█  █ ",
+    "▀▄▄▄▄▀ ▀▄▄▄██ ▄█▄",
 ];
 
-/// 每个网格单位在终端中占用的字符列数。
-///
-/// 字身已含 9 列，取 1 列可让整体宽度控制在启动面板也能容纳的范围内。
-const CELL_COLUMNS: usize = 1;
-
 /// 标志渲染所需的字符列数。
-pub(crate) const LOGO_WIDTH: usize = LOGO_GRID[0].len() * CELL_COLUMNS;
+pub(crate) const LOGO_WIDTH: usize = 17;
 /// 标志渲染所需的字符行数。
-pub(crate) const LOGO_HEIGHT: usize = LOGO_GRID.len();
+pub(crate) const LOGO_HEIGHT: usize = LOGO_LINES.len();
 
 /// 【终端】【品牌标志】按行渲染 Sai 标志。
 ///
@@ -29,43 +23,10 @@ pub(crate) const LOGO_HEIGHT: usize = LOGO_GRID.len();
 /// 返回:
 /// - 每行等宽的 ANSI 文本，行数为 `LOGO_HEIGHT`
 pub(crate) fn logo_lines(style: &str) -> Vec<String> {
-    LOGO_GRID
+    LOGO_LINES
         .iter()
-        .map(|row| render_logo_row(row, style))
+        .map(|line| format!("{style}{line}\x1b[0m"))
         .collect()
-}
-
-/// 【终端】【品牌标志】渲染标志的单行。
-///
-/// 连续实心块合并到同一段样式内，避免逐格重复写入 ANSI 序列。
-///
-/// 参数:
-/// - `row`: 单位网格的一行
-/// - `style`: 实心块使用的 ANSI 样式前缀
-///
-/// 返回:
-/// - 定宽的 ANSI 文本行
-fn render_logo_row<const N: usize>(row: &[u8; N], style: &str) -> String {
-    let mut output = String::new();
-    let mut filled = false;
-    for cell in row {
-        // 1. 进入实心段时写入样式，离开时复位，保证行尾不残留颜色
-        if *cell == 1 && !filled {
-            output.push_str(style);
-            filled = true;
-        } else if *cell == 0 && filled {
-            output.push_str("\x1b[0m");
-            filled = false;
-        }
-        let glyph = if *cell == 1 { '█' } else { ' ' };
-        for _ in 0..CELL_COLUMNS {
-            output.push(glyph);
-        }
-    }
-    if filled {
-        output.push_str("\x1b[0m");
-    }
-    output
 }
 
 #[cfg(test)]
@@ -93,15 +54,14 @@ mod tests {
                 "标志每行必须等宽"
             );
         }
-        // 双箭头提示符：斜边逐行右移
-        assert_eq!(strip_ansi(&lines[0]), "█ █    ");
-        assert_eq!(strip_ansi(&lines[1]), " █ █   ");
-        // 光标块只落在基线两行，保留终端品牌特征
-        assert_eq!(strip_ansi(&lines[3]), " █ █ ██");
-        assert_eq!(strip_ansi(&lines[4]), "█ █  ██");
+        // 字母标锚点：S 上弧、i 的圆点、底部衬线基座
+        assert_eq!(strip_ansi(&lines[0]), "▄▀▀▀▀▄        ▄  ");
+        assert_eq!(strip_ansi(&lines[1]), "▀▄▄▄▄   ▀▀▀▀▄ ▄▄ ");
+        assert_eq!(strip_ansi(&lines[2]), "     █ ▄▀▀▀▀█  █ ");
+        assert_eq!(strip_ansi(&lines[3]), "▀▄▄▄▄▀ ▀▄▄▄██ ▄█▄");
     }
 
-    /// 【终端】【品牌标志】验证样式在实心段结束后复位，不污染后续输出。
+    /// 【终端】【品牌标志】验证样式在每行结束后复位，不污染后续输出。
     ///
     /// 参数:
     /// - 无

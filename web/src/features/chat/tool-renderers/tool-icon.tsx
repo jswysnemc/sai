@@ -6,6 +6,7 @@ import {
   FileSearch,
   FolderTree,
   Globe,
+  Layers,
   ListTodo,
   Search,
   ShieldAlert,
@@ -22,11 +23,13 @@ import type { ToolCardTone } from "./tool-card-shell";
  *
  * 图标表达"这是什么操作"，与状态无关；状态由色调与状态标记表达。
  *
- * @param name 工具标识
+ * @param props.name 工具标识
+ * @param props.backgroundTask 是否为后台任务管理操作（非 start）
  * @returns 对应的图标元素
  */
-export function ToolIcon({ name }: { name: string }) {
+export function ToolIcon({ name, backgroundTask = false }: { name: string; backgroundTask?: boolean }) {
   const size = 14;
+  if (backgroundTask) return <Layers size={size} />;
   if (name === "run_command" || name.includes("command")) return <TerminalSquare size={size} />;
   if (name === "edit_file" || name === "write_file" || name === "str_replace") return <FilePenLine size={size} />;
   if (name === "read_file") return <FileSearch size={size} />;

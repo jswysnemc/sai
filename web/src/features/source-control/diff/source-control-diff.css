@@ -135,7 +135,9 @@
 }
 
 .git-line-selection-unavailable {
-  padding:var(--space-md);
+  padding:var(--space-sm) var(--space-md);
+  border-bottom: 1px dashed var(--line);
+  background: color-mix(in srgb, var(--warning) 5%, transparent);
   color: var(--ink-soft);
   font-size:var(--text-2xs);
 }
@@ -153,10 +155,79 @@
 
 /* 布局切换：meta 栏右侧的紧凑分段按钮 */
 .git-diff-meta {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm);
+  min-height: 2.25rem;
+  padding: var(--space-2xs) var(--space-md);
+  border-bottom: 1px solid var(--line);
+  background: var(--code-surface);
+}
+
+/* 比较双方：等宽胶囊 refs + 箭头，长路径在后方截断 */
+.git-diff-refs {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.git-diff-refs code {
+  padding: 0.0625rem var(--space-xs);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-1);
+  background: var(--paper);
+  color: var(--ink);
+  font: 500 var(--text-2xs) var(--font-code);
+  white-space: nowrap;
+}
+
+.git-diff-refs-arrow {
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+}
+
+.git-diff-refs-path {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--ink-soft);
+  font: 400 var(--text-2xs) var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 空态与加载态：居中图标 + 标题 + 引导，而不是一行孤零零的文字 */
+.git-diff-empty {
+  display: grid;
+  height: 100%;
+  min-height: 12rem;
+  padding: var(--space-2xl) var(--space-md);
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-2xs);
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.git-diff-empty > svg {
+  margin-bottom: var(--space-2xs);
+  color: color-mix(in srgb, var(--ink-soft) 70%, transparent);
+}
+
+.git-diff-empty strong {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.git-diff-empty span {
+  max-width: 22rem;
+  font-size: var(--text-xs);
+  line-height: 1.5;
 }
 
 .git-diff-layout-toggle {

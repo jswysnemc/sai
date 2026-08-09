@@ -203,7 +203,7 @@ export function ChatComposer(props: ChatComposerProps) {
           </div>
           <div className="composer-actions">
             <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} hidden />
-            <button type="button" className="composer-icon-button" onClick={() => fileInputRef.current?.click()} disabled={availability.inputDisabled} aria-label={t("Add images", "添加图片")}><Paperclip size={18} /></button>
+            <button type="button" className="composer-icon-button" onClick={() => fileInputRef.current?.click()} disabled={availability.inputDisabled} aria-label={t("Add images", "添加图片")}><Paperclip size={16} /></button>
             {availability.showStop ? (
               <button type="button" className="composer-send stop" onClick={props.onStop} aria-label={t("Stop run", "停止运行")}><Square size={13} fill="currentColor" /></button>
             ) : (

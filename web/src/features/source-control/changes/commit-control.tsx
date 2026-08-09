@@ -148,15 +148,15 @@ export function CommitControl(props: CommitControlProps) {
 
   return (
     <div className="git-commit-box" ref={rootRef}>
-      <div className="git-commit-editor">
-        <TextArea
-          className="git-commit-message"
-          rows={3}
-          value={props.message}
-          onChange={(event) => props.onMessageChange(event.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={t("Message (Ctrl+Enter to commit)", "提交说明（Ctrl+Enter 提交）")}
-        />
+      <TextArea
+        className="git-commit-message"
+        rows={3}
+        value={props.message}
+        onChange={(event) => props.onMessageChange(event.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={t("Message (Ctrl+Enter to commit)", "提交说明（Ctrl+Enter 提交）")}
+      />
+      {(props.showActionButton || (props.allowSuggestMessage && props.onSuggestMessage)) && <div className="git-commit-actions">
         {props.allowSuggestMessage && props.onSuggestMessage && (
           <Button
             className="git-commit-suggest"
@@ -171,41 +171,41 @@ export function CommitControl(props: CommitControlProps) {
               : t("Generate", "生成说明")}
           </Button>
         )}
-      </div>
-      {props.showActionButton && <div className="git-commit-actions">
-        <Button
-          variant="primary"
-          className="git-commit-primary"
-          onClick={() => void commit(mainChoice)}
-          disabled={!canRunChoice(mainChoice, props, hasMessage)}
-        >
-          <Check size={13} />
-          {mainChoice.label}
-        </Button>
-        <Button
-          variant="primary"
-          className="git-commit-menu-trigger"
-          onClick={() => setMenuOpen((value) => !value)}
-          disabled={props.busy || hasConflicts}
-          aria-expanded={menuOpen}
-          aria-label={t("Choose commit action", "选择提交操作")}
-        >
-          <ChevronDown size={13} />
-        </Button>
-        {menuOpen && (
-          <div className="git-commit-menu" role="menu">
-            {choices.map((choice) => (
-              <Button
-                key={choice.key}
-                className="git-commit-menu-item"
-                disabled={!canRunChoice(choice, props, hasMessage)}
-                onClick={() => void commit(choice)}
-              >
-                {choice.label}
-              </Button>
-            ))}
-          </div>
-        )}
+        {props.showActionButton && <div className="git-commit-split">
+          <Button
+            variant="primary"
+            className="git-commit-primary"
+            onClick={() => void commit(mainChoice)}
+            disabled={!canRunChoice(mainChoice, props, hasMessage)}
+          >
+            <Check size={13} />
+            {mainChoice.label}
+          </Button>
+          <Button
+            variant="primary"
+            className="git-commit-menu-trigger"
+            onClick={() => setMenuOpen((value) => !value)}
+            disabled={props.busy || hasConflicts || !hasMessage}
+            aria-expanded={menuOpen}
+            aria-label={t("Choose commit action", "选择提交操作")}
+          >
+            <ChevronDown size={13} />
+          </Button>
+          {menuOpen && (
+            <div className="git-commit-menu" role="menu">
+              {choices.map((choice) => (
+                <Button
+                  key={choice.key}
+                  className="git-commit-menu-item"
+                  disabled={!canRunChoice(choice, props, hasMessage)}
+                  onClick={() => void commit(choice)}
+                >
+                  {choice.label}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>}
       </div>}
       {hasConflicts && <small className="git-commit-blocked">{t("Resolve all conflicts before committing.", "解决全部冲突后才能提交。")}</small>}
     </div>

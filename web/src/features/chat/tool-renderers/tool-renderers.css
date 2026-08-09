@@ -1,4 +1,5 @@
 .shell-tool-view,
+.bg-task-view,
 .edit-tool-view,
 .generic-tool-view {
   display: grid;
@@ -406,4 +407,115 @@
 .tool-shell.tone-danger .shell-output,
 .tool-shell.tone-danger .generic-tool-block.result {
   color: var(--danger);
+}
+
+/*
+ * 后台任务管理视图
+ *
+ * list/output/wait/stop/cleanup 不是 shell 命令，不套用终端版式：
+ * 操作语义行（动作 + 任务 ID + 状态）替代命令行，任务表与日志流各自成块。
+ */
+.bg-task-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  padding: var(--space-sm) var(--space-lg);
+}
+
+.shell-command-line.has-body ~ .bg-task-meta {
+  padding-top: var(--space-sm);
+}
+
+.bg-task-action {
+  color: var(--technical-text);
+  font: 500 var(--text-xs)/1.4 var(--font-ui);
+  white-space: nowrap;
+}
+
+.bg-task-id {
+  overflow: hidden;
+  color: var(--technical-muted);
+  font: 400 var(--text-2xs)/1.4 var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bg-task-status {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 1.125rem;
+  margin-left: auto;
+  padding: 0 var(--space-xs);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink-soft);
+  font: 500 var(--text-2xs)/1 var(--font-ui);
+  white-space: nowrap;
+}
+
+.bg-task-status.is-running {
+  background: color-mix(in srgb, var(--signal) 12%, transparent);
+  color: var(--signal);
+}
+
+.bg-task-status.is-warning {
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  color: var(--warning);
+}
+
+/* 任务表：状态点 + 名称 + ID + 状态，行密度对齐目录列表 */
+.bg-task-list {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0 0 var(--space-2xs);
+  list-style: none;
+}
+
+.bg-task-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  min-height: 1.75rem;
+  padding: 0 var(--space-lg);
+}
+
+.bg-task-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--technical-muted);
+}
+
+.bg-task-dot.is-running { background: var(--signal); }
+.bg-task-dot.is-stopped,
+.bg-task-dot.is-timed_out { background: var(--warning); }
+
+.bg-task-name {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--technical-text);
+  font: 400 var(--text-xs)/1.4 var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bg-task-list .bg-task-status {
+  margin-left: auto;
+}
+
+.bg-task-empty,
+.bg-task-note {
+  padding: 0 var(--space-lg) var(--space-sm);
+  color: var(--technical-muted);
+  font: 400 var(--text-xs)/1.5 var(--font-ui);
+}
+
+.bg-task-meta ~ .bg-task-empty,
+.bg-task-meta ~ .bg-task-note {
+  padding-top: 0;
 }

@@ -200,18 +200,28 @@
   background: var(--code-surface);
 }
 
-.git-commit-editor {
-  position: relative;
+/* 提交区纵向排布：输入框与操作行之间留出统一间距，不再相互重叠 */
+.git-commit-box {
+  display: grid;
+  gap: var(--space-sm);
 }
 
 .git-commit-message.ui-text-area {
   min-height: 5.75rem;
-  padding-bottom: 2.5rem;
 }
 
+/* 操作行：生成说明在左，提交分体按钮吸收剩余宽度 */
 .git-commit-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.git-commit-split {
   position: relative;
   display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
   grid-template-columns: minmax(0, 1fr) 2rem;
 }
 
@@ -332,8 +342,40 @@
   font:400 var(--text-2xs) var(--font-code);
 }
 
+/*
+ * 文件状态徽章：单字母（M/A/D/U）收进一枚语义色小徽章。
+ * 基色定义在 workspace-pane.css（供工作区文件树复用），
+ * 这里只补上徽章形态与底色；modified 改用蓝色与 added 的绿区分开，
+ * 一屏变更列表里「新增」与「修改」不再同色混淆。
+ */
 .git-file-main .git-file-status {
   justify-self: end;
+  min-width: 1.375rem;
+  padding: 0.0625rem var(--space-2xs);
+  border-radius: var(--radius-1);
+  background: color-mix(in srgb, var(--blue) 12%, transparent);
+  color: var(--blue);
+  text-align: center;
+}
+
+.git-file-main .git-file-status.tone-added {
+  background: color-mix(in srgb, var(--signal) 12%, transparent);
+  color: var(--signal);
+}
+
+.git-file-main .git-file-status.tone-deleted {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.git-file-main .git-file-status.tone-untracked {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink-soft);
+}
+
+.git-file-main .git-file-status.tone-conflict {
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  color: var(--warning);
 }
 
 .git-output-panel {
@@ -431,10 +473,9 @@
 
 }
 
+/* 生成说明是操作行里的普通小号按钮，不再悬浮在输入框上 */
 .ui-button.git-commit-suggest {
-  position: absolute;
-  right: var(--space-2xs);
-  bottom: var(--space-2xs);
+  flex-shrink: 0;
   min-height: 1.75rem;
   padding:0 var(--space-sm);
   border: 1px solid var(--line);
@@ -443,7 +484,6 @@
   color: var(--signal);
   font-size:var(--text-xs);
   gap:var(--space-2xs);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--ink) 12%, transparent);
 }
 
 .ui-button.git-commit-suggest:hover:not(:disabled) {

@@ -85,7 +85,12 @@
   background: var(--line);
 }
 
-.markdown-body img {
+/*
+ * 只给正文图片（经 LightboxImage 渲染）套卡片样式。
+ * 不能写成 .markdown-body img：行内文件引用里的 13px 类型图标也是 img，
+ * CSS 优先级高于 HTML width/height 属性，曾被这条规则放大成图标卡片。
+ */
+.markdown-body img.lightbox-trigger {
   display: block;
   width: auto;
   max-width: min(100%, 20rem);

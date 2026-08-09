@@ -39,6 +39,7 @@
   align-items: center;
   gap:var(--space-sm);
   padding:var(--space-sm) var(--space-lg) var(--space-2xs);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
   background: var(--technical-surface);
 }
 
@@ -108,6 +109,14 @@
   display: grid;
   grid-template-columns: 2.25rem 2.25rem minmax(max-content, 1fr);
   min-width: max-content;
+}
+
+/*
+ * 行悬停：内阴影罩一层墨色薄纱，叠在增删底色之上而不取代它，
+ * 鼠标扫读长 diff 时始终知道光标落在哪一行。
+ */
+.diff-row:hover {
+  box-shadow: inset 0 0 0 100vmax color-mix(in srgb, var(--ink) 5%, transparent);
 }
 
 .diff-file-lines.single-gutter .diff-row {

@@ -1,18 +1,47 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <!-- Sai 字母标：与 src/shared/ui/sai-logo.tsx 共用同一字符网格 -->
   <g fill="#3a7264">
-    <rect x="3.75" y="7.25" width="3.5" height="3.5"/>
-    <rect x="10.75" y="7.25" width="3.5" height="3.5"/>
-    <rect x="7.25" y="10.75" width="3.5" height="3.5"/>
-    <rect x="14.25" y="10.75" width="3.5" height="3.5"/>
-    <rect x="10.75" y="14.25" width="3.5" height="3.5"/>
-    <rect x="17.75" y="14.25" width="3.5" height="3.5"/>
-    <rect x="7.25" y="17.75" width="3.5" height="3.5"/>
-    <rect x="14.25" y="17.75" width="3.5" height="3.5"/>
-    <rect x="21.25" y="17.75" width="3.5" height="3.5"/>
-    <rect x="24.75" y="17.75" width="3.5" height="3.5"/>
-    <rect x="3.75" y="21.25" width="3.5" height="3.5"/>
-    <rect x="10.75" y="21.25" width="3.5" height="3.5"/>
-    <rect x="21.25" y="21.25" width="3.5" height="3.5"/>
-    <rect x="24.75" y="21.25" width="3.5" height="3.5"/>
+    <rect x="3.25" y="11.5" width="1.5" height="1.5"/>
+    <rect x="4.75" y="10" width="1.5" height="1.5"/>
+    <rect x="6.25" y="10" width="1.5" height="1.5"/>
+    <rect x="7.75" y="10" width="1.5" height="1.5"/>
+    <rect x="9.25" y="10" width="1.5" height="1.5"/>
+    <rect x="10.75" y="11.5" width="1.5" height="1.5"/>
+    <rect x="24.25" y="11.5" width="1.5" height="1.5"/>
+    <rect x="3.25" y="13" width="1.5" height="1.5"/>
+    <rect x="4.75" y="14.5" width="1.5" height="1.5"/>
+    <rect x="6.25" y="14.5" width="1.5" height="1.5"/>
+    <rect x="7.75" y="14.5" width="1.5" height="1.5"/>
+    <rect x="9.25" y="14.5" width="1.5" height="1.5"/>
+    <rect x="15.25" y="13" width="1.5" height="1.5"/>
+    <rect x="16.75" y="13" width="1.5" height="1.5"/>
+    <rect x="18.25" y="13" width="1.5" height="1.5"/>
+    <rect x="19.75" y="13" width="1.5" height="1.5"/>
+    <rect x="21.25" y="14.5" width="1.5" height="1.5"/>
+    <rect x="24.25" y="14.5" width="1.5" height="1.5"/>
+    <rect x="25.75" y="14.5" width="1.5" height="1.5"/>
+    <rect x="10.75" y="16" width="1.5" height="3"/>
+    <rect x="13.75" y="17.5" width="1.5" height="1.5"/>
+    <rect x="15.25" y="16" width="1.5" height="1.5"/>
+    <rect x="16.75" y="16" width="1.5" height="1.5"/>
+    <rect x="18.25" y="16" width="1.5" height="1.5"/>
+    <rect x="19.75" y="16" width="1.5" height="1.5"/>
+    <rect x="21.25" y="16" width="1.5" height="3"/>
+    <rect x="25.75" y="16" width="1.5" height="3"/>
+    <rect x="3.25" y="19" width="1.5" height="1.5"/>
+    <rect x="4.75" y="20.5" width="1.5" height="1.5"/>
+    <rect x="6.25" y="20.5" width="1.5" height="1.5"/>
+    <rect x="7.75" y="20.5" width="1.5" height="1.5"/>
+    <rect x="9.25" y="20.5" width="1.5" height="1.5"/>
+    <rect x="10.75" y="19" width="1.5" height="1.5"/>
+    <rect x="13.75" y="19" width="1.5" height="1.5"/>
+    <rect x="15.25" y="20.5" width="1.5" height="1.5"/>
+    <rect x="16.75" y="20.5" width="1.5" height="1.5"/>
+    <rect x="18.25" y="20.5" width="1.5" height="1.5"/>
+    <rect x="19.75" y="19" width="1.5" height="3"/>
+    <rect x="21.25" y="19" width="1.5" height="3"/>
+    <rect x="24.25" y="20.5" width="1.5" height="1.5"/>
+    <rect x="25.75" y="19" width="1.5" height="3"/>
+    <rect x="27.25" y="20.5" width="1.5" height="1.5"/>
   </g>
 </svg>

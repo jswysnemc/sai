@@ -52,7 +52,7 @@
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap:var(--space-3xs);
+  gap:var(--space-2xs);
   margin-left: auto;
 }
 
@@ -102,17 +102,22 @@
   font:600 var(--text-2xs)/1 var(--font-code);
 }
 
+/*
+ * 附件与发送按钮：发送是唯一的主行动，用 30px 实心圆突出；
+ * 附件退回 28px 方形次级位，与左排 28px 基线的控件同高对齐，
+ * 不再出现两个等大圆并排抢焦点。
+ */
 .composer-icon-button,
 .composer-send {
   display: grid;
-  width: 30px;
-  height: 30px;
   place-items: center;
   border: 0;
-  border-radius: var(--radius-circle);
 }
 
 .composer-icon-button {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
 }
@@ -123,6 +128,9 @@
 }
 
 .composer-send {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-circle);
   background: var(--graphite);
   color: var(--paper-raised);
 }

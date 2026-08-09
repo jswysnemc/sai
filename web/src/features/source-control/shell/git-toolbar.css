@@ -14,14 +14,20 @@
   border-bottom: 1px solid var(--line);
 }
 
+/*
+ * 视图切换收紧为居中的分段控件：宽度随内容，不再撑满整行——
+ * 撑满时三个页签像三条通栏按钮，主次尽失。
+ */
 .git-toolbar-views {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   align-items: center;
-  gap: var(--space-3xs);
+  gap: 2px;
   min-width: 0;
-  padding: 0.125rem;
-  border-radius: var(--radius-2);
+  margin-inline: auto;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
   background: var(--control-surface);
 }
 
@@ -32,7 +38,7 @@
   min-height: 1.625rem;
   padding: 0 var(--space-sm);
   border: none;
-  border-radius: var(--radius-1);
+  border-radius: var(--radius-pill);
   background: none;
   color: var(--ink-soft);
   font-size: var(--text-xs);
@@ -44,7 +50,6 @@
 }
 
 .git-toolbar-view:hover:not(.active) {
-  background: color-mix(in srgb, var(--ink) 7%, var(--control-surface));
   color: var(--ink);
 }
 
@@ -52,6 +57,7 @@
   background: var(--paper-raised);
   color: var(--ink);
   font-weight: 500;
+  box-shadow: var(--elevation-1);
 }
 
 .git-toolbar-actions {

@@ -28,7 +28,7 @@ describe("QuestionRequestCard", () => {
     expect(html).toContain("1.");
     expect(html).toContain("直接修改");
     expect(html).toContain("现在完成代码修改");
-    expect(html).toContain("使用 Tab 或方向键选择，然后确认");
+    expect(html).toContain("使用 Tab / 上下键移动，回车或空格选中");
     expect(html).toContain("确认");
     expect(html).toContain("is-selected");
   });

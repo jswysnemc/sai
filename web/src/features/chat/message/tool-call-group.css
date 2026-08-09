@@ -124,14 +124,34 @@
   transform: rotate(180deg);
 }
 
+/*
+ * 展开列表：卡片与触发条左缘对齐（头部度量相同，图标自然落在同一根竖线上），
+ * 导轨穿过所有图标的中心（2xs 内边距 + 20px 图标盒的一半），把整组串成一条时间线。
+ * 图标芯片定位后盖住导轨，线看起来从图标之间穿过；展开的详情块铺底会遮住所在段的导轨。
+ */
 .tool-call-group-items {
+  position: relative;
   display: grid;
   gap:var(--space-3xs);
   margin-top:var(--space-3xs);
-  padding:var(--space-3xs) 0 0 var(--space-2xs);
-  border-left: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  padding:var(--space-3xs) 0 0;
   background: transparent;
   animation: tool-group-reveal var(--duration-slow) var(--ease-out);
+}
+
+.tool-call-group-items::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--space-2xs) + 9.5px);
+  width: 1px;
+  background: color-mix(in srgb, var(--line) 78%, transparent);
+}
+
+.tool-call-group-items .tool-shell-icon {
+  position: relative;
+  box-shadow: 0 0 0 3px var(--paper);
 }
 
 @keyframes tool-group-reveal {
@@ -178,16 +198,27 @@
 /*
  * 探索组展开态：一行一个对象的轻量清单。
  * 与 .tool-call-group-items 共用左侧引导线与入场动画，只是行密度更高。
+ * 清单行没有图标，导轨同样落在触发条图标中心，内容缩进到标题列（图标右缘 + 列间距）。
  */
 .explore-file-list {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-3xs);
   margin: var(--space-3xs) 0 0;
-  padding: var(--space-3xs) 0 var(--space-3xs) var(--space-sm);
-  border-left: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  padding: var(--space-3xs) 0 var(--space-3xs) calc(var(--space-2xs) + 20px + var(--space-sm));
   list-style: none;
   animation: tool-group-reveal var(--duration-slow) var(--ease-out);
+}
+
+.explore-file-list::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--space-2xs) + 9.5px);
+  width: 1px;
+  background: color-mix(in srgb, var(--line) 78%, transparent);
 }
 
 .explore-file-list li {

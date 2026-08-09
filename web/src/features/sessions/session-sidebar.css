@@ -99,31 +99,26 @@
   padding:var(--space-3xs) var(--space-3xs) var(--space-md);
 }
 
+/*
+ * 品牌位：字母标本身即是 "Sai" 字标（trim 模式），不再追加文字重复表意。
+ * 44px 宽的字身既保住辨识度，又不会在小尺寸下半块笔画糊成细线。
+ */
 .sidebar-brand {
   display: inline-flex;
   align-items: center;
   gap:var(--space-sm);
   min-width: 0;
   min-height: 32px;
-  padding:0 var(--space-2xs);
+  padding:0 var(--space-xs);
   border: 0;
   border-radius:var(--radius-3);
   background: transparent;
   color: var(--ink);
-  font-size:var(--text-lg);
-  font-weight: 600;
-  letter-spacing: -0.02em;
   cursor: pointer;
 }
 
 .sidebar-brand:hover {
   background: var(--paper-deep);
-}
-
-.sidebar-brand span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sidebar-heading-actions {
@@ -132,36 +127,46 @@
   gap:var(--space-3xs);
 }
 
+/*
+ * 视图切换器：紧凑分段控件，宽度随内容而非占满整行。
+ * 三个短标签撑满侧栏会显得像三个大按钮；收到内容宽度后，
+ * 它恢复为一个「切换器」应有的体量。
+ */
 .sidebar-view-switcher {
-  display: flex;
+  display: inline-flex;
   gap: 2px;
+  width: fit-content;
   margin: 0 var(--space-3xs) var(--space-sm);
   padding: 2px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-3);
+  border-radius: var(--radius-pill);
   background: var(--paper-deep);
 }
 
 .sidebar-view-switcher button {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 1.75rem;
-  padding: 0 var(--space-xs);
+  flex: 0 0 auto;
+  min-width: 3.25rem;
+  min-height: 1.625rem;
+  padding: 0 var(--space-sm);
   border: 0;
-  border-radius: var(--radius-2);
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--ink-soft);
   font-size: var(--text-2xs);
   white-space: nowrap;
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
 }
 
-.sidebar-view-switcher button:hover {
+.sidebar-view-switcher button:hover:not(.active) {
   color: var(--ink);
 }
 
 .sidebar-view-switcher button.active {
   background: var(--paper-raised);
   color: var(--ink);
+  font-weight: 500;
   box-shadow: var(--elevation-1);
 }
 

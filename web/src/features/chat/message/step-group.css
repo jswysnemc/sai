@@ -58,14 +58,33 @@
   transform: rotate(180deg);
 }
 
+/*
+ * 与工具组同一条时间线：卡片左缘对齐触发条，导轨穿过图标中心，
+ * 图标芯片盖住导轨，展开的详情块遮住所在段的导轨。
+ */
 .step-group-items {
+  position: relative;
   display: grid;
   gap: var(--space-2xs);
   margin-top: var(--space-3xs);
-  padding: var(--space-3xs) 0 0 var(--space-2xs);
-  border-left: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  padding: var(--space-3xs) 0 0;
   background: transparent;
   animation: step-group-reveal var(--duration-slow) var(--ease-out);
+}
+
+.step-group-items::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--space-2xs) + 9.5px);
+  width: 1px;
+  background: color-mix(in srgb, var(--line) 78%, transparent);
+}
+
+.step-group-items .tool-shell-icon {
+  position: relative;
+  box-shadow: 0 0 0 3px var(--paper);
 }
 
 @keyframes step-group-reveal {

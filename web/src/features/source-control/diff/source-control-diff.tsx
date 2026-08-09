@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Columns2, Rows3 } from "lucide-react";
+import { Columns2, GitCompare, Loader2, Rows3 } from "lucide-react";
 import type { GitDiffResponse } from "../../../api/contracts";
 import { DiffView, type DiffLayout } from "../../chat/tool-renderers/diff-view";
 import { Button } from "../../../shared/ui/button/button";
@@ -28,11 +28,22 @@ export function SourceControlDiff(props: SourceControlDiffProps) {
   const { t } = useI18n();
   const [layout, setLayout] = useState<DiffLayout>("side");
   if (props.loading) {
-    return <div className="git-clean diff-clean">{t("Loading diff...", "正在读取差异…")}</div>;
+    return (
+      <div className="git-diff-empty">
+        <Loader2 size={20} className="spin" aria-hidden />
+        <span>{t("Loading diff...", "正在读取差异…")}</span>
+      </div>
+    );
   }
   if (props.error) return <div className="pane-error">{props.error.message}</div>;
   if (!props.data?.patch) {
-    return <div className="git-clean diff-clean">{t("No diff to display", "没有可显示的差异")}</div>;
+    return (
+      <div className="git-diff-empty">
+        <GitCompare size={22} aria-hidden />
+        <strong>{t("No diff to display", "没有可显示的差异")}</strong>
+        <span>{t("Select a file from the changes list to review its diff", "从左侧变更列表选择文件，在这里查看它的差异")}</span>
+      </div>
+    );
   }
 
   const supportsPartial = !props.data.truncated && ["staged", "unstaged"].includes(props.data.mode);
@@ -40,9 +51,11 @@ export function SourceControlDiff(props: SourceControlDiffProps) {
   return (
     <div className="git-diff-shell">
       <div className="git-diff-meta">
-        <span>
-          {props.data.base_ref} → {props.data.head_ref}
-          {props.selectedPath ? ` · ${props.selectedPath}` : ""}
+        <span className="git-diff-refs">
+          <code>{props.data.base_ref}</code>
+          <span className="git-diff-refs-arrow" aria-hidden>→</span>
+          <code>{props.data.head_ref}</code>
+          {props.selectedPath ? <span className="git-diff-refs-path">{props.selectedPath}</span> : null}
         </span>
         <span className="git-diff-layout-toggle" role="group" aria-label={t("Diff layout", "差异布局")}>
           <Button

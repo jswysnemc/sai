@@ -1,5 +1,5 @@
 import { Check, Circle, CircleDot } from "lucide-react";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import type { QuestionPrompt } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
 import { TextArea } from "../../shared/ui/form/text-area";
@@ -13,6 +13,8 @@ type QuestionOptionPanelProps = {
   onToggle: (label: string) => void;
   onCustomDraft: (value: string) => void;
   onSaveCustom: () => void;
+  /** 多问题时的分页指示器，渲染在问题文本同一行右侧 */
+  pager?: ReactNode;
 };
 
 /**
@@ -28,7 +30,8 @@ export function QuestionOptionPanel({
   interactive,
   onToggle,
   onCustomDraft,
-  onSaveCustom
+  onSaveCustom,
+  pager
 }: QuestionOptionPanelProps) {
   const { t } = useI18n();
   const multiple = Boolean(question.multiple);
@@ -36,7 +39,10 @@ export function QuestionOptionPanel({
 
   return (
     <div className="question-panel">
-      <div className="question-text">{question.question}</div>
+      <div className="question-text-row">
+        <div className="question-text">{question.question}</div>
+        {pager}
+      </div>
       <div className="question-options" role="group" aria-label={question.question}>
         {question.options.map((option, index) => {
           const answerValue = option.value ?? option.label;
@@ -48,7 +54,7 @@ export function QuestionOptionPanel({
               disabled={!interactive}
               aria-pressed={active}
               onClick={() => onToggle(answerValue)}
-              onKeyDown={(event) => moveOptionFocus(event, multiple)}
+              onKeyDown={moveOptionFocus}
             >
               <span className="question-option-index" aria-hidden>{index + 1}.</span>
               <span className="question-option-copy">
@@ -84,13 +90,14 @@ export function QuestionOptionPanel({
 /**
  * 使用上下方向键在同一问题的选项间循环移动焦点。
  *
- * 单选问题会同步选择焦点项；多选问题只移动焦点，避免意外切换已有答案。
+ * 方向键只移动焦点，选中交给回车/空格（触发原生 click），
+ * 否则单选的「选中即推进」会让方向键浏览直接跳到下一题。
  *
  * @param event 选项按钮键盘事件
  * @param multiple 当前问题是否允许多选
  * @returns 无返回值
  */
-function moveOptionFocus(event: KeyboardEvent<HTMLButtonElement>, multiple: boolean): void {
+function moveOptionFocus(event: KeyboardEvent<HTMLButtonElement>): void {
   if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
   const container = event.currentTarget.parentElement;
   if (!container) return;
@@ -98,13 +105,9 @@ function moveOptionFocus(event: KeyboardEvent<HTMLButtonElement>, multiple: bool
   const currentIndex = options.indexOf(event.currentTarget);
   if (currentIndex < 0 || options.length < 2) return;
 
-  // 1. 按方向循环计算目标选项
+  // 按方向循环计算目标选项并移动焦点
   event.preventDefault();
   const offset = event.key === "ArrowDown" ? 1 : -1;
   const nextIndex = (currentIndex + offset + options.length) % options.length;
-  const nextOption = options[nextIndex];
-
-  // 2. 单选同步答案，多选仅移动焦点
-  nextOption.focus();
-  if (!multiple) nextOption.click();
+  options[nextIndex].focus();
 }

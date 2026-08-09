@@ -1,3 +1,4 @@
+import { BackgroundTaskToolView } from "./background-task-tool-view";
 import { EditToolView } from "./edit-tool-view";
 import { GenericToolView } from "./generic-tool-view";
 import { ReadToolView } from "./read-tool-view";
@@ -17,8 +18,12 @@ type ToolResultViewProps = {
  * @returns 工具结果视图
  */
 export function ToolResultView({ name, argumentsText, output, headerPath }: ToolResultViewProps) {
-  if (name === "run_command" || name.includes("background_command")) {
+  if (name === "run_command") {
     return <ShellToolView argumentsText={argumentsText} output={output} />;
+  }
+  // 后台任务工具按 action 语义渲染：start 是命令，其余是任务管理操作
+  if (name.includes("background_command")) {
+    return <BackgroundTaskToolView argumentsText={argumentsText} output={output} />;
   }
   if (name === "read_file") {
     return <ReadToolView argumentsText={argumentsText} output={output} headerPath={headerPath} />;

@@ -1,4 +1,4 @@
-import { PanelLeftClose, Settings } from "lucide-react";
+import { FolderPlus, PanelLeftClose, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
@@ -174,8 +174,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
     <div className="session-sidebar">
       <div className="sidebar-heading">
         <button type="button" className="sidebar-brand" onClick={onToggleCollapsed} aria-label="Sai" title="Sai">
-          <SaiLogo size={20} />
-          <span>Sai</span>
+          <SaiLogo size={44} trim />
         </button>
         <div className="sidebar-heading-actions">
           <button type="button" className="icon-button" aria-label={t("Collapse session sidebar", "折叠会话侧栏")} title={t("Collapse session sidebar", "折叠会话侧栏")} onClick={onToggleCollapsed}>
@@ -243,6 +242,13 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
           <div className="sidebar-state">{t("No sessions in this view", "当前视图没有内容")}</div>
         )
       )}
+      {sidebarView === "workspaces" && (
+        <div className="sidebar-session-actions" role="toolbar" aria-label={t("Workspace actions", "工作区操作")}>
+          <button type="button" onClick={() => setBrowserOpen(true)}>
+            <FolderPlus size={14} /><span>{t("Add workspace", "加入工作区")}</span>
+          </button>
+        </div>
+      )}
       {sidebarView === "workspaces" && !tree.isLoading && (
         (tree.data?.length ?? 0) > 0 ? (
           <WorkspaceListView
@@ -257,7 +263,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
             onCloseWorkspace={(workspaceId, name, active) => void actions.closeWorkspace(workspaceId, name, active)}
           />
         ) : (
-          <div className="sidebar-state">{t("No sessions in this view", "当前视图没有内容")}</div>
+          <div className="sidebar-state">{t("No workspaces yet — add one above", "还没有工作区，点击上方「加入工作区」开始")}</div>
         )
       )}
       {(actions.error ?? tree.error) && <p className="sidebar-error">{(actions.error ?? tree.error)?.message}</p>}

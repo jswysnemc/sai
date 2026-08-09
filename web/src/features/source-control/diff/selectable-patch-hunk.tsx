@@ -2,6 +2,7 @@ import { CheckSquare2, Minus, Plus, RotateCcw, Square, SquareCheckBig, SquareX }
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
+import { DiffView } from "../../chat/tool-renderers/diff-view";
 import type { RunGitOperation } from "../types";
 import type { GitPatchHunk } from "./partial-diff";
 import {
@@ -159,9 +160,12 @@ export function SelectablePatchHunk(props: SelectablePatchHunkProps) {
           </div>
         </>
       ) : (
-        <div className="git-line-selection-unavailable">
-          {t("Line selection is unavailable for this file operation.", "此文件操作不支持按行选择。")}
-        </div>
+        <>
+          <div className="git-line-selection-unavailable">
+            {t("Line selection is unavailable for this file operation; showing the raw diff.", "此文件操作不支持按行选择，已改为展示原始差异。")}
+          </div>
+          <DiffView source={props.hunk.patch} layout="unified" />
+        </>
       )}
     </section>
   );

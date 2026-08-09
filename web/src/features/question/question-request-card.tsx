@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Info, MessageSquareText, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Info, MessageSquareText, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { LocalizedError, toDisplayError } from "../../api/api-error";
@@ -58,24 +58,45 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
   /**
    * 更新指定问题的预设选项答案。
    *
+   * 单选问题在选中后立即推进：跳到下一个未回答的问题；
+   * 全部回答完毕则直接提交，不再等待确认按钮。
+   *
    * @param questionIndex 问题索引
    * @param label 选项提交值
    * @param multiple 是否允许多选
    * @returns 无返回值
    */
   const toggleOption = (questionIndex: number, label: string, multiple: boolean): void => {
-    setAnswers((prev) => {
-      const next = prev.map((item) => [...item]);
-      const selected = next[questionIndex] ?? [];
-      if (multiple) {
-        next[questionIndex] = selected.includes(label)
-          ? selected.filter((item) => item !== label)
-          : [...selected, label];
-      } else {
-        next[questionIndex] = [label];
-      }
-      return next;
-    });
+    const next = answers.map((item) => [...item]);
+    const selected = next[questionIndex] ?? [];
+    if (multiple) {
+      next[questionIndex] = selected.includes(label)
+        ? selected.filter((item) => item !== label)
+        : [...selected, label];
+    } else {
+      next[questionIndex] = [label];
+    }
+    setAnswers(next);
+    if (!multiple && interactive) {
+      advanceOrSubmit(next);
+    }
+  };
+
+  /**
+   * 单选作答后的推进：优先跳到第一个未回答的问题，全部完成则自动提交。
+   *
+   * @param next 最新的答案集合
+   * @returns 无返回值
+   */
+  const advanceOrSubmit = (next: QuestionAnswers): void => {
+    const firstUnanswered = next.findIndex(
+      (item, index) => questions[index]?.required !== false && item.length === 0
+    );
+    if (firstUnanswered === -1) {
+      void submit(next);
+    } else if (firstUnanswered !== tab) {
+      setTab(firstUnanswered);
+    }
   };
 
   /**
@@ -88,34 +109,40 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
   const saveCustom = (questionIndex: number, multiple: boolean): void => {
     const value = (customDrafts[questionIndex] ?? "").trim();
     if (!value) return;
-    setAnswers((prev) => {
-      const next = prev.map((item) => [...item]);
-      if (multiple) {
-        const selected = next[questionIndex] ?? [];
-        next[questionIndex] = selected.includes(value) ? selected : [...selected, value];
-      } else {
-        next[questionIndex] = [value];
-      }
-      return next;
-    });
+    const next = answers.map((item) => [...item]);
+    if (multiple) {
+      const selected = next[questionIndex] ?? [];
+      next[questionIndex] = selected.includes(value) ? selected : [...selected, value];
+    } else {
+      next[questionIndex] = [value];
+    }
+    setAnswers(next);
+    if (!multiple && interactive) {
+      advanceOrSubmit(next);
+    }
   };
 
   /**
    * 校验并提交全部问题答案。
    *
+   * @param override 单选自动提交时传入的最新答案，绕开状态更新延迟
    * @returns 提交完成后的 Promise
    */
-  const submit = async (): Promise<void> => {
-    if (!allAnswered) {
+  const submit = async (override?: QuestionAnswers): Promise<void> => {
+    const finalAnswers = override ?? answers;
+    const complete = finalAnswers.every(
+      (item, index) => questions[index]?.required === false || item.length > 0
+    );
+    if (!complete) {
       setError(new LocalizedError("Answer every question first", "请先回答所有问题"));
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
-      await api.questions.answer(pending.id, answers);
+      await api.questions.answer(pending.id, finalAnswers);
       setStatus("answered");
-      setResolvedSummary(answers.map((item) => item.join(t(", ", "、"))));
+      setResolvedSummary(finalAnswers.map((item) => item.join(t(", ", "、"))));
       setExpanded(false);
     } catch (cause) {
       setError(toDisplayError(cause, "Failed to submit answers", "提交回答失败"));
@@ -173,20 +200,6 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
       </Button>
       {expanded && (
         <div className="question-request-body">
-          {questions.length > 1 && (
-            <div className="question-tabs">
-              {questions.map((question, index) => (
-                <Button
-                  key={`${question.header}-${index}`}
-                  className={`question-tab ${tab === index ? "is-active" : ""} ${answers[index]?.length ? "is-answered" : ""}`}
-                  onClick={() => setTab(index)}
-                >
-                  {question.header}
-                  {Boolean(answers[index]?.length) && <Check size={11} className="question-tab-check" aria-hidden />}
-                </Button>
-              ))}
-            </div>
-          )}
           {current && (
             <QuestionOptionPanel
               question={current}
@@ -196,6 +209,27 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
               onToggle={(label) => toggleOption(tab, label, Boolean(current.multiple))}
               onCustomDraft={(value) => setCustomDrafts((prev) => prev.map((item, index) => (index === tab ? value : item)))}
               onSaveCustom={() => saveCustom(tab, Boolean(current.multiple))}
+              pager={questions.length > 1 ? (
+                <div className="question-pager">
+                  <Button
+                    className="question-pager-button"
+                    aria-label={t("Previous question", "上一个问题")}
+                    disabled={tab === 0}
+                    onClick={() => setTab((value) => Math.max(0, value - 1))}
+                  >
+                    <ChevronLeft size={14} aria-hidden />
+                  </Button>
+                  <span className="question-pager-position">{tab + 1} / {questions.length}</span>
+                  <Button
+                    className="question-pager-button"
+                    aria-label={t("Next question", "下一个问题")}
+                    disabled={tab === questions.length - 1}
+                    onClick={() => setTab((value) => Math.min(questions.length - 1, value + 1))}
+                  >
+                    <ChevronRight size={14} aria-hidden />
+                  </Button>
+                </div>
+              ) : undefined}
             />
           )}
           {resolved && resolvedSummary.length > 0 && (
@@ -216,7 +250,7 @@ export function QuestionRequestCard({ pending, response, active = true }: Questi
               <div className="question-request-footer">
                 <div className="question-request-hint">
                   <Info size={14} aria-hidden />
-                  <span>{t("Use Tab or arrow keys to select, then confirm", "使用 Tab 或方向键选择，然后确认")}</span>
+                  <span>{t("Use Tab / arrow keys to move, Enter or Space to select", "使用 Tab / 上下键移动，回车或空格选中")}</span>
                 </div>
                 <div className="question-request-buttons">
                   <Button className="question-action question-cancel" disabled={submitting} onClick={() => void cancel()}>

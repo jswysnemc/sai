@@ -45,6 +45,12 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
     return <TodoToolView toolId={tool.id} argumentsText={tool.arguments || tool.argumentsPreview} output={tool.output} />;
   }
   const argumentsText = tool.arguments || tool.argumentsPreview;
+  // 后台任务工具的管理操作（list/output/wait/stop/cleanup）不是 shell 命令，
+  // 名称、图标与摘要都按动作语义表达
+  const backgroundAction = tool.name.includes("background_command")
+    ? stringField(parseJsonRecord(argumentsText), "action")
+    : "";
+  const backgroundManagement = Boolean(backgroundAction) && backgroundAction !== "start";
   const subagentActivity = parseCodexSubagentActivity(argumentsText);
   // 2. Codex 原生子智能体事件使用语义视图，不把协议参数作为唯一内容
   if (subagentActivity) {
@@ -92,8 +98,8 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
   return (
     <ToolCardShell
       tone={toneOfState(tool.status)}
-      icon={<ToolIcon name={tool.name} />}
-      title={readableToolName(tool.name)}
+      icon={<ToolIcon name={tool.name} backgroundTask={backgroundManagement} />}
+      title={readableToolName(tool.name, backgroundManagement)}
       target={hideTarget ? undefined : target || undefined}
       targetTitle={hideTarget ? undefined : fullCommand || headerPath || summary || undefined}
       actions={<ToolCardActions target={copyableInput(argumentsText, headerPath)} output={tool.output} />}
@@ -205,12 +211,13 @@ function ToolPermissionBadge({ autoAudited, t }: { autoAudited: boolean; t: (en:
  * 将工具标识转换为可读名称。
  *
  * @param name 工具标识
+ * @param backgroundTask 是否为后台任务管理操作
  * @returns 可读名称
  */
-export function readableToolName(name: string): string {
+export function readableToolName(name: string, backgroundTask = false): string {
   const labels: Record<string, string> = {
     run_command: "Shell",
-    background_command: "Shell",
+    background_command: backgroundTask ? "Tasks" : "Shell",
     edit_file: "Edit",
     write_file: "Write",
     str_replace: "Replace",

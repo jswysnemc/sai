@@ -24,6 +24,16 @@ export function toolDisplaySummary(
   if (!args) return compactText(argumentsText);
 
   if (name === "run_command" || name.includes("background_command")) {
+    // 后台任务管理操作（list/output/wait/stop/cleanup）没有 command 字段，
+    // 摘要表达动作本身而不是退化成泛泛的「命令」
+    if (name.includes("background_command")) {
+      const action = stringField(args, "action");
+      if (action && action !== "start") {
+        const label = backgroundActionSummary(action, locale);
+        const taskId = stringField(args, "task_id");
+        return taskId ? compactText(`${label} ${taskId}`) : label;
+      }
+    }
     const command = stringField(args, "command") || stringField(args, "cmd");
     return humanizeCommand(command) || text(locale, "command", "命令");
   }
@@ -130,6 +140,25 @@ export function toolDisplaySummary(
     return compactText(pattern);
   }
   return "";
+}
+
+/**
+ * 将后台任务管理 action 转成可读摘要。
+ *
+ * @param action 后台任务操作（非 start）
+ * @param locale 界面语言
+ * @returns 动作标签
+ */
+function backgroundActionSummary(action: string, locale: Locale): string {
+  const labels: Record<string, [string, string]> = {
+    list: ["Task list", "任务列表"],
+    output: ["Task output", "任务输出"],
+    wait: ["Wait for task", "等待任务"],
+    stop: ["Stop task", "停止任务"],
+    cleanup: ["Clean up tasks", "清理任务"]
+  };
+  const label = labels[action];
+  return label ? text(locale, label[0], label[1]) : action;
 }
 
 /**

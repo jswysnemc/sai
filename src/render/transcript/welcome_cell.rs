@@ -377,7 +377,7 @@ mod tests {
         assert!(narrow.len() < wide.len(), "无标志时高度应随内容收紧");
     }
 
-    /// 【终端】【启动面板】验证三行状态在五行标志高度内垂直居中。
+    /// 【终端】【启动面板】验证三行状态在四行标志高度内顶对齐排布。
     #[test]
     fn runtime_details_are_vertically_centered_with_the_logo() {
         let lines = display_lines(&sample("YOLO mode"), 80);
@@ -403,11 +403,11 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        assert!(visible[1].contains('█') && !visible[1].contains("model:"));
-        assert!(visible[2].contains("model:"));
-        assert!(visible[3].contains("directory:"));
-        assert!(visible[4].contains("permissions:"));
-        assert!(visible[5].contains('█') && !visible[5].contains("permissions:"));
+        assert!(visible[1].contains("model:"));
+        assert!(visible[2].contains("directory:"));
+        assert!(visible[3].contains("permissions:"));
+        // 信息列共三行，末行只剩标志的 S 底弧与 a/i 基座
+        assert!(visible[4].contains('█') && !visible[4].contains("permissions:"));
     }
 
     /// 【终端】【品牌标志】验证标志渲染在边框内部且每行宽度一致。

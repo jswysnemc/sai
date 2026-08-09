@@ -1,4 +1,4 @@
-import { ArrowUp, Folder, FolderPlus, GitBranch, HardDrive, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, Folder, FolderPlus, GitBranch, HardDrive, Loader2, Plus, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
@@ -8,10 +8,9 @@ import { Button } from "../../shared/ui/button/button";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { useI18n } from "../i18n/use-i18n";
 import {
-  directoryOfInput,
   ensureTrailingSlash,
-  filterOfInput,
   lastSegmentOf,
+  normalizeSlashes,
   stripTrailingSlash
 } from "./directory-path-input";
 
@@ -28,17 +27,22 @@ type ServerDirectoryDialogProps = {
 /**
  * 渲染服务端目录浏览和选择对话框。
  *
- * 路径输入框即状态源：以 `/` 结尾的部分决定浏览目录，末段是
- * 子目录过滤词，导航、跳转与搜索共用一个控件。列表行单击进入
- * 目录，高亮行出现行内选择按钮；底部按钮作用于当前目录。
- * 键盘：↑↓ 移动（含上级行）、→/Tab 进入、← 返回上级、Enter 选定、Esc 关闭。
+ * 路径与搜索分离：上方导航栏是纯目录路径（粘贴/输入完整路径后回车跳转，
+ * 输入以 `/` 结尾的路径即时跳转，支持 `/` 与 `C:/` 盘符根）。工具行把
+ * 根目录快捷入口与搜索框并为一行：根目录负责跳转，搜索只负责过滤当前
+ * 目录的子目录列表。导航栏左侧的上级按钮与列表首行「..（上级目录）」
+ * 都可返回上一级。
+ * 键盘：↑↓ 移动、→/Tab 进入、← 返回上级、Enter 跳转或选定、Esc 关闭。
  *
  * @param props 打开状态、文案覆盖、关闭与目录选择回调
  * @returns 服务端目录选择弹层
  */
 export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
   const { t } = useI18n();
-  const [input, setInput] = useState("");
+  // 路径输入框是自由文本，browseDir 才是已提交的浏览目录（空串 = 服务端默认目录）
+  const [pathInput, setPathInput] = useState("");
+  const [browseDir, setBrowseDir] = useState("");
+  const [filter, setFilter] = useState("");
   // 高亮下标：-1 表示「上级目录」行
   const [highlight, setHighlight] = useState(0);
   const [creating, setCreating] = useState(false);
@@ -50,26 +54,29 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
   const listRef = useRef<HTMLDivElement>(null);
   // 返回上级后待高亮的来源目录名，列表加载完成后定位
   const pendingSelectionRef = useRef<string | null>(null);
+  // 仅键盘驱动的高亮变化才滚动列表；鼠标悬停滚动会把列表拖得到处跑
+  const keyboardNavRef = useRef(false);
 
-  const directory = directoryOfInput(input);
-  const filter = filterOfInput(input).toLowerCase();
   const listing = useQuery({
-    queryKey: ["workspace-directories", directory],
-    queryFn: () => api.workspaces.browse(directory ? stripTrailingSlash(directory) : undefined),
+    queryKey: ["workspace-directories", browseDir],
+    queryFn: () => api.workspaces.browse(browseDir ? stripTrailingSlash(browseDir) : undefined),
     enabled: props.open
   });
   const entries = useMemo(() => {
     const sorted = sortEntries(listing.data?.entries ?? []);
-    if (!filter) return sorted;
-    return sorted.filter((entry) => entry.name.toLowerCase().startsWith(filter));
+    const needle = filter.trim().toLowerCase();
+    if (!needle) return sorted;
+    return sorted.filter((entry) => entry.name.toLowerCase().includes(needle));
   }, [listing.data?.entries, filter]);
   const parent = listing.data?.parent ?? null;
   const currentPath = listing.data?.current ?? "";
 
   useEffect(() => {
-    // 1. 打开时重置；输入框初始为空，等首次 browse 返回默认目录
+    // 1. 打开时重置；浏览目录留空，等首次 browse 返回默认目录
     if (!props.open) return;
-    setInput("");
+    setPathInput("");
+    setBrowseDir("");
+    setFilter("");
     setHighlight(0);
     setCreating(false);
     setNewFolderName("");
@@ -80,10 +87,12 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
   }, [props.open]);
 
   useEffect(() => {
-    // 2. 首次加载完成后把输入框同步为默认目录
-    if (!props.open || input || !listing.data) return;
-    setInput(ensureTrailingSlash(listing.data.current));
-  }, [props.open, input, listing.data]);
+    // 2. 首次加载完成后把导航栏同步为默认目录
+    if (!props.open || browseDir || !listing.data) return;
+    const initial = ensureTrailingSlash(listing.data.current);
+    setPathInput(initial);
+    setBrowseDir(initial);
+  }, [props.open, browseDir, listing.data]);
 
   useEffect(() => {
     // 3. 返回上级后把高亮定位回来源目录
@@ -94,7 +103,9 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
   }, [entries]);
 
   useEffect(() => {
-    // 4. 高亮变化时保持行可见
+    // 4. 仅键盘导航时保持高亮行可见（鼠标悬停不滚动列表）
+    if (!keyboardNavRef.current) return;
+    keyboardNavRef.current = false;
     const container = listRef.current;
     const row = container?.querySelector<HTMLElement>(`[data-row-index="${highlight}"]`);
     if (container && row) {
@@ -107,9 +118,12 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
     }
   }, [highlight, entries]);
 
-  /** 进入指定目录：改写输入框即触发浏览。 */
+  /** 进入指定目录：提交浏览目录并同步导航栏文本。 */
   const enterDirectory = (path: string) => {
-    setInput(ensureTrailingSlash(path));
+    const target = ensureTrailingSlash(path);
+    setBrowseDir(target);
+    setPathInput(target);
+    setFilter("");
     setHighlight(0);
     setSubmitError(null);
     inputRef.current?.focus();
@@ -120,6 +134,14 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
     if (!parent) return;
     pendingSelectionRef.current = lastSegmentOf(ensureTrailingSlash(currentPath));
     enterDirectory(parent);
+  };
+
+  /** 把导航栏文本作为完整路径提交浏览；支持 `C:` 这类盘符写法。 */
+  const commitPathInput = () => {
+    const raw = normalizeSlashes(pathInput).trim();
+    if (!raw) return;
+    const target = /^[A-Za-z]:$/.test(raw) ? `${raw}/` : ensureTrailingSlash(raw);
+    enterDirectory(target);
   };
 
   /**
@@ -157,23 +179,34 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
     }
   };
 
+  /** 键盘移动高亮并标记滚动来源为键盘。 */
+  const moveHighlight = (offset: number) => {
+    const minIndex = parent ? -1 : 0;
+    const maxIndex = entries.length - 1;
+    keyboardNavRef.current = true;
+    setHighlight((value) => {
+      const next = value + offset;
+      if (next > maxIndex) return minIndex;
+      if (next < minIndex) return maxIndex;
+      return next;
+    });
+  };
+
   /**
-   * 路径输入框键盘导航。
+   * 导航栏键盘操作。
    *
    * @param event 键盘事件
    * @returns 无返回值
    */
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    const minIndex = parent ? -1 : 0;
-    const maxIndex = entries.length - 1;
+  const handlePathKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();
-        setHighlight((value) => (value >= maxIndex ? minIndex : value + 1));
+        moveHighlight(1);
         break;
       case "ArrowUp":
         event.preventDefault();
-        setHighlight((value) => (value <= minIndex ? maxIndex : value - 1));
+        moveHighlight(-1);
         break;
       case "ArrowRight":
       case "Tab":
@@ -185,18 +218,23 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
       case "ArrowLeft": {
         const element = event.currentTarget;
         const atStart = element.selectionStart === 0 && element.selectionEnd === 0;
-        if (atStart || input.endsWith("/")) {
+        if (atStart || pathInput.endsWith("/")) {
           event.preventDefault();
           goToParent();
         }
         break;
       }
-      case "Enter":
+      case "Enter": {
         event.preventDefault();
-        if (highlight === -1) goToParent();
+        const typed = normalizeSlashes(pathInput).trim();
+        const pending = typed && ensureTrailingSlash(typed) !== browseDir;
+        // 路径已变化先跳转；未变化时 Enter 作用于高亮行或当前目录
+        if (pending) commitPathInput();
+        else if (highlight === -1) goToParent();
         else if (entries[highlight]) void submit(entries[highlight].path);
         else if (currentPath) void submit(stripTrailingSlash(ensureTrailingSlash(currentPath)));
         break;
+      }
       case "Escape":
         event.preventDefault();
         props.onClose();
@@ -206,44 +244,126 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
     }
   };
 
+  /**
+   * 搜索框键盘操作：方向键与回车共享列表导航，Esc 先清空搜索词。
+   *
+   * @param event 键盘事件
+   * @returns 无返回值
+   */
+  const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        moveHighlight(1);
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        moveHighlight(-1);
+        break;
+      case "Enter":
+        event.preventDefault();
+        if (entries[highlight]) enterDirectory(entries[highlight].path);
+        break;
+      case "Escape":
+        event.preventDefault();
+        if (filter) setFilter("");
+        else props.onClose();
+        break;
+      default:
+        break;
+    }
+  };
+
+  const roots = listing.data?.roots ?? [];
+  // 服务端的「越界」错误是英文且没说清边界，换成本地化的可执行提示
+  const browseErrorMessage = (() => {
+    const message = listing.error?.message;
+    if (!message) return null;
+    if (message.includes("outside configured workspace roots")) {
+      return t(
+        "This directory is outside the browsable roots. Jump to a root below, or add paths via the SAI_WEB_WORKSPACE_ROOTS environment variable when starting the server.",
+        "该目录不在可浏览的根目录内。可点下方根目录快捷入口，或在启动服务端时用环境变量 SAI_WEB_WORKSPACE_ROOTS 增加允许的路径。"
+      );
+    }
+    return message;
+  })();
+
   return (
     <Modal
       open={props.open}
       title={props.title ?? t("Open server workspace", "打开服务端工作区")}
-      description={props.description ?? t("Choose a directory on the server running Sai Web. Server configuration limits the browsing scope.", "选择运行 Sai Web 的服务器上的目录。浏览范围由服务端配置限制。")}
+      description={props.description ?? t("Choose a directory on the server running Sai Web. Browsing is limited to allowed roots: your home folder, the server's working directory, and any paths added via SAI_WEB_WORKSPACE_ROOTS.", "选择运行 Sai Web 的服务器上的目录。可浏览范围限于允许的根目录：用户主目录、服务端启动目录，以及环境变量 SAI_WEB_WORKSPACE_ROOTS 添加的路径。")}
       size="large"
       onClose={props.onClose}
     >
       <div className="server-directory-dialog">
         <div className="directory-input-shell">
+          <button
+            type="button"
+            className="directory-up-button"
+            onClick={goToParent}
+            disabled={!parent}
+            aria-label={t("Go to parent directory", "返回上级目录")}
+            title={t("Go to parent directory", "返回上级目录")}
+          >
+            <ArrowLeft size={15} aria-hidden />
+          </button>
           <Folder size={15} aria-hidden />
           <input
             ref={inputRef}
             className="directory-path-input"
-            value={input}
-            placeholder={t("Type a path; the last segment filters subdirectories", "输入路径，最后一段作为子目录过滤词")}
+            value={pathInput}
+            placeholder={t("Full path, e.g. /home/you or C:/Users/you — Enter to navigate", "输入完整路径（如 /home/you 或 C:/Users/you），回车跳转")}
             spellCheck={false}
             autoComplete="off"
             onChange={(event) => {
-              setInput(event.target.value);
+              const value = event.target.value;
+              setPathInput(value);
               setHighlight(0);
+              // 以斜杠结尾视为完整目录，立即浏览
+              if (normalizeSlashes(value).endsWith("/")) {
+                setBrowseDir(ensureTrailingSlash(value));
+              }
             }}
-            onKeyDown={handleKeyDown}
+            onKeyDown={handlePathKeyDown}
           />
           {listing.isFetching && <Loader2 size={14} className="spin" aria-hidden />}
         </div>
-        {(listing.data?.roots.length ?? 0) > 1 && (
-          <div className="directory-roots-row">
-            {listing.data?.roots.map((root) => (
-              <button type="button" key={root.path} onClick={() => enterDirectory(root.path)} title={root.path}>
-                <HardDrive size={12} aria-hidden />
-                {root.name}
-              </button>
-            ))}
+        <div className="directory-toolbar">
+          {roots.length > 0 && (
+            <div className="directory-roots-row">
+              {roots.map((root) => (
+                <button
+                  type="button"
+                  key={root.path}
+                  className={ensureTrailingSlash(currentPath).startsWith(ensureTrailingSlash(root.path)) ? "active" : ""}
+                  onClick={() => enterDirectory(root.path)}
+                  title={root.path}
+                >
+                  <HardDrive size={12} aria-hidden />
+                  {root.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="directory-search-shell">
+            <Search size={13} aria-hidden />
+            <input
+              className="directory-search-input"
+              value={filter}
+              placeholder={t("Filter subdirectories", "搜索当前目录下的子目录")}
+              spellCheck={false}
+              autoComplete="off"
+              onChange={(event) => {
+                setFilter(event.target.value);
+                setHighlight(0);
+              }}
+              onKeyDown={handleSearchKeyDown}
+            />
           </div>
-        )}
+        </div>
         <div className="directory-list" ref={listRef}>
-          {listing.error && <div className="directory-error">{listing.error.message}</div>}
+          {browseErrorMessage && <div className="directory-error">{browseErrorMessage}</div>}
           {submitError && <div className="directory-error">{submitError.message}</div>}
           {parent && (
             <button
@@ -253,7 +373,7 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
               onClick={goToParent}
               onMouseEnter={() => setHighlight(-1)}
             >
-              <ArrowUp size={14} aria-hidden />
+              <ArrowLeft size={14} aria-hidden />
               <span className="directory-row-name">{t(".. (parent directory)", "..（上级目录）")}</span>
             </button>
           )}
@@ -305,7 +425,7 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
           {!listing.error && entries.length === 0 && !listing.isLoading && (
             <div className="directory-empty">
               {filter
-                ? t(`No directories match “${filterOfInput(input)}”`, `没有匹配“${filterOfInput(input)}”的目录`)
+                ? t(`No directories match “${filter}”`, `没有匹配“${filter}”的目录`)
                 : t("The current directory has no browsable subdirectories", "当前目录没有可浏览的子目录")}
             </div>
           )}
@@ -317,10 +437,10 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
             onClick={() => { setCreating((value) => !value); setCreateError(null); }}
             disabled={!listing.data}
             aria-label={t("New folder", "新建文件夹")}
+            title={t("New folder", "新建文件夹")}
           >
             <FolderPlus size={14} aria-hidden />
           </button>
-          <code className="directory-footer-path">{currentPath || "…"}</code>
           <Button
             variant="primary"
             onClick={() => void submit(stripTrailingSlash(ensureTrailingSlash(currentPath)))}
