@@ -78,7 +78,7 @@ fn switch_mode_preserves_persisted_loaded_tools() {
     assert!(agent.tool_visibility.is_visible("get_weather"));
 }
 
-/// 模式切换只更新稳定系统提示，不生成用户侧模式提醒。
+/// 模式切换保持稳定 system prompt，并把模式说明放入待发送的 user 上下文。
 ///
 /// 参数:
 /// - 无
@@ -86,7 +86,7 @@ fn switch_mode_preserves_persisted_loaded_tools() {
 /// 返回:
 /// - 无
 #[test]
-fn switch_mode_updates_context_epoch_without_user_mode_context() {
+fn switch_mode_updates_context_epoch_without_system_mode_context() {
     let temp = tempfile::tempdir().unwrap();
     let paths = test_paths(temp.path());
     let config = AppConfig::default();
@@ -110,8 +110,16 @@ fn switch_mode_updates_context_epoch_without_user_mode_context() {
 
     let yolo_system = message_text(&yolo.messages[0]);
     let audited_system = message_text(&audited.messages[0]);
-    assert!(yolo_system.contains("name=\"yolo\""));
-    assert!(audited_system.contains("name=\"audited\""));
+    assert!(!yolo_system.contains("name=\"yolo\""));
+    assert!(!audited_system.contains("name=\"audited\""));
+    assert!(yolo
+        .pending_user_contexts
+        .iter()
+        .any(|context| context.contains("name=\"yolo\"")));
+    assert!(audited
+        .pending_user_contexts
+        .iter()
+        .any(|context| context.contains("name=\"audited\"")));
     assert!(!audited
         .dynamic_sources
         .iter()
