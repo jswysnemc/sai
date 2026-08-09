@@ -5,6 +5,7 @@ import { Button } from "../../../shared/ui/button/button";
 import { groupHasExpandedTool, usePersistedExpand } from "./tool-expand-state";
 import type { ToolLifecycle } from "../run-event-reducer";
 import { ToolLifecycleCard, readableToolName } from "../tool-lifecycle-card";
+import { ExploreFileList } from "./explore-file-list";
 import { ToolGroupTicker } from "./tool-group-ticker";
 import { toolCardSummary } from "../tool-renderers/tool-card-summary";
 import { toolFilePath } from "../tool-renderers/tool-data";
@@ -74,9 +75,14 @@ export function ToolCallGroup({ tools, live = false }: { tools: ToolLifecycle[];
         <ChevronDown size={14} className={expanded ? "rotate" : ""} aria-hidden />
       </Button>
       {expanded && (
-        <div className="tool-call-group-items">
-          {tools.map((tool) => <ToolLifecycleCard key={tool.id} tool={tool} />)}
-        </div>
+        exploreOnly ? (
+          // 纯探索组展开为轻量文件清单，完整卡片对读操作是冗余
+          <ExploreFileList tools={tools} workspacePath={workspacePath} />
+        ) : (
+          <div className="tool-call-group-items">
+            {tools.map((tool) => <ToolLifecycleCard key={tool.id} tool={tool} />)}
+          </div>
+        )
       )}
     </section>
   );
