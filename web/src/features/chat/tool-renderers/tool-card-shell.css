@@ -67,7 +67,13 @@
   height: 14px;
 }
 
+/*
+ * 名称列锁定最小宽度：Read、Write、Shell 这类短标签宽度不一，
+ * 连续多张卡叠放时操作对象的起点会参差；对齐后对象列成一条竖线。
+ * 更长的名称（MCP 工具）只受最小值托底，不会被截断。
+ */
 .tool-shell-title {
+  min-width: 4rem;
   color: var(--ink-soft);
   font:400 var(--text-sm)/1.3 var(--font-ui);
   white-space: nowrap;
