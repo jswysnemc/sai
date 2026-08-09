@@ -229,6 +229,12 @@ impl StreamRenderer {
         if self.plain || !WaitSpinner::supported() {
             return Ok(());
         }
+        // 工具状态行或命令输出预览仍占着底行时不启动：底行同一时刻只允许
+        // 一个所有者，此时起 spinner 会在下一帧把它们盖掉，底行来回闪。
+        // 这里是 spinner 的唯一启动入口，状态事件与 resume 路径共用该守卫
+        if self.live_tool_status.is_active() || self.command_preview.is_active() {
+            return Ok(());
+        }
         let status = self.work_status.unwrap_or(WorkStatus::Working);
         let phase = status.localized_label().to_string();
         let started_at = *self.work_started.get_or_insert_with(Instant::now);
@@ -265,10 +271,6 @@ impl StreamRenderer {
     /// - 是否成功
     pub(super) fn resume_work_spinner(&mut self) -> Result<()> {
         if self.work_status.is_none() {
-            return Ok(());
-        }
-        // 命令输出预览已内嵌 working 动效，不再启动 WaitSpinner
-        if self.command_preview.is_active() {
             return Ok(());
         }
         // 思考正文流式输出期间不叠 working 文案；工具阶段显示工作中
