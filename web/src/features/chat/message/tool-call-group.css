@@ -37,6 +37,70 @@
   white-space: nowrap;
 }
 
+/*
+ * 折叠行轮播：实时轮次里新完成工具的摘要把上一条向上顶走。
+ * 容器锁定一行高并裁剪，两段一次性动画完成滚出与滚入。
+ */
+.tool-group-ticker {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.tool-group-ticker-line {
+  display: block;
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-group-ticker-line.is-entering {
+  animation: tool-ticker-in var(--duration-slower) var(--ease-out);
+}
+
+.tool-group-ticker-line.is-leaving {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  animation: tool-ticker-out var(--duration-slower) var(--ease-out) forwards;
+}
+
+@keyframes tool-ticker-in {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes tool-ticker-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-group-ticker-line.is-entering {
+    animation: none;
+  }
+
+  .tool-group-ticker-line.is-leaving {
+    display: none;
+    animation: none;
+  }
+}
+
 .tool-call-group-icon {
   display: grid;
   width: 20px;

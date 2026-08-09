@@ -33,7 +33,7 @@ export function MessageParts({ parts, live }: { parts: LiveMessagePart[]; live?:
             />
           );
         }
-        if (item.type === "tool-group") return <ToolCallGroup key={item.id} tools={item.tools} />;
+        if (item.type === "tool-group") return <ToolCallGroup key={item.id} tools={item.tools} live={Boolean(live)} />;
         const part = item.part;
         if (part.type === "reasoning") {
           return <ReasoningBlock key={item.id} source={part.source} live={live && !part.endedAt} startedAt={part.startedAt} endedAt={part.endedAt} />;

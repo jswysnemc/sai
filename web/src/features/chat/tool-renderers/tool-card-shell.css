@@ -73,10 +73,13 @@
   white-space: nowrap;
 }
 
-/* 对象用等宽字体：路径与命令按字符对齐更易扫读 */
+/*
+ * 对象用等宽字体：路径与命令按字符对齐更易扫读。
+ * 吸收全部剩余宽度、放不下才截断——命令这类对象是折叠行的主信息，
+ * 压一道固定百分比上限只会在空间充足时白白省略。
+ */
 .tool-shell-target {
-  flex: 0 1 auto;
-  max-width: min(52%, 42rem);
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--ink-soft);

@@ -7,10 +7,12 @@ import type { ToolLifecycle } from "./run-event-reducer";
 import { toolCardSummary } from "./tool-renderers/tool-card-summary";
 import { parseCodexSubagentActivity } from "./tool-renderers/codex-subagent-data";
 import { CodexSubagentToolView } from "./tool-renderers/codex-subagent-tool-view";
-import { toolFilePath } from "./tool-renderers/tool-data";
+import { parseJsonRecord, stringField, toolFilePath } from "./tool-renderers/tool-data";
+import { AnimatedCount } from "./tool-renderers/animated-count";
+import { streamedLineCount } from "./tool-renderers/write-progress";
 import { ToolCardActions } from "./tool-renderers/tool-card-actions";
 import { ToolFileReference } from "./tool-renderers/tool-file-reference";
-import { displayPath } from "./tool-renderers/tool-display-summary";
+import { displayPath, isCommandToolName, isEditToolName } from "./tool-renderers/tool-display-summary";
 import { toolDiffStat, toolResultSummary } from "./tool-renderers/tool-result-summary";
 import { toolDurationLabel } from "./tool-renderers/tool-duration";
 import { useElapsedClock } from "./tool-renderers/use-elapsed-clock";
@@ -54,32 +56,54 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
     );
   }
   const headerPath = toolFilePath(tool.name, argumentsText);
-  // 3. 操作对象优先取工作区相对路径，其次是参数摘要；准备阶段没有对象时留空
+  // 3. 操作对象：命令类展示完整命令占满剩余宽度，放不下才截断；
+  //    其余优先取工作区相对路径，再退回参数摘要
+  const isCommand = isCommandToolName(tool.name);
+  const fullCommand = isCommand
+    ? stringField(parseJsonRecord(argumentsText), "command")
+      || stringField(parseJsonRecord(argumentsText), "cmd")
+    : "";
   const relativePath = headerPath ? displayPath(headerPath, workspacePath) : "";
-  const summary = headerPath ? "" : toolCardSummary(tool.name, argumentsText, locale, workspacePath) || tool.progress;
+  const summary = headerPath
+    ? ""
+    : fullCommand || toolCardSummary(tool.name, argumentsText, locale, workspacePath) || tool.progress;
   const target = headerPath
     ? <ToolFileReference path={headerPath} label={relativePath || headerPath} className="tool-shell-file" icon={false} />
     : summary;
+  // 展开后详情区已有完整的 `$ 命令` 行，头部再放一遍就是冗余信息
+  const hideTarget = expanded && isCommand && Boolean(fullCommand);
 
   // 4. 权限已并入本卡：头部只留一枚徽章，理由放进展开区，不再单独占一张卡
   const permission = tool.permission;
   const autoAudited = permission?.decision === "allow" && permission.source === "auto_audit";
   const auditReason = permission?.decision === "allow" ? permission.reason?.trim() ?? "" : "";
 
-  // 5. 折叠行右段依次表达"结果如何"与"花了多久"
+  // 5. 折叠行右段依次表达"结果如何"与"花了多久"；
+  //    编辑类流式期间先展示滚动的已写入行数，结束后换成增删统计
   const result = toolResultSummary(tool.name, tool.output, locale);
   const diffStat = toolDiffStat(tool.name, tool.output);
   const duration = toolDurationLabel(tool.startedAtMs, tool.endedAtMs, now);
+  const writingLines = running && isEditToolName(tool.name)
+    ? streamedLineCount(argumentsText)
+    : 0;
 
   return (
     <ToolCardShell
       tone={toneOfState(tool.status)}
       icon={<ToolIcon name={tool.name} />}
       title={readableToolName(tool.name)}
-      target={target || undefined}
-      targetTitle={headerPath || summary || undefined}
+      target={hideTarget ? undefined : target || undefined}
+      targetTitle={hideTarget ? undefined : fullCommand || headerPath || summary || undefined}
       actions={<ToolCardActions target={copyableInput(argumentsText, headerPath)} output={tool.output} />}
-      summary={resultSummaryNode(result, diffStat)}
+      summary={
+        writingLines > 0
+          ? (
+            <>
+              {t("Writing", "写入")} <AnimatedCount value={writingLines} active={running} /> {t("lines", "行")}
+            </>
+          )
+          : resultSummaryNode(result, diffStat)
+      }
       summaryTone={result?.tone ?? "neutral"}
       meta={metaNode(permission ? <ToolPermissionBadge autoAudited={autoAudited} t={t} /> : null, duration)}
       status={tool.status === "completed" ? undefined : <ToolStatusMark state={tool.status} />}
@@ -181,7 +205,7 @@ function ToolPermissionBadge({ autoAudited, t }: { autoAudited: boolean; t: (en:
  * @param name 工具标识
  * @returns 可读名称
  */
-function readableToolName(name: string): string {
+export function readableToolName(name: string): string {
   const labels: Record<string, string> = {
     run_command: "Shell",
     background_command: "Shell",

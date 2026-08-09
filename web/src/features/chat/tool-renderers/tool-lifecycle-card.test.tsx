@@ -105,4 +105,39 @@ describe("ToolLifecycleCard 折叠行", () => {
     }));
     expect(html).not.toContain("复制输出");
   });
+
+  it("折叠态展示完整命令而非压缩摘要", () => {
+    const command = "node /home/snemc/workspace/tmp/sandbox/ball-battle/test/smoke-test.mjs --reporter verbose";
+    const html = render(makeTool({
+      arguments: JSON.stringify({ command }),
+      output: JSON.stringify({ success: true, exit_code: 0, stdout: "ok" })
+    }));
+    expect(html).toContain(command);
+  });
+
+  it("展开的命令卡头部不再重复命令", () => {
+    const command = "cargo test --workspace";
+    // 失败的卡片默认展开，头部命令应让位给详情区的 $ 命令行
+    const html = render(makeTool({
+      id: "expanded-shell",
+      arguments: JSON.stringify({ command }),
+      output: JSON.stringify({ success: false, exit_code: 1, stdout: "" }),
+      status: "failed"
+    }));
+    const occurrences = html.split(command).length - 1;
+    expect(occurrences).toBe(1);
+    expect(html).toContain("shell-command-line");
+  });
+
+  it("流式写入期间折叠行展示已写入行数", () => {
+    const html = render(makeTool({
+      id: "writing",
+      name: "write_file",
+      argumentsPreview: '{"path":"a.rs","content":"l1\\nl2\\nl3\\nl4',
+      arguments: "",
+      status: "running"
+    }));
+    expect(html).toContain("写入");
+    expect(html).toContain("行");
+  });
 });
