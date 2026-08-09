@@ -18,7 +18,7 @@ import { UsageStatsSection } from "../usage/usage-stats-section";
 import { SessionDataSettings } from "../session-data/session-data-settings";
 import { SettingsSkeleton } from "./settings-skeleton";
 import { SettingsErrorRecovery } from "./settings-error-recovery";
-import { getSettingsSection } from "../settings-registry";
+import { isAppConfigSection } from "../settings-section-routing";
 import type { SettingsConfigController, SettingsSectionId } from "../settings-types";
 import type { ThemeId } from "../../theme/theme";
 import { useI18n } from "../../i18n/use-i18n";
@@ -51,7 +51,7 @@ export function SettingsSectionBody({
   onThemeChange
 }: SettingsSectionBodyProps) {
   const { t } = useI18n();
-  const requiresConfig = getSettingsSection(section)?.appConfig === "required";
+  const requiresConfig = isAppConfigSection(section);
 
   if (requiresConfig) {
     // 1. 必需 AppConfig 的分区：加载中展示骨架屏
@@ -144,8 +144,6 @@ function renderAppConfigSection(
           onConfigChange={settings.updateConfig}
         />
       );
-    case "ssh":
-      return <SshSettingsSection />;
     case "hooks":
       return (
         <HooksSettingsSection
@@ -217,6 +215,8 @@ function renderStandaloneSection(
       );
     case "mcp":
       return <McpSettingsSection />;
+    case "ssh":
+      return <SshSettingsSection />;
     case "usage":
       return <UsageStatsSection subview={subview} />;
     case "session-data":

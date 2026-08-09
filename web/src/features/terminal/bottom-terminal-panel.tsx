@@ -1,4 +1,4 @@
-import { Plus, SquareTerminal, X } from "lucide-react";
+import { SquareTerminal, X } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { TerminalManager } from "./use-terminal-manager";
 import { TerminalPane } from "./terminal-pane";
@@ -86,9 +86,6 @@ export function BottomTerminalPanel({ manager, height, onResize, onClose }: Bott
               </Button>
             </div>
           ))}
-          <Button className="bottom-terminal-new" onClick={createTerminal} aria-label={t("New terminal", "新建终端")} title={t("New terminal", "新建终端")}>
-            <Plus size={14} />
-          </Button>
           <SshTargetPicker
             onCreateLocal={createTerminal}
             onCreateSsh={(hostId) => void manager.createSshTerminal(hostId).catch(() => undefined)}

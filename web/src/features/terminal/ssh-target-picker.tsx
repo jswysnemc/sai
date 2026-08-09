@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Server, SquareTerminal } from "lucide-react";
+import { Plus, Server, SquareTerminal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { Button } from "../../shared/ui/button/button";
@@ -13,13 +13,13 @@ type SshTargetPickerProps = {
 };
 
 /**
- * 新建终端时选择本地 Shell 或某台 SSH 主机。
+ * 新建终端按钮，可选择本地 Shell 或某台 SSH 主机。
  *
- * 未配置任何 SSH 主机时不展开菜单，直接创建本地终端，
+ * 未配置任何 SSH 主机时不展开菜单，点击直接创建本地终端，
  * 避免为单一选项增加一次点击。
  *
  * @param props 本地与 SSH 创建回调
- * @returns 终端目标选择器
+ * @returns 新建终端按钮
  */
 export function SshTargetPicker(props: SshTargetPickerProps) {
   const { t } = useI18n();
@@ -41,13 +41,14 @@ export function SshTargetPicker(props: SshTargetPickerProps) {
   return (
     <div className="ssh-target-picker" ref={rootRef}>
       <Button
-        className="ssh-target-toggle"
+        className="bottom-terminal-new"
         onClick={() => (items.length === 0 ? props.onCreateLocal() : setOpen((value) => !value))}
         aria-label={t("New terminal", "新建终端")}
         aria-expanded={items.length === 0 ? undefined : open}
+        aria-haspopup={items.length === 0 ? undefined : "menu"}
         title={t("New terminal", "新建终端")}
       >
-        <ChevronDown size={12} />
+        <Plus size={14} />
       </Button>
       {open && (
         <div className="ssh-target-menu" role="menu">
