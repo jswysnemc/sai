@@ -59,7 +59,13 @@ pub(crate) fn highlight_code_line(lang: &str, line: &str) -> String {
                 return output;
             }
         }
-        if index + 1 < chars.len() && chars[index] == '/' && chars[index + 1] == '/' {
+        // 行注释：仅限真正使用 // 注释的语言。shell 与 python 系没有这种注释，
+        // 命令里的 http:// 会从 // 起被整段染成注释色
+        if supports_line_comment(&lang)
+            && index + 1 < chars.len()
+            && chars[index] == '/'
+            && chars[index + 1] == '/'
+        {
             output.push_str(CODE_COMMENT_STYLE);
             output.extend(chars[index..].iter());
             output.push_str(CODE_TOKEN_RESET);
@@ -182,6 +188,24 @@ fn code_keywords(lang: &str) -> &'static [&'static str] {
     }
 }
 
+/// 判断语言是否使用 `//` 行注释。
+///
+/// shell 与 python 系只有 `#` 注释；不加这层限制时，
+/// 命令里的 `http://` 会从 `//` 起被整段染成注释色。
+///
+/// 参数:
+/// - `lang`: 规范化后的语言标识
+///
+/// 返回:
+/// - 使用 `//` 行注释时返回 true
+fn supports_line_comment(lang: &str) -> bool {
+    matches!(
+        lang,
+        "rs" | "rust" | "js" | "ts" | "tsx" | "jsx" | "javascript" | "typescript" | "c" | "cpp"
+            | "java" | "go"
+    )
+}
+
 /// 判断语言是否支持 `/* */` 块注释。
 ///
 /// 参数:
@@ -283,5 +307,21 @@ mod tests {
         let output = highlight_code_line("typescript", "const total = 1;");
 
         assert!(output.contains(&format!("{CODE_KEYWORD_STYLE}const")));
+    }
+
+    /// shell 命令里的 URL 不被当作 `//` 注释整段染色。
+    #[test]
+    fn shell_urls_are_not_treated_as_line_comments() {
+        let output = highlight_code_line("bash", "curl http://127.0.0.1:8642/ && echo ok");
+
+        assert!(!output.contains(CODE_COMMENT_STYLE));
+    }
+
+    /// rust 的 `//` 行注释仍然按注释着色。
+    #[test]
+    fn rust_line_comments_keep_the_comment_style() {
+        let output = highlight_code_line("rust", "let a = 1; // 计数");
+
+        assert!(output.contains(&format!("{CODE_COMMENT_STYLE}// 计数")));
     }
 }
