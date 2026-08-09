@@ -1,5 +1,5 @@
 import { Check, Cpu, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { createElement, useEffect, useState } from "react";
+import { createElement, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
@@ -17,6 +17,7 @@ import { useI18n } from "../i18n/use-i18n";
 import { clearNewSessionModelReference } from "../sessions/new-session-preferences";
 import { KeyValueEditor } from "./key-value-editor";
 import { ProviderApiKeysField } from "./provider-api-keys-field";
+import { useSelectedFallback } from "./controls/use-selected-fallback";
 
 type ProviderSettingsSectionProps = {
   config: AppConfig;
@@ -75,11 +76,7 @@ export function ProviderSettingsSection({
   const selectedProviderKey = provider?.api_key_selected ?? providerKeys[0]?.id;
   const claudeSimulation = isClaudeClientStyle(provider?.client_style);
 
-  useEffect(() => {
-    if (!config.providers.some((item) => item.id === selectedId)) {
-      setSelectedId(config.active_provider || config.providers[0]?.id || "");
-    }
-  }, [config.active_provider, config.providers, selectedId]);
+  useSelectedFallback(selectedId, config.providers.map((item) => item.id), setSelectedId, config.active_provider);
 
   /** 新增一项 OpenAI 兼容供应商草稿。 */
   const addProvider = () => {

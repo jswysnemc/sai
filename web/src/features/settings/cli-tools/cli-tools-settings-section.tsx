@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useSelectedFallback } from "../controls/use-selected-fallback";
 import type { AppConfig } from "../../../api/contracts";
 import { EditorHeader } from "../editor-layout";
 import { CliToolConfigEditor } from "./cli-tool-config-editor";
@@ -38,9 +39,7 @@ export function CliToolsSettingsSection({
   const toolIds = tools.map(({ id }) => id);
   const [selectedId, setSelectedId] = useState(toolIds[0] ?? "");
 
-  useEffect(() => {
-    if (!toolIds.includes(selectedId)) setSelectedId(toolIds[0] ?? "");
-  }, [selectedId, toolIds.join("\u0000")]);
+  useSelectedFallback(selectedId, toolIds, setSelectedId);
 
   if (!selectedId) {
     return (

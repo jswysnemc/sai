@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useSelectedFallback } from "../controls/use-selected-fallback";
 import { api } from "../../../api/client";
 import type { McpConfig, McpServerConfig } from "../../../api/contracts";
 import { createDefaultMcpServer, parseMcpJson, uniqueServerId } from "./mcp-helpers";
@@ -30,11 +31,7 @@ export function useMcpConfig() {
   }, [response.data, dirty]);
 
   const servers = mcp?.servers ?? [];
-  useEffect(() => {
-    if (!servers.some((server) => server.id === selectedId)) {
-      setSelectedId(servers[0]?.id ?? "");
-    }
-  }, [servers, selectedId]);
+  useSelectedFallback(selectedId, servers.map((server) => server.id), setSelectedId);
 
   const selectedIndex = Math.max(0, servers.findIndex((server) => server.id === selectedId));
   const server = servers[selectedIndex];

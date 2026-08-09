@@ -1,4 +1,5 @@
 import type { AppConfig } from "../../../api/contracts";
+import { mergeSecretText } from "../controls/merge-secret-values";
 
 export type WebSearchProviderId = "tinyfish" | "tavily" | "firecrawl" | "anysearch" | "searxng" | "duckduckgo";
 export type WebSearchDefaultProvider = "auto" | WebSearchProviderId;
@@ -191,22 +192,7 @@ export function webSearchProviderStatus(config: WebSearchConfig, provider: WebSe
  * @returns 保留隐藏密钥并追加可见输入的密钥列表
  */
 export function mergeSearchApiKeyText(current: string[], text: string, secretSentinel: string): string[] {
-  const visible = text.split(/[\n\r,]/).map((key) => key.trim()).filter(Boolean);
-  if (!secretSentinel) return visible;
-
-  // 1. 保持隐藏占位符的数组位置，服务端才能按索引恢复对应密钥
-  let visibleIndex = 0;
-  const merged = current.map((key) => {
-    if (key === secretSentinel) return key;
-    const replacement = visible[visibleIndex];
-    visibleIndex += 1;
-    return replacement ?? "";
-  });
-  // 2. 新增条目追加到现有位置之后
-  merged.push(...visible.slice(visibleIndex));
-  // 3. 移除末尾无占位意义的空槽，隐藏密钥之前的空槽必须保留
-  while (merged.at(-1) === "") merged.pop();
-  return merged;
+  return mergeSecretText(current, text, secretSentinel);
 }
 
 /** 返回界面允许直接编辑的密钥或环境变量引用。 */

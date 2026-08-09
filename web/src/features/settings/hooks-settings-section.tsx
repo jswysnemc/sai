@@ -1,5 +1,6 @@
 import { Plus, Terminal, Trash2, Webhook } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useSelectedFallback } from "./controls/use-selected-fallback";
 import type { AppConfig, HookHttpRequest, HookItem } from "../../api/contracts";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { Select } from "../../shared/ui/select/select";
@@ -39,11 +40,12 @@ export function HooksSettingsSection({ config, onConfigChange }: HooksSettingsSe
   const items = hooks.items ?? [];
   const [selectedKey, setSelectedKey] = useState(itemKey(items[0], 0));
 
-  useEffect(() => {
-    if (!items.some((item, index) => itemKey(item, index) === selectedKey)) {
-      setSelectedKey(itemKey(items[0], 0));
-    }
-  }, [items, selectedKey]);
+  useSelectedFallback(
+    selectedKey,
+    items.map((item, index) => itemKey(item, index)),
+    setSelectedKey,
+    itemKey(items[0], 0)
+  );
 
   const selectedIndex = Math.max(0, items.findIndex((item, index) => itemKey(item, index) === selectedKey));
   const hook = items[selectedIndex];

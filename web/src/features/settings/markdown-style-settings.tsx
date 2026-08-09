@@ -8,6 +8,7 @@ import { useI18n } from "../i18n/use-i18n";
 import { Button } from "../../shared/ui/button/button";
 import { Select } from "../../shared/ui/select/select";
 import { AppearancePreview } from "./appearance-preview/appearance-preview";
+import { ToggleRow } from "./controls/toggle-row";
 import { SettingsGroup } from "./editor-layout";
 import "./markdown-style-settings.css";
 
@@ -76,50 +77,30 @@ export function MarkdownStyleSettings({
                 onChange={(density) => onTableChange({ density })}
               />
             </label>
-            <label className="settings-toggle-field">
-              <span>
-                <strong>{t("Full width", "占满内容宽度")}</strong>
-                <small>{t("Stretch short tables to the message width.", "短表格也扩展到消息内容宽度。")}</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={preferences.table.fullWidth}
-                onChange={(event) => onTableChange({ fullWidth: event.target.checked })}
-              />
-            </label>
-            <label className="settings-toggle-field">
-              <span>
-                <strong>{t("Striped rows", "斑马纹")}</strong>
-                <small>{t("Add a subtle surface to alternating rows.", "为交替数据行增加轻微底色。")}</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={preferences.table.stripedRows}
-                onChange={(event) => onTableChange({ stripedRows: event.target.checked })}
-              />
-            </label>
-            <label className="settings-toggle-field">
-              <span>
-                <strong>{t("Header background", "表头底色")}</strong>
-                <small>{t("Separate the header with a muted surface.", "使用克制底色区分表头。")}</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={preferences.table.headerBackground}
-                onChange={(event) => onTableChange({ headerBackground: event.target.checked })}
-              />
-            </label>
-            <label className="settings-toggle-field">
-              <span>
-                <strong>{t("Wrap cell content", "单元格内容换行")}</strong>
-                <small>{t("Wrap long text instead of keeping every cell on one line.", "长文本可以换行，不强制每个单元格保持单行。")}</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={preferences.table.wrapCells}
-                onChange={(event) => onTableChange({ wrapCells: event.target.checked })}
-              />
-            </label>
+            <ToggleRow
+              label={t("Full width", "占满内容宽度")}
+              hint={t("Stretch short tables to the message width.", "短表格也扩展到消息内容宽度。")}
+              checked={preferences.table.fullWidth}
+              onChange={(fullWidth) => onTableChange({ fullWidth })}
+            />
+            <ToggleRow
+              label={t("Striped rows", "斑马纹")}
+              hint={t("Add a subtle surface to alternating rows.", "为交替数据行增加轻微底色。")}
+              checked={preferences.table.stripedRows}
+              onChange={(stripedRows) => onTableChange({ stripedRows })}
+            />
+            <ToggleRow
+              label={t("Header background", "表头底色")}
+              hint={t("Separate the header with a muted surface.", "使用克制底色区分表头。")}
+              checked={preferences.table.headerBackground}
+              onChange={(headerBackground) => onTableChange({ headerBackground })}
+            />
+            <ToggleRow
+              label={t("Wrap cell content", "单元格内容换行")}
+              hint={t("Wrap long text instead of keeping every cell on one line.", "长文本可以换行，不强制每个单元格保持单行。")}
+              checked={preferences.table.wrapCells}
+              onChange={(wrapCells) => onTableChange({ wrapCells })}
+            />
           </div>
         </fieldset>
 
@@ -165,61 +146,36 @@ export function MarkdownStyleSettings({
                 onChange={(maxHeight) => onCodeBlockChange({ maxHeight })}
               />
             </label>
-            <label className="settings-toggle-field">
-              <span>
-                <strong>{t("Line numbers", "显示行号")}</strong>
-                <small>{t("Show a fixed number column for every source line.", "为每一行源码显示连续编号。")}</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={preferences.codeBlock.lineNumbers}
-                onChange={(event) => onCodeBlockChange({ lineNumbers: event.target.checked })}
-              />
-            </label>
-            <label className="settings-toggle-field">
-              <span>
-                <strong>{t("Wrap long lines", "长行换行")}</strong>
-                <small>{t("Wrap long source lines instead of scrolling horizontally.", "长源码行自动折行，不使用横向滚动。")}</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={preferences.codeBlock.wrapLongLines}
-                onChange={(event) => onCodeBlockChange({ wrapLongLines: event.target.checked })}
-              />
-            </label>
-            <label className="settings-toggle-field">
-              <span>
-                <strong>{t("Language label", "语言标签")}</strong>
-                <small>{t("Show the detected language in the code block header.", "在代码块头部显示识别到的语言。")}</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={preferences.codeBlock.showLanguageLabel}
-                onChange={(event) => onCodeBlockChange({ showLanguageLabel: event.target.checked })}
-              />
-            </label>
-            <label className="settings-toggle-field">
-              <span>
-                <strong>{t("Copy button", "复制按钮")}</strong>
-                <small>{t("Show the copy action in the code block header.", "在代码块头部显示复制操作。")}</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={preferences.codeBlock.showCopyButton}
-                onChange={(event) => onCodeBlockChange({ showCopyButton: event.target.checked })}
-              />
-            </label>
-            <label className="settings-toggle-field">
-              <span>
-                <strong>{t("Block border", "代码块外框")}</strong>
-                <small>{t("Add a thin neutral border around code blocks.", "为代码块增加同色系细边框。")}</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={preferences.codeBlock.showBorder}
-                onChange={(event) => onCodeBlockChange({ showBorder: event.target.checked })}
-              />
-            </label>
+            <ToggleRow
+              label={t("Line numbers", "显示行号")}
+              hint={t("Show a fixed number column for every source line.", "为每一行源码显示连续编号。")}
+              checked={preferences.codeBlock.lineNumbers}
+              onChange={(lineNumbers) => onCodeBlockChange({ lineNumbers })}
+            />
+            <ToggleRow
+              label={t("Wrap long lines", "长行换行")}
+              hint={t("Wrap long source lines instead of scrolling horizontally.", "长源码行自动折行，不使用横向滚动。")}
+              checked={preferences.codeBlock.wrapLongLines}
+              onChange={(wrapLongLines) => onCodeBlockChange({ wrapLongLines })}
+            />
+            <ToggleRow
+              label={t("Language label", "语言标签")}
+              hint={t("Show the detected language in the code block header.", "在代码块头部显示识别到的语言。")}
+              checked={preferences.codeBlock.showLanguageLabel}
+              onChange={(showLanguageLabel) => onCodeBlockChange({ showLanguageLabel })}
+            />
+            <ToggleRow
+              label={t("Copy button", "复制按钮")}
+              hint={t("Show the copy action in the code block header.", "在代码块头部显示复制操作。")}
+              checked={preferences.codeBlock.showCopyButton}
+              onChange={(showCopyButton) => onCodeBlockChange({ showCopyButton })}
+            />
+            <ToggleRow
+              label={t("Block border", "代码块外框")}
+              hint={t("Add a thin neutral border around code blocks.", "为代码块增加同色系细边框。")}
+              checked={preferences.codeBlock.showBorder}
+              onChange={(showBorder) => onCodeBlockChange({ showBorder })}
+            />
           </div>
         </fieldset>
       </div>

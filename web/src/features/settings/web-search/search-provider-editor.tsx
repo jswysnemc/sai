@@ -1,4 +1,6 @@
 import { Select } from "../../../shared/ui/select/select";
+import { TextFieldRow } from "../controls/field-row";
+import { ToggleRow } from "../controls/toggle-row";
 import { EditorHeader, SettingsGroup } from "../editor-layout";
 import { useI18n } from "../../i18n/use-i18n";
 import {
@@ -140,7 +142,7 @@ function TinyFishSettings({ config, secretSentinel, update }: ProviderSettingsPr
             secretSentinel={secretSentinel}
             onChange={(keys) => update({ tinyfish_api_keys: keys })}
           />
-          <TextField
+          <TextFieldRow
             label={t("API endpoint", "接口地址")}
             hint="tinyfish_base_url"
             value={config.tinyfish_base_url}
@@ -150,13 +152,13 @@ function TinyFishSettings({ config, secretSentinel, update }: ProviderSettingsPr
       </SettingsGroup>
       <SettingsGroup title={t("Request preferences", "请求偏好")} description={t("Optional defaults sent with each search.", "每次搜索附带的可选默认参数。")}>
         <div className="settings-form-grid">
-          <TextField
+          <TextFieldRow
             label={t("Default location", "默认位置")}
             hint={t("Leave empty to omit location.", "留空则不指定位置。")}
             value={config.tinyfish_default_location}
             onChange={(value) => update({ tinyfish_default_location: value })}
           />
-          <TextField
+          <TextFieldRow
             label={t("Default language", "默认语言")}
             hint={t("Leave empty to use the service default.", "留空则使用服务默认语言。")}
             value={config.tinyfish_default_language}
@@ -186,7 +188,7 @@ function TavilySettings({ config, secretSentinel, update }: ProviderSettingsProp
             secretSentinel={secretSentinel}
             onChange={(keys) => update({ tavily_api_keys: keys })}
           />
-          <TextField
+          <TextFieldRow
             label={t("API endpoint", "接口地址")}
             hint="tavily_base_url"
             value={config.tavily_base_url}
@@ -209,13 +211,13 @@ function TavilySettings({ config, secretSentinel, update }: ProviderSettingsProp
             />
             <small>tavily_search_depth</small>
           </div>
-          <BooleanField
+          <ToggleRow
             label={t("Include generated answer", "附带生成答案")}
             hint={t("Requests Tavily's synthesized answer.", "请求 Tavily 返回综合答案。")}
             checked={config.tavily_include_answer}
             onChange={(checked) => update({ tavily_include_answer: checked })}
           />
-          <BooleanField
+          <ToggleRow
             label={t("Include raw content", "附带原始正文")}
             hint={t("Includes extracted page content in results.", "在结果中附带提取后的页面正文。")}
             checked={config.tavily_include_raw_content}
@@ -245,7 +247,7 @@ function FirecrawlSettings({ config, secretSentinel, update }: ProviderSettingsP
             secretSentinel={secretSentinel}
             onChange={(keys) => update({ firecrawl_api_keys: keys })}
           />
-          <TextField
+          <TextFieldRow
             label={t("API endpoint", "接口地址")}
             hint="firecrawl_base_url"
             value={config.firecrawl_base_url}
@@ -255,7 +257,7 @@ function FirecrawlSettings({ config, secretSentinel, update }: ProviderSettingsP
       </SettingsGroup>
       <SettingsGroup title={t("Content extraction", "正文提取")}>
         <div className="settings-form-grid">
-          <BooleanField
+          <ToggleRow
             label={t("Only main content", "仅保留主要正文")}
             hint={t("Drops navigation, footer, and other page chrome.", "移除导航、页脚等非正文内容。")}
             checked={config.firecrawl_only_main_content}
@@ -284,7 +286,7 @@ function AnySearchSettings({ config, secretSentinel, update }: ProviderSettingsP
           secretSentinel={secretSentinel}
           onChange={(keys) => update({ anysearch_api_keys: keys })}
         />
-        <TextField
+        <TextFieldRow
           label={t("API endpoint", "接口地址")}
           hint="anysearch_base_url"
           value={config.anysearch_base_url}
@@ -307,7 +309,7 @@ function SearxngSettings({ config, update }: ProviderSettingsProps) {
     <>
       <SettingsGroup title={t("Connection", "连接")} description={t("Point to a SearXNG instance that exposes JSON search.", "填写支持 JSON 搜索的 SearXNG 实例地址。")}>
         <div className="settings-form-grid">
-          <TextField
+          <TextFieldRow
             label={t("Instance URL", "实例地址")}
             hint={t("Required before SearXNG can be selected.", "填写后才可使用 SearXNG。")}
             value={config.searxng_base_url}
@@ -317,7 +319,7 @@ function SearxngSettings({ config, update }: ProviderSettingsProps) {
       </SettingsGroup>
       <SettingsGroup title={t("Search preferences", "搜索偏好")}>
         <div className="settings-form-grid">
-          <TextField
+          <TextFieldRow
             label={t("Language", "语言")}
             hint={t("Use auto or a SearXNG language code.", "填写 auto 或 SearXNG 支持的语言代码。")}
             value={config.searxng_language}
@@ -369,69 +371,6 @@ function DuckDuckGoSettings() {
   );
 }
 
-/**
- * 渲染单行文本配置字段。
- *
- * @param props 字段名称、说明、值和更新回调
- * @returns 文本输入字段
- */
-function TextField({
-  label,
-  hint,
-  value,
-  onChange
-}: {
-  label: string;
-  hint: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="settings-field">
-      <span>{label}</span>
-      <input
-        type="text"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        spellCheck={false}
-        autoComplete="off"
-      />
-      <small>{hint}</small>
-    </label>
-  );
-}
-
-/**
- * 渲染布尔配置开关。
- *
- * @param props 字段名称、说明、状态和更新回调
- * @returns 布尔开关字段
- */
-function BooleanField({
-  label,
-  hint,
-  checked,
-  onChange
-}: {
-  label: string;
-  hint: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <label className="settings-toggle-field">
-      <span>
-        <strong>{label}</strong>
-        <small>{hint}</small>
-      </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-      />
-    </label>
-  );
-}
 
 /**
  * 返回供应商配置状态文案。

@@ -1,5 +1,8 @@
 import { PasswordField } from "../../shared/ui/password-field";
-import { Select, type SelectOption } from "../../shared/ui/select/select";
+import { type SelectOption } from "../../shared/ui/select/select";
+import { NumberFieldRow, SelectFieldRow, TextFieldRow } from "./controls/field-row";
+import { ToggleRow } from "./controls/toggle-row";
+import { mergeSecretValues } from "./controls/merge-secret-values";
 import { useI18n } from "../i18n/use-i18n";
 
 const SECRET_KEYS = ["api_key", "token", "secret", "password", "webhook"];
@@ -56,29 +59,21 @@ function StructuredField({
   const { t } = useI18n();
   const label = fieldLabel(name, t);
   if (typeof value === "boolean") {
-    return (
-      <label className="settings-toggle-field">
-        <span><strong>{label}</strong><small>{name}</small></span>
-        <input type="checkbox" checked={value} onChange={(event) => onChange(event.target.checked)} />
-      </label>
-    );
+    return <ToggleRow label={label} hint={name} checked={value} onChange={onChange} />;
   }
   if (typeof value === "number") {
-    return <label className="settings-field"><span>{label}</span><input type="number" value={value} onChange={(event) => onChange(Number(event.target.value))} /><small>{name}</small></label>;
+    return <NumberFieldRow label={label} hint={name} value={value} onChange={onChange} />;
   }
   const selectOptions = typeof value === "string" ? fieldSelectOptions(name, t) : null;
   if (selectOptions) {
     return (
-      <div className="settings-field">
-        <span>{label}</span>
-        <Select
-          value={String(value)}
-          options={selectOptions}
-          onChange={onChange}
-          ariaLabel={label}
-        />
-        <small>{name}</small>
-      </div>
+      <SelectFieldRow
+        label={label}
+        hint={name}
+        value={String(value)}
+        options={selectOptions}
+        onChange={onChange}
+      />
     );
   }
   if (Array.isArray(value)) {
@@ -99,7 +94,7 @@ function StructuredField({
           onChange={(event) => {
             const nextVisible = event.target.value.split("\n").map((item) => item.trim()).filter(Boolean);
             onChange(secret && secretSentinel
-              ? mergeStructuredSecretArray(currentValues, nextVisible, secretSentinel)
+              ? mergeSecretValues(currentValues, nextVisible, secretSentinel)
               : nextVisible);
           }}
           spellCheck={false}
@@ -142,7 +137,7 @@ function StructuredField({
       </div>
     );
   }
-  return <label className="settings-field"><span>{label}</span><input type="text" value={String(value ?? "")} onChange={(event) => onChange(event.target.value)} spellCheck={false} autoComplete="off" /><small>{name}</small></label>;
+  return <TextFieldRow label={label} hint={name} value={String(value ?? "")} onChange={onChange} />;
 }
 
 /**
@@ -182,33 +177,6 @@ export function fieldSelectOptions(
 function isSecretField(name: string): boolean {
   const normalized = name.toLowerCase();
   return SECRET_KEYS.some((key) => normalized.includes(key));
-}
-
-/**
- * 合并结构化敏感数组，同时保持服务端占位符的原始索引。
- *
- * @param current 当前脱敏数组
- * @param visible 用户编辑后的可见条目
- * @param secretSentinel 服务端敏感字段占位符
- * @returns 可安全提交并由服务端恢复隐藏值的数组
- */
-export function mergeStructuredSecretArray(
-  current: string[],
-  visible: string[],
-  secretSentinel: string
-): string[] {
-  // 1. 逐个替换可见槽位，隐藏槽位保持原索引
-  let visibleIndex = 0;
-  const merged = current.map((item) => {
-    if (item === secretSentinel) return item;
-    const replacement = visible[visibleIndex];
-    visibleIndex += 1;
-    return replacement ?? "";
-  });
-  // 2. 追加新条目，并移除末尾无占位意义的空槽
-  merged.push(...visible.slice(visibleIndex));
-  while (merged.at(-1) === "") merged.pop();
-  return merged;
 }
 
 /**
