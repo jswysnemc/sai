@@ -401,9 +401,8 @@
 }
 
 .key-value-row input:focus {
-  border-color: var(--signal);
+  border-color: var(--line-strong);
   outline: none;
-  box-shadow: var(--ring-focus);
 }
 
 .key-value-add {

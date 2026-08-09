@@ -33,8 +33,7 @@
 
 /* 输入框自身无轮廓，焦点提示由容器承担 */
 .model-add:focus-within {
-  border-color: var(--signal);
-  box-shadow: var(--ring-focus);
+  border-color: var(--line-strong);
 }
 
 .model-add input {
@@ -216,7 +215,6 @@
 }
 
 .model-import-search:focus-within input {
-  box-shadow: var(--ring-focus);
 }
 
 .model-import-search input {

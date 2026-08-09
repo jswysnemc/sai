@@ -280,6 +280,5 @@
 
 /* 重命名输入框出现即为编辑态，补焦点环与其余输入控件保持一致 */
 .terminal-title-input:focus {
-  box-shadow: var(--ring-focus);
 }
 

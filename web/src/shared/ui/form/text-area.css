@@ -13,6 +13,5 @@
 
 /* 边框加深一档不足以标示焦点，配合焦点环才能在键盘操作时看清落点 */
 .ui-text-area:focus {
-  border-color: var(--signal);
-  box-shadow: var(--ring-focus);
+  border-color: var(--line-strong);
 }

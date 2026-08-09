@@ -30,8 +30,7 @@
 }
 
 .global-search-input:focus-within {
-  border-color: var(--signal);
-  box-shadow: var(--ring-focus);
+  border-color: var(--line-strong);
   color: var(--ink);
 }
 

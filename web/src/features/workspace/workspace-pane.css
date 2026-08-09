@@ -673,20 +673,17 @@
 
 /* 去掉默认轮廓后补焦点环，键盘操作才看得出焦点落点 */
 .git-branch-rename-field input:focus {
-  border-color: var(--signal);
-  box-shadow: var(--ring-focus);
+  border-color: var(--line-strong);
 }
 
 /* 去掉默认轮廓后补焦点环，键盘操作才看得出焦点落点 */
 .git-commit-box textarea:focus {
-  border-color: var(--signal);
-  box-shadow: var(--ring-focus);
+  border-color: var(--line-strong);
 }
 
 /* 去掉默认轮廓后补焦点环，键盘操作才看得出焦点落点 */
 .git-init-panel input:focus {
-  border-color: var(--signal);
-  box-shadow: var(--ring-focus);
+  border-color: var(--line-strong);
 }
 
 /* 去掉默认轮廓后补焦点环，键盘操作才看得出焦点落点 */

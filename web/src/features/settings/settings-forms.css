@@ -263,9 +263,8 @@
 /* 去掉浏览器默认 outline 后必须补焦点环，否则键盘操作看不出焦点在哪 */
 .settings-field input:focus,
 .settings-field textarea:focus {
-  border-color: var(--signal);
+  border-color: var(--line-strong);
   outline: none;
-  box-shadow: var(--ring-focus);
 }
 
 .settings-field .ui-select > button,

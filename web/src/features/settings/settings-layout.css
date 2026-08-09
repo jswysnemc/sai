@@ -244,7 +244,7 @@
   color: var(--ink-soft);
 }
 
-.object-list-search:focus-within { border-color: var(--signal); box-shadow: var(--ring-focus); }
+.object-list-search:focus-within { border-color: var(--line-strong); }
 
 .object-list-search input {
   min-width: 0;
@@ -464,8 +464,7 @@
   font-size:var(--text-sm);
 }
 .settings-nav-search input:focus {
-  outline: 2px solid color-mix(in srgb, var(--signal) 35%, transparent);
-  outline-offset: 1px;
+  outline: none;
 }
 .settings-nav-group {
   display: grid;

@@ -216,6 +216,5 @@
 
 /* 去掉默认轮廓后补焦点环，键盘操作才看得出焦点落点 */
 .git-worktree-create input:focus {
-  border-color: var(--signal);
-  box-shadow: var(--ring-focus);
+  border-color: var(--line-strong);
 }

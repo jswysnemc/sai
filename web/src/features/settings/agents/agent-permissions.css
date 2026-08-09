@@ -27,7 +27,7 @@
 }
 
 .agent-permissions-search:focus-within {
-  border-color: var(--signal);
+  border-color: var(--line-strong);
 }
 
 .agent-permissions-search input {
@@ -501,6 +501,5 @@
 
 /* 去掉默认轮廓后补焦点环，键盘操作才看得出焦点落点 */
 .agent-permissions-search:focus-within {
-  border-color: var(--signal);
-  box-shadow: var(--ring-focus);
+  border-color: var(--line-strong);
 }

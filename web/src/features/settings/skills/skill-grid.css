@@ -60,8 +60,7 @@
 }
 
 .skill-library-search:focus-within {
-  border-color: var(--signal);
-  box-shadow: var(--ring-focus);
+  border-color: var(--line-strong);
 }
 
 .skill-library-search input {
