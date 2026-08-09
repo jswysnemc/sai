@@ -49,7 +49,7 @@ pub fn render_session_summary(snapshot: &SessionSnapshot) -> String {
     }
     if let Some(usage) = snapshot.usage.last_conversation_usage.as_ref() {
         output.push_str(&format!(
-            " \x1b[2m·\x1b[0m \x1b[36m↑{}\x1b[0m \x1b[2m·\x1b[0m \x1b[32m↓{}\x1b[0m \x1b[2m· {}\x1b[0m \x1b[32m{:.1}%\x1b[0m",
+            " \x1b[2m·\x1b[0m \x1b[36m↑ {}\x1b[0m \x1b[2m·\x1b[0m \x1b[32m↓ {}\x1b[0m \x1b[2m· {}\x1b[0m \x1b[32m{:.1}%\x1b[0m",
             format_k_u64(usage.prompt_tokens),
             format_k_u64(usage.completion_tokens),
             t("cache", "缓存"),

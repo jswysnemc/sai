@@ -64,9 +64,9 @@ fn renders_compact_session_summary_with_key_fields() {
     assert!(!output.contains("default"));
     assert!(output.contains("Turn") || output.contains("本轮"));
     assert!(output.contains("75.0%"));
-    // 上下行 token 使用简洁的方向箭头，不再依赖 Nerd Font 私有区图标
-    assert!(output.contains("↑8.0k"));
-    assert!(output.contains("↓4.0k"));
+    // 上下行 token 使用简洁的方向箭头并留出间隔，不再依赖 Nerd Font 私有区图标
+    assert!(output.contains("↑ 8.0k"));
+    assert!(output.contains("↓ 4.0k"));
     assert!(!output.contains('\u{f090}'));
     assert!(!output.contains('\u{f08b}'));
     // 低压力时占比随标签弱化，不抢正文注意力
