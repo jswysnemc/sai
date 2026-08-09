@@ -4,6 +4,9 @@ mod background_runtime;
 mod background_schema;
 mod background_tasks;
 pub(crate) mod background_timeout;
+mod background_wait;
+#[cfg(test)]
+mod background_wait_tests;
 mod goal_completions;
 mod process;
 mod progress;

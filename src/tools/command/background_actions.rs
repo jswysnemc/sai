@@ -2,6 +2,7 @@ use super::background_tasks::{
     cleanup_background_tasks, list_background_tasks, read_background_task_output,
     start_background_task, stop_background_task, BackgroundRuntimeOwner,
 };
+use super::background_wait::wait_background_task;
 use crate::config::AppConfig;
 use crate::i18n::text as t;
 use crate::paths::SaiPaths;
@@ -38,13 +39,14 @@ pub(super) async fn run_background_action(
         }
         "list" => list_background_tasks(paths, config).await,
         "output" => read_background_task_output(args, config, paths).await,
+        "wait" => wait_background_task(args, config, paths).await,
         "stop" if !readonly => stop_background_task(args, config, paths).await,
         "cleanup" if !readonly => cleanup_background_tasks(args, paths, config).await,
         "start" | "stop" | "cleanup" => bail!(
             "{}",
             t(
-                "background_command read-only mode only supports action=list and action=output",
-                "background_command 只读模式仅支持 action=list 和 action=output"
+                "background_command read-only mode only supports action=list, action=output, and action=wait",
+                "background_command 只读模式仅支持 action=list、action=output 和 action=wait"
             )
         ),
         _ => bail!(

@@ -77,7 +77,7 @@ pub(super) fn start_background_task(
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
         "task": task,
-        "note": "Use background_command with action=list, action=output, action=stop, or action=cleanup to manage this task."
+        "note": "Use background_command with action=list, action=output, action=wait, action=stop, or action=cleanup to manage this task."
     }))?)
 }
 

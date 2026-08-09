@@ -23,6 +23,10 @@ pub(crate) fn background_command_call_label(arguments: Option<&str>) -> String {
             t("Background output", "后台命令输出"),
             task_id_target(arguments),
         ),
+        "wait" => label_with_target(
+            t("Background wait", "等待后台命令"),
+            task_id_target(arguments),
+        ),
         "stop" => label_with_target(
             t("Background stop", "停止后台命令"),
             task_id_target(arguments),
@@ -68,6 +72,9 @@ pub(crate) fn background_command_result_label(output: &str) -> Option<String> {
     if let Some(task) = value.get("task") {
         if value.get("was_running").is_some() {
             return Some(stop_result_label(task, &value));
+        }
+        if value.get("waited").is_some() {
+            return Some(wait_result_label(task, &value));
         }
         if value.get("stdout").is_some() || value.get("stderr").is_some() {
             return Some(output_result_label(task, &value));
@@ -251,6 +258,36 @@ fn stop_result_label(task: &Value, value: &Value) -> String {
             localized_status(&status)
         )
     }
+}
+
+/// 生成等待结果摘要。
+///
+/// 参数:
+/// - `task`: 后台任务 JSON
+/// - `value`: 完整等待结果 JSON
+///
+/// 返回:
+/// - 等待结果摘要
+fn wait_result_label(task: &Value, value: &Value) -> String {
+    let id = string_field(task, "id")
+        .map(short_id)
+        .unwrap_or_else(|| "task".to_string());
+    if value
+        .get("timeout")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return format!(
+            "{} {id}",
+            t("Background wait timed out", "后台命令等待超时")
+        );
+    }
+    let status = string_field(task, "status").unwrap_or_else(|| "unknown".to_string());
+    format!(
+        "{} {id} {}",
+        t("Background wait", "后台命令等待"),
+        localized_status(&status)
+    )
 }
 
 /// 生成清理结果摘要。
@@ -458,6 +495,12 @@ mod tests {
                 "{} 1730000000-12345",
                 t("Background output", "后台命令输出")
             )
+        );
+        assert_eq!(
+            background_command_call_label(Some(
+                r#"{"action":"wait","task_id":"1730000000-12345"}"#
+            )),
+            format!("{} 1730000000-12345", t("Background wait", "后台命令等待"))
         );
         assert_eq!(
             background_command_call_label(Some(r#"{"action":"cleanup"}"#)),

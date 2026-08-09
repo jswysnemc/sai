@@ -12,22 +12,22 @@ pub(crate) fn background_tool_name() -> &'static str {
 /// 返回后台命令完整工具说明。
 ///
 /// 返回:
-/// - 支持启动、查看、读取、停止和清理的工具说明
+/// - 支持启动、查看、读取、等待、停止和清理的工具说明
 pub(super) fn writable_description() -> &'static str {
     t(
-        "Manage long-running shell commands as background tasks. Prefer run_command for ordinary work: it waits up to timeout_seconds and promotes to a background task on timeout (timeout_seconds=0 starts background immediately). Use action=start only when you intentionally want a background task without waiting. Use list/output/stop/cleanup to manage tasks. For action=start, timeout_seconds=0 means no automatic task lifetime timeout.",
-        "以后台任务方式管理长时间运行的 shell 命令。普通命令优先用 run_command：会等待 timeout_seconds，超时后提升为后台任务（timeout_seconds=0 表示立即后台）。仅在明确不想等待时使用 action=start。用 list/output/stop/cleanup 管理任务。action=start 时 timeout_seconds=0 表示任务本身不自动超时。",
+        "Manage long-running shell commands as background tasks. Prefer run_command for ordinary work: it waits up to timeout_seconds and promotes to a background task on timeout (timeout_seconds=0 starts background immediately). Use action=start only when you intentionally want a background task without waiting. Use action=wait to block until a task finishes, or list/output/stop/cleanup to manage tasks. For action=start, timeout_seconds=0 means no automatic task lifetime timeout.",
+        "以后台任务方式管理长时间运行的 shell 命令。普通命令优先用 run_command：会等待 timeout_seconds，超时后提升为后台任务（timeout_seconds=0 表示立即后台）。仅在明确不想等待时使用 action=start。使用 action=wait 等待任务结束，或使用 list/output/stop/cleanup 管理任务。action=start 时 timeout_seconds=0 表示任务本身不自动超时。",
     )
 }
 
 /// 返回后台命令只读工具说明。
 ///
 /// 返回:
-/// - 只支持查看和读取日志的工具说明
+/// - 只支持查看、读取和等待的工具说明
 pub(super) fn readonly_description() -> &'static str {
     t(
-        "Inspect managed background commands. Read-only mode supports action=list and action=output only.",
-        "检查受管理后台命令。只读模式仅支持 action=list 和 action=output。",
+        "Inspect managed background commands. Read-only mode supports action=list, action=output, and action=wait.",
+        "检查受管理后台命令。只读模式支持 action=list、action=output 和 action=wait。",
     )
 }
 
@@ -36,7 +36,7 @@ pub(super) fn readonly_description() -> &'static str {
 /// 返回:
 /// - 写入模式使用的 JSON schema
 pub(super) fn writable_schema() -> Value {
-    schema(&["start", "list", "output", "stop", "cleanup"])
+    schema(&["start", "list", "output", "wait", "stop", "cleanup"])
 }
 
 /// 返回后台命令只读 schema。
@@ -44,7 +44,7 @@ pub(super) fn writable_schema() -> Value {
 /// 返回:
 /// - 只读模式使用的 JSON schema
 pub(super) fn readonly_schema() -> Value {
-    schema(&["list", "output"])
+    schema(&["list", "output", "wait"])
 }
 
 /// 构造后台命令工具 schema。
@@ -78,11 +78,11 @@ fn schema(actions: &[&str]) -> Value {
             "timeout_seconds": {
                 "type": "integer",
                 "minimum": 0,
-                "description": t("Optional task timeout in seconds for action=start. Use 0 to disable automatic timeout.", "action=start 的可选任务超时时间，单位秒。使用 0 表示不自动超时。"),
+                "description": t("Optional seconds for action=start or action=wait. For start, 0 disables automatic task timeout; wait clamps the value to 1-600 seconds.", "action=start 或 action=wait 的可选秒数。start 使用 0 表示任务不自动超时；wait 会将数值限制在 1-600 秒。"),
             },
             "task_id": {
                 "type": "string",
-                "description": t("Background task id for action=output or action=stop.", "action=output 或 action=stop 的后台任务 ID。"),
+                "description": t("Background task id for action=output, action=wait, or action=stop. Omit it for action=wait to wait for any running task.", "action=output、action=wait 或 action=stop 的后台任务 ID。action=wait 可省略，以等待任意运行中的任务。"),
             },
             "stream": {
                 "type": "string",
