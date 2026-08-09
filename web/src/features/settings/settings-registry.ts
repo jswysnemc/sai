@@ -200,6 +200,19 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     searchKeys: ["git", "scm", "commit", "remote", "仓库", "提交"]
   },
   {
+    id: "ssh",
+    group: "workspace",
+    appConfig: "optional",
+    saveHintEn: "Actions in section",
+    saveHintZh: "操作在本节内完成",
+    labelEn: "SSH",
+    labelZh: "SSH",
+    descriptionEn: "Remote hosts for terminal sessions",
+    descriptionZh: "终端会话可用的远程主机",
+    icon: Server,
+    searchKeys: ["ssh", "remote", "host", "terminal", "远程", "主机", "终端"]
+  },
+  {
     id: "memory",
     group: "operations",
     appConfig: "optional",

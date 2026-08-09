@@ -57,6 +57,7 @@ ratex-parser = "0.1.12"
 ratex-render = { version = "0.1.12", features = ["embed-fonts"] }
 ratex-types = "0.1.12"
 rusqlite = { version = "0.32", features = ["bundled"] }
+russh = "0.62"
 rustyline = "14.0"
 rust-embed = "8.5"
 serde = { version = "1.0", features = ["derive"] }

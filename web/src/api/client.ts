@@ -50,6 +50,10 @@ import type {
   UsageStatsResponse,
   Session,
   TerminalInfo,
+  SshHost,
+  SshHostInput,
+  SshHostKeyPrompt,
+  SshImportCandidate,
   UpdateCronJobRequest,
   UpdateAgentRuntimeRequest,
   BackgroundTask,
@@ -544,9 +548,37 @@ export const api = {
     list: () => apiRequest<{ terminals: TerminalInfo[] }>("/api/terminals"),
     create: (cols: number, rows: number) =>
       apiRequest<TerminalInfo>("/api/terminals", { method: "POST", body: JSON.stringify({ cols, rows }) }),
+    /** 建立 SSH 远程终端；主机密钥待确认时返回 host_key_prompt 而非终端 */
+    createSsh: (sshHostId: string, cols: number, rows: number, passphrase?: string) =>
+      apiRequest<TerminalInfo & { host_key_prompt?: SshHostKeyPrompt }>("/api/terminals", {
+        method: "POST",
+        body: JSON.stringify({ cols, rows, ssh_host_id: sshHostId, passphrase })
+      }),
     rename: (id: string, title: string) =>
       apiRequest<TerminalInfo>(`/api/terminals/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ title }) }),
     remove: (id: string) => apiRequest<{ removed: boolean }>(`/api/terminals/${id}`, { method: "DELETE" })
+  },
+  ssh: {
+    list: () => apiRequest<{ hosts: SshHost[] }>("/api/ssh/hosts"),
+    create: (host: SshHostInput) =>
+      apiRequest<{ host: SshHost }>("/api/ssh/hosts", { method: "POST", body: JSON.stringify(host) }),
+    update: (id: string, host: SshHostInput) =>
+      apiRequest<{ host: SshHost }>(`/api/ssh/hosts/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        body: JSON.stringify(host)
+      }),
+    remove: (id: string) =>
+      apiRequest<{ removed: boolean }>(`/api/ssh/hosts/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    /** 扫描 ~/.ssh/config 返回可导入主机 */
+    scan: () => apiRequest<{ candidates: SshImportCandidate[] }>("/api/ssh/hosts/import"),
+    import: (hosts: SshHostInput[]) =>
+      apiRequest<{ hosts: SshHost[] }>("/api/ssh/hosts/import", { method: "POST", body: JSON.stringify({ hosts }) }),
+    /** 把用户确认过的主机密钥写入 known_hosts */
+    trust: (key: SshHostKeyPrompt) =>
+      apiRequest<{ trusted: boolean }>("/api/ssh/known-hosts/trust", {
+        method: "POST",
+        body: JSON.stringify(key)
+      })
   },
   backgroundTasks: {
     list: () => apiRequest<{ tasks: BackgroundTask[] }>("/api/background-tasks"),

@@ -11,6 +11,7 @@ export type SettingsSectionId =
   | "prompts"
   | "skills"
   | "git"
+  | "ssh"
   | "appearance"
   | "gateways"
   | "memory"

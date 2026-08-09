@@ -37,6 +37,9 @@ pub struct AppConfig {
     pub scm: ScmConfig,
     #[serde(default)]
     pub git: GitConfig,
+    /// SSH 主机列表，供 Web 终端建立远程会话
+    #[serde(default)]
+    pub ssh: crate::config::SshConfig,
     #[serde(default)]
     pub prompt: PromptConfig,
     #[serde(default)]

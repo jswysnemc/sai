@@ -1,0 +1,68 @@
+.ssh-known-host {
+  display: flex;
+  align-items: flex-start;
+  gap:var(--space-sm);
+}
+
+.ssh-known-host-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius:var(--radius-3);
+}
+
+.ssh-known-host.unknown .ssh-known-host-icon {
+  background: var(--signal-soft);
+  color: var(--signal);
+}
+
+.ssh-known-host.changed .ssh-known-host-icon {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.ssh-known-host dl {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap:var(--space-xs);
+  margin: 0;
+  min-width: 0;
+}
+
+.ssh-known-host dl > div {
+  display: flex;
+  gap:var(--space-sm);
+  min-width: 0;
+}
+
+.ssh-known-host dt {
+  flex: none;
+  width: 4.5rem;
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+}
+
+.ssh-known-host dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--ink);
+  font:400 var(--text-xs) var(--font-code);
+  overflow-wrap: anywhere;
+}
+
+.ssh-known-host-fingerprint {
+  user-select: all;
+}
+
+.ssh-known-host-remedy {
+  margin:var(--space-md) 0 0;
+  padding:var(--space-xs) var(--space-sm);
+  border-radius:var(--radius-2);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+  font-size:var(--text-xs);
+  line-height: 1.45;
+}

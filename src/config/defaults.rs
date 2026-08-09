@@ -22,6 +22,7 @@ impl Default for AppConfig {
             display: DisplayConfig::default(),
             scm: ScmConfig::default(),
             git: GitConfig::default(),
+            ssh: super::ssh::SshConfig::default(),
             prompt: PromptConfig::default(),
             gateways: GatewayConfig::default(),
             agents: Vec::new(),

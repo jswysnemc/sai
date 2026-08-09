@@ -5,6 +5,7 @@ import { AgentSettingsSection } from "../agents/agent-settings-section";
 import { AppearanceSettingsSection } from "../appearance-settings-section";
 import { GatewaySettingsSection } from "../gateway-settings-section";
 import { GitSettingsPanel } from "../git/git-settings-panel";
+import { SshSettingsSection } from "../ssh/ssh-settings-section";
 import { ProviderSettingsSection } from "../provider-settings-section";
 import { CliToolsSettingsSection } from "../cli-tools/cli-tools-settings-section";
 import { WebSearchSettingsSection } from "../web-search/web-search-settings-section";
@@ -143,6 +144,8 @@ function renderAppConfigSection(
           onConfigChange={settings.updateConfig}
         />
       );
+    case "ssh":
+      return <SshSettingsSection />;
     case "hooks":
       return (
         <HooksSettingsSection

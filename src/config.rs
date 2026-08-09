@@ -22,6 +22,7 @@ mod provider;
 mod provider_keys;
 mod secrets;
 mod session;
+mod ssh;
 
 #[cfg(test)]
 mod tests;
@@ -53,3 +54,5 @@ pub use prompt_templates::{PromptTemplateConfig, PromptTemplatesConfig};
 pub use provider_keys::*;
 #[allow(unused_imports)]
 pub use session::SessionConfig;
+#[allow(unused_imports)]
+pub use ssh::{SshConfig, SshHostConfig, DEFAULT_SSH_PORT};

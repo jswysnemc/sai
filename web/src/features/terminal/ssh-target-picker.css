@@ -1,0 +1,70 @@
+.ssh-target-picker {
+  position: relative;
+  display: inline-flex;
+}
+
+.ssh-target-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.25rem);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+  min-width: 13rem;
+  max-height: 16rem;
+  overflow: auto;
+  padding:var(--space-2xs);
+  border: 1px solid var(--line);
+  border-radius:var(--radius-3);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow);
+}
+
+.ssh-target-menu button {
+  display: flex;
+  align-items: center;
+  gap:var(--space-xs);
+  padding:var(--space-2xs) var(--space-xs);
+  border: 0;
+  border-radius:var(--radius-2);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.ssh-target-menu button:hover {
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.ssh-target-menu button:focus-visible {
+  box-shadow: var(--ring-focus);
+  outline: 0;
+}
+
+.ssh-target-menu button > span {
+  overflow: hidden;
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ssh-target-menu button > small {
+  overflow: hidden;
+  flex: none;
+  max-width: 8rem;
+  color: var(--ink-soft);
+  font:400 var(--text-2xs) var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ssh-target-separator {
+  margin:0.125rem var(--space-2xs);
+  height: 1px;
+  background: var(--line);
+}

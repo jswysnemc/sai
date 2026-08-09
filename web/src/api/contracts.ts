@@ -144,6 +144,13 @@ export type {
 } from "./contracts/runtime";
 
 export type {
+  SshHost,
+  SshHostInput,
+  SshImportCandidate,
+  SshHostKeyPrompt,
+} from "./contracts/ssh";
+
+export type {
   MemoryEntry,
   MemoryStorageStats,
   MemoryStats,

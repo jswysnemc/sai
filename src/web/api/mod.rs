@@ -21,6 +21,7 @@ mod session_runtime;
 mod session_tree;
 mod sessions;
 mod skills;
+mod ssh_hosts;
 mod subagents;
 mod system;
 mod terminal;
@@ -53,6 +54,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(agent_options::routes())
         .merge(agents::routes())
         .merge(skills::routes())
+        .merge(ssh_hosts::routes())
         .merge(background_tasks::routes())
         .merge(todos::routes())
         .merge(memory::routes())

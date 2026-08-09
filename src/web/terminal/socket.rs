@@ -1,4 +1,4 @@
-use super::session::TerminalSession;
+use super::kind::TerminalKind;
 use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -11,12 +11,12 @@ enum TerminalControl {
     Resize { cols: u16, rows: u16 },
 }
 
-/// 连接浏览器 WebSocket 与 PTY 输入输出。
+/// 连接浏览器 WebSocket 与终端输入输出。
 ///
 /// 参数:
 /// - `socket`: 浏览器 WebSocket
-/// - `session`: PTY 会话
-pub(crate) async fn serve_socket(socket: WebSocket, session: Arc<TerminalSession>) {
+/// - `session`: 本地或 SSH 终端会话
+pub(crate) async fn serve_socket(socket: WebSocket, session: Arc<TerminalKind>) {
     let (mut sender, mut receiver) = socket.split();
     let mut output = session.subscribe();
     let replay = session.replay();
@@ -50,13 +50,13 @@ pub(crate) async fn serve_socket(socket: WebSocket, session: Arc<TerminalSession
                 };
                 match message {
                     Message::Binary(bytes) => {
-                        if session.write(&bytes).is_err() {
+                        if session.write(&bytes).await.is_err() {
                             break;
                         }
                     }
                     Message::Text(text) => {
                         if let Ok(TerminalControl::Resize { cols, rows }) = serde_json::from_str(&text) {
-                            let _ = session.resize(cols, rows);
+                            let _ = session.resize(cols, rows).await;
                         }
                     }
                     Message::Close(_) => break,

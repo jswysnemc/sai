@@ -1,4 +1,7 @@
+use super::kind::TerminalKind;
 use super::session::TerminalSession;
+use super::ssh_session::{SshCreateOutcome, SshTerminalSession};
+use crate::config::SshHostConfig;
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -14,10 +17,10 @@ pub(crate) struct TerminalInfo {
     pub rows: u16,
 }
 
-/// 管理当前活动工作区的 PTY 会话。
+/// 管理当前活动工作区的终端会话。
 #[derive(Clone)]
 pub(crate) struct TerminalManager {
-    sessions: Arc<Mutex<HashMap<String, Arc<TerminalSession>>>>,
+    sessions: Arc<Mutex<HashMap<String, Arc<TerminalKind>>>>,
 }
 
 impl TerminalManager {
@@ -28,7 +31,7 @@ impl TerminalManager {
         }
     }
 
-    /// 创建 PTY 会话。
+    /// 创建本地 PTY 会话。
     ///
     /// 参数:
     /// - `cwd`: 启动目录
@@ -46,13 +49,54 @@ impl TerminalManager {
         rows: u16,
     ) -> Result<TerminalInfo> {
         let id = format!("term_{}", uuid::Uuid::new_v4().simple());
-        let session = Arc::new(TerminalSession::spawn(
+        let session = TerminalKind::Local(TerminalSession::spawn(
             id.clone(),
             cwd,
             configured_shell,
             cols.max(1),
             rows.max(1),
         )?);
+        self.insert(id, session)
+    }
+
+    /// 创建 SSH 远程会话。
+    ///
+    /// 参数:
+    /// - `host`: 主机配置
+    /// - `passphrase`: 私钥口令，无口令时传 None
+    /// - `cols`: 初始列数
+    /// - `rows`: 初始行数
+    ///
+    /// 返回:
+    /// - 终端摘要；主机密钥待确认时返回待确认结果
+    pub(crate) async fn create_ssh(
+        &self,
+        host: &SshHostConfig,
+        passphrase: Option<&str>,
+        cols: u16,
+        rows: u16,
+    ) -> Result<SshCreateOutcome> {
+        let id = format!("ssh_{}", uuid::Uuid::new_v4().simple());
+        match SshTerminalSession::connect(id.clone(), host, passphrase, cols.max(1), rows.max(1))
+            .await?
+        {
+            Ok(session) => Ok(SshCreateOutcome::Created(
+                self.insert(id, TerminalKind::Ssh(session))?,
+            )),
+            Err((key, status)) => Ok(SshCreateOutcome::HostKeyPending { key, status }),
+        }
+    }
+
+    /// 登记会话并返回摘要。
+    ///
+    /// 参数:
+    /// - `id`: 终端 ID
+    /// - `session`: 终端会话
+    ///
+    /// 返回:
+    /// - 终端摘要
+    fn insert(&self, id: String, session: TerminalKind) -> Result<TerminalInfo> {
+        let session = Arc::new(session);
         let info = session.info();
         self.lock_sessions()?.insert(id, session);
         Ok(info)
@@ -68,7 +112,7 @@ impl TerminalManager {
     }
 
     /// 返回指定终端会话。
-    pub(crate) fn get(&self, id: &str) -> Result<Arc<TerminalSession>> {
+    pub(crate) fn get(&self, id: &str) -> Result<Arc<TerminalKind>> {
         self.lock_sessions()?
             .get(id)
             .cloned()
@@ -94,10 +138,10 @@ impl TerminalManager {
     ///
     /// 返回:
     /// - 是否完成移除
-    pub(crate) fn remove(&self, id: &str) -> Result<bool> {
+    pub(crate) async fn remove(&self, id: &str) -> Result<bool> {
         let session = self.lock_sessions()?.remove(id);
         if let Some(session) = session {
-            session.kill()?;
+            session.kill().await?;
             return Ok(true);
         }
         Ok(false)
@@ -111,7 +155,7 @@ impl TerminalManager {
     /// 获取终端表锁。
     fn lock_sessions(
         &self,
-    ) -> Result<std::sync::MutexGuard<'_, HashMap<String, Arc<TerminalSession>>>> {
+    ) -> Result<std::sync::MutexGuard<'_, HashMap<String, Arc<TerminalKind>>>> {
         self.sessions
             .lock()
             .map_err(|_| anyhow::anyhow!("terminal manager lock is poisoned"))

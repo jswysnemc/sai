@@ -170,7 +170,7 @@ async fn switch(
     // 1. Agent 运行已经绑定启动时工作目录，切换不会改变旧运行作用域
     // 2. 按请求先关闭全部终端，否则有终端时拒绝
     if query.close_terminals.unwrap_or(false) {
-        close_all_terminals(&state)?;
+        close_all_terminals(&state).await?;
     }
     ensure_workspace_switch_allowed(&state).await?;
     let workspace = state
@@ -203,7 +203,7 @@ async fn ensure_workspace_switch_allowed(state: &WebAppState) -> WebResult<()> {
 ///
 /// 返回:
 /// - 全部关闭时返回成功
-fn close_all_terminals(state: &WebAppState) -> WebResult<()> {
+async fn close_all_terminals(state: &WebAppState) -> WebResult<()> {
     // 1. 列出当前全部终端
     let terminals = state.terminals.list().map_err(WebError::from)?;
     // 2. 逐个终止并移除
@@ -211,6 +211,7 @@ fn close_all_terminals(state: &WebAppState) -> WebResult<()> {
         state
             .terminals
             .remove(&terminal.id)
+            .await
             .map_err(WebError::from)?;
     }
     Ok(())

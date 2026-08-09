@@ -6,6 +6,7 @@ mod error;
 mod runs;
 mod server;
 pub(crate) mod services;
+mod ssh;
 mod system_monitor;
 mod terminal;
 mod workspace;

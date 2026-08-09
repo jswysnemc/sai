@@ -4,6 +4,8 @@ import type { TerminalManager } from "./use-terminal-manager";
 import { TerminalPane } from "./terminal-pane";
 import { useI18n } from "../i18n/use-i18n";
 import { Button } from "../../shared/ui/button/button";
+import { SshKnownHostPrompt } from "../settings/ssh/ssh-known-host-prompt";
+import { SshTargetPicker } from "./ssh-target-picker";
 import "./bottom-terminal-panel.css";
 
 type BottomTerminalPanelProps = {
@@ -87,6 +89,10 @@ export function BottomTerminalPanel({ manager, height, onResize, onClose }: Bott
           <Button className="bottom-terminal-new" onClick={createTerminal} aria-label={t("New terminal", "新建终端")} title={t("New terminal", "新建终端")}>
             <Plus size={14} />
           </Button>
+          <SshTargetPicker
+            onCreateLocal={createTerminal}
+            onCreateSsh={(hostId) => void manager.createSshTerminal(hostId).catch(() => undefined)}
+          />
         </div>
         <div className="bottom-terminal-actions">
           <Button onClick={onClose} aria-label={t("Hide terminal panel", "隐藏终端面板")} title={t("Hide terminal panel", "隐藏终端面板")}>
@@ -97,6 +103,12 @@ export function BottomTerminalPanel({ manager, height, onResize, onClose }: Bott
       <div className="bottom-terminal-body">
         {active ? <TerminalPane terminalId={active.id} title={active.title} /> : <div className="bottom-terminal-empty">{t("Create a terminal to begin", "新建终端后开始使用")}</div>}
       </div>
+      <SshKnownHostPrompt
+        prompt={manager.hostKeyPrompt}
+        busy={false}
+        onTrust={() => void manager.trustHostKeyAndRetry().catch(() => undefined)}
+        onCancel={manager.dismissHostKeyPrompt}
+      />
     </section>
   );
 }
