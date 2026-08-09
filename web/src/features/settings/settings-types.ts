@@ -38,14 +38,12 @@ export type SettingsConfigController = {
   config: AppConfig | null;
   /** 服务端用于表示敏感字段未修改的占位符 */
   secretSentinel: string;
-  raw: string;
   dirty: boolean;
   loading: boolean;
   saving: boolean;
   error: Error | null;
   saved: boolean;
   updateConfig: (config: AppConfig) => void;
-  updateRaw: (raw: string) => void;
   updateProvider: (index: number, patch: Partial<ProviderConfig>) => void;
   updateGateway: (gateway: GatewayId, patch: Record<string, unknown>) => void;
   saveConfig: () => Promise<void>;

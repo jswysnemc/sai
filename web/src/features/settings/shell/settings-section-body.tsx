@@ -162,8 +162,8 @@ function renderAppConfigSection(
     case "advanced":
       return (
         <AdvancedSettingsSection
-          value={settings.raw}
-          onChange={settings.updateRaw}
+          config={config}
+          onConfigChange={settings.updateConfig}
         />
       );
     default:

@@ -1,8 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useSelectedFallback } from "../controls/use-selected-fallback";
 import { api } from "../../../api/client";
 import type { McpConfig, McpServerConfig } from "../../../api/contracts";
+import { useConfigDocument } from "../use-config-document";
 import { createDefaultMcpServer, parseMcpJson, uniqueServerId } from "./mcp-helpers";
 
 export type McpEditorMode = "form" | "json";
@@ -10,25 +11,31 @@ export type McpEditorMode = "form" | "json";
 /**
  * 管理独立 MCP 配置的加载、草稿、脏标记与保存。
  *
+ * 文档状态机复用 useConfigDocument；本 Hook 补充表单/JSON 双模式、
+ * 服务列表编辑与工具扫描等 MCP 专属逻辑。
+ *
  * @returns MCP 配置控制器
  */
 export function useMcpConfig() {
-  const queryClient = useQueryClient();
-  const response = useQuery({ queryKey: ["mcp-config"], queryFn: api.config.loadMcp });
-  const [mcp, setMcp] = useState<McpConfig | null>(null);
+  const document = useConfigDocument({
+    queryKey: ["mcp-config"] as const,
+    load: api.config.loadMcp,
+    extract: (response) => response.config,
+    save: (config: McpConfig) => api.config.saveMcp(config)
+  });
+  const mcp = document.draft;
   const [raw, setRaw] = useState("");
-  const [dirty, setDirty] = useState(false);
   const [mode, setMode] = useState<McpEditorMode>("form");
   const [selectedId, setSelectedId] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
   const [scannedServerId, setScannedServerId] = useState("");
 
   useEffect(() => {
-    if (!response.data || dirty) return;
-    setMcp(response.data.config);
-    setRaw(JSON.stringify(response.data.config, null, 2));
+    // 1. 无本地编辑时 JSON 文本跟随草稿（首次加载与保存回填）
+    if (document.dirty || !mcp) return;
+    setRaw(JSON.stringify(mcp, null, 2));
     setParseError(null);
-  }, [response.data, dirty]);
+  }, [mcp, document.dirty]);
 
   const servers = mcp?.servers ?? [];
   useSelectedFallback(selectedId, servers.map((server) => server.id), setSelectedId);
@@ -36,31 +43,21 @@ export function useMcpConfig() {
   const selectedIndex = Math.max(0, servers.findIndex((server) => server.id === selectedId));
   const server = servers[selectedIndex];
 
-  const save = useMutation({
-    mutationFn: async () => {
-      const config = mode === "json" ? parseMcpJson(raw) : mcp;
-      if (!config) throw new Error("MCP config is not loaded");
-      return api.config.saveMcp(config);
-    },
-    onSuccess: (saved) => {
-      setMcp(saved.config);
+  /** 保存外观：JSON 模式提交解析结果，成功后同步文本。 */
+  const save = {
+    error: document.saveError,
+    isPending: document.saving,
+    mutateAsync: async () => {
+      const saved = await document.saveNow(mode === "json" ? parseMcpJson(raw) : undefined);
       setRaw(JSON.stringify(saved.config, null, 2));
-      setDirty(false);
       setParseError(null);
-      queryClient.setQueryData(["mcp-config"], saved);
     }
-  });
+  };
 
   const scanTools = useMutation({
     mutationFn: (target: McpServerConfig) => api.config.scanMcpTools(target),
     onSuccess: (_, target) => setScannedServerId(target.id)
   });
-
-  /** 标记未保存并清空上次保存错误。 */
-  const markDirty = () => {
-    setDirty(true);
-    save.reset();
-  };
 
   /**
    * 用完整配置替换草稿并同步 JSON。
@@ -68,10 +65,9 @@ export function useMcpConfig() {
    * @param next 新 MCP 配置
    */
   const updateMcp = (next: McpConfig) => {
-    setMcp(next);
+    document.update(next);
     setRaw(JSON.stringify(next, null, 2));
     setParseError(null);
-    markDirty();
   };
 
   /**
@@ -134,7 +130,7 @@ export function useMcpConfig() {
     }
     try {
       const parsed = parseMcpJson(raw);
-      setMcp(parsed);
+      document.update(parsed);
       setParseError(null);
       setMode("form");
     } catch (error) {
@@ -150,22 +146,22 @@ export function useMcpConfig() {
   const updateRaw = (value: string) => {
     setRaw(value);
     setParseError(null);
-    markDirty();
-    // 1. JSON 合法时同步到表单状态，便于切回表单不丢内容
+    // 1. JSON 合法时同步到表单状态，便于切回表单不丢内容；
+    //    非法输入只标记待保存，保存时再报解析错误
     try {
-      setMcp(parseMcpJson(value));
+      document.update(parseMcpJson(value));
     } catch {
-      // 输入中途不合法时保留上一份 mcp
+      document.markDirty();
     }
   };
 
   return {
-    loading: response.isLoading,
-    path: response.data?.path ?? "~/.config/sai/mcp.jsonc",
-    loadError: response.error as Error | null,
+    loading: document.loading,
+    path: document.response.data?.path ?? "~/.config/sai/mcp.jsonc",
+    loadError: document.loadError,
     mcp,
     raw,
-    dirty,
+    dirty: document.dirty,
     mode,
     selectedId,
     selectedIndex,
