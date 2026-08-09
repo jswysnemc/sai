@@ -35,9 +35,11 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
   const workspacePath = workspaces.data?.workspaces.find((item) => item.id === workspaces.data?.active_id)?.path ?? "";
   // 失败默认展开；用户展开后按 tool.id 记忆，流式更新不自动收缩
   const [expanded, setExpanded] = usePersistedExpand(tool.id, tool.status === "failed");
-  // 执行中的卡片需要推进计时；结束后停表，历史卡片不占用任何定时器
+  // 执行中的卡片需要推进计时；结束后停表，历史卡片不占用任何定时器。
+  // 编辑类不展示耗时（进度由行数与增删统计表达），也就不需要时钟
   const running = tool.status === "preparing" || tool.status === "running";
-  const now = useElapsedClock(running);
+  const isEdit = isEditToolName(tool.name);
+  const now = useElapsedClock(running && !isEdit);
   // 1. todo 已完成时改用清单卡片，不暴露原始 JSON
   if (tool.name === "todo" && tool.status === "completed") {
     return <TodoToolView toolId={tool.id} argumentsText={tool.arguments || tool.argumentsPreview} output={tool.output} />;
@@ -79,11 +81,11 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
   const auditReason = permission?.decision === "allow" ? permission.reason?.trim() ?? "" : "";
 
   // 5. 折叠行右段依次表达"结果如何"与"花了多久"；
-  //    编辑类流式期间先展示滚动的已写入行数，结束后换成增删统计
+  //    编辑类只表达行数与增删统计，不展示耗时
   const result = toolResultSummary(tool.name, tool.output, locale);
   const diffStat = toolDiffStat(tool.name, tool.output);
-  const duration = toolDurationLabel(tool.startedAtMs, tool.endedAtMs, now);
-  const writingLines = running && isEditToolName(tool.name)
+  const duration = isEdit ? "" : toolDurationLabel(tool.startedAtMs, tool.endedAtMs, now);
+  const writingLines = running && isEdit
     ? streamedLineCount(argumentsText)
     : 0;
 
