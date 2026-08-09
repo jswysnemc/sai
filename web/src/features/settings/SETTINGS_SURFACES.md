@@ -2,33 +2,44 @@
 
 This document freezes the Web settings information architecture used by the registry.
 
-## Surface kinds
+## AppConfig participation
 
-| kind | Meaning | Topbar Save | Dirty source |
+Every section declares one `appConfig` value in `settings-registry.ts`. Topbar save,
+loading skeleton, and the error banner are all derived from this single field —
+no per-section special cases.
+
+| appConfig | Meaning | Topbar | Loading gate |
 |---|---|---|---|
-| `app-config` | Part of global `AppConfig` | Show global Save | `useSettingsConfig.dirty` |
-| `local-config` | Independent config document | Hide global Save; section owns save | Section-local dirty |
-| `client-pref` | Browser-only preference | Hide | Instant apply |
-| `operations` | Operational actions / lists | Hide | N/A |
-| `analytics` | Read-only stats | Hide | N/A |
+| `required` | Reads and writes global `AppConfig` | Save button always shown | Skeleton until config loads; error recovery on failure |
+| `optional` | Standalone features that may also write `AppConfig` fields | Save button only while dirty, hint otherwise | None; section degrades when config is absent |
+| `none` | Never touches `AppConfig` | Save hint only (`saveHintEn/Zh`) | None |
+
+Derivation rules (implemented in `showsAppConfigSave` and `SettingsSectionBody`):
+
+- Topbar save: `required`, or `optional && dirty`
+- Skeleton / error recovery: `required` only
+- Global error banner: `required` and `optional`
 
 ## Section inventory
 
-| id | group | kind | Data source | Save model | Notes |
-|---|---|---|---|---|---|
-| providers | general | app-config | `api.config` | global | Endpoints, credentials, models |
-| agents | general | app-config | `api.config` + agents APIs | global for profile fields | Profile workspace may call agent APIs |
-| runtime | general | app-config | `api.config` | global | Permissions, notifications, terminal, context, display, tools |
-| appearance | general | client-pref | theme/locale local storage | instant | Does not mutate server config |
-| plugins | integrations | app-config | `api.config` | global | Search/vision/knowledge/memory plugins |
-| skills | integrations | operations | skills filesystem APIs | action buttons | Resource manager, not AppConfig form |
-| mcp | integrations | local-config | `api.config` MCP endpoints | section Save MCP | Separate dirty from AppConfig |
-| hooks | integrations | app-config | `api.config` | global | Lifecycle hooks |
-| gateways | integrations | app-config | `api.config` | global | Credentials; runtime status lives on `/gateways` |
-| git | workspace | app-config | `api.config` | global | SCM safety and defaults |
-| memory | operations | operations | memory APIs | action buttons | Facts/events reset |
-| usage | operations | analytics | usage APIs | none | Token trends and logs |
-| advanced | advanced | app-config | raw AppConfig JSON | global | Escape hatch |
+| id | group | appConfig | Data source | Notes |
+|---|---|---|---|---|
+| providers | general | required | `api.config` | Endpoints, credentials, models |
+| agents | general | required | `api.config` + agent APIs | Profile workspace may call agent APIs |
+| runtime | general | required | `api.config` | Engine, permissions, notifications, terminal, context, display, tools |
+| appearance | general | none | theme/locale local storage | Instant apply, browser-only |
+| prompts | general | required | `api.config` | Internal prompt templates |
+| cli-tools | integrations | required | `api.config` | Optional CLI assistant tools (route alias: `plugins`) |
+| web-search | integrations | required | `api.config` | Search providers and credentials |
+| skills | integrations | optional | skills filesystem APIs + `AppConfig.skills` | Documents save instantly; behavior fields via topbar save |
+| mcp | integrations | none | `api.config` MCP endpoints | Separate document, section-local save |
+| hooks | integrations | required | `api.config` | Lifecycle hooks |
+| gateways | integrations | required | `api.config` | Section additionally passes dirty/onSave to its runtime controls |
+| git | workspace | required | `api.config` | SCM safety and defaults |
+| memory | operations | optional | memory APIs + `AppConfig.plugins.memory` | Facts/events act instantly; config fields via topbar save |
+| session-data | operations | none | session data APIs | Inspect and delete workspace sessions |
+| usage | operations | none | usage APIs | Read-only stats |
+| advanced | advanced | required | raw AppConfig JSON | Escape hatch |
 
 ## Groups
 
@@ -45,7 +56,7 @@ This document freezes the Web settings information architecture used by the regi
 - `/settings` redirects to `/settings/providers`
 - `/settings/:sectionId` opens a registered section
 - Unknown sectionId redirects to `/settings/providers`
-
+- Legacy alias: `plugins` redirects to `cli-tools`
 
 ## Skills boundary
 

@@ -6,7 +6,7 @@ import {
   filterSettingsSections,
   groupSettingsSections,
   resolveSettingsSectionId,
-  showsGlobalAppConfigSave
+  showsAppConfigSave
 } from "./settings-registry";
 
 describe("settings registry", () => {
@@ -44,11 +44,21 @@ describe("settings registry", () => {
     expect(grouped.some((entry) => entry.group.id === "integrations")).toBe(true);
   });
 
-  it("shows global save only for app-config surfaces", () => {
-    expect(showsGlobalAppConfigSave("app-config")).toBe(true);
-    expect(showsGlobalAppConfigSave("local-config")).toBe(false);
-    expect(showsGlobalAppConfigSave("client-pref")).toBe(false);
-    expect(showsGlobalAppConfigSave("operations")).toBe(false);
-    expect(showsGlobalAppConfigSave("analytics")).toBe(false);
+  it("derives topbar save from the appConfig participation model", () => {
+    // required 常驻保存；optional 仅脏时露出；none 永不展示
+    expect(showsAppConfigSave("required", false)).toBe(true);
+    expect(showsAppConfigSave("required", true)).toBe(true);
+    expect(showsAppConfigSave("optional", false)).toBe(false);
+    expect(showsAppConfigSave("optional", true)).toBe(true);
+    expect(showsAppConfigSave("none", false)).toBe(false);
+    expect(showsAppConfigSave("none", true)).toBe(false);
+  });
+
+  it("gives every non-required section a bilingual save hint", () => {
+    for (const section of SETTINGS_SECTIONS) {
+      if (section.appConfig === "required") continue;
+      expect(section.saveHintEn, section.id).toBeTruthy();
+      expect(section.saveHintZh, section.id).toBeTruthy();
+    }
   });
 });

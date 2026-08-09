@@ -17,11 +17,11 @@ import {
   Webhook
 } from "lucide-react";
 import type {
+  SettingsAppConfigUse,
   SettingsGroupId,
   SettingsGroupMeta,
   SettingsSectionId,
-  SettingsSectionMeta,
-  SettingsSurfaceKind
+  SettingsSectionMeta
 } from "./settings-types";
 
 /** 默认打开的设置 section。 */
@@ -50,7 +50,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "providers",
     group: "general",
-    kind: "app-config",
+    appConfig: "required",
     labelEn: "Providers and models",
     labelZh: "供应商与模型",
     descriptionEn: "Endpoints, credentials, and model lists",
@@ -61,7 +61,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "agents",
     group: "general",
-    kind: "app-config",
+    appConfig: "required",
     labelEn: "Agent profiles",
     labelZh: "Agent 配置",
     descriptionEn: "Prompts, tools, and skill exposure",
@@ -72,7 +72,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "runtime",
     group: "general",
-    kind: "app-config",
+    appConfig: "required",
     labelEn: "Runtime",
     labelZh: "运行时",
     descriptionEn: "Sessions, permissions, notifications, terminal, and display",
@@ -83,7 +83,9 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "appearance",
     group: "general",
-    kind: "client-pref",
+    appConfig: "none",
+    saveHintEn: "Applies immediately",
+    saveHintZh: "即时生效",
     labelEn: "Appearance",
     labelZh: "外观",
     descriptionEn: "Language, theme, colors, and Markdown rendering",
@@ -94,7 +96,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "prompts",
     group: "general",
-    kind: "app-config",
+    appConfig: "required",
     labelEn: "Internal prompts",
     labelZh: "内部提示词",
     descriptionEn: "Commit messages, session titles, and context compaction",
@@ -105,7 +107,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "cli-tools",
     group: "integrations",
-    kind: "app-config",
+    appConfig: "required",
     labelEn: "CLI assistant tools",
     labelZh: "CLI 助手工具",
     descriptionEn: "Optional tools exposed to CLI assistants",
@@ -116,7 +118,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "web-search",
     group: "integrations",
-    kind: "app-config",
+    appConfig: "required",
     labelEn: "Web search",
     labelZh: "Web 搜索",
     descriptionEn: "Provider credentials, endpoints, and search behavior",
@@ -127,7 +129,9 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "skills",
     group: "integrations",
-    kind: "operations",
+    appConfig: "optional",
+    saveHintEn: "Actions in section",
+    saveHintZh: "操作在本节内完成",
     labelEn: "Skills",
     labelZh: "Skills",
     descriptionEn: "Scan, edit, create, and enable Skills",
@@ -138,7 +142,9 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "mcp",
     group: "integrations",
-    kind: "local-config",
+    appConfig: "none",
+    saveHintEn: "Saves in section",
+    saveHintZh: "在本节内保存",
     labelEn: "MCP",
     labelZh: "MCP",
     descriptionEn: "External Model Context Protocol servers",
@@ -149,7 +155,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "hooks",
     group: "integrations",
-    kind: "app-config",
+    appConfig: "required",
     labelEn: "Hooks",
     labelZh: "Hooks",
     descriptionEn: "Lifecycle shell and HTTP actions",
@@ -160,7 +166,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "gateways",
     group: "integrations",
-    kind: "app-config",
+    appConfig: "required",
     labelEn: "Gateways",
     labelZh: "消息网关",
     descriptionEn: "QQ, Weixin credentials and listen addresses",
@@ -171,7 +177,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "git",
     group: "workspace",
-    kind: "app-config",
+    appConfig: "required",
     labelEn: "Git",
     labelZh: "Git",
     descriptionEn: "Repositories, commits, remotes, and safety",
@@ -182,7 +188,9 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "memory",
     group: "operations",
-    kind: "operations",
+    appConfig: "optional",
+    saveHintEn: "Actions in section",
+    saveHintZh: "操作在本节内完成",
     labelEn: "Memory",
     labelZh: "记忆",
     descriptionEn: "Facts, events, and reset controls",
@@ -193,7 +201,9 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "session-data",
     group: "operations",
-    kind: "operations",
+    appConfig: "none",
+    saveHintEn: "Actions in section",
+    saveHintZh: "操作在本节内完成",
     labelEn: "Session data",
     labelZh: "会话数据",
     descriptionEn: "Inspect, clear, and delete workspace sessions",
@@ -204,7 +214,9 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "usage",
     group: "operations",
-    kind: "analytics",
+    appConfig: "none",
+    saveHintEn: "Read only",
+    saveHintZh: "只读",
     labelEn: "Usage",
     labelZh: "用量",
     descriptionEn: "Token trends, providers, models, and request logs",
@@ -215,7 +227,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   {
     id: "advanced",
     group: "advanced",
-    kind: "app-config",
+    appConfig: "required",
     labelEn: "Advanced JSON",
     labelZh: "高级 JSON",
     descriptionEn: "Complete AppConfig JSON",
@@ -252,11 +264,15 @@ export function getSettingsSection(id: SettingsSectionId): SettingsSectionMeta |
 /**
  * 判断顶栏是否应展示全局 AppConfig 保存控件。
  *
- * @param kind 当前 section 面类型
+ * required 面常驻保存；optional 面只在有待保存修改时露出，
+ * 平时与 none 面一样显示分区自己的保存提示。
+ *
+ * @param use 分区对 AppConfig 的参与方式
+ * @param dirty 全局草稿是否有待保存修改
  * @returns 需要全局 Save 时 true
  */
-export function showsGlobalAppConfigSave(kind: SettingsSurfaceKind): boolean {
-  return kind === "app-config";
+export function showsAppConfigSave(use: SettingsAppConfigUse, dirty: boolean): boolean {
+  return use === "required" || (use === "optional" && dirty);
 }
 
 /**

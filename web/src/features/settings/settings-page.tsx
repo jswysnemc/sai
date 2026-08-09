@@ -50,8 +50,7 @@ export function SettingsPage() {
           </p>
           <div className="settings-topbar-actions">
             <SettingsSaveBar
-              kind={meta?.kind ?? "app-config"}
-              sectionId={section}
+              meta={meta}
               dirty={settings.dirty}
               saving={settings.saving}
               saveError={Boolean(settings.error)}
@@ -70,7 +69,7 @@ export function SettingsPage() {
             theme={theme.theme}
             onThemeChange={theme.setTheme}
           />
-          {settings.error && (meta?.kind === "app-config" || section === "skills" || section === "memory") && (
+          {settings.error && meta && meta.appConfig !== "none" && (
             <div className="settings-error">{settings.error.message}</div>
           )}
         </main>

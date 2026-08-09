@@ -24,20 +24,13 @@ export type SettingsSectionId =
 export type SettingsGroupId = "general" | "integrations" | "workspace" | "operations" | "advanced";
 
 /**
- * 设置面类型：决定顶栏保存语义与脏状态来源。
+ * 分区对全局 AppConfig 的参与方式，顶栏保存、加载骨架与错误条均由此派生。
  *
- * - app-config: 全局 AppConfig，使用顶栏 Save
- * - local-config: 独立配置文档，section 内保存
- * - client-pref: 浏览器偏好，即时生效
- * - operations: 运维操作面
- * - analytics: 只读统计
+ * - required: 必须等 AppConfig 加载完成，顶栏常驻保存
+ * - optional: 主体功能不依赖 AppConfig，但可能改写其中字段；有待保存修改时露出顶栏保存
+ * - none: 完全不读写 AppConfig，顶栏只显示保存提示文案
  */
-export type SettingsSurfaceKind =
-  | "app-config"
-  | "local-config"
-  | "client-pref"
-  | "operations"
-  | "analytics";
+export type SettingsAppConfigUse = "required" | "optional" | "none";
 
 export type GatewayId = "qq" | "weixin";
 
@@ -64,7 +57,8 @@ export type SettingsConfigController = {
 export type SettingsSectionMeta = {
   id: SettingsSectionId;
   group: SettingsGroupId;
-  kind: SettingsSurfaceKind;
+  /** 对全局 AppConfig 的参与方式 */
+  appConfig: SettingsAppConfigUse;
   labelEn: string;
   labelZh: string;
   descriptionEn: string;
@@ -72,6 +66,9 @@ export type SettingsSectionMeta = {
   icon: LucideIcon;
   /** 导航搜索关键字（中英混合字面量）。 */
   searchKeys: string[];
+  /** 顶栏保存提示（无待保存修改时展示，如「即时生效」「在本节内保存」） */
+  saveHintEn?: string;
+  saveHintZh?: string;
 };
 
 /** 侧栏分组元数据。 */
