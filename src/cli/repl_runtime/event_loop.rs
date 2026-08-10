@@ -242,9 +242,47 @@ fn handle_stream_key(
             runtime.redraw_stream_composer()?;
         }
         KeyCode::Tab => {
-            // Tab：当前草稿入队，等待本轮结束后执行
+            // Tab：先补全斜杠命令，无补全时才把草稿入队
+            if runtime.stream_draft().text.starts_with('/') {
+                let completed = crate::cli::repl_commands::complete_repl_command(
+                    &runtime.stream_draft().text,
+                );
+                if let Some(completed) = completed {
+                    let draft = runtime.stream_draft_mut();
+                    draft.text = completed.to_string();
+                    draft.cursor = draft.text.chars().count();
+                    draft.slash_selection = 0;
+                    runtime.redraw_stream_composer()?;
+                    return Ok(());
+                }
+            }
             let mode = runtime.stream_mode(AgentMode::Yolo);
             let _ = runtime.enqueue_stream_draft(mode)?;
+        }
+        KeyCode::Up => {
+            // 斜杠面板可见时上下键移动选中项，否则不干预运行中输入
+            let suggestions =
+                crate::cli::repl_commands::visible_repl_command_suggestions(
+                    &runtime.stream_draft().text,
+                );
+            if !suggestions.is_empty() {
+                let draft = runtime.stream_draft_mut();
+                draft.slash_selection = (draft.slash_selection % suggestions.len())
+                    .checked_sub(1)
+                    .unwrap_or(suggestions.len().saturating_sub(1));
+                runtime.redraw_stream_composer()?;
+            }
+        }
+        KeyCode::Down => {
+            let suggestions =
+                crate::cli::repl_commands::visible_repl_command_suggestions(
+                    &runtime.stream_draft().text,
+                );
+            if !suggestions.is_empty() {
+                let draft = runtime.stream_draft_mut();
+                draft.slash_selection = (draft.slash_selection + 1) % suggestions.len();
+                runtime.redraw_stream_composer()?;
+            }
         }
         KeyCode::Enter => {
             if modifiers.contains(KeyModifiers::SHIFT) {
@@ -254,7 +292,19 @@ fn handle_stream_key(
                 draft.is_pasted = false;
                 runtime.redraw_stream_composer()?;
             } else {
-                // Enter：入队，等待本轮结束后执行
+                // Enter：面板可见时先落选中命令，否则 /model 会被当普通文本发出
+                let suggestions =
+                    crate::cli::repl_commands::visible_repl_command_suggestions(
+                        &runtime.stream_draft().text,
+                    );
+                if !suggestions.is_empty() {
+                    let draft = runtime.stream_draft_mut();
+                    let selected = suggestions
+                        [draft.slash_selection.min(suggestions.len().saturating_sub(1))];
+                    draft.text = selected.command.to_string();
+                    draft.cursor = draft.text.chars().count();
+                    draft.slash_selection = 0;
+                }
                 let mode = runtime.stream_mode(AgentMode::Yolo);
                 let _ = runtime.enqueue_stream_draft(mode)?;
             }

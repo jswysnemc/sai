@@ -77,12 +77,23 @@ pub(super) async fn drain_submission_queue(
         while let Some(item) = pending.next() {
             *mode = item.mode;
             let text = item.text.trim().to_string();
+            // 斜杠命令不能作为聊天消息发给模型：/model 这类输入原先会被
+            // 当成普通文本发出去。队列没有主循环的命令分发能力，
+            // 此处交还输入框由用户确认执行，并丢弃其后的排队项保持顺序语义
+            if is_queued_control_command(&text) {
+                runtime.record_meta(crate::i18n::text(
+                    "slash commands are not run from the queue; the text was returned to the input box",
+                    "斜杠命令不会从队列执行，已交还输入框",
+                ).to_string())?;
+                restore_leftover_draft(runtime, Some(text));
+                discard_remaining_queue(runtime, pending)?;
+                return Ok(());
+            }
             // 剪贴板附件在此还原：图片与长文本占位块换回真实内容
             let chat_input = item.clipboard.to_chat_input(&text);
             if chat_input.message.trim().is_empty() && chat_input.image_url.is_none() {
                 continue;
             }
-            // 控制命令和 shell 在队列中仅作为用户消息处理
             input_history.push(text.clone());
             runtime.record_user(*mode, text.clone())?;
             if agent.installed_mode() != *mode {
@@ -119,6 +130,29 @@ pub(super) async fn drain_submission_queue(
         }
     }
     Ok(())
+}
+
+/// 判断排队文本是否为需要主循环执行的斜杠命令或 shell。
+///
+/// 队列只能发起模型轮次，无法执行控制命令；识别出来交还输入框，
+/// 避免 `/model`、`!ls` 这类输入被当成聊天正文发给模型。
+///
+/// 参数:
+/// - `text`: 已去除首尾空白的排队文本
+///
+/// 返回:
+/// - 需要交还输入框时返回 true
+fn is_queued_control_command(text: &str) -> bool {
+    if text.starts_with('!') {
+        return true;
+    }
+    matches!(
+        crate::control_commands::parse_control_command(
+            text,
+            crate::control_commands::ControlSurface::Repl,
+        ),
+        Ok(Some(_))
+    ) || super::super::repl_commands::is_repl_exit_command(text)
 }
 
 /// 丢弃中断或失败后剩余的排队项，并向用户说明数量。
@@ -204,6 +238,39 @@ pub(super) fn repl_runner_submission(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 验证斜杠命令会被识别为需要主循环执行。
+    ///
+    /// 队列只能发起模型轮次，识别失败会让 /model 被当成聊天正文发出去。
+    #[test]
+    fn recognizes_slash_commands_in_the_queue() {
+        assert!(is_queued_control_command("/model"));
+        assert!(is_queued_control_command("/compact"));
+        assert!(is_queued_control_command("/new 标题"));
+    }
+
+    /// 验证 shell 前缀同样交还输入框。
+    #[test]
+    fn recognizes_shell_prefix_in_the_queue() {
+        assert!(is_queued_control_command("!ls -al"));
+    }
+
+    /// 验证退出命令不会被当作聊天消息发给模型。
+    #[test]
+    fn recognizes_exit_commands_in_the_queue() {
+        assert!(is_queued_control_command("/exit"));
+    }
+
+    /// 验证普通消息与含斜杠的正文仍走模型轮次。
+    ///
+    /// 误判会让正常提问被拦下来，代价比漏判更高。
+    #[test]
+    fn keeps_ordinary_messages_in_the_queue() {
+        assert!(!is_queued_control_command("继续实现这个功能"));
+        assert!(!is_queued_control_command("路径是 src/main.rs"));
+        assert!(!is_queued_control_command("/definitely-not-a-command"));
+        assert!(!is_queued_control_command(""));
+    }
 
     /// 验证 REPL 聊天输入会构造成 runner submission。
     #[test]
