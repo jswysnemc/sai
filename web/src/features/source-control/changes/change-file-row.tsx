@@ -33,10 +33,12 @@ export function ChangeFileRow(props: ChangeFileRowProps) {
   const style = { "--git-tree-indent": `${props.depth * 0.875}rem` } as CSSProperties;
   const canStage = props.section === "changes" || props.section === "untracked" || props.section === "merge";
   const canDiscard = props.section === "changes" || props.section === "untracked";
+  // 已删除文件加删除线：状态字母之外再给一个不需要辨认字母的视觉线索
+  const deleted = props.entry.worktree_status === "D" || props.entry.index_status === "D";
 
   return (
     <div
-      className={`git-file-row${props.active ? " active" : ""}${props.selected ? " selected" : ""}`}
+      className={`git-file-row${props.active ? " active" : ""}${props.selected ? " selected" : ""}${deleted ? " is-deleted" : ""}`}
       style={style}
       onContextMenu={props.onContextMenu}
     >

@@ -1,4 +1,4 @@
-import { ChevronDown, Minus, Plus } from "lucide-react";
+import { ChevronRight, Minus, Plus } from "lucide-react";
 import { useState } from "react";
 import type { GitStatusEntry, ScmConfig } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
@@ -38,10 +38,11 @@ export function ChangeSection(props: ChangeSectionProps) {
   return (
     <div className={`git-section git-section-${props.section}`}>
       <div className="git-change-head">
-        <Button className="git-section-toggle" onClick={() => setOpen((value) => !value)}>
-          <ChevronDown size={12} className={open ? "open" : ""} />
+        <Button className="git-section-toggle" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+          <ChevronRight size={12} className={open ? "open" : ""} />
           <span>{props.title}</span>
         </Button>
+        <span className="git-section-count tabular-nums">{props.entries.length}</span>
         <span>
           {props.section === "staged" ? (
             <Button className="git-icon-action" onClick={props.onUnstageAll} title={t("Unstage all", "取消全部暂存")} disabled={props.busy}>

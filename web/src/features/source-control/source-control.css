@@ -512,3 +512,43 @@
 .git-resource-create input:focus {
   border-color: var(--line-strong);
 }
+
+/*
+ * 已删除文件：文件名与路径加删除线。
+ *
+ * 状态徽章里的 D 需要先辨认字母才知道含义，删除线不需要——
+ * 扫一眼列表就能把"这些文件没了"与其它改动区分开。
+ */
+.git-file-row.is-deleted .git-file-path strong,
+.git-file-row.is-deleted .git-file-path small {
+  text-decoration: line-through;
+}
+
+/*
+ * 选中行的左缘色条。
+ *
+ * 仅靠淡背景在长列表里不易定位当前项；左缘一条实色竖线是
+ * 文件列表的通用语汇，扫视时比背景色更容易锁定。
+ */
+.git-file-row.active {
+  box-shadow: inset 0.125rem 0 0 var(--signal);
+}
+
+/*
+ * 分区计数徽章。
+ *
+ * 折叠后仍需知道该分区有多少文件，否则收起等于信息消失。
+ * 等宽数字让多个分区的计数竖向对齐。
+ */
+.git-section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1rem;
+  padding:0 var(--space-3xs);
+  border-radius:var(--radius-1);
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+  font:500 var(--text-2xs) var(--font-code);
+}

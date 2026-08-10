@@ -522,7 +522,7 @@
 .git-history-sync span { display: inline-flex; align-items: center; }
 .git-section-toggle { display: inline-flex; align-items: center; gap:var(--space-2xs); border: 0; background: transparent; color: inherit; font: inherit; }
 .git-section-toggle svg { transition:transform var(--duration-base) ease; }
-.git-section-toggle svg.open { transform: rotate(180deg); }
+.git-section-toggle svg.open { transform: rotate(90deg); }
 .git-change-head > span:last-child { display: flex; gap:var(--space-3xs); }
 .git-change-head button:not(.git-section-toggle),
 .git-file-actions button { display: grid; width: 24px; height: 24px; padding: 0; place-items: center; border: 0; border-radius:var(--radius-1); background: transparent; color: var(--ink-soft); }
