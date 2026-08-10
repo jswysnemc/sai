@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
-use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier};
+use argon2::password_hash::phc::PasswordHash;
+use argon2::password_hash::{PasswordHasher, PasswordVerifier};
 use argon2::Argon2;
 
 /// 口令最短长度，低于此长度的口令在设置时被拒绝。

@@ -1,9 +1,6 @@
 use anyhow::{Context, Result};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-/// 默认监听地址，只接受本机连接。
-pub(super) const DEFAULT_WEB_HOST: &str = "127.0.0.1";
-
 /// 解析监听地址。
 ///
 /// 支持 IPv4 与 IPv6 字面量；`localhost` 视作回环地址，省去用户记忆写法。
