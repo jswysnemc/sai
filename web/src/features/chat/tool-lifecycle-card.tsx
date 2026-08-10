@@ -16,8 +16,8 @@ import { displayPath, isCommandToolName, isEditToolName } from "./tool-renderers
 import { toolDiffStat, toolResultSummary } from "./tool-renderers/tool-result-summary";
 import { toolDurationLabel } from "./tool-renderers/tool-duration";
 import { useElapsedClock } from "./tool-renderers/use-elapsed-clock";
-import { ToolCardShell } from "./tool-renderers/tool-card-shell";
-import { ToolIcon, ToolStatusMark, toneOfState } from "./tool-renderers/tool-icon";
+import { ToolLayout } from "./tool-renderers/layout/tool-layout";
+import { ToolIcon } from "./tool-renderers/tool-icon";
 import { ToolResultView } from "./tool-renderers/tool-result-view";
 import { TodoToolView } from "./tool-renderers/todo-tool-view";
 import "./tool-renderers/tool-renderers.css";
@@ -96,25 +96,29 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
     : 0;
 
   return (
-    <ToolCardShell
-      tone={toneOfState(tool.status)}
+    <ToolLayout
       icon={<ToolIcon name={tool.name} backgroundTask={backgroundManagement} />}
-      title={readableToolName(tool.name, backgroundManagement)}
-      target={hideTarget ? undefined : target || undefined}
-      targetTitle={hideTarget ? undefined : fullCommand || headerPath || summary || undefined}
-      actions={<ToolCardActions target={copyableInput(argumentsText, headerPath)} output={tool.output} />}
-      summary={
+      kindLabel={readableToolName(tool.name, backgroundManagement)}
+      kindDetail={permission ? <ToolPermissionBadge autoAudited={autoAudited} t={t} /> : undefined}
+      primaryContent={hideTarget || !headerPath ? undefined : target}
+      primaryText={hideTarget || headerPath ? "" : summary}
+      secondaryText=""
+      title={hideTarget ? undefined : fullCommand || headerPath || summary || undefined}
+      diffCount={diffStat ? { added: diffStat.added, removed: diffStat.removed } : undefined}
+      hideDiffCountWhenOpen
+      actions={<ToolCardActions target={headerPath || argumentsText} output={tool.output} />}
+      statusLabel={
         writingLines > 0
           ? (
             <>
               {t("Writing", "写入")} <AnimatedCount value={writingLines} active={running} /> {t("lines", "行")}
             </>
           )
-          : resultSummaryNode(result, diffStat)
+          : statusText(result, duration)
       }
-      summaryTone={result?.tone ?? "neutral"}
-      meta={metaNode(permission ? <ToolPermissionBadge autoAudited={autoAudited} t={t} /> : null, duration)}
-      status={tool.status === "completed" ? undefined : <ToolStatusMark state={tool.status} />}
+      showFailureStatus={result?.tone === "danger" || tool.status === "failed"}
+      isRunning={running}
+      animateSummary={running}
       expanded={expanded}
       onToggle={() => setExpanded((value) => !value)}
     >
@@ -125,68 +129,32 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
         </div>
       )}
       <ToolResultView name={tool.name} argumentsText={argumentsText} output={tool.output} headerPath={headerPath} />
-    </ToolCardShell>
+    </ToolLayout>
   );
 }
 
 /**
- * 组装折叠行的结果摘要内容。
+ * 组装摘要行右段的状态文本。
  *
- * 编辑类工具的增删需要各自着色，因此与文字摘要分成两条路径，
- * 不压成一个字符串。两者都缺席时返回 undefined，外壳据此不渲染摘要位，
- * 避免在头部留下一个空节点撑开间距。
- *
- * @param result 文字摘要
- * @param diffStat 增删统计
- * @returns 摘要内容；无内容时返回 undefined
- */
-function resultSummaryNode(
-  result: ReturnType<typeof toolResultSummary>,
-  diffStat: ReturnType<typeof toolDiffStat>
-): ReactNode {
-  if (diffStat) {
-    return (
-      <>
-        {diffStat.added > 0 && <b>+{diffStat.added}</b>}
-        {diffStat.removed > 0 && <i>-{diffStat.removed}</i>}
-      </>
-    );
-  }
-  return result?.label || undefined;
-}
-
-/**
- * 组装折叠行的元信息内容。
- *
- * 权限徽章与耗时都可能缺席，全缺席时返回 undefined，
+ * 结果摘要与耗时都可能缺席，全缺席时返回 undefined，
  * 让外壳跳过这一位而不是渲染空容器。
  *
- * @param badge 权限徽章元素
+ * @param result 文字摘要
  * @param duration 耗时文本
- * @returns 元信息内容；无内容时返回 undefined
+ * @returns 状态内容；无内容时返回 undefined
  */
-function metaNode(badge: ReactNode, duration: string): ReactNode {
-  if (!badge && !duration) return undefined;
+function statusText(
+  result: ReturnType<typeof toolResultSummary>,
+  duration: string
+): ReactNode {
+  const label = result?.label ?? "";
+  if (!label && !duration) return undefined;
   return (
-    <>
-      {badge}
-      {duration}
-    </>
+    <span className="flex items-center gap-2">
+      {label ? <span>{label}</span> : null}
+      {duration ? <span className="tabular-nums">{duration}</span> : null}
+    </span>
   );
-}
-
-/**
- * 选出适合复制的调用内容。
- *
- * 有明确文件路径时复制路径，否则退回原始参数文本——
- * 前者是用户接下来最可能粘到别处的东西，后者至少保证不丢信息。
- *
- * @param argumentsText 参数文本
- * @param headerPath 头部展示的文件路径
- * @returns 待复制文本
- */
-function copyableInput(argumentsText: string, headerPath: string): string {
-  return headerPath || argumentsText;
 }
 
 /**

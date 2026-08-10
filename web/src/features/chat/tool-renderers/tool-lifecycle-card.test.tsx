@@ -56,7 +56,7 @@ describe("ToolLifecycleCard 折叠行", () => {
       output: JSON.stringify({ success: false, exit_code: 1, stdout: "" }),
       status: "failed"
     }));
-    expect(html).toContain("tool-shell-summary is-danger");
+    expect(html).toContain("text-destructive");
     expect(html).toContain("退出码 1");
   });
 

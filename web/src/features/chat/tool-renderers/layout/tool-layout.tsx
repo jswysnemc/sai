@@ -14,6 +14,8 @@ type ToolLayoutProps = {
   sourceLabel?: string;
   /** 主文本，单行截断 */
   primaryText?: string;
+  /** 主内容节点，用于文件链接等可交互对象；提供时覆盖 primaryText */
+  primaryContent?: ReactNode;
   /** 副文本，等宽字体单行截断 */
   secondaryText?: string;
   /** 摘要文本切换动画的帧标识 */
@@ -24,6 +26,8 @@ type ToolLayoutProps = {
   diffCount?: { added: number; removed: number };
   /** 展开后是否隐藏 diff 徽章 */
   hideDiffCountWhenOpen?: boolean;
+  /** 摘要行次级操作，常态隐藏，悬停或聚焦时出现 */
+  actions?: ReactNode;
   /** 状态文字 */
   statusLabel?: ReactNode;
   /** 状态是否按失败着色 */
@@ -58,11 +62,13 @@ export function ToolLayout({
   kindDetail,
   sourceLabel,
   primaryText = "",
+  primaryContent,
   secondaryText = "",
   summaryContentKey,
   animateSummary = false,
   diffCount,
   hideDiffCountWhenOpen = false,
+  actions,
   statusLabel,
   showFailureStatus = false,
   isRunning = false,
@@ -118,13 +124,20 @@ export function ToolLayout({
             {sourceLabel}
           </span>
         ) : null}
-        <ToolSummaryText
-          contentKey={frameKey}
-          primaryText={primaryText}
-          secondaryText={secondaryText}
-          animate={animateSummary}
-        />
+        {primaryContent ? (
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="min-w-0 truncate">{primaryContent}</span>
+          </span>
+        ) : (
+          <ToolSummaryText
+            contentKey={frameKey}
+            primaryText={primaryText}
+            secondaryText={secondaryText}
+            animate={animateSummary}
+          />
+        )}
         <span className="ml-auto flex shrink-0 items-center gap-2">
+          {actions}
           {showDiff ? <ToolDiffBadge added={diffCount.added} removed={diffCount.removed} /> : null}
           {statusLabel ? (
             <span className={showFailureStatus ? "text-destructive" : "text-ink-soft"}>{statusLabel}</span>
