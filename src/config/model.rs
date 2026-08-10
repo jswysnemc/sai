@@ -478,6 +478,9 @@ pub struct MemoryConfig {
 pub struct SecretsConfig {
     #[serde(default)]
     pub api_keys: HashMap<String, String>,
+    /// Web 访问口令的 Argon2 哈希；为空表示未启用口令验证
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub web_password_hash: Option<String>,
 }
 
 /// 对话生命周期 Hook 配置（参考 LiveAgent）。

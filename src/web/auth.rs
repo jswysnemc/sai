@@ -16,12 +16,66 @@ pub(super) struct SessionQuery {
     token: String,
 }
 
+#[derive(Deserialize)]
+pub(super) struct PasswordLoginRequest {
+    password: String,
+}
+
 #[derive(Serialize)]
 struct SessionResponse {
     ok: bool,
 }
 
+#[derive(Serialize)]
+pub(super) struct AuthModeResponse {
+    /// 为真时浏览器需先通过口令登录
+    password_required: bool,
+}
+
+/// 返回当前实例的认证方式。
+///
+/// 该端点不受保护：登录页需要在持有凭据之前判断该显示口令表单还是直接跳转。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+///
+/// 返回:
+/// - 是否启用口令验证
+pub(super) async fn auth_mode(State(state): State<WebAppState>) -> Json<AuthModeResponse> {
+    Json(AuthModeResponse {
+        password_required: state.password_hash.is_some(),
+    })
+}
+
+/// 使用访问口令建立浏览器会话 Cookie。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `request`: 待校验口令
+///
+/// 返回:
+/// - 设置安全 Cookie 的响应
+pub(super) async fn password_login(
+    State(state): State<WebAppState>,
+    Json(request): Json<PasswordLoginRequest>,
+) -> WebResult<Response> {
+    let Some(stored) = state.password_hash.as_deref() else {
+        return Err(WebError::bad_request("password login is not enabled"));
+    };
+    let matched = super::password::verify_web_password(&request.password, stored)
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    if !matched {
+        // 口令错误按固定延迟返回，压制在线枚举速率
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        return Err(WebError::unauthorized());
+    }
+    session_response(&state)
+}
+
 /// 使用启动令牌建立浏览器会话 Cookie。
+///
+/// 启用口令验证后令牌不再单独放行：对外监听时令牌会出现在启动日志与命令历史里，
+/// 只有同时通过口令才能建立会话。
 ///
 /// 参数:
 /// - `state`: Web 应用状态
@@ -33,9 +87,23 @@ pub(super) async fn create_session(
     State(state): State<WebAppState>,
     Query(query): Query<SessionQuery>,
 ) -> WebResult<Response> {
+    if state.password_hash.is_some() {
+        return Err(WebError::unauthorized());
+    }
     if query.token.as_bytes() != state.auth_token.as_bytes() {
         return Err(WebError::unauthorized());
     }
+    session_response(&state)
+}
+
+/// 组装携带会话 Cookie 的成功响应。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+///
+/// 返回:
+/// - 设置安全 Cookie 的响应
+fn session_response(state: &WebAppState) -> WebResult<Response> {
     let cookie = format!(
         "{SESSION_COOKIE}={}; Path=/; HttpOnly; SameSite=Strict",
         state.auth_token

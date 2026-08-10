@@ -11,6 +11,8 @@ use std::sync::Arc;
 pub(super) struct WebAppState {
     pub paths: SaiPaths,
     pub auth_token: Arc<str>,
+    /// Web 访问口令的 Argon2 哈希；为空表示只用启动令牌验证
+    pub password_hash: Option<Arc<str>>,
     pub workspaces: WorkspaceManager,
     pub runs: RunManager,
     pub terminals: TerminalManager,

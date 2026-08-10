@@ -75,6 +75,7 @@ mod sessions;
 mod skills_commands;
 mod terminal_restore;
 mod tree_select;
+mod web_password;
 
 use alarm_worker::run_alarm_worker;
 pub(crate) use args::*;
@@ -197,6 +198,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             .await
         }
         Some(Command::Web(args)) => crate::web::run(&paths, args).await,
+        Some(Command::WebPassword(args)) => web_password::run(&paths, args.command),
         Some(Command::Ask(args)) => {
             let mode = resolve_agent_mode(&paths, mode_override, PermissionSurface::Cli)?;
             let input = parse_message_input_flags(args.message, args.clipb, args.web_search);

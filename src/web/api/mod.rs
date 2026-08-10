@@ -83,6 +83,8 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         ));
     Router::new()
         .route("/api/health", get(health::health))
+        .route("/api/auth/mode", get(auth::auth_mode))
         .route("/api/auth/session", post(auth::create_session))
+        .route("/api/auth/password", post(auth::password_login))
         .merge(protected)
 }

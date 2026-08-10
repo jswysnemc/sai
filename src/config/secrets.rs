@@ -13,6 +13,18 @@ impl SecretsConfig {
         let stripped = json_comments::StripComments::new(raw.as_bytes());
         Ok(serde_json::from_reader(stripped)?)
     }
+
+    /// 以私有权限回写凭据文件。
+    ///
+    /// 参数:
+    /// - `paths`: Sai 路径集合
+    ///
+    /// 返回:
+    /// - 写入结果
+    pub fn save(&self, paths: &SaiPaths) -> Result<()> {
+        let raw = serde_json::to_string_pretty(self)?;
+        write_private_file(&paths.secrets_file, format!("{raw}\n").as_bytes())
+    }
 }
 
 /// 使用私有权限原子写入凭据文件。

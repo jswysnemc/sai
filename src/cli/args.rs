@@ -77,6 +77,8 @@ pub enum Command {
     Tool(ToolArgs),
     /// 启动 Sai Web 编程工作台
     Web(WebArgs),
+    /// 管理 Sai Web 访问口令
+    WebPassword(WebPasswordArgs),
     Ask(MessageArgs),
     Init,
     Paths,
@@ -187,11 +189,35 @@ pub struct WebArgs {
     #[arg(long, alias = "prot", default_value_t = 4096)]
     pub port: u16,
 
+    /// 监听地址；默认只接受本机连接，设为 0.0.0.0 可对外提供服务
+    #[arg(long, value_name = "ADDRESS", default_value = "127.0.0.1")]
+    pub host: String,
+
     #[arg(long)]
     pub no_open: bool,
 
     #[arg(long, value_name = "PATH")]
     pub workspace: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct WebPasswordArgs {
+    #[command(subcommand)]
+    pub command: WebPasswordCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum WebPasswordCommand {
+    /// 设置访问口令，不带参数时交互式输入
+    Set {
+        /// 直接指定口令；省略则从终端读取，避免口令进入命令历史
+        #[arg(long, value_name = "PASSWORD")]
+        password: Option<String>,
+    },
+    /// 清除访问口令，恢复为仅用启动令牌验证
+    Clear,
+    /// 查看当前是否已设置访问口令
+    Status,
 }
 
 #[derive(Debug, Args)]

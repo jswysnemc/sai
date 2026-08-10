@@ -80,6 +80,32 @@ import type { GitOperationAction, GitOperationOptions } from "./git-contracts";
 import type { McpToolInfo } from "./mcp-tool-contracts";
 import type { ManagedSkill, ManagedSkillDocument } from "./skill-contracts";
 
+/** 服务端当前启用的认证方式。 */
+export async function fetchAuthMode(): Promise<{ password_required: boolean }> {
+  const response = await fetch("/api/auth/mode", { credentials: "same-origin" });
+  if (!response.ok) return { password_required: false };
+  return (await response.json()) as { password_required: boolean };
+}
+
+/** 使用访问口令建立同源会话。 */
+export async function loginWithPassword(password: string): Promise<void> {
+  const response = await fetch("/api/auth/password", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password })
+  });
+  if (!response.ok) {
+    throw new Error(text(detectInitialLocale(), "Incorrect password", "口令不正确"));
+  }
+}
+
+/** 判断当前浏览器会话是否已通过验证。 */
+export async function hasActiveSession(): Promise<boolean> {
+  const response = await fetch("/api/workspaces", { credentials: "same-origin" });
+  return response.ok;
+}
+
 /** 使用 URL 启动令牌建立同源会话。 */
 export async function bootstrapSession(): Promise<void> {
   const url = new URL(window.location.href);
@@ -89,9 +115,15 @@ export async function bootstrapSession(): Promise<void> {
     method: "POST",
     credentials: "same-origin"
   });
-  if (!response.ok) throw new Error(text(detectInitialLocale(), "The Sai Web access token is invalid", "Sai Web 访问令牌无效"));
-  url.searchParams.delete("token");
-  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  // 启用口令验证时令牌不再单独放行，此处失败交由登录页接管
+  if (response.ok) {
+    url.searchParams.delete("token");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    return;
+  }
+  const mode = await fetchAuthMode().catch(() => ({ password_required: false }));
+  if (mode.password_required) return;
+  throw new Error(text(detectInitialLocale(), "The Sai Web access token is invalid", "Sai Web 访问令牌无效"));
 }
 
 /** 发送 JSON API 请求并统一处理错误。 */
