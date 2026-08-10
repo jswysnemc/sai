@@ -18,6 +18,7 @@ import { clearNewSessionModelReference } from "../sessions/new-session-preferenc
 import { KeyValueEditor } from "./key-value-editor";
 import { ProviderApiKeysField } from "./provider-api-keys-field";
 import { useSelectedFallback } from "./controls/use-selected-fallback";
+import { findProviderIndex, nextProviderId, providerIdConflict } from "./model/provider-selection";
 
 type ProviderSettingsSectionProps = {
   config: AppConfig;
@@ -70,22 +71,23 @@ export function ProviderSettingsSection({
     tags?: string[];
   }>>({});
   const [importOpen, setImportOpen] = useState(false);
-  const selectedIndex = Math.max(0, config.providers.findIndex((provider) => provider.id === selectedId));
-  const provider = config.providers[selectedIndex];
+  /** 供应商 ID 的输入草稿；为 null 表示未在编辑 */
+  const [idDraft, setIdDraft] = useState<string | null>(null);
+  const [idError, setIdError] = useState("");
+  // 找不到选中项时保持 -1：回落到 0 会让后续按索引的写入打到别的供应商上
+  const selectedIndex = findProviderIndex(config.providers, selectedId);
+  const provider = selectedIndex >= 0 ? config.providers[selectedIndex] : undefined;
   const providerKeys = provider ? normalizedProviderApiKeys(provider) : [];
   const selectedProviderKey = provider?.api_key_selected ?? providerKeys[0]?.id;
   const claudeSimulation = isClaudeClientStyle(provider?.client_style);
 
-  useSelectedFallback(selectedId, config.providers.map((item) => item.id), setSelectedId, config.active_provider);
+  // 回落到列表首项而非 active_provider：后者表示"正在使用哪个"，
+  // 与"正在编辑哪个"无关，用它回落会在改名中间态把编辑区弹回旧供应商
+  useSelectedFallback(selectedId, config.providers.map((item) => item.id), setSelectedId);
 
   /** 新增一项 OpenAI 兼容供应商草稿。 */
   const addProvider = () => {
-    let suffix = 1;
-    let id = "provider";
-    while (config.providers.some((item) => item.id === id)) {
-      suffix += 1;
-      id = `provider-${suffix}`;
-    }
+    const id = nextProviderId(config.providers);
     const next: ProviderConfig = {
       id,
       display_name: t("New provider", "新供应商"),
@@ -104,8 +106,39 @@ export function ProviderSettingsSection({
     };
     onConfigChange({ ...config, providers: [...config.providers, next] });
     setSelectedId(id);
+    setIdDraft(null);
+    setIdError("");
     setFetchError(null);
     setSecretError(null);
+  };
+
+  /**
+   * 【设置】【供应商标识】提交供应商 ID 改名。
+   *
+   * ID 是配置主键，边输入边提交会在中间态与其他供应商重名、并让选中项瞬时失配，
+   * 因此仅在结束编辑时整体提交，重名或留空则回退为原值。
+   *
+   * @param nextId 目标标识
+   * @returns 无返回值
+   */
+  const commitProviderId = (nextId: string) => {
+    setIdDraft(null);
+    if (!provider || selectedIndex < 0) return;
+    const trimmed = nextId.trim();
+    if (trimmed === provider.id) return;
+    const conflict = providerIdConflict(config.providers, selectedIndex, trimmed);
+    if (conflict) {
+      setIdError(
+        conflict === "empty"
+          ? t("Provider ID cannot be empty", "供应商 ID 不能为空")
+          : t("Provider ID is already used", "供应商 ID 已被占用")
+      );
+      return;
+    }
+    setIdError("");
+    // 先更新选中项再改写配置，避免中间渲染里选中项指向已不存在的 ID
+    setSelectedId(trimmed);
+    onProviderChange(selectedIndex, { id: trimmed });
   };
 
   /** 获取当前供应商远端模型并打开导入弹层。 */
@@ -127,6 +160,11 @@ export function ProviderSettingsSection({
 
   /** 将勾选的远端模型合并到当前供应商。 */
   const importModels = (models: string[]) => {
+    // 选中项失配时不写入：按错误索引写会把模型并进别的供应商
+    if (!provider || selectedIndex < 0) {
+      setImportOpen(false);
+      return;
+    }
     const nextModels = [...(provider.models ?? [])];
     for (const model of models) if (!nextModels.includes(model)) nextModels.push(model);
     const modelMetadata = { ...(provider.model_metadata ?? {}) };
@@ -277,7 +315,7 @@ export function ProviderSettingsSection({
         selectedId={selectedId}
         searchPlaceholder={t("Search providers", "搜索供应商")}
         addLabel={t("Add provider", "新增供应商")}
-        onSelect={(id) => { setSelectedId(id); setFetchError(null); setSecretError(null); }}
+        onSelect={(id) => { setSelectedId(id); setIdDraft(null); setIdError(""); setFetchError(null); setSecretError(null); }}
         onAdd={addProvider}
       />
       <section className="settings-editor">
@@ -294,7 +332,23 @@ export function ProviderSettingsSection({
         {fetchError && <div className="settings-inline-error">{fetchError.message}</div>}
         {secretError && <div className="settings-inline-error">{secretError.message}</div>}
         {tab === "connection" && <div className="settings-form-grid">
-          <label className="settings-field"><span>{t("Provider ID", "供应商 ID")}</span><input value={provider.id} onChange={(event) => { setSelectedId(event.target.value); onProviderChange(selectedIndex, { id: event.target.value }); }} /><small>{t("Stable identifier in the configuration file", "配置文件中的稳定标识")}</small></label>
+          <label className="settings-field">
+            <span>{t("Provider ID", "供应商 ID")}</span>
+            <input
+              value={idDraft ?? provider.id}
+              onChange={(event) => setIdDraft(event.target.value)}
+              onBlur={(event) => commitProviderId(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+                if (event.key === "Escape") {
+                  setIdDraft(null);
+                  setIdError("");
+                }
+              }}
+              spellCheck={false}
+            />
+            <small>{idError || t("Stable identifier in the configuration file", "配置文件中的稳定标识")}</small>
+          </label>
           <label className="settings-field"><span>{t("Display name", "显示名称")}</span><input value={provider.display_name} onChange={(event) => onProviderChange(selectedIndex, { display_name: event.target.value })} /><small>{t("Used in model menus and status displays", "用于模型菜单和状态展示")}</small></label>
           <label className="settings-field full"><span>{t("API address", "API 地址")}</span><input value={provider.base_url} onChange={(event) => onProviderChange(selectedIndex, { base_url: event.target.value })} spellCheck={false} /><small>{t("Base URL of the compatible API; the server accesses it when fetching models", "兼容接口的基础地址，获取模型时由服务端访问")}</small></label>
           <div className="settings-field"><span>{t("Protocol", "协议")}</span><Select value={provider.protocol ?? "auto"} options={protocolOptions} onChange={(value) => onProviderChange(selectedIndex, { protocol: value })} ariaLabel={t("Provider protocol", "供应商协议")} /><small>{t("The protocol determines request and reasoning parameter formats", "协议决定请求和思考参数格式")}</small></div>
