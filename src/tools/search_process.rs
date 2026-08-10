@@ -83,23 +83,18 @@ mod tests {
     /// 验证超时确实终止子进程并交回已读到的部分输出。
     ///
     /// 只测格式化函数无法覆盖 spawn / 读取 / kill 这条真实路径。
-    /// 注意 kill 只终止直接子进程：本例用 shell 脚本，其内部 sleep 会被
+    /// 注意 kill 只终止直接子进程：本例经 sh 启动，其内部 sleep 会被
     /// 重新挂到 init 下；ripgrep 不派生子进程，实际使用中不存在这一问题。
     #[tokio::test]
     async fn timeout_kills_child_and_returns_partial_output() {
-        let script = std::env::temp_dir().join("sai_timeout_probe.sh");
-        std::fs::write(
-            &script,
-            "#!/bin/sh\necho 'src/a.rs:1:early hit'\nsleep 300\n",
-        )
-        .unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
-        let mut command = Command::new(&script);
-        command.stdin(Stdio::null());
+        // 直接把脚本作为 sh 的参数传入，不落地成可执行文件：
+        // 并发测试里同时发生的 fork 会继承尚未关闭的写句柄，
+        // 内核据此在 exec 时报 ETXTBSY，导致本用例偶发失败
+        let mut command = Command::new("sh");
+        command
+            .arg("-c")
+            .arg("echo 'src/a.rs:1:early hit'; sleep 300")
+            .stdin(Stdio::null());
 
         let started = std::time::Instant::now();
         let run = tokio::time::timeout(
@@ -118,7 +113,6 @@ mod tests {
             }
             _ => panic!("慢命令应触发超时分支"),
         }
-        let _ = std::fs::remove_file(&script);
     }
 
     /// 验证程序不存在时返回 Missing 以触发内置回退。
