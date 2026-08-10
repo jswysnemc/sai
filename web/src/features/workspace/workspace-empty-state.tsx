@@ -1,10 +1,9 @@
 import { ChevronRight, PanelRightOpen } from "lucide-react";
 import { useI18n } from "../i18n/use-i18n";
-import { ACTIVE_WORKSPACE_PANEL_OPTIONS } from "./workspace-panel-options";
-import type { PaneTab } from "./workspace-tab";
+import { ACTIVE_WORKSPACE_PANEL_OPTIONS, type WorkspacePanelAction } from "./workspace-panel-options";
 
 type WorkspaceEmptyStateProps = {
-  onOpen: (type: PaneTab) => void;
+  onOpen: (type: WorkspacePanelAction) => void;
 };
 
 /**

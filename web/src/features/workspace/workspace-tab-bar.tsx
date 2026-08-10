@@ -2,7 +2,7 @@ import { Activity, Bot, ChevronLeft, FileCode2, GitCompareArrows, Maximize2, Mes
 import { useRef, useState } from "react";
 import { useOutsidePointerDown } from "../../shared/hooks/use-outside-pointer-down";
 import type { PaneTab, WorkspacePanelTab } from "./workspace-tab";
-import { ACTIVE_WORKSPACE_PANEL_OPTIONS, workspacePanelTitle } from "./workspace-panel-options";
+import { ACTIVE_WORKSPACE_PANEL_OPTIONS, workspacePanelTitle, type WorkspacePanelAction } from "./workspace-panel-options";
 import { useI18n } from "../i18n/use-i18n";
 
 type WorkspaceTabBarProps = {
@@ -11,7 +11,7 @@ type WorkspaceTabBarProps = {
   maximized: boolean;
   onActivate: (id: string) => void;
   onClose: (id: string) => void;
-  onAdd: (type: PaneTab) => void;
+  onAdd: (type: WorkspacePanelAction) => void;
   onToggleMaximized: () => void;
   onCollapse: () => void;
 };

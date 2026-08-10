@@ -1,0 +1,57 @@
+.ssh-host-picker {
+  display: grid;
+  gap: var(--space-3xs);
+  max-height: 18rem;
+  overflow: auto;
+}
+
+.ssh-host-picker-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-xs);
+  border: 1px solid transparent;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-xs);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.ssh-host-picker-item:hover {
+  border-color: var(--line);
+  background: var(--paper-deep);
+}
+
+.ssh-host-picker-item:focus-visible {
+  box-shadow: var(--ring-focus);
+  outline: 0;
+}
+
+.ssh-host-picker-item > span {
+  overflow: hidden;
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ssh-host-picker-item > small {
+  flex: none;
+  max-width: 11rem;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font: 400 var(--text-2xs) var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ssh-host-picker-empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-xs);
+  padding: var(--space-xs) 0;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}

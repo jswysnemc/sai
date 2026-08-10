@@ -7,12 +7,13 @@ import { BackgroundTasksPanel } from "../background-tasks/background-tasks-panel
 import { SubagentWorkspace } from "../subagents/subagent-workspace";
 import type { TerminalManager } from "../terminal/use-terminal-manager";
 import { createWorkspacePanelTab, type PaneTab, type WorkspacePanelTab } from "./workspace-tab";
-import { workspacePanelTitle } from "./workspace-panel-options";
+import { workspacePanelTitle, type WorkspacePanelAction } from "./workspace-panel-options";
 import { WorkspaceTabBar } from "./workspace-tab-bar";
 import "./workspace-pane.css";
 import { useI18n } from "../i18n/use-i18n";
 import { ensureTerminalTab } from "../terminal/terminal-tab-state";
 import { WorkspaceEmptyState } from "./workspace-empty-state";
+import { SshHostPickerDialog } from "../terminal/ssh-host-picker-dialog";
 import type { WorkspacePassiveDiff } from "./workspace-passive-diff";
 import { TargetedDiffPane } from "./targeted-diff-pane";
 import { SourceControlPane } from "../source-control/source-control-pane";
@@ -65,6 +66,7 @@ export function WorkspacePane({
 }: WorkspacePaneProps) {
   const { locale, t } = useI18n();
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
+  const [sshPickerOpen, setSshPickerOpen] = useState(false);
   const [fileTreeOverlay, setFileTreeOverlay] = useState(false);
   // 初始不预开空编辑器；由 `+` 菜单、打开文件或外部入口创建标签。
   const [tabs, setTabs] = useState<WorkspacePanelTab[]>([]);
@@ -208,9 +210,35 @@ export function WorkspacePane({
     });
   };
 
-  const addTab = async (type: PaneTab) => {
+  /**
+   * 用选定的 SSH 主机新建远程终端标签。
+   *
+   * 主机密钥待确认时不建标签：连接尚未建立，
+   * 先由密钥确认弹层接管，确认后再走一次本流程。
+   *
+   * @param hostId 目标主机标识
+   * @returns 无返回值
+   */
+  const openSshTerminal = async (hostId: string) => {
+    const terminal = await terminalManager.createSshTerminal(hostId).catch(() => null);
+    if (!terminal) return;
+    const created = createWorkspacePanelTab("terminal", {
+      title: terminal.title || t("Terminal", "终端"),
+      terminalId: terminal.id
+    }, locale);
+    setTabs((current) => ensureTerminalTab(current, created));
+    setActiveTabId(created.id);
+    onActiveTypeChange("terminal");
+  };
+
+  const addTab = async (type: WorkspacePanelAction) => {
     if (type === "side-chat") {
       onRequestSideConversation();
+      return;
+    }
+    // SSH 需要先选主机，交给选择器处理；选定后仍落成终端面板
+    if (type === "ssh") {
+      setSshPickerOpen(true);
       return;
     }
     if (type === "files") {
@@ -337,6 +365,11 @@ export function WorkspacePane({
         ))}
       </div>
       </ErrorBoundary>
+      <SshHostPickerDialog
+        open={sshPickerOpen}
+        onClose={() => setSshPickerOpen(false)}
+        onPick={(hostId) => void openSshTerminal(hostId)}
+      />
     </div>
   );
 }

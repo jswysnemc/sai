@@ -1,8 +1,17 @@
-import { Activity, Bot, FileCode2, GitCompareArrows, MessageSquarePlus, SquareTerminal } from "lucide-react";
+import { Activity, Bot, FileCode2, GitCompareArrows, MessageSquarePlus, Server, SquareTerminal } from "lucide-react";
 import type { PaneTab } from "./workspace-tab";
 
+/**
+ * 侧栏可打开的功能标识。
+ *
+ * 除面板类型外还包含 "ssh"：它最终打开的仍是终端面板，
+ * 但创建过程要先选主机，因此在菜单里单列一项，
+ * 否则 SSH 能力藏在终端面板内部，入口不可见。
+ */
+export type WorkspacePanelAction = PaneTab | "ssh";
+
 export type WorkspacePanelOption = {
-  type: PaneTab;
+  type: WorkspacePanelAction;
   labelEn: string;
   labelZh: string;
   icon: typeof FileCode2;
@@ -17,6 +26,7 @@ export const WORKSPACE_PANEL_OPTIONS: WorkspacePanelOption[] = [
   { type: "files", labelEn: "Editor", labelZh: "编辑器", icon: FileCode2 },
   { type: "diff", labelEn: "Git", labelZh: "Git", icon: GitCompareArrows },
   { type: "terminal", labelEn: "Terminal", labelZh: "终端", icon: SquareTerminal },
+  { type: "ssh", labelEn: "SSH terminal", labelZh: "SSH 终端", icon: Server },
   { type: "tasks", labelEn: "Background tasks", labelZh: "后台任务", icon: Activity },
   { type: "subagents", labelEn: "Subagents", labelZh: "子智能体", icon: Bot },
   { type: "side-chat", labelEn: "Side conversation", labelZh: "旁路对话", icon: MessageSquarePlus }
