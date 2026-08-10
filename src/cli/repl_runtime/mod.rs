@@ -65,6 +65,8 @@ pub(super) struct ReplRuntime {
     agent_panel: agent_panel::AgentPanelState,
     /// 最近一次 composer 绘制后的光标屏幕行（高度变化重锚探测用）
     last_cursor_row: Option<u16>,
+    /// 上次 composer 绘制的内容签名，用于跳过无变化的重绘
+    last_composer_signature: Option<composer_frame::ComposerSignature>,
 }
 
 /// 运行期间底部输入框草稿。
@@ -120,6 +122,7 @@ impl ReplRuntime {
             last_chrome: None,
             agent_panel: agent_panel::AgentPanelState::default(),
             last_cursor_row: None,
+            last_composer_signature: None,
         }
     }
 
@@ -635,6 +638,10 @@ impl ReplRuntime {
                 self.viewport.apply_terminal_scroll(outcome.scrolled_rows);
                 self.stream
                     .note_scrolled(outcome.scrolled_rows.saturating_sub(absorbed));
+                // 历史插入可能滚过 composer 区域，缓存的签名不再代表屏幕现状
+                if outcome.scrolled_rows > 0 {
+                    self.last_composer_signature = None;
+                }
                 self.draw_composer(&mut stdout)
             }
             SyncPlan::Repaint => self.replay(streaming),
@@ -682,6 +689,8 @@ impl ReplRuntime {
         } else {
             reflow::replay(&mut stdout, &self.viewport, &window.lines)?
         };
+        // 整区重放后屏幕内容已被覆盖，必须强制重绘 composer
+        self.last_composer_signature = None;
         self.draw_composer(&mut stdout)?;
         self.stream.reset(&window, painted);
         self.reflow.clear_pending();

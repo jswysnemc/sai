@@ -16,6 +16,23 @@ use crossterm::style::Print;
 use crossterm::terminal::{Clear, ClearType};
 use std::io::Write;
 
+/// composer 一次绘制的完整内容签名。
+///
+/// 覆盖屏幕上会出现的每一处：位置、各区域文本与光标落点。
+/// 两次签名相同即代表重绘不会改变任何像素。
+#[derive(Clone, PartialEq, Eq)]
+pub(super) struct ComposerSignature {
+    top: u16,
+    height: u16,
+    cols: usize,
+    panel_lines: Vec<String>,
+    input_lines: Vec<String>,
+    footer: Option<String>,
+    slash_lines: Vec<String>,
+    cursor_col: u16,
+    cursor_row: u16,
+}
+
 /// 可从输入 source 按当前终端宽度重绘的 REPL composer。
 #[derive(Clone)]
 pub(super) struct ComposerFrame {
@@ -101,20 +118,55 @@ impl ComposerFrame {
             .saturating_add(layout.input_rows)
     }
 
-    /// 将 composer 写入 viewport 底部并恢复输入光标位置。
+    /// 绘制 composer，并在内容与上次完全一致时跳过重绘。
+    ///
+    /// composer 每 32ms 重绘一次，而绘制是"逐行清除再打印"。
+    /// Windows Terminal 不合并这两步，清与画之间的空窗表现为底部闪烁。
+    /// 内容未变时直接复用上次结果，闪烁随之消失。
     ///
     /// 参数:
-    /// - `output`: 终端输出句柄
+    /// - `output`: 终端输出
     /// - `viewport`: 当前历史与 composer 分区
+    /// - `previous`: 上次绘制的内容签名
     ///
     /// 返回:
-    /// - 光标最终所在的屏幕行（供高度变化重锚时探测位移）
-    pub(super) fn draw<W: Write>(&self, output: &mut W, viewport: &InlineViewport) -> Result<u16> {
+    /// - 光标最终所在行与本次内容签名
+    pub(super) fn draw_lines<W: Write>(
+        &self,
+        output: &mut W,
+        viewport: &InlineViewport,
+        previous: Option<&ComposerSignature>,
+    ) -> Result<(u16, ComposerSignature)> {
         let _paint = paint_lock();
         let cols = usize::from(viewport.size().cols);
         let top = viewport.composer_top();
         let height = viewport.composer_height();
         let layout = self.layout(cols);
+        let cursor_row = {
+            let mut row = top;
+            row = row.saturating_add(self.panel_lines.len().min(usize::from(u16::MAX)) as u16);
+            row.saturating_add(1)
+                .saturating_add(layout.cursor_row_offset)
+        };
+        let signature = ComposerSignature {
+            top,
+            height,
+            cols,
+            panel_lines: self.panel_lines.clone(),
+            input_lines: layout.styled_display_lines.clone(),
+            footer: if layout.slash_panel.is_visible() {
+                None
+            } else {
+                Some(self.chrome.footer_line(cols))
+            },
+            slash_lines: layout.slash_panel.rendered_lines(cols),
+            cursor_col: layout.cursor_col,
+            cursor_row,
+        };
+        // 与上次完全一致：连光标位置都没动，重绘只会带来闪烁
+        if previous == Some(&signature) {
+            return Ok((cursor_row, signature));
+        }
 
         // 1. 先清理整个保留区域，避免输入行数或补全提示缩短后残留旧内容
         for row_offset in 0..height {
@@ -158,10 +210,10 @@ impl ComposerFrame {
         }
 
         // 5. 历史插入会移动终端光标，最后必须把它放回可继续编辑的位置
-        let cursor_row = input_start_row.saturating_add(layout.cursor_row_offset);
-        queue!(output, MoveTo(layout.cursor_col, cursor_row), Show)?;
+        let drawn_cursor_row = input_start_row.saturating_add(layout.cursor_row_offset);
+        queue!(output, MoveTo(layout.cursor_col, drawn_cursor_row), Show)?;
         output.flush()?;
-        Ok(cursor_row)
+        Ok((drawn_cursor_row, signature))
     }
 
     /// 根据当前列数计算输入、补全和光标布局。
@@ -294,11 +346,84 @@ mod tests {
         viewport.update(TerminalSize { cols: 40, rows: 12 }, frame.height(40), 8);
         let mut output = Vec::new();
 
-        frame.draw(&mut output, &viewport).unwrap();
+        frame.draw_lines(&mut output, &viewport, None).unwrap();
 
         let output = String::from_utf8(output).unwrap();
         assert!(output.contains("\x1b[9;1H"));
         assert!(output.contains("\x1b[10;6H"));
+    }
+
+    /// 验证内容未变时跳过重绘。
+    ///
+    /// composer 每 32ms 刷新一次，逐行清除再打印在 Windows Terminal 下
+    /// 表现为底部闪烁；内容一致时必须完全不产生输出。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn skips_repaint_when_nothing_changed() {
+        let chrome = ReplChrome {
+            mode: AgentMode::Yolo,
+            context_ratio: 0.0,
+            context_window_tokens: 120_000,
+            model: "gpt".to_string(),
+            thinking: "auto".to_string(),
+            directory: "/workspace".to_string(),
+        };
+        let frame = ComposerFrame::new(chrome, "hello".to_string(), 5, false, Vec::new(), 0);
+        let mut viewport = InlineViewport::new();
+        viewport.update(TerminalSize { cols: 40, rows: 12 }, frame.height(40), 8);
+
+        let mut first = Vec::new();
+        let (_, signature) = frame.draw_lines(&mut first, &viewport, None).unwrap();
+        assert!(!first.is_empty(), "首次绘制必须实际输出");
+
+        let mut second = Vec::new();
+        frame
+            .draw_lines(&mut second, &viewport, Some(&signature))
+            .unwrap();
+
+        assert!(second.is_empty(), "内容未变时不应产生任何终端输出");
+    }
+
+    /// 验证输入变化后仍会重绘。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn repaints_after_the_input_changes() {
+        let chrome = ReplChrome {
+            mode: AgentMode::Yolo,
+            context_ratio: 0.0,
+            context_window_tokens: 120_000,
+            model: "gpt".to_string(),
+            thinking: "auto".to_string(),
+            directory: "/workspace".to_string(),
+        };
+        let first_frame =
+            ComposerFrame::new(chrome.clone(), "hello".to_string(), 5, false, Vec::new(), 0);
+        let mut viewport = InlineViewport::new();
+        viewport.update(
+            TerminalSize { cols: 40, rows: 12 },
+            first_frame.height(40),
+            8,
+        );
+        let mut sink = Vec::new();
+        let (_, signature) = first_frame.draw_lines(&mut sink, &viewport, None).unwrap();
+
+        let changed = ComposerFrame::new(chrome, "hello world".to_string(), 11, false, Vec::new(), 0);
+        let mut output = Vec::new();
+        changed
+            .draw_lines(&mut output, &viewport, Some(&signature))
+            .unwrap();
+
+        assert!(!output.is_empty(), "输入变化后必须重绘");
     }
 
     /// 验证 slash 命令面板隐藏常规状态栏并展示命令说明。
@@ -323,7 +448,7 @@ mod tests {
         viewport.update(TerminalSize { cols: 72, rows: 24 }, frame.height(72), 4);
         let mut output = Vec::new();
 
-        frame.draw(&mut output, &viewport).unwrap();
+        frame.draw_lines(&mut output, &viewport, None).unwrap();
 
         let output = String::from_utf8(output).unwrap();
         assert!(output.contains("/model"));
@@ -354,7 +479,7 @@ mod tests {
         let mut viewport = InlineViewport::new();
         viewport.update(TerminalSize { cols: 72, rows: 24 }, frame.height(72), 4);
         let mut output = Vec::new();
-        frame.draw(&mut output, &viewport).unwrap();
+        frame.draw_lines(&mut output, &viewport, None).unwrap();
         let output = String::from_utf8(output).unwrap();
         let panel_at = output.find("任务清单").unwrap();
         let rule_at = output.find('─').unwrap();
@@ -377,7 +502,7 @@ mod tests {
         viewport.update(TerminalSize { cols: 72, rows: 24 }, frame.height(72), 4);
         let mut output = Vec::new();
 
-        frame.draw(&mut output, &viewport).unwrap();
+        frame.draw_lines(&mut output, &viewport, None).unwrap();
 
         let output = String::from_utf8(output).unwrap();
         let tip = crate::cli::composer_tips::current_composer_tip();
@@ -403,7 +528,7 @@ mod tests {
         viewport.update(TerminalSize { cols: 72, rows: 24 }, frame.height(72), 4);
         let mut output = Vec::new();
 
-        frame.draw(&mut output, &viewport).unwrap();
+        frame.draw_lines(&mut output, &viewport, None).unwrap();
 
         let output = String::from_utf8(output).unwrap();
         // composer 顶部在行 4（0 起），高 4 行，末行之后（行 8 → 1 起第 9 行）清到屏底
@@ -427,7 +552,7 @@ mod tests {
         viewport.update(TerminalSize { cols: 72, rows: 24 }, frame.height(72), 60);
         let mut output = Vec::new();
 
-        frame.draw(&mut output, &viewport).unwrap();
+        frame.draw_lines(&mut output, &viewport, None).unwrap();
 
         let output = String::from_utf8(output).unwrap();
         assert!(!output.contains("\x1b[J"), "贴底时不能清除 footer 行");

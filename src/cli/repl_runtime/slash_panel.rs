@@ -46,6 +46,26 @@ impl SlashPanel {
         self.suggestions.len().min(u16::MAX as usize) as u16
     }
 
+    /// 返回面板各行的渲染结果。
+    ///
+    /// 供 composer 计算内容签名：选中项变化会改变行文本，
+    /// 据此判断能否跳过重绘。
+    ///
+    /// 参数:
+    /// - `cols`: 终端列数
+    ///
+    /// 返回:
+    /// - 面板每行的完整文本
+    pub(super) fn rendered_lines(&self, cols: usize) -> Vec<String> {
+        self.suggestions
+            .iter()
+            .enumerate()
+            .map(|(index, suggestion)| {
+                format_suggestion(*suggestion, cols, index == self.selected)
+            })
+            .collect()
+    }
+
     /// 在输入框下方绘制命令面板。
     ///
     /// 参数:

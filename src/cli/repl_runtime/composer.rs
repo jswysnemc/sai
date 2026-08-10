@@ -141,8 +141,11 @@ impl ReplRuntime {
         let Some(composer) = &self.composer else {
             return Ok(());
         };
-        // 记录光标最终行：终端高度变化时以此探测内容位移
-        let cursor_row = composer.draw(stdout, &self.viewport)?;
+        // 内容未变时跳过重绘：composer 每 32ms 刷新一次，而绘制是
+        // 逐行清除再打印，Windows Terminal 下这一空窗表现为底部闪烁
+        let (cursor_row, signature) =
+            composer.draw_lines(stdout, &self.viewport, self.last_composer_signature.as_ref())?;
+        self.last_composer_signature = Some(signature);
         self.last_cursor_row = Some(cursor_row);
         Ok(())
     }
@@ -270,6 +273,8 @@ impl ReplRuntime {
     /// - 操作结果
     pub(in crate::cli) fn end_composer(&mut self) -> Result<()> {
         self.composer = None;
+        // composer 已撤下，下次出现时必须实绘
+        self.last_composer_signature = None;
         let size = TerminalSize::current();
         // 尺寸已变化：交给 replay 重锚，不能先污染 viewport 记账
         if size != self.viewport.size() {
