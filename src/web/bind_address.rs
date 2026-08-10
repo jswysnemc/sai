@@ -56,6 +56,40 @@ pub(super) fn browsable_url(address: &SocketAddr, token: &str) -> String {
     format!("http://{host}:{port}/?token={token}")
 }
 
+/// 判断绑定地址是否为通配地址。
+///
+/// 通配地址接受所有网卡的连接，启动提示需要据此说明可用的访问方式。
+///
+/// 参数:
+/// - `address`: 实际绑定的套接字地址
+///
+/// 返回:
+/// - 地址为 0.0.0.0 或 :: 时返回 true
+pub(super) fn is_wildcard(address: &SocketAddr) -> bool {
+    address.ip().is_unspecified()
+}
+
+/// 按指定主机名组装访问地址。
+///
+/// 通配监听下浏览器无法直接使用 0.0.0.0，用户需要换成本机在目标网络里的地址；
+/// 这里据此为提示信息生成示例链接。
+///
+/// 参数:
+/// - `host`: 主机名或 IP 字面量
+/// - `port`: 监听端口
+/// - `token`: 本次启动的访问令牌
+///
+/// 返回:
+/// - 带令牌的访问地址
+pub(super) fn url_for_host(host: &str, port: u16, token: &str) -> String {
+    // IPv6 字面量在 URL 中必须放进方括号，主机名与 IPv4 原样使用
+    let host = match host.parse::<IpAddr>() {
+        Ok(IpAddr::V6(ip)) => format!("[{ip}]"),
+        _ => host.to_string(),
+    };
+    format!("http://{host}:{port}/?token={token}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,5 +178,24 @@ mod tests {
             browsable_url(&"[::1]:4096".parse().unwrap(), "abc"),
             "http://[::1]:4096/?token=abc"
         );
+    }
+
+    #[test]
+    fn detects_wildcard_addresses() {
+        assert!(is_wildcard(&"0.0.0.0:4096".parse().unwrap()));
+        assert!(is_wildcard(&"[::]:4096".parse().unwrap()));
+        assert!(!is_wildcard(&"127.0.0.1:4096".parse().unwrap()));
+        assert!(!is_wildcard(&"192.168.1.10:4096".parse().unwrap()));
+    }
+
+    #[test]
+    fn builds_urls_for_a_given_host() {
+        assert_eq!(
+            url_for_host("100.70.178.16", 4096, "abc"),
+            "http://100.70.178.16:4096/?token=abc"
+        );
+        // IPv6 字面量需要方括号，主机名保持原样
+        assert_eq!(url_for_host("fd7a::1", 4096, "abc"), "http://[fd7a::1]:4096/?token=abc");
+        assert_eq!(url_for_host("my-host", 4096, "abc"), "http://my-host:4096/?token=abc");
     }
 }

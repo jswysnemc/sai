@@ -56,7 +56,20 @@ pub(super) async fn run(paths: &SaiPaths, args: WebArgs) -> Result<()> {
         .with_context(|| format!("failed to bind Sai Web at {address}"))?;
     let address = listener.local_addr()?;
     let url = bind_address::browsable_url(&address, &token);
-    println!("Sai Web: {url}");
+
+    // 通配监听下 URL 里的主机部分不能直接用于远程访问，需说明如何替换。
+    // 不去猜测对外地址：多网卡与 VPN 环境下默认路由未必是用户要用的那条网络
+    if bind_address::is_wildcard(&address) {
+        println!("Sai Web: listening on {address} (all interfaces)");
+        println!("  Local:  {url}");
+        println!(
+            "  Remote: {}",
+            bind_address::url_for_host("HOST", address.port(), &token)
+        );
+        println!("  Replace HOST with this machine's address on the network you connect from.");
+    } else {
+        println!("Sai Web: {url}");
+    }
 
     // 绑定到非回环地址意味着同网段任何人都可访问，没有口令时仅凭令牌泄露即可接管
     if bind_address::is_externally_reachable(&address) && password_hash.is_none() {
