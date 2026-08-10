@@ -68,3 +68,12 @@
   height: 1px;
   background: var(--line);
 }
+
+.ssh-target-menu .ssh-target-configure {
+  color: var(--signal);
+}
+
+.ssh-target-menu .ssh-target-configure:hover {
+  background: var(--signal-soft);
+  color: var(--signal);
+}
