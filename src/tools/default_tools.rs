@@ -1,4 +1,5 @@
 use super::fs_path::expand_path;
+use super::search_process::{run_search_command, SearchRun, SEARCH_TIMEOUT_SECONDS};
 use super::{ToolRegistry, ToolSpec};
 use crate::config::AppConfig;
 use crate::i18n::text as t;
@@ -6,13 +7,11 @@ use crate::paths::SaiPaths;
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::process::{Output, Stdio};
+use std::process::Stdio;
 use tokio::process::Command;
 
 const MAX_COMMAND_OUTPUT_CHARS: usize = 20_000;
-const SEARCH_TIMEOUT_SECONDS: u64 = 30;
 
 pub fn register(registry: &mut ToolRegistry, config: &AppConfig, paths: &SaiPaths) {
     register_readonly(registry, config, paths);
@@ -224,8 +223,10 @@ async fn glob_files_with_program(args: Value, program: &str) -> Result<String> {
         .current_dir(&search_path)
         .stdin(Stdio::null());
     // 1. 优先使用 ripgrep 保持大型目录搜索性能
-    if let Some(output) = run_search_command(command).await? {
-        return search_output_limited(output, max_results);
+    match run_search_command(command).await? {
+        SearchRun::Finished(output) => return search_output_limited(output, max_results),
+        SearchRun::TimedOut(partial) => return search_timeout_output(partial, max_results),
+        SearchRun::Missing => {}
     }
     // 2. Windows 发布环境缺少 ripgrep 时使用内置文件遍历
     let result = super::native_search::glob_files(&search_path, &pattern, max_results)?;
@@ -289,8 +290,10 @@ async fn grep_text_with_program(args: Value, program: &str) -> Result<String> {
     }
     command.current_dir(&search_root).stdin(Stdio::null());
     // 1. 优先使用 ripgrep 保持正则搜索性能与兼容性
-    if let Some(output) = run_search_command(command).await? {
-        return search_output_limited(output, max_results);
+    match run_search_command(command).await? {
+        SearchRun::Finished(output) => return search_output_limited(output, max_results),
+        SearchRun::TimedOut(partial) => return search_timeout_output(partial, max_results),
+        SearchRun::Missing => {}
     }
     // 2. Windows 发布环境缺少 ripgrep 时使用内置正则搜索
     let result = super::native_search::grep_text(
@@ -301,27 +304,6 @@ async fn grep_text_with_program(args: Value, program: &str) -> Result<String> {
         max_results,
     )?;
     native_search_output(result, max_results)
-}
-
-/// 执行搜索命令，程序不存在时返回空以触发内置回退。
-///
-/// 参数:
-/// - `command`: 已完成参数配置的搜索命令
-///
-/// 返回:
-/// - ripgrep 输出；程序不存在时返回空
-async fn run_search_command(mut command: Command) -> Result<Option<Output>> {
-    match tokio::time::timeout(
-        std::time::Duration::from_secs(SEARCH_TIMEOUT_SECONDS),
-        command.output(),
-    )
-    .await
-    {
-        Ok(Ok(output)) => Ok(Some(output)),
-        Ok(Err(err)) if err.kind() == ErrorKind::NotFound => Ok(None),
-        Ok(Err(err)) => Err(err.into()),
-        Err(_) => bail!("search timed out after {SEARCH_TIMEOUT_SECONDS}s"),
-    }
 }
 
 /// 将内置搜索结果转换为工具统一 JSON 输出。
@@ -365,6 +347,40 @@ fn command_output_limited(output: std::process::Output, max_lines: usize) -> Res
         "stderr": stderr,
         "truncated": truncated,
         "max_results": max_lines
+    }))?)
+}
+
+/// 将超时搜索的部分结果转换为工具输出。
+///
+/// 搜索超时通常意味着范围过大，而非无结果。整体失败会丢掉已经匹配到的行，
+/// 这里保留部分结果并明确标注截断，同时提示如何缩小范围。
+///
+/// 参数:
+/// - `partial`: 超时前已收到的标准输出
+/// - `max_lines`: 最大结果行数
+///
+/// 返回:
+/// - 工具结果 JSON
+fn search_timeout_output(partial: Vec<u8>, max_lines: usize) -> Result<String> {
+    let stdout = String::from_utf8_lossy(&partial);
+    let lines = stdout.lines().take(max_lines).collect::<Vec<_>>();
+    let matches = lines.len();
+    let truncated = stdout.lines().count() > matches;
+    Ok(serde_json::to_string_pretty(&json!({
+        "success": true,
+        "exit_code": 0,
+        "stdout": clip_output(&lines.join("\n")),
+        "stderr": "",
+        "truncated": true,
+        "max_results": max_lines,
+        "matches": matches,
+        "timed_out": true,
+        "note": format!(
+            "search timed out after {SEARCH_TIMEOUT_SECONDS}s; \
+             returned {matches} match(es) found before the timeout{}. \
+             Narrow the path or pattern for complete results.",
+            if truncated { ", output was also truncated by max_results" } else { "" }
+        )
     }))?)
 }
 
@@ -467,6 +483,52 @@ fn required(args: &Value, key: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 验证搜索超时保留已匹配结果并标注截断。
+    ///
+    /// 超时整体失败会丢掉已经找到的匹配，而搜索超时通常只是范围过大。
+    #[test]
+    fn search_timeout_keeps_partial_matches() {
+        let partial = b"src/a.rs:1:hit one\nsrc/b.rs:2:hit two\n".to_vec();
+
+        let result = search_timeout_output(partial, 10).unwrap();
+
+        let data: Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(data["success"], true);
+        assert_eq!(data["timed_out"], true);
+        assert_eq!(data["truncated"], true);
+        assert_eq!(data["matches"], 2);
+        assert!(data["stdout"].as_str().unwrap().contains("hit one"));
+        assert!(data["stdout"].as_str().unwrap().contains("hit two"));
+    }
+
+    /// 验证超时且无任何匹配时仍返回成功而非报错。
+    #[test]
+    fn search_timeout_without_matches_is_still_successful() {
+        let result = search_timeout_output(Vec::new(), 10).unwrap();
+
+        let data: Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(data["success"], true);
+        assert_eq!(data["timed_out"], true);
+        assert_eq!(data["matches"], 0);
+        assert!(data["note"].as_str().unwrap().contains("timed out"));
+    }
+
+    /// 验证超时结果同样受 max_results 约束。
+    #[test]
+    fn search_timeout_respects_max_results() {
+        let partial = (1..=5)
+            .map(|index| format!("src/f{index}.rs:1:hit"))
+            .collect::<Vec<_>>()
+            .join("\n")
+            .into_bytes();
+
+        let result = search_timeout_output(partial, 2).unwrap();
+
+        let data: Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(data["matches"], 2);
+        assert!(data["note"].as_str().unwrap().contains("max_results"));
+    }
 
     #[tokio::test]
     async fn glob_files_matches_filename_case_insensitively() {
@@ -571,3 +633,4 @@ mod tests {
         assert!(args.contains("--glob=!usr/**"));
     }
 }
+

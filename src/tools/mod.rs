@@ -33,6 +33,7 @@ mod package_advisor;
 pub(crate) mod progressive;
 mod protondb_query;
 mod registry;
+mod search_process;
 mod skill_management;
 mod skills;
 mod str_replace;
