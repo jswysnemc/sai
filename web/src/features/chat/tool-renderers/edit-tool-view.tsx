@@ -1,5 +1,6 @@
 import { FileCheck2 } from "lucide-react";
 import { DiffView } from "./diff-view";
+import { InlineDiffPreview } from "./layout/inline-diff-preview";
 import { parseJsonRecord, prettyJson, stringField } from "./tool-data";
 import { ToolFileReference } from "./tool-file-reference";
 import { useI18n } from "../../i18n/use-i18n";
@@ -54,7 +55,11 @@ export function EditToolView({ argumentsText, output, headerPath }: EditToolView
         </div>
       )}
       {(patch || syntheticPatch)
-        ? <DiffView source={patch || syntheticPatch} headerPath={headerPath || path} />
+        ? (
+          <InlineDiffPreview>
+            <DiffView source={patch || syntheticPatch} headerPath={headerPath || path} />
+          </InlineDiffPreview>
+        )
         : argumentsText && <pre className="generic-tool-block"><code>{prettyJson(argumentsText)}</code></pre>}
       {output && !result && <pre className={`generic-tool-block result${/^tool error:/i.test(output.trimStart()) ? " tool-error-output" : ""}`}><code>{output}</code></pre>}
     </div>
