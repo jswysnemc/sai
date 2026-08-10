@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind 与 sai 设计 token 的桥接层。
+ *
+ * sai 已有 9 套主题，配色全部走 tokens/color-themes.css 里的语义变量，
+ * 切换主题只改 :root 上的变量值。Tailwind 若自带一套调色板，
+ * 两套体系会各画各的，主题切换对 Tailwind 类名失效。
+ *
+ * 因此这里把 Tailwind 的 theme 全部指向既有 token：
+ * `bg-paper`、`text-ink` 之类的类名最终解析到 var(--paper)、var(--ink)，
+ * 主题切换自动生效，无需为每套主题重复定义。
+ *
+ * 同时提供一组语义别名（surface / border / muted 等），
+ * 让移植自其它项目的类名有对应落点，不必逐个改写成 sai 的原始命名。
+ */
+@theme inline {
+  /* 背景层级：paper 为底，raised 上浮，deep 下沉 */
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-paper-deep: var(--paper-deep);
+  --color-surface: var(--paper-raised);
+  --color-surface-soft: var(--surface-soft);
+  --color-card: var(--paper-raised);
+  --color-panel: var(--paper-deep);
+  --color-background: var(--paper);
+  --color-background-alt: var(--paper-deep);
+
+  /* 文本层级：ink 主体，soft 次级，subtlest 最弱 */
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-foreground: var(--ink);
+  --color-foreground-subtle: var(--ink-soft);
+  --color-foreground-subtlest: var(--ink-soft);
+  --color-muted-foreground: var(--ink-soft);
+  --color-popover-foreground: var(--ink);
+
+  /* 描边 */
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-line-soft: var(--line-soft);
+  --color-border: var(--line);
+  --color-input-border-focused: var(--signal);
+
+  /* 语义色 */
+  --color-signal: var(--signal);
+  --color-signal-soft: var(--signal-soft);
+  --color-danger: var(--danger);
+  --color-destructive: var(--danger);
+  --color-warning: var(--warning);
+  --color-blue: var(--blue);
+  --color-violet: var(--violet);
+  --color-magenta: var(--magenta);
+  --color-accent: var(--signal);
+  --color-brand: var(--signal);
+
+  /* diff 增删色：复用语义色，主题切换自动跟随 */
+  --color-diff-added: var(--signal);
+  --color-diff-removed: var(--danger);
+
+  /* 圆角、字号、字族直接沿用 tokens/ 下的阶梯：
+     sai 的 --radius-* 与 --text-* 命名恰好落在 Tailwind 的 theme 命名空间内，
+     Tailwind 会自动把它们识别为 rounded-* / text-* 的取值，无需在此重复声明。
+     此处只补 Tailwind 没有同名对应、而移植代码会用到的别名。 */
+  --radius-xl: var(--radius-5);
+  --text-ui-xs: var(--text-2xs);
+  --text-ui-base: var(--text-xs);
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-code);
+}
+
+/*
+ * 运行中文字的流光渐变。
+ *
+ * 工具卡片在工具执行期间用它替代静态灰色，让"正在运行"一眼可辨。
+ * 颜色由 --ink 混出，跟随主题；reduced-motion 下停止动画只保留静态色。
+ */
+@layer utilities {
+  .animated-gradient-text {
+    background: linear-gradient(
+      90deg,
+      var(--ink) 0%,
+      var(--ink) 34%,
+      color-mix(in srgb, var(--ink) 22%, transparent) 50%,
+      var(--ink) 66%,
+      var(--ink) 100%
+    );
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    animation: gradient-flow 4s linear infinite;
+  }
+
+  @keyframes gradient-flow {
+    0% {
+      background-position: 100% 0;
+    }
+    50% {
+      background-position: 0 0;
+    }
+    100% {
+      background-position: 0 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animated-gradient-text {
+      animation: none;
+      background: none;
+      -webkit-text-fill-color: var(--ink-soft);
+      color: var(--ink-soft);
+    }
+  }
+}
