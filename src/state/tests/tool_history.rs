@@ -18,7 +18,13 @@ fn interrupted_tool_call_is_preserved_in_follow_up_context() {
             r#"{"path":"README.md"}"#,
         )
         .unwrap();
-    let guard = PendingTurnGuard::new(store.clone(), "turn_1".to_string());
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let guard = PendingTurnGuard::new(
+        store.clone(),
+        "turn_1".to_string(),
+        crate::state::PartialTurnSink::new(),
+    )
+    .with_cancel_flag(cancel);
 
     drop(guard);
 

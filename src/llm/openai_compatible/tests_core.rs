@@ -83,6 +83,7 @@ fn stream_chunk_emits_glm_reasoning_content() {
             &mut reasoning_emitted,
             &mut usage,
             &mut tool_calls,
+            &mut None,
             &mut on_chunk,
         )
         .unwrap();
@@ -117,6 +118,7 @@ fn stream_tool_calls_ignore_empty_id_from_bailian_chunks() {
             &mut reasoning_emitted,
             &mut usage,
             &mut tool_calls,
+            &mut None,
             &mut on_chunk,
         )
         .unwrap();

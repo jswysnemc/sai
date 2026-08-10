@@ -259,6 +259,7 @@ async fn queues_second_submission_for_same_session() {
                 restore_input: None,
             },
             handle: task,
+            cancel_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         },
     );
 
@@ -315,6 +316,7 @@ async fn updates_queued_submission_and_restores_new_order() {
                 restore_input: None,
             },
             handle: tokio::spawn(std::future::pending::<()>()),
+            cancel_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         },
     );
 
@@ -447,6 +449,7 @@ async fn message_queue_acknowledges_only_the_delivered_front_item() {
                 restore_input: None,
             },
             handle: tokio::spawn(std::future::pending::<()>()),
+            cancel_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         },
     );
 

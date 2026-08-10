@@ -80,6 +80,8 @@ pub(crate) struct ActiveRunInfo {
 struct ActiveRun {
     info: ActiveRunInfo,
     handle: JoinHandle<()>,
+    /// 停止请求标志，abort 前置位以便轮次按中断而非失败落库
+    cancel_requested: Arc<std::sync::atomic::AtomicBool>,
 }
 
 #[derive(Clone)]
@@ -265,6 +267,9 @@ impl RunManager {
             let workspace_path = std::path::PathBuf::from(&queued.workspace.path);
             let paths = self.paths.clone();
             let task_key = key.clone();
+            // 标志在 spawn 前创建：stop 需要在任务被 abort 之前置位
+            let cancel_requested = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let task_cancel = cancel_requested.clone();
             let handle = tokio::spawn(async move {
                 let _ = start_rx.await;
                 let terminal = crate::runtime_cwd::scope(
@@ -275,6 +280,7 @@ impl RunManager {
                         task_info.clone(),
                         journal.clone(),
                         inter_message_source,
+                        task_cancel,
                     ),
                 )
                 .await;
@@ -289,6 +295,7 @@ impl RunManager {
                 ActiveRun {
                     info: queued.info,
                     handle,
+                    cancel_requested,
                 },
             );
             let _ = start_tx.send(());
@@ -351,7 +358,12 @@ impl RunManager {
             .find_map(|(key, run)| (run.info.run_id == run_id).then(|| key.clone()));
         if let Some(key) = active_key {
             let current = active.remove(&key).expect("active run key must exist");
-            // 1. 立即 abort，不 await 任务收尾，避免上游 SSE 挂起时 stop API 阻塞
+            // 1. 先置位停止标志，再 abort：轮次守卫在析构时读取此标志，
+            //    否则用户主动停止会被记成失败
+            current
+                .cancel_requested
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+            // 2. 立即 abort，不 await 任务收尾，避免上游 SSE 挂起时 stop API 阻塞
             current.handle.abort();
             let info = current.info.clone();
             drop(active);
@@ -469,6 +481,7 @@ async fn run_agent(
     info: ActiveRunInfo,
     journal: EventJournal,
     inter_message_source: Arc<dyn InterMessageSource>,
+    cancel_requested: Arc<std::sync::atomic::AtomicBool>,
 ) -> RunCheckpointStatus {
     let mode = match AgentMode::parse(request.mode.as_deref()) {
         Ok(mode) => mode,
@@ -532,7 +545,8 @@ async fn run_agent(
         Some(config) => SessionRunner::new(&paths).with_config(config),
         None => SessionRunner::new(&paths),
     }
-    .with_inter_message_source(inter_message_source);
+    .with_inter_message_source(inter_message_source)
+    .with_cancel_flag(cancel_requested);
     if let Err(error) = runner.run_submission(submission, &mut sink).await {
         journal.publish(WebEvent::new(
             &info.run_id,

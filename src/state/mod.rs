@@ -5,6 +5,7 @@ pub(crate) mod failure_recovery;
 mod goals;
 pub(crate) mod input_history;
 mod loaded_tools;
+mod partial_turn_sink;
 mod pending_turn;
 pub(crate) mod request_projection;
 mod runtime_recovery;
@@ -34,6 +35,8 @@ pub use compaction::{
 pub(crate) use compaction::{summary_char_limit, validate_summary};
 pub use context_epoch::{ContextEpochProjection, ContextEpochSummary, ContextSourceInput};
 pub use failure_recovery::{FailureKind, RecoverySnapshot, RecoveryStatus};
+#[allow(unused_imports)]
+pub use partial_turn_sink::{PartialTurnContent, PartialTurnSink};
 pub use pending_turn::PendingTurnGuard;
 #[allow(unused_imports)]
 pub use session_memory::summary::SessionMemorySummary;

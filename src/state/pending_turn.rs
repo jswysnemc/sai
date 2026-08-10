@@ -1,13 +1,15 @@
+use super::partial_turn_sink::PartialTurnSink;
 use super::StateStore;
-use crate::llm::ChatStreamKind;
 use anyhow::Result;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 pub struct PendingTurnGuard {
     state: StateStore,
     turn_id: String,
-    completed: bool,
-    partial_content: String,
-    partial_reasoning: String,
+    settled: bool,
+    cancel_requested: Option<Arc<AtomicBool>>,
+    partial: PartialTurnSink,
 }
 
 impl PendingTurnGuard {
@@ -16,32 +18,43 @@ impl PendingTurnGuard {
     /// 参数:
     /// - `state`: 状态存储
     /// - `turn_id`: 当前轮唯一标识
+    /// - `partial`: 流式增量累积句柄，与事件回调闭包共享
     ///
     /// 返回:
     /// - 待完成轮次守卫
-    pub fn new(state: StateStore, turn_id: String) -> Self {
+    pub fn new(state: StateStore, turn_id: String, partial: PartialTurnSink) -> Self {
         Self {
             state,
             turn_id,
-            completed: false,
-            partial_content: String::new(),
-            partial_reasoning: String::new(),
+            settled: false,
+            cancel_requested: None,
+            partial,
         }
     }
 
-    /// 累积已经发送给用户的流式助手内容。
+    /// 绑定用户停止请求标志。
+    ///
+    /// 绑定后，提前结束时按标志判定归因：置位记为用户中断，否则记为失败。
+    /// 不绑定则一律按失败记录，避免把上游报错归因给用户。
     ///
     /// 参数:
-    /// - `kind`: 流式内容类型
-    /// - `text`: 本次增量文本
+    /// - `cancel_requested`: 与 Agent 共享的停止标志
     ///
     /// 返回:
-    /// - 无
-    pub fn append_chunk(&mut self, kind: ChatStreamKind, text: &str) {
-        match kind {
-            ChatStreamKind::Content => self.partial_content.push_str(text),
-            ChatStreamKind::Reasoning => self.partial_reasoning.push_str(text),
-        }
+    /// - 已绑定停止标志的守卫
+    pub fn with_cancel_flag(mut self, cancel_requested: Arc<AtomicBool>) -> Self {
+        self.cancel_requested = Some(cancel_requested);
+        self
+    }
+
+    /// 判断本轮的提前结束是否源自用户主动停止。
+    ///
+    /// 返回:
+    /// - 已绑定标志且标志置位时返回 true
+    fn cancelled_by_user(&self) -> bool {
+        self.cancel_requested
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::SeqCst))
     }
 
     /// 完成当前轮次并关闭守卫。
@@ -55,11 +68,11 @@ impl PendingTurnGuard {
     pub fn complete(mut self, content: &str, reasoning: Option<&str>) -> Result<()> {
         self.state
             .complete_turn(&self.turn_id, content, reasoning)?;
-        self.completed = true;
+        self.settled = true;
         Ok(())
     }
 
-    /// 将当前轮次标记为失败，避免被误记为用户中断。
+    /// 将当前轮次标记为失败，保留真实错误原因。
     ///
     /// 参数:
     /// - `error`: 失败原因
@@ -67,37 +80,38 @@ impl PendingTurnGuard {
     /// 返回:
     /// - 写入是否成功
     pub fn fail(mut self, error: &str) -> Result<()> {
-        if !self.completed {
+        if !self.settled {
             self.persist_failure(error)?;
-            self.completed = true;
+            self.settled = true;
         }
         Ok(())
     }
 
-    /// 手动中断当前轮次。
+    /// 将当前轮次标记为用户中断。
     ///
     /// 返回:
     /// - 中断是否成功
     #[allow(dead_code)]
     pub fn interrupt(&mut self) -> Result<()> {
-        if !self.completed {
+        if !self.settled {
             self.persist_interruption()?;
-            self.completed = true;
+            self.settled = true;
         }
         Ok(())
     }
 }
 
 impl PendingTurnGuard {
-    /// 将当前轮次和已经产生的工具历史保存为中断状态。
+    /// 将当前轮次和已经产生的部分内容保存为中断状态。
     ///
     /// 返回:
     /// - 写入是否成功
     fn persist_interruption(&self) -> Result<()> {
+        let partial = self.partial.snapshot();
         self.state.interrupt_turn(
             &self.turn_id,
-            &self.partial_content,
-            (!self.partial_reasoning.trim().is_empty()).then_some(self.partial_reasoning.as_str()),
+            &partial.content,
+            (!partial.reasoning.trim().is_empty()).then_some(partial.reasoning.as_str()),
         )
     }
 
@@ -109,10 +123,11 @@ impl PendingTurnGuard {
     /// 返回:
     /// - 写入是否成功
     fn persist_failure(&self, error: &str) -> Result<()> {
+        let partial = self.partial.snapshot();
         self.state.fail_turn(
             &self.turn_id,
-            &self.partial_content,
-            (!self.partial_reasoning.trim().is_empty()).then_some(self.partial_reasoning.as_str()),
+            &partial.content,
+            (!partial.reasoning.trim().is_empty()).then_some(partial.reasoning.as_str()),
             error,
         )
     }
@@ -120,8 +135,19 @@ impl PendingTurnGuard {
 
 impl Drop for PendingTurnGuard {
     fn drop(&mut self) {
-        if !self.completed {
-            let _ = self.persist_interruption();
+        if self.settled {
+            return;
         }
+        // 提前结束时按停止标志归因：用户按下停止才算中断。
+        // 无条件记成中断会让上游报错、内部短路都显示成"用户已中断"，
+        // 真实原因反而被覆盖
+        let _ = if self.cancelled_by_user() {
+            self.persist_interruption()
+        } else {
+            self.persist_failure(crate::i18n::text(
+                "the turn ended before a terminal state was recorded",
+                "本轮在写入终态前结束",
+            ))
+        };
     }
 }

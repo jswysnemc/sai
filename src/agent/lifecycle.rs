@@ -101,6 +101,7 @@ impl Agent {
             memory,
             mode,
             live_mode,
+            cancel_requested: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             config,
             paths: paths.clone(),
             last_dynamic_sources: Vec::new(),
@@ -127,6 +128,31 @@ impl Agent {
     /// 返回可在运行期热切换的模式句柄。
     pub fn live_mode_handle(&self) -> std::sync::Arc<std::sync::atomic::AtomicU8> {
         self.live_mode.clone()
+    }
+
+    /// 返回用户停止请求句柄。
+    ///
+    /// 外层收到停止指令后置位。轮次守卫据此把提前结束记为用户中断，
+    /// 而非默认的"未完成"，两者在时间线上的归因完全不同。
+    ///
+    /// 返回:
+    /// - 与本 Agent 共享的停止标志
+    pub fn cancel_handle(&self) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
+        self.cancel_requested.clone()
+    }
+
+    /// 改用调用方提供的停止标志。
+    ///
+    /// 适用于 runner 内部构建 Agent 的入口：外层先持有标志，
+    /// Agent 建成后接管同一份，停止意图才能跨越构建边界传达。
+    ///
+    /// 参数:
+    /// - `cancel_requested`: 调用方持有的停止标志
+    ///
+    /// 返回:
+    /// - 无
+    pub fn adopt_cancel_flag(&mut self, cancel_requested: std::sync::Arc<std::sync::atomic::AtomicBool>) {
+        self.cancel_requested = cancel_requested;
     }
 
     /// 立即应用新模式：更新权限策略；YOLO 时放行全部待审权限。

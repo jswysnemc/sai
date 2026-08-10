@@ -76,6 +76,9 @@ impl ChatUsage {
 struct ChatStreamChoice {
     #[serde(default)]
     delta: ChatChoiceMessage,
+    /// 上游声明的本次生成终止原因，缺省表示尚未结束
+    #[serde(default, deserialize_with = "null_as_default")]
+    finish_reason: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]

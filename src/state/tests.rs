@@ -116,12 +116,18 @@ fn context_rollback_rejects_a_stale_turn_id() {
 }
 
 #[test]
-/// 验证无助手正文的主动中断仍会保留用户轮次。
+/// 验证用户主动中断且无助手正文时仍会保留用户轮次。
 fn interruption_without_assistant_content_preserves_user_turn() {
     let temp = tempfile::tempdir().unwrap();
     let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
     store.start_turn("turn_1", "edit me").unwrap();
-    let guard = PendingTurnGuard::new(store.clone(), "turn_1".to_string());
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let guard = PendingTurnGuard::new(
+        store.clone(),
+        "turn_1".to_string(),
+        crate::state::PartialTurnSink::new(),
+    )
+    .with_cancel_flag(cancel);
 
     drop(guard);
 
@@ -132,13 +138,37 @@ fn interruption_without_assistant_content_preserves_user_turn() {
 }
 
 #[test]
+/// 验证未收到停止请求的提前结束记为失败而非用户中断。
+///
+/// 归因给用户会让上游报错与内部短路都显示成"已中断"，真实原因被覆盖。
+fn early_exit_without_stop_request_is_recorded_as_failure() {
+    let temp = tempfile::tempdir().unwrap();
+    let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
+    store.start_turn("turn_1", "question").unwrap();
+    let guard = PendingTurnGuard::new(
+        store.clone(),
+        "turn_1".to_string(),
+        crate::state::PartialTurnSink::new(),
+    );
+
+    drop(guard);
+
+    let turns = store.load_turns().unwrap();
+    assert_eq!(turns.len(), 1);
+    assert_eq!(turns[0].status, TurnStatus::Failed);
+}
+
+#[test]
 /// 验证部分助手正文会以中断状态进入后续上下文。
 fn interruption_with_partial_content_preserves_assistant_context() {
     let temp = tempfile::tempdir().unwrap();
     let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
     store.start_turn("turn_1", "question").unwrap();
-    let mut guard = PendingTurnGuard::new(store.clone(), "turn_1".to_string());
-    guard.append_chunk(crate::llm::ChatStreamKind::Content, "partial answer");
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let partial = crate::state::PartialTurnSink::new();
+    let guard = PendingTurnGuard::new(store.clone(), "turn_1".to_string(), partial.clone())
+        .with_cancel_flag(cancel);
+    partial.append(crate::llm::ChatStreamKind::Content, "partial answer");
 
     drop(guard);
 

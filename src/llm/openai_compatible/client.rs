@@ -313,6 +313,7 @@ impl OpenAiCompatibleClient {
         let mut reasoning_emitted = 0usize;
         let mut usage = None;
         let mut tool_calls = ToolCallAccumulator::default();
+        let mut finish_reason: Option<String> = None;
         let mut stream = response.bytes_stream();
         while let Some(chunk) = stream.next().await {
             let chunk = chunk?;
@@ -328,6 +329,7 @@ impl OpenAiCompatibleClient {
                     &mut reasoning_emitted,
                     &mut usage,
                     &mut tool_calls,
+                    &mut finish_reason,
                     &mut on_event,
                 )? {
                     if done {
@@ -353,8 +355,24 @@ impl OpenAiCompatibleClient {
                 &mut reasoning_emitted,
                 &mut usage,
                 &mut tool_calls,
+                &mut finish_reason,
                 &mut on_event,
             )?;
+        }
+        // 流在没有 [DONE] 的情况下结束：上游连接提前断开。
+        // 此时既没有 finish_reason 也没有结束标记，静默当成功会把
+        // 截断的回复展示成完整回复，真实原因也无从追查
+        if finish_reason.is_none() {
+            if let Some(debug) = debug.as_ref() {
+                let _ = debug.finish_error(0, "stream ended without [DONE] or finish_reason");
+            }
+            bail!(
+                "{}",
+                t(
+                    "chat completions stream ended before the upstream signalled completion",
+                    "聊天流式响应在上游给出结束标记前中断",
+                )
+            );
         }
         let result = finalize_stream_result(content, reasoning, usage, tool_calls.finish())?;
         if let Some(debug) = debug.as_ref() {

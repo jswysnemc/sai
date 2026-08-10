@@ -1,6 +1,78 @@
 #[cfg(test)]
 mod stream_error_tests {
     use super::chat_stream_error_message;
+
+    /// 【协议】【流式收尾】验证上游声明的终止原因被记录。
+    ///
+    /// 缺少 finish_reason 是判定"连接提前断开"的唯一依据，
+    /// 解析不到就会把截断的回复当成完整回复。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn captures_upstream_finish_reason() {
+        let mut content = String::new();
+        let mut content_emitted = 0usize;
+        let mut reasoning = String::new();
+        let mut reasoning_emitted = 0usize;
+        let mut usage = None;
+        let mut tool_calls = super::ToolCallAccumulator::default();
+        let mut finish_reason = None;
+        let mut on_event = |_| Ok(());
+
+        super::handle_sse_line(
+            r#"data: {"choices":[{"delta":{"content":"done"},"finish_reason":"stop"}]}"#,
+            &mut content,
+            &mut content_emitted,
+            &mut reasoning,
+            &mut reasoning_emitted,
+            &mut usage,
+            &mut tool_calls,
+            &mut finish_reason,
+            &mut on_event,
+        )
+        .unwrap();
+
+        assert_eq!(finish_reason.as_deref(), Some("stop"));
+    }
+
+    /// 【协议】【流式收尾】验证仍在增量输出的分片不会被当成已结束。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn leaves_finish_reason_unset_while_streaming() {
+        let mut content = String::new();
+        let mut content_emitted = 0usize;
+        let mut reasoning = String::new();
+        let mut reasoning_emitted = 0usize;
+        let mut usage = None;
+        let mut tool_calls = super::ToolCallAccumulator::default();
+        let mut finish_reason = None;
+        let mut on_event = |_| Ok(());
+
+        super::handle_sse_line(
+            r#"data: {"choices":[{"delta":{"content":"partial"},"finish_reason":null}]}"#,
+            &mut content,
+            &mut content_emitted,
+            &mut reasoning,
+            &mut reasoning_emitted,
+            &mut usage,
+            &mut tool_calls,
+            &mut finish_reason,
+            &mut on_event,
+        )
+        .unwrap();
+
+        assert!(finish_reason.is_none());
+    }
+
     /// 【协议】【流式错误】验证流中途的错误对象被识别并提取说明。
     ///
     /// 参数:

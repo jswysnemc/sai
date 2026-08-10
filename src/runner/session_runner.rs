@@ -28,6 +28,7 @@ pub(crate) struct SessionRunner<'paths> {
     config_override: Option<AppConfig>,
     tool_registry_override: Option<ToolRegistry>,
     inter_message_source: Option<Arc<dyn InterMessageSource>>,
+    cancel_requested: Option<Arc<std::sync::atomic::AtomicBool>>,
 }
 
 impl<'paths> SessionRunner<'paths> {
@@ -44,6 +45,7 @@ impl<'paths> SessionRunner<'paths> {
             config_override: None,
             tool_registry_override: None,
             inter_message_source: None,
+            cancel_requested: None,
         }
     }
 
@@ -80,6 +82,24 @@ impl<'paths> SessionRunner<'paths> {
     /// - 更新后的会话 runner
     pub(crate) fn with_inter_message_source(mut self, source: Arc<dyn InterMessageSource>) -> Self {
         self.inter_message_source = Some(source);
+        self
+    }
+
+    /// 设置本次运行共享的用户停止标志。
+    ///
+    /// Web 等入口在 runner 内部构建 Agent，外层拿不到 Agent 句柄，
+    /// 需要提前传入标志才能在中止任务时让轮次守卫按中断归因。
+    ///
+    /// 参数:
+    /// - `cancel_requested`: 与调用方共享的停止标志
+    ///
+    /// 返回:
+    /// - 更新后的会话 runner
+    pub(crate) fn with_cancel_flag(
+        mut self,
+        cancel_requested: Arc<std::sync::atomic::AtomicBool>,
+    ) -> Self {
+        self.cancel_requested = Some(cancel_requested);
         self
     }
 
@@ -204,6 +224,10 @@ impl<'paths> SessionRunner<'paths> {
             input.mode,
             input.extra_system_prompt.as_deref(),
         )?;
+        // Agent 在此构建，外层只能通过共享标志表达停止意图
+        if let Some(cancel_requested) = self.cancel_requested.clone() {
+            agent.adopt_cancel_flag(cancel_requested);
+        }
         if uses_progressive_loading(&config) {
             let loaded_tools = loaded_tools_for_submission(&state, submission.channel.as_ref())?;
             agent.restore_loaded_tools(&loaded_tools);

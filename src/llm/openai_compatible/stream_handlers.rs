@@ -41,6 +41,7 @@ fn handle_sse_line<F>(
     reasoning_emitted: &mut usize,
     usage: &mut Option<Usage>,
     tool_calls: &mut ToolCallAccumulator,
+    finish_reason: &mut Option<String>,
     on_event: &mut F,
 ) -> Result<Option<bool>>
 where
@@ -89,6 +90,12 @@ where
         *usage = Some(next_usage.into_usage());
     }
     for choice in response.choices {
+        // 记录上游声明的终止原因：据此区分"正常收尾"与"连接提前断开"
+        if let Some(reason) = choice.finish_reason {
+            if !reason.trim().is_empty() {
+                *finish_reason = Some(reason);
+            }
+        }
         let delta = choice.delta;
         if let Some(text) = delta_reasoning_text(&delta) {
             push_buffered_chunk(

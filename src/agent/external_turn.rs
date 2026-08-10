@@ -51,7 +51,14 @@ impl Agent {
         // 【Sai/ACP】【外部轮次】1. 与原生路径一致地登记轮次，历史与时间线因此不区分内核
         self.state
             .start_turn_with_images(&turn_id, input, &image_urls)?;
-        let guard = PendingTurnGuard::new(self.state.clone(), turn_id.clone());
+        // 外部内核同样累积流式增量：提前结束时已展示的正文才能随轮次落库
+        let partial_content_sink = crate::state::PartialTurnSink::new();
+        let guard = PendingTurnGuard::new(
+            self.state.clone(),
+            turn_id.clone(),
+            partial_content_sink.clone(),
+        )
+        .with_cancel_flag(self.cancel_requested.clone());
         let cwd = crate::runtime_cwd::current_dir()?;
         let worktree_undo =
             crate::state::worktree_undo::WorktreeUndoGuard::begin(&self.state, &cwd, &turn_id)?;
@@ -78,6 +85,9 @@ impl Agent {
                 biased;
                 Some(event) = receiver.recv() => {
                     tool_history.record(&event)?;
+                    if let AgentEvent::Chunk(chunk) = &event {
+                        partial_content_sink.append(chunk.kind, &chunk.text);
+                    }
                     on_event(event)?;
                 },
                 outcome = &mut turn => break outcome,
@@ -86,12 +96,16 @@ impl Agent {
         // 【Sai/ACP】【外部轮次】3. 内核已返回，把仍在通道里的尾部事件排空后再收尾
         while let Ok(event) = receiver.try_recv() {
             tool_history.record(&event)?;
+            if let AgentEvent::Chunk(chunk) = &event {
+                partial_content_sink.append(chunk.kind, &chunk.text);
+            }
             on_event(event)?;
         }
         drop(turn);
         match result {
             Ok(result) => {
                 // 【Sai/ACP】【外部轮次】4. 助手回复写回会话，恢复历史时与原生内核同构
+                //    先落终态再收尾：worktree 清理失败不应让完整回复显示成未完成
                 guard.complete(&result.content, result.reasoning.as_deref())?;
                 worktree_undo.finish()?;
                 self.spawn_session_memory_extraction();

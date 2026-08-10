@@ -148,6 +148,8 @@ pub(super) async fn execute_repl_turn(
         // 2. 绑定热切换句柄：Shift+Tab 立即改权限模式
         rt.bind_live_mode(agent.live_mode_handle(), agent.session_id());
     }
+    // 停止标志在丢弃 chat future 前置位，轮次守卫据此把本轮记为用户中断
+    let cancel_flag = agent.cancel_handle();
     let chat = runner.run_submission_with_agent(submission, agent, &mut sink);
     tokio::pin!(chat);
     let mut interrupted = false;
@@ -165,6 +167,9 @@ pub(super) async fn execute_repl_turn(
                     let mut runtime_ref = runtime.borrow_mut();
                     process_stream_tick(&mut runtime_ref)?;
                     if process_stream_input(&mut runtime_ref)? {
+                        // 先置位再跳出：跳出会丢弃 chat future，
+                        // 守卫在析构时读取此标志才能把本轮记成中断而非失败
+                        cancel_flag.store(true, std::sync::atomic::Ordering::SeqCst);
                         interrupted = true;
                         break Ok(());
                     }

@@ -93,6 +93,9 @@ impl Agent {
         let mut perf = PerfTrace::new("agent");
         perf.mark("start turn");
         let turn_id = turn_id.unwrap_or_else(new_turn_id);
+        // 停止标志按轮清零：上一轮的停止不能影响本轮的终态归因
+        self.cancel_requested
+            .store(false, std::sync::atomic::Ordering::SeqCst);
         // 配置了外部内核时整轮交出去执行；下方全部是 sai 自带内核的路径，
         // 两者只在这一处分流，原生行为不受影响
         if self.uses_external_engine() {
@@ -103,7 +106,15 @@ impl Agent {
         self.state
             .start_turn_with_images(&turn_id, &input, &image_urls)?;
         perf.mark("state start_turn");
-        let mut guard = PendingTurnGuard::new(self.state.clone(), turn_id.clone());
+        // 流式增量交由共享句柄累积：事件闭包与守卫各持一份，
+        // 守卫不被闭包借走，错误路径可直接落终态
+        let partial_content_sink = crate::state::PartialTurnSink::new();
+        let guard = PendingTurnGuard::new(
+            self.state.clone(),
+            turn_id.clone(),
+            partial_content_sink.clone(),
+        )
+        .with_cancel_flag(self.cancel_requested.clone());
         let worktree_undo = crate::state::worktree_undo::WorktreeUndoGuard::begin(
             &self.state,
             &crate::runtime_cwd::current_dir()?,
@@ -129,9 +140,10 @@ impl Agent {
         )?;
         perf.mark("build initial messages");
         let mut on_event = on_event;
-        let mut emit_event = Box::new(|event: AgentEvent| {
+        let chunk_sink = partial_content_sink.clone();
+        let mut emit_event = Box::new(move |event: AgentEvent| {
             if let AgentEvent::Chunk(chunk) = &event {
-                guard.append_chunk(chunk.kind, &chunk.text);
+                chunk_sink.append(chunk.kind, &chunk.text);
             }
             on_event(event)
         });
@@ -182,7 +194,6 @@ impl Agent {
                     .await?
                 {
                     // 恢复失败时按失败落库，避免 UI 显示为用户中断
-                    drop(emit_event);
                     let _ = guard.fail(&err.to_string());
                     return Err(err);
                 }
@@ -215,12 +226,10 @@ impl Agent {
                     Ok(execution) => execution,
                     Err(retry_err) if is_context_overflow_error(&retry_err) => {
                         self.record_overflow_retry_failed(&turn_id, &messages, &retry_err)?;
-                        drop(emit_event);
                         let _ = guard.fail(&retry_err.to_string());
                         return Err(retry_err);
                     }
                     Err(retry_err) => {
-                        drop(emit_event);
                         let _ = guard.fail(&retry_err.to_string());
                         return Err(retry_err);
                     }
@@ -228,7 +237,6 @@ impl Agent {
             }
             Err(err) => {
                 // 请求/工具链路失败：落失败状态，保留真实错误给时间线
-                drop(emit_event);
                 let _ = guard.fail(&err.to_string());
                 return Err(err);
             }
@@ -242,9 +250,11 @@ impl Agent {
             memes::record_auto_meme_event(&self.config, &self.paths, &plan.event)?;
         }
         drop(emit_event);
-        worktree_undo.finish()?;
+        // 模型已产出完整回复，先落终态再做收尾：
+        // 收尾环节失败不应让这一轮显示成中断
         guard.complete(&result.content, result.reasoning.as_deref())?;
         perf.mark("complete turn");
+        worktree_undo.finish()?;
         self.spawn_session_memory_extraction();
         perf.mark("session memory extraction spawned");
         // 长期记忆抽取要发模型请求，异步执行不阻塞用户可见的答复
