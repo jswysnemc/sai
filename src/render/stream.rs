@@ -155,6 +155,24 @@ impl StreamRenderer {
         self.work_status = Some(WorkStatus::WaitingExternal);
         self.ensure_work_spinner(wait_spinner_detail_line(&self.options))
     }
+
+    /// 显示传输层自动重连状态（CLI 末行动效，不写历史）。
+    ///
+    /// 参数:
+    /// - `attempt`: 当前尝试次数（从 1 起）
+    /// - `max_attempts`: 最大尝试次数
+    ///
+    /// 返回:
+    /// - 是否成功刷新末行动效
+    pub fn note_reconnecting(&mut self, attempt: u32, max_attempts: u32) -> Result<()> {
+        self.set_work_status(
+            WorkStatus::Reconnecting {
+                attempt,
+                max_attempts,
+            },
+            true,
+        )
+    }
 }
 
 #[cfg(test)]

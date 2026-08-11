@@ -367,17 +367,39 @@ impl AppConfig {
         Ok(())
     }
 
+    /// 按标识解析供应商。
+    ///
+    /// 已停用的供应商不参与解析：允许解析等于允许发请求，
+    /// 停用开关就形同虚设。
+    ///
+    /// 参数:
+    /// - `id`: 供应商标识；为空时取当前供应商
+    ///
+    /// 返回:
+    /// - 命中的供应商配置
     pub fn provider(&self, id: Option<&str>) -> Result<&ProviderConfig> {
         let target = id.unwrap_or(&self.active_provider);
-        self.providers
+        let provider = self
+            .providers
             .iter()
             .find(|provider| provider.id == target)
-            .with_context(|| format!("provider not found: {target}"))
+            .with_context(|| format!("provider not found: {target}"))?;
+        if !provider.enabled {
+            bail!("provider is disabled: {target}");
+        }
+        Ok(provider)
     }
 
+    /// 枚举可供选择的供应商模型组合。
+    ///
+    /// 已停用的供应商整体跳过，其模型不出现在任何选择列表里。
+    ///
+    /// 返回:
+    /// - 供应商与模型的组合列表
     pub fn provider_model_choices(&self) -> Vec<ProviderModelChoice> {
         self.providers
             .iter()
+            .filter(|provider| provider.enabled)
             .flat_map(|provider| {
                 let models =
                     if provider.models.is_empty() && !provider.default_model.trim().is_empty() {
@@ -652,6 +674,8 @@ impl AppConfig {
 
     /// 返回拥有指定标签的 provider/model 列表。
     ///
+    /// 已停用的供应商整体跳过，与不带标签的枚举保持一致。
+    ///
     /// 参数:
     /// - `tag`: 模型标签
     ///
@@ -661,6 +685,7 @@ impl AppConfig {
         let tag = tag.trim();
         self.providers
             .iter()
+            .filter(|provider| provider.enabled)
             .flat_map(|provider| {
                 let models =
                     if provider.models.is_empty() && !provider.default_model.trim().is_empty() {

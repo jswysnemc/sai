@@ -85,9 +85,9 @@ fn background_command_result_uses_tool_payload_view() {
     assert!(!output.contains("Ctrl+O"));
 }
 
-/// 编辑类工具在参数流与执行阶段带写入行数后缀。
+/// 编辑类工具在出结果前用实时增删统计顶替 run 动效，数字随参数流跳动。
 #[test]
-fn edit_tool_status_line_shows_streamed_line_count() {
+fn edit_tool_status_line_shows_streamed_diff_stats() {
     let view = ToolView::running(
         "write_file".to_string(),
         r#"{"path":"a.rs","content":"l1\nl2\nl3\nl4"#.to_string(),
@@ -95,12 +95,14 @@ fn edit_tool_status_line_shows_streamed_line_count() {
 
     let output = super::render(&view, ToolCallDisplayMode::Summary);
 
-    assert!(output.contains("写入 3 行") || output.contains("writing 3 lines"));
+    assert!(output.contains("\x1b[32m+4\x1b[0m"));
+    assert!(output.contains("\x1b[31m-0\x1b[0m"));
+    assert!(!output.contains("run"));
 }
 
-/// 工具出结果后不再展示写入行数，交给 diff 统计表达。
+/// 工具出结果后回到 ok/err 状态，增删统计交给 diff 视图表达。
 #[test]
-fn edit_tool_result_drops_the_line_count_suffix() {
+fn edit_tool_result_drops_the_live_diff_stats() {
     let mut view = ToolView::running(
         "write_file".to_string(),
         r#"{"path":"a.rs","content":"l1\nl2"}"#.to_string(),
@@ -109,10 +111,11 @@ fn edit_tool_result_drops_the_line_count_suffix() {
 
     let output = super::render(&view, ToolCallDisplayMode::Summary);
 
-    assert!(!output.contains("写入") && !output.contains("writing"));
+    assert!(output.contains("ok"));
+    assert!(!output.contains("\x1b[32m+2\x1b[0m"));
 }
 
-/// 非编辑类工具的状态行不受行数后缀影响。
+/// 非编辑类工具的状态行不受实时统计影响。
 #[test]
 fn non_edit_tools_keep_a_plain_status_line() {
     let view = ToolView::running(
@@ -122,5 +125,6 @@ fn non_edit_tools_keep_a_plain_status_line() {
 
     let output = super::render(&view, ToolCallDisplayMode::Summary);
 
-    assert!(!output.contains("写入") && !output.contains("writing"));
+    assert!(output.contains("run"));
+    assert!(!output.contains("\x1b[32m+"));
 }

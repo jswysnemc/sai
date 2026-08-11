@@ -74,6 +74,11 @@ impl Agent {
                     if !can_retry {
                         return Err(error);
                     }
+                    // 先通知 UI 正在重连，再退避等待；否则界面会像卡住一样没有反馈
+                    on_event(AgentEvent::Reconnecting {
+                        attempt,
+                        max_attempts: MAX_TRANSPORT_ATTEMPTS,
+                    })?;
                     let delay_ms =
                         200u64.saturating_mul(1u64 << (attempt.saturating_sub(1).min(3)));
                     tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;

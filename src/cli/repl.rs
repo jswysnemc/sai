@@ -578,6 +578,31 @@ pub(super) async fn run_repl(
             let _ = crate::state::input_history::append_input_history(paths, input);
         }
         if !goal_continuation {
+            // #region agent log
+            {
+                use std::io::Write;
+                let raw_prefix: String = input.chars().take(80).collect();
+                let chat_prefix: String = chat_input.message.chars().take(80).collect();
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open("/home/snemc/workspace/sai/.cursor/debug-dcb5f5.log")
+                {
+                    let _ = writeln!(
+                        f,
+                        r#"{{"sessionId":"dcb5f5","runId":"pre-fix","hypothesisId":"A","location":"repl.rs:submit","message":"submit raw vs chat_input","data":{{"rawLooksLikeMarker":{},"chatChars":{},"rawPrefix":{},"chatPrefix":{}}},"timestamp":{}}}"#,
+                        input.contains("[text ") || input.contains("[image "),
+                        chat_input.message.chars().count(),
+                        serde_json::to_string(&raw_prefix).unwrap_or_else(|_| "\"\"".into()),
+                        serde_json::to_string(&chat_prefix).unwrap_or_else(|_| "\"\"".into()),
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_millis())
+                            .unwrap_or(0)
+                    );
+                }
+            }
+            // #endregion
             runtime.record_user(mode, input.to_string())?;
         }
         // 4. 模式变化时换工具表；每轮只做轻量 prepare

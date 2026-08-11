@@ -199,6 +199,8 @@ fn build_provider_from_fields(
         id: fields[0].value.trim().to_string(),
         display_name: fields[1].value.trim().to_string(),
         base_url: normalize_base_url(&fields[2].value),
+        // 启用开关不在 TUI 表单里，沿用编辑前的值
+        enabled: provider.enabled,
         protocol: fields[3].value.trim().to_string(),
         api_key: Some(fields[4].value.trim().to_string()).filter(|value| !value.is_empty()),
         api_keys,

@@ -123,6 +123,56 @@ fn provider_model_choices_ignore_unconfigured_models() {
         .any(|choice| choice.provider_id == provider_id));
 }
 
+/// 停用的供应商不出现在模型选择列表里。
+///
+/// 允许它出现就等于允许被选中并发请求，停用开关形同虚设。
+#[test]
+fn disabled_providers_are_excluded_from_model_choices() {
+    let mut config = AppConfig::default();
+    let provider_id = config.providers[0].id.clone();
+    config.providers[0].models = vec!["model-a".to_string()];
+    assert!(config
+        .provider_model_choices()
+        .iter()
+        .any(|choice| choice.provider_id == provider_id));
+
+    config.providers[0].enabled = false;
+
+    assert!(!config
+        .provider_model_choices()
+        .iter()
+        .any(|choice| choice.provider_id == provider_id));
+}
+
+/// 停用的供应商不能被解析，避免绕过开关继续发请求。
+#[test]
+fn disabled_provider_cannot_be_resolved() {
+    let mut config = AppConfig::default();
+    let provider_id = config.providers[0].id.clone();
+    assert!(config.provider(Some(&provider_id)).is_ok());
+
+    config.providers[0].enabled = false;
+
+    let error = config
+        .provider(Some(&provider_id))
+        .expect_err("停用的供应商必须解析失败");
+    assert!(error.to_string().contains("disabled"));
+}
+
+/// 未写入配置文件的供应商默认处于启用状态。
+#[test]
+fn providers_default_to_enabled_when_the_field_is_absent() {
+    let raw = serde_json::json!({
+        "id": "p",
+        "display_name": "p",
+        "base_url": "https://example.test/v1"
+    });
+
+    let provider: ProviderConfig = serde_json::from_value(raw).unwrap();
+
+    assert!(provider.enabled);
+}
+
 #[test]
 fn new_openai_compatible_provider_has_no_active_model() {
     let provider = ProviderConfig::new_openai_compatible();

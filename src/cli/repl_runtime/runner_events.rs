@@ -79,6 +79,9 @@ impl ReplRuntime {
                 self.arm_live_ticker();
                 self.sync_transcript(true)
             }
+            // TUI：重连只更新工作状态行（match 前的 from_agent_event 已写入），
+            // 不插入历史 cell，与 Codex StreamError → status indicator 一致
+            AgentEvent::Reconnecting { .. } => self.sync_transcript(true),
             AgentEvent::ContextUpdated(_) => Ok(()),
             AgentEvent::ToolCall { name, arguments }
             | AgentEvent::ToolCallIdentified {

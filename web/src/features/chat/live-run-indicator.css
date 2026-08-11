@@ -34,6 +34,28 @@
   background: var(--warning);
 }
 
+/* 重连：告警色呼吸点 + 标签扫光，与普通 Working 的 signal 色区分 */
+.live-run-indicator.reconnecting .live-run-dot {
+  background: var(--warning);
+  animation: live-run-breathe 1s var(--ease-in-out) infinite;
+}
+
+.live-run-indicator.reconnecting .live-run-label {
+  background: linear-gradient(
+    90deg,
+    var(--warning) 0%,
+    var(--warning) 38%,
+    color-mix(in srgb, var(--warning) 55%, var(--ink)) 50%,
+    var(--warning) 62%,
+    var(--warning) 100%
+  );
+  background-size: 260% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: live-run-shimmer 1.4s linear infinite;
+}
+
 /*
  * 标签高光：渐变裁到文字上横向平移。
  * 渐变两端保持基准色、中段提亮，扫过时只有一小段变亮，整体亮度不跳。
@@ -75,9 +97,14 @@
     animation: none !important;
   }
 
-  .live-run-indicator.busy .live-run-label {
+  .live-run-indicator.busy .live-run-label,
+  .live-run-indicator.reconnecting .live-run-label {
     background: none;
     color: var(--ink-soft);
     animation: none;
+  }
+
+  .live-run-indicator.reconnecting .live-run-label {
+    color: var(--warning);
   }
 }

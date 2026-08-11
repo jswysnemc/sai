@@ -26,6 +26,11 @@ pub(super) fn handle_agent_event(
             Ok(())
         }
         AgentEvent::WaitingExternal => Ok(()),
+        // CLI：重连只刷新底部状态行动效，不打印历史行（对齐 Codex StreamError）
+        AgentEvent::Reconnecting {
+            attempt,
+            max_attempts,
+        } => renderer.note_reconnecting(attempt, max_attempts),
         AgentEvent::ContextUpdated(_) => Ok(()),
         AgentEvent::ToolCall { name, arguments } => renderer.write_tool_call(&name, &arguments),
         AgentEvent::ToolCallIdentified {

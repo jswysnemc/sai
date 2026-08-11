@@ -3,16 +3,12 @@
   display: inline-flex;
 }
 
+/* 位置与尺寸由 useAnchoredPopover 的内联样式控制（Portal + fixed） */
 .ssh-target-menu {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 0.25rem);
-  z-index: 30;
+  z-index: 110;
   display: flex;
   flex-direction: column;
   gap: 0.0625rem;
-  min-width: 13rem;
-  max-height: 16rem;
   overflow: auto;
   padding:var(--space-2xs);
   border: 1px solid var(--line);

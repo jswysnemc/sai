@@ -24,7 +24,13 @@ impl DiffCell {
     /// - 不依赖后续文件状态的 diff cell
     pub(crate) fn from_arguments(arguments: String) -> Self {
         let rendered = render_edit_file_diff_for_transcript(&arguments).unwrap_or_else(|| {
-            tool_event_text(&tool_event_label("edit_file", Some(&arguments)), "run")
+            // 无法构建 diff 预览时退回状态行：优先展示实时增删统计，
+            // 与参数流阶段的跳动数字衔接，实在没有再用 run 动效
+            let stats = crate::render::edit_diff::streamed_diff_stat_status(&arguments);
+            tool_event_text(
+                &tool_event_label("edit_file", Some(&arguments)),
+                stats.as_deref().unwrap_or("run"),
+            )
         });
         Self {
             rendered: rendered.trim_end().to_string(),

@@ -158,6 +158,21 @@ impl EventAssembler {
                 events
             }
             AgentEvent::WaitingExternal => self.status_event("waiting_external"),
+            // Web：重连走 status.changed，并带上 attempt/max，供指示器展示进度
+            AgentEvent::Reconnecting {
+                attempt,
+                max_attempts,
+            } => {
+                self.status = Some("reconnecting");
+                vec![self.event(
+                    "status.changed",
+                    json!({
+                        "status": "reconnecting",
+                        "attempt": attempt,
+                        "max_attempts": max_attempts,
+                    }),
+                )]
+            }
             AgentEvent::ContextUpdated(update) => vec![self.event(
                 "context.updated",
                 json!({
@@ -723,6 +738,22 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].kind, "status.changed");
         assert_eq!(events[0].payload["status"], "waiting_external");
+    }
+
+    /// 验证传输层重连向 Web 暴露带尝试次数的 status.changed。
+    #[test]
+    fn maps_reconnecting_status_with_attempts() {
+        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let events = assembler.map(RunnerEvent::Agent(AgentEvent::Reconnecting {
+            attempt: 2,
+            max_attempts: 3,
+        }));
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].kind, "status.changed");
+        assert_eq!(events[0].payload["status"], "reconnecting");
+        assert_eq!(events[0].payload["attempt"], 2);
+        assert_eq!(events[0].payload["max_attempts"], 3);
     }
 
     /// 验证自动输入事件向 Web 传递展示文本而不是内部提示。

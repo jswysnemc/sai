@@ -38,6 +38,8 @@ function run(id: string, content: string, completed: boolean): LiveRunState {
     startedAtMs: null,
     durationMs: null,
     status: completed ? "idle" : "working",
+    reconnectAttempt: null,
+    reconnectMaxAttempts: null,
     userInput: content,
     imageUrls: [],
     content: completed ? "answer" : "",

@@ -240,6 +240,30 @@ impl ReplRuntime {
     /// 返回:
     /// - 操作是否成功
     pub(super) fn record_user(&mut self, mode: AgentMode, text: String) -> Result<()> {
+        // #region agent log
+        {
+            use std::io::Write;
+            let looks_like_marker = text.contains("[text ") || text.contains("[image ");
+            let prefix: String = text.chars().take(80).collect();
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("/home/snemc/workspace/sai/.cursor/debug-dcb5f5.log")
+            {
+                let _ = writeln!(
+                    f,
+                    r#"{{"sessionId":"dcb5f5","runId":"pre-fix","hypothesisId":"A","location":"repl_runtime/mod.rs:record_user","message":"record_user echo text","data":{{"looksLikeMarker":{looks_like_marker},"chars":{},"lines":{},"prefix":{}}},"timestamp":{}}}"#,
+                    text.chars().count(),
+                    text.lines().count().max(if text.is_empty() { 0 } else { 1 }),
+                    serde_json::to_string(&prefix).unwrap_or_else(|_| "\"\"".into()),
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis())
+                        .unwrap_or(0)
+                );
+            }
+        }
+        // #endregion
         self.transcript
             .push_user_echo(layout::transcript_mode(mode), text);
         self.sync_transcript(false)

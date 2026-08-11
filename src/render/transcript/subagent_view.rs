@@ -89,10 +89,8 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
     // 3. 【终端】【子智能体状态】运行中显示 Working 白色流光
     if status == "run" {
         output.push('\n');
-        output.push_str(&render_activity_text(
-            WorkStatus::Working.localized_label(),
-            frame,
-        ));
+        let label = WorkStatus::Working.localized_label();
+        output.push_str(&render_activity_text(&label, frame));
     }
     output
 }

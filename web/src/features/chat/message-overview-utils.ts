@@ -267,6 +267,13 @@ function liveStatusLabel(state: LiveRunState, locale: Locale): string {
   if (state.status === "thinking") return text(locale, "Thinking", "思考中");
   if (state.status === "working") return text(locale, "Working", "工作中");
   if (state.status === "compacting") return text(locale, "Compacting", "压缩中");
+  if (state.status === "reconnecting") {
+    const progress =
+      state.reconnectAttempt != null && state.reconnectMaxAttempts != null
+        ? ` ${state.reconnectAttempt}/${state.reconnectMaxAttempts}`
+        : "";
+    return `${text(locale, "Reconnecting…", "正在重连…")}${progress}`;
+  }
   return text(locale, "Waiting to start", "等待开始");
 }
 

@@ -160,7 +160,14 @@ export function LiveRunMessage({
       )}
       <article className="message assistant-message live-message">
           <MessageParts parts={state.parts} live={running} />
-          {running && !compacting && <LiveRunIndicator status={state.status} startedAtMs={state.startedAtMs} />}
+          {running && !compacting && (
+            <LiveRunIndicator
+              status={state.status}
+              startedAtMs={state.startedAtMs}
+              reconnectAttempt={state.reconnectAttempt}
+              reconnectMaxAttempts={state.reconnectMaxAttempts}
+            />
+          )}
           {!running && state.completed && (
             <>
               <TurnMetrics durationMs={state.durationMs} usage={state.usage} />

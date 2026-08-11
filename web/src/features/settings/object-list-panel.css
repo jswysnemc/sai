@@ -109,6 +109,48 @@
 .object-list-item.active { background: var(--signal-soft); color: var(--ink); }
 .object-list-item.active .object-list-icon { color: var(--signal); }
 
+/* 停用项：降到次要层级，但保持可读与可点击 */
+.object-list-item.muted { opacity: 0.55; }
+.object-list-item.muted:hover { opacity: 1; }
+
+.object-list-group {
+  display: grid;
+  gap:var(--space-3xs);
+  margin-top:var(--space-2xs);
+}
+
+.object-list-group-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap:var(--space-2xs);
+  width: 100%;
+  padding:var(--space-2xs) var(--space-sm);
+  border: 0;
+  border-radius:var(--radius-3);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size:var(--text-xs);
+  text-align: left;
+}
+
+.object-list-group-head:hover { background: var(--paper-deep); color: var(--ink); }
+
+.object-list-group-head svg { transition: transform 120ms ease; }
+.object-list-group.expanded .object-list-group-head svg { transform: rotate(90deg); }
+
+.object-list-group-head small {
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding:0 var(--space-3xs);
+  border-radius:var(--radius-2);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+  font:500 var(--text-2xs, var(--text-xs)) var(--font-code);
+}
+
 .object-list-icon {
   display: grid;
   width: 26px;

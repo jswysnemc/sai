@@ -45,7 +45,11 @@ export type RunErrorDetail = {
 export type LiveRunState = {
   runId: string | null;
   sessionId: string | null;
-  status: "idle" | "queued" | "waiting_response" | "waiting_external" | "waiting_permission" | "waiting_question" | "thinking" | "working" | "compacting";
+  status: "idle" | "queued" | "waiting_response" | "waiting_external" | "waiting_permission" | "waiting_question" | "thinking" | "working" | "compacting" | "reconnecting";
+  /** 传输层自动重连的当前尝试次数（从 1 起）；非重连态为 null。 */
+  reconnectAttempt: number | null;
+  /** 传输层自动重连的最大尝试次数；非重连态为 null。 */
+  reconnectMaxAttempts: number | null;
   /** 本轮开始时间戳（毫秒），用于状态行展示已用时长。 */
   startedAtMs: number | null;
   userInput: string;
@@ -80,6 +84,8 @@ export const initialRunState: LiveRunState = {
   runId: null,
   sessionId: null,
   status: "idle",
+  reconnectAttempt: null,
+  reconnectMaxAttempts: null,
   startedAtMs: null,
   userInput: "",
   imageUrls: [],
@@ -136,7 +142,23 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
       if (next === "thinking" && (state.content || state.status === "working")) {
         return state;
       }
-      return { ...state, status: next };
+      if (next === "reconnecting") {
+        const attempt = Number(payload.attempt);
+        const maxAttempts = Number(payload.max_attempts);
+        return {
+          ...state,
+          status: "reconnecting",
+          reconnectAttempt: Number.isFinite(attempt) && attempt > 0 ? attempt : null,
+          reconnectMaxAttempts: Number.isFinite(maxAttempts) && maxAttempts > 0 ? maxAttempts : null
+        };
+      }
+      // 离开重连态时清掉进度，避免旧 attempt 粘在后续 Working 上
+      return {
+        ...state,
+        status: next,
+        reconnectAttempt: null,
+        reconnectMaxAttempts: null
+      };
     }
     case "run.queued":
       return { ...state, status: "queued" };

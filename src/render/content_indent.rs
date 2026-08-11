@@ -12,6 +12,20 @@ pub(crate) const DIFF_NESTED_INDENT: usize = 1;
 /// diff 相对终端左右边界的总内收宽度。
 pub(crate) const DIFF_BLOCK_INSET: usize = CONTENT_LEFT_INDENT + DIFF_NESTED_INDENT;
 
+/// 判断字符是否为悬挂在视觉引导线列的行首符号。
+///
+/// `●`/`•` 是消息与工具的引导点；`✗` 是失败标记、`›` 是系统提示引导符，
+/// 它们同样必须停在引导线列，否则会被推到正文列与正文混在一起。
+///
+/// 参数:
+/// - `ch`: 行首首个可见字符
+///
+/// 返回:
+/// - 是否保留在引导线列
+fn is_guide_marker(ch: char) -> bool {
+    matches!(ch, '●' | '•' | '✗' | '›')
+}
+
 /// 将一行内容放到视觉引导线两侧的正确列。
 ///
 /// 参数:
@@ -21,7 +35,7 @@ pub(crate) const DIFF_BLOCK_INSET: usize = CONTENT_LEFT_INDENT + DIFF_NESTED_IND
 /// - 引导符号位于左侧，普通正文位于右侧的终端行
 pub(crate) fn align_to_guide_column(text: &str) -> String {
     let (leading_spaces, first_visible) = visible_line_start(text);
-    if matches!(first_visible, Some('●' | '•')) && leading_spaces == 0 {
+    if first_visible.is_some_and(is_guide_marker) && leading_spaces == 0 {
         return text.to_string();
     }
     // diff 块内三类行（上下文、新增、删除）经 renderer 输出时结构已一致
@@ -91,7 +105,7 @@ pub(crate) fn align_to_guide_column_with_width(text: &str, guide_width: usize) -
 
     // 【终端】【响应式引导】2. 引导符号行压缩符号与正文之间的间隔
     let (_, first_visible) = visible_line_start(&aligned);
-    if matches!(first_visible, Some('●' | '•')) {
+    if first_visible.is_some_and(is_guide_marker) {
         return compact_marker_guide(&aligned, guide_width);
     }
     // 【终端】【响应式引导】3. 普通正文与续行按目标引导区宽度移除前导空格
@@ -466,6 +480,15 @@ mod tests {
             "\x1b[36m●\x1b[0m input"
         );
         assert_eq!(align_to_guide_column("• tool"), "• tool");
+        // 失败叉号与提示引导符同样悬挂在引导线列，不与正文混排
+        assert_eq!(
+            align_to_guide_column("\x1b[31m✗\x1b[0m 本轮失败"),
+            "\x1b[31m✗\x1b[0m 本轮失败"
+        );
+        assert_eq!(
+            align_to_guide_column("\x1b[2m› 已切换模型\x1b[0m"),
+            "\x1b[2m› 已切换模型\x1b[0m"
+        );
         assert_eq!(align_to_guide_column(" diff"), "   diff");
         assert_eq!(
             align_to_guide_column("\x1b[48;5;22m+line\x1b[K\x1b[0m"),

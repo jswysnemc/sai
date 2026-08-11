@@ -296,7 +296,7 @@ impl Agent {
         // 收尾环节失败不应让这一轮显示成中断
         guard.complete(&result.content, result.reasoning.as_deref())?;
         perf.mark("complete turn");
-        worktree_undo.finish()?;
+        worktree_undo.finish();
         self.spawn_session_memory_extraction();
         perf.mark("session memory extraction spawned");
         // 长期记忆抽取要发模型请求，异步执行不阻塞用户可见的答复

@@ -15,6 +15,30 @@ pub(crate) struct UserEchoCell {
 /// 返回:
 /// - ANSI 文本块
 pub(crate) fn render(cell: &UserEchoCell) -> String {
+    // #region agent log
+    {
+        use std::io::Write;
+        let looks_like_marker = cell.text.contains("[text ") || cell.text.contains("[image ");
+        let prefix_text: String = cell.text.chars().take(80).collect();
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/home/snemc/workspace/sai/.cursor/debug-dcb5f5.log")
+        {
+            let _ = writeln!(
+                f,
+                r#"{{"sessionId":"dcb5f5","runId":"pre-fix","hypothesisId":"B","location":"user_echo_cell.rs:render","message":"render user echo","data":{{"looksLikeMarker":{looks_like_marker},"chars":{},"lines":{},"prefix":{}}},"timestamp":{}}}"#,
+                cell.text.chars().count(),
+                cell.text.lines().count().max(if cell.text.is_empty() { 0 } else { 1 }),
+                serde_json::to_string(&prefix_text).unwrap_or_else(|_| "\"\"".into()),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis())
+                    .unwrap_or(0)
+            );
+        }
+    }
+    // #endregion
     let prefix = match cell.mode {
         TranscriptMode::Yolo => "\x1b[38;5;208m●\x1b[0m ",
         TranscriptMode::Plan => "\x1b[36m●\x1b[0m ",

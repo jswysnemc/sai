@@ -18,6 +18,7 @@ fn test_provider(id: &str, base_url: &str) -> ProviderConfig {
         api_key: None,
         api_keys: Vec::new(),
         api_key_selected: None,
+        enabled: true,
         api_key_balance: false,
         models: Vec::new(),
         model_context_chars: std::collections::HashMap::new(),

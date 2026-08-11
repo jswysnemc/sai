@@ -22,6 +22,15 @@ pub enum AgentEvent {
     InterMessage(super::InterMessageEvent),
     /// 当前模型回合正在等待后台工作产生下一条消息。
     WaitingExternal,
+    /// 传输层瞬时故障后正在自动重连。
+    ///
+    /// 仅在模型尚未产出任何正文/工具参数时发出；一旦开始输出就不再重试，
+    /// 避免把已经流式写出的内容再复制一遍。UI 用它展示「重连中 N/M」，
+    /// 而不是把错误当成最终失败。
+    Reconnecting {
+        attempt: u32,
+        max_attempts: u32,
+    },
     /// 当前 provider 消息已经完成，上下文统计可以立即刷新。
     ContextUpdated(MessageContextUpdate),
     ToolCall {

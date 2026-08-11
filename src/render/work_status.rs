@@ -11,6 +11,8 @@ pub(crate) enum WorkStatus {
     Thinking,
     Working,
     Compacting,
+    /// 传输层瞬时故障后的自动重连，带当前尝试次数。
+    Reconnecting { attempt: u32, max_attempts: u32 },
 }
 
 impl WorkStatus {
@@ -39,6 +41,13 @@ impl WorkStatus {
             | AgentEvent::QuestionResolved { .. } => Some(Self::Working),
             // 权限/提问交互期间由专门 UI 接管，不进入 Working，避免与审核行重叠
             AgentEvent::WaitingExternal => Some(Self::WaitingExternal),
+            AgentEvent::Reconnecting {
+                attempt,
+                max_attempts,
+            } => Some(Self::Reconnecting {
+                attempt: *attempt,
+                max_attempts: *max_attempts,
+            }),
             AgentEvent::PermissionRequested(_) | AgentEvent::QuestionRequested(_) => None,
             AgentEvent::CompactionStarted { .. } => Some(Self::Compacting),
             AgentEvent::CompactionDelta { .. }
@@ -58,30 +67,40 @@ impl WorkStatus {
     /// 返回:
     /// - 工作状态文本
     #[allow(dead_code)]
-    pub(crate) fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> String {
         match self {
-            Self::WaitingResponse => "Waiting",
-            Self::WaitingExternal => "Waiting for external work",
-            Self::Thinking => "Thinking",
-            Self::Working => "Working",
-            Self::Compacting => "Compacting",
+            Self::WaitingResponse => "Waiting".to_string(),
+            Self::WaitingExternal => "Waiting for external work".to_string(),
+            Self::Thinking => "Thinking".to_string(),
+            Self::Working => "Working".to_string(),
+            Self::Compacting => "Compacting".to_string(),
+            Self::Reconnecting {
+                attempt,
+                max_attempts,
+            } => format!("Reconnecting... {attempt}/{max_attempts}"),
         }
     }
 
     /// 【终端】【工作状态】返回动效状态文案。
     ///
+    /// TUI/CLI 与 Codex 一致：重连只改状态行动效文案（`Reconnecting... N/M`），
+    /// 不写入历史 cell，避免瞬时断连刷屏。
+    ///
     /// 参数:
     /// - 无
     ///
     /// 返回:
-    /// - 英文状态短语
-    pub(crate) fn localized_label(self) -> &'static str {
+    /// - 英文状态短语；重连状态带上当前尝试次数
+    pub(crate) fn localized_label(self) -> String {
         match self {
-            Self::WaitingResponse => "Waiting",
-            Self::WaitingExternal => "Waiting",
-            Self::Thinking => "Thinking",
-            Self::Working => "Working",
-            Self::Compacting => "Compacting",
+            Self::WaitingResponse | Self::WaitingExternal => "Waiting".to_string(),
+            Self::Thinking => "Thinking".to_string(),
+            Self::Working => "Working".to_string(),
+            Self::Compacting => "Compacting".to_string(),
+            Self::Reconnecting {
+                attempt,
+                max_attempts,
+            } => format!("Reconnecting... {attempt}/{max_attempts}"),
         }
     }
 
@@ -97,7 +116,8 @@ impl WorkStatus {
     /// 返回:
     /// - 带 ANSI 样式的状态行
     pub(crate) fn render_line(self, frame: usize, elapsed: Duration) -> String {
-        render_activity_line(self.localized_label(), &format_elapsed(elapsed), frame)
+        let label = self.localized_label();
+        render_activity_line(&label, &format_elapsed(elapsed), frame)
     }
 }
 
@@ -164,7 +184,7 @@ mod tests {
     fn working_uses_white_shimmer_and_integer_seconds() {
         let line = WorkStatus::Working.render_line(0, Duration::from_millis(1500));
         let plain = strip_ansi_for_test(&line);
-        assert!(plain.contains(WorkStatus::Working.localized_label()));
+        assert!(plain.contains(&WorkStatus::Working.localized_label()));
         assert!(plain.contains("1s"));
         assert!(!plain.contains("1.5s"));
         assert!(!plain.contains('·'));
@@ -206,5 +226,29 @@ mod tests {
             auto_audit: false,
         });
         assert_eq!(WorkStatus::from_agent_event(&event), None);
+    }
+
+    /// 【终端】【重连状态】验证传输重连映射为带次数的状态行文案。
+    #[test]
+    fn reconnecting_maps_to_codex_style_status_label() {
+        let event = AgentEvent::Reconnecting {
+            attempt: 2,
+            max_attempts: 3,
+        };
+        assert_eq!(
+            WorkStatus::from_agent_event(&event),
+            Some(WorkStatus::Reconnecting {
+                attempt: 2,
+                max_attempts: 3
+            })
+        );
+        assert_eq!(
+            WorkStatus::Reconnecting {
+                attempt: 2,
+                max_attempts: 3
+            }
+            .localized_label(),
+            "Reconnecting... 2/3"
+        );
     }
 }

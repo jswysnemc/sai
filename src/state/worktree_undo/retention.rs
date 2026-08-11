@@ -1,10 +1,14 @@
 use anyhow::Result;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime};
 
 /// 每个会话保留的已完成快照数量上限。
 ///
 /// 撤销只会回到最近若干轮，更早的快照留着没有用途，却会持续占用磁盘。
 pub(super) const MAX_RETAINED_SNAPSHOTS: usize = 5;
+
+/// 未完成快照判定为崩溃残留前的宽限期。
+const PENDING_ORPHAN_GRACE_PERIOD: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// 清理结果统计。
 #[derive(Debug, Default, Eq, PartialEq)]
@@ -28,9 +32,9 @@ impl CleanupReport {
 
 /// 清理快照目录中的残留与超量快照。
 ///
-/// 进程被强制结束时 `finish` 与 `Drop` 都不会执行，`pending_` 目录会永久
-/// 留在磁盘上；已完成快照同样没有数量上限。两者叠加会让状态目录膨胀到
-/// 数 GB。会话启动时调用本函数收敛。
+/// 进程被强制结束时 `finish` 与 `Drop` 都不会执行，`pending_` 目录会留在
+/// 磁盘上；已完成快照同样没有数量上限。清理只删除超过宽限期的 pending
+/// 目录，避免并发会话读取误删正在运行的轮次快照。
 ///
 /// 参数:
 /// - `snapshot_root`: 会话的 worktree-undo 根目录
@@ -38,6 +42,18 @@ impl CleanupReport {
 /// 返回:
 /// - 清理统计；目录不存在时返回空统计
 pub(crate) fn cleanup_snapshot_root(snapshot_root: &Path) -> Result<CleanupReport> {
+    cleanup_snapshot_root_at(snapshot_root, SystemTime::now())
+}
+
+/// 按指定时间清理快照目录，供确定性测试控制 pending 快照年龄。
+///
+/// 参数:
+/// - `snapshot_root`: 会话的 worktree-undo 根目录
+/// - `now`: 本次清理使用的当前时间
+///
+/// 返回:
+/// - 清理统计；目录不存在时返回空统计
+fn cleanup_snapshot_root_at(snapshot_root: &Path, now: SystemTime) -> Result<CleanupReport> {
     let mut report = CleanupReport::default();
     if !snapshot_root.is_dir() {
         return Ok(report);
@@ -52,8 +68,11 @@ pub(crate) fn cleanup_snapshot_root(snapshot_root: &Path) -> Result<CleanupRepor
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
         if name.starts_with("pending_") {
-            std::fs::remove_dir_all(&path)?;
-            report.orphaned += 1;
+            // 新鲜 pending 目录可能属于当前正在流式响应的轮次
+            if pending_is_stale(&path, now) {
+                std::fs::remove_dir_all(&path)?;
+                report.orphaned += 1;
+            }
             continue;
         }
         if name.starts_with("turn_") {
@@ -67,6 +86,22 @@ pub(crate) fn cleanup_snapshot_root(snapshot_root: &Path) -> Result<CleanupRepor
         report.evicted += 1;
     }
     Ok(report)
+}
+
+/// 判断 pending 快照是否已经超过崩溃残留宽限期。
+///
+/// 参数:
+/// - `path`: pending 快照目录
+/// - `now`: 本次清理使用的当前时间
+///
+/// 返回:
+/// - 修改时间早于宽限期时返回 true；时间不可读或位于未来时保守保留
+fn pending_is_stale(path: &Path, now: SystemTime) -> bool {
+    std::fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|modified| now.duration_since(modified).ok())
+        .is_some_and(|age| age >= PENDING_ORPHAN_GRACE_PERIOD)
 }
 
 /// 读取目录修改时间，失败时视为最早。
@@ -104,19 +139,33 @@ mod tests {
         assert!(report.is_empty());
     }
 
-    /// 崩溃残留的 pending 目录应当被删除。
+    /// 超过宽限期的 pending 目录应当作为崩溃残留删除。
     #[test]
-    fn removes_orphaned_pending_directories() {
+    fn removes_stale_pending_directories() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path();
         let pending = make_snapshot(root, "pending_abc");
         let kept = make_snapshot(root, "turn_abc");
+        let now = modified_at(&pending) + PENDING_ORPHAN_GRACE_PERIOD + Duration::from_secs(1);
 
-        let report = cleanup_snapshot_root(root).unwrap();
+        let report = cleanup_snapshot_root_at(root, now).unwrap();
 
         assert_eq!(report.orphaned, 1);
         assert!(!pending.exists());
         assert!(kept.exists(), "已完成快照不受影响");
+    }
+
+    /// 宽限期内的 pending 目录可能仍由运行中轮次持有，必须保留。
+    #[test]
+    fn keeps_recent_pending_directories() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let pending = make_snapshot(root, "pending_active");
+
+        let report = cleanup_snapshot_root(root).unwrap();
+
+        assert_eq!(report.orphaned, 0);
+        assert!(pending.exists());
     }
 
     /// 超过保留上限的已完成快照应当被淘汰。

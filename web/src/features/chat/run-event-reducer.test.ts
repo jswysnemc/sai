@@ -15,6 +15,25 @@ describe("runEventReducer", () => {
     expect(content.content).toBe("answer");
   });
 
+  it("tracks reconnecting attempts and clears them after recovery", () => {
+    const started = runEventReducer(initialRunState, { type: "start", runId: "run", sessionId: "session", userInput: "hello" });
+    const reconnecting = runEventReducer(started, {
+      type: "event",
+      event: event("status.changed", { status: "reconnecting", attempt: 2, max_attempts: 3 })
+    });
+    expect(reconnecting.status).toBe("reconnecting");
+    expect(reconnecting.reconnectAttempt).toBe(2);
+    expect(reconnecting.reconnectMaxAttempts).toBe(3);
+
+    const recovered = runEventReducer(reconnecting, {
+      type: "event",
+      event: event("status.changed", { status: "waiting_response" })
+    });
+    expect(recovered.status).toBe("waiting_response");
+    expect(recovered.reconnectAttempt).toBeNull();
+    expect(recovered.reconnectMaxAttempts).toBeNull();
+  });
+
     it("ignores thinking status after content started", () => {
     const started = runEventReducer(initialRunState, { type: "start", runId: "run", sessionId: "session", userInput: "hello" });
     const content = runEventReducer(started, { type: "event", event: event("message.content.delta", { text: "answer" }) });

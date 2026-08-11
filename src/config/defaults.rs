@@ -297,6 +297,17 @@ pub(super) fn default_true() -> bool {
     true
 }
 
+/// 是否为默认的启用状态（序列化时可省略）。
+///
+/// 参数:
+/// - `value`: 当前开关值
+///
+/// 返回:
+/// - 与默认值一致时返回 true
+pub(super) fn is_default_true(value: &bool) -> bool {
+    *value
+}
+
 pub(super) fn default_reasoning_display() -> String {
     "summary".to_string()
 }

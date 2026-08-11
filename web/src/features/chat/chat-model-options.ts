@@ -1,4 +1,5 @@
 import type { AppConfig, RunModelSelection } from "../../api/contracts";
+import { enabledProviders } from "../settings/model/provider-enablement";
 
 export type ChatModelChoice = RunModelSelection & {
   providerName: string;
@@ -7,12 +8,14 @@ export type ChatModelChoice = RunModelSelection & {
 /**
  * 把应用配置转换为输入区可选择的模型列表。
  *
+ * 已停用的供应商整体跳过：它的模型不能被选中，否则停用开关形同虚设。
+ *
  * @param config Sai 应用配置
  * @returns 去重后的供应商模型选项
  */
 export function buildChatModelChoices(config: AppConfig): ChatModelChoice[] {
   const seen = new Set<string>();
-  return config.providers.flatMap((provider) => {
+  return enabledProviders(config.providers).flatMap((provider) => {
     const models = provider.models?.length ? provider.models : [provider.default_model ?? ""];
     return models.flatMap((model) => {
       const normalized = model.trim();

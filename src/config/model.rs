@@ -160,6 +160,9 @@ pub struct ProviderConfig {
     pub id: String,
     pub display_name: String,
     pub base_url: String,
+    /// 是否启用；停用后不参与模型选择，也不能被解析为当前供应商
+    #[serde(default = "default_true", skip_serializing_if = "is_default_true")]
+    pub enabled: bool,
     #[serde(
         default = "default_provider_protocol",
         skip_serializing_if = "is_auto_protocol"

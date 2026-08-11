@@ -6,15 +6,22 @@ import { useI18n } from "../i18n/use-i18n";
 /**
  * 在实时助手消息末尾展示当前运行阶段与本轮已用时长。
  *
+ * 重连态与其它忙碌态区分：文案带 attempt/max，并用告警色脉冲点，
+ * 避免与「正在执行任务」混淆（对齐 Codex 的 StreamError 状态指示，但落在消息内指示器而非底部栏）。
+ *
  * @param props status 为运行阶段，startedAtMs 为本轮开始时间
  * @returns 对应阶段的局部运行指示器，空闲时不渲染
  */
 export function LiveRunIndicator({
   status,
-  startedAtMs
+  startedAtMs,
+  reconnectAttempt = null,
+  reconnectMaxAttempts = null
 }: {
   status: LiveRunState["status"];
   startedAtMs?: number | null;
+  reconnectAttempt?: number | null;
+  reconnectMaxAttempts?: number | null;
 }) {
   const { t, locale } = useI18n();
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -28,6 +35,10 @@ export function LiveRunIndicator({
   }, [startedAtMs, status]);
 
   if (status === "idle") return null;
+  const reconnectProgress =
+    status === "reconnecting" && reconnectAttempt != null && reconnectMaxAttempts != null
+      ? ` ${reconnectAttempt}/${reconnectMaxAttempts}`
+      : "";
   const labels: Record<Exclude<LiveRunState["status"], "idle">, string> = {
     queued: t("Queued for this session", "已加入会话队列"),
     waiting_response: t("Waiting for model response", "等待模型响应"),
@@ -36,13 +47,19 @@ export function LiveRunIndicator({
     waiting_question: t("Waiting for your answer", "等待你的回答"),
     thinking: t("Organizing thoughts", "正在整理思路"),
     working: t("Working on the task", "正在执行任务"),
-    compacting: t("Compacting context", "正在压缩上下文")
+    compacting: t("Compacting context", "正在压缩上下文"),
+    reconnecting: `${t("Reconnecting…", "正在重连…")}${reconnectProgress}`
   };
   const elapsed = startedAtMs
     ? formatTurnElapsed(Math.max(0, nowMs - startedAtMs), locale.startsWith("zh"))
     : null;
   // 2. 等待用户决定的两个阶段球在用户这边，不做流动动效，避免暗示系统正在推进
-  const tone = AWAITING_USER_STATUSES.has(status) ? "awaiting" : "busy";
+  //    重连用独立 tone：仍脉冲，但换成告警色，和普通 busy 扫光区分开
+  const tone = AWAITING_USER_STATUSES.has(status)
+    ? "awaiting"
+    : status === "reconnecting"
+      ? "reconnecting"
+      : "busy";
   return (
     <div className={`live-run-indicator ${status} ${tone}`} role="status" aria-live="polite">
       <span className="live-run-dot" aria-hidden="true" />

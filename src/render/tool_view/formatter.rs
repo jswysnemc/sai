@@ -41,13 +41,14 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
         None if view.arguments.trim().is_empty() => "arg",
         None => "run",
     };
-    // 编辑类工具在参数流与执行阶段带上已写入行数：
-    // 参数流阶段行数随分片增长，状态行的数字跟着跳动
-    let progress_suffix = write_progress_suffix(view);
+    // 编辑类工具在出结果前用实时增删统计顶替 run/arg 动效：
+    // 参数流阶段数字随分片增长跳动，与 diff 标题的增删计数同色。
+    // color_status 对未知状态原样透传，可直接携带 ANSI 着色文本
+    let live_stats = live_edit_stat_status(view);
+    let status = live_stats.as_deref().unwrap_or(status);
     let denied = permission_denied(view.permission.as_ref());
     if mode == ToolCallDisplayMode::Summary {
         let mut output = tool_event_text(&label, status);
-        output.push_str(&progress_suffix);
         if let Some(progress) = visible_progress(view.progress.as_deref()) {
             output.push_str(&format!("\n\x1b[2m  └─ {progress}\x1b[0m"));
         }
@@ -63,7 +64,6 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
     }
 
     let mut output = tool_event_text(&label, status);
-    output.push_str(&progress_suffix);
     if !view.arguments.trim().is_empty() {
         output.push('\n');
         output.push_str(&render_payload("args", &view.arguments));
@@ -136,44 +136,21 @@ fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
     output
 }
 
-/// 组装编辑类工具的写入行数后缀。
+/// 组装编辑类工具的实时增删统计状态。
 ///
-/// 只在尚未出结果的阶段展示：参数流阶段行数随分片增长（数字跳动），
-/// 执行阶段停在最终值。结果出来后增删统计由 diff 视图表达，不再重复。
+/// 只在尚未出结果的阶段生效：参数流阶段数字随分片增长跳动，
+/// 执行阶段停在最终近似值。结果出来后增删统计由 diff 视图表达，不再重复。
 ///
 /// 参数:
 /// - `view`: 工具生命周期数据
 ///
 /// 返回:
-/// - 形如 ` · 写入 N 行` 的弱化后缀；不适用时返回空串
-fn write_progress_suffix(view: &ToolView) -> String {
+/// - 带 ANSI 着色的 `+N -M` 状态文本；不适用时返回空
+fn live_edit_stat_status(view: &ToolView) -> Option<String> {
     if view.outcome.is_some() || !crate::render::stream_text::is_file_edit_tool(&view.name) {
-        return String::new();
+        return None;
     }
-    let lines = streamed_line_count(&view.arguments);
-    if lines == 0 {
-        return String::new();
-    }
-    let label = if crate::i18n::is_zh() {
-        format!("写入 {lines} 行")
-    } else {
-        format!("writing {lines} lines")
-    };
-    format!(" \x1b[2m· {label}\x1b[0m")
-}
-
-/// 统计参数流中已出现的转义换行数。
-///
-/// 参数以 JSON 文本抵达，内容换行是 `\n` 转义序列；
-/// 数转义序列即可近似"写到第几行"，不必等参数闭合成合法 JSON。
-///
-/// 参数:
-/// - `arguments`: 工具参数原始文本（可能是不完整的 JSON 前缀）
-///
-/// 返回:
-/// - 转义换行数量
-fn streamed_line_count(arguments: &str) -> usize {
-    arguments.matches("\\n").count()
+    crate::render::edit_diff::streamed_diff_stat_status(&view.arguments)
 }
 
 /// 判断权限审计是否以拒绝告终。

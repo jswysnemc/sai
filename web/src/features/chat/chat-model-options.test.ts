@@ -26,4 +26,30 @@ describe("chat model options", () => {
   it("falls back to the active provider default model", () => {
     expect(resolveChatModelSelection(config, null)).toMatchObject({ providerId: "primary", model: "model-b" });
   });
+
+  it("hides models from disabled providers", () => {
+    // 停用的供应商仍能被选中就等于允许发请求，开关形同虚设
+    const withDisabled: AppConfig = {
+      ...config,
+      providers: [
+        { ...config.providers[0], enabled: false },
+        config.providers[1]
+      ]
+    };
+
+    expect(buildChatModelChoices(withDisabled).map((choice) => choice.model)).toEqual(["model-c"]);
+  });
+
+  it("moves the selection off a disabled provider", () => {
+    const withDisabled: AppConfig = {
+      ...config,
+      providers: [
+        { ...config.providers[0], enabled: false },
+        config.providers[1]
+      ]
+    };
+
+    expect(resolveChatModelSelection(withDisabled, { providerId: "primary", model: "model-a" }))
+      .toMatchObject({ providerId: "backup", model: "model-c" });
+  });
 });

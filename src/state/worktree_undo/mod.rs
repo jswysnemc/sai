@@ -41,16 +41,20 @@ impl WorktreeUndoGuard {
 
     /// 完成快照并保存运行后的工作树指纹。
     ///
+    /// 快照属于回复完成后的辅助能力，固化失败只影响撤销入口，不能把已经完整
+    /// 返回的模型回复改判为失败。
+    ///
     /// 参数:
     /// - 无
     ///
     /// 返回:
-    /// - 完成是否成功
-    pub(crate) fn finish(mut self) -> Result<()> {
+    /// - 无
+    pub(crate) fn finish(mut self) {
         if let Some(pending) = self.pending.take() {
-            finalize_snapshot(pending)?;
+            if let Err(error) = finalize_snapshot(pending) {
+                eprintln!("【会话】【工作树快照】固化失败，已保留本轮回复: {error:#}");
+            }
         }
-        Ok(())
     }
 }
 
@@ -132,6 +136,34 @@ mod tests {
             !names.contains(&"huge.bin".to_string()),
             "大文件不应被复制进快照: {names:?}"
         );
+    }
+
+    /// 会话读取期间的快照清理不能删除仍在运行的轮次快照。
+    ///
+    /// Web 在流式响应期间会重新打开会话读取时间线。重新打开会触发快照清理；
+    /// 如果清理直接删除刚创建的 pending 目录，模型回复完成后的固化操作就会返回
+    /// `No such file or directory (os error 2)`，并把成功响应错误标记为本轮失败。
+    #[test]
+    fn session_reopen_cleanup_keeps_running_snapshot() {
+        let temp = tempfile::tempdir().unwrap();
+        let repository_root = temp.path().join("repository");
+        let state_dir = temp.path().join("state");
+        std::fs::create_dir_all(&repository_root).unwrap();
+        repository(&repository_root);
+
+        // 1. 模拟模型轮次开始时创建运行中快照
+        let pending = snapshot::start_snapshot(&state_dir, &repository_root, "turn-running")
+            .unwrap()
+            .unwrap();
+
+        // 2. 模拟 Web 刷新时间线时重新打开会话并执行残留清理
+        let root = snapshot::snapshot_root(&state_dir);
+        let report = cleanup_snapshot_root(&root).unwrap();
+
+        // 3. 运行中快照必须保留，并能在回复完成后正常固化
+        assert_eq!(report.orphaned, 0);
+        snapshot::finalize_snapshot(pending).unwrap();
+        assert!(snapshot::snapshot_directory(&state_dir, "turn-running").is_dir());
     }
 
     /// 递归收集目录下的全部文件路径。

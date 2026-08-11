@@ -19,6 +19,11 @@ import { KeyValueEditor } from "./key-value-editor";
 import { ProviderApiKeysField } from "./provider-api-keys-field";
 import { useSelectedFallback } from "./controls/use-selected-fallback";
 import { findProviderIndex, nextProviderId, providerIdConflict } from "./model/provider-selection";
+import {
+  isProviderEnabled,
+  nextActiveProvider,
+  partitionByEnablement
+} from "./model/provider-enablement";
 
 type ProviderSettingsSectionProps = {
   config: AppConfig;
@@ -219,6 +224,27 @@ export function ProviderSettingsSection({
   };
 
   /**
+   * 【设置】【供应商启用】切换启用状态，并在需要时转移当前供应商。
+   *
+   * 停用正在使用的供应商却不转移，会让后续请求全部落在一个已停用的配置上；
+   * 服务端也会直接拒绝解析。
+   *
+   * @param enabled 目标启用状态
+   * @returns 无返回值
+   */
+  const toggleProviderEnabled = (enabled: boolean) => {
+    if (!provider || selectedIndex < 0) return;
+    const providers = config.providers.map((item, index) => (
+      index === selectedIndex ? { ...item, enabled } : item
+    ));
+    onConfigChange({
+      ...config,
+      providers,
+      active_provider: nextActiveProvider(providers, config.active_provider)
+    });
+  };
+
+  /**
    * 【设置】【供应商删除】删除当前供应商并选择剩余首项。
    *
    * @returns 删除流程完成后返回
@@ -301,17 +327,29 @@ export function ProviderSettingsSection({
     { value: "disabled", label: t("Disabled", "停用") }
   ];
 
+  const providerGroups = partitionByEnablement(config.providers);
+  /**
+   * 把供应商配置转换为列表行。
+   *
+   * @param item 供应商配置
+   * @returns 列表行数据
+   */
+  const providerListItem = (item: ProviderConfig) => ({
+    id: item.id,
+    name: item.display_name || item.id,
+    meta: item.default_model || item.models?.[0] || t("No model configured", "未配置模型"),
+    icon: <Cpu size={14} />,
+    marked: item.id === config.active_provider,
+    muted: !isProviderEnabled(item)
+  });
+
   return (
     <div className="settings-objects-layout">
       <ObjectListPanel
         title={t("Providers", "供应商")}
-        items={config.providers.map((item) => ({
-          id: item.id,
-          name: item.display_name || item.id,
-          meta: item.default_model || item.models?.[0] || t("No model configured", "未配置模型"),
-          icon: <Cpu size={14} />,
-          marked: item.id === config.active_provider
-        }))}
+        items={providerGroups.enabled.map(providerListItem)}
+        collapsedItems={providerGroups.disabled.map(providerListItem)}
+        collapsedTitle={t("Disabled", "已停用")}
         selectedId={selectedId}
         searchPlaceholder={t("Search providers", "搜索供应商")}
         addLabel={t("Add provider", "新增供应商")}
@@ -324,8 +362,17 @@ export function ProviderSettingsSection({
           title={provider.display_name || provider.id}
           description={t("Configure the endpoint, credentials, and models available from this provider.", "配置接口、凭据和当前供应商可用的模型。")}
           actions={<>
+            <label className="settings-switch">
+              <input
+                type="checkbox"
+                checked={isProviderEnabled(provider)}
+                onChange={(event) => toggleProviderEnabled(event.target.checked)}
+              />
+              <span />
+              <strong>{isProviderEnabled(provider) ? t("Enabled", "已启用") : t("Disabled", "已停用")}</strong>
+            </label>
             <button type="button" className="settings-secondary" onClick={() => void fetchModels()} disabled={fetching || !provider.base_url.trim()}><RefreshCw size={14} className={fetching ? "spin" : ""} />{fetching ? t("Fetching", "正在获取") : t("Import models", "导入模型")}</button>
-            <button type="button" className={provider.id === config.active_provider ? "settings-secondary active" : "settings-secondary"} onClick={() => onConfigChange({ ...config, active_provider: provider.id })} disabled={provider.id === config.active_provider}><Check size={14} />{provider.id === config.active_provider ? t("Current provider", "当前供应商") : t("Set as current", "设为当前")}</button>
+            <button type="button" className={provider.id === config.active_provider ? "settings-secondary active" : "settings-secondary"} onClick={() => onConfigChange({ ...config, active_provider: provider.id })} disabled={provider.id === config.active_provider || !isProviderEnabled(provider)}><Check size={14} />{provider.id === config.active_provider ? t("Current provider", "当前供应商") : t("Set as current", "设为当前")}</button>
             <button type="button" className="settings-danger" onClick={() => void deleteProvider()}><Trash2 size={14} />{t("Delete provider", "删除供应商")}</button>
           </>}
         />

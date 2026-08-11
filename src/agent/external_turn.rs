@@ -107,7 +107,7 @@ impl Agent {
                 // 【Sai/ACP】【外部轮次】4. 助手回复写回会话，恢复历史时与原生内核同构
                 //    先落终态再收尾：worktree 清理失败不应让完整回复显示成未完成
                 guard.complete(&result.content, result.reasoning.as_deref())?;
-                worktree_undo.finish()?;
+                worktree_undo.finish();
                 self.spawn_session_memory_extraction();
                 self.memory.process_after_turn(input, &result.content)?;
                 Ok(result)

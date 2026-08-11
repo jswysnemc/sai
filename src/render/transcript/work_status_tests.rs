@@ -115,14 +115,14 @@ fn work_status_is_replaced_without_becoming_history() {
     assert!(!thinking.is_empty());
     // 1. 【终端】【工作状态测试】状态切换后只保留 Thinking 与耗时
     let thinking_plain = strip_ansi_for_test(thinking[0].as_str());
-    assert!(!thinking_plain.contains(WorkStatus::WaitingResponse.localized_label()));
-    assert!(thinking_plain.contains(WorkStatus::Thinking.localized_label()));
+    assert!(!thinking_plain.contains(&WorkStatus::WaitingResponse.localized_label()));
+    assert!(thinking_plain.contains(&WorkStatus::Thinking.localized_label()));
 
     assert!(store.advance_live_animation());
     let animated = store.display_live_tail(80, &options());
     assert!(!animated.is_empty());
     assert!(
-        strip_ansi_for_test(animated[0].as_str()).contains(WorkStatus::Thinking.localized_label())
+        strip_ansi_for_test(animated[0].as_str()).contains(&WorkStatus::Thinking.localized_label())
     );
 
     assert!(store.clear_work_status());
@@ -149,7 +149,7 @@ fn tool_result_keeps_work_status_alive() {
     let live = store.display_live_tail(80, &options());
     assert!(!live.is_empty(), "工具结果后工作动效行不应消失");
     assert!(live.iter().any(|line| {
-        strip_ansi_for_test(line.as_str()).contains(WorkStatus::Working.localized_label())
+        strip_ansi_for_test(line.as_str()).contains(&WorkStatus::Working.localized_label())
     }));
     assert!(store.advance_live_animation());
 }
@@ -169,7 +169,7 @@ fn work_status_hidden_when_live_reasoning_exists() {
 
     let live = store.display_live_tail(80, &options());
     let joined = strip_ansi_for_test(&live.iter().map(|line| line.as_str()).collect::<String>());
-    assert!(!joined.contains(WorkStatus::Working.localized_label()));
+    assert!(!joined.contains(&WorkStatus::Working.localized_label()));
     assert!(joined.contains("Thinking") || joined.contains("思考"));
 }
 

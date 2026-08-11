@@ -10,6 +10,8 @@ export type ProviderConfig = {
   id: string;
   display_name: string;
   base_url: string;
+  /** 是否启用；停用后不出现在模型列表，也不能被解析为当前供应商 */
+  enabled?: boolean;
   api_key?: string;
   api_keys?: ProviderApiKey[];
   api_key_selected?: string;
