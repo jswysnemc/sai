@@ -615,8 +615,9 @@ mod tests {
         frame.draw_lines(&mut output, &viewport, None).unwrap();
         let output = String::from_utf8(output).unwrap();
         let panel_at = output.find("计划").unwrap();
-        let rule_at = output.find('─').unwrap();
-        assert!(panel_at < rule_at, "面板行必须渲染在顶线之前");
+        // 输入区用细引导线 ▏，不再画 ─ 顶线；面板须出现在引导线之前
+        let accent_at = output.find('▏').expect("composer accent");
+        assert!(panel_at < accent_at, "面板行必须渲染在输入区之前");
     }
 
     /// 验证空输入框显示灰色轮询提示。
@@ -664,8 +665,11 @@ mod tests {
         frame.draw_lines(&mut output, &viewport, None).unwrap();
 
         let output = String::from_utf8(output).unwrap();
-        // 固定 2 行（分隔+状态）+ 1 行输入 = 3；顶部在行 4（0 起）时，末行之后为行 7 → 1 起第 8 行
-        assert!(output.contains("\x1b[8;1H\x1b[J"));
+        // 上下空白各 1 + 输入 1 + 状态 1 = 4；顶部行 4（0 起）时，末行后为行 8 → 1 起第 9 行
+        assert!(
+            output.contains("\x1b[9;1H\x1b[J"),
+            "expected clear below floating composer, got {output:?}"
+        );
     }
 
     /// 验证贴底 composer 不发出越界清除，footer 行保持完整。

@@ -227,7 +227,8 @@ mod tests {
             .iter()
             .map(|line| strip_ansi_for_test(line.as_str()))
             .collect::<Vec<_>>();
-        assert_eq!(live_plain, vec!["  abcd", "  efgh"]);
+        // 流式与定稿正文前都留区块空行，对齐后补成引导区宽度空白
+        assert_eq!(live_plain, vec!["  ", "  abcd", "  efgh"]);
         assert!(live
             .lines
             .iter()
@@ -240,12 +241,7 @@ mod tests {
             .iter()
             .map(|line| strip_ansi_for_test(line.as_str()))
             .collect::<Vec<_>>();
-        // 定稿 Markdown 前多一空行；对齐后空行会补成引导区宽度的空白
-        assert_eq!(finalized_plain, {
-            let mut expected = vec!["  ".to_string()];
-            expected.extend(live_plain);
-            expected
-        });
+        assert_eq!(finalized_plain, live_plain);
     }
 
     /// 【终端】【响应式引导测试】验证一至两列终端压缩引导区后不会超宽。
@@ -306,9 +302,18 @@ mod tests {
         );
 
         for line in &window.lines {
+            let plain = strip_ansi_for_test(line.as_str());
+            if plain.starts_with('•') {
+                // Summary 摘要行挂在引导列，不套 diff 块三列内收
+                assert!(
+                    !plain.starts_with(' '),
+                    "diff 摘要应顶格: {plain:?}"
+                );
+                continue;
+            }
             assert!(
                 line.as_str().starts_with("   ") && !line.as_str().starts_with("    "),
-                "diff 行未保持三列内收: {:?}",
+                "diff 正文未保持三列内收: {:?}",
                 line.as_str()
             );
         }
@@ -331,8 +336,8 @@ mod tests {
         let cwd = crate::runtime_cwd::current_dir().unwrap();
         let temp = tempfile::tempdir_in(cwd).unwrap();
         let path = temp.path().join("wrapped-diff.txt");
-        let old_line = "old";
-        let new_line = "new";
+        let old_line = "old_value_that_is_long_enough_to_wrap_in_narrow_diff_columns";
+        let new_line = "new_value_that_is_long_enough_to_wrap_in_narrow_diff_columns";
         std::fs::write(&path, format!("{old_line}\n")).unwrap();
         let arguments = serde_json::json!({
             "path": path.display().to_string(),
@@ -348,10 +353,10 @@ mod tests {
         for line in &window.lines {
             let plain = strip_ansi_for_test(line.as_str());
             if plain.starts_with('•') {
-                // 标题引导符顶格，不被 diff 正文内收推开
+                // 摘要引导符顶格，不被 diff 正文内收推开
                 assert!(
                     !plain.starts_with(' '),
-                    "diff 标题应顶格: {plain:?}"
+                    "diff 摘要应顶格: {plain:?}"
                 );
             } else {
                 assert!(

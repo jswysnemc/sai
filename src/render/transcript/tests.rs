@@ -134,13 +134,14 @@ fn reasoning_cell_lines_fit_display_width() {
                 display_width <= width,
                 "width={width} line {index} overflows: {plain:?}"
             );
-            // 正文行必须带 gutter 缩进（`  └ ` 或四空格），否则就是二次折行产物
-            if index > 0 {
-                assert!(
-                    plain.starts_with("  └ ") || plain.starts_with("    "),
-                    "width={width} line {index} lost gutter: {plain:?}"
-                );
+            // 区块前空行与 ◦ 标题行跳过；正文必须带 gutter（`  └ ` 或四空格）
+            if plain.is_empty() || plain.starts_with('◦') {
+                continue;
             }
+            assert!(
+                plain.starts_with("  └ ") || plain.starts_with("    "),
+                "width={width} line {index} lost gutter: {plain:?}"
+            );
         }
     }
 }
@@ -482,6 +483,7 @@ fn summary_mode_keeps_tool_progress_message_visible() {
 
 #[test]
 fn row_cap_trims_prewrapped_rows_not_source_cells() {
+    // meta 前有区块空行，单条占 2 行；cap=2 时只保留最新一条
     let mut store = TranscriptStore::new(2);
     store.push_meta("first".to_string());
     store.push_meta("second".to_string());
@@ -490,8 +492,9 @@ fn row_cap_trims_prewrapped_rows_not_source_cells() {
     let lines = store.display_tail(80, &options());
 
     assert_eq!(lines.len(), 2);
-    assert!(lines[0].as_str().contains("second"));
-    assert!(lines[1].as_str().contains("third"));
+    assert!(lines.iter().any(|line| line.as_str().contains("third")));
+    assert!(!lines.iter().any(|line| line.as_str().contains("first")));
+    assert!(!lines.iter().any(|line| line.as_str().contains("second")));
 }
 
 /// 验证权限交互附着在既有命令视图并保留最终决定。
