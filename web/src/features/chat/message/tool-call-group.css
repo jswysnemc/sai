@@ -7,6 +7,10 @@
  */
 .tool-call-group {
   color: var(--technical-text);
+  /* grid/flex 子项的 min-width 默认为 auto，会按最长命令的完整宽度撑开，
+     把整个工具组顶出消息列。显式归零后子级的省略号才有机会生效 */
+  min-width: 0;
+  max-width: 100%;
 }
 
 .tool-call-group-trigger {
@@ -241,9 +245,29 @@
 .explore-file-plain,
 .explore-file-target {
   overflow: hidden;
+  /* 占满剩余宽度并允许收缩：缺少 flex 声明时会按内容宽度撑破整行 */
+  flex: 1 1 auto;
   min-width: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/*
+ * 命令行：等宽字体加提示符前缀。
+ *
+ * 命令与文件路径混在同一列时，只靠左侧动作词区分需要逐行核对；
+ * 提示符让"这是一条命令"在扫视时即可辨认。
+ * 前缀用 inline 元素而非 flex 列，命令文本才能继续走单行省略。
+ */
+.explore-file-plain.is-command {
+  font-family: var(--font-code);
+}
+
+.explore-file-plain.is-command em {
+  margin-right: var(--space-2xs);
+  color: var(--ink-soft);
+  font-style: normal;
+  user-select: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

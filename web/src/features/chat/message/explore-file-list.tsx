@@ -16,6 +16,8 @@ type ExploreRow = {
   path: string;
   /** 行内展示文本 */
   label: string;
+  /** 是否为命令，命令用等宽字体并加 $ 前缀 */
+  command: boolean;
 };
 
 /**
@@ -23,6 +25,9 @@ type ExploreRow = {
  *
  * 探索操作没有值得逐卡审查的输出差异，展开时铺一排完整工具卡
  * 只会放大噪音；这里压成「动作 + 对象」行，路径行保持可点击打开。
+ *
+ * 动作词固定列宽，对象列独占剩余宽度并单行截断：
+ * 长命令若按内容撑开会顶破消息气泡，横向滚动条一出现整段就没法读了。
  *
  * @param props tools 为组内探索项，workspacePath 用于展示相对路径
  * @returns 轻量文件行列表
@@ -44,7 +49,10 @@ export function ExploreFileList({
           {row.path ? (
             <ToolFileReference path={row.path} label={row.label} className="explore-file-target" />
           ) : (
-            <span className="explore-file-plain">{row.label}</span>
+            <span className={row.command ? "explore-file-plain is-command" : "explore-file-plain"}>
+              {row.command ? <em aria-hidden>$</em> : null}
+              {row.label}
+            </span>
           )}
         </li>
       ))}
@@ -75,14 +83,15 @@ function exploreRows(
     const argumentsText = tool.arguments || tool.argumentsPreview;
     const action = readableToolName(tool.name);
     const path = toolFilePath(tool.name, argumentsText);
+    const command = commandText(tool, argumentsText);
     const label = path
       ? displayPath(path, workspacePath)
-      : commandText(tool, argumentsText) || toolCardSummary(tool.name, argumentsText, locale, workspacePath);
+      : command || toolCardSummary(tool.name, argumentsText, locale, workspacePath);
     if (!label) continue;
     const key = `${action}:${label.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    rows.push({ key, action, path, label });
+    rows.push({ key, action, path, label, command: Boolean(command) && !path });
   }
   return rows;
 }

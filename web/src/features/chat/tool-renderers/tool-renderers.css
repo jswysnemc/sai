@@ -207,6 +207,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
+  /* flex 项默认按内容撑开，长路径会顶破父容器；显式允许收缩后省略号才生效 */
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .tool-file-reference button:hover {
