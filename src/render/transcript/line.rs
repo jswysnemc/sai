@@ -62,6 +62,30 @@ impl AnsiLine {
 
     /// 【终端】【Diff 换行】拆分 ANSI 文本，并为自动续行恢复内部缩进。
     ///
+    /// 右侧背景边距另行处理的调用方（CLI diff）使用此入口。
+    ///
+    /// 参数:
+    /// - `text`: 原始 ANSI 文本块
+    /// - `width`: 内容宽度
+    /// - `continuation_indent`: 自动续行需要恢复的前导空格列数
+    ///
+    /// 返回:
+    /// - 预换行并保留续行缩进的终端行
+    pub(crate) fn wrap_block_with_continuation_indent(
+        text: &str,
+        width: usize,
+        continuation_indent: usize,
+    ) -> Vec<Self> {
+        Self::wrap_block_with_right_margin_and_continuation_indent(
+            text,
+            width,
+            0,
+            continuation_indent,
+        )
+    }
+
+    /// 【终端】【Diff 换行】拆分 ANSI 文本，并为自动续行恢复内部缩进。
+    ///
     /// 参数:
     /// - `text`: 原始 ANSI 文本块
     /// - `width`: 已扣除右侧边距的内容宽度

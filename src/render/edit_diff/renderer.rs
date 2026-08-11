@@ -37,8 +37,43 @@ pub(crate) fn write_edit_file_diff_block(stdout: &mut io::Stdout, arguments: &st
 /// - Codex 风格 diff 文本
 pub(crate) fn render_edit_file_diff(arguments: &str) -> Option<String> {
     let preview = preview_from_arguments(arguments).ok()?;
-    let diff = indent_diff_for_cli(&render_patch_preview(&preview));
+    let rendered = render_patch_preview(&preview);
+    // CLI 侧此前不折行，交给终端硬换行：续行落在第 0 列且不带背景色，
+    // 增删行的矩形色块因此在每个续行行首缺一个口子。改走与 TUI 相同的
+    // 折行入口，续行先恢复背景再补正文缩进
+    let wrapped = wrap_cli_diff(&rendered);
+    let diff = indent_diff_for_cli(&wrapped);
     Some(inset_cli_diff_background(&diff))
+}
+
+/// 【终端】【Diff 换行】按终端可用列数折行 CLI diff。
+///
+/// 折行宽度需扣除左右两侧的块级内收：左侧由 `indent_diff_for_cli` 补，
+/// 右侧留给背景边距，两者不扣就会把色块顶出终端。
+///
+/// 参数:
+/// - `rendered`: 未缩进的 diff 文本块
+///
+/// 返回:
+/// - 已按正文净宽折行、续行带背景与缩进的文本块
+fn wrap_cli_diff(rendered: &str) -> String {
+    if rendered.is_empty() {
+        return String::new();
+    }
+    let content_width = crate::render::fold_text::terminal_wrap_width()
+        .saturating_sub(DIFF_BLOCK_INSET.saturating_mul(2))
+        .max(1);
+    let body_column = diff_body_start_column(rendered);
+    let lines = crate::render::transcript::AnsiLine::wrap_block_with_continuation_indent(
+        rendered,
+        content_width,
+        body_column.max(crate::render::content_indent::DIFF_NESTED_INDENT),
+    );
+    lines
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// 渲染供 TUI transcript 使用的编辑文件 diff 视图。
