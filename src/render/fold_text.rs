@@ -89,16 +89,11 @@ pub(crate) fn terminal_wrap_width() -> usize {
         .max(8)
 }
 
-/// 命令预览行首前缀占用的列数。
-///
-/// 首行实际写出 `• Ran $ `：引导符一列、空格一列、标题三列、空格一列、
-/// `$ ` 两列，共八列。此前按六列扣减，首行便比终端宽两列，被终端硬换行
-/// 到第 0 列——那正是视觉引导线所在列，续行因此跑到引导线左侧。
-const COMMAND_PREFIX_COLUMNS: usize = 8;
-
 /// 命令预览行首固定装饰占用的列数（不含标题）。
 ///
-/// 组成为：引导符、空格、标题后空格、`$ ` 两列。
+/// 组成为：引导符、空格、标题后空格、`$ ` 两列。此前用的是一个写死
+/// 六列的常量，而 `• Ran $ ` 实际占八列：首行因此比终端宽两列，被终端
+/// 硬换行到第 0 列——那正是视觉引导线所在列。
 const COMMAND_FIXED_PREFIX_COLUMNS: usize = 5;
 
 /// 计算指定标题下命令正文的起始列。
@@ -145,19 +140,6 @@ fn display_columns(text: &str) -> usize {
 ///
 /// 终端极窄时前缀几乎吃掉整行，仍需留出足以看清片段的宽度。
 const COMMAND_MIN_WRAP: usize = 24;
-
-/// 计算命令预览的折行宽度。
-///
-/// 早先这里额外压了一道 72 列上限，于是终端再宽命令也只用到 72 列，
-/// 右侧大片空白闲置而命令被提前折行。宽度只应受终端实际列数约束。
-///
-/// 返回:
-/// - 命令预览可用的折行列数
-pub(crate) fn command_wrap_width() -> usize {
-    terminal_wrap_width()
-        .saturating_sub(COMMAND_PREFIX_COLUMNS)
-        .max(COMMAND_MIN_WRAP)
-}
 
 #[cfg(test)]
 mod tests {

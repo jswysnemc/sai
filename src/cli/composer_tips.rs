@@ -1,5 +1,8 @@
 use std::sync::OnceLock;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+/// 提示轮换的墙钟槽位长度。
+const TIP_SLOT_SECONDS: u64 = 8;
 
 /// 进程启动时选定的轮询起点，保证每次启动偏移不同。
 fn process_tip_seed() -> usize {
@@ -27,10 +30,27 @@ pub(crate) fn current_composer_tip() -> &'static str {
     };
     let elapsed_slots = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| (duration.as_secs() / 8) as usize)
+        .map(|duration| (duration.as_secs() / TIP_SLOT_SECONDS) as usize)
         .unwrap_or(0);
     let index = process_tip_seed().wrapping_add(elapsed_slots) % tips.len();
     tips[index]
+}
+
+/// 返回距离下一次提示轮换的等待时长。
+///
+/// 空输入时按固定一秒唤醒会让底栏每秒重绘一次，而提示八秒才换一条：
+/// 八次里有七次是无效重绘，在 Windows Terminal 下表现为底行持续闪动。
+/// 对齐到槽位边界后，唤醒次数降到实际需要的频率。
+///
+/// 返回:
+/// - 距离下一个轮换槽位的时长；至少为一次可感知的间隔
+pub(crate) fn next_tip_rotation() -> Duration {
+    let elapsed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let remaining = TIP_SLOT_SECONDS - (elapsed % TIP_SLOT_SECONDS);
+    Duration::from_secs(remaining)
 }
 
 const EN_TIPS: &[&str] = &[
@@ -75,6 +95,21 @@ mod tests {
         assert!(!current_composer_tip().is_empty());
         assert!(EN_TIPS.len() >= 5);
         assert_eq!(EN_TIPS.len(), ZH_TIPS.len());
+    }
+
+    /// 唤醒间隔对齐到轮换槽位，不再退化为固定一秒。
+    ///
+    /// 空输入时按秒唤醒会让底栏每秒重绘，而提示八秒才换一条，
+    /// 多出的唤醒在 Windows Terminal 下表现为底行持续闪动。
+    #[test]
+    fn tip_rotation_wait_aligns_to_the_slot_boundary() {
+        let wait = next_tip_rotation();
+
+        assert!(wait > Duration::ZERO, "等待时长必须为正");
+        assert!(
+            wait <= Duration::from_secs(TIP_SLOT_SECONDS),
+            "等待时长不应超过一个轮换槽位: {wait:?}"
+        );
     }
 
     #[test]

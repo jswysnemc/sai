@@ -132,22 +132,23 @@ pub(super) fn read_repl_input(
                 (None, true) => Some(EXTERNAL_EVENT_INPUT_POLL_INTERVAL),
                 (None, false) => None,
             };
-            // 空输入时短轮询，便于灰色操作提示按时切换
+            // 空输入时按提示轮换的槽位边界唤醒：固定一秒会让底栏每秒重绘，
+            // 而提示八秒才换一条，多出的唤醒在 Windows Terminal 下就是底行闪动
             let wait = if input.is_empty() {
-                Some(
-                    wait.unwrap_or(std::time::Duration::from_secs(1))
-                        .min(std::time::Duration::from_secs(1)),
-                )
+                let rotation = super::composer_tips::next_tip_rotation();
+                Some(wait.map_or(rotation, |wait| wait.min(rotation)))
             } else {
                 wait
             };
             if let Some(wait) = wait {
                 if !event::poll(wait)? {
-                    if runtime.process_idle_tick()? || input.is_empty() {
+                    // 内容未变时 draw_lines 会按签名跳过重绘；清零记账等于
+                    // 绕开该缓存强制实绘，因此只在确有刷新时才重置
+                    if runtime.process_idle_tick()? {
                         input_row = 0;
                         rendered_rows = 0;
-                        redraw_input!()?;
                     }
+                    redraw_input!()?;
                     continue;
                 }
             }
