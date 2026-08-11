@@ -1,5 +1,6 @@
 import { SyntaxHighlighter } from "../syntax-highlighter";
 import { CollapsibleOutput } from "./collapsible-output";
+import { ToolPanel } from "./layout/tool-panel";
 import { prettyJson } from "./tool-data";
 import { parseToolFields } from "./tool-fields";
 import { useI18n } from "../../i18n/use-i18n";
@@ -22,7 +23,7 @@ export function GenericToolView({ argumentsText, output }: GenericToolViewProps)
   const { t } = useI18n();
   const fields = parseToolFields(argumentsText);
   return (
-    <div className="generic-tool-view">
+    <ToolPanel className="generic-tool-view">
       {argumentsText && (
         <section>
           <span>{t("Arguments", "参数")}</span>
@@ -32,7 +33,7 @@ export function GenericToolView({ argumentsText, output }: GenericToolViewProps)
         </section>
       )}
       {output && <section><span>{t("Result", "结果")}</span><JsonBlock source={output} className="result" /></section>}
-    </div>
+    </ToolPanel>
   );
 }
 

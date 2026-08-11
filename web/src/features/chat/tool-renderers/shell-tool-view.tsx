@@ -1,5 +1,6 @@
 import { CollapsibleOutput } from "./collapsible-output";
 import { DiffView } from "./diff-view";
+import { ToolPanel } from "./layout/tool-panel";
 import { parseJsonRecord, stringField } from "./tool-data";
 import { useI18n } from "../../i18n/use-i18n";
 
@@ -32,7 +33,7 @@ export function ShellToolView({ argumentsText, output }: ShellToolViewProps) {
   const diffOutput = isDiffCommand(command, stdout);
   const hasBody = Boolean(stdout || stderr || background || (!result && output));
   return (
-    <div className="shell-tool-view">
+    <ToolPanel className="shell-tool-view">
       <div className={`shell-command-line${hasBody ? " has-body" : ""}`}>
         <span>$</span>
         <code>{command}</code>
@@ -51,7 +52,7 @@ export function ShellToolView({ argumentsText, output }: ShellToolViewProps) {
       {stdout && (diffOutput ? <DiffView source={stdout} /> : <CollapsibleOutput source={stdout} />)}
       {stderr && <CollapsibleOutput source={stderr} className="shell-output stderr" />}
       {!result && output && <CollapsibleOutput source={output} />}
-    </div>
+    </ToolPanel>
   );
 }
 

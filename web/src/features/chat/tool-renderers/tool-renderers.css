@@ -15,7 +15,8 @@
   display: grid;
   grid-template-columns: 0.75rem minmax(0, 1fr);
   gap:var(--space-sm);
-  padding:var(--space-sm) var(--space-lg);
+  /* 外层 ToolPanel 已提供内边距，此处只保留纵向节奏 */
+  padding:0 0 var(--space-xs);
   border-bottom: 0;
   background: transparent;
   color: var(--technical-text);

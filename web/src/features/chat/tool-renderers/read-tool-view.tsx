@@ -1,4 +1,5 @@
 import { SyntaxHighlighter } from "../syntax-highlighter";
+import { ToolPanel } from "./layout/tool-panel";
 import { parseReadTextPages, type ReadTextPage } from "./read-result-parser";
 import { prettyJson } from "./tool-data";
 import { ToolFileReference } from "./tool-file-reference";
@@ -22,11 +23,11 @@ export function ReadToolView({ output, headerPath }: ReadToolViewProps) {
     return output ? <pre className="generic-tool-block result"><code>{prettyJson(output)}</code></pre> : null;
   }
   return (
-    <div className="read-tool-view">
+    <ToolPanel className="read-tool-view">
       {pages.map((page, index) => (
         <ReadTextPageView page={page} hidePath={pages.length === 1 && page.path === headerPath} key={`${page.path}-${page.offset}-${index}`} />
       ))}
-    </div>
+    </ToolPanel>
   );
 }
 
