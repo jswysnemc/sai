@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WebEvent } from "../../api/contracts";
-import { sessionRunsReducer } from "./use-run-stream";
+import { applyEventsToSessionRuns, sessionRunsReducer } from "./use-run-stream";
 
 /**
  * 构造会话运行测试事件。
@@ -160,5 +160,77 @@ describe("sessionRunsReducer", () => {
     });
 
     expect(merged.runs).toEqual([]);
+  });
+
+  it("applies a batch of content deltas in one reducer pass", () => {
+    const started = sessionRunsReducer({ runs: [] }, {
+      type: "start",
+      run: {
+        run_id: "run-1",
+        workspace_id: "workspace",
+        session_id: "session",
+        input: "hello",
+        image_urls: [],
+        status: "running"
+      },
+      sessionId: "session",
+      userInput: "hello"
+    });
+    const deltas: WebEvent[] = ["A", "B", "C"].map((chunk, index) => ({
+      sequence: index + 1,
+      run_id: "run-1",
+      workspace_id: "workspace",
+      session_id: "session",
+      timestamp: "now",
+      type: "message.content.delta",
+      payload: { text: chunk }
+    }));
+    const batched = applyEventsToSessionRuns(started, deltas);
+    expect(batched.runs).toHaveLength(1);
+    expect(batched.runs[0].content).toContain("A");
+    expect(batched.runs[0].content).toContain("B");
+    expect(batched.runs[0].content).toContain("C");
+  });
+
+  it("prunes completed live runs once timeline turn ids are known", () => {
+    const started = sessionRunsReducer({ runs: [] }, {
+      type: "start",
+      run: {
+        run_id: "run-1",
+        workspace_id: "workspace",
+        session_id: "session",
+        input: "hello",
+        image_urls: [],
+        status: "running"
+      },
+      sessionId: "session",
+      userInput: "hello"
+    });
+    const completed = sessionRunsReducer(started, {
+      type: "event",
+      event: {
+        sequence: 2,
+        run_id: "run-1",
+        workspace_id: "workspace",
+        session_id: "session",
+        timestamp: "now",
+        type: "run.completed",
+        payload: {}
+      }
+    });
+    expect(completed.runs).toHaveLength(1);
+    expect(completed.runs[0].completed).toBe(true);
+
+    const pruned = sessionRunsReducer(completed, {
+      type: "prune-settled",
+      historyTurnIds: ["run-1"]
+    });
+    expect(pruned.runs).toEqual([]);
+
+    const kept = sessionRunsReducer(completed, {
+      type: "prune-settled",
+      historyTurnIds: ["other-turn"]
+    });
+    expect(kept.runs).toHaveLength(1);
   });
 });

@@ -1,5 +1,5 @@
 import { ShieldCheck } from "lucide-react";
-import type { ReactNode } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import { usePersistedExpand } from "./message/tool-expand-state";
@@ -28,7 +28,7 @@ import { useI18n } from "../i18n/use-i18n";
  * @param props 工具生命周期状态
  * @returns 统一外壳的可折叠工具卡片
  */
-export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
+export const ToolLifecycleCard = memo(function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
   const { locale, t } = useI18n();
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list, staleTime: 30_000 });
   const workspacePath = workspaces.data?.workspaces.find((item) => item.id === workspaces.data?.active_id)?.path ?? "";
@@ -39,15 +39,20 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
   const running = tool.status === "preparing" || tool.status === "running";
   const isEdit = isEditToolName(tool.name);
   const now = useElapsedClock(running && !isEdit);
+  const argumentsText = tool.arguments || tool.argumentsPreview;
+  const parsedArguments = useMemo(() => parseJsonRecord(argumentsText), [argumentsText]);
+  const liveDiff = useMemo(
+    () => (running && isEdit ? streamedDiffCounts(argumentsText) : null),
+    [argumentsText, isEdit, running]
+  );
   // 1. todo 已完成时改用清单卡片，不暴露原始 JSON
   if (tool.name === "todo" && tool.status === "completed") {
-    return <TodoToolView toolId={tool.id} argumentsText={tool.arguments || tool.argumentsPreview} output={tool.output} />;
+    return <TodoToolView toolId={tool.id} argumentsText={argumentsText} output={tool.output} />;
   }
-  const argumentsText = tool.arguments || tool.argumentsPreview;
   // 后台任务工具的管理操作（list/output/wait/stop/cleanup）不是 shell 命令，
   // 名称、图标与摘要都按动作语义表达
   const backgroundAction = tool.name.includes("background_command")
-    ? stringField(parseJsonRecord(argumentsText), "action")
+    ? stringField(parsedArguments, "action")
     : "";
   const backgroundManagement = Boolean(backgroundAction) && backgroundAction !== "start";
   const subagentActivity = parseCodexSubagentActivity(argumentsText);
@@ -67,8 +72,8 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
   //    其余优先取工作区相对路径，再退回参数摘要
   const isCommand = isCommandToolName(tool.name);
   const fullCommand = isCommand
-    ? stringField(parseJsonRecord(argumentsText), "command")
-      || stringField(parseJsonRecord(argumentsText), "cmd")
+    ? stringField(parsedArguments, "command")
+      || stringField(parsedArguments, "cmd")
     : "";
   const relativePath = headerPath ? displayPath(headerPath, workspacePath) : "";
   const summary = headerPath
@@ -89,7 +94,6 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
   //    编辑类用 +N -M 徽章（流式参数阶段实时跳动，与 TUI 一致），不展示耗时
   const result = toolResultSummary(tool.name, tool.output, locale);
   const diffStat = toolDiffStat(tool.name, tool.output);
-  const liveDiff = running && isEdit ? streamedDiffCounts(argumentsText) : null;
   const displayDiff = diffStat ?? liveDiff;
   const duration = isEdit ? "" : toolDurationLabel(tool.startedAtMs, tool.endedAtMs, now);
 
@@ -123,7 +127,7 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
       <ToolResultView name={tool.name} argumentsText={argumentsText} output={tool.output} headerPath={headerPath} />
     </ToolLayout>
   );
-}
+});
 
 /**
  * 组装摘要行右段的状态文本。

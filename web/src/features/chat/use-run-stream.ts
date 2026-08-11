@@ -46,6 +46,8 @@ type SessionRunsAction =
   | { type: "attach"; runs: RunInfo[]; sessionId: string }
   | { type: "start"; run: RunInfo; sessionId: string; userInput: string; imageUrls?: string[] }
   | { type: "event"; event: WebEvent }
+  | { type: "events"; events: WebEvent[] }
+  | { type: "prune-settled"; historyTurnIds: string[] }
   | { type: "update-queued"; runId: string; input?: string; position?: number }
   | { type: "remove-queued"; runId: string }
   | { type: "stop-local"; runId: string }
@@ -53,6 +55,14 @@ type SessionRunsAction =
   | { type: "reset" };
 
 const initialSessionRunsState: SessionRunsState = { runs: [] };
+
+/** 高频流式事件：合并到同一动画帧再进 reducer，降低 React 提交次数 */
+const COALESCED_EVENT_TYPES = new Set<WebEvent["type"]>([
+  "message.content.delta",
+  "message.reasoning.delta",
+  "tool.progress",
+  "compaction.delta",
+]);
 
 /**
  * 将运行事件归并到会话内对应的实时消息。
@@ -126,25 +136,107 @@ export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsA
   if (action.type === "update-queued") {
     return updateQueuedRunState(state, action.runId, action.input, action.position);
   }
-  if (action.event.type === "run.interrupted" && action.event.payload.discard_user_turn === true) {
-    return { runs: state.runs.filter((run) => run.runId !== action.event.run_id) };
+  if (action.type === "prune-settled") {
+    const historyIds = new Set(action.historyTurnIds);
+    const runs = state.runs.filter(
+      (run) => !(run.completed && run.runId && historyIds.has(run.runId))
+    );
+    return runs.length === state.runs.length ? state : { runs };
   }
-  if (action.event.type === "run.merged") {
-    return { runs: state.runs.filter((run) => run.runId !== action.event.run_id) };
+  if (action.type === "events") {
+    return applyEventsToSessionRuns(state, action.events, locale);
   }
-  if (action.event.type === "run.queue.updated") {
+  return applyEventToSessionRuns(state, action.event, locale);
+}
+
+/**
+ * 将单条运行事件应用到会话运行集合。
+ *
+ * @param state 当前会话运行集合
+ * @param event 运行事件
+ * @param locale 本地化语言
+ * @returns 更新后的会话运行集合
+ */
+function applyEventToSessionRuns(
+  state: SessionRunsState,
+  event: WebEvent,
+  locale: Locale
+): SessionRunsState {
+  if (event.type === "run.interrupted" && event.payload.discard_user_turn === true) {
+    return { runs: state.runs.filter((run) => run.runId !== event.run_id) };
+  }
+  if (event.type === "run.merged") {
+    return { runs: state.runs.filter((run) => run.runId !== event.run_id) };
+  }
+  if (event.type === "run.queue.updated") {
     return updateQueuedRunState(
       state,
-      action.event.run_id,
-      typeof action.event.payload.input === "string" ? action.event.payload.input : undefined,
-      typeof action.event.payload.position === "number" ? action.event.payload.position : undefined
+      event.run_id,
+      typeof event.payload.input === "string" ? event.payload.input : undefined,
+      typeof event.payload.position === "number" ? event.payload.position : undefined
     );
   }
-  return {
-    runs: state.runs.map((run) => run.runId === action.event.run_id
-      ? runEventReducer(run, { type: "event", event: action.event }, locale)
-      : run)
-  };
+  let changed = false;
+  const runs = state.runs.map((run) => {
+    if (run.runId !== event.run_id) return run;
+    changed = true;
+    return runEventReducer(run, { type: "event", event }, locale);
+  });
+  return changed ? { runs } : state;
+}
+
+/**
+ * 将同一帧内的多条事件按 run 归并后一次提交，避免逐事件重绘整棵会话树。
+ *
+ * @param state 当前会话运行集合
+ * @param events 待应用事件（保持到达顺序）
+ * @param locale 本地化语言
+ * @returns 更新后的会话运行集合
+ */
+export function applyEventsToSessionRuns(
+  state: SessionRunsState,
+  events: WebEvent[],
+  locale: Locale = "zh-CN"
+): SessionRunsState {
+  if (events.length === 0) return state;
+  if (events.length === 1) return applyEventToSessionRuns(state, events[0], locale);
+
+  const byRun = new Map<string, WebEvent[]>();
+  const special: WebEvent[] = [];
+  for (const event of events) {
+    if (
+      event.type === "run.interrupted"
+      || event.type === "run.merged"
+      || event.type === "run.queue.updated"
+      || event.type === "run.completed"
+      || event.type === "run.failed"
+    ) {
+      special.push(event);
+      continue;
+    }
+    const batch = byRun.get(event.run_id);
+    if (batch) batch.push(event);
+    else byRun.set(event.run_id, [event]);
+  }
+
+  let next = state;
+  if (byRun.size > 0) {
+    let changed = false;
+    const runs = next.runs.map((run) => {
+      const batch = run.runId ? byRun.get(run.runId) : undefined;
+      if (!batch?.length) return run;
+      changed = true;
+      return batch.reduce(
+        (current, event) => runEventReducer(current, { type: "event", event }, locale),
+        run
+      );
+    });
+    if (changed) next = { runs };
+  }
+  for (const event of special) {
+    next = applyEventToSessionRuns(next, event, locale);
+  }
+  return next;
 }
 
 /**
@@ -208,6 +300,43 @@ export function useRunStream(
   );
   const [state, dispatch] = useReducer(reducer, initialSessionRunsState);
   const sourcesRef = useRef(new Map<string, EventSource>());
+  const pendingEventsRef = useRef<WebEvent[]>([]);
+  const coalesceFrameRef = useRef<number | null>(null);
+
+  /** 立即冲刷已合并的高频事件。 */
+  const flushPendingEvents = useCallback(() => {
+    if (coalesceFrameRef.current !== null) {
+      cancelAnimationFrame(coalesceFrameRef.current);
+      coalesceFrameRef.current = null;
+    }
+    const batch = pendingEventsRef.current;
+    if (batch.length === 0) return;
+    pendingEventsRef.current = [];
+    dispatch({ type: "events", events: batch });
+  }, []);
+
+  /**
+   * 高频 delta 合并到下一帧；终态与控制类事件立即提交。
+   *
+   * @param event 运行事件
+   */
+  const enqueueEvent = useCallback((event: WebEvent) => {
+    if (COALESCED_EVENT_TYPES.has(event.type)) {
+      pendingEventsRef.current.push(event);
+      if (coalesceFrameRef.current === null) {
+        coalesceFrameRef.current = requestAnimationFrame(() => {
+          coalesceFrameRef.current = null;
+          const batch = pendingEventsRef.current;
+          if (batch.length === 0) return;
+          pendingEventsRef.current = [];
+          dispatch({ type: "events", events: batch });
+        });
+      }
+      return;
+    }
+    flushPendingEvents();
+    dispatch({ type: "event", event });
+  }, [flushPendingEvents]);
 
   useEffect(() => {
     dispatch({ type: "relocalize" });
@@ -276,10 +405,7 @@ export function useRunStream(
         ]
           .filter((line): line is string => Boolean(line))
           .join("\n");
-        dispatch({
-          type: "event",
-          event: runFailureEvent(runId, sessionId, summary, detail)
-        });
+        enqueueEvent(runFailureEvent(runId, sessionId, summary, detail));
         sourcesRef.current.delete(runId);
         onSettled();
       };
@@ -311,7 +437,7 @@ export function useRunStream(
             && event.payload.queued !== true) {
             onInterruptedWithoutReply?.(String(event.payload.restore_input ?? ""));
           }
-          dispatch({ type: "event", event });
+          enqueueEvent(event);
           if (event.type === "workspace.changed") onWorkspaceChanged?.();
           if (event.type === "compaction.finished" && event.payload.applied === true) {
             void Promise.all([
@@ -381,13 +507,15 @@ export function useRunStream(
     }
     return () => {
       for (const timer of reconnectTimers.values()) window.clearTimeout(timer);
+      flushPendingEvents();
     };
-  }, [locale, openRunIds, openRunKey, onInterruptedWithoutReply, onSettled, onWorkspaceChanged, queryClient, sessionId]);
+  }, [enqueueEvent, flushPendingEvents, locale, openRunIds, openRunKey, onInterruptedWithoutReply, onSettled, onWorkspaceChanged, queryClient, sessionId]);
 
   useEffect(() => () => {
+    flushPendingEvents();
     for (const source of sourcesRef.current.values()) source.close();
     sourcesRef.current.clear();
-  }, []);
+  }, [flushPendingEvents]);
 
   /**
    * 提交一轮运行；同会话已有运行时由后端持久化排队。
@@ -513,6 +641,16 @@ export function useRunStream(
     dispatch({ type: "remove-queued", runId });
   };
 
+  /**
+   * 时间线已落盘后丢弃对应的已完成 live run，释放内存并避免重复渲染。
+   *
+   * @param historyTurnIds 服务端时间线中的轮次标识
+   */
+  const pruneSettled = useCallback((historyTurnIds: string[]) => {
+    if (historyTurnIds.length === 0) return;
+    dispatch({ type: "prune-settled", historyTurnIds });
+  }, []);
+
   return {
     states: state.runs,
     start,
@@ -523,7 +661,11 @@ export function useRunStream(
     moveQueuedRun,
     promoteQueuedRun,
     removeQueuedRun,
-    reset: () => dispatch({ type: "reset" })
+    pruneSettled,
+    reset: () => {
+      flushPendingEvents();
+      dispatch({ type: "reset" });
+    }
   };
 }
 

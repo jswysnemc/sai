@@ -1,4 +1,4 @@
-import { createContext, memo, useContext, type ReactNode } from "react";
+import { createContext, memo, useContext, useDeferredValue, type ReactNode } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
@@ -30,6 +30,9 @@ function transformUrl(url: string): string {
 /** 模块级插件常量，避免每次渲染创建新数组导致 ReactMarkdown 重新解析 */
 const remarkPlugins = [remarkGfm, remarkMath, remarkSvgBlocks];
 const rehypePlugins = [rehypeKatex];
+/** 流式阶段跳过数学/SVG 插件，显著降低每个 delta 的解析成本 */
+const streamingRemarkPlugins = [remarkGfm];
+const streamingRehypePlugins: typeof rehypePlugins = [];
 const inlineAtomContext = createContext<readonly ReactNode[]>([]);
 const markdownStyleContext = createContext<MarkdownStylePreferences>(DEFAULT_MARKDOWN_STYLE_PREFERENCES);
 const INLINE_ATOM_PATTERN = /^sai-atom-(\d+)$/u;
@@ -87,14 +90,20 @@ const markdownComponents: Components = {
 export const MarkdownRenderer = memo(function MarkdownRenderer({
   source,
   inlineAtoms = [],
-  stylePreferences
+  stylePreferences,
+  streaming = false
 }: {
   source: string;
   inlineAtoms?: readonly ReactNode[];
   stylePreferences?: MarkdownStylePreferences;
+  /** 流式输出时延后解析并使用轻量插件集 */
+  streaming?: boolean;
 }) {
   const storedStyle = useMarkdownStylePreferences();
   const style = stylePreferences ?? storedStyle.preferences;
+  // 流式高频更新时让出紧急渲染；定稿后仍用最新 source 立即渲染
+  const deferredSource = useDeferredValue(source);
+  const renderSource = streaming ? deferredSource : source;
 
   return (
     <markdownStyleContext.Provider value={style}>
@@ -114,12 +123,12 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
           data-code-max-height={style.codeBlock.maxHeight}
         >
           <ReactMarkdown
-            remarkPlugins={remarkPlugins}
-            rehypePlugins={rehypePlugins}
+            remarkPlugins={streaming ? streamingRemarkPlugins : remarkPlugins}
+            rehypePlugins={streaming ? streamingRehypePlugins : rehypePlugins}
             urlTransform={transformUrl}
             components={markdownComponents}
           >
-            {source}
+            {renderSource}
           </ReactMarkdown>
         </div>
       </inlineAtomContext.Provider>

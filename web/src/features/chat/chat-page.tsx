@@ -15,6 +15,7 @@ import { HistoryTurn, LiveRunMessage } from "./chat-message";
 import { projectConversationDisplay } from "./conversation-display";
 import { MessageOverviewRail } from "./message-overview-rail";
 import { createLiveOverviewItem, createTimelineOverviewItems } from "./message-overview-utils";
+import { clearToolExpandState } from "./message/tool-expand-state";
 import { clearComposerDraft, readComposerDraft, writeComposerDraft } from "./composer-draft";
 import { useComposerAttachments } from "./composer/use-composer-attachments";
 import { useChatModel } from "./use-chat-model";
@@ -29,7 +30,6 @@ import { useI18n } from "../i18n/use-i18n";
 import { parseGoalCommand } from "../goals/goal-command";
 import { appendTerminalSelection, FOCUS_COMPOSER_EVENT, INSERT_TERMINAL_SELECTION_EVENT, type TerminalSelectionDetail } from "./composer/composer-events";
 import { RuntimeOverview } from "../runtime-overview/runtime-overview";
-import { BranchSwitcher } from "./turn-tree/branch-switcher";
 import { TurnTreeOverview } from "./turn-tree/turn-tree-overview";
 import { TurnTreePanel } from "./turn-tree/turn-tree-panel";
 import { useBranchActions } from "./turn-tree/use-branch-actions";
@@ -177,9 +177,17 @@ export function ChatPage() {
   // 切换会话时恢复该会话草稿；路由离开再回来也保留（模块级草稿缓存）。
   useEffect(() => {
     run.reset();
+    clearToolExpandState();
     setInput(readComposerDraft(activeSession?.id));
     setSubmittedEmptySessionId(null);
   }, [activeSession?.id]);
+
+  // 时间线落盘后修剪已完成 live run，释放重复的 parts/tools 内存
+  useEffect(() => {
+    const turnIds = timeline.data?.turns.map((turn) => turn.turn_id) ?? [];
+    if (turnIds.length === 0) return;
+    run.pruneSettled(turnIds);
+  }, [run.pruneSettled, timeline.data?.turns]);
 
   // 首条消息进入时间线或实时状态后清理乐观布局标记
   useEffect(() => {
@@ -534,25 +542,18 @@ export function ChatPage() {
                 <HistoryTurn
                   turn={turn}
                   sessionId={activeSession?.id}
-                  onRetry={turn.turn_id === lastTurnId && !running
-                    ? () => void resend.retry(turn.user.content, turn.user.image_urls, turn.turn_id)
-                    : undefined}
-                  onContinueFrom={!running ? () => void branchActions.continueFrom(turn.turn_id) : undefined}
-                  onSideConversation={turn.status === "completed" && turn.assistant.content.trim()
-                    ? () => openTurnSideConversation(turn.turn_id)
-                    : undefined}
-                  onEditResend={!running
-                    ? (content, imageUrls) => void editAndResend(turn.turn_id, content, imageUrls)
-                    : undefined}
+                  canRetry={turn.turn_id === lastTurnId && !running}
+                  onRetry={resend.retry}
+                  canContinueFrom={!running}
+                  onContinueFrom={branchActions.continueFrom}
+                  canSideConversation={turn.status === "completed" && Boolean(turn.assistant.content.trim())}
+                  onSideConversation={openTurnSideConversation}
+                  canEditResend={!running}
+                  onEditResend={editAndResend}
                   actionBusy={actionBusy || branchTransitioning}
-                  branchSlot={(
-                    <BranchSwitcher
-                      tree={turnTree.tree.data}
-                      turnId={turn.turn_id}
-                      busy={turnTree.switchBranch.isPending || running}
-                      onSwitch={(target) => turnTree.switchBranch.mutate(target)}
-                    />
-                  )}
+                  branchTree={turnTree.tree.data}
+                  branchBusy={turnTree.switchBranch.isPending || running}
+                  onSwitchBranch={turnTree.switchBranch.mutate}
                 />
               </section>
             ))}

@@ -1,5 +1,6 @@
-import type React from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import type { HistoryEntry, SessionTimelineTurn, TimelineToolEntry } from "../../api/contracts";
+import type { SessionTurnTree } from "../../api/turn-tree-contracts";
 import type { LiveRunState } from "./run-event-reducer";
 import type { LiveMessagePart } from "./run-event-reducer";
 import { LiveRunIndicator } from "./live-run-indicator";
@@ -11,6 +12,7 @@ import { useI18n } from "../i18n/use-i18n";
 import { collectTurnFileChanges } from "./turn-changes/collect-turn-file-changes";
 import { TurnFileChanges } from "./turn-changes/turn-file-changes";
 import { TurnMetrics } from "./message/turn-metrics";
+import { BranchSwitcher } from "./turn-tree/branch-switcher";
 import "./turn-duration-meta.css";
 
 /**
@@ -29,42 +31,81 @@ export function HistoryMessage({ message }: { message: HistoryEntry }) {
   );
 }
 
+type HistoryTurnProps = {
+  turn: SessionTimelineTurn;
+  sessionId?: string | null;
+  canRetry?: boolean;
+  onRetry?: (content: string, imageUrls: string[] | undefined, turnId: string | null) => void;
+  canContinueFrom?: boolean;
+  onContinueFrom?: (turnId: string) => void;
+  canSideConversation?: boolean;
+  onSideConversation?: (turnId: string) => void;
+  canEditResend?: boolean;
+  onEditResend?: (turnId: string | null, content: string, imageUrls: string[]) => void;
+  actionBusy?: boolean;
+  branchTree?: SessionTurnTree;
+  branchBusy?: boolean;
+  onSwitchBranch?: (turnId: string) => void;
+};
+
+/**
+ * 比较历史轮次 props：以 turn 引用与能力开关为准，忽略回调身份，
+ * 避免父组件每次流式更新都击穿 memo。
+ *
+ * @param previous 上次 props
+ * @param next 本次 props
+ * @returns 是否可跳过重渲染
+ */
+function historyTurnPropsEqual(previous: HistoryTurnProps, next: HistoryTurnProps): boolean {
+  return previous.turn === next.turn
+    && previous.sessionId === next.sessionId
+    && previous.canRetry === next.canRetry
+    && previous.canContinueFrom === next.canContinueFrom
+    && previous.canSideConversation === next.canSideConversation
+    && previous.canEditResend === next.canEditResend
+    && previous.actionBusy === next.actionBusy
+    && previous.branchTree === next.branchTree
+    && previous.branchBusy === next.branchBusy;
+}
+
 /**
  * 渲染一个包含结构化工具历史的完整对话轮次。
  *
- * @param props turn 为会话时间线轮次，onRetry 为可选的重试本轮回调，仅最后一轮传入且挂在助手回复上；
- *              onEditResend 改写本轮用户输入并作为新分支重发，onContinueFrom 把对话切回本轮以开新分支
+ * @param props 轮次数据与稳定动作开关
  * @returns 用户消息、工具调用和助手消息
  */
-export function HistoryTurn({
+export const HistoryTurn = memo(function HistoryTurn({
   turn,
   sessionId,
+  canRetry,
   onRetry,
+  canContinueFrom,
   onContinueFrom,
+  canSideConversation,
   onSideConversation,
+  canEditResend,
   onEditResend,
   actionBusy,
-  branchSlot
-}: {
-  turn: SessionTimelineTurn;
-  sessionId?: string | null;
-  onRetry?: () => void;
-  /** 把对话切回本轮，之后发送的消息成为本轮的新分支 */
-  onContinueFrom?: () => void;
-  /** 使用本轮助手回复打开旁路对话 */
-  onSideConversation?: () => void;
-  /** 改写本轮用户输入后作为新分支重新发送 */
-  onEditResend?: (content: string, imageUrls: string[]) => void;
-  actionBusy?: boolean;
-  /** 该轮次存在同级分支时展示的版本切换器 */
-  branchSlot?: React.ReactNode;
-}) {
+  branchTree,
+  branchBusy,
+  onSwitchBranch
+}: HistoryTurnProps) {
   const { t } = useI18n();
+  const parts = useMemo(() => historyTurnParts(turn), [turn]);
+  const fileChanges = useMemo(() => collectTurnFileChanges(turn.tools), [turn.tools]);
   // 失败轮仅有错误摘要时不把错误再当正文渲染一遍
   const failureOnly =
     turn.status === "failed"
     && !turn.assistant.reasoning
     && turn.tools.length === 0;
+  const branchSlot: ReactNode = onSwitchBranch ? (
+    <BranchSwitcher
+      tree={branchTree}
+      turnId={turn.turn_id}
+      busy={branchBusy}
+      onSwitch={onSwitchBranch}
+    />
+  ) : null;
   return (
     <>
       {!turn.automatic && (
@@ -72,12 +113,14 @@ export function HistoryTurn({
           content={turn.user.content}
           timestamp={turn.user.timestamp}
           imageUrls={turn.user.image_urls}
-          onEditResend={onEditResend}
+          onEditResend={canEditResend && onEditResend
+            ? (content, imageUrls) => onEditResend(turn.turn_id, content, imageUrls)
+            : undefined}
           actionBusy={actionBusy}
         />
       )}
       <article className="message assistant-message">
-        {!failureOnly && <MessageParts parts={historyTurnParts(turn)} />}
+        {!failureOnly && <MessageParts parts={parts} />}
         {turn.status === "interrupted" && (
           <RunErrorNotice
             message={turn.assistant.content ? t("The response was interrupted; generated content was preserved", "响应已中断，已保留生成内容") : t("The run was interrupted", "运行已中断")}
@@ -88,23 +131,31 @@ export function HistoryTurn({
           <RunErrorNotice
             message={t("The run failed", "运行失败")}
             detail={historicalFailureDetail(turn, t)}
-            onRetry={onRetry}
+            onRetry={canRetry && onRetry
+              ? () => onRetry(turn.user.content, turn.user.image_urls, turn.turn_id)
+              : undefined}
           />
         )}
         <TurnMetrics durationMs={turn.duration_ms} usage={turn.usage} />
         <TurnFileChanges
-          changes={collectTurnFileChanges(turn.tools)}
+          changes={fileChanges}
           tools={turn.tools}
           sessionId={sessionId}
           turnId={turn.turn_id}
         />
-        {(turn.assistant.content || onRetry || branchSlot || onSideConversation) && (
+        {(turn.assistant.content || canRetry || branchSlot || canSideConversation) && (
           <MessageActions
             text={turn.assistant.content || turn.user.content}
             timestamp={turn.assistant.timestamp}
-            onRetry={onRetry}
-            onContinueFrom={onContinueFrom}
-            onSideConversation={onSideConversation}
+            onRetry={canRetry && onRetry
+              ? () => onRetry(turn.user.content, turn.user.image_urls, turn.turn_id)
+              : undefined}
+            onContinueFrom={canContinueFrom && onContinueFrom
+              ? () => onContinueFrom(turn.turn_id)
+              : undefined}
+            onSideConversation={canSideConversation && onSideConversation
+              ? () => onSideConversation(turn.turn_id)
+              : undefined}
             busy={actionBusy}
             extra={branchSlot}
           />
@@ -112,16 +163,15 @@ export function HistoryTurn({
       </article>
     </>
   );
-}
+}, historyTurnPropsEqual);
 
 /**
  * 渲染当前正在流式生成的用户输入和助手回复。
  *
- * @param props state 为运行状态，running 为运行标记，onRetry 为可选的重试本轮回调，
- *              onEditResend 改写本轮输入后作为新分支重发
+ * @param props state 为运行状态，running 为运行标记
  * @returns 当前运行消息组
  */
-export function LiveRunMessage({
+export const LiveRunMessage = memo(function LiveRunMessage({
   state,
   sessionId,
   running,
@@ -133,7 +183,6 @@ export function LiveRunMessage({
   sessionId?: string | null;
   running: boolean;
   onRetry?: () => void;
-  /** 改写本轮用户输入后作为新分支重新发送 */
   onEditResend?: (content: string, imageUrls: string[]) => void;
   actionBusy?: boolean;
 }) {
@@ -192,13 +241,10 @@ export function LiveRunMessage({
       </article>
     </>
   );
-}
+});
 
 /**
  * 从中断轮次提取可展示详情。
- *
- * 1. 优先使用最后一个失败/中断工具的错误或输出
- * 2. 无工具错误时使用中性说明，避免在没有证据时归因给用户
  *
  * @param turn 已持久化会话轮次
  * @param t 本地化函数

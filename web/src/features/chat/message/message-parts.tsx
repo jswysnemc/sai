@@ -44,7 +44,7 @@ export function MessageParts({ parts, live }: { parts: LiveMessagePart[]; live?:
         if (part.type === "compaction") return <ContextCompactionPart key={item.id} part={part} />;
         if (part.type === "automatic_input") return <AutomaticInputPart key={item.id} content={part.source} />;
         if (part.type === "engine_ready") return <EngineReadyPart key={item.id} engine={part.engine} version={part.version} />;
-        return <MarkdownRenderer key={item.id} source={part.source} />;
+        return <MarkdownRenderer key={item.id} source={part.source} streaming={Boolean(live)} />;
       })}
     </div>
   );

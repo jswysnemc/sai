@@ -145,9 +145,13 @@ export function MessageOverviewRail({ scrollContainerRef, items, activeId, onNav
     });
     scheduleUpdate();
 
-    // 2. 会话切换或消息流式增长时重新绑定尚未出现的锚点
+    // 2. 只观察 `.message-column` 直接子节点（新轮次挂载）；正文流式增长靠 ResizeObserver。
+    //    旧实现对滚动容器 subtree:true，每个 token 的 DOM 变更都会触发布局扫描。
     const mutationObserver = new MutationObserver(scheduleUpdate);
-    mutationObserver.observe(container, { childList: true, subtree: true });
+    const messageColumn = container.querySelector(".message-column");
+    if (messageColumn) {
+      mutationObserver.observe(messageColumn, { childList: true, subtree: false });
+    }
     return () => {
       container.removeEventListener("scroll", scheduleUpdate);
       resizeObserver.disconnect();
@@ -157,7 +161,7 @@ export function MessageOverviewRail({ scrollContainerRef, items, activeId, onNav
     };
   }, [itemIds, scheduleUpdate, scrollContainerRef]);
 
-  // 3. 流式摘要变化时刷新预览数据，但不重复绑定全部观察器
+  // 3. 概览项集合或摘要变化时刷新位置，但不重复绑定全部观察器
   useLayoutEffect(() => scheduleUpdate(), [items, scheduleUpdate]);
 
   /**

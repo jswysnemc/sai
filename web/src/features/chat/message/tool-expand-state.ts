@@ -6,6 +6,16 @@ const expandedIds = new Set<string>();
 const collapsedIds = new Set<string>();
 
 /**
+ * 清空跨会话残留的展开记忆，避免 SPA 长生命周期下 Set 无限增长。
+ *
+ * @returns 无
+ */
+export function clearToolExpandState(): void {
+  expandedIds.clear();
+  collapsedIds.clear();
+}
+
+/**
  * 判断工具是否处于用户记忆的展开态。
  *
  * @param toolId 工具生命周期 id
