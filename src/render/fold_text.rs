@@ -91,8 +91,55 @@ pub(crate) fn terminal_wrap_width() -> usize {
 
 /// 命令预览行首前缀占用的列数。
 ///
-/// 首行为 `$ ` 加行首引导，续行缩进四列，取其中较大者留出余量。
-const COMMAND_PREFIX_COLUMNS: usize = 6;
+/// 首行实际写出 `• Ran $ `：引导符一列、空格一列、标题三列、空格一列、
+/// `$ ` 两列，共八列。此前按六列扣减，首行便比终端宽两列，被终端硬换行
+/// 到第 0 列——那正是视觉引导线所在列，续行因此跑到引导线左侧。
+const COMMAND_PREFIX_COLUMNS: usize = 8;
+
+/// 命令预览行首固定装饰占用的列数（不含标题）。
+///
+/// 组成为：引导符、空格、标题后空格、`$ ` 两列。
+const COMMAND_FIXED_PREFIX_COLUMNS: usize = 5;
+
+/// 计算指定标题下命令正文的起始列。
+///
+/// 折行续行必须缩进到这一列才能与首行正文对齐；标题长度不同
+/// （`Ran` 与 `Background`）时该列也随之变化。
+///
+/// 参数:
+/// - `title`: 命令块标题
+///
+/// 返回:
+/// - 命令正文起始列
+pub(crate) fn command_body_column(title: &str) -> usize {
+    COMMAND_FIXED_PREFIX_COLUMNS.saturating_add(display_columns(title))
+}
+
+/// 计算指定标题下命令预览的折行宽度。
+///
+/// 参数:
+/// - `title`: 命令块标题
+///
+/// 返回:
+/// - 扣除行首装饰与标题后剩余的列数
+pub(crate) fn command_wrap_width_for_title(title: &str) -> usize {
+    terminal_wrap_width()
+        .saturating_sub(command_body_column(title))
+        .max(COMMAND_MIN_WRAP)
+}
+
+/// 统计文本的终端显示列数。
+///
+/// 参数:
+/// - `text`: 纯文本
+///
+/// 返回:
+/// - 显示列数
+fn display_columns(text: &str) -> usize {
+    text.chars()
+        .map(|ch| UnicodeWidthChar::width(ch).unwrap_or(0))
+        .sum()
+}
 
 /// 命令预览折行后至少保留的列数。
 ///
@@ -122,14 +169,35 @@ mod tests {
     /// 早先这里额外取 72 列的下界，宽终端上命令会在右侧仍有大片空白时折行。
     #[test]
     fn command_wrap_width_follows_the_terminal() {
-        assert_eq!(with_render_width(120, command_wrap_width), 114);
-        assert_eq!(with_render_width(200, command_wrap_width), 194);
+        // `• Ran $ ` 共八列，折行宽度即终端列数减八
+        assert_eq!(
+            with_render_width(120, || command_wrap_width_for_title("Ran")),
+            112
+        );
+        assert_eq!(
+            with_render_width(200, || command_wrap_width_for_title("Ran")),
+            192
+        );
+    }
+
+    /// 更长的标题占用更多行首列，折行宽度随之收窄。
+    #[test]
+    fn command_wrap_width_accounts_for_the_title_width() {
+        assert_eq!(command_body_column("Ran"), 8);
+        assert_eq!(command_body_column("Background"), 15);
+        assert_eq!(
+            with_render_width(120, || command_wrap_width_for_title("Background")),
+            105
+        );
     }
 
     /// 终端极窄时仍保留可读的最小宽度。
     #[test]
     fn command_wrap_width_keeps_a_readable_minimum() {
-        assert_eq!(with_render_width(10, command_wrap_width), COMMAND_MIN_WRAP);
+        assert_eq!(
+            with_render_width(10, || command_wrap_width_for_title("Ran")),
+            COMMAND_MIN_WRAP
+        );
     }
 
     /// 宽终端上，长度未超出可用列数的命令不应被折行。
@@ -137,7 +205,7 @@ mod tests {
     fn wide_terminals_keep_commands_on_one_line() {
         let command = format!("cargo test --workspace {}", "-".repeat(60));
         let lines = with_render_width(120, || {
-            wrap_display_lines(&command, command_wrap_width())
+            wrap_display_lines(&command, command_wrap_width_for_title("Ran"))
         });
 
         assert_eq!(lines.len(), 1, "命令未超出可用宽度却被折行: {lines:?}");

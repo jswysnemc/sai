@@ -109,20 +109,23 @@ pub(crate) fn render_command_block_with_action(arguments: &str, action: &str) ->
         .or_else(|| crate::render::tool_event_line::lenient_string_field(arguments, "command"))
         .unwrap_or_else(|| arguments.to_string());
     let command = command.trim();
-    // 1. 按终端宽度折行后首尾折叠，过长命令在主列表收缩
-    let lines = fold_shell_command_lines(command, false);
     // Codex 风格：状态圆点 + 标题 + `$` 命令行，续行缩进
     let title = match action.trim() {
         "" | "Run" => "Ran",
         "Background" => "Background",
         other => other,
     };
+    // 1. 按终端宽度折行后首尾折叠，过长命令在主列表收缩
+    let lines = fold_shell_command_lines(command, false, title);
     let mut output = format!("\x1b[1m\x1b[32m{TOOL_BULLET}\x1b[0m \x1b[1m{title}\x1b[0m ");
     if let Some((first, rest)) = lines.split_first() {
         output.push_str("\x1b[35m$ \x1b[0m");
         append_command_display_line(&mut output, first, true);
+        // 续行缩进到首行正文列：写死四列会让长命令的后半段左移，
+        // 看上去像脱离了命令块
+        let continuation = " ".repeat(crate::render::fold_text::command_body_column(title));
         for line in rest {
-            output.push_str("    ");
+            output.push_str(&continuation);
             append_command_display_line(&mut output, line, false);
         }
     } else {
@@ -136,16 +139,17 @@ pub(crate) fn render_command_block_with_action(arguments: &str, action: &str) ->
 /// 参数:
 /// - `command`: 原始命令
 /// - `expanded`: 是否展开全文
+/// - `title`: 命令块标题，决定正文起始列
 ///
 /// 返回:
 /// - 可见显示行（省略处为 `… +N lines`）
-fn fold_shell_command_lines(command: &str, expanded: bool) -> Vec<String> {
+fn fold_shell_command_lines(command: &str, expanded: bool, title: &str) -> Vec<String> {
     use crate::render::fold_text::{
-        command_wrap_width, fold_display_lines, wrap_display_lines, FOLD_HEAD_LINES,
+        command_wrap_width_for_title, fold_display_lines, wrap_display_lines, FOLD_HEAD_LINES,
         FOLD_TAIL_LINES,
     };
     // 命令行预览：前 2 后 4，过长时收缩
-    let wrap = command_wrap_width();
+    let wrap = command_wrap_width_for_title(title);
     let wrapped = wrap_display_lines(command, wrap);
     let (visible, omitted) =
         fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
@@ -268,6 +272,79 @@ mod tests {
             "expected fold: {plain}"
         );
         assert!(plain.contains("Ran") || plain.contains("$"));
+    }
+
+    /// 【终端】【命令折行】验证命令块任何一行都不超出渲染宽度。
+    ///
+    /// 首行前缀是 `• Ran $ ` 共八列，折行宽度却按六列扣减，
+    /// 于是首行实际占到宽度加二列，被终端硬换行到第 0 列——
+    /// 那正是视觉引导线所在列，续行因此出现在引导线左侧。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn command_block_lines_never_exceed_the_render_width() {
+        use crate::render::render_width::with_render_width;
+
+        let command = format!("echo {}", "x".repeat(200));
+        let args = serde_json::json!({ "command": command }).to_string();
+        for width in [40usize, 60, 100] {
+            let rendered =
+                with_render_width(width, || render_command_block_with_action(&args, "Run"));
+            for line in rendered.lines() {
+                let plain = strip_ansi_for_test(line);
+                let visible: usize = plain
+                    .chars()
+                    .map(|ch| unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0))
+                    .sum();
+                assert!(
+                    visible <= width,
+                    "width={width} 行宽 {visible} 超出渲染宽度: {plain:?}"
+                );
+            }
+        }
+    }
+
+    /// 【终端】【命令折行】验证续行正文与首行正文落在同一列。
+    ///
+    /// 首行正文起于 `• Ran $ ` 之后的第八列，续行若按四列缩进就会
+    /// 比首行左移，长命令的后半段看起来像脱离了命令块。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn wrapped_command_lines_align_with_the_first_body_column() {
+        use crate::render::render_width::with_render_width;
+
+        let command = format!("echo {}", "x".repeat(200));
+        let args = serde_json::json!({ "command": command }).to_string();
+        let rendered = with_render_width(60, || render_command_block_with_action(&args, "Run"));
+        let plain_lines = rendered
+            .lines()
+            .map(strip_ansi_for_test)
+            .collect::<Vec<_>>();
+        let first_body_column: usize = plain_lines[0]
+            .split("echo")
+            .next()
+            .expect("首行必须包含命令正文")
+            .chars()
+            .map(|ch| unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0))
+            .sum();
+
+        assert!(plain_lines.len() > 1, "样例必须触发折行");
+        for line in &plain_lines[1..] {
+            let indent = line.chars().take_while(|ch| *ch == ' ').count();
+            assert_eq!(
+                indent, first_body_column,
+                "续行缩进 {indent} 未对齐首行正文列 {first_body_column}: {line:?}"
+            );
+        }
     }
 
     fn strip_ansi_for_test(text: &str) -> String {

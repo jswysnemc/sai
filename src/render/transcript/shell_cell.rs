@@ -1,6 +1,7 @@
 use crate::render::code_block::highlight_code_line;
 use crate::render::fold_text::{
-    command_wrap_width, fold_display_lines, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
+    command_body_column, command_wrap_width_for_title, fold_display_lines, wrap_display_lines,
+    FOLD_HEAD_LINES, FOLD_TAIL_LINES,
 };
 use crate::render::style::TOOL_BULLET;
 use crate::render::terminal_text as t;
@@ -22,16 +23,17 @@ pub(crate) struct ShellCell {
 /// - 适合 transcript 的 ANSI 文本
 pub(super) fn render(cell: &ShellCell) -> String {
     // 1. 标题 + 折叠后的命令（过长收缩，保留 shell 着色）
-    let command_lines = fold_display_text(cell.command.trim(), false);
-    let mut rendered = format!(
-        "\x1b[1m\x1b[32m{TOOL_BULLET}\x1b[0m \x1b[1m{}\x1b[0m ",
-        t("You ran", "已执行")
-    );
+    //    中文标题占四列而英文占七列，折行宽度与续行缩进都必须按实际标题算，
+    //    否则首行会超出终端宽度、被硬换行到视觉引导线所在的第 0 列
+    let title = t("You ran", "已执行");
+    let command_lines = fold_display_text(cell.command.trim(), false, title);
+    let mut rendered = format!("\x1b[1m\x1b[32m{TOOL_BULLET}\x1b[0m \x1b[1m{title}\x1b[0m ");
     if let Some((first, rest)) = command_lines.split_first() {
         rendered.push_str("\x1b[35m$\x1b[0m ");
         push_shell_line(&mut rendered, first, true);
+        let continuation = " ".repeat(command_body_column(title));
         for line in rest {
-            rendered.push_str("    ");
+            rendered.push_str(&continuation);
             push_shell_line(&mut rendered, line, false);
         }
     } else {
@@ -41,7 +43,7 @@ pub(super) fn render(cell: &ShellCell) -> String {
     if cell.output.is_empty() {
         rendered.push_str("\n\x1b[2m  └ (no output)\x1b[0m");
     } else {
-        let out_lines = fold_display_text(cell.output.trim_end(), false);
+        let out_lines = fold_display_text(cell.output.trim_end(), false, title);
         for (index, line) in out_lines.iter().enumerate() {
             let prefix = if index == 0 { "  └ " } else { "    " };
             if line.starts_with('…') {
@@ -66,12 +68,13 @@ pub(super) fn render(cell: &ShellCell) -> String {
 /// 参数:
 /// - `text`: 原文
 /// - `expanded`: 是否展开
+/// - `title`: 命令块标题，决定行首占用的列数
 ///
 /// 返回:
 /// - 可见行（省略标记已本地化文案）
-fn fold_display_text(text: &str, expanded: bool) -> Vec<String> {
+fn fold_display_text(text: &str, expanded: bool, title: &str) -> Vec<String> {
     // 命令与输出共用同一套折行宽度：前 2 后 4 行做预览折叠
-    let wrap = command_wrap_width();
+    let wrap = command_wrap_width_for_title(title);
     let wrapped = wrap_display_lines(text, wrap);
     let (visible, omitted) =
         fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
