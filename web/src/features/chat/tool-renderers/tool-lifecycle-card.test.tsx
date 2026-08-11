@@ -129,7 +129,7 @@ describe("ToolLifecycleCard 折叠行", () => {
     expect(html).toContain("shell-command-line");
   });
 
-  it("流式写入期间折叠行展示已写入行数", () => {
+  it("流式写入期间折叠行展示跳动中的增删徽章", () => {
     const html = render(makeTool({
       id: "writing",
       name: "write_file",
@@ -137,7 +137,19 @@ describe("ToolLifecycleCard 折叠行", () => {
       arguments: "",
       status: "running"
     }));
-    expect(html).toContain("写入");
-    expect(html).toContain("行");
+    // 进行中从 0 起跳，首屏可能仍是 +0；结构上应挂上 diff 徽章着色类
+    expect(html).toContain("text-diff-added");
+  });
+
+  it("流式替换期间分别展示增删侧", () => {
+    const html = render(makeTool({
+      id: "replacing",
+      name: "str_replace",
+      argumentsPreview: '{"path":"a.txt","old_string":"a\\nb\\nc","new_string":"x\\ny',
+      arguments: "",
+      status: "running"
+    }));
+    expect(html).toContain("text-diff-added");
+    expect(html).toContain("text-diff-removed");
   });
 });

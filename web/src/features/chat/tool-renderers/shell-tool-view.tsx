@@ -1,7 +1,8 @@
 import { CollapsibleOutput } from "./collapsible-output";
 import { DiffView } from "./diff-view";
 import { ToolPanel } from "./layout/tool-panel";
-import { parseJsonRecord, stringField } from "./tool-data";
+import { lenientStringField, parseJsonRecord, stringField } from "./tool-data";
+import { looksLikeJsonFragment } from "./tool-display-summary";
 import { useI18n } from "../../i18n/use-i18n";
 
 type ShellToolViewProps = {
@@ -23,7 +24,9 @@ export function ShellToolView({ argumentsText, output }: ShellToolViewProps) {
   const { t } = useI18n();
   const args = parseJsonRecord(argumentsText);
   const result = parseJsonRecord(output);
-  const command = stringField(args, "command") || argumentsText;
+  const command = stringField(args, "command")
+    || lenientStringField(argumentsText, "command")
+    || (looksLikeJsonFragment(argumentsText) ? "" : argumentsText);
   // 前台超时提升为后台任务：不是失败，展示去向与已产生的部分输出
   const background = result?.mode === "background";
   const stdout = stringField(result, "stdout") || stringField(result, "partial_stdout");

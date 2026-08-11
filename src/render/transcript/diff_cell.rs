@@ -1,13 +1,24 @@
 use crate::permission::PermissionDecision;
+use crate::render::activity_animation::strip_ansi_for_test;
 use crate::render::content_indent::indent_diff_for_transcript;
-use crate::render::edit_diff::render_edit_file_diff_for_transcript;
+use crate::render::edit_diff::{
+    render_edit_file_diff_for_transcript, streamed_diff_stat_status,
+};
+use crate::render::style::TOOL_BULLET;
 use crate::render::tool_event_line::{tool_event_label, tool_event_text};
 use crate::render::tool_view::PermissionAuditView;
-use crate::render::PermissionChoice;
+use crate::render::{PermissionChoice, ToolCallDisplayMode};
 
-/// edit_file 调用时生成的 diff 快照。
+/// 编辑类工具在执行前冻结的 diff 快照。
+///
+/// 摘要行用 `Write/Replace path +N -M`；Summary/Full 都挂冻结的行级正文
+/// （参数流阶段的跳动统计仍走 live ToolView，不会提前倾倒 diff）。
+/// 正文在写盘前生成，避免 str_replace 执行后无法从磁盘重建预览。
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct DiffCell {
+    name: String,
+    arguments: String,
+    /// 冻结的完整预览（可含旧式 Added 标题；渲染时会剥掉）
     rendered: String,
     permission: Option<PermissionAuditView>,
     /// 工具是否已结束（成功/失败），避免结果阶段另开空 cell
@@ -18,25 +29,39 @@ impl DiffCell {
     /// 在工具执行前构造 diff 快照。
     ///
     /// 参数:
-    /// - `arguments`: edit_file 原始参数
+    /// - `name`: 工具名称（`write_file` / `str_replace` / `edit_file`）
+    /// - `arguments`: 原始工具参数
     ///
     /// 返回:
     /// - 不依赖后续文件状态的 diff cell
-    pub(crate) fn from_arguments(arguments: String) -> Self {
+    pub(crate) fn from_call(name: String, arguments: String) -> Self {
         let rendered = render_edit_file_diff_for_transcript(&arguments).unwrap_or_else(|| {
-            // 无法构建 diff 预览时退回状态行：优先展示实时增删统计，
-            // 与参数流阶段的跳动数字衔接，实在没有再用 run 动效
-            let stats = crate::render::edit_diff::streamed_diff_stat_status(&arguments);
+            // 无法构建 diff 预览时退回状态行：优先展示实时增删统计
+            let stats = streamed_diff_stat_status(&arguments);
             tool_event_text(
-                &tool_event_label("edit_file", Some(&arguments)),
+                &tool_event_label(&name, Some(&arguments)),
                 stats.as_deref().unwrap_or("run"),
             )
         });
         Self {
+            name,
+            arguments,
             rendered: rendered.trim_end().to_string(),
             permission: None,
             completed: None,
         }
+    }
+
+    /// 兼容旧构造：默认按 `edit_file` 处理。
+    ///
+    /// 参数:
+    /// - `arguments`: edit_file 原始参数
+    ///
+    /// 返回:
+    /// - diff cell
+    #[allow(dead_code)]
+    pub(crate) fn from_arguments(arguments: String) -> Self {
+        Self::from_call("edit_file".to_string(), arguments)
     }
 
     /// 将权限请求附着到当前 diff 视图。
@@ -135,7 +160,7 @@ impl DiffCell {
         true
     }
 
-    /// 标记 edit_file 已结束，保留预览 diff 并附状态行。
+    /// 标记编辑已结束，保留预览 diff。
     ///
     /// 参数:
     /// - `ok`: 是否成功
@@ -149,18 +174,39 @@ impl DiffCell {
 
 /// 渲染已固化的 diff 快照。
 ///
+/// 摘要行：`Write/Replace path +N -M`。
+/// Summary/Full：再挂冻结行级正文（剥掉旧式 `• Added` 标题）；Hidden 不渲染。
+///
 /// 参数:
 /// - `cell`: diff 源数据
+/// - `mode`: 工具展示模式
 ///
 /// 返回:
 /// - ANSI 文本块
-pub(crate) fn render(cell: &DiffCell) -> String {
-    let mut output = cell.rendered.clone();
-    let mut denied = false;
+pub(crate) fn render(cell: &DiffCell, mode: ToolCallDisplayMode) -> String {
+    if mode == ToolCallDisplayMode::Hidden {
+        return String::new();
+    }
+    let label = tool_event_label(&cell.name, Some(&cell.arguments));
+    let stats = streamed_diff_stat_status(&cell.arguments);
+    let status = match cell.completed {
+        Some(false) => "err",
+        _ => stats.as_deref().unwrap_or(match cell.completed {
+            Some(true) => "ok",
+            _ => "run",
+        }),
+    };
+    let mut output = tool_event_text(&label, status);
+    // 定稿 DiffCell 必须带上冻结正文；之前只在 Full 挂正文，默认 Summary 下写完后 diff 丢失
+    let body = strip_leading_bullet_header(&cell.rendered);
+    if !body.trim().is_empty() {
+        output.push('\n');
+        output.push_str(body.trim_end());
+    }
+
     if let Some(permission) = &cell.permission {
         match &permission.decision {
             Some(decision) => {
-                denied = matches!(decision, PermissionDecision::Deny { .. });
                 if !output.ends_with('\n') {
                     output.push('\n');
                 }
@@ -181,13 +227,25 @@ pub(crate) fn render(cell: &DiffCell) -> String {
             }
         }
     }
-    // 拒绝后的失败状态行与「已拒绝」重复，跳过
-    if let Some(ok) = cell.completed.filter(|_| !denied) {
-        let status = if ok { "ok" } else { "err" };
-        output.push('\n');
-        output.push_str(&indent_diff_for_transcript(
-            &crate::render::tool_event_line::tool_event_text("Edit", status),
-        ));
-    }
     output
+}
+
+/// 去掉冻结预览首行的 `• Added/Edited …` 标题，只保留行级正文。
+///
+/// 参数:
+/// - `rendered`: 冻结的完整预览
+///
+/// 返回:
+/// - 无标题的正文；整段只是状态行时返回空
+fn strip_leading_bullet_header(rendered: &str) -> String {
+    let mut lines = rendered.lines();
+    let Some(first) = lines.next() else {
+        return String::new();
+    };
+    let plain = strip_ansi_for_test(first);
+    let trimmed = plain.trim_start();
+    if trimmed.starts_with(TOOL_BULLET) {
+        return lines.collect::<Vec<_>>().join("\n");
+    }
+    rendered.to_string()
 }

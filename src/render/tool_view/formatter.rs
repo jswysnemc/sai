@@ -41,12 +41,12 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
         None if view.arguments.trim().is_empty() => "arg",
         None => "run",
     };
-    // 编辑类工具在出结果前用实时增删统计顶替 run/arg 动效：
-    // 参数流阶段数字随分片增长跳动，与 diff 标题的增删计数同色。
-    // color_status 对未知状态原样透传，可直接携带 ANSI 着色文本
-    let live_stats = live_edit_stat_status(view);
-    let status = live_stats.as_deref().unwrap_or(status);
+    // 编辑类：用 +N -M 顶替 run/ok。参数流阶段数字跳动，定稿后钉死最终值。
+    // color_status 对未知状态原样透传，可直接携带 ANSI 着色文本。
+    let edit_stats = edit_stat_status(view);
+    let status = edit_stats.as_deref().unwrap_or(status);
     let denied = permission_denied(view.permission.as_ref());
+    let is_edit = crate::render::stream_text::is_file_edit_tool(&view.name);
     if mode == ToolCallDisplayMode::Summary {
         let mut output = tool_event_text(&label, status);
         if let Some(progress) = visible_progress(view.progress.as_deref()) {
@@ -64,7 +64,17 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
     }
 
     let mut output = tool_event_text(&label, status);
-    if !view.arguments.trim().is_empty() {
+    // 编辑类 Full：挂 diff 正文（无 Added 标题）；其它工具仍展示参数/结果载荷
+    if is_edit {
+        if let Some(diff_body) =
+            crate::render::edit_diff::render_edit_file_diff_body_for_transcript(&view.arguments)
+        {
+            if !diff_body.trim().is_empty() {
+                output.push('\n');
+                output.push_str(diff_body.trim_end());
+            }
+        }
+    } else if arguments_ready_for_display(&view.arguments) {
         output.push('\n');
         output.push_str(&render_payload("args", &view.arguments));
     }
@@ -72,7 +82,7 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
         output.push_str(&format!("\n\x1b[2m  ├─ {progress}\x1b[0m"));
     }
     if let Some(outcome) = &view.outcome {
-        if !denied && !outcome.output.trim().is_empty() {
+        if !denied && !outcome.output.trim().is_empty() && !is_edit {
             output.push('\n');
             output.push_str(&render_payload("output", &outcome.output));
         }
@@ -136,21 +146,52 @@ fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
     output
 }
 
-/// 组装编辑类工具的实时增删统计状态。
+/// 组装编辑类工具的增删统计状态。
 ///
-/// 只在尚未出结果的阶段生效：参数流阶段数字随分片增长跳动，
-/// 执行阶段停在最终近似值。结果出来后增删统计由 diff 视图表达，不再重复。
+/// 参数流阶段数字随分片增长跳动；成功定稿后仍保留 `+N -M`
+///（与 Cursor 一类编辑工具一致），不再改成 ok 或整段 Added diff。
+/// 失败时返回空，让外层走 err。
 ///
 /// 参数:
 /// - `view`: 工具生命周期数据
 ///
 /// 返回:
 /// - 带 ANSI 着色的 `+N -M` 状态文本；不适用时返回空
-fn live_edit_stat_status(view: &ToolView) -> Option<String> {
-    if view.outcome.is_some() || !crate::render::stream_text::is_file_edit_tool(&view.name) {
+fn edit_stat_status(view: &ToolView) -> Option<String> {
+    if !crate::render::stream_text::is_file_edit_tool(&view.name) {
         return None;
     }
+    if let Some(outcome) = &view.outcome {
+        if !outcome.ok {
+            return None;
+        }
+        if let Some(status) = result_diff_stat_status(&outcome.output) {
+            return Some(status);
+        }
+    }
     crate::render::edit_diff::streamed_diff_stat_status(&view.arguments)
+}
+
+/// 从编辑工具结果 JSON 的 `changed_files` 组装 `+N -M`。
+///
+/// 参数:
+/// - `output`: 工具输出
+///
+/// 返回:
+/// - 着色统计文本；无有效统计时返回空
+fn result_diff_stat_status(output: &str) -> Option<String> {
+    let value = serde_json::from_str::<Value>(output).ok()?;
+    let files = value.get("changed_files")?.as_array()?;
+    let mut added = 0usize;
+    let mut removed = 0usize;
+    for file in files {
+        added += file.get("added").and_then(Value::as_u64).unwrap_or(0) as usize;
+        removed += file.get("removed").and_then(Value::as_u64).unwrap_or(0) as usize;
+    }
+    if added == 0 && removed == 0 {
+        return None;
+    }
+    Some(crate::render::edit_diff::format_diff_stat_status(added, removed))
 }
 
 /// 判断权限审计是否以拒绝告终。
@@ -229,6 +270,25 @@ pub(crate) fn render_result(
     let mut view = ToolView::running(name.to_string(), String::new());
     view.finish(ok, output.to_string());
     render(&view, mode)
+}
+
+/// 判断工具参数是否已完整到可展示（合法 JSON，或非 JSON 纯文本）。
+///
+/// 参数:
+/// - `arguments`: 工具参数文本
+///
+/// 返回:
+/// - 可展示时 true；未闭合 `{`/`[` 碎片返回 false
+fn arguments_ready_for_display(arguments: &str) -> bool {
+    let trimmed = arguments.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    if serde_json::from_str::<Value>(trimmed).is_ok() {
+        return true;
+    }
+    let looks_like_json = trimmed.starts_with('{') || trimmed.starts_with('[');
+    !looks_like_json
 }
 
 /// 渲染层级工具载荷。

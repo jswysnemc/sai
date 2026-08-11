@@ -52,6 +52,7 @@ describe("ToolLayout", () => {
     expect(html).toContain('aria-expanded="true"');
     expect(html).toContain('role="button"');
     expect(html).toContain("详情");
+    expect(html).toContain("tool-layout-body");
   });
 
   it("hides the content and the toggle affordance when it cannot expand", () => {

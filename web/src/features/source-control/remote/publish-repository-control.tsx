@@ -37,7 +37,12 @@ export function PublishRepositoryControl(props: PublishRepositoryControlProps) {
         placeholder="git@github.com:owner/repository.git"
         spellCheck={false}
       />
-      <Button disabled={!props.remoteUrl.trim() || props.busy} onClick={action}>
+      <Button
+        variant="primary"
+        className="git-remote-action"
+        disabled={!props.remoteUrl.trim() || props.busy}
+        onClick={action}
+      >
         {props.canPublish && <CloudUpload size={13} />}
         {props.remoteConfigured
           ? t("Update remote", "更新远端")

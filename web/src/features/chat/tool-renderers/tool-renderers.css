@@ -15,8 +15,8 @@
   display: grid;
   grid-template-columns: 0.75rem minmax(0, 1fr);
   gap:var(--space-sm);
-  /* 外层 ToolPanel 已提供内边距，此处只保留纵向节奏 */
-  padding:0 0 var(--space-xs);
+  /* ToolPanel 不再带内边距，命令行自己留左右呼吸 */
+  padding: var(--space-sm) var(--space-md) var(--space-xs);
   border-bottom: 0;
   background: transparent;
   color: var(--technical-text);
@@ -89,8 +89,7 @@
 /*
  * 输出正文。
  *
- * 长度由 CollapsibleOutput 在渲染前按行数裁剪，因此这里不再设 max-height：
- * 内嵌滚动区会让一屏对话出现多个独立滚动上下文，滚轮落到哪个全看指针位置。
+ * 超长时由 CollapsibleOutput 的 .is-scrollable 限高并在块内滚动；
  * 横向仍允许滚动——命令输出的长行不该被强制折行打乱对齐。
  */
 .shell-output,
@@ -99,7 +98,7 @@
   max-width: 100%;
   overflow-x: auto;
   margin: 0;
-  padding:0 var(--space-lg) var(--space-md);
+  padding: 0 var(--space-md) var(--space-sm);
   border: 0;
   background: transparent;
   color: color-mix(in srgb, var(--technical-text) 78%, transparent);
@@ -147,7 +146,6 @@
   display: grid;
   min-width: 0;
   max-width: 100%;
-  background: var(--technical-surface);
   color: var(--technical-text);
   font-family: var(--font-code);
 }
@@ -161,9 +159,9 @@
   align-items: center;
   gap:var(--space-sm);
   min-width: 0;
-  padding:var(--space-sm) var(--space-lg);
-  border-bottom: 1px solid var(--technical-border);
-  background: var(--technical-surface-muted);
+  padding: var(--space-2xs) var(--space-md);
+  border-bottom: 1px solid color-mix(in srgb, var(--technical-border) 70%, transparent);
+  background: transparent;
 }
 
 .read-file-head small {
@@ -180,6 +178,14 @@
 
 .read-file-head.path-hidden {
   justify-content: flex-end;
+  min-height: 0;
+  padding-block: var(--space-3xs);
+}
+
+/* 路径已在卡片头展示时，范围说明收成一行弱提示，不再占一整条工具栏 */
+.read-file-head.path-hidden .read-file-range {
+  margin-left: 0;
+  color: var(--technical-muted);
 }
 
 .tool-file-reference {
@@ -221,17 +227,19 @@
 .read-file-content {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  max-height: 420px;
+  /* 与工具输出滚动区同档：展开看内容，不撑满整段对话 */
+  max-height: 16.25rem;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .read-file-gutter {
   display: grid;
-  min-width: 40px;
-  padding:var(--space-md) 0;
-  border-right: 1px solid var(--technical-border);
+  min-width: 2.25rem;
+  padding: var(--space-sm) 0;
+  border-right: 1px solid color-mix(in srgb, var(--technical-border) 70%, transparent);
   color: var(--technical-muted);
-  font:400 var(--text-xs)/1.65 var(--font-code);
+  font:400 var(--text-xs)/1.55 var(--font-code);
   text-align: right;
   user-select: none;
 }
@@ -245,11 +253,11 @@
 .read-file-code {
   min-width: max-content;
   margin: 0;
-  padding:var(--space-md) var(--space-xl);
+  padding: var(--space-sm) var(--space-md);
   border: 0;
   background: transparent;
   color: var(--technical-text);
-  font:400 var(--text-sm)/1.65 var(--font-code);
+  font:400 var(--text-sm)/1.55 var(--font-code);
   white-space: pre;
 }
 

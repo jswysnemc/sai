@@ -12,13 +12,16 @@ use crate::i18n::text as t;
 /// - 可直接交给 `record_meta` 的多行说明
 pub(super) fn turn_failure_text(error: &anyhow::Error) -> String {
     let detail = crate::llm::error_detail_text(error);
-    // 1. 断连类错误已有专属可重试提示，保持原文案不变
+    // 首行短标题供 Failure 渲染挂 `✗`；详情与重试提示放续行，避免整段详情顶掉引导符
     if crate::llm::is_transient_transport_error(error) {
-        return crate::llm::disconnect_user_hint(error);
+        return format!(
+            "{}\n{detail}\n{}",
+            t("Connection interrupted", "连接中断"),
+            t("You can retry this turn.", "可重试本轮请求。")
+        );
     }
-    // 2. 其余错误展示完整错误链，并说明本轮已终止
     format!(
-        "{}: {detail}\n{}",
+        "{}\n{detail}\n{}",
         t("Turn failed", "本轮失败"),
         t(
             "The conversation is intact; you can adjust the request and send again.",
@@ -60,14 +63,21 @@ mod tests {
         assert!(text.contains("/tmp/a.txt"));
     }
 
-    /// 验证断连错误保留可重试提示。
+    /// 验证断连错误保留可重试提示，且首行为短标题便于挂引导符。
     #[test]
     fn transient_failure_keeps_retry_hint() {
-        let error = anyhow::anyhow!("error sending request for url: operation timed out");
+        let error = anyhow::anyhow!("error sending request for url: operation timed out")
+            .context("client error (Connect)");
 
         let text = turn_failure_text(&error);
+        let first = text.lines().next().unwrap_or("");
 
-        assert!(text.contains(&crate::llm::disconnect_user_hint(&error)));
+        assert!(
+            first == "Connection interrupted" || first == "连接中断",
+            "first={first:?}"
+        );
+        assert!(text.contains("error sending request"));
+        assert!(text.contains("可重试") || text.contains("retry"));
     }
 
     /// 验证中断文本不含重新发送引导。

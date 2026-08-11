@@ -1,8 +1,8 @@
 /*
- * 长输出折叠
+ * 长输出：块内限高滚动
  *
- * 折叠态末行用渐隐收口而不是硬截断：硬截断会让人以为输出就到这里，
- * 渐隐则明确表达"下面还有"。展开条贴在渐隐下方，与输出同宽。
+ * 不再截断行数再「展开剩余 N 行」——工具卡本身已是可展开详情，
+ * 输出区用固定上限 + 滚动即可，避免二次折叠打断阅读。
  */
 
 .collapsible-output {
@@ -10,39 +10,11 @@
   min-width: 0;
 }
 
-/* 渐隐遮住最后两行，明确表达"下面还有"；遮罩不依赖背景色，因此不必逐主题配置 */
-.collapsible-output .is-clipped {
-  position: relative;
-  padding-bottom: var(--space-2xs);
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 2.4em), transparent 100%);
-}
-
-.collapsible-output-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2xs);
-  width: 100%;
-  min-height: 1.75rem;
-  padding: 0 var(--space-lg) var(--space-sm);
-  border: 0;
-  background: transparent;
-  color: var(--technical-muted);
-  font: 500 var(--text-2xs)/1 var(--font-ui);
-  text-align: left;
-  cursor: pointer;
-}
-
-.collapsible-output-toggle:hover {
-  color: var(--technical-text);
-}
-
-.collapsible-output-toggle svg {
-  flex-shrink: 0;
-  transition: transform var(--duration-base) var(--ease-standard);
-}
-
-.collapsible-output-toggle svg.rotate {
-  transform: rotate(180deg);
+.collapsible-output > pre.is-scrollable {
+  box-sizing: border-box;
+  max-height: 16.25rem;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 /*

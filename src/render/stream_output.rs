@@ -1,7 +1,7 @@
 use crate::llm::ChatResult;
 use crate::render::markdown::MarkdownStreamRenderer;
-use crate::render::style::TOOL_BULLET;
 use crate::render::terminal_text as t;
+use crate::render::transcript::reasoning_cell;
 use anyhow::Result;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use crossterm::{execute, terminal};
@@ -64,7 +64,13 @@ pub fn print_markdown(markdown: &str) {
 fn print_reasoning(reasoning: &str) -> Result<()> {
     let mut stdout = io::stdout();
     execute!(stdout, SetForegroundColor(Color::DarkCyan))?;
-    writeln!(stdout, "{TOOL_BULLET} {}", t("thinking", "思考"))?;
+    // 非流式打印也用 ◦，与 TUI / CLI 流式思考标题一致
+    writeln!(
+        stdout,
+        "{} {}",
+        reasoning_cell::THINKING_MARKER,
+        t("thinking", "思考")
+    )?;
     for line in reasoning.trim().lines() {
         writeln!(stdout, "  {line}")?;
     }

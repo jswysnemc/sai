@@ -176,7 +176,9 @@ fn tool_suffix(name: &str, arguments: &Value) -> Option<String> {
     match name {
         "run_command" => string_field(arguments, &["command"]).map(command_summary),
         "edit_file" => patch_file_basename(arguments),
-        "trash_path" => string_field(arguments, &["path"]).map(file_basename),
+        "write_file" | "str_replace" | "trash_path" => {
+            string_field(arguments, &["path"]).map(file_basename)
+        }
         "read_file" => read_file_suffix(arguments),
         "glob" | "find_files" | "grep" | "search_text" => {
             string_field(arguments, &["include", "pattern"]).map(compact_text)
@@ -205,7 +207,9 @@ fn tool_suffix_from_partial_text(name: &str, arguments: &str) -> Option<String> 
                 .find_map(patch_path_from_line)
                 .map(file_basename)
         }),
-        "trash_path" => string_field_from_partial(arguments, &["path"]).map(file_basename),
+        "write_file" | "str_replace" | "trash_path" => {
+            string_field_from_partial(arguments, &["path"]).map(file_basename)
+        }
         "read_file" => read_file_suffix_from_partial(arguments),
         "glob" | "find_files" | "grep" | "search_text" => {
             string_field_from_partial(arguments, &["include", "pattern"]).map(compact_text)

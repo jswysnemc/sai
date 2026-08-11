@@ -1,4 +1,4 @@
-import { parseJsonRecord, stringField } from "./tool-data";
+import { lenientStringField, parseJsonRecord, stringField } from "./tool-data";
 import { text, type Locale } from "../../i18n/locale";
 import { workspaceRelativePath } from "../../workspace/workspace-path-utils";
 
@@ -21,7 +21,14 @@ export function toolDisplaySummary(
   workspacePath = ""
 ): string {
   const args = parseJsonRecord(argumentsText);
-  if (!args) return compactText(argumentsText);
+  if (!args) {
+    // 流式阶段常见未闭合 `{...`：不把碎片 JSON 塞进标题；能抠出字段再用
+    if (looksLikeJsonFragment(argumentsText)) {
+      const lenient = lenientSummaryFromPartial(name, argumentsText, locale, workspacePath);
+      return lenient;
+    }
+    return compactText(argumentsText);
+  }
 
   if (name === "run_command" || name.includes("background_command")) {
     // 后台任务管理操作（list/output/wait/stop/cleanup）没有 command 字段，
@@ -301,6 +308,50 @@ function compactText(value: string): string {
   const single = value.replace(/\s+/g, " ").trim();
   if (single.length <= MAX_ITEM_CHARS) return single;
   return `${single.slice(0, MAX_ITEM_CHARS - 1)}…`;
+}
+
+/**
+ * 判断文本是否像尚未闭合的 JSON 对象/数组碎片。
+ *
+ * @param value 参数预览
+ * @returns 疑似 JSON 碎片时返回 true
+ */
+export function looksLikeJsonFragment(value: string): boolean {
+  const trimmed = value.trimStart();
+  return trimmed.startsWith("{") || trimmed.startsWith("[");
+}
+
+/**
+ * 从未闭合 JSON 中宽松提取可读摘要（路径/命令等）。
+ *
+ * @param name 工具名
+ * @param argumentsText 参数预览
+ * @param locale 语言
+ * @param workspacePath 工作区路径
+ * @returns 可读摘要；无法提取时返回空串（隐藏碎片 JSON）
+ */
+function lenientSummaryFromPartial(
+  name: string,
+  argumentsText: string,
+  locale: Locale,
+  workspacePath: string
+): string {
+  if (name === "run_command" || name.includes("background_command")) {
+    const command = lenientStringField(argumentsText, "command") || lenientStringField(argumentsText, "cmd");
+    if (command) return humanizeCommand(command);
+  }
+  const path = lenientStringField(argumentsText, "path");
+  if (path && (name === "read_file" || name === "write_file" || name === "str_replace" || name === "trash_path" || name === "glob" || name === "find_files")) {
+    return displayPath(path, workspacePath);
+  }
+  const query =
+    lenientStringField(argumentsText, "query")
+    || lenientStringField(argumentsText, "pattern")
+    || lenientStringField(argumentsText, "keyword");
+  if (query && (name === "grep" || name === "search_text" || name.includes("search") || name.includes("web_"))) {
+    return humanizeSearchPattern(query) || text(locale, "search", "搜索");
+  }
+  return "";
 }
 
 /**

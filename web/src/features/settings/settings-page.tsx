@@ -1,4 +1,5 @@
 import { ArrowLeft } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { SettingsNav } from "./shell/settings-nav";
 import { SettingsSaveBar } from "./shell/settings-save-bar";
@@ -30,6 +31,8 @@ export function SettingsPage() {
   const settings = useSettingsConfig();
   const theme = useTheme();
   const { t } = useI18n();
+  const pageRef = useRef<HTMLDivElement | null>(null);
+
 
   // 1. 归一非法 section 与子页段：有子页的分区始终落在显式子页 URL 上
   if (!requested || requested !== section || (params.subview ?? undefined) !== subview) {
@@ -37,7 +40,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="settings-page">
+    <div className="settings-page" ref={pageRef}>
       <header className="settings-topbar">
         <div className="settings-topbar-inner">
           <Link to="/" className="settings-back" aria-label={t("Back to workspace", "返回主界面")}>

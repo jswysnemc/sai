@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { LiveMessagePart, ToolLifecycle } from "../run-event-reducer";
-import { groupCompletedToolCalls, toolCallGroupLabel } from "./tool-call-grouping";
+import {
+  groupCompletedToolCalls,
+  shouldUseLightweightExploreList,
+  toolCallGroupLabel
+} from "./tool-call-grouping";
 
 /**
  * 创建指定状态的测试工具部件。
@@ -177,5 +181,21 @@ describe("tool call grouping", () => {
 
     // 只读的 git status 归入探索桶，subagent 落在其他工具桶
     expect(label).toBe("探索了 1 个文件，执行了 1 个工具");
+  });
+
+  it("uses lightweight explore list only for pure file reads", () => {
+    const a = toolPart("a", "completed", "read_file", JSON.stringify({ path: "src/main.rs" }));
+    const b = toolPart("b", "completed", "grep", JSON.stringify({ pattern: "foo", path: "src" }));
+    if (a.type !== "tool" || b.type !== "tool") throw new Error("测试工具类型异常");
+    expect(shouldUseLightweightExploreList([a.tool, b.tool])).toBe(true);
+  });
+
+  it("disables lightweight list when explore group contains shell commands", () => {
+    // 只读 shell 仍算「探索了 N 个文件」，但需要完整工具卡才能二次展开看输出
+    const a = toolPart("a", "completed", "run_command", JSON.stringify({ command: "pwd && ls -la" }));
+    const b = toolPart("b", "completed", "run_command", JSON.stringify({ command: "ls -la docs" }));
+    if (a.type !== "tool" || b.type !== "tool") throw new Error("测试工具类型异常");
+    expect(toolCallGroupLabel([a.tool, b.tool])).toBe("探索了 2 个文件");
+    expect(shouldUseLightweightExploreList([a.tool, b.tool])).toBe(false);
   });
 });

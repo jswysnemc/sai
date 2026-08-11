@@ -61,7 +61,7 @@ fn full_stream_event_sequence_drives_reconcile_pipeline() {
     let mut runtime = ReplRuntime::new(5_000, options());
     runtime.record_meta("准备开始".to_string()).unwrap();
     runtime
-        .record_user(crate::agent::AgentMode::Audited, "帮我跑测试".to_string())
+        .record_user(crate::agent::AgentMode::Audited, "帮我跑测试".to_string(), false)
         .unwrap();
     runtime.record_runner_event(&RunnerEvent::Started).unwrap();
 

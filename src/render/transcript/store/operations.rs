@@ -131,7 +131,30 @@ impl TranscriptStore {
     /// 返回:
     /// - 无
     pub(crate) fn push_user_echo(&mut self, mode: TranscriptMode, text: String) {
-        self.push_cell(HistoryCell::user_echo(mode, text));
+        self.push_user_echo_with_fold(mode, text, false);
+    }
+
+    /// 记录用户输入回显；`fold` 仅对粘贴长文本启用思考式折叠。
+    ///
+    /// 参数:
+    /// - `mode`: 用户提交时的 REPL 模式
+    /// - `text`: 回显正文（粘贴块应已展开）
+    /// - `fold`: 是否按思考块语义折叠
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn push_user_echo_with_fold(
+        &mut self,
+        mode: TranscriptMode,
+        text: String,
+        fold: bool,
+    ) {
+        let cell = if fold {
+            HistoryCell::user_echo_with_fold(mode, text, true)
+        } else {
+            HistoryCell::user_echo(mode, text)
+        };
+        self.push_cell(cell);
     }
 
     /// 记录 Sai 主动提交的自动输入回显。
@@ -403,7 +426,8 @@ impl TranscriptStore {
         self.live_tool_call = None;
         let index = self.cells.len();
         if crate::render::stream_text::is_file_edit_tool(&name) {
-            self.push_cell(HistoryCell::diff(arguments));
+            // 写盘前冻结预览；定稿后 Summary/Full 都挂行级正文
+            self.push_cell(HistoryCell::diff(name, arguments));
         } else if name == "subagent" {
             self.push_cell(HistoryCell::Tool(ToolCell::Subagent(SubagentCell::new(
                 arguments,
@@ -428,9 +452,9 @@ impl TranscriptStore {
         self.finalize_live_tail();
         self.live_tool_call = None;
         let index = self.cells.len();
-        // 编辑类工具历史恢复仍用 DiffCell（按参数重建预览），避免只剩摘要工具行
+        // 编辑类历史仍用 DiffCell：按参数在恢复时重建预览（写盘后 str_replace 可能已对不上磁盘）
         if crate::render::stream_text::is_file_edit_tool(&name) {
-            self.push_cell(HistoryCell::diff(arguments));
+            self.push_cell(HistoryCell::diff(name, arguments));
         } else {
             self.push_cell(HistoryCell::Tool(ToolCell::Invocation(ToolView::running(
                 name, arguments,
@@ -463,7 +487,7 @@ impl TranscriptStore {
             self.active_tool_index = None;
             return;
         }
-        // 编辑类工具使用 DiffCell：在原 diff 上标记完成，避免再塞一个空结果 cell
+        // 编辑类已统一为 ToolView；仍兼容会话里残留的 DiffCell
         if crate::render::stream_text::is_file_edit_tool(&name) && self.finish_active_diff(ok) {
             self.active_tool_index = None;
             return;

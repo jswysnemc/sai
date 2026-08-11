@@ -1,0 +1,14 @@
+/*
+ * 展开面板：一层细框即可。
+ * 内边距交给子视图（命令行、输出、Read 正文），避免 ToolPanel + 视图双重 padding。
+ */
+.tool-panel {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+  border-radius: var(--radius-2);
+  background: color-mix(in srgb, var(--paper-deep) 88%, var(--paper));
+}

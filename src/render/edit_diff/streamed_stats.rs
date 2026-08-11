@@ -29,11 +29,23 @@ pub(crate) fn streamed_diff_counts(arguments: &str) -> Option<(usize, usize)> {
 /// - 形如 `+12 -3` 的 ANSI 着色文本；尚无可统计字段时返回空
 pub(crate) fn streamed_diff_stat_status(arguments: &str) -> Option<String> {
     let (added, removed) = streamed_diff_counts(arguments)?;
-    Some(format!(
+    Some(format_diff_stat_status(added, removed))
+}
+
+/// 将增删行数格式化为与 diff 标题一致的着色状态文本。
+///
+/// 参数:
+/// - `added`: 新增行数
+/// - `removed`: 删除行数
+///
+/// 返回:
+/// - 形如 `+12 -3` 的 ANSI 着色文本
+pub(crate) fn format_diff_stat_status(added: usize, removed: usize) -> String {
+    format!(
         "{} {}",
         style_added_count(added),
         style_removed_count(removed)
-    ))
+    )
 }
 
 /// 统计字段字符串值中已接收的行数。

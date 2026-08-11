@@ -13,7 +13,7 @@ use crate::tools;
 use anyhow::{bail, Result};
 use crossterm::cursor::{self, Hide, MoveTo, Show};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use crossterm::style::{Attribute, Print, SetAttribute};
+use crossterm::style::Print;
 use crossterm::terminal::{self, Clear, ClearType};
 use crossterm::{execute, queue};
 use fuzzy_matcher::skim::SkimMatcherV2;

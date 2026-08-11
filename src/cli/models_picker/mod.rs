@@ -5,7 +5,7 @@ use crate::config::AppConfig;
 use crate::i18n::text as t;
 use crate::paths::SaiPaths;
 use anyhow::{bail, Result};
-use crossterm::cursor::{Hide, Show};
+use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::terminal::{self, Clear, ClearType};
 use crossterm::{execute, queue};
@@ -15,9 +15,16 @@ use std::io::{self, IsTerminal, Write};
 /// 可选思考等级，与 `/thinking` 命令保持一致。
 const THINKING_LEVELS: &[&str] = &["auto", "none", "low", "medium", "high", "xhigh", "max"];
 
-/// 【CLI】【模型选择】运行交互式模型与思考等级选择。
-///
-/// 上下键在当前列内移动，左右键切换模型列与思考列，Enter 保存，Esc 取消。
+/// 交互式模型选择的结果（CLI `sai models` 与 TUI `/model` 共用）。
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(super) enum PickerOutcome {
+    /// 用户取消
+    Cancelled,
+    /// 已保存模型与思考等级
+    Saved { message: String },
+}
+
+/// 【CLI】【模型选择】运行交互式模型与思考等级选择（终端打印结果）。
 ///
 /// 参数:
 /// - `paths`: Sai 路径集合
@@ -25,6 +32,30 @@ const THINKING_LEVELS: &[&str] = &["auto", "none", "low", "medium", "high", "xhi
 /// 返回:
 /// - 保存成功或用户取消时为 Ok
 pub(super) fn run(paths: &SaiPaths) -> Result<()> {
+    match run_interactive(paths)? {
+        PickerOutcome::Cancelled => {
+            println!("{}", t("cancelled", "已取消"));
+            Ok(())
+        }
+        PickerOutcome::Saved { message } => {
+            println!("{message}");
+            Ok(())
+        }
+    }
+}
+
+/// 【CLI/TUI】【模型选择】运行交互式双列选择并写回配置。
+///
+/// 与独立 `sai models` 相同：↑↓ 当前列移动，←→ 切换模型/思考列，
+/// 输入过滤，Enter 保存，Esc 取消。可在 REPL 已启用 raw mode 时嵌套调用。
+///
+/// 参数:
+/// - `paths`: Sai 路径集合
+///
+/// 返回:
+/// - 取消或已保存的结果
+pub(super) fn run_interactive(paths: &SaiPaths) -> Result<PickerOutcome> {
+    AppConfig::init_files(paths)?;
     let mut config = AppConfig::load(paths)?;
     let choices = config.provider_model_choices();
     if choices.is_empty() {
@@ -46,6 +77,7 @@ pub(super) fn run(paths: &SaiPaths) -> Result<()> {
         );
     }
 
+
     // 1. 以当前生效的供应商与模型为起点
     let active = config.provider(None)?;
     let current_provider = active.id.clone();
@@ -61,8 +93,7 @@ pub(super) fn run(paths: &SaiPaths) -> Result<()> {
 
     // 2. 进入交互循环
     let Some(()) = run_loop(&mut picker)? else {
-        println!("{}", t("cancelled", "已取消"));
-        return Ok(());
+        return Ok(PickerOutcome::Cancelled);
     };
 
     // 3. 保存所选取值
@@ -74,47 +105,64 @@ pub(super) fn run(paths: &SaiPaths) -> Result<()> {
     let level = picker.selected_level();
     apply_level(&mut config, &selected.provider_id, level)?;
     config.save(paths)?;
-    println!(
+    let message = format!(
         "{}: {} · {}: {}",
         t("model", "模型"),
         selected.label(),
         t("thinking", "思考"),
         level
     );
-    Ok(())
+    Ok(PickerOutcome::Saved { message })
 }
 
-/// 运行按键循环。
+/// 运行按键循环（固定锚点行绘制，兼容 CLI 与 TUI 嵌套）。
 ///
 /// 参数:
 /// - `picker`: 选择状态
+///
 /// 返回:
 /// - 确认时返回 Some(())，取消时返回 None
 fn run_loop(picker: &mut PickerState) -> Result<Option<()>> {
-    struct RawGuard;
-    impl Drop for RawGuard {
+    let was_raw = terminal::is_raw_mode_enabled().unwrap_or(false);
+    if !was_raw {
+        terminal::enable_raw_mode()?;
+    }
+    struct ModeGuard {
+        was_raw: bool,
+    }
+    impl Drop for ModeGuard {
         fn drop(&mut self) {
-            let _ = terminal::disable_raw_mode();
             let _ = execute!(io::stdout(), Show);
+            if !self.was_raw {
+                let _ = terminal::disable_raw_mode();
+            }
         }
     }
+    let _guard = ModeGuard { was_raw };
 
     let mut stdout = io::stdout();
     execute!(stdout, Hide)?;
-    let _guard = RawGuard;
-    let mut previous_rows = 0usize;
+
+    // 预留固定高度区域，避免在 composer 上滚动污染 transcript
+    let frame_rows = render::frame_row_count();
+    reserve_frame_space(frame_rows)?;
+    let (_, cursor_y) = crossterm::cursor::position().unwrap_or((0, frame_rows.saturating_sub(1)));
+    let anchor_y = cursor_y.saturating_sub(frame_rows.saturating_sub(1));
+
     loop {
         let lines = render::render(picker);
-        draw(&mut stdout, &lines, previous_rows)?;
-        previous_rows = lines.len();
+        draw_at(&mut stdout, anchor_y, frame_rows, &lines)?;
 
-        terminal::enable_raw_mode()?;
-        let key = read_key();
-        terminal::disable_raw_mode()?;
-        let key = key?;
+        let key = read_key()?;
         match key.code {
-            KeyCode::Esc => return Ok(None),
-            KeyCode::Enter if picker.selected_model().is_some() => return Ok(Some(())),
+            KeyCode::Esc => {
+                clear_frame(&mut stdout, anchor_y, frame_rows)?;
+                return Ok(None);
+            }
+            KeyCode::Enter if picker.selected_model().is_some() => {
+                clear_frame(&mut stdout, anchor_y, frame_rows)?;
+                return Ok(Some(()));
+            }
             KeyCode::Up => picker.move_up(),
             KeyCode::Down => picker.move_down(),
             KeyCode::Left => picker.focus_model(),
@@ -136,23 +184,66 @@ fn run_loop(picker: &mut PickerState) -> Result<Option<()>> {
     }
 }
 
-/// 重绘选择界面。
+/// 预留下拉选择区域。
+///
+/// 参数:
+/// - `rows`: 占用行数
+///
+/// 返回:
+/// - 是否成功
+fn reserve_frame_space(rows: u16) -> Result<()> {
+    // 在 raw mode 下用 \r\n 推进光标，避免禁用 raw 再 println
+    let mut stdout = io::stdout();
+    for _ in 1..rows {
+        queue!(stdout, crossterm::style::Print("\r\n"))?;
+    }
+    stdout.flush()?;
+    Ok(())
+}
+
+/// 在固定锚点绘制一帧。
 ///
 /// 参数:
 /// - `stdout`: 标准输出
-/// - `lines`: 待绘制的行
-/// - `previous_rows`: 上一帧行数，用于回退光标覆盖重绘
+/// - `anchor_y`: 首行行号
+/// - `frame_rows`: 预留总行数
+/// - `lines`: 待绘制内容
 ///
 /// 返回:
 /// - 绘制结果
-fn draw(stdout: &mut io::Stdout, lines: &[String], previous_rows: usize) -> Result<()> {
-    if previous_rows > 0 {
-        queue!(stdout, crossterm::cursor::MoveUp(previous_rows as u16))?;
+fn draw_at(stdout: &mut io::Stdout, anchor_y: u16, frame_rows: u16, lines: &[String]) -> Result<()> {
+    for row in 0..frame_rows {
+        queue!(
+            stdout,
+            MoveTo(0, anchor_y.saturating_add(row)),
+            Clear(ClearType::CurrentLine)
+        )?;
+        if let Some(line) = lines.get(row as usize) {
+            queue!(stdout, crossterm::style::Print(line))?;
+        }
     }
-    for line in lines {
-        queue!(stdout, Clear(ClearType::CurrentLine))?;
-        writeln!(stdout, "{line}")?;
+    stdout.flush()?;
+    Ok(())
+}
+
+/// 清空选择区域。
+///
+/// 参数:
+/// - `stdout`: 标准输出
+/// - `anchor_y`: 首行行号
+/// - `frame_rows`: 预留总行数
+///
+/// 返回:
+/// - 是否成功
+fn clear_frame(stdout: &mut io::Stdout, anchor_y: u16, frame_rows: u16) -> Result<()> {
+    for row in 0..frame_rows {
+        queue!(
+            stdout,
+            MoveTo(0, anchor_y.saturating_add(row)),
+            Clear(ClearType::CurrentLine)
+        )?;
     }
+    queue!(stdout, MoveTo(0, anchor_y), Show)?;
     stdout.flush()?;
     Ok(())
 }
@@ -217,12 +308,6 @@ mod tests {
     use super::*;
 
     /// 【CLI】【模型选择】验证 auto 写回为空值，其余等级原样保留。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 无
     #[test]
     fn auto_level_clears_the_provider_override() {
         let mut config = AppConfig::default();
@@ -236,12 +321,6 @@ mod tests {
     }
 
     /// 【CLI】【模型选择】验证未知供应商返回错误而不静默忽略。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 无
     #[test]
     fn unknown_provider_is_reported() {
         let mut config = AppConfig::default();
@@ -250,12 +329,6 @@ mod tests {
     }
 
     /// 【CLI】【模型选择】验证空思考等级归一化为 auto。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 无
     #[test]
     fn empty_level_normalizes_to_auto() {
         assert_eq!(normalized_level(""), "auto");

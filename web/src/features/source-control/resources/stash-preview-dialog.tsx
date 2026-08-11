@@ -5,6 +5,7 @@ import { Button } from "../../../shared/ui/button/button";
 import { Modal } from "../../../shared/ui/dialog/modal";
 import { DiffView } from "../../chat/tool-renderers/diff-view";
 import { useI18n } from "../../i18n/use-i18n";
+import { GitDiffStat } from "../diff/git-diff-stat";
 
 type StashPreviewDialogProps = {
   stash: GitStashEntry | null;
@@ -38,7 +39,7 @@ export function StashPreviewDialog(props: StashPreviewDialogProps) {
       <div className="git-stash-preview">
         {preview.isLoading && <div className="git-resource-state">{t("Loading stash changes...", "正在读取储藏改动…")}</div>}
         {preview.error && <div className="git-resource-state error">{preview.error.message}</div>}
-        {preview.data?.stat && <pre className="git-diff-stat">{preview.data.stat}</pre>}
+        {preview.data?.stat ? <GitDiffStat stat={preview.data.stat} /> : null}
         {preview.data?.patch ? (
           <DiffView source={preview.data.patch} />
         ) : !preview.isLoading && !preview.error ? (

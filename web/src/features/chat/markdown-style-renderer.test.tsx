@@ -11,6 +11,16 @@ describe("MarkdownRenderer style preferences", () => {
     expect(html).toContain("login-page/index.html");
   });
 
+  it("密文件 pill 与中文说明同段渲染，保留说明文本节点", () => {
+    const source =
+      "`docs/00-a.md` `docs/01-b.md` —— 研究文档集 / 工具调研 / `docs/02-c.md` 综合与路线图";
+    const html = renderToStaticMarkup(<MarkdownRenderer source={source} />);
+    expect(html).toContain("inline-file-reference");
+    expect(html).toContain("—— 研究文档集 / 工具调研 /");
+    expect(html).toContain("综合与路线图");
+    expect((html.match(/inline-file-reference/g) ?? []).length).toBe(3);
+  });
+
   it("将表格和代码块配置映射到实际渲染结构", () => {
     const stylePreferences = {
       table: {

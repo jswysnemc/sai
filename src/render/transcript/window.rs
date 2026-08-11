@@ -237,18 +237,16 @@ impl TranscriptStore {
                     }
                 }
             };
+            // 与定稿 Markdown / Reasoning 一致：区块前空一行。
+            // 以前只在 finalize 后由 cell.display_lines 插入，造成「工作时无空行、完成后突然空行」。
+            if !rendered_lines.is_empty() {
+                lines.push(AnsiLine::new(String::new()));
+            }
             lines.extend(rendered_lines);
         }
         if let Some(tool_call) = &self.live_tool_call {
-            let is_diff = crate::render::stream_text::is_file_edit_tool(&tool_call.name);
-            let content_width = if is_diff {
-                width
-                    .saturating_sub(crate::render::content_indent::DIFF_BLOCK_INSET)
-                    .max(1)
-            } else {
-                width
-            };
-            let rendered = crate::render::render_width::with_render_width(content_width, || {
+            // 编辑类 live 固定 Summary 一行（Write +N -M），与普通工具同行宽对齐
+            let rendered = crate::render::render_width::with_render_width(width, || {
                 super::tool_cell::render_live_call(
                     &tool_call.name,
                     &tool_call.arguments_preview,
@@ -256,19 +254,7 @@ impl TranscriptStore {
                 )
             });
             if !rendered.is_empty() {
-                if is_diff {
-                    let body_column = crate::render::edit_diff::diff_body_start_column(&rendered);
-                    lines.extend(
-                        AnsiLine::wrap_block_with_right_margin_and_continuation_indent(
-                            &rendered,
-                            content_width,
-                            crate::render::content_indent::DIFF_BLOCK_INSET,
-                            body_column.max(crate::render::content_indent::DIFF_NESTED_INDENT),
-                        ),
-                    );
-                } else {
-                    lines.extend(AnsiLine::wrap_block(&rendered, content_width));
-                }
+                lines.extend(AnsiLine::wrap_block(&rendered, width));
             }
         }
         if let Some(status) = self.work_status {

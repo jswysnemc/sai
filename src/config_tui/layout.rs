@@ -1,5 +1,56 @@
 //! 配置界面纯布局计算：宽度钳制、滚动窗口和多栏分配。
 
+/// 近全屏内容框的矩形区域。
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct FrameRect {
+    pub x: u16,
+    pub y: u16,
+    pub width: u16,
+    pub height: u16,
+}
+
+/// 计算近全屏内容框：只留一列边距，尽量吃满终端。
+///
+/// 参数:
+/// - `cols`: 终端列数
+/// - `rows`: 终端行数
+///
+/// 返回:
+/// - 可用于绘制圆角面板的矩形
+pub(crate) fn full_frame(cols: u16, rows: u16) -> FrameRect {
+    let margin_x: u16 = if cols > 40 { 1 } else { 0 };
+    let margin_y: u16 = 0;
+    let width = cols.saturating_sub(margin_x.saturating_mul(2)).max(1);
+    let height = rows.saturating_sub(margin_y.saturating_mul(2)).max(1);
+    FrameRect {
+        x: margin_x,
+        y: margin_y,
+        width,
+        height,
+    }
+}
+
+/// 在全屏框内划分「左侧列表 + 右侧说明」两栏。
+///
+/// 参数:
+/// - `inner_w`: 去掉左右边框后的内容宽度
+///
+/// 返回:
+/// - `(左栏宽, 右栏宽)`；过窄时右栏为 0（单栏）
+pub(crate) fn master_detail_widths(inner_w: u16) -> (u16, u16) {
+    if inner_w < 48 {
+        return (inner_w, 0);
+    }
+    let gap = 2u16;
+    let left = (inner_w.saturating_mul(38) / 100).clamp(18, 42);
+    let right = inner_w.saturating_sub(left).saturating_sub(gap);
+    if right < 16 {
+        (inner_w, 0)
+    } else {
+        (left, right)
+    }
+}
+
 /// 计算面板宽度，保证不超过终端可用宽度。
 ///
 /// 参数:
@@ -9,6 +60,7 @@
 ///
 /// 返回:
 /// - 先按最小宽度抬升期望值，再钳制到可用宽度后的结果
+#[cfg(test)]
 pub(crate) fn panel_width(desired: u16, min_width: u16, available: u16) -> u16 {
     desired.max(min_width).min(available)
 }
@@ -102,5 +154,25 @@ mod tests {
     fn three_columns_degrade_on_narrow_terminal() {
         assert_eq!(three_column_widths(30), None);
         assert_eq!(three_column_widths(1), None);
+    }
+
+    /// 验证全屏框几乎吃满终端。
+    #[test]
+    fn full_frame_uses_most_of_the_terminal() {
+        let frame = full_frame(120, 40);
+        assert_eq!(frame.width, 118);
+        assert_eq!(frame.height, 40);
+        assert!(frame.width * 100 / 120 >= 95);
+    }
+
+    /// 验证主从布局在宽终端分栏、窄终端合并。
+    #[test]
+    fn master_detail_splits_on_wide_terminals() {
+        let (left, right) = master_detail_widths(100);
+        assert!(left > 0 && right > 0);
+        assert_eq!(left + right + 2, 100);
+        let (only, none) = master_detail_widths(40);
+        assert_eq!(only, 40);
+        assert_eq!(none, 0);
     }
 }

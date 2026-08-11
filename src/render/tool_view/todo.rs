@@ -1,4 +1,5 @@
 use super::model::ToolView;
+use crate::render::todo_style::{colorize_item, status_marker, status_rank};
 use crate::render::tool_event_line::{tool_event_label, tool_event_text};
 use crate::render::ToolCallDisplayMode;
 use serde::Deserialize;
@@ -84,18 +85,17 @@ pub(crate) fn render_todo_output(
         .count();
     let pending = total.saturating_sub(completed + in_progress + cancelled);
 
-    // 摘要行：进度与状态统计
-    output.push_str(&format!("\n\x1b[2m  {}/{} done", completed, total));
+    // 摘要行：x/x（与沉底面板同一视觉语言，不再画进度条）
+    output.push_str(&format!("\n  \x1b[2m{completed}/{total}\x1b[0m"));
     if in_progress > 0 {
-        output.push_str(&format!(" · {in_progress} active"));
+        output.push_str(&format!(" \x1b[2m· {in_progress} active\x1b[0m"));
     }
     if pending > 0 {
-        output.push_str(&format!(" · {pending} pending"));
+        output.push_str(&format!(" \x1b[2m· {pending} pending\x1b[0m"));
     }
     if cancelled > 0 {
-        output.push_str(&format!(" · {cancelled} cancelled"));
+        output.push_str(&format!(" \x1b[2m· {cancelled} cancelled\x1b[0m"));
     }
-    output.push_str("\x1b[0m");
 
     // Summary 模式：清单已由沉底面板常驻展示，历史区只保留摘要与当前进行中项，
     // 避免每次 todo 调用都在历史里重复整份清单
@@ -106,7 +106,7 @@ pub(crate) fn render_todo_output(
             .find(|item| item.status == "in_progress")
         {
             output.push_str(&format!(
-                "\n  \x1b[2m└─\x1b[0m {} {}",
+                "\n  {} {}",
                 status_marker(&active.status),
                 colorize_item(&active.status, &active.text)
             ));
@@ -114,19 +114,14 @@ pub(crate) fn render_todo_output(
         return Some(output);
     }
 
-    // Full 模式：条目全量展示，当前进行中优先，其次待办，再完成/取消
+    // Full 模式：扁平列表，已完成置顶；不用树形 ├─/└─
     let mut items = result.items;
     items.sort_by_key(|item| status_rank(&item.status));
 
-    for (index, item) in items.iter().enumerate() {
+    for item in &items {
         let marker = status_marker(&item.status);
         let colored = colorize_item(&item.status, &item.text);
-        let connector = if index + 1 == items.len() {
-            "└─"
-        } else {
-            "├─"
-        };
-        output.push_str(&format!("\n  \x1b[2m{connector}\x1b[0m {marker} {colored}"));
+        output.push_str(&format!("\n  {marker} {colored}"));
     }
     Some(output)
 }
@@ -157,53 +152,10 @@ fn changed_item_label(label: &str, changed: &[TodoItemView]) -> String {
     )
 }
 
-/// 状态排序：进行中 > 待办 > 完成 > 取消。
-fn status_rank(status: &str) -> u8 {
-    match status {
-        "in_progress" => 0,
-        "pending" | "todo" => 1,
-        "completed" => 2,
-        "cancelled" => 3,
-        _ => 4,
-    }
-}
-
-/// 返回待办状态的纯文本/符号标记。
-///
-/// 参数:
-/// - `status`: 待办状态
-///
-/// 返回:
-/// - 状态标记
-fn status_marker(status: &str) -> &'static str {
-    match status {
-        "completed" => "\x1b[32m✓\x1b[0m",
-        "in_progress" => "\x1b[36m›\x1b[0m",
-        "cancelled" => "\x1b[2m×\x1b[0m",
-        _ => "\x1b[2m○\x1b[0m",
-    }
-}
-
-/// 按状态着色待办文本。
-///
-/// 参数:
-/// - `status`: 状态
-/// - `text`: 原文
-///
-/// 返回:
-/// - 带 ANSI 的文本
-fn colorize_item(status: &str, text: &str) -> String {
-    match status {
-        "completed" => format!("\x1b[2m{text}\x1b[0m"),
-        "in_progress" => format!("\x1b[1m\x1b[36m{text}\x1b[0m"),
-        "cancelled" => format!("\x1b[2m\x1b[9m{text}\x1b[0m"),
-        _ => text.to_string(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::render::todo_style::status_marker;
 
     /// CLI 没有沉底面板，Full 渲染必须把每个条目都写出来，
     /// 否则计划只剩一行统计，用户无从查看。
@@ -220,7 +172,9 @@ mod tests {
         assert!(rendered.contains("读取配置"));
         assert!(rendered.contains("改写解析"));
         assert!(rendered.contains("补测试"));
-        assert!(rendered.contains("1/3 done"));
+        assert!(rendered.contains("1/3"));
+        assert!(!rendered.contains('█') && !rendered.contains('░'));
+        assert!(rendered.contains('▶'));
     }
 
     /// 更新结果使用条目内容和状态，不暴露内部 ID。
@@ -269,8 +223,8 @@ mod tests {
 
     #[test]
     fn status_marker_covers_common_states() {
-        assert!(status_marker("completed").contains("✓"));
-        assert!(status_marker("in_progress").contains("›"));
-        assert!(status_marker("pending").contains("○"));
+        assert!(status_marker("completed").contains('✓'));
+        assert!(status_marker("in_progress").contains('▶'));
+        assert!(status_marker("pending").contains('○'));
     }
 }

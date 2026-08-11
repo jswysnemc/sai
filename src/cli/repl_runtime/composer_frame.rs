@@ -1,9 +1,13 @@
+use super::shell_hint_panel::{bang_ghost_suffix, ShellHintPanel};
 use super::slash_panel::SlashPanel;
 use super::viewport::InlineViewport;
-use crate::cli::repl_chrome::{chrome_fixed_rows, chrome_rule, ReplChrome};
+use crate::cli::repl_chrome::{
+    chrome_fixed_rows, chrome_input_content_cols, chrome_panel_row, CHROME_ACCENT_COLS,
+    CHROME_INPUT_PAD_ROWS, ReplChrome,
+};
 use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
 use crate::cli::repl_input_render::{
-    repl_cursor_position_for_cols, repl_line_rows_for_cols, repl_prompt_rows_for_cols,
+    repl_cursor_position_for_cols, repl_prompt_rows_for_cols,
     repl_visible_input_lines,
 };
 use crate::cli::repl_text::{repl_input_lines, visible_width};
@@ -29,6 +33,7 @@ pub(super) struct ComposerSignature {
     input_lines: Vec<String>,
     footer: Option<String>,
     slash_lines: Vec<String>,
+    shell_lines: Vec<String>,
     cursor_col: u16,
     cursor_row: u16,
 }
@@ -107,11 +112,19 @@ impl ComposerFrame {
     pub(super) fn height(&self, cols: usize) -> u16 {
         let layout = self.layout(cols);
         let panel_rows = self.panel_lines.len().min(usize::from(u16::MAX)) as u16;
+        let pads = CHROME_INPUT_PAD_ROWS.saturating_mul(2);
+        // slash / shell 提示时收起状态行，仍保留输入上下空白间距
         if layout.slash_panel.is_visible() {
             return panel_rows
-                .saturating_add(2)
+                .saturating_add(pads)
                 .saturating_add(layout.input_rows)
                 .saturating_add(layout.slash_panel.height());
+        }
+        if layout.shell_hint.is_visible() {
+            return panel_rows
+                .saturating_add(pads)
+                .saturating_add(layout.input_rows)
+                .saturating_add(layout.shell_hint.height());
         }
         panel_rows
             .saturating_add(chrome_fixed_rows())
@@ -142,10 +155,17 @@ impl ComposerFrame {
         let top = viewport.composer_top();
         let height = viewport.composer_height();
         let layout = self.layout(cols);
+        let content_cols = chrome_input_content_cols(cols);
+        // 光标落在彩条右侧的内容区
+        let drawn_cursor_col = layout
+            .cursor_col
+            .saturating_add(CHROME_ACCENT_COLS as u16)
+            .min(cols.saturating_sub(1) as u16);
         let cursor_row = {
             let mut row = top;
             row = row.saturating_add(self.panel_lines.len().min(usize::from(u16::MAX)) as u16);
-            row.saturating_add(1)
+            // 输入正文上方有固定空白行，光标落在空白之下
+            row.saturating_add(CHROME_INPUT_PAD_ROWS)
                 .saturating_add(layout.cursor_row_offset)
         };
         let signature = ComposerSignature {
@@ -154,13 +174,14 @@ impl ComposerFrame {
             cols,
             panel_lines: self.panel_lines.clone(),
             input_lines: layout.styled_display_lines.clone(),
-            footer: if layout.slash_panel.is_visible() {
+            footer: if layout.slash_panel.is_visible() || layout.shell_hint.is_visible() {
                 None
             } else {
-                Some(self.chrome.footer_line(cols))
+                Some(self.chrome.footer_line(content_cols))
             },
             slash_lines: layout.slash_panel.rendered_lines(cols),
-            cursor_col: layout.cursor_col,
+            shell_lines: layout.shell_hint.rendered_lines(cols),
+            cursor_col: drawn_cursor_col,
             cursor_row,
         };
         // 与上次完全一致：连光标位置都没动，重绘只会带来闪烁
@@ -178,30 +199,59 @@ impl ComposerFrame {
         }
 
         let mut row = top;
-        // 2. 沉底面板（todo 快照 / 排队消息 / agent 提示）渲染在输入框顶线上方
+        // 2. 沉底面板（todo 快照 / 排队消息 / agent 提示）渲染在输入面板上方
         for line in &self.panel_lines {
             queue!(output, MoveTo(0, row), Print(line))?;
             row = row.saturating_add(1);
         }
-        // 3. 顶线、输入正文、底线和状态栏均从 source 按当前宽度重新计算
-        queue!(output, MoveTo(0, row), Print(chrome_rule(cols)))?;
-        row = row.saturating_add(1);
-
+        // 3. 细引导线 + 灰底面板：输入上下各留一行空白，再接状态行
+        let mode = self.chrome.mode;
+        let panel_body_top = row;
+        for _ in 0..CHROME_INPUT_PAD_ROWS {
+            queue!(
+                output,
+                MoveTo(0, row),
+                Print(chrome_panel_row(mode, "", cols))
+            )?;
+            row = row.saturating_add(1);
+        }
         let input_start_row = row;
         for line in &layout.styled_display_lines {
-            queue!(output, MoveTo(0, row), Print(line))?;
-            row = row.saturating_add(repl_line_rows_for_cols("", line, cols).max(1));
+            for segment in wrap_styled_line(line, content_cols) {
+                queue!(
+                    output,
+                    MoveTo(0, row),
+                    Print(chrome_panel_row(mode, &segment, cols))
+                )?;
+                row = row.saturating_add(1);
+            }
+        }
+        for _ in 0..CHROME_INPUT_PAD_ROWS {
+            queue!(
+                output,
+                MoveTo(0, row),
+                Print(chrome_panel_row(mode, "", cols))
+            )?;
+            row = row.saturating_add(1);
         }
 
-        queue!(output, MoveTo(0, row), Print(chrome_rule(cols)))?;
-        row = row.saturating_add(1);
         let end_row = if layout.slash_panel.is_visible() {
             layout.slash_panel.draw(output, row, cols)?;
             row.saturating_add(layout.slash_panel.height())
+        } else if layout.shell_hint.is_visible() {
+            layout.shell_hint.draw(output, row, cols)?;
+            row.saturating_add(layout.shell_hint.height())
         } else {
-            queue!(output, MoveTo(0, row), Print(self.chrome.footer_line(cols)))?;
+            // 输入与状态同一块面板底，中间不画分割线（对齐 OpenCode）
+            let status = self.chrome.footer_line(content_cols);
+            queue!(
+                output,
+                MoveTo(0, row),
+                Print(chrome_panel_row(mode, &status, cols))
+            )?;
             row.saturating_add(1)
         };
+
 
         // 4. composer 是受管区域底部：面板收起或行数减少后下方残留一并清除；
         //    贴底时无下方区域，跳过以免 MoveTo 越界被 clamp 到底行误清 footer
@@ -211,7 +261,7 @@ impl ComposerFrame {
 
         // 5. 历史插入会移动终端光标，最后必须把它放回可继续编辑的位置
         let drawn_cursor_row = input_start_row.saturating_add(layout.cursor_row_offset);
-        queue!(output, MoveTo(layout.cursor_col, drawn_cursor_row), Show)?;
+        queue!(output, MoveTo(drawn_cursor_col, drawn_cursor_row), Show)?;
         output.flush()?;
         Ok((drawn_cursor_row, signature))
     }
@@ -225,26 +275,43 @@ impl ComposerFrame {
     /// - 当前宽度下的 composer 布局
     fn layout(&self, cols: usize) -> ComposerLayout {
         let cols = cols.max(1);
+        // 输入在圆角盒内折行：扣除左右边框与左侧模式 accent
+        let content_cols = chrome_input_content_cols(cols);
         let lines = repl_input_lines(&self.input);
         let (display_lines, collapsed) = if self.input.is_empty() {
             (vec![placeholder_text()], false)
         } else {
-            let visible =
-                repl_visible_input_lines("", &lines, REPL_MAX_VISIBLE_INPUT_ROWS, self.is_pasted);
+            let visible = repl_visible_input_lines(
+                "",
+                &lines,
+                REPL_MAX_VISIBLE_INPUT_ROWS,
+                self.is_pasted,
+            );
             (visible.lines, visible.collapsed)
         };
-        let styled_display_lines =
+        let mut styled_display_lines =
             style_display_lines(&display_lines, &lines, collapsed, &self.clipboard_blocks);
-        let input_rows = repl_prompt_rows_for_cols("", &display_lines, cols).max(1);
+        // 仅输入 `!` 时附上幽灵说明，光标仍停在 `!` 后（不计入 ghost 宽度）
+        if let Some(ghost) = bang_ghost_suffix(&self.input) {
+            if let Some(first) = styled_display_lines.first_mut() {
+                first.push_str(&format!("\x1b[2m{ghost}\x1b[0m"));
+            }
+        }
+        let input_rows = repl_prompt_rows_for_cols("", &display_lines, content_cols).max(1);
         let slash_panel = SlashPanel::new(&self.input, self.slash_selection);
+        let shell_hint = ShellHintPanel::new(
+            &self.input,
+            &self.chrome.model,
+            &self.chrome.directory,
+        );
         // 折叠判定用显式标志：原文恰好 3 行时显示行数与原始行数相等，
         // 按长度比较会走错分支，把光标画到 composer 边框之外
         let (cursor_col, cursor_row_offset) = if !collapsed {
-            repl_cursor_position_for_cols("", &self.input, self.cursor, cols)
+            repl_cursor_position_for_cols("", &self.input, self.cursor, content_cols)
         } else {
             let last_line = display_lines.last().map(String::as_str).unwrap_or_default();
             (
-                (visible_width(last_line) % cols).min(u16::MAX as usize) as u16,
+                (visible_width(last_line) % content_cols).min(u16::MAX as usize) as u16,
                 input_rows.saturating_sub(1),
             )
         };
@@ -252,6 +319,7 @@ impl ComposerFrame {
             styled_display_lines,
             input_rows,
             slash_panel,
+            shell_hint,
             cursor_col,
             cursor_row_offset,
         }
@@ -268,11 +336,44 @@ fn placeholder_text() -> String {
     format!("\x1b[2m{text}\x1b[0m")
 }
 
+/// 按显示列宽切分含 ANSI 的输入行，供圆角盒逐行绘制。
+fn wrap_styled_line(text: &str, cols: usize) -> Vec<String> {
+    use unicode_width::UnicodeWidthChar;
+    let cols = cols.max(1);
+    if text.is_empty() {
+        return vec![String::new()];
+    }
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    let mut width = 0usize;
+    let mut index = 0usize;
+    while index < text.len() {
+        let ch = text[index..].chars().next().unwrap_or_default();
+        if ch == '\x1b' {
+            let end = crate::render::terminal_image::escape_sequence_end(text, index);
+            current.push_str(&text[index..end]);
+            index = end.max(index + ch.len_utf8());
+            continue;
+        }
+        let char_width = ch.width().unwrap_or(0);
+        if char_width > 0 && width > 0 && width + char_width > cols {
+            lines.push(std::mem::take(&mut current));
+            width = 0;
+        }
+        current.push(ch);
+        width = width.saturating_add(char_width);
+        index += ch.len_utf8();
+    }
+    lines.push(current);
+    lines
+}
+
 /// composer 在单一终端宽度下的计算结果。
 struct ComposerLayout {
     styled_display_lines: Vec<String>,
     input_rows: u16,
     slash_panel: SlashPanel,
+    shell_hint: ShellHintPanel,
     cursor_col: u16,
     cursor_row_offset: u16,
 }
@@ -349,8 +450,11 @@ mod tests {
         frame.draw_lines(&mut output, &viewport, None).unwrap();
 
         let output = String::from_utf8(output).unwrap();
-        assert!(output.contains("\x1b[9;1H"));
-        assert!(output.contains("\x1b[10;6H"));
+        // 最细引导线前景 + 面板灰底 + 输入文本
+        assert!(output.contains("\x1b[38;5;208m"));
+        assert!(output.contains('▏'));
+        assert!(output.contains("\x1b[48;5;236m"));
+        assert!(output.contains("hello"));
     }
 
     /// 验证内容未变时跳过重绘。
@@ -426,6 +530,32 @@ mod tests {
         assert!(!output.is_empty(), "输入变化后必须重绘");
     }
 
+    /// 验证输入 `!` 时展示 shell 提示与幽灵说明，并隐藏常规底栏。
+    #[test]
+    fn bang_prefix_shows_shell_hint_instead_of_footer() {
+        let chrome = ReplChrome {
+            mode: AgentMode::Yolo,
+            context_ratio: 0.0,
+            context_window_tokens: 120_000,
+            model: "gpt-test".to_string(),
+            thinking: "auto".to_string(),
+            directory: "/tmp".to_string(),
+        };
+        let frame = ComposerFrame::new(chrome, "!".to_string(), 1, false, Vec::new(), 0);
+        let mut viewport = InlineViewport::new();
+        viewport.update(TerminalSize { cols: 72, rows: 24 }, frame.height(72), 4);
+        let mut output = Vec::new();
+        frame.draw_lines(&mut output, &viewport, None).unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains('!'));
+        assert!(
+            output.contains("Run a command") || output.contains("运行命令"),
+            "missing shell hint: {output}"
+        );
+        assert!(output.contains("gpt-test"));
+        assert!(!output.contains("120k"));
+    }
+
     /// 验证 slash 命令面板隐藏常规状态栏并展示命令说明。
     ///
     /// 参数:
@@ -452,7 +582,10 @@ mod tests {
 
         let output = String::from_utf8(output).unwrap();
         assert!(output.contains("/model"));
-        assert!(output.matches('─').count() >= 2);
+        // slash 展开时仍保留细引导线输入面板，但不画状态分隔线
+        assert!(output.contains("\x1b[38;5;208m"));
+        assert!(output.contains('▏'));
+        assert!(output.contains("\x1b[48;5;236m"));
         assert!(output.contains("/"));
         assert!(!output.contains("120k"));
     }
@@ -471,8 +604,8 @@ mod tests {
         let mut frame = ComposerFrame::new(chrome, String::new(), 0, false, Vec::new(), 0);
         let base_height = frame.height(72);
         frame.set_panel_lines(vec![
-            "\x1b[2m• 任务清单 1/3\x1b[0m".to_string(),
-            "\x1b[2m  › current\x1b[0m".to_string(),
+            "\x1b[2m计划\x1b[0m \x1b[2m1/3\x1b[0m".to_string(),
+            "\x1b[1m\x1b[36m▶\x1b[0m \x1b[1m\x1b[36mcurrent\x1b[0m".to_string(),
         ]);
         assert_eq!(frame.height(72), base_height + 2);
 
@@ -481,7 +614,7 @@ mod tests {
         let mut output = Vec::new();
         frame.draw_lines(&mut output, &viewport, None).unwrap();
         let output = String::from_utf8(output).unwrap();
-        let panel_at = output.find("任务清单").unwrap();
+        let panel_at = output.find("计划").unwrap();
         let rule_at = output.find('─').unwrap();
         assert!(panel_at < rule_at, "面板行必须渲染在顶线之前");
     }
@@ -531,8 +664,8 @@ mod tests {
         frame.draw_lines(&mut output, &viewport, None).unwrap();
 
         let output = String::from_utf8(output).unwrap();
-        // composer 顶部在行 4（0 起），高 4 行，末行之后（行 8 → 1 起第 9 行）清到屏底
-        assert!(output.contains("\x1b[9;1H\x1b[J"));
+        // 固定 2 行（分隔+状态）+ 1 行输入 = 3；顶部在行 4（0 起）时，末行之后为行 7 → 1 起第 8 行
+        assert!(output.contains("\x1b[8;1H\x1b[J"));
     }
 
     /// 验证贴底 composer 不发出越界清除，footer 行保持完整。

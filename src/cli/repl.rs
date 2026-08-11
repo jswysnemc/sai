@@ -20,7 +20,7 @@ use submission_queue::{
 pub(super) async fn run_repl(
     paths: &SaiPaths,
     initial_mode: AgentMode,
-    thinking_override: Option<String>,
+    mut thinking_override: Option<String>,
 ) -> Result<()> {
     AppConfig::init_files(paths)?;
     let mut config = crate::config::apply_agent_override(
@@ -326,30 +326,41 @@ pub(super) async fn run_repl(
                         runtime.record_meta(message)?;
                     }
                     crate::control_commands::ControlCommand::Model { selection } => {
-                        let selection = match selection {
-                            Some(index) => Some(index),
-                            None => {
-                                let picked = model_select::select_model_index_interactively(paths);
-                                // 内联选择 UI 退出后全量重放，清除其占用行的残留
-                                runtime.redraw()?;
-                                match picked {
-                                    Ok(index) => index,
-                                    Err(err) => {
-                                        runtime.record_meta(err.to_string())?;
-                                        continue;
-                                    }
+                        // 无序号时复用 `sai models` 双列选择器（模型 + 思考）
+                        if selection.is_none() {
+                            let outcome = models_picker::run_interactive(paths);
+                            // 内联选择 UI 退出后全量重放，清除其占用行的残留
+                            runtime.redraw()?;
+                            match outcome {
+                                Ok(models_picker::PickerOutcome::Cancelled) => {
+                                    runtime.record_meta(
+                                        t("model selection cancelled", "已取消模型选择")
+                                            .to_string(),
+                                    )?;
                                 }
+                                Ok(models_picker::PickerOutcome::Saved { message }) => {
+                                    runtime.record_meta(message)?;
+                                    // 选择器已写回思考等级，清掉会话级覆盖以免 reload 冲掉
+                                    thinking_override = None;
+                                    reload_repl_agent(
+                                        paths,
+                                        &mut config,
+                                        &mut client,
+                                        &mut agent,
+                                        mode,
+                                        None,
+                                    )?;
+                                    runtime.record_meta(
+                                        t("configuration reloaded", "配置已重新加载").to_string(),
+                                    )?;
+                                }
+                                Err(err) => runtime.record_meta(err.to_string())?,
                             }
-                        };
-                        let Some(selection) = selection else {
-                            runtime.record_meta(
-                                t("model selection cancelled", "已取消模型选择").to_string(),
-                            )?;
                             continue;
-                        };
+                        }
                         match crate::control_commands::run_model_command(
                             paths,
-                            Some(selection),
+                            selection,
                             crate::control_commands::ControlSurface::Repl,
                         ) {
                             Ok(result) => {
@@ -497,20 +508,40 @@ pub(super) async fn run_repl(
             continue;
         }
         if input.eq_ignore_ascii_case("/providers") {
-            run_providers(paths, ProvidersArgs { index: None })?;
-            reload_repl_agent(
-                paths,
-                &mut config,
-                &mut client,
-                &mut agent,
-                mode,
-                thinking_override.as_deref(),
-            )?;
-            runtime.record_meta(t("configuration reloaded", "配置已重新加载").to_string())?;
+            // 与 /model 共用双列选择器（供应商/模型 + 思考）
+            let outcome = models_picker::run_interactive(paths);
+            runtime.redraw()?;
+            match outcome {
+                Ok(models_picker::PickerOutcome::Cancelled) => {
+                    runtime.record_meta(t("cancelled", "已取消").to_string())?;
+                }
+                Ok(models_picker::PickerOutcome::Saved { message }) => {
+                    runtime.record_meta(message)?;
+                    thinking_override = None;
+                    reload_repl_agent(
+                        paths,
+                        &mut config,
+                        &mut client,
+                        &mut agent,
+                        mode,
+                        None,
+                    )?;
+                    runtime.record_meta(
+                        t("configuration reloaded", "配置已重新加载").to_string(),
+                    )?;
+                }
+                Err(err) => runtime.record_meta(err.to_string())?,
+            }
             continue;
         }
         if input.eq_ignore_ascii_case("/config") {
-            crate::config_tui::run(paths)?;
+            let result = crate::config_tui::run(paths);
+            // 全屏备用屏退出后整页重放，避免残留边框
+            runtime.redraw()?;
+            if let Err(err) = result {
+                runtime.record_meta(err.to_string())?;
+                continue;
+            }
             reload_repl_agent(
                 paths,
                 &mut config,
@@ -537,17 +568,23 @@ pub(super) async fn run_repl(
                 .split_whitespace()
                 .next()
                 .map(std::string::ToString::to_string);
-            if let Err(err) = run_set_thinking(paths, SetThinkingArgs { level }) {
+            let result = run_set_thinking(paths, SetThinkingArgs { level });
+            // 交互选择会占用内联区域，退出后重放清除残留
+            if rest.trim().is_empty() {
+                runtime.redraw()?;
+            }
+            if let Err(err) = result {
                 runtime.record_meta(err.to_string())?;
                 continue;
             }
+            thinking_override = None;
             reload_repl_agent(
                 paths,
                 &mut config,
                 &mut client,
                 &mut agent,
                 mode,
-                thinking_override.as_deref(),
+                None,
             )?;
             runtime.record_meta(t("configuration reloaded", "配置已重新加载").to_string())?;
             continue;
@@ -578,32 +615,7 @@ pub(super) async fn run_repl(
             let _ = crate::state::input_history::append_input_history(paths, input);
         }
         if !goal_continuation {
-            // #region agent log
-            {
-                use std::io::Write;
-                let raw_prefix: String = input.chars().take(80).collect();
-                let chat_prefix: String = chat_input.message.chars().take(80).collect();
-                if let Ok(mut f) = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open("/home/snemc/workspace/sai/.cursor/debug-dcb5f5.log")
-                {
-                    let _ = writeln!(
-                        f,
-                        r#"{{"sessionId":"dcb5f5","runId":"pre-fix","hypothesisId":"A","location":"repl.rs:submit","message":"submit raw vs chat_input","data":{{"rawLooksLikeMarker":{},"chatChars":{},"rawPrefix":{},"chatPrefix":{}}},"timestamp":{}}}"#,
-                        input.contains("[text ") || input.contains("[image "),
-                        chat_input.message.chars().count(),
-                        serde_json::to_string(&raw_prefix).unwrap_or_else(|_| "\"\"".into()),
-                        serde_json::to_string(&chat_prefix).unwrap_or_else(|_| "\"\"".into()),
-                        std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .map(|d| d.as_millis())
-                            .unwrap_or(0)
-                    );
-                }
-            }
-            // #endregion
-            runtime.record_user(mode, input.to_string())?;
+            runtime.record_user(mode, submission.echo_text.clone(), submission.fold_echo)?;
         }
         // 4. 模式变化时换工具表；每轮只做轻量 prepare
         if agent.installed_mode() != mode {
@@ -680,7 +692,47 @@ pub(super) async fn run_repl(
         }
     }
     agent.shutdown_external_engine().await?;
+    // 退出后给出恢复命令，便于下次接续同一会话（对齐 Claude `--resume`）
+    print_repl_resume_hint(state.session_id());
     Ok(())
+}
+
+/// 构造 REPL 退出后的会话恢复命令。
+///
+/// 参数:
+/// - `session_id`: 当前会话 ID
+///
+/// 返回:
+/// - 形如 `sai resume <id>` 的命令文本
+fn repl_resume_command(session_id: &str) -> String {
+    format!("sai resume {session_id}")
+}
+
+/// 在 REPL 退出后向 stdout 打印会话恢复命令。
+///
+/// 参数:
+/// - `session_id`: 当前会话 ID
+///
+/// 返回:
+/// - 无
+fn print_repl_resume_hint(session_id: &str) {
+    let command = repl_resume_command(session_id);
+    println!();
+    println!("{}", t("Resume this session with:", "恢复此会话："));
+    println!("  {command}");
+}
+
+#[cfg(test)]
+mod resume_hint_tests {
+    use super::repl_resume_command;
+
+    #[test]
+    fn resume_command_matches_cli_resume_subcommand() {
+        assert_eq!(
+            repl_resume_command("5fed5f76-1823-43ab-be7a-35ba5b074cd1"),
+            "sai resume 5fed5f76-1823-43ab-be7a-35ba5b074cd1"
+        );
+    }
 }
 
 /// 轮询 /compact 执行期间的取消按键。

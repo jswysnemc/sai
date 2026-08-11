@@ -8,8 +8,7 @@ import { toolCardSummary } from "./tool-renderers/tool-card-summary";
 import { parseCodexSubagentActivity } from "./tool-renderers/codex-subagent-data";
 import { CodexSubagentToolView } from "./tool-renderers/codex-subagent-tool-view";
 import { parseJsonRecord, stringField, toolFilePath } from "./tool-renderers/tool-data";
-import { AnimatedCount } from "./tool-renderers/animated-count";
-import { streamedLineCount } from "./tool-renderers/write-progress";
+import { streamedDiffCounts } from "./tool-renderers/write-progress";
 import { ToolCardActions } from "./tool-renderers/tool-card-actions";
 import { ToolFileReference } from "./tool-renderers/tool-file-reference";
 import { displayPath, isCommandToolName, isEditToolName } from "./tool-renderers/tool-display-summary";
@@ -87,13 +86,12 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
   const auditReason = permission?.decision === "allow" ? permission.reason?.trim() ?? "" : "";
 
   // 5. 折叠行右段依次表达"结果如何"与"花了多久"；
-  //    编辑类只表达行数与增删统计，不展示耗时
+  //    编辑类用 +N -M 徽章（流式参数阶段实时跳动，与 TUI 一致），不展示耗时
   const result = toolResultSummary(tool.name, tool.output, locale);
   const diffStat = toolDiffStat(tool.name, tool.output);
+  const liveDiff = running && isEdit ? streamedDiffCounts(argumentsText) : null;
+  const displayDiff = diffStat ?? liveDiff;
   const duration = isEdit ? "" : toolDurationLabel(tool.startedAtMs, tool.endedAtMs, now);
-  const writingLines = running && isEdit
-    ? streamedLineCount(argumentsText)
-    : 0;
 
   return (
     <ToolLayout
@@ -104,18 +102,12 @@ export function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
       primaryText={hideTarget || headerPath ? "" : summary}
       secondaryText=""
       title={hideTarget ? undefined : fullCommand || headerPath || summary || undefined}
-      diffCount={diffStat ? { added: diffStat.added, removed: diffStat.removed } : undefined}
+      diffCount={displayDiff ? { added: displayDiff.added, removed: displayDiff.removed } : undefined}
+      animateDiffCount={Boolean(displayDiff)}
+      diffCountActive={running}
       hideDiffCountWhenOpen
       actions={<ToolCardActions target={headerPath || argumentsText} output={tool.output} />}
-      statusLabel={
-        writingLines > 0
-          ? (
-            <>
-              {t("Writing", "写入")} <AnimatedCount value={writingLines} active={running} /> {t("lines", "行")}
-            </>
-          )
-          : statusText(result, duration)
-      }
+      statusLabel={statusText(result, duration)}
       showFailureStatus={result?.tone === "danger" || tool.status === "failed"}
       isRunning={running}
       animateSummary={running}

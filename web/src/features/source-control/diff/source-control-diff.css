@@ -1,3 +1,20 @@
+/*
+ * Source Control 右侧是整栏滚动区，不能沿用聊天卡片里 460px 的 diff 高度上限，
+ * 否则内容只占上半截、下面整片空白。
+ */
+.git-diff-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.git-diff-shell > .structured-diff,
+.git-diff-shell .git-patch-hunk .structured-diff {
+  flex: 1 1 auto;
+  max-height: none;
+  border-radius: 0;
+}
+
 .git-partial-diff {
   display: grid;
   gap:var(--space-sm);

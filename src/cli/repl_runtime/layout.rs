@@ -155,7 +155,7 @@ mod tests {
         }
     }
 
-    /// 验证普通正文位于引导线右侧，且折行后不超过终端宽度。
+    /// 验证系统提示引导符挂在引导列，续行位于右侧，且折行不超宽。
     #[test]
     fn transcript_lines_have_left_padding_without_width_overflow() {
         let mut transcript = TranscriptStore::new(100);
@@ -165,7 +165,12 @@ mod tests {
 
         assert!(window.lines.len() >= 2);
         for line in &window.lines {
-            assert!(line.as_str().starts_with("  "), "历史行没有位于引导线右侧");
+            let plain = strip_ansi_for_test(line.as_str());
+            let ok = plain.is_empty()
+                || plain.starts_with("  ")
+                || plain.starts_with('›')
+                || plain.starts_with('✗');
+            assert!(ok, "历史行未对齐引导区: {plain:?}");
             assert!(visible_width(line.as_str()) <= 8, "历史行超出终端宽度");
         }
     }
@@ -193,7 +198,12 @@ mod tests {
             .expect("plain content should be rendered");
 
         assert!(marker.as_str().starts_with("\x1b[38;5;208m●"));
-        assert!(plain.as_str().starts_with("  "));
+        // 系统提示用 › 挂在引导列，与正文缩进区分
+        assert!(
+            strip_ansi_for_test(plain.as_str()).starts_with('›'),
+            "meta should keep › on the guide column: {:?}",
+            plain.as_str()
+        );
     }
 
     /// 【终端】【正文引导测试】验证真实 TUI 布局只扣除两列，并统一流式与定稿正文。
@@ -217,7 +227,7 @@ mod tests {
             .iter()
             .map(|line| strip_ansi_for_test(line.as_str()))
             .collect::<Vec<_>>();
-        assert_eq!(live_plain, vec!["• abcd", "  efgh"]);
+        assert_eq!(live_plain, vec!["  abcd", "  efgh"]);
         assert!(live
             .lines
             .iter()
@@ -230,7 +240,12 @@ mod tests {
             .iter()
             .map(|line| strip_ansi_for_test(line.as_str()))
             .collect::<Vec<_>>();
-        assert_eq!(finalized_plain, live_plain);
+        // 定稿 Markdown 前多一空行；对齐后空行会补成引导区宽度的空白
+        assert_eq!(finalized_plain, {
+            let mut expected = vec!["  ".to_string()];
+            expected.extend(live_plain);
+            expected
+        });
     }
 
     /// 【终端】【响应式引导测试】验证一至两列终端压缩引导区后不会超宽。
@@ -331,18 +346,26 @@ mod tests {
         let window = display_window(&mut transcript, 30, &options(), 100, usize::MAX, usize::MAX);
         assert!(window.lines.len() > 4, "测试数据必须触发 diff 自动换行");
         for line in &window.lines {
-            assert!(
-                line.as_str().starts_with("   "),
-                "diff 续行进入视觉引导区: {:?}",
-                strip_ansi_for_test(line.as_str())
-            );
+            let plain = strip_ansi_for_test(line.as_str());
+            if plain.starts_with('•') {
+                // 标题引导符顶格，不被 diff 正文内收推开
+                assert!(
+                    !plain.starts_with(' '),
+                    "diff 标题应顶格: {plain:?}"
+                );
+            } else {
+                assert!(
+                    line.as_str().starts_with("   "),
+                    "diff 续行进入视觉引导区: {plain:?}"
+                );
+            }
             assert!(visible_width(line.as_str()) <= 30, "diff 续行超出终端宽度");
         }
     }
 
-    /// 【终端】【Diff 流式换行测试】验证参数预览阶段的续行同样退让到正文列。
+    /// 【终端】【Diff 流式】参数预览阶段显示跳动增删统计，不铺完整 diff 色块。
     #[test]
-    fn live_diff_preview_wraps_at_the_body_column() {
+    fn live_edit_preview_shows_streamed_diff_stats() {
         let cwd = crate::runtime_cwd::current_dir().unwrap();
         let temp = tempfile::tempdir_in(cwd).unwrap();
         let path = temp.path().join("live-wrapped-diff.txt");
@@ -362,19 +385,29 @@ mod tests {
             arguments_preview: arguments,
         });
 
-        let window = display_window(&mut transcript, 30, &options(), 100, usize::MAX, usize::MAX);
-        let continuation = window
+        let window = display_window(&mut transcript, 80, &options(), 100, usize::MAX, usize::MAX);
+        let plain = window
             .lines
             .iter()
             .map(|line| strip_ansi_for_test(line.as_str()))
-            .filter(|line| line.contains("long-value") && !line.contains('+'))
-            .collect::<Vec<_>>();
-
-        assert!(!continuation.is_empty(), "流式 Diff 应产生续行");
-        for line in continuation {
-            assert!(line.starts_with("       "), "续行未退让到正文列: {line:?}");
-            assert!(visible_width(&line) <= 30, "续行超出终端宽度: {line:?}");
-        }
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(plain.contains('+'), "流式编辑应展示 +N 统计: {plain}");
+        assert!(plain.contains('-'), "流式编辑应展示 -M 统计: {plain}");
+        assert!(
+            !plain.contains("long-value-long-value"),
+            "流式阶段不应倾倒完整 new_string: {plain}"
+        );
+        let header = window
+            .lines
+            .iter()
+            .map(|line| strip_ansi_for_test(line.as_str()))
+            .find(|line| line.contains('•'))
+            .expect("应有工具状态行");
+        assert!(
+            header.starts_with('•'),
+            "流式工具状态行应顶格: {header:?}"
+        );
     }
 
     /// 验证单列终端不增加留白，保留唯一的正文列。

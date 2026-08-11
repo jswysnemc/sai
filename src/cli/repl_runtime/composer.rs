@@ -84,6 +84,7 @@ impl ReplRuntime {
             &queued,
             &agent_lines,
             cols,
+            self.todo_panel_compact,
         )
     }
 

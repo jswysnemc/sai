@@ -35,8 +35,10 @@ fn live_reasoning_body_animates_without_waiting_for_consolidation() {
         .iter()
         .map(|line| strip_ansi_for_test(line.as_str()))
         .collect::<Vec<_>>();
-    assert!(plain[0].starts_with("• Thinking"));
-    assert!(plain[0].contains("tokens"));
+    // 区块前空行与定稿 Reasoning 对齐
+    assert!(plain[0].is_empty());
+    assert!(plain[1].starts_with("◦ Thinking"));
+    assert!(plain[1].contains("tokens"));
     assert!(plain.iter().any(|line| line.contains("inspect resize")));
     assert!(plain.iter().any(|line| line.contains("compare layout")));
     assert!(plain

@@ -129,6 +129,33 @@ export function ChatPage() {
     () => display.liveRuns.filter((state) => state.status === "queued"),
     [display.liveRuns]
   );
+  const uniqueErrorNotices = useMemo(() => {
+    const notices = [
+      timeline.error && {
+        key: "timeline",
+        message: timeline.error.message,
+        detail: errorDetailForDisplay(timeline.error),
+      },
+      chatModel.error && {
+        key: "chat-model",
+        message: chatModel.error.message,
+        detail: errorDetailForDisplay(chatModel.error),
+      },
+      actionError && {
+        key: "action",
+        message: actionError.message,
+        detail: errorDetailForDisplay(actionError),
+      },
+    ].filter(Boolean) as Array<{ key: string; message: string; detail: string }>;
+    const seen = new Set<string>();
+    const unique = notices.filter((notice) => {
+      const signature = `${notice.message}\n${notice.detail}`;
+      if (seen.has(signature)) return false;
+      seen.add(signature);
+      return true;
+    });
+    return unique;
+  }, [actionError, chatModel.error, timeline.error]);
   const hasHistoryCompaction = Boolean(timeline.data?.compaction?.summary?.trim());
   const conversationEmpty = isConversationEmpty({
     timelineLoading: timeline.isLoading,
@@ -552,9 +579,9 @@ export function ChatPage() {
               onRemove={run.removeQueuedRun}
               onError={(error) => setActionError(toDisplayError(error, "Failed to update the message queue", "更新消息队列失败"))}
             />
-            {timeline.error && <RunErrorNotice message={timeline.error.message} detail={errorDetailForDisplay(timeline.error)} />}
-            {chatModel.error && <RunErrorNotice message={chatModel.error.message} detail={errorDetailForDisplay(chatModel.error)} />}
-            {actionError && <RunErrorNotice message={actionError.message} detail={errorDetailForDisplay(actionError)} />}
+            {uniqueErrorNotices.map((notice) => (
+              <RunErrorNotice key={notice.key} message={notice.message} detail={notice.detail} />
+            ))}
           </div>
           {centerEmptySession ? (
             <div className="empty-session-stage">

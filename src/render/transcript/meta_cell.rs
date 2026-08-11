@@ -16,10 +16,8 @@ pub(crate) struct MetaCell {
 
 /// 渲染系统提示或控制命令消息。
 ///
-/// 系统消息此前整段压暗直接输出，与同样压暗的思考正文只隔一个换行，
-/// 失败提示夹在其中读起来像思考的一部分。现在按类别给出行首符号：
-/// 失败用红色叉号、首行保持常规亮度，提示用弱化的引导符，
-/// 两者都与正文的引导点区分开。
+/// 按类别给出行首符号：失败用红色叉号、首行保持常规亮度；
+/// 提示用弱化的 `›`。与工具行的 `•`、思考的 `◦`、无符号正文缩进区分开。
 ///
 /// 已带 ANSI 样式的文本（如会话摘要）自带完整排版，原样输出。
 ///
@@ -39,11 +37,16 @@ pub(crate) fn render(cell: &MetaCell) -> String {
     };
     // 2. 首行带类别符号，续行缩进对齐并统一弱化
     let mut output = match cell.kind {
-        MetaKind::Failure => format!("\x1b[31m✗\x1b[0m {first}"),
+        // 整行失败色：终端若缺 ✗ 字形，至少标题仍是醒目的红色引导
+        MetaKind::Failure => format!("\x1b[31m✗ {first}\x1b[0m"),
         MetaKind::Notice => format!("\x1b[2m› {first}\x1b[0m"),
     };
     for line in lines {
-        output.push_str(&format!("\n  \x1b[2m{line}\x1b[0m"));
+        let styled = match cell.kind {
+            MetaKind::Failure => format!("\n  \x1b[31m\x1b[2m{line}\x1b[0m"),
+            MetaKind::Notice => format!("\n  \x1b[2m{line}\x1b[0m"),
+        };
+        output.push_str(&styled);
     }
     output
 }
@@ -60,8 +63,11 @@ mod tests {
             kind: MetaKind::Failure,
         });
 
-        assert!(rendered.starts_with("\x1b[31m✗\x1b[0m 本轮失败"));
-        assert!(rendered.contains("\n  \x1b[2m对话内容保持完整"));
+        assert!(
+            rendered.starts_with("\x1b[31m✗ 本轮失败"),
+            "{rendered:?}"
+        );
+        assert!(rendered.contains("\n  \x1b[31m\x1b[2m对话内容保持完整"));
         // 首行不整体压暗，否则与思考正文混在一起
         assert!(!rendered.starts_with("\x1b[2m"));
     }

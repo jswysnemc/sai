@@ -90,6 +90,25 @@ pub(crate) fn render_edit_file_diff_for_transcript(arguments: &str) -> Option<St
     Some(indent_diff_for_transcript(&render_patch_preview(&preview)))
 }
 
+/// 渲染编辑 diff 正文（不含 `• Added …` 标题行）。
+///
+/// Summary 行已用 `Write/Replace path +N -M` 表达动作与统计，Full 模式
+/// 只需挂上行级变更，避免再套一层 Added 标题。
+///
+/// 参数:
+/// - `arguments`: `edit_file` / `write_file` / `str_replace` 工具参数
+///
+/// 返回:
+/// - 相对正文内收的 diff 正文；无法预览时返回空
+pub(crate) fn render_edit_file_diff_body_for_transcript(arguments: &str) -> Option<String> {
+    let preview = preview_from_arguments(arguments).ok()?;
+    let body = render_patch_preview_body(&preview);
+    if body.trim().is_empty() {
+        return None;
+    }
+    Some(indent_diff_for_transcript(&body))
+}
+
 /// 【终端】【Diff 换行】推导 diff 正文相对行首的起始列。
 ///
 /// 每个 diff 正文行的格式是 `行号 标记  内容`，行号列宽在同一份 diff 内一致。
@@ -184,6 +203,19 @@ fn inset_cli_diff_background(diff: &str) -> String {
 fn render_patch_preview(preview: &AppliedPatch) -> String {
     let mut output = String::new();
     output.push_str(&render_summary_header(preview));
+    output.push_str(&render_patch_preview_body(preview));
+    output
+}
+
+/// 渲染变更正文，不含顶层 `• Added/Edited …` 摘要标题。
+///
+/// 参数:
+/// - `preview`: 文件变更预览
+///
+/// 返回:
+/// - 行级 diff 文本（多文件时仍保留每文件小标题）
+fn render_patch_preview_body(preview: &AppliedPatch) -> String {
+    let mut output = String::new();
     for (index, change) in preview.changes.iter().enumerate() {
         if preview.changes.len() > 1 {
             output.push_str(&render_file_header(change));

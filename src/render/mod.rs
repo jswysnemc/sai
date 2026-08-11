@@ -34,6 +34,7 @@ mod streaming_asset_block;
 mod streaming_replace;
 mod style;
 mod table;
+pub(crate) mod todo_style;
 pub(crate) mod terminal_image;
 pub(crate) mod terminal_paint;
 mod tool_call_blocks;
@@ -81,10 +82,8 @@ pub(crate) const fn terminal_text<'a>(english: &'a str, _localized: &'a str) -> 
 /// 返回:
 /// - diff、命令或普通工具视图文本
 pub(crate) fn render_tool_call(name: &str, arguments: &str, mode: ToolCallDisplayMode) -> String {
-    if stream_text::is_file_edit_tool(name) {
-        return edit_diff::render_edit_file_diff(arguments)
-            .unwrap_or_else(|| tool_view::render_call(name, arguments, mode));
-    }
+    // 编辑类与其它工具同一套 ToolView：Summary 为 Write/Replace +N -M，
+    // Full 再挂 diff 正文；不再无条件倾倒整段 Added diff。
     tool_view::render_call(name, arguments, mode)
 }
 

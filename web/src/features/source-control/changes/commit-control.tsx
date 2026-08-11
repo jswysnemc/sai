@@ -171,7 +171,11 @@ export function CommitControl(props: CommitControlProps) {
               : t("Generate", "生成说明")}
           </Button>
         )}
-        {props.showActionButton && <div className="git-commit-split">
+        {props.showActionButton && <div
+          className="git-commit-split"
+          ref={(node) => {
+          }}
+        >
           <Button
             variant="primary"
             className="git-commit-primary"

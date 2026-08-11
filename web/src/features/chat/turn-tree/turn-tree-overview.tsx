@@ -61,6 +61,9 @@ export function TurnTreeOverview({ tree, busy, onSelect }: TurnTreeOverviewProps
   /** 在总览画布上按住空白处拖动，查看超出视口的分支。 */
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest("button")) return;
+    // 阻止浏览器在拖动过程中选中节点文字
+    event.preventDefault();
+    window.getSelection()?.removeAllRanges();
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,

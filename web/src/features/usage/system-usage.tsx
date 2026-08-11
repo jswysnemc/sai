@@ -68,7 +68,20 @@ export function SystemUsage({ selection, mode, agentId, onCompact, compactDisabl
       </button>
       {open && createPortal(
         <div ref={popoverRef} className="system-usage-popover" style={popoverStyle}>
-          <header><div><span>{t("System usage", "系统用量")}</span><strong>{t("Current session and process", "当前会话与进程")}</strong></div><i className={usage.data?.runtime.active_run ? "active" : ""} /></header>
+          <header>
+            <button
+              type="button"
+              className="system-usage-close"
+              onClick={() => setOpen(false)}
+              aria-label={t("Close", "关闭")}
+            >
+              <X size={14} />
+            </button>
+            <div>
+              <span>{t("System usage", "系统用量")}</span>
+              <strong>{t("Current session and process", "当前会话与进程")}</strong>
+            </div>
+          </header>
           {usage.isLoading && <div className="usage-loading">{t("Loading usage", "正在读取用量")}</div>}
           {usage.error && <div className="usage-error">{usage.error.message}</div>}
           {usage.data && (
@@ -76,9 +89,6 @@ export function SystemUsage({ selection, mode, agentId, onCompact, compactDisabl
               <section className="context-usage-card">
                 <div className="context-usage-head">
                   <span>{t("Context usage", "上下文用量")}</span>
-                  <button type="button" className="context-usage-close" onClick={() => setOpen(false)} aria-label={t("Close", "关闭")}>
-                    <X size={14} />
-                  </button>
                 </div>
                 {contextBreakdown ? (
                   <div className="context-usage-chart">

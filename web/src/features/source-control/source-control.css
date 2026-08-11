@@ -210,37 +210,41 @@
   min-height: 5.75rem;
 }
 
-/* 操作行：生成说明在左，提交分体按钮吸收剩余宽度 */
+/* 操作行：生成说明靠左，提交分体靠右；两者都按内容宽度，中间不拉出空洞 */
 .git-commit-actions {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-sm);
 }
 
+/* 主提交与菜单触发是两个独立按钮，必须留出间距；
+ * 拼成零 gap 分体时，完整圆角会让两颗胶囊贴死在一起。 */
 .git-commit-split {
   position: relative;
   display: grid;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  margin-left: auto;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) 2rem;
+  grid-template-columns: auto 2rem;
+  gap: var(--space-xs);
 }
 
 .git-commit-box .git-commit-primary {
   min-width: 0;
-  border-radius:var(--radius-2) 0 0 var(--radius-2);
+  border-radius: var(--radius-2);
 }
 
 .git-commit-box .git-commit-menu-trigger {
   width: 2rem;
   min-width: 2rem;
   padding: 0;
-  border-left: 1px solid color-mix(in srgb, var(--paper) 32%, transparent);
-  border-radius:0 var(--radius-2) var(--radius-2) 0;
+  border-radius: var(--radius-2);
 }
 
 .git-commit-box .ui-button.primary.git-commit-primary:hover:not(:disabled),
 .git-commit-box .ui-button.primary.git-commit-menu-trigger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--graphite) 88%, var(--ink));
+  border-color: var(--graphite-soft);
+  background: var(--graphite-soft);
   color: var(--paper);
 }
 

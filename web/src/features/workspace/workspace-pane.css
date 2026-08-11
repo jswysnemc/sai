@@ -466,8 +466,7 @@
 .git-branch-create { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap:var(--space-xs); }
 .git-branch-create input,
 .git-remote-box input { min-height: 30px; padding:0 var(--space-sm); border: 1px solid var(--line); border-radius:var(--radius-2); background: transparent; font:400 var(--text-xs) var(--font-code); }
-.git-branch-create button,
-.git-remote-box button { min-height: 30px; padding:0 var(--space-md); border: 0; border-radius:var(--radius-2); background: var(--graphite); color: var(--paper); font-size:var(--text-xs); }
+.git-branch-create button { min-height: 30px; padding:0 var(--space-md); border: 0; border-radius:var(--radius-2); background: var(--graphite); color: var(--paper); font-size:var(--text-xs); }
 .git-branch-group { display: grid; gap:var(--space-3xs); }
 .git-branch-group > span { padding:var(--space-2xs) var(--space-xs); color: var(--ink-soft); font-size:var(--text-2xs); }
 .git-branch-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-radius:var(--radius-2); }
@@ -513,9 +512,33 @@
   font-size:var(--text-xs);
 }
 .git-commit-box .ui-button:disabled { opacity: 0.42; cursor: not-allowed; }
-.git-remote-box button { display: flex; align-items: center; justify-content: center; gap:var(--space-xs); min-height: 30px; border: 0; border-radius:var(--radius-2); background: var(--graphite); color: var(--paper); font-size:var(--text-xs); }
 .git-remote-box { display: grid; gap:var(--space-xs); padding:var(--space-sm); border-top: 1px solid var(--line); }
 .git-remote-box input { min-height: 30px; padding:0 var(--space-sm); border: 1px solid var(--line); border-radius:var(--radius-2); background: transparent; font:400 var(--text-xs) var(--font-code); }
+/* 远端主按钮：实心底 + 同系 hover，避免 secondary hover 把深色底刷成浅灰 */
+.git-remote-box .ui-button.git-remote-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  width: 100%;
+  min-height: 30px;
+  padding: 0 var(--space-md);
+  border-color: var(--graphite);
+  border-radius: var(--radius-2);
+  background: var(--graphite);
+  color: var(--paper);
+  font-size: var(--text-xs);
+}
+.git-remote-box .ui-button.git-remote-action:hover:not(:disabled) {
+  border-color: var(--graphite-soft);
+  background: var(--graphite-soft);
+  color: var(--paper);
+}
+.git-remote-box .ui-button.git-remote-action:active:not(:disabled) {
+  border-color: var(--graphite);
+  background: var(--graphite);
+  color: var(--paper);
+}
 .git-section { border-bottom: 1px solid var(--line); }
 .git-change-head { display: flex; align-items: center; justify-content: space-between; min-height: 34px; padding:0 var(--space-sm) 0 var(--space-xs); border-bottom: 1px solid var(--line); color: var(--ink-soft); font-size:var(--text-xs); }
 .git-history-sync { display: inline-flex; gap:var(--space-2xs); }

@@ -60,7 +60,8 @@ export function EditToolView({ argumentsText, output, headerPath }: EditToolView
             <DiffView source={patch || syntheticPatch} headerPath={headerPath || path} />
           </InlineDiffPreview>
         )
-        : argumentsText && <pre className="generic-tool-block"><code>{prettyJson(argumentsText)}</code></pre>}
+        // 参数仍是未闭合 JSON 时不展示 `{...` 碎片；等 diff/完整参数就绪再渲染
+        : args && argumentsText ? <pre className="generic-tool-block"><code>{prettyJson(argumentsText)}</code></pre> : null}
       {output && !result && <pre className={`generic-tool-block result${/^tool error:/i.test(output.trimStart()) ? " tool-error-output" : ""}`}><code>{output}</code></pre>}
     </div>
   );

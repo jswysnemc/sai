@@ -40,6 +40,15 @@ impl TranscriptStore {
                         kind: ExpandableBlockKind::Markdown,
                     });
                 }
+                HistoryCell::UserEcho(cell) if super::user_echo_cell::would_fold(cell) => {
+                    // 粘贴长文本与思考一样进入 Ctrl+O 分页
+                    let preview: String = cell.text.chars().take(48).collect();
+                    blocks.push(ExpandableBlock {
+                        title: format!("{} · {preview}", t("You", "你")),
+                        body: cell.text.clone(),
+                        kind: ExpandableBlockKind::Plain,
+                    });
+                }
                 HistoryCell::Shell(cell)
                     if !cell.command.trim().is_empty() || !cell.output.trim().is_empty() =>
                 {
@@ -120,6 +129,16 @@ impl TranscriptStore {
                 cell.toggle_expanded();
                 self.mark_dirty(index);
                 return true;
+            }
+        }
+        // 3. 再否则切换最近的粘贴长文本回显
+        for index in (0..self.cells.len()).rev() {
+            if let Some(HistoryCell::UserEcho(cell)) = self.cells.get_mut(index) {
+                if super::user_echo_cell::would_fold(cell) {
+                    cell.toggle_expanded();
+                    self.mark_dirty(index);
+                    return true;
+                }
             }
         }
         false

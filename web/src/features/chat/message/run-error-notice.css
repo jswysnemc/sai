@@ -1,33 +1,40 @@
+/* 单层错误卡：标题行左右分布，详情用顶部分隔展开，不再套第二层灰框 */
 .run-error {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap:var(--space-sm) var(--space-lg);
-  margin:var(--space-md) 0;
-  padding:var(--space-md) var(--space-lg);
-  border: 1px solid color-mix(in srgb, var(--danger) 32%, var(--line));
-  border-radius:var(--radius-3);
-  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  gap: 0;
+  margin: var(--space-md) 0;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--line));
+  border-radius: var(--radius-3);
+  background: color-mix(in srgb, var(--danger) 7%, transparent);
   color: var(--danger);
-  font-size:var(--text-base);
+  font-size: var(--text-base);
+}
+
+.run-error-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
 }
 
 .run-error-summary {
   display: flex;
   min-width: 0;
+  flex: 1 1 auto;
   align-items: flex-start;
-  gap:var(--space-sm);
+  gap: var(--space-sm);
 }
 
 .run-error-summary > svg {
   flex: none;
-  margin-top:var(--space-3xs);
+  margin-top: var(--space-3xs);
 }
 
 .run-error-copy {
   display: grid;
   min-width: 0;
-  gap:var(--space-2xs);
+  gap: var(--space-2xs);
 }
 
 .run-error-text {
@@ -39,9 +46,69 @@
 .run-error-inline-detail {
   min-width: 0;
   color: var(--ink-soft);
-  font-size:var(--text-sm);
+  font-size: var(--text-sm);
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.run-error-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+/* 详情切换做成文字链，避免再多一颗小按钮盒 */
+.run-error-detail-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3xs);
+  min-height: 1.75rem;
+  padding: 0 var(--space-2xs);
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: inherit;
+  font: 500 var(--text-xs) inherit;
+  opacity: 0.82;
+  cursor: pointer;
+}
+
+.run-error-detail-toggle:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.run-error-detail-toggle:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
+/* 独立使用（如压缩失败）时：切换钮在上，详情紧贴其下 */
+.run-error-detail {
+  display: grid;
+  gap: var(--space-xs);
+  width: 100%;
+}
+
+.run-error-detail .run-error-detail-toggle {
+  justify-self: start;
+}
+
+/* 详情正文：同层表面 + 顶线，不再描边圆角灰盒 */
+.run-error-detail-body {
+  max-height: 12rem;
+  margin: var(--space-sm) 0 0;
+  padding: var(--space-sm) 0 0;
+  overflow: auto;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, currentColor 22%, var(--line));
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: 400 var(--text-xs) / 1.5 var(--font-code);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .run-error.is-interrupted {
@@ -55,7 +122,23 @@
   color: var(--signal);
 }
 
-/* 中断态重试按钮：浅底 + 信号色描边，避免 primary 深色底 */
+.run-error.is-interrupted .run-error-detail-toggle {
+  color: var(--signal);
+}
+
+.run-error .ui-button.run-error-retry {
+  min-height: 1.75rem;
+  padding: 0 var(--space-sm);
+  border-color: color-mix(in srgb, var(--danger) 38%, var(--line));
+  background: color-mix(in srgb, var(--danger) 10%, var(--paper));
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+
+.run-error .ui-button.run-error-retry:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 17%, var(--paper));
+}
+
 .run-error.is-interrupted .ui-button.run-error-retry {
   border-color: color-mix(in srgb, var(--signal) 42%, var(--line));
   background: color-mix(in srgb, var(--signal) 10%, var(--paper));
@@ -66,24 +149,6 @@
   background: color-mix(in srgb, var(--signal) 16%, var(--paper));
 }
 
-/* 失败态重试按钮：与卡片同为危险色系的浅底描边，不用 primary 的深色底 */
-.run-error .ui-button.run-error-retry {
-  min-height: 1.875rem;
-  padding:0 var(--space-md);
-  border-color: color-mix(in srgb, var(--danger) 38%, var(--line));
-  background: color-mix(in srgb, var(--danger) 10%, var(--paper));
-  color: var(--danger);
-  font-size:var(--text-sm);
-}
-
-.run-error .ui-button.run-error-retry:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 17%, var(--paper));
-}
-
-/*
- * 焦点环跟随卡片语义：全局焦点环是信号色，落在红色失败卡片上会串色。
- * 中断态与断连态本身就是信号色卡片，沿用全局绿色即可。
- */
 .run-error .ui-button:focus-visible {
   outline-color: var(--danger);
 }
@@ -93,51 +158,6 @@
   outline-color: var(--signal);
 }
 
-.run-error-detail {
-  display: grid;
-  grid-column: 1 / -1;
-  gap:var(--space-xs);
-  width: 100%;
-}
-
-.run-error-detail .ui-button.run-error-detail-toggle {
-  min-height: 1.75rem;
-  justify-self: start;
-  padding:0 var(--space-sm);
-  border-color: color-mix(in srgb, var(--danger) 28%, var(--line));
-  background: color-mix(in srgb, var(--danger) 6%, var(--paper));
-  color: var(--danger);
-  font-size:var(--text-xs);
-}
-
-.run-error-detail .ui-button.run-error-detail-toggle:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 12%, var(--paper));
-}
-
-.run-error-detail pre {
-  max-height: 12rem;
-  margin: 0;
-  padding:var(--space-md) var(--space-lg);
-  overflow: auto;
-  border: 1px solid color-mix(in srgb, var(--danger) 24%, var(--line));
-  border-radius:var(--radius-3);
-  background: color-mix(in srgb, var(--danger) 5%, var(--paper));
-  color: var(--ink-soft);
-  font:400 var(--text-xs)/1.5 var(--font-code);
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-
-@media (max-width: 40rem) {
-  .run-error {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .run-error .ui-button.run-error-retry {
-    justify-self: start;
-  }
-}
-
 .run-error.is-disconnect {
   border-color: color-mix(in srgb, var(--signal) 34%, var(--line));
   background: color-mix(in srgb, var(--signal) 8%, transparent);
@@ -145,11 +165,24 @@
 }
 
 .run-error.is-disconnect .run-error-summary > svg,
-.run-error.is-disconnect .run-error-text {
+.run-error.is-disconnect .run-error-text,
+.run-error.is-disconnect .run-error-detail-toggle {
   color: var(--signal);
 }
 
 .run-error.is-disconnect .ui-button.run-error-retry {
   border-color: color-mix(in srgb, var(--signal) 40%, var(--line));
   color: var(--signal);
+}
+
+@media (max-width: 40rem) {
+  .run-error-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-sm);
+  }
+
+  .run-error-actions {
+    justify-content: flex-end;
+  }
 }

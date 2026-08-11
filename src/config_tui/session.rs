@@ -15,7 +15,7 @@ use super::knowledge::edit_knowledge_base;
 use super::plugins::{edit_cli_tools, edit_web_search};
 use super::providers::{select_active_provider, ProviderBrowser};
 use super::settings::edit_settings;
-use super::ui::draw_menu;
+use super::ui::draw_menu_with_details;
 
 pub fn run(paths: &SaiPaths) -> Result<()> {
     AppConfig::init_files(paths)?;
@@ -72,7 +72,7 @@ fn run_main_menu(
     loop {
         let active = active_label(config);
         let options = [
-            format!("{} ({active})", t("Active configuration", "激活配置")),
+            t("Active configuration", "激活配置").to_string(),
             t("Providers and models", "供应商和模型").to_string(),
             t("Web search", "Web 搜索").to_string(),
             t("CLI assistant tools", "CLI 助手工具").to_string(),
@@ -82,7 +82,66 @@ fn run_main_menu(
             t("Global settings", "全局参数设置").to_string(),
             t("Save and exit", "保存并退出").to_string(),
         ];
-        draw_menu(stdout, " SAI CONFIG ", &options, selected, "")?;
+        let details = [
+            format!(
+                "{}\n\n{}: {active}",
+                t(
+                    "Pick which provider/model is active for new chats.",
+                    "选择新对话默认使用的供应商与模型。",
+                ),
+                t("Current", "当前")
+            ),
+            t(
+                "Browse providers, organizations and models. Activate, add, delete or refresh the catalog.",
+                "浏览供应商、组织与模型；可激活、添加、删除或刷新目录。",
+            )
+            .to_string(),
+            t(
+                "Configure web search backends and related API credentials.",
+                "配置 Web 搜索后端与相关 API 凭证。",
+            )
+            .to_string(),
+            t(
+                "Enable or configure CLI assistant tools available to the agent.",
+                "启用或配置智能体可用的 CLI 助手工具。",
+            )
+            .to_string(),
+            t(
+                "Manage knowledge bases used for retrieval during conversations.",
+                "管理对话检索所用的知识库。",
+            )
+            .to_string(),
+            t(
+                "Connect messaging gateways such as Telegram or other channels.",
+                "接入 Telegram 等消息渠道。",
+            )
+            .to_string(),
+            t(
+                "Create and edit agent profiles, tools and system prompts.",
+                "创建与编辑 Agent 配置、工具与系统提示。",
+            )
+            .to_string(),
+            t(
+                "Permissions, context limits, display preferences and tool defaults.",
+                "权限模式、上下文上限、显示偏好与工具默认值。",
+            )
+            .to_string(),
+            t(
+                "Write all pending changes to disk and leave the configuration UI.",
+                "将未保存的更改写入磁盘并退出配置界面。",
+            )
+            .to_string(),
+        ];
+        let subtitle = format!("{}: {active}", t("Active", "当前激活"));
+        draw_menu_with_details(
+            stdout,
+            " SAI CONFIG ",
+            &options,
+            &details,
+            selected,
+            "",
+            &subtitle,
+        )?;
 
         match read_key()? {
             KeyCode::Char('q') | KeyCode::Esc => return Ok(false),

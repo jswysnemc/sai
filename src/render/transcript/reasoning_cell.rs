@@ -1,5 +1,5 @@
 use crate::i18n::text as t;
-use crate::render::activity_animation::render_activity_line;
+use crate::render::activity_animation::{render_activity_detail, render_activity_text};
 use crate::render::fold_text::{
     fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
 };
@@ -9,6 +9,8 @@ use crate::token_counter;
 use std::time::Duration;
 
 const THINKING_LABEL: &str = "Thinking";
+/// 思考专用引导符：与工具行的 `•`、正文无符缩进区分开（CLI Summary / Full / 非流式共用）
+pub(crate) const THINKING_MARKER: &str = "◦";
 
 /// reasoning 内容的原始 source 数据。
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -59,7 +61,7 @@ pub(crate) fn render(cell: &ReasoningCell, mode: ReasoningDisplayMode) -> String
         ReasoningDisplayMode::Summary => {
             let tokens = token_counter::count(&cell.source);
             format!(
-                "\x1b[2m\x1b[36m• {}{}\x1b[0m",
+                "\x1b[2m\x1b[36m{THINKING_MARKER} {}{}\x1b[0m",
                 thinking_label(cell.duration),
                 format_tokens_suffix(tokens)
             )
@@ -100,8 +102,16 @@ pub(crate) fn render_live(
     )
     .trim_start()
     .to_string();
-    // 1. 【终端】【思考状态】与 Working 共用完整状态行动效，保证节拍和视觉基线一致
-    let title = render_activity_line(THINKING_LABEL, &detail, frame);
+    // 1. 思考用 ◦ 引导 + 扫光标题，避免与工具行的 • 抢同一视觉层级
+    let title = format!(
+        "\x1b[2m\x1b[36m{THINKING_MARKER}\x1b[0m {}{}",
+        render_activity_text(THINKING_LABEL, frame),
+        if detail.is_empty() {
+            String::new()
+        } else {
+            format!(" {}", render_activity_detail(&detail))
+        }
+    );
     match mode {
         ReasoningDisplayMode::Hidden => String::new(),
         ReasoningDisplayMode::Summary => title,
@@ -181,8 +191,9 @@ fn render_thinking_body_with_cols(
     terminal_cols: usize,
 ) -> String {
     let tokens = token_counter::count(source);
+    // 定稿标题用弱化 ◦，避免与工具行的加粗 • 抢同一层级
     let title = format!(
-        "\x1b[1m\x1b[36m•\x1b[0m \x1b[1m{}\x1b[0m\x1b[2m{}\x1b[0m",
+        "\x1b[2m\x1b[36m{THINKING_MARKER}\x1b[0m \x1b[2m{}\x1b[0m\x1b[2m{}\x1b[0m",
         thinking_label(duration),
         format_tokens_suffix(tokens)
     );
@@ -212,7 +223,14 @@ fn render_thinking_body_with_title(
         return title;
     }
     // 1. 按「终端列数 - gutter」折行，再拼 `  └ `/`    `，保证最终行宽不超过终端
-    let lines = wrap_display_lines(body, thinking_body_wrap_width(terminal_cols));
+    let wrapped = wrap_display_lines(body, thinking_body_wrap_width(terminal_cols));
+    // 2. 丢掉空段落：模型常在思考里插 `\n\n`，渲染成 gutter 空行会像「块内硬隔开」；
+    //    真正的区块间距交给 cell 级 trailing blank（思考 → 工具）。
+    let blank_dropped = wrapped.iter().filter(|line| line.trim().is_empty()).count();
+    let lines: Vec<String> = wrapped
+        .into_iter()
+        .filter(|line| !line.trim().is_empty())
+        .collect();
     let (visible, omitted) = fold_display_lines(&lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
 
     let mut output = title;
@@ -399,6 +417,22 @@ mod tests {
         assert_eq!(thinking_body_wrap_width(80), 76);
         assert_eq!(thinking_body_wrap_width(10), 8);
         assert_eq!(thinking_body_wrap_width(4), 8);
+    }
+
+    #[test]
+    fn thinking_body_drops_blank_paragraphs() {
+        let rendered = render_thinking_body(
+            "第一段说明能力。\n\n我先检查工作区再回复。",
+            true,
+            false,
+            None,
+        );
+        let plain = strip_ansi_for_test(&rendered);
+        let body: Vec<&str> = plain.lines().skip(1).collect();
+        assert_eq!(body.len(), 2, "blank paragraph must not become a gutter gap: {body:?}");
+        assert!(body[0].contains("第一段"));
+        assert!(body[1].contains("我先检查"));
+        assert!(body.iter().all(|line| !line.trim().is_empty()));
     }
 
     /// 计算纯文本显示宽度。

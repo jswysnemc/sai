@@ -85,10 +85,10 @@ impl ReplChrome {
         }
     }
 
-    /// 底栏整行：模式、上下文、模型、思考等级、目录和 Git 分支。
+    /// 底栏整行：左侧模式/上下文/模型/思考，右侧目录。
     ///
     /// 参数:
-    /// - `cols`: 终端列数
+    /// - `cols`: 终端列数（面板内为扣除彩条后的净宽）
     ///
     /// 返回:
     /// - 已着色状态行
@@ -101,7 +101,7 @@ impl ReplChrome {
             self.model,
             self.thinking
         );
-        // 1. 先在纯文本上裁剪，保证 left + 空格 + right 不超过终端列数
+        // 1. 先在纯文本上裁剪，保证 left + 空格 + right 不超过可用列数
         //    禁止对 gap 强制 max(1)：贴满时再塞空格会变成 cols+1 并触发终端换行
         let (left_text, right_text, gap) = fit_status_segments(&left_plain, &self.directory, cols);
         // 2. 裁剪后再着色，避免 ANSI 干扰宽度计算
@@ -111,7 +111,8 @@ impl ReplChrome {
         } else {
             color_directory(&right_text)
         };
-        format!("{left}{}{}", " ".repeat(gap), right)
+        let line = format!("{left}{}{}", " ".repeat(gap), right);
+        line
     }
 }
 
@@ -264,19 +265,20 @@ fn truncate_to_width(value: &str, width: usize) -> String {
     output
 }
 
-/// 生成全宽浅色分隔线。
-///
-/// 参数:
-/// - `cols`: 终端列数
-///
-/// 返回:
-/// - 带样式的分隔线
-/// 输入框上下分隔线样式。
-///
-/// 使用柔和蓝色，区别于正文里的 dim 水平线（`\x1b[2m`）与代码块青色边框（`\x1b[36m`）。
+/// 输入框边框样式（旧分隔线兼容）。
 const CHROME_RULE_STYLE: &str = "\x1b[38;5;67m";
+/// 输入面板背景（暗色终端上的抬升灰底，近似 opencode 面板）。
+const CHROME_PANEL_BG: &str = "\x1b[48;5;236m";
+/// 面板内分隔线前景。
+const CHROME_PANEL_RULE: &str = "\x1b[38;5;240m";
+/// 左侧模式引导线占用列数（单列字形，视觉上比实心色块更细）。
+pub(super) const CHROME_ACCENT_COLS: usize = 1;
+/// 最细左侧引导字形（左 1/8 方块，落在单元格左侧）。
+const CHROME_ACCENT_GLYPH: &str = "▏";
+/// 输入正文上下各留的空白行数。
+pub(super) const CHROME_INPUT_PAD_ROWS: u16 = 1;
 
-/// 生成输入框顶/底分隔线。
+/// 生成输入框顶/底分隔线（兼容旧调用）。
 ///
 /// 参数:
 /// - `cols`: 终端列数
@@ -285,6 +287,97 @@ const CHROME_RULE_STYLE: &str = "\x1b[38;5;67m";
 /// - 带颜色的整行分隔线
 pub(super) fn chrome_rule(cols: usize) -> String {
     format!("{CHROME_RULE_STYLE}{}\x1b[0m", "─".repeat(cols.max(1)))
+}
+
+/// 模式引导线前景色（细竖线用前景着色，避免实心背景块显得过粗）。
+fn mode_accent_fg(mode: AgentMode) -> &'static str {
+    match mode {
+        AgentMode::Yolo => "\x1b[38;5;208m",
+        AgentMode::Audited => "\x1b[38;5;135m",
+        AgentMode::AutoAudit => "\x1b[38;5;141m",
+        AgentMode::Plan => "\x1b[38;5;73m",
+    }
+}
+
+/// opencode 风格面板行：最细左侧引导线 + 灰底内容区（空位用空格铺满以显出背景）。
+///
+/// 参数:
+/// - `mode`: 当前模式（决定引导线颜色）
+/// - `content`: 已含样式的正文
+/// - `cols`: 终端总列数
+///
+/// 返回:
+/// - 整行 ANSI 文本
+pub(super) fn chrome_panel_row(mode: AgentMode, content: &str, cols: usize) -> String {
+    let cols = cols.max(CHROME_ACCENT_COLS + 1);
+    let inner = cols.saturating_sub(CHROME_ACCENT_COLS);
+    // 正文里的 `\x1b[0m` 会清掉背景，替换为 reset+面板底色以保持整行灰底
+    let content = content.replace("\x1b[0m", &format!("\x1b[0m{CHROME_PANEL_BG}"));
+    let width = visible_width(&content);
+    let body = if width >= inner {
+        truncate_ansi_to_width(&content, inner)
+    } else {
+        format!("{content}{}", " ".repeat(inner - width))
+    };
+    // 面板底上叠最细引导字形；正文区保持面板底色，末尾 reset
+    format!(
+        "{bg}{fg}{glyph}\x1b[0m{bg}{body}\x1b[0m",
+        bg = CHROME_PANEL_BG,
+        fg = mode_accent_fg(mode),
+        glyph = CHROME_ACCENT_GLYPH,
+    )
+}
+
+/// 面板内部分隔行（同色底 + 弱化横线）。
+pub(super) fn chrome_panel_divider(mode: AgentMode, cols: usize) -> String {
+    let cols = cols.max(CHROME_ACCENT_COLS + 1);
+    let inner = cols.saturating_sub(CHROME_ACCENT_COLS);
+    format!(
+        "{bg}{fg}{glyph}\x1b[0m{bg}{CHROME_PANEL_RULE}{}\x1b[0m",
+        "─".repeat(inner),
+        bg = CHROME_PANEL_BG,
+        fg = mode_accent_fg(mode),
+        glyph = CHROME_ACCENT_GLYPH,
+    )
+}
+
+/// 输入区可用列数（扣除左侧彩条）。
+pub(super) fn chrome_input_content_cols(cols: usize) -> usize {
+    cols.saturating_sub(CHROME_ACCENT_COLS).max(1)
+}
+
+/// 截断含 ANSI 的文本到指定显示宽度。
+fn truncate_ansi_to_width(text: &str, width: usize) -> String {
+    use unicode_width::UnicodeWidthChar;
+    if width == 0 {
+        return String::new();
+    }
+    if visible_width(text) <= width {
+        return text.to_string();
+    }
+    let mut out = String::new();
+    let mut used = 0usize;
+    let mut index = 0usize;
+    while index < text.len() {
+        let ch = text[index..].chars().next().unwrap_or_default();
+        if ch == '\x1b' {
+            let end = crate::render::terminal_image::escape_sequence_end(text, index);
+            out.push_str(&text[index..end]);
+            index = end.max(index + ch.len_utf8());
+            continue;
+        }
+        let char_width = ch.width().unwrap_or(0);
+        if used.saturating_add(char_width) > width {
+            break;
+        }
+        out.push(ch);
+        used = used.saturating_add(char_width);
+        index += ch.len_utf8();
+    }
+    // 截断后恢复面板底色，避免后续 padding 丢背景
+    out.push_str("\x1b[0m");
+    out.push_str(CHROME_PANEL_BG);
+    out
 }
 
 /// 生成左右对齐的状态行。
@@ -308,12 +401,14 @@ pub(super) fn chrome_status_line(left: &str, right: &str, cols: usize) -> String
     format!("\x1b[2m{left}{}{right}\x1b[0m", " ".repeat(gap))
 }
 
-/// 极简 chrome 固定占用行数：顶线 + 底线 + 状态（模式并入状态行左侧）。
+/// opencode 风格 chrome 固定占用行数：输入上下各一行空白 + 底部状态行。
 ///
 /// 返回:
 /// - 固定行数
 pub(super) fn chrome_fixed_rows() -> u16 {
-    3
+    CHROME_INPUT_PAD_ROWS
+        .saturating_mul(2)
+        .saturating_add(1)
 }
 
 #[cfg(test)]
@@ -416,5 +511,21 @@ mod tests {
         assert!(line.contains(CHROME_RULE_STYLE));
         assert!(!line.starts_with("\x1b[2m"));
         assert_eq!(strip_ansi(&line), "────────");
+    }
+
+    #[test]
+    fn panel_row_has_thin_accent_bar_and_background_fill() {
+        let line = chrome_panel_row(AgentMode::Yolo, "hello", 20);
+        assert!(line.contains("\x1b[38;5;208m"));
+        assert!(line.contains(CHROME_ACCENT_GLYPH));
+        assert!(line.contains(CHROME_PANEL_BG));
+        assert!(line.contains("hello"));
+        assert_eq!(CHROME_ACCENT_COLS, 1);
+        assert_eq!(visible_width(&line), 20);
+        // 上空白 + 下空白 + 状态行
+        assert_eq!(chrome_fixed_rows(), 3);
+        let divider = chrome_panel_divider(AgentMode::Plan, 20);
+        assert!(divider.contains("\x1b[38;5;73m"));
+        assert_eq!(visible_width(&divider), 20);
     }
 }

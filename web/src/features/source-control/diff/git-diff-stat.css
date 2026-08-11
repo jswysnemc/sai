@@ -1,0 +1,55 @@
+.git-diff-stat-block {
+  border-bottom: 1px solid var(--line);
+  background: var(--code-surface);
+}
+
+.git-diff-stat-toggle.ui-button {
+  display: flex;
+  width: 100%;
+  min-height: 2rem;
+  justify-content: flex-start;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-md);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+.git-diff-stat-toggle.ui-button:hover:not(:disabled) {
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.git-diff-stat-summary {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--code-comment);
+  font: 400 var(--text-xs) var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-diff-stat-hint {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+}
+
+.git-diff-stat-block .git-diff-stat {
+  max-height: 12rem;
+  overflow: auto;
+  border-bottom: 0;
+}
+
+/* 未包在折叠块里时保持原样式；折叠块内去掉重复底边 */
+.git-diff-stat {
+  margin: 0;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--line);
+  color: var(--code-comment);
+  font: 400 var(--text-xs) / 1.5 var(--font-code);
+  white-space: pre-wrap;
+}

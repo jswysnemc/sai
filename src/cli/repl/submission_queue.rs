@@ -90,12 +90,13 @@ pub(super) async fn drain_submission_queue(
                 return Ok(());
             }
             // 剪贴板附件在此还原：图片与长文本占位块换回真实内容
+            let (echo_text, fold_echo) = item.clipboard.echo_text_for_submit(&text);
             let chat_input = item.clipboard.to_chat_input(&text);
             if chat_input.message.trim().is_empty() && chat_input.image_url.is_none() {
                 continue;
             }
             input_history.push(text.clone());
-            runtime.record_user(*mode, text.clone())?;
+            runtime.record_user(*mode, echo_text, fold_echo)?;
             if agent.installed_mode() != *mode {
                 let registry = build_repl_tool_registry(config, paths, *mode)?;
                 agent.switch_mode(*mode, registry)?;

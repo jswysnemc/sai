@@ -52,9 +52,11 @@ impl StreamRenderer {
                 }
                 if self.reasoning_mode != ReasoningDisplayMode::Full {
                     execute!(stdout, SetForegroundColor(Color::DarkCyan))?;
+                    // 与 TUI / Summary live 共用 ◦，避免思考行退化成工具 •
                     writeln!(
                         stdout,
-                        "{TOOL_BULLET} {}",
+                        "{} {}",
+                        reasoning_cell::THINKING_MARKER,
                         self.work_status
                             .unwrap_or(WorkStatus::Thinking)
                             .localized_label()
@@ -66,6 +68,9 @@ impl StreamRenderer {
                     && self.reasoning_mode != ReasoningDisplayMode::Full
                 {
                     execute!(stdout, ResetColor)?;
+                    writeln!(stdout)?;
+                } else if self.mode != Some(ChatStreamKind::Content) {
+                    // 与 TUI Markdown 区块前空行对齐（工具后正文、或思考 trailing 后再空一行）
                     writeln!(stdout)?;
                 }
             }
@@ -185,6 +190,8 @@ impl StreamRenderer {
             ),
         );
         writeln!(stdout, "{rendered}")?;
+        // 与 TUI Reasoning trailing blank 对齐，再进入工具/正文
+        writeln!(stdout)?;
         stdout.flush()?;
         self.mode = None;
         Ok(())

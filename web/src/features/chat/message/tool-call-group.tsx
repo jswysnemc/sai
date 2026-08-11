@@ -1,4 +1,5 @@
 import { ChevronDown, FilePenLine, ListChecks, Search, ShieldCheck, TerminalSquare, Wrench } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../api/client";
 import { Button } from "../../../shared/ui/button/button";
@@ -14,6 +15,7 @@ import {
   isCommandTool,
   isEditTool,
   isExploreTool,
+  shouldUseLightweightExploreList,
   toolCallGroupLabel
 } from "./tool-call-grouping";
 import { useI18n } from "../../i18n/use-i18n";
@@ -30,6 +32,7 @@ import "./tool-call-group.css";
  */
 export function ToolCallGroup({ tools, live = false }: { tools: ToolLifecycle[]; live?: boolean }) {
   const { locale, t } = useI18n();
+  const groupRef = useRef<HTMLElement | null>(null);
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list, staleTime: 30_000 });
   const workspacePath = workspaces.data?.workspaces.find((item) => item.id === workspaces.data?.active_id)?.path ?? "";
   // 组 id 用首项稳定；若用户已展开组内任一工具则保持展开
@@ -40,6 +43,8 @@ export function ToolCallGroup({ tools, live = false }: { tools: ToolLifecycle[];
   );
   const todoOnly = tools.every((tool) => tool.name === "todo");
   const exploreOnly = tools.every(isExploreTool);
+  // 含只读 Shell 的探索组不能用轻量清单，否则无法二次展开看命令输出
+  const lightweightExplore = shouldUseLightweightExploreList(tools);
   const commandOnly = tools.every(isCommandTool);
   const editOnly = tools.every(isEditTool);
   const label = toolCallGroupLabel(tools, locale, workspacePath);
@@ -57,7 +62,7 @@ export function ToolCallGroup({ tools, live = false }: { tools: ToolLifecycle[];
           ? <FilePenLine size={14} />
           : <Wrench size={14} />;
   return (
-    <section className={`tool-call-group${expanded ? " expanded" : ""}`}>
+    <section ref={groupRef} className={`tool-call-group${expanded ? " expanded" : ""}`}>
       <Button className="tool-call-group-trigger" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
         <span className="tool-call-group-icon">{icon}</span>
         <strong title={label}>
@@ -75,8 +80,8 @@ export function ToolCallGroup({ tools, live = false }: { tools: ToolLifecycle[];
         <ChevronDown size={14} className={expanded ? "rotate" : ""} aria-hidden />
       </Button>
       {expanded && (
-        exploreOnly ? (
-          // 纯探索组展开为轻量文件清单，完整卡片对读操作是冗余
+        lightweightExplore ? (
+          // 纯文件探索：轻量清单足够；含 Shell 时改走完整卡片以便二次展开
           <ExploreFileList tools={tools} workspacePath={workspacePath} />
         ) : (
           <div className="tool-call-group-items">

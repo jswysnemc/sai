@@ -1,5 +1,7 @@
 use super::session_summary::render_session_summary;
 use crate::llm::Usage;
+use crate::render::activity_animation::strip_ansi_for_test;
+use crate::render::content_indent::align_to_guide_column;
 use crate::state::{SessionSnapshot, ToolHistorySummary, UsageSnapshot};
 
 #[test]
@@ -75,6 +77,39 @@ fn renders_compact_session_summary_with_key_fields() {
     assert!(!output.contains("12.5"));
     assert!(!output.contains("Checkpoint"));
     assert!(!output.contains("Compaction"));
+    // 水平 turn 分隔：始终换行全宽，绝不用竖线 │，也不再同行右接（避免 TUI 折行溢出）
+    let plain = crate::render::activity_animation::strip_ansi_for_test(&output);
+    assert!(
+        !plain.contains('│'),
+        "overview must not use a vertical pipe divider: {plain}"
+    );
+    let first = plain.lines().next().unwrap_or("");
+    assert!(
+        !first.contains('─'),
+        "overview rule must not sit on the summary text line: {plain}"
+    );
+    let has_next_line = plain.lines().any(|line| {
+        let trimmed = line.trim();
+        !trimmed.is_empty() && trimmed.chars().all(|ch| ch == '─')
+    });
+    assert!(
+        has_next_line,
+        "overview should carry a next-line horizontal turn rule: {plain}"
+    );
+
+    // TUI 对齐后，纯 `─` 分隔行仍须顶格，否则会折行破坏 turn 分隔
+    for line in output.lines() {
+        let plain_line = strip_ansi_for_test(line);
+        let trimmed = plain_line.trim();
+        if trimmed.len() >= 3 && trimmed.chars().all(|ch| ch == '─') {
+            let aligned = align_to_guide_column(line);
+            assert_eq!(
+                strip_ansi_for_test(&aligned),
+                trimmed,
+                "turn rule must stay flush after align: {aligned:?}"
+            );
+        }
+    }
 }
 
 /// 验证上下文占比接近上限时数值升级为警示色。

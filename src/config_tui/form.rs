@@ -4,14 +4,15 @@ use crate::i18n::text as t;
 use anyhow::{bail, Result};
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{KeyCode, KeyModifiers};
-use crossterm::style::{Attribute, Print, SetAttribute};
+use crossterm::style::Print;
 use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::{execute, queue};
 use std::io::{self, Write};
 use std::process::Command;
 
 use super::input::{read_key, read_key_event};
-use super::layout::panel_width;
+use super::layout::{full_frame, master_detail_widths, scroll_start};
+use super::theme::{selection_marks, MUTED, RESET};
 use super::ui::{display_width, draw_box, draw_menu, pad, truncate};
 
 struct FcitxState {
@@ -353,80 +354,123 @@ fn draw_form(
     revealed_secrets: &[bool],
 ) -> Result<()> {
     let (cols, rows) = terminal::size()?;
-    let width = panel_width(96, 48, cols.saturating_sub(8));
-    let height = (fields.len() as u16 + 8)
-        .min(rows.saturating_sub(4))
-        .max(10);
-    let x = cols.saturating_sub(width) / 2;
-    let y = rows.saturating_sub(height) / 2;
+    let frame = full_frame(cols, rows);
+    let x = frame.x;
+    let y = frame.y;
+    let width = frame.width;
+    let height = frame.height;
+
+
     queue!(stdout, Clear(ClearType::All))?;
     draw_box(stdout, x, y, width, height, title)?;
+    let inner_x = x.saturating_add(2);
+    let inner_w = width.saturating_sub(4);
     queue!(
         stdout,
-        MoveTo(x + 2, y + 1),
-        Print(t(
-            "[j/k] move [Enter] edit/toggle/open editor [Ctrl+R] reveal secret [s] confirm [q] cancel",
-            "[j/k]移动 [Enter]编辑/勾选/打开编辑器 [Ctrl+R]显示密钥 [s]确认 [q]取消",
+        MoveTo(inner_x, y + 1),
+        Print(format!(
+            "{MUTED}{}{RESET}",
+            truncate(
+                t(
+                    "↑/↓ move · Enter edit · Ctrl+R reveal secret · s save · q cancel",
+                    "↑/↓ 移动 · Enter 编辑 · Ctrl+R 显示密钥 · s 保存 · q 取消",
+                ),
+                inner_w as usize
+            )
         ))
     )?;
+    // 字段区占满中间；底两行留给按钮与状态；宽终端右侧放字段说明
+    let list_top = y.saturating_add(3);
+    let list_bottom = y.saturating_add(height.saturating_sub(3));
+    let body_h = list_bottom.saturating_sub(list_top).max(1);
+    let (left_w, right_w) = master_detail_widths(inner_w);
+    let visible_rows = body_h as usize;
+    let start = scroll_start(selected.min(fields.len().saturating_sub(1)), visible_rows);
     let mut cursor = None;
-    for (index, field) in fields.iter().enumerate() {
-        let row_y = y + index as u16 + 3;
-        queue!(stdout, MoveTo(x + 2, row_y))?;
-        let marker = if index == selected { ">" } else { " " };
-        let value = field_display_value(field, revealed_secrets[index]);
-        let prefix = format!("{marker} {}: ", field.label);
-        let line = truncate(
-            &format!("{prefix}{value}"),
-            width.saturating_sub(4) as usize,
-        );
+    for row in 0..visible_rows {
+        let index = start + row;
+        let row_y = list_top.saturating_add(row as u16);
+        queue!(stdout, MoveTo(inner_x, row_y))?;
+        if index >= fields.len() {
+            queue!(stdout, Print(" ".repeat(left_w as usize)))?;
+            continue;
+        }
+        let field = &fields[index];
+        let (bar, style) = selection_marks(index == selected && !editing);
+        let value_budget = left_w.saturating_sub(2).saturating_sub(
+            display_width(&format!("{}: ", field.label)) as u16 + 2,
+        ) as usize;
+        let value = field_display_value(field, revealed_secrets[index], value_budget.max(8));
+        let prefix = format!("{bar} {}: ", field.label);
+        let line = truncate(&format!("{prefix}{value}"), left_w as usize);
         if index == selected && !editing {
             queue!(
                 stdout,
-                SetAttribute(Attribute::Reverse),
-                Print(pad(&line, width.saturating_sub(4) as usize)),
-                SetAttribute(Attribute::Reset)
+                Print(format!("{style}{}{RESET}", pad(&line, left_w as usize)))
             )?;
         } else {
-            queue!(stdout, Print(pad(&line, width.saturating_sub(4) as usize)))?;
+            queue!(stdout, Print(pad(&line, left_w as usize)))?;
         }
         if index == selected && editing {
             let rendered_value = rendered_text_value(field, revealed_secrets[index]);
             let cursor_text = take_chars(&rendered_value, cursors[index]);
-            let cursor_x = x
-                + 2
-                + display_width(&prefix) as u16
-                + display_width(&truncate(&cursor_text, width.saturating_sub(4) as usize)) as u16;
-            cursor = Some((cursor_x.min(x + width.saturating_sub(3)), row_y));
+            let plain_prefix = format!("  {}: ", field.label);
+            let cursor_x = inner_x
+                + display_width(&plain_prefix) as u16
+                + display_width(&truncate(&cursor_text, left_w.saturating_sub(2) as usize)) as u16;
+            cursor = Some((cursor_x.min(inner_x.saturating_add(left_w.saturating_sub(1))), row_y));
         }
     }
-    let button_y = y + fields.len() as u16 + 4;
+    if right_w > 0 {
+        let detail_x = inner_x.saturating_add(left_w).saturating_add(2);
+        let detail = if selected < fields.len() {
+            field_detail_text(&fields[selected])
+        } else if selected == fields.len() {
+            t(
+                "Save writes these values into the in-memory config. Use Save & Exit on the main menu to persist to disk.",
+                "保存会把这些值写入内存中的配置。主菜单的「保存并退出」才会落盘。",
+            )
+            .to_string()
+        } else {
+            t(
+                "Cancel discards edits in this form and returns to the previous screen.",
+                "取消会丢弃本表单的修改并返回上一屏。",
+            )
+            .to_string()
+        };
+        draw_form_detail(stdout, detail_x, list_top, right_w, body_h, &detail)?;
+    }
+    let button_y = y.saturating_add(height.saturating_sub(2));
     draw_form_button(
         stdout,
-        x + 2,
+        inner_x,
         button_y,
         t(" Save ", " 保存 "),
         selected == fields.len() && !editing,
     )?;
     draw_form_button(
         stdout,
-        x + 14,
+        inner_x.saturating_add(12),
         button_y,
         t(" Cancel ", " 取消 "),
         selected == fields.len() + 1 && !editing,
     )?;
 
-    let mode = if editing && fields[selected].secret && revealed_secrets[selected] {
+    let mode = if selected < fields.len()
+        && editing
+        && fields[selected].secret
+        && revealed_secrets[selected]
+    {
         t(
             "Editing secret in plain text, Ctrl+R hides it",
             "正在明文编辑密钥，Ctrl+R 隐藏",
         )
-    } else if editing && fields[selected].secret {
+    } else if selected < fields.len() && editing && fields[selected].secret {
         t(
             "Editing secret masked, Ctrl+R reveals it",
             "正在掩码编辑密钥，Ctrl+R 显示明文",
         )
-    } else if editing {
+    } else if selected < fields.len() && editing {
         t(
             "Editing, Enter/Esc ends editing",
             "编辑中，Enter/Esc 结束编辑",
@@ -439,11 +483,14 @@ fn draw_form(
     };
     queue!(
         stdout,
-        MoveTo(x + 2, y + height.saturating_sub(1)),
-        Print(truncate(mode, width.saturating_sub(4) as usize))
+        MoveTo(inner_x, y + height.saturating_sub(1)),
+        Print(format!(
+            "{MUTED}{}{RESET}",
+            truncate(mode, inner_w as usize)
+        ))
     )?;
-    if let Some((x, y)) = cursor {
-        queue!(stdout, Show, MoveTo(x, y))?;
+    if let Some((cx, cy)) = cursor {
+        queue!(stdout, Show, MoveTo(cx, cy))?;
     } else {
         queue!(stdout, Hide)?;
     }
@@ -451,15 +498,120 @@ fn draw_form(
     Ok(())
 }
 
+/// 表单右侧字段说明栏。
+fn draw_form_detail(
+    stdout: &mut io::Stdout,
+    x: u16,
+    y: u16,
+    width: u16,
+    height: u16,
+    text: &str,
+) -> Result<()> {
+    if width == 0 || height == 0 {
+        return Ok(());
+    }
+    queue!(
+        stdout,
+        MoveTo(x, y),
+        Print(format!(
+            "{MUTED}{}{RESET}",
+            truncate(t("Field", "字段"), width as usize)
+        ))
+    )?;
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    let mut current_w = 0usize;
+    let max_w = width as usize;
+    for ch in text.chars() {
+        if ch == '\n' {
+            lines.push(std::mem::take(&mut current));
+            current_w = 0;
+            continue;
+        }
+        let w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+        if current_w + w > max_w && !current.is_empty() {
+            lines.push(std::mem::take(&mut current));
+            current_w = 0;
+        }
+        current.push(ch);
+        current_w += w;
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    for (row, line) in lines
+        .into_iter()
+        .take(height.saturating_sub(2) as usize)
+        .enumerate()
+    {
+        queue!(
+            stdout,
+            MoveTo(x, y.saturating_add(row as u16).saturating_add(2)),
+            Print(format!("{MUTED}{}{RESET}", pad(&line, width as usize)))
+        )?;
+    }
+    Ok(())
+}
+
+/// 根据字段类型生成右侧说明。
+fn field_detail_text(field: &Field) -> String {
+    let mut parts = vec![field.label.to_string()];
+    if field.boolean {
+        parts.push(
+            t(
+                "Toggle: Enter flips true/false.",
+                "开关：Enter 在 true/false 间切换。",
+            )
+            .to_string(),
+        );
+    } else if field.textarea {
+        parts.push(
+            t(
+                "Multiline: Enter opens $EDITOR, then returns here.",
+                "多行：Enter 打开 $EDITOR，保存后回到此屏。",
+            )
+            .to_string(),
+        );
+    } else if !field.choices.is_empty() {
+        parts.push(format!(
+            "{} ({})",
+            t("Choice list: Enter opens a picker.", "选项列表：Enter 打开选择器。"),
+            field.choices.len()
+        ));
+    } else if field.secret {
+        parts.push(
+            t(
+                "Secret: shown masked; Ctrl+R toggles plain text while editing.",
+                "密钥：默认掩码；编辑时 Ctrl+R 切换明文。",
+            )
+            .to_string(),
+        );
+    } else {
+        parts.push(
+            t(
+                "Text: Enter to edit, type freely, Enter/Esc to finish.",
+                "文本：Enter 编辑，输入后 Enter/Esc 结束。",
+            )
+            .to_string(),
+        );
+    }
+    if !field.value.trim().is_empty() && !field.secret {
+        let preview = truncate(&field.value.replace('\n', " "), 80);
+        parts.push(format!("{}: {preview}", t("Current", "当前值")));
+    }
+    parts.join("\n\n")
+}
+
 /// 返回表单字段展示文本。
 ///
 /// 参数:
 /// - `field`: 表单字段
 /// - `revealed_secret`: 是否显示密钥明文
+/// - `max_value_width`: 值区域可用显示宽度
 ///
 /// 返回:
 /// - 字段展示文本
-fn field_display_value(field: &Field, revealed_secret: bool) -> String {
+fn field_display_value(field: &Field, revealed_secret: bool, max_value_width: usize) -> String {
     if field.boolean {
         match parse_bool_field(&field.value) {
             Ok(true) => "[x]".to_string(),
@@ -471,9 +623,15 @@ fn field_display_value(field: &Field, revealed_secret: bool) -> String {
     } else if !field.choices.is_empty() && field.value.is_empty() {
         field.empty_choice_label.to_string()
     } else if !field.choices.is_empty() {
-        choice_label(&field.value, field.empty_choice_label)
+        truncate(
+            &choice_label(&field.value, field.empty_choice_label),
+            max_value_width,
+        )
     } else {
-        truncate(&rendered_text_value(field, revealed_secret), 70)
+        truncate(
+            &rendered_text_value(field, revealed_secret),
+            max_value_width,
+        )
     }
 }
 
@@ -513,15 +671,14 @@ fn draw_form_button(
     selected: bool,
 ) -> Result<()> {
     queue!(stdout, MoveTo(x, y))?;
+    let (bar, style) = selection_marks(selected);
     if selected {
         queue!(
             stdout,
-            SetAttribute(Attribute::Reverse),
-            Print(label),
-            SetAttribute(Attribute::Reset)
+            Print(format!("{bar}{style}{label}{RESET}"))
         )?;
     } else {
-        queue!(stdout, Print(label))?;
+        queue!(stdout, Print(format!("{MUTED}{label}{RESET}")))?;
     }
     Ok(())
 }
@@ -636,20 +793,20 @@ mod tests {
     fn secret_field_is_masked_by_default() {
         let field = Field::new("Token", "secret".to_string()).secret();
 
-        assert_eq!(field_display_value(&field, false), "******");
+        assert_eq!(field_display_value(&field, false, 70), "******");
     }
 
     #[test]
     fn secret_field_can_be_revealed() {
         let field = Field::new("Token", "secret".to_string()).secret();
 
-        assert_eq!(field_display_value(&field, true), "secret");
+        assert_eq!(field_display_value(&field, true, 70), "secret");
     }
 
     #[test]
     fn secret_textarea_is_masked_by_default() {
         let field = Field::textarea("Tokens", "first\nsecond".to_string()).secret();
 
-        assert_eq!(field_display_value(&field, false), "************");
+        assert_eq!(field_display_value(&field, false, 70), "************");
     }
 }

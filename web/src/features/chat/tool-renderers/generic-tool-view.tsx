@@ -1,7 +1,8 @@
 import { SyntaxHighlighter } from "../syntax-highlighter";
 import { CollapsibleOutput } from "./collapsible-output";
 import { ToolPanel } from "./layout/tool-panel";
-import { prettyJson } from "./tool-data";
+import { parseJsonRecord, prettyJson } from "./tool-data";
+import { looksLikeJsonFragment } from "./tool-display-summary";
 import { parseToolFields } from "./tool-fields";
 import { useI18n } from "../../i18n/use-i18n";
 
@@ -22,9 +23,13 @@ type GenericToolViewProps = {
 export function GenericToolView({ argumentsText, output }: GenericToolViewProps) {
   const { t } = useI18n();
   const fields = parseToolFields(argumentsText);
+  // 流式未闭合 JSON 不倾倒 `{...` 碎片；完整 JSON 或字段列表才展示
+  const showArguments = fields.length > 0
+    || (Boolean(argumentsText) && Boolean(parseJsonRecord(argumentsText)))
+    || (Boolean(argumentsText) && !looksLikeJsonFragment(argumentsText));
   return (
     <ToolPanel className="generic-tool-view">
-      {argumentsText && (
+      {showArguments && (
         <section>
           <span>{t("Arguments", "参数")}</span>
           {fields.length > 0

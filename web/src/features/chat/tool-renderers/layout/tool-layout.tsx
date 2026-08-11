@@ -2,6 +2,7 @@ import { ChevronRight } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { ToolDiffBadge } from "./tool-diff-badge";
 import { ToolSummaryText } from "./tool-summary-text";
+import "./tool-layout.css";
 
 type ToolLayoutProps = {
   /** 工具图标 */
@@ -24,6 +25,10 @@ type ToolLayoutProps = {
   animateSummary?: boolean;
   /** diff 增删行数 */
   diffCount?: { added: number; removed: number };
+  /** 是否对 diff 数字做滚动逼近 */
+  animateDiffCount?: boolean;
+  /** diff 数字是否仍在流式增长 */
+  diffCountActive?: boolean;
   /** 展开后是否隐藏 diff 徽章 */
   hideDiffCountWhenOpen?: boolean;
   /** 摘要行次级操作，常态隐藏，悬停或聚焦时出现 */
@@ -67,6 +72,8 @@ export function ToolLayout({
   summaryContentKey,
   animateSummary = false,
   diffCount,
+  animateDiffCount = false,
+  diffCountActive = false,
   hideDiffCountWhenOpen = false,
   actions,
   statusLabel,
@@ -95,10 +102,10 @@ export function ToolLayout({
   };
 
   return (
-    <section className="group/tool min-w-0">
+    <section className="group/tool tool-layout min-w-0">
       <div
         className={[
-          "flex w-full min-w-0 items-center gap-2 text-left text-ui-base transition-colors",
+          "tool-layout-head flex w-full min-w-0 items-center gap-2 text-left text-ui-base transition-colors",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-input-border-focused",
           interactive ? "cursor-pointer" : "cursor-default"
         ].join(" ")}
@@ -109,7 +116,11 @@ export function ToolLayout({
         onKeyDown={interactive ? handleKeyDown : undefined}
         title={title}
       >
-        {icon ? <span className="shrink-0 text-ink-soft" aria-hidden>{icon}</span> : null}
+        {icon ? (
+          <span className="tool-layout-icon shrink-0 text-ink-soft" aria-hidden>
+            {icon}
+          </span>
+        ) : null}
         <span
           className={[
             "shrink-0 whitespace-nowrap font-medium",
@@ -138,7 +149,14 @@ export function ToolLayout({
         )}
         <span className="ml-auto flex shrink-0 items-center gap-2">
           {actions}
-          {showDiff ? <ToolDiffBadge added={diffCount.added} removed={diffCount.removed} /> : null}
+          {showDiff ? (
+            <ToolDiffBadge
+              added={diffCount.added}
+              removed={diffCount.removed}
+              animate={animateDiffCount}
+              active={diffCountActive}
+            />
+          ) : null}
           {statusLabel ? (
             <span className={showFailureStatus ? "text-destructive" : "text-ink-soft"}>{statusLabel}</span>
           ) : null}
@@ -156,7 +174,9 @@ export function ToolLayout({
           ) : null}
         </span>
       </div>
-      {expanded && children ? <div className="pt-2 outline-none">{children}</div> : null}
+      {expanded && children ? (
+        <div className="tool-layout-body outline-none">{children}</div>
+      ) : null}
     </section>
   );
 }

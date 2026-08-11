@@ -1,5 +1,20 @@
 use super::*;
 
+/// 与 `sai models` 一致的选中高亮（无反色黑底）。
+const FOCUS_STYLE: &str = "\x1b[1m\x1b[38;2;190;246;255m";
+const DIM_STYLE: &str = "\x1b[2m";
+const RESET: &str = "\x1b[0m";
+
+/// 内联模糊选择列表，供 `/agent` `/resume` `/tree` `/thinking` 等共用。
+///
+/// 视觉对齐 models 选择器：`→` + 亮色选中、弱化未选中，不铺反色黑底；
+/// 可在 REPL 已启用 raw mode 时嵌套调用。
+///
+/// 参数:
+/// - `items`: 候选项展示文本
+///
+/// 返回:
+/// - 选中项下标；取消时返回空
 pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
     let menu_lines = inline_fuzzy_lines(items.len());
     reserve_inline_fuzzy_space(menu_lines)?;
@@ -9,6 +24,8 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
     let mut selected = 0usize;
     let (_, cursor_y) = cursor::position().unwrap_or((0, menu_lines.saturating_sub(1)));
     let anchor_y = cursor_y.saturating_sub(menu_lines.saturating_sub(1));
+
+
     loop {
         let matches = fuzzy_matches(&matcher, items, &query);
         if selected >= matches.len() {
@@ -46,8 +63,7 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
                     clear_inline_fuzzy(&mut session.stdout, anchor_y, menu_lines)?;
                     return Ok(matches.get(selected).map(|(_, index)| *index));
                 }
-                // 导航只用方向键与 Ctrl 组合：q/j/k 必须留给搜索输入，
-                // 否则 qwen、kimi 这类常见词根本打不进查询框
+                // 导航只用方向键与 Ctrl 组合：q/j/k 必须留给搜索输入
                 KeyCode::Up => selected = selected.saturating_sub(1),
                 KeyCode::Down => selected = (selected + 1).min(matches.len().saturating_sub(1)),
                 KeyCode::Char('p') if modifiers.contains(KeyModifiers::CONTROL) => {
@@ -120,42 +136,58 @@ fn draw_inline_fuzzy(
             Clear(ClearType::CurrentLine)
         )?;
     }
+
+    // 过滤行：与 models 选择器同款弱化标签 + 亮色输入
+    let filter_label = if query.is_empty() {
+        t("type to filter", "输入内容过滤")
+    } else {
+        query
+    };
+    let header = format!(
+        "{DIM_STYLE}{}:{RESET} {FOCUS_STYLE}{filter_label}{RESET}  {DIM_STYLE}({}/{}){RESET}",
+        t("Filter", "过滤"),
+        matches.len(),
+        items.len()
+    );
     queue!(
         stdout,
         MoveTo(0, anchor_y),
-        Print(truncate_display(&format!("> {query}"), width)),
+        Print(truncate_display(&header, width)),
     )?;
+
     if matches.is_empty() {
         queue!(
             stdout,
             MoveTo(0, anchor_y + 1),
-            Print(t("  no matches", "  没有匹配项"))
+            Print(format!(
+                "{DIM_STYLE}{}{RESET}",
+                t("  no matches", "  没有匹配项")
+            ))
         )?;
     } else {
         for (row, (_, item_index)) in matches.iter().skip(scroll).take(visible).enumerate() {
             let item_position = scroll + row;
-            let marker = if item_position == selected { ">" } else { " " };
+            let selected_row = item_position == selected;
+            let marker = if selected_row { "→" } else { " " };
+            let style = if selected_row { FOCUS_STYLE } else { DIM_STYLE };
             let line = truncate_display(&format!("{marker} {}", items[*item_index]), width);
-            queue!(stdout, MoveTo(0, anchor_y + row as u16 + 1))?;
-            if item_position == selected {
-                queue!(
-                    stdout,
-                    SetAttribute(Attribute::Reverse),
-                    Print(line),
-                    SetAttribute(Attribute::Reset)
-                )?;
-            } else {
-                queue!(stdout, Print(line))?;
-            }
+            queue!(
+                stdout,
+                MoveTo(0, anchor_y + row as u16 + 1),
+                Print(format!("{style}{line}{RESET}"))
+            )?;
         }
     }
     queue!(
         stdout,
         MoveTo(0, anchor_y + menu_lines.saturating_sub(1)),
         Print(truncate_display(
-            t(
-                "[type] search  [up/down] move  [enter] select  [esc] cancel",
-                "[输入] 搜索  [上/下] 移动  [enter] 选择  [esc] 取消",
+            &format!(
+                "{DIM_STYLE}{}{RESET}",
+                t(
+                    "Type to filter · ↑/↓ choose · Enter select · Esc cancel",
+                    "输入过滤 · ↑/↓ 选择 · Enter 确认 · Esc 取消",
+                )
             ),
             width
         ))
@@ -194,10 +226,12 @@ fn clear_inline_fuzzy(stdout: &mut io::Stdout, anchor_y: u16, lines: u16) -> Res
 }
 
 fn reserve_inline_fuzzy_space(lines: u16) -> Result<()> {
+    // raw mode 下用 \r\n 推进，避免 println 依赖 cooked 模式
+    let mut stdout = io::stdout();
     for _ in 1..lines {
-        println!();
+        queue!(stdout, Print("\r\n"))?;
     }
-    io::stdout().flush()?;
+    stdout.flush()?;
     Ok(())
 }
 
@@ -206,28 +240,38 @@ fn inline_fuzzy_lines(item_count: usize) -> u16 {
 }
 
 fn truncate_display(value: &str, max: usize) -> String {
-    if value.chars().count() <= max {
-        value.to_string()
-    } else {
-        format!(
-            "{}…",
-            value
-                .chars()
-                .take(max.saturating_sub(1))
-                .collect::<String>()
-        )
+    use unicode_width::UnicodeWidthStr;
+    if UnicodeWidthStr::width(value) <= max {
+        return value.to_string();
     }
+    let mut output = String::new();
+    let mut used = 0usize;
+    for ch in value.chars() {
+        let char_width = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+        if used + char_width > max.saturating_sub(1) {
+            break;
+        }
+        output.push(ch);
+        used += char_width;
+    }
+    output.push('…');
+    output
 }
 
 struct InlineRawMode {
     stdout: io::Stdout,
+    was_raw: bool,
 }
 
 impl InlineRawMode {
     fn start() -> Result<Self> {
-        terminal::enable_raw_mode()?;
+        let was_raw = terminal::is_raw_mode_enabled().unwrap_or(false);
+        if !was_raw {
+            terminal::enable_raw_mode()?;
+        }
         Ok(Self {
             stdout: io::stdout(),
+            was_raw,
         })
     }
 }
@@ -235,7 +279,10 @@ impl InlineRawMode {
 impl Drop for InlineRawMode {
     fn drop(&mut self) {
         let _ = execute!(self.stdout, Show);
-        let _ = terminal::disable_raw_mode();
+        // 仅恢复调用前状态：嵌套在 REPL raw mode 时不要关掉
+        if !self.was_raw {
+            let _ = terminal::disable_raw_mode();
+        }
     }
 }
 
@@ -277,5 +324,14 @@ mod tests {
     #[test]
     fn fuzzy_selector_handles_empty_visible_window() {
         assert_eq!(inline_fuzzy_scroll_offset(4, 0), 0);
+    }
+
+    /// 选中行样式不含反色，使用箭头标记。
+    #[test]
+    fn selected_row_uses_arrow_without_reverse_video() {
+        let line = format!("{}→ item{}", super::FOCUS_STYLE, super::RESET);
+        assert!(line.contains('→'));
+        assert!(!line.contains("\x1b[7m"));
+        assert!(line.contains("190;246;255"));
     }
 }

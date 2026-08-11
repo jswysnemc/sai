@@ -115,6 +115,10 @@ fn partial_arguments_extract_target() {
         tool_event_label("load", Some(r#"{"type":"tool","keywords":["web_search"#)),
         "Load tool web_search"
     );
+    assert_eq!(
+        tool_event_label("write_file", Some(r#"{"path":"src/main.rs","content":"fn "#)),
+        "Write main.rs"
+    );
 }
 
 /// 验证渐进加载工具使用资源类型和名称标签。

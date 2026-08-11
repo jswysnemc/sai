@@ -12,6 +12,10 @@ pub(super) struct ReplInputSubmission {
     pub(super) mode: AgentMode,
     pub(super) raw_input: String,
     pub(super) chat_input: clipboard::ClipboardChatInput,
+    /// 发送后 transcript 回显正文（粘贴长文本已展开）
+    pub(super) echo_text: String,
+    /// 仅粘贴长文本启用思考式折叠
+    pub(super) fold_echo: bool,
 }
 
 /// 输入框产生的下一项工作。
@@ -272,6 +276,8 @@ pub(super) fn read_repl_input(
                                 mode,
                                 raw_input: "/tree".to_string(),
                                 chat_input: clipboard_state.to_chat_input("/tree"),
+                                echo_text: "/tree".to_string(),
+                                fold_echo: false,
                             })));
                         }
                         // 剪贴板占位块整体跳过，保持与删除一致的原子性
@@ -411,6 +417,7 @@ pub(super) fn read_repl_input(
                             )?;
                             return Ok(None);
                         }
+                        let (echo_text, fold_echo) = clipboard_state.echo_text_for_submit(&input);
                         let chat_input = clipboard_state.to_chat_input(&input);
                         let raw_input = std::mem::take(&mut input);
                         cursor = 0;
@@ -423,6 +430,8 @@ pub(super) fn read_repl_input(
                             mode,
                             raw_input,
                             chat_input,
+                            echo_text,
+                            fold_echo,
                         })));
                     }
                     KeyCode::Char('j') if modifiers.contains(KeyModifiers::CONTROL) => {
@@ -497,6 +506,16 @@ pub(super) fn read_repl_input(
                         clipboard_state.clear();
                         history_clean_index = None;
                         is_pasted = false;
+                        // 第一次 Ctrl+C：清空草稿并提示再按一次退出（对齐 Claude 双击退出）
+                        runtime.record_meta(
+                            t(
+                                "Press Ctrl+C again to exit",
+                                "再按一次 Ctrl+C 退出",
+                            )
+                            .to_string(),
+                        )?;
+                        input_row = 0;
+                        rendered_rows = 0;
                         redraw_input!()?;
                     }
                     KeyCode::Char('d')
@@ -520,6 +539,14 @@ pub(super) fn read_repl_input(
                     KeyCode::Char('o') if modifiers.contains(KeyModifiers::CONTROL) => {
                         if runtime.toggle_command_output()? {
                             // pager 返回后重新打开增强输入，并重绘输入框
+                            input_row = 0;
+                            rendered_rows = 0;
+                            redraw_input!()?;
+                        }
+                    }
+                    KeyCode::Char('t') if modifiers.contains(KeyModifiers::CONTROL) => {
+                        // Ctrl+T：沉底 todo 单行 / 多行切换
+                        if runtime.toggle_todo_panel_compact() {
                             input_row = 0;
                             rendered_rows = 0;
                             redraw_input!()?;

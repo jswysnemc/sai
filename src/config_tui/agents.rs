@@ -10,7 +10,7 @@ use super::form::{
     parse_bool_field, parse_provider_model_choice, provider_model_choice_values, run_form, Field,
 };
 use super::input::read_key;
-use super::ui::{draw_menu, message};
+use super::ui::{draw_menu_with_details, message};
 
 /// 编辑统一 Agent 档案和各运行入口默认项。
 ///
@@ -31,15 +31,48 @@ pub(crate) fn edit_agents(stdout: &mut io::Stdout, config: &mut AppConfig) -> Re
                 .map(|profile| format!("{} [{}]", profile.name, profile.id)),
         );
         options.push(t("Add Agent", "新增 Agent").to_string());
-        draw_menu(
+        let mut details = vec![t(
+            "Choose which Agent profile each surface (Web / TUI / CLI) uses by default.",
+            "为 Web / TUI / CLI 各入口选择默认 Agent 档案。",
+        )
+        .to_string()];
+        details.extend(profiles.iter().map(|profile| {
+            if is_builtin(&profile.id) {
+                format!(
+                    "{} · {}",
+                    t("Built-in profile", "内置档案"),
+                    if profile.system_prompt.trim().is_empty() {
+                        t("no custom system prompt", "无自定义系统提示")
+                    } else {
+                        t("has system prompt", "含系统提示")
+                    }
+                )
+            } else {
+                t(
+                    "Custom profile — Enter to edit, d to delete.",
+                    "自定义档案 — Enter 编辑，d 删除。",
+                )
+                .to_string()
+            }
+        }));
+        details.push(
+            t(
+                "Create a new custom Agent profile and open its editor.",
+                "新建自定义 Agent 档案并打开编辑器。",
+            )
+            .to_string(),
+        );
+        draw_menu_with_details(
             stdout,
             t(" AGENTS ", " AGENT 配置 "),
             &options,
+            &details,
             selected,
             t(
                 "Enter edit · d delete custom Agent · q back",
                 "Enter 编辑 · d 删除自定义 Agent · q 返回",
             ),
+            "",
         )?;
         match read_key()? {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),

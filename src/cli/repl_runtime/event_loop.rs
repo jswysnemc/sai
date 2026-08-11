@@ -154,6 +154,13 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                 if ctrl_o && runtime.toggle_live_reasoning()? {
                     continue;
                 }
+                if matches!(key.code, KeyCode::Char('t'))
+                    && key.modifiers.contains(KeyModifiers::CONTROL)
+                    && runtime.toggle_todo_panel_compact()
+                {
+                    runtime.redraw_stream_composer()?;
+                    continue;
+                }
                 if ctrl_o || matches!(key.code, KeyCode::PageUp) {
                     // 1. 流式期间不打开阻塞式浏览面板：pager 会同步占住事件循环，
                     //    模型流无人读取、工具子进程管道写满后挂起

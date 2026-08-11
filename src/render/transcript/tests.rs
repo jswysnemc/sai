@@ -37,7 +37,8 @@ fn live_tail_is_visible_before_consolidation_and_retained_afterward() {
     store.push_user_echo(TranscriptMode::Yolo, "inspect resize".to_string());
     store.push_chunk(&chunk(ChatStreamKind::Content, "streamed answer\n"));
 
-    assert_eq!(store.display_live_tail(80, &options()).len(), 1);
+    // 区块前空行 + 正文一行
+    assert_eq!(store.display_live_tail(80, &options()).len(), 2);
     assert!(store
         .display_tail(80, &options())
         .iter()
@@ -548,13 +549,7 @@ fn permission_audit_stays_inside_existing_command_view() {
     assert!(!rendered.contains("Permission required"));
 }
 
-/// 验证 edit_file 权限选择直接附着在 diff 视图下方。
-///
-/// 参数:
-/// - 无
-///
-/// 返回:
-/// - 无
+/// 验证编辑类权限选择附着在摘要行与 diff 正文下方（无旧式 Added 标题）。
 #[test]
 fn permission_audit_stays_inside_existing_diff_view() {
     let temp = tempfile::tempdir().unwrap();
@@ -582,10 +577,12 @@ fn permission_audit_stays_inside_existing_diff_view() {
         .map(|line| line.as_str())
         .collect::<String>();
 
-    assert!(rendered.contains("old"));
-    assert!(rendered.contains("new"));
-    assert!(rendered.contains("Allow once"));
-    assert!(!rendered.contains("Permission required"));
+    assert!(rendered.contains("Replace"), "{rendered}");
+    assert!(rendered.contains("Allow once"), "{rendered}");
+    assert!(!rendered.contains("Permission required"), "{rendered}");
+    assert!(rendered.contains("old"), "{rendered}");
+    assert!(rendered.contains("new"), "{rendered}");
+    assert!(!rendered.contains("Added"), "{rendered}");
 }
 
 #[test]
@@ -611,14 +608,20 @@ fn diff_cell_keeps_pre_edit_snapshot_after_file_changes() {
 
     store.push_tool_call("str_replace".to_string(), arguments);
     std::fs::write(&path, "new\n").unwrap();
+    // Full 模式才展开冻结正文；写盘后仍应看到调用前的 old→new
+    let full = TranscriptRenderOptions {
+        reasoning_mode: ReasoningDisplayMode::Summary,
+        tool_call_mode: ToolCallDisplayMode::Full,
+    };
     let rendered = store
-        .display_tail(80, &options())
+        .display_tail(80, &full)
         .iter()
         .map(|line| line.as_str())
         .collect::<String>();
 
-    assert!(rendered.contains("old"));
-    assert!(rendered.contains("new"));
+    assert!(rendered.contains("old"), "{rendered}");
+    assert!(rendered.contains("new"), "{rendered}");
+    assert!(rendered.contains("Replace"), "{rendered}");
 }
 
 #[test]
@@ -703,7 +706,7 @@ fn run_command_success_keeps_growing_output_in_summary() {
 }
 
 #[test]
-fn history_edit_file_restores_diff_cell() {
+fn history_edit_file_restores_stat_line_and_diff_body() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("history.txt");
     std::fs::write(&path, "old\n").unwrap();
@@ -718,23 +721,17 @@ fn history_edit_file_restores_diff_cell() {
     store.push_tool_result(
         "str_replace".to_string(),
         true,
-        r#"{"ok":true}"#.to_string(),
+        r#"{"changed_files":[{"path":"history.txt","added":1,"removed":1}]}"#.to_string(),
     );
     let rendered = store
         .display_tail(80, &options())
         .iter()
         .map(|line| line.as_str())
         .collect::<String>();
-    assert!(
-        rendered.contains("old")
-            || rendered.contains("new")
-            || rendered.contains("Edited")
-            || rendered.contains("Edit"),
-        "{rendered}"
-    );
-    // 不应只剩通用 run_command 风格而无编辑标记
-    assert!(
-        rendered.contains('+') || rendered.contains('-') || rendered.contains("Edit"),
-        "{rendered}"
-    );
+    // Summary 默认：Replace +N -M 摘要行 + 冻结行级正文（无旧式 Added 标题）
+    assert!(rendered.contains("Replace"), "{rendered}");
+    assert!(rendered.contains("+1") || rendered.contains('+'), "{rendered}");
+    assert!(rendered.contains("old"), "{rendered}");
+    assert!(rendered.contains("new"), "{rendered}");
+    assert!(!rendered.contains("Added"), "{rendered}");
 }

@@ -14,8 +14,8 @@ pub(crate) const DIFF_BLOCK_INSET: usize = CONTENT_LEFT_INDENT + DIFF_NESTED_IND
 
 /// 判断字符是否为悬挂在视觉引导线列的行首符号。
 ///
-/// `●`/`•` 是消息与工具的引导点；`✗` 是失败标记、`›` 是系统提示引导符，
-/// 它们同样必须停在引导线列，否则会被推到正文列与正文混在一起。
+/// `●` 用户回显、`•` 工具/状态、`◦` 思考、`✗` 失败、`›` 系统提示，
+/// 都必须停在引导线列，否则会被推到正文列与正文混在一起。
 ///
 /// 参数:
 /// - `ch`: 行首首个可见字符
@@ -23,7 +23,20 @@ pub(crate) const DIFF_BLOCK_INSET: usize = CONTENT_LEFT_INDENT + DIFF_NESTED_IND
 /// 返回:
 /// - 是否保留在引导线列
 fn is_guide_marker(ch: char) -> bool {
-    matches!(ch, '●' | '•' | '✗' | '›')
+    matches!(ch, '●' | '•' | '◦' | '✗' | '›')
+}
+
+/// 判断是否为会话 turn 水平分隔线（纯 `─`，可带 ANSI 弱化样式）。
+///
+/// 参数:
+/// - `text`: 已完成 ANSI 渲染的终端行
+///
+/// 返回:
+/// - 是 turn 分隔线时为 true
+fn is_turn_rule_line(text: &str) -> bool {
+    let plain = crate::render::activity_animation::strip_ansi_for_test(text);
+    let trimmed = plain.trim();
+    trimmed.len() >= 3 && trimmed.chars().all(|ch| ch == '─')
 }
 
 /// 将一行内容放到视觉引导线两侧的正确列。
@@ -35,8 +48,19 @@ fn is_guide_marker(ch: char) -> bool {
 /// - 引导符号位于左侧，普通正文位于右侧的终端行
 pub(crate) fn align_to_guide_column(text: &str) -> String {
     let (leading_spaces, first_visible) = visible_line_start(text);
-    if first_visible.is_some_and(is_guide_marker) && leading_spaces == 0 {
-        return text.to_string();
+    if first_visible.is_some_and(is_guide_marker) {
+        // 引导符必须顶格：diff 块缩进曾误伤标题行的 `•`，这里拉回第 0 列
+        if leading_spaces == 0 {
+            return text.to_string();
+        }
+        return remove_leading_visible_spaces(text, leading_spaces);
+    }
+    // turn 水平分隔线必须顶格通栏；再缩进会超出终端宽度并折行
+    if is_turn_rule_line(text) {
+        if leading_spaces == 0 {
+            return text.to_string();
+        }
+        return remove_leading_visible_spaces(text, leading_spaces);
     }
     // diff 块内三类行（上下文、新增、删除）经 renderer 输出时结构已一致
     // （`行号 标记  正文`，上下文行的标记为空格），因此必须统一补同一宽度。
@@ -263,6 +287,8 @@ pub(crate) fn clear_right_margin(columns: usize) -> String {
 
 /// 为文本块的每一行增加指定列数的缩进。
 ///
+/// 以 `•`/`◦` 等引导符开头的标题行保持顶格，只缩进 diff 正文色块。
+///
 /// 参数:
 /// - `text`: 原始文本块
 /// - `columns`: 缩进列数
@@ -270,9 +296,23 @@ pub(crate) fn clear_right_margin(columns: usize) -> String {
 /// 返回:
 /// - 每一行增加缩进后的文本
 fn indent_lines(text: &str, columns: usize) -> String {
+    if columns == 0 {
+        return text.to_string();
+    }
     let indent = " ".repeat(columns);
     text.split_inclusive('\n')
-        .map(|line| format!("{indent}{line}"))
+        .map(|line| {
+            let (content, newline) = match line.strip_suffix('\n') {
+                Some(content) => (content, "\n"),
+                None => (line, ""),
+            };
+            let (_, first) = visible_line_start(content);
+            if first.is_some_and(is_guide_marker) {
+                format!("{content}{newline}")
+            } else {
+                format!("{indent}{content}{newline}")
+            }
+        })
         .collect()
 }
 
@@ -480,10 +520,17 @@ mod tests {
             "\x1b[36m●\x1b[0m input"
         );
         assert_eq!(align_to_guide_column("• tool"), "• tool");
+        assert_eq!(align_to_guide_column("◦ Thinking"), "◦ Thinking");
+        // turn 水平分隔线顶格通栏，不被推到正文列
+        assert_eq!(
+            align_to_guide_column("\x1b[2m────────\x1b[0m"),
+            "\x1b[2m────────\x1b[0m"
+        );
+        assert_eq!(align_to_guide_column("  ────────"), "────────");
         // 失败叉号与提示引导符同样悬挂在引导线列，不与正文混排
         assert_eq!(
-            align_to_guide_column("\x1b[31m✗\x1b[0m 本轮失败"),
-            "\x1b[31m✗\x1b[0m 本轮失败"
+            align_to_guide_column("\x1b[31m✗ 本轮失败\x1b[0m"),
+            "\x1b[31m✗ 本轮失败\x1b[0m"
         );
         assert_eq!(
             align_to_guide_column("\x1b[2m› 已切换模型\x1b[0m"),
@@ -496,6 +543,12 @@ mod tests {
         );
         assert_eq!(indent_diff_for_transcript("a\nb"), " a\n b");
         assert_eq!(indent_diff_for_cli("a\nb"), "   a\n   b");
+        // diff 标题行的引导符保持顶格，正文色块才内收
+        assert_eq!(
+            indent_diff_for_transcript("• Added a.txt (+1 -0)\nline"),
+            "• Added a.txt (+1 -0)\n line"
+        );
+        assert_eq!(align_to_guide_column(" • Added a.txt"), "• Added a.txt");
     }
 
     /// 【终端】【diff 对齐】验证同一 diff 块内三类行的正文落在同一列。

@@ -4,14 +4,15 @@ use anyhow::Result;
 use crossterm::cursor::MoveTo;
 use crossterm::event::KeyCode;
 use crossterm::queue;
-use crossterm::style::{Attribute, Print, SetAttribute};
+use crossterm::style::Print;
 use crossterm::terminal::{self, Clear, ClearType};
 use std::io::{self, Write};
 
 use super::form::run_form;
 use super::input::read_key;
-use super::layout::panel_width;
+use super::layout::full_frame;
 use super::plugin_fields::{apply_plugin_fields, plugin_fields};
+use super::theme::{selection_marks, BOLD, MUTED, RESET};
 use super::ui::{display_width, draw_box, message, pad, truncate};
 
 /// 编辑 CLI 助手可选工具。
@@ -74,11 +75,11 @@ pub(crate) fn edit_web_search(stdout: &mut io::Stdout, config: &mut AppConfig) -
 /// - 绘制与刷新结果
 fn draw_cli_tool_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usize) -> Result<()> {
     let (cols, rows) = terminal::size()?;
-    // 先取期望宽度再钳制到终端可用宽度，避免窄终端溢出换行
-    let width = panel_width(cols.saturating_sub(4), 60, cols.saturating_sub(4));
-    let height = rows.saturating_sub(2).max(10);
-    let x = 2;
-    let y = 1;
+    let frame = full_frame(cols, rows);
+    let width = frame.width;
+    let height = frame.height;
+    let x = frame.x;
+    let y = frame.y;
     queue!(stdout, Clear(ClearType::All))?;
     draw_box(
         stdout,
@@ -91,25 +92,29 @@ fn draw_cli_tool_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usi
     queue!(
         stdout,
         MoveTo(x + 2, y + 1),
-        Print(t(
-            "[Space] enable/disable [Enter] configure [j/k] move [q] back",
-            "[Space]启用/禁用 [Enter]配置 [j/k]移动 [q]返回",
+        Print(format!(
+            "{MUTED}{}{RESET}",
+            t(
+                "Space toggle · Enter configure · ↑/↓ move · q back",
+                "Space 开关 · Enter 配置 · ↑/↓ 移动 · q 返回",
+            )
         ))
     )?;
     queue!(
         stdout,
         MoveTo(x + 2, y + 3),
-        SetAttribute(Attribute::Bold),
-        Print(pad(
-            &cli_tool_row(
-                t("State", "状态"),
-                t("Tool", "工具"),
-                t("Description", "说明"),
+        Print(format!(
+            "{BOLD}{}{RESET}",
+            pad(
+                &cli_tool_row(
+                    t("State", "状态"),
+                    t("Tool", "工具"),
+                    t("Description", "说明"),
+                    width.saturating_sub(4) as usize,
+                ),
                 width.saturating_sub(4) as usize,
-            ),
-            width.saturating_sub(4) as usize,
-        )),
-        SetAttribute(Attribute::Reset)
+            )
+        ))
     )?;
     let tools = cli_tool_names();
     let visible_rows = height.saturating_sub(6) as usize;
@@ -125,18 +130,16 @@ fn draw_cli_tool_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usi
         } else {
             "[OFF]"
         };
-        let line = cli_tool_row(state, name, description, width.saturating_sub(4) as usize);
+        let line = cli_tool_row(state, name, description, width.saturating_sub(6) as usize);
         queue!(stdout, MoveTo(x + 2, y + row as u16 + 4))?;
-        if index == selected {
-            queue!(
-                stdout,
-                SetAttribute(Attribute::Reverse),
-                Print(pad(&line, width.saturating_sub(4) as usize)),
-                SetAttribute(Attribute::Reset)
-            )?;
-        } else {
-            queue!(stdout, Print(pad(&line, width.saturating_sub(4) as usize)))?;
-        }
+        let (bar, style) = selection_marks(index == selected);
+        queue!(
+            stdout,
+            Print(format!(
+                "{bar} {style}{}{RESET}",
+                pad(&line, width.saturating_sub(6) as usize)
+            ))
+        )?;
     }
     stdout.flush()?;
     Ok(())

@@ -1,4 +1,5 @@
-use super::{options, strip_ansi, TranscriptStore};
+use super::{strip_ansi, TranscriptRenderOptions, TranscriptStore};
+use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
 
 /// 【终端】【Diff 换行】验证长行折行后续行缩进到 diff 正文列。
 ///
@@ -23,7 +24,12 @@ fn diff_long_lines_wrap_with_body_column_indent() {
 
     let mut store = TranscriptStore::new(100);
     store.push_tool_call("str_replace".to_string(), args);
-    let lines = store.display_window(60, &options(), 40, usize::MAX);
+    // 折行针对 Full 模式展开的 diff 正文；Summary 只有摘要行
+    let full = TranscriptRenderOptions {
+        reasoning_mode: ReasoningDisplayMode::Summary,
+        tool_call_mode: ToolCallDisplayMode::Full,
+    };
+    let lines = store.display_window(60, &full, 40, usize::MAX);
     let plain = lines
         .lines
         .iter()

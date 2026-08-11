@@ -77,13 +77,50 @@ export function toolSummary(name: string, argumentsText: string, locale: Locale 
  */
 export function toolFilePath(name: string, argumentsText: string): string {
   const args = parseJsonRecord(argumentsText);
-  if (name === "read_file" || name === "write_file" || name === "str_replace") return stringField(args, "path");
+  if (name === "read_file" || name === "write_file" || name === "str_replace") {
+    return stringField(args, "path") || lenientStringField(argumentsText, "path");
+  }
   if (name !== "edit_file") return "";
-  const paths = stringField(args, "patch")
+  const patch = stringField(args, "patch") || lenientStringField(argumentsText, "patch");
+  const paths = patch
     .split("\n")
     .flatMap((line) => {
       const match = /^\*\*\* (?:Add|Delete|Update) File: (.+)$/.exec(line);
       return match ? [match[1].trim()] : [];
     });
   return new Set(paths).size === 1 ? paths[0] : "";
+}
+
+/**
+ * 从可能未闭合的 JSON 文本中提取字符串字段。
+ *
+ * @param raw JSON 片段
+ * @param key 字段名
+ * @returns 字段值；找不到时返回空串
+ */
+export function lenientStringField(raw: string, key: string): string {
+  const pattern = `"${key}"`;
+  const keyIndex = raw.indexOf(pattern);
+  if (keyIndex < 0) return "";
+  const afterKey = raw.slice(keyIndex + pattern.length);
+  const colonIndex = afterKey.indexOf(":");
+  if (colonIndex < 0) return "";
+  const afterColon = afterKey.slice(colonIndex + 1).trimStart();
+  if (!afterColon.startsWith("\"")) return "";
+  let output = "";
+  let escaped = false;
+  for (const ch of afterColon.slice(1)) {
+    if (escaped) {
+      output += ch === "n" ? "\n" : ch === "r" ? "\r" : ch === "t" ? "\t" : ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (ch === "\"") break;
+    output += ch;
+  }
+  return output.trim();
 }

@@ -5,7 +5,7 @@ use crate::llm::ChatStreamKind;
 use crate::render::activity_animation::strip_ansi_for_test;
 use unicode_width::UnicodeWidthStr;
 
-/// 【终端】【正文引导测试】验证定稿正文首行显示引导符号，折行保留等宽引导区。
+/// 【终端】【正文引导测试】验证定稿正文无引导点、仅等宽缩进，折行不超宽。
 ///
 /// 参数:
 /// - 无
@@ -22,7 +22,8 @@ fn finalized_assistant_body_uses_visual_guide_and_aligned_wraps() {
         .map(|line| strip_ansi_for_test(line.as_str()))
         .collect::<Vec<_>>();
 
-    assert_eq!(plain, vec!["• abcd", "  efgh"]);
+    // 区块前空行 + 两列缩进正文（不再使用与工具相同的 •）
+    assert_eq!(plain, vec!["", "  abcd", "  efgh"]);
     assert!(plain
         .iter()
         .all(|line| UnicodeWidthStr::width(line.as_str()) <= 6));
@@ -45,7 +46,8 @@ fn live_and_finalized_assistant_body_share_visual_guide() {
         .iter()
         .map(|line| strip_ansi_for_test(line.as_str()))
         .collect::<Vec<_>>();
-    assert_eq!(live, vec!["• first", "  second"]);
+    // live 与定稿共用区块前空行，避免「工作时无空行、完成后突然出现」
+    assert_eq!(live, vec![String::new(), "  first".into(), "  second".into()]);
 
     assert!(store.finalize_live_tail());
     let finalized = store

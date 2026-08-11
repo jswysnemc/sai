@@ -11,8 +11,9 @@
 
 .bottom-terminal-resize-handle {
   position: absolute;
+  /* 只吃面板顶边外的拖拽带，不要压进标签栏盖住加号 */
   inset: -0.25rem 0 auto;
-  z-index: 2;
+  z-index: 1;
   height: 0.5rem;
   min-height: 0;
   padding: 0;
@@ -23,6 +24,8 @@
 }
 
 .bottom-terminal-head {
+  position: relative;
+  z-index: 3;
   display: flex;
   min-width: 0;
   align-items: center;

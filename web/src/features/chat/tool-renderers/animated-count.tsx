@@ -7,12 +7,14 @@ import { useEffect, useRef, useState } from "react";
  * 这里在每次目标变化时用 rAF 分若干帧追上去。active 关闭（工具结束
  * 或被用户中断）时立即钉在最终值并取消未完成的帧，动效随任务一起停。
  *
+ * 进行中挂载时从 0 起跳，避免首次渲染直接钉在目标值、看不见跳动。
+ *
  * @param props value 为目标数值，active 表示是否仍在进行
  * @returns 当前展示的数字
  */
 export function AnimatedCount({ value, active }: { value: number; active: boolean }) {
-  const [shown, setShown] = useState(value);
-  const shownRef = useRef(value);
+  const [shown, setShown] = useState(() => (active ? 0 : value));
+  const shownRef = useRef(active ? 0 : value);
   const frameRef = useRef(0);
 
   useEffect(() => {

@@ -81,38 +81,47 @@
 
 .system-usage-popover > header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding:var(--space-3xs) var(--space-2xs) var(--space-md);
+  align-items: flex-start;
+  gap: var(--space-xs);
+  padding: var(--space-3xs) var(--space-2xs) var(--space-md);
   border-bottom: 1px solid var(--line);
 }
 
 .system-usage-popover > header > div {
   display: grid;
-  gap:var(--space-3xs);
+  gap: var(--space-3xs);
+  min-width: 0;
 }
 
 .system-usage-popover > header span {
   color: var(--ink-soft);
-  font:500 var(--text-2xs) var(--font-code);
+  font: 500 var(--text-2xs) var(--font-code);
   letter-spacing: 0.09em;
 }
 
 .system-usage-popover > header strong {
-  font-size:var(--text-base);
+  font-size: var(--text-base);
   font-weight: 500;
 }
 
-.system-usage-popover > header i {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--radius-circle);
-  background: var(--line-strong);
+/* 关闭钮固定在浮层左上角，替代原先右上角状态圆点 */
+.system-usage-close {
+  display: grid;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-top: 0.125rem;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: var(--ink-soft);
 }
 
-.system-usage-popover > header i.active {
-  background: var(--signal);
-  box-shadow: var(--ring-signal);
+.system-usage-close:hover {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
 }
 
 .context-usage-card {
@@ -128,8 +137,7 @@
 .context-usage-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  font-size:var(--text-2xs);
+  font-size: var(--text-2xs);
 }
 
 .context-usage-head strong {
@@ -255,23 +263,6 @@
   --context-conversation: var(--violet);
   --context-connectors: var(--chart-1);
   --context-skills: var(--chart-5);
-}
-
-.context-usage-close {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius:var(--radius-2);
-  background: transparent;
-  color: var(--ink-soft);
-}
-
-.context-usage-close:hover {
-  background: color-mix(in srgb, var(--ink) 8%, transparent);
-  color: var(--ink);
 }
 
 .context-usage-summary {

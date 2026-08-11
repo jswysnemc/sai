@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Columns2, GitCompare, Loader2, Rows3 } from "lucide-react";
 import type { GitDiffResponse } from "../../../api/contracts";
 import { DiffView, type DiffLayout } from "../../chat/tool-renderers/diff-view";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
 import type { RunGitOperation } from "../types";
+import { GitDiffStat } from "./git-diff-stat";
 import { splitGitPatchHunks } from "./partial-diff";
 import { SelectablePatchHunk } from "./selectable-patch-hunk";
 import "./source-control-diff.css";
@@ -27,6 +28,9 @@ type SourceControlDiffProps = {
 export function SourceControlDiff(props: SourceControlDiffProps) {
   const { t } = useI18n();
   const [layout, setLayout] = useState<DiffLayout>("side");
+  const shellRef = useRef<HTMLDivElement | null>(null);
+
+
   if (props.loading) {
     return (
       <div className="git-diff-empty">
@@ -49,7 +53,7 @@ export function SourceControlDiff(props: SourceControlDiffProps) {
   const supportsPartial = !props.data.truncated && ["staged", "unstaged"].includes(props.data.mode);
   const hunks = supportsPartial ? splitGitPatchHunks(props.data.patch) : [];
   return (
-    <div className="git-diff-shell">
+    <div className="git-diff-shell" ref={shellRef}>
       <div className="git-diff-meta">
         <span className="git-diff-refs">
           <code>{props.data.base_ref}</code>
@@ -76,7 +80,7 @@ export function SourceControlDiff(props: SourceControlDiffProps) {
           </Button>
         </span>
       </div>
-      {props.data.stat && <pre className="git-diff-stat">{props.data.stat}</pre>}
+      {props.data.stat ? <GitDiffStat stat={props.data.stat} /> : null}
       {layout === "side" ? (
         /* 并排是审阅模式：直接渲染整块对照视图；部分暂存留在统一视图 */
         <DiffView

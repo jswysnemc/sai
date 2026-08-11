@@ -3,6 +3,7 @@ import type { GitCommitDetailsResponse, GitDiffResponse } from "../../../api/con
 import { Button } from "../../../shared/ui/button/button";
 import { DiffView } from "../../chat/tool-renderers/diff-view";
 import { useI18n } from "../../i18n/use-i18n";
+import { GitDiffStat } from "../diff/git-diff-stat";
 import { formatGitDate } from "../graph/graph-utils";
 import { gitHubCommitUrl } from "../links/github-url";
 
@@ -57,7 +58,7 @@ export function GitCommitDetail({ details, diff, selectedPath, onSelectPath, loc
       </div>
       {diff?.patch ? (
         <>
-          {diff.stat && <pre className="git-diff-stat">{diff.stat}</pre>}
+          {diff.stat ? <GitDiffStat stat={diff.stat} /> : null}
           <DiffView source={diff.patch} headerPath={selectedPath ?? undefined} />
         </>
       ) : (

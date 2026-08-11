@@ -102,6 +102,16 @@ impl AnsiLine {
     ) -> Vec<Self> {
         let mut lines = Vec::new();
         for raw_line in text.split('\n') {
+            let plain = crate::render::activity_animation::strip_ansi_for_test(raw_line);
+            let trimmed = plain.trim();
+            // turn 横线按目标宽度重画，避免整屏烘焙后再被正文净宽拆成两行
+            if trimmed.len() >= 3 && trimmed.chars().all(|ch| ch == '─') {
+                lines.push(Self::new(format!(
+                    "\x1b[2m{}\x1b[0m",
+                    "─".repeat(width.max(1))
+                )));
+                continue;
+            }
             lines.extend(wrap_line(
                 raw_line,
                 width,

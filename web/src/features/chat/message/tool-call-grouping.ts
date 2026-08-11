@@ -120,6 +120,18 @@ export function isExploreTool(tool: ToolLifecycle): boolean {
 }
 
 /**
+ * 纯文件探索组可用轻量清单；含只读 Shell 时必须退回完整工具卡，以便二次展开看输出。
+ *
+ * @param tools 工具组中的完成项
+ * @returns true 时渲染 ExploreFileList，否则渲染 ToolLifecycleCard
+ */
+export function shouldUseLightweightExploreList(tools: readonly ToolLifecycle[]): boolean {
+  if (tools.length === 0 || !tools.every(isExploreTool)) return false;
+  // 只读 shell 仍算探索，但其输出（ls/pwd 结果）需要二次展开查看
+  return tools.every((tool) => !isCommandToolName(tool.name));
+}
+
+/**
  * 判断工具是否为写操作类 Shell / 后台命令。
  *
  * 只读命令归探索桶，这里保持互斥，避免同一项被计两次。

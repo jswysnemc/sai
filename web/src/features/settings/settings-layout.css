@@ -5,6 +5,9 @@
   min-width: 0;
   height: 100%;
   overflow: auto;
+  /* 不同 section 内容高低不一会导致纵向滚动条出现/消失，
+     预留 gutter 避免整页（含左侧导航）宽度微抖 */
+  scrollbar-gutter: stable;
   background: var(--paper);
 }
 
@@ -82,6 +85,7 @@
 
 .settings-workspace {
   display: grid;
+  /* 左栏定宽，避免随内容或滚动条状态被挤动 */
   grid-template-columns: 13.75rem minmax(0, 1fr);
   width: min(100%, 1600px);
   min-width: 0;
@@ -96,10 +100,14 @@
   display: grid;
   align-content: start;
   gap:var(--space-2xs);
+  width: 100%;
+  min-width: 0;
   max-height: calc(100vh - 3.5rem);
   padding:var(--space-2xl) var(--space-lg) var(--space-4xl);
   overflow-y: auto;
+  scrollbar-gutter: stable;
   border-right: 1px solid var(--line);
+  box-sizing: border-box;
 }
 
 .settings-navigation-label {

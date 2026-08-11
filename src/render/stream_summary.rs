@@ -138,7 +138,8 @@ impl StreamSummary {
             self.reasoning_elapsed,
         ));
         format!(
-            "{TOOL_BULLET} {label}{}",
+            "{} {label}{}",
+            reasoning_cell::THINKING_MARKER,
             reasoning_cell::format_tokens_suffix(self.reasoning_tokens)
         )
     }
@@ -201,6 +202,8 @@ impl StreamSummary {
         } else {
             writeln!(stdout, "{text}")?;
         }
+        // 2. 与 TUI Reasoning cell 一致：固化后再空一行，和后续工具/正文拉开
+        writeln!(stdout)?;
         stdout.flush()?;
         self.reasoning_chars = 0;
         self.reasoning_lines = 0;
@@ -509,7 +512,12 @@ mod tests {
 
         let output = summary.reasoning_text();
 
-        assert!(output.starts_with("• "));
+        // CLI Summary 固化与 live/TUI 共用 ◦，不再用工具行的 •
+        assert!(
+            output.starts_with(format!("{} ", reasoning_cell::THINKING_MARKER).as_str()),
+            "output={output:?}"
+        );
+        assert!(!output.starts_with("• "));
         assert!(output.contains("思考") || output.contains("Thinking"));
         assert!(summary.reasoning_live_active());
         assert!(output.contains("tokens"));
@@ -535,6 +543,19 @@ mod tests {
         let zero = fresh.reasoning_text();
         assert!(zero.contains("Thinking"));
         assert!(!zero.contains('('));
+    }
+
+    /// CLI Summary 固化后应使用 ◦，并清空 live 状态（与 TUI 思考标记对齐）。
+    #[test]
+    fn reasoning_summary_finalize_keeps_thinking_marker() {
+        let mut summary = StreamSummary::new(false);
+        summary.add_reasoning_text("parity check\n").unwrap();
+        assert!(summary
+            .reasoning_text()
+            .starts_with(reasoning_cell::THINKING_MARKER));
+        summary.finalize_reasoning().unwrap();
+        assert!(!summary.has_reasoning());
+        assert!(!summary.reasoning_live_active());
     }
 
     #[test]

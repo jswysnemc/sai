@@ -11,7 +11,7 @@ use std::io;
 
 use super::form::{parse_bool_field, run_form, Field};
 use super::input::read_key;
-use super::ui::{draw_menu, message};
+use super::ui::{draw_menu_with_details, message};
 
 /// 编辑渠道接入配置。
 ///
@@ -37,6 +37,29 @@ pub(crate) fn edit_gateways(
             t("Edit Weixin iLink bot", "编辑微信 iLink 机器人").to_string(),
             t("Back", "返回").to_string(),
         ];
+        let details = vec![
+            t(
+                "Start or stop the QQ official bot process managed by Sai.",
+                "启动或停止由 Sai 托管的 QQ 官方机器人进程。",
+            )
+            .to_string(),
+            t(
+                "Start or stop the Weixin iLink bot process managed by Sai.",
+                "启动或停止由 Sai 托管的微信 iLink 机器人进程。",
+            )
+            .to_string(),
+            t(
+                "Edit QQ bot credentials, app id and related gateway settings.",
+                "编辑 QQ 机器人凭证、App ID 及相关网关设置。",
+            )
+            .to_string(),
+            t(
+                "Edit Weixin iLink credentials and channel options.",
+                "编辑微信 iLink 凭证与渠道选项。",
+            )
+            .to_string(),
+            t("Return to the main configuration menu.", "返回配置主菜单。").to_string(),
+        ];
         let help = if status_line.trim().is_empty() {
             t(
                 "Enter toggles selected gateway, s start, x stop, r refresh",
@@ -46,12 +69,14 @@ pub(crate) fn edit_gateways(
         } else {
             status_line.clone()
         };
-        draw_menu(
+        draw_menu_with_details(
             stdout,
             t(" GATEWAYS ", " 渠道接入 "),
             &options,
+            &details,
             selected,
             &help,
+            "",
         )?;
         match read_key()? {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),

@@ -21,13 +21,16 @@ describe("ShellToolView", () => {
     const html = render("ls", { success: true, exit_code: 0, stdout: lines(5) });
     expect(html).toContain("line 5");
     expect(html).not.toContain("collapsible-output-toggle");
+    expect(html).toContain("is-scrollable");
   });
 
-  it("长输出折叠并标出被折起的行数", () => {
+  it("长输出完整渲染并用滚动区承载，不再截断行数", () => {
     const html = render("cargo build", { success: true, exit_code: 0, stdout: lines(30) });
-    expect(html).toContain("展开剩余 18 行");
+    expect(html).not.toContain("展开剩余");
+    expect(html).not.toContain("collapsible-output-toggle");
+    expect(html).toContain("is-scrollable");
     expect(html).toContain("line 12");
-    expect(html).not.toContain("line 13");
+    expect(html).toContain("line 30");
   });
 
   it("解析输出中的 ANSI 着色", () => {

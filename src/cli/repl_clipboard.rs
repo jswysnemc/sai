@@ -179,6 +179,31 @@ impl ReplClipboardState {
         })
     }
 
+    /// 生成发送后的用户回显文本：仅当输入含粘贴长文本占位块时展开正文并标记需折叠。
+    ///
+    /// 普通键入长消息保持原文、不折叠；图片占位块保留字面标记。
+    ///
+    /// 参数:
+    /// - `input`: 当前输入（可含 `[text N … chars]` 占位块）
+    ///
+    /// 返回:
+    /// - `(回显正文, 是否按思考块语义折叠)`
+    pub(super) fn echo_text_for_submit(&self, input: &str) -> (String, bool) {
+        let fold = self.has_text_blocks(input);
+        if !fold {
+            return (input.to_string(), false);
+        }
+        let mut text = input.to_string();
+        for item in &self.items {
+            if let ReplClipboardItem::Text { marker, text: body } = item {
+                if text.contains(marker.as_str()) {
+                    text = replace_once(&text, marker, body);
+                }
+            }
+        }
+        (text, true)
+    }
+
     /// 丢弃全部长文本占位块的登记，图片登记保持不变。
     ///
     /// 外部编辑器已把长文本展开成正文，占位块不再对应输入中的任何片段；
@@ -671,6 +696,26 @@ mod tests {
         assert_eq!(spans[0].kind, ReplClipboardBlockKind::Text);
         assert_eq!(spans[1].kind, ReplClipboardBlockKind::Image);
         assert_eq!(spans[0].end, spans[1].start);
+    }
+
+    #[test]
+    fn echo_text_for_submit_expands_only_pasted_text_blocks() {
+        let mut state = ReplClipboardState::default();
+        let mut input = String::from("前缀 ");
+        let mut cursor = input.chars().count();
+        let pasted = "a".repeat(LONG_TEXT_CHARS + 1);
+        state.paste_text_into_input(&mut input, &mut cursor, pasted.clone());
+
+        let (echo, fold) = state.echo_text_for_submit(&input);
+        assert!(fold);
+        assert!(echo.starts_with("前缀 "));
+        assert!(echo.contains(&pasted));
+        assert!(!echo.contains("[text "));
+
+        let typed = "x\n".repeat(20);
+        let (plain_echo, plain_fold) = ReplClipboardState::default().echo_text_for_submit(&typed);
+        assert!(!plain_fold);
+        assert_eq!(plain_echo, typed);
     }
 
     #[test]

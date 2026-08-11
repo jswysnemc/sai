@@ -4,6 +4,7 @@ import { parseReadTextPages, type ReadTextPage } from "./read-result-parser";
 import { prettyJson } from "./tool-data";
 import { ToolFileReference } from "./tool-file-reference";
 import { useI18n } from "../../i18n/use-i18n";
+import { useEffect } from "react";
 
 type ReadToolViewProps = {
   argumentsText: string;
@@ -22,10 +23,18 @@ export function ReadToolView({ output, headerPath }: ReadToolViewProps) {
   if (pages.length === 0) {
     return output ? <pre className="generic-tool-block result"><code>{prettyJson(output)}</code></pre> : null;
   }
+  const single = pages.length === 1;
+  const hidePath = single && pathsReferToSameFile(pages[0]?.path ?? "", headerPath ?? "");
+
+
   return (
     <ToolPanel className="read-tool-view">
       {pages.map((page, index) => (
-        <ReadTextPageView page={page} hidePath={pages.length === 1 && page.path === headerPath} key={`${page.path}-${page.offset}-${index}`} />
+        <ReadTextPageView
+          page={page}
+          hidePath={single && pathsReferToSameFile(page.path, headerPath ?? "")}
+          key={`${page.path}-${page.offset}-${index}`}
+        />
       ))}
     </ToolPanel>
   );
@@ -60,10 +69,32 @@ function ReadTextPageView({ page, hidePath }: { page: ReadTextPage; hidePath: bo
 }
 
 /**
- * 组装读取范围说明。
+ * 判断两段路径是否指向同一文件（绝对/相对/仅文件名）。
  *
- * 优先展示实际覆盖的行区间；请求 limit 与实际行数不一致时补充说明，
- * 因截断而提前结束时给出续读起点。
+ * @param left 路径 A
+ * @param right 路径 B
+ * @returns 视为同一文件时 true
+ */
+export function pathsReferToSameFile(left: string, right: string): boolean {
+  const a = normalizePathKey(left);
+  const b = normalizePathKey(right);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
+}
+
+/**
+ * 归一化路径键：统一分隔符并去掉尾部斜杠。
+ *
+ * @param path 原始路径
+ * @returns 可比对的路径键
+ */
+function normalizePathKey(path: string): string {
+  return path.trim().replaceAll("\\", "/").replace(/\/+$/u, "");
+}
+
+/**
+ * 组装读取范围说明。
  *
  * @param page 文本分页
  * @param t 双语文本选择方法
@@ -81,7 +112,6 @@ function formatReadRange(page: ReadTextPage, t: (en: string, zh: string) => stri
   if (page.lineCount > 0) {
     parts.push(t(`${page.lineCount} lines`, `${page.lineCount} 行`));
   }
-  // 请求上限与实际返回不一致时说明差异来源
   if (page.limit !== null && page.limit !== page.lineCount) {
     parts.push(t(`limit ${page.limit}`, `上限 ${page.limit}`));
   }

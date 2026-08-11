@@ -153,9 +153,19 @@
   background: color-mix(in srgb, var(--line) 78%, transparent);
 }
 
-.tool-call-group-items .tool-shell-icon {
+.tool-call-group-items .tool-shell-icon,
+.tool-call-group-items .tool-layout-icon {
   position: relative;
+  z-index: 1;
+  /* 用纸色遮罩切断时间线，线从图标之间穿过而不是穿过字形 */
   box-shadow: 0 0 0 3px var(--paper);
+  background: var(--paper);
+}
+
+/* 展开体盖住导轨对应段，避免竖线穿进详情面板 */
+.tool-call-group-items .tool-layout-body {
+  position: relative;
+  z-index: 1;
 }
 
 @keyframes tool-group-reveal {

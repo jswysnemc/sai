@@ -51,4 +51,10 @@ describe("tool card summary", () => {
   it("兼容尚未形成合法 JSON 的参数预览", () => {
     expect(toolCardSummary("custom_tool", "first\n  second")).toBe("first second");
   });
+
+  it("隐去未闭合的 JSON 参数碎片，能抠出路径时只展示路径", () => {
+    expect(toolCardSummary("custom_tool", '{"foo":"bar')).toBe("");
+    expect(toolCardSummary("write_file", '{"path":"src/main.rs","content":"fn ')).toBe("src/main.rs");
+    expect(toolCardSummary("run_command", '{"command":"git status')).toBe("git status");
+  });
 });

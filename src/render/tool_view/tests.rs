@@ -42,8 +42,9 @@ fn todo_result_renders_items_instead_of_raw_json() {
 
     assert!(output.contains("检查测试"));
     assert!(output.contains("构建项目"));
-    assert!(output.contains("done") || output.contains("/"));
-    assert!(output.contains("✓") || output.contains("›"));
+    assert!(output.contains('/'));
+    assert!(output.contains('✓') || output.contains('▶'));
+    assert!(!output.contains('├') && !output.contains('└'));
     assert!(!output.contains("\"items\""));
 }
 
@@ -85,6 +86,19 @@ fn background_command_result_uses_tool_payload_view() {
     assert!(!output.contains("Ctrl+O"));
 }
 
+/// Full 模式在参数 JSON 尚未闭合时不倾倒 `{...` 碎片。
+#[test]
+fn full_view_hides_incomplete_json_arguments() {
+    let view = ToolView::running(
+        "web_search".to_string(),
+        r#"{"query":"partial"#.to_string(),
+    );
+    let output = render(&view, ToolCallDisplayMode::Full);
+    let plain = crate::render::activity_animation::strip_ansi_for_test(&output);
+    assert!(!plain.contains("└─ args:"));
+    assert!(!plain.contains("{\"query\""));
+}
+
 /// 编辑类工具在出结果前用实时增删统计顶替 run 动效，数字随参数流跳动。
 #[test]
 fn edit_tool_status_line_shows_streamed_diff_stats() {
@@ -100,19 +114,24 @@ fn edit_tool_status_line_shows_streamed_diff_stats() {
     assert!(!output.contains("run"));
 }
 
-/// 工具出结果后回到 ok/err 状态，增删统计交给 diff 视图表达。
+/// 工具成功定稿后仍保留 +N -M，与参数流阶段的跳动数字衔接。
 #[test]
-fn edit_tool_result_drops_the_live_diff_stats() {
+fn edit_tool_result_keeps_diff_stats_on_status_line() {
     let mut view = ToolView::running(
         "write_file".to_string(),
         r#"{"path":"a.rs","content":"l1\nl2"}"#.to_string(),
     );
-    view.finish(true, r#"{"changed_files":[]}"#.to_string());
+    view.finish(
+        true,
+        r#"{"changed_files":[{"path":"a.rs","added":2,"removed":0}]}"#.to_string(),
+    );
 
     let output = super::render(&view, ToolCallDisplayMode::Summary);
 
-    assert!(output.contains("ok"));
-    assert!(!output.contains("\x1b[32m+2\x1b[0m"));
+    assert!(output.contains("\x1b[32m+2\x1b[0m"));
+    assert!(output.contains("\x1b[31m-0\x1b[0m"));
+    assert!(!output.contains(" ok"));
+    assert!(!output.contains("Added"));
 }
 
 /// 非编辑类工具的状态行不受实时统计影响。

@@ -9,6 +9,7 @@ mod layout;
 mod reflow;
 mod reflow_state;
 mod runner_events;
+mod shell_hint_panel;
 mod slash_panel;
 mod stream;
 mod viewport;
@@ -67,6 +68,8 @@ pub(super) struct ReplRuntime {
     last_cursor_row: Option<u16>,
     /// 上次 composer 绘制的内容签名，用于跳过无变化的重绘
     last_composer_signature: Option<composer_frame::ComposerSignature>,
+    /// 沉底 todo 是否单行模式（Ctrl+T 切换）
+    todo_panel_compact: bool,
 }
 
 /// 运行期间底部输入框草稿。
@@ -123,7 +126,20 @@ impl ReplRuntime {
             agent_panel: agent_panel::AgentPanelState::default(),
             last_cursor_row: None,
             last_composer_signature: None,
+            todo_panel_compact: false,
         }
+    }
+
+    /// 切换沉底 todo 单行 / 多行模式。
+    ///
+    /// 返回:
+    /// - 有 todo 可切换并已翻转时为 true（调用方应重绘 composer）
+    pub(super) fn toggle_todo_panel_compact(&mut self) -> bool {
+        if self.transcript.latest_todo_items().is_empty() {
+            return false;
+        }
+        self.todo_panel_compact = !self.todo_panel_compact;
+        true
     }
 
     /// 更新配置重载后的 transcript 渲染选项与 row cap。
@@ -235,37 +251,14 @@ impl ReplRuntime {
     ///
     /// 参数:
     /// - `mode`: 用户提交时的 REPL 模式
-    /// - `text`: 原始输入文本
+    /// - `text`: 回显正文（粘贴长文本应已展开）
+    /// - `fold`: 仅粘贴长文本为 true，启用思考式折叠
     ///
     /// 返回:
     /// - 操作是否成功
-    pub(super) fn record_user(&mut self, mode: AgentMode, text: String) -> Result<()> {
-        // #region agent log
-        {
-            use std::io::Write;
-            let looks_like_marker = text.contains("[text ") || text.contains("[image ");
-            let prefix: String = text.chars().take(80).collect();
-            if let Ok(mut f) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("/home/snemc/workspace/sai/.cursor/debug-dcb5f5.log")
-            {
-                let _ = writeln!(
-                    f,
-                    r#"{{"sessionId":"dcb5f5","runId":"pre-fix","hypothesisId":"A","location":"repl_runtime/mod.rs:record_user","message":"record_user echo text","data":{{"looksLikeMarker":{looks_like_marker},"chars":{},"lines":{},"prefix":{}}},"timestamp":{}}}"#,
-                    text.chars().count(),
-                    text.lines().count().max(if text.is_empty() { 0 } else { 1 }),
-                    serde_json::to_string(&prefix).unwrap_or_else(|_| "\"\"".into()),
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_millis())
-                        .unwrap_or(0)
-                );
-            }
-        }
-        // #endregion
+    pub(super) fn record_user(&mut self, mode: AgentMode, text: String, fold: bool) -> Result<()> {
         self.transcript
-            .push_user_echo(layout::transcript_mode(mode), text);
+            .push_user_echo_with_fold(layout::transcript_mode(mode), text, fold);
         self.sync_transcript(false)
     }
 

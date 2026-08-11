@@ -1,5 +1,5 @@
 import { FileTypeIcon } from "../../../shared/ui/file-icon";
-import type { MouseEvent } from "react";
+import { useEffect, useRef, type MouseEvent } from "react";
 import { useI18n } from "../../i18n/use-i18n";
 
 type ToolFileReferenceProps = {
@@ -18,6 +18,10 @@ type ToolFileReferenceProps = {
  */
 export function ToolFileReference({ path, label, className = "", icon = true }: ToolFileReferenceProps) {
   const { t } = useI18n();
+  const rootRef = useRef<HTMLSpanElement | null>(null);
+  const isInline = className.includes("inline-file-reference");
+
+
   /**
    * 派发工作区统一文件打开事件。
    *
@@ -32,7 +36,7 @@ export function ToolFileReference({ path, label, className = "", icon = true }: 
   };
 
   return (
-    <span className={`tool-file-reference ${className}`.trim()}>
+    <span ref={rootRef} className={`tool-file-reference ${className}`.trim()}>
       {icon && <FileTypeIcon name={path} size={13} />}
       <button type="button" onClick={openFile} title={t("Open in editor", "在编辑器中打开")}>
         {label || path}

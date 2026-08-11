@@ -1,0 +1,32 @@
+/*
+ * ToolLayout：折叠一行摘要，展开体缩进到标题列，与图标中心对齐的导轨视觉一致。
+ */
+
+.tool-layout {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tool-layout-icon {
+  display: grid;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+}
+
+/* 展开体：与图标+间距对齐，避免详情块顶到导轨或再缩一层「卡片里的卡片」 */
+.tool-layout-body {
+  min-width: 0;
+  margin-top: var(--space-2xs);
+  padding-left: calc(14px + var(--space-sm));
+}
+
+.tool-layout-body > .tool-panel,
+.tool-layout-body > .read-tool-view,
+.tool-layout-body > .shell-tool-view,
+.tool-layout-body > .edit-tool-view,
+.tool-layout-body > .generic-tool-view,
+.tool-layout-body > .bg-task-view {
+  position: relative;
+  z-index: 1;
+}

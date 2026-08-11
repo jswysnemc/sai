@@ -3,9 +3,9 @@
   display: inline-flex;
 }
 
-/* 位置与尺寸由 useAnchoredPopover 的内联样式控制（Portal + fixed） */
+/* 位置与尺寸由组件内联样式控制（Portal + fixed）；z-index 需高于终端右键菜单(320) */
 .ssh-target-menu {
-  z-index: 110;
+  z-index: 400;
   display: flex;
   flex-direction: column;
   gap: 0.0625rem;

@@ -11,6 +11,16 @@ const THINKING_COLUMN_WIDTH: usize = 12;
 const MODEL_VISIBLE_ROWS: usize = 12;
 /// 两列之间的间隔
 const COLUMN_GAP: usize = 3;
+/// 帧固定行数：标题 2 + 空行 + 列标题 + 内容窗口 + 空行 + 底栏
+const FRAME_FIXED_ROWS: u16 = 2 + 1 + 1 + MODEL_VISIBLE_ROWS as u16 + 1 + 1;
+
+/// 【CLI/TUI】【模型选择】返回选择器占用的固定终端行数。
+///
+/// 返回:
+/// - 预留给内联绘制的行数
+pub(super) fn frame_row_count() -> u16 {
+    FRAME_FIXED_ROWS
+}
 /// 聚焦列的高亮样式
 const FOCUS_STYLE: &str = "\x1b[1m\x1b[38;2;190;246;255m";
 /// 选中项样式
@@ -31,12 +41,13 @@ pub(super) fn render(state: &PickerState) -> Vec<String> {
     lines.push(String::new());
     lines.push(column_titles(state));
     let (model_start, models) = state.model_window(MODEL_VISIBLE_ROWS);
-    let rows = models.len().max(state.levels().len());
-    for index in 0..rows {
+    // 内容区固定 MODEL_VISIBLE_ROWS 行，与 frame_row_count 对齐，避免帧高抖动
+    for index in 0..MODEL_VISIBLE_ROWS {
         lines.push(row_line(state, models, model_start, index));
     }
     lines.push(String::new());
     lines.push(footer_line());
+    debug_assert_eq!(lines.len(), FRAME_FIXED_ROWS as usize);
     lines
 }
 

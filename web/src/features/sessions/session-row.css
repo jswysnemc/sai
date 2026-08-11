@@ -38,20 +38,9 @@
   background: var(--paper-raised);
 }
 
-/* 当前会话：浅底加同色圆角竖条，与悬停态拉开一档 */
+/* 当前会话：主强调色浅底，不再用左侧竖条提示 */
 .session-row.active {
-  background: var(--paper-deep);
-}
-
-.session-row.active::before {
-  position: absolute;
-  top: 7px;
-  bottom: 7px;
-  left: 0;
-  width: 3px;
-  border-radius: var(--radius-1);
-  background: var(--signal);
-  content: "";
+  background: var(--signal-soft);
 }
 
 .session-main {
