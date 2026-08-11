@@ -30,6 +30,7 @@ mod tool_invocation;
 mod tool_visibility;
 mod turn_execution;
 mod turn_orchestration;
+mod turn_settlement;
 
 use crate::config::AppConfig;
 use crate::llm::{

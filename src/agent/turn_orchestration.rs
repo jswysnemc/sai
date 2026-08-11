@@ -1,5 +1,6 @@
 use super::message_context::clean_user_visible_text;
 use super::recovery::is_context_overflow_error;
+use super::turn_settlement::settle_step;
 use super::{Agent, AgentEvent, InterMessageSource};
 use crate::llm::ChatResult;
 use crate::perf_trace::PerfTrace;
@@ -109,34 +110,51 @@ impl Agent {
         // 流式增量交由共享句柄累积：事件闭包与守卫各持一份，
         // 守卫不被闭包借走，错误路径可直接落终态
         let partial_content_sink = crate::state::PartialTurnSink::new();
-        let guard = PendingTurnGuard::new(
+        let mut guard = PendingTurnGuard::new(
             self.state.clone(),
             turn_id.clone(),
             partial_content_sink.clone(),
         )
         .with_cancel_flag(self.cancel_requested.clone());
-        let worktree_undo = crate::state::worktree_undo::WorktreeUndoGuard::begin(
-            &self.state,
-            &crate::runtime_cwd::current_dir()?,
-            &turn_id,
+        // 准备阶段的每一步都经由 settle_step：这些步骤原先直接 `?` 返回，
+        // 守卫析构写入的占位文案会盖掉真实原因，界面只剩一句无法排查的提示
+        let workspace_dir = settle_step(
+            &mut guard,
+            crate::runtime_cwd::current_dir().map_err(anyhow::Error::from),
         )?;
-        let auto_meme_plan =
+        let worktree_undo = settle_step(
+            &mut guard,
+            crate::state::worktree_undo::WorktreeUndoGuard::begin(
+                &self.state,
+                &workspace_dir,
+                &turn_id,
+            ),
+        )?;
+        let auto_meme_plan = settle_step(
+            &mut guard,
             memes::plan_auto_meme_before_reply(&self.config, &self.paths, &self.client, &input)
-                .await?;
+                .await,
+        )?;
         perf.mark("auto meme plan");
         // 结构化记忆按当前工作区召回，相关度不足时不注入
         let workspace = crate::runtime_cwd::current_dir()
             .ok()
             .map(|path| path.display().to_string());
-        let association_prompt = self.memory.recall_for_turn(&input, workspace.as_deref())?;
+        let association_prompt = settle_step(
+            &mut guard,
+            self.memory.recall_for_turn(&input, workspace.as_deref()),
+        )?;
         perf.mark("memory association");
         let auto_meme_reminder = auto_meme_plan.as_ref().map(|plan| plan.reminder.as_str());
-        let mut messages = self.chat_messages_for_turn(
-            &turn_id,
-            &input,
-            &image_urls,
-            association_prompt.as_deref(),
-            auto_meme_reminder,
+        let mut messages = settle_step(
+            &mut guard,
+            self.chat_messages_for_turn(
+                &turn_id,
+                &input,
+                &image_urls,
+                association_prompt.as_deref(),
+                auto_meme_reminder,
+            ),
         )?;
         perf.mark("build initial messages");
         let mut on_event = on_event;
@@ -147,17 +165,22 @@ impl Agent {
             }
             on_event(event)
         });
-        if self
-            .compact_conversation_if_needed(&turn_id, &messages, &mut emit_event)
-            .await?
-        {
+        let compacted = settle_step(
+            &mut guard,
+            self.compact_conversation_if_needed(&turn_id, &messages, &mut emit_event)
+                .await,
+        )?;
+        if compacted {
             perf.mark("compaction completed");
-            messages = self.chat_messages_for_turn(
-                &turn_id,
-                &input,
-                &image_urls,
-                association_prompt.as_deref(),
-                auto_meme_reminder,
+            messages = settle_step(
+                &mut guard,
+                self.chat_messages_for_turn(
+                    &turn_id,
+                    &input,
+                    &image_urls,
+                    association_prompt.as_deref(),
+                    auto_meme_reminder,
+                ),
             )?;
             perf.mark("rebuild messages after compaction");
         }
@@ -180,8 +203,9 @@ impl Agent {
         {
             Ok(execution) => execution,
             Err(err) if is_context_overflow_error(&err) => {
-                if !self
-                    .recover_after_provider_overflow(
+                let recovered = settle_step(
+                    &mut guard,
+                    self.recover_after_provider_overflow(
                         &turn_id,
                         &messages,
                         &err,
@@ -191,21 +215,29 @@ impl Agent {
                         auto_meme_reminder,
                         &mut emit_event,
                     )
-                    .await?
-                {
+                    .await,
+                )?;
+                if !recovered {
                     // 恢复失败时按失败落库，避免 UI 显示为用户中断
-                    let _ = guard.fail(&err.to_string());
+                    let _ = guard.fail_in_place(&crate::llm::error_detail_text(&err));
                     return Err(err);
                 }
-                messages = self.chat_messages_for_turn(
-                    &turn_id,
-                    &input,
-                    &image_urls,
-                    association_prompt.as_deref(),
-                    auto_meme_reminder,
+                messages = settle_step(
+                    &mut guard,
+                    self.chat_messages_for_turn(
+                        &turn_id,
+                        &input,
+                        &image_urls,
+                        association_prompt.as_deref(),
+                        auto_meme_reminder,
+                    ),
                 )?;
                 if !used_tools.is_empty() {
-                    messages.extend(self.state.project_running_turn_tool_messages(&turn_id)?);
+                    let tool_messages = settle_step(
+                        &mut guard,
+                        self.state.project_running_turn_tool_messages(&turn_id),
+                    )?;
+                    messages.extend(tool_messages);
                 }
                 match self
                     .chat_with_tools(
@@ -225,29 +257,39 @@ impl Agent {
                 {
                     Ok(execution) => execution,
                     Err(retry_err) if is_context_overflow_error(&retry_err) => {
-                        self.record_overflow_retry_failed(&turn_id, &messages, &retry_err)?;
-                        let _ = guard.fail(&retry_err.to_string());
+                        let recorded =
+                            self.record_overflow_retry_failed(&turn_id, &messages, &retry_err);
+                        let _ = guard
+                            .fail_in_place(&crate::llm::error_detail_text(&retry_err));
+                        recorded?;
                         return Err(retry_err);
                     }
                     Err(retry_err) => {
-                        let _ = guard.fail(&retry_err.to_string());
+                        let _ = guard
+                            .fail_in_place(&crate::llm::error_detail_text(&retry_err));
                         return Err(retry_err);
                     }
                 }
             }
             Err(err) => {
                 // 请求/工具链路失败：落失败状态，保留真实错误给时间线
-                let _ = guard.fail(&err.to_string());
+                let _ = guard.fail_in_place(&crate::llm::error_detail_text(&err));
                 return Err(err);
             }
         };
         let result = execution;
-        emit_event.as_mut()(AgentEvent::FlushContent)?;
+        settle_step(&mut guard, emit_event.as_mut()(AgentEvent::FlushContent))?;
         perf.mark("final content flushed");
         if let Some(plan) = auto_meme_plan {
-            emit_event.as_mut()(AgentEvent::ExternalOutput)?;
-            memes::render_auto_meme(&self.config, &self.paths, &plan.event).await?;
-            memes::record_auto_meme_event(&self.config, &self.paths, &plan.event)?;
+            settle_step(&mut guard, emit_event.as_mut()(AgentEvent::ExternalOutput))?;
+            settle_step(
+                &mut guard,
+                memes::render_auto_meme(&self.config, &self.paths, &plan.event).await,
+            )?;
+            settle_step(
+                &mut guard,
+                memes::record_auto_meme_event(&self.config, &self.paths, &plan.event),
+            )?;
         }
         drop(emit_event);
         // 模型已产出完整回复，先落终态再做收尾：
