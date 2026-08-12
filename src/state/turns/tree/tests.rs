@@ -248,3 +248,32 @@ fn resend_after_editing_the_first_turn_creates_a_new_root() {
     let ids: Vec<_> = branch.iter().map(|turn| turn.turn_id.clone()).collect();
     assert_eq!(ids, vec![edited]);
 }
+
+/// 编辑首轮产生的新根在重新打开数据库后必须保留。
+///
+/// 回归场景：线性父子回填曾在每次打开连接时执行，Web 端各请求
+/// 独立开连接，编辑首轮产生的新根（parent 为 NULL）在下一次
+/// timeline / 树查询时被强行接回旧分支末尾，「新建分支重发」
+/// 退化成了在当前会话末尾追加。
+#[test]
+fn edited_first_turn_root_survives_reopening_the_database() {
+    let temp = tempfile::tempdir().unwrap();
+    {
+        let db = open_db(temp.path());
+        append_turn(&db, "t1", "第一问");
+        append_turn(&db, "t2", "第二问");
+        db.move_leaf_to_parent("t1").unwrap();
+        append_turn(&db, "t3", "改写后的第一问");
+    }
+
+    // 模拟 Web 端的下一次请求：全新连接触发 schema 迁移路径
+    let reopened = open_db(temp.path());
+    let turns = reopened.load_turns().unwrap();
+    let edited = turns.iter().find(|turn| turn.turn_id == "t3").unwrap();
+    assert_eq!(
+        edited.parent_turn_id, None,
+        "重开连接后新根不得被线性回填接回旧分支末尾"
+    );
+    let tree = reopened.session_tree().unwrap();
+    assert_eq!(tree.roots.len(), 2, "树上应有两个根：原首轮与改写轮");
+}

@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use std::path::Path;
 
 /// 打开并初始化对话 SQLite 数据库。
@@ -52,8 +52,9 @@ pub(super) fn open_connection(state_dir: &Path) -> Result<Connection> {
     ensure_provider_user_content_column(&conn)?;
     ensure_model_column(&conn)?;
     ensure_error_column(&conn)?;
-    backfill_linear_parents(&conn)?;
+    // 回填依赖 meta 表记录一次性标记，必须先建表
     create_tree_meta_table(&conn)?;
+    backfill_linear_parents(&conn)?;
     conn.execute_batch(
         "UPDATE turns
          SET assistant_content = '', assistant_reasoning = NULL
@@ -211,10 +212,15 @@ fn ensure_parent_turn_id_column(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// 为升级前的历史轮次补齐线性父子关系。
+/// 为升级前的历史轮次补齐线性父子关系（仅执行一次）。
 ///
 /// 旧会话按 seq 排成一条链，升级后每一轮的父轮次即 seq 紧邻的前一轮，
-/// 首轮父为空。只处理 parent_turn_id 为空的行，重复执行不改变结果。
+/// 首轮父为空。
+///
+/// 该回填必须以元数据标记保证只跑一次：树结构引入后，编辑首轮会
+/// 产生第二个根轮次（parent 合法为 NULL），若每次打开连接都重复
+/// 回填，新根会被强行接回 seq 紧邻的旧分支末尾，「编辑重发新建分支」
+/// 便退化成了在当前会话末尾追加。
 ///
 /// 参数:
 /// - `conn`: SQLite 连接
@@ -222,6 +228,16 @@ fn ensure_parent_turn_id_column(conn: &Connection) -> Result<()> {
 /// 返回:
 /// - 回填是否成功
 fn backfill_linear_parents(conn: &Connection) -> Result<()> {
+    let done: Option<String> = conn
+        .query_row(
+            "SELECT value FROM session_tree_meta WHERE key = 'parents_backfilled'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if done.is_some() {
+        return Ok(());
+    }
     conn.execute(
         "UPDATE turns
          SET parent_turn_id = (
@@ -233,6 +249,11 @@ fn backfill_linear_parents(conn: &Connection) -> Result<()> {
          )
          WHERE parent_turn_id IS NULL
            AND seq > (SELECT MIN(seq) FROM turns)",
+        [],
+    )?;
+    conn.execute(
+        "INSERT INTO session_tree_meta (key, value) VALUES ('parents_backfilled', '1')
+         ON CONFLICT(key) DO UPDATE SET value = '1'",
         [],
     )?;
     Ok(())
