@@ -274,6 +274,8 @@ fn truncate_to_width(value: &str, width: usize) -> String {
 const CHROME_RULE_STYLE: &str = "\x1b[38;5;67m";
 /// 输入面板背景（暗色终端上的抬升灰底，近似 opencode 面板）。
 const CHROME_PANEL_BG: &str = "\x1b[48;5;236m";
+/// 输入框箭头提示符。
+const CHROME_INPUT_ARROW: &str = "\x1b[38;5;204m❯\x1b[0m ";
 /// 面板内分隔线前景。
 const CHROME_PANEL_RULE: &str = "\x1b[38;5;240m";
 /// 输入正文上下各留的空白行数。
@@ -307,7 +309,7 @@ pub(super) fn chrome_panel_row(_mode: AgentMode, content: &str, cols: usize) -> 
     if width >= cols {
         truncate_ansi_to_width(content, cols)
     } else {
-        content.to_string()
+        format!("{CHROME_PANEL_BG}{content}{}\x1b[0m", " ".repeat(cols - width))
     }
 }
 
@@ -316,9 +318,20 @@ pub(super) fn chrome_panel_divider(_mode: AgentMode, cols: usize) -> String {
     format!("{CHROME_PANEL_RULE}{}\x1b[0m", "─".repeat(cols.max(1)))
 }
 
-/// 输入区可用列数（贴左，无彩条扣除）。
+/// 带箭头的输入行：箭头 + 背景色。
+pub(super) fn chrome_input_row(mode: AgentMode, content: &str, cols: usize) -> String {
+    let inner = chrome_input_content_cols(cols);
+    let width = visible_width(content);
+    if width >= inner {
+        format!("{CHROME_PANEL_BG}{CHROME_INPUT_ARROW}{}\x1b[0m", truncate_ansi_to_width(content, inner))
+    } else {
+        format!("{CHROME_PANEL_BG}{CHROME_INPUT_ARROW}{content}{}\x1b[0m", " ".repeat(inner - width))
+    }
+}
+
+/// 输入区可用列数（扣除箭头与间隔）。
 pub(super) fn chrome_input_content_cols(cols: usize) -> usize {
-    cols.max(1)
+    cols.saturating_sub(2).max(1)
 }
 
 /// 截断含 ANSI 的文本到指定显示宽度。
@@ -497,9 +510,10 @@ mod tests {
     #[test]
     fn panel_row_renders_plain_content() {
         let line = chrome_panel_row(AgentMode::Yolo, "hello", 20);
-        assert!(!line.contains(CHROME_PANEL_BG));
+        assert!(line.contains(CHROME_PANEL_BG));
         assert!(line.contains("hello"));
-        assert_eq!(visible_width(&line), 5);
+        // 背景 + 内容 + 填充 + reset = 20 列可见宽度
+        assert_eq!(visible_width(&line), 20);
         // 输入上方一行空白
         assert_eq!(chrome_fixed_rows(), 1);
         let divider = chrome_panel_divider(AgentMode::Plan, 20);

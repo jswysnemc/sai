@@ -135,7 +135,7 @@ pub(crate) fn format_elapsed(elapsed: Duration) -> String {
     } else {
         let mins = total_secs / 60;
         let secs = total_secs % 60;
-        format!("{mins}m{secs:02}s")
+        format!("{mins}m {secs:02}s")
     }
 }
 
@@ -206,7 +206,7 @@ mod tests {
     fn elapsed_seconds_never_include_decimal_tenths() {
         assert_eq!(format_elapsed(Duration::from_millis(999)), "0s");
         assert_eq!(format_elapsed(Duration::from_millis(1500)), "1s");
-        assert_eq!(format_elapsed(Duration::from_secs(65)), "1m05s");
+        assert_eq!(format_elapsed(Duration::from_secs(65)), "1m 05s");
     }
 
     /// 【终端】【工作状态测试】验证权限交互不会切换到 Working。

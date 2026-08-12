@@ -2,8 +2,8 @@ use super::shell_hint_panel::{bang_ghost_suffix, ShellHintPanel};
 use super::slash_panel::SlashPanel;
 use super::viewport::InlineViewport;
 use crate::cli::repl_chrome::{
-    chrome_fixed_rows, chrome_input_content_cols, chrome_panel_row, CHROME_INPUT_PAD_ROWS,
-    ReplChrome,
+    chrome_fixed_rows, chrome_input_content_cols, chrome_input_row, chrome_panel_row,
+    CHROME_INPUT_PAD_ROWS, ReplChrome,
 };
 use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
 use crate::cli::repl_input_render::{
@@ -120,7 +120,6 @@ impl ComposerFrame {
     pub(super) fn height(&self, cols: usize) -> u16 {
         let layout = self.layout(cols);
         let panel_rows = self.panel_lines.len().min(usize::from(u16::MAX)) as u16;
-        let pads = CHROME_INPUT_PAD_ROWS.saturating_mul(2);
         // slash / shell 提示时收起状态行，输入上方保留一行空白
         if layout.slash_panel.is_visible() {
             return panel_rows
@@ -165,8 +164,8 @@ impl ComposerFrame {
         let height = viewport.composer_height();
         let layout = self.layout(cols);
         let content_cols = chrome_input_content_cols(cols);
-        // 光标直接落在输入列位置，无左侧彩条偏移
-        let drawn_cursor_col = layout.cursor_col.min(cols.saturating_sub(1) as u16);
+        // 光标落在箭头提示符之后
+        let drawn_cursor_col = layout.cursor_col.saturating_add(2).min(cols.saturating_sub(1) as u16);
         let cursor_row = {
             let mut row = top;
             row = row.saturating_add(self.panel_lines.len().min(usize::from(u16::MAX)) as u16);
@@ -234,7 +233,7 @@ impl ComposerFrame {
                 queue!(
                     output,
                     MoveTo(0, row),
-                    Print(chrome_panel_row(mode, &segment, cols))
+                    Print(chrome_input_row(mode, &segment, cols))
                 )?;
                 row = row.saturating_add(1);
             }
@@ -462,7 +461,7 @@ mod tests {
         // 极简输入行：无彩条、无背景，只保留输入文本
         assert!(output.contains("hello"));
         assert!(!output.contains('▏'));
-        assert!(!output.contains("\x1b[48;5;236m"));
+        assert!(output.contains("\x1b[48;5;236m"));
     }
 
     /// 验证重绘期间先隐藏光标、结束时在输入位置恢复显示。
