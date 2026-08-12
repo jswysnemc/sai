@@ -427,10 +427,16 @@ pub fn answered_tool_output(exchange: &QuestionExchange) -> String {
         .iter()
         .zip(&exchange.answers)
         .map(|(question, selected)| {
+            // 单选时直接返回字符串，多选时返回数组
+            let answer_value = if question.multiple {
+                json!(selected)
+            } else {
+                json!(selected.first().cloned().unwrap_or_default())
+            };
             json!({
                 "header": question.header,
                 "question": question.question,
-                "answers": selected,
+                "answer": answer_value,
             })
         })
         .collect::<Vec<_>>();

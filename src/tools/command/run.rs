@@ -318,6 +318,7 @@ async fn wait_managed_task(
                 let _ = std::fs::remove_file(&finished.stdout_log);
                 let _ = std::fs::remove_file(&finished.stderr_log);
             }
+            // 进程已退出但无法回收 exit_code（PID 已释放），用 success 表达结果
             return Ok(serde_json::to_string_pretty(&json!({
                 "mode": "foreground",
                 "success": true,
@@ -325,7 +326,7 @@ async fn wait_managed_task(
                 "stdout": clip_output(&stdout),
                 "stderr": clip_output(&stderr),
                 "task_id": task.id,
-                "note": "Process finished in foreground; stdout/stderr are complete. task_id is audit-only and needs no background_command output or completion handling.",
+                "note": "Process finished in foreground; exit_code is unavailable because the PID was already reaped. Use success to determine the outcome. task_id is audit-only and needs no background_command output or completion handling.",
             }))?);
         }
 
