@@ -317,8 +317,8 @@ fn mode_accent_fg(mode: AgentMode) -> &'static str {
 /// - 整行 ANSI 文本
 pub(super) fn chrome_panel_row(mode: AgentMode, content: &str, cols: usize) -> String {
     let cols = cols.max(CHROME_ACCENT_COLS + 1);
-    let inner = cols.saturating_sub(CHROME_ACCENT_COLS);
-    // 正文里的 `\x1b[0m` 会清掉背景，替换为 reset+面板底色以保持整行灰底
+    // 左右各留一列外边距，避免内容贴边
+    let inner = cols.saturating_sub(CHROME_ACCENT_COLS + 2);
     let content = content.replace("\x1b[0m", &format!("\x1b[0m{CHROME_PANEL_BG}"));
     let width = visible_width(&content);
     let body = if width >= inner {
@@ -326,9 +326,8 @@ pub(super) fn chrome_panel_row(mode: AgentMode, content: &str, cols: usize) -> S
     } else {
         format!("{content}{}", " ".repeat(inner - width))
     };
-    // 面板底上叠最细引导字形；正文区保持面板底色，末尾 reset
     format!(
-        "{bg}{fg}{glyph}\x1b[0m{bg}{body}\x1b[0m",
+        "{bg}{fg}{glyph}\x1b[0m{bg} {body} \x1b[0m",
         bg = CHROME_PANEL_BG,
         fg = mode_accent_fg(mode),
         glyph = CHROME_ACCENT_GLYPH,

@@ -222,7 +222,6 @@ impl ComposerFrame {
         }
         // 3. 细引导线 + 灰底面板：输入上下各留一行空白，再接状态行
         let mode = self.chrome.mode;
-        let panel_body_top = row;
         for _ in 0..CHROME_INPUT_PAD_ROWS {
             queue!(
                 output,
@@ -347,9 +346,17 @@ impl ComposerFrame {
 /// 返回:
 /// - 包含快捷操作说明的 ANSI 文本
 fn placeholder_text() -> String {
-    // 1. 每次启动种子不同，并按墙钟轮询下一条小技巧
-    let text = super::super::composer_tips::current_composer_tip();
-    format!("\x1b[2m{text}\x1b[0m")
+    // 静态提示，避免空输入时底栏因轮询闪烁
+    format!("\x1b[2m{}\x1b[0m", static_placeholder_tip())
+}
+
+/// 返回静态占位提示。
+fn static_placeholder_tip() -> &'static str {
+    if crate::i18n::is_zh() {
+        "输入消息 · Enter 发送 · Shift+Enter 换行"
+    } else {
+        "Type a message · Enter send · Shift+Enter newline"
+    }
 }
 
 /// 按显示列宽切分含 ANSI 的输入行，供圆角盒逐行绘制。
@@ -696,8 +703,12 @@ mod tests {
         frame.draw_lines(&mut output, &viewport, None).unwrap();
 
         let output = String::from_utf8(output).unwrap();
-        let tip = crate::cli::composer_tips::current_composer_tip();
-        // 轮询提示内容随种子与墙钟变化，只校验当前 tip 与 dim 样式
+        // 静态提示，不随轮询变化
+        let tip = if crate::i18n::is_zh() {
+            "输入消息 · Enter 发送 · Shift+Enter 换行"
+        } else {
+            "Type a message · Enter send · Shift+Enter newline"
+        };
         assert!(!tip.is_empty());
         assert!(output.contains(tip));
         assert!(output.contains("\x1b[2m"));
