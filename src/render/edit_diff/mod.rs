@@ -1,4 +1,5 @@
 mod colors;
+mod intraline;
 mod model;
 mod renderer;
 mod streamed_stats;

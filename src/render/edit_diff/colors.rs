@@ -18,6 +18,10 @@ pub(crate) struct DiffPalette {
     pub delete_foreground: u8,
     pub add_background: u8,
     pub add_foreground: u8,
+    /// 删除行内被替换片段的强调背景（比整行底色亮一档）
+    pub delete_emphasis_background: u8,
+    /// 新增行内替换片段的强调背景
+    pub add_emphasis_background: u8,
 }
 
 impl Default for DiffPalette {
@@ -34,6 +38,8 @@ impl Default for DiffPalette {
             delete_foreground: 174,
             add_background: 22,
             add_foreground: 108,
+            delete_emphasis_background: 88,
+            add_emphasis_background: 28,
         }
     }
 }
@@ -104,7 +110,7 @@ pub(crate) fn style_context_line(path: &Path, line: &str) -> String {
     )
 }
 
-/// 给 diff 删除行添加样式。
+/// 给 diff 删除行添加样式（无行内强调）。
 ///
 /// 参数:
 /// - `path`: 文件路径
@@ -112,13 +118,32 @@ pub(crate) fn style_context_line(path: &Path, line: &str) -> String {
 ///
 /// 返回:
 /// - 带 ANSI 样式的删除行
+#[cfg(test)]
 pub(crate) fn style_removed_line(path: &Path, line: &str) -> String {
+    style_removed_line_ranged(path, line, None)
+}
+
+/// 给 diff 删除行添加样式，可选高亮行内被替换片段。
+///
+/// 参数:
+/// - `path`: 文件路径
+/// - `line`: diff 行文本
+/// - `emphasis`: 正文中被替换片段的字符区间
+///
+/// 返回:
+/// - 带 ANSI 样式的删除行
+pub(crate) fn style_removed_line_ranged(
+    path: &Path,
+    line: &str,
+    emphasis: Option<std::ops::Range<usize>>,
+) -> String {
     let palette = DiffPalette::default();
     style_diff_line(
         path,
         line,
         palette.delete_background,
         palette.delete_foreground,
+        emphasis.map(|range| (range, palette.delete_emphasis_background)),
     )
 }
 
@@ -131,8 +156,31 @@ pub(crate) fn style_removed_line(path: &Path, line: &str) -> String {
 /// 返回:
 /// - 带 ANSI 样式的新增行
 pub(crate) fn style_added_line(path: &Path, line: &str) -> String {
+    style_added_line_ranged(path, line, None)
+}
+
+/// 给 diff 新增行添加样式，可选高亮行内替换片段。
+///
+/// 参数:
+/// - `path`: 文件路径
+/// - `line`: diff 行文本
+/// - `emphasis`: 正文中替换片段的字符区间
+///
+/// 返回:
+/// - 带 ANSI 样式的新增行
+pub(crate) fn style_added_line_ranged(
+    path: &Path,
+    line: &str,
+    emphasis: Option<std::ops::Range<usize>>,
+) -> String {
     let palette = DiffPalette::default();
-    style_diff_line(path, line, palette.add_background, palette.add_foreground)
+    style_diff_line(
+        path,
+        line,
+        palette.add_background,
+        palette.add_foreground,
+        emphasis.map(|range| (range, palette.add_emphasis_background)),
+    )
 }
 
 /// 给新增行数添加样式。
@@ -174,19 +222,32 @@ pub(crate) fn style_removed_count(count: usize) -> String {
 /// - `line`: diff 行文本
 /// - `background`: ANSI 256 色背景
 /// - `marker_color`: 行首增删标记的 ANSI 256 色前景
+/// - `emphasis`: 可选的行内强调（正文字符区间 + 强调背景色）
 ///
 /// 返回:
 /// - 带 ANSI 样式的 diff 行
-fn style_diff_line(path: &Path, line: &str, background: u8, marker_color: u8) -> String {
+fn style_diff_line(
+    path: &Path,
+    line: &str,
+    background: u8,
+    marker_color: u8,
+    emphasis: Option<(std::ops::Range<usize>, u8)>,
+) -> String {
     let (prefix, body) = split_line_number(line);
     let highlighted = highlight_code_line(language_from_path(path), body);
-    let highlighted = keep_diff_background_after_reset(&highlighted, background);
+    let highlighted = match &emphasis {
+        Some((range, strong)) if !range.is_empty() => {
+            apply_intraline_background(&highlighted, range, background, *strong)
+        }
+        _ => keep_diff_background_after_reset(&highlighted, background),
+    };
     // 行首前缀固定以「标记字符 + 两个空格」结尾，据此切出行号段与标记段；
     // 正文前用 `39` 回到默认前景，代码与上下文行同色
     let numbered = if prefix.len() >= 3 {
         let (number_part, marker_part) = prefix.split_at(prefix.len() - 3);
         format!(
-            "\x1b[38;5;{FILL_LINE_NUMBER}m{number_part}\x1b[38;5;{marker_color}m{marker_part}\x1b[39m{highlighted}"
+            "\x1b[38;5;{FILL_LINE_NUMBER}m{number_part}\x1b[38;5;{marker_color}m{marker_part}\x1b[39m{numbered_body}",
+            numbered_body = highlighted
         )
     } else {
         highlighted
@@ -208,6 +269,64 @@ fn style_diff_line(path: &Path, line: &str, background: u8, marker_color: u8) ->
 /// - reset 后重新应用背景的文本
 fn keep_diff_background_after_reset(text: &str, background: u8) -> String {
     text.replace("\x1b[0m", &format!("\x1b[0m\x1b[48;5;{background}m"))
+}
+
+/// 给已高亮正文的指定可见字符区间套上强调背景（行内精细差异）。
+///
+/// 逐字符扫描 ANSI 流并统计可见索引：进入区间时切换到强调背景，
+/// 离开时切回整行底色；语法高亮产生的 `\x1b[0m` 会清掉背景，
+/// reset 后按当前所在区间恢复对应背景。
+///
+/// 参数:
+/// - `text`: 已语法高亮的正文
+/// - `range`: 强调的可见字符区间（半开）
+/// - `base`: 整行底色
+/// - `strong`: 强调背景色
+///
+/// 返回:
+/// - 注入背景切换序列后的正文
+fn apply_intraline_background(
+    text: &str,
+    range: &std::ops::Range<usize>,
+    base: u8,
+    strong: u8,
+) -> String {
+    let mut output = String::with_capacity(text.len() + 64);
+    let mut visible = 0usize;
+    let mut index = 0usize;
+    let mut in_emphasis = false;
+    while index < text.len() {
+        if text[index..].starts_with('\x1b') {
+            let end = crate::render::terminal_image::escape_sequence_end(text, index).max(index + 1);
+            let sequence = &text[index..end];
+            output.push_str(sequence);
+            // 语法 reset 清掉背景后，按当前区间恢复对应底色
+            if sequence == "\x1b[0m" {
+                let current = if in_emphasis { strong } else { base };
+                output.push_str(&format!("\x1b[48;5;{current}m"));
+            }
+            index = end;
+            continue;
+        }
+        // 区间边界发生在可见字符之间：先切背景再输出字符
+        if visible == range.start && !in_emphasis {
+            output.push_str(&format!("\x1b[48;5;{strong}m"));
+            in_emphasis = true;
+        }
+        if visible == range.end && in_emphasis {
+            output.push_str(&format!("\x1b[48;5;{base}m"));
+            in_emphasis = false;
+        }
+        let ch = text[index..].chars().next().unwrap_or_default();
+        output.push(ch);
+        visible += 1;
+        index += ch.len_utf8();
+    }
+    // 区间延伸到行尾：收尾时回到整行底色，EL 铺满段不受影响
+    if in_emphasis {
+        output.push_str(&format!("\x1b[48;5;{base}m"));
+    }
+    output
 }
 
 /// 根据文件路径推断代码高亮语言。

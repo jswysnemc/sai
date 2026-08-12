@@ -1,7 +1,8 @@
 use super::colors::{
-    style_added_count, style_added_line, style_context_line, style_removed_count,
-    style_removed_line,
+    style_added_count, style_added_line, style_added_line_ranged, style_context_line,
+    style_removed_count, style_removed_line_ranged,
 };
+use super::intraline::intraline_pair;
 use super::model::preview_from_arguments;
 use crate::render::content_indent::{
     clear_right_margin, indent_diff_for_cli, indent_diff_for_transcript, DIFF_BLOCK_INSET,
@@ -311,6 +312,9 @@ fn render_added_file(path: &Path, content: &str) -> String {
 
 /// 渲染更新文件行。
 ///
+/// 连续的删除块与紧随的新增块按行序配对，计算行内精细差异：
+/// 真正被替换的片段以更亮的背景标出，未变部分保持整行底色。
+///
 /// 参数:
 /// - `path`: 文件路径
 /// - `lines`: diff 行
@@ -320,22 +324,71 @@ fn render_added_file(path: &Path, content: &str) -> String {
 fn render_update_lines(path: &Path, lines: &[LineChange]) -> String {
     let width = max_line_number(lines).to_string().len().max(3);
     let mut output = String::new();
-    for line in lines {
-        let (number, marker) = match line.kind {
-            LineChangeKind::Context => (line.old_line.or(line.new_line).unwrap_or_default(), " "),
-            LineChangeKind::Add => (line.new_line.unwrap_or_default(), "+"),
-            LineChangeKind::Delete => (line.old_line.unwrap_or_default(), "-"),
-        };
-        let text = format!("{number:>width$} {marker}  {}", line.text);
-        let styled = match line.kind {
-            LineChangeKind::Context => style_context_line(path, &text),
-            LineChangeKind::Add => style_added_line(path, &text),
-            LineChangeKind::Delete => style_removed_line(path, &text),
-        };
-        output.push_str(&styled);
-        output.push('\n');
+    let mut index = 0usize;
+    while index < lines.len() {
+        if lines[index].kind != LineChangeKind::Delete {
+            let line = &lines[index];
+            output.push_str(&render_plain_line(path, line, width, None));
+            index += 1;
+            continue;
+        }
+        // 1. 收集连续删除块与紧随的新增块
+        let delete_start = index;
+        while index < lines.len() && lines[index].kind == LineChangeKind::Delete {
+            index += 1;
+        }
+        let add_start = index;
+        while index < lines.len() && lines[index].kind == LineChangeKind::Add {
+            index += 1;
+        }
+        let deletes = &lines[delete_start..add_start];
+        let adds = &lines[add_start..index];
+        // 2. 按行序配对计算行内变化区
+        let pairs: Vec<_> = deletes
+            .iter()
+            .zip(adds.iter())
+            .map(|(delete, add)| intraline_pair(&delete.text, &add.text))
+            .collect();
+        for (offset, line) in deletes.iter().enumerate() {
+            let emphasis = pairs.get(offset).and_then(|pair| pair.as_ref()).map(|pair| pair.old.clone());
+            output.push_str(&render_plain_line(path, line, width, emphasis));
+        }
+        for (offset, line) in adds.iter().enumerate() {
+            let emphasis = pairs.get(offset).and_then(|pair| pair.as_ref()).map(|pair| pair.new.clone());
+            output.push_str(&render_plain_line(path, line, width, emphasis));
+        }
     }
     output
+}
+
+/// 渲染单个 diff 行（含结尾换行）。
+///
+/// 参数:
+/// - `path`: 文件路径
+/// - `line`: diff 行
+/// - `width`: 行号列宽
+/// - `emphasis`: 行内强调区间（仅增删行有意义）
+///
+/// 返回:
+/// - 带样式的单行文本
+fn render_plain_line(
+    path: &Path,
+    line: &LineChange,
+    width: usize,
+    emphasis: Option<std::ops::Range<usize>>,
+) -> String {
+    let (number, marker) = match line.kind {
+        LineChangeKind::Context => (line.old_line.or(line.new_line).unwrap_or_default(), " "),
+        LineChangeKind::Add => (line.new_line.unwrap_or_default(), "+"),
+        LineChangeKind::Delete => (line.old_line.unwrap_or_default(), "-"),
+    };
+    let text = format!("{number:>width$} {marker}  {}", line.text);
+    let styled = match line.kind {
+        LineChangeKind::Context => style_context_line(path, &text),
+        LineChangeKind::Add => style_added_line_ranged(path, &text, emphasis),
+        LineChangeKind::Delete => style_removed_line_ranged(path, &text, emphasis),
+    };
+    format!("{styled}\n")
 }
 
 /// 统计最大行号。
