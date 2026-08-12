@@ -252,6 +252,7 @@
   background: var(--paper);
   color: var(--ink);
   font:400 var(--text-base) var(--font-code);
+  transition: border-color var(--transition-fast);
 }
 
 .settings-field input {

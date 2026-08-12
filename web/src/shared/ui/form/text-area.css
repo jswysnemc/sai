@@ -9,6 +9,7 @@
   background: var(--paper-raised);
   color: var(--ink);
   font:var(--text-sm)/1.5 var(--font-ui);
+  transition: border-color var(--transition-fast);
 }
 
 /* 边框加深一档不足以标示焦点，配合焦点环才能在键盘操作时看清落点 */
