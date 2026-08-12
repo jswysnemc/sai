@@ -20,6 +20,8 @@ import { SourceControlPane } from "../source-control/source-control-pane";
 import { WorkspaceFileSplit } from "./workspace-file-split";
 import { SideConversationPane } from "../side-conversation/side-conversation-pane";
 import type { SideConversationRequest } from "../side-conversation/side-conversation-events";
+import { useWorkspaceGitEntries } from "./use-workspace-git-entries";
+import { useFileNavigationHistory } from "./use-file-navigation-history";
 
 type WorkspacePaneProps = {
   selectedFile: string | null;
@@ -71,6 +73,9 @@ export function WorkspacePane({
   // 初始不预开空编辑器；由 `+` 菜单、打开文件或外部入口创建标签。
   const [tabs, setTabs] = useState<WorkspacePanelTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  // 标签徽标、编辑器行装饰共享同一份 Git 状态查询
+  const { entries: gitEntries } = useWorkspaceGitEntries();
+  const navigation = useFileNavigationHistory(selectedFile, onSelectFile);
 
   useEffect(() => {
     if (fileTreeRequestId <= 0) return;
@@ -301,6 +306,7 @@ export function WorkspacePane({
         tabs={tabs}
         activeTabId={activeTab?.id ?? null}
         maximized={maximized}
+        gitEntries={gitEntries}
         onActivate={(id) => {
           setActiveTabId(id);
           const tab = tabs.find((item) => item.id === id);
@@ -330,6 +336,8 @@ export function WorkspacePane({
               onSelectFile={onSelectFile}
               fileTreeOpen={fileTreeOpen}
               onToggleFileTree={toggleFileTree}
+              gitEntries={gitEntries}
+              navigation={navigation}
             />}
             tree={fileTreeOpen ? (
               <FileTree

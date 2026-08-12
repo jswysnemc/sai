@@ -67,7 +67,7 @@
 
 .workspace-tab-main {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr);
+  grid-template-columns: 14px minmax(0, 1fr) auto;
   gap:var(--space-xs);
   align-items: center;
   min-width: 0;
@@ -85,6 +85,18 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* 文件标签的 Git 状态字母：与文件树同一套色调 */
+.workspace-tab-git {
+  flex: 0 0 auto;
+  font: 600 var(--text-2xs)/1 var(--font-code);
+  font-style: normal;
+}
+
+.workspace-tab-git.git-added { color: var(--signal); }
+.workspace-tab-git.git-modified { color: var(--warning); }
+.workspace-tab-git.git-deleted { color: var(--danger); }
+.workspace-tab-git.git-conflicted { color: var(--danger); }
 
 .workspace-tab-close {
   display: grid;
@@ -420,7 +432,27 @@
 .tree-chevron.open { transform: rotate(90deg); }
 .tree-spacer { width: 12px; }
 .editor-pane { display: grid; grid-template-rows: 37px minmax(0, 1fr); min-width: 0; min-height: 0; overflow: hidden; }
-.editor-head { display: flex; align-items: center; gap:var(--space-xs); min-width: 0; padding:0 var(--space-xs) 0 var(--space-md); border-bottom: 1px solid var(--line); background: var(--paper); }
+.editor-head { display: flex; align-items: center; gap:var(--space-xs); min-width: 0; padding:0 var(--space-xs) 0 var(--space-sm); border-bottom: 1px solid var(--line); background: var(--paper); }
+
+/* 文件访问历史：面包屑左侧的后退/前进 */
+.editor-nav { display: inline-flex; flex: 0 0 auto; gap: 1px; }
+.editor-nav button { display: grid; width: 24px; height: 24px; padding: 0; place-items: center; border: 0; border-radius: var(--radius-2); background: transparent; color: var(--ink-soft); }
+.editor-nav button:hover:not(:disabled) { background: var(--paper-deep); color: var(--ink); }
+.editor-nav button:disabled { opacity: 0.35; cursor: default; }
+
+/* Monaco 行号右侧的 Git 变更装饰：新增/修改色条，删除三角 */
+.monaco-code-editor .editor-git-line { width: 3px !important; margin-left: 4px; }
+.monaco-code-editor .editor-git-line-added { background: color-mix(in srgb, var(--signal) 85%, transparent); }
+.monaco-code-editor .editor-git-line-modified { background: color-mix(in srgb, var(--warning) 85%, transparent); }
+.monaco-code-editor .editor-git-line-deleted { background: transparent; overflow: visible; }
+.monaco-code-editor .editor-git-line-deleted::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: -1px;
+  border: 5px solid transparent;
+  border-left-color: color-mix(in srgb, var(--danger) 90%, transparent);
+}
 .editor-head-empty > span { flex: 1; overflow: hidden; color: var(--ink-soft); font:400 var(--text-xs) var(--font-code); text-overflow: ellipsis; white-space: nowrap; }
 .editor-external-change { margin-left: auto; color: var(--warning); font:400 var(--text-2xs) var(--font-ui) !important; }
 .editor-reload { display: grid; width: 27px; height: 27px; padding: 0; place-items: center; border: 1px solid var(--line); border-radius:var(--radius-2); background: var(--paper-deep); color: var(--ink-soft); }
@@ -570,14 +602,22 @@
 
 .git-file-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* 单列：操作按钮已改为绝对定位悬浮层，不再占一列 grid 空间，
+     路径列因此拿到整行宽度（见下方 .git-file-actions 的说明） */
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   min-height: 33px;
   padding:0 var(--space-3xs) 0 0;
   border-radius:var(--radius-2);
+  /* 悬浮操作层的底色：行 hover 的半透明色与面板底色 --paper 的不透明合成。
+     直接复用行的半透明背景会透出被遮住的状态徽章，必须用合成后的实色 */
+  --git-row-overlay-bg: color-mix(in srgb, var(--ink) 6%, var(--paper));
 }
 
+/* focus-within 与 hover 同款背景：键盘 Tab 进行内按钮时整行同步高亮，
+   悬浮操作层的底色才能与行背景无缝衔接 */
 .git-file-row:hover,
+.git-file-row:focus-within,
 .git-history-row:hover {
   background: color-mix(in srgb, var(--ink) 6%, transparent);
 }
@@ -585,6 +625,11 @@
 .git-file-row.active,
 .git-history-row.active {
   background: color-mix(in srgb, var(--signal) 10%, transparent);
+}
+
+/* active 行的行背景是 signal 色（源顺序在 hover 之后、优先生效），悬浮层底色跟随 */
+.git-file-row.active {
+  --git-row-overlay-bg: color-mix(in srgb, var(--signal) 10%, var(--paper));
 }
 
 /* 选中指示条：贴左内缘的圆角竖条，比整行换色更克制也更明确 */
@@ -606,10 +651,37 @@
 .git-file-status.tone-untracked { color: var(--ink-soft); }
 .git-file-status.tone-conflict { color: var(--warning); }
 .git-file-main > span:last-child { overflow: hidden; font:400 var(--text-xs) var(--font-code); text-overflow: ellipsis; white-space: nowrap; }
-.git-file-actions { display: flex; opacity: 0; transition:opacity var(--duration-fast) var(--ease-standard); }
+/*
+ * 行内操作按钮：悬浮层（对齐 VS Code 源代码管理列表的交互）。
+ *
+ * 旧实现用 opacity 隐藏但按钮仍占一列 grid 空间——路径被压缩截断、
+ * 行右侧常驻一块按钮宽度的空白。改为绝对定位后按钮脱离行布局：
+ * 非 hover 时路径拿到整行宽度、状态徽章贴住行右缘；hover/focus 时
+ * 按钮带不透明底色盖在行右缘（遮住徽章），行内其余内容零位移。
+ * active 行不再常驻显示按钮，否则当前打开文件的状态徽章会被永久遮住。
+ */
+.git-file-actions {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  /* 左端 0.75rem 渐变过渡：悬浮层与被遮内容之间不出现生硬直边 */
+  padding-inline: 0.75rem var(--space-3xs);
+  border-radius: 0 var(--radius-2) var(--radius-2) 0;
+  background: linear-gradient(to right, transparent, var(--git-row-overlay-bg) 0.75rem);
+  opacity: 0;
+  /* 隐藏时悬浮层叠在状态徽章上方，必须放行鼠标事件，否则挡住整行点击 */
+  pointer-events: none;
+  transition:opacity var(--duration-fast) var(--ease-standard);
+}
+/* 用 opacity 而非 display:none 隐藏：按钮保留在 Tab 序里，
+   键盘 Tab 进按钮触发 focus-within 时悬浮层同样显示 */
 .git-file-row:hover .git-file-actions,
-.git-file-row:focus-within .git-file-actions,
-.git-file-row.active .git-file-actions { opacity: 1; }
+.git-file-row:focus-within .git-file-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
 .git-history-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap:var(--space-xs); width: 100%; min-height: 48px; padding:var(--space-xs) var(--space-sm); border: 0; border-radius:var(--radius-2); background: transparent; color: var(--ink); text-align: left; }
 .git-history-row span { display: grid; min-width: 0; gap:var(--space-3xs); }
 .git-history-row strong { overflow: hidden; font-size:var(--text-sm); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }

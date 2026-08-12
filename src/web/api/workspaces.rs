@@ -117,7 +117,7 @@ async fn add(
     Ok(Json(workspace))
 }
 
-/// 浏览服务端允许选择的目录。
+/// 浏览服务端目录（不限制范围，快捷入口见返回的 roots）。
 async fn browse(
     Query(query): Query<BrowseDirectoryQuery>,
 ) -> WebResult<Json<super::super::workspaces::DirectoryListing>> {
@@ -126,7 +126,7 @@ async fn browse(
     Ok(Json(listing))
 }
 
-/// 在允许浏览的目录下创建子目录。
+/// 在服务端指定父目录下创建子目录。
 ///
 /// 参数:
 /// - `request`: 父目录路径与新目录名

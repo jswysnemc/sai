@@ -1,7 +1,8 @@
-import { Compartment, EditorState } from "@codemirror/state";
+import { Compartment, EditorState, Transaction } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { useEffect, useRef } from "react";
 import { baseExtensions, presentationExtensions } from "./editor-extensions";
+import { recordEmittedValue, resolveExternalValue } from "./external-value";
 import "./markdown-text-editor.css";
 
 type MarkdownTextEditorProps = {
@@ -33,6 +34,8 @@ export function MarkdownTextEditor({
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   const presentationRef = useRef(new Compartment());
+  // 编辑器自己发出过的内容队列，用于识别父组件回流的旧值（见 external-value.ts）
+  const emittedRef = useRef<string[]>([]);
   onChangeRef.current = onChange;
 
   useEffect(() => {
@@ -43,7 +46,10 @@ export function MarkdownTextEditor({
       state: EditorState.create({
         doc: value,
         extensions: [
-          ...baseExtensions((next) => onChangeRef.current(next)),
+          ...baseExtensions((next) => {
+            recordEmittedValue(emittedRef.current, next);
+            onChangeRef.current(next);
+          }),
           presentationRef.current.of(presentationExtensions({ live, dark, readOnly })),
         ],
       }),
@@ -71,12 +77,15 @@ export function MarkdownTextEditor({
     const view = viewRef.current;
     if (!view) return;
     const current = view.state.doc.toString();
-    if (current === value) return;
-    // 3. 外部内容变化（切换文件、外部重载）时整体替换，光标夹到新长度内
+    // 3. 编辑器自己发出的内容回流时跳过，避免旧值覆盖更新的文档
+    if (resolveExternalValue(value, current, emittedRef.current).kind !== "replace") return;
+    // 4. 真正的外部变化（首次加载、切换文件、磁盘重载）时整体替换：
+    //    不进撤销历史，否则一次 Ctrl+Z 就能把文档退回加载前的空白
     const anchor = Math.min(view.state.selection.main.anchor, value.length);
     view.dispatch({
       changes: { from: 0, to: current.length, insert: value },
       selection: { anchor },
+      annotations: Transaction.addToHistory.of(false),
     });
   }, [value]);
 

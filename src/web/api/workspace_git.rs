@@ -164,7 +164,7 @@ async fn git_statuses(
     Ok(Json(statuses))
 }
 
-/// 将远端仓库克隆到服务端允许的目标目录。
+/// 将远端仓库克隆到服务端指定的目标目录。
 ///
 /// 参数:
 /// - `request`: 远端地址、父目录和可选目录名
@@ -174,7 +174,7 @@ async fn git_statuses(
 async fn git_clone(
     Json(request): Json<GitCloneRequest>,
 ) -> WebResult<Json<workspace::GitOperationResponse>> {
-    // 1. 目标父目录必须位于服务端工作区允许范围
+    // 1. 目标父目录必须是服务端上真实存在的目录
     let parent = super::super::workspaces::validate_browsable_directory(&request.parent)
         .map_err(|error| WebError::bad_request(error.to_string()))?;
     // 2. 克隆命令使用系统 Git，并返回真实标准输出和错误

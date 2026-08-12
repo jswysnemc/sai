@@ -12,7 +12,7 @@ pub(crate) struct DirectoryEntry {
     pub git_repository: bool,
 }
 
-/// 服务端目录浏览结果。
+/// 服务端目录浏览结果；`roots` 为快捷入口目录而非浏览边界。
 #[derive(Clone, Debug, Serialize)]
 pub(crate) struct DirectoryListing {
     pub current: String,
@@ -21,29 +21,33 @@ pub(crate) struct DirectoryListing {
     pub entries: Vec<DirectoryEntry>,
 }
 
-/// 浏览服务端允许根目录中的一级子目录。
+/// 浏览服务端任意目录的一级子目录。
 ///
 /// 参数:
-/// - `requested`: 可选绝对目录，空值使用第一个允许根目录
+/// - `requested`: 可选绝对目录，空值使用第一个快捷入口目录
 ///
 /// 返回:
-/// - 当前目录、父目录、根目录和子目录列表
+/// - 当前目录、父目录、快捷入口和子目录列表
 pub(crate) fn browse(requested: Option<&str>) -> Result<DirectoryListing> {
-    let roots = allowed_roots()?;
+    let roots = quick_access_roots()?;
     let requested = requested.map(str::trim).filter(|value| !value.is_empty());
     let current = match requested {
-        Some(value) => canonical_allowed_directory(Path::new(value), &roots)?,
+        Some(value) => canonical_browsable_directory(Path::new(value))?,
         None => roots
             .first()
             .cloned()
             .context("no workspace roots are available")?,
     };
-    let mut entries = std::fs::read_dir(&current)?
+    // 目录不可读（如权限不足）时返回带路径的可读错误，而不是裸 IO 错误
+    let mut entries = std::fs::read_dir(&current)
+        .with_context(|| format!("failed to read directory: {}", display_path(&current)))?
         .filter_map(Result::ok)
         .filter_map(|entry| directory_entry(entry.path()).ok())
         .collect::<Vec<_>>();
     entries.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
-    let parent = resolve_allowed_parent(&current, &roots);
+    // merged-usr 系统中 /bin、/sbin 等符号链接规范化到同一目标，按路径去重避免重复条目
+    entries.dedup_by(|left, right| left.path == right.path);
+    let parent = resolve_parent(&current);
     Ok(DirectoryListing {
         current: display_path(&current),
         parent,
@@ -55,10 +59,10 @@ pub(crate) fn browse(requested: Option<&str>) -> Result<DirectoryListing> {
     })
 }
 
-/// 在允许根目录内的父目录下创建子目录。
+/// 在服务端指定父目录下创建子目录。
 ///
 /// 参数:
-/// - `parent`: 父目录绝对路径，必须位于允许根目录内
+/// - `parent`: 父目录绝对路径，必须真实存在
 /// - `name`: 新目录名，不允许包含路径分隔符或 `..`
 ///
 /// 返回:
@@ -72,9 +76,8 @@ pub(crate) fn create_directory(parent: &str, name: &str) -> Result<DirectoryEntr
     if name == "." || name == ".." || name.contains('/') || name.contains('\u{5c}') {
         bail!("directory name contains illegal characters");
     }
-    // 2. 校验父目录位于允许根目录内
-    let roots = allowed_roots()?;
-    let parent = canonical_allowed_directory(Path::new(parent.trim()), &roots)?;
+    // 2. 规范化父目录并确认真实存在
+    let parent = canonical_browsable_directory(Path::new(parent.trim()))?;
     // 3. 创建子目录并返回条目
     let target = parent.join(name);
     if target.exists() {
@@ -85,36 +88,56 @@ pub(crate) fn create_directory(parent: &str, name: &str) -> Result<DirectoryEntr
     directory_entry(target)
 }
 
-/// 校验目录位于服务端允许浏览的根目录内。
+/// 校验目录在服务端真实存在且可作为浏览或操作目标。
 ///
 /// 参数:
 /// - `requested`: 待校验绝对目录
 ///
 /// 返回:
-/// - 规范化后的允许目录
+/// - 规范化后的目录
 pub(crate) fn validate_browsable_directory(requested: &str) -> Result<PathBuf> {
-    let roots = allowed_roots()?;
-    canonical_allowed_directory(Path::new(requested.trim()), &roots)
+    canonical_browsable_directory(Path::new(requested.trim()))
 }
 
-/// 返回配置后的服务端目录根集合。
-fn allowed_roots() -> Result<Vec<PathBuf>> {
+/// 返回目录浏览器的快捷入口集合（不再限制浏览范围）。
+///
+/// 返回:
+/// - 用户主目录、服务端当前目录、`SAI_WEB_WORKSPACE_ROOTS` 追加目录，以及文件系统根
+fn quick_access_roots() -> Result<Vec<PathBuf>> {
     let mut roots = Vec::new();
     if let Some(home) =
         directories::BaseDirs::new().map(|directories| directories.home_dir().to_path_buf())
     {
         push_root(&mut roots, home);
     }
-    push_root(&mut roots, std::env::current_dir()?);
+    // 当前目录可能已被删除，失败时跳过而不是中断整个浏览
+    if let Ok(current) = std::env::current_dir() {
+        push_root(&mut roots, current);
+    }
     if let Ok(value) = std::env::var(EXTRA_ROOTS_ENV) {
         for item in std::env::split_paths(&value) {
             push_root(&mut roots, item);
         }
     }
+    for root in filesystem_roots() {
+        push_root(&mut roots, root);
+    }
     if roots.is_empty() {
         bail!("no readable workspace roots are configured");
     }
     Ok(roots)
+}
+
+/// 返回文件系统根目录集合（Unix 为 `/`，Windows 为各可用盘符根）。
+fn filesystem_roots() -> Vec<PathBuf> {
+    if cfg!(windows) {
+        (b'A'..=b'Z')
+            .map(|letter| PathBuf::from(format!("{}:{}", letter as char, '\u{5c}')))
+            .filter(|path| path.is_dir())
+            .collect()
+    } else {
+        vec![PathBuf::from("/")]
+    }
 }
 
 /// 添加规范化且不重复的根目录。
@@ -127,53 +150,22 @@ fn push_root(roots: &mut Vec<PathBuf>, path: PathBuf) {
     }
 }
 
-/// 校验目录处于允许根目录中。
-fn canonical_allowed_directory(path: &Path, roots: &[PathBuf]) -> Result<PathBuf> {
-    // 1. 先规范化，Windows 下可接受盘符与正斜杠写法
+/// 规范化目录路径并做基础健壮性校验。
+///
+/// 参数:
+/// - `path`: 待校验目录路径
+///
+/// 返回:
+/// - 规范化后的目录；不存在或不是目录时返回错误
+fn canonical_browsable_directory(path: &Path) -> Result<PathBuf> {
+    // 1. 规范化会跟随符号链接并要求目标真实存在，Windows 下可接受盘符与正斜杠写法
     let canonical = path
         .canonicalize()
         .with_context(|| format!("directory does not exist: {}", path.display()))?;
     if !canonical.is_dir() {
         bail!("path is not a directory: {}", canonical.display());
     }
-    // 2. 允许根内判断：同时比较原始规范化路径与去掉扩展前缀后的路径
-    if !roots.iter().any(|root| path_is_within(&canonical, root)) {
-        bail!("directory is outside configured workspace roots");
-    }
     Ok(canonical)
-}
-
-/// 判断 path 是否位于 root 之下（含 root 自身）。
-fn path_is_within(path: &Path, root: &Path) -> bool {
-    if path.starts_with(root) || paths_equal(path, root) {
-        return true;
-    }
-    let path_text = strip_verbatim_prefix(&path.display().to_string());
-    let root_text = strip_verbatim_prefix(&root.display().to_string());
-    if cfg!(windows) {
-        let path_norm = normalize_windows_text(&path_text);
-        let root_norm = normalize_windows_text(&root_text);
-        if path_norm == root_norm {
-            return true;
-        }
-        let mut prefix = root_norm;
-        prefix.push('\u{5c}');
-        path_norm.starts_with(&prefix)
-    } else {
-        let path_norm = path_text.trim_end_matches('/');
-        let root_norm = root_text.trim_end_matches('/');
-        path_norm == root_norm || path_norm.starts_with(&(root_norm.to_string() + "/"))
-    }
-}
-
-/// Windows 路径文本归一化：统一分隔符并去掉末尾分隔符。
-fn normalize_windows_text(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| if ch == '/' { '\u{5c}' } else { ch })
-        .collect::<String>()
-        .trim_end_matches('\u{5c}')
-        .to_ascii_lowercase()
 }
 
 /// 构造服务端目录条目。
@@ -182,44 +174,30 @@ fn directory_entry(path: PathBuf) -> Result<DirectoryEntry> {
     if !canonical.is_dir() {
         bail!("path is not a directory");
     }
+    let display = display_path(&canonical);
+    // 文件系统根（如 `/` 或盘符根）没有文件名，用显示路径本身作为条目名
     let name = canonical
         .file_name()
         .and_then(|value| value.to_str())
         .filter(|value| !value.is_empty())
-        .unwrap_or("/")
-        .to_string();
+        .map(str::to_string)
+        .unwrap_or_else(|| display.clone());
     Ok(DirectoryEntry {
         name,
         git_repository: canonical.join(".git").is_dir(),
-        path: display_path(&canonical),
+        path: display,
     })
 }
 
-/// 解析当前目录在允许根内的上级路径。
+/// 解析当前目录的上级路径。
 ///
 /// 参数:
 /// - `current`: 已规范化的当前目录
-/// - `roots`: 允许根目录
 ///
 /// 返回:
-/// - 可浏览的上级目录；已在根边界时返回 None
-fn resolve_allowed_parent(current: &Path, roots: &[PathBuf]) -> Option<String> {
-    // 1. 若当前就是某个允许根，禁止再向上跳出
-    if roots.iter().any(|root| paths_equal(root, current)) {
-        return None;
-    }
-    // 2. 逐级向上找到仍落在任一允许根内的父目录
-    let mut cursor = current.parent().map(Path::to_path_buf);
-    while let Some(parent) = cursor {
-        if let Ok(canonical) = canonical_allowed_directory(&parent, roots) {
-            return Some(display_path(&canonical));
-        }
-        if roots.iter().any(|root| paths_equal(root, &parent)) {
-            return Some(display_path(&parent));
-        }
-        cursor = parent.parent().map(Path::to_path_buf);
-    }
-    None
+/// - 上级目录；已到文件系统根（如 `/` 或盘符根）时返回 None
+fn resolve_parent(current: &Path) -> Option<String> {
+    current.parent().map(display_path)
 }
 
 /// 输出给前端的路径字符串（去掉 Windows 扩展前缀，便于回退与输入）。
@@ -269,37 +247,61 @@ fn strip_windows_verbatim(value: &str) -> Option<String> {
     None
 }
 
-/// 比较两个路径是否指向同一位置（忽略 Windows 扩展前缀差异）。
-fn paths_equal(left: &Path, right: &Path) -> bool {
-    if left == right {
-        return true;
-    }
-    strip_verbatim_prefix(&left.display().to_string())
-        .eq_ignore_ascii_case(&strip_verbatim_prefix(&right.display().to_string()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn rejects_directory_outside_allowed_root() {
-        let root = tempfile::tempdir().unwrap();
+    fn accepts_any_existing_directory() {
+        // 放宽后任意真实目录都可浏览，不再受根目录白名单限制
         let outside = tempfile::tempdir().unwrap();
-        let roots = vec![root.path().canonicalize().unwrap()];
-        assert!(canonical_allowed_directory(outside.path(), &roots).is_err());
+        let canonical = canonical_browsable_directory(outside.path()).unwrap();
+        assert_eq!(canonical, outside.path().canonicalize().unwrap());
     }
 
     #[test]
-    fn parent_stops_at_allowed_root() {
+    fn rejects_missing_path_and_plain_file() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(canonical_browsable_directory(&dir.path().join("missing")).is_err());
+        let file = dir.path().join("plain.txt");
+        std::fs::write(&file, "x").unwrap();
+        assert!(canonical_browsable_directory(&file).is_err());
+    }
+
+    #[test]
+    fn parent_walks_up_to_filesystem_root() {
         let root = tempfile::tempdir().unwrap();
         let child = root.path().join("child");
         std::fs::create_dir(&child).unwrap();
-        let roots = vec![root.path().canonicalize().unwrap()];
         let current = child.canonicalize().unwrap();
-        let parent = resolve_allowed_parent(&current, &roots).unwrap();
-        assert_eq!(PathBuf::from(&parent).canonicalize().unwrap(), roots[0]);
-        assert!(resolve_allowed_parent(&roots[0], &roots).is_none());
+        let parent = resolve_parent(&current).unwrap();
+        assert_eq!(
+            PathBuf::from(&parent).canonicalize().unwrap(),
+            root.path().canonicalize().unwrap()
+        );
+        if cfg!(unix) {
+            assert!(resolve_parent(Path::new("/")).is_none());
+        }
+    }
+
+    #[test]
+    fn quick_access_roots_include_filesystem_root() {
+        let roots = quick_access_roots().unwrap();
+        assert!(!roots.is_empty());
+        if cfg!(unix) {
+            assert!(roots.iter().any(|root| root == Path::new("/")));
+        }
+    }
+
+    #[test]
+    fn browse_reaches_filesystem_root() {
+        if !cfg!(unix) {
+            return;
+        }
+        let listing = browse(Some("/")).unwrap();
+        assert_eq!(listing.current, "/");
+        assert!(listing.parent.is_none());
+        assert!(listing.roots.iter().any(|root| root.path == "/"));
     }
 
     #[test]

@@ -3,12 +3,16 @@ import { useRef, useState } from "react";
 import { useOutsidePointerDown } from "../../shared/hooks/use-outside-pointer-down";
 import type { PaneTab, WorkspacePanelTab } from "./workspace-tab";
 import { ACTIVE_WORKSPACE_PANEL_OPTIONS, workspacePanelTitle, type WorkspacePanelAction } from "./workspace-panel-options";
+import { fileTreeGitStatusLabel, fileTreeGitStatusTone } from "./use-file-tree-git";
+import type { FileTreeGitEntry } from "./use-workspace-git-entries";
 import { useI18n } from "../i18n/use-i18n";
 
 type WorkspaceTabBarProps = {
   tabs: WorkspacePanelTab[];
   activeTabId: string | null;
   maximized: boolean;
+  /** 按工作区路径索引的 Git 状态，用于文件标签徽标 */
+  gitEntries?: ReadonlyMap<string, FileTreeGitEntry>;
   onActivate: (id: string) => void;
   onClose: (id: string) => void;
   onAdd: (type: WorkspacePanelAction) => void;
@@ -49,6 +53,7 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
         <div className="workspace-tab-scroll">
           {props.tabs.map((tab) => {
             const active = tab.id === props.activeTabId;
+            const gitEntry = tab.type === "files" && tab.path ? props.gitEntries?.get(tab.path) : undefined;
             return (
               <div key={tab.id} className={active ? "workspace-tab active" : "workspace-tab"} role="presentation">
                 <button
@@ -61,6 +66,11 @@ export function WorkspaceTabBar(props: WorkspaceTabBarProps) {
                 >
                   <TabIcon type={tab.type} />
                   <span>{tab.title || translatedPaneLabel(tab.type, t)}</span>
+                  {gitEntry && (
+                    <em className={`workspace-tab-git git-${fileTreeGitStatusTone(gitEntry.entry)}`} aria-hidden>
+                      {fileTreeGitStatusLabel(gitEntry.entry)}
+                    </em>
+                  )}
                 </button>
                 {tab.closable && (
                   <button

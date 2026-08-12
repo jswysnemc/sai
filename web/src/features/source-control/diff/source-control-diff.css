@@ -1,31 +1,380 @@
 /*
- * Source Control 右侧是整栏滚动区，不能沿用聊天卡片里 460px 的 diff 高度上限，
- * 否则内容只占上半截、下面整片空白。
+ * Source Control 审阅区：Cursor 式差异卡片流。
+ *
+ * 顶部一条吸附总览栏（未提交 +N −M · 分支 · 文件数），
+ * 其下每个文件一张圆角卡片：吸附文件头 + 内联统一差异。
+ * 滚动上下文是外层 .diff-scroll，总览栏吸附在 0，文件头吸附在总览栏下缘，
+ * 因此卡片不能设 overflow:hidden，否则内层 sticky 会失效。
  */
+
 .git-diff-shell {
   display: flex;
   flex-direction: column;
   min-height: 100%;
 }
 
-.git-diff-shell > .structured-diff,
-.git-diff-shell .git-patch-hunk .structured-diff {
+/* 文件比较等直接嵌入的差异视图占满整栏，不沿用聊天卡片里 460px 的高度上限 */
+.git-diff-shell > .structured-diff {
   flex: 1 1 auto;
   max-height: none;
   border-radius: 0;
 }
 
+.git-review-stream .spin {
+  animation: git-review-spin 0.9s linear infinite;
+}
+
+@keyframes git-review-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- 吸附总览栏 ---------- */
+
+.git-review-summary {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--git-review-summary-height, 2.5rem);
+  padding: var(--space-2xs) var(--space-md);
+  border-bottom: 1px solid var(--line);
+  background: var(--code-surface);
+}
+
+.git-review-summary-title {
+  flex: 0 0 auto;
+  color: var(--ink);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.git-review-summary-stats {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--space-xs);
+  font: 600 var(--text-xs) var(--font-code);
+  font-variant-numeric: tabular-nums;
+}
+
+.git-review-summary-stats b {
+  color: var(--diff-added-text);
+}
+
+.git-review-summary-stats i {
+  color: var(--diff-removed-text);
+  font-style: normal;
+}
+
+.git-review-summary-stats em {
+  color: var(--ink-soft);
+  font: 400 var(--text-2xs) var(--font-ui);
+  font-style: normal;
+}
+
+.git-review-summary-context {
+  display: inline-flex;
+  overflow: hidden;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+}
+
+.git-review-summary-branch {
+  display: inline-flex;
+  overflow: hidden;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-3xs);
+  padding: 0.0625rem var(--space-xs);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  font: 500 var(--text-2xs) var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-review-summary-branch svg {
+  flex: 0 0 auto;
+}
+
+.git-review-summary-count {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.git-review-summary-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin-left: auto;
+}
+
+.git-review-summary-action.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.git-review-summary-action.ui-button:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+/* ---------- 文件卡片流 ---------- */
+
+.git-review-cards {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-md) var(--space-2xl);
+  align-content: start;
+}
+
+.git-file-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background: var(--technical-surface);
+  /* 滚动定位时把吸附总览栏和一点呼吸空间留出来 */
+  scroll-margin-top: calc(var(--git-review-summary-height, 2.5rem) + var(--space-md));
+  transition: box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.git-file-card.is-highlighted {
+  border-color: color-mix(in srgb, var(--signal) 45%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--signal) 25%, transparent);
+}
+
+/* ---------- 卡片文件头 ---------- */
+
+.git-file-card-head {
+  position: sticky;
+  top: var(--git-review-summary-height, 2.5rem);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 2.125rem;
+  padding: 0 var(--space-xs) 0 var(--space-sm);
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--radius-3) var(--radius-3) 0 0;
+  background: var(--paper);
+  cursor: pointer;
+  user-select: none;
+}
+
+.git-file-card.is-collapsed .git-file-card-head {
+  border-bottom: 0;
+  border-radius: var(--radius-3);
+}
+
+.git-file-card-head:focus-visible {
+  box-shadow: var(--ring-focus);
+  outline: 0;
+}
+
+.git-file-card-dot {
+  flex: 0 0 auto;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+}
+
+.git-file-card-dot.tone-modified {
+  background: var(--warning);
+}
+
+.git-file-card-dot.tone-added {
+  background: var(--signal);
+}
+
+.git-file-card-dot.tone-deleted {
+  background: var(--danger);
+}
+
+.git-file-card-dot.tone-conflict {
+  background: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+.git-file-card-path {
+  display: inline-flex;
+  overflow: hidden;
+  min-width: 0;
+  align-items: baseline;
+  white-space: nowrap;
+}
+
+.git-file-card-dir {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--ink-soft);
+  font: 400 var(--text-2xs) var(--font-code);
+  text-overflow: ellipsis;
+}
+
+.git-file-card-name.tool-file-reference {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.git-file-card-name.tool-file-reference button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 500 var(--text-xs) var(--font-code);
+}
+
+.git-file-card-path.is-deleted .git-file-card-name.tool-file-reference button,
+.git-file-card-path.is-deleted .git-file-card-dir {
+  text-decoration: line-through;
+}
+
+.git-file-card-badge {
+  flex: 0 0 auto;
+  padding: 0.0625rem var(--space-xs);
+  border-radius: 999px;
+  font: 500 var(--text-3xs, 0.625rem) var(--font-ui);
+  white-space: nowrap;
+}
+
+.git-file-card-badge.tone-modified {
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  color: var(--warning);
+}
+
+.git-file-card-badge.tone-added {
+  background: color-mix(in srgb, var(--signal) 12%, transparent);
+  color: var(--signal);
+}
+
+.git-file-card-badge.tone-deleted,
+.git-file-card-badge.tone-conflict {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.git-file-card-stats {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--space-xs);
+  margin-left: auto;
+  font: 600 var(--text-2xs) var(--font-code);
+  font-variant-numeric: tabular-nums;
+}
+
+.git-file-card-stats b {
+  color: var(--diff-added-text);
+}
+
+.git-file-card-stats i {
+  color: var(--diff-removed-text);
+  font-style: normal;
+}
+
+.git-file-card-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.git-file-card-action.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.git-file-card-action.ui-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+
+.git-file-card-action.ui-button.is-active {
+  background: var(--signal-soft);
+  color: var(--signal);
+}
+
+.git-file-card-action.ui-button.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+
+.git-file-card-chevron {
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+  transform: rotate(-90deg);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.git-file-card-chevron.open {
+  transform: rotate(0deg);
+}
+
+/* ---------- 卡片正文 ---------- */
+
+.git-file-card-body {
+  min-width: 0;
+  border-radius: 0 0 var(--radius-3) var(--radius-3);
+}
+
+/* 圆角由卡片承担，正文差异视图取消聊天卡片里的高度上限，跟随卡片自然生长 */
+.git-file-card-body > .structured-diff {
+  max-height: none;
+  overflow: visible;
+}
+
+.git-file-card-body .diff-file-lines {
+  border-radius: 0 0 var(--radius-3) var(--radius-3);
+}
+
+.git-file-card-pending {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+/* ---------- 行级操作（部分暂存） ---------- */
+
 .git-partial-diff {
   display: grid;
-  gap:var(--space-sm);
-  padding:var(--space-sm);
+  gap: var(--space-sm);
+  padding: var(--space-sm);
 }
 
 .git-patch-hunk {
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius:var(--radius-2);
+  border-radius: var(--radius-2);
   background: var(--code-surface);
 }
 
@@ -33,34 +382,35 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap:var(--space-sm);
+  gap: var(--space-sm);
   min-height: 2rem;
-  padding:var(--space-2xs) var(--space-xs) var(--space-2xs) var(--space-md);
+  padding: var(--space-2xs) var(--space-xs) var(--space-2xs) var(--space-md);
   border-bottom: 1px solid var(--line);
   background: var(--paper);
 }
 
 .git-patch-hunk > header > span {
   color: var(--ink-soft);
-  font-size:var(--text-2xs);
+  font-size: var(--text-2xs);
   font-weight: 600;
 }
 
 .git-patch-hunk > header > div {
   display: flex;
-  gap:var(--space-2xs);
+  gap: var(--space-2xs);
 }
 
 .git-patch-hunk > header .ui-button,
 .git-line-selection-toolbar .ui-button {
   min-height: 1.5rem;
-  padding:0 var(--space-xs);
-  font-size:var(--text-2xs);
+  padding: 0 var(--space-xs);
+  font-size: var(--text-2xs);
 }
 
 .git-patch-hunk .structured-diff {
   border: 0;
   border-radius: 0;
+  max-height: none;
 }
 
 .git-patch-hunk .diff-file-head {
@@ -70,9 +420,9 @@
 .git-line-selection-toolbar {
   display: flex;
   align-items: center;
-  gap:var(--space-2xs);
+  gap: var(--space-2xs);
   min-height: 2rem;
-  padding:var(--space-2xs) var(--space-xs);
+  padding: var(--space-2xs) var(--space-xs);
   border-bottom: 1px solid var(--line);
   background: var(--paper);
 }
@@ -81,12 +431,12 @@
   flex: 1;
   min-width: 5rem;
   color: var(--ink-soft);
-  font-size:var(--text-2xs);
+  font-size: var(--text-2xs);
 }
 
 .git-selectable-diff {
   overflow: auto;
-  font:400 var(--text-sm)/1.5 var(--font-code);
+  font: 400 var(--text-sm)/1.5 var(--font-code);
 }
 
 .git-selectable-diff-line {
@@ -124,7 +474,7 @@
   min-height: 1.375rem;
   padding: 0;
   border: 0;
-  border-radius:var(--radius-1);
+  border-radius: var(--radius-1);
   color: currentColor;
 }
 
@@ -133,7 +483,7 @@
 }
 
 .git-line-number {
-  padding:0 var(--space-xs);
+  padding: 0 var(--space-xs);
   border-right: 1px solid var(--line);
   color: var(--code-comment);
   text-align: right;
@@ -141,7 +491,7 @@
 }
 
 .git-selectable-diff-line code {
-  padding:0 var(--space-lg) 0 var(--space-sm);
+  padding: 0 var(--space-lg) 0 var(--space-sm);
   white-space: pre;
 }
 
@@ -152,70 +502,14 @@
 }
 
 .git-line-selection-unavailable {
-  padding:var(--space-sm) var(--space-md);
+  padding: var(--space-sm) var(--space-md);
   border-bottom: 1px dashed var(--line);
   background: color-mix(in srgb, var(--warning) 5%, transparent);
-  color: var(--ink-soft);
-  font-size:var(--text-2xs);
-}
-
-@media (max-width: 48rem) {
-  .git-line-selection-toolbar {
-    align-items: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .git-line-selection-toolbar > span {
-    flex-basis: 100%;
-  }
-}
-
-/* 布局切换：meta 栏右侧的紧凑分段按钮 */
-.git-diff-meta {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  min-height: 2.25rem;
-  padding: var(--space-2xs) var(--space-md);
-  border-bottom: 1px solid var(--line);
-  background: var(--code-surface);
-}
-
-/* 比较双方：等宽胶囊 refs + 箭头，长路径在后方截断 */
-.git-diff-refs {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.git-diff-refs code {
-  padding: 0.0625rem var(--space-xs);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-1);
-  background: var(--paper);
-  color: var(--ink);
-  font: 500 var(--text-2xs) var(--font-code);
-  white-space: nowrap;
-}
-
-.git-diff-refs-arrow {
   color: var(--ink-soft);
   font-size: var(--text-2xs);
 }
 
-.git-diff-refs-path {
-  overflow: hidden;
-  min-width: 0;
-  color: var(--ink-soft);
-  font: 400 var(--text-2xs) var(--font-code);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* ---------- 空态与布局切换 ---------- */
 
 /* 空态与加载态：居中图标 + 标题 + 引导，而不是一行孤零零的文字 */
 .git-diff-empty {
@@ -273,4 +567,41 @@
   background: var(--paper-deep);
   border-color: var(--line-strong);
   color: var(--ink);
+}
+
+/* ---------- 响应式 ---------- */
+
+@media (max-width: 48rem) {
+  .git-line-selection-toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .git-line-selection-toolbar > span {
+    flex-basis: 100%;
+  }
+}
+
+/* 窄屏总览栏可能折行，吸附高度不可预期，退回普通布局 */
+@media (max-width: 36rem) {
+  .git-review-summary {
+    position: static;
+    flex-wrap: wrap;
+  }
+
+  .git-file-card-head {
+    top: 0;
+  }
+
+  .git-file-card {
+    scroll-margin-top: var(--space-md);
+  }
+
+  .git-review-cards {
+    padding: var(--space-sm) var(--space-sm) var(--space-2xl);
+  }
+
+  .git-file-card-dir {
+    display: none;
+  }
 }

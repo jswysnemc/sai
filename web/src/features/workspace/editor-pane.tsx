@@ -18,12 +18,21 @@ import {
   reloadRemoteFile,
   updateDocumentContent
 } from "./editor-document-state";
+import { useEditorGitDiff } from "./use-editor-git-diff";
+import type { EditorNavigation } from "./editor-header";
+import type { FileTreeGitEntry } from "./use-workspace-git-entries";
+
+const EMPTY_GIT_ENTRIES: ReadonlyMap<string, FileTreeGitEntry> = new Map();
 
 type EditorPaneProps = {
   path: string | null;
   onSelectFile: (path: string) => void;
   fileTreeOpen: boolean;
   onToggleFileTree: () => void;
+  /** 按工作区路径索引的 Git 状态，用于编辑器行装饰 */
+  gitEntries?: ReadonlyMap<string, FileTreeGitEntry>;
+  /** 文件访问历史导航 */
+  navigation?: EditorNavigation;
 };
 
 /**
@@ -34,7 +43,7 @@ type EditorPaneProps = {
  * @param props 当前文件、打开文件回调和文件树控制状态
  * @returns 编辑器面板
  */
-export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree }: EditorPaneProps) {
+export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree, gitEntries, navigation }: EditorPaneProps) {
   const { t } = useI18n();
   const { theme } = useTheme();
   const imageFile = Boolean(path && isImageFile(path));
@@ -43,6 +52,7 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree 
   const file = useQuery({ queryKey: ["file", path], queryFn: () => api.workspace.file(path!), enabled: Boolean(path) && !imageFile });
   const [document, setDocument] = useState(() => createEditorDocumentState(path));
   const [markdownMode, setMarkdownMode] = useState<MarkdownEditorMode>("wysiwyg");
+  const gitLines = useEditorGitDiff(path, gitEntries ?? EMPTY_GIT_ENTRIES);
 
   useEffect(() => {
     setDocument(createEditorDocumentState(path));
@@ -62,8 +72,15 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree 
     ),
     onSuccess: async (saved) => {
       setDocument((current) => acceptSavedFile(current, saved));
-      await queryClient.invalidateQueries({ queryKey: ["file", path] });
-      await queryClient.invalidateQueries({ queryKey: ["workspace-diff"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["file", path] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace-diff"] }),
+        // 保存即刷新 Git 状态与行装饰，标签徽标和 gutter 不等轮询
+        queryClient.invalidateQueries({ queryKey: ["file-tree-git-statuses"] }),
+        queryClient.invalidateQueries({ queryKey: ["git-review-diff"] }),
+        queryClient.invalidateQueries({ queryKey: ["git-status"] }),
+        queryClient.invalidateQueries({ queryKey: ["git-statuses"] })
+      ]);
     }
   });
 
@@ -100,6 +117,7 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree 
       <EditorHeader
         path={path}
         onSelectFile={onSelectFile}
+        navigation={navigation}
         externalChange={document.externalChange}
         onReload={() => void reload()}
         markdownMode={markdownFile ? markdownMode : null}
@@ -127,6 +145,7 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree 
             value={document.content}
             onChange={(next) => setDocument((current) => updateDocumentContent(current, next))}
             loadingLabel={t("Loading editor", "加载编辑器")}
+            gitLines={gitLines}
           />
         )}
         {!imageFile && file.isLoading && <div className="editor-state">{t("Loading editor", "加载编辑器")}</div>}

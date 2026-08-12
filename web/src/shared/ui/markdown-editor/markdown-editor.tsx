@@ -16,8 +16,9 @@ type MarkdownEditorProps = {
 /**
  * 三态 Markdown 编辑器。
  *
- * 源码与所见即所得共用一个 CodeMirror 实例，切换只热替换装饰与主题，
- * 光标位置和撤销栈都保留；预览模式交给调用方注入的渲染器。
+ * 源码与所见即所得共用一个 CodeMirror 实例，切换只热替换装饰与主题；
+ * 预览模式下编辑器只隐藏不卸载，因此三态之间来回切换时
+ * 光标位置、滚动位置和撤销栈都保留。预览渲染交给调用方注入的渲染器。
  *
  * @param props 内容、变更回调、模式、主题深浅、只读状态与预览渲染函数
  * @returns 编辑区容器
@@ -30,18 +31,19 @@ export function MarkdownEditor({
   readOnly = false,
   renderPreview,
 }: MarkdownEditorProps) {
-  if (mode === "preview") {
-    return <div className="markdown-editor-preview">{renderPreview(value)}</div>;
-  }
+  const preview = mode === "preview";
   return (
-    <div className="markdown-editor-surface">
-      <MarkdownTextEditor
-        value={value}
-        onChange={onChange}
-        live={mode === "wysiwyg"}
-        dark={dark}
-        readOnly={readOnly || !isEditableMode(mode)}
-      />
+    <div className="markdown-editor-root">
+      {preview && <div className="markdown-editor-preview">{renderPreview(value)}</div>}
+      <div className="markdown-editor-surface" hidden={preview}>
+        <MarkdownTextEditor
+          value={value}
+          onChange={onChange}
+          live={mode !== "source"}
+          dark={dark}
+          readOnly={readOnly || !isEditableMode(mode)}
+        />
+      </div>
     </div>
   );
 }

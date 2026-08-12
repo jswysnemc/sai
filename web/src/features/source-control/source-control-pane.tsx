@@ -141,11 +141,11 @@ export function SourceControlPane() {
     staleTime: 10_000,
   });
   const activeCommit = scmState.selectedCommit ?? history.data?.commits[0]?.sha ?? null;
-  const reviewDiffMode = resolveGitReviewDiffMode(scmState.diffMode, scmState.selectedSection);
+  // 审阅区一次取回全量差异并渲染成文件卡片流；选中文件只做滚动定位，不再按路径重新拉取
+  const reviewDiffMode = resolveGitReviewDiffMode(scmState.diffMode);
   const reviewDiff = useQuery({
-    queryKey: ["git-review-diff", selectedRoot, reviewDiffMode, scmState.selectedPath],
-    queryFn: () =>
-      api.workspace.gitReviewDiff(reviewDiffMode, scmState.selectedPath ?? undefined, selectedRoot ?? undefined),
+    queryKey: ["git-review-diff", selectedRoot, reviewDiffMode],
+    queryFn: () => api.workspace.gitReviewDiff(reviewDiffMode, undefined, selectedRoot ?? undefined),
     enabled: ready && mode === "changes" && scmState.selectedSection !== "merge" && !fileComparison.target,
   });
   const commitDetails = useQuery({

@@ -1,7 +1,18 @@
+.markdown-editor-root {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .markdown-editor-surface {
   height: 100%;
   min-height: 0;
   overflow: hidden;
+}
+
+/* 预览时编辑器只隐藏不卸载，保住光标、滚动与撤销栈 */
+.markdown-editor-surface[hidden] {
+  display: none;
 }
 
 /* 预览容器只约束尺寸，滚动与留白交给调用方注入的渲染器 */

@@ -142,7 +142,7 @@ export function GitChangesView(props: GitChangesViewProps) {
               className={scmState.diffMode === "changes" ? "active" : ""}
               onClick={() => scmState.setDiffMode("changes")}
             >
-              {t("Selected changes", "所选变更")}
+              {t("Uncommitted", "未提交")}
             </Button>
             <Button
               className={scmState.diffMode === "branch" ? "active" : ""}
@@ -189,8 +189,6 @@ export function GitChangesView(props: GitChangesViewProps) {
             data={fileComparison.data}
             loading={fileComparison.loading}
             error={fileComparison.error}
-            busy={props.busy}
-            runOperation={props.runOperation}
             onClose={fileComparison.clear}
           />
         ) : scmState.selectedSection === "merge" && scmState.selectedPath ? (
@@ -206,6 +204,7 @@ export function GitChangesView(props: GitChangesViewProps) {
             data={props.reviewDiff.data as never}
             loading={props.reviewDiff.isLoading}
             error={props.reviewDiff.error}
+            state={state}
             selectedPath={scmState.selectedPath}
             busy={props.busy}
             runOperation={props.runOperation}

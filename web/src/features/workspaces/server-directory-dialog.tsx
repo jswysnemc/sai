@@ -275,14 +275,20 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
   };
 
   const roots = listing.data?.roots ?? [];
-  // 服务端的「越界」错误是英文且没说清边界，换成本地化的可执行提示
+  // 加入文件系统根（如 `/`）后按最长前缀判定活动入口，避免 `/` 按钮恒亮
+  const currentWithSlash = ensureTrailingSlash(currentPath);
+  const activeRootPath = roots.reduce((best, root) => {
+    const prefix = ensureTrailingSlash(root.path);
+    return currentWithSlash.startsWith(prefix) && prefix.length > best.length ? prefix : best;
+  }, "");
+  // 服务端的目录读取错误是英文且缺少指引，换成本地化的可执行提示
   const browseErrorMessage = (() => {
     const message = listing.error?.message;
     if (!message) return null;
-    if (message.includes("outside configured workspace roots")) {
+    if (message.includes("failed to read directory")) {
       return t(
-        "This directory is outside the browsable roots. Jump to a root below, or add paths via the SAI_WEB_WORKSPACE_ROOTS environment variable when starting the server.",
-        "该目录不在可浏览的根目录内。可点下方根目录快捷入口，或在启动服务端时用环境变量 SAI_WEB_WORKSPACE_ROOTS 增加允许的路径。"
+        "This directory cannot be read (the server may lack permission). Edit the path above or go back to another directory.",
+        "无法读取该目录（服务端可能没有权限）。请修改上方路径或改到其他目录。"
       );
     }
     return message;
@@ -292,7 +298,7 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
     <Modal
       open={props.open}
       title={props.title ?? t("Open server workspace", "打开服务端工作区")}
-      description={props.description ?? t("Choose a directory on the server running Sai Web. Browsing is limited to allowed roots: your home folder, the server's working directory, and any paths added via SAI_WEB_WORKSPACE_ROOTS.", "选择运行 Sai Web 的服务器上的目录。可浏览范围限于允许的根目录：用户主目录、服务端启动目录，以及环境变量 SAI_WEB_WORKSPACE_ROOTS 添加的路径。")}
+      description={props.description ?? t("Browse any directory on the server running Sai Web. The shortcuts below jump to your home folder, the server's start directory, filesystem roots, and paths added via SAI_WEB_WORKSPACE_ROOTS.", "可浏览运行 Sai Web 的服务器上的任意目录。下方为快捷入口：用户主目录、服务端启动目录、文件系统根目录，以及环境变量 SAI_WEB_WORKSPACE_ROOTS 添加的路径。")}
       size="large"
       onClose={props.onClose}
     >
@@ -336,7 +342,7 @@ export function ServerDirectoryDialog(props: ServerDirectoryDialogProps) {
                 <button
                   type="button"
                   key={root.path}
-                  className={ensureTrailingSlash(currentPath).startsWith(ensureTrailingSlash(root.path)) ? "active" : ""}
+                  className={ensureTrailingSlash(root.path) === activeRootPath ? "active" : ""}
                   onClick={() => enterDirectory(root.path)}
                   title={root.path}
                 >

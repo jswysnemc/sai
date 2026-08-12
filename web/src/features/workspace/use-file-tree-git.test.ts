@@ -29,9 +29,9 @@ describe("file tree Git mapping", () => {
     expect(fileTreeGitSection(entry({}))).toBe("changes");
   });
 
-  it("使用紧凑且可区分的状态徽标", () => {
-    expect(fileTreeGitStatusLabel(entry({ conflicted: true }))).toBe("U");
-    expect(fileTreeGitStatusLabel(entry({ untracked: true }))).toBe("?");
+  it("使用与 VS Code 对齐的状态徽标", () => {
+    expect(fileTreeGitStatusLabel(entry({ conflicted: true }))).toBe("!");
+    expect(fileTreeGitStatusLabel(entry({ untracked: true }))).toBe("U");
     expect(fileTreeGitStatusLabel(entry({ staged: true, index_status: "M" }))).toBe("M*");
     expect(fileTreeGitStatusLabel(entry({ index_status: "A", worktree_status: "." }))).toBe("A");
     expect(fileTreeGitStatusLabel(entry({ worktree_status: "D" }))).toBe("D");

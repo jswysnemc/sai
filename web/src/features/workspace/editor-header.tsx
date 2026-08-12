@@ -1,12 +1,22 @@
-import { FolderTree, RefreshCw, Save } from "lucide-react";
+import { ArrowLeft, ArrowRight, FolderTree, RefreshCw, Save } from "lucide-react";
 import { MarkdownModeToggle } from "../../shared/ui/markdown-editor/markdown-mode-toggle";
 import type { MarkdownEditorMode } from "../../shared/ui/markdown-editor/markdown-editor-mode";
 import { EditorBreadcrumbs } from "./editor-breadcrumbs";
 import { useI18n } from "../i18n/use-i18n";
 
+/** 文件访问历史导航状态与动作。 */
+export type EditorNavigation = {
+  canBack: boolean;
+  canForward: boolean;
+  back: () => void;
+  forward: () => void;
+};
+
 type EditorHeaderProps = {
   path: string;
   onSelectFile: (path: string) => void;
+  /** 历史后退/前进；宿主未接入时不渲染 */
+  navigation?: EditorNavigation;
   /** 磁盘内容已变化 */
   externalChange: boolean;
   onReload: () => void;
@@ -30,6 +40,7 @@ type EditorHeaderProps = {
 export function EditorHeader({
   path,
   onSelectFile,
+  navigation,
   externalChange,
   onReload,
   markdownMode,
@@ -43,6 +54,28 @@ export function EditorHeader({
   const { t } = useI18n();
   return (
     <header className="editor-head">
+      {navigation && (
+        <span className="editor-nav" role="group" aria-label={t("File navigation history", "文件访问历史")}>
+          <button
+            type="button"
+            disabled={!navigation.canBack}
+            onClick={navigation.back}
+            title={t("Back", "后退")}
+            aria-label={t("Back", "后退")}
+          >
+            <ArrowLeft size={14} />
+          </button>
+          <button
+            type="button"
+            disabled={!navigation.canForward}
+            onClick={navigation.forward}
+            title={t("Forward", "前进")}
+            aria-label={t("Forward", "前进")}
+          >
+            <ArrowRight size={14} />
+          </button>
+        </span>
+      )}
       <EditorBreadcrumbs path={path} onSelectFile={onSelectFile} />
       {externalChange && (
         <span className="editor-external-change">{t("File changed on disk", "磁盘内容已变化")}</span>

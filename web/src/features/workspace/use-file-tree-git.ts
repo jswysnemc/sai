@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { GitStatusEntry } from "../../api/contracts";
@@ -7,12 +7,9 @@ import type { GitOperationAction, GitOperationOptions } from "../../api/git-cont
 import type { ChangeSectionKind } from "../source-control/changes/change-section";
 import type { RunGitOperation } from "../source-control/types";
 import { openWorkspaceDiff } from "./workspace-passive-diff";
-import { workspaceRelativePath } from "./workspace-path-utils";
+import { useWorkspaceGitEntries, type FileTreeGitEntry } from "./use-workspace-git-entries";
 
-export type FileTreeGitEntry = {
-  entry: GitStatusEntry;
-  repoRoot: string;
-};
+export type { FileTreeGitEntry } from "./use-workspace-git-entries";
 
 /**
  * 为工作区文件树提供多仓库 Git 状态、操作和被动 Diff 打开能力。
@@ -23,37 +20,7 @@ export type FileTreeGitEntry = {
 export function useFileTreeGit() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<Error | null>(null);
-  const repositories = useQuery({
-    queryKey: ["git-repositories"],
-    queryFn: api.workspace.gitRepositories,
-    retry: false,
-    staleTime: 5_000
-  });
-  const roots = useMemo(
-    () => repositories.data?.repositories.map((repository) => repository.root) ?? [],
-    [repositories.data?.repositories]
-  );
-  const statuses = useQuery({
-    queryKey: ["file-tree-git-statuses", roots],
-    queryFn: () => api.workspace.gitStatuses(roots),
-    enabled: roots.length > 0,
-    retry: false,
-    refetchInterval: 5_000
-  });
-  const entries = useMemo(() => {
-    const result = new Map<string, FileTreeGitEntry>();
-    const workspaceRoot = repositories.data?.workspace_root ?? "";
-    for (const repository of statuses.data?.repositories ?? []) {
-      for (const entry of repository.entries) {
-        const absolute = `${repository.repo_root.replace(/[\\/]$/, "")}/${entry.path.replace(/^[\\/]/, "")}`;
-        result.set(workspaceRelativePath(absolute, workspaceRoot), {
-          entry,
-          repoRoot: repository.repo_root
-        });
-      }
-    }
-    return result;
-  }, [repositories.data?.workspace_root, statuses.data?.repositories]);
+  const { entries } = useWorkspaceGitEntries();
 
   const operation = useMutation({
     mutationFn: ({ action, options }: { action: GitOperationAction; options: GitOperationOptions }) =>
@@ -172,7 +139,10 @@ export function fileTreeGitSection(entry: GitStatusEntry): ChangeSectionKind {
 }
 
 /**
- * 返回文件树使用的紧凑 Git 状态标签。
+ * 返回文件树与编辑器标签共用的紧凑 Git 状态字母。
+ *
+ * 字母语义对齐 VS Code / Cursor：未跟踪为 U、冲突为 !，
+ * 一眼即可与「修改 M / 新增 A / 删除 D」区分。
  *
  * 参数:
  * - `entry`: Git 文件状态
@@ -181,8 +151,8 @@ export function fileTreeGitSection(entry: GitStatusEntry): ChangeSectionKind {
  * - 状态字母
  */
 export function fileTreeGitStatusLabel(entry: GitStatusEntry): string {
-  if (entry.conflicted) return "U";
-  if (entry.untracked) return "?";
+  if (entry.conflicted) return "!";
+  if (entry.untracked) return "U";
   if (entry.staged && entry.worktree_status !== ".") return "M*";
   if (entry.index_status === "A") return "A";
   if (entry.index_status === "D" || entry.worktree_status === "D") return "D";

@@ -53,6 +53,8 @@
 /* 多选态：比 active 更淡，两者叠加时仍能看出哪一个是当前打开的 */
 .git-file-row.selected:not(.active) {
   background: color-mix(in srgb, var(--signal) 6%, transparent);
+  /* 悬浮操作层底色跟随本行背景做不透明合成（机制见 workspace-pane.css 的 .git-file-actions） */
+  --git-row-overlay-bg: color-mix(in srgb, var(--signal) 6%, var(--paper));
 }
 
 .git-change-context-menu {
