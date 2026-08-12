@@ -2,7 +2,8 @@ use super::shell_hint_panel::{bang_ghost_suffix, ShellHintPanel};
 use super::slash_panel::SlashPanel;
 use super::viewport::InlineViewport;
 use crate::cli::repl_chrome::{
-    chrome_input_content_cols, chrome_input_row, CHROME_INPUT_PAD_ROWS, ReplChrome,
+    chrome_input_content_cols, chrome_input_row, CHROME_INPUT_PAD_ROWS,
+    CHROME_INPUT_PREFIX_COLS, ReplChrome,
 };
 use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
 use crate::cli::repl_input_render::{
@@ -163,8 +164,11 @@ impl ComposerFrame {
         let height = viewport.composer_height();
         let layout = self.layout(cols);
         let content_cols = chrome_input_content_cols(cols);
-        // 光标落在箭头提示符之后
-        let drawn_cursor_col = layout.cursor_col.saturating_add(2).min(cols.saturating_sub(1) as u16);
+        // 光标落在提示符前缀之后
+        let drawn_cursor_col = layout
+            .cursor_col
+            .saturating_add(CHROME_INPUT_PREFIX_COLS as u16)
+            .min(cols.saturating_sub(1) as u16);
         let cursor_row = {
             let mut row = top;
             row = row.saturating_add(self.panel_lines.len().min(usize::from(u16::MAX)) as u16);
@@ -337,9 +341,9 @@ fn placeholder_text() -> String {
 /// 返回静态占位提示。
 fn static_placeholder_tip() -> &'static str {
     if crate::i18n::is_zh() {
-        "输入消息 · Enter 发送 · Shift+Enter 换行"
+        "输入消息…"
     } else {
-        "Type a message · Enter send · Shift+Enter newline"
+        "Add a follow-up"
     }
 }
 
@@ -460,7 +464,7 @@ mod tests {
         // 极简输入行：无彩条、无背景，只保留输入文本
         assert!(output.contains("hello"));
         assert!(!output.contains('▏'));
-        assert!(output.contains("\x1b[48;5;236m"));
+        assert!(output.contains("\x1b[48;5;235m"));
     }
 
     /// 验证重绘期间先隐藏光标、结束时在输入位置恢复显示。
@@ -661,9 +665,9 @@ mod tests {
         let panel_at = output.find("计划").unwrap();
         // 极简输入行无彩条；面板须出现在输入提示之前
         let tip = if crate::i18n::is_zh() {
-            "输入消息 · Enter 发送 · Shift+Enter 换行"
+            "输入消息…"
         } else {
-            "Type a message · Enter send · Shift+Enter newline"
+            "Add a follow-up"
         };
         let input_at = output.find(tip).expect("input placeholder");
         assert!(panel_at < input_at, "面板行必须渲染在输入区之前");
@@ -690,9 +694,9 @@ mod tests {
         let output = String::from_utf8(output).unwrap();
         // 静态提示，不随轮询变化
         let tip = if crate::i18n::is_zh() {
-            "输入消息 · Enter 发送 · Shift+Enter 换行"
+            "输入消息…"
         } else {
-            "Type a message · Enter send · Shift+Enter newline"
+            "Add a follow-up"
         };
         assert!(!tip.is_empty());
         assert!(output.contains(tip));
