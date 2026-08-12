@@ -2,8 +2,8 @@ use super::shell_hint_panel::{bang_ghost_suffix, ShellHintPanel};
 use super::slash_panel::SlashPanel;
 use super::viewport::InlineViewport;
 use crate::cli::repl_chrome::{
-    chrome_input_content_cols, chrome_input_row, CHROME_INPUT_PAD_ROWS,
-    CHROME_INPUT_PREFIX_COLS, ReplChrome,
+    chrome_input_content_cols, chrome_input_pad_row, chrome_input_row,
+    CHROME_INPUT_INNER_PAD_ROWS, CHROME_INPUT_PAD_ROWS, CHROME_INPUT_PREFIX_COLS, ReplChrome,
 };
 use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
 use crate::cli::repl_input_render::{
@@ -120,22 +120,26 @@ impl ComposerFrame {
     pub(super) fn height(&self, cols: usize) -> u16 {
         let layout = self.layout(cols);
         let panel_rows = self.panel_lines.len().min(usize::from(u16::MAX)) as u16;
+        // 输入条自身厚度：内部上下背景边距 + 输入行
+        let input_block = CHROME_INPUT_INNER_PAD_ROWS
+            .saturating_mul(2)
+            .saturating_add(layout.input_rows);
         // slash / shell 提示时收起状态行，输入上方保留一行空白
         if layout.slash_panel.is_visible() {
             return panel_rows
                 .saturating_add(CHROME_INPUT_PAD_ROWS)
-                .saturating_add(layout.input_rows)
+                .saturating_add(input_block)
                 .saturating_add(layout.slash_panel.height());
         }
         if layout.shell_hint.is_visible() {
             return panel_rows
                 .saturating_add(CHROME_INPUT_PAD_ROWS)
-                .saturating_add(layout.input_rows)
+                .saturating_add(input_block)
                 .saturating_add(layout.shell_hint.height());
         }
         panel_rows
             .saturating_add(CHROME_INPUT_PAD_ROWS)
-            .saturating_add(layout.input_rows)
+            .saturating_add(input_block)
             .saturating_add(1)
     }
 
@@ -172,8 +176,9 @@ impl ComposerFrame {
         let cursor_row = {
             let mut row = top;
             row = row.saturating_add(self.panel_lines.len().min(usize::from(u16::MAX)) as u16);
-            // 输入正文上方保留一行空白，光标落在空白之下
+            // 输入正文上方有一行透明空白 + 输入条内上边距
             row.saturating_add(CHROME_INPUT_PAD_ROWS)
+                .saturating_add(CHROME_INPUT_INNER_PAD_ROWS)
                 .saturating_add(layout.cursor_row_offset)
         };
         let signature = ComposerSignature {
@@ -230,6 +235,11 @@ impl ComposerFrame {
             )?;
             row = row.saturating_add(1);
         }
+        // 4. 输入条内上边距：整行底色让输入框有厚度
+        for _ in 0..CHROME_INPUT_INNER_PAD_ROWS {
+            queue!(output, MoveTo(0, row), Print(chrome_input_pad_row(cols)))?;
+            row = row.saturating_add(1);
+        }
         let input_start_row = row;
         for line in &layout.styled_display_lines {
             for segment in wrap_styled_line(line, content_cols) {
@@ -241,7 +251,12 @@ impl ComposerFrame {
                 row = row.saturating_add(1);
             }
         }
-        // 输入下方不再留空白行，slash/shell 提示或状态行直接接在输入之下
+        // 5. 输入条内下边距
+        for _ in 0..CHROME_INPUT_INNER_PAD_ROWS {
+            queue!(output, MoveTo(0, row), Print(chrome_input_pad_row(cols)))?;
+            row = row.saturating_add(1);
+        }
+        // slash/shell 提示或状态行直接接在输入条之下
         let end_row = if layout.slash_panel.is_visible() {
             layout.slash_panel.draw(output, row, cols)?;
             row.saturating_add(layout.slash_panel.height())
@@ -722,9 +737,10 @@ mod tests {
         frame.draw_lines(&mut output, &viewport, None).unwrap();
 
         let output = String::from_utf8(output).unwrap();
-        // 上空白 1 + 输入 1 + 状态 1 = 3；顶部行 4（0 起）时，末行后为行 7 → 1 起第 8 行
+        // 上空白 1 + 内上边距 1 + 输入 1 + 内下边距 1 + 状态 1 = 5；
+        // 顶部行 4（0 起）时，末行后为行 9 → 1 起第 10 行
         assert!(
-            output.contains("\x1b[8;1H\x1b[J"),
+            output.contains("\x1b[10;1H\x1b[J"),
             "expected clear below floating composer, got {output:?}"
         );
     }

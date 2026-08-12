@@ -280,6 +280,8 @@ const CHROME_INPUT_ARROW: &str = " \x1b[38;5;245m→\x1b[39m ";
 pub(super) const CHROME_INPUT_PREFIX_COLS: usize = 3;
 /// 输入正文上下各留的空白行数。
 pub(super) const CHROME_INPUT_PAD_ROWS: u16 = 1;
+/// 输入条内部上下各留的背景内边距行数（增加输入框视觉厚度）。
+pub(super) const CHROME_INPUT_INNER_PAD_ROWS: u16 = 1;
 /// 底栏状态左右相对面板内缘的外边距列数。
 pub(super) const CHROME_FOOTER_SIDE_PAD: usize = 1;
 
@@ -306,6 +308,11 @@ pub(super) fn chrome_input_row(_mode: AgentMode, content: &str, cols: usize) -> 
 /// 输入区可用列数（扣除提示符前缀）。
 pub(super) fn chrome_input_content_cols(cols: usize) -> usize {
     cols.saturating_sub(CHROME_INPUT_PREFIX_COLS).max(1)
+}
+
+/// 输入条内部的背景内边距行（整行底色，无内容）。
+pub(super) fn chrome_input_pad_row(cols: usize) -> String {
+    format!("{CHROME_PANEL_BG}{}\x1b[0m", " ".repeat(cols.max(1)))
 }
 
 /// 截断含 ANSI 的文本到指定显示宽度。
