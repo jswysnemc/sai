@@ -78,8 +78,7 @@ impl HistoryCell {
         };
         // 区块间距（交界处只保留一行空行）：
         // - Reasoning：仅前空一行（后空行会与 Markdown/Meta 的前空行叠成两行）
-        // - Markdown / Meta：前空一行（承接思考/工具与正文、总览）
-        // - Tool / Shell：不加前空行，避免连续工具被撕开
+        // - Markdown / Meta / Tool / Shell：前空一行（与正文/总览/工具输出分隔）
         let spaced = if lines.is_empty() {
             lines
         } else if matches!(self, Self::Reasoning(_)) {
@@ -87,7 +86,7 @@ impl HistoryCell {
             spaced.push(AnsiLine::new(String::new()));
             spaced.extend(lines);
             spaced
-        } else if matches!(self, Self::Markdown(_) | Self::Meta(_)) {
+        } else if matches!(self, Self::Markdown(_) | Self::Meta(_) | Self::Tool(_) | Self::Shell(_)) {
             let mut spaced = Vec::with_capacity(lines.len() + 1);
             spaced.push(AnsiLine::new(String::new()));
             spaced.extend(lines);

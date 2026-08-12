@@ -42,11 +42,12 @@ fn mixed_cells_use_distinct_markers_and_section_gaps() {
         snapshot[1]
     );
 
-    // tool: 自身无前空行，紧跟思考标题/正文
+    // tool: 前空行 + • 标记
+    assert!(snapshot[2][0].is_empty());
     assert!(
-        snapshot[2][0].starts_with('•'),
+        snapshot[2][1].starts_with('•'),
         "tool marker: {:?}",
-        snapshot[2][0]
+        snapshot[2][1]
     );
 
     // markdown: 区块空行 + 无 • 的缩进正文
