@@ -449,17 +449,19 @@ impl<'a> ProviderBrowser<'a> {
 
     fn draw(&self, stdout: &mut io::Stdout) -> Result<()> {
         let (cols, rows) = terminal::size()?;
-        let inner_x = 0;
-        let inner_y = 0;
-        let inner_w = cols;
-        let inner_h = rows.saturating_sub(2);
+        let frame = super::layout::full_frame(cols, rows);
+        // 外框内缩：左右各留边框 + 一格边距，底部留状态行与嵌入式帮助条
+        let inner_x = frame.x.saturating_add(2);
+        let inner_y = frame.y.saturating_add(1);
+        let inner_w = frame.width.saturating_sub(4);
+        let inner_h = frame.height.saturating_sub(4);
         let providers = self
             .config
             .providers
             .iter()
             .map(|provider| {
                 let active = if provider.id == self.config.active_provider {
-                    "* "
+                    "● "
                 } else {
                     "  "
                 };
@@ -505,6 +507,14 @@ impl<'a> ProviderBrowser<'a> {
             format!("{} /{} ", t(" MODELS", " 模型"), self.filter)
         };
         queue!(stdout, Clear(ClearType::All))?;
+        super::ui::draw_box(
+            stdout,
+            frame.x,
+            frame.y,
+            frame.width,
+            frame.height,
+            t("PROVIDERS & MODELS", "供应商与模型"),
+        )?;
         // 1. 终端够宽时绘制三栏；宽度之和不超过内容区，保证不重叠
         if let Some((left_w, mid_w, right_w)) = three_column_widths(inner_w) {
             draw_column(
@@ -555,37 +565,44 @@ impl<'a> ProviderBrowser<'a> {
                 stdout, inner_x, inner_y, inner_w, inner_h, &title, items, selected, true,
             )?;
         }
+        use super::theme::{help_line, ACCENT, DANGER, MUTED, RESET};
         let help = if self.filter_mode {
             format!(
-                "{}: {}_  {}",
+                "{ACCENT}{}{RESET}{MUTED}: {}{RESET}{ACCENT}_{RESET}  {}",
                 t("Search", "搜索"),
                 self.filter,
-                t("[Enter] confirm [Esc] cancel", "[Enter]确认 [Esc]取消")
+                help_line(&[
+                    ("Enter", t("confirm", "确认")),
+                    ("Esc", t("cancel", "取消")),
+                ])
             )
         } else {
-            t(
-                "[h/l] columns [j/k] move [Tab] activate model [Enter] model settings [/] search [r] refresh [a] add [d] delete [q] back",
-                "[h/l]切栏 [j/k]移动 [Tab]激活模型 [Enter]模型设置 [/]搜索 [r]刷新 [a]添加 [d]删除 [q]返回",
+            // 删除是破坏性操作，键名用警示色与其它键区分
+            let base = help_line(&[
+                ("h/l", t("columns", "切栏")),
+                ("j/k", t("move", "移动")),
+                ("Tab", t("activate", "激活模型")),
+                ("Enter", t("settings", "模型设置")),
+                ("/", t("search", "搜索")),
+                ("r", t("refresh", "刷新")),
+                ("a", t("add", "添加")),
+            ]);
+            format!(
+                "{base}{MUTED} · {RESET}{DANGER}d{RESET} {MUTED}{}{RESET}{MUTED} · {RESET}{ACCENT}q{RESET} {MUTED}{}{RESET}",
+                t("delete", "删除"),
+                t("back", "返回")
             )
-            .to_string()
         };
-        let status = if self.loading {
-            format!("{}", self.status)
-        } else {
-            self.status.clone()
-        };
+        // 状态行放在框内底部，弱化显示，不与内容抢视线
         queue!(
             stdout,
-            MoveTo(0, rows.saturating_sub(2)),
-            Clear(ClearType::CurrentLine),
-            Print(truncate(&status, cols as usize))
+            MoveTo(inner_x, rows.saturating_sub(2)),
+            Print(format!(
+                "{MUTED}{}{RESET}",
+                truncate(&self.status, inner_w as usize)
+            ))
         )?;
-        queue!(
-            stdout,
-            MoveTo(0, rows.saturating_sub(1)),
-            Clear(ClearType::CurrentLine),
-            Print(truncate(&help, cols as usize))
-        )?;
+        super::ui::draw_status_bar(stdout, &frame, &help)?;
         stdout.flush()?;
         Ok(())
     }

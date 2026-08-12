@@ -1,26 +1,37 @@
 use crate::config::{
-    AgentProfile, AppConfig, DEFAULT_AGENT_ID, EXPLORE_AGENT_ID, GATEWAY_AGENT_ID, GENERAL_AGENT_ID,
+    normalize_deferred_tools, AgentProfile, AppConfig, DEFAULT_AGENT_ID, DEFERRED_ALL_NON_BASE,
+    EXPLORE_AGENT_ID, GATEWAY_AGENT_ID, GENERAL_AGENT_ID,
 };
 use crate::i18n::text as t;
+use crate::paths::SaiPaths;
 use anyhow::Result;
 use crossterm::event::KeyCode;
+use std::collections::BTreeSet;
 use std::io;
 
 use super::form::{
-    parse_bool_field, parse_provider_model_choice, provider_model_choice_values, run_form, Field,
+    edit_textarea, parse_bool_field, parse_provider_model_choice, provider_model_choice_values,
+    run_form, Field,
 };
 use super::input::read_key;
-use super::ui::{draw_menu_with_details, message};
+use super::multi_select::{run_multi_select, HeaderToggle, SelectEntry, StateStyle};
+use super::theme::{DIM, OK, VALUE};
+use super::ui::{draw_menu_with_details, message, truncate};
 
 /// 编辑统一 Agent 档案和各运行入口默认项。
 ///
 /// 参数:
 /// - `stdout`: 终端标准输出
+/// - `paths`: Sai 路径（枚举工具与 Skills 目录）
 /// - `config`: 待更新应用配置
 ///
 /// 返回:
 /// - 编辑流程是否成功
-pub(crate) fn edit_agents(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
+pub(crate) fn edit_agents(
+    stdout: &mut io::Stdout,
+    paths: &SaiPaths,
+    config: &mut AppConfig,
+) -> Result<()> {
     let mut selected = 0usize;
     loop {
         let profiles = visible_profiles(config);
@@ -36,25 +47,7 @@ pub(crate) fn edit_agents(stdout: &mut io::Stdout, config: &mut AppConfig) -> Re
             "为 Web / TUI / CLI 各入口选择默认 Agent 档案。",
         )
         .to_string()];
-        details.extend(profiles.iter().map(|profile| {
-            if is_builtin(&profile.id) {
-                format!(
-                    "{} · {}",
-                    t("Built-in profile", "内置档案"),
-                    if profile.system_prompt.trim().is_empty() {
-                        t("no custom system prompt", "无自定义系统提示")
-                    } else {
-                        t("has system prompt", "含系统提示")
-                    }
-                )
-            } else {
-                t(
-                    "Custom profile — Enter to edit, d to delete.",
-                    "自定义档案 — Enter 编辑，d 删除。",
-                )
-                .to_string()
-            }
-        }));
+        details.extend(profiles.iter().map(profile_overview));
         details.push(
             t(
                 "Create a new custom Agent profile and open its editor.",
@@ -68,10 +61,11 @@ pub(crate) fn edit_agents(stdout: &mut io::Stdout, config: &mut AppConfig) -> Re
             &options,
             &details,
             selected,
-            t(
-                "Enter edit · d delete custom Agent · q back",
-                "Enter 编辑 · d 删除自定义 Agent · q 返回",
-            ),
+            &super::theme::help_line(&[
+                ("Enter", t("edit", "编辑")),
+                ("d", t("delete custom Agent", "删除自定义 Agent")),
+                ("q", t("back", "返回")),
+            ]),
             "",
         )?;
         match read_key()? {
@@ -100,11 +94,25 @@ pub(crate) fn edit_agents(stdout: &mut io::Stdout, config: &mut AppConfig) -> Re
                     .unwrap_or(0);
             }
             KeyCode::Enter if selected > 0 && selected <= profiles.len() => {
-                edit_agent_profile(stdout, config, profiles[selected - 1].clone())?;
+                edit_agent_profile(stdout, paths, config, profiles[selected - 1].clone())?;
             }
             _ => {}
         }
     }
+}
+
+/// Agent 列表右侧的档案概览。
+fn profile_overview(profile: &AgentProfile) -> String {
+    let kind = if is_builtin(&profile.id) {
+        t("Built-in profile", "内置档案")
+    } else {
+        t("Custom profile — d to delete.", "自定义档案 — d 删除。")
+    };
+    format!(
+        "{kind}\n\n{}\n{}",
+        tools_summary(profile),
+        skills_summary(profile)
+    )
 }
 
 /// 编辑 Web、TUI 与 CLI 默认 Agent。
@@ -164,19 +172,90 @@ fn edit_surface_defaults(stdout: &mut io::Stdout, config: &mut AppConfig) -> Res
     Ok(())
 }
 
-/// 编辑单个统一 Agent 档案。
+/// Agent 编辑菜单：基本信息、系统提示词、工具与 Skills 分区编辑。
+///
+/// 修改先落在本地档案副本上，选择「保存修改」才写入内存配置；
+/// q 返回则放弃全部修改。
 ///
 /// 参数:
 /// - `stdout`: 终端标准输出
+/// - `paths`: Sai 路径
 /// - `config`: 待更新应用配置
-/// - `profile`: 当前 Agent 档案
+/// - `profile`: 当前 Agent 档案副本
 ///
 /// 返回:
-/// - 表单编辑结果
+/// - 编辑流程是否成功
 fn edit_agent_profile(
     stdout: &mut io::Stdout,
+    paths: &SaiPaths,
     config: &mut AppConfig,
     mut profile: AgentProfile,
+) -> Result<()> {
+    let mut selected = 0usize;
+    loop {
+        let options = vec![
+            t("Basic info", "基本信息").to_string(),
+            t("System prompt", "系统提示词").to_string(),
+            t("Tool capabilities", "工具能力").to_string(),
+            "Skills".to_string(),
+            t("Save changes", "保存修改").to_string(),
+        ];
+        let details = vec![
+            basics_summary(&profile),
+            prompt_summary(&profile),
+            tools_summary(&profile),
+            skills_summary(&profile),
+            t(
+                "Write this profile into the in-memory config. Use Save & Exit on the main menu to persist to disk. q discards edits.",
+                "把档案写入内存配置；主菜单「保存并退出」才会落盘。q 放弃本次修改。",
+            )
+            .to_string(),
+        ];
+        let subtitle = format!("{} [{}]", profile.name, profile.id);
+        draw_menu_with_details(
+            stdout,
+            t(" EDIT AGENT ", " 编辑 AGENT "),
+            &options,
+            &details,
+            selected,
+            &super::theme::help_line(&[
+                ("Enter", t("open", "进入")),
+                ("s", t("save", "保存")),
+                ("q", t("discard", "放弃")),
+            ]),
+            &subtitle,
+        )?;
+        match read_key()? {
+            KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
+            KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => {
+                selected = (selected + 1).min(options.len().saturating_sub(1))
+            }
+            KeyCode::Char('s') => {
+                upsert_agent(config, profile);
+                return Ok(());
+            }
+            KeyCode::Enter => match selected {
+                0 => edit_agent_basics(stdout, config, &mut profile)?,
+                1 => edit_textarea(stdout, &mut profile.system_prompt)?,
+                2 => edit_agent_tools(stdout, paths, config, &mut profile)?,
+                3 => edit_agent_skills(stdout, paths, config, &mut profile)?,
+                4 => {
+                    upsert_agent(config, profile);
+                    return Ok(());
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+}
+
+/// 编辑 Agent 基本信息（名称、描述、模型、思考等级与注册开关）。
+fn edit_agent_basics(
+    stdout: &mut io::Stdout,
+    config: &AppConfig,
+    profile: &mut AgentProfile,
 ) -> Result<()> {
     let model_value = if profile.provider_id.is_empty() || profile.model.is_empty() {
         String::new()
@@ -202,38 +281,12 @@ fn edit_agent_profile(
             t("Load AGENT.md instruction files", "加载 AGENT.md 指令文件"),
             profile.load_instruction_files,
         ),
-        Field::textarea(
-            t("System prompt", "系统提示词"),
-            profile.system_prompt.clone(),
-        ),
-        Field::textarea(
-            t(
-                "Enabled tools, one per line (empty = all)",
-                "启用工具，每行一个（空=全量）",
-            ),
-            profile.enabled_tools.join("\n"),
-        ),
-        Field::textarea(
-            t(
-                "Tools requiring load, one per line (* = all non-base)",
-                "需要 load 的工具，每行一个（* = 全部非基础工具）",
-            ),
-            profile.deferred_tools.join("\n"),
-        ),
-        Field::textarea(
-            t("Full Skills, one per line", "完整 Skills，每行一个"),
-            profile.skills_full.join("\n"),
-        ),
-        Field::textarea(
-            t("Named Skills, one per line", "名称 Skills，每行一个"),
-            profile.skills_named.join("\n"),
-        ),
     ];
     loop {
-        if !run_form(stdout, t(" EDIT AGENT ", " 编辑 AGENT "), &mut fields)? {
+        if !run_form(stdout, t(" AGENT BASICS ", " AGENT 基本信息 "), &mut fields)? {
             return Ok(());
         }
-        // 1. 先完成易失败的布尔解析，失败时就地提示并重新打开表单
+        // 布尔字段由表单开关保证合法，仍统一解析以防手输异常值
         let (register_to_main, load_instruction_files) = match parse_bool_field(&fields[4].value)
             .and_then(|register| Ok((register, parse_bool_field(&fields[5].value)?)))
         {
@@ -246,24 +299,387 @@ fn edit_agent_profile(
                 continue;
             }
         };
-        // 2. 解析通过后统一写入档案并保存
         profile.name = fields[0].value.trim().to_string();
         profile.description = fields[1].value.trim().to_string();
         (profile.provider_id, profile.model) = parse_provider_model_choice(&fields[2].value);
         profile.thinking_level = fields[3].value.trim().to_string();
         profile.register_to_main = register_to_main;
         profile.load_instruction_files = load_instruction_files;
-        profile.system_prompt = fields[6].value.trim().to_string();
-        profile.enabled_tools = parse_lines(&fields[7].value);
-        // 延迟集合必须落在启用白名单内，否则配置读起来自相矛盾
-        profile.deferred_tools = crate::config::normalize_deferred_tools(
-            &profile.enabled_tools,
-            &parse_lines(&fields[8].value),
-        );
-        profile.skills_full = parse_lines(&fields[9].value);
-        profile.skills_named = parse_lines(&fields[10].value);
-        upsert_agent(config, profile);
         return Ok(());
+    }
+}
+
+/// 工具清单的三个状态：隐藏、启用、延迟 load。
+fn tool_states() -> [StateStyle; 3] {
+    [
+        StateStyle {
+            mark: "○",
+            label: t("hidden", "隐藏"),
+            color: DIM,
+        },
+        StateStyle {
+            mark: "●",
+            label: t("enabled", "启用"),
+            color: OK,
+        },
+        StateStyle {
+            mark: "◐",
+            label: t("deferred", "延迟"),
+            color: VALUE,
+        },
+    ]
+}
+
+/// Skills 清单的三个状态：不暴露、完整、仅名称。
+fn skill_states() -> [StateStyle; 3] {
+    [
+        StateStyle {
+            mark: "○",
+            label: t("off", "不暴露"),
+            color: DIM,
+        },
+        StateStyle {
+            mark: "●",
+            label: t("full", "完整"),
+            color: OK,
+        },
+        StateStyle {
+            mark: "◐",
+            label: t("name only", "仅名称"),
+            color: VALUE,
+        },
+    ]
+}
+
+/// 在多态清单中编辑 Agent 工具白名单与延迟集合。
+///
+/// 参数:
+/// - `stdout`: 终端标准输出
+/// - `paths`: Sai 路径
+/// - `config`: 当前应用配置（枚举工具目录）
+/// - `profile`: 待更新档案
+///
+/// 返回:
+/// - 清单退出结果；保存时写回 `enabled_tools` / `deferred_tools`
+fn edit_agent_tools(
+    stdout: &mut io::Stdout,
+    paths: &SaiPaths,
+    config: &AppConfig,
+    profile: &mut AgentProfile,
+) -> Result<()> {
+    // 1. 枚举本地工具目录，基础工具组排最前，其余按分组聚拢
+    let mut catalog = crate::tools::tool_catalog(config, paths);
+    catalog.sort_by(|left, right| {
+        (left.group != "base", left.group, left.name.as_str()).cmp(&(
+            right.group != "base",
+            right.group,
+            right.name.as_str(),
+        ))
+    });
+    let known = catalog
+        .iter()
+        .map(|entry| entry.name.clone())
+        .collect::<BTreeSet<_>>();
+    let mut entries = catalog
+        .into_iter()
+        .map(|entry| SelectEntry {
+            state: initial_tool_state(profile, &entry.name),
+            description: entry.description,
+            group_label: entry.group_label.to_string(),
+            key: entry.name,
+        })
+        .collect::<Vec<_>>();
+    // 2. 配置里已有但目录未注册的名称（MCP 动态工具、别名）保留展示，防止写回丢失
+    let unknown = profile
+        .enabled_tools
+        .iter()
+        .chain(profile.deferred_tools.iter())
+        .filter(|name| name.as_str() != DEFERRED_ALL_NON_BASE && !known.contains(*name))
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    for name in unknown {
+        entries.push(SelectEntry {
+            state: initial_tool_state(profile, &name),
+            description: t(
+                "Present in config but not currently registered (e.g. MCP dynamic tool). Kept as configured.",
+                "存在于配置但当前未注册（如 MCP 动态工具），按原配置保留。",
+            )
+            .to_string(),
+            group_label: t("Dynamic / unknown", "动态 / 未知").to_string(),
+            key: name,
+        });
+    }
+    let mut toggles = vec![
+        HeaderToggle {
+            label: t(
+                "Whitelist mode (off = inherit all tools)",
+                "白名单模式（关 = 继承全量工具）",
+            )
+            .to_string(),
+            description: t(
+                "On: only tools marked enabled/deferred below are available. Off: the agent inherits every tool; the enabled marks below are ignored and only deferred marks matter.",
+                "开启：仅下方标记为启用/延迟的工具可用。关闭：继承全部工具，下方启用标记不生效，仅延迟标记有意义。",
+            )
+            .to_string(),
+            value: !profile.enabled_tools.is_empty(),
+        },
+        HeaderToggle {
+            label: t(
+                "Defer all non-base tools (*)",
+                "全部非基础工具延迟 load（*）",
+            )
+            .to_string(),
+            description: t(
+                "Writes the wildcard `*` into deferred tools: base tools stay visible, everything else must be loaded on demand. Per-tool deferred marks are ignored while this is on.",
+                "向延迟集合写入通配符 `*`：基础工具直接可见，其余工具需模型按需 load。开启期间逐项延迟标记不生效。",
+            )
+            .to_string(),
+            value: profile
+                .deferred_tools
+                .iter()
+                .any(|name| name == DEFERRED_ALL_NON_BASE),
+        },
+    ];
+    if run_multi_select(
+        stdout,
+        t(" AGENT TOOLS ", " AGENT 工具能力 "),
+        &tool_states(),
+        &mut toggles,
+        &mut entries,
+    )? {
+        let whitelist = toggles[0].value;
+        let wildcard = toggles[1].value;
+        profile.enabled_tools = if whitelist {
+            entries
+                .iter()
+                .filter(|entry| entry.state >= 1)
+                .map(|entry| entry.key.clone())
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let deferred = if wildcard {
+            vec![DEFERRED_ALL_NON_BASE.to_string()]
+        } else {
+            entries
+                .iter()
+                .filter(|entry| entry.state == 2)
+                .map(|entry| entry.key.clone())
+                .collect()
+        };
+        profile.deferred_tools = normalize_deferred_tools(&profile.enabled_tools, &deferred);
+    }
+    Ok(())
+}
+
+/// 返回工具条目在清单中的初始状态。
+///
+/// 全量继承模式（白名单为空）下工具默认显示为启用，
+/// 与运行时「全部可用」的实际语义一致。
+fn initial_tool_state(profile: &AgentProfile, name: &str) -> usize {
+    if profile.deferred_tools.iter().any(|tool| tool == name) {
+        2
+    } else if profile.enabled_tools.is_empty()
+        || profile.enabled_tools.iter().any(|tool| tool == name)
+    {
+        1
+    } else {
+        0
+    }
+}
+
+/// 在多态清单中编辑 Agent 的 Skills 暴露级别。
+///
+/// 参数:
+/// - `stdout`: 终端标准输出
+/// - `paths`: Sai 路径
+/// - `config`: 当前应用配置（扫描 Skills 目录）
+/// - `profile`: 待更新档案
+///
+/// 返回:
+/// - 清单退出结果；保存时写回 `skills_full` / `skills_named`
+fn edit_agent_skills(
+    stdout: &mut io::Stdout,
+    paths: &SaiPaths,
+    config: &AppConfig,
+    profile: &mut AgentProfile,
+) -> Result<()> {
+    let catalog = crate::tools::skill_catalog(config, paths).unwrap_or_default();
+    let known = catalog
+        .iter()
+        .map(|entry| entry.name.clone())
+        .collect::<BTreeSet<_>>();
+    let mut entries = catalog
+        .into_iter()
+        .map(|entry| SelectEntry {
+            state: initial_skill_state(profile, &entry.name),
+            description: entry.description,
+            group_label: String::new(),
+            key: entry.name,
+        })
+        .collect::<Vec<_>>();
+    // 配置中残留但目录已不存在的 skill 名称保留展示
+    let unknown = profile
+        .skills_full
+        .iter()
+        .chain(profile.skills_named.iter())
+        .filter(|name| !known.contains(*name))
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    for name in unknown {
+        entries.push(SelectEntry {
+            state: initial_skill_state(profile, &name),
+            description: t(
+                "Configured but not found in the skills directory. Kept as configured.",
+                "已配置但 Skills 目录中未找到，按原配置保留。",
+            )
+            .to_string(),
+            group_label: t("Missing", "未找到").to_string(),
+            key: name,
+        });
+    }
+    if entries.is_empty() {
+        message(
+            stdout,
+            t(
+                "No skills installed. Manage skills from the main menu Skills page.",
+                "尚未安装任何 Skill，可在主菜单 Skills 页安装与管理。",
+            ),
+        )?;
+        return Ok(());
+    }
+    if run_multi_select(
+        stdout,
+        t(" AGENT SKILLS ", " AGENT SKILLS "),
+        &skill_states(),
+        &mut [],
+        &mut entries,
+    )? {
+        profile.skills_full = entries
+            .iter()
+            .filter(|entry| entry.state == 1)
+            .map(|entry| entry.key.clone())
+            .collect();
+        profile.skills_named = entries
+            .iter()
+            .filter(|entry| entry.state == 2)
+            .map(|entry| entry.key.clone())
+            .collect();
+    }
+    Ok(())
+}
+
+/// 返回 skill 条目在清单中的初始状态。
+fn initial_skill_state(profile: &AgentProfile, name: &str) -> usize {
+    if profile.skills_full.iter().any(|skill| skill == name) {
+        1
+    } else if profile.skills_named.iter().any(|skill| skill == name) {
+        2
+    } else {
+        0
+    }
+}
+
+/// 基本信息分区的当前值摘要。
+fn basics_summary(profile: &AgentProfile) -> String {
+    let model = if profile.provider_id.is_empty() {
+        t("inherit current model", "沿用当前模型").to_string()
+    } else if profile.model.is_empty() {
+        profile.provider_id.clone()
+    } else {
+        format!("{} / {}", profile.provider_id, profile.model)
+    };
+    let description = if profile.description.trim().is_empty() {
+        t("(no description)", "（无描述）").to_string()
+    } else {
+        profile.description.clone()
+    };
+    format!(
+        "{description}\n\n{}: {model}\n{}: {}\n{}: {} · AGENT.md: {}",
+        t("Model", "模型"),
+        t("Thinking", "思考等级"),
+        profile.thinking_level,
+        t("Register to main", "注册主 Agent"),
+        bool_text(profile.register_to_main),
+        bool_text(profile.load_instruction_files),
+    )
+}
+
+/// 系统提示词分区的当前值摘要。
+fn prompt_summary(profile: &AgentProfile) -> String {
+    let prompt = profile.system_prompt.trim();
+    if prompt.is_empty() {
+        t(
+            "Empty — the agent uses the built-in prompt. Enter opens $EDITOR.",
+            "为空 — 使用内置提示词。Enter 打开 $EDITOR 编辑。",
+        )
+        .to_string()
+    } else {
+        format!(
+            "{} {} · {}\n\n{}",
+            prompt.chars().count(),
+            t("chars", "字符"),
+            t("Enter opens $EDITOR", "Enter 打开 $EDITOR"),
+            truncate(&prompt.replace('\n', " "), 160)
+        )
+    }
+}
+
+/// 工具能力分区的当前值摘要。
+fn tools_summary(profile: &AgentProfile) -> String {
+    let wildcard = profile
+        .deferred_tools
+        .iter()
+        .any(|name| name == DEFERRED_ALL_NON_BASE);
+    let deferred_count = profile
+        .deferred_tools
+        .iter()
+        .filter(|name| name.as_str() != DEFERRED_ALL_NON_BASE)
+        .count();
+    let base = if profile.enabled_tools.is_empty() {
+        t("Tools: inherit all", "工具：继承全量").to_string()
+    } else {
+        format!(
+            "{}: {} {}",
+            t("Tools", "工具"),
+            profile.enabled_tools.len(),
+            t("whitelisted", "项白名单")
+        )
+    };
+    let deferred = if wildcard {
+        t("all non-base tools deferred (*)", "非基础工具全部延迟（*）").to_string()
+    } else if deferred_count > 0 {
+        format!("{deferred_count} {}", t("deferred", "项延迟"))
+    } else {
+        t("none deferred", "无延迟").to_string()
+    };
+    format!("{base} · {deferred}")
+}
+
+/// Skills 分区的当前值摘要。
+fn skills_summary(profile: &AgentProfile) -> String {
+    if profile.skills_full.is_empty() && profile.skills_named.is_empty() {
+        t(
+            "Skills: not restricted (all visible when no capability override is set)",
+            "Skills：未单独配置（无其他能力限制时全部可见）",
+        )
+        .to_string()
+    } else {
+        format!(
+            "Skills: {} {} · {} {}",
+            profile.skills_full.len(),
+            t("full", "完整"),
+            profile.skills_named.len(),
+            t("name only", "仅名称")
+        )
+    }
+}
+
+fn bool_text(value: bool) -> &'static str {
+    if value {
+        t("yes", "是")
+    } else {
+        t("no", "否")
     }
 }
 
@@ -370,22 +786,6 @@ fn optional_agent_id(value: &str) -> Option<String> {
     (value != DEFAULT_AGENT_ID && !value.is_empty()).then(|| value.to_string())
 }
 
-/// 解析每行一个值的表单文本。
-///
-/// 参数:
-/// - `value`: 多行文本
-///
-/// 返回:
-/// - 去除空行后的值列表
-fn parse_lines(value: &str) -> Vec<String> {
-    value
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_string)
-        .collect()
-}
-
 /// 判断 Agent 是否为不可删除的内置档案。
 ///
 /// 参数:
@@ -415,9 +815,47 @@ mod tests {
         assert!(choices.contains(&GATEWAY_AGENT_ID.to_string()));
     }
 
-    /// 验证多行能力列表会去除空白项。
+    /// 全量继承模式下工具默认显示为启用，延迟标记优先。
     #[test]
-    fn parses_agent_capability_lines() {
-        assert_eq!(parse_lines(" read_file \n\n grep\n"), ["read_file", "grep"]);
+    fn tool_state_reflects_inherit_and_deferred() {
+        let mut profile = AgentProfile::default();
+        assert_eq!(initial_tool_state(&profile, "read_file"), 1);
+
+        profile.deferred_tools = vec!["show_meme".to_string()];
+        assert_eq!(initial_tool_state(&profile, "show_meme"), 2);
+
+        profile.enabled_tools = vec!["read_file".to_string(), "show_meme".to_string()];
+        assert_eq!(initial_tool_state(&profile, "read_file"), 1);
+        assert_eq!(initial_tool_state(&profile, "web_search"), 0);
+    }
+
+    /// Skill 状态映射：完整优先于仅名称，未配置为不暴露。
+    #[test]
+    fn skill_state_maps_full_and_named() {
+        let profile = AgentProfile {
+            skills_full: vec!["research".to_string()],
+            skills_named: vec!["drawio".to_string()],
+            ..AgentProfile::default()
+        };
+
+        assert_eq!(initial_skill_state(&profile, "research"), 1);
+        assert_eq!(initial_skill_state(&profile, "drawio"), 2);
+        assert_eq!(initial_skill_state(&profile, "other"), 0);
+    }
+
+    /// 工具摘要区分全量继承、白名单与通配延迟。
+    #[test]
+    fn tools_summary_covers_modes() {
+        let mut profile = AgentProfile::default();
+        assert!(tools_summary(&profile).contains("继承全量"));
+
+        profile.deferred_tools = vec![DEFERRED_ALL_NON_BASE.to_string()];
+        assert!(tools_summary(&profile).contains('*'));
+
+        profile.enabled_tools = vec!["read_file".to_string(), "grep".to_string()];
+        profile.deferred_tools = vec!["grep".to_string()];
+        let summary = tools_summary(&profile);
+        assert!(summary.contains('2'));
+        assert!(summary.contains('1'));
     }
 }

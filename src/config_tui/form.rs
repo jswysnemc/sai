@@ -12,7 +12,7 @@ use std::process::Command;
 
 use super::input::{read_key, read_key_event};
 use super::layout::{full_frame, master_detail_widths, scroll_start};
-use super::theme::{selection_marks, MUTED, RESET};
+use super::theme::{selection_marks, ACCENT, BOLD, BRAND, DIM, MUTED, RESET};
 use super::ui::{display_width, draw_box, draw_menu, pad, truncate};
 
 struct FcitxState {
@@ -88,7 +88,7 @@ fn run_fcitx5_remote(arg: &str) {
 }
 
 pub(crate) fn run_form(stdout: &mut io::Stdout, title: &str, fields: &mut [Field]) -> Result<bool> {
-    let mut selected = 0usize;
+    let mut selected = first_selectable(fields);
     let mut editing = false;
     let mut fcitx = FcitxState::new();
     let mut cursors = fields
@@ -146,9 +146,11 @@ pub(crate) fn run_form(stdout: &mut io::Stdout, title: &str, fields: &mut [Field
                 }
             }
             KeyCode::Char('s') if !editing => return Ok(true),
-            KeyCode::Up | KeyCode::Char('k') if !editing => selected = selected.saturating_sub(1),
+            KeyCode::Up | KeyCode::Char('k') if !editing => {
+                selected = previous_selectable(fields, selected)
+            }
             KeyCode::Down | KeyCode::Char('j') if !editing => {
-                selected = (selected + 1).min(fields.len() + 1)
+                selected = next_selectable(fields, selected)
             }
             KeyCode::Left | KeyCode::Char('h') if !editing && selected == fields.len() + 1 => {
                 selected = fields.len()
@@ -186,6 +188,37 @@ pub(crate) fn run_form(stdout: &mut io::Stdout, title: &str, fields: &mut [Field
     }
 }
 
+/// 返回第一个可选中（非分组标题）的字段下标。
+fn first_selectable(fields: &[Field]) -> usize {
+    fields.iter().position(|field| !field.section).unwrap_or(0)
+}
+
+/// 向下移动选中项，跳过分组标题；越过末尾进入按钮区。
+fn next_selectable(fields: &[Field], selected: usize) -> usize {
+    let mut next = selected.saturating_add(1);
+    while next < fields.len() && fields[next].section {
+        next += 1;
+    }
+    next.min(fields.len() + 1)
+}
+
+/// 向上移动选中项，跳过分组标题；已在顶部时停在首个可选字段。
+fn previous_selectable(fields: &[Field], selected: usize) -> usize {
+    if selected == 0 {
+        return first_selectable(fields);
+    }
+    let mut next = selected - 1;
+    loop {
+        if next >= fields.len() || !fields[next].section {
+            return next;
+        }
+        if next == 0 {
+            return first_selectable(fields);
+        }
+        next -= 1;
+    }
+}
+
 /// 通过统一表单输入一个自定义模型标识。
 ///
 /// 参数:
@@ -211,11 +244,24 @@ fn select_choice(
 ) -> Result<String> {
     let mut selected = choices.iter().position(|item| item == current).unwrap_or(0);
     loop {
+        // 当前生效值带勾选标记，视线不必依赖记忆
         let options = choices
             .iter()
-            .map(|choice| choice_label(choice, empty_label))
+            .map(|choice| {
+                let text = choice_label(choice, empty_label);
+                if choice == current {
+                    format!("{text} ✓")
+                } else {
+                    text
+                }
+            })
             .collect::<Vec<_>>();
-        draw_menu(stdout, label, &options, selected, "")?;
+        let status = super::theme::help_line(&[
+            ("↑↓", t("move", "移动")),
+            ("Enter", t("select", "选择")),
+            ("q", t("keep current", "保持当前")),
+        ]);
+        draw_menu(stdout, label, &options, selected, &status)?;
         match read_key()? {
             KeyCode::Esc | KeyCode::Char('q') => return Ok(current.to_string()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
@@ -317,7 +363,8 @@ pub(crate) fn parse_bool_field(value: &str) -> Result<bool> {
     }
 }
 
-fn edit_textarea(stdout: &mut io::Stdout, value: &mut String) -> Result<()> {
+/// 临时离开备用屏，用 $EDITOR 编辑多行文本后返回。
+pub(super) fn edit_textarea(stdout: &mut io::Stdout, value: &mut String) -> Result<()> {
     execute!(
         stdout,
         Show,
@@ -360,30 +407,24 @@ fn draw_form(
     let width = frame.width;
     let height = frame.height;
 
-
     queue!(stdout, Clear(ClearType::All))?;
     draw_box(stdout, x, y, width, height, title)?;
     let inner_x = x.saturating_add(2);
     let inner_w = width.saturating_sub(4);
-    queue!(
-        stdout,
-        MoveTo(inner_x, y + 1),
-        Print(format!(
-            "{MUTED}{}{RESET}",
-            truncate(
-                t(
-                    "↑/↓ move · Enter edit · Ctrl+R reveal secret · s save · q cancel",
-                    "↑/↓ 移动 · Enter 编辑 · Ctrl+R 显示密钥 · s 保存 · q 取消",
-                ),
-                inner_w as usize
-            )
-        ))
-    )?;
     // 字段区占满中间；底两行留给按钮与状态；宽终端右侧放字段说明
-    let list_top = y.saturating_add(3);
+    let list_top = y.saturating_add(2);
     let list_bottom = y.saturating_add(height.saturating_sub(3));
     let body_h = list_bottom.saturating_sub(list_top).max(1);
     let (left_w, right_w) = master_detail_widths(inner_w);
+    // label 列宽取最长标签，钳到左栏一半：标签右侧对齐同一列，值列成一条竖线
+    let label_col = fields
+        .iter()
+        .filter(|field| !field.section)
+        .map(|field| display_width(field.label))
+        .max()
+        .unwrap_or(8)
+        .min((left_w / 2) as usize)
+        .max(8);
     let visible_rows = body_h as usize;
     let start = scroll_start(selected.min(fields.len().saturating_sub(1)), visible_rows);
     let mut cursor = None;
@@ -396,29 +437,70 @@ fn draw_form(
             continue;
         }
         let field = &fields[index];
-        let (bar, style) = selection_marks(index == selected && !editing);
-        let value_budget = left_w.saturating_sub(2).saturating_sub(
-            display_width(&format!("{}: ", field.label)) as u16 + 2,
-        ) as usize;
-        let value = field_display_value(field, revealed_secrets[index], value_budget.max(8));
-        let prefix = format!("{bar} {}: ", field.label);
-        let line = truncate(&format!("{prefix}{value}"), left_w as usize);
-        if index == selected && !editing {
+        if field.section {
+            // 分组标题：品牌色短横 + 名称 + 弱化延伸线
+            let name = truncate(field.label, left_w.saturating_sub(6) as usize);
+            let used = 4 + display_width(&name) + 1;
+            let tail = (left_w as usize).saturating_sub(used);
             queue!(
                 stdout,
-                Print(format!("{style}{}{RESET}", pad(&line, left_w as usize)))
+                Print(format!(
+                    "{DIM}── {RESET}{BRAND}{BOLD}{name}{RESET} {DIM}{}{RESET}",
+                    "─".repeat(tail)
+                ))
+            )?;
+            continue;
+        }
+        let is_selected = index == selected && !editing;
+        let is_editing_row = index == selected && editing;
+        let (bar, row_style) = selection_marks(is_selected);
+        let label_text = pad(field.label, label_col);
+        let value_budget = (left_w as usize).saturating_sub(2 + label_col + 2).max(8);
+        let value = field_display_value(field, revealed_secrets[index], value_budget);
+        if is_selected {
+            // 选中行：整行深底统一亮青，焦点清晰优先于分色
+            let line = truncate(
+                &format!("{label_text}  {}", strip_field_ansi(&value)),
+                left_w.saturating_sub(2) as usize,
+            );
+            queue!(
+                stdout,
+                Print(format!(
+                    "{bar}{row_style} {}{RESET}",
+                    pad(&line, left_w.saturating_sub(2) as usize)
+                ))
             )?;
         } else {
-            queue!(stdout, Print(pad(&line, left_w as usize)))?;
+            // 常规行：标签弱化、值走语义色，两列对齐
+            let editing_marker = if is_editing_row {
+                format!("{ACCENT}▸{RESET}")
+            } else {
+                bar
+            };
+            queue!(
+                stdout,
+                Print(format!(
+                    "{editing_marker} {MUTED}{label_text}{RESET}  {value}"
+                ))
+            )?;
+            let used = 2 + label_col + 2 + display_width(&strip_field_ansi(&value));
+            let remaining = (left_w as usize).saturating_sub(used);
+            if remaining > 0 {
+                queue!(stdout, Print(" ".repeat(remaining)))?;
+            }
         }
-        if index == selected && editing {
+        if is_editing_row {
             let rendered_value = rendered_text_value(field, revealed_secrets[index]);
             let cursor_text = take_chars(&rendered_value, cursors[index]);
-            let plain_prefix = format!("  {}: ", field.label);
             let cursor_x = inner_x
-                + display_width(&plain_prefix) as u16
-                + display_width(&truncate(&cursor_text, left_w.saturating_sub(2) as usize)) as u16;
-            cursor = Some((cursor_x.min(inner_x.saturating_add(left_w.saturating_sub(1))), row_y));
+                + 2
+                + label_col as u16
+                + 2
+                + display_width(&truncate(&cursor_text, value_budget)) as u16;
+            cursor = Some((
+                cursor_x.min(inner_x.saturating_add(left_w.saturating_sub(1))),
+                row_y,
+            ));
         }
     }
     if right_w > 0 {
@@ -441,54 +523,51 @@ fn draw_form(
         draw_form_detail(stdout, detail_x, list_top, right_w, body_h, &detail)?;
     }
     let button_y = y.saturating_add(height.saturating_sub(2));
-    draw_form_button(
+    let save_width = draw_form_button(
         stdout,
         inner_x,
         button_y,
-        t(" Save ", " 保存 "),
+        t("Save", "保存"),
         selected == fields.len() && !editing,
+        true,
     )?;
     draw_form_button(
         stdout,
-        inner_x.saturating_add(12),
+        inner_x.saturating_add(save_width).saturating_add(2),
         button_y,
-        t(" Cancel ", " 取消 "),
+        t("Cancel", "取消"),
         selected == fields.len() + 1 && !editing,
+        false,
     )?;
 
-    let mode = if selected < fields.len()
-        && editing
-        && fields[selected].secret
-        && revealed_secrets[selected]
-    {
-        t(
-            "Editing secret in plain text, Ctrl+R hides it",
-            "正在明文编辑密钥，Ctrl+R 隐藏",
-        )
-    } else if selected < fields.len() && editing && fields[selected].secret {
-        t(
-            "Editing secret masked, Ctrl+R reveals it",
-            "正在掩码编辑密钥，Ctrl+R 显示明文",
-        )
+    // 底部帮助条按当前状态切换内容
+    let help = if selected < fields.len() && editing && fields[selected].secret {
+        super::theme::help_line(&[
+            ("Enter/Esc", t("done", "结束")),
+            (
+                "Ctrl+R",
+                if revealed_secrets[selected] {
+                    t("hide secret", "隐藏明文")
+                } else {
+                    t("reveal secret", "显示明文")
+                },
+            ),
+        ])
     } else if selected < fields.len() && editing {
-        t(
-            "Editing, Enter/Esc ends editing",
-            "编辑中，Enter/Esc 结束编辑",
-        )
+        super::theme::help_line(&[
+            ("Enter/Esc", t("done", "结束编辑")),
+            ("←→", t("cursor", "光标")),
+            ("Home/End", t("jump", "行首尾")),
+        ])
     } else {
-        t(
-            "Navigating, Enter selects current item",
-            "导航中，Enter 选择当前项",
-        )
+        super::theme::help_line(&[
+            ("↑↓", t("move", "移动")),
+            ("Enter", t("edit", "编辑")),
+            ("s", t("save", "保存")),
+            ("q", t("cancel", "取消")),
+        ])
     };
-    queue!(
-        stdout,
-        MoveTo(inner_x, y + height.saturating_sub(1)),
-        Print(format!(
-            "{MUTED}{}{RESET}",
-            truncate(mode, inner_w as usize)
-        ))
-    )?;
+    super::ui::draw_status_bar(stdout, &frame, &help)?;
     if let Some((cx, cy)) = cursor {
         queue!(stdout, Show, MoveTo(cx, cy))?;
     } else {
@@ -496,6 +575,22 @@ fn draw_form(
     }
     stdout.flush()?;
     Ok(())
+}
+
+/// 去除字段值渲染中的 ANSI 序列（选中行统一样式时使用）。
+fn strip_field_ansi(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut index = 0usize;
+    while index < value.len() {
+        if value[index..].starts_with('\x1b') {
+            index = crate::render::terminal_image::escape_sequence_end(value, index).max(index + 1);
+            continue;
+        }
+        let ch = value[index..].chars().next().unwrap_or_default();
+        output.push(ch);
+        index += ch.len_utf8();
+    }
+    output
 }
 
 /// 表单右侧字段说明栏。
@@ -514,8 +609,8 @@ fn draw_form_detail(
         stdout,
         MoveTo(x, y),
         Print(format!(
-            "{MUTED}{}{RESET}",
-            truncate(t("Field", "字段"), width as usize)
+            "{BRAND}{BOLD}◈ {}{RESET}",
+            truncate(t("Field", "字段"), width.saturating_sub(2) as usize)
         ))
     )?;
     let mut lines = Vec::new();
@@ -575,7 +670,10 @@ fn field_detail_text(field: &Field) -> String {
     } else if !field.choices.is_empty() {
         parts.push(format!(
             "{} ({})",
-            t("Choice list: Enter opens a picker.", "选项列表：Enter 打开选择器。"),
+            t(
+                "Choice list: Enter opens a picker.",
+                "选项列表：Enter 打开选择器。"
+            ),
             field.choices.len()
         ));
     } else if field.secret {
@@ -612,25 +710,40 @@ fn field_detail_text(field: &Field) -> String {
 /// 返回:
 /// - 字段展示文本
 fn field_display_value(field: &Field, revealed_secret: bool, max_value_width: usize) -> String {
+    use super::theme::{DIM as VDIM, OK, VALUE};
     if field.boolean {
         match parse_bool_field(&field.value) {
-            Ok(true) => "[x]".to_string(),
-            Ok(false) => "[ ]".to_string(),
+            Ok(true) => format!("{OK}● {}{RESET}", t("on", "启用")),
+            Ok(false) => format!("{VDIM}○ {}{RESET}", t("off", "关闭")),
             Err(_) => rendered_text_value(field, revealed_secret),
         }
     } else if field.textarea && field.value.is_empty() {
-        t("(Enter opens $EDITOR)", "(Enter 打开 $EDITOR)").to_string()
-    } else if !field.choices.is_empty() && field.value.is_empty() {
-        field.empty_choice_label.to_string()
-    } else if !field.choices.is_empty() {
-        truncate(
-            &choice_label(&field.value, field.empty_choice_label),
-            max_value_width,
+        format!(
+            "{VDIM}{}{RESET}",
+            t("(Enter opens $EDITOR)", "(Enter 打开 $EDITOR)")
         )
+    } else if !field.choices.is_empty() && field.value.is_empty() {
+        format!(
+            "{VALUE}{}{RESET} {VDIM}▾{RESET}",
+            truncate(field.empty_choice_label, max_value_width.saturating_sub(2))
+        )
+    } else if !field.choices.is_empty() {
+        format!(
+            "{VALUE}{}{RESET} {VDIM}▾{RESET}",
+            truncate(
+                &choice_label(&field.value, field.empty_choice_label),
+                max_value_width.saturating_sub(2),
+            )
+        )
+    } else if field.value.is_empty() {
+        format!("{VDIM}{}{RESET}", t("(empty)", "（空）"))
     } else {
-        truncate(
-            &rendered_text_value(field, revealed_secret),
-            max_value_width,
+        format!(
+            "{VALUE}{}{RESET}",
+            truncate(
+                &rendered_text_value(field, revealed_secret),
+                max_value_width,
+            )
         )
     }
 }
@@ -663,24 +776,43 @@ fn mask_secret(value: &str) -> String {
     "*".repeat(value.chars().count())
 }
 
+/// 绘制表单按钮，返回按钮可见宽度（供横向排布）。
+///
+/// 主按钮选中时为品牌实心底，次按钮选中时为深底描边感；
+/// 未选中一律弱化，视觉焦点始终只有一个。
+///
+/// 参数:
+/// - `stdout`: 终端输出
+/// - `x`: 起始列
+/// - `y`: 所在行
+/// - `label`: 按钮文字
+/// - `selected`: 是否选中
+/// - `primary`: 是否主按钮
+///
+/// 返回:
+/// - 按钮渲染后的可见宽度
 fn draw_form_button(
     stdout: &mut io::Stdout,
     x: u16,
     y: u16,
     label: &str,
     selected: bool,
-) -> Result<()> {
+    primary: bool,
+) -> Result<u16> {
+    use super::theme::{BUTTON_BG, BUTTON_FG, SELECT_BG};
     queue!(stdout, MoveTo(x, y))?;
-    let (bar, style) = selection_marks(selected);
-    if selected {
+    let text = format!(" {label} ");
+    if selected && primary {
         queue!(
             stdout,
-            Print(format!("{bar}{style}{label}{RESET}"))
+            Print(format!("{BUTTON_BG}{BUTTON_FG}{BOLD}{text}{RESET}"))
         )?;
+    } else if selected {
+        queue!(stdout, Print(format!("{SELECT_BG}{ACCENT}{text}{RESET}")))?;
     } else {
-        queue!(stdout, Print(format!("{MUTED}{label}{RESET}")))?;
+        queue!(stdout, Print(format!("{MUTED}{text}{RESET}")))?;
     }
-    Ok(())
+    Ok(display_width(&text) as u16)
 }
 
 fn insert_char_at_cursor(value: &mut String, cursor: &mut usize, ch: char) {
@@ -723,6 +855,8 @@ pub(crate) struct Field {
     pub(crate) textarea: bool,
     pub(crate) boolean: bool,
     pub(crate) secret: bool,
+    /// 分组标题行：不可选中、不可编辑，仅用于视觉分区
+    pub(crate) section: bool,
     pub(crate) choices: Vec<String>,
     pub(crate) empty_choice_label: &'static str,
 }
@@ -735,9 +869,17 @@ impl Field {
             textarea: false,
             boolean: false,
             secret: false,
+            section: false,
             choices: Vec::new(),
             empty_choice_label: t("Use current Provider", "使用当前 Provider"),
         }
+    }
+
+    /// 创建分组标题行（导航自动跳过）。
+    pub(crate) fn section(label: &'static str) -> Self {
+        let mut field = Self::new(label, String::new());
+        field.section = true;
+        field
     }
 
     pub(crate) fn boolean(label: &'static str, value: bool) -> Self {
@@ -747,6 +889,7 @@ impl Field {
             textarea: false,
             boolean: true,
             secret: false,
+            section: false,
             choices: Vec::new(),
             empty_choice_label: t("Use current Provider", "使用当前 Provider"),
         }
@@ -759,6 +902,7 @@ impl Field {
             textarea: true,
             boolean: false,
             secret: false,
+            section: false,
             choices: Vec::new(),
             empty_choice_label: t("Use current Provider", "使用当前 Provider"),
         }
@@ -793,20 +937,58 @@ mod tests {
     fn secret_field_is_masked_by_default() {
         let field = Field::new("Token", "secret".to_string()).secret();
 
-        assert_eq!(field_display_value(&field, false, 70), "******");
+        assert_eq!(
+            strip_field_ansi(&field_display_value(&field, false, 70)),
+            "******"
+        );
     }
 
     #[test]
     fn secret_field_can_be_revealed() {
         let field = Field::new("Token", "secret".to_string()).secret();
 
-        assert_eq!(field_display_value(&field, true, 70), "secret");
+        assert_eq!(
+            strip_field_ansi(&field_display_value(&field, true, 70)),
+            "secret"
+        );
     }
 
     #[test]
     fn secret_textarea_is_masked_by_default() {
         let field = Field::textarea("Tokens", "first\nsecond".to_string()).secret();
 
-        assert_eq!(field_display_value(&field, false, 70), "************");
+        assert_eq!(
+            strip_field_ansi(&field_display_value(&field, false, 70)),
+            "************"
+        );
+    }
+
+    /// 布尔字段渲染为状态圆点而不是原始 true/false。
+    #[test]
+    fn boolean_field_renders_status_dot() {
+        let on = Field::boolean("Tools", true);
+        let off = Field::boolean("Tools", false);
+
+        assert!(strip_field_ansi(&field_display_value(&on, false, 70)).starts_with('●'));
+        assert!(strip_field_ansi(&field_display_value(&off, false, 70)).starts_with('○'));
+    }
+
+    /// 分组标题行不参与导航：上下移动会跳过它。
+    #[test]
+    fn navigation_skips_section_rows() {
+        let fields = vec![
+            Field::section("组一"),
+            Field::new("A", String::new()),
+            Field::section("组二"),
+            Field::new("B", String::new()),
+        ];
+
+        assert_eq!(first_selectable(&fields), 1);
+        assert_eq!(next_selectable(&fields, 1), 3);
+        assert_eq!(previous_selectable(&fields, 3), 1);
+        // 首字段再向上仍停在首个可选字段
+        assert_eq!(previous_selectable(&fields, 1), 1);
+        // 末字段向下进入按钮区
+        assert_eq!(next_selectable(&fields, 3), 4);
     }
 }

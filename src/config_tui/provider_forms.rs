@@ -326,7 +326,7 @@ pub(super) fn edit_model_form(
             &format!(" EDIT MODEL: {model} "),
             &options,
             selected,
-            t("[Enter] open [q] cancel", "[Enter]打开 [q]取消"),
+            &super::theme::help_line(&[("Enter", t("open", "打开")), ("q", t("cancel", "取消"))]),
         )?;
         match read_key()? {
             crossterm::event::KeyCode::Up | crossterm::event::KeyCode::Char('k') => {

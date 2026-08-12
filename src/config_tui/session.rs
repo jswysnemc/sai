@@ -12,9 +12,10 @@ use super::agents::edit_agents;
 use super::gateways::edit_gateways;
 use super::input::read_key;
 use super::knowledge::edit_knowledge_base;
-use super::plugins::{edit_cli_tools, edit_web_search};
+use super::plugins::edit_cli_tools;
 use super::providers::{select_active_provider, ProviderBrowser};
 use super::settings::edit_settings;
+use super::skills::edit_skills;
 use super::ui::draw_menu_with_details;
 
 pub fn run(paths: &SaiPaths) -> Result<()> {
@@ -71,17 +72,21 @@ fn run_main_menu(
     let mut selected = 0usize;
     loop {
         let active = active_label(config);
-        let options = [
-            t("Active configuration", "激活配置").to_string(),
-            t("Providers and models", "供应商和模型").to_string(),
-            t("Web search", "Web 搜索").to_string(),
-            t("CLI assistant tools", "CLI 助手工具").to_string(),
-            t("Knowledge base", "知识库管理").to_string(),
-            t("Gateway channels", "渠道接入").to_string(),
-            t("Agent configuration", "Agent 配置").to_string(),
-            t("Global settings", "全局参数设置").to_string(),
-            t("Save and exit", "保存并退出").to_string(),
+        // 高频操作前置，低频配置收进「高级设置」；编号既是视觉锚点也是直达键
+        let labels = [
+            t("Active configuration", "激活配置"),
+            t("Providers and models", "供应商和模型"),
+            t("Agent configuration", "Agent 配置"),
+            t("Tools", "工具"),
+            "Skills",
+            t("Advanced settings", "高级设置"),
+            t("Save and exit", "保存并退出"),
         ];
+        let options = labels
+            .iter()
+            .enumerate()
+            .map(|(index, label)| format!("{}  {label}", index + 1))
+            .collect::<Vec<_>>();
         let details = [
             format!(
                 "{}\n\n{}: {active}",
@@ -97,33 +102,23 @@ fn run_main_menu(
             )
             .to_string(),
             t(
-                "Configure web search backends and related API credentials.",
-                "配置 Web 搜索后端与相关 API 凭证。",
+                "Create and edit agent profiles: model, prompt, tool capabilities and skills.",
+                "创建与编辑 Agent 档案：模型、提示词、工具能力与 Skills。",
             )
             .to_string(),
             t(
-                "Enable or configure CLI assistant tools available to the agent.",
-                "启用或配置智能体可用的 CLI 助手工具。",
+                "Toggle and configure assistant tools, including web search.",
+                "启用与配置助手工具，含 Web 搜索。",
             )
             .to_string(),
             t(
-                "Manage knowledge bases used for retrieval during conversations.",
-                "管理对话检索所用的知识库。",
+                "Enable or disable installed skills and global skill switches.",
+                "启停已安装的 Skill 与全局 Skill 开关。",
             )
             .to_string(),
             t(
-                "Connect messaging gateways such as Telegram or other channels.",
-                "接入 Telegram 等消息渠道。",
-            )
-            .to_string(),
-            t(
-                "Create and edit agent profiles, tools and system prompts.",
-                "创建与编辑 Agent 配置、工具与系统提示。",
-            )
-            .to_string(),
-            t(
-                "Permissions, context limits, display preferences and tool defaults.",
-                "权限模式、上下文上限、显示偏好与工具默认值。",
+                "Less frequent settings: knowledge base, gateway channels and global parameters.",
+                "低频配置：知识库、渠道接入与全局参数。",
             )
             .to_string(),
             t(
@@ -133,13 +128,19 @@ fn run_main_menu(
             .to_string(),
         ];
         let subtitle = format!("{}: {active}", t("Active", "当前激活"));
+        let status = super::theme::help_line(&[
+            ("↑↓", t("move", "移动")),
+            ("1-7", t("jump", "跳转")),
+            ("Enter", t("open", "打开")),
+            ("q", t("quit", "退出")),
+        ]);
         draw_menu_with_details(
             stdout,
-            " SAI CONFIG ",
+            "SAI CONFIG",
             &options,
             &details,
             selected,
-            "",
+            &status,
             &subtitle,
         )?;
 
@@ -147,19 +148,97 @@ fn run_main_menu(
             KeyCode::Char('q') | KeyCode::Esc => return Ok(false),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
+            KeyCode::Char(digit @ '1'..='9') => {
+                let target = digit as usize - '1' as usize;
+                if target < options.len() {
+                    selected = target;
+                }
+            }
             KeyCode::Enter => match selected {
                 0 => select_active_provider(stdout, config)?,
                 1 => ProviderBrowser::new(config).run(stdout)?,
-                2 => edit_web_search(stdout, config)?,
+                2 => edit_agents(stdout, paths, config)?,
                 3 => edit_cli_tools(stdout, config)?,
-                4 => edit_knowledge_base(stdout, paths, config)?,
-                5 => edit_gateways(stdout, paths, config)?,
-                6 => edit_agents(stdout, config)?,
-                7 => edit_settings(stdout, config)?,
-                8 => {
+                4 => edit_skills(stdout, paths, config)?,
+                5 => run_advanced_menu(stdout, paths, config)?,
+                6 => {
                     config.save(paths)?;
                     return Ok(true);
                 }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+}
+
+/// 高级设置二级菜单：知识库、渠道接入与全局参数等低频配置。
+///
+/// 参数:
+/// - `stdout`: 终端标准输出
+/// - `paths`: Sai 路径
+/// - `config`: 待更新应用配置
+///
+/// 返回:
+/// - 菜单退出结果
+fn run_advanced_menu(
+    stdout: &mut io::Stdout,
+    paths: &SaiPaths,
+    config: &mut AppConfig,
+) -> Result<()> {
+    let mut selected = 0usize;
+    loop {
+        let labels = [
+            t("Knowledge base", "知识库管理"),
+            t("Gateway channels", "渠道接入"),
+            t("Global parameters", "全局参数"),
+        ];
+        let options = labels
+            .iter()
+            .enumerate()
+            .map(|(index, label)| format!("{}  {label}", index + 1))
+            .collect::<Vec<_>>();
+        let details = [
+            t(
+                "Manage knowledge bases used for retrieval during conversations.",
+                "管理对话检索所用的知识库。",
+            )
+            .to_string(),
+            t(
+                "Connect messaging gateways such as QQ or Weixin channels.",
+                "接入 QQ、微信等消息渠道。",
+            )
+            .to_string(),
+            t(
+                "Permissions, context limits, tool behavior and display preferences.",
+                "权限模式、上下文上限、工具行为与显示偏好。",
+            )
+            .to_string(),
+        ];
+        draw_menu_with_details(
+            stdout,
+            t(" ADVANCED ", " 高级设置 "),
+            &options,
+            &details,
+            selected,
+            &super::theme::help_line(&[
+                ("↑↓", t("move", "移动")),
+                ("Enter", t("open", "打开")),
+                ("q", t("back", "返回")),
+            ]),
+            "",
+        )?;
+        match read_key()? {
+            KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
+            KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
+            KeyCode::Char(digit @ '1'..='3') => {
+                selected = digit as usize - '1' as usize;
+            }
+            KeyCode::Enter => match selected {
+                0 => edit_knowledge_base(stdout, paths, config)?,
+                1 => edit_gateways(stdout, paths, config)?,
+                2 => edit_settings(stdout, config)?,
                 _ => {}
             },
             _ => {}

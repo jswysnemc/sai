@@ -70,11 +70,13 @@ pub(crate) fn edit_knowledge_base(
         }
         selected = selected.min(options.len().saturating_sub(1));
         let help = if status.is_empty() {
-            t(
-                "[Enter] add/delete [a] add [d] delete [r] refresh [q] back",
-                "[Enter]添加/删除 [a]添加 [d]删除 [r]刷新 [q]返回",
-            )
-            .to_string()
+            super::theme::help_line(&[
+                ("Enter", t("add/delete", "添加/删除")),
+                ("a", t("add", "添加")),
+                ("d", t("delete", "删除")),
+                ("r", t("refresh", "刷新")),
+                ("q", t("back", "返回")),
+            ])
         } else {
             status.clone()
         };

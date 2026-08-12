@@ -15,7 +15,7 @@ use super::plugin_fields::{apply_plugin_fields, plugin_fields};
 use super::theme::{selection_marks, BOLD, MUTED, RESET};
 use super::ui::{display_width, draw_box, message, pad, truncate};
 
-/// 编辑 CLI 助手可选工具。
+/// 编辑助手工具（含 Web 搜索）。
 ///
 /// 参数:
 /// - `stdout`: 终端标准输出
@@ -32,34 +32,9 @@ pub(crate) fn edit_cli_tools(stdout: &mut io::Stdout, config: &mut AppConfig) ->
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(count - 1),
-            KeyCode::Char(' ') => toggle_plugin(config, cli_tool_config_index(selected)),
+            KeyCode::Char(' ') => toggle_plugin(config, selected),
             KeyCode::Enter | KeyCode::Char('i') => edit_cli_tool_detail(stdout, config, selected)?,
             _ => {}
-        }
-    }
-}
-
-/// 编辑独立 Web 搜索配置。
-///
-/// 参数:
-/// - `stdout`: 终端标准输出
-/// - `config`: 待更新应用配置
-///
-/// 返回:
-/// - 表单退出或配置保存结果
-pub(crate) fn edit_web_search(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
-    // 表单字段只构造一次，校验失败后沿用已填内容重新进入编辑
-    let mut fields = plugin_fields(config, 0);
-    loop {
-        if !run_form(stdout, t(" WEB SEARCH ", " WEB 搜索 "), &mut fields)? {
-            return Ok(());
-        }
-        match apply_plugin_fields(config, 0, &fields) {
-            Ok(()) => return Ok(()),
-            Err(err) => message(
-                stdout,
-                &format!("{}: {err}", t("Invalid input", "输入无效")),
-            )?,
         }
     }
 }
@@ -81,43 +56,26 @@ fn draw_cli_tool_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usi
     let x = frame.x;
     let y = frame.y;
     queue!(stdout, Clear(ClearType::All))?;
-    draw_box(
-        stdout,
-        x,
-        y,
-        width,
-        height,
-        t(" CLI ASSISTANT TOOLS ", " CLI 助手工具 "),
-    )?;
+    draw_box(stdout, x, y, width, height, t("TOOLS", "助手工具"))?;
+    // 表头与数据行相同缩进（数据行有两列选中条前缀）
     queue!(
         stdout,
-        MoveTo(x + 2, y + 1),
+        MoveTo(x + 4, y + 1),
         Print(format!(
-            "{MUTED}{}{RESET}",
-            t(
-                "Space toggle · Enter configure · ↑/↓ move · q back",
-                "Space 开关 · Enter 配置 · ↑/↓ 移动 · q 返回",
-            )
-        ))
-    )?;
-    queue!(
-        stdout,
-        MoveTo(x + 2, y + 3),
-        Print(format!(
-            "{BOLD}{}{RESET}",
+            "{MUTED}{BOLD}{}{RESET}",
             pad(
                 &cli_tool_row(
                     t("State", "状态"),
                     t("Tool", "工具"),
                     t("Description", "说明"),
-                    width.saturating_sub(4) as usize,
+                    width.saturating_sub(6) as usize,
                 ),
-                width.saturating_sub(4) as usize,
+                width.saturating_sub(6) as usize,
             )
         ))
     )?;
     let tools = cli_tool_names();
-    let visible_rows = height.saturating_sub(6) as usize;
+    let visible_rows = height.saturating_sub(4) as usize;
     let start = selected.saturating_sub(visible_rows.saturating_sub(1));
     for row in 0..visible_rows {
         let index = start + row;
@@ -125,22 +83,54 @@ fn draw_cli_tool_menu(stdout: &mut io::Stdout, config: &AppConfig, selected: usi
             break;
         }
         let (_, name, description) = tools[index];
-        let state = if plugin_enabled(config, cli_tool_config_index(index)) {
-            "[ON]"
-        } else {
-            "[OFF]"
-        };
-        let line = cli_tool_row(state, name, description, width.saturating_sub(6) as usize);
-        queue!(stdout, MoveTo(x + 2, y + row as u16 + 4))?;
+        let enabled = plugin_enabled(config, index);
+        let row_width = width.saturating_sub(6) as usize;
+        queue!(stdout, MoveTo(x + 2, y + row as u16 + 2))?;
         let (bar, style) = selection_marks(index == selected);
-        queue!(
-            stdout,
-            Print(format!(
-                "{bar} {style}{}{RESET}",
-                pad(&line, width.saturating_sub(6) as usize)
-            ))
-        )?;
+        if index == selected {
+            // 选中行：整行深底统一样式
+            let state = if enabled {
+                t("● on", "● 启用")
+            } else {
+                t("○ off", "○ 关闭")
+            };
+            let line = cli_tool_row(state, name, description, row_width);
+            queue!(
+                stdout,
+                Print(format!("{bar}{style} {}{RESET}", pad(&line, row_width)))
+            )?;
+        } else {
+            // 常规行：状态点分色，名称常规，说明弱化
+            use super::theme::{DIM, OK};
+            let (dot_style, state) = if enabled {
+                (OK, t("● on", "● 启用"))
+            } else {
+                (DIM, t("○ off", "○ 关闭"))
+            };
+            let name_cell = pad(name, 24);
+            let state_cell = pad(state, 8);
+            let remaining = row_width
+                .saturating_sub(display_width(&state_cell) + display_width(&name_cell))
+                .max(10);
+            queue!(
+                stdout,
+                Print(format!(
+                    "{bar} {dot_style}{state_cell}{RESET}{name_cell}{MUTED}{}{RESET}",
+                    truncate(description, remaining)
+                ))
+            )?;
+        }
     }
+    super::ui::draw_status_bar(
+        stdout,
+        &frame,
+        &super::theme::help_line(&[
+            ("Space", t("toggle", "开关")),
+            ("Enter", t("configure", "配置")),
+            ("↑↓", t("move", "移动")),
+            ("q", t("back", "返回")),
+        ]),
+    )?;
     stdout.flush()?;
     Ok(())
 }
@@ -161,12 +151,20 @@ fn cli_tool_row(state: &str, name: &str, description: &str, width: usize) -> Str
     fixed + &truncate(description, remaining)
 }
 
-/// 返回 CLI 助手工具菜单目录。
+/// 返回助手工具菜单目录，下标与历史兼容配置索引一致（0 为 Web 搜索）。
 ///
 /// 返回:
 /// - 历史配置标识、显示名称和说明组成的固定目录
-fn cli_tool_names() -> [(&'static str, &'static str, &'static str); 19] {
+fn cli_tool_names() -> [(&'static str, &'static str, &'static str); 20] {
     [
+        (
+            "web",
+            t("Web search", "Web 搜索"),
+            t(
+                "Web search backends and API credentials",
+                "Web 搜索后端与 API 凭证",
+            ),
+        ),
         (
             "vision",
             t("Vision", "识图"),
@@ -363,44 +361,40 @@ fn edit_cli_tool_detail(
     config: &mut AppConfig,
     index: usize,
 ) -> Result<()> {
-    let title = format!(
-        " {}: {} ",
-        t("CLI TOOL", "CLI 工具"),
-        cli_tool_names()[index].1
-    );
-    let config_index = cli_tool_config_index(index);
-    let mut fields = plugin_fields(config, config_index);
-    if !run_form(stdout, &title, &mut fields)? {
-        return Ok(());
+    let title = format!(" {}: {} ", t("TOOL", "工具"), cli_tool_names()[index].1);
+    let mut fields = plugin_fields(config, index);
+    loop {
+        if !run_form(stdout, &title, &mut fields)? {
+            return Ok(());
+        }
+        // 解析失败时就地提示并重新打开表单，沿用已填内容
+        match apply_plugin_fields(config, index, &fields) {
+            Ok(()) => return Ok(()),
+            Err(err) => message(
+                stdout,
+                &format!("{}: {err}", t("Invalid input", "输入无效")),
+            )?,
+        }
     }
-    apply_plugin_fields(config, config_index, &fields)
-}
-
-/// 将工具菜单索引映射到历史兼容配置索引。
-///
-/// 参数:
-/// - `index`: 不含 Web 搜索的工具菜单索引
-///
-/// 返回:
-/// - plugin_fields 使用的历史兼容配置索引
-fn cli_tool_config_index(index: usize) -> usize {
-    index + 1
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// 验证 CLI 助手工具菜单不再包含 Web 搜索，并保持历史配置索引映射。
+    /// 验证工具菜单以 Web 搜索开头，且菜单下标与配置索引一一对应。
     #[test]
-    fn cli_tool_menu_excludes_web_search_and_maps_config_indices() {
+    fn tool_menu_starts_with_web_search_and_maps_indices_directly() {
         let tools = cli_tool_names();
+        let mut config = AppConfig::default();
 
-        assert_eq!(tools.len(), 19);
-        assert_eq!(tools[0].0, "vision");
-        assert!(tools.iter().all(|(id, _, _)| *id != "web"));
-        assert_eq!(cli_tool_config_index(0), 1);
-        assert_eq!(cli_tool_config_index(tools.len() - 1), 19);
+        assert_eq!(tools.len(), 20);
+        assert_eq!(tools[0].0, "web");
+        assert_eq!(tools[1].0, "vision");
+        // 菜单首行切换的正是 Web 搜索开关
+        let before = config.plugins.web.enabled;
+        toggle_plugin(&mut config, 0);
+        assert_ne!(before, config.plugins.web.enabled);
     }
 
     /// 验证受开关控制的轻量工具都能在 TUI 中查看与切换。
@@ -421,12 +415,11 @@ mod tests {
                 .iter()
                 .position(|(name, _, _)| *name == id)
                 .unwrap_or_else(|| panic!("missing menu entry: {id}"));
-            let config_index = cli_tool_config_index(position);
-            let before = plugin_enabled(&config, config_index);
-            toggle_plugin(&mut config, config_index);
+            let before = plugin_enabled(&config, position);
+            toggle_plugin(&mut config, position);
             assert_ne!(
                 before,
-                plugin_enabled(&config, config_index),
+                plugin_enabled(&config, position),
                 "toggle had no effect: {id}"
             );
         }
