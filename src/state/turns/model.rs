@@ -1,5 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+/// 会话根的保留轮次标识。
+///
+/// 根绑定会话本身而不是首条消息：所有首轮的 `parent_turn_id` 都指向
+/// 该哨兵，活动叶子退到根部时也存该值。由此 `parent_turn_id` 永不为
+/// NULL，「旧数据未回填」与「首轮 / 编辑首轮产生的新起点」不再共用
+/// 同一个空值表达。
+pub(crate) const SESSION_ROOT_TURN_ID: &str = "__root__";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TurnStatus {
     Running,

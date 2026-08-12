@@ -55,6 +55,7 @@ pub(super) fn open_connection(state_dir: &Path) -> Result<Connection> {
     // 回填依赖 meta 表记录一次性标记，必须先建表
     create_tree_meta_table(&conn)?;
     backfill_linear_parents(&conn)?;
+    migrate_session_root_sentinel(&conn)?;
     conn.execute_batch(
         "UPDATE turns
          SET assistant_content = '', assistant_reasoning = NULL
@@ -255,6 +256,30 @@ fn backfill_linear_parents(conn: &Connection) -> Result<()> {
         "INSERT INTO session_tree_meta (key, value) VALUES ('parents_backfilled', '1')
          ON CONFLICT(key) DO UPDATE SET value = '1'",
         [],
+    )?;
+    Ok(())
+}
+
+/// 将根表示迁移到显式会话根哨兵（幂等，每次打开都可执行）。
+///
+/// 根绑定会话本身而不是首条消息：
+/// - 首轮（含编辑首轮产生的新起点）的 `parent_turn_id` 统一指向哨兵，
+///   NULL 从此只出现在迁移前的瞬间，消除「未回填」与「新根」的两义性；
+/// - 活动叶子的空串旧哨兵同样迁移为会话根哨兵。
+///
+/// 参数:
+/// - `conn`: SQLite 连接
+///
+/// 返回:
+/// - 迁移是否成功
+fn migrate_session_root_sentinel(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "UPDATE turns SET parent_turn_id = ?1 WHERE parent_turn_id IS NULL",
+        rusqlite::params![super::model::SESSION_ROOT_TURN_ID],
+    )?;
+    conn.execute(
+        "UPDATE session_tree_meta SET value = ?1 WHERE key = 'active_leaf' AND value = ''",
+        rusqlite::params![super::model::SESSION_ROOT_TURN_ID],
     )?;
     Ok(())
 }

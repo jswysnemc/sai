@@ -1,4 +1,4 @@
-use super::model::{Turn, TurnStatus};
+use super::model::{Turn, TurnStatus, SESSION_ROOT_TURN_ID};
 use super::schema::open_connection;
 use anyhow::{bail, Result};
 use chrono::Utc;
@@ -561,8 +561,10 @@ impl ConversationDb {
 
     pub(super) fn insert_turn_locked(&self, conn: &Connection, turn: InsertTurn<'_>) -> Result<()> {
         // 新轮次挂在当前活动叶子之后；从历史中间开分支时叶子已被切走，
-        // 因此这里不能用 seq 最大的轮次充当父节点
-        let parent = active_leaf_locked(conn)?;
+        // 因此这里不能用 seq 最大的轮次充当父节点。
+        // 空会话（无记录）时挂在会话根下：parent 从不写入 NULL
+        let parent = active_leaf_locked(conn)?
+            .unwrap_or_else(|| SESSION_ROOT_TURN_ID.to_string());
         conn.execute(
             "INSERT INTO turns (
                 turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
@@ -583,7 +585,7 @@ impl ConversationDb {
             ],
         )?;
         // 插入后活动叶子推进到新轮次
-        set_active_leaf_locked(conn, Some(turn.turn_id))?;
+        set_active_leaf_locked(conn, turn.turn_id)?;
         Ok(())
     }
 }
@@ -681,15 +683,16 @@ fn map_turn(row: &Row<'_>) -> rusqlite::Result<Turn> {
     })
 }
 
-/// 读取当前活动叶子轮次。
+/// 读取当前活动叶子。
 ///
-/// 未显式设置时回退到 seq 最大的轮次，使升级前的线性会话行为不变。
+/// 位于会话根部时返回 `SESSION_ROOT_TURN_ID`；未显式设置时回退到
+/// seq 最大的轮次，使升级前的线性会话行为不变。
 ///
 /// 参数:
 /// - `conn`: SQLite 连接
 ///
 /// 返回:
-/// - 活动叶子轮次标识；会话为空时返回 None
+/// - 活动叶子标识（可能为会话根哨兵）；空会话且无记录时返回 None
 pub(super) fn active_leaf_locked(conn: &Connection) -> Result<Option<String>> {
     // 1. 优先取显式记录的叶子，并确认它仍然存在
     let stored: Option<String> = conn
@@ -701,10 +704,10 @@ pub(super) fn active_leaf_locked(conn: &Connection) -> Result<Option<String>> {
         .optional()?
         .flatten();
     if let Some(leaf) = stored {
-        // 空串是「已显式退到根部」的哨兵：下一轮应当成为新的根，
-        // 不能落到第 2 步回退到 seq 最大的轮次，否则编辑首轮会接到会话末尾
-        if leaf.is_empty() {
-            return Ok(None);
+        // 会话根是合法叶子位置：下一轮直接挂在根下；
+        // 空串是迁移前的旧哨兵，读取路径同样映射为根（防御历史数据）
+        if leaf == SESSION_ROOT_TURN_ID || leaf.is_empty() {
+            return Ok(Some(SESSION_ROOT_TURN_ID.to_string()));
         }
         let exists: i64 = conn.query_row(
             "SELECT COUNT(*) FROM turns WHERE turn_id = ?1",
@@ -725,21 +728,19 @@ pub(super) fn active_leaf_locked(conn: &Connection) -> Result<Option<String>> {
         .optional()?)
 }
 
-/// 写入当前活动叶子轮次。
+/// 写入当前活动叶子。
 ///
 /// 参数:
 /// - `conn`: SQLite 连接
-/// - `turn_id`: 目标叶子轮次；None 表示显式退到根部
+/// - `turn_id`: 目标叶子；退到根部时传 `SESSION_ROOT_TURN_ID`
 ///
 /// 返回:
 /// - 写入是否成功
-pub(super) fn set_active_leaf_locked(conn: &Connection, turn_id: Option<&str>) -> Result<()> {
-    // None 记为空串而不是删除记录：删除会与「老会话从未记录过叶子」混淆，
-    // 读取时便无法判断该回退到末尾还是该开新的根
+pub(super) fn set_active_leaf_locked(conn: &Connection, turn_id: &str) -> Result<()> {
     conn.execute(
         "INSERT INTO session_tree_meta (key, value) VALUES ('active_leaf', ?1)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        params![turn_id.unwrap_or("")],
+        params![turn_id],
     )?;
     Ok(())
 }

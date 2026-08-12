@@ -144,6 +144,10 @@ pub(super) fn path_to_leaf(turns: &[Turn], leaf_id: &str) -> Vec<String> {
     let mut cursor = Some(leaf_id);
     // 自叶向根回溯；seen 兜住数据损坏导致的环，避免死循环
     while let Some(current) = cursor {
+        // 会话根哨兵不是轮次，抵达即回溯完成
+        if current == crate::state::turns::model::SESSION_ROOT_TURN_ID {
+            break;
+        }
         if !seen.insert(current) {
             break;
         }

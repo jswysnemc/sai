@@ -1,5 +1,6 @@
 use super::builder::{build_tree, path_to_leaf};
 use super::model::SessionTree;
+use crate::state::turns::model::SESSION_ROOT_TURN_ID;
 use crate::state::turns::repository::{active_leaf_locked, set_active_leaf_locked, ConversationDb};
 use anyhow::{bail, Result};
 
@@ -17,6 +18,8 @@ impl ConversationDb {
             let conn = self.conn.lock().unwrap();
             active_leaf_locked(&conn)?
         };
+        // 位于会话根部时没有可高亮的轮次节点
+        let leaf = leaf.filter(|value| value != SESSION_ROOT_TURN_ID);
         Ok(build_tree(&turns, leaf))
     }
 
@@ -39,6 +42,10 @@ impl ConversationDb {
         let Some(leaf) = leaf else {
             return Ok(Vec::new());
         };
+        // 位于会话根部：活动分支为空，下一轮将开启新分支
+        if leaf == SESSION_ROOT_TURN_ID {
+            return Ok(Vec::new());
+        }
         let path = path_to_leaf(&turns, &leaf);
         if path.is_empty() {
             return Ok(turns);
@@ -59,21 +66,24 @@ impl ConversationDb {
     /// 切换只移动指针，不删除任何轮次：原分支仍可通过树视图回到。
     ///
     /// 参数:
-    /// - `turn_id`: 目标轮次
+    /// - `turn_id`: 目标轮次；`SESSION_ROOT_TURN_ID` 表示回到会话根部
     ///
     /// 返回:
     /// - 切换是否成功；目标轮次不存在时报错
     pub fn switch_active_leaf(&self, turn_id: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        let exists: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM turns WHERE turn_id = ?1",
-            rusqlite::params![turn_id],
-            |row| row.get(0),
-        )?;
-        if exists == 0 {
-            bail!("turn not found: {turn_id}");
+        // 会话根是恒存在的合法目标，无需轮次存在性校验
+        if turn_id != SESSION_ROOT_TURN_ID {
+            let exists: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM turns WHERE turn_id = ?1",
+                rusqlite::params![turn_id],
+                |row| row.get(0),
+            )?;
+            if exists == 0 {
+                bail!("turn not found: {turn_id}");
+            }
         }
-        set_active_leaf_locked(&conn, Some(turn_id))
+        set_active_leaf_locked(&conn, turn_id)
     }
 
     /// 把活动叶子退回到指定轮次的父轮次。
@@ -85,7 +95,7 @@ impl ConversationDb {
     /// - `turn_id`: 要退出的轮次
     ///
     /// 返回:
-    /// - 退回后的活动叶子；已在根部时返回 None
+    /// - 退回后的活动叶子；退到会话根部时返回 None
     pub fn move_leaf_to_parent(&self, turn_id: &str) -> Result<Option<String>> {
         let parent: Option<String> = {
             let conn = self.conn.lock().unwrap();
@@ -95,8 +105,11 @@ impl ConversationDb {
                 |row| row.get(0),
             )?
         };
+        // 迁移前的旧行可能仍是 NULL，一律视为挂在会话根下
+        let parent = parent.unwrap_or_else(|| SESSION_ROOT_TURN_ID.to_string());
         let conn = self.conn.lock().unwrap();
-        set_active_leaf_locked(&conn, parent.as_deref())?;
-        Ok(parent)
+        set_active_leaf_locked(&conn, &parent)?;
+        // 对外沿用「已在根部返回 None」的语义，根哨兵不外泄
+        Ok(Some(parent).filter(|value| value != SESSION_ROOT_TURN_ID))
     }
 }

@@ -1,3 +1,4 @@
+use crate::state::turns::model::SESSION_ROOT_TURN_ID;
 use crate::state::turns::ConversationDb;
 
 /// 在临时目录创建对话库。
@@ -239,8 +240,9 @@ fn resend_after_editing_the_first_turn_creates_a_new_root() {
     let turns = db.load_turns().unwrap();
     let edited_turn = turns.iter().find(|turn| turn.turn_id == edited).unwrap();
     assert_eq!(
-        edited_turn.parent_turn_id, None,
-        "改写首轮后应当成为新的根轮次，而不是挂到 seq 最大的 {last} 之后"
+        edited_turn.parent_turn_id.as_deref(),
+        Some(SESSION_ROOT_TURN_ID),
+        "改写首轮后应当挂在会话根下，而不是接到 seq 最大的 {last} 之后"
     );
 
     // 活动分支只剩改写后的这一轮
@@ -271,9 +273,69 @@ fn edited_first_turn_root_survives_reopening_the_database() {
     let turns = reopened.load_turns().unwrap();
     let edited = turns.iter().find(|turn| turn.turn_id == "t3").unwrap();
     assert_eq!(
-        edited.parent_turn_id, None,
+        edited.parent_turn_id.as_deref(),
+        Some(SESSION_ROOT_TURN_ID),
         "重开连接后新根不得被线性回填接回旧分支末尾"
     );
     let tree = reopened.session_tree().unwrap();
     assert_eq!(tree.roots.len(), 2, "树上应有两个根：原首轮与改写轮");
+}
+
+/// 旧格式数据（NULL 父、空串叶子哨兵）打开时迁移到会话根哨兵。
+#[test]
+fn legacy_null_parents_and_empty_leaf_migrate_to_session_root() {
+    let temp = tempfile::tempdir().unwrap();
+    {
+        let db = open_db(temp.path());
+        append_turn(&db, "t1", "第一问");
+        append_turn(&db, "t2", "第二问");
+        // 手工降级为旧格式：首轮父置 NULL、叶子写空串旧哨兵
+        let conn = db.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE turns SET parent_turn_id = NULL WHERE turn_id = 't1'",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE session_tree_meta SET value = '' WHERE key = 'active_leaf'",
+            [],
+        )
+        .unwrap();
+    }
+
+    let db = open_db(temp.path());
+    let turns = db.load_turns().unwrap();
+    let first = turns.iter().find(|turn| turn.turn_id == "t1").unwrap();
+    assert_eq!(
+        first.parent_turn_id.as_deref(),
+        Some(SESSION_ROOT_TURN_ID),
+        "NULL 父应迁移为会话根哨兵"
+    );
+    // 空串叶子迁移为会话根：活动分支为空，下一轮挂根下
+    assert!(db.active_branch_turns().unwrap().is_empty());
+    let fresh = append_turn(&db, "t3", "新的开始");
+    let turns = db.load_turns().unwrap();
+    let fresh_turn = turns.iter().find(|turn| turn.turn_id == fresh).unwrap();
+    assert_eq!(
+        fresh_turn.parent_turn_id.as_deref(),
+        Some(SESSION_ROOT_TURN_ID)
+    );
+}
+
+/// 根哨兵不对外泄漏：退出首轮返回 None，树的活动叶子也为 None。
+#[test]
+fn session_root_sentinel_stays_internal() {
+    let temp = tempfile::tempdir().unwrap();
+    let db = open_db(temp.path());
+    append_turn(&db, "t1", "第一问");
+
+    let parent = db.move_leaf_to_parent("t1").unwrap();
+    assert_eq!(parent, None, "退到根部对外仍表现为 None");
+    assert!(db.active_branch_turns().unwrap().is_empty());
+    let tree = db.session_tree().unwrap();
+    assert_eq!(tree.active_leaf_id, None, "根部没有可高亮的轮次节点");
+
+    // 会话根是合法的切换目标
+    db.switch_active_leaf(SESSION_ROOT_TURN_ID).unwrap();
+    assert!(db.active_branch_turns().unwrap().is_empty());
 }
