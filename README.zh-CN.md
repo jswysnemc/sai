@@ -37,15 +37,15 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 
 ### 终端 REPL
 
-![Sai REPL 问候与流式对话](pics/placeholder-repl.svg)
+![Sai REPL 问候与流式对话](pics/repl.png)
 
 ### 配置 TUI
 
 运行 `sai config`（REPL 内也可进入）打开终端配置界面。主菜单按使用频率分层：激活配置、供应商和模型、Agent、工具、Skills、高级设置。
 
-![配置 TUI 主菜单](pics/placeholder-config.svg)
+![配置 TUI 主菜单](pics/config.png)
 
-![Agent 工具与 Skills 勾选清单](pics/placeholder-config-agents.svg)
+![Agent 工具与 Skills 勾选清单](pics/skills.png)
 
 ### 内置工具
 
@@ -61,9 +61,9 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 
 ### Web 工作台
 
-![并发调度多个子代理](pics/placeholder-web.svg)
+![并发调度多个子代理](pics/web.png)
 
-![源代码管理与模型切换](pics/placeholder-web-git.svg)
+![源代码管理与模型切换](pics/web1.png)
 
 
 ---

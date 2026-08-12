@@ -33,19 +33,17 @@ This project is a fork of [Miyu](https://github.com/SHORiN-KiWATA/Miyu). It cont
 
 Streaming REPL chat, built-in tool replies, the config TUI, plus the web workbench for subagents and Source Control.
 
-> UI shots below are placeholders; real screenshots will replace them later.
-
 ### Terminal REPL
 
-![Sai REPL greeting and streaming chat](pics/placeholder-repl.svg)
+![Sai REPL greeting and streaming chat](pics/repl.png)
 
 ### Config TUI
 
 Run `sai config` (also reachable from the REPL) for the terminal configurator. The main menu is layered by frequency: active configuration, providers and models, Agent, tools, Skills, advanced settings.
 
-![Config TUI main menu](pics/placeholder-config.svg)
+![Config TUI main menu](pics/config.png)
 
-![Agent tool and Skills multi-select](pics/placeholder-config-agents.svg)
+![Agent tool and Skills multi-select](pics/skills.png)
 
 ### Built-in tools
 
@@ -61,9 +59,9 @@ Run `sai config` (also reachable from the REPL) for the terminal configurator. T
 
 ### Web workbench
 
-![Multiple subagents running in parallel](pics/placeholder-web.svg)
+![Multiple subagents running in parallel](pics/web.png)
 
-![Source Control and model switching](pics/placeholder-web-git.svg)
+![Source Control and model switching](pics/web1.png)
 
 
 ---
