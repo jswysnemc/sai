@@ -50,7 +50,8 @@ impl ReplRuntime {
                 if !summary.trim().is_empty() {
                     self.transcript.finalize_live_tail();
                     self.transcript.clear_work_status();
-                    self.transcript.push_meta(summary);
+                    // 总览走专属 cell：渲染层在其下追加 turn 分割线标记轮次边界
+                    self.transcript.push_turn_summary(summary);
                     return self.sync_transcript(false);
                 }
                 return Ok(());

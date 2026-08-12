@@ -5,7 +5,10 @@ use crate::render::command_result_block::{
     render_command_result_view_with_limit, render_completed_command_output,
     render_live_command_output,
 };
-use crate::render::tool_event_line::{tool_event_label, tool_event_text};
+use crate::render::status_style::{color_status, ToolHealth};
+use crate::render::tool_event_line::{
+    tool_event_label_tense, tool_event_text, tool_status_line, tool_verb, ToolVerbTense,
+};
 use crate::render::ToolCallDisplayMode;
 use serde_json::Value;
 
@@ -34,23 +37,32 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
         }
     }
 
-    let label = tool_event_label(&view.name, Some(&view.arguments));
-    let status = match &view.outcome {
-        Some(outcome) if outcome.ok => "ok",
-        Some(_) => "err",
-        None if view.arguments.trim().is_empty() => "arg",
-        None => "run",
-    };
-    // 编辑类：用 +N -M 顶替 run/ok。参数流阶段数字跳动，定稿后钉死最终值。
-    // color_status 对未知状态原样透传，可直接携带 ANSI 着色文本。
-    let edit_stats = edit_stat_status(view);
-    let status = edit_stats.as_deref().unwrap_or(status);
+    let tense = ToolVerbTense::from_done(view.outcome.is_some());
+    let label = tool_event_label_tense(&view.name, Some(&view.arguments), tense);
     let denied = permission_denied(view.permission.as_ref());
     let is_edit = crate::render::stream_text::is_file_edit_tool(&view.name);
+    // 编辑类：徽标用 +N -M 顶替 run/ok，参数流阶段数字跳动、定稿后钉死最终值；
+    // 状态语义（圆点颜色）与徽标分离，仍按 outcome 推导。
+    // 统计尚未就绪时留空，绝不显示 Writing run。
+    let edit_stats = edit_stat_status(view);
+    let (badge, health) = if is_edit {
+        match &view.outcome {
+            Some(outcome) if !outcome.ok => (color_status("err"), ToolHealth::Err),
+            Some(_) => (edit_stats.unwrap_or_default(), ToolHealth::Ok),
+            None => (edit_stats.unwrap_or_default(), ToolHealth::Pending),
+        }
+    } else {
+        match &view.outcome {
+            Some(outcome) if outcome.ok => (color_status("ok"), ToolHealth::Ok),
+            Some(_) => (color_status("err"), ToolHealth::Err),
+            None if view.arguments.trim().is_empty() => (color_status("arg"), ToolHealth::Pending),
+            None => (color_status("run"), ToolHealth::Pending),
+        }
+    };
     if mode == ToolCallDisplayMode::Summary {
-        let mut output = tool_event_text(&label, status);
+        let mut output = tool_status_line(&label, &badge, health);
         if let Some(progress) = visible_progress(view.progress.as_deref()) {
-            output.push_str(&format!("\n\x1b[2m  └─ {progress}\x1b[0m"));
+            output.push_str(&render_progress_note(progress));
         }
         // 失败时在 summary 也展示输出摘要，成功则保留状态行（不再整段吞掉）
         if let Some(outcome) = &view.outcome {
@@ -63,7 +75,7 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
         return output;
     }
 
-    let mut output = tool_event_text(&label, status);
+    let mut output = tool_status_line(&label, &badge, health);
     // 编辑类 Full：挂 diff 正文（无 Added 标题）；其它工具仍展示参数/结果载荷
     if is_edit {
         if let Some(diff_body) =
@@ -79,7 +91,7 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
         output.push_str(&render_payload("args", &view.arguments));
     }
     if let Some(progress) = visible_progress(view.progress.as_deref()) {
-        output.push_str(&format!("\n\x1b[2m  ├─ {progress}\x1b[0m"));
+        output.push_str(&render_progress_note(progress));
     }
     if let Some(outcome) = &view.outcome {
         if !denied && !outcome.output.trim().is_empty() && !is_edit {
@@ -91,6 +103,17 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
     output
 }
 
+/// 渲染附着在状态行下方的进度说明（统一 gutter，弱化）。
+///
+/// 参数:
+/// - `progress`: 已过滤的进度文本
+///
+/// 返回:
+/// - 以换行开头的 gutter 行
+fn render_progress_note(progress: &str) -> String {
+    format!("\n\x1b[2m  └ {progress}\x1b[0m")
+}
+
 /// 渲染前台 run_command 的完整视图。
 ///
 /// 参数:
@@ -100,12 +123,28 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
 /// 返回:
 /// - 命令代码块 + 可选结果块
 fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
-    let action = "Run";
-    let mut output = render_command_block_with_action(&view.arguments, action)
+    let tense = ToolVerbTense::from_done(view.outcome.is_some());
+    let action = tool_verb("run_command", tense);
+    // 圆点以命令语义为准：结果 JSON 的 success 优先，非 JSON 时退回工具层 ok
+    let health = match &view.outcome {
+        Some(outcome) => {
+            let command_ok =
+                crate::render::command_result_block::command_result_streams(&outcome.output)
+                    .map(|(success, _, _)| success)
+                    .unwrap_or(outcome.ok);
+            if command_ok {
+                ToolHealth::Ok
+            } else {
+                ToolHealth::Err
+            }
+        }
+        None => ToolHealth::Pending,
+    };
+    let mut output = render_command_block_with_action(&view.arguments, action, health)
         .trim_end()
         .to_string();
     if let Some(progress) = visible_progress(view.progress.as_deref()) {
-        output.push_str(&format!("\n\x1b[2m  ├─ {progress}\x1b[0m"));
+        output.push_str(&render_progress_note(progress));
     }
     // 权限拒绝的失败输出与「已拒绝」决定行重复，跳过结果块
     let denied = permission_denied(view.permission.as_ref());
@@ -129,7 +168,14 @@ fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
             let status = if outcome.ok { "ok" } else { "err" };
             output.push_str(&format!(
                 "\n{}",
-                tool_event_text(&tool_event_label(&view.name, Some(&view.arguments)), status)
+                tool_event_text(
+                    &tool_event_label_tense(
+                        &view.name,
+                        Some(&view.arguments),
+                        ToolVerbTense::Perfect,
+                    ),
+                    status,
+                )
             ));
         }
         let _ = mode;
@@ -169,7 +215,7 @@ fn edit_stat_status(view: &ToolView) -> Option<String> {
             return Some(status);
         }
     }
-    crate::render::edit_diff::streamed_diff_stat_status(&view.arguments)
+    crate::render::edit_diff::edit_diff_stat_status(&view.arguments)
 }
 
 /// 从编辑工具结果 JSON 的 `changed_files` 组装 `+N -M`。
@@ -291,7 +337,7 @@ fn arguments_ready_for_display(arguments: &str) -> bool {
     !looks_like_json
 }
 
-/// 渲染层级工具载荷。
+/// 渲染层级工具载荷（统一 gutter：`  └ ` 首行 + 四空格续行，整体弱化）。
 ///
 /// 参数:
 /// - `label`: 载荷名称
@@ -320,13 +366,13 @@ fn render_payload(label: &str, payload: &str) -> String {
             line.clone()
         };
         if index == 0 {
-            output.push_str(&format!("\x1b[2m  └─ {label}: {text}\x1b[0m"));
+            output.push_str(&format!("\x1b[2m  └ {label}: {text}\x1b[0m"));
         } else {
-            output.push_str(&format!("\n\x1b[2m     {text}\x1b[0m"));
+            output.push_str(&format!("\n\x1b[2m    {text}\x1b[0m"));
         }
     }
     if output.is_empty() {
-        output.push_str(&format!("\x1b[2m  └─ {label}:\x1b[0m"));
+        output.push_str(&format!("\x1b[2m  └ {label}:\x1b[0m"));
     }
     output
 }

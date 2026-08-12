@@ -1,9 +1,11 @@
 use super::style::{
-    CODE_BLOCK_FRAME_STYLE, CODE_COMMENT_STYLE, CODE_FUNCTION_STYLE, CODE_KEYWORD_STYLE,
-    CODE_NUMBER_STYLE, CODE_STRING_STYLE, CODE_TOKEN_RESET, PRIMARY_STYLE, RESET,
+    CODE_COMMENT_STYLE, CODE_FUNCTION_STYLE, CODE_KEYWORD_STYLE, CODE_NUMBER_STYLE,
+    CODE_STRING_STYLE, CODE_TOKEN_RESET, MD_CODE_LANG_STYLE, PRIMARY_STYLE, RESET,
 };
 
 /// 渲染不带横线的代码块标签行。
+///
+/// 标签弱化显示，与命令输出块的 dim gutter 属于同一视觉层。
 ///
 /// 参数:
 /// - `lang`: Markdown 代码块语言标识
@@ -14,7 +16,7 @@ pub(crate) fn render_code_header(lang: &str) -> String {
     if lang.is_empty() {
         String::new()
     } else {
-        format!("{CODE_BLOCK_FRAME_STYLE}{lang}{RESET}\n")
+        format!("{MD_CODE_LANG_STYLE}{lang}{RESET}\n")
     }
 }
 

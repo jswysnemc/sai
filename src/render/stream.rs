@@ -20,7 +20,6 @@ pub(crate) use crate::render::stream_text::{
 };
 use crate::render::stream_tool_status::tool_start_status;
 use crate::render::streaming_replace::{clear_rendered_rows, rendered_visual_rows};
-use crate::render::style::TOOL_BULLET;
 use crate::render::terminal_text as t;
 use crate::render::tool_call_blocks::{
     write_command_tool_call_block, write_edit_tool_call_block, write_edit_tool_call_diff_block,

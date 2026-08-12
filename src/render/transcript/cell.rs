@@ -64,9 +64,16 @@ impl HistoryCell {
                 display_rendered_lines(width, || tool_cell::render(cell, options.tool_call_mode))
             }
             Self::Meta(cell) => display_rendered_lines(width, || {
-                // 总览横线若在 FinalSummary 时按整屏宽度烘焙，这里按正文净宽重画，避免折到第二行
+                // 历史烘焙的旧横线先剥掉，再按当前正文净宽为总览补一条 turn 分割线；
+                // 分割线在渲染期生成，终端宽度变化时随重排自动重画
                 let rendered = meta_cell::render(cell);
-                crate::render::session_summary::refit_turn_rule(&rendered, width)
+                let refit = crate::render::session_summary::refit_turn_rule(&rendered, width);
+                if cell.kind == meta_cell::MetaKind::Summary {
+                    // 总览正文与通栏分割线之间留一行空行，扫读时不贴在一起
+                    format!("{refit}\n\n{}", turn_rule(width))
+                } else {
+                    refit
+                }
             }),
         };
         // 区块间距（交界处只保留一行空行）：
@@ -189,6 +196,20 @@ impl HistoryCell {
         })
     }
 
+    /// 构造轮次总览 cell，渲染时在其下追加 turn 分割线。
+    ///
+    /// 参数:
+    /// - `text`: 自带样式的上下文总览文本
+    ///
+    /// 返回:
+    /// - 轮次总览 cell
+    pub(crate) fn turn_summary(text: String) -> Self {
+        Self::Meta(MetaCell {
+            text,
+            kind: meta_cell::MetaKind::Summary,
+        })
+    }
+
     /// 构造失败提示 cell。
     ///
     /// 参数:
@@ -213,6 +234,17 @@ impl HistoryCell {
     pub(crate) fn welcome(cell: WelcomeCell) -> Self {
         Self::Welcome(cell)
     }
+}
+
+/// 【终端】【会话分隔】生成一条弱化的通栏 turn 分割线。
+///
+/// 参数:
+/// - `width`: 正文净宽度
+///
+/// 返回:
+/// - 恰好占满一行的弱化横线
+fn turn_rule(width: usize) -> String {
+    format!("\x1b[2m{}\x1b[0m", "─".repeat(width.max(1)))
 }
 
 /// 【终端】【会话渲染】按指定净宽度渲染并折行普通 transcript cell。

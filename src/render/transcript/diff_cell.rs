@@ -1,11 +1,11 @@
 use crate::permission::PermissionDecision;
 use crate::render::activity_animation::strip_ansi_for_test;
-use crate::render::content_indent::indent_diff_for_transcript;
-use crate::render::edit_diff::{
-    render_edit_file_diff_for_transcript, streamed_diff_stat_status,
-};
+use crate::render::edit_diff::{edit_diff_stat_status, render_edit_file_diff_for_transcript};
+use crate::render::status_style::{color_status, ToolHealth};
 use crate::render::style::TOOL_BULLET;
-use crate::render::tool_event_line::{tool_event_label, tool_event_text};
+use crate::render::tool_event_line::{
+    tool_event_label_tense, tool_event_text, tool_status_line, ToolVerbTense,
+};
 use crate::render::tool_view::PermissionAuditView;
 use crate::render::{PermissionChoice, ToolCallDisplayMode};
 
@@ -36,11 +36,11 @@ impl DiffCell {
     /// - 不依赖后续文件状态的 diff cell
     pub(crate) fn from_call(name: String, arguments: String) -> Self {
         let rendered = render_edit_file_diff_for_transcript(&arguments).unwrap_or_else(|| {
-            // 无法构建 diff 预览时退回状态行：优先展示实时增删统计
-            let stats = streamed_diff_stat_status(&arguments);
+            // 无法构建 diff 预览时退回状态行：优先展示增删统计，绝不退化成 Write run
+            let stats = edit_diff_stat_status(&arguments);
             tool_event_text(
-                &tool_event_label(&name, Some(&arguments)),
-                stats.as_deref().unwrap_or("run"),
+                &tool_event_label_tense(&name, Some(&arguments), ToolVerbTense::Progressive),
+                stats.as_deref().unwrap_or(""),
             )
         });
         Self {
@@ -187,16 +187,17 @@ pub(crate) fn render(cell: &DiffCell, mode: ToolCallDisplayMode) -> String {
     if mode == ToolCallDisplayMode::Hidden {
         return String::new();
     }
-    let label = tool_event_label(&cell.name, Some(&cell.arguments));
-    let stats = streamed_diff_stat_status(&cell.arguments);
-    let status = match cell.completed {
-        Some(false) => "err",
-        _ => stats.as_deref().unwrap_or(match cell.completed {
-            Some(true) => "ok",
-            _ => "run",
-        }),
+    let tense = ToolVerbTense::from_done(cell.completed.is_some());
+    let label = tool_event_label_tense(&cell.name, Some(&cell.arguments), tense);
+    let stats = edit_diff_stat_status(&cell.arguments);
+    // 编辑类摘要始终优先 +N -M 徽标；失败才 err，圆点颜色随结果切换。
+    // 禁止成功/进行中落到 Writing run。
+    let (badge, health) = match cell.completed {
+        Some(false) => (color_status("err"), ToolHealth::Err),
+        Some(true) => (stats.unwrap_or_default(), ToolHealth::Ok),
+        None => (stats.unwrap_or_default(), ToolHealth::Pending),
     };
-    let mut output = tool_event_text(&label, status);
+    let mut output = tool_status_line(&label, &badge, health);
     // 定稿 DiffCell 必须带上冻结正文；之前只在 Full 挂正文，默认 Summary 下写完后 diff 丢失
     let body = strip_leading_bullet_header(&cell.rendered);
     if !body.trim().is_empty() {
@@ -204,25 +205,22 @@ pub(crate) fn render(cell: &DiffCell, mode: ToolCallDisplayMode) -> String {
         output.push_str(body.trim_end());
     }
 
+    // 权限控件与其他工具卡一致顶正文列，不再随 diff 正文内收
     if let Some(permission) = &cell.permission {
         match &permission.decision {
             Some(decision) => {
                 if !output.ends_with('\n') {
                     output.push('\n');
                 }
-                output.push_str(&indent_diff_for_transcript(
-                    &crate::render::render_permission_decision(decision),
-                ));
+                output.push_str(&crate::render::render_permission_decision(decision));
             }
             None => {
                 if !output.ends_with('\n') {
                     output.push('\n');
                 }
-                output.push_str(&indent_diff_for_transcript(
-                    &crate::render::render_permission_controls(
-                        permission.selected,
-                        permission.reply_draft.as_deref(),
-                    ),
+                output.push_str(&crate::render::render_permission_controls(
+                    permission.selected,
+                    permission.reply_draft.as_deref(),
                 ));
             }
         }

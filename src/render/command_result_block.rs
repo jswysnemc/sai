@@ -1,7 +1,6 @@
 use crate::render::fold_text::{
     fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
 };
-use crate::render::style::TOOL_BULLET;
 use crate::render::terminal_text as t;
 use serde_json::Value;
 
@@ -37,7 +36,7 @@ pub(crate) fn truncate_chars(text: &str, max_chars: usize) -> String {
     }
     let omitted = total - max_chars;
     format!(
-        "{}\n... {} {omitted} {} ...",
+        "{}\n… {} {omitted} {}",
         text.chars().take(max_chars).collect::<String>(),
         t("truncated", "已截断"),
         t("chars", "字符")
@@ -404,19 +403,26 @@ fn render_output_block_limited_with_hint(
     let sanitized = sanitize_command_output(text.trim());
     let (content, omitted) = limited_output_text(&sanitized, line_limit);
     let raw_lines = content.lines().map(str::to_string).collect::<Vec<_>>();
+    // 错误流在 gutter 首行携带红色标签，标准输出直接展示内容；
+    // 状态圆点只出现在卡片标题层级，输出块内不再另起 `•` 行
+    let is_error = label.starts_with("err") || label.contains("错误");
     let mut lines = Vec::new();
-    for (index, line) in raw_lines.iter().enumerate() {
+    if is_error {
+        lines.push(format!("\x1b[2m  └ \x1b[0m\x1b[31m{label}\x1b[0m"));
+    }
+    for line in raw_lines.iter() {
         if line == "__OMITTED__" {
             let hint = if show_expand_hint {
                 format!("… +{omitted} lines (Ctrl+O to expand)")
             } else {
                 format!("… +{omitted} lines")
             };
-            lines.push(format!("\x1b[2m  └ {hint}\x1b[0m"));
+            let prefix = if lines.is_empty() { "  └ " } else { "    " };
+            lines.push(format!("\x1b[2m{prefix}{hint}\x1b[0m"));
             continue;
         }
         // Codex 输出 gutter：首行 `  └ `，续行四空格，整体 dim
-        let prefix = if index == 0 { "  └ " } else { "    " };
+        let prefix = if lines.is_empty() { "  └ " } else { "    " };
         lines.push(format!("\x1b[2m{prefix}{line}\x1b[0m"));
     }
     if lines.is_empty() {
@@ -428,26 +434,9 @@ fn render_output_block_limited_with_hint(
             "\x1b[2m    … +{omitted} lines (Ctrl+O to expand)\x1b[0m"
         ));
     }
-    render_output_block_lines(label, &lines)
-}
-
-/// 使用 Codex 风格 gutter 渲染输出块。
-///
-/// 参数:
-/// - `label`: 输出块标签（stdout/stderr 语义）
-/// - `lines`: 已准备好的输出内容行
-///
-/// 返回:
-/// - 带 dim 前缀的输出文本
-fn render_output_block_lines(label: &str, lines: &[String]) -> String {
     let mut output = String::new();
-    // 错误流保留标签行，标准输出直接展示内容
-    let is_error = label.starts_with("err") || label.contains("错误") || label.contains("err");
-    if is_error {
-        output.push_str(&format!("\x1b[31m{TOOL_BULLET} {label}\x1b[0m\n"));
-    }
     for line in lines {
-        output.push_str(line);
+        output.push_str(&line);
         output.push('\n');
     }
     output
@@ -543,9 +532,11 @@ mod tests {
         let output = render_output_block("err exit 1", "not found\n");
         let plain = strip_ansi_for_test(&output);
 
-        assert!(plain.contains("• err exit 1"));
+        // 错误标签位于统一 gutter 首行，内容行按续行缩进；圆点只属于卡片标题
+        assert!(plain.contains("└ err exit 1"));
+        assert!(!plain.contains("• err"));
         assert!(!plain.contains("──"));
-        assert!(plain.contains("not found"));
+        assert!(plain.contains("    not found"));
         assert!(!plain.contains(",-- err"));
         assert!(!plain.contains("`--"));
     }

@@ -221,11 +221,16 @@ impl StreamRenderer {
         // 编辑类工具在 diff 块出现前用实时增删统计跳动，替代省略号动效；
         // color_status 对未知状态原样透传，可直接携带 ANSI 着色文本
         let live_status = if crate::render::stream_text::is_file_edit_tool(name) {
-            crate::render::edit_diff::streamed_diff_stat_status(&progress.arguments_preview)
+            crate::render::edit_diff::edit_diff_stat_status(&progress.arguments_preview)
         } else {
             None
         };
-        self.write_live_tool_status(&event_label, live_status.as_deref().unwrap_or("arg"), false)?;
+        // 编辑类：有统计用 +N -M；尚无字段时用 arg/…，不用 run
+        self.write_live_tool_status(
+            &event_label,
+            live_status.as_deref().unwrap_or("arg"),
+            false,
+        )?;
         self.resume_work_spinner()?;
         Ok(())
     }

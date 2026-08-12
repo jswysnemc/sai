@@ -1,6 +1,6 @@
 use super::*;
 use crate::render::markdown::render_table_cell_content;
-use crate::render::style::{INLINE_CODE_STYLE, RESET};
+use crate::render::style::{MD_INLINE_CODE_STYLE, RESET};
 use crossterm::terminal;
 
 #[test]
@@ -97,14 +97,14 @@ fn table_rows_keep_identical_width_with_wide_symbols() {
 
 #[test]
 fn wrap_ansi_text_preserves_inline_code_style_across_lines() {
-    let text = format!("{INLINE_CODE_STYLE}sudo pacman -S neovim{RESET}");
+    let text = format!("{MD_INLINE_CODE_STYLE}sudo pacman -S neovim{RESET}");
 
     let lines = wrap_ansi_text(&text, 12);
 
     assert!(lines.len() > 1);
-    assert!(lines[0].contains(INLINE_CODE_STYLE));
+    assert!(lines[0].contains(MD_INLINE_CODE_STYLE));
     assert!(lines[0].ends_with(RESET));
-    assert!(lines[1].starts_with(INLINE_CODE_STYLE));
+    assert!(lines[1].starts_with(MD_INLINE_CODE_STYLE));
     assert_eq!(
         strip_ansi_for_test(&lines.join("")),
         "sudo pacman -S neovim"

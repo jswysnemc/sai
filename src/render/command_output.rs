@@ -3,12 +3,12 @@ use crate::render::command_result_block::truncate_chars;
 pub(crate) use crate::render::command_result_block::{
     render_command_error_view_for_cli, render_command_result_view_for_cli,
 };
-use crate::render::style::TOOL_BULLET;
+use crate::render::status_style::{tool_bullet, ToolHealth};
 use anyhow::Result;
 use serde_json::Value;
 use std::io::{self, Write};
 
-/// 写入普通工具参数或输出块。
+/// 写入普通工具参数或输出块（统一 gutter：`  └ ` 首行 + 四空格续行）。
 ///
 /// 参数:
 /// - `stdout`: 标准输出句柄
@@ -23,9 +23,13 @@ pub(crate) fn write_tool_payload(
     payload: &str,
 ) -> Result<()> {
     let formatted = format_tool_payload(payload);
-    writeln!(stdout, "\x1b[2m{TOOL_BULLET} {label}:\x1b[0m")?;
-    for line in formatted.lines() {
-        writeln!(stdout, "\x1b[2m  {line}\x1b[0m")?;
+    let mut lines = formatted.lines();
+    match lines.next() {
+        Some(first) => writeln!(stdout, "\x1b[2m  └ {label}: {first}\x1b[0m")?,
+        None => writeln!(stdout, "\x1b[2m  └ {label}:\x1b[0m")?,
+    }
+    for line in lines {
+        writeln!(stdout, "\x1b[2m    {line}\x1b[0m")?;
     }
     Ok(())
 }
@@ -36,6 +40,7 @@ pub(crate) fn write_tool_payload(
 /// - `stdout`: 标准输出句柄
 /// - `arguments`: 工具调用参数
 /// - `action`: 命令动作展示名
+/// - `health`: 状态语义，决定行首圆点颜色
 ///
 /// 返回:
 /// - 写入是否成功
@@ -43,11 +48,12 @@ pub(crate) fn write_command_block_with_action(
     stdout: &mut io::Stdout,
     arguments: &str,
     action: &str,
+    health: ToolHealth,
 ) -> Result<()> {
     write!(
         stdout,
         "{}",
-        render_command_block_with_action(arguments, action)
+        render_command_block_with_action(arguments, action, health)
     )?;
     Ok(())
 }
@@ -87,7 +93,7 @@ pub(crate) fn write_command_error_preview(stdout: &mut io::Stdout, output: &str)
 /// - 代码块风格的命令文本
 #[cfg(test)]
 fn render_command_block(arguments: &str) -> String {
-    render_command_block_with_action(arguments, "")
+    render_command_block_with_action(arguments, "", ToolHealth::Ok)
 }
 
 /// 渲染带动作标题的命令调用块。
@@ -95,10 +101,15 @@ fn render_command_block(arguments: &str) -> String {
 /// 参数:
 /// - `arguments`: 工具调用参数
 /// - `action`: 命令动作展示名
+/// - `health`: 状态语义，决定行首圆点颜色（进行中弱化、成功绿、失败红）
 ///
 /// 返回:
 /// - 代码块风格的命令文本
-pub(crate) fn render_command_block_with_action(arguments: &str, action: &str) -> String {
+pub(crate) fn render_command_block_with_action(
+    arguments: &str,
+    action: &str,
+    health: ToolHealth,
+) -> String {
     let parsed = serde_json::from_str::<Value>(arguments).ok();
     let command = parsed
         .as_ref()
@@ -110,6 +121,7 @@ pub(crate) fn render_command_block_with_action(arguments: &str, action: &str) ->
         .unwrap_or_else(|| arguments.to_string());
     let command = command.trim();
     // Codex 风格：状态圆点 + 标题 + `$` 命令行，续行缩进
+    // 调用方传入 Running/Ran；兼容旧 ""/"Run" 默认按已完成 Ran
     let title = match action.trim() {
         "" | "Run" => "Ran",
         "Background" => "Background",
@@ -117,7 +129,7 @@ pub(crate) fn render_command_block_with_action(arguments: &str, action: &str) ->
     };
     // 1. 按终端宽度折行后首尾折叠，过长命令在主列表收缩
     let lines = fold_shell_command_lines(command, false, title);
-    let mut output = format!("\x1b[1m\x1b[32m{TOOL_BULLET}\x1b[0m \x1b[1m{title}\x1b[0m ");
+    let mut output = format!("{} \x1b[1m{title}\x1b[0m ", tool_bullet(health));
     if let Some((first, rest)) = lines.split_first() {
         output.push_str("\x1b[35m$ \x1b[0m");
         append_command_display_line(&mut output, first, true);
@@ -232,7 +244,7 @@ mod tests {
 
     #[test]
     fn renders_command_block_with_action_header() {
-        let output = render_command_block_with_action(r#"{"command":"date"}"#, "Run");
+        let output = render_command_block_with_action(r#"{"command":"date"}"#, "Run", ToolHealth::Ok);
         let plain = strip_ansi_for_test(&output);
 
         assert!(plain.contains("• Ran"));
@@ -244,7 +256,7 @@ mod tests {
 
     #[test]
     fn renders_background_command_block_with_distinct_header() {
-        let output = render_command_block_with_action(r#"{"command":"sleep 1"}"#, "Background");
+        let output = render_command_block_with_action(r#"{"command":"sleep 1"}"#, "Background", ToolHealth::Pending);
         let plain = strip_ansi_for_test(&output);
 
         assert!(plain.contains("• Background"));
@@ -265,7 +277,7 @@ mod tests {
     fn folds_long_ran_command_in_main_view() {
         let long = "echo ".to_string() + &"x".repeat(800);
         let args = format!(r#"{{"command":"{long}"}}"#);
-        let output = render_command_block_with_action(&args, "Run");
+        let output = render_command_block_with_action(&args, "Run", ToolHealth::Ok);
         let plain = strip_ansi_for_test(&output);
         assert!(
             plain.contains("…") || plain.contains("lines"),
@@ -293,7 +305,7 @@ mod tests {
         let args = serde_json::json!({ "command": command }).to_string();
         for width in [40usize, 60, 100] {
             let rendered =
-                with_render_width(width, || render_command_block_with_action(&args, "Run"));
+                with_render_width(width, || render_command_block_with_action(&args, "Run", ToolHealth::Ok));
             for line in rendered.lines() {
                 let plain = strip_ansi_for_test(line);
                 let visible: usize = plain
@@ -324,7 +336,8 @@ mod tests {
 
         let command = format!("echo {}", "x".repeat(200));
         let args = serde_json::json!({ "command": command }).to_string();
-        let rendered = with_render_width(60, || render_command_block_with_action(&args, "Run"));
+        let rendered =
+            with_render_width(60, || render_command_block_with_action(&args, "Run", ToolHealth::Ok));
         let plain_lines = rendered
             .lines()
             .map(strip_ansi_for_test)

@@ -1,6 +1,6 @@
 use super::model::ToolView;
 use crate::render::todo_style::{colorize_item, status_marker, status_rank};
-use crate::render::tool_event_line::{tool_event_label, tool_event_text};
+use crate::render::tool_event_line::{tool_event_label_tense, tool_event_text, ToolVerbTense};
 use crate::render::ToolCallDisplayMode;
 use serde::Deserialize;
 
@@ -33,11 +33,12 @@ pub(super) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> Option<Strin
     }
     // 运行中但尚无结果：展示操作意图
     if view.outcome.is_none() {
-        let label = tool_event_label("todo", Some(&view.arguments));
+        let label =
+            tool_event_label_tense("todo", Some(&view.arguments), ToolVerbTense::Progressive);
         return Some(tool_event_text(&label, "run"));
     }
     let outcome = view.outcome.as_ref()?;
-    let label = tool_event_label("todo", Some(&view.arguments));
+    let label = tool_event_label_tense("todo", Some(&view.arguments), ToolVerbTense::Perfect);
     render_todo_output(&label, &outcome.output, outcome.ok, mode)
 }
 
@@ -85,17 +86,18 @@ pub(crate) fn render_todo_output(
         .count();
     let pending = total.saturating_sub(completed + in_progress + cancelled);
 
-    // 摘要行：x/x（与沉底面板同一视觉语言，不再画进度条）
-    output.push_str(&format!("\n  \x1b[2m{completed}/{total}\x1b[0m"));
+    // 摘要行走统一 gutter：x/x 计数（与沉底面板同一视觉语言，不画进度条）
+    let mut stats = format!("{completed}/{total}");
     if in_progress > 0 {
-        output.push_str(&format!(" \x1b[2m· {in_progress} active\x1b[0m"));
+        stats.push_str(&format!(" · {in_progress} active"));
     }
     if pending > 0 {
-        output.push_str(&format!(" \x1b[2m· {pending} pending\x1b[0m"));
+        stats.push_str(&format!(" · {pending} pending"));
     }
     if cancelled > 0 {
-        output.push_str(&format!(" \x1b[2m· {cancelled} cancelled\x1b[0m"));
+        stats.push_str(&format!(" · {cancelled} cancelled"));
     }
+    output.push_str(&format!("\n\x1b[2m  └ {stats}\x1b[0m"));
 
     // Summary 模式：清单已由沉底面板常驻展示，历史区只保留摘要与当前进行中项，
     // 避免每次 todo 调用都在历史里重复整份清单
@@ -106,7 +108,7 @@ pub(crate) fn render_todo_output(
             .find(|item| item.status == "in_progress")
         {
             output.push_str(&format!(
-                "\n  {} {}",
+                "\n    {} {}",
                 status_marker(&active.status),
                 colorize_item(&active.status, &active.text)
             ));
@@ -114,14 +116,14 @@ pub(crate) fn render_todo_output(
         return Some(output);
     }
 
-    // Full 模式：扁平列表，已完成置顶；不用树形 ├─/└─
+    // Full 模式：扁平列表，已完成置顶；条目自带状态符，缩进对齐 gutter 续行列
     let mut items = result.items;
     items.sort_by_key(|item| status_rank(&item.status));
 
     for item in &items {
         let marker = status_marker(&item.status);
         let colored = colorize_item(&item.status, &item.text);
-        output.push_str(&format!("\n  {marker} {colored}"));
+        output.push_str(&format!("\n    {marker} {colored}"));
     }
     Some(output)
 }
@@ -129,15 +131,22 @@ pub(crate) fn render_todo_output(
 /// 使用工具返回的变更条目替换内部 ID。
 ///
 /// 参数:
-/// - `label`: 原始工具标签
+/// - `label`: 原始工具标签（`Updating/Updated 动作 对象`）
 /// - `changed`: 本次修改的条目
 ///
 /// 返回:
 /// - 包含条目状态和文本的可读标签
 fn changed_item_label(label: &str, changed: &[TodoItemView]) -> String {
-    let Some(action) = label
-        .strip_prefix("Todo ")
-        .and_then(|rest| rest.split_whitespace().next())
+    // 标签动词由 tool_verb 生成（Updating/Updated），旧版 "Todo " 前缀已废弃
+    let Some((verb, rest)) = label.split_once(' ') else {
+        return label.to_string();
+    };
+    if !matches!(verb, "Updating" | "Updated") {
+        return label.to_string();
+    }
+    let Some(action) = rest
+        .split_whitespace()
+        .next()
         .filter(|action| matches!(*action, "update" | "remove"))
     else {
         return label.to_string();
@@ -146,7 +155,7 @@ fn changed_item_label(label: &str, changed: &[TodoItemView]) -> String {
         return label.to_string();
     };
     format!(
-        "Todo {action} {} {}",
+        "{verb} {action} {} {}",
         status_marker(&item.status),
         item.text
     )
@@ -177,7 +186,7 @@ mod tests {
         assert!(rendered.contains('▶'));
     }
 
-    /// 更新结果使用条目内容和状态，不暴露内部 ID。
+    /// 更新结果使用条目内容和状态，不暴露内部 ID（标签动词为 Updated/Updating）。
     #[test]
     fn update_summary_replaces_internal_id_with_changed_item() {
         let result = r#"{"ok":true,"changed":[
@@ -187,7 +196,7 @@ mod tests {
         ]}"#;
 
         let rendered = render_todo_output(
-            "Todo update todo_1786108008960_2_34858",
+            "Updated update todo_1786108008960_2_34858",
             result,
             true,
             ToolCallDisplayMode::Summary,

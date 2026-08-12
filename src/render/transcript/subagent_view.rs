@@ -48,10 +48,12 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
             _ => "run",
         })
         .unwrap_or("run");
-    // 1. 标题：与主视图工具行同语汇 + 返回提示
-    let mut output = tool_event_text(&format!("Subagent {label}"), status);
+    // 1. 标题：与主视图工具行同语汇（Delegating/Delegated）+ 返回提示
+    let tense = crate::render::tool_event_line::ToolVerbTense::from_done(status != "run");
+    let verb = crate::render::tool_event_line::tool_verb("subagent", tense);
+    let mut output = tool_event_text(&format!("{verb} {label}"), status);
     output.push_str(&format!(
-        "\n\x1b[2m  {} · ↓ {}\x1b[0m\n",
+        "\n\x1b[2m  └ {} · ↓ {}\x1b[0m\n",
         t("subagent session view", "子智能体会话视图"),
         t("switch back", "切换返回")
     ));
@@ -75,14 +77,27 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
                 output.push('\n');
                 output.push_str(&markdown_cell::render_completed(text));
             }
-            SubagentTimelineEntry::Tool { name, ok, .. } => {
+            SubagentTimelineEntry::Tool {
+                name,
+                args_preview,
+                ok,
+                ..
+            } => {
                 let status = match ok {
                     Some(true) => "ok",
                     Some(false) => "err",
                     None => "run",
                 };
+                // 与主视图工具行同语汇：动词 + 对象，而不是原始工具名
+                let tense =
+                    crate::render::tool_event_line::ToolVerbTense::from_done(ok.is_some());
+                let label = crate::render::tool_event_line::tool_event_label_tense(
+                    name,
+                    Some(args_preview.as_str()),
+                    tense,
+                );
                 output.push('\n');
-                output.push_str(&tool_event_text(name, status));
+                output.push_str(&tool_event_text(&label, status));
             }
         }
     }
@@ -103,12 +118,14 @@ mod tests {
     #[test]
     fn view_renders_title_and_placeholder_without_snapshot() {
         let lines = render_view_lines("missing-id", "检查项目", 80, 0);
-        let joined = lines
-            .iter()
-            .map(|line| line.as_str())
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert!(joined.contains("Subagent 检查项目"));
+        let joined = strip_ansi_for_test(
+            &lines
+                .iter()
+                .map(|line| line.as_str())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+        assert!(joined.contains("Delegating 检查项目"));
         assert!(joined.contains("暂无时间线") || joined.contains("no timeline"));
     }
 

@@ -256,7 +256,8 @@ fn subagent_view_switch_replaces_display_window() {
         .iter()
         .map(|line| line.as_str())
         .collect::<String>();
-    assert!(view.contains("Subagent"));
+    // 子智能体视图标题与主视图工具行同语汇（Delegating/Delegated）
+    assert!(view.contains("Delegating") || view.contains("Delegated"));
     assert!(!view.contains("主会话内容"));
 
     // 2. 返回主视图：恢复主会话内容
@@ -481,6 +482,32 @@ fn summary_mode_keeps_tool_progress_message_visible() {
         .any(|line| line.as_str().contains("subagent is checking")));
 }
 
+/// 验证轮次总览渲染后自带按宽度绘制的 turn 分割线，普通提示没有。
+#[test]
+fn turn_summary_appends_a_width_fitted_rule() {
+    let mut store = TranscriptStore::new(100);
+    store.push_turn_summary("\x1b[2m•\x1b[0m \x1b[2mContext:\x1b[0m 8.0k / 1000k".to_string());
+
+    let width = 48;
+    let lines = store.display_tail(width, &options());
+    let rule = lines
+        .iter()
+        .map(|line| crate::render::activity_animation::strip_ansi_for_test(line.as_str()))
+        .find(|plain| !plain.trim().is_empty() && plain.trim().chars().all(|ch| ch == '─'))
+        .expect("turn summary must append a horizontal rule");
+    // 分割线恰好占满正文净宽，terminal 缩放时由渲染层按新宽度重画
+    assert_eq!(rule.trim().chars().count(), width);
+
+    let mut plain_store = TranscriptStore::new(100);
+    plain_store.push_meta("已切换模型".to_string());
+    let has_rule = plain_store
+        .display_tail(width, &options())
+        .iter()
+        .map(|line| crate::render::activity_animation::strip_ansi_for_test(line.as_str()))
+        .any(|plain| !plain.trim().is_empty() && plain.trim().chars().all(|ch| ch == '─'));
+    assert!(!has_rule, "plain notices must not carry a turn rule");
+}
+
 #[test]
 fn row_cap_trims_prewrapped_rows_not_source_cells() {
     // meta 前有区块空行，单条占 2 行；cap=2 时只保留最新一条
@@ -580,7 +607,7 @@ fn permission_audit_stays_inside_existing_diff_view() {
         .map(|line| line.as_str())
         .collect::<String>();
 
-    assert!(rendered.contains("Replace"), "{rendered}");
+    assert!(rendered.contains("Replacing"), "{rendered}");
     assert!(rendered.contains("Allow once"), "{rendered}");
     assert!(!rendered.contains("Permission required"), "{rendered}");
     assert!(rendered.contains("old"), "{rendered}");
@@ -624,7 +651,10 @@ fn diff_cell_keeps_pre_edit_snapshot_after_file_changes() {
 
     assert!(rendered.contains("old"), "{rendered}");
     assert!(rendered.contains("new"), "{rendered}");
-    assert!(rendered.contains("Replace"), "{rendered}");
+    assert!(
+        rendered.contains("Replacing") || rendered.contains("Replaced"),
+        "{rendered}"
+    );
 }
 
 #[test]
@@ -709,6 +739,72 @@ fn run_command_success_keeps_growing_output_in_summary() {
 }
 
 #[test]
+fn markdown_hr_stays_inset_in_transcript_display() {
+    let cell = super::cell::HistoryCell::markdown("before\n\n---\n\nafter\n".to_string());
+    let width = 80usize;
+    let content_width = width
+        .saturating_sub(crate::render::content_indent::CONTENT_LEFT_INDENT)
+        .max(1);
+    let inset = crate::render::markdown_blocks::MARKDOWN_HR_SIDE_INSET
+        .min(content_width.saturating_sub(1) / 2);
+    let expected_dashes = content_width
+        .saturating_sub(inset.saturating_mul(2))
+        .max(1);
+    let lines = cell.display_lines(content_width, &options());
+    let hr = lines.iter().find_map(|line| {
+        let plain = strip_ansi(line.as_str());
+        plain.contains('─').then_some(plain)
+    });
+    let hr = hr.expect("markdown --- must render a horizontal rule");
+    assert!(
+        hr.starts_with("  ─"),
+        "MD hr must sit past the guide column: {hr:?}"
+    );
+    assert!(
+        !hr.starts_with('─'),
+        "MD hr must not be flush-left like a turn rule: {hr:?}"
+    );
+    let dash_count = hr.chars().filter(|ch| *ch == '─').count();
+    assert_eq!(
+        dash_count, expected_dashes,
+        "MD hr must inset both sides within the content column: {hr:?}"
+    );
+    assert!(
+        hr.chars().count() < width,
+        "MD hr must leave right inset vs terminal width: {hr:?}"
+    );
+}
+
+#[test]
+fn settled_write_file_shows_stat_line_not_run() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("notes.md");
+    let arguments = serde_json::json!({
+        "path": path.display().to_string(),
+        "content": "alpha\nbeta\n"
+    })
+    .to_string();
+    let mut store = TranscriptStore::new(100);
+    store.push_tool_call("write_file".to_string(), arguments);
+    store.push_tool_result(
+        "write_file".to_string(),
+        true,
+        r#"{"changed_files":[{"path":"notes.md","added":2,"removed":0}]}"#.to_string(),
+    );
+    let rendered = store
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    let plain = crate::render::activity_animation::strip_ansi_for_test(&rendered);
+    let first = plain.lines().next().unwrap_or("");
+    assert!(first.contains("Wrote") && first.contains("notes.md"), "{first}");
+    assert!(first.contains('+'), "{first}");
+    assert!(!first.contains("run"), "{first}");
+    assert!(plain.contains("alpha") || plain.contains("beta"), "{plain}");
+}
+
+#[test]
 fn history_edit_file_restores_stat_line_and_diff_body() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("history.txt");
@@ -731,8 +827,8 @@ fn history_edit_file_restores_stat_line_and_diff_body() {
         .iter()
         .map(|line| line.as_str())
         .collect::<String>();
-    // Summary 默认：Replace +N -M 摘要行 + 冻结行级正文（无旧式 Added 标题）
-    assert!(rendered.contains("Replace"), "{rendered}");
+    // Summary 默认：Replaced +N -M 摘要行 + 冻结行级正文（无旧式 Added 标题）
+    assert!(rendered.contains("Replaced"), "{rendered}");
     assert!(rendered.contains("+1") || rendered.contains('+'), "{rendered}");
     assert!(rendered.contains("old"), "{rendered}");
     assert!(rendered.contains("new"), "{rendered}");

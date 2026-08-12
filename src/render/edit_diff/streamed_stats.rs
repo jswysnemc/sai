@@ -1,4 +1,6 @@
 use super::colors::{style_added_count, style_removed_count};
+use super::model::preview_from_arguments;
+use crate::tools::file_change_model::FileChange;
 
 /// 从（可能未闭合的）编辑工具参数流中近似统计增删行数。
 ///
@@ -29,6 +31,37 @@ pub(crate) fn streamed_diff_counts(arguments: &str) -> Option<(usize, usize)> {
 /// - 形如 `+12 -3` 的 ANSI 着色文本；尚无可统计字段时返回空
 pub(crate) fn streamed_diff_stat_status(arguments: &str) -> Option<String> {
     let (added, removed) = streamed_diff_counts(arguments)?;
+    Some(format_diff_stat_status(added, removed))
+}
+
+/// 组装编辑工具状态行用的 `+N -M`：先流式近似，再回退精确预览统计。
+///
+/// 定稿参数偶发无法被宽松扫描认到字段时，仍可用 AppliedPatch 给出正确计数，
+/// 避免摘要退化成 `Write run`。
+///
+/// 参数:
+/// - `arguments`: 工具参数原文
+///
+/// 返回:
+/// - 着色 `+N -M`；两边都算不出时返回空
+pub(crate) fn edit_diff_stat_status(arguments: &str) -> Option<String> {
+    streamed_diff_stat_status(arguments).or_else(|| preview_diff_stat_status(arguments))
+}
+
+/// 从可构建的 diff 预览统计增删行数。
+///
+/// 参数:
+/// - `arguments`: 工具参数原文
+///
+/// 返回:
+/// - 着色 `+N -M`；无法预览时返回空
+pub(crate) fn preview_diff_stat_status(arguments: &str) -> Option<String> {
+    let preview = preview_from_arguments(arguments).ok()?;
+    let (added, removed) = preview
+        .changes
+        .iter()
+        .map(FileChange::line_counts)
+        .fold((0usize, 0usize), |acc, item| (acc.0 + item.0, acc.1 + item.1));
     Some(format_diff_stat_status(added, removed))
 }
 
@@ -93,6 +126,17 @@ fn lenient_field_line_count(raw: &str, key: &str) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 预览回退：完整 write 参数即使宽松扫描失败也能给出 +N -M。
+    #[test]
+    fn preview_stat_status_for_write_file() {
+        let status = preview_diff_stat_status(r#"{"path":"a.rs","content":"l1\nl2\n"}"#).unwrap();
+        assert!(status.contains("+2") || status.contains("+2\u{1b}"), "{status}");
+        assert!(status.contains("-0") || status.contains('0'), "{status}");
+        let combined = edit_diff_stat_status(r#"{"path":"notes.md","content":"hello\nworld"}"#).unwrap();
+        assert!(!combined.contains("run"), "{combined}");
+        assert!(combined.contains('+'), "{combined}");
+    }
 
     /// write_file 的 content 分片按新增行实时累计。
     #[test]

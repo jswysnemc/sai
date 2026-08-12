@@ -15,7 +15,9 @@ fn lifecycle_view_replaces_call_with_result() {
     assert!(output.contains("README.md"));
     assert!(output.contains("reading file"));
     assert!(output.contains("contents"));
-    assert!(output.contains("└─"));
+    // 统一 gutter：`  └ ` 首行 + 四空格续行，不再使用 `└─`/`├─`
+    assert!(output.contains("  └ "));
+    assert!(!output.contains("└─") && !output.contains("├─"));
 }
 
 #[test]
@@ -44,7 +46,9 @@ fn todo_result_renders_items_instead_of_raw_json() {
     assert!(output.contains("构建项目"));
     assert!(output.contains('/'));
     assert!(output.contains('✓') || output.contains('▶'));
-    assert!(!output.contains('├') && !output.contains('└'));
+    // 统计行走统一 gutter；条目自带状态符，不用树形连接符
+    assert!(output.contains("  └ "));
+    assert!(!output.contains('├') && !output.contains("└─"));
     assert!(!output.contains("\"items\""));
 }
 
@@ -95,7 +99,7 @@ fn full_view_hides_incomplete_json_arguments() {
     );
     let output = render(&view, ToolCallDisplayMode::Full);
     let plain = crate::render::activity_animation::strip_ansi_for_test(&output);
-    assert!(!plain.contains("└─ args:"));
+    assert!(!plain.contains("└ args:"));
     assert!(!plain.contains("{\"query\""));
 }
 

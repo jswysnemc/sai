@@ -5,6 +5,8 @@ pub(crate) enum MetaKind {
     Notice,
     /// 轮次失败、中断等需要用户注意的错误
     Failure,
+    /// 轮次结束的上下文总览；渲染层在其下追加 turn 分割线
+    Summary,
 }
 
 /// REPL 系统提示、控制命令与错误的 source 数据。
@@ -39,12 +41,13 @@ pub(crate) fn render(cell: &MetaCell) -> String {
     let mut output = match cell.kind {
         // 整行失败色：终端若缺 ✗ 字形，至少标题仍是醒目的红色引导
         MetaKind::Failure => format!("\x1b[31m✗ {first}\x1b[0m"),
-        MetaKind::Notice => format!("\x1b[2m› {first}\x1b[0m"),
+        // 总览正常情况下自带样式走上方 verbatim 分支；纯文本兜底按中性提示排版
+        MetaKind::Notice | MetaKind::Summary => format!("\x1b[2m› {first}\x1b[0m"),
     };
     for line in lines {
         let styled = match cell.kind {
             MetaKind::Failure => format!("\n  \x1b[31m\x1b[2m{line}\x1b[0m"),
-            MetaKind::Notice => format!("\n  \x1b[2m{line}\x1b[0m"),
+            MetaKind::Notice | MetaKind::Summary => format!("\n  \x1b[2m{line}\x1b[0m"),
         };
         output.push_str(&styled);
     }

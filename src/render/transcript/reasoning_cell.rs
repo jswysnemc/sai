@@ -226,7 +226,6 @@ fn render_thinking_body_with_title(
     let wrapped = wrap_display_lines(body, thinking_body_wrap_width(terminal_cols));
     // 2. 丢掉空段落：模型常在思考里插 `\n\n`，渲染成 gutter 空行会像「块内硬隔开」；
     //    真正的区块间距交给 cell 级 trailing blank（思考 → 工具）。
-    let blank_dropped = wrapped.iter().filter(|line| line.trim().is_empty()).count();
     let lines: Vec<String> = wrapped
         .into_iter()
         .filter(|line| !line.trim().is_empty())

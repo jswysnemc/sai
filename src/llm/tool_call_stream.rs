@@ -2,17 +2,25 @@ use super::ToolCallStreamProgress;
 
 const PROGRESS_BYTE_STEP: usize = 8 * 1024;
 const ARGUMENTS_PREVIEW_CHARS: usize = 4096;
-const TARGET_KEYS: &[&str] = &[
+/// 编辑/命令正文字段预览上限：需覆盖流式 +N -M 跳动，不能卡在 4K
+const BODY_ARGUMENTS_PREVIEW_CHARS: usize = 64 * 1024;
+/// 身份字段：闭合后仍应继续跟踪正文字段进度（write_file 的 path 先到）
+const IDENTITY_KEYS: &[&str] = &[
     "path",
     "name",
     "group_name",
     "tool_name",
     "include",
     "pattern",
+];
+/// 正文字段：未闭合时按换行/字节步进发射进度，驱动 Writing +N -M 跳动
+const BODY_KEYS: &[&str] = &[
     "command",
     "patch",
     "content",
     "replacement",
+    "old_string",
+    "new_string",
 ];
 
 #[derive(Debug, Default)]
@@ -20,7 +28,7 @@ pub(crate) struct ToolCallProgressTracker {
     entries: Vec<ToolCallProgressEntry>,
 }
 
-/// 未闭合 target 字段内容增长到该字节数时也触发进度，覆盖单行长命令
+/// 未闭合正文内容增长到该字节数时也触发进度，覆盖单行长命令
 const TARGET_CONTENT_BYTE_STEP: usize = 48;
 
 #[derive(Debug, Default)]
@@ -28,12 +36,15 @@ struct ToolCallProgressEntry {
     emitted: bool,
     last_name: String,
     last_arguments_bytes: usize,
-    target_started: bool,
-    target_seen: bool,
-    /// 未闭合 target 字段已解码内容的换行数，用于命令逐行流式预览
-    last_target_newlines: usize,
-    /// 未闭合 target 字段已解码内容的字节数
-    last_target_content_bytes: usize,
+    identity_started: bool,
+    identity_seen: bool,
+    body_started: bool,
+    /// 上一拍是否仍有未闭合正文字段（用于字段闭合时补发一次）
+    body_open: bool,
+    /// 未闭合正文字段已解码内容的换行数
+    last_body_newlines: usize,
+    /// 未闭合正文字段已解码内容的字节数
+    last_body_content_bytes: usize,
 }
 
 impl ToolCallProgressTracker {
@@ -60,77 +71,86 @@ impl ToolCallProgressTracker {
         let name_changed = !name.trim().is_empty() && entry.last_name != name;
         let size_changed =
             arguments_bytes.saturating_sub(entry.last_arguments_bytes) >= PROGRESS_BYTE_STEP;
-        let target_started = entry.target_started || has_started_target_field(arguments);
-        let target_seen = entry.target_seen || has_complete_target_field(arguments);
-        let target_started_changed = target_started && !entry.target_started;
-        let target_changed = target_seen && !entry.target_seen;
-        // 1. 未闭合 target 字段：按换行或内容增量触发，使 command 块可逐行刷新
-        let partial_target = if target_started && !target_seen {
-            partial_target_field_content(arguments)
-        } else {
-            None
-        };
-        let target_newlines = partial_target
+        let identity_started =
+            entry.identity_started || has_started_any_field(arguments, IDENTITY_KEYS);
+        let identity_seen = entry.identity_seen || has_complete_any_field(arguments, IDENTITY_KEYS);
+        let body_started = entry.body_started || has_started_any_field(arguments, BODY_KEYS);
+        let identity_started_changed = identity_started && !entry.identity_started;
+        let identity_changed = identity_seen && !entry.identity_seen;
+        let body_started_changed = body_started && !entry.body_started;
+        // 只跟踪仍未闭合的正文字段；path 闭合不得关掉 content/new_string 的换行步进
+        let partial_body = partial_open_body_field_content(arguments);
+        let body_open = partial_body.is_some();
+        let body_closed_changed = entry.body_open && !body_open;
+        let body_newlines = partial_body
             .as_ref()
             .map(|text| text.matches('\n').count())
             .unwrap_or(0);
-        let target_content_bytes = partial_target.as_ref().map(String::len).unwrap_or(0);
-        let target_line_progress = target_started
-            && !target_seen
-            && (target_newlines > entry.last_target_newlines
-                || target_content_bytes.saturating_sub(entry.last_target_content_bytes)
-                    >= TARGET_CONTENT_BYTE_STEP);
+        let body_content_bytes = partial_body.as_ref().map(String::len).unwrap_or(0);
+        let body_line_progress = body_open
+            && (body_newlines > entry.last_body_newlines
+                || body_content_bytes.saturating_sub(entry.last_body_content_bytes)
+                    >= TARGET_CONTENT_BYTE_STEP
+                // 首个非空正文也要发，否则 Writing 会卡在无 +N 直到换行/48B
+                || (body_content_bytes > 0 && entry.last_body_content_bytes == 0));
         let first_visible = !entry.emitted && (!name.trim().is_empty() || arguments_bytes > 0);
         if !(first_visible
             || name_changed
             || size_changed
-            || target_started_changed
-            || target_changed
-            || target_line_progress)
+            || identity_started_changed
+            || identity_changed
+            || body_started_changed
+            || body_line_progress
+            || body_closed_changed)
         {
             return None;
         }
         entry.emitted = true;
         entry.last_name = name.to_string();
         entry.last_arguments_bytes = arguments_bytes;
-        entry.target_started = target_started;
-        entry.target_seen = target_seen;
-        entry.last_target_newlines = target_newlines;
-        entry.last_target_content_bytes = target_content_bytes;
+        entry.identity_started = identity_started;
+        entry.identity_seen = identity_seen;
+        entry.body_started = body_started;
+        entry.body_open = body_open;
+        entry.last_body_newlines = body_newlines;
+        entry.last_body_content_bytes = body_content_bytes;
+        let preview_limit = if body_started {
+            BODY_ARGUMENTS_PREVIEW_CHARS
+        } else {
+            ARGUMENTS_PREVIEW_CHARS
+        };
         Some(ToolCallStreamProgress {
             index,
             name: (!name.trim().is_empty()).then(|| name.to_string()),
             arguments_chars: arguments.chars().count(),
             arguments_bytes,
-            arguments_preview: arguments.chars().take(ARGUMENTS_PREVIEW_CHARS).collect(),
+            arguments_preview: arguments.chars().take(preview_limit).collect(),
         })
     }
 }
 
-/// 判断参数片段是否已经开始包含 target 字段。
-///
-/// 参数:
-/// - `arguments`: 当前累计参数文本
-///
-/// 返回:
-/// - 是否存在已经开始的 target 字符串字段
-fn has_started_target_field(arguments: &str) -> bool {
-    TARGET_KEYS
-        .iter()
+/// 判断参数片段是否已开始包含给定字段之一。
+fn has_started_any_field(arguments: &str, keys: &[&str]) -> bool {
+    keys.iter()
         .any(|key| started_json_string_field(arguments, key))
 }
 
-/// 判断参数片段是否已经包含完整 target 字段。
-///
-/// 参数:
-/// - `arguments`: 当前累计参数文本
-///
-/// 返回:
-/// - 是否存在完整 target 字段
-fn has_complete_target_field(arguments: &str) -> bool {
-    TARGET_KEYS
-        .iter()
+/// 判断参数片段是否已包含完整的给定字段之一。
+fn has_complete_any_field(arguments: &str, keys: &[&str]) -> bool {
+    keys.iter()
         .any(|key| complete_json_string_field(arguments, key))
+}
+
+/// 提取仍未闭合的正文字段内容（优先 content/new_string 等，忽略已闭合的 path）。
+fn partial_open_body_field_content(arguments: &str) -> Option<String> {
+    for key in BODY_KEYS {
+        if started_json_string_field(arguments, key)
+            && !complete_json_string_field(arguments, key)
+        {
+            return partial_json_string_field(arguments, key);
+        }
+    }
+    None
 }
 
 /// 判断 JSON 片段中指定字符串字段是否已经开始。
@@ -203,22 +223,6 @@ fn json_string_is_closed(value: &str) -> bool {
         }
     }
     false
-}
-
-/// 提取已开始但可能尚未闭合的 target 字段内容。
-///
-/// 参数:
-/// - `arguments`: 当前累计参数文本
-///
-/// 返回:
-/// - 已解码的字段字符串内容（未闭合时返回已收到部分）
-fn partial_target_field_content(arguments: &str) -> Option<String> {
-    for key in TARGET_KEYS {
-        if let Some(content) = partial_json_string_field(arguments, key) {
-            return Some(content);
-        }
-    }
-    None
 }
 
 /// 从 JSON 片段中提取指定字符串字段的已解码内容。
@@ -424,5 +428,81 @@ mod tests {
         );
         let grown = tracker.update(0, "run_command", &long).unwrap();
         assert!(grown.arguments_preview.contains("echo"));
+    }
+
+    /// path 闭合后 content 每增一行仍应 emit，供 Writing +N -M 跳动。
+    #[test]
+    fn tracker_emits_write_content_lines_after_path_closes() {
+        let mut tracker = ToolCallProgressTracker::default();
+        let _ = tracker.update(0, "write_file", "").unwrap();
+        let path_done = tracker
+            .update(0, "write_file", r#"{"path":"notes.md","content":""#)
+            .unwrap();
+        assert!(path_done.arguments_preview.contains("notes.md"));
+
+        let line1 = tracker
+            .update(
+                0,
+                "write_file",
+                r#"{"path":"notes.md","content":"alpha"#,
+            )
+            .unwrap();
+        assert!(line1.arguments_preview.contains("alpha"));
+
+        // 同行小增长不重复发
+        assert!(tracker
+            .update(
+                0,
+                "write_file",
+                r#"{"path":"notes.md","content":"alpha!"#,
+            )
+            .is_none());
+
+        let line2 = tracker
+            .update(
+                0,
+                "write_file",
+                r#"{"path":"notes.md","content":"alpha\nbeta"#,
+            )
+            .unwrap();
+        assert!(line2.arguments_preview.contains(r#"alpha\nbeta"#));
+
+        let line3 = tracker
+            .update(
+                0,
+                "write_file",
+                r#"{"path":"notes.md","content":"alpha\nbeta\ngamma"#,
+            )
+            .unwrap();
+        assert!(line3.arguments_preview.contains("gamma"));
+        // preview 需保留已到 content，供 UI streamed_diff_counts 算出 +3
+        assert_eq!(
+            line3.arguments_preview.matches(r"\n").count(),
+            2,
+            "open content must keep newlines in preview: {}",
+            line3.arguments_preview
+        );
+    }
+
+    /// str_replace：old_string 闭合后 new_string 换行仍继续 emit。
+    #[test]
+    fn tracker_emits_new_string_after_old_string_closes() {
+        let mut tracker = ToolCallProgressTracker::default();
+        let _ = tracker.update(0, "str_replace", "").unwrap();
+        let _ = tracker
+            .update(
+                0,
+                "str_replace",
+                r#"{"path":"a.rs","old_string":"old\ntext","new_string":""#,
+            )
+            .unwrap();
+        let grown = tracker
+            .update(
+                0,
+                "str_replace",
+                r#"{"path":"a.rs","old_string":"old\ntext","new_string":"new\nline"#,
+            )
+            .unwrap();
+        assert!(grown.arguments_preview.contains(r#"new\nline"#));
     }
 }

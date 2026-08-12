@@ -1,7 +1,7 @@
 use crate::render::asset_block;
 use crate::render::style::{
-    BOLD_STYLE, FOOTNOTE_REF_STYLE, IMAGE_STYLE, INLINE_CODE_STYLE, ITALIC_STYLE, LINK_LABEL_STYLE,
-    RESET, STRIKE_STYLE, URL_STYLE,
+    FOOTNOTE_REF_STYLE, MD_BOLD_STYLE, MD_IMAGE_STYLE, MD_INLINE_CODE_STYLE, MD_ITALIC_STYLE,
+    MD_LINK_LABEL_STYLE, MD_STRIKE_STYLE, MD_URL_STYLE, RESET,
 };
 use crate::render::table::CellContent;
 
@@ -41,7 +41,7 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
                 if chars.get(label_end + 1) == Some(&'(') {
                     if let Some(url_end) = find_marker(&chars, label_end + 2, ')') {
                         let alt = chars[index + 2..label_end].iter().collect::<String>();
-                        output.push_str(IMAGE_STYLE);
+                        output.push_str(MD_IMAGE_STYLE);
                         output.push_str("[image");
                         if !alt.is_empty() {
                             output.push_str(": ");
@@ -49,11 +49,10 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
                         }
                         output.push(']');
                         output.push_str(RESET);
-                        output.push('(');
-                        output.push_str(&render_url(
+                        output.push(' ');
+                        output.push_str(&render_url_parenthesized(
                             &chars[label_end + 2..url_end].iter().collect::<String>(),
                         ));
-                        output.push(')');
                         index = url_end + 1;
                         continue;
                     }
@@ -66,7 +65,7 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
                 continue;
             }
             if let Some(end) = find_marker(&chars, index + 1, '`') {
-                output.push_str(INLINE_CODE_STYLE);
+                output.push_str(MD_INLINE_CODE_STYLE);
                 output.extend(chars[index + 1..end].iter());
                 output.push_str(RESET);
                 index = end + 1;
@@ -105,7 +104,7 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
         }
         if index + 1 < chars.len() && chars[index] == '~' && chars[index + 1] == '~' {
             if let Some(end) = find_double_marker(&chars, index + 2, '~') {
-                output.push_str(STRIKE_STYLE);
+                output.push_str(MD_STRIKE_STYLE);
                 output.extend(chars[index + 2..end].iter());
                 output.push_str(RESET);
                 index = end + 2;
@@ -114,7 +113,7 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
         }
         if index + 1 < chars.len() && chars[index] == '*' && chars[index + 1] == '*' {
             if let Some(end) = find_double_marker(&chars, index + 2, '*') {
-                output.push_str(BOLD_STYLE);
+                output.push_str(MD_BOLD_STYLE);
                 output.extend(chars[index + 2..end].iter());
                 output.push_str(RESET);
                 index = end + 2;
@@ -123,7 +122,7 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
         }
         if chars[index] == '*' {
             if let Some(end) = find_marker(&chars, index + 1, '*') {
-                output.push_str(ITALIC_STYLE);
+                output.push_str(MD_ITALIC_STYLE);
                 output.extend(chars[index + 1..end].iter());
                 output.push_str(RESET);
                 index = end + 1;
@@ -133,7 +132,7 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
         if chars[index] == '_' {
             if is_emphasis_start(&chars, index) {
                 if let Some(end) = find_emphasis_end(&chars, index + 1, '_') {
-                    output.push_str(ITALIC_STYLE);
+                    output.push_str(MD_ITALIC_STYLE);
                     output.extend(chars[index + 1..end].iter());
                     output.push_str(RESET);
                     index = end + 1;
@@ -160,11 +159,11 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
             if let Some(label_end) = find_marker(&chars, index + 1, ']') {
                 if chars.get(label_end + 1) == Some(&'(') {
                     if let Some(url_end) = find_marker(&chars, label_end + 2, ')') {
-                        output.push_str(LINK_LABEL_STYLE);
+                        output.push_str(MD_LINK_LABEL_STYLE);
                         output.extend(chars[index + 1..label_end].iter());
                         output.push_str(RESET);
                         output.push(' ');
-                        output.push_str(&render_url_wrapped(
+                        output.push_str(&render_url_parenthesized(
                             &chars[label_end + 2..url_end].iter().collect::<String>(),
                         ));
                         index = url_end + 1;
@@ -177,8 +176,9 @@ pub(crate) fn render_inline_with_math_mode(text: &str, math_mode: InlineMathMode
             if let Some(end) = find_marker(&chars, index + 1, '>') {
                 let value = chars[index + 1..end].iter().collect::<String>();
                 if value.starts_with("http://") || value.starts_with("https://") {
-                    output.push_str("\x1b[4m");
-                    output.push_str(&render_url_wrapped(&value));
+                    // 裸链接没有标签，整体按链接标签样式渲染，不再保留尖括号噪音
+                    output.push_str(MD_LINK_LABEL_STYLE);
+                    output.push_str(&value);
                     output.push_str(RESET);
                     index = end + 1;
                     continue;
@@ -219,7 +219,7 @@ pub(crate) fn render_table_cell(text: &str) -> String {
             if let Some(label_end) = find_marker(&chars, index + 2, ']') {
                 if chars.get(label_end + 1) == Some(&'(') {
                     if let Some(url_end) = find_marker(&chars, label_end + 2, ')') {
-                        output.push_str(IMAGE_STYLE);
+                        output.push_str(MD_IMAGE_STYLE);
                         output.push_str("[image]");
                         output.push_str(RESET);
                         index = url_end + 1;
@@ -230,7 +230,7 @@ pub(crate) fn render_table_cell(text: &str) -> String {
         }
         if chars[index] == '`' {
             if let Some(end) = find_marker(&chars, index + 1, '`') {
-                output.push_str(INLINE_CODE_STYLE);
+                output.push_str(MD_INLINE_CODE_STYLE);
                 output.extend(chars[index + 1..end].iter());
                 output.push_str(RESET);
                 index = end + 1;
@@ -255,7 +255,7 @@ pub(crate) fn render_table_cell(text: &str) -> String {
         }
         if index + 1 < chars.len() && chars[index] == '~' && chars[index + 1] == '~' {
             if let Some(end) = find_double_marker(&chars, index + 2, '~') {
-                output.push_str(STRIKE_STYLE);
+                output.push_str(MD_STRIKE_STYLE);
                 output.extend(chars[index + 2..end].iter());
                 output.push_str(RESET);
                 index = end + 2;
@@ -264,7 +264,7 @@ pub(crate) fn render_table_cell(text: &str) -> String {
         }
         if index + 1 < chars.len() && chars[index] == '*' && chars[index + 1] == '*' {
             if let Some(end) = find_double_marker(&chars, index + 2, '*') {
-                output.push_str(BOLD_STYLE);
+                output.push_str(MD_BOLD_STYLE);
                 output.extend(chars[index + 2..end].iter());
                 output.push_str(RESET);
                 index = end + 2;
@@ -273,7 +273,7 @@ pub(crate) fn render_table_cell(text: &str) -> String {
         }
         if chars[index] == '*' {
             if let Some(end) = find_marker(&chars, index + 1, '*') {
-                output.push_str(ITALIC_STYLE);
+                output.push_str(MD_ITALIC_STYLE);
                 output.extend(chars[index + 1..end].iter());
                 output.push_str(RESET);
                 index = end + 1;
@@ -283,7 +283,7 @@ pub(crate) fn render_table_cell(text: &str) -> String {
         if chars[index] == '_' {
             if is_emphasis_start(&chars, index) {
                 if let Some(end) = find_emphasis_end(&chars, index + 1, '_') {
-                    output.push_str(ITALIC_STYLE);
+                    output.push_str(MD_ITALIC_STYLE);
                     output.extend(chars[index + 1..end].iter());
                     output.push_str(RESET);
                     index = end + 1;
@@ -295,7 +295,7 @@ pub(crate) fn render_table_cell(text: &str) -> String {
             if let Some(label_end) = find_marker(&chars, index + 1, ']') {
                 if chars.get(label_end + 1) == Some(&'(') {
                     if let Some(url_end) = find_marker(&chars, label_end + 2, ')') {
-                        output.push_str(LINK_LABEL_STYLE);
+                        output.push_str(MD_LINK_LABEL_STYLE);
                         output.extend(chars[index + 1..label_end].iter());
                         output.push_str(RESET);
                         index = url_end + 1;
@@ -308,10 +308,9 @@ pub(crate) fn render_table_cell(text: &str) -> String {
             if let Some(end) = find_marker(&chars, index + 1, '>') {
                 let value = chars[index + 1..end].iter().collect::<String>();
                 if value.starts_with("http://") || value.starts_with("https://") {
-                    output.push_str(URL_STYLE);
-                    output.push('<');
+                    // 单元格空间有限：裸链接直接按链接标签样式展示，不加尖括号
+                    output.push_str(MD_LINK_LABEL_STYLE);
                     output.push_str(&value);
-                    output.push('>');
                     output.push_str(RESET);
                     index = end + 1;
                     continue;
@@ -463,26 +462,15 @@ fn is_line_start_formula_prefix(output: &str, chars: &[char], index: usize) -> b
         && chars[index + 1..].iter().filter(|ch| **ch == '$').count() >= 2
 }
 
-/// 渲染普通链接地址。
+/// 渲染带圆括号的链接地址（括号与地址同为弱化样式）。
 ///
 /// 参数:
 /// - `url`: 链接地址
 ///
 /// 返回:
-/// - 带样式的链接地址
-fn render_url(url: &str) -> String {
-    format!("{URL_STYLE}{url}{RESET}")
-}
-
-/// 渲染带尖括号的链接地址。
-///
-/// 参数:
-/// - `url`: 链接地址
-///
-/// 返回:
-/// - 带尖括号的链接地址
-fn render_url_wrapped(url: &str) -> String {
-    format!("<{}>", render_url(url))
+/// - 弱化的 `(url)` 文本
+fn render_url_parenthesized(url: &str) -> String {
+    format!("{MD_URL_STYLE}({url}){RESET}")
 }
 
 /// 渲染允许的 HTML 行内标签。

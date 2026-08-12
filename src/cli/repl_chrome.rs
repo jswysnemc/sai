@@ -94,6 +94,8 @@ impl ReplChrome {
     /// - 已着色状态行
     pub(super) fn footer_line(&self, cols: usize) -> String {
         let cols = cols.max(1);
+        let pad = CHROME_FOOTER_SIDE_PAD.min(cols.saturating_sub(1) / 2);
+        let inner = cols.saturating_sub(pad.saturating_mul(2)).max(1);
         let left_plain = format!(
             "{}  {}  {}  {}",
             self.mode_plain(),
@@ -101,9 +103,8 @@ impl ReplChrome {
             self.model,
             self.thinking
         );
-        // 1. 先在纯文本上裁剪，保证 left + 空格 + right 不超过可用列数
-        //    禁止对 gap 强制 max(1)：贴满时再塞空格会变成 cols+1 并触发终端换行
-        let (left_text, right_text, gap) = fit_status_segments(&left_plain, &self.directory, cols);
+        // 1. 在扣除左右外边距后的净宽上裁剪，避免贴边
+        let (left_text, right_text, gap) = fit_status_segments(&left_plain, &self.directory, inner);
         // 2. 裁剪后再着色，避免 ANSI 干扰宽度计算
         let left = colorize_left_status(self.mode, &left_text, self.context_ratio);
         let right = if right_text.is_empty() {
@@ -111,8 +112,12 @@ impl ReplChrome {
         } else {
             color_directory(&right_text)
         };
-        let line = format!("{left}{}{}", " ".repeat(gap), right);
-        line
+        format!(
+            "{}{left}{}{right}{}",
+            " ".repeat(pad),
+            " ".repeat(gap),
+            " ".repeat(pad)
+        )
     }
 }
 
@@ -277,6 +282,8 @@ pub(super) const CHROME_ACCENT_COLS: usize = 1;
 const CHROME_ACCENT_GLYPH: &str = "▏";
 /// 输入正文上下各留的空白行数。
 pub(super) const CHROME_INPUT_PAD_ROWS: u16 = 1;
+/// 底栏状态左右相对面板内缘的外边距列数。
+pub(super) const CHROME_FOOTER_SIDE_PAD: usize = 1;
 
 /// 生成输入框顶/底分隔线（兼容旧调用）。
 ///
@@ -434,7 +441,15 @@ mod tests {
         };
         let line = chrome.footer_line(80);
         let plain = strip_ansi(&line);
-        assert!(plain.starts_with("yolo"));
+        assert!(
+            plain.starts_with(' '),
+            "footer must keep left outer pad: {plain:?}"
+        );
+        assert!(
+            plain.ends_with(' '),
+            "footer must keep right outer pad: {plain:?}"
+        );
+        assert!(plain.contains("yolo"));
         assert!(plain.contains("0.0%/272k"));
         assert!(plain.contains("gpt"));
         assert!(plain.contains("xhigh"));

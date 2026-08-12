@@ -58,9 +58,10 @@ fn summary_styles_distinguish_reasoning_from_tools() {
 #[test]
 fn tool_event_text_is_append_only_finish_line() {
     let output = tool_event_text("web_search", "ok");
-    assert!(output.starts_with("• "));
-    assert!(output.contains("web_search"));
-    assert!(output.contains("ok"));
+    let plain = crate::render::activity_animation::strip_ansi_for_test(&output);
+    assert!(plain.starts_with("• "));
+    assert!(plain.contains("web_search"));
+    assert!(plain.contains("ok"));
 }
 
 #[test]

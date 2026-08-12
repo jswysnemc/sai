@@ -1,7 +1,7 @@
 use super::commands::{command_available, ensure_file_exists, run_command};
 use super::math::{build_fallback_svg, convert_svg_to_png, render_image, try_render_ratex};
 use super::MathRenderMode;
-use crate::render::style::{INLINE_CODE_STYLE, RESET};
+use crate::render::style::{MD_INLINE_CODE_STYLE, RESET};
 use crate::render::table::CellContent;
 use crate::render::terminal_image;
 use anyhow::{Context, Result};
@@ -23,7 +23,7 @@ pub(crate) fn render_inline_halfblock(source: &str) -> String {
     }
     match render_inline_halfblock_inner(source) {
         Ok(rendered) => rendered,
-        Err(_) => format!("{INLINE_CODE_STYLE}{source}{RESET}"),
+        Err(_) => format!("{MD_INLINE_CODE_STYLE}{source}{RESET}"),
     }
 }
 
@@ -58,7 +58,7 @@ pub(crate) fn render_cell(source: &str, max_cols: usize, mixed: bool) -> CellCon
             content.math_source = Some(encode_source(source, mixed));
             content
         }
-        Err(_) => CellContent::from_inline(format!("{INLINE_CODE_STYLE}{source}{RESET}")),
+        Err(_) => CellContent::from_inline(format!("{MD_INLINE_CODE_STYLE}{source}{RESET}")),
     }
 }
 

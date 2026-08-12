@@ -104,11 +104,16 @@ impl AnsiLine {
         for raw_line in text.split('\n') {
             let plain = crate::render::activity_animation::strip_ansi_for_test(raw_line);
             let trimmed = plain.trim();
-            // turn 横线按目标宽度重画，避免整屏烘焙后再被正文净宽拆成两行
+            // turn 横线：不短于目标宽度时重画到 width，避免烘焙通栏线被拆行。
+            // MD 线更短（左右内收），必须原样保留，不能被拉成通栏。
             if trimmed.len() >= 3 && trimmed.chars().all(|ch| ch == '─') {
+                let dash_in = trimmed.chars().filter(|ch| *ch == '─').count();
+                let target = width.max(1);
+                let keep_inset = dash_in < target;
+                let dash_out = if keep_inset { dash_in } else { target };
                 lines.push(Self::new(format!(
                     "\x1b[2m{}\x1b[0m",
-                    "─".repeat(width.max(1))
+                    "─".repeat(dash_out.max(1))
                 )));
                 continue;
             }

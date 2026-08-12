@@ -30,15 +30,20 @@ pub(crate) fn write_command_tool_call_block(
     }
     command_block_tools.insert(name.to_string());
     let mut stdout = io::stdout();
+    // CLI 命令块在调用时落盘且通常不回写标题；用进行时表达当下状态
     let command_block_action = if background_command_start {
         background_command_block_action()
     } else {
-        "Run"
+        "Running"
     };
     write!(
         stdout,
         "{}",
-        render_command_block_with_action(arguments, command_block_action)
+        render_command_block_with_action(
+            arguments,
+            command_block_action,
+            crate::render::status_style::ToolHealth::Pending
+        )
     )?;
     stdout.flush()?;
     Ok(true)

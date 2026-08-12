@@ -35,8 +35,20 @@ fn is_guide_marker(ch: char) -> bool {
 /// - 是 turn 分隔线时为 true
 fn is_turn_rule_line(text: &str) -> bool {
     let plain = crate::render::activity_animation::strip_ansi_for_test(text);
-    let trimmed = plain.trim();
-    trimmed.len() >= 3 && trimmed.chars().all(|ch| ch == '─')
+    // 仅顶格的通栏/正文净宽 turn 线。MD `---` 左右内收后更短，
+    // 必须走普通正文缩进，不能被当成 turn 线拉回第 0 列。
+    let trimmed_end = plain.trim_end();
+    if trimmed_end.is_empty()
+        || trimmed_end.starts_with(' ')
+        || !trimmed_end.chars().all(|ch| ch == '─')
+    {
+        return false;
+    }
+    let n = trimmed_end.chars().count();
+    let full = crate::render::markdown_blocks::horizontal_rule_width();
+    // layout align 时 full=终端宽；cell 层 turn 线按正文净宽绘制
+    let content = full.saturating_sub(CONTENT_LEFT_INDENT).max(1);
+    n >= content && content >= 3
 }
 
 /// 将一行内容放到视觉引导线两侧的正确列。
@@ -55,12 +67,10 @@ pub(crate) fn align_to_guide_column(text: &str) -> String {
         }
         return remove_leading_visible_spaces(text, leading_spaces);
     }
-    // turn 水平分隔线必须顶格通栏；再缩进会超出终端宽度并折行
+    // turn 水平分隔线必须顶格通栏；按终端全宽重画，避免正文净宽线右侧留空
     if is_turn_rule_line(text) {
-        if leading_spaces == 0 {
-            return text.to_string();
-        }
-        return remove_leading_visible_spaces(text, leading_spaces);
+        let full = crate::render::markdown_blocks::horizontal_rule_width().max(1);
+        return format!("\x1b[2m{}\x1b[0m", "─".repeat(full));
     }
     // diff 块内三类行（上下文、新增、删除）经 renderer 输出时结构已一致
     // （`行号 标记  正文`，上下文行的标记为空格），因此必须统一补同一宽度。
@@ -507,7 +517,7 @@ mod tests {
     use super::{
         align_cli_stream_block, align_cli_text_delta, align_to_guide_column,
         align_to_guide_column_with_width, clear_right_margin, indent_diff_for_cli,
-        indent_diff_for_transcript, wrap_cli_stream_block_with_width,
+        indent_diff_for_transcript, wrap_cli_stream_block_with_width, CONTENT_LEFT_INDENT,
     };
 
     /// 引导符号保留在左侧，普通正文与续行位于右侧。
@@ -521,12 +531,24 @@ mod tests {
         );
         assert_eq!(align_to_guide_column("• tool"), "• tool");
         assert_eq!(align_to_guide_column("◦ Thinking"), "◦ Thinking");
-        // turn 水平分隔线顶格通栏，不被推到正文列
+        // 通栏 turn 线保持顶格；短 MD 线（正文列内再左右内收）收入引导区右侧
+        let full = crate::render::markdown_blocks::horizontal_rule_width();
+        let turn = "─".repeat(full);
+        let aligned_turn = align_to_guide_column(&turn);
         assert_eq!(
-            align_to_guide_column("\x1b[2m────────\x1b[0m"),
-            "\x1b[2m────────\x1b[0m"
+            crate::render::activity_animation::strip_ansi_for_test(&aligned_turn),
+            turn
         );
-        assert_eq!(align_to_guide_column("  ────────"), "────────");
+        let content = full.saturating_sub(CONTENT_LEFT_INDENT).max(1);
+        let inset = crate::render::markdown_blocks::MARKDOWN_HR_SIDE_INSET
+            .min(content.saturating_sub(1) / 2);
+        let md = "─".repeat(content.saturating_sub(inset.saturating_mul(2)).max(1));
+        assert_eq!(
+            align_to_guide_column(&md),
+            format!("{}{md}", " ".repeat(CONTENT_LEFT_INDENT))
+        );
+        // 已带正文缩进的线不再二次缩进
+        assert_eq!(align_to_guide_column("  ────────"), "  ────────");
         // 失败叉号与提示引导符同样悬挂在引导线列，不与正文混排
         assert_eq!(
             align_to_guide_column("\x1b[31m✗ 本轮失败\x1b[0m"),

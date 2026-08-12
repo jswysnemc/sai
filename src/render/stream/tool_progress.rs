@@ -67,7 +67,12 @@ impl StreamRenderer {
             let mut stdout = io::stdout();
             if tool_name == "run_command" {
                 // 命令内容已在代码块内展示，标题固定用动作短名避免重复
-                write_command_block_with_action(&mut stdout, args, "Run")?;
+                write_command_block_with_action(
+                    &mut stdout,
+                    args,
+                    "Running",
+                    crate::render::status_style::ToolHealth::Pending,
+                )?;
             } else if crate::render::stream_text::is_file_edit_tool(tool_name) {
                 if !write_edit_file_diff_block(&mut stdout, args)? {
                     write_tool_payload(&mut stdout, "args", args)?;
@@ -120,7 +125,14 @@ impl StreamRenderer {
             writeln!(
                 stdout,
                 "{}",
-                tool_event_text(&tool_event_label(tool_name, None), status)
+                tool_event_text(
+                    &crate::render::tool_event_line::tool_event_label_tense(
+                        tool_name,
+                        None,
+                        crate::render::tool_event_line::ToolVerbTense::Perfect,
+                    ),
+                    status,
+                )
             )?;
             write_tool_payload(&mut stdout, "output", output)?;
             stdout.flush()?;

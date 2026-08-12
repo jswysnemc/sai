@@ -1,4 +1,6 @@
-use crate::render::tool_event_line::{tool_event_label, tool_event_text};
+use crate::render::tool_event_line::{
+    tool_event_label_tense, tool_event_text, tool_verb, ToolVerbTense,
+};
 use crate::render::ToolCallDisplayMode;
 use crate::tools::subagent_state::SubagentSnapshot;
 use serde_json::Value;
@@ -63,11 +65,14 @@ impl SubagentCell {
             .subagent_id
             .as_deref()
             .and_then(|id| crate::tools::subagent_state::subagent_snapshot(id).ok());
+        let status = status_key(self, snapshot.as_ref());
+        let tense = ToolVerbTense::from_done(status != "run");
         let label = snapshot
             .as_ref()
-            .map(|snapshot| snapshot.description.clone())
-            .unwrap_or_else(|| tool_event_label("subagent", Some(&self.arguments)));
-        let status = status_key(self, snapshot.as_ref());
+            .map(|snapshot| format!("{} {}", tool_verb("subagent", tense), snapshot.description))
+            .unwrap_or_else(|| {
+                tool_event_label_tense("subagent", Some(&self.arguments), tense)
+            });
         (label, status, status == "run")
     }
 
@@ -171,16 +176,17 @@ pub(super) fn render(cell: &SubagentCell, mode: ToolCallDisplayMode) -> String {
         .as_deref()
         .and_then(|id| crate::tools::subagent_state::subagent_snapshot(id).ok());
     // 【TUI】【子智能体渲染】2. 使用主智能体工具标题和状态样式
+    let status = status_key(cell, snapshot.as_ref());
+    let tense = ToolVerbTense::from_done(status != "run");
     let label = snapshot
         .as_ref()
-        .map(|snapshot| format!("Subagent {}", snapshot.description))
-        .unwrap_or_else(|| tool_event_label("subagent", Some(&cell.arguments)));
-    let status = status_key(cell, snapshot.as_ref());
+        .map(|snapshot| format!("{} {}", tool_verb("subagent", tense), snapshot.description))
+        .unwrap_or_else(|| tool_event_label_tense("subagent", Some(&cell.arguments), tense));
     let mut output = tool_event_text(&label, status);
     // 子 agent 响应不进入 transcript，避免与主 agent 流式渲染竞态；
     // 完整会话通过底部 agent 面板切换到子智能体视图查看
     if let Some(summary) = compact_subagent_summary(cell, snapshot.as_ref()) {
-        output.push_str(&format!("\n\x1b[2m  └─ {summary}\x1b[0m"));
+        output.push_str(&format!("\n\x1b[2m  └ {summary}\x1b[0m"));
     }
     let _ = mode;
     output
@@ -314,7 +320,11 @@ mod tests {
 
         let rendered = render(&cell, ToolCallDisplayMode::Full);
 
-        assert!(rendered.contains("subagent") || rendered.contains("Subagent"));
+        // 标题与主视图工具行同语汇（Delegating/Delegated），摘要走统一 gutter
+        assert!(rendered.contains("Delegating") || rendered.contains("Delegated"));
+        assert!(rendered.contains("检查项目"));
+        assert!(rendered.contains("  └ "));
+        assert!(!rendered.contains("└─"));
         assert!(rendered.contains("运行中") || rendered.contains("running"));
         assert!(!rendered.contains("先检查文件"));
         assert!(!rendered.contains("done"));

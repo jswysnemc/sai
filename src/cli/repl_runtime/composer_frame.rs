@@ -14,7 +14,7 @@ use crate::cli::repl_text::{repl_input_lines, visible_width};
 use crate::cli::REPL_MAX_VISIBLE_INPUT_ROWS;
 use crate::render::terminal_paint::paint_lock;
 use anyhow::Result;
-use crossterm::cursor::{MoveTo, Show};
+use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::queue;
 use crossterm::style::Print;
 use crossterm::terminal::{Clear, ClearType};
@@ -188,6 +188,10 @@ impl ComposerFrame {
         if previous == Some(&signature) {
             return Ok((cursor_row, signature));
         }
+
+        // 0. 重绘期间隐藏光标：清行与逐行打印会带着光标扫过整个 composer 区域，
+        //    可见状态下表现为光标在输入框与面板/状态行之间来回跳动
+        queue!(output, Hide)?;
 
         // 1. 先清理整个保留区域，避免输入行数或补全提示缩短后残留旧内容
         for row_offset in 0..height {
@@ -455,6 +459,37 @@ mod tests {
         assert!(output.contains('▏'));
         assert!(output.contains("\x1b[48;5;236m"));
         assert!(output.contains("hello"));
+    }
+
+    /// 验证重绘期间先隐藏光标、结束时在输入位置恢复显示。
+    ///
+    /// 清行与逐行打印会带着光标扫过整个 composer 区域，
+    /// 可见状态下表现为光标在输入框与面板/状态行之间来回跳动。
+    #[test]
+    fn repaint_hides_cursor_first_and_shows_it_last() {
+        let chrome = ReplChrome {
+            mode: AgentMode::Yolo,
+            context_ratio: 0.0,
+            context_window_tokens: 120_000,
+            model: "gpt".to_string(),
+            thinking: "auto".to_string(),
+            directory: "/workspace".to_string(),
+        };
+        let frame = ComposerFrame::new(chrome, "hello".to_string(), 5, false, Vec::new(), 0);
+        let mut viewport = InlineViewport::new();
+        viewport.update(TerminalSize { cols: 40, rows: 12 }, frame.height(40), 8);
+        let mut output = Vec::new();
+
+        frame.draw_lines(&mut output, &viewport, None).unwrap();
+
+        let output = String::from_utf8(output).unwrap();
+        let hide = output.find("\x1b[?25l").expect("repaint must hide the cursor first");
+        let show = output.rfind("\x1b[?25h").expect("repaint must show the cursor at the end");
+        let first_clear = output.find("\x1b[2K").expect("repaint clears reserved rows");
+        assert!(hide < first_clear, "cursor must be hidden before any clearing");
+        assert!(show > hide);
+        // Show 之后不再有任何绘制输出，光标不会再被移动
+        assert!(!output[show + "\x1b[?25h".len()..].contains("\x1b[2K"));
     }
 
     /// 验证内容未变时跳过重绘。

@@ -1,10 +1,36 @@
 use crate::render::background_command_event::background_command_call_label;
-use crate::render::status_style::color_status;
+use crate::render::status_style::{color_status, tool_bullet, ToolHealth};
 use crate::render::style::TOOL_BULLET;
 use serde_json::Value;
 use std::path::Path;
 
-/// 生成工具调用展示标签。
+/// 工具卡动词时态：进行中 `-ing`，完成后过去式 `-ed` / 不规则过去式。
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ToolVerbTense {
+    /// Writing / Running / Reading
+    Progressive,
+    /// Wrote / Ran / Read
+    Perfect,
+}
+
+impl ToolVerbTense {
+    /// 由工具是否已结束推导时态。
+    ///
+    /// 参数:
+    /// - `done`: 是否已有最终结果（成功或失败）
+    ///
+    /// 返回:
+    /// - 对应时态
+    pub(crate) fn from_done(done: bool) -> Self {
+        if done {
+            Self::Perfect
+        } else {
+            Self::Progressive
+        }
+    }
+}
+
+/// 生成工具调用展示标签（默认进行时，供参数流/未定稿路径）。
 ///
 /// 参数:
 /// - `name`: 工具原始名称
@@ -13,15 +39,32 @@ use std::path::Path;
 /// 返回:
 /// - 面向终端展示的短标签
 pub(crate) fn tool_event_label(name: &str, arguments: Option<&str>) -> String {
+    tool_event_label_tense(name, arguments, ToolVerbTense::Progressive)
+}
+
+/// 生成带时态的工具调用展示标签。
+///
+/// 参数:
+/// - `name`: 工具原始名称
+/// - `arguments`: 工具参数 JSON 文本
+/// - `tense`: 进行中 / 已完成
+///
+/// 返回:
+/// - 面向终端展示的短标签
+pub(crate) fn tool_event_label_tense(
+    name: &str,
+    arguments: Option<&str>,
+    tense: ToolVerbTense,
+) -> String {
     if name == "background_command" {
         return background_command_call_label(arguments);
     }
-    let action = tool_action(name);
+    let action = tool_verb(name, tense);
     let suffix = arguments.and_then(|arguments| tool_suffix_from_text(name, arguments));
     match suffix {
         Some(suffix) if !suffix.trim().is_empty() => format!("{action} {suffix}"),
-        _ if action == "Tool" => format!("Tool {name}"),
-        _ => action.to_string(),
+        _ if is_builtin_tool_verb(name) => action.to_string(),
+        _ => format!("{action} {name}"),
     }
 }
 
@@ -70,10 +113,27 @@ pub(crate) fn tool_command_full_text(name: &str, arguments: Option<&str>) -> Opt
 /// 返回:
 /// - ANSI 标题；非命令工具时回退到短标签
 pub(crate) fn tool_command_title_colored(name: &str, arguments: Option<&str>) -> String {
+    tool_command_title_colored_tense(name, arguments, ToolVerbTense::Progressive)
+}
+
+/// 渲染带时态与 shell 语法着色的命令标题。
+///
+/// 参数:
+/// - `name`: 工具名
+/// - `arguments`: 工具参数 JSON
+/// - `tense`: 进行中 / 已完成
+///
+/// 返回:
+/// - ANSI 标题；非命令工具时回退到短标签
+pub(crate) fn tool_command_title_colored_tense(
+    name: &str,
+    arguments: Option<&str>,
+    tense: ToolVerbTense,
+) -> String {
     let action = if name == "background_command" {
         "Background".to_string()
     } else {
-        tool_action(name).to_string()
+        tool_verb(name, tense).to_string()
     };
     if let Some(command) = tool_command_full_text(name, arguments) {
         // 多行命令逐行着色，保留完整文本
@@ -84,26 +144,68 @@ pub(crate) fn tool_command_title_colored(name: &str, arguments: Option<&str>) ->
             .join("\n");
         return format!("{action} {colored}");
     }
-    tool_event_label(name, arguments)
+    tool_event_label_tense(name, arguments, tense)
 }
 
-/// 生成工具状态事件文本。
+/// 生成工具状态事件行（transcript / 定稿路径的统一排版）。
+///
+/// 统一层级：状态色圆点 + 粗体动词 + 常规对象 + 语义色徽标。
+/// 状态语义由状态键自动推导；编辑类 `+N -M` 等自定义徽标需要
+/// 显式语义时请使用 `tool_status_line`。
 ///
 /// 参数:
-/// - `label`: 工具展示标签
-/// - `status`: 状态文本
+/// - `label`: 工具展示标签（`动词 对象`）
+/// - `status`: 状态键（ok/err/run/arg/skip）或自定义徽标
 ///
 /// 返回:
-/// - 工具状态事件文本
+/// - 单行 ANSI 状态文本
 pub(crate) fn tool_event_text(label: &str, status: &str) -> String {
-    format!("{TOOL_BULLET} {label} {}", color_status(status))
+    tool_status_line(label, &color_status(status), ToolHealth::from_status(status))
 }
 
-/// 生成工具状态文本。
+/// 以显式状态语义生成工具状态事件行。
+///
+/// 参数:
+/// - `label`: 工具展示标签（`动词 对象`）
+/// - `badge`: 行尾徽标（可含 ANSI，如 `+N -M`；空则省略）
+/// - `health`: 状态语义，决定行首圆点颜色
+///
+/// 返回:
+/// - 单行 ANSI 状态文本
+pub(crate) fn tool_status_line(label: &str, badge: &str, health: ToolHealth) -> String {
+    let bullet = tool_bullet(health);
+    let title = emphasize_verb(label);
+    if badge.is_empty() {
+        return format!("{bullet} {title}");
+    }
+    format!("{bullet} {title} {badge}")
+}
+
+/// 加粗标签首词（动词），保持对象部分常规色。
+///
+/// 首词已含 ANSI 样式时原样返回，避免破坏调用方的自定义着色；
+/// 对象部分的 ANSI（如 todo 状态符）不影响动词加粗。
+///
+/// 参数:
+/// - `label`: 展示标签
+///
+/// 返回:
+/// - 动词加粗后的标签
+fn emphasize_verb(label: &str) -> String {
+    match label.split_once(' ') {
+        Some((verb, rest)) if !verb.contains('\x1b') => format!("\x1b[1m{verb}\x1b[0m {rest}"),
+        None if !label.contains('\x1b') => format!("\x1b[1m{label}\x1b[0m"),
+        _ => label.to_string(),
+    }
+}
+
+/// 生成流式阶段的单行工具状态（整行随后由调用方弱化）。
+///
+/// 与定稿行不同：不点亮圆点、不加粗动词，保持 live 行整体安静。
 ///
 /// 参数:
 /// - `label`: 工具展示标签
-/// - `status`: 工具状态
+/// - `status`: 工具状态键
 ///
 /// 返回:
 /// - 可直接写入终端的单行状态文本
@@ -111,32 +213,98 @@ pub(crate) fn tool_call_status_text(label: &str, status: &str) -> String {
     format!("{TOOL_BULLET} {label} {}", color_status(status))
 }
 
-/// 返回工具动作短名。
+/// 返回工具动作动词（按时态）。
 ///
 /// 参数:
 /// - `name`: 工具原始名称
+/// - `tense`: 进行中 / 已完成
 ///
 /// 返回:
-/// - 动作短名
-fn tool_action(name: &str) -> &'static str {
-    match name {
-        "run_command" => "Run",
-        "edit_file" => "Edit",
-        "write_file" => "Write",
-        "str_replace" => "Replace",
-        "read_file" => "Read",
-        "trash_path" => "Trash",
-        "glob" | "find_files" => "Find",
-        "grep" | "search_text" => "Search",
-        "subagent" => "Subagent",
-        "todo" => "Todo",
-        "cron" => "Schedule",
-        "check_os_info" => "Check",
-        "load" => "Load",
-        "create_directory" => "Create",
-        "list_directory" => "List",
-        _ => "Tool",
+/// - 展示用动词
+pub(crate) fn tool_verb(name: &str, tense: ToolVerbTense) -> &'static str {
+    match (name, tense) {
+        ("run_command", ToolVerbTense::Progressive) => "Running",
+        ("run_command", ToolVerbTense::Perfect) => "Ran",
+        ("edit_file", ToolVerbTense::Progressive) => "Editing",
+        ("edit_file", ToolVerbTense::Perfect) => "Edited",
+        ("write_file", ToolVerbTense::Progressive) => "Writing",
+        ("write_file", ToolVerbTense::Perfect) => "Wrote",
+        ("str_replace", ToolVerbTense::Progressive) => "Replacing",
+        ("str_replace", ToolVerbTense::Perfect) => "Replaced",
+        ("read_file", ToolVerbTense::Progressive) => "Reading",
+        ("read_file", ToolVerbTense::Perfect) => "Read",
+        ("trash_path", ToolVerbTense::Progressive) => "Trashing",
+        ("trash_path", ToolVerbTense::Perfect) => "Trashed",
+        ("glob" | "find_files", ToolVerbTense::Progressive) => "Finding",
+        ("glob" | "find_files", ToolVerbTense::Perfect) => "Found",
+        ("grep" | "search_text", ToolVerbTense::Progressive) => "Searching",
+        ("grep" | "search_text", ToolVerbTense::Perfect) => "Searched",
+        ("subagent", ToolVerbTense::Progressive) => "Delegating",
+        ("subagent", ToolVerbTense::Perfect) => "Delegated",
+        ("todo", ToolVerbTense::Progressive) => "Updating",
+        ("todo", ToolVerbTense::Perfect) => "Updated",
+        ("cron", ToolVerbTense::Progressive) => "Scheduling",
+        ("cron", ToolVerbTense::Perfect) => "Scheduled",
+        ("check_os_info", ToolVerbTense::Progressive) => "Checking",
+        ("check_os_info", ToolVerbTense::Perfect) => "Checked",
+        ("load", ToolVerbTense::Progressive) => "Loading",
+        ("load", ToolVerbTense::Perfect) => "Loaded",
+        ("create_directory", ToolVerbTense::Progressive) => "Creating",
+        ("create_directory", ToolVerbTense::Perfect) => "Created",
+        ("list_directory", ToolVerbTense::Progressive) => "Listing",
+        ("list_directory", ToolVerbTense::Perfect) => "Listed",
+        (_, ToolVerbTense::Progressive) => "Running",
+        (_, ToolVerbTense::Perfect) => "Ran",
     }
+}
+
+/// 将已生成标签的动词切换到目标时态，保留后缀（路径/命令摘要）。
+///
+/// 参数:
+/// - `name`: 工具名
+/// - `label`: 现有标签
+/// - `tense`: 目标时态
+///
+/// 返回:
+/// - 切换动词后的标签；无法识别前缀时原样返回
+pub(crate) fn retarget_label_tense(name: &str, label: &str, tense: ToolVerbTense) -> String {
+    let target = tool_verb(name, tense);
+    for candidate in [
+        ToolVerbTense::Progressive,
+        ToolVerbTense::Perfect,
+    ] {
+        let verb = tool_verb(name, candidate);
+        if let Some(rest) = label.strip_prefix(verb) {
+            if rest.is_empty() || rest.starts_with(' ') {
+                return format!("{target}{rest}");
+            }
+        }
+    }
+    label.to_string()
+}
+
+/// 是否为内置工具（有专用动词，标签不必再拼原始工具名）。
+fn is_builtin_tool_verb(name: &str) -> bool {
+    matches!(
+        name,
+        "run_command"
+            | "edit_file"
+            | "write_file"
+            | "str_replace"
+            | "read_file"
+            | "trash_path"
+            | "glob"
+            | "find_files"
+            | "grep"
+            | "search_text"
+            | "subagent"
+            | "todo"
+            | "cron"
+            | "check_os_info"
+            | "load"
+            | "create_directory"
+            | "list_directory"
+    )
 }
 
 /// 解析工具参数 JSON。

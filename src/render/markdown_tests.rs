@@ -1,8 +1,9 @@
 use super::*;
 use crate::render::style::{
-    BOLD_STYLE, CODE_BLOCK_FRAME_STYLE, CODE_FUNCTION_STYLE, CODE_KEYWORD_STYLE, CODE_TOKEN_RESET,
-    FOOTNOTE_DEF_STYLE, FOOTNOTE_REF_STYLE, HEADER_STYLE, IMAGE_STYLE, INLINE_CODE_STYLE,
-    ITALIC_STYLE, LINK_LABEL_STYLE, PRIMARY_STYLE, RESET, STRIKE_STYLE, TERTIARY_STYLE, URL_STYLE,
+    CODE_FUNCTION_STYLE, CODE_KEYWORD_STYLE, CODE_TOKEN_RESET, FOOTNOTE_DEF_STYLE,
+    FOOTNOTE_REF_STYLE, MD_BOLD_STYLE, MD_CODE_LANG_STYLE, MD_H1_STYLE, MD_H2_STYLE, MD_H3_STYLE,
+    MD_IMAGE_STYLE, MD_INLINE_CODE_STYLE, MD_ITALIC_STYLE, MD_LINK_LABEL_STYLE,
+    MD_LIST_MARKER_STYLE, MD_STRIKE_STYLE, MD_URL_STYLE, PRIMARY_STYLE, RESET,
 };
 use crate::render::table;
 use std::sync::Mutex;
@@ -15,7 +16,7 @@ fn streams_only_complete_lines() {
     assert_eq!(renderer.push("**bo"), "");
     assert_eq!(
         renderer.push("ld**\n"),
-        format!("{BOLD_STYLE}bold{RESET}\n")
+        format!("{MD_BOLD_STYLE}bold{RESET}\n")
     );
 }
 
@@ -23,33 +24,48 @@ fn streams_only_complete_lines() {
 fn flushes_partial_final_line() {
     let mut renderer = MarkdownStreamRenderer::new();
     assert_eq!(renderer.push("# Title"), "");
-    assert_eq!(renderer.flush(), format!("{HEADER_STYLE}# Title{RESET}\n"));
+    assert_eq!(renderer.flush(), format!("{MD_H1_STYLE}Title{RESET}\n"));
 }
 
 #[test]
-fn headings_use_one_color_and_distinct_prefix_lengths() {
+fn headings_drop_hash_prefix_and_differ_by_weight() {
+    // 层级靠字重区分：H1 加粗下划线、H2 加粗、H3+ 加粗弱化；`#` 前缀不再输出
     assert_eq!(
         render_markdown_line("# One"),
-        format!("{HEADER_STYLE}# One{RESET}")
+        format!("{MD_H1_STYLE}One{RESET}")
     );
     assert_eq!(
         render_markdown_line("## Two"),
-        format!("{HEADER_STYLE}## Two{RESET}")
+        format!("{MD_H2_STYLE}Two{RESET}")
     );
     assert_eq!(
         render_markdown_line("### Three"),
-        format!("{HEADER_STYLE}### Three{RESET}")
+        format!("{MD_H3_STYLE}Three{RESET}")
     );
     assert_eq!(
         render_markdown_line("###### Six"),
-        format!("{HEADER_STYLE}###### Six{RESET}")
+        format!("{MD_H3_STYLE}Six{RESET}")
     );
 }
 
 #[test]
-fn list_markers_use_tertiary_color() {
-    assert!(render_markdown_line("- item").contains(&format!("{TERTIARY_STYLE}-{RESET}")));
-    assert!(render_markdown_line("1. item").contains(&format!("{TERTIARY_STYLE}1.{RESET}")));
+fn heading_keeps_style_after_inline_reset() {
+    // 标题内的行内样式 reset 后必须补回标题样式，尾部文本不能掉回正文观感
+    let output = render_markdown_line("## 标题带 `code` 尾巴");
+    assert!(output.starts_with(MD_H2_STYLE));
+    assert!(output.contains(&format!("{RESET}{MD_H2_STYLE}")));
+    assert!(output.contains("尾巴"));
+}
+
+#[test]
+fn list_markers_are_dimmed_structure_symbols() {
+    // 列表符号与其他结构符号（引用线、分隔线）同为弱化灰阶
+    assert!(render_markdown_line("- item").contains(&format!("{MD_LIST_MARKER_STYLE}-{RESET}")));
+    assert!(render_markdown_line("* item").contains(&format!("{MD_LIST_MARKER_STYLE}-{RESET}")));
+    assert!(render_markdown_line("1. item").contains(&format!("{MD_LIST_MARKER_STYLE}1.{RESET}")));
+    // 嵌套列表保留原始缩进
+    let nested = render_markdown_line("  - sub");
+    assert!(nested.starts_with("  "));
 }
 
 #[test]
@@ -120,8 +136,9 @@ fn source_preview_snapshots_open_table_with_latest_widths() {
 fn blockquote_is_visually_distinct() {
     let mut renderer = MarkdownStreamRenderer::new();
     let output = renderer.push(">> quoted\n");
-    // 嵌套引用：绿色实心竖条按层级叠加，正文 dim
-    assert!(output.contains("\x1b[32m▏▏\x1b[0m"));
+    // 嵌套引用：弱化细竖条按层级叠加，正文 dim；不再借用绿色语义
+    assert!(output.contains("\x1b[2m▏▏\x1b[0m"));
+    assert!(!output.contains("\x1b[32m"));
     assert!(output.contains("\x1b[2mquoted"));
     assert!(!output.contains("| "));
     assert!(!output.contains("48;5;236"));
@@ -131,7 +148,7 @@ fn blockquote_is_visually_distinct() {
 fn blockquote_keeps_dim_after_inline_styles() {
     let mut renderer = MarkdownStreamRenderer::new();
     let output = renderer.push("> plain **bold** tail\n");
-    assert!(output.contains("\x1b[32m▏\x1b[0m"));
+    assert!(output.contains("\x1b[2m▏\x1b[0m"));
     // 行内加粗的 reset 之后补回 dim，尾部文本保持引用观感
     assert!(output.contains("\x1b[0m\x1b[2m"));
     assert!(output.contains("tail"));
@@ -143,7 +160,7 @@ fn footnote_definition_highlights_marker() {
     // 定义行的标记加粗着色作为锚点；去掉原始 `^` 噪音，正文仍按行内规则渲染
     assert!(output.contains(&format!("{FOOTNOTE_DEF_STYLE}[1]{RESET}")));
     assert!(output.contains("Fowler, M."));
-    assert!(output.contains(ITALIC_STYLE));
+    assert!(output.contains(MD_ITALIC_STYLE));
 }
 
 #[test]
@@ -161,7 +178,7 @@ fn bracket_text_is_not_treated_as_footnote() {
     assert!(!plain.contains(FOOTNOTE_REF_STYLE));
     let link = render_markdown_line("[label](https://example.com)");
     assert!(!link.contains(FOOTNOTE_REF_STYLE));
-    assert!(link.contains(LINK_LABEL_STYLE));
+    assert!(link.contains(MD_LINK_LABEL_STYLE));
 }
 
 #[test]
@@ -175,7 +192,8 @@ fn code_block_has_label_and_readable_content() {
     assert!(!output.contains("\x1b[2m|\x1b[0m"));
     assert!(output.contains(&format!("{CODE_KEYWORD_STYLE}fn{CODE_TOKEN_RESET}")));
     assert!(output.contains(&format!("{CODE_FUNCTION_STYLE}main{CODE_TOKEN_RESET}")));
-    assert!(output.contains(&format!("{CODE_BLOCK_FRAME_STYLE}rust{RESET}")));
+    // 语言标签弱化，与命令输出块 dim gutter 同一视觉层
+    assert!(output.contains(&format!("{MD_CODE_LANG_STYLE}rust{RESET}")));
     assert!(!output.contains("`--"));
 }
 
@@ -207,31 +225,41 @@ fn code_block_streams_line_by_line() {
 }
 
 #[test]
-fn code_block_suppresses_first_empty_line() {
+fn code_block_keeps_one_blank_line_after() {
     let mut renderer = MarkdownStreamRenderer::new();
     let output = renderer.push("```rust\nfn main() {}\n```\n\nNext\n");
-    // Footer ends with \n, then the empty line is suppressed.
-    // "Next" should follow immediately without a blank line.
-    assert!(!output.contains("\n\nNext"));
-    assert!(output.contains("\nNext"));
+    // 块间节奏统一：代码块与后续正文之间恰好一行空行
+    assert!(output.contains("\n\nNext"));
+    assert!(!output.contains("\n\n\nNext"));
 }
 
 #[test]
-fn code_block_suppresses_previous_empty_line() {
+fn code_block_keeps_one_blank_line_before() {
     let mut renderer = MarkdownStreamRenderer::new();
     let output = renderer.push("先测试：\n\n```bash\npwd\n```\n");
-    assert!(!output.contains("先测试：\n\n"));
-    assert!(output.contains("先测试：\n"));
+    // 正文与代码块之间保留一行空行
+    assert!(output.contains("先测试：\n\n"));
+    assert!(!output.contains("先测试：\n\n\n"));
     assert!(output.contains("bash"));
     assert!(!output.contains("──"));
 }
 
 #[test]
-fn regular_paragraphs_suppress_single_blank_line() {
+fn paragraph_gaps_collapse_to_exactly_one_blank_line() {
     let mut renderer = MarkdownStreamRenderer::new();
-    let output = renderer.push("第一段\n\n第二段\n");
-    assert!(output.contains("第一段\n第二段\n"));
-    assert!(!output.contains("第一段\n\n第二段\n"));
+    // 单个空行保留；连续多个空行压缩为一行——块间节奏恒为一行
+    let output = renderer.push("第一段\n\n第二段\n\n\n\n第三段\n");
+    assert!(output.contains("第一段\n\n第二段\n"));
+    assert!(output.contains("第二段\n\n第三段\n"));
+    assert!(!output.contains("第二段\n\n\n"));
+}
+
+#[test]
+fn leading_blank_lines_are_dropped() {
+    let mut renderer = MarkdownStreamRenderer::new();
+    // 首块之前的空行丢弃：正文不以空行开头（区块前距由 transcript cell 负责）
+    let output = renderer.push("\n\n开头\n");
+    assert!(output.starts_with("开头"));
 }
 
 #[test]
@@ -273,14 +301,19 @@ fn renders_more_inline_markdown() {
     let output = render_inline(
         "*i* ~~gone~~ [site](https://example.com) <https://example.org> ![pic](https://img)",
     );
-    assert!(output.contains(&format!("{ITALIC_STYLE}i{RESET}")));
-    assert!(output.contains(&format!("{STRIKE_STYLE}gone{RESET}")));
-    assert!(output.contains(&format!("<{URL_STYLE}https://example.com{RESET}>")));
+    assert!(output.contains(&format!("{MD_ITALIC_STYLE}i{RESET}")));
+    assert!(output.contains(&format!("{MD_STRIKE_STYLE}gone{RESET}")));
+    // 链接：蓝色下划线标签 + 弱化的 (url)
     assert!(output.contains(&format!(
-        "\x1b[4m<{URL_STYLE}https://example.org{RESET}>{RESET}"
+        "{MD_LINK_LABEL_STYLE}site{RESET} {MD_URL_STYLE}(https://example.com){RESET}"
     )));
+    // 裸链接：整体按链接标签样式渲染，无尖括号噪音
     assert!(output.contains(&format!(
-        "{IMAGE_STYLE}[image: pic]{RESET}({URL_STYLE}https://img{RESET})"
+        "{MD_LINK_LABEL_STYLE}https://example.org{RESET}"
+    )));
+    assert!(!output.contains('<'));
+    assert!(output.contains(&format!(
+        "{MD_IMAGE_STYLE}[image: pic]{RESET} {MD_URL_STYLE}(https://img){RESET}"
     )));
     assert!(!output.contains("\x1b[35mimage\x1b[0m"));
 }
@@ -288,7 +321,7 @@ fn renders_more_inline_markdown() {
 #[test]
 fn renders_inline_code_at_start_of_bullet() {
     let output = render_markdown_line("- `read_file` — 读文件内容");
-    assert!(output.contains(&format!("{INLINE_CODE_STYLE}read_file\x1b[0m")));
+    assert!(output.contains(&format!("{MD_INLINE_CODE_STYLE}read_file\x1b[0m")));
     assert!(output.contains("— 读文件内容"));
 }
 
@@ -297,9 +330,9 @@ fn renders_multiple_inline_code_spans_in_bullet_with_chinese_text() {
     let output = render_markdown_line(
         "- `~/.config/Thunar/` - 里面有 `accels.scm`（快捷键绑定）和 `uca.xml`（自定义右键菜单）",
     );
-    assert!(output.contains(&format!("{INLINE_CODE_STYLE}~/.config/Thunar/\x1b[0m")));
-    assert!(output.contains(&format!("{INLINE_CODE_STYLE}accels.scm\x1b[0m")));
-    assert!(output.contains(&format!("{INLINE_CODE_STYLE}uca.xml\x1b[0m")));
+    assert!(output.contains(&format!("{MD_INLINE_CODE_STYLE}~/.config/Thunar/\x1b[0m")));
+    assert!(output.contains(&format!("{MD_INLINE_CODE_STYLE}accels.scm\x1b[0m")));
+    assert!(output.contains(&format!("{MD_INLINE_CODE_STYLE}uca.xml\x1b[0m")));
     assert!(!output.contains('`'));
 }
 
@@ -308,8 +341,8 @@ fn renders_inline_code_when_stream_chunks_split_backticks() {
     let mut renderer = MarkdownStreamRenderer::new();
     assert_eq!(renderer.push("- `~/.config/Thu"), "");
     let output = renderer.push("nar/` - 里面有 `accels.scm`\n");
-    assert!(output.contains(&format!("{INLINE_CODE_STYLE}~/.config/Thunar/\x1b[0m")));
-    assert!(output.contains(&format!("{INLINE_CODE_STYLE}accels.scm\x1b[0m")));
+    assert!(output.contains(&format!("{MD_INLINE_CODE_STYLE}~/.config/Thunar/\x1b[0m")));
+    assert!(output.contains(&format!("{MD_INLINE_CODE_STYLE}accels.scm\x1b[0m")));
     assert!(!output.contains('`'));
 }
 
@@ -317,7 +350,7 @@ fn renders_inline_code_when_stream_chunks_split_backticks() {
 fn keeps_identifier_underscores_literal() {
     let output = render_inline("GTK_IM_MODULE and _italic_");
     assert!(output.contains("GTK_IM_MODULE"));
-    assert!(output.contains(&format!("{ITALIC_STYLE}italic{RESET}")));
+    assert!(output.contains(&format!("{MD_ITALIC_STYLE}italic{RESET}")));
     assert!(!output.contains("GTK\x1b[3mIM\x1b[0mMODULE"));
     assert_eq!(render_inline("abc_def_ghi"), "abc_def_ghi");
 }
@@ -401,9 +434,23 @@ fn horizontal_rule_uses_terminal_width_fallback() {
     let output = render_markdown_line("---");
     assert!(output.starts_with("\x1b[2m"));
     assert!(output.ends_with("\x1b[0m"));
-    assert_eq!(
-        table::visible_width(&output),
-        crate::render::markdown_blocks::horizontal_rule_width()
+    let plain = crate::render::activity_animation::strip_ansi_for_test(&output);
+    let column = crate::render::markdown_blocks::horizontal_rule_width()
+        .saturating_sub(crate::render::content_indent::CONTENT_LEFT_INDENT)
+        .max(1);
+    let inset = crate::render::markdown_blocks::MARKDOWN_HR_SIDE_INSET
+        .min(column.saturating_sub(1) / 2);
+    let dashes = column.saturating_sub(inset.saturating_mul(2)).max(1);
+    assert!(
+        plain.starts_with('─') && !plain.starts_with(' '),
+        "raw MD hr is dash-only before guide align: {plain:?}"
+    );
+    assert_eq!(table::visible_width(&output), dashes);
+    let aligned = crate::render::content_indent::align_to_guide_column(&output);
+    let aligned_plain = crate::render::activity_animation::strip_ansi_for_test(&aligned);
+    assert!(
+        aligned_plain.starts_with("  ─"),
+        "aligned MD hr must sit past the guide column: {aligned_plain:?}"
     );
 }
 
@@ -429,7 +476,7 @@ fn does_not_buffer_plain_lines_with_pipes_as_tables() {
 #[test]
 fn table_cell_renders_images_as_compact_placeholder() {
     let output = render_table_cell("![tux](https://example.com/tux.png)");
-    assert!(output.contains(&format!("{IMAGE_STYLE}[image]{RESET}")));
+    assert!(output.contains(&format!("{MD_IMAGE_STYLE}[image]{RESET}")));
     assert!(!output.contains("https://example.com"));
     assert!(!output.contains('\n'));
 }
@@ -466,7 +513,7 @@ fn table_cell_renders_display_math_as_halfblock_image() {
 #[test]
 fn table_cell_renders_links_as_label_only() {
     let output = render_table_cell("[点我去 ArchWiki](https://wiki.archlinux.org)");
-    assert!(output.contains(&format!("{LINK_LABEL_STYLE}点我去 ArchWiki{RESET}")));
+    assert!(output.contains(&format!("{MD_LINK_LABEL_STYLE}点我去 ArchWiki{RESET}")));
     assert!(!output.contains("https://wiki.archlinux.org"));
     assert!(!output.contains('\n'));
 }
@@ -474,9 +521,9 @@ fn table_cell_renders_links_as_label_only() {
 #[test]
 fn table_cell_preserves_bold_italic_code() {
     let output = render_table_cell("**加粗** _斜体_ `代码`");
-    assert!(output.contains(&format!("{BOLD_STYLE}加粗{RESET}")));
-    assert!(output.contains(&format!("{ITALIC_STYLE}斜体{RESET}")));
-    assert!(output.contains(&format!("{INLINE_CODE_STYLE}代码{RESET}")));
+    assert!(output.contains(&format!("{MD_BOLD_STYLE}加粗{RESET}")));
+    assert!(output.contains(&format!("{MD_ITALIC_STYLE}斜体{RESET}")));
+    assert!(output.contains(&format!("{MD_INLINE_CODE_STYLE}代码{RESET}")));
     assert!(!output.contains('\n'));
 }
 

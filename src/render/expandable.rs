@@ -77,7 +77,8 @@ fn render_command_body(body: &str) -> String {
         if index > 0 {
             output.push('\n');
         }
-        output.push_str("\x1b[1m\x1b[36m── ");
+        // 分节符与 transcript 的弱化围栏同一层级，不再用粗体高亮
+        output.push_str("\x1b[2m── ");
         output.push_str(&label);
         output.push_str(" ──\x1b[0m\n");
         output.push_str(&highlight_output(

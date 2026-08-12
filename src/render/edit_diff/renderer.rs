@@ -6,6 +6,7 @@ use super::model::preview_from_arguments;
 use crate::render::content_indent::{
     clear_right_margin, indent_diff_for_cli, indent_diff_for_transcript, DIFF_BLOCK_INSET,
 };
+use crate::render::status_style::{tool_bullet, ToolHealth};
 use crate::render::style::TOOL_BULLET;
 use crate::tools::file_change_model::{AppliedPatch, FileChange, LineChange, LineChangeKind};
 use anyhow::Result;
@@ -243,13 +244,17 @@ fn render_summary_header(preview: &AppliedPatch) -> String {
     let file_count = preview.changes.len();
     let noun = if file_count == 1 { "file" } else { "files" };
     format!(
-        "{TOOL_BULLET} Edited {file_count} {noun} ({} {})\n",
+        "{} \x1b[1mEdited\x1b[0m {file_count} {noun} ({} {})\n",
+        tool_bullet(ToolHealth::Pending),
         style_added_count(added),
         style_removed_count(removed)
     )
 }
 
 /// 渲染单文件标题。
+///
+/// 标题在写盘前生成，统一按「进行中」弱化圆点 + 粗体动词排版；
+/// TUI transcript 会剥掉该标题改挂状态行，CLI 直接展示。
 ///
 /// 参数:
 /// - `change`: 文件变更
@@ -260,7 +265,8 @@ fn render_file_header(change: &FileChange) -> String {
     let (added, removed) = change.line_counts();
     let path = display_change_path(change);
     format!(
-        "{TOOL_BULLET} {} {} ({} {})\n",
+        "{} \x1b[1m{}\x1b[0m {} ({} {})\n",
+        tool_bullet(ToolHealth::Pending),
         change.action_label(),
         path,
         style_added_count(added),

@@ -117,8 +117,11 @@ impl ReplRuntime {
         }
         let _paint = paint_lock();
         let mut stdout = io::stdout();
+        // 腾行期间隐藏光标：光标短暂落在屏幕底行会被看作一次跳动；
+        // 随后 composer 重绘（top 变化必然触发）会在输入位置重新 Show
         crossterm::queue!(
             stdout,
+            crossterm::cursor::Hide,
             crossterm::cursor::MoveTo(0, size.rows.saturating_sub(1))
         )?;
         for _ in 0..deficit {

@@ -34,7 +34,20 @@ impl StreamRenderer {
             .tool_event_labels
             .get(name)
             .cloned()
-            .unwrap_or_else(|| tool_event_label(name, None));
+            .map(|label| {
+                crate::render::tool_event_line::retarget_label_tense(
+                    name,
+                    &label,
+                    crate::render::tool_event_line::ToolVerbTense::Perfect,
+                )
+            })
+            .unwrap_or_else(|| {
+                crate::render::tool_event_line::tool_event_label_tense(
+                    name,
+                    None,
+                    crate::render::tool_event_line::ToolVerbTense::Perfect,
+                )
+            });
         let background_result_label = if name == "background_command" && ok {
             background_command_result_label(output)
         } else {
@@ -201,10 +214,11 @@ impl StreamRenderer {
         self.end_active_stream_line()?;
         self.finalize_reasoning_summary()?;
         if self.tool_call_mode == ToolCallDisplayMode::Full {
+            // 进度紧跟同一工具的调用块，走统一 gutter 弱化展示
             let mut stdout = io::stdout();
             writeln!(
                 stdout,
-                "{TOOL_BULLET} progress {}: {message}",
+                "\x1b[2m  └ {}: {message}\x1b[0m",
                 self.summary.display_tool_name(name)
             )?;
             stdout.flush()?;
@@ -238,8 +252,8 @@ impl StreamRenderer {
             "{}",
             tool_event_text(
                 &format!(
-                    "{}×{turn_count} · {model}",
-                    t("compact context", "压缩上下文")
+                    "{} ×{turn_count} · {model}",
+                    t("Compacting context", "压缩上下文")
                 ),
                 "run"
             )
@@ -288,7 +302,7 @@ impl StreamRenderer {
         writeln!(
             stdout,
             "{}",
-            tool_event_text(t("compact context", "压缩上下文"), status)
+            tool_event_text(t("Compacted context", "压缩上下文"), status)
         )?;
         if let Some(error) = error {
             writeln!(stdout, "{}", error.message)?;

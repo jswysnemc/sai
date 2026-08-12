@@ -37,8 +37,8 @@ pub(crate) fn render(cell: &ToolCell, mode: ToolCallDisplayMode) -> String {
         ToolCell::Subagent(cell) => subagent_cell::render(cell, mode),
         ToolCell::CompactionStarted { turn_count, model } => tool_event_text(
             &format!(
-                "{}×{turn_count} · {model}",
-                t("compact context", "压缩上下文")
+                "{} ×{turn_count} · {model}",
+                t("Compacting context", "压缩上下文")
             ),
             "run",
         ),
@@ -49,7 +49,7 @@ pub(crate) fn render(cell: &ToolCell, mode: ToolCallDisplayMode) -> String {
             summary,
         } => {
             let mut lines = vec![tool_event_text(
-                t("compact context", "压缩上下文"),
+                t("Compacted context", "压缩上下文"),
                 if *applied { "ok" } else { "skip" },
             )];
             if let Some(message) = message

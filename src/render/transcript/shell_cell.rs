@@ -3,7 +3,7 @@ use crate::render::fold_text::{
     command_body_column, command_wrap_width_for_title, fold_display_lines, wrap_display_lines,
     FOLD_HEAD_LINES, FOLD_TAIL_LINES,
 };
-use crate::render::style::TOOL_BULLET;
+use crate::render::status_style::{tool_bullet, ToolHealth};
 use crate::render::terminal_text as t;
 
 /// REPL 本地 Shell 命令单元。
@@ -26,8 +26,13 @@ pub(super) fn render(cell: &ShellCell) -> String {
     //    中文标题占四列而英文占七列，折行宽度与续行缩进都必须按实际标题算，
     //    否则首行会超出终端宽度、被硬换行到视觉引导线所在的第 0 列
     let title = t("You ran", "已执行");
+    // 圆点颜色与工具卡同语义：零退出码绿、非零红
+    let health = match cell.exit_code {
+        Some(code) if code != 0 => ToolHealth::Err,
+        _ => ToolHealth::Ok,
+    };
     let command_lines = fold_display_text(cell.command.trim(), false, title);
-    let mut rendered = format!("\x1b[1m\x1b[32m{TOOL_BULLET}\x1b[0m \x1b[1m{title}\x1b[0m ");
+    let mut rendered = format!("{} \x1b[1m{title}\x1b[0m ", tool_bullet(health));
     if let Some((first, rest)) = command_lines.split_first() {
         rendered.push_str("\x1b[35m$\x1b[0m ");
         push_shell_line(&mut rendered, first, true);

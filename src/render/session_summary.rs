@@ -1,5 +1,3 @@
-use crate::render::markdown_blocks::horizontal_rule_width;
-use crate::render::table::visible_width;
 use crate::render::terminal_text as t;
 use crate::runtime_recovery::has_visible_runtime_recovery;
 use crate::state::failure_recovery::summary::{format_recovery_snapshot, has_visible_recovery};
@@ -81,37 +79,14 @@ pub fn render_session_summary(snapshot: &SessionSnapshot) -> String {
             )
         ));
     }
-    // 总览块末尾水平线分隔 turn：有空位则右接，否则换行全宽（不是竖线 │）
-    append_right_turn_rule(&mut output);
+    // CLI 本身有 PS1 分隔轮次，这里不烘焙分割线；
+    // TUI 的 turn 分割线由 transcript 渲染层按当前宽度动态追加（见 cell.rs 的 Summary 分支）
     output
 }
 
-/// 【终端】【会话分隔】判断文本是否已带 turn 水平分隔线。
+/// 【终端】【会话分隔】去掉历史烘焙的 turn 横线。
 ///
-/// 参数:
-/// - `text`: 可能含 ANSI 的总览或 meta 文本
-///
-/// 返回:
-/// - 含纯 `─` 分隔行或同行尾部横线时为 true
-pub(crate) fn has_turn_rule(text: &str) -> bool {
-    let plain = crate::render::activity_animation::strip_ansi_for_test(text);
-    plain.lines().any(|line| {
-        let trimmed = line.trim();
-        if trimmed.len() >= 3 && trimmed.chars().all(|ch| ch == '─') {
-            return true;
-        }
-        line.contains('─')
-            && line
-                .trim_end()
-                .chars()
-                .rev()
-                .take_while(|ch| *ch == '─')
-                .count()
-                >= 3
-    })
-}
-
-/// 【终端】【会话分隔】去掉已烘焙的 turn 横线，便于按当前正文宽度重画。
+/// CLI 有 PS1、TUI 有区块空行，新总览不再画 turn 线；此处只清理旧会话残留。
 ///
 /// 参数:
 /// - `text`: 可能含同行或换行横线的总览文本
@@ -134,27 +109,16 @@ pub(crate) fn strip_turn_rule(text: &str) -> String {
     kept.join("\n")
 }
 
-/// 【终端】【会话分隔】按指定列宽重画 turn 横线（始终另起一行，避免与摘要同行后被 TUI 再折行）。
+/// 【终端】【会话分隔】兼容旧入口：只剥离 turn 横线，不再按宽度重画。
 ///
 /// 参数:
-/// - `text`: 原始总览（可已含错误宽度的横线）
-/// - `width`: 当前 transcript 正文净宽度
+/// - `text`: 原始总览（可含历史横线）
+/// - `_width`: 保留签名以兼容 transcript Meta 调用方
 ///
 /// 返回:
-/// - 横线宽度与 `width` 对齐后的文本
-pub(crate) fn refit_turn_rule(text: &str, width: usize) -> String {
-    if !has_turn_rule(text) && !looks_like_session_summary(text) {
-        return text.to_string();
-    }
-    let mut body = strip_turn_rule(text);
-    append_right_turn_rule_with_width(&mut body, width.max(1));
-    body
-}
-
-/// 【终端】【会话分隔】识别会话总览行（Context / 上下文）。
-fn looks_like_session_summary(text: &str) -> bool {
-    let plain = crate::render::activity_animation::strip_ansi_for_test(text);
-    plain.contains("Context") || plain.contains("上下文")
+/// - 去掉 turn 横线后的文本
+pub(crate) fn refit_turn_rule(text: &str, _width: usize) -> String {
+    strip_turn_rule(text)
 }
 
 /// 去掉行尾同行右接的 `─` 横线（含弱化 ANSI 包装）。
@@ -194,32 +158,6 @@ fn truncate_ansi_to_plain_prefix(line: &str, prefix_plain: &str) -> String {
     line[..index].trim_end().to_string()
 }
 
-/// 【终端】【会话分隔】为总览补水平 turn 分隔线。
-///
-/// 始终另起一行画横线：同行右接会在「整屏宽度烘焙、TUI 按正文净宽折行」时溢出到下一行。
-/// 不再使用竖线 `│`。
-///
-/// 参数:
-/// - `output`: 已渲染的总览文本（可含 ANSI）
-///
-/// 返回:
-/// - 无
-fn append_right_turn_rule(output: &mut String) {
-    append_right_turn_rule_with_width(output, horizontal_rule_width().max(1));
-}
-
-/// 按给定列宽追加下一行 turn 横线。
-fn append_right_turn_rule_with_width(output: &mut String, cols: usize) {
-    let cols = cols.max(1);
-    let plain = crate::render::activity_animation::strip_ansi_for_test(output);
-    let first = plain.lines().next().unwrap_or("");
-    let used = visible_width(first);
-    if !output.is_empty() && !output.ends_with('\n') {
-        output.push('\n');
-    }
-    output.push_str(&format!("\x1b[2m{}\x1b[0m", "─".repeat(cols)));
-}
-
 /// 【终端】【会话摘要】按上下文压力选择占比数值的着色。
 ///
 /// 低压力时占比是背景信息，随标签一起弱化；接近上限时逐级升黄、升红，
@@ -242,27 +180,20 @@ fn context_ratio_style(ratio: f32) -> &'static str {
 
 /// 【终端】【会话摘要】将毫秒格式化为人类可读本轮耗时。
 ///
+/// 终端聊天渲染统一使用英文文案（见 `render::terminal_text`），
+/// 时长跟随同一约定，避免出现 `Turn 6分35秒` 这类中英混排。
+///
 /// 参数:
 /// - `ms`: 耗时毫秒
 ///
 /// 返回:
-/// - 如 `12s` / `12秒` / `1m05s`
+/// - 如 `<1s` / `12s` / `1m05s` / `1h02m05s`
 pub(crate) fn format_turn_duration_ms(ms: u64) -> String {
-    use crate::i18n::is_zh;
-    let total_secs = ms / 1_000;
-    if is_zh() {
-        if total_secs < 60 {
-            return format!("{total_secs}秒");
-        }
-        let mins = total_secs / 60;
-        let secs = total_secs % 60;
-        if mins < 60 {
-            return format!("{mins}分{secs:02}秒");
-        }
-        let hours = mins / 60;
-        let remain_mins = mins % 60;
-        return format!("{hours}小时{remain_mins}分{secs:02}秒");
+    // 亚秒轮次显示 `Turn 0s` 像出了错，标成 `<1s` 更符合直觉
+    if ms < 1_000 {
+        return "<1s".to_string();
     }
+    let total_secs = ms / 1_000;
     if total_secs < 60 {
         return format!("{total_secs}s");
     }

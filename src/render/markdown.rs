@@ -8,7 +8,10 @@ pub(crate) use crate::render::markdown_inline::render_table_cell;
 pub(crate) use crate::render::markdown_inline::render_table_cell_content;
 use crate::render::markdown_inline::{render_inline_with_math_mode, InlineMathMode};
 use crate::render::streaming_asset_block::StreamingAssetBlock;
-use crate::render::style::{FOOTNOTE_DEF_STYLE, HEADER_STYLE, RESET, TERTIARY_STYLE};
+use crate::render::style::{
+    FOOTNOTE_DEF_STYLE, MD_H1_STYLE, MD_H2_STYLE, MD_H3_STYLE, MD_LIST_MARKER_STYLE,
+    MD_QUOTE_BAR_STYLE, RESET,
+};
 use crate::render::table;
 use crate::render::table::streaming::StreamingTable;
 
@@ -111,8 +114,8 @@ struct MarkdownLineRenderer {
     code_lang: String,
     code_buffer: Vec<String>,
     code_is_asset: bool,
-    just_closed_code_block: bool,
     pending_blank_lines: usize,
+    has_emitted_content: bool,
     math_buffer: Vec<String>,
     table: StreamingTable,
     asset_block: StreamingAssetBlock,
@@ -131,8 +134,8 @@ impl MarkdownLineRenderer {
             code_lang: String::new(),
             code_buffer: Vec::new(),
             code_is_asset: false,
-            just_closed_code_block: false,
             pending_blank_lines: 0,
+            has_emitted_content: false,
             math_buffer: Vec::new(),
             table: if replace_streamed_table_rows {
                 StreamingTable::new()
@@ -168,11 +171,21 @@ impl MarkdownLineRenderer {
     /// 返回:
     /// - 当前可输出的终端文本
     fn render_line(&mut self, line: &str) -> String {
-        let skip_empty = std::mem::take(&mut self.just_closed_code_block);
-        if skip_empty && !self.in_code_block && line.trim().is_empty() {
-            return String::new();
+        let output = self.render_line_inner(line);
+        if !output.is_empty() {
+            self.has_emitted_content = true;
         }
+        output
+    }
 
+    /// 按行类型分派渲染。
+    ///
+    /// 参数:
+    /// - `line`: 单行 Markdown 文本
+    ///
+    /// 返回:
+    /// - 当前可输出的终端文本
+    fn render_line_inner(&mut self, line: &str) -> String {
         if line.trim_start().starts_with("```") {
             if self.in_code_block {
                 self.in_code_block = false;
@@ -183,11 +196,9 @@ impl MarkdownLineRenderer {
                     let rendered = asset_block::render_asset_block(&lang, &lines);
                     raw_close + &self.asset_block.finish(rendered)
                 } else {
-                    self.just_closed_code_block = true;
                     render_code_footer(&lines)
                 }
             } else {
-                self.pending_blank_lines = 0;
                 let pending = self.flush();
                 self.in_code_block = true;
                 self.code_lang = line
@@ -239,10 +250,9 @@ impl MarkdownLineRenderer {
             self.math_buffer.push(line.to_string());
             self.asset_block.push_line(line)
         } else if table::looks_like_table_row(line) {
-            self.pending_blank_lines = 0;
-            self.table.push_line(line)
+            let gap = self.take_pending_blank_lines();
+            gap + &self.table.push_line(line)
         } else {
-            self.pending_blank_lines = 0;
             let mut output = self.flush();
             let rendered = match self.inline_math_mode {
                 InlineMathMode::TerminalImage => render_markdown_line(line),
@@ -278,10 +288,6 @@ impl MarkdownLineRenderer {
             self.asset_block.finish(rendered)
         } else if !self.table.is_active() {
             self.take_pending_blank_lines()
-        } else if self.table.is_confirmed() {
-            let mut output = self.table.finish();
-            output.push_str(&self.take_pending_blank_lines());
-            output
         } else {
             let mut output = self.table.finish();
             output.push_str(&self.take_pending_blank_lines());
@@ -301,13 +307,19 @@ impl MarkdownLineRenderer {
         }
     }
 
-    /// 取出待输出空行。
+    /// 取出块间空行（统一节奏：相邻块之间恰好一行）。
+    ///
+    /// 源中连续多个空行压缩为一行；首个块之前的空行直接丢弃，
+    /// 避免正文以空行开头（区块前距由 transcript cell 统一负责）。
     ///
     /// 返回:
-    /// - 空行文本
+    /// - 空行文本（零或一行）
     fn take_pending_blank_lines(&mut self) -> String {
         let count = std::mem::take(&mut self.pending_blank_lines);
-        "\n".repeat(count)
+        if count == 0 || !self.has_emitted_content {
+            return String::new();
+        }
+        "\n".to_string()
     }
 }
 
@@ -344,12 +356,12 @@ fn render_markdown_line_with_math_mode(line: &str, math_mode: InlineMathMode) ->
         );
     }
     if let Some((depth, rest)) = parse_blockquote(trimmed) {
-        // 引用条：左侧绿色细竖条（嵌套层级叠加）+ dim 正文；
+        // 引用条：左侧弱化细竖条（嵌套层级叠加）+ dim 正文；
         // 行内样式的 reset 会中断 dim，重置后补回保持整行统一
         let bars = "▏".repeat(depth);
         let body =
             render_inline_for_mode(rest, math_mode).replace(RESET, &format!("{RESET}\x1b[2m"));
-        return format!("{indent}\x1b[32m{bars}\x1b[0m \x1b[2m{body}\x1b[0m");
+        return format!("{indent}{MD_QUOTE_BAR_STYLE}{bars}{RESET} \x1b[2m{body}\x1b[0m");
     }
     if let Some(rest) = trimmed
         .strip_prefix("- ")
@@ -357,7 +369,7 @@ fn render_markdown_line_with_math_mode(line: &str, math_mode: InlineMathMode) ->
         .or_else(|| trimmed.strip_prefix("+ "))
     {
         return format!(
-            "{indent}{TERTIARY_STYLE}-{RESET} {}",
+            "{indent}{MD_LIST_MARKER_STYLE}-{RESET} {}",
             render_inline_for_mode(rest, math_mode)
         );
     }
@@ -369,7 +381,7 @@ fn render_markdown_line_with_math_mode(line: &str, math_mode: InlineMathMode) ->
         let marker = &trimmed[..=digits];
         let rest = &trimmed[digits + 2..];
         return format!(
-            "{indent}{TERTIARY_STYLE}{marker}{RESET} {}",
+            "{indent}{MD_LIST_MARKER_STYLE}{marker}{RESET} {}",
             render_inline_for_mode(rest, math_mode)
         );
     }
@@ -431,8 +443,12 @@ fn parse_blockquote(line: &str) -> Option<(usize, &str)> {
 
 /// 渲染 Markdown 标题。
 ///
+/// 去掉 `#` 前缀噪音，层级靠字重区分：H1 加粗下划线、H2 加粗、
+/// H3 及以下加粗弱化；行内样式的 reset 会中断标题样式，重置后补回。
+///
 /// 参数:
 /// - `line`: 去除缩进后的行
+/// - `math_mode`: 行内公式渲染策略
 ///
 /// 返回:
 /// - 标题渲染结果
@@ -441,11 +457,14 @@ fn render_header(line: &str, math_mode: InlineMathMode) -> Option<String> {
     if level == 0 || level > 6 || line.as_bytes().get(level) != Some(&b' ') {
         return None;
     }
-    let prefix = "#".repeat(level);
-    Some(format!(
-        "{HEADER_STYLE}{prefix} {}{RESET}",
-        render_inline_for_mode(&line[level + 1..], math_mode)
-    ))
+    let style = match level {
+        1 => MD_H1_STYLE,
+        2 => MD_H2_STYLE,
+        _ => MD_H3_STYLE,
+    };
+    let body = render_inline_for_mode(&line[level + 1..], math_mode)
+        .replace(RESET, &format!("{RESET}{style}"));
+    Some(format!("{style}{body}{RESET}"))
 }
 
 #[cfg(test)]

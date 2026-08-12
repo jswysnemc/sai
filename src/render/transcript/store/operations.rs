@@ -179,6 +179,17 @@ impl TranscriptStore {
         self.push_cell(HistoryCell::meta(text));
     }
 
+    /// 记录轮次结束总览，渲染时在其下追加 turn 分割线。
+    ///
+    /// 参数:
+    /// - `text`: 自带样式的上下文总览文本
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn push_turn_summary(&mut self, text: String) {
+        self.push_cell(HistoryCell::turn_summary(text));
+    }
+
     /// 追加失败提示，行首带红色标记与正文区分。
     ///
     /// 参数:
