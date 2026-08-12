@@ -158,7 +158,7 @@
     border-right: 1px solid var(--line);
     box-shadow: 18px 0 42px rgb(var(--shadow-hue) / calc(18% * var(--shadow-boost)));
     transform: translateX(-105%);
-    transition:transform var(--duration-slow) ease;
+    transition:transform var(--transition-slow);
     z-index: 55;
   }
 

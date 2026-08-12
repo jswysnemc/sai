@@ -48,7 +48,7 @@
   color: #f2f5f3;
   line-height: 0;
   opacity: 0;
-  transition:opacity var(--duration-fast) ease;
+  transition:opacity var(--transition-fast);
 }
 
 .composer-attachment .attachment-remove svg {

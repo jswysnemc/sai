@@ -70,7 +70,7 @@
   border-radius: var(--radius-pill);
   background: var(--line-strong);
   opacity: 0;
-  transition:opacity var(--duration-fast) ease;
+  transition:opacity var(--transition-fast);
 }
 
 .session-sidebar-resize-handle:hover span,

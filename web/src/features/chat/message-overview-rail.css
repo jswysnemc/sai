@@ -50,7 +50,7 @@
   width: 7px;
   height: 1px;
   background: currentColor;
-  transition:width var(--duration-base) ease, height var(--duration-base) ease, color var(--duration-base) ease;
+  transition:width var(--transition-base), height var(--transition-base), color var(--transition-base);
 }
 
 .message-overview-marker:hover,
@@ -88,7 +88,7 @@
   transform: translateY(-50%) translateX(-5px);
   visibility: hidden;
   pointer-events: none;
-  transition:opacity var(--duration-fast) ease, transform var(--duration-fast) ease, visibility var(--duration-fast) ease;
+  transition:opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
   backdrop-filter: blur(14px);
 }
 

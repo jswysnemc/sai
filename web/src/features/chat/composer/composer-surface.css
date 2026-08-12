@@ -5,8 +5,8 @@
   background: var(--control-surface);
   box-shadow: none;
   transition:
-    border-color var(--duration-base) ease,
-    box-shadow var(--duration-base) ease;
+    border-color var(--transition-base),
+    box-shadow var(--transition-base);
 }
 
 .composer-surface:focus-within {

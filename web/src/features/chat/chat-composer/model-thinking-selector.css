@@ -87,7 +87,7 @@
 .model-thinking-chevron {
   flex: 0 0 auto;
   opacity: 0.55;
-  transition:transform var(--duration-base) ease;
+  transition:transform var(--transition-base);
 }
 
 .model-thinking-chevron.open {

@@ -7,7 +7,7 @@
 .todo-tool-tag.is-in_progress { color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent); }
 .todo-tool-tag.is-completed { color: var(--signal); background: var(--signal-soft); }
 .todo-tool-tag.is-cancelled { color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); }
-.todo-tool-head > svg { flex-shrink: 0; color: var(--ink-soft); transition:transform var(--duration-base) ease; }
+.todo-tool-head > svg { flex-shrink: 0; color: var(--ink-soft); transition:transform var(--transition-base); }
 .todo-tool-head > svg.open { transform: rotate(180deg); }
 
 .todo-tool-list { display: grid; gap:var(--space-2xs); margin: 0; padding:var(--space-2xs) var(--space-md) var(--space-md) var(--space-md); list-style: none; border-top: 1px solid var(--line); }

@@ -11,6 +11,7 @@
   background: rgb(24 30 31 / 34%);
   backdrop-filter: blur(3px);
   z-index: 200;
+  animation: ui-modal-backdrop-in var(--duration-slow) var(--ease-out);
 }
 
 .ui-modal {
@@ -23,6 +24,19 @@
   border-radius:var(--radius-5);
   background: var(--paper);
   box-shadow: var(--elevation-5);
+  /* 进入动效：轻微上浮 + 缩放归位，与下拉菜单同一方向感 */
+  animation: ui-modal-in var(--duration-slow) var(--ease-out);
+}
+
+@keyframes ui-modal-backdrop-in {
+  from { opacity: 0; }
+}
+
+@keyframes ui-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.375rem) scale(0.98);
+  }
 }
 
 .ui-modal.small { width: min(430px, calc(100vw - 32px)); }
@@ -39,7 +53,7 @@
 
 .ui-modal-header h2 { margin: 0; font-size:var(--text-2xl); }
 .ui-modal-header p { margin:var(--space-2xs) 0 0; color: var(--ink-soft); font-size:var(--text-xs); line-height: 1.55; }
-.ui-modal-header > button { display: grid; width: 28px; height: 28px; padding: 0; place-items: center; border: 0; border-radius:var(--radius-2); background: transparent; color: var(--ink-soft); }
+.ui-modal-header > button { display: grid; width: 28px; height: 28px; padding: 0; place-items: center; border: 0; border-radius:var(--radius-2); background: transparent; color: var(--ink-soft); transition: background var(--transition-fast), color var(--transition-fast); }
 .ui-modal-header > button:hover { background: var(--paper-deep); color: var(--ink); }
 .ui-modal-body { min-height: 0; overflow: auto; padding:var(--space-2xl) var(--space-2xl); }
 .ui-modal-footer { display: flex; justify-content: flex-end; gap:var(--space-sm); padding:var(--space-lg) var(--space-2xl); border-top: 1px solid var(--line); }

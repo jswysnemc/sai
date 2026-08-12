@@ -165,7 +165,7 @@
   transform: translateY(-50%);
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--duration-fast) ease;
+  transition: opacity var(--transition-fast);
 }
 
 .session-row:hover .session-more,

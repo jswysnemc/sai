@@ -136,7 +136,7 @@
 
 .object-list-group-head:hover { background: var(--paper-deep); color: var(--ink); }
 
-.object-list-group-head svg { transition: transform 120ms ease; }
+.object-list-group-head svg { transition: transform var(--transition-fast); }
 .object-list-group.expanded .object-list-group-head svg { transform: rotate(90deg); }
 
 .object-list-group-head small {

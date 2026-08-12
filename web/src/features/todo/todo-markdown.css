@@ -98,13 +98,13 @@
   height: 100%;
   border-radius: var(--radius-pill);
   background: var(--signal);
-  transition:width var(--duration-slower) ease;
+  transition:width var(--duration-slower) var(--ease-standard);
 }
 
 .todo-markdown-trigger > svg {
   flex-shrink: 0;
   color: var(--ink-soft);
-  transition:transform var(--duration-base) ease;
+  transition:transform var(--transition-base);
 }
 
 .todo-markdown-trigger > svg.open {

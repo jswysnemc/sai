@@ -39,7 +39,7 @@
   margin-left: 0;
   color: inherit;
   opacity: 0.55;
-  transition:transform var(--duration-base) ease;
+  transition:transform var(--transition-base);
 }
 
 .workspace-trigger svg.open {

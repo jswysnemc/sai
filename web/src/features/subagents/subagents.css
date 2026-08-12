@@ -18,7 +18,7 @@
 .subagent-overview-empty span { font-size:var(--text-xs); }
 
 /* 概览卡片 */
-.subagent-card { display: grid; gap:var(--space-sm); padding:var(--space-md) var(--space-lg); border: 1px solid var(--line); border-radius: var(--radius-4); background: var(--paper); cursor: pointer; transition:border-color var(--duration-base) ease, background var(--duration-base) ease; }
+.subagent-card { display: grid; gap:var(--space-sm); padding:var(--space-md) var(--space-lg); border: 1px solid var(--line); border-radius: var(--radius-4); background: var(--paper); cursor: pointer; transition:border-color var(--transition-base), background var(--transition-base); }
 .subagent-card:hover { border-color: var(--line-strong); background: var(--control-surface); }
 .subagent-card.active { border-color: var(--signal); background: var(--signal-soft); }
 .subagent-heading { display: flex; align-items: center; gap:var(--space-sm); min-width: 0; }

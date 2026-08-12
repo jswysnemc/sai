@@ -414,7 +414,7 @@
 }
 
 .git-output-toggle svg:last-child {
-  transition:transform var(--duration-base) ease;
+  transition:transform var(--transition-base);
 }
 
 .git-output-panel.open .git-output-toggle svg:last-child {

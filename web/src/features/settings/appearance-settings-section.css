@@ -16,6 +16,7 @@
   padding:var(--space-sm) var(--space-md);
   border: 1px solid var(--line);
   border-radius:var(--radius-3);
+  transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
   background: var(--paper);
   color: var(--ink-soft);
   text-align: left;

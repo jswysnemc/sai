@@ -117,7 +117,7 @@
   padding-right:var(--space-2xs);
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--duration-fast) ease;
+  transition: opacity var(--transition-fast);
 }
 
 .workspace-tree-row:hover .workspace-tree-actions,

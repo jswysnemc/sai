@@ -255,7 +255,7 @@
   min-height: 22px;
   margin-top:var(--space-3xs);
   opacity: 0;
-  transition:opacity var(--duration-base) ease;
+  transition:opacity var(--transition-base);
 }
 
 .user-message-stack:hover .message-actions,

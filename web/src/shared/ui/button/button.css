@@ -14,7 +14,13 @@
   transition:
     background var(--transition-fast),
     border-color var(--transition-fast),
-    color var(--transition-fast);
+    color var(--transition-fast),
+    transform var(--duration-instant) var(--ease-standard);
+}
+
+/* 统一按压反馈：轻微缩沉，让点击有确定的物理回应 */
+.ui-button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 /* 图标在按钮内不可压缩，且消除行内基线偏移 */

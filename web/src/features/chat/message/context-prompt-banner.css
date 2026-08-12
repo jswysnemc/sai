@@ -121,7 +121,7 @@
   flex: 0 0 auto;
   margin-top:var(--space-2xs);
   color: var(--ink-soft);
-  transition:transform var(--duration-base) ease;
+  transition:transform var(--transition-base);
 }
 
 .context-prompt-banner-chevron.rotate {
