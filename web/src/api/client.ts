@@ -362,6 +362,13 @@ export const api = {
         body: JSON.stringify({ cancelled: true })
       })
   },
+  sshSecrets: {
+    submit: (id: string, body: { secret?: string; confirmed?: boolean; cancelled?: boolean }) =>
+      apiRequest<{ accepted: boolean }>(`/api/ssh-secrets/${id}/submit`, {
+        method: "POST",
+        body: JSON.stringify(body)
+      })
+  },
   workspace: {
     tree: (path = "", depth = 5) => {
       const query = new URLSearchParams({ depth: String(depth) });

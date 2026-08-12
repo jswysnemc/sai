@@ -91,7 +91,7 @@ use init::{remove_shell_hooks, run_init, InitKind};
 use input_flags::parse_message_input_flags;
 use interaction::{
     handle_agent_event, prompt_permission_request, prompt_permission_request_tui,
-    prompt_question_request_tui,
+    prompt_question_request_tui, prompt_ssh_secret_request_tui,
 };
 use kb_commands::run_kb;
 pub(crate) use localization::parse;

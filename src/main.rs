@@ -30,6 +30,7 @@ mod runner;
 mod runtime_cwd;
 mod runtime_recovery;
 mod shell;
+mod ssh;
 mod state;
 mod token_counter;
 mod token_estimate;

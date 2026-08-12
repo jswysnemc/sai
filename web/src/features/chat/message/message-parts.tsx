@@ -8,6 +8,7 @@ import { groupIntoSteps } from "./step-grouping";
 import { ContextCompactionPart } from "./context-compaction-part";
 import { PermissionRequestCard } from "../../permission/permission-request-card";
 import { QuestionRequestCard } from "../../question/question-request-card";
+import { SshSecretCard } from "../../ssh/ssh-secret-card";
 import { AutomaticInputPart } from "./automatic-input-part";
 import { EngineReadyPart } from "./engine-ready-part";
 
@@ -41,6 +42,7 @@ export function MessageParts({ parts, live }: { parts: LiveMessagePart[]; live?:
         if (part.type === "tool") return <ToolLifecycleCard key={item.id} tool={part.tool} />;
         if (part.type === "permission") return <PermissionRequestCard key={item.id} request={part.request} decision={part.decision} active={Boolean(live)} />;
         if (part.type === "question") return <QuestionRequestCard key={item.id} pending={part.pending} response={part.response} active={Boolean(live)} />;
+        if (part.type === "ssh_secret") return <SshSecretCard key={item.id} request={part.request} resolved={part.resolved} active={Boolean(live)} />;
         if (part.type === "compaction") return <ContextCompactionPart key={item.id} part={part} />;
         if (part.type === "automatic_input") return <AutomaticInputPart key={item.id} content={part.source} />;
         if (part.type === "engine_ready") return <EngineReadyPart key={item.id} engine={part.engine} version={part.version} />;

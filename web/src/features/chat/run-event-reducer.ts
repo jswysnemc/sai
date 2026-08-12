@@ -1,4 +1,4 @@
-import type { PendingQuestion, PermissionDecision, PermissionRequest, QuestionResponse, TurnUsage, WebEvent } from "../../api/contracts";
+import type { PendingQuestion, PermissionDecision, PermissionRequest, QuestionResponse, SshSecretRequest, TurnUsage, WebEvent } from "../../api/contracts";
 import { text, type Locale } from "../i18n/locale";
 
 export type ToolLifecycle = {
@@ -35,6 +35,7 @@ export type LiveMessagePart =
   | { id: string; type: "permission"; request: PermissionRequest; decision?: PermissionDecision }
   | { id: string; type: "engine_ready"; engine: string; version: string }
   | { id: string; type: "question"; pending: PendingQuestion; response?: QuestionResponse }
+  | { id: string; type: "ssh_secret"; request: SshSecretRequest; resolved?: boolean }
   | { id: string; type: "compaction"; status: "running" | "completed"; turnCount: number; model?: string; applied?: boolean; summary?: string; error?: RunErrorDetail };
 
 export type RunErrorDetail = {
@@ -45,7 +46,7 @@ export type RunErrorDetail = {
 export type LiveRunState = {
   runId: string | null;
   sessionId: string | null;
-  status: "idle" | "queued" | "waiting_response" | "waiting_external" | "waiting_permission" | "waiting_question" | "thinking" | "working" | "compacting" | "reconnecting";
+  status: "idle" | "queued" | "waiting_response" | "waiting_external" | "waiting_permission" | "waiting_question" | "waiting_ssh_secret" | "thinking" | "working" | "compacting" | "reconnecting";
   /** 传输层自动重连的当前尝试次数（从 1 起）；非重连态为 null。 */
   reconnectAttempt: number | null;
   /** 传输层自动重连的最大尝试次数；非重连态为 null。 */
@@ -245,6 +246,16 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
         { ...state, status: "working" },
         String(payload.request_id),
         payload.response as unknown as QuestionResponse
+      );
+    case "ssh.secret.requested":
+      return upsertSshSecretPart({
+        ...closeActiveReasoning(state, event.timestamp),
+        status: "waiting_ssh_secret"
+      }, payload as unknown as SshSecretRequest);
+    case "ssh.secret.resolved":
+      return resolveSshSecretPart(
+        { ...state, status: "working" },
+        String(payload.request_id)
       );
     case "compaction.started":
       return {
@@ -466,6 +477,25 @@ function upsertQuestionPart(state: LiveRunState, pending: PendingQuestion): Live
   return {
     ...state,
     parts: state.parts.map((part, index) => index === existing ? { id, type: "question" as const, pending } : part)
+  };
+}
+
+function upsertSshSecretPart(state: LiveRunState, request: SshSecretRequest): LiveRunState {
+  const id = `ssh-secret-${request.id}`;
+  const existing = state.parts.findIndex((part) => part.type === "ssh_secret" && part.request.id === request.id);
+  if (existing === -1) return { ...state, parts: [...state.parts, { id, type: "ssh_secret", request }] };
+  return {
+    ...state,
+    parts: state.parts.map((part, index) => index === existing ? { id, type: "ssh_secret" as const, request } : part)
+  };
+}
+
+function resolveSshSecretPart(state: LiveRunState, requestId: string): LiveRunState {
+  return {
+    ...state,
+    parts: state.parts.map((part) => part.type === "ssh_secret" && part.request.id === requestId
+      ? { ...part, resolved: true }
+      : part)
   };
 }
 

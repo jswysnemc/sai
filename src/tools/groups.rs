@@ -105,6 +105,7 @@ pub(crate) fn group_for_tool(name: &str) -> &'static str {
         | "draw_fortune_lot"
         | "roll_dice" => "utilities",
         "set_alarm" | "list_alarms" | "cancel_alarm" => "personal",
+        "ssh_list_hosts" | "ssh_run_command" | "ssh_upload_file" | "ssh_download_file" => "ssh",
         "mcp_manager" => "mcp",
         _ if name.starts_with("mcp_") => "mcp",
         _ if is_base_tool(name) => "base",
@@ -131,6 +132,7 @@ pub(crate) fn group_description(group: &str) -> &'static str {
         "knowledge" => "本地知识库检索和维护",
         "utilities" => "计算、编码、哈希和趣味工具",
         "personal" => "闹钟等个人助手工具",
+        "ssh" => "通过 SSH 管理远程服务器（列主机、执行命令、传输文件）",
         "mcp" => "MCP 外部工具服务器",
         _ => "其他工具",
     }

@@ -138,6 +138,21 @@ pub(super) async fn execute_repl_turn(
             prompt_question_request_tui(pending, &runtime)?;
             restore_stream_terminal_modes()?;
         }
+        // SSH 秘密交互标记：弹出安全输入界面，标记本身不进入 transcript
+        if let crate::runner::RunnerEvent::Agent(
+            AgentEvent::ToolProgress { message, .. }
+            | AgentEvent::ToolProgressIdentified { message, .. },
+        ) = &event
+        {
+            if crate::ssh::is_secret_marker(message) {
+                if let Some(request) = crate::ssh::decode_progress_marker(message) {
+                    runtime.borrow_mut().pause_for_permission_prompt()?;
+                    prompt_ssh_secret_request_tui(&request, &runtime)?;
+                    restore_stream_terminal_modes()?;
+                }
+                return Ok(());
+            }
+        }
         runtime.borrow_mut().record_runner_event(&event)
     };
     let stream_mode = submission.mode;

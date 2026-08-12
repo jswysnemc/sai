@@ -8,7 +8,7 @@ pub(crate) mod password;
 mod runs;
 mod server;
 pub(crate) mod services;
-mod ssh;
+pub(crate) mod ssh;
 mod system_monitor;
 mod terminal;
 mod workspace;

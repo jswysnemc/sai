@@ -45,6 +45,7 @@ export function LiveRunIndicator({
     waiting_external: t("Waiting for background work", "等待后台工作"),
     waiting_permission: t("Waiting for permission decision", "等待权限决定"),
     waiting_question: t("Waiting for your answer", "等待你的回答"),
+    waiting_ssh_secret: t("Waiting for secure SSH input", "等待 SSH 安全输入"),
     thinking: t("Organizing thoughts", "正在整理思路"),
     working: t("Working on the task", "正在执行任务"),
     compacting: t("Compacting context", "正在压缩上下文"),
@@ -72,7 +73,8 @@ export function LiveRunIndicator({
 /** 等待用户操作的阶段，指示器保持静态 */
 const AWAITING_USER_STATUSES = new Set<LiveRunState["status"]>([
   "waiting_permission",
-  "waiting_question"
+  "waiting_question",
+  "waiting_ssh_secret"
 ]);
 
 /**

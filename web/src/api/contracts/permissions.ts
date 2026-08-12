@@ -84,3 +84,34 @@ export type QuestionResponse =
   | { status: "answered"; data: QuestionAnswers }
   | { status: "cancelled" }
   | { status: "unavailable"; data: string };
+
+/** SSH 交互征询类型：口令、密码、主机指纹确认、高危命令确认。 */
+export type SshSecretKind = "passphrase" | "password" | "host_key" | "danger_command";
+
+/**
+ * SSH 交互征询请求。
+ *
+ * 只描述“需要什么”，不含任何秘密。真正的口令/密码经提交端点一次性直达后端，
+ * 绝不出现在事件流、消息或模型上下文里。
+ */
+export type SshSecretRequest = {
+  id: string;
+  session_id: string;
+  kind: SshSecretKind;
+  host_label: string;
+  prompt: string;
+  /** 主机指纹，仅指纹确认时给出，供用户核对 */
+  fingerprint?: string | null;
+  /** 指纹是否与 known_hosts 记录不一致 */
+  changed?: boolean;
+};
+
+/** 提交 SSH 交互征询应答的请求体（三选一）。 */
+export type SshSecretSubmit = {
+  /** 口令 / 密码明文（仅秘密输入类使用） */
+  secret?: string;
+  /** 确认类应答 */
+  confirmed?: boolean;
+  /** 是否取消 */
+  cancelled?: boolean;
+};

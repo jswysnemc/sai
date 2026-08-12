@@ -43,8 +43,16 @@ pub(super) fn handle_agent_event(
         AgentEvent::ToolResultIdentified {
             name, ok, output, ..
         } => renderer.write_tool_result(&name, ok, &output),
-        AgentEvent::ToolProgress { name, message } => renderer.write_tool_progress(&name, &message),
+        AgentEvent::ToolProgress { name, message } => {
+            if crate::ssh::is_secret_marker(&message) {
+                return handle_ssh_secret_marker_cli(renderer, &message);
+            }
+            renderer.write_tool_progress(&name, &message)
+        }
         AgentEvent::ToolProgressIdentified { name, message, .. } => {
+            if crate::ssh::is_secret_marker(&message) {
+                return handle_ssh_secret_marker_cli(renderer, &message);
+            }
             renderer.write_tool_progress(&name, &message)
         }
         AgentEvent::PermissionRequested(request) => {
@@ -258,4 +266,209 @@ pub(super) fn prompt_question_request_tui(
     let _ = terminal_guard.finish(&mut stdout);
     runtime.borrow_mut().mark_desynced();
     crate::question::resolve_question(&pending.id, response)
+}
+
+/// 在 TUI 原始模式中安全征询 SSH 秘密或确认。
+///
+/// 口令/密码输入全程不回显；主机指纹与高危命令走是/否确认。用户应答经独立安全通道
+/// 直达后端工具，绝不写入 transcript 或模型上下文。
+///
+/// 参数:
+/// - `request`: 待处理的交互征询（不含秘密）
+/// - `runtime`: REPL 运行期
+///
+/// 返回:
+/// - 应答提交结果
+pub(super) fn prompt_ssh_secret_request_tui(
+    request: &crate::ssh::SecretRequest,
+    runtime: &std::cell::RefCell<&mut ReplRuntime>,
+) -> Result<()> {
+    let mut stdout = io::stdout();
+    // 1. 独占 raw 输入，避免与主循环输入框事件竞争
+    let mut terminal_guard = terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
+    {
+        let mut rt = runtime.borrow_mut();
+        rt.pause_for_permission_prompt()?;
+    }
+    let response =
+        read_ssh_secret_response(&mut stdout, request).unwrap_or(crate::ssh::SecretResponse::Cancelled);
+    // 2. 恢复终端模式；安全输入直接写过终端，受管区域需在下次同步前重启
+    let _ = terminal_guard.finish(&mut stdout);
+    runtime.borrow_mut().mark_desynced();
+    // 仅在仍等待时提交，避免与后端超时竞态
+    if crate::ssh::is_pending(&request.id) {
+        let _ = crate::ssh::submit_secret(&request.id, response);
+    }
+    Ok(())
+}
+
+/// 处理 CLI 流式输出中的 SSH 秘密交互带外标记。
+///
+/// 请求标记触发安全输入；结束标记在 CLI 无需额外动作。
+///
+/// 参数:
+/// - `renderer`: CLI 流式渲染器
+/// - `message`: 工具进度中的带外标记
+///
+/// 返回:
+/// - 处理结果
+fn handle_ssh_secret_marker_cli(
+    renderer: &mut render::StreamRenderer,
+    message: &str,
+) -> Result<()> {
+    if let Some(request) = crate::ssh::decode_progress_marker(message) {
+        renderer.prepare_for_external_output()?;
+        io::stdout().flush()?;
+        prompt_ssh_secret_request_cli(&request)?;
+    }
+    Ok(())
+}
+
+/// 在 CLI 流式输出中安全征询 SSH 秘密或确认。
+///
+/// 非交互终端无法安全输入，直接取消并交由后端给出明确提示。
+///
+/// 参数:
+/// - `request`: 待处理的交互征询（不含秘密）
+///
+/// 返回:
+/// - 应答提交结果
+pub(super) fn prompt_ssh_secret_request_cli(request: &crate::ssh::SecretRequest) -> Result<()> {
+    use std::io::IsTerminal;
+    let mut stdout = io::stdout();
+    if !(io::stdin().is_terminal() && stdout.is_terminal()) {
+        if crate::ssh::is_pending(&request.id) {
+            let _ = crate::ssh::submit_secret(&request.id, crate::ssh::SecretResponse::Cancelled);
+        }
+        return Ok(());
+    }
+    stdout.flush()?;
+    crossterm::terminal::enable_raw_mode()?;
+    let response =
+        read_ssh_secret_response(&mut stdout, request).unwrap_or(crate::ssh::SecretResponse::Cancelled);
+    let _ = crossterm::terminal::disable_raw_mode();
+    println!();
+    if crate::ssh::is_pending(&request.id) {
+        let _ = crate::ssh::submit_secret(&request.id, response);
+    }
+    Ok(())
+}
+
+/// 绘制征询提示并读取用户应答（要求调用方已进入原始模式）。
+///
+/// 参数:
+/// - `stdout`: 标准输出
+/// - `request`: 交互征询
+///
+/// 返回:
+/// - 用户应答
+fn read_ssh_secret_response(
+    stdout: &mut io::Stdout,
+    request: &crate::ssh::SecretRequest,
+) -> Result<crate::ssh::SecretResponse> {
+    use crate::ssh::{InteractiveKind, SecretResponse};
+    // raw 模式下必须使用 \r\n，否则阶梯缩进
+    write!(stdout, "\r\n\x1b[38;5;39m● SSH · {}\x1b[0m\r\n", request.host_label)?;
+    for line in request.prompt.split('\n') {
+        write!(stdout, "{line}\r\n")?;
+    }
+    if let Some(fingerprint) = &request.fingerprint {
+        write!(stdout, "SHA256 {fingerprint}\r\n")?;
+        if request.changed {
+            write!(
+                stdout,
+                "\x1b[33m警告：该主机指纹与 known_hosts 记录不一致\x1b[0m\r\n"
+            )?;
+        }
+    }
+    match request.kind {
+        InteractiveKind::Passphrase | InteractiveKind::Password => {
+            write!(stdout, "输入后回车提交，Esc 取消（不回显）: ")?;
+            stdout.flush()?;
+            Ok(match read_hidden_line(&request.id)? {
+                Some(secret) => SecretResponse::Provided(secret),
+                None => SecretResponse::Cancelled,
+            })
+        }
+        InteractiveKind::HostKey | InteractiveKind::DangerCommand => {
+            write!(stdout, "确认继续？[y/N]: ")?;
+            stdout.flush()?;
+            Ok(match read_confirmation(&request.id)? {
+                Some(confirmed) => SecretResponse::Confirmed(confirmed),
+                None => SecretResponse::Cancelled,
+            })
+        }
+    }
+}
+
+/// 在原始模式下不回显地读取一行秘密。
+///
+/// 参数:
+/// - `request_id`: 关联请求标识，用于在后端超时后自动退出
+///
+/// 返回:
+/// - 提交的秘密；取消或中断时为 `None`
+fn read_hidden_line(request_id: &str) -> Result<Option<String>> {
+    let mut buffer = String::new();
+    loop {
+        if !event::poll(std::time::Duration::from_millis(150))? {
+            // 后端超时撤销请求后不再阻塞等待按键
+            if !crate::ssh::is_pending(request_id) {
+                return Ok(None);
+            }
+            continue;
+        }
+        let event = event::read()?;
+        if permission_prompt::is_interrupt(&event) {
+            return Ok(None);
+        }
+        let Event::Key(key) = event else { continue };
+        if key.kind == KeyEventKind::Release {
+            continue;
+        }
+        match key.code {
+            KeyCode::Enter => return Ok(Some(buffer)),
+            KeyCode::Esc => return Ok(None),
+            KeyCode::Backspace => {
+                buffer.pop();
+            }
+            KeyCode::Char(value) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                buffer.push(value);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// 在原始模式下读取是/否确认。
+///
+/// 参数:
+/// - `request_id`: 关联请求标识，用于在后端超时后自动退出
+///
+/// 返回:
+/// - 用户是否确认；取消或中断时为 `None`
+fn read_confirmation(request_id: &str) -> Result<Option<bool>> {
+    loop {
+        if !event::poll(std::time::Duration::from_millis(150))? {
+            if !crate::ssh::is_pending(request_id) {
+                return Ok(None);
+            }
+            continue;
+        }
+        let event = event::read()?;
+        if permission_prompt::is_interrupt(&event) {
+            return Ok(None);
+        }
+        let Event::Key(key) = event else { continue };
+        if key.kind == KeyEventKind::Release {
+            continue;
+        }
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => return Ok(Some(true)),
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc | KeyCode::Enter => {
+                return Ok(Some(false))
+            }
+            _ => {}
+        }
+    }
 }

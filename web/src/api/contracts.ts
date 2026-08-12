@@ -12,6 +12,9 @@ export type {
   PendingQuestion,
   QuestionAnswers,
   QuestionResponse,
+  SshSecretKind,
+  SshSecretRequest,
+  SshSecretSubmit,
 } from "./contracts/permissions";
 
 export type {

@@ -238,6 +238,11 @@ impl EventAssembler {
                 events
             }
             AgentEvent::ToolProgress { name, message } => {
+                // SSH 秘密交互标记不当作普通进度渲染，转成独立的安全输入事件，
+                // 避免标记文本进入工具进度流；标记本身不含任何秘密
+                if crate::ssh::is_secret_marker(&message) {
+                    return self.map_ssh_secret_marker(&message);
+                }
                 let mut events = self.status_event("working");
                 if name == "run_command"
                     && crate::tools::command::decode_command_output(&message).is_some()
@@ -252,6 +257,9 @@ impl EventAssembler {
                 events
             }
             AgentEvent::ToolProgressIdentified { id, name, message } => {
+                if crate::ssh::is_secret_marker(&message) {
+                    return self.map_ssh_secret_marker(&message);
+                }
                 let mut events = self.status_event("working");
                 let tool_id = self.tool_id_for_provider_call(&id);
                 events.push(self.event(
@@ -366,6 +374,27 @@ impl EventAssembler {
         }
         self.status = Some(status);
         vec![self.event("status.changed", json!({ "status": status }))]
+    }
+
+    /// 将 SSH 秘密交互带外标记转换为浏览器可消费的安全输入事件。
+    ///
+    /// 请求标记携带无秘密的征询元信息，供前端弹出安全输入界面；结束标记通知前端
+    /// 收起界面。真正的秘密由前端经专用提交端点直达后端，不经此事件流。
+    ///
+    /// 参数:
+    /// - `message`: 工具进度中的带外标记
+    ///
+    /// 返回:
+    /// - 对应的安全输入事件
+    fn map_ssh_secret_marker(&mut self, message: &str) -> Vec<WebEvent> {
+        let mut events = self.status_event("working");
+        if let Some(request) = crate::ssh::decode_progress_marker(message) {
+            let payload = serde_json::to_value(&request).unwrap_or_else(|_| json!({}));
+            events.push(self.event("ssh.secret.requested", payload));
+        } else if let Some(request_id) = crate::ssh::decode_resolved_marker(message) {
+            events.push(self.event("ssh.secret.resolved", json!({ "request_id": request_id })));
+        }
+        events
     }
 
     /// 返回指定流式索引的稳定工具 ID。
