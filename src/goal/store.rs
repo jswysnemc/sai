@@ -189,6 +189,7 @@ impl GoalStore {
                 status
             };
             if goal.status != next {
+                goal.status = next;
                 push_update(
                     goal,
                     "status",
@@ -196,7 +197,6 @@ impl GoalStore {
                     Utc::now().to_rfc3339(),
                 );
             }
-            goal.status = next;
             Ok(())
         })
     }

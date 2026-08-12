@@ -385,15 +385,24 @@ pub(super) async fn cleanup_background_tasks(
         .get("remove_logs")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let target_task_id = args
+        .get("task_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
     let mut tasks = store.load()?;
     refresh_task_statuses(&mut tasks, config).await;
     let state = StateStore::new(paths)?;
     sync_runtime_tasks(&state, &tasks)?;
     let mut removed = Vec::new();
-    // 1. 手动清理：移除全部非运行中任务；可选删除日志
+    // 指定 task_id 时只清理该任务（无论状态）；否则清理全部非运行中任务
     tasks.retain(|task| {
-        if task.status == "running" {
+        if let Some(target_id) = target_task_id {
+            if task.id != target_id {
+                return true;
+            }
+        } else if task.status == "running" {
             return true;
         }
         if remove_logs {

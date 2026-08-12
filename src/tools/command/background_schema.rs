@@ -82,7 +82,7 @@ fn schema(actions: &[&str]) -> Value {
             },
             "task_id": {
                 "type": "string",
-                "description": t("Background task id for action=output, action=wait, or action=stop. Omit it for action=wait to wait for any running task.", "action=output、action=wait 或 action=stop 的后台任务 ID。action=wait 可省略，以等待任意运行中的任务。"),
+                "description": t("Background task id for action=output, action=wait, action=stop, or action=cleanup. Omit it for action=wait to wait for any running task, or for action=cleanup to clean all stopped tasks.", "action=output、action=wait、action=stop 或 action=cleanup 的后台任务 ID。action=wait 可省略以等待任意运行中的任务；action=cleanup 可省略以清理所有已停止任务。"),
             },
             "stream": {
                 "type": "string",

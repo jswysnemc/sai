@@ -141,6 +141,11 @@ pub(crate) fn try_create(parent_workdir: &Path, label: &str) -> Result<Option<Su
         );
     }
 
+    // 复制主工作区未提交更改到子 worktree，确保子代理能看到最新代码
+    if let Err(err) = copy_uncommitted_changes(&repo_root, &worktree_root) {
+        tracing_or_ignore(&format!("subagent worktree copy uncommitted changes failed: {err}"));
+    }
+
     Ok(Some(SubagentWorktree {
         repo_root,
         parent_workdir,
@@ -665,3 +670,32 @@ fn display_path(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests;
+
+/// 将主工作区的未提交更改复制到子 worktree。
+///
+/// 参数:
+/// - `parent_repo_root`: 主仓库根目录
+/// - `worktree_root`: 子 worktree 根目录
+///
+/// 返回:
+/// - 无
+fn copy_uncommitted_changes(parent_repo_root: &Path, worktree_root: &Path) -> Result<()> {
+    let patch = run_git_raw(
+        parent_repo_root,
+        &["diff", "HEAD", "--binary"],
+    )
+    .map_err(|e| anyhow::anyhow!("failed to generate uncommitted diff: {e}"))?;
+    if patch.trim().is_empty() {
+        return Ok(());
+    }
+    run_git_apply_with_options(worktree_root, &patch, &[])
+        .map_err(|e| anyhow::anyhow!("failed to apply uncommitted diff to worktree: {e}"))?;
+    Ok(())
+}
+
+fn tracing_or_ignore(message: &str) {
+    let _ = std::fs::write(
+        std::env::temp_dir().join("sai-subagent-worktree.log"),
+        format!("{}\n", message),
+    );
+}
