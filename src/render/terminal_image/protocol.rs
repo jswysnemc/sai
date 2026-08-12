@@ -214,7 +214,24 @@ fn kitty_block_limits() -> (usize, usize, usize, usize) {
 /// 返回:
 /// - `(列数 c, 行数 r)`
 fn kitty_cell_dimensions(pixel_width: usize, pixel_height: usize) -> (usize, usize) {
-    let (max_cols, max_rows, cell_pw, cell_ph) = kitty_block_limits();
+    kitty_cell_dimensions_with(kitty_block_limits(), pixel_width, pixel_height)
+}
+
+/// 以显式终端限制计算 Kitty 块级图片的列/行数（便于复用同一份限制）。
+///
+/// 参数:
+/// - `limits`: `(max_cols, max_rows, cell_pw, cell_ph)`
+/// - `pixel_width`: 图片像素宽度
+/// - `pixel_height`: 图片像素高度
+///
+/// 返回:
+/// - `(列数 c, 行数 r)`
+fn kitty_cell_dimensions_with(
+    limits: (usize, usize, usize, usize),
+    pixel_width: usize,
+    pixel_height: usize,
+) -> (usize, usize) {
+    let (max_cols, max_rows, cell_pw, cell_ph) = limits;
     let pixel_width = pixel_width.max(1);
     let pixel_height = pixel_height.max(1);
     let cell_pw = cell_pw.max(1);
@@ -304,19 +321,23 @@ fn render_kitty_image(path: &Path) -> Result<String> {
     let image = load_image_rgba(path)?;
     let image = crop_transparent_bounds(&image);
     // 2. 仅当超出终端可用区域时才缩小，避免「为了压高度把图压扁」
-    let (max_cols, max_rows, cell_pw, cell_ph) = kitty_block_limits();
+    let limits = kitty_block_limits();
+    let (max_cols, max_rows, cell_pw, cell_ph) = limits;
     let image = fit_raster_to_max_cells(image, max_cols, max_rows, cell_pw, cell_ph);
+    // 3. 推算占位网格后，把像素补齐到恰好覆盖整格。
+    //    只传 c 时终端按自己的取整决定实际行数，与这里预留的换行数可能差一行，
+    //    表现为文本覆盖图片底部或图下多出空行；c/r 同传 + 像素对齐整格后，
+    //    渲染行数与占位行数强制一致（对齐 jcode/ratatui-image 的做法）
+    let (cols, rows) = kitty_cell_dimensions_with(limits, image.width, image.height);
+    let image = pad_raster_to_cell_grid(image, cols, rows, cell_pw, cell_ph);
     let temp = tempfile::Builder::new()
         .prefix("sai-kitty-")
         .suffix(".png")
         .tempfile()
         .context("failed to create temporary kitty image")?;
     write_raster_png(temp.path(), &image)?;
-    // 3. c 定宽；r 按宽高比计算。Kitty 只传 c，高度由终端按比例决定，
-    //    避免同时传偏大的 r 时在图下方 letterbox 出空白
-    let (cols, rows) = kitty_cell_dimensions(image.width, image.height);
-    let mut output = encode_kitty_png(temp.path(), Some(cols), None)?;
-    // 4. 换行数与比例推算的 r 一致（不再多预留）
+    let mut output = encode_kitty_png(temp.path(), Some(cols), Some(rows))?;
+    // 4. 换行数与声明的 r 严格一致
     for _ in 0..rows {
         output.push('\n');
     }

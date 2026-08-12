@@ -165,6 +165,66 @@ fn resize_raster_image(image: &RasterImage, new_width: usize, new_height: usize)
     }
 }
 
+/// 将图片精确适配到单元格网格对应的像素画布。
+///
+/// Kitty 同时收到 `c`/`r` 时会把图像拉伸到该矩形；若图像像素宽高比与
+/// 网格不一致就会变形。先按 contain 缩放，再用透明像素补齐右侧与底部，
+/// 图像内容保持左上对齐（与光标放置位置一致），网格行数与占位行数
+/// 从此严格相等。
+///
+/// 参数:
+/// - `image`: 原图
+/// - `cols`: 目标列数
+/// - `rows`: 目标行数
+/// - `cell_pw`: 单格像素宽
+/// - `cell_ph`: 单格像素高
+///
+/// 返回:
+/// - 尺寸恰为 `cols*cell_pw × rows*cell_ph` 的图片
+fn pad_raster_to_cell_grid(
+    image: RasterImage,
+    cols: usize,
+    rows: usize,
+    cell_pw: usize,
+    cell_ph: usize,
+) -> RasterImage {
+    let target_w = cols.saturating_mul(cell_pw).max(1);
+    let target_h = rows.saturating_mul(cell_ph).max(1);
+    if image.width == target_w && image.height == target_h {
+        return image;
+    }
+    // 1. 仅超出时 contain 缩小；未超出保持原始像素（避免无谓重采样）
+    let image = if image.width > target_w || image.height > target_h {
+        let scale_w = target_w as f32 / image.width.max(1) as f32;
+        let scale_h = target_h as f32 / image.height.max(1) as f32;
+        let scale = scale_w.min(scale_h);
+        let new_w = ((image.width as f32) * scale).round().max(1.0) as usize;
+        let new_h = ((image.height as f32) * scale).round().max(1.0) as usize;
+        resize_raster_image(&image, new_w.min(target_w), new_h.min(target_h))
+    } else {
+        image
+    };
+    // 2. 透明像素补齐到整格边界，内容左上对齐
+    let transparent = Rgba {
+        r: 0,
+        g: 0,
+        b: 0,
+        a: 0,
+    };
+    let mut pixels = vec![transparent; target_w.saturating_mul(target_h)];
+    for y in 0..image.height.min(target_h) {
+        let src_row = y * image.width;
+        let dst_row = y * target_w;
+        let copy_w = image.width.min(target_w);
+        pixels[dst_row..dst_row + copy_w].copy_from_slice(&image.pixels[src_row..src_row + copy_w]);
+    }
+    RasterImage {
+        pixels,
+        width: target_w,
+        height: target_h,
+    }
+}
+
 /// 将 RGBA 位图写入 PNG 文件。
 ///
 /// 参数:

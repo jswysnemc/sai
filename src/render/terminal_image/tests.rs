@@ -36,11 +36,22 @@ mod tests {
         write_test_rgba_png(&path, 16, 32, &pixels);
         let output = render_kitty_image(&path).unwrap();
         assert!(output.contains("\x1b_Gf=100,a=T,q=2,c="));
-        // 块级图只声明 c，高度由比例决定，避免 r 过大在图下 letterbox 空白
-        assert!(!output.contains(",r="));
+        // c/r 同传：终端渲染行数与占位换行数强制一致，图片定位不再漂移
+        let declared_rows = output
+            .split(",r=")
+            .nth(1)
+            .and_then(|rest| {
+                rest.split(|ch: char| !ch.is_ascii_digit())
+                    .next()
+                    .and_then(|value| value.parse::<usize>().ok())
+            })
+            .expect("kitty payload should declare r");
         assert!(output.ends_with('\n'));
         let trailing_newlines = output.chars().rev().take_while(|ch| *ch == '\n').count();
-        assert!(trailing_newlines >= 2);
+        assert_eq!(
+            trailing_newlines, declared_rows,
+            "reserved newlines must match declared rows"
+        );
     }
 
     #[test]
@@ -329,7 +340,7 @@ mod tests {
     }
 
     #[test]
-    fn kitty_render_reserves_aspect_rows_without_r_param() {
+    fn kitty_render_declares_matching_cols_and_rows() {
         let temp_dir = tempfile::tempdir().unwrap();
         let path = temp_dir.path().join("gantt_like.png");
         // 宽短图：模拟甘特图，不应在下方预留远超内容的空白行
@@ -345,9 +356,8 @@ mod tests {
         .collect::<Vec<_>>();
         write_test_rgba_png(&path, width, height, &pixels);
         let output = render_kitty_image(&path).unwrap();
-        // 只传 c，不传 r，避免 letterbox 空白
         assert!(output.contains(",c="));
-        assert!(!output.contains(",r="));
+        assert!(output.contains(",r="));
         let trailing = output.chars().rev().take_while(|ch| *ch == '\n').count();
         // 默认 8x16：高 120 => 约 8 行；允许少量取整偏差
         assert!(
@@ -355,6 +365,31 @@ mod tests {
             "expected compact row reservation for short image, got {trailing} newlines"
         );
         assert!(trailing >= 1);
+    }
+
+    #[test]
+    fn pad_raster_to_cell_grid_snaps_to_exact_grid_pixels() {
+        // 20x18 像素，格 8x16 => 3 列 2 行网格 = 24x32 像素
+        let image = RasterImage {
+            pixels: vec![
+                Rgba {
+                    r: 255,
+                    g: 0,
+                    b: 0,
+                    a: 255,
+                };
+                20 * 18
+            ],
+            width: 20,
+            height: 18,
+        };
+        let padded = pad_raster_to_cell_grid(image, 3, 2, 8, 16);
+        assert_eq!(padded.width, 24);
+        assert_eq!(padded.height, 32);
+        // 原始内容保持左上对齐
+        assert_eq!(padded.pixels[0].a, 255);
+        // 右下补齐区域为透明
+        assert_eq!(padded.pixels[padded.pixels.len() - 1].a, 0);
     }
 
     #[test]
