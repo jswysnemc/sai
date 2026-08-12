@@ -399,6 +399,29 @@ mod tests {
         assert_eq!(timeline[0].tools[0].arguments, r#"{"path":"README.md"}"#);
     }
 
+    /// 【时间线】【模型切换】记录模型后可读回映射，未记录的轮次不在其中。
+    #[test]
+    fn records_turn_model_for_timeline_dividers() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
+        store.start_turn("turn_1", "hello").unwrap();
+        store.set_turn_model("turn_1", "big-pickle").unwrap();
+        store.complete_turn("turn_1", "done", None).unwrap();
+        store.start_turn("turn_2", "again").unwrap();
+        // 空白模型不写入，轮次保持未记录状态
+        store.set_turn_model("turn_2", "  ").unwrap();
+        store.complete_turn("turn_2", "done", None).unwrap();
+
+        let models = store.turn_models().unwrap();
+
+        assert_eq!(models.get("turn_1").map(String::as_str), Some("big-pickle"));
+        assert!(!models.contains_key("turn_2"));
+        // 加载轮次同样携带模型，供其它读路径复用
+        let turns = store.load_turns().unwrap();
+        assert_eq!(turns[0].model.as_deref(), Some("big-pickle"));
+        assert_eq!(turns[1].model, None);
+    }
+
     #[test]
     fn marks_goal_continuation_turns_as_automatic() {
         let temp = tempfile::tempdir().unwrap();

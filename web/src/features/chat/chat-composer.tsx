@@ -34,6 +34,8 @@ type ChatComposerProps = {
   thinkingLevels?: ThinkingLevel[];
   choices: ChatModelChoice[];
   selection: ChatModelChoice | null;
+  /** 运行中点选的待生效模型；本轮结束后自动应用 */
+  pendingSelection: ChatModelChoice | null;
   modelLoading: boolean;
   running: boolean;
   /** 分支切换等短暂过渡期仅禁止发送，草稿仍可编辑。 */
@@ -124,7 +126,8 @@ export function ChatComposer(props: ChatComposerProps) {
             compactDisabled={props.running}
           />
         )}
-        <AgentSelector choices={props.agentChoices} selection={props.agentSelection} loading={props.agentLoading} disabled={props.running} onSelect={props.onAgentSelect} />
+        {/* 运行中保持可选：Agent 只影响下一轮请求参数，不打断当前 turn */}
+        <AgentSelector choices={props.agentChoices} selection={props.agentSelection} loading={props.agentLoading} disabled={false} onSelect={props.onAgentSelect} />
         <Button className="composer-rail-button" onClick={props.onUndo} disabled={!props.undoAvailable || props.running} title={t("Undo the last turn and its worktree changes", "撤销最后一轮及其工作树修改")} aria-label={t("Undo last turn", "撤销最后一轮")}><Undo2 size={14} /></Button>
         <button type="button" className={`composer-rail-button composer-activity-button${runtimeActivity.runningTasks > 0 ? " is-active" : ""}`} onClick={() => window.dispatchEvent(new Event("sai:open-tasks"))} title={runtimeActivity.runningTasks > 0 ? t(`${runtimeActivity.runningTasks} background tasks running`, `${runtimeActivity.runningTasks} 个后台任务进行中`) : t("Open background tasks", "打开后台任务")} aria-label={t("Open background tasks", "打开后台任务")}>
           <Activity size={14} />
@@ -174,10 +177,11 @@ export function ChatComposer(props: ChatComposerProps) {
                 <ModelThinkingSelector
                   choices={props.choices}
                   selection={props.selection}
+                  pendingSelection={props.pendingSelection}
                   thinkingLevel={props.thinkingLevel}
                   thinkingLevels={props.thinkingLevels}
                   loading={props.modelLoading}
-                  disabled={props.running}
+                  disabled={false}
                   onModelSelect={props.onModelSelect}
                   onThinkingLevelChange={props.onThinkingLevelChange}
                 />

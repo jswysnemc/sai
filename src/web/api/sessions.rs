@@ -109,6 +109,24 @@ struct RollbackSessionResponse {
     prompt: Option<String>,
 }
 
+/// 时间线轮次响应：在状态层轮次之上附加本轮使用的模型标识。
+#[derive(Serialize)]
+struct TimelineTurnResponse {
+    #[serde(flatten)]
+    turn: crate::state::SessionTimelineTurn,
+    /// 本轮实际使用的模型；历史轮次未记录时缺省
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model: Option<String>,
+}
+
+/// 会话时间线响应：轮次带模型标识，供前端派生模型切换分割线。
+#[derive(Serialize)]
+struct TimelineResponse {
+    turns: Vec<TimelineTurnResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    compaction: Option<crate::state::SessionTimelineCompaction>,
+}
+
 /// 返回会话管理路由。
 pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
@@ -438,12 +456,12 @@ async fn messages(
 /// - `query`: 轮次数量限制
 ///
 /// 返回:
-/// - 会话时间线
+/// - 带每轮模型标识的会话时间线
 async fn timeline(
     State(state): State<WebAppState>,
     Path(id): Path<String>,
     Query(query): Query<HistoryQuery>,
-) -> WebResult<Json<crate::state::SessionTimeline>> {
+) -> WebResult<Json<TimelineResponse>> {
     let store = StateStore::for_session(&state.paths, &id)
         .map_err(|error| WebError::not_found(error.to_string()))?;
     let mut timeline = store
@@ -451,7 +469,20 @@ async fn timeline(
         .map_err(WebError::from)?;
     permission_timeline::attach_permission_decisions(&store, &mut timeline.turns)
         .map_err(WebError::from)?;
-    Ok(Json(timeline))
+    // 附加每轮记录的模型标识，前端据此在模型变化处绘制切换分割线
+    let mut models = store.turn_models().map_err(WebError::from)?;
+    let turns = timeline
+        .turns
+        .into_iter()
+        .map(|turn| {
+            let model = models.remove(&turn.turn_id);
+            TimelineTurnResponse { turn, model }
+        })
+        .collect();
+    Ok(Json(TimelineResponse {
+        turns,
+        compaction: timeline.compaction,
+    }))
 }
 
 /// 撤销指定会话最后一轮及该轮造成的工作树修改。

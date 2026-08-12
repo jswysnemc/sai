@@ -1,4 +1,4 @@
-import { BrainCircuit, Check, ChevronDown, ChevronRight, Search } from "lucide-react";
+import { BrainCircuit, Check, ChevronDown, ChevronRight, Clock3, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { RunModelSelection, ThinkingLevel } from "../../api/contracts";
@@ -10,6 +10,8 @@ import { useI18n } from "../i18n/use-i18n";
 type ModelThinkingSelectorProps = {
   choices: ChatModelChoice[];
   selection: ChatModelChoice | null;
+  /** 运行中点选的待生效模型；下一轮开始前保持标注 */
+  pendingSelection?: ChatModelChoice | null;
   thinkingLevel: ThinkingLevel;
   thinkingLevels?: ThinkingLevel[];
   loading: boolean;
@@ -41,6 +43,7 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
     || choice.providerName.toLocaleLowerCase().includes(normalizedQuery)
   ));
   const thinkingLabel = thinkingLevelLabel(props.thinkingLevel);
+  const pending = props.pendingSelection ?? null;
 
   useEffect(() => {
     if (!open) return;
@@ -119,10 +122,27 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
         disabled={props.disabled || props.loading}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={t(`${props.selection?.model ?? "No model configured"}, reasoning effort ${thinkingLabel}`, `${props.selection?.model ?? "未配置模型"}，推理强度 ${thinkingLabel}`)}
+        aria-label={pending
+          ? t(
+            `${props.selection?.model ?? "No model configured"}, switching to ${pending.model} next turn, reasoning effort ${thinkingLabel}`,
+            `${props.selection?.model ?? "未配置模型"}，下轮切换为 ${pending.model}，推理强度 ${thinkingLabel}`
+          )
+          : t(`${props.selection?.model ?? "No model configured"}, reasoning effort ${thinkingLabel}`, `${props.selection?.model ?? "未配置模型"}，推理强度 ${thinkingLabel}`)}
       >
         {props.selection?.model ? <ModelIcon model={props.selection.model} size={14} /> : null}
         <span className="model-thinking-model">{props.loading ? t("Loading models", "读取模型") : props.selection?.model ?? t("No model configured", "未配置模型")}</span>
+        {pending && (
+          <span
+            className="model-thinking-pending"
+            title={t(
+              `The current turn keeps its model; ${pending.model} takes effect next turn`,
+              `当前轮继续使用原模型；${pending.model} 将于下一轮生效`
+            )}
+          >
+            <Clock3 size={11} aria-hidden />
+            {t(`${pending.model} next turn`, `${pending.model} 下轮生效`)}
+          </span>
+        )}
         <span className="model-thinking-level">{thinkingLabel}</span>
         <ChevronDown size={12} className={open ? "model-thinking-chevron open" : "model-thinking-chevron"} />
       </button>
@@ -170,6 +190,7 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
               <ModelOptions
                 choices={filteredChoices}
                 selection={props.selection}
+                pendingSelection={pending}
                 query={query}
                 onQueryChange={setQuery}
                 onSelect={selectModel}
@@ -192,10 +213,10 @@ export function ModelThinkingSelector(props: ModelThinkingSelectorProps) {
 /**
  * 渲染模型搜索和模型选项。
  *
- * @param props 已过滤模型、当前选择、搜索状态和选择回调
+ * @param props 已过滤模型、当前选择、待生效选择、搜索状态和选择回调
  * @returns 模型二级菜单
  */
-function ModelOptions({ choices, selection, query, onQueryChange, onSelect }: { choices: ChatModelChoice[]; selection: ChatModelChoice | null; query: string; onQueryChange: (value: string) => void; onSelect: (choice: ChatModelChoice) => void }) {
+function ModelOptions({ choices, selection, pendingSelection, query, onQueryChange, onSelect }: { choices: ChatModelChoice[]; selection: ChatModelChoice | null; pendingSelection?: ChatModelChoice | null; query: string; onQueryChange: (value: string) => void; onSelect: (choice: ChatModelChoice) => void }) {
   const { t } = useI18n();
   return (
     <>
@@ -206,10 +227,13 @@ function ModelOptions({ choices, selection, query, onQueryChange, onSelect }: { 
       <div className="model-thinking-option-list" role="listbox" aria-label={t("Choose model", "选择模型")}>
         {choices.map((choice) => {
           const active = choice.providerId === selection?.providerId && choice.model === selection.model;
+          const isPending = choice.providerId === pendingSelection?.providerId && choice.model === pendingSelection.model;
           return (
-            <button type="button" role="option" aria-selected={active} aria-label={`${choice.model}，${choice.providerName}`} className={active ? "active" : ""} key={`${choice.providerId}-${choice.model}`} onClick={() => onSelect(choice)}>
+            <button type="button" role="option" aria-selected={active} aria-label={`${choice.model}，${choice.providerName}`} className={active ? "active" : isPending ? "pending" : ""} key={`${choice.providerId}-${choice.model}`} onClick={() => onSelect(choice)}>
               <span className="model-thinking-option-main"><ModelIcon model={choice.model} size={15} /><strong>{choice.model}</strong></span>
-              <small>{choice.providerName}</small>
+              {isPending
+                ? <small className="model-thinking-option-pending"><Clock3 size={11} aria-hidden />{t("Next turn", "下轮生效")}</small>
+                : <small>{choice.providerName}</small>}
               <Check size={14} />
             </button>
           );

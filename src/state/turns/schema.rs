@@ -50,6 +50,7 @@ pub(super) fn open_connection(state_dir: &Path) -> Result<Connection> {
     ensure_duration_ms_column(&conn)?;
     ensure_parent_turn_id_column(&conn)?;
     ensure_provider_user_content_column(&conn)?;
+    ensure_model_column(&conn)?;
     backfill_linear_parents(&conn)?;
     create_tree_meta_table(&conn)?;
     conn.execute_batch(
@@ -84,6 +85,30 @@ fn ensure_provider_user_content_column(conn: &Connection) -> Result<()> {
             "ALTER TABLE turns ADD COLUMN provider_user_content TEXT",
             [],
         )?;
+    }
+    Ok(())
+}
+
+/// 确保 turns 表包含本轮使用的模型列。
+///
+/// 每轮记录实际使用的模型标识，供时间线在相邻轮次模型变化时
+/// 绘制"模型已切换"分割线；历史轮次缺省为 NULL。
+///
+/// 参数:
+/// - `conn`: SQLite 连接
+///
+/// 返回:
+/// - 表结构补齐是否成功
+fn ensure_model_column(conn: &Connection) -> Result<()> {
+    let column_count: i64 = conn.query_row(
+        "SELECT COUNT(*)
+         FROM pragma_table_info('turns')
+         WHERE name = 'model'",
+        [],
+        |row| row.get(0),
+    )?;
+    if column_count == 0 {
+        conn.execute("ALTER TABLE turns ADD COLUMN model TEXT", [])?;
     }
     Ok(())
 }

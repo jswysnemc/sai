@@ -47,6 +47,34 @@
   padding-bottom:var(--space-2xs);
 }
 
+/* 模型切换分割线：弱化横线加居中小字，标注相邻轮次间的模型变化 */
+.model-switch-divider {
+  display: flex;
+  align-items: center;
+  gap:var(--space-sm);
+  min-width: 0;
+  margin:var(--space-lg) 0 calc(-1 * var(--space-xs));
+  color: var(--ink-soft);
+  font-size:var(--text-2xs);
+  line-height: 1.4;
+}
+
+.model-switch-divider::before,
+.model-switch-divider::after {
+  content: "";
+  flex: 1 1 0;
+  min-width: var(--space-lg);
+  border-top: 1px solid var(--line);
+}
+
+.model-switch-divider-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* 输入区吸在滚动容器底部，顶部渐变让消息内容自然淡出 */
 .composer-shell {
   position: sticky;

@@ -51,6 +51,10 @@ impl Agent {
         // 【Sai/ACP】【外部轮次】1. 与原生路径一致地登记轮次，历史与时间线因此不区分内核
         self.state
             .start_turn_with_images(&turn_id, input, &image_urls)?;
+        // 外部轮次同样按轮记录模型，与内置内核共用时间线的模型切换分割线口径
+        if let Some(model) = super::model_context::current_model_id(&self.config) {
+            let _ = self.state.set_turn_model(&turn_id, &model);
+        }
         // 外部内核同样累积流式增量：提前结束时已展示的正文才能随轮次落库
         let partial_content_sink = crate::state::PartialTurnSink::new();
         let guard = PendingTurnGuard::new(

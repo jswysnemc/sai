@@ -37,6 +37,7 @@ function run(id: string, content: string, completed: boolean): LiveRunState {
     sessionId: "session",
     startedAtMs: null,
     durationMs: null,
+    model: null,
     status: completed ? "idle" : "working",
     reconnectAttempt: null,
     reconnectMaxAttempts: null,

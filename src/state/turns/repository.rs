@@ -176,6 +176,46 @@ impl ConversationDb {
         Ok(())
     }
 
+    /// 记录本轮实际使用的模型标识。
+    ///
+    /// 参数:
+    /// - `turn_id`: 当前轮唯一标识
+    /// - `model`: 模型标识；空白值不写入
+    ///
+    /// 返回:
+    /// - 更新是否成功
+    pub fn set_turn_model(&self, turn_id: &str, model: &str) -> Result<()> {
+        let model = model.trim();
+        if model.is_empty() {
+            return Ok(());
+        }
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE turns SET model = ?1 WHERE turn_id = ?2",
+            params![model, turn_id],
+        )?;
+        Ok(())
+    }
+
+    /// 读取已记录模型的轮次到模型标识的映射。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - turn_id 到模型标识的映射；未记录模型的轮次不在其中
+    pub fn turn_models(&self) -> Result<std::collections::HashMap<String, String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT turn_id, model FROM turns
+             WHERE model IS NOT NULL AND TRIM(model) != ''",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
     /// 写入轮次处理耗时。
     ///
     /// 参数:
@@ -296,7 +336,7 @@ impl ConversationDb {
             &conn,
             "SELECT turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
                     assistant_reasoning, assistant_timestamp, status, tool_reports, duration_ms,
-                    parent_turn_id
+                    parent_turn_id, model
              FROM turns ORDER BY seq ASC",
             [],
         )
@@ -321,7 +361,7 @@ impl ConversationDb {
                 let mut stmt = conn.prepare(
                     "SELECT turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
                             assistant_reasoning, assistant_timestamp, status, tool_reports, duration_ms,
-                    parent_turn_id
+                    parent_turn_id, model
                      FROM turns WHERE seq > ?1 AND turn_id != ?2 ORDER BY seq ASC",
                 )?;
                 let turns = stmt
@@ -333,7 +373,7 @@ impl ConversationDb {
                 &conn,
                 "SELECT turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
                         assistant_reasoning, assistant_timestamp, status, tool_reports, duration_ms,
-                    parent_turn_id
+                    parent_turn_id, model
                  FROM turns WHERE seq > ?1 ORDER BY seq ASC",
                 params![after_seq],
             ),
@@ -627,6 +667,10 @@ fn map_turn(row: &Row<'_>) -> rusqlite::Result<Turn> {
         tool_reports,
         duration_ms: row.get::<_, i64>(10).unwrap_or(0).max(0) as u64,
         parent_turn_id: row.get::<_, Option<String>>(11).unwrap_or(None),
+        model: row
+            .get::<_, Option<String>>(12)
+            .unwrap_or(None)
+            .filter(|model| !model.trim().is_empty()),
     })
 }
 

@@ -44,7 +44,7 @@ type SessionRunsState = { runs: LiveRunState[] };
 
 type SessionRunsAction =
   | { type: "attach"; runs: RunInfo[]; sessionId: string }
-  | { type: "start"; run: RunInfo; sessionId: string; userInput: string; imageUrls?: string[] }
+  | { type: "start"; run: RunInfo; sessionId: string; userInput: string; imageUrls?: string[]; model?: string }
   | { type: "event"; event: WebEvent }
   | { type: "events"; events: WebEvent[] }
   | { type: "prune-settled"; historyTurnIds: string[] }
@@ -98,7 +98,8 @@ export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsA
       runId: action.run.run_id,
       sessionId: action.sessionId,
       userInput: action.userInput,
-      imageUrls: action.imageUrls
+      imageUrls: action.imageUrls,
+      model: action.model
     }, locale);
     return {
       runs: [...state.runs, {
@@ -541,7 +542,8 @@ export function useRunStream(
     displayInput?: string
   ) => {
     const run = await api.runs.start(targetSessionId, input, mode, selection, imageUrls, thinkingLevel, agentId);
-    dispatch({ type: "start", run, sessionId: targetSessionId, userInput: displayInput ?? input, imageUrls });
+    // 记录本次请求的模型，落库前实时消息即可参与模型切换分割线派生
+    dispatch({ type: "start", run, sessionId: targetSessionId, userInput: displayInput ?? input, imageUrls, model: selection?.model });
     // 运行创建后立即刷新分支树，先展示新用户轮次，不等待助手回复结束
     void queryClient.invalidateQueries({ queryKey: ["session-turn-tree", targetSessionId] });
   };
@@ -566,7 +568,7 @@ export function useRunStream(
     displayInput?: string
   ) => {
     const run = await api.runs.startGoal(targetSessionId, mode, selection, thinkingLevel, agentId);
-    dispatch({ type: "start", run, sessionId: targetSessionId, userInput: displayInput ?? "" });
+    dispatch({ type: "start", run, sessionId: targetSessionId, userInput: displayInput ?? "", model: selection?.model });
   };
 
   /** 使用当前会话模型选择启动一次手动压缩。 */

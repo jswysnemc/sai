@@ -49,6 +49,7 @@ function renderComposer(): string {
       thinkingLevel="auto"
       choices={[]}
       selection={{ providerId: "openai", providerName: "OpenAI", model: "gpt-native" }}
+      pendingSelection={null}
       modelLoading={false}
       running={false}
       runStatus="idle"

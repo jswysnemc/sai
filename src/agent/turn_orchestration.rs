@@ -106,6 +106,11 @@ impl Agent {
         }
         self.state
             .start_turn_with_images(&turn_id, &input, &image_urls)?;
+        // 按轮记录实际使用的模型，供时间线在相邻轮次模型变化时绘制切换分割线；
+        // 记录失败不影响对话流程
+        if let Some(model) = super::model_context::current_model_id(&self.config) {
+            let _ = self.state.set_turn_model(&turn_id, &model);
+        }
         perf.mark("state start_turn");
         // 流式增量交由共享句柄累积：事件闭包与守卫各持一份，
         // 守卫不被闭包借走，错误路径可直接落终态

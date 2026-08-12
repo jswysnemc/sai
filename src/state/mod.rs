@@ -147,6 +147,29 @@ impl StateStore {
         Ok(())
     }
 
+    /// 记录指定轮次实际使用的模型标识。
+    ///
+    /// 参数:
+    /// - `turn_id`: 当前轮次标识
+    /// - `model`: 模型标识；空白值不写入
+    ///
+    /// 返回:
+    /// - 写入是否成功
+    pub fn set_turn_model(&self, turn_id: &str, model: &str) -> Result<()> {
+        self.conv_db.set_turn_model(turn_id, model)
+    }
+
+    /// 读取已记录模型的轮次到模型标识的映射。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - turn_id 到模型标识的映射；未记录模型的轮次不在其中
+    pub fn turn_models(&self) -> Result<std::collections::HashMap<String, String>> {
+        self.conv_db.turn_models()
+    }
+
     /// 保存指定轮次的耗时与汇总用量。
     ///
     /// 参数:

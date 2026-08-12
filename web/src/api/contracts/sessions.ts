@@ -98,6 +98,8 @@ export type SessionTimelineTurn = {
   duration_ms?: number | null;
   /** 同一轮全部模型请求的汇总用量；旧历史可能缺失 */
   usage?: TurnUsage | null;
+  /** 本轮实际使用的模型标识；历史轮次未记录时缺失 */
+  model?: string | null;
 };
 
 export type SessionTimelineCompaction = {

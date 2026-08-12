@@ -53,6 +53,8 @@ export type LiveRunState = {
   reconnectMaxAttempts: number | null;
   /** 本轮开始时间戳（毫秒），用于状态行展示已用时长。 */
   startedAtMs: number | null;
+  /** 本轮请求使用的模型；附着到已有运行时未知，落库后由时间线补齐 */
+  model: string | null;
   userInput: string;
   imageUrls: string[];
   content: string;
@@ -76,8 +78,8 @@ export type LiveRunState = {
 };
 
 export type RunAction =
-  | { type: "start"; runId: string; sessionId: string; userInput: string; imageUrls?: string[] }
-  | { type: "attach"; runId: string; sessionId: string; userInput: string; imageUrls?: string[] }
+  | { type: "start"; runId: string; sessionId: string; userInput: string; imageUrls?: string[]; model?: string }
+  | { type: "attach"; runId: string; sessionId: string; userInput: string; imageUrls?: string[]; model?: string }
   | { type: "event"; event: WebEvent }
   | { type: "reset" };
 
@@ -88,6 +90,7 @@ export const initialRunState: LiveRunState = {
   reconnectAttempt: null,
   reconnectMaxAttempts: null,
   startedAtMs: null,
+  model: null,
   userInput: "",
   imageUrls: [],
   content: "",
@@ -129,6 +132,7 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
       sessionId: action.sessionId,
       userInput: action.userInput,
       imageUrls: action.imageUrls ?? [],
+      model: action.model ?? null,
       status: "waiting_response",
       startedAtMs: Date.now(),
       durationMs: null

@@ -60,6 +60,30 @@
   font-size:var(--text-xs);
 }
 
+/* 待生效模型徽标：运行中点选的新模型下一轮才生效，轻量标注不打断当前轮 */
+.model-thinking-pending {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap:var(--space-3xs);
+  min-width: 0;
+  max-width: 150px;
+  height: 18px;
+  padding:0 var(--space-2xs);
+  border-radius:var(--radius-2);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--signal) 12%, transparent);
+  color: var(--signal);
+  font-size:var(--text-2xs);
+  line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.model-thinking-pending > svg {
+  flex: 0 0 auto;
+}
+
 .model-thinking-chevron {
   flex: 0 0 auto;
   opacity: 0.55;
@@ -217,6 +241,18 @@
 
 .model-thinking-option-list > button.active {
   color: var(--ink);
+}
+
+/* 菜单中的待生效选项：与当前生效项区分，标注"下轮生效" */
+.model-thinking-option-list > button.pending {
+  color: var(--ink);
+}
+
+.model-thinking-option-pending {
+  display: inline-flex;
+  align-items: center;
+  gap:var(--space-3xs);
+  color: var(--signal);
 }
 
 .model-thinking-option-main {

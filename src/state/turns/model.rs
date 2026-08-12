@@ -67,6 +67,8 @@ pub struct Turn {
     pub duration_ms: u64,
     /// 父轮次标识；根轮次为空。同一父轮次下的多个子轮次构成分叉
     pub parent_turn_id: Option<String>,
+    /// 本轮实际使用的模型标识；历史数据未记录时为空
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, GitBranch } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { RunMode } from "../../api/contracts";
@@ -16,6 +16,8 @@ import { projectConversationDisplay } from "./conversation-display";
 import { MessageOverviewRail } from "./message-overview-rail";
 import { createLiveOverviewItem, createTimelineOverviewItems } from "./message-overview-utils";
 import { clearToolExpandState } from "./message/tool-expand-state";
+import { deriveModelSwitchMarkers } from "./model-switch-divider";
+import { ModelSwitchDivider } from "./message/model-switch-divider";
 import { clearComposerDraft, readComposerDraft, writeComposerDraft } from "./composer-draft";
 import { useComposerAttachments } from "./composer/use-composer-attachments";
 import { useChatModel } from "./use-chat-model";
@@ -110,7 +112,11 @@ export function ChatPage() {
       "切换会话分支失败"
     ))
   });
-  const chatModel = useChatModel(activeSession?.id);
+  // 运行状态在模型偏好之前计算：运行中点选的模型要暂存为待生效
+  const runningStates = run.states.filter((state) => !state.completed);
+  const activeRun = runningStates.find((state) => state.status !== "queued") ?? runningStates[0];
+  const running = runningStates.length > 0;
+  const chatModel = useChatModel(activeSession?.id, running);
   const chatAgent = useChatAgentContext();
   const thinking = useThinkingLevel(activeSession?.id);
   const [mode, setMode] = useState<RunMode>("yolo");
@@ -128,6 +134,17 @@ export function ChatPage() {
   const queuedRuns = useMemo(
     () => display.liveRuns.filter((state) => state.status === "queued"),
     [display.liveRuns]
+  );
+  // 相邻轮次模型变化时在其之间绘制切换分割线；历史轮次依据落库的
+  // 模型字段派生，刷新或重进会话后仍可稳定重现
+  const modelSwitchMarkers = useMemo(
+    () => deriveModelSwitchMarkers([
+      ...display.historyTurns.map((turn) => ({ key: turn.turn_id, model: turn.model })),
+      ...activeLiveRuns
+        .filter((state) => state.runId)
+        .map((state) => ({ key: state.runId!, model: state.model }))
+    ]),
+    [activeLiveRuns, display.historyTurns]
   );
   const uniqueErrorNotices = useMemo(() => {
     const notices = [
@@ -342,9 +359,6 @@ export function ChatPage() {
     }
   };
 
-  const runningStates = run.states.filter((state) => !state.completed);
-  const activeRun = runningStates.find((state) => state.status !== "queued") ?? runningStates[0];
-  const running = runningStates.length > 0;
   // 输入历史与 TUI 共用同一份跨会话存储，切换会话后仍可翻到之前输入过的内容
   const inputHistory = useQuery({
     queryKey: ["input-history"],
@@ -463,6 +477,7 @@ export function ChatPage() {
       thinkingLevels={chatModel.thinkingLevels}
       choices={chatModel.choices}
       selection={chatModel.selection}
+      pendingSelection={chatModel.pendingSelection}
       modelLoading={chatModel.isLoading}
       running={running}
       submitBlocked={branchTransitioning}
@@ -537,42 +552,54 @@ export function ChatPage() {
                 />
               </div>
             )}
-            {!branchTransitioning && display.historyTurns.map((turn) => (
-              <section className="conversation-turn" data-overview-id={`turn-${turn.turn_id}`} key={turn.turn_id}>
-                <HistoryTurn
-                  turn={turn}
-                  sessionId={activeSession?.id}
-                  canRetry={turn.turn_id === lastTurnId && !running}
-                  onRetry={resend.retry}
-                  canContinueFrom={!running}
-                  onContinueFrom={branchActions.continueFrom}
-                  canSideConversation={turn.status === "completed" && Boolean(turn.assistant.content.trim())}
-                  onSideConversation={openTurnSideConversation}
-                  canEditResend={!running}
-                  onEditResend={editAndResend}
-                  actionBusy={actionBusy || branchTransitioning}
-                  branchTree={turnTree.tree.data}
-                  branchBusy={turnTree.switchBranch.isPending || running}
-                  onSwitchBranch={turnTree.switchBranch.mutate}
-                />
-              </section>
-            ))}
-            {!branchTransitioning && activeLiveRuns.map((state) => (
-              <section className="conversation-turn" data-overview-id={`live-${state.runId}`} key={state.runId}>
-                <LiveRunMessage
-                  state={state}
-                  sessionId={activeSession?.id}
-                  running={!state.completed}
-                  onRetry={!running && state.completed
-                    ? () => void resend.retry(state.userInput, state.imageUrls, state.runId)
-                    : undefined}
-                  onEditResend={!running && state.completed
-                    ? (content, imageUrls) => void editAndResend(state.runId, content, imageUrls)
-                    : undefined}
-                  actionBusy={actionBusy || branchTransitioning}
-                />
-              </section>
-            ))}
+            {!branchTransitioning && display.historyTurns.map((turn) => {
+              const modelSwitch = modelSwitchMarkers.get(turn.turn_id);
+              return (
+                <Fragment key={turn.turn_id}>
+                  {modelSwitch && <ModelSwitchDivider marker={modelSwitch} />}
+                  <section className="conversation-turn" data-overview-id={`turn-${turn.turn_id}`}>
+                    <HistoryTurn
+                      turn={turn}
+                      sessionId={activeSession?.id}
+                      canRetry={turn.turn_id === lastTurnId && !running}
+                      onRetry={resend.retry}
+                      canContinueFrom={!running}
+                      onContinueFrom={branchActions.continueFrom}
+                      canSideConversation={turn.status === "completed" && Boolean(turn.assistant.content.trim())}
+                      onSideConversation={openTurnSideConversation}
+                      canEditResend={!running}
+                      onEditResend={editAndResend}
+                      actionBusy={actionBusy || branchTransitioning}
+                      branchTree={turnTree.tree.data}
+                      branchBusy={turnTree.switchBranch.isPending || running}
+                      onSwitchBranch={turnTree.switchBranch.mutate}
+                    />
+                  </section>
+                </Fragment>
+              );
+            })}
+            {!branchTransitioning && activeLiveRuns.map((state) => {
+              const modelSwitch = state.runId ? modelSwitchMarkers.get(state.runId) : undefined;
+              return (
+                <Fragment key={state.runId}>
+                  {modelSwitch && <ModelSwitchDivider marker={modelSwitch} />}
+                  <section className="conversation-turn" data-overview-id={`live-${state.runId}`}>
+                    <LiveRunMessage
+                      state={state}
+                      sessionId={activeSession?.id}
+                      running={!state.completed}
+                      onRetry={!running && state.completed
+                        ? () => void resend.retry(state.userInput, state.imageUrls, state.runId)
+                        : undefined}
+                      onEditResend={!running && state.completed
+                        ? (content, imageUrls) => void editAndResend(state.runId, content, imageUrls)
+                        : undefined}
+                      actionBusy={actionBusy || branchTransitioning}
+                    />
+                  </section>
+                </Fragment>
+              );
+            })}
             <QueuedMessageList
               runs={queuedRuns}
               onUpdate={run.updateQueuedInput}

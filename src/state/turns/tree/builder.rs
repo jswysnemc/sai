@@ -174,6 +174,7 @@ mod tests {
             tool_reports: Vec::new(),
             duration_ms: 0,
             parent_turn_id: parent.map(str::to_string),
+            model: None,
         }
     }
 
