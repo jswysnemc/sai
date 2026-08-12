@@ -84,7 +84,8 @@ describe("HistoryTurn", () => {
       />
     );
 
-    expect(html).toContain("查看错误详情");
+    expect(html).toContain("run-error-detail-toggle");
+    expect(html).toContain("详情");
   });
 
   it("offers the last failed tool output as interruption details", () => {
