@@ -1,4 +1,6 @@
-use super::subagent_runner::{estimate_tokens, format_token_count, ProgressMode, SubagentProgress};
+use super::subagent_runner::{
+    estimate_tokens, format_token_count, wrap_subagent_inbox, ProgressMode, SubagentProgress,
+};
 use super::ToolProgress;
 use tokio::sync::mpsc;
 
@@ -47,4 +49,21 @@ fn full_progress_forwards_content_chunks_immediately() {
 
     assert_eq!(receiver.try_recv().unwrap(), "__subagent_text__first");
     assert_eq!(receiver.try_recv().unwrap(), "__subagent_text__ second");
+}
+
+/// 【消息注入】验证追加消息的注入文本带来源标记且保留正文。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn inbox_wrapper_marks_message_source() {
+    let wrapped = wrap_subagent_inbox("user", "优先修复测试");
+
+    assert!(wrapped.starts_with("<subagent-inbox from=\"user\">"));
+    assert!(wrapped.contains("优先修复测试"));
+    assert!(wrapped.ends_with("</subagent-inbox>"));
+    assert!(wrap_subagent_inbox("parent", "x").contains("from=\"parent\""));
 }

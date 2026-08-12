@@ -1,4 +1,5 @@
 use super::args::string_arg;
+use crate::i18n::text as t;
 use crate::tools::subagent_runner::SubagentStats;
 use crate::tools::subagent_state;
 use anyhow::Result;
@@ -70,7 +71,8 @@ pub(super) fn subagent_result(args: Value, owner_key: &str) -> Result<String> {
         subagent_state::acknowledge_finished_notices(owner_key, std::slice::from_ref(&subagent_id));
     }
     Ok(serde_json::to_string_pretty(&json!({
-        "ok": subagent.status == "completed",
+        // idle 表示持久子智能体的当前任务段已成功完成
+        "ok": subagent.status == "completed" || subagent.status == "idle",
         "subagent": subagent,
         "max_lines": max_lines,
         "truncated": truncated,
@@ -127,5 +129,62 @@ pub(super) fn subagent_cancel(args: Value, owner_key: &str) -> Result<String> {
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
         "subagent": subagent
+    }))?)
+}
+
+/// 向存活的子智能体投递追加消息。
+///
+/// 消息进入其消息队列，在下一个步间间隙注入对话；待命中的
+/// 持久子智能体会被唤醒开始新任务段。
+///
+/// 参数:
+/// - `args`: 发送参数（subagent_id 与 message）
+/// - `owner_key`: 子智能体所属者标识
+///
+/// 返回:
+/// - 入队后的子智能体快照
+pub(super) fn subagent_send(args: Value, owner_key: &str) -> Result<String> {
+    let subagent_id = string_arg(&args, "subagent_id")?;
+    let message = string_arg(&args, "message")?;
+    let subagent = subagent_state::queue_subagent_message_for_owner(
+        owner_key,
+        &subagent_id,
+        "parent",
+        &message,
+    )?;
+    Ok(serde_json::to_string_pretty(&json!({
+        "ok": true,
+        "subagent": subagent,
+        "message": t(
+            "message queued; it is injected at the subagent's next step boundary. A system-reminder arrives when the segment finishes",
+            "消息已入队,将在子智能体下一个步间间隙注入。该任务段完成时会收到系统提醒"
+        )
+    }))?)
+}
+
+/// 请求持久子智能体优雅结束。
+///
+/// idle 态立即收尾；running 态在当前任务段完成后收尾。收尾后按
+/// `apply` 参数决定是否把 worktree 变更合并回主工作区（默认合并）。
+///
+/// 参数:
+/// - `args`: 结束参数（subagent_id 与可选 apply）
+/// - `owner_key`: 子智能体所属者标识
+///
+/// 返回:
+/// - 登记结束请求后的子智能体快照
+pub(super) fn subagent_stop(args: Value, owner_key: &str) -> Result<String> {
+    let subagent_id = string_arg(&args, "subagent_id")?;
+    let apply = args.get("apply").and_then(Value::as_bool).unwrap_or(true);
+    let subagent =
+        subagent_state::request_subagent_stop_for_owner(owner_key, &subagent_id, apply)?;
+    Ok(serde_json::to_string_pretty(&json!({
+        "ok": true,
+        "subagent": subagent,
+        "apply": apply,
+        "message": t(
+            "stop requested; an idle subagent finishes immediately, a running one finishes after its current segment. A system-reminder arrives on completion",
+            "已请求结束;待命中的子智能体立即收尾,运行中的在当前任务段完成后收尾。完成时会收到系统提醒"
+        )
     }))?)
 }

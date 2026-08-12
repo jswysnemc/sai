@@ -143,6 +143,81 @@ mod tests {
         assert!(!notices.iter().any(|notice| notice.id == second.id));
     }
 
+    /// 【send】验证追加消息进入队列并返回最新快照。
+    #[test]
+    fn send_queues_message_for_running_subagent() {
+        let owner = "send-owner";
+        let (subagent, _cancel) = subagent_state::create_subagent_for_owner(
+            owner,
+            "send target".to_string(),
+            "general".to_string(),
+            5,
+        );
+
+        let result = subagent_send(
+            json!({"subagent_id": subagent.id, "message": "补充要求"}),
+            owner,
+        )
+        .unwrap();
+        let value = serde_json::from_str::<Value>(&result).unwrap();
+
+        assert_eq!(value["ok"], true);
+        assert_eq!(value["subagent"]["pending_messages"], 1);
+        // 缺 message 参数时报错
+        assert!(subagent_send(json!({"subagent_id": subagent.id}), owner).is_err());
+        // 其他会话不能向该子智能体发消息
+        assert!(subagent_send(
+            json!({"subagent_id": subagent.id, "message": "hi"}),
+            "other-owner"
+        )
+        .is_err());
+    }
+
+    /// 【stop】验证 stop 只接受持久子智能体并透传 apply 标志。
+    #[test]
+    fn stop_requires_persistent_and_carries_apply_flag() {
+        let owner = "stop-owner";
+        let (one_shot, _one_shot_cancel) = subagent_state::create_subagent_for_owner(
+            owner,
+            "one shot".to_string(),
+            "general".to_string(),
+            5,
+        );
+        assert!(subagent_stop(json!({"subagent_id": one_shot.id}), owner).is_err());
+
+        let (persistent, _cancel) = subagent_state::create_subagent_for_owner_goal(
+            owner,
+            None,
+            "persistent".to_string(),
+            "general".to_string(),
+            0,
+            true,
+        );
+        let result =
+            subagent_stop(json!({"subagent_id": persistent.id, "apply": false}), owner).unwrap();
+        let value = serde_json::from_str::<Value>(&result).unwrap();
+
+        assert_eq!(value["ok"], true);
+        assert_eq!(value["apply"], false);
+        let stop = subagent_state::subagent_stop_requested(&persistent.id).unwrap();
+        assert!(!stop.apply);
+    }
+
+    /// 【默认行为】验证不传 persistent 时创建的是一次性子智能体。
+    #[test]
+    fn start_defaults_to_one_shot_subagent() {
+        let (subagent, _cancel) = subagent_state::create_subagent_for_owner(
+            "default-behavior-owner",
+            "plain".to_string(),
+            "general".to_string(),
+            3,
+        );
+
+        assert!(!subagent.persistent);
+        assert_eq!(subagent.pending_messages, 0);
+        assert_eq!(subagent.turns_completed, 0);
+    }
+
     #[test]
     fn result_acknowledges_the_finished_notice() {
         let owner = "result-ack-owner";

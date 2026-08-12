@@ -51,6 +51,7 @@ mod tests {
             "one".to_string(),
             "general".to_string(),
             2,
+            false,
         );
         let (goal_two, _cancel) = create_subagent_for_owner_goal(
             &owner,
@@ -58,6 +59,7 @@ mod tests {
             "two".to_string(),
             "general".to_string(),
             2,
+            false,
         );
         finish_subagent(
             &goal_one.id,

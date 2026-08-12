@@ -30,11 +30,15 @@ export function SubagentCard({ subagent, active = false, onSelect, onCancel }: S
     onCancel();
   };
   const running = subagent.status === "running";
+  // 待命中的持久子智能体仍然存活,允许取消并提示未读留言
+  const alive = running || subagent.status === "idle";
+  const pending = subagent.pending_messages ?? 0;
   return (
     <article className={active ? "subagent-card active" : "subagent-card"} onClick={onSelect}>
       <div className="subagent-heading">
         <SubagentStatusBadge status={subagent.status} />
         <strong>{subagent.description}</strong>
+        {pending > 0 && <span className="subagent-pending-count">{t(`${pending} queued`, `${pending} 条待注入`)}</span>}
       </div>
       <dl>
         <div><dt>{t("Type", "类型")}</dt><dd>{subagentTypeLabel(subagent.subagent_type, locale)}</dd></div>
@@ -42,7 +46,7 @@ export function SubagentCard({ subagent, active = false, onSelect, onCancel }: S
         {subagent.last_tool && !running && <div><dt>{t("Last step", "末步")}</dt><dd>{subagent.last_tool}</dd></div>}
       </dl>
       {subagent.error && <p className="subagent-error">{subagent.error}</p>}
-      {running && (
+      {alive && (
         <button type="button" className="subagent-cancel" onClick={handleCancel}><Ban size={13} />{t("Cancel", "取消")}</button>
       )}
     </article>

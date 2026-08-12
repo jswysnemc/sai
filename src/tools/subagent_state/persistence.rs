@@ -25,9 +25,16 @@ pub(super) fn ensure_owner_loaded(owner_key: &str) {
             continue;
         }
         let mut snapshot = persisted.snapshot;
-        if snapshot.status == "running" {
+        // 1. 存活态（运行中/待命中）的 worker 是进程内 tokio 任务,跨进程无法恢复,
+        //    重启后统一落为 failed 并写明原因
+        if snapshot.status == "running" || snapshot.status == "idle" {
+            snapshot.error = Some(if snapshot.status == "idle" {
+                "持久子智能体随进程退出终止".to_string()
+            } else {
+                "子智能体进程在完成前中断".to_string()
+            });
             snapshot.status = "failed".to_string();
-            snapshot.error = Some("子智能体进程在完成前中断".to_string());
+            snapshot.pending_messages = 0;
             snapshot.updated_at = unix_seconds();
         }
         let mut record = SubagentRecord {
@@ -37,6 +44,9 @@ pub(super) fn ensure_owner_loaded(owner_key: &str) {
             finish_notified: persisted.finish_notified,
             timeline: SubagentTimeline::from_entries(persisted.timeline),
             event_journal: SubagentEventJournal::new(),
+            inbox: Vec::new(),
+            message_log: Vec::new(),
+            stop_request: None,
         };
         publish_record(&mut record);
         subagents.insert(record.snapshot.id.clone(), record);

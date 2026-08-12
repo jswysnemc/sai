@@ -38,6 +38,7 @@ export type Subagent = {
   id:string; description:string; subagent_type:string; status:string; max_steps:number;
   started_at:number; updated_at:number; step:number; phase?:string; last_tool?:string;
   result?:string; error?:string; stats?:Record<string, unknown>;
+  persistent?:boolean; pending_messages?:number; turns_completed?:number;
 };
 
 export type SubagentTimelineEntry =
@@ -45,7 +46,9 @@ export type SubagentTimelineEntry =
   | { kind:"text"; text:string }
   | { kind:"reasoning"; text:string };
 
-export type SubagentDetail = Subagent & { timeline: SubagentTimelineEntry[] };
+export type SubagentMessage = { from:string; text:string; queued_at:number };
+
+export type SubagentDetail = Subagent & { timeline: SubagentTimelineEntry[]; messages?: SubagentMessage[] };
 
 export type SystemUsage = {
   session: {

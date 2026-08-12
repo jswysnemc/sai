@@ -36,13 +36,14 @@ pub(super) async fn wait_subagent(
     let started = tokio::time::Instant::now();
     let mut last_report = 0u64;
     loop {
-        // 1. 指定 id:该子智能体进入终态即返回
+        // 1. 指定 id:该子智能体离开 running（进入终态或持久待命）即返回
         if let Some(id) = &subagent_id {
             let snapshot = subagent_state::subagent_snapshot_for_owner(owner_key, id)?;
             if snapshot.status != "running" {
                 subagent_state::acknowledge_finished_notices(owner_key, std::slice::from_ref(id));
                 return Ok(serde_json::to_string_pretty(&json!({
-                    "ok": snapshot.status == "completed",
+                    // idle 表示持久子智能体的当前任务段已成功完成
+                    "ok": snapshot.status == "completed" || snapshot.status == "idle",
                     "subagent": snapshot
                 }))?);
             }

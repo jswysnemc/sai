@@ -125,6 +125,8 @@ fn command_description(command: &str) -> &'static str {
         "/providers" => "pick provider/model and thinking (same as /model)",
         "/config" => "open fullscreen settings",
         "/ps" => "manage background tasks",
+        "/subagents" => "list session subagents",
+        "/msg" => "leave a message on a subagent",
         "/thinking" => "set reasoning effort",
         "/plan" => "switch to read-only planning mode",
         "/audit" => "switch to audited workspace sandbox mode",

@@ -1,4 +1,4 @@
-use super::subagent_runner::{ProgressMode, SubagentProgress, SubagentRunner};
+use super::subagent_runner::{ProgressMode, SubagentProgress, SubagentRunner, SubagentStats};
 use super::{
     subagent_feed, subagent_runtime, subagent_state, ToolProgress, ToolRegistry, ToolSpec,
 };
@@ -16,7 +16,10 @@ mod control;
 mod wait;
 
 use args::{optional_string_arg, string_arg, summarize_prompt};
-use control::{stats_json, subagent_cancel, subagent_list, subagent_result, subagent_status};
+use control::{
+    stats_json, subagent_cancel, subagent_list, subagent_result, subagent_send, subagent_status,
+    subagent_stop,
+};
 use wait::wait_subagent;
 
 const EXPLORE_PROMPT: &str = include_str!("../prompts/subagent-explore.md");
@@ -99,15 +102,15 @@ pub(crate) fn register(
     registry.register(ToolSpec::new_with_progress(
         "subagent",
         t(
-            "Start and manage an in-process subagent. Only available in interactive REPL and Web sessions. action=start runs it in the background without blocking the conversation. Rules after start: do not interfere with a running subagent - never poll action=status in a loop, never redo or take over its task, and never cancel it unless the user asks. When a subagent finishes you receive an automatic system-reminder; then call action=result with its subagent_id (failed or cancelled runs carry the error there too). If you cannot proceed without the outcome, call action=wait to block until one finishes instead of polling. action=list shows all subagents; action=cancel stops one.",
-            "启动并管理进程内子智能体。此工具只在交互式 REPL 和 Web 会话中可用。action=start 在后台运行,不阻塞主对话。启动后的规约:不要干涉运行中的子智能体——不要循环调用 action=status 轮询,不要抢做或重做它的任务,除非用户要求也不要取消它。子智能体结束时你会收到自动的系统提醒,届时用 action=result 配合 subagent_id 取回结果(失败或取消的也在这里附带错误信息)。如果没有结果就无法继续,用 action=wait 阻塞等待完成,而不是轮询。action=list 列出全部子智能体;action=cancel 取消某个。",
+            "Start and manage an in-process subagent. Only available in interactive REPL and Web sessions. action=start runs it in the background without blocking the conversation. Rules after start: do not interfere with a running subagent - never poll action=status in a loop, never redo or take over its task, and never cancel it unless the user asks. When a subagent finishes you receive an automatic system-reminder; then call action=result with its subagent_id (failed or cancelled runs carry the error there too). If you cannot proceed without the outcome, call action=wait to block until one finishes instead of polling. action=list shows all subagents; action=cancel stops one. Set persistent=true on start for a long-lived subagent: after finishing a task it stays idle instead of exiting, you get a system-reminder per finished segment, action=send appends follow-up messages to it (also works while it is running), and action=stop gracefully ends it (apply=false skips merging its worktree changes back).",
+            "启动并管理进程内子智能体。此工具只在交互式 REPL 和 Web 会话中可用。action=start 在后台运行,不阻塞主对话。启动后的规约:不要干涉运行中的子智能体——不要循环调用 action=status 轮询,不要抢做或重做它的任务,除非用户要求也不要取消它。子智能体结束时你会收到自动的系统提醒,届时用 action=result 配合 subagent_id 取回结果(失败或取消的也在这里附带错误信息)。如果没有结果就无法继续,用 action=wait 阻塞等待完成,而不是轮询。action=list 列出全部子智能体;action=cancel 取消某个。启动时传 persistent=true 可创建持久子智能体:完成任务后进入待命而不退出,每完成一段你都会收到系统提醒,action=send 可追加消息(运行中也能发,步间注入),action=stop 优雅结束它(apply=false 跳过 worktree 变更合并)。",
         ),
         json!({
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["start", "status", "result", "wait", "list", "cancel"],
+                    "enum": ["start", "status", "result", "wait", "list", "cancel", "send", "stop"],
                     "description": t("Operation to perform. Defaults to start.", "要执行的操作，默认 start。")
                 },
                 "description": {
@@ -128,11 +131,23 @@ pub(crate) fn register(
                 },
                 "subagent_id": {
                     "type": "string",
-                    "description": t("Subagent id for status, result, cancel, or wait. wait without it waits for any running subagent.", "status、result、cancel 或 wait 使用的子智能体 ID。wait 不带它时等待任意一个运行中的子智能体。")
+                    "description": t("Subagent id for status, result, cancel, wait, send, or stop. wait without it waits for any running subagent.", "status、result、cancel、wait、send 或 stop 使用的子智能体 ID。wait 不带它时等待任意一个运行中的子智能体。")
                 },
                 "timeout_seconds": {
                     "type": "integer",
                     "description": t("Max seconds for wait before returning. Defaults to 180, capped at 600.", "wait 的最长等待秒数，默认 180，上限 600。")
+                },
+                "persistent": {
+                    "type": "boolean",
+                    "description": t("For start: keep the subagent alive after it finishes a task so you can keep sending follow-ups with action=send; end it with action=stop. Defaults to false (one-shot).", "start 用:任务完成后保持存活待命,可用 action=send 继续追加消息,用 action=stop 结束。默认 false(一次性)。")
+                },
+                "message": {
+                    "type": "string",
+                    "description": t("For send: the follow-up message injected into the subagent's conversation at the next step boundary.", "send 用:追加给子智能体的消息,在其下一个步间间隙注入对话。")
+                },
+                "apply": {
+                    "type": "boolean",
+                    "description": t("For stop: whether to apply the subagent's worktree changes back to the parent workspace. Defaults to true.", "stop 用:结束时是否把子智能体的 worktree 变更合并回主工作区,默认 true。")
                 }
             },
             "additionalProperties": false
@@ -183,6 +198,8 @@ async fn run_subagent_action(
         "wait" => wait_subagent(args, progress, &context.owner_key).await,
         "list" => subagent_list(&context.owner_key),
         "cancel" => subagent_cancel(args, &context.owner_key),
+        "send" => subagent_send(args, &context.owner_key),
+        "stop" => subagent_stop(args, &context.owner_key),
         _ => bail!("unsupported subagent action: {action}"),
     }
 }
@@ -218,6 +235,11 @@ async fn start_subagent(args: Value, context: SubagentContext) -> Result<String>
         .and_then(Value::as_u64)
         .map(|value| (value as usize).clamp(1, MAX_MAX_STEPS))
         .unwrap_or(0);
+    // 持久子智能体：任务段完成后待命等待追加消息,直到显式 stop/cancel
+    let persistent = args
+        .get("persistent")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let goal_id = crate::state::StateStore::for_session(&context.paths, &context.session_id)?
         .goal()?
         .filter(|goal| goal.status.accepts_external_wake())
@@ -228,6 +250,7 @@ async fn start_subagent(args: Value, context: SubagentContext) -> Result<String>
         description,
         subagent_type,
         max_steps,
+        persistent,
     );
     let _ =
         subagent_runtime::record_subagent_started(&context.paths, &context.session_id, &subagent);
@@ -261,13 +284,21 @@ async fn start_subagent(args: Value, context: SubagentContext) -> Result<String>
         )
         .await;
     });
-    Ok(serde_json::to_string_pretty(&json!({
-        "ok": true,
-        "subagent": subagent,
-        "message": t(
+    let message = if persistent {
+        t(
+            "persistent subagent started; it stays idle after each finished task segment. A system-reminder arrives per segment; use action=result to read it, action=send to add follow-ups, action=stop to end it (worktree changes merge on stop by default)",
+            "持久子智能体已启动;每完成一个任务段会进入待命并发送系统提醒。用 action=result 读取结果,action=send 追加消息,action=stop 结束(默认在 stop 时合并 worktree 变更)"
+        )
+    } else {
+        t(
             "subagent started; continue your own work or call action=wait if you need the result. Do not poll action=status: a system-reminder arrives when it finishes",
             "子智能体已启动；请继续自己的工作,需要结果时用 action=wait 等待。不要轮询 action=status:完成时会收到系统提醒"
         )
+    };
+    Ok(serde_json::to_string_pretty(&json!({
+        "ok": true,
+        "subagent": subagent,
+        "message": message
     }))?)
 }
 
@@ -313,13 +344,7 @@ async fn execute_subagent(
     let progress = ToolProgress::new(progress_tx);
     let result = tokio::select! {
         _ = &mut cancel_rx => Err(anyhow::anyhow!("cancelled")),
-        result = run_subagent(
-            &subagent.subagent_type,
-            subagent.max_steps,
-            &prompt,
-            context,
-            progress,
-        ) => result,
+        result = run_subagent_session(&subagent, &prompt, context, progress) => result,
     };
     // 2. 运行结束会释放全部 sender，等待消费任务排空尾部流事件
     if tokio::time::timeout(Duration::from_secs(2), &mut progress_task)
@@ -328,8 +353,15 @@ async fn execute_subagent(
     {
         progress_task.abort();
     }
-    let merge_summary =
-        finalize_worktree(&subagent_id, worktree.as_ref(), matches!(&result, Ok(_)));
+    // 3. 持久子智能体经 stop 结束时尊重其 apply 标志;一次性子智能体沿用成功即合并
+    let apply_allowed = subagent_state::subagent_stop_requested(&subagent_id)
+        .map(|stop| stop.apply)
+        .unwrap_or(true);
+    let merge_summary = finalize_worktree(
+        &subagent_id,
+        worktree.as_ref(),
+        matches!(&result, Ok(_)) && apply_allowed,
+    );
     match result {
         Ok((content, stats)) => {
             let content = append_merge_summary(content, merge_summary.as_ref());
@@ -464,30 +496,71 @@ fn record_finished_runtime_subagent(paths: &SaiPaths, session_id: &str, subagent
     }
 }
 
-/// 运行指定类型的子代理。
+/// 按子智能体的持久标记分发到一次性或持久会话执行路径。
 ///
 /// 参数:
-/// - `subagent_type`: 子代理类型
-/// - `max_steps`: 最大工具调用次数
+/// - `subagent`: 子智能体启动快照
 /// - `prompt`: 子智能体提示
 /// - `context`: 子智能体上下文
 /// - `tool_progress`: 写回快照的进度上报通道
 ///
 /// 返回:
 /// - 子代理输出内容和公开统计信息
-async fn run_subagent(
-    subagent_type: &str,
-    max_steps: usize,
+async fn run_subagent_session(
+    subagent: &subagent_state::SubagentSnapshot,
     prompt: &str,
     context: SubagentContext,
     tool_progress: ToolProgress,
 ) -> Result<(String, Value)> {
+    if subagent.persistent {
+        run_persistent_subagent(
+            &subagent.id,
+            &subagent.subagent_type,
+            subagent.max_steps,
+            prompt,
+            context,
+            tool_progress,
+        )
+        .await
+    } else {
+        run_subagent(
+            &subagent.id,
+            &subagent.subagent_type,
+            subagent.max_steps,
+            prompt,
+            context,
+            tool_progress,
+        )
+        .await
+    }
+}
+
+/// 构造子代理执行器（模型客户端、工具集、系统提示与消息注入回调）。
+///
+/// 参数:
+/// - `subagent_id`: 子智能体 ID，用于步间轮询其消息队列
+/// - `subagent_type`: 子代理类型
+/// - `max_steps`: 每个任务段的最大工具调用次数
+/// - `context`: 子智能体上下文
+/// - `tool_progress`: 写回快照的进度上报通道
+/// - `persistent`: 是否为持久会话（持久会话不设整体运行时限提醒）
+///
+/// 返回:
+/// - 可直接运行的子代理执行器
+fn build_subagent_runner(
+    subagent_id: &str,
+    subagent_type: &str,
+    max_steps: usize,
+    context: &SubagentContext,
+    tool_progress: ToolProgress,
+    persistent: bool,
+) -> Result<SubagentRunner> {
     // 1. 按子智能体模型配置构造客户端,未配置时沿用主对话供应商与模型
     let profile = context
         .config
         .resolve_registered_agent(Some(subagent_type))
         .with_context(|| format!("subagent profile is not exposed: {subagent_type}"))?;
-    let client = build_subagent_client(&context, &profile)?;
+    let client = build_subagent_client(context, &profile)?;
     let (default_prompt, default_tools, excluded) = match subagent_type {
         "explore" => (
             EXPLORE_PROMPT,
@@ -515,7 +588,7 @@ async fn run_subagent(
             .collect::<Vec<_>>();
         default_tools.clone_filtered(&allowed)
     };
-    // 1. 渐进网关按子 Agent 的实际工具集合和延迟配置重建，避免沿用主 Agent 的描述
+    // 2. 渐进网关按子 Agent 的实际工具集合和延迟配置重建，避免沿用主 Agent 的描述
     let mut tools = tools.clone_excluding(&[super::LOAD_NAME, super::INVOKE_NAME]);
     super::progressive::register_loader(&mut tools, &profile.deferred_tools);
     let base_prompt = if profile.system_prompt.trim().is_empty() {
@@ -523,10 +596,23 @@ async fn run_subagent(
     } else {
         profile.system_prompt.clone()
     };
-    let system_prompt = subagent_system_prompt(&context, &profile, &base_prompt)?;
-    // 2. 以 Full 模式上报,时间线可拿到工具调用参数、结果与流式文本
+    let system_prompt = subagent_system_prompt(context, &profile, &base_prompt)?;
+    // 3. 以 Full 模式上报,时间线可拿到工具调用参数、结果与流式文本
     let progress = SubagentProgress::new(tool_progress, ProgressMode::Full, true);
-    let runner = SubagentRunner::new(client, &system_prompt, tools, progress)
+    // 4. 步间消息注入:主代理 action=send 与用户留言经消息队列在此进入对话
+    let poll_id = subagent_id.to_string();
+    let message_poll: super::subagent_runner::SubagentMessagePoll = std::sync::Arc::new(move || {
+        subagent_state::drain_subagent_inbox(&poll_id)
+            .into_iter()
+            .map(
+                |message| super::subagent_runner::SubagentInjectedMessage {
+                    from: message.from,
+                    text: message.text,
+                },
+            )
+            .collect()
+    });
+    Ok(SubagentRunner::new(client, &system_prompt, tools, progress)
         .progressive_loading(
             profile.deferred_tools.clone(),
             context.config.clone(),
@@ -534,8 +620,44 @@ async fn run_subagent(
         )
         .max_steps(max_steps)
         .timeout_seconds(TOOL_TIMEOUT_SECONDS)
-        .session_deadline_seconds(SUBAGENT_TIMEOUT_SECONDS)
-        .excluded_tools(&excluded);
+        // 持久会话面向多任务段长期存活,不注入整体时限收尾提醒
+        .session_deadline_seconds(if persistent {
+            0
+        } else {
+            SUBAGENT_TIMEOUT_SECONDS
+        })
+        .excluded_tools(&excluded)
+        .with_message_poll(message_poll))
+}
+
+/// 运行指定类型的子代理。
+///
+/// 参数:
+/// - `subagent_id`: 子智能体 ID
+/// - `subagent_type`: 子代理类型
+/// - `max_steps`: 最大工具调用次数
+/// - `prompt`: 子智能体提示
+/// - `context`: 子智能体上下文
+/// - `tool_progress`: 写回快照的进度上报通道
+///
+/// 返回:
+/// - 子代理输出内容和公开统计信息
+async fn run_subagent(
+    subagent_id: &str,
+    subagent_type: &str,
+    max_steps: usize,
+    prompt: &str,
+    context: SubagentContext,
+    tool_progress: ToolProgress,
+) -> Result<(String, Value)> {
+    let runner = build_subagent_runner(
+        subagent_id,
+        subagent_type,
+        max_steps,
+        &context,
+        tool_progress,
+        false,
+    )?;
     let result = tokio::time::timeout(
         Duration::from_secs(SUBAGENT_TIMEOUT_SECONDS),
         runner.run(prompt),
@@ -547,6 +669,86 @@ async fn run_subagent(
         bail!("subagent returned an empty result");
     }
     Ok((chat_result.content, stats_json(&stats)))
+}
+
+/// 持久子智能体待命轮询间隔（毫秒）。
+const IDLE_POLL_MILLIS: u64 = 300;
+
+/// 运行持久子智能体的多任务段会话循环。
+///
+/// 生命周期:running（执行任务段）与 idle（待命等新消息）交替，
+/// 直到收到 stop 请求（段间生效，不打断段内工具调用）或被取消。
+/// 对话历史与渐进加载状态跨任务段共享，统计信息累计。
+///
+/// 参数:
+/// - `subagent_id`: 子智能体 ID
+/// - `subagent_type`: 子代理类型
+/// - `max_steps`: 每个任务段的最大工具调用次数
+/// - `prompt`: 首个任务段的提示
+/// - `context`: 子智能体上下文
+/// - `tool_progress`: 写回快照的进度上报通道
+///
+/// 返回:
+/// - 最后一个任务段的输出内容和累计统计信息
+async fn run_persistent_subagent(
+    subagent_id: &str,
+    subagent_type: &str,
+    max_steps: usize,
+    prompt: &str,
+    context: SubagentContext,
+    tool_progress: ToolProgress,
+) -> Result<(String, Value)> {
+    let runner = build_subagent_runner(
+        subagent_id,
+        subagent_type,
+        max_steps,
+        &context,
+        tool_progress,
+        true,
+    )?;
+    let mut messages = runner.initial_messages(prompt);
+    let mut tool_visibility = runner.fresh_tool_visibility();
+    let mut stats = SubagentStats::default();
+    loop {
+        // 1. 跑一个任务段;段级超时兜住单段挂死,超时按失败处理
+        let result = tokio::time::timeout(
+            Duration::from_secs(SUBAGENT_TIMEOUT_SECONDS),
+            runner.run_turn(&mut messages, &mut stats, &mut tool_visibility),
+        )
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!("subagent segment timed out after {SUBAGENT_TIMEOUT_SECONDS}s")
+        })??;
+        let content = if result.content.trim().is_empty() {
+            t("(no text output for this segment)", "（本任务段无正文输出）").to_string()
+        } else {
+            result.content
+        };
+        let stats_value = stats_json(&stats);
+        // 2. 段间检查结束请求:stop 不打断段内执行,在段完成后生效
+        if subagent_state::subagent_stop_requested(subagent_id).is_some() {
+            return Ok((content, stats_value));
+        }
+        // 3. 转入待命;转入失败说明已被取消等,直接交回当前段结果
+        if !subagent_state::park_subagent(
+            subagent_id,
+            Some(content.clone()),
+            Some(stats_value.clone()),
+        ) {
+            return Ok((content, stats_value));
+        }
+        // 4. 待命循环:等待追加消息或结束请求;取消由外层 select 直接中止
+        loop {
+            if subagent_state::subagent_stop_requested(subagent_id).is_some() {
+                return Ok((content, stats_value));
+            }
+            if subagent_state::subagent_inbox_len(subagent_id) > 0 {
+                subagent_state::resume_subagent(subagent_id);
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(IDLE_POLL_MILLIS)).await;
+        }
+    }
 }
 
 /// 判断子 Agent 是否应沿用类型内置的工具集合。

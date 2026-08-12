@@ -305,6 +305,31 @@ fn deadline_reminder(remaining_seconds: u64) -> String {
     )
 }
 
+/// 注入子智能体对话的一条追加消息。
+#[derive(Debug, Clone)]
+pub(crate) struct SubagentInjectedMessage {
+    /// 消息来源标识（parent 为主代理，user 为用户留言）
+    pub(crate) from: String,
+    /// 消息正文
+    pub(crate) text: String,
+}
+
+/// 步间消息轮询回调：返回本次需要注入对话的追加消息。
+pub(crate) type SubagentMessagePoll =
+    std::sync::Arc<dyn Fn() -> Vec<SubagentInjectedMessage> + Send + Sync>;
+
+/// 把追加消息包装成注入子智能体对话的标记文本。
+///
+/// 参数:
+/// - `from`: 消息来源标识
+/// - `text`: 消息正文
+///
+/// 返回:
+/// - 带来源标记的注入文本
+pub(crate) fn wrap_subagent_inbox(from: &str, text: &str) -> String {
+    format!("<subagent-inbox from=\"{from}\">\n{text}\n</subagent-inbox>")
+}
+
 pub(crate) struct SubagentRunner {
     client: OpenAiCompatibleClient,
     system_prompt: String,
@@ -317,6 +342,8 @@ pub(crate) struct SubagentRunner {
     progress: SubagentProgress,
     tool_visibility: ToolVisibility,
     progressive_context: Option<(AppConfig, SaiPaths)>,
+    /// 步间消息轮询回调；设置后每次请求模型前注入排队的追加消息
+    message_poll: Option<SubagentMessagePoll>,
 }
 
 impl SubagentRunner {
@@ -347,7 +374,23 @@ impl SubagentRunner {
             progress,
             tool_visibility: ToolVisibility::new(Vec::new()),
             progressive_context: None,
+            message_poll: None,
         }
+    }
+
+    /// 设置步间消息轮询回调。
+    ///
+    /// 设置后运行循环会在每次请求模型前取出排队的追加消息并注入对话，
+    /// 注入发生在步间间隙，不会打断进行中的工具调用。
+    ///
+    /// 参数:
+    /// - `poll`: 消息轮询回调
+    ///
+    /// 返回:
+    /// - 更新后的执行器
+    pub(crate) fn with_message_poll(mut self, poll: SubagentMessagePoll) -> Self {
+        self.message_poll = Some(poll);
+        self
     }
 
     /// 设置子 Agent 的渐进式工具状态和加载上下文。
@@ -427,13 +470,10 @@ impl SubagentRunner {
     /// - 子代理最终结果和统计信息
     pub(crate) async fn run(&self, prompt: &str) -> Result<(ChatResult, SubagentStats)> {
         let mut stats = SubagentStats::default();
-        let messages = vec![
-            ChatMessage::system(self.system_prompt.clone()),
-            ChatMessage::plain("user", prompt.to_string()),
-        ];
-        let mut tool_visibility = self.tool_visibility.clone();
+        let mut messages = self.initial_messages(prompt);
+        let mut tool_visibility = self.fresh_tool_visibility();
         let result = self
-            .chat_with_tools(messages, &mut stats, &mut tool_visibility)
+            .chat_with_tools(&mut messages, &mut stats, &mut tool_visibility)
             .await?;
         stats.add_usage_or_estimate(
             result.usage.as_ref(),
@@ -441,6 +481,61 @@ impl SubagentRunner {
         );
         self.report_stats(&stats);
         Ok((result, stats))
+    }
+
+    /// 构造子代理会话的初始消息。
+    ///
+    /// 参数:
+    /// - `prompt`: 子代理任务提示
+    ///
+    /// 返回:
+    /// - 含系统提示与首条用户消息的对话
+    pub(crate) fn initial_messages(&self, prompt: &str) -> Vec<ChatMessage> {
+        vec![
+            ChatMessage::system(self.system_prompt.clone()),
+            ChatMessage::plain("user", prompt.to_string()),
+        ]
+    }
+
+    /// 克隆渐进加载初始状态，供持久会话跨任务段复用。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 渐进加载可见性状态
+    pub(crate) fn fresh_tool_visibility(&self) -> ToolVisibility {
+        self.tool_visibility.clone()
+    }
+
+    /// 在既有对话上运行一个任务段直到模型给出最终回复。
+    ///
+    /// 供持久子智能体跨任务段复用同一对话历史；每段的 max_steps
+    /// 预算独立计数，统计信息在传入的 `stats` 上累计。
+    ///
+    /// 参数:
+    /// - `messages`: 跨任务段共享的对话消息
+    /// - `stats`: 累计统计信息
+    /// - `tool_visibility`: 跨任务段共享的渐进加载状态
+    ///
+    /// 返回:
+    /// - 本任务段的最终聊天结果
+    pub(crate) async fn run_turn(
+        &self,
+        messages: &mut Vec<ChatMessage>,
+        stats: &mut SubagentStats,
+        tool_visibility: &mut ToolVisibility,
+    ) -> Result<ChatResult> {
+        let result = self
+            .chat_with_tools(messages, stats, tool_visibility)
+            .await?;
+        // 1. 段末把最终回复写回共享对话，后续任务段才能看到完整历史
+        if !result.content.trim().is_empty() {
+            messages.push(ChatMessage::assistant(result.content.clone(), None));
+        }
+        stats.add_usage_or_estimate(result.usage.as_ref(), &[&result.content]);
+        self.report_stats(stats);
+        Ok(result)
     }
 
     /// 上报子代理最终统计。
@@ -467,6 +562,33 @@ impl SubagentRunner {
         self.progress.phase(text);
     }
 
+    /// 把排队的追加消息注入对话。
+    ///
+    /// 只在两次模型请求之间调用，保证注入不会打断进行中的工具调用；
+    /// 消息以 user 角色进入对话，并带来源标记供模型区分优先级。
+    ///
+    /// 参数:
+    /// - `messages`: 当前对话消息
+    ///
+    /// 返回:
+    /// - 无
+    fn inject_queued_messages(&self, messages: &mut Vec<ChatMessage>) {
+        let Some(poll) = &self.message_poll else {
+            return;
+        };
+        for message in poll() {
+            self.progress.phase(if is_zh() {
+                format!("收到来自 {} 的追加消息", message.from)
+            } else {
+                format!("received a follow-up message from {}", message.from)
+            });
+            messages.push(ChatMessage::plain(
+                "user",
+                wrap_subagent_inbox(&message.from, &message.text),
+            ));
+        }
+    }
+
     /// 运行子代理的工具调用循环。
     ///
     /// 参数:
@@ -477,7 +599,7 @@ impl SubagentRunner {
     /// - 子代理最终聊天结果
     async fn chat_with_tools(
         &self,
-        mut messages: Vec<ChatMessage>,
+        messages: &mut Vec<ChatMessage>,
         stats: &mut SubagentStats,
         tool_visibility: &mut ToolVisibility,
     ) -> Result<ChatResult> {
@@ -492,6 +614,8 @@ impl SubagentRunner {
         let started = tokio::time::Instant::now();
         let mut deadline_reminded = false;
         loop {
+            // 0. 步间注入排队的追加消息（不打断进行中的工具调用）
+            self.inject_queued_messages(messages);
             // 1. 时限临近时注入软提醒；工具不受限，由子代理自行收敛
             if !deadline_reminded && self.session_deadline_seconds > 0 {
                 let elapsed = started.elapsed().as_secs();
@@ -508,7 +632,7 @@ impl SubagentRunner {
                 messages.push(ChatMessage::plain("user", finalization_prompt()));
                 let result = self
                     .client
-                    .chat_stream(messages, Vec::new(), |chunk: ChatStreamChunk| {
+                    .chat_stream(messages.clone(), Vec::new(), |chunk: ChatStreamChunk| {
                         match chunk.kind {
                             ChatStreamKind::Reasoning => self.progress.reasoning(&chunk.text),
                             ChatStreamKind::Content => self.progress.content(&chunk.text),

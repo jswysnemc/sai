@@ -7,6 +7,7 @@
 export function subagentStatusLabel(status: string, locale: Locale = "zh-CN"): string {
   const labels: Record<string, string> = {
     running: text(locale, "Running", "运行中"),
+    idle: text(locale, "Idle", "待命中"),
     completed: text(locale, "Completed", "已完成"),
     failed: text(locale, "Failed", "失败"),
     cancelled: text(locale, "Cancelled", "已取消")

@@ -72,6 +72,12 @@ pub(crate) async fn handle_gateway_command(
             let state = crate::state::StateStore::new(paths)?;
             crate::control_commands::execute_goal_command(&state, command)?.message
         }
+        // 子智能体命令仅在 REPL 解析,网关渠道到不了这里;保留兜底提示
+        ControlCommand::Subagents | ControlCommand::SubagentMessage { .. } => t(
+            "subagent commands are only available in the terminal",
+            "子智能体命令仅在终端可用",
+        )
+        .to_string(),
     }))
 }
 

@@ -636,7 +636,8 @@ export const api = {
   subagents: {
     list: () => apiRequest<Subagent[]>("/api/subagents"),
     detail: (id: string) => apiRequest<SubagentDetail>(`/api/subagents/${encodeURIComponent(id)}`),
-    cancel: (id: string) => apiRequest<Subagent>(`/api/subagents/${encodeURIComponent(id)}/cancel`, { method:"POST" })
+    cancel: (id: string) => apiRequest<Subagent>(`/api/subagents/${encodeURIComponent(id)}/cancel`, { method:"POST" }),
+    message: (id: string, message: string) => apiRequest<Subagent>(`/api/subagents/${encodeURIComponent(id)}/message`, { method:"POST", body:JSON.stringify({ message }) })
   },
   system: {
     usage: (

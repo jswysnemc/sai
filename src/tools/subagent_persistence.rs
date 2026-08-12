@@ -92,6 +92,9 @@ mod tests {
                 worktree_branch: None,
                 parent_workdir: None,
                 worktree_merge: None,
+                persistent: false,
+                pending_messages: 0,
+                turns_completed: 0,
             },
             timeline: vec![SubagentTimelineEntry::Text {
                 text: "done".to_string(),

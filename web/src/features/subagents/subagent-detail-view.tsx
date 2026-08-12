@@ -1,5 +1,6 @@
-import { ArrowLeft, Ban } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { ArrowLeft, Ban, Send } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { api } from "../../api/client";
 import type { Subagent } from "../../api/contracts";
 import { MessageParts } from "../chat/message/message-parts";
 import { SubagentStats } from "./subagent-stats";
@@ -29,6 +30,11 @@ export function SubagentDetailView({ subagent, onBack, onCancel }: SubagentDetai
   const stream = useSubagentStream(subagent);
   const current = stream.snapshot;
   const running = current.status === "running";
+  // 存活（运行中或待命中）的子智能体可接收用户留言
+  const alive = running || current.status === "idle";
+  const [draft, setDraft] = useState("");
+  const [sendError, setSendError] = useState("");
+  const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const timeline = stream.timeline;
   const parts = subagentMessageParts(timeline, running, stream.timestamp, locale);
@@ -36,6 +42,21 @@ export function SubagentDetailView({ subagent, onBack, onCancel }: SubagentDetai
   if (body && !timeline.some((entry) => entry.kind === "text" && entry.text === body)) {
     parts.push({ id: "subagent-result", type: "text", source: body });
   }
+
+  const sendMessage = async () => {
+    const message = draft.trim();
+    if (!message || sending) return;
+    setSending(true);
+    setSendError("");
+    try {
+      await api.subagents.message(current.id, message);
+      setDraft("");
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSending(false);
+    }
+  };
 
   useEffect(() => {
     // 1. 视口停在底部附近时，新时间线内容到达后自动跟随到底
@@ -50,7 +71,7 @@ export function SubagentDetailView({ subagent, onBack, onCancel }: SubagentDetai
       <header className="subagent-detail-head">
         <button type="button" className="subagent-detail-back" onClick={onBack}><ArrowLeft size={14} />{t("Overview", "概览")}</button>
         <SubagentStatusBadge status={current.status} />
-        {running && (
+        {alive && (
           <button type="button" className="subagent-detail-cancel" onClick={() => onCancel(current.id)}><Ban size={13} />{t("Cancel", "取消")}</button>
         )}
       </header>
@@ -66,6 +87,22 @@ export function SubagentDetailView({ subagent, onBack, onCancel }: SubagentDetai
           <p className="subagent-detail-pending">{running ? t("The subagent is running.", "子智能体正在运行。") : t("No output.", "没有输出。")}</p>
         )}
       </div>
+      {alive && (
+        <footer className="subagent-detail-composer">
+          <input
+            type="text"
+            value={draft}
+            placeholder={t("Leave a message; it is injected at the next step boundary", "给子智能体留言，将在下一个步间间隙注入")}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") void sendMessage(); }}
+            disabled={sending}
+          />
+          <button type="button" onClick={() => void sendMessage()} disabled={sending || !draft.trim()}>
+            <Send size={13} />{t("Send", "留言")}
+          </button>
+          {sendError && <span className="subagent-detail-send-error">{sendError}</span>}
+        </footer>
+      )}
     </section>
   );
 }

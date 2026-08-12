@@ -174,7 +174,8 @@ pub(crate) fn cancel_subagent(id: &str) -> Result<SubagentSnapshot> {
     let record = subagents
         .get_mut(id)
         .ok_or_else(|| anyhow::anyhow!("subagent not found: {id}"))?;
-    if record.snapshot.status != "running" {
+    // 1. 运行中与待命中（持久子智能体）都允许取消，其余状态已是终态
+    if record.snapshot.status != "running" && record.snapshot.status != "idle" {
         return Ok(record.snapshot.clone());
     }
     if let Some(cancel) = record.cancel.take() {

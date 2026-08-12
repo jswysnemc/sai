@@ -142,6 +142,7 @@ export type {
   TodoSnapshot,
   Subagent,
   SubagentTimelineEntry,
+  SubagentMessage,
   SubagentDetail,
   SystemUsage,
 } from "./contracts/runtime";

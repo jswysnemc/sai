@@ -149,6 +149,20 @@ fn repl_only_help_lines() -> Vec<String> {
             t("manage background tasks", "管理后台任务")
         ),
         format!(
+            "  /subagents  {}",
+            t(
+                "list session subagents and their liveness",
+                "列出会话子智能体及存活状态"
+            )
+        ),
+        format!(
+            "  /msg [id|index] <text>  {}",
+            t(
+                "leave a message on an alive subagent",
+                "给存活的子智能体留言"
+            )
+        ),
+        format!(
             "  /plan       {}",
             t("switch to read-only planning mode", "切换到只读计划模式")
         ),

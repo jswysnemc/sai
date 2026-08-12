@@ -175,6 +175,16 @@ impl super::ReplRuntime {
         self.agent_panel.is_active()
     }
 
+    /// 返回当前正在查看的子智能体 ID。
+    ///
+    /// 供 `/msg` 留言命令把未显式指定目标的消息投递给查看中的子智能体。
+    ///
+    /// 返回:
+    /// - 处于子智能体视图时返回其 ID
+    pub(in crate::cli) fn viewing_subagent_id(&self) -> Option<String> {
+        self.transcript.viewing_subagent_id().map(str::to_string)
+    }
+
     /// 面板按键核心处理（不负责重绘输入框）。
     ///
     /// 参数:

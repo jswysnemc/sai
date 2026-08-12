@@ -8,6 +8,7 @@ use super::*;
 use crate::agent::Agent;
 
 mod session_support;
+mod subagent_commands;
 mod submission_queue;
 
 use session_support::{
@@ -473,6 +474,28 @@ pub(super) async fn run_repl(
                                     submitted_input.clear();
                                 }
                             }
+                            Err(error) => runtime.record_meta(error.to_string())?,
+                        }
+                    }
+                    crate::control_commands::ControlCommand::Subagents => {
+                        let owner_key = state.state_dir().display().to_string();
+                        runtime
+                            .record_meta(subagent_commands::format_subagent_list(&owner_key))?;
+                    }
+                    crate::control_commands::ControlCommand::SubagentMessage {
+                        target,
+                        message,
+                    } => {
+                        // 用户留言直接进入子智能体消息队列,不经过主 Agent 轮次
+                        let owner_key = state.state_dir().display().to_string();
+                        let viewing = runtime.viewing_subagent_id();
+                        match subagent_commands::deliver_subagent_message(
+                            &owner_key,
+                            target.as_deref(),
+                            &message,
+                            viewing.as_deref(),
+                        ) {
+                            Ok(notice) => runtime.record_meta(notice)?,
                             Err(error) => runtime.record_meta(error.to_string())?,
                         }
                     }

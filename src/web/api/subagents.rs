@@ -1,8 +1,8 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
 use crate::tools::subagent_state::{
-    cancel_subagent, list_subagents, subagent_event_stream, subagent_snapshot, subagent_timeline,
-    SubagentSnapshot,
+    cancel_subagent, list_subagents, queue_subagent_message, subagent_event_stream,
+    subagent_messages, subagent_snapshot, subagent_timeline, SubagentSnapshot,
 };
 use axum::extract::{Path, Query};
 use axum::response::sse::{Event, KeepAlive, Sse};
@@ -20,6 +20,12 @@ struct EventQuery {
     after: Option<u64>,
 }
 
+/// 用户给子智能体留言的请求体。
+#[derive(Deserialize)]
+struct MessageBody {
+    message: String,
+}
+
 /// 返回子智能体管理路由。
 pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
@@ -27,6 +33,7 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/subagents/:id", get(detail))
         .route("/api/subagents/:id/events", get(events))
         .route("/api/subagents/:id/cancel", post(cancel))
+        .route("/api/subagents/:id/message", post(message))
 }
 
 /// 实时订阅子智能体详情变化，并补发断线期间遗漏事件。
@@ -73,18 +80,22 @@ async fn list() -> Json<Vec<SubagentSnapshot>> {
     Json(list_subagents())
 }
 
-/// 返回单个子智能体的详情,附带执行时间线。
+/// 返回单个子智能体的详情,附带执行时间线与留言记录。
 async fn detail(Path(id): Path<String>) -> WebResult<Json<Value>> {
     let snapshot =
         subagent_snapshot(&id).map_err(|error| WebError::not_found(error.to_string()))?;
     let timeline =
         subagent_timeline(&id).map_err(|error| WebError::not_found(error.to_string()))?;
-    // 1. 快照字段平铺,时间线作为附加字段合并进同一响应
+    // 1. 快照字段平铺,时间线与留言记录作为附加字段合并进同一响应
     let mut body = serde_json::to_value(&snapshot).map_err(anyhow::Error::from)?;
     if let Value::Object(map) = &mut body {
         map.insert(
             "timeline".to_string(),
             serde_json::to_value(&timeline).map_err(anyhow::Error::from)?,
+        );
+        map.insert(
+            "messages".to_string(),
+            serde_json::to_value(subagent_messages(&id)).map_err(anyhow::Error::from)?,
         );
     }
     Ok(Json(body))
@@ -94,6 +105,20 @@ async fn detail(Path(id): Path<String>) -> WebResult<Json<Value>> {
 async fn cancel(Path(id): Path<String>) -> WebResult<Json<SubagentSnapshot>> {
     Ok(Json(
         cancel_subagent(&id).map_err(|error| WebError::not_found(error.to_string()))?,
+    ))
+}
+
+/// 给存活的子智能体留言。
+///
+/// 消息进入其队列,在下一个步间间隙注入对话;待命中的持久子智能体
+/// 会被唤醒开始新任务段。留言不改变子智能体的权限模式。
+async fn message(
+    Path(id): Path<String>,
+    Json(body): Json<MessageBody>,
+) -> WebResult<Json<SubagentSnapshot>> {
+    Ok(Json(
+        queue_subagent_message(&id, "user", &body.message)
+            .map_err(|error| WebError::bad_request(error.to_string()))?,
     ))
 }
 

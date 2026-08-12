@@ -37,6 +37,13 @@ pub enum ControlCommand {
         turn_id: Option<String>,
     },
     Goal(GoalCommand),
+    /// 列出当前会话的后台子智能体
+    Subagents,
+    /// 给子智能体留言；`target` 为空时投递给当前查看或唯一存活的子智能体
+    SubagentMessage {
+        target: Option<String>,
+        message: String,
+    },
 }
 
 /// 解析 REPL 或网关控制命令。
@@ -110,7 +117,56 @@ pub fn parse_control_command(
             .map(ControlCommand::Goal)
             .map(Some);
     }
+    // 子智能体列表与留言命令只在 REPL 提供：网关会话不注册 subagent 工具
+    if surface == ControlSurface::Repl && name == "subagents" {
+        if !rest.trim().is_empty() {
+            bail!(t(
+                "subagents command does not accept arguments",
+                "subagents 命令不接受参数"
+            ));
+        }
+        return Ok(Some(ControlCommand::Subagents));
+    }
+    if surface == ControlSurface::Repl && name == "msg" {
+        return parse_subagent_message_command(rest).map(Some);
+    }
     Ok(None)
+}
+
+/// 解析子智能体留言命令参数。
+///
+/// 首个词是子智能体 ID（`subagent_` 前缀）或列表序号（纯数字）时作为目标，
+/// 其余文本为消息；否则整段文本都是消息，目标由 REPL 依据当前查看的
+/// 子智能体或唯一存活的子智能体推断。
+///
+/// 参数:
+/// - `input`: 命令参数文本
+///
+/// 返回:
+/// - 解析后的留言命令
+fn parse_subagent_message_command(input: &str) -> Result<ControlCommand> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        bail!(t(
+            "usage: /msg [id|index] <message>",
+            "用法：/msg [ID|序号] <消息>"
+        ));
+    }
+    let mut parts = trimmed.splitn(2, char::is_whitespace);
+    let first = parts.next().unwrap_or_default();
+    let rest = parts.next().unwrap_or("").trim();
+    let is_target = first.starts_with("subagent_") || first.chars().all(|ch| ch.is_ascii_digit());
+    if is_target && !rest.is_empty() {
+        Ok(ControlCommand::SubagentMessage {
+            target: Some(first.to_string()),
+            message: rest.to_string(),
+        })
+    } else {
+        Ok(ControlCommand::SubagentMessage {
+            target: None,
+            message: trimmed.to_string(),
+        })
+    }
 }
 
 /// 拆分斜杠命令名称和参数。
@@ -281,6 +337,51 @@ mod tests {
         );
         assert_eq!(
             parse_control_command("/压缩", ControlSurface::Repl).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn parses_subagents_list_command_only_in_repl() {
+        assert_eq!(
+            parse_control_command("/subagents", ControlSurface::Repl).unwrap(),
+            Some(ControlCommand::Subagents)
+        );
+        assert!(parse_control_command("/subagents extra", ControlSurface::Repl).is_err());
+        assert_eq!(
+            parse_control_command("/subagents", ControlSurface::Gateway).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn parses_subagent_message_with_optional_target() {
+        // 首词为 ID 或序号时作为目标
+        assert_eq!(
+            parse_control_command("/msg subagent_1_2 请继续", ControlSurface::Repl).unwrap(),
+            Some(ControlCommand::SubagentMessage {
+                target: Some("subagent_1_2".to_string()),
+                message: "请继续".to_string(),
+            })
+        );
+        assert_eq!(
+            parse_control_command("/msg 2 换个方案", ControlSurface::Repl).unwrap(),
+            Some(ControlCommand::SubagentMessage {
+                target: Some("2".to_string()),
+                message: "换个方案".to_string(),
+            })
+        );
+        // 普通文本整体作为消息,目标交由 REPL 推断
+        assert_eq!(
+            parse_control_command("/msg 请优先修复测试", ControlSurface::Repl).unwrap(),
+            Some(ControlCommand::SubagentMessage {
+                target: None,
+                message: "请优先修复测试".to_string(),
+            })
+        );
+        assert!(parse_control_command("/msg", ControlSurface::Repl).is_err());
+        assert_eq!(
+            parse_control_command("/msg hi", ControlSurface::Gateway).unwrap(),
             None
         );
     }

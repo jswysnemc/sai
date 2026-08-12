@@ -34,6 +34,7 @@
 /* 状态徽章 */
 .subagent-status { flex-shrink: 0; padding:1px var(--space-xs); border-radius: var(--radius-pill); font-size:var(--text-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-soft); background: var(--control-surface); }
 .subagent-status.running { color: var(--signal); background: var(--signal-soft); }
+.subagent-status.idle { color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent); }
 .subagent-status.completed { color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent); }
 .subagent-status.failed { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
 .subagent-status.cancelled { color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); }
@@ -81,3 +82,12 @@
 .subagent-stats dd { margin: 0; color: var(--ink); font:500 var(--text-xs) var(--font-code); }
 
 .pane-error { margin:var(--space-md) var(--space-xl); padding:var(--space-sm) var(--space-md); border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--line)); border-radius: var(--radius-2); color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); font-size:var(--text-xs); }
+
+/* 存活子智能体的留言输入区 */
+.subagent-detail-composer { display: flex; align-items: center; gap:var(--space-sm); padding:var(--space-sm) var(--space-xl); border-top: 1px solid var(--line); }
+.subagent-detail-composer input { flex: 1; min-width: 0; padding:var(--space-2xs) var(--space-sm); border: 1px solid var(--line); border-radius: var(--radius-2); background: var(--paper); color: var(--ink); font-size:var(--text-xs); }
+.subagent-detail-composer button { display: inline-flex; align-items: center; gap:var(--space-2xs); padding:var(--space-2xs) var(--space-sm); border: 1px solid var(--line); border-radius: var(--radius-2); background: transparent; color: var(--ink); font-size:var(--text-xs); }
+.subagent-detail-composer button:disabled { opacity: 0.5; }
+.subagent-detail-composer button:not(:disabled):hover { border-color: var(--line-strong); background: var(--control-surface); }
+.subagent-detail-send-error { color: var(--danger); font-size:var(--text-2xs); }
+.subagent-pending-count { margin-left: auto; color: var(--blue); font-size:var(--text-2xs); white-space: nowrap; }

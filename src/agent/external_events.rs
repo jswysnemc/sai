@@ -315,8 +315,14 @@ fn build_event_batch(
     let _ = owner_key;
     // 主动回执仅含状态；完整输出由主 Agent 主动 action=result / background_command output 读取
     for notice in subagents.iter().take(1) {
+        // idle 是持久子智能体的任务段完成回执,附带后续可用操作,与终态区分
+        let hint = if notice.status == "idle" {
+            "持久子代理已完成当前任务段并进入待命。用 subagent action=result 读取本段结果（默认前 50 行，可用参数调整）；需要追加指令用 action=send，全部完成后用 action=stop 结束（默认合并其 worktree 改动，apply=false 跳过）"
+        } else {
+            "结果未附带，请使用 subagent action=result 读取（默认前 50 行，可用参数调整）"
+        };
         sections.push(format!(
-            "子 Agent：{}（{}）\n状态：{}\n说明：结果未附带，请使用 subagent action=result 读取（默认前 50 行，可用参数调整）",
+            "子 Agent：{}（{}）\n状态：{}\n说明：{hint}",
             notice.description, notice.id, notice.status
         ));
     }
@@ -407,6 +413,29 @@ mod tests {
         let batch = take_event_batch(&paths, "sess", "owner", &[], &notices, false).unwrap();
         assert_eq!(batch.background_task_ids, vec!["claim-1".to_string()]);
         assert!(batch.prompt().contains("claim-1"));
+    }
+
+    /// 【持久子代理】【段完成通知】验证 idle 回执附带 send/stop 后续操作指引。
+    #[test]
+    fn idle_notice_explains_persistent_follow_ups() {
+        let batch = build_event_batch(
+            "owner",
+            &[FinishedSubagentNotice {
+                id: "subagent-idle-1".to_string(),
+                goal_id: None,
+                description: "长期重构".to_string(),
+                status: "idle".to_string(),
+                updated_at: 1,
+            }],
+            &[],
+            false,
+        );
+
+        assert!(batch.prompt().contains("subagent-idle-1"));
+        assert!(batch.prompt().contains("待命"));
+        assert!(batch.prompt().contains("action=send"));
+        assert!(batch.prompt().contains("action=stop"));
+        assert_eq!(batch.subagent_ids, vec!["subagent-idle-1"]);
     }
 
     #[test]
