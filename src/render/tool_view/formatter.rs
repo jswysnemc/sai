@@ -87,7 +87,7 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
             }
         }
     } else if arguments_ready_for_display(&view.arguments) {
-        output.push_str("\n\n");
+        output.push('\n');
         output.push_str(&render_payload("args", &view.arguments));
     }
     if let Some(progress) = visible_progress(view.progress.as_deref()) {
@@ -95,7 +95,7 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
     }
     if let Some(outcome) = &view.outcome {
         if !denied && !outcome.output.trim().is_empty() && !is_edit {
-            output.push_str("\n\n");
+            output.push('\n');
             output.push_str(&render_payload("output", &outcome.output));
         }
     }
