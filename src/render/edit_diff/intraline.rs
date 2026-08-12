@@ -18,6 +18,12 @@ pub(super) struct IntralinePair {
 /// 公共部分（前缀 + 后缀）占比低于该百分比时放弃行内高亮。
 const MIN_COMMON_PERCENT: usize = 25;
 
+/// 超过该字节长度的行跳过行内比对。
+///
+/// 词级高亮对 minified 之类的超长单行没有意义，而字符收集与扫描
+/// 的成本随行长线性增长，直接跳过既省时也省两份临时分配。
+const MAX_INTRALINE_BYTES: usize = 2048;
+
 /// 计算配对行的行内变化区。
 ///
 /// 参数:
@@ -25,9 +31,12 @@ const MIN_COMMON_PERCENT: usize = 25;
 /// - `new`: 新增行正文
 ///
 /// 返回:
-/// - 变化区间对；两行相同或相似度过低时返回 None
+/// - 变化区间对；两行相同、相似度过低或行过长时返回 None
 pub(super) fn intraline_pair(old: &str, new: &str) -> Option<IntralinePair> {
     if old == new {
+        return None;
+    }
+    if old.len() > MAX_INTRALINE_BYTES || new.len() > MAX_INTRALINE_BYTES {
         return None;
     }
     let old_chars: Vec<char> = old.chars().collect();
@@ -163,6 +172,14 @@ mod tests {
     #[test]
     fn identical_lines_have_no_ranges() {
         assert_eq!(intraline_pair("same", "same"), None);
+    }
+
+    /// 超长行直接跳过行内比对，避免无意义的大分配与扫描。
+    #[test]
+    fn oversized_lines_skip_intraline_comparison() {
+        let old = "a".repeat(MAX_INTRALINE_BYTES + 1);
+        let new = format!("{}b", "a".repeat(MAX_INTRALINE_BYTES));
+        assert_eq!(intraline_pair(&old, &new), None);
     }
 
     /// 词边界回退：公共前缀停在单词中间时整词纳入变化区。
