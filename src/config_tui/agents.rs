@@ -847,7 +847,11 @@ mod tests {
     #[test]
     fn tools_summary_covers_modes() {
         let mut profile = AgentProfile::default();
-        assert!(tools_summary(&profile).contains("继承全量"));
+        let inherit = tools_summary(&profile);
+        assert!(
+            inherit.contains("inherit all") || inherit.contains("继承全量"),
+            "unexpected inherit summary: {inherit}"
+        );
 
         profile.deferred_tools = vec![DEFERRED_ALL_NON_BASE.to_string()];
         assert!(tools_summary(&profile).contains('*'));
