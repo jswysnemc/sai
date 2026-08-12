@@ -278,8 +278,11 @@ fn encode_kitty_png(path: &Path, cols: Option<usize>, rows: Option<usize>) -> Re
     let bytes =
         fs::read(path).with_context(|| format!("failed to read image {}", path.display()))?;
     let encoded = general_purpose::STANDARD.encode(bytes);
-    // 1. 组装尺寸与静默参数，避免 Kitty 回写响应干扰 REPL
-    let mut control = String::from("f=100,a=T,q=2");
+    // 1. 组装尺寸与静默参数，避免 Kitty 回写响应干扰 REPL。
+    //    C=1：放置图像后光标保持原位。默认行为是光标跳到图像右下角之后，
+    //    表格等逐行拼接的布局会从图片列开始整体错位；占位改由文本层
+    //    （换行 / 空格）自行控制（对齐 jcode/ratatui-image 的做法）
+    let mut control = String::from("f=100,a=T,q=2,C=1");
     if let Some(cols) = cols.filter(|value| *value > 0) {
         control.push_str(&format!(",c={cols}"));
     }
@@ -362,5 +365,33 @@ fn render_iterm_image(path: &Path) -> Result<String> {
     let name = general_purpose::STANDARD.encode(name.as_bytes());
     Ok(format!(
         "\x1b]1337;File=inline=1;name={name}:{encoded}\x07\n"
+    ))
+}
+
+/// 使用 iTerm2 图片协议按显式单元格尺寸渲染图片。
+///
+/// 表格等按行占位的布局依赖「渲染行数与声明一致」；不带尺寸时终端按
+/// 图片像素与自身 DPI 自算行数，与布局侧预留完全脱钩。
+///
+/// 参数:
+/// - `path`: 图片文件路径
+/// - `cols`: 显示列数（cells）
+/// - `rows`: 显示行数（cells）
+///
+/// 返回:
+/// - 声明宽高的 iTerm2 图片协议转义序列
+fn render_iterm_image_with_cells(path: &Path, cols: usize, rows: usize) -> Result<String> {
+    let bytes =
+        fs::read(path).with_context(|| format!("failed to read image {}", path.display()))?;
+    let encoded = general_purpose::STANDARD.encode(bytes);
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("image.png");
+    let name = general_purpose::STANDARD.encode(name.as_bytes());
+    let cols = cols.max(1);
+    let rows = rows.max(1);
+    Ok(format!(
+        "\x1b]1337;File=inline=1;width={cols};height={rows};preserveAspectRatio=1;name={name}:{encoded}\x07\n"
     ))
 }

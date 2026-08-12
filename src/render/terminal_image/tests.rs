@@ -35,7 +35,7 @@ mod tests {
         .collect::<Vec<_>>();
         write_test_rgba_png(&path, 16, 32, &pixels);
         let output = render_kitty_image(&path).unwrap();
-        assert!(output.contains("\x1b_Gf=100,a=T,q=2,c="));
+        assert!(output.contains("\x1b_Gf=100,a=T,q=2,C=1,c="));
         // c/r 同传：终端渲染行数与占位换行数强制一致，图片定位不再漂移
         let declared_rows = output
             .split(",r=")
@@ -90,7 +90,7 @@ mod tests {
             ],
         );
         let output = encode_kitty_png(&path, Some(8), Some(3)).unwrap();
-        assert!(output.contains("f=100,a=T,q=2,c=8,r=3"));
+        assert!(output.contains("f=100,a=T,q=2,C=1,c=8,r=3"));
         assert!(!output.ends_with('\n'));
     }
 
@@ -233,19 +233,19 @@ mod tests {
     #[test]
     fn table_image_dimensions_width_first_keeps_aspect() {
         // 图 240x48，格 10x20：限制 12 列
-        // base_r(12)=2，+1 余量 => 3
+        // base_r(12)=2；c/r 同传后无需安全余量
         let (cols, rows) = table_image_cell_dimensions(240, 48, 10, 20, 12, 16);
         assert_eq!(cols, 12);
-        assert_eq!(rows, 3);
+        assert_eq!(rows, 2);
     }
 
     #[test]
     fn table_image_dimensions_natural_size_without_clamp() {
         // 图 240x48，格 10x20：自然 24 列
-        // base_r(24)=3，+1 => 4
+        // base_r(24)=3；无安全余量
         let (cols, rows) = table_image_cell_dimensions(240, 48, 10, 20, 48, 16);
         assert_eq!(cols, 24);
-        assert_eq!(rows, 4);
+        assert_eq!(rows, 3);
     }
 
     #[test]
@@ -326,7 +326,7 @@ mod tests {
         }
         write_test_rgba_png(&path, 64, 16, &pixels);
         let output = render_kitty_image(&path).unwrap();
-        assert!(output.contains("\x1b_Gf=100,a=T,q=2,c="));
+        assert!(output.contains("\x1b_Gf=100,a=T,q=2,C=1,c="));
         let c_value = output
             .split(",c=")
             .nth(1)

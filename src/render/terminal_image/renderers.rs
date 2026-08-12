@@ -105,8 +105,12 @@ const TABLE_INLINE_MAX_ROWS: usize = 24;
 /// 等宽字体单元格高/宽的目标比（约 2:1）
 const MONO_CELL_ASPECT_NUM: usize = 2;
 const MONO_CELL_ASPECT_DEN: usize = 1;
-/// 行高安全余量：在比例推算结果上再加的行数
-const TABLE_IMAGE_ROW_PAD: usize = 1;
+/// 行高安全余量。
+///
+/// 曾用于兜底「终端自算行数可能超出声明」；Kitty/iTerm2 现在都显式声明
+/// c/r（终端渲染行数与声明强制一致），余量只会在每个公式单元格下方
+/// 多出一行空白，因此归零。
+const TABLE_IMAGE_ROW_PAD: usize = 0;
 
 /// 将 PNG 按最大列宽渲染为表格图片单元格（Kitty / iTerm2 / Sixel）。
 ///
@@ -129,13 +133,24 @@ pub(crate) fn render_inline_image_with_max_cols(path: &Path, max_cols: usize) ->
         max_cols,
         TABLE_INLINE_MAX_ROWS,
     );
-    // 2. Kitty：只传 c，由终端按图片比例自算 r；布局侧用 cell_height 预留空行
+    // 2. Kitty：像素补齐到整格后 c/r 同传，终端渲染行数与表格布局
+    //    预留的 cell_height 强制一致，公式单元格不再压到边框或顶掉后续行
     if supports_kitty_graphics() {
-        let kitty = encode_kitty_png(path, Some(cell_width), None)?;
+        let (norm_pw, norm_ph) = normalize_mono_cell_pixels(cell_pw, cell_ph);
+        let padded =
+            pad_raster_to_cell_grid(image.clone(), cell_width, cell_height, norm_pw, norm_ph);
+        let temp = tempfile::Builder::new()
+            .prefix("sai-kitty-cell-")
+            .suffix(".png")
+            .tempfile()
+            .context("failed to create temporary kitty cell image")?;
+        write_raster_png(temp.path(), &padded)?;
+        let kitty = encode_kitty_png(temp.path(), Some(cell_width), Some(cell_height))?;
         return Ok(image_cell_content(kitty, cell_width, cell_height));
     }
+    // iTerm2：显式声明单元格宽高（cells 单位），占位与渲染保持一致
     if supports_iterm_inline_image() {
-        let iterm = render_iterm_image(path)?;
+        let iterm = render_iterm_image_with_cells(path, cell_width, cell_height)?;
         return Ok(image_cell_content(
             iterm.trim_end().to_string(),
             cell_width,

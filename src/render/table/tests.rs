@@ -123,13 +123,14 @@ fn image_cell_placeholder_lines_reserve_column_width() {
 }
 
 #[test]
-fn graphics_protocol_line_emits_payload_only() {
+fn graphics_protocol_line_pads_full_column_width() {
     let mut output = String::new();
-    let protocol = "\x1b_Gf=100,a=T,q=2,c=8,r=2;abc\x1b\\";
+    let protocol = "\x1b_Gf=100,a=T,q=2,C=1,c=8,r=2;abc\x1b\\";
 
     push_image_cell_line(&mut output, protocol, 8, 10);
 
-    assert_eq!(output, protocol);
+    // C=1 放置后光标不动：协议行后必须补满列宽，后续列才有对齐基准
+    assert_eq!(output, format!("{protocol}{}", " ".repeat(10)));
     assert!(!output.contains("\x1b[8C"));
 }
 

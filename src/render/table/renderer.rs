@@ -112,8 +112,12 @@ pub(super) fn push_image_cell_line(
         return;
     }
     if is_graphics_protocol_line(line) {
-        let _ = (image_width, column_width);
+        let _ = image_width;
+        // Kitty 以 C=1 放置（光标不动），协议行零宽；此处必须补满列宽，
+        // 否则同一物理行的后续列失去对齐基准，表格从图片列开始崩掉。
+        // 图像默认叠加在文本层之上，空格不会遮挡图像。
         output.push_str(line);
+        output.push_str(&" ".repeat(column_width));
         return;
     }
     let content_width = visible_width(line);

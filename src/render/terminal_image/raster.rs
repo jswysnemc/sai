@@ -1,3 +1,4 @@
+#[derive(Clone)]
 struct RasterImage {
     pixels: Vec<Rgba>,
     width: usize,
