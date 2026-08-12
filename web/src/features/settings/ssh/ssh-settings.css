@@ -154,13 +154,7 @@
 }
 
 .ssh-spin {
-  animation: ssh-spin var(--duration-slower) linear infinite;
-}
-
-@keyframes ssh-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: ui-spin 0.9s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

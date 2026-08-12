@@ -167,11 +167,7 @@
 
 /* 参数分片尚未闭合时仅用动态图标表达，固定尺寸避免工具行发生位移 */
 .tool-arguments-spinner {
-  animation: tool-arguments-spin 0.8s linear infinite;
-}
-
-@keyframes tool-arguments-spin {
-  to { transform: rotate(360deg); }
+  animation: ui-spin 0.9s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

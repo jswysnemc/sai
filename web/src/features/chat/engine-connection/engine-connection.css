@@ -37,13 +37,7 @@
 }
 
 .engine-connection-spinner {
-  animation: engine-connection-spin 900ms linear infinite;
-}
-
-@keyframes engine-connection-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: ui-spin 0.9s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

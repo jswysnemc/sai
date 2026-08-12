@@ -20,16 +20,6 @@
   border-radius: 0;
 }
 
-.git-review-stream .spin {
-  animation: git-review-spin 0.9s linear infinite;
-}
-
-@keyframes git-review-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* ---------- 吸附总览栏 ---------- */
 
 .git-review-summary {

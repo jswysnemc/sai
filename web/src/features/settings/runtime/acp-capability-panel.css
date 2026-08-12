@@ -137,7 +137,7 @@
 }
 
 .acp-capability-spinner {
-  animation: acp-capability-spin 0.9s linear infinite;
+  animation: ui-spin 0.9s linear infinite;
 }
 
 .acp-capability-content {
@@ -241,10 +241,6 @@
 
 .acp-capability-group.is-unsupported .acp-capability-item svg {
   color: var(--ink-soft);
-}
-
-@keyframes acp-capability-spin {
-  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 48rem) {

@@ -73,8 +73,6 @@
 .cron-empty span,
 .cron-loading { font-size:var(--text-sm); }
 .cron-error { max-width: 1180px; margin:var(--space-2xl) auto 0; padding:var(--space-md) var(--space-lg); border-radius:var(--radius-3); background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); font-size:var(--text-base); }
-.spin { animation: cron-spin 0.9s linear infinite; }
-@keyframes cron-spin { to { transform: rotate(360deg); } }
 @media (max-width: 60rem) { .cron-layout { grid-template-columns: 1fr; } }
 @media (max-width: 48rem) { .cron-hero { grid-template-columns: auto minmax(0, 1fr); } .cron-refresh-button { grid-column: 1 / -1; justify-self: stretch; } .cron-job-row { grid-template-columns: 1fr auto; } .cron-job-state { grid-column: 1 / -1; } }
 @media (max-width: 36rem) { .cron-form-grid { grid-template-columns: 1fr; } .cron-field-wide,

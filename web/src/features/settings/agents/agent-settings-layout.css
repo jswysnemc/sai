@@ -115,7 +115,7 @@
   border: 2px solid var(--line-strong);
   border-top-color: var(--signal);
   border-radius: var(--radius-circle);
-  animation: agent-settings-spin 0.8s linear infinite;
+  animation: ui-spin 0.9s linear infinite;
 }
 
 .agent-settings-loading > div,
@@ -167,10 +167,6 @@
 .agent-profile-workspace .object-list-search {
   height: 2rem;
   margin-bottom:var(--space-sm);
-}
-
-@keyframes agent-settings-spin {
-  to { transform: rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {

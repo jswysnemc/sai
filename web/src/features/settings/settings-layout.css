@@ -203,8 +203,6 @@
   font-size:var(--text-sm);
 }
 
-.spin { animation: settings-spin 0.9s linear infinite; }
-@keyframes settings-spin { to { transform: rotate(360deg); } }
 
 /* ---------- 响应式 ---------- */
 

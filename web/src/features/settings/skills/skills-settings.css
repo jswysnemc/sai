@@ -106,11 +106,7 @@
 }
 
 .is-spinning {
-  animation: skills-spin 0.8s linear infinite;
-}
-
-@keyframes skills-spin {
-  to { transform: rotate(360deg); }
+  animation: ui-spin 0.9s linear infinite;
 }
 
 @keyframes skills-loading-pulse {
