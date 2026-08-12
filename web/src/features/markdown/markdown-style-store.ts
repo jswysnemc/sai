@@ -6,6 +6,7 @@ import {
   parseMarkdownStylePreferences,
   type MarkdownCodeBlockStylePreferences,
   type MarkdownStylePreferences,
+  type MarkdownStylePreset,
   type MarkdownTableStylePreferences
 } from "./markdown-style-preferences";
 
@@ -129,6 +130,10 @@ function handleStorageChange(event: StorageEvent): void {
 export function useMarkdownStylePreferences() {
   const preferences = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
+  const updatePreset = useCallback((preset: MarkdownStylePreset) => {
+    setPreferences({ ...getSnapshot(), preset });
+  }, []);
+
   const updateTable = useCallback((patch: Partial<MarkdownTableStylePreferences>) => {
     const current = getSnapshot();
     setPreferences({
@@ -147,6 +152,7 @@ export function useMarkdownStylePreferences() {
 
   return {
     preferences,
+    updatePreset,
     updateTable,
     updateCodeBlock,
     reset: resetPreferences

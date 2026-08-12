@@ -110,6 +110,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
       <inlineAtomContext.Provider value={inlineAtoms}>
         <div
           className="markdown-body"
+          data-md-preset={style.preset}
           data-table-border={style.table.borderStyle}
           data-table-density={style.table.density}
           data-table-width={style.table.fullWidth ? "full" : "content"}

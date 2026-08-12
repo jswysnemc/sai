@@ -1,3 +1,4 @@
+export type MarkdownStylePreset = "default" | "compact" | "document" | "vivid";
 export type MarkdownTableBorderStyle = "horizontal" | "grid" | "none";
 export type MarkdownTableDensity = "compact" | "comfortable" | "spacious";
 export type MarkdownCodeFontSize = "small" | "medium" | "large";
@@ -25,6 +26,8 @@ export type MarkdownCodeBlockStylePreferences = {
 };
 
 export type MarkdownStylePreferences = {
+  /** 整体排版风格预设，控制标题、间距与装饰基调 */
+  preset: MarkdownStylePreset;
   table: MarkdownTableStylePreferences;
   codeBlock: MarkdownCodeBlockStylePreferences;
 };
@@ -32,6 +35,7 @@ export type MarkdownStylePreferences = {
 export const MARKDOWN_STYLE_STORAGE_KEY = "sai.markdown-style.v1";
 
 export const DEFAULT_MARKDOWN_STYLE_PREFERENCES: MarkdownStylePreferences = {
+  preset: "default",
   table: {
     borderStyle: "horizontal",
     density: "comfortable",
@@ -52,6 +56,12 @@ export const DEFAULT_MARKDOWN_STYLE_PREFERENCES: MarkdownStylePreferences = {
   }
 };
 
+export const MARKDOWN_STYLE_PRESETS: readonly MarkdownStylePreset[] = [
+  "default",
+  "compact",
+  "document",
+  "vivid"
+];
 const TABLE_BORDER_STYLES: readonly MarkdownTableBorderStyle[] = ["horizontal", "grid", "none"];
 const TABLE_DENSITIES: readonly MarkdownTableDensity[] = ["compact", "comfortable", "spacious"];
 const CODE_FONT_SIZES: readonly MarkdownCodeFontSize[] = ["small", "medium", "large"];
@@ -86,6 +96,7 @@ export function normalizeMarkdownStylePreferences(value: unknown): MarkdownStyle
   const defaults = DEFAULT_MARKDOWN_STYLE_PREFERENCES;
 
   return {
+    preset: readChoice(root?.preset, MARKDOWN_STYLE_PRESETS, defaults.preset),
     table: {
       borderStyle: readChoice(table?.borderStyle, TABLE_BORDER_STYLES, defaults.table.borderStyle),
       density: readChoice(table?.density, TABLE_DENSITIES, defaults.table.density),
@@ -114,6 +125,7 @@ export function normalizeMarkdownStylePreferences(value: unknown): MarkdownStyle
  */
 function cloneDefaultPreferences(): MarkdownStylePreferences {
   return {
+    preset: DEFAULT_MARKDOWN_STYLE_PREFERENCES.preset,
     table: { ...DEFAULT_MARKDOWN_STYLE_PREFERENCES.table },
     codeBlock: { ...DEFAULT_MARKDOWN_STYLE_PREFERENCES.codeBlock }
   };

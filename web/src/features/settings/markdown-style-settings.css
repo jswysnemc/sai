@@ -41,6 +41,55 @@
   min-width: 0;
 }
 
+.markdown-preset-panel {
+  margin-bottom: var(--space-lg);
+}
+
+.markdown-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+
+.markdown-preset {
+  display: grid;
+  gap: var(--space-3xs);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.markdown-preset:hover {
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+.markdown-preset.active {
+  border-color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 8%, transparent);
+}
+
+.markdown-preset strong {
+  color: var(--ink);
+  font-size: var(--text-sm);
+}
+
+.markdown-preset small {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+@media (max-width: 72rem) {
+  .markdown-preset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 72rem) {
   .markdown-style-grid,
   .markdown-style-fields {

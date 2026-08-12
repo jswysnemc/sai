@@ -78,6 +78,7 @@ export function AppearanceSettingsSection({ theme, onThemeChange }: AppearanceSe
       </SettingsGroup>
       <MarkdownStyleSettings
         preferences={markdownStyle.preferences}
+        onPresetChange={markdownStyle.updatePreset}
         onTableChange={markdownStyle.updateTable}
         onCodeBlockChange={markdownStyle.updateCodeBlock}
         onReset={markdownStyle.reset}

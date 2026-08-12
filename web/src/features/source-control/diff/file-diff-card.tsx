@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ListChecks, Loader2, Minus, Plus, RotateCcw, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { api } from "../../../api/client";
 import type { GitStatusEntry } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
@@ -27,10 +27,11 @@ type FileDiffCardProps = {
   highlighted: boolean;
   busy: boolean;
   truncated: boolean;
-  onToggleCollapse: () => void;
+  /** 折叠切换回调，按路径分发以保持引用稳定 */
+  onToggleCollapse: (path: string) => void;
   runOperation: RunGitOperation;
   /** 卡片根元素回调，供父级做滚动定位 */
-  containerRef?: (element: HTMLElement | null) => void;
+  containerRef?: (path: string, element: HTMLElement | null) => void;
 };
 
 /**
@@ -38,11 +39,13 @@ type FileDiffCardProps = {
  *
  * 文件头汇集状态圆点、路径、增删统计与暂存/丢弃操作；
  * 「行级操作」按需拉取该文件的暂存区补丁，切换成可按行暂存的视图。
+ * 以 memo 包裹：大仓库审阅流有几十张卡片，折叠/高亮单张卡片时
+ * 其余卡片（含整个 diff 行列表）不应重渲染。
  *
  * @param props 解析后的文件差异、实时状态与 Git 操作回调
  * @returns 文件差异卡片
  */
-export function FileDiffCard(props: FileDiffCardProps) {
+export const FileDiffCard = memo(function FileDiffCard(props: FileDiffCardProps) {
   const { t } = useI18n();
   const [lineOps, setLineOps] = useState(false);
 
@@ -81,7 +84,7 @@ export function FileDiffCard(props: FileDiffCardProps) {
   const directory = fileDirectory(file.path);
   return (
     <section
-      ref={props.containerRef}
+      ref={(element) => props.containerRef?.(file.path, element)}
       className={`git-file-card${props.collapsed ? " is-collapsed" : ""}${props.highlighted ? " is-highlighted" : ""}`}
     >
       <header
@@ -90,11 +93,11 @@ export function FileDiffCard(props: FileDiffCardProps) {
         tabIndex={0}
         aria-expanded={!props.collapsed}
         title={file.path}
-        onClick={props.onToggleCollapse}
+        onClick={() => props.onToggleCollapse(file.path)}
         onKeyDown={(event) => {
           if (event.key !== "Enter" && event.key !== " ") return;
           event.preventDefault();
-          props.onToggleCollapse();
+          props.onToggleCollapse(file.path);
         }}
       >
         <span className={`git-file-card-dot tone-${tone}`} aria-hidden />
@@ -198,7 +201,7 @@ export function FileDiffCard(props: FileDiffCardProps) {
       )}
     </section>
   );
-}
+});
 
 type FileLineOpsProps = {
   path: string;

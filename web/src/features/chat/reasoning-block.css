@@ -4,27 +4,61 @@
   margin:var(--space-3xs) 0 var(--space-xs);
 }
 
+/*
+ * 头部与工具卡（.tool-shell-head）、步骤组共用同一套度量：
+ * 20px 图标列 + space-2xs 内边距 + space-sm 间距，
+ * 让思考、工具、步骤三类部件的标题文字左缘对成一条线。
+ */
 .reasoning-block > button {
   display: flex;
   align-items: center;
-  gap:var(--space-xs);
-  padding:0 0 var(--space-sm);
+  gap:var(--space-sm);
+  width: 100%;
+  min-height: 28px;
+  padding:var(--space-3xs) var(--space-2xs);
   border: 0;
+  border-radius: var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
   font-size:var(--text-xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.reasoning-block > button:hover {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+.reasoning-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  place-items: center;
+  color: var(--technical-muted);
+}
+
+.reasoning-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 步骤组时间线穿过图标列中心时，用纸色遮罩切断导轨（与工具卡一致） */
+.step-group-items .reasoning-icon {
+  position: relative;
+  border-radius: var(--radius-1);
+  box-shadow: 0 0 0 3px var(--paper);
+  background: var(--paper);
+}
+
+.reasoning-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .reasoning-block:not(.open) {
   margin-bottom: 0;
-}
-
-.reasoning-block:not(.open) > button {
-  padding-bottom: 0;
-}
-
-.reasoning-block.open > button {
-  padding-bottom:var(--space-2xs);
 }
 
 .reasoning-content {
@@ -32,8 +66,9 @@
   max-width: 100%;
   max-height: 260px;
   overflow: auto;
-  margin: 0;
-  padding:var(--space-2xs) 0 var(--space-2xs) var(--space-xl);
+  /* 竖线对齐头部图标中心（space-2xs 内边距 + 图标半宽） */
+  margin:var(--space-3xs) 0 0 calc(var(--space-2xs) + 10px);
+  padding:var(--space-2xs) 0 var(--space-2xs) var(--space-lg);
   border-left: 1px solid var(--line);
   color: var(--ink-soft);
   /* 思考内容是成段正文，与助手正文同档阅读 */

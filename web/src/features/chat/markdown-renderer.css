@@ -521,3 +521,53 @@
     padding:0 var(--space-2xs);
   }
 }
+
+/* ============================================================
+ * 整体风格预设（data-md-preset）
+ * default 即上方基础样式；以下预设只覆盖差异项。
+ * ============================================================ */
+
+/* 紧凑：信息密度优先——小标题、紧间距、收紧行高 */
+.markdown-body[data-md-preset="compact"] p { margin:var(--space-3xs) 0; line-height: 1.55; }
+.markdown-body[data-md-preset="compact"] h1 { margin:var(--space-lg) 0 var(--space-2xs); padding-bottom: 0; border-bottom: none; font-size: 1.28em; }
+.markdown-body[data-md-preset="compact"] h2 { margin:var(--space-lg) 0 var(--space-2xs); font-size: 1.16em; }
+.markdown-body[data-md-preset="compact"] h3 { margin:var(--space-md) 0 var(--space-3xs); font-size: 1.06em; }
+.markdown-body[data-md-preset="compact"] h4,
+.markdown-body[data-md-preset="compact"] h5 { margin:var(--space-sm) 0 var(--space-3xs); font-size: 1em; }
+.markdown-body[data-md-preset="compact"] ul,
+.markdown-body[data-md-preset="compact"] ol { margin:var(--space-3xs) 0; padding-left:var(--space-2xl); }
+.markdown-body[data-md-preset="compact"] li { margin: 1px 0; line-height: 1.5; }
+.markdown-body[data-md-preset="compact"] blockquote { margin:var(--space-xs) 0; padding:var(--space-3xs) 0 var(--space-3xs) var(--space-sm); }
+
+/* 文档：长文阅读优先——大标题、宽行高、充足段落留白 */
+.markdown-body[data-md-preset="document"] p { margin:var(--space-md) 0; line-height: 1.85; }
+.markdown-body[data-md-preset="document"] h1 { margin:var(--space-3xl) 0 var(--space-md); padding-bottom:var(--space-sm); font-size: 1.7em; }
+.markdown-body[data-md-preset="document"] h2 { margin:var(--space-3xl) 0 var(--space-sm); padding-bottom:var(--space-2xs); border-bottom: 1px solid var(--line); font-size: 1.42em; }
+.markdown-body[data-md-preset="document"] h3 { margin:var(--space-2xl) 0 var(--space-xs); font-size: 1.22em; }
+.markdown-body[data-md-preset="document"] li { margin:var(--space-2xs) 0; line-height: 1.8; }
+.markdown-body[data-md-preset="document"] blockquote {
+  margin:var(--space-lg) 0;
+  padding:var(--space-sm) var(--space-lg);
+  border-left: 3px solid var(--line-strong);
+  border-radius: 0 var(--radius-2) var(--radius-2) 0;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+/* 彩色：视觉锚点优先——主题色标题与列表标记、着色引用条 */
+.markdown-body[data-md-preset="vivid"] h1,
+.markdown-body[data-md-preset="vivid"] h2 { color: var(--blue); }
+.markdown-body[data-md-preset="vivid"] h1 { border-bottom-color: color-mix(in srgb, var(--blue) 35%, transparent); }
+.markdown-body[data-md-preset="vivid"] h3,
+.markdown-body[data-md-preset="vivid"] h4 { color: color-mix(in srgb, var(--blue) 70%, var(--ink)); }
+.markdown-body[data-md-preset="vivid"] li::marker { color: var(--blue); }
+.markdown-body[data-md-preset="vivid"] blockquote {
+  border-left-color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 6%, transparent);
+  border-radius: 0 var(--radius-2) var(--radius-2) 0;
+  padding:var(--space-2xs) var(--space-md);
+}
+.markdown-body[data-md-preset="vivid"] strong { color: color-mix(in srgb, var(--blue) 55%, var(--ink)); }
+.markdown-body[data-md-preset="vivid"] .inline-code {
+  color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 9%, transparent);
+}

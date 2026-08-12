@@ -8,6 +8,7 @@ describe("MarkdownStyleSettings", () => {
     const html = renderToStaticMarkup(
       <MarkdownStyleSettings
         preferences={DEFAULT_MARKDOWN_STYLE_PREFERENCES}
+        onPresetChange={vi.fn()}
         onTableChange={vi.fn()}
         onCodeBlockChange={vi.fn()}
         onReset={vi.fn()}
@@ -15,6 +16,8 @@ describe("MarkdownStyleSettings", () => {
     );
 
     expect(html).toContain("Markdown 渲染");
+    expect(html).toContain("整体风格");
+    expect(html).toContain("紧凑");
     expect(html).toContain("表格边框");
     expect(html).toContain("单元格密度");
     expect(html).toContain("斑马纹");
@@ -28,6 +31,7 @@ describe("MarkdownStyleSettings", () => {
     const html = renderToStaticMarkup(
       <MarkdownStyleSettings
         preferences={DEFAULT_MARKDOWN_STYLE_PREFERENCES}
+        onPresetChange={vi.fn()}
         onTableChange={vi.fn()}
         onCodeBlockChange={vi.fn()}
         onReset={vi.fn()}
@@ -43,6 +47,7 @@ describe("MarkdownStyleSettings", () => {
     const withLabel = renderToStaticMarkup(
       <MarkdownStyleSettings
         preferences={DEFAULT_MARKDOWN_STYLE_PREFERENCES}
+        onPresetChange={vi.fn()}
         onTableChange={vi.fn()}
         onCodeBlockChange={vi.fn()}
         onReset={vi.fn()}
@@ -54,6 +59,7 @@ describe("MarkdownStyleSettings", () => {
           ...DEFAULT_MARKDOWN_STYLE_PREFERENCES,
           codeBlock: { ...DEFAULT_MARKDOWN_STYLE_PREFERENCES.codeBlock, showLanguageLabel: false }
         }}
+        onPresetChange={vi.fn()}
         onTableChange={vi.fn()}
         onCodeBlockChange={vi.fn()}
         onReset={vi.fn()}

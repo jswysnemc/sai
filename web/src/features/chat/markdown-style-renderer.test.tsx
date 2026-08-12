@@ -23,6 +23,7 @@ describe("MarkdownRenderer style preferences", () => {
 
   it("将表格和代码块配置映射到实际渲染结构", () => {
     const stylePreferences = {
+      preset: "compact" as const,
       table: {
         ...DEFAULT_MARKDOWN_STYLE_PREFERENCES.table,
         borderStyle: "grid" as const,
@@ -48,6 +49,7 @@ describe("MarkdownRenderer style preferences", () => {
       />
     );
 
+    expect(html).toContain('data-md-preset="compact"');
     expect(html).toContain('data-table-border="grid"');
     expect(html).toContain('data-table-density="compact"');
     expect(html).toContain('data-table-width="content"');

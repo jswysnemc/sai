@@ -1,7 +1,8 @@
-import { Code2, RotateCcw, Table2 } from "lucide-react";
+import { Code2, LayoutTemplate, RotateCcw, Table2 } from "lucide-react";
 import type {
   MarkdownCodeBlockStylePreferences,
   MarkdownStylePreferences,
+  MarkdownStylePreset,
   MarkdownTableStylePreferences
 } from "../markdown/markdown-style-preferences";
 import { useI18n } from "../i18n/use-i18n";
@@ -14,10 +15,50 @@ import "./markdown-style-settings.css";
 
 type MarkdownStyleSettingsProps = {
   preferences: MarkdownStylePreferences;
+  onPresetChange: (preset: MarkdownStylePreset) => void;
   onTableChange: (patch: Partial<MarkdownTableStylePreferences>) => void;
   onCodeBlockChange: (patch: Partial<MarkdownCodeBlockStylePreferences>) => void;
   onReset: () => void;
 };
+
+type PresetOption = {
+  value: MarkdownStylePreset;
+  nameEn: string;
+  nameZh: string;
+  descriptionEn: string;
+  descriptionZh: string;
+};
+
+const PRESET_OPTIONS: readonly PresetOption[] = [
+  {
+    value: "default",
+    nameEn: "Default",
+    nameZh: "默认",
+    descriptionEn: "Balanced spacing and neutral tones.",
+    descriptionZh: "均衡间距与中性配色。"
+  },
+  {
+    value: "compact",
+    nameEn: "Compact",
+    nameZh: "紧凑",
+    descriptionEn: "Denser headings and tighter line height.",
+    descriptionZh: "更小标题与更紧的行距，信息密度优先。"
+  },
+  {
+    value: "document",
+    nameEn: "Document",
+    nameZh: "文档",
+    descriptionEn: "Generous whitespace for long-form reading.",
+    descriptionZh: "更大留白与行高，适合长文阅读。"
+  },
+  {
+    value: "vivid",
+    nameEn: "Vivid",
+    nameZh: "彩色",
+    descriptionEn: "Accent-colored headings, markers, and quotes.",
+    descriptionZh: "标题、列表与引用带主题色视觉锚点。"
+  }
+];
 
 /**
  * 渲染 Markdown 表格与代码块的细粒度外观设置。
@@ -27,6 +68,7 @@ type MarkdownStyleSettingsProps = {
  */
 export function MarkdownStyleSettings({
   preferences,
+  onPresetChange,
   onTableChange,
   onCodeBlockChange,
   onReset
@@ -37,8 +79,8 @@ export function MarkdownStyleSettings({
     <SettingsGroup
       title={t("Markdown rendering", "Markdown 渲染")}
       description={t(
-        "Tune table structure and code block readability. Changes apply to all rendered Markdown immediately.",
-        "细化表格结构与代码块可读性，修改后立即应用到全部 Markdown 内容。"
+        "Pick an overall style, then tune table structure and code block readability. Changes apply to all rendered Markdown immediately.",
+        "先选择整体风格，再细化表格结构与代码块可读性，修改后立即应用到全部 Markdown 内容。"
       )}
       actions={(
         <Button variant="secondary" onClick={onReset}>
@@ -47,6 +89,23 @@ export function MarkdownStyleSettings({
         </Button>
       )}
     >
+      <fieldset className="markdown-style-panel markdown-preset-panel">
+        <legend><span><LayoutTemplate size={15} />{t("Overall style", "整体风格")}</span></legend>
+        <div className="markdown-preset-grid" role="radiogroup" aria-label={t("Markdown style preset", "Markdown 风格预设")}>
+          {PRESET_OPTIONS.map((option) => (
+            <button
+              type="button"
+              className={option.value === preferences.preset ? "markdown-preset active" : "markdown-preset"}
+              onClick={() => onPresetChange(option.value)}
+              aria-pressed={option.value === preferences.preset}
+              key={option.value}
+            >
+              <strong>{t(option.nameEn, option.nameZh)}</strong>
+              <small>{t(option.descriptionEn, option.descriptionZh)}</small>
+            </button>
+          ))}
+        </div>
+      </fieldset>
       <div className="markdown-style-grid">
         <fieldset className="markdown-style-panel">
           <legend><span><Table2 size={15} />{t("Tables", "表格")}</span></legend>

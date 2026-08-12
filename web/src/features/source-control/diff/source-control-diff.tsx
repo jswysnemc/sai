@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronsDownUp, ChevronsUpDown, Columns2, GitBranch, GitCompare, Loader2, Rows3 } from "lucide-react";
 import type { GitDiffResponse, GitRepositoryState, GitStatusEntry } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
@@ -24,6 +24,9 @@ type SourceControlDiffProps = {
 /** 选中文件后卡片高亮的持续时间。 */
 const HIGHLIGHT_DURATION_MS = 1600;
 
+/** 超过该 diff 行数的文件默认折叠，首屏不渲染巨型行列表。 */
+const LARGE_DIFF_LINES = 300;
+
 /**
  * 渲染 Source Control 审阅区：全部变更文件的内联差异卡片流。
  *
@@ -44,12 +47,16 @@ export function SourceControlDiff(props: SourceControlDiffProps) {
 
   const patch = props.data?.patch ?? "";
   const reviewMode = props.data?.mode === "branch" ? "branch" : "working_tree";
-  const files = useMemo(() => {
-    const parsed = parseDiff(patch);
-    return reviewMode === "working_tree"
-      ? [...parsed, ...placeholderFiles(parsed, props.state.entries)]
-      : parsed;
-  }, [patch, props.state.entries, reviewMode]);
+  // 解析只依赖补丁文本：状态轮询刷新 entries 引用时不重新解析，
+  // 且已解析的文件对象引用保持稳定，让卡片的 memo 生效
+  const parsed = useMemo(() => parseDiff(patch), [patch]);
+  const files = useMemo(
+    () =>
+      reviewMode === "working_tree"
+        ? [...parsed, ...placeholderFiles(parsed, props.state.entries)]
+        : parsed,
+    [parsed, props.state.entries, reviewMode]
+  );
   const entryByPath = useMemo(() => {
     const map = new Map<string, GitStatusEntry>();
     for (const entry of props.state.entries) map.set(entry.path, entry);
@@ -88,6 +95,37 @@ export function SourceControlDiff(props: SourceControlDiffProps) {
     if (!props.selectedPath) lastScrolledRef.current = null;
   }, [props.selectedPath]);
 
+  // 巨型文件首次出现时默认折叠；用户手动展开后数据刷新不再折回
+  const seenLargeRef = useRef(new Set<string>());
+  useEffect(() => {
+    const newlyLarge = files.filter(
+      (file) => file.lines.length > LARGE_DIFF_LINES && !seenLargeRef.current.has(file.path)
+    );
+    if (newlyLarge.length === 0) return;
+    for (const file of newlyLarge) seenLargeRef.current.add(file.path);
+    setCollapsed((current) => {
+      const next = new Set(current);
+      for (const file of newlyLarge) next.add(file.path);
+      return next;
+    });
+  }, [files]);
+
+  /** 切换单个文件卡片的折叠状态（引用稳定，供卡片 memo 使用）。 */
+  const toggleCollapse = useCallback((path: string) => {
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }, []);
+
+  /** 登记卡片根元素（引用稳定，供滚动定位使用）。 */
+  const registerCard = useCallback((path: string, element: HTMLElement | null) => {
+    if (element) cardsRef.current.set(path, element);
+    else cardsRef.current.delete(path);
+  }, []);
+
   if (props.loading) {
     return (
       <div className="git-diff-empty">
@@ -112,21 +150,6 @@ export function SourceControlDiff(props: SourceControlDiffProps) {
   }
 
   const allCollapsed = files.length > 0 && files.every((file) => collapsed.has(file.path));
-
-  /**
-   * 切换单个文件卡片的折叠状态。
-   *
-   * @param path 文件路径
-   * @returns 无返回值
-   */
-  const toggleCollapse = (path: string) => {
-    setCollapsed((current) => {
-      const next = new Set(current);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
-  };
 
   return (
     <div className="git-diff-shell git-review-stream">
@@ -191,12 +214,9 @@ export function SourceControlDiff(props: SourceControlDiffProps) {
             highlighted={highlightedPath === file.path}
             busy={props.busy}
             truncated={Boolean(props.data?.truncated)}
-            onToggleCollapse={() => toggleCollapse(file.path)}
+            onToggleCollapse={toggleCollapse}
             runOperation={props.runOperation}
-            containerRef={(element) => {
-              if (element) cardsRef.current.set(file.path, element);
-              else cardsRef.current.delete(file.path);
-            }}
+            containerRef={registerCard}
           />
         ))}
       </div>
