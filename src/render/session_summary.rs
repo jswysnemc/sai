@@ -276,7 +276,7 @@ fn observe_non_display_fields(snapshot: &SessionSnapshot) {
 ///
 /// 返回:
 /// - `xxk` 风格文本
-fn format_k(value: usize) -> String {
+pub(crate) fn format_k(value: usize) -> String {
     if value >= 1_000 {
         let scaled = value as f64 / 1_000.0;
         if scaled >= 10.0 {

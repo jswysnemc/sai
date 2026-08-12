@@ -210,22 +210,21 @@
 }
 
 /*
- * 探索组展开态：一行一个对象的轻量清单。
- * 与 .tool-call-group-items 共用左侧引导线与入场动画，只是行密度更高。
- * 清单行没有图标，导轨同样落在触发条图标中心，内容缩进到标题列（图标右缘 + 列间距）。
+ * 常驻条目清单：一行一个操作，参考 zcode 排版。
+ * 左侧导轨从组头图标中心垂下，内容缩进到标题列（图标右缘 + 列间距）。
+ * 行结构「完成态动词 + 对象」，动词固定弱化列，对象列独占剩余宽度单行截断。
  */
-.explore-file-list {
+.tool-row-list {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3xs);
   margin: var(--space-3xs) 0 0;
   padding: var(--space-3xs) 0 var(--space-3xs) calc(var(--space-2xs) + 20px + var(--space-sm));
   list-style: none;
   animation: tool-group-reveal var(--duration-slow) var(--ease-out);
 }
 
-.explore-file-list::before {
+.tool-row-list::before {
   content: "";
   position: absolute;
   top: 0;
@@ -235,53 +234,126 @@
   background: color-mix(in srgb, var(--line) 78%, transparent);
 }
 
-.explore-file-list li {
+.tool-row {
+  min-width: 0;
+}
+
+.tool-row-line {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+  width: 100%;
   min-width: 0;
-  min-height: 1.375rem;
+  min-height: 1.5rem;
+  padding: var(--space-3xs) var(--space-2xs);
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
   color: var(--technical-text);
-  font: 400 var(--text-xs)/1.5 var(--font-code);
+  font: 400 var(--text-xs)/1.5 var(--font-ui);
+  text-align: left;
 }
 
-.explore-file-action {
+button.tool-row-line {
+  cursor: pointer;
+}
+
+button.tool-row-line:hover {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+/* 动词列：弱化、不收缩，宽度随文案自适应保持左缘对齐 */
+.tool-row-verb {
   flex-shrink: 0;
   min-width: 3.4rem;
   color: var(--ink-soft);
-  font: 500 var(--text-2xs)/1.5 var(--font-ui);
+  font: 400 var(--text-xs)/1.5 var(--font-ui);
 }
 
-.explore-file-plain,
-.explore-file-target {
+.tool-row-target {
+  display: inline-flex;
   overflow: hidden;
-  /* 占满剩余宽度并允许收缩：缺少 flex 声明时会按内容宽度撑破整行 */
   flex: 1 1 auto;
+  align-items: baseline;
+  gap: var(--space-xs);
   min-width: 0;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/*
- * 命令行：等宽字体加提示符前缀。
- *
- * 命令与文件路径混在同一列时，只靠左侧动作词区分需要逐行核对；
- * 提示符让"这是一条命令"在扫视时即可辨认。
- * 前缀用 inline 元素而非 flex 列，命令文本才能继续走单行省略。
- */
-.explore-file-plain.is-command {
+.tool-row-target .tool-row-file {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+/* 父目录后缀：文件名之后弱化展示，扫视时先看到名字 */
+.tool-row-directory {
+  overflow: hidden;
+  flex-shrink: 1;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-style: normal;
+  text-overflow: ellipsis;
+}
+
+.tool-row-plain {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+/* 命令：等宽弱化，与文件对象在扫视时即可区分 */
+.tool-row-plain.is-command {
+  color: var(--ink-soft);
   font-family: var(--font-code);
 }
 
-.explore-file-plain.is-command em {
-  margin-right: var(--space-2xs);
-  color: var(--ink-soft);
+/* 编辑行的 +N -M 徽标沿用 diff 配色 */
+.tool-row-diff {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--space-2xs);
+  font: 500 var(--text-2xs)/1.5 var(--font-code);
+  font-variant-numeric: tabular-nums;
+}
+
+.tool-row-diff em {
   font-style: normal;
-  user-select: none;
+}
+
+.tool-row-diff .added {
+  color: var(--diff-added-text);
+}
+
+.tool-row-diff .removed {
+  color: var(--diff-removed-text);
+}
+
+.tool-row-audited {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--signal);
+}
+
+.tool-row-chevron {
+  flex-shrink: 0;
+  color: var(--ink-soft);
+  transition: transform var(--duration-base) var(--ease-standard);
+}
+
+.tool-row-chevron.rotate {
+  transform: rotate(180deg);
+}
+
+/* 行内嵌详情：缩进对齐对象列，详情面板自带描边容器 */
+.tool-row-detail {
+  min-width: 0;
+  margin: var(--space-3xs) 0 var(--space-xs);
+  padding-left: var(--space-2xs);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .explore-file-list {
+  .tool-row-list {
     animation: none;
   }
 }

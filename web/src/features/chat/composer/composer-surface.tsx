@@ -16,9 +16,10 @@ type ComposerSurfaceProps = {
   submitDisabled?: boolean;
   placeholder: string;
   autoFocus?: boolean;
+  respondToGlobalFocus?: boolean;
   attachments?: ComposerAttachment[];
   onChange: (value: string) => void;
-  onPasteImages: (files: File[], selectionStart: number, selectionEnd: number) => Promise<number | undefined>;
+  onPasteImages?: (files: File[], selectionStart: number, selectionEnd: number) => Promise<number | undefined>;
   onRemoveAttachment?: (id: number) => void;
   onSubmit: () => void;
   children: ReactNode;
@@ -39,6 +40,7 @@ export function ComposerSurface({
   submitDisabled = false,
   placeholder,
   autoFocus = false,
+  respondToGlobalFocus = true,
   attachments,
   onChange,
   onPasteImages,
@@ -65,6 +67,7 @@ export function ComposerSurface({
         historyEntries={historyEntries}
         disabled={disabled}
         autoFocus={autoFocus}
+        respondToGlobalFocus={respondToGlobalFocus}
         placeholder={placeholder}
         onChange={onChange}
         onPasteImages={onPasteImages}

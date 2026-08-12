@@ -1,4 +1,5 @@
 use crate::i18n::text as t;
+use crate::render::activity_animation::render_activity_guide_with_color;
 use crate::render::status_style::color_status;
 use crate::render::transcript::SubagentOverviewEntry;
 use crossterm::event::KeyCode;
@@ -112,18 +113,26 @@ impl AgentPanelState {
     ///
     /// 参数:
     /// - `entries`: 当前子 agent 概览
+    /// - `frame`: live 动效帧序号，驱动运行中条目的流光点
     ///
     /// 返回:
     /// - 面板 ANSI 行；无子 agent 时为空
-    pub(super) fn panel_lines(&self, entries: &[SubagentOverviewEntry]) -> Vec<String> {
+    pub(super) fn panel_lines(&self, entries: &[SubagentOverviewEntry], frame: usize) -> Vec<String> {
         if entries.is_empty() {
             return Vec::new();
         }
+        let running = entries.iter().filter(|entry| entry.running).count();
         if !self.active {
-            // 非焦点态：单行提示，↓ 进入切换
-            let running = entries.iter().filter(|entry| entry.running).count();
+            // 非焦点态：单行提示，↓ 进入切换；运行中/待命用状态色区分
+            let bullet = if running > 0 {
+                render_activity_guide_with_color(frame, Some((204, 167, 0)))
+            } else if entries.iter().any(|entry| entry.status == "idle") {
+                render_activity_guide_with_color(frame, Some((97, 175, 239)))
+            } else {
+                "\x1b[2m•\x1b[0m".to_string()
+            };
             return vec![format!(
-                "\x1b[2m• {}: {} ({}) · ↓ {}\x1b[0m",
+                "{bullet}\x1b[2m {}: {} ({}) · ↓ {}\x1b[0m",
                 t("agents", "智能体"),
                 entries.len(),
                 format!("{running} {}", t("running", "运行中")),
@@ -148,14 +157,27 @@ impl AgentPanelState {
         ));
         for (position, entry) in entries.iter().enumerate() {
             let viewing_suffix = if entry.viewing {
-                format!(" \x1b[2m({})\x1b[0m", t("viewing", "查看中"))
+                format!(" \x1b[36m({})\x1b[0m", t("viewing", "查看中"))
             } else {
                 String::new()
             };
+            // 存活条目行首用状态色引导点；实时阶段（工具进度 / Token 统计）随刷新跳动
+            let marker = if entry.running {
+                format!("{} ", render_activity_guide_with_color(frame, Some((204, 167, 0))))
+            } else if entry.status == "idle" {
+                format!("{} ", render_activity_guide_with_color(frame, Some((97, 175, 239))))
+            } else {
+                String::new()
+            };
+            let detail_suffix = entry
+                .detail
+                .as_deref()
+                .map(|detail| format!(" \x1b[2m· {detail}\x1b[0m"))
+                .unwrap_or_default();
             lines.push(selection_line(
                 self.selected == position + 1,
                 &format!(
-                    "{} {}{viewing_suffix}",
+                    "{marker}{} {}{viewing_suffix}{detail_suffix}",
                     entry.label,
                     color_status(entry.status)
                 ),
@@ -280,6 +302,7 @@ mod tests {
             status: if running { "run" } else { "ok" },
             running,
             viewing: false,
+            detail: None,
         }
     }
 
@@ -345,7 +368,7 @@ mod tests {
     fn hint_line_appears_when_inactive() {
         let panel = AgentPanelState::default();
         let entries = vec![entry(2, "one", true)];
-        let lines = panel.panel_lines(&entries);
+        let lines = panel.panel_lines(&entries, 0);
         assert_eq!(lines.len(), 1);
         assert!(lines[0].contains('↓'));
     }
@@ -355,9 +378,28 @@ mod tests {
         let mut panel = AgentPanelState::default();
         let entries = vec![entry(2, "检查项目", true)];
         panel.activate(&entries);
-        let lines = panel.panel_lines(&entries);
+        let lines = panel.panel_lines(&entries, 0);
         assert!(lines.len() >= 3);
         assert!(lines.iter().any(|line| line.contains('❯')));
         assert!(lines.iter().any(|line| line.contains("检查项目")));
+    }
+
+    /// 【终端】【agent 面板】存活条目展示实时阶段，查看中标注清晰。
+    #[test]
+    fn active_panel_shows_detail_and_viewing_marker() {
+        let mut panel = AgentPanelState::default();
+        let mut running_entry = entry(2, "诗歌分析", true);
+        running_entry.detail = Some("工具调用 3 次　消耗 Token 1.2k".to_string());
+        let mut idle_entry = entry(5, "长期重构", false);
+        idle_entry.status = "idle";
+        idle_entry.viewing = true;
+        let entries = vec![running_entry, idle_entry];
+        panel.activate(&entries);
+
+        let lines = panel.panel_lines(&entries, 0);
+        let joined = lines.join("\n");
+        assert!(joined.contains("消耗 Token 1.2k"), "运行中条目应展示实时阶段: {joined}");
+        assert!(joined.contains("idle"), "待命条目应展示 idle 状态: {joined}");
+        assert!(joined.contains("查看中") || joined.contains("viewing"));
     }
 }

@@ -45,6 +45,7 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
         .map(|snapshot| match snapshot.status.as_str() {
             "completed" => "ok",
             "failed" | "cancelled" => "err",
+            "idle" => "idle",
             _ => "run",
         })
         .unwrap_or("run");
@@ -77,6 +78,20 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
                 output.push('\n');
                 output.push_str(&markdown_cell::render_completed(text));
             }
+            SubagentTimelineEntry::Message { from, text } => {
+                // 追加消息与子智能体自身输出明确区分：来源行着色，正文弱化缩进
+                let source = if from == "user" {
+                    t("user message", "用户留言")
+                } else {
+                    t("message from parent agent", "主代理消息")
+                };
+                output.push('\n');
+                output.push_str(&format!("\x1b[38;5;39m● {source}\x1b[0m"));
+                for (index, line) in text.lines().enumerate() {
+                    let gutter = if index == 0 { "└ " } else { "  " };
+                    output.push_str(&format!("\n\x1b[2m  {gutter}{line}\x1b[0m"));
+                }
+            }
             SubagentTimelineEntry::Tool {
                 name,
                 args_preview,
@@ -101,11 +116,18 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
             }
         }
     }
-    // 3. 【终端】【子智能体状态】运行中显示 Working 白色流光
+    // 3. 【终端】【子智能体状态】运行中显示 Working 白色流光；待命给出留言提示
     if status == "run" {
         output.push('\n');
         let label = WorkStatus::Working.localized_label();
         output.push_str(&render_activity_text(&label, frame));
+    } else if status == "idle" {
+        output.push('\n');
+        output.push_str(&format!(
+            "\x1b[38;5;110m● {}\x1b[0m \x1b[2m{}\x1b[0m",
+            t("idle, waiting for follow-ups", "待命中"),
+            t("leave a message with /msg", "可用 /msg 留言追加指令")
+        ));
     }
     output
 }

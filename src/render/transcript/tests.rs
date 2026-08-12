@@ -283,6 +283,38 @@ fn subagent_overview_lists_running_or_viewing_only() {
     assert!(store.subagent_overview().is_empty());
 }
 
+/// 【终端】【agent 面板】同一子智能体的多次工具调用只保留一个面板条目。
+///
+/// 主代理每次 subagent 调用（start / wait / send / result）都会产生
+/// 一个 transcript cell，此前每个 cell 都各占一行导致面板大量重复。
+#[test]
+fn subagent_overview_deduplicates_repeated_calls_by_id() {
+    let (subagent, _cancel) = crate::tools::subagent_state::create_subagent(
+        "诗歌文本多阶段分析".to_string(),
+        "explore".to_string(),
+        3,
+    );
+    let bound_result = format!(
+        r#"{{"subagent":{{"id":"{}","status":"running"}}}}"#,
+        subagent.id
+    );
+    let mut store = TranscriptStore::new(100);
+    // 同一个子智能体：start + 多次 wait/send，每次调用都是一个独立 cell
+    for _ in 0..3 {
+        store.push_tool_call(
+            "subagent".to_string(),
+            format!(r#"{{"action":"wait","id":"{}"}}"#, subagent.id),
+        );
+        store.push_tool_result("subagent".to_string(), true, bound_result.clone());
+    }
+
+    let overview = store.subagent_overview();
+
+    assert_eq!(overview.len(), 1, "同一子智能体必须去重: {overview:?}");
+    assert!(overview[0].running);
+    assert_eq!(overview[0].status, "run");
+}
+
 #[test]
 fn markdown_table_lines_fit_display_width() {
     // 表格布局必须使用与折行相同的宽度：任何超宽行都会被 wrap_block

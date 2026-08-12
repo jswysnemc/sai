@@ -96,7 +96,10 @@
 .generic-tool-block {
   min-width: 0;
   max-width: 100%;
-  overflow-x: auto;
+  /* 与工具输出滚动区同档限高：大段 JSON 结果在块内滚动，不撑满整段对话 */
+  max-height: 16.25rem;
+  overflow: auto;
+  overscroll-behavior: contain;
   margin: 0;
   padding: 0 var(--space-md) var(--space-sm);
   border: 0;

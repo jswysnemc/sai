@@ -574,8 +574,12 @@ impl ReplRuntime {
     pub(super) fn process_idle_tick(&mut self) -> Result<bool> {
         let reflowed = self.maybe_reflow_due(false)?;
         let subagents = self.tick_subagents()?;
-        // 停留在运行中的子智能体视图时，空闲期也要驱动 Working 扫光
-        if self.transcript.viewing_running_subagent() && self.next_live_refresh.is_none() {
+        // 停留在运行中的子智能体视图，或后台仍有子智能体运行（底部面板
+        // 的流光与实时统计）时，空闲期也要驱动 live 刷新
+        if self.next_live_refresh.is_none()
+            && (self.transcript.viewing_running_subagent()
+                || self.transcript.has_running_subagents())
+        {
             self.next_live_refresh = Some(Instant::now());
         }
         let animated = self.tick_live()?;
@@ -614,6 +618,9 @@ impl ReplRuntime {
             return Ok(());
         }
         let size = current;
+        // 沉底面板承载子智能体状态/动效帧，先于布局重算，不等输入变化；
+        // 行数变化引发的腾行滚动发生在窗口计算前，增量记账才不会错位
+        self.refresh_bottom_panel()?;
         let width = usize::from(size.cols);
         let min_rows = usize::from(size.rows).saturating_mul(2).max(64);
         let window = layout::display_window(
@@ -632,7 +639,9 @@ impl ReplRuntime {
             window.total.saturating_sub(self.stream.offscreen()),
         );
         match self.stream.sync(&window) {
-            SyncPlan::Unchanged => Ok(()),
+            // transcript 行未变时 composer 仍需刷新：底部面板的动效帧与
+            // 实时统计在变，且要把被外部绘制移走的光标收回输入位置
+            SyncPlan::Unchanged => self.draw_composer(&mut io::stdout()),
             SyncPlan::Delta {
                 patches,
                 append,

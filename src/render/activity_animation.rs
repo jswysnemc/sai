@@ -38,8 +38,25 @@ const GUIDE_DOT: char = '•';
 /// 返回:
 /// - 带亮度的引导点 ANSI 文本
 pub(crate) fn render_activity_guide(frame: usize) -> String {
+    render_activity_guide_with_color(frame, None)
+}
+
+/// 【终端】【状态动效】渲染带指定色相的视觉引导点。
+///
+/// 子智能体面板等场景用颜色区分运行状态；默认路径仍走中性灰阶。
+///
+/// 参数:
+/// - `frame`: 当前动画帧序号
+/// - `color`: 可选 RGB 前景色（如运行中黄、待命蓝）
+///
+/// 返回:
+/// - 带亮度与色相的引导点 ANSI 文本
+pub(crate) fn render_activity_guide_with_color(frame: usize, color: Option<(u8, u8, u8)>) -> String {
     let intensity = shimmer_intensity(1, frame, 0);
-    format!("{}{GUIDE_DOT}{RESET}", color_escape(intensity))
+    match color {
+        Some((red, green, blue)) => format!("\x1b[1m\x1b[38;2;{red};{green};{blue}m{GUIDE_DOT}{RESET}"),
+        None => format!("{}{GUIDE_DOT}{RESET}", color_escape(intensity)),
+    }
 }
 
 /// 【终端】【状态动效】渲染从左向右扫过状态文字的白色余弦流光。

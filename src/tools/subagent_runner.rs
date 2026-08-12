@@ -269,7 +269,8 @@ pub(crate) fn format_token_count(tokens: u64, estimated: bool) -> String {
     if tokens >= 1_000_000 {
         format!("{prefix}{:.2}M", tokens as f64 / 1_000_000.0)
     } else if tokens >= 1_000 {
-        format!("{prefix}{:.1}K", tokens as f64 / 1_000.0)
+        // 小写 k 与底栏 272k、总览 +1.9k 的单位风格一致
+        format!("{prefix}{:.1}k", tokens as f64 / 1_000.0)
     } else {
         format!("{prefix}{tokens}")
     }

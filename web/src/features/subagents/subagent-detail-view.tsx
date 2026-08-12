@@ -1,7 +1,8 @@
-import { ArrowLeft, Ban, Send } from "lucide-react";
+import { ArrowLeft, ArrowRight, Ban } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client";
 import type { Subagent } from "../../api/contracts";
+import { ComposerSurface } from "../chat/composer/composer-surface";
 import { MessageParts } from "../chat/message/message-parts";
 import { SubagentStats } from "./subagent-stats";
 import { SubagentStatusBadge } from "./subagent-status-badge";
@@ -37,6 +38,11 @@ export function SubagentDetailView({ subagent, onBack, onCancel }: SubagentDetai
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const timeline = stream.timeline;
+  const inputDisabled = sending || !alive;
+  const submitDisabled = inputDisabled || !draft.trim();
+  const messagePlaceholder = alive
+    ? t("Leave a message; it is injected at the next step boundary", "给子智能体留言，将在下一个步间间隙注入")
+    : t("The subagent has finished and no longer accepts messages", "子智能体已结束，不再接收留言");
   const parts = subagentMessageParts(timeline, running, stream.timestamp, locale);
   const body = current.result || current.error || "";
   if (body && !timeline.some((entry) => entry.kind === "text" && entry.text === body)) {
@@ -87,22 +93,36 @@ export function SubagentDetailView({ subagent, onBack, onCancel }: SubagentDetai
           <p className="subagent-detail-pending">{running ? t("The subagent is running.", "子智能体正在运行。") : t("No output.", "没有输出。")}</p>
         )}
       </div>
-      {alive && (
-        <footer className="subagent-detail-composer">
-          <input
-            type="text"
-            value={draft}
-            placeholder={t("Leave a message; it is injected at the next step boundary", "给子智能体留言，将在下一个步间间隙注入")}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => { if (event.key === "Enter") void sendMessage(); }}
-            disabled={sending}
-          />
-          <button type="button" onClick={() => void sendMessage()} disabled={sending || !draft.trim()}>
-            <Send size={13} />{t("Send", "留言")}
-          </button>
-          {sendError && <span className="subagent-detail-send-error">{sendError}</span>}
-        </footer>
-      )}
+      {/* 输入区始终可见以便发现留言能力；仅存活（运行中/待命）时可发送 */}
+      <footer className="subagent-detail-composer-shell">
+        <ComposerSurface
+          variant="compact"
+          className="composer subagent-detail-composer"
+          value={draft}
+          historyEntries={[]}
+          disabled={inputDisabled}
+          submitDisabled={submitDisabled}
+          respondToGlobalFocus={false}
+          placeholder={messagePlaceholder}
+          onChange={setDraft}
+          onSubmit={() => void sendMessage()}
+        >
+          {sendError && <p className="subagent-detail-send-error" role="alert">{sendError}</p>}
+          <div className="composer-footer subagent-detail-composer-actions">
+            <div className="composer-actions">
+              <button
+                type="submit"
+                className="composer-send"
+                disabled={submitDisabled}
+                aria-label={t("Send message to subagent", "向子智能体发送留言")}
+                title={t("Send message to subagent", "向子智能体发送留言")}
+              >
+                <ArrowRight size={18} />
+              </button>
+            </div>
+          </div>
+        </ComposerSurface>
+      </footer>
     </section>
   );
 }

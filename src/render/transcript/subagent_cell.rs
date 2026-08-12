@@ -22,6 +22,19 @@ enum SubagentPart {
     Progress(String),
 }
 
+/// 底部 agent 面板使用的子智能体概览。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct SubagentOverview {
+    /// 展示名称（快照描述或参数摘要）
+    pub(crate) label: String,
+    /// 状态键：ok / err / run / idle
+    pub(crate) status: &'static str,
+    /// 是否仍在执行
+    pub(crate) running: bool,
+    /// 存活条目的实时阶段（工具进度 / Token 统计 / 待命提示）
+    pub(crate) detail: Option<String>,
+}
+
 /// 可持续更新的子智能体 TUI 单元。
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SubagentCell {
@@ -59,8 +72,8 @@ impl SubagentCell {
     /// 返回底部 agent 面板需要的概览信息。
     ///
     /// 返回:
-    /// - `(展示名称, 状态键, 是否运行中)`；状态键为 ok/err/run
-    pub(crate) fn overview(&self) -> (String, &'static str, bool) {
+    /// - 概览条目；状态键为 ok/err/run/idle
+    pub(crate) fn overview(&self) -> SubagentOverview {
         let snapshot = self
             .subagent_id
             .as_deref()
@@ -73,7 +86,17 @@ impl SubagentCell {
             .unwrap_or_else(|| {
                 tool_event_label_tense("subagent", Some(&self.arguments), tense)
             });
-        (label, status, status == "run")
+        // 存活条目附带实时阶段（工具进度 / Token 统计 / 待命提示），供面板展示
+        let detail = snapshot
+            .as_ref()
+            .filter(|_| status == "run" || status == "idle")
+            .and_then(|snapshot| snapshot.phase.clone());
+        SubagentOverview {
+            label,
+            status,
+            running: status == "run",
+            detail,
+        }
     }
 
     /// 记录一条子智能体进度。
@@ -205,6 +228,8 @@ fn status_key(cell: &SubagentCell, snapshot: Option<&SubagentSnapshot>) -> &'sta
         .map(|snapshot| match snapshot.status.as_str() {
             "completed" => "ok",
             "failed" | "cancelled" => "err",
+            // 持久子智能体待命：存活但不再执行，与运行中区分
+            "idle" => "idle",
             _ => "run",
         })
         .unwrap_or_else(|| match cell.outcome.as_ref() {
@@ -333,9 +358,9 @@ mod tests {
     #[test]
     fn overview_reports_label_and_running_state() {
         let cell = SubagentCell::new(r#"{"description":"检查项目"}"#.to_string());
-        let (label, status, running) = cell.overview();
-        assert!(!label.is_empty());
-        assert_eq!(status, "run");
-        assert!(running);
+        let overview = cell.overview();
+        assert!(!overview.label.is_empty());
+        assert_eq!(overview.status, "run");
+        assert!(overview.running);
     }
 }

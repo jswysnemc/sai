@@ -44,7 +44,8 @@ export type Subagent = {
 export type SubagentTimelineEntry =
   | { kind:"tool"; step:number; name:string; args_preview:string; ok?:boolean|null; output_preview?:string|null }
   | { kind:"text"; text:string }
-  | { kind:"reasoning"; text:string };
+  | { kind:"reasoning"; text:string }
+  | { kind:"message"; from:string; text:string };
 
 export type SubagentMessage = { from:string; text:string; queued_at:number };
 

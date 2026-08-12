@@ -94,6 +94,14 @@ impl ComposerFrame {
         self.panel_lines = lines;
     }
 
+    /// 返回当前固化在 frame 中的沉底面板行。
+    ///
+    /// 返回:
+    /// - 面板 ANSI 行
+    pub(super) fn panel_lines(&self) -> &[String] {
+        &self.panel_lines
+    }
+
     /// 返回当前 composer 绑定的 chrome 状态。
     ///
     /// 返回:
@@ -184,8 +192,12 @@ impl ComposerFrame {
             cursor_col: drawn_cursor_col,
             cursor_row,
         };
-        // 与上次完全一致：连光标位置都没动，重绘只会带来闪烁
+        // 与上次完全一致：连光标位置都没动，跳过重绘只会带来闪烁。
+        // 但 transcript/动效绘制会把终端光标移走（Hide 后停在历史区域），
+        // 必须把光标收回输入位置并恢复显示，光标才始终只出现在输入框内
         if previous == Some(&signature) {
+            queue!(output, MoveTo(drawn_cursor_col, cursor_row), Show)?;
+            output.flush()?;
             return Ok((cursor_row, signature));
         }
 
@@ -492,10 +504,11 @@ mod tests {
         assert!(!output[show + "\x1b[?25h".len()..].contains("\x1b[2K"));
     }
 
-    /// 验证内容未变时跳过重绘。
+    /// 验证内容未变时跳过重绘，但仍把光标收回输入位置。
     ///
     /// composer 每 32ms 刷新一次，逐行清除再打印在 Windows Terminal 下
-    /// 表现为底部闪烁；内容一致时必须完全不产生输出。
+    /// 表现为底部闪烁；内容一致时必须不重绘内容。同时 transcript/动效
+    /// 绘制会把终端光标移走，必须恢复光标位置与显示，光标才始终留在输入框。
     ///
     /// 参数:
     /// - 无
@@ -517,15 +530,24 @@ mod tests {
         viewport.update(TerminalSize { cols: 40, rows: 12 }, frame.height(40), 8);
 
         let mut first = Vec::new();
-        let (_, signature) = frame.draw_lines(&mut first, &viewport, None).unwrap();
+        let (cursor_row, signature) = frame.draw_lines(&mut first, &viewport, None).unwrap();
         assert!(!first.is_empty(), "首次绘制必须实际输出");
 
         let mut second = Vec::new();
-        frame
+        let (second_row, _) = frame
             .draw_lines(&mut second, &viewport, Some(&signature))
             .unwrap();
 
-        assert!(second.is_empty(), "内容未变时不应产生任何终端输出");
+        let output = String::from_utf8(second).unwrap();
+        assert!(
+            !output.contains("\x1b[2K"),
+            "内容未变时不应重绘任何行: {output:?}"
+        );
+        assert!(
+            output.contains("\x1b[?25h"),
+            "内容未变时也要恢复光标显示: {output:?}"
+        );
+        assert_eq!(second_row, cursor_row);
     }
 
     /// 验证输入变化后仍会重绘。

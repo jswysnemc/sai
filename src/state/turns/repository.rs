@@ -279,7 +279,9 @@ impl ConversationDb {
     ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let now = Utc::now().to_rfc3339();
-        // 1. 失败轮若无正文，把错误摘要写入助手内容，便于时间线展示
+        // 1. 失败轮若无正文，把错误摘要写入助手内容，便于旧展示路径直接可见；
+        //    错误摘要同时独立写入 error 列——有部分正文时正文原样保留，
+        //    前端从 error 列取失败原因，不再把正文误当错误详情
         let assistant_content = if content.trim().is_empty() {
             error.trim().to_string()
         } else {
@@ -290,9 +292,10 @@ impl ConversationDb {
              SET assistant_content = ?1,
                  assistant_reasoning = ?2,
                  assistant_timestamp = ?3,
+                 error = ?4,
                  status = 'failed'
-             WHERE turn_id = ?4 AND status = 'running'",
-            params![assistant_content, reasoning, now, turn_id],
+             WHERE turn_id = ?5 AND status = 'running'",
+            params![assistant_content, reasoning, now, error.trim(), turn_id],
         )?;
         Ok(())
     }
@@ -336,7 +339,7 @@ impl ConversationDb {
             &conn,
             "SELECT turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
                     assistant_reasoning, assistant_timestamp, status, tool_reports, duration_ms,
-                    parent_turn_id, model
+                    parent_turn_id, model, error
              FROM turns ORDER BY seq ASC",
             [],
         )
@@ -361,7 +364,7 @@ impl ConversationDb {
                 let mut stmt = conn.prepare(
                     "SELECT turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
                             assistant_reasoning, assistant_timestamp, status, tool_reports, duration_ms,
-                    parent_turn_id, model
+                            parent_turn_id, model, error
                      FROM turns WHERE seq > ?1 AND turn_id != ?2 ORDER BY seq ASC",
                 )?;
                 let turns = stmt
@@ -373,7 +376,7 @@ impl ConversationDb {
                 &conn,
                 "SELECT turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,
                         assistant_reasoning, assistant_timestamp, status, tool_reports, duration_ms,
-                    parent_turn_id, model
+                        parent_turn_id, model, error
                  FROM turns WHERE seq > ?1 ORDER BY seq ASC",
                 params![after_seq],
             ),
@@ -671,6 +674,10 @@ fn map_turn(row: &Row<'_>) -> rusqlite::Result<Turn> {
             .get::<_, Option<String>>(12)
             .unwrap_or(None)
             .filter(|model| !model.trim().is_empty()),
+        error: row
+            .get::<_, Option<String>>(13)
+            .unwrap_or(None)
+            .filter(|error| !error.trim().is_empty()),
     })
 }
 

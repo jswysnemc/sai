@@ -51,6 +51,7 @@ pub(super) fn open_connection(state_dir: &Path) -> Result<Connection> {
     ensure_parent_turn_id_column(&conn)?;
     ensure_provider_user_content_column(&conn)?;
     ensure_model_column(&conn)?;
+    ensure_error_column(&conn)?;
     backfill_linear_parents(&conn)?;
     create_tree_meta_table(&conn)?;
     conn.execute_batch(
@@ -85,6 +86,30 @@ fn ensure_provider_user_content_column(conn: &Connection) -> Result<()> {
             "ALTER TABLE turns ADD COLUMN provider_user_content TEXT",
             [],
         )?;
+    }
+    Ok(())
+}
+
+/// 确保 turns 表包含失败原因列。
+///
+/// 失败轮的错误摘要独立存储，不再与部分正文混用 assistant_content：
+/// 有部分正文的失败轮此前只能保留正文，前端把正文误当错误详情展示。
+///
+/// 参数:
+/// - `conn`: SQLite 连接
+///
+/// 返回:
+/// - 表结构补齐是否成功
+fn ensure_error_column(conn: &Connection) -> Result<()> {
+    let column_count: i64 = conn.query_row(
+        "SELECT COUNT(*)
+         FROM pragma_table_info('turns')
+         WHERE name = 'error'",
+        [],
+        |row| row.get(0),
+    )?;
+    if column_count == 0 {
+        conn.execute("ALTER TABLE turns ADD COLUMN error TEXT", [])?;
     }
     Ok(())
 }

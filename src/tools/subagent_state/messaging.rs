@@ -32,6 +32,9 @@ pub(crate) fn queue_subagent_message(id: &str, from: &str, text: &str) -> Result
         text: text.to_string(),
         queued_at: unix_seconds(),
     });
+    // 入队即记入时间线：TUI 子智能体视图与 Web 详情立即可见，
+    // 不必等到消息真正注入对话的步间间隙
+    record.timeline.push_message(from, text);
     record.snapshot.pending_messages = record.inbox.len();
     record.snapshot.updated_at = unix_seconds();
     publish_record(record);

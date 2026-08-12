@@ -1,12 +1,12 @@
 import { ChevronDown, FilePenLine, ListChecks, Search, ShieldCheck, TerminalSquare, Wrench } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../api/client";
 import { Button } from "../../../shared/ui/button/button";
-import { groupHasExpandedTool, usePersistedExpand } from "./tool-expand-state";
+import { usePersistedExpand } from "./tool-expand-state";
 import type { ToolLifecycle } from "../run-event-reducer";
-import { ToolLifecycleCard, readableToolName } from "../tool-lifecycle-card";
-import { ExploreFileList } from "./explore-file-list";
+import { readableToolName } from "../tool-lifecycle-card";
+import { ToolRowList } from "./tool-row-list";
 import { ToolGroupTicker } from "./tool-group-ticker";
 import { toolCardSummary } from "../tool-renderers/tool-card-summary";
 import { toolFilePath } from "../tool-renderers/tool-data";
@@ -15,42 +15,37 @@ import {
   isCommandTool,
   isEditTool,
   isExploreTool,
-  shouldUseLightweightExploreList,
-  toolCallGroupLabel
+  toolCallGroupTitle
 } from "./tool-call-grouping";
 import { useI18n } from "../../i18n/use-i18n";
 import "./tool-call-group.css";
 
 /**
- * 渲染默认折叠的连续已完成工具组。
+ * 渲染连续已完成工具组：短标题 + 常驻条目清单。
  *
- * 实时轮次里折叠行做纵向轮播：新完成工具的摘要滚入，
- * 静默后落到「探索了 x 个文件」这类聚合标签。
+ * 参考 zcode 排版：组头是「探索 · 2 文件」式分类计数，条目默认可见，
+ * 每行「已读取 / 已执行 + 对象」，有输出的行可单独展开详情。
+ * 实时轮次里组头做纵向轮播，新完成工具的摘要滚入。
  *
  * @param props tools 为组内工具调用，live 表示所属轮次是否仍在进行
- * @returns 工具组标题和可展开原始卡片
+ * @returns 工具组标题和条目清单
  */
 export function ToolCallGroup({ tools, live = false }: { tools: ToolLifecycle[]; live?: boolean }) {
   const { locale, t } = useI18n();
   const groupRef = useRef<HTMLElement | null>(null);
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list, staleTime: 30_000 });
   const workspacePath = workspaces.data?.workspaces.find((item) => item.id === workspaces.data?.active_id)?.path ?? "";
-  // 组 id 用首项稳定；若用户已展开组内任一工具则保持展开
+  // 组 id 用首项稳定；条目清单默认可见，用户收起后按组记忆
   const groupId = tools[0]?.id ? `tool-group-${tools[0].id}` : "tool-group";
-  const [expanded, setExpanded] = usePersistedExpand(
-    groupId,
-    groupHasExpandedTool(tools.map((tool) => tool.id))
-  );
+  const [expanded, setExpanded] = usePersistedExpand(groupId, true);
   const todoOnly = tools.every((tool) => tool.name === "todo");
   const exploreOnly = tools.every(isExploreTool);
-  // 含只读 Shell 的探索组不能用轻量清单，否则无法二次展开看命令输出
-  const lightweightExplore = shouldUseLightweightExploreList(tools);
   const commandOnly = tools.every(isCommandTool);
   const editOnly = tools.every(isEditTool);
-  const label = toolCallGroupLabel(tools, locale, workspacePath);
-  // 每项工具压成「名称 对象」的单行摘要，供折叠行轮播
+  const title = toolCallGroupTitle(tools, locale, workspacePath);
+  // 每项工具压成「名称 对象」的单行摘要，供进行中的组头轮播
   const tickerItems = tools.map((tool) => toolTickerLabel(tool, locale, workspacePath));
-  // 组内经过权限审核的项数：折叠态也要能看出这批操作动过权限
+  // 组内经过权限审核的项数：收起态也要能看出这批操作动过权限
   const auditedCount = tools.filter((tool) => tool.permission).length;
   const icon = todoOnly
     ? <ListChecks size={14} />
@@ -65,8 +60,8 @@ export function ToolCallGroup({ tools, live = false }: { tools: ToolLifecycle[];
     <section ref={groupRef} className={`tool-call-group${expanded ? " expanded" : ""}`}>
       <Button className="tool-call-group-trigger" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
         <span className="tool-call-group-icon">{icon}</span>
-        <strong title={label}>
-          <ToolGroupTicker items={tickerItems} aggregate={label} live={live && !expanded} />
+        <strong title={title}>
+          <ToolGroupTicker items={tickerItems} aggregate={title} live={live && !expanded} />
         </strong>
         {auditedCount > 0 && (
           <span
@@ -79,16 +74,7 @@ export function ToolCallGroup({ tools, live = false }: { tools: ToolLifecycle[];
         )}
         <ChevronDown size={14} className={expanded ? "rotate" : ""} aria-hidden />
       </Button>
-      {expanded && (
-        lightweightExplore ? (
-          // 纯文件探索：轻量清单足够；含 Shell 时改走完整卡片以便二次展开
-          <ExploreFileList tools={tools} workspacePath={workspacePath} />
-        ) : (
-          <div className="tool-call-group-items">
-            {tools.map((tool) => <ToolLifecycleCard key={tool.id} tool={tool} />)}
-          </div>
-        )
-      )}
+      {expanded && <ToolRowList tools={tools} workspacePath={workspacePath} />}
     </section>
   );
 }

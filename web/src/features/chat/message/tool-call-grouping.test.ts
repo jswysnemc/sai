@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { LiveMessagePart, ToolLifecycle } from "../run-event-reducer";
 import {
   groupCompletedToolCalls,
-  shouldUseLightweightExploreList,
-  toolCallGroupLabel
+  toolCallGroupLabel,
+  toolCallGroupTitle,
+  toolDoneVerb
 } from "./tool-call-grouping";
 
 /**
@@ -62,14 +63,16 @@ describe("tool call grouping", () => {
       toolPart("d", "failed"),
       toolPart("e", "completed")
     ]);
-    expect(grouped.map((item) => item.type)).toEqual(["tool-group", "part", "part", "part"]);
-    expect(grouped.filter((item) => item.type === "part").map((item) => item.part.id)).toEqual(["c", "d", "e"]);
+    // 尾部的单项完成调用同样成组，与多项组保持同一套排版
+    expect(grouped.map((item) => item.type)).toEqual(["tool-group", "part", "part", "tool-group"]);
+    expect(grouped.filter((item) => item.type === "part").map((item) => item.part.id)).toEqual(["c", "d"]);
   });
 
   it("does not group tools across text boundaries", () => {
     const text: LiveMessagePart = { id: "text", type: "text", source: "说明" };
     const grouped = groupCompletedToolCalls([toolPart("a", "completed"), text, toolPart("b", "completed")]);
-    expect(grouped.map((item) => item.type)).toEqual(["part", "part", "part"]);
+    // 文本两侧的单项调用各自成组，不跨正文合并
+    expect(grouped.map((item) => item.type)).toEqual(["tool-group", "part", "tool-group"]);
   });
 
   it("counts commands instead of listing raw targets", () => {
@@ -183,19 +186,26 @@ describe("tool call grouping", () => {
     expect(label).toBe("探索了 1 个文件，执行了 1 个工具");
   });
 
-  it("uses lightweight explore list only for pure file reads", () => {
-    const a = toolPart("a", "completed", "read_file", JSON.stringify({ path: "src/main.rs" }));
-    const b = toolPart("b", "completed", "grep", JSON.stringify({ pattern: "foo", path: "src" }));
-    if (a.type !== "tool" || b.type !== "tool") throw new Error("测试工具类型异常");
-    expect(shouldUseLightweightExploreList([a.tool, b.tool])).toBe(true);
+  it("builds compact category titles for group headers", () => {
+    // 组头常驻短标题：分类 · 数量，条目细节交给下方清单
+    const read = toolPart("a", "completed", "read_file", JSON.stringify({ path: "src/main.rs" }));
+    const grep = toolPart("b", "completed", "grep", JSON.stringify({ pattern: "foo", path: "src" }));
+    const shell = toolPart("c", "completed", "run_command", JSON.stringify({ command: "ls -la" }));
+    const edit = toolPart("d", "completed", "write_file", JSON.stringify({ path: "a.rs", content: "x" }));
+    if (read.type !== "tool" || grep.type !== "tool" || shell.type !== "tool" || edit.type !== "tool") {
+      throw new Error("测试工具类型异常");
+    }
+    expect(toolCallGroupTitle([read.tool, grep.tool])).toBe("探索 · 2 个文件");
+    expect(toolCallGroupTitle([shell.tool, shell.tool])).toBe("探索 · 2 个命令");
+    expect(toolCallGroupTitle([read.tool, shell.tool])).toBe("探索 · 2 项");
+    expect(toolCallGroupTitle([edit.tool])).toBe("编辑 · 1 个文件");
+    expect(toolCallGroupTitle([read.tool, edit.tool])).toBe("操作 · 2 项");
   });
 
-  it("disables lightweight list when explore group contains shell commands", () => {
-    // 只读 shell 仍算「探索了 N 个文件」，但需要完整工具卡才能二次展开看输出
-    const a = toolPart("a", "completed", "run_command", JSON.stringify({ command: "pwd && ls -la" }));
-    const b = toolPart("b", "completed", "run_command", JSON.stringify({ command: "ls -la docs" }));
-    if (a.type !== "tool" || b.type !== "tool") throw new Error("测试工具类型异常");
-    expect(toolCallGroupLabel([a.tool, b.tool])).toBe("探索了 2 个文件");
-    expect(shouldUseLightweightExploreList([a.tool, b.tool])).toBe(false);
+  it("maps tool names to done verbs for list rows", () => {
+    expect(toolDoneVerb("read_file")).toBe("已读取");
+    expect(toolDoneVerb("run_command")).toBe("已执行");
+    expect(toolDoneVerb("write_file")).toBe("已写入");
+    expect(toolDoneVerb("unknown_tool")).toBe("已调用");
   });
 });

@@ -1,7 +1,8 @@
-use crate::render::code_block::highlight_code_line;
+use crate::render::code_block::{highlight_code_line_continued, CodeLineHighlightState};
 use crate::render::fold_text::{
-    command_body_column, command_wrap_width_for_title, fold_display_lines, wrap_display_lines,
-    FOLD_HEAD_LINES, FOLD_TAIL_LINES,
+    command_body_column, command_wrap_width_for_title, fold_display_lines,
+    fold_display_lines_tracked, wrap_display_lines, FoldedDisplayLine, FOLD_HEAD_LINES,
+    FOLD_TAIL_LINES,
 };
 use crate::render::status_style::{tool_bullet, ToolHealth};
 use crate::render::terminal_text as t;
@@ -31,18 +32,24 @@ pub(super) fn render(cell: &ShellCell) -> String {
         Some(code) if code != 0 => ToolHealth::Err,
         _ => ToolHealth::Ok,
     };
-    let command_lines = fold_display_text(cell.command.trim(), false, title);
+    let command_lines = fold_command_entries(cell.command.trim(), false, title);
     let mut rendered = format!("{} \x1b[1m{title}\x1b[0m ", tool_bullet(health));
-    if let Some((first, rest)) = command_lines.split_first() {
+    if command_lines.is_empty() {
         rendered.push_str("\x1b[35m$\x1b[0m ");
-        push_shell_line(&mut rendered, first, true);
-        let continuation = " ".repeat(command_body_column(title));
-        for line in rest {
-            rendered.push_str(&continuation);
-            push_shell_line(&mut rendered, line, false);
-        }
     } else {
-        rendered.push_str("\x1b[35m$\x1b[0m ");
+        // 折行续行共享高亮状态，跨行字符串不会被重新 token 化
+        let mut highlight = CodeLineHighlightState::default();
+        let continuation = " ".repeat(command_body_column(title));
+        let mut first = true;
+        for entry in &command_lines {
+            if first {
+                rendered.push_str("\x1b[35m$\x1b[0m ");
+            } else {
+                rendered.push_str(&continuation);
+            }
+            push_shell_line(&mut rendered, entry, &mut highlight);
+            first = false;
+        }
     }
     // 2. 输出体：过长结果同样首尾折叠
     if cell.output.is_empty() {
@@ -95,21 +102,46 @@ fn fold_display_text(text: &str, expanded: bool, title: &str) -> Vec<String> {
         .collect()
 }
 
+/// 折行并折叠命令文本，保留被省略行供高亮状态推进。
+///
+/// 参数:
+/// - `text`: 命令原文
+/// - `expanded`: 是否展开
+/// - `title`: 命令块标题，决定行首占用的列数
+///
+/// 返回:
+/// - 折叠后的显示条目
+fn fold_command_entries(text: &str, expanded: bool, title: &str) -> Vec<FoldedDisplayLine> {
+    let wrap = command_wrap_width_for_title(title);
+    let wrapped = wrap_display_lines(text, wrap);
+    fold_display_lines_tracked(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded)
+}
+
 /// 追加命令显示行。
 ///
 /// 参数:
 /// - `rendered`: 输出缓冲
-/// - `line`: 显示行
-/// - `is_first`: 是否首行（已有 `$` 前缀）
-fn push_shell_line(rendered: &mut String, line: &str, is_first: bool) {
-    let _ = is_first;
-    if line.starts_with('…') {
-        rendered.push_str("\x1b[2m");
-        rendered.push_str(line);
-        rendered.push_str("\x1b[0m\n");
-    } else {
-        rendered.push_str(&highlight_code_line("bash", line));
-        rendered.push('\n');
+/// - `entry`: 折叠后的显示条目
+/// - `highlight`: 跨显示行的高亮状态
+fn push_shell_line(
+    rendered: &mut String,
+    entry: &FoldedDisplayLine,
+    highlight: &mut CodeLineHighlightState,
+) {
+    match entry {
+        FoldedDisplayLine::Omitted { omitted, skipped } => {
+            // 被省略的行仍要推进高亮状态，尾部行的引号/注释上下文才正确
+            for line in skipped {
+                let _ = highlight_code_line_continued("bash", line, highlight);
+            }
+            rendered.push_str("\x1b[2m");
+            rendered.push_str(&format!("… +{omitted} lines (Ctrl+O to expand)"));
+            rendered.push_str("\x1b[0m\n");
+        }
+        FoldedDisplayLine::Line(line) => {
+            rendered.push_str(&highlight_code_line_continued("bash", line, highlight));
+            rendered.push('\n');
+        }
     }
 }
 

@@ -76,9 +76,10 @@ impl ReplRuntime {
     /// - 面板 ANSI 行；无内容时为空
     fn bottom_panel_lines(&self, cols: usize) -> Vec<String> {
         let queued: Vec<QueuedSubmission> = self.submission_queue.iter().cloned().collect();
-        let agent_lines = self
-            .agent_panel
-            .panel_lines(&self.transcript.subagent_overview());
+        let agent_lines = self.agent_panel.panel_lines(
+            &self.transcript.subagent_overview(),
+            self.transcript.live_animation_frame(),
+        );
         super::bottom_panel::render_panel_lines(
             self.transcript.latest_todo_items(),
             &queued,
@@ -131,6 +132,40 @@ impl ReplRuntime {
         let absorbed = deficit.min(self.viewport.origin_row());
         self.viewport.apply_terminal_scroll(deficit);
         self.stream.note_scrolled(deficit.saturating_sub(absorbed));
+        Ok(())
+    }
+
+    /// 用最新状态刷新固化在 composer 中的沉底面板行。
+    ///
+    /// 子智能体的状态、实时统计与动效帧独立于输入内容变化，
+    /// transcript 定时同步时必须重算，否则面板会停留在上次输入时的旧状态。
+    /// 面板行数变化时同步调整保留区高度。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 操作结果
+    pub(in crate::cli) fn refresh_bottom_panel(&mut self) -> Result<()> {
+        if self.composer.is_none() {
+            return Ok(());
+        }
+        let size = self.viewport.size();
+        let lines = self.bottom_panel_lines(usize::from(size.cols));
+        let Some(composer) = self.composer.as_mut() else {
+            return Ok(());
+        };
+        if composer.panel_lines() == lines.as_slice() {
+            return Ok(());
+        }
+        let rows_changed = composer.panel_lines().len() != lines.len();
+        composer.set_panel_lines(lines);
+        // 行数变化时 composer 高度随之变化，需要重新腾行并更新 viewport
+        if rows_changed {
+            let height = self.composer_height_for(size);
+            self.reserve_composer_rows(size, height)?;
+            self.viewport.update(size, height, self.stream.on_screen());
+        }
         Ok(())
     }
 

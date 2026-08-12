@@ -75,6 +75,60 @@ pub(crate) fn fold_display_lines(
     (visible, omitted)
 }
 
+/// 折行折叠后的单个显示条目。
+pub(crate) enum FoldedDisplayLine {
+    /// 正常显示行
+    Line(String),
+    /// 折叠占位；`skipped` 为被省略的原始显示行，供跨行高亮状态推进
+    Omitted { omitted: usize, skipped: Vec<String> },
+}
+
+/// 对显示行做首尾折叠，并保留被省略的原始行。
+///
+/// 与 [`fold_display_lines`] 的区别：折叠处返回被省略的行本身，
+/// 调用方可据此推进跨行语法高亮状态，保证尾部行的引号/注释
+/// 上下文与省略前一致。
+///
+/// 参数:
+/// - `lines`: 显示行
+/// - `head`: 头部保留行数
+/// - `tail`: 尾部保留行数
+/// - `expanded`: 是否展开
+///
+/// 返回:
+/// - 折叠后的显示条目序列
+pub(crate) fn fold_display_lines_tracked(
+    lines: &[String],
+    head: usize,
+    tail: usize,
+    expanded: bool,
+) -> Vec<FoldedDisplayLine> {
+    let expanded = expanded || crate::render::render_expand::expand_override();
+    let keep = head.saturating_add(tail);
+    if expanded || keep == 0 || lines.len() <= keep {
+        return lines
+            .iter()
+            .cloned()
+            .map(FoldedDisplayLine::Line)
+            .collect();
+    }
+    let omitted = lines.len() - keep;
+    let tail_start = lines.len().saturating_sub(tail);
+    let mut entries = Vec::with_capacity(keep + 1);
+    entries.extend(lines[..head].iter().cloned().map(FoldedDisplayLine::Line));
+    entries.push(FoldedDisplayLine::Omitted {
+        omitted,
+        skipped: lines[head..tail_start].to_vec(),
+    });
+    entries.extend(
+        lines[tail_start..]
+            .iter()
+            .cloned()
+            .map(FoldedDisplayLine::Line),
+    );
+    entries
+}
+
 /// 查询当前渲染宽度：优先使用渲染上下文注入值，否则实时查询终端。
 ///
 /// 返回:

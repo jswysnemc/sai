@@ -83,11 +83,9 @@
 
 .pane-error { margin:var(--space-md) var(--space-xl); padding:var(--space-sm) var(--space-md); border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--line)); border-radius: var(--radius-2); color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); font-size:var(--text-xs); }
 
-/* 存活子智能体的留言输入区 */
-.subagent-detail-composer { display: flex; align-items: center; gap:var(--space-sm); padding:var(--space-sm) var(--space-xl); border-top: 1px solid var(--line); }
-.subagent-detail-composer input { flex: 1; min-width: 0; padding:var(--space-2xs) var(--space-sm); border: 1px solid var(--line); border-radius: var(--radius-2); background: var(--paper); color: var(--ink); font-size:var(--text-xs); }
-.subagent-detail-composer button { display: inline-flex; align-items: center; gap:var(--space-2xs); padding:var(--space-2xs) var(--space-sm); border: 1px solid var(--line); border-radius: var(--radius-2); background: transparent; color: var(--ink); font-size:var(--text-xs); }
-.subagent-detail-composer button:disabled { opacity: 0.5; }
-.subagent-detail-composer button:not(:disabled):hover { border-color: var(--line-strong); background: var(--control-surface); }
-.subagent-detail-send-error { color: var(--danger); font-size:var(--text-2xs); }
+/* 留言区复用主会话的 ComposerSurface，仅由详情布局负责外围留白。 */
+.subagent-detail-composer-shell { display: flex; flex: 0 0 auto; justify-content: center; padding:var(--space-sm) var(--space-xl) var(--space-lg); border-top: 1px solid var(--line); background: var(--paper-raised); }
+.subagent-detail-composer { width: 100%; max-width: none; margin: 0; }
+.subagent-detail-composer-actions { justify-content: flex-end; margin-top: 0; }
+.subagent-detail-send-error { margin: 0; padding:0 var(--space-3xs); color: var(--danger); font-size:var(--text-2xs); }
 .subagent-pending-count { margin-left: auto; color: var(--blue); font-size:var(--text-2xs); white-space: nowrap; }

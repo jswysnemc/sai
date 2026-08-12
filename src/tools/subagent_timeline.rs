@@ -25,6 +25,8 @@ pub(crate) enum SubagentTimelineEntry {
     Text { text: String },
     /// 子智能体的推理片段。
     Reasoning { text: String },
+    /// 投递给子智能体的追加消息；`from` 为 `parent`（主代理）或 `user`（用户留言）。
+    Message { from: String, text: String },
 }
 
 /// 子智能体执行时间线,按发生顺序聚合工具调用、正文与推理。
@@ -47,9 +49,7 @@ impl SubagentTimeline {
             .iter()
             .filter_map(|entry| match entry {
                 SubagentTimelineEntry::Tool { step, .. } => Some(*step),
-                SubagentTimelineEntry::Text { .. } | SubagentTimelineEntry::Reasoning { .. } => {
-                    None
-                }
+                _ => None,
             })
             .max()
             .unwrap_or_default();
@@ -126,6 +126,24 @@ impl SubagentTimeline {
     /// - 无
     pub(crate) fn append_reasoning(&mut self, text: &str) {
         self.append_streaming(text, true);
+    }
+
+    /// 记录一条投递给子智能体的追加消息。
+    ///
+    /// 消息在入队时即记录,使 TUI 子智能体视图与 Web 详情时间线
+    /// 立刻可见;实际注入对话发生在下一个步间间隙。
+    ///
+    /// 参数:
+    /// - `from`: 消息来源,`parent`（主代理）或 `user`（用户留言）
+    /// - `text`: 消息正文
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn push_message(&mut self, from: &str, text: &str) {
+        self.push_entry(SubagentTimelineEntry::Message {
+            from: from.to_string(),
+            text: truncate_chars(text, TEXT_ENTRY_LIMIT),
+        });
     }
 
     /// 导出全部时间线条目。
@@ -238,6 +256,28 @@ mod tests {
         assert!(
             matches!(&entries[1], SubagentTimelineEntry::Text { text } if text == "# 结论\n一切正常")
         );
+    }
+
+    /// 【子智能体】【追加消息】消息按入队顺序进入时间线且打断文本聚合。
+    #[test]
+    fn messages_enter_timeline_and_break_text_merging() {
+        let mut timeline = SubagentTimeline::default();
+        timeline.append_text("第一段");
+        timeline.push_message("parent", "补充要求：也检查测试");
+        timeline.append_text("第二段");
+
+        let entries = timeline.entries();
+        assert_eq!(entries.len(), 3);
+        assert!(matches!(
+            &entries[1],
+            SubagentTimelineEntry::Message { from, text }
+                if from == "parent" && text == "补充要求：也检查测试"
+        ));
+        // 消息打断正文聚合，前后正文各自独立
+        assert!(matches!(&entries[2], SubagentTimelineEntry::Text { text } if text == "第二段"));
+        // 恢复路径同样保留消息条目
+        let restored = SubagentTimeline::from_entries(entries);
+        assert_eq!(restored.entries().len(), 3);
     }
 
     #[test]

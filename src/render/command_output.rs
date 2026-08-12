@@ -1,4 +1,4 @@
-use crate::render::code_block::highlight_code_line;
+use crate::render::code_block::{highlight_code_line_continued, CodeLineHighlightState};
 use crate::render::command_result_block::truncate_chars;
 pub(crate) use crate::render::command_result_block::{
     render_command_error_view_for_cli, render_command_result_view_for_cli,
@@ -130,18 +130,23 @@ pub(crate) fn render_command_block_with_action(
     // 1. 按终端宽度折行后首尾折叠，过长命令在主列表收缩
     let lines = fold_shell_command_lines(command, false, title);
     let mut output = format!("{} \x1b[1m{title}\x1b[0m ", tool_bullet(health));
-    if let Some((first, rest)) = lines.split_first() {
-        output.push_str("\x1b[35m$ \x1b[0m");
-        append_command_display_line(&mut output, first, true);
-        // 续行缩进到首行正文列：写死四列会让长命令的后半段左移，
-        // 看上去像脱离了命令块
-        let continuation = " ".repeat(crate::render::fold_text::command_body_column(title));
-        for line in rest {
-            output.push_str(&continuation);
-            append_command_display_line(&mut output, line, false);
-        }
-    } else {
+    // 2. 折行续行共享高亮状态：跨行字符串/注释的颜色才能延续，
+    //    否则 URL 中段的数字会被重新 token 化成数字色
+    let mut highlight = CodeLineHighlightState::default();
+    if lines.is_empty() {
         output.push_str("\x1b[35m$ \x1b[0m\n");
+        return output;
+    }
+    let continuation = " ".repeat(crate::render::fold_text::command_body_column(title));
+    let mut first = true;
+    for entry in &lines {
+        if first {
+            output.push_str("\x1b[35m$ \x1b[0m");
+        } else {
+            output.push_str(&continuation);
+        }
+        append_command_display_line(&mut output, entry, &mut highlight);
+        first = false;
     }
     output
 }
@@ -154,46 +159,48 @@ pub(crate) fn render_command_block_with_action(
 /// - `title`: 命令块标题，决定正文起始列
 ///
 /// 返回:
-/// - 可见显示行（省略处为 `… +N lines`）
-fn fold_shell_command_lines(command: &str, expanded: bool, title: &str) -> Vec<String> {
+/// - 折叠后的显示条目（占位处保留被省略行供状态推进）
+fn fold_shell_command_lines(
+    command: &str,
+    expanded: bool,
+    title: &str,
+) -> Vec<crate::render::fold_text::FoldedDisplayLine> {
     use crate::render::fold_text::{
-        command_wrap_width_for_title, fold_display_lines, wrap_display_lines, FOLD_HEAD_LINES,
-        FOLD_TAIL_LINES,
+        command_wrap_width_for_title, fold_display_lines_tracked, wrap_display_lines,
+        FOLD_HEAD_LINES, FOLD_TAIL_LINES,
     };
     // 命令行预览：前 2 后 4，过长时收缩
     let wrap = command_wrap_width_for_title(title);
     let wrapped = wrap_display_lines(command, wrap);
-    let (visible, omitted) =
-        fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
-    visible
-        .into_iter()
-        .map(|line| {
-            if line == "__OMITTED__" {
-                format!("… +{omitted} lines (Ctrl+O to expand)")
-            } else {
-                line
-            }
-        })
-        .collect()
+    fold_display_lines_tracked(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded)
 }
 
 /// 追加一行命令显示（省略行 dim，普通行 shell 着色）。
 ///
 /// 参数:
 /// - `output`: 输出缓冲
-/// - `line`: 显示行
-/// - `is_first`: 是否为 `$` 同行首行
-fn append_command_display_line(output: &mut String, line: &str, is_first: bool) {
-    if line.starts_with('…') {
-        if !is_first {
-            // 续行已有缩进
+/// - `entry`: 折叠后的显示条目
+/// - `highlight`: 跨显示行的高亮状态
+fn append_command_display_line(
+    output: &mut String,
+    entry: &crate::render::fold_text::FoldedDisplayLine,
+    highlight: &mut CodeLineHighlightState,
+) {
+    use crate::render::fold_text::FoldedDisplayLine;
+    match entry {
+        FoldedDisplayLine::Omitted { omitted, skipped } => {
+            // 被省略的行仍要推进高亮状态，尾部行的引号/注释上下文才正确
+            for line in skipped {
+                let _ = highlight_code_line_continued("sh", line, highlight);
+            }
+            output.push_str("\x1b[2m");
+            output.push_str(&format!("… +{omitted} lines (Ctrl+O to expand)"));
+            output.push_str("\x1b[0m\n");
         }
-        output.push_str("\x1b[2m");
-        output.push_str(line);
-        output.push_str("\x1b[0m\n");
-    } else {
-        output.push_str(&highlight_code_line("sh", line));
-        output.push('\n');
+        FoldedDisplayLine::Line(line) => {
+            output.push_str(&highlight_code_line_continued("sh", line, highlight));
+            output.push('\n');
+        }
     }
 }
 

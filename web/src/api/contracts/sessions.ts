@@ -100,6 +100,8 @@ export type SessionTimelineTurn = {
   usage?: TurnUsage | null;
   /** 本轮实际使用的模型标识；历史轮次未记录时缺失 */
   model?: string | null;
+  /** 失败轮的错误摘要；非失败轮与旧历史缺失 */
+  error?: string | null;
 };
 
 export type SessionTimelineCompaction = {

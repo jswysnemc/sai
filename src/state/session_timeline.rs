@@ -82,6 +82,9 @@ pub struct SessionTimelineTurn {
     /// 同一轮全部模型请求的汇总用量
     #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<Usage>,
+    /// 失败轮的错误摘要；正文与错误各归其位，前端不再拿正文当失败详情
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 /// 会话时间线中展示的最新压缩摘要。
@@ -179,6 +182,17 @@ impl StateStore {
                     })
                     .collect();
                 let automatic = is_automatic_input(&turn.user_content);
+                // 无正文的失败轮 assistant_content 存的就是错误摘要（旧展示兼容），
+                // 时间线里错误由 error 字段承载，正文清空避免气泡与错误框重复
+                let assistant_content = if turn
+                    .error
+                    .as_deref()
+                    .is_some_and(|error| error == turn.assistant_content.trim())
+                {
+                    String::new()
+                } else {
+                    turn.assistant_content
+                };
                 Ok(SessionTimelineTurn {
                     turn_id: turn.turn_id,
                     seq: turn.seq,
@@ -191,7 +205,7 @@ impl StateStore {
                     },
                     assistant: TimelineMessage {
                         timestamp: turn.assistant_timestamp.unwrap_or_default(),
-                        content: turn.assistant_content,
+                        content: assistant_content,
                         reasoning: turn.assistant_reasoning,
                         image_urls: Vec::new(),
                     },
@@ -200,6 +214,7 @@ impl StateStore {
                     automatic,
                     duration_ms: turn.duration_ms,
                     usage,
+                    error: turn.error,
                 })
             })
             .collect()
@@ -397,6 +412,30 @@ mod tests {
         let timeline = store.session_timeline(10).unwrap();
         assert_eq!(timeline[0].tools[0].name, "read_file");
         assert_eq!(timeline[0].tools[0].arguments, r#"{"path":"README.md"}"#);
+    }
+
+    /// 【时间线】【失败轮】错误摘要独立于正文：有正文时两者各归其位，
+    /// 无正文时时间线正文清空，错误只出现在 error 字段。
+    #[test]
+    fn failed_turn_keeps_error_apart_from_partial_content() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
+        // 1. 有部分正文的失败轮：正文保留，错误进 error 字段
+        store.start_turn("turn_1", "做点事").unwrap();
+        store
+            .fail_turn("turn_1", "已经生成的部分正文", None, "上游请求超时")
+            .unwrap();
+        // 2. 无正文的失败轮：错误只出现在 error 字段，正文不再重复
+        store.start_turn("turn_2", "再做点事").unwrap();
+        store.fail_turn("turn_2", "", None, "供应商 500").unwrap();
+
+        let timeline = store.session_timeline(10).unwrap();
+
+        assert_eq!(timeline[0].status, "failed");
+        assert_eq!(timeline[0].assistant.content, "已经生成的部分正文");
+        assert_eq!(timeline[0].error.as_deref(), Some("上游请求超时"));
+        assert_eq!(timeline[1].assistant.content, "");
+        assert_eq!(timeline[1].error.as_deref(), Some("供应商 500"));
     }
 
     /// 【时间线】【模型切换】记录模型后可读回映射，未记录的轮次不在其中。

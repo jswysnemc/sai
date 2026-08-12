@@ -144,6 +144,7 @@ mod tests {
             duration_ms: 0,
             parent_turn_id: None,
             model: None,
+            error: None,
         }
     }
 

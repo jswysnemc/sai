@@ -30,6 +30,18 @@ export function subagentMessageParts(
     if (entry.kind === "text") {
       return { id: `subagent-text-${index}`, type: "text" as const, source: entry.text };
     }
+    if (entry.kind === "message") {
+      // 追加消息复用自动输入样式（蓝点），与子智能体自身输出区分
+      const label = entry.from === "user"
+        ? text(locale, "User message", "用户留言")
+        : text(locale, "Message from parent agent", "主代理消息");
+      return {
+        id: `subagent-message-${index}`,
+        type: "automatic_input" as const,
+        kind: "subagent-message",
+        source: `**${label}**\n\n${entry.text}`
+      };
+    }
     return {
       id: `subagent-tool-${entry.step}-${index}`,
       type: "tool" as const,

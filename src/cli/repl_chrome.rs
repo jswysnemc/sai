@@ -123,17 +123,17 @@ impl ReplChrome {
 
 /// 给模型名称使用稳定的重点颜色。
 fn color_model(value: &str) -> String {
-    format!("\x1b[38;5;81m{value}\x1b[0m")
+    format!("\x1b[38;5;110m{value}\x1b[0m")
 }
 
 /// 给思考等级使用独立颜色。
 fn color_thinking(value: &str) -> String {
-    format!("\x1b[38;5;177m{value}\x1b[0m")
+    format!("\x1b[38;5;109m{value}\x1b[0m")
 }
 
 /// 给右侧当前目录使用弱化但可辨识的颜色。
 fn color_directory(value: &str) -> String {
-    format!("\x1b[38;5;110m{value}\x1b[0m")
+    format!("\x1b[38;5;103m{value}\x1b[0m")
 }
 
 /// 将 token 数格式化为 `272k` 风格。
@@ -455,8 +455,8 @@ mod tests {
         assert!(plain.contains("xhigh"));
         assert!(plain.contains("/workspace"));
         assert!(!plain.contains("main"));
-        assert!(line.contains("\x1b[38;5;81m"));
-        assert!(line.contains("\x1b[38;5;177m"));
+        assert!(line.contains("\x1b[38;5;110m"));
+        assert!(line.contains("\x1b[38;5;109m"));
         assert_eq!(visible_width(&line), 80);
     }
 

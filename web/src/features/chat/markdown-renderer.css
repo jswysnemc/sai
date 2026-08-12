@@ -54,14 +54,15 @@
 
 /*
  * 引用块：只保留左侧竖条一种区分手段。
- * 改造前同时用了左条、背景色与圆角三层，与代码块、表格的外框叠在同一屏时框线过密；
- * 竖条加降级的文字颜色已经足够表达"这是引证内容"，与 TUI 侧的绿色竖条语言一致。
+ * 改造前同时用了左条、背景色与圆角三层，与代码块、表格的外框叠在同一屏时框线过密。
+ * 正文颜色不降级：模型常把要点正文写进引用块，降灰会让大段内容看似"被弱化的缩进"。
+ * 竖条用中性边线色：signal（红系）会被误读成错误/警告标记，
+ * 与 TUI 弱化灰的 ▏竖条语言保持一致。
  */
 .markdown-body blockquote {
   margin:var(--space-md) 0;
-  padding:var(--space-2xs) 0 var(--space-2xs) var(--space-lg);
-  border-left: 2px solid color-mix(in srgb, var(--signal) 55%, var(--line));
-  color: var(--ink-soft);
+  padding:var(--space-2xs) 0 var(--space-2xs) var(--space-md);
+  border-left: 2px solid var(--line-strong);
 }
 
 .markdown-body blockquote p {

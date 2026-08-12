@@ -31,6 +31,21 @@ pub(crate) fn render_code_footer(_lines: &[String]) -> String {
     String::new()
 }
 
+/// 折行续行之间需要延续的行内高亮状态。
+///
+/// 长命令按终端宽度折成多个显示行后逐行高亮，若不延续未闭合的
+/// 引号与注释上下文，续行会被从头重新 token 化：字符串中段的数字
+/// 被染成数字色、普通词被染成命令色。
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct CodeLineHighlightState {
+    /// 未闭合的引号字符（`"`、`'` 或反引号）
+    open_quote: Option<char>,
+    /// 未闭合字符串在行尾是否停在反斜杠转义中
+    escaped: bool,
+    /// 是否仍处于延续到逻辑行尾的行注释中
+    in_comment: bool,
+}
+
 /// 对单行代码做轻量语法高亮。
 ///
 /// 参数:
@@ -40,6 +55,27 @@ pub(crate) fn render_code_footer(_lines: &[String]) -> String {
 /// 返回:
 /// - 带 ANSI 样式的代码行
 pub(crate) fn highlight_code_line(lang: &str, line: &str) -> String {
+    let mut state = CodeLineHighlightState::default();
+    highlight_code_line_continued(lang, line, &mut state)
+}
+
+/// 以显式跨行状态对单个显示行做语法高亮。
+///
+/// 供折行后的命令续行使用：引号与注释上下文经 `state` 在显示行之间
+/// 传递。逻辑行边界调用方应重新使用默认状态。
+///
+/// 参数:
+/// - `lang`: 语言标识
+/// - `line`: 显示行文本
+/// - `state`: 跨行高亮状态，本行扫描后原地更新
+///
+/// 返回:
+/// - 带 ANSI 样式的代码行
+pub(crate) fn highlight_code_line_continued(
+    lang: &str,
+    line: &str,
+    state: &mut CodeLineHighlightState,
+) -> String {
     let lang = lang.trim().to_ascii_lowercase();
     if lang.is_empty() {
         return line.to_string();
@@ -52,12 +88,29 @@ pub(crate) fn highlight_code_line(lang: &str, line: &str) -> String {
     let mut output = String::new();
     let chars = line.chars().collect::<Vec<_>>();
     let mut index = 0;
+    // 0. 上一显示行的注释延续到本行（同一逻辑行内折行），整行按注释染色
+    if state.in_comment {
+        output.push_str(CODE_COMMENT_STYLE);
+        output.extend(chars.iter());
+        output.push_str(CODE_TOKEN_RESET);
+        return output;
+    }
+    // 1. 上一显示行有未闭合字符串：从行首继续染到闭合引号为止
+    if let Some(quote) = state.open_quote {
+        let close = scan_string_end(&chars, 0, quote, state);
+        output.push_str(CODE_STRING_STYLE);
+        output.extend(chars[..close].iter());
+        output.push_str(CODE_TOKEN_RESET);
+        index = close;
+    }
     while index < chars.len() {
         if let Some(marker) = comment_marker {
             if chars[index] == marker {
                 output.push_str(CODE_COMMENT_STYLE);
                 output.extend(chars[index..].iter());
                 output.push_str(CODE_TOKEN_RESET);
+                // 注释延续到逻辑行尾：折行的后续显示行仍在注释内
+                state.in_comment = true;
                 return output;
             }
         }
@@ -89,22 +142,11 @@ pub(crate) fn highlight_code_line(lang: &str, line: &str) -> String {
         {
             let quote = chars[index];
             let start = index;
-            index += 1;
-            let mut escaped = false;
-            while index < chars.len() {
-                if escaped {
-                    escaped = false;
-                } else if chars[index] == '\\' {
-                    escaped = true;
-                } else if chars[index] == quote {
-                    index += 1;
-                    break;
-                }
-                index += 1;
-            }
+            let close = scan_string_end(&chars, index + 1, quote, state);
             output.push_str(CODE_STRING_STYLE);
-            output.extend(chars[start..index].iter());
+            output.extend(chars[start..close].iter());
             output.push_str(CODE_TOKEN_RESET);
+            index = close;
             continue;
         }
         if chars[index].is_ascii_digit() {
@@ -154,6 +196,44 @@ pub(crate) fn highlight_code_line(lang: &str, line: &str) -> String {
         index += 1;
     }
     output
+}
+
+/// 从 `start` 扫描到闭合引号，返回扫描结束位置（含闭合引号）。
+///
+/// 行尾仍未闭合时，把引号与转义进度写回 `state`，供折行后的
+/// 下一显示行继续按字符串染色。
+///
+/// 参数:
+/// - `chars`: 当前行字符
+/// - `start`: 引号内容起始下标
+/// - `quote`: 引号字符
+/// - `state`: 跨行高亮状态
+///
+/// 返回:
+/// - 字符串结束（闭合引号之后）或行尾的下标
+fn scan_string_end(
+    chars: &[char],
+    start: usize,
+    quote: char,
+    state: &mut CodeLineHighlightState,
+) -> usize {
+    let mut index = start;
+    let mut escaped = state.escaped;
+    state.escaped = false;
+    while index < chars.len() {
+        if escaped {
+            escaped = false;
+        } else if chars[index] == '\\' {
+            escaped = true;
+        } else if chars[index] == quote {
+            state.open_quote = None;
+            return index + 1;
+        }
+        index += 1;
+    }
+    state.open_quote = Some(quote);
+    state.escaped = escaped;
+    index
 }
 
 /// 返回指定语言的关键词列表。
@@ -282,6 +362,33 @@ fn next_non_space_is_open_paren(chars: &[char], mut index: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 【终端】【命令着色】折行续行延续未闭合字符串，URL 中段不被重新 token 化。
+    #[test]
+    fn continued_lines_keep_open_string_state() {
+        let mut state = CodeLineHighlightState::default();
+        // 第一显示行：引号未闭合
+        let first = highlight_code_line_continued("sh", r#"curl -o "https://cdn-"#, &mut state);
+        assert!(first.contains(CODE_STRING_STYLE));
+        // 第二显示行：整段仍是字符串，版本号不得染成数字色
+        let second =
+            highlight_code_line_continued("sh", r#"zcode.z.ai/releases/3.7.6/x.deb" | tail -5"#, &mut state);
+        assert!(!second.contains(&format!("{CODE_NUMBER_STYLE}3.7.6")));
+        assert!(second.starts_with(CODE_STRING_STYLE));
+        // 引号闭合后恢复正常 token 化：tail 的 -5 属于字符串外内容
+        assert!(second.contains("tail"));
+        assert_eq!(state, CodeLineHighlightState::default());
+    }
+
+    /// 【终端】【命令着色】折行续行延续行注释状态到逻辑行尾。
+    #[test]
+    fn continued_lines_keep_comment_state() {
+        let mut state = CodeLineHighlightState::default();
+        let first = highlight_code_line_continued("sh", "echo hi # long comment that", &mut state);
+        assert!(first.contains(CODE_COMMENT_STYLE));
+        let second = highlight_code_line_continued("sh", "wraps to next display line", &mut state);
+        assert!(second.starts_with(CODE_COMMENT_STYLE));
+    }
 
     /// CSS 的块注释使用注释样式，行内闭合后继续高亮后文。
     #[test]

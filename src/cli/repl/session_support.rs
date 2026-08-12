@@ -270,6 +270,7 @@ mod tests {
             automatic: false,
             duration_ms: 0,
             usage: None,
+            error: None,
         }
     }
 

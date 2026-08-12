@@ -175,7 +175,10 @@ fn work_status_hidden_when_live_reasoning_exists() {
     assert!(joined.contains("Thinking") || joined.contains("思考"));
 }
 
-/// 【终端】【子智能体动效】验证主 agent 空闲时子智能体视图仍推进扫光帧。
+/// 【终端】【子智能体动效】验证主 agent 空闲时子智能体动画仍持续推进。
+///
+/// 主视图下有运行中的子智能体时也要推进帧：底部 agent 面板的
+/// 流光与实时统计依赖它；进入子智能体视图后继续驱动 Working 扫光。
 ///
 /// 参数:
 /// - 无
@@ -190,6 +193,8 @@ fn subagent_view_animates_while_main_agent_is_idle() {
         3,
     );
     let mut store = TranscriptStore::new(100);
+    // 空 transcript 且主 agent 空闲：没有任何动画诉求，帧保持冻结
+    assert!(!store.advance_live_animation());
     store.push_tool_call(
         "subagent".to_string(),
         r#"{"description":"检查项目"}"#.to_string(),
@@ -203,9 +208,12 @@ fn subagent_view_animates_while_main_agent_is_idle() {
         ),
     );
 
-    // 主 agent 空闲：既无 work_status 也无 reasoning live tail
+    // 主 agent 空闲但有运行中的子智能体：主视图面板动效仍需推进
     assert!(!store.viewing_running_subagent());
-    assert!(!store.advance_live_animation());
+    assert!(
+        store.advance_live_animation(),
+        "主视图下运行中的子智能体必须驱动面板动效帧"
+    );
 
     assert!(store.enter_subagent_view(0), "子智能体视图应能进入");
     assert!(store.viewing_running_subagent());

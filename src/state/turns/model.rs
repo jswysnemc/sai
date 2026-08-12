@@ -69,6 +69,8 @@ pub struct Turn {
     pub parent_turn_id: Option<String>,
     /// 本轮实际使用的模型标识；历史数据未记录时为空
     pub model: Option<String>,
+    /// 失败轮的错误摘要；非失败轮与旧历史为空
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

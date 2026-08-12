@@ -289,7 +289,11 @@ fn duration_suffix(duration: Option<Duration>) -> String {
 /// 返回:
 /// - 如 ` · 12 tokens`
 pub(crate) fn format_tokens_suffix(tokens: usize) -> String {
-    format!(" · {tokens} tokens")
+    // 与底栏/会话总结一致的 k 单位：思考 token 动辄数千，原始数字读起来费劲
+    format!(
+        " · {} tokens",
+        crate::render::session_summary::format_k(tokens)
+    )
 }
 
 #[cfg(test)]
@@ -309,6 +313,14 @@ mod tests {
         let plain = strip_ansi_for_test(&rendered);
         assert!(plain.contains("tokens"));
         assert!(plain.contains("Thinking (12s)"));
+    }
+
+    /// 【终端】【思考统计】token 后缀超过千位用 k 单位，与底栏风格一致。
+    #[test]
+    fn tokens_suffix_uses_k_unit() {
+        assert_eq!(format_tokens_suffix(42), " · 42 tokens");
+        assert_eq!(format_tokens_suffix(1_500), " · 1.5k tokens");
+        assert_eq!(format_tokens_suffix(12_345), " · 12k tokens");
     }
 
     #[test]

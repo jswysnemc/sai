@@ -1,6 +1,7 @@
 use super::{TranscriptStore, TranscriptView};
 use crate::render::transcript::cell::HistoryCell;
 use crate::render::transcript::tool_cell::ToolCell;
+use std::collections::HashMap;
 
 /// 底部 agent 面板展示的子智能体概览条目。
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -9,16 +10,22 @@ pub(crate) struct SubagentOverviewEntry {
     pub(crate) cell_index: usize,
     /// 展示名称（快照描述或参数摘要）
     pub(crate) label: String,
-    /// 状态键：ok / err / run
+    /// 状态键：ok / err / run / idle
     pub(crate) status: &'static str,
     /// 是否仍在运行
     pub(crate) running: bool,
     /// 是否为当前正在查看的子智能体视图
     pub(crate) viewing: bool,
+    /// 存活条目的实时阶段（工具进度 / Token 统计 / 待命提示）
+    pub(crate) detail: Option<String>,
 }
 
 impl TranscriptStore {
-    /// 枚举底部 agent 面板可切换的子智能体（运行中的与正在查看的）。
+    /// 枚举底部 agent 面板可切换的子智能体（存活的与正在查看的）。
+    ///
+    /// 同一个子智能体的每次工具调用（start / wait / send / result）都会
+    /// 产生一个 transcript cell，这里按后台 ID 去重，只保留一个条目并
+    /// 随最新 cell 更新状态。
     ///
     /// 参数:
     /// - 无
@@ -27,30 +34,40 @@ impl TranscriptStore {
     /// - 子智能体概览列表；无可切换条目时为空
     pub(crate) fn subagent_overview(&self) -> Vec<SubagentOverviewEntry> {
         let viewing_id = self.viewing_subagent_id().map(str::to_string);
-        self.cells
-            .iter()
-            .enumerate()
-            .filter_map(|(index, cell)| match cell {
-                HistoryCell::Tool(ToolCell::Subagent(subagent)) => {
-                    let (label, status, running) = subagent.overview();
-                    let viewing = viewing_id.as_deref().is_some_and(|id| {
-                        subagent.subagent_id().is_some_and(|cell_id| cell_id == id)
-                    });
-                    // 子智能体只在运行时出现在面板；正在查看的保留返回路径
-                    if !running && !viewing {
-                        return None;
-                    }
-                    Some(SubagentOverviewEntry {
-                        cell_index: index,
-                        label,
-                        status,
-                        running,
-                        viewing,
-                    })
+        let mut entries: Vec<SubagentOverviewEntry> = Vec::new();
+        let mut position_by_id: HashMap<String, usize> = HashMap::new();
+        for (index, cell) in self.cells.iter().enumerate() {
+            let HistoryCell::Tool(ToolCell::Subagent(subagent)) = cell else {
+                continue;
+            };
+            let overview = subagent.overview();
+            let viewing = viewing_id.as_deref().is_some_and(|id| {
+                subagent.subagent_id().is_some_and(|cell_id| cell_id == id)
+            });
+            // 存活（运行中/待命中）的出现在面板；正在查看的保留返回路径
+            let alive = overview.running || overview.status == "idle";
+            if !alive && !viewing {
+                continue;
+            }
+            let entry = SubagentOverviewEntry {
+                cell_index: index,
+                label: overview.label,
+                status: overview.status,
+                running: overview.running,
+                viewing,
+                detail: overview.detail,
+            };
+            if let Some(id) = subagent.subagent_id() {
+                if let Some(&position) = position_by_id.get(id) {
+                    // 同一子智能体的后续调用只刷新已有条目，保持首次出现的顺序
+                    entries[position] = entry;
+                    continue;
                 }
-                _ => None,
-            })
-            .collect()
+                position_by_id.insert(id.to_string(), entries.len());
+            }
+            entries.push(entry);
+        }
+        entries
     }
 
     /// 切换到指定子智能体的会话视图。
@@ -68,7 +85,7 @@ impl TranscriptStore {
         let Some(id) = subagent.subagent_id() else {
             return false;
         };
-        let (label, _, _) = subagent.overview();
+        let label = subagent.overview().label;
         self.view = TranscriptView::Subagent {
             id: id.to_string(),
             label,

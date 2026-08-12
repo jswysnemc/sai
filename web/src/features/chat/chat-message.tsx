@@ -288,12 +288,13 @@ function historicalFailureDetail(
   turn: SessionTimelineTurn,
   t: (en: string, zh: string) => string
 ): string {
+  // 落库的失败原因最准确；正文已在消息气泡渲染，绝不当错误详情用
+  if (turn.error?.trim()) return turn.error.trim();
   for (let index = turn.tools.length - 1; index >= 0; index -= 1) {
     const tool = turn.tools[index];
     const detail = tool.error?.trim() || (tool.status === "failed" ? tool.output.trim() : "");
     if (detail) return detail;
   }
-  if (turn.assistant.content?.trim()) return turn.assistant.content.trim();
   return t("The provider request failed before a response was produced.", "供应商请求在产生回复前失败。");
 }
 

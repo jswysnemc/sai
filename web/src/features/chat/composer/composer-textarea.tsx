@@ -27,9 +27,10 @@ type ComposerTextareaProps = {
   historyEntries: string[];
   disabled: boolean;
   autoFocus?: boolean;
+  respondToGlobalFocus?: boolean;
   placeholder: string;
   onChange: (value: string) => void;
-  onPasteImages: (files: File[], selectionStart: number, selectionEnd: number) => Promise<number | undefined>;
+  onPasteImages?: (files: File[], selectionStart: number, selectionEnd: number) => Promise<number | undefined>;
   onSubmit: () => void;
 };
 
@@ -110,11 +111,12 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
   }));
 
   useEffect(() => {
+    if (props.respondToGlobalFocus === false) return;
     /** 响应工作区操作并把焦点交还聊天输入区。 */
     const focusComposer = () => editorRef.current?.focus();
     window.addEventListener(FOCUS_COMPOSER_EVENT, focusComposer);
     return () => window.removeEventListener(FOCUS_COMPOSER_EVENT, focusComposer);
-  }, []);
+  }, [props.respondToGlobalFocus]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -305,6 +307,7 @@ export const ComposerTextarea = forwardRef<ComposerTextareaHandle, ComposerTexta
     const selection = readEditorTextSelection(editor) ?? { start: props.value.length, end: props.value.length };
     event.preventDefault();
     if (files.length > 0) {
+      if (!props.onPasteImages) return;
       void props.onPasteImages(files, selection.start, selection.end).then((caret) => {
         if (caret === undefined) return;
         requestAnimationFrame(() => {

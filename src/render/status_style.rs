@@ -61,6 +61,8 @@ pub(crate) fn color_status(status: &str) -> String {
         "ok" => "\x1b[32mok\x1b[0m".to_string(),
         "err" => "\x1b[31merr\x1b[0m".to_string(),
         "run" => "\x1b[33mrun\x1b[0m".to_string(),
+        // 持久子智能体待命：存活但不执行，用蓝色与运行中区分
+        "idle" => "\x1b[38;5;110midle\x1b[0m".to_string(),
         "arg" => "\x1b[2m\x1b[36m…\x1b[0m".to_string(),
         "skip" => "\x1b[2mskip\x1b[0m".to_string(),
         value => value.to_string(),

@@ -219,6 +219,7 @@ mod tests {
             automatic,
             duration_ms: 0,
             usage: None,
+            error: None,
         }
     }
 

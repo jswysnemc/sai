@@ -29,7 +29,7 @@ fn estimates_tokens_with_shared_bpe() {
 #[test]
 fn formats_token_counts_without_unicode_prefix() {
     assert_eq!(format_token_count(999, false), "999");
-    assert_eq!(format_token_count(1_500, true), "~1.5K");
+    assert_eq!(format_token_count(1_500, true), "~1.5k");
 }
 
 /// 验证完整进度模式会立即转发子 Agent 正文分片。

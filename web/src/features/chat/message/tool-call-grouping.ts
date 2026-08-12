@@ -16,6 +16,9 @@ export type GroupedMessagePart =
 /**
  * 聚合连续且已完成的工具调用，运行中和失败调用始终独立展示。
  *
+ * 单项完成调用同样成组：组头「探索 · 1 个文件」+ 一行清单，
+ * 与多项组保持同一套排版，避免两种视觉结构交替出现。
+ *
  * @param parts 原始消息部件
  * @returns 保持原顺序的普通部件和工具组
  */
@@ -25,16 +28,13 @@ export function groupCompletedToolCalls(parts: LiveMessagePart[]): GroupedMessag
 
   /** 将已收集的连续完成项写入结果。 */
   const flushCompleted = () => {
-    if (completedTools.length >= 2) {
+    if (completedTools.length >= 1) {
       result.push({
         type: "tool-group",
         // 仅用首项 id，组增长时不重挂载，避免展开状态被重置
         id: `tool-group-${completedTools[0].id}`,
         tools: completedTools.map((item) => item.tool)
       });
-    } else if (completedTools.length === 1) {
-      const item = completedTools[0];
-      result.push({ type: "part", id: item.id, part: { id: item.id, type: "tool", tool: item.tool } });
     }
     completedTools = [];
   };
@@ -107,6 +107,78 @@ export function toolCallGroupLabel(
 }
 
 /**
+ * 为工具组生成「分类 · 数量」式短标题。
+ *
+ * 与 {@link toolCallGroupLabel} 的长句式不同，短标题用于组头常驻展示：
+ * 组内条目默认可见，标题只需点明类别与规模，如「探索 · 2 文件」。
+ *
+ * @param tools 工具组中的完成项
+ * @param locale 界面语言
+ * @param workspacePath 当前工作区路径，用于对象去重
+ * @returns 短标题文本
+ */
+export function toolCallGroupTitle(
+  tools: ToolLifecycle[],
+  locale: Locale = "zh-CN",
+  workspacePath = ""
+): string {
+  const dot = " · ";
+  if (tools.every((tool) => tool.name === "todo")) {
+    return text(locale, `Plan${dot}${tools.length} ${plural(tools.length, "update")}`, `计划${dot}${tools.length} 次更新`);
+  }
+  const exploreTools = tools.filter(isExploreTool);
+  const editTools = tools.filter(isEditTool);
+  const commandTools = tools.filter(isCommandTool);
+  if (exploreTools.length === tools.length) {
+    // 纯探索组：全是文件读取时按去重文件计数，含只读命令时按条目计数
+    const commandCount = tools.filter((tool) => isCommandToolName(tool.name)).length;
+    if (commandCount === 0) {
+      const files = uniqueTargetCount(exploreTools, locale, workspacePath);
+      return text(locale, `Explore${dot}${files} ${plural(files, "file")}`, `探索${dot}${files} 个文件`);
+    }
+    if (commandCount === tools.length) {
+      return text(locale, `Explore${dot}${commandCount} ${plural(commandCount, "command")}`, `探索${dot}${commandCount} 个命令`);
+    }
+    return text(locale, `Explore${dot}${tools.length} items`, `探索${dot}${tools.length} 项`);
+  }
+  if (editTools.length === tools.length) {
+    const files = uniqueTargetCount(editTools, locale, workspacePath);
+    return text(locale, `Edit${dot}${files} ${plural(files, "file")}`, `编辑${dot}${files} 个文件`);
+  }
+  if (commandTools.length === tools.length) {
+    return text(locale, `Commands${dot}${tools.length} ${plural(tools.length, "item")}`, `命令${dot}${tools.length} 项`);
+  }
+  return text(locale, `Actions${dot}${tools.length} ${plural(tools.length, "item")}`, `操作${dot}${tools.length} 项`);
+}
+
+/**
+ * 返回工具的完成态动词，用于清单行行首。
+ *
+ * @param name 工具标识
+ * @param locale 界面语言
+ * @returns 「已读取」式动词
+ */
+export function toolDoneVerb(name: string, locale: Locale = "zh-CN"): string {
+  const verbs: Record<string, [string, string]> = {
+    read_file: ["Read", "已读取"],
+    grep: ["Searched", "已搜索"],
+    glob: ["Matched", "已匹配"],
+    list_dir: ["Listed", "已列出"],
+    run_command: ["Ran", "已执行"],
+    background_command: ["Ran", "已执行"],
+    write_file: ["Wrote", "已写入"],
+    edit_file: ["Edited", "已编辑"],
+    str_replace: ["Replaced", "已替换"],
+    trash_path: ["Trashed", "已移除"],
+    todo: ["Updated", "已更新"],
+    load: ["Loaded", "已加载"]
+  };
+  const entry = verbs[name];
+  if (entry) return text(locale, entry[0], entry[1]);
+  return text(locale, "Called", "已调用");
+}
+
+/**
  * 判断工具是否为阅读/搜索类探索操作。
  *
  * 只读 shell 命令与 read/grep 工具同属探索行为，一并归入。
@@ -117,18 +189,6 @@ export function toolCallGroupLabel(
 export function isExploreTool(tool: ToolLifecycle): boolean {
   if (isExploreToolName(tool.name)) return true;
   return isCommandToolName(tool.name) && isReadOnlyShellCommand(commandTextOf(tool));
-}
-
-/**
- * 纯文件探索组可用轻量清单；含只读 Shell 时必须退回完整工具卡，以便二次展开看输出。
- *
- * @param tools 工具组中的完成项
- * @returns true 时渲染 ExploreFileList，否则渲染 ToolLifecycleCard
- */
-export function shouldUseLightweightExploreList(tools: readonly ToolLifecycle[]): boolean {
-  if (tools.length === 0 || !tools.every(isExploreTool)) return false;
-  // 只读 shell 仍算探索，但其输出（ls/pwd 结果）需要二次展开查看
-  return tools.every((tool) => !isCommandToolName(tool.name));
 }
 
 /**
