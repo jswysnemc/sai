@@ -121,14 +121,30 @@ pub(super) fn bang_ghost_suffix(input: &str) -> Option<&'static str> {
 /// 返回:
 /// - 展示用路径
 fn display_cwd(path: &str) -> String {
+    // Windows 没有 HOME，用户目录在 USERPROFILE
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .ok();
+    display_cwd_with_home(path, home.as_deref())
+}
+
+/// 以显式家目录将路径压缩为 `~` 形式（纯函数，便于跨平台测试）。
+///
+/// 参数:
+/// - `path`: 绝对或相对路径
+/// - `home`: 家目录；缺失时原样返回
+///
+/// 返回:
+/// - 展示用路径
+fn display_cwd_with_home(path: &str, home: Option<&str>) -> String {
     let trimmed = path.trim();
     if trimmed.is_empty() {
         return "~".to_string();
     }
-    let Ok(home) = std::env::var("HOME") else {
+    let Some(home) = home.map(str::trim).filter(|value| !value.is_empty()) else {
         return trimmed.to_string();
     };
-    // Windows 上 HOME 可能是 /home/user 或 C:\Users\user，统一为正则化路径比较
+    // Windows 路径分隔符统一为正斜杠再比较
     let home_norm = home.replace('\\', "/");
     let trimmed_norm = trimmed.replace('\\', "/");
     if trimmed_norm == home_norm {
@@ -196,9 +212,19 @@ mod tests {
 
     #[test]
     fn home_directory_renders_as_tilde() {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "/home/user".into());
-        assert_eq!(display_cwd(&home), "~");
-        assert_eq!(display_cwd(&format!("{home}/proj")), "~/proj");
+        // 纯函数直接注入家目录，不依赖 HOME/USERPROFILE 环境（Windows CI 无 HOME）
+        assert_eq!(display_cwd_with_home("/home/user", Some("/home/user")), "~");
+        assert_eq!(
+            display_cwd_with_home("/home/user/proj", Some("/home/user")),
+            "~/proj"
+        );
+        // Windows 风格路径同样压缩
+        assert_eq!(
+            display_cwd_with_home("C:\\Users\\dev\\proj", Some("C:\\Users\\dev")),
+            "~/proj"
+        );
+        // 无家目录时原样返回
+        assert_eq!(display_cwd_with_home("/srv/data", None), "/srv/data");
     }
 
     #[test]
