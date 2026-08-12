@@ -128,11 +128,14 @@ fn display_cwd(path: &str) -> String {
     let Ok(home) = std::env::var("HOME") else {
         return trimmed.to_string();
     };
-    if trimmed == home {
+    // Windows 上 HOME 可能是 /home/user 或 C:\Users\user，统一为正则化路径比较
+    let home_norm = home.replace('\\', "/");
+    let trimmed_norm = trimmed.replace('\\', "/");
+    if trimmed_norm == home_norm {
         return "~".to_string();
     }
-    let home_path = Path::new(&home);
-    let current = Path::new(trimmed);
+    let home_path = Path::new(&home_norm);
+    let current = Path::new(&trimmed_norm);
     if let Ok(relative) = current.strip_prefix(home_path) {
         let rest = relative.to_string_lossy();
         if rest.is_empty() {
