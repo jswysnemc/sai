@@ -1,8 +1,9 @@
 .turn-tree-overview {
+  position: relative;
   min-width: 0;
-  min-height: 100%;
-  padding: var(--space-xs);
-  overflow: auto;
+  height: 100%;
+  /* 画布靠平移缩放导航，视口本身不滚动 */
+  overflow: hidden;
   cursor: grab;
   touch-action: none;
   /* 拖动画布时禁止选中节点文字，避免拖一手绿字 */
@@ -20,14 +21,15 @@
   -webkit-user-select: none;
 }
 
-/* 总览需要同时容纳多列分支；桌面端扩大画布，窄屏仍由弹层横向滚动 */
+/* 总览需要同时容纳多列分支：近乎全屏，画布区高度固定占满 */
 .ui-modal.large.turn-tree-overview-modal {
-  width: min(1440px, calc(100vw - 24px));
-  max-height: min(960px, calc(100vh - 24px));
+  width: calc(100vw - 24px);
+  height: calc(100vh - 24px);
+  max-height: calc(100vh - 24px);
 }
 
 .turn-tree-overview-modal .ui-modal-body {
-  padding: var(--space-md);
+  padding: 0;
 }
 
 /*
@@ -37,8 +39,8 @@
  */
 .turn-tree-overview-stage {
   position: relative;
-  /* 树很小时给弹层一个不至于显得残缺的下限 */
-  min-height: 13rem;
+  /* 平移缩放以画布左上角为基准，坐标换算与 JS 保持一致 */
+  transform-origin: 0 0;
 }
 
 .turn-tree-overview-canvas {
@@ -121,13 +123,51 @@
   font-size: var(--text-xs);
 }
 
+/* 缩放控件：悬浮右下角，不遮挡画布主体 */
+.turn-tree-overview-controls {
+  position: absolute;
+  right: var(--space-lg);
+  bottom: var(--space-lg);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3xs);
+  padding: var(--space-3xs);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: color-mix(in srgb, var(--paper-raised) 92%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--elevation-2);
+}
+
+.turn-tree-overview-controls button {
+  display: grid;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 var(--space-2xs);
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.turn-tree-overview-controls button:hover {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}
+
+.turn-tree-overview-zoom-level {
+  min-width: 44px;
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 48rem) {
   .ui-modal.large.turn-tree-overview-modal {
     width: calc(100vw - 16px);
-    max-height: calc(100vh - 24px);
-  }
-
-  .turn-tree-overview-modal .ui-modal-body {
-    padding: var(--space-sm);
+    height: calc(100vh - 16px);
+    max-height: calc(100vh - 16px);
   }
 }
