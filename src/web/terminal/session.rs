@@ -226,20 +226,37 @@ mod tests {
         )
         .expect("PowerShell 终端应成功启动");
 
+        // CI 上 ConPTY / PowerShell 冷启动可能超过 5 秒，且过早写入会被丢掉。
+        wait_until(&session, Duration::from_secs(20), |replay| {
+            !replay.is_empty()
+        });
         session
             .write(b"Write-Output __SAI_PTY_READY__\r\n")
             .expect("应能写入 PowerShell 命令");
-        let deadline = Instant::now() + Duration::from_secs(5);
-        let mut ready = false;
+        let ready = wait_until(&session, Duration::from_secs(20), |replay| {
+            String::from_utf8_lossy(replay).contains("__SAI_PTY_READY__")
+        });
+        let replay = String::from_utf8_lossy(&session.replay()).into_owned();
+        let _ = session.kill();
+
+        assert!(
+            ready,
+            "PowerShell 未在时限内返回终端输出；replay={replay:?}"
+        );
+    }
+
+    fn wait_until(
+        session: &TerminalSession,
+        timeout: Duration,
+        predicate: impl Fn(&[u8]) -> bool,
+    ) -> bool {
+        let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
-            if String::from_utf8_lossy(&session.replay()).contains("__SAI_PTY_READY__") {
-                ready = true;
-                break;
+            if predicate(&session.replay()) {
+                return true;
             }
             std::thread::sleep(Duration::from_millis(50));
         }
-        let _ = session.kill();
-
-        assert!(ready, "PowerShell 未在五秒内返回终端输出");
+        predicate(&session.replay())
     }
 }
