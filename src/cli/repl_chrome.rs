@@ -381,7 +381,7 @@ pub(super) fn chrome_status_line(left: &str, right: &str, cols: usize) -> String
 /// 返回:
 /// - 固定行数
 pub(super) fn chrome_fixed_rows() -> u16 {
-    CHROME_INPUT_PAD_ROWS.saturating_mul(2)
+    CHROME_INPUT_PAD_ROWS
 }
 
 #[cfg(test)]
@@ -500,8 +500,8 @@ mod tests {
         assert!(!line.contains(CHROME_PANEL_BG));
         assert!(line.contains("hello"));
         assert_eq!(visible_width(&line), 5);
-        // 上空白 + 下空白
-        assert_eq!(chrome_fixed_rows(), 2);
+        // 输入上方一行空白
+        assert_eq!(chrome_fixed_rows(), 1);
         let divider = chrome_panel_divider(AgentMode::Plan, 20);
         assert_eq!(visible_width(&divider), 20);
     }

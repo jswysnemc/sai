@@ -121,22 +121,23 @@ impl ComposerFrame {
         let layout = self.layout(cols);
         let panel_rows = self.panel_lines.len().min(usize::from(u16::MAX)) as u16;
         let pads = CHROME_INPUT_PAD_ROWS.saturating_mul(2);
-        // slash / shell 提示时收起状态行，仍保留输入上下空白间距
+        // slash / shell 提示时收起状态行，输入上方保留一行空白
         if layout.slash_panel.is_visible() {
             return panel_rows
-                .saturating_add(pads)
+                .saturating_add(CHROME_INPUT_PAD_ROWS)
                 .saturating_add(layout.input_rows)
                 .saturating_add(layout.slash_panel.height());
         }
         if layout.shell_hint.is_visible() {
             return panel_rows
-                .saturating_add(pads)
+                .saturating_add(CHROME_INPUT_PAD_ROWS)
                 .saturating_add(layout.input_rows)
                 .saturating_add(layout.shell_hint.height());
         }
         panel_rows
-            .saturating_add(chrome_fixed_rows())
+            .saturating_add(CHROME_INPUT_PAD_ROWS)
             .saturating_add(layout.input_rows)
+            .saturating_add(1)
     }
 
     /// 绘制 composer，并在内容与上次完全一致时跳过重绘。
@@ -169,7 +170,7 @@ impl ComposerFrame {
         let cursor_row = {
             let mut row = top;
             row = row.saturating_add(self.panel_lines.len().min(usize::from(u16::MAX)) as u16);
-            // 输入正文上方有固定空白行，光标落在空白之下
+            // 输入正文上方保留一行空白，光标落在空白之下
             row.saturating_add(CHROME_INPUT_PAD_ROWS)
                 .saturating_add(layout.cursor_row_offset)
         };
@@ -238,15 +239,7 @@ impl ComposerFrame {
                 row = row.saturating_add(1);
             }
         }
-        for _ in 0..CHROME_INPUT_PAD_ROWS {
-            queue!(
-                output,
-                MoveTo(0, row),
-                Print(chrome_panel_row(mode, "", cols))
-            )?;
-            row = row.saturating_add(1);
-        }
-
+        // 输入下方不再留空白行，slash/shell 提示或状态行直接接在输入之下
         let end_row = if layout.slash_panel.is_visible() {
             layout.slash_panel.draw(output, row, cols)?;
             row.saturating_add(layout.slash_panel.height())
@@ -254,13 +247,9 @@ impl ComposerFrame {
             layout.shell_hint.draw(output, row, cols)?;
             row.saturating_add(layout.shell_hint.height())
         } else {
-            // 输入与状态同一块面板底，中间不画分割线（对齐 OpenCode）
+            // 状态行独立一行，无背景、无彩条
             let status = self.chrome.footer_line(content_cols);
-            queue!(
-                output,
-                MoveTo(0, row),
-                Print(chrome_panel_row(mode, &status, cols))
-            )?;
+            queue!(output, MoveTo(0, row), Print(status))?;
             row.saturating_add(1)
         };
 
@@ -731,9 +720,9 @@ mod tests {
         frame.draw_lines(&mut output, &viewport, None).unwrap();
 
         let output = String::from_utf8(output).unwrap();
-        // 上下空白各 1 + 输入 1 + 状态 1 = 4；顶部行 4（0 起）时，末行后为行 8 → 1 起第 9 行
+        // 上空白 1 + 输入 1 + 状态 1 = 3；顶部行 4（0 起）时，末行后为行 7 → 1 起第 8 行
         assert!(
-            output.contains("\x1b[9;1H\x1b[J"),
+            output.contains("\x1b[8;1H\x1b[J"),
             "expected clear below floating composer, got {output:?}"
         );
     }
