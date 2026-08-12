@@ -69,8 +69,8 @@ impl HistoryCell {
                 let rendered = meta_cell::render(cell);
                 let refit = crate::render::session_summary::refit_turn_rule(&rendered, width);
                 if cell.kind == meta_cell::MetaKind::Summary {
-                    // 总览正文与通栏分割线之间留一行空行，扫读时不贴在一起
-                    format!("{refit}\n\n{}", turn_rule(width))
+                    // 总览正文与通栏分割线直接相连，扫读时作为同一块信息
+                    format!("{refit}\n{}", turn_rule(width))
                 } else {
                     refit
                 }
