@@ -33,11 +33,19 @@ This project is a fork of [Miyu](https://github.com/SHORiN-KiWATA/Miyu). It cont
 
 Streaming REPL chat, built-in tool replies, the config TUI, plus the web workbench for subagents and Source Control.
 
+> UI shots below are placeholders; real screenshots will replace them later.
+
 ### Terminal REPL
 
-![Sai REPL greeting and streaming chat](pics/hello.png)
+![Sai REPL greeting and streaming chat](pics/placeholder-repl.svg)
 
-![Config TUI for providers and models](pics/sai-config.png)
+### Config TUI
+
+Run `sai config` (also reachable from the REPL) for the terminal configurator. The main menu is layered by frequency: active configuration, providers and models, Agent, tools, Skills, advanced settings.
+
+![Config TUI main menu](pics/placeholder-config.svg)
+
+![Agent tool and Skills multi-select](pics/placeholder-config-agents.svg)
 
 ### Built-in tools
 
@@ -53,9 +61,9 @@ Streaming REPL chat, built-in tool replies, the config TUI, plus the web workben
 
 ### Web workbench
 
-![Multiple subagents running in parallel](pics/multi-subagents.png)
+![Multiple subagents running in parallel](pics/placeholder-web.svg)
 
-![Source Control and model switching](pics/git-model.png)
+![Source Control and model switching](pics/placeholder-web-git.svg)
 
 
 ---
@@ -65,7 +73,7 @@ Streaming REPL chat, built-in tool replies, the config TUI, plus the web workben
 ### Multi-protocol LLM access
 
 - **Triple-protocol adaptive** - OpenAI Chat, OpenAI Responses, Anthropic Messages; `auto` mode picks by provider, or set explicitly
-- **Any compatible provider** - Built-in templates for opencode Zen, OpenAI, Anthropic; custom `base_url` for any third-party compatible service
+- **Any compatible provider** - Built-in templates for opencode Zen, OpenAI, Anthropic; custom `base_url` for any third-party compatible service; multiple API keys per provider with load balancing
 - **Thinking chain control** - `thinking_level` seven tiers (auto / none / low / medium / high / xhigh / max); `thinking_format` covers string / object / deepseek-thinking / openai-chat-reasoning-effort / reasoning / anthropic-thinking
 - **Streaming rendering** - Real-time Markdown streaming with KaTeX math, Mermaid diagrams, Syntect syntax highlighting, o200k tokenizer counting
 - **Context compaction** - Long conversations are summarized by a dedicated compaction model, preserving key information without losing context
@@ -74,9 +82,9 @@ Streaming REPL chat, built-in tool replies, the config TUI, plus the web workben
 
 - **Three permission modes** - `Yolo` free tool use, `Audited` (sandbox + audit log + per-call confirm), `Plan` read-only
 - **Progressive tool loading** - Only `load` and base tools are exposed at start; the model calls `load` to pull in tool groups or skills on demand; the visible set persists to `loaded-tools.json` across turns
-- **30+ built-in tools** - Grouped by purpose: `base` file/command, `web` lookup, `media` image/meme, `research` deep research, `memory` recall, `package` Arch Linux, `game` compatibility, `diagnostics` system, `knowledge` base, `utilities` calc/encode, `personal` alarm, `mcp` external
-- **Subagents** - The `subagent` tool starts an independent LLM loop with a `max_steps` budget and timeout; writable tasks auto-create a `.sai-subagents` git worktree for isolation, then apply back and clean up on success
-- **Skills** - Reusable `SKILL.md` skill packs with enable / disable / list / stats / prune
+- **30+ built-in tools** - Grouped by purpose: `base` file/command, `web` lookup, `media` image/meme, `research` deep research, `memory` recall, `package` Arch Linux, `game` compatibility, `diagnostics` system, `knowledge` base, `utilities` calc/encode, `personal` alarm, `ssh` remote hosts, `mcp` external
+- **Subagents** - The `subagent` tool starts an independent LLM loop with a `max_steps` budget and timeout; writable tasks auto-create a `.sai-subagents` git worktree for isolation, then apply back and clean up on success. Persistent agents can idle and take follow-ups (REPL `/subagents`, `/msg`)
+- **Skills** - Reusable `SKILL.md` skill packs with three visibility tiers (hidden / name-only / full); enable / disable / list / stats / prune from the TUI or CLI
 - **MCP bridging** - Native stdio / http MCP servers; tools registered with `mcp_` prefix; dedicated `mcp.jsonc` config
 - **Session-level Todo** - A plan checklist tracked across tool rounds
 - **Cron jobs** - bash / http / prompt types, persisted to `jobs.db`, triggered by a background scheduler
@@ -121,6 +129,10 @@ Run `sai web` and a browser opens a full remote programming workbench:
 - **System monitor** - Real-time CPU / RSS charts
 - **Settings center** - Graphical config for providers, models, permissions, gateways, MCP, hooks, memory, personas, skills
 - **i18n** - Chinese / English UI toggle
+- **Access control** - `--host` bind address (localhost by default); `sai web-password` sets an access password
+- **Conversation branches** - Fork, browse, and switch from any turn; the branch-overview canvas supports pan and zoom
+- **External engines** - Connect Claude / Codex ACP kernels from the composer; they share the same session and timeline
+- **Markdown styles** - Switchable render presets; reasoning and tool calls collapse into step groups
 
 #### Source Control
 
@@ -137,6 +149,22 @@ The Web workbench includes a Source Control panel backed by the system `git`. It
 
 - **Bilingual** - `en-US` and `zh-CN` UI languages, auto-detected from `SAI_LANG` / `LC_ALL` / `LANG`, overridable with `--lang`
 - **Full-chain localization** - CLI prompts, TUI, web workbench, and error messages all support both languages
+
+### Config TUI
+
+Run `sai config` for the terminal configurator. The 7-item main menu is layered by frequency; number keys jump directly:
+
+1. **Active configuration** - Pick the default provider and model for new chats
+2. **Providers and models** - Browse, add, delete, or refresh the catalog
+3. **Agent configuration** - Sectioned editor for basics, system prompt, tool capabilities, and Skills; tools / Skills use a multi-select list (hidden / enabled / deferred) instead of typing names
+4. **Tools** - Toggle assistant tools; web search lives in the same list
+5. **Skills** - List installed skills, Space to enable/disable; global switches live on the same page
+6. **Advanced settings** - Knowledge base, gateway channels, and global parameters (permissions / terminal & context / tools & background commands / display)
+7. **Save and exit** - Persist in-memory changes to disk
+
+### Conversation branches
+
+Turns are stored as a tree and can fork from any message. Both the TUI and the web workbench can browse and switch branches; the web UI also has a pan-and-zoom branch overview.
 
 ---
 
@@ -205,8 +233,8 @@ Pushing a `v*` tag runs the **Release** workflow and publishes assets on [Releas
 - matching `.sha256` checksums
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 You can also run the **Release** workflow manually from Actions and supply an existing tag.
@@ -220,7 +248,7 @@ Images are published to GitHub Container Registry:
 docker pull ghcr.io/jswysnemc/sai:latest
 
 # version tag
-docker pull ghcr.io/jswysnemc/sai:0.1.0
+docker pull ghcr.io/jswysnemc/sai:0.2.0
 ```
 
 Build locally:
@@ -284,7 +312,7 @@ API keys go in `secrets.jsonc` (same dir), supporting `$env:VAR_NAME` references
 }
 ```
 
-You can also use the built-in TUI configurator or the settings center in `sai web`.
+You can also run `sai config` for the built-in TUI configurator, or use the settings center in `sai web`.
 
 ### 3. Interactive REPL
 
@@ -306,6 +334,7 @@ sai ask -w "latest rust stable features"  # trigger web search
 
 ```bash
 sai web --port 4096
+sai web --host 0.0.0.0 --port 4096   # set `sai web-password set` before exposing the bind
 ```
 
 A browser opens automatically to `http://localhost:4096`.
@@ -335,11 +364,14 @@ Edit the `gateways` section of `config.jsonc`, or use `sai gateway` subcommands 
 | --- | --- |
 | `sai` | Enter the interactive REPL |
 | `sai ask <message>` | One-shot chat; supports `-c` image, `-w` web search |
-| `sai web [--port N] [--no-open]` | Launch the web workbench |
+| `sai web [--port N] [--host ADDR] [--no-open]` | Launch the web workbench |
+| `sai web-password set/clear/status` | Web access password |
 | `sai init` | Initialize the config directory |
 | `sai paths` | Print all directory locations |
+| `sai config` | Open the config TUI |
 | `sai config validate` | Validate the config file |
 | `sai config paths` | Print config paths |
+| `sai models` | Interactive model and thinking-level picker |
 | `sai providers [index]` | View or switch the active provider |
 | `sai set thinking [level]` | Set the thinking-chain level |
 | `sai fish-init` / `bash-init` / `zsh-init` / `powershell-init` | Install the command-not-found hook |
@@ -394,6 +426,7 @@ Sai/
 │   ├── state/            # Session state: turns WAL, pending, compaction, snapshot, recovery
 │   ├── gateways/         # Multi-platform gateways: QQ/WeChat/OneBot/WeCom, supervisor
 │   ├── config/           # Config: AppConfig, providers, permissions, gateways, MCP, models
+│   ├── config_tui/       # Terminal config UI: main menu, Agent/tools/Skills, advanced settings
 │   ├── permission/       # Permissions: broker, policy, sandbox, audit log
 │   ├── mcp/              # MCP bridging: stdio/http client and registration
 │   ├── shell/            # Shell hooks: fish/bash/zsh/powershell

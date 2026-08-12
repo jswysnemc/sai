@@ -33,11 +33,19 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 
 终端 REPL 的流式对话、内置工具回执、配置 TUI，以及 Web 工作台的子代理与源代码管理。
 
+> 下列界面图为占位，正式截图稍后替换。
+
 ### 终端 REPL
 
-![Sai REPL 问候与流式对话](pics/hello.png)
+![Sai REPL 问候与流式对话](pics/placeholder-repl.svg)
 
-![配置 TUI：供应商与模型设置](pics/sai-config.png)
+### 配置 TUI
+
+运行 `sai config`（REPL 内也可进入）打开终端配置界面。主菜单按使用频率分层：激活配置、供应商和模型、Agent、工具、Skills、高级设置。
+
+![配置 TUI 主菜单](pics/placeholder-config.svg)
+
+![Agent 工具与 Skills 勾选清单](pics/placeholder-config-agents.svg)
 
 ### 内置工具
 
@@ -53,9 +61,9 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 
 ### Web 工作台
 
-![并发调度多个子代理](pics/multi-subagents.png)
+![并发调度多个子代理](pics/placeholder-web.svg)
 
-![源代码管理与模型切换](pics/git-model.png)
+![源代码管理与模型切换](pics/placeholder-web-git.svg)
 
 
 ---
@@ -65,7 +73,7 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 ### 多协议 LLM 接入
 
 - **三协议自适应** - OpenAI Chat、OpenAI Responses、Anthropic Messages 三种协议,`auto` 模式按供应商自动选择,也可显式指定
-- **任意兼容供应商** - 内置 opencode Zen、OpenAI、Anthropic 三套模板,支持自定义 `base_url` 接入任意第三方兼容服务
+- **任意兼容供应商** - 内置 opencode Zen、OpenAI、Anthropic 三套模板,支持自定义 `base_url` 接入任意第三方兼容服务;同一供应商可配置多把 API Key 并负载均衡
 - **思维链控制** - `thinking_level` 七档(auto / none / low / medium / high / xhigh / max),`thinking_format` 兼容 string / object / deepseek-thinking / openai-chat-reasoning-effort / reasoning / anthropic-thinking 等多种推理协议
 - **流式渲染** - Markdown 实时流式输出,内建 KaTeX 公式、Mermaid 图表、Syntect 代码高亮、o200k tokenizer 计数
 - **上下文压缩** - 超长对话自动用专用压缩模型归纳历史,保留关键信息不丢上下文
@@ -74,9 +82,9 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 
 - **三种权限模式** - `Yolo` 自由调用工具、`Audited` 审计模式(沙盒 + 审计日志 + 逐次确认)、`Plan` 只读模式(仅允许只读工具)
 - **渐进式工具加载** - 启动仅暴露 `load` 与基础工具,模型按需调用 `load` 加载工具组或 skill,可见集持久化到 `loaded-tools.json` 跨轮恢复
-- **30+ 内置工具** - 按用途分组:`base` 基础文件命令、`web` 网络查询、`media` 图片与表情包、`research` 深度研究、`memory` 记忆操作、`package` Arch Linux 包管理、`game` 游戏兼容性、`diagnostics` 系统诊断、`knowledge` 知识库、`utilities` 计算与编码、`personal` 闹钟、`mcp` 外部工具
-- **子代理** - `subagent` 工具启动独立 LLM 循环,带 `max_steps` 预算与超时;可写任务在 git 仓库内自动创建 `.sai-subagents` worktree 隔离,完成后自动 apply 回父工作区并清理
-- **Skills 技能包** - `SKILL.md` 格式的可复用技能,支持启用 / 禁用 / 列出 / 统计 / 清理
+- **30+ 内置工具** - 按用途分组:`base` 基础文件命令、`web` 网络查询、`media` 图片与表情包、`research` 深度研究、`memory` 记忆操作、`package` Arch Linux 包管理、`game` 游戏兼容性、`diagnostics` 系统诊断、`knowledge` 知识库、`utilities` 计算与编码、`personal` 闹钟、`ssh` 远程主机、`mcp` 外部工具
+- **子代理** - `subagent` 工具启动独立 LLM 循环,带 `max_steps` 预算与超时;可写任务在 git 仓库内自动创建 `.sai-subagents` worktree 隔离,完成后自动 apply 回父工作区并清理。支持 persistent 待命复用与留言通道(REPL `/subagents`、`/msg`)
+- **Skills 技能包** - `SKILL.md` 格式的可复用技能,三级暴露(不暴露 / 仅名称 / 完整);TUI 与 CLI 均可启用 / 禁用 / 列出 / 统计 / 清理
 - **MCP 协议桥接** - 原生支持 stdio / http 两种 MCP Server,工具名以 `mcp_` 前缀注入注册表,独立 `mcp.jsonc` 配置文件
 - **会话级 Todo** - 任务计划清单,跨工具轮次跟踪进度
 - **Cron 定时任务** - bash / http / prompt 三种类型,持久化到 `jobs.db`,后台调度器到期触发
@@ -121,6 +129,10 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 - **系统监控** - CPU / RSS 实时图表
 - **设置中心** - 供应商、模型、权限、网关、MCP、Hooks、记忆、人格、Skills 全图形化配置
 - **国际化** - 中英文界面切换
+- **访问控制** - `--host` 绑定监听地址(默认本机);`sai web-password` 设置访问口令
+- **会话分支** - 从任意轮次分叉、浏览与切换;分支总览画布支持缩放拖动
+- **外部内核** - 在对话栏连接 Claude / Codex 等 ACP 内核,与内置 Agent 共用会话与时间线
+- **Markdown 风格** - 可切换渲染风格预设,思考块与工具组折叠展示
 
 #### 源代码管理
 
@@ -137,6 +149,22 @@ Web 工作台内置源代码管理面板，底层调用系统 `git`。支持变�
 
 - **中英双语** - `en-US` 与 `zh-CN` 两种界面语言,通过 `SAI_LANG` / `LC_ALL` / `LANG` 自动检测,`--lang` 显式覆盖
 - **全链路本地化** - CLI 提示、TUI 界面、Web 工作台、错误消息均支持双语
+
+### 配置 TUI
+
+运行 `sai config` 打开终端配置界面。主菜单 7 项按使用频率分层,数字键直达:
+
+1. **激活配置** - 选择新对话默认供应商与模型
+2. **供应商和模型** - 浏览、添加、删除或刷新目录
+3. **Agent 配置** - 分区编辑基本信息、系统提示词、工具能力与 Skills;工具 / Skills 用勾选清单(隐藏 / 启用 / 延迟),不再手写名称
+4. **工具** - 启停助手工具,Web 搜索并入同一列表
+5. **Skills** - 列出已安装技能,Space 启停;全局开关收在同一页
+6. **高级设置** - 知识库、渠道接入、全局参数(权限 / 终端与上下文 / 工具与后台命令 / 显示偏好)
+7. **保存并退出** - 将内存中的更改写入磁盘
+
+### 会话分支
+
+对话轮次按树存储,可从任意轮次分叉。TUI 与 Web 工作台均可浏览、切换分支;Web 另提供可缩放拖动的分支总览。
 
 ---
 
@@ -205,8 +233,8 @@ sudo pacman -U ~/.cache/sai/packages/sai-<version>-1-x86_64.pkg.tar.zst
 - 各文件对应的 `.sha256` 校验和
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 也可在 Actions 中手动运行 **Release** 工作流，并填写已有标签。
@@ -220,7 +248,7 @@ git push origin v0.1.0
 docker pull ghcr.io/jswysnemc/sai:latest
 
 # 指定版本
-docker pull ghcr.io/jswysnemc/sai:0.1.0
+docker pull ghcr.io/jswysnemc/sai:0.2.0
 ```
 
 本地构建：
@@ -284,7 +312,7 @@ API Key 写入 `secrets.jsonc`(同目录),支持 `$env:VAR_NAME` 引用环境变
 }
 ```
 
-也可用内置 TUI 配置器或 `sai web` 的设置中心图形化编辑。
+也可用 `sai config` 打开内置 TUI 配置器,或用 `sai web` 的设置中心图形化编辑。
 
 ### 3. 交互式 REPL
 
@@ -306,6 +334,7 @@ sai ask -w "最新 rust 稳定版特性"  # 触发联网搜索
 
 ```bash
 sai web --port 4096
+sai web --host 0.0.0.0 --port 4096   # 对外提供服务时请先 `sai web-password set`
 ```
 
 默认自动打开浏览器,访问 `http://localhost:4096`。
@@ -335,11 +364,14 @@ $ nonexist-cmd --flag
 | --- | --- |
 | `sai` | 进入交互式 REPL |
 | `sai ask <message>` | 单轮对话,支持 `-c` 附图、`-w` 联网 |
-| `sai web [--port N] [--no-open]` | 启动 Web 编程工作台 |
+| `sai web [--port N] [--host ADDR] [--no-open]` | 启动 Web 编程工作台 |
+| `sai web-password set/clear/status` | Web 访问口令 |
 | `sai init` | 初始化配置目录 |
 | `sai paths` | 打印所有目录位置 |
+| `sai config` | 打开配置 TUI |
 | `sai config validate` | 校验配置文件 |
 | `sai config paths` | 打印配置路径 |
+| `sai models` | 交互式选择模型与思考等级 |
 | `sai providers [index]` | 查看或切换当前供应商 |
 | `sai set thinking [level]` | 设置思维链等级 |
 | `sai fish-init` / `bash-init` / `zsh-init` / `powershell-init` | 安装对应 shell 的命令未找到 hook |
@@ -394,6 +426,7 @@ Sai/
 │   ├── state/            # 会话状态:turns WAL、pending、压缩、快照、恢复
 │   ├── gateways/         # 多平台网关:QQ/微信/OneBot/企业微信、supervisor
 │   ├── config/           # 配置:AppConfig、供应商、权限、网关、MCP、模型
+│   ├── config_tui/       # 终端配置界面:主菜单、Agent/工具/Skills、高级设置
 │   ├── permission/       # 权限:Broker、策略、沙盒、审计日志
 │   ├── mcp/              # MCP 协议桥接:stdio/http 客户端与注册
 │   ├── shell/            # Shell hook:fish/bash/zsh/powershell
