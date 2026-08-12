@@ -69,12 +69,15 @@ pub(super) fn replay_full<W: Write>(
     // 绘制期间隐藏光标：中途 flush 时若光标可见，Windows 终端会在
     // 输出尾行与输入框之间来回闪动；最终位置由 composer 的 Show 恢复
     queue!(output, Hide)?;
-    // 1. 清空可见屏与 scrollback，从顶部开始顺序输出
+    // 1. 清空可见屏与 scrollback，从顶部开始顺序输出。
+    //    ED 序列不影响 Kitty 图像放置，必须显式发图形删除命令，
+    //    否则 /clear、resize 重放后旧图残留在屏幕上
     queue!(
         output,
         MoveTo(0, 0),
         Clear(ClearType::All),
         Print(CLEAR_SCROLLBACK),
+        Print(crate::render::terminal_image::KITTY_DELETE_PLACEMENTS),
         Print(DISABLE_AUTOWRAP)
     )?;
     for line in lines {

@@ -76,6 +76,12 @@ pub(super) fn open_blocks_pager(blocks: &[ExpandableBlock], start_index: usize) 
             }
 
             queue!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
+            // 全屏视图接管前删除 transcript 的图像放置，避免旧图叠在 pager 上
+            write!(
+                stdout,
+                "{}",
+                crate::render::terminal_image::KITTY_DELETE_PLACEMENTS
+            )?;
             // 4. 固定顶栏：仅块序号
             write!(
                 stdout,

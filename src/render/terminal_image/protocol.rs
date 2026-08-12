@@ -213,6 +213,7 @@ fn kitty_block_limits() -> (usize, usize, usize, usize) {
 ///
 /// 返回:
 /// - `(列数 c, 行数 r)`
+#[cfg(test)]
 fn kitty_cell_dimensions(pixel_width: usize, pixel_height: usize) -> (usize, usize) {
     kitty_cell_dimensions_with(kitty_block_limits(), pixel_width, pixel_height)
 }
@@ -282,25 +283,42 @@ fn encode_kitty_png(path: &Path, cols: Option<usize>, rows: Option<usize>) -> Re
     // 语义更新放置位置，transcript 重排 / 重绘不再留下旧图残影叠影
     let image_id = kitty_image_id(&bytes);
     let placement_id = next_kitty_placement_id();
-    let encoded = general_purpose::STANDARD.encode(bytes);
-    // 1. 组装尺寸与静默参数，避免 Kitty 回写响应干扰 REPL。
-    //    C=1：放置图像后光标保持原位。默认行为是光标跳到图像右下角之后，
-    //    表格等逐行拼接的布局会从图片列开始整体错位；占位改由文本层
-    //    （换行 / 空格）自行控制（对齐 jcode/ratatui-image 的做法）
-    let mut control = format!("f=100,a=T,q=2,C=1,i={image_id},p={placement_id}");
+    // 1. 传输与放置分离：图像数据（大 payload）每个 image_id 只直写终端
+    //    一次；产物字符串只含轻量放置序列。live 重绘 / transcript 重打
+    //    重放的都是缓存字符串，分离后不再反复重传几百 KB 的 base64
+    if register_kitty_transmission(image_id) {
+        transmit_kitty_data_now(&kitty_transmission_payload(image_id, &bytes));
+    }
+    // 2. 放置序列：q=2 静默；C=1 放置后光标保持原位（默认会跳到图像
+    //    右下角之后，表格等逐行拼接的布局会从图片列开始整体错位），
+    //    占位由文本层（换行 / 空格）自行控制（对齐 jcode/ratatui-image）
+    let mut control = format!("a=p,q=2,C=1,i={image_id},p={placement_id}");
     if let Some(cols) = cols.filter(|value| *value > 0) {
         control.push_str(&format!(",c={cols}"));
     }
     if let Some(rows) = rows.filter(|value| *value > 0) {
         control.push_str(&format!(",r={rows}"));
     }
+    Ok(format!("\x1b_G{control}\x1b\\"))
+}
+
+/// 组装 Kitty 图像数据传输载荷（a=t 只传输不放置）。
+///
+/// 参数:
+/// - `image_id`: 图像 ID
+/// - `bytes`: PNG 文件字节
+///
+/// 返回:
+/// - 分块传输转义序列
+fn kitty_transmission_payload(image_id: u32, bytes: &[u8]) -> String {
+    let encoded = general_purpose::STANDARD.encode(bytes);
     let mut output = String::new();
     let mut chunks = encoded.as_bytes().chunks(KITTY_CHUNK_SIZE).peekable();
-    // 2. 首包携带完整控制键，后续分包只传 m 续传标记
+    // 首包携带完整控制键，后续分包只传 m 续传标记
     if let Some(first) = chunks.next() {
         let more = if chunks.peek().is_some() { 1 } else { 0 };
         output.push_str(&format!(
-            "\x1b_G{control},m={more};{}\x1b\\",
+            "\x1b_Ga=t,f=100,q=2,i={image_id},m={more};{}\x1b\\",
             String::from_utf8_lossy(first)
         ));
     }
@@ -311,8 +329,43 @@ fn encode_kitty_png(path: &Path, cols: Option<usize>, rows: Option<usize>) -> Re
             String::from_utf8_lossy(chunk)
         ));
     }
-    Ok(output)
+    output
 }
+
+/// 首次见到该图像 ID 时登记并返回 true（需要传输数据）。
+///
+/// 参数:
+/// - `image_id`: 图像 ID
+///
+/// 返回:
+/// - 本进程内是否为首次传输
+fn register_kitty_transmission(image_id: u32) -> bool {
+    use std::collections::HashSet;
+    use std::sync::{LazyLock, Mutex};
+    static TRANSMITTED: LazyLock<Mutex<HashSet<u32>>> =
+        LazyLock::new(|| Mutex::new(HashSet::new()));
+    TRANSMITTED
+        .lock()
+        .map(|mut set| set.insert(image_id))
+        .unwrap_or(true)
+}
+
+/// 将传输载荷立即直写终端。
+///
+/// a=t 只上传数据：不产生可见输出、不移动光标，插入到任何绘制序列
+/// 之间都无副作用；放置序列随渲染文本在其后送达。
+///
+/// 参数:
+/// - `payload`: 传输转义序列
+fn transmit_kitty_data_now(payload: &str) {
+    use std::io::Write;
+    let mut stdout = std::io::stdout().lock();
+    let _ = stdout.write_all(payload.as_bytes());
+    let _ = stdout.flush();
+}
+
+/// 删除所有可见 Kitty 图像放置（保留已传输数据供重放引用）。
+pub(crate) const KITTY_DELETE_PLACEMENTS: &str = "\x1b_Ga=d,d=a,q=2\x1b\\";
 
 /// 由 PNG 字节计算非零 Kitty 图像 ID。
 ///
