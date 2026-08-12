@@ -2,8 +2,8 @@ use super::shell_hint_panel::{bang_ghost_suffix, ShellHintPanel};
 use super::slash_panel::SlashPanel;
 use super::viewport::InlineViewport;
 use crate::cli::repl_chrome::{
-    chrome_fixed_rows, chrome_input_content_cols, chrome_panel_row, CHROME_ACCENT_COLS,
-    CHROME_INPUT_PAD_ROWS, ReplChrome,
+    chrome_fixed_rows, chrome_input_content_cols, chrome_panel_row, CHROME_INPUT_PAD_ROWS,
+    ReplChrome,
 };
 use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
 use crate::cli::repl_input_render::{
@@ -164,11 +164,8 @@ impl ComposerFrame {
         let height = viewport.composer_height();
         let layout = self.layout(cols);
         let content_cols = chrome_input_content_cols(cols);
-        // 光标落在彩条右侧的内容区
-        let drawn_cursor_col = layout
-            .cursor_col
-            .saturating_add(CHROME_ACCENT_COLS as u16)
-            .min(cols.saturating_sub(1) as u16);
+        // 光标直接落在输入列位置，无左侧彩条偏移
+        let drawn_cursor_col = layout.cursor_col.min(cols.saturating_sub(1) as u16);
         let cursor_row = {
             let mut row = top;
             row = row.saturating_add(self.panel_lines.len().min(usize::from(u16::MAX)) as u16);
@@ -473,11 +470,10 @@ mod tests {
         frame.draw_lines(&mut output, &viewport, None).unwrap();
 
         let output = String::from_utf8(output).unwrap();
-        // 最细引导线前景 + 面板灰底 + 输入文本
-        assert!(output.contains("\x1b[38;5;208m"));
-        assert!(output.contains('▏'));
-        assert!(output.contains("\x1b[48;5;236m"));
+        // 极简输入行：无彩条、无背景，只保留输入文本
         assert!(output.contains("hello"));
+        assert!(!output.contains('▏'));
+        assert!(!output.contains("\x1b[48;5;236m"));
     }
 
     /// 验证重绘期间先隐藏光标、结束时在输入位置恢复显示。
@@ -646,10 +642,7 @@ mod tests {
 
         let output = String::from_utf8(output).unwrap();
         assert!(output.contains("/model"));
-        // slash 展开时仍保留细引导线输入面板，但不画状态分隔线
-        assert!(output.contains("\x1b[38;5;208m"));
-        assert!(output.contains('▏'));
-        assert!(output.contains("\x1b[48;5;236m"));
+        // slash 展开时输入行仍在，但不画状态分隔线
         assert!(output.contains("/"));
         assert!(!output.contains("120k"));
     }
@@ -679,9 +672,14 @@ mod tests {
         frame.draw_lines(&mut output, &viewport, None).unwrap();
         let output = String::from_utf8(output).unwrap();
         let panel_at = output.find("计划").unwrap();
-        // 输入区用细引导线 ▏，不再画 ─ 顶线；面板须出现在引导线之前
-        let accent_at = output.find('▏').expect("composer accent");
-        assert!(panel_at < accent_at, "面板行必须渲染在输入区之前");
+        // 极简输入行无彩条；面板须出现在输入提示之前
+        let tip = if crate::i18n::is_zh() {
+            "输入消息 · Enter 发送 · Shift+Enter 换行"
+        } else {
+            "Type a message · Enter send · Shift+Enter newline"
+        };
+        let input_at = output.find(tip).expect("input placeholder");
+        assert!(panel_at < input_at, "面板行必须渲染在输入区之前");
     }
 
     /// 验证空输入框显示灰色轮询提示。
