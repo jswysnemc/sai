@@ -309,7 +309,7 @@ pub(super) fn chrome_panel_row(_mode: AgentMode, content: &str, cols: usize) -> 
     if width >= cols {
         truncate_ansi_to_width(content, cols)
     } else {
-        format!("{CHROME_PANEL_BG}{content}{}\x1b[0m", " ".repeat(cols - width))
+        content.to_string()
     }
 }
 
@@ -510,10 +510,9 @@ mod tests {
     #[test]
     fn panel_row_renders_plain_content() {
         let line = chrome_panel_row(AgentMode::Yolo, "hello", 20);
-        assert!(line.contains(CHROME_PANEL_BG));
+        assert!(!line.contains(CHROME_PANEL_BG));
         assert!(line.contains("hello"));
-        // 背景 + 内容 + 填充 + reset = 20 列可见宽度
-        assert_eq!(visible_width(&line), 20);
+        assert_eq!(visible_width(&line), 5);
         // 输入上方一行空白
         assert_eq!(chrome_fixed_rows(), 1);
         let divider = chrome_panel_divider(AgentMode::Plan, 20);

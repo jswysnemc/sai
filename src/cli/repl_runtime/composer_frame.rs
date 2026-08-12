@@ -217,13 +217,13 @@ impl ComposerFrame {
             queue!(output, MoveTo(0, row), Print(line))?;
             row = row.saturating_add(1);
         }
-        // 3. 细引导线 + 灰底面板：输入上下各留一行空白，再接状态行
+        // 3. 输入上方保留一行空白（无背景，纯空行）
         let mode = self.chrome.mode;
         for _ in 0..CHROME_INPUT_PAD_ROWS {
             queue!(
                 output,
                 MoveTo(0, row),
-                Print(chrome_panel_row(mode, "", cols))
+                Print(" ".repeat(cols))
             )?;
             row = row.saturating_add(1);
         }
