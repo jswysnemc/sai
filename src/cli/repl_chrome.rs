@@ -272,34 +272,54 @@ fn truncate_to_width(value: &str, width: usize) -> String {
 
 /// 输入面板背景（暗色终端上的深色抬升条）。
 const CHROME_PANEL_BG: &str = "\x1b[48;5;235m";
-/// 输入框提示符：行首一格内边距 + 弱化灰箭头 + 间隔。
-///
-/// 用 `\x1b[39m` 只重置前景，保持整行背景连续。
-const CHROME_INPUT_ARROW: &str = " \x1b[38;5;245m→\x1b[39m ";
+/// 输入行提示符形态。
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(super) enum ChromeInputPrefix {
+    /// 首行普通消息：弱化灰 `→`
+    Message,
+    /// 首行以 `!` 开头：橙色 `$`，表示将执行本地命令
+    Shell,
+    /// 折行续行：仅保留缩进，不重复提示符
+    Continuation,
+}
+
+impl ChromeInputPrefix {
+    /// 返回带样式的前缀文本（宽度恒为 `CHROME_INPUT_PREFIX_COLS`）。
+    ///
+    /// 用 `\x1b[39m` 只重置前景，保持整行背景连续。
+    fn render(self) -> &'static str {
+        match self {
+            Self::Message => " \x1b[38;5;245m→\x1b[39m ",
+            Self::Shell => " \x1b[38;5;208m$\x1b[39m ",
+            Self::Continuation => "   ",
+        }
+    }
+}
 /// 输入提示符占用的列数（含左内边距与间隔）。
 pub(super) const CHROME_INPUT_PREFIX_COLS: usize = 3;
 /// 输入正文上下各留的空白行数。
 pub(super) const CHROME_INPUT_PAD_ROWS: u16 = 1;
 /// 输入条内部上下各留的背景内边距行数（增加输入框视觉厚度）。
 pub(super) const CHROME_INPUT_INNER_PAD_ROWS: u16 = 1;
-/// 底栏状态左右相对面板内缘的外边距列数。
-pub(super) const CHROME_FOOTER_SIDE_PAD: usize = 1;
+/// 底栏状态左右外边距：与输入条的文字起点对齐。
+pub(super) const CHROME_FOOTER_SIDE_PAD: usize = CHROME_INPUT_PREFIX_COLS;
 
-/// 带箭头的输入行：深色背景通栏 + `→` 提示符。
-pub(super) fn chrome_input_row(_mode: AgentMode, content: &str, cols: usize) -> String {
+/// 输入行：深色背景通栏 + 按行形态渲染提示符。
+pub(super) fn chrome_input_row(prefix: ChromeInputPrefix, content: &str, cols: usize) -> String {
     let inner = chrome_input_content_cols(cols);
     let width = visible_width(content);
+    let glyph = prefix.render();
     // 正文样式中的 reset 会打断整行背景（占位提示自带 \x1b[0m），
     // reset 后立即恢复面板底色，保证背景条贯穿整行
     let content = content.replace("\x1b[0m", &format!("\x1b[0m{CHROME_PANEL_BG}"));
     if width >= inner {
         format!(
-            "{CHROME_PANEL_BG}{CHROME_INPUT_ARROW}{}\x1b[0m",
+            "{CHROME_PANEL_BG}{glyph}{}\x1b[0m",
             truncate_ansi_to_width(&content, inner)
         )
     } else {
         format!(
-            "{CHROME_PANEL_BG}{CHROME_INPUT_ARROW}{content}{}\x1b[0m",
+            "{CHROME_PANEL_BG}{glyph}{content}{}\x1b[0m",
             " ".repeat(inner - width)
         )
     }
@@ -481,11 +501,19 @@ mod tests {
     }
 
     #[test]
-    fn input_row_carries_arrow_and_background() {
-        let line = chrome_input_row(AgentMode::Yolo, "hello", 20);
-        assert!(line.contains(CHROME_PANEL_BG));
-        assert!(line.contains('→'));
-        assert!(line.contains("hello"));
+    fn input_row_prefix_follows_line_role() {
+        let first = chrome_input_row(ChromeInputPrefix::Message, "hello", 20);
+        assert!(first.contains(CHROME_PANEL_BG));
+        assert!(first.contains('→'));
+        assert!(first.contains("hello"));
+        // shell 模式换 $ 提示符
+        let shell = chrome_input_row(ChromeInputPrefix::Shell, "!ls", 20);
+        assert!(shell.contains('$'));
+        assert!(!shell.contains('→'));
+        // 续行只保留缩进
+        let cont = chrome_input_row(ChromeInputPrefix::Continuation, "wrapped", 20);
+        assert!(!cont.contains('→') && !cont.contains('$'));
+        assert!(cont.contains("wrapped"));
         // 输入上方一行空白
         assert_eq!(chrome_fixed_rows(), 1);
     }

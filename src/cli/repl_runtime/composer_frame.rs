@@ -2,7 +2,7 @@ use super::shell_hint_panel::{bang_ghost_suffix, ShellHintPanel};
 use super::slash_panel::SlashPanel;
 use super::viewport::InlineViewport;
 use crate::cli::repl_chrome::{
-    chrome_input_content_cols, chrome_input_pad_row, chrome_input_row,
+    chrome_input_content_cols, chrome_input_pad_row, chrome_input_row, ChromeInputPrefix,
     CHROME_INPUT_INNER_PAD_ROWS, CHROME_INPUT_PAD_ROWS, CHROME_INPUT_PREFIX_COLS, ReplChrome,
 };
 use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
@@ -190,7 +190,7 @@ impl ComposerFrame {
             footer: if layout.slash_panel.is_visible() || layout.shell_hint.is_visible() {
                 None
             } else {
-                Some(self.chrome.footer_line(content_cols))
+                Some(self.chrome.footer_line(cols))
             },
             slash_lines: layout.slash_panel.rendered_lines(cols),
             shell_lines: layout.shell_hint.rendered_lines(cols),
@@ -226,7 +226,6 @@ impl ComposerFrame {
             row = row.saturating_add(1);
         }
         // 3. 输入上方保留一行空白（无背景，纯空行）
-        let mode = self.chrome.mode;
         for _ in 0..CHROME_INPUT_PAD_ROWS {
             queue!(
                 output,
@@ -241,12 +240,26 @@ impl ComposerFrame {
             row = row.saturating_add(1);
         }
         let input_start_row = row;
+        // 提示符只画在首行：普通输入用 →，`!` 开头切换为 $ 表示本地命令；
+        // 折行与后续行只保留缩进，不重复提示符
+        let first_prefix = if self.input.starts_with('!') {
+            ChromeInputPrefix::Shell
+        } else {
+            ChromeInputPrefix::Message
+        };
+        let mut drawn_first = false;
         for line in &layout.styled_display_lines {
             for segment in wrap_styled_line(line, content_cols) {
+                let prefix = if drawn_first {
+                    ChromeInputPrefix::Continuation
+                } else {
+                    first_prefix
+                };
+                drawn_first = true;
                 queue!(
                     output,
                     MoveTo(0, row),
-                    Print(chrome_input_row(mode, &segment, cols))
+                    Print(chrome_input_row(prefix, &segment, cols))
                 )?;
                 row = row.saturating_add(1);
             }
@@ -264,8 +277,8 @@ impl ComposerFrame {
             layout.shell_hint.draw(output, row, cols)?;
             row.saturating_add(layout.shell_hint.height())
         } else {
-            // 状态行独立一行，无背景、无彩条
-            let status = self.chrome.footer_line(content_cols);
+            // 状态行独立一行，两侧边距与输入条文字起点对齐
+            let status = self.chrome.footer_line(cols);
             queue!(output, MoveTo(0, row), Print(status))?;
             row.saturating_add(1)
         };
