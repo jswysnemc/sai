@@ -30,7 +30,6 @@ mod background_commands;
 mod center_panel;
 mod chat;
 mod compaction;
-mod composer_tips;
 mod config_commands;
 mod confirm;
 mod fuzzy_select;

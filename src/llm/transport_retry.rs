@@ -85,27 +85,6 @@ fn contains_status(message: &str, status: u16) -> bool {
     message.contains(&format!("({status})")) || message.contains(&format!("({status} "))
 }
 
-/// 用户可见的断连提示（可手动重试）。
-///
-/// 参数:
-/// - `error`: 原始错误
-///
-/// 返回:
-/// - 面向用户的摘要文本；完整错误链请用 `error_detail_text`
-pub(crate) fn disconnect_user_hint(error: &anyhow::Error) -> String {
-    use crate::i18n::text as t;
-    if is_transient_transport_error(error) {
-        format!(
-            "{}: {}\n{}",
-            t("Connection interrupted", "连接中断"),
-            simplify_one_line(error),
-            t("You can retry this turn.", "可重试本轮请求。",)
-        )
-    } else {
-        simplify_one_line(error)
-    }
-}
-
 /// 返回适合 UI 详情区展示的完整错误链。
 ///
 /// 参数:
@@ -130,15 +109,6 @@ pub(crate) fn error_detail_text(error: &anyhow::Error) -> String {
         return error.to_string();
     }
     lines.join("\n")
-}
-
-/// 提取单行简化错误。
-fn simplify_one_line(error: &anyhow::Error) -> String {
-    error
-        .chain()
-        .next()
-        .map(|item| item.to_string())
-        .unwrap_or_else(|| error.to_string())
 }
 
 #[cfg(test)]
@@ -218,6 +188,5 @@ mod tests {
         assert!(detail.contains("outer layer"));
         assert!(detail.contains("mid layer"));
         assert!(detail.contains("root cause"));
-        assert_ne!(disconnect_user_hint(&err), detail);
     }
 }

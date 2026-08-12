@@ -270,56 +270,17 @@ fn truncate_to_width(value: &str, width: usize) -> String {
     output
 }
 
-/// 输入框边框样式（旧分隔线兼容）。
-const CHROME_RULE_STYLE: &str = "\x1b[38;5;67m";
 /// 输入面板背景（暗色终端上的抬升灰底，近似 opencode 面板）。
 const CHROME_PANEL_BG: &str = "\x1b[48;5;236m";
 /// 输入框箭头提示符。
 const CHROME_INPUT_ARROW: &str = "\x1b[38;5;204m❯\x1b[0m ";
-/// 面板内分隔线前景。
-const CHROME_PANEL_RULE: &str = "\x1b[38;5;240m";
 /// 输入正文上下各留的空白行数。
 pub(super) const CHROME_INPUT_PAD_ROWS: u16 = 1;
 /// 底栏状态左右相对面板内缘的外边距列数。
 pub(super) const CHROME_FOOTER_SIDE_PAD: usize = 1;
 
-/// 生成输入框顶/底分隔线（兼容旧调用）。
-///
-/// 参数:
-/// - `cols`: 终端列数
-///
-/// 返回:
-/// - 带颜色的整行分隔线
-pub(super) fn chrome_rule(cols: usize) -> String {
-    format!("{CHROME_RULE_STYLE}{}\x1b[0m", "─".repeat(cols.max(1)))
-}
-
-/// 极简输入行：无背景、无左侧彩条，内容贴左绘制。
-///
-/// 参数:
-/// - `mode`: 当前模式（保留参数兼容，不再影响样式）
-/// - `content`: 已含样式的正文
-/// - `cols`: 终端总列数
-///
-/// 返回:
-/// - 整行 ANSI 文本
-pub(super) fn chrome_panel_row(_mode: AgentMode, content: &str, cols: usize) -> String {
-    let cols = cols.max(1);
-    let width = visible_width(content);
-    if width >= cols {
-        truncate_ansi_to_width(content, cols)
-    } else {
-        content.to_string()
-    }
-}
-
-/// 面板内部分隔行（弱化横线，无背景）。
-pub(super) fn chrome_panel_divider(_mode: AgentMode, cols: usize) -> String {
-    format!("{CHROME_PANEL_RULE}{}\x1b[0m", "─".repeat(cols.max(1)))
-}
-
 /// 带箭头的输入行：箭头 + 背景色。
-pub(super) fn chrome_input_row(mode: AgentMode, content: &str, cols: usize) -> String {
+pub(super) fn chrome_input_row(_mode: AgentMode, content: &str, cols: usize) -> String {
     let inner = chrome_input_content_cols(cols);
     let width = visible_width(content);
     if width >= inner {
@@ -500,22 +461,12 @@ mod tests {
     }
 
     #[test]
-    fn chrome_rule_uses_distinct_color_not_plain_dim() {
-        let line = chrome_rule(8);
-        assert!(line.contains(CHROME_RULE_STYLE));
-        assert!(!line.starts_with("\x1b[2m"));
-        assert_eq!(strip_ansi(&line), "────────");
-    }
-
-    #[test]
-    fn panel_row_renders_plain_content() {
-        let line = chrome_panel_row(AgentMode::Yolo, "hello", 20);
-        assert!(!line.contains(CHROME_PANEL_BG));
+    fn input_row_carries_arrow_and_background() {
+        let line = chrome_input_row(AgentMode::Yolo, "hello", 20);
+        assert!(line.contains(CHROME_PANEL_BG));
+        assert!(line.contains('❯'));
         assert!(line.contains("hello"));
-        assert_eq!(visible_width(&line), 5);
         // 输入上方一行空白
         assert_eq!(chrome_fixed_rows(), 1);
-        let divider = chrome_panel_divider(AgentMode::Plan, 20);
-        assert_eq!(visible_width(&divider), 20);
     }
 }

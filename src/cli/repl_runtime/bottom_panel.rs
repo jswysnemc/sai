@@ -251,7 +251,8 @@ mod tests {
         let plain = strip_ansi_for_test(&lines.join("\n"));
         // 跳过标题行里挂的当前项，只比较条目区顺序
         let body = plain.lines().skip(1).collect::<Vec<_>>().join("\n");
-        let done_at = body.find("done one").unwrap();
+        // 已完成条目保留在条目区
+        assert!(body.contains("done one"));
         // 展开时当前项只在 header 展示，body 不再重复
         assert!(body.find("current").is_none());
         assert!(plain.contains('▶'));

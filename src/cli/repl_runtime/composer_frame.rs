@@ -2,8 +2,7 @@ use super::shell_hint_panel::{bang_ghost_suffix, ShellHintPanel};
 use super::slash_panel::SlashPanel;
 use super::viewport::InlineViewport;
 use crate::cli::repl_chrome::{
-    chrome_fixed_rows, chrome_input_content_cols, chrome_input_row, chrome_panel_row,
-    CHROME_INPUT_PAD_ROWS, ReplChrome,
+    chrome_input_content_cols, chrome_input_row, CHROME_INPUT_PAD_ROWS, ReplChrome,
 };
 use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
 use crate::cli::repl_input_render::{

@@ -136,14 +136,7 @@ pub(super) fn read_repl_input(
                 (None, true) => Some(EXTERNAL_EVENT_INPUT_POLL_INTERVAL),
                 (None, false) => None,
             };
-            // 空输入时按提示轮换的槽位边界唤醒：固定一秒会让底栏每秒重绘，
-            // 而提示八秒才换一条，多出的唤醒在 Windows Terminal 下就是底行闪动
-            let wait = if input.is_empty() {
-                let rotation = super::composer_tips::next_tip_rotation();
-                Some(wait.map_or(rotation, |wait| wait.min(rotation)))
-            } else {
-                wait
-            };
+            // 占位提示为静态文本，空输入无需额外唤醒重绘，直接沿用挂起等待
             if let Some(wait) = wait {
                 if !event::poll(wait)? {
                     // 内容未变时 draw_lines 会按签名跳过重绘；清零记账等于
