@@ -79,7 +79,8 @@ fn render_todo_section(
     };
     if let Some(item) = active {
         header.push_str(&format!(
-            "  \x1b[2m·\x1b[0m {}",
+            "  \x1b[2m·\x1b[0m {} {}",
+            status_marker("in_progress"),
             colorize_item("in_progress", &item.text)
         ));
     }
@@ -104,6 +105,10 @@ fn render_todo_section(
     let (start, end) = display_window(&ordered_statuses, TODO_PREVIEW_LIMIT);
     for &index in &order[start..end] {
         let item = &todos[index];
+        // 展开时跳过当前进行中项，避免与 header 重复
+        if item.status == "in_progress" {
+            continue;
+        }
         let line = format!(
             "  {} {}",
             status_marker(&item.status),
@@ -247,8 +252,8 @@ mod tests {
         // 跳过标题行里挂的当前项，只比较条目区顺序
         let body = plain.lines().skip(1).collect::<Vec<_>>().join("\n");
         let done_at = body.find("done one").unwrap();
-        let current_at = body.find("current").unwrap();
-        assert!(done_at < current_at, "completed should be above active: {body}");
+        // 展开时当前项只在 header 展示，body 不再重复
+        assert!(body.find("current").is_none());
         assert!(plain.contains('▶'));
         assert!(!plain.contains('├') && !plain.contains('└'));
         assert!(
