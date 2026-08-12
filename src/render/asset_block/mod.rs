@@ -62,7 +62,8 @@ pub(crate) fn render_asset_block(lang: &str, lines: &[String]) -> String {
     let Some(kind) = asset_kind_from_lang(lang) else {
         return render_error("asset", t("unsupported asset language", "不支持的资源语言"));
     };
-    render_asset(kind, &lines.join("\n"))
+    let source = lines.join("\n");
+    render_cached(kind.label(), &source, || render_asset(kind, &source))
 }
 
 /// 渲染块级数学公式。
@@ -73,7 +74,10 @@ pub(crate) fn render_asset_block(lang: &str, lines: &[String]) -> String {
 /// 返回:
 /// - 终端图片协议文本或错误提示
 pub(crate) fn render_math_block(lines: &[String]) -> String {
-    math::render_source(&lines.join("\n"), MathRenderMode::Block)
+    let source = lines.join("\n");
+    render_cached("math-block", &source, || {
+        math::render_source(&source, MathRenderMode::Block)
+    })
 }
 
 /// 渲染行内数学公式。
@@ -84,7 +88,62 @@ pub(crate) fn render_math_block(lines: &[String]) -> String {
 /// 返回:
 /// - 终端图片协议文本或错误提示
 pub(crate) fn render_inline_math(source: &str) -> String {
-    math::render_source(source, MathRenderMode::Inline)
+    render_cached("math-inline", source, || {
+        math::render_source(source, MathRenderMode::Inline)
+    })
+}
+
+/// 资产渲染缓存上限（超出时整体清空，公式/图表数量通常远低于该值）。
+const ASSET_CACHE_LIMIT: usize = 128;
+
+/// 以（类型 + 源码 + 终端宽度）为键缓存渲染产物。
+///
+/// 两个目的：
+/// 1. live 预览每次重绘都会重放完整 Markdown 源，无缓存时每帧都会
+///    重新生成 PNG，流式期间卡顿明显；
+/// 2. 渲染产物内含 Kitty 图像/放置 ID，字节一致时重打走 Kitty 的
+///    「替换」语义，位置更新而不叠影。
+///
+/// 参数:
+/// - `kind`: 资产类型标签
+/// - `source`: 原始内容
+/// - `render`: 未命中时的实际渲染函数
+///
+/// 返回:
+/// - 渲染产物（命中时为缓存值）
+fn render_cached(kind: &str, source: &str, render: impl FnOnce() -> String) -> String {
+    use std::collections::HashMap;
+    use std::hash::{Hash, Hasher};
+    use std::sync::{LazyLock, Mutex};
+
+    static CACHE: LazyLock<Mutex<HashMap<u64, String>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+
+    // 测试替身输出与真实渲染互斥，不入缓存避免测试间串扰
+    if test_stub_enabled() {
+        return render();
+    }
+
+    let mut hasher = std::hash::DefaultHasher::new();
+    kind.hash(&mut hasher);
+    source.hash(&mut hasher);
+    // 终端宽度影响块级图的占位行列，resize 后需要重新渲染
+    crossterm::terminal::size().unwrap_or((80, 24)).hash(&mut hasher);
+    let key = hasher.finish();
+
+    if let Ok(cache) = CACHE.lock() {
+        if let Some(cached) = cache.get(&key) {
+            return cached.clone();
+        }
+    }
+    let rendered = render();
+    if let Ok(mut cache) = CACHE.lock() {
+        if cache.len() >= ASSET_CACHE_LIMIT {
+            cache.clear();
+        }
+        cache.insert(key, rendered.clone());
+    }
+    rendered
 }
 
 /// 解析 Markdown 资产语言。

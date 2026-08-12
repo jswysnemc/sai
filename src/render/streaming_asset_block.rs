@@ -11,7 +11,6 @@ pub(crate) struct StreamingAssetBlock {
 #[derive(Clone, Copy)]
 enum AssetPreviewMode {
     ReplaceTerminalRows,
-    SourcePreview,
     StableFinal,
 }
 
@@ -24,17 +23,6 @@ impl StreamingAssetBlock {
         Self {
             raw_visual_rows: 0,
             mode: AssetPreviewMode::ReplaceTerminalRows,
-        }
-    }
-
-    /// 创建 source-backed 实时预览状态。
-    ///
-    /// 返回:
-    /// - 仅展示原始 Markdown 的资产状态
-    pub(crate) fn new_source_preview() -> Self {
-        Self {
-            raw_visual_rows: 0,
-            mode: AssetPreviewMode::SourcePreview,
         }
     }
 
@@ -59,9 +47,7 @@ impl StreamingAssetBlock {
     pub(crate) fn push_line(&mut self, line: &str) -> String {
         self.raw_visual_rows += raw_visual_rows(&align_to_guide_column(line));
         match self.mode {
-            AssetPreviewMode::ReplaceTerminalRows | AssetPreviewMode::SourcePreview => {
-                format!("{line}\n")
-            }
+            AssetPreviewMode::ReplaceTerminalRows => format!("{line}\n"),
             AssetPreviewMode::StableFinal => String::new(),
         }
     }
@@ -80,7 +66,6 @@ impl StreamingAssetBlock {
                 output.push_str(&rendered);
                 output
             }
-            AssetPreviewMode::SourcePreview => String::new(),
             AssetPreviewMode::StableFinal => rendered,
         };
         self.raw_visual_rows = 0;
@@ -119,14 +104,5 @@ mod tests {
 
         assert_eq!(output, "[diagram]\n");
         assert!(!output.contains("\x1b[1A"));
-    }
-
-    #[test]
-    fn source_preview_keeps_raw_asset_until_finalization() {
-        let mut block = StreamingAssetBlock::new_source_preview();
-
-        assert_eq!(block.push_line("```mermaid"), "```mermaid\n");
-        assert_eq!(block.push_line("graph TD"), "graph TD\n");
-        assert!(block.finish("[diagram]\n".to_string()).is_empty());
     }
 }

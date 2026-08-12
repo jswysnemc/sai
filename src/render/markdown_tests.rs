@@ -381,6 +381,26 @@ fn source_preview_keeps_inline_math_as_source_until_finalization() {
 }
 
 #[test]
+fn source_preview_renders_closed_mermaid_and_previews_open_block() {
+    let _guard = ASSET_STUB_LOCK.lock().unwrap();
+    std::env::set_var("SAI_RENDER_ASSET_TEST_STUB", "1");
+    let mut renderer = MarkdownStreamRenderer::new_source_preview();
+    // 已闭合的 mermaid 块：流式中立即输出渲染结果，不再保留原文
+    let closed = renderer.push("```mermaid\ngraph TD\nA --> B\n```\n");
+    // 未闭合的块：正文不输出，由 snapshot 提供弱化预览
+    let partial = renderer.push("```mermaid\ngraph LR\n");
+    let open_preview = renderer.snapshot_open_structures();
+    std::env::remove_var("SAI_RENDER_ASSET_TEST_STUB");
+
+    assert!(closed.contains("[asset rendering skipped]"));
+    assert!(!closed.contains("graph TD"));
+    assert!(!closed.contains("\x1b[1A"), "全量重绘面不得包含清行序列");
+    assert!(partial.is_empty() || !partial.contains("graph LR"));
+    assert!(open_preview.contains("mermaid"));
+    assert!(open_preview.contains("rendering"));
+}
+
+#[test]
 fn removes_stray_formula_prefix_at_line_start() {
     let _guard = ASSET_STUB_LOCK.lock().unwrap();
     std::env::set_var("SAI_RENDER_ASSET_TEST_STUB", "1");

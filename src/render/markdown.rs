@@ -158,7 +158,9 @@ impl MarkdownLineRenderer {
     fn new_source_preview() -> Self {
         let mut renderer = Self::new(false);
         renderer.table = StreamingTable::new_source_preview();
-        renderer.asset_block = StreamingAssetBlock::new_source_preview();
+        // 资产块闭合即出图（渲染结果按内容缓存，重绘走 Kitty 替换语义）；
+        // 未闭合部分由 snapshot_open 以弱化源码预览
+        renderer.asset_block = StreamingAssetBlock::new_stable();
         renderer.inline_math_mode = InlineMathMode::Source;
         renderer
     }
@@ -295,16 +297,37 @@ impl MarkdownLineRenderer {
         }
     }
 
-    /// 非破坏性预览开放中的表格。
+    /// 非破坏性预览开放中的表格与资产块。
     ///
     /// 返回:
-    /// - 表格预览文本；无开放表格时为空
+    /// - 预览文本；无开放结构时为空
     fn snapshot_open(&self) -> String {
         if self.table.is_active() {
-            self.table.snapshot()
-        } else {
-            String::new()
+            return self.table.snapshot();
         }
+        // 未闭合的 mermaid / 公式块：以弱化源码预览，闭合后由 finish 出图
+        if (self.in_code_block && self.code_is_asset) || self.in_math_block {
+            let buffer = if self.in_math_block {
+                &self.math_buffer
+            } else {
+                &self.code_buffer
+            };
+            let label = if self.in_math_block {
+                "math"
+            } else {
+                self.code_lang.as_str()
+            };
+            let mut output = format!("\x1b[2m┌─ {label} (rendering…)\x1b[0m\n");
+            for line in buffer.iter().take(5) {
+                output.push_str(&format!("\x1b[2m│ {line}\x1b[0m\n"));
+            }
+            if buffer.len() > 5 {
+                output.push_str("\x1b[2m│ …\x1b[0m\n");
+            }
+            output.push_str("\x1b[2m└─\x1b[0m\n");
+            return output;
+        }
+        String::new()
     }
 
     /// 取出块间空行（统一节奏：相邻块之间恰好一行）。

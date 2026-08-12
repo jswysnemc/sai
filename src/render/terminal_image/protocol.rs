@@ -277,12 +277,17 @@ fn kitty_cell_dimensions_with(
 fn encode_kitty_png(path: &Path, cols: Option<usize>, rows: Option<usize>) -> Result<String> {
     let bytes =
         fs::read(path).with_context(|| format!("failed to read image {}", path.display()))?;
+    // 图像 ID 取内容 hash，放置 ID 进程内递增分配一次。
+    // 渲染产物字符串会被缓存重放：重打时 (i,p) 不变，Kitty 以「替换」
+    // 语义更新放置位置，transcript 重排 / 重绘不再留下旧图残影叠影
+    let image_id = kitty_image_id(&bytes);
+    let placement_id = next_kitty_placement_id();
     let encoded = general_purpose::STANDARD.encode(bytes);
     // 1. 组装尺寸与静默参数，避免 Kitty 回写响应干扰 REPL。
     //    C=1：放置图像后光标保持原位。默认行为是光标跳到图像右下角之后，
     //    表格等逐行拼接的布局会从图片列开始整体错位；占位改由文本层
     //    （换行 / 空格）自行控制（对齐 jcode/ratatui-image 的做法）
-    let mut control = String::from("f=100,a=T,q=2,C=1");
+    let mut control = format!("f=100,a=T,q=2,C=1,i={image_id},p={placement_id}");
     if let Some(cols) = cols.filter(|value| *value > 0) {
         control.push_str(&format!(",c={cols}"));
     }
@@ -307,6 +312,34 @@ fn encode_kitty_png(path: &Path, cols: Option<usize>, rows: Option<usize>) -> Re
         ));
     }
     Ok(output)
+}
+
+/// 由 PNG 字节计算非零 Kitty 图像 ID。
+///
+/// 参数:
+/// - `bytes`: PNG 文件字节
+///
+/// 返回:
+/// - 32 位非零图像 ID
+fn kitty_image_id(bytes: &[u8]) -> u32 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::hash::DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    let id = hasher.finish() as u32;
+    if id == 0 { 1 } else { id }
+}
+
+/// 分配进程内唯一的 Kitty 放置 ID（非零）。
+///
+/// 同一渲染产物缓存重放时 ID 随字节保持不变；相同图像内容的两次
+/// 独立渲染各获得不同放置 ID，互不顶替。
+///
+/// 返回:
+/// - 32 位非零放置 ID
+fn next_kitty_placement_id() -> u32 {
+    static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+    let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    if id == 0 { 1 } else { id }
 }
 
 /// 使用 Kitty 图形协议渲染图片。

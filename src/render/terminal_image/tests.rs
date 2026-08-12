@@ -35,7 +35,9 @@ mod tests {
         .collect::<Vec<_>>();
         write_test_rgba_png(&path, 16, 32, &pixels);
         let output = render_kitty_image(&path).unwrap();
-        assert!(output.contains("\x1b_Gf=100,a=T,q=2,C=1,c="));
+        assert!(output.contains("\x1b_Gf=100,a=T,q=2,C=1,i="));
+        assert!(output.contains(",p="));
+        assert!(output.contains(",c="));
         // c/r 同传：终端渲染行数与占位换行数强制一致，图片定位不再漂移
         let declared_rows = output
             .split(",r=")
@@ -90,7 +92,8 @@ mod tests {
             ],
         );
         let output = encode_kitty_png(&path, Some(8), Some(3)).unwrap();
-        assert!(output.contains("f=100,a=T,q=2,C=1,c=8,r=3"));
+        assert!(output.contains("f=100,a=T,q=2,C=1,i="));
+        assert!(output.contains(",c=8,r=3"));
         assert!(!output.ends_with('\n'));
     }
 
@@ -326,7 +329,8 @@ mod tests {
         }
         write_test_rgba_png(&path, 64, 16, &pixels);
         let output = render_kitty_image(&path).unwrap();
-        assert!(output.contains("\x1b_Gf=100,a=T,q=2,C=1,c="));
+        assert!(output.contains("\x1b_Gf=100,a=T,q=2,C=1,i="));
+        assert!(output.contains(",c="));
         let c_value = output
             .split(",c=")
             .nth(1)
