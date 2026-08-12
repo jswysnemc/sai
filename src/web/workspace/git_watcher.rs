@@ -9,8 +9,23 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
 
-const GIT_WATCH_DEBOUNCE: Duration = Duration::from_millis(300);
+const GIT_WATCH_DEBOUNCE: Duration = Duration::from_millis(500);
 const GIT_WATCH_EVENT_PATH_LIMIT: usize = 64;
+
+/// 构建产物与依赖目录：内容不影响 Git 状态展示，跳过可避免刷新风暴。
+///
+/// 与仓库扫描的 `should_visit` 排除列表保持一致。
+const NOISY_DIR_NAMES: &[&str] = &[
+    "node_modules",
+    "target",
+    "dist",
+    "build",
+    "coverage",
+    ".cache",
+    "__pycache__",
+    ".venv",
+    "venv",
+];
 
 /// Git 仓库文件变化事件。
 #[derive(Clone, Debug, Serialize)]
@@ -129,7 +144,19 @@ fn create_watcher(
     let callback_sender = sender.clone();
     let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
         let message = match result {
-            Ok(event) if is_refresh_event(&event.kind) => WatcherMessage::Paths(event.paths),
+            Ok(event) if is_refresh_event(&event.kind) => {
+                // 构建产物与 Git 内部噪声（对象库、日志、锁文件）不触发刷新，
+                // 否则 cargo/npm 构建期间每个合并窗口都会引发全量状态与 diff 重拉
+                let paths: Vec<PathBuf> = event
+                    .paths
+                    .into_iter()
+                    .filter(|path| !is_noisy_path(path))
+                    .collect();
+                if paths.is_empty() {
+                    return;
+                }
+                WatcherMessage::Paths(paths)
+            }
             Ok(_) => return,
             Err(error) => WatcherMessage::Error(error.to_string()),
         };
@@ -238,6 +265,44 @@ fn is_git_metadata_path(path: &Path) -> bool {
         .any(|component| component.as_os_str() == OsStr::new(".git"))
 }
 
+/// 判断路径是否为无需刷新 Git 状态的噪声。
+///
+/// 两类噪声：
+/// 1. 工作区内的构建产物与依赖目录（`target/`、`node_modules/` 等），
+///    构建期间高频变化但不影响 Git 状态展示；
+/// 2. `.git` 内部的对象库、reflog 与瞬态锁文件，普通 Git 命令期间反复变化，
+///    真正影响展示的是 `HEAD`、`index`、`refs/` 等状态文件。
+///
+/// 参数:
+/// - `path`: 变化文件或目录路径
+///
+/// 返回:
+/// - 可安全跳过刷新时返回 true
+fn is_noisy_path(path: &Path) -> bool {
+    let mut in_git_dir = false;
+    for component in path.components() {
+        let Some(name) = component.as_os_str().to_str() else {
+            continue;
+        };
+        if !in_git_dir && name == ".git" {
+            in_git_dir = true;
+            continue;
+        }
+        if in_git_dir {
+            if matches!(name, "objects" | "logs" | "lfs" | "tmp") {
+                return true;
+            }
+            // 锁文件仅在 Git 命令执行期间短暂存在（index.lock、HEAD.lock 等）
+            if name.ends_with(".lock") {
+                return true;
+            }
+        } else if NOISY_DIR_NAMES.contains(&name) {
+            return true;
+        }
+    }
+    false
+}
+
 /// 规范化已存在的监听目录。
 ///
 /// 参数:
@@ -283,6 +348,30 @@ mod tests {
         assert!(is_refresh_event(&EventKind::Modify(
             notify::event::ModifyKind::Any
         )));
+    }
+
+    /// 验证构建产物与 Git 内部噪声被过滤，状态文件保留。
+    #[test]
+    fn filters_noisy_paths_but_keeps_state_files() {
+        // 构建产物与依赖目录
+        assert!(is_noisy_path(Path::new("/ws/target/debug/foo.o")));
+        assert!(is_noisy_path(Path::new("/ws/node_modules/pkg/index.js")));
+        assert!(is_noisy_path(Path::new("/ws/web/dist/app.js")));
+        // .git 内部噪声
+        assert!(is_noisy_path(Path::new("/ws/.git/objects/ab/cdef0123")));
+        assert!(is_noisy_path(Path::new("/ws/.git/logs/HEAD")));
+        assert!(is_noisy_path(Path::new("/ws/.git/index.lock")));
+        assert!(is_noisy_path(Path::new(
+            "/ws/.git/worktrees/feature/index.lock"
+        )));
+        // 影响状态展示的文件必须保留
+        assert!(!is_noisy_path(Path::new("/ws/.git/HEAD")));
+        assert!(!is_noisy_path(Path::new("/ws/.git/index")));
+        assert!(!is_noisy_path(Path::new("/ws/.git/refs/heads/main")));
+        assert!(!is_noisy_path(Path::new("/ws/.git/MERGE_HEAD")));
+        // 工作区内的普通文件（包括 Cargo.lock 这类被跟踪的锁文件）
+        assert!(!is_noisy_path(Path::new("/ws/src/main.rs")));
+        assert!(!is_noisy_path(Path::new("/ws/Cargo.lock")));
     }
 
     /// 验证真实文件修改会在防抖后生成事件。
