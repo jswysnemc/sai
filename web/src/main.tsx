@@ -3,6 +3,12 @@ import "@fontsource/fira-sans/latin-500.css";
 import "@fontsource/fira-sans/latin-600.css";
 import "@fontsource/fira-code/latin-400.css";
 import "@fontsource/fira-code/latin-500.css";
+// 中文自托管：系统 CJK 字体（苹方/雅黑/Noto）跨平台字形与字重差异大，
+// 且多数缺 500/600 档，各浏览器合成加粗策略不同导致观感不一致。
+// fontsource 的 CJK 包按 unicode-range 切片，浏览器只下载用到的片段。
+import "@fontsource/noto-sans-sc/chinese-simplified-400.css";
+import "@fontsource/noto-sans-sc/chinese-simplified-500.css";
+import "@fontsource/noto-sans-sc/chinese-simplified-600.css";
 import "@xterm/xterm/css/xterm.css";
 import "katex/dist/katex.min.css";
 import "./shared/styles/tokens.css";

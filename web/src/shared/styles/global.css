@@ -10,15 +10,37 @@ body,
   margin: 0;
 }
 
+html {
+  /* 移动端 Safari / Chrome 在横屏等场景会自行放大文字，跨端字号不一致 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   overflow: hidden;
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-ui);
   font-size:var(--text-xl);
+  /* 显式行高：浏览器默认 normal 随字族浮动（约 1.14–1.2），跨浏览器高度不齐 */
+  line-height: var(--leading-normal);
   /* 字重渲染：关闭次像素加粗，中英混排时两段字族的观感字重才一致 */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/*
+ * 占位符：Firefox 默认用 opacity 0.54 淡化，Blink/WebKit 用固定灰色，
+ * 同一输入框两边深浅不同。统一为主题弱化色 + 不透明。
+ */
+::placeholder {
+  color: var(--ink-soft);
+  opacity: 1;
+}
+
+/* 原生勾选框 / 单选钮 / 进度条着色统一走主题信号色，不随浏览器默认蓝 */
+:root {
+  accent-color: var(--signal);
 }
 
 /*
