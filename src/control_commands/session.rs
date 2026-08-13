@@ -97,7 +97,7 @@ fn short_session_id(id: &str) -> String {
 ///
 /// 返回:
 /// - 如 `3 小时前`；解析失败时原样返回
-fn relative_time(updated_at: &str) -> String {
+pub fn relative_time(updated_at: &str) -> String {
     let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(updated_at) else {
         return updated_at.to_string();
     };

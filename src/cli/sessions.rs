@@ -8,27 +8,42 @@ use super::*;
 ///
 /// 返回:
 /// - 命令是否成功
-pub(super) fn run_sessions(paths: &SaiPaths, args: SessionsArgs) -> Result<()> {
+pub(super) async fn run_sessions(
+    paths: &SaiPaths,
+    args: SessionsArgs,
+    mode: AgentMode,
+    thinking_override: Option<String>,
+) -> Result<()> {
     match args.command.unwrap_or(SessionsCommand::List) {
         SessionsCommand::List => list_current_sessions(paths),
         SessionsCommand::New(args) => create_current_session(paths, args),
         SessionsCommand::Switch(args) => switch_current_session(paths, args),
-        SessionsCommand::Resume(args) => run_resume(paths, args),
+        SessionsCommand::Resume(args) => run_resume(paths, args, mode, thinking_override).await,
         SessionsCommand::Current => print_current_session(paths),
         SessionsCommand::Delete(args) => delete_current_session(paths, args),
         SessionsCommand::Rename(args) => rename_current_session(paths, args),
     }
 }
 
-/// 运行 resume：按 ID 或交互模糊选择后切换会话。
+/// 运行 resume：按 ID 或交互模糊选择后切换会话，并继续该会话的对话。
+///
+/// 恢复会话的意图就是接着聊，切换完直接进入 REPL；非交互终端下
+/// 退回只切换并打印，保持脚本可用。
 ///
 /// 参数:
 /// - `paths`: Sai 路径
 /// - `args`: resume 参数
+/// - `mode`: 已解析的权限模式
+/// - `thinking_override`: 会话级思考等级覆盖
 ///
 /// 返回:
 /// - 是否成功
-pub(super) fn run_resume(paths: &SaiPaths, args: ResumeArgs) -> Result<()> {
+pub(super) async fn run_resume(
+    paths: &SaiPaths,
+    args: ResumeArgs,
+    mode: AgentMode,
+    thinking_override: Option<String>,
+) -> Result<()> {
     let session_id = match args
         .id
         .as_deref()
@@ -42,7 +57,11 @@ pub(super) fn run_resume(paths: &SaiPaths, args: ResumeArgs) -> Result<()> {
         "{}",
         crate::control_commands::resume_session(paths, &session_id)?
     );
-    Ok(())
+    // 管道或重定向下没有可交互终端，切换本身已经生效，直接返回
+    if !(io::stdin().is_terminal() && io::stdout().is_terminal()) {
+        return Ok(());
+    }
+    crate::cli::repl::run_repl(paths, mode, thinking_override).await
 }
 
 /// 交互式模糊选择会话 ID。
@@ -88,9 +107,12 @@ fn list_current_sessions(paths: &SaiPaths) -> Result<()> {
     let active = crate::state::active_session(paths)?;
     for session in crate::state::list_sessions(paths)? {
         let marker = if session.id == active.id { "*" } else { " " };
+        // 列表用于挑会话，相对时间比完整时间戳更快读；短 ID 仍可直接用于 resume
         println!(
-            "{marker} {}  {}  {}",
-            session.id, session.updated_at, session.title
+            "{marker} {}  {:<10}  {}",
+            session.id,
+            crate::control_commands::relative_time(&session.updated_at),
+            session.title
         );
     }
     Ok(())

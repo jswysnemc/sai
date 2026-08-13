@@ -231,8 +231,14 @@ pub async fn run(cli: Cli) -> Result<()> {
         Some(Command::PowershellInit) => shell::powershell::install(&paths),
         Some(Command::RemoveShellHook) => remove_shell_hooks(&paths),
         Some(Command::History(args)) => run_history(&paths, args),
-        Some(Command::Sessions(args)) => run_sessions(&paths, args),
-        Some(Command::Resume(args)) => sessions::run_resume(&paths, args),
+        Some(Command::Sessions(args)) => {
+            let mode = resolve_agent_mode(&paths, mode_override, PermissionSurface::Tui)?;
+            run_sessions(&paths, args, mode, thinking_override.clone()).await
+        }
+        Some(Command::Resume(args)) => {
+            let mode = resolve_agent_mode(&paths, mode_override, PermissionSurface::Tui)?;
+            sessions::run_resume(&paths, args, mode, thinking_override.clone()).await
+        }
         Some(Command::Kb(args)) => run_kb(&paths, args).await,
         Some(Command::Memory(args)) => run_memory(&paths, args),
         Some(Command::Skills(args)) => run_skills(&paths, args),
