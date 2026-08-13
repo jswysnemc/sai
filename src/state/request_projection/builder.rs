@@ -59,7 +59,7 @@ pub(crate) fn project_provider_base_context(
         entries_to_history_messages(history_entries),
         context_state_update,
     );
-    let context = combine_provider_user_content(&projection.pending_user_contexts, "");
+    let context = combine_provider_user_content(&projection.user_contexts, "");
     if !context.is_empty() {
         projection
             .messages
@@ -86,8 +86,7 @@ pub(crate) fn project_provider_base_context_projection(
 ) -> ProjectedBaseContext {
     let mut messages = vec![ChatMessage::system(system_prompt)];
     let mut dynamic_sources = Vec::new();
-    let mut pending_user_contexts = Vec::new();
-    let mut persistent_user_contexts = Vec::new();
+    let mut user_contexts = Vec::new();
     if let Some(summary) = compaction_summary_context {
         messages.push(ChatMessage::system(summary));
     }
@@ -99,14 +98,12 @@ pub(crate) fn project_provider_base_context_projection(
     // 1. 所有每轮可变上下文只追加在历史末端，保持系统与历史前缀逐字稳定
     if let Some(update) = context_state_update {
         dynamic_sources.push(dynamic_source("context_state_update", update));
-        pending_user_contexts.push(update.to_string());
-        persistent_user_contexts.push(update.to_string());
+        user_contexts.push(update.to_string());
     }
     ProjectedBaseContext {
         messages,
         dynamic_sources,
-        pending_user_contexts,
-        persistent_user_contexts,
+        user_contexts,
     }
 }
 
@@ -140,8 +137,7 @@ pub(crate) fn project_provider_turn_from_parts(
         ProjectedBaseContext {
             messages: base_messages,
             dynamic_sources: Vec::new(),
-            pending_user_contexts: Vec::new(),
-            persistent_user_contexts: Vec::new(),
+            user_contexts: Vec::new(),
         },
         input,
         &image_urls,
@@ -176,22 +172,23 @@ pub(crate) fn project_provider_turn_from_base_projection(
 ) -> ProjectedRequest {
     let mut base_messages = base_projection.messages;
     let mut dynamic_sources = base_projection.dynamic_sources;
-    let mut pending_user_contexts = base_projection.pending_user_contexts;
-    let persistent_user_contexts = base_projection.persistent_user_contexts;
+    let mut user_contexts = base_projection.user_contexts;
     if let Some(prompt) = association_prompt {
         dynamic_sources.push(dynamic_source("memory_association", prompt));
-        pending_user_contexts.push(prompt.to_string());
+        user_contexts.push(prompt.to_string());
     }
     if let Some(reminder) = auto_meme_reminder {
         dynamic_sources.push(dynamic_source("auto_meme", reminder));
-        pending_user_contexts.push(reminder.to_string());
+        user_contexts.push(reminder.to_string());
     }
     for (index, url) in image_urls.iter().enumerate() {
         dynamic_sources.push(dynamic_source(&format!("image_{}", index + 1), url));
     }
-    let provider_user_content = combine_provider_user_content(&pending_user_contexts, input);
-    let persisted_user_content = (!persistent_user_contexts.is_empty())
-        .then(|| combine_provider_user_content(&persistent_user_contexts, input));
+    let provider_user_content = combine_provider_user_content(&user_contexts, input);
+    // 记忆召回与表情包提醒同样要落库：它们已经发给供应商，历史里缺失会让
+    // 下一轮重放的用户消息与本轮实际发送内容不一致，前缀缓存从该消息断开
+    let persisted_user_content =
+        (!user_contexts.is_empty()).then(|| provider_user_content.clone());
     let user_message = if image_urls.is_empty() {
         ChatMessage::plain("user", provider_user_content)
     } else {
@@ -515,7 +512,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(sources, [("context_state_update", 7)]);
-        assert_eq!(projection.persistent_user_contexts, ["runtime"]);
+        assert_eq!(projection.user_contexts, ["runtime"]);
     }
 
     #[test]
@@ -555,8 +552,7 @@ mod tests {
             projection.messages[3].tool_call_id.as_deref(),
             Some("call_1")
         );
-        assert_eq!(projection.pending_user_contexts, ["runtime"]);
-        assert_eq!(projection.persistent_user_contexts, ["runtime"]);
+        assert_eq!(projection.user_contexts, ["runtime"]);
     }
 
     /// 【上下文缓存】【跨轮前缀】验证状态更新仅在变化轮次写入 provider 历史。
@@ -617,5 +613,59 @@ mod tests {
             "second request"
         );
         assert!(second.provider_user_content.is_none());
+    }
+
+    /// 【上下文缓存】【跨轮前缀】验证记忆召回与表情包提醒同样写入 provider 历史。
+    ///
+    /// 这两段内容已经发给供应商，若不落库，下一轮重放该轮用户消息时会缺失它们，
+    /// 前缀与供应商缓存错位，该消息之后的全部历史都要重新计费。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn dynamic_user_contexts_are_persisted_verbatim() {
+        let projection = project_provider_turn_from_base_projection(
+            project_provider_base_context_projection("system", None, Vec::new(), Some("runtime")),
+            "ask",
+            &[],
+            Some("<memory>fact</memory>"),
+            Some("<system-reminder>meme</system-reminder>"),
+            0,
+            1_000,
+        );
+
+        let sent = text_content(projection.messages.last().unwrap());
+        // 1. 落库内容必须与实际发送的用户消息逐字相同
+        assert_eq!(
+            projection.provider_user_content.as_deref(),
+            Some(sent.as_str())
+        );
+        assert_eq!(
+            sent,
+            "runtime\n\n<memory>fact</memory>\n\n<system-reminder>meme</system-reminder>\n\nask"
+        );
+
+        // 2. 下一轮以落库内容重放时，该消息与本轮发送内容一致
+        let next = project_provider_turn_from_base_projection(
+            project_provider_base_context_projection(
+                "system",
+                None,
+                vec![
+                    ChatMessage::plain("user", sent.clone()),
+                    ChatMessage::plain("assistant", "answer"),
+                ],
+                None,
+            ),
+            "next",
+            &[],
+            None,
+            None,
+            0,
+            1_000,
+        );
+        assert_eq!(text_content(&next.messages[1]), sent);
     }
 }

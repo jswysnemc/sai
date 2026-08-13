@@ -113,11 +113,11 @@ fn switch_mode_updates_context_epoch_without_system_mode_context() {
     assert!(!yolo_system.contains("name=\"yolo\""));
     assert!(!audited_system.contains("name=\"audited\""));
     assert!(yolo
-        .pending_user_contexts
+        .user_contexts
         .iter()
         .any(|context| context.contains("name=\"yolo\"")));
     assert!(audited
-        .pending_user_contexts
+        .user_contexts
         .iter()
         .any(|context| context.contains("name=\"audited\"")));
     assert!(!audited

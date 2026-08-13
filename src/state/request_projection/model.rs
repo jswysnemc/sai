@@ -68,10 +68,12 @@ pub(crate) struct ProjectedRequest {
 pub(crate) struct ProjectedBaseContext {
     pub messages: Vec<ChatMessage>,
     pub dynamic_sources: Vec<DynamicContextSource>,
-    /// 等待与当前用户输入合并的动态上下文
-    pub pending_user_contexts: Vec<String>,
-    /// 需要随当前轮写入 provider 历史的状态事件
-    pub persistent_user_contexts: Vec<String>,
+    /// 与当前用户输入合并的动态上下文。
+    ///
+    /// 这里只保留单一集合：发给供应商的内容与写入 provider 历史的内容必须
+    /// 逐字相同，否则下一轮重放该轮用户消息时前缀会与供应商缓存错位，
+    /// 导致该消息之后的全部历史重新计费。
+    pub user_contexts: Vec<String>,
 }
 
 /// 命令摘要投影视图。
