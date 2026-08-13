@@ -73,3 +73,14 @@
   background: var(--signal-soft);
   color: var(--signal);
 }
+
+.ssh-target-error {
+  margin: 0 0 var(--space-2xs);
+  padding: var(--space-2xs) var(--space-xs);
+  border-radius: var(--radius-2);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  white-space: normal;
+}

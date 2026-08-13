@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
+import { toDisplayError } from "../../api/api-error";
 import { Button } from "../../shared/ui/button/button";
 import { sshHostAddress } from "../settings/ssh/ssh-host-form-state";
 import { useI18n } from "../i18n/use-i18n";
@@ -11,7 +12,7 @@ import "./ssh-target-picker.css";
 
 type SshTargetPickerProps = {
   onCreateLocal: () => void;
-  onCreateSsh: (hostId: string) => void;
+  onCreateSsh: (hostId: string) => Promise<void> | void;
 };
 
 const MENU_WIDTH = 208;
@@ -37,6 +38,7 @@ export function SshTargetPicker(props: SshTargetPickerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({
     position: "fixed",
     top: 0,
@@ -133,6 +135,7 @@ export function SshTargetPicker(props: SshTargetPickerProps) {
       </Button>
       {open && createPortal(
         <div ref={menuRef} className="ssh-target-menu" role="menu" style={menuStyle}>
+          {error && <p className="ssh-target-error">{error}</p>}
           <button
             type="button"
             role="menuitem"
@@ -151,8 +154,16 @@ export function SshTargetPicker(props: SshTargetPickerProps) {
               role="menuitem"
               key={host.id}
               onClick={() => {
-                setOpen(false);
-                props.onCreateSsh(host.id);
+                // 成功才收起菜单；失败留在原地展示原因，
+                // 先关菜单再异步失败的话用户只会看到什么都没发生
+                setError(null);
+                void Promise.resolve(props.onCreateSsh(host.id))
+                  .then(() => setOpen(false))
+                  .catch((reason) => {
+                    setError(
+                      toDisplayError(reason, "Failed to open the SSH terminal", "SSH 终端创建失败").message
+                    );
+                  });
               }}
             >
               <Server size={13} />

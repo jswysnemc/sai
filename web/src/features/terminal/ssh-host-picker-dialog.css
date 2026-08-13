@@ -55,3 +55,13 @@
   color: var(--ink-soft);
   font-size: var(--text-xs);
 }
+
+.ssh-host-picker-error {
+  margin: 0 0 var(--space-xs);
+  padding: var(--space-2xs) var(--space-xs);
+  border-radius: var(--radius-2);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}

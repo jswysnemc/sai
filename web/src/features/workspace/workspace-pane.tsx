@@ -225,7 +225,8 @@ export function WorkspacePane({
    * @returns 无返回值
    */
   const openSshTerminal = async (hostId: string) => {
-    const terminal = await terminalManager.createSshTerminal(hostId).catch(() => null);
+    // 失败直接抛给主机选择对话框展示；吞掉错误会让界面看起来毫无反应
+    const terminal = await terminalManager.createSshTerminal(hostId);
     if (!terminal) return;
     const created = createWorkspacePanelTab("terminal", {
       title: terminal.title || t("Terminal", "终端"),
@@ -376,7 +377,7 @@ export function WorkspacePane({
       <SshHostPickerDialog
         open={sshPickerOpen}
         onClose={() => setSshPickerOpen(false)}
-        onPick={(hostId) => void openSshTerminal(hostId)}
+        onPick={openSshTerminal}
       />
     </div>
   );

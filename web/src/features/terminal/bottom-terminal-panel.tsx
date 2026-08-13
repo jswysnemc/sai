@@ -93,7 +93,7 @@ export function BottomTerminalPanel({ manager, height, onResize, onClose }: Bott
           ))}
           <SshTargetPicker
             onCreateLocal={createTerminal}
-            onCreateSsh={(hostId) => void manager.createSshTerminal(hostId).catch(() => undefined)}
+            onCreateSsh={(hostId) => manager.createSshTerminal(hostId).then(() => undefined)}
           />
         </div>
         <div className="bottom-terminal-actions">
