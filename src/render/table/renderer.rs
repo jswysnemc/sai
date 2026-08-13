@@ -53,15 +53,22 @@ pub(crate) fn render_table_row(
         })
         .collect();
     let row_height = wrapped.iter().map(Vec::len).max().unwrap_or(1);
+    // 行内各列高度不一时（公式、图片会把行撑高），矮单元格在行内垂直居中，
+    // 贴顶会让并排的短文本看起来吊在半空
+    let offsets = wrapped
+        .iter()
+        .map(|lines| row_height.saturating_sub(lines.len()) / 2)
+        .collect::<Vec<_>>();
     let mut output = String::new();
     for line_index in 0..row_height {
         push_vertical(&mut output);
         for (index, width) in widths.iter().enumerate() {
             let cell = row.get(index);
             let is_image = cell.map(|item| item.is_image).unwrap_or(false);
-            let line = wrapped
-                .get(index)
-                .and_then(|lines| lines.get(line_index))
+            let offset = offsets.get(index).copied().unwrap_or(0);
+            let line = line_index
+                .checked_sub(offset)
+                .and_then(|inner| wrapped.get(index).and_then(|lines| lines.get(inner)))
                 .map(String::as_str)
                 .unwrap_or("");
             let line = if header && !line.is_empty() {

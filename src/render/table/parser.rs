@@ -61,7 +61,10 @@ pub(crate) fn parse_table_alignments(line: &str) -> Vec<TableAlign> {
             match (cell.starts_with(':'), cell.ends_with(':')) {
                 (true, true) => TableAlign::Center,
                 (false, true) => TableAlign::Right,
-                _ => TableAlign::Left,
+                (true, false) => TableAlign::Left,
+                // 未标注对齐时居中：终端表格列宽由最长单元格决定，
+                // 贴左会让短内容散在大片空白的一侧；显式 :--- 仍可强制左对齐
+                (false, false) => TableAlign::Center,
             }
         })
         .collect()

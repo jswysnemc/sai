@@ -234,3 +234,53 @@ fn strip_ansi_for_test(text: &str) -> String {
     }
     output
 }
+
+/// 【渲染】【表格对齐】验证未标注对齐的列居中。
+///
+/// 列宽由最长单元格决定，贴左会让短内容散在大片空白的一侧。
+#[test]
+fn unmarked_columns_are_centered() {
+    let alignments = parse_table_alignments("| --- | :--- | ---: | :---: |");
+
+    assert!(matches!(alignments[0], TableAlign::Center));
+    assert!(matches!(alignments[1], TableAlign::Left));
+    assert!(matches!(alignments[2], TableAlign::Right));
+    assert!(matches!(alignments[3], TableAlign::Center));
+}
+
+/// 【渲染】【表格对齐】验证矮单元格在高行内垂直居中。
+///
+/// 公式与图片会把整行撑高，贴顶会让并排的短文本吊在半空。
+#[test]
+fn short_cells_are_vertically_centered_in_tall_rows() {
+    let row = vec![
+        CellContent {
+            lines: vec!["mid".to_string()],
+            width: 3,
+            is_image: false,
+            math_source: None,
+        },
+        CellContent {
+            lines: vec![
+                "l1".to_string(),
+                "l2".to_string(),
+                "l3".to_string(),
+                "l4".to_string(),
+                "l5".to_string(),
+            ],
+            width: 2,
+            is_image: false,
+            math_source: None,
+        },
+    ];
+    let rendered = render_table_row(&row, &[3, 2], &[TableAlign::Left, TableAlign::Left], false);
+    let lines = strip_ansi_for_test(&rendered)
+        .lines()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+
+    assert_eq!(lines.len(), 5);
+    // 5 行高、1 行内容：偏移 2 行落在正中
+    assert!(lines[2].contains("mid"), "unexpected layout: {lines:?}");
+    assert!(!lines[0].contains("mid"), "cell should not sit at the top");
+}
