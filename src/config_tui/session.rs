@@ -70,6 +70,9 @@ fn run_main_menu(
     config: &mut AppConfig,
 ) -> Result<bool> {
     let mut selected = 0usize;
+    // 进入时的快照：退出前用它判断是否有未落盘的编辑。
+    // 添加模型这类操作只改内存，按 q 退出会静默丢弃，用户却以为已经生效
+    let baseline = serde_json::to_string(&*config).ok();
     loop {
         let active = active_label(config);
         // 高频操作前置，低频配置收进「高级设置」；编号既是视觉锚点也是直达键
@@ -132,7 +135,7 @@ fn run_main_menu(
             ("↑↓", t("move", "移动")),
             ("1-7", t("jump", "跳转")),
             ("Enter", t("open", "打开")),
-            ("q", t("quit", "退出")),
+            ("q", t("save & quit", "保存退出")),
         ]);
         draw_menu_with_details(
             stdout,
@@ -145,7 +148,15 @@ fn run_main_menu(
         )?;
 
         match read_key()? {
-            KeyCode::Char('q') | KeyCode::Esc => return Ok(false),
+            KeyCode::Char('q') | KeyCode::Esc => {
+                // 退出前保存已发生的编辑：这些操作在用户心智里是即时生效的，
+                // 静默丢弃会表现为「加了模型但 /model 找不到」
+                if has_unsaved_changes(config, baseline.as_deref()) {
+                    config.save(paths)?;
+                    return Ok(true);
+                }
+                return Ok(false);
+            }
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
             KeyCode::Char(digit @ '1'..='9') => {
@@ -172,8 +183,25 @@ fn run_main_menu(
     }
 }
 
-/// 高级设置二级菜单：知识库、渠道接入与全局参数等低频配置。
+/// 判断配置相对进入配置界面时是否发生了改动。
 ///
+/// 参数:
+/// - `config`: 当前内存配置
+/// - `baseline`: 进入时的序列化快照；取不到时按「有改动」处理
+///
+/// 返回:
+/// - 需要落盘时返回 true
+fn has_unsaved_changes(config: &AppConfig, baseline: Option<&str>) -> bool {
+    let Some(baseline) = baseline else {
+        // 快照不可用时宁可多存一次，也不能把用户的编辑丢掉
+        return true;
+    };
+    serde_json::to_string(config)
+        .map(|current| current != baseline)
+        .unwrap_or(true)
+}
+
+/// 高级设置二级菜单：知识库、渠道接入与全局参数等低频配置。///
 /// 参数:
 /// - `stdout`: 终端标准输出
 /// - `paths`: Sai 路径
@@ -251,4 +279,31 @@ fn active_label(config: &AppConfig) -> String {
         .provider(None)
         .map(|provider| format!("{} / {}", provider.display_name, provider.default_model))
         .unwrap_or_else(|_| t("not configured", "未配置").to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 【配置】【自动保存】验证新增模型会被判定为待落盘改动。
+    ///
+    /// 判定失败等于按 q 退出后模型丢失，/model 里找不到刚添加的条目。
+    #[test]
+    fn added_model_counts_as_an_unsaved_change() {
+        let mut config = AppConfig::default();
+        let baseline = serde_json::to_string(&config).unwrap();
+        assert!(!has_unsaved_changes(&config, Some(&baseline)));
+
+        config.providers[0].models.push("new-model".to_string());
+
+        assert!(has_unsaved_changes(&config, Some(&baseline)));
+    }
+
+    /// 【配置】【自动保存】验证快照缺失时按有改动处理。
+    #[test]
+    fn missing_baseline_forces_a_save() {
+        let config = AppConfig::default();
+
+        assert!(has_unsaved_changes(&config, None));
+    }
 }
