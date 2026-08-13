@@ -181,9 +181,10 @@ fn render_queue_section(queued: &[QueuedSubmission], cols: usize, lines: &mut Ve
     }
     lines.push(clip_line(
         &format!(
-            "\x1b[2m• {} ({})\x1b[0m",
+            "\x1b[2m• {} ({})  {}\x1b[0m",
             t("queued for next turn", "已排队待下一轮"),
-            queued.len()
+            queued.len(),
+            t("Ctrl+Z undo · Ctrl+Y clear", "Ctrl+Z 撤回 · Ctrl+Y 清空"),
         ),
         cols,
     ));

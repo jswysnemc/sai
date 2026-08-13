@@ -161,6 +161,34 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                     runtime.redraw_stream_composer()?;
                     continue;
                 }
+                // Ctrl+Z 撤回队尾、Ctrl+Y 清空队列：排错入队的消息不必等本轮结束
+                if matches!(key.code, KeyCode::Char('z'))
+                    && key.modifiers.contains(KeyModifiers::CONTROL)
+                {
+                    if runtime.undo_last_queued()?.is_none() {
+                        runtime.record_meta(
+                            crate::i18n::text(
+                                "nothing to undo: the queue is empty or the input box is not empty",
+                                "无可撤回项：队列为空，或输入框还有内容",
+                            )
+                            .to_string(),
+                        )?;
+                    }
+                    continue;
+                }
+                if matches!(key.code, KeyCode::Char('y'))
+                    && key.modifiers.contains(KeyModifiers::CONTROL)
+                {
+                    let count = runtime.clear_queued()?;
+                    if count > 0 {
+                        runtime.record_meta(if crate::i18n::is_zh() {
+                            format!("已清空 {count} 条排队项")
+                        } else {
+                            format!("cleared {count} queued items")
+                        })?;
+                    }
+                    continue;
+                }
                 if ctrl_o || matches!(key.code, KeyCode::PageUp) {
                     // 1. 流式期间不打开阻塞式浏览面板：pager 会同步占住事件循环，
                     //    模型流无人读取、工具子进程管道写满后挂起

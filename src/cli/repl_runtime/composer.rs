@@ -281,6 +281,60 @@ impl ReplRuntime {
         self.control_queue.iter().cloned().collect()
     }
 
+    /// 撤回最后一条排队项并交还输入框。
+    ///
+    /// 消息队列优先，空了再撤控制命令。输入框已有内容时不覆盖，
+    /// 交由调用方提示用户先处理草稿。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 撤回成功时返回被撤回的文本；队列为空或草稿非空时返回 None
+    pub(in crate::cli) fn undo_last_queued(&mut self) -> Result<Option<String>> {
+        if !self.stream_draft.text.trim().is_empty() {
+            return Ok(None);
+        }
+        let restored = match self.submission_queue.pop_back() {
+            Some(item) => {
+                // 附件随文本一起回到草稿，否则占位符会退化成字面文本
+                self.stream_draft.clipboard = item.clipboard;
+                self.stream_draft.mode = Some(item.mode);
+                item.text
+            }
+            None => self.control_queue.pop_back().unwrap_or_default(),
+        };
+        if restored.is_empty() {
+            return Ok(None);
+        }
+        self.stream_draft.text = restored.clone();
+        self.stream_draft.cursor = restored.chars().count();
+        self.stream_draft.slash_selection = 0;
+        self.stream_draft.is_pasted = false;
+        self.redraw_stream_composer()?;
+        self.sync_transcript(false)?;
+        Ok(Some(restored))
+    }
+
+    /// 清空全部排队项。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 被丢弃的条目总数
+    pub(in crate::cli) fn clear_queued(&mut self) -> Result<usize> {
+        let count = self.submission_queue.len() + self.control_queue.len();
+        if count == 0 {
+            return Ok(0);
+        }
+        self.submission_queue.clear();
+        self.control_queue.clear();
+        self.redraw_stream_composer()?;
+        self.sync_transcript(false)?;
+        Ok(count)
+    }
+
     /// 取出全部排队提交。
     ///
     /// 返回:

@@ -280,6 +280,71 @@ fn ordinary_messages_stay_in_the_submission_queue() {
     assert_eq!(runtime.take_submission_queue().len(), 1);
 }
 
+/// 【TUI】【队列编辑】验证撤回把队尾消息交还输入框。
+#[test]
+fn undo_returns_the_last_queued_message_to_the_input() {
+    let mut runtime = ReplRuntime::new(5_000, options());
+    runtime.stream_draft_mut().text = "first".to_string();
+    runtime
+        .enqueue_stream_draft(crate::agent::AgentMode::Yolo)
+        .unwrap();
+    runtime.stream_draft_mut().text = "second".to_string();
+    runtime
+        .enqueue_stream_draft(crate::agent::AgentMode::Yolo)
+        .unwrap();
+
+    assert_eq!(runtime.undo_last_queued().unwrap().as_deref(), Some("second"));
+    assert_eq!(runtime.stream_draft().text, "second");
+    assert_eq!(runtime.take_submission_queue().len(), 1);
+}
+
+/// 【TUI】【队列编辑】验证输入框非空时不覆盖草稿。
+#[test]
+fn undo_refuses_to_overwrite_a_non_empty_draft() {
+    let mut runtime = ReplRuntime::new(5_000, options());
+    runtime.stream_draft_mut().text = "queued".to_string();
+    runtime
+        .enqueue_stream_draft(crate::agent::AgentMode::Yolo)
+        .unwrap();
+    runtime.stream_draft_mut().text = "typing".to_string();
+
+    assert_eq!(runtime.undo_last_queued().unwrap(), None);
+    assert_eq!(runtime.stream_draft().text, "typing");
+    assert_eq!(runtime.take_submission_queue().len(), 1);
+}
+
+/// 【TUI】【队列编辑】验证消息队列空时撤回控制命令。
+#[test]
+fn undo_falls_back_to_the_control_queue() {
+    let mut runtime = ReplRuntime::new(5_000, options());
+    runtime.stream_draft_mut().text = "/tree".to_string();
+    runtime
+        .enqueue_stream_draft(crate::agent::AgentMode::Yolo)
+        .unwrap();
+
+    assert_eq!(runtime.undo_last_queued().unwrap().as_deref(), Some("/tree"));
+    assert!(runtime.queued_control_commands().is_empty());
+}
+
+/// 【TUI】【队列编辑】验证清空同时丢弃消息与控制命令。
+#[test]
+fn clear_drops_both_queues() {
+    let mut runtime = ReplRuntime::new(5_000, options());
+    runtime.stream_draft_mut().text = "message".to_string();
+    runtime
+        .enqueue_stream_draft(crate::agent::AgentMode::Yolo)
+        .unwrap();
+    runtime.stream_draft_mut().text = "/tree".to_string();
+    runtime
+        .enqueue_stream_draft(crate::agent::AgentMode::Yolo)
+        .unwrap();
+
+    assert_eq!(runtime.clear_queued().unwrap(), 2);
+    assert_eq!(runtime.clear_queued().unwrap(), 0);
+    assert!(runtime.take_submission_queue().is_empty());
+    assert!(runtime.queued_control_commands().is_empty());
+}
+
 #[test]
 fn stream_mode_prefers_draft_mode() {    let mut runtime = ReplRuntime::new(5_000, options());
     runtime.stream_draft_mut().mode = Some(crate::agent::AgentMode::Plan);
