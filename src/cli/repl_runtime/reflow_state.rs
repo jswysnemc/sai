@@ -34,6 +34,10 @@ impl ReflowState {
 
     /// 记录一次终端尺寸观察，并在需要时安排 trailing debounce。
     ///
+    /// 只有尺寸真正变化才重设 deadline。尺寸未变的重复观察来自 32ms 动效帧与
+    /// 25ms 主循环 tick 的一致性巡检，若一并推后 deadline，75ms 的 debounce
+    /// 永远等不到窗口，reflow 不会执行，viewport 也就一直重锚不了。
+    ///
     /// 参数:
     /// - `size`: 本次观察到的终端尺寸
     /// - `streaming`: 是否处于流式输出
@@ -49,8 +53,12 @@ impl ReflowState {
         if previous == Some(size) && self.last_reflowed == Some(size) {
             return false;
         }
+        // 1. 尺寸仍在变化说明用户还在拖拽，重新起算 debounce
+        // 2. 尺寸已稳定且已有排期时保留原 deadline，让它按时到期
+        if previous != Some(size) || self.pending_until.is_none() {
+            self.pending_until = Some(Instant::now() + REFLOW_DEBOUNCE);
+        }
         self.pending_size = Some(size);
-        self.pending_until = Some(Instant::now() + REFLOW_DEBOUNCE);
         if streaming {
             self.resize_requested_during_stream = true;
         }
@@ -141,5 +149,84 @@ impl ReflowState {
     /// - 无
     pub(super) fn clear(&mut self) {
         *self = Self::new();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 构造测试用终端尺寸。
+    ///
+    /// 参数:
+    /// - `cols`: 列数
+    ///
+    /// 返回:
+    /// - 终端尺寸
+    fn size(cols: u16) -> TerminalSize {
+        TerminalSize { cols, rows: 24 }
+    }
+
+    /// 【TUI】【resize 动效】验证尺寸稳定后的重复观察不推后 debounce。
+    ///
+    /// 动效帧每 32ms 巡检一次尺寸，若每次都重设 75ms 的 deadline，
+    /// reflow 永远不到期，屏幕停在 resize 前的画面。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn repeated_same_size_observation_keeps_deadline() {
+        let mut state = ReflowState::new();
+        state.observe(size(80), false);
+        state.observe(size(100), false);
+        let scheduled = state.pending_until().expect("resize must schedule reflow");
+
+        // 1. 模拟动效帧反复巡检同一尺寸
+        for _ in 0..8 {
+            state.observe(size(100), false);
+        }
+
+        assert_eq!(state.pending_until(), Some(scheduled));
+    }
+
+    /// 【TUI】【resize 动效】验证持续拖拽仍然重新起算 debounce。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn size_change_extends_deadline() {
+        let mut state = ReflowState::new();
+        state.observe(size(80), false);
+        state.observe(size(100), false);
+        let scheduled = state.pending_until().expect("resize must schedule reflow");
+
+        state.observe(size(120), false);
+
+        assert!(state.pending_until().expect("still pending") > scheduled);
+    }
+
+    /// 【TUI】【resize 动效】验证到期重放后同尺寸观察不再排期。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn observation_after_reflow_stops_scheduling() {
+        let mut state = ReflowState::new();
+        state.observe(size(80), false);
+        state.observe(size(100), false);
+        state.clear_pending();
+        state.mark_reflowed(size(100), false);
+
+        assert!(!state.observe(size(100), false));
+        assert!(state.pending_until().is_none());
     }
 }
