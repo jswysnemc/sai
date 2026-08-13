@@ -12,6 +12,8 @@ pub(super) struct ReplChrome {
     pub(super) model: String,
     pub(super) thinking: String,
     pub(super) directory: String,
+    /// 当前轮累计缓存命中率，轮次进行中才有值
+    pub(super) cache_hit_ratio: Option<f32>,
 }
 
 impl ReplChrome {
@@ -52,6 +54,7 @@ impl ReplChrome {
             model,
             thinking,
             directory,
+            cache_hit_ratio: None,
         }
     }
 
@@ -65,11 +68,40 @@ impl ReplChrome {
 
     /// 左侧上下文占用文案。
     ///
+    /// 轮次进行中带上本轮累计缓存命中率，让长轮次也能看到实时读数。
+    ///
     /// 返回:
-    /// - 如 `0.0%/272k (auto)`
+    /// - 如 `0.0%/272k` 或 `14.1%/1049k cache 96%`
     pub(super) fn context_status(&self) -> String {
         let pct = (self.context_ratio * 100.0).clamp(0.0, 999.9);
-        format!("{pct:.1}%/{}", format_token_k(self.context_window_tokens))
+        let mut status = format!("{pct:.1}%/{}", format_token_k(self.context_window_tokens));
+        if let Some(ratio) = self.cache_hit_ratio {
+            status.push_str(&format!(" cache {:.0}%", (ratio * 100.0).clamp(0.0, 100.0)));
+        }
+        status
+    }
+
+    /// 按轮次进行中的实时读数覆盖上下文与缓存显示。
+    ///
+    /// 参数:
+    /// - `prompt_tokens`: 最近一次请求 provider 实报的上下文占用
+    /// - `cache_hit_ratio`: 本轮累计缓存命中率
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn apply_live_usage(
+        &mut self,
+        prompt_tokens: Option<usize>,
+        cache_hit_ratio: Option<f32>,
+    ) {
+        if let Some(tokens) = prompt_tokens {
+            if self.context_window_tokens > 0 {
+                self.context_ratio = tokens as f32 / self.context_window_tokens as f32;
+            }
+        }
+        if cache_hit_ratio.is_some() {
+            self.cache_hit_ratio = cache_hit_ratio;
+        }
     }
 
     /// 模式纯文本（用于宽度计算）。
@@ -402,6 +434,44 @@ pub(super) fn chrome_fixed_rows() -> u16 {
 mod tests {
     use super::*;
 
+    /// 构造测试用底栏 chrome。
+    ///
+    /// 返回:
+    /// - chrome 状态
+    fn test_chrome() -> ReplChrome {
+        ReplChrome {
+            mode: AgentMode::Yolo,
+            context_ratio: 0.0,
+            context_window_tokens: 200_000,
+            model: "gpt".to_string(),
+            thinking: "auto".to_string(),
+            directory: "/workspace".to_string(),
+            cache_hit_ratio: None,
+        }
+    }
+
+    /// 【TUI】【实时用量】验证实报读数覆盖上下文占比并带出缓存命中。
+    #[test]
+    fn live_usage_overrides_context_status() {
+        let mut chrome = test_chrome();
+        assert_eq!(chrome.context_status(), "0.0%/200k");
+
+        chrome.apply_live_usage(Some(50_000), Some(0.96));
+
+        assert_eq!(chrome.context_status(), "25.0%/200k cache 96%");
+    }
+
+    /// 【TUI】【实时用量】验证轮次尚无实报读数时保留原快照显示。
+    #[test]
+    fn live_usage_without_reading_keeps_snapshot() {
+        let mut chrome = test_chrome();
+        chrome.context_ratio = 0.141;
+
+        chrome.apply_live_usage(None, None);
+
+        assert_eq!(chrome.context_status(), "14.1%/200k");
+    }
+
     #[test]
     fn status_line_keeps_left_and_right() {
         let line = chrome_status_line("0.0%/272k (auto)", "gpt · xhigh", 40);
@@ -418,6 +488,7 @@ mod tests {
             model: "gpt".to_string(),
             thinking: "xhigh".to_string(),
             directory: "/workspace".to_string(),
+            cache_hit_ratio: None,
         };
         let line = chrome.footer_line(80);
         let plain = strip_ansi(&line);
@@ -449,6 +520,7 @@ mod tests {
             model: "gpt-5.6-sol".to_string(),
             thinking: "auto".to_string(),
             directory: "/home/snemc/workspace/sai/very/long/path/segment".to_string(),
+            cache_hit_ratio: None,
         };
         for cols in [20usize, 40, 59, 60, 80, 120] {
             let line = chrome.footer_line(cols);

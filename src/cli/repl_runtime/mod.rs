@@ -6,6 +6,7 @@ mod event_loop;
 mod history;
 mod history_insert;
 mod layout;
+mod live_usage;
 mod reflow;
 mod reflow_state;
 mod runner_events;
@@ -70,6 +71,8 @@ pub(super) struct ReplRuntime {
     last_composer_signature: Option<composer_frame::ComposerSignature>,
     /// 沉底 todo 是否单行模式（Ctrl+T 切换）
     todo_panel_compact: bool,
+    /// 当前轮已完成请求的实时用量，轮次结束后清空
+    live_usage: live_usage::LiveTurnUsage,
 }
 
 /// 运行期间底部输入框草稿。
@@ -127,6 +130,7 @@ impl ReplRuntime {
             last_cursor_row: None,
             last_composer_signature: None,
             todo_panel_compact: false,
+            live_usage: live_usage::LiveTurnUsage::default(),
         }
     }
 

@@ -291,6 +291,11 @@ impl ReplRuntime {
         if let Some(mode) = self.stream_draft.mode {
             chrome.set_mode(mode);
         }
+        // 轮次进行中用已完成请求的实报读数覆盖底栏，避免停留在上一轮结束时的快照
+        chrome.apply_live_usage(
+            self.live_usage.context_prompt_tokens(),
+            self.live_usage.cache_hit_ratio(),
+        );
         let draft = self.stream_draft.clone();
         self.update_composer(
             &chrome,

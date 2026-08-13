@@ -38,6 +38,7 @@ impl ReplRuntime {
             RunnerEvent::Interrupted | RunnerEvent::Completed(_) | RunnerEvent::Failed(_) => {
                 self.next_live_refresh = None;
                 self.live_sync_pending = false;
+                self.live_usage = Default::default();
                 self.transcript.finalize_live_tail();
                 self.transcript.clear_work_status();
                 return self.sync_transcript(false);
@@ -83,7 +84,15 @@ impl ReplRuntime {
             // TUI：重连只更新工作状态行（match 前的 from_agent_event 已写入），
             // 不插入历史 cell，与 Codex StreamError → status indicator 一致
             AgentEvent::Reconnecting { .. } => self.sync_transcript(true),
-            AgentEvent::ContextUpdated(_) => Ok(()),
+            // 每完成一次 provider 请求就刷新底栏的上下文占用与缓存命中，
+            // 不必等到轮次结束的 FinalSummary
+            AgentEvent::ContextUpdated(update) => {
+                let Some(usage) = update.usage.as_ref() else {
+                    return Ok(());
+                };
+                self.live_usage.record(usage);
+                self.redraw_stream_composer()
+            }
             AgentEvent::ToolCall { name, arguments }
             | AgentEvent::ToolCallIdentified {
                 name, arguments, ..
