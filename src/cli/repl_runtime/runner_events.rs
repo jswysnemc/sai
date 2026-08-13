@@ -39,6 +39,8 @@ impl ReplRuntime {
                 self.next_live_refresh = None;
                 self.live_sync_pending = false;
                 self.live_usage = Default::default();
+                // 换一条占位提示：按轮推进而不是定时轮换，空输入框才不会闪
+                super::placeholder_tips::advance_tip();
                 self.transcript.finalize_live_tail();
                 self.transcript.clear_work_status();
                 return self.sync_transcript(false);

@@ -366,13 +366,11 @@ fn placeholder_text() -> String {
     format!("\x1b[2m{}\x1b[0m", static_placeholder_tip())
 }
 
-/// 返回静态占位提示。
+/// 返回当前轮次的占位提示。
+///
+/// 首条是输入引导，之后每轮换一条功能提示，见 placeholder_tips。
 fn static_placeholder_tip() -> &'static str {
-    if crate::i18n::is_zh() {
-        "输入消息…"
-    } else {
-        "Add a follow-up"
-    }
+    super::placeholder_tips::current_tip()
 }
 
 /// 按显示列宽切分含 ANSI 的输入行，供圆角盒逐行绘制。
@@ -699,11 +697,8 @@ mod tests {
         let output = String::from_utf8(output).unwrap();
         let panel_at = output.find("计划").unwrap();
         // 极简输入行无彩条；面板须出现在输入提示之前
-        let tip = if crate::i18n::is_zh() {
-            "输入消息…"
-        } else {
-            "Add a follow-up"
-        };
+        // 占位提示逐轮轮换，测试取当前值而不是硬编码首条
+        let tip = super::super::placeholder_tips::current_tip();
         let input_at = output.find(tip).expect("input placeholder");
         assert!(panel_at < input_at, "面板行必须渲染在输入区之前");
     }
@@ -728,12 +723,8 @@ mod tests {
         frame.draw_lines(&mut output, &viewport, None).unwrap();
 
         let output = String::from_utf8(output).unwrap();
-        // 静态提示，不随轮询变化
-        let tip = if crate::i18n::is_zh() {
-            "输入消息…"
-        } else {
-            "Add a follow-up"
-        };
+        // 同一轮内提示保持静止，不随轮询变化
+        let tip = super::super::placeholder_tips::current_tip();
         assert!(!tip.is_empty());
         assert!(output.contains(tip));
         assert!(output.contains("\x1b[2m"));

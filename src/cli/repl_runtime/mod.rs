@@ -7,6 +7,7 @@ mod history;
 mod history_insert;
 mod layout;
 mod live_usage;
+mod placeholder_tips;
 mod reflow;
 mod reflow_state;
 mod runner_events;
