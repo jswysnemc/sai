@@ -32,15 +32,25 @@ export function SessionDataSettings() {
     }
   });
   const deleteSession = useMutation({
-    mutationFn: (id: string) => api.sessions.remove(id),
-    onSuccess: async (_result, id) => {
+    mutationFn: (id: string) => api.sessions.remove(id),    onSuccess: async (_result, id) => {
       if (expandedId?.endsWith(`/${id}`)) setExpandedId(null);
       setSelectedKeys((current) => {
         const next = new Set(current);
-        for (const key of next) if (key.endsWith(`/${id}`)) next.delete(key);
-        return next;
+        for (const key of next) if (key.endsWith(`/${id}`)) next.delete(key);        return next;
       });
       await invalidateSessionQueries(queryClient, id);
+    }
+  });
+  const deleteManySessions = useMutation({
+    // 删除接口按会话逐个调用；串行执行避免同时写会话索引
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) await api.sessions.remove(id);
+    },
+    onSuccess: async () => {
+      setExpandedId(null);
+      setSelectedKeys(new Set());
+      await queryClient.invalidateQueries({ queryKey: ["session-data"] });
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
     }
   });
   const items = sessions.data ?? [];
@@ -48,8 +58,8 @@ export function SessionDataSettings() {
   const selectedItems = items.filter((item) => selectedKeys.has(sessionKey(item)));
   const totalBytes = items.reduce((sum, session) => sum + session.total_bytes, 0);
   const allSelected = items.length > 0 && selectedItems.length === items.length;
-  const busy = clearSession.isPending || deleteSession.isPending;
-  const error = sessions.error ?? clearSession.error ?? deleteSession.error;
+  const busy = clearSession.isPending || deleteSession.isPending || deleteManySessions.isPending;
+  const error = sessions.error ?? clearSession.error ?? deleteSession.error ?? deleteManySessions.error;
 
   /**
    * 切换单个会话的选择状态。
@@ -122,6 +132,28 @@ export function SessionDataSettings() {
     if (accepted) deleteSession.mutate(session.id);
   };
 
+  /**
+   * 确认并批量删除选中的会话。
+   *
+   * @param selected 待删除会话
+   * @returns 无
+   */
+  const requestDeleteMany = async (selected: SessionDataSummary[]) => {
+    if (selected.length === 0) return;
+    const accepted = await confirm({
+      title: t("Delete sessions", "删除会话"),
+      description: t(
+        `Permanently delete ${selected.length} sessions and their entries across all workspaces?`,
+        `永久删除所有工作区中的 ${selected.length} 个会话及其会话条目？`
+      ),
+      confirmLabel: t("Delete", "删除"),
+      danger: true
+    });
+    if (accepted) {
+      deleteManySessions.mutate(selected.map((session) => session.id));
+    }
+  };
+
   return (
     <section className="session-data-settings">
       <header className="session-data-header">
@@ -143,6 +175,12 @@ export function SessionDataSettings() {
             <Button onClick={() => void requestClear(selectedItems)} disabled={busy} title={t("Clear selected session data", "清空选中会话数据")}>
               <Eraser size={14} aria-hidden />
               {t(`Clear ${selectedItems.length}`, `清空 ${selectedItems.length} 项`)}
+            </Button>
+          )}
+          {selectedItems.length > 0 && (
+            <Button onClick={() => void requestDeleteMany(selectedItems)} disabled={busy} title={t("Delete selected sessions", "删除选中会话")}>
+              <Trash2 size={14} aria-hidden />
+              {t(`Delete ${selectedItems.length}`, `删除 ${selectedItems.length} 项`)}
             </Button>
           )}
           <Button onClick={() => void sessions.refetch()} disabled={sessions.isFetching || busy} title={t("Refresh session data", "刷新会话数据")}>
