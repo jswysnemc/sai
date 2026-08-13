@@ -21,6 +21,7 @@ import type { PaneTab } from "../workspace/workspace-tab";
 import type { ActivityPulse } from "./activity-pulse";
 import { useActivityPulse } from "./use-activity-pulse";
 import { selectTodoOverviewItems, useRuntimeOverviewData } from "./runtime-overview-data";
+import { requestSubagentFocus } from "../subagents/subagent-focus";
 import { subagentStatusLabel } from "../subagents/subagent-labels";
 import "./runtime-overview.css";
 
@@ -183,7 +184,15 @@ export function RuntimeOverview({ sessionId }: RuntimeOverviewProps) {
             <ChevronRight size={13} aria-hidden />
           </Button>
           {data.subagents.overviewItems.map((subagent) => (
-            <Button className="runtime-overview-agent" key={subagent.id} onClick={() => openWorkspacePanel("subagents")}>
+            <Button
+              className="runtime-overview-agent"
+              key={subagent.id}
+              onClick={() => {
+                // 条目直达对应详情，只打开面板等于让用户在列表里再找一遍
+                requestSubagentFocus(subagent.id);
+                openWorkspacePanel("subagents");
+              }}
+            >
               <span className={`runtime-overview-agent-state is-${subagent.status}`} aria-hidden />
               <span>{subagent.description || subagent.subagent_type}</span>
               <small>{subagentStatusLabel(subagent.status, locale)}</small>

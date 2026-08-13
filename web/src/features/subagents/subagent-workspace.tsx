@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { SubagentDetailView } from "./subagent-detail-view";
+import { FOCUS_SUBAGENT_EVENT, focusIdFromEvent, takePendingSubagentFocus } from "./subagent-focus";
 import { SubagentOverview } from "./subagent-overview";
 import "./subagents.css";
 
@@ -15,13 +16,24 @@ import "./subagents.css";
  */
 export function SubagentWorkspace() {
   const queryClient = useQueryClient();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // 概览点击条目时面板可能尚未挂载，首次渲染先认领待聚焦项
+  const [selectedId, setSelectedId] = useState<string | null>(() => takePendingSubagentFocus());
   const query = useQuery({ queryKey: ["subagents"], queryFn: api.subagents.list, refetchInterval: 2000 });
   const cancel = useMutation({
     mutationFn: api.subagents.cancel,
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["subagents"] })
   });
   const selected = query.data?.find((subagent) => subagent.id === selectedId) ?? null;
+
+  // 面板已经打开时，概览的后续点击靠事件切换详情
+  useEffect(() => {
+    const handleFocus = (event: Event) => {
+      const id = focusIdFromEvent(event);
+      if (id) setSelectedId(id);
+    };
+    window.addEventListener(FOCUS_SUBAGENT_EVENT, handleFocus);
+    return () => window.removeEventListener(FOCUS_SUBAGENT_EVENT, handleFocus);
+  }, []);
 
   return (
     <div className="subagent-workspace">
