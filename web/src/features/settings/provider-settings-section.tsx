@@ -426,6 +426,7 @@ export function ProviderSettingsSection({
           <div className="settings-field full">
             <span>{t("Connectivity", "连通性")}</span>
             <ProviderConnectionTest
+              key={`${provider.id}:${provider.default_model ?? ""}:${selectedProviderKey ?? ""}`}
               provider={provider}
               model={provider.default_model || undefined}
               selectedKeyId={selectedProviderKey}
