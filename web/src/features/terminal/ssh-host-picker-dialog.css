@@ -48,12 +48,22 @@
 }
 
 .ssh-host-picker-empty {
-  display: grid;
-  justify-items: start;
-  gap: var(--space-xs);
+  margin: 0;
   padding: var(--space-xs) 0;
   color: var(--ink-soft);
   font-size: var(--text-xs);
+}
+
+.ssh-host-picker-add {
+  justify-content: center;
+  width: 100%;
+}
+
+.ssh-host-picker-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  padding-top: var(--space-xs);
 }
 
 .ssh-host-picker-error {
