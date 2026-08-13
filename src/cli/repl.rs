@@ -57,7 +57,7 @@ pub(super) async fn run_repl(
         env!("CARGO_PKG_VERSION").to_string(),
         repl_welcome_model(&config),
         crate::runtime_cwd::current_dir()
-            .map(|path| path.display().to_string())
+            .map(|path| super::repl_chrome::compress_home_prefix(&path.display().to_string()))
             .unwrap_or_else(|_| "~".to_string()),
         format!("{} mode", mode.label()),
     )?;

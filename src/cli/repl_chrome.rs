@@ -39,7 +39,7 @@ impl ReplChrome {
             .filter(|level| !level.is_empty())
             .unwrap_or_else(|| "auto".to_string());
         let directory = crate::runtime_cwd::current_dir()
-            .map(|path| path.display().to_string())
+            .map(|path| compress_home_prefix(&path.display().to_string()))
             .unwrap_or_else(|_| "?".to_string());
         Self {
             mode,
@@ -150,6 +150,47 @@ impl ReplChrome {
             " ".repeat(gap),
             " ".repeat(pad)
         )
+    }
+}
+
+/// 把家目录前缀压缩成 `~`。
+///
+/// 底栏右侧只有一段空间，深层路径会把左侧的模式与模型挤掉。
+/// Windows 的家目录同样来自 BaseDirs，因此三个平台共用一套逻辑。
+///
+/// 参数:
+/// - `path`: 当前工作目录的显示文本
+///
+/// 返回:
+/// - 压缩后的路径；不在家目录内时原样返回
+pub(super) fn compress_home_prefix(path: &str) -> String {
+    let Some(home) = directories::BaseDirs::new()
+        .map(|dirs| dirs.home_dir().display().to_string())
+        .filter(|home| !home.is_empty())
+    else {
+        return path.to_string();
+    };
+    compress_with_home(path, &home)
+}
+
+/// 按给定家目录压缩路径前缀。
+///
+/// 参数:
+/// - `path`: 当前工作目录
+/// - `home`: 家目录
+///
+/// 返回:
+/// - 压缩后的路径
+fn compress_with_home(path: &str, home: &str) -> String {
+    if path == home {
+        return "~".to_string();
+    }
+    let separator = std::path::MAIN_SEPARATOR;
+    // 只认目录边界，避免 /home/snemc-backup 被误压成 ~-backup
+    let prefix = format!("{home}{separator}");
+    match path.strip_prefix(&prefix) {
+        Some(rest) => format!("~{separator}{rest}"),
+        None => path.to_string(),
     }
 }
 
@@ -470,6 +511,28 @@ mod tests {
         chrome.apply_live_usage(None, None);
 
         assert_eq!(chrome.context_status(), "14.1%/200k");
+    }
+
+    /// 【TUI】【底栏路径】验证家目录压缩为 ~ 且只认目录边界。
+    #[test]
+    fn home_prefix_is_compressed_on_directory_boundary() {
+        let sep = std::path::MAIN_SEPARATOR;
+        let home = format!("{sep}home{sep}snemc");
+
+        assert_eq!(compress_with_home(&home, &home), "~");
+        assert_eq!(
+            compress_with_home(&format!("{home}{sep}workspace{sep}sai"), &home),
+            format!("~{sep}workspace{sep}sai")
+        );
+        // 同名前缀的兄弟目录不能被压缩
+        assert_eq!(
+            compress_with_home(&format!("{home}-backup"), &home),
+            format!("{home}-backup")
+        );
+        assert_eq!(
+            compress_with_home(&format!("{sep}etc{sep}sai"), &home),
+            format!("{sep}etc{sep}sai")
+        );
     }
 
     #[test]
