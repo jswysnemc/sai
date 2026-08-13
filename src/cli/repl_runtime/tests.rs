@@ -234,9 +234,54 @@ fn enqueue_stream_draft_queues_and_clears_input() {
     assert_eq!(queued[0].mode, crate::agent::AgentMode::Audited);
 }
 
+/// 【TUI】【控制队列】验证运行期间输入的斜杠命令不进消息队列。
+///
+/// 混进消息队列会被当成提问发给模型，且会连带丢弃其后的排队消息。
 #[test]
-fn stream_mode_prefers_draft_mode() {
+fn slash_commands_go_to_the_control_queue() {
     let mut runtime = ReplRuntime::new(5_000, options());
+    runtime.stream_draft_mut().text = "/tree".to_string();
+    assert!(runtime
+        .enqueue_stream_draft(crate::agent::AgentMode::Yolo)
+        .unwrap());
+
+    assert!(runtime.take_submission_queue().is_empty());
+    assert_eq!(runtime.queued_control_commands(), vec!["/tree".to_string()]);
+    assert_eq!(runtime.take_next_control_command().as_deref(), Some("/tree"));
+    assert_eq!(runtime.take_next_control_command(), None);
+}
+
+/// 【TUI】【控制队列】验证 shell 前缀同样走控制队列。
+#[test]
+fn shell_prefix_goes_to_the_control_queue() {
+    let mut runtime = ReplRuntime::new(5_000, options());
+    runtime.stream_draft_mut().text = "!ls -al".to_string();
+    assert!(runtime
+        .enqueue_stream_draft(crate::agent::AgentMode::Yolo)
+        .unwrap());
+
+    assert!(runtime.take_submission_queue().is_empty());
+    assert_eq!(
+        runtime.take_next_control_command().as_deref(),
+        Some("!ls -al")
+    );
+}
+
+/// 【TUI】【控制队列】验证普通消息仍进消息队列。
+#[test]
+fn ordinary_messages_stay_in_the_submission_queue() {
+    let mut runtime = ReplRuntime::new(5_000, options());
+    runtime.stream_draft_mut().text = "路径是 src/main.rs".to_string();
+    assert!(runtime
+        .enqueue_stream_draft(crate::agent::AgentMode::Yolo)
+        .unwrap());
+
+    assert!(runtime.queued_control_commands().is_empty());
+    assert_eq!(runtime.take_submission_queue().len(), 1);
+}
+
+#[test]
+fn stream_mode_prefers_draft_mode() {    let mut runtime = ReplRuntime::new(5_000, options());
     runtime.stream_draft_mut().mode = Some(crate::agent::AgentMode::Plan);
     assert_eq!(
         runtime.stream_mode(crate::agent::AgentMode::Yolo),

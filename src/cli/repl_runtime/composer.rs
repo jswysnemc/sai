@@ -4,6 +4,7 @@ use super::{QueuedSubmission, ReplRuntime, StreamComposerDraft};
 use crate::agent::AgentMode;
 use crate::cli::repl_chrome::ReplChrome;
 use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
+use crate::cli::repl_commands::is_control_command_text;
 use crate::render::terminal_paint::paint_lock;
 use anyhow::Result;
 use std::io::{self, Write};
@@ -83,6 +84,7 @@ impl ReplRuntime {
         super::bottom_panel::render_panel_lines(
             self.transcript.latest_todo_items(),
             &queued,
+            &self.queued_control_commands(),
             &agent_lines,
             cols,
             self.todo_panel_compact,
@@ -235,6 +237,17 @@ impl ReplRuntime {
             return Ok(false);
         }
         let mode = self.stream_draft.mode.unwrap_or(fallback_mode);
+        // 斜杠命令与 shell 不是聊天正文：进控制队列等本轮结束后由主循环执行。
+        // 混进消息队列会被当成提问发给模型，且会连带丢弃其后的排队消息
+        if is_control_command_text(&text) {            self.control_queue.push_back(text);
+            self.stream_draft = StreamComposerDraft {
+                mode: Some(mode),
+                ..StreamComposerDraft::default()
+            };
+            self.redraw_stream_composer()?;
+            self.sync_transcript(false)?;
+            return Ok(true);
+        }
         // 剪贴板附件随草稿一起入队，执行时还原为真实图片或长文本
         let clipboard = std::mem::take(&mut self.stream_draft.clipboard);
         self.submission_queue.push_back(QueuedSubmission {
@@ -250,6 +263,22 @@ impl ReplRuntime {
         self.redraw_stream_composer()?;
         self.sync_transcript(false)?;
         Ok(true)
+    }
+
+    /// 取出下一条待执行的控制命令。
+    ///
+    /// 返回:
+    /// - 队首命令原文；队列为空时返回空
+    pub(in crate::cli) fn take_next_control_command(&mut self) -> Option<String> {
+        self.control_queue.pop_front()
+    }
+
+    /// 返回当前排队的控制命令。
+    ///
+    /// 返回:
+    /// - 按入队顺序排列的命令原文
+    pub(in crate::cli) fn queued_control_commands(&self) -> Vec<String> {
+        self.control_queue.iter().cloned().collect()
     }
 
     /// 取出全部排队提交。

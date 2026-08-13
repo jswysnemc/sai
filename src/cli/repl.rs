@@ -1,6 +1,6 @@
 use super::repl_chrome::ReplChrome;
 use super::repl_external_events::ReplExternalEvents;
-use super::repl_input::ReplInputEvent;
+use super::repl_input::{ReplInputEvent, ReplInputSubmission};
 use super::repl_tool_warmup::ReplToolWarmup;
 use super::repl_turn::{execute_automatic_repl_turn, execute_repl_turn};
 use super::repl_turn_failure::{interrupted_failure_text, turn_failure_text};
@@ -116,67 +116,74 @@ pub(super) async fn run_repl(
             tool_call_mode: render::ToolCallDisplayMode::from_config(&config.display.tool_calls),
         };
         runtime.update_options(config.display.repl_transcript_row_cap, transcript_options);
-        let submission = match read_repl_input(
-            mode,
-            prefill.take(),
-            prefill_clipboard.take(),
-            &input_history,
-            &mut chrome,
-            &mut runtime,
-            &mut external_events,
-        )? {
-            Some(ReplInputEvent::User(submission)) => {
-                mode = submission.mode;
-                submission
-            }
-            Some(ReplInputEvent::Automatic {
-                mode: automatic_mode,
-                wake,
-                draft,
-            }) => {
-                mode = automatic_mode;
-                prefill = (!draft.text.trim().is_empty()).then_some(draft.text);
-                prefill_clipboard = prefill.as_ref().map(|_| draft.clipboard_state);
-                apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
-                let outcome = execute_automatic_repl_turn(
-                    paths,
-                    &config,
-                    &mut agent,
-                    &mut runtime,
-                    mode,
-                    transcript_options.reasoning_mode,
-                    transcript_options.tool_call_mode,
+        // 运行期间输入的斜杠命令先于输入框消费：它们在轮次进行中无法执行
+        // （交互选择器会占住事件循环），排到这里才轮到主循环分发
+        let submission = if let Some(command) = runtime.take_next_control_command() {
+            runtime.record_meta(command.clone())?;
+            ReplInputSubmission::control(mode, command)
+        } else {
+            match read_repl_input(
+                mode,
+                prefill.take(),
+                prefill_clipboard.take(),
+                &input_history,
+                &mut chrome,
+                &mut runtime,
+                &mut external_events,
+            )? {
+                Some(ReplInputEvent::User(submission)) => {
+                    mode = submission.mode;
+                    submission
+                }
+                Some(ReplInputEvent::Automatic {
+                    mode: automatic_mode,
                     wake,
-                )
-                .await?;
-                if outcome.interrupted {
-                    if let Some(error) = outcome.result.err() {
-                        runtime.record_failure(interrupted_failure_text(&error))?;
+                    draft,
+                }) => {
+                    mode = automatic_mode;
+                    prefill = (!draft.text.trim().is_empty()).then_some(draft.text);
+                    prefill_clipboard = prefill.as_ref().map(|_| draft.clipboard_state);
+                    apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
+                    let outcome = execute_automatic_repl_turn(
+                        paths,
+                        &config,
+                        &mut agent,
+                        &mut runtime,
+                        mode,
+                        transcript_options.reasoning_mode,
+                        transcript_options.tool_call_mode,
+                        wake,
+                    )
+                    .await?;
+                    if outcome.interrupted {
+                        if let Some(error) = outcome.result.err() {
+                            runtime.record_failure(interrupted_failure_text(&error))?;
+                        }
+                    } else if let Err(error) = outcome.result {
+                        runtime.record_failure(turn_failure_text(&error))?;
                     }
-                } else if let Err(error) = outcome.result {
-                    runtime.record_failure(turn_failure_text(&error))?;
+                    if let Some(draft) = outcome.leftover_draft {
+                        prefill = Some(draft);
+                    }
+                    drain_submission_queue(
+                        paths,
+                        &config,
+                        &mut agent,
+                        &mut runtime,
+                        &mut mode,
+                        &mut input_history,
+                        transcript_options.reasoning_mode,
+                        transcript_options.tool_call_mode,
+                    )
+                    .await?;
+                    if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
+                        prefill = Some(draft);
+                        prefill_clipboard = Some(clipboard);
+                    }
+                    continue;
                 }
-                if let Some(draft) = outcome.leftover_draft {
-                    prefill = Some(draft);
-                }
-                drain_submission_queue(
-                    paths,
-                    &config,
-                    &mut agent,
-                    &mut runtime,
-                    &mut mode,
-                    &mut input_history,
-                    transcript_options.reasoning_mode,
-                    transcript_options.tool_call_mode,
-                )
-                .await?;
-                if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
-                    prefill = Some(draft);
-                    prefill_clipboard = Some(clipboard);
-                }
-                continue;
+                None => break,
             }
-            None => break,
         };
         apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
         let input = submission.raw_input.trim();

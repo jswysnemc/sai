@@ -18,6 +18,32 @@ pub(super) struct ReplInputSubmission {
     pub(super) fold_echo: bool,
 }
 
+impl ReplInputSubmission {
+    /// 构造一条来自控制队列的提交。
+    ///
+    /// 运行期间输入的斜杠命令没有经过输入框，这里补齐主循环分发所需的形状；
+    /// 正文不会发给模型，回显也由调用方单独记录，因此 echo 字段留空。
+    ///
+    /// 参数:
+    /// - `mode`: 当前 Agent 模式
+    /// - `command`: 命令原文
+    ///
+    /// 返回:
+    /// - 可交主循环分发的提交
+    pub(super) fn control(mode: AgentMode, command: String) -> Self {
+        Self {
+            mode,
+            raw_input: command,
+            chat_input: clipboard::ClipboardChatInput {
+                message: String::new(),
+                image_url: None,
+            },
+            echo_text: String::new(),
+            fold_echo: false,
+        }
+    }
+}
+
 /// 输入框产生的下一项工作。
 pub(super) enum ReplInputEvent {
     User(ReplInputSubmission),

@@ -20,6 +20,34 @@ pub(super) fn is_repl_exit_command(input: &str) -> bool {
         || input.eq_ignore_ascii_case("/exit")
 }
 
+/// 判断输入是否需要主循环以控制命令方式执行。
+///
+/// 斜杠命令、shell 前缀与退出命令都无法作为聊天正文发给模型，
+/// 运行期间输入时必须与消息队列分流。
+///
+/// 参数:
+/// - `input`: 已输入或提交的原始文本
+///
+/// 返回:
+/// - 需要交主循环分发时返回 true
+pub(in crate::cli) fn is_control_command_text(input: &str) -> bool {
+    let input = input.trim();
+    if input.is_empty() {
+        return false;
+    }
+    if input.starts_with('!') {
+        return true;
+    }
+    is_repl_exit_command(input)
+        || matches!(
+            crate::control_commands::parse_control_command(
+                input,
+                crate::control_commands::ControlSurface::Repl,
+            ),
+            Ok(Some(_))
+        )
+}
+
 /// 根据当前输入生成斜杠菜单补全建议。
 ///
 /// 参数:

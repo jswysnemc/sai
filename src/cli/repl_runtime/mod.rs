@@ -58,6 +58,8 @@ pub(super) struct ReplRuntime {
     stream_draft: StreamComposerDraft,
     /// Tab 入队、等待当前轮结束后执行的提交
     submission_queue: VecDeque<QueuedSubmission>,
+    /// 运行期间输入的斜杠命令，本轮结束后按序交主循环执行
+    control_queue: VecDeque<String>,
     /// 运行中权限模式热切换句柄（与 Agent 共享）
     live_mode_handle: Option<std::sync::Arc<std::sync::atomic::AtomicU8>>,
     live_session_id: Option<String>,
@@ -123,6 +125,7 @@ impl ReplRuntime {
             pending_input_events: VecDeque::new(),
             stream_draft: StreamComposerDraft::default(),
             submission_queue: VecDeque::new(),
+            control_queue: VecDeque::new(),
             live_mode_handle: None,
             live_session_id: None,
             last_chrome: None,

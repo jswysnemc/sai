@@ -27,6 +27,7 @@ const TODO_PREVIEW_LIMIT: usize = 5;
 pub(super) fn render_panel_lines(
     todos: &[TodoSnapshotItem],
     queued: &[QueuedSubmission],
+    controls: &[String],
     agent_lines: &[String],
     cols: usize,
     todo_compact: bool,
@@ -34,11 +35,51 @@ pub(super) fn render_panel_lines(
     let cols = cols.max(8);
     let mut lines = Vec::new();
     render_todo_section(todos, cols, todo_compact, &mut lines);
+    render_control_section(controls, cols, &mut lines);
     render_queue_section(queued, cols, &mut lines);
     for line in agent_lines {
         lines.push(clip_line(line, cols));
     }
     lines
+}
+
+/// 渲染待执行控制命令区。
+///
+/// 与排队消息分开显示：这些命令不会发给模型，本轮结束后由主循环执行。
+///
+/// 参数:
+/// - `controls`: 待执行命令原文
+/// - `cols`: 终端列数
+/// - `lines`: 输出行缓冲
+///
+/// 返回:
+/// - 无
+fn render_control_section(controls: &[String], cols: usize, lines: &mut Vec<String>) {
+    if controls.is_empty() {
+        return;
+    }
+    lines.push(clip_line(
+        &format!(
+            "\x1b[2m• {} ({})\x1b[0m",
+            t("commands after this turn", "本轮结束后执行"),
+            controls.len()
+        ),
+        cols,
+    ));
+    for command in controls.iter().take(QUEUE_PREVIEW_LIMIT) {
+        let preview = command.split_whitespace().collect::<Vec<_>>().join(" ");
+        lines.push(clip_line(
+            &format!("\x1b[2m  ↳ \x1b[0m\x1b[36m{preview}\x1b[0m"),
+            cols,
+        ));
+    }
+    let hidden = controls.len().saturating_sub(QUEUE_PREVIEW_LIMIT);
+    if hidden > 0 {
+        lines.push(clip_line(
+            &format!("\x1b[2m    … +{hidden} {}\x1b[0m", t("more", "条")),
+            cols,
+        ));
+    }
 }
 
 /// 渲染 todo 快照区。
@@ -223,12 +264,12 @@ mod tests {
     }
 
     fn render(todos: &[TodoSnapshotItem], compact: bool) -> Vec<String> {
-        render_panel_lines(todos, &[], &[], 80, compact)
+        render_panel_lines(todos, &[], &[], &[], 80, compact)
     }
 
     #[test]
     fn empty_inputs_produce_no_panel() {
-        assert!(render_panel_lines(&[], &[], &[], 80, false).is_empty());
+        assert!(render_panel_lines(&[], &[], &[], &[], 80, false).is_empty());
     }
 
     #[test]
@@ -356,7 +397,7 @@ mod tests {
             queued("three"),
             queued("four"),
         ];
-        let lines = render_panel_lines(&[], &queue, &[], 80, false);
+        let lines = render_panel_lines(&[], &queue, &[], &[], 80, false);
         let joined = lines.join("\n");
         assert!(joined.contains("(4)"));
         assert!(joined.contains("↳ one"));
@@ -366,7 +407,7 @@ mod tests {
     #[test]
     fn long_lines_are_clipped_to_terminal_width() {
         let queue = vec![queued(&"字".repeat(120))];
-        let lines = render_panel_lines(&[], &queue, &[], 40, false);
+        let lines = render_panel_lines(&[], &queue, &[], &[], 40, false);
         for line in &lines {
             assert!(visible_width(line) <= 40, "line too wide: {line:?}");
         }
