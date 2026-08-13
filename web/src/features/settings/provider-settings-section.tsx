@@ -1,4 +1,4 @@
-import { Check, Cpu, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Check, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { createElement, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
@@ -338,7 +338,9 @@ export function ProviderSettingsSection({
     id: item.id,
     name: item.display_name || item.id,
     meta: item.default_model || item.models?.[0] || t("No model configured", "未配置模型"),
-    icon: <Cpu size={14} />,
+    // 品牌图标按供应商与默认模型解析，拉不到时降级为模型名首字母块；
+    // 所有供应商共用一个 Cpu 图标既认不出来源，也和"设置"语义混淆
+    icon: <ModelIcon model={item.default_model || item.models?.[0] || item.id} provider={item.id} size={14} />,
     marked: item.id === config.active_provider,
     muted: !isProviderEnabled(item)
   });
