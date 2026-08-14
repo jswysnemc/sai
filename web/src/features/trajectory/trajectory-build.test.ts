@@ -166,3 +166,57 @@ describe("buildTrajectory", () => {
     expect(buildTrajectory(undefined)).toEqual({ records: [], turns: [] });
   });
 });
+
+describe("buildTrajectory 的系统提示词记录", () => {
+  /** 构造一份系统提示词快照。 */
+  const prompt = {
+    source: "session_baseline",
+    content: "You are Sai.",
+    char_count: 12,
+    token_count: 7140,
+    has_instruction_files: true,
+    has_skills: true,
+    has_tools: true,
+    has_memory: false,
+    has_dynamic: false,
+    tool_count: 17,
+    sections: [
+      { id: "baseline", label: "会话 baseline", content: "You are Sai." },
+      { id: "tools", label: "工具定义", content: "read_file..." }
+    ]
+  };
+
+  it("排在全部轮次之前", () => {
+    const model = buildTrajectory(
+      timeline([turn({ turn_id: "t1" })]),
+      prompt as never
+    );
+
+    expect(model.records[0].kind).toBe("system");
+    expect(model.records[0].index).toBe(1);
+    expect(model.records[1].kind).toBe("user");
+  });
+
+  it("摘要给出体量与构成而不是正文开头", () => {
+    const model = buildTrajectory(undefined, prompt as never);
+
+    expect(model.records[0].summary).toBe("7140 tokens · 17 tools · 会话 baseline · 工具定义");
+  });
+
+  it("分区进入详情供分段展示", () => {
+    const model = buildTrajectory(undefined, prompt as never);
+
+    expect(model.records[0].detail.sections).toHaveLength(2);
+    expect(model.records[0].detail.input).toBe("You are Sai.");
+  });
+
+  it("没有系统提示词时不插入空记录", () => {
+    expect(buildTrajectory(timeline([turn({ turn_id: "t1" })])).records[0].kind).toBe("user");
+  });
+
+  it("正文为空白的快照同样跳过", () => {
+    const model = buildTrajectory(undefined, { ...prompt, content: "   " } as never);
+
+    expect(model.records).toHaveLength(0);
+  });
+});

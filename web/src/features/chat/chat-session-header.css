@@ -105,6 +105,15 @@
   justify-self: end;
 }
 
+/*
+ * 工作区面板收起时，它的展开按钮绝对定位浮在眉头右上角
+ * （workspace-pane.css 的 .workspace-reopen-anchor，right: 8px 宽 28px），
+ * 这里让出它的宽度，否则两者叠在一起。
+ */
+.workspace-closed .chat-header-view-switch {
+  margin-right: 28px;
+}
+
 .chat-header-panel {
   /* 弹出菜单相对本容器定位，因此定位上下文与显示状态解耦 */
   position: relative;

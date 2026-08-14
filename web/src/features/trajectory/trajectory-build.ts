@@ -1,4 +1,5 @@
 import type {
+  SessionContextPrompt,
   SessionTimeline,
   SessionTimelineTurn,
   TimelineToolEntry,
@@ -33,12 +34,22 @@ export type TrajectoryTurnHeader = {
  * 轮内顺序按模型实际经历的次序还原：用户输入在前，随后是每次模型请求
  * 产生的工具批次，插入消息紧跟在触发它的工具之后，助手正文收尾。
  *
+ * 系统提示词排在最前：它是每次请求都会重发的前缀，也是上下文占用的
+ * 大头，轨迹里缺了它就看不出一次任务的固定成本从哪来。
+ *
  * @param timeline 会话时间线响应
+ * @param contextPrompt 当前会话的系统提示词快照
  * @returns 扁平记录表与轮次分隔数据
  */
-export function buildTrajectory(timeline: SessionTimeline | undefined): TrajectoryModel {
+export function buildTrajectory(
+  timeline: SessionTimeline | undefined,
+  contextPrompt?: SessionContextPrompt
+): TrajectoryModel {
   const records: TrajectoryRecord[] = [];
   const turns: TrajectoryTurnHeader[] = [];
+  if (contextPrompt?.content?.trim()) {
+    records.push(systemRecord(contextPrompt));
+  }
   if (!timeline) return { records, turns };
 
   for (const turn of timeline.turns) {
@@ -157,6 +168,43 @@ export function buildTrajectory(timeline: SessionTimeline | undefined): Trajecto
   }
 
   return { records, turns };
+}
+
+/**
+ * 把系统提示词快照转换为轨迹首条记录。
+ *
+ * 摘要给出体量与构成而不是正文开头：这条记录的价值在于"固定成本多大、
+ * 由哪些部分组成"，正文本身在详情里按分区读。
+ *
+ * @param prompt 系统提示词快照
+ * @returns 系统记录
+ */
+function systemRecord(prompt: SessionContextPrompt): TrajectoryRecord {
+  const parts: string[] = [];
+  if (prompt.token_count) parts.push(`${prompt.token_count} tokens`);
+  else if (prompt.char_count) parts.push(`${prompt.char_count} chars`);
+  if (prompt.tool_count) parts.push(`${prompt.tool_count} tools`);
+  for (const section of prompt.sections ?? []) parts.push(section.label);
+  return {
+    id: "system-prompt",
+    index: 1,
+    kind: "system",
+    turnId: null,
+    turnSeq: null,
+    turnStart: false,
+    round: 0,
+    roundStart: false,
+    summary: parts.join(" · "),
+    label: prompt.source === "live" ? "live" : "baseline",
+    startedAt: null,
+    durationMs: null,
+    failed: false,
+    running: false,
+    detail: {
+      input: prompt.content,
+      sections: prompt.sections
+    }
+  };
 }
 
 /**

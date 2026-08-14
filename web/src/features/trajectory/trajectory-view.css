@@ -11,6 +11,10 @@
   background: var(--paper);
 }
 
+.trajectory-view [data-kind="system"] {
+  --kind-color: var(--ink-soft);
+}
+
 .trajectory-view [data-kind="user"] {
   --kind-color: var(--blue);
 }

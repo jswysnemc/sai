@@ -2,6 +2,7 @@ import type { PermissionDecision, TurnUsage } from "../../api/contracts";
 
 /** 轨迹记录的种类；决定行标签与配色。 */
 export type TrajectoryRecordKind =
+  | "system"
   | "user"
   | "assistant"
   | "tool"
@@ -65,6 +66,8 @@ export type TrajectoryRecordDetail = {
   permission?: PermissionDecision | null;
   /** 附带的图片地址 */
   imageUrls?: string[];
+  /** 系统提示词按来源拆分的分区，供详情面板分段展示 */
+  sections?: Array<{ id: string; label: string; content: string }>;
 };
 
 /** 记录种类到界面标签的映射所需的双语文案对。 */
@@ -72,6 +75,7 @@ export type RecordKindLabel = { en: string; zh: string };
 
 /** 各记录种类的短标签。 */
 export const RECORD_KIND_LABELS: Record<TrajectoryRecordKind, RecordKindLabel> = {
+  system: { en: "System", zh: "系统" },
   user: { en: "User", zh: "用户" },
   assistant: { en: "Model", zh: "模型" },
   tool: { en: "Tool", zh: "工具" },

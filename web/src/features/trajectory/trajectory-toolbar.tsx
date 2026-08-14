@@ -20,7 +20,7 @@ type TrajectoryToolbarProps = {
 };
 
 /** 过滤按钮的展示顺序；与记录在轮内的出现顺序一致。 */
-const KIND_ORDER: TrajectoryRecordKind[] = ["user", "assistant", "tool", "message", "compaction"];
+const KIND_ORDER: TrajectoryRecordKind[] = ["system", "user", "assistant", "tool", "message", "compaction"];
 
 /**
  * 渲染轨迹视图的顶部工具栏。

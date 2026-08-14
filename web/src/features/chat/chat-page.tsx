@@ -77,6 +77,13 @@ export function ChatPage() {
     queryFn: () => api.sessions.timeline(activeSession!.id),
     enabled: Boolean(activeSession)
   });
+  // 轨迹视图把系统提示词作为首条记录；只在切过去时才拉，对话视图用不到
+  const contextPrompt = useQuery({
+    queryKey: ["session-context-prompt", activeSession?.id, "trajectory", locale],
+    queryFn: () => api.sessions.contextPrompt(activeSession!.id, { locale }),
+    enabled: Boolean(activeSession) && view === "trajectory",
+    staleTime: 30_000
+  });
   const onSettled = useCallback(() => {
     void Promise.all([
       activeSession?.id
@@ -548,7 +555,11 @@ export function ChatPage() {
       <div className="chat-page">
         <div className="chat-trajectory-region">
           {header}
-          <TrajectoryView timeline={timeline.data} loading={timeline.isLoading} />
+          <TrajectoryView
+            timeline={timeline.data}
+            contextPrompt={contextPrompt.data}
+            loading={timeline.isLoading}
+          />
         </div>
       </div>
     );

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { SessionTimeline } from "../../api/contracts";
+import type { SessionContextPrompt, SessionTimeline } from "../../api/contracts";
 import { buildTrajectory } from "./trajectory-build";
 import { TrajectoryDetails } from "./trajectory-details";
 import { countByTurn, filterRecords } from "./trajectory-filter";
@@ -12,6 +12,8 @@ import "./trajectory-view.css";
 
 type TrajectoryViewProps = {
   timeline: SessionTimeline | undefined;
+  /** 当前会话的系统提示词快照；每次请求都会重发，作为轨迹首条记录 */
+  contextPrompt?: SessionContextPrompt;
   loading: boolean;
 };
 
@@ -27,7 +29,7 @@ const NO_HIDDEN_KINDS: ReadonlySet<TrajectoryRecordKind> = new Set();
  * @param props 会话时间线与加载状态
  * @returns 轨迹视图
  */
-export function TrajectoryView({ timeline, loading }: TrajectoryViewProps) {
+export function TrajectoryView({ timeline, contextPrompt, loading }: TrajectoryViewProps) {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<TrajectoryScaleMode>("duration");
   const [hiddenKinds, setHiddenKinds] = useState<ReadonlySet<TrajectoryRecordKind>>(NO_HIDDEN_KINDS);
@@ -35,7 +37,7 @@ export function TrajectoryView({ timeline, loading }: TrajectoryViewProps) {
   const [range, setRange] = useState<TimeDomain | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const model = useMemo(() => buildTrajectory(timeline), [timeline]);
+  const model = useMemo(() => buildTrajectory(timeline, contextPrompt), [timeline, contextPrompt]);
   const bounds = useMemo(() => trajectoryDomain(model.records), [model.records]);
   const turnCounts = useMemo(() => countByTurn(model.records), [model.records]);
   const visible = useMemo(

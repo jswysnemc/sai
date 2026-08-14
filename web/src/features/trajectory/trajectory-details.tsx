@@ -85,12 +85,16 @@ export function TrajectoryDetails({ record, onClose }: TrajectoryDetailsProps) {
       {detail.reasoning && (
         <Block title={t("Reasoning", "思考过程")} body={detail.reasoning} />
       )}
-      {detail.input && (
-        <Block
-          title={record.kind === "tool" ? t("Arguments", "入参") : t("Content", "内容")}
-          body={detail.inputIsJson ? prettyJson(detail.input) : detail.input}
-        />
-      )}
+      {detail.sections?.length
+        ? detail.sections.map((section) => (
+            <Block key={section.id} title={section.label} body={section.content} />
+          ))
+        : detail.input && (
+            <Block
+              title={record.kind === "tool" ? t("Arguments", "入参") : t("Content", "内容")}
+              body={detail.inputIsJson ? prettyJson(detail.input) : detail.input}
+            />
+          )}
       {detail.output && (
         <Block
           title={t("Output", "输出")}
