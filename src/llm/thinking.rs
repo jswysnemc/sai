@@ -38,7 +38,14 @@ pub(crate) fn apply_provider_body_options(
 /// 返回:
 /// - 无
 fn apply_thinking_options(body: &mut Value, provider: &ProviderConfig, protocol: ThinkingProtocol) {
-    let level = normalized_level(&provider.thinking_level);
+    // 先落到当前模型实际支持的档位：配置里留着的旧等级换模型后仍会发出，
+    // 服务端拒绝的是整个请求，而不只是这一个字段
+    let requested = normalized_level(&provider.thinking_level);
+    let resolved = crate::config::resolve_thinking_level(
+        provider.model_thinking_levels_for(&provider.default_model),
+        requested,
+    );
+    let level = resolved.as_str();
     if level == "auto" {
         return;
     }
@@ -727,5 +734,53 @@ mod tests {
             .unwrap();
 
         assert_eq!(body["thinking"], json!({"type": "disabled"}));
+    }
+
+    /// 【协议】【思考等级】验证请求等级落到模型实际支持的档位。
+    ///
+    /// 只支持 high/max 的模型收到 xhigh 时必须降到 high：
+    /// 原样发出会让服务端拒绝整个请求，而不只是忽略这个字段。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn unsupported_level_is_downgraded_to_a_supported_one() {
+        let mut provider = ProviderConfig::default_openai();
+        provider.thinking_format = "openai-chat-reasoning-effort".to_string();
+        provider.default_model = "some-model".to_string();
+        provider.set_model_thinking_levels_for(
+            "some-model",
+            vec!["high".to_string(), "max".to_string()],
+        );
+        provider.thinking_level = "xhigh".to_string();
+
+        let body = apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat)
+            .unwrap();
+
+        assert_eq!(body["reasoning_effort"], json!("high"));
+    }
+
+    /// 【协议】【思考等级】验证未记录支持范围时不改写请求等级。
+    ///
+    /// 目录没覆盖到的模型按全部可用处理，否则新模型一律被降级。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn unknown_model_support_keeps_the_requested_level() {
+        let mut provider = ProviderConfig::default_openai();
+        provider.thinking_format = "openai-chat-reasoning-effort".to_string();
+        provider.thinking_level = "xhigh".to_string();
+
+        let body = apply_provider_body_options(json!({}), &provider, ThinkingProtocol::OpenAiChat)
+            .unwrap();
+
+        assert_eq!(body["reasoning_effort"], json!("xhigh"));
     }
 }

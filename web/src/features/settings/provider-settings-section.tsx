@@ -74,6 +74,7 @@ export function ProviderSettingsSection({
     context_chars?: number | null;
     max_output_tokens?: number | null;
     tags?: string[];
+    thinking_levels?: string[];
   }>>({});
   const [importOpen, setImportOpen] = useState(false);
   /** 供应商 ID 的输入草稿；为 null 表示未在编辑 */
@@ -175,7 +176,8 @@ export function ProviderSettingsSection({
     const modelMetadata = { ...(provider.model_metadata ?? {}) };
     for (const model of models) {
       const metadata = remoteMetadata[model];
-      if (!metadata?.context_chars && !metadata?.max_output_tokens && !metadata?.tags?.length) continue;
+      if (!metadata?.context_chars && !metadata?.max_output_tokens && !metadata?.tags?.length
+        && !metadata?.thinking_levels?.length) continue;
       const current = modelMetadata[model] ?? {};
       modelMetadata[model] = {
         ...current,
@@ -183,6 +185,10 @@ export function ProviderSettingsSection({
         ...(!current.max_output_tokens && metadata.max_output_tokens ? { max_output_tokens: metadata.max_output_tokens } : {}),
         ...(metadata.tags?.length
           ? { tags: Array.from(new Set([...(current.tags ?? []), ...metadata.tags])) }
+          : {}),
+        // 已手工设置过的支持范围不被目录覆盖：这里正是纠正目录错误的地方
+        ...(!current.thinking_levels?.length && metadata.thinking_levels?.length
+          ? { thinking_levels: metadata.thinking_levels }
           : {})
       };
     }

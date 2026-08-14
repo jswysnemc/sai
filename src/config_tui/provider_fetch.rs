@@ -77,6 +77,9 @@ pub(super) fn fetch_models(provider: &ProviderConfig) -> Result<FetchModelsResul
         if entry.tags.is_empty() {
             entry.tags = catalog.tags;
         }
+        if entry.thinking_levels.is_empty() {
+            entry.thinking_levels = catalog.thinking_levels;
+        }
     }
     Ok(FetchModelsResult { models, metadata })
 }

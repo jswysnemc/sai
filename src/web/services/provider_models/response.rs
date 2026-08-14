@@ -32,6 +32,8 @@ pub(super) fn parse_models_response(body: &str, provider_id: &str) -> Result<Fet
                     context_chars,
                     max_output_tokens,
                     tags,
+                    // 供应商 /models 接口普遍不公布思考等级，留空表示未知
+                    thinking_levels: Vec::new(),
                 },
             );
         }

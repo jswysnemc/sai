@@ -6,6 +6,7 @@ import { acpThinkingLevels, buildAcpModelChoices, currentAcpModel } from "./acp-
 import { buildChatModelChoices, resolveChatModelSelection } from "./chat-model-options";
 import type { ChatModelChoice } from "./chat-model-options";
 import { isSameModelSelection, resolveModelSelect } from "./pending-model-selection";
+import { modelThinkingLevels } from "./model-thinking-availability";
 import {
   readStoredChatModelSelection,
   writeStoredChatModelSelection
@@ -105,7 +106,10 @@ export function useChatModel(sessionId?: string, running = false) {
     choices,
     selection,
     pendingSelection,
-    thinkingLevels: external ? acpThinkingLevels(engineStatus.data) : undefined,
+    // 外部内核由 agent 公布可用等级；内置内核从模型目录记录的支持范围推导
+    thinkingLevels: external
+      ? acpThinkingLevels(engineStatus.data)
+      : modelThinkingLevels(response.data?.config, selection),
     isExternal: external,
     selectModel,
     isLoading: response.isLoading || engineStatus.isLoading,

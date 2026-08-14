@@ -7,6 +7,8 @@ import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
 
 const MODEL_TAGS = ["tool", "thinking", "vision", "web_search", "fast", "low_cost"];
+/** 按强度升序排列的思考等级；auto 不在其列，它对任何模型都可用。 */
+const THINKING_LEVELS = ["none", "low", "medium", "high", "xhigh", "max"];
 
 type ModelMetadataEditorProps = {
   provider: ProviderConfig;
@@ -99,6 +101,20 @@ export function ModelMetadataEditor({ provider, onChange }: ModelMetadataEditorP
   const toggleTag = (tag: string) => {
     const tags = metadata.tags ?? [];
     updateMetadata({ tags: tags.includes(tag) ? tags.filter((item) => item !== tag) : [...tags, tag] });
+  };
+
+  /**
+   * 切换当前模型支持的思考等级。
+   *
+   * @param level 等级名
+   */
+  const toggleThinkingLevel = (level: string) => {
+    const levels = metadata.thinking_levels ?? [];
+    const next = levels.includes(level)
+      ? levels.filter((item) => item !== level)
+      : [...levels, level];
+    // 按强度升序存储，配置文件里读起来与界面顺序一致
+    updateMetadata({ thinking_levels: THINKING_LEVELS.filter((item) => next.includes(item)) });
   };
 
   return (
@@ -230,6 +246,35 @@ export function ModelMetadataEditor({ provider, onChange }: ModelMetadataEditorP
                   {t(
                     "Keep enabled by default, hide the local tool, or rename it before sending",
                     "默认启用，也可隐藏本地工具或在发送前改名"
+                  )}
+                </small>
+              </div>
+
+              <div className="model-tag-field settings-field full">
+                <span>{t("Supported reasoning levels", "支持的推理强度")}</span>
+                <div className="model-tag-list">
+                  {THINKING_LEVELS.map((level) => (
+                    <Button
+                      key={level}
+                      className={(metadata.thinking_levels ?? []).includes(level) ? "settings-secondary active" : "settings-secondary"}
+                      onClick={() => toggleThinkingLevel(level)}
+                    >
+                      {level}
+                    </Button>
+                  ))}
+                  {(metadata.thinking_levels?.length ?? 0) > 0 && (
+                    <Button
+                      className="settings-secondary"
+                      onClick={() => updateMetadata({ thinking_levels: undefined })}
+                    >
+                      {t("Clear", "清空")}
+                    </Button>
+                  )}
+                </div>
+                <small>
+                  {t(
+                    "Filled in from the model catalog when models are fetched. Select none to offer every level — do that when the catalog data is wrong. auto is always available.",
+                    "拉取模型时从模型目录填入。一个都不选表示不限制，目录数据有误时这样处理。auto 始终可用。"
                   )}
                 </small>
               </div>

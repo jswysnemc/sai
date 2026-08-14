@@ -13,6 +13,7 @@ mod git;
 mod mcp_file;
 mod model;
 mod model_metadata;
+mod model_thinking;
 mod model_units;
 mod notification;
 mod paths;
@@ -47,6 +48,7 @@ pub use mcp_file::{
 };
 pub use model::*;
 pub use model_metadata::*;
+pub use model_thinking::*;
 pub use model_units::*;
 pub use notification::*;
 pub use permission::*;

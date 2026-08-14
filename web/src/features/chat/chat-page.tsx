@@ -126,7 +126,7 @@ export function ChatPage() {
   const running = runningStates.length > 0;
   const chatModel = useChatModel(activeSession?.id, running);
   const chatAgent = useChatAgentContext();
-  const thinking = useThinkingLevel(activeSession?.id);
+  const thinking = useThinkingLevel(activeSession?.id, chatModel.thinkingLevels);
   const [mode, setMode] = useState<RunMode>("yolo");
   const composerAttachments = useComposerAttachments(activeSession?.id);
   const scrollRef = useRef<HTMLDivElement>(null);

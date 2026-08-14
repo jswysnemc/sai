@@ -181,6 +181,56 @@ pub(super) fn apply_tag_fields(
     Ok(())
 }
 
+/// 返回模型支持的思考等级勾选字段。
+///
+/// 一个都不勾表示不限制：模型目录未覆盖或数据有误时，
+/// 清空即恢复展示全部等级。
+///
+/// 参数:
+/// - `provider`: Provider 配置
+/// - `model`: 模型 ID
+///
+/// 返回:
+/// - 思考等级勾选字段
+pub(super) fn thinking_level_fields(provider: &ProviderConfig, model: &str) -> Vec<Field> {
+    crate::config::THINKING_LEVELS
+        .iter()
+        .map(|level| {
+            Field::boolean(
+                level,
+                provider
+                    .model_thinking_levels_for(model)
+                    .iter()
+                    .any(|item| item.as_str() == *level),
+            )
+        })
+        .collect()
+}
+
+/// 应用模型思考等级勾选字段。
+///
+/// 参数:
+/// - `provider`: Provider 配置
+/// - `model`: 模型 ID
+/// - `fields`: 思考等级勾选字段
+///
+/// 返回:
+/// - 应用是否成功
+pub(super) fn apply_thinking_level_fields(
+    provider: &mut ProviderConfig,
+    model: &str,
+    fields: &[Field],
+) -> Result<()> {
+    let mut levels = Vec::new();
+    for field in fields {
+        if parse_bool_field(&field.value)? {
+            levels.push(field.label.to_string());
+        }
+    }
+    provider.set_model_thinking_levels_for(model, levels);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

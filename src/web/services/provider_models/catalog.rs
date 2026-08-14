@@ -112,6 +112,10 @@ pub(super) fn find_models_dev_model(catalog: &Value, model: &str) -> Option<Cata
                 context_chars: context,
                 max_output_tokens,
                 tags: catalog_model_tags(value),
+                thinking_levels: value
+                    .get("reasoning_options")
+                    .map(crate::config::thinking_levels_from_reasoning_options)
+                    .unwrap_or_default(),
             };
             let ranked = rank_catalog_match(score, &candidate.provider);
             if best
@@ -296,6 +300,8 @@ pub(super) fn find_openrouter_model(catalog: &Value, model: &str) -> Option<Cata
             context_chars: context,
             max_output_tokens,
             tags,
+            // 该目录只公布是否支持推理，不枚举等级，留空表示未知
+            thinking_levels: Vec::new(),
         };
         let ranked = rank_catalog_match(score, &candidate.provider);
         if best
@@ -415,6 +421,8 @@ pub(super) fn find_litellm_model(catalog: &Value, model: &str) -> Option<Catalog
             context_chars: context,
             max_output_tokens,
             tags,
+            // 该目录只公布是否支持推理，不枚举等级，留空表示未知
+            thinking_levels: Vec::new(),
         };
         let ranked = rank_catalog_match(score, &candidate.provider);
         if best

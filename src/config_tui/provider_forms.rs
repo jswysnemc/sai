@@ -8,6 +8,7 @@ use super::form::{parse_bool_field, run_form, Field};
 use super::input::read_key;
 use super::model_metadata_form::{
     apply_context_chars_field, apply_max_output_tokens_field, apply_tag_fields,
+    apply_thinking_level_fields, thinking_level_fields,
     apply_tools_enabled_field, apply_web_search_tool_mode_field, context_chars_field_value,
     max_output_tokens_field_value, tag_fields, tools_enabled_field, web_search_tool_mode_field,
 };
@@ -317,6 +318,7 @@ pub(super) fn edit_model_form(
     let options = vec![
         t("General settings", "常规设置").to_string(),
         t("Model tags", "模型标签").to_string(),
+        t("Supported reasoning levels", "支持的推理强度").to_string(),
         t("Save model settings", "保存模型设置").to_string(),
     ];
     let mut selected = 0usize;
@@ -340,6 +342,9 @@ pub(super) fn edit_model_form(
             }
             crossterm::event::KeyCode::Enter if selected == 1 => {
                 edit_model_tags_form(stdout, provider, model)?;
+            }
+            crossterm::event::KeyCode::Enter if selected == 2 => {
+                edit_model_thinking_levels_form(stdout, provider, model)?;
             }
             crossterm::event::KeyCode::Enter => return Ok(true),
             crossterm::event::KeyCode::Esc | crossterm::event::KeyCode::Char('q') => {
@@ -417,6 +422,25 @@ fn edit_model_tags_form(
     let mut fields = tag_fields(provider, model);
     if run_form(stdout, t(" MODEL TAGS ", " 模型标签 "), &mut fields)? {
         apply_tag_fields(provider, model, &fields)?;
+    }
+    Ok(())
+}
+
+/// 编辑模型支持的思考等级子面板。
+///
+/// 一个都不勾表示不限制，模型目录数据有误时这样恢复。
+fn edit_model_thinking_levels_form(
+    stdout: &mut io::Stdout,
+    provider: &mut ProviderConfig,
+    model: &str,
+) -> Result<()> {
+    let mut fields = thinking_level_fields(provider, model);
+    if run_form(
+        stdout,
+        t(" REASONING LEVELS ", " 推理强度 "),
+        &mut fields,
+    )? {
+        apply_thinking_level_fields(provider, model, &fields)?;
     }
     Ok(())
 }

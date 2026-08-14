@@ -76,6 +76,17 @@ pub(super) fn validate_provider_model_metadata(provider: &ProviderConfig) -> Res
                 );
             }
         }
+        for level in &metadata.thinking_levels {
+            if !super::model_thinking::THINKING_LEVELS.contains(&level.as_str()) {
+                bail!(
+                    "provider {} model_metadata thinking_levels for {} is invalid: {} (allowed: {})",
+                    provider.id,
+                    model,
+                    level,
+                    super::model_thinking::THINKING_LEVELS.join(", ")
+                );
+            }
+        }
         if let Some(mode) = metadata.web_search_tool_mode.as_deref() {
             if mode != WEB_SEARCH_TOOL_MODE_ENABLED
                 && mode != WEB_SEARCH_TOOL_MODE_HIDE

@@ -235,6 +235,7 @@ fn remove_active_provider_model_clears_removed_current_model() {
             tags: vec!["web_search".to_string()],
             tools_enabled: None,
             web_search_tool_mode: None,
+                    thinking_levels: Vec::new(),
         },
     );
 
@@ -587,6 +588,7 @@ fn active_context_window_tokens_prefers_model_metadata() {
             tools_enabled: None,
             tags: Vec::new(),
             web_search_tool_mode: None,
+                    thinking_levels: Vec::new(),
         },
     );
 

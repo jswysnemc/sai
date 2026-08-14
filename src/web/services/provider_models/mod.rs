@@ -144,6 +144,7 @@ pub(super) fn merge_catalog_metadata(
             context_chars: None,
             max_output_tokens: None,
             tags: Vec::new(),
+            thinking_levels: Vec::new(),
         });
         if entry.context_chars.is_none() {
             entry.context_chars = catalog_metadata.context_chars;
@@ -155,6 +156,11 @@ pub(super) fn merge_catalog_metadata(
             if !entry.tags.iter().any(|current| current == &tag) {
                 entry.tags.push(tag);
             }
+        }
+        // 思考等级按整份覆盖而不是取并集：不同目录给的是各自认定的完整集合，
+        // 合并只会把 A 认为不支持的档位从 B 那里补回来，等于没有过滤
+        if entry.thinking_levels.is_empty() {
+            entry.thinking_levels = catalog_metadata.thinking_levels;
         }
         // 外部目录的供应商标识仅在本地为空时补齐，供前端图标匹配
         if entry.provider.trim().is_empty() {
@@ -169,6 +175,9 @@ pub(crate) struct CatalogMetadata {
     pub(crate) context_chars: Option<u64>,
     pub(crate) max_output_tokens: Option<u64>,
     pub(crate) tags: Vec<String>,
+    /// 该模型支持的思考等级；空表示目录未给出，界面按全部可用处理
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) thinking_levels: Vec<String>,
 }
 
 /// 解析供应商 API Key，缺失时允许无认证模型接口。
@@ -270,6 +279,7 @@ mod tests {
                 context_chars: Some(128_000),
                 max_output_tokens: None,
                 tags: vec!["tool".to_string()],
+                            thinking_levels: Vec::new(),
             },
         )]);
 
@@ -282,6 +292,7 @@ mod tests {
                     context_chars: Some(64_000),
                     max_output_tokens: Some(16_384),
                     tags: vec!["thinking".to_string(), "tool".to_string()],
+                                    thinking_levels: Vec::new(),
                 },
             )],
         );
@@ -354,7 +365,53 @@ mod tests {
         assert!(metadata.tags.contains(&"vision".to_string()));
     }
 
-    /// 验证 OpenRouter 目录同样不会因前面不匹配条目提前结束。
+    /// 验证 models.dev 的 reasoning_options 落到支持的思考等级上。
+    ///
+    /// 只支持 high/max 的模型不该在界面上摆出 low/medium：
+    /// 选了也发不出去，服务端会拒绝整个请求。
+    #[test]
+    fn models_dev_reasoning_options_become_thinking_levels() {
+        let catalog = serde_json::json!({
+            "hpc-ai": {
+                "models": {
+                    "deepseek/deepseek-v4-flash": {
+                        "id": "deepseek/deepseek-v4-flash",
+                        "limit": { "context": 1_048_576, "output": 128_000 },
+                        "reasoning": true,
+                        "reasoning_options": [
+                            { "type": "effort", "values": ["high", "max"] }
+                        ]
+                    }
+                }
+            }
+        });
+
+        let metadata = find_models_dev_model(&catalog, "deepseek/deepseek-v4-flash").unwrap();
+
+        assert_eq!(metadata.thinking_levels, vec!["high", "max"]);
+    }
+
+    /// 验证未给出 reasoning_options 的模型不限制等级。
+    ///
+    /// 目录覆盖不全是常态，缺字段必须退回"全部可用"而不是"全部不可用"。
+    #[test]
+    fn models_without_reasoning_options_stay_unrestricted() {
+        let catalog = serde_json::json!({
+            "alibaba": {
+                "models": {
+                    "qwen3.8-only-toggle": {
+                        "id": "qwen3.8-only-toggle",
+                        "limit": { "context": 1_000_000, "output": 131_072 },
+                        "reasoning": true
+                    }
+                }
+            }
+        });
+
+        let metadata = find_models_dev_model(&catalog, "qwen3.8-only-toggle").unwrap();
+
+        assert!(metadata.thinking_levels.is_empty());
+    }
     #[test]
     fn openrouter_catalog_skips_non_matching_entries() {
         let catalog = serde_json::json!({

@@ -34,6 +34,12 @@ pub struct ModelMetadata {
     pub tools_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+    /// 该模型实际支持的思考等级；空表示未知，界面展示全部。
+    ///
+    /// 目录数据可能滞后或有误，因此这里是可编辑的覆盖点而不是只读探测结果：
+    /// 清空即恢复展示全部等级。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub thinking_levels: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub web_search_tool_mode: Option<String>,
 }
@@ -51,6 +57,7 @@ impl ModelMetadata {
             && self.max_output_tokens.is_none()
             && self.tools_enabled.is_none()
             && self.tags.is_empty()
+            && self.thinking_levels.is_empty()
             && self.web_search_tool_mode.is_none()
     }
 }
@@ -82,6 +89,57 @@ impl ProviderConfig {
             .get(model)
             .map(|metadata| metadata.tags.as_slice())
             .unwrap_or(&[])
+    }
+
+    /// 获取模型支持的思考等级。
+    ///
+    /// 参数:
+    /// - `model`: 模型 ID
+    ///
+    /// 返回:
+    /// - 支持的等级列表；空表示未知，调用方应视为全部可用
+    pub fn model_thinking_levels_for(&self, model: &str) -> &[String] {
+        self.model_metadata
+            .get(model)
+            .map(|metadata| metadata.thinking_levels.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// 设置模型支持的思考等级。
+    ///
+    /// 参数:
+    /// - `model`: 模型 ID
+    /// - `levels`: 已校验的等级列表；传空表示恢复为未知
+    ///
+    /// 返回:
+    /// - 无
+    pub fn set_model_thinking_levels_for(&mut self, model: &str, levels: Vec<String>) {
+        if model.trim().is_empty() {
+            return;
+        }
+        if levels.is_empty() {
+            if let Some(metadata) = self.model_metadata.get_mut(model) {
+                metadata.thinking_levels.clear();
+            }
+        } else {
+            self.model_metadata_mut(model).thinking_levels = levels;
+        }
+        self.remove_empty_model_metadata(model);
+    }
+
+    /// 判断某个思考等级对指定模型是否可用。
+    ///
+    /// 参数:
+    /// - `model`: 模型 ID
+    /// - `level`: 待判定的思考等级
+    ///
+    /// 返回:
+    /// - 未记录支持范围或等级在范围内时为真
+    pub fn model_supports_thinking_level(&self, model: &str, level: &str) -> bool {
+        super::model_thinking::thinking_level_available(
+            self.model_thinking_levels_for(model),
+            level,
+        )
     }
 
     /// 判断模型是否允许工具调用。

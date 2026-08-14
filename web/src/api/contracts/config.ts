@@ -42,6 +42,8 @@ export type ModelMetadata = {
   max_output_tokens?: number;
   tools_enabled?: boolean;
   tags?: string[];
+  /** 该模型支持的思考等级；空或缺失表示未知，界面展示全部 */
+  thinking_levels?: string[];
   web_search_tool_mode?: "enabled" | "hide_builtin" | "rename_local";
 };
 
@@ -246,6 +248,7 @@ export type ProviderModelsResponse = {
     context_chars?: number | null;
     max_output_tokens?: number | null;
     tags?: string[];
+    thinking_levels?: string[];
   }>;
 };
 
