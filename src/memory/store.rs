@@ -1,4 +1,4 @@
-use crate::config::{AppConfig, KnowledgeBasePluginConfig, MemoryConfig};
+use crate::config::{AppConfig, MemoryConfig};
 use crate::memory::evicted::{EvictedStore, EvictedTurn};
 use crate::memory::file_store::{render_index_injection_for, FileMemoryLibrary, MemoryScope};
 use crate::paths::SaiPaths;
@@ -14,7 +14,6 @@ use std::path::{Path, PathBuf};
 #[derive(Clone)]
 pub struct MemoryStore {
     config: MemoryConfig,
-    kb_config: KnowledgeBasePluginConfig,
     /// 文件式记忆的根目录，已按人格隔离
     notes_dir: PathBuf,
     evicted: EvictedStore,
@@ -33,7 +32,6 @@ impl MemoryStore {
         let state_dir = config.active_persona_memory_state_dir(paths).join("memory");
         Self {
             config: config.memory_config().clone(),
-            kb_config: config.plugins.knowledge_base.clone(),
             notes_dir: crate::memory::notes_dir(config, paths),
             evicted: EvictedStore::new(state_dir.join("evicted_context.db")),
         }
@@ -126,8 +124,7 @@ impl MemoryStore {
     /// 返回:
     /// - 检索结果的 JSON
     pub fn search_evicted_context(&self, query: &str, limit: usize) -> Result<Value> {
-        self.evicted
-            .search(query, limit, self.kb_config.snippet_context_chars)
+        self.evicted.search(query, limit, self.config.snippet_chars)
     }
 
     /// 只读地检索逐出轮次。

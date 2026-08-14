@@ -28,8 +28,10 @@ import type {
   PromptKind,
   PromptSummary,
   PermissionAuditEvent,
-  MemoryEntry,
-  MemorySearchResult,
+  MemoryListResult,
+  MemoryDetail,
+  MemoryWriteRequest,
+  EvictedSearchResult,
   MemoryStats,
   PermissionRequest,
   ProviderConfig,
@@ -331,16 +333,23 @@ export const api = {
 
   memory: {
     stats: () => apiRequest<MemoryStats>("/api/memory/stats"),
-    list: (limit = 100) => apiRequest<{ facts: MemoryEntry[]; episodes: MemoryEntry[] }>(`/api/memory/entries?limit=${limit}`),
-    search: (q: string, limit = 20, forgotten = false) =>
-      apiRequest<MemorySearchResult>(`/api/memory/search?q=${encodeURIComponent(q)}&limit=${limit}&forgotten=${forgotten}`),
-    remember: (content: string, source = "web") =>
-      apiRequest<{ ok: boolean; id: number }>("/api/memory/entries", {
+    list: (limit = 200) =>
+      apiRequest<MemoryListResult>(`/api/memory/entries?limit=${limit}`),
+    show: (name: string) =>
+      apiRequest<MemoryDetail>(`/api/memory/entries/${encodeURIComponent(name)}`),
+    remember: (request: MemoryWriteRequest) =>
+      apiRequest<{ ok: boolean; name: string }>("/api/memory/entries", {
         method: "POST",
-        body: JSON.stringify({ content, source })
+        body: JSON.stringify(request)
       }),
-    remove: (kind: "fact" | "episode", id: number) =>
-      apiRequest<{ deleted: boolean }>(`/api/memory/entries/${kind}/${id}`, { method: "DELETE" }),
+    remove: (name: string) =>
+      apiRequest<{ deleted: boolean }>(`/api/memory/entries/${encodeURIComponent(name)}`, {
+        method: "DELETE"
+      }),
+    searchEvicted: (q: string, limit = 20) =>
+      apiRequest<EvictedSearchResult>(
+        `/api/memory/evicted?q=${encodeURIComponent(q)}&limit=${limit}`
+      ),
     reset: () => apiRequest<{ ok: boolean }>("/api/memory/reset", { method: "POST" })
   },
   permissions: {

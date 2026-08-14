@@ -155,11 +155,15 @@ export type {
 } from "./contracts/ssh";
 
 export type {
-  MemoryEntry,
-  MemoryStorageStats,
+  MemoryType,
+  MemoryScope,
+  MemorySummary,
+  MemoryListResult,
+  MemoryDetail,
+  MemoryWriteRequest,
   MemoryStats,
-  MemorySearchHit,
-  MemorySearchResult,
+  EvictedTurnHit,
+  EvictedSearchResult,
 } from "./contracts/memory";
 
 export type {

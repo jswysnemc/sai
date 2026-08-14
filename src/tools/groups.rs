@@ -60,13 +60,11 @@ pub(crate) fn group_for_tool(name: &str) -> &'static str {
         | "send_channel_file"
         | "send_channel_video"
         | "send_channel_message" => "media",
-        "remember_fact"
-        | "search_evicted_context"
-        | "recall_past_events"
-        | "recall_memory"
-        | "recall_memories"
-        | "forget_memory"
-        | "forget_memories" => "memory",
+        "write_memory"
+        | "read_memory"
+        | "list_memory"
+        | "delete_memory"
+        | "search_evicted_context" => "memory",
         "aur_search_packages"
         | "aur_get_package_info"
         | "aur_check_status"

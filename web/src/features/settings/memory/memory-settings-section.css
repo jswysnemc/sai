@@ -1,0 +1,281 @@
+/* 记忆分区：统计卡片、录入表单、条目列表与逐出上下文检索 */
+
+.memory-storage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.memory-storage-card {
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-4);
+  padding: var(--space-md);
+}
+
+.memory-storage-card header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+.memory-storage-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--radius-3);
+  background: var(--technical-surface-muted, transparent);
+  flex: none;
+}
+
+.memory-storage-card strong {
+  display: block;
+  font-size: var(--text-sm);
+}
+
+.memory-storage-card small {
+  display: block;
+  opacity: 0.7;
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+.memory-stat-value {
+  margin: var(--space-sm) 0 0;
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+}
+
+.memory-notes-path {
+  display: block;
+  margin-bottom: var(--space-2xl);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-3);
+  background: var(--technical-surface-muted, transparent);
+  font-size: var(--text-xs);
+  opacity: 0.75;
+  overflow-wrap: anywhere;
+}
+
+/* 录入表单 */
+
+.memory-compose {
+  display: grid;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-2xl);
+}
+
+.memory-compose-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--space-sm);
+  align-items: end;
+}
+
+.memory-compose-field {
+  display: grid;
+  gap: var(--space-2xs, 0.25rem);
+  min-width: 0;
+}
+
+.memory-compose-field > span {
+  font-size: var(--text-xs);
+  opacity: 0.75;
+}
+
+.memory-compose-field input,
+.memory-compose textarea,
+.memory-search input {
+  width: 100%;
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-3);
+  padding: var(--space-sm);
+  background: transparent;
+  color: inherit;
+  font-size: var(--text-base);
+}
+
+.memory-compose-scope {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-3);
+}
+
+.memory-compose-scope strong {
+  display: block;
+  font-size: var(--text-sm);
+}
+
+.memory-compose-scope small {
+  display: block;
+  opacity: 0.7;
+  font-size: var(--text-xs);
+}
+
+/* 条目列表 */
+
+.memory-list-block {
+  margin-top: var(--space-2xl);
+}
+
+.memory-list {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.memory-item {
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-4);
+  padding: var(--space-md);
+}
+
+.memory-item-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.memory-item-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.memory-item-toggle code {
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+}
+
+.memory-item button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.memory-item p {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--text-sm);
+  opacity: 0.85;
+}
+
+.memory-type-badge {
+  flex: none;
+  padding: 0 var(--space-xs);
+  border-radius: var(--radius-2, 0.25rem);
+  border: 1px solid var(--technical-border);
+  font-size: var(--text-xs);
+  opacity: 0.8;
+}
+
+.memory-item-body {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--technical-border);
+}
+
+.memory-item-body pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.memory-item-links {
+  margin-top: var(--space-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  align-items: center;
+  font-size: var(--text-xs);
+  opacity: 0.75;
+}
+
+/* 逐出上下文检索 */
+
+.memory-evicted {
+  margin-top: var(--space-2xl);
+}
+
+.memory-search {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.memory-search input {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.memory-search-panel {
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-4);
+  padding: var(--space-md);
+}
+
+.memory-search-meta {
+  font-size: var(--text-xs);
+  opacity: 0.7;
+  margin-bottom: var(--space-sm);
+}
+
+.memory-evicted-list {
+  display: grid;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.memory-evicted-list li {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-start;
+}
+
+.memory-evicted-list p {
+  margin: 0;
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.memory-evicted-list small {
+  opacity: 0.65;
+  font-size: var(--text-xs);
+}
+
+.memory-search-score {
+  flex: none;
+  min-width: 2.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
+  opacity: 0.7;
+}
+
+.memory-danger-row {
+  margin-top: var(--space-2xl);
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 30rem) {
+  .memory-compose-row {
+    grid-template-columns: 1fr;
+  }
+}

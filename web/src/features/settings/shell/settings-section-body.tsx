@@ -10,7 +10,7 @@ import { ProviderSettingsSection } from "../provider-settings-section";
 import { CliToolsSettingsSection } from "../cli-tools/cli-tools-settings-section";
 import { WebSearchSettingsSection } from "../web-search/web-search-settings-section";
 import { RuntimeSettingsSection } from "../runtime-settings-section";
-import { MemorySettingsSection } from "../memory-settings-section";
+import { MemorySettingsSection } from "../memory/memory-settings-section";
 import { HooksSettingsSection } from "../hooks-settings-section";
 import { McpSettingsSection } from "../mcp/mcp-settings-section";
 import { SkillsSettingsSection } from "../skills/skills-settings-section";

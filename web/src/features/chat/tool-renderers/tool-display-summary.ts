@@ -186,8 +186,6 @@ export function isExploreToolName(name: string): boolean {
     || name === "search_knowledge_base"
     || name === "search_knowledge_base_by_name"
     || name === "read_knowledge_base_file"
-    || name === "recall_memories"
-    || name === "recall_past_events"
     || name === "search_evicted_context"
     || name === "check_os_info"
     || name === "online_man_search"

@@ -29,26 +29,25 @@ fn web_search_fields_round_trip_provider_settings() {
     assert_eq!(updated.plugins.web.searxng_safe_search, 2);
 }
 
-/// 验证记忆表单完整保留近期新增字段。
+/// 验证记忆表单只暴露仍然生效的设置且能往返写回。
+///
+/// 自动抽取与遗忘曲线随旧记忆实现一并移除，表单里留着它们只会让用户
+/// 以为调了有用。字段数一并断言，多出来的项必然是又一个死配置。
 #[test]
-fn memory_fields_round_trip_recent_settings() {
+fn memory_fields_round_trip_effective_settings() {
     let mut config = AppConfig::default();
-    config.plugins.memory.auto_skill_enabled = true;
+    config.plugins.memory.evicted_context_enabled = false;
+    config.plugins.memory.association_enabled = false;
     config.plugins.memory.snippet_chars = 321;
-    config.plugins.memory.forget_after_days = 45;
-    config.plugins.memory.learning_min_task_chars = 123;
-    config.plugins.memory.learning_min_method_chars = 234;
 
     let fields = plugin_fields(&config, 9);
     let mut updated = AppConfig::default();
     apply_plugin_fields(&mut updated, 9, &fields).unwrap();
 
-    assert_eq!(fields.len(), 17);
-    assert!(updated.plugins.memory.auto_skill_enabled);
+    assert_eq!(fields.len(), 4);
+    assert!(!updated.plugins.memory.evicted_context_enabled);
+    assert!(!updated.plugins.memory.association_enabled);
     assert_eq!(updated.plugins.memory.snippet_chars, 321);
-    assert_eq!(updated.plugins.memory.forget_after_days, 45);
-    assert_eq!(updated.plugins.memory.learning_min_task_chars, 123);
-    assert_eq!(updated.plugins.memory.learning_min_method_chars, 234);
 }
 
 /// 验证知识库、视觉和诊断表单字段与写回索引一致。

@@ -44,7 +44,7 @@ mod tests {
         assert!(!prompt.contains("deep_diagnose"));
         assert!(!prompt.contains("protondb_query"));
         assert!(!prompt.contains("linux_input_method_diagnose"));
-        assert!(!prompt.contains("remember_fact"));
+        assert!(!prompt.contains("write_memory"));
         assert!(!prompt.contains("draw_zhouyi_hexagram"));
         assert!(!prompt.contains("Available groups"));
         assert!(prompt.contains("Sai"));

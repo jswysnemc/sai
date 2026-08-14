@@ -220,10 +220,10 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     saveHintZh: "操作在本节内完成",
     labelEn: "Memory",
     labelZh: "记忆",
-    descriptionEn: "Facts, events, and reset controls",
-    descriptionZh: "长期事实、往事和清空",
+    descriptionEn: "Memory files, scopes, and evicted context",
+    descriptionZh: "记忆文件、作用域与逐出上下文",
     icon: Brain,
-    searchKeys: ["memory", "fact", "event", "记忆", "事实"]
+    searchKeys: ["memory", "note", "fact", "记忆", "笔记"]
   },
   {
     id: "session-data",

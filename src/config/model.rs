@@ -439,36 +439,12 @@ pub struct MemoryConfig {
     pub enabled: bool,
     #[serde(default = "default_true")]
     pub evicted_context_enabled: bool,
+    /// 是否把记忆索引注入每轮上下文
     #[serde(default = "default_true")]
     pub association_enabled: bool,
-    #[serde(default = "default_true")]
-    pub auto_diary_enabled: bool,
-    #[serde(default = "default_true")]
-    pub auto_fact_enabled: bool,
-    #[serde(default = "default_true")]
-    pub auto_skill_enabled: bool,
-    #[serde(default = "default_memory_association_facts")]
-    pub association_facts: usize,
-    #[serde(default = "default_memory_association_episodes")]
-    pub association_episodes: usize,
-    #[serde(default = "default_memory_association_max_chars")]
-    pub association_max_chars: usize,
+    /// 逐出上下文检索时片段的最大字符数
     #[serde(default = "default_memory_snippet_chars")]
     pub snippet_chars: usize,
-    #[serde(default = "default_memory_forget_after_days")]
-    pub forget_after_days: u64,
-    #[serde(default = "default_true")]
-    pub forgetting_enabled: bool,
-    #[serde(default = "default_memory_half_life_days")]
-    pub forgetting_half_life_days: f64,
-    #[serde(default = "default_memory_min_strength")]
-    pub forgetting_min_strength: f64,
-    #[serde(default = "default_memory_review_boost")]
-    pub forgetting_review_boost: f64,
-    #[serde(default = "default_memory_min_task_chars")]
-    pub learning_min_task_chars: usize,
-    #[serde(default = "default_memory_min_method_chars")]
-    pub learning_min_method_chars: usize,
     /// 会话记忆点提取专用供应商；留空时沿用当前会话供应商。
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub extraction_provider_id: String,

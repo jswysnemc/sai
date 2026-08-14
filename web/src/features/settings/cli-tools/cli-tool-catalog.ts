@@ -50,7 +50,7 @@ const CLI_TOOL_CATALOG: Record<string, CliToolCatalogEntry> = {
   package_advisor: tool("package_advisor", "Package advisor", "软件包建议", "Package review and installation guidance", "软件包审查与安装建议", "system", PackageSearch),
   linux_game_compatibility: tool("linux_game_compatibility", "Linux game compatibility", "Linux 游戏兼容性", "Proton and anti-cheat compatibility lookup", "Proton 与反作弊兼容性查询", "research", Gamepad2),
   diagnostics: tool("diagnostics", "Runtime diagnostics", "运行诊断", "Bounded system diagnostic commands", "受限的系统诊断命令", "system", MonitorCog),
-  memory: tool("memory", "Long-term memory", "长期记忆", "Facts, events, and memory association", "事实、往事与记忆联想", "knowledge", Database)
+  memory: tool("memory", "Long-term memory", "长期记忆", "Read, write and delete memory files", "读写与删除记忆文件", "knowledge", Database)
 };
 
 /**

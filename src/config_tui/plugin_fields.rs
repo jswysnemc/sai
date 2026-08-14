@@ -269,64 +269,12 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
                 config.plugins.memory.evicted_context_enabled,
             ),
             Field::boolean(
-                t("Association enabled", "联想启用"),
+                t("Inject memory index", "注入记忆索引"),
                 config.plugins.memory.association_enabled,
             ),
-            Field::boolean(
-                t("Auto diary", "自动日记"),
-                config.plugins.memory.auto_diary_enabled,
-            ),
-            Field::boolean(
-                t("Auto fact memory", "自动知识记忆"),
-                config.plugins.memory.auto_fact_enabled,
-            ),
-            Field::boolean(
-                t("Auto skill memory", "自动技能记忆"),
-                config.plugins.memory.auto_skill_enabled,
-            ),
             Field::new(
-                t("Association facts", "联想知识条数"),
-                config.plugins.memory.association_facts.to_string(),
-            ),
-            Field::new(
-                t("Association episodes", "联想事件条数"),
-                config.plugins.memory.association_episodes.to_string(),
-            ),
-            Field::new(
-                t("Association char limit", "联想字符上限"),
-                config.plugins.memory.association_max_chars.to_string(),
-            ),
-            Field::new(
-                t("Memory snippet chars", "记忆片段字符数"),
+                t("Evicted snippet chars", "逐出片段字符数"),
                 config.plugins.memory.snippet_chars.to_string(),
-            ),
-            Field::new(
-                t("Forget after days", "记忆保留天数"),
-                config.plugins.memory.forget_after_days.to_string(),
-            ),
-            Field::boolean(
-                t("Forgetting enabled", "遗忘启用"),
-                config.plugins.memory.forgetting_enabled,
-            ),
-            Field::new(
-                t("Forgetting half-life days", "遗忘半衰期天"),
-                config.plugins.memory.forgetting_half_life_days.to_string(),
-            ),
-            Field::new(
-                t("Forgetting minimum strength", "遗忘最低强度"),
-                config.plugins.memory.forgetting_min_strength.to_string(),
-            ),
-            Field::new(
-                t("Recall review boost", "回忆增强强度"),
-                config.plugins.memory.forgetting_review_boost.to_string(),
-            ),
-            Field::new(
-                t("Learning minimum task chars", "学习任务最少字符数"),
-                config.plugins.memory.learning_min_task_chars.to_string(),
-            ),
-            Field::new(
-                t("Learning minimum method chars", "学习方法最少字符数"),
-                config.plugins.memory.learning_min_method_chars.to_string(),
             ),
         ],
         10 => vec![Field::boolean(
@@ -543,26 +491,7 @@ pub(super) fn apply_plugin_fields(
             config.plugins.memory.enabled = parse_bool_field(&fields[0].value)?;
             config.plugins.memory.evicted_context_enabled = parse_bool_field(&fields[1].value)?;
             config.plugins.memory.association_enabled = parse_bool_field(&fields[2].value)?;
-            config.plugins.memory.auto_diary_enabled = parse_bool_field(&fields[3].value)?;
-            config.plugins.memory.auto_fact_enabled = parse_bool_field(&fields[4].value)?;
-            config.plugins.memory.auto_skill_enabled = parse_bool_field(&fields[5].value)?;
-            config.plugins.memory.association_facts = fields[6].value.trim().parse::<usize>()?;
-            config.plugins.memory.association_episodes = fields[7].value.trim().parse::<usize>()?;
-            config.plugins.memory.association_max_chars =
-                fields[8].value.trim().parse::<usize>()?;
-            config.plugins.memory.snippet_chars = fields[9].value.trim().parse::<usize>()?;
-            config.plugins.memory.forget_after_days = fields[10].value.trim().parse::<u64>()?;
-            config.plugins.memory.forgetting_enabled = parse_bool_field(&fields[11].value)?;
-            config.plugins.memory.forgetting_half_life_days =
-                fields[12].value.trim().parse::<f64>()?;
-            config.plugins.memory.forgetting_min_strength =
-                fields[13].value.trim().parse::<f64>()?;
-            config.plugins.memory.forgetting_review_boost =
-                fields[14].value.trim().parse::<f64>()?;
-            config.plugins.memory.learning_min_task_chars =
-                fields[15].value.trim().parse::<usize>()?;
-            config.plugins.memory.learning_min_method_chars =
-                fields[16].value.trim().parse::<usize>()?;
+            config.plugins.memory.snippet_chars = fields[3].value.trim().parse::<usize>()?;
         }
         10 => {
             config.plugins.package_advisor.enabled = parse_bool_field(&fields[0].value)?;

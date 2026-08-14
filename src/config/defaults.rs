@@ -137,20 +137,7 @@ impl Default for MemoryConfig {
             enabled: default_true(),
             evicted_context_enabled: default_true(),
             association_enabled: default_true(),
-            auto_diary_enabled: default_true(),
-            auto_fact_enabled: default_true(),
-            auto_skill_enabled: false,
-            association_facts: default_memory_association_facts(),
-            association_episodes: default_memory_association_episodes(),
-            association_max_chars: default_memory_association_max_chars(),
             snippet_chars: default_memory_snippet_chars(),
-            forget_after_days: default_memory_forget_after_days(),
-            forgetting_enabled: default_true(),
-            forgetting_half_life_days: default_memory_half_life_days(),
-            forgetting_min_strength: default_memory_min_strength(),
-            forgetting_review_boost: default_memory_review_boost(),
-            learning_min_task_chars: default_memory_min_task_chars(),
-            learning_min_method_chars: default_memory_min_method_chars(),
             extraction_provider_id: String::new(),
             extraction_model: String::new(),
         }
@@ -320,44 +307,8 @@ pub(super) fn default_repl_transcript_row_cap() -> usize {
     5_000
 }
 
-pub(super) fn default_memory_association_facts() -> usize {
-    5
-}
-
-pub(super) fn default_memory_association_episodes() -> usize {
-    3
-}
-
-pub(super) fn default_memory_association_max_chars() -> usize {
-    1800
-}
-
 pub(super) fn default_memory_snippet_chars() -> usize {
     500
-}
-
-pub(super) fn default_memory_forget_after_days() -> u64 {
-    90
-}
-
-pub(super) fn default_memory_half_life_days() -> f64 {
-    7.0
-}
-
-pub(super) fn default_memory_min_strength() -> f64 {
-    0.15
-}
-
-pub(super) fn default_memory_review_boost() -> f64 {
-    0.35
-}
-
-pub(super) fn default_memory_min_task_chars() -> usize {
-    16
-}
-
-pub(super) fn default_memory_min_method_chars() -> usize {
-    120
 }
 
 pub(super) fn default_print_image_width_percent() -> u8 {
