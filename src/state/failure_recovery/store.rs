@@ -59,6 +59,28 @@ impl StateStore {
         Ok(())
     }
 
+    /// 记录压缩回放路径失败并退回独立请求。
+    ///
+    /// 记为观察态而非失败态：本次压缩随后还会用独立请求重试，
+    /// 记成失败会把一次成功的压缩算进失败计数，触发无谓的退避。
+    ///
+    /// 参数:
+    /// - `reason`: 回放路径的失败原因
+    ///
+    /// 返回:
+    /// - 写入是否成功
+    pub fn record_compaction_replay_fallback(&self, reason: &str) -> Result<()> {
+        self.record_recovery_failure(
+            None,
+            FailureKind::CompactionLlmFailed,
+            RecoveryStatus::Observed,
+            &format!("compaction prefix replay fell back to a standalone request: {reason}"),
+            0,
+            0,
+            0,
+        )
+    }
+
     /// 记录手动压缩失败。
     ///
     /// 参数:

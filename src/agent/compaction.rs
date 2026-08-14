@@ -141,7 +141,7 @@ impl Agent {
             turn_count: request.turn_count(),
             model: self.compaction_model_label.clone(),
         })?;
-        let summary = match self.create_compaction_summary(request, on_event).await {
+        let summary = match self.create_compaction_summary(request, projection, on_event).await {
             Ok(summary) => summary,
             Err(error) => {
                 self.record_compaction_failure(request, projection, manual, &error)?;
@@ -193,8 +193,13 @@ impl Agent {
 
     /// 使用压缩模型生成一次会话摘要。
     ///
+    /// 优先复用会话前缀：摘要请求原样回放本轮消息、只在末尾追加指令，
+    /// 供应商的热缓存因而可以一路命中。压缩模型与会话模型不同源、
+    /// 或窗口余量不足以再放一次全量回放时，直接走裁剪过的独立请求。
+    ///
     /// 参数:
     /// - `request`: 压缩请求
+    /// - `projection`: 压缩前 provider 请求投影
     /// - `on_event`: 压缩流式事件回调
     ///
     /// 返回:
@@ -202,8 +207,23 @@ impl Agent {
     async fn create_compaction_summary(
         &self,
         request: &CompactionRequest,
+        projection: &ProjectedRequest,
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<String> {
+        if let Some(replay) = self.build_replay_summary_request(projection) {
+            match self
+                .summarize_with_messages(replay.messages, replay.definitions, "replay", on_event)
+                .await
+            {
+                Ok(summary) => return Ok(summary),
+                // 回放路径把会话自己的系统提示词与工具一并送出，模型有可能
+                // 继续干活而不是写笔记。压缩本身不该因为这条优化而变得更易失败，
+                // 因此退回独立请求再试一次，代价是多一次调用
+                Err(error) => {
+                    let _ = self.state.record_compaction_replay_fallback(&format!("{error:#}"));
+                }
+            }
+        }
         let prompt = self.state.build_compaction_summary_prompt(
             request,
             self.context_char_budget,
@@ -213,8 +233,29 @@ impl Agent {
             ChatMessage::system(prompt.system),
             ChatMessage::plain("user", prompt.user),
         ];
+        self.summarize_with_messages(messages, Vec::new(), "standalone", on_event)
+            .await
+    }
+
+    /// 发起一次摘要请求并校验结果。
+    ///
+    /// 参数:
+    /// - `messages`: 压缩模型消息
+    /// - `definitions`: 随请求发送的工具定义
+    /// - `operation`: 用量统计里区分回放与独立请求的标记
+    /// - `on_event`: 压缩流式事件回调
+    ///
+    /// 返回:
+    /// - 校验通过的摘要正文
+    async fn summarize_with_messages(
+        &self,
+        messages: Vec<ChatMessage>,
+        definitions: Vec<crate::llm::ToolDefinition>,
+        operation: &'static str,
+        on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
+    ) -> Result<String> {
         let summary = self
-            .request_compaction_summary(messages, on_event)
+            .request_compaction_summary(messages, definitions, operation, on_event)
             .await
             .context("compaction model request failed")?;
         crate::state::validate_summary(
@@ -228,6 +269,8 @@ impl Agent {
     ///
     /// 参数:
     /// - `messages`: 压缩模型消息
+    /// - `definitions`: 随请求发送的工具定义；独立请求路径下为空
+    /// - `operation`: 用量统计里区分回放与独立请求的标记
     /// - `on_event`: 压缩流式事件回调
     ///
     /// 返回:
@@ -235,12 +278,14 @@ impl Agent {
     async fn request_compaction_summary(
         &self,
         messages: Vec<ChatMessage>,
+        definitions: Vec<crate::llm::ToolDefinition>,
+        operation: &'static str,
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<String> {
         let _http_debug_session = crate::llm::HttpDebugSessionGuard::new(self.state.session_id());
         let result = self
             .compaction_client
-            .chat_stream_events(messages, Vec::new(), |event| match event {
+            .chat_stream_events(messages, definitions, |event| match event {
                 ChatStreamEvent::Chunk(chunk)
                     if chunk.kind == ChatStreamKind::Content && !chunk.text.is_empty() =>
                 {
@@ -258,7 +303,7 @@ impl Agent {
                     provider_name: self.compaction_client.provider_name(),
                     model: self.compaction_client.model(),
                     source: "compaction",
-                    operation: "summary",
+                    operation,
                     status: "success",
                     usage: Some(usage),
                     usage_source: "provider_reported",

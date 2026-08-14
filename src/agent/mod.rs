@@ -1,6 +1,7 @@
 mod agent_state;
 mod compaction;
 mod compaction_model;
+mod compaction_replay;
 mod context_projection;
 mod context_resources;
 mod conversation;

@@ -12,5 +12,5 @@ pub(crate) use builder::{
 pub(crate) use estimate::estimate_projected_request_chars;
 #[allow(unused_imports)]
 pub(crate) use model::{
-    DynamicContextSource, ProjectedBaseContext, ProjectedRequest, ProjectionKind,
+    DynamicContextSource, ProjectedBaseContext, ProjectedRequest, ProjectionEstimate, ProjectionKind,
 };
