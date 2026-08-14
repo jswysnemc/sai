@@ -95,6 +95,16 @@
   display: none;
 }
 
+/*
+ * 视图切换独占一格，不与 chat-header-panel 合并：
+ * 后者是移动端专用容器，桌面端整体 display: none。
+ */
+.chat-header-view-switch {
+  display: flex;
+  align-self: center;
+  justify-self: end;
+}
+
 .chat-header-panel {
   /* 弹出菜单相对本容器定位，因此定位上下文与显示状态解耦 */
   position: relative;
@@ -137,6 +147,11 @@
 }
 
 @media (max-width: 48rem) {
+  /* 轨迹表是四列密集视图，窄屏读不动，切换器一并收起 */
+  .chat-header-view-switch {
+    display: none;
+  }
+
   .chat-header {
     grid-template-columns: 2rem minmax(0, 1fr) 2rem;
     gap: var(--space-xs);

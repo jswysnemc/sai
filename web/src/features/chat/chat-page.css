@@ -320,6 +320,39 @@
   height: 100%;
 }
 
+/*
+ * 视图切换：与 mermaid 工具栏同一套分段控件形制。
+ * SegmentedControl 不自带样式，配色与圆角在使用处给。
+ */
 .chat-view-switch {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  gap: var(--space-3xs);
+  padding: var(--space-3xs);
+  border-radius: var(--radius-2);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.chat-view-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3xs);
+  min-height: 22px;
+  padding: 0 var(--space-xs);
+  border: 0;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  cursor: pointer;
+}
+
+.chat-view-switch button:hover {
+  color: var(--ink);
+}
+
+.chat-view-switch button.active {
+  background: var(--paper-raised);
+  color: var(--ink);
 }

@@ -67,8 +67,8 @@ export function ChatSessionHeader({ title, workspace, branch, viewSwitch }: Chat
           </div>
         )}
       </div>
+      {viewSwitch && <div className="chat-header-view-switch">{viewSwitch}</div>}
       <div className="chat-header-panel">
-        {viewSwitch}
         <Button
           className="chat-header-plus"
           onClick={() => window.dispatchEvent(new Event(OPEN_WORKSPACE_SIDEBAR_EVENT))}
