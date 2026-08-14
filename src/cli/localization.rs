@@ -502,33 +502,42 @@ fn localize_memory_command(mut command: clap::Command) -> clap::Command {
     let descriptions = [
         ("stats", "Show memory statistics", "显示记忆统计"),
         ("reset", "Clear assistant memory", "清空助手记忆"),
-        ("search", "Search memories", "搜索记忆"),
-        ("remember", "Save a manual fact", "手动保存事实"),
+        ("list", "List memories", "列出记忆"),
+        ("show", "Show one memory", "显示一条记忆"),
+        ("remember", "Save a memory", "保存一条记忆"),
+        ("forget", "Delete a memory", "删除一条记忆"),
     ];
     for (name, en, zh) in descriptions {
         command = command.mut_subcommand(name, |subcommand| subcommand.about(t(en, zh)));
     }
     command
-        .mut_subcommand("reset", |subcommand| {
-            subcommand.mut_arg("include_skills", |arg| {
-                arg.help(t(
-                    "Also remove generated skills",
-                    "同时移除自动生成的 skills",
-                ))
+        .mut_subcommand("list", |subcommand| {
+            subcommand.mut_arg("filter", |arg| {
+                arg.help(t("Filter by identifier or description", "按标识或摘要过滤"))
             })
         })
-        .mut_subcommand("search", |subcommand| {
-            subcommand
-                .mut_arg("query", |arg| arg.help(t("Search query", "搜索查询")))
-                .mut_arg("limit", |arg| arg.help(t("Maximum results", "最大结果数")))
-                .mut_arg("forgotten", |arg| {
-                    arg.help(t("Include forgotten memories", "包含已遗忘记忆"))
-                })
+        .mut_subcommand("show", |subcommand| {
+            subcommand.mut_arg("name", |arg| arg.help(t("Memory identifier", "记忆标识")))
+        })
+        .mut_subcommand("forget", |subcommand| {
+            subcommand.mut_arg("name", |arg| arg.help(t("Memory identifier", "记忆标识")))
         })
         .mut_subcommand("remember", |subcommand| {
             subcommand
-                .mut_arg("content", |arg| arg.help(t("Fact content", "事实内容")))
-                .mut_arg("source", |arg| arg.help(t("Source label", "来源标签")))
+                .mut_arg("name", |arg| arg.help(t("Memory identifier", "记忆标识")))
+                .mut_arg("content", |arg| arg.help(t("Memory content", "记忆正文")))
+                .mut_arg("description", |arg| {
+                    arg.help(t("One-line summary", "一句话摘要"))
+                })
+                .mut_arg("memory_type", |arg| {
+                    arg.help(t(
+                        "Entry type: user, feedback, project, reference",
+                        "条目类型：user、feedback、project、reference",
+                    ))
+                })
+                .mut_arg("global", |arg| {
+                    arg.help(t("Write to the global scope", "写入全局作用域"))
+                })
         })
 }
 
