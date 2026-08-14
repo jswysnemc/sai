@@ -76,7 +76,8 @@ impl ReplRuntime {
     /// 返回:
     /// - 找到实时思考块时返回 true
     pub(in crate::cli) fn toggle_live_reasoning(&mut self) -> Result<bool> {
-        if !self.transcript.toggle_live_reasoning() {
+        // 流式思考优先；没有正在流的思考时，退而展开最近一个折叠的 diff
+        if !self.transcript.toggle_live_reasoning() && !self.transcript.toggle_last_diff() {
             return Ok(false);
         }
         self.sync_transcript(true)?;

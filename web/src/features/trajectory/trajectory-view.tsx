@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import type { SessionContextPrompt, SessionTimeline } from "../../api/contracts";
+import { useQueries } from "@tanstack/react-query";
+import { api } from "../../api/client";
+import type { SessionContextPrompt, SessionTimeline, SubagentDetail } from "../../api/contracts";
 import { buildTrajectory } from "./trajectory-build";
 import { TrajectoryDetails } from "./trajectory-details";
 import { countByTurn, filterRecords } from "./trajectory-filter";
@@ -8,6 +10,7 @@ import type { TrajectoryRecordKind } from "./trajectory-record";
 import { trajectoryDomain, type TimeDomain, type TrajectoryScaleMode } from "./trajectory-scale";
 import { TrajectoryTable } from "./trajectory-table";
 import { TrajectoryToolbar } from "./trajectory-toolbar";
+import { referencedSubagentIds } from "./trajectory-subagent";
 import "./trajectory-view.css";
 
 type TrajectoryViewProps = {
@@ -37,7 +40,31 @@ export function TrajectoryView({ timeline, contextPrompt, loading }: TrajectoryV
   const [range, setRange] = useState<TimeDomain | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const model = useMemo(() => buildTrajectory(timeline, contextPrompt), [timeline, contextPrompt]);
+  // 先建一次拿到被引用的子智能体，再按 id 取详情织入——
+  // 列表接口不含 timeline，只有详情接口才有分步记录
+  const base = useMemo(() => buildTrajectory(timeline, contextPrompt), [timeline, contextPrompt]);
+  const subagentIds = useMemo(() => referencedSubagentIds(base.records), [base.records]);
+  const subagentQueries = useQueries({
+    queries: subagentIds.map((id) => ({
+      queryKey: ["subagent", id],
+      queryFn: () => api.subagents.detail(id),
+      staleTime: 15_000
+    }))
+  });
+  const subagentRevision = subagentQueries
+    .map((query) => `${query.data?.id ?? ""}:${query.data?.updated_at ?? 0}`)
+    .join(",");
+  const subagents = useMemo(() => {
+    const found = new Map<string, SubagentDetail>();
+    for (const query of subagentQueries) {
+      if (query.data) found.set(query.data.id, query.data);
+    }
+    return found;
+  }, [subagentRevision]);
+  const model = useMemo(
+    () => (subagents.size > 0 ? buildTrajectory(timeline, contextPrompt, subagents) : base),
+    [base, timeline, contextPrompt, subagents]
+  );
   const bounds = useMemo(() => trajectoryDomain(model.records), [model.records]);
   const turnCounts = useMemo(() => countByTurn(model.records), [model.records]);
   const visible = useMemo(

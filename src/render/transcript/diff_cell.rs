@@ -23,6 +23,8 @@ pub(crate) struct DiffCell {
     permission: Option<PermissionAuditView>,
     /// 工具是否已结束（成功/失败），避免结果阶段另开空 cell
     completed: Option<bool>,
+    /// 超长 diff 是否已展开；Ctrl+O 切换
+    expanded: bool,
 }
 
 impl DiffCell {
@@ -49,6 +51,7 @@ impl DiffCell {
             rendered: rendered.trim_end().to_string(),
             permission: None,
             completed: None,
+            expanded: false,
         }
     }
 
@@ -160,13 +163,18 @@ impl DiffCell {
         true
     }
 
-    /// 标记编辑已结束，保留预览 diff。
+    /// 切换超长 diff 的展开状态。
     ///
     /// 参数:
-    /// - `ok`: 是否成功
+    /// - 无
     ///
     /// 返回:
     /// - 无
+    pub(crate) fn toggle_expanded(&mut self) {
+        self.expanded = !self.expanded;
+    }
+
+    /// 标记编辑已结束，保留预览 diff。
     pub(crate) fn finish(&mut self, ok: bool) {
         self.completed = Some(ok);
     }
@@ -202,7 +210,7 @@ pub(crate) fn render(cell: &DiffCell, mode: ToolCallDisplayMode) -> String {
     let body = strip_leading_bullet_header(&cell.rendered);
     if !body.trim().is_empty() {
         output.push('\n');
-        output.push_str(body.trim_end());
+        output.push_str(fold_diff_body(body.trim_end(), cell.expanded).trim_end());
     }
 
     // 权限控件与其他工具卡一致顶正文列，不再随 diff 正文内收
@@ -228,13 +236,55 @@ pub(crate) fn render(cell: &DiffCell, mode: ToolCallDisplayMode) -> String {
     output
 }
 
-/// 去掉冻结预览首行的 `• Added/Edited …` 标题，只保留行级正文。
+/// 折叠前保留的 diff 头部行数。
+///
+/// 比命令输出的头尾更宽：一处改动连同上下文就占 7 行，
+/// 按命令输出的 2/4 折，单点修改也会被折成省略号。
+const DIFF_FOLD_HEAD_LINES: usize = 8;
+
+/// 折叠后保留的 diff 尾部行数。
+const DIFF_FOLD_TAIL_LINES: usize = 8;
+
+/// 超长 diff 正文按首尾折叠，中间以省略行代替。
+///
+/// 按 diff 自身的行折而不是终端显示行：diff 每行都带行号与增删标记，
+/// 折行产生的续行不是独立信息，按显示行折会把一处改动拦腰截断。
 ///
 /// 参数:
-/// - `rendered`: 冻结的完整预览
+/// - `body`: 无标题的 diff 正文
+/// - `expanded`: 该 cell 是否已展开
 ///
 /// 返回:
-/// - 无标题的正文；整段只是状态行时返回空
+/// - 折叠后的正文；未超长或已展开时原样返回
+fn fold_diff_body(body: &str, expanded: bool) -> String {
+    if expanded || crate::render::render_expand::expand_override() {
+        return body.to_string();
+    }
+    let lines: Vec<&str> = body.lines().collect();
+    let keep = DIFF_FOLD_HEAD_LINES + DIFF_FOLD_TAIL_LINES;
+    if lines.len() <= keep {
+        return body.to_string();
+    }
+    let omitted = lines.len() - keep;
+    let hint = format!(
+        "\x1b[2m\x1b[36m  └ … +{omitted} {} (Ctrl+O {})\x1b[0m",
+        crate::i18n::text("lines", "行"),
+        crate::i18n::text("to expand", "展开")
+    );
+    let mut output: Vec<String> = lines[..DIFF_FOLD_HEAD_LINES]
+        .iter()
+        .map(|line| (*line).to_string())
+        .collect();
+    output.push(hint);
+    output.extend(
+        lines[lines.len() - DIFF_FOLD_TAIL_LINES..]
+            .iter()
+            .map(|line| (*line).to_string()),
+    );
+    output.join("\n")
+}
+
+/// 去掉冻结预览首行的 `• Added/Edited …` 标题，只保留行级正文。
 fn strip_leading_bullet_header(rendered: &str) -> String {
     let mut lines = rendered.lines();
     let Some(first) = lines.next() else {
@@ -246,4 +296,86 @@ fn strip_leading_bullet_header(rendered: &str) -> String {
         return lines.collect::<Vec<_>>().join("\n");
     }
     rendered.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::render::ToolCallDisplayMode;
+
+    /// 构造一次整文件重写的 diff cell。
+    ///
+    /// 参数:
+    /// - `dir`: 临时目录
+    /// - `old_lines`: 原文件行数
+    ///
+    /// 返回:
+    /// - diff cell
+    fn rewrite_cell(dir: &std::path::Path, old_lines: usize) -> DiffCell {
+        let path = dir.join("sample.txt");
+        let old: String = (1..=old_lines).map(|n| format!("line{n}\n")).collect();
+        let new: String = (1..=old_lines).map(|n| format!("CHANGED{n}\n")).collect();
+        std::fs::write(&path, old).unwrap();
+        let args = serde_json::json!({
+            "command": "write_file",
+            "path": path.to_string_lossy(),
+            "content": new
+        })
+        .to_string();
+        DiffCell::from_call("write_file".to_string(), args)
+    }
+
+    /// 【TUI】【diff 折叠】超长 diff 折叠为首尾并给出 Ctrl+O 提示。
+    ///
+    /// 一次整文件重写会刷掉整屏，长度本身就是需要被收起的信号。
+    #[test]
+    fn long_diff_folds_into_head_and_tail() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut cell = rewrite_cell(dir.path(), 60);
+
+        let folded = strip_ansi_for_test(&render(&cell, ToolCallDisplayMode::Summary));
+        assert!(folded.contains("Ctrl+O"), "折叠后应提示展开方式:\n{folded}");
+        let folded_rows = folded.lines().count();
+
+        cell.toggle_expanded();
+        let expanded = strip_ansi_for_test(&render(&cell, ToolCallDisplayMode::Summary));
+        assert!(!expanded.contains("Ctrl+O"), "展开后不应再有提示");
+        assert!(expanded.lines().count() > folded_rows, "展开后行数应多于折叠");
+    }
+
+    /// 【TUI】【diff 折叠】短 diff 保持原样，不插入省略行。
+    ///
+    /// 单点修改连同上下文只有几行，折起来反而要多按一次键才能读全。
+    #[test]
+    fn short_diff_is_not_folded() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("short.txt");
+        std::fs::write(&path, "a\nb\nc\n").unwrap();
+        let args = serde_json::json!({
+            "command": "str_replace",
+            "path": path.to_string_lossy(),
+            "old_string": "b",
+            "new_string": "B"
+        })
+        .to_string();
+
+        let cell = DiffCell::from_call("str_replace".to_string(), args);
+
+        assert!(!strip_ansi_for_test(&render(&cell, ToolCallDisplayMode::Summary)).contains("Ctrl+O"));
+    }
+
+    /// 【TUI】【diff 折叠】回看上下文里按展开渲染。
+    ///
+    /// 备用屏浏览的用途就是读全文，折叠块在那里要全部摊开。
+    #[test]
+    fn review_context_expands_every_diff() {
+        let dir = tempfile::tempdir().unwrap();
+        let cell = rewrite_cell(dir.path(), 60);
+
+        let rendered = crate::render::render_expand::with_expanded_render(|| {
+            strip_ansi_for_test(&render(&cell, ToolCallDisplayMode::Summary))
+        });
+
+        assert!(!rendered.contains("Ctrl+O"));
+    }
 }

@@ -6,6 +6,7 @@ export type TrajectoryRecordKind =
   | "user"
   | "assistant"
   | "tool"
+  | "subagent"
   | "message"
   | "compaction";
 
@@ -38,6 +39,8 @@ export type TrajectoryRecord = {
   failed: boolean;
   /** 该记录是否仍在运行 */
   running: boolean;
+  /** 触发该记录的父记录标识；子智能体条目据此缩进 */
+  parentId?: string;
   /** 详情面板需要的完整内容 */
   detail: TrajectoryRecordDetail;
 };
@@ -79,6 +82,7 @@ export const RECORD_KIND_LABELS: Record<TrajectoryRecordKind, RecordKindLabel> =
   user: { en: "User", zh: "用户" },
   assistant: { en: "Model", zh: "模型" },
   tool: { en: "Tool", zh: "工具" },
+  subagent: { en: "Sub", zh: "子体" },
   message: { en: "Inserted", zh: "插入" },
   compaction: { en: "Compact", zh: "压缩" }
 };

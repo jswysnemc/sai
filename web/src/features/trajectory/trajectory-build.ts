@@ -5,8 +5,10 @@ import type {
   TimelineToolEntry,
   TimelineTurnMessage
 } from "../../api/contracts";
+import type { SubagentDetail } from "../../api/contracts";
 import type { TrajectoryRecord, TrajectoryRecordKind } from "./trajectory-record";
 import { summarizeContent, summarizeToolArguments } from "./trajectory-format";
+import { subagentIdFromOutput, subagentRecords } from "./trajectory-subagent";
 
 /** 构建产物：扁平记录表与按轮次归并的请求边界。 */
 export type TrajectoryModel = {
@@ -43,7 +45,8 @@ export type TrajectoryTurnHeader = {
  */
 export function buildTrajectory(
   timeline: SessionTimeline | undefined,
-  contextPrompt?: SessionContextPrompt
+  contextPrompt?: SessionContextPrompt,
+  subagents?: ReadonlyMap<string, SubagentDetail>
 ): TrajectoryModel {
   const records: TrajectoryRecord[] = [];
   const turns: TrajectoryTurnHeader[] = [];
@@ -104,7 +107,16 @@ export function buildTrajectory(
     for (const group of rounds) {
       const round = roundOf.get(group.round) ?? 1;
       for (const tool of group.tools) {
-        push(toolRecord(tool, turn, round));
+        const record = toolRecord(tool, turn, round);
+        push(record);
+        // 子智能体的步骤紧跟在启动它的调用之后，读起来才是一条链
+        const subagentId = tool.name === "subagent"
+          ? subagentIdFromOutput(tool.output)
+          : null;
+        const detail = subagentId ? subagents?.get(subagentId) : undefined;
+        if (detail) {
+          for (const child of subagentRecords(detail, record.id)) push(child);
+        }
         pushMessagesAfter(messages, tool.seq ?? 0, turn, round, push);
       }
     }

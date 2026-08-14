@@ -43,6 +43,7 @@ export function TrajectoryRow({
       data-failed={record.failed || undefined}
       data-running={record.running || undefined}
       data-round-start={record.roundStart || undefined}
+      data-nested={record.parentId ? "" : undefined}
       aria-selected={selected}
       onClick={() => onSelect(record.id)}
       onDoubleClick={() => { if (record.turnId) onToggleTurn(record.turnId); }}

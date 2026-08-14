@@ -27,6 +27,10 @@
   --kind-color: var(--warning);
 }
 
+.trajectory-view [data-kind="subagent"] {
+  --kind-color: var(--magenta);
+}
+
 .trajectory-view [data-kind="message"] {
   --kind-color: var(--signal);
 }

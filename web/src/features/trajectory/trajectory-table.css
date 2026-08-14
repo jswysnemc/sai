@@ -95,6 +95,19 @@
   background: color-mix(in srgb, var(--signal) 8%, transparent);
 }
 
+/*
+ * 子智能体的步骤缩进一格并压低序号列：
+ * 它们属于上一行那次调用，不是主链上的独立一步。
+ */
+.trajectory-row[data-nested] {
+  padding-left: calc(var(--space-md) + 1rem);
+  background: color-mix(in srgb, var(--kind-color, var(--ink-soft)) 4%, transparent);
+}
+
+.trajectory-row[data-nested] .trajectory-row-index {
+  opacity: 0.5;
+}
+
 /* 一次新的模型请求从这里开始：细分隔线标出边界而不占一整行 */
 .trajectory-row[data-round-start] {
   border-top: 1px dashed color-mix(in srgb, var(--line-strong) 70%, transparent);
