@@ -253,6 +253,7 @@ mod tests {
             },
             tools: vec![TimelineToolEntry {
                 id: "call-1".to_string(),
+                assistant_round: 1,
                 seq: 1,
                 name: "run_command".to_string(),
                 arguments: r#"{"command":"printf long"}"#.to_string(),

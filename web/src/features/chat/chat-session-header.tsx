@@ -1,4 +1,5 @@
 import { FolderGit2, GitBranch, PanelLeft, PanelRightOpen } from "lucide-react";
+import type { ReactNode } from "react";
 import type { Workspace } from "../../api/contracts";
 import { localizeApiMessage } from "../../api/api-error";
 import { Button } from "../../shared/ui/button/button";
@@ -11,15 +12,17 @@ type ChatSessionHeaderProps = {
   title: string;
   workspace?: Pick<Workspace, "name" | "path"> | null;
   branch?: string;
+  /** 会话视图切换控件；置于右侧操作区最前 */
+  viewSwitch?: ReactNode;
 };
 
 /**
  * 渲染会话标题、项目上下文和移动端工作区操作。
  *
- * @param props 会话标题、当前工作区和 Git 分支
+ * @param props 会话标题、当前工作区、Git 分支与视图切换控件
  * @returns 聊天页面头部
  */
-export function ChatSessionHeader({ title, workspace, branch }: ChatSessionHeaderProps) {
+export function ChatSessionHeader({ title, workspace, branch, viewSwitch }: ChatSessionHeaderProps) {
   const { locale, t } = useI18n();
   const workspaceName = workspace ? localizeApiMessage(workspace.name, locale) : "";
   const hasContext = Boolean(workspace?.path || branch);
@@ -65,6 +68,7 @@ export function ChatSessionHeader({ title, workspace, branch }: ChatSessionHeade
         )}
       </div>
       <div className="chat-header-panel">
+        {viewSwitch}
         <Button
           className="chat-header-plus"
           onClick={() => window.dispatchEvent(new Event(OPEN_WORKSPACE_SIDEBAR_EVENT))}

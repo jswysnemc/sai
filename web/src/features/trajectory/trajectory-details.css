@@ -1,0 +1,155 @@
+/*
+ * 详情面板：宽屏时贴在记录表右侧，窄屏时沉到表格下方。
+ * 长文本一律走 pre + 滚动，不做折行截断——
+ * 详情的用途就是看完整内容，再省一次就没有地方能看到原文了。
+ */
+.trajectory-details {
+  display: grid;
+  align-content: start;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-left: 1px solid var(--line);
+  background: var(--paper-raised);
+  overflow-y: auto;
+}
+
+.trajectory-details-idle {
+  place-content: center;
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  text-align: center;
+}
+
+.trajectory-details-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.trajectory-details-index {
+  color: var(--ink-soft);
+  font: var(--text-2xs)/1 var(--font-code);
+}
+
+.trajectory-details-kind {
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-1);
+  background: color-mix(in srgb, var(--kind-color, var(--ink-soft)) 16%, transparent);
+  color: var(--kind-color, var(--ink-soft));
+  font-size: var(--text-2xs);
+}
+
+.trajectory-details-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font: var(--text-2xs)/1.4 var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trajectory-details-close {
+  display: flex;
+  margin-left: auto;
+  padding: 0.15rem;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.trajectory-details-close:hover {
+  color: var(--ink);
+}
+
+.trajectory-details-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.25rem var(--space-sm);
+  margin: 0;
+}
+
+.trajectory-fact {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.trajectory-fact > dt {
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+}
+
+.trajectory-fact > dd {
+  margin: 0;
+  color: var(--ink);
+  font: var(--text-2xs)/1.4 var(--font-code);
+}
+
+.trajectory-details-section {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.trajectory-details-section > h4 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+}
+
+.trajectory-details-section[data-tone="danger"] > h4 {
+  color: var(--danger);
+}
+
+.trajectory-details-copy {
+  display: flex;
+  padding: 0.1rem;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.trajectory-details-copy:hover {
+  color: var(--signal);
+}
+
+.trajectory-details-body {
+  max-height: 18rem;
+  margin: 0;
+  padding: var(--space-xs);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper);
+  color: var(--ink);
+  font: var(--text-2xs)/1.55 var(--font-code);
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.trajectory-details-section[data-tone="danger"] .trajectory-details-body {
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  color: var(--danger);
+}
+
+.trajectory-details-note {
+  margin: 0;
+  color: color-mix(in srgb, var(--ink-soft) 80%, transparent);
+  font-size: var(--text-2xs);
+}
+
+@media (max-width: 64rem) {
+  .trajectory-details {
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+
+  .trajectory-details-idle {
+    display: none;
+  }
+}

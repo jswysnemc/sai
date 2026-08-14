@@ -202,6 +202,7 @@ mod tests {
             },
             tools: vec![TimelineToolEntry {
                 id: "tool-1".to_string(),
+                assistant_round: 1,
                 seq: 1,
                 name: "read_file".to_string(),
                 arguments: "{\"path\":\"README.md\"}".to_string(),

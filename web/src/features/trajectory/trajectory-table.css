@@ -1,0 +1,211 @@
+/*
+ * 记录表：每行一个事件，列宽固定，内容列吃掉剩余空间。
+ * 行高压到 24px —— 轨迹表的用途是一屏看清一次任务做了多少步，
+ * 舒展的行距会把这个用途本身抵消掉。
+ */
+.trajectory-table {
+  display: grid;
+  padding-bottom: var(--space-md);
+  font-size: var(--text-2xs);
+}
+
+.trajectory-table-empty {
+  padding: var(--space-xl) var(--space-md);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+
+.trajectory-turn-divider {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: 0.3rem var(--space-md);
+  border: none;
+  border-top: 1px solid var(--line-strong);
+  background: color-mix(in srgb, var(--paper-raised) 94%, transparent);
+  backdrop-filter: blur(6px);
+  color: var(--ink-soft);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.trajectory-turn-divider:first-child {
+  border-top: none;
+}
+
+.trajectory-turn-divider:hover {
+  color: var(--ink);
+}
+
+.trajectory-turn-divider > strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.trajectory-turn-divider[data-status="failed"] > strong {
+  color: var(--danger);
+}
+
+.trajectory-turn-requests,
+.trajectory-turn-duration {
+  font-family: var(--font-code);
+}
+
+.trajectory-turn-model {
+  max-width: 14rem;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--ink-soft) 80%, transparent);
+  font-family: var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trajectory-turn-duration {
+  margin-left: auto;
+}
+
+.trajectory-row {
+  display: grid;
+  grid-template-columns: 2.5rem 3.5rem minmax(0, 1fr) 4rem;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 24px;
+  padding: 0 var(--space-md);
+  border-left: 2px solid transparent;
+  cursor: pointer;
+}
+
+.trajectory-row:hover {
+  background: var(--surface-soft);
+}
+
+.trajectory-row:focus-visible {
+  outline: 1px solid var(--signal);
+  outline-offset: -1px;
+}
+
+.trajectory-row[data-selected] {
+  border-left-color: var(--kind-color, var(--signal));
+  background: color-mix(in srgb, var(--signal) 8%, transparent);
+}
+
+/* 一次新的模型请求从这里开始：细分隔线标出边界而不占一整行 */
+.trajectory-row[data-round-start] {
+  border-top: 1px dashed color-mix(in srgb, var(--line-strong) 70%, transparent);
+}
+
+
+.trajectory-row-index {
+  color: color-mix(in srgb, var(--ink-soft) 65%, transparent);
+  font-family: var(--font-code);
+  text-align: right;
+}
+
+.trajectory-row-kind {
+  padding: 0.05rem 0.3rem;
+  border-radius: var(--radius-1);
+  background: color-mix(in srgb, var(--kind-color, var(--ink-soft)) 16%, transparent);
+  color: var(--kind-color, var(--ink-soft));
+  font-size: var(--text-2xs);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.trajectory-row-body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.trajectory-row-label {
+  flex: none;
+  max-width: 10rem;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: var(--font-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trajectory-row-summary {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trajectory-row-result {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 40%;
+  align-items: center;
+  gap: 0.25rem;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--ink-soft) 70%, transparent);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trajectory-row-arrow {
+  flex: none;
+  color: color-mix(in srgb, var(--ink-soft) 50%, transparent);
+}
+
+.trajectory-row[data-failed] .trajectory-row-result {
+  color: var(--danger);
+}
+
+.trajectory-row-error-icon {
+  flex: none;
+  color: var(--danger);
+}
+
+.trajectory-row-collapsed {
+  flex: none;
+  padding: 0 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+
+.trajectory-row-collapsed:hover {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.trajectory-row-time {
+  color: color-mix(in srgb, var(--ink-soft) 75%, transparent);
+  font-family: var(--font-code);
+  text-align: right;
+}
+
+.trajectory-row[data-running] .trajectory-row-time {
+  color: var(--signal);
+}
+
+@media (max-width: 48rem) {
+  .trajectory-row {
+    grid-template-columns: 2rem 3rem minmax(0, 1fr) 3.25rem;
+    padding: 0 var(--space-sm);
+  }
+
+  .trajectory-row-result {
+    display: none;
+  }
+
+  .trajectory-turn-model {
+    display: none;
+  }
+}

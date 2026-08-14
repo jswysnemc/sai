@@ -50,6 +50,8 @@ export type TimelineToolEntry = {
   id: string;
   /** 同一轮次中的工具调用顺序；旧历史响应可能缺失 */
   seq?: number;
+  /** 产生该调用的模型子轮编号；同轮内它变化即代表又发了一次模型请求 */
+  assistant_round?: number;
   name: string;
   arguments: string;
   status: "running" | "completed" | "failed";

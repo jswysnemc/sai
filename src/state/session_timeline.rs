@@ -20,6 +20,8 @@ pub struct TimelineMessage {
 pub struct TimelineToolEntry {
     pub id: String,
     pub seq: usize,
+    /// 产生该调用的模型子轮编号；同轮内它变化即代表又发了一次模型请求
+    pub assistant_round: usize,
     pub name: String,
     pub arguments: String,
     pub status: String,
@@ -154,6 +156,7 @@ impl StateStore {
                         TimelineToolEntry {
                             id: exchange.call.provider_call_id,
                             seq: exchange.call.seq,
+                            assistant_round: exchange.call.assistant_round,
                             name,
                             arguments,
                             status: tool_status(&exchange.call.status).to_string(),

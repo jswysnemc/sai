@@ -308,3 +308,18 @@
 .chat-timeline-skeleton {
   padding:var(--space-3xl) 0;
 }
+
+/*
+ * 轨迹视图占满会话列：头部固定，其下交给轨迹视图自行分配高度。
+ * 它与对话视图互斥，共用同一列宽，切换时左右两侧的面板位置不动。
+ */
+.chat-trajectory-region {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
+}
+
+.chat-view-switch {
+  flex: none;
+}

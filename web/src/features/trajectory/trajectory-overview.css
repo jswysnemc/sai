@@ -1,0 +1,127 @@
+/*
+ * 概览轨道：横轴投影记录的真实起止。
+ * 各记录种类共享一套 --kind-color，表格行与这里用同一组配色，
+ * 概览上认出的那段颜色在下面的表里也是同一种。
+ */
+.trajectory-overview {
+  display: grid;
+  gap: 0.25rem;
+  padding: var(--space-xs) var(--space-md);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-raised);
+}
+
+.trajectory-overview-axis {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--ink-soft);
+  font: var(--text-2xs)/1 var(--font-code);
+}
+
+.trajectory-overview-span {
+  color: color-mix(in srgb, var(--ink-soft) 70%, transparent);
+}
+
+.trajectory-overview-reset {
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--signal);
+  font: inherit;
+  cursor: pointer;
+}
+
+.trajectory-overview-axis > span:last-child {
+  margin-left: auto;
+}
+
+.trajectory-overview-reset ~ span:last-child {
+  margin-left: var(--space-sm);
+}
+
+.trajectory-overview-track {
+  position: relative;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper);
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.trajectory-overview-track[data-mode="sequence"] {
+  cursor: default;
+}
+
+.trajectory-overview-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+}
+
+.trajectory-overview-segment {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  min-width: 2px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  background: var(--kind-color, var(--ink-soft));
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+.trajectory-overview-segment:hover {
+  opacity: 1;
+}
+
+.trajectory-overview-segment[data-instant] {
+  top: 9px;
+  bottom: 9px;
+  opacity: 0.5;
+}
+
+.trajectory-overview-segment[data-failed] {
+  background: var(--danger);
+  opacity: 0.9;
+}
+
+.trajectory-overview-segment[data-running] {
+  animation: trajectory-segment-pulse 1.4s ease-in-out infinite;
+}
+
+.trajectory-overview-segment[data-selected] {
+  top: 2px;
+  bottom: 2px;
+  opacity: 1;
+  outline: 1px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.trajectory-overview-selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--signal);
+  border-right: 1px solid var(--signal);
+  background: color-mix(in srgb, var(--signal) 12%, transparent);
+  pointer-events: none;
+}
+
+@keyframes trajectory-segment-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trajectory-overview-segment[data-running] {
+    animation: none;
+  }
+}

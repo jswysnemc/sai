@@ -1,14 +1,16 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, GitBranch } from "lucide-react";
+import { ArrowDown, GitBranch, MessagesSquare, Route } from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { RunMode } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
 import { HoverRevealButton } from "../../shared/ui/hover-reveal-button/hover-reveal-button";
+import { SegmentedControl } from "../../shared/ui/segmented-control";
 import { SkeletonText } from "../../shared/ui/skeleton/skeleton";
 import { Modal } from "../../shared/ui/dialog/modal";
 import { useChatAgentContext } from "../agents/chat-agent-context";
+import { TrajectoryView } from "../trajectory/trajectory-view";
 import { ChatComposer } from "./chat-composer";
 import { ChatSessionHeader } from "./chat-session-header";
 import { HistoryTurn, LiveRunMessage } from "./chat-message";
@@ -55,6 +57,7 @@ export function ChatPage() {
   const [undoConfirmOpen, setUndoConfirmOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<Error | null>(null);
+  const [view, setView] = useState<"conversation" | "trajectory">("conversation");
   const sessions = useQuery({ queryKey: ["sessions"], queryFn: api.sessions.list });
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
   const gitStatus = useQuery({
@@ -87,6 +90,11 @@ export function ChatPage() {
       queryClient.invalidateQueries({ queryKey: ["system-usage"] })
     ]);
   }, [activeSession?.id, queryClient]);
+  // 换会话回到对话视图：轨迹是针对某一次会话的分析视角，
+  // 带着它进入新会话会让人以为看到的是新会话的轨迹
+  useEffect(() => {
+    setView("conversation");
+  }, [activeSession?.id]);
   const onWorkspaceChanged = useCallback(() => {
     void Promise.all([
       queryClient.invalidateQueries({ queryKey: ["file-tree"] }),
@@ -513,15 +521,44 @@ export function ChatPage() {
     />
   );
 
+  // 有历史才提供轨迹视图：空会话切过去只有一张空表，切换本身成了噪声
+  const viewSwitch = (timeline.data?.turns.length ?? 0) > 0 ? (
+    <SegmentedControl
+      className="chat-view-switch"
+      value={view}
+      onChange={setView}
+      ariaLabel={t("Session view", "会话视图")}
+      options={[
+        { value: "conversation", label: t("Chat", "对话"), icon: <MessagesSquare size={13} aria-hidden /> },
+        { value: "trajectory", label: t("Trajectory", "轨迹"), icon: <Route size={13} aria-hidden /> }
+      ]}
+    />
+  ) : undefined;
+  const header = (
+    <ChatSessionHeader
+      title={activeSession?.title ?? t("Select a session", "选择会话")}
+      workspace={activeWorkspace}
+      branch={gitStatus.data?.status === "ready" ? gitStatus.data.head : undefined}
+      viewSwitch={viewSwitch}
+    />
+  );
+
+  if (view === "trajectory" && viewSwitch) {
+    return (
+      <div className="chat-page">
+        <div className="chat-trajectory-region">
+          {header}
+          <TrajectoryView timeline={timeline.data} loading={timeline.isLoading} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={centerEmptySession ? "chat-page empty-session" : "chat-page"}>
       <div className="message-scroll-region">
         <div className="message-scroll" ref={scrollRef}>
-          <ChatSessionHeader
-            title={activeSession?.title ?? t("Select a session", "选择会话")}
-            workspace={activeWorkspace}
-            branch={gitStatus.data?.status === "ready" ? gitStatus.data.head : undefined}
-          />
+          {header}
           <div className="message-column">
             {(timeline.isLoading || branchTransitioning) && (
               <div className="chat-timeline-skeleton">

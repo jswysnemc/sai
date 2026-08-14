@@ -1,0 +1,54 @@
+/*
+ * 轨迹视图：工具栏与概览固定在上方，记录表与详情共享剩余高度。
+ * 记录种类的配色在这里统一定义，工具栏、概览、表格、详情四处
+ * 都通过 --kind-color 取同一个值，颜色语义只有一处定义。
+ */
+.trajectory-view {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
+  background: var(--paper);
+}
+
+.trajectory-view [data-kind="user"] {
+  --kind-color: var(--blue);
+}
+
+.trajectory-view [data-kind="assistant"] {
+  --kind-color: var(--violet);
+}
+
+.trajectory-view [data-kind="tool"] {
+  --kind-color: var(--warning);
+}
+
+.trajectory-view [data-kind="message"] {
+  --kind-color: var(--signal);
+}
+
+.trajectory-view [data-kind="compaction"] {
+  --kind-color: var(--magenta);
+}
+
+.trajectory-view-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+}
+
+.trajectory-view-body[data-inspecting] {
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem);
+}
+
+.trajectory-view-ledger {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+@media (max-width: 64rem) {
+  .trajectory-view-body[data-inspecting] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 45%);
+  }
+}
