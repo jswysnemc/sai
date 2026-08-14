@@ -188,19 +188,8 @@ fn preferred_shell_program() -> OsString {
 fn command_args(program: &OsString, script: &str) -> Vec<OsString> {
     #[cfg(windows)]
     {
-        if is_cmd(program) {
-            vec![OsString::from("/S"), OsString::from("/C"), script.into()]
-        } else if is_posix_shell(program) {
-            vec![OsString::from("-lc"), script.into()]
-        } else {
-            vec![
-                OsString::from("-NoLogo"),
-                OsString::from("-NoProfile"),
-                OsString::from("-NonInteractive"),
-                OsString::from("-Command"),
-                script.into(),
-            ]
-        }
+        use super::shell_selection::{script_args, shell_flavor};
+        script_args(shell_flavor(program), script)
     }
     #[cfg(not(windows))]
     {
@@ -235,18 +224,6 @@ fn executable_in_path(name: &str) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
-/// 判断程序是否为传统 Windows 命令解释器。
-///
-/// 参数:
-/// - `program`: Shell 程序
-///
-/// 返回:
-/// - 是否为 cmd
-#[cfg(windows)]
-fn is_cmd(program: &OsString) -> bool {
-    matches!(program_name(program).as_str(), "cmd" | "cmd.exe")
-}
-
 /// 判断程序是否为 PowerShell。
 ///
 /// 参数:
@@ -256,25 +233,8 @@ fn is_cmd(program: &OsString) -> bool {
 /// - 是否为 PowerShell
 #[cfg(windows)]
 fn is_powershell(program: &OsString) -> bool {
-    matches!(
-        program_name(program).as_str(),
-        "pwsh" | "pwsh.exe" | "powershell" | "powershell.exe"
-    )
-}
-
-/// 判断程序是否使用 POSIX Shell 参数。
-///
-/// 参数:
-/// - `program`: Shell 程序
-///
-/// 返回:
-/// - 是否为 POSIX Shell
-#[cfg(windows)]
-fn is_posix_shell(program: &OsString) -> bool {
-    matches!(
-        program_name(program).as_str(),
-        "sh" | "sh.exe" | "bash" | "bash.exe" | "zsh" | "zsh.exe" | "fish" | "fish.exe"
-    )
+    use super::shell_selection::{shell_flavor, ShellFlavor};
+    shell_flavor(program) == ShellFlavor::PowerShell
 }
 
 /// 返回程序文件名的小写形式。

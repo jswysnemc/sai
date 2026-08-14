@@ -72,15 +72,11 @@ async fn run_command_hook(hook: &HookItem, event: HookEvent, context: &HookConte
         return Ok(());
     }
     let timeout = Duration::from_millis(hook.timeout_ms.unwrap_or(30_000).clamp(100, 120_000));
-    let mut command = if cfg!(windows) {
-        let mut cmd = Command::new("cmd");
-        cmd.arg("/C").arg(script);
-        cmd
-    } else {
-        let mut cmd = Command::new("sh");
-        cmd.arg("-lc").arg(script);
-        cmd
-    };
+    // 走统一的平台 Shell 选择：这里原本硬接 cmd，Windows 上配了 PowerShell
+    // 的钩子脚本会按 cmd 语法解析，语法稍复杂一点就直接失败
+    let invocation = crate::platform::shell::command_invocation(script);
+    let mut command = Command::new(&invocation.program);
+    command.args(&invocation.args);
     if !context.workdir.trim().is_empty() {
         command.current_dir(&context.workdir);
     }

@@ -377,11 +377,11 @@ pub(super) fn edit_textarea(stdout: &mut io::Stdout, value: &mut String) -> Resu
     let mut file = tempfile::NamedTempFile::new()?;
     file.write_all(value.as_bytes())?;
     let path = file.path().to_path_buf();
-    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
-    let status = Command::new(&editor)
-        .arg(&path)
-        .status()
-        .or_else(|_| Command::new("nano").arg(&path).status());
+    // 编辑器与启动方式都交给平台层：Windows 上没有 vim/nano，
+    // 且 GUI 编辑器要直接启动才能等到窗口关闭
+    let editor = std::env::var("EDITOR")
+        .unwrap_or_else(|_| crate::platform::shell::default_editor().to_string());
+    let status = crate::platform::shell::editor_command(&editor, &path).status();
     if let Err(err) = status {
         eprintln!("{}: {err}", t("failed to open editor", "无法打开编辑器"));
     }
