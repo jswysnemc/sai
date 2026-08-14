@@ -113,7 +113,6 @@ impl Agent {
                 guard.complete(&result.content, result.reasoning.as_deref())?;
                 worktree_undo.finish();
                 self.spawn_session_memory_extraction();
-                self.memory.process_after_turn(input, &result.content)?;
                 Ok(result)
             }
             Err(error) => {
@@ -132,11 +131,14 @@ impl Agent {
     /// - 可作为 ACP 嵌入资源发送的记忆与目标上下文
     fn external_prompt_contexts(&self, input: &str) -> Result<Vec<AcpPromptContext>> {
         let mut contexts = Vec::new();
-        // 【Sai/ACP】【上下文注入】1. 关联当前输入相关的长期记忆
-        if let Some(association) = self.memory.association(input)? {
+        // 【Sai/ACP】【上下文注入】1. 注入记忆索引，与内置引擎走同一条渲染
+        let workspace = crate::runtime_cwd::current_dir()
+            .ok()
+            .map(|path| path.display().to_string());
+        if let Some(memory) = self.memory.recall_for_turn(input, workspace.as_deref())? {
             contexts.push(AcpPromptContext {
-                uri: "sai://memory/association".to_string(),
-                text: self.memory.format_association(&association),
+                uri: "sai://memory/index".to_string(),
+                text: memory,
             });
         }
         // 【Sai/ACP】【上下文注入】2. 活动目标每轮重新读取，自动续轮始终获得最新预算和状态
@@ -215,9 +217,22 @@ mod tests {
             AgentMode::Yolo,
         )
         .unwrap();
+        let workspace = crate::runtime_cwd::current_dir().unwrap();
         agent
             .memory
-            .remember_fact("Codex ACP supports embedded resources", "test")
+            .notes(Some(&workspace))
+            .save(
+                crate::memory::file_store::MemoryScope::Project,
+                &crate::memory::file_store::MemoryEntry {
+                    front: crate::memory::file_store::Frontmatter {
+                        name: "acp-embedded-resources".to_string(),
+                        description: "Codex ACP supports embedded resources".to_string(),
+                        memory_type: crate::memory::file_store::MemoryType::Project,
+                    },
+                    body: "正文".to_string(),
+                },
+                "Codex ACP supports embedded resources",
+            )
             .unwrap();
 
         let contexts = agent
@@ -225,7 +240,7 @@ mod tests {
             .unwrap();
 
         assert!(contexts.iter().any(|context| {
-            context.uri == "sai://memory/association" && context.text.contains("embedded resources")
+            context.uri == "sai://memory/index" && context.text.contains("embedded resources")
         }));
         assert!(contexts.iter().any(|context| {
             context.uri == "sai://goal/active"

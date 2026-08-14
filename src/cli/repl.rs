@@ -329,7 +329,7 @@ pub(super) async fn run_repl(
                         runtime.record_meta(message)?;
                     }
                     crate::control_commands::ControlCommand::ClearMemory => {
-                        let message = clear_memory(paths, false)?;
+                        let message = clear_memory(paths)?;
                         agent.reset_memory()?;
                         runtime.record_meta(message)?;
                     }

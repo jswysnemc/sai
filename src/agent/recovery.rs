@@ -203,60 +203,6 @@ impl Agent {
         });
     }
 
-    /// 异步抽取本轮的长期记忆候选。
-    ///
-    /// 抽取要发一次模型请求，放在轮次主链路上会拖慢用户可见的答复，
-    /// 因此与会话记忆一样异步执行；失败只丢这一轮的记忆，不影响对话。
-    ///
-    /// 参数:
-    /// - `user_message`: 用户原文
-    /// - `assistant_message`: 助手回复原文
-    ///
-    /// 返回:
-    /// - 无；抽取在后台任务中完成
-    pub(super) fn spawn_memory_capture(&self, user_message: &str, assistant_message: &str) {
-        if !self.config.memory_config().enabled {
-            return;
-        }
-        // 空回复没有可抽取的内容
-        if user_message.trim().is_empty() || assistant_message.trim().is_empty() {
-            return;
-        }
-        let memory = self.memory.clone();
-        let paths = self.paths.clone();
-        let user_message = user_message.to_string();
-        let assistant_message = assistant_message.to_string();
-        let workspace = crate::runtime_cwd::current_dir()
-            .ok()
-            .map(|path| path.display().to_string());
-        // 抽取复用会话记忆的模型配置；未配置时沿用当前会话 client
-        let client = match self.config.session_memory_runtime_config() {
-            Ok(runtime_config) => {
-                crate::llm::OpenAiCompatibleClient::from_config(&runtime_config, &paths)
-                    .unwrap_or_else(|_| self.client.clone())
-            }
-            Err(_) => self.client.clone(),
-        };
-        tokio::spawn(async move {
-            let candidates = match crate::memory::extract_candidates(
-                &client,
-                &user_message,
-                &assistant_message,
-                workspace.as_deref(),
-            )
-            .await
-            {
-                Ok(candidates) => candidates,
-                Err(error) => {
-                    eprintln!("[sai] memory extraction failed: {error:#}");
-                    return;
-                }
-            };
-            if let Err(error) = memory.capture_candidates(candidates) {
-                eprintln!("[sai] memory capture failed: {error:#}");
-            }
-        });
-    }
 }
 
 /// 使用独立模型请求提取 Session Memory。

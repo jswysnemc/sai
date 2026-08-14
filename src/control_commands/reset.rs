@@ -20,10 +20,9 @@ pub fn clear_state(paths: &SaiPaths, all: bool) -> Result<String> {
     StateStore::new(paths)?.reset_conversation()?;
     let memory = MemoryStore::new(&config, paths);
     if all {
-        memory.reset_all(false)?;
+        memory.reset_all()?;
     } else {
         memory.clear_evicted_context()?;
-        memory.clear_pending_events()?;
     }
     tools::clear_aur_review_state(paths)?;
     Ok(if all {

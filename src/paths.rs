@@ -60,6 +60,33 @@ impl SaiPaths {
         self.config_dir.join("mcp.jsonc")
     }
 
+    /// 构造全部子目录都落在指定根目录之下的路径集合。
+    ///
+    /// 仅供测试使用：真实路径依赖平台基础目录，测试里不能污染用户的实际数据。
+    ///
+    /// 参数:
+    /// - `root`: 临时根目录
+    ///
+    /// 返回:
+    /// - 路径集合
+    #[cfg(test)]
+    pub fn for_tests(root: &std::path::Path) -> Self {
+        Self {
+            config_dir: root.join("config"),
+            config_file: root.join("config/config.jsonc"),
+            secrets_file: root.join("config/secrets.jsonc"),
+            skills_dir: root.join("config/skills"),
+            data_dir: root.join("data"),
+            cache_dir: root.join("cache"),
+            state_dir: root.join("state"),
+            pictures_dir: root.join("pictures"),
+            fish_hook_file: root.join("fish/sai.fish"),
+            bash_hook_file: root.join("shell/bash-hook.sh"),
+            zsh_hook_file: root.join("shell/zsh-hook.zsh"),
+            powershell_hook_file: root.join("shell/powershell-hook.ps1"),
+        }
+    }
+
     pub fn create_dirs(&self) -> Result<()> {
         std::fs::create_dir_all(&self.config_dir)?;
         std::fs::create_dir_all(&self.skills_dir)?;

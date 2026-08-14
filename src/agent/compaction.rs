@@ -170,6 +170,7 @@ impl Agent {
         };
         match outcome {
             CompactionApplyOutcome::Applied => {
+                self.record_evicted_turns(request);
                 on_event(AgentEvent::CompactionFinished {
                     applied: true,
                     summary: Some(summary),
@@ -213,6 +214,40 @@ impl Agent {
             .request_model_summary(request, projection, on_event)
             .await?;
         Ok(self.finalize_summary(request, &summary))
+    }
+
+    /// 把刚被压缩掉的轮次原文留档，供后续回读。
+    ///
+    /// 摘要是有损的，这份留档是它唯一的补救途径，也是摘要末尾那句
+    /// 回读指引所指向的实际内容。写失败只记录不打断：压缩本身已经成功，
+    /// 为留档失败回滚会让上下文继续溢出。
+    ///
+    /// 参数:
+    /// - `request`: 本次压缩请求
+    ///
+    /// 返回:
+    /// - 无
+    fn record_evicted_turns(&self, request: &CompactionRequest) {
+        let mut evicted = Vec::new();
+        for turn in &request.compact_turns {
+            if !turn.user_content.trim().is_empty() {
+                evicted.push(crate::memory::EvictedTurn {
+                    timestamp: turn.user_timestamp.clone(),
+                    role: "user".to_string(),
+                    content: turn.user_content.clone(),
+                });
+            }
+            if !turn.assistant_content.trim().is_empty() {
+                evicted.push(crate::memory::EvictedTurn {
+                    timestamp: turn.assistant_timestamp.clone().unwrap_or_default(),
+                    role: "assistant".to_string(),
+                    content: turn.assistant_content.clone(),
+                });
+            }
+        }
+        if let Err(error) = self.memory.remember_evicted_turns(&evicted) {
+            eprintln!("[sai] 压缩轮次留档失败: {error:#}");
+        }
     }
 
     /// 把程序填充的小节与回读指引合进模型产出。

@@ -310,34 +310,50 @@ pub struct MemoryArgs {
 pub enum MemoryCommand {
     Stats,
     Reset(MemoryResetArgs),
-    Search(MemorySearchArgs),
+    List(MemoryListArgs),
+    Show(MemoryNameArgs),
     Remember(MemoryRememberArgs),
+    Forget(MemoryNameArgs),
 }
 
 #[derive(Debug, Args)]
 pub struct MemoryResetArgs {
-    #[arg(long)]
-    pub include_skills: bool,
-
     /// 跳过破坏性操作确认
     #[arg(long)]
     pub yes: bool,
 }
 
 #[derive(Debug, Args)]
-pub struct MemorySearchArgs {
-    pub query: Vec<String>,
-    #[arg(short, long)]
-    pub limit: Option<usize>,
-    #[arg(long)]
-    pub forgotten: bool,
+pub struct MemoryListArgs {
+    /// 只列出标识或摘要含该关键词的条目
+    pub filter: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct MemoryNameArgs {
+    /// 记忆标识
+    pub name: String,
 }
 
 #[derive(Debug, Args)]
 pub struct MemoryRememberArgs {
+    /// 记忆标识，同时是文件名
+    pub name: String,
+
+    /// 记忆正文
     pub content: Vec<String>,
-    #[arg(short, long, default_value = "manual")]
-    pub source: String,
+
+    /// 一句话摘要；缺省时取正文首行
+    #[arg(short, long)]
+    pub description: Option<String>,
+
+    /// 条目类型：user、feedback、project、reference
+    #[arg(short = 't', long, default_value = "project")]
+    pub memory_type: String,
+
+    /// 写入全局作用域而不是当前工作区
+    #[arg(long)]
+    pub global: bool,
 }
 
 #[cfg(test)]

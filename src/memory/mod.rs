@@ -1,18 +1,27 @@
-mod capture;
-mod injection;
-mod library;
-mod model;
-mod persistence;
-mod retrieval;
-mod store_maintenance;
-mod store_types;
+pub mod evicted;
+pub mod file_store;
+mod store;
 
-pub use capture::extract_candidates;
-pub use library::{now_days, MemoryLibrary};
-pub use model::MemoryCandidate;
-pub use store_types::{AssociationContext, EvictedTurn, MemoryHit};
+pub use evicted::EvictedTurn;
+pub use store::MemoryStore;
 
-include!("store.rs");
-include!("stats.rs");
-include!("storage.rs");
-include!("tests.rs");
+/// 返回文件式记忆的根目录。
+///
+/// 与逐出记录共用人格隔离规则：切换人格后两者都应该换成另一套，
+/// 否则不同人格的偏好会互相覆盖。
+///
+/// 参数:
+/// - `config`: 应用配置
+/// - `paths`: Sai 路径集合
+///
+/// 返回:
+/// - 记忆文件根目录
+pub fn notes_dir(
+    config: &crate::config::AppConfig,
+    paths: &crate::paths::SaiPaths,
+) -> std::path::PathBuf {
+    config
+        .active_persona_memory_data_dir(paths)
+        .join("memory")
+        .join("notes")
+}

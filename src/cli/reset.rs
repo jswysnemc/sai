@@ -21,7 +21,7 @@ pub(super) fn run_reset(
         {
             return Ok(());
         }
-        println!("{}", clear_memory(paths, false)?);
+        println!("{}", clear_memory(paths)?);
         return Ok(());
     }
     let all = match scope {

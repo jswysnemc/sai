@@ -50,7 +50,13 @@ pub(crate) fn build_base_system_prompt(
     base_system_prompt.push_str("\n\n");
     base_system_prompt.push_str(super::runtime_context::CONTEXT_STATE_CONTRACT);
 
-    // 5. 调用方注入的额外系统提示
+    // 5. 记忆使用契约；注入的索引只说明有哪些记忆，不说明何时该写新的
+    if tools_enabled && config.memory_config().enabled {
+        base_system_prompt.push_str("\n\n");
+        base_system_prompt.push_str(crate::memory::file_store::memory_contract());
+    }
+
+    // 6. 调用方注入的额外系统提示
     if let Some(prompt) = extra_system_prompt
         .map(str::trim)
         .filter(|prompt| !prompt.is_empty())

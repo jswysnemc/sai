@@ -305,8 +305,6 @@ impl Agent {
         self.spawn_session_memory_extraction();
         perf.mark("session memory extraction spawned");
         // 长期记忆抽取要发模型请求，异步执行不阻塞用户可见的答复
-        self.spawn_memory_capture(&input, &result.content);
-        self.memory.process_after_turn(&input, &result.content)?;
         perf.mark("memory process after turn");
         perf.mark("usage saved");
         Ok(result)
