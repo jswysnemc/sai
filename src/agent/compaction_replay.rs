@@ -1,3 +1,4 @@
+use super::compaction_schema::REPLAY_INSTRUCTION;
 use super::Agent;
 use crate::llm::ChatMessage;
 use crate::state::request_projection::ProjectedRequest;
@@ -7,34 +8,10 @@ use crate::state::request_projection::ProjectedRequest;
 /// 压缩在上下文占用九成时触发，回放整段前缀后剩下的余量本就不多。
 /// 这里按实际生成体量预留，而不是按 summary_char_limit 的窗口比例：
 /// 后者在九成占用下必然算出超窗，会让这条路径永远走不到。
-const REPLAY_OUTPUT_RESERVE_CHARS: usize = 12_000;
-
-/// 复用会话前缀时追加在末尾的压缩指令。
 ///
-/// 这段文本刻意不做成可编辑模板：它的正确性依赖"上文即会话本身"这一
-/// 调用约定，一旦被改成自带 `{{history}}` 的模板就与调用方式互相矛盾。
-/// 可编辑的是走独立请求那条路径的 `prompt.templates.compaction`。
-const REPLAY_COMPACTION_INSTRUCTION: &str = r#"--- This message is a direct task, not part of the above conversation ---
-
-You are about to run out of context. Write a first-person handoff note to yourself so you can seamlessly continue this task after the conversation above is cleared.
-
-Write the note as your own continuing train of thought — first person, present tense, the way you would reason through the next move. Do not write a third-party report about someone else's work, and do not impose rigid section headings; let the shape follow the task. Write the note in the same language the conversation has been using — do not switch to English just because these instructions happen to be in English.
-
-Make the note self-sufficient: the next turn will see only your most recent user messages and this note — every assistant message, tool call, and tool result above will be gone. In your own words, preserve what you genuinely need to continue:
-
-- What the latest request is actually asking for: your reading of its intent and any ambiguity you have already resolved. The kept user messages are size-capped, so a long request is truncated there: if the latest request is large, preserve the parts at risk of being dropped — above all the actual ask. If several requests are in play, say which one governs the next move.
-- The instructions and constraints currently in force (user preferences, project rules, environment and tooling limits) — condensed to what still matters. Keep decisions you have already settled (what you chose and why) separate from questions still open, so you neither silently reopen a closed choice nor treat an undecided point as decided.
-- What has actually been done, at high fidelity: the exact commands that were run, the exact file paths touched, and whether each succeeded or failed — and the results themselves, not just the commands: the concrete values returned, the key lines or error text, the schema or signature a lookup revealed, since re-running to recover them may be slow or impossible. Keep only the final working version of any code; drop intermediate attempts and already-resolved errors.
-- What you still don't know: context the next step depends on that this conversation never established — files referenced but not yet read, schemas or APIs assumed but unseen, questions the user has not answered. Name these gaps so the next turn checks them instead of assuming.
-- The forward plan — and this is the moment to invest in it. Right now you hold more context on this task than you ever will again; the next turn resumes with less, so the plan you commit here is the one it will follow. Give the exact next command or tool call, but don't stop at the next step: set out the remaining sequence to finish, the decisions you have already made for those upcoming steps, the obstacles you can foresee and how you mean to handle them, and any work you can commit to now. Include any required format for the final answer.
-
-Be honest about uncertainty. If an earlier step claimed something was done but was never verified (tests "passing", a fix "working", a file "created"), say so plainly and treat it as unverified rather than fact.
-
-Be concise, and keep the note proportional to the task: a long multi-step task warrants detail, but a trivial or nearly finished exchange needs only a sentence or two — do not pad it out. Include the critical data, identifiers, and references needed to continue, and omit anything that does not change the next move.
-
-The most recent user messages and the last few tool results stay in context after this note, so do not restate them; everything else above is being cleared and must survive in the note. If a handoff note already appears above, it is an earlier checkpoint: fold its still-relevant content into this one rather than copying it forward, since it is being cleared too.
-
-Return the note as plain text only: do not call any tool, and do not answer the user's task here."#;
+/// 九节都必填、第 3 节还要带代码原文，产出比自由文本笔记长出一截，
+/// 预留不足会让摘要生成到一半撞窗，那比退回独立请求糟得多。
+const REPLAY_OUTPUT_RESERVE_CHARS: usize = 16_000;
 
 /// 复用会话前缀的摘要请求。
 pub(super) struct ReplaySummaryRequest {
@@ -108,7 +85,7 @@ impl Agent {
 /// - 规范化后的消息序列，末尾为压缩指令
 fn replay_messages(messages: Vec<ChatMessage>) -> Vec<ChatMessage> {
     let mut replayed = super::message_context::system_messages_first(messages);
-    replayed.push(ChatMessage::plain("user", REPLAY_COMPACTION_INSTRUCTION));
+    replayed.push(ChatMessage::plain("user", REPLAY_INSTRUCTION.as_str()));
     replayed
 }
 
@@ -127,7 +104,7 @@ fn replay_fits_context(projection: &ProjectedRequest) -> bool {
     let required = projection
         .estimate
         .message_chars
-        .saturating_add(REPLAY_COMPACTION_INSTRUCTION.len())
+        .saturating_add(REPLAY_INSTRUCTION.len())
         .saturating_add(REPLAY_OUTPUT_RESERVE_CHARS);
     required <= limit
 }

@@ -191,6 +191,68 @@ impl Agent {
         }
     }
 
+    /// 生成一次会话摘要并补齐程序填充的部分。
+    ///
+    /// 模型只写九节里的八节，第 6 节的用户原话与末尾的回读指引由程序补上：
+    /// 这两处的价值都在于逐字准确，交给模型转述等于把唯一的保真部分也变成有损的。
+    ///
+    /// 参数:
+    /// - `request`: 压缩请求
+    /// - `projection`: 压缩前 provider 请求投影
+    /// - `on_event`: 压缩流式事件回调
+    ///
+    /// 返回:
+    /// - 装配完成的摘要正文
+    async fn create_compaction_summary(
+        &self,
+        request: &CompactionRequest,
+        projection: &ProjectedRequest,
+        on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
+    ) -> Result<String> {
+        let summary = self
+            .request_model_summary(request, projection, on_event)
+            .await?;
+        Ok(self.finalize_summary(request, &summary))
+    }
+
+    /// 把程序填充的小节与回读指引合进模型产出。
+    ///
+    /// 用户原话节的预算按摘要上限的四分之一切，并受绝对上限约束：
+    /// 小窗口下摘要本身就短，这一节不能反过来把正文挤掉。
+    ///
+    /// 参数:
+    /// - `request`: 压缩请求，提供被压缩轮次的用户原话
+    /// - `summary`: 模型产出的摘要正文
+    ///
+    /// 返回:
+    /// - 装配完成的摘要正文
+    fn finalize_summary(&self, request: &CompactionRequest, summary: &str) -> String {
+        let budget = crate::state::summary_char_limit(self.context_char_budget)
+            .saturating_div(4)
+            .min(super::compaction_schema::DEFAULT_USER_SECTION_BUDGET);
+        let user_section =
+            super::compaction_schema::user_messages_section(&request.compact_turns, budget);
+        let pointer = super::compaction_schema::transcript_pointer(
+            &self.state.session_id(),
+            self.evicted_context_lookup_available(),
+        );
+        super::compaction_schema::assemble(summary, &user_section, pointer.as_deref())
+    }
+
+    /// 判断被压缩轮次的回读工具当前是否可用。
+    ///
+    /// 记忆关闭或工具整体禁用时 search_evicted_context 不会注册，
+    /// 此时指向它只会让下一轮调用一个不存在的工具。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 工具可用时为真
+    fn evicted_context_lookup_available(&self) -> bool {
+        self.tools_enabled && self.config.memory_config().enabled
+    }
+
     /// 使用压缩模型生成一次会话摘要。
     ///
     /// 优先复用会话前缀：摘要请求原样回放本轮消息、只在末尾追加指令，
@@ -204,7 +266,7 @@ impl Agent {
     ///
     /// 返回:
     /// - 校验通过的摘要正文
-    async fn create_compaction_summary(
+    async fn request_model_summary(
         &self,
         request: &CompactionRequest,
         projection: &ProjectedRequest,

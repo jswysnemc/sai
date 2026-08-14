@@ -2,6 +2,7 @@ mod agent_state;
 mod compaction;
 mod compaction_model;
 mod compaction_replay;
+pub(crate) mod compaction_schema;
 mod context_projection;
 mod context_resources;
 mod conversation;
