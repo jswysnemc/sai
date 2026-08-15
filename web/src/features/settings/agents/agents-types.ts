@@ -14,8 +14,19 @@ export type AgentSkillOption = {
   description: string;
 };
 
+/** 一个可开关的内置提示词分段。 */
+export type PromptSectionOption = {
+  id: string;
+  label_en: string;
+  label_zh: string;
+  hint_en: string;
+  hint_zh: string;
+};
+
 /** GET /api/agent-options 响应体。 */
 export type AgentOptions = {
   tools: AgentToolOption[];
   skills: AgentSkillOption[];
+  /** 内置提示词分段清单，由后端给出 */
+  prompt_sections?: PromptSectionOption[];
 };

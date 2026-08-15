@@ -18,6 +18,7 @@ mod model_units;
 mod notification;
 mod paths;
 mod permission;
+mod prompt_sections;
 mod prompt_templates;
 mod provider;
 mod provider_keys;
@@ -38,6 +39,7 @@ pub use agent_presets::{ensure_surface_agent_defaults, seed_default_agent_profil
 pub use agent_tool_modes::{normalize_deferred_tools, DEFERRED_ALL_NON_BASE};
 #[allow(unused_imports)]
 pub use agents::*;
+pub use prompt_sections::{PromptSectionToggles, PROMPT_SECTIONS};
 pub use cli_tools::*;
 #[allow(unused_imports)]
 pub use git::*;

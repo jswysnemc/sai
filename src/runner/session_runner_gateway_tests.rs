@@ -27,6 +27,7 @@ fn gateway_channel_tool_survives_agent_runtime_whitelist() {
     let mut config = AppConfig::default();
     config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
         enabled_tools: vec!["read_file".to_string()],
+        exclusive: false,
         deferred_tools: Vec::new(),
         skills_full: Vec::new(),
         skills_named: Vec::new(),

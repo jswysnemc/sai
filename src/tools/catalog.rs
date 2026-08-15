@@ -25,8 +25,10 @@ pub(crate) struct ToolCatalogEntry {
 /// 返回:
 /// - 按工具名排序的目录条目列表
 pub(crate) fn tool_catalog(config: &AppConfig, paths: &SaiPaths) -> Vec<ToolCatalogEntry> {
-    // 1. 构建本地注册表，跳过 MCP 网络与子进程发现
-    let registry = builtin_registry_without_mcp(config, paths);
+    // 1. 按全开配置构建本地注册表，跳过 MCP 网络与子进程发现。
+    //    用实际配置枚举会让关闭插件的工具从配置界面上消失，于是无法为
+    //    某个 Agent 预先勾选它——而 Agent 白名单本就该独立于全局开关
+    let registry = builtin_registry_without_mcp(&catalog_config(config), paths);
     // 2. 为每个工具附加用途分组与摘要
     let mut entries = catalog_entries(registry);
     entries.extend([
@@ -55,6 +57,31 @@ pub(crate) fn mcp_tool_catalog(config: &AppConfig, paths: &SaiPaths) -> Vec<Tool
         .into_iter()
         .filter(|entry| entry.group == "mcp" && entry.name != "mcp_manager")
         .collect()
+}
+
+/// 构造一份插件全开的配置副本，仅用于枚举工具目录。
+///
+/// 参数:
+/// - `config`: 当前应用配置
+///
+/// 返回:
+/// - 所有插件开关置真的配置副本
+fn catalog_config(config: &AppConfig) -> AppConfig {
+    let mut catalog = config.clone();
+    catalog.plugins.archlinux.enabled = true;
+    catalog.plugins.man.enabled = true;
+    catalog.plugins.memes.enabled = true;
+    catalog.plugins.web.enabled = true;
+    catalog.plugins.web_images.enabled = true;
+    catalog.plugins.deep_diagnose.enabled = true;
+    catalog.plugins.image_generation.enabled = true;
+    catalog.plugins.knowledge_base.enabled = true;
+    catalog.plugins.package_advisor.enabled = true;
+    catalog.plugins.linux_game_compatibility.enabled = true;
+    catalog.plugins.diagnostics.enabled = true;
+    catalog.plugins.memory.enabled = true;
+    catalog.memory.enabled = true;
+    catalog
 }
 
 /// 将注册表转换为排序后的目录项。
@@ -133,5 +160,78 @@ mod tests {
         assert!(!entries
             .iter()
             .any(|entry| entry.name.starts_with("mcp_slow_server_")));
+    }
+
+
+    /// 构造一份关闭全部插件的配置。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 插件全关的配置
+    fn all_plugins_off() -> AppConfig {
+        let mut config = AppConfig::default();
+        config.plugins.archlinux.enabled = false;
+        config.plugins.man.enabled = false;
+        config.plugins.memes.enabled = false;
+        config.plugins.web.enabled = false;
+        config.plugins.knowledge_base.enabled = false;
+        config.plugins.memory.enabled = false;
+        config.memory.enabled = false;
+        config
+    }
+
+    /// 验证插件关闭时工具仍出现在目录里。
+    ///
+    /// 目录是给 Agent 勾选工具用的，按当前全局开关过滤会让关掉的插件
+    /// 在配置界面上彻底消失，于是没法为某个 Agent 单独启用它。
+    #[test]
+    fn disabled_plugins_still_appear_in_the_catalog() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(dir.path());
+
+        let names: Vec<String> = tool_catalog(&all_plugins_off(), &paths)
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect();
+
+        for expected in ["write_memory", "read_memory", "search_knowledge_base"] {
+            assert!(names.iter().any(|name| name == expected), "缺少 {expected}");
+        }
+    }
+
+    /// 验证委派类工具也在目录中。
+    ///
+    /// 这几个工具不经注册表注册，漏掉就无法在 Agent 里勾选。
+    #[test]
+    fn delegation_tools_are_listed() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(dir.path());
+
+        let names: Vec<String> = tool_catalog(&AppConfig::default(), &paths)
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect();
+
+        for expected in ["subagent", "todo", "ask_question"] {
+            assert!(names.iter().any(|name| name == expected), "缺少 {expected}");
+        }
+    }
+
+    /// 验证目录不含重复项。
+    #[test]
+    fn the_catalog_has_no_duplicates() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(dir.path());
+        let names: Vec<String> = tool_catalog(&AppConfig::default(), &paths)
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect();
+
+        let mut unique = names.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), names.len());
     }
 }

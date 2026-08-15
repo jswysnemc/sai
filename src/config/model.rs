@@ -82,6 +82,9 @@ pub struct AppConfig {
     /// 是否加载全局 / 项目 AGENT.md 等指令文件（可由 Agent 档案覆盖）
     #[serde(default = "default_load_instruction_files", skip_serializing)]
     pub load_instruction_files: bool,
+    /// 运行期生效的提示词分段开关，由 Agent 档案写入
+    #[serde(default)]
+    pub prompt_sections: super::prompt_sections::PromptSectionToggles,
 }
 
 #[derive(Debug, Clone, Serialize)]

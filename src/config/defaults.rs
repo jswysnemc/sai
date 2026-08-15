@@ -9,6 +9,7 @@ use crate::default_models::OPENCODE_PROVIDER_ID;
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
+            prompt_sections: Default::default(),
             active_provider: OPENCODE_PROVIDER_ID.to_string(),
             providers: ProviderConfig::default_templates(),
             agent: crate::config::AgentEngineConfig::default(),

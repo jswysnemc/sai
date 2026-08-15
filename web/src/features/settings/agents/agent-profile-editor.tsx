@@ -9,6 +9,7 @@ import { useI18n } from "../../i18n/use-i18n";
 import { EditorHeader } from "../editor-layout";
 import type { AgentOptions } from "./agents-types";
 import { AgentSkillPermissions } from "./agent-skill-permissions";
+import { AgentPromptSections } from "./agent-prompt-sections";
 import { AgentToolPermissions } from "./agent-tool-permissions";
 import { DEFERRED_ALL_NON_BASE } from "./agent-tool-mode-state";
 import { AgentRuntimeFields } from "./agent-runtime-fields";
@@ -163,15 +164,42 @@ export function AgentProfileEditor({ config, profile, options, onChange, onRemov
             />
             <small>{t("Keep only stable role constraints here. Conversation input still provides the specific task.", "只写长期稳定的角色约束，具体任务仍由会话输入提供。")}</small>
           </label>
+          <div className="settings-field full">
+            <span>{t("Built-in prompt sections", "内置提示词分段")}</span>
+            <AgentPromptSections
+              sections={profile.prompt_sections}
+              options={options.prompt_sections}
+              onChange={(sections) => onChange({ prompt_sections: sections })}
+            />
+            <small>{t("These are appended to the system prompt. Turn them all off with an empty prompt above to get a blank agent.", "这些内容会追加到系统提示词。全部关闭且上方提示词留空，即得到空白 Agent。")}</small>
+          </div>
         </div>
       )}
       {tab === "tools" && (
-        <AgentToolPermissions
-          tools={options.tools}
-          enabled={profile.enabled_tools}
-          deferred={profile.deferred_tools ?? []}
-          onChange={(enabledTools, deferredTools) => onChange({ enabled_tools: enabledTools, deferred_tools: deferredTools })}
-        />
+        <>
+          <label className="agent-tools-exclusive">
+            <input
+              type="checkbox"
+              checked={profile.tools_exclusive ?? false}
+              onChange={(event) => onChange({ tools_exclusive: event.target.checked })}
+            />
+            <span>
+              <strong>{t("Exclusive whitelist", "独占白名单")}</strong>
+              <small>
+                {t(
+                  "The list below is final: an empty list means no tools at all, and the subagent / todo / ask_question fallbacks are not added back.",
+                  "下面的列表就是最终结果：留空表示一个工具都不给，也不再补回 subagent / todo / ask_question 兜底工具。"
+                )}
+              </small>
+            </span>
+          </label>
+          <AgentToolPermissions
+            tools={options.tools}
+            enabled={profile.enabled_tools}
+            deferred={profile.deferred_tools ?? []}
+            onChange={(enabledTools, deferredTools) => onChange({ enabled_tools: enabledTools, deferred_tools: deferredTools })}
+          />
+        </>
       )}
       {tab === "skills" && (
         <AgentSkillPermissions

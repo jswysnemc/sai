@@ -33,7 +33,7 @@ pub(crate) fn build_base_system_prompt(
     }
 
     // 3. Skills 目录（渐进加载时仅 catalog）
-    if tools_enabled && config.skills.enabled {
+    if tools_enabled && config.skills.enabled && config.prompt_sections.skills_catalog {
         let progressive = !config.agent_deferred_tools().is_empty();
         let prompt = if progressive {
             tools::skills_catalog_prompt(config, paths)?
@@ -46,12 +46,14 @@ pub(crate) fn build_base_system_prompt(
         }
     }
 
-    // 4. 状态覆盖契约固定在系统前缀中，具体状态通过后续 user 标签增量更新
-    base_system_prompt.push_str("\n\n");
-    base_system_prompt.push_str(super::runtime_context::CONTEXT_STATE_CONTRACT);
+    // 4. 状态覆盖契约，具体状态通过后续 user 标签增量更新
+    if config.prompt_sections.state_contract {
+        base_system_prompt.push_str("\n\n");
+        base_system_prompt.push_str(super::runtime_context::CONTEXT_STATE_CONTRACT);
+    }
 
     // 5. 记忆使用契约；注入的索引只说明有哪些记忆，不说明何时该写新的
-    if tools_enabled && config.memory_config().enabled {
+    if tools_enabled && config.memory_config().enabled && config.prompt_sections.memory_contract {
         base_system_prompt.push_str("\n\n");
         base_system_prompt.push_str(crate::memory::file_store::memory_contract());
     }
@@ -64,7 +66,7 @@ pub(crate) fn build_base_system_prompt(
         base_system_prompt.push_str("\n\n");
         base_system_prompt.push_str(prompt);
     }
-    Ok(base_system_prompt)
+    Ok(base_system_prompt.trim().to_string())
 }
 
 #[cfg(test)]

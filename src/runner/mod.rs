@@ -7,7 +7,7 @@ mod events;
 mod ownership;
 mod session_runner;
 mod submission;
-mod submission_tools;
+pub(crate) mod submission_tools;
 mod turn_runner;
 
 use crate::paths::SaiPaths;

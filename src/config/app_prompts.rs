@@ -15,6 +15,9 @@ impl AppConfig {
     /// - 合并当前用户身份信息后的系统提示词
     pub fn system_prompt(&self, paths: &SaiPaths) -> Result<String> {
         let mut prompt = self.base_system_prompt(paths)?;
+        if !self.prompt_sections.user_identity {
+            return Ok(prompt);
+        }
         let user_identity = self.user_identity_prompt(paths)?;
         if !user_identity.trim().is_empty() {
             prompt.push_str("\n\n<current-user-profile>\n");
@@ -42,7 +45,11 @@ impl AppConfig {
         {
             return Ok(prompt.to_string());
         }
-        // 2. 兼容旧 system-prompt.md 文件，否则使用内置默认人设提示
+        // 2. 关闭内置人设后不再回退：空就是空，这是"0 提示词"能成立的前提
+        if !self.prompt_sections.builtin_persona {
+            return Ok(String::new());
+        }
+        // 3. 兼容旧 system-prompt.md 文件，否则使用内置默认人设提示
         let legacy = self.custom_system_prompt(paths)?;
         if !legacy.trim().is_empty() {
             return Ok(legacy);

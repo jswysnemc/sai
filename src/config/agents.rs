@@ -1,4 +1,5 @@
 use super::agent_presets::{builtin_agent_profiles, resolve_deferred_tools, resolve_enabled_tools};
+use super::PromptSectionToggles;
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_AGENT_ID: &str = "default";
@@ -22,6 +23,11 @@ pub enum AgentSurface {
 pub struct AgentRuntimeOverride {
     /// 允许使用的工具名称
     pub enabled_tools: Vec<String>,
+    /// 白名单是否为最终结果。
+    ///
+    /// 为真时空列表表示一个工具都不给，且不再补回交互兜底工具；
+    /// 为假时沿用旧语义，空列表表示不做收窄。
+    pub exclusive: bool,
     /// 需要模型调用 load 后才暴露的工具名称，必须是 `enabled_tools` 的子集
     pub deferred_tools: Vec<String>,
     /// 完整暴露的 skills
@@ -72,6 +78,17 @@ pub struct AgentProfile {
     /// 是否加载全局 / 项目 AGENT.md、AGENTS.md、CLAUDE.md 等指令文件
     #[serde(default = "default_true")]
     pub load_instruction_files: bool,
+    /// 工具白名单是否为最终结果。
+    ///
+    /// false（默认）：空列表表示继承预设或全量工具，与旧配置一致。
+    /// true：列表就是最终工具集，空列表即一个工具都不给。
+    /// 不复用空列表本身来表达"零工具"，是因为已有配置里存在空列表且
+    /// 依赖旧语义，翻转会让那些 Agent 静默失去全部工具。
+    #[serde(default)]
+    pub tools_exclusive: bool,
+    /// 系统提示词各内置分段的开关
+    #[serde(default)]
+    pub prompt_sections: PromptSectionToggles,
 }
 
 /// 旧版可由主 Agent 选择的子 Agent 档案，仅用于配置兼容迁移。
@@ -119,6 +136,8 @@ impl Default for AgentProfile {
             name: String::new(),
             description: String::new(),
             system_prompt: String::new(),
+            tools_exclusive: false,
+            prompt_sections: PromptSectionToggles::default(),
             enabled_tools: Vec::new(),
             deferred_tools: Vec::new(),
             skills_full: Vec::new(),
@@ -154,6 +173,8 @@ impl AgentProfile {
             model: profile.model,
             thinking_level: profile.thinking_level,
             register_to_main: profile.exposed,
+            tools_exclusive: false,
+            prompt_sections: PromptSectionToggles::default(),
             load_instruction_files: true,
         }
     }
@@ -325,9 +346,16 @@ pub fn apply_agent_override(
     };
     // 4. 内置档案的供应商、模型和思考等级为空时沿用全局选择；只有用户明确配置
     //    过档案，或使用自定义档案时，才允许档案固定值覆盖当前选择
+    // 分段开关先落到运行配置：后续提示词组装与人设回退都读它
+    config.prompt_sections = profile.prompt_sections.clone();
     if !profile.system_prompt.trim().is_empty() {
         config.system_prompt_file = None;
         config.system_prompt = Some(profile.system_prompt.clone());
+    } else if !profile.prompt_sections.builtin_persona {
+        // 关掉内置人设又没写自己的提示词，就是明确要空白；
+        // 这里必须写入空串并清掉文件路径，否则会一路回退到内置人设
+        config.system_prompt_file = None;
+        config.system_prompt = Some(String::new());
     }
     if profile_pins_model_selection(&profile) {
         if !profile.provider_id.trim().is_empty() {
@@ -352,7 +380,9 @@ pub fn apply_agent_override(
     let enabled_tools = resolve_enabled_tools(&profile);
     let deferred_tools = resolve_deferred_tools(&profile, &enabled_tools);
     config.load_instruction_files = profile.load_instruction_files;
-    config.agent_runtime = if enabled_tools.is_empty()
+    // 独占白名单必须落成覆盖：否则空列表会被当成"没有覆盖"，退回全量工具
+    config.agent_runtime = if !profile.tools_exclusive
+        && enabled_tools.is_empty()
         && deferred_tools.is_empty()
         && profile.skills_full.is_empty()
         && profile.skills_named.is_empty()
@@ -361,6 +391,7 @@ pub fn apply_agent_override(
     } else {
         Some(AgentRuntimeOverride {
             enabled_tools,
+            exclusive: profile.tools_exclusive,
             deferred_tools,
             skills_full: profile.skills_full,
             skills_named: profile.skills_named,
@@ -652,5 +683,112 @@ mod tests {
         assert_eq!(profile.name, "旧探索");
         assert_eq!(profile.thinking_level, "high");
         assert!(!profile.register_to_main);
+    }
+}
+
+#[cfg(test)]
+mod blank_agent_tests {
+    use super::*;
+    use crate::config::AppConfig;
+
+    /// 构造一个自定义 Agent 档案并挂进配置。
+    ///
+    /// 参数:
+    /// - `profile`: 待挂载的档案
+    ///
+    /// 返回:
+    /// - 已包含该档案的配置
+    fn config_with(profile: AgentProfile) -> AppConfig {
+        let mut config = AppConfig::default();
+        config.agents = vec![profile];
+        config
+    }
+
+    /// 构造一个最小可用的自定义档案。
+    ///
+    /// 参数:
+    /// - `id`: 档案标识
+    ///
+    /// 返回:
+    /// - 档案
+    fn profile(id: &str) -> AgentProfile {
+        AgentProfile {
+            id: id.to_string(),
+            name: id.to_string(),
+            ..AgentProfile::default()
+        }
+    }
+
+    /// 验证关闭内置人设且未写提示词时得到空白提示词。
+    ///
+    /// 这是"0 提示词 Agent"的核心：此前空提示词会被当成未设置，
+    /// 一路回退到内置人设，配置界面上怎么改都清不掉。
+    #[test]
+    fn a_blank_agent_produces_an_empty_base_prompt() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = crate::paths::SaiPaths::for_tests(dir.path());
+        let mut blank = profile("blank");
+        blank.prompt_sections = crate::config::PromptSectionToggles::all_disabled();
+
+        let config = apply_agent_override(config_with(blank), Some("blank"), AgentSurface::Cli).unwrap();
+
+        assert_eq!(config.base_system_prompt(&paths).unwrap(), "");
+        assert_eq!(config.system_prompt(&paths).unwrap(), "");
+    }
+
+    /// 验证自己写了提示词时不受内置人设开关影响。
+    #[test]
+    fn an_explicit_prompt_survives_with_the_builtin_persona_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = crate::paths::SaiPaths::for_tests(dir.path());
+        let mut custom = profile("custom");
+        custom.system_prompt = "只回答是或否".to_string();
+        custom.prompt_sections = crate::config::PromptSectionToggles::all_disabled();
+
+        let config = apply_agent_override(config_with(custom), Some("custom"), AgentSurface::Cli).unwrap();
+
+        assert_eq!(config.base_system_prompt(&paths).unwrap(), "只回答是或否");
+    }
+
+    /// 验证独占空白名单产生零工具覆盖。
+    ///
+    /// 空列表在旧语义下表示"全量"，这里必须落成一个明确的空覆盖，
+    /// 否则 Agent 会拿到全部工具。
+    #[test]
+    fn an_exclusive_empty_whitelist_yields_no_tools() {
+        let mut bare = profile("bare");
+        bare.tools_exclusive = true;
+
+        let config = apply_agent_override(config_with(bare), Some("bare"), AgentSurface::Cli).unwrap();
+
+        let runtime = config.agent_runtime.expect("独占白名单必须落成覆盖");
+        assert!(runtime.exclusive);
+        assert!(runtime.enabled_tools.is_empty());
+    }
+
+    /// 验证独占白名单只保留列出的工具。
+    #[test]
+    fn an_exclusive_whitelist_keeps_only_what_it_lists() {
+        let mut minimal = profile("minimal");
+        minimal.tools_exclusive = true;
+        minimal.enabled_tools = vec!["run_command".to_string(), "write_file".to_string()];
+
+        let config =
+            apply_agent_override(config_with(minimal), Some("minimal"), AgentSurface::Cli).unwrap();
+
+        let runtime = config.agent_runtime.expect("独占白名单必须落成覆盖");
+        assert_eq!(runtime.enabled_tools, vec!["run_command", "write_file"]);
+    }
+
+    /// 验证非独占的空白名单仍是旧语义。
+    ///
+    /// 已有配置里存在空列表且依赖"继承全量"，语义翻转会让它们静默失去工具。
+    #[test]
+    fn a_non_exclusive_empty_whitelist_keeps_the_legacy_meaning() {
+        let config =
+            apply_agent_override(config_with(profile("legacy")), Some("legacy"), AgentSurface::Cli)
+                .unwrap();
+
+        assert!(config.agent_runtime.is_none());
     }
 }

@@ -183,7 +183,24 @@ export type AgentProfileConfig = {
   thinking_level?: string;
   register_to_main?: boolean;
   load_instruction_files?: boolean;
+  /** 白名单是否为最终结果；为真时空列表表示不给任何工具 */
+  tools_exclusive?: boolean;
+  /** 系统提示词各内置分段的开关 */
+  prompt_sections?: PromptSectionToggles;
 };
+
+/** 系统提示词内置分段的开关。 */
+export type PromptSectionToggles = {
+  builtin_persona?: boolean;
+  user_identity?: boolean;
+  skills_catalog?: boolean;
+  state_contract?: boolean;
+  memory_contract?: boolean;
+  mode_reminder?: boolean;
+};
+
+/** 分段标识，与后端字段名一一对应。 */
+export type PromptSectionId = keyof PromptSectionToggles;
 
 export type AgentRuntimeProfile = {
   id: string;

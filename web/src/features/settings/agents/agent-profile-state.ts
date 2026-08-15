@@ -151,7 +151,9 @@ export function normalizeAgentProfile(
     model: profile.model ?? defaults.model ?? "",
     thinking_level: profile.thinking_level ?? defaults.thinking_level ?? "auto",
     register_to_main: profile.register_to_main ?? defaults.register_to_main ?? false,
-    load_instruction_files: profile.load_instruction_files ?? defaults.load_instruction_files ?? true
+    load_instruction_files: profile.load_instruction_files ?? defaults.load_instruction_files ?? true,
+    tools_exclusive: profile.tools_exclusive ?? defaults.tools_exclusive ?? false,
+    prompt_sections: profile.prompt_sections ?? defaults.prompt_sections
   };
 }
 

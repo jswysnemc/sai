@@ -569,5 +569,12 @@ pub enum ConfigCommand {
     Validate,
     Paths,
     #[command(hide = true)]
-    PromptSource,
+    PromptSource(PromptSourceArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct PromptSourceArgs {
+    /// 按指定 Agent 档案解析，留空则用当前入口默认档案
+    #[arg(long)]
+    pub agent: Option<String>,
 }

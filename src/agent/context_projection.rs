@@ -68,6 +68,7 @@ impl Agent {
             self.mode(),
             compaction_summary_context.as_deref(),
             &projected_history.messages,
+            self.config.prompt_sections.mode_reminder,
         )?;
         let goal_update = context_resources::context_resource_update(
             "goal",

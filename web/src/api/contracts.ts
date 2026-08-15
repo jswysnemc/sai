@@ -107,6 +107,8 @@ export type {
   GitConfig,
   AppConfig,
   AgentProfileConfig,
+  PromptSectionToggles,
+  PromptSectionId,
   AgentRuntimeProfile,
   AgentRuntimeProfilesResponse,
   UpdateAgentRuntimeRequest,

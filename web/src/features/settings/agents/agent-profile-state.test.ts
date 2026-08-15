@@ -28,7 +28,9 @@ describe("主 Agent 档案状态", () => {
       model: "",
       thinking_level: "auto",
       register_to_main: false,
-      load_instruction_files: true
+      load_instruction_files: true,
+      tools_exclusive: false,
+      prompt_sections: undefined
     });
   });
 
@@ -93,5 +95,28 @@ describe("主 Agent 档案状态", () => {
     expect(updated).toEqual([{ id: "review", name: "代码审查" }, { id: "writer", name: "写作" }]);
     expect(removed).toEqual([{ id: "review", name: "代码审查" }]);
     expect(profiles[0].name).toBe("审查");
+  });
+});
+
+describe("normalizeAgentProfile 对新增开关的保留", () => {
+  it("保留独占白名单开关", () => {
+    const normalized = normalizeAgentProfile({ id: "bare", tools_exclusive: true });
+
+    expect(normalized.tools_exclusive).toBe(true);
+  });
+
+  it("保留提示词分段开关", () => {
+    // 归一化丢字段是静默的：界面上改了、保存了，回来还是原样
+    const normalized = normalizeAgentProfile({
+      id: "blank",
+      prompt_sections: { builtin_persona: false, state_contract: false }
+    });
+
+    expect(normalized.prompt_sections?.builtin_persona).toBe(false);
+    expect(normalized.prompt_sections?.state_contract).toBe(false);
+  });
+
+  it("未设置时独占白名单默认关闭", () => {
+    expect(normalizeAgentProfile({ id: "legacy" }).tools_exclusive).toBe(false);
   });
 });

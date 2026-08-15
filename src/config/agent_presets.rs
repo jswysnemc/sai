@@ -157,6 +157,10 @@ pub(super) fn builtin_agent_profiles() -> [AgentProfile; 5] {
 /// 返回:
 /// - 空向量表示全量工具；非空为白名单
 pub(super) fn resolve_enabled_tools(profile: &AgentProfile) -> Vec<String> {
+    // 独占白名单不套内置预设：写什么就是什么，包括什么都不写
+    if profile.tools_exclusive {
+        return expand_legacy_enabled_tools(profile.enabled_tools.clone(), false);
+    }
     let tools = if !profile.enabled_tools.is_empty() {
         profile.enabled_tools.clone()
     } else {
@@ -168,7 +172,7 @@ pub(super) fn resolve_enabled_tools(profile: &AgentProfile) -> Vec<String> {
             _ => Vec::new(),
         }
     };
-    expand_legacy_enabled_tools(tools)
+    expand_legacy_enabled_tools(tools, true)
 }
 
 /// 解析 Agent 档案中需要 load 才暴露的工具列表。
@@ -210,10 +214,11 @@ fn deferred_from_whitelist(tools: &[&str], keep_visible: &[&str]) -> Vec<String>
 ///
 /// 参数:
 /// - `tools`: 配置中的白名单
+/// - `add_conveniences`: 是否补上惯例搭配的工具
 ///
 /// 返回:
 /// - 与当前 ToolRegistry 名称对齐后的白名单
-fn expand_legacy_enabled_tools(mut tools: Vec<String>) -> Vec<String> {
+fn expand_legacy_enabled_tools(mut tools: Vec<String>, add_conveniences: bool) -> Vec<String> {
     if tools.is_empty() {
         return tools;
     }
@@ -232,8 +237,9 @@ fn expand_legacy_enabled_tools(mut tools: Vec<String>) -> Vec<String> {
     if has(&tools, "apply_patch") || has(&tools, "edit_file") {
         push_if_missing(&mut tools, "str_replace");
     }
-    // 3. 具备 write_file 的工程 Agent 默认补上 str_replace
-    if has(&tools, "write_file") {
+    // 3. 具备 write_file 的工程 Agent 默认补上 str_replace；
+    //    独占白名单要的是精确控制，这条便利补充会让"两个工具"变成三个
+    if add_conveniences && has(&tools, "write_file") {
         push_if_missing(&mut tools, "str_replace");
     }
     // 4. 网页读取、天气、汇率、DeepSeek、手册与计算器旧名映射到当前注册名

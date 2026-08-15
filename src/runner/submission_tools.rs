@@ -22,19 +22,19 @@ use anyhow::Result;
 /// - `source`: submission 来源，决定兜底保留哪些交互工具
 ///
 /// 返回:
-/// - 收窄后的注册表；白名单为空时与入参等价
+/// - 收窄后的注册表；非独占模式下白名单为空时与入参等价
 pub(crate) fn apply_enabled_tools_filter(
     registry: ToolRegistry,
     config: &AppConfig,
     source: SubmissionSource,
 ) -> Result<ToolRegistry> {
-    let Some(runtime) = config
-        .agent_runtime
-        .as_ref()
-        .filter(|runtime| !runtime.enabled_tools.is_empty())
-    else {
+    let Some(runtime) = config.agent_runtime.as_ref() else {
         return Ok(registry);
     };
+    // 非独占模式下空白名单沿用旧语义：不做收窄
+    if runtime.enabled_tools.is_empty() && !runtime.exclusive {
+        return Ok(registry);
+    }
     // 1. 白名单收窄：只复制档案允许的工具
     let allowed = runtime
         .enabled_tools
@@ -42,7 +42,11 @@ pub(crate) fn apply_enabled_tools_filter(
         .map(String::as_str)
         .collect::<Vec<_>>();
     let mut filtered = registry.clone_filtered(&allowed);
-    // 2. 交互工具兜底：按来源补回不在白名单里也必须保留的工具
+    // 2. 交互工具兜底：按来源补回不在白名单里也必须保留的工具。
+    //    独占白名单跳过这一步，否则"零工具"仍会带着三个交互工具
+    if runtime.exclusive {
+        return Ok(filtered);
+    }
     let required = match source {
         SubmissionSource::Repl | SubmissionSource::Web => &["subagent", "todo", "ask_question"][..],
         SubmissionSource::Gateway => &["cron", "send_channel_message"][..],

@@ -20,10 +20,42 @@ struct SkillOption {
     description: String,
 }
 
+/// 一个可开关的内置提示词分段。
+#[derive(Serialize)]
+struct PromptSectionOption {
+    id: &'static str,
+    label_en: &'static str,
+    label_zh: &'static str,
+    hint_en: &'static str,
+    hint_zh: &'static str,
+}
+
 #[derive(Serialize)]
 struct AgentOptionsResponse {
     tools: Vec<ToolOption>,
     skills: Vec<SkillOption>,
+    /// 内置提示词分段清单；由后端给出，避免前端另抄一份而漏掉新分段
+    prompt_sections: Vec<PromptSectionOption>,
+}
+
+/// 返回内置提示词分段清单。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 与 PromptSectionToggles 字段一一对应的分段元信息
+fn prompt_section_options() -> Vec<PromptSectionOption> {
+    crate::config::PROMPT_SECTIONS
+        .iter()
+        .map(|section| PromptSectionOption {
+            id: section.id,
+            label_en: section.label_en,
+            label_zh: section.label_zh,
+            hint_en: section.hint_en,
+            hint_zh: section.hint_zh,
+        })
+        .collect()
 }
 
 /// 返回 Agent 配置可选项路由。
@@ -66,6 +98,7 @@ async fn list(State(state): State<WebAppState>) -> Json<AgentOptionsResponse> {
     Json(AgentOptionsResponse {
         tools: tool_options,
         skills: skill_options,
+        prompt_sections: prompt_section_options(),
     })
 }
 
@@ -82,6 +115,7 @@ async fn list_mcp(State(state): State<WebAppState>) -> Json<AgentOptionsResponse
         return Json(AgentOptionsResponse {
             tools: Vec::new(),
             skills: Vec::new(),
+            prompt_sections: Vec::new(),
         });
     }
     let paths = state.paths.clone();
@@ -96,6 +130,7 @@ async fn list_mcp(State(state): State<WebAppState>) -> Json<AgentOptionsResponse
     Json(AgentOptionsResponse {
         tools: tool_options,
         skills: Vec::new(),
+        prompt_sections: Vec::new(),
     })
 }
 

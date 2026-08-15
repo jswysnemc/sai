@@ -56,6 +56,7 @@ fn empty_enabled_tools_keeps_registry_across_cli_surfaces() {
     let mut config = AppConfig::default();
     config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
         enabled_tools: Vec::new(),
+        exclusive: false,
         deferred_tools: vec![crate::config::DEFERRED_ALL_NON_BASE.to_string()],
         skills_full: Vec::new(),
         skills_named: Vec::new(),
@@ -102,6 +103,7 @@ fn enabled_tools_whitelist_filters_out_disabled_tools() {
     let mut config = AppConfig::default();
     config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
         enabled_tools: vec!["read_file".to_string()],
+        exclusive: false,
         deferred_tools: Vec::new(),
         skills_full: Vec::new(),
         skills_named: Vec::new(),

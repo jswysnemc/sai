@@ -10,6 +10,7 @@ fn new_agent_restores_persisted_loaded_tools() {
     let mut config = AppConfig::default();
     config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
         enabled_tools: Vec::new(),
+        exclusive: false,
         deferred_tools: vec![crate::config::DEFERRED_ALL_NON_BASE.to_string()],
         skills_full: Vec::new(),
         skills_named: Vec::new(),
@@ -46,6 +47,7 @@ fn switch_mode_preserves_persisted_loaded_tools() {
     let mut config = AppConfig::default();
     config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
         enabled_tools: Vec::new(),
+        exclusive: false,
         deferred_tools: vec![crate::config::DEFERRED_ALL_NON_BASE.to_string()],
         skills_full: Vec::new(),
         skills_named: Vec::new(),
@@ -226,6 +228,7 @@ fn reload_keeps_loader_for_visible_skills() {
     // 没有延迟工具，只有仅暴露名称的 skill
     config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
         enabled_tools: Vec::new(),
+        exclusive: false,
         deferred_tools: Vec::new(),
         skills_full: Vec::new(),
         skills_named: vec!["named-skill".to_string()],

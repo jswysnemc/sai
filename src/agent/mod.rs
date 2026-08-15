@@ -23,7 +23,7 @@ mod model_context;
 mod recovery;
 pub(crate) mod repeat_guard;
 mod runtime_context;
-mod system_prompt;
+pub(crate) mod system_prompt;
 mod tool_attachments;
 mod tool_execution;
 mod tool_gate;

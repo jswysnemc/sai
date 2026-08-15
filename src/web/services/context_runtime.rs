@@ -78,6 +78,7 @@ pub(super) fn project_context_runtime(
         mode,
         (!compaction_summary.is_empty()).then_some(compaction_summary.as_str()),
         &projected_history.messages,
+        config.prompt_sections.mode_reminder,
     )?;
 
     // 3. 复用真实请求的结构化记忆召回路径，不强化旧命中
