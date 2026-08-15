@@ -100,7 +100,7 @@ describe("主 Agent 档案状态", () => {
 
 describe("normalizeAgentProfile 对新增开关的保留", () => {
   it("保留独占白名单开关", () => {
-    const normalized = normalizeAgentProfile({ id: "bare", tools_exclusive: true });
+    const normalized = normalizeAgentProfile({ id: "bare", name: "空白", tools_exclusive: true });
 
     expect(normalized.tools_exclusive).toBe(true);
   });
@@ -109,6 +109,7 @@ describe("normalizeAgentProfile 对新增开关的保留", () => {
     // 归一化丢字段是静默的：界面上改了、保存了，回来还是原样
     const normalized = normalizeAgentProfile({
       id: "blank",
+      name: "空白",
       prompt_sections: { builtin_persona: false, state_contract: false }
     });
 
@@ -117,6 +118,6 @@ describe("normalizeAgentProfile 对新增开关的保留", () => {
   });
 
   it("未设置时独占白名单默认关闭", () => {
-    expect(normalizeAgentProfile({ id: "legacy" }).tools_exclusive).toBe(false);
+    expect(normalizeAgentProfile({ id: "legacy", name: "旧档案" }).tools_exclusive).toBe(false);
   });
 });

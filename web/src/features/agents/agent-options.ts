@@ -38,7 +38,9 @@ export function buildDefaultAgent(options: AgentOptions, locale: Locale = "zh-CN
     model: "",
     thinking_level: "auto",
     register_to_main: false,
-    load_instruction_files: true
+    load_instruction_files: true,
+    // 默认 Agent 继承全局配置，白名单不是最终结果
+    tools_exclusive: false
   };
 }
 
