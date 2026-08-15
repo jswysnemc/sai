@@ -233,3 +233,137 @@ fn scope_label(scope: MemoryScope) -> &'static str {
         MemoryScope::Project => "project",
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::memory::file_store::{Frontmatter, MemoryEntry, MemoryType};
+
+    /// 构造记忆入口与工作区路径。
+    ///
+    /// 参数:
+    /// - `root`: 临时根目录
+    ///
+    /// 返回:
+    /// - （记忆入口，工作区路径）
+    fn setup(root: &Path) -> (MemoryStore, PathBuf) {
+        let paths = SaiPaths::for_tests(root);
+        let store = MemoryStore::new(&AppConfig::default(), &paths);
+        (store, root.join("project"))
+    }
+
+    /// 写入一条记忆。
+    ///
+    /// 参数:
+    /// - `store`: 记忆入口
+    /// - `workspace`: 工作区路径
+    /// - `name`: 标识
+    /// - `hook`: 索引提示
+    ///
+    /// 返回:
+    /// - 无
+    fn save(store: &MemoryStore, workspace: &Path, name: &str, hook: &str) {
+        store
+            .notes(Some(workspace))
+            .save(
+                MemoryScope::Project,
+                &MemoryEntry {
+                    front: Frontmatter {
+                        name: name.to_string(),
+                        description: format!("{name} 的摘要"),
+                        memory_type: MemoryType::Feedback,
+                    },
+                    body: "正文".to_string(),
+                },
+                hook,
+            )
+            .unwrap();
+    }
+
+    /// 验证写入的记忆出现在注入文本里。
+    ///
+    /// 这条锁的是接线：写入走文件、召回走索引，两者中间隔着一次索引更新，
+    /// 少了那一步记忆写进去了也召不回来。
+    #[test]
+    fn a_saved_memory_shows_up_in_the_injected_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, workspace) = setup(dir.path());
+        save(&store, &workspace, "zh-writing", "中文书写规范");
+
+        let injected = store
+            .recall_for_turn("任意输入", Some(&workspace.display().to_string()))
+            .unwrap()
+            .unwrap();
+
+        assert!(injected.contains("中文书写规范"));
+    }
+
+    /// 验证注入不按当前输入筛选。
+    ///
+    /// 全量注入是这套方案与相关性检索的根本差别：输入与记忆毫不相干时，
+    /// 那条记忆同样必须出现，否则就退回了「明明记过却没生效」的旧行为。
+    #[test]
+    fn the_index_is_injected_regardless_of_the_input() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, workspace) = setup(dir.path());
+        save(&store, &workspace, "pnpm-only", "包管理器选择");
+
+        let injected = store
+            .recall_for_turn("今天天气怎么样", Some(&workspace.display().to_string()))
+            .unwrap()
+            .unwrap();
+
+        assert!(injected.contains("包管理器选择"));
+    }
+
+    /// 验证没有任何记忆时不产生注入。
+    #[test]
+    fn nothing_is_injected_without_memories() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, workspace) = setup(dir.path());
+
+        let injected = store
+            .recall_for_turn("任意", Some(&workspace.display().to_string()))
+            .unwrap();
+
+        assert!(injected.is_none());
+    }
+
+    /// 验证关闭注入开关后不再注入。
+    #[test]
+    fn the_injection_switch_is_honored() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(dir.path());
+        let mut config = AppConfig::default();
+        config.plugins.memory.association_enabled = false;
+        let store = MemoryStore::new(&config, &paths);
+        let workspace = dir.path().join("project");
+        save(&store, &workspace, "a", "提示");
+
+        assert!(store
+            .recall_for_turn("任意", Some(&workspace.display().to_string()))
+            .unwrap()
+            .is_none());
+    }
+
+    /// 验证压缩留档后能按关键词回读。
+    ///
+    /// 摘要末尾那句回读指引依赖这条链路；此前它从未被写入过，指引指向的是
+    /// 一个永远为空的库。
+    #[test]
+    fn evicted_turns_can_be_searched_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, _) = setup(dir.path());
+        store
+            .remember_evicted_turns(&[EvictedTurn {
+                timestamp: "2026-01-01T00:00:00Z".to_string(),
+                role: "user".to_string(),
+                content: "把压缩改成前缀回放以复用供应商缓存".to_string(),
+            }])
+            .unwrap();
+
+        let found = store.search_evicted_context("前缀回放", 5).unwrap();
+
+        assert_eq!(found["results"].as_array().unwrap().len(), 1);
+    }
+}

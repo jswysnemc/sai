@@ -66,3 +66,59 @@ pub(crate) fn build_base_system_prompt(
     }
     Ok(base_system_prompt)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 构造一份指向临时目录的配置与路径。
+    ///
+    /// 参数:
+    /// - `root`: 临时根目录
+    ///
+    /// 返回:
+    /// - （配置，路径集合）
+    fn setup(root: &std::path::Path) -> (AppConfig, SaiPaths) {
+        (AppConfig::default(), SaiPaths::for_tests(root))
+    }
+
+    /// 验证记忆启用时系统提示词带上使用契约。
+    ///
+    /// 契约与工具注册是两处独立的开关，只接对一处就会出现「工具在但模型
+    /// 不知道何时该用」或反过来。这条测试锁的是接线本身。
+    #[test]
+    fn the_memory_contract_is_injected_when_memory_is_on() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, paths) = setup(dir.path());
+
+        let prompt = build_base_system_prompt(&config, &paths, true, None).unwrap();
+
+        assert!(prompt.contains("write_memory") || prompt.contains("read_memory"));
+    }
+
+    /// 验证记忆关闭时不注入契约。
+    ///
+    /// 工具没注册却讲一堆用法，只会诱导模型调用不存在的工具。
+    #[test]
+    fn no_memory_contract_when_memory_is_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut config, paths) = setup(dir.path());
+        config.plugins.memory.enabled = false;
+        config.memory.enabled = false;
+
+        let prompt = build_base_system_prompt(&config, &paths, true, None).unwrap();
+
+        assert!(!prompt.contains("read_memory"));
+    }
+
+    /// 验证禁用工具时同样不注入契约。
+    #[test]
+    fn no_memory_contract_without_tools() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, paths) = setup(dir.path());
+
+        let prompt = build_base_system_prompt(&config, &paths, false, None).unwrap();
+
+        assert!(!prompt.contains("read_memory"));
+    }
+}
