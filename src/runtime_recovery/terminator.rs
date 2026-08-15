@@ -44,6 +44,8 @@ fn terminate_platform_process(pid: u32, pgid: Option<i32>, force: bool) -> Resul
     }
     #[cfg(windows)]
     {
+        // taskkill /T 按进程树终止，Windows 没有进程组的概念
+        let _ = pgid;
         let mut command = std::process::Command::new("taskkill");
         command.arg("/PID").arg(pid.to_string()).arg("/T");
         if force {

@@ -224,33 +224,19 @@ fn executable_in_path(name: &str) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
-/// 判断程序是否为 PowerShell。
+/// 判断编辑器命令是否按 PowerShell 语法拼接。
+///
+/// 与 script_args 共用同一判断：参数按 PowerShell 传、脚本却按 cmd 语法引用，
+/// 带空格的路径会就此断成两段。
 ///
 /// 参数:
 /// - `program`: Shell 程序
 ///
 /// 返回:
-/// - 是否为 PowerShell
+/// - 是否按 PowerShell 语法拼接
 #[cfg(windows)]
 fn is_powershell(program: &OsString) -> bool {
-    use super::shell_selection::{shell_flavor, ShellFlavor};
-    shell_flavor(program) == ShellFlavor::PowerShell
-}
-
-/// 返回程序文件名的小写形式。
-///
-/// 参数:
-/// - `program`: 程序路径或名称
-///
-/// 返回:
-/// - 小写文件名
-#[cfg(windows)]
-fn program_name(program: &OsString) -> String {
-    Path::new(program)
-        .file_name()
-        .unwrap_or(program.as_os_str())
-        .to_string_lossy()
-        .to_ascii_lowercase()
+    super::shell_selection::shell_flavor(program).uses_powershell_syntax()
 }
 
 /// 将路径转换为 PowerShell 单引号字符串。

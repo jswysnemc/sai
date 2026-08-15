@@ -1,6 +1,8 @@
 use crate::config::{AppConfig, NotificationConfig};
 use anyhow::Result;
 use std::io::{Cursor, Write};
+// Windows 没有对应的通知命令行工具，那条分支不会用到 Command
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::process::Command;
 use std::thread;
 use std::time::Duration;

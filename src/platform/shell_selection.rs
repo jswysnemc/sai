@@ -12,12 +12,31 @@ pub(crate) enum ShellFlavor {
     PowerShell,
     /// POSIX 兼容 Shell
     Posix,
+    /// 程序名无法对应到已知风格
+    Unknown,
+}
+
+impl ShellFlavor {
+    /// 判断执行脚本时是否套用 PowerShell 语法。
+    ///
+    /// 未识别的程序也归入此类：Windows 上默认选出来的 Shell 就是 PowerShell，
+    /// 而误按 cmd 语法拼接会让稍复杂的脚本静默地以错误方式执行。此处必须下注，
+    /// 与交互式启动不同。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 是否套用 PowerShell 语法
+    pub(crate) fn uses_powershell_syntax(self) -> bool {
+        matches!(self, Self::PowerShell | Self::Unknown)
+    }
 }
 
 /// 按程序路径判断 Shell 风格。
 ///
-/// 无法识别时按 PowerShell 处理：Windows 上选出来的默认 Shell 就是它，
-/// 而误按 cmd 处理会让稍复杂的脚本静默地以错误语法执行。
+/// 认不出来就如实返回 `Unknown`，不替调用方猜：执行脚本时必须选一种语法，
+/// 交互式启动时却不必附加任何参数，两者对未知程序的正确处理并不相同。
 ///
 /// 参数:
 /// - `program`: Shell 程序路径或名称
@@ -27,10 +46,11 @@ pub(crate) enum ShellFlavor {
 pub(crate) fn shell_flavor(program: &OsStr) -> ShellFlavor {
     match program_name(program).as_str() {
         "cmd" | "cmd.exe" => ShellFlavor::Cmd,
+        "pwsh" | "pwsh.exe" | "powershell" | "powershell.exe" => ShellFlavor::PowerShell,
         "sh" | "sh.exe" | "bash" | "bash.exe" | "zsh" | "zsh.exe" | "fish" | "fish.exe" => {
             ShellFlavor::Posix
         }
-        _ => ShellFlavor::PowerShell,
+        _ => ShellFlavor::Unknown,
     }
 }
 
@@ -50,16 +70,17 @@ pub(crate) fn script_args(flavor: ShellFlavor, script: &str) -> Vec<OsString> {
             OsString::from("/C"),
             OsString::from(script),
         ],
+        ShellFlavor::Posix => vec![OsString::from("-lc"), OsString::from(script)],
         // 关掉横幅、配置文件与交互提示：钩子与工具调用都在非交互场景下运行，
-        // 加载用户 profile 既慢又可能因 profile 报错让脚本整体失败
-        ShellFlavor::PowerShell => vec![
+        // 加载用户 profile 既慢又可能因 profile 报错让脚本整体失败。
+        // Unknown 一并落这里，理由见 uses_powershell_syntax
+        ShellFlavor::PowerShell | ShellFlavor::Unknown => vec![
             OsString::from("-NoLogo"),
             OsString::from("-NoProfile"),
             OsString::from("-NonInteractive"),
             OsString::from("-Command"),
             OsString::from(script),
         ],
-        ShellFlavor::Posix => vec![OsString::from("-lc"), OsString::from(script)],
     }
 }
 
@@ -126,6 +147,10 @@ pub(super) fn select_windows_interactive_shell(
 }
 
 /// 返回 Windows 交互式 Shell 的启动参数。
+///
+/// 只有确认是 PowerShell 才附加参数。交互式启动不需要猜：不带参数对任何 Shell
+/// 都能起来，而把 -NoLogo 传给一个不认识它的程序会让终端直接起不来。用户配置
+/// 的 nu、elvish 等 Shell 正是走到这里，拿启动失败换一行横幅并不划算。
 ///
 /// 参数:
 /// - `program`: 已选中的 Shell 程序
@@ -226,15 +251,34 @@ mod tests {
         assert_eq!(shell_flavor(OsStr::new("zsh.exe")), ShellFlavor::Posix);
     }
 
-    /// 验证无法识别的程序按 PowerShell 处理。
+    /// 验证无法识别的程序如实归为未知。
+    #[test]
+    fn an_unknown_program_is_reported_as_unknown() {
+        assert_eq!(
+            shell_flavor(OsStr::new("some-custom-shell.exe")),
+            ShellFlavor::Unknown
+        );
+    }
+
+    /// 验证未知程序执行脚本时仍按 PowerShell 语法。
     ///
     /// 误判成 cmd 会让脚本以错误语法执行，而且不报错。
     #[test]
-    fn an_unknown_program_defaults_to_powershell() {
+    fn an_unknown_program_still_runs_scripts_as_powershell() {
+        assert!(ShellFlavor::Unknown.uses_powershell_syntax());
         assert_eq!(
-            shell_flavor(OsStr::new("some-custom-shell.exe")),
-            ShellFlavor::PowerShell
+            script_args(ShellFlavor::Unknown, "echo sai"),
+            script_args(ShellFlavor::PowerShell, "echo sai")
         );
+    }
+
+    /// 验证交互式启动未知 Shell 时不附加任何参数。
+    ///
+    /// 用户配置的 nu、elvish 等不认识 -NoLogo，传过去终端根本起不来。
+    #[test]
+    fn an_unknown_interactive_shell_gets_no_arguments() {
+        assert!(windows_interactive_shell_args(OsStr::new("nu.exe")).is_empty());
+        assert!(windows_interactive_shell_args(OsStr::new("custom-shell")).is_empty());
     }
 
     /// 验证每种风格的参数末项都是脚本本身。

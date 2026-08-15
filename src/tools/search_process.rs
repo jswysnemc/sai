@@ -83,17 +83,19 @@ mod tests {
     /// 验证超时确实终止子进程并交回已读到的部分输出。
     ///
     /// 只测格式化函数无法覆盖 spawn / 读取 / kill 这条真实路径。
-    /// 注意 kill 只终止直接子进程：本例经 sh 启动，其内部 sleep 会被
-    /// 重新挂到 init 下；ripgrep 不派生子进程，实际使用中不存在这一问题。
     #[tokio::test]
     async fn timeout_kills_child_and_returns_partial_output() {
         // 直接把脚本作为 sh 的参数传入，不落地成可执行文件：
         // 并发测试里同时发生的 fork 会继承尚未关闭的写句柄，
-        // 内核据此在 exec 时报 ETXTBSY，导致本用例偶发失败
+        // 内核据此在 exec 时报 ETXTBSY，导致本用例偶发失败。
+        // 末尾的 exec 让 sh 就地变成 sleep，kill 才能真正杀干净：
+        // 否则残留的孙进程仍握着管道写端，Windows 上负责阻塞读取的
+        // 线程要等它自己退出，runtime 析构会白等满 300 秒。
+        // ripgrep 同样不派生子进程，这也更贴近实际形态。
         let mut command = Command::new("sh");
         command
             .arg("-c")
-            .arg("echo 'src/a.rs:1:early hit'; sleep 300")
+            .arg("echo 'src/a.rs:1:early hit'; exec sleep 300")
             .stdin(Stdio::null());
 
         let started = std::time::Instant::now();

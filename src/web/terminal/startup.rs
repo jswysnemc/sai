@@ -73,13 +73,16 @@ mod tests {
     }
 
     /// 验证用户配置的 Shell 会成为 PTY 启动程序。
+    ///
+    /// 只断言首项：Windows 会按 Shell 风格追加启动参数，把整条 argv 一起
+    /// 断言等于把平台相关的参数也钉死在这里。
     #[test]
     fn configured_shell_uses_requested_program() {
         let command = terminal_command("custom-shell");
 
         assert_eq!(
-            command.get_argv(),
-            &vec![std::ffi::OsString::from("custom-shell")]
+            command.get_argv().first(),
+            Some(&std::ffi::OsString::from("custom-shell"))
         );
     }
 }
