@@ -259,6 +259,7 @@ mod tests {
                 arguments: r#"{"command":"printf long"}"#.to_string(),
                 status: "completed".to_string(),
                 output: output.to_string(),
+                reasoning: None,
                 ok: Some(true),
                 error: None,
                 result_ref: result_ref.map(str::to_string),

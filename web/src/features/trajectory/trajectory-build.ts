@@ -290,6 +290,7 @@ function toolRecord(
       input: tool.arguments,
       inputIsJson: true,
       output: tool.output,
+      reasoning: tool.reasoning ?? undefined,
       error: tool.error ?? undefined,
       originalChars: tool.original_chars ?? null,
       resultRef: tool.result_ref ?? null,

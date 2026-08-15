@@ -26,6 +26,9 @@ pub struct TimelineToolEntry {
     pub arguments: String,
     pub status: String,
     pub output: String,
+    /// 决定这次调用的模型思考；同一子轮的多次调用共享同一份
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
     pub ok: Option<bool>,
     pub error: Option<String>,
     pub result_ref: Option<String>,
@@ -165,6 +168,10 @@ impl StateStore {
                                 .as_ref()
                                 .map(|result| result.result_preview.clone())
                                 .unwrap_or_default(),
+                            reasoning: exchange
+                                .call
+                                .assistant_reasoning
+                                .filter(|value| !value.trim().is_empty()),
                             ok: exchange.result.as_ref().map(|result| result.ok),
                             error: exchange
                                 .result

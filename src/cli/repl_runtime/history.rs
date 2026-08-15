@@ -208,6 +208,7 @@ mod tests {
                 arguments: "{\"path\":\"README.md\"}".to_string(),
                 status: "completed".to_string(),
                 output: "内容".to_string(),
+                reasoning: None,
                 ok: Some(true),
                 error: None,
                 result_ref: None,

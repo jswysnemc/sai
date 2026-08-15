@@ -349,7 +349,20 @@ function historyTurnParts(turn: SessionTimelineTurn): LiveMessagePart[] {
     const sequenceOrder = (left.seq ?? Number.MAX_SAFE_INTEGER) - (right.seq ?? Number.MAX_SAFE_INTEGER);
     return sequenceOrder || left.created_at.localeCompare(right.created_at);
   });
+  // 同一 assistant_round 的并行调用共享一份思考，只在该子轮首个工具前还原一次
+  let lastReasoningRound: number | null = null;
   for (const tool of tools) {
+    const round = tool.assistant_round ?? 0;
+    if (tool.reasoning && round !== lastReasoningRound) {
+      parts.push({
+        id: `${turn.turn_id}-round-${round}-reasoning`,
+        type: "reasoning",
+        source: tool.reasoning,
+        startedAt: tool.created_at,
+        endedAt: tool.created_at
+      });
+      lastReasoningRound = round;
+    }
     if (tool.permission) {
       parts.push({
         id: `${turn.turn_id}-${tool.id}-permission`,

@@ -56,6 +56,8 @@ export type TimelineToolEntry = {
   arguments: string;
   status: "running" | "completed" | "failed";
   output: string;
+  /** 决定这次调用的模型思考；同一 assistant_round 的多次调用共享同一份 */
+  reasoning?: string | null;
   ok?: boolean | null;
   error?: string | null;
   result_ref?: string | null;
