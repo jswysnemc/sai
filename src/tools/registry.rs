@@ -339,7 +339,7 @@ impl ToolRegistry {
 
     /// 判断模型给出的工具名能否解析到已注册工具。
     ///
-    /// 与 `contains` 的区别是先还原协议别名，模型使用 `apply_patch` 等别名时同样成立。
+    /// 与 `contains` 的区别是先还原协议别名。
     ///
     /// 参数:
     /// - `name`: 模型给出的工具名
@@ -416,15 +416,7 @@ impl ToolRegistry {
     /// 返回:
     /// - 仅包含允许工具的新注册表
     pub fn clone_filtered(&self, allowed: &[&str]) -> ToolRegistry {
-        let wanted = allowed
-            .iter()
-            .copied()
-            .chain(
-                allowed
-                    .iter()
-                    .flat_map(|name| legacy_tool_aliases(name).iter().copied()),
-            )
-            .collect::<BTreeSet<_>>();
+        let wanted = allowed.iter().copied().collect::<BTreeSet<_>>();
         let mut registry = ToolRegistry::new();
         // 1. 按来源注册顺序复制，避免过滤后的工具数组因白名单顺序变化而重排
         for tool in self.ordered_tools() {
@@ -642,41 +634,12 @@ fn value_kind(value: &Value) -> &'static str {
 }
 
 /// 将协议层工具别名还原为本地注册名称。
+///
+/// 只处理协议前缀差异；工具改名不在此列，模型拿到的就是当前名。
 fn local_tool_name(name: &str) -> &str {
     match name {
         "sai_web_search" => "web_search",
-        "replace_file_lines" => "str_replace",
-        "apply_patch" => "edit_file",
-        "fetch_url" => "web_fetch",
-        "query_weather" => "get_weather",
-        "convert_exchange_rate" | "exchange_rate" => "get_exchange_rate",
-        "deepseek_status" => "query_deepseek_status",
-        "man_page_search" | "man_search" => "online_man_search",
-        "man_page_read" | "man_read" => "online_man_get_page",
-        "calculate" | "calculator" => "scientific_calculator",
         _ => name,
-    }
-}
-
-/// 旧工具白名单名称映射到当前注册名。
-///
-/// 参数:
-/// - `name`: 配置中的工具名
-///
-/// 返回:
-/// - 需要一并纳入白名单的当前工具名
-fn legacy_tool_aliases(name: &str) -> &'static [&'static str] {
-    match name {
-        "replace_file_lines" => &["str_replace"],
-        "apply_patch" => &["edit_file", "str_replace"],
-        "fetch_url" => &["web_fetch"],
-        "query_weather" => &["get_weather"],
-        "convert_exchange_rate" | "exchange_rate" => &["get_exchange_rate"],
-        "deepseek_status" => &["query_deepseek_status"],
-        "man_page_search" | "man_search" => &["online_man_search"],
-        "man_page_read" | "man_read" => &["online_man_get_page"],
-        "calculate" | "calculator" => &["scientific_calculator"],
-        _ => &[],
     }
 }
 

@@ -48,9 +48,9 @@ async fn approved_network_command_reaches_handler_without_sandbox_marker() {
         .is_some_and(|arguments| arguments.get("_sai_sandbox").is_none()));
 }
 
-/// 验证协议别名可以解析到本地注册工具。
+/// 验证 resolves 判断工具是否可解析。
 #[test]
-fn resolves_accepts_protocol_aliases() {
+fn resolves_accepts_registered_tools() {
     let mut registry = ToolRegistry::new();
     registry.register(ToolSpec::new(
         "str_replace",
@@ -60,7 +60,6 @@ fn resolves_accepts_protocol_aliases() {
     ));
 
     assert!(registry.resolves("str_replace"));
-    assert!(registry.resolves("replace_file_lines"));
     assert!(!registry.resolves("nonexistent_tool"));
 }
 

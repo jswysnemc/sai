@@ -623,41 +623,22 @@ mod tests {
         assert!(plan.system_prompt.as_deref().unwrap_or("").contains("Plan"));
     }
 
-    /// 旧白名单工具名会展开为当前注册名。
+    /// 白名单原样生效，不再对旧工具名做任何映射。
     #[test]
-    fn expands_legacy_enabled_tool_names() {
+    fn the_whitelist_is_taken_verbatim() {
         let mut config = crate::config::AppConfig::default();
         config.agents.push(AgentProfile {
-            id: "legacy-tools".to_string(),
-            name: "旧工具".to_string(),
-            enabled_tools: vec![
-                "fetch_url".to_string(),
-                "query_weather".to_string(),
-                "convert_exchange_rate".to_string(),
-                "deepseek_status".to_string(),
-                "man_page_search".to_string(),
-                "man_page_read".to_string(),
-                "calculate".to_string(),
-                // 已移除的 Codex patch 工具，应当映射到 str_replace
-                "edit_file".to_string(),
-            ],
+            id: "verbatim".to_string(),
+            name: "原样".to_string(),
+            enabled_tools: vec!["web_fetch".to_string(), "str_replace".to_string()],
             ..AgentProfile::default()
         });
-        let resolved =
-            apply_agent_override(config, Some("legacy-tools"), AgentSurface::Web).unwrap();
+
+        let resolved = apply_agent_override(config, Some("verbatim"), AgentSurface::Web).unwrap();
         let tools = resolved.agent_runtime.unwrap().enabled_tools;
-        for name in [
-            "web_fetch",
-            "get_weather",
-            "get_exchange_rate",
-            "query_deepseek_status",
-            "online_man_search",
-            "online_man_get_page",
-            "scientific_calculator",
-            "str_replace",
-        ] {
-            assert!(tools.iter().any(|tool| tool == name), "missing {name}");
-        }
+
+        assert!(tools.iter().any(|tool| tool == "web_fetch"));
+        assert!(tools.iter().any(|tool| tool == "str_replace"));
     }
 
     /// 验证旧子 Agent 档案会进入统一 Agent 列表并保留暴露状态。

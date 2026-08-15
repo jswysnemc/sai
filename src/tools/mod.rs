@@ -60,7 +60,7 @@ mod xuanxue;
 
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
-pub(crate) use catalog::{mcp_tool_catalog, tool_catalog, ToolCatalogEntry};
+pub(crate) use catalog::{catalog_config, mcp_tool_catalog, tool_catalog, ToolCatalogEntry};
 pub(crate) use context::tool_output_for_context;
 pub(crate) use progressive::{
     register_loader as register_progressive_loader, INVOKE_NAME, LOAD_NAME,

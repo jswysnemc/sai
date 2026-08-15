@@ -159,7 +159,7 @@ pub(super) fn builtin_agent_profiles() -> [AgentProfile; 5] {
 pub(super) fn resolve_enabled_tools(profile: &AgentProfile) -> Vec<String> {
     // 独占白名单不套内置预设：写什么就是什么，包括什么都不写
     if profile.tools_exclusive {
-        return expand_legacy_enabled_tools(profile.enabled_tools.clone(), false);
+        return expand_enabled_tool_conveniences(profile.enabled_tools.clone(), false);
     }
     let tools = if !profile.enabled_tools.is_empty() {
         profile.enabled_tools.clone()
@@ -172,7 +172,7 @@ pub(super) fn resolve_enabled_tools(profile: &AgentProfile) -> Vec<String> {
             _ => Vec::new(),
         }
     };
-    expand_legacy_enabled_tools(tools, true)
+    expand_enabled_tool_conveniences(tools, true)
 }
 
 /// 解析 Agent 档案中需要 load 才暴露的工具列表。
@@ -210,53 +210,18 @@ fn deferred_from_whitelist(tools: &[&str], keep_visible: &[&str]) -> Vec<String>
         .collect()
 }
 
-/// 旧工具名到当前注册名的对照表。
-///
-/// 迁移与诊断都要用这份知识：一处补齐白名单，一处判断某个名字是不是
-/// 已经换掉的旧名。各写一份必然漂移，改名时只会有一处跟上。
-pub(crate) const LEGACY_TOOL_RENAMES: &[(&str, &str)] = &[
-    ("replace_file_lines", "str_replace"),
-    ("apply_patch", "str_replace"),
-    ("edit_file", "str_replace"),
-    ("fetch_url", "web_fetch"),
-    ("query_weather", "get_weather"),
-    ("convert_exchange_rate", "get_exchange_rate"),
-    ("exchange_rate", "get_exchange_rate"),
-    ("deepseek_status", "query_deepseek_status"),
-    ("man_page_search", "online_man_search"),
-    ("man_search", "online_man_search"),
-    ("man_page_read", "online_man_get_page"),
-    ("man_read", "online_man_get_page"),
-    ("calculate", "scientific_calculator"),
-    ("calculator", "scientific_calculator"),
-];
-
-/// 返回某个旧工具名对应的当前注册名。
-///
-/// 参数:
-/// - `name`: 待查工具名
-///
-/// 返回:
-/// - 当前注册名；该名字不是已知旧名时为 None
-pub(crate) fn legacy_tool_replacement(name: &str) -> Option<&'static str> {
-    LEGACY_TOOL_RENAMES
-        .iter()
-        .find(|(old, _)| *old == name)
-        .map(|(_, current)| *current)
-}
-
-/// 将旧工具名展开为当前注册名，并补齐编辑工具组合。
-///
-/// 旧名保留而不是替换：白名单是用户写的，静默改写它会让人在配置界面上
-/// 看到自己没写过的内容。对照表只负责把当前名补进来。
+/// 为白名单补齐惯例搭配的工具。
 ///
 /// 参数:
 /// - `tools`: 配置中的白名单
 /// - `add_conveniences`: 是否补上惯例搭配的工具
 ///
 /// 返回:
-/// - 与当前 ToolRegistry 名称对齐后的白名单
-fn expand_legacy_enabled_tools(mut tools: Vec<String>, add_conveniences: bool) -> Vec<String> {
+/// - 补齐后的白名单
+fn expand_enabled_tool_conveniences(
+    mut tools: Vec<String>,
+    add_conveniences: bool,
+) -> Vec<String> {
     if tools.is_empty() {
         return tools;
     }
@@ -266,15 +231,8 @@ fn expand_legacy_enabled_tools(mut tools: Vec<String>, add_conveniences: bool) -
             tools.push(name.to_string());
         }
     };
-    // 1. 旧名统一按对照表补上当前注册名
-    for (old, current) in LEGACY_TOOL_RENAMES {
-        if has(&tools, old) {
-            push_if_missing(&mut tools, current);
-        }
-    }
-    // 2. 具备 write_file 的工程 Agent 默认补上 str_replace；
-    //    write_file 本身仍是有效工具，这是惯例搭配而不是改名。
-    //    独占白名单要的是精确控制，这条便利补充会让"两个工具"变成三个
+    // 具备 write_file 的工程 Agent 默认补上 str_replace；
+    // 独占白名单要的是精确控制，这条便利补充会让"两个工具"变成三个
     if add_conveniences && has(&tools, "write_file") {
         push_if_missing(&mut tools, "str_replace");
     }
@@ -471,7 +429,7 @@ pub fn ensure_surface_agent_defaults(config: &mut crate::config::AppConfig) -> b
 }
 
 #[cfg(test)]
-mod legacy_rename_tests {
+mod tool_convenience_tests {
     use super::*;
 
     /// 构造字符串白名单。
@@ -479,50 +437,25 @@ mod legacy_rename_tests {
         names.iter().map(|name| name.to_string()).collect()
     }
 
-    /// 验证每个旧名都会补上当前注册名。
-    ///
-    /// 漏一条就意味着那个 Agent 静默少一个工具，配置界面上却仍然写着它。
-    #[test]
-    fn every_legacy_name_brings_in_its_replacement() {
-        for (old, current) in LEGACY_TOOL_RENAMES {
-            let expanded = expand_legacy_enabled_tools(tools(&[old]), false);
-
-            assert!(
-                expanded.iter().any(|tool| tool == current),
-                "{old} 未补上 {current}"
-            );
-        }
-    }
-
-    /// 验证旧名本身被保留。
-    ///
-    /// 白名单是用户写的，静默改写会让人在界面上看到自己没写过的内容。
-    #[test]
-    fn the_legacy_name_itself_is_kept() {
-        let expanded = expand_legacy_enabled_tools(tools(&["edit_file"]), false);
-
-        assert!(expanded.iter().any(|tool| tool == "edit_file"));
-    }
-
-    /// 验证不重复补同一个替代名。
-    #[test]
-    fn a_shared_replacement_is_added_once() {
-        let expanded = expand_legacy_enabled_tools(tools(&["apply_patch", "edit_file"]), false);
-
-        assert_eq!(expanded.iter().filter(|tool| *tool == "str_replace").count(), 1);
-    }
-
     /// 验证 write_file 的便利补充只在非独占模式下发生。
     ///
     /// 独占白名单要的是精确控制，多补一个会让「两个工具」变成三个。
     #[test]
     fn the_write_file_convenience_is_skipped_when_exclusive() {
-        assert!(expand_legacy_enabled_tools(tools(&["write_file"]), true)
+        assert!(expand_enabled_tool_conveniences(tools(&["write_file"]), true)
             .iter()
             .any(|tool| tool == "str_replace"));
-        assert!(!expand_legacy_enabled_tools(tools(&["write_file"]), false)
+        assert!(!expand_enabled_tool_conveniences(tools(&["write_file"]), false)
             .iter()
             .any(|tool| tool == "str_replace"));
+    }
+
+    /// 验证不重复补同一个工具。
+    #[test]
+    fn the_convenience_is_added_once() {
+        let expanded = expand_enabled_tool_conveniences(tools(&["write_file", "str_replace"]), true);
+
+        assert_eq!(expanded.iter().filter(|tool| *tool == "str_replace").count(), 1);
     }
 
     /// 验证空白名单不被补出内容。
@@ -530,13 +463,6 @@ mod legacy_rename_tests {
     /// 空列表在非独占模式下表示「不收窄」，凭空补进工具会改变这层语义。
     #[test]
     fn an_empty_whitelist_stays_empty() {
-        assert!(expand_legacy_enabled_tools(Vec::new(), true).is_empty());
-    }
-
-    /// 验证能按旧名查到当前注册名。
-    #[test]
-    fn a_legacy_name_resolves_to_its_replacement() {
-        assert_eq!(legacy_tool_replacement("edit_file"), Some("str_replace"));
-        assert_eq!(legacy_tool_replacement("str_replace"), None);
+        assert!(expand_enabled_tool_conveniences(Vec::new(), true).is_empty());
     }
 }

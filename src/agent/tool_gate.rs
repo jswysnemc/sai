@@ -295,22 +295,6 @@ mod tests {
         assert_eq!(gate, ToolGate::Proceed);
     }
 
-    /// 验证协议别名可以正常解析。
-    #[test]
-    fn protocol_alias_resolves_to_local_tool() {
-        let registry = registry_with("str_replace");
-        let visibility = super::super::tool_visibility::ToolVisibility::new(Vec::new());
-
-        let gate = evaluate_tool_gate(
-            &registry,
-            &visibility,
-            &call("replace_file_lines", "{}"),
-            &[],
-        );
-
-        assert_eq!(gate, ToolGate::Proceed);
-    }
-
     /// 验证渐进式加载下未加载的工具提示先调用 load。
     #[test]
     fn deferred_tool_asks_for_load_first() {

@@ -53,12 +53,15 @@ pub(super) async fn run_config(paths: &SaiPaths, args: ConfigArgs) -> Result<()>
             );
             println!("system_prompt_chars: {}", system_prompt.chars().count());
             let tools = crate::tools::builtin_registry_without_mcp(&config, paths);
-            // 白名单可以合法地点名会话级工具，诊断口径必须与之一致，
-            // 否则 subagent、todo 这类会被误报成不存在
-            let mut known = tools.clone();
+            // 白名单可以合法地点名会话级工具与插件工具，诊断口径必须覆盖它们：
+            // subagent、todo 由 register_interactive_tools 注册，汇率、计算器
+            // 一类则取决于插件开关，按当前配置去查都会误报成不存在
+            let catalog_config = crate::tools::catalog_config(&config);
+            let mut known =
+                crate::tools::builtin_registry_without_mcp(&catalog_config, paths);
             crate::tools::register_interactive_tools(
                 &mut known,
-                &config,
+                &catalog_config,
                 paths,
                 paths.state_dir.display().to_string(),
                 "prompt-source".to_string(),
@@ -76,7 +79,7 @@ pub(super) async fn run_config(paths: &SaiPaths, args: ConfigArgs) -> Result<()>
             println!("tool_count: {}", effective.definitions().len());
             // 白名单里指向不存在工具的名字会在过滤时被静默丢掉，不点出来
             // 就只表现为「这个 Agent 少了点什么」。MCP 工具按需连接，
-            // 此处不构造连接，跳过以免误报
+            // 此处不建立连接，跳过以免误报
             let stale: Vec<String> = crate::config::unknown_whitelist_tools(&config, &registered)
                 .into_iter()
                 .filter(|name| !name.starts_with("mcp_"))

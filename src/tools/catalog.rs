@@ -61,25 +61,16 @@ pub(crate) fn mcp_tool_catalog(config: &AppConfig, paths: &SaiPaths) -> Vec<Tool
 
 /// 构造一份插件全开的配置副本，仅用于枚举工具目录。
 ///
+/// 逐字段赋值容易在新增插件时漏掉，开关表由 PluginsConfig 自己维护。
+///
 /// 参数:
 /// - `config`: 当前应用配置
 ///
 /// 返回:
 /// - 所有插件开关置真的配置副本
-fn catalog_config(config: &AppConfig) -> AppConfig {
+pub(crate) fn catalog_config(config: &AppConfig) -> AppConfig {
     let mut catalog = config.clone();
-    catalog.plugins.archlinux.enabled = true;
-    catalog.plugins.man.enabled = true;
-    catalog.plugins.memes.enabled = true;
-    catalog.plugins.web.enabled = true;
-    catalog.plugins.web_images.enabled = true;
-    catalog.plugins.deep_diagnose.enabled = true;
-    catalog.plugins.image_generation.enabled = true;
-    catalog.plugins.knowledge_base.enabled = true;
-    catalog.plugins.package_advisor.enabled = true;
-    catalog.plugins.linux_game_compatibility.enabled = true;
-    catalog.plugins.diagnostics.enabled = true;
-    catalog.plugins.memory.enabled = true;
+    catalog.plugins = catalog.plugins.all_enabled();
     catalog.memory.enabled = true;
     catalog
 }

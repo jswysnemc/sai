@@ -355,7 +355,7 @@ pub struct MemesPluginConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
     /// 表情库映射；人格删除后只读 default 键，字段名保留以兼容旧配置
-    #[serde(default, alias = "persona_libraries")]
+    #[serde(default)]
     pub libraries: HashMap<String, String>,
     #[serde(default = "default_memes_width_percent")]
     pub width_percent: u8,
@@ -452,4 +452,71 @@ pub struct DiagnosticsPluginConfig {
     pub max_stdout_chars: usize,
     #[serde(default = "default_diagnostics_max_stderr_chars")]
     pub max_stderr_chars: usize,
+}
+
+impl PluginsConfig {
+    /// 返回所有插件均启用的副本。
+    ///
+    /// 工具目录与白名单诊断都要回答"这个工具在系统里存不存在"，那与用户
+    /// 当前开了哪些插件无关：关掉汇率插件不该让汇率工具从 Agent 配置界面
+    /// 上消失，否则想启用它的人根本勾不到。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 全部插件开关置为 true 的副本
+    pub fn all_enabled(&self) -> Self {
+        let mut plugins = self.clone();
+        plugins.weather.enabled = true;
+        plugins.web.enabled = true;
+        plugins.web_images.enabled = true;
+        plugins.deep_diagnose.enabled = true;
+        plugins.vision.enabled = true;
+        plugins.exchange_rate.enabled = true;
+        plugins.xuanxue.enabled = true;
+        plugins.image_generation.enabled = true;
+        plugins.print_image.enabled = true;
+        plugins.memes.enabled = true;
+        plugins.knowledge_base.enabled = true;
+        plugins.archlinux.enabled = true;
+        plugins.man.enabled = true;
+        plugins.moegirl.enabled = true;
+        plugins.hash_codec.enabled = true;
+        plugins.calculator.enabled = true;
+        plugins.package_advisor.enabled = true;
+        plugins.linux_game_compatibility.enabled = true;
+        plugins.diagnostics.enabled = true;
+        plugins.memory.enabled = true;
+        plugins
+    }
+}
+
+#[cfg(test)]
+mod all_enabled_tests {
+    use super::*;
+
+    /// 验证每一个插件开关都被打开。
+    ///
+    /// 逐字段赋值必然会在新增插件时漏掉，而漏掉的表现是那个工具在 Agent
+    /// 配置界面上不可见——没有任何东西会报错。这里按序列化结果遍历，
+    /// 新插件只要带 enabled 字段就会被这条测试抓住。
+    #[test]
+    fn every_plugin_switch_is_turned_on() {
+        // 先关掉一批，确保通过不是因为默认值本来就是 true
+        let mut plugins = PluginsConfig::default();
+        plugins.weather.enabled = false;
+        plugins.web.enabled = false;
+        plugins.calculator.enabled = false;
+        plugins.exchange_rate.enabled = false;
+        plugins.hash_codec.enabled = false;
+
+        let enabled = serde_json::to_value(plugins.all_enabled()).unwrap();
+
+        for (name, value) in enabled.as_object().unwrap() {
+            if let Some(flag) = value.get("enabled") {
+                assert_eq!(flag, true, "插件 {name} 的开关没有被打开");
+            }
+        }
+    }
 }

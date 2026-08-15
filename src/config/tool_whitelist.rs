@@ -29,15 +29,12 @@ pub fn whitelist_allows_tool(config: &AppConfig, name: &str) -> bool {
 /// 工具改名或下线后，旧配置里的名字会在过滤时被静默丢弃，既不报错也不
 /// 提示，只表现为"这个 Agent 少了点什么"。诊断命令据此把死名字点出来。
 ///
-/// 已知的改名不算死名字：迁移时当前注册名已经补进白名单，功能没有缺失，
-/// 报出来只会让人以为坏了。
-///
 /// 参数:
 /// - `config`: 已应用 Agent 覆盖的运行配置
-/// - `registered`: 当前实际注册的全部工具名
+/// - `registered`: 当前实际注册的全部工具名，应按插件全开口径枚举
 ///
 /// 返回:
-/// - 白名单里既无对应工具、也无改名替代的名字，按配置顺序排列
+/// - 白名单里无对应工具的名字，按配置顺序排列
 pub fn unknown_whitelist_tools(config: &AppConfig, registered: &[String]) -> Vec<String> {
     let Some(runtime) = config.agent_runtime.as_ref() else {
         return Vec::new();
@@ -46,13 +43,6 @@ pub fn unknown_whitelist_tools(config: &AppConfig, registered: &[String]) -> Vec
         .enabled_tools
         .iter()
         .filter(|name| !registered.iter().any(|tool| tool == *name))
-        .filter(|name| {
-            // 改名后的当前名已经在白名单里，这一条只是残留的旧写法
-            match super::agent_presets::legacy_tool_replacement(name) {
-                Some(current) => !registered.iter().any(|tool| tool == current),
-                None => true,
-            }
-        })
         .cloned()
         .collect()
 }
@@ -126,29 +116,5 @@ mod tests {
         let registered = vec!["read_file".to_string()];
 
         assert!(unknown_whitelist_tools(&AppConfig::default(), &registered).is_empty());
-    }
-
-    /// 验证已改名但替代已就位的旧名不算死名字。
-    ///
-    /// edit_file 早已换成 str_replace，迁移时当前名已补进白名单，功能
-    /// 完好。报出来只会让人以为编辑能力坏了，转而去动一份没问题的配置。
-    #[test]
-    fn a_renamed_tool_with_its_replacement_present_is_not_reported() {
-        let config = config_with_whitelist(&["edit_file", "str_replace"], false);
-        let registered = vec!["str_replace".to_string()];
-
-        assert!(unknown_whitelist_tools(&config, &registered).is_empty());
-    }
-
-    /// 验证替代本身也不存在时仍然报告。
-    #[test]
-    fn a_renamed_tool_is_reported_when_its_replacement_is_gone() {
-        let config = config_with_whitelist(&["edit_file"], false);
-        let registered = vec!["read_file".to_string()];
-
-        assert_eq!(
-            unknown_whitelist_tools(&config, &registered),
-            vec!["edit_file".to_string()]
-        );
     }
 }
