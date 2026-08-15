@@ -88,14 +88,15 @@ mod tests {
         // 直接把脚本作为 sh 的参数传入，不落地成可执行文件：
         // 并发测试里同时发生的 fork 会继承尚未关闭的写句柄，
         // 内核据此在 exec 时报 ETXTBSY，导致本用例偶发失败。
-        // 末尾的 exec 让 sh 就地变成 sleep，kill 才能真正杀干净：
-        // 否则残留的孙进程仍握着管道写端，Windows 上负责阻塞读取的
-        // 线程要等它自己退出，runtime 析构会白等满 300 秒。
-        // ripgrep 同样不派生子进程，这也更贴近实际形态。
+        //
+        // sleep 的输出必须重定向掉：kill 只终止直接子进程，孙进程若继承了
+        // 管道写端，读端就等不到 EOF。Windows 上负责阻塞读取的线程因此退不出，
+        // runtime 析构要一直等到 sleep 自己结束。MSYS2 的 sh 没有真正的 exec
+        // 语义，靠 exec 合并进程在那里不成立，切断继承才是可移植的做法。
         let mut command = Command::new("sh");
         command
             .arg("-c")
-            .arg("echo 'src/a.rs:1:early hit'; exec sleep 300")
+            .arg("echo 'src/a.rs:1:early hit'; exec sleep 30 >/dev/null 2>&1")
             .stdin(Stdio::null());
 
         let started = std::time::Instant::now();
