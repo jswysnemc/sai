@@ -17,7 +17,7 @@ describe("buildContextPromptTags", () => {
         { id: "skills", label: "技能目录", content: "skills" },
         { id: "mode", label: "模式说明", content: "mode" },
         { id: "runtime", label: "运行时", content: "runtime" },
-        { id: "memory", label: "关联记忆", content: "memory" },
+        { id: "memory", label: "记忆索引", content: "memory" },
         { id: "tools", label: "工具定义 (17)", content: "tools" }
       ]
     }, t);
@@ -26,8 +26,8 @@ describe("buildContextPromptTags", () => {
     expect(labels.filter((tag) => /工具/.test(tag))).toEqual(["工具定义 (17)"]);
     expect(labels).toContain("技能目录");
     expect(labels).toContain("会话 baseline");
-    expect(labels).toContain("关联记忆");
-    expect(labels.filter((tag) => tag === "关联记忆")).toHaveLength(1);
+    expect(labels).toContain("记忆索引");
+    expect(labels.filter((tag) => tag === "记忆索引")).toHaveLength(1);
     expect(labels).not.toContain("动态段");
   });
 

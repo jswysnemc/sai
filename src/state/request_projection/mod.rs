@@ -1,6 +1,7 @@
 mod builder;
 mod enforce;
 mod estimate;
+mod memory_injection;
 mod model;
 mod session_summary_projection;
 mod validator;

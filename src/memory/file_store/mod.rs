@@ -13,4 +13,4 @@ pub use frontmatter::Frontmatter;
 pub use library::{FileMemoryLibrary, MemoryScope};
 pub use memory_file::MemoryEntry;
 pub use memory_type::MemoryType;
-pub use render::render_index_injection_for;
+pub use render::{render_index_injection_for, MEMORY_TAG};

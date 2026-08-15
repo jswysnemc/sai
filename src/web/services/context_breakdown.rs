@@ -158,7 +158,7 @@ pub(super) fn estimate_context_breakdown_with_runtime(
     let system_prompt_tokens = estimate_joined(&[
         system_core.as_str(),
         dynamic.runtime_context.as_str(),
-        dynamic.associative_memory.as_str(),
+        dynamic.memory_index.as_str(),
     ]);
     let tools_and_agents_tokens = estimate_joined(
         &tools_json_parts

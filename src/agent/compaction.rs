@@ -21,7 +21,7 @@ impl Agent {
     /// - `messages`: 当前内存消息列表
     /// - `input`: 当前用户输入
     /// - `image_urls`: 当前用户图片
-    /// - `association_prompt`: 关联记忆上下文
+    /// - `memory_index_prompt`: 记忆索引注入文本
     /// - `auto_meme_reminder`: 自动表情提醒
     /// - `on_event`: 运行事件回调
     /// - `perf`: 性能追踪器
@@ -35,7 +35,7 @@ impl Agent {
         messages: &mut Vec<ChatMessage>,
         input: &str,
         image_urls: &[String],
-        association_prompt: Option<&str>,
+        memory_index_prompt: Option<&str>,
         auto_meme_reminder: Option<&str>,
         on_event: &mut impl FnMut(super::AgentEvent) -> Result<()>,
         perf: &mut crate::perf_trace::PerfTrace,
@@ -62,7 +62,7 @@ impl Agent {
             turn_id,
             input,
             image_urls,
-            association_prompt,
+            memory_index_prompt,
             auto_meme_reminder,
         )?;
         messages.extend(self.state.project_running_turn_tool_messages(turn_id)?);

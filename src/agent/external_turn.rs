@@ -28,7 +28,7 @@ impl Agent {
     /// 用外部内核执行一轮对话。
     ///
     /// 保留 Sai 的治理与持久化外壳，包括轮次记录、未完成轮守卫、工作树撤销点、
-    /// 关联记忆和活动目标；对话历史仍由外部内核自己维护。
+    /// 记忆索引和活动目标；对话历史仍由外部内核自己维护。
     ///
     /// 参数:
     /// - `input`: 用户输入
@@ -196,7 +196,7 @@ mod tests {
     use crate::state::StateStore;
     use crate::tools::ToolRegistry;
 
-    /// 外部轮次必须同时获得关联记忆和最新活动目标。
+    /// 外部轮次必须同时获得记忆索引和最新活动目标。
     #[test]
     fn builds_memory_and_goal_contexts_for_external_turns() {
         let temp = tempfile::tempdir().unwrap();

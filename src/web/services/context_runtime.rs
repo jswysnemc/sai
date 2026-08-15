@@ -14,7 +14,7 @@ pub(super) struct ContextRuntimeProjection {
     pub(super) goal_context: String,
     pub(super) compaction_summary: String,
     pub(super) runtime_context: String,
-    pub(super) associative_memory: String,
+    pub(super) memory_index: String,
     pub(super) last_auto_meme: String,
     pub(super) memory_enabled: bool,
 }
@@ -29,7 +29,7 @@ impl ContextRuntimeProjection {
             self.goal_context.as_str(),
             self.compaction_summary.as_str(),
             self.runtime_context.as_str(),
-            self.associative_memory.as_str(),
+            self.memory_index.as_str(),
             self.last_auto_meme.as_str(),
         ]
         .iter()
@@ -81,10 +81,10 @@ pub(super) fn project_context_runtime(
         config.prompt_sections.mode_reminder,
     )?;
 
-    // 3. 复用真实请求的结构化记忆召回路径，不强化旧命中
+    // 3. 复用真实请求的注入路径；索引全量注入，与当前输入无关
     let memory = config.memory_config();
     let memory_enabled = memory.enabled && memory.association_enabled;
-    let associative_memory = if memory_enabled && !latest_user_input.trim().is_empty() {
+    let memory_index = if memory_enabled {
         MemoryStore::new(config, paths)
             .recall_for_turn(&latest_user_input, Some(workspace_path))?
             .unwrap_or_default()
@@ -114,7 +114,7 @@ pub(super) fn project_context_runtime(
         goal_context,
         compaction_summary,
         runtime_context,
-        associative_memory,
+        memory_index,
         last_auto_meme,
         memory_enabled,
     })

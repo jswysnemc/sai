@@ -27,7 +27,7 @@ pub(crate) struct TurnRequest {
     pub(crate) image_urls: Vec<String>,
     /// 会话工作目录，作为 ACP 会话的根
     pub(crate) cwd: std::path::PathBuf,
-    /// 关联记忆、活动目标等 Sai 动态上下文
+    /// 记忆索引、活动目标等 Sai 动态上下文
     pub(crate) contexts: Vec<AcpPromptContext>,
 }
 

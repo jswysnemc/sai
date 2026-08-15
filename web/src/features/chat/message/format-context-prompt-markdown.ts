@@ -16,8 +16,9 @@ export function formatContextPromptMarkdown(source: string, locale: Locale = "zh
 
   const parts: string[] = [];
   let cursor = 0;
+  // associative-memory 是旧记忆机制的标签，历史会话里仍存着，与新的 memory 一并识别
   const blockPattern =
-    /<(instruction-files|available-skills|loaded_tools|system-reminder|selected-model|goal-continuation|associative-memory|active-goal)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/giu;
+    /<(instruction-files|available-skills|loaded_tools|system-reminder|selected-model|goal-continuation|associative-memory|memory|active-goal)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/giu;
 
   for (const match of raw.matchAll(blockPattern)) {
     const index = match.index ?? 0;
@@ -73,11 +74,11 @@ export function formatContextPromptMarkdown(source: string, locale: Locale = "zh
           locale
         )
       );
-    } else if (tag === "associative-memory") {
+    } else if (tag === "memory" || tag === "associative-memory") {
       parts.push(
         formatNamedXmlSection(
-          text(locale, "Associative memory", "关联记忆"),
-          "associative-memory",
+          text(locale, "Memory index", "记忆索引"),
+          tag,
           body,
           locale
         )

@@ -7,7 +7,7 @@ impl Agent {
     /// - `turn_id`: 当前运行中轮次标识
     /// - `input`: 当前用户输入
     /// - `image_urls`: 图片 data URL 列表
-    /// - `association_prompt`: 可选关联记忆上下文
+    /// - `memory_index_prompt`: 可选记忆索引注入文本
     /// - `auto_meme_reminder`: 可选自动表情包提醒
     ///
     /// 返回:
@@ -17,7 +17,7 @@ impl Agent {
         turn_id: &str,
         input: &str,
         image_urls: &[String],
-        association_prompt: Option<&str>,
+        memory_index_prompt: Option<&str>,
         auto_meme_reminder: Option<&str>,
     ) -> Result<Vec<ChatMessage>> {
         let base_projection = self.chat_base_context_projection(Some(turn_id))?;
@@ -25,7 +25,7 @@ impl Agent {
             base_projection,
             input,
             image_urls,
-            association_prompt,
+            memory_index_prompt,
             auto_meme_reminder,
             0,
             self.context_char_budget,

@@ -79,7 +79,7 @@ impl Agent {
     /// - `err`: provider 错误
     /// - `input`: 当前用户输入
     /// - `image_urls`: 图片 data URL 列表
-    /// - `association_prompt`: 可选关联记忆上下文
+    /// - `memory_index_prompt`: 可选记忆索引注入文本
     /// - `auto_meme_reminder`: 可选自动表情包提醒
     /// - `on_event`: 压缩流式事件回调
     ///
@@ -92,7 +92,7 @@ impl Agent {
         err: &anyhow::Error,
         input: &str,
         image_urls: &[String],
-        association_prompt: Option<&str>,
+        memory_index_prompt: Option<&str>,
         auto_meme_reminder: Option<&str>,
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<bool> {
@@ -123,7 +123,7 @@ impl Agent {
             turn_id,
             input,
             image_urls,
-            association_prompt,
+            memory_index_prompt,
             auto_meme_reminder,
         )?;
         reprojected.extend(self.state.project_running_turn_tool_messages(turn_id)?);

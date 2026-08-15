@@ -30,7 +30,7 @@ pub(crate) struct SessionContextPrompt {
     pub has_skills: bool,
     /// 是否包含工具描述片段
     pub has_tools: bool,
-    /// 是否包含关联记忆片段
+    /// 是否包含记忆索引片段
     pub has_memory: bool,
     /// 是否包含运行时 / 模式等动态系统段
     pub has_dynamic: bool,
@@ -168,31 +168,31 @@ pub(crate) async fn load_session_context_prompt(
             locale.text("7. Current mode instructions", "7. 当前模式说明"),
             &mode_preview(mode, locale),
         ));
-        if !dynamic.associative_memory.trim().is_empty() {
+        if !dynamic.memory_index.trim().is_empty() {
             sections.push(section(
                 "memory",
-                locale.text("Associative memory", "关联记忆"),
+                locale.text("Memory index", "记忆索引"),
                 locale.text(
-                    "8. Associative memory (recalled from latest user input)",
-                    "8. 关联记忆（按最近用户输入召回）",
+                    "8. Memory index (injected in full; bodies read on demand)",
+                    "8. 记忆索引（全量注入，正文按需读取）",
                 ),
-                &dynamic.associative_memory,
+                &dynamic.memory_index,
             ));
         } else if dynamic.memory_enabled {
             sections.push(section(
                 "memory",
-                locale.text("Associative memory", "关联记忆"),
-                locale.text("8. Associative memory", "8. 关联记忆"),
+                locale.text("Memory index", "记忆索引"),
+                locale.text("8. Memory index", "8. 记忆索引"),
                 locale.text(
-                    "_Memory is enabled; no associative hits for the latest user input (recall changes every turn)._",
-                    "_记忆已开启；当前无与最近用户输入匹配的联想结果（联想随每轮输入变化）。_",
+                    "_Memory is enabled; nothing has been recorded yet. The index appears here once the first entry is written._",
+                    "_记忆已开启，但还没有写过任何条目。写下第一条后，索引会出现在这里。_",
                 ),
             ));
         } else {
             sections.push(section(
                 "memory",
-                locale.text("Associative memory", "关联记忆"),
-                locale.text("8. Associative memory", "8. 关联记忆"),
+                locale.text("Memory index", "记忆索引"),
+                locale.text("8. Memory index", "8. 记忆索引"),
                 locale.text("_Memory is disabled._", "_记忆功能已关闭。_"),
             ));
         }
@@ -239,7 +239,7 @@ pub(crate) async fn load_session_context_prompt(
             content,
             token_count,
             tools_section.tool_count,
-            !dynamic.associative_memory.trim().is_empty(),
+            !dynamic.memory_index.trim().is_empty(),
             dynamic.has_dynamic(),
             agent_owned,
             sections,
@@ -364,7 +364,7 @@ fn format_tool_definition_markdown(definition: &ToolDefinition) -> String {
 /// - `content`: 提示词正文
 /// - `token_count`: 与请求分项一致的已加载上下文 token 数
 /// - `tool_count`: 工具数量
-/// - `has_memory`: 是否含关联记忆正文
+/// - `has_memory`: 是否含记忆索引正文
 /// - `has_dynamic`: 是否含动态系统段
 /// - `agent_id`: 可选 Agent 标识
 /// - `sections`: 带稳定 ID 的预览分区

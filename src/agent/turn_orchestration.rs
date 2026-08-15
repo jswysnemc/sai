@@ -145,7 +145,7 @@ impl Agent {
         let workspace = crate::runtime_cwd::current_dir()
             .ok()
             .map(|path| path.display().to_string());
-        let association_prompt = settle_step(
+        let memory_index_prompt = settle_step(
             &mut guard,
             self.memory.recall_for_turn(&input, workspace.as_deref()),
         )?;
@@ -157,7 +157,7 @@ impl Agent {
                 &turn_id,
                 &input,
                 &image_urls,
-                association_prompt.as_deref(),
+                memory_index_prompt.as_deref(),
                 auto_meme_reminder,
             ),
         )?;
@@ -183,7 +183,7 @@ impl Agent {
                     &turn_id,
                     &input,
                     &image_urls,
-                    association_prompt.as_deref(),
+                    memory_index_prompt.as_deref(),
                     auto_meme_reminder,
                 ),
             )?;
@@ -197,7 +197,7 @@ impl Agent {
                 &mut used_tools,
                 &input,
                 &image_urls,
-                association_prompt.as_deref(),
+                memory_index_prompt.as_deref(),
                 auto_meme_reminder,
                 inter_message_source.as_deref(),
                 wait_for_external,
@@ -216,7 +216,7 @@ impl Agent {
                         &err,
                         &input,
                         &image_urls,
-                        association_prompt.as_deref(),
+                        memory_index_prompt.as_deref(),
                         auto_meme_reminder,
                         &mut emit_event,
                     )
@@ -233,7 +233,7 @@ impl Agent {
                         &turn_id,
                         &input,
                         &image_urls,
-                        association_prompt.as_deref(),
+                        memory_index_prompt.as_deref(),
                         auto_meme_reminder,
                     ),
                 )?;
@@ -251,7 +251,7 @@ impl Agent {
                         &mut used_tools,
                         &input,
                         &image_urls,
-                        association_prompt.as_deref(),
+                        memory_index_prompt.as_deref(),
                         auto_meme_reminder,
                         inter_message_source.as_deref(),
                         wait_for_external,

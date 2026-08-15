@@ -3,7 +3,9 @@ use super::library::FileMemoryLibrary;
 use std::path::Path;
 
 /// 注入文本的包裹标签。
-const WRAPPER: &str = "memory";
+///
+/// 投影层要靠它从历史消息里认出已经注入过的索引，两处必须用同一个值。
+pub const MEMORY_TAG: &str = "memory";
 
 /// 读取指定目录下的索引并渲染为注入文本。
 ///
@@ -37,7 +39,7 @@ fn render_index_injection(project_index: &str, global_index: &str) -> Option<Str
     if project.entries().is_empty() && global.entries().is_empty() {
         return None;
     }
-    let mut output = format!("<{WRAPPER}>\n");
+    let mut output = format!("<{MEMORY_TAG}>\n");
     output.push_str(
         "以下是既有记忆的索引，每行一条。这些是此前确认过的事实与要求，本轮需要遵循。\n\
          需要某条的完整内容时，用 read_memory 工具按标识读取正文，不要凭标题猜测。\n",
@@ -53,7 +55,7 @@ fn render_index_injection(project_index: &str, global_index: &str) -> Option<Str
             output.push_str(&format!("{}\n", entry.render()));
         }
     }
-    output.push_str(&format!("</{WRAPPER}>"));
+    output.push_str(&format!("</{MEMORY_TAG}>"));
     Some(output)
 }
 

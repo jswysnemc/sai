@@ -70,7 +70,7 @@ export function buildContextPromptTags(
     pushTag("baseline", t("Skills", "技能目录"), true);
   }
   if (data.has_memory && !tags.some((tag) => isMemoryTag(tag.label))) {
-    pushTag("memory", t("Memory", "关联记忆"));
+    pushTag("memory", t("Memory", "记忆索引"));
   }
   if (data.has_dynamic && !tags.some((tag) => isDynamicTag(tag.label))) {
     pushTag("runtime", t("Dynamic", "动态段"));

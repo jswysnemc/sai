@@ -1,4 +1,5 @@
 use super::estimate::project_provider_turn_estimate;
+use super::memory_injection::memory_index_already_injected;
 use super::model::{
     DynamicContextSource, ProjectedBaseContext, ProjectedRequest, ProjectedSessionSummary,
     ProjectionKind, ProjectionStats, ProjectionWarning,
@@ -113,7 +114,7 @@ pub(crate) fn project_provider_base_context_projection(
 /// - `base_messages`: 已有系统、历史和运行时上下文消息
 /// - `input`: 当前用户输入
 /// - `image_urls`: 图片 data URL 列表
-/// - `association_prompt`: 可选关联记忆上下文
+/// - `memory_index_prompt`: 可选记忆索引注入文本
 /// - `auto_meme_reminder`: 可选自动表情包提醒
 /// - `tool_count`: 当前可见工具数量
 /// - `context_limit_chars`: 当前模型上下文窗口字符数
@@ -125,7 +126,7 @@ pub(crate) fn project_provider_turn_from_parts(
     base_messages: Vec<ChatMessage>,
     input: &str,
     image_url: Option<&str>,
-    association_prompt: Option<&str>,
+    memory_index_prompt: Option<&str>,
     auto_meme_reminder: Option<&str>,
     tool_count: usize,
     context_limit_chars: usize,
@@ -141,7 +142,7 @@ pub(crate) fn project_provider_turn_from_parts(
         },
         input,
         &image_urls,
-        association_prompt,
+        memory_index_prompt,
         auto_meme_reminder,
         tool_count,
         context_limit_chars,
@@ -154,7 +155,7 @@ pub(crate) fn project_provider_turn_from_parts(
 /// - `base_projection`: 已有系统、历史和运行时上下文投影
 /// - `input`: 当前用户输入
 /// - `image_urls`: 图片 data URL 列表
-/// - `association_prompt`: 可选关联记忆上下文
+/// - `memory_index_prompt`: 可选记忆索引注入文本
 /// - `auto_meme_reminder`: 可选自动表情包提醒
 /// - `tool_count`: 当前可见工具数量
 /// - `context_limit_chars`: 当前模型上下文窗口字符数
@@ -165,7 +166,7 @@ pub(crate) fn project_provider_turn_from_base_projection(
     base_projection: ProjectedBaseContext,
     input: &str,
     image_urls: &[String],
-    association_prompt: Option<&str>,
+    memory_index_prompt: Option<&str>,
     auto_meme_reminder: Option<&str>,
     tool_count: usize,
     context_limit_chars: usize,
@@ -173,7 +174,11 @@ pub(crate) fn project_provider_turn_from_base_projection(
     let mut base_messages = base_projection.messages;
     let mut dynamic_sources = base_projection.dynamic_sources;
     let mut user_contexts = base_projection.user_contexts;
-    if let Some(prompt) = association_prompt {
+    // 索引与最近一次注入的完全相同就跳过：它已经在历史里，重发只是让同一份
+    // 内容在窗口里堆叠，详见 memory_injection
+    if let Some(prompt) = memory_index_prompt
+        .filter(|prompt| !memory_index_already_injected(&base_messages, prompt))
+    {
         dynamic_sources.push(dynamic_source("memory_association", prompt));
         user_contexts.push(prompt.to_string());
     }
