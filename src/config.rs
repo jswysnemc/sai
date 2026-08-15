@@ -25,6 +25,7 @@ mod provider_keys;
 mod secrets;
 mod session;
 mod ssh;
+mod tool_whitelist;
 
 #[cfg(test)]
 mod tests;
@@ -40,6 +41,7 @@ pub use agent_tool_modes::{normalize_deferred_tools, DEFERRED_ALL_NON_BASE};
 #[allow(unused_imports)]
 pub use agents::*;
 pub use prompt_sections::{PromptSectionToggles, PROMPT_SECTIONS};
+pub use tool_whitelist::{unknown_whitelist_tools, whitelist_allows_tool};
 pub use cli_tools::*;
 #[allow(unused_imports)]
 pub use git::*;

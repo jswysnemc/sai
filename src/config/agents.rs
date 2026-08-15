@@ -19,7 +19,7 @@ pub enum AgentSurface {
 }
 
 /// 仅在单轮运行期间生效的 Agent 能力覆盖。
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct AgentRuntimeOverride {
     /// 允许使用的工具名称
     pub enabled_tools: Vec<String>,

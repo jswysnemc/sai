@@ -53,12 +53,44 @@ pub(super) async fn run_config(paths: &SaiPaths, args: ConfigArgs) -> Result<()>
             );
             println!("system_prompt_chars: {}", system_prompt.chars().count());
             let tools = crate::tools::builtin_registry_without_mcp(&config, paths);
+            // 白名单可以合法地点名会话级工具，诊断口径必须与之一致，
+            // 否则 subagent、todo 这类会被误报成不存在
+            let mut known = tools.clone();
+            crate::tools::register_interactive_tools(
+                &mut known,
+                &config,
+                paths,
+                paths.state_dir.display().to_string(),
+                "prompt-source".to_string(),
+            );
+            let registered: Vec<String> = known
+                .definitions()
+                .iter()
+                .map(|tool| tool.function.name.clone())
+                .collect();
             let effective = crate::runner::submission_tools::apply_enabled_tools_filter(
                 tools,
                 &config,
                 crate::runner::SubmissionSource::Repl,
             )?;
             println!("tool_count: {}", effective.definitions().len());
+            // 白名单里指向不存在工具的名字会在过滤时被静默丢掉，不点出来
+            // 就只表现为「这个 Agent 少了点什么」。MCP 工具按需连接，
+            // 此处不构造连接，跳过以免误报
+            let stale: Vec<String> = crate::config::unknown_whitelist_tools(&config, &registered)
+                .into_iter()
+                .filter(|name| !name.starts_with("mcp_"))
+                .collect();
+            if !stale.is_empty() {
+                println!(
+                    "{}: {}",
+                    t(
+                        "unknown_tools_in_whitelist",
+                        "白名单中不存在的工具（已被忽略）"
+                    ),
+                    stale.join(", ")
+                );
+            }
             Ok(())
         }
         None => crate::config_tui::run(paths),

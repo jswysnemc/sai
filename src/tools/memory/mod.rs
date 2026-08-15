@@ -130,3 +130,67 @@ pub fn register_readonly(registry: &mut ToolRegistry, config: AppConfig, paths: 
         },
     ));
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::memory::file_store::memory_contract;
+
+    /// 构造启用记忆的配置。
+    fn enabled_config() -> AppConfig {
+        let mut config = AppConfig::default();
+        config.plugins.memory.enabled = true;
+        config
+    }
+
+    /// 验证记忆契约点名的工具确实注册了。
+    ///
+    /// 契约把工具名写死在提示词里，改名或漏注册都不会让任何东西报错，
+    /// 只会让模型照着契约去调一个不存在的工具。
+    #[test]
+    fn every_tool_named_in_the_contract_is_registered() {
+        let temp = std::env::temp_dir().join("sai-memory-tools-test");
+        let paths = SaiPaths::for_tests(&temp);
+        let mut registry = ToolRegistry::new();
+
+        register(&mut registry, enabled_config(), paths);
+
+        let contract = memory_contract();
+        for name in ["write_memory", "read_memory", "delete_memory"] {
+            assert!(contract.contains(name), "契约未提及 {name}");
+            assert!(registry.contains(name), "契约提到 {name} 但它没有注册");
+        }
+    }
+
+    /// 验证只读注册不包含写入与删除。
+    ///
+    /// 子智能体走的是这条路径，放进写工具等于让它们改主体的记忆。
+    #[test]
+    fn the_readonly_registration_withholds_mutating_tools() {
+        let temp = std::env::temp_dir().join("sai-memory-tools-test");
+        let paths = SaiPaths::for_tests(&temp);
+        let mut registry = ToolRegistry::new();
+
+        register_readonly(&mut registry, enabled_config(), paths);
+
+        assert!(registry.contains("read_memory"));
+        assert!(registry.contains("list_memory"));
+        assert!(!registry.contains("write_memory"));
+        assert!(!registry.contains("delete_memory"));
+    }
+
+    /// 验证关闭记忆后一个记忆工具都不注册。
+    #[test]
+    fn nothing_is_registered_when_memory_is_off() {
+        let temp = std::env::temp_dir().join("sai-memory-tools-test");
+        let paths = SaiPaths::for_tests(&temp);
+        let mut config = AppConfig::default();
+        config.plugins.memory.enabled = false;
+        let mut registry = ToolRegistry::new();
+
+        register(&mut registry, config, paths);
+
+        assert!(!registry.contains("read_memory"));
+        assert!(!registry.contains("write_memory"));
+    }
+}
