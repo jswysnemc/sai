@@ -16,26 +16,6 @@ export function clearToolExpandState(): void {
 }
 
 /**
- * 判断工具是否处于用户记忆的展开态。
- *
- * @param toolId 工具生命周期 id
- * @returns 是否已记录为展开
- */
-export function isToolExpanded(toolId: string): boolean {
-  return expandedIds.has(toolId) && !collapsedIds.has(toolId);
-}
-
-/**
- * 组内是否有用户已展开的工具。
- *
- * @param toolIds 组内工具 id
- * @returns 是否应默认展开组
- */
-export function groupHasExpandedTool(toolIds: readonly string[]): boolean {
-  return toolIds.some((id) => isToolExpanded(id));
-}
-
-/**
  * 解析会话级展开偏好：用户操作优先于默认值。
  *
  * @param id 稳定标识
@@ -49,9 +29,9 @@ function resolveExpanded(id: string, initial: boolean): boolean {
 }
 
 /**
- * 读写会话级展开状态，避免流式更新/分组重挂载后自动收缩。
+ * 读写会话级展开状态，避免流式更新导致重挂载后自动收缩。
  *
- * @param id 工具或工具组稳定标识
+ * @param id 工具稳定标识
  * @param initial 首次且无记忆时的默认值
  * @returns 展开状态与切换函数
  */
