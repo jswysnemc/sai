@@ -770,13 +770,9 @@ fn gateway_validation_rejects_invalid_qq_token() {
 }
 
 #[test]
-fn meme_library_defaults_follow_persona() {
+fn meme_library_falls_back_to_the_builtin_name() {
     let memes = MemesPluginConfig::default();
-    assert_eq!(memes.library_for_persona(""), "sai");
-    assert_eq!(
-        memes.library_for_persona("Custom Persona"),
-        "custom-persona"
-    );
+    assert_eq!(memes.default_library(), "sai");
     assert!(memes.auto_send_enabled);
     assert_eq!(memes.auto_send_probability, 0.2);
     assert_eq!(memes.auto_send_min_confidence, 0.8);

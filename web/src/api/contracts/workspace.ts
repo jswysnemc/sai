@@ -257,7 +257,7 @@ export type FileMutation = {
   kind: "file" | "directory";
 };
 
-export type PromptKind = "personas" | "identities";
+export type PromptKind = "identities";
 
 export type PromptSummary = {
   name: string;

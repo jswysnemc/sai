@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 #[derive(Clone)]
 pub struct MemoryStore {
     config: MemoryConfig,
-    /// 文件式记忆的根目录，已按人格隔离
+    /// 文件式记忆的根目录
     notes_dir: PathBuf,
     evicted: EvictedStore,
 }
@@ -29,10 +29,10 @@ impl MemoryStore {
     /// 返回:
     /// - 记忆入口
     pub fn new(config: &AppConfig, paths: &SaiPaths) -> Self {
-        let state_dir = config.active_persona_memory_state_dir(paths).join("memory");
+        let state_dir = paths.state_dir.join("memory");
         Self {
             config: config.memory_config().clone(),
-            notes_dir: crate::memory::notes_dir(config, paths),
+            notes_dir: crate::memory::notes_dir(paths),
             evicted: EvictedStore::new(state_dir.join("evicted_context.db")),
         }
     }

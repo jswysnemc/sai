@@ -17,26 +17,15 @@ pub(super) async fn run_config(paths: &SaiPaths, args: ConfigArgs) -> Result<()>
         }
         Some(ConfigCommand::PromptSource) => {
             let config = AppConfig::load(paths)?;
-            let persona = config.prompt.active_persona.trim();
             let identity = config.prompt.active_identity.trim();
             println!(
                 "base_prompt_source: {}",
-                if persona.is_empty() {
-                    "built-in"
+                if config.system_prompt.is_some() {
+                    "config"
                 } else {
-                    "persona"
+                    "built-in"
                 }
             );
-            println!(
-                "active_persona: {}",
-                if persona.is_empty() { "Sai" } else { persona }
-            );
-            if !persona.is_empty() {
-                println!(
-                    "active_persona_file: {}",
-                    config.persona_path(paths, persona).display()
-                );
-            }
             println!(
                 "active_identity: {}",
                 if identity.is_empty() {
@@ -45,7 +34,6 @@ pub(super) async fn run_config(paths: &SaiPaths, args: ConfigArgs) -> Result<()>
                     identity
                 }
             );
-            println!("prompts_dir: {}", config.prompts_dir_path(paths).display());
             println!(
                 "identities_dir: {}",
                 config.identities_dir_path(paths).display()

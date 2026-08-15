@@ -1,5 +1,5 @@
 use super::model::AppConfig;
-use super::paths::{config_relative_path, persona_scope_name};
+use super::paths::config_relative_path;
 use crate::paths::SaiPaths;
 use crate::prompts::default_system_prompt;
 use anyhow::{Context, Result};
@@ -72,17 +72,6 @@ impl AppConfig {
         Ok(String::new())
     }
 
-    /// 解析 persona 提示词目录。
-    ///
-    /// 参数:
-    /// - `paths`: 应用目录集合
-    ///
-    /// 返回:
-    /// - 绝对提示词目录路径
-    pub fn prompts_dir_path(&self, paths: &SaiPaths) -> PathBuf {
-        config_relative_path(paths, &self.prompt.prompts_dir)
-    }
-
     /// 解析默认用户身份文件路径。
     ///
     /// 参数:
@@ -105,18 +94,6 @@ impl AppConfig {
         config_relative_path(paths, &self.prompt.identities_dir)
     }
 
-    /// 解析指定 persona 提示词路径。
-    ///
-    /// 参数:
-    /// - `paths`: 应用目录集合
-    /// - `name`: persona 文件名
-    ///
-    /// 返回:
-    /// - persona 提示词路径
-    pub fn persona_path(&self, paths: &SaiPaths, name: &str) -> PathBuf {
-        self.prompts_dir_path(paths).join(name)
-    }
-
     /// 解析指定身份档案路径。
     ///
     /// 参数:
@@ -127,84 +104,6 @@ impl AppConfig {
     /// - 身份档案路径
     pub fn identity_path(&self, paths: &SaiPaths, name: &str) -> PathBuf {
         self.identities_dir_path(paths).join(name)
-    }
-
-    /// 解析指定 persona 的长期记忆数据目录。
-    ///
-    /// 参数:
-    /// - `paths`: 应用目录集合
-    /// - `persona`: persona 名称
-    ///
-    /// 返回:
-    /// - persona 长期记忆数据目录
-    pub fn persona_memory_data_dir(&self, paths: &SaiPaths, persona: &str) -> PathBuf {
-        paths
-            .data_dir
-            .join("personas")
-            .join(persona_scope_name(persona))
-    }
-
-    /// 解析指定 persona 的运行状态目录。
-    ///
-    /// 参数:
-    /// - `paths`: 应用目录集合
-    /// - `persona`: persona 名称
-    ///
-    /// 返回:
-    /// - persona 运行状态目录
-    pub fn persona_memory_state_dir(&self, paths: &SaiPaths, persona: &str) -> PathBuf {
-        paths
-            .state_dir
-            .join("personas")
-            .join(persona_scope_name(persona))
-    }
-
-    /// 解析指定 persona 的技能目录。
-    ///
-    /// 参数:
-    /// - `paths`: 应用目录集合
-    /// - `persona`: persona 名称
-    ///
-    /// 返回:
-    /// - persona 技能目录
-    pub fn persona_skills_dir(&self, paths: &SaiPaths, persona: &str) -> PathBuf {
-        paths
-            .skills_dir
-            .join("personas")
-            .join(persona_scope_name(persona))
-    }
-
-    /// 解析当前 persona 的长期记忆数据目录。
-    ///
-    /// 参数:
-    /// - `paths`: 应用目录集合
-    ///
-    /// 返回:
-    /// - 当前 persona 长期记忆数据目录
-    pub fn active_persona_memory_data_dir(&self, paths: &SaiPaths) -> PathBuf {
-        self.persona_memory_data_dir(paths, self.prompt.active_persona.trim())
-    }
-
-    /// 解析当前 persona 的运行状态目录。
-    ///
-    /// 参数:
-    /// - `paths`: 应用目录集合
-    ///
-    /// 返回:
-    /// - 当前 persona 运行状态目录
-    pub fn active_persona_memory_state_dir(&self, paths: &SaiPaths) -> PathBuf {
-        self.persona_memory_state_dir(paths, self.prompt.active_persona.trim())
-    }
-
-    /// 解析当前 persona 的技能目录。
-    ///
-    /// 参数:
-    /// - `paths`: 应用目录集合
-    ///
-    /// 返回:
-    /// - 当前 persona 技能目录
-    pub fn active_persona_skills_dir(&self, paths: &SaiPaths) -> PathBuf {
-        self.persona_skills_dir(paths, self.prompt.active_persona.trim())
     }
 
     /// 读取当前激活的用户身份提示词。

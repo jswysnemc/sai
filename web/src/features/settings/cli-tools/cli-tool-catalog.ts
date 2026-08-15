@@ -40,7 +40,7 @@ const CLI_TOOL_CATALOG: Record<string, CliToolCatalogEntry> = {
   xuanxue: tool("xuanxue", "I Ching", "六十四卦", "I Ching reference tools", "六十四卦参考工具", "knowledge", BookOpen),
   image_generation: tool("image_generation", "Image generation", "图片生成", "Generate images from text prompts", "根据文本提示生成图片", "media", WandSparkles),
   print_image: tool("print_image", "Image output", "图片输出", "Render image files in supported terminals", "在支持的终端中显示图片", "media", Image),
-  memes: tool("memes", "Meme gallery", "表情图库", "Persona-aware local image library", "按人格选择本地图片库", "media", Images),
+  memes: tool("memes", "Meme gallery", "表情图库", "Local image library", "本地图片库", "media", Images),
   knowledge_base: tool("knowledge_base", "Knowledge base", "知识库", "Local files and semantic retrieval", "本地文件与语义检索", "knowledge", Database),
   archlinux: tool("archlinux", "Arch Linux", "Arch Linux", "ArchWiki and AUR lookup", "ArchWiki 与 AUR 查询", "knowledge", PackageSearch),
   man: tool("man", "Online manuals", "在线手册", "Search and read online manual pages", "搜索并阅读在线手册", "knowledge", TerminalSquare),

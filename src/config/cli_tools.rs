@@ -1,6 +1,5 @@
 use super::defaults::*;
 use super::model::MemoryConfig;
-use super::paths::persona_scope_name;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -355,8 +354,9 @@ pub struct PrintImagePluginConfig {
 pub struct MemesPluginConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
-    #[serde(default)]
-    pub persona_libraries: HashMap<String, String>,
+    /// 表情库映射；人格删除后只读 default 键，字段名保留以兼容旧配置
+    #[serde(default, alias = "persona_libraries")]
+    pub libraries: HashMap<String, String>,
     #[serde(default = "default_memes_width_percent")]
     pub width_percent: u8,
     #[serde(default = "default_memes_height_percent")]
@@ -374,26 +374,21 @@ pub struct MemesPluginConfig {
 }
 
 impl MemesPluginConfig {
-    /// 返回指定人格使用的表情库名称。
+
+    /// 返回当前使用的表情库名称。
+    ///
+    /// 人格系统删除后只有一个库，映射表里除 default 之外的键不再被读取。
     ///
     /// 参数:
-    /// - `persona`: 人格名称或作用域
+    /// - 无
     ///
     /// 返回:
-    /// - 显式映射、默认映射或归一化后的人格名称
-    pub fn library_for_persona(&self, persona: &str) -> String {
-        if persona.trim().is_empty() {
-            return self
-                .persona_libraries
-                .get("default")
-                .cloned()
-                .unwrap_or_else(|| "sai".to_string());
-        }
-        let persona = persona_scope_name(persona);
-        self.persona_libraries
-            .get(&persona)
+    /// - 配置的默认库名；未配置时为 sai
+    pub fn default_library(&self) -> String {
+        self.libraries
+            .get("default")
             .cloned()
-            .unwrap_or(persona)
+            .unwrap_or_else(|| "sai".to_string())
     }
 }
 

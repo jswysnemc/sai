@@ -244,14 +244,10 @@ pub struct ProviderConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptConfig {
-    #[serde(default = "default_prompts_dir")]
-    pub prompts_dir: String,
     #[serde(default = "default_identities_dir")]
     pub identities_dir: String,
     #[serde(default = "default_user_identity_file")]
     pub user_identity_file: String,
-    #[serde(default)]
-    pub active_persona: String,
     #[serde(default)]
     pub active_identity: String,
     /// 提交说明、会话标题和上下文压缩使用的内部提示词

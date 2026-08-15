@@ -3,7 +3,7 @@ export type ManagedSkill = {
   id: string;
   name: string;
   description: string;
-  /** global / persona / claude / codex / opencode / project_* 等扫描源 */
+  /** global / claude / codex / opencode / project_* 等扫描源 */
   scope: string;
   directory_name: string;
   path: string;

@@ -99,10 +99,8 @@ export type PromptTemplatesConfig = {
 };
 
 export type PromptConfig = {
-  prompts_dir?: string;
   identities_dir?: string;
   user_identity_file?: string;
-  active_persona?: string;
   active_identity?: string;
   templates?: PromptTemplatesConfig;
   [key: string]: unknown;

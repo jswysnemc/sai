@@ -47,10 +47,8 @@ impl Default for AppConfig {
 impl Default for PromptConfig {
     fn default() -> Self {
         Self {
-            prompts_dir: default_prompts_dir(),
             identities_dir: default_identities_dir(),
             user_identity_file: default_user_identity_file(),
-            active_persona: String::new(),
             active_identity: String::new(),
             templates: super::PromptTemplatesConfig::default(),
         }
@@ -173,10 +171,6 @@ pub(super) fn default_background_command_log_max_bytes() -> u64 {
 
 pub(super) fn default_background_command_stop_grace_seconds() -> u64 {
     5
-}
-
-pub(super) fn default_prompts_dir() -> String {
-    "prompts".to_string()
 }
 
 pub(super) fn default_identities_dir() -> String {

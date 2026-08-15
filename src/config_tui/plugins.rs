@@ -194,7 +194,7 @@ fn cli_tool_names() -> [(&'static str, &'static str, &'static str); 20] {
         (
             "memes",
             t("Memes", "表情包"),
-            t("Persona meme library and send size", "人格表情库与发送尺寸"),
+            t("Meme library and send size", "表情库与发送尺寸"),
         ),
         (
             "knowledge_base",

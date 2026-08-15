@@ -119,16 +119,13 @@ pub fn register_skills(
 /// - `paths`: 应用目录路径集合
 ///
 /// 返回:
-/// - `(scope, 根目录)` 列表；含 Sai 全局/人格与常见三方目录
+/// - `(scope, 根目录)` 列表；含 Sai 全局目录与常见三方目录
 pub(crate) fn skill_source_roots(
     config: &AppConfig,
     paths: &SaiPaths,
 ) -> Vec<(&'static str, PathBuf)> {
+    let _ = config;
     let mut roots = vec![("global", paths.skills_dir.clone())];
-    let active = config.active_persona_skills_dir(paths);
-    if active != paths.skills_dir {
-        roots.push(("persona", active));
-    }
     roots.extend(third_party_skill_roots());
     roots
 }
@@ -721,16 +718,6 @@ mod tests {
             "---\nname: shared-skill\ndescription: shared\n---\nbody\n",
         )
         .unwrap();
-        // 在 persona 目录放置指向同一 skill 的软链接目录
-        let persona = config.active_persona_skills_dir(&paths);
-        if persona != paths.skills_dir {
-            std::fs::create_dir_all(&persona).unwrap();
-            #[cfg(unix)]
-            {
-                let link = persona.join("shared-skill-link");
-                std::os::unix::fs::symlink(&primary, &link).unwrap();
-            }
-        }
         let entries = skill_entries(&config, &paths).unwrap();
         let count = entries
             .iter()

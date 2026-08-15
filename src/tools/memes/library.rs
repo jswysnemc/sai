@@ -142,7 +142,7 @@ fn selected_library(args: &Value, config: &AppConfig) -> String {
             config
                 .plugins
                 .memes
-                .library_for_persona(&config.prompt.active_persona)
+                .default_library()
         })
 }
 
@@ -158,7 +158,7 @@ fn auto_meme_state_path(config: &AppConfig, paths: &SaiPaths) -> PathBuf {
     let library = config
         .plugins
         .memes
-        .library_for_persona(&config.prompt.active_persona);
+        .default_library();
     paths
         .state_dir
         .join("memes")

@@ -15,9 +15,9 @@ use serde_json::Value;
 ///
 /// 返回:
 /// - 记忆库
-pub(super) fn library(config: &AppConfig, paths: &SaiPaths) -> FileMemoryLibrary {
+pub(super) fn library(_config: &AppConfig, paths: &SaiPaths) -> FileMemoryLibrary {
     let workspace = crate::runtime_cwd::current_dir().ok();
-    FileMemoryLibrary::new(&crate::memory::notes_dir(config, paths), workspace.as_deref())
+    FileMemoryLibrary::new(&crate::memory::notes_dir(paths), workspace.as_deref())
 }
 
 /// 读取必填的字符串参数。

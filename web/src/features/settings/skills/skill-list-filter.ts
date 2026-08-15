@@ -38,7 +38,6 @@ export function filterManagedSkills(
 export function skillScopeLabel(scope: string, t: (en: string, zh: string) => string): string {
   const labels: Record<string, [string, string]> = {
     global: ["Global", "全局"],
-    persona: ["Persona", "人格"],
     claude: ["Claude", "Claude"],
     codex: ["Codex", "Codex"],
     agents: ["Agents", "Agents"],

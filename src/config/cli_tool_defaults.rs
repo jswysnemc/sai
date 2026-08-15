@@ -241,7 +241,7 @@ impl Default for MemesPluginConfig {
     fn default() -> Self {
         Self {
             enabled: default_true(),
-            persona_libraries: HashMap::new(),
+            libraries: HashMap::new(),
             width_percent: default_memes_width_percent(),
             height_percent: default_memes_height_percent(),
             max_image_mb: default_memes_max_image_mb(),

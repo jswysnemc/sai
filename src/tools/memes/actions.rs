@@ -82,7 +82,7 @@ pub(crate) async fn plan_auto_meme_before_reply(
     if rand::random::<f32>() > meme_config.auto_send_probability.clamp(0.0, 1.0) {
         return Ok(None);
     }
-    let library = meme_config.library_for_persona(&config.prompt.active_persona);
+    let library = meme_config.default_library();
     let mut candidates = rank_memes(paths, &library, user_message, &[], 12)?;
     if candidates.is_empty() {
         candidates = rank_memes(paths, &library, "", &[], 12)?;

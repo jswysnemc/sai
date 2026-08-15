@@ -7,7 +7,6 @@ use std::path::PathBuf;
 /// Web 提示词文件类型。
 #[derive(Clone, Copy)]
 pub(crate) enum PromptKind {
-    Persona,
     Identity,
 }
 
@@ -33,7 +32,6 @@ pub(crate) struct PromptDocument {
 /// - 对应提示词类型
 pub(crate) fn parse_kind(value: &str) -> Result<PromptKind> {
     match value {
-        "personas" => Ok(PromptKind::Persona),
         "identities" => Ok(PromptKind::Identity),
         _ => bail!("unsupported prompt kind: {value}"),
     }
@@ -126,20 +124,6 @@ pub(crate) fn save(
             if current_path.exists() {
                 std::fs::remove_file(current_path)?;
             }
-            if matches!(kind, PromptKind::Persona) {
-                move_directory(
-                    config.persona_memory_data_dir(paths, &current_file_name),
-                    config.persona_memory_data_dir(paths, &file_name),
-                )?;
-                move_directory(
-                    config.persona_memory_state_dir(paths, &current_file_name),
-                    config.persona_memory_state_dir(paths, &file_name),
-                )?;
-                move_directory(
-                    config.persona_skills_dir(paths, &current_file_name),
-                    config.persona_skills_dir(paths, &file_name),
-                )?;
-            }
         }
     }
     read(paths, kind, &file_name)
@@ -162,18 +146,12 @@ pub(crate) fn remove(paths: &SaiPaths, kind: PromptKind, name: &str) -> Result<b
         return Ok(false);
     }
     std::fs::remove_file(path)?;
-    if matches!(kind, PromptKind::Persona) {
-        remove_directory(config.persona_memory_data_dir(paths, &file_name))?;
-        remove_directory(config.persona_memory_state_dir(paths, &file_name))?;
-        remove_directory(config.persona_skills_dir(paths, &file_name))?;
-    }
     Ok(true)
 }
 
 /// 返回指定类型的提示词目录。
 fn prompt_directory(paths: &SaiPaths, config: &AppConfig, kind: PromptKind) -> PathBuf {
     match kind {
-        PromptKind::Persona => config.prompts_dir_path(paths),
         PromptKind::Identity => config.identities_dir_path(paths),
     }
 }
@@ -208,29 +186,6 @@ fn format_content(content: &str) -> String {
     } else {
         format!("{content}\n")
     }
-}
-
-/// 删除存在的提示词作用域目录。
-fn remove_directory(path: PathBuf) -> Result<()> {
-    if path.exists() {
-        std::fs::remove_dir_all(path)?;
-    }
-    Ok(())
-}
-
-/// 移动存在的提示词作用域目录。
-fn move_directory(from: PathBuf, to: PathBuf) -> Result<()> {
-    if !from.exists() || from == to {
-        return Ok(());
-    }
-    if let Some(parent) = to.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    if to.exists() {
-        std::fs::remove_dir_all(&to)?;
-    }
-    std::fs::rename(from, to)?;
-    Ok(())
 }
 
 #[cfg(test)]

@@ -20,7 +20,7 @@ pub(crate) fn build_base_system_prompt(
     tools_enabled: bool,
     extra_system_prompt: Option<&str>,
 ) -> Result<String> {
-    // 1. Agent / persona / 用户身份
+    // 1. Agent 人设与用户身份
     let mut base_system_prompt = config.system_prompt(paths)?;
 
     // 2. 全局 AGENT.md 与项目 .AGENT.md / .CLAUDE.md 等附加指令（可按 Agent 关闭）
