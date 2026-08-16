@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import type { SessionContextPrompt, SessionTimeline, SubagentDetail } from "../../api/contracts";
 import { buildTrajectory } from "./trajectory-build";
@@ -14,6 +14,7 @@ import { referencedSubagentIds } from "./trajectory-subagent";
 import "./trajectory-view.css";
 
 type TrajectoryViewProps = {
+  sessionId?: string;
   timeline: SessionTimeline | undefined;
   /** 当前会话的系统提示词快照；每次请求都会重发，作为轨迹首条记录 */
   contextPrompt?: SessionContextPrompt;
@@ -32,17 +33,26 @@ const NO_HIDDEN_KINDS: ReadonlySet<TrajectoryRecordKind> = new Set();
  * @param props 会话时间线与加载状态
  * @returns 轨迹视图
  */
-export function TrajectoryView({ timeline, contextPrompt, loading }: TrajectoryViewProps) {
+export function TrajectoryView({ sessionId, timeline, contextPrompt, loading }: TrajectoryViewProps) {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<TrajectoryScaleMode>("duration");
   const [hiddenKinds, setHiddenKinds] = useState<ReadonlySet<TrajectoryRecordKind>>(NO_HIDDEN_KINDS);
   const [collapsedTurns, setCollapsedTurns] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [range, setRange] = useState<TimeDomain | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const debugRequests = useQuery({
+    queryKey: ["session-debug-requests", sessionId],
+    queryFn: () => api.sessions.debugRequests(sessionId!),
+    enabled: Boolean(sessionId),
+    staleTime: 15_000
+  });
 
   // 先建一次拿到被引用的子智能体，再按 id 取详情织入——
   // 列表接口不含 timeline，只有详情接口才有分步记录
-  const base = useMemo(() => buildTrajectory(timeline, contextPrompt), [timeline, contextPrompt]);
+  const base = useMemo(
+    () => buildTrajectory(timeline, contextPrompt, undefined, debugRequests.data),
+    [timeline, contextPrompt, debugRequests.data]
+  );
   const subagentIds = useMemo(() => referencedSubagentIds(base.records), [base.records]);
   const subagentQueries = useQueries({
     queries: subagentIds.map((id) => ({
@@ -62,8 +72,10 @@ export function TrajectoryView({ timeline, contextPrompt, loading }: TrajectoryV
     return found;
   }, [subagentRevision]);
   const model = useMemo(
-    () => (subagents.size > 0 ? buildTrajectory(timeline, contextPrompt, subagents) : base),
-    [base, timeline, contextPrompt, subagents]
+    () => (subagents.size > 0
+      ? buildTrajectory(timeline, contextPrompt, subagents, debugRequests.data)
+      : base),
+    [base, timeline, contextPrompt, subagents, debugRequests.data]
   );
   const bounds = useMemo(() => trajectoryDomain(model.records), [model.records]);
   const turnCounts = useMemo(() => countByTurn(model.records), [model.records]);
@@ -75,6 +87,20 @@ export function TrajectoryView({ timeline, contextPrompt, loading }: TrajectoryV
     () => model.records.find((record) => record.id === selectedId) ?? null,
     [model.records, selectedId]
   );
+  const selectedResultRef = selected?.detail.resultRef ?? null;
+  const fullToolResult = useQuery({
+    queryKey: ["trajectory-tool-result", sessionId, selectedResultRef],
+    queryFn: () => api.sessions.toolResult(sessionId!, selectedResultRef!),
+    enabled: Boolean(sessionId && selectedResultRef && selected?.kind === "tool"),
+    staleTime: 60_000
+  });
+  const selectedWithFullOutput = useMemo(() => {
+    if (!selected || !fullToolResult.data || selected.kind !== "tool") return selected;
+    return {
+      ...selected,
+      detail: { ...selected.detail, output: fullToolResult.data.content }
+    };
+  }, [selected, fullToolResult.data]);
   const collapsibleTurnIds = useMemo(
     () => model.turns.filter((turn) => (turnCounts.get(turn.turnId) ?? 0) > 1).map((turn) => turn.turnId),
     [model.turns, turnCounts]
@@ -124,6 +150,7 @@ export function TrajectoryView({ timeline, contextPrompt, loading }: TrajectoryV
   return (
     <div className="trajectory-view">
       <TrajectoryToolbar
+        sessionId={sessionId}
         query={query}
         onQueryChange={setQuery}
         mode={mode}
@@ -157,7 +184,7 @@ export function TrajectoryView({ timeline, contextPrompt, loading }: TrajectoryV
             loading={loading}
           />
         </div>
-        <TrajectoryDetails record={selected} onClose={() => setSelectedId(null)} />
+        <TrajectoryDetails record={selectedWithFullOutput} onClose={() => setSelectedId(null)} />
       </div>
     </div>
   );

@@ -160,7 +160,11 @@ pub(crate) fn tool_command_title_colored_tense(
 /// 返回:
 /// - 单行 ANSI 状态文本
 pub(crate) fn tool_event_text(label: &str, status: &str) -> String {
-    tool_status_line(label, &color_status(status), ToolHealth::from_status(status))
+    tool_status_line(
+        label,
+        &color_status(status),
+        ToolHealth::from_status(status),
+    )
 }
 
 /// 以显式状态语义生成工具状态事件行。
@@ -269,10 +273,7 @@ pub(crate) fn tool_verb(name: &str, tense: ToolVerbTense) -> &'static str {
 /// - 切换动词后的标签；无法识别前缀时原样返回
 pub(crate) fn retarget_label_tense(name: &str, label: &str, tense: ToolVerbTense) -> String {
     let target = tool_verb(name, tense);
-    for candidate in [
-        ToolVerbTense::Progressive,
-        ToolVerbTense::Perfect,
-    ] {
+    for candidate in [ToolVerbTense::Progressive, ToolVerbTense::Perfect] {
         let verb = tool_verb(name, candidate);
         if let Some(rest) = label.strip_prefix(verb) {
             if rest.is_empty() || rest.starts_with(' ') {

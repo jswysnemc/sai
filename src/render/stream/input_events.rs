@@ -226,11 +226,7 @@ impl StreamRenderer {
             None
         };
         // 编辑类：有统计用 +N -M；尚无字段时用 arg/…，不用 run
-        self.write_live_tool_status(
-            &event_label,
-            live_status.as_deref().unwrap_or("arg"),
-            false,
-        )?;
+        self.write_live_tool_status(&event_label, live_status.as_deref().unwrap_or("arg"), false)?;
         self.resume_work_spinner()?;
         Ok(())
     }

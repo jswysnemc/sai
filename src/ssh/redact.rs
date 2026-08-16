@@ -59,17 +59,17 @@ mod tests {
     fn replaces_a_known_secret() {
         let text = "connecting with password hunter2 to host";
         let redacted = redact(text, &["hunter2".to_string()]);
-        assert_eq!(redacted, "connecting with password <secret redacted> to host");
+        assert_eq!(
+            redacted,
+            "connecting with password <secret redacted> to host"
+        );
         assert!(!redacted.contains("hunter2"));
     }
 
     #[test]
     fn replaces_every_occurrence_of_multiple_secrets() {
         let text = "pass=topsecret key-pass=keyphrase again topsecret";
-        let redacted = redact(
-            text,
-            &["topsecret".to_string(), "keyphrase".to_string()],
-        );
+        let redacted = redact(text, &["topsecret".to_string(), "keyphrase".to_string()]);
         assert!(!redacted.contains("topsecret"));
         assert!(!redacted.contains("keyphrase"));
         assert_eq!(redacted.matches(SECRET_PLACEHOLDER).count(), 3);

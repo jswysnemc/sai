@@ -9,6 +9,7 @@ import { RtkFilterSettings } from "./rtk-filter-settings";
 import { CompactionModelField } from "./compaction-model-field";
 import { MemoryExtractionModelField } from "./memory-extraction-model-field";
 import { useI18n } from "../i18n/use-i18n";
+import { DebugSettings } from "./runtime/debug-settings";
 
 type RuntimeSettingsSectionProps = {
   config: AppConfig;
@@ -103,6 +104,7 @@ export function RuntimeSettingsSection({ config, subview, onConfigChange }: Runt
               onChange={(next) => onConfigChange({ ...config, display: next })}
             />
           </SettingsGroup>
+          <DebugSettings config={config} onConfigChange={onConfigChange} />
         </div>
       );
     case "engine":

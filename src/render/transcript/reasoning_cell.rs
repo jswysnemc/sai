@@ -440,7 +440,11 @@ mod tests {
         );
         let plain = strip_ansi_for_test(&rendered);
         let body: Vec<&str> = plain.lines().skip(1).collect();
-        assert_eq!(body.len(), 2, "blank paragraph must not become a gutter gap: {body:?}");
+        assert_eq!(
+            body.len(),
+            2,
+            "blank paragraph must not become a gutter gap: {body:?}"
+        );
         assert!(body[0].contains("第一段"));
         assert!(body[1].contains("我先检查"));
         assert!(body.iter().all(|line| !line.trim().is_empty()));

@@ -177,7 +177,13 @@ fn queue_rejects_finished_subagent_and_empty_message() {
     let owner = "inbox-reject-owner";
     let (subagent, _cancel) = create_persistent(owner, "reject target");
     assert!(queue_subagent_message(&subagent.id, "user", "   ").is_err());
-    finish_subagent(&subagent.id, "completed", Some("done".to_string()), None, None);
+    finish_subagent(
+        &subagent.id,
+        "completed",
+        Some("done".to_string()),
+        None,
+        None,
+    );
 
     assert!(queue_subagent_message(&subagent.id, "user", "hello").is_err());
     assert!(queue_subagent_message("missing-subagent", "user", "hello").is_err());
@@ -187,12 +193,8 @@ fn queue_rejects_finished_subagent_and_empty_message() {
 #[test]
 fn stop_request_requires_persistent_subagent() {
     let owner = "stop-request-owner";
-    let (one_shot, _one_shot_cancel) = create_subagent_for_owner(
-        owner,
-        "one shot".to_string(),
-        "general".to_string(),
-        5,
-    );
+    let (one_shot, _one_shot_cancel) =
+        create_subagent_for_owner(owner, "one shot".to_string(), "general".to_string(), 5);
     assert!(request_subagent_stop_for_owner(owner, &one_shot.id, true).is_err());
 
     let (persistent, _cancel) = create_persistent(owner, "stop target");
@@ -210,7 +212,11 @@ fn stop_request_requires_persistent_subagent() {
 fn cancel_idle_persistent_subagent() {
     let owner = "cancel-idle-owner";
     let (subagent, mut cancel_rx) = create_persistent(owner, "cancel idle target");
-    assert!(park_subagent(&subagent.id, Some("segment".to_string()), None));
+    assert!(park_subagent(
+        &subagent.id,
+        Some("segment".to_string()),
+        None
+    ));
 
     let cancelled = cancel_subagent(&subagent.id).unwrap();
 
@@ -223,14 +229,24 @@ fn cancel_idle_persistent_subagent() {
 fn finish_guards_terminal_state_and_renotifies_from_idle() {
     let owner = "finish-guard-owner";
     let (subagent, _cancel) = create_persistent(owner, "finish guard target");
-    assert!(park_subagent(&subagent.id, Some("segment".to_string()), None));
+    assert!(park_subagent(
+        &subagent.id,
+        Some("segment".to_string()),
+        None
+    ));
     // 主 Agent 已消费 idle 段完成通知
     acknowledge_finished_notices(owner, std::slice::from_ref(&subagent.id));
     assert!(pending_finished_notices(owner)
         .iter()
         .all(|notice| notice.id != subagent.id));
 
-    finish_subagent(&subagent.id, "completed", Some("final".to_string()), None, None);
+    finish_subagent(
+        &subagent.id,
+        "completed",
+        Some("final".to_string()),
+        None,
+        None,
+    );
     let finished = subagent_snapshot(&subagent.id).unwrap();
     assert_eq!(finished.status, "completed");
     // idle → completed 是新事件,通知重新投递

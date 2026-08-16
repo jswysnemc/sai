@@ -36,7 +36,10 @@ struct TrustHostKeyRequest {
 pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
         .route("/api/ssh/hosts", get(list).post(create))
-        .route("/api/ssh/hosts/:id", axum::routing::put(update).delete(remove))
+        .route(
+            "/api/ssh/hosts/:id",
+            axum::routing::put(update).delete(remove),
+        )
         .route("/api/ssh/hosts/import", get(scan_config).post(import))
         .route("/api/ssh/known-hosts/trust", post(trust))
 }

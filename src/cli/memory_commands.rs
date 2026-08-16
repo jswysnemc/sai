@@ -46,7 +46,11 @@ pub(super) fn run_memory(paths: &SaiPaths, args: MemoryArgs) -> Result<()> {
             Some((entry, scope)) => {
                 println!("# {}", entry.front.name);
                 println!("{}", entry.front.description);
-                println!("[{}/{}]", entry.front.memory_type.as_str(), scope_label(scope));
+                println!(
+                    "[{}/{}]",
+                    entry.front.memory_type.as_str(),
+                    scope_label(scope)
+                );
                 println!();
                 println!("{}", entry.body);
             }

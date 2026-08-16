@@ -3,12 +3,11 @@ use super::slash_panel::SlashPanel;
 use super::viewport::InlineViewport;
 use crate::cli::repl_chrome::{
     chrome_input_content_cols, chrome_input_pad_row, chrome_input_row, ChromeInputPrefix,
-    CHROME_INPUT_INNER_PAD_ROWS, CHROME_INPUT_PAD_ROWS, CHROME_INPUT_PREFIX_COLS, ReplChrome,
+    ReplChrome, CHROME_INPUT_INNER_PAD_ROWS, CHROME_INPUT_PAD_ROWS, CHROME_INPUT_PREFIX_COLS,
 };
 use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
 use crate::cli::repl_input_render::{
-    repl_cursor_position_for_cols, repl_prompt_rows_for_cols,
-    repl_visible_input_lines,
+    repl_cursor_position_for_cols, repl_prompt_rows_for_cols, repl_visible_input_lines,
 };
 use crate::cli::repl_text::{repl_input_lines, visible_width};
 use crate::cli::REPL_MAX_VISIBLE_INPUT_ROWS;
@@ -227,11 +226,7 @@ impl ComposerFrame {
         }
         // 3. 输入上方保留一行空白（无背景，纯空行）
         for _ in 0..CHROME_INPUT_PAD_ROWS {
-            queue!(
-                output,
-                MoveTo(0, row),
-                Print(" ".repeat(cols))
-            )?;
+            queue!(output, MoveTo(0, row), Print(" ".repeat(cols)))?;
             row = row.saturating_add(1);
         }
         // 4. 输入条内上边距：整行底色让输入框有厚度
@@ -283,7 +278,6 @@ impl ComposerFrame {
             row.saturating_add(1)
         };
 
-
         // 4. composer 是受管区域底部：面板收起或行数减少后下方残留一并清除；
         //    贴底时无下方区域，跳过以免 MoveTo 越界被 clamp 到底行误清 footer
         if end_row < viewport.size().rows {
@@ -312,12 +306,8 @@ impl ComposerFrame {
         let (display_lines, collapsed) = if self.input.is_empty() {
             (vec![placeholder_text()], false)
         } else {
-            let visible = repl_visible_input_lines(
-                "",
-                &lines,
-                REPL_MAX_VISIBLE_INPUT_ROWS,
-                self.is_pasted,
-            );
+            let visible =
+                repl_visible_input_lines("", &lines, REPL_MAX_VISIBLE_INPUT_ROWS, self.is_pasted);
             (visible.lines, visible.collapsed)
         };
         let mut styled_display_lines =
@@ -330,11 +320,8 @@ impl ComposerFrame {
         }
         let input_rows = repl_prompt_rows_for_cols("", &display_lines, content_cols).max(1);
         let slash_panel = SlashPanel::new(&self.input, self.slash_selection);
-        let shell_hint = ShellHintPanel::new(
-            &self.input,
-            &self.chrome.model,
-            &self.chrome.directory,
-        );
+        let shell_hint =
+            ShellHintPanel::new(&self.input, &self.chrome.model, &self.chrome.directory);
         // 折叠判定用显式标志：原文恰好 3 行时显示行数与原始行数相等，
         // 按长度比较会走错分支，把光标画到 composer 边框之外
         let (cursor_col, cursor_row_offset) = if !collapsed {
@@ -517,10 +504,19 @@ mod tests {
         frame.draw_lines(&mut output, &viewport, None).unwrap();
 
         let output = String::from_utf8(output).unwrap();
-        let hide = output.find("\x1b[?25l").expect("repaint must hide the cursor first");
-        let show = output.rfind("\x1b[?25h").expect("repaint must show the cursor at the end");
-        let first_clear = output.find("\x1b[2K").expect("repaint clears reserved rows");
-        assert!(hide < first_clear, "cursor must be hidden before any clearing");
+        let hide = output
+            .find("\x1b[?25l")
+            .expect("repaint must hide the cursor first");
+        let show = output
+            .rfind("\x1b[?25h")
+            .expect("repaint must show the cursor at the end");
+        let first_clear = output
+            .find("\x1b[2K")
+            .expect("repaint clears reserved rows");
+        assert!(
+            hide < first_clear,
+            "cursor must be hidden before any clearing"
+        );
         assert!(show > hide);
         // Show 之后不再有任何绘制输出，光标不会再被移动
         assert!(!output[show + "\x1b[?25h".len()..].contains("\x1b[2K"));
@@ -602,7 +598,8 @@ mod tests {
         let mut sink = Vec::new();
         let (_, signature) = first_frame.draw_lines(&mut sink, &viewport, None).unwrap();
 
-        let changed = ComposerFrame::new(chrome, "hello world".to_string(), 11, false, Vec::new(), 0);
+        let changed =
+            ComposerFrame::new(chrome, "hello world".to_string(), 11, false, Vec::new(), 0);
         let mut output = Vec::new();
         changed
             .draw_lines(&mut output, &viewport, Some(&signature))

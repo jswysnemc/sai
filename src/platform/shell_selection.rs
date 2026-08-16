@@ -1,5 +1,7 @@
 use std::ffi::{OsStr, OsString};
 
+use base64::Engine;
+
 /// Shell 的参数风格。
 ///
 /// 按风格而不是按程序名分派：同一种风格可能对应多个程序名
@@ -61,14 +63,15 @@ pub(crate) fn shell_flavor(program: &OsStr) -> ShellFlavor {
 /// - `script`: 脚本文本
 ///
 /// 返回:
-/// - 参数列表，末项为脚本本身
+/// - 参数列表；PowerShell 的脚本位于 UTF-16LE Base64 参数中
 pub(crate) fn script_args(flavor: ShellFlavor, script: &str) -> Vec<OsString> {
     match flavor {
-        // /S 保留引号原样，否则首尾引号会被 cmd 吃掉
+        // /S 保留引号原样，否则首尾引号会被 cmd 吃掉；先切换到 UTF-8，
+        // 使没有 PowerShell 的 Windows 机器也不会把中文输出写成系统代码页
         ShellFlavor::Cmd => vec![
             OsString::from("/S"),
             OsString::from("/C"),
-            OsString::from(script),
+            OsString::from(format!("chcp 65001>nul & {script}")),
         ],
         ShellFlavor::Posix => vec![OsString::from("-lc"), OsString::from(script)],
         // 关掉横幅、配置文件与交互提示：钩子与工具调用都在非交互场景下运行，
@@ -78,10 +81,42 @@ pub(crate) fn script_args(flavor: ShellFlavor, script: &str) -> Vec<OsString> {
             OsString::from("-NoLogo"),
             OsString::from("-NoProfile"),
             OsString::from("-NonInteractive"),
-            OsString::from("-Command"),
-            OsString::from(script),
+            OsString::from("-EncodedCommand"),
+            powershell_encoded_command(script),
         ],
     }
+}
+
+/// 构造 PowerShell 的 UTF-16LE Base64 命令参数。
+///
+/// PowerShell 的 `-EncodedCommand` 明确要求 UTF-16LE（而不是当前系统代码页或
+/// UTF-8）编码。将脚本作为单个 Base64 参数传入后，路径中的空格、引号、反斜杠及
+/// 中文字符都不会再经过 Windows 命令行的二次解析。
+///
+/// 参数:
+/// - `script`: 需要执行的 PowerShell 脚本文本
+///
+/// 返回:
+/// - 可直接作为 `-EncodedCommand` 值传入的 Base64 字符串
+fn powershell_encoded_command(script: &str) -> OsString {
+    // 1. 在脚本最前面统一设置 PowerShell 与原生命令的 UTF-8 编码
+    let script = format!(
+        "[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false); \
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); \
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false); \
+{script}"
+    );
+
+    // 2. 按 PowerShell 约定将 UTF-16 code unit 写成小端字节
+    let mut utf16le = Vec::with_capacity(script.len() * 2);
+    for code_unit in script.encode_utf16() {
+        utf16le.extend_from_slice(&code_unit.to_le_bytes());
+    }
+
+    // 3. Base64 只使用命令行安全字符，避免参数再次被解释
+    base64::engine::general_purpose::STANDARD
+        .encode(utf16le)
+        .into()
 }
 
 /// 返回程序文件名的小写形式。
@@ -281,26 +316,64 @@ mod tests {
         assert!(windows_interactive_shell_args(OsStr::new("custom-shell")).is_empty());
     }
 
-    /// 验证每种风格的参数末项都是脚本本身。
+    /// 验证 POSIX 风格的参数末项是原始脚本。
     #[test]
     fn the_script_is_always_the_final_argument() {
-        for flavor in [ShellFlavor::Cmd, ShellFlavor::PowerShell, ShellFlavor::Posix] {
+        for flavor in [ShellFlavor::Posix] {
             let args = script_args(flavor, "echo sai");
 
             assert_eq!(args.last().unwrap(), OsStr::new("echo sai"));
         }
     }
 
-    /// 验证 PowerShell 以非交互方式执行且不加载用户配置。
+    /// 验证 cmd 执行前切换到 UTF-8 代码页。
+    #[test]
+    fn cmd_switches_to_utf8_before_running_the_script() {
+        let args = script_args(ShellFlavor::Cmd, "echo 中文");
+
+        assert_eq!(args[0], OsString::from("/S"));
+        assert_eq!(args[1], OsString::from("/C"));
+        assert_eq!(args[2], OsString::from("chcp 65001>nul & echo 中文"));
+    }
+
+    /// 验证 PowerShell 以非交互方式执行且不加载用户配置，并使用编码命令。
     ///
-    /// 少了 -NoProfile，用户 profile 里的任何报错都会让钩子整体失败。
+    /// 少了 -NoProfile，用户 profile 里的任何报错都会让钩子整体失败；
+    /// 使用原始 -Command 则会让路径和引号再次经过 Windows 参数解析。
     #[test]
     fn powershell_runs_non_interactively_without_a_profile() {
         let args = script_args(ShellFlavor::PowerShell, "echo sai");
 
         assert!(args.contains(&OsString::from("-NoProfile")));
         assert!(args.contains(&OsString::from("-NonInteractive")));
-        assert!(args.contains(&OsString::from("-Command")));
+        assert!(args.contains(&OsString::from("-EncodedCommand")));
+        assert!(!args.contains(&OsString::from("-Command")));
+    }
+
+    /// 验证编码命令可以还原中文、空格路径和引号等敏感字符。
+    #[test]
+    fn powershell_encoded_command_is_utf16le_and_sets_utf8_output() {
+        let script = r#"& 'C:\Program Files\工具\say''s.ps1' --name '中文'"#;
+        let args = script_args(ShellFlavor::PowerShell, script);
+        let encoded = args
+            .last()
+            .expect("PowerShell 参数必须包含编码命令")
+            .to_string_lossy();
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(encoded.as_ref())
+            .expect("编码命令必须是有效 Base64");
+
+        assert_eq!(bytes.len() % 2, 0);
+        let code_units = bytes
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]));
+        let code_units = code_units.collect::<Vec<_>>();
+        let decoded = String::from_utf16(&code_units).expect("编码命令必须是有效 UTF-16LE");
+
+        assert!(decoded.contains("[Console]::InputEncoding"));
+        assert!(decoded.contains("[Console]::OutputEncoding"));
+        assert!(decoded.contains("$OutputEncoding"));
+        assert!(decoded.ends_with(script));
     }
 
     /// 验证 cmd 保留脚本中的引号。

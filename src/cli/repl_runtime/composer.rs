@@ -184,8 +184,11 @@ impl ReplRuntime {
         };
         // 内容未变时跳过重绘：composer 每 32ms 刷新一次，而绘制是
         // 逐行清除再打印，Windows Terminal 下这一空窗表现为底部闪烁
-        let (cursor_row, signature) =
-            composer.draw_lines(stdout, &self.viewport, self.last_composer_signature.as_ref())?;
+        let (cursor_row, signature) = composer.draw_lines(
+            stdout,
+            &self.viewport,
+            self.last_composer_signature.as_ref(),
+        )?;
         self.last_composer_signature = Some(signature);
         self.last_cursor_row = Some(cursor_row);
         Ok(())
@@ -239,7 +242,8 @@ impl ReplRuntime {
         let mode = self.stream_draft.mode.unwrap_or(fallback_mode);
         // 斜杠命令与 shell 不是聊天正文：进控制队列等本轮结束后由主循环执行。
         // 混进消息队列会被当成提问发给模型，且会连带丢弃其后的排队消息
-        if is_control_command_text(&text) {            self.control_queue.push_back(text);
+        if is_control_command_text(&text) {
+            self.control_queue.push_back(text);
             self.stream_draft = StreamComposerDraft {
                 mode: Some(mode),
                 ..StreamComposerDraft::default()

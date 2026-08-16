@@ -83,9 +83,7 @@ impl SubagentCell {
         let label = snapshot
             .as_ref()
             .map(|snapshot| format!("{} {}", tool_verb("subagent", tense), snapshot.description))
-            .unwrap_or_else(|| {
-                tool_event_label_tense("subagent", Some(&self.arguments), tense)
-            });
+            .unwrap_or_else(|| tool_event_label_tense("subagent", Some(&self.arguments), tense));
         // 存活条目附带实时阶段（工具进度 / Token 统计 / 待命提示），供面板展示
         let detail = snapshot
             .as_ref()

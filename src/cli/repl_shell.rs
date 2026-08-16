@@ -42,8 +42,8 @@ pub(super) async fn execute_repl_shell(command: &str) -> Result<ReplShellResult>
             )
         })?;
     // 2. 按标准输出、标准错误顺序合并可见结果
-    let mut output = String::from_utf8_lossy(&result.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&result.stderr);
+    let mut output = crate::platform::output_encoding::decode_output(&result.stdout);
+    let stderr = crate::platform::output_encoding::decode_output(&result.stderr);
     if !stderr.is_empty() {
         if !output.is_empty() && !output.ends_with('\n') {
             output.push('\n');

@@ -63,9 +63,7 @@ impl SlashPanel {
         self.suggestions
             .iter()
             .enumerate()
-            .map(|(index, suggestion)| {
-                format_suggestion(*suggestion, cols, index == self.selected)
-            })
+            .map(|(index, suggestion)| format_suggestion(*suggestion, cols, index == self.selected))
             .collect()
     }
 
@@ -168,7 +166,10 @@ mod tests {
             !selected.contains("48;5;") && !selected.contains("48;2;") && !selected.contains("[K"),
             "selected must not paint a solid background bar: {selected:?}"
         );
-        assert!(selected.contains("\x1b[97m"), "selected command should be bright white");
+        assert!(
+            selected.contains("\x1b[97m"),
+            "selected command should be bright white"
+        );
     }
 
     /// 未选中行保持弱化样式，前缀为空位以对齐选中箭头。
@@ -180,7 +181,10 @@ mod tests {
         };
         let line = format_suggestion(suggestion, 72, false);
         let plain = crate::render::activity_animation::strip_ansi_for_test(&line);
-        assert!(plain.starts_with("  /help") || plain.starts_with(' '), "{plain}");
+        assert!(
+            plain.starts_with("  /help") || plain.starts_with(' '),
+            "{plain}"
+        );
         assert!(!line.contains("48;5;"));
         assert!(line.contains("\x1b[2m"));
     }

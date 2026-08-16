@@ -34,17 +34,17 @@ const FALLBACK_SECTIONS: PromptSectionOption[] = [
   },
   {
     id: "state_contract",
-    label_en: "Runtime state contract",
-    label_zh: "运行时状态契约",
-    hint_en: "Explains how to read working directory, time and other state tags. Turning it off may degrade behaviour.",
-    hint_zh: "说明如何读取工作目录、时间等状态标签。关掉后模型可能读不懂运行状态。"
+    label_en: "Runtime context",
+    label_zh: "运行时上下文",
+    hint_en: "Working directory, time, model, shell, current Goal and the contract for reading their state tags.",
+    hint_zh: "工作目录、时间、模型、Shell、当前 Goal，以及读取这些状态标签的说明。"
   },
   {
     id: "memory_contract",
-    label_en: "Memory contract",
-    label_zh: "记忆契约",
-    hint_en: "Tells the model when to write memories. Only injected when memory is enabled.",
-    hint_zh: "告诉模型何时该写记忆，仅在记忆功能启用时注入。"
+    label_en: "Memory context",
+    label_zh: "记忆上下文",
+    hint_en: "Memory usage rules and the relevant memory index for this turn. Only injected when memory is enabled.",
+    hint_zh: "记忆使用规则与本轮相关记忆索引，仅在记忆功能启用时注入。"
   },
   {
     id: "mode_reminder",
@@ -99,15 +99,16 @@ export function AgentPromptSections({ sections, options, onChange }: AgentPrompt
       <div className="agent-prompt-sections-list">
         {catalog.map((section) => (
           <label key={section.id} className="agent-prompt-section-item">
-            <input
-              type="checkbox"
-              checked={enabled(section.id)}
-              onChange={(event) => toggle(section.id, event.target.checked)}
-            />
             <span>
               <strong>{t(section.label_en, section.label_zh)}</strong>
               <small>{t(section.hint_en, section.hint_zh)}</small>
             </span>
+            <input
+              type="checkbox"
+              className="switch-control"
+              checked={enabled(section.id)}
+              onChange={(event) => toggle(section.id, event.target.checked)}
+            />
           </label>
         ))}
       </div>

@@ -68,7 +68,10 @@ fn collect_messages(turns: &[Turn]) -> Vec<&str> {
 /// 返回:
 /// - 与消息一一对应的字符额度
 fn allocate(messages: &[&str], budget: usize) -> Vec<usize> {
-    let lengths: Vec<usize> = messages.iter().map(|message| message.chars().count()).collect();
+    let lengths: Vec<usize> = messages
+        .iter()
+        .map(|message| message.chars().count())
+        .collect();
     let total: usize = lengths.iter().sum();
     // 1. 预算足够时全量保留，不做任何截断
     if total <= budget {
@@ -187,7 +190,9 @@ mod tests {
     /// 验证预算不足时没有任何一条消息整体消失。
     #[test]
     fn no_message_disappears_under_pressure() {
-        let turns: Vec<Turn> = (0..10).map(|index| turn(&"长".repeat(500 + index))).collect();
+        let turns: Vec<Turn> = (0..10)
+            .map(|index| turn(&"长".repeat(500 + index)))
+            .collect();
 
         let section = user_messages_section(&turns, 600);
 

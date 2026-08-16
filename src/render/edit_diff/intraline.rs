@@ -133,11 +133,8 @@ mod tests {
     /// 中段替换：变化区覆盖被替换词，对齐到词边界。
     #[test]
     fn highlights_the_replaced_words_only() {
-        let pair = intraline_pair(
-            "let total = old_value + 1;",
-            "let total = new_value + 1;",
-        )
-        .unwrap();
+        let pair =
+            intraline_pair("let total = old_value + 1;", "let total = new_value + 1;").unwrap();
 
         let old_text: String = "let total = old_value + 1;"
             .chars()

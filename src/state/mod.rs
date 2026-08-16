@@ -16,6 +16,7 @@ mod sessions;
 mod store_context_epoch;
 mod store_lifecycle;
 mod store_provider_input;
+mod store_read_tracking;
 mod store_usage;
 pub(crate) mod tool_history;
 pub(crate) mod turn_messages;

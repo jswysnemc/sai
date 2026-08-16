@@ -121,5 +121,3 @@ fn cli_diff_wraps_long_lines_with_background_continuation() {
         );
     }
 }
-
-

@@ -66,7 +66,9 @@ impl MemoryDirectory {
     /// 返回:
     /// - 文件路径；标识非法时报错
     pub fn entry_path(&self, name: &str) -> Result<PathBuf> {
-        Ok(self.root.join(format!("{}.{ENTRY_EXTENSION}", validate_name(name)?)))
+        Ok(self
+            .root
+            .join(format!("{}.{ENTRY_EXTENSION}", validate_name(name)?)))
     }
 
     /// 创建目录。

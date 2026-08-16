@@ -71,6 +71,10 @@ export type TrajectoryRecordDetail = {
   imageUrls?: string[];
   /** 系统提示词按来源拆分的分区，供详情面板分段展示 */
   sections?: Array<{ id: string; label: string; content: string }>;
+  /** 是否直接来自真实供应商请求体 */
+  actualRequest?: boolean;
+  /** 是否为当前配置即时预览，而非历史真实请求 */
+  preview?: boolean;
 };
 
 /** 记录种类到界面标签的映射所需的双语文案对。 */

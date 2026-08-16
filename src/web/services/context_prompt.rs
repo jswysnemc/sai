@@ -162,12 +162,14 @@ pub(crate) async fn load_session_context_prompt(
                 &dynamic.runtime_context,
             ));
         }
-        sections.push(section(
-            "mode",
-            locale.text("Mode instructions", "模式说明"),
-            locale.text("7. Current mode instructions", "7. 当前模式说明"),
-            &mode_preview(mode, locale),
-        ));
+        if config.prompt_sections.mode_reminder {
+            sections.push(section(
+                "mode",
+                locale.text("Mode instructions", "模式说明"),
+                locale.text("7. Current mode instructions", "7. 当前模式说明"),
+                &mode_preview(mode, locale),
+            ));
+        }
         if !dynamic.memory_index.trim().is_empty() {
             sections.push(section(
                 "memory",
@@ -297,7 +299,7 @@ fn build_tools_markdown_section(
 
     // 4. 与 Agent::new 对齐：过滤后再挂 goal 工具与渐进 load
     //    create_goal / get_goal / update_goal / load 不依赖 enabled_tools 白名单
-    crate::goal::register_tools(&mut registry, store.goal_file());
+    crate::goal::register_tools_for_config(&mut registry, store.goal_file(), config)?;
     let deferred = config.agent_deferred_tools();
     let progressive = !deferred.is_empty();
     if progressive {
@@ -425,9 +427,11 @@ fn apply_web_agent_tool_filter(config: &AppConfig, registry: &mut ToolRegistry) 
         .map(String::as_str)
         .collect::<Vec<_>>();
     let mut filtered = registry.clone_filtered(&allowed);
-    for name in ["subagent", "todo", "ask_question"] {
-        if registry.contains(name) {
-            let _ = filtered.register_from(registry, name);
+    if !runtime.exclusive {
+        for name in ["subagent", "todo", "ask_question"] {
+            if registry.contains(name) {
+                filtered.register_from(registry, name)?;
+            }
         }
     }
     *registry = filtered;

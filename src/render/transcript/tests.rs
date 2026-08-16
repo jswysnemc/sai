@@ -779,9 +779,7 @@ fn markdown_hr_stays_inset_in_transcript_display() {
         .max(1);
     let inset = crate::render::markdown_blocks::MARKDOWN_HR_SIDE_INSET
         .min(content_width.saturating_sub(1) / 2);
-    let expected_dashes = content_width
-        .saturating_sub(inset.saturating_mul(2))
-        .max(1);
+    let expected_dashes = content_width.saturating_sub(inset.saturating_mul(2)).max(1);
     let lines = cell.display_lines(content_width, &options());
     let hr = lines.iter().find_map(|line| {
         let plain = strip_ansi(line.as_str());
@@ -830,7 +828,10 @@ fn settled_write_file_shows_stat_line_not_run() {
         .collect::<String>();
     let plain = crate::render::activity_animation::strip_ansi_for_test(&rendered);
     let first = plain.lines().next().unwrap_or("");
-    assert!(first.contains("Wrote") && first.contains("notes.md"), "{first}");
+    assert!(
+        first.contains("Wrote") && first.contains("notes.md"),
+        "{first}"
+    );
     assert!(first.contains('+'), "{first}");
     assert!(!first.contains("run"), "{first}");
     assert!(plain.contains("alpha") || plain.contains("beta"), "{plain}");
@@ -861,7 +862,10 @@ fn history_edit_file_restores_stat_line_and_diff_body() {
         .collect::<String>();
     // Summary 默认：Replaced +N -M 摘要行 + 冻结行级正文（无旧式 Added 标题）
     assert!(rendered.contains("Replaced"), "{rendered}");
-    assert!(rendered.contains("+1") || rendered.contains('+'), "{rendered}");
+    assert!(
+        rendered.contains("+1") || rendered.contains('+'),
+        "{rendered}"
+    );
     assert!(rendered.contains("old"), "{rendered}");
     assert!(rendered.contains("new"), "{rendered}");
     assert!(!rendered.contains("Added"), "{rendered}");

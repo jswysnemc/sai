@@ -279,7 +279,7 @@ mod tests {
                 context_chars: Some(128_000),
                 max_output_tokens: None,
                 tags: vec!["tool".to_string()],
-                            thinking_levels: Vec::new(),
+                thinking_levels: Vec::new(),
             },
         )]);
 
@@ -292,7 +292,7 @@ mod tests {
                     context_chars: Some(64_000),
                     max_output_tokens: Some(16_384),
                     tags: vec!["thinking".to_string(), "tool".to_string()],
-                                    thinking_levels: Vec::new(),
+                    thinking_levels: Vec::new(),
                 },
             )],
         );

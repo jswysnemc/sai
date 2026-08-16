@@ -421,8 +421,12 @@ fn background_result(
 /// 返回:
 /// - JSON 字符串
 fn foreground_output(output: std::process::Output) -> Result<String> {
-    let stdout = clip_output(&String::from_utf8_lossy(&output.stdout));
-    let stderr = clip_output(&String::from_utf8_lossy(&output.stderr));
+    let stdout = clip_output(&crate::platform::output_encoding::decode_output(
+        &output.stdout,
+    ));
+    let stderr = clip_output(&crate::platform::output_encoding::decode_output(
+        &output.stderr,
+    ));
     Ok(serde_json::to_string_pretty(&json!({
         "mode": "foreground",
         "success": output.status.success(),
@@ -506,7 +510,9 @@ fn read_log_text(path: &str) -> Result<String> {
     if !path.exists() {
         return Ok(String::new());
     }
-    Ok(std::fs::read_to_string(path)?)
+    Ok(crate::platform::output_encoding::decode_output(
+        &std::fs::read(path)?,
+    ))
 }
 
 /// 校验计划模式只读命令。

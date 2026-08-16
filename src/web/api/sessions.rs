@@ -7,6 +7,7 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use std::path::Path as FilePath;
 
+mod debug;
 mod permission_timeline;
 
 #[derive(Serialize)]
@@ -58,6 +59,12 @@ struct RollbackSessionRequest {
 #[derive(Deserialize)]
 struct HistoryQuery {
     limit: Option<usize>,
+}
+
+#[derive(Deserialize)]
+struct ToolResultQuery {
+    #[serde(rename = "ref")]
+    result_ref: String,
 }
 
 #[derive(Deserialize)]
@@ -142,6 +149,8 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/sessions/:id/rollback", post(rollback))
         .route("/api/sessions/:id/permission-audit", get(permission_audit))
         .route("/api/sessions/:id/context-prompt", get(context_prompt))
+        .route("/api/sessions/:id/tool-result", get(tool_result))
+        .merge(debug::routes())
         .route("/api/sessions/:id/compact", post(compact))
 }
 
@@ -186,6 +195,31 @@ async fn context_prompt(
     .await
     .map_err(WebError::from)?;
     Ok(Json(prompt))
+}
+
+/// 读取轨迹中被截断展示的完整工具输出。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `id`: 会话标识
+/// - `query.result_ref`: 会话内相对结果引用
+///
+/// 返回:
+/// - 完整工具输出文本；引用由 StateStore 校验，禁止越出当前会话目录
+async fn tool_result(
+    State(state): State<WebAppState>,
+    Path(id): Path<String>,
+    Query(query): Query<ToolResultQuery>,
+) -> WebResult<Json<serde_json::Value>> {
+    let store = StateStore::for_session(&state.paths, &id)
+        .map_err(|error| WebError::not_found(error.to_string()))?;
+    let content = store
+        .read_tool_result_ref(&query.result_ref)
+        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    Ok(Json(serde_json::json!({
+        "result_ref": query.result_ref,
+        "content": content,
+    })))
 }
 
 /// 返回会话最近的权限审计事件。

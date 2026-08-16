@@ -43,7 +43,11 @@ pub(super) async fn run_search_command_with_timeout(
 ) -> Result<SearchRun> {
     // 1. 改用 spawn 以便超时后能拿到子进程句柄并主动终止，
     //    output() 超时只会丢弃 future，子进程会继续跑成孤儿
-    let mut child = match command.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
+    let mut child = match command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
         Ok(child) => child,
         Err(err) if err.kind() == ErrorKind::NotFound => return Ok(SearchRun::Missing),
         Err(err) => return Err(err.into()),

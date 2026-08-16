@@ -1,5 +1,6 @@
 import type {
   SessionContextPrompt,
+  SessionDebugRequest,
   SessionTimeline,
   SessionTimelineTurn,
   TimelineToolEntry,
@@ -46,17 +47,23 @@ export type TrajectoryTurnHeader = {
 export function buildTrajectory(
   timeline: SessionTimeline | undefined,
   contextPrompt?: SessionContextPrompt,
-  subagents?: ReadonlyMap<string, SubagentDetail>
+  subagents?: ReadonlyMap<string, SubagentDetail>,
+  debugRequests?: readonly SessionDebugRequest[]
 ): TrajectoryModel {
   const records: TrajectoryRecord[] = [];
   const turns: TrajectoryTurnHeader[] = [];
-  if (contextPrompt?.content?.trim()) {
+  const actualRequests = indexDebugRequests(debugRequests);
+  const hasActualRequest = actualRequests.size > 0;
+  if (!hasActualRequest && contextPrompt?.content?.trim()) {
     records.push(systemRecord(contextPrompt));
   }
   if (!timeline) return { records, turns };
 
   for (const turn of timeline.turns) {
     const firstIndex = records.length;
+    if (hasActualRequest && !hasActualRequestForTurn(turn.turn_id, actualRequests) && contextPrompt?.content?.trim()) {
+      records.push(systemRecord(contextPrompt));
+    }
     const rounds = groupToolsByRound(turn.tools ?? []);
     const roundOf = new Map<number, number>();
     rounds.forEach((group, position) => roundOf.set(group.round, position + 1));
@@ -102,10 +109,16 @@ export function buildTrajectory(
     });
 
     const messages = [...(turn.messages ?? [])].sort((left, right) => left.seq - right.seq);
+    const firstRequest = actualRequestRecord(turn, 1, actualRequests);
+    if (firstRequest) push(firstRequest);
     pushMessagesAfter(messages, 0, turn, 1, push);
 
     for (const group of rounds) {
       const round = roundOf.get(group.round) ?? 1;
+      if (round > 1) {
+        const request = actualRequestRecord(turn, round, actualRequests);
+        if (request) push(request);
+      }
       for (const tool of group.tools) {
         const record = toolRecord(tool, turn, round);
         push(record);
@@ -182,6 +195,79 @@ export function buildTrajectory(
   return { records, turns };
 }
 
+/** 按持久化轮次和模型子轮编号索引真实请求快照。 */
+function indexDebugRequests(requests?: readonly SessionDebugRequest[]): ReadonlyMap<string, SessionDebugRequest> {
+  const indexed = new Map<string, SessionDebugRequest>();
+  for (const request of requests ?? []) {
+    if (!request.turn_id || !request.assistant_round || !request.request_body) continue;
+    indexed.set(`${request.turn_id}/${request.assistant_round}`, request);
+  }
+  return indexed;
+}
+
+/** 判断某轮是否已有至少一条真实模型请求快照。 */
+function hasActualRequestForTurn(turnId: string, requests: ReadonlyMap<string, SessionDebugRequest>): boolean {
+  for (const key of requests.keys()) {
+    if (key.startsWith(`${turnId}/`)) return true;
+  }
+  return false;
+}
+
+/** 把真实请求体中的 system 消息和工具定义转换为轨迹记录。 */
+function actualRequestRecord(
+  turn: SessionTimelineTurn,
+  round: number,
+  requests: ReadonlyMap<string, SessionDebugRequest>
+): Omit<TrajectoryRecord, "index" | "turnStart" | "roundStart"> | null {
+  const request = requests.get(`${turn.turn_id}/${round}`);
+  const body = request?.request_body;
+  if (!body) return null;
+  const messages = [
+    ...(Array.isArray(body.messages) ? body.messages : []),
+    ...(Array.isArray(body.input) ? body.input : [])
+  ];
+  const system = messages
+    .filter((message): message is Record<string, unknown> => Boolean(message && typeof message === "object" && message.role === "system"))
+    .map((message) => message.content)
+    .map(contentToText)
+    .filter(Boolean)
+    .join("\n\n");
+  const explicitSystem = contentToText(body.system);
+  const systemContent = [explicitSystem, system].filter(Boolean).join("\n\n");
+  const tools = Array.isArray(body.tools) ? JSON.stringify(body.tools, null, 2) : "";
+  const sections = [
+    systemContent ? { id: "actual-system", label: "System prompt", content: systemContent } : null,
+    tools ? { id: "actual-tools", label: "Tool definitions", content: tools } : null
+  ].filter((section): section is { id: string; label: string; content: string } => section !== null);
+  if (sections.length === 0) return null;
+  const chars = sections.reduce((total, section) => total + section.content.length, 0);
+  return {
+    id: `${turn.turn_id}/actual-request/${round}`,
+    kind: "system",
+    turnId: turn.turn_id,
+    turnSeq: turn.seq,
+    round,
+    summary: `${chars} chars${Array.isArray(body.tools) ? ` · ${body.tools.length} tools` : ""}`,
+    label: `actual #${round}`,
+    startedAt: null,
+    durationMs: null,
+    failed: false,
+    running: false,
+    detail: { sections, actualRequest: true }
+  };
+}
+
+/** 将 OpenAI 文本或多段内容转换为可读文本。 */
+function contentToText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((part): part is Record<string, unknown> => Boolean(part && typeof part === "object"))
+    .map((part) => (typeof part.text === "string" ? part.text : ""))
+    .filter(Boolean)
+    .join("\n");
+}
+
 /**
  * 把系统提示词快照转换为轨迹首条记录。
  *
@@ -214,7 +300,8 @@ function systemRecord(prompt: SessionContextPrompt): TrajectoryRecord {
     running: false,
     detail: {
       input: prompt.content,
-      sections: prompt.sections
+      sections: prompt.sections,
+      preview: true
     }
   };
 }

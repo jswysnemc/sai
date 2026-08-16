@@ -44,7 +44,12 @@ impl HostKey {
 
     /// 渲染为 known_hosts 中的一行。
     pub(crate) fn to_line(&self) -> String {
-        format!("{} {} {}", self.host_field(), self.algorithm, self.key_base64)
+        format!(
+            "{} {} {}",
+            self.host_field(),
+            self.algorithm,
+            self.key_base64
+        )
     }
 }
 

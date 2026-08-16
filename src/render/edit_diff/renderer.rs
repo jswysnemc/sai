@@ -350,11 +350,17 @@ fn render_update_lines(path: &Path, lines: &[LineChange]) -> String {
             .map(|(delete, add)| intraline_pair(&delete.text, &add.text))
             .collect();
         for (offset, line) in deletes.iter().enumerate() {
-            let emphasis = pairs.get(offset).and_then(|pair| pair.as_ref()).map(|pair| pair.old.clone());
+            let emphasis = pairs
+                .get(offset)
+                .and_then(|pair| pair.as_ref())
+                .map(|pair| pair.old.clone());
             output.push_str(&render_plain_line(path, line, width, emphasis));
         }
         for (offset, line) in adds.iter().enumerate() {
-            let emphasis = pairs.get(offset).and_then(|pair| pair.as_ref()).map(|pair| pair.new.clone());
+            let emphasis = pairs
+                .get(offset)
+                .and_then(|pair| pair.as_ref())
+                .map(|pair| pair.new.clone());
             output.push_str(&render_plain_line(path, line, width, emphasis));
         }
     }

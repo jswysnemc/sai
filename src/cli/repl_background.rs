@@ -164,7 +164,11 @@ fn draw_task_list(
 ) -> Result<()> {
     queue!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
     // 全屏视图接管前删除图像放置，避免旧图叠在面板上
-    write!(stdout, "{}", crate::render::terminal_image::KITTY_DELETE_PLACEMENTS)?;
+    write!(
+        stdout,
+        "{}",
+        crate::render::terminal_image::KITTY_DELETE_PLACEMENTS
+    )?;
     draw_line(stdout, t("background tasks", "后台任务"))?;
     draw_line(
         stdout,
@@ -251,7 +255,11 @@ async fn show_task_output(
     let output: ReplBackgroundOutput = serde_json::from_str(&raw)?;
     loop {
         queue!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
-        write!(stdout, "{}", crate::render::terminal_image::KITTY_DELETE_PLACEMENTS)?;
+        write!(
+            stdout,
+            "{}",
+            crate::render::terminal_image::KITTY_DELETE_PLACEMENTS
+        )?;
         draw_line(
             stdout,
             &format!(

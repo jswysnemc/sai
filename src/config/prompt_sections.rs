@@ -27,10 +27,10 @@ pub struct PromptSectionToggles {
     /// 可用 skills 目录
     #[serde(default = "default_true")]
     pub skills_catalog: bool,
-    /// 运行时状态覆盖契约
+    /// 运行时状态、状态解释契约与当前 Goal 上下文
     #[serde(default = "default_true")]
     pub state_contract: bool,
-    /// 记忆使用契约
+    /// 记忆使用契约与本轮记忆索引
     #[serde(default = "default_true")]
     pub memory_contract: bool,
     /// 当前运行模式的约束说明
@@ -79,7 +79,6 @@ impl PromptSectionToggles {
             mode_reminder: false,
         }
     }
-
 }
 
 /// 一个分段的元信息，供配置界面枚举与展示。
@@ -121,17 +120,17 @@ pub const PROMPT_SECTIONS: &[PromptSectionInfo] = &[
     },
     PromptSectionInfo {
         id: "state_contract",
-        label_en: "Runtime state contract",
-        label_zh: "运行时状态契约",
-        hint_en: "Explains how to read the working directory, time and other state tags. Turning it off may degrade behaviour.",
-        hint_zh: "说明如何读取工作目录、时间等状态标签。关掉后模型可能读不懂运行状态。",
+        label_en: "Runtime context",
+        label_zh: "运行时上下文",
+        hint_en: "Working directory, time, model, shell, current Goal and the contract for reading their state tags.",
+        hint_zh: "工作目录、时间、模型、Shell、当前 Goal，以及读取这些状态标签的说明。",
     },
     PromptSectionInfo {
         id: "memory_contract",
-        label_en: "Memory contract",
-        label_zh: "记忆契约",
-        hint_en: "Tells the model when to write memories. Only injected when memory is enabled.",
-        hint_zh: "告诉模型何时该写记忆，仅在记忆功能启用时注入。",
+        label_en: "Memory context",
+        label_zh: "记忆上下文",
+        hint_en: "Memory usage rules and the relevant memory index for this turn. Only injected when memory is enabled.",
+        hint_zh: "记忆使用规则与本轮相关记忆索引，仅在记忆功能启用时注入。",
     },
     PromptSectionInfo {
         id: "mode_reminder",
@@ -167,7 +166,11 @@ mod tests {
         let toggles = PromptSectionToggles::all_disabled();
         let json = serde_json::to_value(&toggles).unwrap();
 
-        assert!(json.as_object().unwrap().values().all(|value| value == false));
+        assert!(json
+            .as_object()
+            .unwrap()
+            .values()
+            .all(|value| value == false));
     }
 
     /// 验证清单覆盖结构体的每一个字段。

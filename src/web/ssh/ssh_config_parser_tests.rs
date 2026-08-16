@@ -86,7 +86,9 @@ fn separates_consecutive_host_blocks() {
 
 #[test]
 fn ignores_directives_before_any_host_block() {
-    let parsed = parse_ssh_config("ServerAliveInterval 60\nUser orphan\nHost box\n  HostName box.example.com\n");
+    let parsed = parse_ssh_config(
+        "ServerAliveInterval 60\nUser orphan\nHost box\n  HostName box.example.com\n",
+    );
 
     assert_eq!(parsed.len(), 1);
     assert_eq!(parsed[0].username, "");

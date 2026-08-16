@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SessionTimeline, SessionTimelineTurn, TimelineToolEntry } from "../../api/contracts";
+import type { SessionDebugRequest, SessionTimeline, SessionTimelineTurn, TimelineToolEntry } from "../../api/contracts";
 import { buildTrajectory } from "./trajectory-build";
 
 /**
@@ -218,5 +218,26 @@ describe("buildTrajectory 的系统提示词记录", () => {
     const model = buildTrajectory(undefined, { ...prompt, content: "   " } as never);
 
     expect(model.records).toHaveLength(0);
+  });
+
+  it("优先展示真实请求体中的系统提示词和工具定义", () => {
+    const request: SessionDebugRequest = {
+      request_id: "req-1",
+      turn_id: "t1",
+      assistant_round: 1,
+      request_body: {
+        messages: [{ role: "system", content: "Actual system prompt" }],
+        tools: [{ type: "function", function: { name: "read_file" } }]
+      }
+    };
+    const model = buildTrajectory(timeline([turn({ turn_id: "t1" })]), prompt as never, undefined, [request]);
+    const actual = model.records.find((record) => record.detail.actualRequest);
+
+    expect(actual?.label).toBe("actual #1");
+    expect(actual?.detail.sections?.map((section) => section.label)).toEqual([
+      "System prompt",
+      "Tool definitions"
+    ]);
+    expect(actual?.detail.sections?.[0].content).toBe("Actual system prompt");
   });
 });

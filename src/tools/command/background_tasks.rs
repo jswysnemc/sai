@@ -505,7 +505,7 @@ pub(super) fn read_log_head(path: &str, head_lines: usize, max_bytes: u64) -> Re
     let mut file = std::fs::File::open(path)?;
     let mut bytes = Vec::new();
     file.by_ref().take(max_bytes).read_to_end(&mut bytes)?;
-    let text = String::from_utf8_lossy(&bytes).into_owned();
+    let text = crate::platform::output_encoding::decode_output(&bytes);
     let lines = text.lines().collect::<Vec<_>>();
     let end = lines.len().min(head_lines);
     let truncated = metadata.len() > max_bytes || lines.len() > head_lines;
@@ -531,7 +531,7 @@ pub(super) fn read_log_tail(path: &str, tail_lines: usize, max_bytes: u64) -> Re
     file.seek(SeekFrom::Start(start))?;
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes)?;
-    let text = String::from_utf8_lossy(&bytes).into_owned();
+    let text = crate::platform::output_encoding::decode_output(&bytes);
     let lines = text.lines().collect::<Vec<_>>();
     let start = lines.len().saturating_sub(tail_lines);
     Ok(LogTail::new(

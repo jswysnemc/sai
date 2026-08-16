@@ -218,10 +218,7 @@ fn deferred_from_whitelist(tools: &[&str], keep_visible: &[&str]) -> Vec<String>
 ///
 /// 返回:
 /// - 补齐后的白名单
-fn expand_enabled_tool_conveniences(
-    mut tools: Vec<String>,
-    add_conveniences: bool,
-) -> Vec<String> {
+fn expand_enabled_tool_conveniences(mut tools: Vec<String>, add_conveniences: bool) -> Vec<String> {
     if tools.is_empty() {
         return tools;
     }
@@ -442,20 +439,31 @@ mod tool_convenience_tests {
     /// 独占白名单要的是精确控制，多补一个会让「两个工具」变成三个。
     #[test]
     fn the_write_file_convenience_is_skipped_when_exclusive() {
-        assert!(expand_enabled_tool_conveniences(tools(&["write_file"]), true)
-            .iter()
-            .any(|tool| tool == "str_replace"));
-        assert!(!expand_enabled_tool_conveniences(tools(&["write_file"]), false)
-            .iter()
-            .any(|tool| tool == "str_replace"));
+        assert!(
+            expand_enabled_tool_conveniences(tools(&["write_file"]), true)
+                .iter()
+                .any(|tool| tool == "str_replace")
+        );
+        assert!(
+            !expand_enabled_tool_conveniences(tools(&["write_file"]), false)
+                .iter()
+                .any(|tool| tool == "str_replace")
+        );
     }
 
     /// 验证不重复补同一个工具。
     #[test]
     fn the_convenience_is_added_once() {
-        let expanded = expand_enabled_tool_conveniences(tools(&["write_file", "str_replace"]), true);
+        let expanded =
+            expand_enabled_tool_conveniences(tools(&["write_file", "str_replace"]), true);
 
-        assert_eq!(expanded.iter().filter(|tool| *tool == "str_replace").count(), 1);
+        assert_eq!(
+            expanded
+                .iter()
+                .filter(|tool| *tool == "str_replace")
+                .count(),
+            1
+        );
     }
 
     /// 验证空白名单不被补出内容。

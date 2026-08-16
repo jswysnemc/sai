@@ -124,7 +124,10 @@ mod tests {
             ChatMessage::plain("assistant", "回复"),
         ];
 
-        assert!(!memory_index_already_injected(&history, &index("- [一](a.md)")));
+        assert!(!memory_index_already_injected(
+            &history,
+            &index("- [一](a.md)")
+        ));
     }
 
     /// 验证只与最近一次注入比较。
@@ -176,6 +179,9 @@ mod tests {
             format!("<{MEMORY_TAG}>\n- [一](a.md)"),
         )];
 
-        assert!(!memory_index_already_injected(&history, &index("- [一](a.md)")));
+        assert!(!memory_index_already_injected(
+            &history,
+            &index("- [一](a.md)")
+        ));
     }
 }

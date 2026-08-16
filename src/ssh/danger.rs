@@ -26,10 +26,7 @@ fn rules() -> &'static [DangerRule] {
             ),
             (r"(?i)\bmkfs(\.\w+)?\b", "格式化文件系统"),
             (r"(?i)\bwipefs\b", "擦除文件系统签名"),
-            (
-                r"(?i)\bdd\b[^\n]*\bof=/dev/",
-                "使用 dd 直接写入块设备",
-            ),
+            (r"(?i)\bdd\b[^\n]*\bof=/dev/", "使用 dd 直接写入块设备"),
             (r"(?i)>\s*/dev/[sh]d[a-z]", "重定向覆盖块设备"),
             (r"(?i)\b(parted|fdisk|gdisk|sfdisk)\b", "修改磁盘分区表"),
             (
@@ -49,7 +46,10 @@ fn rules() -> &'static [DangerRule] {
                 r"(?i)\bchown\s+(-R|--recursive)\b[^\n]*\s+/(\s|$)",
                 "递归修改根目录属主",
             ),
-            (r":\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:", "fork 炸弹"),
+            (
+                r":\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:",
+                "fork 炸弹",
+            ),
             (
                 r"(?i)\b(curl|wget)\b[^\n]*\|\s*(sudo\s+)?(ba)?sh\b",
                 "下载脚本直接管道执行",
@@ -64,10 +64,9 @@ fn rules() -> &'static [DangerRule] {
         specs
             .iter()
             .filter_map(|(pattern, reason)| {
-                Regex::new(pattern).ok().map(|pattern| DangerRule {
-                    pattern,
-                    reason,
-                })
+                Regex::new(pattern)
+                    .ok()
+                    .map(|pattern| DangerRule { pattern, reason })
             })
             .collect()
     })

@@ -144,8 +144,7 @@ fn has_complete_any_field(arguments: &str, keys: &[&str]) -> bool {
 /// 提取仍未闭合的正文字段内容（优先 content/new_string 等，忽略已闭合的 path）。
 fn partial_open_body_field_content(arguments: &str) -> Option<String> {
     for key in BODY_KEYS {
-        if started_json_string_field(arguments, key)
-            && !complete_json_string_field(arguments, key)
+        if started_json_string_field(arguments, key) && !complete_json_string_field(arguments, key)
         {
             return partial_json_string_field(arguments, key);
         }
@@ -441,21 +440,13 @@ mod tests {
         assert!(path_done.arguments_preview.contains("notes.md"));
 
         let line1 = tracker
-            .update(
-                0,
-                "write_file",
-                r#"{"path":"notes.md","content":"alpha"#,
-            )
+            .update(0, "write_file", r#"{"path":"notes.md","content":"alpha"#)
             .unwrap();
         assert!(line1.arguments_preview.contains("alpha"));
 
         // 同行小增长不重复发
         assert!(tracker
-            .update(
-                0,
-                "write_file",
-                r#"{"path":"notes.md","content":"alpha!"#,
-            )
+            .update(0, "write_file", r#"{"path":"notes.md","content":"alpha!"#,)
             .is_none());
 
         let line2 = tracker

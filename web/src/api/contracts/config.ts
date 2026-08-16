@@ -80,6 +80,11 @@ export type TerminalConfig = {
   [key: string]: unknown;
 };
 
+export type DebugConfig = {
+  enabled: boolean;
+  retain_logs?: boolean;
+};
+
 export type ContextConfig = {
   default_max_chars: number;
   compaction_provider_id?: string;
@@ -159,6 +164,7 @@ export type AppConfig = {
   plugins?: Record<string, Record<string, unknown>>;
   prompt?: PromptConfig;
   terminal?: TerminalConfig;
+  debug?: DebugConfig;
   tools?: Record<string, unknown>;
   skills?: Record<string, unknown>;
   display?: Record<string, unknown>;

@@ -251,7 +251,8 @@ mod tests {
 
     #[test]
     fn renders_command_block_with_action_header() {
-        let output = render_command_block_with_action(r#"{"command":"date"}"#, "Run", ToolHealth::Ok);
+        let output =
+            render_command_block_with_action(r#"{"command":"date"}"#, "Run", ToolHealth::Ok);
         let plain = strip_ansi_for_test(&output);
 
         assert!(plain.contains("• Ran"));
@@ -263,7 +264,11 @@ mod tests {
 
     #[test]
     fn renders_background_command_block_with_distinct_header() {
-        let output = render_command_block_with_action(r#"{"command":"sleep 1"}"#, "Background", ToolHealth::Pending);
+        let output = render_command_block_with_action(
+            r#"{"command":"sleep 1"}"#,
+            "Background",
+            ToolHealth::Pending,
+        );
         let plain = strip_ansi_for_test(&output);
 
         assert!(plain.contains("• Background"));
@@ -311,8 +316,9 @@ mod tests {
         let command = format!("echo {}", "x".repeat(200));
         let args = serde_json::json!({ "command": command }).to_string();
         for width in [40usize, 60, 100] {
-            let rendered =
-                with_render_width(width, || render_command_block_with_action(&args, "Run", ToolHealth::Ok));
+            let rendered = with_render_width(width, || {
+                render_command_block_with_action(&args, "Run", ToolHealth::Ok)
+            });
             for line in rendered.lines() {
                 let plain = strip_ansi_for_test(line);
                 let visible: usize = plain
@@ -343,8 +349,9 @@ mod tests {
 
         let command = format!("echo {}", "x".repeat(200));
         let args = serde_json::json!({ "command": command }).to_string();
-        let rendered =
-            with_render_width(60, || render_command_block_with_action(&args, "Run", ToolHealth::Ok));
+        let rendered = with_render_width(60, || {
+            render_command_block_with_action(&args, "Run", ToolHealth::Ok)
+        });
         let plain_lines = rendered
             .lines()
             .map(strip_ansi_for_test)

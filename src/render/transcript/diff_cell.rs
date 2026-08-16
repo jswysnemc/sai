@@ -340,7 +340,10 @@ mod tests {
         cell.toggle_expanded();
         let expanded = strip_ansi_for_test(&render(&cell, ToolCallDisplayMode::Summary));
         assert!(!expanded.contains("Ctrl+O"), "展开后不应再有提示");
-        assert!(expanded.lines().count() > folded_rows, "展开后行数应多于折叠");
+        assert!(
+            expanded.lines().count() > folded_rows,
+            "展开后行数应多于折叠"
+        );
     }
 
     /// 【TUI】【diff 折叠】短 diff 保持原样，不插入省略行。
@@ -361,7 +364,9 @@ mod tests {
 
         let cell = DiffCell::from_call("str_replace".to_string(), args);
 
-        assert!(!strip_ansi_for_test(&render(&cell, ToolCallDisplayMode::Summary)).contains("Ctrl+O"));
+        assert!(
+            !strip_ansi_for_test(&render(&cell, ToolCallDisplayMode::Summary)).contains("Ctrl+O")
+        );
     }
 
     /// 【TUI】【diff 折叠】回看上下文里按展开渲染。

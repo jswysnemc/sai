@@ -1,4 +1,6 @@
-import { ChevronsDownUp, ChevronsUpDown, Clock, ListOrdered, Search, X } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, Clock, Download, ListOrdered, Search, X } from "lucide-react";
+import { useState } from "react";
+import { api } from "../../api/client";
 import { Button } from "../../shared/ui/button/button";
 import { useI18n } from "../i18n/use-i18n";
 import { RECORD_KIND_LABELS, type TrajectoryRecordKind } from "./trajectory-record";
@@ -17,6 +19,8 @@ type TrajectoryToolbarProps = {
   /** 当前筛选后的记录数与总数 */
   shown: number;
   total: number;
+  /** 当前会话标识，用于导出真实 HTTP 调试记录 */
+  sessionId?: string;
 };
 
 /** 过滤按钮的展示顺序；与记录在轮内的出现顺序一致。 */
@@ -38,11 +42,42 @@ export function TrajectoryToolbar({
   allCollapsed,
   onToggleAll,
   shown,
-  total
+  total,
+  sessionId
 }: TrajectoryToolbarProps) {
   const { t, locale } = useI18n();
+  const [exporting, setExporting] = useState(false);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
   const zh = locale.startsWith("zh");
   const durationMode = mode === "duration";
+
+  /** 导出服务端保存的最近一次真实请求体和响应文件。 */
+  const exportLatestDebug = async () => {
+    if (!sessionId || exporting) return;
+    setExporting(true);
+    setExportStatus(null);
+    try {
+      const debug = await api.sessions.debugLatest(sessionId);
+      if (!debug.found) {
+        setExportStatus(t("No debug request has been recorded", "尚未记录调试请求"));
+        return;
+      }
+      const blob = new Blob([JSON.stringify(debug, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `sai-${sessionId}-latest-api-debug.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      setExportStatus(t("Latest real API request exported", "已导出最近一次真实 API 请求"));
+    } catch (error) {
+      setExportStatus(error instanceof Error ? error.message : t("Export failed", "导出失败"));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="trajectory-toolbar" role="toolbar" aria-label={t("Trajectory toolbar", "轨迹工具栏")}>
@@ -107,7 +142,16 @@ export function TrajectoryToolbar({
           {allCollapsed ? <ChevronsUpDown size={13} aria-hidden /> : <ChevronsDownUp size={13} aria-hidden />}
           {allCollapsed ? t("Expand", "展开") : t("Collapse", "折叠")}
         </Button>
+        <Button
+          onClick={() => void exportLatestDebug()}
+          disabled={!sessionId || exporting}
+          title={t("Export the latest real API request and response", "导出最近一次真实 API 请求与响应")}
+        >
+          <Download size={13} aria-hidden />
+          {exporting ? t("Exporting", "导出中") : t("Export API", "导出 API")}
+        </Button>
       </div>
+      {exportStatus && <span className="trajectory-toolbar-status" role="status">{exportStatus}</span>}
     </div>
   );
 }

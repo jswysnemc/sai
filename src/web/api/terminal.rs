@@ -93,7 +93,10 @@ async fn create(
         .ssh
         .find(&host_id)
         .ok_or_else(|| WebError::not_found(format!("ssh host not found: {host_id}")))?;
-    let passphrase = request.passphrase.as_deref().filter(|value| !value.is_empty());
+    let passphrase = request
+        .passphrase
+        .as_deref()
+        .filter(|value| !value.is_empty());
     match state
         .terminals
         .create_ssh(host, passphrase, cols, rows)

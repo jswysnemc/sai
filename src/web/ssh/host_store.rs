@@ -138,8 +138,7 @@ pub(crate) fn trust_host_key(key: &HostKey) -> Result<()> {
 
     // 1. 确保 .ssh 目录存在，并按 SSH 惯例收紧目录权限
     let dir = ssh_dir()?;
-    std::fs::create_dir_all(&dir)
-        .with_context(|| format!("failed to create {}", dir.display()))?;
+    std::fs::create_dir_all(&dir).with_context(|| format!("failed to create {}", dir.display()))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

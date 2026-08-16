@@ -176,8 +176,7 @@ pub(super) fn subagent_send(args: Value, owner_key: &str) -> Result<String> {
 pub(super) fn subagent_stop(args: Value, owner_key: &str) -> Result<String> {
     let subagent_id = string_arg(&args, "subagent_id")?;
     let apply = args.get("apply").and_then(Value::as_bool).unwrap_or(true);
-    let subagent =
-        subagent_state::request_subagent_stop_for_owner(owner_key, &subagent_id, apply)?;
+    let subagent = subagent_state::request_subagent_stop_for_owner(owner_key, &subagent_id, apply)?;
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
         "subagent": subagent,

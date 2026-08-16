@@ -41,9 +41,9 @@ impl TranscriptStore {
                 continue;
             };
             let overview = subagent.overview();
-            let viewing = viewing_id.as_deref().is_some_and(|id| {
-                subagent.subagent_id().is_some_and(|cell_id| cell_id == id)
-            });
+            let viewing = viewing_id
+                .as_deref()
+                .is_some_and(|id| subagent.subagent_id().is_some_and(|cell_id| cell_id == id));
             // 存活（运行中/待命中）的出现在面板；正在查看的保留返回路径
             let alive = overview.running || overview.status == "idle";
             if !alive && !viewing {

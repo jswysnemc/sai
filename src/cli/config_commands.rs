@@ -57,8 +57,7 @@ pub(super) async fn run_config(paths: &SaiPaths, args: ConfigArgs) -> Result<()>
             // subagent、todo 由 register_interactive_tools 注册，汇率、计算器
             // 一类则取决于插件开关，按当前配置去查都会误报成不存在
             let catalog_config = crate::tools::catalog_config(&config);
-            let mut known =
-                crate::tools::builtin_registry_without_mcp(&catalog_config, paths);
+            let mut known = crate::tools::builtin_registry_without_mcp(&catalog_config, paths);
             crate::tools::register_interactive_tools(
                 &mut known,
                 &catalog_config,

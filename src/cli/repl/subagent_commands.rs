@@ -15,11 +15,7 @@ use anyhow::{bail, Result};
 pub(super) fn format_subagent_list(owner_key: &str) -> String {
     let subagents = subagent_state::list_subagents_for_owner(owner_key);
     if subagents.is_empty() {
-        return t(
-            "no subagents in this session",
-            "当前会话还没有子智能体",
-        )
-        .to_string();
+        return t("no subagents in this session", "当前会话还没有子智能体").to_string();
     }
     let mut lines = vec![t("Session subagents:", "会话子智能体：").to_string()];
     for (index, snapshot) in subagents.iter().enumerate() {
@@ -171,10 +167,8 @@ mod tests {
     #[test]
     fn empty_session_yields_hint_and_message_error() {
         let owner = "/nonexistent-subagent-owner-for-test";
-        assert!(format_subagent_list(owner).contains(&t(
-            "no subagents in this session",
-            "当前会话还没有子智能体"
-        )));
+        assert!(format_subagent_list(owner)
+            .contains(&t("no subagents in this session", "当前会话还没有子智能体")));
         assert!(resolve_message_target(owner, None, None).is_err());
     }
 

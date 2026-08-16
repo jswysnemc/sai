@@ -72,6 +72,9 @@ import type {
   RestoreWorktreeResult,
   WeixinLoginSnapshot,
   SessionContextPrompt,
+  LatestSessionDebug,
+  SessionDebugRequest,
+  ToolResultResponse,
   SessionDataSummary,
   SessionDataSelection
 } from "./contracts";
@@ -189,6 +192,11 @@ export const api = {
         body: JSON.stringify({ ids })
       }),
     timeline: (id: string) => apiRequest<SessionTimeline>(`/api/sessions/${id}/timeline?limit=500`),
+    debugLatest: (id: string) => apiRequest<LatestSessionDebug>(`/api/sessions/${encodeURIComponent(id)}/debug/latest`),
+    debugRequests: (id: string) => apiRequest<SessionDebugRequest[]>(`/api/sessions/${encodeURIComponent(id)}/debug/requests`),
+    toolResult: (id: string, resultRef: string) => apiRequest<ToolResultResponse>(
+      `/api/sessions/${encodeURIComponent(id)}/tool-result?ref=${encodeURIComponent(resultRef)}`
+    ),
     contextPrompt: (id: string, options?: {
       agentId?: string;
       locale?: string;

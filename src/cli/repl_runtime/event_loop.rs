@@ -280,9 +280,8 @@ fn handle_stream_key(
         KeyCode::Tab => {
             // Tab：先补全斜杠命令，无补全时才把草稿入队
             if runtime.stream_draft().text.starts_with('/') {
-                let completed = crate::cli::repl_commands::complete_repl_command(
-                    &runtime.stream_draft().text,
-                );
+                let completed =
+                    crate::cli::repl_commands::complete_repl_command(&runtime.stream_draft().text);
                 if let Some(completed) = completed {
                     let draft = runtime.stream_draft_mut();
                     draft.text = completed.to_string();
@@ -297,10 +296,9 @@ fn handle_stream_key(
         }
         KeyCode::Up => {
             // 斜杠面板可见时上下键移动选中项，否则不干预运行中输入
-            let suggestions =
-                crate::cli::repl_commands::visible_repl_command_suggestions(
-                    &runtime.stream_draft().text,
-                );
+            let suggestions = crate::cli::repl_commands::visible_repl_command_suggestions(
+                &runtime.stream_draft().text,
+            );
             if !suggestions.is_empty() {
                 let draft = runtime.stream_draft_mut();
                 draft.slash_selection = (draft.slash_selection % suggestions.len())
@@ -310,10 +308,9 @@ fn handle_stream_key(
             }
         }
         KeyCode::Down => {
-            let suggestions =
-                crate::cli::repl_commands::visible_repl_command_suggestions(
-                    &runtime.stream_draft().text,
-                );
+            let suggestions = crate::cli::repl_commands::visible_repl_command_suggestions(
+                &runtime.stream_draft().text,
+            );
             if !suggestions.is_empty() {
                 let draft = runtime.stream_draft_mut();
                 draft.slash_selection = (draft.slash_selection + 1) % suggestions.len();
@@ -329,14 +326,14 @@ fn handle_stream_key(
                 runtime.redraw_stream_composer()?;
             } else {
                 // Enter：面板可见时先落选中命令，否则 /model 会被当普通文本发出
-                let suggestions =
-                    crate::cli::repl_commands::visible_repl_command_suggestions(
-                        &runtime.stream_draft().text,
-                    );
+                let suggestions = crate::cli::repl_commands::visible_repl_command_suggestions(
+                    &runtime.stream_draft().text,
+                );
                 if !suggestions.is_empty() {
                     let draft = runtime.stream_draft_mut();
-                    let selected = suggestions
-                        [draft.slash_selection.min(suggestions.len().saturating_sub(1))];
+                    let selected = suggestions[draft
+                        .slash_selection
+                        .min(suggestions.len().saturating_sub(1))];
                     draft.text = selected.command.to_string();
                     draft.cursor = draft.text.chars().count();
                     draft.slash_selection = 0;

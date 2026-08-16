@@ -40,8 +40,6 @@ pub use agent_presets::{ensure_surface_agent_defaults, seed_default_agent_profil
 pub use agent_tool_modes::{normalize_deferred_tools, DEFERRED_ALL_NON_BASE};
 #[allow(unused_imports)]
 pub use agents::*;
-pub use prompt_sections::{PromptSectionToggles, PROMPT_SECTIONS};
-pub use tool_whitelist::{unknown_whitelist_tools, whitelist_allows_tool};
 pub use cli_tools::*;
 #[allow(unused_imports)]
 pub use git::*;
@@ -56,9 +54,11 @@ pub use model_thinking::*;
 pub use model_units::*;
 pub use notification::*;
 pub use permission::*;
+pub use prompt_sections::{PromptSectionToggles, PROMPT_SECTIONS};
 pub use prompt_templates::{PromptTemplateConfig, PromptTemplatesConfig};
 pub use provider_keys::*;
 #[allow(unused_imports)]
 pub use session::SessionConfig;
 #[allow(unused_imports)]
 pub use ssh::{SshConfig, SshHostConfig, DEFAULT_SSH_PORT};
+pub use tool_whitelist::{unknown_whitelist_tools, whitelist_allows_tool};

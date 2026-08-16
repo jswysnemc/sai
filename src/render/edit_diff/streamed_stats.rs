@@ -61,7 +61,9 @@ pub(crate) fn preview_diff_stat_status(arguments: &str) -> Option<String> {
         .changes
         .iter()
         .map(FileChange::line_counts)
-        .fold((0usize, 0usize), |acc, item| (acc.0 + item.0, acc.1 + item.1));
+        .fold((0usize, 0usize), |acc, item| {
+            (acc.0 + item.0, acc.1 + item.1)
+        });
     Some(format_diff_stat_status(added, removed))
 }
 
@@ -131,9 +133,13 @@ mod tests {
     #[test]
     fn preview_stat_status_for_write_file() {
         let status = preview_diff_stat_status(r#"{"path":"a.rs","content":"l1\nl2\n"}"#).unwrap();
-        assert!(status.contains("+2") || status.contains("+2\u{1b}"), "{status}");
+        assert!(
+            status.contains("+2") || status.contains("+2\u{1b}"),
+            "{status}"
+        );
         assert!(status.contains("-0") || status.contains('0'), "{status}");
-        let combined = edit_diff_stat_status(r#"{"path":"notes.md","content":"hello\nworld"}"#).unwrap();
+        let combined =
+            edit_diff_stat_status(r#"{"path":"notes.md","content":"hello\nworld"}"#).unwrap();
         assert!(!combined.contains("run"), "{combined}");
         assert!(combined.contains('+'), "{combined}");
     }
@@ -194,8 +200,7 @@ mod tests {
     /// 状态文本使用与 diff 标题一致的增删配色。
     #[test]
     fn stat_status_uses_diff_count_colors() {
-        let status =
-            streamed_diff_stat_status(r#"{"path":"a.rs","content":"l1\nl2"#).unwrap();
+        let status = streamed_diff_stat_status(r#"{"path":"a.rs","content":"l1\nl2"#).unwrap();
         assert!(status.contains("\x1b[32m+2\x1b[0m"));
         assert!(status.contains("\x1b[31m-0\x1b[0m"));
     }

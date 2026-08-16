@@ -25,7 +25,6 @@ pub(super) fn inline_fuzzy_select(items: &[String]) -> Result<Option<usize>> {
     let (_, cursor_y) = cursor::position().unwrap_or((0, menu_lines.saturating_sub(1)));
     let anchor_y = cursor_y.saturating_sub(menu_lines.saturating_sub(1));
 
-
     loop {
         let matches = fuzzy_matches(&matcher, items, &query);
         if selected >= matches.len() {

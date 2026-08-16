@@ -98,10 +98,13 @@ pub(crate) async fn connect_ssh_session(
 
     // 1. 建立 TCP 连接并完成 SSH 握手，握手期间触发主机密钥校验
     let address = format!("{}:{}", host.hostname, host.port);
-    let stream = tokio::time::timeout(SSH_CONNECT_TIMEOUT, tokio::net::TcpStream::connect(&address))
-        .await
-        .with_context(|| format!("timed out connecting to {address}"))?
-        .with_context(|| format!("failed to connect to {address}"))?;
+    let stream = tokio::time::timeout(
+        SSH_CONNECT_TIMEOUT,
+        tokio::net::TcpStream::connect(&address),
+    )
+    .await
+    .with_context(|| format!("timed out connecting to {address}"))?
+    .with_context(|| format!("failed to connect to {address}"))?;
     let handshake = tokio::time::timeout(
         SSH_CONNECT_TIMEOUT,
         client::connect_stream(config, stream, handler),
@@ -148,7 +151,10 @@ pub(crate) async fn connect_ssh_session(
 
     match last_error {
         Some(reason) => anyhow::bail!("SSH public key authentication failed - {reason}"),
-        None => anyhow::bail!("no SSH private key available for {}", host.display_address()),
+        None => anyhow::bail!(
+            "no SSH private key available for {}",
+            host.display_address()
+        ),
     }
 }
 

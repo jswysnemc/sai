@@ -711,7 +711,8 @@ mod blank_agent_tests {
         let mut blank = profile("blank");
         blank.prompt_sections = crate::config::PromptSectionToggles::all_disabled();
 
-        let config = apply_agent_override(config_with(blank), Some("blank"), AgentSurface::Cli).unwrap();
+        let config =
+            apply_agent_override(config_with(blank), Some("blank"), AgentSurface::Cli).unwrap();
 
         assert_eq!(config.base_system_prompt(&paths).unwrap(), "");
         assert_eq!(config.system_prompt(&paths).unwrap(), "");
@@ -726,7 +727,8 @@ mod blank_agent_tests {
         custom.system_prompt = "只回答是或否".to_string();
         custom.prompt_sections = crate::config::PromptSectionToggles::all_disabled();
 
-        let config = apply_agent_override(config_with(custom), Some("custom"), AgentSurface::Cli).unwrap();
+        let config =
+            apply_agent_override(config_with(custom), Some("custom"), AgentSurface::Cli).unwrap();
 
         assert_eq!(config.base_system_prompt(&paths).unwrap(), "只回答是或否");
     }
@@ -740,7 +742,8 @@ mod blank_agent_tests {
         let mut bare = profile("bare");
         bare.tools_exclusive = true;
 
-        let config = apply_agent_override(config_with(bare), Some("bare"), AgentSurface::Cli).unwrap();
+        let config =
+            apply_agent_override(config_with(bare), Some("bare"), AgentSurface::Cli).unwrap();
 
         let runtime = config.agent_runtime.expect("独占白名单必须落成覆盖");
         assert!(runtime.exclusive);
@@ -766,9 +769,12 @@ mod blank_agent_tests {
     /// 已有配置里存在空列表且依赖"继承全量"，语义翻转会让它们静默失去工具。
     #[test]
     fn a_non_exclusive_empty_whitelist_keeps_the_legacy_meaning() {
-        let config =
-            apply_agent_override(config_with(profile("legacy")), Some("legacy"), AgentSurface::Cli)
-                .unwrap();
+        let config = apply_agent_override(
+            config_with(profile("legacy")),
+            Some("legacy"),
+            AgentSurface::Cli,
+        )
+        .unwrap();
 
         assert!(config.agent_runtime.is_none());
     }

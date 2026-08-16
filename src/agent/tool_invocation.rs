@@ -3,7 +3,7 @@ use super::tool_gate::tool_error_output;
 use super::tool_visibility::ToolVisibility;
 use super::{Agent, AgentEvent};
 use crate::llm::{ChatMessage, ToolCall, ToolCallFunction};
-use crate::tools::{self, ToolRegistry};
+use crate::tools::{self, ToolPermission, ToolRegistry};
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use serde_json::Value;
@@ -35,6 +35,21 @@ pub(super) struct PreparedToolCalls {
     pub(super) question_call_count: usize,
 }
 
+/// 已预分配事件序号的单个工具调用。
+pub(super) struct SequencedToolCall {
+    pub(super) sequence: usize,
+    pub(super) provider_call: ToolCall,
+    pub(super) execution_call: Result<ToolCall>,
+}
+
+/// 同一模型子轮中的工具执行组。
+pub(super) enum ToolExecutionGroup {
+    /// 单个调用保持完整串行流程
+    Serial(SequencedToolCall),
+    /// 连续且无需交互授权的只读调用可以并发执行
+    ConcurrentReadOnly(Vec<SequencedToolCall>),
+}
+
 impl PreparedToolCalls {
     /// 计算本批问题调用的轮次限制与兄弟工具延迟策略。
     ///
@@ -52,6 +67,77 @@ impl PreparedToolCalls {
             self.question_call_count == 1 && *question_rounds <= MAX_QUESTION_ROUNDS_PER_TURN,
             self.question_call_count == 1 && self.calls.len() > 1,
         )
+    }
+
+    /// 按执行副作用把调用分成串行项与连续只读组。
+    ///
+    /// 参数:
+    /// - `registry`: 当前会话工具注册表
+    /// - `visibility`: 渐进式工具可见性
+    /// - `first_sequence`: 本批首个工具事件序号
+    ///
+    /// 返回:
+    /// - 保持供应商调用顺序的执行组
+    pub(super) fn into_execution_groups(
+        self,
+        registry: &ToolRegistry,
+        visibility: &ToolVisibility,
+        first_sequence: usize,
+    ) -> Vec<ToolExecutionGroup> {
+        let mut groups = Vec::new();
+        let mut read_only = Vec::new();
+
+        for (index, (provider_call, execution_call)) in self.calls.into_iter().enumerate() {
+            let concurrent = execution_call
+                .as_ref()
+                .is_ok_and(|call| is_concurrent_read_only_call(registry, visibility, call));
+            let call = SequencedToolCall {
+                sequence: first_sequence.saturating_add(index),
+                provider_call,
+                execution_call,
+            };
+            if concurrent {
+                read_only.push(call);
+                continue;
+            }
+            flush_read_only_group(&mut groups, &mut read_only);
+            groups.push(ToolExecutionGroup::Serial(call));
+        }
+        flush_read_only_group(&mut groups, &mut read_only);
+        groups
+    }
+}
+
+/// 判断调用能否进入无需交互的只读并发组。
+fn is_concurrent_read_only_call(
+    registry: &ToolRegistry,
+    visibility: &ToolVisibility,
+    call: &ToolCall,
+) -> bool {
+    if call.function.name == "ask_question" || visibility.is_loader_call(&call.function.name) {
+        return false;
+    }
+    registry
+        .permission(&call.function.name)
+        .is_ok_and(|permission| {
+            permission == ToolPermission::ReadOnly
+                && registry
+                    .requires_permission(&call.function.name, &call.function.arguments)
+                    .is_ok_and(|required| !required)
+        })
+}
+
+/// 把累积的连续只读调用写入执行组。
+fn flush_read_only_group(
+    groups: &mut Vec<ToolExecutionGroup>,
+    read_only: &mut Vec<SequencedToolCall>,
+) {
+    match read_only.len() {
+        0 => {}
+        1 => groups.push(ToolExecutionGroup::Serial(read_only.pop().unwrap())),
+        _ => groups.push(ToolExecutionGroup::ConcurrentReadOnly(std::mem::take(
+            read_only,
+        ))),
     }
 }
 
@@ -226,7 +312,7 @@ mod tests {
     /// 验证统一外壳解包后保留调用标识并输出真实参数。
     #[test]
     fn resolves_invoker_to_real_tool_call() {
-        let visibility = ToolVisibility::new(vec!["*".to_string()]);
+        let visibility = ToolVisibility::new(Vec::new());
         let provider_call = call(
             tools::INVOKE_NAME,
             r#"{"tool_name":"read_file","arguments":{"path":"README.md"}}"#,
@@ -287,6 +373,49 @@ mod tests {
 
         assert_eq!(prepared.question_policy(&mut rounds), (1, true, true));
         assert_eq!(rounds, 1);
+    }
+
+    /// 验证连续只读调用并发分组，写调用会切断分组且序号预先稳定分配。
+    #[test]
+    fn groups_contiguous_read_only_calls_and_preserves_sequences() {
+        let visibility = ToolVisibility::new(Vec::new());
+        let mut registry = ToolRegistry::new();
+        registry.register(crate::tools::ToolSpec::new(
+            "read_a",
+            "read",
+            tools::empty_parameters(),
+            |_| async { Ok(String::new()) },
+        ));
+        registry.register(crate::tools::ToolSpec::new(
+            "read_b",
+            "read",
+            tools::empty_parameters(),
+            |_| async { Ok(String::new()) },
+        ));
+        registry.register(
+            crate::tools::ToolSpec::new("write", "write", tools::empty_parameters(), |_| async {
+                Ok(String::new())
+            })
+            .writes(),
+        );
+        let calls = vec![
+            call("read_a", "{}"),
+            call("read_b", "{}"),
+            call("write", "{}"),
+            call("read_a", "{}"),
+        ];
+
+        let groups = prepare_tool_calls(&visibility, &registry, &calls).into_execution_groups(
+            &registry,
+            &visibility,
+            11,
+        );
+
+        assert!(
+            matches!(groups[0], ToolExecutionGroup::ConcurrentReadOnly(ref group) if group.len() == 2)
+        );
+        assert!(matches!(groups[1], ToolExecutionGroup::Serial(ref call) if call.sequence == 13));
+        assert!(matches!(groups[2], ToolExecutionGroup::Serial(ref call) if call.sequence == 14));
     }
 
     /// 构造测试用供应商工具调用。

@@ -104,8 +104,7 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
                     None => "run",
                 };
                 // 与主视图工具行同语汇：动词 + 对象，而不是原始工具名
-                let tense =
-                    crate::render::tool_event_line::ToolVerbTense::from_done(ok.is_some());
+                let tense = crate::render::tool_event_line::ToolVerbTense::from_done(ok.is_some());
                 let label = crate::render::tool_event_line::tool_event_label_tense(
                     name,
                     Some(args_preview.as_str()),

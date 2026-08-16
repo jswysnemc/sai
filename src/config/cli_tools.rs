@@ -374,7 +374,6 @@ pub struct MemesPluginConfig {
 }
 
 impl MemesPluginConfig {
-
     /// 返回当前使用的表情库名称。
     ///
     /// 人格系统删除后只有一个库，映射表里除 default 之外的键不再被读取。

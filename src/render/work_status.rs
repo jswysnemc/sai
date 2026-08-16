@@ -12,7 +12,10 @@ pub(crate) enum WorkStatus {
     Working,
     Compacting,
     /// 传输层瞬时故障后的自动重连，带当前尝试次数。
-    Reconnecting { attempt: u32, max_attempts: u32 },
+    Reconnecting {
+        attempt: u32,
+        max_attempts: u32,
+    },
 }
 
 impl WorkStatus {

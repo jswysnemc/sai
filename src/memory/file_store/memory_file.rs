@@ -78,8 +78,7 @@ pub fn remove(path: &Path) -> Result<bool> {
     if !path.is_file() {
         return Ok(false);
     }
-    std::fs::remove_file(path)
-        .with_context(|| format!("删除记忆文件失败：{}", path.display()))?;
+    std::fs::remove_file(path).with_context(|| format!("删除记忆文件失败：{}", path.display()))?;
     Ok(true)
 }
 
@@ -144,7 +143,11 @@ mod tests {
     fn a_missing_name_falls_back_to_the_file_stem() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("from-filename.md");
-        std::fs::write(&path, "---\nname:\ndescription: d\nmetadata:\n  type: user\n---\n正文").unwrap();
+        std::fs::write(
+            &path,
+            "---\nname:\ndescription: d\nmetadata:\n  type: user\n---\n正文",
+        )
+        .unwrap();
 
         let found = read(&path).unwrap().unwrap();
 

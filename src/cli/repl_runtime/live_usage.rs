@@ -46,8 +46,7 @@ impl LiveTurnUsage {
     /// 返回:
     /// - 命中率；尚无读数时返回空
     pub(super) fn cache_hit_ratio(&self) -> Option<f32> {
-        (self.prompt_tokens > 0)
-            .then(|| self.cache_read_tokens as f32 / self.prompt_tokens as f32)
+        (self.prompt_tokens > 0).then(|| self.cache_read_tokens as f32 / self.prompt_tokens as f32)
     }
 }
 

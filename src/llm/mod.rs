@@ -5,6 +5,7 @@ mod thinking;
 mod tool_call_stream;
 mod transport_retry;
 
+pub use http_debug::RequestContextGuard as HttpDebugRequestContextGuard;
 pub use http_debug::SessionGuard as HttpDebugSessionGuard;
 pub use openai_compatible::OpenAiCompatibleClient;
 pub use stream_event::{ChatStreamEvent, ToolCallStreamProgress};

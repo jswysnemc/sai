@@ -33,6 +33,9 @@ pub struct AppConfig {
     pub skills: SkillsConfig,
     #[serde(default)]
     pub display: DisplayConfig,
+    /// HTTP 请求与响应调试记录配置。
+    #[serde(default)]
+    pub debug: DebugConfig,
     #[serde(default)]
     pub scm: ScmConfig,
     #[serde(default)]
@@ -101,6 +104,17 @@ pub struct DisplayConfig {
     pub wait_show_thinking_level: bool,
     #[serde(default = "default_repl_transcript_row_cap")]
     pub repl_transcript_row_cap: usize,
+}
+
+/// Web 可控制的调试记录配置。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DebugConfig {
+    /// 是否启用 HTTP 请求调试记录。
+    #[serde(default)]
+    pub enabled: bool,
+    /// 是否保留完整请求、响应流和重组响应。
+    #[serde(default = "default_true")]
+    pub retain_logs: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

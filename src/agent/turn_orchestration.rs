@@ -145,10 +145,14 @@ impl Agent {
         let workspace = crate::runtime_cwd::current_dir()
             .ok()
             .map(|path| path.display().to_string());
-        let memory_index_prompt = settle_step(
-            &mut guard,
-            self.memory.recall_for_turn(&input, workspace.as_deref()),
-        )?;
+        let memory_index_prompt = if self.config.prompt_sections.memory_contract {
+            settle_step(
+                &mut guard,
+                self.memory.recall_for_turn(&input, workspace.as_deref()),
+            )?
+        } else {
+            None
+        };
         perf.mark("memory association");
         let auto_meme_reminder = auto_meme_plan.as_ref().map(|plan| plan.reminder.as_str());
         let mut messages = settle_step(
@@ -264,14 +268,12 @@ impl Agent {
                     Err(retry_err) if is_context_overflow_error(&retry_err) => {
                         let recorded =
                             self.record_overflow_retry_failed(&turn_id, &messages, &retry_err);
-                        let _ = guard
-                            .fail_in_place(&crate::llm::error_detail_text(&retry_err));
+                        let _ = guard.fail_in_place(&crate::llm::error_detail_text(&retry_err));
                         recorded?;
                         return Err(retry_err);
                     }
                     Err(retry_err) => {
-                        let _ = guard
-                            .fail_in_place(&crate::llm::error_detail_text(&retry_err));
+                        let _ = guard.fail_in_place(&crate::llm::error_detail_text(&retry_err));
                         return Err(retry_err);
                     }
                 }

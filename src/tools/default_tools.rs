@@ -633,4 +633,3 @@ mod tests {
         assert!(args.contains("--glob=!usr/**"));
     }
 }
-

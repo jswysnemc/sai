@@ -244,7 +244,7 @@
 .settings-field > span { color: var(--ink); font-size:var(--text-sm); font-weight: 500; }
 .settings-field > small { color: var(--ink-soft); font-size:var(--text-sm); line-height: 1.45; }
 
-.settings-field input,
+.settings-field input:not(.switch-control),
 .settings-field textarea {
   width: 100%;
   border: 1px solid var(--line);
@@ -255,7 +255,7 @@
   transition: border-color var(--transition-fast);
 }
 
-.settings-field input {
+.settings-field input:not(.switch-control) {
   height: 2.5rem;
   padding:0 var(--space-md);
 }
@@ -268,7 +268,7 @@
 }
 
 /* 去掉浏览器默认 outline 后必须补焦点环，否则键盘操作看不出焦点在哪 */
-.settings-field input:focus,
+.settings-field input:not(.switch-control):focus,
 .settings-field textarea:focus {
   border-color: var(--line-strong);
   outline: none;
@@ -303,7 +303,8 @@
  * 但各浏览器对拉伸后的原生控件渲染不同：Chromium 是压扁的方框，
  * Firefox 干脆保持原尺寸居中，跨端表现对不上。
  */
-.settings-toggle-field input[type="checkbox"] {
+.settings-toggle-field input[type="checkbox"],
+.switch-control {
   position: relative;
   flex-shrink: 0;
   appearance: none;
@@ -316,7 +317,8 @@
   transition: background var(--transition-base);
 }
 
-.settings-toggle-field input[type="checkbox"]::after {
+.settings-toggle-field input[type="checkbox"]::after,
+.switch-control::after {
   content: "";
   position: absolute;
   top: var(--switch-thumb-inset);
@@ -329,26 +331,31 @@
   transition: transform var(--transition-base);
 }
 
-.settings-toggle-field input[type="checkbox"]:checked {
+.settings-toggle-field input[type="checkbox"]:checked,
+.switch-control:checked {
   background: var(--signal);
 }
 
-.settings-toggle-field input[type="checkbox"]:checked::after {
+.settings-toggle-field input[type="checkbox"]:checked::after,
+.switch-control:checked::after {
   transform: translateX(var(--switch-thumb-travel));
 }
 
-.settings-toggle-field input[type="checkbox"]:focus-visible {
+.settings-toggle-field input[type="checkbox"]:focus-visible,
+.switch-control:focus-visible {
   outline: none;
   box-shadow: var(--ring-focus);
 }
 
-.settings-toggle-field input[type="checkbox"]:disabled {
+.settings-toggle-field input[type="checkbox"]:disabled,
+.switch-control:disabled {
   cursor: not-allowed;
   opacity: 0.42;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .settings-toggle-field input[type="checkbox"]::after {
+  .settings-toggle-field input[type="checkbox"]::after,
+  .switch-control::after {
     transition: none;
   }
 }

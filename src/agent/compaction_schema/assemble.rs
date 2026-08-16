@@ -14,7 +14,11 @@ use super::catalog::{machine_filled_section, section_after_machine_filled};
 /// - 合成后的完整摘要
 pub(crate) fn assemble(summary: &str, user_section: &str, pointer: Option<&str>) -> String {
     // 1. 去掉模型自行撰写的第 6 节，只保留程序生成的那份
-    let stripped = remove_section(summary, machine_filled_section().ordinal, machine_filled_section().title);
+    let stripped = remove_section(
+        summary,
+        machine_filled_section().ordinal,
+        machine_filled_section().title,
+    );
     // 2. 按后继节的标题定位插入点，定位不到则并到末尾
     let merged = insert_before_section(
         &stripped,
@@ -41,7 +45,10 @@ pub(crate) fn assemble(summary: &str, user_section: &str, pointer: Option<&str>)
 /// - 移除该节后的正文；未命中时原样返回
 fn remove_section(summary: &str, ordinal: usize, title: &str) -> String {
     let lines: Vec<&str> = summary.lines().collect();
-    let Some(start) = lines.iter().position(|line| is_heading_of(line, ordinal, title)) else {
+    let Some(start) = lines
+        .iter()
+        .position(|line| is_heading_of(line, ordinal, title))
+    else {
         return summary.to_string();
     };
     let end = lines
@@ -68,7 +75,10 @@ fn remove_section(summary: &str, ordinal: usize, title: &str) -> String {
 /// - 插入后的正文；锚点缺失时把文本并到末尾
 fn insert_before_section(summary: &str, ordinal: usize, title: &str, block: &str) -> String {
     let lines: Vec<&str> = summary.lines().collect();
-    let Some(anchor) = lines.iter().position(|line| is_heading_of(line, ordinal, title)) else {
+    let Some(anchor) = lines
+        .iter()
+        .position(|line| is_heading_of(line, ordinal, title))
+    else {
         return format!("{}\n\n{block}", summary.trim_end());
     };
     let head = lines[..anchor].join("\n");
@@ -132,7 +142,8 @@ mod tests {
     /// 返回:
     /// - 摘要正文
     fn model_summary() -> String {
-        "## 5. Problem Solving\n已解决\n\n## 7. Pending Tasks\n待办\n\n## 8. Current Work\n在做".to_string()
+        "## 5. Problem Solving\n已解决\n\n## 7. Pending Tasks\n待办\n\n## 8. Current Work\n在做"
+            .to_string()
     }
 
     /// 验证用户原话节被插到第 7 节之前。
@@ -166,7 +177,11 @@ mod tests {
     /// 宁可位置不对也不能丢：这一节是唯一的零失真记录。
     #[test]
     fn user_section_survives_a_missing_anchor() {
-        let merged = assemble("## 1. Primary Request and Intent\n改压缩", "## 6. All user messages\n- 原话", None);
+        let merged = assemble(
+            "## 1. Primary Request and Intent\n改压缩",
+            "## 6. All user messages\n- 原话",
+            None,
+        );
 
         assert!(merged.contains("- 原话"));
     }
@@ -186,7 +201,11 @@ mod tests {
     /// 验证回读指引附在最后。
     #[test]
     fn pointer_is_appended_at_the_end() {
-        let merged = assemble(&model_summary(), "## 6. All user messages\n- 原话", Some("---\n可回读"));
+        let merged = assemble(
+            &model_summary(),
+            "## 6. All user messages\n- 原话",
+            Some("---\n可回读"),
+        );
 
         assert!(merged.trim_end().ends_with("可回读"));
     }

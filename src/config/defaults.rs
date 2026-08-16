@@ -21,6 +21,7 @@ impl Default for AppConfig {
             terminal: TerminalConfig::default(),
             skills: SkillsConfig::default(),
             display: DisplayConfig::default(),
+            debug: DebugConfig::default(),
             scm: ScmConfig::default(),
             git: GitConfig::default(),
             ssh: super::ssh::SshConfig::default(),
@@ -41,6 +42,15 @@ impl Default for AppConfig {
             system_prompt_file: Some("system-prompt.md".to_string()),
             system_prompt: None,
             load_instruction_files: true,
+        }
+    }
+}
+
+impl Default for DebugConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            retain_logs: true,
         }
     }
 }

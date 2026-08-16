@@ -102,7 +102,7 @@ async fn run_command_hook(hook: &HookItem, event: HookEvent, context: &HookConte
         .context("hook command timed out")?
         .context("wait hook command")?;
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr = crate::platform::output_encoding::decode_output(&output.stderr);
         anyhow::bail!("exit {:?}: {}", output.status.code(), stderr.trim());
     }
     Ok(())

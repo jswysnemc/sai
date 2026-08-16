@@ -178,11 +178,6 @@ export function AgentProfileEditor({ config, profile, options, onChange, onRemov
       {tab === "tools" && (
         <>
           <label className="agent-tools-exclusive">
-            <input
-              type="checkbox"
-              checked={profile.tools_exclusive ?? false}
-              onChange={(event) => onChange({ tools_exclusive: event.target.checked })}
-            />
             <span>
               <strong>{t("Exclusive whitelist", "独占白名单")}</strong>
               <small>
@@ -192,6 +187,12 @@ export function AgentProfileEditor({ config, profile, options, onChange, onRemov
                 )}
               </small>
             </span>
+            <input
+              type="checkbox"
+              className="switch-control"
+              checked={profile.tools_exclusive ?? false}
+              onChange={(event) => onChange({ tools_exclusive: event.target.checked })}
+            />
           </label>
           <AgentToolPermissions
             tools={options.tools}

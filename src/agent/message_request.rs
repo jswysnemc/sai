@@ -7,6 +7,7 @@ impl Agent {
     /// 执行一次 provider 流式请求并处理传输层重试。
     ///
     /// 参数:
+    /// - `turn_id`: 持久化轮次标识
     /// - `messages`: 已完成顺序整理的 provider 消息
     /// - `definitions`: 当前请求可见工具定义
     /// - `round`: 当前模型子轮编号
@@ -17,6 +18,7 @@ impl Agent {
     /// - provider 聊天结果
     pub(super) async fn request_model_round<F>(
         &mut self,
+        turn_id: &str,
         messages: Vec<ChatMessage>,
         definitions: Vec<ToolDefinition>,
         round: usize,
@@ -36,6 +38,7 @@ impl Agent {
         let mut attempt = 0u32;
         let result = loop {
             attempt += 1;
+            let _http_debug_request = crate::llm::HttpDebugRequestContextGuard::new(turn_id, round);
             let emitted_flag = std::sync::Arc::clone(&emitted);
             let request_result = self
                 .client

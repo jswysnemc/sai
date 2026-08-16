@@ -100,6 +100,13 @@
   white-space: nowrap;
 }
 
+.trajectory-toolbar-status {
+  flex: 1 1 100%;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  text-align: right;
+}
+
 @media (max-width: 40rem) {
   .trajectory-toolbar-actions {
     margin-left: 0;

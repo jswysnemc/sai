@@ -113,12 +113,18 @@ mod tests {
     /// 验证显式指定全局作用域生效。
     #[test]
     fn global_scope_is_honored() {
-        assert_eq!(parse_scope(&json!({ "scope": "Global" })), MemoryScope::Global);
+        assert_eq!(
+            parse_scope(&json!({ "scope": "Global" })),
+            MemoryScope::Global
+        );
     }
 
     /// 验证无法识别的作用域退回项目而不是报错。
     #[test]
     fn an_unknown_scope_falls_back_to_project() {
-        assert_eq!(parse_scope(&json!({ "scope": "session" })), MemoryScope::Project);
+        assert_eq!(
+            parse_scope(&json!({ "scope": "session" })),
+            MemoryScope::Project
+        );
     }
 }

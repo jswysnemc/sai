@@ -80,7 +80,10 @@ pub(crate) enum FoldedDisplayLine {
     /// 正常显示行
     Line(String),
     /// 折叠占位；`skipped` 为被省略的原始显示行，供跨行高亮状态推进
-    Omitted { omitted: usize, skipped: Vec<String> },
+    Omitted {
+        omitted: usize,
+        skipped: Vec<String>,
+    },
 }
 
 /// 对显示行做首尾折叠，并保留被省略的原始行。
@@ -106,11 +109,7 @@ pub(crate) fn fold_display_lines_tracked(
     let expanded = expanded || crate::render::render_expand::expand_override();
     let keep = head.saturating_add(tail);
     if expanded || keep == 0 || lines.len() <= keep {
-        return lines
-            .iter()
-            .cloned()
-            .map(FoldedDisplayLine::Line)
-            .collect();
+        return lines.iter().cloned().map(FoldedDisplayLine::Line).collect();
     }
     let omitted = lines.len() - keep;
     let tail_start = lines.len().saturating_sub(tail);

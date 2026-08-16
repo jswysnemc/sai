@@ -6,6 +6,7 @@ pub(crate) mod compaction_schema;
 mod context_projection;
 mod context_resources;
 mod conversation;
+mod edit_guard;
 mod event;
 mod external_events;
 mod external_tool_history;
@@ -25,6 +26,7 @@ pub(crate) mod repeat_guard;
 mod runtime_context;
 pub(crate) mod system_prompt;
 mod tool_attachments;
+mod tool_batch_execution;
 mod tool_execution;
 mod tool_gate;
 mod tool_history;
@@ -194,7 +196,14 @@ impl Agent {
                 .enforce_provider_projection(Some(turn_id), &projection)?;
             perf.mark(&format!("round {tool_round} provider projection"));
             let mut result = match self
-                .request_model_round(ordered_messages, definitions, tool_round, on_event, perf)
+                .request_model_round(
+                    turn_id,
+                    ordered_messages,
+                    definitions,
+                    tool_round,
+                    on_event,
+                    perf,
+                )
                 .await
             {
                 Ok(result) => result,
@@ -275,62 +284,78 @@ impl Agent {
                 prepared_calls.question_policy(&mut question_rounds);
             let mut round_model_attachments = Vec::new();
             let assistant_round = tool_event_seq.saturating_add(1);
-            for (provider_call, execution_call) in prepared_calls.calls {
-                let recorded_call = &provider_call;
-                tool_event_seq += 1;
-                let Some(call) = self.begin_tool_invocation(
-                    turn_id,
-                    tool_event_seq,
-                    assistant_round,
-                    result.reasoning.as_deref(),
-                    recorded_call,
-                    execution_call,
-                    messages,
-                    &mut repeat_guard,
-                    on_event,
-                )?
-                else {
-                    continue;
+            let groups = prepared_calls.into_execution_groups(
+                &self.tools,
+                &self.tool_visibility,
+                assistant_round,
+            );
+            tool_event_seq = tool_event_seq.saturating_add(result.tool_calls.len());
+            for group in groups {
+                let serial_calls = match group {
+                    tool_invocation::ToolExecutionGroup::ConcurrentReadOnly(group) => {
+                        round_model_attachments.extend(
+                            self.execute_concurrent_read_only_group(
+                                turn_id,
+                                assistant_round,
+                                result.reasoning.as_deref(),
+                                group,
+                                used_tools,
+                                messages,
+                                &mut repeat_guard,
+                                on_event,
+                                perf,
+                                &hook_ctx,
+                            )
+                            .await?,
+                        );
+                        continue;
+                    }
+                    tool_invocation::ToolExecutionGroup::Serial(call) => vec![call],
                 };
-                used_tools.push(call.function.name.clone());
-                perf.mark(&format!("tool {} call recorded", call.function.name));
-                on_event(AgentEvent::ToolCall {
-                    name: call.function.name.clone(),
-                    arguments: call.function.arguments.clone(),
-                })?;
-                // 重复统计覆盖全部分支：被门禁或权限挡下的调用同样占用轮次，
-                // 漏掉它们会让反复发起的幻觉工具名无限空转
-                let repeat_verdict =
-                    repeat_guard.observe(&call.function.name, &call.function.arguments);
-                if let repeat_guard::RepeatVerdict::Stop { seen } = repeat_verdict {
-                    let output = repeat_guard::stop_notice(&call.function.name, seen);
-                    on_event(AgentEvent::ToolResult {
+                for item in serial_calls {
+                    let provider_call = item.provider_call;
+                    let recorded_call = &provider_call;
+                    let execution_call = item.execution_call;
+                    let Some(call) = self.begin_tool_invocation(
+                        turn_id,
+                        item.sequence,
+                        assistant_round,
+                        result.reasoning.as_deref(),
+                        recorded_call,
+                        execution_call,
+                        messages,
+                        &mut repeat_guard,
+                        on_event,
+                    )?
+                    else {
+                        continue;
+                    };
+                    used_tools.push(call.function.name.clone());
+                    perf.mark(&format!("tool {} call recorded", call.function.name));
+                    on_event(AgentEvent::ToolCall {
                         name: call.function.name.clone(),
-                        ok: false,
-                        output: output.clone(),
+                        arguments: call.function.arguments.clone(),
                     })?;
-                    self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
-                    messages.push(ChatMessage::tool(call.id, output));
-                    continue;
-                }
-                // 未知工具名、畸形参数、未加载工具等可恢复问题在专用流程前统一拦下
-                if let ToolGate::Reject(output) =
-                    evaluate_tool_gate(&self.tools, &self.tool_visibility, &call, &used_tools)
-                {
-                    // 门禁拒绝的调用重发多少次结果都一样，计入重复统计以便及时停止
-                    repeat_guard.observe_rejected(&call.function.name, &call.function.arguments);
-                    self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
-                    on_event(AgentEvent::ToolResult {
-                        name: call.function.name.clone(),
-                        ok: false,
-                        output: output.clone(),
-                    })?;
-                    messages.push(ChatMessage::tool(call.id, output));
-                    continue;
-                }
-                if call.function.name == "ask_question" {
-                    if question_call_count > 1 {
-                        let output = "tool error: only one ask_question call is allowed per tool batch; combine all questions into one call".to_string();
+                    // 重复统计覆盖全部分支：被门禁或权限挡下的调用同样占用轮次，
+                    // 漏掉它们会让反复发起的幻觉工具名无限空转
+                    let repeat_verdict =
+                        repeat_guard.observe(&call.function.name, &call.function.arguments);
+                    if let repeat_guard::RepeatVerdict::Stop { seen } = repeat_verdict {
+                        let output = repeat_guard::stop_notice(&call.function.name, seen);
+                        on_event(AgentEvent::ToolResult {
+                            name: call.function.name.clone(),
+                            ok: false,
+                            output: output.clone(),
+                        })?;
+                        self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
+                        messages.push(ChatMessage::tool(call.id, output));
+                        continue;
+                    }
+                    // 未知工具名、畸形参数、未加载工具等可恢复问题在专用流程前统一拦下
+                    if let ToolGate::Reject(output) =
+                        evaluate_tool_gate(&self.tools, &self.tool_visibility, &call, &used_tools)
+                    {
+                        // 门禁拒绝的调用重发多少次结果都一样，计入重复统计以便及时停止
                         repeat_guard
                             .observe_rejected(&call.function.name, &call.function.arguments);
                         self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
@@ -342,28 +367,114 @@ impl Agent {
                         messages.push(ChatMessage::tool(call.id, output));
                         continue;
                     }
-                    if !question_round_allowed {
-                        let output = tool_invocation::question_limit_notice();
-                        repeat_guard
-                            .observe_rejected(&call.function.name, &call.function.arguments);
-                        self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
-                        on_event(AgentEvent::ToolResult {
-                            name: call.function.name.clone(),
-                            ok: false,
-                            output: output.clone(),
-                        })?;
-                        messages.push(ChatMessage::tool(call.id, output));
-                        continue;
+                    if matches!(call.function.name.as_str(), "str_replace" | "write_file") {
+                        if let Err(error) = edit_guard::ensure_edit_target_was_read(self, &call) {
+                            let output = format!("tool error: {error}");
+                            repeat_guard
+                                .observe_rejected(&call.function.name, &call.function.arguments);
+                            self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
+                            on_event(AgentEvent::ToolResult {
+                                name: call.function.name.clone(),
+                                ok: false,
+                                output: output.clone(),
+                            })?;
+                            messages.push(ChatMessage::tool(call.id, output));
+                            continue;
+                        }
                     }
-                    let request =
-                        match crate::question::QuestionRequest::parse(&call.function.arguments) {
-                            Ok(request) => request,
-                            Err(err) => {
-                                let output =
-                                    format!("tool error: invalid ask_question request: {err}");
-                                repeat_guard.observe_rejected(
-                                    &call.function.name,
-                                    &call.function.arguments,
+                    if call.function.name == "ask_question" {
+                        if question_call_count > 1 {
+                            let output = "tool error: only one ask_question call is allowed per tool batch; combine all questions into one call".to_string();
+                            repeat_guard
+                                .observe_rejected(&call.function.name, &call.function.arguments);
+                            self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
+                            on_event(AgentEvent::ToolResult {
+                                name: call.function.name.clone(),
+                                ok: false,
+                                output: output.clone(),
+                            })?;
+                            messages.push(ChatMessage::tool(call.id, output));
+                            continue;
+                        }
+                        if !question_round_allowed {
+                            let output = tool_invocation::question_limit_notice();
+                            repeat_guard
+                                .observe_rejected(&call.function.name, &call.function.arguments);
+                            self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
+                            on_event(AgentEvent::ToolResult {
+                                name: call.function.name.clone(),
+                                ok: false,
+                                output: output.clone(),
+                            })?;
+                            messages.push(ChatMessage::tool(call.id, output));
+                            continue;
+                        }
+                        let request =
+                            match crate::question::QuestionRequest::parse(&call.function.arguments)
+                            {
+                                Ok(request) => request,
+                                Err(err) => {
+                                    let output =
+                                        format!("tool error: invalid ask_question request: {err}");
+                                    repeat_guard.observe_rejected(
+                                        &call.function.name,
+                                        &call.function.arguments,
+                                    );
+                                    self.record_simple_tool_result(
+                                        turn_id,
+                                        recorded_call,
+                                        false,
+                                        &output,
+                                    )?;
+                                    on_event(AgentEvent::ToolResult {
+                                        name: call.function.name.clone(),
+                                        ok: false,
+                                        output: output.clone(),
+                                    })?;
+                                    messages.push(ChatMessage::tool(call.id, output));
+                                    continue;
+                                }
+                            };
+                        let (pending, response_rx) =
+                            crate::question::request_question(self.session_id(), request.clone());
+                        let request_id = pending.id.clone();
+                        on_event(AgentEvent::QuestionRequested(pending))?;
+                        let response = response_rx
+                            .await
+                            .unwrap_or(crate::question::QuestionResponse::Cancelled);
+                        on_event(AgentEvent::QuestionResolved {
+                            request_id,
+                            response: response.clone(),
+                        })?;
+                        let output = match response {
+                            crate::question::QuestionResponse::Answered(answers) => {
+                                match crate::question::QuestionExchange::new(request, answers) {
+                                    Ok(exchange) => {
+                                        crate::question::answered_tool_output(&exchange)
+                                    }
+                                    Err(err) => {
+                                        let output = format!(
+                                            "tool error: invalid ask_question answers: {err}"
+                                        );
+                                        self.record_simple_tool_result(
+                                            turn_id,
+                                            recorded_call,
+                                            false,
+                                            &output,
+                                        )?;
+                                        on_event(AgentEvent::ToolResult {
+                                            name: call.function.name.clone(),
+                                            ok: false,
+                                            output: output.clone(),
+                                        })?;
+                                        messages.push(ChatMessage::tool(call.id, output));
+                                        continue;
+                                    }
+                                }
+                            }
+                            crate::question::QuestionResponse::Cancelled => {
+                                let output = crate::question::unavailable_tool_output(
+                                    "user cancelled the question",
                                 );
                                 self.record_simple_tool_result(
                                     turn_id,
@@ -379,311 +490,278 @@ impl Agent {
                                 messages.push(ChatMessage::tool(call.id, output));
                                 continue;
                             }
+                            crate::question::QuestionResponse::Unavailable(reason) => {
+                                crate::question::unavailable_tool_output(&reason)
+                            }
                         };
-                    let (pending, response_rx) =
-                        crate::question::request_question(self.session_id(), request.clone());
-                    let request_id = pending.id.clone();
-                    on_event(AgentEvent::QuestionRequested(pending))?;
-                    let response = response_rx
-                        .await
-                        .unwrap_or(crate::question::QuestionResponse::Cancelled);
-                    on_event(AgentEvent::QuestionResolved {
-                        request_id,
-                        response: response.clone(),
-                    })?;
-                    let output = match response {
-                        crate::question::QuestionResponse::Answered(answers) => {
-                            match crate::question::QuestionExchange::new(request, answers) {
-                                Ok(exchange) => crate::question::answered_tool_output(&exchange),
-                                Err(err) => {
-                                    let output =
-                                        format!("tool error: invalid ask_question answers: {err}");
-                                    self.record_simple_tool_result(
-                                        turn_id,
-                                        recorded_call,
-                                        false,
-                                        &output,
-                                    )?;
-                                    on_event(AgentEvent::ToolResult {
-                                        name: call.function.name.clone(),
-                                        ok: false,
-                                        output: output.clone(),
-                                    })?;
-                                    messages.push(ChatMessage::tool(call.id, output));
-                                    continue;
+                        self.record_simple_tool_result(turn_id, recorded_call, true, &output)?;
+                        on_event(AgentEvent::ToolResult {
+                            name: call.function.name.clone(),
+                            ok: true,
+                            output: output.clone(),
+                        })?;
+                        messages.push(ChatMessage::tool(call.id, output));
+                        continue;
+                    }
+                    if defer_sibling_tools {
+                        let output = "tool error: deferred until the user answers ask_question; reissue this tool call after receiving the answer".to_string();
+                        self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
+                        on_event(AgentEvent::ToolResult {
+                            name: call.function.name.clone(),
+                            ok: false,
+                            output: output.clone(),
+                        })?;
+                        messages.push(ChatMessage::tool(call.id, output));
+                        continue;
+                    }
+                    if self.mode() == AgentMode::Plan
+                        && self.tools.permission(&call.function.name)? != ToolPermission::ReadOnly
+                    {
+                        let output = format!(
+                            "tool error: Plan mode blocked non-read-only tool: {}",
+                            call.function.name
+                        );
+                        repeat_guard
+                            .observe_rejected(&call.function.name, &call.function.arguments);
+                        self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
+                        on_event(AgentEvent::ToolResult {
+                            name: call.function.name.clone(),
+                            ok: false,
+                            output: output.clone(),
+                        })?;
+                        messages.push(ChatMessage::tool(call.id, output));
+                        continue;
+                    }
+                    if self
+                        .tools
+                        .requires_permission(&call.function.name, &call.function.arguments)?
+                    {
+                        self.tools.record_permission_requested(
+                            &call.function.name,
+                            &call.function.arguments,
+                        )?;
+                        // 自动审核：与人工审核并行；必须在 on_event（可能阻塞）之前启动
+                        let (auto_task, auto_audit_active) = if self.mode() == AgentMode::AutoAudit
+                        {
+                            let context = crate::permission::build_audit_context(&messages, 2_500);
+                            let tool_name = call.function.name.clone();
+                            let arguments = call.function.arguments.clone();
+                            match crate::permission::resolve_auto_audit_client(
+                                &self.config,
+                                &self.paths,
+                            ) {
+                                Ok(audit_client) => {
+                                    // 先占位 request_id，创建请求后再克隆给任务
+                                    (Some((audit_client, context, tool_name, arguments)), true)
+                                }
+                                Err(_) => {
+                                    // 客户端不可用：静默回退人工审核
+                                    (None, false)
                                 }
                             }
-                        }
-                        crate::question::QuestionResponse::Cancelled => {
-                            let output = crate::question::unavailable_tool_output(
-                                "user cancelled the question",
+                        } else {
+                            (None, false)
+                        };
+                        let (request, decision_rx) =
+                            crate::permission::request_permission_with_auto_audit(
+                                self.session_id(),
+                                &call.function.name,
+                                &call.function.arguments,
+                                auto_audit_active,
                             );
-                            self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
-                            on_event(AgentEvent::ToolResult {
-                                name: call.function.name.clone(),
-                                ok: false,
-                                output: output.clone(),
-                            })?;
-                            messages.push(ChatMessage::tool(call.id, output));
-                            continue;
+                        let request_id = request.id.clone();
+                        let auto_task =
+                            auto_task.map(|(audit_client, context, tool_name, arguments)| {
+                                let audit_request_id = request_id.clone();
+                                tokio::spawn(async move {
+                                    // 超时或失败时静默回退人工审核
+                                    match crate::permission::run_auto_audit(
+                                        &audit_client,
+                                        &audit_request_id,
+                                        &tool_name,
+                                        &arguments,
+                                        &context,
+                                    )
+                                    .await
+                                    {
+                                        Ok(_) => {}
+                                        Err(error) => {
+                                            let message = format!("{error:#}");
+                                            // 超时 / 竞态：完全静默；其它失败仅提示一次后回退人工
+                                            if message.contains("timed out")
+                                                || message.contains("timeout")
+                                                || message.contains("no longer pending")
+                                                || message.contains("no longer running")
+                                            {
+                                                return;
+                                            }
+                                            eprintln!(
+                                                "[sai] auto-audit fallback to human: {message}"
+                                            );
+                                        }
+                                    }
+                                })
+                            });
+                        on_event(AgentEvent::PermissionRequested(request.clone()))?;
+                        let decision = match decision_rx.await {
+                            Ok(decision) => {
+                                if let Some(task) = auto_task {
+                                    task.abort();
+                                }
+                                decision
+                            }
+                            Err(_) => {
+                                if let Some(task) = auto_task {
+                                    let _ = task.await;
+                                }
+                                crate::permission::PermissionDecision::Deny {
+                                    reply: Some("权限审核通道已关闭".to_string()),
+                                }
+                            }
+                        };
+                        on_event(AgentEvent::PermissionResolved {
+                            request_id,
+                            decision: decision.clone(),
+                        })?;
+                        // 自动审核的放行理由写入审计日志，人工批准没有说明
+                        let approval_detail = decision.detail().map(str::to_string);
+                        match decision {
+                            crate::permission::PermissionDecision::Allow { .. } => {
+                                self.tools.record_permission_approved(
+                                    &call.function.name,
+                                    &call.function.arguments,
+                                    approval_detail.as_deref(),
+                                )?;
+                            }
+                            crate::permission::PermissionDecision::Deny { reply } => {
+                                self.tools.record_permission_denied(
+                                    &call.function.name,
+                                    &call.function.arguments,
+                                    reply.as_deref(),
+                                )?;
+                                let output = reply
+                                    .filter(|value| !value.trim().is_empty())
+                                    .unwrap_or_else(|| "用户拒绝了此工具调用".to_string());
+                                self.record_simple_tool_result(
+                                    turn_id,
+                                    recorded_call,
+                                    false,
+                                    &output,
+                                )?;
+                                on_event(AgentEvent::ToolResult {
+                                    name: call.function.name.clone(),
+                                    ok: false,
+                                    output: output.clone(),
+                                })?;
+                                messages.push(ChatMessage::tool(call.id, output));
+                                continue;
+                            }
                         }
-                        crate::question::QuestionResponse::Unavailable(reason) => {
-                            crate::question::unavailable_tool_output(&reason)
-                        }
-                    };
-                    self.record_simple_tool_result(turn_id, recorded_call, true, &output)?;
-                    on_event(AgentEvent::ToolResult {
-                        name: call.function.name.clone(),
-                        ok: true,
-                        output: output.clone(),
-                    })?;
-                    messages.push(ChatMessage::tool(call.id, output));
-                    continue;
-                }
-                if defer_sibling_tools {
-                    let output = "tool error: deferred until the user answers ask_question; reissue this tool call after receiving the answer".to_string();
-                    self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
-                    on_event(AgentEvent::ToolResult {
-                        name: call.function.name.clone(),
-                        ok: false,
-                        output: output.clone(),
-                    })?;
-                    messages.push(ChatMessage::tool(call.id, output));
-                    continue;
-                }
-                if self.mode() == AgentMode::Plan
-                    && self.tools.permission(&call.function.name)? != ToolPermission::ReadOnly
-                {
-                    let output = format!(
-                        "tool error: Plan mode blocked non-read-only tool: {}",
-                        call.function.name
-                    );
-                    repeat_guard.observe_rejected(&call.function.name, &call.function.arguments);
-                    self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
-                    on_event(AgentEvent::ToolResult {
-                        name: call.function.name.clone(),
-                        ok: false,
-                        output: output.clone(),
-                    })?;
-                    messages.push(ChatMessage::tool(call.id, output));
-                    continue;
-                }
-                if self
-                    .tools
-                    .requires_permission(&call.function.name, &call.function.arguments)?
-                {
-                    self.tools.record_permission_requested(
-                        &call.function.name,
-                        &call.function.arguments,
-                    )?;
-                    // 自动审核：与人工审核并行；必须在 on_event（可能阻塞）之前启动
-                    let (auto_task, auto_audit_active) = if self.mode() == AgentMode::AutoAudit {
-                        let context = crate::permission::build_audit_context(&messages, 2_500);
-                        let tool_name = call.function.name.clone();
-                        let arguments = call.function.arguments.clone();
-                        match crate::permission::resolve_auto_audit_client(
+                    }
+                    if self.tool_visibility.is_loader_call(&call.function.name) {
+                        let output = match self.tool_visibility.load_from_arguments(
+                            &self.tools,
+                            &call.function.arguments,
                             &self.config,
                             &self.paths,
                         ) {
-                            Ok(audit_client) => {
-                                // 先占位 request_id，创建请求后再克隆给任务
-                                (Some((audit_client, context, tool_name, arguments)), true)
+                            Ok(output) => {
+                                on_event(AgentEvent::ToolResult {
+                                    name: call.function.name.clone(),
+                                    ok: true,
+                                    output: output.clone(),
+                                })?;
+                                output
                             }
-                            Err(_) => {
-                                // 客户端不可用：静默回退人工审核
-                                (None, false)
+                            Err(err) => {
+                                let output = tool_error_output(&err);
+                                repeat_guard.observe_rejected(
+                                    &call.function.name,
+                                    &call.function.arguments,
+                                );
+                                on_event(AgentEvent::ToolResult {
+                                    name: call.function.name.clone(),
+                                    ok: false,
+                                    output: output.clone(),
+                                })?;
+                                output
                             }
-                        }
-                    } else {
-                        (None, false)
-                    };
-                    let (request, decision_rx) =
-                        crate::permission::request_permission_with_auto_audit(
-                            self.session_id(),
-                            &call.function.name,
-                            &call.function.arguments,
-                            auto_audit_active,
-                        );
-                    let request_id = request.id.clone();
-                    let auto_task =
-                        auto_task.map(|(audit_client, context, tool_name, arguments)| {
-                            let audit_request_id = request_id.clone();
-                            tokio::spawn(async move {
-                                // 超时或失败时静默回退人工审核
-                                match crate::permission::run_auto_audit(
-                                    &audit_client,
-                                    &audit_request_id,
-                                    &tool_name,
-                                    &arguments,
-                                    &context,
-                                )
-                                .await
-                                {
-                                    Ok(_) => {}
-                                    Err(error) => {
-                                        let message = format!("{error:#}");
-                                        // 超时 / 竞态：完全静默；其它失败仅提示一次后回退人工
-                                        if message.contains("timed out")
-                                            || message.contains("timeout")
-                                            || message.contains("no longer pending")
-                                            || message.contains("no longer running")
-                                        {
-                                            return;
-                                        }
-                                        eprintln!("[sai] auto-audit fallback to human: {message}");
-                                    }
-                                }
-                            })
-                        });
-                    on_event(AgentEvent::PermissionRequested(request.clone()))?;
-                    let decision = match decision_rx.await {
-                        Ok(decision) => {
-                            if let Some(task) = auto_task {
-                                task.abort();
-                            }
-                            decision
-                        }
-                        Err(_) => {
-                            if let Some(task) = auto_task {
-                                let _ = task.await;
-                            }
-                            crate::permission::PermissionDecision::Deny {
-                                reply: Some("权限审核通道已关闭".to_string()),
-                            }
-                        }
-                    };
-                    on_event(AgentEvent::PermissionResolved {
-                        request_id,
-                        decision: decision.clone(),
-                    })?;
-                    // 自动审核的放行理由写入审计日志，人工批准没有说明
-                    let approval_detail = decision.detail().map(str::to_string);
-                    match decision {
-                        crate::permission::PermissionDecision::Allow { .. } => {
-                            self.tools.record_permission_approved(
-                                &call.function.name,
-                                &call.function.arguments,
-                                approval_detail.as_deref(),
-                            )?;
-                        }
-                        crate::permission::PermissionDecision::Deny { reply } => {
-                            self.tools.record_permission_denied(
-                                &call.function.name,
-                                &call.function.arguments,
-                                reply.as_deref(),
-                            )?;
-                            let output = reply
-                                .filter(|value| !value.trim().is_empty())
-                                .unwrap_or_else(|| "用户拒绝了此工具调用".to_string());
-                            self.record_simple_tool_result(turn_id, recorded_call, false, &output)?;
-                            on_event(AgentEvent::ToolResult {
-                                name: call.function.name.clone(),
-                                ok: false,
-                                output: output.clone(),
-                            })?;
-                            messages.push(ChatMessage::tool(call.id, output));
-                            continue;
-                        }
+                        };
+                        let context_output =
+                            tools::tool_output_for_context(&call.function.name, &output);
+                        self.record_tool_result_completed(
+                            turn_id,
+                            recorded_call,
+                            !is_tool_error_output(&context_output),
+                            &output,
+                            &context_output,
+                        )?;
+                        messages.push(ChatMessage::tool(call.id, context_output));
+                        continue;
                     }
-                }
-                if self.tool_visibility.is_loader_call(&call.function.name) {
-                    let output = match self.tool_visibility.load_from_arguments(
-                        &self.tools,
-                        &call.function.arguments,
-                        &self.config,
-                        &self.paths,
-                    ) {
-                        Ok(output) => {
-                            on_event(AgentEvent::ToolResult {
-                                name: call.function.name.clone(),
-                                ok: true,
-                                output: output.clone(),
-                            })?;
-                            output
-                        }
-                        Err(err) => {
-                            let output = tool_error_output(&err);
-                            repeat_guard
-                                .observe_rejected(&call.function.name, &call.function.arguments);
-                            on_event(AgentEvent::ToolResult {
-                                name: call.function.name.clone(),
-                                ok: false,
-                                output: output.clone(),
-                            })?;
-                            output
-                        }
-                    };
+                    perf.mark(&format!("tool {} start", call.function.name));
+                    let mut tool_hook_ctx = hook_ctx.clone();
+                    tool_hook_ctx.tool_name = Some(call.function.name.clone());
+                    crate::hooks::dispatch(
+                        &self.config.hooks,
+                        crate::hooks::HookEvent::ToolExecutionStart,
+                        &tool_hook_ctx,
+                    )
+                    .await;
+                    let execution = self
+                        .execute_real_tool(turn_id, &call, on_event, perf)
+                        .await?;
+                    if execution.failed {
+                        repeat_guard
+                            .observe_rejected(&call.function.name, &call.function.arguments);
+                    }
+                    round_model_attachments.extend(execution.model_attachments);
+                    let output = execution.output;
                     let context_output =
                         tools::tool_output_for_context(&call.function.name, &output);
+                    // 重复调用尚未到拒绝阈值时照常返回结果，但提醒模型结果没有变化
+                    let context_output = match repeat_verdict {
+                        repeat_guard::RepeatVerdict::Warn { seen } => format!(
+                            "{context_output}{}",
+                            repeat_guard::warn_notice(&call.function.name, seen)
+                        ),
+                        _ => context_output,
+                    };
                     self.record_tool_result_completed(
                         turn_id,
                         recorded_call,
-                        !is_tool_error_output(&context_output),
+                        !output.starts_with("tool error:"),
                         &output,
                         &context_output,
                     )?;
+                    edit_guard::record_successful_reads(self, &call, &output)?;
+                    perf.mark(&format!("tool {} result persisted", call.function.name));
                     messages.push(ChatMessage::tool(call.id, context_output));
-                    continue;
-                }
-                perf.mark(&format!("tool {} start", call.function.name));
-                let mut tool_hook_ctx = hook_ctx.clone();
-                tool_hook_ctx.tool_name = Some(call.function.name.clone());
-                crate::hooks::dispatch(
-                    &self.config.hooks,
-                    crate::hooks::HookEvent::ToolExecutionStart,
-                    &tool_hook_ctx,
-                )
-                .await;
-                let execution = self
-                    .execute_real_tool(turn_id, &call, on_event, perf)
-                    .await?;
-                if execution.failed {
-                    repeat_guard.observe_rejected(&call.function.name, &call.function.arguments);
-                }
-                round_model_attachments.extend(execution.model_attachments);
-                let output = execution.output;
-                let context_output = tools::tool_output_for_context(&call.function.name, &output);
-                // 重复调用尚未到拒绝阈值时照常返回结果，但提醒模型结果没有变化
-                let context_output = match repeat_verdict {
-                    repeat_guard::RepeatVerdict::Warn { seen } => format!(
-                        "{context_output}{}",
-                        repeat_guard::warn_notice(&call.function.name, seen)
-                    ),
-                    _ => context_output,
-                };
-                self.record_tool_result_completed(
-                    turn_id,
-                    recorded_call,
-                    !output.starts_with("tool error:"),
-                    &output,
-                    &context_output,
-                )?;
-                perf.mark(&format!("tool {} result persisted", call.function.name));
-                messages.push(ChatMessage::tool(call.id, context_output));
-                crate::hooks::dispatch(
-                    &self.config.hooks,
-                    crate::hooks::HookEvent::ToolExecutionEnd,
-                    &tool_hook_ctx,
-                )
-                .await;
-                crate::hooks::dispatch(
-                    &self.config.hooks,
-                    crate::hooks::HookEvent::MessageEnd,
-                    &hook_ctx,
-                )
-                .await;
-                crate::hooks::dispatch(
-                    &self.config.hooks,
-                    crate::hooks::HookEvent::TurnEnd,
-                    &hook_ctx,
-                )
-                .await;
-                if let Some(reminder) = todo_reminder.as_mut() {
-                    let todo_updated = call.function.name == "todo"
-                        && !output.starts_with("tool error:")
-                        && tools::todo::is_mutating_call(&call.function.arguments);
-                    if let Some(content) = reminder.after_tool_round(todo_updated)? {
-                        messages.push(ChatMessage::system(content));
+                    crate::hooks::dispatch(
+                        &self.config.hooks,
+                        crate::hooks::HookEvent::ToolExecutionEnd,
+                        &tool_hook_ctx,
+                    )
+                    .await;
+                    crate::hooks::dispatch(
+                        &self.config.hooks,
+                        crate::hooks::HookEvent::MessageEnd,
+                        &hook_ctx,
+                    )
+                    .await;
+                    crate::hooks::dispatch(
+                        &self.config.hooks,
+                        crate::hooks::HookEvent::TurnEnd,
+                        &hook_ctx,
+                    )
+                    .await;
+                    if let Some(reminder) = todo_reminder.as_mut() {
+                        let todo_updated = call.function.name == "todo"
+                            && !output.starts_with("tool error:")
+                            && tools::todo::is_mutating_call(&call.function.arguments);
+                        if let Some(content) = reminder.after_tool_round(todo_updated)? {
+                            messages.push(ChatMessage::system(content));
+                        }
                     }
                 }
             }

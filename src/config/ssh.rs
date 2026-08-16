@@ -87,7 +87,10 @@ mod tests {
 
     #[test]
     fn display_address_omits_the_default_port() {
-        assert_eq!(host(DEFAULT_SSH_PORT).display_address(), "deploy@example.com");
+        assert_eq!(
+            host(DEFAULT_SSH_PORT).display_address(),
+            "deploy@example.com"
+        );
     }
 
     #[test]

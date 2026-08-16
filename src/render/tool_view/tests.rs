@@ -93,10 +93,7 @@ fn background_command_result_uses_tool_payload_view() {
 /// Full 模式在参数 JSON 尚未闭合时不倾倒 `{...` 碎片。
 #[test]
 fn full_view_hides_incomplete_json_arguments() {
-    let view = ToolView::running(
-        "web_search".to_string(),
-        r#"{"query":"partial"#.to_string(),
-    );
+    let view = ToolView::running("web_search".to_string(), r#"{"query":"partial"#.to_string());
     let output = render(&view, ToolCallDisplayMode::Full);
     let plain = crate::render::activity_animation::strip_ansi_for_test(&output);
     assert!(!plain.contains("└ args:"));
@@ -141,10 +138,7 @@ fn edit_tool_result_keeps_diff_stats_on_status_line() {
 /// 非编辑类工具的状态行不受实时统计影响。
 #[test]
 fn non_edit_tools_keep_a_plain_status_line() {
-    let view = ToolView::running(
-        "grep".to_string(),
-        r#"{"pattern":"a\nb"}"#.to_string(),
-    );
+    let view = ToolView::running("grep".to_string(), r#"{"pattern":"a\nb"}"#.to_string());
 
     let output = super::render(&view, ToolCallDisplayMode::Summary);
 

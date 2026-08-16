@@ -56,6 +56,7 @@ impl RuntimeContextSnapshot {
 /// - `mode`: 当前权限模式
 /// - `checkpoint_context`: 当前压缩摘要上下文
 /// - `history`: 压缩后仍可见的 provider 历史
+/// - `include_runtime_state`: 是否注入运行状态快照
 /// - `include_mode_reminder`: 是否注入当前模式的约束说明
 ///
 /// 返回:
@@ -65,10 +66,15 @@ pub(crate) fn context_state_update(
     mode: AgentMode,
     checkpoint_context: Option<&str>,
     history: &[ChatMessage],
+    include_runtime_state: bool,
     include_mode_reminder: bool,
 ) -> Result<Option<String>> {
     let known = KnownContextState::from_projection(checkpoint_context, history);
-    let mut parts = runtime_update_parts(snapshot, known.runtime.as_ref())?;
+    let mut parts = if include_runtime_state {
+        runtime_update_parts(snapshot, known.runtime.as_ref())?
+    } else {
+        Vec::new()
+    };
     if include_mode_reminder {
         if let Some(mode_update) = mode_update(mode, &known)? {
             parts.push(mode_update);
@@ -467,9 +473,16 @@ mod tests {
     /// 验证首次注入包含全量运行状态和完整模式说明。
     #[test]
     fn initial_update_contains_full_runtime_and_mode() {
-        let update = context_state_update(&snapshot("p/m", "main"), AgentMode::Yolo, None, &[], true)
-            .unwrap()
-            .unwrap();
+        let update = context_state_update(
+            &snapshot("p/m", "main"),
+            AgentMode::Yolo,
+            None,
+            &[],
+            true,
+            true,
+        )
+        .unwrap()
+        .unwrap();
 
         assert!(update.contains("\"kind\":\"runtime\""));
         assert!(update.contains("\"date\":\"2026-08-08\""));
@@ -482,13 +495,13 @@ mod tests {
     #[test]
     fn unchanged_state_does_not_append_context() {
         let current = snapshot("p/m", "main");
-        let first = context_state_update(&current, AgentMode::Yolo, None, &[], true)
+        let first = context_state_update(&current, AgentMode::Yolo, None, &[], true, true)
             .unwrap()
             .unwrap();
         let history = vec![ChatMessage::plain("user", first)];
 
         assert!(
-            context_state_update(&current, AgentMode::Yolo, None, &history, true)
+            context_state_update(&current, AgentMode::Yolo, None, &history, true, true)
                 .unwrap()
                 .is_none()
         );
@@ -497,9 +510,16 @@ mod tests {
     /// 验证 Git 分支变化只追加该字段，日期不参与后续更新。
     #[test]
     fn branch_change_appends_only_changed_field() {
-        let first = context_state_update(&snapshot("p/m", "main"), AgentMode::Yolo, None, &[], true)
-            .unwrap()
-            .unwrap();
+        let first = context_state_update(
+            &snapshot("p/m", "main"),
+            AgentMode::Yolo,
+            None,
+            &[],
+            true,
+            true,
+        )
+        .unwrap()
+        .unwrap();
         let history = vec![ChatMessage::plain("user", first)];
 
         let update = context_state_update(
@@ -507,6 +527,7 @@ mod tests {
             AgentMode::Yolo,
             None,
             &history,
+            true,
             true,
         )
         .unwrap()
@@ -522,7 +543,7 @@ mod tests {
     #[test]
     fn mode_explanation_is_loaded_once_while_visible() {
         let runtime = snapshot("p/m", "main");
-        let yolo = context_state_update(&runtime, AgentMode::Yolo, None, &[], true)
+        let yolo = context_state_update(&runtime, AgentMode::Yolo, None, &[], true, true)
             .unwrap()
             .unwrap();
         let audited = context_state_update(
@@ -530,6 +551,7 @@ mod tests {
             AgentMode::Audited,
             None,
             &[ChatMessage::plain("user", &yolo)],
+            true,
             true,
         )
         .unwrap()
@@ -539,7 +561,7 @@ mod tests {
             ChatMessage::plain("user", audited),
         ];
 
-        let switched = context_state_update(&runtime, AgentMode::Yolo, None, &history, true)
+        let switched = context_state_update(&runtime, AgentMode::Yolo, None, &history, true, true)
             .unwrap()
             .unwrap();
 
@@ -556,12 +578,29 @@ mod tests {
             Some("<conversation-handoff>summary only</conversation-handoff>"),
             &[],
             true,
+            true,
         )
         .unwrap()
         .unwrap();
 
         assert!(update.contains("\"detail\":\"full\""));
         assert!(update.contains("<mode-instructions name=\"audited\">"));
+    }
+
+    /// 验证运行状态与模式说明全部关闭时不产生动态上下文。
+    #[test]
+    fn disabled_runtime_sections_produce_no_context() {
+        let update = context_state_update(
+            &snapshot("p/m", "main"),
+            AgentMode::Yolo,
+            None,
+            &[],
+            false,
+            false,
+        )
+        .unwrap();
+
+        assert!(update.is_none());
     }
 
     /// 验证动态字段清理控制字符并执行限长。

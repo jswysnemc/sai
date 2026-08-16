@@ -15,6 +15,12 @@ pub(super) struct RealToolExecution {
     pub(super) failed: bool,
 }
 
+/// 并发工具执行期间暂存的结果与进度。
+pub(super) struct BufferedRealToolExecution {
+    execution: RealToolExecution,
+    progress: Vec<String>,
+}
+
 impl Agent {
     /// 【Agent】【工具执行】执行已经通过协议、门禁和权限检查的真实工具。
     ///
@@ -58,46 +64,14 @@ impl Agent {
                         })?;
                     }
                     // 2. 成功结果立即发出并持久化可复用报告
-                    return match result {
-                        Ok(mut tool_output) => {
-                            let output = std::mem::take(&mut tool_output.content);
-                            on_event(AgentEvent::ToolResult {
-                                name: call.function.name.clone(),
-                                ok: true,
-                                output: output.clone(),
-                            })?;
-                            perf.mark(&format!("tool {} result event", call.function.name));
-                            if let Some(report) = extract_persistable_tool_report(
-                                &call.function.name,
-                                &output,
-                            ) {
-                                self.state.append_tool_report_context(
-                                    turn_id,
-                                    &call.function.name,
-                                    &report,
-                                )?;
-                            }
-                            Ok(RealToolExecution {
-                                output,
-                                model_attachments: tool_output.model_attachments,
-                                failed: false,
-                            })
-                        }
-                        Err(error) => {
-                            let output = format!("tool error: {error}");
-                            on_event(AgentEvent::ToolResult {
-                                name: call.function.name.clone(),
-                                ok: false,
-                                output: output.clone(),
-                            })?;
-                            perf.mark(&format!("tool {} error event", call.function.name));
-                            Ok(RealToolExecution {
-                                output,
-                                model_attachments: Vec::new(),
-                                failed: true,
-                            })
-                        }
-                    };
+                    let execution = tool_result(result);
+                    return self.finish_real_tool_execution(
+                        turn_id,
+                        call,
+                        execution,
+                        on_event,
+                        perf,
+                    );
                 }
                 Some(message) = progress_rx.recv() => {
                     on_event(AgentEvent::ToolProgress {
@@ -107,5 +81,111 @@ impl Agent {
                 }
             }
         }
+    }
+
+    /// 【Agent】【并发工具】执行只读工具并暂存进度与结果。
+    ///
+    /// 参数:
+    /// - `call`: 已通过门禁与权限检查的只读调用
+    ///
+    /// 返回:
+    /// - 等待调用方按原始顺序提交的执行结果
+    pub(super) async fn execute_real_tool_buffered(
+        &self,
+        call: &ToolCall,
+    ) -> BufferedRealToolExecution {
+        let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
+        let result = self
+            .tools
+            .call_with_progress(&call.function.name, &call.function.arguments, progress_tx)
+            .await;
+        let mut progress = Vec::new();
+        while let Ok(message) = progress_rx.try_recv() {
+            progress.push(message);
+        }
+        BufferedRealToolExecution {
+            execution: tool_result(result),
+            progress,
+        }
+    }
+
+    /// 【Agent】【并发工具】按调用顺序提交暂存结果。
+    ///
+    /// 参数:
+    /// - `turn_id`: 当前持久化轮次标识
+    /// - `call`: 工具调用
+    /// - `buffered`: 暂存的进度与结果
+    /// - `on_event`: Agent 事件回调
+    /// - `perf`: 当前轮次性能标记器
+    ///
+    /// 返回:
+    /// - 已发出事件并持久化报告的执行结果
+    pub(super) fn finish_buffered_real_tool<F>(
+        &self,
+        turn_id: &str,
+        call: &ToolCall,
+        buffered: BufferedRealToolExecution,
+        on_event: &mut F,
+        perf: &mut PerfTrace,
+    ) -> Result<RealToolExecution>
+    where
+        F: FnMut(AgentEvent) -> Result<()>,
+    {
+        for message in buffered.progress {
+            on_event(AgentEvent::ToolProgress {
+                name: call.function.name.clone(),
+                message,
+            })?;
+        }
+        self.finish_real_tool_execution(turn_id, call, buffered.execution, on_event, perf)
+    }
+
+    /// 发出工具结果事件并保存可复用报告。
+    fn finish_real_tool_execution<F>(
+        &self,
+        turn_id: &str,
+        call: &ToolCall,
+        execution: RealToolExecution,
+        on_event: &mut F,
+        perf: &mut PerfTrace,
+    ) -> Result<RealToolExecution>
+    where
+        F: FnMut(AgentEvent) -> Result<()>,
+    {
+        on_event(AgentEvent::ToolResult {
+            name: call.function.name.clone(),
+            ok: !execution.failed,
+            output: execution.output.clone(),
+        })?;
+        perf.mark(&format!(
+            "tool {} {} event",
+            call.function.name,
+            if execution.failed { "error" } else { "result" }
+        ));
+        if !execution.failed {
+            if let Some(report) =
+                extract_persistable_tool_report(&call.function.name, &execution.output)
+            {
+                self.state
+                    .append_tool_report_context(turn_id, &call.function.name, &report)?;
+            }
+        }
+        Ok(execution)
+    }
+}
+
+/// 把注册表执行结果转换为统一内部结果。
+fn tool_result(result: anyhow::Result<crate::tools::ToolOutput>) -> RealToolExecution {
+    match result {
+        Ok(mut tool_output) => RealToolExecution {
+            output: std::mem::take(&mut tool_output.content),
+            model_attachments: tool_output.model_attachments,
+            failed: false,
+        },
+        Err(error) => RealToolExecution {
+            output: format!("tool error: {error}"),
+            model_attachments: Vec::new(),
+            failed: true,
+        },
     }
 }

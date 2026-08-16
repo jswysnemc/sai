@@ -115,7 +115,9 @@ pub fn resolve_thinking_level(available: &[String], level: &str) -> String {
 /// 返回:
 /// - 强度序号；非法等级返回 None
 fn level_rank(level: &str) -> Option<usize> {
-    THINKING_LEVELS.iter().position(|item| *item == level.trim())
+    THINKING_LEVELS
+        .iter()
+        .position(|item| *item == level.trim())
 }
 
 /// 判断某个等级对给定的可用集合是否成立。
@@ -240,7 +242,10 @@ mod tests {
     fn toggle_only_exposes_the_off_level() {
         let options = json!([{ "type": "toggle" }]);
 
-        assert_eq!(thinking_levels_from_reasoning_options(&options), vec!["none"]);
+        assert_eq!(
+            thinking_levels_from_reasoning_options(&options),
+            vec!["none"]
+        );
     }
 
     /// 验证预算式视为全部可用。

@@ -47,7 +47,10 @@ fn live_and_finalized_assistant_body_share_visual_guide() {
         .map(|line| strip_ansi_for_test(line.as_str()))
         .collect::<Vec<_>>();
     // live 与定稿共用区块前空行，避免「工作时无空行、完成后突然出现」
-    assert_eq!(live, vec![String::new(), "  first".into(), "  second".into()]);
+    assert_eq!(
+        live,
+        vec![String::new(), "  first".into(), "  second".into()]
+    );
 
     assert!(store.finalize_live_tail());
     let finalized = store

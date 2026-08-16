@@ -127,7 +127,11 @@ pub(crate) fn highlight_code_line_continued(
             return output;
         }
         // 块注释：CSS 只有 /* */ 一种注释，C 系语言也常用；行内闭合后继续高亮后文
-        if supports_block_comment(&lang) && index + 1 < chars.len() && chars[index] == '/' && chars[index + 1] == '*' {
+        if supports_block_comment(&lang)
+            && index + 1 < chars.len()
+            && chars[index] == '/'
+            && chars[index + 1] == '*'
+        {
             let close = find_block_comment_end(&chars, index + 2);
             output.push_str(CODE_COMMENT_STYLE);
             output.extend(chars[index..close].iter());
@@ -283,8 +287,17 @@ fn code_keywords(lang: &str) -> &'static [&'static str] {
 fn supports_line_comment(lang: &str) -> bool {
     matches!(
         lang,
-        "rs" | "rust" | "js" | "ts" | "tsx" | "jsx" | "javascript" | "typescript" | "c" | "cpp"
-            | "java" | "go"
+        "rs" | "rust"
+            | "js"
+            | "ts"
+            | "tsx"
+            | "jsx"
+            | "javascript"
+            | "typescript"
+            | "c"
+            | "cpp"
+            | "java"
+            | "go"
     )
 }
 
@@ -298,8 +311,19 @@ fn supports_line_comment(lang: &str) -> bool {
 fn supports_block_comment(lang: &str) -> bool {
     matches!(
         lang,
-        "css" | "rs" | "rust" | "js" | "ts" | "tsx" | "jsx" | "javascript" | "typescript" | "c"
-            | "cpp" | "java" | "go"
+        "css"
+            | "rs"
+            | "rust"
+            | "js"
+            | "ts"
+            | "tsx"
+            | "jsx"
+            | "javascript"
+            | "typescript"
+            | "c"
+            | "cpp"
+            | "java"
+            | "go"
     )
 }
 
@@ -371,8 +395,11 @@ mod tests {
         let first = highlight_code_line_continued("sh", r#"curl -o "https://cdn-"#, &mut state);
         assert!(first.contains(CODE_STRING_STYLE));
         // 第二显示行：整段仍是字符串，版本号不得染成数字色
-        let second =
-            highlight_code_line_continued("sh", r#"zcode.z.ai/releases/3.7.6/x.deb" | tail -5"#, &mut state);
+        let second = highlight_code_line_continued(
+            "sh",
+            r#"zcode.z.ai/releases/3.7.6/x.deb" | tail -5"#,
+            &mut state,
+        );
         assert!(!second.contains(&format!("{CODE_NUMBER_STYLE}3.7.6")));
         assert!(second.starts_with(CODE_STRING_STYLE));
         // 引号闭合后恢复正常 token 化：tail 的 -5 属于字符串外内容

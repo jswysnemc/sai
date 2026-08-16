@@ -60,7 +60,11 @@ const TIPS_EN: &[&str] = &[
 /// 返回:
 /// - 当前轮次对应的提示语
 pub(super) fn current_tip() -> &'static str {
-    let tips = if crate::i18n::is_zh() { TIPS_ZH } else { TIPS_EN };
+    let tips = if crate::i18n::is_zh() {
+        TIPS_ZH
+    } else {
+        TIPS_EN
+    };
     let index = TIP_INDEX.load(Ordering::Relaxed) % tips.len();
     tips[index]
 }

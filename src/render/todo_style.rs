@@ -109,10 +109,7 @@ mod tests {
         let statuses = ["pending", "in_progress", "completed", "completed"];
         let order = display_order(&statuses);
         assert_eq!(
-            order
-                .iter()
-                .map(|&i| statuses[i])
-                .collect::<Vec<_>>(),
+            order.iter().map(|&i| statuses[i]).collect::<Vec<_>>(),
             vec!["completed", "completed", "in_progress", "pending"]
         );
     }
@@ -131,8 +128,10 @@ mod tests {
         let window = &statuses[start..end];
         assert!(window.contains(&"in_progress"));
         assert_eq!(window[0], "completed");
-        assert!(window.iter().position(|s| *s == "completed").unwrap()
-            < window.iter().position(|s| *s == "in_progress").unwrap());
+        assert!(
+            window.iter().position(|s| *s == "completed").unwrap()
+                < window.iter().position(|s| *s == "in_progress").unwrap()
+        );
     }
 
     #[test]

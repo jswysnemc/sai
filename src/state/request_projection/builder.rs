@@ -176,8 +176,8 @@ pub(crate) fn project_provider_turn_from_base_projection(
     let mut user_contexts = base_projection.user_contexts;
     // 索引与最近一次注入的完全相同就跳过：它已经在历史里，重发只是让同一份
     // 内容在窗口里堆叠，详见 memory_injection
-    if let Some(prompt) = memory_index_prompt
-        .filter(|prompt| !memory_index_already_injected(&base_messages, prompt))
+    if let Some(prompt) =
+        memory_index_prompt.filter(|prompt| !memory_index_already_injected(&base_messages, prompt))
     {
         dynamic_sources.push(dynamic_source("memory_association", prompt));
         user_contexts.push(prompt.to_string());
@@ -192,8 +192,7 @@ pub(crate) fn project_provider_turn_from_base_projection(
     let provider_user_content = combine_provider_user_content(&user_contexts, input);
     // 记忆召回与表情包提醒同样要落库：它们已经发给供应商，历史里缺失会让
     // 下一轮重放的用户消息与本轮实际发送内容不一致，前缀缓存从该消息断开
-    let persisted_user_content =
-        (!user_contexts.is_empty()).then(|| provider_user_content.clone());
+    let persisted_user_content = (!user_contexts.is_empty()).then(|| provider_user_content.clone());
     let user_message = if image_urls.is_empty() {
         ChatMessage::plain("user", provider_user_content)
     } else {

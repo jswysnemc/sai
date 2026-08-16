@@ -61,7 +61,11 @@ fn full_stream_event_sequence_drives_reconcile_pipeline() {
     let mut runtime = ReplRuntime::new(5_000, options());
     runtime.record_meta("准备开始".to_string()).unwrap();
     runtime
-        .record_user(crate::agent::AgentMode::Audited, "帮我跑测试".to_string(), false)
+        .record_user(
+            crate::agent::AgentMode::Audited,
+            "帮我跑测试".to_string(),
+            false,
+        )
         .unwrap();
     runtime.record_runner_event(&RunnerEvent::Started).unwrap();
 
@@ -247,7 +251,10 @@ fn slash_commands_go_to_the_control_queue() {
 
     assert!(runtime.take_submission_queue().is_empty());
     assert_eq!(runtime.queued_control_commands(), vec!["/tree".to_string()]);
-    assert_eq!(runtime.take_next_control_command().as_deref(), Some("/tree"));
+    assert_eq!(
+        runtime.take_next_control_command().as_deref(),
+        Some("/tree")
+    );
     assert_eq!(runtime.take_next_control_command(), None);
 }
 
@@ -293,7 +300,10 @@ fn undo_returns_the_last_queued_message_to_the_input() {
         .enqueue_stream_draft(crate::agent::AgentMode::Yolo)
         .unwrap();
 
-    assert_eq!(runtime.undo_last_queued().unwrap().as_deref(), Some("second"));
+    assert_eq!(
+        runtime.undo_last_queued().unwrap().as_deref(),
+        Some("second")
+    );
     assert_eq!(runtime.stream_draft().text, "second");
     assert_eq!(runtime.take_submission_queue().len(), 1);
 }
@@ -322,7 +332,10 @@ fn undo_falls_back_to_the_control_queue() {
         .enqueue_stream_draft(crate::agent::AgentMode::Yolo)
         .unwrap();
 
-    assert_eq!(runtime.undo_last_queued().unwrap().as_deref(), Some("/tree"));
+    assert_eq!(
+        runtime.undo_last_queued().unwrap().as_deref(),
+        Some("/tree")
+    );
     assert!(runtime.queued_control_commands().is_empty());
 }
 
@@ -346,7 +359,8 @@ fn clear_drops_both_queues() {
 }
 
 #[test]
-fn stream_mode_prefers_draft_mode() {    let mut runtime = ReplRuntime::new(5_000, options());
+fn stream_mode_prefers_draft_mode() {
+    let mut runtime = ReplRuntime::new(5_000, options());
     runtime.stream_draft_mut().mode = Some(crate::agent::AgentMode::Plan);
     assert_eq!(
         runtime.stream_mode(crate::agent::AgentMode::Yolo),

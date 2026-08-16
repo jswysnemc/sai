@@ -752,8 +752,7 @@ impl TranscriptStore {
         {
             return false;
         }
-        self.live_animation_started
-            .get_or_insert_with(Instant::now);
+        self.live_animation_started.get_or_insert_with(Instant::now);
         true
     }
 

@@ -301,10 +301,8 @@ mod tests {
 
     #[test]
     fn pending_list_is_scoped_by_session() {
-        let (a, _rx_a) =
-            request_secret("s-a", InteractiveKind::Password, "a", "p", None, false);
-        let (b, _rx_b) =
-            request_secret("s-b", InteractiveKind::Password, "b", "p", None, false);
+        let (a, _rx_a) = request_secret("s-a", InteractiveKind::Password, "a", "p", None, false);
+        let (b, _rx_b) = request_secret("s-b", InteractiveKind::Password, "b", "p", None, false);
         assert!(pending_ssh_secrets("s-a").iter().any(|r| r.id == a.id));
         assert!(pending_ssh_secrets("s-a").iter().all(|r| r.id != b.id));
         // 清理，避免影响其它测试

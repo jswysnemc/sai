@@ -305,10 +305,7 @@ mod tests {
             let plain = strip_ansi_for_test(line.as_str());
             if plain.starts_with('•') {
                 // Summary 摘要行挂在引导列，不套 diff 块三列内收
-                assert!(
-                    !plain.starts_with(' '),
-                    "diff 摘要应顶格: {plain:?}"
-                );
+                assert!(!plain.starts_with(' '), "diff 摘要应顶格: {plain:?}");
                 continue;
             }
             assert!(
@@ -354,10 +351,7 @@ mod tests {
             let plain = strip_ansi_for_test(line.as_str());
             if plain.starts_with('•') {
                 // 摘要引导符顶格，不被 diff 正文内收推开
-                assert!(
-                    !plain.starts_with(' '),
-                    "diff 摘要应顶格: {plain:?}"
-                );
+                assert!(!plain.starts_with(' '), "diff 摘要应顶格: {plain:?}");
             } else {
                 assert!(
                     line.as_str().starts_with("   "),
@@ -409,10 +403,7 @@ mod tests {
             .map(|line| strip_ansi_for_test(line.as_str()))
             .find(|line| line.contains('•'))
             .expect("应有工具状态行");
-        assert!(
-            header.starts_with('•'),
-            "流式工具状态行应顶格: {header:?}"
-        );
+        assert!(header.starts_with('•'), "流式工具状态行应顶格: {header:?}");
     }
 
     /// 验证单列终端不增加留白，保留唯一的正文列。

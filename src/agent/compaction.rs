@@ -141,7 +141,10 @@ impl Agent {
             turn_count: request.turn_count(),
             model: self.compaction_model_label.clone(),
         })?;
-        let summary = match self.create_compaction_summary(request, projection, on_event).await {
+        let summary = match self
+            .create_compaction_summary(request, projection, on_event)
+            .await
+        {
             Ok(summary) => summary,
             Err(error) => {
                 self.record_compaction_failure(request, projection, manual, &error)?;
@@ -317,7 +320,9 @@ impl Agent {
                 // 继续干活而不是写笔记。压缩本身不该因为这条优化而变得更易失败，
                 // 因此退回独立请求再试一次，代价是多一次调用
                 Err(error) => {
-                    let _ = self.state.record_compaction_replay_fallback(&format!("{error:#}"));
+                    let _ = self
+                        .state
+                        .record_compaction_replay_fallback(&format!("{error:#}"));
                 }
             }
         }

@@ -1,4 +1,4 @@
-//! HTTP 调试落盘：由环境变量开启，按会话记录请求头、请求体与流式重组响应。
+//! HTTP 调试落盘：由配置或环境变量开启，按会话记录请求头、请求体与流式重组响应。
 //!
 //! 环境变量:
 //! - `SAI_DEBUG_HTTP=1|true|yes|on`：开启
@@ -20,10 +20,52 @@ use std::sync::OnceLock;
 thread_local! {
     /// 当前线程关联的会话 ID（由 Agent 在调用 LLM 前设置）。
     static CURRENT_SESSION_ID: RefCell<Option<String>> = const { RefCell::new(None) };
+    /// 当前模型请求的轮次信息，用于把真实请求映射回轨迹。
+    static CURRENT_REQUEST_CONTEXT: RefCell<Option<RequestContext>> = const { RefCell::new(None) };
 }
 
 static REQUEST_SEQ: AtomicU64 = AtomicU64::new(1);
 static PATH_HINT_PRINTED: OnceLock<()> = OnceLock::new();
+
+#[derive(Debug, Clone)]
+struct RequestContext {
+    turn_id: String,
+    assistant_round: usize,
+}
+
+/// 在异步模型请求作用域内绑定持久化轮次信息。
+pub struct RequestContextGuard {
+    previous: Option<RequestContext>,
+}
+
+impl RequestContextGuard {
+    /// 绑定当前模型请求的轮次。
+    ///
+    /// 参数:
+    /// - `turn_id`: 持久化轮次标识
+    /// - `assistant_round`: 模型子轮编号
+    ///
+    /// 返回:
+    /// - 作用域守卫
+    pub fn new(turn_id: &str, assistant_round: usize) -> Self {
+        let previous = CURRENT_REQUEST_CONTEXT.with(|cell| cell.borrow().clone());
+        CURRENT_REQUEST_CONTEXT.with(|cell| {
+            *cell.borrow_mut() = Some(RequestContext {
+                turn_id: turn_id.to_string(),
+                assistant_round,
+            });
+        });
+        Self { previous }
+    }
+}
+
+impl Drop for RequestContextGuard {
+    fn drop(&mut self) {
+        CURRENT_REQUEST_CONTEXT.with(|cell| {
+            *cell.borrow_mut() = self.previous.take();
+        });
+    }
+}
 
 /// 从环境变量解析得到的调试配置。
 #[derive(Debug, Clone)]
@@ -35,16 +77,19 @@ pub struct HttpDebugConfig {
 }
 
 impl HttpDebugConfig {
-    /// 从环境变量与路径构造配置；未开启时返回 `None`。
+    /// 从配置、环境变量与路径构造配置；环境变量优先。
     ///
     /// 参数:
     /// - `paths`: Sai 路径
+    /// - `configured_enabled`: 配置文件中的启用开关
     ///
     /// 返回:
     /// - 开启时返回配置
-    pub fn from_env(paths: &SaiPaths) -> Option<Self> {
-        let flag = std::env::var("SAI_DEBUG_HTTP").ok()?;
-        if !is_truthy(&flag) {
+    pub fn from_config(paths: &SaiPaths, configured_enabled: bool) -> Option<Self> {
+        let enabled = std::env::var("SAI_DEBUG_HTTP")
+            .map(|value| is_truthy(&value))
+            .unwrap_or(configured_enabled);
+        if !enabled {
             return None;
         }
         let session_filter = std::env::var("SAI_DEBUG_HTTP_SESSION")
@@ -55,6 +100,12 @@ impl HttpDebugConfig {
             root: paths.cache_dir.join("debug-http"),
             session_filter,
         })
+    }
+
+    /// 兼容仅通过环境变量启用调试记录的调用方。
+    #[allow(dead_code)]
+    pub fn from_env(paths: &SaiPaths) -> Option<Self> {
+        Self::from_config(paths, false)
     }
 
     /// 当前会话是否应落盘。
@@ -160,6 +211,8 @@ impl HttpDebugRecorder {
             "protocol": protocol,
             "started_at": chrono::Utc::now().to_rfc3339(),
             "dir": dir.display().to_string(),
+            "turn_id": current_request_context().as_ref().map(|context| context.turn_id.clone()),
+            "assistant_round": current_request_context().as_ref().map(|context| context.assistant_round),
         });
         write_json(&dir.join("meta.json"), &meta)?;
         write_headers_file(&dir.join("request_headers.txt"), request_headers)?;
@@ -284,6 +337,11 @@ impl HttpDebugRecorder {
 /// - 会话 ID
 fn current_session_id() -> Option<String> {
     CURRENT_SESSION_ID.with(|cell| cell.borrow().clone())
+}
+
+/// 读取当前模型请求的轮次信息。
+fn current_request_context() -> Option<RequestContext> {
+    CURRENT_REQUEST_CONTEXT.with(|cell| cell.borrow().clone())
 }
 
 /// 判断环境变量是否为真值。
@@ -453,6 +511,7 @@ mod tests {
             session_filter: None,
         };
         let _guard = SessionGuard::new("sess-debug");
+        let _request_guard = RequestContextGuard::new("turn-debug", 2);
         let body = json!({"model": "gpt", "stream": true});
         let headers = bearer_request_headers("sk-test-key-12345678", &[]);
         let mut recorder = HttpDebugRecorder::start(
@@ -491,6 +550,9 @@ mod tests {
         assert!(reconstructed.contains("\"stream\": false"));
         let headers_text = fs::read_to_string(dir.join("request_headers.txt")).unwrap();
         assert!(!headers_text.contains("sk-test-key-12345678"));
+        let meta = fs::read_to_string(dir.join("meta.json")).unwrap();
+        assert!(meta.contains("turn-debug"));
+        assert!(meta.contains("assistant_round"));
     }
 
     #[test]

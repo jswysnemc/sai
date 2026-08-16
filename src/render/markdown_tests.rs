@@ -308,9 +308,7 @@ fn renders_more_inline_markdown() {
         "{MD_LINK_LABEL_STYLE}site{RESET} {MD_URL_STYLE}(https://example.com){RESET}"
     )));
     // 裸链接：整体按链接标签样式渲染，无尖括号噪音
-    assert!(output.contains(&format!(
-        "{MD_LINK_LABEL_STYLE}https://example.org{RESET}"
-    )));
+    assert!(output.contains(&format!("{MD_LINK_LABEL_STYLE}https://example.org{RESET}")));
     assert!(!output.contains('<'));
     assert!(output.contains(&format!(
         "{MD_IMAGE_STYLE}[image: pic]{RESET} {MD_URL_STYLE}(https://img){RESET}"
@@ -458,8 +456,8 @@ fn horizontal_rule_uses_terminal_width_fallback() {
     let column = crate::render::markdown_blocks::horizontal_rule_width()
         .saturating_sub(crate::render::content_indent::CONTENT_LEFT_INDENT)
         .max(1);
-    let inset = crate::render::markdown_blocks::MARKDOWN_HR_SIDE_INSET
-        .min(column.saturating_sub(1) / 2);
+    let inset =
+        crate::render::markdown_blocks::MARKDOWN_HR_SIDE_INSET.min(column.saturating_sub(1) / 2);
     let dashes = column.saturating_sub(inset.saturating_mul(2)).max(1);
     assert!(
         plain.starts_with('─') && !plain.starts_with(' '),

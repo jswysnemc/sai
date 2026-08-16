@@ -153,7 +153,6 @@ mod tests {
             .any(|entry| entry.name.starts_with("mcp_slow_server_")));
     }
 
-
     /// 构造一份关闭全部插件的配置。
     ///
     /// 参数:

@@ -128,7 +128,9 @@ fn render_cached(kind: &str, source: &str, render: impl FnOnce() -> String) -> S
     kind.hash(&mut hasher);
     source.hash(&mut hasher);
     // 终端宽度影响块级图的占位行列，resize 后需要重新渲染
-    crossterm::terminal::size().unwrap_or((80, 24)).hash(&mut hasher);
+    crossterm::terminal::size()
+        .unwrap_or((80, 24))
+        .hash(&mut hasher);
     let key = hasher.finish();
 
     if let Ok(cache) = CACHE.lock() {

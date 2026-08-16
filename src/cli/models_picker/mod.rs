@@ -77,7 +77,6 @@ pub(super) fn run_interactive(paths: &SaiPaths) -> Result<PickerOutcome> {
         );
     }
 
-
     // 1. 以当前生效的供应商与模型为起点
     let active = config.provider(None)?;
     let current_provider = active.id.clone();
@@ -211,7 +210,12 @@ fn reserve_frame_space(rows: u16) -> Result<()> {
 ///
 /// 返回:
 /// - 绘制结果
-fn draw_at(stdout: &mut io::Stdout, anchor_y: u16, frame_rows: u16, lines: &[String]) -> Result<()> {
+fn draw_at(
+    stdout: &mut io::Stdout,
+    anchor_y: u16,
+    frame_rows: u16,
+    lines: &[String],
+) -> Result<()> {
     for row in 0..frame_rows {
         queue!(
             stdout,

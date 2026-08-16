@@ -106,10 +106,7 @@ pub fn render(front: &Frontmatter, body: &str) -> String {
 /// 返回:
 /// - 单行摘要
 fn single_line(value: &str) -> String {
-    value
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 #[cfg(test)]
@@ -149,7 +146,8 @@ mod tests {
     /// 「原因：xxx」这种摘要很常见，按第一个冒号切会把它腰斩。
     #[test]
     fn a_colon_inside_the_description_is_preserved() {
-        let content = "---\nname: a\ndescription: 原因: 供应商缓存\nmetadata:\n  type: project\n---\n正文";
+        let content =
+            "---\nname: a\ndescription: 原因: 供应商缓存\nmetadata:\n  type: project\n---\n正文";
 
         let (front, _) = split(content).unwrap();
 
@@ -198,7 +196,8 @@ mod tests {
     /// 验证正文里的分隔线不被当作围栏。
     #[test]
     fn a_horizontal_rule_in_the_body_survives() {
-        let content = "---\nname: a\ndescription: b\nmetadata:\n  type: user\n---\n上段\n\n---\n\n下段";
+        let content =
+            "---\nname: a\ndescription: b\nmetadata:\n  type: user\n---\n上段\n\n---\n\n下段";
 
         let (_, body) = split(content).unwrap();
 

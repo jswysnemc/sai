@@ -259,7 +259,11 @@ mod tests {
         .await
         .expect("exec");
         assert!(output.stdout.contains("SAI_OK"), "stdout={}", output.stdout);
-        assert!(output.stderr.contains("SAI_ERR"), "stderr={}", output.stderr);
+        assert!(
+            output.stderr.contains("SAI_ERR"),
+            "stderr={}",
+            output.stderr
+        );
         assert_eq!(output.exit_status, Some(7));
     }
 }

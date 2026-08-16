@@ -120,7 +120,11 @@ mod tests {
         let (_, user) = standalone_template();
 
         for section in SUMMARY_SECTIONS {
-            assert!(user.contains(&section.heading()), "缺少小节：{}", section.title);
+            assert!(
+                user.contains(&section.heading()),
+                "缺少小节：{}",
+                section.title
+            );
         }
     }
 
@@ -131,7 +135,9 @@ mod tests {
         let anchor = machine_filled_section();
 
         assert!(instruction.contains(anchor.guidance));
-        assert!(anchor.guidance.contains("Do not write this section yourself"));
+        assert!(anchor
+            .guidance
+            .contains("Do not write this section yourself"));
     }
 
     /// 验证系统提示词不含变量占位。

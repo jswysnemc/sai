@@ -104,10 +104,7 @@ impl ShellHintPanel {
 /// - 幽灵提示 ANSI；不需要时返回空
 pub(super) fn bang_ghost_suffix(input: &str) -> Option<&'static str> {
     if input == "!" {
-        Some(t(
-            " Run a command – e.g., ls",
-            " 运行命令 – 例如 ls",
-        ))
+        Some(t(" Run a command – e.g., ls", " 运行命令 – 例如 ls"))
     } else {
         None
     }

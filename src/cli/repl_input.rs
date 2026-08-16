@@ -527,11 +527,7 @@ pub(super) fn read_repl_input(
                         is_pasted = false;
                         // 第一次 Ctrl+C：清空草稿并提示再按一次退出（对齐 Claude 双击退出）
                         runtime.record_meta(
-                            t(
-                                "Press Ctrl+C again to exit",
-                                "再按一次 Ctrl+C 退出",
-                            )
-                            .to_string(),
+                            t("Press Ctrl+C again to exit", "再按一次 Ctrl+C 退出").to_string(),
                         )?;
                         input_row = 0;
                         rendered_rows = 0;

@@ -563,8 +563,7 @@ impl ConversationDb {
         // 新轮次挂在当前活动叶子之后；从历史中间开分支时叶子已被切走，
         // 因此这里不能用 seq 最大的轮次充当父节点。
         // 空会话（无记录）时挂在会话根下：parent 从不写入 NULL
-        let parent = active_leaf_locked(conn)?
-            .unwrap_or_else(|| SESSION_ROOT_TURN_ID.to_string());
+        let parent = active_leaf_locked(conn)?.unwrap_or_else(|| SESSION_ROOT_TURN_ID.to_string());
         conn.execute(
             "INSERT INTO turns (
                 turn_id, seq, user_content, user_image_urls, user_timestamp, assistant_content,

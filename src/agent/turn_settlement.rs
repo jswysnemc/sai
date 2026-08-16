@@ -14,10 +14,7 @@ use anyhow::Result;
 ///
 /// 返回:
 /// - 原样透传的步骤结果；失败时已写入轮次终态
-pub(super) fn settle_step<T>(
-    guard: &mut PendingTurnGuard,
-    outcome: Result<T>,
-) -> Result<T> {
+pub(super) fn settle_step<T>(guard: &mut PendingTurnGuard, outcome: Result<T>) -> Result<T> {
     match outcome {
         Ok(value) => Ok(value),
         Err(error) => {
@@ -102,8 +99,11 @@ mod tests {
     #[test]
     fn successful_step_leaves_the_turn_open() {
         let (_dir, state) = running_turn("turn-open");
-        let mut guard =
-            PendingTurnGuard::new(state.clone(), "turn-open".to_string(), PartialTurnSink::new());
+        let mut guard = PendingTurnGuard::new(
+            state.clone(),
+            "turn-open".to_string(),
+            PartialTurnSink::new(),
+        );
 
         let value = settle_step(&mut guard, Ok(7u8)).unwrap();
         guard.complete("done", None).unwrap();

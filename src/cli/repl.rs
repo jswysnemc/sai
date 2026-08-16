@@ -486,8 +486,7 @@ pub(super) async fn run_repl(
                     }
                     crate::control_commands::ControlCommand::Subagents => {
                         let owner_key = state.state_dir().display().to_string();
-                        runtime
-                            .record_meta(subagent_commands::format_subagent_list(&owner_key))?;
+                        runtime.record_meta(subagent_commands::format_subagent_list(&owner_key))?;
                     }
                     crate::control_commands::ControlCommand::SubagentMessage {
                         target,
@@ -548,17 +547,9 @@ pub(super) async fn run_repl(
                 Ok(models_picker::PickerOutcome::Saved { message }) => {
                     runtime.record_meta(message)?;
                     thinking_override = None;
-                    reload_repl_agent(
-                        paths,
-                        &mut config,
-                        &mut client,
-                        &mut agent,
-                        mode,
-                        None,
-                    )?;
-                    runtime.record_meta(
-                        t("configuration reloaded", "配置已重新加载").to_string(),
-                    )?;
+                    reload_repl_agent(paths, &mut config, &mut client, &mut agent, mode, None)?;
+                    runtime
+                        .record_meta(t("configuration reloaded", "配置已重新加载").to_string())?;
                 }
                 Err(err) => runtime.record_meta(err.to_string())?,
             }
@@ -608,14 +599,7 @@ pub(super) async fn run_repl(
                 continue;
             }
             thinking_override = None;
-            reload_repl_agent(
-                paths,
-                &mut config,
-                &mut client,
-                &mut agent,
-                mode,
-                None,
-            )?;
+            reload_repl_agent(paths, &mut config, &mut client, &mut agent, mode, None)?;
             runtime.record_meta(t("configuration reloaded", "配置已重新加载").to_string())?;
             continue;
         }

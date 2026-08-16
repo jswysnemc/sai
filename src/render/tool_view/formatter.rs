@@ -237,7 +237,9 @@ fn result_diff_stat_status(output: &str) -> Option<String> {
     if added == 0 && removed == 0 {
         return None;
     }
-    Some(crate::render::edit_diff::format_diff_stat_status(added, removed))
+    Some(crate::render::edit_diff::format_diff_stat_status(
+        added, removed,
+    ))
 }
 
 /// 判断权限审计是否以拒绝告终。

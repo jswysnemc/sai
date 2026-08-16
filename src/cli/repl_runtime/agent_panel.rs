@@ -117,7 +117,11 @@ impl AgentPanelState {
     ///
     /// 返回:
     /// - 面板 ANSI 行；无子 agent 时为空
-    pub(super) fn panel_lines(&self, entries: &[SubagentOverviewEntry], frame: usize) -> Vec<String> {
+    pub(super) fn panel_lines(
+        &self,
+        entries: &[SubagentOverviewEntry],
+        frame: usize,
+    ) -> Vec<String> {
         if entries.is_empty() {
             return Vec::new();
         }
@@ -163,9 +167,15 @@ impl AgentPanelState {
             };
             // 存活条目行首用状态色引导点；实时阶段（工具进度 / Token 统计）随刷新跳动
             let marker = if entry.running {
-                format!("{} ", render_activity_guide_with_color(frame, Some((204, 167, 0))))
+                format!(
+                    "{} ",
+                    render_activity_guide_with_color(frame, Some((204, 167, 0)))
+                )
             } else if entry.status == "idle" {
-                format!("{} ", render_activity_guide_with_color(frame, Some((97, 175, 239))))
+                format!(
+                    "{} ",
+                    render_activity_guide_with_color(frame, Some((97, 175, 239)))
+                )
             } else {
                 String::new()
             };
@@ -398,8 +408,14 @@ mod tests {
 
         let lines = panel.panel_lines(&entries, 0);
         let joined = lines.join("\n");
-        assert!(joined.contains("消耗 Token 1.2k"), "运行中条目应展示实时阶段: {joined}");
-        assert!(joined.contains("idle"), "待命条目应展示 idle 状态: {joined}");
+        assert!(
+            joined.contains("消耗 Token 1.2k"),
+            "运行中条目应展示实时阶段: {joined}"
+        );
+        assert!(
+            joined.contains("idle"),
+            "待命条目应展示 idle 状态: {joined}"
+        );
         assert!(joined.contains("查看中") || joined.contains("viewing"));
     }
 }

@@ -54,20 +54,20 @@ impl CommandOutputBuffer {
     pub(crate) fn display_text(&self) -> Cow<'_, str> {
         if self.omitted_bytes == 0 {
             if self.tail.is_empty() {
-                return String::from_utf8_lossy(&self.head);
+                return decode_display_bytes(&self.head);
             }
             let mut bytes = Vec::with_capacity(self.head.len().saturating_add(self.tail.len()));
             bytes.extend_from_slice(&self.head);
             bytes.extend(self.tail.iter().copied());
-            return Cow::Owned(String::from_utf8_lossy(&bytes).into_owned());
+            return Cow::Owned(decode_display_bytes(&bytes).into_owned());
         }
         Cow::Owned(format!(
             "{}\n... {} {} {} ...\n{}",
-            String::from_utf8_lossy(&self.head),
+            decode_display_bytes(&self.head),
             t("omitted", "已省略"),
             self.omitted_bytes,
             t("bytes", "字节"),
-            String::from_utf8_lossy(&self.tail.iter().copied().collect::<Vec<_>>())
+            decode_display_bytes(&self.tail.iter().copied().collect::<Vec<_>>())
         ))
     }
 
@@ -78,6 +78,21 @@ impl CommandOutputBuffer {
     /// - 缓冲内存使用量
     pub(super) fn retained_bytes(&self) -> usize {
         self.head.len().saturating_add(self.tail.len())
+    }
+}
+
+/// 解码命令输出并在 UTF-8 完整时保留借用文本。
+///
+/// 参数:
+/// - `bytes`: 命令输出字节
+///
+/// 返回:
+/// - 可展示文本
+fn decode_display_bytes(bytes: &[u8]) -> Cow<'_, str> {
+    if let Ok(text) = std::str::from_utf8(bytes) {
+        Cow::Borrowed(text)
+    } else {
+        Cow::Owned(crate::platform::output_encoding::decode_output(bytes))
     }
 }
 

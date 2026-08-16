@@ -601,17 +601,16 @@ fn build_subagent_runner(
     let progress = SubagentProgress::new(tool_progress, ProgressMode::Full, true);
     // 4. 步间消息注入:主代理 action=send 与用户留言经消息队列在此进入对话
     let poll_id = subagent_id.to_string();
-    let message_poll: super::subagent_runner::SubagentMessagePoll = std::sync::Arc::new(move || {
-        subagent_state::drain_subagent_inbox(&poll_id)
-            .into_iter()
-            .map(
-                |message| super::subagent_runner::SubagentInjectedMessage {
+    let message_poll: super::subagent_runner::SubagentMessagePoll =
+        std::sync::Arc::new(move || {
+            subagent_state::drain_subagent_inbox(&poll_id)
+                .into_iter()
+                .map(|message| super::subagent_runner::SubagentInjectedMessage {
                     from: message.from,
                     text: message.text,
-                },
-            )
-            .collect()
-    });
+                })
+                .collect()
+        });
     Ok(SubagentRunner::new(client, &system_prompt, tools, progress)
         .progressive_loading(
             profile.deferred_tools.clone(),
@@ -720,7 +719,11 @@ async fn run_persistent_subagent(
             anyhow::anyhow!("subagent segment timed out after {SUBAGENT_TIMEOUT_SECONDS}s")
         })??;
         let content = if result.content.trim().is_empty() {
-            t("(no text output for this segment)", "（本任务段无正文输出）").to_string()
+            t(
+                "(no text output for this segment)",
+                "（本任务段无正文输出）",
+            )
+            .to_string()
         } else {
             result.content
         };

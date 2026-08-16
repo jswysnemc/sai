@@ -39,6 +39,92 @@ fn new_agent_restores_persisted_loaded_tools() {
         .any(|source| source.key == "loaded_tools"));
 }
 
+/// 验证独占白名单不会在 Agent 初始化时隐式补回 Goal 工具。
+#[test]
+fn exclusive_tool_whitelist_remains_the_final_tool_set() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = test_paths(temp.path());
+    let mut config = AppConfig::default();
+    config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
+        enabled_tools: vec!["get_weather".to_string()],
+        exclusive: true,
+        ..Default::default()
+    });
+    let state = StateStore::new(&paths).unwrap();
+    let client = OpenAiCompatibleClient::from_config(&config, &paths).unwrap();
+    let mut registry = ToolRegistry::new();
+    register_weather(&mut registry);
+
+    let agent = Agent::new(config, &paths, state, client, registry, AgentMode::Yolo).unwrap();
+
+    assert_eq!(
+        agent
+            .tools
+            .definitions()
+            .into_iter()
+            .map(|tool| tool.function.name)
+            .collect::<Vec<_>>(),
+        vec!["get_weather"]
+    );
+}
+
+/// 验证独占白名单可以显式选择单个 Goal 工具，不会带入其余两个。
+#[test]
+fn exclusive_tool_whitelist_can_select_one_goal_tool() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = test_paths(temp.path());
+    let mut config = AppConfig::default();
+    config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
+        enabled_tools: vec!["get_goal".to_string()],
+        exclusive: true,
+        ..Default::default()
+    });
+    let state = StateStore::new(&paths).unwrap();
+    let client = OpenAiCompatibleClient::from_config(&config, &paths).unwrap();
+
+    let agent = Agent::new(
+        config,
+        &paths,
+        state,
+        client,
+        ToolRegistry::new(),
+        AgentMode::Yolo,
+    )
+    .unwrap();
+
+    assert!(agent.tools.contains("get_goal"));
+    assert!(!agent.tools.contains("create_goal"));
+    assert!(!agent.tools.contains("update_goal"));
+}
+
+/// 验证关闭运行时上下文与模式说明后不再生成对应动态段。
+#[test]
+fn disabled_runtime_prompt_sections_are_not_projected() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = test_paths(temp.path());
+    let mut config = AppConfig::default();
+    config.prompt_sections.state_contract = false;
+    config.prompt_sections.mode_reminder = false;
+    let state = StateStore::new(&paths).unwrap();
+    let client = OpenAiCompatibleClient::from_config(&config, &paths).unwrap();
+    let agent = Agent::new(
+        config,
+        &paths,
+        state,
+        client,
+        ToolRegistry::new(),
+        AgentMode::Yolo,
+    )
+    .unwrap();
+
+    let projection = agent.chat_base_context_projection(None).unwrap();
+
+    assert!(!projection
+        .user_contexts
+        .iter()
+        .any(|context| context.contains("<context-state>")));
+}
+
 /// 模式切换后必须恢复新注册表中仍然存在的会话已加载工具。
 #[test]
 fn switch_mode_preserves_persisted_loaded_tools() {

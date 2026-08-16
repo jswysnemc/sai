@@ -180,6 +180,33 @@ export type SessionContextPromptSection = {
   content: string;
 };
 
+/** 会话最近一次真实 HTTP 调试记录，可直接导出用于供应商请求排查。 */
+export type LatestSessionDebug = {
+  found: boolean;
+  session_id: string;
+  request_id?: string | null;
+  meta?: string | null;
+  request_headers?: string | null;
+  request_body?: string | null;
+  response_headers?: string | null;
+  response_stream?: string | null;
+  response_reconstructed?: string | null;
+  response_error?: string | null;
+};
+
+/** 真实模型请求中携带的 system 消息与工具定义快照。 */
+export type SessionDebugRequest = {
+  request_id: string;
+  turn_id?: string | null;
+  assistant_round?: number | null;
+  request_body?: Record<string, unknown> | null;
+};
+
+export type ToolResultResponse = {
+  result_ref: string;
+  content: string;
+};
+
 
 /** 跨会话共享的输入历史 */
 export type InputHistoryResponse = {

@@ -13,7 +13,11 @@ use serde_json::{json, Value};
 ///
 /// 返回:
 /// - 删除结果的 JSON 文本
-pub(super) async fn delete_memory(args: Value, config: AppConfig, paths: SaiPaths) -> Result<String> {
+pub(super) async fn delete_memory(
+    args: Value,
+    config: AppConfig,
+    paths: SaiPaths,
+) -> Result<String> {
     let name = required_str(&args, "name")?;
     let deleted = library(&config, &paths).delete(name)?;
     Ok(json!({ "deleted": deleted, "name": name }).to_string())

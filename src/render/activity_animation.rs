@@ -51,10 +51,15 @@ pub(crate) fn render_activity_guide(frame: usize) -> String {
 ///
 /// 返回:
 /// - 带亮度与色相的引导点 ANSI 文本
-pub(crate) fn render_activity_guide_with_color(frame: usize, color: Option<(u8, u8, u8)>) -> String {
+pub(crate) fn render_activity_guide_with_color(
+    frame: usize,
+    color: Option<(u8, u8, u8)>,
+) -> String {
     let intensity = shimmer_intensity(1, frame, 0);
     match color {
-        Some((red, green, blue)) => format!("\x1b[1m\x1b[38;2;{red};{green};{blue}m{GUIDE_DOT}{RESET}"),
+        Some((red, green, blue)) => {
+            format!("\x1b[1m\x1b[38;2;{red};{green};{blue}m{GUIDE_DOT}{RESET}")
+        }
         None => format!("{}{GUIDE_DOT}{RESET}", color_escape(intensity)),
     }
 }
@@ -444,7 +449,11 @@ mod tests {
     /// 返回:
     /// - 0 到 1 之间的行程比例
     fn band_center(text: &str, frame: usize) -> f32 {
-        let period = text.chars().count().saturating_add(SHIMMER_PADDING * 2).max(1);
+        let period = text
+            .chars()
+            .count()
+            .saturating_add(SHIMMER_PADDING * 2)
+            .max(1);
         let position =
             (frame % SHIMMER_CYCLE_FRAMES) as f32 / SHIMMER_CYCLE_FRAMES as f32 * period as f32;
         position / period as f32

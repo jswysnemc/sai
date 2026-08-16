@@ -30,7 +30,7 @@ pub(crate) fn register(registry: &mut ToolRegistry, goal_file: PathBuf) {
             let store = create_store.clone();
             async move { create_goal(&store, &args) }
         },
-    ));
+    ).writes());
 
     let get_store = GoalStore::new(goal_file.clone());
     registry.register(ToolSpec::new(
@@ -62,7 +62,7 @@ pub(crate) fn register(registry: &mut ToolRegistry, goal_file: PathBuf) {
             let store = update_store.clone();
             async move { update_goal(&store, &args) }
         },
-    ));
+    ).writes());
 }
 
 #[cfg(test)]

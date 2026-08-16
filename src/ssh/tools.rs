@@ -257,8 +257,7 @@ async fn run_command(
     }
 
     // 2. 建立连接（含指纹确认与口令输入），全程秘密不进模型
-    let (handle, secrets) =
-        establish_connection(session_id, &progress, &host).await?;
+    let (handle, secrets) = establish_connection(session_id, &progress, &host).await?;
 
     // 3. 执行命令并对输出脱敏后返回
     let output = session::exec_command(&handle, &args.command, timeout, session::MAX_OUTPUT_BYTES)
@@ -355,7 +354,10 @@ async fn establish_connection(
     session_id: &str,
     progress: &ToolProgress,
     host: &SshHostConfig,
-) -> Result<(russh::client::Handle<crate::web::ssh::SshClientHandler>, Vec<String>)> {
+) -> Result<(
+    russh::client::Handle<crate::web::ssh::SshClientHandler>,
+    Vec<String>,
+)> {
     let mut passphrase: Option<String> = None;
     let mut secrets: Vec<String> = Vec::new();
     let mut passphrase_requested = false;
@@ -383,8 +385,7 @@ async fn establish_connection(
                 .await?
                 {
                     SecretResponse::Confirmed(true) => {
-                        trust_host_key(&key)
-                            .context("failed to record the confirmed host key")?;
+                        trust_host_key(&key).context("failed to record the confirmed host key")?;
                     }
                     _ => bail!("用户未确认主机指纹，已取消连接。"),
                 }
@@ -428,9 +429,7 @@ async fn establish_connection(
 /// - 错误信息暗示私钥被加密时为 `true`
 fn needs_passphrase(error: &anyhow::Error) -> bool {
     let message = format!("{error:#}").to_lowercase();
-    message.contains("passphrase")
-        || message.contains("encrypt")
-        || message.contains("decrypt")
+    message.contains("passphrase") || message.contains("encrypt") || message.contains("decrypt")
 }
 
 /// 发起一次交互式征询并等待应答。

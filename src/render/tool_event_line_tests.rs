@@ -123,7 +123,10 @@ fn partial_arguments_extract_target() {
         "Loading tool web_search"
     );
     assert_eq!(
-        tool_event_label("write_file", Some(r#"{"path":"src/main.rs","content":"fn "#)),
+        tool_event_label(
+            "write_file",
+            Some(r#"{"path":"src/main.rs","content":"fn "#)
+        ),
         "Writing main.rs"
     );
 }
@@ -204,7 +207,11 @@ fn event_text_uses_unified_title_hierarchy() {
     assert!(run.contains("\x1b[33mrun\x1b[0m"));
 
     // 自定义徽标（编辑类 +N -M）：语义由调用方显式给出
-    let stat = tool_status_line("Wrote a.rs", "\x1b[32m+2\x1b[0m \x1b[31m-0\x1b[0m", ToolHealth::Ok);
+    let stat = tool_status_line(
+        "Wrote a.rs",
+        "\x1b[32m+2\x1b[0m \x1b[31m-0\x1b[0m",
+        ToolHealth::Ok,
+    );
     assert!(stat.starts_with("\x1b[1m\x1b[32m•\x1b[0m "));
     assert!(stat.contains("+2"));
 

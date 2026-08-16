@@ -297,7 +297,8 @@ fn apply_intraline_background(
     let mut in_emphasis = false;
     while index < text.len() {
         if text[index..].starts_with('\x1b') {
-            let end = crate::render::terminal_image::escape_sequence_end(text, index).max(index + 1);
+            let end =
+                crate::render::terminal_image::escape_sequence_end(text, index).max(index + 1);
             let sequence = &text[index..end];
             output.push_str(sequence);
             // 语法 reset 清掉背景后，按当前区间恢复对应底色

@@ -1,6 +1,6 @@
 use super::support::{library, optional_str, parse_scope, required_str, scope_label};
-use crate::memory::file_store::{Frontmatter, MemoryEntry, MemoryType};
 use crate::config::AppConfig;
+use crate::memory::file_store::{Frontmatter, MemoryEntry, MemoryType};
 use crate::paths::SaiPaths;
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
@@ -17,13 +17,18 @@ const RATIONALE_MARKERS: [&str; 2] = ["Why:", "How to apply:"];
 ///
 /// 返回:
 /// - 写入结果的 JSON 文本
-pub(super) async fn write_memory(args: Value, config: AppConfig, paths: SaiPaths) -> Result<String> {
+pub(super) async fn write_memory(
+    args: Value,
+    config: AppConfig,
+    paths: SaiPaths,
+) -> Result<String> {
     let name = required_str(&args, "name")?.to_string();
     let description = required_str(&args, "description")?.to_string();
     let content = required_str(&args, "content")?.to_string();
     let raw_type = required_str(&args, "type")?;
-    let memory_type = MemoryType::parse(raw_type)
-        .ok_or_else(|| anyhow!("未知记忆类型：{raw_type}，可选 user、feedback、project、reference"))?;
+    let memory_type = MemoryType::parse(raw_type).ok_or_else(|| {
+        anyhow!("未知记忆类型：{raw_type}，可选 user、feedback、project、reference")
+    })?;
     let hook = match optional_str(&args, "hook") {
         "" => description.clone(),
         value => value.to_string(),
@@ -158,7 +163,8 @@ mod tests {
     /// 验证写全理由后不再提示。
     #[test]
     fn a_complete_feedback_passes() {
-        let body = "一律使用 pnpm\n\n**Why:** 锁文件不能混用\n**How to apply:** 装依赖时用 pnpm add";
+        let body =
+            "一律使用 pnpm\n\n**Why:** 锁文件不能混用\n**How to apply:** 装依赖时用 pnpm add";
 
         assert!(missing_rationale(MemoryType::Feedback, body).is_none());
     }

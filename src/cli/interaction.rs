@@ -290,8 +290,8 @@ pub(super) fn prompt_ssh_secret_request_tui(
         let mut rt = runtime.borrow_mut();
         rt.pause_for_permission_prompt()?;
     }
-    let response =
-        read_ssh_secret_response(&mut stdout, request).unwrap_or(crate::ssh::SecretResponse::Cancelled);
+    let response = read_ssh_secret_response(&mut stdout, request)
+        .unwrap_or(crate::ssh::SecretResponse::Cancelled);
     // 2. 恢复终端模式；安全输入直接写过终端，受管区域需在下次同步前重启
     let _ = terminal_guard.finish(&mut stdout);
     runtime.borrow_mut().mark_desynced();
@@ -344,8 +344,8 @@ pub(super) fn prompt_ssh_secret_request_cli(request: &crate::ssh::SecretRequest)
     }
     stdout.flush()?;
     crossterm::terminal::enable_raw_mode()?;
-    let response =
-        read_ssh_secret_response(&mut stdout, request).unwrap_or(crate::ssh::SecretResponse::Cancelled);
+    let response = read_ssh_secret_response(&mut stdout, request)
+        .unwrap_or(crate::ssh::SecretResponse::Cancelled);
     let _ = crossterm::terminal::disable_raw_mode();
     println!();
     if crate::ssh::is_pending(&request.id) {
@@ -368,7 +368,11 @@ fn read_ssh_secret_response(
 ) -> Result<crate::ssh::SecretResponse> {
     use crate::ssh::{InteractiveKind, SecretResponse};
     // raw 模式下必须使用 \r\n，否则阶梯缩进
-    write!(stdout, "\r\n\x1b[38;5;39m● SSH · {}\x1b[0m\r\n", request.host_label)?;
+    write!(
+        stdout,
+        "\r\n\x1b[38;5;39m● SSH · {}\x1b[0m\r\n",
+        request.host_label
+    )?;
     for line in request.prompt.split('\n') {
         write!(stdout, "{line}\r\n")?;
     }

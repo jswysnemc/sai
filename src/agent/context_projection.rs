@@ -68,14 +68,19 @@ impl Agent {
             self.mode(),
             compaction_summary_context.as_deref(),
             &projected_history.messages,
+            self.config.prompt_sections.state_contract,
             self.config.prompt_sections.mode_reminder,
         )?;
-        let goal_update = context_resources::context_resource_update(
-            "goal",
-            &session_goal_context,
-            compaction_summary_context.as_deref(),
-            &projected_history.messages,
-        )?;
+        let goal_update = if self.config.prompt_sections.state_contract {
+            context_resources::context_resource_update(
+                "goal",
+                &session_goal_context,
+                compaction_summary_context.as_deref(),
+                &projected_history.messages,
+            )?
+        } else {
+            None
+        };
         let meme_update = context_resources::context_resource_update(
             "last_auto_meme",
             last_auto_meme_reminder.as_deref().unwrap_or_default(),

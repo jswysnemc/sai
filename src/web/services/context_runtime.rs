@@ -56,10 +56,14 @@ pub(super) fn project_context_runtime(
     mode: AgentMode,
 ) -> Result<ContextRuntimeProjection> {
     // 1. 读取 Goal、压缩摘要和最近一条用户输入
-    let goal_context = store
-        .goal()?
-        .map(|goal| crate::goal::system_context(&goal))
-        .unwrap_or_default();
+    let goal_context = if config.prompt_sections.state_contract {
+        store
+            .goal()?
+            .map(|goal| crate::goal::system_context(&goal))
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
     let projected_history = store.project_history(None)?;
     let compaction_summary = projected_history
         .checkpoint_context
@@ -78,12 +82,14 @@ pub(super) fn project_context_runtime(
         mode,
         (!compaction_summary.is_empty()).then_some(compaction_summary.as_str()),
         &projected_history.messages,
+        config.prompt_sections.state_contract,
         config.prompt_sections.mode_reminder,
     )?;
 
     // 3. 复用真实请求的注入路径；索引全量注入，与当前输入无关
     let memory = config.memory_config();
-    let memory_enabled = memory.enabled && memory.association_enabled;
+    let memory_enabled =
+        config.prompt_sections.memory_contract && memory.enabled && memory.association_enabled;
     let memory_index = if memory_enabled {
         MemoryStore::new(config, paths)
             .recall_for_turn(&latest_user_input, Some(workspace_path))?
@@ -95,12 +101,16 @@ pub(super) fn project_context_runtime(
     // 4. 最近一次自动表情包提醒与真实请求保持一致
     let last_auto_meme =
         crate::tools::memes::last_auto_meme_reminder(config, paths)?.unwrap_or_default();
-    let goal_update = context_resource_update(
-        "goal",
-        &goal_context,
-        (!compaction_summary.is_empty()).then_some(compaction_summary.as_str()),
-        &projected_history.messages,
-    )?;
+    let goal_update = if config.prompt_sections.state_contract {
+        context_resource_update(
+            "goal",
+            &goal_context,
+            (!compaction_summary.is_empty()).then_some(compaction_summary.as_str()),
+            &projected_history.messages,
+        )?
+    } else {
+        None
+    };
     let meme_update = context_resource_update(
         "last_auto_meme",
         &last_auto_meme,

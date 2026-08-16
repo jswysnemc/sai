@@ -109,7 +109,7 @@ pub(super) fn estimate_context_breakdown_with_runtime(
     // 渐进加载由当前 Agent 的 deferred_tools 决定，与真实会话保持一致
     let deferred = config.agent_deferred_tools();
     if config.tools.enabled {
-        crate::goal::register_tools(&mut registry, store.goal_file());
+        crate::goal::register_tools_for_config(&mut registry, store.goal_file(), config)?;
         if !deferred.is_empty() {
             tools::register_progressive_loader(&mut registry, deferred);
         }
@@ -238,9 +238,11 @@ fn apply_web_agent_tool_filter(config: &AppConfig, registry: &mut ToolRegistry) 
         .map(String::as_str)
         .collect::<Vec<_>>();
     let mut filtered = registry.clone_filtered(&allowed);
-    for name in ["subagent", "todo", "ask_question"] {
-        if registry.contains(name) {
-            let _ = filtered.register_from(registry, name);
+    if !runtime.exclusive {
+        for name in ["subagent", "todo", "ask_question"] {
+            if registry.contains(name) {
+                filtered.register_from(registry, name)?;
+            }
         }
     }
     *registry = filtered;

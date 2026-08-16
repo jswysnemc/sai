@@ -167,7 +167,12 @@ impl EvictedStore {
                 .get("score")
                 .and_then(Value::as_f64)
                 .unwrap_or_default()
-                .partial_cmp(&left.get("score").and_then(Value::as_f64).unwrap_or_default())
+                .partial_cmp(
+                    &left
+                        .get("score")
+                        .and_then(Value::as_f64)
+                        .unwrap_or_default(),
+                )
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
         hits.truncate(limit);
@@ -210,7 +215,9 @@ mod tests {
     fn a_remembered_turn_can_be_found() {
         let dir = tempfile::tempdir().unwrap();
         let store = store(&dir);
-        store.remember(&[turn("压缩改为前缀回放以复用缓存")]).unwrap();
+        store
+            .remember(&[turn("压缩改为前缀回放以复用缓存")])
+            .unwrap();
 
         let found = store.search("前缀回放", 5, 200).unwrap();
 

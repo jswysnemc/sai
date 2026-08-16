@@ -39,7 +39,11 @@ pub(super) async fn read_memory(args: Value, config: AppConfig, paths: SaiPaths)
 ///
 /// 返回:
 /// - 摘要列表的 JSON 文本
-pub(super) async fn list_memory(_args: Value, config: AppConfig, paths: SaiPaths) -> Result<String> {
+pub(super) async fn list_memory(
+    _args: Value,
+    config: AppConfig,
+    paths: SaiPaths,
+) -> Result<String> {
     let entries: Vec<Value> = library(&config, &paths)
         .list()?
         .into_iter()

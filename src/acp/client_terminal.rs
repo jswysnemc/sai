@@ -82,6 +82,21 @@ impl TerminalRegistry {
         events: &crate::agent_engine::EventSender,
     ) -> Result<String> {
         let command = command_line(params)?;
+        let command_name = params
+            .get("command")
+            .and_then(Value::as_str)
+            .context("terminal/create requires a command")?
+            .to_owned();
+        let command_args = params
+            .get("args")
+            .and_then(Value::as_array)
+            .map(|args| {
+                args.iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
         let original_command = command.clone();
         let cwd = params
             .get("cwd")
@@ -95,14 +110,23 @@ impl TerminalRegistry {
         //    审核针对用户看得懂的原始命令，而不是改写后的 rtk 形式
         let sandboxed = governance.authorize_command(&command, &cwd, events).await?;
         // 2. 再套用输出压缩，与自带 run_command 同一套判定
-        let command = governance.apply_output_filter(&command);
+        let filtered_command = governance.apply_output_filter(&command);
         // 3. 复用 sai 的 shell 构造，沙箱与自带 run_command 完全一致；
         //    首选 shell 不存在时依次回退，与自带命令的行为保持一致
-        let candidates = crate::tools::command::build_shell_commands(
-            &command,
-            governance.command_shell(),
-            sandboxed,
-        )?;
+        let candidates = if filtered_command != command {
+            crate::tools::command::build_shell_commands(
+                &filtered_command,
+                governance.command_shell(),
+                sandboxed,
+            )?
+        } else {
+            crate::tools::command::build_shell_commands_for_args(
+                &command_name,
+                &command_args,
+                governance.command_shell(),
+                sandboxed,
+            )?
+        };
         let env = env_pairs(params);
         let mut spawned = None;
         let mut last_error = None;
@@ -161,13 +185,17 @@ impl TerminalRegistry {
             let progress = events.clone();
             let label = command.clone();
             readers.push(tokio::spawn(async move {
+                let mut decoder = crate::platform::output_encoding::OutputDecoder::default();
                 let mut buffer = [0u8; 4096];
                 let mut reader = stream.into_reader();
                 loop {
                     match reader.read(&mut buffer).await {
                         Ok(0) | Err(_) => break,
                         Ok(count) => {
-                            let chunk = String::from_utf8_lossy(&buffer[..count]).to_string();
+                            let chunk = decoder.push(&buffer[..count]);
+                            if chunk.is_empty() {
+                                continue;
+                            }
                             sink.lock().await.push(&chunk);
                             // 边收边推：长命令运行期间界面也能看到进度，
                             // 否则要等进程退出才一次性出现全部输出
@@ -177,6 +205,14 @@ impl TerminalRegistry {
                             });
                         }
                     }
+                }
+                let chunk = decoder.finish();
+                if !chunk.is_empty() {
+                    sink.lock().await.push(&chunk);
+                    let _ = progress.send(crate::agent::AgentEvent::ToolProgress {
+                        name: label,
+                        message: chunk,
+                    });
                 }
             }));
         }
@@ -368,7 +404,9 @@ fn quote_shell_arg(argument: &str) -> String {
 /// - 可安全拼入命令行的参数文本
 #[cfg(windows)]
 fn quote_shell_arg(argument: &str) -> String {
-    format!("\"{}\"", argument.replace('"', "\\\""))
+    // ACP 的 Windows 命令入口默认使用 PowerShell；反斜杠不是 PowerShell
+    // 的转义字符，单引号加双单引号才可以稳定保留引号、空格和中文。
+    format!("'{}'", argument.replace('\'', "''"))
 }
 
 /// 提取要注入子进程的环境变量。
@@ -406,7 +444,7 @@ mod tests {
         #[cfg(not(windows))]
         assert_eq!(line, "git 'status' '--short'");
         #[cfg(windows)]
-        assert_eq!(line, "git \"status\" \"--short\"");
+        assert_eq!(line, "git 'status' '--short'");
     }
 
     /// 带空白的参数必须加引号，否则会被 shell 拆成多个参数。
@@ -417,7 +455,7 @@ mod tests {
         #[cfg(not(windows))]
         assert_eq!(line, "git 'commit' '-m' 'a b'");
         #[cfg(windows)]
-        assert_eq!(line, "git \"commit\" \"-m\" \"a b\"");
+        assert_eq!(line, "git 'commit' '-m' 'a b'");
     }
 
     /// shell 元字符只能作为参数内容，不能变成额外命令。

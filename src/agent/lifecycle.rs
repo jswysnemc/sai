@@ -53,7 +53,7 @@ impl Agent {
         let context_char_budget = config.active_context_window_tokens()?;
         let compaction_runtime = compaction_model::resolve_compaction_runtime(&config, paths)?;
         let max_tool_rounds = config.tools.max_rounds;
-        crate::goal::register_tools(&mut tools, state.goal_file());
+        crate::goal::register_tools_for_config(&mut tools, state.goal_file(), &config)?;
         // 渐进加载由当前 Agent 的 deferred_tools 决定；
         // skill 提示词只给名称与简介，正文一律靠 load 读取，因此有可见 skill 时同样注册
         let mut tool_visibility = ToolVisibility::from_config(&config);
@@ -151,7 +151,10 @@ impl Agent {
     ///
     /// 返回:
     /// - 无
-    pub fn adopt_cancel_flag(&mut self, cancel_requested: std::sync::Arc<std::sync::atomic::AtomicBool>) {
+    pub fn adopt_cancel_flag(
+        &mut self,
+        cancel_requested: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) {
         self.cancel_requested = cancel_requested;
     }
 
@@ -206,7 +209,7 @@ impl Agent {
             self.state.load_loaded_tools()?
         };
         self.mode = mode;
-        crate::goal::register_tools(&mut tools, self.state.goal_file());
+        crate::goal::register_tools_for_config(&mut tools, self.state.goal_file(), &self.config)?;
         if self.tools_enabled && !deferred.is_empty() {
             tools::register_progressive_loader(&mut tools, deferred);
         }
@@ -237,7 +240,8 @@ impl Agent {
     pub fn replace_tools(&mut self, mut tools: ToolRegistry) {
         let loaded = self.tool_visibility.loaded_tool_names();
         let deferred = self.config.agent_deferred_tools();
-        crate::goal::register_tools(&mut tools, self.state.goal_file());
+        crate::goal::register_tools_for_config(&mut tools, self.state.goal_file(), &self.config)
+            .expect("failed to register goal tools");
         if self.tools_enabled && !deferred.is_empty() {
             tools::register_progressive_loader(&mut tools, deferred);
         }
@@ -289,7 +293,7 @@ impl Agent {
             .store(mode.as_u8(), std::sync::atomic::Ordering::SeqCst);
         self.tools_enabled =
             self.config.tools.enabled && self.config.active_model_tools_enabled()?;
-        crate::goal::register_tools(&mut tools, self.state.goal_file());
+        crate::goal::register_tools_for_config(&mut tools, self.state.goal_file(), &self.config)?;
         // 与初始化保持一致：有可见 skill 时同样需要加载器读取正文
         if self.tools_enabled
             && (!self.config.agent_deferred_tools().is_empty()
@@ -317,7 +321,11 @@ impl Agent {
     /// - 切换是否成功
     pub fn replace_state(&mut self, state: StateStore) -> Result<()> {
         self.state = state;
-        crate::goal::register_tools(&mut self.tools, self.state.goal_file());
+        crate::goal::register_tools_for_config(
+            &mut self.tools,
+            self.state.goal_file(),
+            &self.config,
+        )?;
         self.tool_visibility = ToolVisibility::from_config(&self.config);
         if self.tool_visibility.is_progressive() {
             let loaded = self.state.load_loaded_tools()?;

@@ -65,5 +65,4 @@ fn mixed_cells_use_distinct_markers_and_section_gaps() {
         "meta marker: {:?}",
         snapshot[4][1]
     );
-
 }

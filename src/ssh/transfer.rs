@@ -106,7 +106,10 @@ pub(crate) async fn upload_file(
             .data_bytes(encoded)
             .await
             .context("failed to stream file content")?;
-        channel.eof().await.context("failed to finish remote write")?;
+        channel
+            .eof()
+            .await
+            .context("failed to finish remote write")?;
 
         let mut exit_status = None;
         let mut stderr: Vec<u8> = Vec::new();

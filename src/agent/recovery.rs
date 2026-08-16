@@ -202,7 +202,6 @@ impl Agent {
                 extract_session_memory_with_model(state, client, paths, context_char_budget).await;
         });
     }
-
 }
 
 /// 使用独立模型请求提取 Session Memory。

@@ -110,7 +110,10 @@ mod tests {
     fn resolves_localhost_and_ignores_case_and_padding() {
         let expected = "127.0.0.1:4096".parse::<SocketAddr>().unwrap();
         assert_eq!(resolve_bind_address("localhost", 4096).unwrap(), expected);
-        assert_eq!(resolve_bind_address("  LocalHost  ", 4096).unwrap(), expected);
+        assert_eq!(
+            resolve_bind_address("  LocalHost  ", 4096).unwrap(),
+            expected
+        );
     }
 
     #[test]
@@ -195,7 +198,13 @@ mod tests {
             "http://100.70.178.16:4096/?token=abc"
         );
         // IPv6 字面量需要方括号，主机名保持原样
-        assert_eq!(url_for_host("fd7a::1", 4096, "abc"), "http://[fd7a::1]:4096/?token=abc");
-        assert_eq!(url_for_host("my-host", 4096, "abc"), "http://my-host:4096/?token=abc");
+        assert_eq!(
+            url_for_host("fd7a::1", 4096, "abc"),
+            "http://[fd7a::1]:4096/?token=abc"
+        );
+        assert_eq!(
+            url_for_host("my-host", 4096, "abc"),
+            "http://my-host:4096/?token=abc"
+        );
     }
 }

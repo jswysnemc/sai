@@ -35,7 +35,14 @@ pub(crate) fn create_subagent_for_owner(
     subagent_type: String,
     max_steps: usize,
 ) -> (SubagentSnapshot, oneshot::Receiver<()>) {
-    create_subagent_for_owner_goal(owner_key, None, description, subagent_type, max_steps, false)
+    create_subagent_for_owner_goal(
+        owner_key,
+        None,
+        description,
+        subagent_type,
+        max_steps,
+        false,
+    )
 }
 
 /// 创建绑定到父会话和持续目标的后台子智能体记录。

@@ -33,7 +33,7 @@ pub struct OpenAiCompatibleClient {
     key_pool: Vec<String>,
     /// 轮询游标，用 Arc 包裹使克隆出的客户端共享同一计数器，避免各自轮询失衡
     key_cursor: Arc<AtomicUsize>,
-    /// 可选 HTTP 调试落盘配置（`SAI_DEBUG_HTTP`）
+    /// 可选 HTTP 调试落盘配置（Web 配置或 `SAI_DEBUG_HTTP`）
     http_debug: Option<HttpDebugConfig>,
 }
 
@@ -62,7 +62,7 @@ impl OpenAiCompatibleClient {
         &self.provider.default_model
     }
 
-    pub fn new(provider: &ProviderConfig, _config: &AppConfig, paths: &SaiPaths) -> Result<Self> {
+    pub fn new(provider: &ProviderConfig, config: &AppConfig, paths: &SaiPaths) -> Result<Self> {
         if provider.default_model.trim().is_empty() {
             bail!(
                 "{}: {}",
@@ -89,7 +89,10 @@ impl OpenAiCompatibleClient {
             api_key,
             key_pool,
             key_cursor: Arc::new(AtomicUsize::new(0)),
-            http_debug: HttpDebugConfig::from_env(paths),
+            http_debug: HttpDebugConfig::from_config(
+                paths,
+                config.debug.enabled && config.debug.retain_logs,
+            ),
         })
     }
 

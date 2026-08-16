@@ -57,9 +57,7 @@ impl SshTerminalSession {
         // 1. 完成握手与认证，主机密钥未确认时把密钥带回上层
         let handle = match connect_ssh_session(host, passphrase).await? {
             SshConnectOutcome::Connected(handle) => handle,
-            SshConnectOutcome::HostKeyPending { key, status } => {
-                return Ok(Err((key, status)))
-            }
+            SshConnectOutcome::HostKeyPending { key, status } => return Ok(Err((key, status))),
         };
 
         // 2. 申请带 PTY 的会话通道并启动登录 Shell

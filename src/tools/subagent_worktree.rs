@@ -143,7 +143,9 @@ pub(crate) fn try_create(parent_workdir: &Path, label: &str) -> Result<Option<Su
 
     // 复制主工作区未提交更改到子 worktree，确保子代理能看到最新代码
     if let Err(err) = copy_uncommitted_changes(&repo_root, &worktree_root) {
-        tracing_or_ignore(&format!("subagent worktree copy uncommitted changes failed: {err}"));
+        tracing_or_ignore(&format!(
+            "subagent worktree copy uncommitted changes failed: {err}"
+        ));
     }
 
     Ok(Some(SubagentWorktree {
@@ -680,11 +682,8 @@ mod tests;
 /// 返回:
 /// - 无
 fn copy_uncommitted_changes(parent_repo_root: &Path, worktree_root: &Path) -> Result<()> {
-    let patch = run_git_raw(
-        parent_repo_root,
-        &["diff", "HEAD", "--binary"],
-    )
-    .map_err(|e| anyhow::anyhow!("failed to generate uncommitted diff: {e}"))?;
+    let patch = run_git_raw(parent_repo_root, &["diff", "HEAD", "--binary"])
+        .map_err(|e| anyhow::anyhow!("failed to generate uncommitted diff: {e}"))?;
     if patch.trim().is_empty() {
         return Ok(());
     }

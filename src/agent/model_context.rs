@@ -15,12 +15,7 @@ pub(super) fn current_model_id(config: &AppConfig) -> Option<String> {
     let model = if config.agent.engine.is_external() {
         config.agent.acp.model.trim().to_string()
     } else {
-        config
-            .provider(None)
-            .ok()?
-            .default_model
-            .trim()
-            .to_string()
+        config.provider(None).ok()?.default_model.trim().to_string()
     };
     (!model.is_empty()).then_some(model)
 }

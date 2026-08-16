@@ -340,19 +340,16 @@ fn shell_commands(
         return Ok(vec![shell_command_entry(command, &shell)]);
     }
     let mut pwsh = Command::new("pwsh");
-    pwsh.arg("-NoLogo")
-        .arg("-NoProfile")
-        .arg("-NonInteractive")
-        .arg("-Command")
-        .arg(command);
+    pwsh.args(crate::platform::shell_selection::script_args(
+        crate::platform::shell_selection::ShellFlavor::PowerShell,
+        command,
+    ));
 
     let mut powershell = Command::new("powershell");
-    powershell
-        .arg("-NoLogo")
-        .arg("-NoProfile")
-        .arg("-NonInteractive")
-        .arg("-Command")
-        .arg(command);
+    powershell.args(crate::platform::shell_selection::script_args(
+        crate::platform::shell_selection::ShellFlavor::PowerShell,
+        command,
+    ));
 
     let mut cmd = Command::new("cmd");
     cmd.arg("/S").arg("/C").arg(command);
@@ -391,6 +388,90 @@ pub(crate) fn build_shell_commands(
         bail!("no shell command candidate was produced")
     }
     Ok(candidates)
+}
+
+/// 按 ACP 的命令名和参数数组构造 Shell 候选。
+///
+/// 参数:
+/// - `command`: ACP 的命令名
+/// - `args`: ACP 的独立参数
+/// - `configured_shell`: 配置指定的 Shell
+/// - `sandboxed`: 是否启用沙箱
+///
+/// 返回:
+/// - 按优先级排列的 `(程序名, 命令)` 列表
+///
+/// Windows 的 PowerShell 与 cmd 对引号转义规则不同，先选定候选风格再组装
+/// 命令行，避免把 PowerShell 的单引号参数错误地交给 cmd，或反过来。
+pub(crate) fn build_shell_commands_for_args(
+    command: &str,
+    args: &[String],
+    configured_shell: &str,
+    sandboxed: bool,
+) -> Result<Vec<(String, Command)>> {
+    #[cfg(windows)]
+    {
+        if sandboxed {
+            bail!("audited sandbox mode is not supported on Windows")
+        }
+        let candidates = if let Some(shell) = configured_shell_path(configured_shell) {
+            vec![(shell.clone(), shell_flavor_for_program(&shell))]
+        } else {
+            vec![
+                ("pwsh".to_string(), ShellFlavor::PowerShell),
+                ("powershell".to_string(), ShellFlavor::PowerShell),
+                ("cmd".to_string(), ShellFlavor::Cmd),
+            ]
+        };
+        return Ok(candidates
+            .into_iter()
+            .map(|(shell, flavor)| {
+                let line = command_line_for_flavor(command, args, flavor);
+                shell_command_entry(&line, &shell)
+            })
+            .collect());
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = sandboxed;
+        let line = command_line_for_flavor(command, args);
+        build_shell_commands(&line, configured_shell, false)
+    }
+}
+
+#[cfg(windows)]
+fn shell_flavor_for_program(program: &str) -> crate::platform::shell_selection::ShellFlavor {
+    crate::platform::shell_selection::shell_flavor(std::ffi::OsStr::new(program))
+}
+
+#[cfg(windows)]
+fn command_line_for_flavor(
+    command: &str,
+    args: &[String],
+    flavor: crate::platform::shell_selection::ShellFlavor,
+) -> String {
+    let mut line = command.to_string();
+    for arg in args {
+        line.push(' ');
+        line.push_str(&match flavor {
+            crate::platform::shell_selection::ShellFlavor::PowerShell
+            | crate::platform::shell_selection::ShellFlavor::Unknown => {
+                format!("'{}'", arg.replace('\'', "''"))
+            }
+            _ => format!("\"{}\"", arg.replace('"', "\\\"")),
+        });
+    }
+    line
+}
+
+#[cfg(not(windows))]
+fn command_line_for_flavor(command: &str, args: &[String]) -> String {
+    let mut line = command.to_string();
+    for arg in args {
+        line.push(' ');
+        line.push_str(&format!("'{}'", arg.replace('\'', "'\\''")));
+    }
+    line
 }
 
 #[cfg(target_os = "linux")]
@@ -532,17 +613,10 @@ fn shell_command_entry(command: &str, shell: &str) -> (String, Command) {
     let mut shell_command = Command::new(shell);
     #[cfg(windows)]
     {
-        let lower = program.to_ascii_lowercase();
-        if lower == "cmd" || lower == "cmd.exe" {
-            shell_command.arg("/S").arg("/C").arg(command);
-        } else {
-            shell_command
-                .arg("-NoLogo")
-                .arg("-NoProfile")
-                .arg("-NonInteractive")
-                .arg("-Command")
-                .arg(command);
-        }
+        let flavor = crate::platform::shell_selection::shell_flavor(std::ffi::OsStr::new(shell));
+        shell_command.args(crate::platform::shell_selection::script_args(
+            flavor, command,
+        ));
     }
     #[cfg(not(windows))]
     {
@@ -619,7 +693,10 @@ pub(crate) fn process_exists(pid: u32) -> bool {
         std::process::Command::new("tasklist")
             .args(["/FI", &format!("PID eq {pid}"), "/NH"])
             .output()
-            .map(|output| String::from_utf8_lossy(&output.stdout).contains(&pid.to_string()))
+            .map(|output| {
+                crate::platform::output_encoding::decode_output(&output.stdout)
+                    .contains(&pid.to_string())
+            })
             .unwrap_or(false)
     }
     #[cfg(not(any(unix, windows)))]

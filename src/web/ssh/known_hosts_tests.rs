@@ -14,12 +14,18 @@ fn key(hostname: &str, port: u16, key_base64: &str) -> HostKey {
 
 #[test]
 fn host_field_omits_the_default_port() {
-    assert_eq!(key("example.com", DEFAULT_SSH_PORT, "AAA").host_field(), "example.com");
+    assert_eq!(
+        key("example.com", DEFAULT_SSH_PORT, "AAA").host_field(),
+        "example.com"
+    );
 }
 
 #[test]
 fn host_field_brackets_a_custom_port() {
-    assert_eq!(key("example.com", 2222, "AAA").host_field(), "[example.com]:2222");
+    assert_eq!(
+        key("example.com", 2222, "AAA").host_field(),
+        "[example.com]:2222"
+    );
 }
 
 #[test]
@@ -105,8 +111,14 @@ fn a_later_matching_entry_still_wins_over_an_earlier_mismatch() {
 
 #[test]
 fn append_adds_a_trailing_newline_to_unterminated_text() {
-    let appended = append_known_host("example.com ssh-rsa OLD", &key("new.com", DEFAULT_SSH_PORT, "AAA"));
-    assert_eq!(appended, "example.com ssh-rsa OLD\nnew.com ssh-ed25519 AAA\n");
+    let appended = append_known_host(
+        "example.com ssh-rsa OLD",
+        &key("new.com", DEFAULT_SSH_PORT, "AAA"),
+    );
+    assert_eq!(
+        appended,
+        "example.com ssh-rsa OLD\nnew.com ssh-ed25519 AAA\n"
+    );
 }
 
 #[test]
@@ -119,5 +131,8 @@ fn append_writes_the_first_entry_into_empty_text() {
 fn appended_entry_is_recognized_afterwards() {
     let host_key = key("example.com", DEFAULT_SSH_PORT, "AAA");
     let appended = append_known_host("", &host_key);
-    assert_eq!(check_known_host(&appended, &host_key), KnownHostStatus::Known);
+    assert_eq!(
+        check_known_host(&appended, &host_key),
+        KnownHostStatus::Known
+    );
 }

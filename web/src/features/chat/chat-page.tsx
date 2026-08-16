@@ -58,6 +58,8 @@ export function ChatPage() {
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<Error | null>(null);
   const [view, setView] = useState<"conversation" | "trajectory">("conversation");
+  const [mode, setMode] = useState<RunMode>("yolo");
+  const chatAgent = useChatAgentContext();
   const sessions = useQuery({ queryKey: ["sessions"], queryFn: api.sessions.list });
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
   const gitStatus = useQuery({
@@ -79,8 +81,12 @@ export function ChatPage() {
   });
   // 轨迹视图把系统提示词作为首条记录；只在切过去时才拉，对话视图用不到
   const contextPrompt = useQuery({
-    queryKey: ["session-context-prompt", activeSession?.id, "trajectory", locale],
-    queryFn: () => api.sessions.contextPrompt(activeSession!.id, { locale }),
+    queryKey: ["session-context-prompt", activeSession?.id, "trajectory", locale, chatAgent.selection?.id, mode],
+    queryFn: () => api.sessions.contextPrompt(activeSession!.id, {
+      locale,
+      agentId: chatAgent.selection?.id,
+      mode
+    }),
     enabled: Boolean(activeSession) && view === "trajectory",
     staleTime: 30_000
   });
@@ -88,6 +94,9 @@ export function ChatPage() {
     void Promise.all([
       activeSession?.id
         ? queryClient.invalidateQueries({ queryKey: ["timeline", activeSession.id] })
+        : Promise.resolve(),
+      activeSession?.id
+        ? queryClient.invalidateQueries({ queryKey: ["session-debug-requests", activeSession.id] })
         : Promise.resolve(),
       activeSession?.id
         ? queryClient.invalidateQueries({ queryKey: ["session-turn-tree", activeSession.id] })
@@ -132,9 +141,7 @@ export function ChatPage() {
   const activeRun = runningStates.find((state) => state.status !== "queued") ?? runningStates[0];
   const running = runningStates.length > 0;
   const chatModel = useChatModel(activeSession?.id, running);
-  const chatAgent = useChatAgentContext();
   const thinking = useThinkingLevel(activeSession?.id, chatModel.thinkingLevels);
-  const [mode, setMode] = useState<RunMode>("yolo");
   const composerAttachments = useComposerAttachments(activeSession?.id);
   const scrollRef = useRef<HTMLDivElement>(null);
   const display = useMemo(
@@ -556,6 +563,7 @@ export function ChatPage() {
         <div className="chat-trajectory-region">
           {header}
           <TrajectoryView
+            sessionId={activeSession?.id}
             timeline={timeline.data}
             contextPrompt={contextPrompt.data}
             loading={timeline.isLoading}

@@ -66,10 +66,7 @@ mod tests {
             kind: MetaKind::Failure,
         });
 
-        assert!(
-            rendered.starts_with("\x1b[31m✗ 本轮失败"),
-            "{rendered:?}"
-        );
+        assert!(rendered.starts_with("\x1b[31m✗ 本轮失败"), "{rendered:?}");
         assert!(rendered.contains("\n  \x1b[31m\x1b[2m对话内容保持完整"));
         // 首行不整体压暗，否则与思考正文混在一起
         assert!(!rendered.starts_with("\x1b[2m"));

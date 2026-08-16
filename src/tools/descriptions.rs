@@ -54,7 +54,10 @@ pub(crate) fn tool_description(name: &str, fallback: &str) -> String {
         "add_meme" => t("Add an image to the meme library.", "向表情库添加图片。"),
         "update_meme" => t("Update meme metadata.", "更新表情元数据。"),
         "delete_meme" => t("Delete a meme entry.", "删除表情条目。"),
-        "write_memory" => t("Save one durable fact to memory.", "把一条长期事实写入记忆。"),
+        "write_memory" => t(
+            "Save one durable fact to memory.",
+            "把一条长期事实写入记忆。",
+        ),
         "read_memory" => t("Read one memory by identifier.", "按标识读取一条记忆。"),
         "list_memory" => t("List stored memories.", "列出已存记忆。"),
         "delete_memory" => t("Delete a memory.", "删除一条记忆。"),

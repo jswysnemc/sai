@@ -95,6 +95,12 @@ export function TrajectoryDetails({ record, onClose }: TrajectoryDetailsProps) {
               body={detail.inputIsJson ? prettyJson(detail.input) : detail.input}
             />
           )}
+      {detail.actualRequest && (
+        <p className="trajectory-details-note">{t("Loaded from the recorded provider request.", "内容来自已记录的真实供应商请求。")}</p>
+      )}
+      {detail.preview && (
+        <p className="trajectory-details-note">{t("This is a current configuration preview, not a historical provider request. Enable API debug to capture the exact request.", "这是当前配置预览，不是历史供应商请求。开启 API 调试后可记录精确请求。")}</p>
+      )}
       {detail.output && (
         <Block
           title={t("Output", "输出")}
