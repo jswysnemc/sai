@@ -1,3 +1,4 @@
+use super::deepseek_anchor;
 use super::{tool_history::extract_persistable_tool_report, Agent, AgentEvent};
 use crate::llm::ToolCall;
 use crate::perf_trace::PerfTrace;
@@ -46,11 +47,14 @@ impl Agent {
         F: FnMut(AgentEvent) -> Result<()>,
     {
         let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
-        let tool_future = self.tools.call_with_progress(
-            &call.function.name,
-            &call.function.arguments,
-            progress_tx,
-        );
+        let requested_name = if call.kind == deepseek_anchor::BASH_EXECUTION_KIND {
+            crate::tools::DSH_BASH_EXECUTION_ALIAS
+        } else {
+            &call.function.name
+        };
+        let tool_future =
+            self.tools
+                .call_with_progress(requested_name, &call.function.arguments, progress_tx);
         tokio::pin!(tool_future);
 
         loop {
@@ -95,9 +99,14 @@ impl Agent {
         call: &ToolCall,
     ) -> BufferedRealToolExecution {
         let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
+        let requested_name = if call.kind == deepseek_anchor::BASH_EXECUTION_KIND {
+            crate::tools::DSH_BASH_EXECUTION_ALIAS
+        } else {
+            &call.function.name
+        };
         let result = self
             .tools
-            .call_with_progress(&call.function.name, &call.function.arguments, progress_tx)
+            .call_with_progress(requested_name, &call.function.arguments, progress_tx)
             .await;
         let mut progress = Vec::new();
         while let Ok(message) = progress_rx.try_recv() {

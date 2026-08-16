@@ -236,6 +236,7 @@ fn remove_active_provider_model_clears_removed_current_model() {
             tools_enabled: None,
             web_search_tool_mode: None,
             thinking_levels: Vec::new(),
+            deepseek_anchor_mode: None,
         },
     );
 
@@ -589,6 +590,7 @@ fn active_context_window_tokens_prefers_model_metadata() {
             tags: Vec::new(),
             web_search_tool_mode: None,
             thinking_levels: Vec::new(),
+            deepseek_anchor_mode: None,
         },
     );
 

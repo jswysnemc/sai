@@ -49,19 +49,41 @@ impl Agent {
         let tools_enabled = config.tools.enabled && config.active_model_tools_enabled()?;
         let base_system_prompt =
             build_base_system_prompt(&config, paths, tools_enabled, extra_system_prompt)?;
-        prepare_session_context(&state, &base_system_prompt)?;
+        let anchor_enabled = deepseek_anchor_available(&config, tools_enabled, &tools)?;
+        let anchor_promoted = anchor_enabled && session_anchor_promoted(&state)?;
+        let anchor_bootstrap_system_prompt = anchor_enabled
+            .then(|| {
+                build_base_system_prompt_for_phase(
+                    &config,
+                    paths,
+                    tools_enabled,
+                    extra_system_prompt,
+                    true,
+                )
+            })
+            .transpose()?;
+        let initial_system_prompt = if anchor_enabled && !anchor_promoted {
+            anchor_bootstrap_system_prompt
+                .as_deref()
+                .unwrap_or(&base_system_prompt)
+        } else {
+            &base_system_prompt
+        };
+        prepare_session_context(&state, initial_system_prompt)?;
         let context_char_budget = config.active_context_window_tokens()?;
         let compaction_runtime = compaction_model::resolve_compaction_runtime(&config, paths)?;
         let max_tool_rounds = config.tools.max_rounds;
         crate::goal::register_tools_for_config(&mut tools, state.goal_file(), &config)?;
         // 渐进加载由当前 Agent 的 deferred_tools 决定；
         // skill 提示词只给名称与简介，正文一律靠 load 读取，因此有可见 skill 时同样注册
-        let mut tool_visibility = ToolVisibility::from_config(&config);
+        let mut tool_visibility =
+            ToolVisibility::from_config_with_anchor(&config, anchor_enabled, anchor_promoted);
         if tools_enabled
             && (tool_visibility.is_progressive()
                 || (config.skills.enabled && config.has_visible_skills()))
         {
-            tools::register_progressive_loader(&mut tools, config.agent_deferred_tools());
+            let deferred = tool_visibility.deferred_tools().to_vec();
+            tools::register_progressive_loader(&mut tools, &deferred);
         }
         if tool_visibility.is_progressive() {
             let loaded = state.load_loaded_tools()?;
@@ -93,6 +115,7 @@ impl Agent {
             compaction_client: compaction_runtime.client,
             compaction_model_label: compaction_runtime.label,
             base_system_prompt,
+            anchor_bootstrap_system_prompt,
             context_char_budget,
             tools_enabled,
             max_tool_rounds,
@@ -202,16 +225,20 @@ impl Agent {
     /// 返回:
     /// - 模式切换与会话工具状态恢复结果
     pub fn switch_mode(&mut self, mode: AgentMode, mut tools: ToolRegistry) -> Result<()> {
-        let deferred = self.config.agent_deferred_tools();
-        let loaded = if deferred.is_empty() {
+        let loaded = if !self.tool_visibility.is_progressive() {
             Vec::new()
         } else {
             self.state.load_loaded_tools()?
         };
         self.mode = mode;
         crate::goal::register_tools_for_config(&mut tools, self.state.goal_file(), &self.config)?;
-        if self.tools_enabled && !deferred.is_empty() {
-            tools::register_progressive_loader(&mut tools, deferred);
+        let anchor_enabled = deepseek_anchor_available(&self.config, self.tools_enabled, &tools)?;
+        let anchor_promoted = anchor_enabled && session_anchor_promoted(&self.state)?;
+        self.tool_visibility =
+            ToolVisibility::from_config_with_anchor(&self.config, anchor_enabled, anchor_promoted);
+        if self.tools_enabled && self.tool_visibility.is_progressive() {
+            let deferred = self.tool_visibility.deferred_tools().to_vec();
+            tools::register_progressive_loader(&mut tools, &deferred);
         }
         self.tools = tools;
         // 与工具权限配置共享原子模式，保证运行中 Shift+Tab 立即生效
@@ -224,7 +251,6 @@ impl Agent {
         self.tools
             .set_permission_mode(mode.permission_profile_mode());
         // 1. 按新模式注册表恢复会话已加载集合，不保留当前模式不存在的工具
-        self.tool_visibility = ToolVisibility::from_config(&self.config);
         self.tool_visibility
             .restore_loaded_tools(&self.tools, &loaded);
         Ok(())
@@ -239,11 +265,11 @@ impl Agent {
     /// - 无
     pub fn replace_tools(&mut self, mut tools: ToolRegistry) {
         let loaded = self.tool_visibility.loaded_tool_names();
-        let deferred = self.config.agent_deferred_tools();
         crate::goal::register_tools_for_config(&mut tools, self.state.goal_file(), &self.config)
             .expect("failed to register goal tools");
-        if self.tools_enabled && !deferred.is_empty() {
-            tools::register_progressive_loader(&mut tools, deferred);
+        if self.tools_enabled && self.tool_visibility.is_progressive() {
+            let deferred = self.tool_visibility.deferred_tools().to_vec();
+            tools::register_progressive_loader(&mut tools, &deferred);
         }
         self.tools = tools;
         self.tool_visibility
@@ -259,7 +285,21 @@ impl Agent {
             self.config.tools.enabled && self.config.active_model_tools_enabled()?;
         self.base_system_prompt =
             build_base_system_prompt(&self.config, &self.paths, self.tools_enabled, None)?;
-        prepare_session_context(&self.state, &self.base_system_prompt)?;
+        self.anchor_bootstrap_system_prompt = self
+            .tool_visibility
+            .is_anchor_bootstrap()
+            .then(|| {
+                build_base_system_prompt_for_phase(
+                    &self.config,
+                    &self.paths,
+                    self.tools_enabled,
+                    None,
+                    true,
+                )
+            })
+            .transpose()?;
+        let system_prompt = self.active_system_prompt().to_string();
+        prepare_session_context(&self.state, &system_prompt)?;
         self.context_char_budget = self.config.active_context_window_tokens()?;
         self.max_tool_rounds = self.config.tools.max_rounds;
         Ok(())
@@ -295,14 +335,18 @@ impl Agent {
             self.config.tools.enabled && self.config.active_model_tools_enabled()?;
         crate::goal::register_tools_for_config(&mut tools, self.state.goal_file(), &self.config)?;
         // 与初始化保持一致：有可见 skill 时同样需要加载器读取正文
+        let anchor_enabled = deepseek_anchor_available(&self.config, self.tools_enabled, &tools)?;
+        let anchor_promoted = anchor_enabled && session_anchor_promoted(&self.state)?;
+        self.tool_visibility =
+            ToolVisibility::from_config_with_anchor(&self.config, anchor_enabled, anchor_promoted);
         if self.tools_enabled
-            && (!self.config.agent_deferred_tools().is_empty()
+            && (self.tool_visibility.is_progressive()
                 || (self.config.skills.enabled && self.config.has_visible_skills()))
         {
-            tools::register_progressive_loader(&mut tools, self.config.agent_deferred_tools());
+            let deferred = self.tool_visibility.deferred_tools().to_vec();
+            tools::register_progressive_loader(&mut tools, &deferred);
         }
         self.tools = tools;
-        self.tool_visibility = ToolVisibility::from_config(&self.config);
         if self.tool_visibility.is_progressive() {
             let loaded = self.state.load_loaded_tools()?;
             self.restore_loaded_tools(&loaded);
@@ -326,13 +370,29 @@ impl Agent {
             self.state.goal_file(),
             &self.config,
         )?;
-        self.tool_visibility = ToolVisibility::from_config(&self.config);
+        let anchor_enabled =
+            deepseek_anchor_available(&self.config, self.tools_enabled, &self.tools)?;
+        let anchor_promoted = anchor_enabled && session_anchor_promoted(&self.state)?;
+        self.tool_visibility =
+            ToolVisibility::from_config_with_anchor(&self.config, anchor_enabled, anchor_promoted);
         if self.tool_visibility.is_progressive() {
             let loaded = self.state.load_loaded_tools()?;
             self.restore_loaded_tools(&loaded);
         }
         self.last_dynamic_sources.clear();
-        prepare_session_context(&self.state, &self.base_system_prompt)?;
+        self.anchor_bootstrap_system_prompt = anchor_enabled
+            .then(|| {
+                build_base_system_prompt_for_phase(
+                    &self.config,
+                    &self.paths,
+                    self.tools_enabled,
+                    None,
+                    true,
+                )
+            })
+            .transpose()?;
+        let system_prompt = self.active_system_prompt().to_string();
+        prepare_session_context(&self.state, &system_prompt)?;
         Ok(())
     }
 
@@ -379,6 +439,47 @@ impl Agent {
     pub fn last_dynamic_sources(&self) -> Vec<DynamicContextSource> {
         self.last_dynamic_sources.clone()
     }
+
+    /// 返回当前锚定阶段应发送的稳定系统提示。
+    pub(super) fn active_system_prompt(&self) -> &str {
+        if self.tool_visibility.is_anchor_bootstrap() {
+            self.anchor_bootstrap_system_prompt
+                .as_deref()
+                .unwrap_or(&self.base_system_prompt)
+        } else {
+            &self.base_system_prompt
+        }
+    }
+}
+
+/// 判断已保存会话是否已经产生 Anchored Standard 的晋升信号。
+fn session_anchor_promoted(state: &StateStore) -> Result<bool> {
+    let history = state.project_history(None)?;
+    Ok(history.checkpoint_context.is_some()
+        || history
+            .messages
+            .iter()
+            .any(|message| matches!(message.role.as_str(), "assistant" | "tool")))
+}
+
+/// 确认当前模型启用锚定且真实启动工具都存在。
+fn deepseek_anchor_available(
+    config: &AppConfig,
+    tools_enabled: bool,
+    tools: &ToolRegistry,
+) -> Result<bool> {
+    if !tools_enabled || !config.active_deepseek_anchor_enabled()? {
+        return Ok(false);
+    }
+    let available = ["run_command", "read_file", "write_file", "str_replace"]
+        .into_iter()
+        .all(|name| tools.contains(name));
+    if !available {
+        eprintln!(
+            "[sai] DeepSeek Anchored Standard disabled: run_command, read_file, write_file, and str_replace are required"
+        );
+    }
+    Ok(available)
 }
 
 /// 同步当前模式的稳定系统提示并恢复过期轮次。

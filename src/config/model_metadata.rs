@@ -11,6 +11,10 @@ pub const MODEL_TAG_LOW_COST: &str = "low_cost";
 pub const WEB_SEARCH_TOOL_MODE_ENABLED: &str = "enabled";
 pub const WEB_SEARCH_TOOL_MODE_HIDE: &str = "hide_builtin";
 pub const WEB_SEARCH_TOOL_MODE_RENAME: &str = "rename_local";
+pub const DEEPSEEK_ANCHOR_MODE_OFF: &str = "off";
+pub const DEEPSEEK_ANCHOR_MODE_STANDARD: &str = "anchored_standard";
+pub const DEEPSEEK_ANCHOR_MODES: [&str; 2] =
+    [DEEPSEEK_ANCHOR_MODE_OFF, DEEPSEEK_ANCHOR_MODE_STANDARD];
 pub const MODEL_TAGS: [&str; 6] = [
     MODEL_TAG_TOOL,
     MODEL_TAG_THINKING,
@@ -42,6 +46,16 @@ pub struct ModelMetadata {
     pub thinking_levels: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub web_search_tool_mode: Option<String>,
+    /// DeepSeek 类模型的首请求工具锚定模式；缺失表示关闭。
+    #[serde(default, skip_serializing_if = "is_none_or_off")]
+    pub deepseek_anchor_mode: Option<String>,
+}
+
+fn is_none_or_off(value: &Option<String>) -> bool {
+    value
+        .as_deref()
+        .map(|mode| mode == DEEPSEEK_ANCHOR_MODE_OFF)
+        .unwrap_or(true)
 }
 
 impl ModelMetadata {
@@ -59,6 +73,7 @@ impl ModelMetadata {
             && self.tags.is_empty()
             && self.thinking_levels.is_empty()
             && self.web_search_tool_mode.is_none()
+            && is_none_or_off(&self.deepseek_anchor_mode)
     }
 }
 
@@ -183,6 +198,30 @@ impl ProviderConfig {
             return;
         }
         self.model_metadata_mut(model).web_search_tool_mode = mode;
+        self.remove_empty_model_metadata(model);
+    }
+
+    /// 返回模型的 DeepSeek 首请求锚定模式。
+    pub fn model_deepseek_anchor_mode_for(&self, model: &str) -> &str {
+        self.model_metadata
+            .get(model)
+            .and_then(|metadata| metadata.deepseek_anchor_mode.as_deref())
+            .unwrap_or(DEEPSEEK_ANCHOR_MODE_OFF)
+    }
+
+    /// 设置模型的 DeepSeek 首请求锚定模式。
+    pub fn set_model_deepseek_anchor_mode_for(&mut self, model: &str, mode: &str) {
+        if model.trim().is_empty() {
+            return;
+        }
+        let value = mode.trim();
+        if value == DEEPSEEK_ANCHOR_MODE_OFF || value.is_empty() {
+            if let Some(metadata) = self.model_metadata.get_mut(model) {
+                metadata.deepseek_anchor_mode = None;
+            }
+        } else {
+            self.model_metadata_mut(model).deepseek_anchor_mode = Some(value.to_string());
+        }
         self.remove_empty_model_metadata(model);
     }
 
@@ -320,4 +359,45 @@ impl ProviderConfig {
 /// - 标签属于内置标签集合时返回 true
 pub fn is_valid_model_tag(tag: &str) -> bool {
     MODEL_TAGS.contains(&tag.trim())
+}
+
+/// 判断供应商与模型标识是否属于 DeepSeek 类模型。
+pub fn is_deepseek_like_model(provider: &ProviderConfig, model: &str) -> bool {
+    provider.id.to_ascii_lowercase().contains("deepseek")
+        || provider.base_url.to_ascii_lowercase().contains("deepseek")
+        || model.to_ascii_lowercase().contains("deepseek")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deepseek_anchor_mode_is_model_scoped_and_default_is_removed() {
+        let mut provider = ProviderConfig::new_openai_compatible();
+
+        provider.set_model_deepseek_anchor_mode_for("deepseek-v4", DEEPSEEK_ANCHOR_MODE_STANDARD);
+
+        assert_eq!(
+            provider.model_deepseek_anchor_mode_for("deepseek-v4"),
+            DEEPSEEK_ANCHOR_MODE_STANDARD
+        );
+        assert_eq!(
+            provider.model_deepseek_anchor_mode_for("other-model"),
+            DEEPSEEK_ANCHOR_MODE_OFF
+        );
+
+        provider.set_model_deepseek_anchor_mode_for("deepseek-v4", DEEPSEEK_ANCHOR_MODE_OFF);
+        assert!(!provider.model_metadata.contains_key("deepseek-v4"));
+    }
+
+    #[test]
+    fn detects_deepseek_from_provider_or_model_identity() {
+        let mut provider = ProviderConfig::new_openai_compatible();
+        provider.id = "gateway".to_string();
+        provider.base_url = "https://example.test/v1".to_string();
+
+        assert!(is_deepseek_like_model(&provider, "deepseek-v4"));
+        assert!(!is_deepseek_like_model(&provider, "other-model"));
+    }
 }

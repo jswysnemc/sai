@@ -50,6 +50,10 @@ export function ModelMetadataEditor({ provider, onChange }: ModelMetadataEditorP
     { value: "hide_builtin", label: t("Hide local tool with the same name", "隐藏本地同名工具") },
     { value: "rename_local", label: t("Rename local tool", "更名本地工具") }
   ];
+  const deepseekAnchorOptions = [
+    { value: "off", label: t("Off", "关闭") },
+    { value: "anchored_standard", label: "Anchored Standard" }
+  ];
 
   /**
    * 新增模型标识并选中。
@@ -227,6 +231,27 @@ export function ModelMetadataEditor({ provider, onChange }: ModelMetadataEditorP
                   ariaLabel={t("Model tool calls", "模型工具调用")}
                 />
                 <small>{t("Override the provider default capability", "覆盖供应商默认能力")}</small>
+              </div>
+
+              <div className="settings-field">
+                <span>{t("DeepSeek trajectory anchor", "DeepSeek 轨迹锚定")}</span>
+                <Select
+                  value={metadata.deepseek_anchor_mode ?? "off"}
+                  options={deepseekAnchorOptions}
+                  onChange={(value) =>
+                    updateMetadata({
+                      deepseek_anchor_mode:
+                        value === "off" ? undefined : (value as ModelMetadata["deepseek_anchor_mode"])
+                    })
+                  }
+                  ariaLabel={t("DeepSeek trajectory anchor", "DeepSeek 轨迹锚定")}
+                />
+                <small>
+                  {t(
+                    "Use the Minimal tool pair on request 1, then promote to the resident discovery tools",
+                    "请求 1 使用 Minimal 工具对，随后晋升到常驻发现工具"
+                  )}
+                </small>
               </div>
 
               <div className="settings-field full">

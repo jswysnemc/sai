@@ -63,10 +63,11 @@ use crate::paths::SaiPaths;
 pub(crate) use catalog::{catalog_config, mcp_tool_catalog, tool_catalog, ToolCatalogEntry};
 pub(crate) use context::tool_output_for_context;
 pub(crate) use progressive::{
-    register_loader as register_progressive_loader, INVOKE_NAME, LOAD_NAME,
+    register_loader as register_progressive_loader, DEFERRED_ALL_EXCEPT_ANCHOR_BOOTSTRAP,
+    INVOKE_NAME, LOAD_NAME,
 };
 pub use registry::{empty_parameters, ToolPermission, ToolProgress, ToolRegistry, ToolSpec};
-pub(crate) use registry::{ToolModelAttachment, ToolOutput};
+pub(crate) use registry::{ToolModelAttachment, ToolOutput, DSH_BASH_EXECUTION_ALIAS};
 pub(crate) use skill_management::{
     create_managed_skill, list_managed_skills, read_managed_skill, set_managed_skill_enabled,
     update_managed_skill, ManagedSkill,

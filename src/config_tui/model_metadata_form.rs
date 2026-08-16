@@ -1,6 +1,7 @@
 use crate::config::{parse_context_chars, ProviderConfig, MODEL_TAGS};
 use crate::config::{
-    WEB_SEARCH_TOOL_MODE_ENABLED, WEB_SEARCH_TOOL_MODE_HIDE, WEB_SEARCH_TOOL_MODE_RENAME,
+    DEEPSEEK_ANCHOR_MODE_OFF, DEEPSEEK_ANCHOR_MODE_STANDARD, WEB_SEARCH_TOOL_MODE_ENABLED,
+    WEB_SEARCH_TOOL_MODE_HIDE, WEB_SEARCH_TOOL_MODE_RENAME,
 };
 use crate::i18n::text as t;
 use anyhow::{bail, Result};
@@ -79,6 +80,24 @@ pub(super) fn web_search_tool_mode_field(provider: &ProviderConfig, model: &str)
         WEB_SEARCH_TOOL_MODE_HIDE,
         WEB_SEARCH_TOOL_MODE_RENAME,
     ])
+}
+
+/// 返回 DeepSeek Anchored Standard 模式字段。
+pub(super) fn deepseek_anchor_mode_field(provider: &ProviderConfig, model: &str) -> Field {
+    Field::new(
+        t("DeepSeek trajectory anchor", "DeepSeek 轨迹锚定"),
+        provider.model_deepseek_anchor_mode_for(model).to_string(),
+    )
+    .choices(&[DEEPSEEK_ANCHOR_MODE_OFF, DEEPSEEK_ANCHOR_MODE_STANDARD])
+}
+
+/// 应用 DeepSeek Anchored Standard 模式字段。
+pub(super) fn apply_deepseek_anchor_mode_field(
+    provider: &mut ProviderConfig,
+    model: &str,
+    value: &str,
+) {
+    provider.set_model_deepseek_anchor_mode_for(model, value);
 }
 
 /// 应用网页搜索工具冲突策略字段。
@@ -324,6 +343,21 @@ mod tests {
 
         assert!(provider.model_tools_enabled_for("test-model"));
         assert!(!provider.model_metadata.contains_key("test-model"));
+    }
+
+    #[test]
+    fn applies_deepseek_anchor_mode() {
+        let mut provider = provider_with_model("deepseek-v4");
+        apply_deepseek_anchor_mode_field(
+            &mut provider,
+            "deepseek-v4",
+            DEEPSEEK_ANCHOR_MODE_STANDARD,
+        );
+
+        assert_eq!(
+            provider.model_deepseek_anchor_mode_for("deepseek-v4"),
+            DEEPSEEK_ANCHOR_MODE_STANDARD
+        );
     }
 
     #[test]

@@ -1,3 +1,4 @@
+use super::deepseek_anchor;
 use super::repeat_guard::RepeatGuard;
 use super::tool_gate::tool_error_output;
 use super::tool_visibility::ToolVisibility;
@@ -267,6 +268,11 @@ pub(crate) fn resolve_execution_call(
     visibility: &ToolVisibility,
     provider_call: &ToolCall,
 ) -> Result<ToolCall> {
+    if visibility.is_anchor_enabled()
+        && deepseek_anchor::is_provider_tool(&provider_call.function.name)
+    {
+        return deepseek_anchor::resolve_execution_call(provider_call);
+    }
     if !visibility.is_progressive() || visibility.is_loader_call(&provider_call.function.name) {
         return Ok(provider_call.clone());
     }
@@ -292,6 +298,15 @@ pub(crate) fn resolve_execution_call(
     }
     if !request.arguments.is_object() {
         bail!("invoke_tool arguments must be a JSON object");
+    }
+    // The dsh pair is a provider-facing adapter.  A model may call it directly,
+    // but an invoke_tool envelope still has to target a locally loaded schema;
+    // otherwise the anchor visibility bridge would accidentally bypass load.
+    if visibility.is_anchor_enabled()
+        && deepseek_anchor::is_execution_tool(tool_name)
+        && !visibility.is_loaded(tool_name)
+    {
+        bail!("tool {tool_name} must be loaded before invoke_tool can target it");
     }
 
     // 2. 保留 provider call_id，真实名称和参数交给原有治理与执行链路
@@ -353,6 +368,23 @@ mod tests {
             .unwrap_err();
 
         assert!(error.to_string().contains("direct tool calls are disabled"));
+    }
+
+    #[test]
+    fn anchor_invoke_cannot_bypass_local_tool_loading() {
+        let visibility = ToolVisibility::from_config_with_anchor(
+            &crate::config::AppConfig::default(),
+            true,
+            false,
+        );
+        let provider_call = call(
+            tools::INVOKE_NAME,
+            r#"{"tool_name":"read_file","arguments":{"path":"/tmp/a"}}"#,
+        );
+
+        let error = resolve_execution_call(&visibility, &provider_call).unwrap_err();
+
+        assert!(error.to_string().contains("must be loaded"));
     }
 
     /// 验证基础问题工具直接调用时正常进入问题流程。

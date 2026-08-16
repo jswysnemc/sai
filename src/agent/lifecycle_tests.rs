@@ -244,6 +244,49 @@ fn live_mode_change_does_not_mask_installed_tool_mode() {
     assert_eq!(agent.installed_mode(), AgentMode::Yolo);
 }
 
+#[test]
+fn deepseek_anchor_restores_promotion_from_session_history() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = test_paths(temp.path());
+    let mut config = AppConfig::default();
+    let provider = &mut config.providers[0];
+    provider.id = "deepseek-test".to_string();
+    provider.api_key = Some("test-key".to_string());
+    provider.default_model = "deepseek-v4".to_string();
+    provider.models = vec![provider.default_model.clone()];
+    provider.set_model_deepseek_anchor_mode_for(
+        "deepseek-v4",
+        crate::config::DEEPSEEK_ANCHOR_MODE_STANDARD,
+    );
+    config.active_provider = provider.id.clone();
+
+    let state = StateStore::new(&paths).unwrap();
+    state.start_turn("turn-1", "hello").unwrap();
+    state.complete_turn("turn-1", "done", None).unwrap();
+    let client = OpenAiCompatibleClient::from_config(&config, &paths).unwrap();
+    let mut registry = ToolRegistry::new();
+    register_anchor_tools(&mut registry);
+
+    let agent = Agent::new(config, &paths, state, client, registry, AgentMode::Yolo).unwrap();
+    let names = agent
+        .tool_visibility
+        .definitions(&agent.tools)
+        .into_iter()
+        .map(|definition| definition.function.name)
+        .collect::<Vec<_>>();
+
+    assert!(!agent.tool_visibility.is_anchor_bootstrap());
+    assert_eq!(
+        names,
+        [
+            "bash",
+            "str_replace_editor",
+            crate::tools::LOAD_NAME,
+            crate::tools::INVOKE_NAME,
+        ]
+    );
+}
+
 /// 提取测试消息文本。
 ///
 /// 参数:
@@ -272,6 +315,17 @@ fn register_weather(registry: &mut ToolRegistry) {
         json!({"type":"object","properties":{}}),
         |_| async { Ok("sunny".to_string()) },
     ));
+}
+
+fn register_anchor_tools(registry: &mut ToolRegistry) {
+    for name in ["run_command", "str_replace", "read_file", "write_file"] {
+        registry.register(ToolSpec::new(
+            name,
+            "Test tool.",
+            json!({"type":"object","properties":{}}),
+            |_| async { Ok("ok".to_string()) },
+        ));
+    }
 }
 
 /// 创建隔离的应用路径集合。

@@ -20,11 +20,25 @@ pub(crate) fn build_base_system_prompt(
     tools_enabled: bool,
     extra_system_prompt: Option<&str>,
 ) -> Result<String> {
+    build_base_system_prompt_for_phase(config, paths, tools_enabled, extra_system_prompt, false)
+}
+
+/// 组装指定阶段的基础系统提示。
+///
+/// 锚定首轮只抑制自动注入的 Agent/Claude 指令摘要和技能目录，
+/// 晋升后恢复完整提示。用户显式提供的额外提示始终保留。
+pub(crate) fn build_base_system_prompt_for_phase(
+    config: &AppConfig,
+    paths: &SaiPaths,
+    tools_enabled: bool,
+    extra_system_prompt: Option<&str>,
+    suppress_bootstrap_context: bool,
+) -> Result<String> {
     // 1. Agent 人设与用户身份
     let mut base_system_prompt = config.system_prompt(paths)?;
 
     // 2. 全局 AGENT.md 与项目 .AGENT.md / .CLAUDE.md 等附加指令（可按 Agent 关闭）
-    if config.load_instruction_files {
+    if config.load_instruction_files && !suppress_bootstrap_context {
         let instruction_prompt = load_instruction_prompt(paths);
         if !instruction_prompt.trim().is_empty() {
             base_system_prompt.push_str("\n\n");
@@ -33,8 +47,13 @@ pub(crate) fn build_base_system_prompt(
     }
 
     // 3. Skills 目录（渐进加载时仅 catalog）
-    if tools_enabled && config.skills.enabled && config.prompt_sections.skills_catalog {
-        let progressive = !config.agent_deferred_tools().is_empty();
+    if tools_enabled
+        && config.skills.enabled
+        && config.prompt_sections.skills_catalog
+        && !suppress_bootstrap_context
+    {
+        let progressive = !config.agent_deferred_tools().is_empty()
+            || config.active_deepseek_anchor_enabled().unwrap_or(false);
         let prompt = if progressive {
             tools::skills_catalog_prompt(config, paths)?
         } else {
@@ -178,5 +197,29 @@ mod tests {
         let prompt = build_base_system_prompt(&config, &paths, true, None).unwrap();
 
         assert!(prompt.contains("write_memory"));
+    }
+
+    #[test]
+    fn anchored_bootstrap_suppresses_instruction_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, paths) = setup(dir.path());
+        std::fs::create_dir_all(&paths.config_dir).unwrap();
+        std::fs::write(paths.config_dir.join("AGENT.md"), "bootstrap hidden marker").unwrap();
+        let skill_dir = paths.skills_dir.join("bootstrap-hidden-skill");
+        std::fs::create_dir_all(&skill_dir).unwrap();
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: bootstrap-hidden-skill\ndescription: hidden marker\n---\n",
+        )
+        .unwrap();
+
+        let full = build_base_system_prompt(&config, &paths, true, None).unwrap();
+        let bootstrap =
+            build_base_system_prompt_for_phase(&config, &paths, true, None, true).unwrap();
+
+        assert!(full.contains("bootstrap hidden marker"));
+        assert!(full.contains("bootstrap-hidden-skill"));
+        assert!(!bootstrap.contains("bootstrap hidden marker"));
+        assert!(!bootstrap.contains("bootstrap-hidden-skill"));
     }
 }

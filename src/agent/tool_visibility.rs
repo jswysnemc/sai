@@ -1,3 +1,4 @@
+use super::deepseek_anchor;
 use super::load_request::{LoadRequest, LoadType};
 use crate::config::AppConfig;
 use crate::llm::ToolDefinition;
@@ -14,6 +15,10 @@ pub(crate) struct ToolVisibility {
     loaded: BTreeSet<String>,
     /// 工具首次被 load 的顺序，用于稳定持久化状态和加载结果
     loaded_order: Vec<String>,
+    /// DeepSeek Anchored Standard 是否控制当前会话的工具目录。
+    anchor_enabled: bool,
+    /// false 表示请求 #1 尚未产生持久 assistant/tool 信号。
+    anchor_promoted: bool,
 }
 
 impl ToolVisibility {
@@ -29,6 +34,8 @@ impl ToolVisibility {
             deferred,
             loaded: BTreeSet::new(),
             loaded_order: Vec::new(),
+            anchor_enabled: false,
+            anchor_promoted: false,
         }
     }
 
@@ -41,6 +48,45 @@ impl ToolVisibility {
     /// - 依据 `agent_runtime.deferred_tools` 构造的可见性状态
     pub(crate) fn from_config(config: &AppConfig) -> Self {
         Self::new(config.agent_deferred_tools().to_vec())
+    }
+
+    /// 按配置创建可见性状态，并启用 DeepSeek Anchored Standard。
+    pub(crate) fn from_config_with_anchor(
+        config: &AppConfig,
+        anchor_enabled: bool,
+        anchor_promoted: bool,
+    ) -> Self {
+        let mut visibility = Self::from_config(config);
+        if anchor_enabled {
+            visibility.deferred = vec![tools::DEFERRED_ALL_EXCEPT_ANCHOR_BOOTSTRAP.to_string()];
+            visibility.anchor_enabled = true;
+            visibility.anchor_promoted = anchor_promoted;
+        }
+        visibility
+    }
+
+    /// 返回注册渐进发现网关时使用的延迟集合。
+    pub(crate) fn deferred_tools(&self) -> &[String] {
+        &self.deferred
+    }
+
+    /// 判断当前请求是否仍处于锚定首轮。
+    pub(crate) fn is_anchor_bootstrap(&self) -> bool {
+        self.anchor_enabled && !self.anchor_promoted
+    }
+
+    /// 判断当前会话是否使用 dsh Anchored Standard 工具适配层。
+    pub(crate) fn is_anchor_enabled(&self) -> bool {
+        self.anchor_enabled
+    }
+
+    /// 晋升到 resident 工具目录，返回阶段是否发生变化。
+    pub(crate) fn promote_anchor(&mut self) -> bool {
+        if !self.is_anchor_bootstrap() {
+            return false;
+        }
+        self.anchor_promoted = true;
+        true
     }
 
     /// 判断当前 Agent 是否启用了渐进式加载。
@@ -62,6 +108,17 @@ impl ToolVisibility {
     /// 返回:
     /// - 当前可见的工具定义列表
     pub(crate) fn definitions(&self, registry: &ToolRegistry) -> Vec<ToolDefinition> {
+        if self.anchor_enabled {
+            let mut definitions = deepseek_anchor::definitions();
+            if self.anchor_promoted {
+                let names = [tools::LOAD_NAME, tools::INVOKE_NAME]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect::<BTreeSet<_>>();
+                definitions.extend(registry.definitions_for_names(&names));
+            }
+            return definitions;
+        }
         if !self.is_progressive() {
             return registry.definitions();
         }
@@ -78,6 +135,14 @@ impl ToolVisibility {
     /// 返回:
     /// - 当前是否可见并允许调用
     pub(crate) fn is_visible(&self, name: &str) -> bool {
+        if self.anchor_enabled
+            && (deepseek_anchor::is_provider_tool(name) || deepseek_anchor::is_execution_tool(name))
+        {
+            return true;
+        }
+        if self.is_anchor_bootstrap() {
+            return false;
+        }
         !self.is_progressive()
             || name == tools::LOAD_NAME
             || name == tools::INVOKE_NAME
@@ -161,6 +226,11 @@ impl ToolVisibility {
     /// - 已加载工具名称列表
     pub(crate) fn loaded_tool_names(&self) -> Vec<String> {
         self.loaded_order.clone()
+    }
+
+    /// 判断工具是否已经通过渐进网关加载。
+    pub(crate) fn is_loaded(&self, name: &str) -> bool {
+        self.loaded.contains(name)
     }
 
     /// 按加载工具参数更新可见工具集合。
@@ -337,6 +407,36 @@ mod tests {
         assert_eq!(names, ["read_file", tools::LOAD_NAME, tools::INVOKE_NAME]);
         assert!(visibility.is_visible("read_file"));
         assert!(!visibility.is_visible("web_search"));
+    }
+
+    #[test]
+    fn anchored_standard_exposes_minimal_pair_then_resident_gateway() {
+        let config = AppConfig::default();
+        let mut registry = anchored_registry();
+        let mut visibility = ToolVisibility::from_config_with_anchor(&config, true, false);
+        let deferred = visibility.deferred_tools().to_vec();
+        tools::register_progressive_loader(&mut registry, &deferred);
+
+        assert_eq!(
+            definition_names(visibility.definitions(&registry)),
+            ["bash", "str_replace_editor"]
+        );
+        assert!(visibility.is_visible("bash"));
+        assert!(!visibility.is_visible(tools::LOAD_NAME));
+        assert!(visibility.is_visible("read_file"));
+
+        assert!(visibility.promote_anchor());
+        assert_eq!(
+            definition_names(visibility.definitions(&registry)),
+            [
+                "bash",
+                "str_replace_editor",
+                tools::LOAD_NAME,
+                tools::INVOKE_NAME,
+            ]
+        );
+        assert!(visibility.is_visible(tools::LOAD_NAME));
+        assert!(visibility.is_visible("write_file"));
     }
 
     #[test]
@@ -634,6 +734,19 @@ mod tests {
             json!({"type":"object","properties":{},"additionalProperties":false}),
             |_| async { Ok("ok".to_string()) },
         ));
+        registry
+    }
+
+    fn anchored_registry() -> ToolRegistry {
+        let mut registry = ToolRegistry::new();
+        for name in ["run_command", "str_replace", "read_file", "write_file"] {
+            registry.register(ToolSpec::new(
+                name,
+                "test",
+                json!({"type":"object","properties":{},"additionalProperties":false}),
+                |_| async { Ok("ok".to_string()) },
+            ));
+        }
         registry
     }
 

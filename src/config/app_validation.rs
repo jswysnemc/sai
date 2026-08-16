@@ -1,7 +1,7 @@
 use super::model::ProviderConfig;
 use super::model_metadata::{
-    is_valid_model_tag, WEB_SEARCH_TOOL_MODE_ENABLED, WEB_SEARCH_TOOL_MODE_HIDE,
-    WEB_SEARCH_TOOL_MODE_RENAME,
+    is_valid_model_tag, DEEPSEEK_ANCHOR_MODES, WEB_SEARCH_TOOL_MODE_ENABLED,
+    WEB_SEARCH_TOOL_MODE_HIDE, WEB_SEARCH_TOOL_MODE_RENAME,
 };
 use anyhow::{bail, Result};
 
@@ -94,6 +94,16 @@ pub(super) fn validate_provider_model_metadata(provider: &ProviderConfig) -> Res
             {
                 bail!(
                     "provider {} model_metadata web_search_tool_mode for {} is invalid: {}",
+                    provider.id,
+                    model,
+                    mode
+                );
+            }
+        }
+        if let Some(mode) = metadata.deepseek_anchor_mode.as_deref() {
+            if !DEEPSEEK_ANCHOR_MODES.contains(&mode) {
+                bail!(
+                    "provider {} model_metadata deepseek_anchor_mode for {} is invalid: {}",
                     provider.id,
                     model,
                     mode

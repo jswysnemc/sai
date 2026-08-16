@@ -36,6 +36,7 @@ pub(crate) struct StartRunRequest {
     pub kind: RunKind,
     pub session_id: String,
     pub input: String,
+    // 本地 Agent 选择字段，不会原样进入上游请求。
     #[serde(default)]
     pub agent_id: Option<String>,
     #[serde(default)]
@@ -44,6 +45,8 @@ pub(crate) struct StartRunRequest {
     pub image_urls: Vec<String>,
     #[serde(default)]
     pub mode: Option<String>,
+    // provider_id/thinking_level 仅由 resolve_run_config 消费；model 用于本地选择，
+    // 解析后的模型名会作为 Chat Completions 协议的 model 字段发送。
     #[serde(default)]
     pub provider_id: Option<String>,
     #[serde(default)]

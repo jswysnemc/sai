@@ -70,11 +70,9 @@ fn apply_acp_overrides(
     }
     if let Some(level) = thinking_level {
         let level = level.trim();
-        config.agent.acp.thought_level = if level == "auto" {
-            String::new()
-        } else {
-            level.to_string()
-        };
+        if !level.is_empty() && !level.eq_ignore_ascii_case("auto") {
+            config.agent.acp.thought_level = level.to_string();
+        }
     }
     Ok(())
 }
@@ -89,9 +87,13 @@ fn apply_acp_overrides(
 /// - 覆盖是否成功
 fn apply_thinking_override(config: &mut AppConfig, level: &str) -> Result<()> {
     let level = level.trim().to_ascii_lowercase();
+    // TUI 的 auto 表示沿用 provider/agent 配置，不覆盖当前值。
+    if level.is_empty() || level == "auto" {
+        return Ok(());
+    }
     if !matches!(
         level.as_str(),
-        "auto" | "none" | "low" | "medium" | "high" | "xhigh" | "max"
+        "none" | "low" | "medium" | "high" | "xhigh" | "max"
     ) {
         bail!("unsupported thinking level: {level}");
     }
@@ -154,6 +156,22 @@ mod tests {
         assert_eq!(config.provider(None).unwrap().thinking_level, "xhigh");
     }
 
+    #[test]
+    fn auto_thinking_level_inherits_provider_config_like_tui() {
+        let mut config = AppConfig::default();
+        let active_provider = config.active_provider.clone();
+        config
+            .providers
+            .iter_mut()
+            .find(|provider| provider.id == active_provider)
+            .unwrap()
+            .thinking_level = "high".to_string();
+
+        apply_thinking_override(&mut config, "auto").unwrap();
+
+        assert_eq!(config.provider(None).unwrap().thinking_level, "high");
+    }
+
     /// 外部内核的单轮选择必须写入 ACP 配置，而不是内置供应商。
     #[test]
     fn applies_external_model_and_thinking_to_acp() {
@@ -168,6 +186,17 @@ mod tests {
         .unwrap();
 
         assert_eq!(config.agent.acp.model, "claude-sonnet");
+        assert_eq!(config.agent.acp.thought_level, "high");
+    }
+
+    #[test]
+    fn auto_thinking_level_inherits_acp_config() {
+        let mut config = AppConfig::default();
+        config.agent.engine = crate::config::AgentEngineKind::ClaudeCode;
+        config.agent.acp.thought_level = "high".to_string();
+
+        apply_acp_overrides(&mut config, None, None, Some("auto")).unwrap();
+
         assert_eq!(config.agent.acp.thought_level, "high");
     }
 }

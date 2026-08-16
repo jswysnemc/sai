@@ -45,8 +45,8 @@ pub(crate) fn register(
                 "command":{
                     "type":"string",
                     "description": t(
-                        "Complete shell command string. Put pipelines and conditionals in this single field.",
-                        "完整 Shell 命令字符串。管道和条件语句都放在此字段中。"
+                        "Complete command or PowerShell script. The runner already chooses the shell; do not launch pwsh, powershell, or cmd again.",
+                        "完整命令或 PowerShell 脚本。执行器已选择 Shell；不要再次启动 pwsh、powershell 或 cmd。"
                     )
                 },
                 "timeout_seconds":{
@@ -175,6 +175,11 @@ async fn run_command(
         bail!("{}", t("command execution is disabled; set skills.allow_command_execution=true in config.jsonc to enable run_command", "命令执行已禁用；请在 config.jsonc 中设置 skills.allow_command_execution=true 以启用 run_command"));
     }
     let command = required(&args, "command")?;
+    let shell = args
+        .get("_sai_command_shell")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .unwrap_or(shell);
     // rtk 输出过滤：白名单命令改写为 rtk 代理，压缩进入上下文的命令输出
     let rewritten = super::rtk_filter::rewrite_command(
         &command,

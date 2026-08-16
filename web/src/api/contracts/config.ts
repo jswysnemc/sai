@@ -45,6 +45,8 @@ export type ModelMetadata = {
   /** 该模型支持的思考等级；空或缺失表示未知，界面展示全部 */
   thinking_levels?: string[];
   web_search_tool_mode?: "enabled" | "hide_builtin" | "rename_local";
+  /** DeepSeek 类模型首请求的工具轨迹锚定模式；缺失表示关闭 */
+  deepseek_anchor_mode?: "off" | "anchored_standard";
 };
 
 export type QqGatewayConfig = {

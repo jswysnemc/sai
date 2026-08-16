@@ -14,6 +14,8 @@ pub struct Agent {
     pub(super) compaction_client: OpenAiCompatibleClient,
     pub(super) compaction_model_label: String,
     pub(super) base_system_prompt: String,
+    /// DeepSeek 锚定首轮使用的不含指令摘要与技能目录的系统提示。
+    pub(super) anchor_bootstrap_system_prompt: Option<String>,
     /// 上下文窗口 Token 数经保守换算得到的字符预算
     pub(super) context_char_budget: usize,
     pub(super) tools_enabled: bool,

@@ -182,6 +182,26 @@ fn non_taotoken_glm_request_keeps_default_body() {
 }
 
 #[test]
+fn chat_request_excludes_web_local_selection_fields() {
+    let body = serde_json::to_value(ChatRequest {
+        model: "test-model".to_string(),
+        messages: Vec::new(),
+        temperature: 0.7,
+        stream: true,
+        stream_options: None,
+        max_tokens: None,
+        tools: None,
+        chat_template_kwargs: None,
+    })
+    .unwrap();
+
+    assert_eq!(body["model"], "test-model");
+    for local_field in ["provider_id", "agent_id", "thinking_level"] {
+        assert!(body.get(local_field).is_none(), "unexpected {local_field}");
+    }
+}
+
+#[test]
 fn lower_responses_messages_wraps_codex_message_type() {
     let input = lower_responses_messages(vec![
         ChatMessage::system("sys"),

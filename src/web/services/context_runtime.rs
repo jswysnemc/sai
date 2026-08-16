@@ -76,6 +76,7 @@ pub(super) fn project_context_runtime(
     let selected_model = selected_model_label(config)?.unwrap_or_default();
     let snapshot = RuntimeContextSnapshot::capture(
         (!selected_model.trim().is_empty()).then_some(selected_model.as_str()),
+        Some(config.tools.command_shell.as_str()),
     );
     let runtime_update = context_state_update(
         &snapshot,

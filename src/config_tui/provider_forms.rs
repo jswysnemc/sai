@@ -7,10 +7,11 @@ use std::io;
 use super::form::{parse_bool_field, run_form, Field};
 use super::input::read_key;
 use super::model_metadata_form::{
-    apply_context_chars_field, apply_max_output_tokens_field, apply_tag_fields,
-    apply_thinking_level_fields, apply_tools_enabled_field, apply_web_search_tool_mode_field,
-    context_chars_field_value, max_output_tokens_field_value, tag_fields, thinking_level_fields,
-    tools_enabled_field, web_search_tool_mode_field,
+    apply_context_chars_field, apply_deepseek_anchor_mode_field, apply_max_output_tokens_field,
+    apply_tag_fields, apply_thinking_level_fields, apply_tools_enabled_field,
+    apply_web_search_tool_mode_field, context_chars_field_value, deepseek_anchor_mode_field,
+    max_output_tokens_field_value, tag_fields, thinking_level_fields, tools_enabled_field,
+    web_search_tool_mode_field,
 };
 use super::ui::{draw_menu, message};
 
@@ -378,6 +379,7 @@ fn edit_model_general_form(
             max_output_tokens_field_value(provider, model),
         ),
         web_search_tool_mode_field(provider, model),
+        deepseek_anchor_mode_field(provider, model),
     ];
     if !run_form(stdout, t(" MODEL GENERAL ", " 模型常规设置 "), &mut fields)? {
         return Ok(());
@@ -410,6 +412,7 @@ fn edit_model_general_form(
     apply_context_chars_field(provider, model, &fields[3].value)?;
     apply_max_output_tokens_field(provider, model, &fields[4].value)?;
     apply_web_search_tool_mode_field(provider, model, &fields[5].value);
+    apply_deepseek_anchor_mode_field(provider, model, &fields[6].value);
     Ok(())
 }
 

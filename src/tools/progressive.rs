@@ -6,6 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) const LOAD_NAME: &str = "load";
 pub(crate) const INVOKE_NAME: &str = "invoke_tool";
+/// Anchored Standard 的 resident 目录只常驻 dsh 适配工具和渐进网关。
+pub(crate) const DEFERRED_ALL_EXCEPT_ANCHOR_BOOTSTRAP: &str = "**anchored-standard**";
 
 /// 注册渐进式工具加载器。
 ///
@@ -111,7 +113,17 @@ pub(crate) fn visible_tool_names(registry: &ToolRegistry, deferred: &[String]) -
 /// 返回:
 /// - 工具是否需要先调用 load
 pub(crate) fn is_deferred_tool(name: &str, deferred: &[String]) -> bool {
-    if name == LOAD_NAME || name == INVOKE_NAME || is_base_tool(name) {
+    if name == LOAD_NAME || name == INVOKE_NAME {
+        return false;
+    }
+    if deferred
+        .iter()
+        .any(|configured| configured == DEFERRED_ALL_EXCEPT_ANCHOR_BOOTSTRAP)
+    {
+        // dsh 的常驻工具由 Agent 适配层提供；注册表中的 sai 本地定义全部保持延迟。
+        return true;
+    }
+    if is_base_tool(name) {
         return false;
     }
     deferred

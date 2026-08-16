@@ -62,7 +62,10 @@ impl Agent {
             .or(self.state.compaction_summary_context()?);
         let last_auto_meme_reminder = memes::last_auto_meme_reminder(&self.config, &self.paths)?;
         let selected_model = selected_model_label(&self.config)?;
-        let snapshot = RuntimeContextSnapshot::capture(selected_model.as_deref());
+        let snapshot = RuntimeContextSnapshot::capture(
+            selected_model.as_deref(),
+            Some(self.config.tools.command_shell.as_str()),
+        );
         let runtime_update = context_state_update(
             &snapshot,
             self.mode(),
@@ -91,7 +94,7 @@ impl Agent {
             context_resources::combine_context_updates([runtime_update, goal_update, meme_update]);
         let epoch = self
             .state
-            .context_epoch_projection(&self.base_system_prompt)?;
+            .context_epoch_projection(self.active_system_prompt())?;
         Ok(project_provider_base_context_projection(
             &epoch.baseline,
             compaction_summary_context.as_deref(),

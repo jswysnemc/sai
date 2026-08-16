@@ -33,19 +33,33 @@ impl RuntimeContextSnapshot {
     ///
     /// 返回:
     /// - 限长后的状态快照
-    pub(crate) fn capture(selected_model: Option<&str>) -> Self {
+    pub(crate) fn capture(selected_model: Option<&str>, configured_shell: Option<&str>) -> Self {
         let cwd = crate::runtime_cwd::current_dir().unwrap_or_else(|_| ".".into());
         Self {
             date: Local::now().format("%Y-%m-%d").to_string(),
             cwd: sanitize(&cwd.display().to_string(), 240),
             model: sanitize(selected_model.unwrap_or("unknown"), 120),
             git_branch: git_branch(&cwd).unwrap_or_else(|| "none".to_string()),
-            shell: sanitize(
-                &std::env::var("SHELL").unwrap_or_else(|_| "unknown".to_string()),
-                80,
-            ),
+            shell: sanitize(&runtime_shell(configured_shell), 120),
             terminal: terminal_label(),
         }
+    }
+}
+
+fn runtime_shell(configured_shell: Option<&str>) -> String {
+    if let Some(shell) = configured_shell
+        .map(str::trim)
+        .filter(|shell| !shell.is_empty())
+    {
+        return shell.to_string();
+    }
+    #[cfg(windows)]
+    {
+        "PowerShell (pwsh, then powershell.exe; cmd.exe fallback)".to_string()
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var("SHELL").unwrap_or_else(|_| "sh".to_string())
     }
 }
 

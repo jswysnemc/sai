@@ -6,6 +6,7 @@ pub(crate) mod compaction_schema;
 mod context_projection;
 mod context_resources;
 mod conversation;
+mod deepseek_anchor;
 mod edit_guard;
 mod event;
 mod external_events;
@@ -67,7 +68,7 @@ pub(crate) use inter_message::{
     InterMessage, InterMessageEvent, InterMessageKind, InterMessageSource,
 };
 pub use mode::AgentMode;
-pub(crate) use system_prompt::build_base_system_prompt;
+pub(crate) use system_prompt::{build_base_system_prompt, build_base_system_prompt_for_phase};
 pub(crate) use tool_invocation::resolve_execution_call;
 
 impl Agent {
@@ -185,6 +186,7 @@ impl Agent {
             } else {
                 Vec::new()
             };
+            let was_anchor_bootstrap = self.tool_visibility.is_anchor_bootstrap();
             perf.mark(&format!("round {tool_round} tool definitions"));
             let ordered_messages = system_messages_first(messages.clone());
             let projection = project_provider_turn_from_messages(
@@ -238,6 +240,9 @@ impl Agent {
                         &result,
                         messages,
                     )?;
+                    if was_anchor_bootstrap {
+                        self.promote_anchor_and_refresh_prompt(messages);
+                    }
                     crate::hooks::dispatch(
                         &self.config.hooks,
                         crate::hooks::HookEvent::MessageEnd,
@@ -271,6 +276,9 @@ impl Agent {
                     &hook_ctx,
                 )
                 .await;
+                if was_anchor_bootstrap {
+                    self.promote_anchor_and_refresh_prompt(messages);
+                }
                 result.usage = turn_usage;
                 return Ok(result);
             }
@@ -766,6 +774,21 @@ impl Agent {
                 }
             }
             tool_attachments::append_model_attachments(messages, round_model_attachments);
+            if was_anchor_bootstrap {
+                self.promote_anchor_and_refresh_prompt(messages);
+            }
+        }
+    }
+
+    /// 首个持久 assistant/tool 信号后切换到完整系统提示。
+    fn promote_anchor_and_refresh_prompt(&mut self, messages: &mut Vec<ChatMessage>) {
+        if !self.tool_visibility.promote_anchor() {
+            return;
+        }
+        if let Some(system) = messages.iter_mut().find(|message| message.role == "system") {
+            system.content = Some(crate::llm::ChatContent::Text(
+                self.base_system_prompt.clone(),
+            ));
         }
     }
 }

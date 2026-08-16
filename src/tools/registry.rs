@@ -13,6 +13,9 @@ use tokio::sync::mpsc;
 pub type ToolFuture = Pin<Box<dyn Future<Output = Result<ToolOutput>> + Send>>;
 pub type ToolHandler = Arc<dyn Fn(Value, ToolProgress) -> ToolFuture + Send + Sync>;
 
+/// Provider-facing dsh bash is executed by run_command with a trusted shell override.
+pub(crate) const DSH_BASH_EXECUTION_ALIAS: &str = "__sai_dsh_bash";
+
 /// 工具希望在下一次模型请求中附加的图片。
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ToolModelAttachment {
@@ -536,13 +539,21 @@ impl ToolRegistry {
     }
 
     pub async fn call(&self, name: &str, arguments: &str) -> Result<String> {
+        let requested_name = name;
         let name = local_tool_name(name);
         let Some(tool) = self.tools.get(name) else {
             bail!("unknown tool: {name}");
         };
         let mut args = parse_arguments(arguments)?;
         Ok(self
-            .call_authorized(tool, name, &mut args, ToolProgress::default(), false)
+            .call_authorized(
+                tool,
+                name,
+                &mut args,
+                ToolProgress::default(),
+                false,
+                requested_name == DSH_BASH_EXECUTION_ALIAS,
+            )
             .await?
             .content)
     }
@@ -553,13 +564,21 @@ impl ToolRegistry {
         arguments: &str,
         sender: mpsc::UnboundedSender<String>,
     ) -> Result<ToolOutput> {
+        let requested_name = name;
         let name = local_tool_name(name);
         let Some(tool) = self.tools.get(name) else {
             bail!("unknown tool: {name}");
         };
         let mut args = parse_arguments(arguments)?;
-        self.call_authorized(tool, name, &mut args, ToolProgress::new(sender), true)
-            .await
+        self.call_authorized(
+            tool,
+            name,
+            &mut args,
+            ToolProgress::new(sender),
+            true,
+            requested_name == DSH_BASH_EXECUTION_ALIAS,
+        )
+        .await
     }
 
     /// 统一完成权限判定、沙盒标记注入和审计结果记录。
@@ -580,6 +599,7 @@ impl ToolRegistry {
         args: &mut Value,
         progress: ToolProgress,
         accept_model_attachments: bool,
+        use_dsh_bash: bool,
     ) -> Result<ToolOutput> {
         if let Some(profile) = &self.permission_profile {
             let sandboxed = profile.authorize(name, tool.permission, args)?;
@@ -593,6 +613,14 @@ impl ToolRegistry {
             args.as_object_mut()
                 .context("tool arguments must be a JSON object")?
                 .insert("_sai_model_attachments".to_string(), Value::Bool(true));
+        }
+        if use_dsh_bash {
+            args.as_object_mut()
+                .context("tool arguments must be a JSON object")?
+                .insert(
+                    "_sai_command_shell".to_string(),
+                    Value::String(dsh_bash_shell()),
+                );
         }
         let result = tool.call(args.clone(), progress).await;
         if let Some(profile) = &self.permission_profile {
@@ -639,8 +667,20 @@ fn value_kind(value: &Value) -> &'static str {
 fn local_tool_name(name: &str) -> &str {
     match name {
         "sai_web_search" => "web_search",
+        DSH_BASH_EXECUTION_ALIAS => "run_command",
         _ => name,
     }
+}
+
+fn dsh_bash_shell() -> String {
+    #[cfg(windows)]
+    {
+        let git_bash = r"C:\Program Files\Git\bin\bash.exe";
+        if std::path::Path::new(git_bash).is_file() {
+            return git_bash.to_string();
+        }
+    }
+    "bash".to_string()
 }
 
 pub fn empty_parameters() -> Value {

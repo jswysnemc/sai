@@ -724,6 +724,16 @@ impl AppConfig {
         Ok(provider.model_tools_enabled_for(&provider.default_model))
     }
 
+    /// 判断当前 DeepSeek 类模型是否启用了 Anchored Standard。
+    pub fn active_deepseek_anchor_enabled(&self) -> Result<bool> {
+        let provider = self.provider(None)?;
+        Ok(
+            super::is_deepseek_like_model(provider, &provider.default_model)
+                && provider.model_deepseek_anchor_mode_for(&provider.default_model)
+                    == super::DEEPSEEK_ANCHOR_MODE_STANDARD,
+        )
+    }
+
     /// 返回当前模型上下文窗口 token 数。
     ///
     /// 参数:

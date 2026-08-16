@@ -10,8 +10,8 @@ use crate::i18n::text as t;
 /// - 已知内置工具返回显式短说明，动态工具返回原始说明
 pub(crate) fn tool_description(name: &str, fallback: &str) -> String {
     let description = match name {
-        "run_command" => t("Run shell commands.", "执行 Shell 命令。"),
-        "background_command" => t("Manage background commands.", "管理后台命令。"),
+        "run_command" => return run_command_description(),
+        "background_command" => return background_command_description(),
         "subagent" => t("Start or manage subagents.", "启动或管理子智能体。"),
         "todo" => t("Manage the session task list.", "管理会话任务清单。"),
         "cron" => t("Manage scheduled Gateway tasks.", "管理网关定时任务。"),
@@ -145,6 +145,40 @@ pub(crate) fn tool_description(name: &str, fallback: &str) -> String {
     description.to_string()
 }
 
+fn run_command_description() -> String {
+    #[cfg(windows)]
+    {
+        return t(
+            "Run shell commands. This host is Windows: the command field is already executed as non-interactive PowerShell (pwsh first, then Windows PowerShell, with cmd only as a last fallback). Write the PowerShell script directly; do not prefix it with pwsh/powershell, -Command, -File, cmd /c, or shell launch flags, and do not quote the whole script as a nested command. Quote Windows paths. Prefer Get-ChildItem, Get-Content, Select-String, Get-Location, Get-Command, and $env:NAME. Do not use POSIX-only flags or syntax such as ls -la, grep -n, sed, awk, export, source, $(...), or bash heredocs; use rg for fast file and text search when available.",
+            "执行 Shell 命令。当前主机是 Windows：command 字段本身已经由非交互 PowerShell 执行（优先 pwsh，其次 Windows PowerShell，最后才回退 cmd）。请直接填写 PowerShell 脚本；不要再加 pwsh/powershell、-Command、-File、cmd /c 或其他启动参数，也不要把整段脚本套成嵌套命令。请正确引用 Windows 路径；优先使用 Get-ChildItem、Get-Content、Select-String、Get-Location、Get-Command 和 $env:NAME。不要使用 ls -la、grep -n、sed、awk、export、source、$(...)、bash heredoc 等 POSIX 专用参数或语法；文件与文本搜索优先使用 rg。",
+        )
+        .to_string();
+    }
+    #[cfg(not(windows))]
+    {
+        t(
+            "Run shell commands using the configured POSIX shell.",
+            "使用已配置的 POSIX Shell 执行命令。",
+        )
+        .to_string()
+    }
+}
+
+fn background_command_description() -> String {
+    #[cfg(windows)]
+    {
+        return t(
+            "Manage background PowerShell commands on Windows.",
+            "在 Windows 上管理后台 PowerShell 命令。",
+        )
+        .to_string();
+    }
+    #[cfg(not(windows))]
+    {
+        t("Manage background shell commands.", "管理后台 Shell 命令。").to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,7 +187,10 @@ mod tests {
     fn known_tools_use_explicit_short_descriptions() {
         let description = tool_description("run_command", "long fallback");
         assert_ne!(description, "long fallback");
-        assert!(description.chars().count() < 48);
+        #[cfg(windows)]
+        assert!(description.contains("PowerShell"));
+        #[cfg(not(windows))]
+        assert!(description.contains("POSIX"));
     }
 
     #[test]

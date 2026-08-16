@@ -123,10 +123,7 @@ fn effective_format(provider: &ProviderConfig, protocol: ThinkingProtocol) -> &'
 /// 返回:
 /// - 是否匹配 DeepSeek
 pub(crate) fn is_deepseek_provider(provider: &ProviderConfig) -> bool {
-    let id = provider.id.to_ascii_lowercase();
-    let base_url = provider.base_url.to_ascii_lowercase();
-    let model = provider.default_model.to_ascii_lowercase();
-    id.contains("deepseek") || base_url.contains("deepseek") || model.contains("deepseek")
+    crate::config::is_deepseek_like_model(provider, &provider.default_model)
 }
 
 /// 判断 DeepSeek 当前是否要求工具子轮回传思考内容。

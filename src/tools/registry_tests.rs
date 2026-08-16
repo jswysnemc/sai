@@ -63,6 +63,54 @@ fn resolves_accepts_registered_tools() {
     assert!(!registry.resolves("nonexistent_tool"));
 }
 
+/// dsh bash 的执行别名复用 run_command handler，但只在授权后注入本地 Shell。
+#[tokio::test]
+async fn dsh_bash_alias_uses_run_command_with_private_shell_override() {
+    let received = Arc::new(Mutex::new(None));
+    let handler_received = Arc::clone(&received);
+    let mut registry = ToolRegistry::new();
+    registry.register(
+        ToolSpec::new(
+            "run_command",
+            "test",
+            json!({
+                "type": "object",
+                "properties": {"command": {"type": "string"}},
+                "required": ["command"],
+                "additionalProperties": false
+            }),
+            move |arguments| {
+                let handler_received = Arc::clone(&handler_received);
+                async move {
+                    *handler_received.lock().unwrap() = Some(arguments);
+                    Ok("ok".to_string())
+                }
+            },
+        )
+        .writes(),
+    );
+
+    registry
+        .call(DSH_BASH_EXECUTION_ALIAS, r#"{"command":"printf hello"}"#)
+        .await
+        .unwrap();
+
+    let received = received.lock().unwrap();
+    let arguments = received.as_ref().unwrap();
+    assert_eq!(arguments["command"], "printf hello");
+    assert!(arguments["_sai_command_shell"]
+        .as_str()
+        .is_some_and(|shell| shell.to_ascii_lowercase().contains("bash")));
+    assert_eq!(
+        registry
+            .definitions()
+            .into_iter()
+            .map(|definition| definition.function.name)
+            .collect::<Vec<_>>(),
+        ["run_command"]
+    );
+}
+
 /// 验证工具定义按首次注册顺序输出，替换工具不会改变既有前缀。
 #[test]
 fn definitions_preserve_registration_order() {
