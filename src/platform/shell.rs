@@ -276,7 +276,7 @@ mod tests {
             let args = command_args(&OsString::from("pwsh.exe"), "echo sai");
             let encoded = args.last().expect("PowerShell 必须带编码脚本");
             let bytes = base64::engine::general_purpose::STANDARD
-                .decode(encoded)
+                .decode(encoded.to_string_lossy().as_ref())
                 .expect("编码脚本必须是有效 Base64");
             let utf16 = bytes
                 .chunks_exact(2)
