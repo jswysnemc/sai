@@ -312,7 +312,7 @@ mod tests {
     /// 验证统一外壳解包后保留调用标识并输出真实参数。
     #[test]
     fn resolves_invoker_to_real_tool_call() {
-        let visibility = ToolVisibility::new(Vec::new());
+        let visibility = ToolVisibility::new(vec!["*".to_string()]);
         let provider_call = call(
             tools::INVOKE_NAME,
             r#"{"tool_name":"read_file","arguments":{"path":"README.md"}}"#,
