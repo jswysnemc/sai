@@ -495,6 +495,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires external network access to fcitx-im.org"]
     async fn fetch_page_excerpt_returns_real_content() {
         let url = "https://fcitx-im.org/wiki/Special:MyLanguage/Input_method_related_environment_variables";
         let excerpt = fetch_page_excerpt(url).await;
@@ -519,6 +520,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires external network access to fcitx-im.org"]
     async fn query_with_include_page_excerpt_returns_content() {
         let output = query(json!({
             "topic": "xim",

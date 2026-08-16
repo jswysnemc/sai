@@ -89,19 +89,30 @@ mod tests {
     /// 只测格式化函数无法覆盖 spawn / 读取 / kill 这条真实路径。
     #[tokio::test]
     async fn timeout_kills_child_and_returns_partial_output() {
-        // 直接把脚本作为 sh 的参数传入，不落地成可执行文件：
-        // 并发测试里同时发生的 fork 会继承尚未关闭的写句柄，
-        // 内核据此在 exec 时报 ETXTBSY，导致本用例偶发失败。
-        //
-        // sleep 的输出必须重定向掉：kill 只终止直接子进程，孙进程若继承了
-        // 管道写端，读端就等不到 EOF。Windows 上负责阻塞读取的线程因此退不出，
-        // runtime 析构要一直等到 sleep 自己结束。MSYS2 的 sh 没有真正的 exec
-        // 语义，靠 exec 合并进程在那里不成立，切断继承才是可移植的做法。
-        let mut command = Command::new("sh");
-        command
-            .arg("-c")
-            .arg("echo 'src/a.rs:1:early hit'; exec sleep 30 >/dev/null 2>&1")
-            .stdin(Stdio::null());
+        // 1. Windows 使用 PowerShell 内建的 Start-Sleep，避免 MSYS sh 的孙进程
+        //    继承管道写端，导致终止后读取任务仍等待几十秒
+        // 2. Unix 使用 exec 合并 sleep，确保终止直接子进程即可关闭管道
+        #[cfg(windows)]
+        let mut command = {
+            let mut command = Command::new("pwsh");
+            command.args([
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "Write-Output 'src/a.rs:1:early hit'; Start-Sleep -Seconds 30",
+            ]);
+            command
+        };
+        #[cfg(not(windows))]
+        let mut command = {
+            let mut command = Command::new("sh");
+            command
+                .arg("-c")
+                .arg("echo 'src/a.rs:1:early hit'; exec sleep 30 >/dev/null 2>&1");
+            command
+        };
+        command.stdin(Stdio::null());
 
         let started = std::time::Instant::now();
         let run = tokio::time::timeout(
