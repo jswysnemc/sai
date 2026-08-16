@@ -332,6 +332,25 @@ export function ProviderSettingsSection({
     { value: "object", label: "object" },
     { value: "disabled", label: t("Disabled", "停用") }
   ];
+  const activeModel = provider.default_model ?? "";
+  const activeModelMetadata = activeModel ? (provider.model_metadata?.[activeModel] ?? {}) : {};
+  const deepseekAnchorEnabled = activeModelMetadata.deepseek_anchor_mode === "anchored_standard";
+  const setDeepseekAnchorEnabled = (enabled: boolean) => {
+    if (!activeModel) return;
+    const nextMetadata = { ...(provider.model_metadata ?? {}) };
+    if (enabled) {
+      nextMetadata[activeModel] = {
+        ...activeModelMetadata,
+        deepseek_anchor_mode: "anchored_standard"
+      };
+    } else {
+      const nextModelMetadata = { ...activeModelMetadata };
+      delete nextModelMetadata.deepseek_anchor_mode;
+      if (Object.keys(nextModelMetadata).length === 0) delete nextMetadata[activeModel];
+      else nextMetadata[activeModel] = nextModelMetadata;
+    }
+    onProviderChange(selectedIndex, { model_metadata: nextMetadata });
+  };
 
   const providerGroups = partitionByEnablement(config.providers);
   /**
@@ -447,7 +466,7 @@ export function ProviderSettingsSection({
           <label className="settings-field"><span>Temperature</span><input type="number" min="0" max="2" step="0.1" value={provider.temperature ?? 0.7} onChange={(event) => onProviderChange(selectedIndex, { temperature: Number(event.target.value) })} /><small>{t("Model sampling temperature", "模型采样温度")}</small></label>
           <div className="settings-field"><span>{t("Thinking level", "思考等级")}</span><Select value={provider.thinking_level ?? "auto"} options={THINKING_OPTIONS} onChange={(value) => onProviderChange(selectedIndex, { thinking_level: value })} ariaLabel={t("Thinking level", "思考等级")} /><small>{t("Default reasoning intensity for the provider", "供应商默认推理强度")}</small></div>
           <div className="settings-field"><span>{t("Thinking format", "思考格式")}</span><Select value={provider.thinking_format ?? "auto"} options={thinkingFormatOptions} onChange={(value) => onProviderChange(selectedIndex, { thinking_format: value })} ariaLabel={t("Thinking format", "思考格式")} /><small>{t("Reasoning field in the response", "响应中的思考字段")}</small></div>
-          <label className="settings-toggle-field">
+          <label className="settings-toggle-field settings-inline-toggle">
             <span>
               <strong>{t("Preserve thinking", "回传历史思考")}</strong>
               <small>{t(
@@ -459,6 +478,23 @@ export function ProviderSettingsSection({
               type="checkbox"
               checked={provider.preserve_thinking === true}
               onChange={(event) => onProviderChange(selectedIndex, { preserve_thinking: event.target.checked })}
+            />
+          </label>
+          <label className="settings-toggle-field settings-inline-toggle">
+            <span>
+              <strong>{t("DeepSeek trajectory anchor", "DeepSeek 轨迹锚定")}</strong>
+              <small>
+                {t(
+                  "Use the dsh Anchored Standard tool flow for the selected model's first request.",
+                  "为当前默认模型启用 dsh Anchored Standard 首请求工具流程。"
+                )}
+              </small>
+            </span>
+            <input
+              type="checkbox"
+              checked={deepseekAnchorEnabled}
+              disabled={!activeModel}
+              onChange={(event) => setDeepseekAnchorEnabled(event.target.checked)}
             />
           </label>
           {claudeSimulation && (

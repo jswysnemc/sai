@@ -137,6 +137,46 @@ fn stream_tool_calls_ignore_empty_id_from_bailian_chunks() {
 }
 
 #[test]
+fn stream_tool_calls_do_not_repeat_full_name_on_every_chunk() {
+    let mut tool_calls = ToolCallAccumulator::default();
+    for name in ["run_command", "run_command", "run_command"] {
+        tool_calls.push(ToolCallDelta {
+            index: 0,
+            id: None,
+            kind: Some("function".to_string()),
+            function: ToolCallFunctionDelta {
+                name: Some(name.to_string()),
+                arguments: Some("{}".to_string()),
+            },
+        });
+    }
+
+    let calls = tool_calls.finish();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].function.name, "run_command");
+    assert_eq!(calls[0].function.arguments, "{}{}{}");
+}
+
+#[test]
+fn stream_tool_calls_still_append_split_name_fragments() {
+    let mut tool_calls = ToolCallAccumulator::default();
+    for name in ["run_", "command"] {
+        tool_calls.push(ToolCallDelta {
+            index: 0,
+            id: None,
+            kind: Some("function".to_string()),
+            function: ToolCallFunctionDelta {
+                name: Some(name.to_string()),
+                arguments: None,
+            },
+        });
+    }
+
+    let calls = tool_calls.finish();
+    assert_eq!(calls[0].function.name, "run_command");
+}
+
+#[test]
 fn stream_tool_calls_generate_fallback_ids_when_upstream_omits_id() {
     let mut tool_calls = ToolCallAccumulator::default();
     tool_calls.push(ToolCallDelta {

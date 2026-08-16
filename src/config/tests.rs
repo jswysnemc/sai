@@ -679,6 +679,24 @@ fn active_model_tools_can_be_disabled() {
 }
 
 #[test]
+fn deepseek_anchor_requires_explicit_model_switch_even_for_proxy_names() {
+    let mut config = AppConfig::default();
+    {
+        let provider = &mut config.providers[0];
+        provider.id = "muyuan".to_string();
+        provider.base_url = "https://proxy.example/v1".to_string();
+        provider.default_model = "reasoning-model".to_string();
+        provider.models = vec![provider.default_model.clone()];
+    }
+    config.active_provider = "muyuan".to_string();
+
+    assert!(!config.active_deepseek_anchor_enabled().unwrap());
+    let model = config.providers[0].default_model.clone();
+    config.providers[0].set_model_deepseek_anchor_mode_for(&model, DEEPSEEK_ANCHOR_MODE_STANDARD);
+    assert!(config.active_deepseek_anchor_enabled().unwrap());
+}
+
+#[test]
 fn selects_provider_model_by_web_search_tag() {
     let mut config = AppConfig::default();
     let mut provider = ProviderConfig::new_openai_compatible();

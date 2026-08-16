@@ -483,7 +483,7 @@ impl ToolCallAccumulator {
             }
         }
         if let Some(name) = delta.function.name {
-            call.name.push_str(&name);
+            append_tool_name(&mut call.name, &name);
         }
         if let Some(arguments) = delta.function.arguments {
             call.arguments.push_str(&arguments);
@@ -515,6 +515,28 @@ impl ToolCallAccumulator {
                 },
             })
             .collect()
+    }
+}
+
+/// Append a streamed function name without duplicating providers that resend the
+/// complete name on every chunk instead of sending only a delta.
+fn append_tool_name(current: &mut String, incoming: &str) {
+    if incoming.is_empty() {
+        return;
+    }
+    if current.is_empty() {
+        current.push_str(incoming);
+    } else if incoming.starts_with(current.as_str()) {
+        // Cumulative name: replace the shorter prefix with the complete value.
+        *current = incoming.to_string();
+    } else if current == incoming
+        || current.starts_with(incoming)
+        || current.ends_with(incoming)
+    {
+        // Repeated full name or a repeated fragment; nothing to append.
+    } else {
+        // Normal OpenAI delta semantics: append the next name fragment.
+        current.push_str(incoming);
     }
 }
 /// SSE 行级字节缓冲：在完整换行边界再解码 UTF-8，避免 TCP/HTTP 分片切断多字节字符时

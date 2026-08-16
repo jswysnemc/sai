@@ -293,6 +293,14 @@
   border-radius:var(--radius-3);
 }
 
+/* 行内开关与普通设置字段保持同一高度，避免单个开关撑大整行。 */
+.settings-toggle-field.settings-inline-toggle {
+  min-height: 2.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+
 .settings-toggle-field > span { display: grid; gap:var(--space-3xs); min-width: 0; }
 .settings-toggle-field strong { font-size:var(--text-base); font-weight: 500; }
 .settings-toggle-field small { color: var(--ink-soft); font:400 var(--text-xs) var(--font-code); overflow-wrap: anywhere; }
