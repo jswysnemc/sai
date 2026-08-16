@@ -86,7 +86,7 @@ async fn writable_command_promotes_to_background_on_timeout() {
     config.tools.background_commands_enabled = true;
     config.tools.background_command_timeout_seconds = 0;
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-    // 托管 spawn 在 Windows 默认走 cmd，测试命令需与默认 shell 一致
+    // 托管 spawn 与前台命令统一优先使用 PowerShell；这里使用两种 Shell 都支持的命令。
     #[cfg(windows)]
     let command = "ping -n 6 127.0.0.1 >nul";
     #[cfg(not(windows))]
@@ -136,9 +136,9 @@ async fn writable_command_returns_foreground_when_finished() {
     let mut config = AppConfig::default();
     config.tools.background_commands_enabled = true;
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    // 托管 spawn 在 Windows 默认走 cmd，避免 PowerShell 专有语法
+    // 该断言走托管 spawn 路径，使用 PowerShell 专有命令可防止后台路径悄悄回到 cmd。
     #[cfg(windows)]
-    let command = "echo done";
+    let command = "Write-Output done";
     #[cfg(not(windows))]
     let command = "printf 'done\n'";
 

@@ -298,6 +298,26 @@ fn append_captured_output(buffer: &mut Vec<u8>, chunk: &[u8]) {
 mod output_capture_tests {
     use super::*;
 
+    #[cfg(windows)]
+    #[test]
+    fn background_shell_matches_powershell_first_default() {
+        let command = shell_command("Write-Output $PSVersionTable", "");
+        let program = command
+            .as_std()
+            .get_program()
+            .to_string_lossy()
+            .to_ascii_lowercase();
+        let expected = if executable_in_path("pwsh.exe") {
+            "pwsh.exe"
+        } else if executable_in_path("powershell.exe") {
+            "powershell.exe"
+        } else {
+            "cmd.exe"
+        };
+
+        assert_eq!(program, expected);
+    }
+
     #[test]
     fn captured_output_does_not_exceed_memory_limit() {
         let mut buffer = vec![b'a'; MAX_CAPTURED_OUTPUT_BYTES - 2];
@@ -577,8 +597,30 @@ mod sandbox_tests {
 
 #[cfg(windows)]
 fn shell_command(command: &str, configured_shell: &str) -> Command {
-    let shell = configured_shell_path(configured_shell).unwrap_or_else(|| "cmd".to_string());
+    // 后台任务必须和前台 run_command 使用同一套优先级：空配置时优先
+    // PowerShell，只有两种 PowerShell 都不存在才回退到 cmd。此前这里
+    // 直接写死 cmd，导致超时升级、background_command 与前台行为分叉。
+    let shell =
+        configured_shell_path(configured_shell).unwrap_or_else(preferred_windows_command_shell);
     shell_command_entry(command, &shell).1
+}
+
+#[cfg(windows)]
+fn preferred_windows_command_shell() -> String {
+    for candidate in ["pwsh.exe", "powershell.exe"] {
+        if executable_in_path(candidate) {
+            return candidate.to_string();
+        }
+    }
+    "cmd.exe".to_string()
+}
+
+#[cfg(windows)]
+fn executable_in_path(name: &str) -> bool {
+    let Some(path) = std::env::var_os("PATH") else {
+        return false;
+    };
+    std::env::split_paths(&path).any(|directory| directory.join(name).is_file())
 }
 
 #[cfg(not(windows))]
