@@ -269,9 +269,29 @@ mod tests {
 
     #[test]
     fn command_invocation_contains_script() {
-        let invocation = command_invocation("echo sai");
+        #[cfg(windows)]
+        {
+            use base64::Engine;
 
-        assert!(invocation.args.iter().any(|arg| arg == "echo sai"));
+            let args = command_args(&OsString::from("pwsh.exe"), "echo sai");
+            let encoded = args.last().expect("PowerShell 必须带编码脚本");
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .expect("编码脚本必须是有效 Base64");
+            let utf16 = bytes
+                .chunks_exact(2)
+                .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+                .collect::<Vec<_>>();
+            let script = String::from_utf16(&utf16).expect("编码脚本必须是 UTF-16LE");
+
+            assert!(script.contains("echo sai"));
+        }
+        #[cfg(not(windows))]
+        {
+            let invocation = command_invocation("echo sai");
+
+            assert!(invocation.args.iter().any(|arg| arg == "echo sai"));
+        }
     }
 
     #[test]

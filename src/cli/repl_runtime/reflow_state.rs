@@ -45,6 +45,19 @@ impl ReflowState {
     /// 返回:
     /// - 是否已安排 reflow
     pub(super) fn observe(&mut self, size: TerminalSize, streaming: bool) -> bool {
+        self.observe_at(size, streaming, Instant::now())
+    }
+
+    /// 使用指定时间记录终端尺寸，供主循环和确定性测试共用。
+    ///
+    /// 参数:
+    /// - `size`: 本次观察到的终端尺寸
+    /// - `streaming`: 是否处于流式输出
+    /// - `now`: 本次观察对应的时间点
+    ///
+    /// 返回:
+    /// - 是否已安排 reflow
+    fn observe_at(&mut self, size: TerminalSize, streaming: bool, now: Instant) -> bool {
         let previous = self.last_observed.replace(size);
         if previous.is_none() {
             self.last_reflowed = Some(size);
@@ -56,7 +69,7 @@ impl ReflowState {
         // 1. 尺寸仍在变化说明用户还在拖拽，重新起算 debounce
         // 2. 尺寸已稳定且已有排期时保留原 deadline，让它按时到期
         if previous != Some(size) || self.pending_until.is_none() {
-            self.pending_until = Some(Instant::now() + REFLOW_DEBOUNCE);
+            self.pending_until = Some(now + REFLOW_DEBOUNCE);
         }
         self.pending_size = Some(size);
         if streaming {
@@ -202,11 +215,12 @@ mod tests {
     #[test]
     fn size_change_extends_deadline() {
         let mut state = ReflowState::new();
-        state.observe(size(80), false);
-        state.observe(size(100), false);
+        let base = Instant::now();
+        state.observe_at(size(80), false, base);
+        state.observe_at(size(100), false, base + Duration::from_secs(1));
         let scheduled = state.pending_until().expect("resize must schedule reflow");
 
-        state.observe(size(120), false);
+        state.observe_at(size(120), false, base + Duration::from_secs(2));
 
         assert!(state.pending_until().expect("still pending") > scheduled);
     }
