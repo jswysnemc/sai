@@ -1,4 +1,6 @@
 use super::progress::{CommandOutputBatch, CommandOutputStream};
+#[cfg(windows)]
+use crate::platform::shell_selection::ShellFlavor;
 use crate::tools::ToolProgress;
 use anyhow::{bail, Result};
 use std::io::ErrorKind;
