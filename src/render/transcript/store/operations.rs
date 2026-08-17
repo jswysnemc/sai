@@ -495,16 +495,16 @@ impl TranscriptStore {
         }
         if name == "subagent" && self.update_active_subagent(|cell| cell.finish(ok, output.clone()))
         {
-            self.active_tool_index = None;
+            self.refresh_active_tool_index();
             return;
         }
         // 编辑类已统一为 ToolView；仍兼容会话里残留的 DiffCell
         if crate::render::stream_text::is_file_edit_tool(&name) && self.finish_active_diff(ok) {
-            self.active_tool_index = None;
+            self.refresh_active_tool_index();
             return;
         }
         if self.update_active_tool(&name, |view| view.finish(ok, output.clone())) {
-            self.active_tool_index = None;
+            self.refresh_active_tool_index();
             return;
         }
         let mut view = ToolView::running(name, String::new());
@@ -545,11 +545,11 @@ impl TranscriptStore {
     /// 返回:
     /// - 无
     pub(crate) fn push_compaction_started(&mut self, turn_count: usize, model: String) {
-        self.active_tool_index = None;
         self.push_cell(HistoryCell::Tool(ToolCell::CompactionStarted {
             turn_count,
             model,
         }));
+        self.active_tool_index = Some(self.cells.len().saturating_sub(1));
     }
 
     /// 记录上下文压缩结束事件。
@@ -568,13 +568,28 @@ impl TranscriptStore {
         detail: Option<String>,
         summary: Option<String>,
     ) {
-        self.active_tool_index = None;
+        if let Some(index) = self
+            .cells
+            .iter()
+            .rposition(|cell| matches!(cell, HistoryCell::Tool(ToolCell::CompactionStarted { .. })))
+        {
+            self.cells[index] = HistoryCell::Tool(ToolCell::CompactionFinished {
+                applied,
+                message,
+                detail,
+                summary,
+            });
+            self.mark_dirty(index);
+            self.refresh_active_tool_index();
+            return;
+        }
         self.push_cell(HistoryCell::Tool(ToolCell::CompactionFinished {
             applied,
             message,
             detail,
             summary,
         }));
+        self.refresh_active_tool_index();
     }
 
     /// 将当前流式尾部收敛为定稿 cell。
@@ -629,7 +644,7 @@ impl TranscriptStore {
     /// 返回:
     /// - 是否命中 Diff cell
     fn finish_active_diff(&mut self, ok: bool) -> bool {
-        let Some(index) = self.active_tool_index else {
+        let Some(index) = self.find_pending_diff_index() else {
             return false;
         };
         let Some(HistoryCell::Diff(cell)) = self.cells.get_mut(index) else {
@@ -688,15 +703,12 @@ impl TranscriptStore {
     where
         F: FnOnce(&mut ToolView),
     {
-        let Some(index) = self.active_tool_index else {
+        let Some(index) = self.find_pending_invocation_index(name) else {
             return false;
         };
         let Some(HistoryCell::Tool(ToolCell::Invocation(view))) = self.cells.get_mut(index) else {
             return false;
         };
-        if !view.is_active_for(name) {
-            return false;
-        }
         update(view);
         self.mark_dirty(index);
         true
@@ -713,18 +725,97 @@ impl TranscriptStore {
     where
         F: FnOnce(&mut SubagentCell),
     {
-        let Some(index) = self.active_tool_index else {
+        let Some(index) = self.find_pending_subagent_index() else {
             return false;
         };
         let Some(HistoryCell::Tool(ToolCell::Subagent(cell))) = self.cells.get_mut(index) else {
             return false;
         };
-        if !cell.is_active() {
-            return false;
-        }
         update(cell);
         self.mark_dirty(index);
         true
+    }
+
+    /// 按调用顺序找到仍在运行的同名工具 cell。
+    ///
+    /// 并发同名调用不能只看最近一项：后完成的结果会误改后启动的那张卡，
+    /// 先完成的结果则另开一行空 `Read ok`。
+    fn find_pending_invocation_index(&self, name: &str) -> Option<usize> {
+        self.cells
+            .iter()
+            .enumerate()
+            .find_map(|(index, cell)| match cell {
+                HistoryCell::Tool(ToolCell::Invocation(view)) if view.is_active_for(name) => {
+                    Some(index)
+                }
+                _ => None,
+            })
+    }
+
+    /// 找到仍在运行的编辑 Diff cell。
+    fn find_pending_diff_index(&self) -> Option<usize> {
+        self.cells
+            .iter()
+            .enumerate()
+            .find_map(|(index, cell)| match cell {
+                HistoryCell::Diff(diff) if diff.is_pending() => Some(index),
+                _ => None,
+            })
+    }
+
+    /// 找到仍在运行的子智能体 cell。
+    fn find_pending_subagent_index(&self) -> Option<usize> {
+        self.cells
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(index, cell)| match cell {
+                HistoryCell::Tool(ToolCell::Subagent(cell)) if cell.is_active() => Some(index),
+                _ => None,
+            })
+    }
+
+    /// 把活动指针拨回仍在运行的最后一张工具卡。
+    fn refresh_active_tool_index(&mut self) {
+        self.active_tool_index = self
+            .cells
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(index, cell)| match cell {
+                HistoryCell::Tool(ToolCell::Invocation(view)) if view.outcome.is_none() => {
+                    Some(index)
+                }
+                HistoryCell::Tool(ToolCell::Subagent(cell)) if cell.is_active() => Some(index),
+                HistoryCell::Diff(diff) if diff.is_pending() => Some(index),
+                HistoryCell::Tool(ToolCell::CompactionStarted { .. }) => Some(index),
+                _ => None,
+            });
+    }
+
+    /// 是否存在需要按帧重绘的进行中工具卡。
+    fn has_pending_tool_cells(&self) -> bool {
+        self.cells.iter().any(|cell| match cell {
+            HistoryCell::Tool(ToolCell::Invocation(view)) => view.outcome.is_none(),
+            HistoryCell::Tool(ToolCell::CompactionStarted { .. }) => true,
+            HistoryCell::Diff(diff) => diff.is_pending(),
+            HistoryCell::Tool(ToolCell::Subagent(cell)) => cell.is_active(),
+            _ => false,
+        })
+    }
+
+    /// 第一张进行中工具卡的下标，供动效把脏水位提前到这些行。
+    fn first_pending_tool_index(&self) -> Option<usize> {
+        self.cells.iter().enumerate().find_map(|(index, cell)| {
+            let pending = match cell {
+                HistoryCell::Tool(ToolCell::Invocation(view)) => view.outcome.is_none(),
+                HistoryCell::Tool(ToolCell::CompactionStarted { .. }) => true,
+                HistoryCell::Diff(diff) => diff.is_pending(),
+                HistoryCell::Tool(ToolCell::Subagent(cell)) => cell.is_active(),
+                _ => false,
+            };
+            pending.then_some(index)
+        })
     }
 
     /// 维持 live 动效的计时并判断是否仍需刷新。
@@ -747,12 +838,16 @@ impl TranscriptStore {
         // 主视图下有后台子智能体运行时同样推进帧，驱动底部面板的流光与实时统计
         if !has_reasoning
             && !has_work_status
+            && !self.has_pending_tool_cells()
             && !self.viewing_running_subagent()
             && !self.has_running_subagents()
         {
             return false;
         }
         self.live_animation_started.get_or_insert_with(Instant::now);
+        if let Some(index) = self.first_pending_tool_index() {
+            self.mark_dirty(index);
+        }
         true
     }
 

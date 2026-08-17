@@ -96,6 +96,7 @@ impl EventAssembler {
                         "reasoning": result.reasoning,
                         "usage": result.usage,
                         "duration_ms": result.duration_ms,
+                        "ttft_ms": result.ttft_ms,
                     }),
                 )]
             }
@@ -121,6 +122,7 @@ impl EventAssembler {
                     "context_window_tokens": summary.context_window_tokens,
                     "context_token_ratio": summary.context_token_ratio,
                     "duration_ms": summary.last_turn_duration_ms,
+                    "ttft_ms": summary.last_turn_ttft_ms,
                 }),
             )],
         }

@@ -1,5 +1,6 @@
+use super::budget::CompactionBudgetPolicy;
 use super::model::{CompactionRequest, RunningTurnCompaction};
-use super::should_compact_for_context_tokens;
+use super::should_compact_for_context_tokens_with;
 use crate::state::turns::{Turn, TurnStatus};
 
 /// 压缩后保留的最近已完成轮次数量。
@@ -12,6 +13,13 @@ pub const PRESERVED_RECENT_TURNS: usize = 0;
 ///
 /// 模型刚拿到的几条结果通常正是它下一步要用的，全部折进摘要会让它立刻重新调用。
 pub const PRESERVED_RUNNING_TOOL_CALLS: usize = 4;
+
+/// 自动压缩运行中轮次时，至少要能摘要掉这么多条调用才值得打断。
+///
+/// 只保留末尾 4 条意味着第 5 条工具就会触发一次付费摘要，读几个文件就会
+/// 打出 `Compacting context ×0`。自动路径要求积攒更多旧调用；手动压缩仍用
+/// 原来的保留条数。
+const MIN_RUNNING_CALLS_TO_AUTO_COMPACT: usize = 12;
 
 /// 使用统一策略选择需要压缩的会话内容。
 ///
@@ -36,7 +44,46 @@ pub fn select_compaction(
     context_limit_tokens: usize,
     force: bool,
 ) -> Option<CompactionRequest> {
-    if !force && !should_compact_for_context_tokens(current_context_tokens, context_limit_tokens) {
+    select_compaction_with(
+        turns,
+        previous_summary,
+        running_turn_call_count,
+        current_context_tokens,
+        context_limit_tokens,
+        force,
+        CompactionBudgetPolicy::DEFAULT,
+    )
+}
+
+/// 使用指定会话策略选择需要压缩的内容。
+///
+/// 参数:
+/// - `turns`: 当前全部轮次
+/// - `previous_summary`: 已有压缩摘要
+/// - `running_turn_call_count`: 运行中轮次已记录的工具调用条数
+/// - `current_context_tokens`: 当前请求上下文估算
+/// - `context_limit_tokens`: 当前模型上下文预算
+/// - `force`: 是否由手动入口强制触发
+/// - `policy`: 会话级压缩触发策略
+///
+/// 返回:
+/// - 需要执行的压缩请求；没有任何可压缩内容时返回空
+pub fn select_compaction_with(
+    turns: &[Turn],
+    previous_summary: Option<String>,
+    running_turn_call_count: usize,
+    current_context_tokens: usize,
+    context_limit_tokens: usize,
+    force: bool,
+    policy: CompactionBudgetPolicy,
+) -> Option<CompactionRequest> {
+    if !force
+        && !should_compact_for_context_tokens_with(
+            current_context_tokens,
+            context_limit_tokens,
+            policy,
+        )
+    {
         return None;
     }
     // 1. 已完成轮次全部参与摘要，用户消息由保留预算单独兜住
@@ -48,7 +95,7 @@ pub fn select_compaction(
     let selected_len = completed.len().saturating_sub(PRESERVED_RECENT_TURNS);
     let compact_turns = completed.into_iter().take(selected_len).collect::<Vec<_>>();
     // 2. 运行中轮次同样参与：末尾若干条最新结果保留，其余折进摘要
-    let running_turn = select_running_turn_range(turns, running_turn_call_count);
+    let running_turn = select_running_turn_range(turns, running_turn_call_count, force);
     let request =
         CompactionRequest::new(compact_turns, previous_summary).with_running_turn(running_turn);
     request.has_content().then_some(request)
@@ -59,18 +106,26 @@ pub fn select_compaction(
 /// 参数:
 /// - `turns`: 当前全部轮次
 /// - `running_turn_call_count`: 运行中轮次已记录的工具调用条数
+/// - `force`: 手动压缩时忽略自动门槛
 ///
 /// 返回:
 /// - 运行中轮次压缩范围；无运行轮次或调用数不足时返回空
 fn select_running_turn_range(
     turns: &[Turn],
     running_turn_call_count: usize,
+    force: bool,
 ) -> Option<RunningTurnCompaction> {
     let running = turns
         .iter()
         .find(|turn| turn.status == TurnStatus::Running)?;
     let compacted_calls = running_turn_call_count.saturating_sub(PRESERVED_RUNNING_TOOL_CALLS);
-    (compacted_calls > 0).then(|| RunningTurnCompaction {
+    if compacted_calls == 0 {
+        return None;
+    }
+    if !force && compacted_calls < MIN_RUNNING_CALLS_TO_AUTO_COMPACT {
+        return None;
+    }
+    Some(RunningTurnCompaction {
         turn_id: running.turn_id.clone(),
         compacted_calls,
     })
@@ -165,6 +220,41 @@ mod tests {
         );
     }
 
+    /// 验证运行中工具调用不足自动压缩门槛时不压缩轮次内容。
+    #[test]
+    fn skips_auto_running_turn_until_enough_old_calls_accumulate() {
+        let turns = vec![running_turn(1)];
+
+        assert!(select_compaction(
+            &turns,
+            None,
+            PRESERVED_RUNNING_TOOL_CALLS + 8,
+            900,
+            1_000,
+            false
+        )
+        .is_none());
+        let request = select_compaction(&turns, None, 40, 900, 1_000, false)
+            .expect("enough running calls must still compact");
+        assert_eq!(
+            request.running_turn.expect("running range").compacted_calls,
+            40 - PRESERVED_RUNNING_TOOL_CALLS
+        );
+        let forced = select_compaction(
+            &turns,
+            None,
+            PRESERVED_RUNNING_TOOL_CALLS + 1,
+            100,
+            1_000,
+            true,
+        )
+        .expect("manual compaction still covers a short running turn");
+        assert_eq!(
+            forced.running_turn.expect("running range").compacted_calls,
+            1
+        );
+    }
+
     /// 验证运行中工具调用不足保留数量时不压缩轮次内容。
     #[test]
     fn skips_running_turn_below_preserved_calls() {
@@ -180,8 +270,6 @@ mod tests {
         )
         .is_none());
     }
-
-    /// 验证手动压缩绕过占用阈值。
     #[test]
     fn manual_compaction_bypasses_only_the_threshold() {
         let turns = (1..=5)

@@ -55,6 +55,7 @@ describe("ShellToolView", () => {
   it("有输出时命令行标记分隔态", () => {
     const html = render("ls", { success: true, exit_code: 0, stdout: "a" });
     expect(html).toContain("shell-command-line has-body");
+    expect(html).toContain("language-bash");
   });
 
   it("无输出时命令行不加分隔线", () => {

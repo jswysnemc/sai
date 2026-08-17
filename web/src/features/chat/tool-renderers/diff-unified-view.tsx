@@ -2,14 +2,13 @@ import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { SyntaxHighlighter } from "../syntax-highlighter";
 import type { DiffFile, DiffLine } from "./diff/diff-model";
+import { CONTEXT_MARGIN } from "./diff/diff-blocks";
 import { useI18n } from "../../i18n/use-i18n";
 
 type UnifiedSegment =
   | { kind: "context"; lines: DiffLine[] }
   | { kind: "change"; lines: DiffLine[] }
   | { kind: "marker"; line: DiffLine };
-
-const CONTEXT_MARGIN = 3;
 
 /**
  * 渲染主消息区使用的单栏统一 Diff。

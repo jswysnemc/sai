@@ -30,6 +30,53 @@ pub(crate) fn full_frame(cols: u16, rows: u16) -> FrameRect {
     }
 }
 
+/// 表单主栏与右侧字段说明的宽度。
+///
+/// 值列是表单主体：URL、密钥、JSON 都在这里读和改。
+/// 说明栏只是辅助，宽度封顶；空间不够时整栏收起，绝不挤占输入列。
+///
+/// 参数:
+/// - `inner_w`: 去掉左右边框后的内容宽度
+///
+/// 返回:
+/// - `(表单栏宽, 说明栏宽)`；过窄时说明栏为 0
+pub(crate) fn form_column_widths(inner_w: u16) -> (u16, u16) {
+    const GAP: u16 = 2;
+    const MIN_FORM: u16 = 48;
+    const MIN_HELP: u16 = 22;
+    const MAX_HELP: u16 = 34;
+
+    if inner_w < MIN_FORM.saturating_add(GAP).saturating_add(MIN_HELP) {
+        return (inner_w, 0);
+    }
+    let help = (inner_w / 4).clamp(MIN_HELP, MAX_HELP);
+    let form = inner_w.saturating_sub(help).saturating_sub(GAP);
+    if form < MIN_FORM {
+        (inner_w, 0)
+    } else {
+        (form, help)
+    }
+}
+
+/// 计算表单标签列宽：先保证值列至少 32 列，标签再长也截到 28。
+///
+/// 参数:
+/// - `longest_label`: 当前表单最长标签的显示宽度
+/// - `left_w`: 表单栏总宽
+///
+/// 返回:
+/// - 标签列宽
+pub(crate) fn form_label_width(longest_label: usize, left_w: usize) -> usize {
+    const MIN_VALUE: usize = 32;
+    const MAX_LABEL: usize = 28;
+    const ROW_CHROME: usize = 4;
+    let max_label = left_w
+        .saturating_sub(ROW_CHROME + MIN_VALUE)
+        .min(MAX_LABEL)
+        .max(8);
+    longest_label.min(max_label).max(8)
+}
+
 /// 在全屏框内划分「左侧列表 + 右侧说明」两栏。
 ///
 /// 参数:
@@ -174,5 +221,27 @@ mod tests {
         let (only, none) = master_detail_widths(40);
         assert_eq!(only, 40);
         assert_eq!(none, 0);
+    }
+
+    /// 表单把多数宽度留给输入列，说明栏封顶且不挤占值列。
+    #[test]
+    fn form_columns_prefer_the_value_column() {
+        let (form, help) = form_column_widths(100);
+        assert_eq!(form + help + 2, 100);
+        assert!(form >= 60, "form={form}");
+        assert!(help <= 34, "help={help}");
+        let (only, none) = form_column_widths(60);
+        assert_eq!(only, 60);
+        assert_eq!(none, 0);
+    }
+
+    /// 标签列让位于值列：长标签截到 28，值列至少 32。
+    #[test]
+    fn form_label_width_keeps_value_column_readable() {
+        assert_eq!(form_label_width(40, 80), 28);
+        assert_eq!(form_label_width(12, 80), 12);
+        let label = form_label_width(40, 48);
+        assert!(label <= 12, "label={label}");
+        assert!(48 - 4 - label >= 32);
     }
 }

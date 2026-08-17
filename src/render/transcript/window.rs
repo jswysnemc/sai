@@ -96,6 +96,7 @@ impl TranscriptStore {
                 dirty_from: start,
             };
         }
+        let frame = self.live_animation_frame();
         let (live_full, transient) = self.display_live_tail_parts(width, options);
         // 仅临时结构（未闭合表格预览）截断到尾部 live_cap 行；
         // 稳定正文必须完整参与窗口，才能正常增长并滚入 scrollback
@@ -109,7 +110,7 @@ impl TranscriptStore {
         let mut counts = Vec::with_capacity(self.cells.len());
         let mut cell_rows = 0usize;
         for (index, cell) in self.cells.iter().enumerate() {
-            let count = self.cache.count_for(index, cell, width, options);
+            let count = self.cache.count_for(index, cell, width, options, frame);
             counts.push(count);
             cell_rows += count;
         }
@@ -128,9 +129,9 @@ impl TranscriptStore {
         for (index, count) in counts.iter().enumerate() {
             let end = offset + count;
             if end > start {
-                let cell_lines = self
-                    .cache
-                    .lines_for(index, &self.cells[index], width, options);
+                let cell_lines =
+                    self.cache
+                        .lines_for(index, &self.cells[index], width, options, frame);
                 let skip = start.saturating_sub(offset);
                 lines.extend(cell_lines.into_iter().skip(skip));
             }

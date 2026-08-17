@@ -50,8 +50,11 @@ export function TrajectoryTable({
 
   return (
     <div className="trajectory-table" role="table" aria-label={t("Trajectory records", "轨迹记录")}>
-      {records.map((record) => {
-        const header = record.turnStart && record.turnId ? headers.get(record.turnId) : undefined;
+      {records.map((record, index) => {
+        const previous = records[index - 1];
+        const header = record.turnId && record.turnId !== previous?.turnId
+          ? headers.get(record.turnId)
+          : undefined;
         const collapsed = record.turnId ? collapsedTurns.has(record.turnId) : false;
         const hidden = collapsed && record.turnId
           ? Math.max(0, (turnCounts.get(record.turnId) ?? 1) - 1)
@@ -65,13 +68,21 @@ export function TrajectoryTable({
                 onToggle={() => onToggleTurn(header.turnId)}
               />
             )}
-            <TrajectoryRow
-              record={record}
-              selected={record.id === selectedId}
-              collapsedCount={hidden}
-              onSelect={onSelect}
-              onToggleTurn={onToggleTurn}
-            />
+            {record.kind === "compaction" ? (
+              <CompactionDivider
+                record={record}
+                selected={record.id === selectedId}
+                onSelect={onSelect}
+              />
+            ) : (
+              <TrajectoryRow
+                record={record}
+                selected={record.id === selectedId}
+                collapsedCount={hidden}
+                onSelect={onSelect}
+                onToggleTurn={onToggleTurn}
+              />
+            )}
           </Fragment>
         );
       })}
@@ -110,6 +121,41 @@ function TurnDivider({
       </span>
       {header.model && <code className="trajectory-turn-model">{header.model}</code>}
       <span className="trajectory-turn-duration">{formatDuration(header.durationMs)}</span>
+    </button>
+  );
+}
+
+/**
+ * 渲染压缩摘要的分界行。
+ *
+ * 这是已清出窗口的旧轮次与后面仍保留轮次之间的边界，
+ * 点开后在详情栏读全文，不在表里把摘要撑成一块卡片。
+ *
+ * @param props 压缩记录与选中状态
+ * @returns 压缩分界行
+ */
+function CompactionDivider({
+  record,
+  selected,
+  onSelect
+}: {
+  record: TrajectoryRecord;
+  selected: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <button
+      type="button"
+      className="trajectory-compaction-divider"
+      data-kind="compaction"
+      data-selected={selected || undefined}
+      aria-pressed={selected}
+      onClick={() => onSelect(record.id)}
+    >
+      <strong>{t("Compacted context", "已压缩的上下文")}</strong>
+      {record.label && <span className="trajectory-turn-requests">{record.label}</span>}
+      <span className="trajectory-compaction-summary">{record.summary}</span>
     </button>
   );
 }

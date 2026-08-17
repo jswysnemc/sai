@@ -214,6 +214,45 @@ fn switch_mode_updates_context_epoch_without_system_mode_context() {
         .any(|source| source.key == "mode_reminder"));
 }
 
+/// 验证指令文件首次进入系统 baseline，改动只追加到当前 user 尾部。
+#[test]
+fn instruction_files_load_into_baseline_and_changes_append() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = test_paths(temp.path());
+    std::fs::create_dir_all(&paths.config_dir).unwrap();
+    std::fs::write(paths.config_dir.join("AGENT.md"), "baseline load marker").unwrap();
+    let config = AppConfig::default();
+    let state = StateStore::new(&paths).unwrap();
+    let client = OpenAiCompatibleClient::from_config(&config, &paths).unwrap();
+    let mut agent = Agent::new(
+        config,
+        &paths,
+        state,
+        client,
+        ToolRegistry::new(),
+        AgentMode::Yolo,
+    )
+    .unwrap();
+
+    let first = agent.chat_base_context_projection(None).unwrap();
+    let system = message_text(&first.messages[0]);
+    assert!(system.contains("baseline load marker"));
+    assert!(system.contains("<instruction-files>"));
+    assert!(!first.user_contexts.iter().any(|context| {
+        context.contains("instruction_files") && context.contains("baseline load marker")
+    }));
+
+    std::fs::write(paths.config_dir.join("AGENT.md"), "changed tail marker").unwrap();
+    agent.prepare_for_turn().unwrap();
+    let second = agent.chat_base_context_projection(None).unwrap();
+    let system = message_text(&second.messages[0]);
+    assert!(system.contains("baseline load marker"));
+    assert!(!system.contains("changed tail marker"));
+    assert!(second.user_contexts.iter().any(|context| {
+        context.contains("changed tail marker") && context.contains("instruction_files")
+    }));
+}
+
 /// 验证即时模式先变化时仍能识别工具注册表尚未切换。
 ///
 /// 参数:

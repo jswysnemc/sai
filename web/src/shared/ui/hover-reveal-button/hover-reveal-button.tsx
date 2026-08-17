@@ -6,6 +6,8 @@ type HoverRevealButtonProps = {
   icon: ReactNode;
   /** 悬停或聚焦时展开的说明文字 */
   label: string;
+  /** 为真时文字常驻展开，用于「已暂停跟随」这类需要立刻看懂的状态 */
+  expanded?: boolean;
   className?: string;
   /** 内联定位样式，供浮动场景传入 */
   style?: CSSProperties;
@@ -22,11 +24,11 @@ type HoverRevealButtonProps = {
  * @param props 图标、说明文字、附加类名与点击回调
  * @returns 浮动按钮
  */
-export function HoverRevealButton({ icon, label, className, style, onClick }: HoverRevealButtonProps) {
+export function HoverRevealButton({ icon, label, expanded, className, style, onClick }: HoverRevealButtonProps) {
   return (
     <button
       type="button"
-      className={`hover-reveal-button${className ? ` ${className}` : ""}`}
+      className={`hover-reveal-button${expanded ? " is-expanded" : ""}${className ? ` ${className}` : ""}`}
       style={style}
       onClick={onClick}
       aria-label={label}

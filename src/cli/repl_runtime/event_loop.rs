@@ -208,6 +208,10 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                     // 2. Ctrl+C 中断当前轮
                     return Ok(true);
                 }
+                // 3. 用户消息队列管理（Ctrl+↑ 进入，↓ 离开末项回到输入框）
+                if runtime.handle_queue_panel_key(key.code, key.modifiers)? {
+                    continue;
+                }
                 if matches!(key.code, KeyCode::Enter) && key.modifiers.is_empty() {
                     let paste = {
                         let draft = runtime.stream_draft_mut();
@@ -232,11 +236,11 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                         continue;
                     }
                 }
-                // 3. 底部 agent 面板优先消费按键（↓ 进入、↑↓ 选择、Enter 应用）
+                // 4. 底部 agent 面板优先消费按键（↓ 进入、↑↓ 选择、Enter 应用）
                 if runtime.handle_agent_panel_key(key.code)? {
                     continue;
                 }
-                // 4. 其他键写入运行中输入框
+                // 5. 其他键写入运行中输入框
                 handle_stream_key(runtime, key.code, key.modifiers)?;
             }
             Event::Key(_) => {}

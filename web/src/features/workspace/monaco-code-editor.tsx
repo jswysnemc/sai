@@ -88,9 +88,13 @@ export function MonacoCodeEditor({ path, value, onChange, loadingLabel, gitLines
     // Git 行装饰：新增绿条、修改橙条、删除位置红色三角，另投影到概览标尺
     const editor = editorRef.current;
     const monaco = monacoRef.current;
-    if (!editor || !monaco) return;
+    if (!editor || !monaco) {
+      return;
+    }
     gitDecorationsRef.current?.clear();
-    if (!gitLines || gitLines.length === 0) return;
+    if (!gitLines || gitLines.length === 0) {
+      return;
+    }
     gitDecorationsRef.current = editor.createDecorationsCollection(
       gitLines.map((item) => ({
         range: new monaco.Range(item.line, 1, item.line, 1),
@@ -107,7 +111,7 @@ export function MonacoCodeEditor({ path, value, onChange, loadingLabel, gitLines
     return () => {
       gitDecorationsRef.current?.clear();
     };
-  }, [gitLines, mountVersion]);
+  }, [gitLines, mountVersion, path]);
 
   /**
    * 保存 Monaco 实例并立即按容器尺寸布局。

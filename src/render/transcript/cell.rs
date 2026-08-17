@@ -45,6 +45,16 @@ impl HistoryCell {
         width: usize,
         options: &TranscriptRenderOptions,
     ) -> Vec<AnsiLine> {
+        self.display_lines_framed(width, options, 0)
+    }
+
+    /// 带 live 动效帧渲染 cell；进行中的工具卡用扫光替换静态 `run` 徽标。
+    pub(crate) fn display_lines_framed(
+        &self,
+        width: usize,
+        options: &TranscriptRenderOptions,
+        frame: usize,
+    ) -> Vec<AnsiLine> {
         let lines = match self {
             Self::Welcome(cell) => welcome_cell::display_lines(cell, width),
             Self::Markdown(cell) => {
@@ -60,9 +70,9 @@ impl HistoryCell {
                 reasoning_cell::render(cell, options.reasoning_mode)
             }),
             Self::Shell(cell) => display_rendered_lines(width, || shell_cell::render(cell)),
-            Self::Tool(cell) => {
-                display_rendered_lines(width, || tool_cell::render(cell, options.tool_call_mode))
-            }
+            Self::Tool(cell) => display_rendered_lines(width, || {
+                tool_cell::render(cell, options.tool_call_mode, frame)
+            }),
             Self::Meta(cell) => display_rendered_lines(width, || {
                 // 历史烘焙的旧横线先剥掉，再按当前正文净宽为总览补一条 turn 分割线；
                 // 分割线在渲染期生成，终端宽度变化时随重排自动重画

@@ -86,6 +86,27 @@ describe("ToolLayout", () => {
     expect(expanded).not.toContain("+12");
   });
 
+  it("keeps status and chevron next to the summary instead of pushing them to the far edge", () => {
+    const html = renderToStaticMarkup(
+      <ToolLayout kindLabel="Read" primaryText="a.rs" statusLabel="2 行" onToggle={() => undefined} />
+    );
+
+    expect(html).toContain("tool-layout-meta");
+    expect(html).not.toContain("ml-auto");
+    expect(html.indexOf("a.rs")).toBeLessThan(html.indexOf("2 行"));
+    expect(html.indexOf("2 行")).toBeLessThan(html.indexOf("tool-layout-chevron"));
+  });
+
+  it("places a batch index next to the summary", () => {
+    const html = renderToStaticMarkup(
+      <ToolLayout kindLabel="Read" primaryText="a.rs" statusLabel="2 行" batchLabel="4/10" onToggle={() => undefined} />
+    );
+
+    expect(html).toContain("4/10");
+    expect(html).toContain("tool-layout-batch");
+    expect(html.indexOf("2 行")).toBeLessThan(html.indexOf("4/10"));
+  });
+
   it("renders the source badge for delegated calls", () => {
     const html = renderToStaticMarkup(<ToolLayout kindLabel="已运行" sourceLabel="子智能体" />);
 

@@ -1,13 +1,11 @@
-import { BookMarked, ChevronDown, ChevronUp, FileText, Loader2 } from "lucide-react";
+import { BookMarked, ChevronDown, FileText, Loader2, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import type { RunMode, RunModelSelection, SessionContextPromptSection } from "../../../api/contracts";
-import { HoverRevealButton } from "../../../shared/ui/hover-reveal-button/hover-reveal-button";
 import { MarkdownRenderer } from "../markdown-renderer";
 import { useI18n } from "../../i18n/use-i18n";
 import { formatContextPromptMarkdown } from "./format-context-prompt-markdown";
-import { useCollapseAnchor } from "./use-collapse-anchor";
 import "./context-prompt-banner.css";
 
 type ContextPromptBannerProps = {
@@ -158,7 +156,6 @@ export function ContextPromptBanner({
   const [open, setOpen] = useState(false);
   const [pendingSectionId, setPendingSectionId] = useState<string | null>(null);
   const markdownRef = useRef<HTMLDivElement | null>(null);
-  const anchor = useCollapseAnchor(markdownRef, open);
   const query = useQuery({
     queryKey: [
       "session-context-prompt",
@@ -209,11 +206,6 @@ export function ContextPromptBanner({
         );
 
   /**
-   * 收起展开后的提示词正文。
-   */
-  const collapse = () => setOpen(false);
-
-  /**
    * 展开上下文并定位到标签对应的 Markdown 标题。
    *
    * @param tag 用户点击的上下文标签
@@ -235,7 +227,7 @@ export function ContextPromptBanner({
   }, [open, pendingSectionId, renderedSections.length]);
 
   return (
-    <section className={`context-prompt-banner${open ? " open" : ""}`} data-overview-id="context-prompt">
+    <section className={`context-prompt-banner${open ? " is-open" : ""}`} data-overview-id="context-prompt">
       <div className="context-prompt-banner-head">
         <button
           type="button"
@@ -245,17 +237,17 @@ export function ContextPromptBanner({
           aria-controls="context-prompt-body"
           aria-label={title}
         >
-        <span className="context-prompt-banner-icon" aria-hidden>
-          {query.isLoading ? <Loader2 size={14} className="spin" /> : <BookMarked size={14} />}
-        </span>
+          <span className="context-prompt-banner-icon" aria-hidden>
+            {query.isLoading ? <Loader2 size={14} className="spin" /> : <BookMarked size={14} />}
+          </span>
           <span className="context-prompt-banner-copy">
-          <span className="context-prompt-banner-title">
-            {title}
-            {typeof tokenCount === "number" && (
-              <span className="context-prompt-banner-tokens tnum">
-                {t(`~${formatTokenCount(tokenCount)} tokens`, `约 ${formatTokenCount(tokenCount)} tokens`)}
-              </span>
-            )}
+            <span className="context-prompt-banner-title">
+              {title}
+              {typeof tokenCount === "number" && (
+                <span className="context-prompt-banner-tokens tnum">
+                  {t(`~${formatTokenCount(tokenCount)} tokens`, `约 ${formatTokenCount(tokenCount)} tokens`)}
+                </span>
+              )}
             </span>
             <span className="context-prompt-banner-subtitle">{subtitle}</span>
           </span>
@@ -278,13 +270,15 @@ export function ContextPromptBanner({
         )}
         <button
           type="button"
-          className="context-prompt-banner-chevron-button"
+          className="context-prompt-banner-close"
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
           aria-controls="context-prompt-body"
-          aria-label={title}
+          aria-label={open ? t("Close context", "关闭上下文") : title}
         >
-          <ChevronDown size={14} className={`context-prompt-banner-chevron${open ? " rotate" : ""}`} aria-hidden />
+          {open
+            ? <X size={14} aria-hidden />
+            : <ChevronDown size={14} className="context-prompt-banner-chevron" aria-hidden />}
         </button>
       </div>
       {open && (
@@ -313,15 +307,6 @@ export function ContextPromptBanner({
             <div className="context-prompt-banner-status">
               {t("No system prompt content", "暂无系统提示词内容")}
             </div>
-          )}
-          {anchor && (
-            <HoverRevealButton
-              className="context-prompt-banner-collapse is-reversed"
-              style={{ top: `${anchor.top}px`, right: `${anchor.right}px` }}
-              icon={<ChevronUp size={14} />}
-              label={t("Collapse context prompt", "收起系统提示词")}
-              onClick={collapse}
-            />
           )}
         </div>
       )}

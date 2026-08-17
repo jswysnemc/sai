@@ -1,6 +1,5 @@
 use super::{vision, ToolProgress, ToolRegistry, ToolSpec};
 use crate::config::{AppConfig, ProviderConfig, VisionPluginConfig};
-use crate::default_models::{OPENCODE_DEFAULT_VISION_MODEL, OPENCODE_PROVIDER_ID};
 use crate::i18n::text as t;
 use crate::llm::{ChatMessage, OpenAiCompatibleClient};
 use crate::paths::SaiPaths;
@@ -214,4 +213,3 @@ struct DownloadResult {
     images: Vec<StoredImage>,
     rejected_by_vision: usize,
 }
-

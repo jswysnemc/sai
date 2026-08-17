@@ -8,8 +8,18 @@ pub(crate) struct ToolCatalogEntry {
     pub name: String,
     /// 用途分组标识
     pub group: &'static str,
-    /// 用途分组展示名
+    /// 用途分组中文短标题
     pub group_label: &'static str,
+    /// 用途分组英文短标题
+    pub group_label_en: &'static str,
+    /// 分组中文交互说明；空表示无需额外解释
+    pub group_hint: &'static str,
+    /// 分组英文交互说明
+    pub group_hint_en: &'static str,
+    /// 相关设置页路径
+    pub group_settings_path: Option<&'static str>,
+    /// 设置页排序权重，越小越靠前
+    pub group_rank: u8,
     /// 工具摘要说明
     pub description: String,
 }
@@ -89,10 +99,16 @@ fn catalog_entries(registry: ToolRegistry) -> Vec<ToolCatalogEntry> {
 /// 将工具元数据转换为设置页目录项。
 fn catalog_entry(name: String, description: String) -> ToolCatalogEntry {
     let group = groups::group_for_tool(&name);
+    let meta = groups::group_meta(group);
     ToolCatalogEntry {
         name,
         group,
-        group_label: groups::group_description(group),
+        group_label: meta.label_zh,
+        group_label_en: meta.label_en,
+        group_hint: meta.hint_zh,
+        group_hint_en: meta.hint_en,
+        group_settings_path: meta.settings_path,
+        group_rank: groups::group_rank(group),
         description: summarize_tool_description(&description),
     }
 }
@@ -207,6 +223,39 @@ mod tests {
         for expected in ["subagent", "todo", "ask_question"] {
             assert!(names.iter().any(|name| name == expected), "缺少 {expected}");
         }
+    }
+
+    /// SSH 工具组必须出现在 Agent 设置目录里，否则界面上看不到这一组。
+    #[test]
+    fn ssh_tools_are_listed_as_their_own_group() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(dir.path());
+        let entries = tool_catalog(&AppConfig::default(), &paths);
+        let ssh: Vec<&ToolCatalogEntry> = entries
+            .iter()
+            .filter(|entry| entry.group == "ssh")
+            .collect();
+
+        assert_eq!(ssh.len(), 4, "SSH 组应有四个工具");
+        for expected in [
+            "ssh_list_hosts",
+            "ssh_run_command",
+            "ssh_upload_file",
+            "ssh_download_file",
+        ] {
+            assert!(
+                ssh.iter().any(|entry| entry.name == expected),
+                "缺少 {expected}"
+            );
+        }
+        assert_eq!(ssh[0].group_label, "SSH 远程");
+        assert_eq!(ssh[0].group_label_en, "SSH");
+        assert_eq!(ssh[0].group_rank, 1);
+        assert_eq!(ssh[0].group_settings_path, Some("/settings/ssh"));
+        assert!(
+            ssh[0].group_hint.contains("设置 → SSH"),
+            "SSH 组应说明主机由用户在设置页配置"
+        );
     }
 
     /// 验证目录不含重复项。

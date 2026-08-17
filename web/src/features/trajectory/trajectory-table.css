@@ -5,7 +5,9 @@
  */
 .trajectory-table {
   display: grid;
+  align-content: start;
   padding-bottom: var(--space-md);
+  overflow-anchor: none;
   font-size: var(--text-2xs);
 }
 
@@ -68,6 +70,40 @@
 
 .trajectory-turn-duration {
   margin-left: auto;
+}
+
+.trajectory-compaction-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  min-height: 1.75rem;
+  padding: 0.3rem var(--space-md);
+  border: none;
+  border-top: 1px dashed color-mix(in srgb, var(--kind-color, var(--magenta)) 55%, var(--line));
+  border-bottom: 1px dashed color-mix(in srgb, var(--kind-color, var(--magenta)) 55%, var(--line));
+  background: color-mix(in srgb, var(--kind-color, var(--magenta)) 8%, var(--paper));
+  color: var(--ink-soft);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.trajectory-compaction-divider > strong {
+  flex: none;
+  color: var(--kind-color, var(--magenta));
+  font-weight: 500;
+}
+
+.trajectory-compaction-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trajectory-compaction-divider[data-selected] {
+  background: color-mix(in srgb, var(--kind-color, var(--magenta)) 14%, var(--paper));
 }
 
 .trajectory-row {

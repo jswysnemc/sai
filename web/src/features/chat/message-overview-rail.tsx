@@ -1,5 +1,5 @@
 import { type CSSProperties, type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react";
-import { evenlySpacedOverviewPosition, type MessageOverviewItem } from "./message-overview-utils";
+import { evenlySpacedOverviewPosition, previewViewportShift, type MessageOverviewItem } from "./message-overview-utils";
 import "./message-overview-rail.css";
 import { useI18n } from "../i18n/use-i18n";
 
@@ -73,6 +73,8 @@ export function MessageOverviewRail({ scrollContainerRef, items, activeId, onNav
   const itemsRef = useRef(items);
   const [positionedItems, setPositionedItems] = useState<PositionedOverviewItem[]>([]);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [previewShift, setPreviewShift] = useState(0);
+  const previewRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const itemIds = items.map((item) => item.id).join("\u0000");
   itemsRef.current = items;
@@ -164,6 +166,20 @@ export function MessageOverviewRail({ scrollContainerRef, items, activeId, onNav
   // 3. 概览项集合或摘要变化时刷新位置，但不重复绑定全部观察器
   useLayoutEffect(() => scheduleUpdate(), [items, scheduleUpdate]);
 
+  // 4. 预览默认垂直居中于标记；靠近视口上下沿时平移，避免卡片被裁切
+  useLayoutEffect(() => {
+    const preview = previewRef.current;
+    if (!preview || previewId === null) {
+      setPreviewShift(0);
+      return;
+    }
+    preview.style.setProperty("--message-overview-preview-shift", "0px");
+    const rect = preview.getBoundingClientRect();
+    const shift = previewViewportShift(rect.top, rect.bottom, window.innerHeight);
+    preview.style.setProperty("--message-overview-preview-shift", `${shift}px`);
+    setPreviewShift((current) => current === shift ? current : shift);
+  }, [previewId, positionedItems]);
+
   /**
    * 平滑滚动到指定消息。
    *
@@ -204,7 +220,7 @@ export function MessageOverviewRail({ scrollContainerRef, items, activeId, onNav
               >
                 <span className="message-overview-marker-line" aria-hidden="true" />
               </button>
-              {previewId === item.id && <div id={`message-overview-preview-${item.id}`} className="message-overview-preview" role="tooltip">
+              {previewId === item.id && <div ref={previewRef} id={`message-overview-preview-${item.id}`} className="message-overview-preview" role="tooltip" style={{ "--message-overview-preview-shift": `${previewShift}px` } as CSSProperties}>
                 <div className="message-overview-preview-heading">
                   <span className="message-overview-preview-label">{item.label}</span>
                 </div>

@@ -9,6 +9,7 @@ describe("MarkdownRenderer style preferences", () => {
     expect(html).toContain("inline-file-reference");
     expect(html).toContain("/material-icons/html.svg");
     expect(html).toContain("login-page/index.html");
+    expect(html).toMatch(/<button[^>]*>[\s\S]*material-icons[\s\S]*tool-file-reference-label[\s\S]*login-page\/index\.html/);
   });
 
   it("密文件 pill 与中文说明同段渲染，保留说明文本节点", () => {

@@ -19,6 +19,10 @@
   --kind-color: var(--blue);
 }
 
+.trajectory-view [data-kind="thinking"] {
+  --kind-color: color-mix(in srgb, var(--violet) 60%, var(--ink-soft));
+}
+
 .trajectory-view [data-kind="assistant"] {
   --kind-color: var(--violet);
 }
@@ -40,23 +44,7 @@
 }
 
 .trajectory-view-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
-}
-
-.trajectory-view-body[data-inspecting] {
-  grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem);
-}
-
-.trajectory-view-ledger {
-  min-height: 0;
-  overflow-y: auto;
-}
-
-@media (max-width: 64rem) {
-  .trajectory-view-body[data-inspecting] {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) minmax(0, 45%);
-  }
+  height: 100%;
+  overflow: hidden;
 }

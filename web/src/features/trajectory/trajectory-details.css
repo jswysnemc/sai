@@ -119,7 +119,7 @@
 }
 
 .trajectory-details-body {
-  max-height: 18rem;
+  max-height: min(18rem, calc(100dvh - 16rem));
   margin: 0;
   padding: var(--space-xs);
   border: 1px solid var(--line);
@@ -128,6 +128,7 @@
   color: var(--ink);
   font: var(--text-2xs)/1.55 var(--font-code);
   overflow: auto;
+  overscroll-behavior: contain;
   white-space: pre-wrap;
   word-break: break-word;
 }

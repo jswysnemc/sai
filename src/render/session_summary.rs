@@ -47,11 +47,26 @@ pub fn render_session_summary(snapshot: &SessionSnapshot) -> String {
             format_turn_duration_ms(snapshot.last_turn_duration_ms),
         ));
     }
+    if snapshot.last_turn_ttft_ms > 0 {
+        output.push_str(&format!(
+            " \x1b[2m· {}\x1b[0m {}",
+            t("TTFT", "首字"),
+            format_ttft_ms(snapshot.last_turn_ttft_ms),
+        ));
+    }
     if let Some(usage) = snapshot.usage.last_conversation_usage.as_ref() {
         output.push_str(&format!(
-            " \x1b[2m·\x1b[0m \x1b[36m↑ {}\x1b[0m \x1b[2m·\x1b[0m \x1b[32m↓ {}\x1b[0m \x1b[2m· {}\x1b[0m \x1b[32m{:.1}%\x1b[0m",
+            " \x1b[2m·\x1b[0m \x1b[36m↑ {}\x1b[0m \x1b[2m·\x1b[0m \x1b[32m↓ {}\x1b[0m",
             format_k_u64(usage.prompt_tokens),
             format_k_u64(usage.completion_tokens),
+        ));
+        if let Some(rate) =
+            format_tokens_per_sec(usage.completion_tokens, snapshot.last_turn_duration_ms)
+        {
+            output.push_str(&format!(" \x1b[2m·\x1b[0m \x1b[32m{rate}/s\x1b[0m"));
+        }
+        output.push_str(&format!(
+            " \x1b[2m· {}\x1b[0m \x1b[32m{:.1}%\x1b[0m",
             t("cache", "缓存"),
             turn_cache_hit_ratio(usage) * 100.0,
         ));
@@ -178,6 +193,43 @@ fn context_ratio_style(ratio: f32) -> &'static str {
     }
 }
 
+/// 【终端】【会话摘要】将首字延迟格式化为紧凑文本。
+///
+/// 参数:
+/// - `ms`: 首字延迟毫秒
+///
+/// 返回:
+/// - 如 `420ms` / `1.2s`
+pub(crate) fn format_ttft_ms(ms: u64) -> String {
+    if ms < 1_000 {
+        format!("{ms}ms")
+    } else if ms < 10_000 {
+        format!("{:.1}s", ms as f64 / 1_000.0)
+    } else {
+        format_turn_duration_ms(ms)
+    }
+}
+
+/// 【终端】【会话摘要】按生成耗时计算下行 tokens/s。
+///
+/// 参数:
+/// - `completion_tokens`: 本轮输出 token
+/// - `duration_ms`: 从首字到结束的耗时
+///
+/// 返回:
+/// - 有有效速率时返回紧凑数字文本
+pub(crate) fn format_tokens_per_sec(completion_tokens: u64, duration_ms: u64) -> Option<String> {
+    if completion_tokens == 0 || duration_ms == 0 {
+        return None;
+    }
+    let rate = completion_tokens as f64 * 1_000.0 / duration_ms as f64;
+    if rate < 10.0 {
+        Some(format!("{rate:.1}"))
+    } else {
+        Some(format!("{rate:.0}"))
+    }
+}
+
 /// 【终端】【会话摘要】将毫秒格式化为人类可读本轮耗时。
 ///
 /// 终端聊天渲染统一使用英文文案（见 `render::terminal_text`），
@@ -254,6 +306,7 @@ fn observe_non_display_fields(snapshot: &SessionSnapshot) {
         snapshot.dynamic_sources.len(),
         snapshot.projection_warnings.len(),
         snapshot.last_turn_duration_ms,
+        snapshot.last_turn_ttft_ms,
     );
     if let Some(active_run) = &snapshot.active_run {
         let _ = (

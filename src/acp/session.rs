@@ -634,6 +634,7 @@ impl ExternalTurnEngine for AcpEngine {
             usage: outcome.usage,
             tool_calls: Vec::new(),
             duration_ms: started.elapsed().as_millis() as u64,
+            ttft_ms: 0,
         })
     }
 

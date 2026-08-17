@@ -19,9 +19,29 @@ pub(super) fn create_turn_metrics_table(conn: &Connection) -> Result<()> {
             total_tokens            INTEGER NOT NULL DEFAULT 0,
             cache_read_tokens       INTEGER NOT NULL DEFAULT 0,
             cache_write_tokens      INTEGER NOT NULL DEFAULT 0,
+            ttft_ms                 INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY(turn_id) REFERENCES turns(turn_id) ON DELETE CASCADE
         );",
     )?;
+    ensure_ttft_ms_column(conn)?;
+    Ok(())
+}
+
+/// 为升级前的用量表补齐首字延迟列。
+fn ensure_ttft_ms_column(conn: &Connection) -> Result<()> {
+    let column_count: i64 = conn.query_row(
+        "SELECT COUNT(*)
+         FROM pragma_table_info('turn_metrics')
+         WHERE name = 'ttft_ms'",
+        [],
+        |row| row.get(0),
+    )?;
+    if column_count == 0 {
+        conn.execute(
+            "ALTER TABLE turn_metrics ADD COLUMN ttft_ms INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
     Ok(())
 }
 
@@ -57,6 +77,43 @@ impl ConversationDb {
             ],
         )?;
         Ok(())
+    }
+
+    /// 保存指定轮次的首字延迟。
+    ///
+    /// 参数:
+    /// - `turn_id`: 轮次标识
+    /// - `ttft_ms`: 从发请求到首个 token 的延迟毫秒
+    ///
+    /// 返回:
+    /// - 写入是否成功
+    pub(crate) fn set_turn_ttft_ms(&self, turn_id: &str, ttft_ms: u64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO turn_metrics (turn_id, ttft_ms) VALUES (?1, ?2)
+             ON CONFLICT(turn_id) DO UPDATE SET ttft_ms = excluded.ttft_ms",
+            params![turn_id, ttft_ms as i64],
+        )?;
+        Ok(())
+    }
+
+    /// 读取指定轮次的首字延迟。
+    ///
+    /// 参数:
+    /// - `turn_id`: 轮次标识
+    ///
+    /// 返回:
+    /// - 已记录且大于 0 的首字延迟
+    pub(crate) fn turn_ttft_ms(&self, turn_id: &str) -> Result<Option<u64>> {
+        let conn = self.conn.lock().unwrap();
+        conn.query_row(
+            "SELECT ttft_ms FROM turn_metrics WHERE turn_id = ?1",
+            params![turn_id],
+            |row| Ok(row.get::<_, i64>(0)?.max(0) as u64),
+        )
+        .optional()
+        .map(|value| value.filter(|ms| *ms > 0))
+        .map_err(Into::into)
     }
 
     /// 读取指定轮次的模型用量。
@@ -107,11 +164,13 @@ mod tests {
         };
 
         db.set_turn_usage("turn-1", &usage).unwrap();
+        db.set_turn_ttft_ms("turn-1", 420).unwrap();
 
         let restored = db.turn_usage("turn-1").unwrap().unwrap();
         assert_eq!(restored.prompt_tokens, 100);
         assert_eq!(restored.completion_tokens, 20);
         assert_eq!(restored.cache_read_tokens, 80);
         assert_eq!(restored.cache_write_tokens, 5);
+        assert_eq!(db.turn_ttft_ms("turn-1").unwrap(), Some(420));
     }
 }

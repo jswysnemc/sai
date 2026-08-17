@@ -43,6 +43,57 @@ export function scrollOutputToBottom(element: OutputScrollTarget | null): void {
 }
 
 /**
+ * 把滚动位置向下对齐到整行，避免限高容器贴底时顶边裁出半行字。
+ *
+ * @param scrollTop 目标滚动位置
+ * @param lineHeight 行高（像素）
+ * @param paddingTop 内容区上内边距
+ * @param maxScroll 最大可滚动距离
+ * @returns 对齐后的 scrollTop
+ */
+export function snapScrollTopToLine(
+  scrollTop: number,
+  lineHeight: number,
+  paddingTop: number,
+  maxScroll: number
+): number {
+  const bounded = Math.min(Math.max(0, maxScroll), Math.max(0, scrollTop));
+  if (!Number.isFinite(lineHeight) || lineHeight <= 0) return bounded;
+  const inset = Math.max(0, paddingTop);
+  if (bounded <= inset) return 0;
+  const snapped = Math.floor((bounded - inset) / lineHeight + 1e-6) * lineHeight + inset;
+  return Math.min(Math.max(0, maxScroll), Math.max(0, snapped));
+}
+
+/**
+ * 嵌套输出（长思考块）滚到最新内容，并按行高对齐顶边。
+ *
+ * @param element 限高滚动容器
+ * @returns 无返回值
+ */
+export function scrollNestedOutputToBottom(element: HTMLElement | null): void {
+  if (!element) return;
+  const styles = getComputedStyle(element);
+  const lineHeight = resolveLineHeightPx(styles);
+  const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
+  const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight);
+  element.scrollTop = snapScrollTopToLine(maxScroll, lineHeight, paddingTop, maxScroll);
+}
+
+/**
+ * 读取可用于行对齐的像素行高；`normal` 时按字号回退。
+ *
+ * @param styles 计算样式
+ * @returns 行高像素，无法解析时返回 0
+ */
+function resolveLineHeightPx(styles: CSSStyleDeclaration): number {
+  const parsed = Number.parseFloat(styles.lineHeight);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  const fontSize = Number.parseFloat(styles.fontSize);
+  return Number.isFinite(fontSize) && fontSize > 0 ? fontSize * 1.75 : 0;
+}
+
+/**
  * 根据滚动位置和用户操作意图计算自动跟随状态。
  *
  * @param current 当前跟随状态
@@ -59,6 +110,25 @@ export function resolveFollowOutputState(
   if (atBottom) return { following: true, showJump: false };
   if (userInitiated) return { following: false, showJump: true };
   return current.following ? current : { following: false, showJump: true };
+}
+
+/**
+ * 用户正在滚轮/触摸/按键时，禁止程序把视口拽回底部。
+ *
+ * 流式 token 的 layout 贴底若抢在 scroll 事件前执行，
+ * 用户刚抬起的那一下会被立刻拉回去，跟随时窗形同虚设。
+ *
+ * @param following 当前是否跟随底部
+ * @param intentDeadline 用户意图截止时间（performance.now 口径）
+ * @param now 当前时间
+ * @returns 此时是否仍允许程序贴底
+ */
+export function canProgrammaticFollow(
+  following: boolean,
+  intentDeadline: number,
+  now: number
+): boolean {
+  return following && now > intentDeadline;
 }
 
 /**
@@ -120,7 +190,10 @@ export function useFollowOutputScroll(
 
   useLayoutEffect(() => {
     const element = scrollContainerRef.current;
-    if (stateRef.current.following) scrollOutputToBottom(element);
+    if (!canProgrammaticFollow(stateRef.current.following, userIntentDeadlineRef.current, performance.now())) {
+      return;
+    }
+    scrollOutputToBottom(element);
   }, [contentSignal, scrollContainerRef]);
 
   useLayoutEffect(() => {
@@ -258,9 +331,12 @@ export function useNestedFollowOutputScroll(
     };
   }, [enabled, scrollContainerRef]);
 
-  // 2. 仅在跟随开启时把视口钉在最新内容
+  // 2. 仅在跟随开启且用户没有正在滚动时把视口钉在最新内容
   useLayoutEffect(() => {
-    if (!enabled || !followingRef.current) return;
-    scrollOutputToBottom(scrollContainerRef.current);
+    if (!enabled) return;
+    if (!canProgrammaticFollow(followingRef.current, userIntentDeadlineRef.current, performance.now())) {
+      return;
+    }
+    scrollNestedOutputToBottom(scrollContainerRef.current);
   }, [contentSignal, enabled, scrollContainerRef]);
 }

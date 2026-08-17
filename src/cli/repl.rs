@@ -218,11 +218,9 @@ pub(super) async fn run_repl(
                         runtime.redraw()?;
                     }
                     crate::control_commands::ControlCommand::Context => {
-                        match crate::control_commands::context_info_text(paths) {
-                            Ok(info) => {
-                                center_panel::show_center_panel(t("Context", "上下文"), &info)?;
-                                runtime.redraw()?;
-                            }
+                        runtime.record_user(mode, input.to_string(), false)?;
+                        match crate::control_commands::context_info_for_mode(paths, mode) {
+                            Ok(info) => runtime.record_meta(info)?,
                             Err(err) => runtime.record_meta(err.to_string())?,
                         }
                     }

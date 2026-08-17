@@ -1,8 +1,9 @@
 import { ChevronRight } from "lucide-react";
-import type { KeyboardEvent, ReactNode } from "react";
+import { type KeyboardEvent, type ReactNode } from "react";
 import { ToolDiffBadge } from "./tool-diff-badge";
 import { ToolSummaryText } from "./tool-summary-text";
 import "./tool-layout.css";
+import "../../message/activity-stream.css";
 
 type ToolLayoutProps = {
   /** 工具图标 */
@@ -35,6 +36,8 @@ type ToolLayoutProps = {
   actions?: ReactNode;
   /** 状态文字 */
   statusLabel?: ReactNode;
+  /** 并行批次序号，紧贴摘要，如 4/10 */
+  batchLabel?: string;
   /** 状态是否按失败着色 */
   showFailureStatus?: boolean;
   /** 是否正在运行，运行时类型标签走流光渐变 */
@@ -77,6 +80,7 @@ export function ToolLayout({
   hideDiffCountWhenOpen = false,
   actions,
   statusLabel,
+  batchLabel,
   showFailureStatus = false,
   isRunning = false,
   title,
@@ -105,9 +109,8 @@ export function ToolLayout({
     <section className="group/tool tool-layout min-w-0">
       <div
         className={[
-          "tool-layout-head flex w-full min-w-0 items-center gap-2 text-left text-ui-base transition-colors",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-input-border-focused",
-          interactive ? "cursor-pointer" : "cursor-default"
+          "tool-layout-head",
+          interactive ? "is-interactive" : ""
         ].join(" ")}
         role={interactive ? "button" : undefined}
         tabIndex={interactive ? 0 : undefined}
@@ -117,7 +120,7 @@ export function ToolLayout({
         title={title}
       >
         {icon ? (
-          <span className="tool-layout-icon shrink-0 text-ink-soft" aria-hidden>
+          <span className="tool-layout-icon" aria-hidden>
             {icon}
           </span>
         ) : null}
@@ -136,7 +139,7 @@ export function ToolLayout({
           </span>
         ) : null}
         {primaryContent ? (
-          <span className="flex min-w-0 items-center gap-2">
+          <span className="tool-layout-summary">
             <span className="min-w-0 truncate">{primaryContent}</span>
           </span>
         ) : (
@@ -147,7 +150,7 @@ export function ToolLayout({
             animate={animateSummary}
           />
         )}
-        <span className="ml-auto flex shrink-0 items-center gap-2">
+        <span className="tool-layout-meta">
           {actions}
           {showDiff ? (
             <ToolDiffBadge
@@ -160,16 +163,12 @@ export function ToolLayout({
           {statusLabel ? (
             <span className={showFailureStatus ? "text-destructive" : "text-ink-soft"}>{statusLabel}</span>
           ) : null}
+          {batchLabel ? <span className="tool-layout-batch">{batchLabel}</span> : null}
           {interactive ? (
             <ChevronRight
               size={14}
               aria-hidden
-              className={[
-                "shrink-0 text-ink-soft transition-opacity transition-transform duration-200 ease-out",
-                "opacity-0 group-hover/tool:opacity-100 focus-visible:opacity-100",
-                expanded ? "rotate-90 opacity-100" : "rotate-0",
-                isRunning ? "opacity-100" : ""
-              ].join(" ")}
+              className={["tool-layout-chevron", expanded ? "is-open" : ""].join(" ")}
             />
           ) : null}
         </span>

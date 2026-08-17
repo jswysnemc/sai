@@ -393,6 +393,71 @@ fn tool_progress_and_result_update_one_lifecycle_cell() {
 }
 
 #[test]
+fn concurrent_same_name_tools_update_in_place_fifo() {
+    let mut store = TranscriptStore::new(100);
+    store.push_tool_call(
+        "read_file".to_string(),
+        r#"{"path":"a.rs","offset":1,"limit":20}"#.to_string(),
+    );
+    store.push_tool_call(
+        "read_file".to_string(),
+        r#"{"path":"b.rs","offset":10,"limit":40}"#.to_string(),
+    );
+    store.push_tool_call("read_file".to_string(), r#"{"path":"c.rs"}"#.to_string());
+
+    store.push_tool_result("read_file".to_string(), true, "a".to_string());
+    let mid = store
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| strip_ansi(line.as_str()))
+        .collect::<String>();
+    assert!(mid.contains("Read a.rs:1+20"), "{mid}");
+    assert!(mid.contains("Reading b.rs:10+40"), "{mid}");
+    assert!(mid.contains("Reading c.rs"), "{mid}");
+    assert_eq!(mid.matches("Read ok").count(), 0, "{mid}");
+
+    store.push_tool_result("read_file".to_string(), true, "b".to_string());
+    store.push_tool_result("read_file".to_string(), true, "c".to_string());
+    let done = store
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| strip_ansi(line.as_str()))
+        .collect::<String>();
+    assert!(done.contains("Read a.rs:1+20"), "{done}");
+    assert!(done.contains("Read b.rs:10+40"), "{done}");
+    assert!(done.contains("Read c.rs"), "{done}");
+    assert!(!done.contains("Reading "), "{done}");
+    assert_eq!(done.matches("Read ok").count(), 0, "{done}");
+}
+
+#[test]
+fn compaction_started_updates_in_place_without_x0() {
+    let mut store = TranscriptStore::new(100);
+    store.push_compaction_started(0, "grok-4.6".to_string());
+    let started = store
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| strip_ansi(line.as_str()))
+        .collect::<String>();
+    assert!(started.contains("Compacting context"), "{started}");
+    assert!(!started.contains("×0"), "{started}");
+
+    store.push_compaction_finished(true, None, None, Some("notes".to_string()));
+    let finished = store
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| strip_ansi(line.as_str()))
+        .collect::<String>();
+    assert!(finished.contains("Compacted context"), "{finished}");
+    assert!(!finished.contains("Compacting context"), "{finished}");
+    assert_eq!(
+        finished.matches("Compacted context").count(),
+        1,
+        "{finished}"
+    );
+}
+
+#[test]
 fn command_output_updates_live_cell_and_toggles_expansion() {
     let mut store = TranscriptStore::new(100);
     store.push_tool_call(

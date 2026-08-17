@@ -1,7 +1,8 @@
-import { Brain, ChevronDown } from "lucide-react";
+import { Brain, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNestedFollowOutputScroll } from "./use-follow-output-scroll";
 import "./reasoning-block.css";
+import "./message/activity-stream.css";
 import { useI18n } from "../i18n/use-i18n";
 
 /**
@@ -47,7 +48,7 @@ export function ReasoningBlock({ source, live, startedAt, endedAt }: { source: s
       >
         <span className="reasoning-icon" aria-hidden><Brain size={14} /></span>
         <span className="reasoning-label">{live ? t("Thinking", "正在思考") : t("Reasoning", "思考过程")}{duration ? t(` (${duration})`, `（用时 ${duration}）`) : ""}</span>
-        <ChevronDown size={14} className={open ? "rotate" : ""} />
+        <ChevronRight size={14} />
       </button>
       {open && <div ref={contentRef} className="reasoning-content" tabIndex={-1}>{source}</div>}
     </section>

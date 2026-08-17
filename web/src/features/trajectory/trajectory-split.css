@@ -1,0 +1,94 @@
+.trajectory-split {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, var(--trajectory-split-left, 62%)) 0.5rem minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.trajectory-split-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.trajectory-split-pane .trajectory-table,
+.trajectory-split-pane .trajectory-table-empty,
+.trajectory-split-pane .trajectory-details {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.trajectory-view-body:not([data-inspecting]) .trajectory-split {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.trajectory-view-body:not([data-inspecting]) .trajectory-split-handle,
+.trajectory-view-body:not([data-inspecting]) .trajectory-split-pane:last-child {
+  display: none;
+}
+
+.trajectory-split-pane .trajectory-details {
+  border-left: none;
+}
+
+.trajectory-split-handle {
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  outline: 0;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.trajectory-split-handle span {
+  width: 0.125rem;
+  height: 2.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--line-strong);
+  opacity: 0;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+
+.trajectory-split-handle:hover span,
+.trajectory-split-handle:focus-visible span,
+.trajectory-split-resizing .trajectory-split-handle span {
+  opacity: 1;
+}
+
+.trajectory-split-handle:focus-visible span {
+  background: var(--signal);
+  box-shadow: var(--ring-focus);
+}
+
+.trajectory-split-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+@media (max-width: 64rem) {
+  .trajectory-split {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 0 minmax(0, 45%);
+  }
+
+  .trajectory-split-handle {
+    display: none;
+  }
+
+  .trajectory-split-pane .trajectory-details {
+    border-top: 1px solid var(--line);
+  }
+
+  .trajectory-view-body:not([data-inspecting]) .trajectory-split {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .trajectory-view-body:not([data-inspecting]) .trajectory-split-pane:last-child {
+    display: none;
+  }
+}

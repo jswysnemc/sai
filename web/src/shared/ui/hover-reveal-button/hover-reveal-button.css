@@ -60,7 +60,8 @@
 }
 
 .hover-reveal-button:hover .hover-reveal-button-text,
-.hover-reveal-button:focus-visible .hover-reveal-button-text {
+.hover-reveal-button:focus-visible .hover-reveal-button-text,
+.hover-reveal-button.is-expanded .hover-reveal-button-text {
   grid-template-columns: 1fr;
   padding-right: var(--space-md);
 }

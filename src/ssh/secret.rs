@@ -34,6 +34,8 @@ pub(crate) enum InteractiveKind {
     Passphrase,
     /// 需要输入登录密码
     Password,
+    /// 需要输入远端 sudo 密码
+    SudoPassword,
     /// 需要确认远端主机指纹（首次连接或指纹变更）
     HostKey,
     /// 需要确认执行高危命令

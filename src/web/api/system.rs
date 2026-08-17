@@ -132,6 +132,7 @@ async fn usage(
             projection_warnings: vec![format!("usage snapshot unavailable: {error}")],
             active_run: None,
             last_turn_duration_ms: 0,
+            last_turn_ttft_ms: 0,
         },
     };
     let process = state.system_monitor.snapshot();
@@ -301,6 +302,7 @@ fn resolve_context_prompt_tokens(
     // 3. 其余情况沿用 provider / 快照值
     last_tokens.max(snapshot_tokens)
 }
+
 
 /// 判断最近一次 provider 上下文用量是否仍可用于当前会话。
 ///

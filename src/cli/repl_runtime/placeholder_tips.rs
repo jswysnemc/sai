@@ -12,7 +12,7 @@ static TIP_INDEX: AtomicUsize = AtomicUsize::new(0);
 const TIPS_ZH: &[&str] = &[
     "输入消息…",
     "Shift+Tab 切换 yolo / audit / plan 权限模式",
-    "工作时 Tab 或 Enter 把消息排队，本轮结束后依次执行",
+    "工作时 Tab 或 Enter 把消息排队，Ctrl+↑ 进入队列管理",
     "工作时 Ctrl+Z 撤回排队消息，Ctrl+Y 清空队列",
     "Ctrl+T 折叠计划面板，Ctrl+O 展开思考过程",
     "/tree 浏览会话分支，可从任意历史轮次开新支线",
@@ -34,7 +34,7 @@ const TIPS_ZH: &[&str] = &[
 const TIPS_EN: &[&str] = &[
     "Add a follow-up",
     "Shift+Tab cycles yolo / audit / plan permission modes",
-    "While working, Tab or Enter queues a message for the next turn",
+    "While working, Tab or Enter queues a message; Ctrl+↑ manages the queue",
     "While working, Ctrl+Z undoes a queued message and Ctrl+Y clears the queue",
     "Ctrl+T folds the plan panel, Ctrl+O expands reasoning",
     "/tree browses session branches and forks from any past turn",

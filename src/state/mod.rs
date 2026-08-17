@@ -30,8 +30,9 @@ use std::sync::Arc;
 
 #[allow(unused_imports)]
 pub use compaction::{
-    classify_context_pressure, compaction_trigger_chars, CompactionApplyOutcome, CompactionRequest,
-    CompactionSummary, ContextPressure,
+    classify_context_pressure, classify_context_pressure_with, compaction_trigger_chars,
+    should_compact_for_context_tokens_with, CompactionApplyOutcome, CompactionBudgetPolicy,
+    CompactionRequest, CompactionSummary, ContextPressure,
 };
 pub(crate) use compaction::{summary_char_limit, validate_summary};
 pub use context_epoch::{ContextEpochProjection, ContextEpochSummary, ContextSourceInput};
@@ -171,11 +172,12 @@ impl StateStore {
         self.conv_db.turn_models()
     }
 
-    /// 保存指定轮次的耗时与汇总用量。
+    /// 保存指定轮次的耗时、首字延迟与汇总用量。
     ///
     /// 参数:
     /// - `turn_id`: 当前轮次标识
     /// - `duration_ms`: 从首次输出到完成的耗时毫秒
+    /// - `ttft_ms`: 从发请求到首个 token 的延迟毫秒
     /// - `usage`: 同一轮全部模型请求的汇总用量
     ///
     /// 返回:
@@ -184,21 +186,25 @@ impl StateStore {
         &self,
         turn_id: &str,
         duration_ms: u64,
+        ttft_ms: u64,
         usage: Option<&crate::llm::Usage>,
     ) -> Result<()> {
         // 1. 耗时独立保存，缺少供应商用量时仍可展示
         self.conv_db.set_turn_duration_ms(turn_id, duration_ms)?;
-        // 2. 供应商未返回用量时不创建空记录
+        // 2. 首字延迟写入用量表，与 token 统计同行恢复
+        self.conv_db.set_turn_ttft_ms(turn_id, ttft_ms)?;
+        // 3. 供应商未返回用量时不创建空 token 记录
         if let Some(usage) = usage {
             self.conv_db.set_turn_usage(turn_id, usage)?;
         }
         Ok(())
     }
 
-    /// 保存最近一轮的耗时与汇总用量。
+    /// 保存最近一轮的耗时、首字延迟与汇总用量。
     ///
     /// 参数:
     /// - `duration_ms`: 从首次输出到完成的耗时毫秒
+    /// - `ttft_ms`: 从发请求到首个 token 的延迟毫秒
     /// - `usage`: 同一轮全部模型请求的汇总用量
     ///
     /// 返回:
@@ -206,12 +212,13 @@ impl StateStore {
     pub fn set_last_turn_metrics(
         &self,
         duration_ms: u64,
+        ttft_ms: u64,
         usage: Option<&crate::llm::Usage>,
     ) -> Result<()> {
         let Some((turn_id, _)) = self.conv_db.last_turn_identity()? else {
             return Ok(());
         };
-        self.set_turn_metrics(&turn_id, duration_ms, usage)
+        self.set_turn_metrics(&turn_id, duration_ms, ttft_ms, usage)
     }
 
     /// 中断对话轮次。

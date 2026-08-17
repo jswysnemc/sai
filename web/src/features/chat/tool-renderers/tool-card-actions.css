@@ -20,7 +20,9 @@
 }
 
 .tool-shell-head:hover .tool-card-actions,
-.tool-shell-head:focus-within .tool-card-actions {
+.tool-shell-head:focus-within .tool-card-actions,
+.tool-layout-head:hover .tool-card-actions,
+.tool-layout-head:focus-within .tool-card-actions {
   max-width: 4rem;
   opacity: 1;
 }

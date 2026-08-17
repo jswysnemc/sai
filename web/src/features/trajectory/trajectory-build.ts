@@ -53,17 +53,13 @@ export function buildTrajectory(
   const records: TrajectoryRecord[] = [];
   const turns: TrajectoryTurnHeader[] = [];
   const actualRequests = indexDebugRequests(debugRequests);
-  const hasActualRequest = actualRequests.size > 0;
-  if (!hasActualRequest && contextPrompt?.content?.trim()) {
+  if (contextPrompt?.content?.trim()) {
     records.push(systemRecord(contextPrompt));
   }
   if (!timeline) return { records, turns };
 
   for (const turn of timeline.turns) {
     const firstIndex = records.length;
-    if (hasActualRequest && !hasActualRequestForTurn(turn.turn_id, actualRequests) && contextPrompt?.content?.trim()) {
-      records.push(systemRecord(contextPrompt));
-    }
     const rounds = groupToolsByRound(turn.tools ?? []);
     const roundOf = new Map<number, number>();
     rounds.forEach((group, position) => roundOf.set(group.round, position + 1));
@@ -108,10 +104,62 @@ export function buildTrajectory(
       }
     });
 
+    if (turn.injected_content?.trim()) {
+      push({
+        id: `${turn.turn_id}/injected`,
+        kind: "message",
+        turnId: turn.turn_id,
+        turnSeq: turn.seq,
+        round: 0,
+        summary: summarizeContent(turn.injected_content),
+        label: injectedLabel(turn.injected_content),
+        startedAt: parseTimestamp(turn.user.timestamp),
+        durationMs: null,
+        failed: false,
+        running: false,
+        detail: { input: turn.injected_content }
+      });
+    }
+
     const messages = [...(turn.messages ?? [])].sort((left, right) => left.seq - right.seq);
     const firstRequest = actualRequestRecord(turn, 1, actualRequests);
     if (firstRequest) push(firstRequest);
     pushMessagesAfter(messages, 0, turn, 1, push);
+    let lastThinking = "";
+
+    /**
+     * 把一段思考追加为独立记录；与上一份相同则跳过，避免工具批次与收尾重复。
+     *
+     * @param reasoning 思考正文
+     * @param idSuffix 记录标识后缀
+     * @param round 当前模型请求序号
+     * @param startedAt 起始时刻
+     * @returns 无
+     */
+    const pushThinking = (
+      reasoning: string | undefined,
+      idSuffix: string,
+      round: number,
+      startedAt: number | null
+    ) => {
+      const text = reasoning?.trim();
+      if (!text || text === lastThinking) return;
+      lastThinking = text;
+      push({
+        id: `${turn.turn_id}/thinking/${idSuffix}`,
+        kind: "thinking",
+        turnId: turn.turn_id,
+        turnSeq: turn.seq,
+        round,
+        summary: summarizeContent(text),
+        label: null,
+        startedAt,
+        durationMs: null,
+        failed: false,
+        running: false,
+        detail: { reasoning: text }
+      });
+    };
 
     for (const group of rounds) {
       const round = roundOf.get(group.round) ?? 1;
@@ -119,6 +167,12 @@ export function buildTrajectory(
         const request = actualRequestRecord(turn, round, actualRequests);
         if (request) push(request);
       }
+      pushThinking(
+        group.tools.find((tool) => tool.reasoning?.trim())?.reasoning ?? undefined,
+        `round-${round}`,
+        round,
+        parseTimestamp(group.tools[0]?.created_at)
+      );
       for (const tool of group.tools) {
         const record = toolRecord(tool, turn, round);
         push(record);
@@ -134,7 +188,15 @@ export function buildTrajectory(
       }
     }
 
-    if (turn.assistant.content.trim() || turn.assistant.reasoning?.trim() || turn.error) {
+    if (turn.assistant.reasoning?.trim()) {
+      pushThinking(
+        turn.assistant.reasoning ?? undefined,
+        "assistant",
+        finalRound,
+        parseTimestamp(turn.assistant.timestamp)
+      );
+    }
+    if (turn.assistant.content.trim() || turn.error) {
       push({
         id: `${turn.turn_id}/assistant`,
         kind: "assistant",
@@ -149,7 +211,6 @@ export function buildTrajectory(
         running: turn.status === "running",
         detail: {
           input: turn.assistant.content,
-          reasoning: turn.assistant.reasoning ?? undefined,
           error: turn.error ?? undefined,
           imageUrls: turn.assistant.image_urls ?? [],
           usage: turn.usage ?? null,
@@ -171,28 +232,67 @@ export function buildTrajectory(
     }
   }
 
-  const compaction = timeline.compaction;
-  if (compaction?.summary?.trim()) {
-    records.push({
-      id: "compaction",
-      index: records.length + 1,
-      kind: "compaction",
-      turnId: null,
-      turnSeq: null,
-      turnStart: true,
-      round: 0,
-      roundStart: true,
-      summary: summarizeContent(compaction.summary),
-      label: compaction.reason,
-      startedAt: parseTimestamp(compaction.created_at),
-      durationMs: null,
-      failed: false,
-      running: false,
-      detail: { input: compaction.summary }
-    });
-  }
-
+  insertCompactionRecord(records, turns, timeline.compaction);
   return { records, turns };
+}
+
+/**
+ * 把压缩摘要插到被覆盖轮次之后、仍保留的轮次之前。
+ *
+ * 钉在列表末尾会让人以为前面的轮次消失了：第 5 轮正在进行时，
+ * 摘要其实是 1–4 轮的边界，应该出现在第 5 轮分隔行上面。
+ *
+ * @param records 已按时序排好的记录
+ * @param turns 轮次分隔数据
+ * @param compaction 时间线附带的最新压缩摘要
+ * @returns 无
+ */
+function insertCompactionRecord(
+  records: TrajectoryRecord[],
+  turns: readonly TrajectoryTurnHeader[],
+  compaction: SessionTimeline["compaction"]
+): void {
+  const summary = compaction?.summary?.trim();
+  if (!compaction || !summary) return;
+  const record: TrajectoryRecord = {
+    id: "compaction",
+    index: 0,
+    kind: "compaction",
+    turnId: null,
+    turnSeq: null,
+    turnStart: true,
+    round: 0,
+    roundStart: true,
+    summary: summarizeContent(summary),
+    label: compaction.reason,
+    startedAt: parseTimestamp(compaction.created_at),
+    durationMs: null,
+    failed: false,
+    running: false,
+    detail: { input: compaction.summary }
+  };
+  const covered = Math.min(Math.max(compaction.turn_count, 0), turns.length);
+  const insertAt = covered > 0 && covered < turns.length
+    ? lastRecordIndexForTurn(records, turns[covered - 1].turnId) + 1
+    : records.length;
+  records.splice(insertAt, 0, record);
+  records.forEach((item, index) => {
+    item.index = index + 1;
+  });
+}
+
+/**
+ * 返回指定轮次最后一条记录的下标。
+ *
+ * @param records 记录表
+ * @param turnId 轮次标识
+ * @returns 最后一条的下标；没有该轮时返回 -1
+ */
+function lastRecordIndexForTurn(records: readonly TrajectoryRecord[], turnId: string): number {
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    if (records[index].turnId === turnId) return index;
+  }
+  return -1;
 }
 
 /** 按持久化轮次和模型子轮编号索引真实请求快照。 */
@@ -205,14 +305,6 @@ function indexDebugRequests(requests?: readonly SessionDebugRequest[]): Readonly
   return indexed;
 }
 
-/** 判断某轮是否已有至少一条真实模型请求快照。 */
-function hasActualRequestForTurn(turnId: string, requests: ReadonlyMap<string, SessionDebugRequest>): boolean {
-  for (const key of requests.keys()) {
-    if (key.startsWith(`${turnId}/`)) return true;
-  }
-  return false;
-}
-
 /** 把真实请求体中的 system 消息和工具定义转换为轨迹记录。 */
 function actualRequestRecord(
   turn: SessionTimelineTurn,
@@ -222,18 +314,7 @@ function actualRequestRecord(
   const request = requests.get(`${turn.turn_id}/${round}`);
   const body = request?.request_body;
   if (!body) return null;
-  const messages = [
-    ...(Array.isArray(body.messages) ? body.messages : []),
-    ...(Array.isArray(body.input) ? body.input : [])
-  ];
-  const system = messages
-    .filter((message): message is Record<string, unknown> => Boolean(message && typeof message === "object" && message.role === "system"))
-    .map((message) => message.content)
-    .map(contentToText)
-    .filter(Boolean)
-    .join("\n\n");
-  const explicitSystem = contentToText(body.system);
-  const systemContent = [explicitSystem, system].filter(Boolean).join("\n\n");
+  const systemContent = extractSystemContent(body);
   const tools = Array.isArray(body.tools) ? JSON.stringify(body.tools, null, 2) : "";
   const sections = [
     systemContent ? { id: "actual-system", label: "System prompt", content: systemContent } : null,
@@ -257,15 +338,50 @@ function actualRequestRecord(
   };
 }
 
+/** 从 chat completions / Responses 请求体中提取系统提示。 */
+function extractSystemContent(body: Record<string, unknown>): string {
+  const parts = [
+    contentToText(body.instructions),
+    contentToText(body.system)
+  ];
+  const items = [
+    ...(Array.isArray(body.messages) ? body.messages : []),
+    ...(Array.isArray(body.input) ? body.input : [])
+  ];
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    if (record.role !== "system" && record.role !== "developer") continue;
+    const text = contentToText(record.content);
+    if (text) parts.push(text);
+  }
+  return parts.filter(Boolean).join("\n\n");
+}
+
 /** 将 OpenAI 文本或多段内容转换为可读文本。 */
 function contentToText(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content
     .filter((part): part is Record<string, unknown> => Boolean(part && typeof part === "object"))
-    .map((part) => (typeof part.text === "string" ? part.text : ""))
+    .map((part) => {
+      if (typeof part.text === "string") return part.text;
+      if (typeof part.content === "string") return part.content;
+      return "";
+    })
     .filter(Boolean)
     .join("\n");
+}
+
+/** 根据注入正文里的标签给出短标签。 */
+function injectedLabel(content: string): string {
+  const tags: string[] = [];
+  if (content.includes("<context-state")) tags.push("context-state");
+  if (content.includes("instruction_files") || content.includes("<instruction-files")) tags.push("AGENT.md");
+  if (content.includes("<context-resource")) tags.push("resource");
+  if (content.includes("<memory")) tags.push("memory");
+  if (content.includes("<mode-instructions")) tags.push("mode");
+  return tags.join(" · ") || "inject";
 }
 
 /**

@@ -29,7 +29,45 @@ describe("HistoryTurn", () => {
 
     expect(html).toContain("已拒绝");
     expect(html).toContain("保留文件");
-    expect(html.indexOf("已拒绝")).toBeLessThan(html.indexOf("Edit"));
+    expect(html).toContain("准备回复");
+    expect(html).toContain("工具 1");
+  });
+
+  it("folds completed tools behind the activity header instead of stacking them", () => {
+    const turn: SessionTimelineTurn = {
+      turn_id: "fold-turn",
+      seq: 1,
+      status: "completed",
+      automatic: false,
+      user: { timestamp: "now", content: "读文件" },
+      assistant: { timestamp: "later", content: "已经看过了" },
+      tools: [
+        {
+          id: "read-a",
+          name: "read_file",
+          arguments: "{\"path\":\"src/a.rs\"}",
+          status: "completed",
+          output: JSON.stringify({ type: "text-page", path: "src/a.rs", content: "1: a" }),
+          created_at: "now"
+        },
+        {
+          id: "read-b",
+          name: "read_file",
+          arguments: "{\"path\":\"src/b.rs\"}",
+          status: "completed",
+          output: JSON.stringify({ type: "text-page", path: "src/b.rs", content: "1: b" }),
+          created_at: "now"
+        }
+      ]
+    };
+
+    const html = renderWithProviders(<HistoryTurn turn={turn} />);
+
+    expect(html).toContain("准备回复");
+    expect(html).toContain("工具 2");
+    expect(html).not.toContain("src/a.rs");
+    expect(html).not.toContain("src/b.rs");
+    expect(html).not.toContain("tool-wave-stack");
   });
 
   it("does not attribute a durable interruption to the user without evidence", () => {

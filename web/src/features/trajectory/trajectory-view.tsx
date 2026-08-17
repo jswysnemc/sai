@@ -2,15 +2,17 @@ import { useMemo, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import type { SessionContextPrompt, SessionTimeline, SubagentDetail } from "../../api/contracts";
+import { useI18n } from "../i18n/use-i18n";
 import { buildTrajectory } from "./trajectory-build";
 import { TrajectoryDetails } from "./trajectory-details";
 import { countByTurn, filterRecords } from "./trajectory-filter";
 import { TrajectoryOverview } from "./trajectory-overview";
 import type { TrajectoryRecordKind } from "./trajectory-record";
 import { trajectoryDomain, type TimeDomain, type TrajectoryScaleMode } from "./trajectory-scale";
+import { TrajectorySplit } from "./trajectory-split";
+import { referencedSubagentIds } from "./trajectory-subagent";
 import { TrajectoryTable } from "./trajectory-table";
 import { TrajectoryToolbar } from "./trajectory-toolbar";
-import { referencedSubagentIds } from "./trajectory-subagent";
 import "./trajectory-view.css";
 
 type TrajectoryViewProps = {
@@ -27,13 +29,15 @@ const NO_HIDDEN_KINDS: ReadonlySet<TrajectoryRecordKind> = new Set();
 /**
  * 渲染会话的调用轨迹视图。
  *
- * 概览、记录表与详情共用一份记录集合：三者显示的是同一批数据的
- * 三种投影，任一处的选择都能在另两处对上位置。
+ * 时间轴、记录表与详情共用一份记录集合：三者显示的是同一批数据的
+ * 三种投影，任一处的选择都能在另两处对上位置。记录表在左作总览，
+ * 详情在右看完整文本，中间可拖拽调宽。
  *
  * @param props 会话时间线与加载状态
  * @returns 轨迹视图
  */
 export function TrajectoryView({ sessionId, timeline, contextPrompt, loading }: TrajectoryViewProps) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<TrajectoryScaleMode>("duration");
   const [hiddenKinds, setHiddenKinds] = useState<ReadonlySet<TrajectoryRecordKind>>(NO_HIDDEN_KINDS);
@@ -172,19 +176,23 @@ export function TrajectoryView({ sessionId, timeline, contextPrompt, loading }: 
         onSelect={setSelectedId}
       />
       <div className="trajectory-view-body" data-inspecting={selected !== null || undefined}>
-        <div className="trajectory-view-ledger">
-          <TrajectoryTable
-            records={visible}
-            turns={model.turns}
-            turnCounts={turnCounts}
-            collapsedTurns={collapsedTurns}
-            onToggleTurn={toggleTurn}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            loading={loading}
-          />
-        </div>
-        <TrajectoryDetails record={selectedWithFullOutput} onClose={() => setSelectedId(null)} />
+        <TrajectorySplit
+          leftLabel={t("Overview", "总览")}
+          rightLabel={t("Details", "详情")}
+          left={(
+            <TrajectoryTable
+              records={visible}
+              turns={model.turns}
+              turnCounts={turnCounts}
+              collapsedTurns={collapsedTurns}
+              onToggleTurn={toggleTurn}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              loading={loading}
+            />
+          )}
+          right={<TrajectoryDetails record={selectedWithFullOutput} onClose={() => setSelectedId(null)} />}
+        />
       </div>
     </div>
   );

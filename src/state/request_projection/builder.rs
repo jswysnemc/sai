@@ -1,5 +1,5 @@
 use super::estimate::project_provider_turn_estimate;
-use super::memory_injection::memory_index_already_injected;
+use super::memory_injection::memory_index_injection;
 use super::model::{
     DynamicContextSource, ProjectedBaseContext, ProjectedRequest, ProjectedSessionSummary,
     ProjectionKind, ProjectionStats, ProjectionWarning,
@@ -174,13 +174,12 @@ pub(crate) fn project_provider_turn_from_base_projection(
     let mut base_messages = base_projection.messages;
     let mut dynamic_sources = base_projection.dynamic_sources;
     let mut user_contexts = base_projection.user_contexts;
-    // 索引与最近一次注入的完全相同就跳过：它已经在历史里，重发只是让同一份
-    // 内容在窗口里堆叠，详见 memory_injection
+    // 索引没变就跳过；本模型刚写入或其它进程改了则按差异/全文追加，详见 memory_injection
     if let Some(prompt) =
-        memory_index_prompt.filter(|prompt| !memory_index_already_injected(&base_messages, prompt))
+        memory_index_prompt.and_then(|prompt| memory_index_injection(&base_messages, prompt))
     {
-        dynamic_sources.push(dynamic_source("memory_association", prompt));
-        user_contexts.push(prompt.to_string());
+        dynamic_sources.push(dynamic_source("memory_association", &prompt));
+        user_contexts.push(prompt);
     }
     if let Some(reminder) = auto_meme_reminder {
         dynamic_sources.push(dynamic_source("auto_meme", reminder));

@@ -178,6 +178,11 @@ impl DiffCell {
     pub(crate) fn finish(&mut self, ok: bool) {
         self.completed = Some(ok);
     }
+
+    /// 编辑是否仍在执行。
+    pub(crate) fn is_pending(&self) -> bool {
+        self.completed.is_none()
+    }
 }
 
 /// 渲染已固化的 diff 快照。

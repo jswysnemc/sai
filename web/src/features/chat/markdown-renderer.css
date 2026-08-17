@@ -3,9 +3,15 @@
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
+  /* 首行中文/引号的字形会略高出行盒，无内边距时会被 overflow 裁成半行 */
+  padding-block: 0.2em;
   /* anywhere 会在中文说明与文件 pill 交界处过度拆字，造成「悬空半行」观感 */
   overflow-wrap: break-word;
   word-wrap: break-word;
+  /* 列表首行垂直居中用这条行高算圆点位置，各预设只改变量 */
+  --md-list-leading: 1.68;
+  /* 禁止浏览器用假粗体补齐缺失字重，Edge / Chrome 合成加粗粗细不同 */
+  font-synthesis-weight: none;
 }
 
 .markdown-body > :first-child { margin-top: 0; }
@@ -33,34 +39,63 @@
 .markdown-body h6 { margin:var(--space-md) 0 var(--space-2xs); color: var(--ink-soft); font-size: 0.92em; }
 
 /*
- * 列表标记必须显式声明：Tailwind 的 preflight 把 ul/ol 重置成
- * list-style: none，markdown 正文里的项目符号会整体消失。
+ * 列表：不用浏览器原生 ::marker。
+ * disc/circle 的字形、字号和基线在 Chrome / Edge / Firefox 上各算各的，
+ * 中英混排时圆点会明显高于或低于首行文字。自绘圆点按行高垂直居中。
  */
 .markdown-body ul,
 .markdown-body ol {
   margin:var(--space-xs) 0;
   padding-left:var(--space-4xl);
-  list-style-position: outside;
 }
 
 .markdown-body ul {
-  list-style-type: disc;
-}
-
-.markdown-body ul ul {
-  list-style-type: circle;
-}
-
-.markdown-body ul ul ul {
-  list-style-type: square;
+  list-style: none;
 }
 
 .markdown-body ol {
   list-style-type: decimal;
+  list-style-position: outside;
 }
 
 .markdown-body ol ol {
   list-style-type: lower-alpha;
+}
+
+.markdown-body ol > li::marker {
+  font-family: inherit;
+  font-size: 0.92em;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+}
+
+.markdown-body li {
+  position: relative;
+  margin:var(--space-3xs) 0;
+  line-height: var(--md-list-leading);
+}
+
+.markdown-body ul > li::before {
+  content: "";
+  position: absolute;
+  top: calc(1em * var(--md-list-leading) / 2);
+  left: calc(-1 * var(--space-4xl) + 0.42em);
+  width: 0.34em;
+  height: 0.34em;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateY(-50%);
+}
+
+.markdown-body ul ul > li::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.markdown-body ul ul ul > li::before {
+  border-radius: 1px;
+  background: currentColor;
+  box-shadow: none;
 }
 
 /* 任务列表自带复选框，再画一个圆点是两套标记 */
@@ -68,9 +103,8 @@
   list-style-type: none;
 }
 
-.markdown-body li {
-  margin:var(--space-3xs) 0;
-  line-height: 1.68;
+.markdown-body li:has(> input[type="checkbox"])::before {
+  content: none;
 }
 
 .markdown-body li > p {
@@ -137,52 +171,64 @@
 
 /* 行内代码：底色已足够区分，去掉描边，行内不再出现一圈细框打断阅读节奏 */
 .inline-code {
-  padding:var(--space-3xs) var(--space-xs);
-  border-radius:var(--radius-1);
+  padding: 0.12em 0.4em;
+  border-radius: var(--radius-1);
   background: var(--paper-deep);
   color: var(--code-text);
-  font: 500 0.88em/1.5 var(--font-code);
+  font: 500 0.88em/1.15 var(--font-code);
+  vertical-align: middle;
 }
 
 /*
- * 行内文件 pill：压过 .tool-file-reference 的 inline-flex。
- * flex 整块不可拆时，后面的「—— 说明」常被整段挤到下一行，上一行右侧留白。
+ * 行内文件 pill：外层保持 inline，避免整块 flex 把后面的说明挤到下一行。
+ * 图标必须放在按钮内部做 inline-flex 排列，不能当兄弟节点——
+ * 外层一旦不是 flex，图标会叠在路径文字上。
  */
 .markdown-body .inline-file-reference {
-  display: inline-block;
+  display: inline;
   max-width: min(100%, 16rem);
-  gap: 0;
-  padding: 0.05em 0.35em;
-  border-radius: var(--radius-1);
-  background: var(--paper-deep);
-  vertical-align: baseline;
-  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .markdown-body .inline-file-reference svg,
 .markdown-body .inline-file-reference img {
-  display: inline-block;
-  width: 13px;
-  height: 13px;
-  margin-right: 0.2em;
-  vertical-align: -0.15em;
+  display: block;
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
 }
 
 .markdown-body .inline-file-reference button {
-  display: inline;
-  max-width: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  max-width: min(100%, 16rem);
+  min-height: 0;
+  box-sizing: border-box;
   flex: none;
-  overflow: visible;
+  overflow: hidden;
+  padding: 0.12em 0.4em;
+  border: 0;
+  border-radius: var(--radius-1);
+  background: var(--paper-deep);
   color: var(--blue);
   font-size: 0.88em;
-  line-height: inherit;
+  line-height: 1.15;
   white-space: nowrap;
-  vertical-align: baseline;
-  text-overflow: clip;
+  vertical-align: middle;
+  text-overflow: ellipsis;
 }
 
-.markdown-body .inline-file-reference:hover {
+.markdown-body .inline-file-reference .tool-file-reference-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.markdown-body .inline-file-reference button:hover {
   background: color-mix(in srgb, var(--blue) 10%, var(--paper-deep));
+  color: var(--blue);
+  text-decoration: none;
 }
 
 /*
@@ -564,9 +610,13 @@
 .markdown-body[data-md-preset="compact"] h3 { margin:var(--space-md) 0 var(--space-3xs); font-size: 1.06em; }
 .markdown-body[data-md-preset="compact"] h4,
 .markdown-body[data-md-preset="compact"] h5 { margin:var(--space-sm) 0 var(--space-3xs); font-size: 1em; }
+.markdown-body[data-md-preset="compact"] { --md-list-leading: 1.5; }
 .markdown-body[data-md-preset="compact"] ul,
 .markdown-body[data-md-preset="compact"] ol { margin:var(--space-3xs) 0; padding-left:var(--space-2xl); }
-.markdown-body[data-md-preset="compact"] li { margin: 1px 0; line-height: 1.5; }
+.markdown-body[data-md-preset="compact"] li { margin: 1px 0; }
+.markdown-body[data-md-preset="compact"] ul > li::before {
+  left: calc(-1 * var(--space-2xl) + 0.32em);
+}
 .markdown-body[data-md-preset="compact"] blockquote { margin:var(--space-xs) 0; padding:var(--space-3xs) 0 var(--space-3xs) var(--space-sm); }
 
 /* 文档：长文阅读优先——大标题、宽行高、充足段落留白 */
@@ -574,7 +624,8 @@
 .markdown-body[data-md-preset="document"] h1 { margin:var(--space-3xl) 0 var(--space-md); padding-bottom:var(--space-sm); font-size: 1.7em; }
 .markdown-body[data-md-preset="document"] h2 { margin:var(--space-3xl) 0 var(--space-sm); padding-bottom:var(--space-2xs); border-bottom: 1px solid var(--line); font-size: 1.42em; }
 .markdown-body[data-md-preset="document"] h3 { margin:var(--space-2xl) 0 var(--space-xs); font-size: 1.22em; }
-.markdown-body[data-md-preset="document"] li { margin:var(--space-2xs) 0; line-height: 1.8; }
+.markdown-body[data-md-preset="document"] { --md-list-leading: 1.8; }
+.markdown-body[data-md-preset="document"] li { margin:var(--space-2xs) 0; }
 .markdown-body[data-md-preset="document"] blockquote {
   margin:var(--space-lg) 0;
   padding:var(--space-sm) var(--space-lg);
@@ -589,7 +640,8 @@
 .markdown-body[data-md-preset="vivid"] h1 { border-bottom-color: color-mix(in srgb, var(--blue) 35%, transparent); }
 .markdown-body[data-md-preset="vivid"] h3,
 .markdown-body[data-md-preset="vivid"] h4 { color: color-mix(in srgb, var(--blue) 70%, var(--ink)); }
-.markdown-body[data-md-preset="vivid"] li::marker { color: var(--blue); }
+.markdown-body[data-md-preset="vivid"] ul > li::before { color: var(--blue); }
+.markdown-body[data-md-preset="vivid"] ol > li::marker { color: var(--blue); }
 .markdown-body[data-md-preset="vivid"] blockquote {
   border-left-color: var(--blue);
   background: color-mix(in srgb, var(--blue) 6%, transparent);

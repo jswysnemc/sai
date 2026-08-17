@@ -1,58 +1,34 @@
-import { Ban, CheckCircle2, ChevronDown, Circle, CircleDot, ListChecks } from "lucide-react";
-import { usePersistedExpand } from "../message/tool-expand-state";
+import { Ban, CheckCircle2, Circle, CircleDot } from "lucide-react";
 import type { TodoStatus } from "../../../api/contracts";
-import { parseTodoTool, statusLabel, todoToolHeadline } from "./todo-tool-data";
+import { parseTodoTool } from "./todo-tool-data";
 import "./todo-tool-view.css";
-import { useI18n } from "../../i18n/use-i18n";
 
 const statusIcons = { pending: Circle, in_progress: CircleDot, completed: CheckCircle2, cancelled: Ban } satisfies Record<TodoStatus, typeof Circle>;
 
 type TodoToolItem = { id: string; text: string; status: TodoStatus };
 
 /**
- * 渲染消息流中的 todo 工具调用卡片。
- *
- * 折叠态展示一句摘要(创建/更新/删除了什么),展开态展示调用后的清单全量快照,
- * 本次变更的条目会高亮标记,避免直接暴露原始 JSON。
+ * 渲染 todo 工具展开后的清单，头部由统一工具行承担。
  *
  * @param props todo 工具调用的参数与输出
- * @returns todo 工具卡片
+ * @returns 清单列表；没有条目时为空
  */
-export function TodoToolView({ toolId, argumentsText, output }: { toolId?: string; argumentsText: string; output: string }) {
-  const { locale } = useI18n();
-  const [expanded, setExpanded] = usePersistedExpand(toolId || argumentsText.slice(0, 64), false);
+export function TodoToolView({ argumentsText, output }: { toolId?: string; argumentsText: string; output: string }) {
   const summary = parseTodoTool(argumentsText, output);
-  const headline = todoToolHeadline(summary, locale);
   const items = parseItems(output);
   const changed = new Set(summary.changedIds);
-  const canExpand = items.length > 0;
+  if (items.length === 0) return null;
   return (
-    <div className={`todo-tool-view is-${summary.action}`}>
-      <button
-        type="button"
-        className="todo-tool-head"
-        onClick={() => canExpand && setExpanded((value) => !value)}
-        aria-expanded={canExpand ? expanded : undefined}
-        disabled={!canExpand}
-      >
-        <span className="todo-tool-icon"><ListChecks size={14} /></span>
-        <span className="todo-tool-headline">{headline}</span>
-        {summary.status && summary.action === "update" && <span className={`todo-tool-tag is-${summary.status}`}>{statusLabel(summary.status, locale)}</span>}
-        {canExpand && <ChevronDown size={14} className={expanded ? "open" : ""} />}
-      </button>
-      {expanded && canExpand && (
-        <ul className="todo-tool-list">
-          {items.map((item) => {
-            const Icon = statusIcons[item.status] ?? Circle;
-            return (
-              <li key={item.id} className={`todo-tool-item is-${item.status}${changed.has(item.id) ? " is-changed" : ""}`}>
-                <Icon size={14} /><span>{item.text}</span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+    <ul className="todo-tool-list">
+      {items.map((item) => {
+        const Icon = statusIcons[item.status] ?? Circle;
+        return (
+          <li key={item.id} className={`todo-tool-item is-${item.status}${changed.has(item.id) ? " is-changed" : ""}`}>
+            <Icon size={14} /><span>{item.text}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

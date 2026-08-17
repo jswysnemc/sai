@@ -16,6 +16,7 @@ mod danger;
 mod redact;
 mod secret;
 mod session;
+mod sudo;
 mod tools;
 mod transfer;
 

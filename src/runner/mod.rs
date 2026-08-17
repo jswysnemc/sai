@@ -162,6 +162,7 @@ mod tests {
             usage: None,
             tool_calls: Vec::new(),
             duration_ms: 0,
+            ttft_ms: 0,
         }));
 
         assert_eq!(

@@ -86,7 +86,7 @@ export function ToolSummaryText({
   );
 
   return (
-    <span className="flex min-w-0 items-center gap-2">
+    <span className="tool-layout-summary">
       <span className="min-w-0 truncate">{shown.primaryText}</span>
       {shown.secondaryText ? (
         <span className="min-w-0 truncate font-mono text-ink-soft">{shown.secondaryText}</span>

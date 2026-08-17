@@ -122,14 +122,43 @@
 
 .agent-tool-permission-group-head {
   display: flex;
-  align-items: center;
-  gap:var(--space-xs);
+  flex-direction: column;
+  align-items: stretch;
+  gap:var(--space-3xs);
   min-height: 2.25rem;
-  padding:var(--space-3xs) var(--space-md);
+  padding:var(--space-xs) var(--space-md);
   border-bottom: 1px solid var(--line);
   background: var(--control-surface);
 }
 
+.agent-tool-permission-group-head-row {
+  display: flex;
+  align-items: center;
+  gap:var(--space-xs);
+  min-width: 0;
+}
+
+.agent-tool-permission-group-head-row .agent-tool-mode-switch {
+  margin-left: auto;
+}
+
+.agent-tool-permission-group-hint {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size:var(--text-2xs);
+  line-height: 1.45;
+}
+
+.agent-tool-permission-group-link {
+  width: fit-content;
+  color: var(--signal);
+  font-size:var(--text-2xs);
+  text-decoration: none;
+}
+
+.agent-tool-permission-group-link:hover {
+  text-decoration: underline;
+}
 
 .agent-tool-permission-group-head span {
   margin-left: auto;
@@ -451,7 +480,7 @@
     flex: 1;
   }
 
-  .agent-tool-permission-group-head {
+  .agent-tool-permission-group-head-row {
     flex-wrap: wrap;
   }
 

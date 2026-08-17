@@ -10,7 +10,7 @@ mod reset;
 mod session;
 
 pub use agent::run_agent_command;
-pub use context_info::context_info_text;
+pub use context_info::{context_info_for_mode, context_info_plain};
 pub use goal::{execute_goal_command, GoalCommand};
 pub use help::help_text;
 pub use model::run_model_command;

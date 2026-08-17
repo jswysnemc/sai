@@ -136,7 +136,7 @@ export const HistoryTurn = memo(function HistoryTurn({
               : undefined}
           />
         )}
-        <TurnMetrics durationMs={turn.duration_ms} usage={turn.usage} />
+        <TurnMetrics durationMs={turn.duration_ms} ttftMs={turn.ttft_ms} usage={turn.usage} />
         <TurnFileChanges
           changes={fileChanges}
           tools={turn.tools}
@@ -219,7 +219,7 @@ export const LiveRunMessage = memo(function LiveRunMessage({
           )}
           {!running && state.completed && (
             <>
-              <TurnMetrics durationMs={state.durationMs} usage={state.usage} />
+              <TurnMetrics durationMs={state.durationMs} ttftMs={state.ttftMs} usage={state.usage} />
               <TurnFileChanges
                 changes={collectTurnFileChanges(state.tools)}
                 tools={state.tools}

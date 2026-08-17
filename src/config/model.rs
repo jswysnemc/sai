@@ -392,12 +392,74 @@ impl ProviderModelChoice {
 pub struct ContextConfig {
     #[serde(default = "default_context_chars")]
     pub default_max_chars: usize,
+    /// 自动压缩比例，占用达到窗口的该比例时触发。
+    #[serde(
+        default = "default_compaction_ratio",
+        skip_serializing_if = "is_default_compaction_ratio"
+    )]
+    pub compaction_ratio: f32,
+    /// 自动压缩预留 token；0 表示只按比例。大窗口按剩余量触发。
+    #[serde(
+        default = "default_compaction_reserve_tokens",
+        skip_serializing_if = "is_default_compaction_reserve_tokens"
+    )]
+    pub compaction_reserve_tokens: usize,
     /// 压缩专用供应商；留空时沿用当前会话供应商。
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub compaction_provider_id: String,
     /// 压缩专用模型；留空时沿用当前会话模型。
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub compaction_model: String,
+}
+
+impl ContextConfig {
+    /// 夹紧后的自动压缩比例。
+    ///
+    /// 返回:
+    /// - 0.50–0.99 之间的比例
+    pub fn clamped_compaction_ratio(&self) -> f32 {
+        parse_compaction_ratio_value(self.compaction_ratio)
+    }
+}
+
+/// 自动压缩比例下限。
+pub const MIN_COMPACTION_RATIO: f32 = 0.50;
+/// 自动压缩比例上限。
+pub const MAX_COMPACTION_RATIO: f32 = 0.99;
+
+/// 把数值比例夹紧到合法区间；非有限值回退默认 0.9。
+///
+/// 参数:
+/// - `ratio`: 原始比例
+///
+/// 返回:
+/// - 0.50–0.99 之间的比例
+pub fn parse_compaction_ratio_value(ratio: f32) -> f32 {
+    if !ratio.is_finite() {
+        return default_compaction_ratio();
+    }
+    ratio.clamp(MIN_COMPACTION_RATIO, MAX_COMPACTION_RATIO)
+}
+
+/// 解析表单里的压缩比例，支持 `0.9`、`90`、`90%`。
+///
+/// 参数:
+/// - `value`: 用户输入
+///
+/// 返回:
+/// - 夹紧后的比例；无法解析时返回错误
+pub fn parse_compaction_ratio_text(value: &str) -> anyhow::Result<f32> {
+    let trimmed = value.trim().trim_end_matches('%').trim();
+    let parsed = trimmed.parse::<f32>().map_err(|_| {
+        anyhow::anyhow!("context.compaction_ratio is invalid: {value}")
+    })?;
+    let ratio = if parsed > 1.0 { parsed / 100.0 } else { parsed };
+    if !ratio.is_finite() || ratio < MIN_COMPACTION_RATIO || ratio > MAX_COMPACTION_RATIO {
+        anyhow::bail!(
+            "context.compaction_ratio must be between {MIN_COMPACTION_RATIO} and {MAX_COMPACTION_RATIO}"
+        );
+    }
+    Ok(ratio)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

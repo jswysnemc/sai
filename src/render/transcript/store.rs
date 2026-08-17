@@ -61,6 +61,7 @@ pub(crate) struct TranscriptStore {
     /// 帧号由起点到当前的时长换算，而不是每次刷新加一：后者让动效速度
     /// 取决于主循环的唤醒间隔，主循环一变动效就跟着快慢不定。
     pub(super) live_animation_started: Option<Instant>,
+    /// 最近一次活动工具 cell；并发时真正的匹配走 FIFO 扫描，不依赖这一项。
     pub(super) active_tool_index: Option<usize>,
     pub(super) work_status: Option<WorkStatus>,
     pub(super) work_status_started: Option<Instant>,

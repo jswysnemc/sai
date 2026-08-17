@@ -34,12 +34,14 @@ export function EditToolView({ argumentsText, output, headerPath }: EditToolView
   const oldString = stringField(args, "old_string");
   const newString = stringField(args, "new_string");
   const changedFiles = Array.isArray(result?.changed_files) ? result.changed_files as ChangedFile[] : [];
-  const syntheticPatch = !patch && path && (oldString || content)
+  const outputDiff = result ? stringField(result, "diff") : "";
+  const syntheticPatch = !outputDiff && !patch && path && (oldString || content)
     ? buildSyntheticPatch(path, oldString, newString || content, Boolean(content) && !oldString)
     : "";
+  const chosen = outputDiff || patch || syntheticPatch;
   return (
     <div className="edit-tool-view">
-      {!patch && !syntheticPatch && changedFiles.length > 0 && (
+      {!chosen && changedFiles.length > 0 && (
         <div className="changed-file-list">
           {changedFiles.map((file, index) => (
             <div className="changed-file" key={`${file.path}-${index}`}>
@@ -54,10 +56,10 @@ export function EditToolView({ argumentsText, output, headerPath }: EditToolView
           ))}
         </div>
       )}
-      {(patch || syntheticPatch)
+      {chosen
         ? (
           <InlineDiffPreview>
-            <DiffView source={patch || syntheticPatch} headerPath={headerPath || path} />
+            <DiffView source={chosen} headerPath={headerPath || path} />
           </InlineDiffPreview>
         )
         // 参数仍是未闭合 JSON 时不展示 `{...` 碎片；等 diff/完整参数就绪再渲染
@@ -65,6 +67,17 @@ export function EditToolView({ argumentsText, output, headerPath }: EditToolView
       {output && !result && <pre className={`generic-tool-block result${/^tool error:/i.test(output.trimStart()) ? " tool-error-output" : ""}`}><code>{output}</code></pre>}
     </div>
   );
+}
+
+/**
+ * 统计补丁中以指定前缀开头的行数。
+ *
+ * @param source 补丁文本
+ * @param prefix 行首字符
+ * @returns 匹配行数
+ */
+function countPrefix(source: string, prefix: string): number {
+  return source.split("\n").filter((line) => line.startsWith(prefix)).length;
 }
 
 /**

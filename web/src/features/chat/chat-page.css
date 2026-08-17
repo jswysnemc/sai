@@ -1,13 +1,14 @@
 /*
  * 聊天列宽
  *
- * 消息列与输入框此前各写各的宽度（820 减两侧 16 的内边距 = 788，输入框 784），
- * 居中后左右各差 2px，正文与输入框的边缘对不齐。
- * 现由同一组变量导出：输入框宽度 = 列宽 - 两侧留白，两者内容边缘严格重合。
+ * 消息列与输入框共用同一组变量：输入框宽度 = 列宽 - 两侧留白，内容边缘对齐。
+ * 两侧留白要能放下会话分支、Git 总览等悬浮入口，正文不被盖住。
  */
 :root {
-  --chat-column-width: 820px;
-  --chat-column-gutter: var(--space-2xl);
+  /* 列宽随两侧留白一起加宽，正文可用宽度保持约 788px，不因让位按钮而变窄 */
+  --chat-column-width: 900px;
+  /* 左右各 3.5rem：容纳会话分支、Git 总览等悬浮入口，正文不被盖住 */
+  --chat-column-gutter: 3.5rem;
   --chat-content-width: calc(var(--chat-column-width) - var(--chat-column-gutter) * 2);
   /* 会话眉头高度：分支入口、工作区 `+` 等悬浮元件都按它对齐 */
   --chat-header-height: 2.5rem;
@@ -27,6 +28,7 @@
   position: relative;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
   container-type: inline-size;
 }
 
@@ -37,6 +39,7 @@
   height: 100%;
   min-height: 0;
   overflow: auto;
+  overflow-anchor: none;
 }
 
 .conversation-turn {
@@ -197,7 +200,7 @@
   display: grid;
   min-width: 0;
   max-width: 100%;
-  gap:var(--space-md);
+  gap: var(--space-sm);
 }
 
 /*
@@ -231,9 +234,9 @@
 @keyframes pulse { 50% { opacity: 0.35; } }
 
 @media (max-width: 48rem) {
-  /* 窄屏收紧两侧留白：改的是变量本身，输入框宽度随之跟随，对齐关系不破坏 */
+  /* 窄屏按钮收为图标，留白仍要盖住入口宽度，输入框宽度随变量跟随 */
   :root {
-    --chat-column-gutter: var(--space-xl);
+    --chat-column-gutter: 2.75rem;
   }
 
   .message-column { padding-top:var(--space-2xl); }
@@ -294,15 +297,33 @@
 .message-copy:hover {
   color: var(--ink);
 }
-.context-compaction-block { display:flex; flex-direction:column; gap:var(--space-sm); width:100%; max-width:100%; margin:var(--space-xs) 0; }
+.context-compaction-block { display:flex; flex-direction:column; gap:var(--space-sm); width:100%; max-width:100%; margin:var(--space-xs) 0; overflow-anchor: none; }
 .context-compaction-part { display:flex; align-items:center; gap:var(--space-xs); width:max-content; max-width:100%; padding:var(--space-2xs) var(--space-sm); border:1px solid var(--line); border-radius:var(--radius-3); color:var(--ink-soft); background:var(--control-surface); font-size:var(--text-sm); }
 .context-compaction-block.running .context-compaction-part { color:var(--signal); border-color:color-mix(in srgb, var(--signal) 30%, var(--line)); }
 .context-compaction-divider { display:flex; align-items:center; gap:var(--space-md); width:100%; margin:var(--space-3xs) 0; color:var(--ink-soft); font-size:var(--text-xs); user-select:none; }
 .context-compaction-divider-line { flex:1 1 auto; height:1px; background:var(--line); }
 .context-compaction-divider-label { flex:0 0 auto; letter-spacing:0.02em; }
-.context-compaction-summary { width:100%; max-width:100%; padding:var(--space-md) var(--space-lg); border:1px solid var(--line); border-radius:var(--radius-4); background:var(--control-surface); color:var(--ink-soft); font-size:var(--text-sm); }
-.context-compaction-summary .markdown-body { font-size:inherit; color:inherit; }
-.conversation-compaction { width:100%; max-width:100%; margin:var(--space-2xs) 0 var(--space-md); }
+.context-compaction-summary {
+  width: 100%;
+  max-width: 100%;
+  max-height: min(32rem, calc(100dvh - 16rem));
+  overflow: auto;
+  overflow-anchor: none;
+  overscroll-behavior: contain;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-4);
+  background: var(--control-surface);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+.context-compaction-summary .markdown-body {
+  font-size: inherit;
+  color: inherit;
+  overflow: hidden;
+  overflow-anchor: none;
+}
+.conversation-compaction { width:100%; max-width:100%; margin:var(--space-2xs) 0 var(--space-md); overflow-anchor: none; }
 
 /* 历史加载骨架：占位宽度与助手正文一致，加载完成后不产生横向跳动 */
 .chat-timeline-skeleton {

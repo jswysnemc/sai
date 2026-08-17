@@ -106,6 +106,17 @@ fn file_tools_include_basename() {
         ),
         "Reading a.rs b.rs"
     );
+    assert_eq!(
+        tool_event_label(
+            "read_file",
+            Some(r#"{"path":"src/render/stream.rs","offset":12,"limit":80}"#)
+        ),
+        "Reading stream.rs:12+80"
+    );
+    assert_eq!(
+        tool_event_label("read_file", Some(r#"{"path":"src/a.rs","limit":40}"#)),
+        "Reading a.rs:1+40"
+    );
 }
 
 /// 验证未闭合参数仍可提取工具目标。

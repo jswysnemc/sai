@@ -34,6 +34,17 @@ function nextKeyId(keys: ProviderApiKey[]): string {
 }
 
 /**
+ * 编辑器始终至少展示一个空密钥框，避免用户先点「新增」才能填写。
+ *
+ * @param keys 已保存的密钥列表
+ * @returns 用于渲染的密钥列表
+ */
+export function editorProviderApiKeys(keys: ProviderApiKey[]): ProviderApiKey[] {
+  if (keys.length > 0) return keys;
+  return [{ id: "key-1", api_key: "", label: "" }];
+}
+
+/**
  * 渲染供应商的多密钥列表、使用策略与工作或测试密钥。
  *
  * 每个密钥带稳定标识，服务端据此在脱敏回填时按 id 对齐，
@@ -52,9 +63,10 @@ export function ProviderApiKeysField({
   onChange
 }: ProviderApiKeysFieldProps) {
   const { t } = useI18n();
-  const selectedId = selected && keys.some((key) => key.id === selected)
+  const editorKeys = editorProviderApiKeys(keys);
+  const selectedId = selected && editorKeys.some((key) => key.id === selected)
     ? selected
-    : keys[0]?.id;
+    : editorKeys[0]?.id;
 
   /**
    * 以新列表更新，并在选中项被删除时回落到首个。
@@ -75,8 +87,12 @@ export function ProviderApiKeysField({
    * @returns 无返回值
    */
   const addKey = () => {
-    const id = nextKeyId(keys);
-    onChange({ api_keys: [...keys, { id, api_key: "", label: "" }], api_key_selected: id, api_key_balance: balance });
+    const id = nextKeyId(editorKeys);
+    onChange({
+      api_keys: [...editorKeys, { id, api_key: "", label: "" }],
+      api_key_selected: id,
+      api_key_balance: balance
+    });
   };
 
   /**
@@ -95,7 +111,7 @@ export function ProviderApiKeysField({
    * @returns 无返回值
    */
   const updateKey = (id: string, patch: Partial<ProviderApiKey>) =>
-    updateKeys(keys.map((key) => (key.id === id ? { ...key, ...patch } : key)));
+    updateKeys(editorKeys.map((key) => (key.id === id ? { ...key, ...patch } : key)));
 
   return (
     <div className="provider-api-keys-field">
@@ -106,13 +122,8 @@ export function ProviderApiKeysField({
           {t("Add key", "新增密钥")}
         </Button>
       </div>
-      {keys.length === 0 && (
-        <p className="provider-api-keys-empty">
-          {t("No API keys configured. Add a key to enable provider requests.", "尚未配置接口密钥，请添加密钥后使用该供应商。")}
-        </p>
-      )}
       <ul className="provider-api-keys-list">
-        {keys.map((key, index) => (
+        {editorKeys.map((key, index) => (
           <li className="provider-api-key-row" key={key.id}>
             <div className="provider-api-key-value">
               <PasswordField
@@ -133,19 +144,21 @@ export function ProviderApiKeysField({
               spellCheck={false}
               onChange={(event) => updateKey(key.id, { label: event.target.value })}
             />
-            <button
-              type="button"
-              className="provider-api-key-remove"
-              onClick={() => removeKey(key.id)}
-              aria-label={t("Remove key", "移除密钥")}
-              title={t("Remove key", "移除密钥")}
-            >
-              <Trash2 size={13} />
-            </button>
+            {editorKeys.length > 1 && (
+              <button
+                type="button"
+                className="provider-api-key-remove"
+                onClick={() => removeKey(key.id)}
+                aria-label={t("Remove key", "移除密钥")}
+                title={t("Remove key", "移除密钥")}
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
           </li>
         ))}
       </ul>
-      {keys.length > 1 && (
+      {editorKeys.length > 1 && (
         <div className="provider-api-keys-controls">
           <div className="provider-api-keys-strategy">
             <span>{t("Key usage", "密钥使用方式")}</span>
@@ -164,7 +177,7 @@ export function ProviderApiKeysField({
                 }
               ]}
               onChange={(value) => onChange({
-                api_keys: keys,
+                api_keys: editorKeys,
                 api_key_selected: selectedId,
                 api_key_balance: value === "balance"
               })}
@@ -175,11 +188,11 @@ export function ProviderApiKeysField({
             <span>{balance ? t("Test key", "测试密钥") : t("Working key", "工作密钥")}</span>
             <Select
               value={selectedId ?? ""}
-              options={keys.map((key, index) => ({
+              options={editorKeys.map((key, index) => ({
                 value: key.id,
                 label: key.label?.trim() || `${t("Key", "密钥")} ${index + 1}`
               }))}
-              onChange={(value) => onChange({ api_keys: keys, api_key_selected: value, api_key_balance: balance })}
+              onChange={(value) => onChange({ api_keys: editorKeys, api_key_selected: value, api_key_balance: balance })}
               ariaLabel={balance ? t("API key used for tests", "用于测试的接口密钥") : t("Working API key", "工作接口密钥")}
               menuMinimumWidth={180}
             />

@@ -1,5 +1,6 @@
 use super::model::{PermissionAuditView, ToolView};
 use crate::permission::PermissionDecision;
+use crate::render::activity_animation::render_activity_line;
 use crate::render::command_output::render_command_block_with_action;
 use crate::render::command_result_block::{
     render_command_result_view_with_limit, render_completed_command_output,
@@ -23,6 +24,11 @@ const PAYLOAD_LIMIT: usize = 2_400;
 /// 返回:
 /// - ANSI 工具视图文本
 pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
+    render_framed(view, mode, 0)
+}
+
+/// 渲染工具生命周期；进行中且 `frame > 0` 时用扫光代替静态 `run` 徽标。
+pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: usize) -> String {
     if mode == ToolCallDisplayMode::Hidden {
         return String::new();
     }
@@ -41,6 +47,14 @@ pub(crate) fn render(view: &ToolView, mode: ToolCallDisplayMode) -> String {
     let label = tool_event_label_tense(&view.name, Some(&view.arguments), tense);
     let denied = permission_denied(view.permission.as_ref());
     let is_edit = crate::render::stream_text::is_file_edit_tool(&view.name);
+    if view.outcome.is_none() && frame > 0 && !is_edit {
+        let mut output = render_activity_line(&label, "", frame);
+        if let Some(progress) = visible_progress(view.progress.as_deref()) {
+            output.push_str(&render_progress_note(progress));
+        }
+        output.push_str(&render_permission(view.permission.as_ref()));
+        return output;
+    }
     // 编辑类：徽标用 +N -M 顶替 run/ok，参数流阶段数字跳动、定稿后钉死最终值；
     // 状态语义（圆点颜色）与徽标分离，仍按 outcome 推导。
     // 统计尚未就绪时留空，绝不显示 Writing run。

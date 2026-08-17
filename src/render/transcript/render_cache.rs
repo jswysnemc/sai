@@ -72,9 +72,10 @@ impl RenderCache {
         cell: &HistoryCell,
         width: usize,
         options: &TranscriptRenderOptions,
+        frame: usize,
     ) -> usize {
-        if is_live_subagent(cell) || crate::render::render_expand::expand_override() {
-            return cell.display_lines(width, options).len();
+        if is_live_cell(cell) || crate::render::render_expand::expand_override() {
+            return cell.display_lines_framed(width, options, frame).len();
         }
         while self.entries.len() <= index {
             self.entries.push(None);
@@ -110,11 +111,11 @@ impl RenderCache {
         cell: &HistoryCell,
         width: usize,
         options: &TranscriptRenderOptions,
+        frame: usize,
     ) -> Vec<AnsiLine> {
-        // 1. 后台子智能体单元依赖进程内快照，展开覆盖态与主屏折叠渲染不同，
-        //    两者都禁止读写缓存以免互相污染
-        if is_live_subagent(cell) || crate::render::render_expand::expand_override() {
-            return cell.display_lines(width, options);
+        // 1. 进行中的工具卡与后台子智能体依赖帧号/进程内快照，禁止读写缓存
+        if is_live_cell(cell) || crate::render::render_expand::expand_override() {
+            return cell.display_lines_framed(width, options, frame);
         }
         while self.entries.len() <= index {
             self.entries.push(None);
@@ -135,16 +136,13 @@ impl RenderCache {
     }
 }
 
-/// 判断 cell 是否为仍会产生后台更新的子智能体单元。
-///
-/// 参数:
-/// - `cell`: transcript cell
-///
-/// 返回:
-/// - 仍在后台更新时返回 true
-fn is_live_subagent(cell: &HistoryCell) -> bool {
-    matches!(
-        cell,
-        HistoryCell::Tool(ToolCell::Subagent(subagent)) if subagent.has_live_updates()
-    )
+/// 判断 cell 是否仍会随时间变化，不能写入渲染缓存。
+fn is_live_cell(cell: &HistoryCell) -> bool {
+    match cell {
+        HistoryCell::Tool(ToolCell::Invocation(view)) => view.outcome.is_none(),
+        HistoryCell::Tool(ToolCell::CompactionStarted { .. }) => true,
+        HistoryCell::Tool(ToolCell::Subagent(subagent)) => subagent.has_live_updates(),
+        HistoryCell::Diff(diff) => diff.is_pending(),
+        _ => false,
+    }
 }

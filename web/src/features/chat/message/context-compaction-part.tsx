@@ -1,6 +1,8 @@
 import { Archive, Loader2 } from "lucide-react";
+import { useRef } from "react";
 import type { LiveMessagePart } from "../run-event-reducer";
 import { MarkdownRenderer } from "../markdown-renderer";
+import { useNestedFollowOutputScroll } from "../use-follow-output-scroll";
 import { ErrorDetailToggle } from "./error-detail-toggle";
 import { useI18n } from "../../i18n/use-i18n";
 
@@ -25,6 +27,8 @@ export function ContextCompactionPart({ part }: { part: CompactionPart }) {
         ? t("No old conversation turns can be compacted", "没有可压缩的旧会话轮次")
         : part.error?.message ?? t("Context compaction was not applied", "本次上下文压缩未应用");
   const summary = part.summary?.trim() || null;
+  const summaryRef = useRef<HTMLDivElement>(null);
+  useNestedFollowOutputScroll(summaryRef, summary, running && Boolean(summary));
   const dividerLabel = running
     ? t("Compacting earlier conversation", "正在压缩此前会话")
     : part.applied
@@ -43,7 +47,7 @@ export function ContextCompactionPart({ part }: { part: CompactionPart }) {
         <span className="context-compaction-divider-line" />
       </div>
       {summary && (
-        <div className="context-compaction-summary">
+        <div ref={summaryRef} className="context-compaction-summary" tabIndex={-1}>
           <MarkdownRenderer source={summary} />
         </div>
       )}

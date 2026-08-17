@@ -1,4 +1,5 @@
 import { CollapsibleOutput } from "./collapsible-output";
+import { ShellCommandLine } from "./shell-command-line";
 import { parseJsonRecord, stringField, type JsonRecord } from "./tool-data";
 import { useI18n } from "../../i18n/use-i18n";
 
@@ -42,12 +43,7 @@ export function BackgroundTaskToolView({ argumentsText, output }: BackgroundTask
 
   return (
     <div className="bg-task-view">
-      {command && (
-        <div className="shell-command-line has-body">
-          <span>$</span>
-          <code>{command}</code>
-        </div>
-      )}
+      {command && <ShellCommandLine command={command} hasBody />}
       <div className="bg-task-meta">
         <span className="bg-task-action">{backgroundActionLabel(action, t)}</span>
         {taskId && <code className="bg-task-id">{taskId}</code>}

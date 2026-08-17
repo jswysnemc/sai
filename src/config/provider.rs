@@ -170,6 +170,38 @@ impl ProviderConfig {
         provider
     }
 
+    /// 在未指定当前模型时，从已激活列表或元数据补一个默认模型。
+    ///
+    /// TUI 编辑模型标签/上下文会写入 `model_metadata`，但不一定勾选
+    ///「设为当前模型」。加载时补上，避免空 `default_model` 把会话卡住。
+    pub(crate) fn infer_default_model(&mut self) {
+        if !self.default_model.trim().is_empty() {
+            return;
+        }
+        if let Some(model) = self
+            .models
+            .iter()
+            .find(|model| !model.trim().is_empty())
+            .cloned()
+        {
+            self.default_model = model;
+            return;
+        }
+        let Some(model) = self
+            .model_metadata
+            .keys()
+            .filter(|model| !model.trim().is_empty())
+            .min()
+            .cloned()
+        else {
+            return;
+        };
+        self.default_model = model.clone();
+        if !self.models.iter().any(|item| item == &model) {
+            self.models.push(model);
+        }
+    }
+
     /// 解析本供应商 HTTP 请求使用的 User-Agent。
     ///
     /// 参数:
@@ -348,6 +380,20 @@ mod tests {
             provider.resolved_api_keys().unwrap(),
             vec!["key-a", "key-b"]
         );
+    }
+
+    /// 未指定当前模型时从元数据补默认模型。
+    #[test]
+    fn infer_default_model_uses_metadata_when_models_are_empty() {
+        let mut provider = ProviderConfig::new_openai_compatible();
+        provider
+            .model_metadata
+            .insert("deepseek-v4-flash".to_string(), Default::default());
+
+        provider.infer_default_model();
+
+        assert_eq!(provider.default_model, "deepseek-v4-flash");
+        assert_eq!(provider.models, vec!["deepseek-v4-flash"]);
     }
 
     /// 多密钥为空时回落到单值字段。

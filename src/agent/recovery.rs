@@ -5,7 +5,7 @@ use crate::state::request_projection::{
     estimate_projected_request_chars, project_provider_turn_from_messages,
 };
 use crate::state::{
-    classify_context_pressure, compaction_trigger_chars, ContextPressure, FailureKind,
+    classify_context_pressure_with, CompactionBudgetPolicy, ContextPressure, FailureKind,
     RecoveryStatus, StateStore, ToolResultMaintenanceMode,
 };
 use anyhow::Result;
@@ -36,7 +36,8 @@ impl Agent {
         }
         let context_chars = estimate_projected_request_chars(&projection);
         let context_limit_chars = projection.estimate.context_limit_chars;
-        let maintained = match classify_context_pressure(context_chars, context_limit_chars) {
+        let policy = self.compaction_budget_policy();
+        let maintained = match classify_context_pressure_with(context_chars, context_limit_chars, policy) {
             ContextPressure::Relaxed => return Ok(false),
             ContextPressure::SnipStale => {
                 // 1. 免费档：只裁剪，不触发摘要压缩
@@ -52,7 +53,7 @@ impl Agent {
                     .maintain_stale_tool_results(ToolResultMaintenanceMode::Prune)?;
                 if stats.rewritten > 0
                     && context_chars.saturating_sub(stats.saved_chars)
-                        < compaction_trigger_chars(context_limit_chars)
+                        < policy.trigger_chars(context_limit_chars)
                 {
                     return Ok(true);
                 }
@@ -61,7 +62,7 @@ impl Agent {
         };
         let Some(request) = self
             .state
-            .select_compaction_for_projection(&projection, false)?
+            .select_compaction_for_projection_with(&projection, false, policy)?
         else {
             return Ok(maintained);
         };
@@ -201,6 +202,17 @@ impl Agent {
             let _ =
                 extract_session_memory_with_model(state, client, paths, context_char_budget).await;
         });
+    }
+
+    /// 读取当前会话的自动压缩触发策略。
+    ///
+    /// 返回:
+    /// - 夹紧后的比例与预留 token
+    pub(super) fn compaction_budget_policy(&self) -> CompactionBudgetPolicy {
+        CompactionBudgetPolicy::from_context(
+            self.config.context.clamped_compaction_ratio(),
+            self.config.context.compaction_reserve_tokens,
+        )
     }
 }
 

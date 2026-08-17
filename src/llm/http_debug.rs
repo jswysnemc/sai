@@ -538,6 +538,7 @@ mod tests {
             }),
             tool_calls: Vec::new(),
             duration_ms: 0,
+            ttft_ms: 0,
         };
         recorder.finish_ok(&result).unwrap();
 

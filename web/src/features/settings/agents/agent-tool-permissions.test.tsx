@@ -1,11 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { AgentToolPermissions } from "./agent-tool-permissions";
 
 const tools = [
-  { name: "read_file", group: "base", group_label: "基础操作", description: "读取文件内容" },
-  { name: "edit_file", group: "base", group_label: "基础操作", description: "编辑文件内容" },
-  { name: "web_search", group: "web", group_label: "网页检索", description: "搜索网页内容" }
+  { name: "read_file", group: "base", group_label: "基础操作", group_rank: 0, description: "读取文件内容" },
+  { name: "edit_file", group: "base", group_label: "基础操作", group_rank: 0, description: "编辑文件内容" },
+  { name: "web_search", group: "web", group_label: "网页检索", group_rank: 2, description: "搜索网页内容" }
 ];
 
 describe("AgentToolPermissions", () => {
@@ -49,5 +50,48 @@ describe("AgentToolPermissions", () => {
 
     expect(html).toContain('aria-label="设置网页检索分组的权限"');
     expect(html).toContain('aria-label="设置 web_search 的权限"');
+  });
+
+  it("把 SSH 组排在基础组之后，并说明用户与模型的分工", () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <AgentToolPermissions
+          tools={[
+            ...tools,
+            {
+              name: "ssh_list_hosts",
+              group: "ssh",
+              group_label: "SSH 远程",
+              group_label_en: "SSH",
+              group_hint: "主机和密码在「设置 → SSH」里由你配置和输入。",
+              group_hint_en: "You add hosts and type passwords in Settings → SSH.",
+              group_settings_path: "/settings/ssh",
+              group_rank: 1,
+              description: "列出已配置的 SSH 主机"
+            },
+            {
+              name: "ssh_run_command",
+              group: "ssh",
+              group_label: "SSH 远程",
+              group_rank: 1,
+              description: "在远程主机执行命令"
+            }
+          ]}
+          enabled={[]}
+          deferred={[]}
+          onChange={vi.fn()}
+        />
+      </MemoryRouter>
+    );
+
+    const sshAt = html.indexOf('data-group="ssh"');
+    const webAt = html.indexOf('data-group="web"');
+    expect(sshAt).toBeGreaterThan(-1);
+    expect(webAt).toBeGreaterThan(-1);
+    expect(sshAt).toBeLessThan(webAt);
+    expect(html).toContain("SSH 远程");
+    expect(html).toContain("主机和密码在「设置 → SSH」里由你配置和输入。");
+    expect(html).toContain('href="/settings/ssh"');
+    expect(html).toContain("配置主机");
   });
 });

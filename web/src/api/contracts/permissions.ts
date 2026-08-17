@@ -86,7 +86,12 @@ export type QuestionResponse =
   | { status: "unavailable"; data: string };
 
 /** SSH 交互征询类型：口令、密码、主机指纹确认、高危命令确认。 */
-export type SshSecretKind = "passphrase" | "password" | "host_key" | "danger_command";
+export type SshSecretKind =
+  | "passphrase"
+  | "password"
+  | "sudo_password"
+  | "host_key"
+  | "danger_command";
 
 /**
  * SSH 交互征询请求。

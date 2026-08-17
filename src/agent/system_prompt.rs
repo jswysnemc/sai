@@ -1,4 +1,4 @@
-use super::instruction_files::load_instruction_prompt;
+use super::instruction_files::INSTRUCTION_FILES_CONTRACT;
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
 use crate::tools;
@@ -37,13 +37,15 @@ pub(crate) fn build_base_system_prompt_for_phase(
     // 1. Agent 人设与用户身份
     let mut base_system_prompt = config.system_prompt(paths)?;
 
-    // 2. 全局 AGENT.md 与项目 .AGENT.md / .CLAUDE.md 等附加指令（可按 Agent 关闭）
+    // 2. 指令文件：首次加载进 baseline；之后改动只在 user 尾部追加
     if config.load_instruction_files && !suppress_bootstrap_context {
-        let instruction_prompt = load_instruction_prompt(paths);
-        if !instruction_prompt.trim().is_empty() {
+        let extra = super::instruction_files::load_instruction_prompt(paths);
+        if !extra.trim().is_empty() {
             base_system_prompt.push_str("\n\n");
-            base_system_prompt.push_str(&instruction_prompt);
+            base_system_prompt.push_str(&extra);
         }
+        base_system_prompt.push_str("\n\n");
+        base_system_prompt.push_str(INSTRUCTION_FILES_CONTRACT);
     }
 
     // 3. Skills 目录（渐进加载时仅 catalog）
@@ -217,9 +219,27 @@ mod tests {
         let bootstrap =
             build_base_system_prompt_for_phase(&config, &paths, true, None, true).unwrap();
 
+        assert!(full.contains("instruction-files-contract"));
         assert!(full.contains("bootstrap hidden marker"));
+        assert!(full.contains("<instruction-files>"));
         assert!(full.contains("bootstrap-hidden-skill"));
         assert!(!bootstrap.contains("bootstrap hidden marker"));
+        assert!(!bootstrap.contains("<instruction-files>"));
         assert!(!bootstrap.contains("bootstrap-hidden-skill"));
+    }
+
+    /// 验证指令文件正文进入系统 baseline。
+    #[test]
+    fn instruction_file_bodies_enter_the_system_prompt() {
+        let dir = tempfile::tempdir().unwrap();
+        let (config, paths) = setup(dir.path());
+        std::fs::create_dir_all(&paths.config_dir).unwrap();
+        std::fs::write(paths.config_dir.join("AGENT.md"), "baseline load marker").unwrap();
+
+        let prompt = build_base_system_prompt(&config, &paths, true, None).unwrap();
+
+        assert!(prompt.contains("instruction-files-contract"));
+        assert!(prompt.contains("baseline load marker"));
+        assert!(prompt.contains("<instruction-files>"));
     }
 }

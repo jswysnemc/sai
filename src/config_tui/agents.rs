@@ -367,11 +367,11 @@ fn edit_agent_tools(
     config: &AppConfig,
     profile: &mut AgentProfile,
 ) -> Result<()> {
-    // 1. 枚举本地工具目录，基础工具组排最前，其余按分组聚拢
+    // 1. 枚举本地工具目录，按分组权重排序（基础最先，SSH 紧随其后）
     let mut catalog = crate::tools::tool_catalog(config, paths);
     catalog.sort_by(|left, right| {
-        (left.group != "base", left.group, left.name.as_str()).cmp(&(
-            right.group != "base",
+        (left.group_rank, left.group, left.name.as_str()).cmp(&(
+            right.group_rank,
             right.group,
             right.name.as_str(),
         ))
@@ -382,11 +382,22 @@ fn edit_agent_tools(
         .collect::<BTreeSet<_>>();
     let mut entries = catalog
         .into_iter()
-        .map(|entry| SelectEntry {
-            state: initial_tool_state(profile, &entry.name),
-            description: entry.description,
-            group_label: entry.group_label.to_string(),
-            key: entry.name,
+        .map(|entry| {
+            let description = if entry.group_hint.is_empty() {
+                entry.description
+            } else {
+                format!(
+                    "{}\n\n{}",
+                    entry.description,
+                    t(entry.group_hint_en, entry.group_hint)
+                )
+            };
+            SelectEntry {
+                state: initial_tool_state(profile, &entry.name),
+                description,
+                group_label: t(entry.group_label_en, entry.group_label).to_string(),
+                key: entry.name,
+            }
         })
         .collect::<Vec<_>>();
     // 2. 配置里已有但目录未注册的名称（MCP 动态工具、别名）保留展示，防止写回丢失

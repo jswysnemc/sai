@@ -51,6 +51,38 @@ pub(crate) fn context_resource_update(
     )))
 }
 
+/// 仅在内容相对 baseline 或历史中的最近版本发生变化时追加资源。
+///
+/// 首次加载已写入 baseline 时不再往 user 消息重复塞一份；文件改了、
+/// 或改完又改回 baseline 时才追加。
+///
+/// 参数:
+/// - `name`: 稳定资源名
+/// - `content`: 当前完整资源正文
+/// - `baseline_content`: 已冻结在 baseline 中的同名正文
+/// - `checkpoint_context`: 当前压缩摘要
+/// - `history`: 压缩后仍可见的 provider 历史
+///
+/// 返回:
+/// - 需要追加的资源状态；没有变化时返回空
+pub(crate) fn context_resource_update_against_baseline(
+    name: &str,
+    content: &str,
+    baseline_content: &str,
+    checkpoint_context: Option<&str>,
+    history: &[ChatMessage],
+) -> Result<Option<String>> {
+    let hash = blake3::hash(content.as_bytes()).to_hex()[..16].to_string();
+    let baseline_hash = blake3::hash(baseline_content.as_bytes()).to_hex()[..16].to_string();
+    let known = known_resources(checkpoint_context, history);
+    match known.get(name) {
+        Some(known_hash) if known_hash == &hash => return Ok(None),
+        None if hash == baseline_hash => return Ok(None),
+        _ => {}
+    }
+    context_resource_update(name, content, checkpoint_context, history)
+}
+
 /// 合并多个独立的上下文状态更新。
 ///
 /// 参数:
@@ -246,5 +278,29 @@ mod tests {
                 ChatContent::Parts(_) => None,
             })
             .unwrap_or(false));
+    }
+
+    /// 验证已在 baseline 中的资源不会在首轮再追加一份。
+    #[test]
+    fn baseline_seed_skips_the_first_duplicate() {
+        assert!(context_resource_update_against_baseline(
+            "instruction_files",
+            "loaded",
+            "loaded",
+            None,
+            &[],
+        )
+        .unwrap()
+        .is_none());
+        let changed = context_resource_update_against_baseline(
+            "instruction_files",
+            "updated",
+            "loaded",
+            None,
+            &[],
+        )
+        .unwrap()
+        .unwrap();
+        assert!(changed.contains("updated"));
     }
 }

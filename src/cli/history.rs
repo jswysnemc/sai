@@ -19,6 +19,7 @@ pub(super) fn run_history(paths: &SaiPaths, args: HistoryArgs) -> Result<()> {
                 usage: None,
                 tool_calls: Vec::new(),
                 duration_ms: 0,
+                ttft_ms: 0,
             };
             render::print_assistant_response(&response, !args.no_thinking)?;
         } else {

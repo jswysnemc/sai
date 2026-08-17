@@ -61,9 +61,12 @@ use turn_execution::assistant_tool_message;
 
 pub use agent_state::Agent;
 pub(crate) use compaction::CompactionRunOutcome;
-pub(crate) use context_resources::{combine_context_updates, context_resource_update};
+pub(crate) use context_resources::{
+    combine_context_updates, context_resource_update, context_resource_update_against_baseline,
+};
 pub use event::{AgentEvent, CompactionError, MessageContextUpdate};
 pub(crate) use external_events::{ExternalEventBatch, ExternalEventWake};
+pub(crate) use instruction_files::{extract_instruction_files, load_instruction_prompt};
 pub(crate) use inter_message::{
     InterMessage, InterMessageEvent, InterMessageKind, InterMessageSource,
 };
@@ -154,6 +157,7 @@ impl Agent {
                     usage: turn_usage,
                     tool_calls: Vec::new(),
                     duration_ms: 0,
+                    ttft_ms: 0,
                 });
             }
             tool_round += 1;

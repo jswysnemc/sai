@@ -5,6 +5,11 @@ export type AgentToolOption = {
   name: string;
   group: string;
   group_label?: string;
+  group_label_en?: string;
+  group_hint?: string;
+  group_hint_en?: string;
+  group_settings_path?: string | null;
+  group_rank?: number;
   description?: string;
 };
 

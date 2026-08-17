@@ -599,5 +599,6 @@ fn finalize_stream_result(
         usage,
         tool_calls,
         duration_ms: 0,
+        ttft_ms: 0,
     })
 }

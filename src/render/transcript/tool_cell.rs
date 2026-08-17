@@ -1,4 +1,5 @@
 use super::subagent_cell::{self, SubagentCell};
+use crate::render::activity_animation::render_activity_line;
 use crate::render::stream_text::is_file_edit_tool;
 use crate::render::terminal_text as t;
 use crate::render::tool_event_line::tool_event_text;
@@ -28,20 +29,22 @@ pub(crate) enum ToolCell {
 /// 参数:
 /// - `cell`: 工具历史数据
 /// - `mode`: 工具展示模式
+/// - `frame`: live 扫光帧；0 表示静态排版
 ///
 /// 返回:
 /// - ANSI 工具视图文本
-pub(crate) fn render(cell: &ToolCell, mode: ToolCallDisplayMode) -> String {
+pub(crate) fn render(cell: &ToolCell, mode: ToolCallDisplayMode, frame: usize) -> String {
     match cell {
-        ToolCell::Invocation(view) => tool_view::render(view, mode),
+        ToolCell::Invocation(view) => tool_view::render_framed(view, mode, frame),
         ToolCell::Subagent(cell) => subagent_cell::render(cell, mode),
-        ToolCell::CompactionStarted { turn_count, model } => tool_event_text(
-            &format!(
-                "{} ×{turn_count} · {model}",
-                t("Compacting context", "压缩上下文")
-            ),
-            "run",
-        ),
+        ToolCell::CompactionStarted { turn_count, model } => {
+            let label = compaction_started_label(*turn_count, model);
+            if frame > 0 {
+                render_activity_line(&label, "", frame)
+            } else {
+                tool_event_text(&label, "run")
+            }
+        }
         ToolCell::CompactionFinished {
             applied,
             message,
@@ -77,6 +80,18 @@ pub(crate) fn render(cell: &ToolCell, mode: ToolCallDisplayMode) -> String {
             }
             lines.join("\n")
         }
+    }
+}
+
+/// 压缩开始行文案。运行中轮次压缩没有已完成轮次时不要写 `×0`。
+fn compaction_started_label(turn_count: usize, model: &str) -> String {
+    if turn_count == 0 {
+        format!("{} · {model}", t("Compacting context", "压缩上下文"))
+    } else {
+        format!(
+            "{} ×{turn_count} · {model}",
+            t("Compacting context", "压缩上下文")
+        )
     }
 }
 

@@ -45,13 +45,19 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
             format!(
                 "{}\n\n{}: {} · {}: {}",
                 t(
-                    "Web terminal shell, context budget and compaction model.",
-                    "网页终端 Shell、上下文预算与压缩模型。",
+                    "Web terminal shell, context budget, compact ratio and reserve.",
+                    "网页终端 Shell、上下文预算、压缩比例与预留。",
                 ),
                 t("Context chars", "上下文字符"),
                 config.context.default_max_chars,
-                t("Compaction", "压缩模型"),
-                compaction_label(config),
+                t("Compact", "压缩"),
+                format!(
+                    "{} · {}% · {} {}",
+                    compaction_label(config),
+                    (config.context.clamped_compaction_ratio() * 100.0).round() as u32,
+                    t("reserve", "预留"),
+                    config.context.compaction_reserve_tokens
+                ),
             ),
             format!(
                 "{}\n\n{}: {} · {}: {} · {}: {}",
@@ -184,6 +190,23 @@ fn edit_context_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Res
         )
         .choices_owned(provider_model_choice_values(config, false))
         .empty_choice_label(t("Follow conversation model", "沿用会话模型")),
+        Field::new(
+            t(
+                "Auto-compact ratio, 0.50-0.99 or 50-99",
+                "自动压缩比例，0.50-0.99 或 50-99",
+            ),
+            format!(
+                "{}",
+                (config.context.clamped_compaction_ratio() * 100.0).round() as u32
+            ),
+        ),
+        Field::new(
+            t(
+                "Reserved tokens, 0 uses ratio only",
+                "压缩预留 token，0 表示只按比例",
+            ),
+            config.context.compaction_reserve_tokens.to_string(),
+        ),
     ];
     loop {
         if !run_form(
@@ -205,12 +228,35 @@ fn edit_context_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Res
                 continue;
             }
         };
+        let compaction_ratio = match crate::config::parse_compaction_ratio_text(&fields[3].value) {
+            Ok(value) => value,
+            Err(err) => {
+                message(
+                    stdout,
+                    &format!("{}: {err}", t("Invalid input", "输入无效")),
+                )?;
+                continue;
+            }
+        };
+        let compaction_reserve_tokens =
+            match parse_number_field::<usize>(fields[4].label, &fields[4].value) {
+                Ok(value) => value,
+                Err(err) => {
+                    message(
+                        stdout,
+                        &format!("{}: {err}", t("Invalid input", "输入无效")),
+                    )?;
+                    continue;
+                }
+            };
         config.terminal.shell = fields[0].value.trim().to_string();
         config.context.default_max_chars = default_max_chars;
         (
             config.context.compaction_provider_id,
             config.context.compaction_model,
         ) = parse_provider_model_choice(&fields[2].value);
+        config.context.compaction_ratio = compaction_ratio;
+        config.context.compaction_reserve_tokens = compaction_reserve_tokens;
         return Ok(());
     }
 }

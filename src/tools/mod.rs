@@ -262,6 +262,9 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
         memory::register(&mut registry, config.clone(), paths.clone());
     }
     crate::mcp::register_mcp_manager(&mut registry, paths.clone());
+    // 目录与非会话路径也要挂上 SSH 组，否则 Agent 设置页看不到这一组。
+    // 交互会话随后会用真实 session_id 再注册一次，覆盖这里的空会话占位。
+    crate::ssh::register(&mut registry, paths, "");
     registry
 }
 

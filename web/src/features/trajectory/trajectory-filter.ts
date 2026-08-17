@@ -55,6 +55,7 @@ function matchesQuery(record: TrajectoryRecord, needle: string): boolean {
   return Boolean(
     detail.input?.toLowerCase().includes(needle)
     || detail.output?.toLowerCase().includes(needle)
+    || detail.reasoning?.toLowerCase().includes(needle)
     || detail.error?.toLowerCase().includes(needle)
   );
 }

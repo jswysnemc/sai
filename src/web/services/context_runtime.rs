@@ -1,5 +1,6 @@
 use crate::agent::{
-    combine_context_updates, context_resource_update, context_state_update, AgentMode,
+    combine_context_updates, context_resource_update, context_resource_update_against_baseline,
+    context_state_update, extract_instruction_files, load_instruction_prompt, AgentMode,
     RuntimeContextSnapshot,
 };
 use crate::config::AppConfig;
@@ -16,6 +17,7 @@ pub(super) struct ContextRuntimeProjection {
     pub(super) runtime_context: String,
     pub(super) memory_index: String,
     pub(super) last_auto_meme: String,
+    pub(super) instruction_files: String,
     pub(super) memory_enabled: bool,
 }
 
@@ -118,8 +120,30 @@ pub(super) fn project_context_runtime(
         (!compaction_summary.is_empty()).then_some(compaction_summary.as_str()),
         &projected_history.messages,
     )?;
+    let instruction_files = if config.load_instruction_files {
+        load_instruction_prompt(paths)
+    } else {
+        String::new()
+    };
+    let baseline_files = store
+        .context_epoch_baseline()?
+        .as_deref()
+        .map(extract_instruction_files)
+        .unwrap_or_default();
+    let instruction_update = if config.load_instruction_files {
+        context_resource_update_against_baseline(
+            "instruction_files",
+            &instruction_files,
+            &baseline_files,
+            (!compaction_summary.is_empty()).then_some(compaction_summary.as_str()),
+            &projected_history.messages,
+        )?
+    } else {
+        None
+    };
     let runtime_context =
-        combine_context_updates([runtime_update, goal_update, meme_update]).unwrap_or_default();
+        combine_context_updates([runtime_update, goal_update, instruction_update, meme_update])
+            .unwrap_or_default();
 
     Ok(ContextRuntimeProjection {
         goal_context,
@@ -127,6 +151,7 @@ pub(super) fn project_context_runtime(
         runtime_context,
         memory_index,
         last_auto_meme,
+        instruction_files,
         memory_enabled,
     })
 }

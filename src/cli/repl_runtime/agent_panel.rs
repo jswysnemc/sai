@@ -1,8 +1,19 @@
+use crate::cli::repl_text::visible_width;
 use crate::i18n::text as t;
-use crate::render::activity_animation::render_activity_guide_with_color;
+use crate::render::activity_animation::{render_activity_guide_with_color, render_activity_text};
+use crate::render::session_summary::format_k;
 use crate::render::status_style::color_status;
 use crate::render::transcript::SubagentOverviewEntry;
 use crossterm::event::KeyCode;
+
+/// 左栏最少列宽，保证 `1.2k` / `idle` 能右对齐
+const TOKEN_COL_MIN: usize = 4;
+/// 动效栏与标题栏之间的固定间隔
+const COL_GAP: &str = "  ";
+/// 运行中引导点色相
+const RUNNING_GUIDE: (u8, u8, u8) = (204, 167, 0);
+/// 待命引导点色相
+const IDLE_GUIDE: (u8, u8, u8) = (97, 175, 239);
 
 /// 底部主/子 agent 切换面板的交互状态。
 #[derive(Default)]
@@ -126,25 +137,23 @@ impl AgentPanelState {
             return Vec::new();
         }
         let running = entries.iter().filter(|entry| entry.running).count();
+        let total_tokens = entries.iter().filter_map(|entry| entry.tokens).sum::<u64>();
+        let header_left = header_left_plain(total_tokens);
+        let col_width = token_column_width(entries, &header_left);
         if !self.active {
-            // 非焦点态：单行提示，↓ 进入切换；运行中/待命用状态色区分
-            let bullet = if running > 0 {
-                render_activity_guide_with_color(frame, Some((204, 167, 0)))
-            } else if entries.iter().any(|entry| entry.status == "idle") {
-                render_activity_guide_with_color(frame, Some((97, 175, 239)))
-            } else {
-                "\x1b[2m•\x1b[0m".to_string()
-            };
+            // 非焦点态：左栏合计 tokens（运行中扫光），右栏标题；↓ 进入切换
+            let left = render_header_left(total_tokens, running, entries, col_width, frame);
             return vec![format!(
-                "{bullet}\x1b[2m {}: {} ({}) · ↓ {}\x1b[0m",
+                "    {left}{COL_GAP}\x1b[2m{}: {} ({}) · ↓ {}\x1b[0m",
                 t("agents", "智能体"),
                 entries.len(),
                 format!("{running} {}", t("running", "运行中")),
                 t("switch", "切换")
             )];
         }
+        let header_left_cell = render_header_left(total_tokens, running, entries, col_width, frame);
         let mut lines = vec![format!(
-            "\x1b[2m• {} · ↑↓ {} · Enter {} · Esc {}\x1b[0m",
+            "    {header_left_cell}{COL_GAP}\x1b[2m{} · ↑↓ {} · Enter {} · Esc {}\x1b[0m",
             t("agents", "智能体"),
             t("select", "选择"),
             t("view", "查看"),
@@ -152,12 +161,12 @@ impl AgentPanelState {
         )];
         lines.push(selection_line(
             self.selected == 0,
+            &pad_left("", col_width),
             &format!(
                 "{} {}",
                 t("main agent", "主智能体"),
                 t("(overview)", "(总览)")
             ),
-            None,
         ));
         for (position, entry) in entries.iter().enumerate() {
             let viewing_suffix = if entry.viewing {
@@ -165,33 +174,10 @@ impl AgentPanelState {
             } else {
                 String::new()
             };
-            // 存活条目行首用状态色引导点；实时阶段（工具进度 / Token 统计）随刷新跳动
-            let marker = if entry.running {
-                format!(
-                    "{} ",
-                    render_activity_guide_with_color(frame, Some((204, 167, 0)))
-                )
-            } else if entry.status == "idle" {
-                format!(
-                    "{} ",
-                    render_activity_guide_with_color(frame, Some((97, 175, 239)))
-                )
-            } else {
-                String::new()
-            };
-            let detail_suffix = entry
-                .detail
-                .as_deref()
-                .map(|detail| format!(" \x1b[2m· {detail}\x1b[0m"))
-                .unwrap_or_default();
             lines.push(selection_line(
                 self.selected == position + 1,
-                &format!(
-                    "{marker}{} {}{viewing_suffix}{detail_suffix}",
-                    entry.label,
-                    color_status(entry.status)
-                ),
-                Some(entry.status),
+                &render_entry_left(entry, col_width, frame),
+                &format!("{}{viewing_suffix}", entry.label),
             ));
         }
         lines
@@ -245,6 +231,7 @@ impl super::ReplRuntime {
             };
         }
         if code == KeyCode::Down && self.agent_panel.activate(&entries) {
+            self.queue_panel.deactivate();
             return Ok(true);
         }
         Ok(false)
@@ -282,22 +269,118 @@ impl super::ReplRuntime {
     }
 }
 
-/// 渲染单行选择条目。
+/// 渲染单行选择条目：选择箭头与标题着色，左栏动效保持原色。
 ///
 /// 参数:
 /// - `selected`: 是否为当前高亮
-/// - `content`: 条目内容（可含 ANSI）
-/// - `status`: 可选状态键（仅用于语义，占位保持签名稳定）
+/// - `left`: 已对齐的 tokens / 状态栏（可含扫光 ANSI）
+/// - `title`: 右栏标题
 ///
 /// 返回:
 /// - ANSI 行
-fn selection_line(selected: bool, content: &str, status: Option<&str>) -> String {
-    let _ = status;
-    if selected {
-        format!("\x1b[1m\x1b[36m  ❯ {content}\x1b[0m")
+fn selection_line(selected: bool, left: &str, title: &str) -> String {
+    let marker = if selected {
+        "\x1b[1m\x1b[36m  ❯ \x1b[0m"
     } else {
-        format!("\x1b[2m    {content}\x1b[0m")
+        "    "
+    };
+    let title = if selected {
+        format!("\x1b[1m\x1b[36m{title}\x1b[0m")
+    } else {
+        format!("\x1b[2m{title}\x1b[0m")
+    };
+    format!("{marker}{left}{COL_GAP}{title}")
+}
+
+/// 格式化 token 左栏纯文本。
+fn format_token_plain(tokens: u64) -> String {
+    format_k(usize::try_from(tokens).unwrap_or(usize::MAX))
+}
+
+/// 标题行左栏纯文本（有合计 tokens 时用数字，否则空，留给引导点）。
+fn header_left_plain(total_tokens: u64) -> String {
+    if total_tokens > 0 {
+        format_token_plain(total_tokens)
+    } else {
+        String::new()
     }
+}
+
+/// 条目左栏纯文本：优先 tokens，否则用状态键占位。
+fn entry_left_plain(entry: &SubagentOverviewEntry) -> String {
+    match entry.tokens {
+        Some(tokens) => format_token_plain(tokens),
+        None if entry.running => String::new(),
+        None => entry.status.to_string(),
+    }
+}
+
+/// 计算两栏布局的左栏宽度，保证数字与标题分别对齐。
+fn token_column_width(entries: &[SubagentOverviewEntry], header_left: &str) -> usize {
+    entries
+        .iter()
+        .map(|entry| visible_width(&entry_left_plain(entry)))
+        .chain(std::iter::once(visible_width(header_left)))
+        .max()
+        .unwrap_or(0)
+        .max(TOKEN_COL_MIN)
+}
+
+/// 按可见列宽左补空格，让数字右对齐。
+fn pad_left(text: &str, width: usize) -> String {
+    let pad = width.saturating_sub(visible_width(text));
+    format!("{}{text}", " ".repeat(pad))
+}
+
+/// 渲染标题行左栏：有 tokens 则跳动，否则用状态色引导点。
+fn render_header_left(
+    total_tokens: u64,
+    running: usize,
+    entries: &[SubagentOverviewEntry],
+    width: usize,
+    frame: usize,
+) -> String {
+    if total_tokens > 0 {
+        let plain = format_token_plain(total_tokens);
+        let pad = " ".repeat(width.saturating_sub(visible_width(&plain)));
+        let body = if running > 0 {
+            render_activity_text(&plain, frame)
+        } else {
+            format!("\x1b[2m{plain}\x1b[0m")
+        };
+        return format!("{pad}{body}");
+    }
+    let bullet = if running > 0 {
+        render_activity_guide_with_color(frame, Some(RUNNING_GUIDE))
+    } else if entries.iter().any(|entry| entry.status == "idle") {
+        render_activity_guide_with_color(frame, Some(IDLE_GUIDE))
+    } else {
+        "\x1b[2m•\x1b[0m".to_string()
+    };
+    format!("{}{bullet}", " ".repeat(width.saturating_sub(1)))
+}
+
+/// 渲染条目左栏：运行中的 tokens 走扫光跳动，待命/终态用静态数字或状态色。
+fn render_entry_left(entry: &SubagentOverviewEntry, width: usize, frame: usize) -> String {
+    if let Some(tokens) = entry.tokens {
+        let plain = format_token_plain(tokens);
+        let pad = " ".repeat(width.saturating_sub(visible_width(&plain)));
+        let body = if entry.running {
+            render_activity_text(&plain, frame)
+        } else {
+            format!("\x1b[2m{plain}\x1b[0m")
+        };
+        return format!("{pad}{body}");
+    }
+    if entry.running {
+        let bullet = render_activity_guide_with_color(frame, Some(RUNNING_GUIDE));
+        return format!("{}{bullet}", " ".repeat(width.saturating_sub(1)));
+    }
+    let status = color_status(entry.status);
+    format!(
+        "{}{status}",
+        " ".repeat(width.saturating_sub(visible_width(entry.status)))
+    )
 }
 
 #[cfg(test)]
@@ -313,6 +396,7 @@ mod tests {
             running,
             viewing: false,
             detail: None,
+            tokens: None,
         }
     }
 
@@ -394,12 +478,12 @@ mod tests {
         assert!(lines.iter().any(|line| line.contains("检查项目")));
     }
 
-    /// 【终端】【agent 面板】存活条目展示实时阶段，查看中标注清晰。
+    /// 【终端】【agent 面板】运行中走 tokens 跳动，查看中标注清晰。
     #[test]
-    fn active_panel_shows_detail_and_viewing_marker() {
+    fn active_panel_shows_token_cell_and_viewing_marker() {
         let mut panel = AgentPanelState::default();
         let mut running_entry = entry(2, "诗歌分析", true);
-        running_entry.detail = Some("工具调用 3 次　消耗 Token 1.2k".to_string());
+        running_entry.tokens = Some(1_200);
         let mut idle_entry = entry(5, "长期重构", false);
         idle_entry.status = "idle";
         idle_entry.viewing = true;
@@ -408,14 +492,76 @@ mod tests {
 
         let lines = panel.panel_lines(&entries, 0);
         let joined = lines.join("\n");
+        let plain = crate::render::activity_animation::strip_ansi_for_test(&joined);
         assert!(
-            joined.contains("消耗 Token 1.2k"),
-            "运行中条目应展示实时阶段: {joined}"
+            plain.contains("1.2k"),
+            "运行中条目左栏应展示跳动 tokens: {plain}"
         );
         assert!(
             joined.contains("idle"),
-            "待命条目应展示 idle 状态: {joined}"
+            "待命且无 tokens 的条目左栏应展示 idle: {joined}"
         );
         assert!(joined.contains("查看中") || joined.contains("viewing"));
+        assert!(
+            !joined.contains("消耗 Token"),
+            "长阶段文案不应再挤进标题栏: {joined}"
+        );
+    }
+
+    /// 【终端】【agent 面板】动效栏与标题栏分列，各行标题起点对齐。
+    #[test]
+    fn token_and_title_columns_align() {
+        let mut panel = AgentPanelState::default();
+        let mut running_entry = entry(2, "诗歌分析", true);
+        running_entry.tokens = Some(1_200);
+        let mut idle_entry = entry(5, "长期重构", false);
+        idle_entry.status = "idle";
+        idle_entry.tokens = Some(12);
+        let entries = vec![running_entry, idle_entry];
+        panel.activate(&entries);
+
+        let lines = panel.panel_lines(&entries, 0);
+        let titles = [
+            t("agents", "智能体"),
+            t("main agent", "主智能体"),
+            "诗歌分析",
+            "长期重构",
+        ];
+        let starts: Vec<usize> = lines
+            .iter()
+            .zip(titles)
+            .map(|(line, title)| {
+                let plain = crate::render::activity_animation::strip_ansi_for_test(line);
+                let byte_index = plain
+                    .find(title)
+                    .unwrap_or_else(|| panic!("missing {title} in {plain}"));
+                visible_width(&plain[..byte_index])
+            })
+            .collect();
+        assert_eq!(starts.len(), 4, "标题行与三条条目都应出现: {lines:?}");
+        assert!(
+            starts.windows(2).all(|pair| pair[0] == pair[1]),
+            "标题栏起点必须对齐: {starts:?} / {lines:?}"
+        );
+        let token_col: Vec<usize> = lines
+            .iter()
+            .filter_map(|line| {
+                let plain = crate::render::activity_animation::strip_ansi_for_test(line);
+                ["1.2k", "12"].iter().find_map(|token| {
+                    let byte_index = plain.find(token)?;
+                    let end = byte_index + token.len();
+                    Some(visible_width(&plain[..end]))
+                })
+            })
+            .collect();
+        assert_eq!(
+            token_col.len(),
+            3,
+            "标题合计与两条 token 行都应出现: {lines:?}"
+        );
+        assert!(
+            token_col.windows(2).all(|pair| pair[0] == pair[1]),
+            "tokens 数字应右对齐在同一栏: {token_col:?} / {lines:?}"
+        );
     }
 }

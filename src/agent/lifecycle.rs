@@ -491,7 +491,13 @@ fn deepseek_anchor_available(
 /// 返回:
 /// - 上下文同步与恢复结果
 fn prepare_session_context(state: &StateStore, base_system_prompt: &str) -> Result<()> {
-    state.reset_if_prompt_changed(base_system_prompt)?;
+    let prompt = match state.context_epoch_baseline()? {
+        Some(baseline) => {
+            super::instruction_files::freeze_instruction_files(base_system_prompt, &baseline)
+        }
+        None => base_system_prompt.to_string(),
+    };
+    state.reset_if_prompt_changed(&prompt)?;
     state.recover_stale_turns()?;
     Ok(())
 }

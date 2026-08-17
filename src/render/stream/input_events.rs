@@ -115,8 +115,7 @@ impl StreamRenderer {
         let background_command_start =
             name == "background_command" && is_background_command_start(arguments);
         let event_label = tool_event_label(name, Some(arguments));
-        self.tool_event_labels
-            .insert(name.to_string(), event_label.clone());
+        self.push_tool_event_label(name, event_label.clone());
         if name == "run_command" {
             // 命令输出预览接管底部动效，停掉 WaitSpinner 避免锚点冲突
             self.stop_waiting()?;
@@ -129,6 +128,9 @@ impl StreamRenderer {
             && !tool_call_has_visible_block(name)
             && !background_command_start
         {
+            if self.live_tool_status.is_active() {
+                self.finish_live_tool_status()?;
+            }
             self.write_live_tool_status(&event_label, tool_start_status(name), false)?;
             self.resume_work_spinner()?;
             return Ok(());
@@ -202,8 +204,6 @@ impl StreamRenderer {
             self.stop_command_preview()?;
         }
         let event_label = tool_event_label(name, Some(&progress.arguments_preview));
-        self.tool_event_labels
-            .insert(name.to_string(), event_label.clone());
         if crate::render::stream_text::is_file_edit_tool(name)
             && !self.streaming_edit_progress.contains(&progress.index)
         {

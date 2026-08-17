@@ -100,12 +100,16 @@ export type SessionTimelineTurn = {
   messages?: TimelineTurnMessage[];
   /** 处理耗时毫秒；历史未记录时可能缺失 */
   duration_ms?: number | null;
+  /** 首字延迟毫秒；历史未记录时可能缺失 */
+  ttft_ms?: number | null;
   /** 同一轮全部模型请求的汇总用量；旧历史可能缺失 */
   usage?: TurnUsage | null;
   /** 本轮实际使用的模型标识；历史轮次未记录时缺失 */
   model?: string | null;
   /** 失败轮的错误摘要；非失败轮与旧历史缺失 */
   error?: string | null;
+  /** 写入供应商的用户消息相对可见正文多出来的注入前缀 */
+  injected_content?: string | null;
 };
 
 export type SessionTimelineCompaction = {

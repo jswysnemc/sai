@@ -1,4 +1,6 @@
-use super::session_summary::{refit_turn_rule, render_session_summary};
+use super::session_summary::{
+    format_tokens_per_sec, format_ttft_ms, refit_turn_rule, render_session_summary,
+};
 use crate::llm::Usage;
 use crate::state::{SessionSnapshot, ToolHistorySummary, UsageSnapshot};
 
@@ -42,6 +44,7 @@ fn renders_compact_session_summary_with_key_fields() {
         projection_warnings: Vec::new(),
         active_run: None,
         last_turn_duration_ms: 12_500,
+        last_turn_ttft_ms: 420,
     };
 
     let output = render_session_summary(&snapshot);
@@ -67,6 +70,9 @@ fn renders_compact_session_summary_with_key_fields() {
     // 上下行 token 使用简洁的方向箭头并留出间隔，不再依赖 Nerd Font 私有区图标
     assert!(output.contains("↑ 8.0k"));
     assert!(output.contains("↓ 4.0k"));
+    assert!(output.contains("TTFT") || output.contains("首字"));
+    assert!(output.contains("420ms"));
+    assert!(output.contains("320/s"));
     assert!(!output.contains('\u{f090}'));
     assert!(!output.contains('\u{f08b}'));
     // 低压力时占比随标签弱化，不抢正文注意力
@@ -131,6 +137,7 @@ fn context_ratio_escalates_color_under_pressure() {
         projection_warnings: Vec::new(),
         active_run: None,
         last_turn_duration_ms: 0,
+        last_turn_ttft_ms: 0,
     };
 
     assert!(render_session_summary(&snapshot).contains("\x1b[31m(90.0%)"));
@@ -138,4 +145,13 @@ fn context_ratio_escalates_color_under_pressure() {
     snapshot.context_prompt_tokens = 700_000;
     snapshot.context_token_ratio = 0.7;
     assert!(render_session_summary(&snapshot).contains("\x1b[33m(70.0%)"));
+}
+
+#[test]
+fn formats_ttft_and_output_rate() {
+    assert_eq!(format_ttft_ms(420), "420ms");
+    assert_eq!(format_ttft_ms(1_200), "1.2s");
+    assert_eq!(format_tokens_per_sec(4_000, 12_500).as_deref(), Some("320"));
+    assert_eq!(format_tokens_per_sec(20, 5_000).as_deref(), Some("4.0"));
+    assert_eq!(format_tokens_per_sec(0, 5_000), None);
 }

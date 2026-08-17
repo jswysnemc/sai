@@ -8,7 +8,7 @@
 
 use crate::config::SshHostConfig;
 use crate::web::ssh::{
-    connect_ssh_session, HostKey, KnownHostStatus, SshClientHandler, SshConnectOutcome,
+    connect_ssh_session_auth, HostKey, KnownHostStatus, SshClientHandler, SshConnectOutcome,
 };
 use anyhow::{Context, Result};
 use russh::client;
@@ -58,8 +58,9 @@ pub(crate) enum ConnectResult {
 pub(crate) async fn connect(
     host: &SshHostConfig,
     passphrase: Option<&str>,
+    password: Option<&str>,
 ) -> Result<ConnectResult> {
-    match connect_ssh_session(host, passphrase).await? {
+    match connect_ssh_session_auth(host, passphrase, password).await? {
         SshConnectOutcome::Connected(handle) => Ok(ConnectResult::Connected(handle)),
         SshConnectOutcome::HostKeyPending { key, status } => {
             Ok(ConnectResult::HostKeyPending { key, status })
@@ -83,7 +84,22 @@ pub(crate) async fn exec_command(
     timeout: Duration,
     max_bytes: usize,
 ) -> Result<RemoteCommandOutput> {
+    exec_command_with_stdin(handle, command, timeout, max_bytes, None).await
+}
+
+/// 在已建立的连接上执行命令，并可把一段数据写入远端 stdin。
+///
+/// `stdin` 用于把用户提供的 sudo 密码交给 `sudo -S`，这段字节不会出现在
+/// 工具参数或返回给模型的结果里。
+pub(crate) async fn exec_command_with_stdin(
+    handle: &client::Handle<SshClientHandler>,
+    command: &str,
+    timeout: Duration,
+    max_bytes: usize,
+    stdin: Option<&[u8]>,
+) -> Result<RemoteCommandOutput> {
     let command = command.to_string();
+    let stdin = stdin.map(Vec::from);
     let run = async move {
         // 1. 打开会话通道并发起命令；exec 不请求回执，直接读取输出流
         let mut channel = handle
@@ -94,6 +110,16 @@ pub(crate) async fn exec_command(
             .exec(false, command)
             .await
             .context("failed to start remote command")?;
+        if let Some(payload) = stdin {
+            channel
+                .data_bytes(payload)
+                .await
+                .context("failed to write remote stdin")?;
+            channel
+                .eof()
+                .await
+                .context("failed to close remote stdin")?;
+        }
 
         let mut stdout: Vec<u8> = Vec::new();
         let mut stderr: Vec<u8> = Vec::new();
@@ -239,11 +265,11 @@ mod tests {
         };
 
         // 首次连接会带回待确认的主机指纹，信任后重连完成认证
-        let handle = match connect(&host, None).await.expect("connect") {
+        let handle = match connect(&host, None, None).await.expect("connect") {
             ConnectResult::Connected(handle) => handle,
             ConnectResult::HostKeyPending { key, .. } => {
                 crate::web::ssh::trust_host_key(&key).expect("trust host key");
-                match connect(&host, None).await.expect("reconnect") {
+                match connect(&host, None, None).await.expect("reconnect") {
                     ConnectResult::Connected(handle) => handle,
                     ConnectResult::HostKeyPending { .. } => panic!("still pending after trust"),
                 }

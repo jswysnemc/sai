@@ -111,6 +111,168 @@ pub(crate) fn group_for_tool(name: &str) -> &'static str {
     }
 }
 
+/// 用途分组的展示、排序与交互说明。
+#[derive(Clone, Copy)]
+pub(crate) struct ToolGroupMeta {
+    /// 设置页排序，数字越小越靠前
+    pub rank: u8,
+    /// 英文短标题
+    pub label_en: &'static str,
+    /// 中文短标题
+    pub label_zh: &'static str,
+    /// 英文用户说明；空表示该组无需额外解释
+    pub hint_en: &'static str,
+    /// 中文用户说明
+    pub hint_zh: &'static str,
+    /// 给模型看的分组说明（英文，配合 load 提示）
+    pub model_description: &'static str,
+    /// 相关设置页路径
+    pub settings_path: Option<&'static str>,
+}
+
+const UNKNOWN_GROUP: ToolGroupMeta = ToolGroupMeta {
+    rank: 90,
+    label_en: "Other",
+    label_zh: "其他",
+    hint_en: "",
+    hint_zh: "",
+    model_description: "Other tools",
+    settings_path: None,
+};
+
+/// 返回用途分组的展示与排序元数据。
+///
+/// 参数:
+/// - `group`: 分组标识
+///
+/// 返回:
+/// - 该组的标题、提示、模型说明与排序
+pub(crate) fn group_meta(group: &str) -> ToolGroupMeta {
+    match group {
+        "base" => ToolGroupMeta {
+            rank: 0,
+            label_en: "Base",
+            label_zh: "基础操作",
+            hint_en: "",
+            hint_zh: "",
+            model_description: "Core file, command, and task tools",
+            settings_path: None,
+        },
+        "ssh" => ToolGroupMeta {
+            rank: 1,
+            label_en: "SSH",
+            label_zh: "SSH 远程",
+            hint_en: "You add hosts and type passwords in Settings → SSH. The model only sees host aliases and command output — never keys or passwords. Dangerous commands still ask you to confirm.",
+            hint_zh: "主机和密码在「设置 → SSH」里由你配置和输入。模型只能看到主机别名和命令结果，看不到密钥或密码。高危命令仍会再向你确认一次。",
+            model_description: "Remote SSH: list hosts, run commands, transfer files. Call hosts by host_id only; credentials stay in the user UI.",
+            settings_path: Some("/settings/ssh"),
+        },
+        "web" => ToolGroupMeta {
+            rank: 2,
+            label_en: "Web",
+            label_zh: "网页检索",
+            hint_en: "",
+            hint_zh: "",
+            model_description: "Web search, page fetch, weather, and online status",
+            settings_path: None,
+        },
+        "media" => ToolGroupMeta {
+            rank: 3,
+            label_en: "Media",
+            label_zh: "媒体",
+            hint_en: "",
+            hint_zh: "",
+            model_description: "Image understanding, generation, and memes",
+            settings_path: None,
+        },
+        "memory" => ToolGroupMeta {
+            rank: 4,
+            label_en: "Memory",
+            label_zh: "记忆",
+            hint_en: "",
+            hint_zh: "",
+            model_description: "Long-term memory, evicted context, and recall",
+            settings_path: None,
+        },
+        "knowledge" => ToolGroupMeta {
+            rank: 5,
+            label_en: "Knowledge",
+            label_zh: "知识库",
+            hint_en: "",
+            hint_zh: "",
+            model_description: "Local knowledge-base search and maintenance",
+            settings_path: None,
+        },
+        "package" => ToolGroupMeta {
+            rank: 6,
+            label_en: "Packages",
+            label_zh: "软件包",
+            hint_en: "",
+            hint_zh: "",
+            model_description: "Arch Linux, AUR, man pages, and package review",
+            settings_path: None,
+        },
+        "diagnostics" => ToolGroupMeta {
+            rank: 7,
+            label_en: "Diagnostics",
+            label_zh: "诊断",
+            hint_en: "",
+            hint_zh: "",
+            model_description: "System diagnostics and input-method troubleshooting",
+            settings_path: None,
+        },
+        "game" => ToolGroupMeta {
+            rank: 8,
+            label_en: "Games",
+            label_zh: "游戏",
+            hint_en: "",
+            hint_zh: "",
+            model_description: "Linux game compatibility lookup",
+            settings_path: None,
+        },
+        "utilities" => ToolGroupMeta {
+            rank: 9,
+            label_en: "Utilities",
+            label_zh: "实用工具",
+            hint_en: "",
+            hint_zh: "",
+            model_description: "Calculator, encoding, hash, and novelty tools",
+            settings_path: None,
+        },
+        "personal" => ToolGroupMeta {
+            rank: 10,
+            label_en: "Personal",
+            label_zh: "个人",
+            hint_en: "",
+            hint_zh: "",
+            model_description: "Personal-assistant tools such as alarms",
+            settings_path: None,
+        },
+        "mcp" => ToolGroupMeta {
+            rank: 11,
+            label_en: "MCP",
+            label_zh: "MCP",
+            hint_en: "",
+            hint_zh: "",
+            model_description: "External MCP tool servers",
+            settings_path: None,
+        },
+        "other" => UNKNOWN_GROUP,
+        _ => UNKNOWN_GROUP,
+    }
+}
+
+/// 返回分组在设置页中的排序权重。
+///
+/// 参数:
+/// - `group`: 分组标识
+///
+/// 返回:
+/// - 越小越靠前
+pub(crate) fn group_rank(group: &str) -> u8 {
+    group_meta(group).rank
+}
+
 /// 获取用途分组说明。
 ///
 /// 参数:
@@ -119,19 +281,31 @@ pub(crate) fn group_for_tool(name: &str) -> &'static str {
 /// 返回:
 /// - 适合展示给模型的分组说明
 pub(crate) fn group_description(group: &str) -> &'static str {
-    match group {
-        "base" => "基础文件、命令和任务操作",
-        "web" => "网页搜索、网页读取、天气和在线状态查询",
-        "media" => "图片理解、图片生成和表情包操作",
-        "memory" => "长期记忆、旧上下文和回忆",
-        "package" => "Arch Linux、AUR、man 手册和包审查",
-        "game" => "Linux 游戏兼容性查询",
-        "diagnostics" => "系统诊断和输入法排查",
-        "knowledge" => "本地知识库检索和维护",
-        "utilities" => "计算、编码、哈希和趣味工具",
-        "personal" => "闹钟等个人助手工具",
-        "ssh" => "通过 SSH 管理远程服务器（列主机、执行命令、传输文件）",
-        "mcp" => "MCP 外部工具服务器",
-        _ => "其他工具",
+    group_meta(group).model_description
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// SSH 组必须紧挨基础组，避免按字母序沉到列表底部。
+    #[test]
+    fn ssh_ranks_immediately_after_base() {
+        assert_eq!(group_rank("base"), 0);
+        assert_eq!(group_rank("ssh"), 1);
+        assert!(group_rank("ssh") < group_rank("web"));
+        assert!(group_rank("ssh") < group_rank("utilities"));
+    }
+
+    /// SSH 组必须带用户/模型分工说明，并指向主机设置页。
+    #[test]
+    fn ssh_meta_explains_user_versus_model() {
+        let meta = group_meta("ssh");
+        assert_eq!(meta.label_zh, "SSH 远程");
+        assert_eq!(meta.label_en, "SSH");
+        assert!(meta.hint_zh.contains("设置 → SSH"));
+        assert!(meta.hint_en.contains("Settings → SSH"));
+        assert!(meta.model_description.contains("host_id"));
+        assert_eq!(meta.settings_path, Some("/settings/ssh"));
     }
 }

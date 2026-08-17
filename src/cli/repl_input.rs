@@ -1,7 +1,7 @@
 use super::repl_chrome::ReplChrome;
 use super::repl_clipboard::ReplClipboardState;
 use super::repl_external_events::ReplExternalEvents;
-use super::repl_runtime::ReplRuntime;
+use super::repl_runtime::{QueuePanelIdleResult, ReplRuntime};
 use super::repl_windows_paste::{WindowsPasteKey, WindowsPasteState};
 use super::*;
 use crate::agent::ExternalEventWake;
@@ -225,6 +225,67 @@ pub(super) fn read_repl_input(
                     rendered_rows = 0;
                     redraw_input!()?;
                     continue;
+                }
+                // Ctrl+C 仍由后面的匹配处理；其余键在队列管理态由面板吞掉
+                let skip_queue_for_ctrl_c =
+                    matches!(code, KeyCode::Char('c')) && modifiers.contains(KeyModifiers::CONTROL);
+                if !skip_queue_for_ctrl_c
+                    && (runtime.queue_panel_active()
+                        || (code == KeyCode::Up && modifiers.contains(KeyModifiers::CONTROL)))
+                {
+                    match runtime.handle_queue_panel_idle_key(
+                        code,
+                        modifiers,
+                        input.trim().is_empty(),
+                    )? {
+                        QueuePanelIdleResult::Ignored => {}
+                        QueuePanelIdleResult::Consumed => {
+                            input_row = 0;
+                            rendered_rows = 0;
+                            redraw_input!()?;
+                            continue;
+                        }
+                        QueuePanelIdleResult::Edit(item) => {
+                            input = item.text;
+                            cursor = input.chars().count();
+                            clipboard_state = item.clipboard;
+                            mode = item.mode;
+                            chrome.set_mode(mode);
+                            slash_selection = 0;
+                            history_clean_index = None;
+                            is_pasted = false;
+                            input_row = 0;
+                            rendered_rows = 0;
+                            redraw_input!()?;
+                            continue;
+                        }
+                        QueuePanelIdleResult::SendNow(item) => {
+                            if !input.trim().is_empty() {
+                                let leftover = runtime.stream_draft_mut();
+                                leftover.text = input;
+                                leftover.cursor = cursor;
+                                leftover.clipboard = clipboard_state;
+                                leftover.mode = Some(mode);
+                            }
+                            let (echo_text, fold_echo) =
+                                item.clipboard.echo_text_for_submit(&item.text);
+                            let chat_input = item.clipboard.to_chat_input(&item.text);
+                            finish_repl_input(
+                                &mut stdout,
+                                input_row,
+                                rendered_rows,
+                                runtime,
+                                &mut terminal_guard,
+                            )?;
+                            return Ok(Some(ReplInputEvent::User(ReplInputSubmission {
+                                mode: item.mode,
+                                raw_input: item.text,
+                                chat_input,
+                                echo_text,
+                                fold_echo,
+                            })));
+                        }
+                    }
                 }
                 // 底部 agent 面板：面板焦点态全键拦截；空输入时 ↓ 进入面板
                 if (runtime.agent_panel_active() || input.is_empty())

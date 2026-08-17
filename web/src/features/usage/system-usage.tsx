@@ -69,6 +69,10 @@ export function SystemUsage({ selection, mode, agentId, onCompact, compactDisabl
       {open && createPortal(
         <div ref={popoverRef} className="system-usage-popover" style={popoverStyle}>
           <header>
+            <div>
+              <span>{t("System usage", "系统用量")}</span>
+              <strong>{t("Current session and process", "当前会话与进程")}</strong>
+            </div>
             <button
               type="button"
               className="system-usage-close"
@@ -77,10 +81,6 @@ export function SystemUsage({ selection, mode, agentId, onCompact, compactDisabl
             >
               <X size={14} />
             </button>
-            <div>
-              <span>{t("System usage", "系统用量")}</span>
-              <strong>{t("Current session and process", "当前会话与进程")}</strong>
-            </div>
           </header>
           {usage.isLoading && <div className="usage-loading">{t("Loading usage", "正在读取用量")}</div>}
           {usage.error && <div className="usage-error">{usage.error.message}</div>}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isNearOutputBottom, resolveFollowOutputState, scrollOutputToBottom } from "./use-follow-output-scroll";
+import { canProgrammaticFollow, isNearOutputBottom, resolveFollowOutputState, scrollOutputToBottom, snapScrollTopToLine } from "./use-follow-output-scroll";
 
 describe("follow output scroll", () => {
   it("将底部容差内的位置视为正在跟随", () => {
@@ -45,5 +45,19 @@ describe("follow output scroll", () => {
     scrollOutputToBottom(element);
 
     expect(element.scrollTop).toBe(960);
+  });
+
+  it("用户滚轮窗口内不让程序贴底抢走视口", () => {
+    expect(canProgrammaticFollow(true, 1000, 999)).toBe(false);
+    expect(canProgrammaticFollow(true, 1000, 1001)).toBe(true);
+    expect(canProgrammaticFollow(false, 1000, 2000)).toBe(false);
+  });
+
+  it("把贴底滚动对齐到整行，避免顶边裁出半行", () => {
+    expect(snapScrollTopToLine(54, 20, 4, 54)).toBe(44);
+    expect(snapScrollTopToLine(44, 20, 4, 54)).toBe(44);
+    expect(snapScrollTopToLine(0, 20, 4, 54)).toBe(0);
+    expect(snapScrollTopToLine(80, 20, 4, 54)).toBe(44);
+    expect(snapScrollTopToLine(54, 0, 4, 54)).toBe(54);
   });
 });

@@ -33,7 +33,7 @@ pub(crate) async fn handle_gateway_command(
         )
         .to_string(),
         ControlCommand::Help => crate::control_commands::help_text(ControlSurface::Gateway),
-        ControlCommand::Context => crate::control_commands::context_info_text(paths)?,
+        ControlCommand::Context => crate::control_commands::context_info_plain(paths)?,
         ControlCommand::New { title } => {
             crate::control_commands::create_new_session(paths, &title)?
         }

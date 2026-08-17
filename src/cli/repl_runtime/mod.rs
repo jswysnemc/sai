@@ -8,6 +8,7 @@ mod history_insert;
 mod layout;
 mod live_usage;
 mod placeholder_tips;
+mod queue_panel;
 mod reflow;
 mod reflow_state;
 mod runner_events;
@@ -15,6 +16,8 @@ mod shell_hint_panel;
 mod slash_panel;
 mod stream;
 mod viewport;
+
+pub(in crate::cli) use queue_panel::QueuePanelIdleResult;
 
 #[cfg(test)]
 mod tests;
@@ -68,6 +71,8 @@ pub(super) struct ReplRuntime {
     last_chrome: Option<ReplChrome>,
     /// 底部主/子 agent 切换面板状态
     agent_panel: agent_panel::AgentPanelState,
+    /// 用户消息队列管理面板状态
+    queue_panel: queue_panel::QueuePanelState,
     /// 最近一次 composer 绘制后的光标屏幕行（高度变化重锚探测用）
     last_cursor_row: Option<u16>,
     /// 上次 composer 绘制的内容签名，用于跳过无变化的重绘
@@ -131,6 +136,7 @@ impl ReplRuntime {
             live_session_id: None,
             last_chrome: None,
             agent_panel: agent_panel::AgentPanelState::default(),
+            queue_panel: queue_panel::QueuePanelState::default(),
             last_cursor_row: None,
             last_composer_signature: None,
             todo_panel_compact: false,
@@ -484,6 +490,7 @@ impl ReplRuntime {
         self.stream_draft = StreamComposerDraft::default();
         self.submission_queue.clear();
         self.agent_panel.deactivate();
+        self.queue_panel.deactivate();
         self.replay(false)
     }
 

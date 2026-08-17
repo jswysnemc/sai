@@ -4,7 +4,6 @@ import { parseReadTextPages, type ReadTextPage } from "./read-result-parser";
 import { prettyJson } from "./tool-data";
 import { ToolFileReference } from "./tool-file-reference";
 import { useI18n } from "../../i18n/use-i18n";
-import { useEffect } from "react";
 
 type ReadToolViewProps = {
   argumentsText: string;
@@ -20,19 +19,21 @@ type ReadToolViewProps = {
  */
 export function ReadToolView({ output, headerPath }: ReadToolViewProps) {
   const pages = parseReadTextPages(output);
+  const hidePath = pages.length === 1 && pathsReferToSameFile(pages[0]?.path ?? "", headerPath ?? "");
   if (pages.length === 0) {
-    return output ? <pre className="generic-tool-block result"><code>{prettyJson(output)}</code></pre> : null;
+    return output ? (
+      <ToolPanel className="read-tool-view">
+        <pre className="generic-tool-block result"><code>{prettyJson(output)}</code></pre>
+      </ToolPanel>
+    ) : null;
   }
-  const single = pages.length === 1;
-  const hidePath = single && pathsReferToSameFile(pages[0]?.path ?? "", headerPath ?? "");
-
 
   return (
     <ToolPanel className="read-tool-view">
       {pages.map((page, index) => (
         <ReadTextPageView
           page={page}
-          hidePath={single && pathsReferToSameFile(page.path, headerPath ?? "")}
+          hidePath={hidePath && pathsReferToSameFile(page.path, headerPath ?? "")}
           key={`${page.path}-${page.offset}-${index}`}
         />
       ))}

@@ -80,6 +80,7 @@
 
 .composer-activity-button {
   position: relative;
+  overflow: visible;
 }
 
 .composer-activity-button.is-active {
@@ -89,17 +90,18 @@
 
 .composer-activity-badge {
   position: absolute;
-  top: -3px;
-  right: -3px;
+  top: -2px;
+  right: -2px;
+  z-index: 1;
   display: grid;
   min-width: 14px;
   height: 14px;
-  padding:0 var(--space-3xs);
+  padding: 0 3px;
   place-items: center;
   border-radius: var(--radius-pill);
   background: var(--signal);
   color: var(--paper);
-  font:600 var(--text-2xs)/1 var(--font-code);
+  font: 600 var(--text-2xs)/14px var(--font-code);
 }
 
 /*

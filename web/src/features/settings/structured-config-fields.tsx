@@ -246,7 +246,9 @@ function fieldLabel(name: string, t: (en: string, zh: string) => string): string
     wait_show_model: t("Show model while waiting", "等待时显示模型"),
     wait_show_thinking_level: t("Show thinking level while waiting", "等待时显示思考等级"),
     repl_transcript_row_cap: t("Terminal transcript row limit", "终端记录行数上限"),
-    default_max_chars: t("Default context tokens", "默认上下文 token 数")
+    default_max_chars: t("Default context tokens", "默认上下文 token 数"),
+    compaction_ratio: t("Auto-compact ratio", "自动压缩比例"),
+    compaction_reserve_tokens: t("Reserved headroom", "压缩预留 token")
   };
   return labels[name] ?? humanizeFieldName(name);
 }

@@ -55,7 +55,11 @@ impl StateStore {
         force: bool,
     ) -> Result<Option<CompactionRequest>> {
         let projection = project_provider_turn_from_messages(messages, 0, context_limit_tokens);
-        self.select_compaction_for_projection(&projection, force)
+        self.select_compaction_for_projection_with(
+            &projection,
+            force,
+            super::CompactionBudgetPolicy::DEFAULT,
+        )
     }
 
     /// 按 provider 请求投影视图选择统一压缩轮次。
@@ -71,6 +75,28 @@ impl StateStore {
         projection: &ProjectedRequest,
         force: bool,
     ) -> Result<Option<CompactionRequest>> {
+        self.select_compaction_for_projection_with(
+            projection,
+            force,
+            super::CompactionBudgetPolicy::DEFAULT,
+        )
+    }
+
+    /// 按会话策略选择统一压缩轮次。
+    ///
+    /// 参数:
+    /// - `projection`: 当前 provider 请求投影视图
+    /// - `force`: 是否由手动入口强制触发
+    /// - `policy`: 会话级压缩触发策略
+    ///
+    /// 返回:
+    /// - 压缩请求；自动入口未达到阈值或旧轮次不足时返回空
+    pub fn select_compaction_for_projection_with(
+        &self,
+        projection: &ProjectedRequest,
+        force: bool,
+        policy: super::CompactionBudgetPolicy,
+    ) -> Result<Option<CompactionRequest>> {
         let current_context_tokens = estimate_projected_request_chars(projection);
         let context_limit_tokens = projection.estimate.context_limit_chars;
         let turns = self.conv_db.active_branch_turns()?;
@@ -79,13 +105,14 @@ impl StateStore {
             .map(|summary| summary.summary);
         // 运行中轮次的工具调用同样参与压缩，需要知道其中已记录多少条
         let (running_turn_call_count, already_compacted) = self.running_turn_call_counts(&turns)?;
-        let request = super::select_compaction(
+        let request = super::select_compaction_with(
             &turns,
             previous_summary,
             running_turn_call_count,
             current_context_tokens,
             context_limit_tokens,
             force,
+            policy,
         );
         // 压缩边界按累计记录：第二次压缩要接着上一次的位置往后推进
         Ok(request.map(|request| request.with_compacted_call_offset(already_compacted)))

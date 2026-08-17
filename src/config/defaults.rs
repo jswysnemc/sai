@@ -157,6 +157,8 @@ impl Default for ContextConfig {
     fn default() -> Self {
         Self {
             default_max_chars: default_context_chars(),
+            compaction_ratio: default_compaction_ratio(),
+            compaction_reserve_tokens: default_compaction_reserve_tokens(),
             compaction_provider_id: String::new(),
             compaction_model: String::new(),
         }
@@ -528,6 +530,22 @@ pub(super) fn default_calculator_backend() -> String {
 
 pub(super) fn default_context_chars() -> usize {
     120_000
+}
+
+pub(super) fn default_compaction_ratio() -> f32 {
+    0.9
+}
+
+pub(super) fn default_compaction_reserve_tokens() -> usize {
+    50_000
+}
+
+pub(super) fn is_default_compaction_ratio(value: &f32) -> bool {
+    (*value - default_compaction_ratio()).abs() < f32::EPSILON
+}
+
+pub(super) fn is_default_compaction_reserve_tokens(value: &usize) -> bool {
+    *value == default_compaction_reserve_tokens()
 }
 
 /// 默认客户端模拟风格。

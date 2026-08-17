@@ -37,16 +37,38 @@
   border-bottom: 1px solid color-mix(in srgb, var(--technical-border) 60%, transparent);
 }
 
-.shell-command-line > span {
+.shell-command-prompt {
   color: var(--shell-prompt);
   font-weight: 600;
   user-select: none;
 }
 
-.shell-command-line code {
+.shell-command-highlight {
+  min-width: 0;
+  font-family: var(--font-code);
+}
+
+.shell-command-line code,
+.shell-command-highlight code {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+  padding: 0;
+  background: transparent;
   color: var(--technical-text);
+  font: inherit;
+}
+
+.shell-command-line .hljs,
+.shell-command-highlight .hljs {
+  background: transparent;
+}
+
+.tool-layout-summary .shell-command-highlight,
+.tool-layout-summary .shell-command-highlight code {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /*
@@ -153,6 +175,10 @@
   font-family: var(--font-code);
 }
 
+.read-tool-view > .generic-tool-block {
+  padding-top: var(--space-sm);
+}
+
 .read-file-page + .read-file-page {
   border-top: 1px solid var(--technical-border);
 }
@@ -173,14 +199,14 @@
   font-size:var(--text-2xs);
 }
 
-/* 路径吸收剩余宽度，读取范围贴右显示 */
+/* 路径吸收剩余宽度，读取范围紧跟路径 */
 .read-file-head .read-file-range {
-  margin-left: auto;
+  margin-left: 0;
   font-family: var(--font-code);
 }
 
 .read-file-head.path-hidden {
-  justify-content: flex-end;
+  justify-content: flex-start;
   min-height: 0;
   padding-block: var(--space-3xs);
 }
@@ -194,12 +220,13 @@
 .tool-file-reference {
   display: inline-flex;
   align-items: center;
-  gap:var(--space-xs);
   min-width: 0;
+  max-width: 100%;
   vertical-align: middle;
 }
 
-.tool-file-reference svg {
+.tool-file-reference svg,
+.tool-file-reference img {
   display: block;
   flex: 0 0 auto;
 }
@@ -207,6 +234,7 @@
 .tool-file-reference button {
   display: inline-flex;
   align-items: center;
+  gap: var(--space-xs);
   overflow: hidden;
   padding: 0;
   border: 0;
@@ -220,6 +248,12 @@
   /* flex 项默认按内容撑开，长路径会顶破父容器；显式允许收缩后省略号才生效 */
   min-width: 0;
   flex: 1 1 auto;
+}
+
+.tool-file-reference-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tool-file-reference button:hover {

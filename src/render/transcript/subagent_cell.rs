@@ -33,6 +33,8 @@ pub(crate) struct SubagentOverview {
     pub(crate) running: bool,
     /// 存活条目的实时阶段（工具进度 / Token 统计 / 待命提示）
     pub(crate) detail: Option<String>,
+    /// 累计消耗的 token 估算
+    pub(crate) tokens: Option<u64>,
 }
 
 /// 可持续更新的子智能体 TUI 单元。
@@ -89,11 +91,13 @@ impl SubagentCell {
             .as_ref()
             .filter(|_| status == "run" || status == "idle")
             .and_then(|snapshot| snapshot.phase.clone());
+        let tokens = snapshot.as_ref().and_then(snapshot_tokens);
         SubagentOverview {
             label,
             status,
             running: status == "run",
             detail,
+            tokens,
         }
     }
 
@@ -237,6 +241,49 @@ fn status_key(cell: &SubagentCell, snapshot: Option<&SubagentSnapshot>) -> &'sta
         })
 }
 
+/// 从快照统计或阶段文案里取出 token 估算。
+///
+/// 运行中主要靠 phase 上报；终态才把完整 stats 写进快照。
+fn snapshot_tokens(snapshot: &SubagentSnapshot) -> Option<u64> {
+    snapshot
+        .stats
+        .as_ref()
+        .and_then(|stats| {
+            stats
+                .get("token_estimate")
+                .and_then(serde_json::Value::as_u64)
+                .or_else(|| {
+                    stats
+                        .get("total_tokens")
+                        .and_then(serde_json::Value::as_u64)
+                })
+        })
+        .or_else(|| snapshot.phase.as_deref().and_then(parse_token_label))
+        .filter(|tokens| *tokens > 0)
+}
+
+/// 从「消耗 Token 1.2k」这类阶段文案里解析数字。
+fn parse_token_label(text: &str) -> Option<u64> {
+    text.split(|ch: char| ch.is_whitespace() || ch == '　')
+        .rev()
+        .find_map(parse_compact_token_count)
+}
+
+/// 解析 `1.2k` / `12k` / `999` 形式的 token 展示。
+fn parse_compact_token_count(raw: &str) -> Option<u64> {
+    let raw = raw.trim().trim_start_matches('~');
+    if raw.is_empty() {
+        return None;
+    }
+    if let Some(body) = raw.strip_suffix('k').or_else(|| raw.strip_suffix('K')) {
+        return Some((body.parse::<f64>().ok()? * 1_000.0).round() as u64);
+    }
+    if let Some(body) = raw.strip_suffix('M') {
+        return Some((body.parse::<f64>().ok()? * 1_000_000.0).round() as u64);
+    }
+    raw.parse().ok()
+}
+
 /// 生成子智能体的一行简要状态。
 ///
 /// 参数:
@@ -360,5 +407,20 @@ mod tests {
         assert!(!overview.label.is_empty());
         assert_eq!(overview.status, "run");
         assert!(overview.running);
+        assert_eq!(overview.tokens, None);
+    }
+
+    #[test]
+    fn parse_token_label_reads_compact_phase_text() {
+        assert_eq!(
+            parse_token_label("工具调用 3 次　消耗 Token 1.2k"),
+            Some(1_200)
+        );
+        assert_eq!(
+            parse_token_label("tool calls: 3　token cost: 12k"),
+            Some(12_000)
+        );
+        assert_eq!(parse_token_label("token cost: 999"), Some(999));
+        assert_eq!(parse_token_label("正在读取文件"), None);
     }
 }

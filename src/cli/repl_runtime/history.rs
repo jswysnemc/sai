@@ -220,8 +220,10 @@ mod tests {
             messages: Vec::new(),
             automatic,
             duration_ms: 0,
+            ttft_ms: 0,
             usage: None,
             error: None,
+            injected_content: None,
         }
     }
 

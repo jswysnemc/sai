@@ -1,10 +1,9 @@
-use super::QueuedSubmission;
 use crate::cli::repl_text::visible_width;
 use crate::i18n::text as t;
 use crate::render::todo_style::{colorize_item, display_order, display_window, status_marker};
 use crate::render::transcript::TodoSnapshotItem;
 
-/// 沉底面板展示的排队消息上限。
+/// 沉底面板展示的控制命令预览上限。
 const QUEUE_PREVIEW_LIMIT: usize = 3;
 
 /// todo 多行模式展示的条目上限。
@@ -17,7 +16,8 @@ const TODO_PREVIEW_LIMIT: usize = 5;
 ///
 /// 参数:
 /// - `todos`: 最新 todo 清单快照
-/// - `queued`: 排队等待下一轮执行的用户提交
+/// - `queue_lines`: 用户消息队列区已渲染行
+/// - `controls`: 待本轮结束后执行的控制命令
 /// - `agent_lines`: 多智能体切换面板行（未截断）
 /// - `cols`: 终端列数
 /// - `todo_compact`: true 时 todo 区只保留一行摘要（Ctrl+T 切换）
@@ -26,7 +26,7 @@ const TODO_PREVIEW_LIMIT: usize = 5;
 /// - 已截断到终端宽度的 ANSI 面板行；无内容时为空
 pub(super) fn render_panel_lines(
     todos: &[TodoSnapshotItem],
-    queued: &[QueuedSubmission],
+    queue_lines: &[String],
     controls: &[String],
     agent_lines: &[String],
     cols: usize,
@@ -36,7 +36,9 @@ pub(super) fn render_panel_lines(
     let mut lines = Vec::new();
     render_todo_section(todos, cols, todo_compact, &mut lines);
     render_control_section(controls, cols, &mut lines);
-    render_queue_section(queued, cols, &mut lines);
+    for line in queue_lines {
+        lines.push(clip_line(line, cols));
+    }
     for line in agent_lines {
         lines.push(clip_line(line, cols));
     }
@@ -84,8 +86,7 @@ fn render_control_section(controls: &[String], cols: usize, lines: &mut Vec<Stri
 
 /// 渲染 todo 快照区。
 ///
-/// 多行：已完成置顶 + 进行中 + 待办；单行：仅进度摘要（可带当前项）。
-/// 全部完成时始终单行。
+/// 多行：已完成置顶 + 进行中 + 待办，条目对齐；单行：进度摘要可带当前项。
 ///
 /// 参数:
 /// - `todos`: 最新 todo 清单快照
@@ -118,12 +119,15 @@ fn render_todo_section(
     } else {
         format!("\x1b[2m{title}\x1b[0m \x1b[2m{done}/{total}\x1b[0m")
     };
-    if let Some(item) = active {
-        header.push_str(&format!(
-            "  \x1b[2m·\x1b[0m {} {}",
-            status_marker("in_progress"),
-            colorize_item("in_progress", &item.text)
-        ));
+    // 单行时才把当前项挂在标题旁；展开后条目与其它待办对齐，不再升成标题
+    if compact || all_done {
+        if let Some(item) = active {
+            header.push_str(&format!(
+                "  \x1b[2m·\x1b[0m {} {}",
+                status_marker("in_progress"),
+                colorize_item("in_progress", &item.text)
+            ));
+        }
     }
     // 单行模式提示：多行可 Ctrl+T 收起；单行可展开
     if !all_done {
@@ -146,10 +150,6 @@ fn render_todo_section(
     let (start, end) = display_window(&ordered_statuses, TODO_PREVIEW_LIMIT);
     for &index in &order[start..end] {
         let item = &todos[index];
-        // 展开时跳过当前进行中项，避免与 header 重复
-        if item.status == "in_progress" {
-            continue;
-        }
         let line = format!(
             "  {} {}",
             status_marker(&item.status),
@@ -161,48 +161,6 @@ fn render_todo_section(
     if hidden > 0 {
         lines.push(clip_line(
             &format!("\x1b[2m  … +{hidden} {}\x1b[0m", t("more", "条")),
-            cols,
-        ));
-    }
-}
-
-/// 渲染排队消息区：一行计数 + 每条消息单行预览。
-///
-/// 参数:
-/// - `queued`: 排队提交
-/// - `cols`: 终端列数
-/// - `lines`: 输出行缓冲
-///
-/// 返回:
-/// - 无
-fn render_queue_section(queued: &[QueuedSubmission], cols: usize, lines: &mut Vec<String>) {
-    if queued.is_empty() {
-        return;
-    }
-    lines.push(clip_line(
-        &format!(
-            "\x1b[2m• {} ({})  {}\x1b[0m",
-            t("queued for next turn", "已排队待下一轮"),
-            queued.len(),
-            t("Ctrl+Z undo · Ctrl+Y clear", "Ctrl+Z 撤回 · Ctrl+Y 清空"),
-        ),
-        cols,
-    ));
-    for submission in queued.iter().take(QUEUE_PREVIEW_LIMIT) {
-        let preview = submission
-            .text
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
-        lines.push(clip_line(
-            &format!("\x1b[2m\x1b[3m  ↳ {preview}\x1b[0m"),
-            cols,
-        ));
-    }
-    let hidden = queued.len().saturating_sub(QUEUE_PREVIEW_LIMIT);
-    if hidden > 0 {
-        lines.push(clip_line(
-            &format!("\x1b[2m    … +{hidden} {}\x1b[0m", t("more", "条")),
             cols,
         ));
     }
@@ -252,17 +210,7 @@ fn clip_line(line: &str, cols: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::AgentMode;
-    use crate::cli::repl_clipboard::ReplClipboardState;
     use crate::render::activity_animation::strip_ansi_for_test;
-
-    fn queued(text: &str) -> QueuedSubmission {
-        QueuedSubmission {
-            mode: AgentMode::Yolo,
-            text: text.to_string(),
-            clipboard: ReplClipboardState::default(),
-        }
-    }
 
     fn render(todos: &[TodoSnapshotItem], compact: bool) -> Vec<String> {
         render_panel_lines(todos, &[], &[], &[], 80, compact)
@@ -291,12 +239,17 @@ mod tests {
         ];
         let lines = render(&todos, false);
         let plain = strip_ansi_for_test(&lines.join("\n"));
-        // 跳过标题行里挂的当前项，只比较条目区顺序
+        let header = plain.lines().next().unwrap_or_default();
         let body = plain.lines().skip(1).collect::<Vec<_>>().join("\n");
         // 已完成条目保留在条目区
         assert!(body.contains("done one"));
-        // 展开时当前项只在 header 展示，body 不再重复
-        assert!(body.find("current").is_none());
+        // 展开时当前项与其它条目对齐，不升到标题行
+        assert!(body.contains("current"));
+        assert!(!header.contains("current"));
+        let done_at = body.find("done one").unwrap();
+        let current_at = body.find("current").unwrap();
+        let next_at = body.find("next").unwrap();
+        assert!(done_at < current_at && current_at < next_at);
         assert!(plain.contains('▶'));
         assert!(!plain.contains('├') && !plain.contains('└'));
         assert!(
@@ -327,9 +280,20 @@ mod tests {
         assert!(multi.len() > 1);
         let compact_plain = strip_ansi_for_test(&compact[0]);
         assert!(compact_plain.contains("1/3"));
+        assert!(compact_plain.contains("current"));
         assert!(!compact_plain.contains('█') && !compact_plain.contains('░'));
         assert!(!compact_plain.contains("next"));
-        assert!(multi.join("\n").contains("next"));
+        let multi_plain = strip_ansi_for_test(&multi.join("\n"));
+        assert!(multi_plain.contains("next"));
+        assert!(multi_plain
+            .lines()
+            .skip(1)
+            .any(|line| line.contains("current")));
+        assert!(!multi_plain
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .contains("current"));
     }
 
     #[test]
@@ -391,23 +355,8 @@ mod tests {
     }
 
     #[test]
-    fn queue_section_lists_previews_and_overflow() {
-        let queue = vec![
-            queued("one"),
-            queued("two"),
-            queued("three"),
-            queued("four"),
-        ];
-        let lines = render_panel_lines(&[], &queue, &[], &[], 80, false);
-        let joined = lines.join("\n");
-        assert!(joined.contains("(4)"));
-        assert!(joined.contains("↳ one"));
-        assert!(joined.contains("+1"));
-    }
-
-    #[test]
     fn long_lines_are_clipped_to_terminal_width() {
-        let queue = vec![queued(&"字".repeat(120))];
+        let queue = vec![format!("  ↳ {}", "字".repeat(120))];
         let lines = render_panel_lines(&[], &queue, &[], &[], 40, false);
         for line in &lines {
             assert!(visible_width(line) <= 40, "line too wide: {line:?}");

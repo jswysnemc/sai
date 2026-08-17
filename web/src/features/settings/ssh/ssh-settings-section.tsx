@@ -130,8 +130,8 @@ export function SshSettingsSection() {
         kicker={t("Remote access", "远程访问")}
         title={t("SSH", "SSH")}
         description={t(
-          "Hosts available as remote terminal targets. Only the private key path is stored, never passwords.",
-          "可作为远程终端目标的主机。仅保存私钥路径，不保存密码。"
+          "Hosts for the remote terminal and the agent's SSH tools. Only the private key path is stored — passwords are typed when connecting. Enable the SSH group on the Agent page so the model can use these hosts.",
+          "这些主机同时给远程终端和 Agent 的 SSH 工具用。只保存私钥路径，密码在连接时输入。要让模型用这些主机，请在 Agent 配置里打开「SSH 远程」工具组。"
         )}
       />
 

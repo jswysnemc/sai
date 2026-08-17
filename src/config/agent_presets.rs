@@ -87,6 +87,10 @@ const CODE_AGENT_TOOLS: &[&str] = &[
     "calculate_hash",
     "decode_encoded_text",
     "mcp_manager",
+    "ssh_list_hosts",
+    "ssh_run_command",
+    "ssh_upload_file",
+    "ssh_download_file",
 ];
 
 /// Plan Agent 只读工具。
@@ -232,6 +236,18 @@ fn expand_enabled_tool_conveniences(mut tools: Vec<String>, add_conveniences: bo
     // 独占白名单要的是精确控制，这条便利补充会让"两个工具"变成三个
     if add_conveniences && has(&tools, "write_file") {
         push_if_missing(&mut tools, "str_replace");
+    }
+    // 能跑本地命令的 Agent 默认也能用 SSH 工具组；旧档案白名单里没有
+    // 这四个名字，不补上的话设置页即使列出分组，运行时仍会被滤掉。
+    if add_conveniences && has(&tools, "run_command") {
+        for name in [
+            "ssh_list_hosts",
+            "ssh_run_command",
+            "ssh_upload_file",
+            "ssh_download_file",
+        ] {
+            push_if_missing(&mut tools, name);
+        }
     }
     tools
 }
@@ -452,6 +468,24 @@ mod tool_convenience_tests {
     }
 
     /// 验证不重复补同一个工具。
+    #[test]
+    fn run_command_unlocks_the_ssh_tool_group() {
+        let expanded = expand_enabled_tool_conveniences(tools(&["run_command"]), true);
+        for name in [
+            "ssh_list_hosts",
+            "ssh_run_command",
+            "ssh_upload_file",
+            "ssh_download_file",
+        ] {
+            assert!(expanded.iter().any(|tool| tool == name), "缺少 {name}");
+        }
+        assert!(
+            !expand_enabled_tool_conveniences(tools(&["run_command"]), false)
+                .iter()
+                .any(|tool| tool == "ssh_list_hosts")
+        );
+    }
+
     #[test]
     fn the_convenience_is_added_once() {
         let expanded =

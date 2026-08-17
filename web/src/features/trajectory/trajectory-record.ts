@@ -4,6 +4,7 @@ import type { PermissionDecision, TurnUsage } from "../../api/contracts";
 export type TrajectoryRecordKind =
   | "system"
   | "user"
+  | "thinking"
   | "assistant"
   | "tool"
   | "subagent"
@@ -84,6 +85,7 @@ export type RecordKindLabel = { en: string; zh: string };
 export const RECORD_KIND_LABELS: Record<TrajectoryRecordKind, RecordKindLabel> = {
   system: { en: "System", zh: "系统" },
   user: { en: "User", zh: "用户" },
+  thinking: { en: "Think", zh: "思考" },
   assistant: { en: "Model", zh: "模型" },
   tool: { en: "Tool", zh: "工具" },
   subagent: { en: "Sub", zh: "子体" },

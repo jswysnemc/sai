@@ -159,6 +159,85 @@ fn disabled_provider_cannot_be_resolved() {
     assert!(error.to_string().contains("disabled"));
 }
 
+/// TUI 把无 default_model 的供应商设为当前项时，不得回退到已停用的 opencode。
+#[test]
+fn normalize_keeps_enabled_provider_instead_of_disabled_opencode() {
+    let mut config = AppConfig::default();
+    config
+        .providers
+        .iter_mut()
+        .find(|provider| provider.id == crate::default_models::OPENCODE_PROVIDER_ID)
+        .unwrap()
+        .enabled = false;
+
+    let mut custom = ProviderConfig::new_openai_compatible();
+    custom.id = "b.ai".to_string();
+    custom.display_name = "b.ai".to_string();
+    custom.base_url = "https://api.b.ai/v1".to_string();
+    custom.model_metadata.insert(
+        "deepseek-v4-flash".to_string(),
+        ModelMetadata {
+            context_chars: Some(70_000),
+            ..ModelMetadata::default()
+        },
+    );
+    config.providers.push(custom);
+    config.active_provider = "b.ai".to_string();
+
+    config.normalize_builtin_providers();
+
+    assert_eq!(config.active_provider, "b.ai");
+    assert_eq!(
+        config.provider(None).unwrap().default_model,
+        "deepseek-v4-flash"
+    );
+    assert!(config.validate().is_ok());
+}
+
+/// 当前供应商已停用时，回退到其他已启用且带模型的供应商。
+#[test]
+fn normalize_falls_back_to_enabled_provider_when_active_is_disabled() {
+    let mut config = AppConfig::default();
+    let disabled_id = config.providers[0].id.clone();
+    config.providers[0].enabled = false;
+    config.active_provider = disabled_id.clone();
+    config.providers[1].models = vec!["usable-model".to_string()];
+    config.providers[1].default_model = "usable-model".to_string();
+
+    config.normalize_builtin_providers();
+
+    assert_ne!(config.active_provider, disabled_id);
+    assert!(config.provider(None).is_ok());
+    assert!(config.validate().is_ok());
+}
+
+/// 写入已停用的供应商不得把它提升为当前项。
+#[test]
+fn upsert_does_not_activate_disabled_provider() {
+    let mut config = AppConfig::default();
+    let active = config.active_provider.clone();
+    let mut provider = ProviderConfig::new_openai_compatible();
+    provider.id = "disabled-new".to_string();
+    provider.enabled = false;
+
+    config.upsert_provider(provider);
+
+    assert_eq!(config.active_provider, active);
+}
+
+/// 已停用的供应商不能被设为当前模型。
+#[test]
+fn set_active_provider_model_rejects_disabled_provider() {
+    let mut config = AppConfig::default();
+    let provider_id = config.providers[0].id.clone();
+    config.providers[0].enabled = false;
+
+    let error = config
+        .set_active_provider_model(&provider_id, "any-model")
+        .expect_err("停用的供应商不能被激活");
+    assert!(error.to_string().contains("disabled"));
+}
+
 /// 未写入配置文件的供应商默认处于启用状态。
 #[test]
 fn providers_default_to_enabled_when_the_field_is_absent() {
@@ -419,6 +498,33 @@ fn remove_provider_rejects_deleting_last_provider() {
 
     assert!(config.remove_provider(&provider_id).is_err());
     assert_eq!(config.providers.len(), 1);
+}
+
+#[test]
+fn validate_rejects_invalid_compaction_ratio() {
+    let mut config = AppConfig::default();
+    config.context.compaction_ratio = 0.2;
+    assert!(config.validate().is_err());
+    config.context.compaction_ratio = 0.9;
+    config.context.compaction_reserve_tokens = 8_000;
+    assert!(config.validate().is_ok());
+}
+
+#[test]
+fn parses_compaction_ratio_percent_or_fraction() {
+    assert_eq!(
+        crate::config::parse_compaction_ratio_text("90").unwrap(),
+        0.9
+    );
+    assert_eq!(
+        crate::config::parse_compaction_ratio_text("0.85").unwrap(),
+        0.85
+    );
+    assert_eq!(
+        crate::config::parse_compaction_ratio_text("95%").unwrap(),
+        0.95
+    );
+    assert!(crate::config::parse_compaction_ratio_text("20").is_err());
 }
 
 #[test]

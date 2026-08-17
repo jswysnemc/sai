@@ -31,9 +31,7 @@ impl StreamRenderer {
         }
         let status = if ok { "ok" } else { "err" };
         let event_label = self
-            .tool_event_labels
-            .get(name)
-            .cloned()
+            .take_tool_event_label(name)
             .map(|label| {
                 crate::render::tool_event_line::retarget_label_tense(
                     name,
@@ -95,13 +93,13 @@ impl StreamRenderer {
                         return Ok(());
                     }
                     if !ok {
-                        self.write_tool_event_line(name, status)?;
+                        self.write_custom_tool_event_line(&event_label, status)?;
                     }
                     self.resume_work_spinner()?;
                     return Ok(());
                 }
                 if !ok {
-                    self.write_tool_event_line(name, status)?;
+                    self.write_custom_tool_event_line(&event_label, status)?;
                 }
                 self.resume_work_spinner()?;
                 return Ok(());
@@ -163,7 +161,7 @@ impl StreamRenderer {
                 if let Some(label) = background_result_label {
                     self.write_custom_tool_event_line(&label, status)?;
                 } else {
-                    self.write_tool_event_line(name, status)?;
+                    self.write_custom_tool_event_line(&event_label, status)?;
                 }
             }
         }
@@ -251,10 +249,14 @@ impl StreamRenderer {
             stdout,
             "{}",
             tool_event_text(
-                &format!(
-                    "{} ×{turn_count} · {model}",
-                    t("Compacting context", "压缩上下文")
-                ),
+                &if turn_count == 0 {
+                    format!("{} · {model}", t("Compacting context", "压缩上下文"))
+                } else {
+                    format!(
+                        "{} ×{turn_count} · {model}",
+                        t("Compacting context", "压缩上下文")
+                    )
+                },
                 "run"
             )
         )?;

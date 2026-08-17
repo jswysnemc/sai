@@ -11,7 +11,7 @@ use std::io::{self, Write};
 use std::process::Command;
 
 use super::input::{read_key, read_key_event};
-use super::layout::{full_frame, master_detail_widths, scroll_start};
+use super::layout::{form_column_widths, form_label_width, full_frame, scroll_start};
 use super::theme::{selection_marks, ACCENT, BOLD, BRAND, DIM, MUTED, RESET};
 use super::ui::{display_width, draw_box, draw_menu, pad, truncate};
 
@@ -287,7 +287,12 @@ pub(crate) fn provider_model_choice_values(
     include_current: bool,
 ) -> Vec<String> {
     let mut choices = vec![String::new()];
-    if include_current {
+    if include_current
+        && config
+            .providers
+            .iter()
+            .any(|provider| provider.id == OPENCODE_PROVIDER_ID && provider.enabled)
+    {
         choices.push(format!(
             "{OPENCODE_PROVIDER_ID}\t{OPENCODE_DEFAULT_VISION_MODEL}"
         ));
@@ -304,7 +309,7 @@ pub(crate) fn provider_model_choice_values(
 pub(crate) fn vision_provider_value(config: &AppConfig) -> String {
     let vision = &config.plugins.vision;
     if vision.vision_provider_id.trim().is_empty() {
-        format!("{OPENCODE_PROVIDER_ID}\t{OPENCODE_DEFAULT_VISION_MODEL}")
+        String::new()
     } else if vision.vision_model.trim().is_empty() {
         config
             .provider(Some(vision.vision_provider_id.trim()))
@@ -415,16 +420,15 @@ fn draw_form(
     let list_top = y.saturating_add(2);
     let list_bottom = y.saturating_add(height.saturating_sub(3));
     let body_h = list_bottom.saturating_sub(list_top).max(1);
-    let (left_w, right_w) = master_detail_widths(inner_w);
-    // label 列宽取最长标签，钳到左栏一半：标签右侧对齐同一列，值列成一条竖线
-    let label_col = fields
+    let (left_w, right_w) = form_column_widths(inner_w);
+    // 标签列对齐成一条竖线，但宽度让位于值列，避免 URL / 密钥被挤成省略号
+    let longest_label = fields
         .iter()
         .filter(|field| !field.section)
         .map(|field| display_width(field.label))
         .max()
-        .unwrap_or(8)
-        .min((left_w / 2) as usize)
-        .max(8);
+        .unwrap_or(8);
+    let label_col = form_label_width(longest_label, left_w as usize);
     let visible_rows = body_h as usize;
     let start = scroll_start(selected.min(fields.len().saturating_sub(1)), visible_rows);
     let mut cursor = None;
@@ -971,6 +975,13 @@ mod tests {
 
         assert!(strip_field_ansi(&field_display_value(&on, false, 70)).starts_with('●'));
         assert!(strip_field_ansi(&field_display_value(&off, false, 70)).starts_with('○'));
+    }
+
+    /// 未指定识图模型时保持空选项，避免保存时把已停用的 opencode 写进去。
+    #[test]
+    fn empty_vision_provider_stays_empty() {
+        let config = AppConfig::default();
+        assert!(vision_provider_value(&config).is_empty());
     }
 
     /// 分组标题行不参与导航：上下移动会跳过它。

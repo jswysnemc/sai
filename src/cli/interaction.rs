@@ -386,7 +386,7 @@ fn read_ssh_secret_response(
         }
     }
     match request.kind {
-        InteractiveKind::Passphrase | InteractiveKind::Password => {
+        InteractiveKind::Passphrase | InteractiveKind::Password | InteractiveKind::SudoPassword => {
             write!(stdout, "输入后回车提交，Esc 取消（不回显）: ")?;
             stdout.flush()?;
             Ok(match read_hidden_line(&request.id)? {

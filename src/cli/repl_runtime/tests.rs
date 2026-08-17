@@ -116,6 +116,7 @@ fn full_stream_event_sequence_drives_reconcile_pipeline() {
             usage: None,
             tool_calls: Vec::new(),
             duration_ms: 0,
+            ttft_ms: 0,
         }))
         .unwrap();
     runtime.finish_stream().unwrap();
@@ -356,6 +357,155 @@ fn clear_drops_both_queues() {
     assert_eq!(runtime.clear_queued().unwrap(), 0);
     assert!(runtime.take_submission_queue().is_empty());
     assert!(runtime.queued_control_commands().is_empty());
+}
+
+/// 入队若干用户消息。
+fn enqueue_messages(runtime: &mut ReplRuntime, texts: &[&str]) {
+    for text in texts {
+        runtime.stream_draft_mut().text = (*text).to_string();
+        runtime
+            .enqueue_stream_draft(crate::agent::AgentMode::Yolo)
+            .unwrap();
+    }
+}
+
+/// 【TUI】【队列管理】验证 Ctrl+↑ 进入管理并默认高亮队尾。
+#[test]
+fn ctrl_up_enters_queue_panel_on_the_nearest_item() {
+    use crossterm::event::{KeyCode, KeyModifiers};
+
+    let mut runtime = ReplRuntime::new(5_000, options());
+    enqueue_messages(&mut runtime, &["one", "two", "three"]);
+    assert!(!runtime.queue_panel_active());
+    assert!(runtime
+        .handle_queue_panel_key(KeyCode::Up, KeyModifiers::CONTROL)
+        .unwrap());
+    assert!(runtime.queue_panel_active());
+}
+
+/// 【TUI】【队列管理】验证删除中间项后其余项保持原序。
+#[test]
+fn queue_panel_deletes_the_selected_item() {
+    use crossterm::event::{KeyCode, KeyModifiers};
+
+    let mut runtime = ReplRuntime::new(5_000, options());
+    enqueue_messages(&mut runtime, &["one", "two", "three"]);
+    runtime
+        .handle_queue_panel_key(KeyCode::Up, KeyModifiers::CONTROL)
+        .unwrap();
+    runtime
+        .handle_queue_panel_key(KeyCode::Up, KeyModifiers::NONE)
+        .unwrap();
+    runtime
+        .handle_queue_panel_key(KeyCode::Char('d'), KeyModifiers::NONE)
+        .unwrap();
+
+    let queued = runtime.take_submission_queue();
+    assert_eq!(
+        queued
+            .iter()
+            .map(|item| item.text.as_str())
+            .collect::<Vec<_>>(),
+        ["one", "three"]
+    );
+}
+
+/// 【TUI】【队列管理】验证输入框非空时拒绝取回编辑。
+#[test]
+fn queue_panel_edit_refuses_to_overwrite_a_non_empty_draft() {
+    use crossterm::event::{KeyCode, KeyModifiers};
+
+    let mut runtime = ReplRuntime::new(5_000, options());
+    enqueue_messages(&mut runtime, &["queued"]);
+    runtime.stream_draft_mut().text = "typing".to_string();
+    runtime
+        .handle_queue_panel_key(KeyCode::Up, KeyModifiers::CONTROL)
+        .unwrap();
+    runtime
+        .handle_queue_panel_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+
+    assert_eq!(runtime.stream_draft().text, "typing");
+    assert_eq!(runtime.take_submission_queue().len(), 1);
+}
+
+/// 【TUI】【队列管理】验证取回编辑把选中项交还输入框。
+#[test]
+fn queue_panel_edit_restores_the_selected_item() {
+    use crossterm::event::{KeyCode, KeyModifiers};
+
+    let mut runtime = ReplRuntime::new(5_000, options());
+    enqueue_messages(&mut runtime, &["one", "two"]);
+    runtime
+        .handle_queue_panel_key(KeyCode::Up, KeyModifiers::CONTROL)
+        .unwrap();
+    runtime
+        .handle_queue_panel_key(KeyCode::Enter, KeyModifiers::NONE)
+        .unwrap();
+
+    assert_eq!(runtime.stream_draft().text, "two");
+    assert!(!runtime.queue_panel_active());
+    let queued = runtime.take_submission_queue();
+    assert_eq!(
+        queued
+            .iter()
+            .map(|item| item.text.as_str())
+            .collect::<Vec<_>>(),
+        ["one"]
+    );
+}
+
+/// 【TUI】【队列管理】验证立即发送把选中项提到队首。
+#[test]
+fn queue_panel_send_now_promotes_the_selected_item() {
+    use crossterm::event::{KeyCode, KeyModifiers};
+
+    let mut runtime = ReplRuntime::new(5_000, options());
+    enqueue_messages(&mut runtime, &["one", "two", "three"]);
+    runtime
+        .handle_queue_panel_key(KeyCode::Up, KeyModifiers::CONTROL)
+        .unwrap();
+    runtime
+        .handle_queue_panel_key(KeyCode::Char('s'), KeyModifiers::NONE)
+        .unwrap();
+
+    let queued = runtime.take_submission_queue();
+    assert_eq!(
+        queued
+            .iter()
+            .map(|item| item.text.as_str())
+            .collect::<Vec<_>>(),
+        ["three", "one", "two"]
+    );
+}
+
+/// 【TUI】【队列管理】验证空闲态立即发送取出该项，其余仍留在队列。
+#[test]
+fn queue_panel_idle_send_now_takes_the_selected_item() {
+    use crate::cli::repl_runtime::QueuePanelIdleResult;
+    use crossterm::event::{KeyCode, KeyModifiers};
+
+    let mut runtime = ReplRuntime::new(5_000, options());
+    enqueue_messages(&mut runtime, &["one", "two"]);
+    runtime
+        .handle_queue_panel_key(KeyCode::Up, KeyModifiers::CONTROL)
+        .unwrap();
+    let result = runtime
+        .handle_queue_panel_idle_key(KeyCode::Char('s'), KeyModifiers::NONE, true)
+        .unwrap();
+    match result {
+        QueuePanelIdleResult::SendNow(item) => assert_eq!(item.text, "two"),
+        other => panic!("expected SendNow, got {other:?}"),
+    }
+    let queued = runtime.take_submission_queue();
+    assert_eq!(
+        queued
+            .iter()
+            .map(|item| item.text.as_str())
+            .collect::<Vec<_>>(),
+        ["one"]
+    );
+    assert!(!runtime.queue_panel_active());
 }
 
 #[test]

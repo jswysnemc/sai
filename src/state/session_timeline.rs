@@ -84,12 +84,18 @@ pub struct SessionTimelineTurn {
     /// 处理耗时毫秒；0 表示历史数据未记录
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub duration_ms: u64,
+    /// 首字延迟毫秒；0 表示历史数据未记录
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub ttft_ms: u64,
     /// 同一轮全部模型请求的汇总用量
     #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<Usage>,
     /// 失败轮的错误摘要；正文与错误各归其位，前端不再拿正文当失败详情
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// 写入供应商的用户消息相对可见正文多出来的注入前缀
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub injected_content: Option<String>,
 }
 
 /// 会话时间线中展示的最新压缩摘要。
@@ -126,6 +132,7 @@ impl StateStore {
             .into_iter()
             .map(|turn| {
                 let usage = self.conv_db.turn_usage(&turn.turn_id)?;
+                let ttft_ms = self.conv_db.turn_ttft_ms(&turn.turn_id)?.unwrap_or(0);
                 let exchanges =
                     load_tool_exchanges_for_turn(&self.conv_db, &self.session_id, &turn.turn_id)?;
                 let messages = self
@@ -192,6 +199,10 @@ impl StateStore {
                     })
                     .collect();
                 let automatic = is_automatic_input(&turn.user_content);
+                let provider = self
+                    .conv_db
+                    .provider_user_content(&turn.turn_id, &turn.user_content)?;
+                let injected_content = injected_prefix(&provider, &turn.user_content);
                 // 无正文的失败轮 assistant_content 存的就是错误摘要（旧展示兼容），
                 // 时间线里错误由 error 字段承载，正文清空避免气泡与错误框重复
                 let assistant_content = if turn
@@ -223,8 +234,10 @@ impl StateStore {
                     messages,
                     automatic,
                     duration_ms: turn.duration_ms,
+                    ttft_ms,
                     usage,
                     error: turn.error,
+                    injected_content,
                 })
             })
             .collect()
@@ -332,6 +345,29 @@ fn turn_status(status: TurnStatus) -> &'static str {
 /// - 是否为零
 fn is_zero_u64(value: &u64) -> bool {
     *value == 0
+}
+
+/// 取出供应商用户消息相对可见正文多出来的注入前缀。
+///
+/// 参数:
+/// - `provider`: 实际发给模型的用户消息
+/// - `visible`: 界面展示的用户输入
+///
+/// 返回:
+/// - 注入前缀；两者相同时为 None
+fn injected_prefix(provider: &str, visible: &str) -> Option<String> {
+    let provider = provider.trim();
+    let visible = visible.trim();
+    if provider.is_empty() || provider == visible {
+        return None;
+    }
+    if let Some(stripped) = provider.strip_suffix(visible) {
+        let prefix = stripped.trim();
+        if !prefix.is_empty() {
+            return Some(prefix.to_string());
+        }
+    }
+    Some(provider.to_string())
 }
 
 #[cfg(test)]
@@ -506,6 +542,28 @@ mod tests {
         let timeline = store.session_timeline(10).unwrap();
 
         assert!(timeline[0].automatic);
+    }
+
+    #[test]
+    fn exposes_provider_injected_prefix_separately_from_visible_user_text() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = StateStore::new(&test_paths(temp.path().to_path_buf())).unwrap();
+        store.start_turn("turn_inject", "hello").unwrap();
+        store
+            .set_provider_user_content(
+                "turn_inject",
+                "<context-state>\n{\"kind\":\"runtime_change\"}\n</context-state>\n\nhello",
+            )
+            .unwrap();
+        store.complete_turn("turn_inject", "ok", None).unwrap();
+
+        let timeline = store.session_timeline(10).unwrap();
+
+        assert_eq!(timeline[0].user.content, "hello");
+        assert_eq!(
+            timeline[0].injected_content.as_deref(),
+            Some("<context-state>\n{\"kind\":\"runtime_change\"}\n</context-state>")
+        );
     }
 
     #[test]

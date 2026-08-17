@@ -11,6 +11,14 @@ struct ToolOption {
     name: String,
     group: String,
     group_label: String,
+    group_label_en: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    group_hint: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    group_hint_en: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    group_settings_path: Option<String>,
+    group_rank: u8,
     description: String,
 }
 
@@ -140,6 +148,11 @@ fn tool_option(entry: tools::ToolCatalogEntry) -> ToolOption {
         name: entry.name,
         group: entry.group.to_string(),
         group_label: entry.group_label.to_string(),
+        group_label_en: entry.group_label_en.to_string(),
+        group_hint: entry.group_hint.to_string(),
+        group_hint_en: entry.group_hint_en.to_string(),
+        group_settings_path: entry.group_settings_path.map(str::to_string),
+        group_rank: entry.group_rank,
         description: entry.description,
     }
 }

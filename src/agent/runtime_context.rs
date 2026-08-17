@@ -231,6 +231,7 @@ fn runtime_update_parts(
     };
     let mut parts = Vec::new();
     for (field, old, new) in [
+        ("date", previous.date.as_str(), current.date.as_str()),
         ("cwd", previous.cwd.as_str(), current.cwd.as_str()),
         ("model", previous.model.as_str(), current.model.as_str()),
         (
@@ -361,6 +362,7 @@ fn has_complete_mode_instructions(text: &str, name: &str) -> bool {
 /// - 无
 fn apply_runtime_change(runtime: &mut RuntimeContextSnapshot, field: &str, value: String) {
     match field {
+        "date" => runtime.date = value,
         "cwd" => runtime.cwd = value,
         "model" => runtime.model = value,
         "git_branch" => runtime.git_branch = value,
@@ -521,7 +523,7 @@ mod tests {
         );
     }
 
-    /// 验证 Git 分支变化只追加该字段，日期不参与后续更新。
+    /// 验证 Git 分支变化只追加该字段。
     #[test]
     fn branch_change_appends_only_changed_field() {
         let first = context_state_update(
@@ -550,7 +552,33 @@ mod tests {
         assert!(update.contains("\"kind\":\"runtime_change\""));
         assert!(update.contains("\"field\":\"git_branch\""));
         assert!(!update.contains("\"field\":\"model\""));
-        assert!(!update.contains("\"date\""));
+        assert!(!update.contains("\"field\":\"date\""));
+    }
+
+    /// 验证日期变化同样只追加该字段，不改写更早的运行状态。
+    #[test]
+    fn date_change_appends_only_changed_field() {
+        let first = context_state_update(
+            &snapshot("p/m", "main"),
+            AgentMode::Yolo,
+            None,
+            &[],
+            true,
+            true,
+        )
+        .unwrap()
+        .unwrap();
+        let history = vec![ChatMessage::plain("user", first)];
+        let mut next = snapshot("p/m", "main");
+        next.date = "2026-08-18".to_string();
+
+        let update = context_state_update(&next, AgentMode::Yolo, None, &history, true, true)
+            .unwrap()
+            .unwrap();
+
+        assert!(update.contains("\"field\":\"date\""));
+        assert!(update.contains("\"value\":\"2026-08-18\""));
+        assert!(!update.contains("\"field\":\"git_branch\""));
     }
 
     /// 验证首次切入新模式载入完整说明，切回已载入模式只发送简报。

@@ -395,6 +395,7 @@ describe("runEventReducer", () => {
       type: "event",
       event: event("run.completed", {
         duration_ms: 5_000,
+        ttft_ms: 420,
         usage: {
           prompt_tokens: 1_000,
           completion_tokens: 200,
@@ -406,6 +407,7 @@ describe("runEventReducer", () => {
     });
 
     expect(completed.durationMs).toBe(5_000);
+    expect(completed.ttftMs).toBe(420);
     expect(completed.usage).toEqual({
       prompt_tokens: 1_000,
       completion_tokens: 200,

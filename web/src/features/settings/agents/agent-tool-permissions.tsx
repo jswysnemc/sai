@@ -84,18 +84,29 @@ export function AgentToolPermissions({ tools, enabled, deferred, onChange }: Age
       grouped.set(tool.group, items);
     }
     return [...grouped.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left, leftItems], [right, rightItems]) => {
+        const leftRank = leftItems[0]?.group_rank ?? 50;
+        const rightRank = rightItems[0]?.group_rank ?? 50;
+        return leftRank - rightRank || left.localeCompare(right);
+      })
       .map(([group, items]) => {
-        const label = items[0]?.group_label || group;
+        const sample = items[0];
+        const label = t(sample?.group_label_en || group, sample?.group_label || group);
+        const hint = t(sample?.group_hint_en ?? "", sample?.group_hint ?? "");
         return {
           group,
           label,
+          hint,
+          settingsHref: sample?.group_settings_path || undefined,
           allItems: items,
           visibleItems: items.filter((tool) => {
             const matchesQuery = normalizedQuery.length === 0
               || tool.name.toLocaleLowerCase().includes(normalizedQuery)
               || group.toLocaleLowerCase().includes(normalizedQuery)
               || (tool.group_label ?? "").toLocaleLowerCase().includes(normalizedQuery)
+              || (tool.group_label_en ?? "").toLocaleLowerCase().includes(normalizedQuery)
+              || (tool.group_hint ?? "").toLocaleLowerCase().includes(normalizedQuery)
+              || (tool.group_hint_en ?? "").toLocaleLowerCase().includes(normalizedQuery)
               || (tool.description ?? "").toLocaleLowerCase().includes(normalizedQuery);
             const matchesStatus = statusFilter === "all"
               || resolveToolMode(selection, tool.name, tool.group === "base") === statusFilter;
@@ -104,7 +115,7 @@ export function AgentToolPermissions({ tools, enabled, deferred, onChange }: Age
         };
       })
       .filter(({ visibleItems }) => visibleItems.length > 0);
-  }, [deferred, enabled, normalizedQuery, statusFilter, tools]);
+  }, [deferred, enabled, normalizedQuery, statusFilter, t, tools]);
 
   if (tools.length === 0) {
     return <p className="agent-permissions-empty">{t("No tools available.", "暂无可用工具。")}</p>;
@@ -165,11 +176,14 @@ export function AgentToolPermissions({ tools, enabled, deferred, onChange }: Age
         <p className="agent-permissions-empty">{t("No matching tools.", "没有匹配的工具。")}</p>
       ) : (
         <div className="agent-tool-permission-groups">
-          {groups.map(({ group, label, allItems, visibleItems }) => (
+          {groups.map(({ group, label, hint, settingsHref, allItems, visibleItems }) => (
             <AgentToolModeGroup
               key={group}
               group={group}
               label={label}
+              hint={hint}
+              settingsHref={settingsHref}
+              settingsLabel={t("Configure hosts", "配置主机")}
               allItems={allItems}
               visibleItems={visibleItems}
               selection={selection}

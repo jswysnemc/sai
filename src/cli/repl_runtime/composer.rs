@@ -77,13 +77,14 @@ impl ReplRuntime {
     /// - 面板 ANSI 行；无内容时为空
     fn bottom_panel_lines(&self, cols: usize) -> Vec<String> {
         let queued: Vec<QueuedSubmission> = self.submission_queue.iter().cloned().collect();
+        let queue_lines = self.queue_panel.panel_lines(&queued);
         let agent_lines = self.agent_panel.panel_lines(
             &self.transcript.subagent_overview(),
             self.transcript.live_animation_frame(),
         );
         super::bottom_panel::render_panel_lines(
             self.transcript.latest_todo_items(),
-            &queued,
+            &queue_lines,
             &self.queued_control_commands(),
             &agent_lines,
             cols,
@@ -259,6 +260,7 @@ impl ReplRuntime {
             text,
             clipboard,
         });
+        self.queue_panel.clamp(self.submission_queue.len());
         self.stream_draft = StreamComposerDraft {
             mode: Some(mode),
             ..StreamComposerDraft::default()
@@ -311,6 +313,7 @@ impl ReplRuntime {
         if restored.is_empty() {
             return Ok(None);
         }
+        self.queue_panel.clamp(self.submission_queue.len());
         self.stream_draft.text = restored.clone();
         self.stream_draft.cursor = restored.chars().count();
         self.stream_draft.slash_selection = 0;
@@ -334,6 +337,7 @@ impl ReplRuntime {
         }
         self.submission_queue.clear();
         self.control_queue.clear();
+        self.queue_panel.deactivate();
         self.redraw_stream_composer()?;
         self.sync_transcript(false)?;
         Ok(count)
@@ -344,6 +348,7 @@ impl ReplRuntime {
     /// 返回:
     /// - 按先进先出顺序排列的提交列表
     pub(in crate::cli) fn take_submission_queue(&mut self) -> Vec<QueuedSubmission> {
+        self.queue_panel.deactivate();
         self.submission_queue.drain(..).collect()
     }
 

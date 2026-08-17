@@ -15,10 +15,13 @@ import { displayPath, isCommandToolName, isEditToolName } from "./tool-renderers
 import { toolDiffStat, toolResultSummary } from "./tool-renderers/tool-result-summary";
 import { toolDurationLabel } from "./tool-renderers/tool-duration";
 import { useElapsedClock } from "./tool-renderers/use-elapsed-clock";
+import { HighlightedShellCommand } from "./tool-renderers/shell-command-line";
 import { ToolLayout } from "./tool-renderers/layout/tool-layout";
+import { ToolPanel } from "./tool-renderers/layout/tool-panel";
 import { ToolIcon } from "./tool-renderers/tool-icon";
 import { ToolResultView } from "./tool-renderers/tool-result-view";
 import { TodoToolView } from "./tool-renderers/todo-tool-view";
+import { parseTodoTool, todoToolHeadline } from "./tool-renderers/todo-tool-data";
 import "./tool-renderers/tool-renderers.css";
 import { useI18n } from "../i18n/use-i18n";
 
@@ -28,7 +31,13 @@ import { useI18n } from "../i18n/use-i18n";
  * @param props 工具生命周期状态
  * @returns 统一外壳的可折叠工具卡片
  */
-export const ToolLifecycleCard = memo(function ToolLifecycleCard({ tool }: { tool: ToolLifecycle }) {
+export const ToolLifecycleCard = memo(function ToolLifecycleCard({
+  tool,
+  batchLabel
+}: {
+  tool: ToolLifecycle;
+  batchLabel?: string;
+}) {
   const { locale, t } = useI18n();
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list, staleTime: 30_000 });
   const workspacePath = workspaces.data?.workspaces.find((item) => item.id === workspaces.data?.active_id)?.path ?? "";
@@ -45,10 +54,8 @@ export const ToolLifecycleCard = memo(function ToolLifecycleCard({ tool }: { too
     () => (running && isEdit ? streamedDiffCounts(argumentsText) : null),
     [argumentsText, isEdit, running]
   );
-  // 1. todo 已完成时改用清单卡片，不暴露原始 JSON
-  if (tool.name === "todo" && tool.status === "completed") {
-    return <TodoToolView toolId={tool.id} argumentsText={argumentsText} output={tool.output} />;
-  }
+  const todoSummary = tool.name === "todo" ? parseTodoTool(argumentsText, tool.output) : null;
+  const todoHeadline = todoSummary ? todoToolHeadline(todoSummary, locale) : "";
   // 后台任务工具的管理操作（list/output/wait/stop/cleanup）不是 shell 命令，
   // 名称、图标与摘要都按动作语义表达
   const backgroundAction = tool.name.includes("background_command")
@@ -56,7 +63,7 @@ export const ToolLifecycleCard = memo(function ToolLifecycleCard({ tool }: { too
     : "";
   const backgroundManagement = Boolean(backgroundAction) && backgroundAction !== "start";
   const subagentActivity = parseCodexSubagentActivity(argumentsText);
-  // 2. Codex 原生子智能体事件使用语义视图，不把协议参数作为唯一内容
+  // Codex 原生子智能体事件使用语义视图，不把协议参数作为唯一内容
   if (subagentActivity) {
     return (
       <CodexSubagentToolView
@@ -68,7 +75,7 @@ export const ToolLifecycleCard = memo(function ToolLifecycleCard({ tool }: { too
     );
   }
   const headerPath = toolFilePath(tool.name, argumentsText);
-  // 3. 操作对象：命令类展示完整命令占满剩余宽度，放不下才截断；
+  // 操作对象：命令类展示完整命令占满剩余宽度，放不下才截断；
   //    其余优先取工作区相对路径，再退回参数摘要
   const isCommand = isCommandToolName(tool.name);
   const fullCommand = isCommand
@@ -76,34 +83,38 @@ export const ToolLifecycleCard = memo(function ToolLifecycleCard({ tool }: { too
       || stringField(parsedArguments, "cmd")
     : "";
   const relativePath = headerPath ? displayPath(headerPath, workspacePath) : "";
-  const summary = headerPath
-    ? ""
-    : fullCommand || toolCardSummary(tool.name, argumentsText, locale, workspacePath) || tool.progress;
+  const summary = todoHeadline
+    || (headerPath ? "" : fullCommand || toolCardSummary(tool.name, argumentsText, locale, workspacePath) || tool.progress);
   const target = headerPath
     ? <ToolFileReference path={headerPath} label={relativePath || headerPath} className="tool-shell-file" icon={false} />
-    : summary;
+    : fullCommand
+      ? <HighlightedShellCommand command={fullCommand} />
+      : undefined;
   // 展开后详情区已有完整的 `$ 命令` 行，头部再放一遍就是冗余信息
   const hideTarget = expanded && isCommand && Boolean(fullCommand);
 
-  // 4. 权限已并入本卡：头部只留一枚徽章，理由放进展开区，不再单独占一张卡
+  // 权限已并入本卡：头部只留一枚徽章，理由放进展开区，不再单独占一张卡
   const permission = tool.permission;
   const autoAudited = permission?.decision === "allow" && permission.source === "auto_audit";
   const auditReason = permission?.decision === "allow" ? permission.reason?.trim() ?? "" : "";
 
-  // 5. 折叠行右段依次表达"结果如何"与"花了多久"；
+  // 折叠行右段依次表达"结果如何"与"花了多久"；
   //    编辑类用 +N -M 徽章（流式参数阶段实时跳动，与 TUI 一致），不展示耗时
   const result = toolResultSummary(tool.name, tool.output, locale);
   const diffStat = toolDiffStat(tool.name, tool.output);
   const displayDiff = diffStat ?? liveDiff;
   const duration = isEdit ? "" : toolDurationLabel(tool.startedAtMs, tool.endedAtMs, now);
+  const todoStatus = todoSummary?.itemCount != null
+    ? t(`${todoSummary.itemCount} items`, `${todoSummary.itemCount} 项`)
+    : undefined;
 
   return (
     <ToolLayout
       icon={<ToolIcon name={tool.name} backgroundTask={backgroundManagement} />}
       kindLabel={readableToolName(tool.name, backgroundManagement)}
       kindDetail={permission ? <ToolPermissionBadge autoAudited={autoAudited} t={t} /> : undefined}
-      primaryContent={hideTarget || !headerPath ? undefined : target}
-      primaryText={hideTarget || headerPath ? "" : summary}
+      primaryContent={hideTarget ? undefined : target}
+      primaryText={hideTarget || target ? "" : summary}
       secondaryText=""
       title={hideTarget ? undefined : fullCommand || headerPath || summary || undefined}
       diffCount={displayDiff ? { added: displayDiff.added, removed: displayDiff.removed } : undefined}
@@ -111,7 +122,8 @@ export const ToolLifecycleCard = memo(function ToolLifecycleCard({ tool }: { too
       diffCountActive={running}
       hideDiffCountWhenOpen
       actions={<ToolCardActions target={headerPath || argumentsText} output={tool.output} />}
-      statusLabel={statusText(result, duration)}
+      statusLabel={todoStatus ?? statusText(result, duration)}
+      batchLabel={batchLabel}
       showFailureStatus={result?.tone === "danger" || tool.status === "failed"}
       isRunning={running}
       animateSummary={running}
@@ -124,7 +136,13 @@ export const ToolLifecycleCard = memo(function ToolLifecycleCard({ tool }: { too
           {auditReason}
         </div>
       )}
-      <ToolResultView name={tool.name} argumentsText={argumentsText} output={tool.output} headerPath={headerPath} />
+      {tool.name === "todo" ? (
+        <ToolPanel className="todo-tool-view">
+          <TodoToolView argumentsText={argumentsText} output={tool.output} />
+        </ToolPanel>
+      ) : (
+        <ToolResultView name={tool.name} argumentsText={argumentsText} output={tool.output} headerPath={headerPath} />
+      )}
     </ToolLayout>
   );
 });

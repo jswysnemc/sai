@@ -33,7 +33,7 @@ use anyhow::Result;
 use crossterm::execute;
 use crossterm::style::{Color, ResetColor, SetForegroundColor};
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{self, Write};
 use std::time::Instant;
 
@@ -60,7 +60,8 @@ pub struct StreamRenderer {
     summary: StreamSummary,
     wait_spinner: Option<WaitSpinner>,
     live_tool_status: LiveToolStatus,
-    tool_event_labels: HashMap<String, String>,
+    /// 并发同名工具调用的标签栈，以工具名为 key，按调用顺序入栈
+    tool_event_label_stacks: HashMap<String, VecDeque<String>>,
     command_block_tools: HashSet<String>,
     streaming_edit_progress: HashSet<usize>,
     pending_streamed_edit_blocks: usize,
@@ -110,7 +111,7 @@ impl StreamRenderer {
             summary: StreamSummary::new(readable_tool_names),
             wait_spinner: None,
             live_tool_status: LiveToolStatus::new(),
-            tool_event_labels: HashMap::new(),
+            tool_event_label_stacks: HashMap::new(),
             command_block_tools: HashSet::new(),
             streaming_edit_progress: HashSet::new(),
             pending_streamed_edit_blocks: 0,
@@ -135,6 +136,24 @@ impl StreamRenderer {
     /// - 无
     pub fn suppress_denied_result(&mut self, tool: &str) {
         self.suppressed_denied_results.insert(tool.to_string());
+    }
+
+    /// 记录一次工具调用的展示标签，同名并发调用按顺序入栈。
+    fn push_tool_event_label(&mut self, name: &str, label: String) {
+        self.tool_event_label_stacks
+            .entry(name.to_string())
+            .or_default()
+            .push_back(label);
+    }
+
+    /// 取出最早一次尚未对账的同名工具标签。
+    fn take_tool_event_label(&mut self, name: &str) -> Option<String> {
+        let stack = self.tool_event_label_stacks.get_mut(name)?;
+        let label = stack.pop_front();
+        if stack.is_empty() {
+            self.tool_event_label_stacks.remove(name);
+        }
+        label
     }
 
     /// 启动等待响应动画。

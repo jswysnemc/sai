@@ -1,22 +1,80 @@
+/*
+ * 与工具行共用 20px 图标列：圆点居中在图标格里，
+ * 标题行高与 tool-layout-head 对齐，避免蓝点比文件图标更靠左。
+ */
 .automatic-input-part {
-  display: flex;
-  align-items: flex-start;
-  gap:var(--space-sm);
-  margin:var(--space-lg) 0;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  column-gap: var(--space-sm);
+  align-items: start;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
   color: var(--ink-soft);
+  font-size: var(--text-xs);
 }
 
 .automatic-input-dot {
-  flex: 0 0 auto;
-  width: 0.5rem;
-  height: 0.5rem;
-  margin-top:var(--space-sm);
+  display: grid;
+  width: 20px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+}
+
+.automatic-input-dot::after {
+  display: block;
+  width: 0.45rem;
+  height: 0.45rem;
   border-radius: var(--radius-circle);
   background: var(--blue);
+  content: "";
 }
 
 .automatic-input-content {
   min-width: 0;
-  max-width: 100%;
-  line-height: 1.55;
+}
+
+.automatic-input-title,
+.automatic-input-leftover {
+  margin: 0;
+  min-height: 28px;
+  line-height: 1.45;
+}
+
+.automatic-input-title {
+  display: flex;
+  align-items: center;
+  color: var(--ink);
+}
+
+.automatic-input-notice + .automatic-input-notice {
+  margin-top: var(--space-xs);
+}
+
+.automatic-input-fields {
+  display: grid;
+  gap: 0.15rem 0;
+  margin: 0;
+}
+
+.automatic-input-field {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: var(--space-sm);
+  align-items: start;
+}
+
+.automatic-input-field dt {
+  color: color-mix(in srgb, var(--ink-soft) 85%, transparent);
+  line-height: 1.45;
+}
+
+.automatic-input-field dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-break: strict;
+  line-height: 1.45;
+  word-break: break-word;
 }

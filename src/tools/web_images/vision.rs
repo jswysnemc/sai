@@ -48,12 +48,10 @@ fn vision_provider(config: &AppConfig, vision: &VisionPluginConfig) -> Result<Pr
     let mut provider = if !provider_id.is_empty() {
         config.provider(Some(provider_id))?.clone()
     } else {
-        config.provider(Some(OPENCODE_PROVIDER_ID))?.clone()
+        config.provider(None)?.clone()
     };
     provider.default_model = if !model.is_empty() {
         model.to_string()
-    } else if provider_id.is_empty() {
-        OPENCODE_DEFAULT_VISION_MODEL.to_string()
     } else {
         provider.default_model.clone()
     };
@@ -133,4 +131,3 @@ fn parse_boolish(value: Option<&Value>) -> Option<bool> {
         _ => None,
     }
 }
-

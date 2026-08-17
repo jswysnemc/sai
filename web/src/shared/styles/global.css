@@ -14,6 +14,10 @@ html {
   /* 移动端 Safari / Chrome 在横屏等场景会自行放大文字，跨端字号不一致 */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* Chrome 会在中西文交界自动插空，Edge / Firefox 默认不插，混排宽窄不同 */
+  text-autospace: no-autospace;
+  /* 禁止用假粗体补齐未加载字重，各引擎合成加粗的笔画粗细差一截 */
+  font-synthesis-weight: none;
 }
 
 body {

@@ -127,7 +127,7 @@ fn repl_only_help_lines() -> Vec<String> {
         t("REPL:", "REPL:").to_string(),
         format!(
             "  /context    {}",
-            t("show current context info", "查看当前上下文信息")
+            t("show context usage grid", "查看上下文占用网格")
         ),
         format!(
             "  /providers  {}",

@@ -66,6 +66,8 @@ export type LiveRunState = {
   completed: boolean;
   /** 本轮耗时（毫秒），从首次思考/正文到结束 */
   durationMs: number | null;
+  /** 本轮首字延迟（毫秒），从发请求到首个思考/正文 token */
+  ttftMs: number | null;
   /** 本轮全部模型请求的汇总 token 与缓存用量 */
   usage: TurnUsage | null;
   /**
@@ -101,6 +103,7 @@ export const initialRunState: LiveRunState = {
   errorDetail: null,
   completed: false,
   durationMs: null,
+  ttftMs: null,
   usage: null
 };
 
@@ -135,7 +138,8 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
       model: action.model ?? null,
       status: "waiting_response",
       startedAtMs: Date.now(),
-      durationMs: null
+      durationMs: null,
+      ttftMs: null
     };
   }
   const { event } = action;
@@ -327,17 +331,24 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
     }
     case "run.completed": {
       const durationMs = typeof payload.duration_ms === "number" ? payload.duration_ms : state.durationMs;
+      const ttftMs = typeof payload.ttft_ms === "number" ? payload.ttft_ms : state.ttftMs;
       return {
         ...closeActiveReasoning(state, event.timestamp),
         status: "idle",
         completed: true,
         durationMs: durationMs ?? null,
+        ttftMs: ttftMs ?? null,
         usage: parseTurnUsage(payload.usage)
       };
     }
     case "session.summary": {
       const durationMs = typeof payload.duration_ms === "number" ? payload.duration_ms : state.durationMs;
-      return { ...state, durationMs: durationMs ?? state.durationMs };
+      const ttftMs = typeof payload.ttft_ms === "number" ? payload.ttft_ms : state.ttftMs;
+      return {
+        ...state,
+        durationMs: durationMs ?? state.durationMs,
+        ttftMs: ttftMs ?? state.ttftMs
+      };
     }
     default:
       return state;

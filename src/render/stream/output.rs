@@ -303,23 +303,6 @@ impl StreamRenderer {
         Ok(())
     }
 
-    /// 追加写入工具状态事件。
-    ///
-    /// 参数:
-    /// - `name`: 工具名称
-    /// - `status`: 工具状态文本
-    ///
-    /// 返回:
-    /// - 写入是否成功
-    pub(super) fn write_tool_event_line(&self, name: &str, status: &str) -> Result<()> {
-        let label = self
-            .tool_event_labels
-            .get(name)
-            .map(String::as_str)
-            .unwrap_or_else(|| self.summary.display_tool_name(name));
-        self.write_custom_tool_event_line(label, status)
-    }
-
     /// 以指定标签写入工具状态事件。
     ///
     /// 参数:

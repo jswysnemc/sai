@@ -30,5 +30,7 @@ export function useEditorGitDiff(
   });
 
   const patch = enabled ? diff.data?.patch ?? "" : "";
-  return useMemo(() => (patch ? buildEditorGitLines(patch) : []), [patch]);
+  const gitLines = useMemo(() => (patch ? buildEditorGitLines(patch) : []), [patch]);
+
+  return gitLines;
 }

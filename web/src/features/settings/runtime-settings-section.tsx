@@ -48,8 +48,8 @@ export function RuntimeSettingsSection({ config, subview, onConfigChange }: Runt
         <SettingsGroup
           title={t("Context management", "上下文管理")}
           description={t(
-            "Context compacts automatically at 90% capacity and can also be triggered manually.",
-            "上下文达到 90% 时自动压缩，也可以随时手动触发。"
+            "Auto-compact uses the later of the ratio and reserved headroom, so small windows are not forced to leave 40k unused.",
+            "自动压缩取比例与预留中更晚到达的条件，小窗口不会被固定预留 40k 过早压缩。"
           )}
         >
           <div className="settings-form-grid">
@@ -59,15 +59,38 @@ export function RuntimeSettingsSection({ config, subview, onConfigChange }: Runt
                 type="number"
                 min={1}
                 value={config.context?.default_max_chars ?? 120_000}
-                onChange={(event) => onConfigChange({
-                  ...config,
-                  context: {
-                    ...(config.context ?? { default_max_chars: 120_000 }),
-                    default_max_chars: Math.max(1, Number(event.target.value))
-                  }
-                })}
+                onChange={(event) => onConfigChange(updateContext(config, {
+                  default_max_chars: Math.max(1, Number(event.target.value))
+                }))}
               />
               <small>{t("Used only when the model has no dedicated context window setting", "仅在模型没有单独配置上下文窗口时使用")}</small>
+            </label>
+            <label className="settings-field">
+              <span>{t("Auto-compact ratio", "自动压缩比例")}</span>
+              <input
+                type="number"
+                min={50}
+                max={99}
+                step={1}
+                value={Math.round((config.context?.compaction_ratio ?? 0.9) * 100)}
+                onChange={(event) => onConfigChange(updateContext(config, {
+                  compaction_ratio: clampCompactionRatio(Number(event.target.value) / 100)
+                }))}
+              />
+              <small>{t("Percent of the session context window. 90 means compact at 90%.", "占当前会话上下文窗口的百分比。90 表示用到 90% 再压缩。")}</small>
+            </label>
+            <label className="settings-field">
+              <span>{t("Reserved headroom", "压缩预留 token")}</span>
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                value={config.context?.compaction_reserve_tokens ?? 50_000}
+                onChange={(event) => onConfigChange(updateContext(config, {
+                  compaction_reserve_tokens: Math.max(0, Number(event.target.value) || 0)
+                }))}
+              />
+              <small>{t("Large windows compact when this many tokens remain. 0 uses the ratio only. Small windows still follow the ratio.", "大窗口在剩余不足该值时压缩。0 表示只按比例。小窗口仍按比例，不会被预留拖早。")}</small>
             </label>
             <CompactionModelField config={config} onConfigChange={onConfigChange} />
             <MemoryExtractionModelField config={config} onConfigChange={onConfigChange} />
@@ -121,6 +144,35 @@ export function RuntimeSettingsSection({ config, subview, onConfigChange }: Runt
         </SettingsGroup>
       );
   }
+}
+
+/**
+ * 合并上下文管理字段，保留未编辑项。
+ *
+ * @param config 当前应用配置
+ * @param patch 要覆盖的上下文字段
+ * @returns 更新后的应用配置
+ */
+function updateContext(config: AppConfig, patch: Partial<NonNullable<AppConfig["context"]>>): AppConfig {
+  return {
+    ...config,
+    context: {
+      default_max_chars: 120_000,
+      ...config.context,
+      ...patch
+    }
+  };
+}
+
+/**
+ * 把压缩比例限制在 50%–99%。
+ *
+ * @param ratio 0–1 比例
+ * @returns 夹紧后的比例
+ */
+function clampCompactionRatio(ratio: number): number {
+  if (!Number.isFinite(ratio)) return 0.9;
+  return Math.min(0.99, Math.max(0.5, ratio));
 }
 
 /** rtk 过滤字段由专属配置组接管，通用工具字段中排除。 */

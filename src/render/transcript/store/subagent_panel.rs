@@ -18,6 +18,8 @@ pub(crate) struct SubagentOverviewEntry {
     pub(crate) viewing: bool,
     /// 存活条目的实时阶段（工具进度 / Token 统计 / 待命提示）
     pub(crate) detail: Option<String>,
+    /// 累计消耗的 token 估算，供面板左栏跳动
+    pub(crate) tokens: Option<u64>,
 }
 
 impl TranscriptStore {
@@ -56,6 +58,7 @@ impl TranscriptStore {
                 running: overview.running,
                 viewing,
                 detail: overview.detail,
+                tokens: overview.tokens,
             };
             if let Some(id) = subagent.subagent_id() {
                 if let Some(&position) = position_by_id.get(id) {

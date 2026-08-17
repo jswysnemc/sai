@@ -100,6 +100,7 @@ export function ProviderSettingsSection({
       base_url: "https://api.example.com/v1",
       protocol: "auto",
       api_key: "",
+      api_keys: [{ id: "key-1", api_key: "", label: "" }],
       models: [],
       default_model: "",
       thinking_level: "auto",

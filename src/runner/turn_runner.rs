@@ -104,8 +104,11 @@ impl<'agent> TurnRunner<'agent> {
                 )
                 .await
         };
-        let output_started = first_output.lock().unwrap().unwrap_or(started);
-        let duration_ms = output_started.elapsed().as_millis() as u64;
+        let first_output_at = *first_output.lock().unwrap();
+        let ttft_ms = first_output_at
+            .map(|at| at.saturating_duration_since(started).as_millis() as u64)
+            .unwrap_or(0);
+        let duration_ms = first_output_at.unwrap_or(started).elapsed().as_millis() as u64;
         let elapsed = started.elapsed().as_secs().max(1);
         let mut result = match result {
             Ok(result) => result,
@@ -124,11 +127,13 @@ impl<'agent> TurnRunner<'agent> {
             }
         };
         result.duration_ms = duration_ms.max(1);
-        // 2. 将处理耗时与整轮用量写入会话数据库，供 TUI 和 Web 时间线恢复展示
-        let _ = self
-            .agent
-            .state()
-            .set_last_turn_metrics(result.duration_ms, result.usage.as_ref());
+        result.ttft_ms = ttft_ms;
+        // 2. 将处理耗时、首字延迟与整轮用量写入会话数据库，供 TUI 和 Web 时间线恢复展示
+        let _ = self.agent.state().set_last_turn_metrics(
+            result.duration_ms,
+            result.ttft_ms,
+            result.usage.as_ref(),
+        );
         // 3. 只把本轮开始时已经活动的目标计入使用量
         if let Some(goal) = active_goal {
             let tokens = result

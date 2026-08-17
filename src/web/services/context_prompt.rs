@@ -110,7 +110,7 @@ pub(crate) async fn load_session_context_prompt(
         let mut sections = Vec::new();
         let (baseline_without_skills, skills_prompt) =
             split_tagged_section(&baseline, "available-skills");
-        let (stable_prompt, instruction_files) =
+        let (stable_prompt, instruction_from_baseline) =
             split_tagged_section(&baseline_without_skills, "instruction-files");
         sections.push(section(
             "baseline",
@@ -121,6 +121,11 @@ pub(crate) async fn load_session_context_prompt(
             ),
             &stable_prompt,
         ));
+        let instruction_files = if !instruction_from_baseline.trim().is_empty() {
+            instruction_from_baseline
+        } else {
+            dynamic.instruction_files.clone()
+        };
         if !instruction_files.trim().is_empty() {
             sections.push(section(
                 "instructions",

@@ -240,9 +240,9 @@ export function ChatPage() {
   }, [activeSession?.id, input]);
 
   useEffect(() => {
-    if (!input) return;
+    if (!input || showJump) return;
     jumpToBottom();
-  }, [input, jumpToBottom]);
+  }, [input, jumpToBottom, showJump]);
 
   useEffect(() => {
     /** 将终端右键菜单发送的选区追加为输入原子。 */
@@ -712,8 +712,11 @@ export function ChatPage() {
         {showJump && (
           <HoverRevealButton
             className="jump-to-bottom"
+            expanded
             icon={<ArrowDown size={16} />}
-            label={t("Jump to bottom", "回到底部")}
+            label={running
+              ? t("Following paused · Jump to bottom", "已暂停跟随 · 回到底部")
+              : t("Jump to bottom", "回到底部")}
             onClick={jumpToBottom}
           />
         )}

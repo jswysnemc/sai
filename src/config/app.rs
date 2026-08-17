@@ -106,7 +106,7 @@ impl AppConfig {
         Ok(())
     }
 
-    fn normalize_builtin_providers(&mut self) {
+    pub(super) fn normalize_builtin_providers(&mut self) {
         for provider in ProviderConfig::default_templates() {
             if !self.providers.iter().any(|item| {
                 item.id == provider.id
@@ -121,15 +121,42 @@ impl AppConfig {
         if self.plugins.vision.vision_provider_id == "opencodezen" {
             self.plugins.vision.vision_provider_id = OPENCODE_PROVIDER_ID.to_string();
         }
-        if self
-            .provider(None)
-            .map(|provider| provider.default_model.trim().is_empty())
-            .unwrap_or(true)
-        {
-            self.active_provider = OPENCODE_PROVIDER_ID.to_string();
-        }
+        self.ensure_usable_active_provider();
         // 旧配置可能存有不带协议前缀的搜索地址，补齐后再进入校验
         self.plugins.web.normalize_endpoints();
+    }
+
+    /// 保证 `active_provider` 指向一个已启用的供应商。
+    ///
+    /// TUI 可能把刚编辑、还没有 `default_model` 的供应商写成当前项。
+    /// 旧逻辑此时会强行切到 `opencode`；该模板若已被停用，加载就会
+    /// 报 `provider is disabled: opencode`，连配置界面都进不去。
+    fn ensure_usable_active_provider(&mut self) {
+        let active = self.active_provider.clone();
+        if let Some(provider) = self
+            .providers
+            .iter_mut()
+            .find(|provider| provider.id == active && provider.enabled)
+        {
+            provider.infer_default_model();
+            return;
+        }
+        if let Some(id) = self.first_enabled_provider_id() {
+            if let Some(provider) = self.providers.iter_mut().find(|provider| provider.id == id) {
+                provider.infer_default_model();
+            }
+            self.active_provider = id;
+        }
+    }
+
+    /// 返回第一个已启用供应商的标识，优先选已有默认模型的。
+    fn first_enabled_provider_id(&self) -> Option<String> {
+        self.providers
+            .iter()
+            .filter(|provider| provider.enabled)
+            .find(|provider| !provider.default_model.trim().is_empty())
+            .or_else(|| self.providers.iter().find(|provider| provider.enabled))
+            .map(|provider| provider.id.clone())
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -247,6 +274,16 @@ impl AppConfig {
         }
         if self.context.default_max_chars == 0 {
             bail!("context.default_max_chars must be greater than 0");
+        }
+        if !self.context.compaction_ratio.is_finite()
+            || self.context.compaction_ratio < super::MIN_COMPACTION_RATIO
+            || self.context.compaction_ratio > super::MAX_COMPACTION_RATIO
+        {
+            bail!(
+                "context.compaction_ratio must be between {} and {}",
+                super::MIN_COMPACTION_RATIO,
+                super::MAX_COMPACTION_RATIO
+            );
         }
         if self.tools.background_command_log_max_bytes == 0 {
             bail!("tools.background_command_log_max_bytes must be greater than 0");
@@ -426,6 +463,9 @@ impl AppConfig {
             .iter_mut()
             .find(|provider| provider.id == provider_id)
             .with_context(|| format!("provider not found: {provider_id}"))?;
+        if !provider.enabled {
+            bail!("provider is disabled: {provider_id}");
+        }
         if model.trim().is_empty() {
             bail!("model cannot be empty");
         }
@@ -607,11 +647,7 @@ impl AppConfig {
         // 1. 删除供应商并为主对话选择有效回退项
         let removed = self.providers.remove(index);
         if self.active_provider == removed.id {
-            self.active_provider = self
-                .providers
-                .first()
-                .map(|provider| provider.id.clone())
-                .unwrap_or_default();
+            self.active_provider = self.first_enabled_provider_id().unwrap_or_default();
         }
 
         // 2. 清理压缩、视觉、嵌入和子智能体的供应商及模型引用
@@ -753,7 +789,9 @@ impl AppConfig {
     }
 
     pub fn upsert_provider(&mut self, provider: ProviderConfig) {
-        self.active_provider = provider.id.clone();
+        if provider.enabled {
+            self.active_provider = provider.id.clone();
+        }
         match self
             .providers
             .iter()

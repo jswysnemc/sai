@@ -1,7 +1,7 @@
 use crate::config::{AppConfig, ModelMetadata, ProviderConfig};
 use crate::i18n::text as t;
 use anyhow::Result;
-use crossterm::cursor::MoveTo;
+use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::KeyCode;
 use crossterm::queue;
 use crossterm::style::Print;
@@ -16,7 +16,7 @@ use super::input::{read_key, read_key_with_timeout};
 use super::layout::three_column_widths;
 use super::provider_fetch::{fetch_models, FetchModelsResult};
 use super::provider_forms::{edit_model_form, edit_provider_form};
-use super::ui::{draw_column, draw_menu, message, truncate};
+use super::ui::{display_width, draw_column, draw_menu, message, pad, truncate};
 
 pub(crate) struct ProviderBrowser<'a> {
     config: &'a mut AppConfig,
@@ -77,8 +77,7 @@ impl<'a> ProviderBrowser<'a> {
                     KeyCode::Down | KeyCode::Char('j') => self.move_down(),
                     KeyCode::Char('/') => {
                         self.filter_mode = true;
-                        self.filter.clear();
-                        self.rebuild_models();
+                        self.active_col = 2;
                     }
                     KeyCode::Char('r') => self.refresh_models(),
                     KeyCode::Char('a') if self.active_col == 2 => self.add_custom_model(stdout)?,
@@ -99,7 +98,15 @@ impl<'a> ProviderBrowser<'a> {
                 self.filter_mode = false;
                 self.filter.clear();
             }
-            KeyCode::Enter => self.filter_mode = false,
+            KeyCode::Enter | KeyCode::Tab => self.filter_mode = false,
+            KeyCode::Up => {
+                self.move_up();
+                return;
+            }
+            KeyCode::Down => {
+                self.move_down();
+                return;
+            }
             KeyCode::Backspace => {
                 self.filter.pop();
             }
@@ -219,11 +226,10 @@ impl<'a> ProviderBrowser<'a> {
     }
 
     fn rebuild_models(&mut self) {
-        let filter = self.filter.to_ascii_lowercase();
         let mut grouped: BTreeMap<String, Vec<ModelEntry>> = BTreeMap::new();
         let ordered_models = self.prioritized_models();
         for model in &ordered_models {
-            if !filter.is_empty() && !model.to_ascii_lowercase().contains(&filter) {
+            if !model_matches_filter(model, &self.filter) {
                 continue;
             }
             let org = model
@@ -316,7 +322,17 @@ impl<'a> ProviderBrowser<'a> {
                         }
                     }
                     if edit_model_form(stdout, provider, &model.full)? {
-                        self.config.active_provider = provider.id.clone();
+                        // 只改标签/上下文时旧逻辑也会把该供应商设为当前项，
+                        // 若此时还没有 default_model，加载会回退到已停用的 opencode。
+                        if provider.default_model.trim().is_empty() {
+                            provider.default_model = model.full.clone();
+                            if !provider.models.iter().any(|item| item == &model.full) {
+                                provider.models.push(model.full.clone());
+                            }
+                        }
+                        if provider.enabled && provider.default_model == model.full {
+                            self.config.active_provider = provider.id.clone();
+                        }
                         self.status = format!(
                             "{}: {}",
                             t("Updated model settings", "已更新模型设置"),
@@ -501,11 +517,7 @@ impl<'a> ProviderBrowser<'a> {
             })
             .collect::<Vec<_>>();
 
-        let models_title = if self.filter.is_empty() {
-            t(" MODELS ", " 模型 ").to_string()
-        } else {
-            format!("{} /{} ", t(" MODELS", " 模型"), self.filter)
-        };
+        let models_title = t(" MODELS ", " 模型 ").to_string();
         queue!(stdout, Clear(ClearType::All))?;
         super::ui::draw_box(
             stdout,
@@ -515,14 +527,17 @@ impl<'a> ProviderBrowser<'a> {
             frame.height,
             t("PROVIDERS & MODELS", "供应商与模型"),
         )?;
+        let filter_cursor = self.draw_filter_bar(stdout, inner_x, inner_y, inner_w)?;
+        let list_y = inner_y.saturating_add(2);
+        let list_h = inner_h.saturating_sub(2);
         // 1. 终端够宽时绘制三栏；宽度之和不超过内容区，保证不重叠
         if let Some((left_w, mid_w, right_w)) = three_column_widths(inner_w) {
             draw_column(
                 stdout,
                 inner_x,
-                inner_y,
+                list_y,
                 left_w,
-                inner_h,
+                list_h,
                 t(" PROVIDERS ", " 供应商 "),
                 &providers,
                 self.provider_idx,
@@ -531,9 +546,9 @@ impl<'a> ProviderBrowser<'a> {
             draw_column(
                 stdout,
                 inner_x + left_w + 1,
-                inner_y,
+                list_y,
                 mid_w,
-                inner_h,
+                list_h,
                 t(" ORG ", " 组织 "),
                 &self.orgs,
                 self.org_idx,
@@ -542,9 +557,9 @@ impl<'a> ProviderBrowser<'a> {
             draw_column(
                 stdout,
                 inner_x + left_w + mid_w + 2,
-                inner_y,
+                list_y,
                 right_w,
-                inner_h,
+                list_h,
                 &models_title,
                 &models,
                 self.model_idx,
@@ -562,20 +577,17 @@ impl<'a> ProviderBrowser<'a> {
                 _ => (models_title, &models, self.model_idx),
             };
             draw_column(
-                stdout, inner_x, inner_y, inner_w, inner_h, &title, items, selected, true,
+                stdout, inner_x, list_y, inner_w, list_h, &title, items, selected, true,
             )?;
         }
         use super::theme::{help_line, ACCENT, DANGER, MUTED, RESET};
         let help = if self.filter_mode {
-            format!(
-                "{ACCENT}{}{RESET}{MUTED}: {}{RESET}{ACCENT}_{RESET}  {}",
-                t("Search", "搜索"),
-                self.filter,
-                help_line(&[
-                    ("Enter", t("confirm", "确认")),
-                    ("Esc", t("cancel", "取消")),
-                ])
-            )
+            help_line(&[
+                ("type", t("filter models", "过滤模型")),
+                ("↑↓", t("move", "移动")),
+                ("Enter", t("keep filter", "保留过滤")),
+                ("Esc", t("clear", "清除")),
+            ])
         } else {
             // 删除是破坏性操作，键名用警示色与其它键区分
             let base = help_line(&[
@@ -603,8 +615,71 @@ impl<'a> ProviderBrowser<'a> {
             ))
         )?;
         super::ui::draw_status_bar(stdout, &frame, &help)?;
+        if let Some((cx, cy)) = filter_cursor {
+            queue!(stdout, Show, MoveTo(cx, cy))?;
+        } else {
+            queue!(stdout, Hide)?;
+        }
         stdout.flush()?;
         Ok(())
+    }
+
+    /// 在三栏上方画一条全宽过滤框，避免查询被挤进窄列标题。
+    ///
+    /// 参数:
+    /// - `stdout`: 终端输出
+    /// - `x`: 内容区左列
+    /// - `y`: 过滤框行
+    /// - `width`: 内容区宽度
+    ///
+    /// 返回:
+    /// - 过滤态下的光标坐标
+    fn draw_filter_bar(
+        &self,
+        stdout: &mut io::Stdout,
+        x: u16,
+        y: u16,
+        width: u16,
+    ) -> Result<Option<(u16, u16)>> {
+        use super::theme::{ACCENT, BOLD, MUTED, RESET, SELECT_BG};
+        let prefix = format!("/ {}", t("Search models", "搜索模型"));
+        let query = if self.filter.is_empty() && !self.filter_mode {
+            t("type to filter", "输入以过滤")
+        } else {
+            self.filter.as_str()
+        };
+        let count = if self.filter.is_empty() {
+            String::new()
+        } else {
+            format!("  {} {}", self.models.len(), t("matches", "项"))
+        };
+        let field_w = (width as usize).saturating_sub(display_width(&count));
+        let body = truncate(&format!("{prefix}  {query}"), field_w.saturating_sub(1));
+        let line = format!("{}{count}", pad(&body, field_w.saturating_sub(1)));
+        if self.filter_mode {
+            queue!(
+                stdout,
+                MoveTo(x, y),
+                Print(format!("{SELECT_BG}{ACCENT}{BOLD} {line}{RESET}"))
+            )?;
+            let cursor_x = x
+                + 1
+                + display_width(&truncate(
+                    &format!("{prefix}  {}", self.filter),
+                    field_w.saturating_sub(1),
+                )) as u16;
+            Ok(Some((
+                cursor_x.min(x.saturating_add(width.saturating_sub(1))),
+                y,
+            )))
+        } else {
+            queue!(
+                stdout,
+                MoveTo(x, y),
+                Print(format!("{MUTED} {line}{RESET}"))
+            )?;
+            Ok(None)
+        }
     }
 }
 
@@ -618,6 +693,22 @@ fn format_status_line(value: &str) -> String {
 struct ModelEntry {
     name: String,
     full: String,
+}
+
+/// 判断模型标识是否命中过滤词（大小写不敏感子串）。
+///
+/// 参数:
+/// - `model`: 完整模型标识
+/// - `filter`: 已规范化或原始的过滤词
+///
+/// 返回:
+/// - 空过滤词视为全部命中
+fn model_matches_filter(model: &str, filter: &str) -> bool {
+    let filter = filter.trim();
+    filter.is_empty()
+        || model
+            .to_ascii_lowercase()
+            .contains(&filter.to_ascii_lowercase())
 }
 
 /// 返回当前供应商的本地模型，默认模型和已激活模型优先。
@@ -728,5 +819,19 @@ pub(crate) fn select_active_provider(
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::model_matches_filter;
+
+    /// 空过滤词不过滤；大小写与子串都能命中。
+    #[test]
+    fn model_filter_matches_substring_case_insensitively() {
+        assert!(model_matches_filter("minimax-m3", ""));
+        assert!(model_matches_filter("minimax-m3", "Mini"));
+        assert!(model_matches_filter("openai/gpt-4o", "gpt-4"));
+        assert!(!model_matches_filter("minimax-m3", "claude"));
     }
 }

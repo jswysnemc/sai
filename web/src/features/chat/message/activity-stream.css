@@ -1,0 +1,154 @@
+/*
+ * 正文前的工作组：思考与工具共用与工具行相同的图标列，
+ * 折叠后只留一行摘要，并行工具按开始/结束事件排队轮播。
+ */
+
+.activity-preamble {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  gap: var(--space-3xs);
+}
+
+.activity-preamble-head,
+.reasoning-block > button,
+.tool-layout-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: max-content;
+  max-width: 100%;
+  min-height: 28px;
+  padding: var(--space-3xs) 0;
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tool-layout-head:not(.is-interactive) {
+  cursor: default;
+}
+
+.activity-preamble-head:hover,
+.reasoning-block > button:hover,
+.tool-layout-head:hover {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+.activity-preamble-icon,
+.reasoning-icon,
+.tool-layout-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  place-items: center;
+  color: var(--technical-muted);
+}
+
+.activity-preamble-icon svg,
+.reasoning-icon svg,
+.tool-layout-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.activity-preamble-label,
+.reasoning-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-preamble-head > svg,
+.reasoning-block > button > svg,
+.tool-layout-chevron {
+  flex-shrink: 0;
+  color: var(--ink-soft);
+  transition: transform var(--duration-base) var(--ease-standard);
+}
+
+.activity-preamble.is-open > .activity-preamble-head > svg,
+.reasoning-block.open > button > svg,
+.tool-layout-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.activity-preamble-body {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-3xs);
+}
+
+.activity-preamble-collapsed {
+  min-width: 0;
+}
+
+.tool-wave {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-3xs);
+}
+
+.tool-wave-carousel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.tool-wave-viewport {
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 28px;
+}
+
+.tool-wave-slide {
+  min-width: 0;
+  animation: tool-wave-in var(--duration-slow) var(--ease-out);
+}
+
+.tool-wave-slide .tool-layout-head {
+  pointer-events: none;
+}
+
+.tool-layout-batch {
+  flex-shrink: 0;
+  color: var(--ink-soft);
+  font: 400 var(--text-2xs)/1 var(--font-code);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tool-wave-stack {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-3xs);
+}
+
+@keyframes tool-wave-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.45rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-wave-slide {
+    animation: none;
+  }
+}

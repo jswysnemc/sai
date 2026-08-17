@@ -7,18 +7,26 @@
   max-width: 100%;
 }
 
-.tool-layout-icon {
-  display: grid;
-  width: 14px;
-  height: 14px;
-  place-items: center;
+.tool-layout-summary {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-sm);
 }
 
-/* 展开体：与图标+间距对齐，避免详情块顶到导轨或再缩一层「卡片里的卡片」 */
+.tool-layout-meta {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* 展开体贴齐图标列左侧，避免灰框相对标题再缩进一层 */
 .tool-layout-body {
   min-width: 0;
   margin-top: var(--space-2xs);
-  padding-left: calc(14px + var(--space-sm));
+  padding-left: 0;
 }
 
 .tool-layout-body > .tool-panel,

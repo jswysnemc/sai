@@ -3,6 +3,12 @@ use crate::runtime_cwd;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+/// 稳定系统提示中的指令文件覆盖规则。
+///
+/// 首次加载的正文进入 Context Epoch baseline；之后文件变了只在当前
+/// user 消息尾部追加，不改写已经冻结的系统前缀。
+pub(crate) const INSTRUCTION_FILES_CONTRACT: &str = "<instruction-files-contract>\n全局与项目 AGENT.md / AGENTS.md / CLAUDE.md 的首次加载正文在系统提示的 <instruction-files> 中。文件之后若有改动，会在 user 角色的 <context-resource name=\"instruction_files\"> 中追加更新；以历史中最后一份为准。\n</instruction-files-contract>";
+
 /// 全局附加指令文件名（位于 Sai 配置目录）。
 const GLOBAL_INSTRUCTION_NAMES: &[&str] = &["AGENT.md", "AGENTS.md"];
 
@@ -30,7 +36,7 @@ const MAX_INSTRUCTION_CHARS: usize = 120_000;
 ///
 /// 返回:
 /// - 已拼接的附加提示文本；没有任何文件时返回空字符串
-pub(super) fn load_instruction_prompt(paths: &SaiPaths) -> String {
+pub(crate) fn load_instruction_prompt(paths: &SaiPaths) -> String {
     let mut sections = Vec::new();
     let mut seen_paths = HashSet::new();
     let mut seen_content = HashSet::new();
@@ -72,6 +78,92 @@ pub(super) fn load_instruction_prompt(paths: &SaiPaths) -> String {
     out.push_str(&sections.join("\n\n"));
     out.push_str("\n</instruction-files>");
     out
+}
+
+/// 从系统提示中取出完整的 `<instruction-files>` 区块。
+///
+/// 参数:
+/// - `prompt`: 系统提示或 baseline
+///
+/// 返回:
+/// - 含起止标签的区块；没有该段时为空
+pub(crate) fn extract_instruction_files(prompt: &str) -> String {
+    split_instruction_files(prompt).1
+}
+
+/// 若只有指令文件变了，把 live 提示里的该段换回已冻结 baseline。
+///
+/// 系统提示的其余部分也变了（例如锚定晋升补上技能目录）时不加冻结，
+/// 让新的完整提示成为下一份 baseline。
+///
+/// 参数:
+/// - `live_prompt`: 按当前磁盘即时组装的系统提示
+/// - `baseline`: 会话已冻结的 Context Epoch baseline
+///
+/// 返回:
+/// - 用于更新 epoch 的稳定系统提示
+pub(crate) fn freeze_instruction_files(live_prompt: &str, baseline: &str) -> String {
+    let (live_rest, _) = split_instruction_files(live_prompt);
+    let (baseline_rest, baseline_files) = split_instruction_files(baseline);
+    if live_rest.trim() != baseline_rest.trim() {
+        return live_prompt.to_string();
+    }
+    with_instruction_files_section(live_prompt, &baseline_files)
+}
+
+/// 拆出 `<instruction-files>` 区块。
+fn split_instruction_files(source: &str) -> (String, String) {
+    const OPEN: &str = "<instruction-files>";
+    const CLOSE: &str = "</instruction-files>";
+    let Some(start) = source.find(OPEN) else {
+        return (source.to_string(), String::new());
+    };
+    let Some(relative_end) = source[start..].find(CLOSE) else {
+        return (source.to_string(), String::new());
+    };
+    let end = start + relative_end + CLOSE.len();
+    let extracted = source[start..end].to_string();
+    let mut remaining = source[..start].trim_end().to_string();
+    let tail = source[end..].trim_start();
+    if !remaining.is_empty() && !tail.is_empty() {
+        remaining.push_str("\n\n");
+    }
+    remaining.push_str(tail);
+    (remaining, extracted)
+}
+
+/// 用指定区块替换或插入 `<instruction-files>`。
+fn with_instruction_files_section(prompt: &str, section: &str) -> String {
+    let (rest, old) = split_instruction_files(prompt);
+    if old.is_empty() {
+        if section.is_empty() {
+            return prompt.to_string();
+        }
+        return insert_instruction_section(prompt, section);
+    }
+    if section.is_empty() {
+        return rest;
+    }
+    prompt.replacen(&old, section, 1)
+}
+
+/// 按系统提示组装顺序把指令文件插回技能目录 / 状态契约之前。
+fn insert_instruction_section(prompt: &str, section: &str) -> String {
+    for marker in [
+        "<available-skills>",
+        "<context-state-contract>",
+        "<instruction-files-contract>",
+    ] {
+        if let Some(pos) = prompt.find(marker) {
+            return format!(
+                "{}\n\n{}\n\n{}",
+                prompt[..pos].trim_end(),
+                section,
+                prompt[pos..].trim_start()
+            );
+        }
+    }
+    format!("{}\n\n{}", prompt.trim_end(), section)
 }
 
 /// 在目录中按优先级查找项目指令文件。
@@ -234,5 +326,23 @@ mod tests {
         let prompt = load_instruction_prompt(&paths);
         let _ = std::env::set_current_dir(previous);
         assert!(prompt.is_empty());
+    }
+
+    #[test]
+    fn freeze_keeps_baseline_files_when_only_they_changed() {
+        let baseline = "persona\n\n<instruction-files>\nold\n</instruction-files>\n\n<context-state-contract>\nrule\n</context-state-contract>";
+        let live = "persona\n\n<instruction-files>\nnew\n</instruction-files>\n\n<context-state-contract>\nrule\n</context-state-contract>";
+        let frozen = freeze_instruction_files(live, baseline);
+        assert!(frozen.contains("old"));
+        assert!(!frozen.contains("new"));
+    }
+
+    #[test]
+    fn freeze_allows_a_new_baseline_when_the_rest_of_the_prompt_changed() {
+        let baseline = "persona\n\n<instruction-files>\nold\n</instruction-files>";
+        let live = "persona\n\n<instruction-files>\nnew\n</instruction-files>\n\n<available-skills>\nskill\n</available-skills>";
+        let frozen = freeze_instruction_files(live, baseline);
+        assert!(frozen.contains("new"));
+        assert!(frozen.contains("available-skills"));
     }
 }

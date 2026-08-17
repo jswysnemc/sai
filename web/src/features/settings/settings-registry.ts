@@ -84,7 +84,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     descriptionEn: "Sessions, permissions, notifications, terminal, and display",
     descriptionZh: "会话、权限、通知、终端与显示",
     icon: SlidersHorizontal,
-    searchKeys: ["runtime", "session", "model", "thinking", "permission", "notification", "terminal", "context", "display", "tools", "debug", "api", "会话", "模型", "思考", "权限", "通知", "终端", "上下文", "调试"],
+    searchKeys: ["runtime", "session", "model", "thinking", "permission", "notification", "terminal", "context", "display", "tools", "debug", "api", "会话", "模型", "思考", "权限", "通知", "终端", "上下文", "压缩比例", "预留", "调试"],
     subviews: [
       { id: "engine", labelEn: "Engine", labelZh: "对话内核" },
       { id: "permissions", labelEn: "Permissions", labelZh: "权限" },

@@ -112,6 +112,29 @@ export function createOverviewSummary(content: string | null | undefined, maxLen
 }
 
 /**
+ * 计算预览相对居中位置需要上移或下移的像素，避免卡片超出视口。
+ *
+ * @param top 预览当前顶边
+ * @param bottom 预览当前底边
+ * @param viewportHeight 视口高度
+ * @param margin 与视口边缘的最小间距
+ * @returns 需要叠加到 translateY 的偏移；正值下移
+ */
+export function previewViewportShift(
+  top: number,
+  bottom: number,
+  viewportHeight: number,
+  margin = 8
+): number {
+  const overflowBottom = bottom - (viewportHeight - margin);
+  const overflowTop = margin - top;
+  if (overflowBottom <= 0 && overflowTop <= 0) return 0;
+  if (overflowBottom > 0 && overflowTop > 0) return (overflowTop - overflowBottom) / 2;
+  if (overflowBottom > 0) return -overflowBottom;
+  return overflowTop;
+}
+
+/**
  * 按固定优选间距计算居中的概览标识位置。
  *
  * @param index 当前项目序号

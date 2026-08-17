@@ -18,6 +18,11 @@ function makeTool(patch: Partial<ToolLifecycle>): ToolLifecycle {
   };
 }
 
+/** 去掉标记后比对命令原文，避免语法着色把连续文本拆进 span。 */
+function stripTags(html: string): string {
+  return html.replace(/<[^>]+>/g, "");
+}
+
 /** 在查询上下文中渲染工具卡为静态标记。 */
 function render(tool: ToolLifecycle): string {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -112,7 +117,8 @@ describe("ToolLifecycleCard 折叠行", () => {
       arguments: JSON.stringify({ command }),
       output: JSON.stringify({ success: true, exit_code: 0, stdout: "ok" })
     }));
-    expect(html).toContain(command);
+    expect(stripTags(html)).toContain(command);
+    expect(html).toContain("language-bash");
   });
 
   it("展开的命令卡头部不再重复命令", () => {
@@ -124,9 +130,9 @@ describe("ToolLifecycleCard 折叠行", () => {
       output: JSON.stringify({ success: false, exit_code: 1, stdout: "" }),
       status: "failed"
     }));
-    const occurrences = html.split(command).length - 1;
-    expect(occurrences).toBe(1);
+    expect(stripTags(html).split(command).length - 1).toBe(1);
     expect(html).toContain("shell-command-line");
+    expect(html).toContain("language-bash");
   });
 
   it("流式写入期间折叠行展示跳动中的增删徽章", () => {

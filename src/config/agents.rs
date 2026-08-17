@@ -541,6 +541,8 @@ mod tests {
             .enabled_tools
             .iter()
             .any(|t| t == "online_man_search"));
+        assert!(runtime.enabled_tools.iter().any(|t| t == "ssh_list_hosts"));
+        assert!(runtime.enabled_tools.iter().any(|t| t == "ssh_run_command"));
         assert!(!runtime.enabled_tools.iter().any(|t| t == "show_meme"));
         assert!(!runtime.enabled_tools.iter().any(|t| t == "calculate"));
         assert!(!runtime.enabled_tools.iter().any(|t| t == "man_page_search"));

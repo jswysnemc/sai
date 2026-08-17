@@ -516,7 +516,11 @@ fn action_suffix_from_partial(arguments: &str) -> Option<String> {
 /// - 读取对象文本
 fn read_file_suffix(arguments: &Value) -> Option<String> {
     if let Some(path) = string_field(arguments, &["path"]).map(file_basename) {
-        return Some(path);
+        return Some(with_read_range(
+            path,
+            u64_field(arguments, "offset"),
+            u64_field(arguments, "limit"),
+        ));
     }
     let files = arguments
         .get("files")
@@ -524,8 +528,14 @@ fn read_file_suffix(arguments: &Value) -> Option<String> {
         .filter(|files| !files.is_empty())?;
     let names = files
         .iter()
-        .filter_map(|file| string_field(file, &["path"]))
-        .map(file_basename)
+        .filter_map(|file| {
+            let path = string_field(file, &["path"]).map(file_basename)?;
+            Some(with_read_range(
+                path,
+                u64_field(file, "offset"),
+                u64_field(file, "limit"),
+            ))
+        })
         .take(4)
         .collect::<Vec<_>>();
     if names.is_empty() {
@@ -547,7 +557,48 @@ fn read_file_suffix(arguments: &Value) -> Option<String> {
 /// 返回:
 /// - 读取对象文本
 fn read_file_suffix_from_partial(arguments: &str) -> Option<String> {
-    string_field_from_partial(arguments, &["path"]).map(file_basename)
+    let path = string_field_from_partial(arguments, &["path"]).map(file_basename)?;
+    Some(with_read_range(
+        path,
+        u64_field_from_partial(arguments, "offset"),
+        u64_field_from_partial(arguments, "limit"),
+    ))
+}
+
+/// 把读取起点与行数接到文件名后面：`file.rs:12+80`。
+///
+/// 参数未带 offset/limit 时只保留文件名，避免每个整文件读取都写成 `:1+2000`。
+fn with_read_range(path: String, offset: Option<u64>, limit: Option<u64>) -> String {
+    match (
+        offset.filter(|value| *value > 0),
+        limit.filter(|value| *value > 0),
+    ) {
+        (None, None) => path,
+        (Some(start), Some(count)) => format!("{path}:{start}+{count}"),
+        (Some(start), None) => format!("{path}:{start}+"),
+        (None, Some(count)) => format!("{path}:1+{count}"),
+    }
+}
+
+/// 读取 JSON 对象上的非负整数字段。
+fn u64_field(value: &Value, key: &str) -> Option<u64> {
+    value.get(key).and_then(|item| {
+        item.as_u64()
+            .or_else(|| item.as_i64().and_then(|number| u64::try_from(number).ok()))
+    })
+}
+
+/// 从未闭合 JSON 片段中读取非负整数字段。
+fn u64_field_from_partial(raw: &str, key: &str) -> Option<u64> {
+    let pattern = format!("\"{key}\"");
+    let key_index = raw.find(&pattern)?;
+    let after_key = &raw[key_index + pattern.len()..];
+    let colon_index = after_key.find(':')?;
+    let digits = after_key[colon_index + 1..].trim_start();
+    let end = digits
+        .find(|ch: char| !ch.is_ascii_digit())
+        .unwrap_or(digits.len());
+    digits.get(..end)?.parse().ok()
 }
 
 /// 提取子智能体展示对象。

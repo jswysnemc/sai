@@ -5,7 +5,8 @@ import {
   createLiveOverviewItem,
   createOverviewSummary,
   createTimelineOverviewItems,
-  evenlySpacedOverviewPosition
+  evenlySpacedOverviewPosition,
+  previewViewportShift
 } from "./message-overview-utils";
 
 /**
@@ -118,5 +119,11 @@ describe("message overview utils", () => {
     expect(evenlySpacedOverviewPosition(3, 4, 100)).toBe(71);
     expect(evenlySpacedOverviewPosition(0, 1, 100)).toBe(50);
     expect(evenlySpacedOverviewPosition(2, 3, 20)).toBe(20);
+  });
+
+  it("预览靠近视口边缘时上移或下移，避免被裁切", () => {
+    expect(previewViewportShift(200, 380, 800)).toBe(0);
+    expect(previewViewportShift(720, 900, 800)).toBe(-108);
+    expect(previewViewportShift(-20, 160, 800)).toBe(28);
   });
 });

@@ -76,26 +76,21 @@
   top: 0;
   left: 25px;
   width: min(320px, calc(100vw - 100px));
-  max-height: 180px;
-  overflow: hidden;
+  max-height: min(180px, calc(100dvh - 16px));
+  overflow: auto;
+  overscroll-behavior: contain;
   padding:var(--space-md) var(--space-lg);
   border: 1px solid var(--line);
   border-radius:var(--radius-4);
   background: color-mix(in srgb, var(--paper-raised) 94%, transparent);
   color: var(--ink);
   box-shadow: var(--elevation-3);
-  opacity: 0;
-  transform: translateY(-50%) translateX(-5px);
-  visibility: hidden;
+  opacity: 1;
+  transform: translateY(calc(-50% + var(--message-overview-preview-shift, 0px))) translateX(0);
+  visibility: visible;
   pointer-events: none;
   transition:opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
   backdrop-filter: blur(14px);
-}
-
-.message-overview-preview {
-  opacity: 1;
-  transform: translateY(-50%) translateX(0);
-  visibility: visible;
 }
 
 .message-overview-preview-heading {

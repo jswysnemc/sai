@@ -90,11 +90,32 @@ impl Agent {
             compaction_summary_context.as_deref(),
             &projected_history.messages,
         )?;
-        let state_update =
-            context_resources::combine_context_updates([runtime_update, goal_update, meme_update]);
-        let epoch = self
-            .state
-            .context_epoch_projection(self.active_system_prompt())?;
+        let live_system_prompt = self.active_system_prompt();
+        let epoch_prompt = match self.state.context_epoch_baseline()? {
+            Some(baseline) => {
+                super::instruction_files::freeze_instruction_files(live_system_prompt, &baseline)
+            }
+            None => live_system_prompt.to_string(),
+        };
+        let epoch = self.state.context_epoch_projection(&epoch_prompt)?;
+        let instruction_update =
+            if self.config.load_instruction_files && !self.tool_visibility.is_anchor_bootstrap() {
+                context_resources::context_resource_update_against_baseline(
+                    "instruction_files",
+                    &super::instruction_files::load_instruction_prompt(&self.paths),
+                    &super::instruction_files::extract_instruction_files(&epoch.baseline),
+                    compaction_summary_context.as_deref(),
+                    &projected_history.messages,
+                )?
+            } else {
+                None
+            };
+        let state_update = context_resources::combine_context_updates([
+            runtime_update,
+            goal_update,
+            instruction_update,
+            meme_update,
+        ]);
         Ok(project_provider_base_context_projection(
             &epoch.baseline,
             compaction_summary_context.as_deref(),

@@ -24,7 +24,8 @@ type SshSecretCardProps = {
  */
 export function SshSecretCard({ request, resolved = false, active = true }: SshSecretCardProps) {
   const { t } = useI18n();
-  const isSecret = request.kind === "passphrase" || request.kind === "password";
+  const isSecret =
+    request.kind === "passphrase" || request.kind === "password" || request.kind === "sudo_password";
   const [secret, setSecret] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(resolved);
@@ -142,6 +143,8 @@ function titleOf(kind: SshSecretRequest["kind"], t: (en: string, zh: string) => 
       return t("SSH key passphrase required", "需要私钥口令");
     case "password":
       return t("SSH password required", "需要登录密码");
+    case "sudo_password":
+      return t("sudo password required", "需要 sudo 密码");
     case "host_key":
       return t("Confirm host key", "确认主机指纹");
     case "danger_command":

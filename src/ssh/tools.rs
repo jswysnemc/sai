@@ -6,7 +6,7 @@
 //! [`super::redact`] 脱敏。
 
 use super::secret::{self, InteractiveKind, SecretResponse};
-use super::{danger, redact, session, transfer};
+use super::{danger, redact, session, sudo, transfer};
 use crate::config::{AppConfig, SshHostConfig};
 use crate::paths::SaiPaths;
 use crate::tools::{empty_parameters, ToolProgress, ToolRegistry, ToolSpec};
@@ -256,13 +256,48 @@ async fn run_command(
         }
     }
 
-    // 2. 建立连接（含指纹确认与口令输入），全程秘密不进模型
-    let (handle, secrets) = establish_connection(session_id, &progress, &host).await?;
+    // 2. sudo 密码由用户在安全输入里提供，模型看不到，也不进工具参数
+    let mut stdin = None;
+    if sudo::needs_sudo_password(&args.command) {
+        match request_interactive(
+            session_id,
+            &progress,
+            InteractiveKind::SudoPassword,
+            &host.label,
+            "远端命令需要 sudo 密码。密码只用于本次执行，不会交给模型。",
+            None,
+            false,
+        )
+        .await?
+        {
+            SecretResponse::Provided(secret) => {
+                stdin = Some(format!("{secret}\n"));
+            }
+            _ => return Ok("用户取消了 sudo 密码输入。".to_string()),
+        }
+    }
 
-    // 3. 执行命令并对输出脱敏后返回
-    let output = session::exec_command(&handle, &args.command, timeout, session::MAX_OUTPUT_BYTES)
-        .await
-        .map_err(|error| anyhow!(redact::redact_error(&error, &secrets)))?;
+    // 3. 建立连接（含指纹确认与口令输入），全程秘密不进模型
+    let (handle, mut secrets) = establish_connection(session_id, &progress, &host).await?;
+    if let Some(secret) = stdin.as_ref() {
+        secrets.push(secret.trim_end_matches('\n').to_string());
+    }
+
+    // 4. 执行命令并对输出脱敏后返回
+    let remote_command = if stdin.is_some() {
+        sudo::with_sudo_stdin(&args.command)
+    } else {
+        args.command.clone()
+    };
+    let output = session::exec_command_with_stdin(
+        &handle,
+        &remote_command,
+        timeout,
+        session::MAX_OUTPUT_BYTES,
+        stdin.as_deref().map(str::as_bytes),
+    )
+    .await
+    .map_err(|error| anyhow!(redact::redact_error(&error, &secrets)))?;
 
     let payload = json!({
         "host_id": host.id,
@@ -359,11 +394,13 @@ async fn establish_connection(
     Vec<String>,
 )> {
     let mut passphrase: Option<String> = None;
+    let mut password: Option<String> = None;
     let mut secrets: Vec<String> = Vec::new();
     let mut passphrase_requested = false;
+    let mut password_requested = false;
 
     for _ in 0..MAX_CONNECT_ATTEMPTS {
-        match session::connect(host, passphrase.as_deref()).await {
+        match session::connect(host, passphrase.as_deref(), password.as_deref()).await {
             Ok(session::ConnectResult::Connected(handle)) => return Ok((handle, secrets)),
             Ok(session::ConnectResult::HostKeyPending { key, status }) => {
                 // 指纹未登记或已变更：交给用户核对，绝不静默信任
@@ -411,6 +448,25 @@ async fn establish_connection(
                         }
                         _ => bail!("用户取消了私钥口令输入。"),
                     }
+                } else if !password_requested && needs_login_password(&error) {
+                    password_requested = true;
+                    match request_interactive(
+                        session_id,
+                        progress,
+                        InteractiveKind::Password,
+                        &host.label,
+                        "公钥认证失败，请输入该主机的登录密码。",
+                        None,
+                        false,
+                    )
+                    .await?
+                    {
+                        SecretResponse::Provided(secret) => {
+                            secrets.push(secret.clone());
+                            password = Some(secret);
+                        }
+                        _ => bail!("用户取消了登录密码输入。"),
+                    }
                 } else {
                     return Err(anyhow!(redact::redact_error(&error, &secrets)));
                 }
@@ -430,6 +486,14 @@ async fn establish_connection(
 fn needs_passphrase(error: &anyhow::Error) -> bool {
     let message = format!("{error:#}").to_lowercase();
     message.contains("passphrase") || message.contains("encrypt") || message.contains("decrypt")
+}
+
+/// 判断连接错误是否适合改走登录密码。
+fn needs_login_password(error: &anyhow::Error) -> bool {
+    let message = format!("{error:#}").to_lowercase();
+    message.contains("public key authentication failed")
+        || message.contains("no ssh private key available")
+        || message.contains("password authentication")
 }
 
 /// 发起一次交互式征询并等待应答。
@@ -522,6 +586,17 @@ mod tests {
         )));
         assert!(needs_passphrase(&anyhow!("wrong passphrase supplied")));
         assert!(!needs_passphrase(&anyhow!("connection refused")));
+    }
+
+    #[test]
+    fn needs_login_password_detects_key_failure() {
+        assert!(needs_login_password(&anyhow!(
+            "SSH public key authentication failed - /home/u/.ssh/id_ed25519: rejected by the server"
+        )));
+        assert!(needs_login_password(&anyhow!(
+            "no SSH private key available for deploy@box"
+        )));
+        assert!(!needs_login_password(&anyhow!("connection refused")));
     }
 
     #[test]

@@ -35,7 +35,8 @@
   width: 100%;
   max-width: var(--chat-content-width);
   min-height: 28px;
-  padding:0 var(--space-3xs);
+  /* 上下留出角标探出的空间：overflow-x:auto 会把 overflow-y 也变成裁切 */
+  padding: 4px var(--space-3xs);
   overflow-x: auto;
   scrollbar-width: none;
 }

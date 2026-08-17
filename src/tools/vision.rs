@@ -1,6 +1,5 @@
 use super::{ToolRegistry, ToolSpec};
 use crate::config::{AppConfig, PrintImagePluginConfig, ProviderConfig, VisionPluginConfig};
-use crate::default_models::{OPENCODE_DEFAULT_VISION_MODEL, OPENCODE_PROVIDER_ID};
 use crate::i18n::text as t;
 use crate::llm::{ChatMessage, OpenAiCompatibleClient};
 use crate::paths::SaiPaths;
@@ -160,12 +159,10 @@ fn vision_provider(config: &AppConfig, vision: &VisionPluginConfig) -> Result<Pr
     let mut provider = if !provider_id.is_empty() {
         config.provider(Some(provider_id))?.clone()
     } else {
-        config.provider(Some(OPENCODE_PROVIDER_ID))?.clone()
+        config.provider(None)?.clone()
     };
     provider.default_model = if !model.is_empty() {
         model.to_string()
-    } else if provider_id.is_empty() {
-        OPENCODE_DEFAULT_VISION_MODEL.to_string()
     } else {
         provider.default_model.clone()
     };

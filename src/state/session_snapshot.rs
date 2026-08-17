@@ -44,6 +44,8 @@ pub struct SessionSnapshot {
     pub active_run: Option<ActiveRunSummary>,
     /// 最近一轮从首次思考/正文到结束的耗时（毫秒）；未设置时为 0
     pub last_turn_duration_ms: u64,
+    /// 最近一轮从发请求到首个 token 的延迟（毫秒）；未设置时为 0
+    pub last_turn_ttft_ms: u64,
 }
 
 impl StateStore {
@@ -129,6 +131,7 @@ impl StateStore {
             projection_warnings,
             active_run: None,
             last_turn_duration_ms: 0,
+            last_turn_ttft_ms: 0,
         })
     }
 

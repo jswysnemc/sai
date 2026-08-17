@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import type { AgentToolOption } from "./agents-types";
 import {
   countToolModes,
@@ -19,6 +20,12 @@ type AgentToolModeGroupProps = {
   group: string;
   /** 分组显示名称 */
   label: string;
+  /** 用户/模型分工说明；空则不渲染 */
+  hint?: string;
+  /** 相关设置页路径 */
+  settingsHref?: string;
+  /** 设置页链接文案 */
+  settingsLabel?: string;
   /** 分组内全部工具，用于批量操作 */
   allItems: AgentToolOption[];
   /** 当前搜索命中的工具 */
@@ -46,6 +53,9 @@ type AgentToolModeGroupProps = {
 export function AgentToolModeGroup({
   group,
   label,
+  hint,
+  settingsHref,
+  settingsLabel,
   allItems,
   visibleItems,
   selection,
@@ -64,16 +74,24 @@ export function AgentToolModeGroup({
   return (
     <section className="agent-tool-permission-group" data-group={group}>
       <header className="agent-tool-permission-group-head">
-        <div className="agent-tool-permission-group-title">
-          <strong>{label}</strong>
-          {label !== group && <small>{group}</small>}
+        <div className="agent-tool-permission-group-head-row">
+          <div className="agent-tool-permission-group-title">
+            <strong>{label}</strong>
+            {label !== group && <small>{group}</small>}
+          </div>
+          <ToolModeSwitch
+            value={uniformMode ?? ("" as ToolMode)}
+            options={modeLabels}
+            ariaLabel={groupAriaLabel}
+            onChange={(mode) => onChange(groupNames, mode)}
+          />
         </div>
-        <ToolModeSwitch
-          value={uniformMode ?? ("" as ToolMode)}
-          options={modeLabels}
-          ariaLabel={groupAriaLabel}
-          onChange={(mode) => onChange(groupNames, mode)}
-        />
+        {hint ? <p className="agent-tool-permission-group-hint">{hint}</p> : null}
+        {settingsHref ? (
+          <Link className="agent-tool-permission-group-link" to={settingsHref}>
+            {settingsLabel ?? settingsHref}
+          </Link>
+        ) : null}
       </header>
       <div className="agent-tool-permission-items">
         {visibleItems.map((tool) => {

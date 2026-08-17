@@ -85,6 +85,26 @@ pub(crate) async fn connect_ssh_session(
     host: &SshHostConfig,
     passphrase: Option<&str>,
 ) -> Result<SshConnectOutcome> {
+    connect_ssh_session_auth(host, passphrase, None).await
+}
+
+/// 连接远端主机并完成认证，可附带登录密码。
+///
+/// 先尝试公钥；公钥全部失败且提供了登录密码时再试密码认证。
+/// 密码只在本次调用中使用，不会写入配置或日志。
+///
+/// 参数:
+/// - `host`: 主机配置
+/// - `passphrase`: 私钥口令
+/// - `password`: 登录密码，无则只走公钥
+///
+/// 返回:
+/// - 连接结果
+pub(crate) async fn connect_ssh_session_auth(
+    host: &SshHostConfig,
+    passphrase: Option<&str>,
+    password: Option<&str>,
+) -> Result<SshConnectOutcome> {
     let config = Arc::new(client::Config {
         inactivity_timeout: None,
         ..client::Config::default()
@@ -147,6 +167,19 @@ pub(crate) async fn connect_ssh_session(
             return Ok(SshConnectOutcome::Connected(session));
         }
         last_error = Some(format!("{}: rejected by the server", path.display()));
+    }
+
+    // 4. 公钥都失败时，若用户已提供登录密码则再试密码认证
+    if let Some(password) = password.filter(|value| !value.is_empty()) {
+        if session
+            .authenticate_password(&host.username, password)
+            .await
+            .map_err(|error| anyhow::anyhow!("SSH password authentication failed: {error}"))?
+            .success()
+        {
+            return Ok(SshConnectOutcome::Connected(session));
+        }
+        anyhow::bail!("SSH password authentication was rejected");
     }
 
     match last_error {

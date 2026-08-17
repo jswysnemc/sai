@@ -1,6 +1,7 @@
 import { CollapsibleOutput } from "./collapsible-output";
 import { DiffView } from "./diff-view";
 import { ToolPanel } from "./layout/tool-panel";
+import { ShellCommandLine } from "./shell-command-line";
 import { lenientStringField, parseJsonRecord, stringField } from "./tool-data";
 import { looksLikeJsonFragment } from "./tool-display-summary";
 import { useI18n } from "../../i18n/use-i18n";
@@ -37,10 +38,7 @@ export function ShellToolView({ argumentsText, output }: ShellToolViewProps) {
   const hasBody = Boolean(stdout || stderr || background || (!result && output));
   return (
     <ToolPanel className="shell-tool-view">
-      <div className={`shell-command-line${hasBody ? " has-body" : ""}`}>
-        <span>$</span>
-        <code>{command}</code>
-      </div>
+      <ShellCommandLine command={command} hasBody={hasBody} />
       {background && (
         <div className="shell-background-note">
           {t("Promoted to background task", "已转入后台任务")}

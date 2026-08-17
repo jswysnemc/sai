@@ -192,6 +192,8 @@ pub struct ChatResult {
     pub tool_calls: Vec<ToolCall>,
     /// 本轮从首次思考/正文输出到结束的耗时（毫秒）
     pub duration_ms: u64,
+    /// 从发请求到首个思考/正文 token 的延迟（毫秒）；未观测到首字时为 0
+    pub ttft_ms: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
