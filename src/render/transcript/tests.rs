@@ -315,6 +315,49 @@ fn subagent_overview_deduplicates_repeated_calls_by_id() {
     assert_eq!(overview[0].status, "run");
 }
 
+/// 【终端】【agent 面板】尚未返回的 wait 调用按参数中的 subagent_id 归并。
+///
+/// 回归：子智能体 ID 此前只从工具输出解析，进行中的调用还没有输出，于是
+/// 拿不到 ID 也就无法去重。并发等待四个子智能体时，四条 wait 会各占一行，
+/// 和真正的委派条目混在一起。
+#[test]
+fn subagent_overview_merges_pending_waits_by_argument_id() {
+    let (subagent, _cancel) = crate::tools::subagent_state::create_subagent(
+        "并发等待".to_string(),
+        "general".to_string(),
+        3,
+    );
+    let mut store = TranscriptStore::new(100);
+    // 1. start 已返回并绑定后台 ID
+    store.push_tool_call(
+        "subagent".to_string(),
+        r#"{"description":"并发等待"}"#.to_string(),
+    );
+    store.push_tool_result(
+        "subagent".to_string(),
+        true,
+        format!(
+            r#"{{"subagent":{{"id":"{}","status":"running"}}}}"#,
+            subagent.id
+        ),
+    );
+    // 2. 三次仍在进行中的 wait，没有任何结果可供解析
+    for _ in 0..3 {
+        store.push_tool_call(
+            "subagent".to_string(),
+            format!(r#"{{"action":"wait","subagent_id":"{}"}}"#, subagent.id),
+        );
+    }
+
+    let overview = store.subagent_overview();
+
+    assert_eq!(
+        overview.len(),
+        1,
+        "进行中的 wait 应归并到同一条目: {overview:?}"
+    );
+}
+
 #[test]
 fn markdown_table_lines_fit_display_width() {
     // 表格布局必须使用与折行相同的宽度：任何超宽行都会被 wrap_block

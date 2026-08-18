@@ -159,19 +159,31 @@ fn load_uses_load_label() {
     );
 }
 
-/// 验证子智能体工具优先展示描述和操作目标。
+/// 验证子智能体工具按 action 选择动词，并展示描述或操作目标。
 #[test]
 fn subagent_uses_description_label() {
     assert_eq!(
         tool_event_label("subagent", Some(r#"{"description":"scan code"}"#)),
         "Delegating scan code"
     );
+    // 只有 start 是委派，其余 action 各用各的动词，否则 wait / status 会和委派混作一谈
     assert_eq!(
         tool_event_label(
             "subagent",
             Some(r#"{"action":"status","subagent_id":"subagent_1"}"#)
         ),
-        "Delegating status subagent_1"
+        "Checking subagent_1"
+    );
+    assert_eq!(
+        tool_event_label(
+            "subagent",
+            Some(r#"{"action":"wait","subagent_id":"subagent_1"}"#)
+        ),
+        "Awaiting subagent_1"
+    );
+    assert_eq!(
+        tool_event_label("subagent", Some(r#"{"action":"list"}"#)),
+        "Listing"
     );
 }
 

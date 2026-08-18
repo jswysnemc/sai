@@ -20,6 +20,12 @@ pub(crate) struct SubagentOverviewEntry {
     pub(crate) detail: Option<String>,
     /// 累计消耗的 token 估算，供面板左栏跳动
     pub(crate) tokens: Option<u64>,
+    /// 子智能体类型，并发多个时用来区分
+    pub(crate) agent_type: Option<String>,
+    /// 已执行步数与预算
+    pub(crate) progress: Option<(usize, usize)>,
+    /// 运行时长（秒）
+    pub(crate) elapsed_seconds: Option<u64>,
 }
 
 impl TranscriptStore {
@@ -59,6 +65,9 @@ impl TranscriptStore {
                 viewing,
                 detail: overview.detail,
                 tokens: overview.tokens,
+                agent_type: overview.agent_type,
+                progress: overview.progress,
+                elapsed_seconds: overview.elapsed_seconds,
             };
             if let Some(id) = subagent.subagent_id() {
                 if let Some(&position) = position_by_id.get(id) {

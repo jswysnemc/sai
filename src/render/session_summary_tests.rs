@@ -72,7 +72,7 @@ fn renders_compact_session_summary_with_key_fields() {
     assert!(output.contains("↓ 4.0k"));
     assert!(output.contains("TTFT") || output.contains("首字"));
     assert!(output.contains("420ms"));
-    assert!(output.contains("320/s"));
+    assert!(output.contains("320 tok/s"));
     assert!(!output.contains('\u{f090}'));
     assert!(!output.contains('\u{f08b}'));
     // 低压力时占比随标签弱化，不抢正文注意力

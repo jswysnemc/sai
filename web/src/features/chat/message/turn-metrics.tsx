@@ -61,7 +61,7 @@ export function TurnMetrics({
           </span>
           {tokensPerSec && (
             <span className="turn-metric" title={t("Output tokens per second", "输出速率")}>
-              {tokensPerSec}/s
+              {tokensPerSec} tok/s
             </span>
           )}
           <span className="turn-metric" title={t("Cache hit ratio for this turn", "本轮缓存命中占比")}>

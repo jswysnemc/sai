@@ -63,7 +63,7 @@ pub fn render_session_summary(snapshot: &SessionSnapshot) -> String {
         if let Some(rate) =
             format_tokens_per_sec(usage.completion_tokens, snapshot.last_turn_duration_ms)
         {
-            output.push_str(&format!(" \x1b[2m·\x1b[0m \x1b[32m{rate}/s\x1b[0m"));
+            output.push_str(&format!(" \x1b[2m·\x1b[0m \x1b[32m{rate} tok/s\x1b[0m"));
         }
         output.push_str(&format!(
             " \x1b[2m· {}\x1b[0m \x1b[32m{:.1}%\x1b[0m",

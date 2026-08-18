@@ -177,7 +177,7 @@ impl AgentPanelState {
             lines.push(selection_line(
                 self.selected == position + 1,
                 &render_entry_left(entry, col_width, frame),
-                &format!("{}{viewing_suffix}", entry.label),
+                &format!("{}{viewing_suffix}", render_entry_title(entry)),
             ));
         }
         lines
@@ -292,6 +292,78 @@ fn selection_line(selected: bool, left: &str, title: &str) -> String {
     format!("{marker}{left}{COL_GAP}{title}")
 }
 
+/// 组装条目右栏：类型 · 描述 · 当前阶段 · 步数 · 时长。
+///
+/// 面板一行要同时回答「这是谁、在做什么、跑了多久、预算还剩多少」。
+/// 按重要性从左往右排，窄终端下先被截掉的是尾部的次要信息。
+///
+/// 参数:
+/// - `entry`: 子智能体概览条目
+///
+/// 返回:
+/// - 右栏纯文本
+fn render_entry_title(entry: &SubagentOverviewEntry) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(agent_type) = entry
+        .agent_type
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        parts.push(clip_chars(agent_type, 14));
+    }
+    parts.push(clip_chars(entry.label.trim(), 36));
+    if let Some(detail) = entry
+        .detail
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        parts.push(clip_chars(detail, 28));
+    }
+    if let Some((step, max_steps)) = entry.progress {
+        parts.push(format!("{step}/{max_steps}"));
+    }
+    if let Some(elapsed) = entry.elapsed_seconds.filter(|seconds| *seconds > 0) {
+        parts.push(format_elapsed(elapsed));
+    }
+    parts.join(" · ")
+}
+
+/// 按字符数截断，超长时以省略号收尾。
+///
+/// 参数:
+/// - `text`: 原始文本
+/// - `max_chars`: 最大字符数
+///
+/// 返回:
+/// - 截断后的文本
+fn clip_chars(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+    let kept: String = text.chars().take(max_chars.saturating_sub(1)).collect();
+    format!("{kept}…")
+}
+
+/// 把秒数压成面板可读的短时长。
+///
+/// 参数:
+/// - `seconds`: 运行时长
+///
+/// 返回:
+/// - 形如 42s / 3m07s / 2h05m 的短文本
+fn format_elapsed(seconds: u64) -> String {
+    if seconds < 60 {
+        return format!("{seconds}s");
+    }
+    let minutes = seconds / 60;
+    if minutes < 60 {
+        return format!("{minutes}m{:02}s", seconds % 60);
+    }
+    format!("{}h{:02}m", minutes / 60, minutes % 60)
+}
+
 /// 格式化 token 左栏纯文本。
 fn format_token_plain(tokens: u64) -> String {
     format_k(usize::try_from(tokens).unwrap_or(usize::MAX))
@@ -387,6 +459,58 @@ fn render_entry_left(entry: &SubagentOverviewEntry, width: usize, frame: usize) 
 mod tests {
     use super::*;
 
+    /// 【终端】【agent 面板】条目行同时给出身份、当前动作与进度。
+    ///
+    /// 此前右栏只有一个「Delegating + 描述」，同屏几个子智能体时
+    /// 除了描述本身没有任何可区分信息。
+    #[test]
+    fn entry_title_combines_identity_and_progress() {
+        let entry = SubagentOverviewEntry {
+            cell_index: 0,
+            label: "诗歌文本多阶段分析".to_string(),
+            status: "run",
+            running: true,
+            viewing: false,
+            detail: Some("Reading foo.rs".to_string()),
+            tokens: Some(12_300),
+            agent_type: Some("explore".to_string()),
+            progress: Some((3, 20)),
+            elapsed_seconds: Some(134),
+        };
+
+        assert_eq!(
+            render_entry_title(&entry),
+            "explore · 诗歌文本多阶段分析 · Reading foo.rs · 3/20 · 2m14s"
+        );
+    }
+
+    /// 缺失的可选字段整段省略，不留下空的分隔符。
+    #[test]
+    fn entry_title_omits_missing_segments() {
+        let entry = SubagentOverviewEntry {
+            cell_index: 0,
+            label: "查资料".to_string(),
+            status: "run",
+            running: true,
+            viewing: false,
+            detail: None,
+            tokens: None,
+            agent_type: None,
+            progress: None,
+            elapsed_seconds: None,
+        };
+
+        assert_eq!(render_entry_title(&entry), "查资料");
+    }
+
+    /// 时长在秒 / 分 / 小时之间正确进位。
+    #[test]
+    fn elapsed_is_formatted_compactly() {
+        assert_eq!(format_elapsed(42), "42s");
+        assert_eq!(format_elapsed(134), "2m14s");
+        assert_eq!(format_elapsed(7_500), "2h05m");
+    }
+
     /// 构造测试概览条目。
     fn entry(cell_index: usize, label: &str, running: bool) -> SubagentOverviewEntry {
         SubagentOverviewEntry {
@@ -397,6 +521,9 @@ mod tests {
             viewing: false,
             detail: None,
             tokens: None,
+            agent_type: None,
+            progress: None,
+            elapsed_seconds: None,
         }
     }
 

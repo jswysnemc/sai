@@ -35,6 +35,12 @@ pub(crate) struct SubagentOverview {
     pub(crate) detail: Option<String>,
     /// 累计消耗的 token 估算
     pub(crate) tokens: Option<u64>,
+    /// 子智能体类型（general / explore / 自定义档案），并发多个时用来区分
+    pub(crate) agent_type: Option<String>,
+    /// 已执行步数与预算，反映还能跑多久
+    pub(crate) progress: Option<(usize, usize)>,
+    /// 运行时长（秒）；终态取最后一次更新与启动的间隔
+    pub(crate) elapsed_seconds: Option<u64>,
 }
 
 /// 可持续更新的子智能体 TUI 单元。
@@ -55,9 +61,13 @@ impl SubagentCell {
     /// 返回:
     /// - 空时间线单元
     pub(crate) fn new(arguments: String) -> Self {
+        // 针对已有子智能体的调用（wait / status / send / result）在参数里就带着目标 ID。
+        // 此前只从工具输出里解析，进行中的调用因而拿不到 ID：既无法与 start 归并成同一
+        // 条目（面板上每个 wait 各占一行），也取不到运行时快照（只能显示参数摘要）。
+        let subagent_id = subagent_id_from_arguments(&arguments);
         Self {
             arguments,
-            subagent_id: None,
+            subagent_id,
             parts: Vec::new(),
             outcome: None,
         }
@@ -82,9 +92,12 @@ impl SubagentCell {
             .and_then(|id| crate::tools::subagent_state::subagent_snapshot(id).ok());
         let status = status_key(self, snapshot.as_ref());
         let tense = ToolVerbTense::from_done(status != "run");
+        // 面板列的是子智能体本身，动词对每一行都一样、纯属噪音；
+        // 只有拿不到快照（尚未绑定）时才退回带动词的参数摘要
         let label = snapshot
             .as_ref()
-            .map(|snapshot| format!("{} {}", tool_verb("subagent", tense), snapshot.description))
+            .map(|snapshot| snapshot.description.clone())
+            .filter(|description| !description.trim().is_empty())
             .unwrap_or_else(|| tool_event_label_tense("subagent", Some(&self.arguments), tense));
         // 存活条目附带实时阶段（工具进度 / Token 统计 / 待命提示），供面板展示
         let detail = snapshot
@@ -92,12 +105,32 @@ impl SubagentCell {
             .filter(|_| status == "run" || status == "idle")
             .and_then(|snapshot| snapshot.phase.clone());
         let tokens = snapshot.as_ref().and_then(snapshot_tokens);
+        let agent_type = snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.subagent_type.clone())
+            .filter(|value| !value.trim().is_empty());
+        let progress = snapshot
+            .as_ref()
+            .filter(|snapshot| snapshot.max_steps > 0)
+            .map(|snapshot| (snapshot.step, snapshot.max_steps));
+        let elapsed_seconds = snapshot.as_ref().and_then(|snapshot| {
+            // 运行中按当前时间算，终态定格在最后一次更新，避免结束后还在跳
+            let end = if status == "run" || status == "idle" {
+                crate::tools::command::unix_seconds()
+            } else {
+                snapshot.updated_at
+            };
+            end.checked_sub(snapshot.started_at)
+        });
         SubagentOverview {
             label,
             status,
             running: status == "run",
             detail,
             tokens,
+            agent_type,
+            progress,
+            elapsed_seconds,
         }
     }
 
@@ -325,6 +358,26 @@ fn compact_subagent_summary(
 ///
 /// 返回:
 /// - 可识别时返回 `(ID, 状态)`
+/// 从 subagent 工具参数中解析目标子智能体 ID。
+///
+/// start 之外的 action（wait / status / send / result / cancel / stop）都在参数里
+/// 指明目标，这让面板在调用尚未返回时就能把它归并到已有条目上。
+///
+/// 参数:
+/// - `arguments`: subagent 工具参数 JSON
+///
+/// 返回:
+/// - 解析到的子智能体 ID
+fn subagent_id_from_arguments(arguments: &str) -> Option<String> {
+    let value = serde_json::from_str::<Value>(arguments).ok()?;
+    ["subagent_id", "id"]
+        .iter()
+        .find_map(|key| value.get(*key).and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(str::to_string)
+}
+
 fn subagent_identity(output: &str) -> Option<(String, String)> {
     let value = serde_json::from_str::<Value>(output).ok()?;
     let subagent = value.get("subagent")?;

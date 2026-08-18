@@ -59,12 +59,71 @@ pub(crate) fn tool_event_label_tense(
     if name == "background_command" {
         return background_command_call_label(arguments);
     }
+    if name == "subagent" {
+        return subagent_call_label(arguments, tense);
+    }
     let action = tool_verb(name, tense);
     let suffix = arguments.and_then(|arguments| tool_suffix_from_text(name, arguments));
     match suffix {
         Some(suffix) if !suffix.trim().is_empty() => format!("{action} {suffix}"),
         _ if is_builtin_tool_verb(name) => action.to_string(),
         _ => format!("{action} {name}"),
+    }
+}
+
+/// 按 action 生成子智能体工具的展示标签。
+///
+/// subagent 是多 action 工具，只有 start 属于「委派」。此前所有 action 共用
+/// Delegating，于是 wait / status / cancel 也被显示成委派，和真正的委派混在
+/// 同一串列表里分不出区别。
+///
+/// 参数:
+/// - `arguments`: 工具参数 JSON，可能尚未闭合
+/// - `tense`: 进行中 / 已完成
+///
+/// 返回:
+/// - 面向终端展示的短标签
+fn subagent_call_label(arguments: Option<&str>, tense: ToolVerbTense) -> String {
+    let action = arguments
+        .and_then(|arguments| {
+            parse_arguments(arguments)
+                .and_then(|value| string_field(&value, &["action"]))
+                .or_else(|| string_field_from_partial(arguments, &["action"]))
+        })
+        .unwrap_or_else(|| "start".to_string());
+    let verb = subagent_verb(&action, tense);
+    let suffix = arguments.and_then(|arguments| tool_suffix_from_text("subagent", arguments));
+    match suffix {
+        Some(suffix) if !suffix.trim().is_empty() => format!("{verb} {suffix}"),
+        _ => verb.to_string(),
+    }
+}
+
+/// 子智能体各 action 对应的展示动词。
+///
+/// 参数:
+/// - `action`: 子智能体工具 action
+/// - `tense`: 进行中 / 已完成
+///
+/// 返回:
+/// - 展示动词
+fn subagent_verb(action: &str, tense: ToolVerbTense) -> &'static str {
+    match (action, tense) {
+        ("wait", ToolVerbTense::Progressive) => "Awaiting",
+        ("wait", ToolVerbTense::Perfect) => "Awaited",
+        ("status", ToolVerbTense::Progressive) => "Checking",
+        ("status", ToolVerbTense::Perfect) => "Checked",
+        ("result", ToolVerbTense::Progressive) => "Reading",
+        ("result", ToolVerbTense::Perfect) => "Read",
+        ("list", ToolVerbTense::Progressive) => "Listing",
+        ("list", ToolVerbTense::Perfect) => "Listed",
+        ("cancel", ToolVerbTense::Progressive) => "Cancelling",
+        ("cancel", ToolVerbTense::Perfect) => "Cancelled",
+        ("stop", ToolVerbTense::Progressive) => "Stopping",
+        ("stop", ToolVerbTense::Perfect) => "Stopped",
+        ("send", ToolVerbTense::Progressive) => "Messaging",
+        ("send", ToolVerbTense::Perfect) => "Messaged",
+        (_, tense) => tool_verb("subagent", tense),
     }
 }
 
@@ -613,10 +672,8 @@ fn subagent_suffix(arguments: &Value) -> Option<String> {
     if action == "start" {
         return string_field(arguments, &["description"]).map(compact_text);
     }
-    let target = string_field(arguments, &["subagent_id"])
-        .map(compact_text)
-        .unwrap_or_else(|| action.clone());
-    Some(format!("{action} {target}"))
+    // action 已经由动词表达，这里只给操作对象，避免出现「Delegating wait subagent_x」
+    string_field(arguments, &["subagent_id"]).map(compact_text)
 }
 
 /// 从不完整参数文本中提取子智能体展示对象。
@@ -632,10 +689,7 @@ fn subagent_suffix_from_partial(arguments: &str) -> Option<String> {
     if action == "start" {
         return string_field_from_partial(arguments, &["description"]).map(compact_text);
     }
-    let target = string_field_from_partial(arguments, &["subagent_id"])
-        .map(compact_text)
-        .unwrap_or_else(|| action.clone());
-    Some(format!("{action} {target}"))
+    string_field_from_partial(arguments, &["subagent_id"]).map(compact_text)
 }
 
 /// 提取加载请求的展示对象。
