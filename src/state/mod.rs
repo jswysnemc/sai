@@ -30,9 +30,9 @@ use std::sync::Arc;
 
 #[allow(unused_imports)]
 pub use compaction::{
-    classify_context_pressure, classify_context_pressure_with, compaction_trigger_chars,
-    should_compact_for_context_tokens_with, CompactionApplyOutcome, CompactionBudgetPolicy,
-    CompactionRequest, CompactionSummary, ContextPressure,
+    classify_context_pressure_with, should_compact_for_context_tokens_with, CompactionApplyOutcome,
+    CompactionBudgetPolicy, CompactionRequest, CompactionSummary, ContextPressure,
+    ResolvedCompactionPolicy,
 };
 pub(crate) use compaction::{summary_char_limit, validate_summary};
 pub use context_epoch::{ContextEpochProjection, ContextEpochSummary, ContextSourceInput};
@@ -51,7 +51,7 @@ pub use session_timeline::{
 #[allow(unused_imports)]
 pub use sessions::{
     active_session_id_for_workspace, active_state_dir, create_session,
-    create_session_for_workspace, delete_session, delete_sessions,
+    create_session_for_workspace, delete_session, delete_sessions, delete_sessions_for_workspace,
     ensure_active_session as active_session, ensure_workspace_session, list_sessions,
     list_sessions_for_workspace, locate_session_dirs, rename_session,
     state_dir_for_workspace_session, switch_session, title_from_message_public,

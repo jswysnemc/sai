@@ -14,6 +14,6 @@ pub use repository::{
 };
 pub use workspace::workspace_id_for_path;
 pub use workspace_repository::{
-    active_session_id_for_workspace, ensure_workspace_session, list_sessions,
-    list_sessions_for_workspace, state_dir_for_workspace_session,
+    active_session_id_for_workspace, delete_sessions_for_workspace, ensure_workspace_session,
+    list_sessions, list_sessions_for_workspace, state_dir_for_workspace_session,
 };

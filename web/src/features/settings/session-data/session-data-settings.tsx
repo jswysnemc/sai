@@ -20,6 +20,7 @@ export function SessionDataSettings() {
   const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
+  const [deleteWarning, setDeleteWarning] = useState<string | null>(null);
   const sessions = useQuery({
     queryKey: ["session-data"],
     queryFn: api.sessionData.list
@@ -31,24 +32,23 @@ export function SessionDataSettings() {
       await queryClient.invalidateQueries({ queryKey: ["session-data"] });
     }
   });
-  const deleteSession = useMutation({
-    mutationFn: (id: string) => api.sessions.remove(id),    onSuccess: async (_result, id) => {
-      if (expandedId?.endsWith(`/${id}`)) setExpandedId(null);
-      setSelectedKeys((current) => {
-        const next = new Set(current);
-        for (const key of next) if (key.endsWith(`/${id}`)) next.delete(key);        return next;
-      });
-      await invalidateSessionQueries(queryClient, id);
-    }
-  });
-  const deleteManySessions = useMutation({
-    // 删除接口按会话逐个调用；串行执行避免同时写会话索引
-    mutationFn: async (ids: string[]) => {
-      for (const id of ids) await api.sessions.remove(id);
-    },
-    onSuccess: async () => {
+  const deleteSessions = useMutation({
+    // 删除按工作区定位：此前复用只带会话 ID 的接口，删别的工作区的会话会静默失败
+    mutationFn: (targets: SessionDataSummary[]) =>
+      api.sessionData.deleteMany(targets.map(toSelection)),
+    onSuccess: async (result) => {
+      // 后端会报告索引里找不到的会话，必须显式提示，不能当作删除成功
+      setDeleteWarning(
+        result.missing_ids.length > 0
+          ? t(
+              `${result.missing_ids.length} sessions were not found and remain in the list`,
+              `${result.missing_ids.length} 个会话未找到，仍保留在列表中`
+            )
+          : null
+      );
       setExpandedId(null);
       setSelectedKeys(new Set());
+      await Promise.all(result.deleted_ids.map((id) => invalidateSessionQueries(queryClient, id)));
       await queryClient.invalidateQueries({ queryKey: ["session-data"] });
       await queryClient.invalidateQueries({ queryKey: ["sessions"] });
     }
@@ -58,8 +58,8 @@ export function SessionDataSettings() {
   const selectedItems = items.filter((item) => selectedKeys.has(sessionKey(item)));
   const totalBytes = items.reduce((sum, session) => sum + session.total_bytes, 0);
   const allSelected = items.length > 0 && selectedItems.length === items.length;
-  const busy = clearSession.isPending || deleteSession.isPending || deleteManySessions.isPending;
-  const error = sessions.error ?? clearSession.error ?? deleteSession.error ?? deleteManySessions.error;
+  const busy = clearSession.isPending || deleteSessions.isPending;
+  const error = sessions.error ?? clearSession.error ?? deleteSessions.error;
 
   /**
    * 切换单个会话的选择状态。
@@ -129,7 +129,7 @@ export function SessionDataSettings() {
       confirmLabel: t("Delete", "删除"),
       danger: true
     });
-    if (accepted) deleteSession.mutate(session.id);
+    if (accepted) deleteSessions.mutate([session]);
   };
 
   /**
@@ -150,7 +150,7 @@ export function SessionDataSettings() {
       danger: true
     });
     if (accepted) {
-      deleteManySessions.mutate(selected.map((session) => session.id));
+      deleteSessions.mutate(selected);
     }
   };
 
@@ -192,6 +192,7 @@ export function SessionDataSettings() {
 
       {sessions.isLoading && <div className="session-data-empty">{t("Loading session data", "正在读取会话数据")}</div>}
       {error && <div className="session-data-error">{error.message}</div>}
+      {deleteWarning && <div className="session-data-notice">{deleteWarning}</div>}
       {!sessions.isLoading && items.length === 0 && (
         <div className="session-data-empty">{t("No session data", "暂无会话数据")}</div>
       )}

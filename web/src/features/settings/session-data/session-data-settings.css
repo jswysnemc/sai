@@ -262,6 +262,16 @@
   color: var(--danger);
 }
 
+/* 部分会话未被删除时的提示：不是请求失败，但也不能当成全部成功 */
+.session-data-notice {
+  padding: var(--space-lg);
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--line));
+  border-radius: var(--radius-2);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
 @media (max-width: 50rem) {
   .session-data-row-main {
     align-items: flex-start;

@@ -76,7 +76,8 @@ import type {
   SessionDebugRequest,
   ToolResultResponse,
   SessionDataSummary,
-  SessionDataSelection
+  SessionDataSelection,
+  SessionDataDeleteResult
 } from "./contracts";
 import { ApiError } from "./api-error";
 import { detectInitialLocale, text } from "../features/i18n/locale";
@@ -244,6 +245,20 @@ export const api = {
           provider_id: selection?.providerId,
           model: selection?.model
         })
+      }),
+    updateCompactionPolicy: (id: string, input: {
+      compaction_ratio?: number;
+      compaction_reserve_tokens?: number;
+      reset?: boolean;
+    }) =>
+      apiRequest<{
+        compaction_ratio: number;
+        compaction_reserve_tokens: number;
+        compaction_trigger_tokens: number;
+        compaction_policy_override: boolean;
+      }>(`/api/sessions/${id}/compaction-policy`, {
+        method: "PATCH",
+        body: JSON.stringify(input)
       })
   },
   sessionData: {
@@ -254,6 +269,12 @@ export const api = {
       }),
     clearMany: (sessions: SessionDataSelection[]) =>
       apiRequest<{ cleared: boolean; cleared_ids: string[] }>("/api/session-data/clear", {
+        method: "POST",
+        body: JSON.stringify({ sessions })
+      }),
+    // 删除必须带工作区：各工作区可能存在同名会话，只按 ID 删会落到当前工作区的作用域
+    deleteMany: (sessions: SessionDataSelection[]) =>
+      apiRequest<SessionDataDeleteResult>("/api/session-data/delete", {
         method: "POST",
         body: JSON.stringify({ sessions })
       })

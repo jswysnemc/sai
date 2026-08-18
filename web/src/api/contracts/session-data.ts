@@ -29,3 +29,9 @@ export type SessionDataSelection = {
   workspace_id: string;
   session_id: string;
 };
+
+export type SessionDataDeleteResult = {
+  deleted_ids: string[];
+  /** 索引中不存在、因而未被删除的会话 */
+  missing_ids: string[];
+};

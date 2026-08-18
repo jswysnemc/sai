@@ -186,4 +186,5 @@ export type {
   SessionDataItem,
   SessionDataSummary,
   SessionDataSelection,
+  SessionDataDeleteResult,
 } from "./contracts/session-data";

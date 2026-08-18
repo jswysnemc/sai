@@ -59,6 +59,18 @@ struct ClearSessionDataResponse {
     cleared_ids: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct DeleteSessionDataRequest {
+    sessions: Vec<SessionDataSelection>,
+}
+
+#[derive(Debug, Serialize)]
+struct DeleteSessionDataResponse {
+    deleted_ids: Vec<String>,
+    /// 索引中不存在、因而未被删除的会话，交给前端提示而不是静默吞掉
+    missing_ids: Vec<String>,
+}
+
 #[derive(Default)]
 struct StateMetrics {
     turn_count: Option<usize>,
@@ -86,6 +98,7 @@ pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
         .route("/api/session-data", get(list))
         .route("/api/session-data/clear", post(clear_many))
+        .route("/api/session-data/delete", post(delete_many))
         .route("/api/session-data/:id/clear", post(clear))
 }
 
@@ -122,13 +135,27 @@ async fn clear(
     Path(id): Path<String>,
 ) -> WebResult<Json<ClearSessionDataResponse>> {
     let workspace_id = super::sessions::reject_session_run(&state, &id).await?;
-    let owner_key = super::session_runtime::reject_running_subagents(&state.paths, &id)?;
+    // 1. 必须按会话所属工作区定位：locate_session_dirs 会先扫服务端当前工作区，
+    //    对各工作区都存在的 default 等同名会话会清掉错误目标
+    let workspaces = state.workspaces.list().map_err(WebError::from)?;
+    let workspace_path = workspaces
+        .iter()
+        .find(|workspace| workspace.id == workspace_id)
+        .map(|workspace| PathBuf::from(&workspace.path))
+        .ok_or_else(|| WebError::not_found(format!("workspace not found: {workspace_id}")))?;
+    let owner_key = super::session_runtime::reject_running_subagents_for_workspace(
+        &state.paths,
+        &workspace_path,
+        &id,
+    )?;
     let paths = state.paths.clone();
     let clear_id = id.clone();
-    tokio::task::spawn_blocking(move || clear_session_data(&paths, &clear_id))
-        .await
-        .map_err(|error| WebError::from(anyhow::anyhow!(error)))?
-        .map_err(|error| WebError::bad_request(error.to_string()))?;
+    tokio::task::spawn_blocking(move || {
+        clear_session_data_for_workspace(&paths, &workspace_path, &clear_id)
+    })
+    .await
+    .map_err(|error| WebError::from(anyhow::anyhow!(error)))?
+    .map_err(|error| WebError::bad_request(error.to_string()))?;
     super::session_runtime::clear_session_runtime_records(&owner_key, &id);
     state
         .runs
@@ -236,6 +263,121 @@ async fn clear_selected_sessions(
     Ok(Json(ClearSessionDataResponse {
         cleared: true,
         cleared_ids: selections.into_iter().map(|item| item.session_id).collect(),
+    }))
+}
+
+/// 删除多个工作区中的会话及其全部数据。
+///
+/// 会话按工作区分作用域存放，各工作区可以有同名的 default 等会话，因此删除
+/// 必须带上所属工作区。此前前端复用了只按会话 ID 删除的接口，落到服务端当前
+/// 工作区的作用域里查找，别的工作区的会话在索引中找不到，请求返回成功却一个
+/// 都没删掉。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `request`: 待删除的工作区与会话选择
+///
+/// 返回:
+/// - 实际删除与未找到的会话标识
+async fn delete_many(
+    State(state): State<WebAppState>,
+    Json(request): Json<DeleteSessionDataRequest>,
+) -> WebResult<Json<DeleteSessionDataResponse>> {
+    let selections = dedupe_selections(request.sessions);
+    if selections.is_empty() {
+        return Err(WebError::bad_request(
+            "at least one session must be selected",
+        ));
+    }
+
+    // 1. 把每个选择解析到所属工作区的真实路径
+    let workspaces = state.workspaces.list().map_err(WebError::from)?;
+    let resolved = selections
+        .iter()
+        .map(|selection| {
+            let workspace = workspaces
+                .iter()
+                .find(|workspace| workspace.id == selection.workspace_id)
+                .ok_or_else(|| {
+                    WebError::not_found(format!("workspace not found: {}", selection.workspace_id))
+                })?;
+            Ok((selection.clone(), PathBuf::from(&workspace.path)))
+        })
+        .collect::<WebResult<Vec<_>>>()?;
+
+    // 2. 运行中的会话与子智能体一律拒绝，避免删掉正在写入的目录
+    let mut owners = Vec::with_capacity(resolved.len());
+    for (selection, workspace_path) in &resolved {
+        let owner_key = super::session_runtime::reject_running_subagents_for_workspace(
+            &state.paths,
+            workspace_path,
+            &selection.session_id,
+        )?;
+        if state
+            .runs
+            .is_session_active(&selection.workspace_id, &selection.session_id)
+            .await
+        {
+            return Err(WebError::conflict(
+                "stop the session run before modifying it",
+            ));
+        }
+        owners.push((
+            selection.session_id.clone(),
+            selection.workspace_id.clone(),
+            owner_key,
+        ));
+    }
+
+    // 3. 按工作区归组，同一工作区的多个会话共用一次索引写入
+    let mut grouped: Vec<(PathBuf, Vec<String>)> = Vec::new();
+    for (selection, workspace_path) in &resolved {
+        match grouped
+            .iter_mut()
+            .find(|(path, _)| path == workspace_path)
+        {
+            Some((_, ids)) => ids.push(selection.session_id.clone()),
+            None => grouped.push((workspace_path.clone(), vec![selection.session_id.clone()])),
+        }
+    }
+
+    let paths = state.paths.clone();
+    let deleted_ids = tokio::task::spawn_blocking(move || {
+        let mut deleted = Vec::new();
+        for (workspace_path, session_ids) in &grouped {
+            deleted.extend(crate::state::delete_sessions_for_workspace(
+                &paths,
+                workspace_path,
+                session_ids,
+            )?);
+        }
+        Ok::<Vec<String>, anyhow::Error>(deleted)
+    })
+    .await
+    .map_err(|error| WebError::from(anyhow::anyhow!(error)))?
+    .map_err(|error| WebError::bad_request(error.to_string()))?;
+
+    // 4. 只为真正删掉的会话清理运行时痕迹
+    for (session_id, workspace_id, owner_key) in &owners {
+        if !deleted_ids.contains(session_id) {
+            continue;
+        }
+        super::session_runtime::clear_session_runtime_records(owner_key, session_id);
+        state
+            .runs
+            .remove_session_history(workspace_id, session_id)
+            .await
+            .map_err(WebError::from)?;
+    }
+
+    let missing_ids = selections
+        .iter()
+        .map(|selection| selection.session_id.clone())
+        .filter(|id| !deleted_ids.contains(id))
+        .collect::<Vec<_>>();
+    Ok(Json(DeleteSessionDataResponse {
+        deleted_ids,
+        missing_ids,
     }))
 }
 
@@ -464,19 +606,6 @@ fn collect_file_stats(path: &FilePath) -> Result<FileStats> {
     Ok(total)
 }
 
-/// 清空指定会话状态目录并重新初始化最小状态文件。
-///
-/// 参数:
-/// - `paths`: Sai 路径集合
-/// - `session_id`: 会话标识
-///
-/// 返回:
-/// - 清理结果
-fn clear_session_data(paths: &SaiPaths, session_id: &str) -> Result<()> {
-    let (_, state_dir) = crate::state::locate_session_dirs(paths, session_id)?;
-    clear_state_directory(paths, session_id, &state_dir, None)
-}
-
 /// 清空指定工作区中的会话状态目录并重新初始化最小状态文件。
 ///
 /// 参数:
@@ -606,8 +735,9 @@ mod tests {
         let paths = test_paths(temp.path());
         let workspace = temp.path().join("workspace");
         std::fs::create_dir_all(&workspace).unwrap();
+        let clear_workspace = workspace.clone();
 
-        crate::runtime_cwd::scope(workspace, async {
+        crate::runtime_cwd::scope(workspace, async move {
             let session = crate::state::create_session(&paths, Some("keep title")).unwrap();
             let store = StateStore::for_session(&paths, &session.id).unwrap();
             store.start_turn("turn-1", "question").unwrap();
@@ -617,7 +747,7 @@ mod tests {
             std::fs::write(&marker, "remove me").unwrap();
             drop(store);
 
-            clear_session_data(&paths, &session.id).unwrap();
+            clear_session_data_for_workspace(&paths, &clear_workspace, &session.id).unwrap();
 
             let metadata = crate::state::list_sessions(&paths)
                 .unwrap()
@@ -632,5 +762,46 @@ mod tests {
             assert!(reopened.state_dir().join("profile.md").is_file());
         })
         .await;
+    }
+
+    /// 会话数据面板横跨所有工作区，删除必须落到会话真正所属的作用域。
+    ///
+    /// 回归此前的缺陷：删除只按会话 ID 在服务端当前工作区的索引里查找，
+    /// 别的工作区的会话找不到就静默返回成功，界面刷新后会话原样还在。
+    #[tokio::test]
+    async fn deletes_sessions_from_a_non_current_workspace() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path());
+        let workspace_a = temp.path().join("workspace-a");
+        let workspace_b = temp.path().join("workspace-b");
+        std::fs::create_dir_all(&workspace_a).unwrap();
+        std::fs::create_dir_all(&workspace_b).unwrap();
+
+        // 1. 在工作区 B 里建一个会话
+        let session_b = crate::runtime_cwd::scope(workspace_b.clone(), async {
+            crate::state::create_session(&paths, Some("b session")).unwrap()
+        })
+        .await;
+
+        // 2. 把当前工作区切到 A，此时 B 的会话不在当前作用域的索引里
+        let target_b = session_b.id.clone();
+        let deleted = crate::runtime_cwd::scope(workspace_a.clone(), async {
+            let stale = crate::state::delete_sessions(&paths, &[target_b.clone()]).unwrap();
+            assert!(
+                stale.is_empty(),
+                "按当前工作区删除跨工作区会话本就删不掉，这里固定住该前提"
+            );
+            crate::state::delete_sessions_for_workspace(&paths, &workspace_b, &[target_b.clone()])
+                .unwrap()
+        })
+        .await;
+
+        // 3. 指定工作区后必须真的删掉
+        assert_eq!(deleted, vec![session_b.id.clone()]);
+        let remaining = crate::state::list_sessions_for_workspace(&paths, &workspace_b).unwrap();
+        assert!(
+            !remaining.iter().any(|item| item.id == session_b.id),
+            "会话应已从所属工作区的索引中移除"
+        );
     }
 }

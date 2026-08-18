@@ -1,8 +1,8 @@
 use super::model::SessionInfo;
 use super::repository::{
-    current_session_scope, ensure_default_session_for_base, migrate_legacy_sessions_to_workspace,
-    read_current_session_id_from_base, sanitize_session_id, save_sessions_to_base,
-    session_state_dir, sort_sessions,
+    current_session_scope, delete_sessions_in_base, ensure_default_session_for_base,
+    migrate_legacy_sessions_to_workspace, read_current_session_id_from_base, sanitize_session_id,
+    save_sessions_to_base, session_state_dir, sort_sessions,
 };
 use super::workspace::workspace_scope_for_path;
 use crate::paths::SaiPaths;
@@ -101,6 +101,30 @@ pub fn ensure_workspace_session(
     save_sessions_to_base(&scope.state_dir, &sessions)?;
     std::fs::create_dir_all(session_state_dir(&scope.state_dir, &session.id))?;
     Ok(session)
+}
+
+/// 删除指定工作区中的会话。
+///
+/// 会话数据面板横跨所有工作区，删除请求必须带上会话所属的工作区，否则会落到
+/// 当前工作区的作用域里查找，别的工作区的会话就会静默地删不掉。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+/// - `workspace_path`: 工作区目录
+/// - `session_ids`: 待删除会话 ID 列表
+///
+/// 返回:
+/// - 实际删除的会话 ID 列表
+pub fn delete_sessions_for_workspace(
+    paths: &SaiPaths,
+    workspace_path: &Path,
+    session_ids: &[String],
+) -> Result<Vec<String>> {
+    let scope = workspace_scope_for_path(paths, workspace_path);
+    migrate_legacy_sessions_to_workspace(paths, &scope.state_dir)?;
+    // 索引缺失时先补默认会话，避免空索引下把删除误判成「会话不存在」
+    ensure_default_session_for_base(&scope.state_dir)?;
+    delete_sessions_in_base(&scope.state_dir, session_ids)
 }
 
 /// 返回指定工作区和会话的状态目录。

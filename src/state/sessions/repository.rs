@@ -152,12 +152,31 @@ pub fn delete_session(paths: &SaiPaths, session_id: &str) -> Result<bool> {
 /// - 实际删除的会话 ID 列表
 pub fn delete_sessions(paths: &SaiPaths, session_ids: &[String]) -> Result<Vec<String>> {
     let scope = current_session_scope(paths)?;
+    delete_sessions_in_base(&scope.state_dir, session_ids)
+}
+
+/// 在指定会话作用域内删除会话并仅写入一次索引。
+///
+/// 会话按工作区分目录存放，同名 ID（例如各工作区都有的 default）只在自己的
+/// 作用域里有效。删除必须落到会话真正所属的作用域，否则索引里找不到这个 ID，
+/// 会静默地一个都删不掉。
+///
+/// 参数:
+/// - `state_dir`: 会话作用域的状态目录
+/// - `session_ids`: 待删除会话 ID 列表
+///
+/// 返回:
+/// - 实际删除的会话 ID 列表
+pub(super) fn delete_sessions_in_base(
+    state_dir: &Path,
+    session_ids: &[String],
+) -> Result<Vec<String>> {
     let requested = session_ids
         .iter()
         .map(|id| id.trim())
         .filter(|id| !id.is_empty())
         .collect::<std::collections::BTreeSet<_>>();
-    let mut sessions = read_sessions_from_base(&scope.state_dir)?;
+    let mut sessions = read_sessions_from_base(state_dir)?;
     let deleted = sessions
         .iter()
         .filter(|session| requested.contains(session.id.as_str()))
@@ -168,21 +187,21 @@ pub fn delete_sessions(paths: &SaiPaths, session_ids: &[String]) -> Result<Vec<S
     }
     // 1. 允许删除任意会话（含 default），不再强制保留至少一个
     sessions.retain(|session| !requested.contains(session.id.as_str()));
-    save_sessions_to_base(&scope.state_dir, &sessions)?;
+    save_sessions_to_base(state_dir, &sessions)?;
     for session_id in &deleted {
-        let state_dir = session_state_dir(&scope.state_dir, session_id);
-        if state_dir.exists() {
-            std::fs::remove_dir_all(state_dir)?;
+        let session_dir = session_state_dir(state_dir, session_id);
+        if session_dir.exists() {
+            std::fs::remove_dir_all(session_dir)?;
         }
     }
     // 2. 当前会话被删时，切到剩余最新会话；若已删空则写入空标记，下一次 ensure 再补默认
-    let current = read_current_session_id_from_base(&scope.state_dir)?;
+    let current = read_current_session_id_from_base(state_dir)?;
     if deleted.contains(&current) {
         if let Some(fallback) = sessions.first() {
-            write_current_session_id_to_base(&scope.state_dir, &fallback.id)?;
+            write_current_session_id_to_base(state_dir, &fallback.id)?;
         } else {
             // 索引已空：清理 current，避免指向已删除目录
-            let _ = std::fs::remove_file(current_session_file(&scope.state_dir));
+            let _ = std::fs::remove_file(current_session_file(state_dir));
         }
     }
     Ok(deleted)
