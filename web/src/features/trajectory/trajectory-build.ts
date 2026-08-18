@@ -254,12 +254,14 @@ function insertCompactionRecord(
 ): void {
   const summary = compaction?.summary?.trim();
   if (!compaction || !summary) return;
+  const fromSeq = Number(compaction.compacted_from_seq ?? 0);
+  const toSeq = Number(compaction.compacted_to_seq ?? 0);
   const record: TrajectoryRecord = {
     id: "compaction",
     index: 0,
     kind: "compaction",
     turnId: null,
-    turnSeq: null,
+    turnSeq: toSeq > 0 ? toSeq : null,
     turnStart: true,
     round: 0,
     roundStart: true,
@@ -269,16 +271,65 @@ function insertCompactionRecord(
     durationMs: null,
     failed: false,
     running: false,
-    detail: { input: compaction.summary }
+    detail: {
+      input: compaction.summary,
+      compactedFromSeq: fromSeq > 0 ? fromSeq : null,
+      compactedToSeq: toSeq > 0 ? toSeq : null
+    }
   };
-  const covered = Math.min(Math.max(compaction.turn_count, 0), turns.length);
-  const insertAt = covered > 0 && covered < turns.length
-    ? lastRecordIndexForTurn(records, turns[covered - 1].turnId) + 1
-    : records.length;
+  const insertAt = compactionInsertAt(records, turns, compaction);
   records.splice(insertAt, 0, record);
   records.forEach((item, index) => {
     item.index = index + 1;
   });
+}
+
+/**
+ * 计算压缩摘要应插入的下标。
+ *
+ * 被覆盖的轮次若还在表里，插到它们后面；若压缩时已经删掉，
+ * 插到系统提示词之后、第一条剩余对话之前，避免顶上看起来从第 4 轮起跳。
+ *
+ * @param records 已按时序排好的记录
+ * @param turns 轮次分隔数据
+ * @param compaction 时间线附带的最新压缩摘要
+ * @returns 插入下标
+ */
+function compactionInsertAt(
+  records: readonly TrajectoryRecord[],
+  turns: readonly TrajectoryTurnHeader[],
+  compaction: NonNullable<SessionTimeline["compaction"]>
+): number {
+  const toSeq = Number(compaction.compacted_to_seq ?? 0);
+  if (toSeq > 0) {
+    const lastCovered = [...turns].reverse().find((turn) => turn.seq <= toSeq);
+    if (lastCovered) {
+      return lastRecordIndexForTurn(records, lastCovered.turnId) + 1;
+    }
+    return firstConversationIndex(records);
+  }
+
+  const firstSeq = turns[0]?.seq ?? 0;
+  if (firstSeq > 1 && compaction.turn_count > 0) {
+    return firstConversationIndex(records);
+  }
+
+  const covered = Math.min(Math.max(compaction.turn_count, 0), turns.length);
+  if (covered > 0 && covered < turns.length) {
+    return lastRecordIndexForTurn(records, turns[covered - 1].turnId) + 1;
+  }
+  return records.length;
+}
+
+/**
+ * 第一条属于对话轮次的记录下标；没有时落到末尾。
+ *
+ * @param records 记录表
+ * @returns 下标
+ */
+function firstConversationIndex(records: readonly TrajectoryRecord[]): number {
+  const index = records.findIndex((record) => record.turnId);
+  return index === -1 ? records.length : index;
 }
 
 /**

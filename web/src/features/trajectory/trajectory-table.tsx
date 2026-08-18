@@ -144,6 +144,13 @@ function CompactionDivider({
   onSelect: (id: string) => void;
 }) {
   const { t } = useI18n();
+  const from = record.detail.compactedFromSeq ?? 0;
+  const to = record.detail.compactedToSeq ?? 0;
+  const range = from > 0 && to > 0
+    ? from === to
+      ? t(`Turn ${from} compacted`, `第 ${from} 轮已压缩`)
+      : t(`Turns ${from}–${to} compacted`, `第 ${from}–${to} 轮已压缩`)
+    : t("Compacted context", "已压缩的上下文");
   return (
     <button
       type="button"
@@ -153,7 +160,7 @@ function CompactionDivider({
       aria-pressed={selected}
       onClick={() => onSelect(record.id)}
     >
-      <strong>{t("Compacted context", "已压缩的上下文")}</strong>
+      <strong>{range}</strong>
       {record.label && <span className="trajectory-turn-requests">{record.label}</span>}
       <span className="trajectory-compaction-summary">{record.summary}</span>
     </button>

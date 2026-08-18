@@ -76,6 +76,10 @@ export type TrajectoryRecordDetail = {
   actualRequest?: boolean;
   /** 是否为当前配置即时预览，而非历史真实请求 */
   preview?: boolean;
+  /** 压缩摘要覆盖的起始轮次序号 */
+  compactedFromSeq?: number | null;
+  /** 压缩摘要覆盖的结束轮次序号 */
+  compactedToSeq?: number | null;
 };
 
 /** 记录种类到界面标签的映射所需的双语文案对。 */

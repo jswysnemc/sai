@@ -302,6 +302,8 @@ describe("buildTrajectory 的思考与注入", () => {
       compaction: {
         applied: true,
         turn_count: 4,
+        compacted_from_seq: 1,
+        compacted_to_seq: 4,
         summary: "## 1. Primary Request\n排查崩溃",
         created_at: "2026-08-14T10:15:00Z",
         reason: "auto"
@@ -330,6 +332,48 @@ describe("buildTrajectory 的思考与注入", () => {
     });
 
     expect(model.records.at(-1)?.kind).toBe("compaction");
+  });
+
+  it("被删掉的旧轮次把压缩摘要插到剩余对话前面", () => {
+    const model = buildTrajectory({
+      turns: [
+        turn({ turn_id: "t4", seq: 4, user: { timestamp: "2026-08-14T10:20:00Z", content: "当前可用哪些ssh主机" } }),
+        turn({ turn_id: "t5", seq: 5, user: { timestamp: "2026-08-14T10:21:00Z", content: "连上local试试" } })
+      ],
+      compaction: {
+        applied: true,
+        turn_count: 3,
+        compacted_from_seq: 1,
+        compacted_to_seq: 3,
+        summary: "前三轮已折进摘要",
+        created_at: "2026-08-14T10:15:00Z",
+        reason: "auto"
+      }
+    }, {
+      source: "session_baseline",
+      content: "You are Sai.",
+      char_count: 12,
+      token_count: 10768,
+      has_instruction_files: false,
+      has_skills: false,
+      has_tools: true,
+      has_memory: false,
+      has_dynamic: false,
+      tool_count: 17,
+      sections: []
+    } as never);
+
+    expect(model.turns.map((item) => item.seq)).toEqual([4, 5]);
+    expect(model.records.map((record) => record.kind)).toEqual([
+      "system",
+      "compaction",
+      "user",
+      "assistant",
+      "user",
+      "assistant"
+    ]);
+    expect(model.records[1].detail.compactedFromSeq).toBe(1);
+    expect(model.records[1].detail.compactedToSeq).toBe(3);
   });
 
   it("把供应商用户消息里的注入前缀展成插入记录", () => {

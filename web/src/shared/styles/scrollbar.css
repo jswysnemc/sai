@@ -1,10 +1,16 @@
-/* 全局滚动条：默认隐藏，容器悬停或滚动时短暂显示，并移除三角步进按钮。
+/* 全局滚动条：默认隐藏，容器悬停或滚动时短暂显示极淡滑块，
+ * 指针停在滑块上才略加深，并移除三角步进按钮。
  *
  * 背景：标准 scrollbar-width/scrollbar-color 与 ::-webkit-scrollbar 自定义
  * 同时存在时，Linux 经典滚动条模式下的 Blink 可能优先标准属性，从而忽略
  * webkit 伪元素里的 button display:none。因此标准属性仅对 Gecko 生效，
  * Blink/Safari/Edge 完全走 webkit 自定义路径。
  */
+
+:root {
+  --scrollbar-thumb: color-mix(in srgb, var(--ink-soft) 22%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--ink-soft) 48%, transparent);
+}
 
 /* 1. Gecko 专用：默认透明，悬停或滚动中再显示细滚动条 */
 @supports not selector(::-webkit-scrollbar-button) {
@@ -15,7 +21,7 @@
 
   *:hover,
   *.is-scrolling {
-    scrollbar-color: color-mix(in srgb, var(--ink-soft) 48%, transparent) transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
   }
 }
 
@@ -81,13 +87,13 @@
 
 *:hover::-webkit-scrollbar-thumb,
 *.is-scrolling::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--ink-soft) 48%, transparent);
+  background: var(--scrollbar-thumb);
   background-clip: padding-box;
 }
 
 *:hover::-webkit-scrollbar-thumb:hover,
 *.is-scrolling::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--ink-soft) 72%, transparent);
+  background: var(--scrollbar-thumb-hover);
   background-clip: padding-box;
 }
 
@@ -115,5 +121,5 @@
 
 .xterm .xterm-viewport:hover,
 .xterm .xterm-viewport.is-scrolling {
-  scrollbar-color: color-mix(in srgb, var(--ink-soft) 48%, transparent) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
