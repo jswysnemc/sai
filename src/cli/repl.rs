@@ -217,9 +217,11 @@ pub(super) async fn run_repl(
                         )?;
                         runtime.redraw()?;
                     }
-                    crate::control_commands::ControlCommand::Context => {
+                    crate::control_commands::ControlCommand::Context { update } => {
                         runtime.record_user(mode, input.to_string(), false)?;
-                        match crate::control_commands::context_info_for_mode(paths, mode) {
+                        match crate::control_commands::context_info_for_mode_with_update(
+                            paths, mode, update,
+                        ) {
                             Ok(info) => runtime.record_meta(info)?,
                             Err(err) => runtime.record_meta(err.to_string())?,
                         }
@@ -635,6 +637,11 @@ pub(super) async fn run_repl(
             agent.switch_mode(mode, registry)?;
         }
         agent.prepare_for_turn()?;
+        // 用户主动发话：清除积压的未消费回执，否则它们会在下一次等待里整包注入，
+        // 并因为 take_ready 排在读键之前而持续抢走输入
+        if !goal_continuation {
+            let _ = agent.discard_stale_external_completion_notices().await;
+        }
         let reasoning_mode = transcript_options.reasoning_mode;
         let tool_call_mode = transcript_options.tool_call_mode;
         let render_options = stream_render_options(&config);

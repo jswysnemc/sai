@@ -94,8 +94,11 @@ pub(super) async fn execute_automatic_repl_turn(
     );
     let batch = automatic.batch;
     let outcome = execute_repl_turn(paths, config, agent, runtime, automatic.submission).await?;
-    // 只在成功后确认清除回执；中断或失败时保留，下次等待重新投递
-    if !outcome.interrupted && outcome.result.is_ok() {
+    // 中断同样算作已消费：用户按下 Ctrl+C 就是看到了这批回执并主动放弃。
+    // 若此时不确认，下一次等待会立刻重投同一批，而 take_ready 又排在读键之前，
+    // 用户既抢不回输入、也退不出去，形成中断→重投→再中断的活锁。
+    // 仅在真正失败（provider 报错）时保留，留给下次重试。
+    if outcome.interrupted || outcome.result.is_ok() {
         if let Some(batch) = batch.as_ref() {
             let _ = agent.acknowledge_external_events(batch);
         }

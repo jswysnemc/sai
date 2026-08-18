@@ -143,16 +143,22 @@ pub(super) fn read_repl_input(
     }
     redraw_input!()?;
     loop {
-        if let Some(wake) = external_events.take_ready() {
-            terminal_guard.finish(&mut stdout)?;
-            return Ok(Some(ReplInputEvent::Automatic {
-                mode,
-                wake: wake?,
-                draft: ReplInputDraft {
-                    text: input,
-                    clipboard_state,
-                },
-            }));
+        // 回执让位给用户按键：自动轮一旦启动就接管终端，而 take_ready 原本无条件
+        // 排在读键之前，用户连第一个字符都打不进去（input 始终为空，靠它判断无效）。
+        // 先做一次零超时探测，终端里已有待读事件就走正常按键流程。
+        let user_pending = event::poll(Duration::from_secs(0))?;
+        if !user_pending {
+            if let Some(wake) = external_events.take_ready() {
+                terminal_guard.finish(&mut stdout)?;
+                return Ok(Some(ReplInputEvent::Automatic {
+                    mode,
+                    wake: wake?,
+                    draft: ReplInputDraft {
+                        text: input,
+                        clipboard_state,
+                    },
+                }));
+            }
         }
         let queued_event = runtime.pop_input_event();
         if queued_event.is_none() {

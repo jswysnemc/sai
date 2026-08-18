@@ -133,6 +133,43 @@ impl Agent {
         acknowledge_finished_notices(&owner_key, &batch.subagent_ids);
         Ok(())
     }
+
+    /// 静默清除积压的外部完成回执，不投递给模型。
+    ///
+    /// 回执的确认延后到轮次成功结束，因此中断、崩溃、跨进程恢复都会留下未确认的
+    /// 回执。用户主动发话说明他要开始新话题，此时把陈年回执整包注入既打断意图，
+    /// 也会在上下文里反复堆积同一条内容。这里在用户输入落地前把它们确认掉。
+    ///
+    /// 这是 take_event_batch 处「投递即清除会让回执永久丢失」那段论证所依赖的
+    /// 安全阀：两者缺一不可，只保留延后确认会让未消费回执变成永久的自动触发源。
+    ///
+    /// 返回:
+    /// - 清除是否成功
+    pub(crate) async fn discard_stale_external_completion_notices(&self) -> Result<()> {
+        let owner_key = self.state.state_dir().display().to_string();
+        let session_id = self.state.session_id();
+
+        // 1. 子 Agent 回执按 owner 作用域收集，不跨会话
+        let subagent_ids = pending_finished_notices(&owner_key)
+            .into_iter()
+            .map(|notice| notice.id)
+            .collect::<Vec<_>>();
+
+        // 2. 后台命令回执只取归属本会话、且已进入终态的那些
+        let (background_notices, _) =
+            poll_session_background_completions(&self.paths, &self.config, session_id).await?;
+        let background_ids = background_notices
+            .into_iter()
+            .map(|notice| notice.task_id)
+            .collect::<Vec<_>>();
+
+        if subagent_ids.is_empty() && background_ids.is_empty() {
+            return Ok(());
+        }
+        acknowledge_background_completions(&self.paths, session_id, &background_ids)?;
+        acknowledge_finished_notices(&owner_key, &subagent_ids);
+        Ok(())
+    }
 }
 
 impl ExternalEventMonitor {
