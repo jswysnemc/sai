@@ -4,7 +4,7 @@ import { Button } from "../../../shared/ui/button/button";
 import { TextArea } from "../../../shared/ui/form/text-area";
 import type { LiveRunState } from "../run-event-reducer";
 import { useI18n } from "../../i18n/use-i18n";
-import { UserMessageBubble } from "../message/user-message-bubble";
+import { QueuedMessagePreview } from "./queued-message-preview";
 
 type QueueAction = "move" | "update" | "remove";
 
@@ -150,7 +150,8 @@ export function QueuedMessageRow(props: QueuedMessageRowProps) {
             aria-label={t("Edit queued message", "编辑排队消息")}
           />
         ) : (
-          <UserMessageBubble
+          <QueuedMessagePreview
+            position={props.position}
             content={props.run.userInput}
             imageUrls={props.run.imageUrls}
           />

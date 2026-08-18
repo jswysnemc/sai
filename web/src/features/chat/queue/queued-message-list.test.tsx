@@ -38,7 +38,40 @@ describe("QueuedMessageList", () => {
     expect(html).toContain("当前任务结束后立即执行");
     expect(html).toContain("编辑排队消息");
     expect(html).toContain("删除排队消息");
-    expect(html).toContain('class="message user-message"');
+    // 队列行渲染为紧凑预览而非聊天气泡：气泡的 fit-content 宽度与投影不适合并排成列表
+    expect(html).toContain('class="queued-message-preview"');
+    expect(html).not.toContain("user-bubble");
+  });
+
+  it("numbers each row and surfaces the queue length", () => {
+    const html = renderToStaticMarkup(
+      <QueuedMessageList
+        runs={[queuedRun("run-1", "first"), queuedRun("run-2", "second")]}
+        onUpdate={vi.fn()}
+        onMove={vi.fn()}
+        onRemove={vi.fn()}
+        onError={vi.fn()}
+      />
+    );
+
+    expect(html).toContain("2 条待发送");
+    expect(html).toContain('class="queued-message-index" aria-hidden="true">1<');
+    expect(html).toContain('class="queued-message-index" aria-hidden="true">2<');
+  });
+
+  it("marks image-only messages instead of rendering an empty row", () => {
+    const html = renderToStaticMarkup(
+      <QueuedMessageList
+        runs={[{ ...queuedRun("run-1", "  "), imageUrls: ["/a.png", "/b.png"] }]}
+        onUpdate={vi.fn()}
+        onMove={vi.fn()}
+        onRemove={vi.fn()}
+        onError={vi.fn()}
+      />
+    );
+
+    expect(html).toContain("仅图片");
+    expect(html).toContain("附带 2 张图片");
   });
 
   it("moves a queued message to the requested position without mutating input", () => {

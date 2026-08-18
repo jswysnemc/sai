@@ -1,21 +1,47 @@
 .queued-message-list {
   width: 100%;
-  margin: var(--space-lg) 0 var(--space-2xl);
+  margin: var(--space-lg) 0 var(--space-xl);
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-3);
   background: color-mix(in srgb, var(--paper-deep) 72%, var(--paper));
 }
 
+/* 表头：此前只有 aria-label，视觉上认不出这一块是待发送队列 */
+.queued-message-list-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+  height: 1.75rem;
+  padding: 0 var(--space-sm);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+}
+
+.queued-message-list-head span {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-control);
+}
+
+.queued-message-list-head small {
+  font: 400 var(--text-2xs)/var(--leading-control) var(--font-code);
+  opacity: 0.8;
+}
+
 .queued-message-row {
   display: grid;
   grid-template-columns: 1.75rem minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-sm);
+  gap: var(--space-2xs);
   min-width: 0;
-  min-height: 2.5rem;
-  padding: var(--space-2xs) var(--space-sm);
+  min-height: 2.25rem;
+  padding: var(--space-3xs) var(--space-2xs);
   transition: background var(--transition-fast), opacity var(--transition-fast);
+}
+
+/* 行之间给一条细线，只靠 hover 背景分不出边界 */
+.queued-message-row + .queued-message-row {
+  border-top: 1px solid var(--line-soft);
 }
 
 .queued-message-row:hover,
@@ -31,9 +57,12 @@
 .queued-message-icon-action.ui-button {
   width: 1.75rem;
   min-width: 1.75rem;
+  height: 1.75rem;
   min-height: 1.75rem;
   padding: 0;
   border-color: transparent;
+  background: transparent;
+  box-shadow: none;
   color: var(--ink-soft);
 }
 
@@ -49,53 +78,84 @@
   min-width: 0;
 }
 
-.queued-message-content .user-message {
-  justify-content: flex-start;
+/* 内容预览：序号 + 可选图片徽章 + 单行正文 */
+.queued-message-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-width: 0;
 }
 
-.queued-message-content .user-message-stack {
-  max-width: 100%;
-  justify-items: start;
+/* 队列是有序的，序号让「立即」这个动作有参照 */
+.queued-message-index {
+  flex: 0 0 auto;
+  min-width: 0.875rem;
+  color: var(--ink-soft);
+  font: 500 var(--text-2xs)/var(--leading-control) var(--font-code);
+  text-align: right;
+  opacity: 0.72;
 }
 
-.queued-message-content .user-bubble {
-  padding: var(--space-sm) var(--space-md);
+.queued-message-preview-images {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  height: 1.125rem;
+  padding: 0 var(--space-2xs);
+  border-radius: var(--radius-1);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink-soft);
+  font: 500 var(--text-2xs)/var(--leading-control) var(--font-code);
 }
 
-.queued-message-content p {
+/* 单行截断：队列只需认出是哪一条，完整内容点编辑就能看到 */
+.queued-message-preview p {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
   color: var(--ink);
-  font-size: var(--text-base);
-  line-height: var(--leading-snug);
-  white-space: pre-wrap;
+  font-size: var(--text-sm);
+  line-height: var(--leading-control);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queued-message-preview em {
+  color: var(--ink-soft);
+  font-style: normal;
 }
 
 .queued-message-editor.ui-text-area {
-  min-height: 3.75rem;
+  min-height: 3.25rem;
   max-height: 12rem;
   padding: var(--space-xs) var(--space-sm);
   resize: vertical;
   border-radius: var(--radius-2);
   background: var(--paper-raised);
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
 }
 
 .queued-message-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-2xs);
+  gap: var(--space-3xs);
   min-width: 0;
 }
 
 .queued-message-promote.ui-button {
+  height: 1.75rem;
   min-height: 1.75rem;
-  padding: 0 var(--space-sm);
+  gap: var(--space-3xs);
+  padding: 0 var(--space-xs);
   border-color: transparent;
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  background: transparent;
+  box-shadow: none;
   color: var(--ink-soft);
-  font-size: var(--text-sm);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-control);
 }
 
 .queued-message-promote.ui-button:hover:not(:disabled),
@@ -106,22 +166,35 @@
   color: var(--ink);
 }
 
+/*
+ * 操作区默认压暗，指针落到该行才浮起来。
+ * 三组按钮在每一行常驻会把视线从消息内容上拽走。
+ */
+.queued-message-actions .ui-button:not(:disabled) {
+  opacity: 0.55;
+  transition: opacity var(--transition-fast);
+}
+
+.queued-message-row:hover .queued-message-actions .ui-button:not(:disabled),
+.queued-message-row:focus-within .queued-message-actions .ui-button:not(:disabled) {
+  opacity: 1;
+}
+
 @media (max-width: 30rem) {
   .queued-message-row {
     grid-template-columns: 1.75rem minmax(0, 1fr);
     align-items: start;
-    padding: var(--space-xs) var(--space-sm);
-  }
-
-  .queued-message-content {
-    padding-top: var(--space-2xs);
+    row-gap: var(--space-3xs);
+    padding: var(--space-2xs);
   }
 
   .queued-message-actions {
     grid-column: 2;
+    justify-content: flex-start;
   }
 
-  .queued-message-editor.ui-text-area {
-    min-height: 3.25rem;
+  /* 触屏没有 hover，操作区必须常显 */
+  .queued-message-actions .ui-button:not(:disabled) {
+    opacity: 1;
   }
 }

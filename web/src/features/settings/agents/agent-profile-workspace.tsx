@@ -115,9 +115,10 @@ export function AgentProfileWorkspace({ config, options, onConfigChange }: Agent
           if (profile.register_to_main && profile.id !== DEFAULT_AGENT_ID) badges.push(t("Registered", "已注册"));
           const metaParts = [
             t(`${profile.enabled_tools.length} tools`, `${profile.enabled_tools.length} 工具`),
-            `${skillCount} Skills`,
-            profile.model ? profile.model : t("Inherit model", "沿用模型")
+            t(`${skillCount} Skills`, `${skillCount} 技能`)
           ];
+          // 沿用模型是默认状态，逐项重复只会把这行挤到换行，指定了才值得占位
+          if (profile.model) metaParts.push(profile.model);
           if (badges.length > 0) metaParts.unshift(badges.join(" · "));
           return {
             id: profile.id,

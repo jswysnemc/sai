@@ -19,49 +19,52 @@
   line-height: 1.4;
 }
 
+/*
+ * 档案摘要
+ *
+ * 五个指标此前排在 repeat(4, 1fr) 的网格里，第五项被挤到第二行独占，右侧空
+ * 三列，两行卡片吃掉上百像素。摘要是一眼扫过的信息，不需要各自成卡，改成
+ * 一行随宽度回流的指标条。
+ */
 .agent-profile-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap:var(--space-xs);
-  margin:var(--space-md) 0 var(--space-lg);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap:var(--space-2xs) var(--space-lg);
+  margin:var(--space-sm) 0 var(--space-md);
+  padding:var(--space-2xs) 0;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .agent-profile-stats > div {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
-  column-gap:var(--space-xs);
-  row-gap: 0.0625rem;
+  display: inline-flex;
   align-items: baseline;
+  gap:var(--space-2xs);
   min-width: 0;
-  padding:var(--space-xs) var(--space-sm);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-2);
-  background: var(--control-surface);
 }
 
 .agent-profile-stats span {
-  grid-column: 1 / -1;
+  flex: 0 0 auto;
   color: var(--ink-soft);
   font-size:var(--text-2xs);
-  line-height: 1.2;
+  line-height: var(--leading-control);
 }
 
 .agent-profile-stats strong {
   overflow: hidden;
   color: var(--ink);
-  font-size:var(--text-base);
-  font-weight: 600;
-  line-height: 1.2;
+  font: 500 var(--text-sm)/var(--leading-control) var(--font-code);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* 总量紧贴在数值后面，读作 66/69 而不是两个孤立的数 */
 .agent-profile-stats small {
+  margin-left: -0.25rem;
   color: var(--ink-soft);
-  font-size:var(--text-2xs);
+  font: 400 var(--text-2xs)/var(--leading-control) var(--font-code);
   font-variant-numeric: tabular-nums;
-  line-height: 1.2;
 }
 
 .agent-editor-tabs {
@@ -86,7 +89,7 @@
   border-radius: var(--radius-pill);
   background: var(--paper-deep);
   color: var(--ink-soft);
-  font:500 var(--text-2xs)/1 var(--font-code);
+  font:500 var(--text-2xs)/var(--leading-control) var(--font-code);
   font-style: normal;
 }
 
@@ -124,12 +127,31 @@
   line-height: 1.45;
 }
 
+/*
+ * 表单密度
+ *
+ * 全局 settings-field 的说明文字与标签同为 12px，层级不分且行行占位；
+ * 这一屏字段多，把说明压到 10px 并收紧栅格间距，省下的高度留给提示词编辑框。
+ */
+.agent-profile-editor .settings-form-grid {
+  gap:var(--space-md) var(--space-2xl);
+}
+
+.agent-profile-editor .settings-field {
+  gap:var(--space-2xs);
+}
+
+.agent-profile-editor .settings-field > small {
+  font-size:var(--text-2xs);
+  line-height: var(--leading-snug);
+}
+
+.agent-profile-editor .settings-field input:not(.switch-control) {
+  height: 2.125rem;
+}
+
 @media (max-width: 60rem) {
   .agent-profile-editor .settings-form-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .agent-profile-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -141,10 +163,6 @@
 
   .agent-profile-editor .settings-field.full {
     grid-column: auto;
-  }
-
-  .agent-profile-stats {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .agent-editor-tabs {

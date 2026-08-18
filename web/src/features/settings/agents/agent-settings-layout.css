@@ -35,64 +35,39 @@
   line-height: 1.35;
 }
 
+/*
+ * 入口默认 Agent
+ *
+ * 每个入口就是一次下拉选择，标签 + 下拉两行足够。此前用的卡片把当前值在
+ * 标题右侧和下拉框里各显示一遍，说明文字又与 title 属性重复，四张卡撑掉
+ * 近 150px 高度换来的信息量只有四个选择框。
+ */
 .agent-surface-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap:var(--space-sm);
+  gap:var(--space-sm) var(--space-md);
 }
 
-.agent-surface-card {
+.agent-surface-field {
   display: grid;
-  gap:var(--space-xs);
-  min-width: 0;
-  padding:var(--space-sm) var(--space-md) var(--space-sm);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-4);
-  background: var(--paper-raised);
-}
-
-.agent-surface-card header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap:var(--space-xs);
+  gap:var(--space-3xs);
   min-width: 0;
 }
 
-.agent-surface-card header strong {
-  color: var(--ink);
-  font-size:var(--text-sm);
-  font-weight: 600;
-}
-
-.agent-surface-card header span {
-  overflow: hidden;
-  max-width: 55%;
-  color: var(--signal);
-  font-size:var(--text-2xs);
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agent-surface-card p {
-  margin: 0;
-  overflow: hidden;
+.agent-surface-field > span {
   color: var(--ink-soft);
   font-size:var(--text-2xs);
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: var(--leading-control);
 }
 
-.agent-surface-card .ui-select > button {
+.agent-surface-field .ui-select > button {
   min-height: 1.875rem;
   padding:0 var(--space-sm);
   border-radius:var(--radius-2);
   font-size:var(--text-sm);
 }
 
-.agent-surface-card .ui-select > button svg {
+.agent-surface-field .ui-select > button svg {
   width: 0.875rem;
   height: 0.875rem;
 }
@@ -164,6 +139,18 @@
   padding:var(--space-xs) var(--space-sm);
 }
 
+/*
+ * 档案元信息单行截断。
+ *
+ * 「内置 · 已注册 · 24 工具 · 31 技能」这类串长短不一，一旦换行，列表项就
+ * 高低参差、扫读时对不齐。这里只作用于 Agent 工作区，不动其他设置页的列表。
+ */
+.agent-profile-workspace .object-list-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .agent-profile-workspace .object-list-search {
   height: 2rem;
   margin-bottom:var(--space-sm);
@@ -181,17 +168,6 @@
 
 @media (max-width: 48rem) {
   .agent-settings-shell { gap:var(--space-lg); }
-
-  .agent-surface-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .agent-surface-card p {
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
 
   .agent-settings-load-error {
     align-items: stretch;

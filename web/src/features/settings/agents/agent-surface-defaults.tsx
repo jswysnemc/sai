@@ -41,8 +41,6 @@ export function AgentSurfaceDefaults({ config, options, onConfigChange }: AgentS
     return config.gateway_agent ?? "gateway";
   };
 
-  const nameOf = (id: string) => choices.find((choice) => choice.value === id)?.label ?? id;
-
   return (
     <section className="agent-surface-defaults">
       <div className="settings-section-heading">
@@ -52,24 +50,17 @@ export function AgentSurfaceDefaults({ config, options, onConfigChange }: AgentS
         </div>
       </div>
       <div className="agent-surface-grid">
-        {surfaces.map((surface) => {
-          const value = valueOf(surface.field);
-          return (
-            <article key={surface.field} className="agent-surface-card" title={surface.description}>
-              <header>
-                <strong>{surface.label}</strong>
-                <span>{nameOf(value)}</span>
-              </header>
-              <p>{surface.description}</p>
-              <Select
-                value={value}
-                options={choices}
-                onChange={(next) => update(surface.field, next)}
-                ariaLabel={t(`Default Agent for ${surface.label}`, `${surface.label} 默认 Agent`)}
-              />
-            </article>
-          );
-        })}
+        {surfaces.map((surface) => (
+          <label key={surface.field} className="agent-surface-field" title={surface.description}>
+            <span>{surface.label}</span>
+            <Select
+              value={valueOf(surface.field)}
+              options={choices}
+              onChange={(next) => update(surface.field, next)}
+              ariaLabel={t(`Default Agent for ${surface.label}`, `${surface.label} 默认 Agent`)}
+            />
+          </label>
+        ))}
       </div>
     </section>
   );

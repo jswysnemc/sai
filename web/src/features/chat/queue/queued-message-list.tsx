@@ -62,6 +62,10 @@ export function QueuedMessageList({ runs, onUpdate, onMove, onRemove, onError }:
 
   return (
     <section className="queued-message-list" aria-label={t("Message queue", "消息队列")}>
+      <header className="queued-message-list-head">
+        <span>{t("Message queue", "消息队列")}</span>
+        <small>{t(`${runs.length} waiting`, `${runs.length} 条待发送`)}</small>
+      </header>
       {runs.map((run, index) => (
         <QueuedMessageRow
           key={run.runId}

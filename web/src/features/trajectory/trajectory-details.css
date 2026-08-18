@@ -118,19 +118,80 @@
   color: var(--signal);
 }
 
+/*
+ * 分区内容框：滚动权归于显式选中
+ *
+ * 同屏并列 5–8 个内容框，若个个可滚，指针落在面板中央时滚轮必然被其中一个
+ * 吃掉，外层详情面板反而滚不动。因此未聚焦时用 overflow: hidden 让本框不参与
+ * 滚轮消费，滚轮直接冒泡给外层；点击或 Tab 聚焦后才切成可滚。
+ *
+ * 右内边距在两态之间此消彼长：全局滚动条固定占 7px（见 shared/styles/scrollbar.css），
+ * 不补这一段，切换瞬间内容区会窄 7px，pre-wrap 的折行位置随之跳动。
+ */
+.trajectory-details-body-wrap {
+  position: relative;
+  min-width: 0;
+}
+
 .trajectory-details-body {
   max-height: min(18rem, calc(100dvh - 16rem));
   margin: 0;
   padding: var(--space-xs);
+  padding-right: calc(var(--space-xs) + 7px);
   border: 1px solid var(--line);
   border-radius: var(--radius-2);
   background: var(--paper);
   color: var(--ink);
   font: var(--text-2xs)/1.55 var(--font-code);
-  overflow: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
   white-space: pre-wrap;
   word-break: break-word;
+  transition: border-color var(--transition-fast);
+}
+
+/* 选中态：交出滚动权，同时收回为滚动条预留的内边距 */
+.trajectory-details-body-wrap:focus-within .trajectory-details-body {
+  overflow-y: auto;
+  padding-right: var(--space-xs);
+  border-color: color-mix(in srgb, var(--signal) 50%, var(--line));
+  outline: none;
+}
+
+/* 只有真的装不下才提示可以点开，内容没超出的框保持安静 */
+.trajectory-details-body-wrap[data-overflowing="true"]:not(:focus-within) .trajectory-details-body {
+  cursor: pointer;
+}
+
+.trajectory-details-body-wrap[data-overflowing="true"]:not(:focus-within) .trajectory-details-body:hover {
+  border-color: var(--line-strong);
+}
+
+/* 底部渐隐：说明内容未完，取代被 overflow: hidden 藏掉的滚动条 */
+.trajectory-details-body-wrap[data-overflowing="true"]:not(:focus-within)::before {
+  content: "";
+  position: absolute;
+  inset-inline: 1px;
+  bottom: 1px;
+  height: 2.25rem;
+  border-radius: 0 0 var(--radius-2) var(--radius-2);
+  background: linear-gradient(to top, var(--paper), transparent);
+  pointer-events: none;
+}
+
+/* 悬停时才说明怎么滚，避免每个框常驻一行提示 */
+.trajectory-details-body-wrap[data-overflowing="true"]:not(:focus-within):hover::after {
+  content: attr(data-hint);
+  position: absolute;
+  right: var(--space-xs);
+  bottom: var(--space-2xs);
+  padding: 0 var(--space-2xs);
+  border-radius: var(--radius-1);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-control);
+  pointer-events: none;
 }
 
 .trajectory-details-section[data-tone="danger"] .trajectory-details-body {

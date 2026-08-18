@@ -2,6 +2,7 @@ import { Check, Copy, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCopyAction } from "../chat/tool-renderers/use-copy-action";
 import { useI18n } from "../i18n/use-i18n";
+import { DetailsBody } from "./details-body";
 import { formatClock, formatDuration, formatTokens, prettyJson } from "./trajectory-format";
 import { RECORD_KIND_LABELS, recordEndedAt, type TrajectoryRecord } from "./trajectory-record";
 import "./trajectory-details.css";
@@ -171,7 +172,7 @@ function Block({
           {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
         </button>
       </h4>
-      <pre className="trajectory-details-body">{body}</pre>
+      <DetailsBody title={title} body={body} />
       {footer && <p className="trajectory-details-note">{footer}</p>}
     </section>
   );
