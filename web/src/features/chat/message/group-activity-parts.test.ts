@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LiveMessagePart } from "../run-event-reducer";
-import { collectWaveTools, countWorkItems, groupActivityParts } from "./group-activity-parts";
+import { collectWaveSecrets, collectWaveTools, countWorkItems, groupActivityParts } from "./group-activity-parts";
 import type { ToolLifecycle } from "../run-event-reducer";
 
 function tool(id: string): LiveMessagePart {
@@ -22,6 +22,21 @@ function reasoning(id: string): LiveMessagePart {
 
 function text(id: string): LiveMessagePart {
   return { id, type: "text", source: "hello" };
+}
+
+function sshSecret(id: string): LiveMessagePart {
+  return {
+    id,
+    type: "ssh_secret",
+    request: {
+      id: `${id}-req`,
+      session_id: "s1",
+      kind: "password",
+      host_label: "local",
+      prompt: "未配置私钥，请输入该主机的登录密码。",
+      changed: false
+    }
+  };
 }
 
 describe("groupActivityParts", () => {
@@ -68,6 +83,21 @@ describe("groupActivityParts", () => {
 
     if (segments[0].type !== "preamble") throw new Error("expected preamble");
     expect(segments[0].items.map((item) => item.kind)).toEqual(["wave", "reasoning", "wave"]);
+  });
+
+  it("keeps an SSH password card inside the tool wave", () => {
+    const segments = groupActivityParts([
+      tool("t1"),
+      sshSecret("sec1"),
+      text("body")
+    ]);
+
+    expect(segments).toHaveLength(2);
+    if (segments[0].type !== "preamble") throw new Error("expected preamble");
+    expect(segments[0].items).toHaveLength(1);
+    if (segments[0].items[0].kind !== "wave") throw new Error("expected wave");
+    expect(segments[0].items[0].parts.map((part) => part.type)).toEqual(["tool", "ssh_secret"]);
+    expect(collectWaveSecrets(segments[0].items).map((part) => part.id)).toEqual(["sec1"]);
   });
 
   it("counts reasoning segments and tools", () => {

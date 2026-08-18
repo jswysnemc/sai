@@ -10,7 +10,7 @@ use super::{danger, redact, session, sudo, transfer};
 use crate::config::{AppConfig, SshHostConfig};
 use crate::paths::SaiPaths;
 use crate::tools::{empty_parameters, ToolProgress, ToolRegistry, ToolSpec};
-use crate::web::ssh::{trust_host_key, KnownHostStatus};
+use crate::web::ssh::{host_has_usable_identity, trust_host_key, KnownHostStatus};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -399,6 +399,28 @@ async fn establish_connection(
     let mut passphrase_requested = false;
     let mut password_requested = false;
 
+    // 没有可尝试的私钥时立刻征询登录密码，避免先握手再把调用挂在空认证上
+    if !host_has_usable_identity(host) {
+        password_requested = true;
+        match request_interactive(
+            session_id,
+            progress,
+            InteractiveKind::Password,
+            &host.label,
+            "未配置私钥，请输入该主机的登录密码。",
+            None,
+            false,
+        )
+        .await?
+        {
+            SecretResponse::Provided(secret) => {
+                secrets.push(secret.clone());
+                password = Some(secret);
+            }
+            _ => bail!("用户取消了登录密码输入。"),
+        }
+    }
+
     for _ in 0..MAX_CONNECT_ATTEMPTS {
         match session::connect(host, passphrase.as_deref(), password.as_deref()).await {
             Ok(session::ConnectResult::Connected(handle)) => return Ok((handle, secrets)),
@@ -492,6 +514,7 @@ fn needs_passphrase(error: &anyhow::Error) -> bool {
 fn needs_login_password(error: &anyhow::Error) -> bool {
     let message = format!("{error:#}").to_lowercase();
     message.contains("public key authentication failed")
+        || message.contains("public key authentication timed out")
         || message.contains("no ssh private key available")
         || message.contains("password authentication")
 }
@@ -595,6 +618,9 @@ mod tests {
         )));
         assert!(needs_login_password(&anyhow!(
             "no SSH private key available for deploy@box"
+        )));
+        assert!(needs_login_password(&anyhow!(
+            "/home/u/.ssh/id_ed25519: SSH public key authentication timed out"
         )));
         assert!(!needs_login_password(&anyhow!("connection refused")));
     }

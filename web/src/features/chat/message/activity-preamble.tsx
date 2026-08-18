@@ -2,10 +2,11 @@ import { ChevronRight, Layers } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ReasoningBlock } from "../reasoning-block";
 import { PermissionRequestCard } from "../../permission/permission-request-card";
+import { SshSecretCard } from "../../ssh/ssh-secret-card";
 import { usePersistedExpand } from "./tool-expand-state";
 import { ToolWave } from "./tool-wave";
 import { useToolWaveQueue } from "./tool-wave-queue";
-import { collectWavePermissions, collectWaveTools, countWorkItems, type WorkItem } from "./group-activity-parts";
+import { collectWavePermissions, collectWaveSecrets, collectWaveTools, countWorkItems, type WorkItem } from "./group-activity-parts";
 import "./activity-stream.css";
 import { useI18n } from "../../i18n/use-i18n";
 
@@ -30,10 +31,12 @@ export function ActivityPreamble({
   const counts = countWorkItems(items);
   const tools = collectWaveTools(items);
   const permissions = collectWavePermissions(items);
+  const secrets = collectWaveSecrets(items);
+  const pendingSecret = secrets.some((part) => !part.resolved);
   const working = Boolean(live) && tools.some((part) => (
     part.tool.status === "preparing" || part.tool.status === "running"
   ));
-  const defaultOpen = Boolean(live) && !followedByText;
+  const defaultOpen = Boolean(live) && (!followedByText || pendingSecret);
   const [open, setOpen] = usePersistedExpand(id, defaultOpen);
   const [userToggled, setUserToggled] = useState(false);
   const snapshots = tools.map((part) => ({ id: part.tool.id, status: part.tool.status }));
@@ -41,9 +44,13 @@ export function ActivityPreamble({
   const collapsedShowsWave = !open && counts.tools > 0 && (working || wave.busy);
 
   useEffect(() => {
+    if (pendingSecret) {
+      setOpen(true);
+      return;
+    }
     if (userToggled) return;
     setOpen(defaultOpen);
-  }, [defaultOpen, setOpen, userToggled]);
+  }, [defaultOpen, pendingSecret, setOpen, userToggled]);
 
   const label = working
     ? t("Preparing reply", "正在准备回复")
@@ -89,13 +96,21 @@ export function ActivityPreamble({
           ))}
         </div>
       ) : (
-        permissions.length > 0 || collapsedShowsWave ? (
+        permissions.length > 0 || secrets.length > 0 || collapsedShowsWave ? (
           <div className="activity-preamble-collapsed">
             {permissions.map((part) => (
               <PermissionRequestCard
                 key={part.id}
                 request={part.request}
                 decision={part.decision}
+                active={Boolean(live)}
+              />
+            ))}
+            {secrets.map((part) => (
+              <SshSecretCard
+                key={part.id}
+                request={part.request}
+                resolved={part.resolved}
                 active={Boolean(live)}
               />
             ))}

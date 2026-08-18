@@ -389,14 +389,18 @@ impl EventAssembler {
     /// 返回:
     /// - 对应的安全输入事件
     fn map_ssh_secret_marker(&mut self, message: &str) -> Vec<WebEvent> {
-        let mut events = self.status_event("working");
         if let Some(request) = crate::ssh::decode_progress_marker(message) {
+            let mut events = self.status_event("waiting_ssh_secret");
             let payload = serde_json::to_value(&request).unwrap_or_else(|_| json!({}));
             events.push(self.event("ssh.secret.requested", payload));
-        } else if let Some(request_id) = crate::ssh::decode_resolved_marker(message) {
-            events.push(self.event("ssh.secret.resolved", json!({ "request_id": request_id })));
+            return events;
         }
-        events
+        if let Some(request_id) = crate::ssh::decode_resolved_marker(message) {
+            let mut events = self.status_event("working");
+            events.push(self.event("ssh.secret.resolved", json!({ "request_id": request_id })));
+            return events;
+        }
+        Vec::new()
     }
 
     /// 返回指定流式索引的稳定工具 ID。

@@ -11,6 +11,8 @@ use std::time::Duration;
 
 /// 建立 SSH 连接的握手超时。
 const SSH_CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
+/// 单次公钥/密码认证超时，避免服务端拒公钥后把调用挂死。
+const SSH_AUTH_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// 未显式指定私钥时依次尝试的默认私钥文件。
 const DEFAULT_IDENTITY_FILES: [&str; 3] = ["id_ed25519", "id_ecdsa", "id_rsa"];
@@ -147,7 +149,7 @@ pub(crate) async fn connect_ssh_session_auth(
         }
     };
 
-    // 3. 依次尝试候选私钥，任一通过即完成认证
+    // 3. 依次尝试候选私钥，任一通过即完成认证；单次认证限时，避免卡在拒公钥的服务端
     let mut last_error = None;
     for path in identity_candidates(host) {
         let key = match russh::keys::load_secret_key(&path, passphrase) {
@@ -158,25 +160,18 @@ pub(crate) async fn connect_ssh_session_auth(
             }
         };
         let key = PrivateKeyWithHashAlg::new(Arc::new(key), Some(HashAlg::Sha256));
-        if session
-            .authenticate_publickey(&host.username, key)
-            .await
-            .map_err(|error| anyhow::anyhow!("SSH authentication failed: {error}"))?
-            .success()
-        {
-            return Ok(SshConnectOutcome::Connected(session));
+        match authenticate_publickey(&mut session, &host.username, key).await {
+            Ok(true) => return Ok(SshConnectOutcome::Connected(session)),
+            Ok(false) => {
+                last_error = Some(format!("{}: rejected by the server", path.display()));
+            }
+            Err(error) => last_error = Some(format!("{}: {error}", path.display())),
         }
-        last_error = Some(format!("{}: rejected by the server", path.display()));
     }
 
-    // 4. 公钥都失败时，若用户已提供登录密码则再试密码认证
+    // 4. 公钥都失败或没有私钥时，若用户已提供登录密码则再试密码认证
     if let Some(password) = password.filter(|value| !value.is_empty()) {
-        if session
-            .authenticate_password(&host.username, password)
-            .await
-            .map_err(|error| anyhow::anyhow!("SSH password authentication failed: {error}"))?
-            .success()
-        {
+        if authenticate_password(&mut session, &host.username, password).await? {
             return Ok(SshConnectOutcome::Connected(session));
         }
         anyhow::bail!("SSH password authentication was rejected");
@@ -216,4 +211,68 @@ fn identity_candidates(host: &SshHostConfig) -> Vec<std::path::PathBuf> {
         .map(|name| base.join(name))
         .filter(|path| path.exists())
         .collect()
+}
+
+/// 该主机是否有磁盘上实际存在、可尝试的私钥。
+///
+/// 未配置 `identity_file` 且默认 `~/.ssh/id_*` 也不存在时返回 false，
+/// 上层应立刻走登录密码，而不是先握手再空等。
+pub(crate) fn host_has_usable_identity(host: &SshHostConfig) -> bool {
+    identity_candidates(host).iter().any(|path| path.exists())
+}
+
+/// 限时尝试公钥认证。
+async fn authenticate_publickey(
+    session: &mut client::Handle<SshClientHandler>,
+    username: &str,
+    key: PrivateKeyWithHashAlg,
+) -> Result<bool> {
+    let result = tokio::time::timeout(
+        SSH_AUTH_TIMEOUT,
+        session.authenticate_publickey(username, key),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("SSH public key authentication timed out"))?
+    .map_err(|error| anyhow::anyhow!("SSH authentication failed: {error}"))?;
+    Ok(result.success())
+}
+
+/// 限时尝试密码认证。
+async fn authenticate_password(
+    session: &mut client::Handle<SshClientHandler>,
+    username: &str,
+    password: &str,
+) -> Result<bool> {
+    let result = tokio::time::timeout(
+        SSH_AUTH_TIMEOUT,
+        session.authenticate_password(username, password),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("SSH password authentication timed out"))?
+    .map_err(|error| anyhow::anyhow!("SSH password authentication failed: {error}"))?;
+    Ok(result.success())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::SshHostConfig;
+
+    fn host_with_identity(identity_file: &str) -> SshHostConfig {
+        SshHostConfig {
+            id: "local".to_string(),
+            label: "local".to_string(),
+            hostname: "127.0.0.1".to_string(),
+            port: 22,
+            username: "snemc".to_string(),
+            identity_file: identity_file.to_string(),
+            remote_directory: String::new(),
+        }
+    }
+
+    #[test]
+    fn missing_identity_file_is_not_usable() {
+        let host = host_with_identity("/definitely/missing/sai-ssh-id");
+        assert!(!host_has_usable_identity(&host));
+    }
 }

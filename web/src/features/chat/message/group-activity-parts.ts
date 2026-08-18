@@ -3,7 +3,8 @@ import type { LiveMessagePart } from "../run-event-reducer";
 export type ReasoningPart = Extract<LiveMessagePart, { type: "reasoning" }>;
 export type ToolPart = Extract<LiveMessagePart, { type: "tool" }>;
 export type PermissionPart = Extract<LiveMessagePart, { type: "permission" }>;
-export type WavePart = ToolPart | PermissionPart;
+export type SshSecretPart = Extract<LiveMessagePart, { type: "ssh_secret" }>;
+export type WavePart = ToolPart | PermissionPart | SshSecretPart;
 
 export type WorkItem =
   | { kind: "reasoning"; part: ReasoningPart }
@@ -14,13 +15,13 @@ export type MessageSegment =
   | { type: "part"; part: LiveMessagePart };
 
 /**
- * 判断部件是否属于正文前的工作流（思考、工具、获批权限）。
+ * 判断部件是否属于正文前的工作流（思考、工具、获批权限、SSH 安全输入）。
  *
  * @param part 消息部件
  * @returns 是否为可编组的工作部件
  */
 export function isWorkPart(part: LiveMessagePart): part is ReasoningPart | WavePart {
-  return part.type === "reasoning" || part.type === "tool" || part.type === "permission";
+  return part.type === "reasoning" || part.type === "tool" || part.type === "permission" || part.type === "ssh_secret";
 }
 
 /**
@@ -94,6 +95,18 @@ export function collectWaveTools(items: WorkItem[]): ToolPart[] {
 export function collectWavePermissions(items: WorkItem[]): PermissionPart[] {
   return items.flatMap((item) => (
     item.kind === "wave" ? item.parts.filter((part): part is PermissionPart => part.type === "permission") : []
+  ));
+}
+
+/**
+ * 取出工作组里的 SSH 安全输入卡，折叠态仍需展示以免用户看不见密码框。
+ *
+ * @param items 工作组条目
+ * @returns SSH 安全输入部件
+ */
+export function collectWaveSecrets(items: WorkItem[]): SshSecretPart[] {
+  return items.flatMap((item) => (
+    item.kind === "wave" ? item.parts.filter((part): part is SshSecretPart => part.type === "ssh_secret") : []
   ));
 }
 

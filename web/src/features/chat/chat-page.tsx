@@ -712,7 +712,7 @@ export function ChatPage() {
         {showJump && (
           <HoverRevealButton
             className="jump-to-bottom"
-            expanded
+            expanded={running}
             icon={<ArrowDown size={16} />}
             label={running
               ? t("Following paused · Jump to bottom", "已暂停跟随 · 回到底部")

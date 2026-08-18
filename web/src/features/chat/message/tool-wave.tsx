@@ -1,5 +1,6 @@
 import { ToolLifecycleCard } from "../tool-lifecycle-card";
 import { PermissionRequestCard } from "../../permission/permission-request-card";
+import { SshSecretCard } from "../../ssh/ssh-secret-card";
 import type { WavePart } from "./group-activity-parts";
 import "./activity-stream.css";
 
@@ -42,18 +43,27 @@ export function ToolWave({
   if (!carousel) {
     return (
       <div className="tool-wave-stack">
-        {parts.map((part) => (
-          part.type === "tool"
-            ? <ToolLifecycleCard key={part.id} tool={part.tool} />
-            : (
+        {parts.map((part) => {
+          if (part.type === "tool") return <ToolLifecycleCard key={part.id} tool={part.tool} />;
+          if (part.type === "permission") {
+            return (
               <PermissionRequestCard
                 key={part.id}
                 request={part.request}
                 decision={part.decision}
                 active={Boolean(live)}
               />
-            )
-        ))}
+            );
+          }
+          return (
+            <SshSecretCard
+              key={part.id}
+              request={part.request}
+              resolved={part.resolved}
+              active={Boolean(live)}
+            />
+          );
+        })}
       </div>
     );
   }
