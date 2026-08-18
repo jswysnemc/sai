@@ -37,7 +37,7 @@ async fn list(State(state): State<WebAppState>) -> WebResult<Json<Value>> {
     // 1. 先迁移历史遗留的网关记录，网关进程只在网关管理页展示
     crate::gateways::process_control::migrate_legacy_gateway_tasks(&state.paths)
         .map_err(WebError::from)?;
-    let output = list_background_tasks_for_user(&state.paths, &config)
+    let output = list_background_tasks_for_user(&state.paths, &config, true)
         .await
         .map_err(WebError::from)?;
     Ok(Json(parse_tool_output(output)?))

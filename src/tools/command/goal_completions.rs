@@ -2,7 +2,6 @@ use super::background_tasks::refresh_task_statuses;
 use super::store::{BackgroundCommandStore, BackgroundCommandTask};
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
-use crate::runtime_recovery::OwnerKind;
 use anyhow::Result;
 
 /// 后台命令完成通知摘要。
@@ -138,8 +137,7 @@ pub(crate) fn acknowledge_background_completions(
 
 /// 判断任务是否绑定到交互式会话。
 fn owned_by_session(task: &BackgroundCommandTask, session_id: &str) -> bool {
-    task.runtime_owner_kind.as_deref() == Some(OwnerKind::Session.as_str())
-        && task.runtime_owner_id.as_deref() == Some(session_id)
+    task.owned_by_session(session_id)
 }
 
 /// 判断后台任务是否属于指定会话 Goal。

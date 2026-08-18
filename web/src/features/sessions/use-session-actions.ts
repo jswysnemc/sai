@@ -42,6 +42,10 @@ export function useSessionActions({ confirm, t, tree, onNavigate }: SessionActio
     await queryClient.invalidateQueries({ queryKey: ["session-tree"] });
     await queryClient.invalidateQueries({ queryKey: ["messages"] });
     await queryClient.invalidateQueries({ queryKey: ["timeline"] });
+    // 后台任务与子智能体都按会话隔离，切会话后必须重取；
+    // 这两个 queryKey 不含会话维度，不主动失效就会继续显示上一个会话的列表
+    await queryClient.invalidateQueries({ queryKey: ["background-tasks"] });
+    await queryClient.invalidateQueries({ queryKey: ["subagents"] });
   };
 
   /**

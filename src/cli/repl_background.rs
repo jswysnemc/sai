@@ -141,7 +141,7 @@ async fn load_repl_background_tasks(
     paths: &SaiPaths,
     config: &AppConfig,
 ) -> Result<Vec<ReplBackgroundTask>> {
-    let raw = list_background_tasks_for_user(paths, config).await?;
+    let raw = list_background_tasks_for_user(paths, config, true).await?;
     let list: ReplBackgroundTaskList = serde_json::from_str(&raw)?;
     Ok(list.tasks)
 }

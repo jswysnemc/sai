@@ -144,24 +144,6 @@ pub(crate) fn subagent_snapshot_for_owner(owner_key: &str, id: &str) -> Result<S
         .ok_or_else(|| anyhow::anyhow!("subagent not found in current session: {id}"))
 }
 
-/// 列出后台子智能体快照。
-///
-/// 参数:
-/// - 无
-///
-/// 返回:
-/// - 子智能体快照列表
-pub(crate) fn list_subagents() -> Vec<SubagentSnapshot> {
-    let mut subagents = subagents()
-        .lock()
-        .expect("subagent state lock")
-        .values()
-        .map(|record| record.snapshot.clone())
-        .collect::<Vec<_>>();
-    subagents.sort_by(|left, right| right.started_at.cmp(&left.started_at));
-    subagents
-}
-
 /// 取消后台子智能体。
 ///
 /// 参数:

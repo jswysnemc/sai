@@ -184,15 +184,19 @@ pub(super) fn spawn_managed_task(
 }
 
 /// 列出后台命令。
-/// 列出后台命令。
 ///
 /// 参数:
 /// - `paths`: Sai 路径
 /// - `config`: 应用配置
+/// - `session_scoped`: 是否只列当前会话的任务；CLI 运维视角传 false 看全量
 ///
 /// 返回:
 /// - JSON 格式任务列表
-pub(super) async fn list_background_tasks(paths: &SaiPaths, config: &AppConfig) -> Result<String> {
+pub(super) async fn list_background_tasks(
+    paths: &SaiPaths,
+    config: &AppConfig,
+    session_scoped: bool,
+) -> Result<String> {
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
     let mut tasks = store.load()?;
     refresh_task_statuses(&mut tasks, config).await;
@@ -214,6 +218,12 @@ pub(super) async fn list_background_tasks(paths: &SaiPaths, config: &AppConfig) 
     sync_runtime_tasks(&state, &tasks)?;
     // 2. 网关进程由网关管理页独立管理，通用后台任务列表不展示
     tasks.retain(|task| !is_gateway_owned_task(task));
+    // 3. 会话视角只看自己起的任务：任务表是机器级全局的，不过滤会让别的会话、
+    //    以及 CLI 起的无主任务一并出现在当前会话的面板里。CLI 传 false 看全量。
+    if session_scoped {
+        let session_id = state.session_id();
+        tasks.retain(|task| task.owned_by_session(session_id));
+    }
     let _ = pruned;
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,

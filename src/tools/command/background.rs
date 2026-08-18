@@ -104,8 +104,9 @@ pub(crate) fn register_readonly(registry: &mut ToolRegistry, config: AppConfig, 
 pub(crate) async fn list_background_tasks_for_user(
     paths: &SaiPaths,
     config: &AppConfig,
+    session_scoped: bool,
 ) -> Result<String> {
-    list_background_tasks(paths, config).await
+    list_background_tasks(paths, config, session_scoped).await
 }
 
 /// 用户 CLI 启动后台命令。

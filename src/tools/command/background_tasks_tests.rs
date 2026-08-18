@@ -124,12 +124,15 @@ async fn output_read_records_runtime_event_and_output_cap_recovery() {
     let stderr_log = store.logs_dir().join("task-1.err.log");
     std::fs::write(&stdout_log, "alpha\nbeta\ngamma\n").unwrap();
     std::fs::write(&stderr_log, "").unwrap();
+    // 归属当前会话：Agent 工具操作的后台任务都由 register_session_background 建立，
+    // 带 owner。无主任务不会被同步进任何会话的 runtime_processes。
+    let session_id = StateStore::new(&paths).unwrap().session_id().to_string();
     store
         .save(&[BackgroundCommandTask {
             id: "task-1".to_string(),
             runtime_process_id: Some("background_command_task-1".to_string()),
-            runtime_owner_kind: None,
-            runtime_owner_id: None,
+            runtime_owner_kind: Some("session".to_string()),
+            runtime_owner_id: Some(session_id),
             runtime_process_kind: None,
             goal_id: None,
             label: "server".to_string(),

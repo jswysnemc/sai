@@ -1,10 +1,10 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
 use crate::tools::subagent_state::{
-    cancel_subagent, list_subagents, queue_subagent_message, subagent_event_stream,
+    cancel_subagent, list_subagents_for_owner, queue_subagent_message, subagent_event_stream,
     subagent_messages, subagent_snapshot, subagent_timeline, SubagentSnapshot,
 };
-use axum::extract::{Path, Query};
+use axum::extract::{Path, Query, State};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -75,9 +75,20 @@ fn subagent_sse_event(event: &crate::tools::subagent_event::SubagentStreamEvent)
         .data(serde_json::to_string(event).unwrap_or_else(|_| "{}".to_string()))
 }
 
-/// 列出当前进程内的子智能体。
-async fn list() -> Json<Vec<SubagentSnapshot>> {
-    Json(list_subagents())
+/// 列出当前会话的子智能体。
+///
+/// 子智能体状态存在一张进程级全局表里，记录带 owner_key（会话状态目录）。
+/// 此前这里取的是全表，于是上一个会话起的子智能体会出现在新会话的列表里。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+///
+/// 返回:
+/// - 归属当前会话的子智能体快照
+async fn list(State(state): State<WebAppState>) -> WebResult<Json<Vec<SubagentSnapshot>>> {
+    let store = crate::state::StateStore::new(&state.paths).map_err(WebError::from)?;
+    let owner_key = store.state_dir().display().to_string();
+    Ok(Json(list_subagents_for_owner(&owner_key)))
 }
 
 /// 返回单个子智能体的详情,附带执行时间线与留言记录。

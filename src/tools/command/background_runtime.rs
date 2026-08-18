@@ -8,6 +8,11 @@ use anyhow::Result;
 
 /// 同步后台命令集合到 Runtime Recovery。
 ///
+/// runtime_processes 表按 session_id 分区存在每个会话各自的库里，而后台任务表
+/// 是全局的。这里必须只挑出归属当前会话的任务：否则每调一次列表，全局所有会话
+/// 的任务都会被写进当前会话，并把 session_id 列打成当前会话，使一个「读时可见性」
+/// 问题固化成持久化的数据污染。
+///
 /// 参数:
 /// - `state`: 当前会话状态存储
 /// - `tasks`: 后台任务列表
@@ -18,7 +23,11 @@ pub(super) fn sync_runtime_tasks(
     state: &StateStore,
     tasks: &[BackgroundCommandTask],
 ) -> Result<()> {
+    let session_id = state.session_id();
     for task in tasks {
+        if !task.owned_by_session(session_id) {
+            continue;
+        }
         sync_runtime_task(state, task)?;
     }
     Ok(())

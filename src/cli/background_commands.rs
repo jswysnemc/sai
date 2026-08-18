@@ -88,7 +88,7 @@ pub async fn run_background_commands(paths: &SaiPaths, args: BackgroundCommandsA
         BackgroundCommand::List => {
             AppConfig::init_files(paths)?;
             let config = AppConfig::load_or_default(paths)?;
-            println!("{}", list_background_tasks_for_user(paths, &config).await?);
+            println!("{}", list_background_tasks_for_user(paths, &config, false).await?);
         }
         BackgroundCommand::Output(args) => {
             AppConfig::init_files(paths)?;

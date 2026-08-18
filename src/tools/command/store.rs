@@ -1,3 +1,4 @@
+use crate::runtime_recovery::OwnerKind;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -29,6 +30,24 @@ pub(crate) struct BackgroundCommandTask {
     /// 终态完成通知是否已经交给所属会话 Agent
     #[serde(default)]
     pub(crate) completion_notified: bool,
+}
+
+impl BackgroundCommandTask {
+    /// 判断任务是否归属指定的交互式会话。
+    ///
+    /// 后台任务存在全局的 tasks.json 里（进程是机器级资源，`sai ps` 需要总览），
+    /// 因此凡是要落到某个会话名下的操作——写 runtime_processes、面板列表、完成
+    /// 回执——都必须先过这道判定，否则别的会话的任务会串进来。
+    ///
+    /// 参数:
+    /// - `session_id`: 目标会话标识
+    ///
+    /// 返回:
+    /// - 属于该会话时返回 true
+    pub(crate) fn owned_by_session(&self, session_id: &str) -> bool {
+        self.runtime_owner_kind.as_deref() == Some(OwnerKind::Session.as_str())
+            && self.runtime_owner_id.as_deref() == Some(session_id)
+    }
 }
 
 #[derive(Debug, Clone)]

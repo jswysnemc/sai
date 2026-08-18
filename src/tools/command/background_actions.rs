@@ -37,7 +37,7 @@ pub(super) async fn run_background_action(
         "start" if !readonly => {
             start_background_task(args, config, paths, allow_command_execution, runtime_owner)
         }
-        "list" => list_background_tasks(paths, config).await,
+        "list" => list_background_tasks(paths, config, true).await,
         "output" => read_background_task_output(args, config, paths).await,
         "wait" => wait_background_task(args, config, paths).await,
         "stop" if !readonly => stop_background_task(args, config, paths).await,
