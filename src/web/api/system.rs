@@ -43,6 +43,10 @@ struct SessionUsageResponse {
     latest_checkpoint_at: Option<String>,
     latest_checkpoint_reason: Option<String>,
     compaction_warning: Option<String>,
+    compaction_ratio: f32,
+    compaction_reserve_tokens: usize,
+    compaction_trigger_tokens: usize,
+    compaction_policy_override: bool,
     context_breakdown: ContextUsageBreakdownResponse,
 }
 
@@ -184,6 +188,18 @@ async fn usage(
     let context_window_tokens = snapshot.context_window_tokens;
     let context_token_ratio =
         crate::state::context_ratio(context_prompt_tokens, context_window_tokens);
+    let resolved = store
+        .resolve_compaction_policy(&base_config.context)
+        .unwrap_or_else(|_| crate::state::ResolvedCompactionPolicy {
+            policy: crate::state::CompactionBudgetPolicy::from_context(
+                base_config.context.clamped_compaction_ratio(),
+                base_config.context.compaction_reserve_tokens,
+            ),
+            session_override: false,
+        });
+    let compaction_trigger_tokens = resolved
+        .policy
+        .trigger_chars(context_window_tokens.max(1));
     Ok(Json(SystemUsageResponse {
         session: SessionUsageResponse {
             id: snapshot.session_id,
@@ -205,6 +221,10 @@ async fn usage(
                     "conversation has been compacted multiple times; start a focused session if details become distorted"
                         .to_string()
                 }),
+            compaction_ratio: resolved.policy.ratio,
+            compaction_reserve_tokens: resolved.policy.reserve_tokens,
+            compaction_trigger_tokens,
+            compaction_policy_override: resolved.session_override,
             context_breakdown: ContextUsageBreakdownResponse {
                 system_prompt_tokens: breakdown.system_prompt_tokens,
                 tools_and_agents_tokens: breakdown.tools_and_agents_tokens,

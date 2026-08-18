@@ -150,6 +150,7 @@ impl ProviderConfig {
     ///
     /// 返回:
     /// - 未记录支持范围或等级在范围内时为真
+    #[allow(dead_code)]
     pub fn model_supports_thinking_level(&self, model: &str, level: &str) -> bool {
         super::model_thinking::thinking_level_available(
             self.model_thinking_levels_for(model),

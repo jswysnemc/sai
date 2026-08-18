@@ -3,6 +3,18 @@ use anyhow::{bail, Result};
 
 use super::GoalCommand;
 
+/// `/context` 对本会话压缩策略的改写。
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ContextPolicyUpdate {
+    /// 清除会话覆盖，回到全局默认
+    Reset,
+    /// 写入本会话比例（50–99），可选同时改预留
+    Set {
+        ratio_percent: u32,
+        reserve: Option<usize>,
+    },
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ControlSurface {
     Repl,
@@ -12,8 +24,10 @@ pub enum ControlSurface {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ControlCommand {
     Help,
-    /// 查看当前会话的上下文信息
-    Context,
+    /// 查看或改写当前会话的上下文压缩策略
+    Context {
+        update: Option<ContextPolicyUpdate>,
+    },
     New {
         title: String,
     },
@@ -66,7 +80,9 @@ pub fn parse_control_command(
         return Ok(Some(ControlCommand::Help));
     }
     if matches_surface_alias(&name, surface, "context", &["上下文"]) {
-        return Ok(Some(ControlCommand::Context));
+        return Ok(Some(ControlCommand::Context {
+            update: parse_context_policy_update(rest)?,
+        }));
     }
     if matches_surface_alias(&name, surface, "new", &["新建"]) {
         return Ok(Some(ControlCommand::New {
@@ -176,6 +192,66 @@ fn parse_subagent_message_command(input: &str) -> Result<ControlCommand> {
 ///
 /// 返回:
 /// - 命令名和参数文本
+/// 解析 `/context` 后的策略参数。
+///
+/// 参数:
+/// - `rest`: 命令余下文本
+///
+/// 返回:
+/// - 无参数时为空；`reset` 清除覆盖；否则为比例与可选预留
+fn parse_context_policy_update(rest: &str) -> Result<Option<ContextPolicyUpdate>> {
+    let rest = rest.trim();
+    if rest.is_empty() {
+        return Ok(None);
+    }
+    if matches!(rest, "reset" | "clear" | "默认" | "重置") {
+        return Ok(Some(ContextPolicyUpdate::Reset));
+    }
+    let mut parts = rest.split_whitespace();
+    let ratio_text = parts.next().unwrap_or_default();
+    let reserve_text = parts.next();
+    if parts.next().is_some() {
+        bail!(t(
+            "usage: /context [ratio] [reserve] | /context reset",
+            "用法：/context [比例] [预留] 或 /context reset"
+        ));
+    }
+    let ratio = crate::config::parse_compaction_ratio_text(ratio_text)?;
+    let ratio_percent = (ratio * 100.0).round() as u32;
+    let reserve = reserve_text
+        .map(parse_reserve_tokens)
+        .transpose()?;
+    Ok(Some(ContextPolicyUpdate::Set {
+        ratio_percent,
+        reserve,
+    }))
+}
+
+/// 解析预留 token，支持 `8000` / `8k`。
+///
+/// 参数:
+/// - `value`: 原始文本
+///
+/// 返回:
+/// - token 数
+fn parse_reserve_tokens(value: &str) -> Result<usize> {
+    let trimmed = value.trim().trim_end_matches(['t', 'T']);
+    let (number, scale) = if let Some(raw) = trimmed.strip_suffix(['k', 'K']) {
+        (raw, 1_000usize)
+    } else if let Some(raw) = trimmed.strip_suffix(['m', 'M']) {
+        (raw, 1_000_000usize)
+    } else {
+        (trimmed, 1usize)
+    };
+    let parsed = number
+        .parse::<f64>()
+        .map_err(|_| anyhow::anyhow!("{}: {value}", t("invalid reserve", "无效预留")))?;
+    if parsed < 0.0 || !parsed.is_finite() {
+        bail!(t("invalid reserve", "无效预留"));
+    }
+    Ok((parsed * scale as f64).round() as usize)
+}
+
 fn slash_command_parts(input: &str) -> Option<(&str, &str)> {
     let input = input.trim();
     let input = input
@@ -257,6 +333,29 @@ fn parse_model_args(input: &str) -> Result<Option<usize>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_context_policy_arguments() {
+        assert_eq!(
+            parse_control_command("/context", ControlSurface::Repl).unwrap(),
+            Some(ControlCommand::Context { update: None })
+        );
+        assert_eq!(
+            parse_control_command("/context reset", ControlSurface::Repl).unwrap(),
+            Some(ControlCommand::Context {
+                update: Some(ContextPolicyUpdate::Reset)
+            })
+        );
+        assert_eq!(
+            parse_control_command("/context 85 8k", ControlSurface::Repl).unwrap(),
+            Some(ControlCommand::Context {
+                update: Some(ContextPolicyUpdate::Set {
+                    ratio_percent: 85,
+                    reserve: Some(8_000)
+                })
+            })
+        );
+    }
 
     #[test]
     fn parses_english_and_chinese_gateway_aliases() {

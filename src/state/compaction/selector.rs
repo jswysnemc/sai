@@ -36,6 +36,7 @@ const MIN_RUNNING_CALLS_TO_AUTO_COMPACT: usize = 12;
 ///
 /// 返回:
 /// - 需要执行的压缩请求；没有任何可压缩内容时返回空
+#[cfg(test)]
 pub fn select_compaction(
     turns: &[Turn],
     previous_summary: Option<String>,

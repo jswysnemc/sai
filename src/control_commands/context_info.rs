@@ -24,8 +24,9 @@ const ITALIC: &str = "\x1b[3m";
 ///
 /// 返回:
 /// - 带 ANSI 的多行文本
+#[allow(dead_code)]
 pub fn context_info_for_mode(paths: &SaiPaths, mode: AgentMode) -> Result<String> {
-    context_info_for(paths, mode, true)
+    context_info_for(paths, mode, true, None)
 }
 
 /// 组装无 ANSI 的上下文用量视图，供网关渠道回复。
@@ -35,8 +36,41 @@ pub fn context_info_for_mode(paths: &SaiPaths, mode: AgentMode) -> Result<String
 ///
 /// 返回:
 /// - 多行纯文本
+#[allow(dead_code)]
 pub fn context_info_plain(paths: &SaiPaths) -> Result<String> {
-    context_info_for(paths, AgentMode::Yolo, false)
+    context_info_for(paths, AgentMode::Yolo, false, None)
+}
+
+/// 查看上下文用量，并可改写本会话压缩策略。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+/// - `mode`: 当前 Agent 模式
+/// - `update`: 对本会话策略的改写
+///
+/// 返回:
+/// - 带 ANSI 的多行文本
+pub fn context_info_for_mode_with_update(
+    paths: &SaiPaths,
+    mode: AgentMode,
+    update: Option<crate::control_commands::ContextPolicyUpdate>,
+) -> Result<String> {
+    context_info_for(paths, mode, true, update)
+}
+
+/// 网关入口：查看或改写本会话压缩策略。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+/// - `update`: 对本会话策略的改写
+///
+/// 返回:
+/// - 多行纯文本
+pub fn context_info_plain_with_update(
+    paths: &SaiPaths,
+    update: Option<crate::control_commands::ContextPolicyUpdate>,
+) -> Result<String> {
+    context_info_for(paths, AgentMode::Yolo, false, update)
 }
 
 /// 读取会话状态并渲染上下文用量。
@@ -48,9 +82,15 @@ pub fn context_info_plain(paths: &SaiPaths) -> Result<String> {
 ///
 /// 返回:
 /// - 渲染文本
-fn context_info_for(paths: &SaiPaths, mode: AgentMode, styled: bool) -> Result<String> {
+fn context_info_for(
+    paths: &SaiPaths,
+    mode: AgentMode,
+    styled: bool,
+    update: Option<crate::control_commands::ContextPolicyUpdate>,
+) -> Result<String> {
     let config = AppConfig::load_or_default(paths)?;
     let state = crate::state::StateStore::new(paths)?;
+    apply_context_policy_update(&state, &config, update)?;
     let context_limit = config.active_context_window_tokens().unwrap_or(128_000);
     let snapshot = state.session_snapshot(context_limit)?;
     let provider = config.provider(None).ok();
@@ -90,8 +130,9 @@ fn context_info_for(paths: &SaiPaths, mode: AgentMode, styled: bool) -> Result<S
         .compaction
         .as_ref()
         .map(|item| item.compacted_turns);
-    let compact_ratio = config.context.clamped_compaction_ratio();
-    let compact_reserve = config.context.compaction_reserve_tokens;
+    let resolved = state.resolve_compaction_policy(&config.context)?;
+    let compact_ratio = resolved.policy.ratio;
+    let compact_reserve = resolved.policy.reserve_tokens;
     let compact_trigger = crate::state::CompactionBudgetPolicy::from_context(
         compact_ratio,
         compact_reserve,
@@ -110,6 +151,7 @@ fn context_info_for(paths: &SaiPaths, mode: AgentMode, styled: bool) -> Result<S
             compact_ratio,
             compact_reserve,
             compact_trigger,
+            session_override: resolved.session_override,
         },
         styled,
     ))
@@ -145,6 +187,7 @@ struct ContextView {
     compact_ratio: f32,
     compact_reserve: usize,
     compact_trigger: usize,
+    session_override: bool,
 }
 
 struct CategoryUsage {
@@ -540,24 +583,62 @@ fn paint(styled: bool, code: &str, text: &str) -> String {
 /// - 如 `自动压缩 · 90% · 预留 50k · 触发 72k`
 fn format_auto_compact_line(view: &ContextView) -> String {
     let percent = (view.compact_ratio * 100.0).round() as u32;
+    let scope = if view.session_override {
+        t("this session", "本会话")
+    } else {
+        t("default", "默认")
+    };
     if view.compact_reserve == 0 {
         format!(
-            "{} · {}% · {} {}",
+            "{} · {} · {}% · {} {}",
             t("Auto-compact", "自动压缩"),
+            scope,
             percent,
             t("trigger", "触发"),
             format_tokens(view.compact_trigger)
         )
     } else {
         format!(
-            "{} · {}% · {} {} · {} {}",
+            "{} · {} · {}% · {} {} · {} {}",
             t("Auto-compact", "自动压缩"),
+            scope,
             percent,
             t("reserve", "预留"),
             format_tokens(view.compact_reserve),
             t("trigger", "触发"),
             format_tokens(view.compact_trigger)
         )
+    }
+}
+
+/// 把 `/context` 参数写进当前会话策略。
+///
+/// 参数:
+/// - `state`: 当前会话状态
+/// - `config`: 全局配置，供合并未改动的字段
+/// - `update`: 策略改写
+///
+/// 返回:
+/// - 写入是否成功
+fn apply_context_policy_update(
+    state: &crate::state::StateStore,
+    config: &AppConfig,
+    update: Option<crate::control_commands::ContextPolicyUpdate>,
+) -> Result<()> {
+    let Some(update) = update else {
+        return Ok(());
+    };
+    match update {
+        crate::control_commands::ContextPolicyUpdate::Reset => state.clear_compaction_policy(),
+        crate::control_commands::ContextPolicyUpdate::Set {
+            ratio_percent,
+            reserve,
+        } => {
+            let current = state.resolve_compaction_policy(&config.context)?;
+            let ratio = crate::config::parse_compaction_ratio_value(ratio_percent as f32 / 100.0);
+            let reserve_tokens = reserve.unwrap_or(current.policy.reserve_tokens);
+            state.save_compaction_policy(ratio, reserve_tokens)
+        }
     }
 }
 
@@ -641,6 +722,7 @@ mod tests {
             compact_ratio: 0.9,
             compact_reserve: 50_000,
             compact_trigger: 950_000,
+            session_override: false,
         }
     }
 

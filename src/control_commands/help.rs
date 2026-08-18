@@ -126,8 +126,15 @@ fn repl_only_help_lines() -> Vec<String> {
     vec![
         t("REPL:", "REPL:").to_string(),
         format!(
-            "  /context    {}",
-            t("show context usage grid", "查看上下文占用网格")
+            "  /context [85] [8k]  {}",
+            t(
+                "show context usage; optional session compact ratio and reserve",
+                "查看上下文占用；可设本会话压缩比例与预留",
+            )
+        ),
+        format!(
+            "  /context reset      {}",
+            t("restore global compact defaults", "恢复全局压缩默认")
         ),
         format!(
             "  /providers  {}",

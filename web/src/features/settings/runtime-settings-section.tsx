@@ -48,8 +48,8 @@ export function RuntimeSettingsSection({ config, subview, onConfigChange }: Runt
         <SettingsGroup
           title={t("Context management", "上下文管理")}
           description={t(
-            "Auto-compact uses the later of the ratio and reserved headroom, so small windows are not forced to leave 40k unused.",
-            "自动压缩取比例与预留中更晚到达的条件，小窗口不会被固定预留 40k 过早压缩。"
+            "Workspace defaults for new sessions. The chat context panel can override ratio and reserve for the current session.",
+            "新会话的工作区默认值。对话里的上下文用量可为本会话单独改比例与预留。"
           )}
         >
           <div className="settings-form-grid">

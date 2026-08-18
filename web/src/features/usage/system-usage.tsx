@@ -7,6 +7,8 @@ import { localizeApiMessage } from "../../api/api-error";
 import type { RunMode, RunModelSelection } from "../../api/contracts";
 import { useAnchoredPopover } from "../../shared/ui/popover/use-anchored-popover";
 import { ContextDonut } from "./context-donut";
+import { COMPACTION_POLICY_FALLBACK, CompactionPolicyPanel } from "./compaction-policy/compaction-policy-panel";
+import { formatTokenCount } from "./token-format";
 import "./system-usage.css";
 import { useI18n } from "../i18n/use-i18n";
 
@@ -130,6 +132,17 @@ export function SystemUsage({ selection, mode, agentId, onCompact, compactDisabl
                     <small>{formatContextCacheDetail(contextCache, t)}</small>
                   </div>
                 )}
+                <CompactionPolicyPanel
+                  sessionId={usage.data.session.id}
+                  ratio={usage.data.session.compaction_ratio ?? COMPACTION_POLICY_FALLBACK.ratio}
+                  reserve={usage.data.session.compaction_reserve_tokens ?? COMPACTION_POLICY_FALLBACK.reserve}
+                  windowTokens={usage.data.session.context_window_tokens}
+                  usedTokens={usage.data.session.context_prompt_tokens}
+                  overridden={Boolean(usage.data.session.compaction_policy_override)}
+                  onSaved={() => {
+                    void queryClient.invalidateQueries({ queryKey: ["system-usage"] });
+                  }}
+                />
                 <div className="context-compaction-actions">
                   <span>{usage.data.session.checkpoint_count > 0 ? t(`Compacted ${usage.data.session.compacted_turns} turns · ${formatCompactionReason(usage.data.session.latest_checkpoint_reason, t)}`, `已压缩 ${usage.data.session.compacted_turns} 轮 · ${formatCompactionReason(usage.data.session.latest_checkpoint_reason, t)}`) : t("Not compacted", "尚未压缩")}</span>
                   <button type="button" onClick={() => compact.mutate()} disabled={compact.isPending || compactDisabled || usage.data.runtime.active_run}>
@@ -262,28 +275,6 @@ export function formatContextCacheDetail(
  */
 function formatTokenApprox(value: number): string {
   return `~${formatTokenCount(Math.max(0, value))}`;
-}
-
-/**
- * 格式化较大的计数。
- *
- * @param value 原始数值
- * @returns 紧凑计数文本
- */
-export function formatTokenCount(value: number): string {
-  if (value >= 1_000_000) return `${stripTrailingZero(value / 1_000_000)}m`;
-  if (value >= 1_000) return `${stripTrailingZero(value / 1_000)}k`;
-  return String(value);
-}
-
-/**
- * 移除一位小数格式中的无效零。
- *
- * @param value 需要压缩显示的数值
- * @returns 最多保留一位小数的文本
- */
-function stripTrailingZero(value: number): string {
-  return value.toFixed(1).replace(/\.0$/, "");
 }
 
 /**

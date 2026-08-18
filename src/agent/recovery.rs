@@ -209,10 +209,15 @@ impl Agent {
     /// 返回:
     /// - 夹紧后的比例与预留 token
     pub(super) fn compaction_budget_policy(&self) -> CompactionBudgetPolicy {
-        CompactionBudgetPolicy::from_context(
-            self.config.context.clamped_compaction_ratio(),
-            self.config.context.compaction_reserve_tokens,
-        )
+        self.state
+            .resolve_compaction_policy(&self.config.context)
+            .map(|resolved| resolved.policy)
+            .unwrap_or_else(|_| {
+                CompactionBudgetPolicy::from_context(
+                    self.config.context.clamped_compaction_ratio(),
+                    self.config.context.compaction_reserve_tokens,
+                )
+            })
     }
 }
 

@@ -52,6 +52,21 @@ struct CompactSessionRequest {
 }
 
 #[derive(Deserialize)]
+struct CompactionPolicyRequest {
+    compaction_ratio: Option<f32>,
+    compaction_reserve_tokens: Option<usize>,
+    reset: Option<bool>,
+}
+
+#[derive(Serialize)]
+struct CompactionPolicyResponse {
+    compaction_ratio: f32,
+    compaction_reserve_tokens: usize,
+    compaction_trigger_tokens: usize,
+    compaction_policy_override: bool,
+}
+
+#[derive(Deserialize)]
 struct RollbackSessionRequest {
     turn_id: String,
 }
@@ -152,6 +167,7 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/sessions/:id/tool-result", get(tool_result))
         .merge(debug::routes())
         .route("/api/sessions/:id/compact", post(compact))
+        .route("/api/sessions/:id/compaction-policy", patch(update_compaction_policy))
 }
 
 /// 返回指定会话的系统提示词预览（含 AGENT.md 等指令文件）。
@@ -332,6 +348,51 @@ async fn compact(
         .await
         .map_err(|error| WebError::conflict(error.to_string()))?;
     Ok(Json(info))
+}
+
+/// 更新当前会话的自动压缩策略。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `id`: 会话 ID
+/// - `request`: 比例、预留或重置
+///
+/// 返回:
+/// - 生效后的策略
+async fn update_compaction_policy(
+    State(state): State<WebAppState>,
+    Path(id): Path<String>,
+    Json(request): Json<CompactionPolicyRequest>,
+) -> WebResult<Json<CompactionPolicyResponse>> {
+    let store = StateStore::for_session(&state.paths, &id).map_err(WebError::from)?;
+    let config = crate::config::AppConfig::load_or_default(&state.paths).map_err(WebError::from)?;
+    if request.reset == Some(true) {
+        store.clear_compaction_policy().map_err(WebError::from)?;
+    } else {
+        let current = store
+            .resolve_compaction_policy(&config.context)
+            .map_err(WebError::from)?;
+        let ratio = request
+            .compaction_ratio
+            .map(crate::config::parse_compaction_ratio_value)
+            .unwrap_or(current.policy.ratio);
+        let reserve = request
+            .compaction_reserve_tokens
+            .unwrap_or(current.policy.reserve_tokens);
+        store
+            .save_compaction_policy(ratio, reserve)
+            .map_err(WebError::from)?;
+    }
+    let resolved = store
+        .resolve_compaction_policy(&config.context)
+        .map_err(WebError::from)?;
+    let window = config.active_context_window_tokens().unwrap_or(128_000).max(1);
+    Ok(Json(CompactionPolicyResponse {
+        compaction_ratio: resolved.policy.ratio,
+        compaction_reserve_tokens: resolved.policy.reserve_tokens,
+        compaction_trigger_tokens: resolved.policy.trigger_chars(window),
+        compaction_policy_override: resolved.session_override,
+    }))
 }
 
 /// 列出当前工作区会话。

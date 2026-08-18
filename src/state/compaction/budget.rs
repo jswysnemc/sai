@@ -112,6 +112,7 @@ pub enum ContextPressure {
 ///
 /// 返回:
 /// - 上下文压力档位；预算未知时视为无压力
+#[cfg(test)]
 pub fn classify_context_pressure(
     context_chars: usize,
     context_limit_chars: usize,
@@ -158,6 +159,7 @@ pub fn classify_context_pressure_with(
 ///
 /// 返回:
 /// - 达到默认策略阈值时返回 true
+#[cfg(test)]
 pub fn should_compact_for_context_tokens(
     context_tokens: usize,
     context_limit_tokens: usize,
@@ -196,6 +198,7 @@ pub fn should_compact_for_context_tokens_with(
 ///
 /// 返回:
 /// - 自动压缩触发字符数
+#[cfg(test)]
 pub fn compaction_trigger_chars(context_limit_chars: usize) -> usize {
     CompactionBudgetPolicy::DEFAULT.trigger_chars(context_limit_chars)
 }

@@ -103,6 +103,12 @@ pub struct SessionTimelineTurn {
 pub struct SessionTimelineCompaction {
     pub applied: bool,
     pub turn_count: usize,
+    /// 本次摘要覆盖的起始轮次序号；被删掉的旧轮次仍按此对齐
+    #[serde(default, skip_serializing_if = "is_zero_i64")]
+    pub compacted_from_seq: i64,
+    /// 本次摘要覆盖的结束轮次序号
+    #[serde(default, skip_serializing_if = "is_zero_i64")]
+    pub compacted_to_seq: i64,
     pub summary: String,
     pub created_at: String,
     pub reason: String,
@@ -279,6 +285,8 @@ impl StateStore {
         Ok(Some(SessionTimelineCompaction {
             applied: true,
             turn_count: checkpoint.source_turn_count,
+            compacted_from_seq: checkpoint.compacted_from_seq,
+            compacted_to_seq: checkpoint.compacted_to_seq,
             summary: summary.to_string(),
             created_at: checkpoint.created_at,
             reason: match checkpoint.reason {
@@ -344,6 +352,11 @@ fn turn_status(status: TurnStatus) -> &'static str {
 /// 返回:
 /// - 是否为零
 fn is_zero_u64(value: &u64) -> bool {
+    *value == 0
+}
+
+/// 判断 i64 是否为零，供 serde 跳过缺省压缩区间。
+fn is_zero_i64(value: &i64) -> bool {
     *value == 0
 }
 
@@ -593,5 +606,7 @@ mod tests {
         assert!(compaction.applied);
         assert!(compaction.summary.contains("keep context"));
         assert!(compaction.turn_count >= 1);
+        assert!(compaction.compacted_from_seq >= 1);
+        assert!(compaction.compacted_to_seq >= compaction.compacted_from_seq);
     }
 }

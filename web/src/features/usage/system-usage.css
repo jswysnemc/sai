@@ -7,12 +7,13 @@
   align-items: center;
   gap:var(--space-xs);
   min-width: 0;
-  min-height: 28px;
+  height: 28px;
   padding:0 var(--space-xs) 0 var(--space-2xs);
   border: 0;
   border-radius:var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
+  line-height: var(--leading-control);
   text-align: left;
 }
 
@@ -49,15 +50,21 @@
   height: 10px;
 }
 
+/*
+ * 数值与百分比按基线对齐：两者字号不同（11px / 10px），
+ * 中心对齐会让小字上浮，基线对齐才符合数字并排的阅读习惯。
+ * 前提是两个子元素行高一致，否则基线位置会随字族浮动。
+ */
 .system-usage-trigger > span:last-child {
   display: inline-flex;
   align-items: baseline;
   gap:var(--space-2xs);
   min-width: 0;
+  line-height: var(--leading-control);
 }
 
 .system-usage-trigger strong {
-  font:500 var(--text-xs) var(--font-code);
+  font:500 var(--text-xs)/var(--leading-control) var(--font-code);
   color: inherit;
 }
 
@@ -65,6 +72,7 @@
   color: inherit;
   opacity: 0.68;
   font-size:var(--text-2xs);
+  line-height: var(--leading-control);
   white-space: nowrap;
 }
 
@@ -142,7 +150,7 @@
 
 .context-usage-head strong {
   color: var(--signal);
-  font:500 var(--text-sm) var(--font-code);
+  font:500 var(--text-sm)/var(--leading-control) var(--font-code);
 }
 
 .context-usage-track {
@@ -302,13 +310,13 @@
 
 .context-cache-summary strong {
   color: var(--ink);
-  font:600 var(--text-sm) var(--font-code);
+  font:600 var(--text-sm)/var(--leading-control) var(--font-code);
 }
 
 .context-cache-summary small {
   min-width: 0;
   color: var(--ink-soft);
-  font:400 var(--text-sm) var(--font-code);
+  font:400 var(--text-sm)/var(--leading-control) var(--font-code);
   text-align: right;
 }
 

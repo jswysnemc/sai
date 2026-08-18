@@ -115,6 +115,10 @@ export type SessionTimelineTurn = {
 export type SessionTimelineCompaction = {
   applied: boolean;
   turn_count: number;
+  /** 摘要覆盖的起始轮次序号；旧轮次被删后仍用它对齐轨迹 */
+  compacted_from_seq?: number | null;
+  /** 摘要覆盖的结束轮次序号 */
+  compacted_to_seq?: number | null;
   summary: string;
   created_at: string;
   reason: "auto" | "manual" | "legacy" | string;

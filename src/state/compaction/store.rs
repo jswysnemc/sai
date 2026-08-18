@@ -179,13 +179,14 @@ impl StateStore {
             .load_authoritative_compaction_summary()?
             .map(|summary| summary.summary);
         let (running_turn_call_count, already_compacted) = self.running_turn_call_counts(&turns)?;
-        Ok(super::select_compaction(
+        Ok(super::select_compaction_with(
             &turns,
             previous_summary,
             running_turn_call_count,
             0,
             1,
             true,
+            super::CompactionBudgetPolicy::DEFAULT,
         )
         .map(|request| request.with_compacted_call_offset(already_compacted)))
     }

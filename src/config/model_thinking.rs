@@ -144,6 +144,7 @@ pub fn thinking_level_available(available: &[String], level: &str) -> bool {
 ///
 /// 返回:
 /// - 规范化后的等级列表
+#[allow(dead_code)]
 pub fn normalize_thinking_levels<I, S>(levels: I) -> Vec<String>
 where
     I: IntoIterator<Item = S>,

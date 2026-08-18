@@ -74,6 +74,10 @@ export type SystemUsage = {
     latest_checkpoint_at?: string | null;
     latest_checkpoint_reason?: "auto" | "manual" | "legacy" | null;
     compaction_warning?: string | null;
+    compaction_ratio?: number;
+    compaction_reserve_tokens?: number;
+    compaction_trigger_tokens?: number;
+    compaction_policy_override?: boolean;
     context_breakdown?: {
       system_prompt_tokens: number;
       tools_and_agents_tokens: number;
