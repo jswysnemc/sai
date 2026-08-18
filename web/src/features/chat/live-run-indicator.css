@@ -14,7 +14,7 @@
   min-height: 28px;
   margin-top:var(--space-3xs);
   color: var(--ink-soft);
-  font:500 var(--text-xs)/1.4 var(--font-code);
+  font:500 var(--text-xs)/var(--leading-control) var(--font-code);
 }
 
 /* 状态点：忙碌时呼吸，等待用户时定住并换成告警色 */

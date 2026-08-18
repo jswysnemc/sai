@@ -113,7 +113,7 @@
   border-radius:var(--radius-1);
   background: color-mix(in srgb, var(--atom-color) 9%, var(--paper-raised));
   color: var(--atom-color);
-  font:500 var(--text-sm)/1 var(--font-code);
+  font:500 var(--text-sm)/var(--leading-control) var(--font-code);
   vertical-align: middle;
   white-space: nowrap;
 }
@@ -139,7 +139,7 @@
   align-items: center;
   min-width: 0;
   overflow: hidden;
-  line-height: 1;
+  line-height: var(--leading-control);
   text-overflow: ellipsis;
 }
 
@@ -207,7 +207,7 @@
   align-items: center;
   gap:var(--space-xs);
   color: var(--atom-color);
-  font:600 var(--text-sm)/1.4 var(--font-code);
+  font:600 var(--text-sm)/var(--leading-control) var(--font-code);
 }
 
 .user-atom-preview-header > span {

@@ -28,7 +28,7 @@
 .skill-detail-navigation > span {
   overflow: hidden;
   color: var(--ink-soft);
-  font: 500 var(--text-xs) var(--font-code);
+  font: 500 var(--text-xs)/var(--leading-control) var(--font-code);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

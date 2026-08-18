@@ -54,7 +54,7 @@
   background: transparent !important;
   box-shadow: none !important;
   color: var(--ink-soft);
-  font:400 var(--text-sm)/1 var(--font-ui, inherit);
+  font:400 var(--text-sm)/var(--leading-control) var(--font-ui, inherit);
   letter-spacing: normal;
   cursor: pointer;
   place-items: center;

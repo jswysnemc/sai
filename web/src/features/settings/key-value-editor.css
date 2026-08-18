@@ -19,7 +19,7 @@
   border-radius:var(--radius-3);
   background: var(--paper);
   color: var(--ink);
-  font:400 var(--text-base) var(--font-code);
+  font:400 var(--text-base)/var(--leading-control) var(--font-code);
 }
 
 .key-value-row input:focus {

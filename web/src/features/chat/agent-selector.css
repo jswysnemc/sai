@@ -18,6 +18,7 @@
 }
 
 .agent-selector .ui-select > button {
+  height: 28px;
   min-height: 28px;
   max-width: 148px;
   gap:var(--space-2xs);
@@ -27,6 +28,7 @@
   background: transparent;
   color: var(--ink-soft);
   font-size:var(--text-xs);
+  line-height: var(--leading-control);
 }
 
 .agent-selector .ui-select > button:hover:not(:disabled),

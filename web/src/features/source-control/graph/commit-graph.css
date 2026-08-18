@@ -199,7 +199,7 @@
   outline: 0;
   background: var(--paper-raised);
   color: var(--ink);
-  font:400 var(--text-sm) var(--font-code);
+  font:400 var(--text-sm)/var(--leading-control) var(--font-code);
 }
 
 .git-graph-branch-field input:focus {

@@ -243,7 +243,7 @@
   padding-left: var(--space-xs);
   border-left: 1px solid var(--line);
   color: var(--ink-soft);
-  font: 400 var(--text-2xs) var(--font-code);
+  font: 400 var(--text-2xs)/var(--leading-control) var(--font-code);
 }
 
 .skill-card-footer > svg {

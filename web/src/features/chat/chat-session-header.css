@@ -51,7 +51,7 @@
   gap: var(--space-md);
   overflow: hidden;
   color: var(--ink-soft);
-  font: 400 var(--text-2xs)/1 var(--font-code);
+  font: 400 var(--text-2xs)/var(--leading-control) var(--font-code);
 }
 
 .chat-header-context-item {
@@ -60,7 +60,7 @@
   min-height: 1rem;
   align-items: center;
   gap: var(--space-2xs);
-  line-height: 1;
+  line-height: var(--leading-control);
 }
 
 .chat-header-context-item > svg {

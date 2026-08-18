@@ -97,7 +97,7 @@
 .workspace-tree-row small {
   overflow: hidden;
   color: var(--ink-soft);
-  font:400 var(--text-2xs) var(--font-code);
+  font:400 var(--text-2xs)/var(--leading-control) var(--font-code);
   font-variant-numeric: tabular-nums;
   text-align: right;
   text-overflow: ellipsis;

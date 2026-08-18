@@ -42,7 +42,7 @@
   max-width: 11rem;
   overflow: hidden;
   color: var(--ink-soft);
-  font: 400 var(--text-2xs) var(--font-code);
+  font: 400 var(--text-2xs)/var(--leading-control) var(--font-code);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

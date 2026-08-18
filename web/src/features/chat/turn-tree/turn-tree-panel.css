@@ -37,7 +37,7 @@
 
 .turn-tree-head > small {
   margin-left: auto;
-  font: var(--text-2xs)/1 var(--font-code);
+  font: var(--text-2xs)/var(--leading-control) var(--font-code);
 }
 
 .turn-tree-close {

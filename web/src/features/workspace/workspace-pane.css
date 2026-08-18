@@ -317,7 +317,7 @@
   border-bottom: 1px solid var(--line);
   background: var(--paper);
   color: var(--ink-soft);
-  font: 400 var(--text-2xs) var(--font-code);
+  font: 400 var(--text-2xs)/var(--leading-control) var(--font-code);
 }
 
 .workspace-targeted-diff-head > span:first-child {
@@ -767,7 +767,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
   color: var(--ink-soft);
-  font:500 var(--text-2xs) var(--font-code);
+  font:500 var(--text-2xs)/var(--leading-control) var(--font-code);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

@@ -17,6 +17,7 @@
   border-radius:var(--radius-2);
   background: transparent;
   color: var(--ink-soft);
+  line-height: var(--leading-control);
   text-align: left;
 }
 
@@ -281,7 +282,7 @@
   outline: none;
   background: transparent;
   color: var(--ink);
-  font:400 var(--text-sm) var(--font-code);
+  font:400 var(--text-sm)/var(--leading-control) var(--font-code);
 }
 
 /* 搜索栏：只过滤当前目录列表，与路径导航职责分离 */
@@ -306,7 +307,7 @@
   outline: none;
   background: transparent;
   color: var(--ink);
-  font:400 var(--text-xs) var(--font-ui);
+  font:400 var(--text-xs)/var(--leading-control) var(--font-ui);
 }
 
 .directory-search-input::placeholder { color: var(--technical-muted); }
@@ -347,7 +348,7 @@
   border-radius: var(--radius-pill);
   background: transparent;
   color: var(--ink-soft);
-  font:400 var(--text-2xs) var(--font-code);
+  font:400 var(--text-2xs)/var(--leading-control) var(--font-code);
 }
 
 .directory-roots-row button:hover { border-color: var(--line-strong); color: var(--ink); }
@@ -395,7 +396,7 @@
   align-items: center;
   gap:var(--space-3xs);
   color: var(--signal);
-  font:500 var(--text-2xs) var(--font-code);
+  font:500 var(--text-2xs)/var(--leading-control) var(--font-code);
 }
 
 /* 行内选择：仅当前高亮行出现，直接选定该目录 */
@@ -408,7 +409,7 @@
   border-radius:var(--radius-2);
   background: var(--signal);
   color: var(--paper-raised);
-  font:500 var(--text-2xs) var(--font-ui);
+  font:500 var(--text-2xs)/var(--leading-control) var(--font-ui);
 }
 
 .directory-row-select:hover { background: color-mix(in srgb, var(--signal) 84%, var(--ink)); }
@@ -433,7 +434,7 @@
   border-radius:var(--radius-2);
   background: var(--paper);
   color: var(--ink);
-  font:400 var(--text-2xs) var(--font-code);
+  font:400 var(--text-2xs)/var(--leading-control) var(--font-code);
 }
 
 .directory-create-row input:focus { border-color: var(--line-strong); outline: none; }

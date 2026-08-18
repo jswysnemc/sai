@@ -23,6 +23,19 @@
   --leading-normal: 1.55;
   --leading-relaxed: 1.7;
 
+  /*
+   * 单行控件专用行高
+   *
+   * 取值必须大于字族的自然行高（西文 Fira Sans 约 1.2em，中文 Noto Sans SC 约 1.48em），
+   * 使行盒的 half-leading 为正，字形被完整包在行盒内。
+   *
+   * 一旦行高小于自然行高（典型写法 line-height: 1），half-leading 变负，字形上下溢出行盒，
+   * 其垂直位置改由字体的 ascent / descent 比例独占决定。而 Windows 走 DirectWrite、
+   * Linux 走 FreeType，两者对同一字体返回的 ascent / descent 并不一致，
+   * 偏移就直接暴露成"文字没有垂直居中"。
+   */
+  --leading-control: 1.6;
+
   /* 字重，与 fontsource 已加载的 400/500/600 三档对应 */
   --weight-regular: 400;
   --weight-medium: 500;

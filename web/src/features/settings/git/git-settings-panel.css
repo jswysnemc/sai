@@ -65,7 +65,7 @@
 .git-setting-toggle small {
   overflow-wrap: anywhere;
   color: var(--ink-soft);
-  font:400 var(--text-2xs) var(--font-code);
+  font:400 var(--text-2xs)/var(--leading-control) var(--font-code);
 }
 
 .git-settings-safety-note,

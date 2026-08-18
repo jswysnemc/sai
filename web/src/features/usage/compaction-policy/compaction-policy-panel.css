@@ -1,0 +1,295 @@
+/*
+ * 会话级自动压缩策略面板
+ *
+ * 比例与预留取更晚到达者，所以版面按「结果 → 依据」排：先给最终触发点和
+ * 它在窗口上的位置，再摊开两个条件各自的触发点，生效的那条高亮、另一条压暗。
+ */
+.compaction-policy {
+  display: grid;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--line);
+}
+
+.compaction-policy-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.compaction-policy-head > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.compaction-policy-head span {
+  color: var(--ink);
+  font-size: var(--text-xs);
+}
+
+.compaction-policy-head small {
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+}
+
+.compaction-policy-reset {
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-control);
+}
+
+.compaction-policy-reset:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.compaction-policy-reset:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* 结果区：触发点是用户唯一真正关心的数，放在最前且字号最大 */
+.compaction-policy-preview {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+.compaction-policy-preview p {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+}
+
+.compaction-policy-preview strong {
+  color: var(--signal);
+  font: 500 var(--text-sm)/var(--leading-control) var(--font-code);
+}
+
+/*
+ * 窗口轴：把「现在」和「触发点」画在同一条轴上，
+ * 两者的距离比任何数字都直观。高度压到 4px，避免变成大色块。
+ */
+.compaction-policy-track {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--line);
+}
+
+.compaction-policy-track-used {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ink-soft);
+  transition: width var(--transition-base);
+}
+
+.compaction-policy-track-mark {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  margin-left: -1px;
+  border-radius: var(--radius-pill);
+  background: var(--signal);
+  transition: left var(--transition-base);
+}
+
+.compaction-policy-scale {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+}
+
+.compaction-policy-scale small:nth-child(2) {
+  color: var(--ink);
+}
+
+/* 条件区 */
+.compaction-policy-conditions {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+.compaction-policy-condition {
+  display: grid;
+  gap: var(--space-2xs);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper);
+  opacity: 0.62;
+  transition: opacity var(--transition-base), border-color var(--transition-base);
+}
+
+/* 生效的条件才是当前决定触发点的那个，用不透明度和描边区分，不加额外装饰 */
+.compaction-policy-condition.is-active {
+  border-color: color-mix(in srgb, var(--signal) 42%, var(--line));
+  opacity: 1;
+}
+
+.compaction-policy-condition-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+}
+
+.compaction-policy-condition-head output {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+  flex: 0 0 auto;
+  color: var(--ink);
+  font: 500 var(--text-2xs)/var(--leading-control) var(--font-code);
+}
+
+.compaction-policy-condition-head em {
+  padding: 0 var(--space-2xs);
+  border-radius: var(--radius-1);
+  background: color-mix(in srgb, var(--signal) 14%, transparent);
+  color: var(--signal);
+  font-size: var(--text-2xs);
+  font-style: normal;
+  line-height: var(--leading-control);
+}
+
+.compaction-policy-condition-body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.compaction-policy-condition-body input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 4px;
+  margin: 0;
+  accent-color: var(--signal);
+  cursor: pointer;
+}
+
+.compaction-policy-condition-body input[type="range"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* 数值输入：单位跟在框内右侧，省掉一行标签 */
+.compaction-policy-number {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-3xs);
+  height: 25px;
+  padding: 0 var(--space-xs);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: var(--paper-deep);
+}
+
+.compaction-policy-number:focus-within {
+  border-color: var(--signal);
+}
+
+.compaction-policy-number input {
+  width: 2.5rem;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 400 var(--text-xs)/var(--leading-control) var(--font-code);
+  text-align: right;
+}
+
+.compaction-policy-number.wide input {
+  width: 4.5rem;
+}
+
+.compaction-policy-number span {
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-control);
+}
+
+/* 快捷档：解决「预留该填多少」没有参照的问题 */
+.compaction-policy-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs);
+  min-width: 0;
+}
+
+.compaction-policy-presets button {
+  height: 22px;
+  padding: 0 var(--space-xs);
+  border: 1px solid transparent;
+  border-radius: var(--radius-2);
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+  font: 400 var(--text-2xs)/var(--leading-control) var(--font-code);
+}
+
+.compaction-policy-presets button:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.compaction-policy-presets button.is-selected {
+  border-color: color-mix(in srgb, var(--signal) 42%, var(--line));
+  color: var(--signal);
+}
+
+.compaction-policy-presets button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.compaction-policy-note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-snug);
+}
+
+.compaction-policy-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-snug);
+}
+
+/* 窄屏：滑块与数字输入各占一行，快捷档换行铺开 */
+@media (max-width: 30rem) {
+  .compaction-policy-condition-body {
+    flex-wrap: wrap;
+    gap: var(--space-2xs);
+  }
+
+  .compaction-policy-condition-body input[type="range"] {
+    flex: 1 1 100%;
+  }
+
+  .compaction-policy-number.wide input {
+    width: 3.5rem;
+  }
+}

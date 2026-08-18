@@ -44,7 +44,7 @@
 
 .search-provider-summary strong {
   color: var(--ink);
-  font: 500 var(--text-xs) var(--font-code);
+  font: 500 var(--text-xs)/var(--leading-control) var(--font-code);
 }
 
 .search-provider-header-actions {

@@ -56,7 +56,7 @@
 .turn-file-changes-summary strong {
   overflow: hidden;
   color: var(--ink);
-  font: 500 var(--text-sm)/1.3 var(--font-ui);
+  font: 500 var(--text-sm)/var(--leading-control) var(--font-ui);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

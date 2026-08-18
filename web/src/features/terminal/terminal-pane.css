@@ -130,7 +130,7 @@
   justify-content: space-between;
   padding:0 var(--space-sm) 0 var(--space-md);
   border-bottom: 1px solid var(--terminal-line);
-  font:500 var(--text-2xs) var(--font-code);
+  font:500 var(--text-2xs)/var(--leading-control) var(--font-code);
   text-transform: uppercase;
 }
 .terminal-sidebar > header {
@@ -139,7 +139,7 @@
   justify-content: space-between;
   padding:0 var(--space-sm) 0 var(--space-md);
   border-bottom: 1px solid var(--terminal-line);
-  font:500 var(--text-2xs) var(--font-code);
+  font:500 var(--text-2xs)/var(--leading-control) var(--font-code);
   text-transform: uppercase;
 }
 
@@ -218,7 +218,7 @@
   outline: 0;
   background: var(--terminal-surface);
   color: var(--terminal-text);
-  font:400 var(--text-2xs) var(--font-code);
+  font:400 var(--text-2xs)/var(--leading-control) var(--font-code);
 }
 
 .terminal-list-item:hover button:last-child {

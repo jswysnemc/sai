@@ -16,7 +16,7 @@
   align-items: center;
   gap: var(--space-sm);
   color: var(--ink-soft);
-  font: var(--text-2xs)/1 var(--font-code);
+  font: var(--text-2xs)/var(--leading-control) var(--font-code);
 }
 
 .trajectory-overview-span {

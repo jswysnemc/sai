@@ -45,7 +45,7 @@
   outline: 0;
   background: transparent;
   color: var(--ink);
-  font:400 var(--text-sm) var(--font-code);
+  font:400 var(--text-sm)/var(--leading-control) var(--font-code);
 }
 
 .model-add .ui-button.model-add-button {
@@ -104,7 +104,7 @@
   background: transparent;
   box-shadow: none;
   color: var(--ink);
-  font:400 var(--text-sm) var(--font-code);
+  font:400 var(--text-sm)/var(--leading-control) var(--font-code);
   text-align: left;
 }
 
@@ -166,7 +166,7 @@
   min-height: 1.75rem;
   height: 1.75rem;
   padding:0 var(--space-md);
-  font:400 var(--text-xs) var(--font-code);
+  font:400 var(--text-xs)/var(--leading-control) var(--font-code);
 }
 
 /* ---------- 供应商自定义 JSON ---------- */

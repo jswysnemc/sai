@@ -259,7 +259,7 @@
   box-shadow: none;
   color: var(--ink-soft);
   font-size:var(--text-sm);
-  line-height: 1;
+  line-height: var(--leading-control);
 }
 
 .composer-footer .composer-mode .ui-select > button:hover:not(:disabled),
@@ -292,7 +292,7 @@
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--signal) 12%, transparent);
   color: var(--signal);
-  font:500 var(--text-2xs)/1 var(--font-ui);
+  font:500 var(--text-2xs)/var(--leading-control) var(--font-ui);
   white-space: nowrap;
 }
 

@@ -10,7 +10,7 @@
   border-radius:var(--radius-3);
   background: transparent;
   color: var(--ink-soft);
-  font:600 var(--text-xs) var(--font-code);
+  font:600 var(--text-xs)/var(--leading-control) var(--font-code);
   letter-spacing: 0.04em;
   cursor: pointer;
 }

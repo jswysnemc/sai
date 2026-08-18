@@ -6,7 +6,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
   color: var(--ink-soft);
-  font: 500 var(--text-2xs)/1 var(--font-ui);
+  font: 500 var(--text-2xs)/var(--leading-control) var(--font-ui);
 }
 
 .codex-subagent-activity.is-started,

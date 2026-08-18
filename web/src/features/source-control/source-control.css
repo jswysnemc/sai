@@ -147,7 +147,7 @@
 
 .git-resource-row small {
   color: var(--ink-soft);
-  font:400 var(--text-2xs) var(--font-code);
+  font:400 var(--text-2xs)/var(--leading-control) var(--font-code);
 }
 
 .git-resource-row > div {
@@ -185,7 +185,7 @@
   outline: 0;
   background: var(--paper-raised);
   color: var(--ink);
-  font:400 var(--text-2xs) var(--font-code);
+  font:400 var(--text-2xs)/var(--leading-control) var(--font-code);
 }
 
 .git-resource-create input:focus {
@@ -544,5 +544,5 @@
   border-radius:var(--radius-1);
   background: var(--surface-soft);
   color: var(--ink-soft);
-  font:500 var(--text-2xs) var(--font-code);
+  font:500 var(--text-2xs)/var(--leading-control) var(--font-code);
 }

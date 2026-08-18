@@ -70,7 +70,7 @@
   align-items: center;
   gap:var(--space-3xs);
   color: var(--ink-soft);
-  font:400 var(--text-2xs) var(--font-code);
+  font:400 var(--text-2xs)/var(--leading-control) var(--font-code);
 }
 
 .git-repository-changes-toggle em {

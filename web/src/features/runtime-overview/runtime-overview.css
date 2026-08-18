@@ -129,7 +129,7 @@
 
 .runtime-overview-section-title small {
   color: var(--ink-soft);
-  font: var(--text-2xs)/1 var(--font-code);
+  font: var(--text-2xs)/var(--leading-control) var(--font-code);
   white-space: nowrap;
 }
 
@@ -240,7 +240,7 @@
 
 .runtime-overview-agent small {
   color: var(--ink-soft);
-  font: var(--text-2xs)/1 var(--font-code);
+  font: var(--text-2xs)/var(--leading-control) var(--font-code);
 }
 
 .runtime-overview.is-collapsed {

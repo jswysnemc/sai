@@ -47,7 +47,7 @@
   border-radius:var(--radius-2);
   background: transparent;
   color: var(--ink);
-  font:400 var(--text-xs) var(--font-code);
+  font:400 var(--text-xs)/var(--leading-control) var(--font-code);
 }
 
 .git-remote-setup-field input:focus-visible {
