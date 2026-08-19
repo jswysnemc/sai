@@ -362,12 +362,12 @@ impl OpenAiCompatibleClient {
                 &mut on_event,
             )?;
         }
-        // 流在没有 [DONE] 的情况下结束：上游连接提前断开。
-        // 此时既没有 finish_reason 也没有结束标记，静默当成功会把
-        // 截断的回复展示成完整回复，真实原因也无从追查
-        if finish_reason.is_none() {
+        // 部分 OpenAI 兼容上游（含 OpenCode）正常收尾时只给 usage，
+        // 既不发 [DONE] 也不带 finish_reason。有用量即可视为完整结束。
+        if !openai_stream_completed(finish_reason.as_deref(), usage.as_ref()) {
             if let Some(debug) = debug.as_ref() {
-                let _ = debug.finish_error(0, "stream ended without [DONE] or finish_reason");
+                let _ =
+                    debug.finish_error(0, "stream ended without [DONE], finish_reason or usage");
             }
             bail!(
                 "{}",
@@ -739,4 +739,19 @@ impl OpenAiCompatibleClient {
         }
         Ok(Some(result))
     }
+}
+
+/// 判断 OpenAI 兼容流是否已经给出完整结束信号。
+///
+/// `[DONE]` 在读循环里直接返回；此处覆盖「连接正常关闭但没发 `[DONE]`」的收尾。
+/// OpenCode 一类上游常在最后一包带上 usage，不写 finish_reason。
+///
+/// 参数:
+/// - `finish_reason`: 上游声明的终止原因
+/// - `usage`: 流里收到的用量
+///
+/// 返回:
+/// - 有终止原因或用量时视为正常结束
+fn openai_stream_completed(finish_reason: Option<&str>, usage: Option<&Usage>) -> bool {
+    finish_reason.is_some_and(|reason| !reason.trim().is_empty()) || usage.is_some()
 }

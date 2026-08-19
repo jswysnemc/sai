@@ -106,6 +106,29 @@ mod stream_error_tests {
         );
     }
 
+    /// 【协议】【流式收尾】验证只回报 usage、不写 finish_reason 时仍算正常结束。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn usage_without_finish_reason_completes_the_stream() {
+        assert!(super::openai_stream_completed(
+            None,
+            Some(&crate::llm::Usage {
+                prompt_tokens: 12,
+                completion_tokens: 3,
+                total_tokens: 15,
+                cache_read_tokens: 0,
+                cache_write_tokens: 0,
+            })
+        ));
+        assert!(!super::openai_stream_completed(None, None));
+        assert!(super::openai_stream_completed(Some("stop"), None));
+    }
+
     /// 【协议】【流式错误】验证正常增量与结束标记不被误判为错误。
     ///
     /// 参数:
@@ -237,7 +260,9 @@ mod stream_error_tests {
         let prepared = apply_preserved_thinking(history, &provider);
 
         assert_eq!(prepared.len(), 3);
-        assert!(prepared.iter().all(|message| message.reasoning_content.is_none()));
+        assert!(prepared
+            .iter()
+            .all(|message| message.reasoning_content.is_none()));
         assert_eq!(prepared[2].role, "tool");
     }
 }

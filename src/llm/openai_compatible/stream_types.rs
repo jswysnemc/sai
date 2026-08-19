@@ -77,7 +77,7 @@ struct ChatStreamChoice {
     #[serde(default)]
     delta: ChatChoiceMessage,
     /// 上游声明的本次生成终止原因，缺省表示尚未结束
-    #[serde(default, deserialize_with = "null_as_default")]
+    #[serde(default, alias = "finishReason", deserialize_with = "null_as_default")]
     finish_reason: Option<String>,
 }
 
@@ -529,10 +529,7 @@ fn append_tool_name(current: &mut String, incoming: &str) {
     } else if incoming.starts_with(current.as_str()) {
         // Cumulative name: replace the shorter prefix with the complete value.
         *current = incoming.to_string();
-    } else if current == incoming
-        || current.starts_with(incoming)
-        || current.ends_with(incoming)
-    {
+    } else if current == incoming || current.starts_with(incoming) || current.ends_with(incoming) {
         // Repeated full name or a repeated fragment; nothing to append.
     } else {
         // Normal OpenAI delta semantics: append the next name fragment.
