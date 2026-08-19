@@ -8,6 +8,7 @@ use crate::state::{
     classify_context_pressure_with, CompactionBudgetPolicy, ContextPressure, FailureKind,
     RecoveryStatus, StateStore, ToolResultMaintenanceMode,
 };
+use crate::state::{context_ratio, occupancy_tokens};
 use anyhow::Result;
 
 impl Agent {
@@ -30,39 +31,52 @@ impl Agent {
         messages: &[ChatMessage],
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
     ) -> Result<bool> {
-        let projection = project_provider_turn_from_messages(messages, 0, self.context_char_budget);
+        let mut projection =
+            project_provider_turn_from_messages(messages, 0, self.context_char_budget);
         if !self.state.should_attempt_auto_compaction()? {
             return Ok(false);
         }
+        // 1. 有 API prompt_tokens 时用上次用量加尚未发出的尾部消息
+        // 2. 未回报时对当前消息做图片友好的全量预估
+        let last_usage = self
+            .state
+            .usage_snapshot()
+            .ok()
+            .and_then(|snapshot| snapshot.last_conversation_usage);
+        let occupancy = occupancy_tokens(messages, last_usage.as_ref());
+        projection.estimate.message_chars = occupancy;
+        projection.estimate.context_ratio =
+            context_ratio(occupancy, projection.estimate.context_limit_chars);
         let context_chars = estimate_projected_request_chars(&projection);
         let context_limit_chars = projection.estimate.context_limit_chars;
         let policy = self.compaction_budget_policy();
-        let maintained = match classify_context_pressure_with(context_chars, context_limit_chars, policy) {
-            ContextPressure::Relaxed => return Ok(false),
-            ContextPressure::SnipStale => {
-                // 1. 免费档：只裁剪，不触发摘要压缩
-                let stats = self
-                    .state
-                    .maintain_stale_tool_results(ToolResultMaintenanceMode::Snip)?;
-                return Ok(stats.rewritten > 0);
-            }
-            ContextPressure::Compact => {
-                // 2. 压缩档：先折叠陈旧结果，省够空间就跳过付费摘要
-                let stats = self
-                    .state
-                    .maintain_stale_tool_results(ToolResultMaintenanceMode::Prune)?;
-                if stats.rewritten > 0
-                    && context_chars.saturating_sub(stats.saved_chars)
-                        < policy.trigger_chars(context_limit_chars)
-                {
-                    return Ok(true);
+        let maintained =
+            match classify_context_pressure_with(context_chars, context_limit_chars, policy) {
+                ContextPressure::Relaxed => return Ok(false),
+                ContextPressure::SnipStale => {
+                    // 1. 免费档：只裁剪，不触发摘要压缩
+                    let stats = self
+                        .state
+                        .maintain_stale_tool_results(ToolResultMaintenanceMode::Snip)?;
+                    return Ok(stats.rewritten > 0);
                 }
-                stats.rewritten > 0
-            }
-        };
-        let Some(request) = self
-            .state
-            .select_compaction_for_projection_with(&projection, false, policy)?
+                ContextPressure::Compact => {
+                    // 2. 压缩档：先折叠陈旧结果，省够空间就跳过付费摘要
+                    let stats = self
+                        .state
+                        .maintain_stale_tool_results(ToolResultMaintenanceMode::Prune)?;
+                    if stats.rewritten > 0
+                        && context_chars.saturating_sub(stats.saved_chars)
+                            < policy.trigger_chars(context_limit_chars)
+                    {
+                        return Ok(true);
+                    }
+                    stats.rewritten > 0
+                }
+            };
+        let Some(request) =
+            self.state
+                .select_compaction_for_projection_with(&projection, false, policy)?
         else {
             return Ok(maintained);
         };

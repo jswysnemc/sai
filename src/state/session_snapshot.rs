@@ -144,17 +144,12 @@ impl StateStore {
     /// - 预估 prompt token 数
     fn estimate_session_context_tokens(&self) -> Result<usize> {
         let history = super::checkpoints::project_history(&self.conv_db, &self.session_id, None)?;
-        let mut parts = Vec::new();
-        if let Some(context) = history.checkpoint_context.as_ref() {
-            parts.push(context.clone());
+        let mut messages = Vec::new();
+        if let Some(context) = history.checkpoint_context {
+            messages.push(crate::llm::ChatMessage::system(context));
         }
-        for message in &history.messages {
-            if let Ok(serialized) = serde_json::to_string(message) {
-                parts.push(serialized);
-            }
-        }
-        let refs: Vec<&str> = parts.iter().map(String::as_str).collect();
-        Ok(crate::token_estimate::estimate_texts_tokens(&refs) as usize)
+        messages.extend(history.messages);
+        Ok(super::compaction::estimate_chat_messages_tokens(&messages))
     }
 }
 

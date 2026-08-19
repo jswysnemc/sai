@@ -30,9 +30,9 @@ use std::sync::Arc;
 
 #[allow(unused_imports)]
 pub use compaction::{
-    classify_context_pressure_with, should_compact_for_context_tokens_with, CompactionApplyOutcome,
-    CompactionBudgetPolicy, CompactionRequest, CompactionSummary, ContextPressure,
-    ResolvedCompactionPolicy,
+    classify_context_pressure_with, occupancy_tokens, should_compact_for_context_tokens_with,
+    CompactionApplyOutcome, CompactionBudgetPolicy, CompactionRequest, CompactionSummary,
+    ContextPressure, ResolvedCompactionPolicy,
 };
 pub(crate) use compaction::{summary_char_limit, validate_summary};
 pub use context_epoch::{ContextEpochProjection, ContextEpochSummary, ContextSourceInput};

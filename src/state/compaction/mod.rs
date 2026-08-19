@@ -1,9 +1,9 @@
 mod budget;
-mod policy;
 mod estimate;
 mod handoff;
 mod message_origin;
 mod model;
+mod policy;
 mod projection_budget;
 mod prompt;
 mod selector;
@@ -18,8 +18,7 @@ pub use budget::{
     classify_context_pressure_with, should_compact_for_context_tokens_with, CompactionBudgetPolicy,
     ContextPressure,
 };
-pub use policy::ResolvedCompactionPolicy;
-pub use estimate::{estimate_chat_messages_chars, estimate_chat_messages_tokens};
+pub use estimate::{estimate_chat_messages_chars, estimate_chat_messages_tokens, occupancy_tokens};
 pub(in crate::state) use handoff::elision_marker_message;
 pub use handoff::summary_context_message;
 #[allow(unused_imports)]
@@ -27,6 +26,7 @@ pub(crate) use message_origin::is_real_user_input;
 #[allow(unused_imports)]
 pub use model::RunningTurnCompaction;
 pub use model::{CompactionRequest, CompactionSummary};
+pub use policy::ResolvedCompactionPolicy;
 pub use selector::select_compaction_with;
 #[allow(unused_imports)]
 pub(crate) use selector::{PRESERVED_RECENT_TURNS, PRESERVED_RUNNING_TOOL_CALLS};
