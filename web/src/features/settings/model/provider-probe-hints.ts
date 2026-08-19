@@ -61,7 +61,6 @@ export function probeHint(kind: ProviderProbeErrorKind | undefined, t: Translate
  * @returns 阶段显示名
  */
 export function stageLabel(stage: string, t: Translate): string {
-  if (stage === "catalog") return t("Endpoint & credentials", "地址与凭据");
   if (stage === "completion") return t("Model response", "模型响应");
   if (stage === "tool_call") return t("Tool calling", "工具调用");
   return stage;

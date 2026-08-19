@@ -128,6 +128,7 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 - **后台任务管理** - 管理常驻进程、Cron 任务
 - **系统监控** - CPU / RSS 实时图表
 - **设置中心** - 供应商、模型、权限、网关、MCP、Hooks、记忆、人格、Skills 全图形化配置
+- **供应商探测** - 连通性测试发一条最小对话；工具测试要求模型发出一次虚拟函数调用。两者都不依赖 `/models`
 - **国际化** - 中英文界面切换
 - **访问控制** - `--host` 绑定监听地址(默认本机);`sai web-password` 设置访问口令
 - **会话分支** - 从任意轮次分叉、浏览与切换;分支总览画布支持缩放拖动
@@ -514,6 +515,10 @@ Linux `~/.local/share/sai` / macOS `~/Library/Application Support/sai` / Windows
 **支持哪些模型?**
 
 任何兼容 OpenAI Chat、OpenAI Responses、Anthropic Messages 三种协议的模型均可接入。默认内置 opencode Zen、OpenAI、Anthropic 三套模板,可自定义 `base_url` 接入第三方中转。
+
+**连通性测试为什么不请求 `/models`?**
+
+测试要回答的是「这个模型能不能出结果」。不少中转站不提供 `/models`，或给它单独设了权限。刷新模型目录是供应商页上的独立操作。
 
 **长对话上下文会丢吗?**
 

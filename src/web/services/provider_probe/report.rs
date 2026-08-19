@@ -3,7 +3,7 @@ use serde::Serialize;
 /// 单个探测阶段的结果。
 #[derive(Debug, Clone, Serialize)]
 pub struct ProbeStageResult {
-    /// 阶段标识：catalog、completion 或 tool_call
+    /// 阶段标识：completion 或 tool_call
     pub stage: &'static str,
     pub ok: bool,
     pub duration_ms: u64,

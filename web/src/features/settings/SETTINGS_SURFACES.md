@@ -24,7 +24,7 @@ Derivation rules (implemented in `showsAppConfigSave` and `SettingsSectionBody`)
 
 | id | group | appConfig | Data source | Notes |
 |---|---|---|---|---|
-| providers | general | required | `api.config` | Endpoints, credentials, models |
+| providers | general | required | `api.config` | Endpoints, credentials, models. Connection test sends a minimal chat; tool test sends a dummy function definition. Catalog refresh is a separate action, not a probe prerequisite |
 | agents | general | required | `api.config` + agent APIs | Profile workspace may call agent APIs |
 | runtime | general | required | `api.config` | Engine, permissions, notifications, terminal, context, display, tools |
 | appearance | general | none | theme/locale local storage | Instant apply, browser-only |

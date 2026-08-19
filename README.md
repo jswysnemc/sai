@@ -126,6 +126,7 @@ Run `sai web` and a browser opens a full remote programming workbench:
 - **Background tasks** - Manage long-running processes and cron jobs
 - **System monitor** - Real-time CPU / RSS charts
 - **Settings center** - Graphical config for providers, models, permissions, gateways, MCP, hooks, memory, personas, skills
+- **Provider checks** - Connection test sends a minimal chat; tool test asks the model to emit a dummy function call. Neither requires `/models`
 - **i18n** - Chinese / English UI toggle
 - **Access control** - `--host` bind address (localhost by default); `sai web-password` sets an access password
 - **Conversation branches** - Fork, browse, and switch from any turn; the branch-overview canvas supports pan and zoom
@@ -512,6 +513,10 @@ No. The terminal REPL, one-shot ask, and web workbench all work locally. Configu
 **Which models are supported?**
 
 Any model compatible with OpenAI Chat, OpenAI Responses, or Anthropic Messages. opencode Zen, OpenAI, and Anthropic templates are bundled; custom `base_url` accepts any third-party relay.
+
+**Why does the connection test not call `/models`?**
+
+The test answers whether the chosen model can produce a reply. Many relays omit `/models` or put it behind a different permission. Refreshing the catalog is a separate action on the providers page.
 
 **Does long-context get lost?**
 

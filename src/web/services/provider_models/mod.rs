@@ -2,7 +2,9 @@
 
 mod catalog;
 mod match_score;
+mod reasoning_field;
 mod response;
+mod transport_error;
 
 use super::config_service::SECRET_SENTINEL;
 use crate::config::{AppConfig, ProviderConfig};
@@ -15,6 +17,7 @@ use std::time::Duration;
 pub(crate) use catalog::fetch_catalog_metadata;
 use catalog::{fetch_litellm_catalog, fetch_models_dev_catalog, fetch_openrouter_catalog};
 use response::parse_models_response;
+use transport_error::describe_transport_error;
 
 /// 使用当前配置补齐脱敏凭据。
 ///
@@ -66,6 +69,7 @@ pub(crate) fn restore_provider_secret(
 }
 
 /// 供应商模型接口返回结果。
+#[derive(Debug)]
 pub(crate) struct FetchModelsResult {
     pub(crate) models: Vec<String>,
     pub(crate) metadata: BTreeMap<String, CatalogMetadata>,
@@ -107,7 +111,7 @@ pub(crate) fn fetch_models(
                 }
             }
             Err(error) => {
-                last_error = Some(error.to_string());
+                last_error = Some(describe_transport_error(&error));
                 break;
             }
         }

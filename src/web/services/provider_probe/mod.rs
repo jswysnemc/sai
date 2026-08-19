@@ -26,9 +26,9 @@ const PROBE_TIMEOUT_SECONDS: u64 = 20;
 
 /// 对一个供应商执行普通连通性探测。
 ///
-/// 分两个阶段，任一阶段失败即停止：
-/// 1. catalog：拉取模型列表，验证地址可达与凭据有效
-/// 2. completion：发一条最小对话，验证该模型标识真能出结果
+/// 只发一条最小对话请求：连通性要回答的是"这个模型能不能用"，
+/// 而模型目录接口给不出这个答案。不少中转站压根不提供 `/models`，
+/// 或者给它单独设了权限，拿它当前置条件只会让测试停在真正该测的东西之前。
 ///
 /// 参数:
 /// - `paths`: Sai 路径
@@ -45,22 +45,11 @@ pub async fn probe_provider(
     model: Option<&str>,
 ) -> Result<ProviderProbeReport> {
     let target_model = resolve_model(provider, model);
-    let catalog_stage = run_catalog_stage(paths, provider, &target_model).await;
-    let catalog_ok = catalog_stage.ok;
-    let mut stages = vec![catalog_stage];
-    if !catalog_ok {
-        return Ok(ProviderProbeReport::from_stages(
-            provider.id.clone(),
-            target_model,
-            stages,
-            None,
-        ));
-    }
-
     // 1. 推理阶段：该模型是否真的可用
     let completion_started = Instant::now();
     let completion = run_completion(paths, config, provider, &target_model).await;
     let completion_ms = completion_started.elapsed().as_millis() as u64;
+    let mut stages = Vec::new();
     let tokens = match &completion {
         Ok(outcome) => {
             stages.push(ProbeStageResult::success(
@@ -90,7 +79,7 @@ pub async fn probe_provider(
 
 /// 对一个供应商执行独立的工具调用探测。
 ///
-/// 先验证目录接口，再发送带最小工具定义的请求；不会执行模型返回的工具。
+/// 直接发送带最小工具定义的请求；不会执行模型返回的工具。
 ///
 /// 参数:
 /// - `paths`: Sai 路径
@@ -107,22 +96,10 @@ pub async fn probe_provider_tools(
     model: Option<&str>,
 ) -> Result<ProviderProbeReport> {
     let target_model = resolve_model(provider, model);
-    let catalog_stage = run_catalog_stage(paths, provider, &target_model).await;
-    let catalog_ok = catalog_stage.ok;
-    let mut stages = vec![catalog_stage];
-    if !catalog_ok {
-        return Ok(ProviderProbeReport::from_stages(
-            provider.id.clone(),
-            target_model,
-            stages,
-            None,
-        ));
-    }
-
     let tool_started = Instant::now();
     let tool = run_tool_call(paths, config, provider, &target_model).await;
     let tool_ms = tool_started.elapsed().as_millis() as u64;
-    let tokens = None;
+    let mut stages = Vec::new();
     match &tool {
         Ok(detail) => stages.push(ProbeStageResult::success(
             "tool_call",
@@ -136,7 +113,7 @@ pub async fn probe_provider_tools(
         provider.id.clone(),
         target_model,
         stages,
-        tokens,
+        None,
     ))
 }
 
@@ -163,62 +140,6 @@ fn resolve_model(provider: &ProviderConfig, model: Option<&str>) -> String {
         return provider.default_model.clone();
     }
     provider.models.first().cloned().unwrap_or_default()
-}
-
-/// 请求模型目录并生成目录阶段结果。
-///
-/// @param paths Sai 路径
-/// @param provider 待探测的供应商配置
-/// @param target_model 待探测的模型标识
-/// @returns 目录阶段结果
-async fn run_catalog_stage(
-    paths: &SaiPaths,
-    provider: &ProviderConfig,
-    target_model: &str,
-) -> ProbeStageResult {
-    let catalog_started = Instant::now();
-    let catalog = fetch_catalog(paths, provider).await;
-    let catalog_ms = catalog_started.elapsed().as_millis() as u64;
-    match catalog {
-        Ok(models) => {
-            ProbeStageResult::success("catalog", catalog_ms, catalog_detail(&models, target_model))
-        }
-        Err(error) => ProbeStageResult::failure("catalog", catalog_ms, &error),
-    }
-}
-
-/// 拉取模型目录。
-///
-/// 参数:
-/// - `paths`: Sai 路径
-/// - `provider`: 供应商配置
-///
-/// 返回:
-/// - 模型标识列表
-async fn fetch_catalog(paths: &SaiPaths, provider: &ProviderConfig) -> Result<Vec<String>> {
-    let paths = paths.clone();
-    let provider = provider.clone();
-    tokio::task::spawn_blocking(move || {
-        super::provider_models::fetch_models(&paths, &provider).map(|result| result.models)
-    })
-    .await?
-}
-
-/// 组装目录阶段的成功摘要。
-///
-/// 参数:
-/// - `models`: 拉到的模型列表
-/// - `target`: 待探测模型
-///
-/// 返回:
-/// - 含模型总数的摘要；目标模型不在列表中时额外提示
-fn catalog_detail(models: &[String], target: &str) -> String {
-    let count = models.len();
-    if target.is_empty() || models.iter().any(|model| model == target) {
-        return format!("{count} models");
-    }
-    // 不少中转站的目录接口并不完整，这里只提示而不判定为失败
-    format!("{count} models; \"{target}\" not listed")
 }
 
 /// 发送一次最小对话请求。
@@ -412,20 +333,6 @@ mod tests {
         assert_eq!(resolve_model(&provider, None), "default-model");
         let without_default = provider_with("", &["first-model"]);
         assert_eq!(resolve_model(&without_default, None), "first-model");
-    }
-
-    /// 验证目录摘要在模型缺席时给出提示。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 无；断言失败则测试不通过
-    #[test]
-    fn flags_model_missing_from_catalog() {
-        let models = vec!["a".to_string(), "b".to_string()];
-        assert_eq!(catalog_detail(&models, "a"), "2 models");
-        assert_eq!(catalog_detail(&models, "z"), "2 models; \"z\" not listed");
     }
 
     /// 验证回复摘要压平换行并在超长时截断。

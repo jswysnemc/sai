@@ -160,6 +160,14 @@ mod tests {
             classify("request timed out after 30s"),
             ProbeErrorKind::Timeout
         );
+        // 展开后的 reqwest 链路把 DNS 根因露出来，才能从「未知」归到网络
+        assert_eq!(
+            classify(
+                "error sending request for url (https://api.example.test/v1/models): \
+client error (Connect): dns error: failed to lookup address"
+            ),
+            ProbeErrorKind::Network
+        );
     }
 
     /// 验证模型不存在与限流的归类。

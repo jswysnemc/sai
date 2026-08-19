@@ -40,8 +40,9 @@ function providerForProbe(provider: ProviderConfig, selectedKeyId?: string): Pro
 /**
  * 渲染供应商连通性测试控件。
  *
- * 测试分两个阶段执行：先验地址与凭据，再发一条最小对话验模型可用。
- * 分阶段展示是为了让失败能落到具体一环，而不是笼统的"连接失败"。
+ * 连通性测试发一条最小对话，工具测试发一条带最小工具定义的请求。
+ * 两者都不先打 `/models`：目录接口回答不了「这个模型能不能用」，
+ * 不少中转站甚至不提供该接口。
  *
  * @param props 供应商配置与待测模型
  * @returns 测试按钮与结果面板
