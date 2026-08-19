@@ -57,6 +57,7 @@ mod repl_editor_buffer;
 mod repl_external_events;
 mod repl_input;
 mod repl_input_navigation;
+mod repl_mentions;
 mod repl_input_render;
 #[cfg(test)]
 mod repl_input_tests;

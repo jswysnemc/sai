@@ -91,7 +91,12 @@ pub(super) async fn drain_submission_queue(
             }
             // 剪贴板附件在此还原：图片与长文本占位块换回真实内容
             let (echo_text, fold_echo) = item.clipboard.echo_text_for_submit(&text);
-            let chat_input = item.clipboard.to_chat_input(&text);
+            let mut chat_input = item.clipboard.to_chat_input(&text);
+            chat_input.message = crate::cli::repl_mentions::expand_skill_mentions(
+                &chat_input.message,
+                config,
+                paths,
+            );
             if chat_input.message.trim().is_empty() && chat_input.image_url.is_none() {
                 continue;
             }

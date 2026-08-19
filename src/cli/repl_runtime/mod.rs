@@ -7,6 +7,7 @@ mod history;
 mod history_insert;
 mod layout;
 mod live_usage;
+mod mention_panel;
 mod placeholder_tips;
 mod queue_panel;
 mod reflow;
@@ -77,6 +78,8 @@ pub(super) struct ReplRuntime {
     last_cursor_row: Option<u16>,
     /// 上次 composer 绘制的内容签名，用于跳过无变化的重绘
     last_composer_signature: Option<composer_frame::ComposerSignature>,
+    /// `#` 引用可用的 skill 名称与描述
+    mention_skills: Vec<(String, String)>,
     /// 沉底 todo 是否单行模式（Ctrl+T 切换）
     todo_panel_compact: bool,
     /// 当前轮已完成请求的实时用量，轮次结束后清空
@@ -139,9 +142,29 @@ impl ReplRuntime {
             queue_panel: queue_panel::QueuePanelState::default(),
             last_cursor_row: None,
             last_composer_signature: None,
+            mention_skills: Vec::new(),
             todo_panel_compact: false,
             live_usage: live_usage::LiveTurnUsage::default(),
         }
+    }
+
+    /// 更新 `#` 引用使用的 skill 目录。
+    ///
+    /// 参数:
+    /// - `skills`: 名称与描述
+    ///
+    /// 返回:
+    /// - 无
+    pub(in crate::cli) fn set_mention_skills(&mut self, skills: Vec<(String, String)>) {
+        self.mention_skills = skills;
+    }
+
+    /// 返回当前缓存的 skill 引用目录。
+    ///
+    /// 返回:
+    /// - 名称与描述
+    pub(in crate::cli) fn mention_skills(&self) -> &[(String, String)] {
+        &self.mention_skills
     }
 
     /// 切换沉底 todo 单行 / 多行模式。

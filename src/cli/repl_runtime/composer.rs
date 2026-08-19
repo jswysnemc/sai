@@ -40,6 +40,7 @@ impl ReplRuntime {
             clipboard_blocks,
             slash_selection,
         );
+        frame.set_mention_skills(self.mention_skills.clone());
         frame.set_panel_lines(self.bottom_panel_lines(usize::from(size.cols)));
         self.last_chrome = Some(chrome.clone());
         self.composer = Some(frame);

@@ -1,3 +1,4 @@
+use super::mention_panel::MentionPanel;
 use super::shell_hint_panel::{bang_ghost_suffix, ShellHintPanel};
 use super::slash_panel::SlashPanel;
 use super::viewport::InlineViewport;
@@ -9,6 +10,7 @@ use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
 use crate::cli::repl_input_render::{
     repl_cursor_position_for_cols, repl_prompt_rows_for_cols, repl_visible_input_lines,
 };
+use crate::cli::repl_mentions::{find_mention_trigger, mention_suggestions};
 use crate::cli::repl_text::{repl_input_lines, visible_width};
 use crate::cli::REPL_MAX_VISIBLE_INPUT_ROWS;
 use crate::render::terminal_paint::paint_lock;
@@ -32,6 +34,7 @@ pub(super) struct ComposerSignature {
     input_lines: Vec<String>,
     footer: Option<String>,
     slash_lines: Vec<String>,
+    mention_lines: Vec<String>,
     shell_lines: Vec<String>,
     cursor_col: u16,
     cursor_row: u16,
@@ -46,6 +49,8 @@ pub(super) struct ComposerFrame {
     is_pasted: bool,
     clipboard_blocks: Vec<ReplClipboardBlockSpan>,
     slash_selection: usize,
+    /// `#` 引用可用的 skill 名称与描述
+    mention_skills: Vec<(String, String)>,
     /// 输入框上方的沉底面板行（todo 快照 / 排队消息 / agent 提示）
     panel_lines: Vec<String>,
 }
@@ -78,8 +83,20 @@ impl ComposerFrame {
             is_pasted,
             clipboard_blocks,
             slash_selection,
+            mention_skills: Vec::new(),
             panel_lines: Vec::new(),
         }
+    }
+
+    /// 设置 `#` 引用使用的 skill 目录。
+    ///
+    /// 参数:
+    /// - `skills`: 名称与描述
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn set_mention_skills(&mut self, skills: Vec<(String, String)>) {
+        self.mention_skills = skills;
     }
 
     /// 设置输入框上方的沉底面板行。
@@ -123,7 +140,13 @@ impl ComposerFrame {
         let input_block = CHROME_INPUT_INNER_PAD_ROWS
             .saturating_mul(2)
             .saturating_add(layout.input_rows);
-        // slash / shell 提示时收起状态行，输入上方保留一行空白
+        // slash / mention / shell 提示时收起状态行，输入上方保留一行空白
+        if layout.mention_panel.is_visible() {
+            return panel_rows
+                .saturating_add(CHROME_INPUT_PAD_ROWS)
+                .saturating_add(input_block)
+                .saturating_add(layout.mention_panel.height());
+        }
         if layout.slash_panel.is_visible() {
             return panel_rows
                 .saturating_add(CHROME_INPUT_PAD_ROWS)
@@ -186,12 +209,16 @@ impl ComposerFrame {
             cols,
             panel_lines: self.panel_lines.clone(),
             input_lines: layout.styled_display_lines.clone(),
-            footer: if layout.slash_panel.is_visible() || layout.shell_hint.is_visible() {
+            footer: if layout.mention_panel.is_visible()
+                || layout.slash_panel.is_visible()
+                || layout.shell_hint.is_visible()
+            {
                 None
             } else {
                 Some(self.chrome.footer_line(cols))
             },
             slash_lines: layout.slash_panel.rendered_lines(cols),
+            mention_lines: layout.mention_panel.rendered_lines(cols),
             shell_lines: layout.shell_hint.rendered_lines(cols),
             cursor_col: drawn_cursor_col,
             cursor_row,
@@ -264,8 +291,11 @@ impl ComposerFrame {
             queue!(output, MoveTo(0, row), Print(chrome_input_pad_row(cols)))?;
             row = row.saturating_add(1);
         }
-        // slash/shell 提示或状态行直接接在输入条之下
-        let end_row = if layout.slash_panel.is_visible() {
+        // mention/slash/shell 提示或状态行直接接在输入条之下
+        let end_row = if layout.mention_panel.is_visible() {
+            layout.mention_panel.draw(output, row, cols)?;
+            row.saturating_add(layout.mention_panel.height())
+        } else if layout.slash_panel.is_visible() {
             layout.slash_panel.draw(output, row, cols)?;
             row.saturating_add(layout.slash_panel.height())
         } else if layout.shell_hint.is_visible() {
@@ -319,7 +349,17 @@ impl ComposerFrame {
             }
         }
         let input_rows = repl_prompt_rows_for_cols("", &display_lines, content_cols).max(1);
-        let slash_panel = SlashPanel::new(&self.input, self.slash_selection);
+        let mention_panel = mention_panel_for(
+            &self.input,
+            self.cursor,
+            self.slash_selection,
+            &self.mention_skills,
+        );
+        let slash_panel = if mention_panel.is_visible() {
+            SlashPanel::new("", 0)
+        } else {
+            SlashPanel::new(&self.input, self.slash_selection)
+        };
         let shell_hint =
             ShellHintPanel::new(&self.input, &self.chrome.model, &self.chrome.directory);
         // 折叠判定用显式标志：原文恰好 3 行时显示行数与原始行数相等，
@@ -337,6 +377,7 @@ impl ComposerFrame {
             styled_display_lines,
             input_rows,
             slash_panel,
+            mention_panel,
             shell_hint,
             cursor_col,
             cursor_row_offset,
@@ -392,11 +433,34 @@ fn wrap_styled_line(text: &str, cols: usize) -> Vec<String> {
     lines
 }
 
+/// 构造当前光标处的引用面板。
+///
+/// 参数:
+/// - `input`: 当前输入
+/// - `cursor`: 光标字符偏移
+/// - `selected`: 选中项
+/// - `skills`: skill 目录
+///
+/// 返回:
+/// - 引用面板
+fn mention_panel_for(
+    input: &str,
+    cursor: usize,
+    selected: usize,
+    skills: &[(String, String)],
+) -> MentionPanel {
+    let suggestions = find_mention_trigger(input, cursor)
+        .map(|trigger| mention_suggestions(&trigger, skills))
+        .unwrap_or_default();
+    MentionPanel::new(suggestions, selected)
+}
+
 /// composer 在单一终端宽度下的计算结果。
 struct ComposerLayout {
     styled_display_lines: Vec<String>,
     input_rows: u16,
     slash_panel: SlashPanel,
+    mention_panel: MentionPanel,
     shell_hint: ShellHintPanel,
     cursor_col: u16,
     cursor_row_offset: u16,

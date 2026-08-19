@@ -282,7 +282,10 @@ fn handle_stream_key(
             runtime.redraw_stream_composer()?;
         }
         KeyCode::Tab => {
-            // Tab：先补全斜杠命令，无补全时才把草稿入队
+            // Tab：先补全 #/@ 引用，再补全斜杠命令，否则入队
+            if complete_stream_mention(runtime)? {
+                return Ok(());
+            }
             if runtime.stream_draft().text.starts_with('/') {
                 let completed =
                     crate::cli::repl_commands::complete_repl_command(&runtime.stream_draft().text);
@@ -299,7 +302,25 @@ fn handle_stream_key(
             let _ = runtime.enqueue_stream_draft(mode)?;
         }
         KeyCode::Up => {
-            // 斜杠面板可见时上下键移动选中项，否则不干预运行中输入
+            // 引用或斜杠面板可见时上下键移动选中项
+            let draft = runtime.stream_draft();
+            let mentions =
+                crate::cli::repl_mentions::find_mention_trigger(&draft.text, draft.cursor)
+                    .map(|trigger| {
+                        crate::cli::repl_mentions::mention_suggestions(
+                            &trigger,
+                            runtime.mention_skills(),
+                        )
+                    })
+                    .unwrap_or_default();
+            if !mentions.is_empty() {
+                let draft = runtime.stream_draft_mut();
+                draft.slash_selection = (draft.slash_selection % mentions.len())
+                    .checked_sub(1)
+                    .unwrap_or(mentions.len().saturating_sub(1));
+                runtime.redraw_stream_composer()?;
+                return Ok(());
+            }
             let suggestions = crate::cli::repl_commands::visible_repl_command_suggestions(
                 &runtime.stream_draft().text,
             );
@@ -312,6 +333,22 @@ fn handle_stream_key(
             }
         }
         KeyCode::Down => {
+            let draft = runtime.stream_draft();
+            let mentions =
+                crate::cli::repl_mentions::find_mention_trigger(&draft.text, draft.cursor)
+                    .map(|trigger| {
+                        crate::cli::repl_mentions::mention_suggestions(
+                            &trigger,
+                            runtime.mention_skills(),
+                        )
+                    })
+                    .unwrap_or_default();
+            if !mentions.is_empty() {
+                let draft = runtime.stream_draft_mut();
+                draft.slash_selection = (draft.slash_selection + 1) % mentions.len();
+                runtime.redraw_stream_composer()?;
+                return Ok(());
+            }
             let suggestions = crate::cli::repl_commands::visible_repl_command_suggestions(
                 &runtime.stream_draft().text,
             );
@@ -329,6 +366,9 @@ fn handle_stream_key(
                 draft.is_pasted = false;
                 runtime.redraw_stream_composer()?;
             } else {
+                if complete_stream_mention(runtime)? {
+                    return Ok(());
+                }
                 // Enter：面板可见时先落选中命令，否则 /model 会被当普通文本发出
                 let suggestions = crate::cli::repl_commands::visible_repl_command_suggestions(
                     &runtime.stream_draft().text,
@@ -418,6 +458,41 @@ fn handle_stream_key(
         _ => {}
     }
     Ok(())
+}
+
+/// 确认流式草稿中的 `#` / `@` 引用。
+///
+/// 参数:
+/// - `runtime`: REPL 运行期
+///
+/// 返回:
+/// - 已补全时为真
+fn complete_stream_mention(runtime: &mut ReplRuntime) -> Result<bool> {
+    let draft = runtime.stream_draft();
+    let Some(trigger) = crate::cli::repl_mentions::find_mention_trigger(&draft.text, draft.cursor)
+    else {
+        return Ok(false);
+    };
+    let suggestions =
+        crate::cli::repl_mentions::mention_suggestions(&trigger, runtime.mention_skills());
+    let Some(item) = suggestions
+        .get(
+            draft
+                .slash_selection
+                .min(suggestions.len().saturating_sub(1)),
+        )
+        .cloned()
+    else {
+        return Ok(false);
+    };
+    let draft = runtime.stream_draft_mut();
+    let (next, cursor) = crate::cli::repl_mentions::apply_mention(&draft.text, &trigger, &item);
+    draft.text = next;
+    draft.cursor = cursor;
+    draft.slash_selection = 0;
+    draft.is_pasted = false;
+    runtime.redraw_stream_composer()?;
+    Ok(true)
 }
 
 /// 把终端按键转换为 Windows 粘贴回放可比较的字符。

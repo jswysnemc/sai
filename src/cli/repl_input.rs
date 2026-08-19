@@ -1,6 +1,9 @@
 use super::repl_chrome::ReplChrome;
 use super::repl_clipboard::ReplClipboardState;
 use super::repl_external_events::ReplExternalEvents;
+use super::repl_mentions::{
+    apply_mention, find_mention_trigger, mention_suggestions, MentionSuggestion,
+};
 use super::repl_runtime::{QueuePanelIdleResult, ReplRuntime};
 use super::repl_windows_paste::{WindowsPasteKey, WindowsPasteState};
 use super::*;
@@ -325,8 +328,18 @@ pub(super) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Tab => {
-                        // Tab：斜杠命令补全；空闲时也可提示队列能力（无文本则忽略）
-                        if input.starts_with('/') {
+                        // Tab：引用补全或斜杠命令补全
+                        if let Some((next, next_cursor)) = complete_active_mention(
+                            &input,
+                            cursor,
+                            slash_selection,
+                            runtime.mention_skills(),
+                        ) {
+                            input = next;
+                            cursor = next_cursor;
+                            slash_selection = 0;
+                            history_clean_index = None;
+                        } else if input.starts_with('/') {
                             if let Some(completed) = complete_repl_command(&input) {
                                 input = completed.to_string();
                                 cursor = input.chars().count();
@@ -389,74 +402,95 @@ pub(super) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Up => {
-                        let suggestions = visible_repl_command_suggestions(&input);
-                        if !suggestions.is_empty() {
-                            slash_selection = (slash_selection % suggestions.len())
+                        let mentions =
+                            active_mention_suggestions(&input, cursor, runtime.mention_skills());
+                        if !mentions.is_empty() {
+                            slash_selection = (slash_selection % mentions.len())
                                 .checked_sub(1)
-                                .unwrap_or(suggestions.len().saturating_sub(1));
+                                .unwrap_or(mentions.len().saturating_sub(1));
                             redraw_input!()?;
                         } else {
-                            let plain_prefix = String::new();
-                            if let Some(next_cursor) = move_cursor_up_by_visual_row(
-                                &plain_prefix,
-                                &input,
-                                cursor,
-                                terminal_cols(),
-                            ) {
-                                cursor = next_cursor;
+                            let suggestions = visible_repl_command_suggestions(&input);
+                            if !suggestions.is_empty() {
+                                slash_selection = (slash_selection % suggestions.len())
+                                    .checked_sub(1)
+                                    .unwrap_or(suggestions.len().saturating_sub(1));
                                 redraw_input!()?;
-                            } else if repl_should_browse_history(
-                                &input,
-                                history,
-                                history_clean_index,
-                            ) {
-                                if input.is_empty() {
-                                    history_index = history.len();
+                            } else {
+                                let plain_prefix = String::new();
+                                if let Some(next_cursor) = move_cursor_up_by_visual_row(
+                                    &plain_prefix,
+                                    &input,
+                                    cursor,
+                                    terminal_cols(),
+                                ) {
+                                    cursor = next_cursor;
+                                    redraw_input!()?;
+                                } else if repl_should_browse_history(
+                                    &input,
+                                    history,
+                                    history_clean_index,
+                                ) {
+                                    if input.is_empty() {
+                                        history_index = history.len();
+                                    }
+                                    history_index = history_index.saturating_sub(1);
+                                    input = history.get(history_index).cloned().unwrap_or_default();
+                                    cursor = input.chars().count();
+                                    history_clean_index = Some(history_index);
+                                    slash_selection = 0;
+                                    clipboard_state.clear();
+                                    is_pasted = false;
+                                    redraw_input!()?;
                                 }
-                                history_index = history_index.saturating_sub(1);
-                                input = history.get(history_index).cloned().unwrap_or_default();
-                                cursor = input.chars().count();
-                                history_clean_index = Some(history_index);
-                                slash_selection = 0;
-                                clipboard_state.clear();
-                                is_pasted = false;
-                                redraw_input!()?;
                             }
                         }
                     }
                     KeyCode::Down => {
-                        let suggestions = visible_repl_command_suggestions(&input);
-                        if !suggestions.is_empty() {
-                            slash_selection = (slash_selection + 1) % suggestions.len();
+                        let mentions =
+                            active_mention_suggestions(&input, cursor, runtime.mention_skills());
+                        if !mentions.is_empty() {
+                            slash_selection = (slash_selection + 1) % mentions.len();
                         } else {
-                            let plain_prefix = String::new();
-                            if let Some(next_cursor) = move_cursor_down_by_visual_row(
-                                &plain_prefix,
-                                &input,
-                                cursor,
-                                terminal_cols(),
-                            ) {
-                                cursor = next_cursor;
-                            } else if repl_history_is_clean(&input, history, history_clean_index)
-                                && history_index + 1 < history.len()
-                            {
-                                history_index += 1;
-                                input = history.get(history_index).cloned().unwrap_or_default();
-                                cursor = input.chars().count();
-                                history_clean_index = Some(history_index);
-                                slash_selection = 0;
-                                clipboard_state.clear();
-                                is_pasted = false;
-                            } else if repl_history_is_clean(&input, history, history_clean_index)
-                                && history_index < history.len()
-                            {
-                                history_index = history.len();
-                                input.clear();
-                                cursor = input.chars().count();
-                                history_clean_index = None;
-                                slash_selection = 0;
-                                clipboard_state.clear();
-                                is_pasted = false;
+                            let suggestions = visible_repl_command_suggestions(&input);
+                            if !suggestions.is_empty() {
+                                slash_selection = (slash_selection + 1) % suggestions.len();
+                            } else {
+                                let plain_prefix = String::new();
+                                if let Some(next_cursor) = move_cursor_down_by_visual_row(
+                                    &plain_prefix,
+                                    &input,
+                                    cursor,
+                                    terminal_cols(),
+                                ) {
+                                    cursor = next_cursor;
+                                } else if repl_history_is_clean(
+                                    &input,
+                                    history,
+                                    history_clean_index,
+                                ) && history_index + 1 < history.len()
+                                {
+                                    history_index += 1;
+                                    input = history.get(history_index).cloned().unwrap_or_default();
+                                    cursor = input.chars().count();
+                                    history_clean_index = Some(history_index);
+                                    slash_selection = 0;
+                                    clipboard_state.clear();
+                                    is_pasted = false;
+                                } else if repl_history_is_clean(
+                                    &input,
+                                    history,
+                                    history_clean_index,
+                                ) && history_index < history.len()
+                                {
+                                    history_index = history.len();
+                                    input.clear();
+                                    cursor = input.chars().count();
+                                    history_clean_index = None;
+                                    slash_selection = 0;
+                                    clipboard_state.clear();
+                                    is_pasted = false;
+                                }
                             }
                         }
                         redraw_input!()?;
@@ -482,6 +516,20 @@ pub(super) fn read_repl_input(
                             slash_selection = 0;
                             history_clean_index = None;
                             is_pasted = true;
+                            redraw_input!()?;
+                            continue;
+                        }
+                        if let Some((next, next_cursor)) = complete_active_mention(
+                            &input,
+                            cursor,
+                            slash_selection,
+                            runtime.mention_skills(),
+                        ) {
+                            input = next;
+                            cursor = next_cursor;
+                            slash_selection = 0;
+                            history_clean_index = None;
+                            is_pasted = false;
                             redraw_input!()?;
                             continue;
                         }
@@ -693,6 +741,47 @@ pub(super) fn read_repl_input(
             _ => {}
         }
     }
+}
+
+/// 返回光标处可见的引用建议。
+///
+/// 参数:
+/// - `input`: 当前输入
+/// - `cursor`: 光标字符偏移
+/// - `skills`: skill 目录
+///
+/// 返回:
+/// - 过滤后的建议
+fn active_mention_suggestions(
+    input: &str,
+    cursor: usize,
+    skills: &[(String, String)],
+) -> Vec<MentionSuggestion> {
+    find_mention_trigger(input, cursor)
+        .map(|trigger| mention_suggestions(&trigger, skills))
+        .unwrap_or_default()
+}
+
+/// 确认当前引用建议，替换触发片段。
+///
+/// 参数:
+/// - `input`: 当前输入
+/// - `cursor`: 光标字符偏移
+/// - `selected`: 选中下标
+/// - `skills`: skill 目录
+///
+/// 返回:
+/// - 新输入与新光标；无建议时为空
+fn complete_active_mention(
+    input: &str,
+    cursor: usize,
+    selected: usize,
+    skills: &[(String, String)],
+) -> Option<(String, usize)> {
+    let trigger = find_mention_trigger(input, cursor)?;
+    let suggestions = mention_suggestions(&trigger, skills);
+    let item = suggestions.get(selected.min(suggestions.len().saturating_sub(1)))?;
+    Some(apply_mention(input, &trigger, item))
 }
 
 /// 判断当前输入是否仍与选中的历史记录一致。

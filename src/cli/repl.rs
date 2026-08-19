@@ -116,6 +116,7 @@ pub(super) async fn run_repl(
             tool_call_mode: render::ToolCallDisplayMode::from_config(&config.display.tool_calls),
         };
         runtime.update_options(config.display.repl_transcript_row_cap, transcript_options);
+        runtime.set_mention_skills(super::repl_mentions::load_mention_skills(&config, paths));
         // 运行期间输入的斜杠命令先于输入框消费：它们在轮次进行中无法执行
         // （交互选择器会占住事件循环），排到这里才轮到主循环分发
         let submission = if let Some(command) = runtime.take_next_control_command() {
@@ -619,7 +620,9 @@ pub(super) async fn run_repl(
         if input.is_empty() {
             continue;
         }
-        let chat_input = submission.chat_input;
+        let mut chat_input = submission.chat_input;
+        chat_input.message =
+            super::repl_mentions::expand_skill_mentions(&chat_input.message, &config, paths);
         if chat_input.message.trim().is_empty() && chat_input.image_url.is_none() {
             continue;
         }
