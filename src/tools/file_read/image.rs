@@ -16,26 +16,37 @@ pub(super) enum ImageReadMode {
 
 /// 根据当前会话模型能力选择图片读取方式。
 ///
+/// 当前模型带视觉标签，或配置要求优先使用当前多模态模型时，
+/// 把图片直接交给这次对话的模型，不再另开视觉描述请求。
+///
 /// 参数:
 /// - `config`: 已应用会话模型覆盖的应用配置
 ///
 /// 返回:
 /// - 当前图片应直接附加或交给备用视觉模型描述
 pub(super) fn image_read_mode(config: &AppConfig) -> ImageReadMode {
-    if !config.plugins.vision.prefer_current_multimodal_model {
-        return ImageReadMode::DescribeWithConfiguredVisionModel;
+    if current_model_supports_vision(config)
+        || config.plugins.vision.prefer_current_multimodal_model
+    {
+        return ImageReadMode::AttachToCurrentModel;
     }
-    let supports_vision = config.provider(None).ok().is_some_and(|provider| {
+    ImageReadMode::DescribeWithConfiguredVisionModel
+}
+
+/// 判断当前会话模型是否带视觉能力标签。
+///
+/// 参数:
+/// - `config`: 已应用会话模型覆盖的应用配置
+///
+/// 返回:
+/// - 当前模型带 vision 标签时为真
+fn current_model_supports_vision(config: &AppConfig) -> bool {
+    config.provider(None).ok().is_some_and(|provider| {
         provider
             .model_tags_for(&provider.default_model)
             .iter()
             .any(|tag| tag == MODEL_TAG_VISION)
-    });
-    if supports_vision {
-        ImageReadMode::AttachToCurrentModel
-    } else {
-        ImageReadMode::DescribeWithConfiguredVisionModel
-    }
+    })
 }
 
 /// 读取本地图片，并按当前模型能力直接附加或生成备用描述。
@@ -52,31 +63,12 @@ pub(super) async fn read_image_page(
     config: &AppConfig,
     paths: &SaiPaths,
 ) -> Result<ReadPage> {
-    if !config.plugins.vision.enabled {
-        bail!("vision plugin is disabled")
-    }
     let prompt = request
         .image_prompt
         .as_deref()
         .unwrap_or(DEFAULT_IMAGE_PROMPT);
     match image_read_mode(config) {
-        ImageReadMode::AttachToCurrentModel if !request.accept_model_attachment => {
-            let description = crate::tools::vision::analyze_local_image_with_prompt(
-                config,
-                paths,
-                &request.path,
-                prompt,
-            )
-            .await?;
-            Ok(ReadPage::text(json!({
-                "type": "image-analysis",
-                "path": request.path.display().to_string(),
-                "prompt": prompt,
-                "attachment_submitted": false,
-                "content": description,
-            })))
-        }
-        ImageReadMode::AttachToCurrentModel => {
+        ImageReadMode::AttachToCurrentModel if request.accept_model_attachment => {
             let image_url = crate::tools::vision::local_image_data_url(&request.path)?;
             let attachment =
                 ToolModelAttachment::new(image_url, request.path.display().to_string(), prompt);
@@ -86,28 +78,50 @@ pub(super) async fn read_image_page(
                     "path": request.path.display().to_string(),
                     "prompt": prompt,
                     "attachment_submitted": true,
-                    "content": "The image is attached to the active multimodal model for direct analysis.",
+                    "content": "The image is attached to the current model for direct analysis.",
                 }),
                 model_attachments: vec![attachment],
             })
         }
+        ImageReadMode::AttachToCurrentModel => {
+            // 调用方不会转发附件时，只能退回文字描述
+            describe_image_page(request, config, paths, prompt).await
+        }
         ImageReadMode::DescribeWithConfiguredVisionModel => {
-            let description = crate::tools::vision::analyze_local_image_with_prompt(
-                config,
-                paths,
-                &request.path,
-                prompt,
-            )
-            .await?;
-            Ok(ReadPage::text(json!({
-                "type": "image-analysis",
-                "path": request.path.display().to_string(),
-                "prompt": prompt,
-                "attachment_submitted": false,
-                "content": description,
-            })))
+            describe_image_page(request, config, paths, prompt).await
         }
     }
+}
+
+/// 使用配置的视觉模型生成图片文字描述。
+///
+/// 参数:
+/// - `request`: 图片读取请求
+/// - `config`: 应用配置
+/// - `paths`: Sai 路径集合
+/// - `prompt`: 读图提示
+///
+/// 返回:
+/// - 仅含文字描述的读取结果
+async fn describe_image_page(
+    request: &ReadRequest,
+    config: &AppConfig,
+    paths: &SaiPaths,
+    prompt: &str,
+) -> Result<ReadPage> {
+    if !config.plugins.vision.enabled {
+        bail!("vision plugin is disabled")
+    }
+    let description =
+        crate::tools::vision::analyze_local_image_with_prompt(config, paths, &request.path, prompt)
+            .await?;
+    Ok(ReadPage::text(json!({
+        "type": "image-analysis",
+        "path": request.path.display().to_string(),
+        "prompt": prompt,
+        "attachment_submitted": false,
+        "content": description,
+    })))
 }
 
 #[cfg(test)]
@@ -177,10 +191,22 @@ mod tests {
         );
     }
 
-    /// 当前会话模型不支持视觉时使用配置的备用视觉模型。
+    /// 默认优先当前模型时，即使未打视觉标签也把图片交给当前会话模型。
     #[test]
-    fn text_only_model_uses_configured_vision_description() {
+    fn default_preference_attaches_to_current_model() {
         let config = AppConfig::default();
+
+        assert_eq!(
+            image_read_mode(&config),
+            ImageReadMode::AttachToCurrentModel
+        );
+    }
+
+    /// 关闭当前模型优先且模型无视觉标签时，才走备用视觉描述。
+    #[test]
+    fn disabled_preference_without_vision_uses_description() {
+        let mut config = AppConfig::default();
+        config.plugins.vision.prefer_current_multimodal_model = false;
 
         assert_eq!(
             image_read_mode(&config),
@@ -188,16 +214,16 @@ mod tests {
         );
     }
 
-    /// 显式关闭当前模型优先策略时仍使用配置的备用视觉模型。
+    /// 当前模型带视觉标签时，即使关闭优先策略仍直接附加。
     #[test]
-    fn disabled_preference_uses_configured_vision_description() {
+    fn vision_tag_attaches_even_when_preference_is_disabled() {
         let mut config = AppConfig::default();
         mark_current_model_as_vision(&mut config);
         config.plugins.vision.prefer_current_multimodal_model = false;
 
         assert_eq!(
             image_read_mode(&config),
-            ImageReadMode::DescribeWithConfiguredVisionModel
+            ImageReadMode::AttachToCurrentModel
         );
     }
 

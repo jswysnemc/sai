@@ -10,8 +10,6 @@ use serde_json::{json, Value};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
-
 pub fn register_print(registry: &mut ToolRegistry, config: AppConfig) {
     if !config.plugins.print_image.enabled {
         return;
@@ -188,9 +186,6 @@ pub(crate) fn local_image_data_url(path: &Path) -> Result<String> {
         .with_context(|| format!("failed to stat image {}", path.display()))?;
     if !metadata.is_file() {
         bail!("image path is not a file: {}", path.display())
-    }
-    if metadata.len() as usize > MAX_IMAGE_BYTES {
-        bail!("image too large: {} bytes", metadata.len())
     }
     let bytes =
         std::fs::read(path).with_context(|| format!("failed to read image {}", path.display()))?;

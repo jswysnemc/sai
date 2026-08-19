@@ -1,17 +1,19 @@
 use super::manager::StartRunRequest;
 use anyhow::{bail, Result};
 
-pub(crate) const MAX_RUN_REQUEST_BYTES: usize = 16 * 1024 * 1024;
+/// HTTP 请求体上限，只防异常大包打满内存，不是产品层的图片体积策略。
+pub(crate) const MAX_RUN_REQUEST_BYTES: usize = 128 * 1024 * 1024;
 const MAX_RUN_IMAGE_ATTACHMENTS: usize = 4;
-const MAX_RUN_IMAGE_DATA_URL_BYTES: usize = 3 * 1024 * 1024;
 
-/// 校验 Web 运行请求中的图片数量和单项编码尺寸。
+/// 校验 Web 运行请求中的图片数量。
+///
+/// 单张编码体积不在 SAI 侧限制，由上游模型接口拒绝。
 ///
 /// 参数:
 /// - `request`: 待启动的 Web 运行请求
 ///
 /// 返回:
-/// - 请求在限制内时返回成功
+/// - 请求在数量限制内时返回成功
 pub(super) fn validate_start_request(request: &StartRunRequest) -> Result<()> {
     let image_urls = request
         .image_url
@@ -20,12 +22,6 @@ pub(super) fn validate_start_request(request: &StartRunRequest) -> Result<()> {
         .collect::<Vec<_>>();
     if image_urls.len() > MAX_RUN_IMAGE_ATTACHMENTS {
         bail!("a run accepts at most {MAX_RUN_IMAGE_ATTACHMENTS} image attachments");
-    }
-    if image_urls
-        .iter()
-        .any(|url| url.len() > MAX_RUN_IMAGE_DATA_URL_BYTES)
-    {
-        bail!("an encoded image attachment exceeds {MAX_RUN_IMAGE_DATA_URL_BYTES} bytes");
     }
     Ok(())
 }
@@ -58,10 +54,11 @@ mod tests {
         assert!(validate_start_request(&request).is_err());
     }
 
+    /// 验证单张编码体积不再由 SAI 拦截。
     #[test]
-    fn rejects_oversized_encoded_image_attachment() {
-        let request = request(vec!["x".repeat(MAX_RUN_IMAGE_DATA_URL_BYTES + 1)]);
+    fn accepts_large_encoded_image_attachment() {
+        let request = request(vec!["x".repeat(8 * 1024 * 1024)]);
 
-        assert!(validate_start_request(&request).is_err());
+        assert!(validate_start_request(&request).is_ok());
     }
 }

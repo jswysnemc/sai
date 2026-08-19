@@ -2,8 +2,7 @@ import { useState } from "react";
 import { useI18n } from "../../i18n/use-i18n";
 import {
   attachmentLimitViolation,
-  MAX_IMAGE_ATTACHMENTS,
-  MAX_IMAGE_ATTACHMENT_BYTES
+  MAX_IMAGE_ATTACHMENTS
 } from "../composer/attachment-limits";
 import { readImageAsDataUrl } from "../composer/read-image-as-data-url";
 import {
@@ -18,7 +17,7 @@ import {
  * 管理用户消息编辑态的正文与图片。
  *
  * 原消息的图片会作为初值带入，因此重新发送时不会丢图；新增图片走与输入区
- * 相同的数量与大小限制，避免两处规则不一致。
+ * 相同的数量限制，避免两处规则不一致。
  *
  * @param initialContent 原消息正文
  * @param initialImageUrls 原消息图片地址
@@ -40,20 +39,12 @@ export function useUserMessageEditorState(initialContent: string, initialImageUr
   const addFiles = async (files: File[]) => {
     const picked = files.filter((file) => file.type.startsWith("image/"));
     if (picked.length === 0) return;
-    // 1. 数量与单张大小沿用输入区的限制
+    // 1. 数量沿用输入区限制；单张体积交给上游接口拒绝
     const violation = attachmentLimitViolation(images.length, picked);
     if (violation === "too_many") {
       setError(t(
         `Attach at most ${MAX_IMAGE_ATTACHMENTS} images`,
         `最多添加 ${MAX_IMAGE_ATTACHMENTS} 张图片`
-      ));
-      return;
-    }
-    if (violation === "too_large") {
-      const megabytes = MAX_IMAGE_ATTACHMENT_BYTES / 1024 / 1024;
-      setError(t(
-        `Each image must be ${megabytes} MiB or smaller`,
-        `每张图片不能超过 ${megabytes} MiB`
       ));
       return;
     }

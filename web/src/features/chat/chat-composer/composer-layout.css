@@ -69,6 +69,54 @@
   white-space: nowrap;
 }
 
+/*
+ * Windows Edge 上按钮默认 appearance 会加额外内边距，
+ * SVG 走行内基线时图标与文字不在同一光学中线。
+ * 控件行高仍用 --leading-control，避免 line-height:1 让字形溢出。
+ */
+.composer-context-strip .workspace-trigger,
+.composer-context-strip .system-usage-trigger,
+.composer-context-strip .agent-selector .ui-select > button,
+.composer-context-strip .ui-button.composer-rail-button,
+.composer-footer .model-thinking-trigger,
+.composer-footer .composer-mode .ui-select > button {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  padding-block: 0;
+}
+
+.composer-context-strip svg,
+.composer-footer .model-thinking-trigger svg,
+.composer-footer .composer-mode .ui-select > button svg,
+.workspace-trigger svg,
+.agent-selector svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.workspace-trigger strong,
+.system-usage-trigger strong,
+.system-usage-trigger small,
+.model-thinking-model,
+.model-thinking-level,
+.agent-selector .ui-select-value,
+.composer-context-chip span {
+  line-height: var(--leading-control);
+}
+
+@supports (text-box: trim-both cap alphabetic) {
+  .workspace-trigger strong,
+  .system-usage-trigger strong,
+  .system-usage-trigger small,
+  .model-thinking-model,
+  .model-thinking-level,
+  .agent-selector .ui-select-value > span,
+  .composer-context-chip span {
+    text-box: trim-both cap alphabetic;
+  }
+}
+
 .composer-context-strip .ui-button.composer-rail-button {
   height: 28px;
   min-height: 28px;

@@ -45,6 +45,28 @@ pub(super) fn is_externally_reachable(address: &SocketAddr) -> bool {
 /// 返回:
 /// - 带令牌的访问地址
 pub(super) fn browsable_url(address: &SocketAddr, token: &str) -> String {
+    format!("{}/?token={token}", browsable_origin(address))
+}
+
+/// 组装不带启动令牌的访问地址。
+///
+/// 参数:
+/// - `address`: 实际绑定的套接字地址
+///
+/// 返回:
+/// - 不含令牌的本机访问地址
+pub(super) fn browsable_url_without_token(address: &SocketAddr) -> String {
+    browsable_origin(address)
+}
+
+/// 组装浏览器可打开的主机与端口。
+///
+/// 参数:
+/// - `address`: 实际绑定的套接字地址
+///
+/// 返回:
+/// - `http://host:port`
+fn browsable_origin(address: &SocketAddr) -> String {
     let port = address.port();
     let host = match address.ip() {
         IpAddr::V4(ip) if ip.is_unspecified() => Ipv4Addr::LOCALHOST.to_string(),
@@ -53,7 +75,7 @@ pub(super) fn browsable_url(address: &SocketAddr, token: &str) -> String {
         IpAddr::V6(ip) => format!("[{ip}]"),
         IpAddr::V4(ip) => ip.to_string(),
     };
-    format!("http://{host}:{port}/?token={token}")
+    format!("http://{host}:{port}")
 }
 
 /// 判断绑定地址是否为通配地址。
@@ -168,6 +190,10 @@ mod tests {
         assert_eq!(
             browsable_url(&"[::]:4096".parse().unwrap(), "abc"),
             "http://127.0.0.1:4096/?token=abc"
+        );
+        assert_eq!(
+            browsable_url_without_token(&"127.0.0.1:4096".parse().unwrap()),
+            "http://127.0.0.1:4096"
         );
     }
 

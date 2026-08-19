@@ -55,7 +55,7 @@ async function start() {
   await bootstrapSession();
 
   // 启用口令验证且尚无有效会话时先呈现登录页
-  const mode = await fetchAuthMode().catch(() => ({ password_required: false }));
+  const mode = await fetchAuthMode().catch(() => ({ password_required: false, allow_anonymous: false }));
   const authenticated = mode.password_required ? await hasActiveSession() : true;
 
   const root = document.getElementById("root");

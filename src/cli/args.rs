@@ -196,6 +196,10 @@ pub struct WebArgs {
     #[arg(long)]
     pub no_open: bool,
 
+    /// 关闭启动令牌，仅允许监听 127.0.0.1 / ::1 时使用
+    #[arg(long)]
+    pub allow_anonymous: bool,
+
     #[arg(long, value_name = "PATH")]
     pub workspace: Option<PathBuf>,
 }

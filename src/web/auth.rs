@@ -30,6 +30,8 @@ struct SessionResponse {
 pub(super) struct AuthModeResponse {
     /// 为真时浏览器需先通过口令登录
     password_required: bool,
+    /// 为真时本机回环访问不需要启动令牌
+    allow_anonymous: bool,
 }
 
 /// 返回当前实例的认证方式。
@@ -44,6 +46,7 @@ pub(super) struct AuthModeResponse {
 pub(super) async fn auth_mode(State(state): State<WebAppState>) -> Json<AuthModeResponse> {
     Json(AuthModeResponse {
         password_required: state.password_hash.is_some(),
+        allow_anonymous: state.allow_anonymous,
     })
 }
 
@@ -130,6 +133,9 @@ pub(super) async fn require_auth(
     request: Request<Body>,
     next: Next,
 ) -> Response {
+    if state.allow_anonymous && state.password_hash.is_none() {
+        return next.run(request).await;
+    }
     if request_token(&request).as_deref() == Some(state.auth_token.as_ref()) {
         return next.run(request).await;
     }

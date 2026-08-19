@@ -87,10 +87,10 @@ import type { McpToolInfo } from "./mcp-tool-contracts";
 import type { ManagedSkill, ManagedSkillDocument } from "./skill-contracts";
 
 /** 服务端当前启用的认证方式。 */
-export async function fetchAuthMode(): Promise<{ password_required: boolean }> {
+export async function fetchAuthMode(): Promise<{ password_required: boolean; allow_anonymous: boolean }> {
   const response = await fetch("/api/auth/mode", { credentials: "same-origin" });
-  if (!response.ok) return { password_required: false };
-  return (await response.json()) as { password_required: boolean };
+  if (!response.ok) return { password_required: false, allow_anonymous: false };
+  return (await response.json()) as { password_required: boolean; allow_anonymous: boolean };
 }
 
 /** 使用访问口令建立同源会话。 */
@@ -127,8 +127,8 @@ export async function bootstrapSession(): Promise<void> {
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
     return;
   }
-  const mode = await fetchAuthMode().catch(() => ({ password_required: false }));
-  if (mode.password_required) return;
+  const mode = await fetchAuthMode().catch(() => ({ password_required: false, allow_anonymous: false }));
+  if (mode.password_required || mode.allow_anonymous) return;
   throw new Error(text(detectInitialLocale(), "The Sai Web access token is invalid", "Sai Web 访问令牌无效"));
 }
 

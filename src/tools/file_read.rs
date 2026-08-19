@@ -20,8 +20,8 @@ pub fn register(registry: &mut ToolRegistry, config: AppConfig, paths: SaiPaths)
     registry.register(ToolSpec::new_with_output(
         "read_file",
         t(
-            "Read one or more UTF-8 text files by 1-based line offset, list directory pages, or analyze local images with the vision model. Use path for one target or files for batch reads.",
-            "按 1 起始行号读取一个或多个 UTF-8 文本文件、分页列出目录，或使用视觉模型分析本地图片。单个目标使用 path，批量读取使用 files。",
+            "Read one or more UTF-8 text files by 1-based line offset, list directory pages, or load a local image. When the current model is multimodal the image is attached for it to see directly; otherwise a configured vision model describes it. Use path for one target or files for batch reads.",
+            "按 1 起始行号读取一个或多个 UTF-8 文本文件、分页列出目录，或加载本地图片。当前模型支持多模态时图片会直接交给该模型查看，否则才用备用视觉模型生成描述。单个目标使用 path，批量读取使用 files。",
         ),
         json!({
             "type": "object",

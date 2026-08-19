@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../i18n/use-i18n";
 import {
   attachmentLimitViolation,
-  MAX_IMAGE_ATTACHMENTS,
-  MAX_IMAGE_ATTACHMENT_BYTES
+  MAX_IMAGE_ATTACHMENTS
 } from "./attachment-limits";
 import { readImageAsDataUrl } from "./read-image-as-data-url";
 import {
@@ -55,13 +54,6 @@ export function useComposerAttachments(sessionId?: string | null) {
       throw new Error(t(
         `Attach at most ${MAX_IMAGE_ATTACHMENTS} images`,
         `最多添加 ${MAX_IMAGE_ATTACHMENTS} 张图片`
-      ));
-    }
-    if (violation === "too_large") {
-      const megabytes = MAX_IMAGE_ATTACHMENT_BYTES / 1024 / 1024;
-      throw new Error(t(
-        `Each image must be ${megabytes} MiB or smaller`,
-        `每张图片不能超过 ${megabytes} MiB`
       ));
     }
     const loaded = await Promise.all(images.map(async (file) => ({

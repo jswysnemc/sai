@@ -33,12 +33,19 @@ pub(super) async fn run(paths: &SaiPaths, args: WebArgs) -> Result<()> {
         .web_password_hash
         .as_deref()
         .map(|hash| Arc::from(hash) as Arc<str>);
+    let address = bind_address::resolve_bind_address(&args.host, args.port)?;
+    if args.allow_anonymous && bind_address::is_externally_reachable(&address) {
+        anyhow::bail!(
+            "--allow-anonymous is only allowed when listening on a loopback address (127.0.0.1 or ::1)"
+        );
+    }
     let workspaces = WorkspaceManager::new(paths, args.workspace.as_deref())?;
     let runs = RunManager::new(paths)?;
     let state = WebAppState {
         paths: paths.clone(),
         auth_token: Arc::from(token.as_str()),
         password_hash: password_hash.clone(),
+        allow_anonymous: args.allow_anonymous,
         workspaces,
         runs: runs.clone(),
         terminals: TerminalManager::new(),
@@ -50,12 +57,15 @@ pub(super) async fn run(paths: &SaiPaths, args: WebArgs) -> Result<()> {
         .merge(api::router(state.clone()))
         .fallback(assets::serve)
         .with_state(state);
-    let address = bind_address::resolve_bind_address(&args.host, args.port)?;
     let listener = tokio::net::TcpListener::bind(address)
         .await
         .with_context(|| format!("failed to bind Sai Web at {address}"))?;
     let address = listener.local_addr()?;
-    let url = bind_address::browsable_url(&address, &token);
+    let url = if args.allow_anonymous {
+        bind_address::browsable_url_without_token(&address)
+    } else {
+        bind_address::browsable_url(&address, &token)
+    };
 
     // 通配监听下 URL 里的主机部分不能直接用于远程访问，需说明如何替换。
     // 不去猜测对外地址：多网卡与 VPN 环境下默认路由未必是用户要用的那条网络
