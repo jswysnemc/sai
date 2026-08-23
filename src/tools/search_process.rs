@@ -75,6 +75,16 @@ pub(super) async fn run_search_command_with_timeout(
         Err(_) => {
             // 3. 终止子进程，避免留下继续扫描磁盘的孤儿 ripgrep
             let _ = child.kill().await;
+            let _ = child.wait().await;
+            // 4. 超时取消的是读取 future，管道里可能还有已写出但未拷入缓冲的数据
+            let drain = async {
+                use tokio::io::AsyncReadExt;
+                let _ = tokio::join!(
+                    stdout.read_to_end(&mut collected),
+                    stderr.read_to_end(&mut collected_err),
+                );
+            };
+            let _ = tokio::time::timeout(std::time::Duration::from_millis(200), drain).await;
             Ok(SearchRun::TimedOut(collected))
         }
     }
@@ -89,18 +99,16 @@ mod tests {
     /// 只测格式化函数无法覆盖 spawn / 读取 / kill 这条真实路径。
     #[tokio::test]
     async fn timeout_kills_child_and_returns_partial_output() {
-        // 1. Windows 使用 PowerShell 内建的 Start-Sleep，避免 MSYS sh 的孙进程
-        //    继承管道写端，导致终止后读取任务仍等待几十秒
-        // 2. Unix 使用 exec 合并 sleep，确保终止直接子进程即可关闭管道
+        // 1. Windows 用 cmd 立即 echo 再 ping 等待：pwsh 启动慢且默认缓冲
+        //    标准输出，1 秒超时经常在写出前触发，部分结果为空
+        // 2. ping 重定向到 nul，不占用搜索管道写端；杀掉 cmd 即可关闭管道
+        // 3. Unix 使用 exec 合并 sleep，确保终止直接子进程即可关闭管道
         #[cfg(windows)]
         let mut command = {
-            let mut command = Command::new("pwsh");
+            let mut command = Command::new("cmd");
             command.args([
-                "-NoLogo",
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "Write-Output 'src/a.rs:1:early hit'; Start-Sleep -Seconds 30",
+                "/C",
+                "echo src/a.rs:1:early hit& ping -n 31 127.0.0.1>nul",
             ]);
             command
         };
