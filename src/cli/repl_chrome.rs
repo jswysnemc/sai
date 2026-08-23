@@ -125,16 +125,49 @@ impl ReplChrome {
     /// 返回:
     /// - 已着色状态行
     pub(super) fn footer_line(&self, cols: usize) -> String {
+        self.footer_line_with_activity(cols, None)
+    }
+
+    /// 底栏整行，左侧可附加当前工作状态。
+    ///
+    /// 参数:
+    /// - `cols`: 终端列数
+    /// - `activity`: 如 `Working 12s`
+    ///
+    /// 返回:
+    /// - 已着色状态行
+    pub(super) fn footer_line_with_activity(&self, cols: usize, activity: Option<&str>) -> String {
+        let left_plain = match activity.filter(|text| !text.is_empty()) {
+            Some(activity) => format!(
+                "{activity}  {}  {}  {}  {}",
+                self.mode_plain(),
+                self.context_status(),
+                self.model,
+                self.thinking
+            ),
+            None => format!(
+                "{}  {}  {}  {}",
+                self.mode_plain(),
+                self.context_status(),
+                self.model,
+                self.thinking
+            ),
+        };
+        self.compose_footer_line(cols, &left_plain)
+    }
+
+    /// 按净宽裁剪并着色底栏左右两段。
+    ///
+    /// 参数:
+    /// - `cols`: 终端列数
+    /// - `left_plain`: 左侧纯文本
+    ///
+    /// 返回:
+    /// - 已着色状态行
+    fn compose_footer_line(&self, cols: usize, left_plain: &str) -> String {
         let cols = cols.max(1);
         let pad = CHROME_FOOTER_SIDE_PAD.min(cols.saturating_sub(1) / 2);
         let inner = cols.saturating_sub(pad.saturating_mul(2)).max(1);
-        let left_plain = format!(
-            "{}  {}  {}  {}",
-            self.mode_plain(),
-            self.context_status(),
-            self.model,
-            self.thinking
-        );
         // 1. 在扣除左右外边距后的净宽上裁剪，避免贴边
         let (left_text, right_text, gap) = fit_status_segments(&left_plain, &self.directory, inner);
         // 2. 裁剪后再着色，避免 ANSI 干扰宽度计算
@@ -540,6 +573,16 @@ mod tests {
         let line = chrome_status_line("0.0%/272k (auto)", "gpt · xhigh", 40);
         assert!(line.contains("0.0%/272k (auto)"));
         assert!(line.contains("gpt · xhigh"));
+    }
+
+    #[test]
+    fn footer_puts_activity_before_mode() {
+        let chrome = test_chrome();
+        let line = chrome.footer_line_with_activity(80, Some("Working 12s"));
+        let plain = crate::render::activity_animation::strip_ansi_for_test(&line);
+        let work = plain.find("Working 12s").expect("activity");
+        let mode = plain.find("yolo").expect("mode");
+        assert!(work < mode, "{plain}");
     }
 
     #[test]

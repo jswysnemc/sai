@@ -9,6 +9,7 @@ use crate::token_counter;
 use std::time::Duration;
 
 const THINKING_LABEL: &str = "Thinking";
+const THOUGHT_LABEL: &str = "Thought";
 /// 思考专用引导符：与工具行的 `•`、正文无符缩进区分开（CLI Summary / Full / 非流式共用）
 pub(crate) const THINKING_MARKER: &str = "◦";
 
@@ -62,7 +63,7 @@ pub(crate) fn render(cell: &ReasoningCell, mode: ReasoningDisplayMode) -> String
             let tokens = token_counter::count(&cell.source);
             format!(
                 "\x1b[2m\x1b[36m{THINKING_MARKER} {}{}\x1b[0m",
-                thinking_label(cell.duration),
+                thought_label(cell.duration),
                 format_tokens_suffix(tokens)
             )
         }
@@ -194,7 +195,7 @@ fn render_thinking_body_with_cols(
     // 定稿标题用弱化 ◦，避免与工具行的加粗 • 抢同一层级
     let title = format!(
         "\x1b[2m\x1b[36m{THINKING_MARKER}\x1b[0m \x1b[2m{}\x1b[0m\x1b[2m{}\x1b[0m",
-        thinking_label(duration),
+        thought_label(duration),
         format_tokens_suffix(tokens)
     );
     render_thinking_body_with_title(source, expanded, show_expand_hint, terminal_cols, title)
@@ -225,7 +226,7 @@ fn render_thinking_body_with_title(
     // 1. 按「终端列数 - gutter」折行，再拼 `  └ `/`    `，保证最终行宽不超过终端
     let wrapped = wrap_display_lines(body, thinking_body_wrap_width(terminal_cols));
     // 2. 丢掉空段落：模型常在思考里插 `\n\n`，渲染成 gutter 空行会像「块内硬隔开」；
-    //    真正的区块间距交给 cell 级 trailing blank（思考 → 工具）。
+    //    思考与后续正文的间距由 cell / live 的前空行负责，工具块不加前空行
     let lines: Vec<String> = wrapped
         .into_iter()
         .filter(|line| !line.trim().is_empty())
@@ -255,7 +256,7 @@ fn render_thinking_body_with_title(
     output
 }
 
-/// 生成思考标题（含可选耗时，CLI / TUI 各阶段共用的唯一实现）。
+/// 生成流式思考标题（进行时）。
 ///
 /// 参数:
 /// - `duration`: 可选耗时
@@ -264,6 +265,17 @@ fn render_thinking_body_with_title(
 /// - 如 `Thinking (12s)`；无耗时则仅 `Thinking`
 pub(crate) fn thinking_label(duration: Option<Duration>) -> String {
     format!("{THINKING_LABEL}{}", duration_suffix(duration))
+}
+
+/// 生成定稿思考标题（完成后再用过去式）。
+///
+/// 参数:
+/// - `duration`: 可选耗时
+///
+/// 返回:
+/// - 如 `Thought (12s)`；无耗时则仅 `Thought`
+pub(crate) fn thought_label(duration: Option<Duration>) -> String {
+    format!("{THOUGHT_LABEL}{}", duration_suffix(duration))
 }
 
 /// 生成思考耗时后缀。
@@ -323,6 +335,27 @@ mod tests {
         assert_eq!(format_tokens_suffix(12_345), " · 12k tokens");
     }
 
+    /// 【终端】【思考时态】定稿标题用过去式，流式标题保持进行时。
+    #[test]
+    fn finalized_reasoning_title_uses_past_tense() {
+        assert_eq!(thought_label(Some(Duration::from_secs(3))), "Thought (3s)");
+        assert_eq!(
+            thinking_label(Some(Duration::from_secs(3))),
+            "Thinking (3s)"
+        );
+        let rendered = render(
+            &ReasoningCell {
+                source: "done".to_string(),
+                expanded: true,
+                duration: Some(Duration::from_secs(3)),
+            },
+            ReasoningDisplayMode::Summary,
+        );
+        let plain = strip_ansi_for_test(&rendered);
+        assert!(plain.contains("Thought (3s)"), "{plain}");
+        assert!(!plain.contains("Thinking"));
+    }
+
     #[test]
     fn live_reasoning_omits_zero_duration() {
         // 零耗时与 CLI live 行一致：仅 Thinking，不显示 (0s)
@@ -348,7 +381,8 @@ mod tests {
             },
             ReasoningDisplayMode::Full,
         );
-        assert!(rendered.contains("Thinking") || rendered.contains("思考"));
+        assert!(rendered.contains("Thought"));
+        assert!(!rendered.contains("Thinking"));
         assert!(rendered.contains("└"));
         assert!(rendered.contains("line one"));
         assert!(rendered.contains("line two"));

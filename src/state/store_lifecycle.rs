@@ -174,6 +174,10 @@ impl StateStore {
         self.state_dir.join("loaded-tools.json")
     }
 
+    pub(super) fn loaded_skills_file(&self) -> PathBuf {
+        self.state_dir.join("loaded-skills.json")
+    }
+
     fn log_file(&self) -> PathBuf {
         self.state_dir.join("sai.log")
     }

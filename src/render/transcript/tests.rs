@@ -233,6 +233,66 @@ fn expanded_render_context_unfolds_reasoning() {
     assert!(!folded_again.contains("thinking line 6"));
 }
 
+/// 【终端】【Ctrl+O】定稿思考可用内联展开，并失效渲染缓存。
+#[test]
+fn toggle_inline_expand_unfolds_finalized_reasoning() {
+    let mut store = TranscriptStore::new(200);
+    let source = (1..=12)
+        .map(|n| format!("thinking line {n}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    store.push_chunk(&chunk(ChatStreamKind::Reasoning, &source));
+    store.finalize_live_tail();
+    let _ = store.display_tail(80, &options());
+
+    assert!(store.toggle_inline_expand());
+    let expanded = store
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(expanded.contains("thinking line 6"));
+}
+
+/// 【终端】【Ctrl+O】定稿 diff 进入分页列表，内联展开会失效缓存。
+#[test]
+fn toggle_inline_expand_unfolds_finalized_diff() {
+    let cwd = crate::runtime_cwd::current_dir().unwrap();
+    let temp = tempfile::tempdir_in(cwd).unwrap();
+    let path = temp.path().join("ctrl-o-diff.txt");
+    let old: String = (1..=40).map(|n| format!("line{n}\n")).collect();
+    let new: String = (1..=40).map(|n| format!("changed{n}\n")).collect();
+    std::fs::write(&path, &old).unwrap();
+    let arguments = serde_json::json!({
+        "path": path.display().to_string(),
+        "old_string": old,
+        "new_string": new
+    })
+    .to_string();
+    let mut store = TranscriptStore::new(200);
+    store.push_tool_call("str_replace".to_string(), arguments);
+    let _ = store.display_tail(80, &options());
+
+    let blocks = store.expandable_blocks();
+    assert!(
+        blocks
+            .iter()
+            .any(|block| block.kind == crate::render::transcript::ExpandableBlockKind::Diff),
+        "diff must be in Ctrl+O pager"
+    );
+
+    assert!(store.toggle_inline_expand());
+    let expanded = store
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    assert!(
+        !expanded.contains("Ctrl+O"),
+        "expanded diff should drop fold hint: {expanded}"
+    );
+}
+
 #[test]
 fn subagent_view_switch_replaces_display_window() {
     let mut store = TranscriptStore::new(100);

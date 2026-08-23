@@ -8,6 +8,7 @@ mod meta_cell;
 pub(crate) mod reasoning_cell;
 mod render_cache;
 mod shell_cell;
+mod spacing;
 mod store;
 mod subagent_cell;
 mod subagent_view;
@@ -15,7 +16,6 @@ mod tool_cell;
 mod user_echo_cell;
 mod welcome_cell;
 mod window;
-mod work_status_cell;
 
 #[cfg(test)]
 mod assistant_body_tests;

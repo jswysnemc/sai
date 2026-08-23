@@ -111,7 +111,7 @@ impl StreamRenderer {
             return Ok(());
         }
         self.finish_subagent_reasoning_line()?;
-        self.set_work_status(WorkStatus::Working, false)?;
+        self.set_work_status(crate::render::work_status::status_for_tool(name), false)?;
         let background_command_start =
             name == "background_command" && is_background_command_start(arguments);
         let event_label = tool_event_label(name, Some(arguments));
@@ -195,7 +195,11 @@ impl StreamRenderer {
         if self.plain {
             return Ok(());
         }
-        self.set_work_status(WorkStatus::Working, false)?;
+        let progress_name = progress.name.as_deref().unwrap_or("tool");
+        self.set_work_status(
+            crate::render::work_status::status_for_tool(progress_name),
+            false,
+        )?;
         if self.tool_call_mode == ToolCallDisplayMode::Hidden {
             return Ok(());
         }

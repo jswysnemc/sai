@@ -15,6 +15,10 @@ pub(crate) struct ToolVisibility {
     loaded: BTreeSet<String>,
     /// 工具首次被 load 的顺序，用于稳定持久化状态和加载结果
     loaded_order: Vec<String>,
+    /// 本会话已经全文 load 过的 skill 名称
+    pub(super) loaded_skills: BTreeSet<String>,
+    /// skill 首次被 load 的顺序
+    pub(super) loaded_skill_order: Vec<String>,
     /// DeepSeek Anchored Standard 是否控制当前会话的工具目录。
     anchor_enabled: bool,
     /// false 表示请求 #1 尚未产生持久 assistant/tool 信号。
@@ -34,6 +38,8 @@ impl ToolVisibility {
             deferred,
             loaded: BTreeSet::new(),
             loaded_order: Vec::new(),
+            loaded_skills: BTreeSet::new(),
+            loaded_skill_order: Vec::new(),
             anchor_enabled: false,
             anchor_promoted: false,
         }
@@ -297,38 +303,6 @@ impl ToolVisibility {
             "already_loaded": already_loaded,
             "currently_loaded_tools": self.loaded_tool_names(),
             "instruction": instruction,
-        }))?)
-    }
-
-    /// 加载多个 skill 文档并返回固定的 `skills` 数组。
-    ///
-    /// 参数:
-    /// - `keywords`: 要加载的 skill 名称
-    /// - `config`: 当前应用配置
-    /// - `paths`: 应用目录路径集合
-    ///
-    /// 返回:
-    /// - 包含名称和完整文档的 JSON
-    fn load_skills(
-        &self,
-        keywords: &[String],
-        config: &AppConfig,
-        paths: &SaiPaths,
-    ) -> Result<String> {
-        if !config.skills.enabled {
-            bail!("skill loading is disabled");
-        }
-        // 1. 先读取全部文档，任一名称无效时不返回部分结果
-        let skills = keywords
-            .iter()
-            .map(|name| {
-                tools::load_installed_skill(name, config, paths)
-                    .map(|content| json!({"name": name, "content": content}))
-            })
-            .collect::<Result<Vec<_>>>()?;
-        Ok(serde_json::to_string_pretty(&json!({
-            "ok": true,
-            "skills": skills,
         }))?)
     }
 

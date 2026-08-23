@@ -46,7 +46,7 @@ fn build_skills_prompt(config: &AppConfig, paths: &SaiPaths, with_source: bool) 
         return Ok(String::new());
     }
     Ok(format!(
-        "<available-skills>\n这些是已安装的 skills 目录，只提供名称与简介。遇到匹配任务时，调用 load，设置 type 为 skill，并通过 keywords 数组传入名称，读取完整流程后再执行。当前不支持创建、保存或自动生成新的 skill；不要把 skill 内容保存到知识库。\n{}\n</available-skills>",
+        "<available-skills>\n这些是已安装的 skills 目录，只提供名称与简介。遇到匹配任务时，调用 load，设置 type 为 skill，并通过 keywords 数组传入名称，读取完整流程后再执行。每个 skill 在本会话中只需 load 一次；再次 load 只会得到 already_loaded，不会返回正文。压缩之后若历史里的正文被去掉，可以再 load 一次全文。当前不支持创建、保存或自动生成新的 skill；不要把 skill 内容保存到知识库。\n{}\n</available-skills>",
         entries.join("\n")
     ))
 }
@@ -685,6 +685,7 @@ mod tests {
         assert!(!prompt.contains("run it."));
         assert!(prompt.contains("load"));
         assert!(prompt.contains("keywords"));
+        assert!(prompt.contains("already_loaded"));
     }
 
     /// 【Skills】【三档可见性】未配置运行期覆盖时全部 skill 按名称与描述暴露。

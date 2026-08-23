@@ -194,9 +194,13 @@ fn reset_conversation_clears_loaded_tools() {
         vec!["web_fetch".to_string(), "web_search".to_string()]
     );
 
+    store
+        .save_loaded_skills(&["gpu-passthrough".to_string()])
+        .unwrap();
     store.reset_conversation().unwrap();
 
     assert!(store.load_loaded_tools().unwrap().is_empty());
+    assert!(store.load_loaded_skills().unwrap().is_empty());
 }
 
 #[test]

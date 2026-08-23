@@ -165,24 +165,18 @@ impl QueuePanelState {
 
     /// 非焦点态的摘要行。
     fn idle_lines(&self, queued: &[QueuedSubmission]) -> Vec<String> {
-        const PREVIEW: usize = 3;
-        let mut lines = vec![format!(
-            "\x1b[2m• {} ({})  {}\x1b[0m",
+        // 只保留一行：预览条目会抬高输入框
+        let preview = queued
+            .last()
+            .map(|submission| preview_text(&submission.text))
+            .unwrap_or_default();
+        vec![format!(
+            "\x1b[2m• {} ({})  {}  \x1b[3m{}\x1b[0m",
             t("queued for next turn", "已排队待下一轮"),
             queued.len(),
-            t("Ctrl+↑ manage", "Ctrl+↑ 管理")
-        )];
-        for submission in queued.iter().take(PREVIEW) {
-            lines.push(format!(
-                "\x1b[2m\x1b[3m  ↳ {}\x1b[0m",
-                preview_text(&submission.text)
-            ));
-        }
-        let hidden = queued.len().saturating_sub(PREVIEW);
-        if hidden > 0 {
-            lines.push(format!("\x1b[2m    … +{hidden} {}\x1b[0m", t("more", "条")));
-        }
-        lines
+            t("Ctrl+↑ manage", "Ctrl+↑ 管理"),
+            preview
+        )]
     }
 
     /// 焦点态列出全部条目。
@@ -499,8 +493,10 @@ mod tests {
         let panel = QueuePanelState::default();
         let lines = panel.panel_lines(&[item("one"), item("two"), item("three"), item("four")]);
         let joined = lines.join("\n");
+        assert_eq!(lines.len(), 1);
         assert!(joined.contains("Ctrl+↑") || joined.contains("Ctrl+Up"));
-        assert!(joined.contains("+1"));
+        assert!(joined.contains("(4)"));
+        assert!(joined.contains("four"));
         assert!(!joined.contains('❯'));
     }
 

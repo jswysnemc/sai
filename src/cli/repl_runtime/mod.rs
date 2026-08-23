@@ -5,6 +5,7 @@ mod composer_frame;
 mod event_loop;
 mod history;
 mod history_insert;
+mod history_replay;
 mod layout;
 mod live_usage;
 mod mention_panel;
@@ -143,7 +144,7 @@ impl ReplRuntime {
             last_cursor_row: None,
             last_composer_signature: None,
             mention_skills: Vec::new(),
-            todo_panel_compact: false,
+            todo_panel_compact: true,
             live_usage: live_usage::LiveTurnUsage::default(),
         }
     }

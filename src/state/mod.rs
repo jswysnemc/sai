@@ -4,6 +4,7 @@ mod context_epoch;
 pub(crate) mod failure_recovery;
 mod goals;
 pub(crate) mod input_history;
+mod loaded_skills;
 mod loaded_tools;
 mod partial_turn_sink;
 mod pending_turn;
@@ -441,6 +442,7 @@ impl StateStore {
     pub fn reset_conversation(&self) -> Result<()> {
         self.conv_db.reset()?;
         self.clear_loaded_tools()?;
+        self.clear_loaded_skills()?;
         self.clear_compaction_summary()?;
         self.clear_last_usage()
     }
@@ -476,6 +478,33 @@ impl StateStore {
     /// - 清空是否成功
     pub fn clear_loaded_tools(&self) -> Result<()> {
         loaded_tools::clear(&self.loaded_tools_file())
+    }
+
+    /// 读取当前会话已经 load 过的 skill 名称。
+    ///
+    /// 返回:
+    /// - 已加载 skill 名称列表
+    pub fn load_loaded_skills(&self) -> Result<Vec<String>> {
+        loaded_skills::load(&self.loaded_skills_file())
+    }
+
+    /// 保存当前会话已经 load 过的 skill 名称。
+    ///
+    /// 参数:
+    /// - `names`: 已加载名称
+    ///
+    /// 返回:
+    /// - 保存是否成功
+    pub fn save_loaded_skills(&self, names: &[String]) -> Result<()> {
+        loaded_skills::save(&self.loaded_skills_file(), names)
+    }
+
+    /// 清空当前会话已经 load 过的 skill 名称。
+    ///
+    /// 返回:
+    /// - 清空是否成功
+    pub fn clear_loaded_skills(&self) -> Result<()> {
+        loaded_skills::clear(&self.loaded_skills_file())
     }
 
     /// 撤销最后一轮对话。

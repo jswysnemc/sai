@@ -25,6 +25,7 @@ mod model_context;
 mod recovery;
 pub(crate) mod repeat_guard;
 mod runtime_context;
+mod skill_load;
 pub(crate) mod system_prompt;
 mod tool_attachments;
 mod tool_batch_execution;

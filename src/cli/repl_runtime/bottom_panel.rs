@@ -3,9 +3,6 @@ use crate::i18n::text as t;
 use crate::render::todo_style::{colorize_item, display_order, display_window, status_marker};
 use crate::render::transcript::TodoSnapshotItem;
 
-/// 沉底面板展示的控制命令预览上限。
-const QUEUE_PREVIEW_LIMIT: usize = 3;
-
 /// todo 多行模式展示的条目上限。
 ///
 /// 全量铺开会让 composer 高度随清单长度实时变化，而 composer 贴在历史区
@@ -60,28 +57,18 @@ fn render_control_section(controls: &[String], cols: usize, lines: &mut Vec<Stri
     if controls.is_empty() {
         return;
     }
+    let preview = controls
+        .first()
+        .map(|command| command.split_whitespace().collect::<Vec<_>>().join(" "))
+        .unwrap_or_default();
     lines.push(clip_line(
         &format!(
-            "\x1b[2m• {} ({})\x1b[0m",
+            "\x1b[2m• {} ({})  \x1b[0m\x1b[36m{preview}\x1b[0m",
             t("commands after this turn", "本轮结束后执行"),
             controls.len()
         ),
         cols,
     ));
-    for command in controls.iter().take(QUEUE_PREVIEW_LIMIT) {
-        let preview = command.split_whitespace().collect::<Vec<_>>().join(" ");
-        lines.push(clip_line(
-            &format!("\x1b[2m  ↳ \x1b[0m\x1b[36m{preview}\x1b[0m"),
-            cols,
-        ));
-    }
-    let hidden = controls.len().saturating_sub(QUEUE_PREVIEW_LIMIT);
-    if hidden > 0 {
-        lines.push(clip_line(
-            &format!("\x1b[2m    … +{hidden} {}\x1b[0m", t("more", "条")),
-            cols,
-        ));
-    }
 }
 
 /// 渲染 todo 快照区。

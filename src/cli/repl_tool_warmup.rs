@@ -1,4 +1,4 @@
-use super::{build_repl_tool_registry_for_session, AgentMode, AppConfig, SaiPaths};
+use super::{build_repl_tool_registry_for_session_with_notices, AgentMode, AppConfig, SaiPaths};
 use crate::tools::ToolRegistry;
 use anyhow::{anyhow, Result};
 use std::path::PathBuf;
@@ -7,7 +7,7 @@ use std::thread::JoinHandle;
 /// TUI 启动后的 MCP 工具注册表后台预热任务。
 pub(super) struct ReplToolWarmup {
     mode: AgentMode,
-    task: Option<JoinHandle<Result<ToolRegistry>>>,
+    task: Option<JoinHandle<Result<(ToolRegistry, Vec<String>)>>>,
 }
 
 impl ReplToolWarmup {
@@ -30,7 +30,13 @@ impl ReplToolWarmup {
         state_dir: PathBuf,
     ) -> Self {
         let task = std::thread::spawn(move || {
-            build_repl_tool_registry_for_session(&config, &paths, mode, &session_id, &state_dir)
+            build_repl_tool_registry_for_session_with_notices(
+                &config,
+                &paths,
+                mode,
+                &session_id,
+                &state_dir,
+            )
         });
         Self {
             mode,
@@ -42,7 +48,7 @@ impl ReplToolWarmup {
     ///
     /// 返回:
     /// - 未完成时返回空；完成时返回启动模式和完整注册表
-    pub(super) fn take_ready(&mut self) -> Option<Result<(AgentMode, ToolRegistry)>> {
+    pub(super) fn take_ready(&mut self) -> Option<Result<(AgentMode, ToolRegistry, Vec<String>)>> {
         let task = self.task.as_ref()?;
         if !task.is_finished() {
             return None;
@@ -51,12 +57,14 @@ impl ReplToolWarmup {
         Some(
             task.join()
                 .map_err(|_| anyhow!("TUI tool registry warmup thread panicked"))
-                .and_then(|registry| registry.map(|registry| (self.mode, registry))),
+                .and_then(|registry| {
+                    registry.map(|(registry, notices)| (self.mode, registry, notices))
+                }),
         )
     }
 
     #[cfg(test)]
-    fn from_task(mode: AgentMode, task: JoinHandle<Result<ToolRegistry>>) -> Self {
+    fn from_task(mode: AgentMode, task: JoinHandle<Result<(ToolRegistry, Vec<String>)>>) -> Self {
         Self {
             mode,
             task: Some(task),
@@ -73,7 +81,7 @@ mod tests {
     fn polling_warmup_does_not_wait_for_mcp_discovery() {
         let task = std::thread::spawn(|| {
             std::thread::sleep(Duration::from_millis(200));
-            Ok(ToolRegistry::new())
+            Ok((ToolRegistry::new(), Vec::new()))
         });
         let mut warmup = ReplToolWarmup::from_task(AgentMode::Audited, task);
         let started = Instant::now();
@@ -94,7 +102,7 @@ mod tests {
             );
             std::thread::sleep(Duration::from_millis(20));
         };
-        let (mode, _) = result.unwrap();
+        let (mode, _, _) = result.unwrap();
         assert_eq!(mode, AgentMode::Audited);
     }
 }

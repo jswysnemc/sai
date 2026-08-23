@@ -90,6 +90,18 @@ impl Agent {
             compaction_summary_context.as_deref(),
             &projected_history.messages,
         )?;
+        let skills_update = if self.config.skills.enabled {
+            context_resources::context_resource_update(
+                "loaded_skills",
+                &super::skill_load::loaded_skills_resource(
+                    &self.tool_visibility.loaded_skill_names(),
+                ),
+                compaction_summary_context.as_deref(),
+                &projected_history.messages,
+            )?
+        } else {
+            None
+        };
         let live_system_prompt = self.active_system_prompt();
         let epoch_prompt = match self.state.context_epoch_baseline()? {
             Some(baseline) => {
@@ -115,6 +127,7 @@ impl Agent {
             goal_update,
             instruction_update,
             meme_update,
+            skills_update,
         ]);
         Ok(project_provider_base_context_projection(
             &epoch.baseline,

@@ -2,6 +2,7 @@ mod live_reasoning;
 mod operations;
 mod subagent_panel;
 mod todo_snapshot;
+mod work_activity;
 
 pub(crate) use subagent_panel::SubagentOverviewEntry;
 

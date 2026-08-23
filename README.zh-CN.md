@@ -81,10 +81,10 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 ### Agent 与渐进式工具系统
 
 - **三种权限模式** - `Yolo` 自由调用工具、`Audited` 审计模式(沙盒 + 审计日志 + 逐次确认)、`Plan` 只读模式(仅允许只读工具)
-- **渐进式工具加载** - 启动仅暴露 `load` 与基础工具,模型按需调用 `load` 加载工具组或 skill,可见集持久化到 `loaded-tools.json` 跨轮恢复
+- **渐进式工具加载** - 启动仅暴露 `load` 与基础工具,模型按需调用 `load` 加载工具组或 skill。工具组持久化到 `loaded-tools.json`。每个 skill 在本会话只完整加载一次：再次 `load` 只返回 `already_loaded`，名称列表写在后缀 `<context-resource>`，系统提示前缀可走缓存。压缩后会清空 `loaded-skills.json`，之后可以重新拉取正文。
 - **30+ 内置工具** - 按用途分组:`base` 基础文件命令、`web` 网络查询、`media` 图片与表情包、`research` 深度研究、`memory` 记忆操作、`package` Arch Linux 包管理、`game` 游戏兼容性、`diagnostics` 系统诊断、`knowledge` 知识库、`utilities` 计算与编码、`personal` 闹钟、`ssh` 远程主机、`mcp` 外部工具
 - **子代理** - `subagent` 工具启动独立 LLM 循环,带 `max_steps` 预算与超时;可写任务在 git 仓库内自动创建 `.sai-subagents` worktree 隔离,完成后自动 apply 回父工作区并清理。支持 persistent 待命复用与留言通道(REPL `/subagents`、`/msg`)
-- **Skills 技能包** - `SKILL.md` 格式的可复用技能,三级暴露(不暴露 / 仅名称 / 完整);TUI 与 CLI 均可启用 / 禁用 / 列出 / 统计 / 清理
+- **Skills 技能包** - `SKILL.md` 格式的可复用技能,三级暴露(不暴露 / 仅名称 / 完整);TUI 与 CLI 均可启用 / 禁用 / 列出 / 统计 / 清理。会话内 load 缓存见上。
 - **MCP 协议桥接** - 原生支持 stdio / http 两种 MCP Server,工具名以 `mcp_` 前缀注入注册表,独立 `mcp.jsonc` 配置文件
 - **会话级 Todo** - 任务计划清单,跨工具轮次跟踪进度
 - **Cron 定时任务** - bash / http / prompt 三种类型,持久化到 `jobs.db`,后台调度器到期触发
@@ -234,8 +234,8 @@ sudo pacman -U ~/.cache/sai/packages/sai-<version>-1-x86_64.pkg.tar.zst
 - 各文件对应的 `.sha256` 校验和
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 也可在 Actions 中手动运行 **Release** 工作流，并填写已有标签。
@@ -249,7 +249,7 @@ git push origin v0.2.0
 docker pull ghcr.io/jswysnemc/sai:latest
 
 # 指定版本
-docker pull ghcr.io/jswysnemc/sai:0.2.0
+docker pull ghcr.io/jswysnemc/sai:0.2.1
 ```
 
 本地构建：
@@ -321,7 +321,7 @@ API Key 写入 `secrets.jsonc`(同目录),支持 `$env:VAR_NAME` 引用环境变
 sai
 ```
 
-REPL 内支持多行输入、图片粘贴(`-c` 从剪贴板读图)、`!` 前缀执行 shell、`/` 前缀执行控制命令、模糊搜索历史、流式渲染推理与正文。
+REPL 内支持多行输入、图片粘贴(`-c` 从剪贴板读图)、`!` 前缀执行 shell、`/` 前缀执行控制命令、模糊搜索历史、流式渲染推理与正文。空闲时 `Ctrl+O` 打开 transcript pager（含 diff）；流式期间只切换实时思考。工作状态留在 live tail（`Working` / `Thinking`，以及等待执行、写入或回复）。思考定稿后标题改为过去式 `Thought`。
 
 ### 4. 单轮对话
 
@@ -476,6 +476,7 @@ Linux `~/.local/state/sai` / macOS `~/Library/Application Support/sai` / Windows
 | `conversation.db` | SQLite WAL 对话轮次存储 |
 | `usage.json` | Token 用量统计 |
 | `loaded-tools.json` | 渐进式工具可见集(跨轮恢复) |
+| `loaded-skills.json` | 本会话已 load 的 skill 名称；压缩后清空 |
 | `prompt.sha256` | 系统提示指纹,变更则重置会话 |
 | `profile.md` | 用户画像 |
 | `sai.log` | 运行日志 |

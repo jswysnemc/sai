@@ -15,7 +15,7 @@ impl StreamRenderer {
             return Ok(());
         }
         self.finish_subagent_reasoning_line()?;
-        self.set_work_status(WorkStatus::Working, false)?;
+        self.set_work_status(WorkStatus::WaitingResponse, false)?;
         if name != "run_command" {
             self.stop_command_preview()?;
         }
@@ -181,7 +181,7 @@ impl StreamRenderer {
         if self.plain {
             return Ok(());
         }
-        self.set_work_status(WorkStatus::Working, false)?;
+        self.set_work_status(crate::render::work_status::status_for_tool(name), false)?;
         if message == "__external_output__" {
             self.finish_subagent_reasoning_line()?;
             self.prepare_for_external_output()?;

@@ -89,6 +89,10 @@ impl Agent {
             let loaded = state.load_loaded_tools()?;
             tool_visibility.restore_loaded_tools(&tools, &loaded);
         }
+        if config.skills.enabled {
+            let loaded = state.load_loaded_skills()?;
+            tool_visibility.restore_loaded_skills(&loaded);
+        }
         let memory = MemoryStore::new(&config, paths);
         memory.init()?;
         let live_mode = tools
@@ -253,6 +257,10 @@ impl Agent {
         // 1. 按新模式注册表恢复会话已加载集合，不保留当前模式不存在的工具
         self.tool_visibility
             .restore_loaded_tools(&self.tools, &loaded);
+        if self.config.skills.enabled {
+            let loaded_skills = self.state.load_loaded_skills()?;
+            self.tool_visibility.restore_loaded_skills(&loaded_skills);
+        }
         Ok(())
     }
 
@@ -351,6 +359,10 @@ impl Agent {
             let loaded = self.state.load_loaded_tools()?;
             self.restore_loaded_tools(&loaded);
         }
+        if self.config.skills.enabled {
+            let loaded = self.state.load_loaded_skills()?;
+            self.restore_loaded_skills(&loaded);
+        }
         self.memory = MemoryStore::new(&self.config, &self.paths);
         self.memory.init()?;
         self.prepare_for_turn()
@@ -378,6 +390,10 @@ impl Agent {
         if self.tool_visibility.is_progressive() {
             let loaded = self.state.load_loaded_tools()?;
             self.restore_loaded_tools(&loaded);
+        }
+        if self.config.skills.enabled {
+            let loaded = self.state.load_loaded_skills()?;
+            self.restore_loaded_skills(&loaded);
         }
         self.last_dynamic_sources.clear();
         self.anchor_bootstrap_system_prompt = anchor_enabled
@@ -427,6 +443,25 @@ impl Agent {
     /// - 当前已经加载的工具名称列表
     pub fn loaded_tools(&self) -> Vec<String> {
         self.tool_visibility.loaded_tool_names()
+    }
+
+    /// 恢复本会话已经 load 过的 skill。
+    ///
+    /// 参数:
+    /// - `names`: 持久化的 skill 名称
+    ///
+    /// 返回:
+    /// - 无
+    pub fn restore_loaded_skills(&mut self, names: &[String]) {
+        self.tool_visibility.restore_loaded_skills(names);
+    }
+
+    /// 导出本会话已经 load 过的 skill 名称。
+    ///
+    /// 返回:
+    /// - skill 名称列表
+    pub fn loaded_skills(&self) -> Vec<String> {
+        self.tool_visibility.loaded_skill_names()
     }
 
     /// 导出最近一次 provider 请求的动态上下文来源。

@@ -133,10 +133,31 @@ impl StreamSummary {
     /// 返回:
     /// - 推理摘要文本
     pub(crate) fn reasoning_text(&self) -> String {
-        // 1. 【终端】【思考摘要】复用 reasoning_cell 的标签与 token 格式
-        let label = reasoning_cell::thinking_label(reasoning_cell::duration_label_value(
-            self.reasoning_elapsed,
-        ));
+        self.reasoning_title(false)
+    }
+
+    /// 生成定稿推理摘要文本（过去式标题）。
+    ///
+    /// 返回:
+    /// - 如 `◦ Thought (12s) · 12 tokens`
+    fn finalized_reasoning_text(&self) -> String {
+        self.reasoning_title(true)
+    }
+
+    /// 按进行时或过去式生成推理摘要标题。
+    ///
+    /// 参数:
+    /// - `done`: 是否已定稿
+    ///
+    /// 返回:
+    /// - 带引导符与 token 计数的摘要行
+    fn reasoning_title(&self, done: bool) -> String {
+        let duration = reasoning_cell::duration_label_value(self.reasoning_elapsed);
+        let label = if done {
+            reasoning_cell::thought_label(duration)
+        } else {
+            reasoning_cell::thinking_label(duration)
+        };
         format!(
             "{} {label}{}",
             reasoning_cell::THINKING_MARKER,
@@ -191,7 +212,7 @@ impl StreamSummary {
         if !self.has_reasoning() {
             return Ok(());
         }
-        let text = style_summary_text(&self.reasoning_text(), SummaryStyle::Reasoning);
+        let text = style_summary_text(&self.finalized_reasoning_text(), SummaryStyle::Reasoning);
         let _paint = paint_lock();
         let mut stdout = io::stdout();
         if self.reasoning_live {
@@ -535,6 +556,12 @@ mod tests {
 
         assert!(output.contains("Thinking (12s)"), "output={output:?}");
         assert!(!output.contains("Thinking(12s)"));
+        assert_eq!(
+            summary.finalized_reasoning_text().contains("Thought (12s)"),
+            true,
+            "finalize must switch to past tense: {}",
+            summary.finalized_reasoning_text()
+        );
         // 2. 零耗时省略括号，与 reasoning_cell 固化时 duration=None 行为一致
         let mut fresh = StreamSummary::new(false);
         fresh

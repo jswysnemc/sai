@@ -57,10 +57,10 @@ mod repl_editor_buffer;
 mod repl_external_events;
 mod repl_input;
 mod repl_input_navigation;
-mod repl_mentions;
 mod repl_input_render;
 #[cfg(test)]
 mod repl_input_tests;
+mod repl_mentions;
 mod repl_pager;
 mod repl_runtime;
 mod repl_shell;
@@ -471,23 +471,34 @@ fn build_tool_registry_with_mcp(
     mode: AgentMode,
     discover_mcp: bool,
 ) -> Result<tools::ToolRegistry> {
-    let mut registry = if config.tools.enabled {
+    Ok(build_tool_registry_with_mcp_notices(config, paths, mode, discover_mcp)?.0)
+}
+
+/// 按需构建工具注册表，并带回 MCP 发现失败说明。
+fn build_tool_registry_with_mcp_notices(
+    config: &AppConfig,
+    paths: &SaiPaths,
+    mode: AgentMode,
+    discover_mcp: bool,
+) -> Result<(tools::ToolRegistry, Vec<String>)> {
+    let (mut registry, notices) = if config.tools.enabled {
         match mode {
             AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit if discover_mcp => {
-                tools::builtin_registry(config, paths)
+                tools::builtin_registry_with_mcp_notices(config, paths)
             }
-            AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit => {
-                tools::builtin_registry_without_mcp(config, paths)
-            }
-            AgentMode::Plan => tools::readonly_registry(config, paths),
+            AgentMode::Yolo | AgentMode::Audited | AgentMode::AutoAudit => (
+                tools::builtin_registry_without_mcp(config, paths),
+                Vec::new(),
+            ),
+            AgentMode::Plan => (tools::readonly_registry(config, paths), Vec::new()),
         }
     } else {
-        tools::ToolRegistry::new()
+        (tools::ToolRegistry::new(), Vec::new())
     };
     if mode != AgentMode::Plan && config.tools.enabled && config.skills.enabled {
         tools::register_skills(&mut registry, config, paths, true)?;
     }
-    Ok(registry)
+    Ok((registry, notices))
 }
 
 pub(crate) fn build_repl_tool_registry(
@@ -517,6 +528,30 @@ pub(crate) fn build_repl_tool_registry_for_session(
     session_id: &str,
     state_dir: &std::path::Path,
 ) -> Result<tools::ToolRegistry> {
+    Ok(build_repl_tool_registry_for_session_with_notices(
+        config, paths, mode, session_id, state_dir,
+    )?
+    .0)
+}
+
+/// 构造绑定到指定会话的交互式工具注册表，并带回 MCP 发现失败说明。
+///
+/// 参数:
+/// - `config`: 应用配置
+/// - `paths`: Sai 路径
+/// - `mode`: Agent 模式
+/// - `session_id`: 会话 ID
+/// - `state_dir`: 会话状态目录
+///
+/// 返回:
+/// - `(工具注册表, MCP 发现失败说明)`
+pub(crate) fn build_repl_tool_registry_for_session_with_notices(
+    config: &AppConfig,
+    paths: &SaiPaths,
+    mode: AgentMode,
+    session_id: &str,
+    state_dir: &std::path::Path,
+) -> Result<(tools::ToolRegistry, Vec<String>)> {
     build_repl_tool_registry_for_session_with_mcp(config, paths, mode, session_id, state_dir, true)
 }
 
@@ -538,7 +573,10 @@ pub(crate) fn build_repl_tool_registry_without_mcp_for_session(
     session_id: &str,
     state_dir: &std::path::Path,
 ) -> Result<tools::ToolRegistry> {
-    build_repl_tool_registry_for_session_with_mcp(config, paths, mode, session_id, state_dir, false)
+    Ok(build_repl_tool_registry_for_session_with_mcp(
+        config, paths, mode, session_id, state_dir, false,
+    )?
+    .0)
 }
 
 /// 按需构造本地或完整的会话工具注册表。
@@ -549,11 +587,14 @@ fn build_repl_tool_registry_for_session_with_mcp(
     session_id: &str,
     state_dir: &std::path::Path,
     discover_mcp: bool,
-) -> Result<tools::ToolRegistry> {
-    let mut registry = if discover_mcp {
-        build_tool_registry(config, paths, mode)?
+) -> Result<(tools::ToolRegistry, Vec<String>)> {
+    let (mut registry, notices) = if discover_mcp {
+        build_tool_registry_with_mcp_notices(config, paths, mode, true)?
     } else {
-        build_tool_registry_without_mcp(config, paths, mode)?
+        (
+            build_tool_registry_without_mcp(config, paths, mode)?,
+            Vec::new(),
+        )
     };
     if mode != AgentMode::Plan && config.tools.enabled {
         tools::register_interactive_tools(
@@ -583,5 +624,5 @@ fn build_repl_tool_registry_for_session_with_mcp(
         workspace,
         audit,
     ));
-    Ok(registry)
+    Ok((registry, notices))
 }

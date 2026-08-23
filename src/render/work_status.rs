@@ -6,8 +6,14 @@ use std::time::Duration;
 /// 单轮请求的用户可见工作状态。
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum WorkStatus {
+    /// 已发出请求，等待模型首包
     WaitingResponse,
+    /// 等待后台/外部工作完成后继续
     WaitingExternal,
+    /// 等待工具开始执行
+    WaitingToRun,
+    /// 等待写入磁盘（编辑类工具）
+    WaitingToWrite,
     Thinking,
     Working,
     Compacting,
@@ -31,17 +37,23 @@ impl WorkStatus {
             AgentEvent::Chunk(chunk) if chunk.kind == ChatStreamKind::Reasoning => {
                 Some(Self::Thinking)
             }
-            AgentEvent::Chunk(_)
-            | AgentEvent::InterMessage(_)
-            | AgentEvent::ToolCall { .. }
-            | AgentEvent::ToolCallIdentified { .. }
-            | AgentEvent::ToolCallProgress(_)
+            AgentEvent::Chunk(_) => Some(Self::Working),
+            AgentEvent::InterMessage(_)
             | AgentEvent::ToolResult { .. }
             | AgentEvent::ToolResultIdentified { .. }
-            | AgentEvent::ToolProgress { .. }
-            | AgentEvent::ToolProgressIdentified { .. }
             | AgentEvent::PermissionResolved { .. }
-            | AgentEvent::QuestionResolved { .. } => Some(Self::Working),
+            | AgentEvent::QuestionResolved { .. } => Some(Self::WaitingResponse),
+            AgentEvent::ToolCall { name, .. }
+            | AgentEvent::ToolCallIdentified { name, .. }
+            | AgentEvent::ToolProgress { name, .. }
+            | AgentEvent::ToolProgressIdentified { name, .. } => Some(status_for_tool(name)),
+            AgentEvent::ToolCallProgress(progress) => Some(
+                progress
+                    .name
+                    .as_deref()
+                    .map(status_for_tool)
+                    .unwrap_or(Self::WaitingToRun),
+            ),
             // 权限/提问交互期间由专门 UI 接管，不进入 Working，避免与审核行重叠
             AgentEvent::WaitingExternal => Some(Self::WaitingExternal),
             AgentEvent::Reconnecting {
@@ -72,8 +84,9 @@ impl WorkStatus {
     #[allow(dead_code)]
     pub(crate) fn label(self) -> String {
         match self {
-            Self::WaitingResponse => "Waiting".to_string(),
-            Self::WaitingExternal => "Waiting for external work".to_string(),
+            Self::WaitingResponse => "Waiting for response".to_string(),
+            Self::WaitingExternal | Self::WaitingToRun => "Waiting to run".to_string(),
+            Self::WaitingToWrite => "Waiting to write".to_string(),
             Self::Thinking => "Thinking".to_string(),
             Self::Working => "Working".to_string(),
             Self::Compacting => "Compacting".to_string(),
@@ -96,7 +109,9 @@ impl WorkStatus {
     /// - 英文状态短语；重连状态带上当前尝试次数
     pub(crate) fn localized_label(self) -> String {
         match self {
-            Self::WaitingResponse | Self::WaitingExternal => "Waiting".to_string(),
+            Self::WaitingResponse => "Waiting for response".to_string(),
+            Self::WaitingExternal | Self::WaitingToRun => "Waiting to run".to_string(),
+            Self::WaitingToWrite => "Waiting to write".to_string(),
             Self::Thinking => "Thinking".to_string(),
             Self::Working => "Working".to_string(),
             Self::Compacting => "Compacting".to_string(),
@@ -121,6 +136,21 @@ impl WorkStatus {
     pub(crate) fn render_line(self, frame: usize, elapsed: Duration) -> String {
         let label = self.localized_label();
         render_activity_line(&label, &format_elapsed(elapsed), frame)
+    }
+}
+
+/// 按工具种类选择等待语义。
+///
+/// 参数:
+/// - `name`: 工具名称
+///
+/// 返回:
+/// - 编辑类为等待写入，其余为等待运行
+pub(crate) fn status_for_tool(name: &str) -> WorkStatus {
+    if crate::render::stream_text::is_file_edit_tool(name) {
+        WorkStatus::WaitingToWrite
+    } else {
+        WorkStatus::WaitingToRun
     }
 }
 
@@ -173,6 +203,45 @@ mod tests {
         assert_eq!(
             WorkStatus::from_agent_event(&content),
             Some(WorkStatus::Working)
+        );
+    }
+
+    /// 【终端】【工作状态】验证工具事件使用等待运行 / 等待写入，结果后回到等待响应。
+    #[test]
+    fn tool_events_use_waiting_semantics() {
+        let run = AgentEvent::ToolCall {
+            name: "read_file".into(),
+            arguments: "{}".into(),
+        };
+        let write = AgentEvent::ToolCall {
+            name: "str_replace".into(),
+            arguments: "{}".into(),
+        };
+        let done = AgentEvent::ToolResult {
+            name: "read_file".into(),
+            ok: true,
+            output: "ok".into(),
+        };
+        assert_eq!(
+            WorkStatus::from_agent_event(&run),
+            Some(WorkStatus::WaitingToRun)
+        );
+        assert_eq!(
+            WorkStatus::from_agent_event(&write),
+            Some(WorkStatus::WaitingToWrite)
+        );
+        assert_eq!(
+            WorkStatus::from_agent_event(&done),
+            Some(WorkStatus::WaitingResponse)
+        );
+        assert_eq!(WorkStatus::WaitingToRun.localized_label(), "Waiting to run");
+        assert_eq!(
+            WorkStatus::WaitingToWrite.localized_label(),
+            "Waiting to write"
+        );
+        assert_eq!(
+            WorkStatus::WaitingResponse.localized_label(),
+            "Waiting for response"
         );
     }
 

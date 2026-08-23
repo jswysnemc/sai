@@ -72,6 +72,16 @@ impl TranscriptStore {
                         kind: ExpandableBlockKind::Command,
                     });
                 }
+                HistoryCell::Diff(cell) => {
+                    let body = cell.pager_body();
+                    if !body.trim().is_empty() {
+                        blocks.push(ExpandableBlock {
+                            title: format!("{} · {}", t("diff", "差异"), cell.pager_title()),
+                            body,
+                            kind: ExpandableBlockKind::Diff,
+                        });
+                    }
+                }
                 HistoryCell::Tool(ToolCell::Invocation(view)) if view.has_command_output() => {
                     let body = command_full_body(view);
                     if !body.trim().is_empty() {

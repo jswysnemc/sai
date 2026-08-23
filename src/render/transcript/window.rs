@@ -1,4 +1,5 @@
 use super::line::AnsiLine;
+use super::spacing;
 use super::store::TranscriptStore;
 use super::{assistant_body, markdown_cell, reasoning_cell, TranscriptRenderOptions};
 use crate::llm::ChatStreamKind;
@@ -105,28 +106,59 @@ impl TranscriptStore {
         } else {
             0
         };
-        let live: Vec<AnsiLine> = live_full.into_iter().skip(live_skip).collect();
+        let mut live: Vec<AnsiLine> = live_full.into_iter().skip(live_skip).collect();
         // 1. 统计每个 cell 的行数（缓存命中时只读长度，不重新渲染）
         let mut counts = Vec::with_capacity(self.cells.len());
+        let mut gap_before = vec![false; self.cells.len()];
         let mut cell_rows = 0usize;
         for (index, cell) in self.cells.iter().enumerate() {
+            if index > 0 && spacing::needs_section_gap(&self.cells[index - 1], cell) {
+                gap_before[index] = true;
+                cell_rows += 1;
+            }
             let count = self.cache.count_for(index, cell, width, options, frame);
             counts.push(count);
             cell_rows += count;
         }
+        // 2. 定稿区最后一行若已是空行，丢掉 live 自己的前空行；正文后的工具 live 再补一块空行
+        if let Some(last_index) = self.cells.len().checked_sub(1) {
+            let last_lines =
+                self.cache
+                    .lines_for(last_index, &self.cells[last_index], width, options, frame);
+            spacing::drop_duplicate_leading_blank(&mut live, last_lines.last());
+            spacing::ensure_live_tool_gap(&mut live, self.cells.get(last_index));
+        }
         let total = cell_rows + live.len();
-        // 2. 脏行水位：有脏 cell 时取其起始行，否则从 live 区起点算起
+        // 3. 脏行水位：有脏 cell 时取其起始行（含它前面的区块空行），否则从 live 区起点算起
         let dirty_from = match self.dirty_from_cell {
-            Some(cell_index) => counts.iter().take(cell_index).sum::<usize>(),
+            Some(cell_index) => {
+                let mut rows = 0usize;
+                for index in 0..cell_index {
+                    if gap_before[index] {
+                        rows += 1;
+                    }
+                    rows += counts[index];
+                }
+                if gap_before.get(cell_index) == Some(&true) {
+                    rows += 1;
+                }
+                rows
+            }
             None => cell_rows,
         }
         .min(total);
-        // 3. 窗口首行同时满足最小覆盖行数与调用方的追加/修补需求
+        // 4. 窗口首行同时满足最小覆盖行数与调用方的追加/修补需求
         let start = total.saturating_sub(min_rows).min(max_start).min(cell_rows);
-        // 4. 顺序拼出窗口行：跳过完全位于窗口上方的 cell，首个跨界 cell 截取尾部
+        // 5. 顺序拼出窗口行：跳过完全位于窗口上方的 cell，首个跨界 cell 截取尾部
         let mut lines = Vec::with_capacity(total - start);
         let mut offset = 0usize;
         for (index, count) in counts.iter().enumerate() {
+            if gap_before[index] {
+                if offset >= start {
+                    lines.push(AnsiLine::new(String::new()));
+                }
+                offset += 1;
+            }
             let end = offset + count;
             if end > start {
                 let cell_lines =
@@ -200,14 +232,10 @@ impl TranscriptStore {
     ) -> (Vec<AnsiLine>, bool) {
         let mut lines = Vec::new();
         let mut transient = false;
-        // 有思考内容时只显示 reasoning 动效，不再叠一层 working/thinking 文案
-        let has_live_reasoning = self
-            .live_tail
-            .as_ref()
-            .is_some_and(|tail| tail.kind == ChatStreamKind::Reasoning && !tail.source.is_empty());
+        let mut emitted_live_content = false;
         if let Some(tail) = &self.live_tail {
             // 【终端】【流式正文】1. 按内容类型选择渲染方式，避免宽度与折行分支漂移
-            let rendered_lines = match tail.kind {
+            let mut rendered_lines = match tail.kind {
                 ChatStreamKind::Content => {
                     let (rendered, open) =
                         crate::render::render_width::with_render_width(width, || {
@@ -238,13 +266,23 @@ impl TranscriptStore {
                     }
                 }
             };
+            // 3. 丢掉折行带进来的首尾视觉空行，区块前距只保留下面这一行
+            spacing::trim_leading_visual_blanks(&mut rendered_lines);
+            spacing::trim_trailing_visual_blanks(&mut rendered_lines);
             // 与定稿 Markdown / Reasoning 一致：区块前空一行。
             // 以前只在 finalize 后由 cell.display_lines 插入，造成「工作时无空行、完成后突然空行」。
             if !rendered_lines.is_empty() {
                 lines.push(AnsiLine::new(String::new()));
+                if tail.kind == ChatStreamKind::Content {
+                    emitted_live_content = true;
+                }
             }
             lines.extend(rendered_lines);
         }
+        let has_live_reasoning = self
+            .live_tail
+            .as_ref()
+            .is_some_and(|tail| tail.kind == ChatStreamKind::Reasoning && !tail.source.is_empty());
         if let Some(tool_call) = &self.live_tool_call {
             // 编辑类 live 固定 Summary 一行（Write +N -M），与普通工具同行宽对齐
             let rendered = crate::render::render_width::with_render_width(width, || {
@@ -255,7 +293,13 @@ impl TranscriptStore {
                 )
             });
             if !rendered.is_empty() {
-                lines.extend(AnsiLine::wrap_block(&rendered, width));
+                let mut tool_lines = AnsiLine::wrap_block(&rendered, width);
+                spacing::trim_trailing_visual_blanks(&mut tool_lines);
+                // 流式正文与工具预览同在 live 区时，也要留下和定稿一样的一块空行
+                if emitted_live_content {
+                    spacing::ensure_blank_before(&mut lines);
+                }
+                lines.extend(tool_lines);
             }
         }
         if let Some(status) = self.work_status {
@@ -264,10 +308,12 @@ impl TranscriptStore {
                     .work_status_started
                     .map(|started| started.elapsed())
                     .unwrap_or_default();
-                lines.extend(AnsiLine::wrap_block(
-                    &super::work_status_cell::render(status, self.live_animation_frame(), elapsed),
+                let mut status_lines = AnsiLine::wrap_block(
+                    &status.render_line(self.live_animation_frame(), elapsed),
                     width,
-                ));
+                );
+                spacing::trim_trailing_visual_blanks(&mut status_lines);
+                lines.extend(status_lines);
             }
         }
         (lines, transient)

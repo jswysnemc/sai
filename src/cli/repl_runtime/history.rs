@@ -34,9 +34,7 @@ pub(super) fn append_timeline_with_compaction(
     }
     for turn in turns {
         append_user_message(transcript, turn);
-        append_reasoning(transcript, turn.assistant.reasoning.as_deref());
-        append_tools(transcript, turn);
-        append_content(transcript, &turn.assistant.content);
+        super::history_replay::replay_turn(transcript, turn);
     }
 }
 
@@ -113,7 +111,7 @@ fn history_user_text(turn: &SessionTimelineTurn) -> String {
 ///
 /// 返回:
 /// - 无
-fn append_reasoning(transcript: &mut TranscriptStore, reasoning: Option<&str>) {
+pub(super) fn append_reasoning(transcript: &mut TranscriptStore, reasoning: Option<&str>) {
     let Some(reasoning) = reasoning.filter(|value| !value.trim().is_empty()) else {
         return;
     };
@@ -124,32 +122,6 @@ fn append_reasoning(transcript: &mut TranscriptStore, reasoning: Option<&str>) {
     transcript.finalize_live_tail();
 }
 
-/// 追加历史工具调用及其结果。
-///
-/// 参数:
-/// - `transcript`: 当前 TUI transcript
-/// - `turn`: 包含工具历史的轮次
-///
-/// 返回:
-/// - 无
-fn append_tools(transcript: &mut TranscriptStore, turn: &SessionTimelineTurn) {
-    for tool in &turn.tools {
-        transcript.push_history_tool_call(tool.name.clone(), tool.arguments.clone());
-        if tool.status == "running" {
-            let output = "The tool call was not completed in the previous session";
-            transcript.push_tool_result(tool.name.clone(), false, output.to_string());
-            continue;
-        }
-        let output = if !tool.output.trim().is_empty() {
-            tool.output.clone()
-        } else {
-            tool.error.clone().unwrap_or_default()
-        };
-        let ok = tool.ok.unwrap_or(tool.status == "completed");
-        transcript.push_tool_result(tool.name.clone(), ok, output);
-    }
-}
-
 /// 追加历史助手回复内容。
 ///
 /// 参数:
@@ -158,7 +130,7 @@ fn append_tools(transcript: &mut TranscriptStore, turn: &SessionTimelineTurn) {
 ///
 /// 返回:
 /// - 无
-fn append_content(transcript: &mut TranscriptStore, content: &str) {
+pub(super) fn append_content(transcript: &mut TranscriptStore, content: &str) {
     if content.trim().is_empty() {
         return;
     }

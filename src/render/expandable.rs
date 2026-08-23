@@ -13,6 +13,8 @@ pub(crate) enum ExpandableBlockKind {
     Command,
     /// 未指定格式的纯文本。
     Plain,
+    /// 已渲染的编辑 diff（含行级增删色）。
+    Diff,
 }
 
 /// 可在 pager 中展开的正文块。
@@ -38,7 +40,7 @@ pub(crate) fn render_expandable_body(kind: ExpandableBlockKind, body: &str) -> S
     match kind {
         ExpandableBlockKind::Markdown => render_markdown_body(body),
         ExpandableBlockKind::Command => render_command_body(body),
-        ExpandableBlockKind::Plain => body.to_string(),
+        ExpandableBlockKind::Plain | ExpandableBlockKind::Diff => body.to_string(),
     }
 }
 
@@ -287,6 +289,16 @@ mod tests {
         let body = "raw text\nsecond line";
         assert_eq!(
             render_expandable_body(ExpandableBlockKind::Plain, body),
+            body
+        );
+    }
+
+    /// 【终端】【分页】diff 正文保持已渲染 ANSI，不再当 Markdown 解析。
+    #[test]
+    fn diff_body_is_kept_verbatim() {
+        let body = "\x1b[48;5;22m+added\x1b[0m";
+        assert_eq!(
+            render_expandable_body(ExpandableBlockKind::Diff, body),
             body
         );
     }

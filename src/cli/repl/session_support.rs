@@ -152,7 +152,15 @@ pub(super) fn apply_ready_tool_registry(
         return Ok(());
     };
     match result {
-        Ok((warmup_mode, registry)) if warmup_mode == mode => agent.replace_tools(registry),
+        Ok((warmup_mode, registry, notices)) if warmup_mode == mode => {
+            agent.replace_tools(registry);
+            for notice in notices {
+                runtime.record_meta(format!(
+                    "{}: {notice}",
+                    t("MCP tool discovery failed", "MCP 工具发现失败")
+                ))?;
+            }
+        }
         Ok(_) => {}
         Err(error) => runtime.record_meta(format!(
             "{}: {error}",

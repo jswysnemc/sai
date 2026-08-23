@@ -130,7 +130,7 @@ impl Agent {
     /// 返回:
     /// - 压缩结果是否已经应用
     pub(super) async fn execute_compaction(
-        &self,
+        &mut self,
         request: &CompactionRequest,
         projection: &ProjectedRequest,
         exclude_turn_id: Option<&str>,
@@ -173,6 +173,9 @@ impl Agent {
         };
         match outcome {
             CompactionApplyOutcome::Applied => {
+                // 压缩可能剪掉 <loaded-skill> 正文，允许之后再次全文 load
+                self.tool_visibility.clear_loaded_skills();
+                self.state.clear_loaded_skills()?;
                 self.record_evicted_turns(request);
                 on_event(AgentEvent::CompactionFinished {
                     applied: true,

@@ -79,10 +79,10 @@ Run `sai config` (also reachable from the REPL) for the terminal configurator. T
 ### Agent and progressive tool system
 
 - **Three permission modes** - `Yolo` free tool use, `Audited` (sandbox + audit log + per-call confirm), `Plan` read-only
-- **Progressive tool loading** - Only `load` and base tools are exposed at start; the model calls `load` to pull in tool groups or skills on demand; the visible set persists to `loaded-tools.json` across turns
+- **Progressive tool loading** - Only `load` and base tools are exposed at start; the model calls `load` to pull in tool groups or skills on demand. Tool groups persist to `loaded-tools.json`. Each skill is loaded once per session: later `load` calls return `already_loaded` without the body, and the name list lives in a suffix `<context-resource>` so the system-prompt prefix stays cacheable. Compaction clears `loaded-skills.json` so the next load can return the full document.
 - **30+ built-in tools** - Grouped by purpose: `base` file/command, `web` lookup, `media` image/meme, `research` deep research, `memory` recall, `package` Arch Linux, `game` compatibility, `diagnostics` system, `knowledge` base, `utilities` calc/encode, `personal` alarm, `ssh` remote hosts, `mcp` external
 - **Subagents** - The `subagent` tool starts an independent LLM loop with a `max_steps` budget and timeout; writable tasks auto-create a `.sai-subagents` git worktree for isolation, then apply back and clean up on success. Persistent agents can idle and take follow-ups (REPL `/subagents`, `/msg`)
-- **Skills** - Reusable `SKILL.md` skill packs with three visibility tiers (hidden / name-only / full); enable / disable / list / stats / prune from the TUI or CLI
+- **Skills** - Reusable `SKILL.md` skill packs with three visibility tiers (hidden / name-only / full); enable / disable / list / stats / prune from the TUI or CLI. Session loads are cached as described above.
 - **MCP bridging** - Native stdio / http MCP servers; tools registered with `mcp_` prefix; dedicated `mcp.jsonc` config
 - **Session-level Todo** - A plan checklist tracked across tool rounds
 - **Cron jobs** - bash / http / prompt types, persisted to `jobs.db`, triggered by a background scheduler
@@ -232,8 +232,8 @@ Pushing a `v*` tag runs the **Release** workflow and publishes assets on [Releas
 - matching `.sha256` checksums
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 You can also run the **Release** workflow manually from Actions and supply an existing tag.
@@ -247,7 +247,7 @@ Images are published to GitHub Container Registry:
 docker pull ghcr.io/jswysnemc/sai:latest
 
 # version tag
-docker pull ghcr.io/jswysnemc/sai:0.2.0
+docker pull ghcr.io/jswysnemc/sai:0.2.1
 ```
 
 Build locally:
@@ -319,7 +319,7 @@ You can also run `sai config` for the built-in TUI configurator, or use the sett
 sai
 ```
 
-The REPL supports multi-line input, image paste (`-c` reads from clipboard), `!` prefix for shell, `/` prefix for control commands, fuzzy history search, and streaming render of reasoning and body text.
+The REPL supports multi-line input, image paste (`-c` reads from clipboard), `!` prefix for shell, `/` prefix for control commands, fuzzy history search, and streaming render of reasoning and body text. Idle `Ctrl+O` opens the transcript pager, including diffs; while a turn is streaming it only toggles live reasoning. Work status stays in the live tail (`Working` / `Thinking`, then waiting to run, write, or respond). Finalized reasoning uses the past-tense `Thought` label.
 
 ### 4. One-shot chat
 
@@ -474,6 +474,7 @@ Linux `~/.local/state/sai` / macOS `~/Library/Application Support/sai` / Windows
 | `conversation.db` | SQLite WAL conversation turn store |
 | `usage.json` | Token usage stats |
 | `loaded-tools.json` | Progressive tool visibility set (cross-turn restore) |
+| `loaded-skills.json` | Skill names already loaded this session; cleared on compaction |
 | `prompt.sha256` | System prompt fingerprint; change resets the session |
 | `profile.md` | User profile |
 | `sai.log` | Runtime log |

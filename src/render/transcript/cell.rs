@@ -5,6 +5,7 @@ use super::markdown_cell::{self, MarkdownCell};
 use super::meta_cell::{self, MetaCell};
 use super::reasoning_cell::{self, ReasoningCell};
 use super::shell_cell::{self, ShellCell};
+use super::spacing;
 use super::tool_cell::{self, ToolCell};
 use super::user_echo_cell::{self, UserEchoCell};
 use super::welcome_cell::{self, WelcomeCell};
@@ -89,8 +90,8 @@ impl HistoryCell {
         // 区块间距（交界处只保留一行空行）：
         // - Reasoning：仅前空一行（后空行会与 Markdown/Meta 的前空行叠成两行）
         // - Markdown / Meta：前空一行（承接思考/工具与正文、总览）
-        // - Tool / Shell：不加前空行，避免连续工具被撕开
-        let spaced = if lines.is_empty() {
+        // - Tool / Shell：自身不加前空行；正文后的工具空行由窗口拼装补上
+        let mut spaced = if lines.is_empty() {
             lines
         } else if matches!(self, Self::Reasoning(_)) {
             let mut spaced = Vec::with_capacity(lines.len() + 1);
@@ -105,6 +106,9 @@ impl HistoryCell {
         } else {
             lines
         };
+        // wrap_block 遇到渲染文本尾部 `\n` 会留下 `\x1b[0m` 空行；
+        // 块间前空行由本函数显式插入，尾部空行会在流式 live 接缝处叠成两行
+        spacing::trim_trailing_visual_blanks(&mut spaced);
         spaced
     }
 

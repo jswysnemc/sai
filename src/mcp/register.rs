@@ -9,36 +9,50 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 /// 将已启用 MCP server 的工具注册到工具表。
-pub fn register_mcp_tools(registry: &mut ToolRegistry, config: &AppConfig, paths: &SaiPaths) {
+///
+/// 发现失败写入返回值，不往 stderr 打，避免 TUI 输入框被覆盖。
+///
+/// 参数:
+/// - `registry`: 当前工具注册表
+/// - `config`: 当前应用配置
+/// - `paths`: Sai 路径集合
+///
+/// 返回:
+/// - 各服务列举或缓存失败说明；成功时为空
+pub fn register_mcp_tools(
+    registry: &mut ToolRegistry,
+    config: &AppConfig,
+    paths: &SaiPaths,
+) -> Vec<String> {
     if !config.mcp.enabled || config.mcp.servers.is_empty() {
-        return;
+        return Vec::new();
     }
     let servers = config.mcp.servers.clone();
     let cache_paths = paths.clone();
     // 在专用 MCP runtime 上列举工具（stdio Child 与连接池绑定该 runtime）
     // 从主 runtime 的同步路径调用时，放到独立线程避免嵌套 block_on
-    let tools = std::thread::spawn(move || {
+    let (tools, notices) = std::thread::spawn(move || {
         super::client::block_on_mcp(async move {
             let mut all = Vec::new();
+            let mut notices = Vec::new();
             for server in servers.iter().filter(|server| server.enabled) {
                 match list_server_tools_on_rt(server).await {
                     Ok(mut tools) => {
                         if let Err(error) = tool_cache::store_server(&cache_paths, server, &tools) {
-                            eprintln!("[mcp] cache tools for {}: {error}", server.id);
+                            notices.push(format!("cache tools for {}: {error}", server.id));
                         }
                         all.append(&mut tools);
                     }
-                    Err(error) => eprintln!("[mcp] list tools for {}: {error}", server.id),
+                    Err(error) => {
+                        notices.push(format!("list tools for {}: {error}", server.id));
+                    }
                 }
             }
-            all
+            (all, notices)
         })
     })
     .join()
-    .unwrap_or_else(|_| {
-        eprintln!("[mcp] list tools thread panicked");
-        Vec::new()
-    });
+    .unwrap_or_else(|_| (Vec::new(), vec!["list tools thread panicked".to_string()]));
 
     let server_index: Arc<HashMap<String, McpServerConfig>> = Arc::new(
         config
@@ -82,6 +96,7 @@ pub fn register_mcp_tools(registry: &mut ToolRegistry, config: &AppConfig, paths
             .writes(),
         );
     }
+    notices
 }
 
 /// 从持久化缓存注册延迟连接的 MCP 工具。
@@ -260,5 +275,25 @@ mod tests {
         let statuses = super::super::client::runtime_statuses(std::slice::from_ref(&server)).await;
         assert!(!statuses[0].running);
         assert!(registry.call(&dynamic_name, "{}").await.is_err());
+    }
+
+    /// 列举失败写入返回值，不往 stderr 打。
+    #[test]
+    fn register_mcp_tools_returns_notices_instead_of_printing() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path());
+        let mut config = AppConfig::default();
+        config.mcp.enabled = true;
+        config.mcp.servers = vec![unavailable_server()];
+        let mut registry = ToolRegistry::new();
+
+        let notices = register_mcp_tools(&mut registry, &config, &paths);
+
+        assert!(
+            notices
+                .iter()
+                .any(|notice| notice.contains("lazy-cache-test-server")),
+            "{notices:?}"
+        );
     }
 }

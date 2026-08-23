@@ -115,7 +115,6 @@ fn work_status_is_replaced_without_becoming_history() {
     assert!(store.set_work_status(WorkStatus::Thinking));
     let thinking = store.display_live_tail(80, &options());
     assert!(!thinking.is_empty());
-    // 1. 【终端】【工作状态测试】状态切换后只保留 Thinking 与耗时
     let thinking_plain = strip_ansi_for_test(thinking[0].as_str());
     assert!(!thinking_plain.contains(&WorkStatus::WaitingResponse.localized_label()));
     assert!(thinking_plain.contains(&WorkStatus::Thinking.localized_label()));
@@ -173,6 +172,38 @@ fn work_status_hidden_when_live_reasoning_exists() {
     let joined = strip_ansi_for_test(&live.iter().map(|line| line.as_str()).collect::<String>());
     assert!(!joined.contains(&WorkStatus::Working.localized_label()));
     assert!(joined.contains("Thinking") || joined.contains("思考"));
+}
+
+/// 【终端】【思考时态】思考定稿后标题改过去式，状态行不再闪 Thinking。
+#[test]
+fn finalized_reasoning_drops_thinking_work_status() {
+    let mut store = TranscriptStore::new(100);
+    assert!(store.set_work_status(WorkStatus::Thinking));
+    store.push_chunk(&chunk(ChatStreamKind::Reasoning, "inspect plan"));
+    assert!(store.finalize_live_tail());
+
+    let tail = store
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| strip_ansi_for_test(line.as_str()))
+        .collect::<Vec<_>>();
+    let joined = tail.join("\n");
+    assert!(joined.contains("Thought"), "{tail:?}");
+    assert!(
+        !joined.contains("Thinking"),
+        "Thinking must not remain after finalize: {tail:?}"
+    );
+    let live = store.display_live_tail(80, &options());
+    let live_plain: Vec<String> = live
+        .iter()
+        .map(|line| strip_ansi_for_test(line.as_str()))
+        .collect();
+    assert!(
+        live_plain
+            .iter()
+            .any(|line| line.contains(&WorkStatus::WaitingResponse.localized_label())),
+        "after thinking, status should wait for response: {live_plain:?}"
+    );
 }
 
 /// 【终端】【子智能体动效】验证主 agent 空闲时子智能体动画仍持续推进。

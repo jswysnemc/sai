@@ -176,9 +176,24 @@ pub fn clear_aur_review_state(paths: &SaiPaths) -> anyhow::Result<()> {
 /// 返回:
 /// - 可直接用于 Agent 运行的完整工具注册表
 pub fn builtin_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
+    builtin_registry_with_mcp_notices(config, paths).0
+}
+
+/// 构建完整工具注册表，并返回 MCP 发现失败说明。
+///
+/// 参数:
+/// - `config`: 当前应用配置
+/// - `paths`: 应用目录路径集合
+///
+/// 返回:
+/// - `(工具注册表, 发现失败说明)`
+pub(crate) fn builtin_registry_with_mcp_notices(
+    config: &AppConfig,
+    paths: &SaiPaths,
+) -> (ToolRegistry, Vec<String>) {
     let mut registry = builtin_registry_without_mcp(config, paths);
-    crate::mcp::register_mcp_tools(&mut registry, config, paths);
-    registry
+    let notices = crate::mcp::register_mcp_tools(&mut registry, config, paths);
+    (registry, notices)
 }
 
 /// 构建使用缓存定义并延迟连接 MCP 的工具注册表。

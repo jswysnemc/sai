@@ -183,6 +183,22 @@ impl DiffCell {
     pub(crate) fn is_pending(&self) -> bool {
         self.completed.is_none()
     }
+
+    /// 返回 Ctrl+O 分页标题。
+    ///
+    /// 返回:
+    /// - 工具名
+    pub(crate) fn pager_title(&self) -> String {
+        self.name.clone()
+    }
+
+    /// 返回已渲染的完整 diff 正文（去掉旧式标题行）。
+    ///
+    /// 返回:
+    /// - 可直接写入 pager 的 ANSI 文本
+    pub(crate) fn pager_body(&self) -> String {
+        strip_leading_bullet_header(&self.rendered)
+    }
 }
 
 /// 渲染已固化的 diff 快照。

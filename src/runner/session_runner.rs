@@ -233,6 +233,9 @@ impl<'paths> SessionRunner<'paths> {
             agent.restore_loaded_tools(&loaded_tools);
             sink.on_runner_event(RunnerEvent::LoadedToolsChanged(loaded_tools))?;
         }
+        if config.skills.enabled {
+            agent.restore_loaded_skills(&state.load_loaded_skills()?);
+        }
         sink.on_runner_event(RunnerEvent::Started)?;
         let mut turn_runner = TurnRunner::for_source(&mut agent, submission.source)
             .with_inter_message_source(self.inter_message_source.clone());
@@ -242,6 +245,9 @@ impl<'paths> SessionRunner<'paths> {
             let loaded_tools = agent.loaded_tools();
             state.save_loaded_tools(&loaded_tools)?;
             sink.on_runner_event(RunnerEvent::LoadedToolsChanged(loaded_tools))?;
+        }
+        if config.skills.enabled {
+            state.save_loaded_skills(&agent.loaded_skills())?;
         }
         // Web 与网关每轮重建 Agent，返回前显式关闭 ACP 会话与子进程
         let shutdown_result = agent.shutdown_external_engine().await;
@@ -310,6 +316,9 @@ impl<'paths> SessionRunner<'paths> {
             // 3. 持久化渐进加载集合，供崩溃恢复
             agent.state().save_loaded_tools(&loaded_tools)?;
             sink.on_runner_event(RunnerEvent::LoadedToolsChanged(loaded_tools))?;
+        }
+        if config.skills.enabled {
+            agent.state().save_loaded_skills(&agent.loaded_skills())?;
         }
         let result = result?;
         if should_apply_command_mode_exit_policy(submission.source) {

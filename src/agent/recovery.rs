@@ -26,7 +26,7 @@ impl Agent {
     /// 返回:
     /// - 历史是否被改写（改写后调用方需重建消息）
     pub(super) async fn compact_conversation_if_needed(
-        &self,
+        &mut self,
         turn_id: &str,
         messages: &[ChatMessage],
         on_event: &mut impl FnMut(AgentEvent) -> Result<()>,
