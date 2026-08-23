@@ -291,6 +291,17 @@ pub(super) fn default_true() -> bool {
     true
 }
 
+/// 判断历史 `tools.max_rounds` 是否为零。
+///
+/// 参数:
+/// - `value`: 配置值
+///
+/// 返回:
+/// - 为零时返回 true，序列化时省略该键
+pub(super) fn is_zero_max_rounds(value: &usize) -> bool {
+    *value == 0
+}
+
 /// 是否为默认的启用状态（序列化时可省略）。
 ///
 /// 参数:

@@ -72,7 +72,6 @@ impl Agent {
         prepare_session_context(&state, initial_system_prompt)?;
         let context_char_budget = config.active_context_window_tokens()?;
         let compaction_runtime = compaction_model::resolve_compaction_runtime(&config, paths)?;
-        let max_tool_rounds = config.tools.max_rounds;
         crate::goal::register_tools_for_config(&mut tools, state.goal_file(), &config)?;
         // 渐进加载由当前 Agent 的 deferred_tools 决定；
         // skill 提示词只给名称与简介，正文一律靠 load 读取，因此有可见 skill 时同样注册
@@ -122,7 +121,6 @@ impl Agent {
             anchor_bootstrap_system_prompt,
             context_char_budget,
             tools_enabled,
-            max_tool_rounds,
             tools,
             tool_visibility,
             memory,
@@ -309,7 +307,6 @@ impl Agent {
         let system_prompt = self.active_system_prompt().to_string();
         prepare_session_context(&self.state, &system_prompt)?;
         self.context_char_budget = self.config.active_context_window_tokens()?;
-        self.max_tool_rounds = self.config.tools.max_rounds;
         Ok(())
     }
 

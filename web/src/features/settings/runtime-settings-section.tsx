@@ -102,7 +102,7 @@ export function RuntimeSettingsSection({ config, subview, onConfigChange }: Runt
         <div className="runtime-groups">
           <SettingsGroup
             title={t("Tool execution", "工具执行")}
-            description={t("Control tool rounds, Shell, and background commands.", "控制工具轮次、Shell 和后台命令。")}
+            description={t("Control tool availability, Shell, and background commands.", "控制工具可用性、Shell 和后台命令。")}
           >
             <StructuredConfigFields
               value={withoutRtkFields((config.tools as Record<string, unknown> | undefined) ?? {})}
@@ -175,8 +175,13 @@ function clampCompactionRatio(ratio: number): number {
   return Math.min(0.99, Math.max(0.5, ratio));
 }
 
-/** rtk 过滤字段由专属配置组接管，通用工具字段中排除。 */
+/** rtk 过滤字段由专属配置组接管；轮次上限已取消，通用工具字段中一并排除。 */
 function withoutRtkFields(tools: Record<string, unknown>): Record<string, unknown> {
-  const { command_filter: _filter, command_filter_denylist: _denylist, ...rest } = tools;
+  const {
+    command_filter: _filter,
+    command_filter_denylist: _denylist,
+    max_rounds: _maxRounds,
+    ...rest
+  } = tools;
   return rest;
 }

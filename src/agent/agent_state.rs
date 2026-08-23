@@ -19,7 +19,6 @@ pub struct Agent {
     /// 上下文窗口 Token 数经保守换算得到的字符预算
     pub(super) context_char_budget: usize,
     pub(super) tools_enabled: bool,
-    pub(super) max_tool_rounds: usize,
     pub(super) tools: ToolRegistry,
     pub(super) tool_visibility: ToolVisibility,
     pub(super) memory: MemoryStore,

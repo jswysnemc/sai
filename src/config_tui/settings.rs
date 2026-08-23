@@ -60,15 +60,13 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
                 ),
             ),
             format!(
-                "{}\n\n{}: {} · {}: {} · {}: {}",
+                "{}\n\n{}: {} · {}: {}",
                 t(
                     "Tool availability, command shell, output filter and background command limits.",
                     "工具可用性、命令 Shell、输出过滤器与后台命令限制。",
                 ),
                 t("Tools", "工具"),
                 on_off(config.tools.enabled),
-                t("Max rounds", "最大轮数"),
-                config.tools.max_rounds,
                 t("Background", "后台命令"),
                 on_off(config.tools.background_commands_enabled),
             ),
@@ -267,10 +265,6 @@ fn edit_tool_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result
         Field::section(t("Tools", "工具")),
         Field::boolean(t("Tools enabled", "工具启用"), config.tools.enabled),
         Field::new(
-            t("Tool max rounds", "工具最大轮数"),
-            config.tools.max_rounds.to_string(),
-        ),
-        Field::new(
             t(
                 "Command shell, empty uses user shell",
                 "命令执行 Shell，留空使用用户 Shell",
@@ -356,13 +350,12 @@ fn edit_tool_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result
 fn apply_tool_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> {
     // 分组标题行只用于视觉分区，取值前先剔除
     let values: Vec<&Field> = fields.iter().filter(|field| !field.section).collect();
-    let [tools_enabled, tool_max_rounds, command_shell, command_filter, command_filter_denylist, background_commands, background_timeout, background_log_max, background_stop_grace] =
+    let [tools_enabled, command_shell, command_filter, command_filter_denylist, background_commands, background_timeout, background_log_max, background_stop_grace] =
         values.as_slice()
     else {
         unreachable!("tool settings field layout must remain complete")
     };
     // 1. 先完成全部易失败的解析，避免半写入配置
-    let max_rounds = parse_number_field::<usize>(tool_max_rounds.label, &tool_max_rounds.value)?;
     let timeout_seconds =
         parse_number_field::<u64>(background_timeout.label, &background_timeout.value)?;
     let log_max_bytes =
@@ -373,7 +366,6 @@ fn apply_tool_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> {
     let background_commands = parse_bool_field(&background_commands.value)?;
     // 2. 解析全部通过后统一写入配置
     config.tools.enabled = tools_enabled;
-    config.tools.max_rounds = max_rounds;
     config.tools.command_shell = command_shell.value.trim().to_string();
     config.tools.command_filter = command_filter.value.trim().to_string();
     config.tools.command_filter_denylist = command_filter_denylist

@@ -466,7 +466,8 @@ pub fn parse_compaction_ratio_text(value: &str) -> anyhow::Result<f32> {
 pub struct ToolsConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
-    #[serde(default)]
+    /// 历史字段：旧配置可能仍带此键，运行时不再限制工具轮次。
+    #[serde(default, skip_serializing_if = "is_zero_max_rounds")]
     pub max_rounds: usize,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub command_shell: String,

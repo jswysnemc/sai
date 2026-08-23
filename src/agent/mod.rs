@@ -40,7 +40,7 @@ mod turn_settlement;
 
 use crate::config::AppConfig;
 use crate::llm::{
-    ChatMessage, ChatResult, ChatStreamChunk, ChatStreamKind, OpenAiCompatibleClient,
+    ChatMessage, ChatResult, OpenAiCompatibleClient,
 };
 use crate::memory::MemoryStore;
 use crate::paths::SaiPaths;
@@ -133,33 +133,6 @@ impl Agent {
                         on_event,
                     )?);
                 }
-            }
-            if self.max_tool_rounds > 0
-                && tool_round >= self.max_tool_rounds
-                && pending_gap_delivery.is_none()
-            {
-                let content = format!(
-                    "工具调用已达到上限 {} 轮，已停止继续调用。可将 `tools.max_rounds` 设为 0 以允许无限工具调用。",
-                    self.max_tool_rounds
-                );
-                on_event(AgentEvent::Chunk(ChatStreamChunk {
-                    kind: ChatStreamKind::Content,
-                    text: content.clone(),
-                }))?;
-                crate::hooks::dispatch(
-                    &self.config.hooks,
-                    crate::hooks::HookEvent::AgentEnd,
-                    &hook_ctx,
-                )
-                .await;
-                return Ok(ChatResult {
-                    content,
-                    reasoning: None,
-                    usage: turn_usage,
-                    tool_calls: Vec::new(),
-                    duration_ms: 0,
-                    ttft_ms: 0,
-                });
             }
             tool_round += 1;
             crate::hooks::dispatch(
