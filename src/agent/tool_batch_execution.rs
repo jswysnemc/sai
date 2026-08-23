@@ -169,12 +169,12 @@ impl Agent {
                     let buffered = executions.next().expect("missing buffered tool result");
                     let execution =
                         self.finish_buffered_real_tool(turn_id, &call, buffered, on_event, perf)?;
-                    if execution.failed {
+                    attachments.extend(execution.model_attachments);
+                    let output = execution.output;
+                    if execution.failed || is_tool_error_output(&output) {
                         repeat_guard
                             .observe_rejected(&call.function.name, &call.function.arguments);
                     }
-                    attachments.extend(execution.model_attachments);
-                    let output = execution.output;
                     let context_output =
                         tools::tool_output_for_context(&call.function.name, &output);
                     let context_output = match repeat_verdict {

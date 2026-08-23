@@ -697,12 +697,12 @@ impl Agent {
                     let execution = self
                         .execute_real_tool(turn_id, &call, on_event, perf)
                         .await?;
-                    if execution.failed {
+                    round_model_attachments.extend(execution.model_attachments);
+                    let output = execution.output;
+                    if execution.failed || is_tool_error_output(&output) {
                         repeat_guard
                             .observe_rejected(&call.function.name, &call.function.arguments);
                     }
-                    round_model_attachments.extend(execution.model_attachments);
-                    let output = execution.output;
                     let context_output =
                         tools::tool_output_for_context(&call.function.name, &output);
                     // 重复调用尚未到拒绝阈值时照常返回结果，但提醒模型结果没有变化

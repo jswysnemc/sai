@@ -730,7 +730,7 @@ impl SubagentRunner {
                             .await
                     }
                 };
-                if rejected {
+                if rejected || !ok {
                     repeat_guard.observe_rejected(&call.function.name, &call.function.arguments);
                 }
                 if ok {
