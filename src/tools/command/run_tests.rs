@@ -163,6 +163,9 @@ async fn writable_command_returns_foreground_when_finished() {
         stdout.to_ascii_lowercase().contains("done"),
         "stdout should contain done, got: {stdout:?}"
     );
+    assert_eq!(data["completed"], true);
+    assert_eq!(data["success"], true);
+    assert_eq!(data["exit_code"], 0);
     let task_id = data["task_id"]
         .as_str()
         .expect("foreground managed finish keeps audit task_id");
@@ -177,4 +180,35 @@ async fn writable_command_returns_foreground_when_finished() {
         tasks.iter().all(|item| item.id != task_id),
         "foreground finished tasks should be auto-removed after output is consumed"
     );
+}
+
+/// 验证前台托管命令回传真实非零退出码。
+#[tokio::test]
+async fn writable_command_reports_nonzero_exit_code() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = isolated_test_paths(temp.path().to_path_buf());
+    let mut config = AppConfig::default();
+    config.tools.background_commands_enabled = true;
+    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    #[cfg(windows)]
+    let command = "cmd /c exit 7";
+    #[cfg(not(windows))]
+    let command = "exit 7";
+
+    let result = run_command(
+        json!({"command": command, "timeout_seconds": 10}),
+        true,
+        String::new(),
+        ToolProgress::new(sender),
+        &config,
+        &paths,
+        None,
+    )
+    .await
+    .unwrap();
+    let data: Value = serde_json::from_str(&result).unwrap();
+    assert_eq!(data["mode"], "foreground");
+    assert_eq!(data["completed"], true);
+    assert_eq!(data["success"], false);
+    assert_eq!(data["exit_code"], 7);
 }

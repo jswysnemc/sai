@@ -1,4 +1,5 @@
 use super::background_tasks::{spawn_managed_task, BackgroundRuntimeOwner};
+use super::exit_status::{exit_status_path, read_exit_code, remove_exit_status_file};
 #[cfg(test)]
 use super::process::terminate_process;
 use super::process::{process_exists, run_shell_command};
@@ -315,6 +316,7 @@ async fn wait_managed_task(
         if !process_exists(task.pid) {
             let stdout = read_log_text(&task.stdout_log)?;
             let stderr = read_log_text(&task.stderr_log)?;
+            let exit_code = read_exit_code(exit_status_path(&task.stdout_log))?;
             let store = BackgroundCommandStore::new(paths.state_dir.clone());
             let mut tasks = store.load()?;
             if let Some(index) = tasks.iter().position(|item| item.id == task.id) {
@@ -322,16 +324,18 @@ async fn wait_managed_task(
                 store.save(&tasks)?;
                 let _ = std::fs::remove_file(&finished.stdout_log);
                 let _ = std::fs::remove_file(&finished.stderr_log);
+                remove_exit_status_file(&finished.stdout_log);
             }
-            // 进程已退出但无法回收 exit_code（PID 已释放），用 success 表达结果
+            // 1. 退出码来自旁路文件；读不到时仍标明进程已结束，避免被当成还在跑
             return Ok(serde_json::to_string_pretty(&json!({
                 "mode": "foreground",
-                "success": true,
-                "exit_code": null,
+                "completed": true,
+                "success": exit_code == Some(0),
+                "exit_code": exit_code,
                 "stdout": clip_output(&stdout),
                 "stderr": clip_output(&stderr),
                 "task_id": task.id,
-                "note": "Process finished in foreground; exit_code is unavailable because the PID was already reaped. Use success to determine the outcome. task_id is audit-only and needs no background_command output or completion handling.",
+                "note": "Command finished in foreground. exit_code is the process status. task_id is audit-only and needs no background_command output or completion handling.",
             }))?);
         }
 
@@ -434,6 +438,7 @@ fn foreground_output(output: std::process::Output) -> Result<String> {
     ));
     Ok(serde_json::to_string_pretty(&json!({
         "mode": "foreground",
+        "completed": true,
         "success": output.status.success(),
         "exit_code": output.status.code(),
         "stdout": stdout,

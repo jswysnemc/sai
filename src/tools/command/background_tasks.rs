@@ -3,6 +3,9 @@ use super::background_runtime::{
     sync_runtime_tasks, LogTail,
 };
 use super::background_timeout::{is_unlimited, timeout_seconds_from_args};
+use super::exit_status::{
+    exit_status_path, remove_exit_status_file, wrap_command_with_exit_status,
+};
 use super::process::{process_exists, spawn_background_shell, terminate_process};
 use super::store::{unix_seconds, BackgroundCommandStore, BackgroundCommandTask};
 use crate::config::AppConfig;
@@ -150,8 +153,10 @@ pub(super) fn spawn_managed_task(
     let stderr_log = store.logs_dir().join(format!("{now}-{id_prefix}.err.log"));
     let stdout = std::fs::File::create(&stdout_log)?;
     let stderr = std::fs::File::create(&stderr_log)?;
+    // 1. 命令结束后把退出码写到旁路文件，前台等待才能读到真实状态
+    let wrapped = wrap_command_with_exit_status(&command, &exit_status_path(&stdout_log));
     let process =
-        spawn_background_shell(&command, &cwd, &config.tools.command_shell, stdout, stderr)?;
+        spawn_background_shell(&wrapped, &cwd, &config.tools.command_shell, stdout, stderr)?;
     let task_id = format!("{now}-{}", process.pid);
     let runtime_process_id = background_runtime_process_id(&task_id);
     let task = BackgroundCommandTask {
@@ -207,6 +212,7 @@ pub(super) async fn list_background_tasks(
         if drop {
             let _ = std::fs::remove_file(&task.stdout_log);
             let _ = std::fs::remove_file(&task.stderr_log);
+            remove_exit_status_file(&task.stdout_log);
             pruned = true;
             false
         } else {
@@ -418,6 +424,7 @@ pub(super) async fn cleanup_background_tasks(
         if remove_logs {
             let _ = std::fs::remove_file(&task.stdout_log);
             let _ = std::fs::remove_file(&task.stderr_log);
+            remove_exit_status_file(&task.stdout_log);
         }
         removed.push(task.id.clone());
         false
