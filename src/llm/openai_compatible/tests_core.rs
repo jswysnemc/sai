@@ -25,7 +25,7 @@ fn test_provider(id: &str, base_url: &str) -> ProviderConfig {
         model_metadata: std::collections::HashMap::new(),
         default_model: String::new(),
         timeout_seconds: 60,
-        temperature: 0.7,
+        temperature: None,
         anthropic_max_tokens: 4096,
         thinking_level: "auto".to_string(),
         thinking_format: "auto".to_string(),
@@ -226,7 +226,7 @@ fn chat_request_excludes_web_local_selection_fields() {
     let body = serde_json::to_value(ChatRequest {
         model: "test-model".to_string(),
         messages: Vec::new(),
-        temperature: 0.7,
+        temperature: Some(0.7),
         stream: true,
         stream_options: None,
         max_tokens: None,

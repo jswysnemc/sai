@@ -406,7 +406,7 @@ impl OpenAiCompatibleClient {
                 .provider
                 .model_max_output_tokens_for(&self.provider.default_model)
                 .unwrap_or(self.provider.anthropic_max_tokens),
-            temperature: Some(self.provider.temperature),
+            temperature: self.provider.temperature,
         };
         let mut request = apply_provider_body_options(
             serde_json::to_value(request)?,
@@ -601,7 +601,7 @@ impl OpenAiCompatibleClient {
             temperature: if codex {
                 None
             } else {
-                Some(self.provider.temperature)
+                self.provider.temperature
             },
             prompt_cache_key: codex.then(|| session_key.clone()),
             client_metadata: codex.then(|| serde_json::json!({ "session_id": session_key })),

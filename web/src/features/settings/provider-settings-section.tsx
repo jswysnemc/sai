@@ -1,5 +1,5 @@
 import { Check, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { createElement, useState } from "react";
+import { createElement, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
@@ -19,6 +19,8 @@ import { KeyValueEditor } from "./key-value-editor";
 import { ProviderApiKeysField } from "./provider-api-keys-field";
 import { useSelectedFallback } from "./controls/use-selected-fallback";
 import { findProviderIndex, nextProviderId, providerIdConflict } from "./model/provider-selection";
+import { formatTemperature, parseTemperature } from "./model/temperature-field";
+import { providerIdFollowsName, suggestedProviderId } from "./model/provider-id-sync";
 import {
   isProviderEnabled,
   nextActiveProvider,
@@ -80,6 +82,10 @@ export function ProviderSettingsSection({
   /** 供应商 ID 的输入草稿；为 null 表示未在编辑 */
   const [idDraft, setIdDraft] = useState<string | null>(null);
   const [idError, setIdError] = useState("");
+  /** 标识是否仍随显示名称同步 */
+  const [idFollowsName, setIdFollowsName] = useState(true);
+  const [temperatureDraft, setTemperatureDraft] = useState("");
+  const [temperatureError, setTemperatureError] = useState("");
   // 找不到选中项时保持 -1：回落到 0 会让后续按索引的写入打到别的供应商上
   const selectedIndex = findProviderIndex(config.providers, selectedId);
   const provider = selectedIndex >= 0 ? config.providers[selectedIndex] : undefined;
@@ -90,6 +96,13 @@ export function ProviderSettingsSection({
   // 回落到列表首项而非 active_provider：后者表示"正在使用哪个"，
   // 与"正在编辑哪个"无关，用它回落会在改名中间态把编辑区弹回旧供应商
   useSelectedFallback(selectedId, config.providers.map((item) => item.id), setSelectedId);
+
+  useEffect(() => {
+    if (!provider) return;
+    setIdFollowsName(providerIdFollowsName(provider.id, provider.display_name));
+    setTemperatureDraft(formatTemperature(provider.temperature));
+    setTemperatureError("");
+  }, [provider?.id]);
 
   /** 新增一项 OpenAI 兼容供应商草稿。 */
   const addProvider = () => {
@@ -115,6 +128,9 @@ export function ProviderSettingsSection({
     setSelectedId(id);
     setIdDraft(null);
     setIdError("");
+    setIdFollowsName(true);
+    setTemperatureDraft("");
+    setTemperatureError("");
     setFetchError(null);
     setSecretError(null);
   };
@@ -132,7 +148,10 @@ export function ProviderSettingsSection({
     setIdDraft(null);
     if (!provider || selectedIndex < 0) return;
     const trimmed = nextId.trim();
-    if (trimmed === provider.id) return;
+    if (trimmed === provider.id) {
+      setIdFollowsName(providerIdFollowsName(trimmed, provider.display_name));
+      return;
+    }
     const conflict = providerIdConflict(config.providers, selectedIndex, trimmed);
     if (conflict) {
       setIdError(
@@ -143,9 +162,58 @@ export function ProviderSettingsSection({
       return;
     }
     setIdError("");
+    setIdFollowsName(providerIdFollowsName(trimmed, provider.display_name));
     // 先更新选中项再改写配置，避免中间渲染里选中项指向已不存在的 ID
     setSelectedId(trimmed);
     onProviderChange(selectedIndex, { id: trimmed });
+  };
+
+  /**
+   * 【设置】【供应商名称】更新显示名称，并在标识仍跟随名称时同步 ID。
+   *
+   * @param displayName 新的显示名称
+   * @returns 无返回值
+   */
+  const updateDisplayName = (displayName: string) => {
+    if (!provider || selectedIndex < 0) return;
+    if (!idFollowsName) {
+      onProviderChange(selectedIndex, { display_name: displayName });
+      return;
+    }
+    const suggested = suggestedProviderId(displayName, config.providers, selectedIndex);
+    if (!suggested.id || suggested.id === provider.id) {
+      setIdError("");
+      onProviderChange(selectedIndex, { display_name: displayName });
+      return;
+    }
+    if (suggested.conflict) {
+      setIdError(t("This name matches another provider ID. Edit the ID.", "该名称与现有供应商 ID 冲突，请编辑 ID"));
+      onProviderChange(selectedIndex, { display_name: displayName });
+      return;
+    }
+    setIdError("");
+    setIdDraft(null);
+    setSelectedId(suggested.id);
+    onProviderChange(selectedIndex, { display_name: displayName, id: suggested.id });
+  };
+
+  /**
+   * 【设置】【温度】提交温度输入。空值表示请求里不带该参数。
+   *
+   * @param raw 输入框文本
+   * @returns 无返回值
+   */
+  const commitTemperature = (raw: string) => {
+    if (!provider || selectedIndex < 0) return;
+    const parsed = parseTemperature(raw);
+    if (!parsed.ok) {
+      setTemperatureError(t("Temperature must be between 0 and 2", "温度必须在 0 到 2 之间"));
+      setTemperatureDraft(formatTemperature(provider.temperature));
+      return;
+    }
+    setTemperatureError("");
+    setTemperatureDraft(formatTemperature(parsed.value));
+    onProviderChange(selectedIndex, { temperature: parsed.value });
   };
 
   /** 获取当前供应商远端模型并打开导入弹层。 */
@@ -408,6 +476,14 @@ export function ProviderSettingsSection({
         {secretError && <div className="settings-inline-error">{secretError.message}</div>}
         {tab === "connection" && <div className="settings-form-grid">
           <label className="settings-field">
+            <span>{t("Display name", "显示名称")}</span>
+            <input
+              value={provider.display_name}
+              onChange={(event) => updateDisplayName(event.target.value)}
+            />
+            <small>{t("Used in model menus and status displays. The ID follows this name until you edit it.", "用于模型菜单和状态展示。未手动改 ID 时，标识会跟随名称。")}</small>
+          </label>
+          <label className="settings-field">
             <span>{t("Provider ID", "供应商 ID")}</span>
             <input
               value={idDraft ?? provider.id}
@@ -424,7 +500,6 @@ export function ProviderSettingsSection({
             />
             <small>{idError || t("Stable identifier in the configuration file", "配置文件中的稳定标识")}</small>
           </label>
-          <label className="settings-field"><span>{t("Display name", "显示名称")}</span><input value={provider.display_name} onChange={(event) => onProviderChange(selectedIndex, { display_name: event.target.value })} /><small>{t("Used in model menus and status displays", "用于模型菜单和状态展示")}</small></label>
           <label className="settings-field full"><span>{t("API address", "API 地址")}</span><input value={provider.base_url} onChange={(event) => onProviderChange(selectedIndex, { base_url: event.target.value })} spellCheck={false} /><small>{t("Base URL of the compatible API; the server accesses it when fetching models", "兼容接口的基础地址，获取模型时由服务端访问")}</small></label>
           <div className="settings-field"><span>{t("Protocol", "协议")}</span><Select value={provider.protocol ?? "auto"} options={protocolOptions} onChange={(value) => onProviderChange(selectedIndex, { protocol: value })} ariaLabel={t("Provider protocol", "供应商协议")} /><small>{t("The protocol determines request and reasoning parameter formats", "协议决定请求和思考参数格式")}</small></div>
           <div className="settings-field"><span>{t("Default model", "默认模型")}</span>
@@ -464,7 +539,24 @@ export function ProviderSettingsSection({
         </div>}
         {tab === "behavior" && <div className="settings-form-grid">
           <label className="settings-field"><span>{t("Request timeout", "请求超时")}</span><input type="number" min="1" value={provider.timeout_seconds ?? 120} onChange={(event) => onProviderChange(selectedIndex, { timeout_seconds: Number(event.target.value) })} /><small>{t("Seconds", "单位为秒")}</small></label>
-          <label className="settings-field"><span>Temperature</span><input type="number" min="0" max="2" step="0.1" value={provider.temperature ?? 0.7} onChange={(event) => onProviderChange(selectedIndex, { temperature: Number(event.target.value) })} /><small>{t("Model sampling temperature", "模型采样温度")}</small></label>
+          <label className="settings-field">
+            <span>Temperature</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={temperatureDraft}
+              placeholder={t("Leave empty for provider default", "留空则不发送，由供应商默认")}
+              onChange={(event) => {
+                setTemperatureDraft(event.target.value);
+                setTemperatureError("");
+              }}
+              onBlur={(event) => commitTemperature(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
+            />
+            <small>{temperatureError || t("Optional sampling temperature from 0 to 2. Empty omits the field.", "可选采样温度，范围 0 到 2。留空则请求不带该参数。")}</small>
+          </label>
           <div className="settings-field"><span>{t("Thinking level", "思考等级")}</span><Select value={provider.thinking_level ?? "auto"} options={THINKING_OPTIONS} onChange={(value) => onProviderChange(selectedIndex, { thinking_level: value })} ariaLabel={t("Thinking level", "思考等级")} /><small>{t("Default reasoning intensity for the provider", "供应商默认推理强度")}</small></div>
           <div className="settings-field"><span>{t("Thinking format", "思考格式")}</span><Select value={provider.thinking_format ?? "auto"} options={thinkingFormatOptions} onChange={(value) => onProviderChange(selectedIndex, { thinking_format: value })} ariaLabel={t("Thinking format", "思考格式")} /><small>{t("Reasoning field in the response", "响应中的思考字段")}</small></div>
           <label className="settings-toggle-field settings-inline-toggle">

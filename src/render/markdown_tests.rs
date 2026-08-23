@@ -425,6 +425,49 @@ fn renders_multiline_math_blocks_as_assets() {
 }
 
 #[test]
+fn renders_svg_fences_as_assets() {
+    let _guard = ASSET_STUB_LOCK.lock().unwrap();
+    std::env::set_var("SAI_RENDER_ASSET_TEST_STUB", "1");
+    let mut renderer = MarkdownStreamRenderer::new();
+    let output = renderer.push("```svg\n<svg viewBox=\"0 0 8 8\"><path d=\"M0 0h8v8z\" /></svg>\n```\n");
+    std::env::remove_var("SAI_RENDER_ASSET_TEST_STUB");
+    assert!(output.contains("```svg\n<svg viewBox=\"0 0 8 8\"><path d=\"M0 0h8v8z\" /></svg>\n```\n"));
+    assert!(output.contains("\x1b[1A\r\x1b[2K"));
+    assert!(output.contains("[asset rendering skipped]"));
+    assert!(!output.contains("[svg]"));
+}
+
+#[test]
+fn renders_raw_svg_blocks_as_assets() {
+    let _guard = ASSET_STUB_LOCK.lock().unwrap();
+    std::env::set_var("SAI_RENDER_ASSET_TEST_STUB", "1");
+    let mut renderer = MarkdownStreamRenderer::new();
+    let output = renderer.push("<svg viewBox=\"0 0 8 8\">\n<path d=\"M0 0h8v8z\" />\n</svg>\n");
+    std::env::remove_var("SAI_RENDER_ASSET_TEST_STUB");
+    assert!(output.contains("<svg viewBox=\"0 0 8 8\">\n<path d=\"M0 0h8v8z\" />\n</svg>\n"));
+    assert!(output.contains("\x1b[1A\r\x1b[2K"));
+    assert!(output.contains("[asset rendering skipped]"));
+}
+
+#[test]
+fn source_preview_renders_closed_svg_and_previews_open_block() {
+    let _guard = ASSET_STUB_LOCK.lock().unwrap();
+    std::env::set_var("SAI_RENDER_ASSET_TEST_STUB", "1");
+    let mut renderer = MarkdownStreamRenderer::new_source_preview();
+    let closed = renderer.push("```svg\n<svg viewBox=\"0 0 1 1\"></svg>\n```\n");
+    let partial = renderer.push("<svg viewBox=\"0 0 2 2\">\n");
+    let open_preview = renderer.snapshot_open_structures();
+    std::env::remove_var("SAI_RENDER_ASSET_TEST_STUB");
+
+    assert!(closed.contains("[asset rendering skipped]"));
+    assert!(!closed.contains("<svg viewBox=\"0 0 1 1\">"));
+    assert!(!closed.contains("\x1b[1A"), "全量重绘面不得包含清行序列");
+    assert!(partial.is_empty() || !partial.contains("viewBox=\"0 0 2 2\""));
+    assert!(open_preview.contains("svg"));
+    assert!(open_preview.contains("rendering"));
+}
+
+#[test]
 fn renders_mermaid_blocks_as_assets() {
     let _guard = ASSET_STUB_LOCK.lock().unwrap();
     std::env::set_var("SAI_RENDER_ASSET_TEST_STUB", "1");

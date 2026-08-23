@@ -459,10 +459,14 @@ impl TranscriptStore {
         // work_status 生命周期由 runner 事件层管理（轮开始设置、轮结束清除），
         // 工具结果不清除，否则工具后的模型思考期间动效整段消失
         self.finalize_live_tail();
-        // todo 工具结果携带全量清单快照：记录供沉底面板展示
+        // todo 工具结果携带全量清单快照：仅未完成计划挂到沉底面板
         if name == "todo" && ok {
             if let Some(items) = super::todo_snapshot::parse_todo_snapshot(&output) {
-                self.latest_todo = items;
+                self.latest_todo = if super::todo_snapshot::snapshot_is_active(&items) {
+                    items
+                } else {
+                    Vec::new()
+                };
             }
         }
         if name == "subagent" && self.update_active_subagent(|cell| cell.finish(ok, output.clone()))
@@ -612,6 +616,7 @@ impl TranscriptStore {
         self.active_tool_index = None;
         self.cache.clear();
         self.dirty_from_cell = None;
+        self.latest_todo.clear();
     }
 
     /// 结束当前活动的 edit_file Diff 单元。

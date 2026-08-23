@@ -530,9 +530,9 @@ fn parses_compaction_ratio_percent_or_fraction() {
 #[test]
 fn validate_rejects_invalid_temperature_and_timeout() {
     let mut config = AppConfig::default();
-    config.providers[0].temperature = 3.0;
+    config.providers[0].temperature = Some(3.0);
     assert!(config.validate().is_err());
-    config.providers[0].temperature = 0.7;
+    config.providers[0].temperature = Some(0.7);
     config.providers[0].timeout_seconds = 0;
     assert!(config.validate().is_err());
     config.providers[0].timeout_seconds = 60;

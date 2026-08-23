@@ -49,7 +49,10 @@ pub(super) fn edit_provider_form(
         ),
         Field::new(
             t("Temperature", "温度参数"),
-            provider.temperature.to_string(),
+            provider
+                .temperature
+                .map(|value| value.to_string())
+                .unwrap_or_default(),
         ),
         Field::new(
             t("Thinking level", "思考等级"),
@@ -213,7 +216,14 @@ fn build_provider_from_fields(
         model_metadata: provider.model_metadata.clone(),
         default_model: provider.default_model.clone(),
         timeout_seconds: fields[5].value.trim().parse().unwrap_or(60),
-        temperature: fields[6].value.trim().parse().unwrap_or(0.7),
+        temperature: {
+            let raw = fields[6].value.trim();
+            if raw.is_empty() {
+                None
+            } else {
+                raw.parse::<f64>().ok()
+            }
+        },
         anthropic_max_tokens,
         thinking_level: fields[7].value.trim().to_string(),
         thinking_format: fields[8].value.trim().to_string(),

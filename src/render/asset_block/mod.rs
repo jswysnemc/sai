@@ -1,6 +1,7 @@
 mod commands;
 mod math;
 mod mermaid;
+mod svg;
 mod table_math;
 
 #[cfg(test)]
@@ -9,6 +10,7 @@ mod tests;
 use crate::render::style::{ASSET_ERROR_STYLE, RESET};
 use crate::render::terminal_text as t;
 
+pub(crate) use svg::{contains_svg_close, looks_like_svg_start};
 pub(crate) use table_math::{
     decode_source as decode_table_math_source, render_cell as render_inline_math_table_cell,
     render_inline_halfblock as render_inline_math_halfblock,
@@ -18,6 +20,7 @@ pub(crate) use table_math::{
 enum AssetKind {
     Mermaid,
     Math,
+    Svg,
 }
 
 #[derive(Clone, Copy)]
@@ -35,6 +38,7 @@ impl AssetKind {
         match self {
             Self::Mermaid => "mermaid",
             Self::Math => "math",
+            Self::Svg => "svg",
         }
     }
 }
@@ -45,7 +49,7 @@ impl AssetKind {
 /// - `lang`: Markdown 代码块语言
 ///
 /// 返回:
-/// - 是否为 Mermaid 或数学资产
+/// - 是否为 Mermaid、数学或 SVG 资产
 pub(crate) fn is_asset_language(lang: &str) -> bool {
     asset_kind_from_lang(lang).is_some()
 }
@@ -159,6 +163,7 @@ fn asset_kind_from_lang(lang: &str) -> Option<AssetKind> {
     match lang.trim().to_ascii_lowercase().as_str() {
         "mermaid" | "mmd" => Some(AssetKind::Mermaid),
         "math" | "latex" | "tex" => Some(AssetKind::Math),
+        "svg" => Some(AssetKind::Svg),
         _ => None,
     }
 }
@@ -181,7 +186,12 @@ fn render_asset(kind: AssetKind, source: &str) -> String {
     if test_stub_enabled() {
         return render_success("[asset rendering skipped]\n".to_string());
     }
-    match mermaid::render_terminal(source) {
+    let rendered = match kind {
+        AssetKind::Mermaid => mermaid::render_terminal(source),
+        AssetKind::Svg => svg::render_terminal(source),
+        AssetKind::Math => unreachable!("math already returned"),
+    };
+    match rendered {
         Ok(rendered) => render_success(rendered),
         Err(error) => render_error(kind.label(), &error.to_string()),
     }

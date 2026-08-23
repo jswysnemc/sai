@@ -5001,6 +5001,7 @@ dependencies = [
  "ratex-types",
  "regex",
  "reqwest",
+ "resvg",
  "rodio",
  "rusqlite",
  "russh",
@@ -5023,6 +5024,7 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width",
  "urlencoding",
+ "usvg",
  "uuid",
  "windows-sys 0.61.2",
 ]

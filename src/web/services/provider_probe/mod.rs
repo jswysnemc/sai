@@ -305,7 +305,7 @@ mod tests {
             model_metadata: std::collections::HashMap::new(),
             default_model: default_model.to_string(),
             timeout_seconds: 60,
-            temperature: 0.7,
+            temperature: None,
             anthropic_max_tokens: 4096,
             thinking_level: "auto".to_string(),
             thinking_format: "auto".to_string(),

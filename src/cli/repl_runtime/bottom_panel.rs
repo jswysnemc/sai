@@ -89,7 +89,7 @@ fn render_todo_section(
     compact: bool,
     lines: &mut Vec<String>,
 ) {
-    if todos.is_empty() {
+    if todos.is_empty() || !todo_snapshot_is_active(todos) {
         return;
     }
     let done = todos
@@ -97,17 +97,12 @@ fn render_todo_section(
         .filter(|item| item.status == "completed")
         .count();
     let total = todos.len();
-    let all_done = done == total;
     let active = todos.iter().find(|item| item.status == "in_progress");
     let title = t("Plan", "计划");
     // 进度用 x/x，不再画 █░ 条——窄面板里数字更清楚，也不抖
-    let mut header = if all_done {
-        format!("\x1b[32m✓\x1b[0m \x1b[2m{title}\x1b[0m \x1b[2m{done}/{total}\x1b[0m")
-    } else {
-        format!("\x1b[2m{title}\x1b[0m \x1b[2m{done}/{total}\x1b[0m")
-    };
+    let mut header = format!("\x1b[2m{title}\x1b[0m \x1b[2m{done}/{total}\x1b[0m");
     // 单行时才把当前项挂在标题旁；展开后条目与其它待办对齐，不再升成标题
-    if compact || all_done {
+    if compact {
         if let Some(item) = active {
             header.push_str(&format!(
                 "  \x1b[2m·\x1b[0m {} {}",
@@ -116,18 +111,15 @@ fn render_todo_section(
             ));
         }
     }
-    // 单行模式提示：多行可 Ctrl+T 收起；单行可展开
-    if !all_done {
-        let hint = if compact {
-            t("Ctrl+T expand", "Ctrl+T 展开")
-        } else {
-            t("Ctrl+T compact", "Ctrl+T 单行")
-        };
-        header.push_str(&format!("  \x1b[2m{hint}\x1b[0m"));
-    }
+    let hint = if compact {
+        t("Ctrl+T expand", "Ctrl+T 展开")
+    } else {
+        t("Ctrl+T compact", "Ctrl+T 单行")
+    };
+    header.push_str(&format!("  \x1b[2m{hint}\x1b[0m"));
     lines.push(clip_line(&header, cols));
 
-    if compact || all_done {
+    if compact {
         return;
     }
 
@@ -192,6 +184,19 @@ fn clip_line(line: &str, cols: usize) -> String {
     out.push('…');
     out.push_str("\x1b[0m");
     out
+}
+
+/// 判断 todo 快照是否仍有未完成项。
+///
+/// 参数:
+/// - `todos`: 沉底面板使用的清单快照
+///
+/// 返回:
+/// - 存在 pending 或 in_progress 时为 true
+fn todo_snapshot_is_active(todos: &[TodoSnapshotItem]) -> bool {
+    todos
+        .iter()
+        .any(|item| matches!(item.status.as_str(), "pending" | "in_progress"))
 }
 
 #[cfg(test)]
@@ -284,16 +289,13 @@ mod tests {
     }
 
     #[test]
-    fn fully_completed_todo_collapses_to_one_line() {
+    fn fully_completed_todo_hides_panel() {
         let todos = vec![TodoSnapshotItem {
             status: "completed".to_string(),
             text: "done".to_string(),
         }];
-        let lines = render(&todos, false);
-        assert_eq!(lines.len(), 1);
-        let plain = strip_ansi_for_test(&lines[0]);
-        assert!(plain.contains("1/1"));
-        assert!(plain.starts_with('✓'));
+        assert!(render(&todos, false).is_empty());
+        assert!(render(&todos, true).is_empty());
     }
 
     fn todos(count: usize, in_progress: usize) -> Vec<TodoSnapshotItem> {

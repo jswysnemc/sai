@@ -1,5 +1,6 @@
 use crate::i18n::text as t;
 use anyhow::Result;
+use crossterm::event::KeyCode;
 use crossterm::cursor::MoveTo;
 use crossterm::queue;
 use crossterm::style::Print;
@@ -397,6 +398,58 @@ pub(crate) fn draw_column(
         )?;
     }
     Ok(())
+}
+
+/// 未保存更改时的退出选择。
+pub(crate) enum UnsavedExitChoice {
+    Save,
+    Discard,
+    Cancel,
+}
+
+/// 用配置界面的菜单询问如何处理未保存更改。
+///
+/// 参数:
+/// - `stdout`: 终端输出
+///
+/// 返回:
+/// - 保存、放弃或取消
+pub(crate) fn confirm_unsaved_exit(stdout: &mut io::Stdout) -> Result<UnsavedExitChoice> {
+    let mut selected = 0usize;
+    loop {
+        let options = [
+            t("Save and exit", "保存并退出"),
+            t("Discard changes", "放弃更改"),
+            t("Cancel", "取消"),
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+        draw_menu(
+            stdout,
+            t(" Unsaved changes ", " 未保存的更改 "),
+            &options,
+            selected,
+            &help_line(&[
+                ("↑↓", t("move", "移动")),
+                ("Enter", t("confirm", "确认")),
+                ("Esc", t("back", "返回")),
+            ]),
+        )?;
+        match read_key()? {
+            KeyCode::Esc | KeyCode::Char('q') => return Ok(UnsavedExitChoice::Cancel),
+            KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
+            KeyCode::Enter => {
+                return Ok(match selected {
+                    0 => UnsavedExitChoice::Save,
+                    1 => UnsavedExitChoice::Discard,
+                    _ => UnsavedExitChoice::Cancel,
+                });
+            }
+            _ => {}
+        }
+    }
 }
 
 pub(crate) fn message(stdout: &mut io::Stdout, text: &str) -> Result<()> {

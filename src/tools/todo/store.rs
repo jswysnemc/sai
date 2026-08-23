@@ -86,16 +86,7 @@ impl TodoStore {
     /// 返回:
     /// - TODO 项列表
     pub(crate) fn list(&self) -> Result<Vec<TodoItem>> {
-        if !self.file.exists() {
-            return Ok(Vec::new());
-        }
-        let content = std::fs::read_to_string(&self.file)
-            .with_context(|| format!("failed to read todo file {}", self.file.display()))?;
-        if content.trim().is_empty() {
-            return Ok(Vec::new());
-        }
-        serde_json::from_str(&content)
-            .with_context(|| format!("failed to parse todo file {}", self.file.display()))
+        self.settle_if_finished(self.read_items()?)
     }
 
     /// 新增一个 TODO 项。
@@ -250,9 +241,47 @@ impl TodoStore {
         Ok(self.list()?.iter().any(|item| item.status.is_unfinished()))
     }
 
+    /// 读取活动 TODO 文件，不触发归档。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 文件中的 TODO 项
+    fn read_items(&self) -> Result<Vec<TodoItem>> {
+        if !self.file.exists() {
+            return Ok(Vec::new());
+        }
+        let content = std::fs::read_to_string(&self.file)
+            .with_context(|| format!("failed to read todo file {}", self.file.display()))?;
+        if content.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+        serde_json::from_str(&content)
+            .with_context(|| format!("failed to parse todo file {}", self.file.display()))
+    }
+
+    /// 活动计划已全部结束时归档并清空，避免完成态残留到其它会话界面。
+    ///
+    /// 参数:
+    /// - `items`: 当前活动 TODO 项
+    ///
+    /// 返回:
+    /// - 仍应保留在活动列表中的条目
+    fn settle_if_finished(&self, items: Vec<TodoItem>) -> Result<Vec<TodoItem>> {
+        // 1. 仍有未完成项时保持活动列表
+        if items.is_empty() || items.iter().any(|item| item.status.is_unfinished()) {
+            return Ok(items);
+        }
+        // 2. 全部结束后写入历史并清空活动文件
+        self.append_history(&items)?;
+        self.write_items(&[])?;
+        Ok(Vec::new())
+    }
+
     /// 保存当前会话全部 TODO 项。
     ///
-    /// 全部完成后仍保留在活动列表，供前端持续展示；新计划开始时再归档。
+    /// 全部完成后立即归档并清空活动列表。
     ///
     /// 参数:
     /// - `items`: TODO 项列表
@@ -260,7 +289,8 @@ impl TodoStore {
     /// 返回:
     /// - 保存是否成功
     fn save(&self, items: &[TodoItem]) -> Result<()> {
-        self.write_items(items)
+        let items = self.settle_if_finished(items.to_vec())?;
+        self.write_items(&items)
     }
 
     /// 读取归档的历史计划（时间从旧到新）。
@@ -441,12 +471,13 @@ mod tests {
             .unwrap();
         assert_eq!(updated.status, TodoStatus::Completed);
         assert!(!store.has_unfinished().unwrap());
-        // 全部完成后仍保留在活动列表，便于界面持续展示。
-        assert_eq!(store.list().unwrap().len(), 1);
-        assert!(store.list_history().unwrap().is_empty());
+        // 全部完成后立即归档，活动列表清空
+        assert!(store.list().unwrap().is_empty());
+        assert_eq!(store.list_history().unwrap().len(), 1);
 
         let reopened = TodoStore::new(store.file().to_path_buf());
-        assert_eq!(reopened.list().unwrap().len(), 1);
+        assert!(reopened.list().unwrap().is_empty());
+        assert_eq!(reopened.list_history().unwrap().len(), 1);
     }
 
     /// 验证新计划开始时归档已完成计划。
@@ -459,7 +490,8 @@ mod tests {
         store
             .update_at(position, None, Some(TodoStatus::Completed))
             .unwrap();
-        assert_eq!(store.list().unwrap().len(), 1);
+        assert!(store.list().unwrap().is_empty());
+        assert_eq!(store.list_history().unwrap().len(), 1);
 
         let next = store.add("new plan").unwrap();
         assert_eq!(store.list().unwrap().len(), 1);
@@ -553,6 +585,22 @@ mod tests {
         assert!(store.locate(None, Some(0)).is_err());
         assert!(store.locate(None, Some(3)).is_err());
         assert!(store.locate(None, None).is_err());
+    }
+
+    #[test]
+    fn list_archives_leftover_completed_plan() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("todos.json");
+        std::fs::write(
+            &file,
+            r#"[{"id":"todo_1","text":"done","status":"completed","created_at":"t","updated_at":"t"}]
+"#,
+        )
+        .unwrap();
+        let store = TodoStore::new(file);
+        assert!(store.list().unwrap().is_empty());
+        assert_eq!(store.list_history().unwrap().len(), 1);
+        assert_eq!(store.list_history().unwrap()[0].items[0].text, "done");
     }
 
     #[test]

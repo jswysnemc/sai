@@ -209,11 +209,8 @@ pub struct ProviderConfig {
         skip_serializing_if = "is_default_timeout"
     )]
     pub timeout_seconds: u64,
-    #[serde(
-        default = "default_temperature",
-        skip_serializing_if = "is_default_temperature"
-    )]
-    pub temperature: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f64>,
     /// Anthropic Messages API 的 max_tokens（仅 anthropic 协议使用）。
     #[serde(
         default = "default_anthropic_max_tokens",

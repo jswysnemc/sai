@@ -14,6 +14,19 @@ impl TranscriptStore {
     }
 }
 
+/// 判断快照是否仍有未完成项。
+///
+/// 参数:
+/// - `items`: todo 快照条目
+///
+/// 返回:
+/// - 存在 pending 或 in_progress 时为 true
+pub(super) fn snapshot_is_active(items: &[TodoSnapshotItem]) -> bool {
+    items
+        .iter()
+        .any(|item| matches!(item.status.as_str(), "pending" | "in_progress"))
+}
+
 /// 从 todo 工具输出解析全量清单快照。
 ///
 /// 参数:
@@ -45,7 +58,8 @@ pub(super) fn parse_todo_snapshot(output: &str) -> Option<Vec<TodoSnapshotItem>>
 
 #[cfg(test)]
 mod tests {
-    use super::parse_todo_snapshot;
+    use super::{parse_todo_snapshot, snapshot_is_active};
+    use crate::render::transcript::TranscriptStore;
 
     #[test]
     fn parses_items_with_status() {
@@ -64,5 +78,43 @@ mod tests {
     fn ignores_invalid_output() {
         assert!(parse_todo_snapshot("not json").is_none());
         assert!(parse_todo_snapshot(r#"{"ok":true}"#).is_none());
+    }
+
+    #[test]
+    fn snapshot_is_active_only_when_unfinished_items_remain() {
+        let pending = parse_todo_snapshot(
+            r#"{"ok":true,"items":[{"text":"one","status":"pending"}]}"#,
+        )
+        .unwrap();
+        let completed = parse_todo_snapshot(
+            r#"{"ok":true,"items":[{"text":"one","status":"completed"},{"text":"two","status":"cancelled"}]}"#,
+        )
+        .unwrap();
+        assert!(snapshot_is_active(&pending));
+        assert!(!snapshot_is_active(&completed));
+    }
+
+    #[test]
+    fn completed_snapshot_does_not_stay_in_panel_state() {
+        let mut store = TranscriptStore::new(10);
+        store.push_tool_result(
+            "todo".into(),
+            true,
+            r#"{"ok":true,"items":[{"text":"done","status":"completed"}]}"#.into(),
+        );
+        assert!(store.latest_todo_items().is_empty());
+    }
+
+    #[test]
+    fn unfinished_snapshot_is_kept_until_clear() {
+        let mut store = TranscriptStore::new(10);
+        store.push_tool_result(
+            "todo".into(),
+            true,
+            r#"{"ok":true,"items":[{"text":"next","status":"pending"}]}"#.into(),
+        );
+        assert_eq!(store.latest_todo_items().len(), 1);
+        store.clear();
+        assert!(store.latest_todo_items().is_empty());
     }
 }

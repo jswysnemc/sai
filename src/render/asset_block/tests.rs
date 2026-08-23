@@ -7,6 +7,7 @@ fn detects_asset_languages() {
     assert!(is_asset_language("mermaid"));
     assert!(is_asset_language("math"));
     assert!(is_asset_language("latex"));
+    assert!(is_asset_language("svg"));
     assert!(!is_asset_language("rust"));
 }
 
@@ -56,6 +57,41 @@ fn mermaid_renders_to_png_without_external_cli() {
     let output = mermaid::render_image("graph TD\nA[Start] --> B[End]", &temp_dir).unwrap();
 
     assert!(fs::metadata(output).unwrap().len() > 0);
+}
+
+#[test]
+fn svg_renders_to_png_without_external_cli() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let output = svg::render_image(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3" fill="#4ade80"/></svg>"##,
+        &temp_dir,
+    )
+    .unwrap();
+
+    assert!(fs::metadata(&output).unwrap().len() > 0);
+}
+
+#[test]
+fn svg_rejects_non_standalone_markup() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let error = svg::render_image("<div>not svg</div>", &temp_dir)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("standalone SVG"));
+}
+
+#[test]
+fn svg_start_and_close_helpers_match_web_rules() {
+    assert!(svg::looks_like_svg_start(
+        r#"<?xml version="1.0"?><svg viewBox="0 0 1 1"></svg>"#
+    ));
+    assert!(svg::looks_like_svg_start("<SVG viewBox=\"0 0 1 1\">"));
+    assert!(!svg::looks_like_svg_start("<div>"));
+    assert!(svg::contains_svg_close("  </SVG>"));
+    assert!(svg::is_svg_markup(
+        "  <svg viewBox=\"0 0 1 1\"></svg>  "
+    ));
+    assert!(!svg::is_svg_markup("<svg></svg><p>x</p>"));
 }
 
 #[test]

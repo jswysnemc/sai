@@ -42,13 +42,29 @@ fn build_skills_prompt(config: &AppConfig, paths: &SaiPaths, with_source: bool) 
             }
         })
         .collect::<Vec<_>>();
-    if entries.is_empty() {
-        return Ok(String::new());
-    }
     Ok(format!(
-        "<available-skills>\n这些是已安装的 skills 目录，只提供名称与简介。遇到匹配任务时，调用 load，设置 type 为 skill，并通过 keywords 数组传入名称，读取完整流程后再执行。每个 skill 在本会话中只需 load 一次；再次 load 只会得到 already_loaded，不会返回正文。压缩之后若历史里的正文被去掉，可以再 load 一次全文。当前不支持创建、保存或自动生成新的 skill；不要把 skill 内容保存到知识库。\n{}\n</available-skills>",
-        entries.join("\n")
+        "<available-skills>\n{}\n{}</available-skills>",
+        skills_catalog_instructions(paths),
+        if entries.is_empty() {
+            String::new()
+        } else {
+            format!("{}\n", entries.join("\n"))
+        }
     ))
+}
+
+/// 生成 skill 目录使用与写入说明。
+///
+/// 参数:
+/// - `paths`: 应用目录路径集合
+///
+/// 返回:
+/// - 加载规则与默认写入路径
+fn skills_catalog_instructions(paths: &SaiPaths) -> String {
+    format!(
+        "这些是已安装的 skills 目录，只提供名称与简介。遇到匹配任务时，调用 load，设置 type 为 skill，并通过 keywords 数组传入名称，读取完整流程后再执行。每个 skill 在本会话中只需 load 一次；再次 load 只会得到 already_loaded，不会返回正文。压缩之后若历史里的正文被去掉，可以再 load 一次全文。需要沉淀可复用流程时，用 write_file 自行创建 skill：默认写入目录是 {}。在该目录下新建 <name>/SKILL.md，目录名只用字母、数字、连字符和下划线。SKILL.md 必须含 YAML frontmatter 的 name 与 description，然后是正文。不要把 skill 写进知识库。",
+        paths.skills_dir.display()
+    )
 }
 
 /// 生成 skill 目录提示（不含来源标注）。
@@ -565,6 +581,21 @@ mod tests {
     }
 
     #[test]
+    fn skills_prompt_tells_default_write_path_even_when_empty() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path());
+        let config = AppConfig::default();
+        let prompt = skills_prompt(&config, &paths).unwrap();
+
+        assert!(prompt.contains("<available-skills>"));
+        assert!(prompt.contains(&paths.skills_dir.display().to_string()));
+        assert!(prompt.contains("write_file"));
+        assert!(prompt.contains("SKILL.md"));
+        assert!(!prompt.contains("不支持创建"));
+        assert!(!prompt.contains("不要把 skill 内容保存到知识库"));
+    }
+
+    #[test]
     fn skills_prompt_reads_global_skills_dir() {
         let temp = tempfile::tempdir().unwrap();
         let paths = test_paths(temp.path());
@@ -579,6 +610,8 @@ mod tests {
         let prompt = skills_prompt(&config, &paths).unwrap();
         assert!(prompt.contains("gpu-passthrough"));
         assert!(prompt.contains("GPU switching"));
+        assert!(prompt.contains(&paths.skills_dir.display().to_string()));
+        assert!(!prompt.contains("不支持创建"));
     }
 
     #[test]

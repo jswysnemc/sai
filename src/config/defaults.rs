@@ -228,9 +228,7 @@ pub(super) fn default_weixin_gateway_bot_type() -> String {
     "3".to_string()
 }
 
-pub(super) fn default_temperature() -> f32 {
-    0.7
-}
+
 
 pub(super) fn default_anthropic_max_tokens() -> u32 {
     4096
@@ -261,10 +259,6 @@ pub(super) fn is_default_subagent(value: &super::agents::SubagentConfig) -> bool
         && (value.thinking_level.is_empty() || value.thinking_level == "auto")
         && value.default_profile.is_empty()
         && value.profiles.is_empty()
-}
-
-pub(super) fn is_default_temperature(value: &f32) -> bool {
-    (*value - default_temperature()).abs() < f32::EPSILON
 }
 
 pub(super) fn is_default_anthropic_max_tokens(value: &u32) -> bool {

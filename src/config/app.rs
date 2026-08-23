@@ -183,7 +183,10 @@ impl AppConfig {
                     provider.id
                 );
             }
-            if !(0.0..=2.0).contains(&provider.temperature) {
+            if provider
+                .temperature
+                .is_some_and(|value| !(0.0..=2.0).contains(&value))
+            {
                 bail!(
                     "provider {} temperature must be between 0.0 and 2.0",
                     provider.id

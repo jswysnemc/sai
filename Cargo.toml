@@ -52,6 +52,7 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 rand = "0.8"
 rustc-hash = "2"
 regex = "1.12"
+resvg = "0.46"
 rodio = { version = "0.19", default-features = false, features = ["mp3", "wav"] }
 ratex-layout = "0.1.12"
 ratex-parser = "0.1.12"
@@ -76,6 +77,7 @@ tokio-tungstenite = { version = "0.24", default-features = false, features = ["c
 trash = "5.2"
 unicode-segmentation = "1.13"
 unicode-width = "0.1"
+usvg = "0.46"
 urlencoding = "2.1"
 uuid = { version = "1.11", features = ["v4"] }
 

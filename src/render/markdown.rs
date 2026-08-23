@@ -111,12 +111,14 @@ impl MarkdownStreamRenderer {
 struct MarkdownLineRenderer {
     in_code_block: bool,
     in_math_block: bool,
+    in_svg_block: bool,
     code_lang: String,
     code_buffer: Vec<String>,
     code_is_asset: bool,
     pending_blank_lines: usize,
     has_emitted_content: bool,
     math_buffer: Vec<String>,
+    svg_buffer: Vec<String>,
     table: StreamingTable,
     asset_block: StreamingAssetBlock,
     inline_math_mode: InlineMathMode,
@@ -131,12 +133,14 @@ impl MarkdownLineRenderer {
         Self {
             in_code_block: false,
             in_math_block: false,
+            in_svg_block: false,
             code_lang: String::new(),
             code_buffer: Vec::new(),
             code_is_asset: false,
             pending_blank_lines: 0,
             has_emitted_content: false,
             math_buffer: Vec::new(),
+            svg_buffer: Vec::new(),
             table: if replace_streamed_table_rows {
                 StreamingTable::new()
             } else {
@@ -226,6 +230,14 @@ impl MarkdownLineRenderer {
             } else {
                 format!("{}\n", highlight_code_line(&self.code_lang, line))
             }
+        } else if self.in_svg_block {
+            self.push_svg_line(line)
+        } else if asset_block::looks_like_svg_start(line) {
+            let pending = self.flush();
+            self.in_svg_block = true;
+            self.svg_buffer.clear();
+            self.asset_block.reset();
+            pending + &self.push_svg_line(line)
         } else if line.trim().is_empty() {
             let output = if self.table.is_active() {
                 self.table.finish()
@@ -268,6 +280,24 @@ impl MarkdownLineRenderer {
         }
     }
 
+    /// 把一行写入裸 SVG 块；遇到结束标签时出图。
+    ///
+    /// 参数:
+    /// - `line`: 当前 SVG 源码行
+    ///
+    /// 返回:
+    /// - 流式预览或闭合后的终端图片
+    fn push_svg_line(&mut self, line: &str) -> String {
+        self.svg_buffer.push(line.to_string());
+        let raw = self.asset_block.push_line(line);
+        if !asset_block::contains_svg_close(line) {
+            return raw;
+        }
+        self.in_svg_block = false;
+        let rendered = asset_block::render_asset_block("svg", &std::mem::take(&mut self.svg_buffer));
+        raw + &self.asset_block.finish(rendered)
+    }
+
     /// 刷新行级渲染器缓冲。
     ///
     /// 返回:
@@ -288,6 +318,10 @@ impl MarkdownLineRenderer {
             let rendered = asset_block::render_math_block(&self.math_buffer);
             self.math_buffer.clear();
             self.asset_block.finish(rendered)
+        } else if self.in_svg_block {
+            self.in_svg_block = false;
+            let rendered = asset_block::render_asset_block("svg", &std::mem::take(&mut self.svg_buffer));
+            self.asset_block.finish(rendered)
         } else if !self.table.is_active() {
             self.take_pending_blank_lines()
         } else {
@@ -305,15 +339,19 @@ impl MarkdownLineRenderer {
         if self.table.is_active() {
             return self.table.snapshot();
         }
-        // 未闭合的 mermaid / 公式块：以弱化源码预览，闭合后由 finish 出图
-        if (self.in_code_block && self.code_is_asset) || self.in_math_block {
+        // 未闭合的 mermaid / 公式 / SVG 块：以弱化源码预览，闭合后由 finish 出图
+        if (self.in_code_block && self.code_is_asset) || self.in_math_block || self.in_svg_block {
             let buffer = if self.in_math_block {
                 &self.math_buffer
+            } else if self.in_svg_block {
+                &self.svg_buffer
             } else {
                 &self.code_buffer
             };
             let label = if self.in_math_block {
                 "math"
+            } else if self.in_svg_block {
+                "svg"
             } else {
                 self.code_lang.as_str()
             };

@@ -16,7 +16,7 @@ use super::plugins::edit_cli_tools;
 use super::providers::{select_active_provider, ProviderBrowser};
 use super::settings::edit_settings;
 use super::skills::edit_skills;
-use super::ui::draw_menu_with_details;
+use super::ui::{confirm_unsaved_exit, draw_menu_with_details, message, UnsavedExitChoice};
 
 pub fn run(paths: &SaiPaths) -> Result<()> {
     AppConfig::init_files(paths)?;
@@ -70,11 +70,11 @@ fn run_main_menu(
     config: &mut AppConfig,
 ) -> Result<bool> {
     let mut selected = 0usize;
-    // 进入时的快照：退出前用它判断是否有未落盘的编辑。
-    // 添加模型这类操作只改内存，按 q 退出会静默丢弃，用户却以为已经生效
+    // 进入时的快照：用来标已修改状态，退出前提示保存或放弃
     let baseline = serde_json::to_string(&*config).ok();
     loop {
         let active = active_label(config);
+        let dirty = has_unsaved_changes(config, baseline.as_deref());
         // 高频操作前置，低频配置收进「高级设置」；编号既是视觉锚点也是直达键
         let labels = [
             t("Active configuration", "激活配置"),
@@ -83,7 +83,11 @@ fn run_main_menu(
             t("Tools", "工具"),
             "Skills",
             t("Advanced settings", "高级设置"),
-            t("Save and exit", "保存并退出"),
+            if dirty {
+                t("Save and exit", "保存并退出")
+            } else {
+                t("Exit", "退出")
+            },
         ];
         let options = labels
             .iter()
@@ -124,22 +128,42 @@ fn run_main_menu(
                 "低频配置：知识库、渠道接入与全局参数。",
             )
             .to_string(),
-            t(
-                "Write all pending changes to disk and leave the configuration UI.",
-                "将未保存的更改写入磁盘并退出配置界面。",
-            )
-            .to_string(),
+            if dirty {
+                t(
+                    "Configuration has unsaved edits. Confirm whether to write them before leaving.",
+                    "配置有未保存的修改。退出前确认是否写入磁盘。",
+                )
+                .to_string()
+            } else {
+                t(
+                    "No pending edits. Leave the configuration UI.",
+                    "没有未保存的修改。离开配置界面。",
+                )
+                .to_string()
+            },
         ];
-        let subtitle = format!("{}: {active}", t("Active", "当前激活"));
+        let subtitle = if dirty {
+            format!(
+                "{}: {active}  ·  {}",
+                t("Active", "当前激活"),
+                t("Unsaved changes", "已修改")
+            )
+        } else {
+            format!("{}: {active}", t("Active", "当前激活"))
+        };
         let status = super::theme::help_line(&[
             ("↑↓", t("move", "移动")),
             ("1-7", t("jump", "跳转")),
             ("Enter", t("open", "打开")),
-            ("q", t("save & quit", "保存退出")),
+            ("q", t("quit", "退出")),
         ]);
         draw_menu_with_details(
             stdout,
-            "SAI CONFIG",
+            if dirty {
+                "SAI CONFIG *"
+            } else {
+                "SAI CONFIG"
+            },
             &options,
             &details,
             selected,
@@ -149,13 +173,9 @@ fn run_main_menu(
 
         match read_key()? {
             KeyCode::Char('q') | KeyCode::Esc => {
-                // 退出前保存已发生的编辑：这些操作在用户心智里是即时生效的，
-                // 静默丢弃会表现为「加了模型但 /model 找不到」
-                if has_unsaved_changes(config, baseline.as_deref()) {
-                    config.save(paths)?;
-                    return Ok(true);
+                if let Some(saved) = confirm_and_leave(stdout, paths, config, dirty)? {
+                    return Ok(saved);
                 }
-                return Ok(false);
             }
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
@@ -173,13 +193,56 @@ fn run_main_menu(
                 4 => edit_skills(stdout, paths, config)?,
                 5 => run_advanced_menu(stdout, paths, config)?,
                 6 => {
-                    config.save(paths)?;
-                    return Ok(true);
+                    if dirty {
+                        if let Some(saved) = confirm_and_leave(stdout, paths, config, true)? {
+                            return Ok(saved);
+                        }
+                    } else {
+                        return Ok(false);
+                    }
                 }
                 _ => {}
             },
             _ => {}
         }
+    }
+}
+
+/// 退出前处理未保存更改。
+///
+/// 参数:
+/// - `stdout`: 终端输出
+/// - `paths`: Sai 路径
+/// - `config`: 当前内存配置
+/// - `dirty`: 是否相对进入时发生了改动
+///
+/// 返回:
+/// - `Some(true)` 已保存后退出；`Some(false)` 放弃或无需保存后退出；`None` 继续编辑
+fn confirm_and_leave(
+    stdout: &mut io::Stdout,
+    paths: &SaiPaths,
+    config: &AppConfig,
+    dirty: bool,
+) -> Result<Option<bool>> {
+    if !dirty {
+        return Ok(Some(false));
+    }
+    match confirm_unsaved_exit(stdout)? {
+        UnsavedExitChoice::Save => match config.save(paths) {
+            Ok(()) => Ok(Some(true)),
+            Err(error) => {
+                message(
+                    stdout,
+                    &format!(
+                        "{}: {error}",
+                        t("Failed to save configuration", "保存配置失败")
+                    ),
+                )?;
+                Ok(None)
+            }
+        },
+        UnsavedExitChoice::Discard => Ok(Some(false)),
+        UnsavedExitChoice::Cancel => Ok(None),
     }
 }
 
