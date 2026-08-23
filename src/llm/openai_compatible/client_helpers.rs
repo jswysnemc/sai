@@ -65,9 +65,7 @@ where
 ///
 /// 返回:
 /// - (可选 instructions, 剩余消息)
-fn split_responses_instructions(
-    messages: Vec<ChatMessage>,
-) -> (Option<String>, Vec<ChatMessage>) {
+fn split_responses_instructions(messages: Vec<ChatMessage>) -> (Option<String>, Vec<ChatMessage>) {
     let mut instructions = Vec::new();
     let mut rest = Vec::new();
     let mut past_system = false;
@@ -93,13 +91,12 @@ fn split_responses_instructions(
         past_system = true;
         rest.push(message);
     }
-    let joined = instructions.join("
+    let joined = instructions.join(
+        "
 
-");
-    (
-        (!joined.trim().is_empty()).then_some(joined),
-        rest,
-    )
+",
+    );
+    ((!joined.trim().is_empty()).then_some(joined), rest)
 }
 
 /// Codex CLI 默认 User-Agent。
@@ -369,11 +366,16 @@ fn prepare_anthropic_tools(
     }
 }
 
+/// DeepSeek 思考模式要求带 `tool_calls` 的 assistant 同时携带 `reasoning_content`。
+/// flash 一类模型经常直接出工具、不写思考；缺字段时补这个占位，避免服务端 400。
+const DEEPSEEK_TOOL_REASONING_PLACEHOLDER: &str = ".";
+
 /// 【协议】【思考回传】根据供应商规则准备历史思考内容。
 ///
 /// 普通兼容网关移除 `reasoning_content`，避免因未知字段拒绝请求；DeepSeek
 /// 与显式开启 Preserved Thinking 的供应商保持原消息。DeepSeek 思考模式开启时，
-/// 旧工具历史若缺少思考字段，则同时移除对应 assistant/tool 序列，避免服务端返回 400。
+/// 带 `tool_calls` 却缺少思考字段的 assistant 会补占位思考，而不是丢掉整段
+/// assistant/tool 历史——丢掉当前轮工具结果会让模型看不见输出，从而无限重发。
 /// 关闭思考后保留普通工具历史，不再应用该限制。
 ///
 /// 参数:
@@ -398,22 +400,20 @@ fn apply_preserved_thinking(
     if !deepseek_requires_tool_reasoning(provider) {
         return messages;
     }
-    let mut output = Vec::with_capacity(messages.len());
-    let mut omit_tool_results = false;
-    for message in messages {
-        // 1. DeepSeek 要求带 tool_calls 的 assistant 消息同时携带 reasoning_content
-        if message.role == "assistant" {
-            omit_tool_results = message.tool_calls.is_some() && message.reasoning_content.is_none();
-            if omit_tool_results {
-                continue;
+    messages
+        .into_iter()
+        .map(|mut message| {
+            // 1. 缺思考的工具调用补占位，保证 DeepSeek 收下完整 tool 结果
+            if message.role == "assistant"
+                && message.tool_calls.is_some()
+                && message
+                    .reasoning_content
+                    .as_deref()
+                    .is_none_or(str::is_empty)
+            {
+                message.reasoning_content = Some(DEEPSEEK_TOOL_REASONING_PLACEHOLDER.to_string());
             }
-        }
-        // 2. 被省略 assistant 消息对应的 tool 结果也不能孤立发送
-        if message.role == "tool" && omit_tool_results {
-            continue;
-        }
-        omit_tool_results = false;
-        output.push(message);
-    }
-    output
+            message
+        })
+        .collect()
 }

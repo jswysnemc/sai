@@ -287,11 +287,12 @@ fn append_turn_inter_messages(
 /// 返回:
 /// - 无
 fn append_assistant_context_messages(turn: &Turn, messages: &mut Vec<ChatMessage>) {
-    if !turn.assistant_content.trim().is_empty() {
-        messages.push(ChatMessage::plain(
-            "assistant",
-            turn.assistant_content.clone(),
-        ));
+    // 1. 最终回复必须带上本轮思考，DeepSeek 带 tools 的后续请求不能缺这个字段
+    if !turn.assistant_content.trim().is_empty() || turn.assistant_reasoning.is_some() {
+        messages.push(
+            ChatMessage::plain("assistant", turn.assistant_content.clone())
+                .with_reasoning(turn.assistant_reasoning.clone()),
+        );
     }
     messages.extend(project_legacy_tool_report_messages(&turn.tool_reports));
 }
@@ -511,6 +512,28 @@ mod tests {
         assert_eq!(messages[3].reasoning_content.as_deref(), Some("再查询天气"));
         assert_eq!(messages[2].role, "tool");
         assert_eq!(messages[4].role, "tool");
+    }
+
+    /// 【会话历史】【DeepSeek】验证最终回复带回本轮思考。
+    #[test]
+    fn projects_final_assistant_reasoning() {
+        let (_temp, db) = db();
+        let mut completed = turn();
+        completed.assistant_content = "已经装完".to_string();
+        completed.assistant_reasoning = Some("安装成功，可以向用户汇报".to_string());
+
+        let messages =
+            project_turn_messages_with_tool_history(&db, "default", &[completed]).unwrap();
+
+        assert_eq!(messages[1].role, "assistant");
+        assert_eq!(
+            messages[1].reasoning_content.as_deref(),
+            Some("安装成功，可以向用户汇报")
+        );
+        assert!(matches!(
+            messages[1].content.as_ref(),
+            Some(crate::llm::ChatContent::Text(text)) if text == "已经装完"
+        ));
     }
 
     #[test]

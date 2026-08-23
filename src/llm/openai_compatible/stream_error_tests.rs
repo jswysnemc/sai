@@ -181,7 +181,7 @@ mod stream_error_tests {
         );
     }
 
-    /// 【协议】【DeepSeek】验证缺少思考内容的旧工具历史不会产生孤立 tool 消息。
+    /// 【协议】【DeepSeek】验证缺思考的工具历史补占位后完整保留。
     ///
     /// 参数:
     /// - 无
@@ -189,8 +189,8 @@ mod stream_error_tests {
     /// 返回:
     /// - 无
     #[test]
-    fn deepseek_omits_incomplete_legacy_tool_history() {
-        use super::apply_preserved_thinking;
+    fn deepseek_fills_missing_tool_reasoning_and_keeps_history() {
+        use super::{apply_preserved_thinking, DEEPSEEK_TOOL_REASONING_PLACEHOLDER};
         use crate::config::ProviderConfig;
         use crate::llm::{ChatMessage, ToolCall, ToolCallFunction};
 
@@ -217,11 +217,57 @@ mod stream_error_tests {
 
         let prepared = apply_preserved_thinking(history, &provider);
 
-        assert_eq!(prepared.len(), 3);
-        assert!(prepared.iter().all(|message| message.role != "tool"));
+        assert_eq!(prepared.len(), 5);
+        assert_eq!(prepared[1].role, "assistant");
         assert_eq!(
             prepared[1].reasoning_content.as_deref(),
+            Some(DEEPSEEK_TOOL_REASONING_PLACEHOLDER)
+        );
+        assert_eq!(prepared[2].role, "tool");
+        assert_eq!(
+            prepared[3].reasoning_content.as_deref(),
             Some("旧轮最终思考")
+        );
+    }
+
+    /// 【协议】【DeepSeek】验证当前轮缺思考的工具结果不会被丢掉。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[test]
+    fn deepseek_keeps_current_turn_tool_results_without_reasoning() {
+        use super::{apply_preserved_thinking, DEEPSEEK_TOOL_REASONING_PLACEHOLDER};
+        use crate::config::ProviderConfig;
+        use crate::llm::{ChatMessage, ToolCall, ToolCallFunction};
+
+        let history = vec![
+            ChatMessage::plain("user", "安装软件包"),
+            ChatMessage::assistant(
+                "",
+                Some(vec![ToolCall {
+                    id: "call-1".to_string(),
+                    kind: "function".to_string(),
+                    function: ToolCallFunction {
+                        name: "run_command".to_string(),
+                        arguments: r#"{"command":"pacman -U pkg"}"#.to_string(),
+                    },
+                }]),
+            ),
+            ChatMessage::tool("call-1", r#"{"success":true,"stdout":"installed"}"#),
+        ];
+        let mut provider = ProviderConfig::default_openai();
+        provider.id = "deepseek".to_string();
+
+        let prepared = apply_preserved_thinking(history, &provider);
+
+        assert_eq!(prepared.len(), 3);
+        assert_eq!(prepared[2].role, "tool");
+        assert_eq!(
+            prepared[1].reasoning_content.as_deref(),
+            Some(DEEPSEEK_TOOL_REASONING_PLACEHOLDER)
         );
     }
 
