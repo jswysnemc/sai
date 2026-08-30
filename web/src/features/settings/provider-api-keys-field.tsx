@@ -124,7 +124,9 @@ export function ProviderApiKeysField({
       </div>
       <ul className="provider-api-keys-list">
         {editorKeys.map((key, index) => (
-          <li className="provider-api-key-row" key={key.id}>
+          // 同一供应商内 key.id 唯一，跨供应商会重复：带上供应商标识，
+          // 避免切换供应商时 React 复用上一个供应商的输入框实例
+          <li className="provider-api-key-row" key={`${providerId}:${key.id}`}>
             <div className="provider-api-key-value">
               <PasswordField
                 value={key.api_key}

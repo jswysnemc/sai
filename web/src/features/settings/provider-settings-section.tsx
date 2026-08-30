@@ -10,7 +10,9 @@ import { ModelMetadataEditor } from "./model-metadata-editor";
 import { ModelImportDialog } from "./model-import-dialog";
 import { ObjectListPanel } from "./object-list-panel";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
+import { Toast, useToast } from "../../shared/ui/notify/notify";
 import { Select } from "../../shared/ui/select/select";
+import { SkeletonText } from "../../shared/ui/skeleton/skeleton";
 import { ModelIcon } from "../../shared/ui/model-icon";
 import { JsonCodeEditor } from "../../shared/ui/code-editor/json-code-editor";
 import { useI18n } from "../i18n/use-i18n";
@@ -64,6 +66,7 @@ export function ProviderSettingsSection({
   const { t } = useI18n();
   const confirm = useConfirm();
   const navigate = useNavigate();
+  const { notice, showToast, dismissToast } = useToast();
   // 子页由路由解析保证合法，此处仅作类型收窄的回落
   const tab = (subview ?? "connection") as "connection" | "models" | "behavior" | "advanced";
   const [selectedId, setSelectedId] = useState(config.active_provider || config.providers[0]?.id || "");
@@ -79,6 +82,21 @@ export function ProviderSettingsSection({
     thinking_levels?: string[];
   }>>({});
   const [importOpen, setImportOpen] = useState(false);
+
+  /**
+   * 丢弃上一个供应商拉取到的远端模型目录。
+   *
+   * 目录里的供应商品牌会画在默认模型下拉里，残留会让新供应商的模型
+   * 顶着上一个供应商的图标。
+   *
+   * @returns 无返回值
+   */
+  const clearRemoteModels = () => {
+    setRemoteModels([]);
+    setRemoteMetadata({});
+    setImportOpen(false);
+  };
+
   /** 供应商 ID 的输入草稿；为 null 表示未在编辑 */
   const [idDraft, setIdDraft] = useState<string | null>(null);
   const [idError, setIdError] = useState("");
@@ -102,6 +120,7 @@ export function ProviderSettingsSection({
     setIdFollowsName(providerIdFollowsName(provider.id, provider.display_name));
     setTemperatureDraft(formatTemperature(provider.temperature));
     setTemperatureError("");
+    clearRemoteModels();
   }, [provider?.id]);
 
   /** 新增一项 OpenAI 兼容供应商草稿。 */
@@ -133,6 +152,7 @@ export function ProviderSettingsSection({
     setTemperatureError("");
     setFetchError(null);
     setSecretError(null);
+    clearRemoteModels();
   };
 
   /**
@@ -302,21 +322,50 @@ export function ProviderSettingsSection({
    * 【设置】【供应商启用】切换启用状态，并在需要时转移当前供应商。
    *
    * 停用正在使用的供应商却不转移，会让后续请求全部落在一个已停用的配置上；
-   * 服务端也会直接拒绝解析。
+   * 服务端也会直接拒绝解析。转移是静默发生的，因此先让用户确认。
    *
    * @param enabled 目标启用状态
-   * @returns 无返回值
+   * @returns 确认流程完成后返回
    */
-  const toggleProviderEnabled = (enabled: boolean) => {
+  const toggleProviderEnabled = async (enabled: boolean) => {
     if (!provider || selectedIndex < 0) return;
     const providers = config.providers.map((item, index) => (
       index === selectedIndex ? { ...item, enabled } : item
     ));
-    onConfigChange({
-      ...config,
-      providers,
-      active_provider: nextActiveProvider(providers, config.active_provider)
-    });
+    const nextActive = nextActiveProvider(providers, config.active_provider);
+    const name = provider.display_name || provider.id;
+    if (!enabled && provider.id === config.active_provider) {
+      const target = providers.find((item) => item.id === nextActive);
+      const targetName = target ? target.display_name || target.id : "";
+      const confirmed = await confirm({
+        title: t("Disable the current provider", "停用当前供应商"),
+        description: targetName
+          ? t(
+            `“${name}” is the current provider. Disabling it switches the current provider to “${targetName}”.`,
+            `“${name}”是当前正在使用的供应商，停用后当前供应商会切换为“${targetName}”。`
+          )
+          : t(
+            `“${name}” is the current provider. Disabling it leaves no provider in use.`,
+            `“${name}”是当前正在使用的供应商，停用后将没有正在使用的供应商。`
+          ),
+        confirmLabel: t("Disable provider", "停用供应商"),
+        danger: true
+      });
+      if (!confirmed) return;
+    }
+    onConfigChange({ ...config, providers, active_provider: nextActive });
+  };
+
+  /**
+   * 【设置】【设为当前】切换当前供应商，并提示切换结果。
+   *
+   * @returns 无返回值
+   */
+  const setAsCurrentProvider = () => {
+    if (!provider) return;
+    const name = provider.display_name || provider.id;
+    onConfigChange({ ...config, active_provider: provider.id });
+    showToast(t(`“${name}” is now the current provider.`, `已将“${name}”设为当前供应商。`));
   };
 
   /**
@@ -348,7 +397,20 @@ export function ProviderSettingsSection({
   };
 
   if (!provider) {
-    return <div className="settings-empty"><button type="button" className="settings-secondary" onClick={addProvider}><Plus size={14} />{t("Add provider", "新增供应商")}</button></div>;
+    return (
+      <div className="settings-empty">
+        <div className="settings-empty-copy">
+          <strong>{t("No provider configured", "还没有配置供应商")}</strong>
+          <p>
+            {t(
+              "Add a provider to connect a model API, then fill in its endpoint, credentials, and models.",
+              "新增一个供应商即可接入模型接口，随后填写接口地址、凭据和可用模型。"
+            )}
+          </p>
+        </div>
+        <button type="button" className="settings-secondary" onClick={addProvider}><Plus size={14} />{t("Add provider", "新增供应商")}</button>
+      </div>
+    );
   }
 
   /**
@@ -368,6 +430,13 @@ export function ProviderSettingsSection({
   };
 
   const models = provider.models ?? [];
+  // 没有 API 地址时服务端无从拉取模型列表，禁用原因挂在按钮的 tooltip 上
+  const importBlockedReason = provider.base_url.trim()
+    ? ""
+    : t(
+      "Fill in the API address first; the server fetches the model list from it.",
+      "请先填写 API 地址，模型列表由服务端从该地址获取。"
+    );
   // 1. 默认模型下拉选项来自已配置模型，历史值不在列表时保留为可选项
   const defaultModelOptions = (provider.default_model && !models.includes(provider.default_model)
     ? [provider.default_model, ...models]
@@ -449,10 +518,18 @@ export function ProviderSettingsSection({
         selectedId={selectedId}
         searchPlaceholder={t("Search providers", "搜索供应商")}
         addLabel={t("Add provider", "新增供应商")}
-        onSelect={(id) => { setSelectedId(id); setIdDraft(null); setIdError(""); setFetchError(null); setSecretError(null); }}
+        onSelect={(id) => {
+          setSelectedId(id);
+          setIdDraft(null);
+          setIdError("");
+          setFetchError(null);
+          setSecretError(null);
+          clearRemoteModels();
+        }}
         onAdd={addProvider}
       />
       <section className="settings-editor">
+        <Toast notice={notice} onDismiss={dismissToast} />
         <EditorHeader
           kicker={t("Model provider", "模型供应商")}
           title={provider.display_name || provider.id}
@@ -462,19 +539,25 @@ export function ProviderSettingsSection({
               <input
                 type="checkbox"
                 checked={isProviderEnabled(provider)}
-                onChange={(event) => toggleProviderEnabled(event.target.checked)}
+                onChange={(event) => void toggleProviderEnabled(event.target.checked)}
               />
               <span />
               <strong>{isProviderEnabled(provider) ? t("Enabled", "已启用") : t("Disabled", "已停用")}</strong>
             </label>
-            <button type="button" className="settings-secondary" onClick={() => void fetchModels()} disabled={fetching || !provider.base_url.trim()}><RefreshCw size={14} className={fetching ? "spin" : ""} />{fetching ? t("Fetching", "正在获取") : t("Import models", "导入模型")}</button>
-            <button type="button" className={provider.id === config.active_provider ? "settings-secondary active" : "settings-secondary"} onClick={() => onConfigChange({ ...config, active_provider: provider.id })} disabled={provider.id === config.active_provider || !isProviderEnabled(provider)}><Check size={14} />{provider.id === config.active_provider ? t("Current provider", "当前供应商") : t("Set as current", "设为当前")}</button>
+            {/* 禁用态按钮收不到鼠标事件，说明挂在包裹层上 */}
+            <span className="settings-action-hint" title={importBlockedReason || undefined}>
+              <button type="button" className="settings-secondary" onClick={() => void fetchModels()} disabled={fetching || !provider.base_url.trim()}><RefreshCw size={14} className={fetching ? "spin" : ""} />{fetching ? t("Fetching", "正在获取") : t("Import models", "导入模型")}</button>
+            </span>
+            <button type="button" className={provider.id === config.active_provider ? "settings-secondary active" : "settings-secondary"} onClick={setAsCurrentProvider} disabled={provider.id === config.active_provider || !isProviderEnabled(provider)}><Check size={14} />{provider.id === config.active_provider ? t("Current provider", "当前供应商") : t("Set as current", "设为当前")}</button>
             <button type="button" className="settings-danger" onClick={() => void deleteProvider()}><Trash2 size={14} />{t("Delete provider", "删除供应商")}</button>
           </>}
         />
         {fetchError && <div className="settings-inline-error">{fetchError.message}</div>}
         {secretError && <div className="settings-inline-error">{secretError.message}</div>}
-        {tab === "connection" && <div className="settings-form-grid">
+        {fetching && <div className="provider-editor-loading">
+          <SkeletonText lines={6} label={t("Fetching the model list", "正在获取模型列表")} />
+        </div>}
+        {!fetching && tab === "connection" && <div className="settings-form-grid">
           <label className="settings-field">
             <span>{t("Display name", "显示名称")}</span>
             <input
@@ -497,8 +580,9 @@ export function ProviderSettingsSection({
                 }
               }}
               spellCheck={false}
+              aria-invalid={idError ? true : undefined}
             />
-            <small>{idError || t("Stable identifier in the configuration file", "配置文件中的稳定标识")}</small>
+            <small className={idError ? "settings-field-error" : undefined}>{idError || t("Stable identifier in the configuration file", "配置文件中的稳定标识")}</small>
           </label>
           <label className="settings-field full"><span>{t("API address", "API 地址")}</span><input value={provider.base_url} onChange={(event) => onProviderChange(selectedIndex, { base_url: event.target.value })} spellCheck={false} /><small>{t("Base URL of the compatible API; the server accesses it when fetching models", "兼容接口的基础地址，获取模型时由服务端访问")}</small></label>
           <div className="settings-field"><span>{t("Protocol", "协议")}</span><Select value={provider.protocol ?? "auto"} options={protocolOptions} onChange={(value) => onProviderChange(selectedIndex, { protocol: value })} ariaLabel={t("Provider protocol", "供应商协议")} /><small>{t("The protocol determines request and reasoning parameter formats", "协议决定请求和思考参数格式")}</small></div>
@@ -510,6 +594,9 @@ export function ProviderSettingsSection({
           </div>
           <div className="settings-field full">
             <ProviderApiKeysField
+              // 切换供应商时重建：密钥框内部持有明文状态，
+              // 复用实例会把上一个供应商的密钥露出来
+              key={provider.id}
               providerId={provider.id}
               keys={providerKeys}
               selected={selectedProviderKey}
@@ -537,7 +624,7 @@ export function ProviderSettingsSection({
             <small>{t("Run a normal model response test or a separate tool-calling test with the selected key.", "可以使用当前选中的密钥分别测试普通模型响应和工具调用。")}</small>
           </div>
         </div>}
-        {tab === "behavior" && <div className="settings-form-grid">
+        {!fetching && tab === "behavior" && <div className="settings-form-grid">
           <label className="settings-field"><span>{t("Request timeout", "请求超时")}</span><input type="number" min="1" value={provider.timeout_seconds ?? 120} onChange={(event) => onProviderChange(selectedIndex, { timeout_seconds: Number(event.target.value) })} /><small>{t("Seconds", "单位为秒")}</small></label>
           <label className="settings-field">
             <span>Temperature</span>
@@ -554,8 +641,9 @@ export function ProviderSettingsSection({
               onKeyDown={(event) => {
                 if (event.key === "Enter") event.currentTarget.blur();
               }}
+              aria-invalid={temperatureError ? true : undefined}
             />
-            <small>{temperatureError || t("Optional sampling temperature from 0 to 2. Empty omits the field.", "可选采样温度，范围 0 到 2。留空则请求不带该参数。")}</small>
+            <small className={temperatureError ? "settings-field-error" : undefined}>{temperatureError || t("Optional sampling temperature from 0 to 2. Empty omits the field.", "可选采样温度，范围 0 到 2。留空则请求不带该参数。")}</small>
           </label>
           <div className="settings-field"><span>{t("Thinking level", "思考等级")}</span><Select value={provider.thinking_level ?? "auto"} options={THINKING_OPTIONS} onChange={(value) => onProviderChange(selectedIndex, { thinking_level: value })} ariaLabel={t("Thinking level", "思考等级")} /><small>{t("Default reasoning intensity for the provider", "供应商默认推理强度")}</small></div>
           <div className="settings-field"><span>{t("Thinking format", "思考格式")}</span><Select value={provider.thinking_format ?? "auto"} options={thinkingFormatOptions} onChange={(value) => onProviderChange(selectedIndex, { thinking_format: value })} ariaLabel={t("Thinking format", "思考格式")} /><small>{t("Reasoning field in the response", "响应中的思考字段")}</small></div>
@@ -607,8 +695,14 @@ export function ProviderSettingsSection({
             </label>
           )}
         </div>}
-        {tab === "models" && <ModelMetadataEditor provider={provider} onChange={updateModelConfiguration} />}
-        {tab === "advanced" && <div className="provider-advanced-layout">
+        {!fetching && tab === "models" && <ModelMetadataEditor
+          // 切换供应商时重建：选中模型、新模型草稿和上下文单位都是内部状态，
+          // 复用实例会把上一个供应商的选择带过来
+          key={provider.id}
+          provider={provider}
+          onChange={updateModelConfiguration}
+        />}
+        {!fetching && tab === "advanced" && <div className="provider-advanced-layout">
           <div className="provider-advanced-top">
             <div className="settings-field">
               <span>{t("Client style", "客户端模拟")}</span>

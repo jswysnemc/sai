@@ -2,6 +2,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ModelMetadata, ProviderConfig } from "../../api/contracts";
 import { Button } from "../../shared/ui/button/button";
+import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { ModelIcon } from "../../shared/ui/model-icon";
 import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
@@ -24,6 +25,7 @@ type ModelMetadataEditorProps = {
  */
 export function ModelMetadataEditor({ provider, onChange }: ModelMetadataEditorProps) {
   const { t } = useI18n();
+  const confirm = useConfirm();
   const models = provider.models ?? [];
   const [selected, setSelected] = useState(provider.default_model || models[0] || "");
   const [draft, setDraft] = useState("");
@@ -65,9 +67,22 @@ export function ModelMetadataEditor({ provider, onChange }: ModelMetadataEditorP
   /**
    * 删除指定模型及其元数据。
    *
+   * 删除同时会清掉该模型的能力配置，且无法撤销，因此先确认一次。
+   *
    * @param model 模型标识
+   * @returns 确认流程完成后返回
    */
-  const removeModel = (model: string) => {
+  const removeModel = async (model: string) => {
+    const confirmed = await confirm({
+      title: t("Delete model", "删除模型"),
+      description: t(
+        `Delete “${model}” and its capability settings from this provider.`,
+        `将从该供应商删除“${model}”及其能力配置。`
+      ),
+      confirmLabel: t("Delete model", "删除模型"),
+      danger: true
+    });
+    if (!confirmed) return;
     const nextModels = models.filter((item) => item !== model);
     const nextMetadata = { ...(provider.model_metadata ?? {}) };
     delete nextMetadata[model];
@@ -151,7 +166,7 @@ export function ModelMetadataEditor({ provider, onChange }: ModelMetadataEditorP
               </Button>
               <Button
                 className="model-chip-remove"
-                onClick={() => removeModel(model)}
+                onClick={() => void removeModel(model)}
                 aria-label={t(`Delete model ${model}`, `删除模型 ${model}`)}
               >
                 <Trash2 size={12} />

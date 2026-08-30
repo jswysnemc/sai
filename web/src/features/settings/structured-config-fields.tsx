@@ -130,10 +130,13 @@ function StructuredField({
         <span>{label}</span>
         <PasswordField
           value={hidden ? "" : String(value ?? "")}
-          placeholder={hidden ? t("Saved value remains unchanged", "已保存的值保持不变") : undefined}
+          placeholder={hidden ? t("Type a new value to replace it", "输入新值以替换") : undefined}
+          // 空输入框分不出"已保存"和"未设置"，用框内标记把前者标出来
+          savedValueHint={hidden ? t("Saved", "已保存") : undefined}
+          onClearSavedValue={hidden ? () => onChange("") : undefined}
           onChange={onChange}
         />
-        <small>{hidden ? t("A secret value is already saved.", "已保存敏感值。") : name}</small>
+        <small>{hidden ? t("A secret value is already saved. Clear it, or type a new value to replace it.", "已保存敏感值。可清除后留空，或输入新值替换。") : name}</small>
       </div>
     );
   }

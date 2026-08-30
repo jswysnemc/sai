@@ -18,7 +18,9 @@
 
 /* ---------- 编辑区标题行 ---------- */
 
+/* 提示条绝对定位在编辑区右上角 */
 .settings-editor {
+  position: relative;
   min-width: 0;
 }
 
@@ -449,3 +451,18 @@
   font-size:var(--text-base);
   line-height: 1.55;
 }
+
+.settings-empty-copy { display: grid; gap:var(--space-xs); }
+.settings-empty-copy strong { color: var(--ink); font-size:var(--text-lg); font-weight: 500; }
+.settings-empty-copy p { margin: 0; max-width: 34rem; }
+
+/* 禁用按钮收不到鼠标事件，说明文字挂在这层包裹上 */
+.settings-action-hint { display: inline-flex; }
+
+/* 字段级错误：与 .settings-inline-error 同一套危险色 */
+.settings-field > small.settings-field-error { color: var(--danger); }
+
+.settings-field input[aria-invalid="true"] { border-color: color-mix(in srgb, var(--danger) 46%, var(--line)); }
+
+/* 拉取远端模型期间用骨架屏占位，表单先让位 */
+.provider-editor-loading { margin-top:var(--space-2xl); }
