@@ -1,5 +1,7 @@
-use super::ReplRuntime;
+use super::stream_commands::{StreamCommandContext, StreamInputAction};
+use super::{ReplRuntime, StreamComposerDraft};
 use crate::agent::AgentMode;
+use crate::cli::repl_commands::{stream_command_disabled_hint, stream_command_policy, StreamCommandPolicy};
 use crate::cli::repl_windows_paste::WindowsPasteKey;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
@@ -107,13 +109,18 @@ pub(crate) fn process_stream_tick(runtime: &mut ReplRuntime) -> Result<()> {
 /// 处理模型运行期间的非阻塞终端事件。
 ///
 /// Agent 工作时允许编辑底部输入框：Tab 入队，Shift+Tab 切换模式，Ctrl+C 中断。
+/// 只读命令立即执行，打断类命令拒绝并提示，`/exit` 立即退出。
 ///
 /// 参数:
 /// - `runtime`: 当前 REPL 运行期
+/// - `ctx`: 轮次开始时抓取的命令上下文
 ///
 /// 返回:
-/// - 收到 Ctrl+C 时返回 true
-pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
+/// - 键盘请求中断、退出或继续
+pub(crate) fn process_stream_input(
+    runtime: &mut ReplRuntime,
+    ctx: &StreamCommandContext,
+) -> Result<StreamInputAction> {
     while event::poll(Duration::ZERO)? {
         let input = event::read()?;
         match input {
@@ -219,7 +226,7 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                     && key.modifiers.contains(KeyModifiers::CONTROL)
                 {
                     // 2. Ctrl+C 中断当前轮
-                    return Ok(true);
+                    return Ok(StreamInputAction::Interrupt);
                 }
                 // 3. 用户消息队列管理（Ctrl+↑ 进入，↓ 离开末项回到输入框）
                 if runtime.handle_queue_panel_key(key.code, key.modifiers)? {
@@ -254,29 +261,34 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                     continue;
                 }
                 // 5. 其他键写入运行中输入框
-                handle_stream_key(runtime, key.code, key.modifiers)?;
+                let action = handle_stream_key(runtime, ctx, key.code, key.modifiers)?;
+                if action != StreamInputAction::Continue {
+                    return Ok(action);
+                }
             }
             Event::Key(_) => {}
             _ => {}
         }
     }
-    Ok(false)
+    Ok(StreamInputAction::Continue)
 }
 
 /// 将单个按键应用到运行中 composer 草稿。
 ///
 /// 参数:
 /// - `runtime`: REPL 运行期
+/// - `ctx`: 轮次开始时抓取的命令上下文
 /// - `code`: 键码
 /// - `modifiers`: 修饰键
 ///
 /// 返回:
-/// - 是否成功
+/// - 按键请求中断、退出或继续
 fn handle_stream_key(
     runtime: &mut ReplRuntime,
+    ctx: &StreamCommandContext,
     code: KeyCode,
     modifiers: KeyModifiers,
-) -> Result<()> {
+) -> Result<StreamInputAction> {
     match code {
         KeyCode::BackTab => {
             // 部分终端把 Shift+Tab 发成 BackTab：立即生效
@@ -297,18 +309,21 @@ fn handle_stream_key(
         KeyCode::Tab => {
             // Tab：先补全 #/@ 引用，再补全斜杠命令，否则入队
             if complete_stream_mention(runtime)? {
-                return Ok(());
+                return Ok(StreamInputAction::Continue);
             }
             if runtime.stream_draft().text.starts_with('/') {
-                let completed =
-                    crate::cli::repl_commands::complete_repl_command(&runtime.stream_draft().text);
+                // 运行期间不补全置灰命令：Tab 出一条执行不了的命令没有意义
+                let completed = crate::cli::repl_commands::complete_repl_command(
+                    &runtime.stream_draft().text,
+                    true,
+                );
                 if let Some(completed) = completed {
                     let draft = runtime.stream_draft_mut();
                     draft.text = completed.to_string();
                     draft.cursor = draft.text.chars().count();
                     draft.slash_selection = 0;
                     runtime.redraw_stream_composer()?;
-                    return Ok(());
+                    return Ok(StreamInputAction::Continue);
                 }
             }
             let mode = runtime.stream_mode(AgentMode::Yolo);
@@ -332,10 +347,11 @@ fn handle_stream_key(
                     .checked_sub(1)
                     .unwrap_or(mentions.len().saturating_sub(1));
                 runtime.redraw_stream_composer()?;
-                return Ok(());
+                return Ok(StreamInputAction::Continue);
             }
             let suggestions = crate::cli::repl_commands::visible_repl_command_suggestions(
                 &runtime.stream_draft().text,
+                true,
             );
             if !suggestions.is_empty() {
                 let draft = runtime.stream_draft_mut();
@@ -360,10 +376,11 @@ fn handle_stream_key(
                 let draft = runtime.stream_draft_mut();
                 draft.slash_selection = (draft.slash_selection + 1) % mentions.len();
                 runtime.redraw_stream_composer()?;
-                return Ok(());
+                return Ok(StreamInputAction::Continue);
             }
             let suggestions = crate::cli::repl_commands::visible_repl_command_suggestions(
                 &runtime.stream_draft().text,
+                true,
             );
             if !suggestions.is_empty() {
                 let draft = runtime.stream_draft_mut();
@@ -378,26 +395,26 @@ fn handle_stream_key(
                 draft.slash_selection = 0;
                 draft.is_pasted = false;
                 runtime.redraw_stream_composer()?;
-            } else {
-                if complete_stream_mention(runtime)? {
-                    return Ok(());
-                }
-                // Enter：面板可见时先落选中命令，否则 /model 会被当普通文本发出
-                let suggestions = crate::cli::repl_commands::visible_repl_command_suggestions(
-                    &runtime.stream_draft().text,
-                );
-                if !suggestions.is_empty() {
-                    let draft = runtime.stream_draft_mut();
-                    let selected = suggestions[draft
-                        .slash_selection
-                        .min(suggestions.len().saturating_sub(1))];
-                    draft.text = selected.command.to_string();
-                    draft.cursor = draft.text.chars().count();
-                    draft.slash_selection = 0;
-                }
-                let mode = runtime.stream_mode(AgentMode::Yolo);
-                let _ = runtime.enqueue_stream_draft(mode)?;
+                return Ok(StreamInputAction::Continue);
             }
+            if complete_stream_mention(runtime)? {
+                return Ok(StreamInputAction::Continue);
+            }
+            // Enter：面板可见时先落选中命令，否则 /model 会被当普通文本发出
+            let suggestions = crate::cli::repl_commands::visible_repl_command_suggestions(
+                &runtime.stream_draft().text,
+                true,
+            );
+            if !suggestions.is_empty() {
+                let draft = runtime.stream_draft_mut();
+                let selected = suggestions[draft
+                    .slash_selection
+                    .min(suggestions.len().saturating_sub(1))];
+                draft.text = selected.command.to_string();
+                draft.cursor = draft.text.chars().count();
+                draft.slash_selection = 0;
+            }
+            return dispatch_stream_command(runtime, ctx);
         }
         KeyCode::Backspace => {
             let draft = runtime.stream_draft_mut();
@@ -470,7 +487,68 @@ fn handle_stream_key(
         }
         _ => {}
     }
-    Ok(())
+    Ok(StreamInputAction::Continue)
+}
+
+/// 按执行策略分发运行期间提交的命令。
+///
+/// 只读命令立刻执行，打断类命令拒绝并保留草稿，退出命令返回退出信号，
+/// 其余按普通消息入队等本轮结束。
+///
+/// 参数:
+/// - `runtime`: REPL 运行期
+/// - `ctx`: 轮次开始时抓取的命令上下文
+///
+/// 返回:
+/// - 请求退出、中断或继续
+fn dispatch_stream_command(
+    runtime: &mut ReplRuntime,
+    ctx: &StreamCommandContext,
+) -> Result<StreamInputAction> {
+    let text = runtime.stream_draft().text.trim().to_string();
+    if text.is_empty() {
+        return Ok(StreamInputAction::Continue);
+    }
+    // shell 命令保持入队：它本就是"本轮结束后跑"的语义，且沉底面板会
+    // 常驻列出待执行项，用户可预期；拒绝会让 `!ls` 这类操作彻底不可用
+    if text.starts_with('!') {
+        return enqueue_stream_draft(runtime);
+    }
+    match stream_command_policy(&text) {
+        StreamCommandPolicy::Exit => Ok(StreamInputAction::Exit),
+        StreamCommandPolicy::Immediate => {
+            super::stream_commands::run_immediate_stream_command(runtime, ctx, &text)?;
+            let mode = runtime.stream_draft().mode;
+            *runtime.stream_draft_mut() = StreamComposerDraft {
+                mode,
+                ..StreamComposerDraft::default()
+            };
+            runtime.redraw_stream_composer()?;
+            Ok(StreamInputAction::Continue)
+        }
+        // 置灰命令不放进队列：静默排队正是用户看不到命令何时执行的根因，
+        // 明确拒绝并把原文留在输入框里，本轮结束后直接回车即可
+        StreamCommandPolicy::Disabled => {
+            let hint = stream_command_disabled_hint(&text);
+            runtime.record_meta(hint)?;
+            runtime.redraw_stream_composer()?;
+            Ok(StreamInputAction::Continue)
+        }
+        StreamCommandPolicy::NotCommand => enqueue_stream_draft(runtime),
+    }
+}
+
+/// 把当前流式草稿按普通消息入队。
+///
+/// 参数:
+/// - `runtime`: REPL 运行期
+///
+/// 返回:
+/// - 入队结果包装为继续运行
+fn enqueue_stream_draft(runtime: &mut ReplRuntime) -> Result<StreamInputAction> {
+    let mode = runtime.stream_mode(AgentMode::Yolo);
+    let _ = runtime.enqueue_stream_draft(mode)?;
+    Ok(StreamInputAction::Continue)
 }
 
 /// 确认流式草稿中的 `#` / `@` 引用。

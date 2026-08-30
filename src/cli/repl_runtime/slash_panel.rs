@@ -21,11 +21,12 @@ impl SlashPanel {
     /// 参数:
     /// - `input`: 当前输入文本
     /// - `selected`: 当前选中项
+    /// - `streaming`: 模型是否正在运行；为 true 时打断类命令标记为禁用
     ///
     /// 返回:
     /// - 已过滤的命令面板
-    pub(super) fn new(input: &str, selected: usize) -> Self {
-        let suggestions = visible_repl_command_suggestions(input);
+    pub(super) fn new(input: &str, selected: usize, streaming: bool) -> Self {
+        let suggestions = visible_repl_command_suggestions(input, streaming);
         let selected = selected.min(suggestions.len().saturating_sub(1));
         Self {
             suggestions,
@@ -105,7 +106,23 @@ fn format_suggestion(suggestion: ReplCommandSuggestion, cols: usize, selected: b
     // 标记 1 列 + 间隔 1 列 + 命令列 + 间隔 1 列 + 说明
     let command_width = 18usize.min(cols.saturating_sub(3));
     let description_width = cols.saturating_sub(command_width + 3);
-    let description = truncate_to_width(suggestion.description, description_width);
+    // 置灰命令把说明换成等待提示：原说明描述的是命令用途，
+    // 但此刻用户需要知道的是"为什么选不了它"
+    let description = if suggestion.disabled {
+        truncate_to_width(
+            &crate::i18n::text("available after this turn", "本轮结束后可用"),
+            description_width,
+        )
+    } else {
+        truncate_to_width(suggestion.description, description_width)
+    };
+    // 置灰项即使被高亮也不提亮：亮白会让人以为可以选中执行
+    if suggestion.disabled {
+        return format!(
+            "{marker} \x1b[90m{:<command_width$}\x1b[0m\x1b[90m{}\x1b[0m",
+            suggestion.command, description
+        );
+    }
     if selected {
         // 亮白命令 + 常规亮度说明，无 48; 背景、无 EL 填色
         return format!(
@@ -152,12 +169,37 @@ fn truncate_to_width(value: &str, width: usize) -> String {
 mod tests {
     use super::*;
 
+    /// 置灰命令整行灰化，且不能套用选中态的亮白。
+    #[test]
+    fn disabled_suggestion_is_greyed_out_even_when_selected() {
+        let suggestion = ReplCommandSuggestion {
+            command: "/model",
+            description: "choose the active model",
+            disabled: true,
+        };
+        let selected = format_suggestion(suggestion, 72, true);
+        assert!(
+            selected.contains("\x1b[90m"),
+            "disabled entry should be grey: {selected:?}"
+        );
+        assert!(
+            !selected.contains("\x1b[97m"),
+            "disabled entry must not use the selectable bright white: {selected:?}"
+        );
+        let plain = crate::render::activity_animation::strip_ansi_for_test(&selected);
+        assert!(
+            plain.contains('/') && !plain.contains("choose the active model"),
+            "description should be replaced by the wait hint: {plain}"
+        );
+    }
+
     /// 选中行不得铺实心背景，并使用 `→` 指示当前项。
     #[test]
     fn selected_suggestion_uses_arrow_without_background_fill() {
         let suggestion = ReplCommandSuggestion {
             command: "/model",
             description: "choose the active model",
+            disabled: false,
         };
         let selected = format_suggestion(suggestion, 72, true);
         let plain = crate::render::activity_animation::strip_ansi_for_test(&selected);
@@ -178,6 +220,7 @@ mod tests {
         let suggestion = ReplCommandSuggestion {
             command: "/help",
             description: "show available commands",
+            disabled: false,
         };
         let line = format_suggestion(suggestion, 72, false);
         let plain = crate::render::activity_animation::strip_ansi_for_test(&line);

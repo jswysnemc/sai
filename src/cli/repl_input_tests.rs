@@ -222,7 +222,7 @@ fn slash_can_be_inserted_into_fresh_composer_after_a_turn() {
 
     assert_eq!(input, "/");
     assert_eq!(cursor, 1);
-    assert!(!repl_command_suggestions(&input).is_empty());
+    assert!(!repl_command_suggestions(&input, false).is_empty());
 }
 
 #[test]

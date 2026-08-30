@@ -8,9 +8,10 @@ use super::*;
 use crate::agent::Agent;
 
 mod session_support;
-mod subagent_commands;
+pub(super) mod subagent_commands;
 mod submission_queue;
 
+use repl_session_link::{observer_turn_refusal, ReplSessionLink};
 use session_support::{
     apply_ready_tool_registry, record_repl_history, reload_repl_agent, repl_welcome_model,
 };
@@ -104,8 +105,12 @@ pub(super) async fn run_repl(
         mode,
     )?;
     let mut external_events = ReplExternalEvents::new();
+    // 跨进程会话链接：本终端是否驱动这一会话，取决于有没有别的 sai 实例先抢到租约
+    let mut session_link = ReplSessionLink::attach(paths, &state).await;
 
     loop {
+        // 会话切换（/new、/resume）或持有者更替后重新链接并同步界面提示
+        session_link.refresh(paths, &state, &mut runtime).await?;
         // 每次进入输入循环都重新绑定当前 Agent，会话切换后不会消费旧监听结果
         external_events.arm(&agent);
         apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
@@ -145,17 +150,22 @@ pub(super) async fn run_repl(
                     prefill = (!draft.text.trim().is_empty()).then_some(draft.text);
                     prefill_clipboard = prefill.as_ref().map(|_| draft.clipboard_state);
                     apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
+                    let owner_key = state.state_dir().display().to_string();
                     let outcome = execute_automatic_repl_turn(
                         paths,
                         &config,
                         &mut agent,
                         &mut runtime,
+                        &owner_key,
                         mode,
                         transcript_options.reasoning_mode,
                         transcript_options.tool_call_mode,
                         wake,
                     )
                     .await?;
+                    if outcome.exit_requested {
+                        break;
+                    }
                     if outcome.interrupted {
                         if let Some(error) = outcome.result.err() {
                             runtime.record_failure(interrupted_failure_text(&error))?;
@@ -166,11 +176,12 @@ pub(super) async fn run_repl(
                     if let Some(draft) = outcome.leftover_draft {
                         prefill = Some(draft);
                     }
-                    drain_submission_queue(
+                    let exit = drain_submission_queue(
                         paths,
                         &config,
                         &mut agent,
                         &mut runtime,
+                        &owner_key,
                         &mut mode,
                         &mut input_history,
                         transcript_options.reasoning_mode,
@@ -180,6 +191,9 @@ pub(super) async fn run_repl(
                     if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
                         prefill = Some(draft);
                         prefill_clipboard = Some(clipboard);
+                    }
+                    if exit {
+                        break;
                     }
                     continue;
                 }
@@ -640,6 +654,12 @@ pub(super) async fn run_repl(
             let registry = build_repl_tool_registry(&config, paths, mode)?;
             agent.switch_mode(mode, registry)?;
         }
+        // 观察者模式：本终端不驱动轮次，两个进程同时写同一份会话状态会互相覆盖
+        if let Some(notice) = observer_turn_refusal(session_link.role(), state.state_dir()) {
+            runtime.record_meta(notice)?;
+            prefill = Some(submission.raw_input.clone());
+            continue;
+        }
         agent.prepare_for_turn()?;
         // 用户主动发话：清除积压的未消费回执，否则它们会在下一次等待里整包注入，
         // 并因为 take_ready 排在读键之前而持续抢走输入
@@ -657,9 +677,22 @@ pub(super) async fn run_repl(
             render_options.clone(),
             goal_continuation,
         );
-        let outcome =
-            execute_repl_turn(paths, &config, &mut agent, &mut runtime, runner_submission).await?;
+        let owner_key = state.state_dir().display().to_string();
+        let outcome = execute_repl_turn(
+            paths,
+            &config,
+            &mut agent,
+            &mut runtime,
+            &owner_key,
+            runner_submission,
+        )
+        .await?;
         apply_stream_mode(&runtime, &mut mode);
+        // 退出请求在中断处理之前：/exit 走的就是中断路径，
+        // 不必再记录中断提示，直接落到循环外的收尾
+        if outcome.exit_requested {
+            break;
+        }
         if outcome.interrupted {
             if !state.latest_interrupted_turn_has_content(&submitted_input)? {
                 prefill = Some(submitted_input);
@@ -667,11 +700,12 @@ pub(super) async fn run_repl(
                 prefill = Some(draft);
             }
             // 中断后仍执行已入队内容
-            drain_submission_queue(
+            let exit = drain_submission_queue(
                 paths,
                 &config,
                 &mut agent,
                 &mut runtime,
+                &owner_key,
                 &mut mode,
                 &mut input_history,
                 transcript_options.reasoning_mode,
@@ -681,6 +715,9 @@ pub(super) async fn run_repl(
             if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
                 prefill = Some(draft);
                 prefill_clipboard = Some(clipboard);
+            }
+            if exit {
+                break;
             }
             continue;
         }
@@ -698,11 +735,12 @@ pub(super) async fn run_repl(
             prefill = Some(draft);
         }
         // 1. 本轮成功后依次执行 Tab 入队的消息
-        drain_submission_queue(
+        let exit = drain_submission_queue(
             paths,
             &config,
             &mut agent,
             &mut runtime,
+            &owner_key,
             &mut mode,
             &mut input_history,
             transcript_options.reasoning_mode,
@@ -712,6 +750,9 @@ pub(super) async fn run_repl(
         if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
             prefill = Some(draft);
             prefill_clipboard = Some(clipboard);
+        }
+        if exit {
+            break;
         }
     }
     agent.shutdown_external_engine().await?;

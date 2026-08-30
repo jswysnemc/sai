@@ -12,7 +12,7 @@ use anyhow::{bail, Result};
 ///
 /// 返回:
 /// - 可直接展示的列表文本
-pub(super) fn format_subagent_list(owner_key: &str) -> String {
+pub(in crate::cli) fn format_subagent_list(owner_key: &str) -> String {
     let subagents = subagent_state::list_subagents_for_owner(owner_key);
     if subagents.is_empty() {
         return t("no subagents in this session", "当前会话还没有子智能体").to_string();
@@ -66,7 +66,7 @@ pub(super) fn format_subagent_list(owner_key: &str) -> String {
 ///
 /// 返回:
 /// - 投递成功的提示文本
-pub(super) fn deliver_subagent_message(
+pub(in crate::cli) fn deliver_subagent_message(
     owner_key: &str,
     target: Option<&str>,
     message: &str,

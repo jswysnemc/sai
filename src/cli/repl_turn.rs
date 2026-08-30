@@ -1,5 +1,6 @@
 use super::terminal_restore::restore_stream_terminal_modes;
 use super::*;
+use crate::cli::repl_runtime::{StreamCommandContext, StreamInputAction};
 use crate::agent::{Agent, AgentEvent, ExternalEventBatch, ExternalEventWake};
 
 /// 自动唤醒对应的 runner submission 与待确认事件批次。
@@ -14,6 +15,8 @@ pub(super) struct ReplTurnOutcome {
     pub(super) result: Result<()>,
     /// 运行期间未入队的草稿，交回空闲输入框
     pub(super) leftover_draft: Option<String>,
+    /// 运行期间用户输入了退出命令，主循环应立即退出 REPL
+    pub(super) exit_requested: bool,
 }
 
 /// 把后台唤醒事件构造成带蓝色自动消息的 REPL submission。
@@ -75,6 +78,7 @@ pub(super) async fn execute_automatic_repl_turn(
     config: &AppConfig,
     agent: &mut Agent,
     runtime: &mut ReplRuntime,
+    owner_key: &str,
     mode: AgentMode,
     reasoning_mode: render::ReasoningDisplayMode,
     tool_call_mode: render::ToolCallDisplayMode,
@@ -93,7 +97,8 @@ pub(super) async fn execute_automatic_repl_turn(
         stream_render_options(config),
     );
     let batch = automatic.batch;
-    let outcome = execute_repl_turn(paths, config, agent, runtime, automatic.submission).await?;
+    let outcome =
+        execute_repl_turn(paths, config, agent, runtime, owner_key, automatic.submission).await?;
     // 中断同样算作已消费：用户按下 Ctrl+C 就是看到了这批回执并主动放弃。
     // 若此时不确认，下一次等待会立刻重投同一批，而 take_ready 又排在读键之前，
     // 用户既抢不回输入、也退不出去，形成中断→重投→再中断的活锁。
@@ -113,64 +118,44 @@ pub(super) async fn execute_automatic_repl_turn(
 /// - `config`: 当前应用配置
 /// - `agent`: 当前复用 Agent
 /// - `runtime`: TUI 运行期
+/// - `owner_key`: 当前会话的子智能体作用域键
 /// - `submission`: 用户或自动输入 submission
 ///
 /// 返回:
-/// - 中断标志与对话执行结果
+/// - 中断标志、退出请求与对话执行结果
 pub(super) async fn execute_repl_turn(
     paths: &SaiPaths,
     config: &AppConfig,
     agent: &mut Agent,
     runtime: &mut ReplRuntime,
+    owner_key: &str,
     submission: crate::runner::RunnerSubmission,
 ) -> Result<ReplTurnOutcome> {
     let runner = crate::runner::SessionRunner::new(paths).with_config(config.clone());
-    let runtime = std::cell::RefCell::new(runtime);
+    // 事件通道：sink 只负责入队，交互弹窗与 transcript 写入都由消费循环完成。
+    // 用无界 std::sync::mpsc 而非有界通道——sink 是在异步轮次里被同步调用的，
+    // 一旦通道满而阻塞就会卡住整个 tokio worker 线程；无界通道下由消费侧
+    // 每 25ms 的排空节奏承担背压
+    let (event_tx, event_rx) = std::sync::mpsc::channel::<crate::runner::RunnerEvent>();
     let mut sink = |event: crate::runner::RunnerEvent| {
-        if let crate::runner::RunnerEvent::Agent(AgentEvent::PermissionRequested(request)) = &event
-        {
-            // 1. 先清掉 working 动效，再挂权限控件，避免最后一行重叠
-            runtime.borrow_mut().pause_for_permission_prompt()?;
-            runtime
-                .borrow_mut()
-                .record_permission_request(request.clone())?;
-            prompt_permission_request_tui(request, &runtime)?;
-            restore_stream_terminal_modes()?;
-        }
-        if let crate::runner::RunnerEvent::Agent(AgentEvent::QuestionRequested(pending)) = &event {
-            prompt_question_request_tui(pending, &runtime)?;
-            restore_stream_terminal_modes()?;
-        }
-        // SSH 秘密交互标记：弹出安全输入界面，标记本身不进入 transcript
-        if let crate::runner::RunnerEvent::Agent(
-            AgentEvent::ToolProgress { message, .. }
-            | AgentEvent::ToolProgressIdentified { message, .. },
-        ) = &event
-        {
-            if crate::ssh::is_secret_marker(message) {
-                if let Some(request) = crate::ssh::decode_progress_marker(message) {
-                    runtime.borrow_mut().pause_for_permission_prompt()?;
-                    prompt_ssh_secret_request_tui(&request, &runtime)?;
-                    restore_stream_terminal_modes()?;
-                }
-                return Ok(());
-            }
-        }
-        runtime.borrow_mut().record_runner_event(&event)
+        event_tx
+            .send(event)
+            .map_err(|_| anyhow::anyhow!("runner event channel is closed"))
     };
     let stream_mode = submission.mode;
-    {
-        let mut rt = runtime.borrow_mut();
-        // 1. 本轮开始时保留可编辑输入框，供 Tab 入队
-        rt.begin_stream_composer(stream_mode)?;
-        // 2. 绑定热切换句柄：Shift+Tab 立即改权限模式
-        rt.bind_live_mode(agent.live_mode_handle(), agent.session_id());
-    }
+    // 命令上下文必须在建 chat future 之前抓取：之后 Agent 被独占借用，
+    // 立即执行的命令就拿不到 paths 与子智能体作用域键了
+    let stream_ctx = StreamCommandContext::capture(paths, owner_key.to_string(), stream_mode);
+    // 1. 本轮开始时保留可编辑输入框，供 Tab 入队
+    runtime.begin_stream_composer(stream_mode)?;
+    // 2. 绑定热切换句柄：Shift+Tab 立即改权限模式
+    runtime.bind_live_mode(agent.live_mode_handle(), agent.session_id());
     // 停止标志在丢弃 chat future 前置位，轮次守卫据此把本轮记为用户中断
     let cancel_flag = agent.cancel_handle();
     let chat = runner.run_submission_with_agent(submission, agent, &mut sink);
     tokio::pin!(chat);
     let mut interrupted = false;
+    let mut exit_requested = false;
     let mut resize_tick = tokio::time::interval(Duration::from_millis(25));
     resize_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     // 流式阶段同样保持 bracketed paste 与键盘增强：否则粘贴多行会被
@@ -180,15 +165,27 @@ pub(super) async fn execute_repl_turn(
     let result: Result<()> = async {
         loop {
             tokio::select! {
-                result = &mut chat => break result.map(|_| ()),
+                result = &mut chat => {
+                    let outcome = result.map(|_| ());
+                    // 轮次结束后排空剩余事件：Completed / Failed / FinalSummary
+                    // 是 sink 最后发出的，不排空就会丢掉收尾渲染
+                    drain_runner_events(&event_rx, runtime)?;
+                    break outcome;
+                }
                 _ = resize_tick.tick() => {
-                    let mut runtime_ref = runtime.borrow_mut();
-                    process_stream_tick(&mut runtime_ref)?;
-                    if process_stream_input(&mut runtime_ref)? {
+                    drain_runner_events(&event_rx, runtime)?;
+                    process_stream_tick(runtime)?;
+                    let action = process_stream_input(runtime, &stream_ctx)?;
+                    if action != StreamInputAction::Continue {
                         // 先置位再跳出：跳出会丢弃 chat future，
-                        // 守卫在析构时读取此标志才能把本轮记成中断而非失败
+                        // 守卫在析构时读取此标志才能把本轮记成中断而非失败。
+                        // 退出同样走中断路径，由主循环收尾后 break；
+                        // 直接 std::process::exit 会跳过终端模式恢复
                         cancel_flag.store(true, std::sync::atomic::Ordering::SeqCst);
                         interrupted = true;
+                        exit_requested = action == StreamInputAction::Exit;
+                        // 中断前也排空：已经产出但还没渲染的输出应当保留
+                        drain_runner_events(&event_rx, runtime)?;
                         break Ok(());
                     }
                 }
@@ -199,10 +196,9 @@ pub(super) async fn execute_repl_turn(
     // 终端模式恢复失败也不能跳过流状态清理，先记录结果最后上报
     let guard_result = stream_terminal_guard.finish(&mut io::stdout());
     let leftover_draft = {
-        let mut rt = runtime.borrow_mut();
-        rt.clear_live_mode();
-        rt.finish_stream()?;
-        let draft = rt.stream_draft().text.trim().to_string();
+        runtime.clear_live_mode();
+        runtime.finish_stream()?;
+        let draft = runtime.stream_draft().text.trim().to_string();
         (!draft.is_empty()).then_some(draft)
     };
     guard_result?;
@@ -219,7 +215,69 @@ pub(super) async fn execute_repl_turn(
         interrupted,
         result,
         leftover_draft,
+        exit_requested,
     })
+}
+
+/// 排空事件通道里积压的轮次事件。
+///
+/// 参数:
+/// - `rx`: 事件接收端
+/// - `runtime`: REPL 运行期
+///
+/// 返回:
+/// - 处理结果
+fn drain_runner_events(
+    rx: &std::sync::mpsc::Receiver<crate::runner::RunnerEvent>,
+    runtime: &mut ReplRuntime,
+) -> Result<()> {
+    while let Ok(event) = rx.try_recv() {
+        handle_turn_event(event, runtime)?;
+    }
+    Ok(())
+}
+
+/// 处理单个轮次事件。
+///
+/// 交互式事件（权限、提问、SSH 秘密）在这里弹窗，而不是在 sink 内部——
+/// 三类答复都经 `request.id` 关联的全局状态回传（`decide_permission` /
+/// `resolve_question` / `submit_secret`），因此弹窗发生在哪一侧都能送达，
+/// Agent 只管 await 自己的一次性通道。
+///
+/// 参数:
+/// - `event`: 轮次事件
+/// - `runtime`: REPL 运行期
+///
+/// 返回:
+/// - 处理结果
+fn handle_turn_event(event: crate::runner::RunnerEvent, runtime: &mut ReplRuntime) -> Result<()> {
+    if let crate::runner::RunnerEvent::Agent(AgentEvent::PermissionRequested(request)) = &event {
+        // 1. 先清掉 working 动效，再挂权限控件，避免最后一行重叠
+        runtime.pause_for_permission_prompt()?;
+        runtime.record_permission_request(request.clone())?;
+        prompt_permission_request_tui(request, runtime)?;
+        restore_stream_terminal_modes()?;
+    } else if let crate::runner::RunnerEvent::Agent(AgentEvent::QuestionRequested(pending)) = &event
+    {
+        prompt_question_request_tui(pending, runtime)?;
+        restore_stream_terminal_modes()?;
+    } else if let crate::runner::RunnerEvent::Agent(
+        AgentEvent::ToolProgress { message, .. }
+        | AgentEvent::ToolProgressIdentified { message, .. },
+    ) = &event
+    {
+        // SSH 秘密交互标记：弹出安全输入界面，标记本身不进入 transcript，
+        // 否则口令会落进历史区
+        if crate::ssh::is_secret_marker(message) {
+            if let Some(request) = crate::ssh::decode_progress_marker(message) {
+                runtime.pause_for_permission_prompt()?;
+                prompt_ssh_secret_request_tui(&request, runtime)?;
+                restore_stream_terminal_modes()?;
+            }
+            return Ok(());
+        }
+    }
+    runtime.record_runner_event(&event)
 }
 
 #[cfg(test)]

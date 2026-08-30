@@ -3,6 +3,7 @@ mod bottom_panel;
 mod composer;
 mod composer_frame;
 mod event_loop;
+mod follow;
 mod history;
 mod history_insert;
 mod history_replay;
@@ -17,6 +18,7 @@ mod runner_events;
 mod shell_hint_panel;
 mod slash_panel;
 mod stream;
+mod stream_commands;
 mod viewport;
 
 pub(in crate::cli) use queue_panel::QueuePanelIdleResult;
@@ -33,6 +35,7 @@ use crate::render::terminal_frame::TerminalFrame;
 use crate::render::terminal_paint::paint_lock;
 use crate::render::transcript::{TranscriptRenderOptions, TranscriptStore, WelcomeCell};
 use crate::state::{SessionTimelineCompaction, SessionTimelineTurn};
+use crate::web::runs::WebEvent;
 use anyhow::Result;
 use crossterm::event::Event;
 use std::collections::VecDeque;
@@ -89,10 +92,16 @@ pub(super) struct ReplRuntime {
     panels_dismissed: Option<(String, usize)>,
     /// 沉底 todo 是否单行模式（Ctrl+T 切换）
     todo_panel_compact: bool,
+    /// 当前是否有模型轮次在跑；斜杠面板据此置灰打断类命令
+    stream_active: bool,
     /// 当前轮已完成请求的实时用量，轮次结束后清空
     live_usage: live_usage::LiveTurnUsage,
     /// 当前帧的终端输出缓冲：整帧攒齐后一次提交
     frame: TerminalFrame,
+    /// 跟随模式（本进程是会话观察者）下持有者下行事件的接收端
+    follow_events: Option<tokio::sync::mpsc::UnboundedReceiver<WebEvent>>,
+    /// 跟随模式下尚未落进 transcript 的远端正文
+    follow_buffer: follow::FollowBuffer,
 }
 
 /// 运行期间底部输入框草稿。
@@ -154,8 +163,11 @@ impl ReplRuntime {
             mention_skills: Vec::new(),
             panels_dismissed: None,
             todo_panel_compact: true,
+            stream_active: false,
             live_usage: live_usage::LiveTurnUsage::default(),
             frame: TerminalFrame::new(),
+            follow_events: None,
+            follow_buffer: follow::FollowBuffer::default(),
         }
     }
 
@@ -525,6 +537,8 @@ impl ReplRuntime {
     pub(super) fn finish_stream(&mut self) -> Result<()> {
         self.next_live_refresh = None;
         self.live_sync_pending = false;
+        // 轮次结束：斜杠面板恢复全部命令可选
+        self.stream_active = false;
         self.transcript.finalize_live_tail();
         self.transcript.clear_work_status();
         if self.reflow.take_stream_finish_reflow_needed() {
@@ -663,6 +677,8 @@ impl ReplRuntime {
     pub(super) fn process_idle_tick(&mut self) -> Result<bool> {
         let reflowed = self.maybe_reflow_due(false)?;
         let subagents = self.tick_subagents()?;
+        // 观察者模式下主循环卡在读键上，远端事件只能借空闲节拍落地
+        let followed = self.drain_follow_events()?;
         // 停留在运行中的子智能体视图，或后台仍有子智能体运行（底部面板
         // 的流光与实时统计）时，空闲期也要驱动 live 刷新
         if self.next_live_refresh.is_none()
@@ -672,7 +688,7 @@ impl ReplRuntime {
             self.next_live_refresh = Some(Instant::now());
         }
         let animated = self.tick_live()?;
-        Ok(reflowed || subagents || animated)
+        Ok(reflowed || subagents || followed || animated)
     }
 
     /// 记录终端尺寸变化并安排 resize reflow。
@@ -879,3 +895,4 @@ impl ReplRuntime {
 }
 
 pub(super) use event_loop::{process_stream_input, process_stream_tick};
+pub(super) use stream_commands::{StreamCommandContext, StreamInputAction};

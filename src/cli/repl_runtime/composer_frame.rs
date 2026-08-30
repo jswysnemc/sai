@@ -57,6 +57,8 @@ pub(super) struct ComposerFrame {
     /// 面板完全由输入内容推导，没有独立开关；Esc 收起后必须记住状态，
     /// 否则下一次重绘会立刻把面板再画回来
     panels_dismissed: bool,
+    /// 模型是否正在运行；为 true 时斜杠面板把打断类命令置灰
+    streaming: bool,
 }
 
 impl ComposerFrame {
@@ -90,7 +92,19 @@ impl ComposerFrame {
             mention_skills: Vec::new(),
             panel_lines: Vec::new(),
             panels_dismissed: false,
+            streaming: false,
         }
+    }
+
+    /// 设置模型是否正在运行。
+    ///
+    /// 参数:
+    /// - `streaming`: 运行中为 true，斜杠面板据此置灰打断类命令
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn set_streaming(&mut self, streaming: bool) {
+        self.streaming = streaming;
     }
 
     /// 设置是否已用 Esc 收起补全面板。
@@ -385,9 +399,9 @@ impl ComposerFrame {
             )
         };
         let slash_panel = if self.panels_dismissed || mention_panel.is_visible() {
-            SlashPanel::new("", 0)
+            SlashPanel::new("", 0, self.streaming)
         } else {
-            SlashPanel::new(&self.input, self.slash_selection)
+            SlashPanel::new(&self.input, self.slash_selection, self.streaming)
         };
         let shell_hint =
             ShellHintPanel::new(&self.input, &self.chrome.model, &self.chrome.directory);

@@ -4,7 +4,7 @@ use super::{QueuedSubmission, ReplRuntime, StreamComposerDraft};
 use crate::agent::AgentMode;
 use crate::cli::repl_chrome::ReplChrome;
 use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
-use crate::cli::repl_commands::is_control_command_text;
+use crate::cli::repl_commands::is_stream_command_text;
 use anyhow::Result;
 
 impl ReplRuntime {
@@ -40,6 +40,9 @@ impl ReplRuntime {
         );
         frame.set_mention_skills(self.mention_skills.clone());
         frame.set_panel_lines(self.bottom_panel_lines(usize::from(size.cols)));
+        // 运行期间置灰打断类命令：排队会让用户不知道命令何时才执行，
+        // 而提示"本轮结束后可用"至少是可预期的
+        frame.set_streaming(self.stream_active);
         // 收起只对收起那一刻的输入生效：继续打字或移动光标就恢复候选，
         // 否则用户按一次 Esc 后整段输入过程中再也看不到补全
         let still_dismissed = self
@@ -281,8 +284,9 @@ impl ReplRuntime {
         }
         let mode = self.stream_draft.mode.unwrap_or(fallback_mode);
         // 斜杠命令与 shell 不是聊天正文：进控制队列等本轮结束后由主循环执行。
-        // 混进消息队列会被当成提问发给模型，且会连带丢弃其后的排队消息
-        if is_control_command_text(&text) {
+        // 混进消息队列会被当成提问发给模型，且会连带丢弃其后的排队消息。
+        // 立即执行与退出命令已在 handle_stream_key 层拦截，这里只收置灰命令
+        if is_stream_command_text(&text) {
             self.control_queue.push_back(text);
             self.stream_draft = StreamComposerDraft {
                 mode: Some(mode),
@@ -403,6 +407,7 @@ impl ReplRuntime {
             mode: Some(mode),
             ..StreamComposerDraft::default()
         };
+        self.stream_active = true;
         self.redraw_stream_composer()
     }
 

@@ -339,7 +339,7 @@ pub(super) fn read_repl_input(
                             slash_selection = 0;
                             history_clean_index = None;
                         } else if input.starts_with('/') {
-                            if let Some(completed) = complete_repl_command(&input) {
+                            if let Some(completed) = complete_repl_command(&input, false) {
                                 input = completed.to_string();
                                 cursor = input.chars().count();
                                 history_clean_index = None;
@@ -356,7 +356,7 @@ pub(super) fn read_repl_input(
                         let panel_open =
                             !active_mention_suggestions(&input, cursor, runtime.mention_skills())
                                 .is_empty()
-                                || !visible_repl_command_suggestions(&input).is_empty();
+                                || !visible_repl_command_suggestions(&input, false).is_empty();
                         if panel_open && !runtime.composer_panels_dismissed() {
                             runtime.dismiss_composer_panels(&input, cursor);
                             last_escape = None;
@@ -448,7 +448,7 @@ pub(super) fn read_repl_input(
                                 .unwrap_or(mentions.len().saturating_sub(1));
                             redraw_input!()?;
                         } else {
-                            let suggestions = visible_repl_command_suggestions(&input);
+                            let suggestions = visible_repl_command_suggestions(&input, false);
                             if !suggestions.is_empty() {
                                 slash_selection = (slash_selection % suggestions.len())
                                     .checked_sub(1)
@@ -492,7 +492,7 @@ pub(super) fn read_repl_input(
                         if !mentions.is_empty() {
                             slash_selection = (slash_selection + 1) % mentions.len();
                         } else {
-                            let suggestions = visible_repl_command_suggestions(&input);
+                            let suggestions = visible_repl_command_suggestions(&input, false);
                             if !suggestions.is_empty() {
                                 slash_selection = (slash_selection + 1) % suggestions.len();
                             } else {
@@ -573,7 +573,7 @@ pub(super) fn read_repl_input(
                             redraw_input!()?;
                             continue;
                         }
-                        let suggestions = visible_repl_command_suggestions(&input);
+                        let suggestions = visible_repl_command_suggestions(&input, false);
                         if let Some(selected) = suggestions
                             .get(slash_selection.min(suggestions.len().saturating_sub(1)))
                         {

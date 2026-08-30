@@ -14,6 +14,11 @@ const COL_GAP: &str = "  ";
 const RUNNING_GUIDE: (u8, u8, u8) = (204, 167, 0);
 /// 待命引导点色相
 const IDLE_GUIDE: (u8, u8, u8) = (97, 175, 239);
+/// 非焦点态铺开的条目上限
+///
+/// 底栏与 todo、消息队列共用纵向空间，全部铺开会挤掉输入框；
+/// 超出的部分折叠成一行计数，↓ 进入焦点态可看全量
+const INACTIVE_ENTRY_LIMIT: usize = 5;
 
 /// 底部主/子 agent 切换面板的交互状态。
 #[derive(Default)]
@@ -141,15 +146,32 @@ impl AgentPanelState {
         let header_left = header_left_plain(total_tokens);
         let col_width = token_column_width(entries, &header_left);
         if !self.active {
-            // 非焦点态：左栏合计 tokens（运行中扫光），右栏标题；↓ 进入切换
+            // 非焦点态同样铺开列表：并行多个子 agent 时，只有一行合计看不出
+            // 各自跑到哪一步、各自消耗了多少，而这正是并发时最需要的信息
             let left = render_header_left(total_tokens, running, entries, col_width, frame);
-            return vec![format!(
+            let mut lines = vec![format!(
                 "    {left}{COL_GAP}\x1b[2m{}: {} ({}) · ↓ {}\x1b[0m",
                 t("agents", "智能体"),
                 entries.len(),
                 format!("{running} {}", t("running", "运行中")),
                 t("switch", "切换")
             )];
+            for entry in entries.iter().take(INACTIVE_ENTRY_LIMIT) {
+                lines.push(selection_line(
+                    false,
+                    &render_entry_left(entry, col_width, frame),
+                    &render_entry_title(entry),
+                ));
+            }
+            let hidden = entries.len().saturating_sub(INACTIVE_ENTRY_LIMIT);
+            if hidden > 0 {
+                lines.push(format!(
+                    "    {}{COL_GAP}\x1b[2m… +{hidden} {}\x1b[0m",
+                    pad_left("", col_width),
+                    t("more", "条")
+                ));
+            }
+            return lines;
         }
         let header_left_cell = render_header_left(total_tokens, running, entries, col_width, frame);
         let mut lines = vec![format!(
@@ -582,13 +604,38 @@ mod tests {
         assert!(!panel.is_active());
     }
 
+    /// 非焦点态也铺开条目：并行多个子 agent 时，只有一行合计看不出
+    /// 各自的状态与用量。
     #[test]
-    fn hint_line_appears_when_inactive() {
+    fn inactive_panel_lists_subagents() {
         let panel = AgentPanelState::default();
-        let entries = vec![entry(2, "one", true)];
+        let entries = vec![entry(2, "one", true), entry(5, "two", false)];
         let lines = panel.panel_lines(&entries, 0);
-        assert_eq!(lines.len(), 1);
+        // 表头 + 每个条目一行
+        assert_eq!(lines.len(), 3);
         assert!(lines[0].contains('↓'));
+        let plain = crate::render::activity_animation::strip_ansi_for_test(&lines[1..].join("\n"));
+        assert!(plain.contains("one"), "{plain}");
+        assert!(plain.contains("two"), "{plain}");
+    }
+
+    /// 非焦点态的列表有上限，超出折叠成一行计数。
+    #[test]
+    fn inactive_panel_caps_the_list() {
+        let panel = AgentPanelState::default();
+        let entries: Vec<SubagentOverviewEntry> = (0..INACTIVE_ENTRY_LIMIT + 3)
+            .map(|index| entry(index, &format!("任务{index}"), true))
+            .collect();
+        let lines = panel.panel_lines(&entries, 0);
+        // 表头 + 上限条目 + 一行折叠计数
+        assert_eq!(lines.len(), INACTIVE_ENTRY_LIMIT + 2);
+        assert!(
+            lines
+                .last()
+                .is_some_and(|line| line.contains(&format!("+{}", 3))),
+            "excess entries should collapse into a count: {:?}",
+            lines.last()
+        );
     }
 
     #[test]

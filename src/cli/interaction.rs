@@ -143,7 +143,7 @@ pub(super) fn prompt_permission_request(
 /// - 权限决定提交结果
 pub(super) fn prompt_permission_request_tui(
     request: &crate::permission::PermissionRequest,
-    runtime: &std::cell::RefCell<&mut ReplRuntime>,
+    runtime: &mut ReplRuntime,
 ) -> Result<()> {
     use crate::permission::{PermissionInteractionState, PermissionTransition};
 
@@ -151,12 +151,9 @@ pub(super) fn prompt_permission_request_tui(
     let mut stdout = io::stdout();
     // 1. 独占 raw 输入，避免与主循环输入框事件竞争
     let mut terminal_guard = terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
-    // 2. 选择项附着在工具视图下方（working 动效已在 sink 入口暂停）
-    {
-        let mut rt = runtime.borrow_mut();
-        rt.update_permission_choice(&request.id, state.selected())?;
-        rt.update_permission_reply(&request.id, state.reply_draft().map(str::to_string))?;
-    }
+    // 2. 选择项附着在工具视图下方（working 动效已在事件消费侧暂停）
+    runtime.update_permission_choice(&request.id, state.selected())?;
+    runtime.update_permission_reply(&request.id, state.reply_draft().map(str::to_string))?;
 
     let result = (|| -> Result<()> {
         loop {
@@ -179,10 +176,9 @@ pub(super) fn prompt_permission_request_tui(
                 );
             }
             if let Event::Resize(cols, rows) = event {
-                let mut rt = runtime.borrow_mut();
-                rt.observe_input_resize(cols, rows);
-                rt.update_permission_choice(&request.id, state.selected())?;
-                rt.update_permission_reply(&request.id, state.reply_draft().map(str::to_string))?;
+                runtime.observe_input_resize(cols, rows);
+                runtime.update_permission_choice(&request.id, state.selected())?;
+                runtime.update_permission_reply(&request.id, state.reply_draft().map(str::to_string))?;
                 continue;
             }
             // Shift+Tab / BackTab：立即切到 YOLO 并放行当前会话全部待审
@@ -192,16 +188,13 @@ pub(super) fn prompt_permission_request_tui(
                         || (matches!(key.code, KeyCode::Tab)
                             && key.modifiers.contains(KeyModifiers::SHIFT));
                     if shift_tab {
-                        {
-                            let mut rt = runtime.borrow_mut();
-                            rt.stream_draft_mut().mode = Some(crate::agent::AgentMode::Yolo);
-                            let _ = rt.apply_stream_mode_live(crate::agent::AgentMode::Yolo);
-                        }
+                        runtime.stream_draft_mut().mode = Some(crate::agent::AgentMode::Yolo);
+                        let _ = runtime.apply_stream_mode_live(crate::agent::AgentMode::Yolo);
                         let _ =
                             crate::permission::allow_all_pending_for_session(&request.session_id);
                         // 切 YOLO + 放行全部待审的影响面覆盖本会话后续所有调用，
                         // 落一条可见记录，否则用户不知道之后为何不再弹确认
-                        runtime.borrow_mut().record_meta(t(
+                        runtime.record_meta(t(
                             "Shift+Tab: switched to YOLO and allowed all pending requests in this session.",
                             "Shift+Tab：已切换为 YOLO，并放行本会话全部待审请求。",
                         ).to_string())?;
@@ -211,9 +204,8 @@ pub(super) fn prompt_permission_request_tui(
             }
             match state.handle_event(event) {
                 PermissionTransition::Continue => {
-                    let mut rt = runtime.borrow_mut();
-                    rt.update_permission_choice(&request.id, state.selected())?;
-                    rt.update_permission_reply(
+                    runtime.update_permission_choice(&request.id, state.selected())?;
+                    runtime.update_permission_reply(
                         &request.id,
                         state.reply_draft().map(str::to_string),
                     )?;
@@ -256,22 +248,19 @@ fn prompt_question_request(pending: &crate::question::PendingQuestion) -> Result
 /// - 是否成功提交回答
 pub(super) fn prompt_question_request_tui(
     pending: &crate::question::PendingQuestion,
-    runtime: &std::cell::RefCell<&mut ReplRuntime>,
+    runtime: &mut ReplRuntime,
 ) -> Result<()> {
     let mut stdout = io::stdout();
     // 1. 独占 raw 输入，避免与主循环输入框事件竞争
     let mut terminal_guard = terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
-    {
-        let mut rt = runtime.borrow_mut();
-        rt.pause_for_permission_prompt()?;
-    }
+    runtime.pause_for_permission_prompt()?;
 
     let response = crate::question_tui::ask(&pending.request)
         .unwrap_or_else(|err| crate::question::QuestionResponse::Unavailable(err.to_string()));
 
     // 2. 恢复终端模式；提问面板直接写过终端，受管区域需要在下次同步前重启
     let _ = terminal_guard.finish(&mut stdout);
-    runtime.borrow_mut().mark_desynced();
+    runtime.mark_desynced();
     crate::question::resolve_question(&pending.id, response)
 }
 
@@ -288,20 +277,17 @@ pub(super) fn prompt_question_request_tui(
 /// - 应答提交结果
 pub(super) fn prompt_ssh_secret_request_tui(
     request: &crate::ssh::SecretRequest,
-    runtime: &std::cell::RefCell<&mut ReplRuntime>,
+    runtime: &mut ReplRuntime,
 ) -> Result<()> {
     let mut stdout = io::stdout();
     // 1. 独占 raw 输入，避免与主循环输入框事件竞争
     let mut terminal_guard = terminal_restore::TerminalInputGuard::enable(&mut stdout, true)?;
-    {
-        let mut rt = runtime.borrow_mut();
-        rt.pause_for_permission_prompt()?;
-    }
+    runtime.pause_for_permission_prompt()?;
     let response = read_ssh_secret_response(&mut stdout, request)
         .unwrap_or(crate::ssh::SecretResponse::Cancelled);
     // 2. 恢复终端模式；安全输入直接写过终端，受管区域需在下次同步前重启
     let _ = terminal_guard.finish(&mut stdout);
-    runtime.borrow_mut().mark_desynced();
+    runtime.mark_desynced();
     // 仅在仍等待时提交，避免与后端超时竞态
     if crate::ssh::is_pending(&request.id) {
         let _ = crate::ssh::submit_secret(&request.id, response);

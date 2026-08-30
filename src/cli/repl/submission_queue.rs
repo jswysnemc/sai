@@ -51,23 +51,25 @@ pub(super) fn take_stream_draft_prefill(
 /// - `config`: 应用配置
 /// - `agent`: 复用 Agent
 /// - `runtime`: TUI 运行期
+/// - `owner_key`: 当前会话的子智能体作用域键
 /// - `mode`: 当前模式
 /// - `input_history`: 输入历史
 /// - `reasoning_mode`: 推理显示模式
 /// - `tool_call_mode`: 工具显示模式
 ///
 /// 返回:
-/// - 队列执行结果
+/// - 队列执行结果，以及是否收到退出请求
 pub(super) async fn drain_submission_queue(
     paths: &SaiPaths,
     config: &AppConfig,
     agent: &mut Agent,
     runtime: &mut ReplRuntime,
+    owner_key: &str,
     mode: &mut AgentMode,
     input_history: &mut Vec<String>,
     reasoning_mode: render::ReasoningDisplayMode,
     tool_call_mode: render::ToolCallDisplayMode,
-) -> Result<()> {
+) -> Result<bool> {
     loop {
         let queued = runtime.take_submission_queue();
         if queued.is_empty() {
@@ -87,7 +89,7 @@ pub(super) async fn drain_submission_queue(
                 ).to_string())?;
                 restore_leftover_draft(runtime, Some(text));
                 discard_remaining_queue(runtime, pending)?;
-                return Ok(());
+                return Ok(false);
             }
             // 剪贴板附件在此还原：图片与长文本占位块换回真实内容
             let (echo_text, fold_echo) = item.clipboard.echo_text_for_submit(&text);
@@ -118,8 +120,13 @@ pub(super) async fn drain_submission_queue(
                 false,
             );
             let outcome =
-                execute_repl_turn(paths, config, agent, runtime, runner_submission).await?;
+                execute_repl_turn(paths, config, agent, runtime, owner_key, runner_submission)
+                    .await?;
             apply_stream_mode(runtime, mode);
+            if outcome.exit_requested {
+                discard_remaining_queue(runtime, pending)?;
+                return Ok(true);
+            }
             if outcome.interrupted || outcome.result.is_err() {
                 if let Err(error) = outcome.result {
                     runtime.record_meta(if outcome.interrupted {
@@ -130,14 +137,14 @@ pub(super) async fn drain_submission_queue(
                 }
                 restore_leftover_draft(runtime, outcome.leftover_draft);
                 discard_remaining_queue(runtime, pending)?;
-                return Ok(());
+                return Ok(false);
             }
             // 半截草稿只回填输入框等待用户提交，不再作为正式消息自动发送
             restore_leftover_draft(runtime, outcome.leftover_draft);
             // 本轮执行中新入队的项目由外层循环继续处理
         }
     }
-    Ok(())
+    Ok(false)
 }
 
 /// 判断排队文本是否为需要主循环执行的斜杠命令或 shell。
@@ -151,16 +158,9 @@ pub(super) async fn drain_submission_queue(
 /// 返回:
 /// - 需要交还输入框时返回 true
 fn is_queued_control_command(text: &str) -> bool {
-    if text.starts_with('!') {
-        return true;
-    }
-    matches!(
-        crate::control_commands::parse_control_command(
-            text,
-            crate::control_commands::ControlSurface::Repl,
-        ),
-        Ok(Some(_))
-    ) || super::super::repl_commands::is_repl_exit_command(text)
+    // 复用同一套判定：主循环单独分发的 /plan、/ps 等命令也要拦住，
+    // 否则会从队列里被当成聊天正文发给模型
+    super::super::repl_commands::is_stream_command_text(text)
 }
 
 /// 丢弃中断或失败后剩余的排队项，并向用户说明数量。

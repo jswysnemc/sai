@@ -20,6 +20,101 @@ pub(super) fn is_repl_exit_command(input: &str) -> bool {
         || input.eq_ignore_ascii_case("/exit")
 }
 
+/// 模型运行期间斜杠命令的执行策略。
+///
+/// 运行期间 `&mut Agent` 被轮次独占，交互选择器也会占住事件循环，
+/// 因此按是否触碰这两者把命令分为立即执行、置灰与立即退出三档。
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::cli) enum StreamCommandPolicy {
+    /// 不触碰 Agent 状态、不弹交互选择器，可在本轮流式期间同步执行
+    Immediate,
+    /// 需要 `&mut Agent`、交互选择器或 `.await`，只能等本轮结束后执行
+    Disabled,
+    /// 退出 REPL，无需等待本轮结束
+    Exit,
+    /// 不是控制命令，按普通消息处理
+    NotCommand,
+}
+
+/// `parse_control_command` 未覆盖、由主循环用字符串比较单独分发的命令。
+///
+/// 判定控制命令时必须单独覆盖它们，否则运行期间输入 `/plan` 之类会被
+/// 解析器判为普通文本，混进消息队列当成提问发给模型。
+const EXTRA_REPL_COMMANDS: &[&str] = &[
+    "/plan",
+    "/audit",
+    "/yolo",
+    "/auto",
+    "/auto-audit",
+    "/providers",
+    "/config",
+    "/undo",
+    "/thinking",
+    "/ps",
+];
+
+/// 其中只切换权限模式的命令：等价于 Shift+Tab 热切换，可立即生效。
+const STREAM_IMMEDIATE_EXTRA_COMMANDS: &[&str] =
+    &["/plan", "/audit", "/yolo", "/auto", "/auto-audit"];
+
+/// 判断输入在模型运行期间的执行策略。
+///
+/// 参数:
+/// - `input`: 已输入或提交的原始文本
+///
+/// 返回:
+/// - 立即执行 / 置灰 / 立即退出 / 非控制命令
+pub(in crate::cli) fn stream_command_policy(input: &str) -> StreamCommandPolicy {
+    let input = input.trim();
+    if input.is_empty() {
+        return StreamCommandPolicy::NotCommand;
+    }
+    if is_repl_exit_command(input) {
+        return StreamCommandPolicy::Exit;
+    }
+    if input.starts_with('!') {
+        // shell 命令要 await 子进程，同步路径下无法执行
+        return StreamCommandPolicy::Disabled;
+    }
+    if let Some(policy) = extra_stream_command_policy(input) {
+        return policy;
+    }
+    match crate::control_commands::parse_control_command(
+        input,
+        crate::control_commands::ControlSurface::Repl,
+    ) {
+        // 只读查询：自建 StateStore 或读子智能体目录，不触碰 Agent
+        Ok(Some(
+            crate::control_commands::ControlCommand::Help
+            | crate::control_commands::ControlCommand::Context { .. }
+            | crate::control_commands::ControlCommand::Subagents
+            | crate::control_commands::ControlCommand::SubagentMessage { .. },
+        )) => StreamCommandPolicy::Immediate,
+        Ok(Some(_)) => StreamCommandPolicy::Disabled,
+        _ => StreamCommandPolicy::NotCommand,
+    }
+}
+
+/// 判断主循环单独分发的命令的执行策略。
+///
+/// 参数:
+/// - `input`: 已去除首尾空白的输入
+///
+/// 返回:
+/// - 命中这类命令时返回其策略；否则为空
+fn extra_stream_command_policy(input: &str) -> Option<StreamCommandPolicy> {
+    for &command in EXTRA_REPL_COMMANDS {
+        if repl_command_rest(input, command).is_some() {
+            return Some(if STREAM_IMMEDIATE_EXTRA_COMMANDS.contains(&command) {
+                StreamCommandPolicy::Immediate
+            } else {
+                StreamCommandPolicy::Disabled
+            });
+        }
+    }
+    None
+}
+
 /// 判断输入是否需要主循环以控制命令方式执行。
 ///
 /// 斜杠命令、shell 前缀与退出命令都无法作为聊天正文发给模型，
@@ -30,32 +125,38 @@ pub(super) fn is_repl_exit_command(input: &str) -> bool {
 ///
 /// 返回:
 /// - 需要交主循环分发时返回 true
-pub(in crate::cli) fn is_control_command_text(input: &str) -> bool {
-    let input = input.trim();
-    if input.is_empty() {
-        return false;
+pub(in crate::cli) fn is_stream_command_text(input: &str) -> bool {
+    !matches!(stream_command_policy(input), StreamCommandPolicy::NotCommand)
+}
+
+/// 生成运行期间命中置灰命令的提示文本。
+///
+/// 参数:
+/// - `input`: 被拒绝的命令原文
+///
+/// 返回:
+/// - 说明该命令需等本轮结束的提示
+pub(super) fn stream_command_disabled_hint(input: &str) -> String {
+    let name = input.trim().split_whitespace().next().unwrap_or_default();
+    if crate::i18n::is_zh() {
+        format!("{name} 需等本轮结束后执行；已保留在输入框，本轮结束后按 Enter 即可")
+    } else {
+        format!("{name} runs after this turn; kept in the input box — press Enter once it finishes")
     }
-    if input.starts_with('!') {
-        return true;
-    }
-    is_repl_exit_command(input)
-        || matches!(
-            crate::control_commands::parse_control_command(
-                input,
-                crate::control_commands::ControlSurface::Repl,
-            ),
-            Ok(Some(_))
-        )
 }
 
 /// 根据当前输入生成斜杠菜单补全建议。
 ///
 /// 参数:
 /// - `input`: 当前输入内容
+/// - `streaming`: 模型是否正在运行；为 true 时把打断类命令标记为禁用
 ///
 /// 返回:
 /// - 可补全的斜杠菜单
-pub(super) fn repl_command_suggestions(input: &str) -> Vec<ReplCommandSuggestion> {
+pub(super) fn repl_command_suggestions(
+    input: &str,
+    streaming: bool,
+) -> Vec<ReplCommandSuggestion> {
     if !input.starts_with('/') {
         return Vec::new();
     }
@@ -68,6 +169,11 @@ pub(super) fn repl_command_suggestions(input: &str) -> Vec<ReplCommandSuggestion
         .map(|command| ReplCommandSuggestion {
             command,
             description: command_description(command),
+            disabled: streaming
+                && matches!(
+                    stream_command_policy(command),
+                    StreamCommandPolicy::Disabled
+                ),
         })
         .collect()
 }
@@ -108,11 +214,15 @@ pub(super) fn unknown_slash_command_hint(input: &str, external_engine: bool) -> 
 ///
 /// 参数:
 /// - `input`: 当前输入内容
+/// - `streaming`: 模型是否正在运行
 ///
 /// 返回:
 /// - 不超过面板容量的补全建议
-pub(super) fn visible_repl_command_suggestions(input: &str) -> Vec<ReplCommandSuggestion> {
-    repl_command_suggestions(input)
+pub(super) fn visible_repl_command_suggestions(
+    input: &str,
+    streaming: bool,
+) -> Vec<ReplCommandSuggestion> {
+    repl_command_suggestions(input, streaming)
         .into_iter()
         .take(MAX_REPL_COMMAND_SUGGESTIONS)
         .collect()
@@ -122,11 +232,15 @@ pub(super) fn visible_repl_command_suggestions(input: &str) -> Vec<ReplCommandSu
 ///
 /// 参数:
 /// - `input`: 当前输入内容
+/// - `streaming`: 模型是否正在运行；为 true 时不补全置灰命令
 ///
 /// 返回:
 /// - 唯一补全结果
-pub(super) fn complete_repl_command(input: &str) -> Option<&'static str> {
-    let suggestions = repl_command_suggestions(input);
+pub(super) fn complete_repl_command(input: &str, streaming: bool) -> Option<&'static str> {
+    let suggestions: Vec<ReplCommandSuggestion> = repl_command_suggestions(input, streaming)
+        .into_iter()
+        .filter(|suggestion| !suggestion.disabled)
+        .collect();
     if suggestions.len() == 1 {
         suggestions.first().map(|suggestion| suggestion.command)
     } else {
@@ -144,6 +258,7 @@ pub(super) fn complete_repl_command(input: &str) -> Option<&'static str> {
 fn command_description(command: &str) -> &'static str {
     match command {
         "/help" => "show available commands",
+        "/context" => "show context usage and compaction policy",
         "/new" => "start a new session",
         "/resume" => "resume or switch sessions",
         "/compact" => "compact older conversation history",
@@ -264,12 +379,12 @@ mod tests {
 
     #[test]
     fn ps_command_completes_background_manager() {
-        assert_eq!(complete_repl_command("/ps"), Some("/ps"));
+        assert_eq!(complete_repl_command("/ps", false), Some("/ps"));
     }
 
     #[test]
     fn suggestions_include_command_descriptions() {
-        let suggestions = repl_command_suggestions("/mo");
+        let suggestions = repl_command_suggestions("/mo", false);
 
         assert_eq!(suggestions.len(), 1);
         assert_eq!(suggestions[0].command, "/model");
@@ -278,19 +393,128 @@ mod tests {
 
     #[test]
     fn visible_suggestions_match_panel_capacity() {
-        let suggestions = visible_repl_command_suggestions("/");
+        let suggestions = visible_repl_command_suggestions("/", false);
 
         assert_eq!(suggestions.len(), MAX_REPL_COMMAND_SUGGESTIONS);
-        assert!(repl_command_suggestions("/").len() > suggestions.len());
+        assert!(repl_command_suggestions("/", false).len() > suggestions.len());
     }
 
     #[test]
     fn command_descriptions_are_always_english() {
-        let suggestions = visible_repl_command_suggestions("/");
+        let suggestions = visible_repl_command_suggestions("/", false);
 
         assert!(suggestions
             .iter()
             .all(|suggestion| suggestion.description.is_ascii()));
+    }
+
+    /// 只读查询命令在模型运行期间立即执行，不必等本轮结束。
+    #[test]
+    fn read_only_commands_run_immediately() {
+        for command in ["/context", "/subagents", "/help"] {
+            assert_eq!(
+                stream_command_policy(command),
+                StreamCommandPolicy::Immediate,
+                "{command} should run immediately"
+            );
+        }
+    }
+
+    /// 权限模式切换等价于 Shift+Tab 热切换，运行期间同样立即生效。
+    #[test]
+    fn mode_switch_commands_run_immediately() {
+        for command in ["/plan", "/audit", "/yolo", "/auto", "/auto-audit"] {
+            assert_eq!(
+                stream_command_policy(command),
+                StreamCommandPolicy::Immediate,
+                "{command} should switch mode immediately"
+            );
+        }
+    }
+
+    /// 需要 Agent 状态或交互选择器的命令运行期间置灰。
+    #[test]
+    fn stateful_commands_are_disabled_while_streaming() {
+        for command in [
+            "/new",
+            "/resume",
+            "/compact",
+            "/clear",
+            "/clear memory",
+            "/model",
+            "/agent",
+            "/providers",
+            "/config",
+            "/tree",
+            "/thinking",
+            "/ps",
+            "/undo",
+            "!ls",
+        ] {
+            assert_eq!(
+                stream_command_policy(command),
+                StreamCommandPolicy::Disabled,
+                "{command} should be disabled while streaming"
+            );
+        }
+    }
+
+    /// 退出命令任何时候都立即退出，不等本轮结束。
+    #[test]
+    fn exit_command_exits_immediately() {
+        assert_eq!(stream_command_policy("/exit"), StreamCommandPolicy::Exit);
+        assert_eq!(stream_command_policy("exit"), StreamCommandPolicy::Exit);
+        assert_eq!(stream_command_policy("QUIT"), StreamCommandPolicy::Exit);
+    }
+
+    /// 主循环单独分发的命令也必须判定为控制命令。
+    ///
+    /// 漏判会让它们在运行期间混进消息队列，被当成提问发给模型。
+    #[test]
+    fn extra_commands_are_control_commands() {
+        for command in [
+            "/plan",
+            "/audit",
+            "/yolo",
+            "/auto",
+            "/auto-audit",
+            "/providers",
+            "/config",
+            "/undo",
+            "/thinking high",
+            "/ps",
+        ] {
+            assert!(
+                is_stream_command_text(command),
+                "{command} must be treated as a control command"
+            );
+        }
+    }
+
+    /// 普通消息与未知斜杠输入都不是控制命令。
+    #[test]
+    fn plain_text_is_not_a_control_command() {
+        assert_eq!(
+            stream_command_policy("write a quicksort"),
+            StreamCommandPolicy::NotCommand
+        );
+        assert!(!is_stream_command_text(""));
+        assert!(!is_stream_command_text("/nosuchcommand"));
+    }
+
+    /// 运行期间的补全跳过置灰命令，避免补全到一条不能执行的命令。
+    #[test]
+    fn disabled_commands_are_not_completed_while_streaming() {
+        assert_eq!(complete_repl_command("/ps", false), Some("/ps"));
+        assert_eq!(complete_repl_command("/ps", true), None);
+        assert_eq!(complete_repl_command("/con", true), Some("/context"));
+    }
+
+    /// 置灰命令的提示要带上命令名，让用户知道被拒绝的是哪一条。
+    #[test]
+    fn disabled_hint_names_the_command() {
+        let hint = stream_command_disabled_hint("/model");
+        assert!(hint.contains("/model"), "{hint}");
     }
 }
 /// slash 命令面板中的单条说明。
@@ -298,5 +522,7 @@ mod tests {
 pub(super) struct ReplCommandSuggestion {
     pub(super) command: &'static str,
     pub(super) description: &'static str,
+    /// 模型运行期间是否不可用（需要 Agent 状态或交互选择器）
+    pub(super) disabled: bool,
 }
 pub(super) const MAX_REPL_COMMAND_SUGGESTIONS: usize = 8;
