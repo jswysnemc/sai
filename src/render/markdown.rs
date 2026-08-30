@@ -85,6 +85,38 @@ impl MarkdownStreamRenderer {
         output
     }
 
+    /// 预览尚未闭合的尾部（不推进渲染状态）。
+    ///
+    /// 只在普通段落态下可用：代码块 / 数学块 / SVG / 未确认表格的渲染都会
+    /// 改写行渲染器状态，对同一行重复渲染会破坏它们（例如 ```` ```rust ````
+    /// 会被开关两次）。段落态下渲染是行的纯函数，可以安全预览。
+    ///
+    /// 返回:
+    /// - 尾部的渲染文本（含换行）；处于结构化块中或尾部为空时为 None
+    pub(crate) fn preview_tail(&self) -> Option<String> {
+        if self.line_renderer.in_code_block
+            || self.line_renderer.in_math_block
+            || self.line_renderer.in_svg_block
+            || self.line_renderer.table.is_active()
+        {
+            return None;
+        }
+        let tail = self.buffer.as_str();
+        // 这些前缀一旦补全就会切换状态，不能在预览里按段落渲染
+        if tail.is_empty()
+            || tail.trim_start().starts_with("```")
+            || tail.trim() == "$$"
+            || asset_block::looks_like_svg_start(tail)
+            || table::looks_like_table_row(tail)
+        {
+            return None;
+        }
+        Some(format!(
+            "{}\n",
+            render_markdown_line_with_math_mode(tail, self.line_renderer.inline_math_mode)
+        ))
+    }
+
     /// 刷新剩余 Markdown 缓冲。
     ///
     /// 返回:

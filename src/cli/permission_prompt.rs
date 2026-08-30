@@ -2,10 +2,13 @@ use crate::i18n::text as t;
 use crate::permission::{
     PermissionDecision, PermissionInteractionState, PermissionRequest, PermissionTransition,
 };
-use crate::render::{render_permission_controls, render_permission_title, rendered_visual_rows};
+use crate::render::{
+    render_permission_controls, render_permission_title, rendered_visual_rows, terminal_width,
+};
 use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::style::Print;
 use crossterm::terminal::{Clear, ClearType};
 use crossterm::{execute, queue};
 use std::io::{self, IsTerminal, Write};
@@ -100,7 +103,20 @@ fn read_terminal_decision(request: &PermissionRequest) -> Result<Option<Permissi
                         && key.modifiers.contains(KeyModifiers::SHIFT));
                 if shift_tab {
                     let _ = crate::permission::allow_all_pending_for_session(&request.session_id);
+                    // Shift+Tab 会放行本会话后续所有工具调用，必须留下可见记录，
+                    // 否则用户不知道为什么之后不再弹出确认
                     erase_menu_at(&mut stdout, anchor)?;
+                    queue!(stdout, MoveTo(0, anchor), Clear(ClearType::FromCursorDown))?;
+                    queue!(
+                        stdout,
+                        Print(format!(
+                            "\x1b[33m{}\x1b[0m\r\n",
+                            t(
+                                "Shift+Tab: allowed all pending requests in this session.",
+                                "Shift+Tab：已放行本会话全部待审请求。"
+                            )
+                        ))
+                    )?;
                     execute!(stdout, Show)?;
                     stdout.flush()?;
                     return Ok(None);
@@ -170,7 +186,7 @@ fn menu_rows(request: &PermissionRequest, state: &PermissionInteractionState) ->
             render_permission_controls(state.selected(), state.reply_draft())
         )
     };
-    rendered_visual_rows(&logical)
+    rendered_visual_rows(&logical, terminal_width())
         .max(1)
         .min(usize::from(u16::MAX)) as u16
 }

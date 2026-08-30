@@ -378,3 +378,74 @@ fn empty_full_reasoning_flush_resets_live_rows() {
     assert_eq!(renderer.reasoning_frame, 0);
     assert!(renderer.mode.is_none());
 }
+
+/// 【终端】【流式尾部】验证未换行的尾部也可预览，且随后能被擦掉重画。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn pending_tail_is_previewed_then_cleared_before_the_next_chunk() {
+    let mut renderer = StreamRenderer::new(
+        ReasoningDisplayMode::Full,
+        ToolCallDisplayMode::Summary,
+        false,
+        StreamRenderOptions::default(),
+    );
+    let chunk = |kind: ChatStreamKind, text: &str| crate::llm::ChatStreamChunk {
+        kind,
+        text: text.to_string(),
+    };
+    let content = |text: &str| crate::llm::ChatStreamChunk {
+        kind: ChatStreamKind::Content,
+        text: text.to_string(),
+    };
+
+    // 1. 推入未换行的片段：定稿输出仍为空，但尾部已被画出
+    renderer
+        .write_chunk(chunk(ChatStreamKind::Content, "partial ans"))
+        .unwrap();
+    assert!(
+        renderer.pending_tail_rows > 0,
+        "未换行尾部应当已画出，否则慢速生成时屏幕会长时间不动"
+    );
+
+    // 2. 下一个片段前先擦掉上一帧尾部，行数归零后重画
+    renderer
+        .write_chunk(chunk(ChatStreamKind::Content, "wer\n"))
+        .unwrap();
+    assert!(
+        renderer.pending_tail_rows == 0,
+        "换行后不应再有未定稿尾部残留"
+    );
+}
+
+/// 【终端】【流式尾部】验证预览不会破坏结构化块（代码围栏不能开关两次）。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 无
+#[test]
+fn tail_preview_is_suppressed_inside_code_fences() {
+    let mut renderer = StreamRenderer::new(
+        ReasoningDisplayMode::Full,
+        ToolCallDisplayMode::Summary,
+        false,
+        StreamRenderOptions::default(),
+    );
+    let content = |text: &str| crate::llm::ChatStreamChunk {
+        kind: ChatStreamKind::Content,
+        text: text.to_string(),
+    };
+
+    renderer.write_chunk(content("```rust\n")).unwrap();
+    // 围栏内的内容不该按段落预览，否则状态会被重复推进
+    renderer.write_chunk(content("let x = 1;")).unwrap();
+    assert_eq!(renderer.pending_tail_rows, 0);
+    renderer.write_chunk(content("\n```\n")).unwrap();
+    assert_eq!(renderer.pending_tail_rows, 0);
+}

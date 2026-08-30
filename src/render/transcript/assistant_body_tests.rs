@@ -22,8 +22,9 @@ fn finalized_assistant_body_uses_visual_guide_and_aligned_wraps() {
         .map(|line| strip_ansi_for_test(line.as_str()))
         .collect::<Vec<_>>();
 
-    // 区块前空行 + 两列缩进正文（不再使用与工具相同的 •）
-    assert_eq!(plain, vec!["", "  abcd", "  efgh"]);
+    // 区块前空行 + 两列缩进正文（不再使用与工具相同的 •）。
+    // 续行再内收两列，软换行与真实换行因此可区分
+    assert_eq!(plain, vec!["", "  abcd", "    ef", "    gh"]);
     assert!(plain
         .iter()
         .all(|line| UnicodeWidthStr::width(line.as_str()) <= 6));

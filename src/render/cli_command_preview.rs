@@ -1,6 +1,6 @@
 use super::command_result_block::render_live_command_output_for_cli;
 use super::content_indent::align_to_guide_column;
-use super::streaming_replace::{clear_rendered_rows, rendered_visual_rows};
+use super::streaming_replace::{clear_rendered_rows, rendered_visual_rows, terminal_width};
 use super::work_status::WorkStatus;
 use crate::render::activity_animation::ACTIVITY_FRAME_INTERVAL;
 use crate::render::terminal_paint::paint_lock;
@@ -231,7 +231,7 @@ fn redraw_preview(state: &Arc<Mutex<PreviewState>>) -> Result<bool> {
     let block = format!("{rendered}\n");
     write!(stdout, "{block}")?;
     stdout.flush()?;
-    guard.rendered_rows = rendered_visual_rows(&block);
+    guard.rendered_rows = rendered_visual_rows(&block, terminal_width());
     Ok(true)
 }
 

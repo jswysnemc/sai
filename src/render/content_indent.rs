@@ -282,6 +282,11 @@ pub(crate) fn indent_diff_for_cli(text: &str) -> String {
 /// 该序列保存当前位置，移动到终端右边界，清除指定列数后恢复光标。
 /// 不写入固定宽度空格，因此终端缩放时不会留下碎片色块。
 ///
+/// 位置保存用 DECSC/DECRC（`ESC 7` / `ESC 8`）而不是 SCOSC/SCOR
+///（`CSI s` / `CSI u`）：后者在部分 Windows 终端与复用器配置下被忽略，
+/// 一旦保存/恢复失效，光标就停在右边界，后续输出从错误的列开始，
+/// 整块 diff 向右错位。
+///
 /// 参数:
 /// - `columns`: 需要恢复为终端默认背景的右侧列数
 ///
@@ -292,7 +297,7 @@ pub(crate) fn clear_right_margin(columns: usize) -> String {
         return String::new();
     }
     let move_left = columns.saturating_sub(1);
-    format!("\x1b[s\x1b[999C\x1b[{move_left}D\x1b[{columns}X\x1b[u")
+    format!("\x1b7\x1b[999C\x1b[{move_left}D\x1b[{columns}X\x1b8")
 }
 
 /// 为文本块的每一行增加指定列数的缩进。
@@ -713,12 +718,14 @@ mod tests {
     }
 
     /// 右侧边距序列必须清除目标列数并恢复原光标。
+    ///
+    /// 用 DECSC/DECRC 而非 SCOSC/SCOR：后者在部分终端上被静默忽略。
     #[test]
     fn right_margin_clear_preserves_cursor_position() {
         let sequence = clear_right_margin(3);
-        assert!(sequence.starts_with("\x1b[s"));
+        assert!(sequence.starts_with("\x1b7"));
         assert!(sequence.contains("\x1b[2D\x1b[3X"));
-        assert!(sequence.ends_with("\x1b[u"));
+        assert!(sequence.ends_with("\x1b8"));
     }
 
     /// 【终端】【CLI 布局】验证普通正文右移，引导符号保留在左侧。

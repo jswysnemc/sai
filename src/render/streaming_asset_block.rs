@@ -1,4 +1,4 @@
-use crate::render::content_indent::align_to_guide_column;
+use crate::render::content_indent::cli_content_width;
 use crate::render::streaming_replace::{clear_rendered_rows, raw_visual_rows};
 
 /// Markdown 资产块流式替换状态。
@@ -45,7 +45,8 @@ impl StreamingAssetBlock {
     /// 返回:
     /// - 需要立即写入终端的原始 Markdown 行
     pub(crate) fn push_line(&mut self, line: &str) -> String {
-        self.raw_visual_rows += raw_visual_rows(&align_to_guide_column(line));
+        // 同 table/streaming：按正文实际折行宽度算，而不是终端整宽
+        self.raw_visual_rows += raw_visual_rows(line, cli_content_width());
         match self.mode {
             AssetPreviewMode::ReplaceTerminalRows => format!("{line}\n"),
             AssetPreviewMode::StableFinal => String::new(),

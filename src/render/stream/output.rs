@@ -1,4 +1,5 @@
 use super::*;
+use crate::render::streaming_replace::terminal_width;
 
 impl StreamRenderer {
     /// 【终端】【CLI 布局】渲染并对齐一段流式 Markdown 增量。
@@ -43,6 +44,8 @@ impl StreamRenderer {
     /// 返回:
     /// - 切换是否成功
     pub(super) fn switch_mode(&mut self, mode: ChatStreamKind) -> Result<()> {
+        // 未定稿尾部还挂在终端上，切换模式会另起一行，必须先擦掉
+        self.clear_pending_tail()?;
         let mut stdout = io::stdout();
         match mode {
             ChatStreamKind::Reasoning => {
@@ -51,16 +54,21 @@ impl StreamRenderer {
                     writeln!(stdout)?;
                 }
                 if self.reasoning_mode != ReasoningDisplayMode::Full {
+                    // 只给这一行上色并立刻复位。原先要等到切回 Content 才复位，
+                    // 中间一旦出错（管道被 head 关掉、Ctrl+C、终端异常）`?` 直接返回，
+                    // 前景色就留在暗青上，用户之后的 shell 提示符与输出全被染色
                     execute!(stdout, SetForegroundColor(Color::DarkCyan))?;
                     // 与 TUI / Summary live 共用 ◦，避免思考行退化成工具 •
-                    writeln!(
+                    let written = writeln!(
                         stdout,
                         "{} {}",
                         reasoning_cell::THINKING_MARKER,
                         self.work_status
                             .unwrap_or(WorkStatus::Thinking)
                             .localized_label()
-                    )?;
+                    );
+                    execute!(stdout, ResetColor)?;
+                    written?;
                 }
             }
             ChatStreamKind::Content => {
@@ -86,6 +94,8 @@ impl StreamRenderer {
     /// - 结束是否成功
     pub(super) fn end_active_stream_line(&mut self) -> Result<()> {
         self.finish_live_tool_status()?;
+        // 定稿前先擦掉未定稿尾部，否则最终输出会与预览重复一遍
+        self.clear_pending_tail()?;
         if self.reasoning_mode == ReasoningDisplayMode::Summary
             && self.mode == Some(ChatStreamKind::Reasoning)
         {
@@ -146,6 +156,7 @@ impl StreamRenderer {
             false,
         ));
         // 3. 擦除上一帧再写入本帧，行数按终端折行后的视觉行计算
+        self.clear_pending_tail()?;
         let mut stdout = io::stdout();
         if self.reasoning_live_rows > 0 {
             write!(stdout, "{}", clear_rendered_rows(self.reasoning_live_rows))?;
@@ -153,7 +164,7 @@ impl StreamRenderer {
         let block = format!("{rendered}\n");
         write!(stdout, "{block}")?;
         stdout.flush()?;
-        self.reasoning_live_rows = rendered_visual_rows(&block);
+        self.reasoning_live_rows = rendered_visual_rows(&block, terminal_width());
         Ok(())
     }
 

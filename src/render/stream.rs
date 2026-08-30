@@ -80,6 +80,12 @@ pub struct StreamRenderer {
     /// 【终端】【子智能体状态】推理增量是否位于新的物理行起点
     subagent_reasoning_at_line_start: bool,
     command_preview: CliCommandPreview,
+    /// 已写出但尚未定稿的正文尾部占用的终端视觉行数
+    ///
+    /// 正文按行缓冲，未换行的尾部原本要等下一个 \n 才可见；慢速生成时
+    /// 屏幕长时间没有变化，看起来像卡住。这里先把尾部画出来，下次写入前
+    /// 按这个行数擦掉重画
+    pending_tail_rows: usize,
 }
 
 impl StreamRenderer {
@@ -124,6 +130,7 @@ impl StreamRenderer {
             reasoning_frame: 0,
             subagent_reasoning_at_line_start: true,
             command_preview: CliCommandPreview::new(),
+            pending_tail_rows: 0,
         }
     }
 

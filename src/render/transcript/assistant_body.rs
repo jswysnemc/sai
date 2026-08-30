@@ -12,13 +12,24 @@ use crate::render::content_indent::CONTENT_LEFT_INDENT;
 ///
 /// 返回:
 /// - 全部物理行带等宽左侧缩进的预换行终端行
+/// 自动续行相对正文起始列再内收的列数。
+///
+/// 没有它时，软换行出来的续行与真实换行在同一列上：200 列的代码行折行后
+/// 看起来就是两行独立代码，读者无法判断源码里到底有没有换行。
+/// 取与引导区同宽，续行读起来是一个自然的台阶。
+const CONTINUATION_INDENT: usize = CONTENT_LEFT_INDENT;
+
 pub(super) fn display_lines(rendered: &str, content_width: usize) -> Vec<AnsiLine> {
     if rendered.is_empty() {
         return Vec::new();
     }
 
-    // 1. 按调用方传入的正文净宽度完成折行
-    let lines = AnsiLine::wrap_block(rendered, content_width);
+    // 1. 按调用方传入的正文净宽度完成折行，并为续行恢复内收
+    let lines = AnsiLine::wrap_block_with_continuation_indent(
+        rendered,
+        content_width,
+        CONTINUATION_INDENT,
+    );
     // 2. 每一行补上与引导区同宽的空白，落在工具/思考符号右侧的内容列
     let prefix = " ".repeat(CONTENT_LEFT_INDENT);
     lines

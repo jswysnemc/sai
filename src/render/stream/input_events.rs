@@ -92,9 +92,63 @@ impl StreamRenderer {
         if self.plain {
             write!(stdout, "{text}")?;
         } else {
+            // 先把上一次画出的未定稿尾部擦掉，再写本次增量：
+            // 尾部会被下一帧原地重画，不清就会叠出一串重复文本
+            self.clear_pending_tail()?;
             write!(stdout, "{}", self.render_markdown_delta(&text))?;
+            self.draw_pending_tail()?;
         }
         stdout.flush()?;
+        Ok(())
+    }
+
+    /// 擦除上一次画出的未定稿正文尾部。
+    ///
+    /// 返回:
+    /// - 操作是否成功
+    pub(super) fn clear_pending_tail(&mut self) -> Result<()> {
+        if self.pending_tail_rows == 0 {
+            return Ok(());
+        }
+        let mut stdout = io::stdout();
+        write!(
+            stdout,
+            "{}",
+            crate::render::streaming_replace::clear_rendered_rows(self.pending_tail_rows)
+        )?;
+        self.pending_tail_rows = 0;
+        Ok(())
+    }
+
+    /// 把当前尚未闭合的正文尾部先画到终端上。
+    ///
+    /// 正文按行缓冲，未换行的尾部原本要等到下一个 `\n` 才可见；慢速生成或
+    /// 长段落时屏幕会长时间不动，看起来像卡住。这里先把尾部画出来，
+    /// 行数记下来供下一帧擦除重画。
+    ///
+    /// 返回:
+    /// - 操作是否成功
+    pub(super) fn draw_pending_tail(&mut self) -> Result<()> {
+        let Some(preview) = self.markdown.preview_tail() else {
+            return Ok(());
+        };
+        let rendered = crate::render::render_width::with_render_width(
+            crate::render::content_indent::cli_content_width(),
+            || preview,
+        );
+        let aligned = crate::render::content_indent::align_cli_stream_block(
+            &crate::render::content_indent::wrap_cli_stream_block(&rendered),
+        );
+        if aligned.trim().is_empty() {
+            return Ok(());
+        }
+        let rows = crate::render::rendered_visual_rows(
+            &aligned,
+            crate::render::content_indent::cli_content_width(),
+        );
+        let mut stdout = io::stdout();
+        write!(stdout, "{aligned}")?;
+        self.pending_tail_rows = rows;
         Ok(())
     }
 

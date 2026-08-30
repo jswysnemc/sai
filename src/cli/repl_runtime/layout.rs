@@ -227,8 +227,9 @@ mod tests {
             .iter()
             .map(|line| strip_ansi_for_test(line.as_str()))
             .collect::<Vec<_>>();
-        // 流式与定稿正文前都留区块空行，对齐后补成引导区宽度空白
-        assert_eq!(live_plain, vec!["  ", "  abcd", "  efgh"]);
+        // 流式与定稿正文前都留区块空行，对齐后补成引导区宽度空白；
+        // 续行再内收两列，区分软换行与真实换行
+        assert_eq!(live_plain, vec!["  ", "  abcd", "    ef", "    gh"]);
         assert!(live
             .lines
             .iter()

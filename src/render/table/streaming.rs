@@ -1,5 +1,5 @@
 use super::{is_table_separator, render_table};
-use crate::render::content_indent::align_to_guide_column;
+use crate::render::content_indent::cli_content_width;
 use crate::render::markdown_inline::render_table_cell_content;
 use crate::render::streaming_replace::{
     clear_rendered_rows, raw_visual_rows, rendered_visual_rows,
@@ -105,7 +105,9 @@ impl StreamingTable {
             // 1. CLI：未确认前输出原文；确认后（含刚确认）按全表列宽清屏重绘
             PreviewMode::ReplaceTerminalRows => {
                 if !now_confirmed {
-                    self.raw_visual_rows += raw_visual_rows(&align_to_guide_column(line));
+                    // 正文随后会在 cli_content_width() 处折行，行数必须按同一宽度算
+                    self.raw_visual_rows +=
+                        raw_visual_rows(line, cli_content_width());
                     return format!("{line}\n");
                 }
                 // 刚确认时也需清掉已输出的原文行；后续行清掉上一帧表格预览
@@ -175,7 +177,7 @@ impl StreamingTable {
             output.push_str(&clear_rendered_rows(rows));
         }
         let table = render_table(&self.lines, render_table_cell_content);
-        self.preview_visual_rows = rendered_visual_rows(&table);
+        self.preview_visual_rows = rendered_visual_rows(&table, cli_content_width());
         self.raw_visual_rows = 0;
         output.push_str(&table);
         output
