@@ -1,6 +1,41 @@
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use std::time::Duration;
+
+/// Ctrl+C / Ctrl+D 中断。
+///
+/// raw mode 下终端不会把 Ctrl+C 转成 SIGINT，它只是一个普通按键事件。
+/// 不特殊处理的话配置界面里 Ctrl+C 完全没有反应，用户只能靠知道
+/// 要按 q / Esc 才能出去。
+#[derive(Debug)]
+pub(crate) struct Interrupted;
+
+impl std::fmt::Display for Interrupted {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("interrupted")
+    }
+}
+
+impl std::error::Error for Interrupted {}
+
+/// 判断是否为中断组合键。
+///
+/// 与 REPL 权限弹窗保持同一套约定（Ctrl+C / Ctrl+D）。
+///
+/// 参数:
+/// - `event`: 终端键盘事件
+///
+/// 返回:
+/// - 是否为中断组合键
+fn is_interrupt(event: KeyEvent) -> bool {
+    matches!(
+        (event.code, event.modifiers.contains(KeyModifiers::CONTROL)),
+        (
+            KeyCode::Char('c') | KeyCode::Char('C') | KeyCode::Char('d') | KeyCode::Char('D'),
+            true
+        )
+    )
+}
 
 pub(crate) fn read_key() -> Result<KeyCode> {
     Ok(read_key_event()?.code)
@@ -29,10 +64,14 @@ pub(crate) fn read_key_event_with_timeout(timeout: Option<Duration>) -> Result<O
                 return Ok(None);
             }
         }
-        // 2. 读取事件并过滤非键盘输入和按键释放事件
+        // 2. 读取事件并过滤非键盘输入和按键释放事件；
+        //    Ctrl+C/Ctrl+D 直接中断，让「退出」这个通用手势在配置界面同样有效
         if let Event::Key(event) = event::read()? {
             if !is_actionable_key_event(event) {
                 continue;
+            }
+            if is_interrupt(event) {
+                return Err(Interrupted.into());
             }
             return Ok(Some(event));
         }
@@ -72,5 +111,20 @@ mod tests {
         };
 
         assert!(!is_actionable_key_event(release));
+    }
+
+    /// Ctrl+C / Ctrl+D 被识别为中断。
+    #[test]
+    fn detects_interrupt_keys() {
+        let key = |code, modifiers| KeyEvent {
+            code,
+            modifiers,
+            kind: KeyEventKind::Press,
+            state: KeyEventState::NONE,
+        };
+        assert!(is_interrupt(key(KeyCode::Char('c'), KeyModifiers::CONTROL)));
+        assert!(is_interrupt(key(KeyCode::Char('d'), KeyModifiers::CONTROL)));
+        assert!(!is_interrupt(key(KeyCode::Char('c'), KeyModifiers::NONE)));
+        assert!(!is_interrupt(key(KeyCode::Char('a'), KeyModifiers::CONTROL)));
     }
 }

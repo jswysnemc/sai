@@ -113,38 +113,14 @@ pub(super) fn apply_web_search_tool_mode_field(
     );
 }
 
-/// 应用模型上下文 token 字段。
+/// 解析模型最大输出 token 字段（只校验，不修改配置）。
 ///
 /// 参数:
-/// - `provider`: Provider 配置
-/// - `model`: 模型 ID
-/// - `value`: 表单输入的上下文 token 数
-///
-/// 返回:
-/// - 应用是否成功
-pub(super) fn apply_context_chars_field(
-    provider: &mut ProviderConfig,
-    model: &str,
-    value: &str,
-) -> Result<()> {
-    provider.set_model_context_chars_for(model, parse_context_chars(value)?);
-    Ok(())
-}
-
-/// 应用模型最大输出 token 字段。
-///
-/// 参数:
-/// - `provider`: Provider 配置
-/// - `model`: 模型 ID
 /// - `value`: 表单输入的最大输出 token 数
 ///
 /// 返回:
-/// - 应用是否成功
-pub(super) fn apply_max_output_tokens_field(
-    provider: &mut ProviderConfig,
-    model: &str,
-    value: &str,
-) -> Result<()> {
+/// - 解析后的值，空输入表示不限制
+pub(super) fn parse_max_output_tokens(value: &str) -> Result<Option<u32>> {
     let value = parse_context_chars(value)?;
     let value = value
         .map(|value| {
@@ -154,26 +130,18 @@ pub(super) fn apply_max_output_tokens_field(
     if value == Some(0) {
         bail!("max output tokens must be greater than 0");
     }
-    provider.set_model_max_output_tokens_for(model, value);
-    Ok(())
+    Ok(value)
 }
 
-/// 应用模型工具调用支持字段。
+/// 解析模型上下文字段（只校验，不修改配置）。
 ///
 /// 参数:
-/// - `provider`: Provider 配置
-/// - `model`: 模型 ID
-/// - `value`: 工具调用支持字段值
+/// - `value`: 表单输入的上下文 token 数
 ///
 /// 返回:
-/// - 应用是否成功
-pub(super) fn apply_tools_enabled_field(
-    provider: &mut ProviderConfig,
-    model: &str,
-    value: &str,
-) -> Result<()> {
-    provider.set_model_tools_enabled_for(model, parse_bool_field(value)?);
-    Ok(())
+/// - 解析后的值，空输入表示不限制
+pub(super) fn parse_context_chars_field(value: &str) -> Result<Option<usize>> {
+    parse_context_chars(value)
 }
 
 /// 应用模型标签勾选字段。
@@ -266,7 +234,8 @@ mod tests {
     fn applies_unit_context_to_model_metadata() {
         let mut provider = provider_with_model("test-model");
 
-        apply_context_chars_field(&mut provider, "test-model", "128k").unwrap();
+        provider
+            .set_model_context_chars_for("test-model", parse_context_chars_field("128k").unwrap());
 
         assert_eq!(
             provider
@@ -296,7 +265,10 @@ mod tests {
     fn applies_max_output_tokens() {
         let mut provider = provider_with_model("test-model");
 
-        apply_max_output_tokens_field(&mut provider, "test-model", "32k").unwrap();
+        // apply_max_output_tokens_field 已拆分为 parse_max_output_tokens + setter：
+        // 表单需要先全量校验再落地，避免中途报错把 provider 改坏一半
+        provider
+            .set_model_max_output_tokens_for("test-model", parse_max_output_tokens("32k").unwrap());
 
         assert_eq!(
             provider.model_max_output_tokens_for("test-model"),
@@ -323,7 +295,7 @@ mod tests {
     fn applies_disabled_tool_support() {
         let mut provider = provider_with_model("test-model");
 
-        apply_tools_enabled_field(&mut provider, "test-model", "false").unwrap();
+        provider.set_model_tools_enabled_for("test-model", parse_bool_field("false").unwrap());
 
         assert!(!provider.model_tools_enabled_for("test-model"));
         assert_eq!(
@@ -338,8 +310,8 @@ mod tests {
     #[test]
     fn enabling_tool_support_removes_default_metadata() {
         let mut provider = provider_with_model("test-model");
-        apply_tools_enabled_field(&mut provider, "test-model", "false").unwrap();
-        apply_tools_enabled_field(&mut provider, "test-model", "true").unwrap();
+        provider.set_model_tools_enabled_for("test-model", parse_bool_field("false").unwrap());
+        provider.set_model_tools_enabled_for("test-model", parse_bool_field("true").unwrap());
 
         assert!(provider.model_tools_enabled_for("test-model"));
         assert!(!provider.model_metadata.contains_key("test-model"));

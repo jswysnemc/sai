@@ -7,11 +7,10 @@ use std::io;
 use super::form::{parse_bool_field, run_form, Field};
 use super::input::read_key;
 use super::model_metadata_form::{
-    apply_context_chars_field, apply_deepseek_anchor_mode_field, apply_max_output_tokens_field,
-    apply_tag_fields, apply_thinking_level_fields, apply_tools_enabled_field,
+    apply_deepseek_anchor_mode_field, apply_tag_fields, apply_thinking_level_fields,
     apply_web_search_tool_mode_field, context_chars_field_value, deepseek_anchor_mode_field,
-    max_output_tokens_field_value, tag_fields, thinking_level_fields, tools_enabled_field,
-    web_search_tool_mode_field,
+    max_output_tokens_field_value, parse_context_chars_field, parse_max_output_tokens, tag_fields,
+    thinking_level_fields, tools_enabled_field, web_search_tool_mode_field,
 };
 use super::ui::{draw_menu, message};
 
@@ -39,7 +38,7 @@ pub(super) fn edit_provider_form(
             "anthropic",
         ]),
         Field::new(
-            "API Key or $env:NAME",
+            t("API Key or $env:NAME", "密钥或 $env:NAME"),
             provider.api_key.clone().unwrap_or_default(),
         )
         .secret(),
@@ -115,14 +114,18 @@ pub(super) fn edit_provider_form(
         },
     ));
     // 多密钥管理：每行一个密钥，可在竖线后附备注；非空时优先于上面的单密钥字段。
-    // 注意：此处不能用 secret 掩码——textarea 的 value 会原样写回，掩码串将覆盖真实密钥。
-    fields.push(Field::textarea(
-        t(
-            "API keys (one per line; optional label after ' | ')",
-            "接口密钥（每行一个，竖线后可加备注）",
-        ),
-        render_api_key_lines(&provider.api_keys),
-    ));
+    // 掩码只作用于显示：写回与 $EDITOR 编辑读写的都是 field.value，
+    // 掩码串不会覆盖真实密钥（见 rendered_text_value）。
+    fields.push(
+        Field::textarea(
+            t(
+                "API keys (one per line; optional label after ' | ')",
+                "接口密钥（每行一个，竖线后可加备注）",
+            ),
+            render_api_key_lines(&provider.api_keys),
+        )
+        .secret(),
+    );
     fields.push(
         Field::new(
             t("Balance API keys", "在密钥间负载均衡"),
@@ -391,39 +394,60 @@ fn edit_model_general_form(
         web_search_tool_mode_field(provider, model),
         deepseek_anchor_mode_field(provider, model),
     ];
-    if !run_form(stdout, t(" MODEL GENERAL ", " 模型常规设置 "), &mut fields)? {
+    loop {
+        if !run_form(stdout, t(" MODEL GENERAL ", " 模型常规设置 "), &mut fields)? {
+            return Ok(());
+        }
+        // 校验失败时就地提示并重新打开表单，不让非法输入终止 TUI。
+        // 先解析全部可失败字段再落地，避免中途报错把 provider 改坏一半
+        let parsed = (|| -> Result<(bool, bool, bool, Option<usize>, Option<u32>)> {
+            Ok((
+                parse_bool_field(&fields[0].value)?,
+                parse_bool_field(&fields[1].value)?,
+                parse_bool_field(&fields[2].value)?,
+                parse_context_chars_field(&fields[3].value)?,
+                parse_max_output_tokens(&fields[4].value)?,
+            ))
+        })();
+        let (active, current, tools_enabled, context_chars, max_output) = match parsed {
+            Ok(parsed) => parsed,
+            Err(err) => {
+                message(
+                    stdout,
+                    &format!("{}: {err}", t("Invalid input", "输入无效")),
+                )?;
+                continue;
+            }
+        };
+        if active {
+            if !provider.models.iter().any(|item| item == model) {
+                provider.models.push(model.to_string());
+            }
+        } else {
+            provider.models.retain(|item| item != model);
+        }
+        if current || provider.default_model == model && !active {
+            provider.default_model = if active {
+                model.to_string()
+            } else {
+                provider.models.first().cloned().unwrap_or_default()
+            };
+            if !provider.default_model.is_empty()
+                && !provider
+                    .models
+                    .iter()
+                    .any(|item| item == &provider.default_model)
+            {
+                provider.models.push(provider.default_model.clone());
+            }
+        }
+        provider.set_model_tools_enabled_for(model, tools_enabled);
+        provider.set_model_context_chars_for(model, context_chars);
+        provider.set_model_max_output_tokens_for(model, max_output);
+        apply_web_search_tool_mode_field(provider, model, &fields[5].value);
+        apply_deepseek_anchor_mode_field(provider, model, &fields[6].value);
         return Ok(());
     }
-    let active = parse_bool_field(&fields[0].value)?;
-    let current = parse_bool_field(&fields[1].value)?;
-    if active {
-        if !provider.models.iter().any(|item| item == model) {
-            provider.models.push(model.to_string());
-        }
-    } else {
-        provider.models.retain(|item| item != model);
-    }
-    if current || provider.default_model == model && !active {
-        provider.default_model = if active {
-            model.to_string()
-        } else {
-            provider.models.first().cloned().unwrap_or_default()
-        };
-        if !provider.default_model.is_empty()
-            && !provider
-                .models
-                .iter()
-                .any(|item| item == &provider.default_model)
-        {
-            provider.models.push(provider.default_model.clone());
-        }
-    }
-    apply_tools_enabled_field(provider, model, &fields[2].value)?;
-    apply_context_chars_field(provider, model, &fields[3].value)?;
-    apply_max_output_tokens_field(provider, model, &fields[4].value)?;
-    apply_web_search_tool_mode_field(provider, model, &fields[5].value);
-    apply_deepseek_anchor_mode_field(provider, model, &fields[6].value);
-    Ok(())
 }
 
 /// 编辑模型标签子面板。

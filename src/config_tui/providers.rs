@@ -16,7 +16,7 @@ use super::input::{read_key, read_key_with_timeout};
 use super::layout::three_column_widths;
 use super::provider_fetch::{fetch_models, FetchModelsResult};
 use super::provider_forms::{edit_model_form, edit_provider_form};
-use super::ui::{display_width, draw_column, draw_menu, message, pad, truncate};
+use super::ui::{confirm_delete, display_width, draw_column, draw_menu, message, pad, truncate};
 
 pub(crate) struct ProviderBrowser<'a> {
     config: &'a mut AppConfig,
@@ -82,8 +82,8 @@ impl<'a> ProviderBrowser<'a> {
                     KeyCode::Char('r') => self.refresh_models(),
                     KeyCode::Char('a') if self.active_col == 2 => self.add_custom_model(stdout)?,
                     KeyCode::Char('a') => self.add_provider(stdout)?,
-                    KeyCode::Char('d') if self.active_col == 2 => self.delete_model(),
-                    KeyCode::Char('d') => self.delete_provider(),
+                    KeyCode::Char('d') if self.active_col == 2 => self.delete_model(stdout)?,
+                    KeyCode::Char('d') => self.delete_provider(stdout)?,
                     KeyCode::Tab if self.active_col == 2 => self.toggle_model_activation(),
                     KeyCode::Enter | KeyCode::Char('i') => self.select_or_edit(stdout)?,
                     _ => {}
@@ -272,19 +272,35 @@ impl<'a> ProviderBrowser<'a> {
         Ok(())
     }
 
-    fn delete_provider(&mut self) {
+    fn delete_provider(&mut self, stdout: &mut io::Stdout) -> Result<()> {
         if self.config.providers.is_empty() {
-            return;
+            return Ok(());
         }
         let provider_id = self.config.providers[self.provider_idx].id.clone();
+        // 删除会级联清理压缩/视觉/嵌入/subagent 的模型引用，且无法撤销，
+        // 必须先确认，并在副标题里说明后果
+        if !confirm_delete(
+            stdout,
+            &t(" DELETE PROVIDER ", " 删除供应商 "),
+            &provider_id,
+            &t(
+                "This also clears models, keys and any model references pointing at it.",
+                "同时删除其下的模型与密钥，并清空指向它的模型引用（压缩 / 视觉 / 嵌入 / 子代理）。",
+            ),
+        )? {
+            self.status = t("Delete cancelled", "已取消删除").to_string();
+            return Ok(());
+        }
         if let Err(error) = self.config.remove_provider(&provider_id) {
             self.status = error.to_string();
-            return;
+            return Ok(());
         }
         self.provider_idx = self
             .provider_idx
             .min(self.config.providers.len().saturating_sub(1));
+        self.status = format!("{}: {provider_id}", t("Removed provider", "已删除供应商"));
         self.refresh_models();
+        Ok(())
     }
 
     fn select_or_edit(&mut self, stdout: &mut io::Stdout) -> Result<()> {
@@ -437,13 +453,13 @@ impl<'a> ProviderBrowser<'a> {
     }
 
     /// 删除当前选中的本地模型和关联元数据。
-    fn delete_model(&mut self) {
+    fn delete_model(&mut self, stdout: &mut io::Stdout) -> Result<()> {
         let Some(model) = self
             .models
             .get(self.model_idx)
             .map(|entry| entry.full.clone())
         else {
-            return;
+            return Ok(());
         };
         let Some(provider_id) = self
             .config
@@ -451,8 +467,20 @@ impl<'a> ProviderBrowser<'a> {
             .get(self.provider_idx)
             .map(|provider| provider.id.clone())
         else {
-            return;
+            return Ok(());
         };
+        if !confirm_delete(
+            stdout,
+            &t(" REMOVE MODEL ", " 移除模型 "),
+            &model,
+            &t(
+                "Removes it from this provider's model list.",
+                "从该供应商的模型列表中移除。",
+            ),
+        )? {
+            self.status = t("Delete cancelled", "已取消删除").to_string();
+            return Ok(());
+        }
         if self
             .config
             .remove_active_provider_model(&provider_id, &model)
@@ -461,6 +489,7 @@ impl<'a> ProviderBrowser<'a> {
             self.rebuild_models();
             self.status = format!("{}: {model}", t("Removed model", "已移除模型"));
         }
+        Ok(())
     }
 
     fn draw(&self, stdout: &mut io::Stdout) -> Result<()> {

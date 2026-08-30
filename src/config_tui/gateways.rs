@@ -238,9 +238,24 @@ fn start_selected_gateway(
     gateway: ManagedGateway,
     status_line: &mut String,
 ) -> Result<()> {
+    // 网关以独立进程启动、从磁盘读取配置，因此必须先落盘当前内存配置。
+    // 这与其它界面的「显式保存」模型不同，必须在状态行里说明，否则用户
+    // 退出时选「放弃更改」会误以为改动从未写入
+    if let Err(error) = config.validate() {
+        *status_line = format!(
+            "{}: {error}",
+            t("Configuration is invalid", "配置校验未通过")
+        );
+        return Ok(());
+    }
     config.save(paths)?;
     block_on_runtime(start_gateway(paths, config, gateway))?;
-    *status_line = format!("{}: {}", t("started", "已启动"), gateway.title());
+    *status_line = format!(
+        "{}: {} · {}",
+        t("started", "已启动"),
+        gateway.title(),
+        t("configuration saved to disk", "配置已写入磁盘")
+    );
     Ok(())
 }
 

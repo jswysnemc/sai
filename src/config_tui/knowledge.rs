@@ -1,7 +1,7 @@
 use crate::config::AppConfig;
 use crate::i18n::text as t;
 use crate::paths::SaiPaths;
-use crate::tools::knowledge_base::KnowledgeBase;
+use crate::tools::knowledge_base::{FileRecord, KnowledgeBase};
 use anyhow::{bail, Result};
 use crossterm::event::KeyCode;
 use std::io;
@@ -25,12 +25,14 @@ pub(crate) fn edit_knowledge_base(
     paths: &SaiPaths,
     config: &AppConfig,
 ) -> Result<()> {
+    let kb = KnowledgeBase::new(config.clone(), paths.clone())?;
     let mut selected = 0usize;
     let mut status = String::new();
+    // 只在进入、数据变更、手动刷新时重新读库：list()/stats() 都会开库统计
+    // （stats 内部还会再 list 一次），放在每次按键上跑会让光标移动明显发涩
+    let mut files = kb.list().unwrap_or_default();
+    let mut stats = kb.stats().ok();
     loop {
-        let kb = KnowledgeBase::new(config.clone(), paths.clone())?;
-        let files = kb.list().unwrap_or_default();
-        let stats = kb.stats().ok();
         let summary = stats
             .as_ref()
             .and_then(|value| {
@@ -70,10 +72,11 @@ pub(crate) fn edit_knowledge_base(
         }
         selected = selected.min(options.len().saturating_sub(1));
         let help = if status.is_empty() {
+            // Enter 只作用于上方两个操作项，文件行上不做事，避免「回车即删除」
             super::theme::help_line(&[
-                ("Enter", t("add/delete", "添加/删除")),
+                ("Enter", t("run highlighted action", "执行高亮操作")),
                 ("a", t("add", "添加")),
-                ("d", t("delete", "删除")),
+                ("d", t("delete file", "删除文件")),
                 ("r", t("refresh", "刷新")),
                 ("q", t("back", "返回")),
             ])
@@ -88,28 +91,54 @@ pub(crate) fn edit_knowledge_base(
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
             KeyCode::Char('r') => {
+                reload_knowledge(&kb, &mut files, &mut stats);
                 status = t("refreshed", "已刷新").to_string();
             }
-            KeyCode::Char('a') => match add_path(stdout, paths, config) {
-                Ok(message) => status = message,
-                Err(err) => status = err.to_string(),
-            },
-            KeyCode::Enter if selected == 0 => match add_path(stdout, paths, config) {
-                Ok(message) => status = message,
-                Err(err) => status = err.to_string(),
-            },
-            KeyCode::Enter if selected == 1 => match clear_all(stdout, paths, config) {
-                Ok(message) => status = message,
-                Err(err) => status = err.to_string(),
-            },
-            KeyCode::Char('d') | KeyCode::Enter if selected >= 2 && !files.is_empty() => {
+            KeyCode::Char('a') => {
+                match add_path(stdout, paths, config) {
+                    Ok(message) => status = message,
+                    Err(err) => status = err.to_string(),
+                }
+                reload_knowledge(&kb, &mut files, &mut stats);
+            }
+            KeyCode::Enter if selected == 0 => {
+                match add_path(stdout, paths, config) {
+                    Ok(message) => status = message,
+                    Err(err) => status = err.to_string(),
+                }
+                reload_knowledge(&kb, &mut files, &mut stats);
+            }
+            KeyCode::Enter if selected == 1 => {
+                match clear_all(stdout, paths, config) {
+                    Ok(message) => status = message,
+                    Err(err) => status = err.to_string(),
+                }
+                reload_knowledge(&kb, &mut files, &mut stats);
+            }
+            // 文件行上只认 d：Enter 在这里删除文件与其余界面「Enter 打开/执行」的
+            // 语义冲突，且删除同时丢弃已索引向量，无法恢复
+            KeyCode::Char('d') if selected >= 2 && !files.is_empty() => {
                 let index = selected - 2;
                 if let Some(file) = files.get(index) {
-                    match remove_one(paths, config, &file.name) {
-                        Ok(message) => {
-                            status = message;
-                            selected = selected.saturating_sub(1).max(2);
-                        }
+                    let name = file.name.clone();
+                    match super::ui::confirm_delete(
+                        stdout,
+                        &t(" DELETE FILE ", " 删除文件 "),
+                        &name,
+                        &t(
+                            "Removes the file and its indexed vectors from the knowledge base.",
+                            "同时删除文件及其已索引向量，无法恢复。",
+                        ),
+                    ) {
+                        Ok(true) => match remove_one(paths, config, &name) {
+                            Ok(message) => {
+                                status = message;
+                                selected = selected.saturating_sub(1).max(2);
+                                reload_knowledge(&kb, &mut files, &mut stats);
+                            }
+                            Err(err) => status = err.to_string(),
+                        },
+                        Ok(false) => status = t("Delete cancelled", "已取消删除").to_string(),
                         Err(err) => status = err.to_string(),
                     }
                 }
@@ -117,6 +146,21 @@ pub(crate) fn edit_knowledge_base(
             _ => {}
         }
     }
+}
+
+/// 重新读取知识库文件列表与统计。
+///
+/// 参数:
+/// - `kb`: 知识库实例
+/// - `files`: 待刷新的文件列表
+/// - `stats`: 待刷新的统计信息
+fn reload_knowledge(
+    kb: &KnowledgeBase,
+    files: &mut Vec<FileRecord>,
+    stats: &mut Option<serde_json::Value>,
+) {
+    *files = kb.list().unwrap_or_default();
+    *stats = kb.stats().ok();
 }
 
 fn add_path(stdout: &mut io::Stdout, paths: &SaiPaths, config: &AppConfig) -> Result<String> {

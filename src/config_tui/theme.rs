@@ -71,12 +71,23 @@ const SELECTED_TEXT_STYLE: &str = "\x1b[48;2;33;46;51m\x1b[38;2;190;246;255m";
 ///
 /// 返回:
 /// - 单行 ANSI 帮助文本
+/// 帮助条分段分隔符。
+///
+/// 单独暴露出来：状态栏放不下时需要在分隔符上切分并按优先级丢段，
+/// 调用方不能自己拼一份，否则两处格式会悄悄失配。
+///
+/// 返回:
+/// - 带样式的分隔符文本
+pub(super) fn help_separator() -> String {
+    format!("{DIM} · {RESET}")
+}
+
 pub(super) fn help_line(pairs: &[(&str, &str)]) -> String {
     pairs
         .iter()
         .map(|(key, description)| format!("{ACCENT}{key}{RESET} {MUTED}{description}{RESET}"))
         .collect::<Vec<_>>()
-        .join(&format!("{DIM} · {RESET}"))
+        .join(&help_separator())
 }
 
 #[cfg(test)]

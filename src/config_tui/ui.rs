@@ -161,10 +161,75 @@ pub(crate) fn draw_status_bar(
         ),
         Print(format!(
             " {} ",
-            truncate_ansi(content, frame.width.saturating_sub(6) as usize)
+            fit_status_bar(content, frame.width.saturating_sub(6) as usize)
         ))
     )?;
     Ok(())
+}
+
+/// 计算带 ANSI 样式文本的显示宽度。
+///
+/// `display_width` 走 UnicodeWidthStr，会把样式序列本身计入列数；
+/// 这里按 `truncate_ansi` 的口径跳过转义序列，两者必须一致。
+///
+/// 参数:
+/// - `value`: 可能带样式的文本
+///
+/// 返回:
+/// - 终端实际占用的列数
+fn ansi_width(value: &str) -> usize {
+    let mut width = 0usize;
+    let mut index = 0usize;
+    while index < value.len() {
+        let ch = value[index..].chars().next().unwrap_or_default();
+        if ch == '\x1b' {
+            index = crate::render::terminal_image::escape_sequence_end(value, index);
+            continue;
+        }
+        width += UnicodeWidthChar::width(ch).unwrap_or(0);
+        index += ch.len_utf8();
+    }
+    width
+}
+
+/// 按优先级压缩状态条，保证末段（返回 / 退出键）不被截掉。
+///
+/// 窄终端上整条从左到右截断会把 `q 返回` 连同 `d 删除` 一起切掉：
+/// 用户既看不到怎么退出，也看不到哪个键是破坏性的。
+/// 因此放不下时从中间丢段，始终保留首段与末段。
+///
+/// 参数:
+/// - `content`: 已带样式的状态文本
+/// - `max`: 可用显示宽度
+///
+/// 返回:
+/// - 压缩后的状态文本
+fn fit_status_bar(content: &str, max: usize) -> String {
+    // 必须用 ANSI 感知的宽度：display_width 走 UnicodeWidthStr，
+    // 会把样式序列本身计入列数，与 truncate_ansi 的度量口径不一致
+    let measured = ansi_width(content);
+    if measured <= max {
+        return content.to_string();
+    }
+    let separator = super::theme::help_separator();
+    let segments = content.split(&separator).collect::<Vec<_>>();
+    // 不足三段时无从取舍，退化为普通截断
+    if segments.len() < 3 {
+        return truncate_ansi(content, max);
+    }
+    let last = segments[segments.len() - 1];
+    let first = segments[0];
+    // 末段优先：先只留首段 + 末段，仍放不下就只留末段
+    for candidate in [
+        format!("{first}{separator}{last}"),
+        format!("{separator}{last}"),
+        last.to_string(),
+    ] {
+        if ansi_width(&candidate) <= max {
+            return candidate;
+        }
+    }
+    truncate_ansi(last, max)
 }
 
 /// 在框内绘制一条弱化横向分隔线（两端与边框相接）。
@@ -407,6 +472,54 @@ pub(crate) enum UnsavedExitChoice {
     Cancel,
 }
 
+/// 破坏性删除操作的确认弹窗。
+///
+/// 默认停在「取消」：删除键往往与目标键相邻（如 s/d、a/d），
+/// 误触后无法撤销，因此默认选项必须是安全项。
+///
+/// 参数:
+/// - `stdout`: 终端输出
+/// - `title`: 顶栏标题
+/// - `target`: 待删除对象名称
+/// - `warning`: 副标题中的后果说明（可为空）
+///
+/// 返回:
+/// - 是否确认删除
+pub(crate) fn confirm_delete(
+    stdout: &mut io::Stdout,
+    title: &str,
+    target: &str,
+    warning: &str,
+) -> Result<bool> {
+    let mut selected = 1usize;
+    loop {
+        let options = [
+            format!("{} {target}", t("Delete", "删除")),
+            t("Cancel", "取消").to_string(),
+        ];
+        draw_menu_with_details(
+            stdout,
+            title,
+            &options,
+            &[],
+            selected,
+            &help_line(&[
+                ("↑↓", t("move", "移动")),
+                ("Enter", t("confirm", "确认")),
+                ("Esc", t("cancel", "取消")),
+            ]),
+            warning,
+        )?;
+        match read_key()? {
+            KeyCode::Esc | KeyCode::Char('q') => return Ok(false),
+            KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
+            KeyCode::Enter => return Ok(selected == 0),
+            _ => {}
+        }
+    }
+}
+
 /// 用配置界面的菜单询问如何处理未保存更改。
 ///
 /// 参数:
@@ -455,38 +568,64 @@ pub(crate) fn confirm_unsaved_exit(stdout: &mut io::Stdout) -> Result<UnsavedExi
 pub(crate) fn message(stdout: &mut io::Stdout, text: &str) -> Result<()> {
     let (cols, rows) = terminal::size()?;
     let frame = full_frame(cols, rows);
-    queue!(stdout, Clear(ClearType::All))?;
-    draw_box(
-        stdout,
-        frame.x,
-        frame.y,
-        frame.width,
-        frame.height,
-        t(" Notice ", " 提示 "),
-    )?;
     let lines = wrap_text(text, frame.width.saturating_sub(4) as usize);
-    for (row, line) in lines
-        .into_iter()
-        .take(frame.height.saturating_sub(4) as usize)
-        .enumerate()
-    {
-        queue!(
+    let page = frame.height.saturating_sub(4) as usize;
+    // 内容超出一屏时可滚动：Skills 详情、校验错误这类长文本原先只取头部，
+    // 直接断在句子中间且无法看到后面
+    let max_offset = lines.len().saturating_sub(page);
+    let mut offset = 0usize;
+    loop {
+        queue!(stdout, Clear(ClearType::All))?;
+        draw_box(
             stdout,
-            MoveTo(
-                frame.x.saturating_add(2),
-                frame.y.saturating_add(2).saturating_add(row as u16)
-            ),
-            Print(line)
+            frame.x,
+            frame.y,
+            frame.width,
+            frame.height,
+            t(" Notice ", " 提示 "),
         )?;
+        for (row, line) in lines.iter().skip(offset).take(page).enumerate() {
+            queue!(
+                stdout,
+                MoveTo(
+                    frame.x.saturating_add(2),
+                    frame.y.saturating_add(2).saturating_add(row as u16)
+                ),
+                Print(line.clone())
+            )?;
+        }
+        let status = if max_offset == 0 {
+            help_line(&[(t("any key", "任意键"), t("continue", "继续"))])
+        } else {
+            // 滚动时把位置一并显示，否则用户不知道下面还有多少
+            format!(
+                "{}  {}/{}",
+                help_line(&[
+                    ("↑↓", t("scroll", "滚动")),
+                    (t("any key", "任意键"), t("continue", "继续")),
+                ]),
+                offset.saturating_add(page).min(lines.len()),
+                lines.len()
+            )
+        };
+        draw_status_bar(stdout, &frame, &status)?;
+        stdout.flush()?;
+        let key = read_key()?;
+        let next = match key {
+            KeyCode::Up | KeyCode::Char('k') => offset.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => (offset + 1).min(max_offset),
+            KeyCode::PageUp => offset.saturating_sub(page),
+            KeyCode::PageDown | KeyCode::Char(' ') => (offset + page).min(max_offset),
+            KeyCode::Home => 0,
+            KeyCode::End => max_offset,
+            _ => return Ok(()),
+        };
+        // 已经到头/到尾时按方向键视为「任意键」直接关闭，避免空按一下没反应
+        if next == offset && max_offset > 0 {
+            return Ok(());
+        }
+        offset = next;
     }
-    draw_status_bar(
-        stdout,
-        &frame,
-        &help_line(&[(t("any key", "任意键"), t("continue", "继续"))]),
-    )?;
-    stdout.flush()?;
-    let _ = read_key()?;
-    Ok(())
 }
 
 /// 按显示宽度截断文本，超长时追加省略号。
@@ -590,5 +729,29 @@ mod tests {
         assert!(output.contains('d'));
         assert!(!output.contains("ef"));
         assert!(output.starts_with(ACCENT));
+    }
+
+    /// 放不下时优先丢中间段，末段的返回键必须留下来。
+    #[test]
+    fn status_bar_keeps_the_trailing_back_key_when_narrow() {
+        let help = super::super::theme::help_line(&[
+            ("\u{2191}\u{2193}", "move"),
+            ("Enter", "open"),
+            ("d", "delete"),
+            ("q", "back"),
+        ]);
+        let full_width = ansi_width(&help);
+        let narrowed = fit_status_bar(&help, 20);
+
+        assert!(ansi_width(&narrowed) <= 20);
+        assert!(narrowed.contains("back"), "返回键不能被截掉：{narrowed}");
+        assert!(full_width > 20);
+    }
+
+    /// 宽度足够时不改写内容。
+    #[test]
+    fn status_bar_is_untouched_when_it_fits() {
+        let help = super::super::theme::help_line(&[("q", "back")]);
+        assert_eq!(fit_status_bar(&help, 80), help);
     }
 }

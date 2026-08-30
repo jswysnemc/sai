@@ -10,7 +10,7 @@ use std::io;
 
 use super::agents::edit_agents;
 use super::gateways::edit_gateways;
-use super::input::read_key;
+use super::input::{read_key, Interrupted};
 use super::knowledge::edit_knowledge_base;
 use super::plugins::edit_cli_tools;
 use super::providers::{select_active_provider, ProviderBrowser};
@@ -52,8 +52,12 @@ impl TerminalSession {
         let result = run_main_menu(&mut self.stdout, paths, &mut config);
         execute!(self.stdout, Show, LeaveAlternateScreen)?;
         terminal::disable_raw_mode()?;
-        let _ = result?;
-        Ok(())
+        match result {
+            Ok(_) => Ok(()),
+            // Ctrl+C 是用户主动放弃，不是故障：安静退出，不打印错误栈
+            Err(err) if err.downcast_ref::<Interrupted>().is_some() => Ok(()),
+            Err(err) => Err(err),
+        }
     }
 }
 
@@ -228,19 +232,36 @@ fn confirm_and_leave(
         return Ok(Some(false));
     }
     match confirm_unsaved_exit(stdout)? {
-        UnsavedExitChoice::Save => match config.save(paths) {
-            Ok(()) => Ok(Some(true)),
-            Err(error) => {
+        UnsavedExitChoice::Save => {
+            // 必须在落盘前校验：validate 只在加载时跑，写出非法配置会让下一次
+            // sai（包括 sai config 本身）启动即失败，用户被锁在唯一能修复它的界面外
+            if let Err(error) = config.validate() {
                 message(
                     stdout,
                     &format!(
-                        "{}: {error}",
-                        t("Failed to save configuration", "保存配置失败")
+                        "{}\n\n{error}",
+                        t(
+                            "Configuration is invalid, not saved. Fix it before leaving.",
+                            "配置校验未通过，未保存。请先修正后再退出。"
+                        )
                     ),
                 )?;
-                Ok(None)
+                return Ok(None);
             }
-        },
+            match config.save(paths) {
+                Ok(()) => Ok(Some(true)),
+                Err(error) => {
+                    message(
+                        stdout,
+                        &format!(
+                            "{}: {error}",
+                            t("Failed to save configuration", "保存配置失败")
+                        ),
+                    )?;
+                    Ok(None)
+                }
+            }
+        }
         UnsavedExitChoice::Discard => Ok(Some(false)),
         UnsavedExitChoice::Cancel => Ok(None),
     }

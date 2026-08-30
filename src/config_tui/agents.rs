@@ -33,6 +33,7 @@ pub(crate) fn edit_agents(
     config: &mut AppConfig,
 ) -> Result<()> {
     let mut selected = 0usize;
+    let mut status = String::new();
     loop {
         let profiles = visible_profiles(config);
         let mut options = vec![t("Surface defaults", "入口默认 Agent").to_string()];
@@ -61,11 +62,15 @@ pub(crate) fn edit_agents(
             &options,
             &details,
             selected,
-            &super::theme::help_line(&[
-                ("Enter", t("edit", "编辑")),
-                ("d", t("delete custom Agent", "删除自定义 Agent")),
-                ("q", t("back", "返回")),
-            ]),
+            &if status.is_empty() {
+                super::theme::help_line(&[
+                    ("Enter", t("edit", "编辑")),
+                    ("d", t("delete custom Agent", "删除自定义 Agent")),
+                    ("q", t("back", "返回")),
+                ])
+            } else {
+                status.clone()
+            },
             "",
         )?;
         match read_key()? {
@@ -75,10 +80,24 @@ pub(crate) fn edit_agents(
                 selected = (selected + 1).min(options.len().saturating_sub(1))
             }
             KeyCode::Char('d') if selected > 0 && selected <= profiles.len() => {
-                let id = &profiles[selected - 1].id;
-                if !is_builtin(id) {
-                    config.agents.retain(|profile| &profile.id != id);
-                    selected = selected.saturating_sub(1);
+                let id = profiles[selected - 1].id.clone();
+                if !is_builtin(&id) {
+                    // 删除不可撤销，且 d 与 Enter 同区，默认必须停在「取消」
+                    if super::ui::confirm_delete(
+                        stdout,
+                        &t(" DELETE AGENT ", " 删除自定义 Agent "),
+                        &id,
+                        &t(
+                            "Removes this Agent profile permanently.",
+                            "永久删除该 Agent 档案，无法恢复。",
+                        ),
+                    )? {
+                        config.agents.retain(|profile| profile.id != id);
+                        selected = selected.saturating_sub(1);
+                        status = format!("{}: {id}", t("Removed agent", "已删除 Agent"));
+                    } else {
+                        status = t("Delete cancelled", "已取消删除").to_string();
+                    }
                 }
             }
             KeyCode::Enter if selected == 0 => edit_surface_defaults(stdout, config)?,
