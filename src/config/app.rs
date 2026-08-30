@@ -430,6 +430,29 @@ impl AppConfig {
         Ok(provider)
     }
 
+    /// 汇总一个供应商可选择的模型标识。
+    ///
+    /// `default_model` 可能不在 `models` 列表里：`/config` 里的几处编辑路径
+    /// 只改写 `default_model` 而不追加进 `models`，直接手改配置文件同理。
+    /// 只读 `models` 会让当前生效的模型在 `/model` 里凭空消失，所以补上。
+    ///
+    /// 参数:
+    /// - `provider`: 供应商配置
+    ///
+    /// 返回:
+    /// - 去重且去空的模型标识列表
+    fn provider_choice_models(provider: &ProviderConfig) -> Vec<String> {
+        let mut models = provider.models.clone();
+        let default_model = provider.default_model.trim();
+        if !default_model.is_empty() && !models.iter().any(|model| model == default_model) {
+            models.push(default_model.to_string());
+        }
+        models
+            .into_iter()
+            .filter(|model| !model.trim().is_empty())
+            .collect()
+    }
+
     /// 枚举可供选择的供应商模型组合。
     ///
     /// 已停用的供应商整体跳过，其模型不出现在任何选择列表里。
@@ -441,15 +464,8 @@ impl AppConfig {
             .iter()
             .filter(|provider| provider.enabled)
             .flat_map(|provider| {
-                let models =
-                    if provider.models.is_empty() && !provider.default_model.trim().is_empty() {
-                        vec![provider.default_model.clone()]
-                    } else {
-                        provider.models.clone()
-                    };
-                models
+                Self::provider_choice_models(provider)
                     .into_iter()
-                    .filter(|model| !model.trim().is_empty())
                     .map(|model| ProviderModelChoice {
                         provider_id: provider.id.clone(),
                         provider_name: provider.display_name.clone(),
@@ -726,13 +742,7 @@ impl AppConfig {
             .iter()
             .filter(|provider| provider.enabled)
             .flat_map(|provider| {
-                let models =
-                    if provider.models.is_empty() && !provider.default_model.trim().is_empty() {
-                        vec![provider.default_model.clone()]
-                    } else {
-                        provider.models.clone()
-                    };
-                models
+                Self::provider_choice_models(provider)
                     .into_iter()
                     .filter(|model| {
                         !model.trim().is_empty()

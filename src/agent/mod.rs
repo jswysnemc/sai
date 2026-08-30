@@ -22,6 +22,7 @@ mod message_request;
 mod message_usage;
 mod mode;
 mod model_context;
+pub(crate) mod model_json;
 mod recovery;
 pub(crate) mod repeat_guard;
 mod runtime_context;
@@ -72,6 +73,7 @@ pub(crate) use inter_message::{
     InterMessage, InterMessageEvent, InterMessageKind, InterMessageSource,
 };
 pub use mode::AgentMode;
+pub(crate) use model_json::first_json_object;
 pub(crate) use system_prompt::{build_base_system_prompt, build_base_system_prompt_for_phase};
 pub(crate) use tool_invocation::resolve_execution_call;
 

@@ -178,3 +178,91 @@ fn check_arguments_rejects_malformed_and_non_object_values() {
     let scalar = registry.check_arguments("42").unwrap_err();
     assert!(scalar.to_string().contains("got number"));
 }
+
+/// 空参数按空对象处理。
+#[test]
+fn empty_arguments_become_an_empty_object() {
+    assert_eq!(parse_arguments("   ").unwrap(), json!({}));
+}
+
+/// 严格有效的 JSON 按原样解析。
+#[test]
+fn strict_json_arguments_parse_unchanged() {
+    assert_eq!(
+        parse_arguments(r#"{"command":"echo probe-again"}"#).unwrap(),
+        json!({"command": "echo probe-again"})
+    );
+}
+
+/// 参数后面多带一段内容时取第一个完整 JSON，而不是整次调用失败。
+///
+/// 模型流式吐参数时会在有效 JSON 后残留另一个 JSON 或说明文字；严格解析
+/// 报 "trailing characters" 会让工具调用失败并拖垮正在跑的子代理。
+#[test]
+fn trailing_content_after_arguments_still_parses() {
+    assert_eq!(
+        parse_arguments(r#"{"command":"echo probe-again"}{"command":"rm -rf /"}"#).unwrap(),
+        json!({"command": "echo probe-again"})
+    );
+    assert_eq!(
+        parse_arguments("{\"path\":\"a\"}\n这里还有一段解释").unwrap(),
+        json!({"path": "a"})
+    );
+}
+
+/// 嵌套对象与数组内的尾随内容不影响外层解析。
+#[test]
+fn nested_arguments_with_trailing_text_parse() {
+    let arguments = r#"{"files":[{"path":"a.rs"},{"path":"b.rs"}],"note":"x"} trailing"#;
+    assert_eq!(
+        parse_arguments(arguments).unwrap(),
+        json!({"files": [{"path": "a.rs"}, {"path": "b.rs"}], "note": "x"})
+    );
+}
+
+/// 完全不是 JSON 时仍然报错，不能因为容错而静默吞掉坏输入。
+#[test]
+fn non_json_arguments_still_fail() {
+    assert!(parse_arguments("这不是 JSON").is_err());
+    assert!(parse_arguments("{broken").is_err());
+}
+
+/// 容错只接受对象：工具参数在契约上是对象，尾随内容后取出标量或数组时
+/// 继续放行等于让 `run_command` 这类工具拿着无意义入参执行。
+#[test]
+fn trailing_content_after_a_non_object_argument_still_fails() {
+    let array = parse_arguments("[\"a\",\"b\"] 后面还有内容").unwrap_err();
+    assert!(array.to_string().contains("tool arguments are not valid JSON"), "{array}");
+
+    let scalar = parse_arguments("123 后面还有内容").unwrap_err();
+    assert!(scalar.to_string().contains("tool arguments are not valid JSON"), "{scalar}");
+
+    assert!(parse_arguments("\"just a string\" 后面还有内容").is_err());
+}
+
+/// 说明文字在参数之前时不前向扫描：那会把示例对象当成真实参数执行。
+#[test]
+fn leading_prose_before_arguments_still_fails() {
+    let error = parse_arguments("可以这样调用：\n{\"path\":\"a.rs\"}").unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("tool arguments are not valid JSON"),
+        "{error}"
+    );
+}
+
+/// 复现子代理的真实故障：几百行的长参数后面残留片段时仍取前面的完整对象。
+#[test]
+fn long_arguments_with_a_trailing_fragment_still_parse() {
+    let arguments = format!(
+        "{{\"content\":\"{}\",\"path\":\"a.rs\"}} 残余片段",
+        "line\\n".repeat(400)
+    );
+
+    let parsed = parse_arguments(&arguments).unwrap();
+
+    assert_eq!(parsed["path"], json!("a.rs"));
+    assert_eq!(parsed["content"].as_str().unwrap().lines().count(), 400);
+}

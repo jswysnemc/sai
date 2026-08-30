@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use serde_json::Value;
 use std::collections::BTreeSet;
 
@@ -25,7 +25,8 @@ impl LoadRequest {
     /// 返回:
     /// - 资源类型和去重后的关键词数组
     pub(super) fn parse(arguments: &str) -> Result<Self> {
-        let value = serde_json::from_str::<Value>(arguments.trim())?;
+        // 参数来自模型输出，尾部多带内容时退回第一个完整 JSON 对象
+        let value = super::first_json_object(arguments).context("invalid load arguments")?;
         let Some(object) = value.as_object() else {
             bail!("load arguments must be a JSON object");
         };
@@ -167,6 +168,28 @@ mod tests {
 
         assert_eq!(request.resource_type, LoadType::Tool);
         assert_eq!(request.keywords, ["web_search", "web_fetch"]);
+    }
+
+    /// 参数尾部多带内容时仍能解析出加载请求。
+    #[test]
+    fn tolerates_trailing_content_after_load_arguments() {
+        let request =
+            LoadRequest::parse(r#"{"type":"tool","keywords":["web_search"]} 残余片段"#).unwrap();
+
+        assert_eq!(request.resource_type, LoadType::Tool);
+        assert_eq!(request.keywords, ["web_search"]);
+    }
+
+    /// 非对象参数与说明文字在前时仍然拒绝。
+    #[test]
+    fn rejects_non_object_and_leading_prose_load_arguments() {
+        let array = LoadRequest::parse(r#"["web_search"] 残余片段"#).unwrap_err();
+        assert!(array.to_string().contains("invalid load arguments"), "{array}");
+
+        let prose =
+            LoadRequest::parse("示例：\n{\"type\":\"tool\",\"keywords\":[\"web_search\"]}")
+                .unwrap_err();
+        assert!(prose.to_string().contains("invalid load arguments"), "{prose}");
     }
 
     /// 验证类型与字段冲突时拒绝猜测。

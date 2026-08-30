@@ -286,8 +286,12 @@ pub(crate) fn resolve_execution_call(
         );
     }
 
-    // 1. 严格解析统一外壳，避免额外字段或非对象参数绕过真实工具校验
-    let request = serde_json::from_str::<InvokeRequest>(&provider_call.function.arguments)
+    // 1. 解析统一外壳：额外字段与非对象参数仍然拒绝，不会绕过真实工具校验。
+    //    外壳来自模型输出，尾部多带内容时退回第一个完整 JSON 对象，长参数
+    //    （几百行的写入内容）最容易触发这种残留，严格解析会让整次调用失败。
+    let envelope = super::first_json_object(&provider_call.function.arguments)
+        .context("invalid invoke_tool arguments")?;
+    let request = serde_json::from_value::<InvokeRequest>(envelope)
         .context("invalid invoke_tool arguments")?;
     let tool_name = request.tool_name.trim();
     if tool_name.is_empty() {
@@ -356,6 +360,79 @@ mod tests {
         assert_eq!(
             resolved.function.arguments,
             provider_call.function.arguments
+        );
+    }
+
+    /// 外壳尾部多带内容时仍能解包，长参数不会因此让整次调用失败。
+    #[test]
+    fn resolves_invoker_envelope_with_trailing_content() {
+        let visibility = ToolVisibility::new(vec!["*".to_string()]);
+        let provider_call = call(
+            tools::INVOKE_NAME,
+            r#"{"tool_name":"read_file","arguments":{"path":"README.md"}} 残余片段"#,
+        );
+
+        let resolved = resolve_execution_call(&visibility, &provider_call).unwrap();
+
+        assert_eq!(resolved.function.name, "read_file");
+        assert_eq!(
+            serde_json::from_str::<Value>(&resolved.function.arguments).unwrap(),
+            serde_json::json!({"path": "README.md"})
+        );
+    }
+
+    /// 容错不放宽外壳本身：额外字段、非对象入参、畸形输入、说明文字在前都照旧拒绝。
+    #[test]
+    fn trailing_content_does_not_relax_envelope_validation() {
+        let visibility = ToolVisibility::new(vec!["*".to_string()]);
+
+        let unknown_field = resolve_execution_call(
+            &visibility,
+            &call(
+                tools::INVOKE_NAME,
+                r#"{"tool_name":"read_file","arguments":{"path":"a"},"extra":1} 残余片段"#,
+            ),
+        )
+        .unwrap_err();
+        let unknown_field = format!("{unknown_field:#}");
+        assert!(unknown_field.contains("unknown field"), "{unknown_field}");
+
+        let non_object = resolve_execution_call(
+            &visibility,
+            &call(
+                tools::INVOKE_NAME,
+                r#"{"tool_name":"read_file","arguments":[]} 残余片段"#,
+            ),
+        )
+        .unwrap_err();
+        assert!(
+            non_object.to_string().contains("must be a JSON object"),
+            "{non_object}"
+        );
+
+        let malformed = resolve_execution_call(
+            &visibility,
+            &call(tools::INVOKE_NAME, r#"{"tool_name":"read_file""#),
+        )
+        .unwrap_err();
+        assert!(
+            malformed.to_string().contains("invalid invoke_tool arguments"),
+            "{malformed}"
+        );
+
+        let leading_prose = resolve_execution_call(
+            &visibility,
+            &call(
+                tools::INVOKE_NAME,
+                "示例：\n{\"tool_name\":\"read_file\",\"arguments\":{}}",
+            ),
+        )
+        .unwrap_err();
+        assert!(
+            leading_prose
+                .to_string()
+                .contains("invalid invoke_tool arguments"),
+            "{leading_prose}"
         );
     }
 

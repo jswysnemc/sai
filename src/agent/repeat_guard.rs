@@ -113,7 +113,8 @@ fn key_of(name: &str, arguments: &str) -> (String, String) {
 /// 返回:
 /// - JSON 按字段名排序后的文本；非 JSON 则去掉空白
 fn normalize_arguments(arguments: &str) -> String {
-    serde_json::from_str::<serde_json::Value>(arguments)
+    // 与实际执行的入参保持同一解析规则，否则同一调用换个残片就绕过重复防护
+    super::first_json_object(arguments)
         .map(|value| canonical_json(&value))
         .unwrap_or_else(|_| arguments.split_whitespace().collect::<String>())
 }
@@ -231,6 +232,15 @@ mod tests {
             RepeatVerdict::Stop {
                 seen: IDENTICAL_STOP_THRESHOLD + 1
             }
+        );
+    }
+
+    /// 尾随残片不能绕过重复防护：归一化要与实际执行的入参一致。
+    #[test]
+    fn trailing_content_normalizes_to_the_same_key() {
+        assert_eq!(
+            normalize_arguments(r#"{"path":"a"} 残余片段"#),
+            normalize_arguments(r#"{"path":"a"}"#)
         );
     }
 

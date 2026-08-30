@@ -274,7 +274,7 @@ fn validated_arguments(
     let value = if provider_call.function.arguments.trim().is_empty() {
         json!({})
     } else {
-        serde_json::from_str::<Value>(&provider_call.function.arguments)
+        super::first_json_object(&provider_call.function.arguments)
             .context("invalid DeepSeek anchor tool arguments")?
     };
     let object = value
@@ -460,6 +460,36 @@ mod tests {
         })))
         .unwrap_err();
         assert!(existing.to_string().contains("Cannot overwrite"));
+    }
+
+    /// 参数尾部多带内容时取第一个完整对象，schema 校验照常进行。
+    #[test]
+    fn tolerates_trailing_content_after_anchor_arguments() {
+        let bash = resolve_execution_call(&call(BASH_NAME, r#"{"command":"pwd"} 残余片段"#)).unwrap();
+
+        assert_eq!(bash.function.name, "run_command");
+        assert_eq!(json_args(&bash), json!({"command": "pwd"}));
+    }
+
+    /// 非对象参数与说明文字在前时仍然拒绝，避免把示例参数当成真实调用。
+    #[test]
+    fn rejects_non_object_and_leading_prose_anchor_arguments() {
+        let array = resolve_execution_call(&call(BASH_NAME, "[\"pwd\"] 残余片段")).unwrap_err();
+        assert!(
+            array
+                .to_string()
+                .contains("invalid DeepSeek anchor tool arguments"),
+            "{array}"
+        );
+
+        let prose =
+            resolve_execution_call(&call(BASH_NAME, "示例：\n{\"command\":\"pwd\"}")).unwrap_err();
+        assert!(
+            prose
+                .to_string()
+                .contains("invalid DeepSeek anchor tool arguments"),
+            "{prose}"
+        );
     }
 
     fn call(name: &str, arguments: &str) -> ToolCall {

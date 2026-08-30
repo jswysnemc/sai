@@ -236,6 +236,12 @@ pub struct ToolRegistry {
     /// 工具注册顺序；请求里的 tools 数组按它输出，保证前缀稳定以命中供应商缓存
     order: Vec<String>,
     permission_profile: Option<PermissionProfile>,
+    /// 当前会话状态目录（会话唯一身份），供网格目标归属判定
+    session_key: String,
+    /// 当前会话 id
+    session_id: String,
+    /// 是否允许网格工具跨越会话边界（`mesh.cross_session`）
+    mesh_cross_session: bool,
 }
 
 impl ToolRegistry {
@@ -258,7 +264,46 @@ impl ToolRegistry {
     /// 返回:
     /// - 无
     pub(crate) fn set_permission_profile(&mut self, profile: PermissionProfile) {
-        self.permission_profile = Some(profile);
+        self.permission_profile = Some(self.apply_session_ownership(profile));
+    }
+
+    /// 绑定当前会话身份与跨会话开关。
+    ///
+    /// 网格工具的归属判定依赖会话身份，因此注册交互式工具时必须先绑定；
+    /// 权限配置可以在这之前或之后挂上，两种顺序都要生效。
+    ///
+    /// 参数:
+    /// - `session_key`: 当前会话状态目录
+    /// - `session_id`: 当前会话 id
+    /// - `cross_session`: 是否允许跨会话投递
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn set_session_ownership(
+        &mut self,
+        session_key: String,
+        session_id: String,
+        cross_session: bool,
+    ) {
+        self.session_key = session_key;
+        self.session_id = session_id;
+        self.mesh_cross_session = cross_session;
+        if let Some(profile) = self.permission_profile.take() {
+            self.permission_profile = Some(self.apply_session_ownership(profile));
+        }
+    }
+
+    /// 把注册表持有的会话身份与跨会话开关写进权限配置。
+    ///
+    /// 参数:
+    /// - `profile`: 待补充的权限配置
+    ///
+    /// 返回:
+    /// - 补充后的权限配置
+    fn apply_session_ownership(&self, profile: PermissionProfile) -> PermissionProfile {
+        profile
+            .with_session(&self.session_key, &self.session_id)
+            .with_cross_session(self.mesh_cross_session)
     }
 
     /// 返回当前权限配置的副本。
@@ -602,7 +647,14 @@ impl ToolRegistry {
         use_dsh_bash: bool,
     ) -> Result<ToolOutput> {
         if let Some(profile) = &self.permission_profile {
-            let sandboxed = profile.authorize(name, tool.permission, args)?;
+            // 网格工具按目标地址判定归属：投给别人的会话默认直接拒绝
+            let scope = super::mesh::session_scope_for_call(
+                name,
+                args,
+                &self.session_key,
+                &self.session_id,
+            );
+            let sandboxed = profile.authorize_scoped(name, tool.permission, args, scope)?;
             if sandboxed {
                 args.as_object_mut()
                     .context("tool arguments must be a JSON object")?
@@ -635,12 +687,17 @@ impl ToolRegistry {
 }
 
 /// 解析工具参数，空参数按空对象处理。
+///
+/// 解析规则统一在 [`crate::agent::first_json_object`]：严格解析优先，失败时
+/// 退回取第一个完整的 JSON 对象。模型流式吐参数时偶尔会在有效 JSON 后面多带
+/// 一段（另一个 JSON、说明文字、或截断后拼接的残片），严格解析会让整次工具
+/// 调用失败并拖垮正在跑的子代理，而入参本身是完好的。
 fn parse_arguments(arguments: &str) -> Result<Value> {
-    if arguments.trim().is_empty() {
-        Ok(json!({}))
-    } else {
-        Ok(serde_json::from_str(arguments)?)
+    let trimmed = arguments.trim();
+    if trimmed.is_empty() {
+        return Ok(json!({}));
     }
+    crate::agent::first_json_object(trimmed).context("tool arguments are not valid JSON")
 }
 
 /// 返回 JSON 值的类型名称，用于参数校验错误说明。

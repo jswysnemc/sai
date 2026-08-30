@@ -144,6 +144,55 @@ fn disabled_providers_are_excluded_from_model_choices() {
         .any(|choice| choice.provider_id == provider_id));
 }
 
+/// 只改 `default_model` 而未加进 `models` 时，新模型仍要可选。
+///
+/// `/config` 的编辑路径与直接手改配置文件都可能让 `default_model` 落在
+/// `models` 之外；只读 `models` 会让当前生效的模型在 `/model` 里凭空消失。
+#[test]
+fn default_model_outside_models_list_is_still_selectable() {
+    let mut config = AppConfig::default();
+    let provider_id = config.providers[0].id.clone();
+    config.providers[0].models = vec!["old-model".to_string()];
+    config.providers[0].default_model = "new-model".to_string();
+
+    let models = models_for(&config, &provider_id);
+
+    assert!(models.iter().any(|model| model == "old-model"), "{models:?}");
+    assert!(models.iter().any(|model| model == "new-model"), "{models:?}");
+}
+
+/// `default_model` 已在 `models` 里时不重复出现。
+#[test]
+fn default_model_inside_models_list_is_not_duplicated() {
+    let mut config = AppConfig::default();
+    let provider_id = config.providers[0].id.clone();
+    config.providers[0].models = vec!["model-a".to_string(), "model-b".to_string()];
+    config.providers[0].default_model = "model-a".to_string();
+
+    assert_eq!(models_for(&config, &provider_id), vec!["model-a".to_string(), "model-b".to_string()]);
+}
+
+/// `models` 为空时回落到 `default_model`，保持既有行为。
+#[test]
+fn empty_models_list_falls_back_to_default_model() {
+    let mut config = AppConfig::default();
+    let provider_id = config.providers[0].id.clone();
+    config.providers[0].models.clear();
+    config.providers[0].default_model = "only-model".to_string();
+
+    assert_eq!(models_for(&config, &provider_id), vec!["only-model".to_string()]);
+}
+
+/// 取出指定供应商在模型选择列表里的模型标识。
+fn models_for(config: &AppConfig, provider_id: &str) -> Vec<String> {
+    config
+        .provider_model_choices()
+        .into_iter()
+        .filter(|choice| choice.provider_id == provider_id)
+        .map(|choice| choice.model)
+        .collect()
+}
+
 /// 停用的供应商不能被解析，避免绕过开关继续发请求。
 #[test]
 fn disabled_provider_cannot_be_resolved() {

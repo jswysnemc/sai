@@ -1,7 +1,7 @@
 use super::Agent;
 use crate::llm::ToolCall;
 use crate::tools::fs_path::expand_path;
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -14,7 +14,8 @@ use std::path::PathBuf;
 /// 返回:
 /// - 未知读取来源或快照有效时成功；已知快照失效时返回阻断原因
 pub(super) fn ensure_edit_target_was_read(agent: &Agent, call: &ToolCall) -> Result<()> {
-    let args = serde_json::from_str::<Value>(&call.function.arguments)?;
+    let args =
+        super::first_json_object(&call.function.arguments).context("invalid tool arguments")?;
     let path_text = args
         .get("path")
         .and_then(Value::as_str)
@@ -54,7 +55,8 @@ pub(super) fn record_successful_reads(agent: &Agent, call: &ToolCall, output: &s
     if call.function.name != "read_file" || output.starts_with("tool error:") {
         return Ok(());
     }
-    let args = serde_json::from_str::<Value>(&call.function.arguments)?;
+    let args =
+        super::first_json_object(&call.function.arguments).context("invalid tool arguments")?;
     for path in read_targets(&args) {
         if path.is_file() {
             agent.state().record_read_file(&path)?;
@@ -89,5 +91,14 @@ mod tests {
         assert_eq!(read_targets(&single).len(), 1);
         let batch = serde_json::json!({"files":[{"path":"a"},{"path":"b"}]});
         assert_eq!(read_targets(&batch).len(), 2);
+    }
+
+    /// 门禁放行后这里会二次解析参数，必须用与门禁相同的规则，否则带残片的调用
+    /// 会在登记读取记录时把错误冒到整轮之外。
+    #[test]
+    fn reparse_uses_the_same_tolerant_rule_as_the_gate() {
+        let args = crate::agent::first_json_object(r#"{"path":"one.txt"} 残余片段"#).unwrap();
+
+        assert_eq!(read_targets(&args), vec![expand_path("one.txt")]);
     }
 }
