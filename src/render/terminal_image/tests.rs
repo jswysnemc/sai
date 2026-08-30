@@ -4,20 +4,19 @@ mod tests {
 
     #[test]
     fn detects_iterm_terminal_program() {
-        std::env::set_var("TERM_PROGRAM", "iTerm.app");
+        // 用线程局部覆盖而不是改环境变量：并行测试共享进程环境，
+        // 改动会被同进程的其它渲染测试看到
+        test_override::set(None, Some(true), None);
         assert!(supports_iterm_inline_image());
-        std::env::remove_var("TERM_PROGRAM");
+        test_override::set(None, None, None);
     }
 
     #[test]
     fn wezterm_prefers_iterm_protocol_over_kitty() {
-        std::env::set_var("TERM_PROGRAM", "WezTerm");
-        std::env::remove_var("KITTY_WINDOW_ID");
-        std::env::set_var("TERM", "xterm-256color");
+        test_override::set(Some(false), Some(true), None);
         assert!(!supports_kitty_graphics());
         assert!(supports_iterm_inline_image());
-        std::env::remove_var("TERM_PROGRAM");
-        std::env::remove_var("TERM");
+        test_override::set(None, None, None);
     }
 
     #[test]
@@ -102,9 +101,9 @@ mod tests {
 
     #[test]
     fn detects_windows_terminal_session() {
-        std::env::set_var("WT_SESSION", "session-id");
+        test_override::set(None, None, Some(true));
         assert!(supports_windows_terminal_sixel());
-        std::env::remove_var("WT_SESSION");
+        test_override::set(None, None, None);
     }
 
     #[test]

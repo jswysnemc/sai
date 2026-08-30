@@ -152,15 +152,74 @@ fn parse_cell_count(value: &str) -> Option<usize> {
         .filter(|value| *value > 0)
 }
 
+/// 测试用的协议判定覆盖（线程局部）。
+///
+/// 直接改环境变量会污染同进程内的其它测试：测试默认并行执行，一处
+/// `remove_var("KITTY_WINDOW_ID")` 会让并发运行的图片渲染测试误判终端
+/// 不支持图形协议，从而随机失败。线程局部覆盖天然按测试隔离。
+#[cfg(test)]
+pub(super) mod test_override {
+    use std::cell::Cell;
+
+    thread_local! {
+        static KITTY: Cell<Option<bool>> = const { Cell::new(None) };
+        static ITERM: Cell<Option<bool>> = const { Cell::new(None) };
+        static SIXEL: Cell<Option<bool>> = const { Cell::new(None) };
+    }
+
+    /// 一次性设置三项协议判定结果，`None` 表示回退到真实环境检测。
+    pub fn set(kitty: Option<bool>, iterm: Option<bool>, sixel: Option<bool>) {
+        KITTY.with(|cell| cell.set(kitty));
+        ITERM.with(|cell| cell.set(iterm));
+        SIXEL.with(|cell| cell.set(sixel));
+    }
+
+    pub fn kitty() -> Option<bool> {
+        KITTY.with(|cell| cell.get())
+    }
+
+    pub fn iterm() -> Option<bool> {
+        ITERM.with(|cell| cell.get())
+    }
+
+    pub fn sixel() -> Option<bool> {
+        SIXEL.with(|cell| cell.get())
+    }
+}
+
 /// 判断当前终端是否支持 Kitty 图形协议。
+///
+/// 环境变量只能覆盖一部分终端：Ghostty / foot / Konsole / rio 都实现了
+/// Kitty 协议，但不设 `KITTY_WINDOW_ID`。漏判会让 mermaid 与 `$$…$$`
+/// 公式静默降级成粗糙的半块栅格。
+///
+/// tmux 需要显式开启 allow-passthrough 才会转发图形序列，默认不透传，
+/// 因此在 tmux 里不按终端名推断支持——宁可降级，也不要吐出一串被吞掉的
+/// 转义序列。WezTerm 走下面的 iTerm2 分支，这里不重复判定。
 ///
 /// 返回:
 /// - 是否支持 Kitty 图形协议
 fn supports_kitty_graphics() -> bool {
-    std::env::var_os("KITTY_WINDOW_ID").is_some()
-        || std::env::var("TERM")
-            .map(|term| term.contains("xterm-kitty"))
-            .unwrap_or(false)
+    #[cfg(test)]
+    if let Some(value) = test_override::kitty() {
+        return value;
+    }
+    if std::env::var_os("KITTY_WINDOW_ID").is_some() {
+        return true;
+    }
+    if std::env::var_os("TMUX").is_some() {
+        return false;
+    }
+    let term = std::env::var("TERM").unwrap_or_default();
+    // xterm-kitty 与 Ghostty 都走 Kitty 协议；foot 以 foot / foot-extra 开头
+    if term.contains("xterm-kitty") || term.starts_with("xterm-ghostty") || term.starts_with("foot")
+    {
+        return true;
+    }
+    matches!(
+        std::env::var("TERM_PROGRAM").unwrap_or_default().as_str(),
+        "ghostty" | "foot" | "Konsole" | "rio"
+    )
 }
 
 /// 判断当前终端是否支持 iTerm2 图片协议。
@@ -168,6 +227,10 @@ fn supports_kitty_graphics() -> bool {
 /// 返回:
 /// - 是否支持 iTerm2 图片协议
 fn supports_iterm_inline_image() -> bool {
+    #[cfg(test)]
+    if let Some(value) = test_override::iterm() {
+        return value;
+    }
     std::env::var("TERM_PROGRAM")
         .map(|program| matches!(program.as_str(), "iTerm.app" | "WezTerm"))
         .unwrap_or(false)
@@ -178,6 +241,10 @@ fn supports_iterm_inline_image() -> bool {
 /// 返回:
 /// - 是否可能支持 Sixel 图形协议
 fn supports_windows_terminal_sixel() -> bool {
+    #[cfg(test)]
+    if let Some(value) = test_override::sixel() {
+        return value;
+    }
     std::env::var_os("WT_SESSION").is_some()
         || std::env::var("TERM_PROGRAM")
             .map(|program| program == "Windows_Terminal")

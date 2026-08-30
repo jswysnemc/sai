@@ -53,12 +53,77 @@ pub(crate) fn render_cell(source: &str, max_cols: usize, mixed: bool) -> CellCon
     if source.trim().is_empty() {
         return CellContent::empty();
     }
-    match render_cell_inner(source, max_cols, mixed) {
+    // 表格单元格同样每帧重算：流式期间每个单元格都会 fork typst /
+    // rsvg-convert / magick，未缓存时一张含公式的表能卡住整屏
+    // 测试替身输出与真实渲染互斥，不入缓存避免测试间串扰
+    let enabled = !super::test_stub_enabled();
+    let key = cell_cache_key(source, max_cols, mixed);
+    if enabled {
+        if let Some(cached) = cell_cache_get(&key) {
+            return cached;
+        }
+    }
+    let rendered = match render_cell_inner(source, max_cols, mixed) {
         Ok(mut content) => {
             content.math_source = Some(encode_source(source, mixed));
             content
         }
         Err(_) => CellContent::from_inline(format!("{MD_INLINE_CODE_STYLE}{source}{RESET}")),
+    };
+    if enabled {
+        cell_cache_put(key, rendered.clone());
+    }
+    rendered
+}
+
+/// 表格公式单元格缓存上限。
+const CELL_CACHE_LIMIT: usize = 64;
+
+/// 表格公式单元格渲染缓存。
+///
+/// 与 `render_cached` 分开存放：`render_cached` 只缓存 String，
+/// 而表格单元格还需要 width / is_image 等布局元数据。
+static CELL_CACHE: std::sync::LazyLock<std::sync::Mutex<Vec<(u64, CellContent)>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(Vec::new()));
+
+/// 计算单元格缓存键。
+///
+/// 参数:
+/// - `source`: 公式或混合内容
+/// - `max_cols`: 最大列宽
+/// - `mixed`: 是否包含普通文本
+///
+/// 返回:
+/// - 缓存键
+fn cell_cache_key(source: &str, max_cols: usize, mixed: bool) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::hash::DefaultHasher::new();
+    source.hash(&mut hasher);
+    max_cols.hash(&mut hasher);
+    mixed.hash(&mut hasher);
+    // 终端宽度决定默认列宽，resize 后必须重新渲染
+    crossterm::terminal::size()
+        .unwrap_or((80, 24))
+        .hash(&mut hasher);
+    hasher.finish()
+}
+
+/// 读取单元格缓存。
+fn cell_cache_get(key: &u64) -> Option<CellContent> {
+    CELL_CACHE
+        .lock()
+        .ok()
+        .and_then(|cache| cache.iter().find(|(entry, _)| entry == key).map(|(_, v)| v.clone()))
+}
+
+/// 写入单元格缓存。
+fn cell_cache_put(key: u64, content: CellContent) {
+    if let Ok(mut cache) = CELL_CACHE.lock() {
+        if cache.len() >= CELL_CACHE_LIMIT {
+            cache.clear();
+        }
+        cache.retain(|(entry, _)| *entry != key);
+        cache.push((key, content));
     }
 }
 

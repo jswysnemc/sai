@@ -373,11 +373,64 @@ fn table_cell_math_render_source(trimmed: &str) -> Option<(String, bool)> {
     {
         return Some((trimmed[2..trimmed.len() - 2].to_string(), false));
     }
-    // 3. 文字 + 公式：整格作为混合源码（Typst/LaTeX 管线）
-    if dollar_count >= 2 {
+    // 3. 文字 + 公式：整格作为混合源码（Typst/LaTeX 管线）。
+    //    必须存在真正的成对分隔符：只数 `$` 会把 `Between $5 and $10`、
+    //    `USD$5 – USD$9` 这类金额/散文误判为公式，送进图片管线后
+    //    在不支持 Sixel 的终端上整格变空白
+    if dollar_count >= 2 && has_math_delimiters(trimmed) {
         return Some((trimmed.to_string(), true));
     }
     None
+}
+
+/// 判断文本中是否存在成对的数学分隔符（`$…$` 或 `$$…$$`）。
+///
+/// 采用与 pandoc 相同的惯例：分隔符内侧不得紧邻空白。这样 `Between $5
+/// and $10`、`costs $3, ships $7` 这类金额与散文会被排除，而 `$x^2$`、
+/// `total $a+b$ items` 仍识别为公式。
+///
+/// 反斜杠转义的 `\$` 不参与配对，内容为空的 `$$` 不算公式。
+/// 注意 `USD$5 – USD$9` 这类两侧都紧贴数字的写法仍有歧义，无法从语法上
+/// 与数学区分，保持按公式处理。
+///
+/// 参数:
+/// - `text`: 待检查文本
+///
+/// 返回:
+/// - 存在非空公式片段时为真
+fn has_math_delimiters(text: &str) -> bool {
+    let chars: Vec<char> = text.chars().collect();
+    let len = chars.len();
+    let mut index = 0usize;
+    while index < len {
+        if chars[index] != '$' || (index > 0 && chars[index - 1] == '\\') {
+            index += 1;
+            continue;
+        }
+        let delim_len = if index + 1 < len && chars[index + 1] == '$' {
+            2
+        } else {
+            1
+        };
+        let content_start = index + delim_len;
+        let mut scan = content_start;
+        while scan + delim_len <= len {
+            let escaped = scan > 0 && chars[scan - 1] == '\\';
+            let matched = chars[scan] == '$'
+                && (delim_len == 1 || chars[scan + 1] == '$')
+                && !escaped;
+            if matched {
+                // 内容非空，且两侧都不以空白紧贴分隔符
+                let content: String = chars[content_start..scan].iter().collect();
+                return !content.is_empty()
+                    && !content.starts_with(char::is_whitespace)
+                    && !content.ends_with(char::is_whitespace);
+            }
+            scan += 1;
+        }
+        index += delim_len;
+    }
+    false
 }
 
 /// 预处理表格单元格文本，将多行内容折叠为单行。
@@ -591,4 +644,50 @@ fn is_emphasis_end(chars: &[char], index: usize) -> bool {
 /// - 是否为英文单词字符
 fn is_word_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::table_cell_math_render_source;
+
+    /// 金额/散文里的裸 `$` 不是公式，不能进图片管线。
+    #[test]
+    fn plain_currency_text_is_not_math() {
+        for text in [
+            "Between $5 and $10",
+            "costs $3, ships $7",
+            "a $ b $ c",
+            "$$",
+            "price: $",
+            "revenue $1 then $ 2",
+        ] {
+            assert_eq!(
+                table_cell_math_render_source(text),
+                None,
+                "{text} 不应被当成公式"
+            );
+        }
+    }
+
+    /// 成对分隔符必须被识别。
+    #[test]
+    fn delimited_math_is_recognized() {
+        assert_eq!(
+            table_cell_math_render_source("$x^2$"),
+            Some(("x^2".to_string(), false))
+        );
+        assert_eq!(
+            table_cell_math_render_source("$$E=mc^2$$"),
+            Some(("E=mc^2".to_string(), false))
+        );
+        let (source, mixed) = table_cell_math_render_source("total $a+b$ items").unwrap();
+        assert_eq!(source, "total $a+b$ items");
+        assert!(mixed);
+    }
+
+    /// 转义的 \$ 不构成分隔符。
+    #[test]
+    fn escaped_dollar_is_not_a_delimiter() {
+        assert_eq!(table_cell_math_render_source(r"cost \$5 and \$6"), None);
+    }
 }

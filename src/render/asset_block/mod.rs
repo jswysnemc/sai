@@ -220,10 +220,37 @@ pub(super) fn render_error(label: &str, message: &str) -> String {
     format!("{ASSET_ERROR_STYLE}[{label} render failed: {message}]{RESET}\n")
 }
 
+#[cfg(test)]
+thread_local! {
+    static TEST_STUB: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// 判断测试替身是否开启。
+///
+/// 用线程局部状态而不是环境变量：测试默认每测试一条线程，环境变量是
+/// 进程级的，stub 测试设上之后会与并行的真实渲染测试互相污染，
+/// 表现为随机失败。线程局部天然按测试隔离，不需要加锁。
 ///
 /// 返回:
 /// - 是否跳过实际图片生成
+#[cfg(test)]
 pub(super) fn test_stub_enabled() -> bool {
-    cfg!(test) && std::env::var_os("SAI_RENDER_ASSET_TEST_STUB").is_some()
+    TEST_STUB.with(|flag| flag.get())
+}
+
+#[cfg(not(test))]
+pub(super) fn test_stub_enabled() -> bool {
+    false
+}
+
+/// 设置当前线程的测试替身开关。
+///
+/// 参数:
+/// - `enabled`: 是否跳过实际图片生成
+///
+/// 返回:
+/// - 无
+#[cfg(test)]
+pub(super) fn set_test_stub(enabled: bool) {
+    TEST_STUB.with(|flag| flag.set(enabled));
 }

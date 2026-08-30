@@ -6,9 +6,6 @@ use crate::render::style::{
     MD_LIST_MARKER_STYLE, MD_STRIKE_STYLE, MD_URL_STYLE, PRIMARY_STYLE, RESET,
 };
 use crate::render::table;
-use std::sync::Mutex;
-
-static ASSET_STUB_LOCK: Mutex<()> = Mutex::new(());
 
 #[test]
 fn streams_only_complete_lines() {
@@ -355,10 +352,9 @@ fn keeps_identifier_underscores_literal() {
 
 #[test]
 fn renders_inline_math_formulas_visibly() {
-    let _guard = ASSET_STUB_LOCK.lock().unwrap();
-    std::env::set_var("SAI_RENDER_ASSET_TEST_STUB", "1");
+    crate::render::asset_block::set_test_stub(true);
     let output = render_inline("inline $E=mc^2$ and display $$a^2+b^2=c^2$$");
-    std::env::remove_var("SAI_RENDER_ASSET_TEST_STUB");
+    crate::render::asset_block::set_test_stub(false);
     assert!(output.contains("inline "));
     assert!(output.contains(" and display "));
     assert!(output.contains("[inline math rendering skipped]"));
@@ -368,11 +364,10 @@ fn renders_inline_math_formulas_visibly() {
 
 #[test]
 fn source_preview_keeps_inline_math_as_source_until_finalization() {
-    let _guard = ASSET_STUB_LOCK.lock().unwrap();
-    std::env::set_var("SAI_RENDER_ASSET_TEST_STUB", "1");
+    crate::render::asset_block::set_test_stub(true);
     let mut renderer = MarkdownStreamRenderer::new_source_preview();
     let output = renderer.push("inline $E=mc^2$ and display $$a^2+b^2=c^2$$\n");
-    std::env::remove_var("SAI_RENDER_ASSET_TEST_STUB");
+    crate::render::asset_block::set_test_stub(false);
 
     assert_eq!(output, "inline $E=mc^2$ and display $$a^2+b^2=c^2$$\n");
     assert!(!output.contains("[inline math rendering skipped]"));
@@ -380,15 +375,14 @@ fn source_preview_keeps_inline_math_as_source_until_finalization() {
 
 #[test]
 fn source_preview_renders_closed_mermaid_and_previews_open_block() {
-    let _guard = ASSET_STUB_LOCK.lock().unwrap();
-    std::env::set_var("SAI_RENDER_ASSET_TEST_STUB", "1");
+    crate::render::asset_block::set_test_stub(true);
     let mut renderer = MarkdownStreamRenderer::new_source_preview();
     // 已闭合的 mermaid 块：流式中立即输出渲染结果，不再保留原文
     let closed = renderer.push("```mermaid\ngraph TD\nA --> B\n```\n");
     // 未闭合的块：正文不输出，由 snapshot 提供弱化预览
     let partial = renderer.push("```mermaid\ngraph LR\n");
     let open_preview = renderer.snapshot_open_structures();
-    std::env::remove_var("SAI_RENDER_ASSET_TEST_STUB");
+    crate::render::asset_block::set_test_stub(false);
 
     assert!(closed.contains("[asset rendering skipped]"));
     assert!(!closed.contains("graph TD"));
@@ -400,12 +394,11 @@ fn source_preview_renders_closed_mermaid_and_previews_open_block() {
 
 #[test]
 fn removes_stray_formula_prefix_at_line_start() {
-    let _guard = ASSET_STUB_LOCK.lock().unwrap();
-    std::env::set_var("SAI_RENDER_ASSET_TEST_STUB", "1");
+    crate::render::asset_block::set_test_stub(true);
     let backtick = render_inline("`$x^2$");
     let dunhao = render_inline("、$x^2$");
     let text = render_inline("文字、$x^2$");
-    std::env::remove_var("SAI_RENDER_ASSET_TEST_STUB");
+    crate::render::asset_block::set_test_stub(false);
     assert!(!backtick.starts_with('`'));
     assert!(!dunhao.starts_with('、'));
     assert!(text.starts_with("文字、"));
@@ -413,11 +406,10 @@ fn removes_stray_formula_prefix_at_line_start() {
 
 #[test]
 fn renders_multiline_math_blocks_as_assets() {
-    let _guard = ASSET_STUB_LOCK.lock().unwrap();
-    std::env::set_var("SAI_RENDER_ASSET_TEST_STUB", "1");
+    crate::render::asset_block::set_test_stub(true);
     let mut renderer = MarkdownStreamRenderer::new();
     let output = renderer.push("$$\na^2 + b^2 = c^2\n$$\n");
-    std::env::remove_var("SAI_RENDER_ASSET_TEST_STUB");
+    crate::render::asset_block::set_test_stub(false);
     assert!(output.contains("$$\na^2 + b^2 = c^2\n$$\n"));
     assert!(output.contains("\x1b[1A\r\x1b[2K"));
     assert!(output.contains("[asset rendering skipped]"));
@@ -426,11 +418,10 @@ fn renders_multiline_math_blocks_as_assets() {
 
 #[test]
 fn renders_svg_fences_as_assets() {
-    let _guard = ASSET_STUB_LOCK.lock().unwrap();
-    std::env::set_var("SAI_RENDER_ASSET_TEST_STUB", "1");
+    crate::render::asset_block::set_test_stub(true);
     let mut renderer = MarkdownStreamRenderer::new();
     let output = renderer.push("```svg\n<svg viewBox=\"0 0 8 8\"><path d=\"M0 0h8v8z\" /></svg>\n```\n");
-    std::env::remove_var("SAI_RENDER_ASSET_TEST_STUB");
+    crate::render::asset_block::set_test_stub(false);
     assert!(output.contains("```svg\n<svg viewBox=\"0 0 8 8\"><path d=\"M0 0h8v8z\" /></svg>\n```\n"));
     assert!(output.contains("\x1b[1A\r\x1b[2K"));
     assert!(output.contains("[asset rendering skipped]"));
@@ -439,11 +430,10 @@ fn renders_svg_fences_as_assets() {
 
 #[test]
 fn renders_raw_svg_blocks_as_assets() {
-    let _guard = ASSET_STUB_LOCK.lock().unwrap();
-    std::env::set_var("SAI_RENDER_ASSET_TEST_STUB", "1");
+    crate::render::asset_block::set_test_stub(true);
     let mut renderer = MarkdownStreamRenderer::new();
     let output = renderer.push("<svg viewBox=\"0 0 8 8\">\n<path d=\"M0 0h8v8z\" />\n</svg>\n");
-    std::env::remove_var("SAI_RENDER_ASSET_TEST_STUB");
+    crate::render::asset_block::set_test_stub(false);
     assert!(output.contains("<svg viewBox=\"0 0 8 8\">\n<path d=\"M0 0h8v8z\" />\n</svg>\n"));
     assert!(output.contains("\x1b[1A\r\x1b[2K"));
     assert!(output.contains("[asset rendering skipped]"));
@@ -451,13 +441,12 @@ fn renders_raw_svg_blocks_as_assets() {
 
 #[test]
 fn source_preview_renders_closed_svg_and_previews_open_block() {
-    let _guard = ASSET_STUB_LOCK.lock().unwrap();
-    std::env::set_var("SAI_RENDER_ASSET_TEST_STUB", "1");
+    crate::render::asset_block::set_test_stub(true);
     let mut renderer = MarkdownStreamRenderer::new_source_preview();
     let closed = renderer.push("```svg\n<svg viewBox=\"0 0 1 1\"></svg>\n```\n");
     let partial = renderer.push("<svg viewBox=\"0 0 2 2\">\n");
     let open_preview = renderer.snapshot_open_structures();
-    std::env::remove_var("SAI_RENDER_ASSET_TEST_STUB");
+    crate::render::asset_block::set_test_stub(false);
 
     assert!(closed.contains("[asset rendering skipped]"));
     assert!(!closed.contains("<svg viewBox=\"0 0 1 1\">"));
@@ -469,11 +458,10 @@ fn source_preview_renders_closed_svg_and_previews_open_block() {
 
 #[test]
 fn renders_mermaid_blocks_as_assets() {
-    let _guard = ASSET_STUB_LOCK.lock().unwrap();
-    std::env::set_var("SAI_RENDER_ASSET_TEST_STUB", "1");
+    crate::render::asset_block::set_test_stub(true);
     let mut renderer = MarkdownStreamRenderer::new();
     let output = renderer.push("```mermaid\ngraph TD\nA --> B\n```\n");
-    std::env::remove_var("SAI_RENDER_ASSET_TEST_STUB");
+    crate::render::asset_block::set_test_stub(false);
     assert!(output.contains("```mermaid\ngraph TD\nA --> B\n```\n"));
     assert!(output.contains("\x1b[1A\r\x1b[2K"));
     assert!(output.contains("[asset rendering skipped]"));

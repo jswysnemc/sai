@@ -157,6 +157,14 @@ pub(crate) fn render_inline_image_with_max_cols(path: &Path, max_cols: usize) ->
             cell_height,
         ));
     }
+    // Sixel 必须先确认支持：不支持的终端会静默吞掉 DCS 载荷，
+    // 单元格内容整个消失。块级路径同样按 supports_windows_terminal_sixel
+    // 做了这道判断（见 render_terminal_image_with_size）。
+    // 表格内不能用半块栅格兜底——多行 ANSI 会撑破行高，因此这里报错，
+    // 由调用方退化为公式源码文本：宁可看到式子，也不要看到一个空格
+    if !supports_windows_terminal_sixel() {
+        anyhow::bail!("terminal does not support inline image protocols for table cells");
+    }
     let size = TerminalImageSize {
         width_cells: Some(cell_width),
         height_cells: Some(cell_height),
