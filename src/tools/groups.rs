@@ -3,6 +3,11 @@ pub(crate) const BASE_TOOL_NAMES: &[&str] = &[
     "background_command",
     "subagent",
     "todo",
+    "session_probe",
+    "agent_probe",
+    "mesh_send",
+    "mesh_recv",
+    "mesh_reply",
     "cron",
     "edit_file",
     "write_file",
@@ -335,4 +340,25 @@ mod tests {
         assert!(meta.model_description.contains("host_id"));
         assert_eq!(meta.settings_path, Some("/settings/ssh"));
     }
+
+    /// 网格工具必须默认可见。
+    ///
+    /// 它们曾只注册不进 BASE 名单，于是被渐进式加载判为延迟工具：工具确实
+    /// 注册了，agent 却看不到，表现为"没有跨会话通信工具"。
+    #[test]
+    fn mesh_tools_are_not_deferred_by_default() {
+        for name in [
+            "session_probe",
+            "agent_probe",
+            "mesh_send",
+            "mesh_recv",
+            "mesh_reply",
+        ] {
+            assert!(
+                !crate::tools::progressive::is_deferred_tool(name, &[]),
+                "{name} must be visible without an explicit load"
+            );
+        }
+    }
+
 }
