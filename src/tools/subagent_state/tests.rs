@@ -30,6 +30,7 @@ fn progress_update_writes_back_to_running_snapshot() {
             step: Some(2),
             phase: Some("工具 #2：Search 运行中".to_string()),
             last_tool: Some("Search".to_string()),
+            stats: None,
         },
     );
     let loaded = subagent_snapshot(&subagent.id).unwrap();
@@ -37,6 +38,36 @@ fn progress_update_writes_back_to_running_snapshot() {
     assert_eq!(loaded.step, 2);
     assert_eq!(loaded.phase.as_deref(), Some("工具 #2：Search 运行中"));
     assert_eq!(loaded.last_tool.as_deref(), Some("Search"));
+}
+
+/// 验证运行期上报的累计用量会写进快照。
+///
+/// 终态之前面板也要能读到 token，否则用户只能等任务结束才看到一次总数。
+///
+/// 返回:
+/// - 无
+#[test]
+fn progress_update_writes_runtime_stats() {
+    let (subagent, _cancel) = create_subagent("stats".to_string(), "explore".to_string(), 5);
+    update_subagent_progress(
+        &subagent.id,
+        SubagentProgressUpdate {
+            step: Some(1),
+            phase: None,
+            last_tool: None,
+            stats: Some(serde_json::json!({ "token_estimate": 1234 })),
+        },
+    );
+    let loaded = subagent_snapshot(&subagent.id).unwrap();
+
+    assert_eq!(
+        loaded
+            .stats
+            .as_ref()
+            .and_then(|value| value.get("token_estimate"))
+            .and_then(serde_json::Value::as_u64),
+        Some(1234)
+    );
 }
 
 /// 验证终态子智能体不会再接受进度更新。
@@ -59,6 +90,7 @@ fn progress_update_ignored_after_finish() {
             step: Some(9),
             phase: Some("不应写入".to_string()),
             last_tool: None,
+            stats: None,
         },
     );
     let loaded = subagent_snapshot(&subagent.id).unwrap();

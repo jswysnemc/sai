@@ -105,6 +105,7 @@ pub(crate) fn group_for_tool(name: &str) -> &'static str {
         "set_alarm" | "list_alarms" | "cancel_alarm" => "personal",
         "ssh_list_hosts" | "ssh_run_command" | "ssh_upload_file" | "ssh_download_file" => "ssh",
         "mcp_manager" => "mcp",
+        "session_probe" | "agent_probe" | "mesh_send" | "mesh_recv" | "mesh_reply" => "mesh",
         _ if name.starts_with("mcp_") => "mcp",
         _ if is_base_tool(name) => "base",
         _ => "other",
@@ -257,6 +258,15 @@ pub(crate) fn group_meta(group: &str) -> ToolGroupMeta {
             model_description: "External MCP tool servers",
             settings_path: None,
         },
+        "mesh" => ToolGroupMeta {
+            rank: 12,
+            label_en: "Mesh",
+            label_zh: "会话网格",
+            hint_en: "Mesh coordinates across sessions and subagents: probes observe without touching, and messaging exchanges messages with a correlation id. Leaving the current session requires mesh.cross_session=true.",
+            hint_zh: "会话网格用于跨会话与子智能体协作：探测器只看不碰，收发工具用 correlation id 互发消息。发给当前会话之外的目标需要 mesh.cross_session=true。",
+            model_description: "Mesh coordination: list sessions with their holder, watcher count and running turn, list subagents with status, step count and token usage, and send, receive and reply to messages across sessions and subagents",
+            settings_path: None,
+        },
         "other" => UNKNOWN_GROUP,
         _ => UNKNOWN_GROUP,
     }
@@ -295,6 +305,23 @@ mod tests {
         assert_eq!(group_rank("ssh"), 1);
         assert!(group_rank("ssh") < group_rank("web"));
         assert!(group_rank("ssh") < group_rank("utilities"));
+    }
+
+    /// 网格工具自成一组，排在所有工具组之后。
+    #[test]
+    fn mesh_probe_tools_share_their_own_group() {
+        assert_eq!(group_for_tool("session_probe"), "mesh");
+        assert_eq!(group_for_tool("agent_probe"), "mesh");
+        assert_eq!(group_for_tool("mesh_send"), "mesh");
+        assert_eq!(group_for_tool("mesh_recv"), "mesh");
+        assert_eq!(group_for_tool("mesh_reply"), "mesh");
+        assert!(group_rank("mesh") > group_rank("mcp"));
+        assert!(
+            group_meta("mesh")
+                .model_description
+                .contains("Mesh coordination")
+        );
+        assert!(group_meta("mesh").hint_zh.contains("会话网格"));
     }
 
     /// SSH 组必须带用户/模型分工说明，并指向主机设置页。

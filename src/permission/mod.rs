@@ -14,6 +14,7 @@ pub(crate) use broker::{
     PermissionRequest,
 };
 pub(crate) use interaction::{PermissionInteractionState, PermissionTransition};
-pub(crate) use policy::{PermissionProfile, PermissionProfileMode};
+#[allow(unused_imports)]
+pub(crate) use policy::{PermissionProfile, PermissionProfileMode, SessionScope};
 
 pub(crate) use auto_audit::{build_audit_context, resolve_auto_audit_client, run_auto_audit};

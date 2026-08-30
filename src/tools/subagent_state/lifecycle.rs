@@ -285,6 +285,11 @@ pub(crate) fn update_subagent_progress(id: &str, update: SubagentProgressUpdate)
     if let Some(last_tool) = update.last_tool {
         record.snapshot.last_tool = Some(last_tool);
     }
+    // 运行期累计用量：终态之前面板也要能读到实时 token，
+    // 否则只能等任务结束才看到一次总数
+    if let Some(stats) = update.stats {
+        record.snapshot.stats = Some(stats);
+    }
     record.snapshot.updated_at = unix_seconds();
     publish_record(record);
     let owner_key = record.owner_key.clone();

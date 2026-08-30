@@ -59,6 +59,19 @@ impl PermissionProfileMode {
     }
 }
 
+/// 工具调用相对当前会话的归属范围。
+///
+/// 网格工具（`mesh_send` / `mesh_reply`）能投递到别的会话或别的子智能体，
+/// 权限判定必须区分"投给自己"和"投给别人"：前者是普通工具调用，后者会触碰
+/// 别人会话的状态，默认一律拒绝。
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum SessionScope {
+    /// 只作用于当前会话（当前会话自己，或它自己名下的子智能体）
+    Local,
+    /// 跨越会话边界：别的会话、别的会话名下的子智能体，或广播
+    CrossSession,
+}
+
 /// 单个工具注册表绑定的权限配置。
 #[derive(Debug, Clone)]
 pub(crate) struct PermissionProfile {
@@ -67,6 +80,12 @@ pub(crate) struct PermissionProfile {
     workspace: PathBuf,
     audit: Option<PermissionAuditLog>,
     approved: Arc<Mutex<HashSet<String>>>,
+    /// 当前会话状态目录；会话的唯一身份，用于判定网格目标的归属
+    session_key: String,
+    /// 当前会话 id
+    session_id: String,
+    /// 是否允许网格工具跨越会话边界；默认 false，由 `mesh.cross_session` 打开
+    cross_session: bool,
 }
 
 impl PermissionProfile {
@@ -128,7 +147,51 @@ impl PermissionProfile {
             workspace: workspace.canonicalize().unwrap_or(workspace),
             audit,
             approved: Arc::new(Mutex::new(HashSet::new())),
+            session_key: String::new(),
+            session_id: String::new(),
+            cross_session: false,
         }
+    }
+
+    /// 绑定当前会话身份，供网格工具判定目标归属。
+    ///
+    /// 参数:
+    /// - `session_key`: 当前会话状态目录（会话唯一身份）
+    /// - `session_id`: 当前会话 id
+    ///
+    /// 返回:
+    /// - 绑定身份后的权限配置
+    pub(crate) fn with_session(mut self, session_key: &str, session_id: &str) -> Self {
+        self.session_key = session_key.to_string();
+        self.session_id = session_id.to_string();
+        self
+    }
+
+    /// 设置是否允许网格工具跨越会话边界。
+    ///
+    /// 参数:
+    /// - `allowed`: `mesh.cross_session` 配置值
+    ///
+    /// 返回:
+    /// - 设置后的权限配置
+    pub(crate) fn with_cross_session(mut self, allowed: bool) -> Self {
+        self.cross_session = allowed;
+        self
+    }
+
+    /// 返回当前会话 id。
+    pub(crate) fn session_id(&self) -> &str {
+        &self.session_id
+    }
+
+    /// 返回当前会话状态目录。
+    pub(crate) fn session_key(&self) -> &str {
+        &self.session_key
+    }
+
+    /// 返回是否允许跨越会话边界。
+    pub(crate) fn cross_session_allowed(&self) -> bool {
+        self.cross_session
     }
 
     /// 立即切换权限模式（无需重建工具注册表）。
@@ -194,6 +257,9 @@ impl PermissionProfile {
 
     /// 在工具执行前完成权限判定并写入审计日志。
     ///
+    /// 默认按"只作用于当前会话"判定；需要跨会话判定的调用方（工具注册表执行
+    /// 网格工具时）应调用 [`Self::authorize_scoped`]。
+    ///
     /// 参数:
     /// - `tool`: 工具名称
     /// - `permission`: 工具声明的权限等级
@@ -207,6 +273,42 @@ impl PermissionProfile {
         permission: ToolPermission,
         arguments: &Value,
     ) -> Result<bool> {
+        self.authorize_scoped(tool, permission, arguments, SessionScope::Local)
+    }
+
+    /// 带会话归属维度完成权限判定并写入审计日志。
+    ///
+    /// 跨会话判定先于模式判定：它不是"要不要问用户"的问题，而是"这个部署允许
+    /// 不允许"的问题，因此 YOLO 模式也不放行。想跨会话投递必须先配置
+    /// `mesh.cross_session = true`。
+    ///
+    /// 参数:
+    /// - `tool`: 工具名称
+    /// - `permission`: 工具声明的权限等级
+    /// - `arguments`: 工具参数
+    /// - `scope`: 本次调用相对当前会话的归属范围
+    ///
+    /// 返回:
+    /// - 是否需要启用 Shell 沙盒
+    pub(crate) fn authorize_scoped(
+        &self,
+        tool: &str,
+        permission: ToolPermission,
+        arguments: &Value,
+        scope: SessionScope,
+    ) -> Result<bool> {
+        // 0. 跨会话目标是部署策略开关，任何权限模式下都先拦一道
+        if scope == SessionScope::CrossSession && !self.cross_session {
+            self.record(
+                tool,
+                AuditDecision::Denied,
+                arguments,
+                Some("cross-session mesh target blocked; set mesh.cross_session=true to allow"),
+            );
+            bail!(
+                "permission policy blocked cross-session mesh target: {tool} (set mesh.cross_session=true to allow)"
+            );
+        }
         // 1. YOLO 模式不增加权限检查和沙盒
         if self.current_mode() == PermissionProfileMode::Yolo {
             return Ok(false);

@@ -331,16 +331,22 @@ fn subagent_view_switch_replaces_display_window() {
     assert!(main.contains("主会话内容"));
 }
 
+/// 【终端】【agent 面板】已结束的子智能体保留在面板里。
+///
+/// 并发跑完一批子智能体后，用户要能在一处看到每个任务的结果与最终
+/// 用量；此前终态条目会直接从列表消失，跑完就再也查不到消耗。
 #[test]
-fn subagent_overview_lists_running_or_viewing_only() {
+fn subagent_overview_keeps_finished_entries() {
     let mut store = TranscriptStore::new(100);
-    // 已结束且未在查看的子智能体不出现在面板
     store.push_tool_call(
         "subagent".to_string(),
         r#"{"description":"完成的"}"#.to_string(),
     );
     store.push_tool_result("subagent".to_string(), true, "plain result".to_string());
-    assert!(store.subagent_overview().is_empty());
+    let overview = store.subagent_overview();
+    assert_eq!(overview.len(), 1, "finished subagents stay in the panel");
+    assert!(!overview[0].running);
+    assert!(overview[0].label.contains("完成的"));
 }
 
 /// 【终端】【agent 面板】同一子智能体的多次工具调用只保留一个面板条目。

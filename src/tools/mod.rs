@@ -27,6 +27,7 @@ mod linux_game;
 mod man;
 pub(crate) mod memes;
 mod memory;
+pub(crate) mod mesh;
 mod moegirl;
 mod native_search;
 mod package_advisor;
@@ -325,7 +326,20 @@ pub(crate) fn register_interactive_tools(
         paths.clone(),
         subagent_tools,
         owner_key.clone(),
+        session_id.clone(),
+    );
+    // 网格：探测是只读的；收发会触碰别的会话状态，归属维度由 mesh.cross_session 控制
+    registry.set_session_ownership(
+        owner_key.clone(),
+        session_id.clone(),
+        config.mesh.cross_session,
+    );
+    mesh::register(
+        registry,
+        paths.clone(),
+        owner_key.clone(),
         session_id,
+        config.mesh.cross_session,
     );
     todo::register(
         registry,

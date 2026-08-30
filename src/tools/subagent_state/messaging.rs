@@ -13,6 +13,51 @@ use super::*;
 /// 返回:
 /// - 入队后的子智能体快照；记录不存在或已进入终态时报错
 pub(crate) fn queue_subagent_message(id: &str, from: &str, text: &str) -> Result<SubagentSnapshot> {
+    queue_subagent_mesh_message_in(id, from, text, MeshMessageMeta::default())
+}
+
+/// 把一条带网格关联信息的消息投递给子智能体。
+///
+/// 网格投递只按子智能体 id 定位，不校验父会话归属：归属由网格工具在调用前
+/// 按 `mesh.cross_session` 判定，这里不再重复。子智能体已进入终态时报错，
+/// 调用方据此回退到磁盘信箱。
+///
+/// 参数:
+/// - `owner_key`: 父会话稳定作用域键
+/// - `id`: 子智能体 ID
+/// - `from`: 消息来源标识
+/// - `text`: 消息正文
+/// - `meta`: 网格关联信息
+///
+/// 返回:
+/// - 入队后的子智能体快照；记录不存在或已进入终态时报错
+pub(crate) fn queue_subagent_mesh_message(
+    owner_key: &str,
+    id: &str,
+    from: &str,
+    text: &str,
+    meta: MeshMessageMeta,
+) -> Result<SubagentSnapshot> {
+    ensure_owner_loaded(owner_key);
+    queue_subagent_mesh_message_in(id, from, text, meta)
+}
+
+/// 向子智能体消息队列压入一条消息。
+///
+/// 参数:
+/// - `id`: 子智能体 ID
+/// - `from`: 消息来源标识
+/// - `text`: 消息正文
+/// - `meta`: 网格关联信息；非网格消息传默认值
+///
+/// 返回:
+/// - 入队后的子智能体快照；记录不存在或已进入终态时报错
+fn queue_subagent_mesh_message_in(
+    id: &str,
+    from: &str,
+    text: &str,
+    meta: MeshMessageMeta,
+) -> Result<SubagentSnapshot> {
     let text = text.trim();
     if text.is_empty() {
         bail!("subagent message must not be empty");
@@ -31,6 +76,9 @@ pub(crate) fn queue_subagent_message(id: &str, from: &str, text: &str) -> Result
         from: from.to_string(),
         text: text.to_string(),
         queued_at: unix_seconds(),
+        id: meta.id,
+        reply_to: meta.reply_to,
+        from_addr: meta.from_addr,
     });
     // 入队即记入时间线：TUI 子智能体视图与 Web 详情立即可见，
     // 不必等到消息真正注入对话的步间间隙
