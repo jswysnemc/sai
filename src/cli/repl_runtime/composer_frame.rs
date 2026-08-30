@@ -13,7 +13,6 @@ use crate::cli::repl_input_render::{
 use crate::cli::repl_mentions::{find_mention_trigger, mention_suggestions};
 use crate::cli::repl_text::{repl_input_lines, visible_width};
 use crate::cli::REPL_MAX_VISIBLE_INPUT_ROWS;
-use crate::render::terminal_paint::paint_lock;
 use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::queue;
@@ -171,8 +170,10 @@ impl ComposerFrame {
     /// Windows Terminal 不合并这两步，清与画之间的空窗表现为底部闪烁。
     /// 内容未变时直接复用上次结果，闪烁随之消失。
     ///
+    /// 输出写入调用方的帧缓冲，与同一帧的历史修补一起提交。
+    ///
     /// 参数:
-    /// - `output`: 终端输出
+    /// - `output`: 当前帧的输出缓冲
     /// - `viewport`: 当前历史与 composer 分区
     /// - `previous`: 上次绘制的内容签名
     ///
@@ -184,7 +185,6 @@ impl ComposerFrame {
         viewport: &InlineViewport,
         previous: Option<&ComposerSignature>,
     ) -> Result<(u16, ComposerSignature)> {
-        let _paint = paint_lock();
         let cols = usize::from(viewport.size().cols);
         let top = viewport.composer_top();
         let height = viewport.composer_height();
@@ -228,7 +228,6 @@ impl ComposerFrame {
         // 必须把光标收回输入位置并恢复显示，光标才始终只出现在输入框内
         if previous == Some(&signature) {
             queue!(output, MoveTo(drawn_cursor_col, cursor_row), Show)?;
-            output.flush()?;
             return Ok((cursor_row, signature));
         }
 
@@ -317,7 +316,6 @@ impl ComposerFrame {
         // 5. 历史插入会移动终端光标，最后必须把它放回可继续编辑的位置
         let drawn_cursor_row = input_start_row.saturating_add(layout.cursor_row_offset);
         queue!(output, MoveTo(drawn_cursor_col, drawn_cursor_row), Show)?;
-        output.flush()?;
         Ok((drawn_cursor_row, signature))
     }
 

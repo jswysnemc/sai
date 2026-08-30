@@ -5,9 +5,7 @@ use crate::agent::AgentMode;
 use crate::cli::repl_chrome::ReplChrome;
 use crate::cli::repl_clipboard::ReplClipboardBlockSpan;
 use crate::cli::repl_commands::is_control_command_text;
-use crate::render::terminal_paint::paint_lock;
 use anyhow::Result;
-use std::io::{self, Write};
 
 impl ReplRuntime {
     /// 更新 composer source，并在可视历史增高时从 source 重放。
@@ -96,7 +94,9 @@ impl ReplRuntime {
     /// 在内容尾部与屏幕底部之间为 composer 腾出足够行数。
     ///
     /// 不足时在屏幕底行输出换行触发真实滚动，上方内容进入原生
-    /// scrollback；被 origin 上移吸收的部分不计入滚出行。
+    /// scrollback；被 origin 上移吸收的部分不计入滚出行。腾行写入当前帧，
+    /// 与随后的 composer 重绘一起提交：分开提交时终端会渲染出"已滚动但
+    /// 输入框尚未重画"的中间态，表现为底栏上下跳动。
     ///
     /// 参数:
     /// - `size`: 当前终端尺寸
@@ -120,19 +120,16 @@ impl ReplRuntime {
         if deficit == 0 {
             return Ok(());
         }
-        let _paint = paint_lock();
-        let mut stdout = io::stdout();
         // 腾行期间隐藏光标：光标短暂落在屏幕底行会被看作一次跳动；
         // 随后 composer 重绘（top 变化必然触发）会在输入位置重新 Show
         crossterm::queue!(
-            stdout,
+            self.frame,
             crossterm::cursor::Hide,
             crossterm::cursor::MoveTo(0, size.rows.saturating_sub(1))
         )?;
         for _ in 0..deficit {
-            crossterm::queue!(stdout, crossterm::style::Print("\r\n"))?;
+            crossterm::queue!(self.frame, crossterm::style::Print("\r\n"))?;
         }
-        stdout.flush()?;
         let absorbed = deficit.min(self.viewport.origin_row());
         self.viewport.apply_terminal_scroll(deficit);
         self.stream.note_scrolled(deficit.saturating_sub(absorbed));
@@ -173,26 +170,55 @@ impl ReplRuntime {
         Ok(())
     }
 
-    /// 按已保存的 source 重绘固定在底部的 composer。
+    /// 按已保存的 source 把 composer 写入当前帧。
+    ///
+    /// 只入帧不提交：调用方负责在帧边界一次性送达终端。
     ///
     /// 参数:
-    /// - `stdout`: 终端输出句柄
+    /// - 无
     ///
     /// 返回:
     /// - 绘制结果
-    pub(in crate::cli) fn draw_composer(&mut self, stdout: &mut io::Stdout) -> Result<()> {
+    pub(in crate::cli) fn queue_composer(&mut self) -> Result<()> {
         let Some(composer) = &self.composer else {
             return Ok(());
         };
         // 内容未变时跳过重绘：composer 每 32ms 刷新一次，而绘制是
         // 逐行清除再打印，Windows Terminal 下这一空窗表现为底部闪烁
         let (cursor_row, signature) = composer.draw_lines(
-            stdout,
+            &mut self.frame,
             &self.viewport,
             self.last_composer_signature.as_ref(),
         )?;
         self.last_composer_signature = Some(signature);
         self.last_cursor_row = Some(cursor_row);
+        Ok(())
+    }
+
+    /// 按已保存的 source 重绘固定在底部的 composer 并提交本帧。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 绘制结果
+    pub(in crate::cli) fn draw_composer(&mut self) -> Result<()> {
+        self.queue_composer()?;
+        self.commit_frame()
+    }
+
+    /// 把当前帧累积的绘制一次性提交到终端。
+    ///
+    /// 一帧内的腾行滚动、历史行修补与 composer 重绘必须同时上屏：分开提交时
+    /// Windows Terminal 的渲染线程会抓到中间态，表现为状态行闪动与底栏跳动。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 提交结果
+    pub(in crate::cli) fn commit_frame(&mut self) -> Result<()> {
+        self.frame.commit()?;
         Ok(())
     }
 
@@ -398,10 +424,7 @@ impl ReplRuntime {
             draft.clipboard.block_spans(&draft.text),
             draft.slash_selection,
         )?;
-        let mut stdout = io::stdout();
-        self.draw_composer(&mut stdout)?;
-        stdout.flush()?;
-        Ok(())
+        self.draw_composer()
     }
 
     /// 结束 composer 绘制并释放底部 viewport 给历史输出。

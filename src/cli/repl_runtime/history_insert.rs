@@ -1,12 +1,11 @@
 use super::viewport::InlineViewport;
-use crate::render::terminal_paint::paint_lock;
 use crate::render::transcript::AnsiLine;
 use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo};
 use crossterm::queue;
 use crossterm::style::Print;
 use crossterm::terminal::{Clear, ClearType};
-use std::io::{self, Write};
+use std::io::Write;
 
 /// 输出定位行期间关闭终端自动换行，防止测宽偏差引发滚动漂移。
 const DISABLE_AUTOWRAP: &str = "\x1b[?7l";
@@ -20,30 +19,33 @@ pub(super) struct AppendOutcome {
 
 /// 将完整 transcript 重绘到 composer viewport 上方。
 ///
+/// 输出写入调用方的帧缓冲，由帧提交统一送达终端。
+///
 /// 参数:
-/// - `stdout`: 终端输出句柄
+/// - `output`: 当前帧的输出缓冲
 /// - `viewport`: 当前 inline viewport
 /// - `lines`: 已按当前宽度预换行的历史行
 ///
 /// 返回:
 /// - 实际绘制的行数
-pub(super) fn replay_lines(
-    stdout: &mut io::Stdout,
+pub(super) fn replay_lines<W: Write>(
+    output: &mut W,
     viewport: &InlineViewport,
     lines: &[AnsiLine],
 ) -> Result<usize> {
-    // 绘制期间隐藏光标：中途 flush 时若光标可见，Windows 终端会在
-    // 输出尾行与输入框之间来回闪动；最终位置由 composer 的 Show 恢复
-    queue!(stdout, Hide)?;
-    let painted = replay_lines_to(stdout, viewport, lines)?;
-    stdout.flush()?;
-    Ok(painted)
+    // 绘制期间隐藏光标：光标会随定位写入扫过整个历史区，
+    // 可见状态下表现为一次跳动；最终位置由 composer 的 Show 恢复
+    queue!(output, Hide)?;
+    replay_lines_to(output, viewport, lines)
 }
 
 /// 执行一次增量协调：修补变化行、追加新行、清理收缩行。
 ///
+/// 输出写入调用方的帧缓冲，不自行送达终端：修补与随后的 composer 重绘
+/// 必须落在同一帧里提交，否则终端会渲染出"清行后尚未打印"的中间态。
+///
 /// 参数:
-/// - `output`: 支持终端控制序列的目标输出
+/// - `output`: 当前帧的输出缓冲
 /// - `previous_viewport`: 本次同步前的 inline viewport
 /// - `viewport`: 已按新行数更新的 inline viewport
 /// - `patches`: 待重写的 `(全局行号, 新内容)` 列表
@@ -65,9 +67,8 @@ pub(super) fn apply_delta<W: Write>(
     new_total: usize,
     offscreen: usize,
 ) -> Result<AppendOutcome> {
-    let _paint = paint_lock();
-    // 绘制期间隐藏光标：中途 flush 时若光标可见，Windows 终端会在
-    // 输出尾行与输入框之间来回闪动；最终位置由 composer 的 Show 恢复
+    // 绘制期间隐藏光标：定位写入会带着光标扫过历史区，
+    // 可见状态下表现为一次跳动；最终位置由 composer 的 Show 恢复
     queue!(output, Hide)?;
     queue!(output, Print(DISABLE_AUTOWRAP))?;
     // 1. 修补仍在屏幕上的变化行（坐标基于旧 viewport，修补不移动其他行）
@@ -95,7 +96,6 @@ pub(super) fn apply_delta<W: Write>(
     // 3. 追加新行：屏幕未满时直接写入，满后用真实终端滚动保留原生 scrollback
     let outcome = append_lines_to(output, previous_viewport, viewport, append)?;
     queue!(output, Print(ENABLE_AUTOWRAP))?;
-    output.flush()?;
     Ok(outcome)
 }
 

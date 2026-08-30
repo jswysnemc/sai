@@ -131,7 +131,6 @@ pub(super) fn read_repl_input(
     macro_rules! redraw_input {
         () => {
             render_repl_input(
-                &mut stdout,
                 &mut input_row,
                 &mut rendered_rows,
                 chrome,

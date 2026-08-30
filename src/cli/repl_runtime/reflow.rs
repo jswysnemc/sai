@@ -1,13 +1,12 @@
 use super::history_insert::replay_lines;
 use super::viewport::InlineViewport;
-use crate::render::terminal_paint::paint_lock;
 use crate::render::transcript::AnsiLine;
 use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo};
 use crossterm::queue;
 use crossterm::style::Print;
 use crossterm::terminal::{Clear, ClearType};
-use std::io::{self, Write};
+use std::io::Write;
 
 /// 清空终端 scrollback 的控制序列（ED 3）。
 const CLEAR_SCROLLBACK: &str = "\x1b[3J";
@@ -19,28 +18,26 @@ const ENABLE_AUTOWRAP: &str = "\x1b[?7h";
 /// 从 source 行重放历史可视尾部，并清理其后的旧内容。
 ///
 /// 先逐行重绘（每行独立清行），再从最后一行之后清到屏幕底部，
-/// 避免整屏先清空再绘制造成的闪烁。
+/// 避免整屏先清空再绘制造成的闪烁。输出写入调用方的帧缓冲。
 ///
 /// 参数:
-/// - `stdout`: 终端输出句柄
+/// - `output`: 当前帧的输出缓冲
 /// - `viewport`: 当前 inline viewport
 /// - `lines`: 当前宽度下的预换行 transcript 行
 ///
 /// 返回:
 /// - 实际绘制在屏幕上的行数
-pub(super) fn replay(
-    stdout: &mut io::Stdout,
+pub(super) fn replay<W: Write>(
+    output: &mut W,
     viewport: &InlineViewport,
     lines: &[AnsiLine],
 ) -> Result<usize> {
-    let _paint = paint_lock();
-    let painted = replay_lines(stdout, viewport, lines)?;
+    let painted = replay_lines(output, viewport, lines)?;
     // 重绘区域之后可能残留旧行或旧 composer，一并清除（composer 随后由调用方重绘）
     let end_row = viewport
         .origin_row()
         .saturating_add(painted.min(usize::from(u16::MAX)) as u16);
-    queue!(stdout, MoveTo(0, end_row), Clear(ClearType::FromCursorDown))?;
-    stdout.flush()?;
+    queue!(output, MoveTo(0, end_row), Clear(ClearType::FromCursorDown))?;
     Ok(painted)
 }
 
@@ -51,7 +48,7 @@ pub(super) fn replay(
 /// 通过真实滚动重新进入 scrollback，可视尾部留在屏幕上。
 ///
 /// 参数:
-/// - `output`: 终端输出句柄
+/// - `output`: 当前帧的输出缓冲
 /// - `viewport`: 已按新尺寸更新的 inline viewport（origin 必须为 0）
 /// - `lines`: 当前宽度下的预换行 transcript 行
 ///
@@ -62,12 +59,11 @@ pub(super) fn replay_full<W: Write>(
     viewport: &InlineViewport,
     lines: &[AnsiLine],
 ) -> Result<usize> {
-    let _paint = paint_lock();
     let rows = usize::from(viewport.size().rows).max(1);
     let composer = usize::from(viewport.composer_height());
     let visible_budget = rows.saturating_sub(composer).max(1);
-    // 绘制期间隐藏光标：中途 flush 时若光标可见，Windows 终端会在
-    // 输出尾行与输入框之间来回闪动；最终位置由 composer 的 Show 恢复
+    // 绘制期间隐藏光标：光标会随整屏重放扫过全部内容行，
+    // 可见状态下表现为一次跳动；最终位置由 composer 的 Show 恢复
     queue!(output, Hide)?;
     // 1. 清空可见屏与 scrollback，从顶部开始顺序输出。
     //    ED 序列不影响 Kitty 图像放置，必须显式发图形删除命令，
@@ -100,7 +96,6 @@ pub(super) fn replay_full<W: Write>(
         }
     }
     queue!(output, Print(ENABLE_AUTOWRAP))?;
-    output.flush()?;
     Ok(total.min(visible_budget))
 }
 

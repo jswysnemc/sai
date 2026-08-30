@@ -34,6 +34,7 @@ mod streaming_asset_block;
 mod streaming_replace;
 mod style;
 mod table;
+pub(crate) mod terminal_frame;
 pub(crate) mod terminal_image;
 pub(crate) mod terminal_paint;
 pub(crate) mod todo_style;

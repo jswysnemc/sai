@@ -29,6 +29,7 @@ use crate::cli::repl_chrome::ReplChrome;
 use crate::cli::repl_clipboard::ReplClipboardState;
 use crate::cli::repl_windows_paste::WindowsPasteState;
 use crate::render::activity_animation::ACTIVITY_FRAME_INTERVAL;
+use crate::render::terminal_frame::TerminalFrame;
 use crate::render::terminal_paint::paint_lock;
 use crate::render::transcript::{TranscriptRenderOptions, TranscriptStore, WelcomeCell};
 use crate::state::{SessionTimelineCompaction, SessionTimelineTurn};
@@ -85,6 +86,8 @@ pub(super) struct ReplRuntime {
     todo_panel_compact: bool,
     /// 当前轮已完成请求的实时用量，轮次结束后清空
     live_usage: live_usage::LiveTurnUsage,
+    /// 当前帧的终端输出缓冲：整帧攒齐后一次提交
+    frame: TerminalFrame,
 }
 
 /// 运行期间底部输入框草稿。
@@ -146,6 +149,7 @@ impl ReplRuntime {
             mention_skills: Vec::new(),
             todo_panel_compact: true,
             live_usage: live_usage::LiveTurnUsage::default(),
+            frame: TerminalFrame::new(),
         }
     }
 
@@ -680,16 +684,18 @@ impl ReplRuntime {
         match self.stream.sync(&window) {
             // transcript 行未变时 composer 仍需刷新：底部面板的动效帧与
             // 实时统计在变，且要把被外部绘制移走的光标收回输入位置
-            SyncPlan::Unchanged => self.draw_composer(&mut io::stdout()),
+            SyncPlan::Unchanged => {
+                self.queue_composer()?;
+                self.commit_frame()
+            }
             SyncPlan::Delta {
                 patches,
                 append,
                 old_total,
                 new_total,
             } => {
-                let mut stdout = io::stdout();
                 let outcome = history_insert::apply_delta(
-                    &mut stdout,
+                    &mut self.frame,
                     &previous_viewport,
                     &self.viewport,
                     &patches,
@@ -707,7 +713,8 @@ impl ReplRuntime {
                 if outcome.scrolled_rows > 0 {
                     self.last_composer_signature = None;
                 }
-                self.draw_composer(&mut stdout)
+                self.queue_composer()?;
+                self.commit_frame()
             }
             SyncPlan::Repaint => self.replay(streaming),
         }
@@ -715,6 +722,8 @@ impl ReplRuntime {
 
     /// 清屏范围内从 source 重新铺设当前宽度的可视历史。
     fn replay(&mut self, streaming: bool) -> Result<()> {
+        // 重锚要读终端的真实光标位置，腾行等已入帧的绘制必须先送达
+        self.commit_frame()?;
         let size = TerminalSize::current();
         let previous = self.viewport.size();
         // 1. 分层重锚：仅高度变化时折行不变，scrollback 内容依旧有效，
@@ -748,15 +757,15 @@ impl ReplRuntime {
         self.transcript.clear_dirty();
         self.viewport
             .update(size, self.composer_height_for(size), window.total);
-        let mut stdout = io::stdout();
         let painted = if full_reanchor {
-            reflow::replay_full(&mut stdout, &self.viewport, &window.lines)?
+            reflow::replay_full(&mut self.frame, &self.viewport, &window.lines)?
         } else {
-            reflow::replay(&mut stdout, &self.viewport, &window.lines)?
+            reflow::replay(&mut self.frame, &self.viewport, &window.lines)?
         };
         // 整区重放后屏幕内容已被覆盖，必须强制重绘 composer
         self.last_composer_signature = None;
-        self.draw_composer(&mut stdout)?;
+        self.queue_composer()?;
+        self.commit_frame()?;
         self.stream.reset(&window, painted);
         self.reflow.clear_pending();
         self.reflow.mark_reflowed(size, streaming);
@@ -806,6 +815,8 @@ impl ReplRuntime {
     /// 已有输出全部视作 scrollback 保留原样，后续内容从光标处追加。
     fn restart_after_external(&mut self) -> Result<()> {
         self.desynced = false;
+        // 光标查询要读终端的真实位置，未提交的绘制必须先送达
+        self.commit_frame()?;
         let _paint = paint_lock();
         let mut stdout = io::stdout();
         let position = crossterm::cursor::position().unwrap_or((0, 0));

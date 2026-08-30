@@ -14,7 +14,6 @@ use super::*;
 /// 6. 可选斜杠补全提示
 ///
 /// 参数:
-/// - `stdout`: 终端输出
 /// - `input_row`: 输入区起始行（可上移）
 /// - `rendered_rows`: 上次渲染占用行数
 /// - `chrome`: 底栏状态
@@ -25,8 +24,8 @@ use super::*;
 ///
 /// 返回:
 /// - 渲染是否成功
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render_repl_input(
-    stdout: &mut io::Stdout,
     input_row: &mut u16,
     rendered_rows: &mut u16,
     chrome: &ReplChrome,
@@ -46,7 +45,7 @@ pub(super) fn render_repl_input(
         slash_selection,
     )?;
     *input_row = next_input_row;
-    runtime.draw_composer(stdout)?;
+    runtime.draw_composer()?;
     *rendered_rows = current_rows;
     Ok(())
 }

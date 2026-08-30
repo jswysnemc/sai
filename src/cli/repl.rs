@@ -78,7 +78,7 @@ pub(super) async fn run_repl(
     {
         let chrome = ReplChrome::from_runtime(&config, &state, mode);
         runtime.update_composer(&chrome, "", 0, false, Vec::new(), 0)?;
-        runtime.draw_composer(&mut std::io::stdout())?;
+        runtime.draw_composer()?;
     }
     // 2. 本地工具立即可用，MCP 动态工具在后台发现，避免阻塞输入框
     let initial_registry = build_repl_tool_registry_without_mcp_for_session(
