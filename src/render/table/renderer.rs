@@ -243,6 +243,11 @@ pub(super) fn wrap_ansi_text(text: &str, width: usize) -> Vec<String> {
         current_width += grapheme_width;
         index += grapheme.len();
     }
+    // 末行同样要收尾：否则单元格最后一段停在粗体 / 行内代码色上时，
+    // 该样式会一直延续到外层拼上的 `│` 边框，边框被染上多余属性
+    if !active_style.is_empty() {
+        current.push_str(RESET);
+    }
     lines.push(current);
     lines
 }

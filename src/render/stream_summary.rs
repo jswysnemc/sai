@@ -499,16 +499,8 @@ pub(crate) fn tool_status_text(name: &str, stats: &ToolStats) -> String {
 /// - 压缩后的文本
 fn clip_progress_line(text: &str, max_chars: usize) -> String {
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    if text.chars().count() <= max_chars {
-        text
-    } else {
-        format!(
-            "{}...",
-            text.chars()
-                .take(max_chars.saturating_sub(3))
-                .collect::<String>()
-        )
-    }
+    // 按显示列数截断：中文进度文本按字符数截断会撑到近两倍宽
+    crate::render::clip_to_width(&text, max_chars, "...")
 }
 
 #[cfg(test)]

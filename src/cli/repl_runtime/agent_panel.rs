@@ -339,11 +339,8 @@ fn render_entry_title(entry: &SubagentOverviewEntry) -> String {
 /// 返回:
 /// - 截断后的文本
 fn clip_chars(text: &str, max_chars: usize) -> String {
-    if text.chars().count() <= max_chars {
-        return text.to_string();
-    }
-    let kept: String = text.chars().take(max_chars.saturating_sub(1)).collect();
-    format!("{kept}…")
+    // 按显示列数截断：中文 agent 名按字符数截断会撑到近两倍宽
+    crate::render::clip_to_width(text, max_chars, "…")
 }
 
 /// 把秒数压成面板可读的短时长。

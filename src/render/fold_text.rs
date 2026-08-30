@@ -1,4 +1,5 @@
-use unicode_width::UnicodeWidthChar;
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// 折叠预览：默认保留前 2 行与后 4 行。
 pub(crate) const FOLD_HEAD_LINES: usize = 2;
@@ -25,14 +26,18 @@ pub(crate) fn wrap_display_lines(text: &str, wrap_width: usize) -> Vec<String> {
         }
         let mut current = String::new();
         let mut current_width = 0usize;
-        for ch in raw.chars() {
-            let ch_w = UnicodeWidthChar::width(ch).unwrap_or(0).max(1);
-            if current_width > 0 && current_width.saturating_add(ch_w) > width {
+        // 按字素簇而不是逐字符计宽：ZWJ 家族 emoji（👨‍👩‍👧）与组合音标
+        // （e + U+0301）的真实宽度是 0，逐字符再用 .max(1) 兜底会把它们
+        // 各算成 1 列，含 emoji 的命令输出因此提前约 30% 折行，
+        // 「… +N 行」的省略计数也与实际显示对不上
+        for grapheme in raw.graphemes(true) {
+            let grapheme_width = UnicodeWidthStr::width(grapheme);
+            if current_width > 0 && current_width.saturating_add(grapheme_width) > width {
                 lines.push(std::mem::take(&mut current));
                 current_width = 0;
             }
-            current.push(ch);
-            current_width = current_width.saturating_add(ch_w);
+            current.push_str(grapheme);
+            current_width = current_width.saturating_add(grapheme_width);
         }
         if !current.is_empty() || raw.is_empty() {
             lines.push(current);
@@ -171,9 +176,14 @@ pub(crate) fn command_body_column(title: &str) -> usize {
 /// 返回:
 /// - 扣除行首装饰与标题后剩余的列数
 pub(crate) fn command_wrap_width_for_title(title: &str) -> usize {
+    // 同 thinking_body_wrap_width：下限保证可读，但必须夹回终端列数，
+    // 否则窄终端上「标题列 + 下限宽度」会一起超出屏幕，
+    // 外层再硬折一次就把左侧装饰折成参差的碎片
+    let cols = terminal_wrap_width().max(1);
     terminal_wrap_width()
         .saturating_sub(command_body_column(title))
         .max(COMMAND_MIN_WRAP)
+        .min(cols)
 }
 
 /// 统计文本的终端显示列数。
@@ -198,6 +208,28 @@ const COMMAND_MIN_WRAP: usize = 24;
 mod tests {
     use super::*;
     use crate::render::render_width::with_render_width;
+
+    /// ZWJ 家族 emoji 按字素簇计宽（真宽 6 列），不再逐字符折算成 8 列。
+    #[test]
+    fn wrap_counts_emoji_zwj_sequences_by_grapheme() {
+        // "ab " + 👨‍👩‍👧 + " cd"：真实显示宽度 12，逐字符折算会算成 14
+        let lines = wrap_display_lines("ab \u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467} cd", 12);
+        assert_eq!(lines.len(), 1, "emoji 不应提前折行：{lines:?}");
+    }
+
+    /// 组合音标（e + U+0301）宽度为 0，不应把每个字符各算 1 列。
+    #[test]
+    fn wrap_counts_combining_marks_as_zero_width() {
+        let decomposed = "\u{65}\u{301}".repeat(6);
+        let lines = wrap_display_lines(&decomposed, 8);
+        assert_eq!(lines.len(), 1, "组合音标不应撑宽：{lines:?}");
+    }
+
+    /// 纯 ASCII 行为不变。
+    #[test]
+    fn wrap_still_breaks_plain_ascii_on_width() {
+        assert_eq!(wrap_display_lines("abcdefghij", 8), vec!["abcdefgh", "ij"]);
+    }
 
     /// 命令折行宽度跟随终端实际列数，不再压在固定上限上。
     ///
@@ -226,12 +258,19 @@ mod tests {
         );
     }
 
-    /// 终端极窄时仍保留可读的最小宽度。
+    /// 下限优先，但不能把宽度顶到超出终端列数。
+    ///
+    /// 终端比 `COMMAND_MIN_WRAP` 还窄时，若仍按下限折行，「标题列 + 下限宽度」
+    /// 会一起超出屏幕，外层再硬折一次就把左侧装饰折成参差的碎片。
     #[test]
-    fn command_wrap_width_keeps_a_readable_minimum() {
+    fn command_wrap_width_never_exceeds_the_terminal() {
+        // 极窄终端：夹回终端列数
+        assert_eq!(with_render_width(10, || command_wrap_width_for_title("Ran")), 10);
+        // 正常宽度：扣除标题列后仍是可用列数
+        let available = with_render_width(80, || 80 - command_body_column("Ran"));
         assert_eq!(
-            with_render_width(10, || command_wrap_width_for_title("Ran")),
-            COMMAND_MIN_WRAP
+            with_render_width(80, || command_wrap_width_for_title("Ran")),
+            available
         );
     }
 

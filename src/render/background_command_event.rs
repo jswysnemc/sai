@@ -398,11 +398,8 @@ fn string_field(value: &Value, key: &str) -> Option<String> {
 /// - 单行展示文本
 fn compact_text(value: String) -> String {
     let value = value.split_whitespace().collect::<Vec<_>>().join(" ");
-    if value.chars().count() <= 48 {
-        value
-    } else {
-        format!("{}...", value.chars().take(45).collect::<String>())
-    }
+    // 按显示列数截断：中文路径按字符数截断会撑到近两倍宽
+    crate::render::clip_to_width(&value, 48, "...")
 }
 
 /// 缩短任务 ID。
@@ -413,11 +410,7 @@ fn compact_text(value: String) -> String {
 /// 返回:
 /// - 适合单行展示的 ID
 fn short_id(value: String) -> String {
-    if value.chars().count() <= 18 {
-        value
-    } else {
-        format!("{}...", value.chars().take(15).collect::<String>())
-    }
+    crate::render::clip_to_width(&value, 18, "...")
 }
 
 /// 生成超时展示文本。

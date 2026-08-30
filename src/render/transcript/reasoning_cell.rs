@@ -145,7 +145,13 @@ const THINKING_GUTTER_WIDTH: usize = 4;
 /// 返回:
 /// - 正文可用显示宽度
 fn thinking_body_wrap_width(terminal_cols: usize) -> usize {
-    terminal_cols.saturating_sub(THINKING_GUTTER_WIDTH).max(8)
+    // 下限保证极窄终端下正文还有可读宽度，但必须再夹回终端列数：
+    // 只写 .max(8) 时 4 列终端会按 8 列折行，再拼上 4 列 gutter 就超出屏幕
+    let cols = terminal_cols.max(1);
+    terminal_cols
+        .saturating_sub(THINKING_GUTTER_WIDTH)
+        .max(8)
+        .min(cols)
 }
 
 /// 将思考正文渲染为可折叠 gutter 块（CLI / TUI 共用）。
@@ -461,7 +467,8 @@ mod tests {
     fn thinking_body_wrap_width_reserves_gutter() {
         assert_eq!(thinking_body_wrap_width(80), 76);
         assert_eq!(thinking_body_wrap_width(10), 8);
-        assert_eq!(thinking_body_wrap_width(4), 8);
+        // 极窄终端：下限不能把宽度顶到超过终端列数，否则拼上 gutter 会溢出
+        assert_eq!(thinking_body_wrap_width(4), 4);
     }
 
     #[test]
