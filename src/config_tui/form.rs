@@ -227,8 +227,8 @@ fn previous_selectable(fields: &[Field], selected: usize) -> usize {
 /// 返回:
 /// - 非空模型标识，取消时返回空
 pub(crate) fn add_custom_model_form(stdout: &mut io::Stdout) -> Result<Option<String>> {
-    let mut fields = [Field::new("Model ID", String::new())];
-    if !run_form(stdout, " ADD CUSTOM MODEL ", &mut fields)? {
+    let mut fields = [Field::new(t("Model ID", "模型标识"), String::new())];
+    if !run_form(stdout, &t(" ADD CUSTOM MODEL ", " 添加自定义模型 "), &mut fields)? {
         return Ok(None);
     }
     let model = fields[0].value.trim().to_string();
@@ -379,21 +379,43 @@ pub(super) fn edit_textarea(stdout: &mut io::Stdout, value: &mut String) -> Resu
     )?;
     stdout.flush()?;
     terminal::disable_raw_mode()?;
+    let result = edit_textarea_with_editor(value);
+    // 无论成败都要先回到备用屏：错误提示得画在界面里才看得见，
+    // 之前 eprintln 写 stderr，而备用屏占着显示，用户只会看到「什么都没发生」
+    terminal::enable_raw_mode()?;
+    execute!(stdout, EnterAlternateScreen, Clear(ClearType::All), Hide)?;
+    match result {
+        Ok(Some(edited)) => *value = edited,
+        // 编辑器以非零码退出（如 vim 的 :cq）视为取消，保留原值
+        Ok(None) => {}
+        Err(err) => super::ui::message(stdout, &err.to_string())?,
+    }
+    Ok(())
+}
+
+/// 调用外部编辑器编辑多行文本。
+///
+/// 参数:
+/// - `value`: 待编辑的原文
+///
+/// 返回:
+/// - `Ok(Some(...))` 为编辑后的内容；`Ok(None)` 表示用户取消；`Err` 为无法编辑
+fn edit_textarea_with_editor(value: &str) -> Result<Option<String>> {
     let mut file = tempfile::NamedTempFile::new()?;
     file.write_all(value.as_bytes())?;
+    file.flush()?;
     let path = file.path().to_path_buf();
     // 编辑器与启动方式都交给平台层：Windows 上没有 vim/nano，
     // 且 GUI 编辑器要直接启动才能等到窗口关闭
     let editor = std::env::var("EDITOR")
         .unwrap_or_else(|_| crate::platform::shell::default_editor().to_string());
-    let status = crate::platform::shell::editor_command(&editor, &path).status();
-    if let Err(err) = status {
-        eprintln!("{}: {err}", t("failed to open editor", "无法打开编辑器"));
+    let status = crate::platform::shell::editor_command(&editor, &path)
+        .status()
+        .map_err(|err| anyhow::anyhow!("{}: {err}", t("failed to open editor", "无法打开编辑器")))?;
+    if !status.success() {
+        return Ok(None);
     }
-    *value = std::fs::read_to_string(&path)?.trim().to_string();
-    terminal::enable_raw_mode()?;
-    execute!(stdout, EnterAlternateScreen, Clear(ClearType::All), Hide)?;
-    Ok(())
+    Ok(Some(std::fs::read_to_string(&path)?.trim().to_string()))
 }
 
 fn draw_form(
@@ -771,14 +793,26 @@ fn rendered_text_value(field: &Field, revealed_secret: bool) -> String {
 
 /// 掩码密钥文本。
 ///
+/// 定宽掩码：不按长度打星，避免从星号数量反推出密钥长度
+/// （32 位 hex、108 位 OpenAI key、sk-ant-… 会立刻被区分开）。
+///
 /// 参数:
 /// - `value`: 原始文本
 ///
 /// 返回:
 /// - 掩码后文本
 fn mask_secret(value: &str) -> String {
-    "*".repeat(value.chars().count())
+    if value.is_empty() {
+        return String::new();
+    }
+    if value.chars().count() <= MASK_SECRET_MAX_STARS {
+        return "*".repeat(value.chars().count());
+    }
+    format!("{}…", "*".repeat(MASK_SECRET_MAX_STARS))
 }
+
+/// 掩码星号上限，超出后以省略号收尾。
+const MASK_SECRET_MAX_STARS: usize = 8;
 
 /// 绘制表单按钮，返回按钮可见宽度（供横向排布）。
 ///
@@ -961,10 +995,19 @@ mod tests {
     fn secret_textarea_is_masked_by_default() {
         let field = Field::textarea("Tokens", "first\nsecond".to_string()).secret();
 
+        // 定宽掩码：不泄露真实长度
         assert_eq!(
             strip_field_ansi(&field_display_value(&field, false, 70)),
-            "************"
+            "********…"
         );
+    }
+
+    /// 短密钥按原长度打星，空值不产生掩码。
+    #[test]
+    fn mask_secret_keeps_short_values_verbatim() {
+        assert_eq!(mask_secret(""), "");
+        assert_eq!(mask_secret("abc"), "***");
+        assert_eq!(mask_secret(&"x".repeat(MASK_SECRET_MAX_STARS)), "********");
     }
 
     /// 布尔字段渲染为状态圆点而不是原始 true/false。

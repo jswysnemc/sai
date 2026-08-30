@@ -126,6 +126,20 @@ pub(super) fn run_multi_select(
                 rows = build_rows(toggles, entries, &filter);
                 selected = clamp_selection(&rows, selected);
             }
+            // 批量设置：工具列表有几十项，从「全部继承」改成白名单要逐个按空格太折磨人。
+            // 只作用于当前过滤结果，配合 / 可以「先过滤再批量改」
+            KeyCode::Char('A') => {
+                if states.len() > 1 {
+                    for index in visible_entry_indices(&rows) {
+                        entries[index].state = 1;
+                    }
+                }
+            }
+            KeyCode::Char('0') => {
+                for index in visible_entry_indices(&rows) {
+                    entries[index].state = 0;
+                }
+            }
             KeyCode::Char(' ') | KeyCode::Enter => match rows.get(selected) {
                 Some(Row::Toggle(index)) => toggles[*index].value = !toggles[*index].value,
                 Some(Row::Entry(index)) => {
@@ -160,6 +174,22 @@ fn build_rows(toggles: &[HeaderToggle], entries: &[SelectEntry], filter: &str) -
         rows.push(Row::Entry(index));
     }
     rows
+}
+
+/// 取出当前可见（未被过滤掉）的条目下标。
+///
+/// 参数:
+/// - `rows`: 已按过滤词构建的行序列
+///
+/// 返回:
+/// - 可见条目在 entries 中的下标
+fn visible_entry_indices(rows: &[Row]) -> Vec<usize> {
+    rows.iter()
+        .filter_map(|row| match row {
+            Row::Entry(index) => Some(*index),
+            _ => None,
+        })
+        .collect()
 }
 
 fn first_selectable(rows: &[Row]) -> usize {
@@ -214,10 +244,9 @@ fn clamp_selection(rows: &[Row], selected: usize) -> usize {
 fn state_summary(states: &[StateStyle], entries: &[SelectEntry]) -> String {
     let mut parts = Vec::new();
     for (index, state) in states.iter().enumerate() {
-        // 默认态（第 0 态）不计数，避免副标题充满无信息量的「关闭 41」
-        if index == 0 {
-            continue;
-        }
+        // 每个状态都计数，包括默认态：工具列表里第 0 态是「隐藏」，
+        // 恰恰是用户最想知道的数量。原先跳过它会渲染成「● 启用 5 · 共 58」，
+        // 读者得自己做 58-5 才知道有 53 项被隐藏
         let count = entries.iter().filter(|entry| entry.state == index).count();
         if count > 0 {
             parts.push(format!("{} {} {count}", state.mark, state.label));
@@ -333,6 +362,8 @@ fn draw(
             .join("/");
         help_line(&[
             ("Space", &format!("{} ({cycle})", t("cycle", "切换"))),
+            ("A", t("select all", "全选")),
+            ("0", t("clear all", "全不选")),
             ("/", t("search", "搜索")),
             ("s", t("save", "保存")),
             ("q", t("cancel", "取消")),
@@ -563,5 +594,41 @@ mod tests {
         let summary = state_summary(&states, &entries);
         assert!(summary.contains("● 启用 2"));
         assert!(summary.contains('3'));
+    }
+
+    /// 默认态也要计数：工具列表里第 0 态是「隐藏」，漏掉它用户得自己做减法。
+    #[test]
+    fn summary_counts_the_default_state_too() {
+        let states = vec![
+            StateStyle {
+                mark: "○",
+                label: "隐藏",
+                color: "",
+            },
+            StateStyle {
+                mark: "●",
+                label: "启用",
+                color: "",
+            },
+        ];
+        let entries = vec![entry("a", "", 0), entry("b", "", 0), entry("c", "", 1)];
+
+        let summary = state_summary(&states, &entries);
+        assert!(summary.contains("○ 隐藏 2"), "{summary}");
+        assert!(summary.contains("● 启用 1"), "{summary}");
+    }
+
+    /// 批量操作只取过滤后仍可见的条目：分组标题与开关行不能混进来。
+    #[test]
+    fn visible_entry_indices_skips_group_headers_and_toggles() {
+        let rows = vec![
+            Row::Toggle(0),
+            Row::Group("group".to_string()),
+            Row::Entry(3),
+            Row::Group("other".to_string()),
+            Row::Entry(7),
+        ];
+
+        assert_eq!(visible_entry_indices(&rows), vec![3, 7]);
     }
 }

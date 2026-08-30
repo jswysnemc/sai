@@ -40,7 +40,7 @@ pub(super) fn web_search_fields(config: &AppConfig) -> Vec<Field> {
             config.plugins.web.tinyfish_enabled,
         ),
         Field::textarea(
-            "TinyFish API Keys",
+            t("TinyFish API Keys", "TinyFish 密钥"),
             config.plugins.web.tinyfish_api_keys.join("\n"),
         )
         .secret(),
@@ -61,7 +61,7 @@ pub(super) fn web_search_fields(config: &AppConfig) -> Vec<Field> {
             config.plugins.web.tavily_enabled,
         ),
         Field::textarea(
-            "Tavily API Keys",
+            t("Tavily API Keys", "Tavily 密钥"),
             config.plugins.web.tavily_api_keys.join("\n"),
         )
         .secret(),
@@ -87,7 +87,7 @@ pub(super) fn web_search_fields(config: &AppConfig) -> Vec<Field> {
             config.plugins.web.firecrawl_enabled,
         ),
         Field::textarea(
-            "Firecrawl API Keys",
+            t("Firecrawl API Keys", "Firecrawl 密钥"),
             config.plugins.web.firecrawl_api_keys.join("\n"),
         )
         .secret(),
@@ -104,7 +104,7 @@ pub(super) fn web_search_fields(config: &AppConfig) -> Vec<Field> {
             config.plugins.web.anysearch_enabled,
         ),
         Field::textarea(
-            "AnySearch API Keys",
+            t("AnySearch API Keys", "AnySearch 密钥"),
             config.plugins.web.anysearch_api_keys.join("\n"),
         )
         .secret(),

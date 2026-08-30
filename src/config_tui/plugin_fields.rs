@@ -51,7 +51,7 @@ pub(super) fn plugin_fields(config: &AppConfig, index: usize) -> Vec<Field> {
                 config.plugins.image_generation.base_url.clone(),
             ),
             Field::textarea(
-                "API Keys",
+                t("API Keys", "接口密钥"),
                 config.plugins.image_generation.api_keys.join("\n"),
             )
             .secret(),
