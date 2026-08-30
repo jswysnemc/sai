@@ -11,6 +11,7 @@ pub mod defaults;
 mod gateway_defaults;
 mod git;
 mod mcp_file;
+mod mesh;
 mod model;
 mod model_metadata;
 mod model_thinking;
@@ -51,6 +52,7 @@ pub use mcp_file::{
 pub use model::*;
 pub use model_metadata::*;
 pub use model_thinking::*;
+pub use mesh::MeshConfig;
 pub use model_units::*;
 pub use notification::*;
 pub use permission::*;

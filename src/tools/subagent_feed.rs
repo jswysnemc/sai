@@ -9,6 +9,8 @@ const TEXT_PREFIX: &str = "__subagent_text__";
 const TOOL_CALL_PREFIX: &str = "__subtool_call__";
 /// 子工具调用结果消息前缀。
 const TOOL_RESULT_PREFIX: &str = "__subtool_result__";
+/// 累计用量快照消息前缀；运行期每轮上报，供底部面板实时显示 token
+pub(crate) const STATS_PREFIX: &str = "__subagent_stats__";
 
 /// 消费子代理进度消息,写入时间线并同步快照。
 ///
@@ -58,7 +60,20 @@ fn dispatch_message(subagent_id: &str, message: &str) {
         subagent_state::timeline_streaming_text(subagent_id, text, false);
         return;
     }
-    // 3. 普通文本:作为阶段说明写回快照(如最终统计行)
+    // 3. 累计用量:写回快照供面板实时读取,不作为阶段文案进时间线
+    if let Some(payload) = message.strip_prefix(STATS_PREFIX) {
+        if let Ok(stats) = serde_json::from_str::<Value>(payload) {
+            subagent_state::update_subagent_progress(
+                subagent_id,
+                subagent_state::SubagentProgressUpdate {
+                    stats: Some(stats),
+                    ..Default::default()
+                },
+            );
+        }
+        return;
+    }
+    // 4. 普通文本:作为阶段说明写回快照(如最终统计行)
     subagent_state::update_subagent_progress(subagent_id, parse_progress_message(message));
 }
 

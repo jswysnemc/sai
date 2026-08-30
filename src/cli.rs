@@ -64,6 +64,7 @@ mod repl_mentions;
 mod repl_pager;
 mod repl_runtime;
 mod repl_shell;
+mod repl_session_link;
 mod repl_text;
 mod repl_tool_warmup;
 mod repl_transcript_pager;

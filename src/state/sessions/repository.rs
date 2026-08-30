@@ -1,4 +1,4 @@
-use super::model::{SessionInfo, DEFAULT_SESSION_ID};
+use super::model::{LocatedSession, SessionInfo, DEFAULT_SESSION_ID};
 use super::repository_paths::{current_session_file, sessions_file};
 use super::workspace::{current_workspace_scope, WorkspaceScope};
 use crate::paths::SaiPaths;
@@ -298,6 +298,69 @@ pub fn locate_session_dirs(paths: &SaiPaths, session_id: &str) -> Result<(PathBu
     }
 
     Err(anyhow::anyhow!("session not found: {session_id}"))
+}
+
+/// 只读列出所有工作区的会话。
+///
+/// 与 `list_sessions` 不同：既不创建索引文件也不补默认会话，索引缺失的工作区
+/// 直接跳过。探测类工具要能在不留下任何痕迹的前提下观察别的会话。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+///
+/// 返回:
+/// - 按工作区、会话 ID 排序的会话及其状态目录
+pub fn list_all_sessions(paths: &SaiPaths) -> Result<Vec<LocatedSession>> {
+    let workspaces_root = paths.state_dir.join("sessions").join("workspaces");
+    let entries = match std::fs::read_dir(&workspaces_root) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("failed to read {}", workspaces_root.display()))
+        }
+    };
+    let mut located = Vec::new();
+    for entry in entries {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let base = entry.path();
+        let workspace_id = entry.file_name().to_string_lossy().into_owned();
+        let current = current_session_id_if_present(&base);
+        for session in read_sessions_from_base(&base)? {
+            located.push(LocatedSession {
+                state_dir: session_state_dir(&base, &session.id),
+                is_current: session.id == current,
+                info: session,
+                workspace_id: workspace_id.clone(),
+            });
+        }
+    }
+    located.sort_by(|left, right| {
+        left.workspace_id
+            .cmp(&right.workspace_id)
+            .then_with(|| left.info.id.cmp(&right.info.id))
+    });
+    Ok(located)
+}
+
+/// 读取当前会话 ID，文件缺失时按默认会话处理且不写盘。
+///
+/// 参数:
+/// - `base_state_dir`: 工作区会话作用域目录
+///
+/// 返回:
+/// - 当前会话 ID
+fn current_session_id_if_present(base_state_dir: &Path) -> String {
+    let file = current_session_file(base_state_dir);
+    if !file.is_file() {
+        return DEFAULT_SESSION_ID.to_string();
+    }
+    std::fs::read_to_string(file)
+        .map(|value| value.trim().to_string())
+        .unwrap_or_else(|_| DEFAULT_SESSION_ID.to_string())
 }
 
 /// 若索引中存在该会话则返回会话状态目录。

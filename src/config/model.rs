@@ -88,6 +88,9 @@ pub struct AppConfig {
     /// 运行期生效的提示词分段开关，由 Agent 档案写入
     #[serde(default)]
     pub prompt_sections: super::prompt_sections::PromptSectionToggles,
+    /// 会话网格：跨会话消息收发开关，默认只允许投递给自己
+    #[serde(default)]
+    pub mesh: super::mesh::MeshConfig,
 }
 
 #[derive(Debug, Clone, Serialize)]

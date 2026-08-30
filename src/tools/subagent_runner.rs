@@ -1,3 +1,4 @@
+use super::subagent_feed::STATS_PREFIX;
 use super::{readable_tool_name, tool_output_for_context, ToolProgress, ToolRegistry};
 use crate::agent::repeat_guard::{self, RepeatGuard, RepeatVerdict};
 use crate::agent::{evaluate_tool_gate, resolve_execution_call, ToolGate, ToolVisibility};
@@ -54,6 +55,20 @@ impl SubagentProgress {
         if self.enabled && self.mode != ProgressMode::Hidden {
             self.progress.report(message.into());
         }
+    }
+
+    /// 上报累计用量快照。
+    ///
+    /// 与阶段文本不同，用量不受展示模式限制：进度被隐藏时底部面板
+    /// 仍要能读到实时 token，否则长任务期间数字一直是空的。
+    ///
+    /// 参数:
+    /// - `stats`: `SubagentStats::public()` 生成的用量 JSON
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn stats(&self, stats: Value) {
+        self.progress.report(format!("{STATS_PREFIX}{stats}"));
     }
 
     /// 上报子代理推理文本。
@@ -667,6 +682,9 @@ impl SubagentRunner {
                 )
                 .await?;
             stats.add_usage_or_estimate(result.usage.as_ref(), &[]);
+            // 每轮结束把累计用量写回快照：底部面板据此实时显示 token，
+            // 否则长任务期间数字要等到任务结束才出现
+            self.progress.stats(stats.public());
             if result.tool_calls.is_empty() {
                 return Ok(result);
             }

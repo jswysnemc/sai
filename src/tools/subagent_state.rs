@@ -28,9 +28,9 @@ pub(crate) use lifecycle::{
     timeline_tool_finished, timeline_tool_started, update_subagent_progress,
 };
 pub(crate) use messaging::{
-    drain_subagent_inbox, queue_subagent_message, queue_subagent_message_for_owner,
-    request_subagent_stop_for_owner, subagent_inbox_len, subagent_messages,
-    subagent_stop_requested,
+    drain_subagent_inbox, queue_subagent_mesh_message, queue_subagent_message,
+    queue_subagent_message_for_owner, request_subagent_stop_for_owner, subagent_inbox_len,
+    subagent_messages, subagent_stop_requested,
 };
 use persistence::{
     ensure_owner_loaded, persist_owner_locked, publish_record, subagents, unix_seconds,
@@ -107,6 +107,8 @@ pub(crate) struct SubagentProgressUpdate {
     pub(crate) step: Option<usize>,
     pub(crate) phase: Option<String>,
     pub(crate) last_tool: Option<String>,
+    /// 累计用量快照；运行期每轮写入，供底部面板实时显示 token 消耗
+    pub(crate) stats: Option<Value>,
 }
 
 struct SubagentRecord {
@@ -127,14 +129,34 @@ struct SubagentRecord {
 }
 
 /// 投递给子智能体的一条追加消息。
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct SubagentInboxMessage {
-    /// 消息来源：`parent`（主代理）或 `user`（用户留言）
+    /// 消息来源：`parent`（主代理）、`user`（用户留言）或网格地址
     pub(crate) from: String,
     /// 消息正文
     pub(crate) text: String,
     /// 入队时间（Unix 秒）
     pub(crate) queued_at: u64,
+    /// 网格消息 id；非网格消息为空，旧记录反序列化为 `None`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) id: Option<String>,
+    /// 网格回复地址；非网格消息为空
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) reply_to: Option<String>,
+    /// 网格发送方地址；非网格消息为空
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) from_addr: Option<String>,
+}
+
+/// 网格消息投递到子智能体信箱时携带的关联信息。
+#[derive(Debug, Clone, Default)]
+pub(crate) struct MeshMessageMeta {
+    /// 网格消息 id
+    pub(crate) id: Option<String>,
+    /// 回复应投递到的地址
+    pub(crate) reply_to: Option<String>,
+    /// 发送方地址
+    pub(crate) from_addr: Option<String>,
 }
 
 /// 持久子智能体的优雅结束请求。

@@ -42,6 +42,7 @@ impl Default for AppConfig {
             system_prompt_file: Some("system-prompt.md".to_string()),
             system_prompt: None,
             load_instruction_files: true,
+            mesh: super::mesh::MeshConfig::default(),
         }
     }
 }
