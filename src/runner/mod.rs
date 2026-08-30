@@ -5,6 +5,7 @@ mod continuation;
 mod control_runner;
 mod events;
 mod ownership;
+mod session_actor;
 mod session_runner;
 mod submission;
 pub(crate) mod submission_tools;
@@ -16,7 +17,11 @@ use anyhow::Result;
 pub(crate) use automatic_input::{AutomaticInput, AutomaticInputEvent, AutomaticInputKind};
 pub(crate) use continuation::{ContinuationReason, RunnerContinuation};
 pub(crate) use events::{RunnerEvent, RunnerEventSink, RunnerOutput};
-pub(crate) use ownership::{ActiveRunGuard, SessionOwner};
+pub(crate) use ownership::{
+    active_run, holder_is_alive, session_holder, ActiveRunGuard, ActiveRunLockRecord,
+    SessionHolderGuard, SessionOwner, TransportKind, TransportRef, HOLDER_HEARTBEAT_INTERVAL,
+};
+pub(crate) use session_actor::{ActorCmd, ActorHandle, SessionActor, SessionSubscription, Watcher};
 pub(crate) use session_runner::SessionRunner;
 pub(crate) use submission::{
     ChannelSubmission, ControlSubmission, RenderPolicy, RunnerSubmission, RunnerSubmissionKind,

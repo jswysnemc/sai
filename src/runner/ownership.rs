@@ -8,9 +8,26 @@ use std::fs::OpenOptions;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
 
 static ACTIVE_RUNS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 const ACTIVE_RUN_LOCK_FILE: &str = "active-run.json";
+
+/// 会话持有者登记文件。
+///
+/// 与 `active-run.json` 职责分离：后者是**轮次级**互斥（一轮跑完即释放），
+/// 前者是**会话级**长期登记（TUI 或 Web 打开会话期间一直存在），
+/// 供其它进程发现"谁在持有这个会话"并连接它的事件流。
+const SESSION_HOLDER_FILE: &str = "session-holder.json";
+
+/// 会话持有者登记表格式版本。
+const HOLDER_SCHEMA: u8 = 1;
+
+/// 持有者心跳写入间隔。
+pub(crate) const HOLDER_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(2);
+
+/// 心跳判死阈值：超过这么久没更新就认为持有者已失联。
+const HOLDER_HEARTBEAT_STALE: Duration = Duration::from_secs(15);
 
 /// session 运行 owner。
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -62,11 +79,11 @@ impl From<SubmissionSource> for SessionOwner {
 
 /// active run 锁文件记录。
 #[derive(Debug, Clone, Deserialize, Serialize)]
-struct ActiveRunLockRecord {
-    session_id: String,
-    owner: String,
-    pid: u32,
-    started_at: String,
+pub(crate) struct ActiveRunLockRecord {
+    pub(crate) session_id: String,
+    pub(crate) owner: String,
+    pub(crate) pid: u32,
+    pub(crate) started_at: String,
 }
 
 impl ActiveRunLockRecord {
@@ -209,6 +226,237 @@ impl Drop for ActiveRunGuard {
     }
 }
 
+/// 会话持有者暴露事件流的端点类型。
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum TransportKind {
+    /// Unix domain socket（Linux / macOS）
+    Unix,
+    /// Windows named pipe
+    WinPipe,
+}
+
+/// 会话持有者的事件流端点，供观察者连接。
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub(crate) struct TransportRef {
+    pub(crate) kind: TransportKind,
+    /// socket 路径或 named pipe 名称
+    pub(crate) path: String,
+}
+
+/// 会话持有者登记表。
+///
+/// 新增字段一律带 `#[serde(default)]`：读到旧格式时按缺省值处理，
+/// 观察者据此降级为只读，而不是直接报错。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct SessionHolderRecord {
+    pub(crate) schema: u8,
+    pub(crate) session_id: String,
+    pub(crate) owner: String,
+    pub(crate) pid: u32,
+    pub(crate) started_at: String,
+    #[serde(default)]
+    pub(crate) heartbeat_at: Option<String>,
+    #[serde(default)]
+    pub(crate) transport: Option<TransportRef>,
+    #[serde(default)]
+    pub(crate) watchers: u32,
+}
+
+impl SessionHolderRecord {
+    /// 构造当前进程的持有者登记。
+    fn current(session_id: &str, owner: SessionOwner) -> Self {
+        let now = Utc::now().to_rfc3339();
+        Self {
+            schema: HOLDER_SCHEMA,
+            session_id: session_id.to_string(),
+            owner: owner.as_str().to_string(),
+            pid: std::process::id(),
+            started_at: now.clone(),
+            heartbeat_at: Some(now),
+            transport: None,
+            watchers: 0,
+        }
+    }
+}
+
+/// 会话持有者守卫；`Drop` 时撤销登记。
+pub(crate) struct SessionHolderGuard {
+    path: PathBuf,
+    session_id: String,
+    pid: u32,
+}
+
+impl SessionHolderGuard {
+    /// 登记为会话持有者。
+    ///
+    /// 语义互斥：已有存活持有者时返回错误，调用方应降级为观察者。
+    ///
+    /// 参数:
+    /// - `state_dir`: 会话状态目录
+    /// - `session_id`: 会话 ID
+    /// - `owner`: 持有者类型
+    ///
+    /// 返回:
+    /// - 持有者守卫，释放时撤销登记
+    pub(crate) fn acquire(state_dir: &Path, session_id: &str, owner: SessionOwner) -> Result<Self> {
+        let path = state_dir.join(SESSION_HOLDER_FILE);
+        if let Some(existing) = read_holder_record(&path) {
+            if existing.session_id == session_id && holder_is_alive(&existing) {
+                bail!(
+                    "session {session_id} is already held by {} in process {}",
+                    existing.owner,
+                    existing.pid
+                );
+            }
+            let _ = std::fs::remove_file(&path);
+        }
+        let record = SessionHolderRecord::current(session_id, owner);
+        write_holder_record(&path, &record)?;
+        Ok(Self {
+            path,
+            session_id: session_id.to_string(),
+            pid: record.pid,
+        })
+    }
+
+    /// 更新心跳时间戳。
+    ///
+    /// 返回:
+    /// - 写入结果
+    pub(crate) fn heartbeat(&self) -> Result<()> {
+        let Some(mut record) = read_holder_record(&self.path) else {
+            return Ok(());
+        };
+        record.heartbeat_at = Some(Utc::now().to_rfc3339());
+        write_holder_record(&self.path, &record)
+    }
+
+    /// 登记事件流端点，供观察者连接。
+    ///
+    /// 参数:
+    /// - `transport`: 端点描述
+    ///
+    /// 返回:
+    /// - 写入结果
+    pub(crate) fn publish_transport(&self, transport: TransportRef) -> Result<()> {
+        let Some(mut record) = read_holder_record(&self.path) else {
+            return Ok(());
+        };
+        record.transport = Some(transport);
+        write_holder_record(&self.path, &record)
+    }
+
+    /// 更新观察者数量（仅用于诊断展示）。
+    ///
+    /// 参数:
+    /// - `watchers`: 当前观察者数
+    ///
+    /// 返回:
+    /// - 写入结果
+    pub(crate) fn set_watchers(&self, watchers: u32) -> Result<()> {
+        let Some(mut record) = read_holder_record(&self.path) else {
+            return Ok(());
+        };
+        record.watchers = watchers;
+        write_holder_record(&self.path, &record)
+    }
+}
+
+impl Drop for SessionHolderGuard {
+    /// 撤销本进程自己的登记。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    fn drop(&mut self) {
+        if let Some(record) = read_holder_record(&self.path) {
+            if record.session_id == self.session_id && record.pid == self.pid {
+                let _ = std::fs::remove_file(&self.path);
+            }
+        }
+    }
+}
+
+/// 读取当前会话持有者登记。
+///
+/// 只读取、不创建任何文件；观察者用它发现持有者并连接其事件流。
+///
+/// 参数:
+/// - `state_dir`: 会话状态目录
+///
+/// 返回:
+/// - 持有者登记；无登记或内容不可解析时为空
+pub(crate) fn session_holder(state_dir: &Path) -> Option<SessionHolderRecord> {
+    read_holder_record(&state_dir.join(SESSION_HOLDER_FILE))
+}
+
+/// 读取会话当前正在跑的那一轮（只读，不创建也不清理锁文件）。
+///
+/// 崩溃残留的锁文件会让会话永远显示"正在跑一轮"，因此这里按 pid 判活，
+/// 进程已退出的锁直接视为无人运行。
+///
+/// 参数:
+/// - `state_dir`: 会话状态目录
+///
+/// 返回:
+/// - 轮次锁记录；无锁文件或持有进程已退出时为空
+pub(crate) fn active_run(state_dir: &Path) -> Option<ActiveRunLockRecord> {
+    let record = read_lock_record(&state_dir.join(ACTIVE_RUN_LOCK_FILE))?;
+    process_exists(record.pid).then_some(record)
+}
+
+/// 判断持有者是否仍然存活。
+///
+/// 先判心跳：心跳新鲜就直接判定存活，避免每次都去查进程——
+/// Windows 的进程检查要起 `tasklist` 子进程，很贵。
+/// 心跳过期后才回落到进程存在性检查。
+///
+/// 参数:
+/// - `record`: 持有者登记
+///
+/// 返回:
+/// - 持有者存活为 true
+pub(crate) fn holder_is_alive(record: &SessionHolderRecord) -> bool {
+    let Some(heartbeat_at) = record.heartbeat_at.as_deref() else {
+        // 旧格式没有心跳字段，直接查进程
+        return process_exists(record.pid);
+    };
+    let Ok(heartbeat) = chrono::DateTime::parse_from_rfc3339(heartbeat_at) else {
+        return process_exists(record.pid);
+    };
+    let age = Utc::now().signed_duration_since(heartbeat.with_timezone(&Utc));
+    let stale = chrono::Duration::seconds(HOLDER_HEARTBEAT_STALE.as_secs() as i64);
+    if age <= stale {
+        return true;
+    }
+    process_exists(record.pid)
+}
+
+/// 读取持有者登记文件。
+fn read_holder_record(path: &Path) -> Option<SessionHolderRecord> {
+    let content = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&content).ok()
+}
+
+/// 原子写入持有者登记文件（tmp + rename）。
+fn write_holder_record(path: &Path, record: &SessionHolderRecord) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    let file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&tmp)?;
+    serde_json::to_writer_pretty(file, record)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+}
+
 /// 写入跨进程 active run 锁文件。
 ///
 /// 参数:
@@ -223,7 +471,10 @@ fn acquire_durable_lock(
     record: &ActiveRunLockRecord,
     owner: SessionOwner,
 ) -> Result<()> {
-    loop {
+    // 重试上限 + 退避：清理 stale 锁后立刻重建仍可能撞上另一个正在竞争的
+    // 进程，无退避的空转会把 CPU 打满
+    const MAX_ATTEMPTS: u32 = 50;
+    for attempt in 0..MAX_ATTEMPTS {
         match create_lock_file(lock_path, record) {
             Ok(()) => return Ok(()),
             Err(error) if error.kind() == ErrorKind::AlreadyExists => {
@@ -231,7 +482,14 @@ fn acquire_durable_lock(
             }
             Err(error) => return Err(error.into()),
         }
+        if attempt > 0 {
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
+    bail!(
+        "could not acquire the active run lock for session {} after {MAX_ATTEMPTS} attempts",
+        record.session_id
+    )
 }
 
 /// 原子创建锁文件。
@@ -551,5 +809,151 @@ mod tests {
 
         assert!(second.is_ok());
         drop(first);
+    }
+
+    /// 持有者登记后可被读到，释放后登记撤销。
+    #[test]
+    fn session_holder_registration_round_trips() {
+        let temp = tempfile::tempdir().unwrap();
+        let session_id = unique_session_id();
+
+        let guard =
+            SessionHolderGuard::acquire(temp.path(), &session_id, SessionOwner::Repl).unwrap();
+        let holder = session_holder(temp.path()).unwrap();
+
+        assert_eq!(holder.session_id, session_id);
+        assert_eq!(holder.owner, "repl");
+        assert_eq!(holder.pid, std::process::id());
+        assert!(holder.heartbeat_at.is_some());
+        assert!(holder.transport.is_none());
+        drop(guard);
+        assert!(session_holder(temp.path()).is_none());
+    }
+
+    /// 已有存活持有者时，第二个进程只能降级为观察者。
+    #[test]
+    fn session_holder_rejects_a_second_live_holder() {
+        let temp = tempfile::tempdir().unwrap();
+        let session_id = unique_session_id();
+
+        let first =
+            SessionHolderGuard::acquire(temp.path(), &session_id, SessionOwner::Repl).unwrap();
+        let second = SessionHolderGuard::acquire(temp.path(), &session_id, SessionOwner::Web);
+
+        assert!(second.is_err(), "a live holder must not be displaced");
+        assert_eq!(session_holder(temp.path()).unwrap().owner, "repl");
+        drop(first);
+    }
+
+    /// 心跳过期且进程已死时，持有者被判定为失联，登记可被接管。
+    #[test]
+    fn stale_session_holder_can_be_taken_over() {
+        let temp = tempfile::tempdir().unwrap();
+        let session_id = unique_session_id();
+        let path = temp.path().join(SESSION_HOLDER_FILE);
+        // 心跳必须过期：新鲜心跳会被直接判活，不该被接管
+        let long_past =
+            Utc::now() - chrono::Duration::seconds(HOLDER_HEARTBEAT_STALE.as_secs() as i64 + 60);
+        let stale = SessionHolderRecord {
+            schema: HOLDER_SCHEMA,
+            session_id: session_id.clone(),
+            owner: "repl".to_string(),
+            pid: u32::MAX,
+            started_at: long_past.to_rfc3339(),
+            heartbeat_at: Some(long_past.to_rfc3339()),
+            transport: None,
+            watchers: 0,
+        };
+        write_holder_record(&path, &stale).unwrap();
+
+        let taken =
+            SessionHolderGuard::acquire(temp.path(), &session_id, SessionOwner::Web).unwrap();
+
+        assert_eq!(session_holder(temp.path()).unwrap().owner, "web");
+        drop(taken);
+    }
+
+    /// 心跳新鲜时直接判活，不去查进程——Windows 的进程检查很贵。
+    #[test]
+    fn fresh_heartbeat_keeps_a_dead_pid_alive() {
+        let record = SessionHolderRecord {
+            schema: HOLDER_SCHEMA,
+            session_id: "session".to_string(),
+            owner: "web".to_string(),
+            pid: u32::MAX,
+            started_at: Utc::now().to_rfc3339(),
+            heartbeat_at: Some(Utc::now().to_rfc3339()),
+            transport: None,
+            watchers: 0,
+        };
+
+        assert!(holder_is_alive(&record));
+    }
+
+    /// 心跳过期后回落到进程检查，pid 不存在则判定失联。
+    #[test]
+    fn expired_heartbeat_falls_back_to_process_check() {
+        let long_past = Utc::now() - chrono::Duration::seconds(HOLDER_HEARTBEAT_STALE.as_secs() as i64 + 60);
+        let record = SessionHolderRecord {
+            schema: HOLDER_SCHEMA,
+            session_id: "session".to_string(),
+            owner: "web".to_string(),
+            pid: u32::MAX,
+            started_at: long_past.to_rfc3339(),
+            heartbeat_at: Some(long_past.to_rfc3339()),
+            transport: None,
+            watchers: 0,
+        };
+
+        assert!(!holder_is_alive(&record));
+    }
+
+    /// 旧格式没有心跳字段时按缺失处理，不报错。
+    #[test]
+    fn legacy_holder_record_without_heartbeat_is_readable() {
+        let record = SessionHolderRecord {
+            schema: HOLDER_SCHEMA,
+            session_id: "session".to_string(),
+            owner: "web".to_string(),
+            pid: u32::MAX,
+            started_at: Utc::now().to_rfc3339(),
+            heartbeat_at: None,
+            transport: None,
+            watchers: 0,
+        };
+        let json = serde_json::to_string(&record).unwrap();
+        // 去掉可选字段，模拟旧版本写入的内容
+        let legacy = json
+            .replace(",\"heartbeat_at\":null", "")
+            .replace(",\"transport\":null", "")
+            .replace(",\"watchers\":0", "");
+
+        let parsed: SessionHolderRecord = serde_json::from_str(&legacy).unwrap();
+
+        assert!(parsed.heartbeat_at.is_none());
+        assert!(parsed.transport.is_none());
+        assert_eq!(parsed.watchers, 0);
+    }
+
+    /// 观察者连接所需的端点可以登记并被读到。
+    #[test]
+    fn transport_can_be_published_for_observers() {
+        let temp = tempfile::tempdir().unwrap();
+        let session_id = unique_session_id();
+        let guard =
+            SessionHolderGuard::acquire(temp.path(), &session_id, SessionOwner::Web).unwrap();
+
+        guard
+            .publish_transport(TransportRef {
+                kind: TransportKind::Unix,
+                path: "/tmp/sai-bus-abc12345".to_string(),
+            })
+            .unwrap();
+
+        let holder = session_holder(temp.path()).unwrap();
+        let transport = holder.transport.unwrap();
+        assert_eq!(transport.kind, TransportKind::Unix);
+        assert_eq!(transport.path, "/tmp/sai-bus-abc12345");
+        drop(guard);
     }
 }
