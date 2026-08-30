@@ -184,6 +184,54 @@ fn preview_str_replace(
 fn build_line_diff(old_content: &str, new_content: &str) -> Vec<LineChange> {
     let old_lines: Vec<&str> = old_content.lines().collect();
     let new_lines: Vec<&str> = new_content.lines().collect();
+    // 1. 先剥掉公共前后缀，再只对真正不同的区间做 LCS。
+    //    编辑几乎总是落在文件中间一小段，而全量 LCS 的时间与内存都是
+    //    O(旧行数 × 新行数)：5000 行的文件要分配 2500 万个格子（约 200MB），
+    //    在每次 write_file 预览上都会卡一下，还有 OOM 风险。
+    //    剥离后行号用前缀长度补回，输出与全量计算完全等价
+    //    剥离时要在两侧各留 `DIFF_CONTEXT_LINES` 行余量：变更紧邻文件首尾时，
+    //    它两侧的上下文行本身就是公共缀，全剥掉会让预览丢掉上下文
+    let raw_prefix = common_affix_len(&old_lines, &new_lines, true);
+    let old_rest = &old_lines[raw_prefix..];
+    let new_rest = &new_lines[raw_prefix..];
+    let raw_suffix = common_affix_len(old_rest, new_rest, false);
+    let prefix = raw_prefix.saturating_sub(DIFF_CONTEXT_LINES);
+    let suffix = raw_suffix.saturating_sub(DIFF_CONTEXT_LINES);
+    let old_core = &old_lines[prefix..old_lines.len().saturating_sub(suffix)];
+    let new_core = &new_lines[prefix..new_lines.len().saturating_sub(suffix)];
+    build_core_line_diff(old_core, new_core, prefix)
+}
+
+/// 计算两段行的公共前缀或后缀长度。
+///
+/// 参数:
+/// - `left`: 第一段行
+/// - `right`: 第二段行
+/// - `prefix`: 为 true 时从前向后比，否则从后向前比
+///
+/// 返回:
+/// - 公共缀长度（不超过较短一段）
+fn common_affix_len(left: &[&str], right: &[&str], prefix: bool) -> usize {
+    let limit = left.len().min(right.len());
+    if prefix {
+        (0..limit).take_while(|&index| left[index] == right[index]).count()
+    } else {
+        (1..=limit)
+            .take_while(|&offset| left[left.len() - offset] == right[right.len() - offset])
+            .count()
+    }
+}
+
+/// 对已完成前后缀剥离的行序列做 LCS diff。
+///
+/// 参数:
+/// - `old_lines`: 旧文本的行（不含公共前后缀）
+/// - `new_lines`: 新文本的行（不含公共前后缀）
+/// - `line_offset`: 行号偏移，即被剥离的前缀行数
+///
+/// 返回:
+/// - 带行号的增删上下文行
+fn build_core_line_diff(old_lines: &[&str], new_lines: &[&str], line_offset: usize) -> Vec<LineChange> {
     let (old_len, new_len) = (old_lines.len(), new_lines.len());
     // 1. 计算 LCS 长度表
     let mut dp = vec![vec![0usize; new_len + 1]; old_len + 1];
@@ -204,8 +252,8 @@ fn build_line_diff(old_content: &str, new_content: &str) -> Vec<LineChange> {
         if old_lines[i] == new_lines[j] {
             lines.push(LineChange {
                 kind: LineChangeKind::Context,
-                old_line: Some(i + 1),
-                new_line: Some(j + 1),
+                old_line: Some(line_offset + i + 1),
+                new_line: Some(line_offset + j + 1),
                 text: old_lines[i].to_string(),
             });
             i += 1;
@@ -213,7 +261,7 @@ fn build_line_diff(old_content: &str, new_content: &str) -> Vec<LineChange> {
         } else if dp[i + 1][j] >= dp[i][j + 1] {
             lines.push(LineChange {
                 kind: LineChangeKind::Delete,
-                old_line: Some(i + 1),
+                old_line: Some(line_offset + i + 1),
                 new_line: None,
                 text: old_lines[i].to_string(),
             });
@@ -222,7 +270,7 @@ fn build_line_diff(old_content: &str, new_content: &str) -> Vec<LineChange> {
             lines.push(LineChange {
                 kind: LineChangeKind::Add,
                 old_line: None,
-                new_line: Some(j + 1),
+                new_line: Some(line_offset + j + 1),
                 text: new_lines[j].to_string(),
             });
             j += 1;
@@ -231,7 +279,7 @@ fn build_line_diff(old_content: &str, new_content: &str) -> Vec<LineChange> {
     while i < old_len {
         lines.push(LineChange {
             kind: LineChangeKind::Delete,
-            old_line: Some(i + 1),
+            old_line: Some(line_offset + i + 1),
             new_line: None,
             text: old_lines[i].to_string(),
         });
@@ -241,14 +289,17 @@ fn build_line_diff(old_content: &str, new_content: &str) -> Vec<LineChange> {
         lines.push(LineChange {
             kind: LineChangeKind::Add,
             old_line: None,
-            new_line: Some(j + 1),
+            new_line: Some(line_offset + j + 1),
             text: new_lines[j].to_string(),
         });
         j += 1;
     }
     // 3. 压缩为变更附近上下文，避免整文件重写刷屏
-    compress_line_diff(&lines, 3)
+    compress_line_diff(&lines, DIFF_CONTEXT_LINES)
 }
+
+/// diff 预览在每处变更上下保留的上下文行数。
+const DIFF_CONTEXT_LINES: usize = 3;
 
 /// 仅保留变更行附近上下文。
 ///
@@ -482,5 +533,80 @@ mod tests {
         );
         let preview = preview_from_arguments(&partial).unwrap();
         assert!(matches!(preview.changes[0], FileChange::Add { .. }));
+    }
+}
+
+#[cfg(test)]
+mod diff_tests {
+    use super::*;
+
+    /// 未优化的全量 LCS，作为剥离前后缀版本的等价性参照。
+    fn reference_diff(old_content: &str, new_content: &str) -> Vec<LineChange> {
+        let old_lines: Vec<&str> = old_content.lines().collect();
+        let new_lines: Vec<&str> = new_content.lines().collect();
+        build_core_line_diff(&old_lines, &new_lines, 0)
+    }
+
+    fn summarize(changes: &[LineChange]) -> Vec<String> {
+        changes
+            .iter()
+            .map(|change| {
+                format!(
+                    "{:?}:{}:{}",
+                    change.kind,
+                    change.old_line.unwrap_or(0),
+                    change.new_line.unwrap_or(0)
+                )
+            })
+            .collect()
+    }
+
+    /// 剥离前后缀不能改变结果：行号、类型、条数都要与全量计算一致。
+    #[test]
+    fn prefix_suffix_stripping_matches_full_lcs() {
+        let long_old = format!("h\n{}t", "x\n".repeat(50));
+        let long_new = format!("h\n{}T", "x\n".repeat(50));
+        let cases: [(&str, &str); 9] = [
+            ("a\nb\nc", "a\nB\nc"),
+            ("a\nb\nc", "a\nb\nc"),
+            ("", "a\nb"),
+            ("a\nb", ""),
+            ("same\n", "same\n"),
+            ("1\n2\n3\n4\n5", "1\n2\nX\n4\n5"),
+            (&long_old, &long_new),
+            ("a\nb\nc\nd", "d\nc\nb\na"),
+            ("only-old\n", "only-new\n"),
+        ];
+
+        for (old, new) in cases {
+            assert_eq!(
+                summarize(&build_line_diff(old, new)),
+                summarize(&reference_diff(old, new)),
+                "diff mismatch for {old:?} -> {new:?}"
+            );
+        }
+    }
+
+    /// 大文件中间改一行：剥离后不应再出现全量 LCS 的平方级开销。
+    #[test]
+    fn single_line_edit_in_a_large_file_stays_fast() {
+        let big = (0..20_000)
+            .map(|index| format!("line-{index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let mut lines: Vec<String> = big.lines().map(str::to_string).collect();
+        lines[10_000] = "line-10000-edited".to_string();
+        let edited = lines.join("\n");
+
+        let started = std::time::Instant::now();
+        let changes = build_line_diff(&big, &edited);
+        let elapsed = started.elapsed();
+
+        // 上下各 3 行上下文 + 1 删 + 1 增
+        assert_eq!(changes.len(), 8, "unexpected diff shape: {changes:?}");
+        assert!(
+            elapsed < std::time::Duration::from_secs(2),
+            "大文件 diff 耗时过长：{elapsed:?}"
+        );
     }
 }

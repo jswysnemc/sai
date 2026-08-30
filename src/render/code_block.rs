@@ -270,6 +270,43 @@ fn code_keywords(lang: &str) -> &'static [&'static str] {
             "then", "while",
         ],
         "json" | "toml" | "yaml" | "yml" => &["true", "false", "null"],
+        // edit_diff::colors 已把这些扩展名映射到对应语言（因此 `//` 与
+        // `/* */` 注释会被识别），但这里没有关键词表的话，func / class /
+        // public 全都无着色，高亮看起来就很随意
+        "go" => &[
+            "break", "case", "chan", "const", "continue", "default", "defer", "else",
+            "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map",
+            "package", "range", "return", "select", "struct", "switch", "type", "var",
+        ],
+        "java" => &[
+            "abstract", "assert", "break", "case", "catch", "class", "const", "continue",
+            "default", "do", "else", "enum", "extends", "final", "finally", "for", "if",
+            "implements", "import", "instanceof", "interface", "native", "new", "package",
+            "private", "protected", "public", "return", "static", "strictfp", "super", "switch",
+            "synchronized", "this", "throw", "throws", "transient", "try", "void", "volatile",
+            "while",
+        ],
+        "c" | "h" => &[
+            "auto", "break", "case", "char", "const", "continue", "default", "do", "double",
+            "else", "enum", "extern", "float", "for", "goto", "if", "inline", "int", "long",
+            "register", "restrict", "return", "short", "signed", "sizeof", "static", "struct",
+            "switch", "typedef", "union", "unsigned", "void", "volatile", "while",
+        ],
+        "cpp" | "cc" | "hpp" | "cxx" => &[
+            "auto", "bool", "break", "case", "catch", "char", "class", "const", "constexpr",
+            "continue", "default", "delete", "do", "double", "else", "enum", "explicit", "extern",
+            "false", "float", "for", "friend", "goto", "if", "inline", "int", "long", "namespace",
+            "new", "nullptr", "operator", "private", "protected", "public", "return", "short",
+            "signed", "sizeof", "static", "struct", "switch", "template", "this", "throw", "true",
+            "try", "typedef", "typename", "union", "unsigned", "using", "virtual", "void",
+            "volatile", "while",
+        ],
+        "sql" => &[
+            "and", "as", "asc", "by", "create", "delete", "desc", "distinct", "drop", "from",
+            "group", "having", "in", "insert", "into", "is", "join", "left", "like", "limit", "not",
+            "null", "on", "or", "order", "right", "select", "set", "table", "update", "values",
+            "where", "with",
+        ],
         _ => &[],
     }
 }
@@ -295,7 +332,11 @@ fn supports_line_comment(lang: &str) -> bool {
             | "javascript"
             | "typescript"
             | "c"
+            | "h"
             | "cpp"
+            | "cc"
+            | "hpp"
+            | "cxx"
             | "java"
             | "go"
     )
@@ -321,7 +362,11 @@ fn supports_block_comment(lang: &str) -> bool {
             | "javascript"
             | "typescript"
             | "c"
+            | "h"
             | "cpp"
+            | "cc"
+            | "hpp"
+            | "cxx"
             | "java"
             | "go"
     )
