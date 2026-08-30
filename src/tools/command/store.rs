@@ -80,6 +80,12 @@ impl BackgroundCommandStore {
 
     /// 加载任务列表。
     ///
+    /// 文件尾部偶尔会残留上一次写入的碎片：写入被打断、或两个进程先后写
+    /// 同一个文件而旧内容更长时都会留下它。严格解析会报成 "trailing
+    /// characters" 并让调用方失败——一个后台任务列表读不出来不该拖垮整条
+    /// 命令，所以退回取第一个完整的 JSON 数组把数据救回来；实在读不出来
+    /// 就按空列表处理，而不是把错误抛给上层。
+    ///
     /// 返回:
     /// - 后台任务列表
     pub(crate) fn load(&self) -> Result<Vec<BackgroundCommandTask>> {
@@ -88,7 +94,15 @@ impl BackgroundCommandStore {
             return Ok(Vec::new());
         }
         let raw = std::fs::read_to_string(file)?;
-        Ok(serde_json::from_str(&raw)?)
+        if let Ok(tasks) = serde_json::from_str::<Vec<BackgroundCommandTask>>(&raw) {
+            return Ok(tasks);
+        }
+        let mut stream =
+            serde_json::Deserializer::from_str(&raw).into_iter::<Vec<BackgroundCommandTask>>();
+        match stream.next() {
+            Some(Ok(tasks)) => Ok(tasks),
+            _ => Ok(Vec::new()),
+        }
     }
 
     /// 保存任务列表。
@@ -100,10 +114,13 @@ impl BackgroundCommandStore {
     /// - 保存是否成功
     pub(crate) fn save(&self, tasks: &[BackgroundCommandTask]) -> Result<()> {
         self.init()?;
-        std::fs::write(
-            self.state_file(),
-            format!("{}\n", serde_json::to_string_pretty(tasks)?),
-        )?;
+        // 原子替换：直接写目标文件在写入被打断时会留下半截内容，下一次
+        // 读取就会失败。先写临时文件再 rename，读到的永远是完整内容。
+        let payload = format!("{}\n", serde_json::to_string_pretty(tasks)?);
+        let temp = tempfile::NamedTempFile::new_in(&self.root)?;
+        std::fs::write(temp.path(), payload)?;
+        temp.persist(self.state_file())
+            .map_err(|error| anyhow::anyhow!("failed to persist background tasks: {}", error.error))?;
         Ok(())
     }
 
@@ -150,4 +167,40 @@ pub(crate) fn unix_seconds() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_secs())
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 文件尾部残留碎片时仍能读出前面的完整任务列表。
+    ///
+    /// 这是线上真实发生过的一次故障：tasks.json 尾部多了 47 字节残留，
+    /// 严格解析报 "trailing characters" 并让整条命令失败。
+    #[test]
+    fn load_salvages_tasks_despite_a_trailing_fragment() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = BackgroundCommandStore::new(dir.path().to_path_buf());
+
+        store.save(&[]).unwrap();
+        let mut raw = std::fs::read_to_string(store.state_file()).unwrap();
+        raw.push_str("\n\"completion_notified\": false\n}\n]");
+        std::fs::write(store.state_file(), &raw).unwrap();
+
+        assert!(store.load().unwrap().is_empty(), "a trailing fragment must not fail the load");
+    }
+
+    /// 保存走原子替换，读到的永远是完整内容。
+    #[test]
+    fn save_replaces_the_file_atomically() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = BackgroundCommandStore::new(dir.path().to_path_buf());
+
+        store.save(&[]).unwrap();
+        let path = store.state_file();
+
+        assert!(path.is_file());
+        let raw = std::fs::read_to_string(&path).unwrap();
+        assert!(serde_json::from_str::<Vec<BackgroundCommandTask>>(&raw).is_ok());
+    }
 }
