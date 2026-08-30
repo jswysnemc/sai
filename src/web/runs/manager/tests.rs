@@ -74,8 +74,9 @@ fn test_checkpoint(
     }
 }
 
+/// 验证会话事件日志不随运行检查点淘汰：淘汰运行后仍能回读同一会话的事件。
 #[tokio::test]
-async fn keeps_only_recent_run_journals() {
+async fn keeps_session_journals_beyond_terminal_history_capacity() {
     let temp = tempfile::tempdir().unwrap();
     let manager = RunManager::new(&test_paths(temp.path().to_path_buf())).unwrap();
     for index in 0..=RUN_HISTORY_CAPACITY {
@@ -88,57 +89,130 @@ async fn keeps_only_recent_run_journals() {
                 RunCheckpointStatus::Completed,
             ))
             .unwrap();
-        manager.insert_journal(run_id, EventJournal::new()).await;
     }
-    assert!(manager.journal("run-0").await.is_none());
-    assert!(manager
-        .journal(&format!("run-{RUN_HISTORY_CAPACITY}"))
-        .await
-        .is_some());
-}
-
-#[tokio::test]
-async fn keeps_active_journals_beyond_terminal_history_capacity() {
-    let temp = tempfile::tempdir().unwrap();
-    let manager = RunManager::new(&test_paths(temp.path().to_path_buf())).unwrap();
-    let first_journal = EventJournal::new();
-    for index in 0..=RUN_HISTORY_CAPACITY {
-        let run_id = format!("run-{index}");
-        manager
-            .checkpoints
-            .upsert(test_checkpoint(
-                temp.path(),
-                &run_id,
-                RunCheckpointStatus::Running,
-            ))
-            .unwrap();
-        let journal = if index == 0 {
-            first_journal.clone()
-        } else {
-            EventJournal::new()
-        };
-        manager.insert_journal(run_id, journal).await;
-    }
-    let shared = manager.journal("run-0").await.unwrap();
-    let mut receiver = shared.subscribe();
-
-    first_journal.publish(WebEvent::new(
+    // 最早的运行已经被检查点淘汰
+    assert!(manager.checkpoints.get("run-0").is_none());
+    let bus = manager.session_bus("workspace", "session-run-0").await;
+    let journal = bus.journal();
+    let _ = bus.emit(WebEvent::new(
         "run-0",
         "workspace",
         "session-run-0",
         "status.changed",
         json!({ "status": "working" }),
     ));
-
-    let event = tokio::time::timeout(std::time::Duration::from_secs(1), receiver.recv())
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(event.kind, "status.changed");
+    let replayed = wait_for_events(&journal, "run-0").await;
+    assert_eq!(replayed.len(), 1);
+    assert_eq!(replayed[0].kind, "status.changed");
 }
 
+/// 验证同一会话的多个前端共享同一份事件日志。
 #[tokio::test]
-async fn journal_recovery_reuses_one_broadcast_channel() {
+async fn session_bus_shares_one_journal_across_frontends() {
+    let temp = tempfile::tempdir().unwrap();
+    let manager = RunManager::new(&test_paths(temp.path().to_path_buf())).unwrap();
+    let first = manager.session_bus("workspace", "session").await;
+    let second = manager.session_bus("workspace", "session").await;
+    assert!(manager
+        .buses
+        .read()
+        .await
+        .entries
+        .contains_key("workspace:session"));
+
+    let _ = first.emit(WebEvent::new(
+        "run-a",
+        "workspace",
+        "session",
+        "status.changed",
+        json!({ "status": "working" }),
+    ));
+
+    let shared = wait_for_events(&second.journal(), "run-a").await;
+    assert_eq!(shared.len(), 1);
+    assert_eq!(shared[0].payload["status"], "working");
+}
+
+/// 验证会话事件日志在重新打开后仍能按序号补发。
+#[tokio::test]
+async fn session_journal_replays_events_after_sequence() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = test_paths(temp.path().to_path_buf());
+    let manager = RunManager::new(&paths).unwrap();
+    let bus = manager.session_bus("workspace", "session").await;
+    for index in 0..3 {
+        let _ = bus.emit(WebEvent::new(
+            "run-1",
+            "workspace",
+            "session",
+            "message.content.delta",
+            json!({ "text": index.to_string() }),
+        ));
+    }
+    let published = wait_for_events(&bus.journal(), "run-1").await;
+    assert_eq!(published.len(), 3);
+
+    // 丢弃内存状态，仅从磁盘恢复
+    let reopened = RunManager::new(&paths).unwrap();
+    let restored = reopened.session_bus("workspace", "session").await.journal();
+    let backlog = restored.events_after(1);
+    assert_eq!(backlog.len(), 2);
+    assert_eq!(backlog[0].payload["text"], "1");
+    assert!(restored.events_after(3).is_empty());
+}
+
+/// 验证会话历史清理后再次订阅会从空日志重新开始。
+#[tokio::test]
+async fn session_history_removal_resets_the_event_stream() {
+    let temp = tempfile::tempdir().unwrap();
+    let manager = RunManager::new(&test_paths(temp.path().to_path_buf())).unwrap();
+    manager
+        .checkpoints
+        .upsert(test_checkpoint(
+            temp.path(),
+            "run-1",
+            RunCheckpointStatus::Completed,
+        ))
+        .unwrap();
+    let bus = manager.session_bus("workspace", "session-run-1").await;
+    let _ = bus.emit(WebEvent::new(
+        "run-1",
+        "workspace",
+        "session-run-1",
+        "run.completed",
+        json!({}),
+    ));
+    assert_eq!(wait_for_events(&bus.journal(), "run-1").await.len(), 1);
+    drop(bus);
+
+    manager
+        .remove_session_history("workspace", "session-run-1")
+        .await
+        .unwrap();
+
+    let recreated = manager.session_bus("workspace", "session-run-1").await;
+    assert!(recreated.journal().events_after(0).is_empty());
+}
+
+/// 等待事件总线把入队事件落到会话日志上。
+async fn wait_for_events(journal: &EventJournal, run_id: &str) -> Vec<WebEvent> {
+    for _ in 0..100 {
+        let events = journal
+            .events_after(0)
+            .into_iter()
+            .filter(|event| event.run_id == run_id)
+            .collect::<Vec<_>>();
+        if !events.is_empty() {
+            return events;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    Vec::new()
+}
+
+/// 验证同一会话的第二个前端加入后，仍能收到此后发生的事件。
+#[tokio::test]
+async fn late_watcher_receives_events_published_after_it_attaches() {
     let temp = tempfile::tempdir().unwrap();
     let manager = RunManager::new(&test_paths(temp.path().to_path_buf())).unwrap();
     manager
@@ -149,11 +223,18 @@ async fn journal_recovery_reuses_one_broadcast_channel() {
             RunCheckpointStatus::Running,
         ))
         .unwrap();
-    let first = manager.journal("run-recovered").await.unwrap();
-    let mut receiver = first.subscribe();
-    let second = manager.journal("run-recovered").await.unwrap();
+    // 1. 第一个前端经运行标识定位到所属会话
+    let bus = manager.run_bus("run-recovered").await.unwrap();
+    let mut first = bus.attach().unwrap();
+    // 2. 第二个前端在同一会话上单独订阅
+    let mut second = manager
+        .run_bus("run-recovered")
+        .await
+        .unwrap()
+        .attach()
+        .unwrap();
 
-    second.publish(WebEvent::new(
+    let _ = bus.emit(WebEvent::new(
         "run-recovered",
         "workspace",
         "session-run-recovered",
@@ -161,11 +242,17 @@ async fn journal_recovery_reuses_one_broadcast_channel() {
         json!({ "status": "working" }),
     ));
 
-    let event = tokio::time::timeout(std::time::Duration::from_secs(1), receiver.recv())
+    let first_event = tokio::time::timeout(std::time::Duration::from_secs(1), first.events.recv())
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(event.kind, "status.changed");
+    let second_event = tokio::time::timeout(std::time::Duration::from_secs(1), second.events.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(first_event.kind, "status.changed");
+    assert_eq!(second_event.kind, "status.changed");
+    assert_eq!(first_event.sequence, second_event.sequence);
 }
 
 #[tokio::test]
@@ -173,8 +260,7 @@ async fn removes_session_checkpoints_and_journals_together() {
     let temp = tempfile::tempdir().unwrap();
     let manager = RunManager::new(&test_paths(temp.path().to_path_buf())).unwrap();
     let run_id = "run-history";
-    let event_path = manager.checkpoints.event_path(run_id);
-    let journal = EventJournal::persistent(event_path.clone());
+    let event_path = manager.session_event_path("workspace:session");
     manager
         .checkpoints
         .upsert(RunCheckpoint {
@@ -210,16 +296,15 @@ async fn removes_session_checkpoints_and_journals_together() {
             updated_at: String::new(),
         })
         .unwrap();
-    manager
-        .insert_journal(run_id.to_string(), journal.clone())
-        .await;
-    journal.publish(WebEvent::new(
+    let bus = manager.session_bus("workspace", "session").await;
+    let _ = bus.emit(WebEvent::new(
         run_id,
         "workspace",
         "session",
         "run.completed",
         json!({}),
     ));
+    assert!(wait_for_events(&bus.journal(), run_id).await.len() == 1);
 
     manager
         .remove_session_history("workspace", "session")
@@ -227,8 +312,9 @@ async fn removes_session_checkpoints_and_journals_together() {
         .unwrap();
 
     assert!(manager.checkpoints.get(run_id).is_none());
-    assert!(manager.journal(run_id).await.is_none());
+    assert!(manager.run_bus(run_id).await.is_none());
     assert!(!event_path.exists());
+    assert!(manager.buses.read().await.entries.is_empty());
 }
 
 /// 验证同一会话的第二次提交会进入持久化队列。
@@ -487,7 +573,8 @@ async fn message_queue_acknowledges_only_the_delivered_front_item() {
         manager.checkpoints.get(&first.id).unwrap().status,
         RunCheckpointStatus::Completed
     );
-    let first_events = manager.journal(&first.id).await.unwrap().events_after(0);
+    let first_events =
+        wait_for_events(&manager.run_bus(&first.id).await.unwrap().journal(), &first.id).await;
     assert!(first_events.iter().any(|event| {
         event.kind == "run.merged" && event.payload["target_run_id"] == "active-run"
     }));

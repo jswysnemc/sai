@@ -5,7 +5,8 @@ mod auth;
 mod bind_address;
 mod error;
 pub(crate) mod password;
-mod runs;
+// 会话事件总线（src/runner/session_actor.rs）需要复用 Web 事件与事件日志类型
+pub(crate) mod runs;
 mod server;
 pub(crate) mod services;
 pub(crate) mod ssh;

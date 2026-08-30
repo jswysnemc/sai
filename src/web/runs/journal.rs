@@ -3,18 +3,18 @@ use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use tokio::sync::broadcast;
 
 const EVENT_JOURNAL_CAPACITY: usize = 2048;
-const EVENT_BROADCAST_CAPACITY: usize = 512;
 const EVENT_JOURNAL_MAX_BYTES: u64 = 16 * 1024 * 1024;
 const EVENT_JOURNAL_COMPACT_EVENTS: usize = EVENT_JOURNAL_CAPACITY * 2;
 
-/// 单轮运行的有界事件日志与实时广播。
+/// 会话的有界事件日志。
+///
+/// 只负责按序号落盘与补发；实时扇出由会话事件总线（SessionActor）负责，
+/// 避免 broadcast 在慢消费者身上静默丢事件。
 #[derive(Clone)]
 pub(crate) struct EventJournal {
     inner: Arc<Mutex<JournalInner>>,
-    sender: broadcast::Sender<WebEvent>,
     path: Option<PathBuf>,
 }
 
@@ -32,7 +32,6 @@ impl EventJournal {
     /// 返回:
     /// - 事件日志
     pub(crate) fn new() -> Self {
-        let (sender, _) = broadcast::channel(EVENT_BROADCAST_CAPACITY);
         Self {
             inner: Arc::new(Mutex::new(JournalInner {
                 next_sequence: 1,
@@ -41,7 +40,6 @@ impl EventJournal {
                 persisted_bytes: 0,
                 persisted_events: 0,
             })),
-            sender,
             path: None,
         }
     }
@@ -102,8 +100,6 @@ impl EventJournal {
         if let Some(path) = &self.path {
             persist_event(path, &encoded, &mut inner);
         }
-        drop(inner);
-        let _ = self.sender.send(event.clone());
         event
     }
 
@@ -122,14 +118,6 @@ impl EventJournal {
             .filter(|event| event.sequence > after)
             .cloned()
             .collect()
-    }
-
-    /// 订阅实时事件。
-    ///
-    /// 返回:
-    /// - 广播接收器
-    pub(crate) fn subscribe(&self) -> broadcast::Receiver<WebEvent> {
-        self.sender.subscribe()
     }
 }
 

@@ -6,10 +6,16 @@ use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
 
 /// 将 Sai 运行事件关联成稳定的浏览器消息与工具生命周期。
-pub(super) struct EventAssembler {
+///
+/// 生命周期与会话一致：同一会话的连续轮次共用同一个组装器，轮次边界由
+/// `begin_run` 显式重置，因此新打开的标签页能从事件流重建每一轮的输入。
+pub(crate) struct EventAssembler {
     run_id: String,
     workspace_id: String,
     session_id: String,
+    /// 当前轮次的用户输入，供 run.started 事件回传给后加入的观察者
+    run_input: String,
+    run_image_urls: Vec<String>,
     status: Option<&'static str>,
     /// 是否已进入正文输出阶段；进入后不再回退到 thinking
     content_started: bool,
@@ -27,20 +33,21 @@ struct PreparedTool {
 }
 
 impl EventAssembler {
-    /// 创建运行事件组装器。
+    /// 创建会话级运行事件组装器。
     ///
     /// 参数:
-    /// - `run_id`: 运行 ID
     /// - `workspace_id`: 工作区 ID
     /// - `session_id`: 会话 ID
     ///
     /// 返回:
     /// - 事件组装器
-    pub(super) fn new(run_id: &str, workspace_id: &str, session_id: &str) -> Self {
+    pub(crate) fn new(workspace_id: &str, session_id: &str) -> Self {
         Self {
-            run_id: run_id.to_string(),
+            run_id: String::new(),
             workspace_id: workspace_id.to_string(),
             session_id: session_id.to_string(),
+            run_input: String::new(),
+            run_image_urls: Vec::new(),
             status: None,
             content_started: false,
             tool_ids_by_index: HashMap::new(),
@@ -51,6 +58,29 @@ impl EventAssembler {
         }
     }
 
+    /// 开启新一轮，重置轮次边界状态。
+    ///
+    /// 工具 ID 计数器保持单调递增，保证跨轮次不复用同一标识。
+    ///
+    /// 参数:
+    /// - `run_id`: 运行 ID
+    /// - `input`: 本轮用户输入
+    /// - `image_urls`: 本轮图片列表
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn begin_run(&mut self, run_id: &str, input: &str, image_urls: &[String]) {
+        self.run_id = run_id.to_string();
+        self.run_input = input.to_string();
+        self.run_image_urls = image_urls.to_vec();
+        self.status = None;
+        self.content_started = false;
+        self.tool_ids_by_index.clear();
+        self.tool_ids_by_provider_id.clear();
+        self.prepared_tools.clear();
+        self.active_tools_by_name.clear();
+    }
+
     /// 转换单条 RunnerEvent。
     ///
     /// 参数:
@@ -58,11 +88,17 @@ impl EventAssembler {
     ///
     /// 返回:
     /// - 一条或多条 Web 事件
-    pub(super) fn map(&mut self, event: RunnerEvent) -> Vec<WebEvent> {
+    pub(crate) fn map(&mut self, event: RunnerEvent) -> Vec<WebEvent> {
         match event {
             RunnerEvent::Started => {
                 let mut events = self.status_event("waiting_response");
-                events.push(self.event("run.started", json!({})));
+                events.push(self.event(
+                    "run.started",
+                    json!({
+                        "input": self.run_input,
+                        "image_urls": self.run_image_urls,
+                    }),
+                ));
                 events
             }
             RunnerEvent::AutomaticInput(input) => {
@@ -532,7 +568,8 @@ mod tests {
     /// 验证运行中断事件包含可供前端展开的诊断详情。
     #[test]
     fn interrupted_event_contains_diagnostic_detail() {
-        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let mut assembler = EventAssembler::new("workspace", "session");
+        assembler.begin_run("run", "", &[]);
 
         let events = assembler.map(RunnerEvent::Interrupted);
         let interrupted = events
@@ -554,7 +591,8 @@ mod tests {
     /// - 无
     #[test]
     fn emits_permission_resolution_for_stream_replay() {
-        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let mut assembler = EventAssembler::new("workspace", "session");
+        assembler.begin_run("run", "", &[]);
 
         let events = assembler.map(RunnerEvent::Agent(AgentEvent::PermissionResolved {
             request_id: "permission".to_string(),
@@ -574,7 +612,8 @@ mod tests {
 
     #[test]
     fn keeps_tool_progress_and_result_on_one_tool_id() {
-        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let mut assembler = EventAssembler::new("workspace", "session");
+        assembler.begin_run("run", "", &[]);
         let preparing = assembler.map(RunnerEvent::Agent(AgentEvent::ToolCallProgress(
             ToolCallStreamProgress {
                 index: 0,
@@ -606,7 +645,8 @@ mod tests {
 
     #[test]
     fn hides_internal_command_output_progress_events() {
-        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let mut assembler = EventAssembler::new("workspace", "session");
+        assembler.begin_run("run", "", &[]);
         let message = crate::tools::command::encode_command_output_for_test(
             crate::tools::command::CommandOutputStream::Stdout,
             b"building\n",
@@ -621,7 +661,8 @@ mod tests {
 
     #[test]
     fn does_not_return_to_thinking_after_content() {
-        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let mut assembler = EventAssembler::new("workspace", "session");
+        assembler.begin_run("run", "", &[]);
         let first = assembler.map(RunnerEvent::Agent(AgentEvent::Chunk(
             crate::llm::ChatStreamChunk {
                 kind: ChatStreamKind::Content,
@@ -650,7 +691,8 @@ mod tests {
 
     #[test]
     fn emits_status_only_when_it_changes() {
-        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let mut assembler = EventAssembler::new("workspace", "session");
+        assembler.begin_run("run", "", &[]);
         let first = assembler.map(RunnerEvent::Agent(AgentEvent::Chunk(
             crate::llm::ChatStreamChunk {
                 kind: ChatStreamKind::Content,
@@ -681,7 +723,8 @@ mod tests {
 
     #[test]
     fn allocates_new_id_when_provider_index_restarts_next_round() {
-        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let mut assembler = EventAssembler::new("workspace", "session");
+        assembler.begin_run("run", "", &[]);
         let first = assembler.map(RunnerEvent::Agent(AgentEvent::ToolCallProgress(
             ToolCallStreamProgress {
                 index: 0,
@@ -716,7 +759,8 @@ mod tests {
 
     #[test]
     fn pairs_started_by_name_when_unnamed_call_is_dropped() {
-        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let mut assembler = EventAssembler::new("workspace", "session");
+        assembler.begin_run("run", "", &[]);
         // 1. 幻影调用只出现在流式阶段且没有名称，最终会被供应商丢弃
         assembler.map(RunnerEvent::Agent(AgentEvent::ToolCallProgress(
             ToolCallStreamProgress {
@@ -751,7 +795,8 @@ mod tests {
 
     #[test]
     fn emits_workspace_change_after_successful_edit() {
-        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let mut assembler = EventAssembler::new("workspace", "session");
+        assembler.begin_run("run", "", &[]);
         assembler.map(RunnerEvent::Agent(AgentEvent::ToolCall {
             name: "edit_file".to_string(),
             arguments: "{}".to_string(),
@@ -767,7 +812,8 @@ mod tests {
     /// 验证 Goal 等待外部工作时向 Web 暴露独立状态。
     #[test]
     fn maps_external_waiting_status() {
-        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let mut assembler = EventAssembler::new("workspace", "session");
+        assembler.begin_run("run", "", &[]);
         let events = assembler.map(RunnerEvent::WaitingExternal);
 
         assert_eq!(events.len(), 1);
@@ -778,7 +824,8 @@ mod tests {
     /// 验证传输层重连向 Web 暴露带尝试次数的 status.changed。
     #[test]
     fn maps_reconnecting_status_with_attempts() {
-        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let mut assembler = EventAssembler::new("workspace", "session");
+        assembler.begin_run("run", "", &[]);
         let events = assembler.map(RunnerEvent::Agent(AgentEvent::Reconnecting {
             attempt: 2,
             max_attempts: 3,
@@ -791,10 +838,69 @@ mod tests {
         assert_eq!(events[0].payload["max_attempts"], 3);
     }
 
+    /// 验证新一轮会重置运行状态与工具配对表，避免上一轮残留渗入下一轮。
+    #[test]
+    fn begin_run_resets_status_and_tool_pairing() {
+        let mut assembler = EventAssembler::new("workspace", "session");
+        assembler.begin_run("run-1", "第一轮", &[]);
+        assembler.map(RunnerEvent::Agent(AgentEvent::ToolCall {
+            name: "edit_file".to_string(),
+            arguments: "{}".to_string(),
+        }));
+        assembler.map(RunnerEvent::Completed(crate::llm::ChatResult {
+            content: "done".to_string(),
+            reasoning: None,
+            usage: None,
+            tool_calls: Vec::new(),
+            duration_ms: 0,
+            ttft_ms: 0,
+        }));
+
+        assembler.begin_run("run-2", "第二轮", &[]);
+        let events = assembler.map(RunnerEvent::Agent(AgentEvent::ToolCallProgress(
+            ToolCallStreamProgress {
+                index: 0,
+                name: Some("edit_file".to_string()),
+                arguments_chars: 10,
+                arguments_bytes: 10,
+                arguments_preview: "{}".to_string(),
+            },
+        )));
+
+        let preparing = events
+            .iter()
+            .find(|event| event.kind == "tool.call.preparing")
+            .unwrap();
+        assert_eq!(preparing.run_id, "run-2");
+        assert!(preparing.payload["tool_id"].as_str().unwrap().starts_with("run-2-"));
+        // 状态已重置，新一轮首个事件会重新携带 status.changed
+        assert!(events
+            .iter()
+            .any(|event| event.kind == "status.changed"));
+    }
+
+    /// 验证 run.started 事件携带本轮输入，供后加入的标签页重建用户气泡。
+    #[test]
+    fn started_event_carries_run_input() {
+        let mut assembler = EventAssembler::new("workspace", "session");
+        assembler.begin_run("run-1", "你好", &["data:image/png;base64,AAAA".to_string()]);
+
+        let events = assembler.map(RunnerEvent::Started);
+        let started = events
+            .iter()
+            .find(|event| event.kind == "run.started")
+            .unwrap();
+
+        assert_eq!(started.run_id, "run-1");
+        assert_eq!(started.payload["input"], "你好");
+        assert_eq!(started.payload["image_urls"][0], "data:image/png;base64,AAAA");
+    }
+
     /// 验证自动输入事件向 Web 传递展示文本而不是内部提示。
     #[test]
     fn maps_automatic_input_message() {
-        let mut assembler = EventAssembler::new("run", "workspace", "session");
+        let mut assembler = EventAssembler::new("workspace", "session");
+        assembler.begin_run("run", "", &[]);
         let events = assembler.map(RunnerEvent::AutomaticInput(AutomaticInputEvent::new(
             AutomaticInputKind::ExternalCompletion,
             "后台任务已完成".to_string(),

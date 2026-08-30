@@ -1,10 +1,15 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
+use super::runs::{replay_after, session_events_stream, sse_keep_alive};
 use crate::state::StateStore;
 use axum::extract::{Path, Query, State};
+use axum::http::HeaderMap;
+use axum::response::sse::{Event, Sse};
 use axum::routing::{get, patch, post};
 use axum::{Json, Router};
+use futures_util::stream::Stream;
 use serde::{Deserialize, Serialize};
+use std::convert::Infallible;
 use std::path::Path as FilePath;
 
 mod debug;
@@ -74,6 +79,13 @@ struct RollbackSessionRequest {
 #[derive(Deserialize)]
 struct HistoryQuery {
     limit: Option<usize>,
+}
+
+#[derive(Deserialize)]
+struct SessionEventQuery {
+    after: Option<u64>,
+    /// 会话所属工作区；缺省时使用当前活动工作区
+    workspace_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -168,6 +180,40 @@ pub(super) fn routes() -> Router<WebAppState> {
         .merge(debug::routes())
         .route("/api/sessions/:id/compact", post(compact))
         .route("/api/sessions/:id/compaction-policy", patch(update_compaction_policy))
+        .route("/api/sessions/:id/events", get(events))
+}
+
+/// 订阅会话级事件流并按事件序号补发遗漏内容。
+///
+/// 同一会话的多个标签页共享这一条流，因此新发起的轮次、排队变更和中断
+/// 都会出现在所有标签页上；刷新页面时按最后收到的序号补发落盘历史。
+///
+/// 参数:
+/// - `state`: Web 应用状态
+/// - `id`: 会话标识
+/// - `query`: 补发起始序号与可选工作区标识
+/// - `headers`: 请求头，用于读取 Last-Event-ID
+///
+/// 返回:
+/// - SSE 事件流
+async fn events(
+    State(state): State<WebAppState>,
+    Path(id): Path<String>,
+    Query(query): Query<SessionEventQuery>,
+    headers: HeaderMap,
+) -> WebResult<Sse<impl Stream<Item = Result<Event, Infallible>>>> {
+    // 1. 校验会话存在，避免为任意标识创建会话事件日志
+    StateStore::for_session(&state.paths, &id)
+        .map_err(|error| WebError::not_found(error.to_string()))?;
+    let workspace = match query.workspace_id.as_deref() {
+        Some(workspace_id) => state.workspaces.get(workspace_id).map_err(WebError::from)?,
+        None => state.workspaces.active().map_err(WebError::from)?,
+    };
+    // 2. 取到日志与订阅后即释放总线句柄，避免 SSE 流长期持有执行者
+    let bus = state.runs.session_bus(&workspace.id, &id).await;
+    let stream = session_events_stream(bus, replay_after(query.after, &headers))
+        .ok_or_else(|| WebError::conflict("session event stream is unavailable"))?;
+    Ok(Sse::new(stream).keep_alive(sse_keep_alive()))
 }
 
 /// 返回指定会话的系统提示词预览（含 AGENT.md 等指令文件）。

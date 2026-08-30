@@ -83,10 +83,11 @@ impl InterMessageSource for WebMessageQueue {
             queued
         };
 
-        let journal = self.manager.journal(message_id).await.unwrap_or_else(|| {
-            super::super::EventJournal::persistent(self.manager.checkpoints.event_path(message_id))
-        });
-        journal.publish(WebEvent::new(
+        let bus = self
+            .manager
+            .session_bus(&queued.info.workspace_id, &queued.info.session_id)
+            .await;
+        let _ = bus.emit(WebEvent::new(
             &queued.info.run_id,
             &queued.info.workspace_id,
             &queued.info.session_id,

@@ -11,7 +11,8 @@ use crate::runner::RunnerEvent;
 /// - 无
 #[test]
 fn keeps_identified_tool_lifecycle_on_one_tool_id() {
-    let mut assembler = EventAssembler::new("run", "workspace", "session");
+    let mut assembler = EventAssembler::new("workspace", "session");
+    assembler.begin_run("run", "", &[]);
     let started = assembler.map(RunnerEvent::Agent(AgentEvent::ToolCallIdentified {
         id: "provider-call-1".to_string(),
         name: "Read file".to_string(),

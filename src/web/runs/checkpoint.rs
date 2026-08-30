@@ -16,6 +16,11 @@ pub(super) const RUN_HISTORY_CAPACITY: usize = 32;
 pub(crate) enum RunCheckpointStatus {
     Queued,
     Running,
+    /// 这一轮不在本进程手里：另一个持有者（TUI 或另一个 sai web 实例）正在驱动它。
+    ///
+    /// 非终态：不参与 `is_terminal`，因此不会被压缩输入、也不会被历史淘汰，
+    /// 等持有者那一轮真的结束时会带着自己的状态覆盖回来。
+    Orphaned,
     Completed,
     Interrupted,
     Failed,
@@ -263,7 +268,21 @@ impl RunCheckpointStore {
     }
 
     /// 将进程退出时仍在运行的检查点恢复为中断状态。
-    pub(crate) fn recover_running_as_interrupted(&self) -> Result<Vec<RunCheckpoint>> {
+    /// 按条件把进程退出时仍在运行的检查点恢复为中断状态。
+    ///
+    /// `should_recover` 返回 false 的记录保持原状：那一轮正被另一个进程驱动，
+    /// 把它标成 interrupted 会在对端毫不知情的情况下杀掉正在进行的轮次
+    /// （轮次状态库里它还是 running，恢复后直接变成 interrupted）。
+    ///
+    /// 参数:
+    /// - `should_recover`: 判断某个检查点是否可以恢复
+    ///
+    /// 返回:
+    /// - 已恢复为中断状态的检查点
+    pub(crate) fn recover_running_as_interrupted_where(
+        &self,
+        should_recover: impl Fn(&RunCheckpoint) -> bool,
+    ) -> Result<Vec<RunCheckpoint>> {
         let mut records = self
             .records
             .lock()
@@ -271,6 +290,9 @@ impl RunCheckpointStore {
         let mut recovered = Vec::new();
         for record in records.iter_mut() {
             if record.status != RunCheckpointStatus::Running {
+                continue;
+            }
+            if !should_recover(record) {
                 continue;
             }
             record.status = RunCheckpointStatus::Interrupted;
@@ -284,6 +306,40 @@ impl RunCheckpointStore {
         drop(records);
         self.remove_journals(&removed)?;
         Ok(recovered)
+    }
+
+    /// 标记某一轮不在本进程手里。
+    ///
+    /// 用于启动恢复：持有者存活时不能把那一轮按崩溃恢复，只能标 orphaned，
+    /// 由真正的持有者写回终态。
+    ///
+    /// 参数:
+    /// - `run_id`: 运行标识
+    ///
+    /// 返回:
+    /// - 标记结果
+    pub(crate) fn mark_orphaned(&self, run_id: &str) -> Result<()> {
+        self.update_status(run_id, RunCheckpointStatus::Orphaned)
+    }
+
+    /// 返回仍在运行或已被标 orphaned 的检查点。
+    ///
+    /// 启动恢复用它复查被跳过的那一轮：持有者还活着时不能按崩溃恢复，
+    /// 但要标 orphaned，免得它一直显示成「本进程正在跑」。
+    ///
+    /// 返回:
+    /// - 未终结的检查点
+    pub(crate) fn running_or_orphaned(&self) -> Vec<RunCheckpoint> {
+        self.records
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .iter()
+            .filter(|record| {
+                record.status == RunCheckpointStatus::Running
+                    || record.status == RunCheckpointStatus::Orphaned
+            })
+            .cloned()
+            .collect()
     }
 
     /// 返回指定运行的事件日志文件。

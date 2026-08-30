@@ -72,11 +72,10 @@ impl RunManager {
             drop(queues);
 
             // 3. 通知已订阅客户端更新内容和本地顺序
-            let journal = self
-                .journal(run_id)
-                .await
-                .unwrap_or_else(|| EventJournal::persistent(self.checkpoints.event_path(run_id)));
-            journal.publish(WebEvent::new(
+            let bus = self
+                .session_bus(&info.workspace_id, &info.session_id)
+                .await;
+            let _ = bus.emit(WebEvent::new(
                 &info.run_id,
                 &info.workspace_id,
                 &info.session_id,
