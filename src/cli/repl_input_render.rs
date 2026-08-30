@@ -165,7 +165,14 @@ pub(super) fn repl_render_rows(prefix: &str, lines: &[String], has_suggestions: 
 }
 
 pub(super) fn repl_prompt_rows(prefix: &str, lines: &[String]) -> u16 {
-    repl_prompt_rows_for_cols(prefix, lines, terminal_cols())
+    // 用 composer 实际绘制的内容宽（整宽去掉 "> " 边距），而不是终端整宽。
+    // 折叠判定与渲染必须同宽，否则在临界长度上两者会差一行，
+    // composer 会悄悄长过 REPL_MAX_VISIBLE_INPUT_ROWS 上限
+    repl_prompt_rows_for_cols(
+        prefix,
+        lines,
+        crate::cli::repl_chrome::chrome_input_content_cols(terminal_cols()),
+    )
 }
 
 /// 为剪贴板原子块插入特殊颜色，保持原始文本和字符区间不变。

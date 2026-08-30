@@ -40,6 +40,18 @@ impl ReplRuntime {
         );
         frame.set_mention_skills(self.mention_skills.clone());
         frame.set_panel_lines(self.bottom_panel_lines(usize::from(size.cols)));
+        // 收起只对收起那一刻的输入生效：继续打字或移动光标就恢复候选，
+        // 否则用户按一次 Esc 后整段输入过程中再也看不到补全
+        let still_dismissed = self
+            .panels_dismissed
+            .as_ref()
+            .is_some_and(|(dismissed_input, dismissed_cursor)| {
+                dismissed_input == input && *dismissed_cursor == cursor
+            });
+        if !still_dismissed {
+            self.panels_dismissed = None;
+        }
+        frame.set_panels_dismissed(self.panels_dismissed.is_some());
         self.last_chrome = Some(chrome.clone());
         self.composer = Some(frame);
         // 终端尺寸已变化：旧 origin 上的 reserve 计算全部失效，
@@ -505,5 +517,28 @@ impl ReplRuntime {
             },
             true,
         );
+    }
+
+    /// 收起 slash / @ / # 补全面板。
+    ///
+    /// 面板内容由输入推导，没有独立开关，因此记录收起时的输入快照，
+    /// 由 `update_composer` 在输入或光标变化时自动恢复。
+    ///
+    /// 参数:
+    /// - `input`: 当前输入文本
+    /// - `cursor`: 光标字符偏移
+    ///
+    /// 返回:
+    /// - 无
+    pub(in crate::cli) fn dismiss_composer_panels(&mut self, input: &str, cursor: usize) {
+        self.panels_dismissed = Some((input.to_string(), cursor));
+    }
+
+    /// 补全面板当前是否已收起。
+    ///
+    /// 返回:
+    /// - 已收起为真
+    pub(in crate::cli) fn composer_panels_dismissed(&self) -> bool {
+        self.panels_dismissed.is_some()
     }
 }

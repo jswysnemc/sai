@@ -1,4 +1,4 @@
-use super::repl_chrome::ReplChrome;
+use super::repl_chrome::{chrome_input_content_cols, ReplChrome};
 use super::repl_clipboard::ReplClipboardState;
 use super::repl_external_events::ReplExternalEvents;
 use super::repl_mentions::{
@@ -350,6 +350,19 @@ pub(super) fn read_repl_input(
                         redraw_input!()?;
                     }
                     KeyCode::Esc => {
+                        // 补全面板打开时，单次 Esc 先收起面板。
+                        // 面板是最显眼的界面元素，却只有「双击 Esc（顺带清空草稿
+                        // 和剪贴板附件）」能关掉，单击看起来像按键失灵
+                        let panel_open =
+                            !active_mention_suggestions(&input, cursor, runtime.mention_skills())
+                                .is_empty()
+                                || !visible_repl_command_suggestions(&input).is_empty();
+                        if panel_open && !runtime.composer_panels_dismissed() {
+                            runtime.dismiss_composer_panels(&input, cursor);
+                            last_escape = None;
+                            redraw_input!()?;
+                            continue;
+                        }
                         let now = Instant::now();
                         if last_escape.is_some_and(|previous| {
                             now.duration_since(previous) <= REPL_ESC_CLEAR_WINDOW
@@ -366,10 +379,36 @@ pub(super) fn read_repl_input(
                             last_escape = Some(now);
                         }
                     }
+                    // 词级移动：Ctrl+←/→ 是 emacs/readline 通用键位，
+                    // Alt+←/→ 在多数终端上等价。没有这两个绑定时，
+                    // 长句子里只能一个字符一个字符挪
+                    KeyCode::Left
+                        if modifiers.contains(KeyModifiers::CONTROL)
+                            || modifiers.contains(KeyModifiers::ALT) =>
+                    {
+                        cursor = word_start_before(&input, cursor);
+                        redraw_input!()?;
+                    }
+                    KeyCode::Right
+                        if modifiers.contains(KeyModifiers::CONTROL)
+                            || modifiers.contains(KeyModifiers::ALT) =>
+                    {
+                        cursor = word_end_after(&input, cursor);
+                        redraw_input!()?;
+                    }
                     KeyCode::Left => {
                         // 输入为空时左移光标没有意义，改为打开会话树
                         if input.is_empty() {
-                            terminal_guard.finish(&mut stdout)?;
+                            // 与其它退出路径一样走完整收尾：只 finish guard 会让
+                            // composer 仍带着过期的 last_composer_signature 注册着，
+                            // 而下面要拉起的是一个嵌套全屏界面
+                            finish_repl_input(
+                                &mut stdout,
+                                input_row,
+                                rendered_rows,
+                                runtime,
+                                &mut terminal_guard,
+                            )?;
                             return Ok(Some(ReplInputEvent::User(ReplInputSubmission {
                                 mode,
                                 raw_input: "/tree".to_string(),
@@ -417,11 +456,13 @@ pub(super) fn read_repl_input(
                                 redraw_input!()?;
                             } else {
                                 let plain_prefix = String::new();
+                                // 折行宽度必须与 composer 绘制时一致：绘制用的是去掉
+                                // "> " 边距后的内容宽，用整宽会让落点逐行偏移
                                 if let Some(next_cursor) = move_cursor_up_by_visual_row(
                                     &plain_prefix,
                                     &input,
                                     cursor,
-                                    terminal_cols(),
+                                    chrome_input_content_cols(terminal_cols()),
                                 ) {
                                     cursor = next_cursor;
                                     redraw_input!()?;
@@ -460,7 +501,7 @@ pub(super) fn read_repl_input(
                                     &plain_prefix,
                                     &input,
                                     cursor,
-                                    terminal_cols(),
+                                    chrome_input_content_cols(terminal_cols()),
                                 ) {
                                     cursor = next_cursor;
                                 } else if repl_history_is_clean(
@@ -671,6 +712,16 @@ pub(super) fn read_repl_input(
                             input_row = 0;
                             rendered_rows = 0;
                             redraw_input!()?;
+                        } else {
+                            // 提示语里主动宣传了 Ctrl+O，按下去却毫无反应会让人以为键位坏了
+                            runtime.record_meta(
+                                t(
+                                    "Ctrl+O: no expandable command output or diff yet",
+                                    "Ctrl+O：当前还没有可展开的命令输出或 diff",
+                                )
+                                .to_string(),
+                            )?;
+                            redraw_input!()?;
                         }
                     }
                     KeyCode::Char('t') if modifiers.contains(KeyModifiers::CONTROL) => {
@@ -678,6 +729,15 @@ pub(super) fn read_repl_input(
                         if runtime.toggle_todo_panel_compact() {
                             input_row = 0;
                             rendered_rows = 0;
+                            redraw_input!()?;
+                        } else {
+                            runtime.record_meta(
+                                t(
+                                    "Ctrl+T: no active plan to fold",
+                                    "Ctrl+T：当前没有进行中的计划可折叠",
+                                )
+                                .to_string(),
+                            )?;
                             redraw_input!()?;
                         }
                     }
@@ -724,7 +784,10 @@ pub(super) fn read_repl_input(
                         is_pasted = false;
                         redraw_input!()?;
                     }
-                    KeyCode::Char(ch) if !modifiers.contains(KeyModifiers::CONTROL) => {
+                    KeyCode::Char(ch)
+                        if !modifiers.contains(KeyModifiers::CONTROL)
+                            && !modifiers.contains(KeyModifiers::ALT) =>
+                    {
                         if !is_disallowed_control_char(ch) {
                             windows_paste.record_char(ch, Instant::now());
                             insert_char_at_cursor(&mut input, &mut cursor, ch);

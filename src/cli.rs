@@ -112,7 +112,7 @@ use repl_input::read_repl_input;
 use repl_input_navigation::{move_cursor_down_by_visual_row, move_cursor_up_by_visual_row};
 use repl_input_render::{clear_repl_input, render_repl_input};
 use repl_runtime::{process_stream_input, process_stream_tick, ReplRuntime};
-use repl_shell::execute_repl_shell;
+use repl_shell::execute_repl_shell_live;
 use repl_text::*;
 use reset::run_reset;
 use sessions::run_sessions;

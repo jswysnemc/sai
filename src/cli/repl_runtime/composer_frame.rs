@@ -11,7 +11,7 @@ use crate::cli::repl_input_render::{
     repl_cursor_position_for_cols, repl_prompt_rows_for_cols, repl_visible_input_lines,
 };
 use crate::cli::repl_mentions::{find_mention_trigger, mention_suggestions};
-use crate::cli::repl_text::{repl_input_lines, visible_width};
+use crate::cli::repl_text::repl_input_lines;
 use crate::cli::REPL_MAX_VISIBLE_INPUT_ROWS;
 use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo, Show};
@@ -52,6 +52,11 @@ pub(super) struct ComposerFrame {
     mention_skills: Vec<(String, String)>,
     /// 输入框上方的沉底面板行（todo 快照 / 排队消息 / agent 提示）
     panel_lines: Vec<String>,
+    /// 是否已用 Esc 收起补全面板（slash / @ / #）
+    ///
+    /// 面板完全由输入内容推导，没有独立开关；Esc 收起后必须记住状态，
+    /// 否则下一次重绘会立刻把面板再画回来
+    panels_dismissed: bool,
 }
 
 impl ComposerFrame {
@@ -84,7 +89,19 @@ impl ComposerFrame {
             slash_selection,
             mention_skills: Vec::new(),
             panel_lines: Vec::new(),
+            panels_dismissed: false,
         }
+    }
+
+    /// 设置是否已用 Esc 收起补全面板。
+    ///
+    /// 参数:
+    /// - `dismissed`: 收起为 true
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn set_panels_dismissed(&mut self, dismissed: bool) {
+        self.panels_dismissed = dismissed;
     }
 
     /// 设置 `#` 引用使用的 skill 目录。
@@ -341,19 +358,33 @@ impl ComposerFrame {
         let mut styled_display_lines =
             style_display_lines(&display_lines, &lines, collapsed, &self.clipboard_blocks);
         // 仅输入 `!` 时附上幽灵说明，光标仍停在 `!` 后（不计入 ghost 宽度）
-        if let Some(ghost) = bang_ghost_suffix(&self.input) {
+        let ghost = bang_ghost_suffix(&self.input);
+        if let Some(ghost) = ghost.as_deref() {
             if let Some(first) = styled_display_lines.first_mut() {
                 first.push_str(&format!("\x1b[2m{ghost}\x1b[0m"));
             }
         }
-        let input_rows = repl_prompt_rows_for_cols("", &display_lines, content_cols).max(1);
-        let mention_panel = mention_panel_for(
-            &self.input,
-            self.cursor,
-            self.slash_selection,
-            &self.mention_skills,
-        );
-        let slash_panel = if mention_panel.is_visible() {
+        // 行数必须按带 ghost 的正文算：ghost 会让首行折行变高，
+        // 用不含 ghost 的正文算出的行数偏小，底部状态行会被挤出保留区
+        let mut measured_lines = display_lines.clone();
+        if let Some(ghost) = ghost.as_deref() {
+            if let Some(first) = measured_lines.first_mut() {
+                first.push_str(ghost);
+            }
+        }
+        let input_rows = repl_prompt_rows_for_cols("", &measured_lines, content_cols).max(1);
+        let mention_panel = if self.panels_dismissed {
+            // 收起后重新输入前不再弹出，避免 Esc 看起来失灵
+            MentionPanel::new(Vec::new(), 0)
+        } else {
+            mention_panel_for(
+                &self.input,
+                self.cursor,
+                self.slash_selection,
+                &self.mention_skills,
+            )
+        };
+        let slash_panel = if self.panels_dismissed || mention_panel.is_visible() {
             SlashPanel::new("", 0)
         } else {
             SlashPanel::new(&self.input, self.slash_selection)
@@ -366,10 +397,16 @@ impl ComposerFrame {
             repl_cursor_position_for_cols("", &self.input, self.cursor, content_cols)
         } else {
             let last_line = display_lines.last().map(String::as_str).unwrap_or_default();
-            (
-                (visible_width(last_line) % content_cols).min(u16::MAX as usize) as u16,
-                input_rows.saturating_sub(1),
-            )
+            // 用与绘制同一个折行模拟器求末行落点，而不是对宽度取模：
+            // 末行在列边界处是宽字符（CJK / emoji）时，宽字符会整体移到下一行，
+            // 取模算出的列会落在错误位置，光标被画到 composer 边框之外
+            let (end_col, _) = repl_cursor_position_for_cols(
+                "",
+                last_line,
+                last_line.chars().count(),
+                content_cols,
+            );
+            (end_col, input_rows.saturating_sub(1))
         };
         ComposerLayout {
             styled_display_lines,

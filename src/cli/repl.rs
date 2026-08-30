@@ -193,7 +193,8 @@ pub(super) async fn run_repl(
             break;
         }
         if let Some(command) = input.strip_prefix('!') {
-            match execute_repl_shell(command).await {
+            // 用带实时状态刷新的版本：直接 await 会让界面静默卡住
+            match execute_repl_shell_live(command, &mut runtime).await {
                 Ok(result) => {
                     runtime.record_shell(result.command, result.output, result.exit_code)?
                 }

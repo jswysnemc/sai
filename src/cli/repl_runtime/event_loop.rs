@@ -190,7 +190,20 @@ pub(crate) fn process_stream_input(runtime: &mut ReplRuntime) -> Result<bool> {
                     }
                     continue;
                 }
-                if ctrl_o || matches!(key.code, KeyCode::PageUp) {
+                if ctrl_o {
+                    // 轮次内没有可折叠的思考块时给 Ctrl+O 自己的提示。
+                    // 不能复用下面 PageUp 的 pager 文案：用户按的是 Ctrl+O，
+                    // 看到一条关于会话浏览面板的说明只会以为这个键坏了
+                    runtime.record_meta(
+                        crate::i18n::text(
+                            "Ctrl+O: no collapsible reasoning block in this turn",
+                            "Ctrl+O：本轮没有可折叠的思考块",
+                        )
+                        .to_string(),
+                    )?;
+                    continue;
+                }
+                if matches!(key.code, KeyCode::PageUp) {
                     // 1. 流式期间不打开阻塞式浏览面板：pager 会同步占住事件循环，
                     //    模型流无人读取、工具子进程管道写满后挂起
                     runtime.record_meta(

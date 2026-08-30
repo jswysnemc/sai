@@ -82,6 +82,11 @@ pub(super) struct ReplRuntime {
     last_composer_signature: Option<composer_frame::ComposerSignature>,
     /// `#` 引用可用的 skill 名称与描述
     mention_skills: Vec<(String, String)>,
+    /// Esc 是否已收起补全面板，以及收起时的输入快照
+    ///
+    /// 快照用于在输入变化后自动恢复面板：收起只对当前这一次输入生效，
+    /// 继续打字或移动光标都应该重新弹出候选
+    panels_dismissed: Option<(String, usize)>,
     /// 沉底 todo 是否单行模式（Ctrl+T 切换）
     todo_panel_compact: bool,
     /// 当前轮已完成请求的实时用量，轮次结束后清空
@@ -147,6 +152,7 @@ impl ReplRuntime {
             last_cursor_row: None,
             last_composer_signature: None,
             mention_skills: Vec::new(),
+            panels_dismissed: None,
             todo_panel_compact: true,
             live_usage: live_usage::LiveTurnUsage::default(),
             frame: TerminalFrame::new(),
@@ -443,6 +449,46 @@ impl ReplRuntime {
         self.sync_transcript(false)
     }
 
+    /// 进入 `!` Shell 命令的等待状态并显示实时耗时。
+    ///
+    /// 命令在 REPL 主循环里同步等待，没有工作状态行的话界面会完全静止，
+    /// 用户无法区分「正在跑」和「卡死了」。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 操作是否成功
+    pub(super) fn begin_shell_status(&mut self) -> Result<()> {
+        self.transcript
+            .set_work_status(crate::render::work_status::WorkStatus::WaitingToRun);
+        // 立刻排一帧，让状态行在命令启动前就画出来
+        self.next_live_refresh = Some(Instant::now());
+        self.sync_transcript(false)
+    }
+
+    /// 结束 `!` Shell 命令的等待状态。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 操作是否成功
+    pub(super) fn end_shell_status(&mut self) -> Result<()> {
+        self.transcript.clear_work_status();
+        self.next_live_refresh = None;
+        self.sync_transcript(false)
+    }
+
+    /// transcript 当前是否还挂着工作状态行。
+    ///
+    /// 返回:
+    /// - 存在工作状态为真
+    #[cfg(test)]
+    pub(super) fn transcript_has_work_status(&self) -> bool {
+        self.transcript.has_work_status()
+    }
+
     /// 记录 REPL 启动欢迎面板。
     ///
     /// 参数:
@@ -735,17 +781,15 @@ impl ReplRuntime {
             self.viewport.restart_at(size, 0);
         }
         let width = usize::from(size.cols);
-        // 2. 重放窗口至少覆盖屏幕，同时尊重配置的 row cap 上限；
-        //    全量重锚会重建 scrollback，因此取完整 row cap 保留回滚历史
-        let min_rows = if full_reanchor {
-            self.transcript.row_cap().max(usize::from(size.rows))
-        } else {
-            usize::from(size.rows)
-                .saturating_mul(2)
-                .max(64)
-                .min(self.transcript.row_cap())
-                .max(usize::from(size.rows))
-        };
+        // 2. 重放窗口至少覆盖屏幕，同时尊重配置的 row cap 上限。
+        //    重放的前缀会经真实滚动追加进 scrollback，因此全量重锚也只取
+        //    屏幕附近的行数：按整个 row cap 重放会让每次横向缩放都往回滚区
+        //    再追加数千行，缩放几次后回滚区就被重复副本塞满
+        let min_rows = usize::from(size.rows)
+            .saturating_mul(2)
+            .max(64)
+            .min(self.transcript.row_cap())
+            .max(usize::from(size.rows));
         let window = layout::display_window(
             &mut self.transcript,
             width,

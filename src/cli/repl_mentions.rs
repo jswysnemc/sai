@@ -4,6 +4,26 @@ use crate::paths::SaiPaths;
 use crate::runtime_cwd;
 use crate::tools::{load_installed_skill_document, skill_catalog};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+/// 目录条目缓存有效期。
+const DIR_CACHE_TTL: Duration = Duration::from_millis(500);
+
+/// 单条目录列表缓存。
+struct DirCacheEntry {
+    /// 缓存键：目录路径 + 插入前缀
+    key: String,
+    show_hidden: bool,
+    fetched_at: Instant,
+    entries: Vec<MentionSuggestion>,
+}
+
+/// 目录条目缓存。
+///
+/// 补全面板每帧都会重算（32ms 一次），而 read_dir + 逐条 stat 在大目录上
+/// 可能要几十毫秒，未缓存时输入 `@` 会直接把界面卡住。
+static DIR_CACHE: Mutex<Option<DirCacheEntry>> = Mutex::new(None);
 
 /// 输入框引用触发类型。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -223,7 +243,7 @@ fn list_cwd_files(query: &str) -> Vec<MentionSuggestion> {
             .rsplit('/')
             .next()
             .is_some_and(|part| part.starts_with('.'));
-    let mut entries = read_dir_entries(&root, &dir, show_hidden);
+    let mut entries = cached_dir_entries(&root, &dir, show_hidden);
     if !keyword.is_empty() {
         entries.retain(|entry| entry.label.to_ascii_lowercase().contains(&keyword));
     }
@@ -243,6 +263,42 @@ fn split_file_query(query: &str) -> (String, String) {
         Some(index) => (query[..=index].to_string(), query[index + 1..].to_string()),
         None => (String::new(), query.to_string()),
     }
+}
+
+/// 读取目录条目并在短时间内复用结果。
+///
+/// 过滤词每次按键都变，但目录内容不会，因此按目录缓存原始条目、
+/// 过滤留在缓存之外做，避免每帧重复扫盘。
+///
+/// 参数:
+/// - `root`: 绝对或工作区路径
+/// - `prefix`: 插入时使用的相对前缀
+/// - `show_hidden`: 是否列出点开头的条目
+///
+/// 返回:
+/// - 已排序的目录与文件建议
+fn cached_dir_entries(root: &Path, prefix: &str, show_hidden: bool) -> Vec<MentionSuggestion> {
+    let key = format!("{}\u{0}{prefix}", root.display());
+    if let Ok(guard) = DIR_CACHE.lock() {
+        if let Some(entry) = guard.as_ref() {
+            if entry.key == key
+                && entry.show_hidden == show_hidden
+                && entry.fetched_at.elapsed() < DIR_CACHE_TTL
+            {
+                return entry.entries.clone();
+            }
+        }
+    }
+    let entries = read_dir_entries(root, prefix, show_hidden);
+    if let Ok(mut guard) = DIR_CACHE.lock() {
+        *guard = Some(DirCacheEntry {
+            key,
+            show_hidden,
+            fetched_at: Instant::now(),
+            entries: entries.clone(),
+        });
+    }
+    entries
 }
 
 /// 读取一个目录下的文件与子目录。

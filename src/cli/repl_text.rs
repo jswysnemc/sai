@@ -42,6 +42,50 @@ pub(super) fn remove_word_before_cursor(value: &mut String, cursor: &mut usize) 
     *cursor = start;
 }
 
+/// 返回光标前一个词首的字符下标。
+///
+/// 词的定义与 `remove_word_before_cursor` 一致（空白分隔），
+/// 保证 Ctrl+← 与 Ctrl+W 落在相同边界上。
+///
+/// 参数:
+/// - `value`: 输入文本
+/// - `cursor`: 光标字符偏移
+///
+/// 返回:
+/// - 前一个词首的字符下标
+pub(super) fn word_start_before(value: &str, cursor: usize) -> usize {
+    let chars = value.chars().collect::<Vec<_>>();
+    let mut start = cursor.min(chars.len());
+    while start > 0 && chars[start - 1].is_whitespace() {
+        start -= 1;
+    }
+    while start > 0 && !chars[start - 1].is_whitespace() {
+        start -= 1;
+    }
+    start
+}
+
+/// 返回光标后一个词尾的字符下标。
+///
+/// 参数:
+/// - `value`: 输入文本
+/// - `cursor`: 光标字符偏移
+///
+/// 返回:
+/// - 后一个词尾的字符下标
+pub(super) fn word_end_after(value: &str, cursor: usize) -> usize {
+    let chars = value.chars().collect::<Vec<_>>();
+    let len = chars.len();
+    let mut end = cursor.min(len);
+    while end < len && chars[end].is_whitespace() {
+        end += 1;
+    }
+    while end < len && !chars[end].is_whitespace() {
+        end += 1;
+    }
+    end
+}
+
 pub(super) fn remove_char_at_cursor(value: &mut String, cursor: usize) {
     if cursor >= value.chars().count() {
         return;
@@ -264,5 +308,38 @@ pub(super) fn colored_mode_label(mode: AgentMode) -> String {
         AgentMode::Audited => "\x1b[35m[AUDIT]\x1b[0m".to_string(),
         AgentMode::AutoAudit => "\x1b[38;5;141m[AUTO-AUDIT]\x1b[0m".to_string(),
         AgentMode::Plan => "\x1b[36m[PLAN]\x1b[0m".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{word_end_after, word_start_before};
+
+    /// 向左跳过空白后停在词首。
+    #[test]
+    fn word_start_skips_trailing_space_then_word() {
+        //                0123456789
+        let value = "alpha beta";
+        assert_eq!(word_start_before(value, 10), 6);
+        // 光标已在词首时继续往左跨一个词
+        assert_eq!(word_start_before(value, 6), 0);
+        assert_eq!(word_start_before(value, 0), 0);
+    }
+
+    /// 向右跳过空白后停在词尾。
+    #[test]
+    fn word_end_skips_leading_space_then_word() {
+        let value = "alpha beta";
+        assert_eq!(word_end_after(value, 0), 5);
+        assert_eq!(word_end_after(value, 5), 10);
+        assert_eq!(word_end_after(value, 10), 10);
+    }
+
+    /// CJK 没有空格，按空白分隔仍是一次跨到边界，不会越界。
+    #[test]
+    fn word_motion_handles_cjk_without_spaces() {
+        let value = "你好世界";
+        assert_eq!(word_start_before(value, 4), 0);
+        assert_eq!(word_end_after(value, 0), 4);
     }
 }

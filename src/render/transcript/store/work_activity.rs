@@ -31,3 +31,14 @@ impl TranscriptStore {
         self.work_status.take().is_some()
     }
 }
+
+impl TranscriptStore {
+    /// 当前是否处于工作状态。
+    ///
+    /// 返回:
+    /// - 已设置工作状态为真
+    #[cfg(test)]
+    pub(crate) fn has_work_status(&self) -> bool {
+        self.work_status.is_some()
+    }
+}
