@@ -8,8 +8,6 @@ use crossterm::style::Print;
 use crossterm::terminal::{Clear, ClearType};
 use std::io::Write;
 
-/// 清空终端 scrollback 的控制序列（ED 3）。
-const CLEAR_SCROLLBACK: &str = "\x1b[3J";
 /// 输出期间关闭终端自动换行。
 const DISABLE_AUTOWRAP: &str = "\x1b[?7l";
 /// 恢复终端自动换行。
@@ -41,11 +39,15 @@ pub(super) fn replay<W: Write>(
     Ok(painted)
 }
 
-/// 清空可见屏与 scrollback 后从 source 全量重放（含 scrollback 前缀）。
+/// 清屏后从 source 重放可视历史（不清 scrollback）。
 ///
-/// 终端缩放会自行把可见行推入 scrollback 且不被记账，旧内容与重放内容
-/// 会形成双份残留。此路径清空后按顺序重放整个窗口：超出可视预算的前缀
-/// 通过真实滚动重新进入 scrollback，可视尾部留在屏幕上。
+/// 终端缩放会自行把可见行推入 scrollback 且不被记账，若不清可见屏会与
+/// 重放内容形成双份残留，因此清空可见屏后按顺序重放整个窗口：超出可视
+/// 预算的前缀经真实滚动进入 scrollback，可视尾部留在屏幕上。
+///
+/// 只清可见屏、不发 ED 3：ED 3 会连终端原生回滚一起抹掉，其中可能包含
+/// 启动 sai 之前的用户历史，一次横向缩放就永久丢失。历史重建改为追加，
+/// 因此调用方会把重放行数量控制在可视预算附近而非整个 row cap。
 ///
 /// 参数:
 /// - `output`: 当前帧的输出缓冲
@@ -65,14 +67,13 @@ pub(super) fn replay_full<W: Write>(
     // 绘制期间隐藏光标：光标会随整屏重放扫过全部内容行，
     // 可见状态下表现为一次跳动；最终位置由 composer 的 Show 恢复
     queue!(output, Hide)?;
-    // 1. 清空可见屏与 scrollback，从顶部开始顺序输出。
+    // 1. 只清空可见屏后从顶部开始顺序输出，保留终端 scrollback。
     //    ED 序列不影响 Kitty 图像放置，必须显式发图形删除命令，
-    //    否则 /clear、resize 重放后旧图残留在屏幕上
+    //    否则重放后旧图残留在屏幕上
     queue!(
         output,
         MoveTo(0, 0),
         Clear(ClearType::All),
-        Print(CLEAR_SCROLLBACK),
         Print(crate::render::terminal_image::KITTY_DELETE_PLACEMENTS),
         Print(DISABLE_AUTOWRAP)
     )?;
@@ -126,9 +127,9 @@ mod tests {
         let painted = replay_full(&mut sink, &viewport, &lines(10)).unwrap();
         let output = String::from_utf8(sink).unwrap();
         assert_eq!(painted, 10);
-        // 清屏 + 清 scrollback + 从顶部输出
+        // 清可见屏 + 从顶部输出，但不发 ED 3（保留终端原生回滚）
         assert!(output.contains("\x1b[2J"));
-        assert!(output.contains("\x1b[3J"));
+        assert!(!output.contains("\x1b[3J"));
         assert!(output.contains("line-0"));
         assert!(output.contains("line-9"));
     }
@@ -155,6 +156,16 @@ mod tests {
         let painted = replay_full(&mut sink, &viewport, &[]).unwrap();
         assert_eq!(painted, 0);
         let output = String::from_utf8(sink).unwrap();
-        assert!(output.contains("\x1b[3J"));
+        assert!(output.contains("\x1b[2J"));
+    }
+
+    /// 重放只清可见屏：ED 3 会连启动前的终端历史一起抹掉，不能出现。
+    #[test]
+    fn replay_never_destroys_native_scrollback() {
+        let viewport = anchored_viewport(24, 4, 60);
+        let mut sink = Vec::new();
+        replay_full(&mut sink, &viewport, &lines(60)).unwrap();
+        let output = String::from_utf8(sink).unwrap();
+        assert!(!output.contains("\x1b[3J"));
     }
 }

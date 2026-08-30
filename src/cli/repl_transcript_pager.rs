@@ -55,11 +55,19 @@ fn run_pager_loop(runtime: &mut ReplRuntime) -> Result<()> {
     let mut lines = runtime.transcript_pager_lines(usize::from(cols));
     // 进度锚点：视口底部距内容末尾的行数；初始停在底部（最新内容）
     let mut offset_from_bottom = 0usize;
+    // 上一次实际绘制的画面指纹：poll 只是唤醒手段，没有变化时不该重绘。
+    // 原先每次 250ms 超时都整屏 Clear + 逐行重打，空闲时表现为持续微闪，
+    // 在 SSH / 远程会话上还要白白吃掉带宽
+    let mut drawn: Option<(u16, u16, usize, usize)> = None;
     loop {
         let view_height = usize::from(rows.max(2)) - 1;
         let max_offset = lines.len().saturating_sub(view_height);
         offset_from_bottom = offset_from_bottom.min(max_offset);
-        draw_view(&lines, view_height, cols, offset_from_bottom)?;
+        let frame = (cols, rows, offset_from_bottom, lines.len());
+        if drawn != Some(frame) {
+            draw_view(&lines, view_height, cols, offset_from_bottom)?;
+            drawn = Some(frame);
+        }
         if !event::poll(Duration::from_millis(250))? {
             continue;
         }
