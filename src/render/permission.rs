@@ -87,6 +87,15 @@ pub(crate) fn render_permission_controls(
                 "上下键选择 · Enter 确认 · y 允许 · n 拒绝",
             )
         ));
+        // Shift+Tab 会放行本会话全部待审请求（并切到 YOLO），影响面远大于
+        // 单次允许，必须显式出现在提示里，否则用户不知道自己按了什么
+        lines.push(format!(
+            "  \x1b[2m{}\x1b[0m",
+            t(
+                "Shift+Tab: allow all pending in this session (YOLO)",
+                "Shift+Tab：放行本会话全部待审请求（YOLO）",
+            )
+        ));
     }
     lines.join("\n")
 }

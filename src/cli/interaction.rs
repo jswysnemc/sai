@@ -1,6 +1,7 @@
 use super::repl_runtime::ReplRuntime;
 use super::{permission_prompt, terminal_restore};
 use crate::agent::AgentEvent;
+use crate::i18n::text as t;
 use crate::render;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
@@ -198,6 +199,12 @@ pub(super) fn prompt_permission_request_tui(
                         }
                         let _ =
                             crate::permission::allow_all_pending_for_session(&request.session_id);
+                        // 切 YOLO + 放行全部待审的影响面覆盖本会话后续所有调用，
+                        // 落一条可见记录，否则用户不知道之后为何不再弹确认
+                        runtime.borrow_mut().record_meta(t(
+                            "Shift+Tab: switched to YOLO and allowed all pending requests in this session.",
+                            "Shift+Tab：已切换为 YOLO，并放行本会话全部待审请求。",
+                        ).to_string())?;
                         return Ok(());
                     }
                 }
