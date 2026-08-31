@@ -175,6 +175,10 @@ export type AppConfig = {
   scm?: ScmConfig;
   git?: GitConfig;
   context?: ContextConfig;
+  /** 会话网格：跨会话消息收发开关 */
+  mesh?: {
+    cross_session?: boolean;
+  };
   memory?: MemoryRuntimeConfig;
   [key: string]: unknown;
 };

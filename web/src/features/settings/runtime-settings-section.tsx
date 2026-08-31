@@ -6,6 +6,7 @@ import { PermissionDefaultSettings } from "./runtime/permission-default-settings
 import { NotificationSettings } from "./runtime/notification-settings";
 import { TerminalSettingsFields } from "./terminal-settings-fields";
 import { RtkFilterSettings } from "./rtk-filter-settings";
+import { ToggleRow } from "./controls/toggle-row";
 import { CompactionModelField } from "./compaction-model-field";
 import { MemoryExtractionModelField } from "./memory-extraction-model-field";
 import { useI18n } from "../i18n/use-i18n";
@@ -125,6 +126,20 @@ export function RuntimeSettingsSection({ config, subview, onConfigChange }: Runt
             <StructuredConfigFields
               value={(config.display as Record<string, unknown> | undefined) ?? {}}
               onChange={(next) => onConfigChange({ ...config, display: next })}
+            />
+          </SettingsGroup>
+          <SettingsGroup
+            title={t("Session mesh", "会话网格")}
+            description={t(
+              "Mesh tools can deliver messages to other sessions and subagents. Cross-session delivery stays off by default.",
+              "网格工具可向其他会话与子智能体投递消息。跨会话投递默认关闭。"
+            )}
+          >
+            <ToggleRow
+              label={t("Cross-session messaging", "跨会话投递")}
+              hint={t("Send mesh messages to sessions other than this one", "向本会话以外的会话发送网格消息")}
+              checked={config.mesh?.cross_session ?? false}
+              onChange={(checked) => onConfigChange({ ...config, mesh: { cross_session: checked } })}
             />
           </SettingsGroup>
           <DebugSettings config={config} onConfigChange={onConfigChange} />

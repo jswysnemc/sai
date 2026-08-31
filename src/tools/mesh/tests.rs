@@ -542,6 +542,71 @@ async fn send_outside_the_session_is_allowed_when_cross_session_is_enabled() {
     .await;
 }
 
+/// 白名单 Agent（如"代码 Agent"的 enabled_tools）过滤注册表后，
+/// `mesh.cross_session` 开关必须仍然生效：过滤若把会话归属与开关重置，
+/// 即使配置了 true 也会被权限策略拦下。
+#[tokio::test]
+async fn cross_session_survives_the_agent_whitelist_filter() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(temp.path());
+    let cwd = temp.path().join("workspace");
+    std::fs::create_dir_all(&cwd).unwrap();
+
+    crate::runtime_cwd::scope(cwd.clone(), async {
+        let (local, _) = session_in(&paths, &cwd, "local");
+        let (other, _) = session_in(&paths, &cwd, "other");
+        let state_dir = locate_session_dirs(&paths, &local.id).unwrap().1;
+
+        // 白名单配置等价于"代码 Agent"的 enabled_tools，并显式开启跨会话
+        let mut config = crate::config::AppConfig::default();
+        config.mesh.cross_session = true;
+        config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
+            enabled_tools: vec!["mesh_send".to_string()],
+            exclusive: false,
+            deferred_tools: Vec::new(),
+            skills_full: Vec::new(),
+            skills_named: Vec::new(),
+        });
+
+        // 与真实路径一致：先注册（含会话归属），再过白名单过滤，最后绑定权限配置
+        let mut registry = ToolRegistry::new();
+        super::register(
+            &mut registry,
+            paths.clone(),
+            state_dir.display().to_string(),
+            local.id.clone(),
+            config.mesh.cross_session,
+        );
+        registry.set_session_ownership(
+            state_dir.display().to_string(),
+            local.id.clone(),
+            config.mesh.cross_session,
+        );
+        let mut filtered = crate::runner::submission_tools::apply_enabled_tools_filter(
+            registry,
+            &config,
+            crate::runner::SubmissionSource::Repl,
+        )
+        .unwrap();
+        filtered.set_permission_profile(crate::permission::PermissionProfile::new(
+            crate::permission::PermissionProfileMode::Yolo,
+            cwd.clone(),
+            None,
+        ));
+
+        let output = filtered
+            .call(
+                "mesh_send",
+                &format!(r#"{{"to":"session:{}","text":"hi"}}"#, other.id),
+            )
+            .await
+            .unwrap();
+        let parsed: Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(parsed["ok"], true, "{parsed}");
+    })
+    .await;
+}
+
 /// 会话内投递：mesh_send 之后 mesh_recv 能取到同一条消息与关联标识。
 #[tokio::test]
 async fn send_and_recv_round_trip_within_the_session() {

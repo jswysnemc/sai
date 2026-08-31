@@ -472,6 +472,13 @@ impl ToolRegistry {
                 registry.register(tool.clone());
             }
         }
+        // 2. 过滤只收窄工具集合；会话归属与跨会话开关必须随注册表保留，
+        //    否则白名单 Agent 的 mesh.cross_session 会在过滤时被重置成关闭，
+        //    跨会话投递即使配了 true 也会被权限策略拦下来。
+        registry.session_key = self.session_key.clone();
+        registry.session_id = self.session_id.clone();
+        registry.mesh_cross_session = self.mesh_cross_session;
+        registry.permission_profile = self.permission_profile.clone();
         registry
     }
 

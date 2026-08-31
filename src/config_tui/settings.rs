@@ -31,6 +31,7 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
             t("Terminal & context", "终端与上下文").to_string(),
             t("Tools & background commands", "工具与后台命令").to_string(),
             t("Display", "显示偏好").to_string(),
+            t("Mesh", "会话网格").to_string(),
         ];
         let details = vec![
             format!(
@@ -81,6 +82,15 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
                 t("Tool calls", "工具调用"),
                 config.display.tool_calls,
             ),
+            format!(
+                "{}\n\n{}: {}",
+                t(
+                    "Allow mesh messaging across sessions and subagents.",
+                    "允许网格消息跨会话与子智能体投递。",
+                ),
+                t("Cross-session", "跨会话"),
+                on_off(config.mesh.cross_session),
+            ),
         ];
         draw_menu_with_details(
             stdout,
@@ -99,7 +109,7 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
             KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
             KeyCode::Up | KeyCode::Char('k') => selected = selected.saturating_sub(1),
             KeyCode::Down | KeyCode::Char('j') => selected = (selected + 1).min(options.len() - 1),
-            KeyCode::Char(digit @ '1'..='4') => {
+            KeyCode::Char(digit @ '1'..='5') => {
                 selected = digit as usize - '1' as usize;
             }
             KeyCode::Enter => match selected {
@@ -107,6 +117,7 @@ pub(crate) fn edit_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> 
                 1 => edit_context_settings(stdout, config)?,
                 2 => edit_tool_settings(stdout, config)?,
                 3 => edit_display_settings(stdout, config)?,
+                4 => edit_mesh_settings(stdout, config)?,
                 _ => {}
             },
             _ => {}
@@ -441,4 +452,30 @@ fn apply_display_fields(config: &mut AppConfig, fields: &[Field]) -> Result<()> 
     config.display.wait_show_thinking_level = wait_thinking;
     config.display.repl_transcript_row_cap = transcript_row_cap.max(1);
     Ok(())
+}
+
+/// 编辑会话网格跨会话开关。
+fn edit_mesh_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Result<()> {
+    let mut fields = vec![Field::boolean(
+        t(
+            "Allow mesh messages across sessions",
+            "允许网格消息跨会话投递",
+        ),
+        config.mesh.cross_session,
+    )];
+    loop {
+        if !run_form(stdout, t(" MESH ", " 会话网格 "), &mut fields)? {
+            return Ok(());
+        }
+        match parse_bool_field(&fields[0].value) {
+            Ok(cross_session) => {
+                config.mesh.cross_session = cross_session;
+                return Ok(());
+            }
+            Err(err) => message(
+                stdout,
+                &format!("{}: {err}", t("Invalid input", "输入无效")),
+            )?,
+        }
+    }
 }

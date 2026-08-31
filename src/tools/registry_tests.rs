@@ -160,6 +160,36 @@ fn clone_filtered_preserves_source_order() {
     assert_eq!(names, vec!["first", "third"]);
 }
 
+/// 白名单过滤只收窄工具集合：会话归属与跨会话开关必须随注册表保留。
+///
+/// Agent 白名单（如"代码 Agent"的 enabled_tools）走 `clone_filtered` 收窄工具，
+/// 若这里把会话归属和 `mesh.cross_session` 重置掉，配了 true 也会被权限策略拦下。
+#[test]
+fn clone_filtered_preserves_session_ownership_and_cross_session() {
+    let mut registry = ToolRegistry::new();
+    for name in ["mesh_send", "read_file"] {
+        registry.register(ToolSpec::new(
+            name,
+            "test",
+            empty_parameters(),
+            |_arguments| async move { Ok(String::new()) },
+        ));
+    }
+    registry.set_session_ownership(
+        "state/dir".to_string(),
+        "session-1".to_string(),
+        true,
+    );
+
+    let filtered = registry.clone_filtered(&["mesh_send"]);
+    assert_eq!(filtered.session_key, "state/dir");
+    assert_eq!(filtered.session_id, "session-1");
+    assert!(
+        filtered.mesh_cross_session,
+        "cross_session 开关必须在白名单过滤后保留"
+    );
+}
+
 /// 验证参数校验区分合法对象、畸形 JSON 和非对象值。
 #[test]
 fn check_arguments_rejects_malformed_and_non_object_values() {
