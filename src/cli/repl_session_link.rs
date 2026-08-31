@@ -128,8 +128,8 @@ impl ReplSessionLink {
             self.attached_session = session_id;
             return;
         };
-        let cwd = crate::runtime_cwd::current_dir().unwrap_or_default();
-        let workspace_id = crate::state::workspace_id_for_path(&cwd);
+        // 会话事件文件按规范化后的工作区 ID 分目录，必须与写侧走同一条规范化
+        let workspace_id = crate::state::current_workspace_id().unwrap_or_default();
         let journal_path =
             crate::web::runs::session_event_path(&paths.state_dir, &workspace_id, &session_id);
         let (link, _bus) = SessionLink::attach(

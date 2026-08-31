@@ -157,7 +157,9 @@ fn pipe_name(state_dir: &Path) -> String {
 
 /// 按 `state_dir` 推导端点。
 ///
-/// 平台无关的测试（端点推导）直接用它；两个平台的实现也用它，避免哈希逻辑出现两份。
+/// 目前只被平台无关的测试（端点推导）使用；两个平台的实现直接走哈希与套接字
+/// 路径构造，避免哈希逻辑出现两份。
+#[cfg(test)]
 fn endpoint_for(state_dir: &Path) -> Endpoint {
     #[cfg(unix)]
     return Endpoint::Unix(socket_path(state_dir));

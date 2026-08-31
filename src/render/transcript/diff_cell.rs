@@ -170,6 +170,7 @@ impl DiffCell {
     ///
     /// 返回:
     /// - 无
+    #[cfg(test)]
     pub(crate) fn toggle_expanded(&mut self) {
         self.expanded = !self.expanded;
     }

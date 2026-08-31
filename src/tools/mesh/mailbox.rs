@@ -459,17 +459,3 @@ fn rewrite_file(path: &Path, entries: &[MeshEnvelope]) -> Result<()> {
         .with_context(|| format!("failed to replace {}", path.display()))?;
     Ok(())
 }
-
-/// 清空进程内信箱，仅测试使用（模拟"另一个进程"重新加载）。
-///
-/// 参数:
-/// - 无
-///
-/// 返回:
-/// - 无
-#[cfg(test)]
-pub(crate) fn reset_memory() {
-    if let Ok(mut inboxes) = inboxes().lock() {
-        inboxes.clear();
-    }
-}

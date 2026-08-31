@@ -1,6 +1,8 @@
 use super::TranscriptStore;
 use crate::llm::ChatStreamKind;
+#[cfg(test)]
 use crate::render::transcript::store::HistoryCell;
+#[cfg(test)]
 use crate::render::transcript::tool_cell::ToolCell;
 
 impl TranscriptStore {
@@ -32,6 +34,7 @@ impl TranscriptStore {
     ///
     /// 返回:
     /// - 找到可切换块时返回 true
+    #[cfg(test)]
     pub(crate) fn toggle_inline_expand(&mut self) -> bool {
         if self.toggle_live_reasoning() {
             return true;

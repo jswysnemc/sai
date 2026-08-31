@@ -110,19 +110,6 @@ pub(crate) fn style_context_line(path: &Path, line: &str) -> String {
     )
 }
 
-/// 给 diff 删除行添加样式（无行内强调）。
-///
-/// 参数:
-/// - `path`: 文件路径
-/// - `line`: diff 行文本
-///
-/// 返回:
-/// - 带 ANSI 样式的删除行
-#[cfg(test)]
-pub(crate) fn style_removed_line(path: &Path, line: &str) -> String {
-    style_removed_line_ranged(path, line, None)
-}
-
 /// 给 diff 删除行添加样式，可选高亮行内被替换片段。
 ///
 /// 参数:

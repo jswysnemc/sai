@@ -398,10 +398,6 @@ fn pending_tail_is_previewed_then_cleared_before_the_next_chunk() {
         kind,
         text: text.to_string(),
     };
-    let content = |text: &str| crate::llm::ChatStreamChunk {
-        kind: ChatStreamKind::Content,
-        text: text.to_string(),
-    };
 
     // 1. 推入未换行的片段：定稿输出仍为空，但尾部已被画出
     renderer

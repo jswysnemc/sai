@@ -132,6 +132,7 @@ impl StreamSummary {
     ///
     /// 返回:
     /// - 推理摘要文本
+    #[cfg(test)]
     pub(crate) fn reasoning_text(&self) -> String {
         self.reasoning_title(false)
     }

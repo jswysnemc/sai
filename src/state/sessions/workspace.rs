@@ -29,9 +29,7 @@ pub fn current_workspace_scope(paths: &SaiPaths) -> Result<WorkspaceScope> {
 /// 返回:
 /// - 工作区作用域
 pub fn workspace_scope_for_path(paths: &SaiPaths, workspace_path: &Path) -> WorkspaceScope {
-    let normalized = crate::platform::windows_path::canonicalize(workspace_path)
-        .unwrap_or_else(|_| workspace_path.to_path_buf());
-    let workspace_id = workspace_id_for_path(&normalized);
+    let workspace_id = workspace_id_for_directory(workspace_path);
     WorkspaceScope {
         state_dir: paths
             .state_dir
@@ -39,6 +37,39 @@ pub fn workspace_scope_for_path(paths: &SaiPaths, workspace_path: &Path) -> Work
             .join("workspaces")
             .join(workspace_id),
     }
+}
+
+/// 返回当前工作区的稳定 ID。
+///
+/// 与会话落盘走同一套规范化，因此可以直接和 `list_all_sessions` 报出的
+/// `workspace_id` 比较。
+///
+/// 参数:
+/// - 无
+///
+/// 返回:
+/// - 当前工作区 ID
+pub fn current_workspace_id() -> Result<String> {
+    let cwd = crate::runtime_cwd::current_dir()?;
+    Ok(workspace_id_for_directory(&cwd))
+}
+
+/// 规范化工作区路径后生成稳定 ID。
+///
+/// 会话按这个 ID 分目录存放，任何按当前工作区查会话的地方都必须用它，不能
+/// 直接哈希原始路径：Windows 上原始 cwd 可能是 8.3 短名（`RUNNER~1`）、大小写
+/// 不一致或带 `\\?\` 前缀，规范化前后哈希值不同，查出来就是空列表。Linux 上
+/// 对应 cwd 含符号链接的情况。
+///
+/// 参数:
+/// - `workspace_path`: 工作区目录
+///
+/// 返回:
+/// - 工作区 ID
+fn workspace_id_for_directory(workspace_path: &Path) -> String {
+    let normalized = crate::platform::windows_path::canonicalize(workspace_path)
+        .unwrap_or_else(|_| workspace_path.to_path_buf());
+    workspace_id_for_path(&normalized)
 }
 
 /// 根据工作区路径生成稳定 ID。

@@ -1125,9 +1125,12 @@ pub(crate) const EVENT_COMPACTION_BEGIN: &str = "run.compaction.begin";
 /// compaction 结束事件的事件类型。
 pub(crate) const EVENT_COMPACTION_END: &str = "run.compaction.end";
 /// compaction 广播使用的运行标识（它不是一次对话轮次，没有真实 run_id）。
+// 待破坏式写入方接入广播后会有调用方（见下方 `broadcast_compaction`）。
+#[allow(dead_code)]
 const COMPACTION_RUN_ID: &str = "compaction";
 
 /// 本进程登记到会话状态目录上的事件总线。
+#[allow(dead_code)]
 struct BusEntry {
     bus: ActorHandle,
     workspace_id: String,
@@ -1139,6 +1142,7 @@ struct BusEntry {
 /// compaction 之类的破坏式写入发生在 `StateStore` 里，而 `StateStore` 拿不到事件总线句柄
 /// （它在会话创建时就被各个前端各自持有）。这里按状态目录登记一份，让那些写入方
 /// 能广播一条「我要改写了」。
+#[allow(dead_code)]
 fn session_buses() -> &'static Mutex<HashMap<PathBuf, BusEntry>> {
     static BUSES: OnceLock<Mutex<HashMap<PathBuf, BusEntry>>> = OnceLock::new();
     BUSES.get_or_init(|| Mutex::new(HashMap::new()))
@@ -1162,6 +1166,8 @@ fn compacting_sessions() -> &'static Mutex<std::collections::HashSet<PathBuf>> {
 ///
 /// 返回:
 /// - 无
+// 破坏式写入方接入广播后会有调用方（见下方 `broadcast_compaction`）。
+#[allow(dead_code)]
 pub(crate) fn register_session_bus(
     state_dir: &Path,
     workspace_id: &str,
@@ -1186,6 +1192,7 @@ pub(crate) fn register_session_bus(
 ///
 /// 返回:
 /// - 无
+#[allow(dead_code)]
 pub(crate) fn unregister_session_bus(state_dir: &Path) {
     let mut buses = session_buses().lock().unwrap_or_else(|e| e.into_inner());
     buses.remove(state_dir);
@@ -1198,6 +1205,7 @@ pub(crate) fn unregister_session_bus(state_dir: &Path) {
 ///
 /// 返回:
 /// - 是否正在 compaction
+#[allow(dead_code)]
 pub(crate) fn is_compacting(state_dir: &Path) -> bool {
     compacting_sessions()
         .lock()
@@ -1234,6 +1242,8 @@ fn set_compacting(state_dir: &Path, compacting: bool) {
 ///
 /// 返回:
 /// - 无
+// 等 `StateStore` 的破坏式写入接入广播后会有调用方。
+#[allow(dead_code)]
 pub(crate) fn broadcast_compaction(state_dir: &Path, begin: bool, detail: &str) {
     set_compacting(state_dir, begin);
     let entry = {

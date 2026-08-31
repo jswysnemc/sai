@@ -211,6 +211,42 @@ async fn session_probe_scopes_separate_workspace_from_all() {
     .await;
 }
 
+/// workspace 作用域按规范化后的当前目录计算工作区 ID。
+///
+/// 会话目录名由 `workspace_scope_for_path` 规范化路径后哈希得出，查询侧若直接
+/// 哈希原始 cwd 就会算出另一个 ID。Windows 上原始 cwd 可能是 8.3 短名
+/// （`RUNNER~1`）、大小写不一致或带 `\\?\` 前缀；Linux 上的等价场景是 cwd 里
+/// 含符号链接，这条用例因此在 Linux 上就能复现 Windows 的失败。
+#[cfg(unix)]
+#[tokio::test]
+async fn session_probe_workspace_scope_uses_the_canonicalized_cwd() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(temp.path());
+    let real = temp.path().join("real-workspace");
+    let alias = temp.path().join("alias-workspace");
+    std::fs::create_dir_all(&real).unwrap();
+    std::os::unix::fs::symlink(&real, &alias).unwrap();
+
+    crate::runtime_cwd::scope(alias, async {
+        let (local, _) = session_in(&paths, &real, "local");
+        let registry = registry_for(&paths, &local);
+
+        let output = probe(&registry, "session_probe", r#"{"scope":"workspace"}"#).await;
+        let ids = output["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|session| session["id"].as_str().unwrap().to_string())
+            .collect::<Vec<_>>();
+
+        assert!(
+            ids.contains(&local.id),
+            "workspace 作用域必须按规范化路径认出本工作区: {output}"
+        );
+    })
+    .await;
+}
+
 /// 非法作用域直接报错，而不是静默退化成默认作用域。
 #[tokio::test]
 async fn session_probe_rejects_an_unknown_scope() {

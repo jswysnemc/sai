@@ -52,7 +52,6 @@ pub use mcp_file::{
 pub use model::*;
 pub use model_metadata::*;
 pub use model_thinking::*;
-pub use mesh::MeshConfig;
 pub use model_units::*;
 pub use notification::*;
 pub use permission::*;

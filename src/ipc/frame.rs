@@ -31,6 +31,8 @@ pub(crate) const KIND_CTL_HELLO: &str = "ctl.hello";
 #[allow(dead_code)]
 pub(crate) const KIND_CTL_SUBSCRIBE: &str = "ctl.subscribe";
 /// 持有者下发给观察者的全量状态快照。
+// 目前只有测试在构造这种帧；接入会话恢复流程后会有调用方。
+#[allow(dead_code)]
 pub(crate) const KIND_CTL_SNAPSHOT: &str = "ctl.snapshot";
 /// 交互请求（权限审批、提问等）。
 // P4 接入权限交互后会有调用方。
@@ -53,6 +55,8 @@ pub(crate) const KIND_CTL_PING: &str = "ctl.ping";
 #[allow(dead_code)]
 pub(crate) const KIND_CTL_PONG: &str = "ctl.pong";
 /// 事件帧：payload 里放 runner 事件体。
+// 目前只有测试在构造这种帧；接入跨进程事件流后会有调用方。
+#[allow(dead_code)]
 pub(crate) const KIND_EVT_RUNNER: &str = "evt.runner";
 /// 事件帧：payload 里放**已组装**的 WebEvent。
 ///

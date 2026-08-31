@@ -14,7 +14,6 @@ use crate::state::LocatedSession;
 use crate::tools::ToolRegistry;
 use anyhow::{anyhow, bail, Result};
 use serde_json::Value;
-use std::path::PathBuf;
 
 /// 网格工具上下文。
 ///
@@ -153,8 +152,9 @@ fn sessions_in_scope(context: &MeshContext, scope: &str) -> Result<Vec<LocatedSe
             .filter(|session| session.info.id == context.session_id)
             .collect(),
         "workspace" => {
-            let workspace_id =
-                crate::state::workspace_id_for_path(&crate::runtime_cwd::current_dir()?);
+            // 会话是按规范化后的路径分工作区存放的，这里必须走同一条规范化，
+            // 直接哈希 cwd 会在 Windows 上算出另一个 ID（短名/大小写/UNC 前缀）
+            let workspace_id = crate::state::current_workspace_id()?;
             sessions
                 .into_iter()
                 .filter(|session| session.workspace_id == workspace_id)
@@ -203,15 +203,4 @@ fn unix_seconds() -> u64 {
 /// - Unix 毫秒数
 fn unix_millis() -> u64 {
     mailbox::unix_millis()
-}
-
-/// 返回当前会话状态目录。
-///
-/// 参数:
-/// - `context`: 网格上下文
-///
-/// 返回:
-/// - 当前会话状态目录
-fn self_state_dir(context: &MeshContext) -> PathBuf {
-    PathBuf::from(&context.owner_key)
 }

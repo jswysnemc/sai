@@ -179,21 +179,6 @@ impl PermissionProfile {
         self
     }
 
-    /// 返回当前会话 id。
-    pub(crate) fn session_id(&self) -> &str {
-        &self.session_id
-    }
-
-    /// 返回当前会话状态目录。
-    pub(crate) fn session_key(&self) -> &str {
-        &self.session_key
-    }
-
-    /// 返回是否允许跨越会话边界。
-    pub(crate) fn cross_session_allowed(&self) -> bool {
-        self.cross_session
-    }
-
     /// 立即切换权限模式（无需重建工具注册表）。
     ///
     /// 参数:
