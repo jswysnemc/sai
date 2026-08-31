@@ -1,4 +1,4 @@
-import { detectInitialLocale, type Locale } from "../features/i18n/locale";
+import { currentLocale, type Locale } from "../features/i18n/locale";
 
 /**
  * 保存服务端原始错误，并在读取 message 时按当前 Web 语言转换固定错误文案。
@@ -21,7 +21,7 @@ export class ApiError extends Error {
     this.detail = (detail ?? "").trim() || rawMessage;
     Object.defineProperty(this, "message", {
       configurable: true,
-      get: () => localizeApiMessage(this.rawMessage, detectInitialLocale())
+      get: () => localizeApiMessage(this.rawMessage, currentLocale())
     });
   }
 }
@@ -46,7 +46,7 @@ export class LocalizedError extends Error {
     this.chineseMessage = chineseMessage;
     Object.defineProperty(this, "message", {
       configurable: true,
-      get: () => detectInitialLocale() === "zh-CN" ? this.chineseMessage : this.englishMessage
+      get: () => currentLocale() === "zh-CN" ? this.chineseMessage : this.englishMessage
     });
   }
 }

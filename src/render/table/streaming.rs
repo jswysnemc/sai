@@ -106,8 +106,7 @@ impl StreamingTable {
             PreviewMode::ReplaceTerminalRows => {
                 if !now_confirmed {
                     // 正文随后会在 cli_content_width() 处折行，行数必须按同一宽度算
-                    self.raw_visual_rows +=
-                        raw_visual_rows(line, cli_content_width());
+                    self.raw_visual_rows += raw_visual_rows(line, cli_content_width());
                     return format!("{line}\n");
                 }
                 // 刚确认时也需清掉已输出的原文行；后续行清掉上一帧表格预览

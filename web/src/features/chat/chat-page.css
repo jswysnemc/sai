@@ -79,13 +79,28 @@
 }
 
 /* 输入区吸在滚动容器底部，顶部渐变让消息内容自然淡出 */
-.composer-shell {
+.composer-dock {
   position: sticky;
   bottom: 0;
   z-index: 15;
   flex: 0 0 auto;
   margin-top: 0;
-  padding-top:var(--space-lg);
+  background: var(--paper);
+}
+
+.composer-error-dock {
+  width: min(100%, var(--chat-content-width));
+  margin: 0 auto;
+  padding: 0 var(--chat-column-gutter);
+}
+
+.composer-error-dock .run-error {
+  margin: 0 0 var(--space-sm);
+}
+
+.composer-shell {
+  position: relative;
+  padding-top: var(--space-lg);
   /* mask 的颜色只用于 alpha 通道，与主题配色无关 */
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
   mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
@@ -135,6 +150,7 @@
   pointer-events: none;
 }
 
+.empty-session-stage .composer-dock,
 .empty-session-stage .composer-shell {
   position: relative;
   bottom: auto;

@@ -40,9 +40,7 @@ mod turn_orchestration;
 mod turn_settlement;
 
 use crate::config::AppConfig;
-use crate::llm::{
-    ChatMessage, ChatResult, OpenAiCompatibleClient,
-};
+use crate::llm::{ChatMessage, ChatResult, OpenAiCompatibleClient};
 use crate::memory::MemoryStore;
 use crate::paths::SaiPaths;
 use crate::perf_trace::PerfTrace;

@@ -178,7 +178,10 @@ pub(super) fn prompt_permission_request_tui(
             if let Event::Resize(cols, rows) = event {
                 runtime.observe_input_resize(cols, rows);
                 runtime.update_permission_choice(&request.id, state.selected())?;
-                runtime.update_permission_reply(&request.id, state.reply_draft().map(str::to_string))?;
+                runtime.update_permission_reply(
+                    &request.id,
+                    state.reply_draft().map(str::to_string),
+                )?;
                 continue;
             }
             // Shift+Tab / BackTab：立即切到 YOLO 并放行当前会话全部待审

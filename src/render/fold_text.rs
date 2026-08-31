@@ -265,7 +265,10 @@ mod tests {
     #[test]
     fn command_wrap_width_never_exceeds_the_terminal() {
         // 极窄终端：夹回终端列数
-        assert_eq!(with_render_width(10, || command_wrap_width_for_title("Ran")), 10);
+        assert_eq!(
+            with_render_width(10, || command_wrap_width_for_title("Ran")),
+            10
+        );
         // 正常宽度：扣除标题列后仍是可用列数
         let available = with_render_width(80, || 80 - command_body_column("Ran"));
         assert_eq!(

@@ -235,3 +235,10 @@
   display: grid;
   gap:var(--space-3xs);
 }
+
+.session-list-empty {
+  margin: var(--space-sm) var(--space-2xs);
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}

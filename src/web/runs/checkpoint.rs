@@ -111,6 +111,8 @@ impl RunCheckpointStore {
     /// 参数:
     /// - `run_id`: 被编辑或移动的运行标识
     /// - `input`: 最新用户输入
+    /// - `queue_insert_at`: 排队插入点
+    /// - `image_urls`: 最新图片附件
     /// - `ordered_run_ids`: 同一会话从前到后的排队运行标识
     ///
     /// 返回:
@@ -119,6 +121,8 @@ impl RunCheckpointStore {
         &self,
         run_id: &str,
         input: &str,
+        queue_insert_at: crate::web::runs::QueueInsertAt,
+        image_urls: &[String],
         ordered_run_ids: &[String],
     ) -> Result<()> {
         let mut records = self
@@ -144,6 +148,11 @@ impl RunCheckpointStore {
                 if record.info.run_id == run_id {
                     record.info.input = input.to_string();
                     record.request.input = input.to_string();
+                    record.info.insert_at = queue_insert_at;
+                    record.request.insert_at = queue_insert_at;
+                    record.info.image_urls = image_urls.to_vec();
+                    record.request.image_url = None;
+                    record.request.image_urls = image_urls.to_vec();
                     record.updated_at = chrono::Utc::now().to_rfc3339();
                 }
                 selected_records.insert(record.info.run_id.clone(), record);
@@ -598,6 +607,7 @@ mod tests {
             status: RunCheckpointStatus::Running,
             discard_user_turn: false,
             restore_input: None,
+            insert_at: crate::web::runs::QueueInsertAt::Turn,
         };
         store
             .upsert(RunCheckpoint {
@@ -619,6 +629,7 @@ mod tests {
                     provider_id: None,
                     model: None,
                     thinking_level: None,
+                    insert_at: crate::web::runs::QueueInsertAt::Turn,
                 },
                 status: RunCheckpointStatus::Running,
                 updated_at: String::new(),
@@ -658,6 +669,7 @@ mod tests {
                 status: RunCheckpointStatus::Completed,
                 discard_user_turn: false,
                 restore_input: None,
+                insert_at: crate::web::runs::QueueInsertAt::Turn,
             },
             workspace: WorkspaceInfo {
                 id: "workspace".to_string(),
@@ -676,6 +688,7 @@ mod tests {
                 provider_id: None,
                 model: None,
                 thinking_level: None,
+                insert_at: crate::web::runs::QueueInsertAt::Turn,
             },
             status: RunCheckpointStatus::Completed,
             updated_at: String::new(),

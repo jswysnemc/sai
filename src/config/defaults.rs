@@ -229,8 +229,6 @@ pub(super) fn default_weixin_gateway_bot_type() -> String {
     "3".to_string()
 }
 
-
-
 pub(super) fn default_anthropic_max_tokens() -> u32 {
     4096
 }

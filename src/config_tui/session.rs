@@ -163,11 +163,7 @@ fn run_main_menu(
         ]);
         draw_menu_with_details(
             stdout,
-            if dirty {
-                "SAI CONFIG *"
-            } else {
-                "SAI CONFIG"
-            },
+            if dirty { "SAI CONFIG *" } else { "SAI CONFIG" },
             &options,
             &details,
             selected,

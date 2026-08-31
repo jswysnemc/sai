@@ -11,12 +11,14 @@ static TIP_INDEX: AtomicUsize = AtomicUsize::new(0);
 /// 首条固定为输入引导，其余是随版本更新的功能提示。
 const TIPS_ZH: &[&str] = &[
     "输入消息…",
-    "Shift+Tab 切换 yolo / audit / plan 权限模式",
-    "工作时 Tab 或 Enter 把消息排队，Ctrl+↑ 进入队列管理",
-    "工作时 Ctrl+Z 撤回排队消息，Ctrl+Y 清空队列",
+    "Shift+Tab 切换 yolo / audit / auto-audit / plan 权限模式",
+    "工作时 Tab 或 Enter 把消息排队；Ctrl+C 停止本轮",
+    "工作时 Ctrl+↑ 管理队列，Tab 切换「下次请求 / 本轮之后」",
+    "工作时 Ctrl+Z 撤回队尾；Ctrl+Y 按两次清空队列",
     "Ctrl+T 折叠计划面板，Ctrl+O 展开思考或 diff",
     "/tree 浏览会话分支；空输入时按 ← 也能打开",
-    "/undo 撤销上一轮，回到发送前的状态",
+    "/rename 为当前会话命名，底栏右侧会显示标题",
+    "/undo 撤销上一轮（需输入两次确认）",
     "/compact 压缩长对话，保留关键信息继续聊",
     "/subagents 查看子代理，/msg 给运行中的子代理留言",
     "/model 切换供应商与模型，/thinking 调整思考等级",
@@ -34,12 +36,14 @@ const TIPS_ZH: &[&str] = &[
 /// 英文提示语。
 const TIPS_EN: &[&str] = &[
     "Add a follow-up",
-    "Shift+Tab cycles yolo / audit / plan permission modes",
-    "While working, Tab or Enter queues a message; Ctrl+↑ manages the queue",
-    "While working, Ctrl+Z undoes a queued message and Ctrl+Y clears the queue",
+    "Shift+Tab cycles yolo / audit / auto-audit / plan permission modes",
+    "While working, Tab or Enter queues a message; Ctrl+C stops the turn",
+    "While working, Ctrl+↑ opens the queue; Tab toggles next-request vs after-this-turn",
+    "While working, Ctrl+Z undoes the last queued message; Ctrl+Y twice clears the queue",
     "Ctrl+T folds the plan panel, Ctrl+O expands reasoning or a diff",
     "/tree browses session branches; press ← on an empty prompt to open it",
-    "/undo rolls back the last turn",
+    "/rename names the current session; the title appears in the footer",
+    "/undo rolls back the last turn (type it twice to confirm)",
     "/compact condenses a long conversation and keeps going",
     "/subagents lists subagents, /msg leaves a note for a running one",
     "/model switches provider and model, /thinking adjusts effort",
@@ -113,6 +117,7 @@ mod tests {
             advance_tip();
         }
         assert_eq!(current_tip(), first, "index must wrap around");
+        assert_eq!(TIPS_ZH.len(), TIPS_EN.len());
         reset_tip();
     }
 }

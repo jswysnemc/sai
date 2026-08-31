@@ -197,9 +197,7 @@ async fn usage(
             ),
             session_override: false,
         });
-    let compaction_trigger_tokens = resolved
-        .policy
-        .trigger_chars(context_window_tokens.max(1));
+    let compaction_trigger_tokens = resolved.policy.trigger_chars(context_window_tokens.max(1));
     Ok(Json(SystemUsageResponse {
         session: SessionUsageResponse {
             id: snapshot.session_id,
@@ -322,7 +320,6 @@ fn resolve_context_prompt_tokens(
     // 3. 其余情况沿用 provider / 快照值
     last_tokens.max(snapshot_tokens)
 }
-
 
 /// 判断最近一次 provider 上下文用量是否仍可用于当前会话。
 ///

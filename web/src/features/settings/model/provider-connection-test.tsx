@@ -117,11 +117,15 @@ export function ProviderConnectionTest({ provider, model, selectedKeyId }: Provi
         </ol>
       )}
 
-      {report?.ok && report.tokens !== undefined && (
+        {report?.ok && report.tokens !== undefined && (
         <p className="provider-probe-note">
           {t(`Model ${report.model} replied, ${report.tokens} tokens used.`, `模型 ${report.model} 已响应，消耗 ${report.tokens} Token。`)}
         </p>
       )}
+
+      <p className="provider-probe-note">
+        {t("Tests the unsaved draft above, not the last saved provider.", "测试的是上方未保存的草稿，不是上次已保存的供应商。")}
+      </p>
 
       {hint && <p className="provider-probe-note">{hint}</p>}
     </div>

@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import type { AppConfig, RunInfo, RunMode, RunModelSelection, ThinkingLevel, WebEvent } from "../../api/contracts";
 import { api } from "../../api/client";
-import { initialRunState, relocalizeRunError, runEventReducer, type LiveRunState } from "./run-event-reducer";
+import { initialRunState, parseQueueInsertAt, relocalizeRunError, runEventReducer, type LiveRunState } from "./run-event-reducer";
 import { useI18n } from "../i18n/use-i18n";
 import { text, type Locale } from "../i18n/locale";
 import { notifyReplyComplete } from "../../shared/notify/reply-complete-notify";
@@ -49,7 +49,7 @@ type SessionRunsAction =
   | { type: "event"; event: WebEvent }
   | { type: "events"; events: WebEvent[] }
   | { type: "prune-settled"; historyTurnIds: string[] }
-  | { type: "update-queued"; runId: string; input?: string; position?: number }
+  | { type: "update-queued"; runId: string; input?: string; position?: number; insertAt?: LiveRunState["insertAt"]; imageUrls?: string[] }
   | { type: "remove-queued"; runId: string }
   | { type: "stop-local"; runId: string }
   | { type: "fail-open"; summary: string; detail: string }
@@ -105,7 +105,8 @@ export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsA
           runId: run.run_id,
           sessionId: action.sessionId,
           userInput: run.input ?? "",
-          imageUrls: run.image_urls
+          imageUrls: run.image_urls,
+          insertAt: parseQueueInsertAt(run.insert_at)
         }, locale),
         status: run.status === "queued" ? "queued" as const : "waiting_response" as const
       }));
@@ -133,7 +134,8 @@ export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsA
       sessionId: action.sessionId,
       userInput: action.userInput,
       imageUrls: action.imageUrls,
-      model: action.model
+      model: action.model,
+      insertAt: parseQueueInsertAt(action.run.insert_at)
     }, locale);
     return {
       runs: [...state.runs, {
@@ -182,7 +184,7 @@ export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsA
     return { runs: state.runs.filter((run) => run.runId !== action.runId) };
   }
   if (action.type === "update-queued") {
-    return updateQueuedRunState(state, action.runId, action.input, action.position);
+    return updateQueuedRunState(state, action.runId, action.input, action.position, action.insertAt, action.imageUrls);
   }
   if (action.type === "prune-settled") {
     const historyIds = new Set(action.historyTurnIds);
@@ -225,7 +227,9 @@ function applyEventToSessionRuns(
       state,
       event.run_id,
       typeof event.payload.input === "string" ? event.payload.input : undefined,
-      typeof event.payload.position === "number" ? event.payload.position : undefined
+      typeof event.payload.position === "number" ? event.payload.position : undefined,
+      parseQueueInsertAt(event.payload.insert_at),
+      Array.isArray(event.payload.image_urls) ? event.payload.image_urls as string[] : undefined
     );
   }
   let changed = false;
@@ -269,7 +273,8 @@ export function upsertRunFromEvent(
     userInput: typeof event.payload.input === "string" ? event.payload.input : "",
     imageUrls: Array.isArray(event.payload.image_urls)
       ? event.payload.image_urls as string[]
-      : []
+      : [],
+    insertAt: parseQueueInsertAt(event.payload.insert_at)
   }, locale);
   return {
     runs: [...state.runs, { ...created, status: statusForRunEntryEvent(event.type) }]
@@ -340,25 +345,31 @@ export function applyEventsToSessionRuns(
 }
 
 /**
- * 更新排队运行正文并在会话运行集合中调整位置。
+ * 更新排队运行正文、附件并在会话运行集合中调整位置。
  *
  * @param state 当前会话运行集合
  * @param runId 待更新运行标识
  * @param input 可选新正文
  * @param position 可选目标位置
+ * @param insertAt 可选插入点
+ * @param imageUrls 可选图片附件
  * @returns 更新后的会话运行集合
  */
 export function updateQueuedRunState(
   state: SessionRunsState,
   runId: string,
   input?: string,
-  position?: number
+  position?: number,
+  insertAt?: LiveRunState["insertAt"],
+  imageUrls?: string[]
 ): SessionRunsState {
   const current = state.runs.findIndex((run) => run.runId === runId && run.status === "queued");
   if (current < 0) return state;
   const selected = {
     ...state.runs[current],
-    userInput: input ?? state.runs[current].userInput
+    userInput: input ?? state.runs[current].userInput,
+    insertAt: insertAt ?? state.runs[current].insertAt,
+    imageUrls: imageUrls ?? state.runs[current].imageUrls
   };
   if (position === undefined) {
     return { runs: state.runs.map((run, index) => index === current ? selected : run) };
@@ -381,6 +392,7 @@ export function updateQueuedRunState(
  * @param onSettled 运行结束回调
  * @param onWorkspaceChanged 工作区文件变化回调
  * @param onInterruptedWithoutReply 无回复中断输入恢复回调
+ * @param onQueueMerged 排队消息并入当前轮时的回调
  * @returns 会话运行状态与启动、停止、重置操作
  */
 export function useRunStream(
@@ -388,7 +400,8 @@ export function useRunStream(
   sessionId: string | undefined,
   onSettled: () => void,
   onWorkspaceChanged?: () => void,
-  onInterruptedWithoutReply?: (input: string) => void
+  onInterruptedWithoutReply?: (input: string) => void,
+  onQueueMerged?: (input: string) => void
 ) {
   const { locale } = useI18n();
   const queryClient = useQueryClient();
@@ -434,8 +447,11 @@ export function useRunStream(
       return;
     }
     flushPendingEvents();
+    if (event.type === "run.merged") {
+      onQueueMerged?.(typeof event.payload.input === "string" ? event.payload.input : "");
+    }
     dispatch({ type: "event", event });
-  }, [flushPendingEvents]);
+  }, [flushPendingEvents, onQueueMerged]);
 
   useEffect(() => {
     dispatch({ type: "relocalize" });
@@ -676,26 +692,38 @@ export function useRunStream(
    * @returns 停止完成后的 Promise
    */
   const stop = async (runId: string) => {
-    // 1. 先本地结束运行态，保证停止按钮立即生效
     dispatch({ type: "stop-local", runId });
-    // 2. 再请求服务端中断；即使服务端已结束也保持本地终态
     try {
       await api.runs.stop(runId);
-    } catch {
-      // 服务端停止失败时仍保留本地终态，避免界面卡在思考中
+    } catch (error) {
+      if (workspaceId && sessionId) {
+        const { runs } = await api.runs.active();
+        dispatch({
+          type: "attach",
+          sessionId,
+          runs: runs.filter((run) => run.workspace_id === workspaceId && run.session_id === sessionId)
+        });
+      }
+      throw error;
     }
   };
 
   /**
-   * 更新排队消息正文。
+   * 更新排队消息正文和图片附件。
    *
    * @param runId 排队运行标识
    * @param input 新消息正文
+   * @param imageUrls 保留的图片附件
    * @returns 更新完成后的 Promise
    */
-  const updateQueuedInput = async (runId: string, input: string) => {
-    const info = await api.runs.updateQueue(runId, { input });
-    dispatch({ type: "update-queued", runId, input: info.input ?? input });
+  const updateQueuedInput = async (runId: string, input: string, imageUrls?: string[]) => {
+    const info = await api.runs.updateQueue(runId, { input, image_urls: imageUrls });
+    dispatch({
+      type: "update-queued",
+      runId,
+      input: info.input ?? input,
+      imageUrls: info.image_urls ?? imageUrls
+    });
   };
 
   /**
@@ -711,12 +739,36 @@ export function useRunStream(
   };
 
   /**
-   * 将排队消息提升到当前会话队首。
+   * 将排队消息提升到队首，并改为下次模型请求间隙插入。
    *
    * @param runId 排队运行标识
-   * @returns 移动完成后的 Promise
+   * @returns 更新完成后的 Promise
    */
-  const promoteQueuedRun = (runId: string) => moveQueuedRun(runId, 0);
+  const promoteQueuedRun = async (runId: string) => {
+    const info = await api.runs.updateQueue(runId, { position: 0, insert_at: "request" });
+    dispatch({
+      type: "update-queued",
+      runId,
+      position: 0,
+      insertAt: parseQueueInsertAt(info.insert_at) ?? "request"
+    });
+  };
+
+  /**
+   * 切换排队消息的插入点。
+   *
+   * @param runId 排队运行标识
+   * @param insertAt 目标插入点
+   * @returns 更新完成后的 Promise
+   */
+  const updateQueuedInsertAt = async (runId: string, insertAt: LiveRunState["insertAt"]) => {
+    const info = await api.runs.updateQueue(runId, { insert_at: insertAt });
+    dispatch({
+      type: "update-queued",
+      runId,
+      insertAt: parseQueueInsertAt(info.insert_at) ?? insertAt
+    });
+  };
 
   /**
    * 删除尚未开始的排队消息。
@@ -748,6 +800,7 @@ export function useRunStream(
     updateQueuedInput,
     moveQueuedRun,
     promoteQueuedRun,
+    updateQueuedInsertAt,
     removeQueuedRun,
     pruneSettled,
     reset: () => {

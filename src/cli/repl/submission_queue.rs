@@ -71,7 +71,7 @@ pub(super) async fn drain_submission_queue(
     tool_call_mode: render::ToolCallDisplayMode,
 ) -> Result<bool> {
     loop {
-        let queued = runtime.take_submission_queue();
+        let queued = runtime.take_turn_interval_queue();
         if queued.is_empty() {
             break;
         }

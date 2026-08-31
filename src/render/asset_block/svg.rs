@@ -120,7 +120,10 @@ fn rasterize_svg(source: &str, output: &std::path::Path) -> Result<()> {
 /// - 声明之后的切片；没有声明时返回原文
 fn skip_xml_declaration(source: &str) -> &str {
     let trimmed = source.trim_start();
-    if !trimmed.get(..5).is_some_and(|prefix| prefix.eq_ignore_ascii_case("<?xml")) {
+    if !trimmed
+        .get(..5)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("<?xml"))
+    {
         return source;
     }
     match trimmed.find("?>") {
@@ -140,7 +143,9 @@ fn starts_with_svg_tag(source: &str) -> bool {
     let Some(rest) = source.get(4..) else {
         return false;
     };
-    source.get(..4).is_some_and(|prefix| prefix.eq_ignore_ascii_case("<svg"))
+    source
+        .get(..4)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("<svg"))
         && rest
             .as_bytes()
             .first()

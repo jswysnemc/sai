@@ -1,10 +1,10 @@
-import { Activity, ArrowRight, Bot, Cpu, GitBranch, Paperclip, Square, SquareTerminal, Undo2 } from "lucide-react";
-import { useRef, useEffect, useState, useMemo } from "react";
+import { Activity, ArrowRight, Bot, Cpu, GitBranch, Loader2, Paperclip, Square, SquareTerminal, Undo2 } from "lucide-react";
+import { useRef } from "react";
 import type { ChangeEvent } from "react";
 import type { RunMode, RunModelSelection, ThinkingLevel } from "../../api/contracts";
 import type { ChatModelChoice } from "./chat-model-options";
 import { ComposerSurface } from "./composer/composer-surface";
-import { composerTipIntervalMs, currentComposerTip } from "./composer/composer-tips";
+import { currentComposerTip } from "./composer/composer-tips";
 import type { ComposerAttachment } from "./composer/use-composer-attachments";
 import { resolveComposerAvailability } from "./composer-availability";
 import { ModelThinkingSelector } from "./model-thinking-selector";
@@ -23,6 +23,7 @@ import { Button } from "../../shared/ui/button/button";
 import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
 import { GoalControl } from "../goals/goal-control";
+import { TodoMarkdownView } from "../todo/todo-markdown-view";
 import "./chat-composer.css";
 
 type ChatComposerProps = {
@@ -47,6 +48,7 @@ type ChatComposerProps = {
   agentSelection: AgentChoice | null;
   agentLoading: boolean;
   sessionId?: string;
+  submitting?: boolean;
   onChange: (value: string) => void;
   onModeChange: (mode: RunMode) => void;
   onThinkingLevelChange: (level: ThinkingLevel) => void;
@@ -77,15 +79,7 @@ export function ChatComposer(props: ChatComposerProps) {
   });
   const externalEngine = engineStatus.data?.external === true ? engineStatus.data : null;
   const engineStatusPending = engineStatus.isLoading && !engineStatus.data;
-  const [tipNow, setTipNow] = useState(() => Date.now());
-  // 1. 空输入时轮询展示操作小技巧；每次页面加载起点不同
-  useEffect(() => {
-    const timer = window.setInterval(() => setTipNow(Date.now()), composerTipIntervalMs());
-    return () => window.clearInterval(timer);
-  }, []);
-  const rotatingPlaceholder = props.sessionAvailable
-    ? currentComposerTip(locale, tipNow)
-    : undefined;
+  const sessionTip = props.sessionAvailable ? currentComposerTip(locale) : undefined;
 
   const git = useQuery({ queryKey: ["git-status", null], queryFn: () => api.workspace.gitStatus(), staleTime: 20_000 });
   const runtimeActivity = useRuntimeActivity();
@@ -108,15 +102,21 @@ export function ChatComposer(props: ChatComposerProps) {
     runActive: props.running,
     runStatus: props.runStatus,
     hasDraft: Boolean(props.value.trim()) || props.attachments.length > 0,
-    submitBlocked: props.submitBlocked
+    submitBlocked: props.submitBlocked || props.submitting
   });
   const runModeOptions = createRunModeOptions(t);
+  const placeholder = !props.sessionAvailable
+    ? t("Select a session first", "请先选择会话")
+    : props.running
+      ? t("Type a message; Enter queues it", "输入消息，Enter 排队")
+      : (sessionTip ?? t("Type a message; press Enter to send", "输入消息，Enter 发送"));
 
   return (
     <div className="composer-shell">
       <div className="composer-context-strip">
         <WorkspaceSwitcher />
         {git.data?.status === "ready" && git.data.head && <span className="composer-context-chip" title={git.data.upstream || git.data.head}><GitBranch size={13}/><span>{git.data.head}</span></span>}
+        <TodoMarkdownView sessionId={props.sessionId} compact />
         {!externalEngine && !engineStatusPending && (
           <SystemUsage
             selection={props.selection}
@@ -156,7 +156,7 @@ export function ChatComposer(props: ChatComposerProps) {
         historyEntries={props.historyEntries}
         disabled={availability.inputDisabled}
         submitDisabled={availability.sendDisabled}
-        placeholder={props.sessionAvailable ? (rotatingPlaceholder ?? t("Type a message; press Enter to send", "输入消息，Enter 发送")) : t("Select a session first", "请先选择会话")}
+        placeholder={placeholder}
         attachments={props.attachments}
         onChange={props.onChange}
         onPasteImages={props.onAddImages}
@@ -194,7 +194,7 @@ export function ChatComposer(props: ChatComposerProps) {
                 <Select
                   value={props.mode}
                   options={runModeOptions}
-                  disabled={props.running}
+                  disabled={false}
                   ariaLabel={t("Run mode", "运行模式")}
                   menuPreferredWidth={240}
                   menuMinimumWidth={200}
@@ -208,11 +208,12 @@ export function ChatComposer(props: ChatComposerProps) {
           <div className="composer-actions">
             <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} hidden />
             <button type="button" className="composer-icon-button" onClick={() => fileInputRef.current?.click()} disabled={availability.inputDisabled} aria-label={t("Add images", "添加图片")}><Paperclip size={16} /></button>
-            {availability.showStop ? (
+            {availability.showStop && (
               <button type="button" className="composer-send stop" onClick={props.onStop} aria-label={t("Stop run", "停止运行")}><Square size={13} fill="currentColor" /></button>
-            ) : (
-              <button type="submit" className="composer-send" disabled={availability.sendDisabled} aria-label={t("Send message", "发送消息")}><ArrowRight size={18} /></button>
             )}
+            <button type="submit" className="composer-send" disabled={availability.sendDisabled || props.submitting} aria-label={props.running ? t("Queue message", "排队发送") : t("Send message", "发送消息")}>
+              {props.submitting ? <Loader2 size={16} className="composer-send-spin" /> : <ArrowRight size={18} />}
+            </button>
           </div>
         </div>
       </ComposerSurface>

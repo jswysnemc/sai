@@ -5,7 +5,12 @@ export type Session = {
   title: string;
   created_at: string;
   updated_at: string;
+  /** 当前工作区选中的会话指针，不等于终端或网页是否已打开。 */
   active: boolean;
+  /** 终端或网页已加载该会话。 */
+  loaded?: boolean;
+  /** 存活持有者类型：repl / web / gateway；未加载时为空。 */
+  holder?: string | null;
 };
 
 export type WorkspaceSessions = {
@@ -136,6 +141,9 @@ export type RunModelSelection = {
 
 export type ThinkingLevel = "auto" | "max" | "xhigh" | "high" | "medium" | "low" | "none";
 
+/** 排队消息插入当前对话的位置。 */
+export type QueueInsertAt = "turn" | "request";
+
 export type RunInfo = {
   run_id: string;
   workspace_id: string;
@@ -145,6 +153,7 @@ export type RunInfo = {
   status?: "queued" | "running" | "completed" | "interrupted" | "failed";
   discard_user_turn?: boolean;
   restore_input?: string | null;
+  insert_at?: QueueInsertAt;
 };
 
 export type ActiveRunsResponse = {

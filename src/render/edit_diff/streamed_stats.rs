@@ -1,6 +1,5 @@
 use super::colors::{style_added_count, style_removed_count};
 use super::model::preview_from_arguments;
-use crate::tools::file_change_model::FileChange;
 
 /// 从（可能未闭合的）编辑工具参数流中近似统计增删行数。
 ///
@@ -34,10 +33,10 @@ pub(crate) fn streamed_diff_stat_status(arguments: &str) -> Option<String> {
     Some(format_diff_stat_status(added, removed))
 }
 
-/// 组装编辑工具状态行用的 `+N -M`：先流式近似，再回退精确预览统计。
+/// 组装编辑工具状态行用的 `+N -M`：先取精确预览统计，再回退流式近似。
 ///
-/// 定稿参数偶发无法被宽松扫描认到字段时，仍可用 AppliedPatch 给出正确计数，
-/// 避免摘要退化成 `Write run`。
+/// 预览与 diff 正文同源，数字必然和画出来的 +/- 行一致；参数流阶段 JSON
+/// 未闭合、构建不出预览时才退回宽松扫描，让状态行随分片跳动。
 ///
 /// 参数:
 /// - `arguments`: 工具参数原文
@@ -45,7 +44,7 @@ pub(crate) fn streamed_diff_stat_status(arguments: &str) -> Option<String> {
 /// 返回:
 /// - 着色 `+N -M`；两边都算不出时返回空
 pub(crate) fn edit_diff_stat_status(arguments: &str) -> Option<String> {
-    streamed_diff_stat_status(arguments).or_else(|| preview_diff_stat_status(arguments))
+    preview_diff_stat_status(arguments).or_else(|| streamed_diff_stat_status(arguments))
 }
 
 /// 从可构建的 diff 预览统计增删行数。
@@ -57,13 +56,7 @@ pub(crate) fn edit_diff_stat_status(arguments: &str) -> Option<String> {
 /// - 着色 `+N -M`；无法预览时返回空
 pub(crate) fn preview_diff_stat_status(arguments: &str) -> Option<String> {
     let preview = preview_from_arguments(arguments).ok()?;
-    let (added, removed) = preview
-        .changes
-        .iter()
-        .map(FileChange::line_counts)
-        .fold((0usize, 0usize), |acc, item| {
-            (acc.0 + item.0, acc.1 + item.1)
-        });
+    let (added, removed) = preview.line_counts();
     Some(format_diff_stat_status(added, removed))
 }
 
@@ -88,6 +81,9 @@ pub(crate) fn format_diff_stat_status(added: usize, removed: usize) -> String {
 /// 与严格 JSON 解析不同：值未闭合时统计已到达的部分，供流式跳动使用。
 /// 以转义状态机单遍扫描，`\n` 转义计行、字面反斜杠不误计。
 ///
+/// 值已闭合且以换行结尾时不补最后一行：`"l1\nl2\n"` 是两行而不是三行，
+/// 否则徽标会比 diff 正文画出的行多一行。
+///
 /// 参数:
 /// - `raw`: JSON 参数片段
 /// - `key`: 字段名
@@ -103,6 +99,7 @@ fn lenient_field_line_count(raw: &str, key: &str) -> Option<usize> {
     let value = after_colon.strip_prefix('"')?;
     let mut newlines = 0usize;
     let mut has_content = false;
+    let mut ends_with_newline = false;
     let mut escaped = false;
     for ch in value.chars() {
         if escaped {
@@ -110,18 +107,30 @@ fn lenient_field_line_count(raw: &str, key: &str) -> Option<usize> {
                 newlines += 1;
             }
             has_content = true;
+            ends_with_newline = ch == 'n';
             escaped = false;
             continue;
         }
         match ch {
             '\\' => escaped = true,
-            '"' => break,
+            '"' => {
+                // 值已闭合：末尾的换行是行终止符，后面不再有新行
+                return Some(if !has_content {
+                    0
+                } else if ends_with_newline {
+                    newlines
+                } else {
+                    newlines + 1
+                });
+            }
             _ => has_content = true,
         }
+        ends_with_newline = false;
     }
     if !has_content {
         return Some(0);
     }
+    // 值尚未闭合：最后一行还在增长，先按已到达的行数计
     Some(newlines + 1)
 }
 
@@ -145,15 +154,24 @@ mod tests {
     }
 
     /// write_file 的 content 分片按新增行实时累计。
+    ///
+    /// 值一旦闭合，行数按 `lines()` 口径计：结尾换行不再补一行。
     #[test]
     fn counts_streamed_write_file_content() {
+        // 未闭合：最后一行还在增长，按已到达的行数计
         assert_eq!(
             streamed_diff_counts(r#"{"path":"a.rs","content":"l1\nl2\nl3"#),
             Some((3, 0))
         );
+        // 已闭合且以换行结尾：两行就是两行，不能报三行
         assert_eq!(
             streamed_diff_counts(r#"{"path":"a.rs","content":"l1\nl2\n"}"#),
-            Some((3, 0))
+            Some((2, 0))
+        );
+        // 已闭合且不以换行结尾
+        assert_eq!(
+            streamed_diff_counts(r#"{"path":"a.rs","content":"l1\nl2"}"#),
+            Some((2, 0))
         );
     }
 
@@ -163,6 +181,11 @@ mod tests {
         assert_eq!(
             streamed_diff_counts(r#"{"path":"a.rs","old_string":"a\nb","new_string":"x\ny\nz"}"#),
             Some((3, 2))
+        );
+        // 结尾换行不补行，与 diff 正文画出的行数一致
+        assert_eq!(
+            streamed_diff_counts(r#"{"path":"a.rs","old_string":"a\nb\n","new_string":"x\n"}"#),
+            Some((1, 2))
         );
         // new_string 尚未到达时先展示删除侧
         assert_eq!(

@@ -43,7 +43,9 @@ pub(crate) fn clear_rendered_rows(row_count: usize) -> String {
 /// 返回:
 /// - 折行后的视觉行数
 pub(crate) fn rendered_visual_rows(text: &str, width: usize) -> usize {
-    text.lines().map(|line| raw_visual_rows(line, width)).sum::<usize>()
+    text.lines()
+        .map(|line| raw_visual_rows(line, width))
+        .sum::<usize>()
 }
 
 /// 返回终端整列宽度，供直接写满整行的调用方计算视觉行数。

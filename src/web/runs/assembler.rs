@@ -872,11 +872,12 @@ mod tests {
             .find(|event| event.kind == "tool.call.preparing")
             .unwrap();
         assert_eq!(preparing.run_id, "run-2");
-        assert!(preparing.payload["tool_id"].as_str().unwrap().starts_with("run-2-"));
+        assert!(preparing.payload["tool_id"]
+            .as_str()
+            .unwrap()
+            .starts_with("run-2-"));
         // 状态已重置，新一轮首个事件会重新携带 status.changed
-        assert!(events
-            .iter()
-            .any(|event| event.kind == "status.changed"));
+        assert!(events.iter().any(|event| event.kind == "status.changed"));
     }
 
     /// 验证 run.started 事件携带本轮输入，供后加入的标签页重建用户气泡。
@@ -893,7 +894,10 @@ mod tests {
 
         assert_eq!(started.run_id, "run-1");
         assert_eq!(started.payload["input"], "你好");
-        assert_eq!(started.payload["image_urls"][0], "data:image/png;base64,AAAA");
+        assert_eq!(
+            started.payload["image_urls"][0],
+            "data:image/png;base64,AAAA"
+        );
     }
 
     /// 验证自动输入事件向 Web 传递展示文本而不是内部提示。

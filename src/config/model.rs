@@ -450,9 +450,9 @@ pub fn parse_compaction_ratio_value(ratio: f32) -> f32 {
 /// - 夹紧后的比例；无法解析时返回错误
 pub fn parse_compaction_ratio_text(value: &str) -> anyhow::Result<f32> {
     let trimmed = value.trim().trim_end_matches('%').trim();
-    let parsed = trimmed.parse::<f32>().map_err(|_| {
-        anyhow::anyhow!("context.compaction_ratio is invalid: {value}")
-    })?;
+    let parsed = trimmed
+        .parse::<f32>()
+        .map_err(|_| anyhow::anyhow!("context.compaction_ratio is invalid: {value}"))?;
     let ratio = if parsed > 1.0 { parsed / 100.0 } else { parsed };
     if !ratio.is_finite() || ratio < MIN_COMPACTION_RATIO || ratio > MAX_COMPACTION_RATIO {
         anyhow::bail!(

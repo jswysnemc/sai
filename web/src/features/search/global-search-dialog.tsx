@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { WorkspaceSessions } from "../../api/contracts";
 import { Modal } from "../../shared/ui/dialog/modal";
+import { modKeyLabel } from "../../shared/mod-key";
 import { useI18n } from "../i18n/use-i18n";
 import "./global-search-dialog.css";
 
@@ -58,6 +59,7 @@ type GlobalSearchDialogProps = {
  */
 export function GlobalSearchDialog({ open, workspaces, onClose, onAction, onOpenSession }: GlobalSearchDialogProps) {
   const { t } = useI18n();
+  const modifier = modKeyLabel();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<SearchFilter>("all");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -71,17 +73,17 @@ export function GlobalSearchDialog({ open, workspaces, onClose, onAction, onOpen
   }, [open]);
 
   const actions = useMemo<SearchResult[]>(() => [
-    { id: "new-session", kind: "action", label: t("New task", "新建任务"), shortcut: "Ctrl+N", icon: CheckCircle2, action: "new-session" },
-    { id: "open-workspace", kind: "action", label: t("Open workspace", "打开工作区"), shortcut: "Ctrl+O", icon: FolderOpen, action: "open-workspace" },
+    { id: "new-session", kind: "action", label: t("New task", "新建任务"), shortcut: `${modifier}+N`, icon: CheckCircle2, action: "new-session" },
+    { id: "open-workspace", kind: "action", label: t("Open workspace", "打开工作区"), shortcut: `${modifier}+O`, icon: FolderOpen, action: "open-workspace" },
     { id: "settings", kind: "action", label: t("Settings", "设置"), icon: Settings, action: "settings" },
     { id: "scheduled-tasks", kind: "action", label: t("Scheduled tasks", "定时任务"), icon: CalendarClock, action: "scheduled-tasks" },
-    { id: "toggle-terminal", kind: "action", label: t("Toggle terminal", "切换终端"), shortcut: "Ctrl+J", icon: SquareTerminal, action: "toggle-terminal" },
+    { id: "toggle-terminal", kind: "action", label: t("Toggle terminal", "切换终端"), shortcut: `${modifier}+J`, icon: SquareTerminal, action: "toggle-terminal" },
     { id: "open-tasks", kind: "action", label: t("Background tasks", "后台任务"), icon: Wrench, action: "open-tasks" },
     { id: "open-subagents", kind: "action", label: t("Subagents", "子智能体"), icon: Sparkles, action: "open-subagents" },
     { id: "open-git", kind: "action", label: t("Git changes", "Git 变更"), icon: FileCode2, action: "open-git" },
     { id: "open-files", kind: "action", label: t("Open file tree", "打开文件树"), icon: FileCode2, action: "open-files" },
-    { id: "toggle-sidebar", kind: "action", label: t("Toggle sidebar", "切换侧栏"), shortcut: "Ctrl+B", icon: PanelLeft, action: "toggle-sidebar" }
-  ], [t]);
+    { id: "toggle-sidebar", kind: "action", label: t("Toggle sidebar", "切换侧栏"), shortcut: `${modifier}+B`, icon: PanelLeft, action: "toggle-sidebar" }
+  ], [modifier, t]);
 
   const sessions = useMemo<SearchResult[]>(() => workspaces.flatMap((workspace) => workspace.sessions.map((session) => ({
     id: `session:${workspace.workspace_id}:${session.id}`,
@@ -144,13 +146,13 @@ export function GlobalSearchDialog({ open, workspaces, onClose, onAction, onOpen
       <div className="global-search-content">
         <label className="global-search-input">
           <Search size={16} aria-hidden="true" />
-          <input ref={inputRef} value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }} onKeyDown={handleKeyDown} placeholder={t("Search actions, tasks or files", "搜索操作、任务或文件")} aria-label={t("Search actions, tasks or files", "搜索操作、任务或文件")} autoComplete="off" spellCheck={false} />
+          <input ref={inputRef} value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }} onKeyDown={handleKeyDown} placeholder={t("Search actions, tasks or file tree", "搜索操作、任务或文件树")} aria-label={t("Search actions, tasks or file tree", "搜索操作、任务或文件树")} autoComplete="off" spellCheck={false} />
         </label>
         <div className="global-search-filters" role="tablist" aria-label={t("Search filters", "搜索筛选")}>{([
           ["all", t("All", "全部")],
           ["actions", t("Actions", "操作")],
           ["sessions", t("Tasks", "任务")],
-          ["files", t("Files", "文件")]
+          ["files", t("File tree", "文件树")]
         ] as const).map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={filter === id} className={filter === id ? "active" : ""} onClick={() => { setFilter(id); setActiveIndex(0); }}>{label}</button>)}</div>
         <div className="global-search-results" role="listbox" aria-label={t("Search results", "搜索结果")}>
           {results.map((result, index) => {

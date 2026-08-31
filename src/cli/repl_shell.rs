@@ -164,7 +164,9 @@ mod tests {
         #[cfg(not(windows))]
         let command = "printf shell-test";
         let mut runtime = ReplRuntime::new(100, test_options());
-        let result = execute_repl_shell_live(command, &mut runtime).await.unwrap();
+        let result = execute_repl_shell_live(command, &mut runtime)
+            .await
+            .unwrap();
 
         assert_eq!(result.command, command);
         assert_eq!(result.output, "shell-test");
@@ -180,7 +182,9 @@ mod tests {
         let command = "sleep 0.35; printf done";
         let mut runtime = ReplRuntime::new(100, test_options());
 
-        let result = execute_repl_shell_live(command, &mut runtime).await.unwrap();
+        let result = execute_repl_shell_live(command, &mut runtime)
+            .await
+            .unwrap();
 
         assert_eq!(result.output, "done");
         assert_eq!(result.exit_code, Some(0));

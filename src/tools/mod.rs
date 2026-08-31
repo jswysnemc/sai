@@ -328,7 +328,8 @@ pub(crate) fn register_interactive_tools(
         owner_key.clone(),
         session_id.clone(),
     );
-    // 网格：探测是只读的；收发会触碰别的会话状态，归属维度由 mesh.cross_session 控制
+    // 网格：探测是只读的；发送会触碰别的会话状态，归属由 mesh.cross_session 控制。
+    // 接收走会话队列主动回执，不注册单独的收取工具。
     registry.set_session_ownership(
         owner_key.clone(),
         session_id.clone(),

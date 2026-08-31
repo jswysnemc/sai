@@ -72,6 +72,7 @@ impl ReplRuntime {
                 self.throttled_live_sync()
             }
             AgentEvent::InterMessage(message) => {
+                self.clamp_queue_panel();
                 self.transcript.finalize_live_tail();
                 self.transcript.push_automatic_echo(message.content.clone());
                 self.transcript.set_work_status(WorkStatus::WaitingResponse);

@@ -78,18 +78,17 @@ fn wrap_cli_diff(rendered: &str) -> String {
         .join("\n")
 }
 
-/// 渲染供 TUI transcript 使用的编辑文件 diff 视图。
+/// 渲染已构建好的预览正文，供 TUI transcript 使用。
 ///
-/// TUI 会在窗口层添加正文基线，本入口只增加 diff 的内部层级。
+/// 与统计复用同一份预览，避免为取 `+N -M` 再算一次 diff。
 ///
 /// 参数:
-/// - `arguments`: `edit_file` / `write_file` / `str_replace` 工具参数
+/// - `preview`: 已构建的文件变更预览
 ///
 /// 返回:
-/// - 相对正文内收一列的 Codex 风格 diff 文本
-pub(crate) fn render_edit_file_diff_for_transcript(arguments: &str) -> Option<String> {
-    let preview = preview_from_arguments(arguments).ok()?;
-    Some(indent_diff_for_transcript(&render_patch_preview(&preview)))
+/// - 相对正文内收的 Codex 风格 diff 文本
+pub(crate) fn render_patch_preview_for_transcript(preview: &AppliedPatch) -> String {
+    indent_diff_for_transcript(&render_patch_preview(preview))
 }
 
 /// 渲染编辑 diff 正文（不含 `• Added …` 标题行）。
@@ -241,7 +240,7 @@ fn render_summary_header(preview: &AppliedPatch) -> String {
     if let [change] = preview.changes.as_slice() {
         return render_file_header(change);
     }
-    let (added, removed) = total_line_counts(preview);
+    let (added, removed) = preview.line_counts();
     let file_count = preview.changes.len();
     let noun = if file_count == 1 { "file" } else { "files" };
     format!(
@@ -411,21 +410,6 @@ fn max_line_number(lines: &[LineChange]) -> usize {
         .flatten()
         .max()
         .unwrap_or(1)
-}
-
-/// 统计总新增和删除行数。
-///
-/// 参数:
-/// - `preview`: 文件变更预览
-///
-/// 返回:
-/// - `(新增行数, 删除行数)`
-fn total_line_counts(preview: &AppliedPatch) -> (usize, usize) {
-    preview
-        .changes
-        .iter()
-        .map(FileChange::line_counts)
-        .fold((0, 0), |acc, item| (acc.0 + item.0, acc.1 + item.1))
 }
 
 /// 显示文件变更路径。

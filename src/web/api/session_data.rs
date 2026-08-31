@@ -332,10 +332,7 @@ async fn delete_many(
     // 3. 按工作区归组，同一工作区的多个会话共用一次索引写入
     let mut grouped: Vec<(PathBuf, Vec<String>)> = Vec::new();
     for (selection, workspace_path) in &resolved {
-        match grouped
-            .iter_mut()
-            .find(|(path, _)| path == workspace_path)
-        {
+        match grouped.iter_mut().find(|(path, _)| path == workspace_path) {
             Some((_, ids)) => ids.push(selection.session_id.clone()),
             None => grouped.push((workspace_path.clone(), vec![selection.session_id.clone()])),
         }

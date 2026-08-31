@@ -50,6 +50,7 @@ export function SubagentWorkspace() {
           onCancel={(id) => cancel.mutate(id)}
         />
       )}
+      {cancel.error && <div className="pane-error">{cancel.error.message}</div>}
     </div>
   );
 }

@@ -416,9 +416,8 @@ fn has_math_delimiters(text: &str) -> bool {
         let mut scan = content_start;
         while scan + delim_len <= len {
             let escaped = scan > 0 && chars[scan - 1] == '\\';
-            let matched = chars[scan] == '$'
-                && (delim_len == 1 || chars[scan + 1] == '$')
-                && !escaped;
+            let matched =
+                chars[scan] == '$' && (delim_len == 1 || chars[scan + 1] == '$') && !escaped;
             if matched {
                 // 内容非空，且两侧都不以空白紧贴分隔符
                 let content: String = chars[content_start..scan].iter().collect();

@@ -1,5 +1,6 @@
 import { CheckSquare2, MoreHorizontal, Pencil, Square, Trash2 } from "lucide-react";
 import type { RefObject } from "react";
+import { useRef } from "react";
 import { formatRelativeTime } from "../../shared/format-relative-time";
 import type { Session } from "../../api/contracts";
 import { ActiveAgentIndicator } from "./active-agent-indicator";
@@ -8,7 +9,8 @@ import "./session-row.css";
 
 type SessionRowProps = {
   session: Session;
-  running: boolean;
+  loaded: boolean;
+  holder?: string | null;
   /** 相对时间的基准时刻，由列表统一按分钟推进 */
   now: number;
   /** 多选模式下是否可勾选（仅活动工作区） */
@@ -36,7 +38,7 @@ type SessionRowProps = {
 };
 
 /**
- * 渲染单条会话行：标题、相对时间、运行指示与行内操作。
+ * 渲染单条会话行：标题、相对时间、加载指示与行内操作。
  *
  * 悬停时更多按钮从右缘滑入、时间整体左移让位，两者始终共存——
  * 时间是扫读时的主要线索，不能在悬停瞬间消失。
@@ -46,7 +48,8 @@ type SessionRowProps = {
  */
 export function SessionRow({
   session,
-  running,
+  loaded,
+  holder,
   now,
   selectable,
   checked,
@@ -67,11 +70,12 @@ export function SessionRow({
   onDelete
 }: SessionRowProps) {
   const { locale, t } = useI18n();
+  const skipBlurSubmit = useRef(false);
   const rowClass = [
     "session-row",
     session.active ? "active" : "",
     checked ? "selected" : "",
-    running ? "running" : ""
+    loaded ? "loaded" : "unloaded"
   ].filter(Boolean).join(" ");
 
   return (
@@ -89,12 +93,24 @@ export function SessionRow({
             disabled={renamePending}
             onChange={(event) => onRenameDraft(event.target.value)}
             onKeyDown={(event) => {
-              // 1. 回车提交重命名
-              if (event.key === "Enter") onRenameSubmit();
-              // 2. Esc 取消编辑
-              if (event.key === "Escape") onRenameCancel();
+              // 1. 回车提交重命名，并跳过失焦重复提交
+              if (event.key === "Enter") {
+                skipBlurSubmit.current = true;
+                onRenameSubmit();
+              }
+              // 2. Esc 取消编辑，并跳过失焦提交
+              if (event.key === "Escape") {
+                skipBlurSubmit.current = true;
+                onRenameCancel();
+              }
             }}
-            onBlur={onRenameCancel}
+            onBlur={() => {
+              if (skipBlurSubmit.current) {
+                skipBlurSubmit.current = false;
+                return;
+              }
+              onRenameSubmit();
+            }}
             aria-label={t(`Rename ${session.title}`, `重命名 ${session.title}`)}
           />
         </div>
@@ -102,7 +118,7 @@ export function SessionRow({
         <button type="button" className="session-main" onClick={selectable ? onToggleChecked : onOpen}>
           <span className="session-summary">
             <strong>{session.title}</strong>
-            {running && <ActiveAgentIndicator />}
+            {loaded && <ActiveAgentIndicator holder={holder} />}
             <small title={new Date(session.updated_at).toLocaleString(locale)}>
               {formatRelativeTime(session.updated_at, locale, now)}
             </small>

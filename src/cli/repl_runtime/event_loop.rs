@@ -1,7 +1,9 @@
 use super::stream_commands::{StreamCommandContext, StreamInputAction};
 use super::{ReplRuntime, StreamComposerDraft};
 use crate::agent::AgentMode;
-use crate::cli::repl_commands::{stream_command_disabled_hint, stream_command_policy, StreamCommandPolicy};
+use crate::cli::repl_commands::{
+    stream_command_disabled_hint, stream_command_policy, StreamCommandPolicy,
+};
 use crate::cli::repl_windows_paste::WindowsPasteKey;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
@@ -99,6 +101,7 @@ pub(crate) fn process_stream_tick(runtime: &mut ReplRuntime) -> Result<()> {
     runtime.observe_terminal_size(true)?;
     runtime.maybe_reflow_due(true)?;
     runtime.tick_live()?;
+    runtime.clamp_queue_panel();
     if runtime.tick_subagents()? {
         // 子 agent 状态变化会改变底部 agent 面板的计数与状态行
         runtime.redraw_stream_composer()?;
@@ -136,7 +139,10 @@ pub(crate) fn process_stream_input(
                 // Windows 终端把 Ctrl+V 转成括号粘贴的文本事件，图片不会以文本
                 // 形式到达；剪贴板里有图时先按图片插入，否则按普通文本粘贴
                 #[cfg(windows)]
-                if draft.clipboard.paste_image_if_any(&mut draft.text, &mut draft.cursor) {
+                if draft
+                    .clipboard
+                    .paste_image_if_any(&mut draft.text, &mut draft.cursor)
+                {
                     draft.is_pasted = true;
                     draft.slash_selection = 0;
                     runtime.redraw_stream_composer()?;
@@ -168,6 +174,11 @@ pub(crate) fn process_stream_input(
                 }
                 let ctrl_o = matches!(key.code, KeyCode::Char('o'))
                     && key.modifiers.contains(KeyModifiers::CONTROL);
+                if !(matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y'))
+                    && key.modifiers.contains(KeyModifiers::CONTROL))
+                {
+                    runtime.pending_clear_queue = false;
+                }
                 if ctrl_o && runtime.toggle_live_reasoning()? {
                     continue;
                 }
@@ -196,12 +207,27 @@ pub(crate) fn process_stream_input(
                 if matches!(key.code, KeyCode::Char('y'))
                     && key.modifiers.contains(KeyModifiers::CONTROL)
                 {
-                    let count = runtime.clear_queued()?;
-                    if count > 0 {
+                    let count = runtime.queue_len() + runtime.queued_control_commands().len();
+                    if count == 0 {
+                        runtime.pending_clear_queue = false;
+                        continue;
+                    }
+                    if !runtime.pending_clear_queue {
+                        runtime.pending_clear_queue = true;
                         runtime.record_meta(if crate::i18n::is_zh() {
-                            format!("已清空 {count} 条排队项")
+                            format!("再按一次 Ctrl+Y 清空 {count} 条排队项")
                         } else {
-                            format!("cleared {count} queued items")
+                            format!("press Ctrl+Y again to clear {count} queued items")
+                        })?;
+                        continue;
+                    }
+                    runtime.pending_clear_queue = false;
+                    let cleared = runtime.clear_queued()?;
+                    if cleared > 0 {
+                        runtime.record_meta(if crate::i18n::is_zh() {
+                            format!("已清空 {cleared} 条排队项")
+                        } else {
+                            format!("cleared {cleared} queued items")
                         })?;
                     }
                     continue;
@@ -265,8 +291,10 @@ pub(crate) fn process_stream_input(
                         continue;
                     }
                 }
-                // 4. 底部 agent 面板优先消费按键（↓ 进入、↑↓ 选择、Enter 应用）
-                if runtime.handle_agent_panel_key(key.code)? {
+                // 4. 底部 agent 面板优先消费按键（空输入 ↓ 展开、↑ 收回到输入框）
+                if (runtime.agent_panel_active() || runtime.stream_draft().text.is_empty())
+                    && runtime.handle_agent_panel_key(key.code)?
+                {
                     continue;
                 }
                 // 5. 其他键写入运行中输入框
@@ -335,8 +363,15 @@ fn handle_stream_key(
                     return Ok(StreamInputAction::Continue);
                 }
             }
-            let mode = runtime.stream_mode(AgentMode::Yolo);
-            let _ = runtime.enqueue_stream_draft(mode)?;
+            if runtime.stream_draft().text.trim().is_empty() {
+                runtime.record_meta(
+                    crate::i18n::text("type a message before queuing", "输入内容后再排队")
+                        .to_string(),
+                )?;
+                return Ok(StreamInputAction::Continue);
+            }
+            // 与 Enter 同一套分发：置灰命令拒绝留在输入框，避免本轮结束后悄悄执行
+            return dispatch_stream_command(runtime, ctx);
         }
         KeyCode::Up => {
             // 引用或斜杠面板可见时上下键移动选中项

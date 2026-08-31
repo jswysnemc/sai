@@ -8,7 +8,6 @@ import { SessionWorkspaceIcon } from "./session-workspace-icon";
 
 type WorkspaceListViewProps = {
   workspaces: WorkspaceSessions[];
-  runningSessions: Set<string>;
   /** 菜单外点关闭用的容器引用 */
   menuRef: RefObject<HTMLDivElement | null>;
   /** 当前打开菜单的工作区 ID */
@@ -33,7 +32,6 @@ type WorkspaceListViewProps = {
  */
 export function WorkspaceListView({
   workspaces,
-  runningSessions,
   menuRef,
   menu,
   onToggleMenu,
@@ -48,9 +46,7 @@ export function WorkspaceListView({
     <div className="session-list sidebar-workspaces-view">
       {workspaces.map((workspace) => {
         const name = localizeApiMessage(workspace.workspace_name, locale);
-        const running = workspace.sessions.some((session) =>
-          runningSessions.has(`${workspace.workspace_id}:${session.id}`)
-        );
+        const loaded = workspace.sessions.some((session) => session.loaded);
         return (
           <div className="session-workspace" key={workspace.workspace_id}>
             <div className={workspace.active ? "workspace-tree-row active" : "workspace-tree-row"}>
@@ -63,7 +59,7 @@ export function WorkspaceListView({
                 <SessionWorkspaceIcon isGitRepository={workspace.is_git_repository} size={14} />
                 <span className="workspace-summary">
                   <strong>{name}</strong>
-                  {running && <ActiveAgentIndicator />}
+                  {loaded && <ActiveAgentIndicator />}
                   <small>{t(`${workspace.sessions.length} sessions`, `${workspace.sessions.length} 个会话`)}</small>
                 </span>
               </button>

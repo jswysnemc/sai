@@ -12,6 +12,7 @@ mod live_usage;
 mod mention_panel;
 mod placeholder_tips;
 mod queue_panel;
+mod queue_source;
 mod reflow;
 mod reflow_state;
 mod runner_events;
@@ -40,6 +41,8 @@ use anyhow::Result;
 use crossterm::event::Event;
 use std::collections::VecDeque;
 use std::io::{self, Write};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use composer_frame::ComposerFrame;
@@ -66,8 +69,9 @@ pub(super) struct ReplRuntime {
     pending_input_events: VecDeque<Event>,
     /// 智能体运行期间编辑的草稿输入
     stream_draft: StreamComposerDraft,
-    /// Tab 入队、等待当前轮结束后执行的提交
-    submission_queue: VecDeque<QueuedSubmission>,
+    /// 用户排队提交：请求间隔由 InterMessageSource 在下次模型请求前注入，
+    /// 轮次间隔在本轮结束后开新轮
+    submission_queue: Arc<Mutex<VecDeque<QueuedSubmission>>>,
     /// 运行期间输入的斜杠命令，本轮结束后按序交主循环执行
     control_queue: VecDeque<String>,
     /// 运行中权限模式热切换句柄（与 Agent 共享）
@@ -102,6 +106,8 @@ pub(super) struct ReplRuntime {
     follow_events: Option<tokio::sync::mpsc::UnboundedReceiver<WebEvent>>,
     /// 跟随模式下尚未落进 transcript 的远端正文
     follow_buffer: follow::FollowBuffer,
+    /// 流式阶段 Ctrl+Y 清空队列需按第二次确认
+    pending_clear_queue: bool,
 }
 
 /// 运行期间底部输入框草稿。
@@ -116,13 +122,57 @@ pub(super) struct StreamComposerDraft {
     pub(super) mode: Option<AgentMode>,
 }
 
+/// 排队消息插入当前对话的位置。
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::cli) enum QueueInsertAt {
+    /// 当前轮下一次模型请求前插入，续在同一轮
+    Request,
+    /// 本轮结束后作为新一轮插入
+    Turn,
+}
+
+impl QueueInsertAt {
+    /// 在请求间隔与轮次间隔之间切换。
+    pub(in crate::cli) fn toggle(self) -> Self {
+        match self {
+            Self::Request => Self::Turn,
+            Self::Turn => Self::Request,
+        }
+    }
+}
+
 /// 队列中的下一条用户提交。
 #[derive(Clone, Debug)]
 pub(in crate::cli) struct QueuedSubmission {
+    pub(in crate::cli) id: String,
     pub(in crate::cli) mode: AgentMode,
     pub(in crate::cli) text: String,
     /// 草稿携带的剪贴板附件；缺失时占位符会以字面文本发给模型
     pub(in crate::cli) clipboard: ReplClipboardState,
+    pub(in crate::cli) insert_at: QueueInsertAt,
+}
+
+impl QueuedSubmission {
+    /// 创建一条默认在轮次间隔插入的排队提交。
+    pub(in crate::cli) fn new(
+        mode: AgentMode,
+        text: String,
+        clipboard: ReplClipboardState,
+    ) -> Self {
+        Self {
+            id: next_queued_id(),
+            mode,
+            text,
+            clipboard,
+            insert_at: QueueInsertAt::Turn,
+        }
+    }
+}
+
+/// 生成排队项稳定标识，供请求间隔确认消费。
+fn next_queued_id() -> String {
+    static COUNTER: AtomicU64 = AtomicU64::new(1);
+    format!("repl-q-{}", COUNTER.fetch_add(1, Ordering::Relaxed))
 }
 
 impl ReplRuntime {
@@ -151,7 +201,7 @@ impl ReplRuntime {
             subagent_signature: Vec::new(),
             pending_input_events: VecDeque::new(),
             stream_draft: StreamComposerDraft::default(),
-            submission_queue: VecDeque::new(),
+            submission_queue: Arc::new(Mutex::new(VecDeque::new())),
             control_queue: VecDeque::new(),
             live_mode_handle: None,
             live_session_id: None,
@@ -168,6 +218,7 @@ impl ReplRuntime {
             frame: TerminalFrame::new(),
             follow_events: None,
             follow_buffer: follow::FollowBuffer::default(),
+            pending_clear_queue: false,
         }
     }
 
@@ -576,7 +627,7 @@ impl ReplRuntime {
         self.desynced = false;
         self.pending_input_events.clear();
         self.stream_draft = StreamComposerDraft::default();
-        self.submission_queue.clear();
+        self.lock_queue().clear();
         self.agent_panel.deactivate();
         self.queue_panel.deactivate();
         self.replay(false)

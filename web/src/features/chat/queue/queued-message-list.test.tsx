@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { DialogProvider } from "../../../shared/ui/dialog/dialog-provider";
 import { initialRunState, type LiveRunState } from "../run-event-reducer";
 import { QueuedMessageList, reorderQueuedRuns } from "./queued-message-list";
 
@@ -20,22 +21,37 @@ function queuedRun(id: string, input: string): LiveRunState {
   };
 }
 
+const queueNoops = {
+  onUpdate: vi.fn(),
+  onMove: vi.fn(),
+  onPromote: vi.fn(),
+  onInsertAt: vi.fn(),
+  onRemove: vi.fn(),
+  onError: vi.fn()
+};
+
+/**
+ * 在确认框上下文中渲染队列，供静态 HTML 断言。
+ *
+ * @param runs 排队运行
+ * @returns 静态 HTML
+ */
+function renderQueue(runs: LiveRunState[]): string {
+  return renderToStaticMarkup(
+    <DialogProvider>
+      <QueuedMessageList runs={runs} {...queueNoops} />
+    </DialogProvider>
+  );
+}
+
 describe("QueuedMessageList", () => {
   it("renders queued messages as compact rows with all expected actions", () => {
-    const html = renderToStaticMarkup(
-      <QueuedMessageList
-        runs={[queuedRun("run-1", "first"), queuedRun("run-2", "second")]}
-        onUpdate={vi.fn()}
-        onMove={vi.fn()}
-        onRemove={vi.fn()}
-        onError={vi.fn()}
-      />
-    );
+    const html = renderQueue([queuedRun("run-1", "first"), queuedRun("run-2", "second")]);
 
     expect(html).toContain('class="queued-message-list"');
     expect(html).toContain("first");
     expect(html).toContain("second");
-    expect(html).toContain("当前任务结束后立即执行");
+    expect(html).toContain("下次模型请求时优先插入");
     expect(html).toContain("编辑排队消息");
     expect(html).toContain("删除排队消息");
     // 队列行渲染为紧凑预览而非聊天气泡：气泡的 fit-content 宽度与投影不适合并排成列表
@@ -44,15 +60,7 @@ describe("QueuedMessageList", () => {
   });
 
   it("numbers each row and surfaces the queue length", () => {
-    const html = renderToStaticMarkup(
-      <QueuedMessageList
-        runs={[queuedRun("run-1", "first"), queuedRun("run-2", "second")]}
-        onUpdate={vi.fn()}
-        onMove={vi.fn()}
-        onRemove={vi.fn()}
-        onError={vi.fn()}
-      />
-    );
+    const html = renderQueue([queuedRun("run-1", "first"), queuedRun("run-2", "second")]);
 
     expect(html).toContain("2 条待发送");
     expect(html).toContain('class="queued-message-index" aria-hidden="true">1<');
@@ -60,18 +68,12 @@ describe("QueuedMessageList", () => {
   });
 
   it("marks image-only messages instead of rendering an empty row", () => {
-    const html = renderToStaticMarkup(
-      <QueuedMessageList
-        runs={[{ ...queuedRun("run-1", "  "), imageUrls: ["/a.png", "/b.png"] }]}
-        onUpdate={vi.fn()}
-        onMove={vi.fn()}
-        onRemove={vi.fn()}
-        onError={vi.fn()}
-      />
-    );
+    const html = renderQueue([{ ...queuedRun("run-1", "  "), imageUrls: ["/a.png", "/b.png"] }]);
 
     expect(html).toContain("仅图片");
     expect(html).toContain("附带 2 张图片");
+    expect(html).toContain('class="queued-message-thumbs"');
+    expect(html).toContain('src="/a.png"');
   });
 
   it("moves a queued message to the requested position without mutating input", () => {

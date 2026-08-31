@@ -238,8 +238,8 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
-        let refusal = observer_turn_refusal(LinkRole::Observer, dir.path())
-            .expect("观察者模式必须拒绝提交");
+        let refusal =
+            observer_turn_refusal(LinkRole::Observer, dir.path()).expect("观察者模式必须拒绝提交");
         assert!(refusal.contains("web"), "拒绝理由要点名持有者：{refusal}");
     }
 }

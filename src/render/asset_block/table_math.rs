@@ -129,10 +129,12 @@ fn cell_cache_key(source: &str, max_cols: usize, mixed: bool) -> u64 {
 
 /// 读取单元格缓存。
 fn cell_cache_get(key: &u64) -> Option<CellContent> {
-    CELL_CACHE
-        .lock()
-        .ok()
-        .and_then(|cache| cache.iter().find(|(entry, _)| entry == key).map(|(_, v)| v.clone()))
+    CELL_CACHE.lock().ok().and_then(|cache| {
+        cache
+            .iter()
+            .find(|(entry, _)| entry == key)
+            .map(|(_, v)| v.clone())
+    })
 }
 
 /// 写入单元格缓存。

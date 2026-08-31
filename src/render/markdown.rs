@@ -326,7 +326,8 @@ impl MarkdownLineRenderer {
             return raw;
         }
         self.in_svg_block = false;
-        let rendered = asset_block::render_asset_block("svg", &std::mem::take(&mut self.svg_buffer));
+        let rendered =
+            asset_block::render_asset_block("svg", &std::mem::take(&mut self.svg_buffer));
         raw + &self.asset_block.finish(rendered)
     }
 
@@ -352,7 +353,8 @@ impl MarkdownLineRenderer {
             self.asset_block.finish(rendered)
         } else if self.in_svg_block {
             self.in_svg_block = false;
-            let rendered = asset_block::render_asset_block("svg", &std::mem::take(&mut self.svg_buffer));
+            let rendered =
+                asset_block::render_asset_block("svg", &std::mem::take(&mut self.svg_buffer));
             self.asset_block.finish(rendered)
         } else if !self.table.is_active() {
             self.take_pending_blank_lines()

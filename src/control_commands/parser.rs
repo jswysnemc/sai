@@ -50,6 +50,10 @@ pub enum ControlCommand {
     Tree {
         turn_id: Option<String>,
     },
+    /// 重命名当前会话
+    Rename {
+        title: String,
+    },
     Goal(GoalCommand),
     /// 列出当前会话的后台子智能体
     Subagents,
@@ -97,6 +101,18 @@ pub fn parse_control_command(
             } else {
                 Some(id.to_string())
             },
+        }));
+    }
+    if matches_surface_alias(&name, surface, "rename", &["重命名"]) {
+        let title = rest.trim();
+        if title.is_empty() {
+            bail!(t(
+                "rename command requires a title",
+                "rename 命令需要提供标题"
+            ));
+        }
+        return Ok(Some(ControlCommand::Rename {
+            title: title.to_string(),
         }));
     }
     if matches_surface_alias(&name, surface, "compact", &["压缩"]) {
@@ -218,9 +234,7 @@ fn parse_context_policy_update(rest: &str) -> Result<Option<ContextPolicyUpdate>
     }
     let ratio = crate::config::parse_compaction_ratio_text(ratio_text)?;
     let ratio_percent = (ratio * 100.0).round() as u32;
-    let reserve = reserve_text
-        .map(parse_reserve_tokens)
-        .transpose()?;
+    let reserve = reserve_text.map(parse_reserve_tokens).transpose()?;
     Ok(Some(ContextPolicyUpdate::Set {
         ratio_percent,
         reserve,
@@ -501,6 +515,23 @@ mod tests {
             parse_control_command("/恢复 work", ControlSurface::Gateway).unwrap(),
             Some(ControlCommand::Resume {
                 id: Some("work".to_string())
+            })
+        );
+    }
+
+    #[test]
+    fn parses_rename_with_required_title() {
+        assert_eq!(
+            parse_control_command("/rename Sprint plan", ControlSurface::Repl).unwrap(),
+            Some(ControlCommand::Rename {
+                title: "Sprint plan".to_string()
+            })
+        );
+        assert!(parse_control_command("/rename", ControlSurface::Repl).is_err());
+        assert_eq!(
+            parse_control_command("/重命名 本周计划", ControlSurface::Gateway).unwrap(),
+            Some(ControlCommand::Rename {
+                title: "本周计划".to_string()
             })
         );
     }

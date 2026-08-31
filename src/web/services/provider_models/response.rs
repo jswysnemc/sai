@@ -229,8 +229,8 @@ mod tests {
     /// 验证全部条目都解析不了时返回错误而不是空列表。
     #[test]
     fn fails_when_every_entry_is_unparseable() {
-        let error = parse_models_response(r#"{"data":[{"id":1},{"id":2}]}"#, "provider-a")
-            .unwrap_err();
+        let error =
+            parse_models_response(r#"{"data":[{"id":1},{"id":2}]}"#, "provider-a").unwrap_err();
 
         assert!(error.to_string().contains("none could be parsed"));
     }

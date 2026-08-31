@@ -242,7 +242,10 @@ mod tests {
 
         let mut reader = BufReader::new(&buf[..]);
         for i in 0..5u64 {
-            assert_eq!(read_frame(&mut reader).await?, Some(frame(KIND_EVT_RUNNER, Some(i))));
+            assert_eq!(
+                read_frame(&mut reader).await?,
+                Some(frame(KIND_EVT_RUNNER, Some(i)))
+            );
         }
         // 读完应干净 EOF。
         assert_eq!(read_frame(&mut reader).await?, None);
@@ -289,7 +292,10 @@ mod tests {
         let feeder = tokio::spawn(async move {
             let chunk = vec![b'a'; 64 * 1024];
             for _ in 0..(MAX_FRAME_BYTES / (64 * 1024) + 4) {
-                if tokio::io::AsyncWriteExt::write_all(&mut writer, &chunk).await.is_err() {
+                if tokio::io::AsyncWriteExt::write_all(&mut writer, &chunk)
+                    .await
+                    .is_err()
+                {
                     return;
                 }
             }
@@ -325,7 +331,9 @@ mod tests {
     async fn truncated_frame_at_eof_is_an_error() -> Result<()> {
         let buf = b"{\"kind\":\"evt.runner\"".to_vec();
         let mut reader = BufReader::new(&buf[..]);
-        let err = read_frame(&mut reader).await.expect_err("半帧 + EOF 必须报错");
+        let err = read_frame(&mut reader)
+            .await
+            .expect_err("半帧 + EOF 必须报错");
         assert!(err.to_string().contains("帧中间关闭"), "实际错误: {err}");
         Ok(())
     }

@@ -12,7 +12,9 @@ mod request_limits;
 pub(crate) use assembler::EventAssembler;
 pub(crate) use event::WebEvent;
 pub(crate) use journal::EventJournal;
-pub(crate) use manager::{ActiveRunInfo, QueuedRunUpdate, RunKind, RunManager, StartRunRequest};
+pub(crate) use manager::{
+    ActiveRunInfo, QueueInsertAt, QueuedRunUpdate, RunKind, RunManager, StartRunRequest,
+};
 pub(crate) use request_limits::MAX_RUN_REQUEST_BYTES;
 
 /// 会话事件日志的路径。
@@ -32,10 +34,10 @@ pub(crate) fn session_event_path(
     workspace_id: &str,
     session_id: &str,
 ) -> std::path::PathBuf {
-    state_dir
-        .join("web")
-        .join("session-events")
-        .join(format!("{}.jsonl", sanitize_key(&format!("{workspace_id}:{session_id}"))))
+    state_dir.join("web").join("session-events").join(format!(
+        "{}.jsonl",
+        sanitize_key(&format!("{workspace_id}:{session_id}"))
+    ))
 }
 
 /// 把调度键转成跨平台安全的文件名。

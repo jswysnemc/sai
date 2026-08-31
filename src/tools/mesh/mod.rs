@@ -1,25 +1,26 @@
 mod address;
 mod agent_probe;
 mod mailbox;
-mod recv;
-mod reply;
 mod send;
 mod session_probe;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use address::{session_scope_for_call, MeshAddress};
 use crate::paths::SaiPaths;
 use crate::state::LocatedSession;
 use crate::tools::ToolRegistry;
+pub(crate) use address::{session_scope_for_call, MeshAddress};
 use anyhow::{anyhow, bail, Result};
+pub(crate) use mailbox::{acknowledge as acknowledge_mesh_messages, next_pending, MeshEnvelope};
 use serde_json::Value;
+use std::path::Path;
 
 /// 网格工具上下文。
 ///
 /// 两个探测工具是只读的：只读取会话索引、持有者登记、轮次锁和子智能体
-/// 持久化文件，不创建也不修改任何状态。三个收发工具会往目标会话的信箱里
-/// 写消息，因此受 `cross_session` 归属开关约束。
+/// 持久化文件，不创建也不修改任何状态。收发工具会往目标会话的信箱里
+/// 写消息，因此受 `cross_session` 归属开关约束。接收不再单独提供工具：
+/// 投递后由会话的外部事件队列主动回执给主 Agent。
 #[derive(Clone)]
 pub(crate) struct MeshContext {
     paths: SaiPaths,
@@ -56,9 +57,7 @@ pub(crate) fn register(
     };
     session_probe::register(registry, context.clone());
     agent_probe::register(registry, context.clone());
-    send::register(registry, context.clone());
-    recv::register(registry, context.clone());
-    reply::register(registry, context);
+    send::register(registry, context);
 }
 
 /// 返回当前会话自己的地址。
@@ -149,7 +148,7 @@ fn sessions_in_scope(context: &MeshContext, scope: &str) -> Result<Vec<LocatedSe
     Ok(match scope {
         "self" => sessions
             .into_iter()
-            .filter(|session| session.info.id == context.session_id)
+            .filter(|session| Path::new(&context.owner_key) == session.state_dir.as_path())
             .collect(),
         "workspace" => {
             // 会话是按规范化后的路径分工作区存放的，这里必须走同一条规范化，

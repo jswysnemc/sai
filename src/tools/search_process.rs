@@ -106,10 +106,7 @@ mod tests {
         #[cfg(windows)]
         let mut command = {
             let mut command = Command::new("cmd");
-            command.args([
-                "/C",
-                "echo src/a.rs:1:early hit& ping -n 31 127.0.0.1>nul",
-            ]);
+            command.args(["/C", "echo src/a.rs:1:early hit& ping -n 31 127.0.0.1>nul"]);
             command
         };
         #[cfg(not(windows))]

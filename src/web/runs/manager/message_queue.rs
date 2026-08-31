@@ -36,21 +36,24 @@ impl InterMessageSource for WebMessageQueue {
     /// 查看队首用户消息，不改变队列和检查点。
     async fn peek(&self) -> Result<Option<InterMessage>> {
         let queues = self.manager.queued.lock().await;
-        let Some(queued) = queues
-            .get(&self.session_key)
-            .and_then(|queue| queue.front())
-        else {
+        let Some(queue) = queues.get(&self.session_key) else {
             return Ok(None);
         };
-        // 控制命令保持独立运行，不能越过队首合并后续用户消息
-        if queued.request.kind != RunKind::Conversation {
-            return Ok(None);
+        for queued in queue {
+            // 控制命令保持独立运行，不能越过前面的压缩/续轮去合并用户消息
+            if queued.request.kind != RunKind::Conversation {
+                return Ok(None);
+            }
+            if queued.request.insert_at != super::QueueInsertAt::Request {
+                continue;
+            }
+            return Ok(Some(InterMessage::queued_user(
+                queued.info.run_id.clone(),
+                queued.info.input.clone(),
+                queued.info.image_urls.clone(),
+            )));
         }
-        Ok(Some(InterMessage::queued_user(
-            queued.info.run_id.clone(),
-            queued.info.input.clone(),
-            queued.info.image_urls.clone(),
-        )))
+        Ok(None)
     }
 
     /// 在 provider 成功接收消息后确认队首输入。
@@ -61,20 +64,20 @@ impl InterMessageSource for WebMessageQueue {
             let Some(queue) = queues.get_mut(&self.session_key) else {
                 bail!("queued message no longer exists: {message_id}");
             };
-            let Some(front) = queue.front() else {
+            let Some(position) = queue
+                .iter()
+                .position(|queued| queued.info.run_id == message_id)
+            else {
                 bail!("queued message no longer exists: {message_id}");
             };
-            if front.info.run_id != message_id {
-                bail!("queued message order changed before acknowledgement: {message_id}");
-            }
 
             // 1. 先持久化终态，失败时保持内存队列不变
             self.manager
                 .checkpoints
                 .update_status(message_id, RunCheckpointStatus::Completed)?;
-            // 2. 再移除内存队首，避免 launch_next 把同一消息启动成独立回合
+            // 2. 再按 id 移除，避免 launch_next 把同一消息启动成独立回合
             let queued = queue
-                .pop_front()
+                .remove(position)
                 .expect("validated queued message must still exist");
             let remove_queue = queue.is_empty();
             if remove_queue {

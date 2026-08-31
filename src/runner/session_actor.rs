@@ -514,9 +514,9 @@ mod tests {
     use super::*;
     use crate::llm::ChatStreamChunk;
     use crate::llm::ChatStreamKind;
-    use serde_json::json;
     use crate::runner::AutomaticInputEvent;
     use crate::runner::AutomaticInputKind;
+    use serde_json::json;
 
     /// 创建测试用会话事件总线。
     fn bus() -> (ActorHandle, tempfile::TempDir) {
@@ -638,7 +638,13 @@ mod tests {
         assert!(handle.journal().events_after(0).len() >= WATCHER_CAPACITY);
         // 4. 摘除后接收端关闭，SSE 流结束并触发客户端重连
         handle
-            .emit(WebEvent::new("run", "workspace", "session", "run.completed", json!({})))
+            .emit(WebEvent::new(
+                "run",
+                "workspace",
+                "session",
+                "run.completed",
+                json!({}),
+            ))
             .unwrap();
         settle(&handle, total + 1).await;
         assert!(drain(&mut subscription).is_empty());

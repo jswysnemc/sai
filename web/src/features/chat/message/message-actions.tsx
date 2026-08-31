@@ -1,6 +1,7 @@
 import { Check, Copy, GitBranch, MessageSquarePlus, Pencil, RotateCcw } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { Toast, useToast } from "../../../shared/ui/notify/notify";
 import { useI18n } from "../../i18n/use-i18n";
 
 type MessageActionsProps = {
@@ -36,6 +37,7 @@ export function MessageActions({
   const { locale, t } = useI18n();
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | null>(null);
+  const { notice, showToast, dismissToast } = useToast();
 
   useEffect(() => () => {
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
@@ -49,6 +51,7 @@ export function MessageActions({
       timerRef.current = window.setTimeout(() => setCopied(false), 1_600);
     } catch {
       setCopied(false);
+      showToast(t("Could not copy to the clipboard", "无法复制到剪贴板"), "error");
     }
   };
 
@@ -100,6 +103,7 @@ export function MessageActions({
       <button type="button" className="message-copy" onClick={onCopy} aria-label={t("Copy original message", "复制消息原文")} title={t("Copy original", "复制原文")}>
         {copied ? <Check size={13} /> : <Copy size={13} />}
       </button>
+      <Toast notice={notice} onDismiss={dismissToast} />
     </div>
   );
 }

@@ -42,6 +42,7 @@ import type {
   RunMode,
   RunModelSelection,
   ThinkingLevel,
+  QueueInsertAt,
   RunInfo,
   ActiveRunsResponse,
   AgentRuntimeProfile,
@@ -308,7 +309,8 @@ export const api = {
       selection?: RunModelSelection,
       imageUrls?: string[],
       thinkingLevel?: ThinkingLevel,
-      agentId?: string
+      agentId?: string,
+      insertAt?: QueueInsertAt
     ) =>
       apiRequest<RunInfo>("/api/runs", {
         method: "POST",
@@ -320,7 +322,8 @@ export const api = {
           provider_id: selection?.providerId,
           model: selection?.model,
           image_urls: imageUrls,
-          thinking_level: thinkingLevel
+          thinking_level: thinkingLevel,
+          insert_at: insertAt
         })
       }),
     startGoal: (
@@ -344,8 +347,8 @@ export const api = {
         })
       }),
     stop: (id: string) => apiRequest<{ stopped: boolean }>(`/api/runs/${id}`, { method: "DELETE" }),
-    /** 更新排队运行的正文或等待位置。 */
-    updateQueue: (id: string, update: { input?: string; position?: number }) =>
+    /** 更新排队运行的正文、附件、等待位置或插入点。 */
+    updateQueue: (id: string, update: { input?: string; position?: number; insert_at?: QueueInsertAt; image_urls?: string[] }) =>
       apiRequest<RunInfo>(`/api/runs/${id}/queue`, {
         method: "PATCH",
         body: JSON.stringify(update)

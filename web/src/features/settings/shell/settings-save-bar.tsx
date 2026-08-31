@@ -9,6 +9,7 @@ type SettingsSaveBarProps = {
   dirty: boolean;
   saving: boolean;
   saveError: boolean;
+  saveErrorMessage?: string;
   loaded: boolean;
   onSave: () => void;
 };
@@ -27,6 +28,7 @@ export function SettingsSaveBar({
   dirty,
   saving,
   saveError,
+  saveErrorMessage,
   loaded,
   onSave
 }: SettingsSaveBarProps) {
@@ -37,7 +39,7 @@ export function SettingsSaveBar({
   if (showsAppConfigSave(use, dirty)) {
     return (
       <>
-        <SaveStatusBadge dirty={dirty} saving={saving} saveError={saveError} loaded={loaded} />
+        <SaveStatusBadge dirty={dirty} saving={saving} saveError={saveError} saveErrorMessage={saveErrorMessage} loaded={loaded} />
         <button
           type="button"
           className="settings-save"

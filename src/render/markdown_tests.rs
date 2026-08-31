@@ -420,9 +420,12 @@ fn renders_multiline_math_blocks_as_assets() {
 fn renders_svg_fences_as_assets() {
     crate::render::asset_block::set_test_stub(true);
     let mut renderer = MarkdownStreamRenderer::new();
-    let output = renderer.push("```svg\n<svg viewBox=\"0 0 8 8\"><path d=\"M0 0h8v8z\" /></svg>\n```\n");
+    let output =
+        renderer.push("```svg\n<svg viewBox=\"0 0 8 8\"><path d=\"M0 0h8v8z\" /></svg>\n```\n");
     crate::render::asset_block::set_test_stub(false);
-    assert!(output.contains("```svg\n<svg viewBox=\"0 0 8 8\"><path d=\"M0 0h8v8z\" /></svg>\n```\n"));
+    assert!(
+        output.contains("```svg\n<svg viewBox=\"0 0 8 8\"><path d=\"M0 0h8v8z\" /></svg>\n```\n")
+    );
     assert!(output.contains("\x1b[1A\r\x1b[2K"));
     assert!(output.contains("[asset rendering skipped]"));
     assert!(!output.contains("[svg]"));

@@ -648,8 +648,9 @@ mod tests {
             "new_string": new_string
         })
         .to_string();
-        crate::render::edit_diff::render_edit_file_diff_for_transcript(&arguments)
-            .expect("diff 应能渲染")
+        let preview =
+            crate::render::edit_diff::preview_from_arguments(&arguments).expect("diff 应能构建");
+        crate::render::edit_diff::render_patch_preview_for_transcript(&preview)
     }
 
     /// 提取 diff 正文行经引导对齐后的首内容列。

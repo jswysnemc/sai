@@ -39,6 +39,27 @@ export function detectInitialLocale(
   return "en-US";
 }
 
+/** 界面语言运行时快照；供 API 错误等无法读取 React 上下文的模块使用。 */
+let runtimeLocale: Locale | null = null;
+
+/**
+ * 由 I18nProvider 同步当前界面语言。
+ *
+ * @param locale 当前界面语言
+ */
+export function setRuntimeLocale(locale: Locale): void {
+  runtimeLocale = locale;
+}
+
+/**
+ * 返回当前界面语言；尚未由 Provider 同步时回落到初始检测结果。
+ *
+ * @returns 当前界面语言
+ */
+export function currentLocale(): Locale {
+  return runtimeLocale ?? detectInitialLocale();
+}
+
 /**
  * 按指定语言选择界面文本。
  *

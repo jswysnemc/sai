@@ -1,6 +1,7 @@
 use super::descriptions::tool_description;
 use super::{
-    builtin_registry, builtin_registry_without_mcp, groups, register_interactive_tools, ToolRegistry,
+    builtin_registry, builtin_registry_without_mcp, groups, register_interactive_tools,
+    ToolRegistry,
 };
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
@@ -327,13 +328,19 @@ mod tests {
         let mut by_group: std::collections::BTreeMap<&str, Vec<String>> =
             std::collections::BTreeMap::new();
         for entry in &entries {
-            by_group
-                .entry(entry.group)
-                .or_default()
-                .push(format!("{}{}", entry.name, if entry.resident { "*" } else { "" }));
+            by_group.entry(entry.group).or_default().push(format!(
+                "{}{}",
+                entry.name,
+                if entry.resident { "*" } else { "" }
+            ));
         }
         for (group, names) in &by_group {
-            println!("AUDIT_GROUP [{}] n={} {}", group, names.len(), names.join(", "));
+            println!(
+                "AUDIT_GROUP [{}] n={} {}",
+                group,
+                names.len(),
+                names.join(", ")
+            );
         }
         println!("AUDIT_LEGEND name* means resident");
     }
@@ -386,13 +393,7 @@ mod tests {
         let paths = SaiPaths::for_tests(dir.path());
         let entries = tool_catalog(&AppConfig::default(), &paths);
 
-        for expected in [
-            "session_probe",
-            "agent_probe",
-            "mesh_send",
-            "mesh_recv",
-            "mesh_reply",
-        ] {
+        for expected in ["session_probe", "agent_probe", "mesh_send"] {
             let entry = entries
                 .iter()
                 .find(|entry| entry.name == expected)

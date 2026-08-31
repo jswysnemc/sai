@@ -73,7 +73,7 @@ fn render_control_section(controls: &[String], cols: usize, lines: &mut Vec<Stri
 
 /// 渲染 todo 快照区。
 ///
-/// 多行：已完成置顶 + 进行中 + 待办，条目对齐；单行：进度摘要可带当前项。
+/// 多行：进行中置顶 + 待办 + 已完成，条目对齐；单行：进度摘要可带当前项。
 ///
 /// 参数:
 /// - `todos`: 最新 todo 清单快照
@@ -98,9 +98,8 @@ fn render_todo_section(
         .count();
     let total = todos.len();
     let active = todos.iter().find(|item| item.status == "in_progress");
-    let title = t("Plan", "计划");
-    // 进度用 x/x，不再画 █░ 条——窄面板里数字更清楚，也不抖
-    let mut header = format!("\x1b[2m{title}\x1b[0m \x1b[2m{done}/{total}\x1b[0m");
+    // 左侧引导点与队列、智能体同一套沉底装饰，避免「计划」顶格成一块标签
+    let mut header = format!("\x1b[2m• {done}/{total}\x1b[0m");
     // 单行时才把当前项挂在标题旁；展开后条目与其它待办对齐，不再升成标题
     if compact {
         if let Some(item) = active {
@@ -214,7 +213,7 @@ mod tests {
     }
 
     #[test]
-    fn todo_section_puts_completed_above_active_without_tree() {
+    fn todo_section_puts_active_above_completed_without_tree() {
         let todos = vec![
             TodoSnapshotItem {
                 status: "pending".to_string(),
@@ -241,7 +240,7 @@ mod tests {
         let done_at = body.find("done one").unwrap();
         let current_at = body.find("current").unwrap();
         let next_at = body.find("next").unwrap();
-        assert!(done_at < current_at && current_at < next_at);
+        assert!(current_at < next_at && next_at < done_at);
         assert!(plain.contains('▶'));
         assert!(!plain.contains('├') && !plain.contains('└'));
         assert!(

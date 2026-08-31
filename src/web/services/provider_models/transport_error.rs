@@ -103,7 +103,10 @@ client error (Connect): dns error: failed to lookup address"
             Some(error("connection closed", Some(error("broken pipe", None)))),
         );
 
-        assert_eq!(describe_error_chain(&chain), "connection closed: broken pipe");
+        assert_eq!(
+            describe_error_chain(&chain),
+            "connection closed: broken pipe"
+        );
     }
 
     /// 验证无描述的错误链退回固定文案而不是返回空串。

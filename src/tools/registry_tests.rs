@@ -175,11 +175,7 @@ fn clone_filtered_preserves_session_ownership_and_cross_session() {
             |_arguments| async move { Ok(String::new()) },
         ));
     }
-    registry.set_session_ownership(
-        "state/dir".to_string(),
-        "session-1".to_string(),
-        true,
-    );
+    registry.set_session_ownership("state/dir".to_string(), "session-1".to_string(), true);
 
     let filtered = registry.clone_filtered(&["mesh_send"]);
     assert_eq!(filtered.session_key, "state/dir");
@@ -262,10 +258,20 @@ fn non_json_arguments_still_fail() {
 #[test]
 fn trailing_content_after_a_non_object_argument_still_fails() {
     let array = parse_arguments("[\"a\",\"b\"] 后面还有内容").unwrap_err();
-    assert!(array.to_string().contains("tool arguments are not valid JSON"), "{array}");
+    assert!(
+        array
+            .to_string()
+            .contains("tool arguments are not valid JSON"),
+        "{array}"
+    );
 
     let scalar = parse_arguments("123 后面还有内容").unwrap_err();
-    assert!(scalar.to_string().contains("tool arguments are not valid JSON"), "{scalar}");
+    assert!(
+        scalar
+            .to_string()
+            .contains("tool arguments are not valid JSON"),
+        "{scalar}"
+    );
 
     assert!(parse_arguments("\"just a string\" 后面还有内容").is_err());
 }

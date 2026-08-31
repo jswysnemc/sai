@@ -91,13 +91,11 @@ const CODE_AGENT_TOOLS: &[&str] = &[
     "ssh_run_command",
     "ssh_upload_file",
     "ssh_download_file",
-    // 网格：跨会话与子智能体协作。两个探针只读，收发默认只投递给当前会话
-    // 自己（`mesh.cross_session` 默认关闭），因此不额外收窄权限。
+    // 网格：跨会话与子智能体协作。两个探针只读；发送后由会话队列主动回执，
+    // 默认只投递给当前会话自己（`mesh.cross_session` 默认关闭）。
     "session_probe",
     "agent_probe",
     "mesh_send",
-    "mesh_recv",
-    "mesh_reply",
 ];
 
 /// Plan Agent 只读工具。
@@ -407,14 +405,8 @@ mod mesh_visibility_tests {
     use crate::runner::SubmissionSource;
     use std::collections::BTreeSet;
 
-    /// 五个网格工具。
-    const MESH_TOOLS: [&str; 5] = [
-        "session_probe",
-        "agent_probe",
-        "mesh_send",
-        "mesh_recv",
-        "mesh_reply",
-    ];
+    /// 三个网格工具。
+    const MESH_TOOLS: [&str; 3] = ["session_probe", "agent_probe", "mesh_send"];
 
     /// 计算默认配置下指定入口的 agent 实际可见的工具名称。
     ///
@@ -437,13 +429,12 @@ mod mesh_visibility_tests {
             dir.path(),
         )
         .unwrap();
-        let registry =
-            crate::runner::submission_tools::apply_enabled_tools_filter(
-                registry,
-                &config,
-                SubmissionSource::Repl,
-            )
-            .unwrap();
+        let registry = crate::runner::submission_tools::apply_enabled_tools_filter(
+            registry,
+            &config,
+            SubmissionSource::Repl,
+        )
+        .unwrap();
         crate::tools::progressive::visible_tool_names(&registry, config.agent_deferred_tools())
     }
 
@@ -466,7 +457,10 @@ mod mesh_visibility_tests {
         let visible = visible_tools_for_default_agent(AgentSurface::Cli);
 
         for name in MESH_TOOLS {
-            assert!(visible.contains(name), "CLI 默认配置下 {name} 应对 agent 可见");
+            assert!(
+                visible.contains(name),
+                "CLI 默认配置下 {name} 应对 agent 可见"
+            );
         }
     }
 

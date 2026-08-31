@@ -1,7 +1,7 @@
 use super::terminal_restore::restore_stream_terminal_modes;
 use super::*;
-use crate::cli::repl_runtime::{StreamCommandContext, StreamInputAction};
 use crate::agent::{Agent, AgentEvent, ExternalEventBatch, ExternalEventWake};
+use crate::cli::repl_runtime::{StreamCommandContext, StreamInputAction};
 
 /// 自动唤醒对应的 runner submission 与待确认事件批次。
 pub(super) struct AutomaticReplSubmission {
@@ -97,8 +97,15 @@ pub(super) async fn execute_automatic_repl_turn(
         stream_render_options(config),
     );
     let batch = automatic.batch;
-    let outcome =
-        execute_repl_turn(paths, config, agent, runtime, owner_key, automatic.submission).await?;
+    let outcome = execute_repl_turn(
+        paths,
+        config,
+        agent,
+        runtime,
+        owner_key,
+        automatic.submission,
+    )
+    .await?;
     // 中断同样算作已消费：用户按下 Ctrl+C 就是看到了这批回执并主动放弃。
     // 若此时不确认，下一次等待会立刻重投同一批，而 take_ready 又排在读键之前，
     // 用户既抢不回输入、也退不出去，形成中断→重投→再中断的活锁。
@@ -131,7 +138,9 @@ pub(super) async fn execute_repl_turn(
     owner_key: &str,
     submission: crate::runner::RunnerSubmission,
 ) -> Result<ReplTurnOutcome> {
-    let runner = crate::runner::SessionRunner::new(paths).with_config(config.clone());
+    let runner = crate::runner::SessionRunner::new(paths)
+        .with_config(config.clone())
+        .with_inter_message_source(runtime.inter_message_source());
     // 事件通道：sink 只负责入队，交互弹窗与 transcript 写入都由消费循环完成。
     // 用无界 std::sync::mpsc 而非有界通道——sink 是在异步轮次里被同步调用的，
     // 一旦通道满而阻塞就会卡住整个 tokio worker 线程；无界通道下由消费侧

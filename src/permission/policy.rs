@@ -61,7 +61,7 @@ impl PermissionProfileMode {
 
 /// 工具调用相对当前会话的归属范围。
 ///
-/// 网格工具（`mesh_send` / `mesh_reply`）能投递到别的会话或别的子智能体，
+/// 网格工具（`mesh_send`）能投递到别的会话或别的子智能体，
 /// 权限判定必须区分"投给自己"和"投给别人"：前者是普通工具调用，后者会触碰
 /// 别人会话的状态，默认一律拒绝。
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

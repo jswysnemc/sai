@@ -21,7 +21,12 @@ struct SessionResponse {
     title: String,
     created_at: String,
     updated_at: String,
+    /// 当前工作区选中的会话指针，不等于终端/网页是否已打开该会话。
     active: bool,
+    /// 终端或网页已加载该会话（持有者心跳仍存活）。
+    loaded: bool,
+    /// 存活持有者类型：`repl` / `web` / `gateway` 等；未加载时为空。
+    holder: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -179,7 +184,10 @@ pub(super) fn routes() -> Router<WebAppState> {
         .route("/api/sessions/:id/tool-result", get(tool_result))
         .merge(debug::routes())
         .route("/api/sessions/:id/compact", post(compact))
-        .route("/api/sessions/:id/compaction-policy", patch(update_compaction_policy))
+        .route(
+            "/api/sessions/:id/compaction-policy",
+            patch(update_compaction_policy),
+        )
         .route("/api/sessions/:id/events", get(events))
 }
 
@@ -335,12 +343,10 @@ async fn tree(State(state): State<WebAppState>) -> WebResult<Json<Vec<WorkspaceS
         let sessions = crate::state::list_sessions_for_workspace(&state.paths, path)
             .map_err(WebError::from)?
             .into_iter()
-            .map(|session| SessionResponse {
-                active: workspace.id == active_workspace.id && session.id == active_session_id,
-                id: session.id,
-                title: session.title,
-                created_at: session.created_at,
-                updated_at: session.updated_at,
+            .map(|session| {
+                let selected =
+                    workspace.id == active_workspace.id && session.id == active_session_id;
+                session_response(&state.paths, path, session, selected)
             })
             .collect();
         result.push(WorkspaceSessionsResponse {
@@ -389,6 +395,7 @@ async fn compact(
                 provider_id: request.provider_id,
                 model: request.model,
                 thinking_level: None,
+                insert_at: crate::web::runs::QueueInsertAt::Turn,
             },
         )
         .await
@@ -432,7 +439,10 @@ async fn update_compaction_policy(
     let resolved = store
         .resolve_compaction_policy(&config.context)
         .map_err(WebError::from)?;
-    let window = config.active_context_window_tokens().unwrap_or(128_000).max(1);
+    let window = config
+        .active_context_window_tokens()
+        .unwrap_or(128_000)
+        .max(1);
     Ok(Json(CompactionPolicyResponse {
         compaction_ratio: resolved.policy.ratio,
         compaction_reserve_tokens: resolved.policy.reserve_tokens,
@@ -443,17 +453,16 @@ async fn update_compaction_policy(
 
 /// 列出当前工作区会话。
 async fn list(State(state): State<WebAppState>) -> WebResult<Json<Vec<SessionResponse>>> {
+    let workspace = state.workspaces.active().map_err(WebError::from)?;
+    let workspace_path = FilePath::new(&workspace.path);
     let active = crate::state::active_session(&state.paths).map_err(WebError::from)?;
     let sessions = crate::state::list_sessions(&state.paths).map_err(WebError::from)?;
     Ok(Json(
         sessions
             .into_iter()
-            .map(|session| SessionResponse {
-                active: session.id == active.id,
-                id: session.id,
-                title: session.title,
-                created_at: session.created_at,
-                updated_at: session.updated_at,
+            .map(|session| {
+                let selected = session.id == active.id;
+                session_response(&state.paths, workspace_path, session, selected)
             })
             .collect(),
     ))
@@ -465,24 +474,27 @@ async fn create(
     Json(request): Json<CreateSessionRequest>,
 ) -> WebResult<Json<SessionResponse>> {
     let workspace_active = request.workspace_id.is_none();
-    let session = if let Some(workspace_id) = request.workspace_id.as_deref() {
-        let workspace = state.workspaces.get(workspace_id).map_err(WebError::from)?;
+    let workspace = if let Some(workspace_id) = request.workspace_id.as_deref() {
+        state.workspaces.get(workspace_id).map_err(WebError::from)?
+    } else {
+        state.workspaces.active().map_err(WebError::from)?
+    };
+    let session = if workspace_active {
+        crate::state::create_session(&state.paths, request.title.as_deref())
+    } else {
         crate::state::create_session_for_workspace(
             &state.paths,
             FilePath::new(&workspace.path),
             request.title.as_deref(),
         )
-    } else {
-        crate::state::create_session(&state.paths, request.title.as_deref())
     }
     .map_err(WebError::from)?;
-    Ok(Json(SessionResponse {
-        id: session.id,
-        title: session.title,
-        created_at: session.created_at,
-        updated_at: session.updated_at,
-        active: workspace_active,
-    }))
+    Ok(Json(session_response(
+        &state.paths,
+        FilePath::new(&workspace.path),
+        session,
+        workspace_active,
+    )))
 }
 
 /// 切换当前会话。
@@ -492,13 +504,13 @@ async fn switch(
 ) -> WebResult<Json<SessionResponse>> {
     let session = crate::state::switch_session(&state.paths, &id)
         .map_err(|error| WebError::not_found(error.to_string()))?;
-    Ok(Json(SessionResponse {
-        id: session.id,
-        title: session.title,
-        created_at: session.created_at,
-        updated_at: session.updated_at,
-        active: true,
-    }))
+    let workspace = state.workspaces.active().map_err(WebError::from)?;
+    Ok(Json(session_response(
+        &state.paths,
+        FilePath::new(&workspace.path),
+        session,
+        true,
+    )))
 }
 
 /// 重命名会话。
@@ -509,14 +521,15 @@ async fn rename(
 ) -> WebResult<Json<SessionResponse>> {
     let session = crate::state::rename_session(&state.paths, &id, &request.title)
         .map_err(|error| WebError::bad_request(error.to_string()))?;
+    let workspace = state.workspaces.active().map_err(WebError::from)?;
     let active = crate::state::active_session(&state.paths).map_err(WebError::from)?;
-    Ok(Json(SessionResponse {
-        active: session.id == active.id,
-        id: session.id,
-        title: session.title,
-        created_at: session.created_at,
-        updated_at: session.updated_at,
-    }))
+    let selected = session.id == active.id;
+    Ok(Json(session_response(
+        &state.paths,
+        FilePath::new(&workspace.path),
+        session,
+        selected,
+    )))
 }
 
 /// 删除会话。
@@ -735,6 +748,63 @@ pub(super) async fn reject_session_run(state: &WebAppState, session_id: &str) ->
 ///
 /// 返回:
 /// - 会话所属工作区标识
+/// 组装会话 API 响应：选中指针与终端/网页加载态分开。
+///
+/// 参数:
+/// - `paths`: Sai 路径集合
+/// - `workspace_path`: 会话所属工作区路径
+/// - `session`: 会话索引记录
+/// - `selected`: 是否为该工作区当前选中会话
+///
+/// 返回:
+/// - 含加载态的会话响应
+fn session_response(
+    paths: &crate::paths::SaiPaths,
+    workspace_path: &FilePath,
+    session: crate::state::SessionInfo,
+    selected: bool,
+) -> SessionResponse {
+    let (loaded, holder) = session_loaded_holder(paths, workspace_path, &session.id);
+    SessionResponse {
+        id: session.id,
+        title: session.title,
+        created_at: session.created_at,
+        updated_at: session.updated_at,
+        active: selected,
+        loaded,
+        holder,
+    }
+}
+
+/// 读取会话存活持有者：终端 REPL、网页或网关打开会话期间会写心跳。
+///
+/// 参数:
+/// - `paths`: Sai 路径集合
+/// - `workspace_path`: 会话所属工作区路径
+/// - `session_id`: 会话标识
+///
+/// 返回:
+/// - `(是否已加载, 持有者类型)`
+fn session_loaded_holder(
+    paths: &crate::paths::SaiPaths,
+    workspace_path: &FilePath,
+    session_id: &str,
+) -> (bool, Option<String>) {
+    let Ok((_, state_dir)) =
+        crate::state::state_dir_for_workspace_session(paths, workspace_path, session_id)
+    else {
+        return (false, None);
+    };
+    let Some(record) = crate::runner::session_holder(&state_dir) else {
+        return (false, None);
+    };
+    if crate::runner::holder_is_alive(&record) {
+        (true, Some(record.owner))
+    } else {
+        (false, None)
+    }
+}
+
 fn session_workspace_id(
     paths: &crate::paths::SaiPaths,
     session_id: &str,
@@ -816,5 +886,45 @@ mod tests {
 
         assert!(crate::web::workspace::is_git_repository(&nested).await);
         assert!(!crate::web::workspace::is_git_repository(&ordinary).await);
+    }
+
+    /// 【会话加载】【持有者心跳】未打开的会话不算加载，终端持有后才算加载。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无
+    #[tokio::test]
+    async fn session_loaded_follows_alive_terminal_or_web_holder() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path());
+        let workspace = temp.path().join("workspace");
+        std::fs::create_dir_all(&workspace).unwrap();
+
+        crate::runtime_cwd::scope(workspace.clone(), async {
+            let session =
+                crate::state::create_session_for_workspace(&paths, &workspace, Some("held"))
+                    .unwrap();
+            assert_eq!(
+                session_loaded_holder(&paths, &workspace, &session.id),
+                (false, None)
+            );
+
+            let (_, state_dir) =
+                crate::state::state_dir_for_workspace_session(&paths, &workspace, &session.id)
+                    .unwrap();
+            let _guard = crate::runner::SessionHolderGuard::acquire(
+                &state_dir,
+                &session.id,
+                crate::runner::SessionOwner::Repl,
+            )
+            .unwrap();
+            assert_eq!(
+                session_loaded_holder(&paths, &workspace, &session.id),
+                (true, Some("repl".to_string()))
+            );
+        })
+        .await;
     }
 }

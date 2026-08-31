@@ -39,6 +39,9 @@ pub(crate) async fn handle_gateway_command(
         ControlCommand::New { title } => {
             crate::control_commands::create_new_session(paths, &title)?
         }
+        ControlCommand::Rename { title } => {
+            crate::control_commands::rename_current_session(paths, &title)?
+        }
         ControlCommand::Resume { id } => match id {
             Some(id) => crate::control_commands::resume_session(paths, &id)?,
             None => {

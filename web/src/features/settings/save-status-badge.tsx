@@ -5,6 +5,7 @@ type SaveStatusBadgeProps = {
   dirty: boolean;
   saving: boolean;
   saveError: boolean;
+  saveErrorMessage?: string;
   loaded: boolean;
 };
 
@@ -14,12 +15,17 @@ type SaveStatusBadgeProps = {
  * @param props 脏标记、保存中、保存失败和已加载状态
  * @returns 保存状态徽标，配置未加载时返回 null
  */
-export function SaveStatusBadge({ dirty, saving, saveError, loaded }: SaveStatusBadgeProps) {
+export function SaveStatusBadge({ dirty, saving, saveError, saveErrorMessage, loaded }: SaveStatusBadgeProps) {
   const { t } = useI18n();
   if (!loaded) return null;
   // 1. 保存失败优先展示，提示用户检查错误信息
-  if (saveError && dirty) {
-    return <span className="settings-status-badge failed"><AlertCircle size={13} /><span className="settings-status-badge-text">{t("Save failed", "保存失败")}</span></span>;
+  if (saveError) {
+    return (
+      <span className="settings-status-badge failed" title={saveErrorMessage}>
+        <AlertCircle size={13} />
+        <span className="settings-status-badge-text">{saveErrorMessage || t("Save failed", "保存失败")}</span>
+      </span>
+    );
   }
   // 2. 保存中和未保存修改共用警示样式
   if (saving || dirty) {

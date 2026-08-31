@@ -31,7 +31,10 @@ impl ReplRuntime {
     ///
     /// 返回:
     /// - 无
-    pub(in crate::cli) fn follow_remote_stream(&mut self, events: mpsc::UnboundedReceiver<WebEvent>) {
+    pub(in crate::cli) fn follow_remote_stream(
+        &mut self,
+        events: mpsc::UnboundedReceiver<WebEvent>,
+    ) {
         self.follow_events = Some(events);
         self.follow_buffer = FollowBuffer::default();
     }

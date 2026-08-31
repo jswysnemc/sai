@@ -20,6 +20,8 @@
 /* 概览卡片 */
 .subagent-card { display: grid; gap:var(--space-sm); padding:var(--space-md) var(--space-lg); border: 1px solid var(--line); border-radius: var(--radius-4); background: var(--paper); cursor: pointer; transition:border-color var(--transition-base), background var(--transition-base); }
 .subagent-card:hover { border-color: var(--line-strong); background: var(--control-surface); }
+.subagent-card-main { display: grid; gap: var(--space-sm); border: 0; background: transparent; text-align: start; cursor: pointer; }
+.subagent-card-main:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
 .subagent-card.active { border-color: var(--signal); background: var(--signal-soft); }
 .subagent-heading { display: flex; align-items: center; gap:var(--space-sm); min-width: 0; }
 .subagent-heading strong { overflow: hidden; font-size:var(--text-sm); font-weight: 600; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; }

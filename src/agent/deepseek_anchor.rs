@@ -465,7 +465,8 @@ mod tests {
     /// 参数尾部多带内容时取第一个完整对象，schema 校验照常进行。
     #[test]
     fn tolerates_trailing_content_after_anchor_arguments() {
-        let bash = resolve_execution_call(&call(BASH_NAME, r#"{"command":"pwd"} 残余片段"#)).unwrap();
+        let bash =
+            resolve_execution_call(&call(BASH_NAME, r#"{"command":"pwd"} 残余片段"#)).unwrap();
 
         assert_eq!(bash.function.name, "run_command");
         assert_eq!(json_args(&bash), json!({"command": "pwd"}));

@@ -1,9 +1,11 @@
 import { Plus, Search } from "lucide-react";
+import { modKeyLabel } from "../../shared/mod-key";
 import { useI18n } from "../i18n/use-i18n";
 
 type SessionSidebarActionsProps = {
   onNewSession: () => void;
   onSearch: () => void;
+  createPending?: boolean;
 };
 
 /**
@@ -15,12 +17,15 @@ type SessionSidebarActionsProps = {
  * @param props 新建与搜索回调
  * @returns 紧凑操作列表
  */
-export function SessionSidebarActions({ onNewSession, onSearch }: SessionSidebarActionsProps) {
+export function SessionSidebarActions({ onNewSession, onSearch, createPending = false }: SessionSidebarActionsProps) {
   const { t } = useI18n();
+  const modifier = modKeyLabel();
   return (
     <div className="sidebar-session-actions" role="toolbar" aria-label={t("Session actions", "会话操作")}>
-      <button type="button" onClick={onNewSession}><Plus size={14} /><span>{t("New task", "新建任务")}</span></button>
-      <button type="button" onClick={onSearch}><Search size={14} /><span>{t("Search", "搜索")}</span><kbd>Ctrl+K</kbd></button>
+      <button type="button" onClick={onNewSession} disabled={createPending}>
+        <Plus size={14} /><span>{createPending ? t("Creating", "正在创建") : t("New task", "新建任务")}</span>
+      </button>
+      <button type="button" onClick={onSearch}><Search size={14} /><span>{t("Search", "搜索")}</span><kbd>{modifier}+K</kbd></button>
     </div>
   );
 }

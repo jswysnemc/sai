@@ -77,6 +77,27 @@ pub(crate) struct AppliedPatch {
     pub changes: Vec<FileChange>,
 }
 
+impl AppliedPatch {
+    /// 统计整份 patch 的增删行数。
+    ///
+    /// 与正文画出的 `+` / `-` 行同源：`Add` 按正文行数计，`Update` 按
+    /// diff 行里的 Add/Delete 条数计，上下文压缩不影响这两个数。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - `(新增行数, 删除行数)`
+    pub(crate) fn line_counts(&self) -> (usize, usize) {
+        self.changes
+            .iter()
+            .map(FileChange::line_counts)
+            .fold((0usize, 0usize), |acc, item| {
+                (acc.0 + item.0, acc.1 + item.1)
+            })
+    }
+}
+
 /// 单行 diff 变更。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LineChange {

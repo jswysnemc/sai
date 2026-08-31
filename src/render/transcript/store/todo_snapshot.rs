@@ -82,10 +82,9 @@ mod tests {
 
     #[test]
     fn snapshot_is_active_only_when_unfinished_items_remain() {
-        let pending = parse_todo_snapshot(
-            r#"{"ok":true,"items":[{"text":"one","status":"pending"}]}"#,
-        )
-        .unwrap();
+        let pending =
+            parse_todo_snapshot(r#"{"ok":true,"items":[{"text":"one","status":"pending"}]}"#)
+                .unwrap();
         let completed = parse_todo_snapshot(
             r#"{"ok":true,"items":[{"text":"one","status":"completed"},{"text":"two","status":"cancelled"}]}"#,
         )

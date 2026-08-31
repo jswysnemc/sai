@@ -116,7 +116,7 @@ pub(crate) fn render_todo_output(
         return Some(output);
     }
 
-    // Full 模式：扁平列表，已完成置顶；条目自带状态符，缩进对齐 gutter 续行列
+    // Full 模式：扁平列表，进行中置顶；条目自带状态符，缩进对齐 gutter 续行列
     let mut items = result.items;
     items.sort_by_key(|item| status_rank(&item.status));
 

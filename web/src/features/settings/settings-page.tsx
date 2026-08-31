@@ -62,6 +62,7 @@ export function SettingsPage() {
               dirty={settings.dirty}
               saving={settings.saving}
               saveError={Boolean(settings.error)}
+              saveErrorMessage={settings.error?.message}
               loaded={Boolean(settings.config)}
               onSave={() => void settings.saveConfig()}
             />
@@ -81,9 +82,6 @@ export function SettingsPage() {
             theme={theme.theme}
             onThemeChange={theme.setTheme}
           />
-          {settings.error && meta && meta.appConfig !== "none" && (
-            <div className="settings-error">{settings.error.message}</div>
-          )}
         </main>
       </div>
     </div>

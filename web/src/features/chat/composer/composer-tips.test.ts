@@ -1,27 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { currentComposerTip } from "./composer-tips";
+import { composerTips, currentComposerTip } from "./composer-tips";
 
 describe("currentComposerTip", () => {
-  it("returns non-empty localized tips that rotate by time", () => {
-    const first = currentComposerTip("zh-CN", 0);
-    const later = currentComposerTip("zh-CN", 8_000);
+  it("returns a stable tip for the same page load", () => {
+    const first = currentComposerTip("zh-CN");
+    const later = currentComposerTip("zh-CN");
     expect(first.length).toBeGreaterThan(0);
-    expect(later.length).toBeGreaterThan(0);
-    // 不同时间槽应切换（列表长度 > 1）
-    expect(first === later).toBe(false);
+    expect(later).toBe(first);
   });
 
   it("returns English tips for en locales", () => {
-    const tip = currentComposerTip("en-US", 0);
+    const tip = currentComposerTip("en-US");
     expect(tip).toMatch(/[A-Za-z]/);
   });
 
   it("keeps web tips free of TUI-only shortcuts", () => {
-    const samples = Array.from({ length: 20 }, (_, i) => currentComposerTip("en-US", i * 8_000)).join("\n");
+    const samples = composerTips("en-US").join("\n");
     expect(samples).not.toMatch(/\bTUI\b/);
     expect(samples).not.toMatch(/Prefix !/);
     expect(samples).not.toMatch(/Double Esc/);
     expect(samples).not.toMatch(/Ctrl\+O/);
-    expect(samples).toMatch(/@|skill|lightbox|Settings|paperclip|model/i);
+    expect(samples).toMatch(/@|skill|lightbox|Settings|paperclip|model|rename/i);
   });
 });

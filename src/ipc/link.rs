@@ -27,7 +27,9 @@ use crate::ipc::frame::{
     Frame, KIND_CTL_ABORT, KIND_CTL_HELLO, KIND_CTL_PING, KIND_CTL_PONG, KIND_CTL_SUBMIT,
     KIND_CTL_SUBMIT_ACK, KIND_CTL_SUBSCRIBE, KIND_EVT_MIRROR,
 };
-use crate::ipc::transport::{probe_holder, transport_for_state_dir, SessionStream, SessionTransport};
+use crate::ipc::transport::{
+    probe_holder, transport_for_state_dir, SessionStream, SessionTransport,
+};
 use crate::runner::{
     holder_is_alive, session_holder, ActorHandle, SessionActor, SessionHolderGuard, SessionOwner,
     TransportKind, TransportRef, HOLDER_HEARTBEAT_INTERVAL,
@@ -269,7 +271,10 @@ impl SessionLink {
         let local = || SessionActor::spawn(journal_path.clone(), workspace_id, session_id);
         // `probe_holder` 只是一次廉价快筛，真正的仲裁者是下面这次 bind 抢到的租约
         let holder_exists = probe_holder(state_dir).await;
-        let Ok(transport) = transport_for_state_dir(state_dir).map(Arc::<dyn SessionTransport>::from) else {
+        let Ok(transport) =
+            transport_for_state_dir(state_dir).map(Arc::<dyn SessionTransport>::from)
+        else {
+            hold_without_ipc(state_dir, session_id, owner);
             return (link, local());
         };
         if !holder_exists && transport.is_holder() {
@@ -284,7 +289,9 @@ impl SessionLink {
             // 持有者可能刚崩溃不到 15s。放开租约，以观察者身份重建传输，
             // 交给看门狗等心跳过期后再竞争，而不是占着端点当观察者。
             drop(transport);
-            let Ok(rebound) = transport_for_state_dir(state_dir).map(Arc::<dyn SessionTransport>::from) else {
+            let Ok(rebound) =
+                transport_for_state_dir(state_dir).map(Arc::<dyn SessionTransport>::from)
+            else {
                 return (link, local());
             };
             let bus = link.start_observer(owner, rebound);
@@ -302,9 +309,17 @@ impl SessionLink {
     ///
     /// 返回:
     /// - 观察者模式的事件总线
-    fn start_observer(&self, owner: SessionOwner, transport: Arc<dyn SessionTransport>) -> ActorHandle {
+    fn start_observer(
+        &self,
+        owner: SessionOwner,
+        transport: Arc<dyn SessionTransport>,
+    ) -> ActorHandle {
         self.set_role(LinkRole::Observer);
-        let bus = ActorHandle::observer(&self.state.workspace_id, &self.state.session_id, self.clone());
+        let bus = ActorHandle::observer(
+            &self.state.workspace_id,
+            &self.state.session_id,
+            self.clone(),
+        );
         tokio::spawn(observe(self.clone(), transport));
         tokio::spawn(watchdog(self.clone(), owner, bus.clone()));
         bus
@@ -643,6 +658,36 @@ async fn claim_holder(
     None
 }
 
+/// 拿不到 IPC 时仍登记持有者心跳。
+///
+/// 单进程降级不等于会话没打开：终端已经在跑，session_probe 必须能发现
+/// 这个还没发过提示词的空会话。
+///
+/// 参数:
+/// - `state_dir`: 会话状态目录
+/// - `session_id`: 会话 ID
+/// - `owner`: 本进程的持有者类型
+///
+/// 返回:
+/// - 无
+fn hold_without_ipc(state_dir: &Path, session_id: &str, owner: SessionOwner) {
+    let state_dir = state_dir.to_path_buf();
+    let session_id = session_id.to_string();
+    tokio::spawn(async move {
+        let Some(guard) = claim_holder(&state_dir, &session_id, owner).await else {
+            return;
+        };
+        let mut heartbeat = tokio::time::interval(HOLDER_HEARTBEAT_INTERVAL);
+        heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            heartbeat.tick().await;
+            if guard.heartbeat().is_err() {
+                return;
+            }
+        }
+    });
+}
+
 /// 持有者主循环：接受观察者连接，同时按 [`HOLDER_HEARTBEAT_INTERVAL`] 写心跳。
 async fn serve(
     link: SessionLink,
@@ -765,7 +810,10 @@ fn handle_upstream(
         }
         // 观察者请求中断一轮；回执复用提交回执通道，submit_id 存被中断的轮次
         KIND_CTL_ABORT => {
-            let run_id = frame.payload["run_id"].as_str().unwrap_or_default().to_string();
+            let run_id = frame.payload["run_id"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
             let Some(sink) = link.holder_sink() else {
                 // 没有执行器（TUI 之类的持有者）：明确拒绝，绝不让请求静默消失
                 let _ = ack_tx.send(abort_ack(
@@ -940,13 +988,14 @@ async fn observe(link: SessionLink, transport: Arc<dyn SessionTransport>) {
 }
 
 /// 连接持有者并消费事件流；连接断开时返回。
-async fn connect(
-    link: &SessionLink,
-    transport: &dyn SessionTransport,
-) -> Result<()> {
+async fn connect(link: &SessionLink, transport: &dyn SessionTransport) -> Result<()> {
     let mut stream = transport.connect().await?;
     let (tx, mut rx) = mpsc::unbounded_channel::<Frame>();
-    *link.state.upstream.lock().unwrap_or_else(|e| e.into_inner()) = Some(tx);
+    *link
+        .state
+        .upstream
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(tx);
     // 报上自己已收到的最后序号，持有者据此补发
     stream
         .send(&Frame::control(
@@ -956,7 +1005,11 @@ async fn connect(
         .await?;
     let outcome = pump(link, &mut stream, &mut rx).await;
     // 断开期间不再上行，等到重连成功再恢复
-    *link.state.upstream.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    *link
+        .state
+        .upstream
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = None;
     // 未决提交一律判失败：观察者侧的调用方据此给用户明确反馈，
     // 绝不能让已经敲出去的输入凭空消失
     link.fail_pending("会话持有者已断开");
@@ -1033,8 +1086,8 @@ async fn watchdog(link: SessionLink, owner: SessionOwner, bus: ActorHandle) {
             }
         }
         // 2. 先抢租约：多进程同时竞争时它是唯一公平的仲裁者
-        let Ok(transport) = transport_for_state_dir(&link.state.state_dir)
-            .map(Arc::<dyn SessionTransport>::from)
+        let Ok(transport) =
+            transport_for_state_dir(&link.state.state_dir).map(Arc::<dyn SessionTransport>::from)
         else {
             continue;
         };
@@ -1048,7 +1101,11 @@ async fn watchdog(link: SessionLink, owner: SessionOwner, bus: ActorHandle) {
         };
         let _ = guard.publish_transport(transport_ref(transport.as_ref()));
         link.set_role(LinkRole::Holder);
-        *link.state.upstream.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *link
+            .state
+            .upstream
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
         // 4. 先把事件总线切成持有者模式，再起监听：否则上行事件没有落盘的地方
         bus.promote_to_holder(&link.state.journal_path);
         tokio::spawn(serve(link.clone(), transport, bus.clone(), Some(guard)));
@@ -1222,7 +1279,9 @@ pub(crate) fn is_compacting(state_dir: &Path) -> bool {
 /// 返回:
 /// - 无
 fn set_compacting(state_dir: &Path, compacting: bool) {
-    let mut set = compacting_sessions().lock().unwrap_or_else(|e| e.into_inner());
+    let mut set = compacting_sessions()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     if compacting {
         set.insert(state_dir.to_path_buf());
     } else {
@@ -1593,6 +1652,7 @@ mod tests {
                 provider_id: None,
                 model: None,
                 thinking_level: None,
+                insert_at: crate::web::runs::QueueInsertAt::Turn,
             },
         }
     }
@@ -1669,7 +1729,10 @@ mod tests {
         assert_eq!(ack.status.as_deref(), Some("running"));
         assert_eq!(ack.submit_id, "sub-1");
         assert_eq!(
-            executed.lock().unwrap_or_else(|e| e.into_inner()).as_slice(),
+            executed
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .as_slice(),
             ["run-1"],
             "持有者必须沿用观察者分配的轮次标识，否则事件流对不上"
         );
@@ -1751,7 +1814,11 @@ mod tests {
         let link = SessionLink::detached(&journal, "workspace", "session");
         // 伪造一条上行通道：提交会登记成未决，然后一直等回执
         let (upstream_tx, upstream_rx) = mpsc::unbounded_channel::<Frame>();
-        *link.state.upstream.lock().unwrap_or_else(|e| e.into_inner()) = Some(upstream_tx);
+        *link
+            .state
+            .upstream
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(upstream_tx);
 
         let pending = {
             let link = link.clone();

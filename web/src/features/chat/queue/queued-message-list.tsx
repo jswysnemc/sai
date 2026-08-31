@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { QueueInsertAt } from "../../../api/contracts";
 import type { LiveRunState } from "../run-event-reducer";
 import { QueuedMessageRow } from "./queued-message-row";
 import { useI18n } from "../../i18n/use-i18n";
@@ -6,8 +7,10 @@ import "./queued-message-list.css";
 
 export type QueuedMessageListProps = {
   runs: LiveRunState[];
-  onUpdate: (runId: string, input: string) => Promise<void>;
+  onUpdate: (runId: string, input: string, imageUrls: string[]) => Promise<void>;
   onMove: (runId: string, position: number) => Promise<void>;
+  onPromote: (runId: string) => Promise<void>;
+  onInsertAt: (runId: string, insertAt: QueueInsertAt) => Promise<void>;
   onRemove: (runId: string) => Promise<void>;
   onError: (error: unknown) => void;
 };
@@ -39,7 +42,7 @@ export function reorderQueuedRuns(
  * @param props 排队运行和编辑、排序、删除回调
  * @returns 紧凑队列列表；队列为空时不渲染
  */
-export function QueuedMessageList({ runs, onUpdate, onMove, onRemove, onError }: QueuedMessageListProps) {
+export function QueuedMessageList({ runs, onUpdate, onMove, onPromote, onInsertAt, onRemove, onError }: QueuedMessageListProps) {
   const { t } = useI18n();
   const [draggedRunId, setDraggedRunId] = useState<string | null>(null);
   if (runs.length === 0) return null;
@@ -78,6 +81,8 @@ export function QueuedMessageList({ runs, onUpdate, onMove, onRemove, onError }:
           onDrop={() => void dropAt(index)}
           onUpdate={onUpdate}
           onMove={onMove}
+          onPromote={onPromote}
+          onInsertAt={onInsertAt}
           onRemove={onRemove}
           onError={onError}
         />

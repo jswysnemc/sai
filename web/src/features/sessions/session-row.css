@@ -1,7 +1,7 @@
 /*
  * 会话行
  *
- * 单行结构：标题吸收剩余宽度，运行指示与相对时间贴右。
+ * 单行结构：标题吸收剩余宽度，加载指示与相对时间贴右。
  * 悬停时右内边距扩一档，元信息整体左移给更多按钮让位——
  * 时间是扫读时的主要线索，不允许在悬停瞬间消失。
  */
@@ -65,7 +65,7 @@
 }
 
 .session-main .session-summary {
-  /* 运行指示灯是条件渲染的，用 flex + auto 外边距把时间推到右缘，
+  /* 加载指示灯是条件渲染的，用 flex + auto 外边距把时间推到右缘，
      列数不随指示灯出现与否而改变 */
   display: flex;
   align-items: center;
@@ -113,9 +113,13 @@
   white-space: nowrap;
 }
 
-/* 运行中的会话把时间换成信号色：正在动的会话比几分钟前更重要 */
-.session-row.running .session-main small {
+/* 已加载的会话把时间换成信号色：打开中的会话比几分钟前更重要 */
+.session-row.loaded .session-main small {
   color: var(--signal);
+}
+
+.session-row.unloaded .session-main strong {
+  color: var(--ink-soft);
 }
 
 .active-agent-indicator {

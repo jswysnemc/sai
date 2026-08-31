@@ -80,6 +80,11 @@
 .settings-status-badge.saved { background: var(--signal-soft); color: var(--signal); }
 .settings-status-badge.dirty { background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--warning); }
 .settings-status-badge.failed { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+.settings-status-badge-text {
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ---------- 主体两栏工作区 ---------- */
 

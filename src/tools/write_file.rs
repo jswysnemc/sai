@@ -1,4 +1,4 @@
-use super::file_diff::unified_diff;
+use super::file_diff::{diff_line_counts, unified_diff};
 use super::file_edit::atomic_write::write_text_file;
 use super::fs_path::{expand_path, fs_error};
 use super::{ToolRegistry, ToolSpec};
@@ -100,11 +100,8 @@ fn write_file(args: Value) -> Result<String> {
         content.to_string()
     };
     write_text_file(&path, &final_content)?;
-    let (added, removed) = if existed {
-        line_diff_counts(&old_content, &final_content)
-    } else {
-        (line_count(&final_content), 0)
-    };
+    // 与 diff 正文同一套 LCS 口径：净增量会让「整文件重写」报成 +0 -0
+    let (added, removed) = diff_line_counts(&old_content, &final_content);
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
         "mode": if append { "append" } else { "write" },
@@ -134,39 +131,6 @@ fn required_string<'a>(args: &'a Value, key: &str) -> Result<&'a str> {
         .ok_or_else(|| anyhow::anyhow!("{key} is required"))
 }
 
-/// 粗略统计新旧文本的新增/删除行数。
-///
-/// 参数:
-/// - `old_content`: 旧文本
-/// - `new_content`: 新文本
-///
-/// 返回:
-/// - `(added, removed)`
-fn line_diff_counts(old_content: &str, new_content: &str) -> (usize, usize) {
-    let old_lines = line_count(old_content);
-    let new_lines = line_count(new_content);
-    if new_lines >= old_lines {
-        (new_lines - old_lines, 0)
-    } else {
-        (0, old_lines - new_lines)
-    }
-}
-
-/// 统计文本行数。
-///
-/// 参数:
-/// - `content`: 文本
-///
-/// 返回:
-/// - 行数
-fn line_count(content: &str) -> usize {
-    if content.is_empty() {
-        0
-    } else {
-        content.lines().count()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,6 +154,9 @@ mod tests {
         .unwrap();
         let created: Value = serde_json::from_str(&create).unwrap();
         assert_eq!(created["changed_files"][0]["action"], "Added");
+        // 新建：`# Title` / 空行 / `Body` 三行全部计入新增
+        assert_eq!(created["changed_files"][0]["added"], 3);
+        assert_eq!(created["changed_files"][0]["removed"], 0);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "# Title\n\nBody\n");
 
         let overwrite = write_file(json!({
@@ -199,6 +166,9 @@ mod tests {
         .unwrap();
         let updated: Value = serde_json::from_str(&overwrite).unwrap();
         assert_eq!(updated["changed_files"][0]["action"], "Edited");
+        // 整文件重写按实际增删行计，不能塌成净增量 +0 -2
+        assert_eq!(updated["changed_files"][0]["added"], 1);
+        assert_eq!(updated["changed_files"][0]["removed"], 3);
         assert_eq!(std::fs::read_to_string(path).unwrap(), "rewritten\n");
     }
 
@@ -217,6 +187,10 @@ mod tests {
         .unwrap();
 
         assert!(output.contains("\"mode\": \"append\""));
+        // 追加只算新增的行，原内容不算删除
+        let appended: Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(appended["changed_files"][0]["added"], 1);
+        assert_eq!(appended["changed_files"][0]["removed"], 0);
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
             "first\nsecond\n",

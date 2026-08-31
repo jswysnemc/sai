@@ -43,7 +43,11 @@ impl StreamCommandContext {
     ///
     /// 返回:
     /// - 立即执行命令上下文
-    pub(in crate::cli) fn capture(paths: &SaiPaths, owner_key: String, turn_mode: AgentMode) -> Self {
+    pub(in crate::cli) fn capture(
+        paths: &SaiPaths,
+        owner_key: String,
+        turn_mode: AgentMode,
+    ) -> Self {
         Self {
             paths: paths.clone(),
             owner_key,
@@ -97,6 +101,16 @@ pub(in crate::cli) fn run_immediate_stream_command(
                 viewing.as_deref(),
             );
             runtime.record_meta(notice.unwrap_or_else(|error| error.to_string()))
+        }
+        Ok(Some(ControlCommand::Rename { title })) => {
+            match crate::control_commands::rename_current_session(&ctx.paths, &title) {
+                Ok(message) => {
+                    runtime.set_session_title(title);
+                    runtime.record_meta(message)?;
+                    runtime.redraw_stream_composer()
+                }
+                Err(error) => runtime.record_meta(error.to_string()),
+            }
         }
         Ok(Some(_)) => Ok(()),
         Err(error) => runtime.record_meta(error.to_string()),
@@ -162,7 +176,10 @@ mod tests {
         assert_eq!(stream_mode_switch("/AUDIT"), Some(AgentMode::Audited));
         assert_eq!(stream_mode_switch("/yolo"), Some(AgentMode::Yolo));
         assert_eq!(stream_mode_switch("/auto"), Some(AgentMode::AutoAudit));
-        assert_eq!(stream_mode_switch("/auto-audit"), Some(AgentMode::AutoAudit));
+        assert_eq!(
+            stream_mode_switch("/auto-audit"),
+            Some(AgentMode::AutoAudit)
+        );
         assert_eq!(stream_mode_switch("/model"), None);
         assert_eq!(stream_mode_switch("hello"), None);
     }

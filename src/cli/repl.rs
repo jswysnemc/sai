@@ -64,8 +64,8 @@ pub(super) async fn run_repl(
     )?;
     runtime.record_meta(
         t(
-            "Shift+Tab mode · Tab queues while working · Enter send · Shift+Enter newline",
-            "Shift+Tab 切模式 · 工作时 Tab 入队 · Enter 发送 · Shift+Enter 换行",
+            "Shift+Tab cycles mode · Tab/Enter queue while working · Ctrl+C stop · Enter send when idle",
+            "Shift+Tab 切模式 · 工作时 Tab/Enter 入队 · Ctrl+C 停止 · 空闲 Enter 发送",
         )
         .to_string(),
     )?;
@@ -77,7 +77,10 @@ pub(super) async fn run_repl(
     record_repl_history(&mut runtime, &state)?;
     // 1. 重量级初始化前先呈现输入框，避免版本信息后长时间没有输入区
     {
-        let chrome = ReplChrome::from_runtime(&config, &state, mode);
+        let mut chrome = ReplChrome::from_runtime(&config, &state, mode);
+        if let Ok(session) = crate::state::active_session(paths) {
+            chrome.set_session_title(session.title);
+        }
         runtime.update_composer(&chrome, "", 0, false, Vec::new(), 0)?;
         runtime.draw_composer()?;
     }
@@ -108,6 +111,7 @@ pub(super) async fn run_repl(
     // 跨进程会话链接：本终端是否驱动这一会话，取决于有没有别的 sai 实例先抢到租约
     let mut session_link = ReplSessionLink::attach(paths, &state).await;
 
+    let mut pending_undo = false;
     loop {
         // 会话切换（/new、/resume）或持有者更替后重新链接并同步界面提示
         session_link.refresh(paths, &state, &mut runtime).await?;
@@ -116,6 +120,9 @@ pub(super) async fn run_repl(
         apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
         // 每轮刷新底栏上下文/模型信息
         let mut chrome = ReplChrome::from_runtime(&config, &state, mode);
+        if let Ok(session) = crate::state::active_session(paths) {
+            chrome.set_session_title(session.title);
+        }
         let transcript_options = render::transcript::TranscriptRenderOptions {
             reasoning_mode: render::ReasoningDisplayMode::from_config(&config.display.reasoning),
             tool_call_mode: render::ToolCallDisplayMode::from_config(&config.display.tool_calls),
@@ -202,6 +209,9 @@ pub(super) async fn run_repl(
         };
         apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
         let input = submission.raw_input.trim();
+        if !input.eq_ignore_ascii_case("/undo") {
+            pending_undo = false;
+        }
         let mut submitted_input = input.to_string();
         if super::repl_commands::is_repl_exit_command(input) {
             break;
@@ -250,6 +260,12 @@ pub(super) async fn run_repl(
                         prefill = None;
                         runtime.clear()?;
                         runtime.record_meta(message)?;
+                    }
+                    crate::control_commands::ControlCommand::Rename { title } => {
+                        match crate::control_commands::rename_current_session(paths, &title) {
+                            Ok(message) => runtime.record_meta(message)?,
+                            Err(err) => runtime.record_meta(err.to_string())?,
+                        }
                     }
                     crate::control_commands::ControlCommand::Resume { id } => {
                         let session_id = match id {
@@ -591,6 +607,18 @@ pub(super) async fn run_repl(
             continue;
         }
         if input.eq_ignore_ascii_case("/undo") {
+            if !pending_undo {
+                pending_undo = true;
+                runtime.record_meta(
+                    t(
+                        "type /undo again to drop the last turn",
+                        "再次输入 /undo 确认撤销上一轮",
+                    )
+                    .to_string(),
+                )?;
+                continue;
+            }
+            pending_undo = false;
             let outcome = state.undo_last_turn()?;
             runtime.record_meta(format!(
                 "{}: {}",

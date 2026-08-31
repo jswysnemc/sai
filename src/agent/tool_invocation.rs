@@ -416,7 +416,9 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            malformed.to_string().contains("invalid invoke_tool arguments"),
+            malformed
+                .to_string()
+                .contains("invalid invoke_tool arguments"),
             "{malformed}"
         );
 

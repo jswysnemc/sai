@@ -156,6 +156,17 @@ impl ComposerFrame {
         &self.chrome
     }
 
+    /// 返回可改写的 chrome 状态。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - chrome 可变引用
+    pub(super) fn chrome_mut(&mut self) -> &mut ReplChrome {
+        &mut self.chrome
+    }
+
     /// 返回 composer 在指定终端宽度下的视觉行数。
     ///
     /// 参数:
@@ -579,6 +590,8 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
+            session_title: String::new(),
+            activity: None,
         };
         let frame = ComposerFrame::new(chrome, "hello".to_string(), 5, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();
@@ -608,6 +621,8 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
+            session_title: String::new(),
+            activity: None,
         };
         let frame = ComposerFrame::new(chrome, "hello".to_string(), 5, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();
@@ -656,6 +671,8 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
+            session_title: String::new(),
+            activity: None,
         };
         let frame = ComposerFrame::new(chrome, "hello".to_string(), 5, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();
@@ -699,6 +716,8 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
+            session_title: String::new(),
+            activity: None,
         };
         let first_frame =
             ComposerFrame::new(chrome.clone(), "hello".to_string(), 5, false, Vec::new(), 0);
@@ -732,6 +751,8 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/tmp".to_string(),
             cache_hit_ratio: None,
+            session_title: String::new(),
+            activity: None,
         };
         let frame = ComposerFrame::new(chrome, "!".to_string(), 1, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();
@@ -765,6 +786,8 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
+            session_title: String::new(),
+            activity: None,
         };
         let frame = ComposerFrame::new(chrome, "/".to_string(), 1, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();
@@ -774,7 +797,10 @@ mod tests {
         frame.draw_lines(&mut output, &viewport, None).unwrap();
 
         let output = String::from_utf8(output).unwrap();
-        assert!(output.contains("/model"));
+        assert!(
+            output.contains("/help") && output.contains("/rename"),
+            "slash panel should list visible commands: {output}"
+        );
         // slash 展开时输入行仍在，但不画状态分隔线
         assert!(output.contains("/"));
         assert!(!output.contains("120k"));
@@ -791,11 +817,13 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
+            session_title: String::new(),
+            activity: None,
         };
         let mut frame = ComposerFrame::new(chrome, String::new(), 0, false, Vec::new(), 0);
         let base_height = frame.height(72);
         frame.set_panel_lines(vec![
-            "\x1b[2m计划\x1b[0m \x1b[2m1/3\x1b[0m".to_string(),
+            "\x1b[2m• 1/3\x1b[0m".to_string(),
             "\x1b[1m\x1b[36m▶\x1b[0m \x1b[1m\x1b[36mcurrent\x1b[0m".to_string(),
         ]);
         assert_eq!(frame.height(72), base_height + 2);
@@ -805,7 +833,7 @@ mod tests {
         let mut output = Vec::new();
         frame.draw_lines(&mut output, &viewport, None).unwrap();
         let output = String::from_utf8(output).unwrap();
-        let panel_at = output.find("计划").unwrap();
+        let panel_at = output.find("• 1/3").unwrap();
         // 极简输入行无彩条；面板须出现在输入提示之前
         // 占位提示逐轮轮换，测试取当前值而不是硬编码首条
         let tip = super::super::placeholder_tips::current_tip();
@@ -824,6 +852,8 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
+            session_title: String::new(),
+            activity: None,
         };
         let frame = ComposerFrame::new(chrome, String::new(), 0, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();
@@ -851,6 +881,8 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
+            session_title: String::new(),
+            activity: None,
         };
         let frame = ComposerFrame::new(chrome, String::new(), 0, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();
@@ -879,6 +911,8 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
+            session_title: String::new(),
+            activity: None,
         };
         let frame = ComposerFrame::new(chrome, String::new(), 0, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();

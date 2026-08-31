@@ -74,8 +74,8 @@ export function useSessionActions({ confirm, t, tree, onNavigate }: SessionActio
         if (!switched) return;
       }
       await api.sessions.switch(sessionId);
-      if (!workspaceActive) window.location.reload();
-      else await refresh();
+      await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      await refresh();
       onNavigate?.();
     } catch (cause) {
       setNavigationError(toDisplayError(cause, "Failed to open session", "打开会话失败"));

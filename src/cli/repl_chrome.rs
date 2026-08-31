@@ -14,6 +14,10 @@ pub(super) struct ReplChrome {
     pub(super) directory: String,
     /// 当前轮累计缓存命中率，轮次进行中才有值
     pub(super) cache_hit_ratio: Option<f32>,
+    /// 当前会话标题，未命名时可为空
+    pub(super) session_title: String,
+    /// 底栏左侧附加活动提示，如 `Ctrl+C 停止`
+    pub(super) activity: Option<String>,
 }
 
 impl ReplChrome {
@@ -55,6 +59,8 @@ impl ReplChrome {
             thinking,
             directory,
             cache_hit_ratio: None,
+            session_title: String::new(),
+            activity: None,
         }
     }
 
@@ -64,6 +70,28 @@ impl ReplChrome {
     /// - `mode`: 新模式
     pub(super) fn set_mode(&mut self, mode: AgentMode) {
         self.mode = mode;
+    }
+
+    /// 写入当前会话标题。
+    ///
+    /// 参数:
+    /// - `title`: 会话标题
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn set_session_title(&mut self, title: String) {
+        self.session_title = title;
+    }
+
+    /// 写入底栏活动提示。
+    ///
+    /// 参数:
+    /// - `activity`: 如停止快捷键提示；空则清除
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn set_activity(&mut self, activity: Option<String>) {
+        self.activity = activity;
     }
 
     /// 左侧上下文占用文案。
@@ -125,7 +153,7 @@ impl ReplChrome {
     /// 返回:
     /// - 已着色状态行
     pub(super) fn footer_line(&self, cols: usize) -> String {
-        self.footer_line_with_activity(cols, None)
+        self.footer_line_with_activity(cols, self.activity.as_deref())
     }
 
     /// 底栏整行，左侧可附加当前工作状态。
@@ -168,8 +196,9 @@ impl ReplChrome {
         let cols = cols.max(1);
         let pad = CHROME_FOOTER_SIDE_PAD.min(cols.saturating_sub(1) / 2);
         let inner = cols.saturating_sub(pad.saturating_mul(2)).max(1);
+        let right_plain = footer_right_text(&self.session_title, &self.directory);
         // 1. 在扣除左右外边距后的净宽上裁剪，避免贴边
-        let (left_text, right_text, gap) = fit_status_segments(&left_plain, &self.directory, inner);
+        let (left_text, right_text, gap) = fit_status_segments(&left_plain, &right_plain, inner);
         // 2. 裁剪后再着色，避免 ANSI 干扰宽度计算
         let left = colorize_left_status(self.mode, &left_text, self.context_ratio);
         let right = if right_text.is_empty() {
@@ -183,6 +212,27 @@ impl ReplChrome {
             " ".repeat(gap),
             " ".repeat(pad)
         )
+    }
+}
+
+/// 底栏右侧：会话标题（截断）加工作目录。
+///
+/// 参数:
+/// - `title`: 会话标题
+/// - `directory`: 压缩后的工作目录
+///
+/// 返回:
+/// - 右侧纯文本
+fn footer_right_text(title: &str, directory: &str) -> String {
+    let title = title.trim();
+    if title.is_empty() {
+        return directory.to_string();
+    }
+    let short: String = title.chars().take(16).collect();
+    if title.chars().count() > 16 {
+        format!("{short}…  {directory}")
+    } else {
+        format!("{short}  {directory}")
     }
 }
 
@@ -521,6 +571,8 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
+            session_title: String::new(),
+            activity: None,
         }
     }
 
@@ -576,6 +628,17 @@ mod tests {
     }
 
     #[test]
+    fn footer_puts_session_title_before_directory() {
+        let mut chrome = test_chrome();
+        chrome.set_session_title("demo-session".to_string());
+        let line = chrome.footer_line(80);
+        let plain = strip_ansi(&line);
+        let title = plain.find("demo-session").expect("title");
+        let directory = plain.find("/workspace").expect("directory");
+        assert!(title < directory, "{plain}");
+    }
+
+    #[test]
     fn footer_puts_activity_before_mode() {
         let chrome = test_chrome();
         let line = chrome.footer_line_with_activity(80, Some("Working 12s"));
@@ -595,6 +658,8 @@ mod tests {
             thinking: "xhigh".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
+            session_title: String::new(),
+            activity: None,
         };
         let line = chrome.footer_line(80);
         let plain = strip_ansi(&line);
@@ -627,6 +692,8 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/home/snemc/workspace/sai/very/long/path/segment".to_string(),
             cache_hit_ratio: None,
+            session_title: String::new(),
+            activity: None,
         };
         for cols in [20usize, 40, 59, 60, 80, 120] {
             let line = chrome.footer_line(cols);

@@ -339,10 +339,8 @@ fn compact_subagent_summary(
             other => other,
         };
         return Some(match snapshot.last_tool.as_deref() {
-            Some(tool) if !tool.is_empty() => {
-                format!("{status} · {} {tool}", t("last tool", "最近工具"))
-            }
-            _ => format!("{status} · {}", snapshot.description),
+            Some(tool) if !tool.is_empty() => format!("{status} · {tool}"),
+            _ => status.to_string(),
         });
     }
     if cell.outcome.is_some() {

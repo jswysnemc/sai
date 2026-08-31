@@ -6,8 +6,6 @@ pub(crate) const BASE_TOOL_NAMES: &[&str] = &[
     "session_probe",
     "agent_probe",
     "mesh_send",
-    "mesh_recv",
-    "mesh_reply",
     "cron",
     "edit_file",
     "write_file",
@@ -110,7 +108,7 @@ pub(crate) fn group_for_tool(name: &str) -> &'static str {
         "set_alarm" | "list_alarms" | "cancel_alarm" => "personal",
         "ssh_list_hosts" | "ssh_run_command" | "ssh_upload_file" | "ssh_download_file" => "ssh",
         "mcp_manager" => "mcp",
-        "session_probe" | "agent_probe" | "mesh_send" | "mesh_recv" | "mesh_reply" => "mesh",
+        "session_probe" | "agent_probe" | "mesh_send" => "mesh",
         _ if name.starts_with("mcp_") => "mcp",
         _ if is_base_tool(name) => "base",
         _ => "other",
@@ -267,9 +265,9 @@ pub(crate) fn group_meta(group: &str) -> ToolGroupMeta {
             rank: 12,
             label_en: "Mesh",
             label_zh: "会话网格",
-            hint_en: "Mesh coordinates across sessions and subagents: probes observe without touching, and messaging exchanges messages with a correlation id. Leaving the current session requires mesh.cross_session=true.",
-            hint_zh: "会话网格用于跨会话与子智能体协作：探测器只看不碰，收发工具用 correlation id 互发消息。发给当前会话之外的目标需要 mesh.cross_session=true。",
-            model_description: "Mesh coordination: list sessions with their holder, watcher count and running turn, list subagents with status, step count and token usage, and send, receive and reply to messages across sessions and subagents",
+            hint_en: "Mesh coordinates across sessions and subagents: probes observe without touching, and mesh_send delivers into the receiver's session queue as an active receipt. Leaving the current session requires mesh.cross_session=true.",
+            hint_zh: "会话网格用于跨会话与子智能体协作：探测器只看不碰，mesh_send 投进接收方的会话队列作为主动回执。发给当前会话之外的目标需要 mesh.cross_session=true。",
+            model_description: "Mesh coordination: list live sessions with their holder, watcher count and running turn, list subagents with status, step count and token usage, and send or reply to messages across sessions and subagents. Incoming messages are queued as active receipts; there is no receive tool.",
             settings_path: None,
         },
         "other" => UNKNOWN_GROUP,
@@ -318,14 +316,11 @@ mod tests {
         assert_eq!(group_for_tool("session_probe"), "mesh");
         assert_eq!(group_for_tool("agent_probe"), "mesh");
         assert_eq!(group_for_tool("mesh_send"), "mesh");
-        assert_eq!(group_for_tool("mesh_recv"), "mesh");
-        assert_eq!(group_for_tool("mesh_reply"), "mesh");
+        assert_eq!(group_for_tool("mesh_send"), "mesh");
         assert!(group_rank("mesh") > group_rank("mcp"));
-        assert!(
-            group_meta("mesh")
-                .model_description
-                .contains("Mesh coordination")
-        );
+        assert!(group_meta("mesh")
+            .model_description
+            .contains("Mesh coordination"));
         assert!(group_meta("mesh").hint_zh.contains("会话网格"));
     }
 
@@ -347,18 +342,11 @@ mod tests {
     /// 注册了，agent 却看不到，表现为"没有跨会话通信工具"。
     #[test]
     fn mesh_tools_are_not_deferred_by_default() {
-        for name in [
-            "session_probe",
-            "agent_probe",
-            "mesh_send",
-            "mesh_recv",
-            "mesh_reply",
-        ] {
+        for name in ["session_probe", "agent_probe", "mesh_send"] {
             assert!(
                 !crate::tools::progressive::is_deferred_tool(name, &[]),
                 "{name} must be visible without an explicit load"
             );
         }
     }
-
 }

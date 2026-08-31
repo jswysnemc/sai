@@ -125,6 +125,9 @@ mod tests {
         assert!(is_interrupt(key(KeyCode::Char('c'), KeyModifiers::CONTROL)));
         assert!(is_interrupt(key(KeyCode::Char('d'), KeyModifiers::CONTROL)));
         assert!(!is_interrupt(key(KeyCode::Char('c'), KeyModifiers::NONE)));
-        assert!(!is_interrupt(key(KeyCode::Char('a'), KeyModifiers::CONTROL)));
+        assert!(!is_interrupt(key(
+            KeyCode::Char('a'),
+            KeyModifiers::CONTROL
+        )));
     }
 }

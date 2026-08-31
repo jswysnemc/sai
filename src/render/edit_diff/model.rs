@@ -36,7 +36,11 @@ fn preview_from_value(value: &Value) -> Result<AppliedPatch> {
         value.get("path").and_then(Value::as_str),
         value.get("content").and_then(Value::as_str),
     ) {
-        return preview_write_file(path, content);
+        let mode = value
+            .get("mode")
+            .and_then(Value::as_str)
+            .unwrap_or("overwrite");
+        return preview_write_file(path, content, mode == "append");
     }
     if let (Some(path), Some(old_string), Some(new_string)) = (
         value.get("path").and_then(Value::as_str),
@@ -68,7 +72,9 @@ fn preview_from_partial_arguments(raw: &str) -> Result<Option<AppliedPatch>> {
         string_field_from_partial(raw, "content"),
     ) {
         if !path.trim().is_empty() {
-            return Ok(Some(preview_write_file(&path, &content)?));
+            // 追加模式接在原内容之后：按覆盖预览会把整份旧内容画成删除
+            let append = string_field_from_partial(raw, "mode").as_deref() == Some("append");
+            return Ok(Some(preview_write_file(&path, &content, append)?));
         }
     }
     if let (Some(path), Some(old_string), Some(new_string)) = (
@@ -89,15 +95,19 @@ fn preview_from_partial_arguments(raw: &str) -> Result<Option<AppliedPatch>> {
     Ok(None)
 }
 
-/// 预览 write_file 的新增或整文件覆盖。
+/// 预览 write_file 的新增、整文件覆盖或追加。
+///
+/// 追加模式的新内容接在原文件之后，预览必须按同一份最终内容构造，
+/// 否则会把原有内容整段画成删除，增删计数也跟着虚高。
 ///
 /// 参数:
 /// - `path_text`: 目标路径
-/// - `content`: 新文件内容
+/// - `content`: 本次写入的内容
+/// - `append`: 是否追加到原内容之后
 ///
 /// 返回:
 /// - 单文件变更预览
-fn preview_write_file(path_text: &str, content: &str) -> Result<AppliedPatch> {
+fn preview_write_file(path_text: &str, content: &str, append: bool) -> Result<AppliedPatch> {
     let path = expand_path(path_text);
     if path.exists() && !path.is_file() {
         bail!("not a regular file: {}", path.display());
@@ -111,12 +121,17 @@ fn preview_write_file(path_text: &str, content: &str) -> Result<AppliedPatch> {
         });
     }
     let old_content = std::fs::read_to_string(&path)?;
+    let new_content = if append {
+        format!("{old_content}{content}")
+    } else {
+        content.to_string()
+    };
     Ok(AppliedPatch {
         changes: vec![FileChange::Update {
             path,
             move_path: None,
-            new_content: content.to_string(),
-            lines: build_line_diff(&old_content, content),
+            new_content: new_content.clone(),
+            lines: build_line_diff(&old_content, &new_content),
         }],
     })
 }
@@ -214,7 +229,9 @@ fn build_line_diff(old_content: &str, new_content: &str) -> Vec<LineChange> {
 fn common_affix_len(left: &[&str], right: &[&str], prefix: bool) -> usize {
     let limit = left.len().min(right.len());
     if prefix {
-        (0..limit).take_while(|&index| left[index] == right[index]).count()
+        (0..limit)
+            .take_while(|&index| left[index] == right[index])
+            .count()
     } else {
         (1..=limit)
             .take_while(|&offset| left[left.len() - offset] == right[right.len() - offset])
@@ -231,7 +248,11 @@ fn common_affix_len(left: &[&str], right: &[&str], prefix: bool) -> usize {
 ///
 /// 返回:
 /// - 带行号的增删上下文行
-fn build_core_line_diff(old_lines: &[&str], new_lines: &[&str], line_offset: usize) -> Vec<LineChange> {
+fn build_core_line_diff(
+    old_lines: &[&str],
+    new_lines: &[&str],
+    line_offset: usize,
+) -> Vec<LineChange> {
     let (old_len, new_len) = (old_lines.len(), new_lines.len());
     // 1. 计算 LCS 长度表
     let mut dp = vec![vec![0usize; new_len + 1]; old_len + 1];

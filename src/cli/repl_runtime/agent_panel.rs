@@ -14,11 +14,6 @@ const COL_GAP: &str = "  ";
 const RUNNING_GUIDE: (u8, u8, u8) = (204, 167, 0);
 /// 待命引导点色相
 const IDLE_GUIDE: (u8, u8, u8) = (97, 175, 239);
-/// 非焦点态铺开的条目上限
-///
-/// 底栏与 todo、消息队列共用纵向空间，全部铺开会挤掉输入框；
-/// 超出的部分折叠成一行计数，↓ 进入焦点态可看全量
-const INACTIVE_ENTRY_LIMIT: usize = 5;
 
 /// 底部主/子 agent 切换面板的交互状态。
 #[derive(Default)]
@@ -36,6 +31,8 @@ pub(super) enum AgentPanelAction {
     Ignored,
     /// 按键已被面板消费，仅需重绘底部
     Consumed,
+    /// 离开面板，焦点回到输入框并收成单行
+    Exit,
     /// 用户确认选择：`None` 表示主 agent，`Some(cell_index)` 为子 agent
     Apply(Option<usize>),
 }
@@ -97,11 +94,19 @@ impl AgentPanelState {
         let total = entries.len() + 1;
         match code {
             KeyCode::Up => {
-                self.selected = self.selected.checked_sub(1).unwrap_or(total - 1);
-                AgentPanelAction::Consumed
+                if self.selected == 0 {
+                    // 主项再按 ↑：收成单行，焦点回到输入框
+                    self.deactivate();
+                    AgentPanelAction::Exit
+                } else {
+                    self.selected -= 1;
+                    AgentPanelAction::Consumed
+                }
             }
             KeyCode::Down => {
-                self.selected = (self.selected + 1) % total;
+                if self.selected + 1 < total {
+                    self.selected += 1;
+                }
                 AgentPanelAction::Consumed
             }
             KeyCode::Enter => {
@@ -110,16 +115,16 @@ impl AgentPanelState {
                 } else {
                     entries.get(self.selected - 1).map(|entry| entry.cell_index)
                 };
-                self.active = false;
+                self.deactivate();
                 AgentPanelAction::Apply(choice)
             }
             KeyCode::Esc => {
-                self.active = false;
-                AgentPanelAction::Consumed
+                self.deactivate();
+                AgentPanelAction::Exit
             }
             // 其他键：退出面板并交回常规输入处理
             _ => {
-                self.active = false;
+                self.deactivate();
                 AgentPanelAction::Ignored
             }
         }
@@ -141,45 +146,23 @@ impl AgentPanelState {
         if entries.is_empty() {
             return Vec::new();
         }
-        let running = entries.iter().filter(|entry| entry.running).count();
-        let total_tokens = entries.iter().filter_map(|entry| entry.tokens).sum::<u64>();
-        let header_left = header_left_plain(total_tokens);
-        let col_width = token_column_width(entries, &header_left);
-        if !self.active {
-            // 非焦点态同样铺开列表：并行多个子 agent 时，只有一行合计看不出
-            // 各自跑到哪一步、各自消耗了多少，而这正是并发时最需要的信息
-            let left = render_header_left(total_tokens, running, entries, col_width, frame);
-            let mut lines = vec![format!(
-                "    {left}{COL_GAP}\x1b[2m{}: {} ({}) · ↓ {}\x1b[0m",
-                t("agents", "智能体"),
-                entries.len(),
-                format!("{running} {}", t("running", "运行中")),
-                t("switch", "切换")
-            )];
-            for entry in entries.iter().take(INACTIVE_ENTRY_LIMIT) {
-                lines.push(selection_line(
-                    false,
-                    &render_entry_left(entry, col_width, frame),
-                    &render_entry_title(entry),
-                ));
-            }
-            let hidden = entries.len().saturating_sub(INACTIVE_ENTRY_LIMIT);
-            if hidden > 0 {
-                lines.push(format!(
-                    "    {}{COL_GAP}\x1b[2m… +{hidden} {}\x1b[0m",
-                    pad_left("", col_width),
-                    t("more", "条")
-                ));
-            }
-            return lines;
+        if self.active {
+            self.active_lines(entries, frame)
+        } else {
+            vec![idle_line(entries, frame)]
         }
-        let header_left_cell = render_header_left(total_tokens, running, entries, col_width, frame);
+    }
+
+    /// 焦点态：引导点标题 + 主智能体 + 全部子智能体。
+    fn active_lines(&self, entries: &[SubagentOverviewEntry], frame: usize) -> Vec<String> {
+        let col_width = token_column_width(entries);
         let mut lines = vec![format!(
-            "    {header_left_cell}{COL_GAP}\x1b[2m{} · ↑↓ {} · Enter {} · Esc {}\x1b[0m",
+            "{} \x1b[2m{} · ↑↓ {} · Enter {} · ↑ {}\x1b[0m",
+            guide_dot(entries, frame),
             t("agents", "智能体"),
             t("select", "选择"),
             t("view", "查看"),
-            t("back", "返回")
+            t("input", "回输入框")
         )];
         lines.push(selection_line(
             self.selected == 0,
@@ -236,7 +219,7 @@ impl super::ReplRuntime {
         let entries = self.transcript.subagent_overview();
         if self.agent_panel.is_active() {
             return match self.agent_panel.handle_key(code, &entries) {
-                AgentPanelAction::Consumed => Ok(true),
+                AgentPanelAction::Consumed | AgentPanelAction::Exit => Ok(true),
                 AgentPanelAction::Apply(choice) => {
                     // 主 agent：返回主会话视图；子 agent：整体切换到其会话时间线
                     let changed = match choice {
@@ -314,10 +297,9 @@ fn selection_line(selected: bool, left: &str, title: &str) -> String {
     format!("{marker}{left}{COL_GAP}{title}")
 }
 
-/// 组装条目右栏：类型 · 描述 · 当前阶段 · 步数 · 时长。
+/// 组装条目右栏：名称 · 步数 · 时长。
 ///
-/// 面板一行要同时回答「这是谁、在做什么、跑了多久、预算还剩多少」。
-/// 按重要性从左往右排，窄终端下先被截掉的是尾部的次要信息。
+/// 类型作短前缀，阶段细节不再进标题，避免与 todo、队列抢宽度。
 ///
 /// 参数:
 /// - `entry`: 子智能体概览条目
@@ -325,24 +307,17 @@ fn selection_line(selected: bool, left: &str, title: &str) -> String {
 /// 返回:
 /// - 右栏纯文本
 fn render_entry_title(entry: &SubagentOverviewEntry) -> String {
-    let mut parts: Vec<String> = Vec::new();
-    if let Some(agent_type) = entry
+    let label = clip_chars(entry.label.trim(), 28);
+    let identity = match entry
         .agent_type
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        parts.push(clip_chars(agent_type, 14));
-    }
-    parts.push(clip_chars(entry.label.trim(), 36));
-    if let Some(detail) = entry
-        .detail
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        parts.push(clip_chars(detail, 28));
-    }
+        Some(agent_type) => format!("{} {label}", clip_chars(agent_type, 10)),
+        None => label,
+    };
+    let mut parts = vec![identity];
     if let Some((step, max_steps)) = entry.progress {
         parts.push(format!("{step}/{max_steps}"));
     }
@@ -388,12 +363,46 @@ fn format_token_plain(tokens: u64) -> String {
     format_k(usize::try_from(tokens).unwrap_or(usize::MAX))
 }
 
-/// 标题行左栏纯文本（有合计 tokens 时用数字，否则空，留给引导点）。
-fn header_left_plain(total_tokens: u64) -> String {
-    if total_tokens > 0 {
-        format_token_plain(total_tokens)
+/// 非焦点态的单行摘要。
+///
+/// 与 todo、消息队列共用同一套沉底装饰：一行引导点摘要，避免多智能体
+/// 一开就把底栏铺成一块列表，把输入框顶上去。条目细节留给 ↓ 展开。
+///
+/// 参数:
+/// - `entries`: 当前子 agent 概览
+/// - `frame`: live 动效帧序号
+///
+/// 返回:
+/// - 单行 ANSI 摘要
+fn idle_line(entries: &[SubagentOverviewEntry], frame: usize) -> String {
+    let running = entries.iter().filter(|entry| entry.running).count();
+    let mut summary = format!("{} ({})", t("agents", "智能体"), entries.len());
+    if running > 0 {
+        summary.push_str(&format!(" · {} {}", running, t("running", "运行中")));
+    }
+    // 引导点之外全部压暗：与 todo、队列同一套沉底装饰，只有状态点是亮色
+    format!(
+        "{} \x1b[2m{summary}  ↓ {}\x1b[0m",
+        guide_dot(entries, frame),
+        t("expand", "展开")
+    )
+}
+
+/// 沉底引导点：运行中走流光，有待命条目用待命色，其余为静态暗点。
+///
+/// 参数:
+/// - `entries`: 当前子 agent 概览
+/// - `frame`: live 动效帧序号
+///
+/// 返回:
+/// - 引导点 ANSI 文本，宽度恒为一列
+fn guide_dot(entries: &[SubagentOverviewEntry], frame: usize) -> String {
+    if entries.iter().any(|entry| entry.running) {
+        render_activity_guide_with_color(frame, Some(RUNNING_GUIDE))
+    } else if entries.iter().any(|entry| entry.status == "idle") {
+        render_activity_guide_with_color(frame, Some(IDLE_GUIDE))
     } else {
-        String::new()
+        "\x1b[2m•\x1b[0m".to_string()
     }
 }
 
@@ -407,11 +416,10 @@ fn entry_left_plain(entry: &SubagentOverviewEntry) -> String {
 }
 
 /// 计算两栏布局的左栏宽度，保证数字与标题分别对齐。
-fn token_column_width(entries: &[SubagentOverviewEntry], header_left: &str) -> usize {
+fn token_column_width(entries: &[SubagentOverviewEntry]) -> usize {
     entries
         .iter()
         .map(|entry| visible_width(&entry_left_plain(entry)))
-        .chain(std::iter::once(visible_width(header_left)))
         .max()
         .unwrap_or(0)
         .max(TOKEN_COL_MIN)
@@ -421,34 +429,6 @@ fn token_column_width(entries: &[SubagentOverviewEntry], header_left: &str) -> u
 fn pad_left(text: &str, width: usize) -> String {
     let pad = width.saturating_sub(visible_width(text));
     format!("{}{text}", " ".repeat(pad))
-}
-
-/// 渲染标题行左栏：有 tokens 则跳动，否则用状态色引导点。
-fn render_header_left(
-    total_tokens: u64,
-    running: usize,
-    entries: &[SubagentOverviewEntry],
-    width: usize,
-    frame: usize,
-) -> String {
-    if total_tokens > 0 {
-        let plain = format_token_plain(total_tokens);
-        let pad = " ".repeat(width.saturating_sub(visible_width(&plain)));
-        let body = if running > 0 {
-            render_activity_text(&plain, frame)
-        } else {
-            format!("\x1b[2m{plain}\x1b[0m")
-        };
-        return format!("{pad}{body}");
-    }
-    let bullet = if running > 0 {
-        render_activity_guide_with_color(frame, Some(RUNNING_GUIDE))
-    } else if entries.iter().any(|entry| entry.status == "idle") {
-        render_activity_guide_with_color(frame, Some(IDLE_GUIDE))
-    } else {
-        "\x1b[2m•\x1b[0m".to_string()
-    };
-    format!("{}{bullet}", " ".repeat(width.saturating_sub(1)))
 }
 
 /// 渲染条目左栏：运行中的 tokens 走扫光跳动，待命/终态用静态数字或状态色。
@@ -499,7 +479,7 @@ mod tests {
 
         assert_eq!(
             render_entry_title(&entry),
-            "explore · 诗歌文本多阶段分析 · Reading foo.rs · 3/20 · 2m14s"
+            "explore 诗歌文本多阶段分析 · 3/20 · 2m14s"
         );
     }
 
@@ -593,7 +573,7 @@ mod tests {
         panel.activate(&entries);
         assert_eq!(
             panel.handle_key(KeyCode::Esc, &entries),
-            AgentPanelAction::Consumed
+            AgentPanelAction::Exit
         );
         assert!(!panel.is_active());
         panel.activate(&entries);
@@ -604,38 +584,57 @@ mod tests {
         assert!(!panel.is_active());
     }
 
-    /// 非焦点态也铺开条目：并行多个子 agent 时，只有一行合计看不出
-    /// 各自的状态与用量。
+    /// ↑ 回到输入框：主智能体项再按 ↑ 收成单行，而不是绕回最后一项。
     #[test]
-    fn inactive_panel_lists_subagents() {
+    fn up_on_the_main_entry_returns_to_the_input_box() {
+        let mut panel = AgentPanelState::default();
+        let entries = vec![entry(2, "one", true), entry(5, "two", false)];
+        panel.activate(&entries);
+        assert_eq!(
+            panel.handle_key(KeyCode::Up, &entries),
+            AgentPanelAction::Exit
+        );
+        assert!(!panel.is_active());
+        // 收起后只剩一行摘要
+        assert_eq!(panel.panel_lines(&entries, 0).len(), 1);
+        // 选中项已越过主项时，↑ 先退回上一项
+        panel.activate(&entries);
+        panel.handle_key(KeyCode::Down, &entries);
+        panel.handle_key(KeyCode::Down, &entries);
+        assert_eq!(
+            panel.handle_key(KeyCode::Up, &entries),
+            AgentPanelAction::Consumed
+        );
+        assert!(panel.is_active());
+    }
+
+    /// 非焦点态只占一行：底栏还要留给 todo 与消息队列，铺开会把输入框顶上去。
+    #[test]
+    fn inactive_panel_is_a_single_summary_line() {
         let panel = AgentPanelState::default();
         let entries = vec![entry(2, "one", true), entry(5, "two", false)];
         let lines = panel.panel_lines(&entries, 0);
-        // 表头 + 每个条目一行
-        assert_eq!(lines.len(), 3);
-        assert!(lines[0].contains('↓'));
-        let plain = crate::render::activity_animation::strip_ansi_for_test(&lines[1..].join("\n"));
-        assert!(plain.contains("one"), "{plain}");
-        assert!(plain.contains("two"), "{plain}");
+        assert_eq!(lines.len(), 1);
+        let plain = crate::render::activity_animation::strip_ansi_for_test(&lines[0]);
+        assert!(plain.starts_with('•'), "摘要行应以引导点起头: {plain}");
+        assert!(plain.contains("(2)"), "摘要行应给出条目数: {plain}");
+        assert!(plain.contains('1'), "摘要行应给出运行中条数: {plain}");
+        assert!(plain.contains('↓'), "摘要行应提示 ↓ 展开: {plain}");
+        // 条目细节留给 ↓ 展开，不在摘要行里占位
+        assert!(!plain.contains("one"), "{plain}");
+        assert!(!plain.contains("two"), "{plain}");
     }
 
-    /// 非焦点态的列表有上限，超出折叠成一行计数。
+    /// 子 agent 再多，收起态也只占一行。
     #[test]
-    fn inactive_panel_caps_the_list() {
+    fn inactive_panel_height_does_not_grow_with_entry_count() {
         let panel = AgentPanelState::default();
-        let entries: Vec<SubagentOverviewEntry> = (0..INACTIVE_ENTRY_LIMIT + 3)
+        let entries: Vec<SubagentOverviewEntry> = (0..8)
             .map(|index| entry(index, &format!("任务{index}"), true))
             .collect();
-        let lines = panel.panel_lines(&entries, 0);
-        // 表头 + 上限条目 + 一行折叠计数
-        assert_eq!(lines.len(), INACTIVE_ENTRY_LIMIT + 2);
-        assert!(
-            lines
-                .last()
-                .is_some_and(|line| line.contains(&format!("+{}", 3))),
-            "excess entries should collapse into a count: {:?}",
-            lines.last()
-        );
+        assert_eq!(panel.panel_lines(&entries, 0).len(), 1);
+        let single = panel.panel_lines(&entries[..1], 0);
+        assert_eq!(single.len(), 1);
     }
 
     #[test]
@@ -679,9 +678,9 @@ mod tests {
         );
     }
 
-    /// 【终端】【agent 面板】动效栏与标题栏分列，各行标题起点对齐。
+    /// 【终端】【agent 面板】标题行顶格带引导点，条目行缩进且标题与 tokens 分列对齐。
     #[test]
-    fn token_and_title_columns_align() {
+    fn header_is_a_guide_dot_and_entry_columns_align() {
         let mut panel = AgentPanelState::default();
         let mut running_entry = entry(2, "诗歌分析", true);
         running_entry.tokens = Some(1_200);
@@ -692,47 +691,49 @@ mod tests {
         panel.activate(&entries);
 
         let lines = panel.panel_lines(&entries, 0);
-        let titles = [
-            t("agents", "智能体"),
-            t("main agent", "主智能体"),
-            "诗歌分析",
-            "长期重构",
-        ];
-        let starts: Vec<usize> = lines
+        let plain_lines: Vec<String> = lines
             .iter()
-            .zip(titles)
-            .map(|(line, title)| {
-                let plain = crate::render::activity_animation::strip_ansi_for_test(line);
-                let byte_index = plain
-                    .find(title)
-                    .unwrap_or_else(|| panic!("missing {title} in {plain}"));
-                visible_width(&plain[..byte_index])
-            })
+            .map(|line| crate::render::activity_animation::strip_ansi_for_test(line))
             .collect();
-        assert_eq!(starts.len(), 4, "标题行与三条条目都应出现: {lines:?}");
+        // 标题行与 todo、队列同一套沉底装饰：顶格引导点
         assert!(
-            starts.windows(2).all(|pair| pair[0] == pair[1]),
-            "标题栏起点必须对齐: {starts:?} / {lines:?}"
+            plain_lines[0].starts_with('•'),
+            "标题行应以引导点顶格: {:?}",
+            plain_lines[0]
         );
-        let token_col: Vec<usize> = lines
+        let rows = &plain_lines[1..];
+        let starts: Vec<usize> = rows
             .iter()
-            .filter_map(|line| {
-                let plain = crate::render::activity_animation::strip_ansi_for_test(line);
-                ["1.2k", "12"].iter().find_map(|token| {
-                    let byte_index = plain.find(token)?;
-                    let end = byte_index + token.len();
-                    Some(visible_width(&plain[..end]))
-                })
+            .zip([t("main agent", "主智能体"), "诗歌分析", "长期重构"])
+            .map(|(line, title)| {
+                let byte_index = line
+                    .find(title)
+                    .unwrap_or_else(|| panic!("missing {title} in {line}"));
+                visible_width(&line[..byte_index])
             })
             .collect();
         assert_eq!(
-            token_col.len(),
+            starts.len(),
             3,
-            "标题合计与两条 token 行都应出现: {lines:?}"
+            "主智能体与两条条目都应出现: {plain_lines:?}"
         );
         assert!(
+            starts.windows(2).all(|pair| pair[0] == pair[1]),
+            "条目标题栏起点必须对齐: {starts:?} / {plain_lines:?}"
+        );
+        let token_col: Vec<usize> = rows
+            .iter()
+            .filter_map(|line| {
+                ["1.2k", "12"].iter().find_map(|token| {
+                    let byte_index = line.find(token)?;
+                    Some(visible_width(&line[..byte_index + token.len()]))
+                })
+            })
+            .collect();
+        assert_eq!(token_col.len(), 2, "两条 token 行都应出现: {plain_lines:?}");
+        assert!(
             token_col.windows(2).all(|pair| pair[0] == pair[1]),
-            "tokens 数字应右对齐在同一栏: {token_col:?} / {lines:?}"
+            "tokens 数字应右对齐在同一栏: {token_col:?} / {plain_lines:?}"
         );
     }
 }

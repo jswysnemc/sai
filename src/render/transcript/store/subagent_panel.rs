@@ -78,6 +78,7 @@ impl TranscriptStore {
             entries.push(entry);
         }
         trim_finished_entries(&mut entries);
+        sort_overview_entries(&mut entries);
         entries
     }
 
@@ -165,6 +166,19 @@ fn trim_finished_entries(entries: &mut Vec<SubagentOverviewEntry>) {
     }
 }
 
+/// 运行中优先，其次待命，终态沉底；同组保持原序。
+fn sort_overview_entries(entries: &mut [SubagentOverviewEntry]) {
+    entries.sort_by_key(|entry| {
+        if entry.running {
+            0u8
+        } else if entry.status == "idle" {
+            1
+        } else {
+            2
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,5 +242,19 @@ mod tests {
             .collect();
         trim_finished_entries(&mut entries);
         assert_eq!(entries.len(), total);
+    }
+
+    /// 运行中条目排在待命与终态之前。
+    #[test]
+    fn running_entries_sort_before_idle_and_finished() {
+        let mut entries = vec![
+            entry("完成", false, "ok"),
+            entry("待命", false, "idle"),
+            entry("运行", true, "run"),
+        ];
+        trim_finished_entries(&mut entries);
+        sort_overview_entries(&mut entries);
+        let labels: Vec<&str> = entries.iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(labels, ["运行", "待命", "完成"]);
     }
 }

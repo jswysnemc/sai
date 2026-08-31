@@ -32,9 +32,10 @@ pub(super) struct GapMessageCandidate {
 impl Agent {
     /// 选择下一条模型间隙消息。
     ///
-    /// 1. 用户排队消息优先于自动完成回执
+    /// 1. 用户排队的请求间隔消息优先于自动完成回执
     /// 2. 每次只返回一条消息
-    /// 3. 只有最终回复边界允许等待后台任务或生成 Goal 续作
+    /// 3. 外部完成（含 mesh 入站）走请求间隔，在下一次模型请求前注入
+    /// 4. 只有最终回复边界允许等待后台任务或生成 Goal 续作
     ///
     /// 参数:
     /// - `source`: 可选用户排队消息来源
@@ -55,8 +56,9 @@ impl Agent {
         F: FnMut(AgentEvent) -> Result<()>,
     {
         let monitor = self.external_event_monitor();
-        let can_poll_external =
-            self.tools.contains("subagent") || self.tools.contains("background_command");
+        let can_poll_external = self.tools.contains("subagent")
+            || self.tools.contains("background_command")
+            || self.tools.contains("mesh_send");
         let mut wait_announced = false;
         loop {
             // 1. 用户新要求具有最高优先级，并且保持 Web 队列中的可编辑顺序
@@ -73,7 +75,8 @@ impl Agent {
                 return Ok(None);
             }
 
-            // 2. 外部监听器已经把完成事件压缩为单条确定性回执
+            // 2. 外部监听器已经把完成事件压缩为单条确定性回执。
+            //    mesh 入站也走这条请求间隙，不排到轮次结束后才投递。
             match monitor.poll_once().await? {
                 ExternalEventPoll::Ready(ExternalEventWake::Completion(batch)) => {
                     let prompt = self.external_completion_prompt(&batch)?;

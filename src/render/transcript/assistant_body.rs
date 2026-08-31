@@ -25,11 +25,8 @@ pub(super) fn display_lines(rendered: &str, content_width: usize) -> Vec<AnsiLin
     }
 
     // 1. 按调用方传入的正文净宽度完成折行，并为续行恢复内收
-    let lines = AnsiLine::wrap_block_with_continuation_indent(
-        rendered,
-        content_width,
-        CONTINUATION_INDENT,
-    );
+    let lines =
+        AnsiLine::wrap_block_with_continuation_indent(rendered, content_width, CONTINUATION_INDENT);
     // 2. 每一行补上与引导区同宽的空白，落在工具/思考符号右侧的内容列
     let prefix = " ".repeat(CONTENT_LEFT_INDENT);
     lines

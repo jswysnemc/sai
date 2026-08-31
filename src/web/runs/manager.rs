@@ -5,12 +5,12 @@ use super::model_override::resolve_run_config;
 use super::request_limits::validate_start_request;
 use super::{EventJournal, WebEvent};
 use crate::agent::{AgentMode, InterMessageSource};
+use crate::ipc::link::{HolderRequest, LinkRole, SessionLink, SubmittedRun};
 use crate::paths::SaiPaths;
 use crate::runner::{
     ActorHandle, ControlSubmission, RunnerSubmission, SessionRunner, SubmissionSource,
     UserInputSubmission,
 };
-use crate::ipc::link::{HolderRequest, LinkRole, SessionLink, SubmittedRun};
 use crate::web::workspaces::WorkspaceInfo;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
@@ -30,6 +30,17 @@ mod queue;
 mod tests;
 
 pub(crate) use queue::QueuedRunUpdate;
+
+/// 排队消息插入当前对话的位置。
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum QueueInsertAt {
+    /// 当前轮下一次模型请求前插入，续在同一轮
+    Request,
+    /// 本轮结束后作为新一轮插入
+    #[default]
+    Turn,
+}
 
 /// 启动一轮 Web 对话所需参数。
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -55,6 +66,9 @@ pub(crate) struct StartRunRequest {
     pub model: Option<String>,
     #[serde(default)]
     pub thinking_level: Option<String>,
+    /// 排队时插入位置；立即启动的一轮忽略该字段。
+    #[serde(default)]
+    pub insert_at: QueueInsertAt,
 }
 
 /// Web 运行种类。
@@ -80,6 +94,9 @@ pub(crate) struct ActiveRunInfo {
     pub discard_user_turn: bool,
     #[serde(default)]
     pub restore_input: Option<String>,
+    /// 排队插入点；非排队运行保持默认轮次间隔。
+    #[serde(default)]
+    pub insert_at: QueueInsertAt,
 }
 
 struct ActiveRun {
@@ -149,11 +166,12 @@ impl RunManager {
         // 启动恢复只处理「没有活着的持有者」的那一轮：持有者还活着说明这一轮
         // 正被另一个进程（TUI 或另一个 sai web 实例）驱动，按崩溃恢复会在对端
         // 毫不知情的情况下把它的轮次标成 interrupted/failed——那才是真正的误杀。
-        for checkpoint in manager
-            .checkpoints
-            .recover_running_as_interrupted_where(|checkpoint| {
-                !session_is_held_by_a_live_process(paths, &checkpoint.info.session_id)
-            })?
+        for checkpoint in
+            manager
+                .checkpoints
+                .recover_running_as_interrupted_where(|checkpoint| {
+                    !session_is_held_by_a_live_process(paths, &checkpoint.info.session_id)
+                })?
         {
             if let Ok(state) = crate::state::StateStore::for_workspace_session(
                 paths,
@@ -280,13 +298,16 @@ impl RunManager {
             status,
             discard_user_turn: false,
             restore_input: None,
+            insert_at: request.insert_at,
         };
         let bus = self.session_bus(&workspace.id, &request.session_id).await;
         // 观察者不持有 Agent：整包上行给持有者执行，本进程只负责把受理结果回给前端。
         // 持有者与单进程（Detached）都走下面原有的本地路径，行为完全不变。
         if let Some(link) = self.session_link(&workspace.id, &request.session_id).await {
             if link.role() == LinkRole::Observer {
-                return self.forward_to_holder(&link, &workspace, request, info).await;
+                return self
+                    .forward_to_holder(&link, &workspace, request, info)
+                    .await;
             }
         }
         self.checkpoints.upsert(RunCheckpoint {
@@ -315,6 +336,7 @@ impl RunManager {
                     "position": queue.len(),
                     "input": info.input,
                     "image_urls": info.image_urls,
+                    "insert_at": info.insert_at,
                 }),
             ));
             return Ok(info);
@@ -342,7 +364,8 @@ impl RunManager {
     /// 返回:
     /// - 会话链接
     async fn session_link(&self, workspace_id: &str, session_id: &str) -> Option<SessionLink> {
-        self.link_for_key(&session_key(workspace_id, session_id)).await
+        self.link_for_key(&session_key(workspace_id, session_id))
+            .await
     }
 
     /// 按调度键返回会话链接。
@@ -600,9 +623,7 @@ impl RunManager {
             let info = current.info.clone();
             drop(active);
             self.checkpoints.update_interruption(run_id, false, None)?;
-            let bus = self
-                .session_bus(&info.workspace_id, &info.session_id)
-                .await;
+            let bus = self.session_bus(&info.workspace_id, &info.session_id).await;
             let _ = bus.emit(WebEvent::new(
                 &info.run_id,
                 &info.workspace_id,

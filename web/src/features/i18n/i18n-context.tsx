@@ -1,5 +1,5 @@
 import { createContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { detectInitialLocale, LOCALE_STORAGE_KEY, text, type Locale } from "./locale";
+import { detectInitialLocale, LOCALE_STORAGE_KEY, setRuntimeLocale, text, type Locale } from "./locale";
 
 export type Translate = (en: string, zh: string) => string;
 
@@ -27,6 +27,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<Locale>(detectInitialLocale);
 
   useEffect(() => {
+    setRuntimeLocale(locale);
     document.documentElement.lang = locale;
     window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
   }, [locale]);

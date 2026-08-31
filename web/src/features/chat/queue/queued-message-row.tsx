@@ -1,12 +1,14 @@
-import { ArrowUpToLine, Check, GripVertical, Pencil, Trash2, X } from "lucide-react";
+import { ArrowUpToLine, Check, GripVertical, Loader2, Pencil, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "../../../shared/ui/button/button";
 import { TextArea } from "../../../shared/ui/form/text-area";
+import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
+import type { QueueInsertAt } from "../../../api/contracts";
 import type { LiveRunState } from "../run-event-reducer";
 import { useI18n } from "../../i18n/use-i18n";
-import { QueuedMessagePreview } from "./queued-message-preview";
+import { QueuedImageStrip, QueuedMessagePreview } from "./queued-message-preview";
 
-type QueueAction = "move" | "update" | "remove";
+type QueueAction = "move" | "update" | "remove" | "insert";
 
 type QueuedMessageRowProps = {
   run: LiveRunState;
@@ -16,8 +18,10 @@ type QueuedMessageRowProps = {
   onDragStart: () => void;
   onDragEnd: () => void;
   onDrop: () => void;
-  onUpdate: (runId: string, input: string) => Promise<void>;
+  onUpdate: (runId: string, input: string, imageUrls: string[]) => Promise<void>;
   onMove: (runId: string, position: number) => Promise<void>;
+  onPromote: (runId: string) => Promise<void>;
+  onInsertAt: (runId: string, insertAt: QueueInsertAt) => Promise<void>;
   onRemove: (runId: string) => Promise<void>;
   onError: (error: unknown) => void;
 };
@@ -30,15 +34,20 @@ type QueuedMessageRowProps = {
  */
 export function QueuedMessageRow(props: QueuedMessageRowProps) {
   const { t } = useI18n();
+  const confirm = useConfirm();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(props.run.userInput);
+  const [draftImages, setDraftImages] = useState(props.run.imageUrls);
   const [busy, setBusy] = useState<QueueAction | null>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const runId = props.run.runId;
 
   useEffect(() => {
-    if (!editing) setDraft(props.run.userInput);
-  }, [editing, props.run.userInput]);
+    if (!editing) {
+      setDraft(props.run.userInput);
+      setDraftImages(props.run.imageUrls);
+    }
+  }, [editing, props.run.userInput, props.run.imageUrls]);
 
   useEffect(() => {
     if (editing) editorRef.current?.focus();
@@ -65,14 +74,14 @@ export function QueuedMessageRow(props: QueuedMessageRowProps) {
   };
 
   /**
-   * 保存编辑后的消息正文。
+   * 保存编辑后的消息正文和图片。
    *
    * @returns 保存完成后的 Promise
    */
   const save = async () => {
-    if (!runId || (!draft.trim() && props.run.imageUrls.length === 0)) return;
+    if (!runId || (!draft.trim() && draftImages.length === 0)) return;
     try {
-      await perform("update", () => props.onUpdate(runId, draft));
+      await perform("update", () => props.onUpdate(runId, draft, draftImages));
       setEditing(false);
     } catch {
       // 错误已交由聊天页统一展示，保留编辑状态供用户修正
@@ -89,6 +98,7 @@ export function QueuedMessageRow(props: QueuedMessageRowProps) {
     if (event.key === "Escape") {
       event.preventDefault();
       setDraft(props.run.userInput);
+      setDraftImages(props.run.imageUrls);
       setEditing(false);
       return;
     }
@@ -140,15 +150,21 @@ export function QueuedMessageRow(props: QueuedMessageRowProps) {
 
       <div className="queued-message-content">
         {editing ? (
-          <TextArea
-            ref={editorRef}
-            className="queued-message-editor"
-            value={draft}
-            rows={2}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={handleEditorKeyDown}
-            aria-label={t("Edit queued message", "编辑排队消息")}
-          />
+          <div className="queued-message-editor-block">
+            <TextArea
+              ref={editorRef}
+              className="queued-message-editor"
+              value={draft}
+              rows={2}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={handleEditorKeyDown}
+              aria-label={t("Edit queued message", "编辑排队消息")}
+            />
+            <QueuedImageStrip
+              imageUrls={draftImages}
+              onRemove={(index) => setDraftImages((current) => current.filter((_, item) => item !== index))}
+            />
+          </div>
         ) : (
           <QueuedMessagePreview
             position={props.position}
@@ -164,16 +180,17 @@ export function QueuedMessageRow(props: QueuedMessageRowProps) {
             <Button
               className="queued-message-icon-action"
               onClick={() => void save()}
-              disabled={busy !== null || (!draft.trim() && props.run.imageUrls.length === 0)}
+              disabled={busy !== null || (!draft.trim() && draftImages.length === 0)}
               aria-label={t("Save queued message", "保存排队消息")}
               title={t("Save", "保存")}
             >
-              <Check size={15} />
+              {busy === "update" ? <Loader2 size={15} className="queued-busy-spin" /> : <Check size={15} />}
             </Button>
             <Button
               className="queued-message-icon-action"
               onClick={() => {
                 setDraft(props.run.userInput);
+                setDraftImages(props.run.imageUrls);
                 setEditing(false);
               }}
               disabled={busy !== null}
@@ -186,14 +203,28 @@ export function QueuedMessageRow(props: QueuedMessageRowProps) {
         ) : (
           <>
             <Button
-              className="queued-message-promote"
-              onClick={() => runId && void perform("move", () => props.onMove(runId, 0)).catch(() => undefined)}
-              disabled={!runId || props.position === 0 || busy !== null}
-              aria-label={t("Run next after the current task", "当前任务结束后立即执行")}
-              title={t("Move to the front of the queue", "移到队首，当前任务结束后优先执行")}
+              className={`queued-message-insert${props.run.insertAt === "request" ? " is-request" : ""}`}
+              onClick={() => runId && void perform("insert", () => props.onInsertAt(runId, props.run.insertAt === "request" ? "turn" : "request")).catch(() => undefined)}
+              disabled={!runId || busy !== null}
+              aria-label={props.run.insertAt === "request"
+                ? t("Insert at next model request; click to wait for the current turn", "下次模型请求时插入；点击改为等本轮结束")
+                : t("Wait for the current turn; click to insert at the next model request", "等本轮结束后插入；点击改为下次请求时插入")}
+              title={props.run.insertAt === "request"
+                ? t("Next request", "下次请求")
+                : t("After this turn", "本轮之后")}
             >
-              <ArrowUpToLine size={14} />
-              <span>{t("Next", "立即")}</span>
+              {busy === "insert" ? <Loader2 size={14} className="queued-busy-spin" /> : null}
+              <span>{props.run.insertAt === "request" ? t("Request", "请求") : t("Turn", "轮次")}</span>
+            </Button>
+            <Button
+              className="queued-message-promote"
+              onClick={() => runId && void perform("move", () => props.onPromote(runId)).catch(() => undefined)}
+              disabled={!runId || (props.position === 0 && props.run.insertAt === "request") || busy !== null}
+              aria-label={t("Insert at the next model request", "下次模型请求时优先插入")}
+              title={t("Move to the front and insert at the next model request", "移到队首，下次模型请求时插入")}
+            >
+              {busy === "move" ? <Loader2 size={14} className="queued-busy-spin" /> : <ArrowUpToLine size={14} />}
+              <span>{t("Next request", "下次请求")}</span>
             </Button>
             <Button
               className="queued-message-icon-action"
@@ -207,12 +238,25 @@ export function QueuedMessageRow(props: QueuedMessageRowProps) {
             <Button
               variant="ghost-danger"
               className="queued-message-icon-action"
-              onClick={() => runId && void perform("remove", () => props.onRemove(runId)).catch(() => undefined)}
+              onClick={() => {
+                if (!runId) return;
+                void (async () => {
+                  const accepted = await confirm({
+                    title: t("Remove queued message?", "删除排队消息？"),
+                    description: t("This queued message will not be sent.", "这条排队消息将不会发送。"),
+                    confirmLabel: t("Delete", "删除"),
+                    cancelLabel: t("Cancel", "取消"),
+                    danger: true
+                  });
+                  if (!accepted) return;
+                  await perform("remove", () => props.onRemove(runId)).catch(() => undefined);
+                })();
+              }}
               disabled={!runId || busy !== null}
               aria-label={t("Delete queued message", "删除排队消息")}
               title={t("Delete", "删除")}
             >
-              <Trash2 size={14} />
+              {busy === "remove" ? <Loader2 size={14} className="queued-busy-spin" /> : <Trash2 size={14} />}
             </Button>
           </>
         )}

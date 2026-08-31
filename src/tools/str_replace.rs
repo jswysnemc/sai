@@ -1,4 +1,4 @@
-use super::file_diff::unified_diff;
+use super::file_diff::{diff_line_counts, unified_diff};
 use super::file_edit::atomic_write::write_text_file;
 use super::file_edit::line_endings::{materialize_model_text, to_model_text_view};
 use super::fs_path::{expand_path, fs_error};
@@ -138,10 +138,9 @@ fn str_replace(args: Value) -> Result<String> {
     )?;
 
     let replacements = if replace_all { matches } else { 1 };
-    let old_lines = line_count(old_string) * replacements;
-    let new_lines = line_count(new_string) * replacements;
-    let added = new_lines;
-    let removed = old_lines;
+    // 与 diff 正文同一套 LCS 口径：按 old/new_string 的行数乘次数会多报，
+    // 例如三行里只改中间一行应报 +1 -1 而不是 +3 -3
+    let (added, removed) = diff_line_counts(content, &updated);
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
         "mode": "replace",
@@ -172,21 +171,6 @@ fn required_string<'a>(args: &'a Value, key: &str) -> Result<&'a str> {
         .ok_or_else(|| anyhow::anyhow!("{key} is required"))
 }
 
-/// 统计文本行数。
-///
-/// 参数:
-/// - `content`: 文本
-///
-/// 返回:
-/// - 行数
-fn line_count(content: &str) -> usize {
-    if content.is_empty() {
-        0
-    } else {
-        content.lines().count()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,7 +198,28 @@ mod tests {
         .unwrap();
         let data: Value = serde_json::from_str(&result).unwrap();
         assert_eq!(data["changed_files"][0]["action"], "Edited");
+        // 只改一行就报 +1 -1
+        assert_eq!(data["changed_files"][0]["added"], 1);
+        assert_eq!(data["changed_files"][0]["removed"], 1);
         assert_eq!(std::fs::read_to_string(path).unwrap(), "ONE\ntwo\n");
+    }
+
+    /// 三行里只改中间一行：统计要跟画出来的 +/- 行一样。
+    #[test]
+    fn str_replace_counts_only_the_changed_lines() {
+        let cwd = crate::runtime_cwd::current_dir().unwrap();
+        let temp = tempfile::tempdir_in(cwd).unwrap();
+        let path = temp.path().join("sample.txt");
+        std::fs::write(&path, "a\nb\nc\n").unwrap();
+        let result = str_replace(json!({
+            "path": path.display().to_string(),
+            "old_string": "a\nb\nc\n",
+            "new_string": "a\nB\nc\n"
+        }))
+        .unwrap();
+        let data: Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(data["changed_files"][0]["added"], 1);
+        assert_eq!(data["changed_files"][0]["removed"], 1);
     }
 
     #[test]

@@ -145,6 +145,18 @@
   background: var(--ink-soft);
 }
 
+.composer-send-spin {
+  animation: composer-send-spin 0.8s linear infinite;
+}
+
+@keyframes composer-send-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-send-spin { animation: none; }
+}
+
 .composer-send:disabled,
 .composer-icon-button:disabled,
 .model-thinking-trigger:disabled {

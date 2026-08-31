@@ -228,7 +228,11 @@ fn previous_selectable(fields: &[Field], selected: usize) -> usize {
 /// - 非空模型标识，取消时返回空
 pub(crate) fn add_custom_model_form(stdout: &mut io::Stdout) -> Result<Option<String>> {
     let mut fields = [Field::new(t("Model ID", "模型标识"), String::new())];
-    if !run_form(stdout, &t(" ADD CUSTOM MODEL ", " 添加自定义模型 "), &mut fields)? {
+    if !run_form(
+        stdout,
+        &t(" ADD CUSTOM MODEL ", " 添加自定义模型 "),
+        &mut fields,
+    )? {
         return Ok(None);
     }
     let model = fields[0].value.trim().to_string();
@@ -411,7 +415,9 @@ fn edit_textarea_with_editor(value: &str) -> Result<Option<String>> {
         .unwrap_or_else(|_| crate::platform::shell::default_editor().to_string());
     let status = crate::platform::shell::editor_command(&editor, &path)
         .status()
-        .map_err(|err| anyhow::anyhow!("{}: {err}", t("failed to open editor", "无法打开编辑器")))?;
+        .map_err(|err| {
+            anyhow::anyhow!("{}: {err}", t("failed to open editor", "无法打开编辑器"))
+        })?;
     if !status.success() {
         return Ok(None);
     }

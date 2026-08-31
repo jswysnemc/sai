@@ -893,7 +893,8 @@ mod tests {
     /// 心跳过期后回落到进程检查，pid 不存在则判定失联。
     #[test]
     fn expired_heartbeat_falls_back_to_process_check() {
-        let long_past = Utc::now() - chrono::Duration::seconds(HOLDER_HEARTBEAT_STALE.as_secs() as i64 + 60);
+        let long_past =
+            Utc::now() - chrono::Duration::seconds(HOLDER_HEARTBEAT_STALE.as_secs() as i64 + 60);
         let record = SessionHolderRecord {
             schema: HOLDER_SCHEMA,
             session_id: "session".to_string(),

@@ -119,8 +119,9 @@ impl BackgroundCommandStore {
         let payload = format!("{}\n", serde_json::to_string_pretty(tasks)?);
         let temp = tempfile::NamedTempFile::new_in(&self.root)?;
         std::fs::write(temp.path(), payload)?;
-        temp.persist(self.state_file())
-            .map_err(|error| anyhow::anyhow!("failed to persist background tasks: {}", error.error))?;
+        temp.persist(self.state_file()).map_err(|error| {
+            anyhow::anyhow!("failed to persist background tasks: {}", error.error)
+        })?;
         Ok(())
     }
 
@@ -187,7 +188,10 @@ mod tests {
         raw.push_str("\n\"completion_notified\": false\n}\n]");
         std::fs::write(store.state_file(), &raw).unwrap();
 
-        assert!(store.load().unwrap().is_empty(), "a trailing fragment must not fail the load");
+        assert!(
+            store.load().unwrap().is_empty(),
+            "a trailing fragment must not fail the load"
+        );
     }
 
     /// 保存走原子替换，读到的永远是完整内容。

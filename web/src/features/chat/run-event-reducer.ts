@@ -1,4 +1,4 @@
-import type { PendingQuestion, PermissionDecision, PermissionRequest, QuestionResponse, SshSecretRequest, TurnUsage, WebEvent } from "../../api/contracts";
+import type { PendingQuestion, PermissionDecision, PermissionRequest, QueueInsertAt, QuestionResponse, SshSecretRequest, TurnUsage, WebEvent } from "../../api/contracts";
 import { text, type Locale } from "../i18n/locale";
 
 export type ToolLifecycle = {
@@ -57,6 +57,8 @@ export type LiveRunState = {
   model: string | null;
   userInput: string;
   imageUrls: string[];
+  /** 排队插入点；非排队运行为 turn */
+  insertAt: QueueInsertAt;
   content: string;
   reasoning: string;
   tools: ToolLifecycle[];
@@ -80,8 +82,8 @@ export type LiveRunState = {
 };
 
 export type RunAction =
-  | { type: "start"; runId: string; sessionId: string; userInput: string; imageUrls?: string[]; model?: string }
-  | { type: "attach"; runId: string; sessionId: string; userInput: string; imageUrls?: string[]; model?: string }
+  | { type: "start"; runId: string; sessionId: string; userInput: string; imageUrls?: string[]; model?: string; insertAt?: QueueInsertAt }
+  | { type: "attach"; runId: string; sessionId: string; userInput: string; imageUrls?: string[]; model?: string; insertAt?: QueueInsertAt }
   | { type: "event"; event: WebEvent }
   | { type: "reset" };
 
@@ -95,6 +97,7 @@ export const initialRunState: LiveRunState = {
   model: null,
   userInput: "",
   imageUrls: [],
+  insertAt: "turn",
   content: "",
   reasoning: "",
   tools: [],
@@ -135,6 +138,7 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
       sessionId: action.sessionId,
       userInput: action.userInput,
       imageUrls: action.imageUrls ?? [],
+      insertAt: action.insertAt ?? "turn",
       model: action.model ?? null,
       status: "waiting_response",
       startedAtMs: Date.now(),
@@ -170,7 +174,11 @@ export function runEventReducer(state: LiveRunState, action: RunAction, locale: 
       };
     }
     case "run.queued":
-      return { ...state, status: "queued" };
+      return {
+        ...state,
+        status: "queued",
+        insertAt: parseQueueInsertAt(payload.insert_at) ?? state.insertAt
+      };
     case "run.dequeued":
     case "run.started":
       return { ...state, status: "waiting_response" };
@@ -637,3 +645,14 @@ function closeActiveReasoning(state: LiveRunState, timestamp: string): LiveRunSt
     parts: state.parts.map((part, index) => index === state.parts.length - 1 && part.type === "reasoning" ? { ...part, endedAt: timestamp } : part)
   };
 }
+
+/**
+ * 解析排队插入点；无法识别时返回空，由调用方保留原值。
+ *
+ * @param value 事件或 API 中的插入点
+ * @returns 合法插入点
+ */
+export function parseQueueInsertAt(value: unknown): QueueInsertAt | undefined {
+  return value === "request" || value === "turn" ? value : undefined;
+}
+

@@ -9,6 +9,8 @@ import { HoverRevealButton } from "../../shared/ui/hover-reveal-button/hover-rev
 import { SegmentedControl } from "../../shared/ui/segmented-control";
 import { SkeletonText } from "../../shared/ui/skeleton/skeleton";
 import { Modal } from "../../shared/ui/dialog/modal";
+import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
+import { Toast, useToast } from "../../shared/ui/notify/notify";
 import { useChatAgentContext } from "../agents/chat-agent-context";
 import { TrajectoryView } from "../trajectory/trajectory-view";
 import { ChatComposer } from "./chat-composer";
@@ -32,6 +34,7 @@ import { ContextPromptBanner } from "./message/context-prompt-banner";
 import { errorDetailForDisplay, RunErrorNotice } from "./message/run-error-notice";
 import { useI18n } from "../i18n/use-i18n";
 import { parseGoalCommand } from "../goals/goal-command";
+import { parseRenameCommand } from "../sessions/rename-command";
 import { appendTerminalSelection, FOCUS_COMPOSER_EVENT, INSERT_TERMINAL_SELECTION_EVENT, type TerminalSelectionDetail } from "./composer/composer-events";
 import { RuntimeOverview } from "../runtime-overview/runtime-overview";
 import { TurnTreeOverview } from "./turn-tree/turn-tree-overview";
@@ -51,8 +54,11 @@ import { openSideConversation } from "../side-conversation/side-conversation-eve
  */
 export function ChatPage() {
   const { locale, t } = useI18n();
+  const confirm = useConfirm();
+  const { notice, showToast, dismissToast } = useToast();
   const queryClient = useQueryClient();
   const [input, setInput] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [undoError, setUndoError] = useState<Error | null>(null);
   const [undoConfirmOpen, setUndoConfirmOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
@@ -121,12 +127,16 @@ export function ChatPage() {
   const onInterruptedWithoutReply = useCallback((restoredInput: string) => {
     setInput(restoredInput);
   }, []);
+  const onQueueMerged = useCallback(() => {
+    showToast(t("A queued message was inserted into this turn", "一条排队消息已插入本轮"), "success");
+  }, [showToast, t]);
   const run = useRunStream(
     workspaces.data?.active_id,
     activeSession?.id,
     onSettled,
     onWorkspaceChanged,
-    onInterruptedWithoutReply
+    onInterruptedWithoutReply,
+    onQueueMerged
   );
   const turnTree = useTurnTree(activeSession?.id, {
     onBranchChanged: run.reset,
@@ -283,9 +293,33 @@ export function ChatPage() {
 
   /** 提交当前输入内容和模型选择。 */
   const submit = async () => {
-    if (turnTree.switchBranch.isPending || branchActions.pending) return;
+    if (turnTree.switchBranch.isPending || branchActions.pending || submitting) return;
     const value = input.trim();
     if ((!value && composerAttachments.attachments.length === 0) || !activeSession) return;
+    const renameCommand = parseRenameCommand(value);
+    if (renameCommand) {
+      if (!renameCommand.title) {
+        setActionError(new Error(t("Enter a title after /rename", "请在 /rename 后输入会话标题")));
+        return;
+      }
+      const originalInput = input;
+      setActionError(null);
+      setInput("");
+      clearComposerDraft(activeSession.id);
+      setSubmitting(true);
+      try {
+        await api.sessions.rename(activeSession.id, renameCommand.title);
+        await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+        await queryClient.invalidateQueries({ queryKey: ["session-tree"] });
+      } catch (error) {
+        setInput(originalInput);
+        writeComposerDraft(activeSession.id, originalInput);
+        setActionError(toDisplayError(error, "Failed to rename the session", "重命名会话失败"));
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     const goalCommand = parseGoalCommand(value);
     if (goalCommand) {
       if (!goalCommand.objective && composerAttachments.attachments.length === 0) {
@@ -305,6 +339,7 @@ export function ChatPage() {
       clearComposerDraft(activeSession.id);
       composerAttachments.clearAttachments();
       jumpToBottom();
+      setSubmitting(true);
       try {
         // 2. 将命令后的完整输入（含技能标记与图片）保存为当前会话目标
         const response = await api.goals.set(activeSession.id, objectiveWithMedia);
@@ -324,12 +359,15 @@ export function ChatPage() {
         writeComposerDraft(activeSession.id, originalInput);
         composerAttachments.restoreAttachments(currentAttachments);
         setActionError(toDisplayError(error, "Failed to start goal", "启动目标失败"));
+      } finally {
+        setSubmitting(false);
       }
       return;
     }
     const originalInput = input;
     const currentAttachments = composerAttachments.attachments;
     if (conversationEmpty) setSubmittedEmptySessionId(activeSession.id);
+    setSubmitting(true);
     try {
       await queryClient.invalidateQueries({ queryKey: ["timeline", activeSession.id] });
       const expanded = value ? await expandSkillsForSubmit(value) : value;
@@ -360,6 +398,8 @@ export function ChatPage() {
       writeComposerDraft(activeSession.id, originalInput);
       composerAttachments.restoreAttachments(currentAttachments);
       setActionError(toDisplayError(error, "Failed to start the run", "启动运行失败"));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -458,12 +498,29 @@ export function ChatPage() {
    */
   const editAndResend = async (turnId: string | null, content: string, imageUrls: string[]) => {
     if (actionBusy) return;
+    const accepted = await confirm({
+      title: t("Edit and resend this turn?", "编辑并重新发送这一轮？"),
+      description: t("The conversation will branch from this turn. The original turn stays in the tree.", "对话将从这一轮分出新分支。原来的一轮仍留在分支树中。"),
+      confirmLabel: t("Resend", "重新发送"),
+      cancelLabel: t("Cancel", "取消")
+    });
+    if (!accepted) return;
     setActionBusy(true);
     try {
       await resend.editAndResend(turnId, content, imageUrls);
     } finally {
       setActionBusy(false);
     }
+  };
+
+  const continueFrom = async (turnId: string) => {
+    const accepted = await confirm({
+      title: t("Continue from this turn?", "从这里继续？"),
+      description: t("Later messages stay in the branch tree. New replies will continue from this turn.", "之后的消息仍留在分支树中。新的回复将从这一轮继续。"),
+      confirmLabel: t("Continue", "继续"),
+      cancelLabel: t("Cancel", "取消")
+    });
+    if (accepted) branchActions.continueFrom(turnId);
   };
 
   const lastTurnId = timeline.data?.turns.filter((turn) => !turn.automatic).at(-1)?.turn_id;
@@ -510,6 +567,7 @@ export function ChatPage() {
       agentSelection={chatAgent.selection}
       agentLoading={chatAgent.isLoading}
       sessionId={activeSession?.id}
+      submitting={submitting}
       onChange={setInput}
       onModeChange={setMode}
       onThinkingLevelChange={thinking.setThinkingLevel}
@@ -517,7 +575,12 @@ export function ChatPage() {
       onRemoveAttachment={composerAttachments.removeAttachment}
       onModelSelect={chatModel.selectModel}
       onSubmit={() => void submit()}
-      onStop={() => activeRun?.runId && void run.stop(activeRun.runId)}
+      onStop={() => {
+        if (!activeRun?.runId) return;
+        void run.stop(activeRun.runId).catch((error) => {
+          setActionError(toDisplayError(error, "Failed to stop the run", "停止运行失败"));
+        });
+      }}
       onUndo={() => setUndoConfirmOpen(true)}
       onAgentSelect={chatAgent.selectAgent}
       onCompact={() => activeSession
@@ -533,6 +596,18 @@ export function ChatPage() {
           )
         : Promise.resolve()}
     />
+  );
+  const composerDock = (
+    <div className="composer-dock">
+      {uniqueErrorNotices.length > 0 && (
+        <div className="composer-error-dock">
+          {uniqueErrorNotices.map((notice) => (
+            <RunErrorNotice key={notice.key} message={notice.message} detail={notice.detail} />
+          ))}
+        </div>
+      )}
+      {composer}
+    </div>
   );
 
   // 有历史才提供轨迹视图：空会话切过去只有一张空表，切换本身成了噪声
@@ -620,7 +695,7 @@ export function ChatPage() {
                       canRetry={turn.turn_id === lastTurnId && !running}
                       onRetry={resend.retry}
                       canContinueFrom={!running}
-                      onContinueFrom={branchActions.continueFrom}
+                      onContinueFrom={continueFrom}
                       canSideConversation={turn.status === "completed" && Boolean(turn.assistant.content.trim())}
                       onSideConversation={openTurnSideConversation}
                       canEditResend={!running}
@@ -660,12 +735,11 @@ export function ChatPage() {
               runs={queuedRuns}
               onUpdate={run.updateQueuedInput}
               onMove={run.moveQueuedRun}
+              onPromote={run.promoteQueuedRun}
+              onInsertAt={run.updateQueuedInsertAt}
               onRemove={run.removeQueuedRun}
               onError={(error) => setActionError(toDisplayError(error, "Failed to update the message queue", "更新消息队列失败"))}
             />
-            {uniqueErrorNotices.map((notice) => (
-              <RunErrorNotice key={notice.key} message={notice.message} detail={notice.detail} />
-            ))}
           </div>
           {centerEmptySession ? (
             <div className="empty-session-stage">
@@ -673,10 +747,10 @@ export function ChatPage() {
                 <h2>{t("Start a new conversation", "开始新的对话")}</h2>
                 <p>{t("Enter a task or question. Press Enter to send and Shift+Enter for a new line.", "输入任务或问题，Enter 发送，Shift+Enter 换行")}</p>
               </div>
-              {composer}
+              {composerDock}
             </div>
           ) : (
-            composer
+            composerDock
           )}
         </div>
         <MessageOverviewRail
@@ -766,6 +840,7 @@ export function ChatPage() {
       >
         <p>{undoError?.message}</p>
       </Modal>
+      <Toast notice={notice} onDismiss={dismissToast} />
     </div>
   );
 }

@@ -133,11 +133,9 @@ fn context_info_for(
     let resolved = state.resolve_compaction_policy(&config.context)?;
     let compact_ratio = resolved.policy.ratio;
     let compact_reserve = resolved.policy.reserve_tokens;
-    let compact_trigger = crate::state::CompactionBudgetPolicy::from_context(
-        compact_ratio,
-        compact_reserve,
-    )
-    .trigger_chars(snapshot.context_window_tokens.max(1));
+    let compact_trigger =
+        crate::state::CompactionBudgetPolicy::from_context(compact_ratio, compact_reserve)
+            .trigger_chars(snapshot.context_window_tokens.max(1));
 
     Ok(render_context_view(
         &ContextView {
@@ -344,11 +342,7 @@ fn render_context_view(view: &ContextView, styled: bool) -> String {
     lines.push(String::new());
     lines.push(format!(
         "  {}",
-        paint(
-            styled,
-            DIM,
-            &format_auto_compact_line(view)
-        )
+        paint(styled, DIM, &format_auto_compact_line(view))
     ));
     if let Some(turns) = view.compaction {
         lines.push(format!(

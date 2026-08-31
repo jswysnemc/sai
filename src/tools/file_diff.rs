@@ -95,6 +95,32 @@ pub(crate) fn unified_diff(path: &str, old_content: &str, new_content: &str) -> 
     output
 }
 
+/// 统计新旧文本的增删行数。
+///
+/// 与 [`unified_diff`] 走同一套 LCS，因此数字与 diff 正文里实际画出的
+/// `+` / `-` 行一致：增删条数只由 LCS 长度决定，与回溯时的取舍无关。
+///
+/// 参数:
+/// - `old_content`: 修改前内容
+/// - `new_content`: 修改后内容
+///
+/// 返回:
+/// - `(新增行数, 删除行数)`
+pub(crate) fn diff_line_counts(old_content: &str, new_content: &str) -> (usize, usize) {
+    let old_lines: Vec<&str> = old_content.lines().collect();
+    let new_lines: Vec<&str> = new_content.lines().collect();
+    let mut added = 0usize;
+    let mut removed = 0usize;
+    for operation in diff_operations(&old_lines, &new_lines) {
+        match operation.kind {
+            DiffKind::Added => added += 1,
+            DiffKind::Removed => removed += 1,
+            DiffKind::Context => {}
+        }
+    }
+    (added, removed)
+}
+
 /// 使用 LCS 回溯得到稳定的增删上下文序列。
 fn diff_operations<'a>(old_lines: &[&'a str], new_lines: &[&'a str]) -> Vec<DiffOp<'a>> {
     let mut lcs = vec![vec![0usize; new_lines.len() + 1]; old_lines.len() + 1];
@@ -165,7 +191,21 @@ fn hunk_ranges(changed: &[usize], operation_count: usize, context: usize) -> Vec
 
 #[cfg(test)]
 mod tests {
-    use super::unified_diff;
+    use super::{diff_line_counts, unified_diff};
+
+    /// 增删条数与 unified diff 里画出的 +/- 行一致。
+    #[test]
+    fn line_counts_match_the_rendered_diff() {
+        assert_eq!(
+            diff_line_counts("one\ntwo\nthree\n", "one\nTWO\nthree\n"),
+            (1, 1)
+        );
+        assert_eq!(diff_line_counts("", "hello\nworld\n"), (2, 0));
+        assert_eq!(diff_line_counts("a\nb\n", ""), (0, 2));
+        assert_eq!(diff_line_counts("same\n", "same\n"), (0, 0));
+        // 整行重写：两边都算实际行数，而不是只报净增量
+        assert_eq!(diff_line_counts("a\nb\nc\n", "x\ny\nz\n"), (3, 3));
+    }
 
     #[test]
     fn emits_only_changed_region_with_original_context() {

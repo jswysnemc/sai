@@ -214,7 +214,10 @@ mod unix {
                 .write(true)
                 .open(lease_path(state_dir))
                 .with_context(|| {
-                    format!("打开 ipc 持有者租约锁失败（state_dir: {}）", state_dir.display())
+                    format!(
+                        "打开 ipc 持有者租约锁失败（state_dir: {}）",
+                        state_dir.display()
+                    )
                 })?;
 
             // 抢不到租约 = 有活的持有者：绝不动它的端点，本进程作为观察者接入。
@@ -275,7 +278,10 @@ mod unix {
     ///
     /// 刻意不带 `create(true)`：探活不该在 state_dir 里留下新文件。
     pub(super) fn open_lease(state_dir: &Path) -> Option<File> {
-        OpenOptions::new().write(true).open(lease_path(state_dir)).ok()
+        OpenOptions::new()
+            .write(true)
+            .open(lease_path(state_dir))
+            .ok()
     }
 
     #[async_trait]
@@ -620,7 +626,10 @@ mod tests {
             holder_stream.send(&ev(i, &format!("down{i}"))).await?;
         }
         for i in 0..16u64 {
-            assert_eq!(observer_stream.recv().await?, Some(ev(i, &format!("down{i}"))));
+            assert_eq!(
+                observer_stream.recv().await?,
+                Some(ev(i, &format!("down{i}")))
+            );
         }
         Ok(())
     }

@@ -88,9 +88,7 @@ fn svg_start_and_close_helpers_match_web_rules() {
     assert!(svg::looks_like_svg_start("<SVG viewBox=\"0 0 1 1\">"));
     assert!(!svg::looks_like_svg_start("<div>"));
     assert!(svg::contains_svg_close("  </SVG>"));
-    assert!(svg::is_svg_markup(
-        "  <svg viewBox=\"0 0 1 1\"></svg>  "
-    ));
+    assert!(svg::is_svg_markup("  <svg viewBox=\"0 0 1 1\"></svg>  "));
     assert!(!svg::is_svg_markup("<svg></svg><p>x</p>"));
 }
 

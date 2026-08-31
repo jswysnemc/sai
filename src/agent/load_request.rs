@@ -184,12 +184,17 @@ mod tests {
     #[test]
     fn rejects_non_object_and_leading_prose_load_arguments() {
         let array = LoadRequest::parse(r#"["web_search"] 残余片段"#).unwrap_err();
-        assert!(array.to_string().contains("invalid load arguments"), "{array}");
+        assert!(
+            array.to_string().contains("invalid load arguments"),
+            "{array}"
+        );
 
-        let prose =
-            LoadRequest::parse("示例：\n{\"type\":\"tool\",\"keywords\":[\"web_search\"]}")
-                .unwrap_err();
-        assert!(prose.to_string().contains("invalid load arguments"), "{prose}");
+        let prose = LoadRequest::parse("示例：\n{\"type\":\"tool\",\"keywords\":[\"web_search\"]}")
+            .unwrap_err();
+        assert!(
+            prose.to_string().contains("invalid load arguments"),
+            "{prose}"
+        );
     }
 
     /// 验证类型与字段冲突时拒绝猜测。

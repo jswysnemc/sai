@@ -14,7 +14,6 @@ type SelectionState = ReturnType<typeof useSessionSelection>;
 
 type SessionListViewProps = {
   workspace: WorkspaceSessions;
-  runningSessions: Set<string>;
   selection: SelectionState;
   /** 相对时间基准，由外层按分钟推进 */
   now: number;
@@ -40,7 +39,6 @@ type SessionListViewProps = {
  */
 export function SessionListView({
   workspace,
-  runningSessions,
   selection,
   now,
   menuRef,
@@ -59,9 +57,7 @@ export function SessionListView({
 
   const workspaceName = localizeApiMessage(workspace.workspace_name, locale);
   const sessions = workspace.sessions;
-  const workspaceRunning = sessions.some((session) =>
-    runningSessions.has(`${workspace.workspace_id}:${session.id}`)
-  );
+  const workspaceLoaded = sessions.some((session) => session.loaded);
 
   /**
    * 进入指定会话的重命名编辑态。
@@ -99,7 +95,7 @@ export function SessionListView({
       <div className="workspace-context-row">
         <SessionWorkspaceIcon isGitRepository={workspace.is_git_repository} size={13} />
         <strong title={workspace.workspace_path}>{workspaceName}</strong>
-        {workspaceRunning && <ActiveAgentIndicator />}
+        {workspaceLoaded && <ActiveAgentIndicator />}
         <small>{t(`${sessions.length} sessions`, `${sessions.length} 个会话`)}</small>
         {selection.selecting && (
           <button
@@ -124,11 +120,15 @@ export function SessionListView({
         />
       )}
       <div className="workspace-session-children">
+        {sessions.length === 0 && (
+          <p className="session-list-empty">{t("No sessions yet. Create a task to start.", "还没有会话。新建任务开始对话。")}</p>
+        )}
         {sessions.map((session) => (
           <SessionRow
             key={session.id}
             session={session}
-            running={runningSessions.has(`${workspace.workspace_id}:${session.id}`)}
+            loaded={Boolean(session.loaded)}
+            holder={session.holder}
             now={now}
             selectable={selection.selecting}
             checked={selection.selected.has(session.id)}

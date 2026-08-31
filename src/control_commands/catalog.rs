@@ -3,6 +3,7 @@ pub const REPL_COMMANDS: &[&str] = &[
     "/context",
     "/new",
     "/resume",
+    "/rename",
     "/compact",
     "/goal",
     "/clear",

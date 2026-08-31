@@ -115,7 +115,7 @@ async fn session_probe_reports_holder_watchers_and_idle_turn() {
             SessionHolderGuard::acquire(&state_dir, &session.id, SessionOwner::Repl).unwrap();
         holder.set_watchers(3).unwrap();
 
-        let output = probe(&registry_for(&paths, &session), "session_probe", "{}").await;
+        let output = probe(&registry_for(&paths, &session), "session_probe", r#"{"scope":"self"}"#).await;
         let sessions = output["sessions"].as_array().unwrap();
 
         assert_eq!(output["scope"], "self");
@@ -125,6 +125,7 @@ async fn session_probe_reports_holder_watchers_and_idle_turn() {
         assert_eq!(sessions[0]["is_current"], true);
         assert_eq!(sessions[0]["is_self"], true);
         assert_eq!(sessions[0]["held"], true);
+        assert_eq!(sessions[0]["idle"], true);
         assert_eq!(sessions[0]["running"], false);
         assert_eq!(sessions[0]["holder"]["owner"], "repl");
         assert_eq!(sessions[0]["holder"]["pid"], std::process::id());
@@ -162,7 +163,7 @@ async fn session_probe_marks_the_session_that_is_running_a_turn() {
     .await;
 }
 
-/// workspace 作用域只报本工作区，all 作用域跨工作区。
+/// workspace 作用域只报本工作区的活动会话，all 作用域跨工作区但仍隐藏非活动会话。
 #[tokio::test]
 async fn session_probe_scopes_separate_workspace_from_all() {
     let temp = tempfile::tempdir().unwrap();
@@ -174,7 +175,7 @@ async fn session_probe_scopes_separate_workspace_from_all() {
 
     crate::runtime_cwd::scope(cwd.clone(), async {
         let (local, _) = session_in(&paths, &cwd, "local");
-        let (foreign, _) = session_in(&paths, &other, "foreign");
+        let (foreign, foreign_dir) = session_in(&paths, &other, "foreign");
         let registry = registry_for(&paths, &local);
 
         let in_workspace = probe(&registry, "session_probe", r#"{"scope":"workspace"}"#).await;
@@ -190,6 +191,25 @@ async fn session_probe_scopes_separate_workspace_from_all() {
             "workspace 作用域不该带上别的工作区的会话"
         );
 
+        let hidden = probe(&registry, "session_probe", r#"{"scope":"all"}"#).await;
+        let hidden_ids = hidden["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|session| session["id"].as_str().unwrap().to_string())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert!(hidden_ids.contains(&local.id));
+        assert!(
+            !hidden_ids.contains(&foreign.id),
+            "没有存活持有者的会话不应出现在探测结果里: {hidden}"
+        );
+        assert!(
+            hidden["omitted_inactive"].as_u64().unwrap() >= 1,
+            "应统计被省略的非活动会话: {hidden}"
+        );
+
+        let _holder =
+            SessionHolderGuard::acquire(&foreign_dir, &foreign.id, SessionOwner::Repl).unwrap();
         let everything = probe(&registry, "session_probe", r#"{"scope":"all"}"#).await;
         let all_ids = everything["sessions"]
             .as_array()
@@ -207,6 +227,78 @@ async fn session_probe_scopes_separate_workspace_from_all() {
             .filter(|session| session["is_current"] == true)
             .count();
         assert_eq!(current, 2, "每个工作区各有一个当前会话");
+    })
+    .await;
+}
+
+/// 同一工作区里没有存活持有者的会话不出现在探测结果中；当前会话本身仍展示。
+#[tokio::test]
+async fn session_probe_omits_unheld_sessions_in_the_same_workspace() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(temp.path());
+    let cwd = temp.path().join("workspace-a");
+    std::fs::create_dir_all(&cwd).unwrap();
+
+    crate::runtime_cwd::scope(cwd.clone(), async {
+        let (local, _) = session_in(&paths, &cwd, "local");
+        let (idle, _) = session_in(&paths, &cwd, "idle");
+        let registry = registry_for(&paths, &local);
+
+        let output = probe(&registry, "session_probe", r#"{"scope":"workspace"}"#).await;
+        let ids = output["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|session| session["id"].as_str().unwrap().to_string())
+            .collect::<Vec<_>>();
+
+        assert!(ids.contains(&local.id), "{output}");
+        assert!(
+            !ids.contains(&idle.id),
+            "非活动会话不应出现在探测结果里: {output}"
+        );
+        assert!(
+            output["omitted_inactive"].as_u64().unwrap() >= 1,
+            "应统计被省略的非活动会话: {output}"
+        );
+    })
+    .await;
+}
+
+/// 【网格】【会话探测】另一工作区刚打开、还没发过提示词的会话，只要持有者存活就应被发现。
+#[tokio::test]
+async fn session_probe_finds_an_empty_held_session_in_another_workspace() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(temp.path());
+    let cwd = temp.path().join("workspace-a");
+    let other = temp.path().join("workspace-b");
+    std::fs::create_dir_all(&cwd).unwrap();
+    std::fs::create_dir_all(&other).unwrap();
+
+    crate::runtime_cwd::scope(cwd.clone(), async {
+        let (local, _) = session_in(&paths, &cwd, "local");
+        let foreign_sessions = crate::state::list_sessions_for_workspace(&paths, &other).unwrap();
+        let foreign = foreign_sessions
+            .iter()
+            .find(|session| session.id == "default")
+            .cloned()
+            .expect("opening a workspace creates the default session before any prompt");
+        let foreign_dir =
+            crate::state::state_dir_for_workspace_session(&paths, &other, &foreign.id)
+                .unwrap()
+                .1;
+        let _holder =
+            SessionHolderGuard::acquire(&foreign_dir, &foreign.id, SessionOwner::Repl).unwrap();
+
+        let output = probe(&registry_for(&paths, &local), "session_probe", "{}").await;
+        assert_eq!(output["scope"], "all");
+        let sessions = output["sessions"].as_array().unwrap();
+        let found = sessions.iter().find(|session| session["id"] == foreign.id);
+        let found = found.unwrap_or_else(|| panic!("empty held session missing: {output}"));
+        assert_eq!(found["held"], true);
+        assert_eq!(found["idle"], true);
+        assert_eq!(found["running"], false);
+        assert_eq!(found["is_self"], false);
     })
     .await;
 }
@@ -411,6 +503,15 @@ async fn interactive_registry_exposes_both_probe_tools() {
 
         assert!(registry.contains("session_probe"));
         assert!(registry.contains("agent_probe"));
+        assert!(registry.contains("mesh_send"));
+        assert!(
+            !registry.contains("mesh_reply"),
+            "results go back through mesh_send; mesh_reply is removed"
+        );
+        assert!(
+            !registry.contains("mesh_recv"),
+            "incoming mesh messages are queued as active receipts; there is no recv tool"
+        );
         // 探测是只读的，不能要求写权限确认
         assert_eq!(
             registry.permission("session_probe").unwrap(),
@@ -450,12 +551,16 @@ fn scope_arg_accepts_only_declared_values() {
         "self"
     );
     assert_eq!(
-        super::scope_arg(&json!({ "scope": " WORKSPACE " }), &["self", "workspace"], "self")
-            .unwrap(),
+        super::scope_arg(
+            &json!({ "scope": " WORKSPACE " }),
+            &["self", "workspace"],
+            "self"
+        )
+        .unwrap(),
         "workspace"
     );
-    let error = super::scope_arg(&json!({ "scope": "galaxy" }), &["self", "all"], "self")
-        .unwrap_err();
+    let error =
+        super::scope_arg(&json!({ "scope": "galaxy" }), &["self", "all"], "self").unwrap_err();
     assert!(error.to_string().contains("unsupported scope: galaxy"));
 }
 
@@ -607,17 +712,21 @@ async fn cross_session_survives_the_agent_whitelist_filter() {
     .await;
 }
 
-/// 会话内投递：mesh_send 之后 mesh_recv 能取到同一条消息与关联标识。
+/// 会话内投递：mesh_send 之后进入会话队列待投递，确认后不再重复注入。
 #[tokio::test]
-async fn send_and_recv_round_trip_within_the_session() {
+async fn send_queues_an_active_receipt_without_recv() {
     let temp = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(temp.path());
     let cwd = temp.path().join("workspace");
     std::fs::create_dir_all(&cwd).unwrap();
 
     crate::runtime_cwd::scope(cwd.clone(), async {
-        let (session, _) = session_in(&paths, &cwd, "local");
+        let (session, state_dir) = session_in(&paths, &cwd, "local");
         let registry = registry_with_cross_session(&paths, &session, false);
+        assert!(
+            !registry.contains("mesh_recv"),
+            "mesh_recv must not be registered"
+        );
 
         let sent: Value = serde_json::from_str(
             &registry
@@ -631,26 +740,26 @@ async fn send_and_recv_round_trip_within_the_session() {
         .unwrap();
         let correlation_id = sent["correlation_id"].as_str().unwrap().to_string();
 
-        let received: Value = serde_json::from_str(
-            &registry.call("mesh_recv", r#"{"limit":10}"#).await.unwrap(),
-        )
-        .unwrap();
-        let messages = received["messages"].as_array().unwrap();
+        let pending = super::next_pending(&state_dir, &session.id)
+            .expect("sent message should be queued as an active receipt");
+        assert_eq!(
+            pending.correlation_id.as_deref(),
+            Some(correlation_id.as_str())
+        );
+        assert_eq!(pending.text, "ping");
 
+        super::acknowledge_mesh_messages(&state_dir, std::slice::from_ref(&pending.id));
         assert!(
-            messages
-                .iter()
-                .any(|message| message["correlation_id"] == correlation_id
-                    && message["text"] == "ping"),
-            "sent message should be receivable: {received}"
+            super::next_pending(&state_dir, &session.id).is_none(),
+            "acknowledged mesh messages must not be re-delivered"
         );
     })
     .await;
 }
 
-/// 无人应答时 expect_reply 报超时，而不是把调用挂死。
+/// 投递成功后立即返回，不再阻塞等待回复。
 #[tokio::test]
-async fn expect_reply_reports_timed_out_when_nobody_answers() {
+async fn mesh_send_returns_without_waiting_for_a_reply() {
     let temp = tempfile::tempdir().unwrap();
     let paths = SaiPaths::for_tests(temp.path());
     let cwd = temp.path().join("workspace");
@@ -663,7 +772,7 @@ async fn expect_reply_reports_timed_out_when_nobody_answers() {
             .call(
                 "mesh_send",
                 &format!(
-                    r#"{{"to":"session:{}","text":"ping","expect_reply":true,"timeout_ms":50}}"#,
+                    r#"{{"to":"session:{}","text":"ping"}}"#,
                     session.id
                 ),
             )
@@ -671,7 +780,11 @@ async fn expect_reply_reports_timed_out_when_nobody_answers() {
             .unwrap();
         let parsed: Value = serde_json::from_str(&output).unwrap();
 
-        assert_eq!(parsed["timed_out"], true, "{parsed}");
+        assert_eq!(parsed["ok"], true, "{parsed}");
+        assert!(parsed["correlation_id"].as_str().is_some());
+        assert!(parsed.get("timed_out").is_none());
+        assert!(parsed.get("reply").is_none());
+        assert!(parsed.get("expect_reply").is_none());
     })
     .await;
 }

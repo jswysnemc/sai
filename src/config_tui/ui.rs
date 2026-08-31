@@ -1,7 +1,7 @@
 use crate::i18n::text as t;
 use anyhow::Result;
-use crossterm::event::KeyCode;
 use crossterm::cursor::MoveTo;
+use crossterm::event::KeyCode;
 use crossterm::queue;
 use crossterm::style::Print;
 use crossterm::terminal::{self, Clear, ClearType};

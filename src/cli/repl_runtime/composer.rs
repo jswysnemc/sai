@@ -45,12 +45,12 @@ impl ReplRuntime {
         frame.set_streaming(self.stream_active);
         // 收起只对收起那一刻的输入生效：继续打字或移动光标就恢复候选，
         // 否则用户按一次 Esc 后整段输入过程中再也看不到补全
-        let still_dismissed = self
-            .panels_dismissed
-            .as_ref()
-            .is_some_and(|(dismissed_input, dismissed_cursor)| {
-                dismissed_input == input && *dismissed_cursor == cursor
-            });
+        let still_dismissed =
+            self.panels_dismissed
+                .as_ref()
+                .is_some_and(|(dismissed_input, dismissed_cursor)| {
+                    dismissed_input == input && *dismissed_cursor == cursor
+                });
         if !still_dismissed {
             self.panels_dismissed = None;
         }
@@ -90,8 +90,8 @@ impl ReplRuntime {
     /// 返回:
     /// - 面板 ANSI 行；无内容时为空
     fn bottom_panel_lines(&self, cols: usize) -> Vec<String> {
-        let queued: Vec<QueuedSubmission> = self.submission_queue.iter().cloned().collect();
-        let queue_lines = self.queue_panel.panel_lines(&queued);
+        let queued = self.queued_items();
+        let queue_lines = self.queue_panel.panel_lines(&queued, self.stream_active);
         let agent_lines = self.agent_panel.panel_lines(
             &self.transcript.subagent_overview(),
             self.transcript.live_animation_frame(),
@@ -298,12 +298,9 @@ impl ReplRuntime {
         }
         // 剪贴板附件随草稿一起入队，执行时还原为真实图片或长文本
         let clipboard = std::mem::take(&mut self.stream_draft.clipboard);
-        self.submission_queue.push_back(QueuedSubmission {
-            mode,
-            text,
-            clipboard,
-        });
-        self.queue_panel.clamp(self.submission_queue.len());
+        self.lock_queue()
+            .push_back(QueuedSubmission::new(mode, text, clipboard));
+        self.clamp_queue_panel();
         self.stream_draft = StreamComposerDraft {
             mode: Some(mode),
             ..StreamComposerDraft::default()
@@ -344,7 +341,8 @@ impl ReplRuntime {
         if !self.stream_draft.text.trim().is_empty() {
             return Ok(None);
         }
-        let restored = match self.submission_queue.pop_back() {
+        let restored = self.lock_queue().pop_back();
+        let restored = match restored {
             Some(item) => {
                 // 附件随文本一起回到草稿，否则占位符会退化成字面文本
                 self.stream_draft.clipboard = item.clipboard;
@@ -356,7 +354,7 @@ impl ReplRuntime {
         if restored.is_empty() {
             return Ok(None);
         }
-        self.queue_panel.clamp(self.submission_queue.len());
+        self.clamp_queue_panel();
         self.stream_draft.text = restored.clone();
         self.stream_draft.cursor = restored.chars().count();
         self.stream_draft.slash_selection = 0;
@@ -374,11 +372,11 @@ impl ReplRuntime {
     /// 返回:
     /// - 被丢弃的条目总数
     pub(in crate::cli) fn clear_queued(&mut self) -> Result<usize> {
-        let count = self.submission_queue.len() + self.control_queue.len();
+        let count = self.lock_queue().len() + self.control_queue.len();
         if count == 0 {
             return Ok(0);
         }
-        self.submission_queue.clear();
+        self.lock_queue().clear();
         self.control_queue.clear();
         self.queue_panel.deactivate();
         self.redraw_stream_composer()?;
@@ -386,13 +384,14 @@ impl ReplRuntime {
         Ok(count)
     }
 
-    /// 取出全部排队提交。
+    /// 取出全部排队提交（仅测试断言用：正式路径由 InterMessageSource 逐条取）。
     ///
     /// 返回:
     /// - 按先进先出顺序排列的提交列表
+    #[cfg(test)]
     pub(in crate::cli) fn take_submission_queue(&mut self) -> Vec<QueuedSubmission> {
         self.queue_panel.deactivate();
-        self.submission_queue.drain(..).collect()
+        self.lock_queue().drain(..).collect()
     }
 
     /// 开始一轮流式输出前重置草稿，保留空 composer 供运行期间输入。
@@ -432,6 +431,9 @@ impl ReplRuntime {
             self.live_usage.context_prompt_tokens(),
             self.live_usage.cache_hit_ratio(),
         );
+        chrome.set_activity(Some(
+            crate::i18n::text("Ctrl+C stop", "Ctrl+C 停止").to_string(),
+        ));
         let draft = self.stream_draft.clone();
         self.update_composer(
             &chrome,
@@ -442,6 +444,22 @@ impl ReplRuntime {
             draft.slash_selection,
         )?;
         self.draw_composer()
+    }
+
+    /// 更新底栏会话标题。
+    ///
+    /// 参数:
+    /// - `title`: 新标题
+    ///
+    /// 返回:
+    /// - 无
+    pub(in crate::cli) fn set_session_title(&mut self, title: String) {
+        if let Some(frame) = self.composer.as_mut() {
+            frame.chrome_mut().set_session_title(title.clone());
+        }
+        if let Some(chrome) = self.last_chrome.as_mut() {
+            chrome.set_session_title(title);
+        }
     }
 
     /// 结束 composer 绘制并释放底部 viewport 给历史输出。

@@ -38,7 +38,7 @@ pub(crate) fn colorize_item(status: &str, text: &str) -> String {
     }
 }
 
-/// 展示排序：已完成置顶，其次进行中、待办、取消。
+/// 展示排序：进行中置顶，其次待办、已完成、取消。
 ///
 /// 参数:
 /// - `status`: 状态
@@ -47,15 +47,15 @@ pub(crate) fn colorize_item(status: &str, text: &str) -> String {
 /// - 排序键（越小越靠前）
 pub(crate) fn status_rank(status: &str) -> u8 {
     match status {
-        "completed" => 0,
-        "in_progress" => 1,
-        "pending" | "todo" => 2,
+        "in_progress" => 0,
+        "pending" | "todo" => 1,
+        "completed" => 2,
         "cancelled" => 3,
         _ => 4,
     }
 }
 
-/// 在「已完成置顶」排序后的清单上选取展示窗口，并保证进行中项可见。
+/// 在「进行中置顶」排序后的清单上选取展示窗口，并保证进行中项可见。
 ///
 /// 参数:
 /// - `statuses`: 已按展示顺序排好的状态切片
@@ -80,14 +80,12 @@ pub(crate) fn display_window(statuses: &[&str], limit: usize) -> (usize, usize) 
                 .position(|status| matches!(*status, "pending" | "todo"))
                 .unwrap_or(0)
         });
-    // 焦点尽量靠窗口下半，让上方多留已完成条目
-    let start = focus
-        .saturating_sub(limit.saturating_sub(2).max(1))
-        .min(len - limit);
+    // 焦点靠窗口上沿，优先露出进行中与待办，已完成沉到底部
+    let start = focus.saturating_sub(1).min(len - limit);
     (start, start + limit)
 }
 
-/// 按展示顺序重排下标：已完成在前，保持各组内部原序。
+/// 按展示顺序重排下标：进行中在前，保持各组内部原序。
 ///
 /// 参数:
 /// - `statuses`: 原始状态序列
@@ -105,32 +103,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn completed_items_sort_above_active_and_pending() {
+    fn in_progress_items_sort_above_pending_and_completed() {
         let statuses = ["pending", "in_progress", "completed", "completed"];
         let order = display_order(&statuses);
         assert_eq!(
             order.iter().map(|&i| statuses[i]).collect::<Vec<_>>(),
-            vec!["completed", "completed", "in_progress", "pending"]
+            vec!["in_progress", "pending", "completed", "completed"]
         );
     }
 
     #[test]
-    fn display_window_keeps_completed_above_active() {
+    fn display_window_keeps_active_above_completed() {
         let statuses = [
-            "completed",
-            "completed",
-            "completed",
             "in_progress",
             "pending",
             "pending",
+            "completed",
+            "completed",
+            "completed",
         ];
         let (start, end) = display_window(&statuses, 4);
         let window = &statuses[start..end];
         assert!(window.contains(&"in_progress"));
-        assert_eq!(window[0], "completed");
+        assert_eq!(window[0], "in_progress");
         assert!(
-            window.iter().position(|s| *s == "completed").unwrap()
-                < window.iter().position(|s| *s == "in_progress").unwrap()
+            window.iter().position(|s| *s == "in_progress").unwrap()
+                < window.iter().position(|s| *s == "completed").unwrap()
         );
     }
 

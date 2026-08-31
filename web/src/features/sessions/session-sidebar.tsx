@@ -60,7 +60,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
   }, []);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const appMenuRef = useRef<HTMLDivElement | null>(null);
-  const { tree, runningSessions } = useSessionTree();
+  const { tree } = useSessionTree();
   const activeWorkspace = tree.data?.find((workspace) => workspace.active);
 
   const actions = useSessionActions({
@@ -204,6 +204,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
         <SessionSidebarActions
           onNewSession={() => actions.create.mutate(undefined)}
           onSearch={() => setSearchOpen(true)}
+          createPending={actions.create.isPending}
         />
       )}
       {sidebarView === "files" && (
@@ -225,7 +226,6 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
         activeWorkspace ? (
           <SessionListView
             workspace={activeWorkspace}
-            runningSessions={runningSessions}
             selection={selection}
             now={nowTick}
             menuRef={menuRef}
@@ -253,7 +253,6 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
         (tree.data?.length ?? 0) > 0 ? (
           <WorkspaceListView
             workspaces={tree.data ?? []}
-            runningSessions={runningSessions}
             menuRef={menuRef}
             menu={workspaceMenu}
             onToggleMenu={setWorkspaceMenu}

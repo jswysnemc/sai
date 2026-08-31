@@ -44,6 +44,7 @@ function run(id: string, content: string, completed: boolean): LiveRunState {
     reconnectMaxAttempts: null,
     userInput: content,
     imageUrls: [],
+    insertAt: "turn",
     content: completed ? "answer" : "",
     reasoning: "",
     tools: [],

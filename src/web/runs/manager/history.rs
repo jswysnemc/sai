@@ -27,11 +27,7 @@ impl RunManager {
     ///
     /// 返回:
     /// - 会话事件总线句柄
-    pub(crate) async fn session_bus(
-        &self,
-        workspace_id: &str,
-        session_id: &str,
-    ) -> ActorHandle {
+    pub(crate) async fn session_bus(&self, workspace_id: &str, session_id: &str) -> ActorHandle {
         let key = session_key(workspace_id, session_id);
         if let Some(bus) = self.buses.read().await.entries.get(&key) {
             return bus.clone();

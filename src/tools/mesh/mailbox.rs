@@ -15,10 +15,14 @@ use std::sync::{Mutex, OnceLock};
 pub(crate) const INBOX_DIR: &str = "inbox";
 /// 跨进程信箱文件名。
 pub(crate) const INBOX_FILE: &str = "mesh.jsonl";
+/// 已投递给 Agent 队列的消息 id 清单，避免同一条被主动回执重复注入。
+const ACKED_FILE: &str = "mesh.acked.json";
 /// 心跳超时：写入方超过这个时长没有心跳且进程已不在，其条目判死并被清理。
 pub(crate) const HEARTBEAT_TIMEOUT_MS: u64 = 60_000;
 /// 单个信箱保留的最大条目数，超出的最旧条目在压缩时丢弃。
 const MAX_ENTRIES: usize = 256;
+/// 已确认 id 保留上限；超出时丢掉最旧的。
+const MAX_ACKED: usize = 512;
 
 /// 网格消息类型：普通消息。
 pub(crate) const KIND_MESSAGE: &str = "message";
@@ -56,36 +60,18 @@ pub(crate) struct MeshEnvelope {
     pub(crate) heartbeat_at: u64,
 }
 
-impl MeshEnvelope {
-    /// 序列化为工具输出里的消息视图。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 消息 JSON
-    pub(crate) fn to_json(&self) -> Value {
-        json!({
-            "id": self.id,
-            "correlation_id": self.correlation_id,
-            "reply_to": self.reply_to,
-            "from": self.from,
-            "to": self.to,
-            "kind": self.kind,
-            "text": self.text,
-            "queued_at_ms": self.queued_at_ms,
-            "pid": self.pid,
-            "heartbeat_at": self.heartbeat_at,
-        })
-    }
-}
-
 /// 进程内信箱：状态目录 -> 消息列表。
 ///
 /// 同进程投递优先走这里（零延迟、不落盘）；跨进程才写 `inbox/mesh.jsonl`。
 fn inboxes() -> &'static Mutex<HashMap<String, Vec<MeshEnvelope>>> {
     static INBOXES: OnceLock<Mutex<HashMap<String, Vec<MeshEnvelope>>>> = OnceLock::new();
     INBOXES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// 已确认投递的消息 id：状态目录 -> 按确认顺序排列的 id。
+fn acked_ids() -> &'static Mutex<HashMap<String, Vec<String>>> {
+    static ACKED: OnceLock<Mutex<HashMap<String, Vec<String>>>> = OnceLock::new();
+    ACKED.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 /// 返回会话的跨进程信箱文件路径。
@@ -97,6 +83,17 @@ fn inboxes() -> &'static Mutex<HashMap<String, Vec<MeshEnvelope>>> {
 /// - `<state_dir>/inbox/mesh.jsonl`
 pub(crate) fn inbox_file(state_dir: &Path) -> PathBuf {
     state_dir.join(INBOX_DIR).join(INBOX_FILE)
+}
+
+/// 返回已确认消息 id 清单的路径。
+///
+/// 参数:
+/// - `state_dir`: 会话状态目录
+///
+/// 返回:
+/// - `<state_dir>/inbox/mesh.acked.json`
+fn acked_file(state_dir: &Path) -> PathBuf {
+    state_dir.join(INBOX_DIR).join(ACKED_FILE)
 }
 
 /// 生成一条网格消息 id。
@@ -308,33 +305,142 @@ pub(crate) fn list(state_dir: &Path) -> Vec<MeshEnvelope> {
 
 /// 按关联 id 查找一条普通消息。
 ///
-/// 供 `mesh_reply` 找到自己收到的原始消息，从而拿到回复地址；找不到就不能回复，
-/// 也就无法伪造别人的关联 id。
-///
 /// 参数:
 /// - `state_dir`: 会话状态目录
 /// - `correlation_id`: 关联 id
 ///
 /// 返回:
 /// - 自己的信箱里最先匹配的消息；没有则 `None`
+#[allow(dead_code)]
 pub(crate) fn find(state_dir: &Path, correlation_id: &str) -> Option<MeshEnvelope> {
     list(state_dir).into_iter().find(|envelope| {
         envelope.kind != KIND_REPLY && envelope.correlation_id.as_deref() == Some(correlation_id)
     })
 }
 
-/// 按关联 id 查找一条回复。
+/// 取出下一条尚未交给 Agent 队列的会话级网格消息。
+///
+/// 只投递给本会话自己的消息与广播；发给子智能体的条目由子智能体信箱消费，
+/// 不再唤醒父会话。每次只返回最旧的一条，与后台完成回执的「消息间隙一条」一致。
 ///
 /// 参数:
 /// - `state_dir`: 会话状态目录
-/// - `correlation_id`: 关联 id
+/// - `session_id`: 当前会话标识
 ///
 /// 返回:
-/// - 匹配的回复；尚未收到则 `None`
-pub(crate) fn find_reply(state_dir: &Path, correlation_id: &str) -> Option<MeshEnvelope> {
+/// - 待投递消息；没有则 `None`
+pub(crate) fn next_pending(state_dir: &Path, session_id: &str) -> Option<MeshEnvelope> {
+    let acked = load_acked(state_dir);
     list(state_dir).into_iter().find(|envelope| {
-        envelope.kind == KIND_REPLY && envelope.correlation_id.as_deref() == Some(correlation_id)
+        !acked.iter().any(|id| id == &envelope.id) && directed_at_session(envelope, session_id)
     })
+}
+
+/// 标记消息已被 Agent 队列消费，后续 `next_pending` 不再返回它们。
+///
+/// 消息本身仍留在信箱里，便于按 correlation_id 对上同一条线程。
+///
+/// 参数:
+/// - `state_dir`: 会话状态目录
+/// - `ids`: 已投递的消息 id
+///
+/// 返回:
+/// - 无
+pub(crate) fn acknowledge(state_dir: &Path, ids: &[String]) {
+    if ids.is_empty() {
+        return;
+    }
+    let mut acked = load_acked(state_dir);
+    for id in ids {
+        if id.is_empty() || acked.iter().any(|existing| existing == id) {
+            continue;
+        }
+        acked.push(id.clone());
+    }
+    let overflow = acked.len().saturating_sub(MAX_ACKED);
+    if overflow > 0 {
+        acked.drain(..overflow);
+    }
+    persist_acked(state_dir, &acked);
+}
+
+/// 判断信封是否应唤醒该会话的主 Agent。
+///
+/// 参数:
+/// - `envelope`: 信箱条目
+/// - `session_id`: 当前会话标识
+///
+/// 返回:
+/// - 发给本会话或广播时为 true
+fn directed_at_session(envelope: &MeshEnvelope, session_id: &str) -> bool {
+    match MeshAddress::parse(&envelope.to) {
+        Ok(MeshAddress::Session(target)) => target == session_id,
+        Ok(MeshAddress::Broadcast) => true,
+        Ok(MeshAddress::Agent { .. }) | Err(_) => false,
+    }
+}
+
+/// 读取已确认 id 清单（内存优先，未命中再读磁盘）。
+///
+/// 参数:
+/// - `state_dir`: 会话状态目录
+///
+/// 返回:
+/// - 按确认顺序排列的 id
+fn load_acked(state_dir: &Path) -> Vec<String> {
+    let key = state_dir.display().to_string();
+    if let Ok(acked) = acked_ids().lock() {
+        if let Some(ids) = acked.get(&key) {
+            return ids.clone();
+        }
+    }
+    let ids = read_acked_file(state_dir);
+    if let Ok(mut acked) = acked_ids().lock() {
+        acked.insert(key, ids.clone());
+    }
+    ids
+}
+
+/// 把已确认 id 写回内存与磁盘。
+///
+/// 参数:
+/// - `state_dir`: 会话状态目录
+/// - `ids`: 完整的已确认清单
+///
+/// 返回:
+/// - 无
+fn persist_acked(state_dir: &Path, ids: &[String]) {
+    let key = state_dir.display().to_string();
+    if let Ok(mut acked) = acked_ids().lock() {
+        acked.insert(key, ids.to_vec());
+    }
+    let path = acked_file(state_dir);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let encoded = match serde_json::to_string(&json!({ "ids": ids })) {
+        Ok(encoded) => encoded,
+        Err(_) => return,
+    };
+    let _ = std::fs::write(path, encoded);
+}
+
+/// 从磁盘读取已确认 id 清单。
+///
+/// 参数:
+/// - `state_dir`: 会话状态目录
+///
+/// 返回:
+/// - 解析成功的 id 列表；缺文件或坏 JSON 时为空
+fn read_acked_file(state_dir: &Path) -> Vec<String> {
+    let Ok(raw) = std::fs::read_to_string(acked_file(state_dir)) else {
+        return Vec::new();
+    };
+    serde_json::from_str::<Value>(&raw)
+        .ok()
+        .and_then(|value| value.get("ids").cloned())
+        .and_then(|ids| serde_json::from_value::<Vec<String>>(ids).ok())
+        .unwrap_or_default()
 }
 
 /// 读取磁盘信箱里的全部条目，坏行跳过。

@@ -29,7 +29,7 @@ pub(super) fn validate_start_request(request: &StartRunRequest) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::web::runs::manager::RunKind;
+    use crate::web::runs::manager::{QueueInsertAt, RunKind};
 
     /// 创建图片限制测试请求。
     fn request(image_urls: Vec<String>) -> StartRunRequest {
@@ -44,6 +44,7 @@ mod tests {
             provider_id: None,
             model: None,
             thinking_level: None,
+            insert_at: QueueInsertAt::Turn,
         }
     }
 

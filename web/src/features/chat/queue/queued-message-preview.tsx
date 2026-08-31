@@ -1,5 +1,47 @@
-import { Image as ImageIcon } from "lucide-react";
+import { Image as ImageIcon, X } from "lucide-react";
 import { useI18n } from "../../i18n/use-i18n";
+
+/**
+ * 渲染排队消息附带的图片缩略图，编辑时可逐张移除。
+ *
+ * @param imageUrls 图片地址
+ * @param onRemove 可选移除回调；缺省时只预览
+ * @returns 缩略图条
+ */
+export function QueuedImageStrip({
+  imageUrls,
+  onRemove
+}: {
+  imageUrls: string[];
+  onRemove?: (index: number) => void;
+}) {
+  const { t } = useI18n();
+  if (imageUrls.length === 0) return null;
+
+  return (
+    <div
+      className="queued-message-thumbs"
+      title={t(`${imageUrls.length} images attached`, `附带 ${imageUrls.length} 张图片`)}
+    >
+      {imageUrls.map((url, index) => (
+        <span key={`${url}-${index}`} className="queued-message-thumb">
+          <img src={url} alt="" />
+          {onRemove && (
+            <button
+              type="button"
+              className="queued-message-thumb-remove"
+              onClick={() => onRemove(index)}
+              aria-label={t(`Remove image ${index + 1}`, `删除第 ${index + 1} 张图片`)}
+              title={t("Remove image", "删除图片")}
+            >
+              <X size={10} />
+            </button>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 /**
  * 队列行的内容预览。
@@ -31,13 +73,13 @@ export function QueuedMessagePreview({
         {position + 1}
       </span>
       {imageUrls.length > 0 ? (
-        <span
-          className="queued-message-preview-images"
-          title={t(`${imageUrls.length} images attached`, `附带 ${imageUrls.length} 张图片`)}
-        >
-          <ImageIcon size={11} aria-hidden="true" />
-          {imageUrls.length}
-        </span>
+        <>
+          <QueuedImageStrip imageUrls={imageUrls} />
+          <span className="queued-message-preview-images" aria-hidden="true">
+            <ImageIcon size={11} />
+            {imageUrls.length}
+          </span>
+        </>
       ) : null}
       <p title={text || undefined}>
         {text || <em>{t("Images only", "仅图片")}</em>}

@@ -1,3 +1,5 @@
+use crate::i18n::text as t;
+
 /// 返回 REPL 支持的斜杠菜单。
 ///
 /// 返回:
@@ -87,6 +89,7 @@ pub(in crate::cli) fn stream_command_policy(input: &str) -> StreamCommandPolicy 
         Ok(Some(
             crate::control_commands::ControlCommand::Help
             | crate::control_commands::ControlCommand::Context { .. }
+            | crate::control_commands::ControlCommand::Rename { .. }
             | crate::control_commands::ControlCommand::Subagents
             | crate::control_commands::ControlCommand::SubagentMessage { .. },
         )) => StreamCommandPolicy::Immediate,
@@ -126,7 +129,10 @@ fn extra_stream_command_policy(input: &str) -> Option<StreamCommandPolicy> {
 /// 返回:
 /// - 需要交主循环分发时返回 true
 pub(in crate::cli) fn is_stream_command_text(input: &str) -> bool {
-    !matches!(stream_command_policy(input), StreamCommandPolicy::NotCommand)
+    !matches!(
+        stream_command_policy(input),
+        StreamCommandPolicy::NotCommand
+    )
 }
 
 /// 生成运行期间命中置灰命令的提示文本。
@@ -153,10 +159,7 @@ pub(super) fn stream_command_disabled_hint(input: &str) -> String {
 ///
 /// 返回:
 /// - 可补全的斜杠菜单
-pub(super) fn repl_command_suggestions(
-    input: &str,
-    streaming: bool,
-) -> Vec<ReplCommandSuggestion> {
+pub(super) fn repl_command_suggestions(input: &str, streaming: bool) -> Vec<ReplCommandSuggestion> {
     if !input.starts_with('/') {
         return Vec::new();
     }
@@ -248,7 +251,7 @@ pub(super) fn complete_repl_command(input: &str, streaming: bool) -> Option<&'st
     }
 }
 
-/// 返回 slash 命令的英文说明文本。
+/// 返回 slash 命令的本地化说明文本。
 ///
 /// 参数:
 /// - `command`: slash 命令文本
@@ -257,28 +260,50 @@ pub(super) fn complete_repl_command(input: &str, streaming: bool) -> Option<&'st
 /// - 适合 command palette 右侧展示的简短说明
 fn command_description(command: &str) -> &'static str {
     match command {
-        "/help" => "show available commands",
-        "/context" => "show context usage and compaction policy",
-        "/new" => "start a new session",
-        "/resume" => "resume or switch sessions",
-        "/compact" => "compact older conversation history",
-        "/clear" => "clear conversation; /clear memory clears memory",
-        "/model" => "pick model and thinking (same as sai models)",
-        "/agent" => "switch the active agent",
-        "/providers" => "pick provider/model and thinking (same as /model)",
-        "/config" => "open fullscreen settings",
-        "/ps" => "manage background tasks",
-        "/subagents" => "list session subagents",
-        "/msg" => "leave a message on a subagent",
-        "/thinking" => "set reasoning effort",
-        "/plan" => "switch to read-only planning mode",
-        "/audit" => "switch to audited workspace sandbox mode",
-        "/yolo" => "switch to YOLO mode",
-        "/auto" | "/auto-audit" => "switch to auto-audit mode",
-        "/goal" => "manage long-running goals",
-        "/tree" => "browse the session tree and switch branches",
-        "/undo" => "undo the last turn and restore input",
-        "/exit" => "leave the REPL",
+        "/help" => t("show available commands", "显示可用命令"),
+        "/context" => t(
+            "show context usage and compaction policy",
+            "查看上下文占用与压缩策略",
+        ),
+        "/new" => t("start a new session", "新建会话"),
+        "/resume" => t("resume or switch sessions", "恢复或切换会话"),
+        "/rename" => t("rename the current session", "为当前会话命名"),
+        "/compact" => t("compact older conversation history", "压缩旧对话历史"),
+        "/clear" => t(
+            "clear conversation; /clear memory clears memory",
+            "清空对话；/clear memory 同时清空记忆",
+        ),
+        "/model" => t(
+            "pick model and thinking (same as sai models)",
+            "选择模型与思考等级（与 sai models 相同）",
+        ),
+        "/agent" => t("switch the active agent", "切换当前 Agent"),
+        "/providers" => t(
+            "pick provider/model and thinking (same as /model)",
+            "选择供应商、模型与思考等级（与 /model 相同）",
+        ),
+        "/config" => t("open fullscreen settings", "打开全屏配置"),
+        "/ps" => t("manage background tasks", "管理后台任务"),
+        "/subagents" => t("list session subagents", "列出会话子智能体"),
+        "/msg" => t("leave a message on a subagent", "给子智能体留言"),
+        "/thinking" => t("set reasoning effort", "设置思考等级"),
+        "/plan" => t("switch to read-only planning mode", "切换到只读计划模式"),
+        "/audit" => t(
+            "switch to audited workspace sandbox mode",
+            "切换到审核工作区沙箱模式",
+        ),
+        "/yolo" => t("switch to YOLO mode", "切换到 YOLO 模式"),
+        "/auto" | "/auto-audit" => t("switch to auto-audit mode", "切换到自动审核模式"),
+        "/goal" => t("manage long-running goals", "管理长期目标"),
+        "/tree" => t(
+            "browse the session tree and switch branches",
+            "浏览会话树并切换分支",
+        ),
+        "/undo" => t(
+            "undo the last turn and restore input",
+            "撤销上一轮并恢复输入",
+        ),
+        "/exit" => t("leave the REPL", "退出 REPL"),
         _ => "",
     }
 }
@@ -360,6 +385,7 @@ mod tests {
         assert!(repl_commands().contains(&"/compact"));
         assert!(repl_commands().contains(&"/model"));
         assert!(repl_commands().contains(&"/resume"));
+        assert!(repl_commands().contains(&"/rename"));
         assert!(!repl_commands().contains(&"/帮助"));
         assert!(!repl_commands().contains(&"/压缩"));
         assert!(!repl_commands().contains(&"/模型"));
@@ -400,18 +426,27 @@ mod tests {
     }
 
     #[test]
-    fn command_descriptions_are_always_english() {
+    fn command_descriptions_follow_locale() {
         let suggestions = visible_repl_command_suggestions("/", false);
 
         assert!(suggestions
             .iter()
-            .all(|suggestion| suggestion.description.is_ascii()));
+            .all(|suggestion| !suggestion.description.is_empty()));
+        if crate::i18n::is_zh() {
+            assert!(suggestions
+                .iter()
+                .any(|suggestion| !suggestion.description.is_ascii()));
+        } else {
+            assert!(suggestions
+                .iter()
+                .all(|suggestion| suggestion.description.is_ascii()));
+        }
     }
 
     /// 只读查询命令在模型运行期间立即执行，不必等本轮结束。
     #[test]
     fn read_only_commands_run_immediately() {
-        for command in ["/context", "/subagents", "/help"] {
+        for command in ["/context", "/subagents", "/help", "/rename Demo"] {
             assert_eq!(
                 stream_command_policy(command),
                 StreamCommandPolicy::Immediate,

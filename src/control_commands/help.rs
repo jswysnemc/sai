@@ -40,6 +40,11 @@ fn shared_help_lines(surface: ControlSurface) -> Vec<String> {
         ),
         format!(
             "  {}  {}",
+            command_label(surface, "/rename <title>", "/重命名 <标题>"),
+            t("rename the current session", "为当前会话命名")
+        ),
+        format!(
+            "  {}  {}",
             command_label(surface, "/compact", "/压缩"),
             t(
                 "manually compact old conversation turns",
@@ -174,6 +179,13 @@ fn repl_only_help_lines() -> Vec<String> {
             t("switch to read-only planning mode", "切换到只读计划模式")
         ),
         format!(
+            "  /audit      {}",
+            t(
+                "switch to audited workspace sandbox mode",
+                "切换到审核工作区沙箱模式"
+            )
+        ),
+        format!(
             "  /yolo       {}",
             t("switch to YOLO mode", "切换到 YOLO 模式")
         ),
@@ -183,6 +195,11 @@ fn repl_only_help_lines() -> Vec<String> {
                 "switch to auto-audit mode (LLM + human in parallel)",
                 "切换到自动审核模式（LLM 与人工并行）"
             )
+        ),
+        format!("  /auto-audit {}", t("same as /auto", "与 /auto 相同")),
+        format!(
+            "  /goal [text]  {}",
+            t("create or update a persistent goal", "创建或更新持久目标")
         ),
         format!(
             "  /tree       {}",
@@ -212,11 +229,24 @@ fn repl_key_help_lines() -> Vec<String> {
         format!(
             "  Tab         {}",
             t(
-                "toggle YOLO/PLAN, or complete slash commands",
-                "切换 YOLO/PLAN，或补全斜杠菜单"
+                "complete @/# / slash; while working, queue the message",
+                "补全 @/# / 斜杠；工作时把消息排队"
             )
         ),
-        format!("  Enter       {}", t("send message", "发送消息")),
+        format!(
+            "  Shift+Tab   {}",
+            t(
+                "cycle yolo / audit / auto-audit / plan",
+                "循环 yolo / audit / auto-audit / plan 权限模式"
+            )
+        ),
+        format!(
+            "  Enter       {}",
+            t(
+                "send when idle; queue while the model is working",
+                "空闲时发送；模型工作时排队"
+            )
+        ),
         format!("  Shift+Enter {}", t("insert newline", "插入换行")),
         format!(
             "  Ctrl+J      {}",
@@ -245,6 +275,34 @@ fn repl_key_help_lines() -> Vec<String> {
             "  Esc Esc     {}",
             t("clear current message", "清空当前消息")
         ),
-        format!("  Ctrl+C Ctrl+C {}", t("exit REPL", "退出 REPL")),
+        format!(
+            "  Ctrl+C      {}",
+            t(
+                "stop the current turn while working; press twice when idle to exit",
+                "工作时停止本轮；空闲连按两次退出",
+            )
+        ),
+        format!(
+            "  Ctrl+C Ctrl+C {}",
+            t("exit REPL when idle", "空闲时退出 REPL")
+        ),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::help_text;
+    use super::ControlSurface;
+
+    /// 【TUI】【帮助】快捷键说明与 REPL 命令覆盖 Shift+Tab、/audit、/goal。
+    #[test]
+    fn repl_help_covers_mode_cycle_and_recent_commands() {
+        let text = help_text(ControlSurface::Repl);
+        assert!(text.contains("Shift+Tab"));
+        assert!(text.contains("auto-audit"));
+        assert!(text.contains("/audit"));
+        assert!(text.contains("/goal"));
+        assert!(text.contains("/rename"));
+        assert!(!text.contains("toggle YOLO/PLAN"));
+    }
 }

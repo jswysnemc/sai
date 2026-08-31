@@ -50,6 +50,7 @@ fn test_checkpoint(
             status,
             discard_user_turn: false,
             restore_input: None,
+            insert_at: QueueInsertAt::Turn,
         },
         workspace: WorkspaceInfo {
             id: "workspace".to_string(),
@@ -68,6 +69,7 @@ fn test_checkpoint(
             provider_id: None,
             model: None,
             thinking_level: None,
+            insert_at: QueueInsertAt::Turn,
         },
         status,
         updated_at: String::new(),
@@ -246,10 +248,11 @@ async fn late_watcher_receives_events_published_after_it_attaches() {
         .await
         .unwrap()
         .unwrap();
-    let second_event = tokio::time::timeout(std::time::Duration::from_secs(1), second.events.recv())
-        .await
-        .unwrap()
-        .unwrap();
+    let second_event =
+        tokio::time::timeout(std::time::Duration::from_secs(1), second.events.recv())
+            .await
+            .unwrap()
+            .unwrap();
     assert_eq!(first_event.kind, "status.changed");
     assert_eq!(second_event.kind, "status.changed");
     assert_eq!(first_event.sequence, second_event.sequence);
@@ -273,6 +276,7 @@ async fn removes_session_checkpoints_and_journals_together() {
                 status: RunCheckpointStatus::Completed,
                 discard_user_turn: false,
                 restore_input: None,
+                insert_at: QueueInsertAt::Turn,
             },
             workspace: WorkspaceInfo {
                 id: "workspace".to_string(),
@@ -291,6 +295,7 @@ async fn removes_session_checkpoints_and_journals_together() {
                 provider_id: None,
                 model: None,
                 thinking_level: None,
+                insert_at: QueueInsertAt::Turn,
             },
             status: RunCheckpointStatus::Completed,
             updated_at: String::new(),
@@ -343,6 +348,7 @@ async fn queues_second_submission_for_same_session() {
                 status: RunCheckpointStatus::Running,
                 discard_user_turn: false,
                 restore_input: None,
+                insert_at: QueueInsertAt::Turn,
             },
             handle: task,
             cancel_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -363,6 +369,7 @@ async fn queues_second_submission_for_same_session() {
                 provider_id: None,
                 model: None,
                 thinking_level: None,
+                insert_at: QueueInsertAt::Turn,
             },
         )
         .await
@@ -400,6 +407,7 @@ async fn updates_queued_submission_and_restores_new_order() {
                 status: RunCheckpointStatus::Running,
                 discard_user_turn: false,
                 restore_input: None,
+                insert_at: QueueInsertAt::Turn,
             },
             handle: tokio::spawn(std::future::pending::<()>()),
             cancel_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -422,6 +430,7 @@ async fn updates_queued_submission_and_restores_new_order() {
                     provider_id: None,
                     model: None,
                     thinking_level: None,
+                    insert_at: QueueInsertAt::Turn,
                 },
             )
             .await
@@ -436,6 +445,8 @@ async fn updates_queued_submission_and_restores_new_order() {
             QueuedRunUpdate {
                 input: Some("edited third".to_string()),
                 position: Some(0),
+                insert_at: None,
+                image_urls: None,
             },
         )
         .await
@@ -461,12 +472,31 @@ async fn updates_queued_submission_and_restores_new_order() {
         "edited third"
     );
 
+    manager
+        .update_queued(
+            &moved_id,
+            QueuedRunUpdate {
+                input: None,
+                position: None,
+                insert_at: None,
+                image_urls: Some(vec!["data:image/png;base64,AAAA".to_string()]),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        manager.checkpoints.get(&moved_id).unwrap().info.image_urls,
+        vec!["data:image/png;base64,AAAA"]
+    );
+
     let empty_error = manager
         .update_queued(
             &queued_ids[0],
             QueuedRunUpdate {
                 input: Some("   ".to_string()),
                 position: None,
+                insert_at: None,
+                image_urls: None,
             },
         )
         .await
@@ -478,6 +508,8 @@ async fn updates_queued_submission_and_restores_new_order() {
             QueuedRunUpdate {
                 input: None,
                 position: Some(0),
+                insert_at: None,
+                image_urls: None,
             },
         )
         .await
@@ -500,6 +532,10 @@ async fn updates_queued_submission_and_restores_new_order() {
     assert_eq!(
         restored.checkpoints.get(&moved_id).unwrap().info.input,
         "edited third"
+    );
+    assert_eq!(
+        restored.checkpoints.get(&moved_id).unwrap().info.image_urls,
+        vec!["data:image/png;base64,AAAA"]
     );
 }
 
@@ -533,6 +569,7 @@ async fn message_queue_acknowledges_only_the_delivered_front_item() {
                 status: RunCheckpointStatus::Running,
                 discard_user_turn: false,
                 restore_input: None,
+                insert_at: QueueInsertAt::Turn,
             },
             handle: tokio::spawn(std::future::pending::<()>()),
             cancel_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -556,6 +593,7 @@ async fn message_queue_acknowledges_only_the_delivered_front_item() {
                         provider_id: None,
                         model: None,
                         thinking_level: None,
+                        insert_at: QueueInsertAt::Request,
                     },
                 )
                 .await
@@ -573,8 +611,11 @@ async fn message_queue_acknowledges_only_the_delivered_front_item() {
         manager.checkpoints.get(&first.id).unwrap().status,
         RunCheckpointStatus::Completed
     );
-    let first_events =
-        wait_for_events(&manager.run_bus(&first.id).await.unwrap().journal(), &first.id).await;
+    let first_events = wait_for_events(
+        &manager.run_bus(&first.id).await.unwrap().journal(),
+        &first.id,
+    )
+    .await;
     assert!(first_events.iter().any(|event| {
         event.kind == "run.merged" && event.payload["target_run_id"] == "active-run"
     }));

@@ -157,8 +157,14 @@ fn default_model_outside_models_list_is_still_selectable() {
 
     let models = models_for(&config, &provider_id);
 
-    assert!(models.iter().any(|model| model == "old-model"), "{models:?}");
-    assert!(models.iter().any(|model| model == "new-model"), "{models:?}");
+    assert!(
+        models.iter().any(|model| model == "old-model"),
+        "{models:?}"
+    );
+    assert!(
+        models.iter().any(|model| model == "new-model"),
+        "{models:?}"
+    );
 }
 
 /// `default_model` 已在 `models` 里时不重复出现。
@@ -169,7 +175,10 @@ fn default_model_inside_models_list_is_not_duplicated() {
     config.providers[0].models = vec!["model-a".to_string(), "model-b".to_string()];
     config.providers[0].default_model = "model-a".to_string();
 
-    assert_eq!(models_for(&config, &provider_id), vec!["model-a".to_string(), "model-b".to_string()]);
+    assert_eq!(
+        models_for(&config, &provider_id),
+        vec!["model-a".to_string(), "model-b".to_string()]
+    );
 }
 
 /// `models` 为空时回落到 `default_model`，保持既有行为。
@@ -180,7 +189,10 @@ fn empty_models_list_falls_back_to_default_model() {
     config.providers[0].models.clear();
     config.providers[0].default_model = "only-model".to_string();
 
-    assert_eq!(models_for(&config, &provider_id), vec!["only-model".to_string()]);
+    assert_eq!(
+        models_for(&config, &provider_id),
+        vec!["only-model".to_string()]
+    );
 }
 
 /// 取出指定供应商在模型选择列表里的模型标识。

@@ -38,6 +38,7 @@ export type {
   ToolResultResponse,
   RunModelSelection,
   ThinkingLevel,
+  QueueInsertAt,
   RunInfo,
   ActiveRunsResponse,
   WebEvent,
