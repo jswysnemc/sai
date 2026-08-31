@@ -59,6 +59,26 @@ impl ReplClipboardState {
         self.next_image_index = 0;
     }
 
+    /// Windows 终端把 Ctrl+V 转成括号粘贴的文本事件，图片不会以文本形式到达。
+    /// 剪贴板里有图片时按图片插入，供 `Event::Paste` 分支先探测。
+    ///
+    /// 参数:
+    /// - `input`: 当前输入内容
+    /// - `cursor`: 当前光标字符位置
+    ///
+    /// 返回:
+    /// - 剪贴板包含图片且已插入时返回 true
+    #[cfg(windows)]
+    pub(super) fn paste_image_if_any(&mut self, input: &mut String, cursor: &mut usize) -> bool {
+        match clipboard::read_clipboard_payload() {
+            Ok(payload @ ClipboardPayload::ImageDataUrl { .. }) => {
+                self.insert_payload(input, cursor, payload);
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// 将括号粘贴事件中的文本插入输入区，长文本会生成原子块。
     ///
     /// 参数:

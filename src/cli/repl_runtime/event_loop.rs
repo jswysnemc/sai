@@ -133,6 +133,15 @@ pub(crate) fn process_stream_input(
                 let text = strip_control_sequences(&text);
                 let draft = runtime.stream_draft_mut();
                 draft.windows_paste.reset();
+                // Windows 终端把 Ctrl+V 转成括号粘贴的文本事件，图片不会以文本
+                // 形式到达；剪贴板里有图时先按图片插入，否则按普通文本粘贴
+                #[cfg(windows)]
+                if draft.clipboard.paste_image_if_any(&mut draft.text, &mut draft.cursor) {
+                    draft.is_pasted = true;
+                    draft.slash_selection = 0;
+                    runtime.redraw_stream_composer()?;
+                    continue;
+                }
                 draft
                     .clipboard
                     .paste_text_into_input(&mut draft.text, &mut draft.cursor, text);
