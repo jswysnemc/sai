@@ -103,8 +103,9 @@ pub(crate) fn visible_tool_names(registry: &ToolRegistry, deferred: &[String]) -
 
 /// 判断工具是否必须经过渐进网关加载。
 ///
-/// 基础工具始终保留原生定义。通配符只延迟非基础工具；显式配置只延迟
-/// 对应的非基础工具，其他启用工具继续按原生 Schema 调用。
+/// 基础集合只是默认值，不是不可覆盖的策略：显式点名的工具一律按需 load，
+/// 基础工具也不例外，否则用户在配置界面上把它切成"按需"却始终不生效。
+/// 通配符才回落到基础集合，因为全量开放的 Agent 无法穷举工具名。
 ///
 /// 参数:
 /// - `name`: 工具名称
@@ -123,12 +124,16 @@ pub(crate) fn is_deferred_tool(name: &str, deferred: &[String]) -> bool {
         // dsh 的常驻工具由 Agent 适配层提供；注册表中的 sai 本地定义全部保持延迟。
         return true;
     }
+    // 1. 用户点名优先于内置基础集合：配置界面上选了"按需"就得真的按需
+    if deferred.iter().any(|configured| configured == name) {
+        return true;
+    }
     if is_base_tool(name) {
         return false;
     }
     deferred
         .iter()
-        .any(|configured| configured == DEFERRED_ALL_NON_BASE || configured == name)
+        .any(|configured| configured == DEFERRED_ALL_NON_BASE)
 }
 
 /// 生成加载工具描述。

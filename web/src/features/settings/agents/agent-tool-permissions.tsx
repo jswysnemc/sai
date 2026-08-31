@@ -43,7 +43,8 @@ export function AgentToolPermissions({ tools, enabled, deferred, onChange }: Age
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const selection: ToolModeSelection = { enabled, deferred };
   const allNames = tools.map((tool) => tool.name);
-  const nonBaseNames = tools.filter((tool) => tool.group !== "base").map((tool) => tool.name);
+  // 常驻与否由后端给出：网格工具自成一组却仍是常驻的，拿分组推断会判错
+  const nonResidentNames = tools.filter((tool) => !tool.resident).map((tool) => tool.name);
 
   const modeLabels: ToolModeLabels = [
     { value: "on", label: t("On", "启用"), title: t("Exposed from the start of the session", "会话开始即暴露给模型") },
@@ -65,14 +66,14 @@ export function AgentToolPermissions({ tools, enabled, deferred, onChange }: Age
    * @param mode 目标状态
    */
   const applyChange = (names: string[], mode: ToolMode) => {
-    const expanded = expandWildcard(selection, nonBaseNames);
+    const expanded = expandWildcard(selection, nonResidentNames);
     const next = updateToolModes(expanded, names, mode, allNames);
     onChange(next.enabled, next.deferred);
   };
 
-  const isBase = useMemo(() => {
-    const baseNames = new Set(tools.filter((tool) => tool.group === "base").map((tool) => tool.name));
-    return (name: string) => baseNames.has(name);
+  const isResident = useMemo(() => {
+    const residentNames = new Set(tools.filter((tool) => tool.resident).map((tool) => tool.name));
+    return (name: string) => residentNames.has(name);
   }, [tools]);
 
   /** 按分组整理工具，并根据搜索词与状态筛选可见项。 */
@@ -109,7 +110,7 @@ export function AgentToolPermissions({ tools, enabled, deferred, onChange }: Age
               || (tool.group_hint_en ?? "").toLocaleLowerCase().includes(normalizedQuery)
               || (tool.description ?? "").toLocaleLowerCase().includes(normalizedQuery);
             const matchesStatus = statusFilter === "all"
-              || resolveToolMode(selection, tool.name, tool.group === "base") === statusFilter;
+              || resolveToolMode(selection, tool.name, !!tool.resident) === statusFilter;
             return matchesQuery && matchesStatus;
           })
         };
@@ -121,7 +122,7 @@ export function AgentToolPermissions({ tools, enabled, deferred, onChange }: Age
     return <p className="agent-permissions-empty">{t("No tools available.", "暂无可用工具。")}</p>;
   }
 
-  const counts = countToolModes(selection, allNames, isBase);
+  const counts = countToolModes(selection, allNames, isResident);
 
   return (
     <div className="agent-permissions-panel agent-tool-permissions">
@@ -161,9 +162,9 @@ export function AgentToolPermissions({ tools, enabled, deferred, onChange }: Age
             <CheckCheck size={14} aria-hidden="true" />
             {t("All on", "全部启用")}
           </Button>
-          <Button onClick={() => applyChange(nonBaseNames, "load")}>
+          <Button onClick={() => applyChange(nonResidentNames, "load")}>
             <Timer size={14} aria-hidden="true" />
-            {t("Non-base to load", "非基础按需")}
+            {t("Non-resident to load", "非常驻按需")}
           </Button>
           <Button onClick={() => onChange([], [])} disabled={enabled.length === 0 && deferred.length === 0}>
             <X size={14} aria-hidden="true" />

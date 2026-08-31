@@ -35,9 +35,9 @@ export function AgentProfileEditor({ config, profile, options, onChange, onRemov
   const [tab, setTab] = useState<AgentEditorTab>("basic");
   const skillCount = profile.skills_full.length + profile.skills_named.length;
   const deferredTools = profile.deferred_tools ?? [];
-  // 通配符代表全部非基础工具，逐项计数时按实际非基础工具数量折算
+  // 通配符代表全部非常驻工具，逐项计数时按实际非常驻工具数量折算
   const deferredCount = deferredTools.includes(DEFERRED_ALL_NON_BASE)
-    ? options.tools.filter((tool) => tool.group !== "base").length
+    ? options.tools.filter((tool) => !tool.resident).length
     : deferredTools.length;
   const isBuiltin = profile.id === DEFAULT_AGENT_ID || ["general", "explore"].includes(profile.id);
   const tabs: Array<{ id: AgentEditorTab; label: string; icon: typeof Settings2 }> = [

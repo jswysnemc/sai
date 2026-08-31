@@ -2,10 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { AgentToolPermissions } from "./agent-tool-permissions";
+import { DEFERRED_ALL_NON_BASE } from "./agent-tool-mode-state";
 
 const tools = [
-  { name: "read_file", group: "base", group_label: "基础操作", group_rank: 0, description: "读取文件内容" },
-  { name: "edit_file", group: "base", group_label: "基础操作", group_rank: 0, description: "编辑文件内容" },
+  { name: "read_file", group: "base", resident: true, group_label: "基础操作", group_rank: 0, description: "读取文件内容" },
+  { name: "edit_file", group: "base", resident: true, group_label: "基础操作", group_rank: 0, description: "编辑文件内容" },
   { name: "web_search", group: "web", group_label: "网页检索", group_rank: 2, description: "搜索网页内容" }
 ];
 
@@ -22,7 +23,7 @@ describe("AgentToolPermissions", () => {
 
     expect(html).toContain('placeholder="搜索工具、分组或说明"');
     expect(html).toContain("全部启用");
-    expect(html).toContain("非基础按需");
+    expect(html).toContain("非常驻按需");
     expect(html).toContain('aria-label="筛选工具状态"');
   });
 
@@ -50,6 +51,24 @@ describe("AgentToolPermissions", () => {
 
     expect(html).toContain('aria-label="设置网页检索分组的权限"');
     expect(html).toContain('aria-label="设置 web_search 的权限"');
+  });
+
+  it("常驻工具即使不在基础分组里也显示为启用", () => {
+    // 网格工具自成一组但属于常驻集合，按分组推断会被误判成按需
+    const html = renderToStaticMarkup(
+      <AgentToolPermissions
+        tools={[
+          { name: "session_probe", group: "mesh", resident: true, group_label: "会话网格", group_rank: 12, description: "列出会话" },
+          { name: "web_search", group: "web", group_label: "网页检索", group_rank: 2, description: "搜索网页内容" }
+        ]}
+        enabled={[]}
+        deferred={[DEFERRED_ALL_NON_BASE]}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(html).toContain('data-group="mesh"');
+    expect(html).toContain("启用 1 · 按需 1 · 关闭 0");
   });
 
   it("把 SSH 组排在基础组之后，并说明用户与模型的分工", () => {

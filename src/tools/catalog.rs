@@ -1,6 +1,14 @@
-use super::{builtin_registry, builtin_registry_without_mcp, groups, ToolRegistry};
+use super::descriptions::tool_description;
+use super::{
+    builtin_registry, builtin_registry_without_mcp, groups, register_interactive_tools, ToolRegistry,
+};
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
+
+/// 目录使用的占位会话标识。
+///
+/// 目录只要工具元数据，这个标识不会落到任何会话状态里。
+const CATALOG_SESSION_ID: &str = "tool-catalog";
 
 /// 内置工具目录条目。
 pub(crate) struct ToolCatalogEntry {
@@ -8,6 +16,8 @@ pub(crate) struct ToolCatalogEntry {
     pub name: String,
     /// 用途分组标识
     pub group: &'static str,
+    /// 是否属于常驻集合：延迟集合含通配符时这些工具仍然直接可见
+    pub resident: bool,
     /// 用途分组中文短标题
     pub group_label: &'static str,
     /// 用途分组英文短标题
@@ -35,23 +45,48 @@ pub(crate) struct ToolCatalogEntry {
 /// 返回:
 /// - 按工具名排序的目录条目列表
 pub(crate) fn tool_catalog(config: &AppConfig, paths: &SaiPaths) -> Vec<ToolCatalogEntry> {
-    // 1. 按全开配置构建本地注册表，跳过 MCP 网络与子进程发现。
-    //    用实际配置枚举会让关闭插件的工具从配置界面上消失，于是无法为
-    //    某个 Agent 预先勾选它——而 Agent 白名单本就该独立于全局开关
-    let registry = builtin_registry_without_mcp(&catalog_config(config), paths);
-    // 2. 为每个工具附加用途分组与摘要
-    let mut entries = catalog_entries(registry);
-    entries.extend([
-        catalog_entry("subagent".to_string(), "启动子任务代理".to_string()),
-        catalog_entry("todo".to_string(), "管理待办任务清单".to_string()),
-        catalog_entry(
-            "ask_question".to_string(),
-            "向用户提出结构化问题并等待回答".to_string(),
-        ),
-    ]);
+    let mut entries = catalog_entries(catalog_registry(config, paths));
+    // 渠道发送工具只在网关收到入站消息、拿到渠道上下文后才注册，目录侧没有
+    // 渠道可绑定，只能按名字补一条；否则网关 Agent 的配置页看不到这个工具，
+    // 而它却写在该 Agent 的默认白名单里。
+    entries.push(catalog_entry(
+        "send_channel_message".to_string(),
+        tool_description("send_channel_message", "Send a channel message."),
+    ));
     entries.sort_by(|left, right| left.name.cmp(&right.name));
     entries.dedup_by(|left, right| left.name == right.name);
     entries
+}
+
+/// 构造目录使用的工具注册表。
+///
+/// 必须和真实交互式会话共用 `register_interactive_tools`：网格工具、子智能体、
+/// 任务清单与结构化提问都只在那条路径上注册。早先目录自己抄了一份名单，
+/// 于是网格工具虽然注册成功，配置界面上却不存在，用户也就无从选择。
+///
+/// 参数:
+/// - `config`: 当前应用配置
+/// - `paths`: 应用目录路径集合
+///
+/// 返回:
+/// - 覆盖交互式会话全部工具的注册表
+fn catalog_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
+    // 1. 按全开配置构建本地注册表，跳过 MCP 网络与子进程发现。
+    //    用实际配置枚举会让关闭插件的工具从配置界面上消失，于是无法为
+    //    某个 Agent 预先勾选它——而 Agent 白名单本就该独立于全局开关
+    let catalog = catalog_config(config);
+    let mut registry = builtin_registry_without_mcp(&catalog, paths);
+    // 2. 挂上只在会话中注册的工具，保证目录与会话看到同一份工具集合
+    register_interactive_tools(
+        &mut registry,
+        &catalog,
+        paths,
+        paths.state_dir.display().to_string(),
+        CATALOG_SESSION_ID.to_string(),
+    );
+    // 3. 定时任务只在网关提交路径注册，目录里同样要能勾选
+    crate::cron::register_tool(&mut registry, paths.clone(), String::new());
+    registry
 }
 
 /// 枚举 MCP 动态工具，供设置页后台补充选项。
@@ -99,10 +134,14 @@ fn catalog_entries(registry: ToolRegistry) -> Vec<ToolCatalogEntry> {
 /// 将工具元数据转换为设置页目录项。
 fn catalog_entry(name: String, description: String) -> ToolCatalogEntry {
     let group = groups::group_for_tool(&name);
+    // 常驻与否由基础集合决定，与用途分组无关：网格工具自成一组却仍是常驻的，
+    // 前端若拿分组推断就会把它显示成"按需"，和实际行为对不上。
+    let resident = groups::is_base_tool(&name);
     let meta = groups::group_meta(group);
     ToolCatalogEntry {
         name,
         group,
+        resident,
         group_label: meta.label_zh,
         group_label_en: meta.label_en,
         group_hint: meta.hint_zh,
@@ -127,6 +166,7 @@ fn summarize_tool_description(description: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
     use std::time::{Duration, Instant};
 
     #[test]
@@ -255,6 +295,128 @@ mod tests {
         assert!(
             ssh[0].group_hint.contains("设置 → SSH"),
             "SSH 组应说明主机由用户在设置页配置"
+        );
+    }
+
+    #[test]
+    fn zz_audit_probe() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(dir.path());
+        let config = AppConfig::default();
+        let mut registry =
+            crate::tools::builtin_registry_without_mcp(&catalog_config(&config), &paths);
+        crate::tools::register_interactive_tools(
+            &mut registry,
+            &config,
+            &paths,
+            dir.path().to_string_lossy().to_string(),
+            "audit-session".to_string(),
+        );
+        let registered: std::collections::BTreeSet<String> =
+            registry.tool_infos().into_iter().map(|i| i.name).collect();
+        let entries = tool_catalog(&config, &paths);
+        let catalog: std::collections::BTreeSet<String> =
+            entries.iter().map(|e| e.name.clone()).collect();
+        let missing: Vec<&String> = registered.difference(&catalog).collect();
+        println!(
+            "AUDIT registered={} catalog={} missing={}",
+            registered.len(),
+            catalog.len(),
+            missing.len()
+        );
+        let mut by_group: std::collections::BTreeMap<&str, Vec<String>> =
+            std::collections::BTreeMap::new();
+        for entry in &entries {
+            by_group
+                .entry(entry.group)
+                .or_default()
+                .push(format!("{}{}", entry.name, if entry.resident { "*" } else { "" }));
+        }
+        for (group, names) in &by_group {
+            println!("AUDIT_GROUP [{}] n={} {}", group, names.len(), names.join(", "));
+        }
+        println!("AUDIT_LEGEND name* means resident");
+    }
+
+    /// 验证目录覆盖交互式会话注册的全部工具。
+    ///
+    /// Agent 设置页的工具清单来自目录。目录一旦漏掉某个只在会话中注册的工具，
+    /// 用户就既看不到也无法为它配置加载方式——网格工具正是这样"注册成功却
+    /// 不存在"的。这里直接比对两条路径，任何新增的会话级工具都会被这条断言
+    /// 挡下。
+    #[test]
+    fn the_catalog_covers_every_interactive_tool() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(dir.path());
+        let config = AppConfig::default();
+        let mut registry =
+            crate::tools::builtin_registry_without_mcp(&catalog_config(&config), &paths);
+        crate::tools::register_interactive_tools(
+            &mut registry,
+            &config,
+            &paths,
+            dir.path().to_string_lossy().to_string(),
+            "catalog-coverage-session".to_string(),
+        );
+        let catalog: BTreeSet<String> = tool_catalog(&config, &paths)
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect();
+
+        let missing = registry
+            .tool_infos()
+            .into_iter()
+            .map(|info| info.name)
+            .filter(|name| !catalog.contains(name))
+            .collect::<Vec<_>>();
+
+        assert!(
+            missing.is_empty(),
+            "以下工具注册了却不在配置目录里，agent 配置页看不到它们: {}",
+            missing.join(", ")
+        );
+    }
+
+    /// 验证网格工具出现在配置目录里，并归入 mesh 分组。
+    ///
+    /// 用户要在配置界面上为它们选择"常驻 / 按需 / 关闭"，前提是先看得到。
+    #[test]
+    fn mesh_tools_are_listed_in_the_catalog() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(dir.path());
+        let entries = tool_catalog(&AppConfig::default(), &paths);
+
+        for expected in [
+            "session_probe",
+            "agent_probe",
+            "mesh_send",
+            "mesh_recv",
+            "mesh_reply",
+        ] {
+            let entry = entries
+                .iter()
+                .find(|entry| entry.name == expected)
+                .unwrap_or_else(|| panic!("目录缺少 {expected}"));
+            assert_eq!(entry.group, "mesh", "{expected} 应归入 mesh 分组");
+            assert!(!entry.description.is_empty(), "{expected} 应有摘要说明");
+        }
+    }
+
+    /// 验证只在网关提交路径注册的定时任务工具也进入目录。
+    #[test]
+    fn the_gateway_only_cron_tool_is_listed_in_the_catalog() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(dir.path());
+
+        let names: Vec<String> = tool_catalog(&AppConfig::default(), &paths)
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect();
+
+        assert!(names.iter().any(|name| name == "cron"), "目录缺少 cron");
+        assert!(
+            names.iter().any(|name| name == "send_channel_message"),
+            "目录缺少 send_channel_message"
         );
     }
 

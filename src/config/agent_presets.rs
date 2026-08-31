@@ -91,6 +91,13 @@ const CODE_AGENT_TOOLS: &[&str] = &[
     "ssh_run_command",
     "ssh_upload_file",
     "ssh_download_file",
+    // 网格：跨会话与子智能体协作。两个探针只读，收发默认只投递给当前会话
+    // 自己（`mesh.cross_session` 默认关闭），因此不额外收窄权限。
+    "session_probe",
+    "agent_probe",
+    "mesh_send",
+    "mesh_recv",
+    "mesh_reply",
 ];
 
 /// Plan Agent 只读工具。
@@ -383,6 +390,138 @@ fn builtin_gateway_agent() -> AgentProfile {
 /// - CLI、代码、探索、Plan 与网关档案
 pub fn seed_default_agent_profiles() -> Vec<AgentProfile> {
     builtin_agent_profiles().into_iter().collect()
+}
+
+/// 网格工具的默认可见性。
+///
+/// 这几条断言针对的是"注册了但看不见"这类事故：单测可以逐个调用网格工具，
+/// 全部通过，而 agent 会话的工具列表里根本没有它们。因此这里不测注册表能否
+/// 调用，只测默认配置下它们是否真的出现在 agent 可见的工具集合里。
+#[cfg(test)]
+mod mesh_visibility_tests {
+    use super::super::agents::apply_agent_override;
+    use super::super::AgentSurface;
+    use crate::agent::AgentMode;
+    use crate::config::AppConfig;
+    use crate::paths::SaiPaths;
+    use crate::runner::SubmissionSource;
+    use std::collections::BTreeSet;
+
+    /// 五个网格工具。
+    const MESH_TOOLS: [&str; 5] = [
+        "session_probe",
+        "agent_probe",
+        "mesh_send",
+        "mesh_recv",
+        "mesh_reply",
+    ];
+
+    /// 计算默认配置下指定入口的 agent 实际可见的工具名称。
+    ///
+    /// 参数:
+    /// - `surface`: 运行入口
+    ///
+    /// 返回:
+    /// - 经过白名单收窄与渐进加载过滤后仍然可见的工具名
+    fn visible_tools_for_default_agent(surface: AgentSurface) -> BTreeSet<String> {
+        let mut config = AppConfig::default();
+        crate::config::ensure_surface_agent_defaults(&mut config);
+        let config = apply_agent_override(config, None, surface).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(dir.path());
+        let registry = crate::cli::build_repl_tool_registry_without_mcp_for_session(
+            &config,
+            &paths,
+            AgentMode::Yolo,
+            "visibility-session",
+            dir.path(),
+        )
+        .unwrap();
+        let registry =
+            crate::runner::submission_tools::apply_enabled_tools_filter(
+                registry,
+                &config,
+                SubmissionSource::Repl,
+            )
+            .unwrap();
+        crate::tools::progressive::visible_tool_names(&registry, config.agent_deferred_tools())
+    }
+
+    /// 默认配置下代码 Agent（TUI / Web 默认入口）必须能看到网格工具。
+    ///
+    /// 白名单、注册表与延迟集合三者缺一不可：白名单没点名会被过滤掉，
+    /// 不在基础集合里又会被通配符判成延迟工具。
+    #[test]
+    fn the_default_code_agent_sees_the_mesh_tools() {
+        let visible = visible_tools_for_default_agent(AgentSurface::Tui);
+
+        for name in MESH_TOOLS {
+            assert!(visible.contains(name), "默认配置下 {name} 应对 agent 可见");
+        }
+    }
+
+    /// 全量开放的 CLI 助手同样默认可见：它用的是通配符延迟集合。
+    #[test]
+    fn the_default_cli_agent_sees_the_mesh_tools() {
+        let visible = visible_tools_for_default_agent(AgentSurface::Cli);
+
+        for name in MESH_TOOLS {
+            assert!(visible.contains(name), "CLI 默认配置下 {name} 应对 agent 可见");
+        }
+    }
+
+    /// 原本常驻的工具不能因为这次调整变成默认不可见。
+    #[test]
+    fn the_default_agent_still_sees_the_classic_base_tools() {
+        let visible = visible_tools_for_default_agent(AgentSurface::Tui);
+
+        for name in ["run_command", "read_file", "write_file", "subagent", "todo"] {
+            assert!(visible.contains(name), "{name} 不应退回按需加载");
+        }
+    }
+
+    /// 用户显式把网格工具设为按需时，配置必须生效。
+    ///
+    /// 基础集合只是默认值，不能反过来压住用户的选择。
+    #[test]
+    fn an_explicit_deferral_wins_over_the_builtin_base_set() {
+        let mut config = AppConfig::default();
+        crate::config::ensure_surface_agent_defaults(&mut config);
+        let mut config = apply_agent_override(config, None, AgentSurface::Tui).unwrap();
+        let runtime = config.agent_runtime.as_mut().unwrap();
+        for name in MESH_TOOLS {
+            if !runtime.deferred_tools.iter().any(|tool| tool == name) {
+                runtime.deferred_tools.push(name.to_string());
+            }
+        }
+
+        let visible = crate::tools::progressive::visible_tool_names(
+            &visible_registry(&config),
+            config.agent_deferred_tools(),
+        );
+
+        for name in MESH_TOOLS {
+            assert!(
+                !visible.contains(name),
+                "用户设为按需后 {name} 不应再默认可见"
+            );
+        }
+        assert!(visible.contains("run_command"), "未点名的工具不应受影响");
+    }
+
+    /// 构造测试用注册表，供延迟集合断言复用。
+    fn visible_registry(config: &AppConfig) -> crate::tools::ToolRegistry {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = SaiPaths::for_tests(dir.path());
+        crate::cli::build_repl_tool_registry_without_mcp_for_session(
+            config,
+            &paths,
+            AgentMode::Yolo,
+            "visibility-session",
+            dir.path(),
+        )
+        .unwrap()
+    }
 }
 
 /// 为尚未指定入口默认 Agent 的配置补齐入口默认值。

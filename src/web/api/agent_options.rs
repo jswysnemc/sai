@@ -10,6 +10,8 @@ use serde::Serialize;
 struct ToolOption {
     name: String,
     group: String,
+    /// 常驻工具：即使延迟集合含通配符也直接可见
+    resident: bool,
     group_label: String,
     group_label_en: String,
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -147,6 +149,7 @@ fn tool_option(entry: tools::ToolCatalogEntry) -> ToolOption {
     ToolOption {
         name: entry.name,
         group: entry.group.to_string(),
+        resident: entry.resident,
         group_label: entry.group_label.to_string(),
         group_label_en: entry.group_label_en.to_string(),
         group_hint: entry.group_hint.to_string(),

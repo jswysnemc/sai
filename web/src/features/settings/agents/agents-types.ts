@@ -4,6 +4,8 @@ export type { AgentProfile } from "../../agents/agent-types";
 export type AgentToolOption = {
   name: string;
   group: string;
+  /** 常驻工具：延迟集合含通配符时这些工具仍然直接可见 */
+  resident?: boolean;
   group_label?: string;
   group_label_en?: string;
   group_hint?: string;

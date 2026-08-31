@@ -17,19 +17,19 @@ export type ToolModeSelection = {
  *
  * @param selection 当前启用与延迟集合
  * @param name 工具名称
- * @param isBaseTool 该工具是否属于基础工具分组
+ * @param isResident 该工具是否常驻（延迟集合含通配符时仍然直接可见）
  * @returns 工具的三段状态
  */
 export function resolveToolMode(
   selection: ToolModeSelection,
   name: string,
-  isBaseTool: boolean
+  isResident: boolean
 ): ToolMode {
   const available = selection.enabled.length === 0 || selection.enabled.includes(name);
   if (!available) return "off";
+  // 点名优先于通配符：用户显式选了按需就必须真的按需，常驻集合只是默认值
   if (selection.deferred.includes(name)) return "load";
-  // 通配符只覆盖非基础工具，基础工具始终初始可见
-  if (selection.deferred.includes(DEFERRED_ALL_NON_BASE) && !isBaseTool) return "load";
+  if (selection.deferred.includes(DEFERRED_ALL_NON_BASE) && !isResident) return "load";
   return "on";
 }
 
@@ -82,16 +82,16 @@ export function updateToolModes(
  * 否则单个工具的 on 无法覆盖通配符。
  *
  * @param selection 当前启用与延迟集合
- * @param nonBaseNames 全部非基础工具名称
+ * @param nonResidentNames 全部非常驻工具名称
  * @returns 不含通配符的延迟集合
  */
 export function expandWildcard(
   selection: ToolModeSelection,
-  nonBaseNames: string[]
+  nonResidentNames: string[]
 ): ToolModeSelection {
   if (!selection.deferred.includes(DEFERRED_ALL_NON_BASE)) return selection;
   const explicit = selection.deferred.filter((name) => name !== DEFERRED_ALL_NON_BASE);
-  for (const name of nonBaseNames) {
+  for (const name of nonResidentNames) {
     if (!explicit.includes(name)) explicit.push(name);
   }
   return { enabled: selection.enabled, deferred: explicit };
@@ -102,17 +102,17 @@ export function expandWildcard(
  *
  * @param selection 当前启用与延迟集合
  * @param names 待统计的工具名称
- * @param isBaseTool 判定工具是否属于基础工具分组
+ * @param isResident 判定工具是否常驻
  * @returns 三段状态各自的数量
  */
 export function countToolModes(
   selection: ToolModeSelection,
   names: string[],
-  isBaseTool: (name: string) => boolean
+  isResident: (name: string) => boolean
 ): Record<ToolMode, number> {
   const counts: Record<ToolMode, number> = { on: 0, load: 0, off: 0 };
   for (const name of names) {
-    counts[resolveToolMode(selection, name, isBaseTool(name))] += 1;
+    counts[resolveToolMode(selection, name, isResident(name))] += 1;
   }
   return counts;
 }
