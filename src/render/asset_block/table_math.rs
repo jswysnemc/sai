@@ -68,12 +68,31 @@ pub(crate) fn render_cell(source: &str, max_cols: usize, mixed: bool) -> CellCon
             content.math_source = Some(encode_source(source, mixed));
             content
         }
-        Err(_) => CellContent::from_inline(format!("{MD_INLINE_CODE_STYLE}{source}{RESET}")),
+        Err(_) => degraded_cell(source, mixed),
     };
     if enabled {
         cell_cache_put(key, rendered.clone());
     }
     rendered
+}
+
+/// 构造图片管线失败后的公式单元格。
+///
+/// 「这是公式单元格」只由单元格文本决定，与机器无关：终端不支持图形
+/// 协议、或缺少 typst / rsvg-convert / magick 等工具链时，内容退化为
+/// 单行源码文本，但 `is_image` 与 `math_source` 必须保留——列宽确定后
+/// 还有机会按最终宽度重新渲染出图片（见 `refit_math_image_cells`）。
+///
+/// 参数:
+/// - `source`: 公式或混合内容
+/// - `mixed`: 是否包含普通文本
+///
+/// 返回:
+/// - 退化为源码文本的公式单元格
+fn degraded_cell(source: &str, mixed: bool) -> CellContent {
+    let text = format!("{MD_INLINE_CODE_STYLE}{source}{RESET}");
+    let width = crate::render::table::visible_width(&text);
+    CellContent::from_image(vec![text], width, Some(encode_source(source, mixed)))
 }
 
 /// 表格公式单元格缓存上限。

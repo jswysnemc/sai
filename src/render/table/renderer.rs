@@ -40,7 +40,9 @@ pub(crate) fn render_table_row(
             let cell_lines = cell.map(|item| item.lines.as_slice()).unwrap_or(&[]);
             let mut all_lines = Vec::new();
             for line in cell_lines {
-                if is_image {
+                // 只有真正的协议载荷（Kitty / iTerm2 / Sixel）才按整块占位；
+                // 公式单元格在不支持图形协议时退化为源码文本，仍可安全折行
+                if is_image && is_graphics_protocol_line(line) {
                     all_lines.push(line.clone());
                 } else {
                     all_lines.extend(wrap_ansi_text(line, *width));
@@ -66,18 +68,19 @@ pub(crate) fn render_table_row(
             let cell = row.get(index);
             let is_image = cell.map(|item| item.is_image).unwrap_or(false);
             let offset = offsets.get(index).copied().unwrap_or(0);
-            let line = line_index
+            let raw_line = line_index
                 .checked_sub(offset)
                 .and_then(|inner| wrapped.get(index).and_then(|lines| lines.get(inner)))
                 .map(String::as_str)
                 .unwrap_or("");
-            let line = if header && !line.is_empty() {
-                format!("\x1b[1m{line}\x1b[0m")
+            let is_protocol = is_image && is_graphics_protocol_line(raw_line);
+            let line = if header && !raw_line.is_empty() {
+                format!("\x1b[1m{raw_line}\x1b[0m")
             } else {
-                line.to_string()
+                raw_line.to_string()
             };
             output.push(' ');
-            if is_image {
+            if is_protocol {
                 push_image_cell_line(
                     &mut output,
                     &line,

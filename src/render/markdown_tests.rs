@@ -552,6 +552,38 @@ fn table_cell_content_renders_pure_math_as_image() {
         .is_some_and(|s| s.starts_with("pure:")));
 }
 
+/// 【渲染】【表格公式】公式单元格的分类不随机器能力漂移。
+///
+/// `is_image` / `math_source` 描述的是「这一格是公式」，只由单元格文本
+/// 决定；渲染不出图片时内容退化为源码文本，分类必须保持不变。否则断言
+/// 只在装了图形终端（或刚好有可用字体 / typst / magick）的机器上成立，
+/// CI runner 上就会红。
+#[test]
+fn table_cell_content_keeps_math_classification_without_image_protocol() {
+    // 关掉三种图形协议即可在本机确定地复现 runner 的降级路径；
+    // 用独占的公式文本，避免与其它测试共用单元格缓存
+    crate::render::terminal_image::test_override::set(Some(false), Some(false), Some(false));
+    let mixed = render_table_cell_content("判定 $q_7 \\neq r_7$ 在此");
+    let pure = render_table_cell_content("$q_7 \\neq r_7$");
+    crate::render::terminal_image::test_override::set(None, None, None);
+
+    assert!(mixed.is_image, "降级后仍须标记为公式单元格");
+    assert!(mixed
+        .math_source
+        .as_deref()
+        .is_some_and(|s| s.starts_with("mixed:")));
+    assert!(pure.is_image, "降级后仍须标记为公式单元格");
+    assert!(pure
+        .math_source
+        .as_deref()
+        .is_some_and(|s| s.starts_with("pure:")));
+    // 内容退化为单行源码文本：宁可看到式子，也不要看到一个空格
+    assert_eq!(mixed.lines.len(), 1);
+    assert!(mixed.lines[0].contains("q_7"));
+    assert_eq!(pure.lines.len(), 1);
+    assert!(pure.lines[0].contains("q_7"));
+}
+
 #[test]
 fn table_cell_renders_display_math_as_halfblock_image() {
     let output = render_table_cell("$$a^2+b^2$$");
