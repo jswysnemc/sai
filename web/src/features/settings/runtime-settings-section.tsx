@@ -9,6 +9,7 @@ import { RtkFilterSettings } from "./rtk-filter-settings";
 import { ToggleRow } from "./controls/toggle-row";
 import { CompactionModelField } from "./compaction-model-field";
 import { MemoryExtractionModelField } from "./runtime/session-memory-extraction-field";
+import { PasteKeySettings } from "./runtime/paste-key-settings";
 import { useI18n } from "../i18n/use-i18n";
 import { DebugSettings } from "./runtime/debug-settings";
 
@@ -37,12 +38,25 @@ export function RuntimeSettingsSection({ config, subview, onConfigChange }: Runt
       return <NotificationSettings config={config} onConfigChange={onConfigChange} />;
     case "terminal":
       return (
-        <SettingsGroup
-          title={t("Web terminal", "网页终端")}
-          description={t("Configure the Shell used by new Web terminal sessions.", "配置网页终端启动的 Shell，新建终端时生效。")}
-        >
-          <TerminalSettingsFields config={config} onConfigChange={onConfigChange} />
-        </SettingsGroup>
+        <div className="runtime-groups">
+          <SettingsGroup
+            title={t("Web terminal", "网页终端")}
+            description={t("Configure the Shell used by new Web terminal sessions.", "配置网页终端启动的 Shell，新建终端时生效。")}
+          >
+            <TerminalSettingsFields config={config} onConfigChange={onConfigChange} />
+          </SettingsGroup>
+          <SettingsGroup
+            title={t("TUI input", "TUI 输入")}
+            description={t(
+              "Keys used by the terminal UI input box.",
+              "终端 TUI 输入框使用的键位。"
+            )}
+          >
+            <div className="settings-form-grid">
+              <PasteKeySettings config={config} onConfigChange={onConfigChange} />
+            </div>
+          </SettingsGroup>
+        </div>
       );
     case "context":
       return (
