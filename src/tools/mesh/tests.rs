@@ -122,7 +122,7 @@ async fn session_probe_reports_holder_watchers_and_idle_turn() {
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0]["id"], session.id);
         assert_eq!(sessions[0]["title"], "probe");
-        assert_eq!(sessions[0]["is_current"], true);
+        assert_eq!(sessions[0]["is_workspace_current"], true);
         assert_eq!(sessions[0]["is_self"], true);
         assert_eq!(sessions[0]["held"], true);
         assert_eq!(sessions[0]["idle"], true);
@@ -219,16 +219,86 @@ async fn session_probe_scopes_separate_workspace_from_all() {
             .collect::<std::collections::BTreeSet<_>>();
         assert!(all_ids.contains(&local.id));
         assert!(all_ids.contains(&foreign.id));
-        // 只有自己所在工作区的会话才算当前会话
+        // 每个工作区各有一个共享指针指向的会话；它不是「哪个是我」的判据
         let current = everything["sessions"]
             .as_array()
             .unwrap()
             .iter()
-            .filter(|session| session["is_current"] == true)
+            .filter(|session| session["is_workspace_current"] == true)
             .count();
         assert_eq!(current, 2, "每个工作区各有一个当前会话");
+        let own = everything["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|session| session["is_self"] == true)
+            .count();
+        assert_eq!(own, 1, "is_self 有且只有一条");
     })
     .await;
+}
+
+/// 判定「哪个是我」只能看 is_self：共享指针常常属于别的终端。
+#[tokio::test]
+async fn session_probe_self_identity_never_depends_on_the_workspace_pointer() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(temp.path());
+    let cwd = temp.path().join("workspace-a");
+    std::fs::create_dir_all(&cwd).unwrap();
+
+    crate::runtime_cwd::scope(cwd.clone(), async {
+        // 同一工作区里后建的会话抢走共享指针，但「我」仍然是先建的那个
+        let (local, _) = session_in(&paths, &cwd, "local");
+        let (newer, newer_dir) = session_in(&paths, &cwd, "newer");
+        // 没有存活持有者的会话不进探测结果，给它挂一个才看得到
+        let _holder =
+            SessionHolderGuard::acquire(&newer_dir, &newer.id, SessionOwner::Repl).unwrap();
+        let registry = registry_for(&paths, &local);
+
+        let output = probe(&registry, "session_probe", r#"{"scope":"workspace"}"#).await;
+        let sessions = output["sessions"].as_array().unwrap();
+        let mine = sessions
+            .iter()
+            .filter(|session| session["is_self"] == true)
+            .collect::<Vec<_>>();
+        assert_eq!(mine.len(), 1, "is_self 有且只有一条: {output}");
+        assert_eq!(mine[0]["id"], local.id, "is_self 必须指向本进程会话");
+        assert_eq!(output["self"]["session_id"], local.id);
+        // 共享指针落在后建的会话上，证明它不能当身份判据
+        let pointer = sessions
+            .iter()
+            .find(|session| session["is_workspace_current"] == true)
+            .expect("工作区共享指针应指向某条会话");
+        assert_eq!(pointer["id"], newer.id);
+        assert_eq!(pointer["is_self"], false);
+    })
+    .await;
+}
+
+/// 工具说明必须点名 is_self，且不能把 is_workspace_current 说成身份判据。
+///
+/// 两种语言都要覆盖：模型在中文界面下读到的是中文那份说明。
+#[test]
+fn probe_description_documents_is_self() {
+    for description in [
+        super::session_probe::DESCRIPTION_EN,
+        super::session_probe::DESCRIPTION_ZH,
+    ] {
+        assert!(
+            description.contains("is_self"),
+            "工具说明必须点名 is_self: {description}"
+        );
+        assert!(
+            !description.contains("whether it is its workspace's current session")
+                && !description.contains("是否为所在工作区的当前会话"),
+            "工具说明不应再把 is_workspace_current 说成身份判据: {description}"
+        );
+        assert!(
+            description.contains("never from is_workspace_current")
+                || description.contains("绝不要看 is_workspace_current"),
+            "工具说明必须明确排除用 is_workspace_current 判身份: {description}"
+        );
+    }
 }
 
 /// 同一工作区里没有存活持有者的会话不出现在探测结果中；当前会话本身仍展示。

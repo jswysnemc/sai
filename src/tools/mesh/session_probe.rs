@@ -7,6 +7,12 @@ use anyhow::Result;
 use serde_json::{json, Value};
 use std::path::Path;
 
+/// 英文版工具说明。
+pub(super) const DESCRIPTION_EN: &str = "Inspect live Sai sessions and who holds them, without touching them. scope=all (default) reports live sessions across every workspace; workspace reports this workspace; self reports only the current session. A session is live when a terminal, web page, or gateway holds it — including a brand-new session that has not received any prompt yet. Inactive sessions (no live holder) are omitted, except the current session itself. Each entry carries the session id and title, whether it is idle (held but not running a turn), the holder, and whether a turn is running. Exactly one entry has is_self: true — that entry is YOU, and the top-level self.session_id / self.state_dir repeat the same identity. Always decide \"which session am I\" from is_self, never from is_workspace_current: the latter only names the session this workspace's shared pointer file points at, which is often owned by another terminal or tab, so it is frequently true for a session that is not you and false for the one that is. Use it before coordinating across sessions. Read-only: it never starts, switches, or interrupts a session.";
+
+/// 中文版工具说明。
+pub(super) const DESCRIPTION_ZH: &str = "查看仍在活动的 Sai 会话及其持有者,不碰任何会话。scope=all(默认)报所有工作区的活动会话;workspace 报本工作区;self 只报当前会话。终端、网页或网关打开着的会话就算活动,包括还没有发过任何提示词的新会话。没有存活持有者的非活动会话不展示,当前会话本身除外。每条记录包含会话 id 与标题、是否空闲(已打开但没在跑一轮)、持有者以及此刻是否正在跑一轮。is_self 为 true 的条目有且只有一条,它就是你;顶层 self.session_id / self.state_dir 给出同一身份。判断「哪个是我」一律看 is_self,绝不要看 is_workspace_current:后者只说明本工作区共享指针文件指向哪条会话,那个会话常常属于另一个终端或标签页,因此它经常在别人的会话上为真、在你的会话上为假。跨会话协作前先查它。只读工具:不会启动、切换或打断会话。";
+
 /// 注册 session_probe 工具。
 ///
 /// 参数:
@@ -18,10 +24,7 @@ use std::path::Path;
 pub(super) fn register(registry: &mut ToolRegistry, context: MeshContext) {
     registry.register(ToolSpec::new(
         "session_probe",
-        t(
-            "Inspect live Sai sessions and who holds them, without touching them. scope=all (default) reports live sessions across every workspace; workspace reports this workspace; self reports only the current session. A session is live when a terminal, web page, or gateway holds it — including a brand-new session that has not received any prompt yet. Inactive sessions (no live holder) are omitted, except the current session itself. Each entry carries the session id and title, whether it is idle (held but not running a turn), whether it is its workspace's current session, the holder, and whether a turn is running. Use it before coordinating across sessions. Read-only: it never starts, switches, or interrupts a session.",
-            "查看仍在活动的 Sai 会话及其持有者,不碰任何会话。scope=all(默认)报所有工作区的活动会话;workspace 报本工作区;self 只报当前会话。终端、网页或网关打开着的会话就算活动,包括还没有发过任何提示词的新会话。没有存活持有者的非活动会话不展示,当前会话本身除外。每条记录包含会话 id 与标题、是否空闲(已打开但没在跑一轮)、是否为所在工作区的当前会话、持有者以及此刻是否正在跑一轮。跨会话协作前先查它。只读工具:不会启动、切换或打断会话。",
-        ),
+        t(DESCRIPTION_EN, DESCRIPTION_ZH),
         json!({
             "type": "object",
             "properties": {
@@ -29,8 +32,8 @@ pub(super) fn register(registry: &mut ToolRegistry, context: MeshContext) {
                     "type": "string",
                     "enum": ["self", "workspace", "all"],
                     "description": t(
-                        "Which live sessions to report: all (every workspace, default), workspace (this workspace), or self (current session). Inactive sessions are omitted.",
-                        "要查看的活动会话范围:all(所有工作区,默认)、workspace(本工作区)、self(当前会话)。非活动会话不展示。"
+                        "Which live sessions to report: all (every workspace, default), workspace (this workspace), or self (your own session — the entry with is_self: true). Inactive sessions are omitted.",
+                        "要查看的活动会话范围:all(所有工作区,默认)、workspace(本工作区)、self(你自己的会话,即 is_self 为 true 的那条)。非活动会话不展示。"
                     )
                 }
             },
@@ -123,7 +126,9 @@ fn describe(session: &LocatedSession, context: &MeshContext) -> Value {
         "workspace_id": session.workspace_id,
         "state_dir": session.state_dir.display().to_string(),
         "updated_at": session.info.updated_at,
-        "is_current": session.is_current,
+        // 工作区共享指针文件的答案：它只说明「这个工作区当前指向哪条会话」，
+        // 那个会话可能属于另一个终端，不能拿来判定「哪个是我」
+        "is_workspace_current": session.is_current,
         // 每个工作区都有 default 会话，按 id 判断会把别的工作区的 default
         // 也当成自己；状态目录才是会话的唯一身份
         "is_self": Path::new(&context.owner_key) == session.state_dir,
