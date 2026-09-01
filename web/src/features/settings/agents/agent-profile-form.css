@@ -247,7 +247,7 @@
   }
 }
 
-/* 工具页的独占白名单开关 */
+/* 工具页的独占白名单开关：挂在 SettingsGroup 的 actions 槽位上 */
 
 .agent-tools-exclusive {
   display: flex;
@@ -255,10 +255,10 @@
   justify-content: space-between;
   gap: var(--space-md);
   padding: var(--space-sm);
-  margin-bottom: var(--space-md);
   border: 1px solid var(--line);
   border-radius: var(--radius-3);
   cursor: pointer;
+  max-width: min(24rem, 100%);
 }
 
 .agent-tools-exclusive > span {
