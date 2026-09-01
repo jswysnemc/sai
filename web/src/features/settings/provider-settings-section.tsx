@@ -1,24 +1,18 @@
-import { Check, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { createElement, useEffect, useState } from "react";
+import { Plus } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { AppConfig, ProviderApiKey, ProviderConfig } from "../../api/contracts";
 import { EditorHeader } from "./editor-layout";
-import { ProviderConnectionTest } from "./model/provider-connection-test";
-import { ModelMetadataEditor } from "./model-metadata-editor";
 import { ModelImportDialog } from "./model-import-dialog";
 import { ObjectListPanel } from "./object-list-panel";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { Toast, useToast } from "../../shared/ui/notify/notify";
-import { Select } from "../../shared/ui/select/select";
-import { SkeletonText } from "../../shared/ui/skeleton/skeleton";
 import { ModelIcon } from "../../shared/ui/model-icon";
-import { JsonCodeEditor } from "../../shared/ui/code-editor/json-code-editor";
+import { SkeletonText } from "../../shared/ui/skeleton/skeleton";
 import { useI18n } from "../i18n/use-i18n";
 import { clearNewSessionModelReference } from "../sessions/new-session-preferences";
-import { KeyValueEditor } from "./key-value-editor";
-import { ProviderApiKeysField } from "./provider-api-keys-field";
 import { useSelectedFallback } from "./controls/use-selected-fallback";
 import { findProviderIndex, nextProviderId, providerIdConflict } from "./model/provider-selection";
 import { formatTemperature, parseTemperature } from "./model/temperature-field";
@@ -28,6 +22,11 @@ import {
   nextActiveProvider,
   partitionByEnablement
 } from "./model/provider-enablement";
+import { ProviderHeaderActions } from "./providers/provider-header-actions";
+import { ProviderConnectionTab, buildDefaultModelOptions } from "./providers/provider-connection-tab";
+import { ProviderModelsTab } from "./providers/provider-models-tab";
+import { ProviderBehaviorTab } from "./providers/provider-behavior-tab";
+import { ProviderAdvancedTab } from "./providers/provider-advanced-tab";
 
 type ProviderSettingsSectionProps = {
   config: AppConfig;
@@ -52,6 +51,9 @@ function normalizedProviderApiKeys(provider: ProviderConfig): ProviderApiKey[] {
 
 /**
  * 渲染供应商列表和当前供应商编辑表单。
+ *
+ * 壳持有共享状态（选中项、远端模型目录、导入弹层），四个页签的表单
+ * 拆分在 providers/ 目录下，每个文件只负责一个页签。
  *
  * @param props 应用配置和更新回调
  * @returns 供应商设置区域
@@ -109,7 +111,6 @@ export function ProviderSettingsSection({
   const provider = selectedIndex >= 0 ? config.providers[selectedIndex] : undefined;
   const providerKeys = provider ? normalizedProviderApiKeys(provider) : [];
   const selectedProviderKey = provider?.api_key_selected ?? providerKeys[0]?.id;
-  const claudeSimulation = isClaudeClientStyle(provider?.client_style);
 
   // 回落到列表首项而非 active_provider：后者表示"正在使用哪个"，
   // 与"正在编辑哪个"无关，用它回落会在改名中间态把编辑区弹回旧供应商
@@ -437,44 +438,18 @@ export function ProviderSettingsSection({
       "Fill in the API address first; the server fetches the model list from it.",
       "请先填写 API 地址，模型列表由服务端从该地址获取。"
     );
-  // 1. 默认模型下拉选项来自已配置模型，历史值不在列表时保留为可选项
-  const defaultModelOptions = (provider.default_model && !models.includes(provider.default_model)
-    ? [provider.default_model, ...models]
-    : models
-  ).map((model) => ({
-    value: model,
-    label: model,
-    icon: createElement(ModelIcon, {
-      model,
-      provider: remoteMetadata[model]?.provider,
-      size: 14
-    })
-  }));
-  const emptyModelOptions = [{ value: "", label: t("Add models on the Models tab first", "先在模型页签添加模型") }];
-  const protocolOptions = [
-    { value: "auto", label: t("Auto detect", "自动检测") },
-    { value: "openai-chat", label: "OpenAI Chat Completions" },
-    { value: "openai-responses", label: "OpenAI Responses" },
-    { value: "anthropic", label: "Anthropic Messages" }
-  ];
-  // 取值必须与后端白名单（src/config/app.rs 的 thinking_format 校验）一致，
-  // 否则保存时会被拒绝
-  const thinkingFormatOptions = [
-    { value: "auto", label: t("Automatic", "自动") },
-    { value: "openai-chat-reasoning-effort", label: "openai-chat-reasoning-effort" },
-    { value: "reasoning", label: "reasoning" },
-    { value: "anthropic-thinking", label: "anthropic-thinking" },
-    { value: "deepseek-thinking", label: "deepseek-thinking" },
-    { value: "moonshot-thinking", label: "moonshot-thinking" },
-    { value: "string", label: "string" },
-    { value: "object", label: "object" },
-    { value: "disabled", label: t("Disabled", "停用") }
-  ];
+  const defaultModelOptions = buildDefaultModelOptions(models, provider.default_model, remoteMetadata);
   const activeModel = provider.default_model ?? "";
-  const activeModelMetadata = activeModel ? (provider.model_metadata?.[activeModel] ?? {}) : {};
-  const deepseekAnchorEnabled = activeModelMetadata.deepseek_anchor_mode === "anchored_standard";
+
+  /**
+   * 【设置】【DeepSeek 锚定】切换当前默认模型的轨迹锚定开关。
+   *
+   * @param enabled 目标状态
+   * @returns 无返回值
+   */
   const setDeepseekAnchorEnabled = (enabled: boolean) => {
     if (!activeModel) return;
+    const activeModelMetadata = provider.model_metadata?.[activeModel] ?? {};
     const nextMetadata = { ...(provider.model_metadata ?? {}) };
     if (enabled) {
       nextMetadata[activeModel] = {
@@ -534,249 +509,75 @@ export function ProviderSettingsSection({
           kicker={t("Model provider", "模型供应商")}
           title={provider.display_name || provider.id}
           description={t("Configure the endpoint, credentials, and models available from this provider.", "配置接口、凭据和当前供应商可用的模型。")}
-          actions={<>
-            <label className="settings-switch">
-              <input
-                type="checkbox"
-                checked={isProviderEnabled(provider)}
-                onChange={(event) => void toggleProviderEnabled(event.target.checked)}
-              />
-              <span />
-              <strong>{isProviderEnabled(provider) ? t("Enabled", "已启用") : t("Disabled", "已停用")}</strong>
-            </label>
-            {/* 禁用态按钮收不到鼠标事件，说明挂在包裹层上 */}
-            <span className="settings-action-hint" title={importBlockedReason || undefined}>
-              <button type="button" className="settings-secondary" onClick={() => void fetchModels()} disabled={fetching || !provider.base_url.trim()}><RefreshCw size={14} className={fetching ? "spin" : ""} />{fetching ? t("Fetching", "正在获取") : t("Import models", "导入模型")}</button>
-            </span>
-            <button type="button" className={provider.id === config.active_provider ? "settings-secondary active" : "settings-secondary"} onClick={setAsCurrentProvider} disabled={provider.id === config.active_provider || !isProviderEnabled(provider)}><Check size={14} />{provider.id === config.active_provider ? t("Current provider", "当前供应商") : t("Set as current", "设为当前")}</button>
-            <button type="button" className="settings-danger" onClick={() => void deleteProvider()}><Trash2 size={14} />{t("Delete provider", "删除供应商")}</button>
-          </>}
+          actions={
+            <ProviderHeaderActions
+              config={config}
+              provider={provider}
+              enabled={isProviderEnabled(provider)}
+              isCurrent={provider.id === config.active_provider}
+              fetching={fetching}
+              importBlockedReason={importBlockedReason}
+              onToggleEnabled={(enabled) => void toggleProviderEnabled(enabled)}
+              onFetchModels={() => void fetchModels()}
+              onSetCurrent={setAsCurrentProvider}
+              onDelete={() => void deleteProvider()}
+            />
+          }
         />
         {fetchError && <div className="settings-inline-error">{fetchError.message}</div>}
         {secretError && <div className="settings-inline-error">{secretError.message}</div>}
         {fetching && <div className="provider-editor-loading">
           <SkeletonText lines={6} label={t("Fetching the model list", "正在获取模型列表")} />
         </div>}
-        {!fetching && tab === "connection" && <div className="settings-form-grid">
-          <label className="settings-field">
-            <span>{t("Display name", "显示名称")}</span>
-            <input
-              value={provider.display_name}
-              onChange={(event) => updateDisplayName(event.target.value)}
-            />
-            <small>{t("Used in model menus and status displays. The ID follows this name until you edit it.", "用于模型菜单和状态展示。未手动改 ID 时，标识会跟随名称。")}</small>
-          </label>
-          <label className="settings-field">
-            <span>{t("Provider ID", "供应商 ID")}</span>
-            <input
-              value={idDraft ?? provider.id}
-              onChange={(event) => setIdDraft(event.target.value)}
-              onBlur={(event) => commitProviderId(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") event.currentTarget.blur();
-                if (event.key === "Escape") {
-                  setIdDraft(null);
-                  setIdError("");
-                }
-              }}
-              spellCheck={false}
-              aria-invalid={idError ? true : undefined}
-            />
-            <small className={idError ? "settings-field-error" : undefined}>{idError || t("Stable identifier in the configuration file", "配置文件中的稳定标识")}</small>
-          </label>
-          <label className="settings-field full"><span>{t("API address", "API 地址")}</span><input value={provider.base_url} onChange={(event) => onProviderChange(selectedIndex, { base_url: event.target.value })} spellCheck={false} /><small>{t("Base URL of the compatible API; the server accesses it when fetching models", "兼容接口的基础地址，获取模型时由服务端访问")}</small></label>
-          <div className="settings-field"><span>{t("Protocol", "协议")}</span><Select value={provider.protocol ?? "auto"} options={protocolOptions} onChange={(value) => onProviderChange(selectedIndex, { protocol: value })} ariaLabel={t("Provider protocol", "供应商协议")} /><small>{t("The protocol determines request and reasoning parameter formats", "协议决定请求和思考参数格式")}</small></div>
-          <div className="settings-field"><span>{t("Default model", "默认模型")}</span>
-            {models.length > 0
-              ? <Select value={provider.default_model ?? ""} options={defaultModelOptions} onChange={(value) => onProviderChange(selectedIndex, { default_model: value })} ariaLabel={t("Default model", "默认模型")} />
-              : <Select value="" options={emptyModelOptions} disabled onChange={() => undefined} ariaLabel={t("Default model", "默认模型")} />}
-            <small>{models.length > 0 ? t("Used when no model is selected manually", "未手动切换时使用") : t("Add models on the Models tab first", "先在模型页签添加模型")}</small>
-          </div>
-          <div className="settings-field full">
-            <ProviderApiKeysField
-              // 切换供应商时重建：密钥框内部持有明文状态，
-              // 复用实例会把上一个供应商的密钥露出来
-              key={provider.id}
-              providerId={provider.id}
-              keys={providerKeys}
-              selected={selectedProviderKey}
-              balance={provider.api_key_balance === true}
-              secretSentinel={secretSentinel}
-              onRevealKey={revealProviderApiKey}
-              onChange={(patch) => {
-                setSecretError(null);
-                onProviderChange(selectedIndex, {
-                  ...patch,
-                  api_key: ""
-                });
-              }}
-            />
-            <small>{t("Use one selected key by default, or enable load balancing when multiple keys are configured. Environment variables can be referenced with `$env:VARIABLE_NAME`.", "默认使用一个选中的密钥；配置多个密钥后可以启用负载均衡。支持使用 `$env:VARIABLE_NAME` 引用环境变量。")}</small>
-          </div>
-          <div className="settings-field full">
-            <span>{t("Connectivity", "连通性")}</span>
-            <ProviderConnectionTest
-              key={`${provider.id}:${provider.default_model ?? ""}:${selectedProviderKey ?? ""}`}
-              provider={provider}
-              model={provider.default_model || undefined}
-              selectedKeyId={selectedProviderKey}
-            />
-            <small>{t("Run a normal model response test or a separate tool-calling test with the selected key.", "可以使用当前选中的密钥分别测试普通模型响应和工具调用。")}</small>
-          </div>
-        </div>}
-        {!fetching && tab === "behavior" && <div className="settings-form-grid">
-          <label className="settings-field"><span>{t("Request timeout", "请求超时")}</span><input type="number" min="1" value={provider.timeout_seconds ?? 120} onChange={(event) => onProviderChange(selectedIndex, { timeout_seconds: Number(event.target.value) })} /><small>{t("Seconds", "单位为秒")}</small></label>
-          <label className="settings-field">
-            <span>Temperature</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={temperatureDraft}
-              placeholder={t("Leave empty for provider default", "留空则不发送，由供应商默认")}
-              onChange={(event) => {
-                setTemperatureDraft(event.target.value);
-                setTemperatureError("");
-              }}
-              onBlur={(event) => commitTemperature(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") event.currentTarget.blur();
-              }}
-              aria-invalid={temperatureError ? true : undefined}
-            />
-            <small className={temperatureError ? "settings-field-error" : undefined}>{temperatureError || t("Optional sampling temperature from 0 to 2. Empty omits the field.", "可选采样温度，范围 0 到 2。留空则请求不带该参数。")}</small>
-          </label>
-          <div className="settings-field"><span>{t("Thinking level", "思考等级")}</span><Select value={provider.thinking_level ?? "auto"} options={THINKING_OPTIONS} onChange={(value) => onProviderChange(selectedIndex, { thinking_level: value })} ariaLabel={t("Thinking level", "思考等级")} /><small>{t("Default reasoning intensity for the provider", "供应商默认推理强度")}</small></div>
-          <div className="settings-field"><span>{t("Thinking format", "思考格式")}</span><Select value={provider.thinking_format ?? "auto"} options={thinkingFormatOptions} onChange={(value) => onProviderChange(selectedIndex, { thinking_format: value })} ariaLabel={t("Thinking format", "思考格式")} /><small>{t("Reasoning field in the response", "响应中的思考字段")}</small></div>
-          <label className="settings-toggle-field settings-inline-toggle">
-            <span>
-              <strong>{t("Preserve thinking", "回传历史思考")}</strong>
-              <small>{t(
-                "Send previous reasoning_content back in multi-turn requests; required by models such as kimi-k2.7-code.",
-                "多轮请求回传历史 reasoning_content；kimi-k2.7-code 一类模型要求开启。"
-              )}</small>
-            </span>
-            <input
-              type="checkbox"
-              checked={provider.preserve_thinking === true}
-              onChange={(event) => onProviderChange(selectedIndex, { preserve_thinking: event.target.checked })}
-            />
-          </label>
-          <label className="settings-toggle-field settings-inline-toggle">
-            <span>
-              <strong>{t("DeepSeek trajectory anchor", "DeepSeek 轨迹锚定")}</strong>
-              <small>
-                {t(
-                  "Use the dsh Anchored Standard tool flow for the selected model's first request.",
-                  "为当前默认模型启用 dsh Anchored Standard 首请求工具流程。"
-                )}
-              </small>
-            </span>
-            <input
-              type="checkbox"
-              checked={deepseekAnchorEnabled}
-              disabled={!activeModel}
-              onChange={(event) => setDeepseekAnchorEnabled(event.target.checked)}
-            />
-          </label>
-          {claudeSimulation && (
-            <label className="settings-field">
-              <span>{t("Claude max output", "Claude 最大输出")}</span>
-              <input
-                type="number"
-                min="1"
-                value={provider.anthropic_max_tokens ?? 8192}
-                onChange={(event) =>
-                  onProviderChange(selectedIndex, {
-                    anthropic_max_tokens: Number(event.target.value),
-                  })
-                }
-              />
-              <small>{t("Anthropic Messages max_tokens for Claude simulation", "Claude 模拟时 Anthropic Messages 的 max_tokens")}</small>
-            </label>
-          )}
-        </div>}
-        {!fetching && tab === "models" && <ModelMetadataEditor
-          // 切换供应商时重建：选中模型、新模型草稿和上下文单位都是内部状态，
-          // 复用实例会把上一个供应商的选择带过来
-          key={provider.id}
-          provider={provider}
-          onChange={updateModelConfiguration}
-        />}
-        {!fetching && tab === "advanced" && <div className="provider-advanced-layout">
-          <div className="provider-advanced-top">
-            <div className="settings-field">
-              <span>{t("Client style", "客户端模拟")}</span>
-              <Select
-                value={provider.client_style ?? "auto"}
-                options={[
-                  { value: "auto", label: t("Auto", "自动") },
-                  { value: "default", label: t("Default", "默认") },
-                  { value: "codex", label: "Codex CLI" },
-                  { value: "claude", label: "Claude Code" },
-                ]}
-                onChange={(value) => onProviderChange(selectedIndex, { client_style: value })}
-                ariaLabel={t("Client style", "客户端模拟")}
-              />
-              <small>{t("Codex forces Responses body and codex_cli_rs headers. Claude forces Anthropic Messages with Claude Code headers (beta, x-app, session). Use for 1M-context Claude proxies.", "Codex 强制 Responses 与 codex_cli_rs 头。Claude 强制 Anthropic Messages 与 Claude Code 头（beta、x-app、session）。适用于 1M 上下文 Claude 代理。")}</small>
-            </div>
-            {claudeSimulation && (
-              <label className="settings-toggle-field">
-                <span>
-                  <strong>{t("Claude 1M context", "Claude 启用 1M 上下文")}</strong>
-                  <small>{t(
-                    "Attach context-1m-2025-08-07 in anthropic-beta. Enabled by default.",
-                    "在 anthropic-beta 中附加 context-1m-2025-08-07，默认启用。"
-                  )}</small>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={provider.claude_1m_context !== false}
-                  onChange={(event) => onProviderChange(selectedIndex, {
-                    claude_1m_context: event.target.checked
-                  })}
-                />
-              </label>
-            )}
-            <label className="settings-field">
-              <span>User-Agent</span>
-              <input
-                value={provider.user_agent ?? ""}
-                onChange={(event) => onProviderChange(selectedIndex, { user_agent: event.target.value })}
-                spellCheck={false}
-                placeholder={
-                  provider.client_style === "codex"
-                    ? "codex_cli_rs/0.144.0"
-                    : claudeSimulation
-                      ? "claude-cli/2.1.113 (external, cli)"
-                      : "sai/0.1"
-                }
-              />
-              <small>{t("Empty uses Codex/Claude CLI UA when Client style matches, otherwise sai/0.1. Overrides User-Agent in extra headers.", "留空时：客户端模拟为 Codex/Claude 则用对应 CLI UA，否则 sai/0.1。优先于自定义请求头中的 User-Agent。")}</small>
-            </label>
-          </div>
-          <div className="provider-advanced-panels">
-            <div className="settings-field provider-advanced-panel">
-              <span>{t("Extra headers", "自定义请求头")}</span>
-              <KeyValueEditor
-                value={provider.extra_headers ?? {}}
-                onChange={(extra_headers) => onProviderChange(selectedIndex, { extra_headers })}
-              />
-              <small>{t("Merged into each model request; Authorization is not overridden", "合并到每次模型请求，不覆盖 Authorization")}</small>
-            </div>
-            <div className="settings-json-field provider-advanced-panel">
-              <div>
-                <span>{t("Custom body JSON", "自定义 body JSON")}</span>
-                <small>{t("The object is merged into each model request; explicit fields take precedence", "对象会合并到每次模型请求，显式配置字段优先")}</small>
-              </div>
-              <JsonCodeEditor
-                value={provider.extra_body || "{}"}
-                onChange={(value) => onProviderChange(selectedIndex, { extra_body: value === "{}" ? "" : value })}
-                height={220}
-                ariaLabel={t("Provider custom body JSON", "供应商自定义 body JSON")}
-              />
-            </div>
-          </div>
-        </div>}
+        {!fetching && tab === "connection" && (
+          <ProviderConnectionTab
+            provider={provider}
+            providerIndex={selectedIndex}
+            providerKeys={providerKeys}
+            selectedProviderKey={selectedProviderKey}
+            secretSentinel={secretSentinel}
+            idDraft={idDraft}
+            idError={idError}
+            defaultModelOptions={defaultModelOptions}
+            remoteMetadata={remoteMetadata}
+            onIdDraftChange={setIdDraft}
+            onCommitId={commitProviderId}
+            onIdEscape={() => {
+              setIdDraft(null);
+              setIdError("");
+            }}
+            onDisplayNameChange={updateDisplayName}
+            onPatch={(patch) => onProviderChange(selectedIndex, patch)}
+            onRevealKey={revealProviderApiKey}
+            onKeysChange={(patch) => {
+              setSecretError(null);
+              onProviderChange(selectedIndex, { ...patch, api_key: "" });
+            }}
+          />
+        )}
+        {!fetching && tab === "models" && (
+          <ProviderModelsTab provider={provider} onChange={updateModelConfiguration} />
+        )}
+        {!fetching && tab === "behavior" && (
+          <ProviderBehaviorTab
+            provider={provider}
+            temperatureDraft={temperatureDraft}
+            temperatureError={temperatureError}
+            onTemperatureDraftChange={(value) => {
+              setTemperatureDraft(value);
+              setTemperatureError("");
+            }}
+            onCommitTemperature={commitTemperature}
+            onPatch={(patch) => onProviderChange(selectedIndex, patch)}
+            onDeepseekAnchorChange={setDeepseekAnchorEnabled}
+          />
+        )}
+        {!fetching && tab === "advanced" && (
+          <ProviderAdvancedTab
+            provider={provider}
+            onPatch={(patch) => onProviderChange(selectedIndex, patch)}
+          />
+        )}
       </section>
       <ModelImportDialog
         open={importOpen}
@@ -788,25 +589,4 @@ export function ProviderSettingsSection({
       />
     </div>
   );
-}
-
-const THINKING_OPTIONS = [
-  { value: "auto", label: "auto" },
-  { value: "max", label: "max" },
-  { value: "xhigh", label: "xhigh" },
-  { value: "high", label: "high" },
-  { value: "medium", label: "medium" },
-  { value: "low", label: "low" },
-  { value: "none", label: "none" }
-];
-
-/**
- * 判断客户端模拟是否为 Claude Code。
- *
- * @param style 客户端模拟配置
- * @returns Claude 模拟时 true
- */
-function isClaudeClientStyle(style?: string): boolean {
-  const normalized = (style ?? "auto").trim().toLowerCase();
-  return normalized === "claude" || normalized === "claude-code" || normalized === "claude_code";
 }

@@ -305,7 +305,14 @@
 }
 
 
-/* ---------- 供应商高级页紧凑布局 ---------- */
+/* ---------- 供应商头部操作与高级页 ---------- */
+
+.provider-header-meta {
+  color: var(--ink-soft);
+  font: 400 var(--text-2xs)/var(--leading-control) var(--font-code);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 
 .provider-advanced-layout {
   display: grid;
