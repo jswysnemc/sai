@@ -279,3 +279,182 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* 筛选栏：关键字搜索 + 类型/作用域 chips */
+
+.memory-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.memory-filter-bar .memory-search {
+  flex: 1 1 12rem;
+  margin-bottom: 0;
+}
+
+.memory-filter-bar .memory-search button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-xs);
+  border: none;
+  background: none;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.memory-filter-bar .memory-search button:hover {
+  opacity: 1;
+}
+
+.memory-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.memory-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: calc(var(--space-xs) / 2) var(--space-sm);
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-4);
+  background: none;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.memory-chip[data-active="true"] {
+  border-color: currentColor;
+  font-weight: 600;
+}
+
+.memory-chip-count {
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 工作区选择 */
+
+.memory-workspace-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-lg);
+  font-size: var(--text-sm);
+}
+
+.memory-workspace-field small {
+  opacity: 0.7;
+  font-size: var(--text-xs);
+}
+
+/* 条目卡片：作用域徽章、编辑表单、链接与理由提示 */
+
+.memory-scope-badge {
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-3);
+  font-size: var(--text-xs);
+  opacity: 0.75;
+}
+
+.memory-item-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+  font-size: var(--text-xs);
+}
+
+.memory-link-chip {
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-3);
+  background: none;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.memory-link-chip:hover {
+  border-color: currentColor;
+}
+
+.memory-edit {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.memory-edit textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.memory-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.memory-rationale-hint {
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-3);
+  background: var(--technical-surface-muted, transparent);
+  font-size: var(--text-xs);
+  opacity: 0.8;
+}
+
+.memory-write-feedback {
+  margin-top: calc(-1 * var(--space-sm));
+  margin-bottom: var(--space-md);
+  font-size: var(--text-xs);
+  opacity: 0.8;
+}
+
+.memory-write-feedback:empty {
+  display: none;
+}
+
+/* 注入索引预览 */
+
+.memory-index-preview {
+  margin-top: var(--space-2xl);
+}
+
+.memory-index-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.memory-index-toggle svg {
+  align-self: center;
+}
+
+.memory-index-toggle small {
+  opacity: 0.65;
+  font-size: var(--text-xs);
+}
+
+.memory-index-body {
+  margin-top: var(--space-sm);
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-4);
+  padding: var(--space-md);
+}
+
+.memory-index-body pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--text-xs);
+}

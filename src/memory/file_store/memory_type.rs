@@ -64,7 +64,39 @@ impl MemoryType {
     pub fn requires_rationale(self) -> bool {
         matches!(self, Self::Feedback | Self::Project)
     }
+
+    /// 检查需要理由的类型是否写全了理由与应用方式。
+    ///
+    /// 工具与网页接口共用这一份判定：两边各写一遍，模型和用户拿到的
+    /// 提示迟早会不一样。
+    ///
+    /// 参数:
+    /// - `body`: 正文
+    ///
+    /// 返回:
+    /// - 缺失提示；无需理由或已写全时为 None
+    pub fn missing_rationale(self, body: &str) -> Option<String> {
+        if !self.requires_rationale() {
+            return None;
+        }
+        let missing: Vec<&str> = RATIONALE_MARKERS
+            .iter()
+            .filter(|marker| !body.contains(**marker))
+            .copied()
+            .collect();
+        if missing.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "{} 类记忆建议在正文补上 {}：缺了理由，下一轮无法判断它在新情境下还适不适用。",
+            self.as_str(),
+            missing.join(" 与 ")
+        ))
+    }
 }
+
+/// 需要说明理由的类型必须出现的两个小标题。
+const RATIONALE_MARKERS: [&str; 2] = ["Why:", "How to apply:"];
 
 #[cfg(test)]
 mod tests {
@@ -104,5 +136,43 @@ mod tests {
         assert!(MemoryType::Project.requires_rationale());
         assert!(!MemoryType::User.requires_rationale());
         assert!(!MemoryType::Reference.requires_rationale());
+    }
+
+    /// 验证需要理由的类型缺小标题时给出提示。
+    #[test]
+    fn a_feedback_without_rationale_is_flagged() {
+        let note = MemoryType::Feedback
+            .missing_rationale("一律使用 pnpm")
+            .unwrap();
+
+        assert!(note.contains("Why:"));
+        assert!(note.contains("How to apply:"));
+    }
+
+    /// 验证写全理由后不再提示。
+    #[test]
+    fn a_complete_feedback_passes() {
+        let body =
+            "一律使用 pnpm\n\n**Why:** 锁文件不能混用\n**How to apply:** 装依赖时用 pnpm add";
+
+        assert!(MemoryType::Feedback.missing_rationale(body).is_none());
+    }
+
+    /// 验证不需要理由的类型从不提示。
+    #[test]
+    fn types_without_a_rationale_requirement_are_never_flagged() {
+        assert!(MemoryType::User.missing_rationale("用户是 Rust 开发者").is_none());
+        assert!(MemoryType::Reference.missing_rationale("看板：http://x").is_none());
+    }
+
+    /// 验证只缺一个小标题时只提示那一个。
+    #[test]
+    fn only_the_missing_marker_is_reported() {
+        let note = MemoryType::Project
+            .missing_rationale("目标\n\n**Why:** 因为")
+            .unwrap();
+
+        assert!(note.contains("How to apply:"));
+        assert!(!note.contains("Why: 与"));
     }
 }

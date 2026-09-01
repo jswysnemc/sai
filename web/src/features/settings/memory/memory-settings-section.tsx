@@ -1,12 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Brain, FolderTree, Globe, Layers } from "lucide-react";
+import { useMemo, useState } from "react";
 import { api } from "../../../api/client";
-import type { AppConfig, MemoryWriteRequest } from "../../../api/contracts";
+import type { AppConfig, MemoryWriteRequest, MemoryWriteResult } from "../../../api/contracts";
 import { useI18n } from "../../i18n/use-i18n";
 import { SettingsGroup } from "../editor-layout";
-import { MemoryComposeForm } from "./memory-compose-form";
+import { MemoryComposeForm, MemoryWriteFeedback } from "./memory-compose-form";
 import { MemoryEntryList } from "./memory-entry-list";
 import { MemoryEvictedSearch } from "./memory-evicted-search";
+import { MemoryFilterBar } from "./memory-filter-bar";
+import { EMPTY_MEMORY_FILTER, filterMemories, type MemoryFilter } from "./memory-filter";
+import { MemoryIndexPreview } from "./memory-index-preview";
 import "./memory-settings-section.css";
 
 type MemorySettingsSectionProps = {
@@ -15,7 +19,11 @@ type MemorySettingsSectionProps = {
 };
 
 /**
- * 记忆管理：启停、统计、新建、按作用域列出与删除、逐出上下文检索。
+ * 记忆管理：启停、工作区选择、筛选搜索、新建、就地编辑、链接导航、
+ * 注入索引预览与逐出上下文检索。
+ *
+ * 项目记忆按工作区分目录存放，所有请求都带上选中的工作区标识——
+ * 缺省时服务端会退回它自己的 cwd，把别的工作区的记忆显示出来。
  *
  * @param props 可选 AppConfig（用于 plugins.memory.enabled）
  * @returns 记忆设置区域
@@ -23,21 +31,41 @@ type MemorySettingsSectionProps = {
 export function MemorySettingsSection({ config, onConfigChange }: MemorySettingsSectionProps = {}) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const stats = useQuery({ queryKey: ["memory-stats"], queryFn: api.memory.stats });
-  const entries = useQuery({ queryKey: ["memory-entries"], queryFn: () => api.memory.list(200) });
+  const [filter, setFilter] = useState<MemoryFilter>(EMPTY_MEMORY_FILTER);
+  const [writeResult, setWriteResult] = useState<MemoryWriteResult | null>(null);
+  const [navigateTarget, setNavigateTarget] = useState<{ name: string; signal: number } | null>(null);
+
+  const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
+  const workspaceList = workspaces.data?.workspaces ?? [];
+  const [workspaceId, setWorkspaceId] = useState<string | undefined>(undefined);
+  const selectedWorkspace = workspaceId ?? workspaces.data?.active_id;
+
+  const stats = useQuery({
+    queryKey: ["memory-stats", selectedWorkspace],
+    queryFn: () => api.memory.stats({ workspace: selectedWorkspace })
+  });
+  const entries = useQuery({
+    queryKey: ["memory-entries", selectedWorkspace],
+    queryFn: () => api.memory.list(200, { workspace: selectedWorkspace })
+  });
 
   /** 写入或删除后刷新列表与统计。 */
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ["memory-entries"] });
     await queryClient.invalidateQueries({ queryKey: ["memory-stats"] });
+    await queryClient.invalidateQueries({ queryKey: ["memory-index"] });
   };
 
   const remember = useMutation({
     mutationFn: (request: MemoryWriteRequest) => api.memory.remember(request),
-    onSuccess: refresh
+    onSuccess: async (result) => {
+      setWriteResult(result);
+      await refresh();
+    }
   });
   const remove = useMutation({
-    mutationFn: (name: string) => api.memory.remove(name),
+    mutationFn: (name: string) =>
+      api.memory.remove(name, { workspace: selectedWorkspace }),
     onSuccess: async (_, name) => {
       await queryClient.invalidateQueries({ queryKey: ["memory-detail", name] });
       await refresh();
@@ -45,7 +73,21 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
   });
   const reset = useMutation({ mutationFn: api.memory.reset, onSuccess: refresh });
 
-  const error = entries.error || stats.error || remember.error || remove.error || reset.error;
+  const allEntries = useMemo(() => entries.data?.entries ?? [], [entries.data]);
+  const visibleEntries = useMemo(
+    () => filterMemories(allEntries, filter),
+    [allEntries, filter]
+  );
+
+  const error =
+    entries.error || stats.error || remember.error || remove.error || reset.error || workspaces.error;
+
+  /** 链接跳转：展开目标条目；筛掉了就先清筛选。 */
+  const navigateToMemory = (name: string) => {
+    const known = allEntries.some((entry) => entry.name === name);
+    setFilter((current) => (known ? current : EMPTY_MEMORY_FILTER));
+    setNavigateTarget({ name, signal: Date.now() });
+  };
 
   return (
     <section className="settings-section-card">
@@ -94,6 +136,28 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
         </SettingsGroup>
       )}
 
+      {workspaceList.length > 1 && (
+        <label className="memory-workspace-field">
+          <span>{t("Workspace", "工作区")}</span>
+          <select
+            value={selectedWorkspace ?? ""}
+            onChange={(event) => setWorkspaceId(event.target.value || undefined)}
+          >
+            {workspaceList.map((workspace) => (
+              <option key={workspace.id} value={workspace.id}>
+                {workspace.name}
+              </option>
+            ))}
+          </select>
+          <small>
+            {t(
+              "Project memories are stored per workspace",
+              "项目记忆按工作区存放"
+            )}
+          </small>
+        </label>
+      )}
+
       <div className="memory-storage-grid">
         <StatCard
           icon={<FolderTree size={14} />}
@@ -121,9 +185,32 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
         </code>
       )}
 
-      <MemoryComposeForm pending={remember.isPending} onSubmit={(request) => remember.mutate(request)} />
+      <MemoryComposeForm
+        pending={remember.isPending}
+        workspace={selectedWorkspace}
+        onSubmit={(request) => remember.mutate(request)}
+      />
+      <MemoryWriteFeedback result={writeResult} />
 
-      <MemoryEntryList entries={entries.data?.entries ?? []} onRemove={(name) => remove.mutate(name)} />
+      <MemoryFilterBar
+        entries={allEntries}
+        type={filter.type}
+        scope={filter.scope}
+        query={filter.query}
+        onTypeChange={(type) => setFilter((current) => ({ ...current, type }))}
+        onScopeChange={(scope) => setFilter((current) => ({ ...current, scope }))}
+        onQueryChange={(query) => setFilter((current) => ({ ...current, query }))}
+      />
+
+      <MemoryEntryList
+        entries={visibleEntries}
+        workspace={selectedWorkspace}
+        onRemove={(name) => remove.mutate(name)}
+        onNavigate={navigateToMemory}
+        navigateTarget={navigateTarget}
+      />
+
+      <MemoryIndexPreview workspace={selectedWorkspace} />
 
       <MemoryEvictedSearch />
 

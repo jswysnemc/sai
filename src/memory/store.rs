@@ -48,6 +48,28 @@ impl MemoryStore {
         self.config.enabled
     }
 
+    /// 返回文件式记忆的根目录。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 记忆文件根目录
+    pub fn notes_dir(&self) -> &Path {
+        &self.notes_dir
+    }
+
+    /// 返回已留档的逐出轮次数量。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 逐出轮次条数
+    pub fn evicted_count(&self) -> Result<usize> {
+        Ok(usize::try_from(self.evicted.count()?).unwrap_or(0))
+    }
+
     /// 建立记忆目录。
     ///
     /// 参数:
@@ -142,44 +164,6 @@ impl MemoryStore {
         self.search_evicted_context(query, limit)
     }
 
-    /// 列出全部记忆。
-    ///
-    /// 参数:
-    /// - `limit`: 返回条数上限
-    ///
-    /// 返回:
-    /// - 记忆列表的 JSON
-    pub fn list_entries(&self, limit: usize) -> Result<Value> {
-        let workspace = crate::runtime_cwd::current_dir().ok();
-        let mut entries: Vec<Value> = self
-            .notes(workspace.as_deref())
-            .list()?
-            .into_iter()
-            .map(|summary| {
-                json!({
-                    "name": summary.name,
-                    "description": summary.description,
-                    "type": summary.memory_type.as_str(),
-                    "scope": scope_label(summary.scope),
-                })
-            })
-            .collect();
-        entries.truncate(limit);
-        Ok(json!({ "ok": true, "count": entries.len(), "entries": entries }))
-    }
-
-    /// 删除一条记忆。
-    ///
-    /// 参数:
-    /// - `name`: 记忆标识
-    ///
-    /// 返回:
-    /// - 是否确实删除了一条
-    pub fn delete_entry(&self, name: &str) -> Result<bool> {
-        let workspace = crate::runtime_cwd::current_dir().ok();
-        self.notes(workspace.as_deref()).delete(name)
-    }
-
     /// 清空全部记忆与逐出记录。
     ///
     /// 参数:
@@ -217,20 +201,6 @@ impl MemoryStore {
             "evicted_turns": self.evicted.count()?,
             "storage": { "mode": "markdown_files" },
         }))
-    }
-}
-
-/// 返回作用域的展示标识。
-///
-/// 参数:
-/// - `scope`: 作用域
-///
-/// 返回:
-/// - 小写标识
-fn scope_label(scope: MemoryScope) -> &'static str {
-    match scope {
-        MemoryScope::Global => "global",
-        MemoryScope::Project => "project",
     }
 }
 

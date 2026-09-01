@@ -82,6 +82,14 @@ export type TerminalConfig = {
   [key: string]: unknown;
 };
 
+/** 读取系统剪贴板并插入输入框的键位。 */
+export type PasteImageKey = "ctrl_v" | "alt_v" | "both";
+
+export type InputConfig = {
+  paste_image_key?: PasteImageKey;
+  [key: string]: unknown;
+};
+
 export type DebugConfig = {
   enabled: boolean;
   retain_logs?: boolean;
@@ -168,6 +176,8 @@ export type AppConfig = {
   plugins?: Record<string, Record<string, unknown>>;
   prompt?: PromptConfig;
   terminal?: TerminalConfig;
+  /** TUI 输入框交互：剪贴板粘贴键位 */
+  input?: InputConfig;
   debug?: DebugConfig;
   tools?: Record<string, unknown>;
   skills?: Record<string, unknown>;

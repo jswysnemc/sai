@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
-import type { MemoryType, MemoryWriteRequest } from "../../../api/contracts";
+import type { MemoryType, MemoryWriteRequest, MemoryWriteResult } from "../../../api/contracts";
 import { Select } from "../../../shared/ui/select/select";
 import { useI18n } from "../../i18n/use-i18n";
+import { missingRationaleMarkers } from "./memory-filter";
 
 type MemoryComposeFormProps = {
   pending: boolean;
+  workspace?: string;
   onSubmit: (request: MemoryWriteRequest) => void;
 };
 
@@ -35,17 +37,19 @@ const TYPE_HINTS: Array<{ value: MemoryType; en: string; zh: string; hintEn: str
  * 标识、摘要、类型、作用域都要显式填：文件式记忆靠标识定位与关联，
  * 让它自动生成会让同一件事被反复记成互不相干的多条。
  *
- * @param props 提交状态与回调
+ * @param props 提交状态、工作区标识与回调
  * @returns 新建表单
  */
-export function MemoryComposeForm({ pending, onSubmit }: MemoryComposeFormProps) {
+export function MemoryComposeForm({ pending, workspace, onSubmit }: MemoryComposeFormProps) {
   const { t } = useI18n();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [hook, setHook] = useState("");
   const [content, setContent] = useState("");
   const [memoryType, setMemoryType] = useState<MemoryType>("feedback");
   const [global, setGlobal] = useState(false);
 
+  const missing = missingRationaleMarkers(memoryType, content);
   const ready = name.trim().length > 0 && description.trim().length > 0 && content.trim().length > 0;
 
   /** 提交并清空表单。 */
@@ -56,10 +60,13 @@ export function MemoryComposeForm({ pending, onSubmit }: MemoryComposeFormProps)
       description: description.trim(),
       content: content.trim(),
       memory_type: memoryType,
-      global
+      global,
+      hook: hook.trim(),
+      workspace
     });
     setName("");
     setDescription("");
+    setHook("");
     setContent("");
   };
 
@@ -97,6 +104,14 @@ export function MemoryComposeForm({ pending, onSubmit }: MemoryComposeFormProps)
             onChange={(value) => setMemoryType(value as MemoryType)}
           />
         </label>
+        <label className="memory-compose-field">
+          <span>{t("Index hook", "索引提示")}</span>
+          <input
+            value={hook}
+            onChange={(event) => setHook(event.target.value)}
+            placeholder={t("Optional; defaults to the summary", "可选；留空沿用摘要")}
+          />
+        </label>
         <label className="memory-compose-scope">
           <input type="checkbox" checked={global} onChange={(event) => setGlobal(event.target.checked)} />
           <span>
@@ -114,9 +129,36 @@ export function MemoryComposeForm({ pending, onSubmit }: MemoryComposeFormProps)
         )}
         rows={4}
       />
+      {missing.length > 0 && (
+        <div className="memory-rationale-hint">
+          {t(
+            `Missing ${missing.join(" and ")} — without them a later turn cannot judge whether this still applies.`,
+            `缺 ${missing.join(" 与 ")}——缺了理由，下一轮无法判断这条在新情境下还适不适用。`
+          )}
+        </div>
+      )}
       <button type="button" onClick={submit} disabled={!ready || pending}>
         <Plus size={14} /> {pending ? t("Saving", "保存中") : t("Save memory", "保存记忆")}
       </button>
+    </div>
+  );
+}
+
+/**
+ * 写入结果的内联反馈：更新了同名条目或后端要求补写理由时提示。
+ *
+ * @param result 写入接口的响应
+ * @returns 提示元素；无话可说时为空
+ */
+export function MemoryWriteFeedback({ result }: { result: MemoryWriteResult | null }) {
+  const { t } = useI18n();
+  if (!result) return null;
+  return (
+    <div className="memory-write-feedback">
+      {result.updated &&
+        t("Updated the existing memory with the same identifier.", "已更新同名记忆。")}
+      {result.updated && result.note ? " " : ""}
+      {result.note}
     </div>
   );
 }

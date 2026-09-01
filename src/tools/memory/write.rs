@@ -5,9 +5,6 @@ use crate::paths::SaiPaths;
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
-/// 需要说明理由的类型必须出现的两个小标题。
-const RATIONALE_MARKERS: [&str; 2] = ["Why:", "How to apply:"];
-
 /// 写入或更新一条记忆。
 ///
 /// 参数:
@@ -53,37 +50,10 @@ pub(super) async fn write_memory(
         "links": entry.links(),
     });
     // 缺理由不阻止写入，但要让模型知道下次该补：直接失败会让它反复重试
-    if let Some(missing) = missing_rationale(memory_type, &entry.body) {
+    if let Some(missing) = memory_type.missing_rationale(&entry.body) {
         result["note"] = json!(missing);
     }
     Ok(result.to_string())
-}
-
-/// 检查需要理由的类型是否写全了理由与应用方式。
-///
-/// 参数:
-/// - `memory_type`: 条目类型
-/// - `body`: 正文
-///
-/// 返回:
-/// - 缺失提示；无需理由或已写全时为 None
-fn missing_rationale(memory_type: MemoryType, body: &str) -> Option<String> {
-    if !memory_type.requires_rationale() {
-        return None;
-    }
-    let missing: Vec<&str> = RATIONALE_MARKERS
-        .iter()
-        .filter(|marker| !body.contains(**marker))
-        .copied()
-        .collect();
-    if missing.is_empty() {
-        return None;
-    }
-    Some(format!(
-        "{} 类记忆建议在正文补上 {}：缺了理由，下一轮无法判断它在新情境下还适不适用。",
-        memory_type.as_str(),
-        missing.join(" 与 ")
-    ))
 }
 
 /// 返回写入工具的参数结构。
@@ -150,40 +120,6 @@ pub(super) fn schema() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// 验证需要理由的类型缺小标题时给出提示。
-    #[test]
-    fn a_feedback_without_rationale_is_flagged() {
-        let note = missing_rationale(MemoryType::Feedback, "一律使用 pnpm").unwrap();
-
-        assert!(note.contains("Why:"));
-        assert!(note.contains("How to apply:"));
-    }
-
-    /// 验证写全理由后不再提示。
-    #[test]
-    fn a_complete_feedback_passes() {
-        let body =
-            "一律使用 pnpm\n\n**Why:** 锁文件不能混用\n**How to apply:** 装依赖时用 pnpm add";
-
-        assert!(missing_rationale(MemoryType::Feedback, body).is_none());
-    }
-
-    /// 验证不需要理由的类型从不提示。
-    #[test]
-    fn types_without_a_rationale_requirement_are_never_flagged() {
-        assert!(missing_rationale(MemoryType::User, "用户是 Rust 开发者").is_none());
-        assert!(missing_rationale(MemoryType::Reference, "看板：http://x").is_none());
-    }
-
-    /// 验证只缺一个小标题时只提示那一个。
-    #[test]
-    fn only_the_missing_marker_is_reported() {
-        let note = missing_rationale(MemoryType::Project, "目标\n\n**Why:** 因为").unwrap();
-
-        assert!(note.contains("How to apply:"));
-        assert!(!note.contains("Why: 与"));
-    }
 
     /// 验证参数结构声明了全部必填项。
     #[test]

@@ -31,6 +31,9 @@ import type {
   MemoryListResult,
   MemoryDetail,
   MemoryWriteRequest,
+  MemoryWriteResult,
+  MemoryIndexResult,
+  MemoryQuery,
   EvictedSearchResult,
   MemoryStats,
   PermissionRequest,
@@ -364,20 +367,26 @@ export const api = {
   },
 
   memory: {
-    stats: () => apiRequest<MemoryStats>("/api/memory/stats"),
-    list: (limit = 200) =>
-      apiRequest<MemoryListResult>(`/api/memory/entries?limit=${limit}`),
-    show: (name: string) =>
-      apiRequest<MemoryDetail>(`/api/memory/entries/${encodeURIComponent(name)}`),
+    stats: (query: MemoryQuery = {}) =>
+      apiRequest<MemoryStats>(withQuery("/api/memory/stats", query)),
+    list: (limit = 200, query: MemoryQuery = {}) =>
+      apiRequest<MemoryListResult>(withQuery("/api/memory/entries", { ...query, limit })),
+    show: (name: string, query: MemoryQuery = {}) =>
+      apiRequest<MemoryDetail>(
+        withQuery(`/api/memory/entries/${encodeURIComponent(name)}`, query)
+      ),
     remember: (request: MemoryWriteRequest) =>
-      apiRequest<{ ok: boolean; name: string }>("/api/memory/entries", {
+      apiRequest<MemoryWriteResult>("/api/memory/entries", {
         method: "POST",
         body: JSON.stringify(request)
       }),
-    remove: (name: string) =>
-      apiRequest<{ deleted: boolean }>(`/api/memory/entries/${encodeURIComponent(name)}`, {
-        method: "DELETE"
-      }),
+    remove: (name: string, query: MemoryQuery = {}) =>
+      apiRequest<{ deleted: boolean }>(
+        withQuery(`/api/memory/entries/${encodeURIComponent(name)}`, query),
+        { method: "DELETE" }
+      ),
+    index: (query: MemoryQuery = {}) =>
+      apiRequest<MemoryIndexResult>(withQuery("/api/memory/index", query)),
     searchEvicted: (q: string, limit = 20) =>
       apiRequest<EvictedSearchResult>(
         `/api/memory/evicted?q=${encodeURIComponent(q)}&limit=${limit}`
@@ -761,4 +770,24 @@ function gitQuery(repoRoot?: string): URLSearchParams {
 function gitUrl(path: string, repoRoot?: string): string {
   const query = gitQuery(repoRoot).toString();
   return query ? `${path}?${query}` : path;
+}
+
+/**
+ * 给 GET/DELETE 地址补上查询参数。
+ *
+ * 记忆按工作区分目录存放，请求必须带上工作区标识，否则服务端会退回
+ * 自己的进程 cwd，把别的工作区的记忆显示出来。
+ *
+ * @param path 接口路径
+ * @param params 可选查询参数
+ * @returns 完整请求地址
+ */
+function withQuery(path: string, params: Record<string, string | number | undefined>): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === "") continue;
+    query.set(key, String(value));
+  }
+  const encoded = query.toString();
+  return encoded ? `${path}?${encoded}` : path;
 }

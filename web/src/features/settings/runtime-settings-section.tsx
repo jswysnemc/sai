@@ -8,7 +8,7 @@ import { TerminalSettingsFields } from "./terminal-settings-fields";
 import { RtkFilterSettings } from "./rtk-filter-settings";
 import { ToggleRow } from "./controls/toggle-row";
 import { CompactionModelField } from "./compaction-model-field";
-import { MemoryExtractionModelField } from "./memory-extraction-model-field";
+import { MemoryExtractionModelField } from "./runtime/session-memory-extraction-field";
 import { useI18n } from "../i18n/use-i18n";
 import { DebugSettings } from "./runtime/debug-settings";
 
