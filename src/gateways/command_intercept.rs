@@ -32,7 +32,11 @@ pub(crate) async fn handle_gateway_command(
             "会话树仅在终端可用",
         )
         .to_string(),
-        ControlCommand::Help => crate::control_commands::help_text(ControlSurface::Gateway),
+        // 网关不渲染快捷键段，键位参数只影响 REPL 的帮助文本
+        ControlCommand::Help => crate::control_commands::help_text(
+            ControlSurface::Gateway,
+            crate::config::PasteImageKey::default(),
+        ),
         ControlCommand::Context { update } => {
             crate::control_commands::context_info_plain_with_update(paths, update)?
         }

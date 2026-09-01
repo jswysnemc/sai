@@ -964,3 +964,33 @@ fn meme_library_falls_back_to_the_builtin_name() {
     assert_eq!(memes.auto_send_probability, 0.2);
     assert_eq!(memes.auto_send_min_confidence, 0.8);
 }
+
+#[test]
+fn paste_image_key_parses_every_configured_value() {
+    assert_eq!(PasteImageKey::parse("ctrl_v"), Some(PasteImageKey::CtrlV));
+    assert_eq!(PasteImageKey::parse("alt_v"), Some(PasteImageKey::AltV));
+    assert_eq!(PasteImageKey::parse("both"), Some(PasteImageKey::Both));
+    // 大小写与连字符写法都要认，配置是手写的
+    assert_eq!(PasteImageKey::parse(" CTRL+V "), Some(PasteImageKey::CtrlV));
+    assert_eq!(PasteImageKey::parse("alt+v"), Some(PasteImageKey::AltV));
+    assert_eq!(PasteImageKey::parse("shift_v"), None);
+}
+
+#[test]
+fn paste_image_key_round_trips_through_config_text() {
+    for key in [PasteImageKey::CtrlV, PasteImageKey::AltV, PasteImageKey::Both] {
+        assert_eq!(PasteImageKey::parse(key.as_str()), Some(key));
+    }
+}
+
+/// Windows 默认必须避开被终端吞掉的 Ctrl+V。
+#[test]
+fn paste_image_key_default_avoids_ctrl_v_on_windows() {
+    let expected = if cfg!(windows) {
+        PasteImageKey::AltV
+    } else {
+        PasteImageKey::CtrlV
+    };
+    assert_eq!(PasteImageKey::default(), expected);
+    assert_eq!(InputConfig::default().paste_image_key, expected);
+}

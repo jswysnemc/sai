@@ -31,6 +31,7 @@ use crate::agent::AgentMode;
 use crate::cli::repl_chrome::ReplChrome;
 use crate::cli::repl_clipboard::ReplClipboardState;
 use crate::cli::repl_windows_paste::WindowsPasteState;
+use crate::config::PasteImageKey;
 use crate::render::activity_animation::ACTIVITY_FRAME_INTERVAL;
 use crate::render::terminal_frame::TerminalFrame;
 use crate::render::terminal_paint::paint_lock;
@@ -67,6 +68,8 @@ pub(super) struct ReplRuntime {
     desynced: bool,
     subagent_signature: Vec<(String, String, u64, u64)>,
     pending_input_events: VecDeque<Event>,
+    /// 读取系统剪贴板并插入的键位；两个输入框共用
+    paste_image_key: PasteImageKey,
     /// 智能体运行期间编辑的草稿输入
     stream_draft: StreamComposerDraft,
     /// 用户排队提交：请求间隔由 InterMessageSource 在下次模型请求前注入，
@@ -200,6 +203,7 @@ impl ReplRuntime {
             desynced: false,
             subagent_signature: Vec::new(),
             pending_input_events: VecDeque::new(),
+            paste_image_key: PasteImageKey::default(),
             stream_draft: StreamComposerDraft::default(),
             submission_queue: Arc::new(Mutex::new(VecDeque::new())),
             control_queue: VecDeque::new(),
@@ -220,6 +224,25 @@ impl ReplRuntime {
             follow_buffer: follow::FollowBuffer::default(),
             pending_clear_queue: false,
         }
+    }
+
+    /// 更新读取系统剪贴板的键位。
+    ///
+    /// 参数:
+    /// - `key`: 配置给出的键位
+    ///
+    /// 返回:
+    /// - 无
+    pub(in crate::cli) fn set_paste_image_key(&mut self, key: PasteImageKey) {
+        self.paste_image_key = key;
+    }
+
+    /// 返回读取系统剪贴板的键位。
+    ///
+    /// 返回:
+    /// - 当前生效的键位
+    pub(in crate::cli) fn paste_image_key(&self) -> PasteImageKey {
+        self.paste_image_key
     }
 
     /// 更新 `#` 引用使用的 skill 目录。

@@ -4,6 +4,7 @@ use crate::agent::AgentMode;
 use crate::cli::repl_commands::{
     stream_command_disabled_hint, stream_command_policy, StreamCommandPolicy,
 };
+use crate::cli::repl_clipboard::{is_paste_key, paste_image_first};
 use crate::cli::repl_windows_paste::WindowsPasteKey;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
@@ -133,21 +134,18 @@ pub(crate) fn process_stream_input(
                 runtime.observe_stream_resize(cols, rows);
             }
             Event::Paste(text) => {
-                let text = strip_control_sequences(&text);
                 let draft = runtime.stream_draft_mut();
                 draft.windows_paste.reset();
                 // Windows 终端把 Ctrl+V 转成括号粘贴的文本事件，图片不会以文本
                 // 形式到达；剪贴板里有图时先按图片插入，否则按普通文本粘贴
-                #[cfg(windows)]
-                if draft
-                    .clipboard
-                    .paste_image_if_any(&mut draft.text, &mut draft.cursor)
-                {
+                if paste_image_first(&mut draft.clipboard, &mut draft.text, &mut draft.cursor) {
                     draft.is_pasted = true;
                     draft.slash_selection = 0;
                     runtime.redraw_stream_composer()?;
                     continue;
                 }
+                let text = strip_control_sequences(&text);
+                let draft = runtime.stream_draft_mut();
                 draft
                     .clipboard
                     .paste_text_into_input(&mut draft.text, &mut draft.cursor, text);
@@ -506,7 +504,7 @@ fn handle_stream_key(
             draft.cursor = draft.text.chars().count();
             runtime.redraw_stream_composer()?;
         }
-        KeyCode::Char('v') if modifiers.contains(KeyModifiers::CONTROL) => {
+        KeyCode::Char('v') if is_paste_key(runtime.paste_image_key(), code, modifiers) => {
             let draft = runtime.stream_draft_mut();
             draft.windows_paste.reset();
             draft.is_pasted = draft

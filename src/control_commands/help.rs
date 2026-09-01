@@ -1,19 +1,21 @@
 use super::ControlSurface;
+use crate::config::PasteImageKey;
 use crate::i18n::text as t;
 
 /// 生成控制命令帮助文本。
 ///
 /// 参数:
 /// - `surface`: 命令入口类型
+/// - `paste_image_key`: 当前生效的剪贴板粘贴键位，用于键位帮助
 ///
 /// 返回:
 /// - 帮助文本
-pub fn help_text(surface: ControlSurface) -> String {
+pub fn help_text(surface: ControlSurface, paste_image_key: PasteImageKey) -> String {
     let mut lines = vec![t("Available command groups:", "可用命令组:").to_string()];
     lines.extend(shared_help_lines(surface));
     if surface == ControlSurface::Repl {
         lines.extend(repl_only_help_lines());
-        lines.extend(repl_key_help_lines());
+        lines.extend(repl_key_help_lines(paste_image_key));
     }
     lines.join("\n")
 }
@@ -223,7 +225,7 @@ fn repl_only_help_lines() -> Vec<String> {
 ///
 /// 返回:
 /// - 帮助行列表
-fn repl_key_help_lines() -> Vec<String> {
+fn repl_key_help_lines(paste_image_key: PasteImageKey) -> Vec<String> {
     vec![
         t("Keys:", "快捷键:").to_string(),
         format!(
@@ -256,7 +258,8 @@ fn repl_key_help_lines() -> Vec<String> {
             )
         ),
         format!(
-            "  Ctrl+V      {}",
+            "  {:<11} {}",
+            paste_image_key_label(paste_image_key),
             t("paste clipboard text or image", "粘贴剪贴板文本或图片")
         ),
         format!("  Ctrl+L      {}", t("clear screen", "清屏")),
@@ -289,20 +292,51 @@ fn repl_key_help_lines() -> Vec<String> {
     ]
 }
 
+/// 返回剪贴板粘贴键位的展示名。
+///
+/// 键位可配置，帮助里必须写出当前生效的那个：Windows 上默认是 Alt+V，
+/// 写死 Ctrl+V 会让人照着按却什么也没发生。
+///
+/// 参数:
+/// - `key`: 当前生效的键位
+///
+/// 返回:
+/// - 展示名，如 `Alt+V` 或 `Ctrl+V/Alt+V`
+fn paste_image_key_label(key: PasteImageKey) -> &'static str {
+    match key {
+        PasteImageKey::CtrlV => "Ctrl+V",
+        PasteImageKey::AltV => "Alt+V",
+        PasteImageKey::Both => "Ctrl+V/Alt+V",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::help_text;
     use super::ControlSurface;
+    use crate::config::PasteImageKey;
 
     /// 【TUI】【帮助】快捷键说明与 REPL 命令覆盖 Shift+Tab、/audit、/goal。
     #[test]
     fn repl_help_covers_mode_cycle_and_recent_commands() {
-        let text = help_text(ControlSurface::Repl);
+        let text = help_text(ControlSurface::Repl, PasteImageKey::CtrlV);
         assert!(text.contains("Shift+Tab"));
         assert!(text.contains("auto-audit"));
         assert!(text.contains("/audit"));
         assert!(text.contains("/goal"));
         assert!(text.contains("/rename"));
         assert!(!text.contains("toggle YOLO/PLAN"));
+    }
+
+    /// 【TUI】帮助里写出的粘贴键位必须跟着配置走。
+    #[test]
+    fn repl_help_names_the_configured_paste_key() {
+        let text = help_text(ControlSurface::Repl, PasteImageKey::AltV);
+        assert!(text.contains("Alt+V"), "帮助应写出 Alt+V: {text}");
+        assert!(
+            !text.contains("Ctrl+V      "),
+            "配置为 Alt+V 时不应再写死 Ctrl+V: {text}"
+        );
+        assert!(help_text(ControlSurface::Repl, PasteImageKey::Both).contains("Ctrl+V/Alt+V"));
     }
 }

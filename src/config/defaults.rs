@@ -19,6 +19,7 @@ impl Default for AppConfig {
             context: ContextConfig::default(),
             tools: ToolsConfig::default(),
             terminal: TerminalConfig::default(),
+            input: InputConfig::default(),
             skills: SkillsConfig::default(),
             display: DisplayConfig::default(),
             debug: DebugConfig::default(),
@@ -102,6 +103,24 @@ impl Default for TerminalConfig {
             shell: default_terminal_shell(),
         }
     }
+}
+
+impl Default for InputConfig {
+    fn default() -> Self {
+        Self {
+            paste_image_key: default_paste_image_key(),
+        }
+    }
+}
+
+/// 返回读取系统剪贴板的默认键位。
+///
+/// 平台分支统一收在 [`PasteImageKey::default`]。
+///
+/// 返回:
+/// - Windows 为 Alt+V，其他平台为 Ctrl+V
+pub(super) fn default_paste_image_key() -> PasteImageKey {
+    PasteImageKey::default()
 }
 
 /// 返回网页终端的默认 Shell 配置值。

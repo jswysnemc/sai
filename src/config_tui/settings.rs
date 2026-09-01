@@ -2,7 +2,7 @@
 //!
 //! Skills 全局开关已迁至主菜单 Skills 管理页。
 
-use crate::config::AppConfig;
+use crate::config::{AppConfig, PasteImageKey};
 use crate::i18n::text as t;
 use anyhow::Result;
 use crossterm::event::KeyCode;
@@ -216,6 +216,14 @@ fn edit_context_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Res
             ),
             config.context.compaction_reserve_tokens.to_string(),
         ),
+        Field::new(
+            t(
+                "Clipboard paste key (ctrl_v, alt_v, both)",
+                "剪贴板粘贴键（ctrl_v、alt_v、both）",
+            ),
+            config.input.paste_image_key.as_str().to_string(),
+        )
+        .choices(&["ctrl_v", "alt_v", "both"]),
     ];
     loop {
         if !run_form(
@@ -266,6 +274,8 @@ fn edit_context_settings(stdout: &mut io::Stdout, config: &mut AppConfig) -> Res
         ) = parse_provider_model_choice(&fields[2].value);
         config.context.compaction_ratio = compaction_ratio;
         config.context.compaction_reserve_tokens = compaction_reserve_tokens;
+        // 无法识别的键位退回平台默认，而不是让输入框彻底失去粘贴能力
+        config.input.paste_image_key = PasteImageKey::parse(&fields[5].value).unwrap_or_default();
         return Ok(());
     }
 }

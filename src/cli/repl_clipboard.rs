@@ -1,5 +1,62 @@
 use crate::clipboard::{self, ClipboardChatInput, ClipboardPayload};
+use crate::config::PasteImageKey;
 use anyhow::Result;
+use base64::Engine as _;
+use crossterm::event::{KeyCode, KeyModifiers};
+
+/// 判断这一按键是否命中配置的「读取剪贴板」键位。
+///
+/// 两个输入框（空闲态与流式态）共用这一份判定，避免两边各自写键位条件后
+/// 慢慢走偏。
+///
+/// 参数:
+/// - `key`: 配置的键位
+/// - `code`: 终端按键码
+/// - `modifiers`: 终端修饰键
+///
+/// 返回:
+/// - 命中时为 true
+pub(super) fn is_paste_key(key: PasteImageKey, code: KeyCode, modifiers: KeyModifiers) -> bool {
+    if code != KeyCode::Char('v') {
+        return false;
+    }
+    let ctrl = modifiers.contains(KeyModifiers::CONTROL);
+    let alt = modifiers.contains(KeyModifiers::ALT);
+    match key {
+        PasteImageKey::CtrlV => ctrl,
+        PasteImageKey::AltV => alt,
+        PasteImageKey::Both => ctrl || alt,
+    }
+}
+
+/// 剪贴板里有图片时按图片插入，供 `Event::Paste` 分支先探测。
+///
+/// Windows 终端把 Ctrl+V 转成括号粘贴的文本事件，图片不会以文本形式到达，
+/// 只能反过来查系统剪贴板。其他平台的括号粘贴事件带着真文本，探测只会
+/// 白读一次剪贴板，因此只在 Windows 上启用。
+///
+/// 参数:
+/// - `state`: 剪贴板状态
+/// - `input`: 当前输入内容
+/// - `cursor`: 当前光标字符位置
+///
+/// 返回:
+/// - 剪贴板包含图片且已插入时返回 true
+pub(super) fn paste_image_first(
+    state: &mut ReplClipboardState,
+    input: &mut String,
+    cursor: &mut usize,
+) -> bool {
+    #[cfg(windows)]
+    {
+        state.paste_image_if_any(input, cursor)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (state, input, cursor);
+        false
+    }
+}
 
 const LONG_TEXT_CHARS: usize = 200;
 const LONG_TEXT_LINES: usize = 4;
@@ -348,6 +405,38 @@ impl ReplClipboardState {
         ClipboardChatInput { message, image_url }
     }
 
+    /// 把另一终端转发过来的图片挂进剪贴板状态。
+    ///
+    /// 转发只带 data URL，尺寸得自己从 PNG 头里读出来：占位块文本带着
+    /// 宽高，写死成 0x0 会让回显里出现 `[image 1 0x0]` 这种假尺寸。
+    ///
+    /// 参数:
+    /// - `input`: 当前输入内容
+    /// - `cursor`: 当前光标字符位置
+    /// - `data_url`: 图片的 PNG data URL
+    ///
+    /// 返回:
+    /// - 成功插入时返回 true
+    pub(super) fn insert_image_data_url(
+        &mut self,
+        input: &mut String,
+        cursor: &mut usize,
+        data_url: String,
+    ) -> bool {
+        let Some((width, height)) = png_data_url_size(&data_url) else {
+            return false;
+        };
+        self.insert_payload(
+            input,
+            cursor,
+            ClipboardPayload::ImageDataUrl {
+                data_url,
+                width,
+                height,
+            },
+        )
+    }
+
     /// 插入指定剪贴板载荷，测试可直接覆盖文本和图片分支。
     ///
     /// 参数:
@@ -471,6 +560,28 @@ impl ReplClipboardItem {
     }
 }
 
+/// 读出 PNG data URL 的像素尺寸。
+///
+/// 只读 PNG 头的 IHDR：转发过来的图片只需要宽高来拼占位块文本，
+/// 整图解一次码纯属浪费。
+///
+/// 参数:
+/// - `data_url`: 形如 `data:image/png;base64,…` 的 data URL
+///
+/// 返回:
+/// - 读取成功时的（宽, 高）
+fn png_data_url_size(data_url: &str) -> Option<(usize, usize)> {
+    let encoded = data_url.split_once("base64,")?.1;
+    // 宽高是 IHDR 的头两个字段，落在第 16 字节起；取前 24 字节足够
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .ok()?;
+    let ihdr = bytes.get(16..24)?;
+    let width = u32::from_be_bytes(ihdr[0..4].try_into().ok()?);
+    let height = u32::from_be_bytes(ihdr[4..8].try_into().ok()?);
+    Some((width as usize, height as usize))
+}
+
 /// 在指定字符位置插入文本。
 ///
 /// 参数:
@@ -531,6 +642,47 @@ fn replace_once(value: &str, from: &str, to: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 三档配置 × 常见按键：只认自己那一档，且不误吞词级移动的 Alt+←/→。
+    #[test]
+    fn is_paste_key_matches_only_the_configured_key() {
+        let v = KeyCode::Char('v');
+        let left = KeyCode::Left;
+        let ctrl = KeyModifiers::CONTROL;
+        let alt = KeyModifiers::ALT;
+        let none = KeyModifiers::NONE;
+
+        assert!(is_paste_key(PasteImageKey::CtrlV, v, ctrl));
+        assert!(!is_paste_key(PasteImageKey::CtrlV, v, alt));
+        assert!(!is_paste_key(PasteImageKey::CtrlV, v, none));
+
+        assert!(is_paste_key(PasteImageKey::AltV, v, alt));
+        assert!(!is_paste_key(PasteImageKey::AltV, v, ctrl));
+        assert!(!is_paste_key(PasteImageKey::AltV, v, none));
+
+        assert!(is_paste_key(PasteImageKey::Both, v, ctrl));
+        assert!(is_paste_key(PasteImageKey::Both, v, alt));
+        assert!(!is_paste_key(PasteImageKey::Both, v, none));
+
+        // 词级移动与别的字符都不该被当成粘贴
+        for key in [PasteImageKey::CtrlV, PasteImageKey::AltV, PasteImageKey::Both] {
+            assert!(!is_paste_key(key, left, ctrl));
+            assert!(!is_paste_key(key, left, alt));
+            assert!(!is_paste_key(key, KeyCode::Char('c'), ctrl));
+            assert!(!is_paste_key(key, KeyCode::Enter, none));
+        }
+    }
+
+    /// 非 Windows 上括号粘贴带着真文本，探测只会白读一次剪贴板。
+    #[test]
+    #[cfg(not(windows))]
+    fn paste_image_first_is_a_noop_off_windows() {
+        let mut state = ReplClipboardState::default();
+        let mut input = String::new();
+        let mut cursor = 0;
+        assert!(!paste_image_first(&mut state, &mut input, &mut cursor));
+        assert!(input.is_empty());
+    }
 
     #[test]
     fn short_text_pastes_inline() {

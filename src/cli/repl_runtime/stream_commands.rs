@@ -79,7 +79,10 @@ pub(in crate::cli) fn run_immediate_stream_command(
         Ok(Some(ControlCommand::Help)) => {
             // 帮助不走浮层：浮层内的阻塞读键会让 chat future 停止被 poll，
             // 模型流与工具子进程管道无人读取。整段作为 meta 进入 transcript
-            runtime.record_meta(crate::control_commands::help_text(ControlSurface::Repl))
+            runtime.record_meta(crate::control_commands::help_text(
+                ControlSurface::Repl,
+                runtime.paste_image_key(),
+            ))
         }
         Ok(Some(ControlCommand::Context { update })) => {
             let info = crate::control_commands::context_info_for_mode_with_update(

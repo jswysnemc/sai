@@ -1,5 +1,5 @@
 use super::repl_chrome::{chrome_input_content_cols, ReplChrome};
-use super::repl_clipboard::ReplClipboardState;
+use super::repl_clipboard::{is_paste_key, paste_image_first, ReplClipboardState};
 use super::repl_external_events::ReplExternalEvents;
 use super::repl_mentions::{
     apply_mention, find_mention_trigger, mention_suggestions, MentionSuggestion,
@@ -188,8 +188,17 @@ pub(super) fn read_repl_input(
         match event {
             Event::Resize(cols, rows) => runtime.observe_input_resize(cols, rows),
             Event::Paste(text) => {
-                let text = strip_terminal_control_sequences(&text);
                 windows_paste.reset();
+                // Windows 终端把 Ctrl+V 转成括号粘贴的文本事件，图片不会以文本
+                // 形式到达；剪贴板里有图时先按图片插入，否则按普通文本粘贴
+                if paste_image_first(&mut clipboard_state, &mut input, &mut cursor) {
+                    slash_selection = 0;
+                    history_clean_index = None;
+                    is_pasted = true;
+                    redraw_input!()?;
+                    continue;
+                }
+                let text = strip_terminal_control_sequences(&text);
                 clipboard_state.paste_text_into_input(&mut input, &mut cursor, text);
                 slash_selection = 0;
                 history_clean_index = None;
@@ -615,7 +624,9 @@ pub(super) fn read_repl_input(
                         is_pasted = false;
                         redraw_input!()?;
                     }
-                    KeyCode::Char('v') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    KeyCode::Char('v')
+                        if is_paste_key(runtime.paste_image_key(), code, modifiers) =>
+                    {
                         windows_paste.reset();
                         is_pasted = clipboard_state.paste_into_input(&mut input, &mut cursor)?;
                         slash_selection = 0;

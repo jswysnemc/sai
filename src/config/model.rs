@@ -30,6 +30,8 @@ pub struct AppConfig {
     #[serde(default)]
     pub terminal: TerminalConfig,
     #[serde(default)]
+    pub input: InputConfig,
+    #[serde(default)]
     pub skills: SkillsConfig,
     #[serde(default)]
     pub display: DisplayConfig,
@@ -499,6 +501,70 @@ pub struct TerminalConfig {
     /// 终端 Shell 可执行文件路径或名称，留空时使用平台默认值。
     #[serde(default)]
     pub shell: String,
+}
+
+/// 输入框交互配置。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputConfig {
+    /// 读取系统剪贴板并插入（含图片）的键位。
+    ///
+    /// Windows 终端自己吞掉 Ctrl+V，剪贴板是图片时连括号粘贴事件都不发，
+    /// 应用层收不到按键，因此 Windows 默认改用不被拦截的 Alt+V。
+    #[serde(default = "default_paste_image_key")]
+    pub paste_image_key: PasteImageKey,
+}
+
+/// 读取系统剪贴板的键位。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PasteImageKey {
+    /// Ctrl+V
+    CtrlV,
+    /// Alt+V
+    AltV,
+    /// 两个键位都能触发
+    Both,
+}
+
+impl Default for PasteImageKey {
+    /// 平台默认键位：Windows 终端吞掉 Ctrl+V，只能用不被拦截的 Alt+V。
+    fn default() -> Self {
+        if cfg!(windows) {
+            Self::AltV
+        } else {
+            Self::CtrlV
+        }
+    }
+}
+
+impl PasteImageKey {
+    /// 解析配置文本。
+    ///
+    /// 参数:
+    /// - `value`: 配置值
+    ///
+    /// 返回:
+    /// - 匹配的键位；无法识别时为空
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "ctrl_v" | "ctrl+v" => Some(Self::CtrlV),
+            "alt_v" | "alt+v" => Some(Self::AltV),
+            "both" => Some(Self::Both),
+            _ => None,
+        }
+    }
+
+    /// 返回配置文本。
+    ///
+    /// 返回:
+    /// - 与 [`Self::parse`] 对应的文本
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::CtrlV => "ctrl_v",
+            Self::AltV => "alt_v",
+            Self::Both => "both",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

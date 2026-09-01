@@ -11,7 +11,8 @@ mod session_support;
 pub(super) mod subagent_commands;
 mod submission_queue;
 
-use repl_session_link::{observer_turn_refusal, ReplSessionLink};
+use crate::ipc::LinkRole;
+use repl_session_link::{role_badge, ReplSessionLink};
 use session_support::{
     apply_ready_tool_registry, record_repl_history, reload_repl_agent, repl_welcome_model,
 };
@@ -54,6 +55,7 @@ pub(super) async fn run_repl(
         config.display.repl_transcript_row_cap,
         initial_transcript_options,
     );
+    runtime.set_paste_image_key(config.input.paste_image_key);
     runtime.record_welcome(
         env!("CARGO_PKG_VERSION").to_string(),
         repl_welcome_model(&config),
@@ -109,7 +111,8 @@ pub(super) async fn run_repl(
     )?;
     let mut external_events = ReplExternalEvents::new();
     // 跨进程会话链接：本终端是否驱动这一会话，取决于有没有别的 sai 实例先抢到租约
-    let mut session_link = ReplSessionLink::attach(paths, &state).await;
+    let mut session_link = ReplSessionLink::attach(paths, &state, runtime.submission_queue_handle())
+        .await;
 
     let mut pending_undo = false;
     loop {
@@ -123,12 +126,36 @@ pub(super) async fn run_repl(
         if let Ok(session) = crate::state::active_session(paths) {
             chrome.set_session_title(session.title);
         }
+        // 跟随者常驻标记：角色会随持有者更替变化，每轮都要重取
+        chrome.set_role_badge(role_badge(session_link.role()));
         let transcript_options = render::transcript::TranscriptRenderOptions {
             reasoning_mode: render::ReasoningDisplayMode::from_config(&config.display.reasoning),
             tool_call_mode: render::ToolCallDisplayMode::from_config(&config.display.tool_calls),
         };
         runtime.update_options(config.display.repl_transcript_row_cap, transcript_options);
         runtime.set_mention_skills(super::repl_mentions::load_mention_skills(&config, paths));
+        // 2. 先把排队中的消息跑掉：跟随端上行的一轮在本终端空闲时落到这里。
+        //    队列为空时这一步是空操作，本地单终端行为完全不变
+        if runtime.queue_len() > 0 {
+            let owner_key = state.state_dir().display().to_string();
+            let exit = drain_submission_queue(
+                paths,
+                &config,
+                &mut agent,
+                &mut runtime,
+                &owner_key,
+                &mut mode,
+                &mut input_history,
+                transcript_options.reasoning_mode,
+                transcript_options.tool_call_mode,
+                &session_link,
+            )
+            .await?;
+            if exit {
+                break;
+            }
+            continue;
+        }
         // 运行期间输入的斜杠命令先于输入框消费：它们在轮次进行中无法执行
         // （交互选择器会占住事件循环），排到这里才轮到主循环分发
         let submission = if let Some(command) = runtime.take_next_control_command() {
@@ -193,6 +220,7 @@ pub(super) async fn run_repl(
                         &mut input_history,
                         transcript_options.reasoning_mode,
                         transcript_options.tool_call_mode,
+                        &session_link,
                     )
                     .await?;
                     if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
@@ -239,6 +267,7 @@ pub(super) async fn run_repl(
                             t("Help", "帮助"),
                             &crate::control_commands::help_text(
                                 crate::control_commands::ControlSurface::Repl,
+                                config.input.paste_image_key,
                             ),
                         )?;
                         runtime.redraw()?;
@@ -663,6 +692,24 @@ pub(super) async fn run_repl(
         if input.is_empty() {
             continue;
         }
+        // 跟随端：本终端不持有 Agent，整包上行给持有者执行。回显与流式输出
+        // 由持有者经事件流广播回来，本终端不再本地回显，否则同一条消息会出现两次。
+        // 整包上行，因此放在取出 chat_input 之前，技能引用由持有者侧展开
+        if session_link.role() == LinkRole::Observer {
+            let workspace_id = crate::state::current_workspace_id().unwrap_or_default();
+            match session_link
+                .forward_turn(&submission, state.session_id(), &workspace_id)
+                .await
+            {
+                Ok(()) => continue,
+                Err(error) => {
+                    // 上行失败必须可见并退回输入框：用户输入绝不能静默消失
+                    runtime.record_meta(error.to_string())?;
+                    prefill = Some(submission.raw_input.clone());
+                    continue;
+                }
+            }
+        }
         let mut chat_input = submission.chat_input;
         chat_input.message =
             super::repl_mentions::expand_skill_mentions(&chat_input.message, &config, paths);
@@ -677,16 +724,15 @@ pub(super) async fn run_repl(
         if !goal_continuation {
             runtime.record_user(mode, submission.echo_text.clone(), submission.fold_echo)?;
         }
+        // 持有者是会话事件的唯一写者，回显也要广播，否则跟随端只见回答不见提问
+        session_link.broadcast_user_message(
+            &submission.echo_text,
+            chat_input.image_url.clone().into_iter().collect(),
+        );
         // 4. 模式变化时换工具表；每轮只做轻量 prepare
         if agent.installed_mode() != mode {
             let registry = build_repl_tool_registry(&config, paths, mode)?;
             agent.switch_mode(mode, registry)?;
-        }
-        // 观察者模式：本终端不驱动轮次，两个进程同时写同一份会话状态会互相覆盖
-        if let Some(notice) = observer_turn_refusal(session_link.role(), state.state_dir()) {
-            runtime.record_meta(notice)?;
-            prefill = Some(submission.raw_input.clone());
-            continue;
         }
         agent.prepare_for_turn()?;
         // 用户主动发话：清除积压的未消费回执，否则它们会在下一次等待里整包注入，
@@ -738,6 +784,7 @@ pub(super) async fn run_repl(
                 &mut input_history,
                 transcript_options.reasoning_mode,
                 transcript_options.tool_call_mode,
+                &session_link,
             )
             .await?;
             if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
@@ -773,6 +820,7 @@ pub(super) async fn run_repl(
             &mut input_history,
             transcript_options.reasoning_mode,
             transcript_options.tool_call_mode,
+            &session_link,
         )
         .await?;
         if let Some((draft, clipboard)) = take_stream_draft_prefill(&mut runtime) {
