@@ -1,8 +1,8 @@
-import type { AppConfig } from "../../api/contracts";
-import { Select } from "../../shared/ui/select/select";
-import { buildChatModelChoices } from "../chat/chat-model-options";
-import { useI18n } from "../i18n/use-i18n";
-import { modelSelectOption } from "./model-select-option";
+import type { AppConfig } from "../../../api/contracts";
+import { Select } from "../../../shared/ui/select/select";
+import { buildChatModelChoices } from "../../chat/chat-model-options";
+import { useI18n } from "../../i18n/use-i18n";
+import { modelSelectOption } from "../model-select-option";
 
 const INHERIT_VALUE = "";
 
@@ -12,10 +12,13 @@ type MemoryExtractionModelFieldProps = {
 };
 
 /**
- * 渲染记忆提取模型选择器；空值表示跟随当前会话模型。
+ * 渲染会话记忆点提取模型选择器；空值表示跟随当前会话模型。
+ *
+ * 这里配置的是后台会话记忆点提取（`src/state/session_memory/`）用的模型，
+ * 与设置页「记忆」分区管理的文件式长期记忆（`src/memory/`）是两套东西。
  *
  * @param props 应用配置和更新回调
- * @returns 记忆提取模型设置字段
+ * @returns 会话记忆点提取模型设置字段
  */
 export function MemoryExtractionModelField({ config, onConfigChange }: MemoryExtractionModelFieldProps) {
   const { t } = useI18n();
@@ -67,7 +70,7 @@ export function MemoryExtractionModelField({ config, onConfigChange }: MemoryExt
 
   return (
     <label className="settings-field">
-      <span>{t("Session memory model", "记忆提取模型")}</span>
+      <span>{t("Session memory extraction model", "会话记忆点提取模型")}</span>
       <Select
         value={current}
         options={options}
