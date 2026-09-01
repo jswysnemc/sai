@@ -1,76 +1,80 @@
-/* 记忆分区：概览（工作区选择 + 统计卡片）、录入表单、条目列表与逐出上下文检索 */
+/* 记忆分区：紧凑元信息行、折叠式新建表单、条目列表、底部工具区与页脚 */
 
-.memory-overview {
-  display: grid;
-  gap: var(--space-lg);
-  margin-bottom: var(--space-lg);
-}
+/* ---------- 元信息行：统计数字 + 工作区选择 + 存储路径 ---------- */
 
-.memory-storage-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-  gap: var(--space-sm);
-}
-
-.memory-storage-card {
-  border: 1px solid var(--technical-border);
-  border-radius: var(--radius-4);
-  padding: var(--space-md);
-}
-
-.memory-storage-card header {
+.memory-meta-row {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-sm);
-}
-
-.memory-storage-icon {
-  display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: var(--radius-3);
-  background: var(--technical-surface-muted, transparent);
-  flex: none;
-}
-
-.memory-storage-card strong {
-  display: block;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
   font-size: var(--text-sm);
 }
 
-.memory-storage-card small {
-  display: block;
-  opacity: 0.7;
-  font-size: var(--text-xs);
-  line-height: 1.4;
+.memory-meta-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin: 0;
 }
 
-.memory-stat-value {
-  margin: var(--space-sm) 0 0;
-  font-size: var(--text-2xl);
+.memory-meta-stat {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs, 0.25rem);
+}
+
+.memory-meta-stat > dt {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+.memory-meta-stat > dd {
+  margin: 0;
+  font-size: var(--text-base);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-.memory-notes-path {
-  display: block;
-  margin-bottom: var(--space-2xl);
-  padding: var(--space-xs) var(--space-sm);
+.memory-meta-path {
+  min-width: 0;
+  margin-left: auto;
+  padding: var(--space-2xs, 0.25rem) var(--space-sm);
   border-radius: var(--radius-3);
   background: var(--technical-surface-muted, transparent);
   font-size: var(--text-xs);
-  opacity: 0.75;
-  overflow-wrap: anywhere;
+  opacity: 0.7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
-/* 录入表单 */
+/* ---------- 新建表单 ---------- */
+
+.memory-compose-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs, 0.25rem);
+  margin-bottom: var(--space-lg);
+}
 
 .memory-compose {
   display: grid;
   gap: var(--space-sm);
   margin-bottom: var(--space-2xl);
+}
+
+.memory-compose-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.memory-compose-head h3 {
+  margin: 0;
+  font-size: var(--text-base);
 }
 
 .memory-compose-row {
@@ -123,7 +127,7 @@
   font-size: var(--text-xs);
 }
 
-/* 条目列表 */
+/* ---------- 条目列表 ---------- */
 
 .memory-list-block {
   margin-top: var(--space-2xl);
@@ -207,23 +211,75 @@
   opacity: 0.75;
 }
 
-/* 逐出上下文检索 */
+/* ---------- 底部工具区：索引预览与逐出检索并排 ---------- */
 
-.memory-evicted {
+.memory-tools-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: var(--space-lg);
   margin-top: var(--space-2xl);
+  align-items: start;
 }
+
+.memory-tool-entry,
+.memory-tool-panel {
+  display: grid;
+  gap: var(--space-sm);
+  align-content: start;
+}
+
+.memory-tool-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  text-align: left;
+}
+
+.memory-tool-toggle svg {
+  align-self: center;
+}
+
+.memory-tool-toggle small {
+  opacity: 0.65;
+  font-size: var(--text-xs);
+}
+
+.memory-tool-toggle:hover {
+  color: var(--signal);
+}
+
+.memory-index-body {
+  margin-top: var(--space-sm);
+  border: 1px solid var(--technical-border);
+  border-radius: var(--radius-4);
+  padding: var(--space-md);
+}
+
+.memory-index-body pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--text-xs);
+}
+
+/* ---------- 逐出上下文检索 ---------- */
 
 .memory-search {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-sm);
-  margin-bottom: var(--space-lg);
 }
 
 .memory-search input {
   flex: 1;
-  min-width: 10rem;
+  min-width: 8rem;
 }
 
 .memory-search-panel {
@@ -244,7 +300,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  max-height: 20rem;
+  max-height: 16rem;
   overflow-y: auto;
 }
 
@@ -274,27 +330,40 @@
   opacity: 0.7;
 }
 
-.memory-danger-row {
-  margin-top: var(--space-2xl);
+/* ---------- 页脚：启停开关与清空 ---------- */
+
+.memory-footer-row {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
-  gap: var(--space-sm);
+  gap: var(--space-lg);
   flex-wrap: wrap;
+  margin-top: var(--space-2xl);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--technical-border);
 }
 
-.memory-danger-note {
-  font-size: var(--text-xs);
-  opacity: 0.7;
+.memory-enabled-toggle {
+  flex: 1 1 16rem;
+  max-width: 28rem;
 }
 
 @media (max-width: 30rem) {
   .memory-compose-row {
     grid-template-columns: 1fr;
   }
+
+  .memory-footer-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .memory-footer-row .settings-danger {
+    align-self: flex-end;
+  }
 }
 
-/* 筛选栏：关键字搜索 + 类型/作用域 chips */
+/* ---------- 筛选栏：关键字搜索 + 类型/作用域 chips ---------- */
 
 .memory-filter-bar {
   display: flex;
@@ -306,7 +375,6 @@
 
 .memory-filter-bar .memory-search {
   flex: 1 1 12rem;
-  margin-bottom: 0;
 }
 
 .memory-filter-bar .memory-search button {
@@ -351,21 +419,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 工作区选择 */
-
-.memory-workspace-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-  font-size: var(--text-sm);
-}
-
-.memory-workspace-field small {
-  opacity: 0.7;
-  font-size: var(--text-xs);
-}
-
-/* 条目卡片：作用域徽章、编辑表单、链接与理由提示 */
+/* ---------- 条目卡片：作用域徽章、编辑表单、链接与理由提示 ---------- */
 
 .memory-scope-badge {
   padding: 0 var(--space-sm);
@@ -421,44 +475,4 @@
 
 .memory-write-feedback:empty {
   display: none;
-}
-
-/* 注入索引预览 */
-
-.memory-index-preview {
-  margin-top: var(--space-2xl);
-}
-
-.memory-index-toggle {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-sm);
-  padding: 0;
-  border: none;
-  background: none;
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.memory-index-toggle svg {
-  align-self: center;
-}
-
-.memory-index-toggle small {
-  opacity: 0.65;
-  font-size: var(--text-xs);
-}
-
-.memory-index-body {
-  margin-top: var(--space-sm);
-  border: 1px solid var(--technical-border);
-  border-radius: var(--radius-4);
-  padding: var(--space-md);
-}
-
-.memory-index-body pre {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-size: var(--text-xs);
 }

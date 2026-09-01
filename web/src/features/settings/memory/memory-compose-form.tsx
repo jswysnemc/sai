@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import type { MemoryType, MemoryWriteRequest, MemoryWriteResult } from "../../../api/contracts";
 import { Select } from "../../../shared/ui/select/select";
 import { useI18n } from "../../i18n/use-i18n";
@@ -8,6 +8,8 @@ import { missingRationaleMarkers } from "./memory-filter";
 type MemoryComposeFormProps = {
   pending: boolean;
   workspace?: string;
+  /** 折叠表单回调：录入是低频动作，表单默认收起 */
+  onCollapse: () => void;
   /** 返回写入结果；失败时表单内容保留，用户输入不能丢 */
   onSubmit: (request: MemoryWriteRequest) => Promise<MemoryWriteResult | null>;
 };
@@ -41,7 +43,7 @@ const TYPE_HINTS: Array<{ value: MemoryType; en: string; zh: string; hintEn: str
  * @param props 提交状态、工作区标识与回调
  * @returns 新建表单
  */
-export function MemoryComposeForm({ pending, workspace, onSubmit }: MemoryComposeFormProps) {
+export function MemoryComposeForm({ pending, workspace, onCollapse, onSubmit }: MemoryComposeFormProps) {
   const { t } = useI18n();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -74,6 +76,17 @@ export function MemoryComposeForm({ pending, workspace, onSubmit }: MemoryCompos
 
   return (
     <div className="memory-compose">
+      <div className="memory-compose-head">
+        <h3>{t("New memory", "新建记忆")}</h3>
+        <button
+          type="button"
+          className="settings-secondary"
+          onClick={onCollapse}
+          disabled={pending}
+        >
+          <X size={13} /> {t("Collapse", "收起")}
+        </button>
+      </div>
       <div className="memory-compose-row">
         <label className="memory-compose-field">
           <span>{t("Identifier", "标识")}</span>

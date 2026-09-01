@@ -1,18 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Brain, FolderTree, Globe, Layers } from "lucide-react";
+import { Brain, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../../api/client";
 import type { AppConfig, MemoryWriteRequest, MemoryWriteResult } from "../../../api/contracts";
 import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
-import { Select } from "../../../shared/ui/select/select";
 import { useI18n } from "../../i18n/use-i18n";
-import { SettingsGroup } from "../editor-layout";
 import { MemoryComposeForm, MemoryWriteFeedback } from "./memory-compose-form";
 import { MemoryEntryList } from "./memory-entry-list";
 import { MemoryEvictedSearch } from "./memory-evicted-search";
 import { MemoryFilterBar } from "./memory-filter-bar";
 import { EMPTY_MEMORY_FILTER, filterMemories, type MemoryFilter } from "./memory-filter";
 import { MemoryIndexPreview } from "./memory-index-preview";
+import { MemoryMetaRow } from "./memory-meta-row";
+import { MemoryToolsRow } from "./memory-tools-row";
 import "./memory-settings-section.css";
 
 type MemorySettingsSectionProps = {
@@ -23,6 +23,9 @@ type MemorySettingsSectionProps = {
 /**
  * 记忆管理：启停、工作区选择、筛选搜索、新建、就地编辑、链接导航、
  * 注入索引预览与逐出上下文检索。
+ *
+ * 空间分配以条目列表为中心：列表紧随元信息行出现在首屏，新建表单默认
+ * 折叠成按钮，索引预览与逐出检索收进底部工具区，启停开关下沉到页脚。
  *
  * 项目记忆按工作区分目录存放，所有请求都带上选中的工作区标识——
  * 缺省时服务端会退回它自己的 cwd，把别的工作区的记忆显示出来。
@@ -37,6 +40,8 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
   const [filter, setFilter] = useState<MemoryFilter>(EMPTY_MEMORY_FILTER);
   const [writeResult, setWriteResult] = useState<MemoryWriteResult | null>(null);
   const [navigateTarget, setNavigateTarget] = useState<{ name: string; signal: number } | null>(null);
+  // 新建表单默认收起：录入是低频动作，不能让表单常驻挤占条目列表
+  const [composing, setComposing] = useState(false);
 
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
   const workspaceList = workspaces.data?.workspaces ?? [];
@@ -86,7 +91,7 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
     const confirmed = await confirm({
       title: t("Delete memory", "删除记忆"),
       description: t(
-        `Delete the memory "${name}"? This cannot be undone.`,
+        `Delete the memory \"${name}\"? This cannot be undone.`,
         `删除记忆「${name}」？删除后无法恢复。`
       ),
       confirmLabel: t("Delete", "删除"),
@@ -129,115 +134,66 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
     setNavigateTarget({ name, signal: Date.now() });
   };
 
+  const enabled = (config?.plugins?.memory as { enabled?: boolean } | undefined)?.enabled !== false;
+
+  /** 切换记忆功能开关：同步写入插件与记忆两组配置，保持两侧语义一致。 */
+  const toggleEnabled = (checked: boolean) => {
+    if (!config || !onConfigChange) return;
+    const plugins = config.plugins ?? {};
+    const previous = (plugins.memory as Record<string, unknown> | undefined) ?? {};
+    onConfigChange({
+      ...config,
+      plugins: { ...plugins, memory: { ...previous, enabled: checked } },
+      memory: {
+        ...(config.memory as Record<string, unknown> | undefined),
+        enabled: checked
+      }
+    });
+  };
+
   return (
     <section className="settings-section-card">
       <header className="settings-section-head">
         <h2>
           <Brain size={16} /> {t("Memory", "记忆管理")}
         </h2>
-        <p>
-          {t(
-            "Each memory is one markdown file holding one fact. The index is injected every turn; the assistant reads an entry's body on demand. Files can be edited by hand and kept in version control.",
-            "每条记忆是一个 markdown 文件，只放一个事实。索引每轮注入，正文由助手按需读取。文件可以手改，也可以纳入版本控制。"
-          )}
-        </p>
       </header>
 
-      {config && onConfigChange && (
-        <SettingsGroup
-          title={t("Memory feature", "记忆功能")}
-          description={t(
-            "When disabled, the memory tools are not registered and the index is not injected. Default is enabled.",
-            "关闭后不注册记忆工具，也不注入索引。默认开启。"
-          )}
-        >
-          <label className="settings-toggle-field">
-            <span>
-              <strong>{t("Enable memory", "启用记忆")}</strong>
-              <small>plugins.memory.enabled</small>
-            </span>
-            <input
-              type="checkbox"
-              checked={(config.plugins?.memory as { enabled?: boolean } | undefined)?.enabled !== false}
-              onChange={(event) => {
-                const plugins = config.plugins ?? {};
-                const previous = (plugins.memory as Record<string, unknown> | undefined) ?? {};
-                onConfigChange({
-                  ...config,
-                  plugins: { ...plugins, memory: { ...previous, enabled: event.target.checked } },
-                  memory: {
-                    ...(config.memory as Record<string, unknown> | undefined),
-                    enabled: event.target.checked
-                  }
-                });
-              }}
-            />
-          </label>
-        </SettingsGroup>
-      )}
-
-      <div className="memory-overview">
-        {workspaceList.length > 1 && (
-          <label className="memory-workspace-field">
-            <span>{t("Workspace", "工作区")}</span>
-            <Select
-              value={selectedWorkspace ?? workspaceList[0]?.id ?? ""}
-              options={workspaceList.map((workspace) => ({
-                value: workspace.id,
-                label: workspace.name
-              }))}
-              ariaLabel={t("Choose workspace", "选择工作区")}
-              onChange={(value) => setWorkspaceId(value || undefined)}
-            />
-            <small>
-              {t(
-                "Project memories are stored per workspace",
-                "项目记忆按工作区存放"
-              )}
-            </small>
-          </label>
-        )}
-
-        <div className="memory-storage-grid">
-          <StatCard
-            icon={<FolderTree size={14} />}
-            title={t("Project", "项目记忆")}
-            value={stats.data?.project_memories ?? 0}
-            hint={t("Visible only in this workspace", "仅在当前工作区可见")}
-          />
-          <StatCard
-            icon={<Globe size={14} />}
-            title={t("Global", "全局记忆")}
-            value={stats.data?.global_memories ?? 0}
-            hint={t("Applies everywhere", "在所有工作区生效")}
-          />
-          <StatCard
-            icon={<Layers size={14} />}
-            title={t("Evicted turns", "逐出轮次")}
-            value={stats.data?.evicted_turns ?? 0}
-            hint={t("Originals kept after compaction", "压缩后留档的原文")}
-          />
-        </div>
-      </div>
-
-      {stats.data?.notes_dir && (
-        <code className="memory-notes-path" title={stats.data.notes_dir}>
-          {stats.data.notes_dir}
-        </code>
-      )}
-
-      <MemoryComposeForm
-        pending={remember.isPending}
-        workspace={selectedWorkspace}
-        onSubmit={async (request) => {
-          try {
-            return await remember.mutateAsync(request);
-          } catch {
-            // 错误已由 error 汇总展示；返回空让表单保留输入
-            return null;
-          }
-        }}
+      <MemoryMetaRow
+        stats={stats.data}
+        workspaceCount={workspaceList.length}
+        selectedWorkspace={selectedWorkspace ?? workspaceList[0]?.id}
+        workspaceOptions={workspaceList.map((workspace) => ({
+          value: workspace.id,
+          label: workspace.name
+        }))}
+        notesDir={stats.data?.notes_dir}
+        onWorkspaceChange={(value) => setWorkspaceId(value || undefined)}
       />
+
+      {composing ? (
+        <MemoryComposeForm
+          pending={remember.isPending}
+          workspace={selectedWorkspace}
+          onCollapse={() => setComposing(false)}
+          onSubmit={async (request) => {
+            try {
+              return await remember.mutateAsync(request);
+            } catch {
+              // 错误已由 error 汇总展示；返回空让表单保留输入
+              return null;
+            }
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          className="settings-secondary memory-compose-toggle"
+          onClick={() => setComposing(true)}
+        >
+          <Plus size={14} /> {t("New memory", "新建记忆")}
+        </button>
+      )}
       <MemoryWriteFeedback result={writeResult} />
 
       <MemoryFilterBar
@@ -259,59 +215,37 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
         navigateTarget={navigateTarget}
       />
 
-      <MemoryIndexPreview workspace={selectedWorkspace} />
+      <MemoryToolsRow>
+        <MemoryIndexPreview workspace={selectedWorkspace} />
+        <MemoryEvictedSearch />
+      </MemoryToolsRow>
 
-      <MemoryEvictedSearch />
-
-      <div className="memory-danger-row">
+      <div className="memory-footer-row">
+        {config && onConfigChange && (
+          <label className="settings-toggle-field memory-enabled-toggle">
+            <span>
+              <strong>{t("Enable memory", "启用记忆")}</strong>
+              <small>{t("Disabled: tools unregistered, index not injected", "关闭后不注册记忆工具，也不注入索引")}</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(event) => toggleEnabled(event.target.checked)}
+            />
+          </label>
+        )}
         <button
           type="button"
           className="settings-danger"
           onClick={resetWithConfirm}
           disabled={reset.isPending}
+          title={t("Clears memories in every workspace, not just the selected one.", "清空的是所有工作区的记忆，不只是当前选中的工作区。")}
         >
           {reset.isPending ? t("Clearing…", "清空中…") : t("Clear all memories", "清空全部记忆")}
         </button>
-        <small className="memory-danger-note">
-          {t(
-            "Clears memories in every workspace, not just the selected one.",
-            "清空的是所有工作区的记忆，不只是当前选中的工作区。"
-          )}
-        </small>
       </div>
 
       {error && <div className="settings-inline-error">{(error as Error).message}</div>}
     </section>
-  );
-}
-
-/**
- * 一张统计卡片。
- *
- * @param props 图标、标题、数值与说明
- * @returns 统计卡片
- */
-function StatCard({
-  icon,
-  title,
-  value,
-  hint
-}: {
-  icon: React.ReactNode;
-  title: string;
-  value: number;
-  hint: string;
-}) {
-  return (
-    <article className="memory-storage-card">
-      <header>
-        <span className="memory-storage-icon">{icon}</span>
-        <div>
-          <strong>{title}</strong>
-          <small>{hint}</small>
-        </div>
-      </header>
-      <p className="memory-stat-value">{value}</p>
-    </article>
   );
 }

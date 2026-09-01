@@ -219,6 +219,11 @@
   gap: var(--space-sm);
 }
 
+/* 部件是网格项，默认 min-width:auto 会让宽内容（如压缩摘要里的长代码行）
+   按内容最小宽度把整列撑破；普通消息的 .markdown-body 已自带 min-width:0，
+   这里把保护范围补全到所有部件 */
+.message-parts > * { min-width: 0; }
+
 /*
  * 工具卡的外框、悬停与导轨已统一到 tool-card-shell。
  * 详情里的代码块不再自带外框：区块边界由外壳的左导轨表达，
@@ -313,7 +318,7 @@
 .message-copy:hover {
   color: var(--ink);
 }
-.context-compaction-block { display:flex; flex-direction:column; gap:var(--space-sm); width:100%; max-width:100%; margin:var(--space-xs) 0; overflow-anchor: none; }
+.context-compaction-block { display:flex; flex-direction:column; gap:var(--space-sm); width:100%; max-width:100%; min-width:0; margin:var(--space-xs) 0; overflow-anchor: none; }
 .context-compaction-part { display:flex; align-items:center; gap:var(--space-xs); width:max-content; max-width:100%; padding:var(--space-2xs) var(--space-sm); border:1px solid var(--line); border-radius:var(--radius-3); color:var(--ink-soft); background:var(--control-surface); font-size:var(--text-sm); }
 .context-compaction-block.running .context-compaction-part { color:var(--signal); border-color:color-mix(in srgb, var(--signal) 30%, var(--line)); }
 .context-compaction-divider { display:flex; align-items:center; gap:var(--space-md); width:100%; margin:var(--space-3xs) 0; color:var(--ink-soft); font-size:var(--text-xs); user-select:none; }

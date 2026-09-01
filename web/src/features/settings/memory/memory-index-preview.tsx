@@ -29,21 +29,23 @@ export function MemoryIndexPreview({ workspace }: MemoryIndexPreviewProps) {
   });
 
   return (
-    <div className="memory-index-preview">
+    <div className={open ? "memory-tool-panel" : "memory-tool-entry"}>
       <button
         type="button"
-        className="memory-index-toggle"
+        className="memory-tool-toggle"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
       >
         <Eye size={13} />
         {t("Injected index preview", "注入索引预览")}
-        <small>
-          {t(
-            "Exactly what the model receives each turn",
-            "模型每轮收到的索引，与这里显示的一致"
-          )}
-        </small>
+        {!open && (
+          <small>
+            {t(
+              "Exactly what the model receives each turn",
+              "模型每轮收到的索引，与这里显示的一致"
+            )}
+          </small>
+        )}
       </button>
       {open && (
         <div className="memory-index-body">
