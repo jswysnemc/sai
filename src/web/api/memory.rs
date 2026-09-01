@@ -167,13 +167,13 @@ async fn show(
 ) -> WebResult<Json<Value>> {
     let store = store(&state);
     let workspace = workspace_for(&state.workspaces, query.workspace.as_deref());
-    let found = store
-        .notes(workspace.as_deref())
-        .load(&name)
-        .map_err(WebError::from)?;
+    let library = store.notes(workspace.as_deref());
+    let found = library.load(&name).map_err(WebError::from)?;
     let Some((entry, scope)) = found else {
         return Ok(Json(json!({ "found": false, "name": name })));
     };
+    // hook 必须回显：编辑表单拿不到它，保存时留空就会把自定义提示重置成摘要
+    let hook = library.load_hook(&name).map_err(WebError::from)?;
     Ok(Json(json!({
         "found": true,
         "name": entry.front.name,
@@ -181,6 +181,7 @@ async fn show(
         "type": entry.front.memory_type.as_str(),
         "scope": scope_label(scope),
         "content": entry.body,
+        "hook": hook.unwrap_or_default(),
         "links": entry.links(),
     })))
 }

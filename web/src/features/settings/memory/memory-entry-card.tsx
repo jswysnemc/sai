@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, Link2, Pencil, Trash2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../../api/client";
 import type { MemoryQuery, MemoryScope, MemorySummary, MemoryType, MemoryWriteResult } from "../../../api/contracts";
 import { useI18n } from "../../i18n/use-i18n";
@@ -49,8 +49,10 @@ export function MemoryEntryCard({
 }: MemoryEntryCardProps) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
+  const rootRef = useRef<HTMLElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [saveNote, setSaveNote] = useState<string | null>(null);
   const query: MemoryQuery = { workspace };
 
   const detail = useQuery({
@@ -60,7 +62,10 @@ export function MemoryEntryCard({
   });
 
   useEffect(() => {
-    if (expandSignal > 0) setExpanded(true);
+    if (expandSignal <= 0) return;
+    setExpanded(true);
+    // 跳转目标可能在视口外：展开后滚到可见位置，否则用户看不到任何反馈
+    rootRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [expandSignal]);
 
   const save = useMutation({
@@ -71,15 +76,10 @@ export function MemoryEntryCard({
       await queryClient.invalidateQueries({ queryKey: ["memory-entries"] });
       await queryClient.invalidateQueries({ queryKey: ["memory-stats"] });
       setEditing(false);
-      if (result.note) {
-        // 软提示放在编辑区里，不弹窗打断
-        setSaveNote(result.note);
-      } else {
-        setSaveNote(null);
-      }
+      // 软提示放在编辑区里，不弹窗打断
+      setSaveNote(result.note ?? null);
     }
   });
-  const [saveNote, setSaveNote] = useState<string | null>(null);
 
   const missing =
     detail.data?.found && detail.data.type && detail.data.content
@@ -87,7 +87,7 @@ export function MemoryEntryCard({
       : [];
 
   return (
-    <article className="memory-item" data-type={entry.type}>
+    <article ref={rootRef} className="memory-item" data-type={entry.type}>
       <header className="memory-item-head">
         <button
           type="button"
@@ -156,6 +156,7 @@ export function MemoryEntryCard({
               name={entry.name}
               description={detail.data.description ?? entry.description}
               content={detail.data.content ?? ""}
+              hook={detail.data.hook ?? ""}
               memoryType={detail.data.type ?? entry.type}
               global={entry.scope === "global"}
               workspace={workspace}
@@ -181,6 +182,8 @@ type MemoryEditFormProps = {
   name: string;
   description: string;
   content: string;
+  /** 索引里的提示行；保存时原样带回，空值后端会沿用摘要 */
+  hook: string;
   memoryType: MemoryType;
   global: boolean;
   workspace?: string;
@@ -190,7 +193,7 @@ type MemoryEditFormProps = {
 };
 
 /**
- * 就地编辑表单：只改摘要与正文。
+ * 就地编辑表单：改摘要、索引提示与正文。
  *
  * 标识、类型与作用域不在编辑范围：标识是文件名与链接目标，改名等于
  * 换一条记忆；类型与作用域选错，删了重建比改更不容易出半吊子状态。
@@ -202,6 +205,7 @@ function MemoryEditForm({
   name,
   description,
   content,
+  hook,
   memoryType,
   global,
   workspace,
@@ -211,6 +215,7 @@ function MemoryEditForm({
 }: MemoryEditFormProps) {
   const { t } = useI18n();
   const [nextDescription, setNextDescription] = useState(description);
+  const [nextHook, setNextHook] = useState(hook);
   const [nextContent, setNextContent] = useState(content);
   const missing = missingRationaleMarkers(memoryType, nextContent);
 
@@ -221,6 +226,14 @@ function MemoryEditForm({
         <input
           value={nextDescription}
           onChange={(event) => setNextDescription(event.target.value)}
+        />
+      </label>
+      <label className="memory-compose-field">
+        <span>{t("Index hook", "索引提示")}</span>
+        <input
+          value={nextHook}
+          onChange={(event) => setNextHook(event.target.value)}
+          placeholder={t("Optional; defaults to the summary", "可选；留空沿用摘要")}
         />
       </label>
       <textarea
@@ -242,14 +255,15 @@ function MemoryEditForm({
         </button>
         <button
           type="button"
-          disabled={pending || nextContent.trim().length === 0}
+          disabled={pending || nextContent.trim().length === 0 || nextDescription.trim().length === 0}
           onClick={() =>
             onSave({
               name,
-              description: nextDescription.trim() || description,
+              description: nextDescription.trim(),
               content: nextContent,
               memory_type: memoryType,
               global,
+              hook: nextHook.trim(),
               workspace
             })
           }
@@ -257,6 +271,11 @@ function MemoryEditForm({
           <Check size={13} /> {pending ? t("Saving", "保存中") : t("Save changes", "保存修改")}
         </button>
       </div>
+      {nextDescription.trim().length === 0 && (
+        <div className="memory-rationale-hint">
+          {t("A summary is required.", "摘要不能为空。")}
+        </div>
+      )}
     </div>
   );
 }

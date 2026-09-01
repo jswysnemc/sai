@@ -27,6 +27,8 @@ export type MemoryDetail = {
   type?: MemoryType;
   scope?: MemoryScope;
   content?: string;
+  /** 索引里的提示行；编辑保存时必须原样带回，否则会被重置成摘要 */
+  hook?: string;
   /** 正文里用 [[标识]] 引用的其它记忆 */
   links?: string[];
 };

@@ -93,6 +93,28 @@ impl FileMemoryLibrary {
         Ok(None)
     }
 
+    /// 读取一条记忆在索引里的提示行。
+    ///
+    /// 编辑界面要回显 hook：不读出来，保存时留空就会把自定义提示重置成摘要。
+    ///
+    /// 参数:
+    /// - `name`: 记忆标识
+    ///
+    /// 返回:
+    /// - 索引里的 hook；没有索引或没有对应指针时为 None
+    pub fn load_hook(&self, name: &str) -> Result<Option<String>> {
+        let name = validate_name(name)?;
+        let file = format!("{name}.md");
+        for (_, directory) in self.lookup_order() {
+            let existing = std::fs::read_to_string(directory.index_path()).unwrap_or_default();
+            let document = IndexDocument::parse(&existing);
+            if let Some(entry) = document.entries().into_iter().find(|entry| entry.file == file) {
+                return Ok(Some(entry.hook.clone()));
+            }
+        }
+        Ok(None)
+    }
+
     /// 删除一条记忆，并同步索引。
     ///
     /// 参数:
