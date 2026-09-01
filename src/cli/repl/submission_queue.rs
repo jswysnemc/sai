@@ -56,6 +56,7 @@ pub(super) fn take_stream_draft_prefill(
 /// - `input_history`: 输入历史
 /// - `reasoning_mode`: 推理显示模式
 /// - `tool_call_mode`: 工具显示模式
+/// - `session_link`: 会话链接，用于把用户回显广播给跟随端
 ///
 /// 返回:
 /// - 队列执行结果，以及是否收到退出请求
@@ -69,6 +70,7 @@ pub(super) async fn drain_submission_queue(
     input_history: &mut Vec<String>,
     reasoning_mode: render::ReasoningDisplayMode,
     tool_call_mode: render::ToolCallDisplayMode,
+    session_link: &super::repl_session_link::ReplSessionLink,
 ) -> Result<bool> {
     loop {
         let queued = runtime.take_turn_interval_queue();
@@ -103,7 +105,12 @@ pub(super) async fn drain_submission_queue(
                 continue;
             }
             input_history.push(text.clone());
-            runtime.record_user(*mode, echo_text, fold_echo)?;
+            runtime.record_user(*mode, echo_text.clone(), fold_echo)?;
+            // 跟随端上行的一轮走这条路径，回显要广播回去，否则对端只见回答不见提问
+            session_link.broadcast_user_message(
+                &echo_text,
+                chat_input.image_url.clone().into_iter().collect(),
+            );
             if agent.installed_mode() != *mode {
                 let registry = build_repl_tool_registry(config, paths, *mode)?;
                 agent.switch_mode(*mode, registry)?;

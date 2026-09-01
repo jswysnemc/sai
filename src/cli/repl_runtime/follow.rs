@@ -81,6 +81,20 @@ impl ReplRuntime {
     /// - 无
     fn render_follow_event(&mut self, event: WebEvent) -> Result<()> {
         match event.kind.as_str() {
+            // 持有者广播的用户回显：本终端（或其它跟随端）发出的消息也要看得见，
+            // 否则跟随端只见回答不见提问
+            super::super::repl_session_link::USER_SUBMITTED_EVENT => {
+                self.flush_follow_buffer()?;
+                let text = event
+                    .payload
+                    .get("input")
+                    .and_then(|input| input.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                if !text.trim().is_empty() {
+                    self.record_user(crate::agent::AgentMode::Yolo, text, false)?;
+                }
+            }
             // 新一轮开始：先把上一轮没收尾的输出落下去
             "run.started" => self.flush_follow_buffer()?,
             "message.content.delta" => {

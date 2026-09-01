@@ -274,7 +274,10 @@ impl SessionLink {
         let Ok(transport) =
             transport_for_state_dir(state_dir).map(Arc::<dyn SessionTransport>::from)
         else {
-            hold_without_ipc(state_dir, session_id, owner);
+            // 拿不到端点也必须定角色：两个进程都停在 Detached 就会各自跑一轮，
+            // 把同一份会话状态写坏。先用快筛结果给个结论，再由心跳任务异步纠正。
+            link.set_role(attach_role_without_ipc(holder_exists));
+            hold_without_ipc(state_dir, session_id, owner, link.clone());
             return (link, local());
         };
         if !holder_exists && transport.is_holder() {
@@ -292,6 +295,8 @@ impl SessionLink {
             let Ok(rebound) =
                 transport_for_state_dir(state_dir).map(Arc::<dyn SessionTransport>::from)
             else {
+                // 重试仍拿不到端点：登记表里那条「心跳新鲜」的记录就是持有者
+                link.set_role(LinkRole::Observer);
                 return (link, local());
             };
             let bus = link.start_observer(owner, rebound);
@@ -658,23 +663,51 @@ async fn claim_holder(
     None
 }
 
+/// 拿不到 IPC 端点的初始角色。
+///
+/// 快筛说已有存活持有者，本进程只能是跟随者；否则这里就是唯一候选人，
+/// 先按持有者走，[`hold_without_ipc`] 抢租约失败时再纠正。
+///
+/// 参数:
+/// - `holder_exists`: 快筛是否探测到存活持有者
+///
+/// 返回:
+/// - 初始角色
+fn attach_role_without_ipc(holder_exists: bool) -> LinkRole {
+    if holder_exists {
+        LinkRole::Observer
+    } else {
+        LinkRole::Holder
+    }
+}
+
 /// 拿不到 IPC 时仍登记持有者心跳。
 ///
 /// 单进程降级不等于会话没打开：终端已经在跑，session_probe 必须能发现
 /// 这个还没发过提示词的空会话。
 ///
+/// 抢租约失败或心跳写失败都说明这个会话另有持有者，此时把角色纠正为
+/// 观察者，否则本进程会以为自己能驱动轮次。
+///
 /// 参数:
 /// - `state_dir`: 会话状态目录
 /// - `session_id`: 会话 ID
 /// - `owner`: 本进程的持有者类型
+/// - `link`: 会话链接，用于纠正角色
 ///
 /// 返回:
 /// - 无
-fn hold_without_ipc(state_dir: &Path, session_id: &str, owner: SessionOwner) {
+fn hold_without_ipc(
+    state_dir: &Path,
+    session_id: &str,
+    owner: SessionOwner,
+    link: SessionLink,
+) {
     let state_dir = state_dir.to_path_buf();
     let session_id = session_id.to_string();
     tokio::spawn(async move {
         let Some(guard) = claim_holder(&state_dir, &session_id, owner).await else {
+            link.set_role(LinkRole::Observer);
             return;
         };
         let mut heartbeat = tokio::time::interval(HOLDER_HEARTBEAT_INTERVAL);
@@ -682,6 +715,7 @@ fn hold_without_ipc(state_dir: &Path, session_id: &str, owner: SessionOwner) {
         loop {
             heartbeat.tick().await;
             if guard.heartbeat().is_err() {
+                link.set_role(LinkRole::Observer);
                 return;
             }
         }
@@ -1373,6 +1407,16 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let journal = dir.path().join("session.jsonl");
         (dir, journal)
+    }
+
+    /// 拿不到 IPC 端点时，探测到存活持有者就只能当跟随者。
+    ///
+    /// 两个进程都停在 Detached 会各自跑一轮写坏同一份会话状态，
+    /// 这是那个漏洞唯一能低成本覆盖的一环。
+    #[test]
+    fn attach_role_without_ipc_follows_an_existing_holder() {
+        assert_eq!(attach_role_without_ipc(true), LinkRole::Observer);
+        assert_eq!(attach_role_without_ipc(false), LinkRole::Holder);
     }
 
     /// 等角色变成期望值。

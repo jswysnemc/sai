@@ -18,6 +18,8 @@ pub(super) struct ReplChrome {
     pub(super) session_title: String,
     /// 底栏左侧附加活动提示，如 `Ctrl+C 停止`
     pub(super) activity: Option<String>,
+    /// 底栏左侧常驻的主从角色标记，如 `跟随中`；持有者与单进程时为空
+    pub(super) role_badge: Option<String>,
 }
 
 impl ReplChrome {
@@ -61,6 +63,7 @@ impl ReplChrome {
             cache_hit_ratio: None,
             session_title: String::new(),
             activity: None,
+            role_badge: None,
         }
     }
 
@@ -92,6 +95,20 @@ impl ReplChrome {
     /// - 无
     pub(super) fn set_activity(&mut self, activity: Option<String>) {
         self.activity = activity;
+    }
+
+    /// 写入底栏常驻主从标记。
+    ///
+    /// 与 `activity` 分开：活动提示只在轮次进行中有值，角色标记只要本终端
+    /// 不是会话持有者就一直挂着，让用户随时知道轮次由谁驱动。
+    ///
+    /// 参数:
+    /// - `badge`: 角色标记文本；空则清除
+    ///
+    /// 返回:
+    /// - 无
+    pub(super) fn set_role_badge(&mut self, badge: Option<String>) {
+        self.role_badge = badge;
     }
 
     /// 左侧上下文占用文案。
@@ -165,16 +182,22 @@ impl ReplChrome {
     /// 返回:
     /// - 已着色状态行
     pub(super) fn footer_line_with_activity(&self, cols: usize, activity: Option<&str>) -> String {
+        let badge = self
+            .role_badge
+            .as_deref()
+            .filter(|badge| !badge.is_empty())
+            .map(|badge| format!("{badge}  "))
+            .unwrap_or_default();
         let left_plain = match activity.filter(|text| !text.is_empty()) {
             Some(activity) => format!(
-                "{activity}  {}  {}  {}  {}",
+                "{badge}{activity}  {}  {}  {}  {}",
                 self.mode_plain(),
                 self.context_status(),
                 self.model,
                 self.thinking
             ),
             None => format!(
-                "{}  {}  {}  {}",
+                "{badge}{}  {}  {}  {}",
                 self.mode_plain(),
                 self.context_status(),
                 self.model,
@@ -573,7 +596,23 @@ mod tests {
             cache_hit_ratio: None,
             session_title: String::new(),
             activity: None,
+            role_badge: None,
         }
+    }
+
+    /// 角色标记常驻底栏，且排在活动提示之前。
+    #[test]
+    fn role_badge_sits_at_the_left_of_the_footer() {
+        let mut chrome = test_chrome();
+        assert!(!chrome.footer_line(60).contains("跟随中"));
+
+        chrome.set_role_badge(Some("跟随中".to_string()));
+        assert!(chrome.footer_line(60).contains("跟随中"));
+        // 活动提示（Ctrl+C 停止）出现时角色标记仍在
+        let busy = chrome.footer_line_with_activity(60, Some("Ctrl+C"));
+        assert!(busy.contains("跟随中"));
+        assert!(busy.contains("Ctrl+C"));
+        assert!(busy.find("跟随中").unwrap() < busy.find("Ctrl+C").unwrap());
     }
 
     /// 【TUI】【实时用量】验证实报读数覆盖上下文占比并带出缓存命中。
@@ -660,6 +699,7 @@ mod tests {
             cache_hit_ratio: None,
             session_title: String::new(),
             activity: None,
+            role_badge: None,
         };
         let line = chrome.footer_line(80);
         let plain = strip_ansi(&line);
@@ -694,6 +734,7 @@ mod tests {
             cache_hit_ratio: None,
             session_title: String::new(),
             activity: None,
+            role_badge: None,
         };
         for cols in [20usize, 40, 59, 60, 80, 120] {
             let line = chrome.footer_line(cols);

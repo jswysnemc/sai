@@ -67,8 +67,21 @@ impl ReplRuntime {
     }
 
     /// 返回当前用户队列长度。
-    pub(super) fn queue_len(&self) -> usize {
+    pub(in crate::cli) fn queue_len(&self) -> usize {
         self.lock_queue().len()
+    }
+
+    /// 返回用户提交队列的共享句柄。
+    ///
+    /// 持有者侧的跨进程受理任务要往队列里放跟随端上行的一轮，而它拿不到
+    /// `ReplRuntime` 的借用（主循环正卡在读键上），只能持有这个 `Arc`。
+    ///
+    /// 返回:
+    /// - 队列句柄
+    pub(in crate::cli) fn submission_queue_handle(
+        &self,
+    ) -> Arc<Mutex<VecDeque<QueuedSubmission>>> {
+        Arc::clone(&self.submission_queue)
     }
 
     /// 按当前队列长度夹紧管理面板高亮。

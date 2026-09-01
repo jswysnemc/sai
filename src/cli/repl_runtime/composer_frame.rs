@@ -592,6 +592,7 @@ mod tests {
             cache_hit_ratio: None,
             session_title: String::new(),
             activity: None,
+            role_badge: None,
         };
         let frame = ComposerFrame::new(chrome, "hello".to_string(), 5, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();
@@ -623,6 +624,7 @@ mod tests {
             cache_hit_ratio: None,
             session_title: String::new(),
             activity: None,
+            role_badge: None,
         };
         let frame = ComposerFrame::new(chrome, "hello".to_string(), 5, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();
@@ -673,6 +675,7 @@ mod tests {
             cache_hit_ratio: None,
             session_title: String::new(),
             activity: None,
+            role_badge: None,
         };
         let frame = ComposerFrame::new(chrome, "hello".to_string(), 5, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();
@@ -718,6 +721,7 @@ mod tests {
             cache_hit_ratio: None,
             session_title: String::new(),
             activity: None,
+            role_badge: None,
         };
         let first_frame =
             ComposerFrame::new(chrome.clone(), "hello".to_string(), 5, false, Vec::new(), 0);
@@ -753,6 +757,7 @@ mod tests {
             cache_hit_ratio: None,
             session_title: String::new(),
             activity: None,
+            role_badge: None,
         };
         let frame = ComposerFrame::new(chrome, "!".to_string(), 1, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();
@@ -788,6 +793,7 @@ mod tests {
             cache_hit_ratio: None,
             session_title: String::new(),
             activity: None,
+            role_badge: None,
         };
         let frame = ComposerFrame::new(chrome, "/".to_string(), 1, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();
@@ -819,6 +825,7 @@ mod tests {
             cache_hit_ratio: None,
             session_title: String::new(),
             activity: None,
+            role_badge: None,
         };
         let mut frame = ComposerFrame::new(chrome, String::new(), 0, false, Vec::new(), 0);
         let base_height = frame.height(72);
@@ -854,6 +861,7 @@ mod tests {
             cache_hit_ratio: None,
             session_title: String::new(),
             activity: None,
+            role_badge: None,
         };
         let frame = ComposerFrame::new(chrome, String::new(), 0, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();
@@ -883,6 +891,7 @@ mod tests {
             cache_hit_ratio: None,
             session_title: String::new(),
             activity: None,
+            role_badge: None,
         };
         let frame = ComposerFrame::new(chrome, String::new(), 0, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();
@@ -913,6 +922,7 @@ mod tests {
             cache_hit_ratio: None,
             session_title: String::new(),
             activity: None,
+            role_badge: None,
         };
         let frame = ComposerFrame::new(chrome, String::new(), 0, false, Vec::new(), 0);
         let mut viewport = InlineViewport::new();
