@@ -208,12 +208,14 @@ export function ChatComposer(props: ChatComposerProps) {
           <div className="composer-actions">
             <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} hidden />
             <button type="button" className="composer-icon-button" onClick={() => fileInputRef.current?.click()} disabled={availability.inputDisabled} aria-label={t("Add images", "添加图片")}><Paperclip size={16} /></button>
-            {availability.showStop && (
+            {/* 同一个按钮在发送与停止之间切换：两个按钮并排会让界面跳变，也会误导连续点击 */}
+            {availability.showStop ? (
               <button type="button" className="composer-send stop" onClick={props.onStop} aria-label={t("Stop run", "停止运行")}><Square size={13} fill="currentColor" /></button>
+            ) : (
+              <button type="submit" className="composer-send" disabled={availability.sendDisabled || props.submitting} aria-label={props.running ? t("Queue message", "排队发送") : t("Send message", "发送消息")}>
+                {props.submitting ? <Loader2 size={16} className="composer-send-spin" /> : <ArrowRight size={18} />}
+              </button>
             )}
-            <button type="submit" className="composer-send" disabled={availability.sendDisabled || props.submitting} aria-label={props.running ? t("Queue message", "排队发送") : t("Send message", "发送消息")}>
-              {props.submitting ? <Loader2 size={16} className="composer-send-spin" /> : <ArrowRight size={18} />}
-            </button>
           </div>
         </div>
       </ComposerSurface>
