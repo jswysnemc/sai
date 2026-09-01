@@ -1,6 +1,6 @@
-import type { AppConfig, InputConfig, PasteImageKey } from "../../api/contracts";
-import { Select } from "../../shared/ui/select/select";
-import { useI18n } from "../i18n/use-i18n";
+import type { AppConfig, InputConfig, PasteImageKey } from "../../../api/contracts";
+import { Select } from "../../../shared/ui/select/select";
+import { useI18n } from "../../i18n/use-i18n";
 
 /** 粘贴键位的可选项与说明。 */
 const PASTE_KEY_OPTIONS: Array<{ value: PasteImageKey; en: string; zh: string }> = [
