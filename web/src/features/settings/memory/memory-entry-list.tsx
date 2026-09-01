@@ -4,6 +4,8 @@ import { MemoryEntryCard } from "./memory-entry-card";
 
 type MemoryEntryListProps = {
   entries: MemorySummary[];
+  /** 列表仍在加载时为真：空列表不能先显示「暂无」再突然变出条目 */
+  loading: boolean;
   workspace?: string;
   onRemove: (name: string) => void;
   /** 点击 [[链接]] 时跳转到目标条目 */
@@ -18,11 +20,12 @@ type MemoryEntryListProps = {
  * 项目记忆排在前面：同名时它覆盖全局那条，先看到的才是实际生效的那条。
  * 筛选与搜索由外层完成，这里只负责分组与渲染。
  *
- * @param props 条目、工作区标识、操作回调与跳转目标
+ * @param props 条目、加载状态、工作区标识、操作回调与跳转目标
  * @returns 记忆列表
  */
 export function MemoryEntryList({
   entries,
+  loading,
   workspace,
   onRemove,
   onNavigate,
@@ -43,7 +46,12 @@ export function MemoryEntryList({
             <h3>
               {title} ({items.length})
             </h3>
-            {items.length === 0 && <div className="settings-muted">{t("None", "暂无")}</div>}
+            {loading && items.length === 0 && (
+              <div className="settings-muted">{t("Loading…", "读取中…")}</div>
+            )}
+            {!loading && items.length === 0 && (
+              <div className="settings-muted">{t("None", "暂无")}</div>
+            )}
             <div className="memory-list">
               {items.map((entry) => (
                 <MemoryEntryCard

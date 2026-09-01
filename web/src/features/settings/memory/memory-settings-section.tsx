@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Brain, FolderTree, Globe, Layers } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../../../api/client";
 import type { AppConfig, MemoryWriteRequest, MemoryWriteResult } from "../../../api/contracts";
+import { useConfirm } from "../../../shared/ui/dialog/dialog-provider";
+import { Select } from "../../../shared/ui/select/select";
 import { useI18n } from "../../i18n/use-i18n";
 import { SettingsGroup } from "../editor-layout";
 import { MemoryComposeForm, MemoryWriteFeedback } from "./memory-compose-form";
@@ -30,6 +32,7 @@ type MemorySettingsSectionProps = {
  */
 export function MemorySettingsSection({ config, onConfigChange }: MemorySettingsSectionProps = {}) {
   const { t } = useI18n();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<MemoryFilter>(EMPTY_MEMORY_FILTER);
   const [writeResult, setWriteResult] = useState<MemoryWriteResult | null>(null);
@@ -39,6 +42,11 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
   const workspaceList = workspaces.data?.workspaces ?? [];
   const [workspaceId, setWorkspaceId] = useState<string | undefined>(undefined);
   const selectedWorkspace = workspaceId ?? workspaces.data?.active_id;
+
+  // 切换工作区时清掉上一工作区的写入提示：语境已变，残留只会误导
+  useEffect(() => {
+    setWriteResult(null);
+  }, [selectedWorkspace]);
 
   const stats = useQuery({
     queryKey: ["memory-stats", selectedWorkspace],
@@ -73,6 +81,34 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
   });
   const reset = useMutation({ mutationFn: api.memory.reset, onSuccess: refresh });
 
+  /** 删除前确认：删除不可恢复，误触图标不该直接生效。 */
+  const removeWithConfirm = async (name: string) => {
+    const confirmed = await confirm({
+      title: t("Delete memory", "删除记忆"),
+      description: t(
+        `Delete the memory "${name}"? This cannot be undone.`,
+        `删除记忆「${name}」？删除后无法恢复。`
+      ),
+      confirmLabel: t("Delete", "删除"),
+      danger: true
+    });
+    if (confirmed) remove.mutate(name);
+  };
+
+  /** 清空前确认：范围是所有工作区的记忆，不只是当前工作区。 */
+  const resetWithConfirm = async () => {
+    const confirmed = await confirm({
+      title: t("Clear all memories", "清空全部记忆"),
+      description: t(
+        "This deletes every memory across all workspaces, not just the selected one. This cannot be undone.",
+        "删除所有工作区的全部记忆，不只是当前选中的工作区。删除后无法恢复。"
+      ),
+      confirmLabel: t("Clear all", "全部清空"),
+      danger: true
+    });
+    if (confirmed) reset.mutate();
+  };
+
   const allEntries = useMemo(() => entries.data?.entries ?? [], [entries.data]);
   const visibleEntries = useMemo(
     () => filterMemories(allEntries, filter),
@@ -82,10 +118,14 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
   const error =
     entries.error || stats.error || remember.error || remove.error || reset.error || workspaces.error;
 
-  /** 链接跳转：展开目标条目；筛掉了就先清筛选。 */
+  /** 链接跳转：展开目标条目；被当前筛选排除时先清筛选，否则列表不渲染它。 */
   const navigateToMemory = (name: string) => {
-    const known = allEntries.some((entry) => entry.name === name);
-    setFilter((current) => (known ? current : EMPTY_MEMORY_FILTER));
+    const target = allEntries.find((entry) => entry.name === name);
+    if (!target) return;
+    // 目标被类型、作用域或关键字筛选掉时必须清掉，否则跳转毫无反应
+    if (filterMemories([target], filter).length === 0) {
+      setFilter(EMPTY_MEMORY_FILTER);
+    }
     setNavigateTarget({ name, signal: Date.now() });
   };
 
@@ -136,47 +176,48 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
         </SettingsGroup>
       )}
 
-      {workspaceList.length > 1 && (
-        <label className="memory-workspace-field">
-          <span>{t("Workspace", "工作区")}</span>
-          <select
-            value={selectedWorkspace ?? ""}
-            onChange={(event) => setWorkspaceId(event.target.value || undefined)}
-          >
-            {workspaceList.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.name}
-              </option>
-            ))}
-          </select>
-          <small>
-            {t(
-              "Project memories are stored per workspace",
-              "项目记忆按工作区存放"
-            )}
-          </small>
-        </label>
-      )}
+      <div className="memory-overview">
+        {workspaceList.length > 1 && (
+          <label className="memory-workspace-field">
+            <span>{t("Workspace", "工作区")}</span>
+            <Select
+              value={selectedWorkspace ?? workspaceList[0]?.id ?? ""}
+              options={workspaceList.map((workspace) => ({
+                value: workspace.id,
+                label: workspace.name
+              }))}
+              ariaLabel={t("Choose workspace", "选择工作区")}
+              onChange={(value) => setWorkspaceId(value || undefined)}
+            />
+            <small>
+              {t(
+                "Project memories are stored per workspace",
+                "项目记忆按工作区存放"
+              )}
+            </small>
+          </label>
+        )}
 
-      <div className="memory-storage-grid">
-        <StatCard
-          icon={<FolderTree size={14} />}
-          title={t("Project", "项目记忆")}
-          value={stats.data?.project_memories ?? 0}
-          hint={t("Visible only in this workspace", "仅在当前工作区可见")}
-        />
-        <StatCard
-          icon={<Globe size={14} />}
-          title={t("Global", "全局记忆")}
-          value={stats.data?.global_memories ?? 0}
-          hint={t("Applies everywhere", "在所有工作区生效")}
-        />
-        <StatCard
-          icon={<Layers size={14} />}
-          title={t("Evicted turns", "逐出轮次")}
-          value={stats.data?.evicted_turns ?? 0}
-          hint={t("Originals kept after compaction", "压缩后留档的原文")}
-        />
+        <div className="memory-storage-grid">
+          <StatCard
+            icon={<FolderTree size={14} />}
+            title={t("Project", "项目记忆")}
+            value={stats.data?.project_memories ?? 0}
+            hint={t("Visible only in this workspace", "仅在当前工作区可见")}
+          />
+          <StatCard
+            icon={<Globe size={14} />}
+            title={t("Global", "全局记忆")}
+            value={stats.data?.global_memories ?? 0}
+            hint={t("Applies everywhere", "在所有工作区生效")}
+          />
+          <StatCard
+            icon={<Layers size={14} />}
+            title={t("Evicted turns", "逐出轮次")}
+            value={stats.data?.evicted_turns ?? 0}
+            hint={t("Originals kept after compaction", "压缩后留档的原文")}
+          />
+        </div>
       </div>
 
       {stats.data?.notes_dir && (
@@ -188,7 +229,14 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
       <MemoryComposeForm
         pending={remember.isPending}
         workspace={selectedWorkspace}
-        onSubmit={(request) => remember.mutate(request)}
+        onSubmit={async (request) => {
+          try {
+            return await remember.mutateAsync(request);
+          } catch {
+            // 错误已由 error 汇总展示；返回空让表单保留输入
+            return null;
+          }
+        }}
       />
       <MemoryWriteFeedback result={writeResult} />
 
@@ -204,8 +252,9 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
 
       <MemoryEntryList
         entries={visibleEntries}
+        loading={entries.isLoading}
         workspace={selectedWorkspace}
-        onRemove={(name) => remove.mutate(name)}
+        onRemove={removeWithConfirm}
         onNavigate={navigateToMemory}
         navigateTarget={navigateTarget}
       />
@@ -217,12 +266,18 @@ export function MemorySettingsSection({ config, onConfigChange }: MemorySettings
       <div className="memory-danger-row">
         <button
           type="button"
-          className="settings-secondary"
-          onClick={() => reset.mutate()}
+          className="settings-danger"
+          onClick={resetWithConfirm}
           disabled={reset.isPending}
         >
           {reset.isPending ? t("Clearing…", "清空中…") : t("Clear all memories", "清空全部记忆")}
         </button>
+        <small className="memory-danger-note">
+          {t(
+            "Clears memories in every workspace, not just the selected one.",
+            "清空的是所有工作区的记忆，不只是当前选中的工作区。"
+          )}
+        </small>
       </div>
 
       {error && <div className="settings-inline-error">{(error as Error).message}</div>}
