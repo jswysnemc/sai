@@ -105,11 +105,16 @@
   line-height: var(--leading-control);
 }
 
+/*
+ * 文本修剪只用于不会截断字形的纯标签。
+ * .model-thinking-model 是 flex 项且自带 overflow: hidden（省略号截断），
+ * 行盒一旦被修剪到 cap..alphabetic，基线以下的下伸部（g/p/y）与中文下半
+ * 就会被裁掉，出现"底部拦腰截断"；它必须保留完整行盒。
+ */
 @supports (text-box: trim-both cap alphabetic) {
   .workspace-trigger strong,
   .system-usage-trigger strong,
   .system-usage-trigger small,
-  .model-thinking-model,
   .model-thinking-level,
   .agent-selector .ui-select-value > span,
   .composer-context-chip span {

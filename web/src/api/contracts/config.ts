@@ -104,6 +104,17 @@ export type ContextConfig = {
   [key: string]: unknown;
 };
 
+/** 模型请求瞬时失败的自动重试策略（仅输出开始前的瞬时故障） */
+export type RetryConfig = {
+  /** 最大尝试次数（含首次请求），1–10 */
+  max_attempts?: number;
+  /** 首次重试前的等待毫秒数 */
+  initial_delay_ms?: number;
+  /** 间隔方式：exponential（指数退避）或 fixed（固定间隔） */
+  backoff?: "exponential" | "fixed" | string;
+  [key: string]: unknown;
+};
+
 export type PromptTemplateConfig = {
   system: string;
   user: string;
@@ -185,6 +196,8 @@ export type AppConfig = {
   scm?: ScmConfig;
   git?: GitConfig;
   context?: ContextConfig;
+  /** 模型请求瞬时失败的自动重试策略 */
+  retry?: RetryConfig;
   /** 会话网格：跨会话消息收发开关 */
   mesh?: {
     cross_session?: boolean;

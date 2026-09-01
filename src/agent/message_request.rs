@@ -34,7 +34,11 @@ impl Agent {
         perf.mark(&format!("round {round} model request start"));
         // 输出开始前允许瞬时断连重试；开始输出后重试会复制正文，因此立即返回错误
         let emitted = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        const MAX_TRANSPORT_ATTEMPTS: u32 = 3;
+        // 重试策略来自配置：次数、首拍间隔与间隔方式都可在设置的运行时页调整
+        let retry = &self.config.retry;
+        let max_attempts = retry.clamped_max_attempts();
+        let initial_delay = retry.clamped_initial_delay();
+        let fixed_backoff = retry.is_fixed_backoff();
         let mut attempt = 0u32;
         let result = loop {
             attempt += 1;
@@ -73,17 +77,22 @@ impl Agent {
                 Err(error) => {
                     let can_retry = !emitted.load(std::sync::atomic::Ordering::SeqCst)
                         && crate::llm::is_transient_transport_error(&error)
-                        && attempt < MAX_TRANSPORT_ATTEMPTS;
+                        && attempt < max_attempts;
                     if !can_retry {
                         return Err(error);
                     }
                     // 先通知 UI 正在重连，再退避等待；否则界面会像卡住一样没有反馈
                     on_event(AgentEvent::Reconnecting {
                         attempt,
-                        max_attempts: MAX_TRANSPORT_ATTEMPTS,
+                        max_attempts,
                     })?;
-                    let delay_ms =
-                        200u64.saturating_mul(1u64 << (attempt.saturating_sub(1).min(3)));
+                    let delay_ms = if fixed_backoff {
+                        initial_delay.as_millis() as u64
+                    } else {
+                        // 指数退避：首拍为配置间隔，之后逐次翻倍，封顶 8 倍防溢出
+                        let shift = attempt.saturating_sub(1).min(3);
+                        (initial_delay.as_millis() as u64).saturating_mul(1u64 << shift)
+                    };
                     tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
                 }
             }

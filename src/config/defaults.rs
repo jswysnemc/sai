@@ -17,6 +17,7 @@ impl Default for AppConfig {
             session: SessionConfig::default(),
             notification: crate::config::NotificationConfig::default(),
             context: ContextConfig::default(),
+            retry: RetryConfig::default(),
             tools: ToolsConfig::default(),
             terminal: TerminalConfig::default(),
             input: InputConfig::default(),
@@ -183,6 +184,36 @@ impl Default for ContextConfig {
             compaction_model: String::new(),
         }
     }
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            max_attempts: default_retry_max_attempts(),
+            initial_delay_ms: default_retry_initial_delay_ms(),
+            backoff: default_retry_backoff(),
+        }
+    }
+}
+
+/// 默认最大尝试次数（含首次请求）。
+pub(super) fn default_retry_max_attempts() -> u32 {
+    3
+}
+
+/// 默认首次重试等待毫秒数。
+pub(super) fn default_retry_initial_delay_ms() -> u64 {
+    200
+}
+
+/// 默认重试间隔方式。
+pub(super) fn default_retry_backoff() -> String {
+    "exponential".to_string()
+}
+
+/// 是否为默认重试间隔方式（序列化时可省略）。
+pub(super) fn is_default_retry_backoff(value: &str) -> bool {
+    value.eq_ignore_ascii_case("exponential")
 }
 
 pub(super) fn default_timeout() -> u64 {

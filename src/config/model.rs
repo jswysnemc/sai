@@ -25,6 +25,9 @@ pub struct AppConfig {
     pub notification: NotificationConfig,
     #[serde(default)]
     pub context: ContextConfig,
+    /// 模型请求瞬时失败的自动重试策略
+    #[serde(default)]
+    pub retry: RetryConfig,
     #[serde(default)]
     pub tools: ToolsConfig,
     #[serde(default)]
@@ -462,6 +465,100 @@ pub fn parse_compaction_ratio_text(value: &str) -> anyhow::Result<f32> {
         );
     }
     Ok(ratio)
+}
+
+/// 模型请求瞬时失败的自动重试策略。
+///
+/// 只对输出开始前发生的瞬时传输故障（断连、超时、5xx 网关）生效；
+/// 业务错误（鉴权、余额、上下文超限）与已开始输出的请求不会重试。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RetryConfig {
+    /// 最大尝试次数（含首次请求）
+    #[serde(default = "default_retry_max_attempts")]
+    pub max_attempts: u32,
+    /// 首次重试前的等待毫秒数
+    #[serde(default = "default_retry_initial_delay_ms")]
+    pub initial_delay_ms: u64,
+    /// 间隔方式：exponential（指数退避）或 fixed（固定间隔）
+    #[serde(
+        default = "default_retry_backoff",
+        skip_serializing_if = "is_default_retry_backoff"
+    )]
+    pub backoff: String,
+}
+
+impl RetryConfig {
+    /// 夹紧后的最大尝试次数，至少为 1。
+    ///
+    /// 返回:
+    /// - 1–10 之间的整数
+    pub fn clamped_max_attempts(&self) -> u32 {
+        self.max_attempts.clamp(1, 10)
+    }
+
+    /// 首次重试前的等待时长。
+    ///
+    /// 返回:
+    /// - 按配置换算的等待时长，上限 60 秒
+    pub fn clamped_initial_delay(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.initial_delay_ms.min(60_000))
+    }
+
+    /// 是否采用固定间隔（否则指数退避）。
+    ///
+    /// 返回:
+    /// - 配置为 fixed 时 true
+    pub fn is_fixed_backoff(&self) -> bool {
+        self.backoff.eq_ignore_ascii_case("fixed")
+    }
+}
+
+#[cfg(test)]
+mod retry_tests {
+    use super::RetryConfig;
+
+    #[test]
+    fn clamps_out_of_range_attempts() {
+        let config = RetryConfig {
+            max_attempts: 99,
+            initial_delay_ms: 200,
+            backoff: "exponential".to_string(),
+        };
+        assert_eq!(config.clamped_max_attempts(), 10);
+        let config = RetryConfig {
+            max_attempts: 0,
+            ..config
+        };
+        assert_eq!(config.clamped_max_attempts(), 1);
+    }
+
+    #[test]
+    fn caps_initial_delay() {
+        let config = RetryConfig {
+            max_attempts: 3,
+            initial_delay_ms: 120_000,
+            backoff: "exponential".to_string(),
+        };
+        assert_eq!(config.clamped_initial_delay(), std::time::Duration::from_secs(60));
+    }
+
+    #[test]
+    fn recognizes_fixed_backoff_case_insensitively() {
+        let config = RetryConfig::default();
+        assert!(!config.is_fixed_backoff());
+        let config = RetryConfig {
+            backoff: "Fixed".to_string(),
+            ..config
+        };
+        assert!(config.is_fixed_backoff());
+    }
+
+    /// 旧配置文件没有 retry 段时应回落默认值。
+    #[test]
+    fn deserializes_missing_section_as_default() {
+        let config: RetryConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(config, RetryConfig::default());
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

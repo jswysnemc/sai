@@ -10,6 +10,7 @@ import { ToggleRow } from "./controls/toggle-row";
 import { CompactionModelField } from "./compaction-model-field";
 import { MemoryExtractionModelField } from "./runtime/session-memory-extraction-field";
 import { PasteKeySettings } from "./runtime/paste-key-settings";
+import { RetrySettings } from "./runtime/retry-settings";
 import { useI18n } from "../i18n/use-i18n";
 import { DebugSettings } from "./runtime/debug-settings";
 
@@ -162,15 +163,26 @@ export function RuntimeSettingsSection({ config, subview, onConfigChange }: Runt
     case "engine":
     default:
       return (
-        <SettingsGroup
-          title={t("Conversation engine", "对话内核")}
-          description={t(
-            "Run the reasoning loop with sai's own engine or hand it to an external ACP agent.",
-            "用 sai 自带内核执行推理循环，或交给外部 ACP agent。"
-          )}
-        >
-          <AgentEngineSettings config={config} onConfigChange={onConfigChange} />
-        </SettingsGroup>
+        <div className="runtime-groups">
+          <SettingsGroup
+            title={t("Conversation engine", "对话内核")}
+            description={t(
+              "Run the reasoning loop with sai's own engine or hand it to an external ACP agent.",
+              "用 sai 自带内核执行推理循环，或交给外部 ACP agent。"
+            )}
+          >
+            <AgentEngineSettings config={config} onConfigChange={onConfigChange} />
+          </SettingsGroup>
+          <SettingsGroup
+            title={t("Failure retry", "失败重试")}
+            description={t(
+              "Retry transient transport failures (disconnects, timeouts, gateway errors) before any model output starts. Business errors and streams already producing output are never retried.",
+              "模型输出开始前遇到瞬时传输故障（断连、超时、网关错误）时自动重试。业务错误与已开始输出的请求不会重试。"
+            )}
+          >
+            <RetrySettings config={config} onConfigChange={onConfigChange} />
+          </SettingsGroup>
+        </div>
       );
   }
 }

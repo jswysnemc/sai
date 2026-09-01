@@ -139,6 +139,7 @@ export type {
   McpServerConfig,
   McpConfig,
   McpConfigResponse,
+  RetryConfig,
 } from "./contracts/config";
 
 export type {
