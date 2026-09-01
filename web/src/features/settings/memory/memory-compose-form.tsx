@@ -8,7 +8,8 @@ import { missingRationaleMarkers } from "./memory-filter";
 type MemoryComposeFormProps = {
   pending: boolean;
   workspace?: string;
-  onSubmit: (request: MemoryWriteRequest) => void;
+  /** 返回写入结果；失败时表单内容保留，用户输入不能丢 */
+  onSubmit: (request: MemoryWriteRequest) => Promise<MemoryWriteResult | null>;
 };
 
 /** 条目类型的可选项与说明。 */
@@ -52,10 +53,10 @@ export function MemoryComposeForm({ pending, workspace, onSubmit }: MemoryCompos
   const missing = missingRationaleMarkers(memoryType, content);
   const ready = name.trim().length > 0 && description.trim().length > 0 && content.trim().length > 0;
 
-  /** 提交并清空表单。 */
-  const submit = () => {
+  /** 提交并清空表单；失败时保留输入。 */
+  const submit = async () => {
     if (!ready) return;
-    onSubmit({
+    const result = await onSubmit({
       name: name.trim(),
       description: description.trim(),
       content: content.trim(),
@@ -64,6 +65,7 @@ export function MemoryComposeForm({ pending, workspace, onSubmit }: MemoryCompos
       hook: hook.trim(),
       workspace
     });
+    if (!result) return;
     setName("");
     setDescription("");
     setHook("");

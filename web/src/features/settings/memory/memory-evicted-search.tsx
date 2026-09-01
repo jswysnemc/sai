@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { api } from "../../../api/client";
 import { useI18n } from "../../i18n/use-i18n";
 
@@ -15,10 +15,12 @@ import { useI18n } from "../../i18n/use-i18n";
 export function MemoryEvictedSearch() {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
+  // 键入中途不发请求：每个按键都触发一次后端扫描纯属浪费
+  const deferredQuery = useDeferredValue(query);
   const search = useQuery({
-    queryKey: ["memory-evicted", query],
-    queryFn: () => api.memory.searchEvicted(query, 20),
-    enabled: query.trim().length > 0
+    queryKey: ["memory-evicted", deferredQuery],
+    queryFn: () => api.memory.searchEvicted(deferredQuery, 20),
+    enabled: deferredQuery.trim().length > 0
   });
   const results = search.data?.results ?? [];
 
@@ -32,7 +34,7 @@ export function MemoryEvictedSearch() {
           placeholder={t("Search context removed by compaction", "检索被压缩清出的上下文")}
         />
       </label>
-      {query.trim() && (
+      {deferredQuery.trim() && (
         <div className="memory-search-panel">
           <div className="memory-search-meta">
             {search.isFetching
