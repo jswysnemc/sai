@@ -274,6 +274,45 @@ fn render_file_header(change: &FileChange) -> String {
     )
 }
 
+/// 渲染已解析 unified diff 为 transcript 正文。
+///
+/// 工具结果携带写盘前的 unified diff；TUI 消费事件时文件可能已写完，
+/// 结果定稿需要按补丁重建渲染。行结构与 `render_update_lines` 一致，
+/// 增删行内的精细差异同样按删除块与新增块配对计算。
+///
+/// 参数:
+/// - `patch`: unified diff 解析出的文件补丁
+///
+/// 返回:
+/// - 相对正文内收的行级 diff 文本
+pub(crate) fn render_unified_patch_for_transcript(
+    patch: &crate::render::transcript::unified_diff::UnifiedFilePatch,
+) -> String {
+    let lines: Vec<LineChange> = patch
+        .lines
+        .iter()
+        .map(|line| LineChange {
+            kind: match line.kind {
+                crate::render::transcript::unified_diff::UnifiedLineKind::Context => {
+                    LineChangeKind::Context
+                }
+                crate::render::transcript::unified_diff::UnifiedLineKind::Add => {
+                    LineChangeKind::Add
+                }
+                crate::render::transcript::unified_diff::UnifiedLineKind::Delete => {
+                    LineChangeKind::Delete
+                }
+            },
+            old_line: line.old_line,
+            new_line: line.new_line,
+            text: line.text.clone(),
+        })
+        .collect();
+    let path = std::path::PathBuf::from(&patch.path);
+    let rendered = render_update_lines(&path, &lines);
+    indent_diff_for_transcript(&rendered)
+}
+
 /// 渲染单文件 diff。
 ///
 /// 参数:

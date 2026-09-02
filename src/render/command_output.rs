@@ -193,9 +193,10 @@ fn append_command_display_line(
             for line in skipped {
                 let _ = highlight_code_line_continued("sh", line, highlight);
             }
-            output.push_str("\x1b[2m");
-            output.push_str(&format!("… +{omitted} lines (Ctrl+O to expand)"));
-            output.push_str("\x1b[0m\n");
+            output.push_str(&crate::render::omitted_line::render_omitted_line_plain(
+                *omitted, true,
+            ));
+            output.push('\n');
         }
         FoldedDisplayLine::Line(line) => {
             output.push_str(&highlight_code_line_continued("sh", line, highlight));

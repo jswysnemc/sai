@@ -62,6 +62,9 @@ pub(crate) fn tool_event_label_tense(
     if name == "subagent" {
         return subagent_call_label(arguments, tense);
     }
+    if name == "todo" {
+        return todo_call_label(arguments, tense);
+    }
     let action = tool_verb(name, tense);
     let suffix = arguments.and_then(|arguments| tool_suffix_from_text(name, arguments));
     match suffix {
@@ -125,6 +128,129 @@ fn subagent_verb(action: &str, tense: ToolVerbTense) -> &'static str {
         ("send", ToolVerbTense::Perfect) => "Messaged",
         (_, tense) => tool_verb("subagent", tense),
     }
+}
+
+/// 按 action 生成 todo 工具的展示标签。
+///
+/// todo 的 action 是面向模型的接口词，直接拼进标签会出现
+/// `Updating update 补齐回归测试` 这类同义重复。这里把 action 映射为
+/// 面向用户的动词，update 按是否改文本区分 Marking/Editing，
+/// 结果渲染层的 `changed_item_label` 再用条目内容替换对象。
+///
+/// 参数:
+/// - `arguments`: 工具参数 JSON，可能尚未闭合
+/// - `tense`: 进行中 / 已完成
+///
+/// 返回:
+/// - 面向终端展示的短标签
+fn todo_call_label(arguments: Option<&str>, tense: ToolVerbTense) -> String {
+    let Some(arguments) = arguments else {
+        return tool_verb("todo", tense).to_string();
+    };
+    let action = parse_arguments(arguments)
+        .and_then(|value| string_field(&value, &["action"]))
+        .or_else(|| string_field_from_partial(arguments, &["action"]))
+        .unwrap_or_else(|| "list".to_string());
+    let verb = todo_verb(&action, arguments, tense);
+    let suffix = todo_object(arguments, &action);
+    match suffix {
+        Some(suffix) if !suffix.trim().is_empty() => format!("{verb} {suffix}"),
+        _ => verb.to_string(),
+    }
+}
+
+/// todo 各 action 对应的展示动词。
+///
+/// 参数:
+/// - `action`: todo 工具 action
+/// - `arguments`: 工具参数 JSON，用于区分 update 是否改文本
+/// - `tense`: 进行中 / 已完成
+///
+/// 返回:
+/// - 展示动词
+fn todo_verb(action: &str, arguments: &str, tense: ToolVerbTense) -> &'static str {
+    match action {
+        "list" => tool_verb("list_directory", tense),
+        "add" => {
+            if tense == ToolVerbTense::Progressive {
+                "Adding"
+            } else {
+                "Added"
+            }
+        }
+        "remove" => {
+            if tense == ToolVerbTense::Progressive {
+                "Removing"
+            } else {
+                "Removed"
+            }
+        }
+        // update 只改状态时是标记，改文本时是编辑
+        "update" => {
+            let has_text = parse_arguments(arguments)
+                .map(|value| {
+                    value
+                        .get("text")
+                        .and_then(Value::as_str)
+                        .is_some_and(|text| !text.trim().is_empty())
+                })
+                .unwrap_or(false);
+            match (has_text, tense) {
+                (true, ToolVerbTense::Progressive) => "Editing",
+                (true, ToolVerbTense::Perfect) => "Edited",
+                (false, ToolVerbTense::Progressive) => "Marking",
+                (false, ToolVerbTense::Perfect) => "Marked",
+            }
+        }
+        _ => tool_verb("todo", tense),
+    }
+}
+
+/// 提取 todo 展示对象：优先用条目文本，其次用状态。
+///
+/// 参数:
+/// - `arguments`: 工具参数 JSON，可能尚未闭合
+/// - `action`: todo 工具 action
+///
+/// 返回:
+/// - 可展示对象文本
+fn todo_object(arguments: &str, action: &str) -> Option<String> {
+    if action == "list" {
+        return None;
+    }
+    let parsed = parse_arguments(arguments);
+    let text = parsed
+        .as_ref()
+        .and_then(|value| string_field(value, &["text"]))
+        .or_else(|| string_field_from_partial(arguments, &["text"]));
+    if let Some(text) = text {
+        return Some(compact_text(text));
+    }
+    // add 多条 texts：取首条加省略
+    let texts = parsed
+        .as_ref()
+        .and_then(|value| value.get("texts").and_then(Value::as_array))
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+        });
+    if let Some(texts) = texts {
+        if texts.is_empty() {
+            return None;
+        }
+        if texts.len() == 1 {
+            return Some(compact_text(texts[0].clone()));
+        }
+        return Some(compact_text(format!("{} …", texts[0])));
+    }
+    // update 只改状态：展示目标状态
+    parsed
+        .as_ref()
+        .and_then(|value| string_field(value, &["status"]))
+        .map(compact_text)
 }
 
 /// 提取命令类工具的完整命令文本（不做省略）。

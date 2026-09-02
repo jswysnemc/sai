@@ -10,6 +10,7 @@ mod tests;
 pub(crate) use model::preview_from_arguments;
 pub(crate) use renderer::{
     diff_body_start_column, render_edit_file_diff_body_for_transcript,
-    render_patch_preview_for_transcript, write_edit_file_diff_block,
+    render_patch_preview_for_transcript, render_unified_patch_for_transcript,
+    write_edit_file_diff_block,
 };
 pub(crate) use streamed_stats::{edit_diff_stat_status, format_diff_stat_status};

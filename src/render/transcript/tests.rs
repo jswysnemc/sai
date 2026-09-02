@@ -6,6 +6,8 @@ use crate::render::{ReasoningDisplayMode, ToolCallDisplayMode};
 
 #[path = "tests/diff_wrapping.rs"]
 mod diff_wrapping;
+#[path = "tests/result_diff.rs"]
+mod result_diff;
 
 #[test]
 fn ansi_lines_are_prewrapped_at_requested_width() {

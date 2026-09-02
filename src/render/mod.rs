@@ -1,6 +1,7 @@
 pub(crate) mod activity_animation;
 mod asset_block;
 mod background_command_event;
+pub(crate) mod background_promotion;
 pub(crate) mod brand_logo;
 mod cli_command_preview;
 mod code_block;
@@ -16,6 +17,7 @@ mod live_tool_status;
 mod markdown;
 mod markdown_blocks;
 mod markdown_inline;
+pub(crate) mod omitted_line;
 mod permission;
 pub(crate) mod render_expand;
 pub(crate) mod render_width;

@@ -1,5 +1,4 @@
 use super::cell::TranscriptMode;
-use crate::i18n::text as t;
 use crate::render::fold_text::{
     fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
 };
@@ -87,22 +86,66 @@ pub(crate) fn render(cell: &UserEchoCell) -> String {
     let mut content_index = 0usize;
     for line in visible {
         if line == "__OMITTED__" {
-            lines.push(format!(
-                "  \x1b[2m… +{omitted} {} (Ctrl+O {})\x1b[0m",
-                t("lines", "行"),
-                t("to expand", "展开")
+            lines.push(crate::render::omitted_line::render_omitted_line(
+                omitted, true,
             ));
             continue;
         }
-        if content_index == 0 {
-            lines.push(format!("{prefix}{line}"));
+        // 图片占位块（[image N WxH]）用洋红色标注，与普通文本区分；
+        // 长文本占位块由折叠语义处理，保持原有弱化色
+        let styled = if is_image_placeholder(&line) {
+            style_image_placeholder(&line)
         } else {
-            lines.push(format!("  {line}"));
+            line.clone()
+        };
+        if content_index == 0 {
+            lines.push(format!("{prefix}{styled}"));
+        } else {
+            lines.push(format!("  {styled}"));
         }
         content_index += 1;
     }
     // 轮次前空一行，和上一轮总览/响应隔开
     format!("\n{}", lines.join("\n"))
+}
+
+/// 判断回显行是否为图片占位块。
+///
+/// 图片粘贴在输入框中被原子化为 `[image N WxH]` 标记，回显时需要
+/// 与普通文本区分，让用户确认附件仍然存在。
+///
+/// 参数:
+/// - `line`: 回显行文本
+///
+/// 返回:
+/// - 是图片占位块时返回 true
+fn is_image_placeholder(line: &str) -> bool {
+    let trimmed = line.trim();
+    if !trimmed.starts_with("[image ") || !trimmed.ends_with(']') {
+        return false;
+    }
+    let inner = &trimmed["[image ".len()..trimmed.len() - 1];
+    let mut parts = inner.split_whitespace();
+    let index = parts.next().unwrap_or_default();
+    let size = parts.next().unwrap_or_default();
+    let tail = parts.next();
+    // 结构固定为两个词：序号 + WxH 尺寸
+    !index.is_empty()
+        && !size.is_empty()
+        && tail.is_none()
+        && size.contains('x')
+        && index.chars().all(|ch| ch.is_ascii_digit())
+}
+
+/// 渲染图片占位块：洋红色调的附件标签样式。
+///
+/// 参数:
+/// - `line`: 图片占位块行
+///
+/// 返回:
+/// - 着色后的占位块文本
+fn style_image_placeholder(line: &str) -> String {
+    format!("\x1b[35m{line}\x1b[0m")
 }
 
 /// 判断用户回显是否应按粘贴折叠语义处理（含 Ctrl+O）。
@@ -172,5 +215,19 @@ mod tests {
         let expanded = render(&cell);
         assert!(expanded.contains("line-10"));
         assert!(!expanded.contains("Ctrl+O"));
+    }
+
+    /// 图片占位块回显时被识别并着洋红色，普通文本不受影响。
+    #[test]
+    fn image_placeholder_is_tinted_magenta() {
+        assert!(is_image_placeholder("[image 1 800x600]"));
+        assert!(is_image_placeholder("  [image 12 64x64]  "));
+        assert!(!is_image_placeholder("[text 1 2000 chars]"));
+        assert!(!is_image_placeholder("normal message"));
+        assert!(!is_image_placeholder("[image 1 800x600 extra]"));
+
+        let styled = style_image_placeholder("[image 1 800x600]");
+        assert!(styled.contains("\x1b[35m"));
+        assert!(styled.contains("[image 1 800x600]"));
     }
 }

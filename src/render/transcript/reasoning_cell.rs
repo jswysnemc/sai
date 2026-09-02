@@ -1,4 +1,3 @@
-use crate::i18n::text as t;
 use crate::render::activity_animation::{render_activity_detail, render_activity_text};
 use crate::render::fold_text::{
     fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
@@ -243,16 +242,11 @@ fn render_thinking_body_with_title(
     let mut content_index = 0usize;
     for line in visible {
         if line == "__OMITTED__" {
-            let hint = if show_expand_hint {
-                format!(
-                    "… +{omitted} {} (Ctrl+O {})",
-                    t("lines", "行"),
-                    t("to expand", "展开")
-                )
-            } else {
-                format!("… +{omitted} {}", t("lines", "行"))
-            };
-            output.push_str(&format!("\n\x1b[2m\x1b[36m  └ {hint}\x1b[0m"));
+            output.push('\n');
+            output.push_str(&crate::render::omitted_line::render_omitted_line(
+                omitted,
+                show_expand_hint,
+            ));
             continue;
         }
         let prefix = if content_index == 0 { "  └ " } else { "    " };

@@ -94,7 +94,7 @@ fn fold_display_text(text: &str, expanded: bool, title: &str) -> Vec<String> {
         .into_iter()
         .map(|line| {
             if line == "__OMITTED__" {
-                format!("… +{omitted} lines (Ctrl+O to expand)")
+                crate::render::omitted_line::render_omitted_line_plain(omitted, true)
             } else {
                 line
             }
@@ -134,9 +134,10 @@ fn push_shell_line(
             for line in skipped {
                 let _ = highlight_code_line_continued("bash", line, highlight);
             }
-            rendered.push_str("\x1b[2m");
-            rendered.push_str(&format!("… +{omitted} lines (Ctrl+O to expand)"));
-            rendered.push_str("\x1b[0m\n");
+            rendered.push_str(&crate::render::omitted_line::render_omitted_line_plain(
+                *omitted, true,
+            ));
+            rendered.push('\n');
         }
         FoldedDisplayLine::Line(line) => {
             rendered.push_str(&highlight_code_line_continued("bash", line, highlight));

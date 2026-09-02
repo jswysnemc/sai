@@ -1,6 +1,7 @@
 pub(crate) mod command_output_buffer;
 mod formatter;
 mod model;
+mod read_file;
 mod todo;
 
 #[cfg(test)]

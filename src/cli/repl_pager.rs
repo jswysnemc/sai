@@ -13,6 +13,10 @@ use crossterm::{execute, queue};
 use std::io::{self, Write};
 use unicode_width::UnicodeWidthChar;
 
+mod repl_pager_search;
+
+use repl_pager_search::PagerSearch;
+
 /// 在备用屏幕中分页展示可展开块列表，支持左右切换与可拖动进度条。
 ///
 /// 参数:
@@ -50,6 +54,8 @@ pub(super) fn open_blocks_pager(blocks: &[ExpandableBlock], start_index: usize) 
     let result = (|| -> Result<()> {
         let mut index = start_index.min(blocks.len() - 1);
         let mut scroll: usize = 0;
+        let mut search = PagerSearch::default();
+        let mut search_mode = false;
         // 拖动目标：横向底栏进度条 / 右侧竖向滚动条
         let mut drag_target = ScrollDragTarget::None;
         loop {
@@ -59,8 +65,12 @@ pub(super) fn open_blocks_pager(blocks: &[ExpandableBlock], start_index: usize) 
             // 2. 固定顶栏仅序号；命令标题进入可滚动区，不钉在顶部
             let block = &blocks[index];
             let rendered_body = render_expandable_body(block.kind, &block.body);
-            let header_prefix = format!("[{}/{}]", index + 1, blocks.len());
-            let header_rows = 1usize; // 仅块序号
+            let header_prefix = if search.active() {
+                search.status_text()
+            } else {
+                format!("[{}/{}]", index + 1, blocks.len())
+            };
+            let header_rows = 1usize; // 块序号或搜索状态
             let footer_rows = 2usize; // 进度条 + 快捷键
             let view_h = rows.saturating_sub(header_rows + footer_rows).max(1);
             // 3. 滚动窗口内容 = 完整命令标题 + 空行 + 正文
@@ -110,9 +120,23 @@ pub(super) fn open_blocks_pager(blocks: &[ExpandableBlock], start_index: usize) 
             let track = horizontal_progress_track(cols, content_lines.len(), view_h, scroll);
             write!(stdout, "{track}\r\n")?;
             // 8. 底栏快捷键
+            let base_hint = if search_mode {
+                t(
+                    "type to search · Enter/n next · N prev · Esc exit search",
+                    "输入即搜索 · Enter/n 下一处 · N 上一处 · Esc 退出搜索",
+                )
+                .to_string()
+            } else {
+                t(
+                    "/ search · n/N next/prev match",
+                    "/ 搜索 · n/N 下一处/上一处",
+                )
+                .to_string()
+            };
             let footer = if blocks.len() > 1 {
                 format!(
-                    "{}  {}%  {}/{}",
+                    "{}  {}  {}%  {}/{}",
+                    base_hint,
                     t(
                         "←→ blocks · ↑↓/PgUp/PgDn/mouse scroll · drag bar · Esc close",
                         "←→ 切换块 · ↑↓/PgUp/PgDn/鼠标滚动 · 拖动进度条 · Esc 关闭",
@@ -123,7 +147,8 @@ pub(super) fn open_blocks_pager(blocks: &[ExpandableBlock], start_index: usize) 
                 )
             } else {
                 format!(
-                    "{}  {}%",
+                    "{}  {}  {}%",
+                    base_hint,
                     t(
                         "↑↓/PgUp/PgDn/mouse scroll · drag bar · Esc close",
                         "↑↓/PgUp/PgDn/鼠标滚动 · 拖动进度条 · Esc 关闭"
@@ -141,49 +166,104 @@ pub(super) fn open_blocks_pager(blocks: &[ExpandableBlock], start_index: usize) 
                     modifiers,
                     kind,
                     ..
-                }) if kind != KeyEventKind::Release => match code {
-                    KeyCode::Esc | KeyCode::Char('q') => break,
-                    KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => break,
-                    KeyCode::Left | KeyCode::Char('h') if blocks.len() > 1 => {
-                        index = if index == 0 {
-                            blocks.len() - 1
-                        } else {
-                            index - 1
-                        };
-                        scroll = 0;
+                }) if kind != KeyEventKind::Release => {
+                    // 搜索模式：字符进入搜索词，Enter/n 跳下一处，Esc 退出搜索
+                    if search_mode {
+                        match code {
+                            KeyCode::Esc => {
+                                search_mode = false;
+                                search.update("", &content_lines);
+                            }
+                            KeyCode::Enter | KeyCode::Char('n') => {
+                                if let Some(hit) = search.next() {
+                                    scroll = hit.min(max_scroll);
+                                }
+                            }
+                            KeyCode::Char('N') => {
+                                if let Some(hit) = search.previous() {
+                                    scroll = hit.min(max_scroll);
+                                }
+                            }
+                            KeyCode::Backspace => {
+                                search.backspace(&content_lines);
+                                if let Some(hit) = search.current() {
+                                    scroll = hit.min(max_scroll);
+                                }
+                            }
+                            KeyCode::Char(ch) => {
+                                search.push_char(ch, &content_lines);
+                                if let Some(hit) = search.current() {
+                                    scroll = hit.min(max_scroll);
+                                }
+                            }
+                            _ => {}
+                        }
                         drag_target = ScrollDragTarget::None;
+                        continue;
                     }
-                    KeyCode::Right | KeyCode::Char('l') if blocks.len() > 1 => {
-                        index = (index + 1) % blocks.len();
-                        scroll = 0;
-                        drag_target = ScrollDragTarget::None;
+                    match code {
+                        KeyCode::Esc | KeyCode::Char('q') => break,
+                        KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => break,
+                        // / 进入搜索模式；已有搜索词时直接跳下一处
+                        KeyCode::Char('/') => {
+                            search_mode = true;
+                            if let Some(hit) = search.current() {
+                                scroll = hit.min(max_scroll);
+                            }
+                        }
+                        KeyCode::Char('n') if search.active() => {
+                            if let Some(hit) = search.next() {
+                                scroll = hit.min(max_scroll);
+                            }
+                        }
+                        KeyCode::Char('N') if search.active() => {
+                            if let Some(hit) = search.previous() {
+                                scroll = hit.min(max_scroll);
+                            }
+                        }
+                        KeyCode::Left | KeyCode::Char('h') if blocks.len() > 1 => {
+                            index = if index == 0 {
+                                blocks.len() - 1
+                            } else {
+                                index - 1
+                            };
+                            scroll = 0;
+                            search = PagerSearch::default();
+                            drag_target = ScrollDragTarget::None;
+                        }
+                        KeyCode::Right | KeyCode::Char('l') if blocks.len() > 1 => {
+                            index = (index + 1) % blocks.len();
+                            scroll = 0;
+                            search = PagerSearch::default();
+                            drag_target = ScrollDragTarget::None;
+                        }
+                        KeyCode::Up | KeyCode::Char('k') => {
+                            scroll = scroll.saturating_sub(1);
+                            drag_target = ScrollDragTarget::None;
+                        }
+                        KeyCode::Down | KeyCode::Char('j') => {
+                            scroll = (scroll + 1).min(max_scroll);
+                            drag_target = ScrollDragTarget::None;
+                        }
+                        KeyCode::PageUp => {
+                            scroll = scroll.saturating_sub(view_h);
+                            drag_target = ScrollDragTarget::None;
+                        }
+                        KeyCode::PageDown | KeyCode::Char(' ') => {
+                            scroll = (scroll + view_h).min(max_scroll);
+                            drag_target = ScrollDragTarget::None;
+                        }
+                        KeyCode::Home => {
+                            scroll = 0;
+                            drag_target = ScrollDragTarget::None;
+                        }
+                        KeyCode::End => {
+                            scroll = max_scroll;
+                            drag_target = ScrollDragTarget::None;
+                        }
+                        _ => {}
                     }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        scroll = scroll.saturating_sub(1);
-                        drag_target = ScrollDragTarget::None;
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        scroll = (scroll + 1).min(max_scroll);
-                        drag_target = ScrollDragTarget::None;
-                    }
-                    KeyCode::PageUp => {
-                        scroll = scroll.saturating_sub(view_h);
-                        drag_target = ScrollDragTarget::None;
-                    }
-                    KeyCode::PageDown | KeyCode::Char(' ') => {
-                        scroll = (scroll + view_h).min(max_scroll);
-                        drag_target = ScrollDragTarget::None;
-                    }
-                    KeyCode::Home => {
-                        scroll = 0;
-                        drag_target = ScrollDragTarget::None;
-                    }
-                    KeyCode::End => {
-                        scroll = max_scroll;
-                        drag_target = ScrollDragTarget::None;
-                    }
-                    _ => {}
-                },
+                }
                 Event::Mouse(mouse) => {
                     apply_mouse(
                         mouse,

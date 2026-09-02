@@ -27,6 +27,47 @@ const RESET: &str = "\x1b[0m";
 /// 视觉引导点字符
 const GUIDE_DOT: char = '•';
 
+/// 圆点脉冲周期（帧）：两秒一呼吸，与文字扫光的节拍独立
+const DOT_PULSE_CYCLE: usize = 63;
+
+/// 【终端】【状态动效】渲染思考态的呼吸圆点。
+///
+/// 思考用亮度呼吸表达活跃：圆点按余弦曲线在中灰与白色之间起伏，
+/// 与正文扫光节拍独立——扫光表达「正在处理」，呼吸表达「持续存在」。
+///
+/// 参数:
+/// - `frame`: 当前动画帧序号
+///
+/// 返回:
+/// - 带呼吸亮度的圆点 ANSI 文本
+pub(crate) fn render_thinking_dot(frame: usize) -> String {
+    let phase = (frame % DOT_PULSE_CYCLE) as f32 / DOT_PULSE_CYCLE as f32;
+    // 1 - cos(2πt) 把相位映射到 0..1：起点最暗、半周期最亮，循环往复
+    let pulse = (1.0 - (std::f32::consts::TAU * phase).cos()) / 2.0;
+    let blended = blend_color(BASE_COLOR, HIGHLIGHT_COLOR, pulse);
+    format!(
+        "\x1b[38;2;{};{};{}m{GUIDE_DOT}{RESET}",
+        blended.0, blended.1, blended.2
+    )
+}
+
+/// 【终端】【状态动效】按比例混合两个 RGB 颜色。
+///
+/// 参数:
+/// - `from`: 起始颜色
+/// - `to`: 目标颜色
+/// - `ratio`: 混合比例，0 保持起始色，1 完全变成目标色
+///
+/// 返回:
+/// - 混合后的颜色
+fn blend_color(from: (u8, u8, u8), to: (u8, u8, u8), ratio: f32) -> (u8, u8, u8) {
+    let mix = |a: u8, b: u8| -> u8 {
+        let value = a as f32 + (b as f32 - a as f32) * ratio.clamp(0.0, 1.0);
+        value.round().clamp(0.0, 255.0) as u8
+    };
+    (mix(from.0, to.0), mix(from.1, to.1), mix(from.2, to.2))
+}
+
 /// 【终端】【状态动效】渲染状态行的视觉引导点。
 ///
 /// 引导点与助手正文使用同一符号，因此状态行与正文共用一条视觉基线；
@@ -239,6 +280,21 @@ pub(crate) fn strip_ansi_for_test(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 【终端】【状态动效】思考圆点亮度随帧呼吸，且按周期循环。
+    #[test]
+    fn thinking_dot_pulses_and_cycles() {
+        let dark = render_thinking_dot(0);
+        let bright = render_thinking_dot(DOT_PULSE_CYCLE / 2);
+        let cycled = render_thinking_dot(DOT_PULSE_CYCLE);
+
+        // 起点最暗：处于基础灰
+        assert!(dark.contains("96;96;96"), "{dark}");
+        // 半周期最亮：接近白色
+        assert!(bright.contains("255;255;255"), "{bright}");
+        // 一个完整周期后回到起点
+        assert_eq!(dark, cycled);
+    }
 
     /// 【终端】【状态动效】验证高亮位置按帧从左向右移动。
     ///

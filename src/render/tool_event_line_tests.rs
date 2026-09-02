@@ -192,11 +192,29 @@ fn subagent_uses_description_label() {
 fn management_tools_include_action_and_target() {
     assert_eq!(
         tool_event_label("todo", Some(r#"{"action":"add","text":"检查测试"}"#)),
-        "Updating add 检查测试"
+        "Adding 检查测试"
     );
     assert_eq!(
         tool_event_label("cron", Some(r#"{"action":"remove","id":"cron_1"}"#)),
         "Scheduling remove cron_1"
+    );
+    assert_eq!(
+        tool_event_label(
+            "todo",
+            Some(r#"{"action":"update","id":"t1","status":"completed"}"#)
+        ),
+        "Marking completed"
+    );
+    assert_eq!(
+        tool_event_label(
+            "todo",
+            Some(r#"{"action":"update","id":"t1","text":"新文本"}"#)
+        ),
+        "Editing 新文本"
+    );
+    assert_eq!(
+        tool_event_label("todo", Some(r#"{"action":"list"}"#)),
+        "Listing"
     );
 }
 

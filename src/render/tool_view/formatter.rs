@@ -42,6 +42,11 @@ pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: u
             return rendered;
         }
     }
+    if view.name == "read_file" {
+        if let Some(rendered) = super::read_file::render(view, mode) {
+            return rendered;
+        }
+    }
 
     let tense = ToolVerbTense::from_done(view.outcome.is_some());
     let label = tool_event_label_tense(&view.name, Some(&view.arguments), tense);
@@ -137,6 +142,21 @@ fn render_progress_note(progress: &str) -> String {
 /// 返回:
 /// - 命令代码块 + 可选结果块
 fn render_command_tool(view: &ToolView, mode: ToolCallDisplayMode) -> String {
+    // 1. 前台命令等待超时被提升为后台任务：用专用视图表达，不再落入 err
+    if let Some(outcome) = view.outcome.as_ref() {
+        if let Some(promotion) =
+            crate::render::background_promotion::parse_background_promotion(&outcome.output)
+        {
+            let command = crate::render::tool_event_line::tool_command_full_text(
+                "run_command",
+                Some(&view.arguments),
+            )
+            .unwrap_or_default();
+            return crate::render::background_promotion::render_promotion_line(
+                &promotion, &command,
+            );
+        }
+    }
     let tense = ToolVerbTense::from_done(view.outcome.is_some());
     let action = tool_verb("run_command", tense);
     // 圆点以命令语义为准：结果 JSON 的 success 优先，非 JSON 时退回工具层 ok

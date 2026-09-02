@@ -1,6 +1,8 @@
 use crate::agent::AgentEvent;
 use crate::llm::ChatStreamKind;
-use crate::render::activity_animation::render_activity_line;
+use crate::render::activity_animation::{
+    render_activity_detail, render_activity_line, render_activity_text,
+};
 use std::time::Duration;
 
 /// 单轮请求的用户可见工作状态。
@@ -126,6 +128,7 @@ impl WorkStatus {
     ///
     /// 行首引导点与助手正文共用同一符号，因此状态行与正文落在同一条视觉基线上；
     /// 状态文字使用从左向右的白色余弦流光，并展示本轮整数秒时长。
+    /// 思考态的引导点改为亮度呼吸，与其余状态的静态圆点区分活跃语义。
     ///
     /// 参数:
     /// - `frame`: 动画帧序号
@@ -135,6 +138,14 @@ impl WorkStatus {
     /// - 带 ANSI 样式的状态行
     pub(crate) fn render_line(self, frame: usize, elapsed: Duration) -> String {
         let label = self.localized_label();
+        if self == Self::Thinking {
+            let detail = render_activity_detail(&format_elapsed(elapsed));
+            return format!(
+                "{} {} {detail}",
+                crate::render::activity_animation::render_thinking_dot(frame),
+                render_activity_text(&label, frame)
+            );
+        }
         render_activity_line(&label, &format_elapsed(elapsed), frame)
     }
 }

@@ -196,9 +196,37 @@ impl DiffCell {
         self.expanded = !self.expanded;
     }
 
-    /// 标记编辑已结束，保留预览 diff。
+    /// 标记编辑已结束，保留预览 diff（测试与旧调用兼容入口）。
+    #[cfg(test)]
     pub(crate) fn finish(&mut self, ok: bool) {
         self.completed = Some(ok);
+    }
+
+    /// 用工具结果固化编辑结束后的 diff 快照。
+    ///
+    /// 事件经无界通道送达 TUI 时，写盘常常已经完成；若此时按参数重新预览，
+    /// 读到的新文件对新文件就是空 diff。工具结果携带写盘前生成的 unified
+    /// diff 与增删统计，成功时优先用报告重建，报告缺失或失败时保留原快照。
+    ///
+    /// 参数:
+    /// - `ok`: 编辑是否成功
+    /// - `output`: 工具原始输出
+    ///
+    /// 返回:
+    /// - 无
+    pub(crate) fn finish_with_output(&mut self, ok: bool, output: &str) {
+        self.completed = Some(ok);
+        if !ok {
+            return;
+        }
+        let Some(report) = super::result_diff::parse_edit_result(output) else {
+            return;
+        };
+        if report.rendered.is_empty() || report.stats.is_none() {
+            return;
+        }
+        self.rendered = report.rendered;
+        self.stats = report.stats;
     }
 
     /// 编辑是否仍在执行。
@@ -308,13 +336,8 @@ fn fold_diff_body(body: &str, expanded: bool) -> String {
         return body.to_string();
     }
     let omitted = lines.len() - keep;
-    // 用「省略 N 行」而不是「+N 行」：后者会被读成新增行数，与徽标的 +N 撞车
-    let hint = format!(
-        "\x1b[2m\x1b[36m  └ … {} {omitted} {} (Ctrl+O {})\x1b[0m",
-        crate::i18n::text("omitted", "省略"),
-        crate::i18n::text("lines", "行"),
-        crate::i18n::text("to expand", "展开")
-    );
+    // 统一省略行样式：与思考/命令输出折叠一致的 dim 青色
+    let hint = crate::render::omitted_line::render_omitted_line(omitted, true);
     let mut output: Vec<String> = lines[..DIFF_FOLD_HEAD_LINES]
         .iter()
         .map(|line| (*line).to_string())

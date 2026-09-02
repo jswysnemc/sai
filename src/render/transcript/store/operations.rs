@@ -475,7 +475,9 @@ impl TranscriptStore {
             return;
         }
         // 编辑类已统一为 ToolView；仍兼容会话里残留的 DiffCell
-        if crate::render::stream_text::is_file_edit_tool(&name) && self.finish_active_diff(ok) {
+        if crate::render::stream_text::is_file_edit_tool(&name)
+            && self.finish_active_diff(ok, &output)
+        {
             self.refresh_active_tool_index();
             return;
         }
@@ -621,19 +623,24 @@ impl TranscriptStore {
 
     /// 结束当前活动的 edit_file Diff 单元。
     ///
+    /// 编辑结果里带有写盘前的真实 diff 与增删统计：事件跨线程送达时文件可能
+    /// 已写完，按参数重建预览只会得到空 diff；成功结果到达时用报告固化正文，
+    /// 报告缺失时保留流式阶段冻结的内容。
+    ///
     /// 参数:
     /// - `ok`: 编辑是否成功
+    /// - `output`: 工具原始输出
     ///
     /// 返回:
     /// - 是否命中 Diff cell
-    fn finish_active_diff(&mut self, ok: bool) -> bool {
+    fn finish_active_diff(&mut self, ok: bool, output: &str) -> bool {
         let Some(index) = self.find_pending_diff_index() else {
             return false;
         };
         let Some(HistoryCell::Diff(cell)) = self.cells.get_mut(index) else {
             return false;
         };
-        cell.finish(ok);
+        cell.finish_with_output(ok, output);
         self.mark_dirty(index);
         true
     }

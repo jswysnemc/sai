@@ -137,28 +137,21 @@ pub(crate) fn render_todo_output(
 /// 返回:
 /// - 包含条目状态和文本的可读标签
 fn changed_item_label(label: &str, changed: &[TodoItemView]) -> String {
-    // 标签动词由 tool_verb 生成（Updating/Updated），旧版 "Todo " 前缀已废弃
-    let Some((verb, rest)) = label.split_once(' ') else {
+    // 标签动词由 todo_call_label 生成（Marking/Marked/Editing/Edited 等），
+    // 定稿时用实际变更条目替换展示对象
+    let Some((verb, _)) = label.split_once(' ') else {
         return label.to_string();
     };
-    if !matches!(verb, "Updating" | "Updated") {
+    if !matches!(
+        verb,
+        "Marking" | "Marked" | "Editing" | "Edited" | "Adding" | "Added" | "Removing" | "Removed"
+    ) {
         return label.to_string();
     }
-    let Some(action) = rest
-        .split_whitespace()
-        .next()
-        .filter(|action| matches!(*action, "update" | "remove"))
-    else {
-        return label.to_string();
-    };
     let Some(item) = changed.first() else {
         return label.to_string();
     };
-    format!(
-        "{verb} {action} {} {}",
-        status_marker(&item.status),
-        item.text
-    )
+    format!("{verb} {} {}", status_marker(&item.status), item.text)
 }
 
 #[cfg(test)]
@@ -186,7 +179,7 @@ mod tests {
         assert!(rendered.contains('▶'));
     }
 
-    /// 更新结果使用条目内容和状态，不暴露内部 ID（标签动词为 Updated/Updating）。
+    /// 更新结果使用条目内容和状态，不暴露内部 ID（标签动词为 Marked/Marking 等）。
     #[test]
     fn update_summary_replaces_internal_id_with_changed_item() {
         let result = r#"{"ok":true,"changed":[
@@ -196,7 +189,7 @@ mod tests {
         ]}"#;
 
         let rendered = render_todo_output(
-            "Updated update todo_1786108008960_2_34858",
+            "Marked completed",
             result,
             true,
             ToolCallDisplayMode::Summary,
