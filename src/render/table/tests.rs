@@ -235,17 +235,38 @@ fn strip_ansi_for_test(text: &str) -> String {
     output
 }
 
-/// 【渲染】【表格对齐】验证未标注对齐的列居中。
+/// 【渲染】【表格对齐】表头内容居中、数据内容靠左。
 ///
-/// 列宽由最长单元格决定，贴左会让短内容散在大片空白的一侧。
+/// markdown 分隔行的对齐声明不再参与视觉,统一覆盖。
 #[test]
-fn unmarked_columns_are_centered() {
-    let alignments = parse_table_alignments("| --- | :--- | ---: | :---: |");
+fn header_cells_center_and_data_cells_left() {
+    let output = sample_table(&[
+        "| 名称 | 数量 |",
+        "| ---: | :--- |",
+        "| 短 | 1 |",
+        "| 长一些的内容 | 22 |",
+    ]);
+    let plain = strip_ansi_for_test(&output);
+    let lines = plain.lines().collect::<Vec<_>>();
 
-    assert!(matches!(alignments[0], TableAlign::Center));
-    assert!(matches!(alignments[1], TableAlign::Left));
-    assert!(matches!(alignments[2], TableAlign::Right));
-    assert!(matches!(alignments[3], TableAlign::Center));
+    // 表头行:两个单元格内容都应两侧有填充(居中)
+    let header = lines
+        .iter()
+        .find(|line| line.contains("名称"))
+        .expect("header row rendered");
+    assert!(
+        header.contains(" 名称 ") || header.contains("  名称 ") || header.contains("名称 "),
+        "表头应有居中留白: {header}"
+    );
+    // 数据行:内容紧贴列左缘(靠左),填充只出现在内容右侧
+    let data = lines
+        .iter()
+        .find(|line| line.contains("长一些的内容"))
+        .expect("data row rendered");
+    assert!(
+        data.contains("│ 长一些的内容") && !data.contains("长一些的内容  │"),
+        "数据内容应靠左: {data}"
+    );
 }
 
 /// 【渲染】【表格对齐】验证矮单元格在高行内垂直居中。
@@ -273,7 +294,7 @@ fn short_cells_are_vertically_centered_in_tall_rows() {
             math_source: None,
         },
     ];
-    let rendered = render_table_row(&row, &[3, 2], &[TableAlign::Left, TableAlign::Left], false);
+    let rendered = render_table_row(&row, &[3, 2], false);
     let lines = strip_ansi_for_test(&rendered)
         .lines()
         .map(str::to_string)

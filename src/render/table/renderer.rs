@@ -17,10 +17,12 @@ const VERTICAL: char = '│';
 
 /// 渲染单个表格数据行。
 ///
+/// 表头内容一律居中、数据内容一律靠左；markdown 分隔行的对齐声明
+/// 不参与最终视觉，统一被覆盖。
+///
 /// 参数:
 /// - `row`: 当前数据行
 /// - `widths`: 最终列宽
-/// - `alignments`: 每列对齐方式
 /// - `header`: 是否为表头
 ///
 /// 返回:
@@ -28,7 +30,6 @@ const VERTICAL: char = '│';
 pub(crate) fn render_table_row(
     row: &[CellContent],
     widths: &[usize],
-    alignments: &[TableAlign],
     header: bool,
 ) -> String {
     let wrapped: Vec<Vec<String>> = widths
@@ -89,11 +90,17 @@ pub(crate) fn render_table_row(
                 );
             } else {
                 let content_width = visible_width(&line);
+                // 表头内容一律居中、数据内容一律靠左
+                let align = if header {
+                    TableAlign::Center
+                } else {
+                    TableAlign::Left
+                };
                 output.push_str(&aligned_cell_with_width(
                     &line,
                     content_width,
                     *width,
-                    alignments.get(index).copied().unwrap_or(TableAlign::Left),
+                    align,
                 ));
             }
             output.push(' ');
@@ -356,7 +363,6 @@ fn aligned_cell_with_width(
     let padding = column_width.saturating_sub(content_width);
     match align {
         TableAlign::Left => format!("{cell}{}", " ".repeat(padding)),
-        TableAlign::Right => format!("{}{cell}", " ".repeat(padding)),
         TableAlign::Center => {
             let left = padding / 2;
             let right = padding - left;

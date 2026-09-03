@@ -10,7 +10,7 @@ mod tests;
 pub(crate) use layout::compute_table_widths;
 pub(crate) use model::{CellContent, TableAlign};
 pub(crate) use parser::{
-    is_table_separator, looks_like_table_row, parse_table_alignments, parse_table_row,
+    is_table_separator, looks_like_table_row, parse_table_row,
 };
 pub(crate) use renderer::{
     bottom_border, middle_border, render_table_row, top_border, visible_width,
@@ -35,23 +35,19 @@ pub(crate) fn render_table<F>(lines: &[String], render_cell: F) -> String
 where
     F: Fn(&str) -> CellContent + Copy,
 {
-    let alignments = lines
-        .get(1)
-        .filter(|line| is_table_separator(line))
-        .map(|line| parse_table_alignments(line))
-        .unwrap_or_default();
-    let mut rows = lines
+    let rows = lines
         .iter()
         .filter(|line| !is_table_separator(line))
         .map(|line| parse_table_row(line, render_cell))
         .collect::<Vec<_>>();
     let widths = compute_table_widths(&rows);
+    let mut rows = rows;
     refit_math_image_cells(&mut rows, &widths);
 
     let mut output = String::new();
     output.push_str(&top_border(&widths));
     for (row_index, row) in rows.iter().enumerate() {
-        output.push_str(&render_table_row(row, &widths, &alignments, row_index == 0));
+        output.push_str(&render_table_row(row, &widths, row_index == 0));
         if row_index + 1 < rows.len() {
             output.push_str(&middle_border(&widths));
         }

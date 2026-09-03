@@ -1,11 +1,14 @@
 use super::visible_width;
 
 /// Markdown 表格列的对齐方式。
+///
+/// 表头固定居中、数据固定靠左,列对齐不再由 markdown 声明驱动;
+/// Right 保留给潜在的未来用途。
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub(crate) enum TableAlign {
     Left,
     Center,
-    Right,
 }
 
 /// 已渲染的表格单元格内容，携带终端显示宽度与图片元数据。

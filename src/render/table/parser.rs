@@ -1,4 +1,4 @@
-use super::{CellContent, TableAlign};
+use super::CellContent;
 
 /// 判断一行是否为 Markdown 表格分隔行。
 ///
@@ -43,30 +43,6 @@ where
     split_table_cells(line)
         .into_iter()
         .map(|cell| render_cell(&cell))
-        .collect()
-}
-
-/// 解析表格对齐标记。
-///
-/// 参数:
-/// - `line`: Markdown 分隔行
-///
-/// 返回:
-/// - 每列对齐方式
-pub(crate) fn parse_table_alignments(line: &str) -> Vec<TableAlign> {
-    split_table_cells(line)
-        .into_iter()
-        .map(|cell| {
-            let cell = cell.trim();
-            match (cell.starts_with(':'), cell.ends_with(':')) {
-                (true, true) => TableAlign::Center,
-                (false, true) => TableAlign::Right,
-                (true, false) => TableAlign::Left,
-                // 未标注对齐时居中：终端表格列宽由最长单元格决定，
-                // 贴左会让短内容散在大片空白的一侧；显式 :--- 仍可强制左对齐
-                (false, false) => TableAlign::Center,
-            }
-        })
         .collect()
 }
 
