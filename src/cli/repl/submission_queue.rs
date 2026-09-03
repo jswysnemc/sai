@@ -126,9 +126,16 @@ pub(super) async fn drain_submission_queue(
                 stream_render_options(config),
                 false,
             );
-            let outcome =
-                execute_repl_turn(paths, config, agent, runtime, owner_key, runner_submission)
-                    .await?;
+            let outcome = execute_repl_turn(
+                paths,
+                config,
+                agent,
+                runtime,
+                owner_key,
+                runner_submission,
+                session_link.event_bus(),
+            )
+            .await?;
             apply_stream_mode(runtime, mode);
             if outcome.exit_requested {
                 discard_remaining_queue(runtime, pending)?;

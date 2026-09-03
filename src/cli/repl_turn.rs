@@ -70,6 +70,7 @@ pub(super) fn automatic_repl_submission(
 /// - `reasoning_mode`: 推理内容展示模式
 /// - `tool_call_mode`: 工具调用展示模式
 /// - `wake`: Goal 续轮或外部完成事件
+/// - `event_bus`: 会话事件总线，转发给轮次执行
 ///
 /// 返回:
 /// - 自动轮次执行结果
@@ -83,6 +84,7 @@ pub(super) async fn execute_automatic_repl_turn(
     reasoning_mode: render::ReasoningDisplayMode,
     tool_call_mode: render::ToolCallDisplayMode,
     wake: ExternalEventWake,
+    event_bus: Option<crate::runner::ActorHandle>,
 ) -> Result<ReplTurnOutcome> {
     if agent.installed_mode() != mode {
         let registry = build_repl_tool_registry(config, paths, mode)?;
@@ -104,6 +106,7 @@ pub(super) async fn execute_automatic_repl_turn(
         runtime,
         owner_key,
         automatic.submission,
+        event_bus,
     )
     .await?;
     // 中断同样算作已消费：用户按下 Ctrl+C 就是看到了这批回执并主动放弃。
@@ -127,6 +130,7 @@ pub(super) async fn execute_automatic_repl_turn(
 /// - `runtime`: TUI 运行期
 /// - `owner_key`: 当前会话的子智能体作用域键
 /// - `submission`: 用户或自动输入 submission
+/// - `event_bus`: 会话事件总线；持有者模式下把 RunnerEvent 广播给跟随端
 ///
 /// 返回:
 /// - 中断标志、退出请求与对话执行结果
@@ -137,6 +141,7 @@ pub(super) async fn execute_repl_turn(
     runtime: &mut ReplRuntime,
     owner_key: &str,
     submission: crate::runner::RunnerSubmission,
+    event_bus: Option<crate::runner::ActorHandle>,
 ) -> Result<ReplTurnOutcome> {
     let runner = crate::runner::SessionRunner::new(paths)
         .with_config(config.clone())
@@ -146,10 +151,26 @@ pub(super) async fn execute_repl_turn(
     // 一旦通道满而阻塞就会卡住整个 tokio worker 线程；无界通道下由消费侧
     // 每 25ms 的排空节奏承担背压
     let (event_tx, event_rx) = std::sync::mpsc::channel::<crate::runner::RunnerEvent>();
+    // 同一事件还要进会话事件总线：跟随端靠它实时看到本轮的流式输出与工具
+    // 活动。总线只入队不 await，失败也不影响本地渲染——对端失联不该拖垮本轮
+    let (run_input, run_images) = match submission.kind {
+        crate::runner::RunnerSubmissionKind::UserInput(ref input) => {
+            (input.input.clone(), input.image_urls.clone())
+        }
+        _ => (String::new(), Vec::new()),
+    };
+    if let Some(bus) = event_bus.as_ref() {
+        let run_id = format!("run_{}", uuid::Uuid::new_v4().simple());
+        let _ = bus.begin_run(&run_id, &run_input, &run_images);
+    }
     let mut sink = |event: crate::runner::RunnerEvent| {
         event_tx
-            .send(event)
-            .map_err(|_| anyhow::anyhow!("runner event channel is closed"))
+            .send(event.clone())
+            .map_err(|_| anyhow::anyhow!("runner event channel is closed"))?;
+        if let Some(bus) = event_bus.as_ref() {
+            let _ = bus.publish(event);
+        }
+        Ok(())
     };
     let stream_mode = submission.mode;
     // 命令上下文必须在建 chat future 之前抓取：之后 Agent 被独占借用，

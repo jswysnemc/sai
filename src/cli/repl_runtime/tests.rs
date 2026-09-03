@@ -569,3 +569,80 @@ fn stream_mode_prefers_draft_mode() {
         crate::agent::AgentMode::Plan
     );
 }
+
+/// 构造一条跟随流事件。
+///
+/// 参数:
+/// - `kind`: 事件类型
+/// - `payload`: 事件负载
+///
+/// 返回:
+/// - Web 事件
+fn follow_event(kind: &str, payload: serde_json::Value) -> crate::web::runs::WebEvent {
+    crate::web::runs::WebEvent::new("run-1", "workspace", "session", kind, payload)
+}
+
+/// 【跟随模式】远端正文分片实时进入 live tail,不再等轮次结束才落盘。
+///
+/// 流式渲染只输出到最近一个换行(与持有者本地 live tail 同一语义),
+/// 分片带换行符模拟真实模型输出。
+#[test]
+fn follow_stream_renders_content_deltas_live() {
+    let mut runtime = ReplRuntime::new(5_000, options());
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    runtime.follow_remote_stream(rx);
+
+    tx.send(follow_event(
+        "message.content.delta",
+        serde_json::json!({ "text": "远端流式正文第一行\n" }),
+    ))
+    .unwrap();
+    let progressed = runtime.drain_follow_events().unwrap();
+    assert!(progressed, "有事件就应当推进");
+
+    let rendered = runtime
+        .transcript
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    let plain = crate::render::activity_animation::strip_ansi_for_test(&rendered);
+    assert!(plain.contains("远端流式正文第一行"), "正文应实时可见: {plain}");
+
+    // 轮次结束收敛 live tail,正文仍保留
+    tx.send(follow_event("run.completed", serde_json::json!({}))).unwrap();
+    runtime.drain_follow_events().unwrap();
+    let rendered = runtime
+        .transcript
+        .display_tail(80, &options())
+        .iter()
+        .map(|line| line.as_str())
+        .collect::<String>();
+    let plain = crate::render::activity_animation::strip_ansi_for_test(&rendered);
+    assert!(plain.contains("远端流式正文第一行"), "定稿后正文不丢: {plain}");
+}
+
+/// 【跟随模式】接入跟随流后读键等待必须周期性唤醒,否则主循环阻塞在读键上,
+/// 远端事件要等用户按键才落地。
+#[test]
+fn follow_stream_wakes_the_idle_tick() {
+    let mut runtime = ReplRuntime::new(5_000, options());
+    assert!(
+        runtime.pending_wait().is_none(),
+        "未跟随时无额外唤醒"
+    );
+
+    let (_tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    runtime.follow_remote_stream(rx);
+    assert!(
+        runtime.pending_wait().is_some(),
+        "跟随流存在时必须周期性唤醒"
+    );
+
+    runtime.stop_following();
+    assert!(
+        runtime.pending_wait().is_none(),
+        "停止跟随后不再唤醒"
+    );
+}
+

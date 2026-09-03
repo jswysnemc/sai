@@ -78,6 +78,18 @@ impl ReplSessionLink {
             .map_or(LinkRole::Detached, SessionLink::role)
     }
 
+    /// 返回会话事件总线的克隆句柄。
+    ///
+    /// 持有者用它把本轮 RunnerEvent 广播给所有跟随端；观察者侧拿到的是
+    /// 远端镜像句柄（publish 走 mirror 上行），因此统一返回即可，调用方
+    /// 无需按角色区分。
+    ///
+    /// 返回:
+    /// - 链接存在时的事件总线句柄
+    pub(super) fn event_bus(&self) -> Option<crate::runner::ActorHandle> {
+        self.bus.clone()
+    }
+
     /// 把本终端的一次提交上行给会话持有者代跑。
     ///
     /// 观察者不持有 Agent，自己跑会与持有者互相覆盖同一份会话状态；

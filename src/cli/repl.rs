@@ -189,6 +189,7 @@ pub(super) async fn run_repl(
                         transcript_options.reasoning_mode,
                         transcript_options.tool_call_mode,
                         wake,
+                        session_link.event_bus(),
                     )
                     .await?;
                     if outcome.exit_requested {
@@ -753,6 +754,7 @@ pub(super) async fn run_repl(
             &mut runtime,
             &owner_key,
             runner_submission,
+            session_link.event_bus(),
         )
         .await?;
         apply_stream_mode(&runtime, &mut mode);

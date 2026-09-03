@@ -231,7 +231,7 @@ impl ReplRuntime {
     ///
     /// 返回:
     /// - 无
-    fn arm_live_ticker(&mut self) {
+    pub(super) fn arm_live_ticker(&mut self) {
         if self.next_live_refresh.is_none() {
             self.next_live_refresh = Some(Instant::now() + LIVE_REFRESH_INTERVAL);
         }
@@ -244,7 +244,7 @@ impl ReplRuntime {
     ///
     /// 返回:
     /// - 操作是否成功
-    fn throttled_live_sync(&mut self) -> Result<()> {
+    pub(super) fn throttled_live_sync(&mut self) -> Result<()> {
         let now = Instant::now();
         if let Some(next) = self.next_live_refresh {
             if now < next {

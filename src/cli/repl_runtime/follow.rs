@@ -1,23 +1,22 @@
 //! 跟随模式（P4）：把会话持有者下行的事件渲染进 TUI transcript。
 //!
 //! 本进程是观察者时，会话由另一个 sai 实例驱动：本终端不再执行轮次，
-//! 只把对端的一轮输出按纯文本补进 transcript，让用户知道那边在做什么。
-//!
-//! 刻意不把它做成完整的远端渲染（`record_runner_event` 那套流式渲染）：
-//! 那条路径与轮次生命周期、权限弹窗、工作区状态深度耦合，而观察者侧拿到的
-//! 是已经组装好的 `WebEvent`，反推回 `RunnerEvent` 会引入一整类难以验证的
-//! 状态错位。**先看得到、且不会坏**，比渲染得漂亮更重要。
+//! 只把对端的输出渲染进 transcript。正文分片经 `push_chunk` 进入 live
+//! tail 实时滚动——与持有者本地的流式渲染共用同一条路径，但没有轮次
+//! 生命周期、权限弹窗的耦合：交互类事件只落一行提示，权限仍在持有者
+//! 的终端里由它自己处理。
 
 use super::ReplRuntime;
 use crate::i18n::text as t;
+use crate::llm::{ChatStreamChunk, ChatStreamKind};
 use crate::web::runs::WebEvent;
 use anyhow::Result;
 use tokio::sync::mpsc;
 
 /// 跟随模式下累积的远端输出。
 ///
-/// 正文分片逐条到达，攒到轮次结束再整段落进 transcript：分片插进去会让
-/// transcript 每行一个 meta 单元，滚屏时无法阅读。
+/// 工具调用等非正文事件的提示文本；正文分片已经实时进入 live tail，
+/// 不再需要整轮缓存。
 #[derive(Default)]
 pub(in crate::cli) struct FollowBuffer {
     text: String,
@@ -85,6 +84,7 @@ impl ReplRuntime {
             // 否则跟随端只见回答不见提问
             super::super::repl_session_link::USER_SUBMITTED_EVENT => {
                 self.flush_follow_buffer()?;
+                self.transcript.finalize_live_tail();
                 let text = event
                     .payload
                     .get("input")
@@ -95,15 +95,42 @@ impl ReplRuntime {
                     self.record_user(crate::agent::AgentMode::Yolo, text, false)?;
                 }
             }
-            // 新一轮开始：先把上一轮没收尾的输出落下去
-            "run.started" => self.flush_follow_buffer()?,
+            // 新一轮开始：收尾上一轮，进入思考动效——与持有者同款状态行
+            "run.started" => {
+                self.flush_follow_buffer()?;
+                self.transcript.finalize_live_tail();
+                self.transcript.set_work_status(
+                    crate::render::work_status::WorkStatus::WaitingResponse,
+                );
+                self.arm_live_ticker();
+                self.sync_transcript(true)?;
+            }
+            // 正文与思考分片直接进入 live tail，实时滚动
             "message.content.delta" => {
                 if let Some(text) = event.payload.get("text").and_then(|text| text.as_str()) {
-                    self.follow_buffer.text.push_str(text);
+                    if !text.is_empty() {
+                        self.transcript.push_chunk(&ChatStreamChunk {
+                            kind: ChatStreamKind::Content,
+                            text: text.to_string(),
+                        });
+                        self.throttled_live_sync()?;
+                    }
+                }
+            }
+            "message.reasoning.delta" => {
+                if let Some(text) = event.payload.get("text").and_then(|text| text.as_str()) {
+                    if !text.is_empty() {
+                        self.transcript.push_chunk(&ChatStreamChunk {
+                            kind: ChatStreamKind::Reasoning,
+                            text: text.to_string(),
+                        });
+                        self.throttled_live_sync()?;
+                    }
                 }
             }
             "tool.call.started" => {
                 self.flush_follow_buffer()?;
+                self.transcript.finalize_live_tail();
                 let name = event
                     .payload
                     .get("name")
@@ -131,15 +158,26 @@ impl ReplRuntime {
                     .to_string(),
                 )?;
             }
-            "run.completed" => self.flush_follow_buffer()?,
+            "run.completed" => {
+                self.flush_follow_buffer()?;
+                self.transcript.finalize_live_tail();
+                self.transcript.clear_work_status();
+                self.sync_transcript(false)?;
+            }
             "run.interrupted" => {
                 self.flush_follow_buffer()?;
+                self.transcript.finalize_live_tail();
+                self.transcript.clear_work_status();
+                self.sync_transcript(false)?;
                 self.record_meta(
                     t("the holder interrupted this run", "持有者中断了这一轮").to_string(),
                 )?;
             }
             "run.failed" => {
                 self.flush_follow_buffer()?;
+                self.transcript.finalize_live_tail();
+                self.transcript.clear_work_status();
+                self.sync_transcript(false)?;
                 let message = event
                     .payload
                     .get("message")
@@ -155,7 +193,7 @@ impl ReplRuntime {
         Ok(())
     }
 
-    /// 把累积的远端正文整段落进 transcript。
+    /// 把累积的远端提示文本整段落进 transcript。
     ///
     /// 返回:
     /// - 无

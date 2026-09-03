@@ -359,10 +359,21 @@ impl ReplRuntime {
             .transcript
             .viewing_running_subagent()
             .then_some(LIVE_REFRESH_INTERVAL);
-        [reflow_wait, subagent_wait, animation_wait]
-            .into_iter()
-            .flatten()
-            .min()
+        // 跟随模式下远端事件持续到达：读键必须周期性醒来排空，
+        // 否则主循环阻塞在 event::read，跟随端要等用户按键才更新
+        let follow_wait = self
+            .follow_events
+            .is_some()
+            .then_some(LIVE_REFRESH_INTERVAL);
+        [
+            reflow_wait,
+            subagent_wait,
+            animation_wait,
+            follow_wait,
+        ]
+        .into_iter()
+        .flatten()
+        .min()
     }
 
     /// 重放已经到期的 resize 请求。
