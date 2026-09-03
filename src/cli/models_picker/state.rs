@@ -285,7 +285,7 @@ fn model_matches(choice: &ProviderModelChoice, needle: &str) -> bool {
 ///
 /// 返回:
 /// - 不越界的新下标
-fn next_index(index: usize, len: usize) -> usize {
+pub(super) fn next_index(index: usize, len: usize) -> usize {
     if len == 0 {
         return 0;
     }

@@ -1,5 +1,6 @@
 mod render;
 mod state;
+mod subagents;
 
 use crate::config::AppConfig;
 use crate::i18n::text as t;
@@ -91,7 +92,7 @@ pub(super) fn run_interactive(paths: &SaiPaths) -> Result<PickerOutcome> {
     );
 
     // 2. 进入交互循环
-    let Some(()) = run_loop(&mut picker)? else {
+    let Some(()) = run_loop(&mut picker, &mut config, paths)? else {
         return Ok(PickerOutcome::Cancelled);
     };
 
@@ -118,10 +119,16 @@ pub(super) fn run_interactive(paths: &SaiPaths) -> Result<PickerOutcome> {
 ///
 /// 参数:
 /// - `picker`: 选择状态
+/// - `config`: 应用配置，供子智能体模型设置写回
+/// - `paths`: Sai 路径集合，用于配置落盘
 ///
 /// 返回:
 /// - 确认时返回 Some(())，取消时返回 None
-fn run_loop(picker: &mut PickerState) -> Result<Option<()>> {
+fn run_loop(
+    picker: &mut PickerState,
+    config: &mut AppConfig,
+    paths: &SaiPaths,
+) -> Result<Option<()>> {
     let was_raw = terminal::is_raw_mode_enabled().unwrap_or(false);
     if !was_raw {
         terminal::enable_raw_mode()?;
@@ -166,6 +173,10 @@ fn run_loop(picker: &mut PickerState) -> Result<Option<()>> {
             KeyCode::Down => picker.move_down(),
             KeyCode::Left => picker.focus_model(),
             KeyCode::Right => picker.focus_thinking(),
+            KeyCode::Tab => {
+                // 子智能体模型设置与主选择器共用同一锚点绘制区
+                subagents::run(&mut stdout, anchor_y, frame_rows, config, paths)?;
+            }
             KeyCode::Backspace => picker.pop_filter(),
             KeyCode::Delete => picker.clear_filter(),
             KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {

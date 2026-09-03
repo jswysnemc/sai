@@ -22,12 +22,12 @@ pub(super) fn frame_row_count() -> u16 {
     FRAME_FIXED_ROWS
 }
 /// 聚焦列的高亮样式
-const FOCUS_STYLE: &str = "\x1b[1m\x1b[38;2;190;246;255m";
+pub(super) const FOCUS_STYLE: &str = "\x1b[1m\x1b[38;2;190;246;255m";
 /// 选中项样式
-const SELECTED_STYLE: &str = "\x1b[38;2;92;176;194m";
+pub(super) const SELECTED_STYLE: &str = "\x1b[38;2;92;176;194m";
 /// 弱化样式
-const DIM_STYLE: &str = "\x1b[2m";
-const RESET: &str = "\x1b[0m";
+pub(super) const DIM_STYLE: &str = "\x1b[2m";
+pub(super) const RESET: &str = "\x1b[0m";
 
 /// 【CLI】【模型选择】渲染无品牌 Logo 的双列选择界面。
 ///
@@ -187,8 +187,8 @@ fn footer_line() -> String {
     format!(
         "{DIM_STYLE}{}{RESET}",
         t(
-            "Type to filter · Backspace edit · Ctrl+U clear · ↑/↓ choose · ←/→ switch · Enter save · Esc cancel",
-            "输入过滤 · Backspace 删除 · Ctrl+U 清空 · ↑/↓ 选择 · ←/→ 切换 · Enter 保存 · Esc 取消",
+            "Type to filter · Backspace edit · Ctrl+U clear · ↑/↓ choose · ←/→ switch · Tab subagents · Enter save · Esc cancel",
+            "输入过滤 · Backspace 删除 · Ctrl+U 清空 · ↑/↓ 选择 · ←/→ 切换 · Tab 子智能体 · Enter 保存 · Esc 取消",
         )
     )
 }
@@ -201,7 +201,7 @@ fn footer_line() -> String {
 ///
 /// 返回:
 /// - 不超过最大宽度的文本
-fn truncate(text: &str, width: usize) -> String {
+pub(super) fn truncate(text: &str, width: usize) -> String {
     if UnicodeWidthStr::width(text) <= width {
         return text.to_string();
     }

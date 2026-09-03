@@ -301,6 +301,59 @@ impl crate::config::AppConfig {
             .into_iter()
             .find(|profile| profile.register_to_main && profile.id == requested)
     }
+
+    /// 为指定 Agent 写入或清除供应商/模型覆盖。
+    ///
+    /// 内置与旧版迁移档案尚未落盘时，先物化完整档案再改写，
+    /// 避免只含 id 与模型的空档案覆盖工具白名单等内置能力。
+    /// 空的供应商标识表示恢复「沿用当前模型」。
+    ///
+    /// 参数:
+    /// - `agent_id`: Agent 标识
+    /// - `provider_id`: 供应商标识；空表示沿用当前供应商
+    /// - `model`: 模型名称；空表示沿用该供应商当前模型
+    ///
+    /// 返回:
+    /// - 是否改动了配置
+    pub fn set_agent_model(&mut self, agent_id: &str, provider_id: &str, model: &str) -> bool {
+        let Some(profile) = self
+            .resolved_agent_profiles()
+            .into_iter()
+            .find(|profile| profile.id == agent_id)
+        else {
+            return false;
+        };
+        let provider_id = provider_id.trim();
+        let model = model.trim();
+        if let Some(existing) = self
+            .agents
+            .iter_mut()
+            .find(|existing| existing.id == agent_id)
+        {
+            let mut changed = false;
+            if existing.provider_id != provider_id {
+                existing.provider_id = provider_id.to_string();
+                changed = true;
+            }
+            if existing.model != model {
+                existing.model = model.to_string();
+                changed = true;
+            }
+            changed
+        } else if !provider_id.is_empty()
+            || !profile.provider_id.is_empty()
+            || !profile.model.is_empty()
+        {
+            // 未配置档案仅在需要固定或清除既有覆盖时物化，避免无谓膨胀配置
+            let mut materialized = profile;
+            materialized.provider_id = provider_id.to_string();
+            materialized.model = model.to_string();
+            self.agents.push(materialized);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 /// 把指定 Agent 档案应用到运行期配置。
