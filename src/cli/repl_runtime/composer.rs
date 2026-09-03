@@ -446,22 +446,6 @@ impl ReplRuntime {
         self.draw_composer()
     }
 
-    /// 更新底栏会话标题。
-    ///
-    /// 参数:
-    /// - `title`: 新标题
-    ///
-    /// 返回:
-    /// - 无
-    pub(in crate::cli) fn set_session_title(&mut self, title: String) {
-        if let Some(frame) = self.composer.as_mut() {
-            frame.chrome_mut().set_session_title(title.clone());
-        }
-        if let Some(chrome) = self.last_chrome.as_mut() {
-            chrome.set_session_title(title);
-        }
-    }
-
     /// 结束 composer 绘制并释放底部 viewport 给历史输出。
     ///
     /// 返回:

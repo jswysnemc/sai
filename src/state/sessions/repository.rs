@@ -33,7 +33,23 @@ pub fn title_from_message_public(message: &str, fallback: &str) -> String {
 /// - 新会话信息
 pub fn create_session(paths: &SaiPaths, title: Option<&str>) -> Result<SessionInfo> {
     let scope = current_session_scope(paths)?;
-    create_session_in_scope(&scope, title)
+    create_session_record(&scope, title, true)
+}
+
+/// 创建新会话但保持当前会话不变。
+///
+/// 供网格的 `session_create` 使用：创建只是登记，激活（切换当前会话）是
+/// 独立的显式动作，交给 `switch_session_located` 完成。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+/// - `title`: 可选会话标题
+///
+/// 返回:
+/// - 新会话信息
+pub fn create_session_detached(paths: &SaiPaths, title: Option<&str>) -> Result<SessionInfo> {
+    let scope = current_session_scope(paths)?;
+    create_session_record(&scope, title, false)
 }
 
 /// 在指定工作区创建新会话并设为该工作区当前会话。
@@ -51,18 +67,23 @@ pub fn create_session_for_workspace(
     title: Option<&str>,
 ) -> Result<SessionInfo> {
     let scope = super::workspace::workspace_scope_for_path(paths, workspace_path);
-    create_session_in_scope(&scope, title)
+    create_session_record(&scope, title, true)
 }
 
-/// 在指定会话作用域创建并切换会话。
+/// 在指定会话作用域创建会话，可选同时切换当前指针。
 ///
 /// 参数:
 /// - `scope`: 工作区会话作用域
 /// - `title`: 可选会话标题
+/// - `activate`: 是否把新会话设为当前会话
 ///
 /// 返回:
 /// - 新会话信息
-fn create_session_in_scope(scope: &WorkspaceScope, title: Option<&str>) -> Result<SessionInfo> {
+fn create_session_record(
+    scope: &WorkspaceScope,
+    title: Option<&str>,
+    activate: bool,
+) -> Result<SessionInfo> {
     let now = Utc::now().to_rfc3339();
     let session = SessionInfo {
         id: new_session_id(),
@@ -77,7 +98,9 @@ fn create_session_in_scope(scope: &WorkspaceScope, title: Option<&str>) -> Resul
     let mut sessions = ensure_default_session_for_base(&scope.state_dir)?;
     sessions.insert(0, session.clone());
     save_sessions_to_base(&scope.state_dir, &sessions)?;
-    write_current_session_id_to_base(&scope.state_dir, &session.id)?;
+    if activate {
+        write_current_session_id_to_base(&scope.state_dir, &session.id)?;
+    }
     std::fs::create_dir_all(session_state_dir(&scope.state_dir, &session.id))?;
     Ok(session)
 }
@@ -92,13 +115,42 @@ fn create_session_in_scope(scope: &WorkspaceScope, title: Option<&str>) -> Resul
 /// - 当前会话信息
 pub fn switch_session(paths: &SaiPaths, session_id: &str) -> Result<SessionInfo> {
     let scope = current_session_scope(paths)?;
+    switch_session_in_base(&scope.state_dir, session_id)
+}
+
+/// 跨工作区切换会话：把目标会话所在工作区的当前指针指向它。
+///
+/// 与 `switch_session` 不同：目标不在当前工作区时不报错，而是切换它
+/// 所属工作区的指针——那个工作区里打开着的终端随后能 /resume 进该会话。
+/// 供网格的 `session_activate` 使用。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+/// - `session_id`: 会话 ID
+///
+/// 返回:
+/// - 切换后的会话信息
+pub fn switch_session_located(paths: &SaiPaths, session_id: &str) -> Result<SessionInfo> {
+    let (base, _) = locate_session_dirs(paths, session_id)?;
+    switch_session_in_base(&base, session_id)
+}
+
+/// 在指定工作区作用域内把当前指针切到目标会话。
+///
+/// 参数:
+/// - `base_state_dir`: 工作区会话作用域目录
+/// - `session_id`: 会话 ID
+///
+/// 返回:
+/// - 切换后的会话信息
+fn switch_session_in_base(base_state_dir: &Path, session_id: &str) -> Result<SessionInfo> {
     let session_id = session_id.trim();
-    let session = ensure_default_session_for_base(&scope.state_dir)?
+    let session = ensure_default_session_for_base(base_state_dir)?
         .into_iter()
         .find(|session| session.id == session_id)
         .with_context(|| format!("session not found: {session_id}"))?;
-    write_current_session_id_to_base(&scope.state_dir, &session.id)?;
-    std::fs::create_dir_all(session_state_dir(&scope.state_dir, &session.id))?;
+    write_current_session_id_to_base(base_state_dir, &session.id)?;
+    std::fs::create_dir_all(session_state_dir(base_state_dir, &session.id))?;
     Ok(session)
 }
 

@@ -14,8 +14,6 @@ pub(super) struct ReplChrome {
     pub(super) directory: String,
     /// 当前轮累计缓存命中率，轮次进行中才有值
     pub(super) cache_hit_ratio: Option<f32>,
-    /// 当前会话标题，未命名时可为空
-    pub(super) session_title: String,
     /// 底栏左侧附加活动提示，如 `Ctrl+C 停止`
     pub(super) activity: Option<String>,
     /// 底栏左侧常驻的主从角色标记，如 `跟随中`；持有者与单进程时为空
@@ -61,7 +59,6 @@ impl ReplChrome {
             thinking,
             directory,
             cache_hit_ratio: None,
-            session_title: String::new(),
             activity: None,
             role_badge: None,
         }
@@ -73,17 +70,6 @@ impl ReplChrome {
     /// - `mode`: 新模式
     pub(super) fn set_mode(&mut self, mode: AgentMode) {
         self.mode = mode;
-    }
-
-    /// 写入当前会话标题。
-    ///
-    /// 参数:
-    /// - `title`: 会话标题
-    ///
-    /// 返回:
-    /// - 无
-    pub(super) fn set_session_title(&mut self, title: String) {
-        self.session_title = title;
     }
 
     /// 写入底栏活动提示。
@@ -219,7 +205,8 @@ impl ReplChrome {
         let cols = cols.max(1);
         let pad = CHROME_FOOTER_SIDE_PAD.min(cols.saturating_sub(1) / 2);
         let inner = cols.saturating_sub(pad.saturating_mul(2)).max(1);
-        let right_plain = footer_right_text(&self.session_title, &self.directory);
+        // 右侧只放工作目录；会话以 id 键控，标题不再进底栏
+        let right_plain = self.directory.clone();
         // 1. 在扣除左右外边距后的净宽上裁剪，避免贴边
         let (left_text, right_text, gap) = fit_status_segments(&left_plain, &right_plain, inner);
         // 2. 裁剪后再着色，避免 ANSI 干扰宽度计算
@@ -235,27 +222,6 @@ impl ReplChrome {
             " ".repeat(gap),
             " ".repeat(pad)
         )
-    }
-}
-
-/// 底栏右侧：会话标题（截断）加工作目录。
-///
-/// 参数:
-/// - `title`: 会话标题
-/// - `directory`: 压缩后的工作目录
-///
-/// 返回:
-/// - 右侧纯文本
-fn footer_right_text(title: &str, directory: &str) -> String {
-    let title = title.trim();
-    if title.is_empty() {
-        return directory.to_string();
-    }
-    let short: String = title.chars().take(16).collect();
-    if title.chars().count() > 16 {
-        format!("{short}…  {directory}")
-    } else {
-        format!("{short}  {directory}")
     }
 }
 
@@ -594,7 +560,6 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
-            session_title: String::new(),
             activity: None,
             role_badge: None,
         }
@@ -666,15 +631,23 @@ mod tests {
         assert!(line.contains("gpt · xhigh"));
     }
 
+    /// 【TUI】【底栏】会话标题不再进底栏，右侧只剩工作目录。
     #[test]
-    fn footer_puts_session_title_before_directory() {
-        let mut chrome = test_chrome();
-        chrome.set_session_title("demo-session".to_string());
+    fn footer_keeps_only_the_directory_on_the_right() {
+        let chrome = test_chrome();
         let line = chrome.footer_line(80);
         let plain = strip_ansi(&line);
-        let title = plain.find("demo-session").expect("title");
-        let directory = plain.find("/workspace").expect("directory");
-        assert!(title < directory, "{plain}");
+        let trimmed = plain.trim_end();
+        assert!(
+            trimmed.ends_with("/workspace"),
+            "右侧最后一段必须是目录: {plain}"
+        );
+        // 目录与左侧状态之间只允许 gap 空白，不允许再混入标题等其它段落
+        let directory_at = trimmed.len() - "/workspace".len();
+        assert!(
+            plain[..directory_at].trim_end().ends_with("auto"),
+            "左侧状态与目录之间不应有其它段落: {plain}"
+        );
     }
 
     #[test]
@@ -697,7 +670,6 @@ mod tests {
             thinking: "xhigh".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
-            session_title: String::new(),
             activity: None,
             role_badge: None,
         };
@@ -732,7 +704,6 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/home/snemc/workspace/sai/very/long/path/segment".to_string(),
             cache_hit_ratio: None,
-            session_title: String::new(),
             activity: None,
             role_badge: None,
         };

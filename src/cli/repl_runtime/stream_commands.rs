@@ -108,7 +108,7 @@ pub(in crate::cli) fn run_immediate_stream_command(
         Ok(Some(ControlCommand::Rename { title })) => {
             match crate::control_commands::rename_current_session(&ctx.paths, &title) {
                 Ok(message) => {
-                    runtime.set_session_title(title);
+                    // 底栏不再展示会话标题，改名无需同步 chrome
                     runtime.record_meta(message)?;
                     runtime.redraw_stream_composer()
                 }

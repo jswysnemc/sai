@@ -156,17 +156,6 @@ impl ComposerFrame {
         &self.chrome
     }
 
-    /// 返回可改写的 chrome 状态。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - chrome 可变引用
-    pub(super) fn chrome_mut(&mut self) -> &mut ReplChrome {
-        &mut self.chrome
-    }
-
     /// 返回 composer 在指定终端宽度下的视觉行数。
     ///
     /// 参数:
@@ -590,7 +579,6 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
-            session_title: String::new(),
             activity: None,
             role_badge: None,
         };
@@ -622,7 +610,6 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
-            session_title: String::new(),
             activity: None,
             role_badge: None,
         };
@@ -673,7 +660,6 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
-            session_title: String::new(),
             activity: None,
             role_badge: None,
         };
@@ -719,7 +705,6 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
-            session_title: String::new(),
             activity: None,
             role_badge: None,
         };
@@ -755,7 +740,6 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/tmp".to_string(),
             cache_hit_ratio: None,
-            session_title: String::new(),
             activity: None,
             role_badge: None,
         };
@@ -791,7 +775,6 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
-            session_title: String::new(),
             activity: None,
             role_badge: None,
         };
@@ -823,7 +806,6 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
-            session_title: String::new(),
             activity: None,
             role_badge: None,
         };
@@ -859,7 +841,6 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
-            session_title: String::new(),
             activity: None,
             role_badge: None,
         };
@@ -889,7 +870,6 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
-            session_title: String::new(),
             activity: None,
             role_badge: None,
         };
@@ -920,7 +900,6 @@ mod tests {
             thinking: "auto".to_string(),
             directory: "/workspace".to_string(),
             cache_hit_ratio: None,
-            session_title: String::new(),
             activity: None,
             role_badge: None,
         };

@@ -2,6 +2,8 @@ mod address;
 mod agent_probe;
 mod mailbox;
 mod send;
+mod session_activate;
+mod session_create;
 mod session_probe;
 #[cfg(test)]
 mod tests;
@@ -57,7 +59,9 @@ pub(crate) fn register(
     };
     session_probe::register(registry, context.clone());
     agent_probe::register(registry, context.clone());
-    send::register(registry, context);
+    send::register(registry, context.clone());
+    session_create::register(registry, context.clone());
+    session_activate::register(registry, context);
 }
 
 /// 返回当前会话自己的地址。

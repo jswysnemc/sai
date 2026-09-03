@@ -48,6 +48,47 @@ mod tests {
     }
 
     #[test]
+    fn create_session_detached_keeps_current_session() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path().to_path_buf());
+
+        let current = create_session(&paths, Some("Current")).unwrap();
+        let detached = create_session_detached(&paths, Some("Detached")).unwrap();
+
+        // 创建不激活：当前指针仍指原会话，新会话已入索引
+        assert_eq!(ensure_active_session(&paths).unwrap().id, current.id);
+        assert_ne!(detached.id, current.id);
+        let listed = list_sessions(&paths).unwrap();
+        assert!(listed
+            .iter()
+            .any(|session| session.id == detached.id && session.title == "Detached"));
+    }
+
+    #[test]
+    fn switch_session_located_switches_foreign_workspace_pointer() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = test_paths(temp.path().to_path_buf());
+        let other = temp.path().join("workspace-b");
+        std::fs::create_dir_all(&other).unwrap();
+
+        // 目标工作区里后建的会话抢走指针，跨工作区切回先建的那个
+        let first = create_session_for_workspace(&paths, &other, Some("First")).unwrap();
+        let second = create_session_for_workspace(&paths, &other, Some("Second")).unwrap();
+        assert_eq!(
+            crate::state::active_session_id_for_workspace(&paths, &other).unwrap(),
+            second.id
+        );
+
+        let switched = switch_session_located(&paths, &first.id).unwrap();
+
+        assert_eq!(switched.id, first.id);
+        assert_eq!(
+            crate::state::active_session_id_for_workspace(&paths, &other).unwrap(),
+            first.id
+        );
+    }
+
+    #[test]
     fn delete_active_session_switches_to_default() {
         let temp = tempfile::tempdir().unwrap();
         let paths = test_paths(temp.path().to_path_buf());
