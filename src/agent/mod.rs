@@ -279,8 +279,8 @@ impl Agent {
             for group in groups {
                 let serial_calls = match group {
                     tool_invocation::ToolExecutionGroup::ConcurrentReadOnly(group) => {
-                        round_model_attachments.extend(
-                            self.execute_concurrent_read_only_group(
+                        match self
+                            .execute_concurrent_read_only_group(
                                 turn_id,
                                 assistant_round,
                                 result.reasoning.as_deref(),
@@ -292,8 +292,21 @@ impl Agent {
                                 perf,
                                 &hook_ctx,
                             )
-                            .await?,
-                        );
+                            .await
+                        {
+                            Ok(attachments) => {
+                                round_model_attachments.extend(attachments);
+                            }
+                            Err(error) => {
+                                // 工具批次中途失败时，已成功读取的图片附件不能跟着丢弃：
+                                // 工具结果文本已声明"图片已附加"，丢弃会让模型反复重新读取
+                                tool_attachments::append_model_attachments(
+                                    messages,
+                                    std::mem::take(&mut round_model_attachments),
+                                );
+                                return Err(error);
+                            }
+                        }
                         continue;
                     }
                     tool_invocation::ToolExecutionGroup::Serial(call) => vec![call],
@@ -694,9 +707,20 @@ impl Agent {
                         &tool_hook_ctx,
                     )
                     .await;
-                    let execution = self
+                    let execution = match self
                         .execute_real_tool(turn_id, &call, on_event, perf)
-                        .await?;
+                        .await
+                    {
+                        Ok(execution) => execution,
+                        Err(error) => {
+                            // 同上：中途失败不丢已读取的图片附件
+                            tool_attachments::append_model_attachments(
+                                messages,
+                                std::mem::take(&mut round_model_attachments),
+                            );
+                            return Err(error);
+                        }
+                    };
                     round_model_attachments.extend(execution.model_attachments);
                     let output = execution.output;
                     if execution.failed || is_tool_error_output(&output) {

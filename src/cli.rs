@@ -200,9 +200,25 @@ pub async fn run(cli: Cli) -> Result<()> {
         }
         Some(Command::Web(args)) => crate::web::run(&paths, args).await,
         Some(Command::WebPassword(args)) => web_password::run(&paths, args.command),
-        Some(Command::Ask(args)) => {
+        Some(Command::Ask(ref args)) => {
+            // 子命令自带的模式标志优先于顶层;都没有时维持 None,
+            // 让 resolve_agent_mode 回退到配置默认
+            let mode_override = cli_mode_override(&cli).or_else(|| {
+                if args.plan {
+                    Some(AgentMode::Plan)
+                } else if args.audited {
+                    Some(AgentMode::Audited)
+                } else if args.auto_audit {
+                    Some(AgentMode::AutoAudit)
+                } else if args.yolo {
+                    Some(AgentMode::Yolo)
+                } else {
+                    None
+                }
+            });
             let mode = resolve_agent_mode(&paths, mode_override, PermissionSurface::Cli)?;
-            let input = parse_message_input_flags(args.message, args.clipb, args.web_search);
+            let input =
+                parse_message_input_flags(args.message.clone(), args.clipb, args.web_search);
             run_chat_with_options(
                 &paths,
                 ChatRunOptions {
@@ -213,7 +229,7 @@ pub async fn run(cli: Cli) -> Result<()> {
                     mode,
                     clipb: input.clipb,
                     web_search: input.web_search,
-                    thinking_override: args.thinking.or_else(|| thinking_override.clone()),
+                    thinking_override: args.thinking.clone().or_else(|| thinking_override.clone()),
                     show_final_summary: true,
                 },
             )

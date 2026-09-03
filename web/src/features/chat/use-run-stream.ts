@@ -43,12 +43,18 @@ const EVENT_TYPES = [
 
 type SessionRunsState = { runs: LiveRunState[] };
 
+/** prune-settled 用的历史轮次摘要：标识与是否仍在运行。 */
+export type HistoryTurnKey = {
+  turnId: string;
+  running: boolean;
+};
+
 type SessionRunsAction =
   | { type: "attach"; runs: RunInfo[]; sessionId: string }
   | { type: "start"; run: RunInfo; sessionId: string; userInput: string; imageUrls?: string[]; model?: string }
   | { type: "event"; event: WebEvent }
   | { type: "events"; events: WebEvent[] }
-  | { type: "prune-settled"; historyTurnIds: string[] }
+  | { type: "prune-settled"; historyTurns: HistoryTurnKey[] }
   | { type: "update-queued"; runId: string; input?: string; position?: number; insertAt?: LiveRunState["insertAt"]; imageUrls?: string[] }
   | { type: "remove-queued"; runId: string }
   | { type: "stop-local"; runId: string }
@@ -187,10 +193,16 @@ export function sessionRunsReducer(state: SessionRunsState, action: SessionRunsA
     return updateQueuedRunState(state, action.runId, action.input, action.position, action.insertAt, action.imageUrls);
   }
   if (action.type === "prune-settled") {
-    const historyIds = new Set(action.historyTurnIds);
-    const runs = state.runs.filter(
-      (run) => !(run.completed && run.runId && historyIds.has(run.runId))
-    );
+    // 历史轮次已落盘的运行不再重复渲染；重放截断丢失终态事件、但历史里
+    // 已是终态的运行同样清掉——否则它的用户气泡会永久堆在会话底部
+    const history = new Map(action.historyTurns.map((turn) => [turn.turnId, turn]));
+    const runs = state.runs.filter((run) => {
+      if (!run.runId) return true;
+      const turn = history.get(run.runId);
+      if (!turn) return true;
+      if (run.completed) return false;
+      return turn.running;
+    });
     return runs.length === state.runs.length ? state : { runs };
   }
   if (action.type === "events") {
@@ -784,11 +796,11 @@ export function useRunStream(
   /**
    * 时间线已落盘后丢弃对应的已完成 live run，释放内存并避免重复渲染。
    *
-   * @param historyTurnIds 服务端时间线中的轮次标识
+   * @param historyTurns 服务端时间线中的轮次标识与运行状态
    */
-  const pruneSettled = useCallback((historyTurnIds: string[]) => {
-    if (historyTurnIds.length === 0) return;
-    dispatch({ type: "prune-settled", historyTurnIds });
+  const pruneSettled = useCallback((historyTurns: HistoryTurnKey[]) => {
+    if (historyTurns.length === 0) return;
+    dispatch({ type: "prune-settled", historyTurns });
   }, []);
 
   return {

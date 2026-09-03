@@ -288,7 +288,9 @@ mod tests {
 
     #[test]
     fn folds_long_ran_command_in_main_view() {
-        let long = "echo ".to_string() + &"x".repeat(800);
+        // 折行宽度跟随终端列数(可达 196+),命令要长到足以折出超过
+        // FOLD_HEAD_LINES + FOLD_TAIL_LINES 行才触发折叠
+        let long = "echo ".to_string() + &"x".repeat(3_000);
         let args = format!(r#"{{"command":"{long}"}}"#);
         let output = render_command_block_with_action(&args, "Run", ToolHealth::Ok);
         let plain = strip_ansi_for_test(&output);

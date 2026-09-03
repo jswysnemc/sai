@@ -84,6 +84,17 @@ pub(super) async fn send(context: MeshContext, args: Value) -> Result<String> {
     };
     let delivered_to = mailbox::deliver(&context.paths, &target, &envelope)?;
 
+    // 自发检测：from == to 只可能是把 session_probe 里 is_self 那条当成了目标。
+    // 静默投递成功会让模型以为消息已发给对方，实际是发给自己造成回环。
+    let warning = if envelope.from == envelope.to {
+        Some(t(
+            "DELIVERED TO YOURSELF (from == to). You picked the session_probe entry with is_self: true — that entry is YOU. If you meant another session, re-run session_probe and choose an entry with is_self: false. Do not use is_workspace_current to decide identity.",
+            "消息发给了你自己(from == to)。你选中的是 session_probe 里 is_self 为 true 的条目——那就是你自己的会话。如果想发给别的会话,重新运行 session_probe 并选择 is_self 为 false 的条目。不要用 is_workspace_current 判断身份。"
+        ))
+    } else {
+        None
+    };
+
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
         "correlation_id": correlation_id,
@@ -92,5 +103,6 @@ pub(super) async fn send(context: MeshContext, args: Value) -> Result<String> {
         "reply_to": envelope.reply_to,
         "delivered_to": delivered_to,
         "queued_at_ms": queued_at_ms,
+        "warning": warning,
     }))?)
 }

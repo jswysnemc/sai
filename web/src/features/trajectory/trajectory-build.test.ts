@@ -376,6 +376,37 @@ describe("buildTrajectory 的思考与注入", () => {
     expect(model.records[1].detail.compactedToSeq).toBe(3);
   });
 
+  it("压缩后 seq 重新计数时摘要不落到新消息后面", () => {
+    const model = buildTrajectory({
+      turns: [
+        turn({
+          turn_id: "t1",
+          seq: 1,
+          user: { timestamp: "2026-08-14T10:20:00Z", content: "压缩后的新消息" }
+        }),
+        turn({
+          turn_id: "t2",
+          seq: 2,
+          user: { timestamp: "2026-08-14T10:21:00Z", content: "再问一句" }
+        })
+      ],
+      compaction: {
+        applied: true,
+        turn_count: 4,
+        compacted_from_seq: 1,
+        compacted_to_seq: 4,
+        summary: "旧轮次摘要",
+        created_at: "2026-08-14T10:15:00Z",
+        reason: "manual"
+      }
+    });
+
+    const kinds = model.records.map((record) => record.kind);
+    const compactionAt = kinds.indexOf("compaction");
+    expect(compactionAt).toBe(0);
+    expect(kinds.slice(1)).toEqual(["user", "assistant", "user", "assistant"]);
+  });
+
   it("把供应商用户消息里的注入前缀展成插入记录", () => {
     const model = buildTrajectory(timeline([
       turn({

@@ -29,6 +29,8 @@ export type TrajectoryTurnHeader = {
   requestCount: number;
   /** 本轮记录在 records 中的起始下标 */
   firstIndex: number;
+  /** 用户消息时刻；压缩摘要按时间与 seq 双重对齐时使用 */
+  startedAt: number | null;
 };
 
 /**
@@ -227,7 +229,8 @@ export function buildTrajectory(
         durationMs: turn.duration_ms ?? null,
         model: turn.model ?? null,
         requestCount: rounds.length + 1,
-        firstIndex
+        firstIndex,
+        startedAt: parseTimestamp(turn.user.timestamp)
       });
     }
   }
@@ -290,6 +293,10 @@ function insertCompactionRecord(
  * 被覆盖的轮次若还在表里，插到它们后面；若压缩时已经删掉，
  * 插到系统提示词之后、第一条剩余对话之前，避免顶上看起来从第 4 轮起跳。
  *
+ * 时间戳兜底：旧版本压缩会删光全部轮次导致 seq 从 1 重新计数，
+ * 新轮次的 seq 可能全部落在 [from, to] 区间内。仅当轮次时刻早于
+ * 压缩创建时刻时才视为被覆盖，seq 与时间双重对齐。
+ *
  * @param records 已按时序排好的记录
  * @param turns 轮次分隔数据
  * @param compaction 时间线附带的最新压缩摘要
@@ -300,9 +307,13 @@ function compactionInsertAt(
   turns: readonly TrajectoryTurnHeader[],
   compaction: NonNullable<SessionTimeline["compaction"]>
 ): number {
+  const compactionAt = parseTimestamp(compaction.created_at);
+  const covered = (turn: TrajectoryTurnHeader): boolean =>
+    turn.seq <= Number(compaction.compacted_to_seq ?? 0)
+    && (compactionAt === null || turn.startedAt === null || turn.startedAt <= compactionAt);
   const toSeq = Number(compaction.compacted_to_seq ?? 0);
   if (toSeq > 0) {
-    const lastCovered = [...turns].reverse().find((turn) => turn.seq <= toSeq);
+    const lastCovered = [...turns].reverse().find(covered);
     if (lastCovered) {
       return lastRecordIndexForTurn(records, lastCovered.turnId) + 1;
     }
@@ -314,9 +325,9 @@ function compactionInsertAt(
     return firstConversationIndex(records);
   }
 
-  const covered = Math.min(Math.max(compaction.turn_count, 0), turns.length);
-  if (covered > 0 && covered < turns.length) {
-    return lastRecordIndexForTurn(records, turns[covered - 1].turnId) + 1;
+  const count = Math.min(Math.max(compaction.turn_count, 0), turns.length);
+  if (count > 0 && count < turns.length) {
+    return lastRecordIndexForTurn(records, turns[count - 1].turnId) + 1;
   }
   return records.length;
 }

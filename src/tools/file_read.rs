@@ -269,12 +269,14 @@ async fn read_page(
 /// 返回:
 /// - 是否为图片文件
 fn is_image_file(path: &Path) -> bool {
+    // 与 vision::mime_from_path 保持同一扩展名集合：bmp 等多模态管线不支持的
+    // 格式一旦走进图片分支，每次读取都会报 unsupported extension，模型反复重试
     matches!(
         path.extension()
             .and_then(|value| value.to_str())
             .map(str::to_ascii_lowercase)
             .as_deref(),
-        Some("png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp")
+        Some("png" | "jpg" | "jpeg" | "webp" | "gif")
     )
 }
 

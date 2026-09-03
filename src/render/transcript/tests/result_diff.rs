@@ -5,6 +5,8 @@ use crate::render::transcript::unified_diff;
 
 /// 构造 write_file 工具结果输出。
 ///
+/// 与真实工具输出同构：diff 位于 JSON 顶层，changed_files 条目只带统计。
+///
 /// 参数:
 /// - `path`: 展示用路径
 /// - `old`: 写盘前内容
@@ -21,9 +23,9 @@ fn write_file_output(path: &str, old: &str, new: &str) -> String {
             "action": if old.is_empty() { "Added" } else { "Edited" },
             "path": path,
             "added": added,
-            "removed": removed,
-            "diff": crate::tools::file_diff::unified_diff(path, old, new)
-        }]
+            "removed": removed
+        }],
+        "diff": crate::tools::file_diff::unified_diff(path, old, new)
     })
     .to_string()
 }

@@ -128,6 +128,23 @@ pub struct MessageArgs {
     #[arg(long, value_name = "LEVEL")]
     pub thinking: Option<String>,
 
+    /// 与顶层一致的权限模式覆盖；不加的话 `sai ask --yolo` 会把
+    /// --yolo 当进 trailing_var_arg 的正文传给模型
+    #[arg(long, conflicts_with_all = ["audited", "yolo", "auto_audit"])]
+    pub plan: bool,
+
+    /// 启用带审计日志和工作区沙盒的执行模式
+    #[arg(long, conflicts_with_all = ["plan", "yolo", "auto_audit"])]
+    pub audited: bool,
+
+    /// 启用 LLM 自动审核与人工审核并行的模式
+    #[arg(long = "auto-audit", conflicts_with_all = ["plan", "yolo", "audited"])]
+    pub auto_audit: bool,
+
+    /// 显式启用不询问权限的执行模式
+    #[arg(long, conflicts_with_all = ["plan", "audited", "auto_audit"])]
+    pub yolo: bool,
+
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub message: Vec<String>,
 }
@@ -415,6 +432,27 @@ mod tests {
         let result = Cli::try_parse_from(["sai", "--yolo", "--audited", "inspect"]);
 
         assert!(result.is_err());
+    }
+
+    /// ask 子命令的模式标志被识别为选项,不再混入正文。
+    ///
+    /// 此前 MessageArgs 没有模式标志,`sai ask --yolo "..."` 会把 --yolo
+    /// 当进 trailing_var_arg 的消息传给模型。
+    #[test]
+    fn ask_subcommand_parses_mode_flags_without_polluting_message() {
+        let cli = Cli::try_parse_from(["sai", "ask", "--yolo", "只回复OK"]).unwrap();
+
+        let Some(Command::Ask(args)) = cli.command else {
+            panic!("expected ask command");
+        };
+        assert!(args.yolo);
+        assert_eq!(args.message, vec!["只回复OK".to_string()]);
+    }
+
+    /// ask 子命令的模式标志同样互斥。
+    #[test]
+    fn ask_subcommand_rejects_conflicting_mode_flags() {
+        assert!(Cli::try_parse_from(["sai", "ask", "--yolo", "--plan", "hi"]).is_err());
     }
 
     /// 验证顶层微信登录兼容命令可以正确解析参数。

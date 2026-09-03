@@ -231,12 +231,19 @@ export function ChatPage() {
     setSubmittedEmptySessionId(null);
   }, [activeSession?.id]);
 
-  // 时间线落盘后修剪已完成 live run，释放重复的 parts/tools 内存
+  // 时间线落盘后修剪已完成 live run，释放重复的 parts/tools 内存。
+  // 依赖 run.states：SSE backlog 重放晚于时间线查询返回时也能补一次修剪，
+  // 否则重放重建的运行会一直堆在会话底部
+  const liveRunIds = run.states.map((state) => state.runId).join(",");
   useEffect(() => {
-    const turnIds = timeline.data?.turns.map((turn) => turn.turn_id) ?? [];
-    if (turnIds.length === 0) return;
-    run.pruneSettled(turnIds);
-  }, [run.pruneSettled, timeline.data?.turns]);
+    const historyTurns = timeline.data?.turns.map((turn) => ({
+      turnId: turn.turn_id,
+      running: turn.status === "running"
+    })) ?? [];
+    if (historyTurns.length === 0) return;
+    run.pruneSettled(historyTurns);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run.pruneSettled, timeline.data?.turns, liveRunIds]);
 
   // 首条消息进入时间线或实时状态后清理乐观布局标记
   useEffect(() => {

@@ -13,9 +13,10 @@ pub(crate) struct EditResultReport {
 
 /// 从编辑工具结果 JSON 解析 diff 报告。
 ///
-/// `write_file` / `str_replace` 在写盘前生成 unified diff 与增删统计并放进
-/// `changed_files`；TUI 消费事件时文件可能已经写完，按参数重建预览会得到
-/// 空差异，因此定稿快照必须改从结果报告恢复。
+/// `write_file` / `str_replace` 把 unified diff 放在输出 JSON 的顶层
+/// `diff` 键（`changed_files` 条目内只有 action/path/added/removed 统计）；
+/// 条目内嵌 `diff` 的旧格式也兼容。TUI 消费事件时文件可能已经写完，
+/// 按参数重建预览会得到空差异，因此定稿快照必须改从结果报告恢复。
 ///
 /// 参数:
 /// - `output`: 工具原始输出
@@ -31,7 +32,11 @@ pub(crate) fn parse_edit_result(output: &str) -> Option<EditResultReport> {
     for file in files {
         added += file.get("added").and_then(Value::as_u64).unwrap_or(0) as usize;
         removed += file.get("removed").and_then(Value::as_u64).unwrap_or(0) as usize;
-        let diff = file.get("diff").and_then(Value::as_str)?;
+        // 真实工具把 diff 放在顶层；条目内嵌是历史格式
+        let diff = file
+            .get("diff")
+            .and_then(Value::as_str)
+            .or_else(|| value.get("diff").and_then(Value::as_str))?;
         let patch = parse_unified_diff(diff)?;
         body.push_str(&render_patch(&patch));
         body.push('\n');

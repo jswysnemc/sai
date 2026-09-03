@@ -203,3 +203,71 @@ async fn output_read_records_runtime_event_and_output_cap_recovery() {
         .find(|task| task.id == "task-1")
         .is_some_and(|task| task.completion_notified));
 }
+
+/// 任务归属会话与工作区 current 指针不一致时,list/output 仍指向任务自己的会话库。
+///
+/// 复现线上缺陷:当前终端不在 current 会话上时,StateStore::new 打开的是
+/// current 指针的库——list 过滤成空、output 报 "runtime process was not found"。
+#[tokio::test]
+async fn owner_session_task_survives_current_pointer_mismatch() {
+    use crate::state::create_session;
+
+    let temp = tempfile::tempdir().unwrap();
+    let paths = isolated_test_paths(temp.path().to_path_buf());
+    let store = BackgroundCommandStore::new(paths.state_dir.clone());
+    store.init().unwrap();
+    // 会话 A:任务归属者;创建后 current 指针指向 A
+    let session_a = create_session(&paths, Some("owner")).unwrap();
+    // 会话 B:另一个终端 /new 之后 current 指针指向 B
+    create_session(&paths, Some("other")).unwrap();
+    let stdout_log = store.logs_dir().join("task-mismatch.out.log");
+    let stderr_log = store.logs_dir().join("task-mismatch.err.log");
+    std::fs::write(&stdout_log, "heartbeat\n").unwrap();
+    std::fs::write(&stderr_log, "").unwrap();
+    // 预先在 A 的库里登记 runtime process(真实链路由 spawn_managed_task 完成)
+    let task = BackgroundCommandTask {
+        id: "task-mismatch".to_string(),
+        runtime_process_id: Some("background_command_task-mismatch".to_string()),
+        runtime_owner_kind: Some("session".to_string()),
+        runtime_owner_id: Some(session_a.id.clone()),
+        runtime_process_kind: None,
+        goal_id: None,
+        label: "server".to_string(),
+        command: "sleep 9999".to_string(),
+        cwd: ".".to_string(),
+        pid: std::process::id(),
+        pgid: None,
+        status: "running".to_string(),
+        stdout_log: stdout_log.display().to_string(),
+        stderr_log: stderr_log.display().to_string(),
+        started_at: 0,
+        updated_at: 0,
+        timeout_seconds: 0,
+        completion_notified: false,
+    };
+    store.save(&[task.clone()]).unwrap();
+    let owner = BackgroundRuntimeOwner::session(&session_a.id);
+
+    // list:以 A 的身份列出,任务必须在列
+    let listing = list_background_tasks(&paths, &AppConfig::default(), true, Some(&owner))
+        .await
+        .unwrap();
+    let body: Value = serde_json::from_str(&listing).unwrap();
+    let listed = body["tasks"].as_array().unwrap();
+    assert_eq!(listed.len(), 1, "task must be visible to its owner session");
+    assert_eq!(listed[0]["id"], "task-mismatch");
+
+    // output:事件必须落到 A 的库而不是 current 指针指向的 B
+    let output = read_background_task_output(
+        json!({ "task_id": "task-mismatch", "stream": "stdout", "tail_lines": 10 }),
+        &AppConfig::default(),
+        &paths,
+    )
+    .await
+    .unwrap();
+    let body: Value = serde_json::from_str(&output).unwrap();
+    assert_eq!(body["stdout"], "heartbeat");
+    let state_a = StateStore::for_session(&paths, &session_a.id).unwrap();
+    let snapshot = state_a.session_snapshot(1_000).unwrap();
+    assert_eq!(snapshot.runtime_recovery.active_process_count, 1);
+}

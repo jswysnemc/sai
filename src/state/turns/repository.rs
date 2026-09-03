@@ -552,10 +552,18 @@ impl ConversationDb {
     }
 
     pub(super) fn next_seq_locked(&self, conn: &Connection) -> Result<i64> {
-        let max_seq: i64 =
-            conn.query_row("SELECT COALESCE(MAX(seq), 0) FROM turns", [], |row| {
-                row.get(0)
-            })?;
+        // 空闲压缩会删光全部已完成轮次，仅看 turns 的 MAX(seq) 会让序号从 1 重新
+        // 开始；把 checkpoint 记录的 compacted_to_seq 一并纳入，保证轮次序号在
+        // 压缩后仍然单调递增，前端按 seq 对齐压缩边界时不会被新轮次误导。
+        let max_seq: i64 = conn.query_row(
+            "SELECT MAX(m) FROM (
+                SELECT COALESCE(MAX(seq), 0) AS m FROM turns
+                UNION ALL
+                SELECT COALESCE(MAX(compacted_to_seq), 0) FROM compaction_checkpoints
+            )",
+            [],
+            |row| row.get(0),
+        )?;
         Ok(max_seq + 1)
     }
 

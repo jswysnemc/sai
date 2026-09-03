@@ -168,7 +168,9 @@ mod tests {
 
     #[test]
     fn folds_long_command_in_transcript() {
-        let long = "echo ".to_string() + &"a".repeat(800);
+        // 折行宽度跟随终端列数(宽终端下 800 字符只折出 5 行,不足
+        // 头 2 + 尾 4 的折叠阈值),加长到稳定超过阈值
+        let long = "echo ".to_string() + &"a".repeat(3_000);
         let rendered = render(&ShellCell {
             command: long,
             output: String::new(),

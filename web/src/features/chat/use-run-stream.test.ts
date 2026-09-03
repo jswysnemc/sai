@@ -243,13 +243,34 @@ describe("sessionRunsReducer", () => {
 
     const pruned = sessionRunsReducer(completed, {
       type: "prune-settled",
-      historyTurnIds: ["run-1"]
+      historyTurns: [{ turnId: "run-1", running: false }]
     });
     expect(pruned.runs).toEqual([]);
 
     const kept = sessionRunsReducer(completed, {
       type: "prune-settled",
-      historyTurnIds: ["other-turn"]
+      historyTurns: [{ turnId: "other-turn", running: false }]
+    });
+    expect(kept.runs).toHaveLength(1);
+  });
+
+  it("prunes a replayed run whose terminal event was lost but history settled", () => {
+    // 重放截断丢失 run.completed：运行的 completed=false，但时间线里该轮已完成
+    const replayed = sessionRunsReducer({ runs: [] }, {
+      type: "event",
+      event: broadcast("run.started", { input: "重放的历史消息", image_urls: [] }, "run-stale")
+    });
+
+    const pruned = sessionRunsReducer(replayed, {
+      type: "prune-settled",
+      historyTurns: [{ turnId: "run-stale", running: false }]
+    });
+    expect(pruned.runs).toEqual([]);
+
+    // 历史里仍在运行的轮次保留 live 展示
+    const kept = sessionRunsReducer(replayed, {
+      type: "prune-settled",
+      historyTurns: [{ turnId: "run-stale", running: true }]
     });
     expect(kept.runs).toHaveLength(1);
   });
@@ -366,7 +387,7 @@ describe("session runs server-driven upsert", () => {
     });
     const settled = sessionRunsReducer(running, {
       type: "prune-settled",
-      historyTurnIds: ["run-done"]
+      historyTurns: [{ turnId: "run-done", running: false }]
     });
 
     const failed = sessionRunsReducer(settled, { type: "fail-open", summary: "连接中断", detail: "detail" });

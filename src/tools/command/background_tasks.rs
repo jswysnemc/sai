@@ -201,6 +201,7 @@ pub(super) async fn list_background_tasks(
     paths: &SaiPaths,
     config: &AppConfig,
     session_scoped: bool,
+    runtime_owner: Option<&BackgroundRuntimeOwner>,
 ) -> Result<String> {
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
     let mut tasks = store.load()?;
@@ -220,14 +221,32 @@ pub(super) async fn list_background_tasks(
         }
     });
     store.save(&tasks)?;
-    let state = StateStore::new(paths)?;
-    sync_runtime_tasks(&state, &tasks)?;
-    // 2. 网关进程由网关管理页独立管理，通用后台任务列表不展示
+    // 2. 同步到各任务自己的会话库：按 current 指针打开会把别的会话的任务
+    //    写错库，或者把本会话的任务漏掉（当前终端不在 current 上时）
+    {
+        let mut synced: Vec<(String, String)> = Vec::new();
+        for task in &tasks {
+            let key = (
+                task.runtime_owner_kind.clone().unwrap_or_default(),
+                task.runtime_owner_id.clone().unwrap_or_default(),
+            );
+            if synced.iter().any(|item| *item == key) {
+                continue;
+            }
+            if let Ok(state) = state_for_task(paths, task) {
+                sync_runtime_tasks(&state, &tasks)?;
+                synced.push(key);
+            }
+        }
+    }
+    // 3. 网关进程由网关管理页独立管理，通用后台任务列表不展示
     tasks.retain(|task| !is_gateway_owned_task(task));
-    // 3. 会话视角只看自己起的任务：任务表是机器级全局的，不过滤会让别的会话、
+    // 4. 会话视角只看自己起的任务：任务表是机器级全局的，不过滤会让别的会话、
     //    以及 CLI 起的无主任务一并出现在当前会话的面板里。CLI 传 false 看全量。
     if session_scoped {
-        let session_id = state.session_id();
+        let session_id = runtime_owner
+            .map(|owner| owner.owner_id.as_str())
+            .unwrap_or_default();
         tasks.retain(|task| task.owned_by_session(session_id));
     }
     let _ = pruned;
@@ -283,12 +302,14 @@ pub(super) async fn read_background_task_output(
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
     let mut tasks = store.load()?;
     refresh_task_statuses(&mut tasks, config).await;
-    let state = StateStore::new(paths)?;
-    sync_runtime_tasks(&state, &tasks)?;
     let task_index = tasks
         .iter()
         .position(|task| task.id == task_id)
         .ok_or_else(|| anyhow::anyhow!("background command not found: {task_id}"))?;
+    // 打开任务自己的会话库：事件必须落到 runtime_owner_id 指向的库里，
+    // 按 current 指针开库会报 "runtime process was not found"
+    let state = state_for_task(paths, &tasks[task_index])?;
+    sync_runtime_tasks(&state, &tasks)?;
     let task = &tasks[task_index];
     let max_bytes = config.tools.background_command_log_max_bytes;
     let read_log = |path: &str| -> Result<LogTail> {
@@ -374,7 +395,8 @@ pub(super) async fn stop_background_task(
     }
     let task = task.clone();
     store.save(&tasks)?;
-    let state = StateStore::new(paths)?;
+    // 状态同步到任务自己的会话库，而不是工作区 current 指向的会话
+    let state = state_for_task(paths, &task)?;
     sync_runtime_tasks(&state, &tasks)?;
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
@@ -478,6 +500,11 @@ pub(super) async fn refresh_task_statuses(
 }
 
 /// 打开后台任务所属会话的状态存储。
+///
+/// 任务的 runtime_processes 落在它 runtime_owner_id 指向的会话库里；若按
+/// 工作区 current 指针打开（`StateStore::new`），当前终端不在 current 会话上
+/// 时会打开别的库：list 过滤成空、output 报 process not found。
+/// 无 owner 的任务退回 current 指针（CLI 起的野任务没有归属）。
 fn state_for_runtime_owner(
     paths: &SaiPaths,
     owner: Option<&BackgroundRuntimeOwner>,
@@ -491,6 +518,27 @@ fn state_for_runtime_owner(
         }
         _ => StateStore::new(paths),
     }
+}
+
+/// 按任务自身的 runtime owner 打开状态存储。
+///
+/// 参数:
+/// - `paths`: Sai 路径
+/// - `task`: 后台任务
+///
+/// 返回:
+/// - 任务所属会话的状态存储；无 owner 任务退回 current 指针
+fn state_for_task(paths: &SaiPaths, task: &BackgroundCommandTask) -> Result<StateStore> {
+    let owner = task
+        .runtime_owner_kind
+        .as_deref()
+        .zip(task.runtime_owner_id.as_deref())
+        .map(|(kind, id)| BackgroundRuntimeOwner {
+            owner_kind: OwnerKind::from_str(kind),
+            owner_id: id.to_string(),
+            process_kind: ProcessKind::BackgroundCommand,
+        });
+    state_for_runtime_owner(paths, owner.as_ref())
 }
 
 /// 读取日志末尾若干行。

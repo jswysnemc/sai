@@ -78,7 +78,7 @@ pub(super) async fn read_image_page(
                     "path": request.path.display().to_string(),
                     "prompt": prompt,
                     "attachment_submitted": true,
-                    "content": "The image is attached to the current model for direct analysis.",
+                    "content": "The image is attached to the model request that follows this tool result. Analyze it directly; do NOT read this image file again. If you need to revisit details later, re-read the file to obtain a fresh attachment.",
                 }),
                 model_attachments: vec![attachment],
             })

@@ -34,6 +34,8 @@ pub(crate) struct ProviderBrowser<'a> {
     loading: bool,
     fetch_seq: u64,
     fetch_rx: Option<Receiver<FetchResult>>,
+    /// 光标是否已处于显示态；避免逐帧重发 Show/Hide 放大闪烁
+    cursor_visible: bool,
 }
 
 impl<'a> ProviderBrowser<'a> {
@@ -54,14 +56,23 @@ impl<'a> ProviderBrowser<'a> {
             loading: false,
             fetch_seq: 0,
             fetch_rx: None,
+            cursor_visible: false,
         }
     }
 
     pub(crate) fn run(mut self, stdout: &mut io::Stdout) -> Result<()> {
         self.refresh_models();
+        // 上一帧签名：轮询 tick 里内容没变就不重绘，避免加载期间
+        // 10Hz 清屏重画造成的整屏闪烁
+        let mut last_frame: Option<String> = None;
         loop {
+            let before = self.frame_signature();
             self.poll_fetch_result();
-            self.draw(stdout)?;
+            let changed = before != self.frame_signature();
+            if changed || last_frame.is_none() {
+                self.draw(stdout)?;
+                last_frame = Some(self.frame_signature());
+            }
             match read_key_with_timeout(if self.loading {
                 Some(Duration::from_millis(100))
             } else {
@@ -90,6 +101,33 @@ impl<'a> ProviderBrowser<'a> {
                 },
             }
         }
+    }
+
+    /// 计算当前界面的内容签名。
+    ///
+    /// 渲染涉及的全部状态拼接为字符串，用于轮询 tick 的脏检查：
+    /// loading 等待期 100ms 一拍，若签名未变则跳过整屏重绘。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 内容签名
+    fn frame_signature(&self) -> String {
+        format!(
+            "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+            self.active_col,
+            self.provider_idx,
+            self.org_idx,
+            self.model_idx,
+            self.filter,
+            self.filter_mode,
+            self.loading,
+            self.status,
+            self.orgs.len(),
+            self.models.len(),
+            self.config.providers.len(),
+        )
     }
 
     fn handle_filter_key(&mut self, key: KeyCode) {
@@ -492,7 +530,7 @@ impl<'a> ProviderBrowser<'a> {
         Ok(())
     }
 
-    fn draw(&self, stdout: &mut io::Stdout) -> Result<()> {
+    fn draw(&mut self, stdout: &mut io::Stdout) -> Result<()> {
         let (cols, rows) = terminal::size()?;
         let frame = super::layout::full_frame(cols, rows);
         // 外框内缩：左右各留边框 + 一格边距，底部留状态行与嵌入式帮助条
@@ -644,10 +682,16 @@ impl<'a> ProviderBrowser<'a> {
             ))
         )?;
         super::ui::draw_status_bar(stdout, &frame, &help)?;
+        // 光标显隐只在过滤态切换后的首帧发送，逐帧重发会放大终端闪烁
         if let Some((cx, cy)) = filter_cursor {
-            queue!(stdout, Show, MoveTo(cx, cy))?;
-        } else {
+            if !self.cursor_visible {
+                queue!(stdout, Show)?;
+                self.cursor_visible = true;
+            }
+            queue!(stdout, MoveTo(cx, cy))?;
+        } else if self.cursor_visible {
             queue!(stdout, Hide)?;
+            self.cursor_visible = false;
         }
         stdout.flush()?;
         Ok(())

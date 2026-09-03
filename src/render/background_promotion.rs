@@ -70,10 +70,14 @@ pub(crate) fn render_promotion_line(promotion: &BackgroundPromotion, command: &s
     } else {
         t("Started background", "已启动后台任务")
     };
+    // 命令正文用与命令工具一致的 bash 语法着色，未命中高亮规则时保持原样
     let object = if command.trim().is_empty() {
         String::new()
     } else {
-        format!(" {command}")
+        format!(
+            " {}",
+            crate::render::code_block::highlight_code_line("bash", command)
+        )
     };
     let waited = if promotion.promoted && promotion.waited_seconds > 0 {
         format!(

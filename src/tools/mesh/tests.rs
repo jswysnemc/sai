@@ -150,13 +150,14 @@ async fn session_probe_marks_the_session_that_is_running_a_turn() {
         let guard =
             ActiveRunGuard::acquire_with_state_dir(&session.id, SessionOwner::Web, &state_dir)
                 .unwrap();
-        let running = probe(&registry, "session_probe", "{}").await;
+        // 自己不在 sessions 里,用 self 作用域检查本会话的运行状态
+        let running = probe(&registry, "session_probe", r#"{"scope":"self"}"#).await;
         assert_eq!(running["sessions"][0]["running"], true);
         assert_eq!(running["sessions"][0]["active_run"]["owner"], "web");
 
         // 崩溃残留的锁会让会话永远显示"正在跑一轮"，释放后必须回到空闲
         drop(guard);
-        let idle = probe(&registry, "session_probe", "{}").await;
+        let idle = probe(&registry, "session_probe", r#"{"scope":"self"}"#).await;
         assert_eq!(idle["sessions"][0]["running"], false);
         assert!(idle["sessions"][0]["active_run"].is_null());
     })
@@ -185,7 +186,10 @@ async fn session_probe_scopes_separate_workspace_from_all() {
             .iter()
             .map(|session| session["id"].as_str().unwrap().to_string())
             .collect::<Vec<_>>();
-        assert!(ids.contains(&local.id));
+        assert!(
+            !ids.contains(&local.id),
+            "sessions 数组只列其它会话,自己由顶层 self 标识: {in_workspace}"
+        );
         assert!(
             !ids.contains(&foreign.id),
             "workspace 作用域不该带上别的工作区的会话"
@@ -198,7 +202,6 @@ async fn session_probe_scopes_separate_workspace_from_all() {
             .iter()
             .map(|session| session["id"].as_str().unwrap().to_string())
             .collect::<std::collections::BTreeSet<_>>();
-        assert!(hidden_ids.contains(&local.id));
         assert!(
             !hidden_ids.contains(&foreign.id),
             "没有存活持有者的会话不应出现在探测结果里: {hidden}"
@@ -217,23 +220,17 @@ async fn session_probe_scopes_separate_workspace_from_all() {
             .iter()
             .map(|session| session["id"].as_str().unwrap().to_string())
             .collect::<std::collections::BTreeSet<_>>();
-        assert!(all_ids.contains(&local.id));
+        assert!(!all_ids.contains(&local.id), "自己不在 sessions 里");
         assert!(all_ids.contains(&foreign.id));
-        // 每个工作区各有一个共享指针指向的会话；它不是「哪个是我」的判据
+        // 共享指针条目:foreign 是自己工作区的 current;local 的指针指向自己但被排除
         let current = everything["sessions"]
             .as_array()
             .unwrap()
             .iter()
             .filter(|session| session["is_workspace_current"] == true)
             .count();
-        assert_eq!(current, 2, "每个工作区各有一个当前会话");
-        let own = everything["sessions"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter(|session| session["is_self"] == true)
-            .count();
-        assert_eq!(own, 1, "is_self 有且只有一条");
+        assert_eq!(current, 1, "列表里只有 foreign 的指针条目");
+        assert_eq!(everything["self"]["session_id"], local.id);
     })
     .await;
 }
@@ -257,14 +254,13 @@ async fn session_probe_self_identity_never_depends_on_the_workspace_pointer() {
 
         let output = probe(&registry, "session_probe", r#"{"scope":"workspace"}"#).await;
         let sessions = output["sessions"].as_array().unwrap();
-        let mine = sessions
-            .iter()
-            .filter(|session| session["is_self"] == true)
-            .collect::<Vec<_>>();
-        assert_eq!(mine.len(), 1, "is_self 有且只有一条: {output}");
-        assert_eq!(mine[0]["id"], local.id, "is_self 必须指向本进程会话");
+        // 自己不在 sessions 里;后建的会话持有共享指针,仍在列表中
+        assert!(
+            sessions.iter().all(|session| session["is_self"] == false),
+            "sessions 里不应出现自己: {output}"
+        );
         assert_eq!(output["self"]["session_id"], local.id);
-        // 共享指针落在后建的会话上，证明它不能当身份判据
+        // 共享指针落在后建的会话上,证明它不能当身份判据
         let pointer = sessions
             .iter()
             .find(|session| session["is_workspace_current"] == true)
@@ -275,7 +271,7 @@ async fn session_probe_self_identity_never_depends_on_the_workspace_pointer() {
     .await;
 }
 
-/// 工具说明必须点名 is_self，且不能把 is_workspace_current 说成身份判据。
+/// 工具说明必须声明 sessions 数组不含自己,且不能把 is_workspace_current 说成身份判据。
 ///
 /// 两种语言都要覆盖：模型在中文界面下读到的是中文那份说明。
 #[test]
@@ -285,8 +281,13 @@ fn probe_description_documents_is_self() {
         super::session_probe::DESCRIPTION_ZH,
     ] {
         assert!(
-            description.contains("is_self"),
-            "工具说明必须点名 is_self: {description}"
+            description.contains("self.session_id"),
+            "工具说明必须点名 self.session_id: {description}"
+        );
+        assert!(
+            description.contains("never in it")
+                || description.contains("绝不会出现在里面"),
+            "工具说明必须声明 sessions 数组不含自己: {description}"
         );
         assert!(
             !description.contains("whether it is its workspace's current session")
@@ -294,8 +295,8 @@ fn probe_description_documents_is_self() {
             "工具说明不应再把 is_workspace_current 说成身份判据: {description}"
         );
         assert!(
-            description.contains("never from is_workspace_current")
-                || description.contains("绝不要看 is_workspace_current"),
+            description.contains("Never use is_workspace_current")
+                || description.contains("绝不要用 is_workspace_current"),
             "工具说明必须明确排除用 is_workspace_current 判身份: {description}"
         );
     }
@@ -322,7 +323,10 @@ async fn session_probe_omits_unheld_sessions_in_the_same_workspace() {
             .map(|session| session["id"].as_str().unwrap().to_string())
             .collect::<Vec<_>>();
 
-        assert!(ids.contains(&local.id), "{output}");
+        assert!(
+            !ids.contains(&local.id),
+            "自己不在 sessions 数组里,由顶层 self 标识: {output}"
+        );
         assert!(
             !ids.contains(&idle.id),
             "非活动会话不应出现在探测结果里: {output}"
@@ -402,9 +406,10 @@ async fn session_probe_workspace_scope_uses_the_canonicalized_cwd() {
             .collect::<Vec<_>>();
 
         assert!(
-            ids.contains(&local.id),
-            "workspace 作用域必须按规范化路径认出本工作区: {output}"
+            ids.is_empty(),
+            "自己不在 sessions 数组里: {output}"
         );
+        assert_eq!(output["self"]["session_id"], local.id);
     })
     .await;
 }

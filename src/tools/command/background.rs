@@ -106,7 +106,7 @@ pub(crate) async fn list_background_tasks_for_user(
     config: &AppConfig,
     session_scoped: bool,
 ) -> Result<String> {
-    list_background_tasks(paths, config, session_scoped).await
+    list_background_tasks(paths, config, session_scoped, None).await
 }
 
 /// 用户 CLI 启动后台命令。
