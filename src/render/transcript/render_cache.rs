@@ -63,6 +63,7 @@ impl RenderCache {
     /// - `cell`: 对应 cell 数据
     /// - `width`: 当前终端列数
     /// - `options`: transcript 渲染选项
+    /// - `frame`: 当前动画帧
     ///
     /// 返回:
     /// - 该 cell 在当前宽度下的行数
@@ -102,6 +103,7 @@ impl RenderCache {
     /// - `cell`: 对应 cell 数据
     /// - `width`: 当前终端列数
     /// - `options`: transcript 渲染选项
+    /// - `frame`: 当前动画帧
     ///
     /// 返回:
     /// - 预换行 ANSI 行
@@ -136,10 +138,12 @@ impl RenderCache {
     }
 }
 
-/// 判断 cell 是否仍会随时间变化，不能写入渲染缓存。
+/// 判断单元是否仍会随时间变化；参数为历史单元，返回是否跳过静态缓存。
 fn is_live_cell(cell: &HistoryCell) -> bool {
     match cell {
-        HistoryCell::Tool(ToolCell::Invocation(view)) => view.outcome.is_none(),
+        HistoryCell::Tool(ToolCell::Invocation(view)) => {
+            view.outcome.is_none() || view.is_running_background()
+        }
         HistoryCell::Tool(ToolCell::CompactionStarted { .. }) => true,
         HistoryCell::Tool(ToolCell::Subagent(subagent)) => subagent.has_live_updates(),
         HistoryCell::Diff(diff) => diff.is_pending(),

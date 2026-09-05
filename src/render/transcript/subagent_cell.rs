@@ -27,7 +27,7 @@ enum SubagentPart {
 pub(crate) struct SubagentOverview {
     /// 展示名称（快照描述或参数摘要）
     pub(crate) label: String,
-    /// 状态键：ok / err / run / idle
+    /// 状态键：ok / err / run / idle / cancelled / interrupted
     pub(crate) status: &'static str,
     /// 是否仍在执行
     pub(crate) running: bool,
@@ -37,7 +37,7 @@ pub(crate) struct SubagentOverview {
     pub(crate) tokens: Option<u64>,
     /// 子智能体类型（general / explore / 自定义档案），并发多个时用来区分
     pub(crate) agent_type: Option<String>,
-    /// 已执行步数与预算，反映还能跑多久
+    /// 已执行步数与预算，反映剩余执行次数
     pub(crate) progress: Option<(usize, usize)>,
     /// 运行时长（秒）；终态取最后一次更新与启动的间隔
     pub(crate) elapsed_seconds: Option<u64>,
@@ -84,7 +84,7 @@ impl SubagentCell {
     /// 返回底部 agent 面板需要的概览信息。
     ///
     /// 返回:
-    /// - 概览条目；状态键为 ok/err/run/idle
+    /// - 含状态、进度和用量的概览条目
     pub(crate) fn overview(&self) -> SubagentOverview {
         let snapshot = self
             .subagent_id
@@ -100,10 +100,11 @@ impl SubagentCell {
             .filter(|description| !description.trim().is_empty())
             .unwrap_or_else(|| tool_event_label_tense("subagent", Some(&self.arguments), tense));
         // 存活条目附带实时阶段（工具进度 / Token 统计 / 待命提示），供面板展示
-        let detail = snapshot
-            .as_ref()
-            .filter(|_| status == "run" || status == "idle")
-            .and_then(|snapshot| snapshot.phase.clone());
+        let detail = snapshot.as_ref().and_then(|snapshot| match status {
+            "err" | "interrupted" => snapshot.error.clone(),
+            "run" | "idle" => snapshot.phase.clone(),
+            _ => None,
+        });
         let tokens = snapshot.as_ref().and_then(snapshot_tokens);
         let agent_type = snapshot
             .as_ref()
@@ -257,16 +258,10 @@ pub(super) fn render(cell: &SubagentCell, mode: ToolCallDisplayMode) -> String {
 /// - `snapshot`: 可选后台快照
 ///
 /// 返回:
-/// - ok / err / run
+/// - 统一终端状态键
 fn status_key(cell: &SubagentCell, snapshot: Option<&SubagentSnapshot>) -> &'static str {
     snapshot
-        .map(|snapshot| match snapshot.status.as_str() {
-            "completed" => "ok",
-            "failed" | "cancelled" => "err",
-            // 持久子智能体待命：存活但不再执行，与运行中区分
-            "idle" => "idle",
-            _ => "run",
-        })
+        .map(|snapshot| crate::render::status_style::subagent_status_key(&snapshot.status))
         .unwrap_or_else(|| match cell.outcome.as_ref() {
             Some((true, _)) => "ok",
             Some((false, _)) => "err",
@@ -336,12 +331,23 @@ fn compact_subagent_summary(
             "completed" => t("completed", "已完成"),
             "failed" => t("failed", "失败"),
             "cancelled" => t("cancelled", "已取消"),
+            "interrupted" => t("interrupted", "已中断"),
+            "idle" => t("idle · /msg to continue", "待命，可用 /msg 追加任务"),
             other => other,
         };
-        return Some(match snapshot.last_tool.as_deref() {
-            Some(tool) if !tool.is_empty() => format!("{status} · {tool}"),
-            _ => status.to_string(),
-        });
+        let detail = if matches!(snapshot.status.as_str(), "failed" | "interrupted") {
+            snapshot.error.as_deref()
+        } else if snapshot.status == "running" {
+            snapshot.phase.as_deref()
+        } else {
+            None
+        };
+        let mut summary = vec![status.to_string(), snapshot.subagent_type.clone()];
+        if let Some(detail) = detail.filter(|text| !text.trim().is_empty()) {
+            summary.push(crate::render::clip_to_width(detail, 64, "…"));
+        }
+        summary.push(t("↓ view details", "↓ 查看详情").to_string());
+        return Some(summary.join(" · "));
     }
     if cell.outcome.is_some() {
         return Some(t("finished", "已结束").to_string());
@@ -349,13 +355,6 @@ fn compact_subagent_summary(
     Some(t("running", "运行中").to_string())
 }
 
-/// 从 subagent 工具结果中读取子智能体 ID 和状态。
-///
-/// 参数:
-/// - `output`: subagent 工具 JSON 输出
-///
-/// 返回:
-/// - 可识别时返回 `(ID, 状态)`
 /// 从 subagent 工具参数中解析目标子智能体 ID。
 ///
 /// start 之外的 action（wait / status / send / result / cancel / stop）都在参数里
@@ -376,6 +375,7 @@ fn subagent_id_from_arguments(arguments: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+/// 从子任务工具结果读取身份；参数为 JSON 输出，返回可选的 `(ID, 状态)`。
 fn subagent_identity(output: &str) -> Option<(String, String)> {
     let value = serde_json::from_str::<Value>(output).ok()?;
     let subagent = value.get("subagent")?;

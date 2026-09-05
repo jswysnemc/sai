@@ -1,7 +1,8 @@
 import { Bot, Settings2 } from "lucide-react";
 import { useState } from "react";
 import type { AgentChoice } from "../agents/agent-types";
-import { AgentQuickConfigDialog } from "../agents/agent-quick-config/agent-quick-config-dialog";
+import { SubagentModelDialog } from "../agents/subagent-model-config/subagent-model-dialog";
+import { Button } from "../../shared/ui/button/button";
 import { Select } from "../../shared/ui/select/select";
 import "./agent-selector.css";
 import { useI18n } from "../i18n/use-i18n";
@@ -15,7 +16,7 @@ type AgentSelectorProps = {
 };
 
 /**
- * 渲染主界面 Agent 选择器,并提供打开全局 Agent 配置的入口。
+ * 渲染主对话 Agent 选择器，并提供子任务模型与思考设置入口。
  *
  * @param props Agent 选项、当前选择、加载状态和更新回调
  * @returns Agent 单选控件与配置按钮
@@ -37,17 +38,16 @@ export function AgentSelector({ choices, selection, loading, disabled, onSelect 
         menuClassName="agent-selector-menu"
         onChange={onSelect}
       />
-      <button
-        type="button"
+      <Button
         className="agent-selector-config"
         onClick={() => setQuickConfigOpen(true)}
-        title={t("Quick Agent model settings", "快速调整 Agent 模型")}
-        aria-label={t("Quick Agent model settings", "快速调整 Agent 模型")}
+        title={t("Subagent models & thinking", "子任务模型与思考")}
+        aria-label={t("Subagent models & thinking", "子任务模型与思考")}
       >
         <Settings2 size={13} />
-      </button>
+      </Button>
       {quickConfigOpen && (
-        <AgentQuickConfigDialog open agent={selection} onClose={() => setQuickConfigOpen(false)} />
+        <SubagentModelDialog open onClose={() => setQuickConfigOpen(false)} />
       )}
     </div>
   );

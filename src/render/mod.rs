@@ -13,6 +13,7 @@ mod engine_notice;
 mod error;
 pub(crate) mod expandable;
 pub(crate) mod fold_text;
+pub(crate) mod input_atom;
 mod live_tool_status;
 mod markdown;
 mod markdown_blocks;

@@ -6,6 +6,71 @@ use crate::config::AppConfig;
 use crate::tools::ToolRegistry;
 use serde_json::Value;
 
+/// 【后台命令】【等待回归】等待结束时返回仍运行的任务和日志，供主 Agent 判断。
+#[tokio::test]
+async fn regression_background_wait_returns_running_snapshot_and_logs() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = isolated_test_paths(temp.path().to_path_buf());
+    let store = BackgroundCommandStore::new(paths.state_dir.clone());
+    terminal_task(&store, "running");
+    let mut tasks = store.load().unwrap();
+    tasks[0].pid = std::process::id();
+    tasks[0].timeout_seconds = 0;
+    tasks[0].started_at = super::store::unix_seconds();
+    std::fs::write(&tasks[0].stdout_log, "waiting for input\n").unwrap();
+    store.save(&tasks).unwrap();
+    let output = wait_background_task(
+        serde_json::json!({"task_id": "task-1", "timeout_seconds": 1}),
+        &AppConfig::default(),
+        &paths,
+        None,
+    )
+    .await
+    .unwrap();
+    let body: Value = serde_json::from_str(&output).unwrap();
+    assert_eq!(body["task"]["status"], "running");
+    assert!(body["stdout"]
+        .as_str()
+        .unwrap()
+        .contains("waiting for input"));
+    assert_eq!(body["needs_attention"], true);
+    assert!(!store.load().unwrap()[0].completion_notified);
+}
+
+/// 等待并刷新一个会话时，其他会话的后台任务必须保留且不可被选为等待结果。
+#[tokio::test]
+async fn background_wait_preserves_other_session_tasks() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = isolated_test_paths(temp.path().to_path_buf());
+    let store = BackgroundCommandStore::new(paths.state_dir.clone());
+    terminal_task(&store, "running");
+    let mut own = store.load().unwrap().remove(0);
+    own.timeout_seconds = 0;
+    own.runtime_owner_kind = Some("session".into());
+    own.runtime_owner_id = Some("session-one".into());
+    let mut other = own.clone();
+    other.id = "other-task".into();
+    other.runtime_owner_id = Some("session-two".into());
+    other.pid = std::process::id();
+    store.save(&[own, other.clone()]).unwrap();
+    let owner = super::background_tasks::BackgroundRuntimeOwner::session("session-one");
+    let output = wait_background_task(
+        serde_json::json!({"timeout_seconds": 1}),
+        &AppConfig::default(),
+        &paths,
+        Some(&owner),
+    )
+    .await
+    .unwrap();
+    let body: Value = serde_json::from_str(&output).unwrap();
+    assert_eq!(body["task"]["id"], "task-1");
+    let saved = store.load().unwrap();
+    assert_eq!(saved.len(), 2);
+    let retained = saved.iter().find(|task| task.id == other.id).unwrap();
+    assert_eq!(retained.status, "running");
+    assert_eq!(retained.updated_at, other.updated_at);
+}
+
 fn terminal_task(store: &BackgroundCommandStore, status: &str) {
     store.init().unwrap();
     let stdout_log = store.logs_dir().join("task.out.log");
@@ -81,6 +146,7 @@ async fn wait_returns_terminal_task() {
         serde_json::json!({"task_id": "task-1", "timeout_seconds": 1}),
         &AppConfig::default(),
         &paths,
+        None,
     )
     .await
     .unwrap();
@@ -138,6 +204,7 @@ async fn wait_without_task_id_returns_any_finished_task() {
         serde_json::json!({"timeout_seconds": 1}),
         &AppConfig::default(),
         &paths,
+        None,
     )
     .await
     .unwrap();

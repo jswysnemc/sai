@@ -45,7 +45,11 @@ impl TranscriptStore {
                     let preview: String = cell.text.chars().take(48).collect();
                     blocks.push(ExpandableBlock {
                         title: format!("{} · {preview}", t("You", "你")),
-                        body: cell.text.clone(),
+                        body: crate::render::input_atom::render_input_atoms(
+                            &cell.text,
+                            &cell.atoms,
+                            true,
+                        ),
                         kind: ExpandableBlockKind::Plain,
                     });
                 }
@@ -86,10 +90,16 @@ impl TranscriptStore {
                     let body = command_full_body(view);
                     if !body.trim().is_empty() {
                         // 命令标题使用完整命令并做 shell 着色，Ctrl+O 界面不省略
-                        let label = crate::render::tool_event_line::tool_command_title_colored(
-                            &view.name,
-                            Some(&view.arguments),
-                        );
+                        let label = if view.name == "background_command" {
+                            colorize_command_lines(
+                                &crate::render::tool_view::background_task_command(view),
+                            )
+                        } else {
+                            crate::render::tool_event_line::tool_command_title_colored(
+                                &view.name,
+                                Some(&view.arguments),
+                            )
+                        };
                         blocks.push(ExpandableBlock {
                             title: format!("{} · {label}", t("command", "命令")),
                             body,
@@ -97,8 +107,33 @@ impl TranscriptStore {
                         });
                     }
                 }
+                HistoryCell::Tool(ToolCell::Invocation(view)) => {
+                    let body = tool_full_body(view);
+                    if !body.is_empty() {
+                        blocks.push(ExpandableBlock {
+                            title: crate::render::tool_event_line::tool_event_label_tense(
+                                &view.name,
+                                Some(&view.arguments),
+                                crate::render::tool_event_line::ToolVerbTense::from_done(
+                                    view.outcome.is_some(),
+                                ),
+                            ),
+                            body,
+                            kind: ExpandableBlockKind::Plain,
+                        });
+                    }
+                }
                 _ => {}
             }
+        }
+        if let Some(tail) = self.live_tail.as_ref().filter(|tail| {
+            tail.kind == crate::llm::ChatStreamKind::Reasoning && !tail.source.is_empty()
+        }) {
+            blocks.push(ExpandableBlock {
+                title: "Thinking".to_string(),
+                body: tail.source.clone(),
+                kind: ExpandableBlockKind::Markdown,
+            });
         }
         blocks
     }
@@ -155,6 +190,40 @@ impl TranscriptStore {
     }
 }
 
+/// 收集通用工具的完整参数、进度与结果，使折叠载荷都能通过分段视图读取。
+///
+/// 参数: `view` 为工具生命周期数据
+/// 返回: 保留全文的正文，JSON 以可读缩进显示
+fn tool_full_body(view: &crate::render::tool_view::ToolView) -> String {
+    if view.name == "todo" {
+        return crate::render::render_expand::with_expanded_render(|| {
+            crate::render::tool_view::render(view, crate::render::ToolCallDisplayMode::Full)
+        });
+    }
+    let mut sections = Vec::new();
+    for (label, payload) in [
+        ("Arguments", view.arguments.as_str()),
+        ("Progress", view.progress.as_deref().unwrap_or_default()),
+        (
+            "Output",
+            view.outcome
+                .as_ref()
+                .map(|outcome| outcome.output.as_str())
+                .unwrap_or_default(),
+        ),
+    ] {
+        if payload.trim().is_empty() {
+            continue;
+        }
+        let formatted = serde_json::from_str::<serde_json::Value>(payload)
+            .ok()
+            .and_then(|value| serde_json::to_string_pretty(&value).ok())
+            .unwrap_or_else(|| payload.to_string());
+        sections.push(format!("{label}\n{formatted}"));
+    }
+    sections.join("\n\n")
+}
+
 /// 将命令文本逐行做 shell 语法着色。
 ///
 /// 参数:
@@ -178,6 +247,9 @@ fn colorize_command_lines(command: &str) -> String {
 /// 返回:
 /// - 完整文本
 fn command_full_body(view: &crate::render::tool_view::ToolView) -> String {
+    if let Some(body) = crate::render::tool_view::background_pager_body(view) {
+        return body;
+    }
     let stdout = view.command_stdout_text();
     let stderr = view.command_stderr_text();
     let mut parts = Vec::new();

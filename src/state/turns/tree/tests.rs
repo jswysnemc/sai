@@ -13,6 +13,35 @@ fn append_turn(db: &ConversationDb, turn_id: &str, user: &str) -> String {
     turn_id.to_string()
 }
 
+/// 【会话】【多起点测试】两个起始消息可反复切换，活动上下文不混入另一条路径。
+#[test]
+fn session_start_creates_independent_root_messages_and_contexts() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = crate::paths::SaiPaths::for_tests(temp.path());
+    let store = crate::state::StateStore::new(&paths).unwrap();
+    store.start_turn("first", "FIRST_ROOT").unwrap();
+    store.complete_turn("first", "FIRST_ANSWER", None).unwrap();
+    store.switch_to_session_start().unwrap();
+    assert!(store.load_turns().unwrap().is_empty());
+    store.start_turn("second", "SECOND_ROOT").unwrap();
+    store
+        .complete_turn("second", "SECOND_ANSWER", None)
+        .unwrap();
+    let tree = store.session_tree().unwrap();
+    assert_eq!(tree.roots.len(), 2);
+    assert_eq!(tree.active_leaf_id.as_deref(), Some("second"));
+    for (id, present, absent) in [
+        ("first", "FIRST_ROOT", "SECOND_ROOT"),
+        ("second", "SECOND_ROOT", "FIRST_ROOT"),
+    ] {
+        store.switch_active_leaf(id).unwrap();
+        let history = format!("{:?}", store.project_history(None).unwrap().messages);
+        assert!(history.contains(present));
+        assert!(!history.contains(absent));
+    }
+    assert_eq!(store.load_all_turns().unwrap().len(), 2);
+}
+
 /// 线性追加的轮次应当形成单链，活动叶子指向最后一轮。
 #[test]
 fn sequential_turns_form_a_single_chain() {

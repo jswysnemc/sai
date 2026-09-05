@@ -1,10 +1,10 @@
 use super::stream_commands::{StreamCommandContext, StreamInputAction};
 use super::{ReplRuntime, StreamComposerDraft};
 use crate::agent::AgentMode;
+use crate::cli::repl_clipboard::{is_paste_key, paste_image_first};
 use crate::cli::repl_commands::{
     stream_command_disabled_hint, stream_command_policy, StreamCommandPolicy,
 };
-use crate::cli::repl_clipboard::{is_paste_key, paste_image_first};
 use crate::cli::repl_windows_paste::WindowsPasteKey;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
@@ -58,11 +58,10 @@ impl ReplRuntime {
         // 2. 交互终端：备用屏 pager 展示全部折叠块，左右切换
         if std::io::stdout().is_terminal() && std::io::stdin().is_terminal() {
             let blocks = self.transcript.expandable_blocks();
-            if blocks.is_empty() {
-                return Ok(false);
-            }
             let start = blocks.len().saturating_sub(1);
-            super::super::repl_pager::open_blocks_pager(&blocks, start)?;
+            super::super::repl_pager::open_blocks_pager(&blocks, start, |width| {
+                self.expanded_transcript_lines(width)
+            })?;
             // 备用屏返回后强制重同步 viewport 与 composer，避免输入框错位
             self.resync_after_overlay()?;
             return Ok(true);
@@ -619,7 +618,9 @@ fn complete_stream_mention(runtime: &mut ReplRuntime) -> Result<bool> {
         return Ok(false);
     };
     let draft = runtime.stream_draft_mut();
-    let (next, cursor) = crate::cli::repl_mentions::apply_mention(&draft.text, &trigger, &item);
+    let (next, cursor) = draft
+        .clipboard
+        .complete_mention(&draft.text, &trigger, &item);
     draft.text = next;
     draft.cursor = cursor;
     draft.slash_selection = 0;

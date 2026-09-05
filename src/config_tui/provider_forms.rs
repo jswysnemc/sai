@@ -140,6 +140,10 @@ pub(super) fn edit_provider_form(
         ),
         render_selected_index(&provider),
     ));
+    fields.push(
+        Field::new(t("Enabled", "启用供应商"), provider.enabled.to_string())
+            .choices(&["true", "false"]),
+    );
     loop {
         if !run_form(stdout, t(" EDIT PROVIDER ", " 编辑供应商 "), &mut fields)? {
             return Ok(None);
@@ -199,16 +203,20 @@ fn build_provider_from_fields(
             )
         };
     let extra_headers = normalize_extra_headers(&fields[headers_idx].value)?;
-    // 多密钥三字段固定在表单末尾：密钥列表、负载均衡开关、选中序号
-    let api_keys = parse_api_key_lines(&fields[fields.len() - 3].value, &provider.api_keys);
-    let api_key_balance = parse_bool_field(&fields[fields.len() - 2].value)?;
-    let api_key_selected = parse_selected_key(&fields[fields.len() - 1].value, &api_keys);
+    // 1. 请求头之后依次为密钥列表、负载均衡、选中序号和供应商启用状态
+    let api_keys = parse_api_key_lines(&fields[headers_idx + 1].value, &provider.api_keys);
+    let api_key_balance = parse_bool_field(&fields[headers_idx + 2].value)?;
+    let api_key_selected = parse_selected_key(&fields[headers_idx + 3].value, &api_keys);
+    let enabled = fields
+        .get(headers_idx + 4)
+        .map(|field| parse_bool_field(&field.value))
+        .transpose()?
+        .unwrap_or(provider.enabled);
     let updated = ProviderConfig {
         id: fields[0].value.trim().to_string(),
         display_name: fields[1].value.trim().to_string(),
         base_url: normalize_base_url(&fields[2].value),
-        // 启用开关不在 TUI 表单里，沿用编辑前的值
-        enabled: provider.enabled,
+        enabled,
         protocol: fields[3].value.trim().to_string(),
         api_key: Some(fields[4].value.trim().to_string()).filter(|value| !value.is_empty()),
         api_keys,

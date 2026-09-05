@@ -39,7 +39,7 @@ pub(super) async fn run_background_action(
         }
         "list" => list_background_tasks(paths, config, true, runtime_owner.as_ref()).await,
         "output" => read_background_task_output(args, config, paths).await,
-        "wait" => wait_background_task(args, config, paths).await,
+        "wait" => wait_background_task(args, config, paths, runtime_owner.as_ref()).await,
         "stop" if !readonly => stop_background_task(args, config, paths).await,
         "cleanup" if !readonly => cleanup_background_tasks(args, paths, config).await,
         "start" | "stop" | "cleanup" => bail!(

@@ -13,6 +13,22 @@ use crate::tools::{ToolRegistry, ToolSpec};
 use anyhow::Result;
 use serde_json::json;
 
+/// 【终端】【后台日志】读取卡片使用的有界日志快照，不消费任何通知。
+///
+/// 参数: `task` 为可信任务表中的记录
+/// 返回: 任务状态与最近日志，最多各 128 KiB、2000 行
+pub(crate) fn background_log_snapshot(
+    task: &super::store::BackgroundCommandTask,
+) -> Result<serde_json::Value> {
+    let stdout = super::background_tasks::read_log_tail(&task.stdout_log, 2_000, 128 * 1_024)?;
+    let stderr = super::background_tasks::read_log_tail(&task.stderr_log, 2_000, 128 * 1_024)?;
+    Ok(json!({
+        "task": task, "stdout": stdout.text, "stderr": stderr.text,
+        "stdout_truncated": stdout.truncated, "stderr_truncated": stderr.truncated,
+        "live_output": true,
+    }))
+}
+
 /// 注册后台命令写入类工具。
 ///
 /// 参数:

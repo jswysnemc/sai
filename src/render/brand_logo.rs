@@ -1,24 +1,21 @@
-/// Sai 品牌标志的静态文本行：半块字符（▀ ▄ █）拼出的 "Sai" 字母标。
-///
-/// 大写 S 全高，小写 a/i 取 x 字高，i 带点与衬线基座；取代旧的双箭头
-/// 像素网格。每行固定 17 列，不足以空格补齐。Web 端 `sai-logo.tsx`
-/// 使用同一套字符网格。
+/// 终端原生 SAI 字标：等宽细线与圆角连接，四行内保持清晰轮廓。
+/// 每行固定 21 列，使用标准箱线字符，无需图片协议或特殊图标字体。
 const LOGO_LINES: [&str; 4] = [
-    "▄▀▀▀▀▄        ▄  ",
-    "▀▄▄▄▄   ▀▀▀▀▄ ▄▄ ",
-    "     █ ▄▀▀▀▀█  █ ",
-    "▀▄▄▄▄▀ ▀▄▄▄██ ▄█▄",
+    "╭────╴  ╭────╮  ╶─┬─╴",
+    "╰────╮  │    │    │  ",
+    "     │  ├────┤    │  ",
+    "╶────╯  ╵    ╵  ╶─┴─╴",
 ];
 
 /// 标志渲染所需的字符列数。
-pub(crate) const LOGO_WIDTH: usize = 17;
+pub(crate) const LOGO_WIDTH: usize = 21;
 /// 标志渲染所需的字符行数。
 pub(crate) const LOGO_HEIGHT: usize = LOGO_LINES.len();
 
 /// 【终端】【品牌标志】按行渲染 Sai 标志。
 ///
 /// 参数:
-/// - `style`: 实心块使用的 ANSI 样式前缀
+/// - `style`: 字标线条使用的 ANSI 样式前缀
 ///
 /// 返回:
 /// - 每行等宽的 ANSI 文本，行数为 `LOGO_HEIGHT`
@@ -54,11 +51,10 @@ mod tests {
                 "标志每行必须等宽"
             );
         }
-        // 字母标锚点：S 上弧、i 的圆点、底部衬线基座
-        assert_eq!(strip_ansi(&lines[0]), "▄▀▀▀▀▄        ▄  ");
-        assert_eq!(strip_ansi(&lines[1]), "▀▄▄▄▄   ▀▀▀▀▄ ▄▄ ");
-        assert_eq!(strip_ansi(&lines[2]), "     █ ▄▀▀▀▀█  █ ");
-        assert_eq!(strip_ansi(&lines[3]), "▀▄▄▄▄▀ ▀▄▄▄██ ▄█▄");
+        // 1. 圆角轮廓与同宽细线保持完整，避免退回断裂的半块字符
+        assert!(strip_ansi(&lines[0]).contains("╭────╴"));
+        assert!(strip_ansi(&lines[2]).contains("├────┤"));
+        assert!(strip_ansi(&lines[3]).ends_with("╶─┴─╴"));
     }
 
     /// 【终端】【品牌标志】验证样式在每行结束后复位，不污染后续输出。

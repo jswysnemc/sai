@@ -25,7 +25,7 @@ fn tool_status_uses_simple_single_success() {
     };
     let output = tool_status_text("deep_diagnose", &stats);
     assert!(output.starts_with("deep_diagnose×1 "));
-    assert!(output.contains("\x1b[32mok\x1b[0m"));
+    assert!(output.contains("\x1b[32mdone\x1b[0m"));
 }
 
 #[test]
@@ -39,8 +39,8 @@ fn tool_status_counts_mixed_multiple_calls() {
     let output = tool_status_text("grep", &stats);
     assert!(output.starts_with("grep×3 "));
     assert!(output.contains("\x1b[33m"));
-    assert!(output.contains("\x1b[32mok\x1b[0m:1"));
-    assert!(output.contains("\x1b[31merr\x1b[0m:1"));
+    assert!(output.contains("\x1b[32mdone\x1b[0m:1"));
+    assert!(output.contains("\x1b[31mfailed\x1b[0m:1"));
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn tool_event_text_is_append_only_finish_line() {
     let plain = crate::render::activity_animation::strip_ansi_for_test(&output);
     assert!(plain.starts_with("• "));
     assert!(plain.contains("web_search"));
-    assert!(plain.contains("ok"));
+    assert!(plain.contains("done"));
 }
 
 #[test]

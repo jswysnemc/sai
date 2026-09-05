@@ -1,6 +1,6 @@
 .agent-quick-grid {
   display: grid;
-  gap:var(--space-xl);
+  gap:var(--space-lg);
 }
 
 .agent-quick-field {
@@ -41,10 +41,4 @@
 .agent-quick-error {
   border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
   color: var(--danger);
-}
-
-@media (max-width: 40rem) {
-  .agent-quick-grid {
-    gap:var(--space-lg);
-  }
 }

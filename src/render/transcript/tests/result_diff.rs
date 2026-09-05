@@ -138,7 +138,7 @@ fn failed_write_keeps_preview_body() {
     let plain = crate::render::activity_animation::strip_ansi_for_test(&rendered);
     assert!(plain.contains("alpha"), "{plain}");
     assert!(plain.contains("beta"), "{plain}");
-    assert!(plain.contains("err"), "{plain}");
+    assert!(plain.contains("failed"), "{plain}");
 }
 
 /// 【TUI】【结果 diff 解析】unified diff 行号与增删标记被正确恢复。

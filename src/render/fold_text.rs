@@ -58,29 +58,18 @@ pub(crate) fn wrap_display_lines(text: &str, wrap_width: usize) -> Vec<String> {
 /// - `expanded`: 是否展开
 ///
 /// 返回:
-/// - `(可见行, 省略行数)`；省略处用 `__OMITTED__` 占位
+/// - 显示行与结构化省略条目，正文中的同名文本不会误判为折叠符号
 pub(crate) fn fold_display_lines(
     lines: &[String],
     head: usize,
     tail: usize,
     expanded: bool,
-) -> (Vec<String>, usize) {
-    // 展开渲染上下文（备用屏回看）：全部折叠块按展开输出
-    let expanded = expanded || crate::render::render_expand::expand_override();
-    let keep = head.saturating_add(tail);
-    if expanded || keep == 0 || lines.len() <= keep {
-        return (lines.to_vec(), 0);
-    }
-    let omitted = lines.len() - keep;
-    let mut visible = Vec::with_capacity(keep + 1);
-    visible.extend_from_slice(&lines[..head.min(lines.len())]);
-    visible.push("__OMITTED__".to_string());
-    let tail_start = lines.len().saturating_sub(tail);
-    visible.extend_from_slice(&lines[tail_start..]);
-    (visible, omitted)
+) -> Vec<FoldedDisplayLine> {
+    fold_display_lines_tracked(lines, head, tail, expanded)
 }
 
 /// 折行折叠后的单个显示条目。
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum FoldedDisplayLine {
     /// 正常显示行
     Line(String),
@@ -304,12 +293,20 @@ mod tests {
     #[test]
     fn folds_middle_when_too_many_display_lines() {
         let lines: Vec<String> = (1..=20).map(|n| format!("line{n}")).collect();
-        let (visible, omitted) = fold_display_lines(&lines, 2, 4, false);
-        assert_eq!(omitted, 14);
-        assert!(visible.iter().any(|l| l == "__OMITTED__"));
-        assert!(visible.contains(&"line1".to_string()));
-        assert!(visible.contains(&"line2".to_string()));
-        assert!(visible.contains(&"line20".to_string()));
-        assert!(!visible.iter().any(|l| l == "line10"));
+        let visible = fold_display_lines(&lines, 2, 4, false);
+        assert!(visible
+            .iter()
+            .any(|line| matches!(line, FoldedDisplayLine::Omitted { omitted: 14, .. })));
+        for text in ["line1", "line2", "line20"] {
+            assert!(visible.contains(&FoldedDisplayLine::Line(text.to_string())));
+        }
+        assert!(!visible.contains(&FoldedDisplayLine::Line("line10".to_string())));
+    }
+
+    /// 正文中的旧占位字符串必须按普通文本保留。
+    #[test]
+    fn literal_omission_token_remains_content() {
+        let visible = fold_display_lines(&["__OMITTED__".to_string()], 2, 4, false);
+        assert_eq!(visible, vec![FoldedDisplayLine::Line("__OMITTED__".into())]);
     }
 }

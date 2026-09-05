@@ -20,6 +20,8 @@ mod welcome_cell;
 mod window;
 
 #[cfg(test)]
+mod animation_tests;
+#[cfg(test)]
 mod assistant_body_tests;
 #[cfg(test)]
 mod layout_hierarchy_tests;

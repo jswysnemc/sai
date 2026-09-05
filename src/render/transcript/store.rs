@@ -1,3 +1,6 @@
+mod animation;
+mod background_logs;
+mod input_echo;
 mod live_reasoning;
 mod operations;
 mod subagent_panel;

@@ -28,7 +28,7 @@ impl ToolHealth {
         match status {
             "ok" => Self::Ok,
             "err" => Self::Err,
-            "skip" => Self::Neutral,
+            "skip" | "cancelled" | "interrupted" | "idle" => Self::Neutral,
             _ => Self::Pending,
         }
     }
@@ -57,15 +57,47 @@ pub(crate) fn tool_bullet(health: ToolHealth) -> String {
 /// 返回:
 /// - 带 ANSI 颜色的状态文本，未知状态（如编辑类 `+N -M`）原样透传
 pub(crate) fn color_status(status: &str) -> String {
-    match status {
-        "ok" => "\x1b[32mok\x1b[0m".to_string(),
-        "err" => "\x1b[31merr\x1b[0m".to_string(),
-        "run" => "\x1b[33mrun\x1b[0m".to_string(),
+    let style = match status {
+        "ok" => "\x1b[32m",
+        "err" => "\x1b[31m",
+        "run" => "\x1b[33m",
         // 持久子智能体待命：存活但不执行，用蓝色与运行中区分
-        "idle" => "\x1b[38;5;110midle\x1b[0m".to_string(),
-        "arg" => "\x1b[2m\x1b[36m…\x1b[0m".to_string(),
-        "skip" => "\x1b[2mskip\x1b[0m".to_string(),
-        value => value.to_string(),
+        "idle" => "\x1b[38;5;110m",
+        "arg" => "\x1b[2m\x1b[36m",
+        "skip" | "cancelled" | "interrupted" => "\x1b[2m",
+        value => return value.to_string(),
+    };
+    format!("{style}{}\x1b[0m", status_text(status))
+}
+
+/// 将内部状态键转换为展示文案，供着色与列宽计算共用。
+///
+/// 参数: `status` 为内部状态键或自定义徽标
+/// 返回: 面向用户的状态文字
+pub(crate) fn status_text(status: &str) -> &str {
+    match status {
+        "ok" => "done",
+        "err" => "failed",
+        "run" => "running",
+        "arg" => "preparing",
+        "skip" => "skipped",
+        "cancelled" => "stopped",
+        value => value,
+    }
+}
+
+/// 统一子任务持久化状态与终端状态键，供概要、工具卡和详情视图共用。
+///
+/// 参数: `status` 为子任务快照状态
+/// 返回: 对应的终端状态键
+pub(crate) fn subagent_status_key(status: &str) -> &'static str {
+    match status {
+        "completed" => "ok",
+        "failed" => "err",
+        "cancelled" => "cancelled",
+        "interrupted" => "interrupted",
+        "idle" => "idle",
+        _ => "run",
     }
 }
 
@@ -86,11 +118,12 @@ mod tests {
 
     #[test]
     fn color_status_styles_known_values() {
-        assert_eq!(color_status("ok"), "\x1b[32mok\x1b[0m");
-        assert_eq!(color_status("err"), "\x1b[31merr\x1b[0m");
-        assert_eq!(color_status("run"), "\x1b[33mrun\x1b[0m");
-        assert_eq!(color_status("arg"), "\x1b[2m\x1b[36m…\x1b[0m");
-        assert_eq!(color_status("skip"), "\x1b[2mskip\x1b[0m");
+        assert_eq!(color_status("ok"), "\x1b[32mdone\x1b[0m");
+        assert_eq!(color_status("err"), "\x1b[31mfailed\x1b[0m");
+        assert_eq!(color_status("run"), "\x1b[33mrunning\x1b[0m");
+        assert_eq!(color_status("arg"), "\x1b[2m\x1b[36mpreparing\x1b[0m");
+        assert_eq!(color_status("skip"), "\x1b[2mskipped\x1b[0m");
+        assert_eq!(color_status("interrupted"), "\x1b[2minterrupted\x1b[0m");
         assert_eq!(color_status("custom"), "custom");
     }
 
@@ -117,6 +150,7 @@ mod tests {
         assert_eq!(ToolHealth::from_status("run"), ToolHealth::Pending);
         assert_eq!(ToolHealth::from_status("arg"), ToolHealth::Pending);
         assert_eq!(ToolHealth::from_status("skip"), ToolHealth::Neutral);
+        assert_eq!(ToolHealth::from_status("interrupted"), ToolHealth::Neutral);
         assert_eq!(ToolHealth::from_status(""), ToolHealth::Pending);
     }
 }

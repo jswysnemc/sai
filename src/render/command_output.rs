@@ -142,7 +142,7 @@ pub(crate) fn render_command_block_with_action(
     for entry in &lines {
         if first {
             output.push_str("\x1b[35m$ \x1b[0m");
-        } else {
+        } else if matches!(entry, crate::render::fold_text::FoldedDisplayLine::Line(_)) {
             output.push_str(&continuation);
         }
         append_command_display_line(&mut output, entry, &mut highlight);
@@ -193,7 +193,7 @@ fn append_command_display_line(
             for line in skipped {
                 let _ = highlight_code_line_continued("sh", line, highlight);
             }
-            output.push_str(&crate::render::omitted_line::render_omitted_line_plain(
+            output.push_str(&crate::render::omitted_line::render_omitted_line(
                 *omitted, true,
             ));
             output.push('\n');

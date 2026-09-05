@@ -2,7 +2,7 @@ use super::line::AnsiLine;
 use crate::render::brand_logo::{logo_lines, LOGO_HEIGHT, LOGO_WIDTH};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-/// 品牌标志使用的实心块样式（与 Web 端 --signal 同色）。
+/// 品牌字标的线条颜色（与 Web 端 --signal 同色）。
 const LOGO_STYLE: &str = "\x1b[38;2;58;114;100m";
 /// 标志与右侧信息列之间的间隔列数。
 const LOGO_CONTENT_GAP: usize = 2;
@@ -407,7 +407,7 @@ mod tests {
         assert!(visible[2].contains("directory:"));
         assert!(visible[3].contains("permissions:"));
         // 信息列共三行，末行只剩标志的 S 底弧与 a/i 基座
-        assert!(visible[4].contains('█') && !visible[4].contains("permissions:"));
+        assert!(visible[4].contains("╶────╯") && !visible[4].contains("permissions:"));
     }
 
     /// 【终端】【品牌标志】验证标志渲染在边框内部且每行宽度一致。
@@ -424,7 +424,7 @@ mod tests {
         // 标志块必须出现在带边框的正文行内，而不是边框之外
         let logo_rows = lines
             .iter()
-            .filter(|line| line.as_str().contains('█'))
+            .filter(|line| line.as_str().contains("├────┤"))
             .collect::<Vec<_>>();
         assert!(!logo_rows.is_empty(), "宽终端应渲染标志");
         for line in &logo_rows {
@@ -459,7 +459,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
 
-        assert!(!joined.contains('█'), "窄终端不应渲染标志");
+        assert!(!joined.contains("╭────╴"), "窄终端不应渲染标志");
         assert!(joined.contains("gpt-5"));
     }
 

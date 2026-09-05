@@ -1,3 +1,4 @@
+mod background;
 pub(crate) mod command_output_buffer;
 mod formatter;
 mod model;
@@ -7,6 +8,7 @@ mod todo;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use background::{background_pager_body, background_task_command};
 pub(crate) use formatter::{render, render_call, render_framed, render_result};
 pub(crate) use model::{PermissionAuditView, ToolView};
 pub(crate) use todo::render_todo_output;

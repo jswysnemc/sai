@@ -13,7 +13,12 @@ use std::time::Duration;
 #[path = "subagent_args.rs"]
 mod args;
 mod control;
+mod runner_factory;
 mod wait;
+
+use runner_factory::build_subagent_runner;
+#[cfg(test)]
+use runner_factory::inherits_default_tools;
 
 use args::{optional_string_arg, string_arg, summarize_prompt};
 use control::{
@@ -212,7 +217,8 @@ async fn run_subagent_action(
 ///
 /// 返回:
 /// - 已创建子智能体的快照
-async fn start_subagent(args: Value, context: SubagentContext) -> Result<String> {
+async fn start_subagent(args: Value, mut context: SubagentContext) -> Result<String> {
+    runner_factory::refresh_model_settings(&mut context)?;
     let prompt = string_arg(&args, "prompt")?;
     let requested_type = optional_string_arg(&args, "subagent_type")?;
     let profile = context
@@ -535,100 +541,6 @@ async fn run_subagent_session(
     }
 }
 
-/// 构造子代理执行器（模型客户端、工具集、系统提示与消息注入回调）。
-///
-/// 参数:
-/// - `subagent_id`: 子智能体 ID，用于步间轮询其消息队列
-/// - `subagent_type`: 子代理类型
-/// - `max_steps`: 每个任务段的最大工具调用次数
-/// - `context`: 子智能体上下文
-/// - `tool_progress`: 写回快照的进度上报通道
-/// - `persistent`: 是否为持久会话（持久会话不设整体运行时限提醒）
-///
-/// 返回:
-/// - 可直接运行的子代理执行器
-fn build_subagent_runner(
-    subagent_id: &str,
-    subagent_type: &str,
-    max_steps: usize,
-    context: &SubagentContext,
-    tool_progress: ToolProgress,
-    persistent: bool,
-) -> Result<SubagentRunner> {
-    // 1. 按子智能体模型配置构造客户端,未配置时沿用主对话供应商与模型
-    let profile = context
-        .config
-        .resolve_registered_agent(Some(subagent_type))
-        .with_context(|| format!("subagent profile is not exposed: {subagent_type}"))?;
-    let client = build_subagent_client(context, &profile)?;
-    let (default_prompt, default_tools, excluded) = match subagent_type {
-        "explore" => (
-            EXPLORE_PROMPT,
-            context.tools.clone_filtered(EXPLORE_ALLOWED),
-            Vec::new(),
-        ),
-        "general" => (
-            GENERAL_PROMPT,
-            context.tools.clone(),
-            GENERAL_EXCLUDED.to_vec(),
-        ),
-        _ => (
-            GENERAL_PROMPT,
-            context.tools.clone(),
-            GENERAL_EXCLUDED.to_vec(),
-        ),
-    };
-    let tools = if inherits_default_tools(&context.config, &profile) {
-        default_tools
-    } else {
-        let allowed = profile
-            .enabled_tools
-            .iter()
-            .map(String::as_str)
-            .collect::<Vec<_>>();
-        default_tools.clone_filtered(&allowed)
-    };
-    // 2. 渐进网关按子 Agent 的实际工具集合和延迟配置重建，避免沿用主 Agent 的描述
-    let mut tools = tools.clone_excluding(&[super::LOAD_NAME, super::INVOKE_NAME]);
-    super::progressive::register_loader(&mut tools, &profile.deferred_tools);
-    let base_prompt = if profile.system_prompt.trim().is_empty() {
-        default_prompt.to_string()
-    } else {
-        profile.system_prompt.clone()
-    };
-    let system_prompt = subagent_system_prompt(context, &profile, &base_prompt)?;
-    // 3. 以 Full 模式上报,时间线可拿到工具调用参数、结果与流式文本
-    let progress = SubagentProgress::new(tool_progress, ProgressMode::Full, true);
-    // 4. 步间消息注入:主代理 action=send 与用户留言经消息队列在此进入对话
-    let poll_id = subagent_id.to_string();
-    let message_poll: super::subagent_runner::SubagentMessagePoll =
-        std::sync::Arc::new(move || {
-            subagent_state::drain_subagent_inbox(&poll_id)
-                .into_iter()
-                .map(|message| super::subagent_runner::SubagentInjectedMessage {
-                    from: message.from,
-                    text: message.text,
-                })
-                .collect()
-        });
-    Ok(SubagentRunner::new(client, &system_prompt, tools, progress)
-        .progressive_loading(
-            profile.deferred_tools.clone(),
-            context.config.clone(),
-            context.paths.clone(),
-        )
-        .max_steps(max_steps)
-        .timeout_seconds(TOOL_TIMEOUT_SECONDS)
-        // 持久会话面向多任务段长期存活,不注入整体时限收尾提醒
-        .session_deadline_seconds(if persistent {
-            0
-        } else {
-            SUBAGENT_TIMEOUT_SECONDS
-        })
-        .excluded_tools(&excluded)
-        .with_message_poll(message_poll))
-}
-
 /// 运行指定类型的子代理。
 ///
 /// 参数:
@@ -754,20 +666,6 @@ async fn run_persistent_subagent(
     }
 }
 
-/// 判断子 Agent 是否应沿用类型内置的工具集合。
-///
-/// 参数:
-/// - `config`: 当前应用配置
-/// - `profile`: 已解析的统一 Agent 档案
-///
-/// 返回:
-/// - 内置 Agent 或旧版迁移档案在工具为空时返回 true
-fn inherits_default_tools(config: &AppConfig, profile: &crate::config::AgentProfile) -> bool {
-    profile.enabled_tools.is_empty()
-        && (matches!(profile.id.as_str(), "general" | "explore")
-            || !config.agents.iter().any(|agent| agent.id == profile.id))
-}
-
 /// 按子智能体模型配置构造 LLM 客户端。
 ///
 /// 子智能体配置了独立供应商/模型时,在一份克隆配置上覆盖 active_provider 与该供应商
@@ -782,83 +680,8 @@ fn build_subagent_client(
     context: &SubagentContext,
     profile: &crate::config::AgentProfile,
 ) -> Result<OpenAiCompatibleClient> {
-    let subagent = &context.config.subagent;
-    // 1. 未配置任何子智能体供应商与模型,沿用主对话配置
-    if subagent.provider_id.is_empty()
-        && subagent.model.is_empty()
-        && profile.provider_id.is_empty()
-        && profile.model.is_empty()
-        && (profile.thinking_level.is_empty() || profile.thinking_level == "auto")
-    {
-        return OpenAiCompatibleClient::from_config(&context.config, &context.paths);
-    }
-    let mut config = context.config.clone();
-    // 2. 指定了供应商则切换 active_provider,否则在当前供应商上改模型
-    let provider_id = if profile.provider_id.is_empty() {
-        &subagent.provider_id
-    } else {
-        &profile.provider_id
-    };
-    if !provider_id.is_empty() {
-        config.active_provider = provider_id.clone();
-    }
-    let active = config.active_provider.clone();
-    if let Some(provider) = config
-        .providers
-        .iter_mut()
-        .find(|provider| provider.id == active)
-    {
-        let model = if profile.model.is_empty() {
-            &subagent.model
-        } else {
-            &profile.model
-        };
-        if !model.is_empty() {
-            provider.default_model = model.clone();
-        }
-        let thinking = if profile.thinking_level.is_empty() || profile.thinking_level == "auto" {
-            &subagent.thinking_level
-        } else {
-            &profile.thinking_level
-        };
-        if !thinking.is_empty() && thinking != "auto" {
-            provider.thinking_level = thinking.clone();
-        }
-    }
+    let config = crate::config::subagent_runtime_config(&context.config, profile)?;
     OpenAiCompatibleClient::from_config(&config, &context.paths)
-}
-
-/// 组合 Agent 系统提示词与该档案启用的 Skills。
-///
-/// 参数:
-/// - `context`: 子智能体运行上下文
-/// - `profile`: 统一 Agent 档案
-/// - `base_prompt`: Agent 基础系统提示词
-///
-/// 返回:
-/// - 可直接交给子智能体的完整系统提示词
-fn subagent_system_prompt(
-    context: &SubagentContext,
-    profile: &crate::config::AgentProfile,
-    base_prompt: &str,
-) -> Result<String> {
-    if profile.skills_full.is_empty() && profile.skills_named.is_empty() {
-        return Ok(base_prompt.to_string());
-    }
-    let mut config = context.config.clone();
-    config.agent_runtime = Some(crate::config::AgentRuntimeOverride {
-        enabled_tools: profile.enabled_tools.clone(),
-        exclusive: profile.tools_exclusive,
-        deferred_tools: profile.deferred_tools.clone(),
-        skills_full: profile.skills_full.clone(),
-        skills_named: profile.skills_named.clone(),
-    });
-    let skills = crate::tools::skills_prompt(&config, &context.paths)?;
-    if skills.trim().is_empty() {
-        Ok(base_prompt.to_string())
-    } else {
-        Ok(format!("{base_prompt}\n\n{skills}"))
-    }
 }
 
 include!("subagent_tests.rs");

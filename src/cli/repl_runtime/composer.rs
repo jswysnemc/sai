@@ -103,6 +103,7 @@ impl ReplRuntime {
             &agent_lines,
             cols,
             self.todo_panel_compact,
+            self.transcript.live_animation_frame(),
         )
     }
 

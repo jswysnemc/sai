@@ -20,18 +20,17 @@ pub(crate) fn render(cell: &MarkdownCell) -> String {
     output.trim_end_matches('\n').to_string()
 }
 
-/// 渲染流式过程中可展示的 Markdown 内容（供 TUI 全量重绘 live tail）。
-///
-/// 已闭合表格按全表列宽输出；末尾尚未闭合的表格输出当前最优列宽预览。
-/// 不强制关闭未完成的代码块等其它结构。
+/// 渲染完整 Markdown 快照，包括没有换行符的最后一行。
 ///
 /// 参数:
-/// - `source`: 当前完整 Markdown 流式源
+/// - `source`: 当前完整 Markdown 正文
 ///
 /// 返回:
-/// - 可安全展示在 live 区的 ANSI 文本
+/// - 可反复重绘的 ANSI 文本
 pub(crate) fn render_completed(source: &str) -> String {
-    render_completed_parts(source).0
+    render(&MarkdownCell {
+        source: source.to_string(),
+    })
 }
 
 /// 渲染流式 Markdown，并报告尾部是否仍有开放结构。

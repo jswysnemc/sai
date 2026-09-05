@@ -3,8 +3,9 @@ use crate::config::AppConfig;
 use crate::paths::SaiPaths;
 use crate::state::StateStore;
 use crate::tools::command::{
-    acknowledge_background_completions, poll_background_completions,
-    poll_session_background_completions, BackgroundCompletionNotice,
+    acknowledge_background_attention, acknowledge_background_completions,
+    poll_background_completions, poll_session_background_completions, BackgroundAttentionNotice,
+    BackgroundCompletionNotice,
 };
 use crate::tools::mesh::{acknowledge_mesh_messages, next_pending};
 use crate::tools::subagent_goal::{list_subagents_for_goal, pending_finished_notices_for_goal};
@@ -17,6 +18,13 @@ use std::time::Duration;
 
 const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
+#[path = "external_attention.rs"]
+mod attention;
+
+#[cfg(test)]
+#[path = "external_attention_tests.rs"]
+mod attention_tests;
+
 /// 一批尚未交给主 Agent 的外部完成事件。
 #[derive(Debug)]
 pub(crate) struct ExternalEventBatch {
@@ -24,6 +32,7 @@ pub(crate) struct ExternalEventBatch {
     display: String,
     subagent_ids: Vec<String>,
     background_task_ids: Vec<String>,
+    background_attention: Option<BackgroundAttentionNotice>,
     mesh_message_ids: Vec<String>,
 }
 
@@ -64,6 +73,7 @@ impl ExternalEventBatch {
             display: display.to_string(),
             subagent_ids: Vec::new(),
             background_task_ids: Vec::new(),
+            background_attention: None,
             mesh_message_ids: Vec::new(),
         }
     }
@@ -95,6 +105,9 @@ impl ExternalEventBatch {
     /// 返回:
     /// - 子智能体或后台命令标识
     pub(crate) fn event_id(&self) -> &str {
+        if let Some(notice) = &self.background_attention {
+            return &notice.event_id;
+        }
         self.subagent_ids
             .first()
             .or_else(|| self.background_task_ids.first())
@@ -134,6 +147,13 @@ impl Agent {
             self.state.session_id(),
             &batch.background_task_ids,
         )?;
+        if let Some(notice) = &batch.background_attention {
+            acknowledge_background_attention(
+                &self.paths,
+                self.state.session_id(),
+                std::slice::from_ref(&notice.task_id),
+            )?;
+        }
         acknowledge_finished_notices(&owner_key, &batch.subagent_ids);
         acknowledge_mesh_messages(self.state.state_dir(), &batch.mesh_message_ids);
         Ok(())
@@ -270,6 +290,11 @@ impl ExternalEventMonitor {
                 build_mesh_batch(&envelope),
             )));
         }
+        if let Some(batch) = self.poll_attention(Some(goal_id))? {
+            return Ok(ExternalEventPoll::Ready(ExternalEventWake::Completion(
+                batch,
+            )));
+        }
         let running_subagents = list_subagents_for_goal(&owner_key, goal_id)
             .iter()
             .any(|snapshot| snapshot.status == "running");
@@ -316,6 +341,11 @@ impl ExternalEventMonitor {
         if let Some(envelope) = next_pending(self.state.state_dir(), self.state.session_id()) {
             return Ok(ExternalEventPoll::Ready(ExternalEventWake::Completion(
                 build_mesh_batch(&envelope),
+            )));
+        }
+        if let Some(batch) = self.poll_attention(None)? {
+            return Ok(ExternalEventPoll::Ready(ExternalEventWake::Completion(
+                batch,
             )));
         }
         let running_subagents = list_subagents_for_owner(&owner_key)
@@ -424,6 +454,7 @@ fn build_event_batch(
             .map(|notice| notice.task_id.clone())
             .collect(),
         mesh_message_ids: Vec::new(),
+        background_attention: None,
     }
 }
 
@@ -438,7 +469,8 @@ fn build_event_batch(
 /// - 可插入模型间隙或唤醒空闲会话的事件批次
 fn build_mesh_batch(envelope: &crate::tools::mesh::MeshEnvelope) -> ExternalEventBatch {
     let correlation_id = envelope.correlation_id.as_deref().unwrap_or(&envelope.id);
-    let hint = "如需回复或送回结果，对 from / reply_to 再发一次 mesh_send，并带上同一个 correlation_id";
+    let hint =
+        "如需回复或送回结果，对 from / reply_to 再发一次 mesh_send，并带上同一个 correlation_id";
     let details = format!(
         "来自：{}\n目标：{}\ncorrelation_id：{}\n正文：\n{}",
         envelope.from, envelope.to, correlation_id, envelope.text
@@ -457,6 +489,7 @@ fn build_mesh_batch(envelope: &crate::tools::mesh::MeshEnvelope) -> ExternalEven
         display,
         subagent_ids: Vec::new(),
         background_task_ids: Vec::new(),
+        background_attention: None,
         mesh_message_ids: vec![envelope.id.clone()],
     }
 }

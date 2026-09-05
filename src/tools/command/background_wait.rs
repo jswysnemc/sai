@@ -1,4 +1,4 @@
-use super::background_tasks::refresh_task_statuses;
+use super::background_tasks::{read_log_tail, refresh_task_statuses, BackgroundRuntimeOwner};
 use super::store::BackgroundCommandStore;
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
@@ -6,8 +6,8 @@ use anyhow::{Context, Result};
 use serde_json::{json, Value};
 use std::time::Duration;
 
-const WAIT_DEFAULT_SECONDS: u64 = 180;
-const WAIT_MAX_SECONDS: u64 = 600;
+const WAIT_DEFAULT_SECONDS: u64 = 60;
+const WAIT_MAX_SECONDS: u64 = 60;
 const WAIT_POLL_MILLIS: u64 = 500;
 
 /// 阻塞等待后台任务进入终态。
@@ -19,6 +19,7 @@ const WAIT_POLL_MILLIS: u64 = 500;
 /// - `args`: 包含可选 `task_id` 和 `timeout_seconds` 的工具参数
 /// - `config`: 应用配置，用于刷新任务状态
 /// - `paths`: Sai 路径
+/// - `owner`: 调用方会话范围，空值保留命令模式的全局行为
 ///
 /// 返回:
 /// - JSON 格式的终态任务、无任务说明或等待超时结果
@@ -26,6 +27,7 @@ pub(super) async fn wait_background_task(
     args: Value,
     config: &AppConfig,
     paths: &SaiPaths,
+    owner: Option<&BackgroundRuntimeOwner>,
 ) -> Result<String> {
     let task_id = args
         .get("task_id")
@@ -45,6 +47,13 @@ pub(super) async fn wait_background_task(
 
     loop {
         let mut tasks = store.load()?;
+        // 1. 等待范围限制在调用方所属会话，不能被其他会话任务占住
+        if let Some(owner) = owner {
+            tasks.retain(|task| {
+                task.runtime_owner_id.as_deref() == Some(&owner.owner_id)
+                    && task.runtime_owner_kind.as_deref() == Some(owner.owner_kind.as_str())
+            });
+        }
         if wait_for_any && tracked_task_ids.is_none() {
             let running_ids = tasks
                 .iter()
@@ -61,7 +70,14 @@ pub(super) async fn wait_background_task(
             tracked_task_ids = Some(running_ids);
         }
         if refresh_task_statuses(&mut tasks, config).await {
-            store.save(&tasks)?;
+            // 2. 只合并本次刷新过的任务，保留其他会话的任务记录
+            let mut all = store.load()?;
+            for task in &tasks {
+                if let Some(current) = all.iter_mut().find(|item| item.id == task.id) {
+                    *current = task.clone();
+                }
+            }
+            store.save(&all)?;
         }
 
         let terminal_task = if let Some(id) = task_id.as_deref() {
@@ -88,12 +104,40 @@ pub(super) async fn wait_background_task(
         }
 
         if started.elapsed().as_secs() >= timeout_seconds {
+            let task = tasks.iter().find(|task| {
+                task_id.as_ref().map_or_else(
+                    || {
+                        tracked_task_ids
+                            .as_ref()
+                            .is_some_and(|ids| ids.contains(&task.id))
+                    },
+                    |id| &task.id == id,
+                ) && task.status == "running"
+            });
+            let max_bytes = config
+                .tools
+                .background_command_log_max_bytes
+                .clamp(1, 8_192);
+            let stdout = task
+                .map(|task| read_log_tail(&task.stdout_log, 16, max_bytes))
+                .transpose()?;
+            let stderr = task
+                .map(|task| read_log_tail(&task.stderr_log, 16, max_bytes))
+                .transpose()?;
             return Ok(serde_json::to_string_pretty(&json!({
-                "ok": false,
+                "ok": true,
+                "completed": false,
                 "timeout": true,
                 "waited": true,
-                "message": "background task is still running; a later wait or output call can inspect it",
-                "task_id": task_id,
+                "needs_attention": true,
+                "message": "The wait interval ended; the command is still running. Review the recent logs for progress, errors or input prompts before deciding whether to wait again. This does not stop the command.",
+                "task_id": task.map(|task| task.id.as_str()),
+                "task": task,
+                "stdout": stdout.as_ref().map(|output| &output.text),
+                "stderr": stderr.as_ref().map(|output| &output.text),
+                "stdout_truncated": stdout.as_ref().is_some_and(|output| output.truncated),
+                "stderr_truncated": stderr.as_ref().is_some_and(|output| output.truncated),
+                "waited_seconds": started.elapsed().as_secs(),
             }))?);
         }
         tokio::time::sleep(Duration::from_millis(WAIT_POLL_MILLIS)).await;

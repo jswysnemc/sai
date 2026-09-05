@@ -1,4 +1,5 @@
 use crate::render::terminal_text as t;
+use crate::render::tool_event_line::ToolVerbTense;
 use serde_json::Value;
 
 /// 生成后台命令调用展示标签。
@@ -8,30 +9,69 @@ use serde_json::Value;
 ///
 /// 返回:
 /// - 面向终端展示的后台命令动作标签
-pub(crate) fn background_command_call_label(arguments: Option<&str>) -> String {
+#[cfg(test)]
+fn background_command_call_label(arguments: Option<&str>) -> String {
+    background_command_call_label_tense(arguments, ToolVerbTense::Progressive)
+}
+
+/// 按后台命令动作及生命周期生成自然语言标签。
+///
+/// 参数: `arguments` 为完整或部分工具参数，`tense` 区分进行中和完成事件
+/// 返回: 展示动作与目标的标签
+pub(crate) fn background_command_call_label_tense(
+    arguments: Option<&str>,
+    tense: ToolVerbTense,
+) -> String {
     let Some(arguments) = arguments else {
         return t("Background command", "后台命令").to_string();
     };
+    let done = tense == ToolVerbTense::Perfect;
     let action = background_action(arguments).unwrap_or_else(|| "command".to_string());
     match action.as_str() {
         "start" => label_with_target(
-            t("Background start", "启动后台命令"),
+            if done {
+                "Started background command"
+            } else {
+                "Starting background command"
+            },
             start_target(arguments),
         ),
-        "list" => t("Background list", "后台命令列表").to_string(),
+        "list" => if done {
+            "Checked background commands"
+        } else {
+            "Checking background commands"
+        }
+        .to_string(),
         "output" => label_with_target(
-            t("Background output", "后台命令输出"),
+            if done {
+                "Read background output"
+            } else {
+                "Reading background output"
+            },
             task_id_target(arguments),
         ),
         "wait" => label_with_target(
-            t("Background wait", "等待后台命令"),
+            if done {
+                "Waited for background command"
+            } else {
+                "Waiting for background command"
+            },
             task_id_target(arguments),
         ),
         "stop" => label_with_target(
-            t("Background stop", "停止后台命令"),
+            if done {
+                "Stopped background command"
+            } else {
+                "Stopping background command"
+            },
             task_id_target(arguments),
         ),
-        "cleanup" => t("Background cleanup", "清理后台命令").to_string(),
+        "cleanup" => if done {
+            "Cleared finished background commands"
+        } else {
+            "Clearing finished background commands"
+        }
+        .to_string(),
         _ => t("Background command", "后台命令").to_string(),
     }
 }
@@ -57,7 +97,7 @@ pub(crate) fn is_background_command_start(arguments: &str) -> bool {
 /// 返回:
 /// - 命令块动作标题
 pub(crate) fn background_command_block_action() -> &'static str {
-    t("Background", "后台")
+    t("Starting in background", "正在后台启动")
 }
 
 /// 生成后台命令结果摘要。
@@ -166,21 +206,17 @@ fn start_result_label(task: &Value) -> String {
     let id = string_field(task, "id").map(short_id);
     let pid = task.get("pid").and_then(Value::as_u64);
     let timeout = task.get("timeout_seconds").and_then(Value::as_u64);
-    let mut parts = vec![format!(
-        "{} {}",
-        t("Background started", "后台命令已启动"),
-        compact_text(label)
-    )];
+    let mut parts = vec![format!("Started {} in background", compact_text(label))];
     if let Some(id) = id {
-        parts.push(format!("id={id}"));
+        parts.push(id);
     }
     if let Some(pid) = pid {
-        parts.push(format!("pid={pid}"));
+        parts.push(format!("PID {pid}"));
     }
-    if let Some(timeout) = timeout {
-        parts.push(format!("timeout={}", timeout_label(timeout)));
+    if let Some(timeout) = timeout.filter(|seconds| *seconds > 0) {
+        parts.push(format!("timeout {}", timeout_label(timeout)));
     }
-    parts.join(" ")
+    parts.join(" · ")
 }
 
 /// 生成列表结果摘要。
@@ -196,12 +232,7 @@ fn list_result_label(tasks: &[Value]) -> String {
     let stopped = count_status(tasks, "stopped");
     let timed_out = count_status(tasks, "timed_out");
     format!(
-        "{} {}={running} {}={exited} {}={stopped} {}={timed_out}",
-        t("Background list", "后台命令列表"),
-        t("running", "运行中"),
-        t("exited", "已退出"),
-        t("stopped", "已停止"),
-        t("timed_out", "已超时")
+        "Background commands · {running} running · {exited} finished · {stopped} stopped · {timed_out} timed out"
     )
 }
 
@@ -220,10 +251,7 @@ fn output_result_label(task: &Value, value: &Value) -> String {
     let stdout_lines = text_line_count(value.get("stdout"));
     let stderr_lines = text_line_count(value.get("stderr"));
     format!(
-        "{} {id} stdout={stdout_lines} {} stderr={stderr_lines} {}",
-        t("Background output", "后台命令输出"),
-        t("lines", "行"),
-        t("lines", "行")
+        "Read background output {id} · {stdout_lines} stdout lines · {stderr_lines} stderr lines"
     )
 }
 
@@ -245,16 +273,10 @@ fn stop_result_label(task: &Value, value: &Value) -> String {
         .and_then(Value::as_bool)
         .unwrap_or(false);
     if was_running {
-        format!(
-            "{} {id} {}",
-            t("Background stop", "停止后台命令"),
-            localized_status(&status)
-        )
+        format!("Stopped background command {id}")
     } else {
         format!(
-            "{} {id} {}_{}",
-            t("Background stop", "停止后台命令"),
-            t("already", "已经"),
+            "Background command {id} already {}",
             localized_status(&status)
         )
     }
@@ -278,16 +300,14 @@ fn wait_result_label(task: &Value, value: &Value) -> String {
         .unwrap_or(false)
     {
         return format!(
-            "{} {id}",
-            t("Background wait timed out", "后台命令等待超时")
+            "Stopped waiting for background command {id} · still {}",
+            localized_status(
+                &string_field(task, "status").unwrap_or_else(|| "running".to_string())
+            )
         );
     }
     let status = string_field(task, "status").unwrap_or_else(|| "unknown".to_string());
-    format!(
-        "{} {id} {}",
-        t("Background wait", "后台命令等待"),
-        localized_status(&status)
-    )
+    format!("Background command {id} {}", localized_status(&status))
 }
 
 /// 生成清理结果摘要。
@@ -307,12 +327,7 @@ fn cleanup_result_label(value: &Value) -> String {
         .get("remaining")
         .and_then(Value::as_u64)
         .unwrap_or_default();
-    format!(
-        "{} {}={removed} {}={remaining}",
-        t("Background cleanup", "清理后台命令"),
-        t("removed", "已移除"),
-        t("remaining", "剩余")
-    )
+    format!("Cleared {removed} finished background commands · {remaining} remaining")
 }
 
 /// 返回后台任务状态的本地化名称。
@@ -325,9 +340,9 @@ fn cleanup_result_label(value: &Value) -> String {
 fn localized_status(status: &str) -> &str {
     match status {
         "running" => t("running", "运行中"),
-        "exited" => t("exited", "已退出"),
+        "exited" => t("finished", "已结束"),
         "stopped" => t("stopped", "已停止"),
-        "timed_out" => t("timed_out", "已超时"),
+        "timed_out" => t("timed out", "已超时"),
         _ => status,
     }
 }
@@ -464,134 +479,4 @@ fn json_string_field_from_partial(raw: &str, key: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn call_label_describes_background_actions() {
-        assert_eq!(
-            background_command_call_label(Some(
-                r#"{"action":"start","label":"dev server","command":"npm run dev"}"#
-            )),
-            format!("{} dev server", t("Background start", "启动后台命令"))
-        );
-        assert_eq!(
-            background_command_call_label(Some(r#"{"action":"list"}"#)),
-            t("Background list", "后台命令列表")
-        );
-        assert_eq!(
-            background_command_call_label(Some(
-                r#"{"action":"output","task_id":"1730000000-12345"}"#
-            )),
-            format!(
-                "{} 1730000000-12345",
-                t("Background output", "后台命令输出")
-            )
-        );
-        assert_eq!(
-            background_command_call_label(Some(
-                r#"{"action":"wait","task_id":"1730000000-12345"}"#
-            )),
-            format!("{} 1730000000-12345", t("Background wait", "后台命令等待"))
-        );
-        assert_eq!(
-            background_command_call_label(Some(r#"{"action":"cleanup"}"#)),
-            t("Background cleanup", "清理后台命令")
-        );
-    }
-
-    #[test]
-    fn start_result_summarizes_task_identity() {
-        let output = json!({
-            "ok": true,
-            "task": {
-                "id": "1730000000-12345",
-                "label": "dev server",
-                "pid": 12345,
-                "timeout_seconds": 0
-            }
-        })
-        .to_string();
-
-        assert_eq!(
-            background_command_result_label(&output).unwrap(),
-            format!(
-                "{} dev server id=1730000000-12345 pid=12345 timeout=none",
-                t("Background started", "后台命令已启动")
-            )
-        );
-    }
-
-    #[test]
-    fn list_output_stop_and_cleanup_results_are_compact() {
-        let list = json!({
-            "ok": true,
-            "tasks": [
-                {"status": "running"},
-                {"status": "running"},
-                {"status": "exited"},
-                {"status": "stopped"},
-                {"status": "timed_out"}
-            ]
-        })
-        .to_string();
-        let output = json!({
-            "ok": true,
-            "task": {"id": "1730000000-12345"},
-            "stdout": "one\ntwo",
-            "stderr": ""
-        })
-        .to_string();
-        let stop = json!({
-            "ok": true,
-            "was_running": true,
-            "task": {"id": "1730000000-12345", "status": "stopped"}
-        })
-        .to_string();
-        let cleanup = json!({
-            "ok": true,
-            "removed": ["a", "b"],
-            "remaining": 1
-        })
-        .to_string();
-
-        assert_eq!(
-            background_command_result_label(&list).unwrap(),
-            format!(
-                "{} {}=2 {}=1 {}=1 {}=1",
-                t("Background list", "后台命令列表"),
-                t("running", "运行中"),
-                t("exited", "已退出"),
-                t("stopped", "已停止"),
-                t("timed_out", "已超时")
-            )
-        );
-        assert_eq!(
-            background_command_result_label(&output).unwrap(),
-            format!(
-                "{} 1730000000-12345 stdout=2 {} stderr=0 {}",
-                t("Background output", "后台命令输出"),
-                t("lines", "行"),
-                t("lines", "行")
-            )
-        );
-        assert_eq!(
-            background_command_result_label(&stop).unwrap(),
-            format!(
-                "{} 1730000000-12345 {}",
-                t("Background stop", "停止后台命令"),
-                t("stopped", "已停止")
-            )
-        );
-        assert_eq!(
-            background_command_result_label(&cleanup).unwrap(),
-            format!(
-                "{} {}=2 {}=1",
-                t("Background cleanup", "清理后台命令"),
-                t("removed", "已移除"),
-                t("remaining", "剩余")
-            )
-        );
-    }
-}
+mod tests;

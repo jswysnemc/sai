@@ -94,7 +94,7 @@ pub(super) async fn drain_submission_queue(
                 return Ok(false);
             }
             // 剪贴板附件在此还原：图片与长文本占位块换回真实内容
-            let (echo_text, fold_echo) = item.clipboard.echo_text_for_submit(&text);
+            let echo = item.clipboard.echo_text_for_submit(&text);
             let mut chat_input = item.clipboard.to_chat_input(&text);
             chat_input.message = crate::cli::repl_mentions::expand_skill_mentions(
                 &chat_input.message,
@@ -105,10 +105,10 @@ pub(super) async fn drain_submission_queue(
                 continue;
             }
             input_history.push(text.clone());
-            runtime.record_user(*mode, echo_text.clone(), fold_echo)?;
+            runtime.record_input(*mode, echo.clone())?;
             // 跟随端上行的一轮走这条路径，回显要广播回去，否则对端只见回答不见提问
             session_link.broadcast_user_message(
-                &echo_text,
+                &echo.text,
                 chat_input.image_url.clone().into_iter().collect(),
             );
             if agent.installed_mode() != *mode {

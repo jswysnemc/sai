@@ -1,4 +1,5 @@
 mod agent_panel;
+mod background_logs;
 mod bottom_panel;
 mod composer;
 mod composer_frame;
@@ -13,8 +14,10 @@ mod mention_panel;
 mod placeholder_tips;
 mod queue_panel;
 mod queue_source;
+mod records;
 mod reflow;
 mod reflow_state;
+mod refresh;
 mod runner_events;
 mod shell_hint_panel;
 mod slash_panel;
@@ -24,6 +27,8 @@ mod viewport;
 
 pub(in crate::cli) use queue_panel::QueuePanelIdleResult;
 
+#[cfg(test)]
+mod full_pager_tests;
 #[cfg(test)]
 mod tests;
 
@@ -67,6 +72,7 @@ pub(super) struct ReplRuntime {
     live_sync_pending: bool,
     desynced: bool,
     subagent_signature: Vec<(String, String, u64, u64)>,
+    background_logs: background_logs::BackgroundLogWatcher,
     pending_input_events: VecDeque<Event>,
     /// 读取系统剪贴板并插入的键位；两个输入框共用
     paste_image_key: PasteImageKey,
@@ -202,6 +208,7 @@ impl ReplRuntime {
             live_sync_pending: false,
             desynced: false,
             subagent_signature: Vec::new(),
+            background_logs: background_logs::BackgroundLogWatcher::default(),
             pending_input_events: VecDeque::new(),
             paste_image_key: PasteImageKey::default(),
             stream_draft: StreamComposerDraft::default(),
@@ -354,26 +361,20 @@ impl ReplRuntime {
                 .has_running_subagents()
                 .then_some(SUBAGENT_REFRESH_INTERVAL)
         };
-        // 子智能体视图的扫光按 live 节拍唤醒，与主 agent 动效保持同一帧率
-        let animation_wait = self
-            .transcript
-            .viewing_running_subagent()
-            .then_some(LIVE_REFRESH_INTERVAL);
+        // 后台命令与子任务均独立唤醒输入循环，不能依赖主 Agent 的外部消息监听
+        let animation_wait = (self.transcript.viewing_running_subagent()
+            || self.transcript.has_running_background_commands())
+        .then_some(LIVE_REFRESH_INTERVAL);
         // 跟随模式下远端事件持续到达：读键必须周期性醒来排空，
         // 否则主循环阻塞在 event::read，跟随端要等用户按键才更新
         let follow_wait = self
             .follow_events
             .is_some()
             .then_some(LIVE_REFRESH_INTERVAL);
-        [
-            reflow_wait,
-            subagent_wait,
-            animation_wait,
-            follow_wait,
-        ]
-        .into_iter()
-        .flatten()
-        .min()
+        [reflow_wait, subagent_wait, animation_wait, follow_wait]
+            .into_iter()
+            .flatten()
+            .min()
     }
 
     /// 重放已经到期的 resize 请求。
@@ -390,248 +391,6 @@ impl ReplRuntime {
         self.reflow.clear_pending();
         self.replay(streaming)?;
         Ok(true)
-    }
-
-    /// 记录用户输入并立即插入 source-backed 历史。
-    ///
-    /// 参数:
-    /// - `mode`: 用户提交时的 REPL 模式
-    /// - `text`: 回显正文（粘贴长文本应已展开）
-    /// - `fold`: 仅粘贴长文本为 true，启用思考式折叠
-    ///
-    /// 返回:
-    /// - 操作是否成功
-    pub(super) fn record_user(&mut self, mode: AgentMode, text: String, fold: bool) -> Result<()> {
-        self.transcript
-            .push_user_echo_with_fold(layout::transcript_mode(mode), text, fold);
-        self.sync_transcript(false)
-    }
-
-    /// 将已保存的会话历史与压缩摘要渲染到当前 TUI transcript。
-    ///
-    /// 参数:
-    /// - `turns`: 按时间顺序排列的历史轮次
-    /// - `compaction`: 最新压缩摘要
-    ///
-    /// 返回:
-    /// - transcript 同步结果
-    pub(super) fn record_history_with_compaction(
-        &mut self,
-        turns: &[SessionTimelineTurn],
-        compaction: Option<&SessionTimelineCompaction>,
-    ) -> Result<()> {
-        history::append_timeline_with_compaction(&mut self.transcript, turns, compaction);
-        self.sync_transcript(false)
-    }
-
-    /// 记录控制命令、系统提示或错误信息。
-    ///
-    /// 参数:
-    /// - `text`: 原始消息文本
-    ///
-    /// 返回:
-    /// - 操作是否成功
-    pub(super) fn record_meta(&mut self, text: String) -> Result<()> {
-        self.transcript.push_meta(text);
-        self.sync_transcript(false)
-    }
-
-    /// 记录轮次失败或中断提示，带失败专属样式。
-    ///
-    /// 参数:
-    /// - `text`: 失败说明
-    ///
-    /// 返回:
-    /// - transcript 同步结果
-    pub(super) fn record_failure(&mut self, text: String) -> Result<()> {
-        self.transcript.push_failure(text);
-        self.sync_transcript(false)
-    }
-
-    /// 记录等待用户处理的权限事件。
-    ///
-    /// 参数:
-    /// - `request`: 权限请求
-    ///
-    /// 返回:
-    /// - transcript 同步结果
-    pub(super) fn record_permission_request(
-        &mut self,
-        request: crate::permission::PermissionRequest,
-    ) -> Result<()> {
-        self.transcript.push_permission_request(request);
-        self.sync_transcript(false)
-    }
-
-    /// 更新 transcript 中权限事件的最终决定。
-    ///
-    /// 参数:
-    /// - `request_id`: 权限请求标识
-    /// - `decision`: 用户决定
-    ///
-    /// 返回:
-    /// - transcript 同步结果
-    pub(super) fn resolve_permission(
-        &mut self,
-        request_id: &str,
-        decision: crate::permission::PermissionDecision,
-    ) -> Result<()> {
-        self.transcript.resolve_permission(request_id, decision);
-        self.sync_transcript(false)
-    }
-
-    /// 更新权限事件中的内联拒绝回复草稿。
-    ///
-    /// 参数:
-    /// - `request_id`: 权限请求标识
-    /// - `draft`: 回复草稿；空值表示返回权限选择
-    ///
-    /// 返回:
-    /// - transcript 同步结果
-    pub(super) fn update_permission_reply(
-        &mut self,
-        request_id: &str,
-        draft: Option<String>,
-    ) -> Result<()> {
-        self.transcript
-            .set_permission_reply_draft(request_id, draft);
-        self.sync_transcript(false)
-    }
-
-    /// 更新权限事件中的当前高亮选项。
-    ///
-    /// 参数:
-    /// - `request_id`: 权限请求标识
-    /// - `selected`: 高亮选项
-    ///
-    /// 返回:
-    /// - transcript 同步结果
-    pub(super) fn update_permission_choice(
-        &mut self,
-        request_id: &str,
-        selected: crate::render::PermissionChoice,
-    ) -> Result<()> {
-        self.transcript.set_permission_choice(request_id, selected);
-        self.sync_transcript(false)
-    }
-
-    /// 权限交互开始时暂停工作动效，避免遮挡审计选择。
-    ///
-    /// 返回:
-    /// - transcript 同步结果
-    pub(super) fn pause_for_permission_prompt(&mut self) -> Result<()> {
-        self.next_live_refresh = None;
-        self.live_sync_pending = false;
-        self.transcript.clear_work_status();
-        self.transcript.finalize_live_tail();
-        self.sync_transcript(false)
-    }
-
-    /// 记录本地 Shell 命令与输出。
-    ///
-    /// 参数:
-    /// - `command`: Shell 命令
-    /// - `output`: 命令输出
-    /// - `exit_code`: 可选退出码
-    ///
-    /// 返回:
-    /// - 同步 transcript 是否成功
-    pub(super) fn record_shell(
-        &mut self,
-        command: String,
-        output: String,
-        exit_code: Option<i32>,
-    ) -> Result<()> {
-        self.transcript.push_shell(command, output, exit_code);
-        self.sync_transcript(false)
-    }
-
-    /// 进入 `!` Shell 命令的等待状态并显示实时耗时。
-    ///
-    /// 命令在 REPL 主循环里同步等待，没有工作状态行的话界面会完全静止，
-    /// 用户无法区分「正在跑」和「卡死了」。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 操作是否成功
-    pub(super) fn begin_shell_status(&mut self) -> Result<()> {
-        self.transcript
-            .set_work_status(crate::render::work_status::WorkStatus::WaitingToRun);
-        // 立刻排一帧，让状态行在命令启动前就画出来
-        self.next_live_refresh = Some(Instant::now());
-        self.sync_transcript(false)
-    }
-
-    /// 结束 `!` Shell 命令的等待状态。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 操作是否成功
-    pub(super) fn end_shell_status(&mut self) -> Result<()> {
-        self.transcript.clear_work_status();
-        self.next_live_refresh = None;
-        self.sync_transcript(false)
-    }
-
-    /// transcript 当前是否还挂着工作状态行。
-    ///
-    /// 返回:
-    /// - 存在工作状态为真
-    #[cfg(test)]
-    pub(super) fn transcript_has_work_status(&self) -> bool {
-        self.transcript.has_work_status()
-    }
-
-    /// 记录 REPL 启动欢迎面板。
-    ///
-    /// 参数:
-    /// - `version`: 当前程序版本
-    /// - `model`: 当前模型名称
-    /// - `directory`: 当前工作目录
-    /// - `permissions`: 当前权限模式
-    ///
-    /// 返回:
-    /// - 操作是否成功
-    pub(super) fn record_welcome(
-        &mut self,
-        version: String,
-        model: String,
-        directory: String,
-        permissions: String,
-    ) -> Result<()> {
-        self.transcript.push_welcome(WelcomeCell {
-            version,
-            model,
-            directory,
-            permissions,
-        });
-        self.sync_transcript(false)
-    }
-
-    /// 在流结束后收敛 source，并修复所有 stream-time reflow。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 操作是否成功
-    pub(super) fn finish_stream(&mut self) -> Result<()> {
-        self.next_live_refresh = None;
-        self.live_sync_pending = false;
-        // 轮次结束：斜杠面板恢复全部命令可选
-        self.stream_active = false;
-        self.transcript.finalize_live_tail();
-        self.transcript.clear_work_status();
-        if self.reflow.take_stream_finish_reflow_needed() {
-            self.reflow.schedule_immediate();
-            self.maybe_reflow_due(false)?;
-            return Ok(());
-        }
-        self.sync_transcript(false)
     }
 
     /// 标记终端已被外部程序写入，下一次同步前重启受管区域。
@@ -700,80 +459,6 @@ impl ReplRuntime {
     /// - 重绘是否成功
     pub(super) fn redraw(&mut self) -> Result<()> {
         self.replay(false)
-    }
-
-    /// 在固定节流周期内刷新动效帧并冲刷待同步的流式内容。
-    ///
-    /// 下一次到期时间由上一次的计划时刻累加，而不是从本次实际唤醒时刻起算：
-    /// 主循环 25ms 一跳、刷新间隔 32ms，两者不整除，按唤醒时刻累加会让每轮
-    /// 都多等一个 tick，实际间隔被拉到 50ms。按计划时刻推进则只是对齐到
-    /// 最近的 tick，长期平均仍是 32ms。
-    ///
-    /// 参数:
-    /// - 无
-    ///
-    /// 返回:
-    /// - 是否执行了 live 刷新
-    pub(super) fn tick_live(&mut self) -> Result<bool> {
-        let Some(next_refresh) = self.next_live_refresh else {
-            return Ok(false);
-        };
-        let now = Instant::now();
-        if now < next_refresh {
-            return Ok(false);
-        }
-        let animated = self.transcript.advance_live_animation();
-        let pending = std::mem::take(&mut self.live_sync_pending);
-        if !animated && !pending {
-            self.next_live_refresh = None;
-            return Ok(false);
-        }
-        // 工作状态、reasoning 或未冲刷的正文仍在进行时保持节奏刷新；
-        // 落后超过一个周期时（如终端卡顿）重新对齐到当前时刻，不追补欠帧
-        let planned = next_refresh + LIVE_REFRESH_INTERVAL;
-        self.next_live_refresh = Some(if planned > now {
-            planned
-        } else {
-            now + LIVE_REFRESH_INTERVAL
-        });
-        self.sync_transcript(true)?;
-        Ok(true)
-    }
-
-    /// 刷新后台子智能体的持久化时间线。
-    ///
-    /// 返回:
-    /// - 是否执行了 transcript 同步
-    pub(super) fn tick_subagents(&mut self) -> Result<bool> {
-        let signature = self.transcript.subagent_signature();
-        if signature == self.subagent_signature {
-            return Ok(false);
-        }
-        self.subagent_signature = signature;
-        self.transcript.mark_subagents_dirty();
-        self.sync_transcript(true)?;
-        Ok(true)
-    }
-
-    /// 处理输入阶段的定时重绘。
-    ///
-    /// 返回:
-    /// - 是否执行了任何刷新
-    pub(super) fn process_idle_tick(&mut self) -> Result<bool> {
-        let reflowed = self.maybe_reflow_due(false)?;
-        let subagents = self.tick_subagents()?;
-        // 观察者模式下主循环卡在读键上，远端事件只能借空闲节拍落地
-        let followed = self.drain_follow_events()?;
-        // 停留在运行中的子智能体视图，或后台仍有子智能体运行（底部面板
-        // 的流光与实时统计）时，空闲期也要驱动 live 刷新
-        if self.next_live_refresh.is_none()
-            && (self.transcript.viewing_running_subagent()
-                || self.transcript.has_running_subagents())
-        {
-            self.next_live_refresh = Some(Instant::now());
-        }
-        let animated = self.tick_live()?;
-        Ok(reflowed || subagents || followed || animated)
     }
 
     /// 记录终端尺寸变化并安排 resize reflow。

@@ -24,8 +24,9 @@ const BASE_COLOR: (u8, u8, u8) = (96, 96, 96);
 const HIGHLIGHT_COLOR: (u8, u8, u8) = (255, 255, 255);
 const RESET: &str = "\x1b[0m";
 
-/// 视觉引导点字符
-const GUIDE_DOT: char = '•';
+/// 同直径的旋转半圆，每四帧切换一次，避免字形大小随动画变化。
+const GUIDE_FRAMES: [char; 4] = ['◐', '◓', '◑', '◒'];
+const GUIDE_FRAME_HOLD: usize = 4;
 
 /// 圆点脉冲周期（帧）：两秒一呼吸，与文字扫光的节拍独立
 const DOT_PULSE_CYCLE: usize = 63;
@@ -46,8 +47,11 @@ pub(crate) fn render_thinking_dot(frame: usize) -> String {
     let pulse = (1.0 - (std::f32::consts::TAU * phase).cos()) / 2.0;
     let blended = blend_color(BASE_COLOR, HIGHLIGHT_COLOR, pulse);
     format!(
-        "\x1b[38;2;{};{};{}m{GUIDE_DOT}{RESET}",
-        blended.0, blended.1, blended.2
+        "\x1b[22m\x1b[38;2;{};{};{}m{}{RESET}",
+        blended.0,
+        blended.1,
+        blended.2,
+        guide_frame(frame)
     )
 }
 
@@ -97,12 +101,21 @@ pub(crate) fn render_activity_guide_with_color(
     color: Option<(u8, u8, u8)>,
 ) -> String {
     let intensity = shimmer_intensity(1, frame, 0);
+    let glyph = guide_frame(frame);
     match color {
         Some((red, green, blue)) => {
-            format!("\x1b[1m\x1b[38;2;{red};{green};{blue}m{GUIDE_DOT}{RESET}")
+            format!("\x1b[22m\x1b[38;2;{red};{green};{blue}m{glyph}{RESET}")
         }
-        None => format!("{}{GUIDE_DOT}{RESET}", color_escape(intensity)),
+        None => format!("\x1b[22m{}{glyph}{RESET}", color_escape(intensity)),
     }
+}
+
+/// 【终端】【状态动效】根据帧号选择固定宽度的旋转字形。
+///
+/// 参数: `frame` 为当前帧号
+/// 返回: 占用一个终端单元格的半圆字符
+fn guide_frame(frame: usize) -> char {
+    GUIDE_FRAMES[(frame / GUIDE_FRAME_HOLD) % GUIDE_FRAMES.len()]
 }
 
 /// 【终端】【状态动效】渲染从左向右扫过状态文字的白色余弦流光。
@@ -286,7 +299,7 @@ mod tests {
     fn thinking_dot_pulses_and_cycles() {
         let dark = render_thinking_dot(0);
         let bright = render_thinking_dot(DOT_PULSE_CYCLE / 2);
-        let cycled = render_thinking_dot(DOT_PULSE_CYCLE);
+        let cycled = render_thinking_dot(DOT_PULSE_CYCLE * GUIDE_FRAMES.len() * GUIDE_FRAME_HOLD);
 
         // 起点最暗：处于基础灰
         assert!(dark.contains("96;96;96"), "{dark}");
@@ -413,7 +426,12 @@ mod tests {
             .map(render_activity_guide)
             .collect::<Vec<_>>();
 
-        assert!(samples.iter().all(|dot| strip_ansi_for_test(dot) == "•"));
+        let glyphs: std::collections::HashSet<String> =
+            samples.iter().map(|dot| strip_ansi_for_test(dot)).collect();
+        assert_eq!(glyphs.len(), 4);
+        assert!(glyphs
+            .iter()
+            .all(|glyph| unicode_width::UnicodeWidthStr::width(glyph.as_str()) == 1));
         assert!(
             samples
                 .iter()
@@ -424,7 +442,7 @@ mod tests {
         );
         assert_eq!(
             render_activity_guide(0),
-            render_activity_guide(SHIMMER_CYCLE_FRAMES),
+            render_activity_guide(SHIMMER_CYCLE_FRAMES * GUIDE_FRAMES.len() * GUIDE_FRAME_HOLD),
             "流光应按周期循环"
         );
     }

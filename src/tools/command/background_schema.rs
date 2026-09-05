@@ -15,8 +15,8 @@ pub(crate) fn background_tool_name() -> &'static str {
 /// - 支持启动、查看、读取、等待、停止和清理的工具说明
 pub(super) fn writable_description() -> &'static str {
     t(
-        "Manage long-running shell commands as background tasks. Prefer run_command for ordinary work: it waits up to timeout_seconds and promotes to a background task on timeout (timeout_seconds=0 starts background immediately). Use action=start only when you intentionally want a background task without waiting. Use action=wait to block until a task finishes, or list/output/stop/cleanup to manage tasks. For action=start, timeout_seconds=0 means no automatic task lifetime timeout.",
-        "以后台任务方式管理长时间运行的 shell 命令。普通命令优先用 run_command：会等待 timeout_seconds，超时后提升为后台任务（timeout_seconds=0 表示立即后台）。仅在明确不想等待时使用 action=start。使用 action=wait 等待任务结束，或使用 list/output/stop/cleanup 管理任务。action=start 时 timeout_seconds=0 表示任务本身不自动超时。",
+        "Manage long-running shell commands as background tasks. Prefer run_command for ordinary work; use action=start for immediate background execution. action=wait waits at most 60 seconds, then returns recent logs if still running. Inspect needs_attention results before waiting again. Session tasks automatically request inspection after 90 seconds without output or 10 minutes of runtime; reminders are at least 5 minutes apart. action=start timeout_seconds=0 disables the task lifetime timeout. Use output/list/stop/cleanup to inspect and manage tasks.",
+        "以后台任务方式管理长时间运行的 shell 命令。普通命令优先用 run_command；立即后台运行使用 action=start。action=wait 每次最多等待 60 秒，未结束时返回近期日志；收到 needs_attention 后先检查进展再决定是否继续等待。会话任务连续 90 秒没有输出或运行超过 10 分钟时自动提醒检查，同一任务的提醒至少间隔 5 分钟。action=start 的 timeout_seconds=0 表示任务不自动超时。使用 output/list/stop/cleanup 查看和管理任务。",
     )
 }
 
@@ -78,7 +78,7 @@ fn schema(actions: &[&str]) -> Value {
             "timeout_seconds": {
                 "type": "integer",
                 "minimum": 0,
-                "description": t("Optional seconds for action=start or action=wait. For start, 0 disables automatic task timeout; wait clamps the value to 1-600 seconds.", "action=start 或 action=wait 的可选秒数。start 使用 0 表示任务不自动超时；wait 会将数值限制在 1-600 秒。"),
+                "description": t("Optional seconds for action=start or action=wait. For start, 0 disables automatic task timeout; wait clamps to 1-60 seconds and returns status and recent logs when the interval ends.", "action=start 或 action=wait 的可选秒数。start 使用 0 表示任务不自动超时；wait 限制在 1-60 秒，等待结束时返回状态及近期日志。"),
             },
             "task_id": {
                 "type": "string",

@@ -619,14 +619,14 @@ mod tests {
             .lines()
             .next()
             .unwrap()
-            .contains("\x1b[32mok\x1b[0m:1"));
+            .contains("\x1b[32mdone\x1b[0m:1"));
         assert!(output
             .lines()
             .next()
             .unwrap()
-            .contains("\x1b[31merr\x1b[0m:1"));
-        assert!(output.contains("\n  • read_file×1 \x1b[32mok\x1b[0m"));
-        assert!(output.contains("\n  • web_search×1 \x1b[31merr\x1b[0m"));
+            .contains("\x1b[31mfailed\x1b[0m:1"));
+        assert!(output.contains("\n  • read_file×1 \x1b[32mdone\x1b[0m"));
+        assert!(output.contains("\n  • web_search×1 \x1b[31mfailed\x1b[0m"));
         assert!(!output.contains(", web_search"));
     }
 

@@ -164,7 +164,7 @@ fn streaming_section_gaps_match_finalized_cells() {
 
     let mid_reasoning = plain_tail(&mut live, &opts);
     assert_no_consecutive_blanks(&mid_reasoning);
-    assert_preceded_by_blank(&mid_reasoning, '◦', true);
+    assert_preceded_by_blank(&mid_reasoning, '◐', true);
 
     live.finalize_live_tail();
     live.push_tool_call("read_file".into(), r#"{"path":"a.rs"}"#.into());
@@ -216,7 +216,7 @@ fn live_reasoning_and_tool_preview_share_single_gap_rules() {
 
     let lines = plain_tail(&mut store, &opts);
     assert_no_consecutive_blanks(&lines);
-    assert_preceded_by_blank(&lines, '◦', true);
+    assert_preceded_by_blank(&lines, '◐', true);
     assert_preceded_by_blank(&lines, '•', false);
 }
 

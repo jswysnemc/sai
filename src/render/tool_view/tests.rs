@@ -30,9 +30,10 @@ fn summary_view_keeps_failure_visible() {
     );
 
     assert!(!output.is_empty());
-    assert!(output.contains("err"));
+    assert!(output.contains("failed"));
 }
 
+/// 清单标题只显示一次计划进度，正文保留条目内容和状态。
 #[test]
 fn todo_result_renders_items_instead_of_raw_json() {
     let output = render_result(
@@ -44,10 +45,10 @@ fn todo_result_renders_items_instead_of_raw_json() {
 
     assert!(output.contains("检查测试"));
     assert!(output.contains("构建项目"));
-    assert!(output.contains('/'));
-    assert!(output.contains('✓') || output.contains('▶'));
-    // 统计行走统一 gutter；条目自带状态符，不用树形连接符
-    assert!(output.contains("  └ "));
+    assert!(output.lines().next().unwrap_or_default().contains("1/2"));
+    assert_eq!(output.matches("Plan").count(), 1);
+    assert!(output.contains('✓') && output.contains('◐'));
+    // 1. 进度合并到标题，条目自带状态符，不再重复统计行
     assert!(!output.contains('├') && !output.contains("└─"));
     assert!(!output.contains("\"items\""));
 }
@@ -75,9 +76,9 @@ fn command_permission_uses_existing_command_view() {
     assert!(!output.contains("Permission required"));
 }
 
-/// 验证后台命令结果按普通工具载荷展示，不复用前台命令输出块。
+/// 后台命令结果使用自然状态摘要，不展示内部 JSON。
 #[test]
-fn background_command_result_uses_tool_payload_view() {
+fn background_command_result_uses_command_view() {
     let output = render_result(
         "background_command",
         true,
@@ -87,7 +88,9 @@ fn background_command_result_uses_tool_payload_view() {
 
     assert!(output.contains("task-1"));
     assert!(!output.contains("── • Run command"));
-    assert!(!output.contains("Ctrl+O"));
+    assert!(!output.contains("\"task\""));
+    assert!(output.contains("Running"));
+    assert!(output.contains("in background"));
 }
 
 /// Full 模式在参数 JSON 尚未闭合时不倾倒 `{...` 碎片。

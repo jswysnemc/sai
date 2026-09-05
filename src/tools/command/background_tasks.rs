@@ -341,6 +341,19 @@ pub(super) async fn read_background_task_output(
     }
     store.save(&tasks)?;
     let task = &tasks[task_index];
+    if task.status == "running" {
+        if let Some(session_id) = task
+            .runtime_owner_id
+            .as_deref()
+            .filter(|id| task.owned_by_session(id))
+        {
+            super::background_attention::acknowledge_background_attention(
+                paths,
+                session_id,
+                std::slice::from_ref(&task.id),
+            )?;
+        }
+    }
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
         "task": task,
@@ -595,13 +608,13 @@ pub(super) fn read_log_tail(path: &str, tail_lines: usize, max_bytes: u64) -> Re
     use std::io::{Read, Seek, SeekFrom};
     file.seek(SeekFrom::Start(start))?;
     let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
+    file.take(max_bytes).read_to_end(&mut bytes)?;
     let text = crate::platform::output_encoding::decode_output(&bytes);
     let lines = text.lines().collect::<Vec<_>>();
     let start = lines.len().saturating_sub(tail_lines);
     Ok(LogTail::new(
         lines[start..].join("\n"),
-        metadata.len() > max_bytes,
+        metadata.len() > max_bytes || lines.len() > tail_lines,
         metadata.len(),
         bytes.len() as u64,
         max_bytes,

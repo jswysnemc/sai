@@ -1,6 +1,7 @@
 use crate::render::activity_animation::{render_activity_detail, render_activity_text};
 use crate::render::fold_text::{
-    fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
+    fold_display_lines, terminal_wrap_width, wrap_display_lines, FoldedDisplayLine,
+    FOLD_HEAD_LINES, FOLD_TAIL_LINES,
 };
 use crate::render::work_status::format_elapsed;
 use crate::render::ReasoningDisplayMode;
@@ -102,9 +103,10 @@ pub(crate) fn render_live(
     )
     .trim_start()
     .to_string();
-    // 1. 思考用 ◦ 引导 + 扫光标题，避免与工具行的 • 抢同一视觉层级
+    // 【终端】【思考状态】1. 活动思考使用旋转引导符号，定稿后恢复空心圆
     let title = format!(
-        "\x1b[2m\x1b[36m{THINKING_MARKER}\x1b[0m {}{}",
+        "{} {}{}",
+        crate::render::activity_animation::render_thinking_dot(frame),
         render_activity_text(THINKING_LABEL, frame),
         if detail.is_empty() {
             String::new()
@@ -236,19 +238,22 @@ fn render_thinking_body_with_title(
         .into_iter()
         .filter(|line| !line.trim().is_empty())
         .collect();
-    let (visible, omitted) = fold_display_lines(&lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
+    let visible = fold_display_lines(&lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
 
     let mut output = title;
     let mut content_index = 0usize;
     for line in visible {
-        if line == "__OMITTED__" {
-            output.push('\n');
-            output.push_str(&crate::render::omitted_line::render_omitted_line(
-                omitted,
-                show_expand_hint,
-            ));
-            continue;
-        }
+        let line = match line {
+            FoldedDisplayLine::Omitted { omitted, .. } => {
+                output.push('\n');
+                output.push_str(&crate::render::omitted_line::render_omitted_line(
+                    omitted,
+                    show_expand_hint,
+                ));
+                continue;
+            }
+            FoldedDisplayLine::Line(line) => line,
+        };
         let prefix = if content_index == 0 { "  └ " } else { "    " };
         content_index += 1;
         output.push_str(&format!("\n\x1b[2m\x1b[36m{prefix}{line}\x1b[0m"));
@@ -408,7 +413,7 @@ mod tests {
         assert!(!collapsed.contains("line 6"));
         assert!(collapsed.contains("Ctrl+O"));
         // 12 行、前 2 后 4，中间省略 6 行
-        assert!(collapsed.contains("+6"));
+        assert!(collapsed.contains("▸ 6 lines hidden"));
 
         let expanded = render(
             &ReasoningCell {
@@ -427,7 +432,7 @@ mod tests {
         let source = "字".repeat(96 * 12);
         let collapsed = render_thinking_body(&source, false, true, None);
         assert!(collapsed.contains("Ctrl+O"));
-        assert!(collapsed.contains('…'));
+        assert!(collapsed.contains('▸'));
         let expanded = render_thinking_body(&source, true, true, None);
         assert!(!expanded.contains("Ctrl+O"));
     }

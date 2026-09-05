@@ -522,8 +522,8 @@ fn concurrent_same_name_tools_update_in_place_fifo() {
         .iter()
         .map(|line| strip_ansi(line.as_str()))
         .collect::<String>();
-    assert!(mid.contains("Read a.rs:1+20"), "{mid}");
-    assert!(mid.contains("Reading b.rs:10+40"), "{mid}");
+    assert!(mid.contains("Read a.rs:1–20"), "{mid}");
+    assert!(mid.contains("Reading b.rs:10–49"), "{mid}");
     assert!(mid.contains("Reading c.rs"), "{mid}");
     assert_eq!(mid.matches("Read ok").count(), 0, "{mid}");
 
@@ -534,8 +534,8 @@ fn concurrent_same_name_tools_update_in_place_fifo() {
         .iter()
         .map(|line| strip_ansi(line.as_str()))
         .collect::<String>();
-    assert!(done.contains("Read a.rs:1+20"), "{done}");
-    assert!(done.contains("Read b.rs:10+40"), "{done}");
+    assert!(done.contains("Read a.rs:1–20"), "{done}");
+    assert!(done.contains("Read b.rs:10–49"), "{done}");
     assert!(done.contains("Read c.rs"), "{done}");
     assert!(!done.contains("Reading "), "{done}");
     assert_eq!(done.matches("Read ok").count(), 0, "{done}");

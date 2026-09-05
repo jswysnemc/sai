@@ -159,7 +159,7 @@ impl ToolView {
     /// 返回:
     /// - run_command 且已有输出时返回 true
     pub(crate) fn has_command_output(&self) -> bool {
-        self.name == "run_command"
+        matches!(self.name.as_str(), "run_command" | "background_command")
             && (!self.command_stdout.is_empty()
                 || !self.command_stderr.is_empty()
                 || self.outcome.is_some())

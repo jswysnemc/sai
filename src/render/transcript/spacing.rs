@@ -85,7 +85,7 @@ pub(super) fn live_opens_with_tool(lines: &[AnsiLine]) -> bool {
         .is_some_and(|line| {
             strip_ansi_for_test(line.as_str())
                 .trim_start()
-                .starts_with('•')
+                .starts_with(['•', '●', '◐', '◓', '◑', '◒'])
         })
 }
 

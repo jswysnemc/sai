@@ -1,5 +1,6 @@
 mod background;
 mod background_actions;
+mod background_attention;
 mod background_runtime;
 mod background_schema;
 mod background_tasks;
@@ -29,9 +30,12 @@ pub(crate) use rtk_filter::rewrite_command;
 pub(crate) use rtk_probe::{rtk_available, rtk_proxy_commands};
 
 pub(crate) use background::{
-    cleanup_background_tasks_for_user, list_background_tasks_for_user,
+    background_log_snapshot, cleanup_background_tasks_for_user, list_background_tasks_for_user,
     read_background_task_output_for_user, start_background_task_for_user,
     stop_background_task_for_user,
+};
+pub(crate) use background_attention::{
+    acknowledge_background_attention, poll_background_attention, BackgroundAttentionNotice,
 };
 pub(crate) use goal_completions::{
     acknowledge_background_completions, poll_background_completions,

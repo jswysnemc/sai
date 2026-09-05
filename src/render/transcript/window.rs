@@ -292,6 +292,14 @@ impl TranscriptStore {
                     options.tool_call_mode,
                 )
             });
+            let rendered = if self.live_animation_frame() > 0 {
+                crate::render::content_indent::animate_guide_marker(
+                    &rendered,
+                    self.live_animation_frame(),
+                )
+            } else {
+                rendered
+            };
             if !rendered.is_empty() {
                 let mut tool_lines = AnsiLine::wrap_block(&rendered, width);
                 spacing::trim_trailing_visual_blanks(&mut tool_lines);

@@ -36,6 +36,9 @@ pub(crate) const CODE_COMMENT_STYLE: &str = "\x1b[2m\x1b[38;2;110;106;134m";
 pub(crate) const TABLE_BORDER_STYLE: &str = "\x1b[2m";
 pub(crate) const ASSET_ERROR_STYLE: &str = "\x1b[31m";
 pub(crate) const TOOL_BULLET: &str = "•";
+/// 视觉引导列统一使用相同直径的实心与空心圆。
+pub(crate) const GUIDE_FILLED: char = '●';
+pub(crate) const GUIDE_HOLLOW: char = '○';
 
 // ── Markdown 正文统一视觉体系 ────────────────────────────────────
 //

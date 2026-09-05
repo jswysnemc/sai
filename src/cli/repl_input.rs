@@ -1,93 +1,21 @@
 use super::repl_chrome::{chrome_input_content_cols, ReplChrome};
 use super::repl_clipboard::{is_paste_key, paste_image_first, ReplClipboardState};
 use super::repl_external_events::ReplExternalEvents;
-use super::repl_mentions::{
-    apply_mention, find_mention_trigger, mention_suggestions, MentionSuggestion,
-};
 use super::repl_runtime::{QueuePanelIdleResult, ReplRuntime};
 use super::repl_windows_paste::{WindowsPasteKey, WindowsPasteState};
 use super::*;
-use crate::agent::ExternalEventWake;
 
 const EXTERNAL_EVENT_INPUT_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
-pub(super) struct ReplInputSubmission {
-    pub(super) mode: AgentMode,
-    pub(super) raw_input: String,
-    pub(super) chat_input: clipboard::ClipboardChatInput,
-    /// 发送后 transcript 回显正文（粘贴长文本已展开）
-    pub(super) echo_text: String,
-    /// 仅粘贴长文本启用思考式折叠
-    pub(super) fold_echo: bool,
-}
+mod cleanup;
+mod editing;
+mod submission;
 
-impl ReplInputSubmission {
-    /// 构造一条来自控制队列的提交。
-    ///
-    /// 运行期间输入的斜杠命令没有经过输入框，这里补齐主循环分发所需的形状；
-    /// 正文不会发给模型，回显也由调用方单独记录，因此 echo 字段留空。
-    ///
-    /// 参数:
-    /// - `mode`: 当前 Agent 模式
-    /// - `command`: 命令原文
-    ///
-    /// 返回:
-    /// - 可交主循环分发的提交
-    pub(super) fn control(mode: AgentMode, command: String) -> Self {
-        Self {
-            mode,
-            raw_input: command,
-            chat_input: clipboard::ClipboardChatInput {
-                message: String::new(),
-                image_url: None,
-            },
-            echo_text: String::new(),
-            fold_echo: false,
-        }
-    }
-}
-
-/// 输入框产生的下一项工作。
-pub(super) enum ReplInputEvent {
-    User(ReplInputSubmission),
-    Automatic {
-        mode: AgentMode,
-        wake: ExternalEventWake,
-        draft: ReplInputDraft,
-    },
-}
-
-/// 自动唤醒期间暂存的输入文本与剪贴板附件。
-pub(super) struct ReplInputDraft {
-    pub(super) text: String,
-    pub(super) clipboard_state: ReplClipboardState,
-}
-
-/// 清理输入区并恢复终端状态，干净结束本次 REPL 输入循环。
-///
-/// 参数:
-/// - `stdout`: 终端输出句柄
-/// - `input_row`: 输入区起始行
-/// - `rendered_rows`: 输入区已经渲染的行数
-/// - `runtime`: REPL 终端运行期
-/// - `terminal_guard`: 终端输入模式守卫
-///
-/// 返回:
-/// - 清理与终端恢复是否成功
-fn finish_repl_input(
-    stdout: &mut io::Stdout,
-    input_row: u16,
-    rendered_rows: u16,
-    runtime: &mut ReplRuntime,
-    terminal_guard: &mut super::terminal_restore::TerminalInputGuard,
-) -> Result<()> {
-    // 1. 清除 composer 已经绘制的全部终端行
-    clear_repl_input(stdout, input_row, rendered_rows)?;
-    // 2. 释放 composer 占用空间，使 transcript 尾部保持完整
-    runtime.end_composer()?;
-    // 3. 恢复 raw mode、粘贴模式与键盘增强协议
-    terminal_guard.finish(stdout)
-}
+use cleanup::finish_repl_input;
+use editing::*;
+#[cfg(test)]
+pub(super) use editing::{repl_history_is_clean, repl_should_browse_history};
+pub(super) use submission::{ReplInputDraft, ReplInputEvent, ReplInputSubmission};
 
 /// 读取、编辑并提交 REPL 输入，同时在 debounce 到期时处理 resize 重放。
 ///
@@ -284,9 +212,11 @@ pub(super) fn read_repl_input(
                                 leftover.clipboard = clipboard_state;
                                 leftover.mode = Some(mode);
                             }
-                            let (echo_text, fold_echo) =
-                                item.clipboard.echo_text_for_submit(&item.text);
-                            let chat_input = item.clipboard.to_chat_input(&item.text);
+                            let submission = ReplInputSubmission::from_input(
+                                item.mode,
+                                item.text,
+                                &item.clipboard,
+                            );
                             finish_repl_input(
                                 &mut stdout,
                                 input_row,
@@ -294,13 +224,7 @@ pub(super) fn read_repl_input(
                                 runtime,
                                 &mut terminal_guard,
                             )?;
-                            return Ok(Some(ReplInputEvent::User(ReplInputSubmission {
-                                mode: item.mode,
-                                raw_input: item.text,
-                                chat_input,
-                                echo_text,
-                                fold_echo,
-                            })));
+                            return Ok(Some(ReplInputEvent::User(submission)));
                         }
                     }
                 }
@@ -342,6 +266,7 @@ pub(super) fn read_repl_input(
                             cursor,
                             slash_selection,
                             runtime.mention_skills(),
+                            &mut clipboard_state,
                         ) {
                             input = next;
                             cursor = next_cursor;
@@ -422,8 +347,10 @@ pub(super) fn read_repl_input(
                                 mode,
                                 raw_input: "/tree".to_string(),
                                 chat_input: clipboard_state.to_chat_input("/tree"),
-                                echo_text: "/tree".to_string(),
-                                fold_echo: false,
+                                echo: crate::render::input_atom::InputEcho {
+                                    text: "/tree".to_string(),
+                                    ..Default::default()
+                                },
                             })));
                         }
                         // 剪贴板占位块整体跳过，保持与删除一致的原子性
@@ -573,6 +500,7 @@ pub(super) fn read_repl_input(
                             cursor,
                             slash_selection,
                             runtime.mention_skills(),
+                            &mut clipboard_state,
                         ) {
                             input = next;
                             cursor = next_cursor;
@@ -600,22 +528,18 @@ pub(super) fn read_repl_input(
                             )?;
                             return Ok(None);
                         }
-                        let (echo_text, fold_echo) = clipboard_state.echo_text_for_submit(&input);
-                        let chat_input = clipboard_state.to_chat_input(&input);
-                        let raw_input = std::mem::take(&mut input);
+                        let submission = ReplInputSubmission::from_input(
+                            mode,
+                            std::mem::take(&mut input),
+                            &clipboard_state,
+                        );
                         cursor = 0;
                         clipboard_state.clear();
                         is_pasted = false;
                         // 1. 提交后立即显示空 composer，流式输出始终插入其上方
                         redraw_input!()?;
                         terminal_guard.finish(&mut stdout)?;
-                        return Ok(Some(ReplInputEvent::User(ReplInputSubmission {
-                            mode,
-                            raw_input,
-                            chat_input,
-                            echo_text,
-                            fold_echo,
-                        })));
+                        return Ok(Some(ReplInputEvent::User(submission)));
                     }
                     KeyCode::Char('j') if modifiers.contains(KeyModifiers::CONTROL) => {
                         insert_newline_at_cursor(&mut input, &mut cursor);
@@ -813,99 +737,5 @@ pub(super) fn read_repl_input(
             }
             _ => {}
         }
-    }
-}
-
-/// 返回光标处可见的引用建议。
-///
-/// 参数:
-/// - `input`: 当前输入
-/// - `cursor`: 光标字符偏移
-/// - `skills`: skill 目录
-///
-/// 返回:
-/// - 过滤后的建议
-fn active_mention_suggestions(
-    input: &str,
-    cursor: usize,
-    skills: &[(String, String)],
-) -> Vec<MentionSuggestion> {
-    find_mention_trigger(input, cursor)
-        .map(|trigger| mention_suggestions(&trigger, skills))
-        .unwrap_or_default()
-}
-
-/// 确认当前引用建议，替换触发片段。
-///
-/// 参数:
-/// - `input`: 当前输入
-/// - `cursor`: 光标字符偏移
-/// - `selected`: 选中下标
-/// - `skills`: skill 目录
-///
-/// 返回:
-/// - 新输入与新光标；无建议时为空
-fn complete_active_mention(
-    input: &str,
-    cursor: usize,
-    selected: usize,
-    skills: &[(String, String)],
-) -> Option<(String, usize)> {
-    let trigger = find_mention_trigger(input, cursor)?;
-    let suggestions = mention_suggestions(&trigger, skills);
-    let item = suggestions.get(selected.min(suggestions.len().saturating_sub(1)))?;
-    Some(apply_mention(input, &trigger, item))
-}
-
-/// 判断当前输入是否仍与选中的历史记录一致。
-///
-/// 参数:
-/// - `input`: 当前输入
-/// - `history`: 历史记录
-/// - `history_clean_index`: 最近选中的历史下标
-///
-/// 返回:
-/// - 未修改选中历史时返回 true
-pub(super) fn repl_history_is_clean(
-    input: &str,
-    history: &[String],
-    history_clean_index: Option<usize>,
-) -> bool {
-    history_clean_index
-        .and_then(|index| history.get(index))
-        .is_some_and(|entry| entry == input)
-}
-
-/// 判断上方向键是否可以进入历史浏览。
-///
-/// 参数:
-/// - `input`: 当前输入
-/// - `history`: 历史记录
-/// - `history_clean_index`: 最近选中的历史下标
-///
-/// 返回:
-/// - 输入为空或仍为未修改历史时返回 true
-pub(super) fn repl_should_browse_history(
-    input: &str,
-    history: &[String],
-    history_clean_index: Option<usize>,
-) -> bool {
-    !history.is_empty()
-        && (input.is_empty() || repl_history_is_clean(input, history, history_clean_index))
-}
-
-/// 循环切换 REPL 权限模式。
-///
-/// 参数:
-/// - `mode`: 当前模式
-///
-/// 返回:
-/// - 下一模式
-fn cycle_repl_mode(mode: AgentMode) -> AgentMode {
-    match mode {
-        AgentMode::Yolo => AgentMode::Audited,
-        AgentMode::Audited => AgentMode::AutoAudit,
-        AgentMode::AutoAudit => AgentMode::Plan,
-        AgentMode::Plan => AgentMode::Yolo,
     }
 }

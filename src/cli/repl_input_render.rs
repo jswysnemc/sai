@@ -88,11 +88,12 @@ pub(super) fn repl_visible_input_lines(
         let chars = line.chars().count();
         let head: String = line.chars().take(48).collect();
         let omitted = chars.saturating_sub(head.chars().count());
-        let note = if is_zh() {
-            format!("... 已隐藏 {omitted} 字符输入内容 ...")
+        let description = if is_zh() {
+            format!("已隐藏 {omitted} 字符输入内容")
         } else {
-            format!("... {omitted} input chars hidden ...")
+            format!("{omitted} input chars hidden")
         };
+        let note = crate::render::omitted_line::render_fold_hint(&description, None);
         return VisibleInputLines {
             lines: vec![format!("{head}…"), note],
             collapsed: true,
@@ -100,11 +101,12 @@ pub(super) fn repl_visible_input_lines(
     }
 
     let omitted_lines = lines.len().saturating_sub(2);
-    let omitted = if is_zh() {
-        format!("... 已隐藏 {omitted_lines} 行输入内容 ...")
+    let description = if is_zh() {
+        format!("已隐藏 {omitted_lines} 行输入内容")
     } else {
-        format!("... {omitted_lines} input lines hidden ...")
+        format!("{omitted_lines} input lines hidden")
     };
+    let omitted = crate::render::omitted_line::render_fold_hint(&description, None);
     VisibleInputLines {
         lines: vec![
             clip_collapsed_edge(&lines[0], COLLAPSED_EDGE_CHARS),
@@ -203,14 +205,7 @@ pub(super) fn style_clipboard_line(
                 output.push_str("\x1b[0m");
             }
             if let Some(kind) = next {
-                output.push_str(match kind {
-                    super::repl_clipboard::ReplClipboardBlockKind::Text => {
-                        "\x1b[48;5;25m\x1b[38;5;159m"
-                    }
-                    super::repl_clipboard::ReplClipboardBlockKind::Image => {
-                        "\x1b[48;5;89m\x1b[38;5;225m"
-                    }
-                });
+                output.push_str(kind.style());
             }
             active = next;
         }
@@ -219,6 +214,9 @@ pub(super) fn style_clipboard_line(
             output.push_str("\x1b[0m");
             active = None;
         }
+    }
+    if active.is_some() {
+        output.push_str("\x1b[0m");
     }
     output
 }

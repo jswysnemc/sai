@@ -129,7 +129,13 @@ fn row_line(
     let model_focused = state.column() == PickerColumn::Model;
     let model_label = models
         .get(index)
-        .map(ProviderModelChoice::label)
+        .map(|choice| {
+            if choice.provider_id.is_empty() && choice.model.is_empty() {
+                choice.provider_name.clone()
+            } else {
+                choice.label()
+            }
+        })
         .or_else(|| {
             (index == 0 && state.models().is_empty())
                 .then(|| t("No matching models", "没有匹配的模型").to_string())

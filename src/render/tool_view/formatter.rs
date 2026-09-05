@@ -13,8 +13,6 @@ use crate::render::tool_event_line::{
 use crate::render::ToolCallDisplayMode;
 use serde_json::Value;
 
-const PAYLOAD_LIMIT: usize = 2_400;
-
 /// 渲染完整工具生命周期视图。
 ///
 /// 参数:
@@ -33,7 +31,9 @@ pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: u
         return String::new();
     }
 
-    // 只有前台命令使用命令输出专用视图，后台命令按普通工具载荷展示
+    if let Some(rendered) = super::background::render(view, frame) {
+        return rendered;
+    }
     if view.name == "run_command" {
         return render_command_tool(view, mode);
     }
@@ -49,7 +49,16 @@ pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: u
     }
 
     let tense = ToolVerbTense::from_done(view.outcome.is_some());
-    let label = tool_event_label_tense(&view.name, Some(&view.arguments), tense);
+    let label = view
+        .outcome
+        .as_ref()
+        .filter(|outcome| outcome.ok && view.name == "background_command")
+        .and_then(|outcome| {
+            crate::render::background_command_event::background_command_result_label(
+                &outcome.output,
+            )
+        })
+        .unwrap_or_else(|| tool_event_label_tense(&view.name, Some(&view.arguments), tense));
     let denied = permission_denied(view.permission.as_ref());
     let is_edit = crate::render::stream_text::is_file_edit_tool(&view.name);
     if view.outcome.is_none() && frame > 0 && !is_edit {
@@ -72,7 +81,7 @@ pub(crate) fn render_framed(view: &ToolView, mode: ToolCallDisplayMode, frame: u
         }
     } else {
         match &view.outcome {
-            Some(outcome) if outcome.ok => (color_status("ok"), ToolHealth::Ok),
+            Some(outcome) if outcome.ok => (String::new(), ToolHealth::Ok),
             Some(_) => (color_status("err"), ToolHealth::Err),
             None if view.arguments.trim().is_empty() => (color_status("arg"), ToolHealth::Pending),
             None => (color_status("run"), ToolHealth::Pending),
@@ -296,7 +305,7 @@ fn permission_denied(permission: Option<&PermissionAuditView>) -> bool {
 ///
 /// 返回:
 /// - 不重复工具内容的权限交互文本
-fn render_permission(permission: Option<&PermissionAuditView>) -> String {
+pub(super) fn render_permission(permission: Option<&PermissionAuditView>) -> String {
     let Some(permission) = permission else {
         return String::new();
     };
@@ -383,23 +392,27 @@ fn arguments_ready_for_display(arguments: &str) -> bool {
 /// - Codex 风格的层级载荷块
 fn render_payload(label: &str, payload: &str) -> String {
     use crate::render::fold_text::{
-        fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES,
-        FOLD_TAIL_LINES,
+        fold_display_lines, terminal_wrap_width, wrap_display_lines, FoldedDisplayLine,
+        FOLD_HEAD_LINES, FOLD_TAIL_LINES,
     };
     let formatted = serde_json::from_str::<Value>(payload)
         .ok()
         .and_then(|value| serde_json::to_string_pretty(&value).ok())
         .unwrap_or_else(|| payload.trim().to_string());
-    // 1. 先按字符上限粗截，再按显示行首尾折叠（后台/子智能体长结果）
-    let truncated = truncate_chars(&formatted, PAYLOAD_LIMIT);
-    let wrapped = wrap_display_lines(&truncated, terminal_wrap_width().saturating_sub(8).max(8));
-    let (visible, omitted) = fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, false);
+    // 【终端】【工具载荷】1. 保留原文，仅按显示行折叠，全文模式可还原全部内容
+    let wrapped = wrap_display_lines(&formatted, terminal_wrap_width().saturating_sub(8).max(8));
+    let visible = fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, false);
     let mut output = String::new();
     for (index, line) in visible.iter().enumerate() {
-        let text = if line == "__OMITTED__" {
-            format!("… +{omitted} lines")
-        } else {
-            line.clone()
+        let text = match line {
+            FoldedDisplayLine::Omitted { omitted, .. } => {
+                output.push('\n');
+                output.push_str(&crate::render::omitted_line::render_omitted_line(
+                    *omitted, true,
+                ));
+                continue;
+            }
+            FoldedDisplayLine::Line(line) => line,
         };
         if index == 0 {
             output.push_str(&format!("\x1b[2m  └ {label}: {text}\x1b[0m"));
@@ -424,21 +437,4 @@ fn visible_progress(progress: Option<&str>) -> Option<&str> {
     progress
         .map(str::trim)
         .filter(|message| !message.is_empty() && !message.starts_with("__"))
-}
-
-/// 按字符数量截断工具载荷。
-///
-/// 参数:
-/// - `text`: 原始文本
-/// - `limit`: 最大字符数
-///
-/// 返回:
-/// - 截断后的文本
-fn truncate_chars(text: &str, limit: usize) -> String {
-    if text.chars().count() <= limit {
-        return text.to_string();
-    }
-    let mut output = text.chars().take(limit).collect::<String>();
-    output.push_str("\n...");
-    output
 }

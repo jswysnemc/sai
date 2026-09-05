@@ -400,6 +400,14 @@ impl StateStore {
         self.conv_db.switch_active_leaf(turn_id)
     }
 
+    /// 【会话】【分支导航】返回空白会话起点，下一条输入创建新的根轮次。
+    ///
+    /// 参数: 无
+    /// 返回: 切换结果；原有轮次和分支完整保留
+    pub(crate) fn switch_to_session_start(&self) -> Result<()> {
+        self.conv_db.switch_to_session_start()
+    }
+
     /// 把活动叶子退回指定轮次的父轮次。
     ///
     /// 参数:

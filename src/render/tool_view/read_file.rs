@@ -60,7 +60,7 @@ pub(crate) fn parse_read_page(output: &str) -> Option<ReadPageView> {
 
 /// 渲染 read_file 定稿后的完整工具视图。
 ///
-/// 状态行：`• Read path:offset+limit 10-19`；
+/// 状态行只展示文件名和实际返回的行号范围；
 /// 正文行号列用中性灰着色，与 diff 行号视觉同源。
 ///
 /// 参数:
@@ -75,7 +75,19 @@ pub(crate) fn render(view: &super::model::ToolView, mode: ToolCallDisplayMode) -
     }
     let outcome = view.outcome.as_ref()?;
     let page = parse_read_page(&outcome.output)?;
-    let label = tool_event_label_tense("read_file", Some(&view.arguments), ToolVerbTense::Perfect);
+    let mut arguments = serde_json::from_str::<Value>(&view.arguments).unwrap_or_default();
+    if let Some(fields) = arguments.as_object_mut() {
+        fields.remove("offset");
+        fields.remove("limit");
+    }
+    if !page.path.is_empty() {
+        arguments = serde_json::json!({"path": page.path});
+    }
+    let label = tool_event_label_tense(
+        "read_file",
+        Some(&arguments.to_string()),
+        ToolVerbTense::Perfect,
+    );
     let badge = read_page_badge(&page);
     let health = if outcome.ok {
         ToolHealth::Ok
@@ -90,15 +102,20 @@ pub(crate) fn render(view: &super::model::ToolView, mode: ToolCallDisplayMode) -
     if mode == ToolCallDisplayMode::Summary {
         return Some(output);
     }
+    let number_width = page
+        .offset
+        .saturating_add(page.content.len().saturating_sub(1))
+        .to_string()
+        .len();
     for line in &page.content {
         output.push('\n');
-        output.push_str(&render_content_line(line));
+        output.push_str(&render_content_line(line, number_width));
     }
     if page.truncated {
         if let Some(next) = page.next {
             output.push_str(&format!(
-                "\n\x1b[2m\x1b[36m  └ … {} offset={next}\x1b[0m",
-                crate::i18n::text("next page from line", "下一页从行")
+                "\n\x1b[2m  {} {next}\x1b[0m",
+                crate::i18n::text("More content from line", "后续内容起始行：")
             ));
         }
     }
@@ -111,31 +128,37 @@ pub(crate) fn render(view: &super::model::ToolView, mode: ToolCallDisplayMode) -
 /// - `page`: 文本分页视图
 ///
 /// 返回:
-/// - `x-y` 区间徽标；空页返回 empty
+/// - 单行行号或 `x–y` 区间徽标；空页返回本地化提示
 fn read_page_badge(page: &ReadPageView) -> String {
     if page.content.is_empty() {
-        return color_status("empty");
+        return color_status(crate::i18n::text("empty", "空文件"));
     }
     let first = page.offset;
-    let last = first + page.content.len().saturating_sub(1);
-    format!("\x1b[36m{first}-{last}\x1b[0m")
+    let last = first.saturating_add(page.content.len().saturating_sub(1));
+    let range = if first == last {
+        first.to_string()
+    } else {
+        format!("{first}–{last}")
+    };
+    format!("\x1b[2m{range}\x1b[0m")
 }
 
 /// 渲染单条 `N: text` 内容行：行号列灰色，正文默认色。
 ///
 /// 参数:
 /// - `line`: 已带行号前缀的内容行
+/// - `number_width`: 本页行号列的显示宽度
 ///
 /// 返回:
 /// - 着色后的内容行
-fn render_content_line(line: &str) -> String {
+fn render_content_line(line: &str, number_width: usize) -> String {
     let Some((number, rest)) = line.split_once(": ") else {
         return format!("\x1b[2m    {line}\x1b[0m");
     };
     if !number.chars().all(|ch| ch.is_ascii_digit()) || number.is_empty() {
         return format!("\x1b[2m    {line}\x1b[0m");
     }
-    format!("\x1b[2m\x1b[38;5;{LINE_NUMBER_COLOR}m{number}\x1b[0m {rest}")
+    format!("\x1b[2m\x1b[38;5;{LINE_NUMBER_COLOR}m{number:>number_width$}\x1b[0m  {rest}")
 }
 
 #[cfg(test)]
@@ -143,10 +166,27 @@ mod tests {
     use super::*;
     use crate::render::activity_animation::strip_ansi_for_test;
 
+    /// 【终端】【读取工具测试】完成后只显示实际返回区间，不能重复请求起点与行数。
+    #[test]
+    fn regression_read_header_reports_a_single_actual_range() {
+        let mut view = super::super::model::ToolView::running(
+            "read_file".into(),
+            r#"{"path":"src/a.rs","offset":10,"limit":100}"#.into(),
+        );
+        view.finish(true, r#"{"type":"text-page","path":"src/a.rs","offset":10,"content":"10: x\n11: y","truncated":false}"#.into());
+        let rendered = render(&view, ToolCallDisplayMode::Summary).unwrap();
+        let plain = strip_ansi_for_test(&rendered);
+        assert_eq!(plain.matches("10").count(), 1, "读取范围重复: {plain}");
+        assert!(
+            !plain.contains("+100"),
+            "请求行数不应混入实际读取范围: {plain}"
+        );
+    }
+
     /// 行号列被识别并着色，正文保持原样。
     #[test]
     fn content_line_colors_the_number_column() {
-        let rendered = render_content_line("42: let x = 1;");
+        let rendered = render_content_line("42: let x = 1;", 2);
         let plain = strip_ansi_for_test(&rendered);
         assert!(plain.contains("42"), "{plain}");
         assert!(plain.contains("let x = 1;"), "{plain}");
@@ -156,7 +196,7 @@ mod tests {
     /// 非标准行号格式按普通弱化行处理。
     #[test]
     fn non_numbered_line_falls_back_to_plain() {
-        let rendered = render_content_line("no prefix here");
+        let rendered = render_content_line("no prefix here", 2);
         assert!(!rendered.contains("\x1b[38;5;244m"));
     }
 
@@ -171,7 +211,7 @@ mod tests {
             content: vec!["10: a".to_string(), "11: b".to_string()],
         };
         let plain = strip_ansi_for_test(&read_page_badge(&page));
-        assert!(plain.contains("10-11"), "{plain}");
+        assert!(plain.contains("10–11"), "{plain}");
     }
 
     /// text-page JSON 正确解析为分页视图。

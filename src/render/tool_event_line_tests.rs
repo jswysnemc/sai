@@ -1,5 +1,4 @@
 use super::*;
-use crate::render::terminal_text as t;
 
 /// 验证命令全文保留多行内容和较长参数。
 #[test]
@@ -46,11 +45,11 @@ fn command_tools_use_run_label() {
             "background_command",
             Some(r#"{"action":"start","command":"sleep 1"}"#)
         ),
-        format!("{} sleep 1", t("Background start", "启动后台命令"))
+        "Starting background command sleep 1"
     );
     assert_eq!(
         tool_event_label("background_command", Some(r#"{"action":"list"}"#)),
-        t("Background list", "后台命令列表")
+        "Checking background commands"
     );
 }
 
@@ -111,11 +110,11 @@ fn file_tools_include_basename() {
             "read_file",
             Some(r#"{"path":"src/render/stream.rs","offset":12,"limit":80}"#)
         ),
-        "Reading stream.rs:12+80"
+        "Reading stream.rs:12–91"
     );
     assert_eq!(
         tool_event_label("read_file", Some(r#"{"path":"src/a.rs","limit":40}"#)),
-        "Reading a.rs:1+40"
+        "Reading a.rs:1–40"
     );
 }
 
@@ -235,17 +234,17 @@ fn event_text_uses_unified_title_hierarchy() {
     let ok = tool_event_text("Wrote main.rs", "ok");
     assert!(ok.starts_with("\x1b[1m\x1b[32m•\x1b[0m "));
     assert!(ok.contains("\x1b[1mWrote\x1b[0m main.rs"));
-    assert!(ok.ends_with("\x1b[32mok\x1b[0m"));
+    assert!(ok.ends_with("\x1b[32mdone\x1b[0m"));
 
     // 失败：红色圆点 + 红色 err
     let err = tool_event_text("Read a.rs", "err");
     assert!(err.starts_with("\x1b[1m\x1b[31m•\x1b[0m "));
-    assert!(err.ends_with("\x1b[31merr\x1b[0m"));
+    assert!(err.ends_with("\x1b[31mfailed\x1b[0m"));
 
     // 进行中：弱化圆点 + 黄色 run
     let run = tool_event_text("Reading a.rs", "run");
     assert!(run.starts_with("\x1b[2m•\x1b[0m "));
-    assert!(run.contains("\x1b[33mrun\x1b[0m"));
+    assert!(run.contains("\x1b[33mrunning\x1b[0m"));
 
     // 自定义徽标（编辑类 +N -M）：语义由调用方显式给出
     let stat = tool_status_line(
@@ -271,7 +270,7 @@ fn unknown_tools_use_tool_label() {
 
     assert_eq!(label, "Running custom_tool");
     assert!(plain.contains("Running custom_tool"));
-    assert!(output.contains("\x1b[31merr\x1b[0m"));
+    assert!(output.contains("\x1b[31mfailed\x1b[0m"));
     assert_eq!(
         tool_event_label_tense("custom_tool", None, ToolVerbTense::Perfect),
         "Ran custom_tool"

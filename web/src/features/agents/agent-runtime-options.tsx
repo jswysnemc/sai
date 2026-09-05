@@ -19,10 +19,8 @@ export const AGENT_THINKING_OPTIONS = ["auto", "none", "low", "medium", "high", 
  */
 export function buildAgentModelChoices(config: AppConfig, providerId: string, currentModel: string) {
   const choices: SelectOption<string>[] = enabledProviders(config.providers).flatMap((provider) => {
-    const configured = provider.models ?? [];
-    const models = configured.length > 0
-      ? configured
-      : [provider.default_model].filter((model): model is string => Boolean(model));
+    const models = [...new Set([...(provider.models ?? []), provider.default_model ?? ""]
+      .map((model) => model.trim()).filter(Boolean))];
     return models.map((model) => ({
       value: `${provider.id}\t${model}`,
       label: `${provider.display_name || provider.id} / ${model}`,

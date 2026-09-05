@@ -22,10 +22,12 @@ mod permission;
 mod prompt_sections;
 mod prompt_templates;
 mod provider;
+mod provider_choices;
 mod provider_keys;
 mod secrets;
 mod session;
 mod ssh;
+mod subagent_models;
 mod tool_whitelist;
 
 #[cfg(test)]
@@ -62,4 +64,7 @@ pub use provider_keys::*;
 pub use session::SessionConfig;
 #[allow(unused_imports)]
 pub use ssh::{SshConfig, SshHostConfig, DEFAULT_SSH_PORT};
+pub(crate) use subagent_models::{
+    subagent_runtime_config, SubagentModelChoice, SubagentModelSettings,
+};
 pub use tool_whitelist::{unknown_whitelist_tools, whitelist_allows_tool};

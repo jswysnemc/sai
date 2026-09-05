@@ -274,6 +274,7 @@ export type SubagentConfig = {
   thinking_level?: string;
   default_profile?: string;
   profiles?: SubagentProfileConfig[];
+  model_overrides?: Record<string, { provider_id: string; model: string; thinking_level: string }>;
 };
 
 export type ConfigResponse = {

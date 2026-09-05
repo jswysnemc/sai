@@ -1,7 +1,10 @@
 use super::cell::TranscriptMode;
+use super::AnsiLine;
 use crate::render::fold_text::{
-    fold_display_lines, terminal_wrap_width, wrap_display_lines, FOLD_HEAD_LINES, FOLD_TAIL_LINES,
+    fold_display_lines, terminal_wrap_width, wrap_display_lines, FoldedDisplayLine,
+    FOLD_HEAD_LINES, FOLD_TAIL_LINES,
 };
+use crate::render::input_atom::{render_input_atoms, InputAtom, InputAtomKind, InputEcho};
 
 /// 用户输入回显的 source-backed 数据。
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -12,6 +15,8 @@ pub(crate) struct UserEchoCell {
     pub(crate) expanded: bool,
     /// 粘贴长文本才做思考式折叠；普通键入长消息保持全文。
     pub(crate) fold: bool,
+    /// 真实附件来源及其在完整正文中的范围
+    pub(crate) atoms: Vec<InputAtom>,
 }
 
 impl UserEchoCell {
@@ -42,6 +47,21 @@ impl UserEchoCell {
             text,
             expanded: false,
             fold,
+            atoms: Vec::new(),
+        }
+    }
+
+    /// 创建携带真实原子块元数据的用户回显。
+    ///
+    /// 参数: `mode` 为提交模式，`echo` 为完整正文与已登记原子块
+    /// 返回: 默认显示附件标签的回显单元
+    pub(crate) fn with_atoms(mode: TranscriptMode, echo: InputEcho) -> Self {
+        Self {
+            mode,
+            text: echo.text,
+            expanded: false,
+            fold: false,
+            atoms: echo.atoms,
         }
     }
 
@@ -56,7 +76,7 @@ impl UserEchoCell {
 
 /// 渲染用户提交后的输入回显。
 ///
-/// 仅粘贴长文本（`cell.fold`）按显示行首尾折叠（前 2 后 4），中间省略并提示 Ctrl+O；
+/// 已登记附件显示标签，长文本通过 Ctrl+O 展开；旧记录沿用首尾预览。
 /// 普通键入消息无论多长都全文展示。
 ///
 /// 参数:
@@ -70,82 +90,62 @@ pub(crate) fn render(cell: &UserEchoCell) -> String {
         TranscriptMode::Plan => "\x1b[36m●\x1b[0m ",
         TranscriptMode::Automatic => "\x1b[38;5;39m●\x1b[0m ",
     };
-    let body = cell.text.trim_end();
+    let expanded = cell.expanded || crate::render::render_expand::expand_override();
+    let styled = render_input_atoms(&cell.text, &cell.atoms, expanded);
+    let body = styled.trim_end();
     if body.is_empty() {
         return format!("\n{prefix}");
     }
     // 续行缩进两列；按净宽折行后再按需折叠
     let wrap = terminal_wrap_width().saturating_sub(2).max(8);
-    let wrapped = wrap_display_lines(body, wrap);
-    let (visible, omitted) = if cell.fold {
-        fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, cell.expanded)
+    let wrapped: Vec<String> = AnsiLine::wrap_block(body, wrap)
+        .into_iter()
+        .map(|line| line.as_str().to_string())
+        .collect();
+    let visible = if cell.fold {
+        fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded)
     } else {
-        (wrapped.clone(), 0)
+        wrapped
+            .iter()
+            .cloned()
+            .map(FoldedDisplayLine::Line)
+            .collect()
     };
     let mut lines = Vec::with_capacity(visible.len());
     let mut content_index = 0usize;
     for line in visible {
-        if line == "__OMITTED__" {
-            lines.push(crate::render::omitted_line::render_omitted_line(
-                omitted, true,
-            ));
-            continue;
-        }
-        // 图片占位块（[image N WxH]）用洋红色标注，与普通文本区分；
-        // 长文本占位块由折叠语义处理，保持原有弱化色
-        let styled = if is_image_placeholder(&line) {
-            style_image_placeholder(&line)
-        } else {
-            line.clone()
+        let line = match line {
+            FoldedDisplayLine::Omitted { omitted, .. } => {
+                lines.push(crate::render::omitted_line::render_omitted_line(
+                    omitted, true,
+                ));
+                continue;
+            }
+            FoldedDisplayLine::Line(line) => line,
         };
         if content_index == 0 {
-            lines.push(format!("{prefix}{styled}"));
+            lines.push(format!("{prefix}{line}"));
         } else {
-            lines.push(format!("  {styled}"));
+            lines.push(format!("  {line}"));
         }
         content_index += 1;
     }
+    if !expanded {
+        let hidden = cell
+            .atoms
+            .iter()
+            .filter(|atom| atom.kind == InputAtomKind::Text)
+            .filter_map(|atom| cell.text.get(atom.range.clone()))
+            .map(|text| wrap_display_lines(text, wrap).len())
+            .sum();
+        if hidden > 0 {
+            lines.push(crate::render::omitted_line::render_omitted_line(
+                hidden, true,
+            ));
+        }
+    }
     // 轮次前空一行，和上一轮总览/响应隔开
     format!("\n{}", lines.join("\n"))
-}
-
-/// 判断回显行是否为图片占位块。
-///
-/// 图片粘贴在输入框中被原子化为 `[image N WxH]` 标记，回显时需要
-/// 与普通文本区分，让用户确认附件仍然存在。
-///
-/// 参数:
-/// - `line`: 回显行文本
-///
-/// 返回:
-/// - 是图片占位块时返回 true
-fn is_image_placeholder(line: &str) -> bool {
-    let trimmed = line.trim();
-    if !trimmed.starts_with("[image ") || !trimmed.ends_with(']') {
-        return false;
-    }
-    let inner = &trimmed["[image ".len()..trimmed.len() - 1];
-    let mut parts = inner.split_whitespace();
-    let index = parts.next().unwrap_or_default();
-    let size = parts.next().unwrap_or_default();
-    let tail = parts.next();
-    // 结构固定为两个词：序号 + WxH 尺寸
-    !index.is_empty()
-        && !size.is_empty()
-        && tail.is_none()
-        && size.contains('x')
-        && index.chars().all(|ch| ch.is_ascii_digit())
-}
-
-/// 渲染图片占位块：洋红色调的附件标签样式。
-///
-/// 参数:
-/// - `line`: 图片占位块行
-///
-/// 返回:
-/// - 着色后的占位块文本
-fn style_image_placeholder(line: &str) -> String {
-    format!("\x1b[35m{line}\x1b[0m")
 }
 
 /// 判断用户回显是否应按粘贴折叠语义处理（含 Ctrl+O）。
@@ -156,6 +156,13 @@ fn style_image_placeholder(line: &str) -> String {
 /// 返回:
 /// - 粘贴长文本且默认宽度下会省略中间行时为 true
 pub(crate) fn would_fold(cell: &UserEchoCell) -> bool {
+    if cell
+        .atoms
+        .iter()
+        .any(|atom| atom.kind == InputAtomKind::Text)
+    {
+        return true;
+    }
     if !cell.fold {
         return false;
     }
@@ -217,17 +224,14 @@ mod tests {
         assert!(!expanded.contains("Ctrl+O"));
     }
 
-    /// 图片占位块回显时被识别并着洋红色，普通文本不受影响。
+    /// 没有附件来源的方括号文本不能获得附件样式。
     #[test]
-    fn image_placeholder_is_tinted_magenta() {
-        assert!(is_image_placeholder("[image 1 800x600]"));
-        assert!(is_image_placeholder("  [image 12 64x64]  "));
-        assert!(!is_image_placeholder("[text 1 2000 chars]"));
-        assert!(!is_image_placeholder("normal message"));
-        assert!(!is_image_placeholder("[image 1 800x600 extra]"));
-
-        let styled = style_image_placeholder("[image 1 800x600]");
-        assert!(styled.contains("\x1b[35m"));
-        assert!(styled.contains("[image 1 800x600]"));
+    fn literal_image_label_remains_plain_text() {
+        let rendered = render(&UserEchoCell::new(
+            TranscriptMode::Yolo,
+            "[image 1 800x600] [ordinary]".to_string(),
+        ));
+        assert!(!rendered.contains("\x1b[48;5;89m"));
+        assert!(rendered.contains("[image 1 800x600] [ordinary]"));
     }
 }

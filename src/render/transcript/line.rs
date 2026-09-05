@@ -189,6 +189,7 @@ fn wrap_line(
                 if current_width >= width {
                     lines.push(finish_line(
                         &current,
+                        width.saturating_sub(current_width),
                         fill_to_end,
                         &last_fill_sgr,
                         right_margin,
@@ -207,6 +208,7 @@ fn wrap_line(
         if current_width > 0 && current_width.saturating_add(char_width) > width {
             lines.push(finish_line(
                 &current,
+                width.saturating_sub(current_width),
                 fill_to_end,
                 &last_fill_sgr,
                 right_margin,
@@ -221,6 +223,7 @@ fn wrap_line(
     if !current.is_empty() || lines.is_empty() {
         lines.push(finish_line(
             &current,
+            width.saturating_sub(current_width),
             fill_to_end,
             &last_fill_sgr,
             right_margin,
@@ -251,32 +254,56 @@ fn continuation_line(
     (format!("{active_sgr}{}", " ".repeat(indent)), indent)
 }
 
-/// 判断 SGR 序列是否为 reset。
+/// 解析 SGR 操作码；参数为样式序列，返回跳过颜色分量后的操作码列表。
+fn sgr_commands(sequence: &str) -> Vec<u16> {
+    let Some(params) = sequence
+        .strip_prefix("\x1b[")
+        .and_then(|body| body.strip_suffix('m'))
+    else {
+        return Vec::new();
+    };
+    let mut values = params.split(';');
+    let mut commands = Vec::new();
+    while let Some(value) = values.next() {
+        let code = value
+            .split(':')
+            .next()
+            .filter(|part| !part.is_empty())
+            .unwrap_or("0");
+        let Ok(code) = code.parse::<u16>() else {
+            continue;
+        };
+        commands.push(code);
+        // 1. 颜色分量中的 0 和 48 不是 reset 或背景设置；冒号格式的分量已在同一参数中
+        if matches!(code, 38 | 48 | 58) && !value.contains(':') {
+            let count = match values.next() {
+                Some("2") => 3,
+                Some("5") => 1,
+                _ => 0,
+            };
+            for _ in 0..count {
+                values.next();
+            }
+        }
+    }
+    commands
+}
+
+/// 判断样式是否重置全部属性；参数为 SGR 序列，返回是否包含独立 reset 操作。
 fn is_reset_sgr(sequence: &str) -> bool {
-    let Some(body) = sequence.strip_prefix("\x1b[") else {
-        return false;
-    };
-    let params = body.strip_suffix('m').unwrap_or(body);
-    params.is_empty() || params.split(';').any(|value| value == "0")
+    sgr_commands(sequence).contains(&0)
 }
 
-/// 判断 SGR 是否设置背景色（48;...）。
+/// 判断样式是否设置背景；参数为 SGR 序列，返回是否包含背景色操作。
 fn sgr_sets_background(sequence: &str) -> bool {
-    let Some(body) = sequence.strip_prefix("\x1b[") else {
-        return false;
-    };
-    let params = body.strip_suffix('m').unwrap_or(body);
-    params.split(';').any(|value| value == "48")
+    sgr_commands(sequence)
+        .into_iter()
+        .any(|code| matches!(code, 40..=48 | 100..=107))
 }
 
-/// 更新续行需要恢复的 SGR 样式序列。
+/// 更新续行样式；参数为当前样式缓冲和新序列，返回值为空。
 fn update_active_sgr(active_sgr: &mut String, sequence: &str) {
-    let Some(body) = sequence.strip_prefix("\x1b[") else {
-        return;
-    };
-    let params = body.strip_suffix('m').unwrap_or(body);
-    let reset = params.is_empty() || params.split(';').any(|value| value == "0");
-    if reset {
+    if is_reset_sgr(sequence) {
         active_sgr.clear();
     }
     if sequence != "\x1b[m" && sequence != "\x1b[0m" {
@@ -284,8 +311,17 @@ fn update_active_sgr(active_sgr: &mut String, sequence: &str) {
     }
 }
 
-/// 结束预换行行；EL 必须在 reset 之前、背景色仍生效时执行。
-fn finish_line(text: &str, fill_to_end: bool, fill_sgr: &str, right_margin: usize) -> AnsiLine {
+/// 【终端】【差异背景】将背景补为真实空格，保证原生回滚区缩放后仍保留色块。
+///
+/// 参数: `text` 为已折行正文，`remaining` 为剩余列，`fill_to_end` 和 `fill_sgr` 指定背景，`right_margin` 为留白
+/// 返回: 背景和右侧留白均已恢复的终端行
+fn finish_line(
+    text: &str,
+    remaining: usize,
+    fill_to_end: bool,
+    fill_sgr: &str,
+    right_margin: usize,
+) -> AnsiLine {
     let mut output = text.to_string();
     // 去掉可能残留的尾部 reset
     while output.ends_with("\x1b[0m") {
@@ -298,6 +334,8 @@ fn finish_line(text: &str, fill_to_end: bool, fill_sgr: &str, right_margin: usiz
         if !fill_sgr.is_empty() {
             output.push_str(fill_sgr);
         }
+        // 1. EL 产生的擦除空白在终端 reflow 时会丢失，写入真实空格保留背景
+        output.push_str(&" ".repeat(remaining));
         output.push_str("\x1b[K");
     }
     output.push_str("\x1b[0m");
@@ -312,6 +350,32 @@ fn finish_line(text: &str, fill_to_end: bool, fill_sgr: &str, right_margin: usiz
 #[cfg(test)]
 mod tests {
     use super::AnsiLine;
+
+    /// 真实着色空格占满内容列，终端重排时不依赖擦除命令生成的空白。
+    #[test]
+    fn diff_background_padding_survives_scrollback_reflow() {
+        let lines = AnsiLine::wrap_block_with_right_margin("\x1b[48;5;22m+ x\x1b[K\x1b[0m", 12, 3);
+        let line = lines[0].as_str();
+        let plain = crate::render::activity_animation::strip_ansi_for_test(line);
+        assert_eq!(plain, "+ x         ");
+        assert!(line.contains("         \x1b[K\x1b[0m"));
+        assert!(line.ends_with(&crate::render::content_indent::clear_right_margin(3)));
+    }
+
+    /// 零值颜色分量不能清除续行背景，值为 48 的前景分量也不能被当作背景指令。
+    #[test]
+    fn diff_background_survives_rgb_and_palette_zero_components() {
+        for background in ["\x1b[48;2;0;95;0m", "\x1b[48;5;0m", "\x1b[48:2::0:95:0m"] {
+            let source = format!("{background}\x1b[38;2;48;0;0mabcdefgh\x1b[K\x1b[0m");
+            let lines = AnsiLine::wrap_block(&source, 4);
+            assert_eq!(lines.len(), 2);
+            assert!(lines
+                .iter()
+                .all(|line| line.as_str().starts_with(background)));
+        }
+        assert!(!super::sgr_sets_background("\x1b[38;2;48;0;0m"));
+        assert!(super::is_reset_sgr("\x1b[0;38;2;0;95;0m"));
+    }
 
     /// ANSI 文本中的制表符按四列制表位展开并参与折行。
     #[test]

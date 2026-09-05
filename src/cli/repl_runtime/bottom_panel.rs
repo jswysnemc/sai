@@ -1,6 +1,8 @@
 use crate::cli::repl_text::visible_width;
 use crate::i18n::text as t;
-use crate::render::todo_style::{colorize_item, display_order, display_window, status_marker};
+use crate::render::todo_style::{
+    colorize_item, display_order, display_window, status_marker_framed,
+};
 use crate::render::transcript::TodoSnapshotItem;
 
 /// todo 多行模式展示的条目上限。
@@ -28,10 +30,11 @@ pub(super) fn render_panel_lines(
     agent_lines: &[String],
     cols: usize,
     todo_compact: bool,
+    frame: usize,
 ) -> Vec<String> {
     let cols = cols.max(8);
     let mut lines = Vec::new();
-    render_todo_section(todos, cols, todo_compact, &mut lines);
+    render_todo_section(todos, cols, todo_compact, frame, &mut lines);
     render_control_section(controls, cols, &mut lines);
     for line in queue_lines {
         lines.push(clip_line(line, cols));
@@ -40,6 +43,9 @@ pub(super) fn render_panel_lines(
         lines.push(clip_line(line, cols));
     }
     lines
+        .into_iter()
+        .map(|line| crate::render::content_indent::normalize_guide_marker(&line))
+        .collect()
 }
 
 /// 渲染待执行控制命令区。
@@ -87,6 +93,7 @@ fn render_todo_section(
     todos: &[TodoSnapshotItem],
     cols: usize,
     compact: bool,
+    frame: usize,
     lines: &mut Vec<String>,
 ) {
     if todos.is_empty() || !todo_snapshot_is_active(todos) {
@@ -97,16 +104,19 @@ fn render_todo_section(
         .filter(|item| item.status == "completed")
         .count();
     let total = todos.len();
-    let active = todos.iter().find(|item| item.status == "in_progress");
+    let active = todos
+        .iter()
+        .find(|item| item.status == "in_progress")
+        .or_else(|| todos.iter().find(|item| item.status == "pending"));
     // 左侧引导点与队列、智能体同一套沉底装饰，避免「计划」顶格成一块标签
-    let mut header = format!("\x1b[2m• {done}/{total}\x1b[0m");
+    let mut header = format!("\x1b[2m● {} {done}/{total}\x1b[0m", t("Plan", "计划"));
     // 单行时才把当前项挂在标题旁；展开后条目与其它待办对齐，不再升成标题
     if compact {
         if let Some(item) = active {
             header.push_str(&format!(
                 "  \x1b[2m·\x1b[0m {} {}",
-                status_marker("in_progress"),
-                colorize_item("in_progress", &item.text)
+                status_marker_framed(&item.status, frame),
+                colorize_item(&item.status, &item.text)
             ));
         }
     }
@@ -115,7 +125,17 @@ fn render_todo_section(
     } else {
         t("Ctrl+T compact", "Ctrl+T 单行")
     };
-    header.push_str(&format!("  \x1b[2m{hint}\x1b[0m"));
+    let marker = if compact {
+        crate::render::omitted_line::FOLD_MARKER
+    } else {
+        crate::render::omitted_line::EXPANDED_MARKER
+    };
+    let suffix = format!("  \x1b[2m{marker} {hint}\x1b[0m");
+    let suffix_width = visible_width(&suffix);
+    if cols > suffix_width + 12 {
+        header = clip_line(&header, cols - suffix_width);
+    }
+    header.push_str(&suffix);
     lines.push(clip_line(&header, cols));
 
     if compact {
@@ -130,7 +150,7 @@ fn render_todo_section(
         let item = &todos[index];
         let line = format!(
             "  {} {}",
-            status_marker(&item.status),
+            status_marker_framed(&item.status, frame),
             colorize_item(&item.status, &item.text)
         );
         lines.push(clip_line(&line, cols));
@@ -138,7 +158,13 @@ fn render_todo_section(
     let hidden = total.saturating_sub(end - start);
     if hidden > 0 {
         lines.push(clip_line(
-            &format!("\x1b[2m  … +{hidden} {}\x1b[0m", t("more", "条")),
+            &format!(
+                "  {}",
+                crate::render::omitted_line::render_fold_hint(
+                    &format!("{hidden} {}", t("items hidden", "条已折叠")),
+                    Some("Ctrl+O"),
+                )
+            ),
             cols,
         ));
     }
@@ -204,12 +230,12 @@ mod tests {
     use crate::render::activity_animation::strip_ansi_for_test;
 
     fn render(todos: &[TodoSnapshotItem], compact: bool) -> Vec<String> {
-        render_panel_lines(todos, &[], &[], &[], 80, compact)
+        render_panel_lines(todos, &[], &[], &[], 80, compact, 0)
     }
 
     #[test]
     fn empty_inputs_produce_no_panel() {
-        assert!(render_panel_lines(&[], &[], &[], &[], 80, false).is_empty());
+        assert!(render_panel_lines(&[], &[], &[], &[], 80, false, 0).is_empty());
     }
 
     #[test]
@@ -241,11 +267,11 @@ mod tests {
         let current_at = body.find("current").unwrap();
         let next_at = body.find("next").unwrap();
         assert!(current_at < next_at && next_at < done_at);
-        assert!(plain.contains('▶'));
+        assert!(plain.contains('◐'));
         assert!(!plain.contains('├') && !plain.contains('└'));
         assert!(
-            lines.join("\n").contains("\x1b[9m"),
-            "completed items should use strikethrough"
+            !lines.join("\n").contains("\x1b[9m"),
+            "completed items should remain readable"
         );
     }
 
@@ -339,13 +365,13 @@ mod tests {
         let rendered = render(&todos(12, 0), false).join("\n");
         let plain = strip_ansi_for_test(&rendered);
         assert!(plain.contains("0/12"));
-        assert!(plain.contains('+'));
+        assert!(plain.contains("▸ 7"));
     }
 
     #[test]
     fn long_lines_are_clipped_to_terminal_width() {
         let queue = vec![format!("  ↳ {}", "字".repeat(120))];
-        let lines = render_panel_lines(&[], &queue, &[], &[], 40, false);
+        let lines = render_panel_lines(&[], &queue, &[], &[], 40, false, 0);
         for line in &lines {
             assert!(visible_width(line) <= 40, "line too wide: {line:?}");
         }

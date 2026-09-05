@@ -308,6 +308,7 @@ pub(super) fn is_default_subagent(value: &super::agents::SubagentConfig) -> bool
         && (value.thinking_level.is_empty() || value.thinking_level == "auto")
         && value.default_profile.is_empty()
         && value.profiles.is_empty()
+        && value.model_overrides.is_empty()
 }
 
 pub(super) fn is_default_anthropic_max_tokens(value: &u32) -> bool {

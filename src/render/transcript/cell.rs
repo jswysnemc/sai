@@ -56,7 +56,7 @@ impl HistoryCell {
         options: &TranscriptRenderOptions,
         frame: usize,
     ) -> Vec<AnsiLine> {
-        let lines = match self {
+        let mut lines = match self {
             Self::Welcome(cell) => welcome_cell::display_lines(cell, width),
             Self::Markdown(cell) => {
                 // 【终端】【正文引导】正文渲染与折行共用调用方传入的净宽度
@@ -87,6 +87,18 @@ impl HistoryCell {
                 }
             }),
         };
+        // 【终端】【状态动效】运行中的命令、编辑和工具共用引导符动画
+        if frame > 0 && self.is_animating() {
+            if let Some(line) = lines
+                .iter_mut()
+                .find(|line| !spacing::is_visual_blank(line))
+            {
+                *line = AnsiLine::new(crate::render::content_indent::animate_guide_marker(
+                    line.as_str(),
+                    frame,
+                ));
+            }
+        }
         // 区块间距（交界处只保留一行空行）：
         // - Reasoning：仅前空一行（后空行会与 Markdown/Meta 的前空行叠成两行）
         // - Markdown / Meta：前空一行（承接思考/工具与正文、总览）
@@ -110,6 +122,22 @@ impl HistoryCell {
         // 块间前空行由本函数显式插入，尾部空行会在流式 live 接缝处叠成两行
         spacing::trim_trailing_visual_blanks(&mut spaced);
         spaced
+    }
+
+    /// 判断单元是否正在执行，待命和完成状态保持静态。
+    ///
+    /// 参数: 无
+    /// 返回: 是否需要引导符动画
+    fn is_animating(&self) -> bool {
+        match self {
+            Self::Tool(ToolCell::Invocation(view)) => {
+                view.outcome.is_none() || view.is_running_background()
+            }
+            Self::Tool(ToolCell::CompactionStarted { .. }) => true,
+            Self::Tool(ToolCell::Subagent(cell)) => cell.overview().running,
+            Self::Diff(cell) => cell.is_pending(),
+            _ => false,
+        }
     }
 
     /// 构造用户输入回显 cell。

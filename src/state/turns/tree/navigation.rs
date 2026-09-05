@@ -5,6 +5,14 @@ use crate::state::turns::repository::{active_leaf_locked, set_active_leaf_locked
 use anyhow::{bail, Result};
 
 impl ConversationDb {
+    /// 【会话】【分支导航】返回首条消息之前的起点，保留所有历史分支。
+    ///
+    /// 参数: 无
+    /// 返回: 活动位置写入结果
+    pub(crate) fn switch_to_session_start(&self) -> Result<()> {
+        self.switch_active_leaf(SESSION_ROOT_TURN_ID)
+    }
+
     /// 读取当前会话树。
     ///
     /// 参数:

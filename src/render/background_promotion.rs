@@ -1,4 +1,4 @@
-use crate::render::status_style::{tool_bullet, ToolHealth};
+use crate::render::status_style::ToolHealth;
 use crate::render::terminal_text as t;
 use serde_json::Value;
 
@@ -13,6 +13,8 @@ pub(crate) struct BackgroundPromotion {
     pub waited_seconds: u64,
     /// 等待期间产生的部分 stdout
     pub partial_stdout: String,
+    /// 等待期间产生的部分 stderr
+    pub partial_stderr: String,
 }
 
 /// 解析 run_command 结果里的后台提升信息。
@@ -50,13 +52,18 @@ pub(crate) fn parse_background_promotion(output: &str) -> Option<BackgroundPromo
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string(),
+        partial_stderr: value
+            .get("partial_stderr")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
     })
 }
 
 /// 渲染后台提升的专用事件行。
 ///
 /// 提升不是失败：圆点用进行中色，徽标给任务 ID 与等待秒数，
-/// 正文提示后续用 background_command 管理该任务。
+/// 正文提示可以通过后台任务面板查看输出或停止命令。
 ///
 /// 参数:
 /// - `promotion`: 后台提升视图
@@ -66,44 +73,38 @@ pub(crate) fn parse_background_promotion(output: &str) -> Option<BackgroundPromo
 /// - ANSI 事件行文本
 pub(crate) fn render_promotion_line(promotion: &BackgroundPromotion, command: &str) -> String {
     let verb = if promotion.promoted {
-        t("Backgrounded", "已转入后台")
+        t("Moved to background", "已转入后台")
     } else {
-        t("Started background", "已启动后台任务")
+        t("Started in background", "已在后台启动")
     };
-    // 命令正文用与命令工具一致的 bash 语法着色，未命中高亮规则时保持原样
-    let object = if command.trim().is_empty() {
-        String::new()
-    } else {
-        format!(
-            " {}",
-            crate::render::code_block::highlight_code_line("bash", command)
-        )
-    };
-    let waited = if promotion.promoted && promotion.waited_seconds > 0 {
-        format!(
-            " · {} {}{}",
-            promotion.waited_seconds,
-            t("s", "秒"),
-            t(" waited", "等待")
-        )
-    } else {
-        String::new()
-    };
-    let badge = format!(
-        "\x1b[36m{}{waited}\x1b[0m",
-        short_task_id(&promotion.task_id)
-    );
-    let line = format!(
-        "{} \x1b[1m{verb}\x1b[0m{object} {badge}",
-        tool_bullet(ToolHealth::Pending)
-    );
-    format!(
-        "{line}\n\x1b[2m\x1b[36m  └ {}\x1b[0m",
-        t(
-            "manage with background_command (list/output/wait/stop)",
-            "用 background_command 管理（list/output/wait/stop）"
-        )
+    // 1. 旧格式提升结果也使用同一命令卡片，保留命令提示符与日志折叠
+    let mut output = crate::render::command_output::render_command_block_with_action(
+        &serde_json::json!({"command": command}).to_string(),
+        verb,
+        ToolHealth::Pending,
     )
+    .trim_end()
+    .to_string();
+    let waited = if promotion.promoted && promotion.waited_seconds > 0 {
+        format!(" · {}{}", promotion.waited_seconds, t("s", "秒"))
+    } else {
+        String::new()
+    };
+    output.push_str(&format!(
+        "\n\x1b[2m  {}{waited} · /ps\x1b[0m",
+        short_task_id(&promotion.task_id)
+    ));
+    // 2. 标准输出与错误输出都保留，不能在转入后台时丢失诊断信息
+    let body = crate::render::command_result_block::render_live_command_output(
+        &promotion.partial_stdout,
+        &promotion.partial_stderr,
+        false,
+    );
+    if !body.trim().is_empty() {
+        output.push('\n');
+        output.push_str(body.trim_end());
+    }
+    output
 }
 
 /// 缩短任务 ID 供单行展示。
@@ -143,10 +144,12 @@ mod tests {
             promoted: true,
             waited_seconds: 30,
             partial_stdout: String::new(),
+            partial_stderr: "diagnostic".into(),
         };
         let plain = strip_ansi_for_test(&render_promotion_line(&promotion, "cargo test"));
-        assert!(plain.contains("cargo test"), "{plain}");
+        assert!(plain.contains("$ cargo test"), "{plain}");
+        assert!(plain.contains("diagnostic"), "{plain}");
         assert!(plain.contains("task-abc123"), "{plain}");
-        assert!(!plain.contains("err"), "{plain}");
+        assert!(!plain.lines().next().unwrap().contains("err"), "{plain}");
     }
 }

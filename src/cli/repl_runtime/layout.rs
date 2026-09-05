@@ -81,6 +81,31 @@ impl ReplRuntime {
             .collect()
     }
 
+    /// 完整展开会话中的正文、思考、工具参数和结果，不受主视图行数上限影响。
+    ///
+    /// 参数: `width` 为分页正文可用列数
+    /// 返回: 完整会话的 ANSI 显示行
+    pub(in crate::cli) fn expanded_transcript_lines(
+        &mut self,
+        width: usize,
+    ) -> Vec<crate::render::transcript::AnsiLine> {
+        let options = crate::render::transcript::TranscriptRenderOptions {
+            reasoning_mode: crate::render::ReasoningDisplayMode::Full,
+            tool_call_mode: crate::render::ToolCallDisplayMode::Full,
+        };
+        crate::render::render_expand::with_expanded_render(|| {
+            display_window(
+                &mut self.transcript,
+                width.max(1),
+                &options,
+                usize::MAX,
+                0,
+                usize::MAX,
+            )
+            .lines
+        })
+    }
+
     /// 计算当前终端尺寸下 composer 需要保留的行数。
     ///
     /// 参数:
@@ -168,8 +193,8 @@ mod tests {
             let plain = strip_ansi_for_test(line.as_str());
             let ok = plain.is_empty()
                 || plain.starts_with("  ")
-                || plain.starts_with('›')
-                || plain.starts_with('✗');
+                || plain.starts_with('○')
+                || plain.starts_with('●');
             assert!(ok, "历史行未对齐引导区: {plain:?}");
             assert!(visible_width(line.as_str()) <= 8, "历史行超出终端宽度");
         }
@@ -198,10 +223,10 @@ mod tests {
             .expect("plain content should be rendered");
 
         assert!(marker.as_str().starts_with("\x1b[38;5;208m●"));
-        // 系统提示用 › 挂在引导列，与正文缩进区分
+        // 系统提示用 ○ 挂在引导列，与正文缩进区分
         assert!(
-            strip_ansi_for_test(plain.as_str()).starts_with('›'),
-            "meta should keep › on the guide column: {:?}",
+            strip_ansi_for_test(plain.as_str()).starts_with('○'),
+            "meta should keep ○ on the guide column: {:?}",
             plain.as_str()
         );
     }
@@ -304,7 +329,7 @@ mod tests {
 
         for line in &window.lines {
             let plain = strip_ansi_for_test(line.as_str());
-            if plain.starts_with('•') {
+            if plain.starts_with('●') {
                 // Summary 摘要行挂在引导列，不套 diff 块三列内收
                 assert!(!plain.starts_with(' '), "diff 摘要应顶格: {plain:?}");
                 continue;
@@ -350,7 +375,7 @@ mod tests {
         assert!(window.lines.len() > 4, "测试数据必须触发 diff 自动换行");
         for line in &window.lines {
             let plain = strip_ansi_for_test(line.as_str());
-            if plain.starts_with('•') {
+            if plain.starts_with('●') {
                 // 摘要引导符顶格，不被 diff 正文内收推开
                 assert!(!plain.starts_with(' '), "diff 摘要应顶格: {plain:?}");
             } else {
@@ -402,9 +427,9 @@ mod tests {
             .lines
             .iter()
             .map(|line| strip_ansi_for_test(line.as_str()))
-            .find(|line| line.contains('•'))
+            .find(|line| line.contains('●'))
             .expect("应有工具状态行");
-        assert!(header.starts_with('•'), "流式工具状态行应顶格: {header:?}");
+        assert!(header.starts_with('●'), "流式工具状态行应顶格: {header:?}");
     }
 
     /// 验证单列终端不增加留白，保留唯一的正文列。

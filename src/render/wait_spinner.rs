@@ -383,7 +383,7 @@ mod tests {
 
         assert!(plain.contains("Thinking"));
         assert!(plain.contains("0s"));
-        assert!(plain.starts_with("• "));
+        assert!(plain.starts_with("◐ "));
         assert!(!plain.contains('·'));
         assert_ne!(first, second);
         assert_eq!(lines, 1);

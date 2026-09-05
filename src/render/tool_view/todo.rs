@@ -1,6 +1,9 @@
 use super::model::ToolView;
+use crate::render::status_style::{color_status, ToolHealth};
 use crate::render::todo_style::{colorize_item, status_marker, status_rank};
-use crate::render::tool_event_line::{tool_event_label_tense, tool_event_text, ToolVerbTense};
+use crate::render::tool_event_line::{
+    tool_event_label_tense, tool_event_text, tool_status_line, ToolVerbTense,
+};
 use crate::render::ToolCallDisplayMode;
 use serde::Deserialize;
 
@@ -66,7 +69,6 @@ pub(crate) fn render_todo_output(
     }
     let result = serde_json::from_str::<TodoResultView>(result_json).ok()?;
     let display_label = changed_item_label(label, &result.changed);
-    let mut output = tool_event_text(&display_label, if ok { "ok" } else { "err" });
 
     let total = result.items.len();
     let completed = result
@@ -87,7 +89,7 @@ pub(crate) fn render_todo_output(
     let pending = total.saturating_sub(completed + in_progress + cancelled);
 
     // 摘要行走统一 gutter：x/x 计数（与沉底面板同一视觉语言，不画进度条）
-    let mut stats = format!("{completed}/{total}");
+    let mut stats = format!("Plan {completed}/{total}");
     if in_progress > 0 {
         stats.push_str(&format!(" · {in_progress} active"));
     }
@@ -97,7 +99,25 @@ pub(crate) fn render_todo_output(
     if cancelled > 0 {
         stats.push_str(&format!(" · {cancelled} cancelled"));
     }
-    output.push_str(&format!("\n\x1b[2m  └ {stats}\x1b[0m"));
+    // 1. 读取清单直接展示计划进度，修改操作保留动作和条目，不重复成功徽标
+    let mut output = if ok && matches!(display_label.as_str(), "Listed" | "Todo") {
+        tool_status_line(
+            "Plan",
+            &format!("\x1b[2m{}\x1b[0m", stats.trim_start_matches("Plan ")),
+            ToolHealth::Ok,
+        )
+    } else {
+        let health = if ok { ToolHealth::Ok } else { ToolHealth::Err };
+        let badge = if ok {
+            String::new()
+        } else {
+            color_status("err")
+        };
+        format!(
+            "{}\n\x1b[2m  └ {stats}\x1b[0m",
+            tool_status_line(&display_label, &badge, health)
+        )
+    };
 
     // Summary 模式：清单已由沉底面板常驻展示，历史区只保留摘要与当前进行中项，
     // 避免每次 todo 调用都在历史里重复整份清单
@@ -106,6 +126,13 @@ pub(crate) fn render_todo_output(
             .items
             .iter()
             .find(|item| item.status == "in_progress")
+            .or_else(|| result.items.iter().find(|item| item.status == "pending"))
+            .filter(|item| {
+                !result
+                    .changed
+                    .iter()
+                    .any(|changed| changed.text == item.text && display_label.contains(&item.text))
+            })
         {
             output.push_str(&format!(
                 "\n    {} {}",
@@ -176,7 +203,7 @@ mod tests {
         assert!(rendered.contains("补测试"));
         assert!(rendered.contains("1/3"));
         assert!(!rendered.contains('█') && !rendered.contains('░'));
-        assert!(rendered.contains('▶'));
+        assert!(rendered.contains('◐'));
     }
 
     /// 更新结果使用条目内容和状态，不暴露内部 ID（标签动词为 Marked/Marking 等）。
@@ -226,7 +253,7 @@ mod tests {
     #[test]
     fn status_marker_covers_common_states() {
         assert!(status_marker("completed").contains('✓'));
-        assert!(status_marker("in_progress").contains('▶'));
+        assert!(status_marker("in_progress").contains('◐'));
         assert!(status_marker("pending").contains('○'));
     }
 }

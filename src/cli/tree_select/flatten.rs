@@ -3,8 +3,8 @@ use crate::state::{SessionTree, TurnTreeNode};
 /// 压平后的树行，供选择器展示与回选。
 #[derive(Debug, Clone)]
 pub(crate) struct TreeRow {
-    /// 该行对应的轮次
-    pub(crate) turn_id: String,
+    /// 该行对应的轮次，空值表示首条消息之前的会话起点
+    pub(crate) turn_id: Option<String>,
     /// 已经拼好装订线与摘要的展示文本
     pub(crate) label: String,
 }
@@ -20,24 +20,22 @@ pub(crate) struct TreeRow {
 /// 返回:
 /// - 自上而下的展示行
 pub(crate) fn flatten_tree(tree: &SessionTree) -> Vec<TreeRow> {
-    let mut rows = Vec::new();
     let active = tree.active_leaf_id.as_deref();
+    let marker = if active.is_none() { "●" } else { "○" };
+    let mut rows = vec![TreeRow {
+        turn_id: None,
+        label: format!(
+            "{marker} {}",
+            super::t(
+                "Session start · new starting message",
+                "会话起点 · 新的起始消息"
+            )
+        ),
+    }];
     let root_count = tree.roots.len();
     for (index, root) in tree.roots.iter().enumerate() {
-        // 多个根时根之间也需要装订线，单根则从零缩进直接展开
-        let ancestors = if root_count > 1 {
-            vec![index + 1 < root_count]
-        } else {
-            Vec::new()
-        };
-        push_node(
-            root,
-            &ancestors,
-            root_count > 1,
-            index + 1 == root_count,
-            active,
-            &mut rows,
-        );
+        // 【终端】【会话树】所有起始消息并列挂在会话起点下
+        push_node(root, &[], true, index + 1 == root_count, active, &mut rows);
     }
     rows
 }
@@ -64,7 +62,7 @@ fn push_node(
 ) {
     let is_active = active == Some(node.turn_id.as_str());
     rows.push(TreeRow {
-        turn_id: node.turn_id.clone(),
+        turn_id: Some(node.turn_id.clone()),
         label: render_label(node, ancestors, has_connector, is_last, is_active),
     });
     // 1. 子层的祖先竖线：当前层若还有后续兄弟就要延续竖线
@@ -124,6 +122,20 @@ fn render_label(
 mod tests {
     use super::*;
 
+    /// 【终端】【会话树测试】根轮次之前应提供可选择的会话起点，供新建并列分支。
+    #[test]
+    fn regression_tree_exposes_a_session_start_before_first_turn() {
+        let tree = SessionTree {
+            roots: vec![node("first", 1, vec![])],
+            active_leaf_id: Some("first".into()),
+            total_turns: 1,
+            branch_points: 0,
+        };
+        let rows = flatten_tree(&tree);
+        assert_eq!(rows.len(), 2, "必须能够选择首条用户消息之前的起点");
+        assert!(rows[0].turn_id.is_none());
+    }
+
     /// 构造测试节点。
     fn node(id: &str, seq: i64, children: Vec<TurnTreeNode>) -> TurnTreeNode {
         TurnTreeNode {
@@ -150,10 +162,10 @@ mod tests {
 
         let rows = flatten_tree(&tree);
 
-        assert_eq!(rows.len(), 2);
+        assert_eq!(rows.len(), 3);
         assert!(rows[0].label.starts_with("○ "), "{}", rows[0].label);
         assert!(rows[1].label.contains("└─"), "{}", rows[1].label);
-        assert!(rows[1].label.contains('●'));
+        assert!(rows[2].label.contains('●'));
     }
 
     /// 分叉处前一个用 ├─，最后一个用 └─。
@@ -172,9 +184,9 @@ mod tests {
 
         let rows = flatten_tree(&tree);
 
-        assert_eq!(rows.len(), 3);
-        assert!(rows[1].label.contains("├─"), "{}", rows[1].label);
-        assert!(rows[2].label.contains("└─"), "{}", rows[2].label);
+        assert_eq!(rows.len(), 4);
+        assert!(rows[2].label.contains("├─"), "{}", rows[2].label);
+        assert!(rows[3].label.contains("└─"), "{}", rows[3].label);
     }
 
     /// 非最后分支的子节点保留祖先竖线。
@@ -197,7 +209,10 @@ mod tests {
         let rows = flatten_tree(&tree);
 
         // b 不是最后一个兄弟，因此 d 这一行要先画竖线再画连接符
-        let deep = rows.iter().find(|row| row.turn_id == "d").unwrap();
+        let deep = rows
+            .iter()
+            .find(|row| row.turn_id.as_deref() == Some("d"))
+            .unwrap();
         assert!(deep.label.contains("│"), "{}", deep.label);
     }
 
@@ -213,6 +228,6 @@ mod tests {
 
         let rows = flatten_tree(&tree);
 
-        assert!(rows[0].label.contains('●'));
+        assert!(rows[1].label.contains('●'));
     }
 }

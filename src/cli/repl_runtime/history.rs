@@ -199,6 +199,49 @@ mod tests {
         }
     }
 
+    /// 历史子任务保留身份、最新终态和详情入口，不退化成普通工具行。
+    #[test]
+    fn history_subagent_restores_panel_entry_and_detail_view() {
+        let owner = format!("history-panel-{}", rand::random::<u64>());
+        let (snapshot, _cancel) = crate::tools::subagent_state::create_subagent_for_owner(
+            &owner,
+            "检查项目".into(),
+            "explore".into(),
+            8,
+        );
+        let mut historical = turn(false, "查看子任务");
+        historical.tools[0].name = "subagent".into();
+        historical.tools[0].arguments = r#"{"action":"start","description":"检查项目"}"#.into();
+        historical.tools[0].output =
+            serde_json::json!({"ok": true, "subagent": snapshot}).to_string();
+        crate::tools::subagent_state::finish_subagent(
+            &snapshot.id,
+            "interrupted",
+            None,
+            Some("The session ended before completion".into()),
+            None,
+        );
+
+        let mut transcript = TranscriptStore::new(100);
+        append_timeline(&mut transcript, &[historical]);
+        let entries = transcript.subagent_overview();
+        assert_eq!(entries.len(), 1, "历史子任务必须保留面板入口");
+        assert_eq!(entries[0].status, "interrupted");
+        assert!(!entries[0].running);
+        assert!(transcript.enter_subagent_view(entries[0].cell_index));
+        let view = transcript
+            .display_tail(100, &options())
+            .iter()
+            .map(|line| line.as_str())
+            .collect::<String>();
+        assert!(
+            view.contains("The session ended before completion"),
+            "{view}"
+        );
+        assert!(!view.contains("Working"));
+        crate::tools::subagent_state::clear_subagents_for_owner(&owner);
+    }
+
     #[test]
     fn history_uses_blue_mode_for_automatic_turns() {
         let mut transcript = TranscriptStore::new(100);

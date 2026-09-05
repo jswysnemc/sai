@@ -1,3 +1,4 @@
+use crate::render::activity_animation::strip_ansi_for_test;
 use crate::render::transcript::AnsiLine;
 
 /// Ctrl+O 阅读面板的搜索状态。
@@ -37,7 +38,10 @@ impl PagerSearch {
         }
         let needle = self.query.to_lowercase();
         for (index, line) in content_lines.iter().enumerate() {
-            if line.as_str().to_lowercase().contains(&needle) {
+            if strip_ansi_for_test(line.as_str())
+                .to_lowercase()
+                .contains(&needle)
+            {
                 self.matches.push(index);
             }
         }
@@ -68,6 +72,33 @@ impl PagerSearch {
         let mut query = self.query.clone();
         query.pop();
         self.update(&query, content_lines);
+    }
+
+    /// 重新索引重排后的正文，并保留当前命中序号。
+    ///
+    /// 参数: `content_lines` 为当前视图内容
+    /// 返回: 无
+    pub(super) fn refresh(&mut self, content_lines: &[AnsiLine]) {
+        let selected = self.selected;
+        let query = self.query.clone();
+        self.update(&query, content_lines);
+        self.selected = selected.min(self.matches.len().saturating_sub(1));
+    }
+
+    /// 高亮命中行的可见文字，避免原有 ANSI 样式覆盖搜索结果。
+    ///
+    /// 参数: `line` 为原始样式行，`index` 为内容行下标
+    /// 返回: 命中时返回反色文字，其余行保留原样
+    pub(super) fn highlight(&self, line: &str, index: usize) -> String {
+        if self.matches.binary_search(&index).is_err() {
+            return line.to_string();
+        }
+        let style = if self.current() == Some(index) {
+            "\x1b[1m\x1b[7m"
+        } else {
+            "\x1b[4m"
+        };
+        format!("{style}{}\x1b[0m", strip_ansi_for_test(line))
     }
 
     /// 跳到下一个命中。
@@ -176,5 +207,23 @@ mod tests {
 
         search.next();
         assert_eq!(search.status_text(), "/one [2/2]");
+    }
+
+    /// 搜索使用可见正文，允许关键词跨越语法高亮片段。
+    #[test]
+    fn search_matches_across_ansi_styles() {
+        let content = lines(&["\x1b[31mRu\x1b[0mnn\x1b[1ming\x1b[0m command"]);
+        let mut search = PagerSearch::default();
+        search.update("running", &content);
+        assert_eq!(search.current(), Some(0));
+    }
+
+    /// ANSI 颜色参数不能成为用户可见的搜索结果。
+    #[test]
+    fn search_ignores_terminal_control_parameters() {
+        let content = lines(&["\x1b[31mfailed\x1b[0m"]);
+        let mut search = PagerSearch::default();
+        search.update("31", &content);
+        assert!(search.matches.is_empty());
     }
 }

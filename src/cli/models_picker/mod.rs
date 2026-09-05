@@ -22,7 +22,10 @@ pub(super) enum PickerOutcome {
     /// 用户取消
     Cancelled,
     /// 已保存模型与思考等级
-    Saved { message: String },
+    Saved {
+        message: String,
+        main_model_changed: bool,
+    },
 }
 
 /// 【CLI】【模型选择】运行交互式模型与思考等级选择（终端打印结果）。
@@ -38,7 +41,7 @@ pub(super) fn run(paths: &SaiPaths) -> Result<()> {
             println!("{}", t("cancelled", "已取消"));
             Ok(())
         }
-        PickerOutcome::Saved { message } => {
+        PickerOutcome::Saved { message, .. } => {
             println!("{message}");
             Ok(())
         }
@@ -58,6 +61,7 @@ pub(super) fn run(paths: &SaiPaths) -> Result<()> {
 pub(super) fn run_interactive(paths: &SaiPaths) -> Result<PickerOutcome> {
     AppConfig::init_files(paths)?;
     let mut config = AppConfig::load(paths)?;
+    let initial_subagent = config.subagent.clone();
     let choices = config.provider_model_choices();
     if choices.is_empty() {
         bail!(
@@ -93,6 +97,12 @@ pub(super) fn run_interactive(paths: &SaiPaths) -> Result<PickerOutcome> {
 
     // 2. 进入交互循环
     let Some(()) = run_loop(&mut picker, &mut config, paths)? else {
+        if config.subagent != initial_subagent {
+            return Ok(PickerOutcome::Saved {
+                message: t("Subagent model settings saved", "子任务模型设置已保存").to_string(),
+                main_model_changed: false,
+            });
+        }
         return Ok(PickerOutcome::Cancelled);
     };
 
@@ -112,7 +122,10 @@ pub(super) fn run_interactive(paths: &SaiPaths) -> Result<PickerOutcome> {
         t("thinking", "思考"),
         level
     );
-    Ok(PickerOutcome::Saved { message })
+    Ok(PickerOutcome::Saved {
+        message,
+        main_model_changed: true,
+    })
 }
 
 /// 运行按键循环（固定锚点行绘制，兼容 CLI 与 TUI 嵌套）。

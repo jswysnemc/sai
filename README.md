@@ -321,6 +321,12 @@ sai
 
 The REPL supports multi-line input, image paste (`-c` reads from clipboard), `!` prefix for shell, `/` prefix for control commands, fuzzy history search, and streaming render of reasoning and body text. Idle `Ctrl+O` opens the transcript pager, including diffs; while a turn is streaming it only toggles live reasoning. Work status stays in the live tail (`Working` / `Thinking`, then waiting to run, write, or respond). Finalized reasoning uses the past-tense `Thought` label.
 
+In the pager, `a` switches between individual segments and the fully expanded transcript. Use `/` to search, `Enter` to finish editing the search, and `n` / `N` to move between matches. Full view includes messages, reasoning, tool inputs and results, and pasted text beyond the main view's line limit. Submitted image, text, file, and skill atoms retain distinct label styles.
+
+Press `Tab` in `/model` to configure shared subagent defaults or override the model and thinking level for an individual task type. The Web chat's “Subagent models & thinking” button uses the same configuration; changes apply to newly started subagents. Select “Session start” in `/tree`, or use `/tree root`, to create another starting message. Each branch keeps its own conversation context.
+
+Background command cards keep the `$` command line and update recent logs automatically, with long output available through `Ctrl+O`. Tasks with no new output for 90 seconds, or running for 10 minutes, prompt the main agent to check progress. Acknowledged checks have a five-minute reminder cooldown. Each wait lasts at most 60 seconds and returns the current status and recent logs without stopping the command. Use `Ctrl+T` to fold or expand the plan and `↓` to open the subagent panel and select a task.
+
 ### 4. One-shot chat
 
 ```bash

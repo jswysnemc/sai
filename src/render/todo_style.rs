@@ -12,16 +12,27 @@
 pub(crate) fn status_marker(status: &str) -> &'static str {
     match status {
         "completed" => "\x1b[32m✓\x1b[0m",
-        // ▶ 表示「当前焦点」，与用户回显 ●、工具 •、思考 ◦ 区分开
-        "in_progress" => "\x1b[1m\x1b[36m▶\x1b[0m",
-        "cancelled" => "\x1b[2m✕\x1b[0m",
+        "in_progress" => "\x1b[36m◐\x1b[0m",
+        "cancelled" => "\x1b[2m–\x1b[0m",
         _ => "\x1b[2m○\x1b[0m",
+    }
+}
+
+/// 渲染当前状态的动画标记；参数为状态和帧号，返回单列 ANSI 图形。
+pub(crate) fn status_marker_framed(status: &str, frame: usize) -> String {
+    if status == "in_progress" {
+        crate::render::activity_animation::render_activity_guide_with_color(
+            frame,
+            Some((86, 182, 194)),
+        )
+    } else {
+        status_marker(status).to_string()
     }
 }
 
 /// 按状态着色待办正文。
 ///
-/// 已完成与已取消均带删除线，扫读时一眼区分「已关掉」的条目。
+/// 已完成条目减淡保留可读性，仅已取消条目使用删除线。
 ///
 /// 参数:
 /// - `status`: 状态
@@ -31,7 +42,7 @@ pub(crate) fn status_marker(status: &str) -> &'static str {
 /// - 带 ANSI 的文本
 pub(crate) fn colorize_item(status: &str, text: &str) -> String {
     match status {
-        "completed" => format!("\x1b[2m\x1b[9m{text}\x1b[0m"),
+        "completed" => format!("\x1b[2m{text}\x1b[0m"),
         "in_progress" => format!("\x1b[1m\x1b[36m{text}\x1b[0m"),
         "cancelled" => format!("\x1b[2m\x1b[9m{text}\x1b[0m"),
         _ => text.to_string(),
@@ -133,14 +144,15 @@ mod tests {
     }
 
     #[test]
-    fn completed_text_uses_strikethrough() {
-        assert!(colorize_item("completed", "done").contains("\x1b[9m"));
+    fn completed_text_stays_readable_and_cancelled_text_is_struck() {
+        assert!(!colorize_item("completed", "done").contains("\x1b[9m"));
+        assert!(colorize_item("cancelled", "cancelled").contains("\x1b[9m"));
     }
 
     #[test]
     fn in_progress_marker_is_not_user_or_tool_bullet() {
         let marker = status_marker("in_progress");
-        assert!(marker.contains('▶'));
+        assert!(marker.contains('◐'));
         assert!(!marker.contains('●'));
         assert!(!marker.contains('•'));
     }

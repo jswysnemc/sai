@@ -44,7 +44,7 @@ pub(super) fn render(cell: &ShellCell) -> String {
         for entry in &command_lines {
             if first {
                 rendered.push_str("\x1b[35m$\x1b[0m ");
-            } else {
+            } else if matches!(entry, FoldedDisplayLine::Line(_)) {
                 rendered.push_str(&continuation);
             }
             push_shell_line(&mut rendered, entry, &mut highlight);
@@ -57,11 +57,17 @@ pub(super) fn render(cell: &ShellCell) -> String {
     } else {
         let out_lines = fold_display_text(cell.output.trim_end(), false, title);
         for (index, line) in out_lines.iter().enumerate() {
-            let prefix = if index == 0 { "  └ " } else { "    " };
-            if line.starts_with('…') {
-                rendered.push_str(&format!("\n\x1b[2m{prefix}{line}\x1b[0m"));
-            } else {
-                rendered.push_str(&format!("\n\x1b[2m{prefix}{line}\x1b[0m"));
+            match line {
+                FoldedDisplayLine::Omitted { omitted, .. } => {
+                    rendered.push('\n');
+                    rendered.push_str(&crate::render::omitted_line::render_omitted_line(
+                        *omitted, true,
+                    ));
+                }
+                FoldedDisplayLine::Line(line) => {
+                    let prefix = if index == 0 { "  └ " } else { "    " };
+                    rendered.push_str(&format!("\n\x1b[2m{prefix}{line}\x1b[0m"));
+                }
             }
         }
     }
@@ -84,22 +90,11 @@ pub(super) fn render(cell: &ShellCell) -> String {
 ///
 /// 返回:
 /// - 可见行（省略标记已本地化文案）
-fn fold_display_text(text: &str, expanded: bool, title: &str) -> Vec<String> {
+fn fold_display_text(text: &str, expanded: bool, title: &str) -> Vec<FoldedDisplayLine> {
     // 命令与输出共用同一套折行宽度：前 2 后 4 行做预览折叠
     let wrap = command_wrap_width_for_title(title);
     let wrapped = wrap_display_lines(text, wrap);
-    let (visible, omitted) =
-        fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded);
-    visible
-        .into_iter()
-        .map(|line| {
-            if line == "__OMITTED__" {
-                crate::render::omitted_line::render_omitted_line_plain(omitted, true)
-            } else {
-                line
-            }
-        })
-        .collect()
+    fold_display_lines(&wrapped, FOLD_HEAD_LINES, FOLD_TAIL_LINES, expanded)
 }
 
 /// 折行并折叠命令文本，保留被省略行供高亮状态推进。
@@ -134,7 +129,7 @@ fn push_shell_line(
             for line in skipped {
                 let _ = highlight_code_line_continued("bash", line, highlight);
             }
-            rendered.push_str(&crate::render::omitted_line::render_omitted_line_plain(
+            rendered.push_str(&crate::render::omitted_line::render_omitted_line(
                 *omitted, true,
             ));
             rendered.push('\n');

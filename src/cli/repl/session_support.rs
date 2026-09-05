@@ -27,6 +27,10 @@ const REPL_HISTORY_COMMAND_OUTPUT_BYTE_LIMIT: usize = 2 * 1024 * 1024;
 /// - 历史读取与渲染结果
 pub(super) fn record_repl_history(runtime: &mut ReplRuntime, state: &StateStore) -> Result<()> {
     let mut timeline = state.session_timeline_with_compaction(REPL_HISTORY_TURN_LIMIT)?;
+    // 【终端】【历史子任务】1. 先恢复所属会话的快照，使首次渲染即可显示真实终态
+    let _ = crate::tools::subagent_state::list_subagents_for_owner(
+        &state.state_dir().to_string_lossy(),
+    );
     let reader = state.tool_result_ref_reader()?;
     restore_history_command_outputs(&mut timeline.turns, |result_ref, max_bytes| {
         reader.read_with_limit(result_ref, max_bytes)
@@ -53,13 +57,24 @@ where
         .iter_mut()
         .rev()
         .flat_map(|turn| turn.tools.iter_mut())
-        .filter(|tool| tool.name == "run_command")
+        .filter(|tool| {
+            tool.name == "run_command"
+                || (tool.name == "background_command"
+                    && serde_json::from_str::<serde_json::Value>(&tool.arguments).is_ok_and(
+                        |args| {
+                            matches!(
+                                args["action"].as_str(),
+                                Some("start" | "output" | "wait" | "stop")
+                            )
+                        },
+                    ))
+        })
     {
         let Some(result_ref) = tool.result_ref.as_deref() else {
             let preview_is_truncated = tool
                 .original_chars
                 .is_some_and(|original| original > tool.output.chars().count());
-            if preview_is_truncated && command_result_streams(&tool.output).is_none() {
+            if preview_is_truncated && !is_history_command_result(&tool.name, &tool.output) {
                 tool.output = unavailable_command_output(None, false);
             }
             continue;
@@ -72,7 +87,7 @@ where
         }
         remaining_files -= 1;
         tool.output = match read_result_ref(result_ref, remaining_bytes) {
-            Ok(Some(output)) if command_result_streams(&output).is_some() => {
+            Ok(Some(output)) if is_history_command_result(&tool.name, &output) => {
                 remaining_bytes = remaining_bytes.saturating_sub(output.len());
                 output
             }
@@ -84,6 +99,20 @@ where
             Err(_) => unavailable_command_output(Some(result_ref), false),
         };
     }
+}
+
+/// 校验可恢复的命令结果；参数为工具名和输出，返回是否为前台日志或后台任务快照。
+fn is_history_command_result(name: &str, output: &str) -> bool {
+    if command_result_streams(output).is_some() {
+        return true;
+    }
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(output) else {
+        return false;
+    };
+    if name == "background_command" {
+        return value.get("task").is_some_and(serde_json::Value::is_object);
+    }
+    value["mode"] == "background" && (value["task_id"].is_string() || value["task"].is_object())
 }
 
 /// 生成启动预算未加载完整命令结果时的说明。
@@ -333,6 +362,27 @@ mod tests {
         restore_history_command_outputs(&mut turns, |_, _| Ok(Some(full.to_string())));
 
         assert_eq!(turns[0].tools[0].output, full);
+    }
+
+    /// 后台历史长日志与前台转后台结果同样恢复完整引用，任务列表不会被误判为日志。
+    #[test]
+    fn restores_background_command_history_without_touching_task_lists() {
+        let full = r#"{"task":{"id":"task-one","status":"exited","command":"build"},"stdout":"complete background log"}"#;
+        let mut background =
+            command_turn("truncated", Some("tool-results/background.txt"), full.len());
+        background.tools[0].name = "background_command".into();
+        background.tools[0].arguments = r#"{"action":"output"}"#.into();
+        let mut list = background.clone();
+        list.tools[0].arguments = r#"{"action":"list"}"#.into();
+        list.tools[0].output = r#"{"tasks":[]}"#.into();
+        let mut turns = vec![background, list];
+        restore_history_command_outputs(&mut turns, |_, _| Ok(Some(full.into())));
+        assert_eq!(turns[0].tools[0].output, full);
+        assert_eq!(turns[1].tools[0].output, r#"{"tasks":[]}"#);
+        assert!(is_history_command_result(
+            "run_command",
+            r#"{"mode":"background","task_id":"task-one"}"#
+        ));
     }
 
     /// 引用缺失时显示可读提示，不回退展示被截断的协议 JSON。

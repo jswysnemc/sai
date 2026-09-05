@@ -7,11 +7,16 @@ use super::repl_turn_failure::{interrupted_failure_text, turn_failure_text};
 use super::*;
 use crate::agent::Agent;
 
+mod compact;
+mod exit_hint;
+mod model_selection;
+mod navigation;
 mod session_support;
 pub(super) mod subagent_commands;
 mod submission_queue;
 
 use crate::ipc::LinkRole;
+use exit_hint::print_repl_resume_hint;
 use repl_session_link::{role_badge, ReplSessionLink};
 use session_support::{
     apply_ready_tool_registry, record_repl_history, reload_repl_agent, repl_welcome_model,
@@ -108,12 +113,13 @@ pub(super) async fn run_repl(
     )?;
     let mut external_events = ReplExternalEvents::new();
     // 跨进程会话链接：本终端是否驱动这一会话，取决于有没有别的 sai 实例先抢到租约
-    let mut session_link = ReplSessionLink::attach(paths, &state, runtime.submission_queue_handle())
-        .await;
+    let mut session_link =
+        ReplSessionLink::attach(paths, &state, runtime.submission_queue_handle()).await;
 
     let mut pending_undo = false;
     loop {
         // 会话切换（/new、/resume）或持有者更替后重新链接并同步界面提示
+        runtime.bind_background_session(paths, state.session_id());
         session_link.refresh(paths, &state, &mut runtime).await?;
         // 每次进入输入循环都重新绑定当前 Agent，会话切换后不会消费旧监听结果
         external_events.arm(&agent);
@@ -321,55 +327,8 @@ pub(super) async fn run_repl(
                         }
                     }
                     crate::control_commands::ControlCommand::Compact => {
-                        let submission = crate::runner::RunnerSubmission::control(
-                            crate::runner::SubmissionSource::Repl,
-                            mode,
-                            crate::runner::ControlSubmission::new(
-                                crate::control_commands::ControlCommand::Compact,
-                            ),
-                        );
-                        let result = {
-                            let runner = crate::runner::SessionRunner::new(paths)
-                                .with_config(config.clone());
-                            let runtime = std::cell::RefCell::new(&mut runtime);
-                            let mut sink = |event: crate::runner::RunnerEvent| {
-                                runtime.borrow_mut().record_runner_event(&event)
-                            };
-                            let compact =
-                                runner.run_submission_with_agent(submission, &mut agent, &mut sink);
-                            tokio::pin!(compact);
-                            let mut resize_tick = tokio::time::interval(Duration::from_millis(25));
-                            resize_tick
-                                .set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-                            // 用 raw 模式轮询按键取消，而不是 tokio 的 ctrl_c：
-                            // 后者首次 poll 即永久接管 SIGINT，会让 cooked 段的
-                            // Ctrl+C 行为在使用 /compact 前后不一致
-                            let mut compact_guard = terminal_restore::TerminalInputGuard::enable(
-                                &mut io::stdout(),
-                                false,
-                            )?;
-                            let compact_result = loop {
-                                tokio::select! {
-                                    result = &mut compact => break result.map(|_| ()),
-                                    _ = resize_tick.tick() => {
-                                        let mut runtime_ref = runtime.borrow_mut();
-                                        process_stream_tick(&mut *runtime_ref)?;
-                                        drop(runtime_ref);
-                                        if poll_compact_cancel()? {
-                                            runtime.borrow_mut().record_meta(
-                                                t("compaction cancelled", "已取消压缩")
-                                                    .to_string(),
-                                            )?;
-                                            break Ok(());
-                                        }
-                                    }
-                                }
-                            };
-                            let guard_result = compact_guard.finish(&mut io::stdout());
-                            compact_result.and(guard_result)
-                        };
-                        runtime.finish_stream()?;
-                        result?;
+                        compact::run_compaction(paths, &config, mode, &mut agent, &mut runtime)
+                            .await?;
                     }
                     crate::control_commands::ControlCommand::Clear { all } => {
                         let message = crate::control_commands::clear_state(paths, all)?;
@@ -392,34 +351,15 @@ pub(super) async fn run_repl(
                     crate::control_commands::ControlCommand::Model { selection } => {
                         // 无序号时复用 `sai models` 双列选择器（模型 + 思考）
                         if selection.is_none() {
-                            let outcome = models_picker::run_interactive(paths);
-                            // 内联选择 UI 退出后全量重放，清除其占用行的残留
-                            runtime.redraw()?;
-                            match outcome {
-                                Ok(models_picker::PickerOutcome::Cancelled) => {
-                                    runtime.record_meta(
-                                        t("model selection cancelled", "已取消模型选择")
-                                            .to_string(),
-                                    )?;
-                                }
-                                Ok(models_picker::PickerOutcome::Saved { message }) => {
-                                    runtime.record_meta(message)?;
-                                    // 选择器已写回思考等级，清掉会话级覆盖以免 reload 冲掉
-                                    thinking_override = None;
-                                    reload_repl_agent(
-                                        paths,
-                                        &mut config,
-                                        &mut client,
-                                        &mut agent,
-                                        mode,
-                                        None,
-                                    )?;
-                                    runtime.record_meta(
-                                        t("configuration reloaded", "配置已重新加载").to_string(),
-                                    )?;
-                                }
-                                Err(err) => runtime.record_meta(err.to_string())?,
-                            }
+                            model_selection::run_picker(
+                                paths,
+                                &mut config,
+                                &mut client,
+                                &mut agent,
+                                &mut runtime,
+                                mode,
+                                &mut thinking_override,
+                            )?;
                             continue;
                         }
                         match crate::control_commands::run_model_command(
@@ -447,40 +387,7 @@ pub(super) async fn run_repl(
                         }
                     }
                     crate::control_commands::ControlCommand::Tree { turn_id } => {
-                        // 1. 未指定轮次时打开树界面交互选择
-                        let target = match turn_id {
-                            Some(id) => Some(id),
-                            None => {
-                                let picked = tree_select::select_turn_interactively(paths);
-                                // 内联选择 UI 退出后全量重放，清除其占用行的残留
-                                runtime.redraw()?;
-                                match picked {
-                                    Ok(target) => target,
-                                    Err(err) => {
-                                        runtime.record_meta(err.to_string())?;
-                                        continue;
-                                    }
-                                }
-                            }
-                        };
-                        let Some(target) = target else {
-                            runtime.record_meta(
-                                t("tree navigation cancelled", "已取消会话树切换").to_string(),
-                            )?;
-                            continue;
-                        };
-                        // 2. 切换活动叶子，随后清屏重放该分支历史
-                        match agent.state().switch_active_leaf(&target) {
-                            Ok(()) => {
-                                runtime.clear()?;
-                                record_repl_history(&mut runtime, agent.state())?;
-                                runtime.record_meta(
-                                    t("switched to the selected turn", "已切换到所选轮次")
-                                        .to_string(),
-                                )?;
-                            }
-                            Err(err) => runtime.record_meta(err.to_string())?,
-                        }
+                        navigation::select_turn(&agent, &mut runtime, turn_id)?;
                     }
                     crate::control_commands::ControlCommand::Agent { selection } => {
                         let selection = match selection {
@@ -594,21 +501,15 @@ pub(super) async fn run_repl(
         }
         if input.eq_ignore_ascii_case("/providers") {
             // 与 /model 共用双列选择器（供应商/模型 + 思考）
-            let outcome = models_picker::run_interactive(paths);
-            runtime.redraw()?;
-            match outcome {
-                Ok(models_picker::PickerOutcome::Cancelled) => {
-                    runtime.record_meta(t("cancelled", "已取消").to_string())?;
-                }
-                Ok(models_picker::PickerOutcome::Saved { message }) => {
-                    runtime.record_meta(message)?;
-                    thinking_override = None;
-                    reload_repl_agent(paths, &mut config, &mut client, &mut agent, mode, None)?;
-                    runtime
-                        .record_meta(t("configuration reloaded", "配置已重新加载").to_string())?;
-                }
-                Err(err) => runtime.record_meta(err.to_string())?,
-            }
+            model_selection::run_picker(
+                paths,
+                &mut config,
+                &mut client,
+                &mut agent,
+                &mut runtime,
+                mode,
+                &mut thinking_override,
+            )?;
             continue;
         }
         if input.eq_ignore_ascii_case("/config") {
@@ -631,25 +532,7 @@ pub(super) async fn run_repl(
             continue;
         }
         if input.eq_ignore_ascii_case("/undo") {
-            if !pending_undo {
-                pending_undo = true;
-                runtime.record_meta(
-                    t(
-                        "type /undo again to drop the last turn",
-                        "再次输入 /undo 确认撤销上一轮",
-                    )
-                    .to_string(),
-                )?;
-                continue;
-            }
-            pending_undo = false;
-            let outcome = state.undo_last_turn()?;
-            runtime.record_meta(format!(
-                "{}: {}",
-                t("undone messages", "已撤销消息数"),
-                outcome.removed
-            ))?;
-            prefill = outcome.prompt;
+            navigation::undo_turn(&state, &mut runtime, &mut pending_undo, &mut prefill)?;
             continue;
         }
         if let Some(rest) = repl_command_rest(input, "/thinking") {
@@ -717,11 +600,11 @@ pub(super) async fn run_repl(
             let _ = crate::state::input_history::append_input_history(paths, input);
         }
         if !goal_continuation {
-            runtime.record_user(mode, submission.echo_text.clone(), submission.fold_echo)?;
+            runtime.record_input(mode, submission.echo.clone())?;
         }
         // 持有者是会话事件的唯一写者，回显也要广播，否则跟随端只见回答不见提问
         session_link.broadcast_user_message(
-            &submission.echo_text,
+            &submission.echo.text,
             chat_input.image_url.clone().into_iter().collect(),
         );
         // 4. 模式变化时换工具表；每轮只做轻量 prepare
@@ -831,65 +714,4 @@ pub(super) async fn run_repl(
     // 退出后给出恢复命令，便于下次接续同一会话（对齐 Claude `--resume`）
     print_repl_resume_hint(state.session_id());
     Ok(())
-}
-
-/// 构造 REPL 退出后的会话恢复命令。
-///
-/// 参数:
-/// - `session_id`: 当前会话 ID
-///
-/// 返回:
-/// - 形如 `sai resume <id>` 的命令文本
-fn repl_resume_command(session_id: &str) -> String {
-    format!("sai resume {session_id}")
-}
-
-/// 在 REPL 退出后向 stdout 打印会话恢复命令。
-///
-/// 参数:
-/// - `session_id`: 当前会话 ID
-///
-/// 返回:
-/// - 无
-fn print_repl_resume_hint(session_id: &str) {
-    let command = repl_resume_command(session_id);
-    println!();
-    println!("{}", t("Resume this session with:", "恢复此会话："));
-    println!("  {command}");
-}
-
-#[cfg(test)]
-mod resume_hint_tests {
-    use super::repl_resume_command;
-
-    #[test]
-    fn resume_command_matches_cli_resume_subcommand() {
-        assert_eq!(
-            repl_resume_command("5fed5f76-1823-43ab-be7a-35ba5b074cd1"),
-            "sai resume 5fed5f76-1823-43ab-be7a-35ba5b074cd1"
-        );
-    }
-}
-
-/// 轮询 /compact 执行期间的取消按键。
-///
-/// 参数:
-/// - 无
-///
-/// 返回:
-/// - 收到 Ctrl+C 或 Esc 时返回 true
-fn poll_compact_cancel() -> Result<bool> {
-    while event::poll(Duration::ZERO)? {
-        if let Event::Key(key) = event::read()? {
-            if key.kind == KeyEventKind::Release {
-                continue;
-            }
-            let ctrl_c = matches!(key.code, KeyCode::Char('c'))
-                && key.modifiers.contains(KeyModifiers::CONTROL);
-            if ctrl_c || matches!(key.code, KeyCode::Esc) {
-                return Ok(true);
-            }
-        }
-    }
-    Ok(false)
 }

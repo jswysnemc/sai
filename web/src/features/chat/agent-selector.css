@@ -50,11 +50,13 @@
   opacity: 0.55;
 }
 
-.agent-selector-config {
+.agent-selector .agent-selector-config {
   display: grid;
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: 1.75rem;
+  height: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0;
   place-items: center;
   border: 0;
   border-radius:var(--radius-2);
@@ -62,7 +64,7 @@
   color: var(--ink-soft);
 }
 
-.agent-selector-config:hover {
+.agent-selector .agent-selector-config:hover {
   color: var(--ink);
   background: color-mix(in srgb, var(--ink) 7%, transparent);
 }
