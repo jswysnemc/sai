@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 import { calculateAnchoredPopoverPosition } from "./anchored-popover-position";
 
 describe("anchored popover position", () => {
+  it("上方能完整容纳紧凑内容时翻转，避免仅因下方超过默认阈值而滚动", () => {
+    const position = calculateAnchoredPopoverPosition(
+      { left: 1030, right: 1108, top: 378, bottom: 406 },
+      { viewportWidth: 1280, viewportHeight: 633, preferredWidth: 360, minimumWidth: 280, align: "right", maxHeight: 430, preferredHeight: 340 }
+    );
+    expect(position.top).toBeUndefined();
+    expect(position.maxHeight).toBe(360);
+  });
   it("在移动端将左对齐菜单限制在视口内部", () => {
     expect(calculateAnchoredPopoverPosition(
       { left: 28, right: 142, top: 20, bottom: 48 },

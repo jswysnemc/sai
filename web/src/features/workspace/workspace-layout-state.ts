@@ -64,11 +64,12 @@ export function parseWorkspaceLayout(serialized: string | null, viewportWidth: n
   if (!serialized) return createDefaultWorkspaceLayout(viewportWidth, viewportHeight);
   try {
     const value = JSON.parse(serialized) as Partial<WorkspaceLayoutState>;
+    const workspaceOpen = value.workspaceOpen === true;
     return {
-      chatOpen: value.chatOpen !== false,
-      workspaceOpen: value.workspaceOpen !== false,
+      chatOpen: !workspaceOpen || value.chatOpen !== false,
+      workspaceOpen,
       workspaceWidth: clampWorkspaceWidth(Number(value.workspaceWidth) || DEFAULT_WORKSPACE_WIDTH, viewportWidth),
-      workspaceMaximized: value.workspaceMaximized === true,
+      workspaceMaximized: workspaceOpen && value.workspaceMaximized === true,
       terminalOpen: value.terminalOpen === true,
       terminalHeight: clampTerminalHeight(Number(value.terminalHeight) || DEFAULT_TERMINAL_HEIGHT, viewportHeight),
       swapped: value.swapped === true
@@ -87,7 +88,7 @@ export function parseWorkspaceLayout(serialized: string | null, viewportWidth: n
 export function createDefaultWorkspaceLayout(viewportWidth: number, viewportHeight = 900): WorkspaceLayoutState {
   return {
     chatOpen: true,
-    workspaceOpen: true,
+    workspaceOpen: false,
     workspaceWidth: clampWorkspaceWidth(DEFAULT_WORKSPACE_WIDTH, viewportWidth),
     workspaceMaximized: false,
     terminalOpen: false,

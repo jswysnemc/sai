@@ -1,0 +1,144 @@
+/* 【Web 工作台】【面板空状态】空面板与定向差异视图 */
+.workspace-pane-empty {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  justify-content: center;
+  gap: var(--space-lg);
+  width: min(100%, 24rem);
+  margin: 0 auto;
+  padding: var(--space-xl);
+  color: var(--ink-soft);
+  font-size:var(--text-sm);
+}
+
+.workspace-pane-empty-heading {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-sm);
+}
+
+.workspace-pane-empty-heading > svg { color: var(--signal); }
+.workspace-pane-empty-heading > div { display: grid; gap: var(--space-3xs); }
+.workspace-pane-empty-heading strong { color: var(--ink); font-size: var(--text-base); font-weight: 500; }
+.workspace-pane-empty-heading span { color: var(--ink-soft); font-size: var(--text-xs); }
+
+.workspace-pane-empty-actions {
+  display: grid;
+  border-top: 1px solid var(--line);
+}
+
+.workspace-pane-empty-actions button {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr) 0.875rem;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0 var(--space-xs);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.workspace-pane-empty-actions button:hover { background: var(--paper-deep); color: var(--ink); }
+.workspace-pane-empty-actions button > svg:last-child { justify-self: end; }
+
+.workspace-targeted-diff {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace-targeted-diff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 var(--space-sm);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink-soft);
+  font: 400 var(--text-2xs)/var(--leading-control) var(--font-code);
+}
+
+.workspace-targeted-diff-head > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-targeted-diff-layout-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--space-3xs);
+}
+
+.workspace-targeted-diff-layout-toggle button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.workspace-targeted-diff-layout-toggle button:hover,
+.workspace-targeted-diff-layout-toggle button.is-active {
+  border-color: var(--line-strong);
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.workspace-targeted-diff > .structured-diff {
+  max-height: none;
+  border-radius: 0;
+}
+
+.workspace-targeted-diff-empty {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  padding: var(--space-xl);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.workspace-reopen-anchor {
+  position: absolute;
+  /* 按钮浮在会话眉头之上，用眉头高度算出居中位置，眉头改高时不必再调这里 */
+  top: calc((var(--chat-header-height, 2.5rem) - 28px) / 2);
+  right: 8px;
+  z-index: 25;
+}
+
+.workspace-reopen {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius:var(--radius-2);
+  background: transparent;
+  color: var(--ink-soft);
+  box-shadow: none;
+}
+
+.workspace-reopen:hover,
+.workspace-reopen[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}

@@ -1,4 +1,5 @@
 import { Check } from "lucide-react";
+import { Button } from "../../shared/ui/button/button";
 import { EditorHeader } from "./editor-layout";
 import { SettingsGroup } from "./editor-layout";
 import type { ThemeId } from "../theme/theme";
@@ -57,8 +58,7 @@ export function AppearanceSettingsSection({ theme, onThemeChange }: AppearanceSe
       >
         <div className="theme-preset-grid">
           {THEME_PRESETS.map((preset) => (
-            <button
-              type="button"
+            <Button
               className={preset.id === theme ? "theme-preset active" : "theme-preset"}
               onClick={() => onThemeChange(preset.id)}
               aria-pressed={preset.id === theme}
@@ -72,7 +72,7 @@ export function AppearanceSettingsSection({ theme, onThemeChange }: AppearanceSe
                 <small>{t(preset.descriptionEn, preset.descriptionZh)}</small>
               </span>
               <Check size={15} className="theme-preset-check" />
-            </button>
+            </Button>
           ))}
         </div>
       </SettingsGroup>

@@ -41,15 +41,14 @@
 }
 
 .settings-kicker {
-  color: var(--signal);
-  font:500 var(--text-2xs) var(--font-code);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  color: var(--ink-soft);
+  font: 500 var(--text-xs) var(--font-ui);
 }
 
 .editor-header h2 {
   margin: 0;
-  font-size:var(--text-2xl);
+  font-size: 1.125rem;
+  font-weight: 500;
   letter-spacing: -0.02em;
 }
 
@@ -152,14 +151,14 @@
 }
 
 .settings-save {
-  border: 1px solid var(--signal);
-  background: var(--signal);
-  color: var(--paper-raised);
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .settings-save:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--signal) 82%, var(--ink));
-  background: color-mix(in srgb, var(--signal) 82%, var(--ink));
+  border-color: color-mix(in srgb, var(--ink) 85%, var(--paper));
+  background: color-mix(in srgb, var(--ink) 85%, var(--paper));
 }
 
 .settings-secondary {
@@ -258,7 +257,7 @@
 }
 
 .settings-field input:not(.switch-control) {
-  height: 2.5rem;
+  height: 2.125rem;
   padding:0 var(--space-md);
 }
 
@@ -278,7 +277,7 @@
 
 .settings-field .ui-select > button,
 .settings-field .ui-password-field input {
-  min-height: 2.5rem;
+  min-height: 2.125rem;
   font-size:var(--text-base);
 }
 

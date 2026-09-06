@@ -6,7 +6,8 @@
  */
 
 .git-toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-md);
   min-height: 2.875rem;
@@ -24,7 +25,7 @@
   align-items: center;
   gap: 2px;
   min-width: 0;
-  margin-inline: auto;
+  margin-inline: 0;
   padding: 2px;
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
@@ -68,13 +69,14 @@
 }
 
 /* 窄屏收起视图文案，只保留图标与计数 */
-@media (max-width: 56rem) {
+@container git-panel (width < 42rem) {
   .git-toolbar {
     gap: var(--space-sm);
     padding: var(--space-xs) var(--space-sm);
   }
 
-  .git-toolbar-view span {
+  .git-toolbar-view span:not(.git-view-count-badge),
+  .git-toolbar .git-review-branch small {
     display: none;
   }
 

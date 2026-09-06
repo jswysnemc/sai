@@ -51,7 +51,7 @@
   gap: var(--space-sm);
 }
 
-.markdown-preset {
+.markdown-preset.ui-button {
   display: grid;
   gap: var(--space-3xs);
   padding: var(--space-sm) var(--space-md);
@@ -63,14 +63,14 @@
   transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 
-.markdown-preset:hover {
+.markdown-preset.ui-button:hover {
   border-color: var(--line-strong);
   background: color-mix(in srgb, var(--ink) 4%, transparent);
 }
 
-.markdown-preset.active {
-  border-color: var(--blue);
-  background: color-mix(in srgb, var(--blue) 8%, transparent);
+.markdown-preset.ui-button.active {
+  border-color: var(--ink-soft);
+  background: var(--surface-selected);
 }
 
 .markdown-preset strong {

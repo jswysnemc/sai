@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { parseDiff } from "./diff-parser";
 
 describe("diff parser", () => {
+  it("补丁末尾的换行符不会生成不存在的上下文行或零行号", () => {
+    const file = parseDiff("diff --git a/new.ts b/new.ts\nnew file mode 100644\n--- /dev/null\n+++ b/new.ts\n@@ -0,0 +1 @@\n+const value = 1;\n")[0];
+    expect(file.lines).toEqual([{ kind: "added", newLine: 1, text: "const value = 1;" }]);
+  });
   it("keeps deleted lines that start with dashes", () => {
     // 内容为 `-- legacy note` 的删除行在补丁里是 `--- legacy note`，
     // 按前缀猜测会把它当成 `--- a/file` 文件头丢弃

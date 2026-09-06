@@ -1,255 +1,202 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronsDownUp, ChevronsUpDown, Columns2, GitBranch, GitCompare, Loader2, Rows3 } from "lucide-react";
+import { GitCompare, Loader2 } from "lucide-react";
 import type { GitDiffResponse, GitRepositoryState, GitStatusEntry } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
 import type { DiffFile } from "../../chat/tool-renderers/diff/diff-model";
 import { parseDiff } from "../../chat/tool-renderers/diff/diff-parser";
-import type { DiffLayout } from "../../chat/tool-renderers/diff-view";
+import { useDiffViewOptions } from "../../chat/tool-renderers/diff/use-diff-view-options";
 import type { RunGitOperation } from "../types";
+import { isDiffFileCollapsed } from "./diff-review-state";
 import { FileDiffCard } from "./file-diff-card";
+import { ReviewToolbar } from "./review-toolbar";
 import "./source-control-diff.css";
 
 type SourceControlDiffProps = {
   data?: GitDiffResponse;
   loading: boolean;
   error?: Error | null;
-  /** 当前仓库状态，提供分支名与每个文件的暂存状态 */
   state: GitRepositoryState;
   selectedPath: string | null;
   busy: boolean;
   runOperation: RunGitOperation;
 };
 
-/** 选中文件后卡片高亮的持续时间。 */
-const HIGHLIGHT_DURATION_MS = 1600;
-
-/** 超过该 diff 行数的文件默认折叠，首屏不渲染巨型行列表。 */
-const LARGE_DIFF_LINES = 300;
-
 /**
- * 渲染 Source Control 审阅区：全部变更文件的内联差异卡片流。
- *
- * 顶部吸附总览栏汇总增删行数与分支，正文把每个文件渲染成
- * 独立卡片（吸附文件头 + 统一差异 + 暂存/丢弃操作）；
- * 左侧列表选中文件时滚动定位到对应卡片，而不是切换整个视图。
- *
- * @param props Diff 数据、仓库状态和 Git 操作回调
- * @returns 差异卡片流或空状态
+ * 组合多文件审阅流，提供筛选、文件导航和按需展开的大文件正文。
+ * @param props 补丁、仓库状态、外部文件选择及 Git 操作回调
+ * @returns 可响应容器宽度的差异审阅区
  */
 export function SourceControlDiff(props: SourceControlDiffProps) {
   const { t } = useI18n();
-  const [layout, setLayout] = useState<DiffLayout>("unified");
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-  const [highlightedPath, setHighlightedPath] = useState<string | null>(null);
+  const display = useDiffViewOptions();
+  const [collapsed, setCollapsed] = useState<ReadonlyMap<string, boolean>>(new Map());
+  const [query, setQuery] = useState("");
+  const [activePath, setActivePath] = useState<string | null>(props.selectedPath);
   const cardsRef = useRef(new Map<string, HTMLElement>());
-  const lastScrolledRef = useRef<string | null>(null);
-
+  const lastSelectedRef = useRef<string | null>(null);
+  const scrollFrameRef = useRef(0);
   const patch = props.data?.patch ?? "";
   const reviewMode = props.data?.mode === "branch" ? "branch" : "working_tree";
-  // 解析只依赖补丁文本：状态轮询刷新 entries 引用时不重新解析，
-  // 且已解析的文件对象引用保持稳定，让卡片的 memo 生效
   const parsed = useMemo(() => parseDiff(patch), [patch]);
-  const files = useMemo(
-    () =>
-      reviewMode === "working_tree"
-        ? [...parsed, ...placeholderFiles(parsed, props.state.entries)]
-        : parsed,
-    [parsed, props.state.entries, reviewMode]
-  );
-  const entryByPath = useMemo(() => {
-    const map = new Map<string, GitStatusEntry>();
-    for (const entry of props.state.entries) map.set(entry.path, entry);
-    return map;
-  }, [props.state.entries]);
-  const totals = useMemo(
-    () =>
-      files.reduce(
-        (sum, file) => ({ added: sum.added + file.added, removed: sum.removed + file.removed }),
-        { added: 0, removed: 0 }
-      ),
-    [files]
-  );
+  const parsedPaths = useMemo(() => new Set(parsed.map((file) => file.path)), [parsed]);
+  const files = useMemo(() => reviewMode === "working_tree"
+    ? [...parsed, ...placeholderFiles(parsed, props.state.entries)] : parsed,
+  [parsed, props.state.entries, reviewMode]);
+  const entryByPath = useMemo(() => new Map(props.state.entries.map((entry) => [entry.path, entry])), [props.state.entries]);
+  const filesByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files]);
+  const filtered = useMemo(() => {
+    const needle = query.trim().replaceAll("\\", "/").toLocaleLowerCase();
+    return needle ? files.filter((file) => file.path.toLocaleLowerCase().includes(needle)) : files;
+  }, [files, query]);
+  const totals = useMemo(() => files.reduce((sum, file) => ({
+    added: sum.added + file.added, removed: sum.removed + file.removed,
+  }), { added: 0, removed: 0 }), [files]);
+  const currentIndex = Math.max(0, filtered.findIndex((file) => file.path === activePath));
+  const allCollapsed = filtered.length > 0 && filtered.every((file) => isDiffFileCollapsed(file, collapsed, props.selectedPath));
 
-  useEffect(() => {
-    // 左侧选中文件 → 展开并滚动到对应卡片；同一选择在数据刷新时不重复滚动
-    const path = props.selectedPath;
-    if (!path || lastScrolledRef.current === path) return;
-    const element = cardsRef.current.get(path);
-    if (!element) return;
-    lastScrolledRef.current = path;
-    setCollapsed((current) => {
-      if (!current.has(path)) return current;
-      const next = new Set(current);
-      next.delete(path);
-      return next;
-    });
-    element.scrollIntoView({ block: "start", behavior: "smooth" });
-    setHighlightedPath(path);
-    const timer = window.setTimeout(() => setHighlightedPath(null), HIGHLIGHT_DURATION_MS);
-    return () => window.clearTimeout(timer);
-  }, [files, props.selectedPath]);
-
-  useEffect(() => {
-    // 清空选择后允许再次选中同一文件时重新定位
-    if (!props.selectedPath) lastScrolledRef.current = null;
-  }, [props.selectedPath]);
-
-  // 巨型文件首次出现时默认折叠；用户手动展开后数据刷新不再折回
-  const seenLargeRef = useRef(new Set<string>());
-  useEffect(() => {
-    const newlyLarge = files.filter(
-      (file) => file.lines.length > LARGE_DIFF_LINES && !seenLargeRef.current.has(file.path)
-    );
-    if (newlyLarge.length === 0) return;
-    for (const file of newlyLarge) seenLargeRef.current.add(file.path);
-    setCollapsed((current) => {
-      const next = new Set(current);
-      for (const file of newlyLarge) next.add(file.path);
-      return next;
-    });
-  }, [files]);
-
-  /** 切换单个文件卡片的折叠状态（引用稳定，供卡片 memo 使用）。 */
-  const toggleCollapse = useCallback((path: string) => {
-    setCollapsed((current) => {
-      const next = new Set(current);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
+  /**
+   * 展开指定文件后定位正文，取消尚未执行的旧定位请求。
+   * @param path 目标文件路径
+   * @returns 无返回值
+   */
+  const revealFile = useCallback((path: string) => {
+    setCollapsed((current) => new Map(current).set(path, false));
+    setActivePath(path);
+    window.cancelAnimationFrame(scrollFrameRef.current);
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      cardsRef.current.get(path)?.scrollIntoView({ block: "start" });
     });
   }, []);
 
-  /** 登记卡片根元素（引用稳定，供滚动定位使用）。 */
+  useEffect(() => {
+    const path = props.selectedPath;
+    if (!path) { lastSelectedRef.current = null; return; }
+    if (lastSelectedRef.current === path || !filesByPath.has(path)) return;
+    // 1. 【差异审阅】【文件定位】外部选择先清除筛选，再等待目标卡片挂载
+    if (query) { setQuery(""); return; }
+    lastSelectedRef.current = path;
+    revealFile(path);
+  }, [filesByPath, props.selectedPath, query, revealFile]);
+
+  useEffect(() => () => window.cancelAnimationFrame(scrollFrameRef.current), []);
+
+  useEffect(() => {
+    const visible = new Set<string>();
+    const firstCard = cardsRef.current.values().next().value;
+    const root = firstCard?.closest(".diff-scroll");
+    if (!root || typeof IntersectionObserver === "undefined") return;
+    const toolbar = firstCard?.closest(".git-review-stream")?.querySelector(".git-review-summary");
+    let observer: IntersectionObserver | undefined;
+    // 2. 【差异审阅】【文件导航】手动滚动时同步当前文件，排除工具栏遮挡的区域
+    /**
+     * 按工具栏实际高度重建可见区域，兼容响应式换行和字体缩放。
+     * @returns 无返回值
+     */
+    const observeCards = () => {
+      observer?.disconnect();
+      visible.clear();
+      observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          const path = (entry.target as HTMLElement).dataset.filePath;
+          if (!path) continue;
+          if (entry.isIntersecting && entry.intersectionRect.height > 0) visible.add(path);
+          else visible.delete(path);
+        }
+        const firstVisible = filtered.find((file) => visible.has(file.path));
+        if (firstVisible) setActivePath(firstVisible.path);
+      }, { root, rootMargin: `-${Math.ceil(toolbar?.getBoundingClientRect().height ?? 80)}px 0px 0px 0px`, threshold: 0 });
+      for (const card of cardsRef.current.values()) observer.observe(card);
+    };
+    observeCards();
+    const resize = new ResizeObserver(observeCards);
+    if (toolbar) resize.observe(toolbar);
+    return () => { observer?.disconnect(); resize.disconnect(); };
+  }, [filtered]);
+
+  /**
+   * 切换文件折叠状态，明确覆盖大文件的默认折叠规则。
+   * @param path 文件路径
+   * @returns 无返回值
+   */
+  const toggleCollapse = useCallback((path: string) => {
+    const file = filesByPath.get(path);
+    if (!file) return;
+    setCollapsed((current) => new Map(current).set(path, !isDiffFileCollapsed(file, current, props.selectedPath)));
+  }, [filesByPath, props.selectedPath]);
+
+  /**
+   * 登记文件卡片，供列表选择和工具栏导航定位。
+   * @param path 文件路径
+   * @param element 卡片节点；卸载时为空
+   * @returns 无返回值
+   */
   const registerCard = useCallback((path: string, element: HTMLElement | null) => {
     if (element) cardsRef.current.set(path, element);
     else cardsRef.current.delete(path);
   }, []);
 
-  if (props.loading) {
-    return (
-      <div className="git-diff-empty">
-        <Loader2 size={20} className="spin" aria-hidden />
-        <span>{t("Loading diff...", "正在读取差异…")}</span>
-      </div>
-    );
-  }
+  /**
+   * 在当前筛选结果中定位相邻文件。
+   * @param direction 前一项为 -1，后一项为 1
+   * @returns 无返回值
+   */
+  const navigate = (direction: -1 | 1) => {
+    const file = filtered[currentIndex + direction];
+    if (file) revealFile(file.path);
+  };
+
+  /**
+   * 统一展开或折叠当前筛选结果，保留其他文件的状态。
+   * @returns 无返回值
+   */
+  const toggleAll = () => setCollapsed((current) => {
+    const next = new Map(current);
+    for (const file of filtered) next.set(file.path, !allCollapsed);
+    return next;
+  });
+
+  if (props.loading) return <div className="git-diff-empty"><Loader2 size={20} className="spin" aria-hidden />
+    <span>{t("Loading diff...", "正在读取差异…")}</span></div>;
   if (props.error) return <div className="pane-error">{props.error.message}</div>;
-  if (!props.data || files.length === 0) {
-    return (
-      <div className="git-diff-empty">
-        <GitCompare size={22} aria-hidden />
-        <strong>{t("No changes to review", "没有待审阅的变更")}</strong>
-        <span>
-          {reviewMode === "branch"
-            ? t("This branch has no differences against its baseline", "当前分支相对基线没有差异")
-            : t("The working tree is clean", "工作区很干净，没有未提交的更改")}
-        </span>
-      </div>
-    );
-  }
+  if (!props.data || files.length === 0) return <div className="git-diff-empty">
+    <GitCompare size={22} aria-hidden /><strong>{t("No changes to review", "没有待审阅的变更")}</strong>
+    <span>{reviewMode === "branch" ? t("This branch has no differences against its baseline", "当前分支相对基线没有差异")
+      : t("The working tree is clean", "工作区没有未提交的改动")}</span>
+  </div>;
 
-  const allCollapsed = files.length > 0 && files.every((file) => collapsed.has(file.path));
-
-  return (
-    <div className="git-diff-shell git-review-stream">
-      <header className="git-review-summary">
-        <span className="git-review-summary-title">
-          {reviewMode === "branch" ? t("Against baseline", "相对基线") : t("Uncommitted", "未提交")}
-        </span>
-        <span className="git-review-summary-stats">
-          {totals.added > 0 && <b>+{totals.added}</b>}
-          {totals.removed > 0 && <i>-{totals.removed}</i>}
-          {totals.added === 0 && totals.removed === 0 && <em>{t("No line changes", "无行级改动")}</em>}
-        </span>
-        <span className="git-review-summary-context">
-          <span className="git-review-summary-branch" title={props.state.head}>
-            <GitBranch size={11} aria-hidden />
-            {reviewMode === "branch" ? props.data.base_ref : props.state.head || "HEAD"}
-          </span>
-          <span className="git-review-summary-count">
-            {t(`${files.length} files`, `${files.length} 个文件`)}
-          </span>
-        </span>
-        <span className="git-review-summary-actions">
-          <Button
-            className="git-review-summary-action"
-            onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(files.map((file) => file.path)))}
-            title={allCollapsed ? t("Expand all files", "展开全部文件") : t("Collapse all files", "折叠全部文件")}
-            aria-label={allCollapsed ? t("Expand all files", "展开全部文件") : t("Collapse all files", "折叠全部文件")}
-          >
-            {allCollapsed ? <ChevronsUpDown size={13} /> : <ChevronsDownUp size={13} />}
-          </Button>
-          <span className="git-diff-layout-toggle" role="group" aria-label={t("Diff layout", "差异布局")}>
-            <Button
-              className={layout === "unified" ? "is-active" : ""}
-              onClick={() => setLayout("unified")}
-              title={t("Unified view", "统一视图")}
-              aria-label={t("Unified view", "统一视图")}
-            >
-              <Rows3 size={13} />
-            </Button>
-            <Button
-              className={layout === "side" ? "is-active" : ""}
-              onClick={() => setLayout("side")}
-              title={t("Side by side view", "并排对比")}
-              aria-label={t("Side by side view", "并排对比")}
-            >
-              <Columns2 size={13} />
-            </Button>
-          </span>
-        </span>
-      </header>
-
-      <div className="git-review-cards">
-        {files.map((file, index) => (
-          <FileDiffCard
-            key={`${file.path}-${index}`}
-            file={file}
-            entry={entryByPath.get(file.path)}
-            repoRoot={props.state.repo_root}
-            reviewMode={reviewMode}
-            layout={layout}
-            collapsed={collapsed.has(file.path)}
-            highlighted={highlightedPath === file.path}
-            busy={props.busy}
-            truncated={Boolean(props.data?.truncated)}
-            onToggleCollapse={toggleCollapse}
-            runOperation={props.runOperation}
-            containerRef={registerCard}
-          />
-        ))}
-      </div>
-      {props.data.truncated && (
-        <div className="git-clean">{t("Diff truncated", "差异已截断")}</div>
-      )}
+  return <div className="git-diff-shell git-review-stream" ref={display.ref}>
+    <ReviewToolbar title={reviewMode === "branch" ? t("Against baseline", "相对基线") : t("Uncommitted", "未提交改动")}
+      branch={reviewMode === "branch" ? props.data.base_ref : props.state.head || "HEAD"}
+      added={totals.added} removed={totals.removed} fileCount={files.length} visibleCount={filtered.length}
+      currentIndex={currentIndex} query={query} allCollapsed={allCollapsed} display={display}
+      truncated={Boolean(props.data.truncated)}
+      onQueryChange={setQuery} onNavigate={navigate} onToggleAll={toggleAll} />
+    <div className="git-review-cards">
+      {filtered.map((file) => <FileDiffCard key={file.path} file={file} entry={entryByPath.get(file.path)}
+        repoRoot={props.state.repo_root} reviewMode={reviewMode} layout={display.layout} wrap={display.wrap}
+        collapsed={isDiffFileCollapsed(file, collapsed, props.selectedPath)} highlighted={activePath === file.path}
+        busy={props.busy} truncated={Boolean(props.data?.truncated && (!parsedPaths.has(file.path) || parsed.at(-1)?.path === file.path))} onToggleCollapse={toggleCollapse}
+        runOperation={props.runOperation} containerRef={registerCard} />)}
+      {!filtered.length && <div className="git-diff-empty"><strong>{t("No matching files", "没有匹配的文件")}</strong>
+        <Button variant="ghost" size="small" onClick={() => setQuery("")}>{t("Clear filter", "清除筛选")}</Button></div>}
     </div>
-  );
+    {props.data.truncated && <div className="git-clean">{t("Diff truncated", "差异已截断")}</div>}
+  </div>;
 }
 
 /**
- * 为补丁中缺席的工作区条目补占位卡片。
- *
- * 二进制或超大的未跟踪文件不会出现在后端合成的补丁里，
- * 若不补位，用户会在列表里看到文件、审阅区却完全找不到。
- *
+ * 为补丁中缺席的工作区条目补充文件卡片，保留二进制或未读取文件的入口。
  * @param parsed 已解析出的文件差异
  * @param entries 仓库全部状态条目
- * @returns 无内容的占位文件差异
+ * @returns 补丁中没有出现的文件条目
  */
 function placeholderFiles(parsed: DiffFile[], entries: GitStatusEntry[]): DiffFile[] {
   const seen = new Set(parsed.map((file) => file.path));
-  return entries
-    .filter((entry) => !seen.has(entry.path))
-    .map((entry) => ({
-      path: entry.path,
-      status: entry.untracked || entry.index_status === "A"
-        ? "added"
-        : entry.worktree_status === "D" || entry.index_status === "D"
-          ? "deleted"
-          : "modified",
-      added: 0,
-      removed: 0,
-      lines: [],
-    }));
+  return entries.filter((entry) => !seen.has(entry.path)).map((entry) => ({
+    path: entry.path,
+    status: entry.untracked || entry.index_status === "A" ? "added"
+      : entry.worktree_status === "D" || entry.index_status === "D" ? "deleted" : "modified",
+    added: 0, removed: 0, lines: [],
+  }));
 }

@@ -26,10 +26,10 @@
   gap:var(--space-sm);
   justify-items: stretch;
   padding:var(--space-md) var(--space-xl);
-  border: 1px solid var(--line);
-  border-radius:0.875rem 0.875rem var(--radius-1) 0.875rem;
-  background: var(--paper-raised);
-  box-shadow: var(--elevation-2);
+  border: 1px solid transparent;
+  border-radius: 1rem;
+  background: var(--control-surface);
+  box-shadow: none;
 }
 
 .user-message .message-content {

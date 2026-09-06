@@ -73,11 +73,13 @@ export function GitToolbar(props: GitToolbarProps) {
           const Icon = tab.icon;
           const active = props.mode === tab.mode;
           return (
-            <button
+            <Button
               key={tab.mode}
-              type="button"
+              variant="ghost"
               role="tab"
               aria-selected={active}
+              aria-label={t(tab.en, tab.zh)}
+              title={t(tab.en, tab.zh)}
               className={active ? "git-toolbar-view active" : "git-toolbar-view"}
               onClick={() => props.onModeChange(tab.mode)}
             >
@@ -86,7 +88,7 @@ export function GitToolbar(props: GitToolbarProps) {
               {tab.mode === "changes" && props.countBadge !== null && (
                 <span className="git-view-count-badge">{props.countBadge}</span>
               )}
-            </button>
+            </Button>
           );
         })}
       </nav>

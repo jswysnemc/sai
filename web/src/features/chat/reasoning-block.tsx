@@ -35,6 +35,28 @@ export function ReasoningBlock({ source, live, startedAt, endedAt }: { source: s
   // 3. 长思考块跟随底部；用户上滚查看时不抢焦点，回到底部后恢复
   useNestedFollowOutputScroll(contentRef, source, Boolean(live && open));
 
+  // 4. 手动滚动停止后把位置吸附到整行边界，避免停靠处留着半行文字
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el || !open || live) return;
+    let timer = 0;
+    const snap = () => {
+      const line = Number.parseFloat(getComputedStyle(el).lineHeight);
+      if (!Number.isFinite(line) || line <= 0) return;
+      const target = Math.round(el.scrollTop / line) * line;
+      if (Math.abs(target - el.scrollTop) > 1) el.scrollTo({ top: target, behavior: "smooth" });
+    };
+    const onScroll = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(snap, 160);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, [open, live]);
+
   if (!source) return null;
   const duration = reasoningDuration(startedAt, endedAt, clock, locale);
   return (

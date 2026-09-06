@@ -1,14 +1,16 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import "./button.css";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  ref?: Ref<HTMLButtonElement>;
   /**
    * 视觉变体。
    *
    * danger 是实心警示色，用于对话框确认这类需要明确阻断的主操作；
    * ghost-danger 是透明底红字，用于列表与工具栏里密集排布的破坏性动作。
    */
-  variant?: "primary" | "secondary" | "danger" | "ghost-danger";
+  variant?: "primary" | "secondary" | "ghost" | "danger" | "ghost-danger";
+  size?: "default" | "small" | "icon";
   children: ReactNode;
 };
 
@@ -18,6 +20,6 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
  * @param props 按钮类型、内容和原生按钮属性
  * @returns 统一样式按钮
  */
-export function Button({ variant = "secondary", className = "", children, ...props }: ButtonProps) {
-  return <button type="button" className={`ui-button ${variant}${className ? ` ${className}` : ""}`} {...props}>{children}</button>;
+export function Button({ variant = "secondary", size = "default", className = "", children, ...props }: ButtonProps) {
+  return <button type="button" className={`ui-button ${variant} ui-button-${size}${className ? ` ${className}` : ""}`} {...props}>{children}</button>;
 }

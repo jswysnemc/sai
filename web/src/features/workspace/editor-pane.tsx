@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderTree } from "lucide-react";
+import { FileCode2, FileUp, FolderTree } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { MarkdownEditor } from "../../shared/ui/markdown-editor/markdown-editor";
@@ -19,6 +19,9 @@ import {
   updateDocumentContent
 } from "./editor-document-state";
 import { useEditorGitDiff } from "./use-editor-git-diff";
+import { registerUnsavedEditor } from "./unsaved-editor-changes";
+import { OpenFileDialog } from "./open-file-dialog";
+import { Button } from "../../shared/ui/button/button";
 import type { EditorNavigation } from "./editor-header";
 import type { FileTreeGitEntry } from "./use-workspace-git-entries";
 
@@ -52,7 +55,16 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree,
   const file = useQuery({ queryKey: ["file", path], queryFn: () => api.workspace.file(path!), enabled: Boolean(path) && !imageFile });
   const [document, setDocument] = useState(() => createEditorDocumentState(path));
   const [markdownMode, setMarkdownMode] = useState<MarkdownEditorMode>("wysiwyg");
+  const [openFileDialog, setOpenFileDialog] = useState(false);
+  const fileDialog = <OpenFileDialog open={openFileDialog} initialPath={path ?? ""} onSelectFile={onSelectFile} onClose={() => setOpenFileDialog(false)} />;
   const gitLines = useEditorGitDiff(path, gitEntries ?? EMPTY_GIT_ENTRIES);
+  const hasUnsavedChanges = Boolean(document.baseline && document.content !== document.baseline.content);
+
+  useEffect(() => {
+    if (!document.path || !hasUnsavedChanges) return;
+    // 1. 【工作区】【编辑保护】保存或还原后撤销登记，折叠面板时继续保护当前草稿
+    return registerUnsavedEditor(document.path);
+  }, [document.path, hasUnsavedChanges]);
 
   useEffect(() => {
     setDocument(createEditorDocumentState(path));
@@ -101,13 +113,15 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree,
       <section className="editor-pane">
         <header className="editor-head editor-head-empty">
           <span>{t("No file open", "未打开文件")}</span>
+          <Button variant="ghost" size="icon" className="editor-open-file" onClick={() => setOpenFileDialog(true)} aria-label={t("Open file by path", "通过路径打开文件")}><FileUp size={15} /></Button>
           {!fileTreeOpen && (
             <button type="button" className="editor-tree-toggle" onClick={onToggleFileTree} aria-label={t("Open file tree", "打开文件树")} aria-pressed={false}>
               <FolderTree size={15} />
             </button>
           )}
         </header>
-        <div className="editor-empty"><FileCodePlaceholder /><p>{t("Select a text file from the file tree", "从文件树选择文本文件")}</p></div>
+        <div className="editor-empty"><FileCode2 size={26} /><p>{t("Select a file or open one by path", "从文件树选择文件，或通过路径打开")}</p><Button size="small" onClick={() => setOpenFileDialog(true)}><FileUp size={14} />{t("Open file", "打开文件")}</Button></div>
+        {fileDialog}
       </section>
     );
   }
@@ -127,6 +141,7 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree,
         savable={!imageFile}
         fileTreeOpen={fileTreeOpen}
         onToggleFileTree={onToggleFileTree}
+        onOpenFile={() => setOpenFileDialog(true)}
       />
       <div className="editor-area">
         {imageFile && <ImageFilePreview path={path} />}
@@ -152,10 +167,7 @@ export function EditorPane({ path, onSelectFile, fileTreeOpen, onToggleFileTree,
         {file.error && <div className="pane-error">{file.error.message}</div>}
         {save.error && <div className="pane-error">{save.error.message}</div>}
       </div>
+      {fileDialog}
     </section>
   );
-}
-
-function FileCodePlaceholder() {
-  return <div className="file-code-placeholder">&lt;/&gt;</div>;
 }

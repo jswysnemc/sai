@@ -29,7 +29,7 @@ describe("HistoryTurn", () => {
 
     expect(html).toContain("已拒绝");
     expect(html).toContain("保留文件");
-    expect(html).toContain("准备回复");
+    expect(html).toContain("处理过程");
     expect(html).toContain("工具 1");
   });
 
@@ -63,7 +63,7 @@ describe("HistoryTurn", () => {
 
     const html = renderWithProviders(<HistoryTurn turn={turn} />);
 
-    expect(html).toContain("准备回复");
+    expect(html).toContain("处理过程");
     expect(html).toContain("工具 2");
     expect(html).not.toContain("src/a.rs");
     expect(html).not.toContain("src/b.rs");

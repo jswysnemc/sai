@@ -91,10 +91,9 @@ export function MarkdownStyleSettings({
     >
       <fieldset className="markdown-style-panel markdown-preset-panel">
         <legend><span><LayoutTemplate size={15} />{t("Overall style", "整体风格")}</span></legend>
-        <div className="markdown-preset-grid" role="radiogroup" aria-label={t("Markdown style preset", "Markdown 风格预设")}>
+        <div className="markdown-preset-grid" role="group" aria-label={t("Markdown style preset", "Markdown 风格预设")}>
           {PRESET_OPTIONS.map((option) => (
-            <button
-              type="button"
+            <Button
               className={option.value === preferences.preset ? "markdown-preset active" : "markdown-preset"}
               onClick={() => onPresetChange(option.value)}
               aria-pressed={option.value === preferences.preset}
@@ -102,7 +101,7 @@ export function MarkdownStyleSettings({
             >
               <strong>{t(option.nameEn, option.nameZh)}</strong>
               <small>{t(option.descriptionEn, option.descriptionZh)}</small>
-            </button>
+            </Button>
           ))}
         </div>
       </fieldset>

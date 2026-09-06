@@ -5,9 +5,11 @@ import { localizeApiMessage } from "../../api/api-error";
 import { useI18n } from "../i18n/use-i18n";
 import { ActiveAgentIndicator } from "./active-agent-indicator";
 import { SessionWorkspaceIcon } from "./session-workspace-icon";
+import { sessionActivityKey } from "./session-running-state";
 
 type WorkspaceListViewProps = {
   workspaces: WorkspaceSessions[];
+  runningSessions: ReadonlySet<string>;
   /** 菜单外点关闭用的容器引用 */
   menuRef: RefObject<HTMLDivElement | null>;
   /** 当前打开菜单的工作区 ID */
@@ -32,6 +34,7 @@ type WorkspaceListViewProps = {
  */
 export function WorkspaceListView({
   workspaces,
+  runningSessions,
   menuRef,
   menu,
   onToggleMenu,
@@ -46,7 +49,7 @@ export function WorkspaceListView({
     <div className="session-list sidebar-workspaces-view">
       {workspaces.map((workspace) => {
         const name = localizeApiMessage(workspace.workspace_name, locale);
-        const loaded = workspace.sessions.some((session) => session.loaded);
+        const running = workspace.sessions.some((session) => runningSessions.has(sessionActivityKey(workspace.workspace_id, session.id)));
         return (
           <div className="session-workspace" key={workspace.workspace_id}>
             <div className={workspace.active ? "workspace-tree-row active" : "workspace-tree-row"}>
@@ -59,7 +62,7 @@ export function WorkspaceListView({
                 <SessionWorkspaceIcon isGitRepository={workspace.is_git_repository} size={14} />
                 <span className="workspace-summary">
                   <strong>{name}</strong>
-                  {loaded && <ActiveAgentIndicator />}
+                  {running && <ActiveAgentIndicator />}
                   <small>{t(`${workspace.sessions.length} sessions`, `${workspace.sessions.length} 个会话`)}</small>
                 </span>
               </button>

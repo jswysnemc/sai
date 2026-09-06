@@ -21,7 +21,7 @@
 }
 
 .session-row.selected {
-  background: var(--signal-soft);
+  background: var(--surface-selected);
 }
 
 .session-check {
@@ -35,12 +35,12 @@
 }
 
 .session-row:hover {
-  background: var(--paper-raised);
+  background: var(--surface-hover);
 }
 
 /* 当前会话：主强调色浅底，不再用左侧竖条提示 */
 .session-row.active {
-  background: var(--signal-soft);
+  background: var(--surface-selected);
 }
 
 .session-main {
@@ -49,7 +49,7 @@
   align-items: center;
   width: 100%;
   min-width: 0;
-  min-height: 30px;
+  min-height: 2rem;
   padding: var(--space-2xs) var(--space-sm);
   border: 0;
   background: transparent;
@@ -106,7 +106,7 @@
 .session-main small {
   overflow: hidden;
   color: var(--ink-soft);
-  font: 400 var(--text-2xs)/var(--leading-control) var(--font-code);
+  font: 400 var(--text-2xs)/var(--leading-control) var(--font-ui);
   font-variant-numeric: tabular-nums;
   text-align: right;
   text-overflow: ellipsis;
@@ -115,7 +115,7 @@
 
 /* 已加载的会话把时间换成信号色：打开中的会话比几分钟前更重要 */
 .session-row.loaded .session-main small {
-  color: var(--signal);
+  color: var(--ink-soft);
 }
 
 .session-row.unloaded .session-main strong {
@@ -141,7 +141,7 @@
 
 .active-agent-indicator::before {
   position: absolute;
-  animation: agent-active-pulse 1.8s ease-out infinite;
+  animation: none;
 }
 
 @keyframes agent-active-pulse {
@@ -241,4 +241,15 @@
 
 .session-rename input:disabled {
   opacity: 0.55;
+}
+
+.session-main.ui-button { border: 0; border-radius: inherit; color: var(--ink); }
+.session-row .session-main.ui-button:hover { background: transparent; }
+.session-more-menu { position: absolute; right: 0.125rem; top: 0.1875rem; opacity: 0; pointer-events: none; }
+.session-more-menu .ui-button { height: 1.625rem; min-height: 1.625rem; width: 1.625rem; }
+.session-row:hover .session-more-menu, .session-row:focus-within .session-more-menu { opacity: 1; pointer-events: auto; }
+@media (pointer: coarse) {
+  .session-more-menu { opacity: 1; pointer-events: auto; }
+  .session-row .session-main { min-height: 2.5rem; padding-right: 2rem; }
+  .session-more-menu { top: 0.4375rem; }
 }

@@ -5,8 +5,7 @@ import { isSideConversationSessionTitle } from "../side-conversation/side-conver
 /**
  * 管理工作区会话树。
  *
- * 会话视图固定展示活动工作区、工作区视图平铺全部工作区。
- * 加载态（终端/网页已打开）随持有者心跳变化，因此周期性刷新。
+ * 周期更新各工作区会话；展示范围和实际运行状态由侧栏单独管理。
  *
  * @returns 会话树查询
  */

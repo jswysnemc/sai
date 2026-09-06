@@ -1,0 +1,4 @@
+.ui-text-input { width: 100%; min-width: 0; min-height: 2.125rem; padding: 0.375rem 0.625rem; border: 1px solid var(--line); border-radius: var(--radius-2); outline: none; background: var(--paper); color: var(--ink); font: 400 var(--text-sm)/1.5 var(--font-ui); }
+.ui-text-input:focus, .ui-text-input:focus-visible { border-color: var(--ink-soft); box-shadow: none; outline: none; }
+.ui-text-input:disabled { opacity: 0.5; }
+.ui-text-input[aria-invalid="true"] { border-color: var(--danger); }

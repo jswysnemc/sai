@@ -82,6 +82,9 @@ export function GitChangesView(props: GitChangesViewProps) {
       className="git-changes-body"
       detailKey={fileComparison.target?.headPath ?? scmState.selectedPath}
       detailTitle={fileComparison.target?.headPath ?? scmState.selectedPath ?? undefined}
+      preferDetail
+      listLabel={t("Changed files", "变更文件")}
+      detailLabel={t("Review all changes", "审阅全部改动")}
     >
       <section className="git-change-panel">
         {state.operation && (
@@ -201,6 +204,7 @@ export function GitChangesView(props: GitChangesViewProps) {
           />
         ) : (
           <SourceControlDiff
+            key={`${state.repo_root}:${scmState.diffMode}`}
             data={props.reviewDiff.data as never}
             loading={props.reviewDiff.isLoading}
             error={props.reviewDiff.error}

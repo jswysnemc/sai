@@ -16,6 +16,7 @@ mod prompts;
 mod providers;
 mod questions;
 mod runs;
+mod session_activity;
 mod session_data;
 mod session_runtime;
 mod session_tree;
@@ -72,6 +73,7 @@ pub(super) fn router(state: WebAppState) -> Router<WebAppState> {
         .merge(goals::routes())
         .merge(gateway_weixin_login::routes())
         .merge(session_tree::routes())
+        .merge(session_activity::routes())
         .merge(session_data::routes())
         .merge(sessions::routes())
         .merge(runs::routes())

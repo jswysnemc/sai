@@ -12,15 +12,11 @@ function renderLogo(): string {
 }
 
 describe("SaiLogo", () => {
-  it("renders the Sai lettermark as grid-aligned rects", () => {
+  it("keeps the app icon accessible and square", () => {
     const html = renderLogo();
 
     expect(html).toContain('aria-label="Sai"');
-    // 半块字符网格展开后的矩形总数（█/▀/▄ 各计一个）
-    expect(html.match(/<rect/g)).toHaveLength(42);
-    // 位置锚点：S 左上起点与 i 的圆点
-    expect(html).toContain('<rect x="3.25" y="11.5" width="1.5" height="1.5"></rect>');
-    expect(html).toContain('<rect x="24.25" y="11.5" width="1.5" height="1.5"></rect>');
-    expect(html).not.toContain("linearGradient");
+    expect(html).toContain('width="20" height="20"');
+    expect(renderToStaticMarkup(<SaiLogo size={48} trim />)).toContain('width="48" height="24"');
   });
 });

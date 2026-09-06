@@ -1,27 +1,26 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, GitBranch, MessagesSquare, Route } from "lucide-react";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
 import type { RunMode } from "../../api/contracts";
-import { Button } from "../../shared/ui/button/button";
 import { HoverRevealButton } from "../../shared/ui/hover-reveal-button/hover-reveal-button";
-import { SegmentedControl } from "../../shared/ui/segmented-control";
 import { SkeletonText } from "../../shared/ui/skeleton/skeleton";
-import { Modal } from "../../shared/ui/dialog/modal";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { Toast, useToast } from "../../shared/ui/notify/notify";
 import { useChatAgentContext } from "../agents/chat-agent-context";
 import { TrajectoryView } from "../trajectory/trajectory-view";
+import { collectChatErrorNotices } from "./chat-error-notices";
+import { ChatConversation } from "./chat-conversation";
+import { ChatViewSwitch } from "./chat-view-switch";
+import { ChatSessionDialogs } from "./chat-session-dialogs";
+import { ChatEmptyState } from "./chat-empty-state";
 import { ChatComposer } from "./chat-composer";
 import { ChatSessionHeader } from "./chat-session-header";
-import { HistoryTurn, LiveRunMessage } from "./chat-message";
 import { projectConversationDisplay } from "./conversation-display";
 import { MessageOverviewRail } from "./message-overview-rail";
 import { createLiveOverviewItem, createTimelineOverviewItems } from "./message-overview-utils";
 import { clearToolExpandState } from "./message/tool-expand-state";
-import { deriveModelSwitchMarkers } from "./model-switch-divider";
-import { ModelSwitchDivider } from "./message/model-switch-divider";
 import { clearComposerDraft, readComposerDraft, writeComposerDraft } from "./composer-draft";
 import { useComposerAttachments } from "./composer/use-composer-attachments";
 import { useChatModel } from "./use-chat-model";
@@ -31,14 +30,13 @@ import { useFollowOutputScroll } from "./use-follow-output-scroll";
 import "./chat-page.css";
 import { ContextCompactionPart } from "./message/context-compaction-part";
 import { ContextPromptBanner } from "./message/context-prompt-banner";
-import { errorDetailForDisplay, RunErrorNotice } from "./message/run-error-notice";
+import { RunErrorNotice } from "./message/run-error-notice";
 import { useI18n } from "../i18n/use-i18n";
 import { parseGoalCommand } from "../goals/goal-command";
 import { parseRenameCommand } from "../sessions/rename-command";
 import { appendTerminalSelection, FOCUS_COMPOSER_EVENT, INSERT_TERMINAL_SELECTION_EVENT, type TerminalSelectionDetail } from "./composer/composer-events";
-import { RuntimeOverview } from "../runtime-overview/runtime-overview";
-import { TurnTreeOverview } from "./turn-tree/turn-tree-overview";
 import { TurnTreePanel } from "./turn-tree/turn-tree-panel";
+import { TurnTreeNavigation } from "./turn-tree/turn-tree-navigation";
 import { useBranchActions } from "./turn-tree/use-branch-actions";
 import { useResendActions } from "./turn-tree/use-resend-actions";
 import { useTurnTree } from "./turn-tree/use-turn-tree";
@@ -52,7 +50,7 @@ import { openSideConversation } from "../side-conversation/side-conversation-eve
  *
  * @returns 聊天页面
  */
-export function ChatPage() {
+export function ChatPage({ toolbar }: { toolbar?: ReactNode }) {
   const { locale, t } = useI18n();
   const confirm = useConfirm();
   const { notice, showToast, dismissToast } = useToast();
@@ -76,7 +74,6 @@ export function ChatPage() {
   });
   const activeSession = sessions.data?.find((session) => session.active);
   const [treeOpen, setTreeOpen] = useState(false);
-  const [treeOverviewOpen, setTreeOverviewOpen] = useState(false);
   const activeWorkspace = workspaces.data?.workspaces.find(
     (workspace) => workspace.id === workspaces.data.active_id
   );
@@ -116,6 +113,7 @@ export function ChatPage() {
   // 带着它进入新会话会让人以为看到的是新会话的轨迹
   useEffect(() => {
     setView("conversation");
+    setTreeOpen(false);
   }, [activeSession?.id]);
   const onWorkspaceChanged = useCallback(() => {
     void Promise.all([
@@ -167,44 +165,10 @@ export function ChatPage() {
     () => display.liveRuns.filter((state) => state.status === "queued"),
     [display.liveRuns]
   );
-  // 相邻轮次模型变化时在其之间绘制切换分割线；历史轮次依据落库的
-  // 模型字段派生，刷新或重进会话后仍可稳定重现
-  const modelSwitchMarkers = useMemo(
-    () => deriveModelSwitchMarkers([
-      ...display.historyTurns.map((turn) => ({ key: turn.turn_id, model: turn.model })),
-      ...activeLiveRuns
-        .filter((state) => state.runId)
-        .map((state) => ({ key: state.runId!, model: state.model }))
-    ]),
-    [activeLiveRuns, display.historyTurns]
+  const uniqueErrorNotices = useMemo(
+    () => collectChatErrorNotices({ timeline: timeline.error, model: chatModel.error, action: actionError }),
+    [actionError, chatModel.error, timeline.error]
   );
-  const uniqueErrorNotices = useMemo(() => {
-    const notices = [
-      timeline.error && {
-        key: "timeline",
-        message: timeline.error.message,
-        detail: errorDetailForDisplay(timeline.error),
-      },
-      chatModel.error && {
-        key: "chat-model",
-        message: chatModel.error.message,
-        detail: errorDetailForDisplay(chatModel.error),
-      },
-      actionError && {
-        key: "action",
-        message: actionError.message,
-        detail: errorDetailForDisplay(actionError),
-      },
-    ].filter(Boolean) as Array<{ key: string; message: string; detail: string }>;
-    const seen = new Set<string>();
-    const unique = notices.filter((notice) => {
-      const signature = `${notice.message}\n${notice.detail}`;
-      if (seen.has(signature)) return false;
-      seen.add(signature);
-      return true;
-    });
-    return unique;
-  }, [actionError, chatModel.error, timeline.error]);
   const hasHistoryCompaction = Boolean(timeline.data?.compaction?.summary?.trim());
   const conversationEmpty = isConversationEmpty({
     timelineLoading: timeline.isLoading,
@@ -618,24 +582,16 @@ export function ChatPage() {
   );
 
   // 有历史才提供轨迹视图：空会话切过去只有一张空表，切换本身成了噪声
-  const viewSwitch = (timeline.data?.turns.length ?? 0) > 0 ? (
-    <SegmentedControl
-      className="chat-view-switch"
-      value={view}
-      onChange={setView}
-      ariaLabel={t("Session view", "会话视图")}
-      options={[
-        { value: "conversation", label: t("Chat", "对话"), icon: <MessagesSquare size={13} aria-hidden /> },
-        { value: "trajectory", label: t("Trajectory", "轨迹"), icon: <Route size={13} aria-hidden /> }
-      ]}
-    />
-  ) : undefined;
+  const viewSwitch = (timeline.data?.turns.length ?? 0) > 0
+    ? <ChatViewSwitch view={view} onChange={setView} /> : undefined;
   const header = (
     <ChatSessionHeader
-      title={activeSession?.title ?? t("Select a session", "选择会话")}
+      title={conversationEmpty && activeSession ? t("New task", "新建任务") : activeSession?.title ?? t("Select a session", "选择会话")}
       workspace={activeWorkspace}
       branch={gitStatus.data?.status === "ready" ? gitStatus.data.head : undefined}
       viewSwitch={viewSwitch}
+      branchNavigation={view === "conversation" && (turnTree.tree.data?.total_turns ?? 0) > 0 ? <TurnTreeNavigation open={treeOpen} count={turnTree.tree.data?.branch_points ?? 0} onToggle={() => setTreeOpen((value) => !value)} /> : undefined}
+      actions={toolbar}
     />
   );
 
@@ -657,9 +613,12 @@ export function ChatPage() {
 
   return (
     <div className={centerEmptySession ? "chat-page empty-session" : "chat-page"}>
+      <div className="chat-page-navigation">
+        {header}
+        {treeOpen && turnTree.tree.data && <TurnTreePanel tree={turnTree.tree.data} busy={turnTree.switchBranch.isPending || running} onSelect={(turnId) => turnTree.switchBranch.mutate(turnId)} onClose={() => setTreeOpen(false)} />}
+      </div>
       <div className="message-scroll-region">
         <div className="message-scroll" ref={scrollRef}>
-          {header}
           <div className="message-column">
             {(timeline.isLoading || branchTransitioning) && (
               <div className="chat-timeline-skeleton">
@@ -690,54 +649,25 @@ export function ChatPage() {
                 />
               </div>
             )}
-            {!branchTransitioning && display.historyTurns.map((turn) => {
-              const modelSwitch = modelSwitchMarkers.get(turn.turn_id);
-              return (
-                <Fragment key={turn.turn_id}>
-                  {modelSwitch && <ModelSwitchDivider marker={modelSwitch} />}
-                  <section className="conversation-turn" data-overview-id={`turn-${turn.turn_id}`}>
-                    <HistoryTurn
-                      turn={turn}
-                      sessionId={activeSession?.id}
-                      canRetry={turn.turn_id === lastTurnId && !running}
-                      onRetry={resend.retry}
-                      canContinueFrom={!running}
-                      onContinueFrom={continueFrom}
-                      canSideConversation={turn.status === "completed" && Boolean(turn.assistant.content.trim())}
-                      onSideConversation={openTurnSideConversation}
-                      canEditResend={!running}
-                      onEditResend={editAndResend}
-                      actionBusy={actionBusy || branchTransitioning}
-                      branchTree={turnTree.tree.data}
-                      branchBusy={turnTree.switchBranch.isPending || running}
-                      onSwitchBranch={turnTree.switchBranch.mutate}
-                    />
-                  </section>
-                </Fragment>
-              );
-            })}
-            {!branchTransitioning && activeLiveRuns.map((state) => {
-              const modelSwitch = state.runId ? modelSwitchMarkers.get(state.runId) : undefined;
-              return (
-                <Fragment key={state.runId}>
-                  {modelSwitch && <ModelSwitchDivider marker={modelSwitch} />}
-                  <section className="conversation-turn" data-overview-id={`live-${state.runId}`}>
-                    <LiveRunMessage
-                      state={state}
-                      sessionId={activeSession?.id}
-                      running={!state.completed}
-                      onRetry={!running && state.completed
-                        ? () => void resend.retry(state.userInput, state.imageUrls, state.runId)
-                        : undefined}
-                      onEditResend={!running && state.completed
-                        ? (content, imageUrls) => void editAndResend(state.runId, content, imageUrls)
-                        : undefined}
-                      actionBusy={actionBusy || branchTransitioning}
-                    />
-                  </section>
-                </Fragment>
-              );
-            })}
+            {!branchTransitioning && <ChatConversation
+              turns={display.historyTurns}
+              liveRuns={activeLiveRuns}
+              running={running}
+              lastTurnId={lastTurnId}
+              actions={{
+                sessionId: activeSession?.id,
+                onRetry: resend.retry,
+                canContinueFrom: !running,
+                onContinueFrom: continueFrom,
+                onSideConversation: openTurnSideConversation,
+                canEditResend: !running,
+                onEditResend: editAndResend,
+                actionBusy: actionBusy || branchTransitioning,
+                branchTree: turnTree.tree.data,
+                branchBusy: turnTree.switchBranch.isPending || running,
+                onSwitchBranch: turnTree.switchBranch.mutate
+              }}
+            />}
             <QueuedMessageList
               runs={queuedRuns}
               onUpdate={run.updateQueuedInput}
@@ -749,13 +679,7 @@ export function ChatPage() {
             />
           </div>
           {centerEmptySession ? (
-            <div className="empty-session-stage">
-              <div className="empty-session-greeting">
-                <h2>{t("Start a new conversation", "开始新的对话")}</h2>
-                <p>{t("Enter a task or question. Press Enter to send and Shift+Enter for a new line.", "输入任务或问题，Enter 发送，Shift+Enter 换行")}</p>
-              </div>
-              {composerDock}
-            </div>
+            <ChatEmptyState onChoose={setInput} disabled={!activeSession}>{composerDock}</ChatEmptyState>
           ) : (
             composerDock
           )}
@@ -765,31 +689,6 @@ export function ChatPage() {
           items={overviewItems}
           onNavigate={pauseFollowing}
         />
-        {!treeOpen && (turnTree.tree.data?.total_turns ?? 0) > 0 && (
-          <button
-            type="button"
-            className="turn-tree-open"
-            onClick={() => setTreeOpen(true)}
-            aria-label={t("Show session branches", "查看会话分支")}
-            title={t("Show session branches", "查看会话分支")}
-          >
-            <GitBranch size={13} aria-hidden />
-            <span className="turn-tree-open-label">{t("Branches", "会话分支")}</span>
-            {(turnTree.tree.data?.branch_points ?? 0) > 0 && (
-              <span className="turn-tree-open-count">{turnTree.tree.data?.branch_points}</span>
-            )}
-          </button>
-        )}
-        {treeOpen && turnTree.tree.data && (
-          <TurnTreePanel
-            tree={turnTree.tree.data}
-            busy={turnTree.switchBranch.isPending || running}
-            onSelect={(turnId) => turnTree.switchBranch.mutate(turnId)}
-            onClose={() => setTreeOpen(false)}
-            onOpenOverview={() => setTreeOverviewOpen(true)}
-          />
-        )}
-        <RuntimeOverview sessionId={activeSession?.id} />
         {showJump && (
           <HoverRevealButton
             className="jump-to-bottom"
@@ -802,51 +701,13 @@ export function ChatPage() {
           />
         )}
       </div>
-      <Modal
-        open={treeOverviewOpen}
-        title={t("Branch overview", "分支总览")}
-        description={t("Click any turn to switch the conversation to that branch.", "点击任意轮次即可把对话切换到该分支。")}
-        size="large"
-        className="turn-tree-overview-modal"
-        onClose={() => setTreeOverviewOpen(false)}
-      >
-        {turnTree.tree.data && (
-          <TurnTreeOverview
-            tree={turnTree.tree.data}
-            busy={turnTree.switchBranch.isPending || running}
-            onSelect={(turnId) => {
-              turnTree.switchBranch.mutate(turnId, {
-                onSuccess: () => setTreeOverviewOpen(false)
-              });
-            }}
-          />
-        )}
-      </Modal>
-      <Modal
-        open={undoConfirmOpen}
-        title={t("Step back to the previous turn?", "退回上一轮？")}
-        description={t("The conversation moves back one turn. Nothing is deleted — the turn you step out of stays in the branch tree and can be reached again.", "对话位置退回一轮。不会删除任何内容：退出的这一轮仍保留在分支树中，随时可以切回。")}
-        size="small"
-        onClose={() => setUndoConfirmOpen(false)}
-        footer={(
-          <>
-            <Button onClick={() => setUndoConfirmOpen(false)}>{t("Cancel", "取消")}</Button>
-            <Button onClick={() => void undoToPreviousTurn()}>{t("Step back", "确认退回")}</Button>
-          </>
-        )}
-      >
-        <p>{t("Worktree changes made by that turn are not rolled back. The user input returns to the composer so you can revise and resend.", "该轮对工作树的修改不会被回滚。用户输入会回到输入框，便于修改后重新发送。")}</p>
-      </Modal>
-      <Modal
-        open={Boolean(undoError)}
-        title={t("Undo failed", "撤销失败")}
-        description={t("The worktree changed after the turn completed, so Sai did not run an undo that could overwrite newer changes.", "工作树在本轮结束后又发生变化，因此没有执行可能覆盖新修改的撤销。")}
-        size="small"
-        onClose={() => setUndoError(null)}
-        footer={<Button onClick={() => setUndoError(null)}>{t("Close", "关闭")}</Button>}
-      >
-        <p>{undoError?.message}</p>
-      </Modal>
+      <ChatSessionDialogs
+        undoOpen={undoConfirmOpen}
+        undoError={undoError}
+        onCloseUndo={() => setUndoConfirmOpen(false)}
+        onUndo={() => void undoToPreviousTurn()}
+        onCloseError={() => setUndoError(null)}
+      />
       <Toast notice={notice} onDismiss={dismissToast} />
     </div>
   );

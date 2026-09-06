@@ -26,3 +26,12 @@ export function workspaceRelativePath(path: string, workspacePath: string): stri
 function normalizePathSeparators(path: string): string {
   return path.trim().replace(/^\\\\\?\\/, "").replace(/^\/\/\?\//, "").replace(/\\/g, "/").replace(/\/{2,}/g, "/");
 }
+
+/**
+ * 判断路径是否为服务器绝对路径，兼容 Unix、Windows 盘符与网络路径。
+ * @param path 文件路径
+ * @returns 是否为绝对路径
+ */
+export function isAbsoluteFilePath(path: string): boolean {
+  return /^(?:\/|[a-z]:[\\/]|\\\\)/i.test(path.trim());
+}

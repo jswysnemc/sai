@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronRight, FilePlus2, FolderPlus, PanelRightClose, Pencil, RefreshCw, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, FilePlus2, FileUp, FolderPlus, PanelRightClose, Pencil, RefreshCw, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { toDisplayError } from "../../api/api-error";
@@ -9,6 +9,9 @@ import { DirectoryIcon, FileTypeIcon } from "../../shared/ui/file-icon";
 import { filterFileNodes, findFileNode, parentFilePath } from "./file-tree-utils";
 import { WorkspaceFileSearch } from "./workspace-file-search";
 import { useI18n } from "../i18n/use-i18n";
+import { Button } from "../../shared/ui/button/button";
+import { TextInput } from "../../shared/ui/form/text-input";
+import { OpenFileDialog } from "./open-file-dialog";
 import { ChangeContextMenu } from "../source-control/changes/change-context-menu";
 import "../source-control/changes/change-file-list.css";
 import {
@@ -45,6 +48,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
   const tree = useQuery({ queryKey: ["file-tree"], queryFn: () => api.workspace.tree(), refetchOnWindowFocus: true, refetchInterval: 15_000 });
   const [focusedPath, setFocusedPath] = useState<string | null>(selectedFile);
   const [action, setAction] = useState<FileAction>(null);
+  const [openFileDialog, setOpenFileDialog] = useState(false);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<Error | null>(null);
   const [gitMenu, setGitMenu] = useState<GitMenuState>(null);
@@ -60,7 +64,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
 
   /** 打开新建文件或目录输入栏。 */
   const beginCreate = (kind: "file" | "directory") => {
-    const parent = focusedNode?.kind === "directory" ? focusedNode.path : parentFilePath(focusedPath ?? "");
+    const parent = focusedNode?.kind === "directory" ? focusedNode.path : parentFilePath(focusedNode?.path ?? "");
     setAction({ kind, value: parent ? `${parent}/` : "" });
     setError(null);
   };
@@ -119,12 +123,13 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
       <div className="file-tree-head">
         <span>{t("Files", "文件")}</span>
         <div className="file-tree-actions">
-          <button type="button" onClick={() => beginCreate("file")} aria-label={t("New file", "新建文件")}><FilePlus2 size={13} /></button>
-          <button type="button" onClick={() => beginCreate("directory")} aria-label={t("New directory", "新建目录")}><FolderPlus size={13} /></button>
-          <button type="button" onClick={beginRename} disabled={!focusedPath} aria-label={t("Rename", "重命名")}><Pencil size={12} /></button>
-          <button type="button" onClick={() => void deleteFocused()} disabled={!focusedPath} aria-label={t("Delete", "删除")}><Trash2 size={12} /></button>
-          <button type="button" onClick={() => void tree.refetch()} aria-label={t("Refresh file tree", "刷新文件树")}><RefreshCw size={12} /></button>
-          {onClose && <button type="button" onClick={onClose} aria-label={t("Close file tree", "关闭文件树")}><PanelRightClose size={12} /></button>}
+          <Button variant="ghost" size="icon" onClick={() => setOpenFileDialog(true)} aria-label={t("Open file by path", "通过路径打开文件")} title={t("Open file", "打开文件")}><FileUp size={13} /></Button>
+          <Button variant="ghost" size="icon" onClick={() => beginCreate("file")} aria-label={t("New file", "新建文件")}><FilePlus2 size={13} /></Button>
+          <Button variant="ghost" size="icon" onClick={() => beginCreate("directory")} aria-label={t("New directory", "新建目录")}><FolderPlus size={13} /></Button>
+          <Button variant="ghost" size="icon" onClick={beginRename} disabled={!focusedNode} aria-label={t("Rename", "重命名")}><Pencil size={12} /></Button>
+          <Button variant="ghost" size="icon" onClick={() => void deleteFocused()} disabled={!focusedNode} aria-label={t("Delete", "删除")}><Trash2 size={12} /></Button>
+          <Button variant="ghost" size="icon" onClick={() => void tree.refetch()} aria-label={t("Refresh file tree", "刷新文件树")}><RefreshCw size={12} /></Button>
+          {onClose && <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("Close file tree", "关闭文件树")}><PanelRightClose size={12} /></Button>}
         </div>
       </div>
       <WorkspaceFileSearch value={search} onChange={setSearch} />
@@ -132,9 +137,9 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
         {action && (
           <div className="file-action-bar">
             {action.kind === "directory" ? <FolderPlus size={13} /> : action.kind === "file" ? <FilePlus2 size={13} /> : <Pencil size={13} />}
-            <input autoFocus value={action.value} onChange={(event) => setAction({ ...action, value: event.target.value })} onKeyDown={(event) => { if (event.key === "Enter") void submitAction(); if (event.key === "Escape") setAction(null); }} spellCheck={false} />
-            <button type="button" onClick={() => void submitAction()} aria-label={t("Confirm", "确认")}><Check size={12} /></button>
-            <button type="button" onClick={() => setAction(null)} aria-label={t("Cancel", "取消")}><X size={12} /></button>
+            <TextInput autoFocus value={action.value} onChange={(event) => setAction({ ...action, value: event.target.value })} onKeyDown={(event) => { if (event.key === "Enter") void submitAction(); if (event.key === "Escape") setAction(null); }} aria-label={t("File or directory name", "文件或目录名称")} spellCheck={false} />
+            <Button variant="ghost" size="icon" onClick={() => void submitAction()} aria-label={t("Confirm", "确认")}><Check size={12} /></Button>
+            <Button variant="ghost" size="icon" onClick={() => setAction(null)} aria-label={t("Cancel", "取消")}><X size={12} /></Button>
           </div>
         )}
         {visibleNodes.map((node) => (
@@ -181,6 +186,7 @@ export function FileTree({ selectedFile, onSelectFile, onClearFile, onClose }: F
           onClose={() => setGitMenu(null)}
         />
       )}
+      <OpenFileDialog open={openFileDialog} initialPath={selectedFile ?? ""} onSelectFile={onSelectFile} onClose={() => setOpenFileDialog(false)} />
     </aside>
   );
 }

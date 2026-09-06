@@ -20,6 +20,8 @@ type ParserState = "header" | "hunk";
  */
 export function parseDiff(source: string): DiffFile[] {
   const lines = source.replaceAll("\r\n", "\n").split("\n");
+  // 1. 【差异审阅】【补丁解析】结尾分隔符不代表空白代码行，真实上下文仍带空格前缀
+  if (lines.at(-1) === "") lines.pop();
   const files: DiffFile[] = [];
   let current: DiffFile | undefined;
   let state: ParserState = "header";

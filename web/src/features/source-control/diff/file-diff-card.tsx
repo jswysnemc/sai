@@ -1,12 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ListChecks, Loader2, Minus, Plus, RotateCcw, Trash2 } from "lucide-react";
-import { memo, useState } from "react";
+import { memo, useId, useState } from "react";
 import { api } from "../../../api/client";
 import type { GitStatusEntry } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
+import { FileTypeIcon } from "../../../shared/ui/file-icon";
 import { useI18n } from "../../i18n/use-i18n";
-import { DiffIdeaView } from "../../chat/tool-renderers/diff-idea-view";
-import { DiffUnifiedView } from "../../chat/tool-renderers/diff-unified-view";
+import { DiffCodeView } from "../../chat/tool-renderers/diff/diff-code-view";
 import type { DiffFile } from "../../chat/tool-renderers/diff/diff-model";
 import type { DiffLayout } from "../../chat/tool-renderers/diff-view";
 import { ToolFileReference } from "../../chat/tool-renderers/tool-file-reference";
@@ -14,6 +14,8 @@ import type { RunGitOperation } from "../types";
 import type { GitReviewDiffMode } from "./diff-mode";
 import { splitGitPatchHunks } from "./partial-diff";
 import { SelectablePatchHunk } from "./selectable-patch-hunk";
+import { FileDiffPreview, type LoadedFileDiff } from "./file-diff-preview";
+import "./file-diff-card.css";
 
 type FileDiffCardProps = {
   file: DiffFile;
@@ -22,6 +24,7 @@ type FileDiffCardProps = {
   repoRoot: string;
   reviewMode: GitReviewDiffMode;
   layout: DiffLayout;
+  wrap?: boolean;
   collapsed: boolean;
   /** 左侧列表选中的文件，滚动定位后短暂高亮 */
   highlighted: boolean;
@@ -48,8 +51,13 @@ type FileDiffCardProps = {
 export const FileDiffCard = memo(function FileDiffCard(props: FileDiffCardProps) {
   const { t } = useI18n();
   const [lineOps, setLineOps] = useState(false);
+  const [loadFile, setLoadFile] = useState(false);
+  const [loadedFile, setLoadedFile] = useState<LoadedFileDiff | null>(null);
+  const contentId = useId();
 
-  const { file, entry } = props;
+  const file = loadedFile?.file ?? props.file;
+  const entry = props.entry;
+  const truncated = loadedFile?.truncated ?? props.truncated;
   const tone = fileTone(file, entry);
   const badge = fileBadge(entry, t);
   const deleted = tone === "deleted";
@@ -60,7 +68,7 @@ export const FileDiffCard = memo(function FileDiffCard(props: FileDiffCardProps)
   const canDiscard = interactive && hasWorktreeChanges && !entry?.conflicted;
   const lineOpsMode: "staged" | "unstaged" = hasWorktreeChanges ? "unstaged" : "staged";
   const canLineOps =
-    interactive && !props.truncated && !entry?.conflicted && file.status !== "binary" && file.lines.length > 0;
+    interactive && !truncated && !entry?.conflicted && file.status !== "binary" && file.lines.length > 0;
 
   /**
    * 经确认后丢弃该文件的工作区改动。
@@ -85,39 +93,35 @@ export const FileDiffCard = memo(function FileDiffCard(props: FileDiffCardProps)
   return (
     <section
       ref={(element) => props.containerRef?.(file.path, element)}
-      className={`git-file-card${props.collapsed ? " is-collapsed" : ""}${props.highlighted ? " is-highlighted" : ""}`}
+      className={`git-file-card tone-${tone}${props.collapsed ? " is-collapsed" : ""}${props.highlighted ? " is-highlighted" : ""}`}
+      data-file-path={file.path}
     >
       <header
         className="git-file-card-head"
-        role="button"
-        tabIndex={0}
-        aria-expanded={!props.collapsed}
         title={file.path}
-        onClick={() => props.onToggleCollapse(file.path)}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter" && event.key !== " ") return;
-          event.preventDefault();
-          props.onToggleCollapse(file.path);
-        }}
       >
-        <span className={`git-file-card-dot tone-${tone}`} aria-hidden />
+        <Button variant="ghost" size="icon" className="git-file-card-toggle" aria-expanded={!props.collapsed}
+          aria-controls={contentId} onClick={() => props.onToggleCollapse(file.path)}
+          aria-label={props.collapsed ? t(`Expand ${file.path}`, `展开 ${file.path}`) : t(`Collapse ${file.path}`, `折叠 ${file.path}`)}>
+          <ChevronDown size={14} className={`git-file-card-chevron${props.collapsed ? "" : " open"}`} aria-hidden />
+        </Button>
+        <FileTypeIcon name={file.path} size={15} />
         <span className={`git-file-card-path${deleted ? " is-deleted" : ""}`}>
-          {directory && <span className="git-file-card-dir">{directory}/</span>}
           <ToolFileReference
             path={file.path}
             label={fileName(file.path)}
             icon={false}
             className="git-file-card-name"
           />
+          {directory && <span className="git-file-card-dir">{directory}</span>}
         </span>
         {badge && <span className={`git-file-card-badge tone-${tone}`}>{badge}</span>}
         <span className="git-file-card-stats">
           {file.added > 0 && <b>+{file.added}</b>}
           {file.removed > 0 && <i>-{file.removed}</i>}
         </span>
-        {/* 操作按钮不参与折叠切换；分支审阅等只读场景不渲染空容器 */}
         {(canLineOps || canUnstage || canStage || canDiscard) && (
-          <span className="git-file-card-actions" onClick={(event) => event.stopPropagation()}>
+          <span className="git-file-card-actions">
             {canLineOps && (
               <Button
                 className={`git-file-card-action${lineOps ? " is-active" : ""}`}
@@ -161,22 +165,27 @@ export const FileDiffCard = memo(function FileDiffCard(props: FileDiffCardProps)
             )}
           </span>
         )}
-        <ChevronDown size={14} className={`git-file-card-chevron${props.collapsed ? "" : " open"}`} aria-hidden />
       </header>
 
       {!props.collapsed && (
-        <div className="git-file-card-body">
+        <div className="git-file-card-body" id={contentId}>
           {file.oldPath && (
             <p className="diff-file-note">{t(`Renamed from ${file.oldPath}`, `由 ${file.oldPath} 重命名`)}</p>
           )}
-          {file.status === "binary" && (
+          {!loadFile && file.status === "binary" && (
             <p className="diff-file-note">{t("Binary file not shown", "二进制文件不展示内容")}</p>
           )}
-          {file.status !== "binary" && file.lines.length === 0 && (
+          {!loadFile && !truncated && file.status !== "binary" && file.lines.length === 0 && (
             <p className="diff-file-note">
               {t("No previewable text changes for this file", "此文件没有可预览的文本改动")}
             </p>
           )}
+          {props.truncated && !loadFile && <div className="git-file-card-load">
+            <span>{t("This file is not fully included in the overview", "此文件差异未完整载入")}</span>
+            <Button variant="ghost" size="small" onClick={() => setLoadFile(true)}>
+              {t("Load file diff", "读取文件差异")}
+            </Button>
+          </div>}
           {lineOps && canLineOps ? (
             <FileLineOps
               path={file.path}
@@ -185,16 +194,12 @@ export const FileDiffCard = memo(function FileDiffCard(props: FileDiffCardProps)
               busy={props.busy}
               runOperation={props.runOperation}
             />
+          ) : loadFile ? (
+            <FileDiffPreview path={props.file.path} repoRoot={props.repoRoot} mode={props.reviewMode}
+              layout={props.layout} wrap={props.wrap} onLoaded={setLoadedFile} />
           ) : (
             file.lines.length > 0 && (
-              /* structured-diff 提供代码字体与配色；紧凑模式去掉自带底色，由卡片承担 */
-              <div className="structured-diff is-compact">
-                {props.layout === "side" ? (
-                  <DiffIdeaView file={file} language={languageOfPath(file.path)} />
-                ) : (
-                  <DiffUnifiedView file={file} language={languageOfPath(file.path)} />
-                )}
-              </div>
+              <DiffCodeView file={file} language={languageOfPath(file.path)} layout={props.layout} wrap={props.wrap} />
             )
           )}
         </div>
@@ -237,6 +242,9 @@ function FileLineOps(props: FileLineOpsProps) {
     );
   }
   if (diff.error) return <p className="diff-file-note">{(diff.error as Error).message}</p>;
+  if (diff.data?.truncated) return <p className="diff-file-note">
+    {t("The file diff is truncated; line operations are unavailable", "此文件差异已截断，暂时无法按行操作")}
+  </p>;
 
   const hunks = splitGitPatchHunks(diff.data?.patch ?? "");
   if (hunks.length === 0) {

@@ -1,4 +1,4 @@
-import { Bot, BrainCircuit, Cpu } from "lucide-react";
+import { Box, Gauge, Layers2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AGENT_THINKING_OPTIONS, buildAgentModelChoices } from "../agent-runtime-options";
 import { Button } from "../../../shared/ui/button/button";
@@ -70,7 +70,7 @@ export function SubagentModelDialog({ open, onClose }: SubagentModelDialogProps)
       {!runtime.loading && runtime.settings && (
         <div className="agent-quick-grid">
           <div className="agent-quick-field">
-            <span><Bot size={14} />{t("Applies to", "设置对象")}</span>
+            <span><Layers2 size={14} strokeWidth={1.6} />{t("Applies to", "设置对象")}</span>
             <Select
               value={target}
               options={[
@@ -84,7 +84,7 @@ export function SubagentModelDialog({ open, onClose }: SubagentModelDialogProps)
           </div>
           <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
             <div className="agent-quick-field min-w-0">
-              <span><Cpu size={14} />{t("Model", "模型")}</span>
+              <span><Box size={14} strokeWidth={1.6} />{t("Model", "模型")}</span>
               <Select
                 value={modelSelection}
                 options={[{ value: "", label: inherit }, ...modelChoices]}
@@ -95,7 +95,7 @@ export function SubagentModelDialog({ open, onClose }: SubagentModelDialogProps)
               />
             </div>
             <div className="agent-quick-field min-w-0">
-              <span><BrainCircuit size={14} />{t("Thinking", "思考")}</span>
+              <span><Gauge size={14} strokeWidth={1.6} />{t("Thinking", "思考")}</span>
               <Select
                 value={thinkingLevel}
                 options={AGENT_THINKING_OPTIONS.map((option) => option.value === "auto" ? { ...option, label: inherit } : option)}

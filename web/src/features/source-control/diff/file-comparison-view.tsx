@@ -2,6 +2,8 @@ import { GitCompare, GitCompareArrows, Loader2, X } from "lucide-react";
 import type { GitDiffResponse } from "../../../api/contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { DiffView } from "../../chat/tool-renderers/diff-view";
+import { DiffViewControls } from "../../chat/tool-renderers/diff/diff-view-controls";
+import { useDiffViewOptions } from "../../chat/tool-renderers/diff/use-diff-view-options";
 import { useI18n } from "../../i18n/use-i18n";
 import type { FileComparisonTarget } from "./file-comparison-state";
 import { GitDiffStat } from "./git-diff-stat";
@@ -54,6 +56,7 @@ export function FileComparisonView(props: FileComparisonViewProps) {
  */
 function FileComparisonBody(props: Pick<FileComparisonViewProps, "data" | "loading" | "error">) {
   const { t } = useI18n();
+  const display = useDiffViewOptions("side");
   if (props.loading) {
     return (
       <div className="git-diff-empty">
@@ -73,9 +76,10 @@ function FileComparisonBody(props: Pick<FileComparisonViewProps, "data" | "loadi
     );
   }
   return (
-    <div className="git-diff-shell">
+    <div className="git-diff-shell git-file-comparison-detail" ref={display.ref}>
+      <div className="diff-view-toolbar"><DiffViewControls options={display} /></div>
       {props.data.stat ? <GitDiffStat stat={props.data.stat} /> : null}
-      <DiffView source={props.data.patch} layout="side" />
+      <DiffView source={props.data.patch} layout={display.layout} wrap={display.wrap} review />
       {props.data.truncated && <div className="git-clean">{t("Diff truncated", "差异已截断")}</div>}
     </div>
   );

@@ -18,7 +18,7 @@
 }
 
 .agent-quick-field > span svg {
-  color: var(--signal);
+  color: var(--ink-soft);
 }
 
 .agent-quick-grid > p,

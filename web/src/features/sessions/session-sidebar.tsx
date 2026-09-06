@@ -1,6 +1,6 @@
-import { FolderPlus, PanelLeftClose, Settings } from "lucide-react";
+import { FolderPlus, PanelLeftClose } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useConfirm } from "../../shared/ui/dialog/dialog-provider";
 import { SkeletonList } from "../../shared/ui/skeleton/skeleton";
 import { SaiLogo } from "../../shared/ui/sai-logo";
@@ -12,6 +12,12 @@ import { useSessionSelection } from "./use-session-selection";
 import { LocaleSwitcher } from "../i18n/locale-switcher";
 import { useI18n } from "../i18n/use-i18n";
 import { SessionSidebarActions } from "./session-sidebar-actions";
+import { Button } from "../../shared/ui/button/button";
+import { SegmentedControl } from "../../shared/ui/segmented-control";
+import { SidebarProjectGroup } from "./sidebar-project-group";
+import { SessionScopeControl, SESSION_SCOPE_KEY, type SessionScope } from "./session-scope-control";
+import { useRunningSessions } from "./session-running-state";
+import { WORKBENCH_COMMAND_EVENT, type WorkbenchCommand } from "../workspace/workbench-shortcuts";
 import { SessionListView } from "./session-list-view";
 import { WorkspaceListView } from "./workspace-list-view";
 import { SidebarAppMenu } from "./sidebar-app-menu";
@@ -45,13 +51,14 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
   const { t } = useI18n();
   const confirm = useConfirm();
   const navigate = useNavigate();
-  const location = useLocation();
   const [menu, setMenu] = useState<string | null>(null);
   const [workspaceMenu, setWorkspaceMenu] = useState<string | null>(null);
-  const [appMenuOpen, setAppMenuOpen] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [sidebarView, setSidebarView] = useState<SidebarView>("sessions");
+  const [sessionScope, setSessionScope] = useState<SessionScope>(() => localStorage.getItem(SESSION_SCOPE_KEY) === "all" ? "all" : "current");
+  const runningSessions = useRunningSessions();
+  useEffect(() => { localStorage.setItem(SESSION_SCOPE_KEY, sessionScope); }, [sessionScope]);
   // 相对时间每分钟刷新一次
   const [nowTick, setNowTick] = useState(() => Date.now());
   useEffect(() => {
@@ -59,9 +66,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
     return () => window.clearInterval(id);
   }, []);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const appMenuRef = useRef<HTMLDivElement | null>(null);
   const { tree } = useSessionTree();
-  const activeWorkspace = tree.data?.find((workspace) => workspace.active);
 
   const actions = useSessionActions({
     confirm,
@@ -76,19 +81,19 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
   });
 
   useEffect(() => {
-    /** 处理全局搜索快捷键。 */
-    const handleSearchShortcut = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "k") return;
-      event.preventDefault();
-      setSearchOpen(true);
+    /** 【会话导航】【快捷操作】处理命令菜单与新建会话请求。 */
+    const handleCommand = (event: Event) => {
+      const command = (event as CustomEvent<WorkbenchCommand>).detail;
+      if (command === "search") setSearchOpen(true);
+      if (command === "new-session" && !actions.create.isPending) actions.create.mutate(undefined);
     };
-    window.addEventListener("keydown", handleSearchShortcut);
-    return () => window.removeEventListener("keydown", handleSearchShortcut);
-  }, []);
+    window.addEventListener(WORKBENCH_COMMAND_EVENT, handleCommand);
+    return () => window.removeEventListener(WORKBENCH_COMMAND_EVENT, handleCommand);
+  }, [actions.create]);
 
   // 1. 监听整页 pointerdown，点击菜单外任意位置时关闭会话或工作区管理菜单
   useEffect(() => {
-    if (!menu && !workspaceMenu && !appMenuOpen) return;
+    if (!menu && !workspaceMenu) return;
     /**
      * 处理菜单外部点击并关闭菜单。
      *
@@ -96,14 +101,12 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
      */
     const onPointerDown = (event: PointerEvent) => {
       if (menuRef.current && event.target instanceof Node && menuRef.current.contains(event.target)) return;
-      if (appMenuRef.current && event.target instanceof Node && appMenuRef.current.contains(event.target)) return;
       setMenu(null);
       setWorkspaceMenu(null);
-      setAppMenuOpen(false);
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [appMenuOpen, menu, workspaceMenu]);
+  }, [menu, workspaceMenu]);
 
   /**
    * 执行统一搜索面板选中的应用操作。
@@ -120,7 +123,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
     else if (action === "open-tasks") window.dispatchEvent(new Event("sai:open-tasks"));
     else if (action === "open-subagents") window.dispatchEvent(new Event("sai:open-subagents"));
     else if (action === "open-git") window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_PANEL_EVENT, { detail: { tab: "diff" } }));
-    else if (action === "open-files") window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_PANEL_EVENT, { detail: { tab: "files" } }));
+    else if (action === "open-files") window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_PANEL_EVENT, { detail: { tab: "files", revealFileTree: true } }));
     else if (action === "toggle-sidebar") onToggleCollapsed();
     onNavigate?.();
   };
@@ -133,10 +136,6 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
     void actions.openSession(workspaceId, sessionId, workspace.active, session.active);
   };
 
-  const appMenuActive = location.pathname.startsWith("/settings")
-    || location.pathname.startsWith("/gateways")
-    || location.pathname.startsWith("/cron-jobs");
-
   const dialogs = (
     <>
       <ServerDirectoryDialog open={browserOpen} onClose={() => setBrowserOpen(false)} onSelect={actions.openDirectory} />
@@ -146,6 +145,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
         onClose={() => setSearchOpen(false)}
         onAction={runSearchAction}
         onOpenSession={openSearchSession}
+        onOpenFile={onSelectFile}
       />
     </>
   );
@@ -158,11 +158,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
           onNewSession={() => actions.create.mutate(undefined)}
           newSessionPending={actions.create.isPending}
           onOpenDirectory={() => setBrowserOpen(true)}
-          appMenuOpen={appMenuOpen}
-          onToggleAppMenu={() => setAppMenuOpen((value) => !value)}
-          onCloseAppMenu={() => setAppMenuOpen(false)}
-          appMenuActive={appMenuActive}
-          appMenuRef={appMenuRef}
+          onSearch={() => setSearchOpen(true)}
           onAfterNavigate={onNavigate}
         />
         {dialogs}
@@ -173,40 +169,28 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
   return (
     <div className="session-sidebar">
       <div className="sidebar-heading">
-        <button type="button" className="sidebar-brand" onClick={onToggleCollapsed} aria-label="Sai" title="Sai">
-          <SaiLogo size={44} trim />
-        </button>
+        <Button variant="ghost" className="sidebar-brand" onClick={onToggleCollapsed} aria-label="Sai" title="Sai">
+          <SaiLogo size={48} trim />
+        </Button>
         <div className="sidebar-heading-actions">
-          <button type="button" className="icon-button" aria-label={t("Collapse session sidebar", "折叠会话侧栏")} title={t("Collapse session sidebar", "折叠会话侧栏")} onClick={onToggleCollapsed}>
+          <Button variant="ghost" size="icon" className="icon-button" aria-label={t("Collapse session sidebar", "折叠会话侧栏")} title={t("Collapse session sidebar", "折叠会话侧栏")} onClick={onToggleCollapsed}>
             <PanelLeftClose size={16} />
-          </button>
+          </Button>
         </div>
       </div>
-      <div className="sidebar-view-switcher" role="tablist" aria-label={t("Sidebar view", "侧栏视图")}>
-        {([
-          ["sessions", t("Sessions", "会话")],
-          ["workspaces", t("Workspaces", "工作区")],
-          ["files", t("Files", "文件树")]
-        ] as const).map(([view, label]) => (
-          <button
-            key={view}
-            type="button"
-            role="tab"
-            aria-selected={sidebarView === view}
-            className={sidebarView === view ? "active" : ""}
-            onClick={() => setSidebarView(view)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {sidebarView === "sessions" && (
-        <SessionSidebarActions
-          onNewSession={() => actions.create.mutate(undefined)}
-          onSearch={() => setSearchOpen(true)}
-          createPending={actions.create.isPending}
-        />
-      )}
+      <SessionSidebarActions
+        onNewSession={() => actions.create.mutate(undefined)}
+        onSearch={() => setSearchOpen(true)}
+        onScheduledTasks={() => { navigate("/cron-jobs"); onNavigate?.(); }}
+        onSkills={() => { navigate("/settings/skills"); onNavigate?.(); }}
+        createPending={actions.create.isPending}
+      />
+      <SegmentedControl className="sidebar-view-switcher" value={sidebarView} onChange={setSidebarView} ariaLabel={t("Sidebar view", "侧栏视图")} options={[
+        { value: "sessions", label: t("Sessions", "会话") },
+        { value: "workspaces", label: t("Workspaces", "工作区") },
+        { value: "files", label: t("Files", "文件") }
+      ]} />
+      {sidebarView === "sessions" && <SessionScopeControl value={sessionScope} onChange={(scope) => { setSessionScope(scope); selection.exitSelection(); }} />}
       {sidebarView === "files" && (
         <div className="sidebar-file-tree-view">
           <FileTree
@@ -223,36 +207,47 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
         </div>
       )}
       {sidebarView === "sessions" && !tree.isLoading && (
-        activeWorkspace ? (
-          <SessionListView
-            workspace={activeWorkspace}
-            selection={selection}
-            now={nowTick}
-            menuRef={menuRef}
-            menu={menu}
-            onToggleMenu={setMenu}
-            onOpenSession={(sessionId, sessionActive) =>
-              void actions.openSession(activeWorkspace.workspace_id, sessionId, true, sessionActive)}
-            onRename={async (id, title) => {
-              await actions.rename.mutateAsync({ id, title });
-            }}
-            onDelete={(id, title) => void actions.removeWithConfirm(id, title)}
-          />
-        ) : (
-          <div className="sidebar-state">{t("No sessions in this view", "当前视图没有内容")}</div>
-        )
+        <div className={`sidebar-projects${sessionScope === "current" ? " is-current-workspace" : ""}`}>
+          {(tree.data ?? []).filter((workspace) => sessionScope === "all" || workspace.active).map((workspace) => {
+            const sessions = <SessionListView
+              key={workspace.workspace_id}
+              workspace={workspace}
+              runningSessions={runningSessions}
+              showWorkspaceHeader={sessionScope === "current"}
+              selection={selection}
+              now={nowTick}
+              menuRef={menuRef}
+              menu={menu}
+              onToggleMenu={setMenu}
+              onOpenSession={(sessionId, sessionActive) => void actions.openSession(workspace.workspace_id, sessionId, workspace.active, sessionActive)}
+              onRename={async (id, title) => { await actions.rename.mutateAsync({ id, title }); }}
+              onDelete={(id, title) => void actions.removeWithConfirm(id, title)}
+            />;
+            return sessionScope === "current" ? sessions : <SidebarProjectGroup
+              key={workspace.workspace_id}
+              workspace={workspace}
+              pending={actions.create.isPending}
+              canClose={!workspace.active || (tree.data?.length ?? 0) > 1}
+              onCreate={() => actions.create.mutate(workspace.active ? undefined : workspace.workspace_id)}
+              onOpen={() => void actions.openWorkspace(workspace.workspace_id, workspace.active)}
+              onClose={() => void actions.closeWorkspace(workspace.workspace_id, workspace.workspace_name, workspace.active)}
+            >{sessions}</SidebarProjectGroup>;
+          })}
+          {!tree.data?.length && <div className="sidebar-state">{t("Add a project to get started.", "加入项目后即可开始。")}</div>}
+        </div>
       )}
       {sidebarView === "workspaces" && (
         <div className="sidebar-session-actions" role="toolbar" aria-label={t("Workspace actions", "工作区操作")}>
-          <button type="button" onClick={() => setBrowserOpen(true)}>
+          <Button variant="ghost" onClick={() => setBrowserOpen(true)}>
             <FolderPlus size={14} /><span>{t("Add workspace", "加入工作区")}</span>
-          </button>
+          </Button>
         </div>
       )}
       {sidebarView === "workspaces" && !tree.isLoading && (
         (tree.data?.length ?? 0) > 0 ? (
           <WorkspaceListView
             workspaces={tree.data ?? []}
+            runningSessions={runningSessions}
             menuRef={menuRef}
             menu={workspaceMenu}
             onToggleMenu={setWorkspaceMenu}
@@ -266,25 +261,11 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
         )
       )}
       {(actions.error ?? tree.error) && <p className="sidebar-error">{(actions.error ?? tree.error)?.message}</p>}
-      <div className="sidebar-footer" ref={appMenuRef}>
+      <div className="sidebar-footer">
         <div className="sidebar-footer-actions">
-          <button
-            type="button"
-            className={`sidebar-settings-link${appMenuOpen || appMenuActive ? " active" : ""}`}
-            onClick={() => setAppMenuOpen((value) => !value)}
-            aria-expanded={appMenuOpen}
-          >
-            <Settings size={15} strokeWidth={1.8} /><span>{t("Settings", "设置")}</span>
-          </button>
+          <SidebarAppMenu onOpenDirectory={() => setBrowserOpen(true)} onAfterNavigate={onNavigate} />
           <LocaleSwitcher />
         </div>
-        {appMenuOpen && (
-          <SidebarAppMenu
-            onClose={() => setAppMenuOpen(false)}
-            onOpenDirectory={() => setBrowserOpen(true)}
-            onAfterNavigate={onNavigate}
-          />
-        )}
       </div>
       {dialogs}
     </div>

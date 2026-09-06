@@ -1,0 +1,142 @@
+/* 【Web 工作台】【中性主题】默认外观使用灰阶表面，语义色只表达运行与变更状态 */
+:root:not([data-theme]),
+:root[data-theme="linen"],
+:root[data-theme="system"] {
+  color-scheme: light;
+  --paper: #ffffff;
+  --paper-raised: #ffffff;
+  --paper-deep: #f5f5f5;
+  --control-surface: #f3f3f3;
+  --ink: #242424;
+  --ink-soft: #6b6b6b;
+  --line: #e5e5e5;
+  --line-strong: #bcbcbc;
+  --graphite: #242424;
+  --graphite-soft: #404040;
+  --signal: #23794f;
+  --signal-soft: #eaf4ee;
+  --danger: #c13c3c;
+  --warning: #95621b;
+  --blue: #3169c6;
+  --shadow-hue: 0 0 0;
+  --shadow-boost: 1;
+  --sidebar-surface: #f7f7f7;
+  --code-surface: #f8f8f8;
+  --code-head: #f2f2f2;
+  --code-text: #292929;
+  --code-comment: #747474;
+  --code-keyword: #8054ad;
+  --code-string: #327748;
+  --code-number: #a56824;
+  --code-danger: #b93e3e;
+  --terminal-surface: #ffffff;
+  --terminal-selection: #e5e5e5;
+  --terminal-line: #e5e5e5;
+  --terminal-text: #292929;
+  --terminal-muted: #717171;
+  --technical-surface: #fafafa;
+  --technical-surface-muted: #f3f3f3;
+  --technical-border: #e5e5e5;
+  --technical-text: #292929;
+  --technical-muted: #6b6b6b;
+  --diff-added-bg: #eaf5ee;
+  --diff-added-text: #226d43;
+  --diff-removed-bg: #fcecec;
+  --diff-removed-text: #b33636;
+  --diff-hunk-bg: #edf2fa;
+  --diff-hunk-text: #40679d;
+}
+
+:root[data-theme="graphite"] {
+  color-scheme: dark;
+  --paper: #1c1c1c;
+  --paper-raised: #252525;
+  --paper-deep: #171717;
+  --control-surface: #282828;
+  --ink: #ededed;
+  --ink-soft: #a3a3a3;
+  --line: #343434;
+  --line-strong: #636363;
+  --graphite: #ededed;
+  --graphite-soft: #cccccc;
+  --signal: #79c49b;
+  --signal-soft: #20372a;
+  --danger: #ee8585;
+  --warning: #d3ac72;
+  --blue: #89ade4;
+  --shadow-hue: 0 0 0;
+  --shadow-boost: 2;
+  --sidebar-surface: #171717;
+  --code-surface: #202020;
+  --code-head: #292929;
+  --code-text: #e3e3e3;
+  --code-comment: #999999;
+  --code-keyword: #c4a2e3;
+  --code-string: #a7c995;
+  --code-number: #dbb684;
+  --code-danger: #ee9393;
+  --terminal-surface: #1c1c1c;
+  --terminal-selection: #383838;
+  --terminal-line: #343434;
+  --terminal-text: #e3e3e3;
+  --terminal-muted: #a3a3a3;
+  --technical-surface: #202020;
+  --technical-surface-muted: #282828;
+  --technical-border: #383838;
+  --technical-text: #e3e3e3;
+  --technical-muted: #a3a3a3;
+  --diff-added-bg: #23382b;
+  --diff-added-text: #a2d3b5;
+  --diff-removed-bg: #402828;
+  --diff-removed-text: #efaaaa;
+  --diff-hunk-bg: #283243;
+  --diff-hunk-text: #a8c2e6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    color-scheme: dark;
+    --paper: #1c1c1c;
+    --paper-raised: #252525;
+    --paper-deep: #171717;
+    --control-surface: #282828;
+    --ink: #ededed;
+    --ink-soft: #a3a3a3;
+    --line: #343434;
+    --line-strong: #636363;
+    --graphite: #ededed;
+    --graphite-soft: #cccccc;
+    --signal: #79c49b;
+    --signal-soft: #20372a;
+    --danger: #ee8585;
+    --warning: #d3ac72;
+    --blue: #89ade4;
+    --shadow-hue: 0 0 0;
+    --shadow-boost: 2;
+    --sidebar-surface: #171717;
+    --code-surface: #202020;
+    --code-head: #292929;
+    --code-text: #e3e3e3;
+    --code-comment: #999999;
+    --code-keyword: #c4a2e3;
+    --code-string: #a7c995;
+    --code-number: #dbb684;
+    --code-danger: #ee9393;
+    --terminal-surface: #1c1c1c;
+    --terminal-selection: #383838;
+    --terminal-line: #343434;
+    --terminal-text: #e3e3e3;
+    --terminal-muted: #a3a3a3;
+    --technical-surface: #202020;
+    --technical-surface-muted: #282828;
+    --technical-border: #383838;
+    --technical-text: #e3e3e3;
+    --technical-muted: #a3a3a3;
+    --diff-added-bg: #23382b;
+    --diff-added-text: #a2d3b5;
+    --diff-removed-bg: #402828;
+    --diff-removed-text: #efaaaa;
+    --diff-hunk-bg: #283243;
+    --diff-hunk-text: #a8c2e6;
+  }
+}

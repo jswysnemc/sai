@@ -65,7 +65,7 @@ export function useSessionActions({ confirm, t, tree, onNavigate }: SessionActio
   ) => {
     setNavigationError(null);
     try {
-      if (sessionActive) {
+      if (workspaceActive && sessionActive) {
         onNavigate?.();
         return;
       }
@@ -74,6 +74,11 @@ export function useSessionActions({ confirm, t, tree, onNavigate }: SessionActio
         if (!switched) return;
       }
       await api.sessions.switch(sessionId);
+      // 1. 【会话导航】【切换项目】文件、Git 和终端缓存绑定服务端活动项目，重新载入后统一建立新上下文
+      if (!workspaceActive) {
+        window.location.reload();
+        return;
+      }
       await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       await refresh();
       onNavigate?.();

@@ -4,6 +4,11 @@
   max-width: 220px;
 }
 
+/* 展开完整路径时放开容器宽度限制，路径长度决定占位 */
+.workspace-switcher:has(.workspace-trigger strong.path) {
+  max-width: none;
+}
+
 .workspace-trigger {
   display: inline-flex;
   align-items: center;
@@ -45,6 +50,35 @@
 
 .workspace-trigger svg.open {
   transform: rotate(180deg);
+}
+
+/* 展开为完整路径时用等宽字体，并允许占用更多横向空间 */
+.workspace-trigger strong.path {
+  max-width: min(26rem, 44vw);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+}
+
+.workspace-path-toggle {
+  display: grid;
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  min-height: 1.5rem;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: var(--ink-soft);
+  opacity: 0.72;
+}
+
+.workspace-path-toggle:hover,
+.workspace-path-toggle[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+  opacity: 1;
 }
 
 .workspace-trigger:hover,

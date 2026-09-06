@@ -33,6 +33,9 @@ export function SettingsPage() {
   const { t } = useI18n();
   const pageRef = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => {
+    pageRef.current?.scrollTo({ top: 0 });
+  }, [section, subview]);
 
   // 1. 归一非法 section 与子页段：有子页的分区始终落在显式子页 URL 上
   if (!requested || requested !== section || (params.subview ?? undefined) !== subview) {
@@ -40,7 +43,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="settings-page" ref={pageRef}>
+    <div className="settings-page">
       <header className="settings-topbar">
         <div className="settings-topbar-inner">
           <Link to="/" className="settings-back" aria-label={t("Back to workspace", "返回主界面")}>
@@ -48,14 +51,6 @@ export function SettingsPage() {
             <span>{t("Back to workspace", "返回主界面")}</span>
           </Link>
           <h1>{t("Settings", "设置")}</h1>
-          <p>
-            {meta
-              ? t(meta.descriptionEn, meta.descriptionZh)
-              : t(
-                  "Manage models, CLI assistant tools, agents, gateways, and interface preferences.",
-                  "管理模型、CLI 助手工具、Agent、网关和界面偏好。"
-                )}
-          </p>
           <div className="settings-topbar-actions">
             <SettingsSaveBar
               meta={meta}
@@ -71,7 +66,8 @@ export function SettingsPage() {
       </header>
       <div className="settings-workspace">
         <SettingsNav activeSection={section} />
-        <main className="settings-main">
+        <main className="settings-main" ref={pageRef}>
+          <div className="settings-main-content">
           {meta?.subviews && (
             <SettingsSubnav sectionId={section} subviews={meta.subviews} />
           )}
@@ -82,6 +78,7 @@ export function SettingsPage() {
             theme={theme.theme}
             onThemeChange={theme.setTheme}
           />
+          </div>
         </main>
       </div>
     </div>

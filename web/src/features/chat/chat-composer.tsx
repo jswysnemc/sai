@@ -1,102 +1,27 @@
-import { Activity, ArrowRight, Bot, Cpu, GitBranch, Loader2, Paperclip, Square, SquareTerminal, Undo2 } from "lucide-react";
-import { useRef } from "react";
-import type { ChangeEvent } from "react";
-import type { RunMode, RunModelSelection, ThinkingLevel } from "../../api/contracts";
-import type { ChatModelChoice } from "./chat-model-options";
-import { ComposerSurface } from "./composer/composer-surface";
-import { currentComposerTip } from "./composer/composer-tips";
-import type { ComposerAttachment } from "./composer/use-composer-attachments";
-import { resolveComposerAvailability } from "./composer-availability";
-import { ModelThinkingSelector } from "./model-thinking-selector";
-import type { LiveRunState } from "./run-event-reducer";
-import type { AgentChoice } from "../agents/agent-types";
-import { AgentSelector } from "./agent-selector";
-import { WorkspaceSwitcher } from "../workspaces/workspace-switcher";
-import { SystemUsage } from "../usage/system-usage";
+import { ArrowUp, Loader2, Plus, Square } from "lucide-react";
+import { useRef, type ChangeEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
-import { AcpRuntimeControls } from "./acp-runtime/acp-runtime-controls";
-import { EngineConnectionBadge } from "./engine-connection/engine-connection-badge";
-import { useRuntimeActivity } from "../runtime-activity/use-runtime-activity";
-import { createRunModeOptions } from "../permission/run-mode-options";
 import { Button } from "../../shared/ui/button/button";
-import { Select } from "../../shared/ui/select/select";
 import { useI18n } from "../i18n/use-i18n";
-import { GoalControl } from "../goals/goal-control";
-import { TodoMarkdownView } from "../todo/todo-markdown-view";
+import { ComposerSurface } from "./composer/composer-surface";
+import { resolveComposerAvailability } from "./composer-availability";
+import { ComposerModelControls } from "./chat-composer/composer-model-controls";
+import { ComposerContextFooter } from "./chat-composer/composer-context-footer";
+import type { ChatComposerProps } from "./chat-composer/composer-types";
 import "./chat-composer.css";
 
-type ChatComposerProps = {
-  value: string;
-  mode: RunMode;
-  attachments: ComposerAttachment[];
-  historyEntries: string[];
-  thinkingLevel: ThinkingLevel;
-  thinkingLevels?: ThinkingLevel[];
-  choices: ChatModelChoice[];
-  selection: ChatModelChoice | null;
-  /** 运行中点选的待生效模型；本轮结束后自动应用 */
-  pendingSelection: ChatModelChoice | null;
-  modelLoading: boolean;
-  running: boolean;
-  /** 分支切换等短暂过渡期仅禁止发送，草稿仍可编辑。 */
-  submitBlocked?: boolean;
-  runStatus: LiveRunState["status"];
-  sessionAvailable: boolean;
-  undoAvailable: boolean;
-  agentChoices: AgentChoice[];
-  agentSelection: AgentChoice | null;
-  agentLoading: boolean;
-  sessionId?: string;
-  submitting?: boolean;
-  onChange: (value: string) => void;
-  onModeChange: (mode: RunMode) => void;
-  onThinkingLevelChange: (level: ThinkingLevel) => void;
-  onAddImages: (files: File[], selectionStart: number, selectionEnd: number) => Promise<number | undefined>;
-  onRemoveAttachment: (id: number) => void;
-  onModelSelect: (selection: RunModelSelection) => void;
-  onSubmit: () => void;
-  onStop: () => void;
-  onUndo: () => void;
-  onAgentSelect: (id: string) => void;
-  onCompact: () => Promise<void>;
-  onContinueGoal: () => Promise<void>;
-};
-
 /**
- * 渲染 sai-chat 风格的底部输入区。
- *
- * @param props 输入状态、模型状态、附件状态和操作回调
- * @returns 聊天输入区
+ * 渲染任务输入、附件、模型选择和发送状态。
+ * @param props 草稿、运行状态、会话配置和操作回调
+ * @returns 保留队列与停止语义的聊天输入区
  */
 export function ChatComposer(props: ChatComposerProps) {
-  const { t, locale } = useI18n();
-  // 外部内核下模型、思考等级与内置上下文统计均不生效
-  const engineStatus = useQuery({
-    queryKey: ["engine-status"],
-    queryFn: api.config.engineStatus,
-    staleTime: 60_000
-  });
+  const { t } = useI18n();
+  const engineStatus = useQuery({ queryKey: ["engine-status"], queryFn: api.config.engineStatus, staleTime: 60_000 });
   const externalEngine = engineStatus.data?.external === true ? engineStatus.data : null;
-  const engineStatusPending = engineStatus.isLoading && !engineStatus.data;
-  const sessionTip = props.sessionAvailable ? currentComposerTip(locale) : undefined;
-
-  const git = useQuery({ queryKey: ["git-status", null], queryFn: () => api.workspace.gitStatus(), staleTime: 20_000 });
-  const runtimeActivity = useRuntimeActivity();
+  const enginePending = engineStatus.isLoading && !engineStatus.data;
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  /**
-   * 读取文件选择器中的全部图片。
-   *
-   * @param event 文件输入变更事件
-   */
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (files.length === 0) return;
-    void props.onAddImages(files, props.value.length, props.value.length);
-  };
-
   const availability = resolveComposerAvailability({
     sessionAvailable: props.sessionAvailable,
     runActive: props.running,
@@ -104,51 +29,23 @@ export function ChatComposer(props: ChatComposerProps) {
     hasDraft: Boolean(props.value.trim()) || props.attachments.length > 0,
     submitBlocked: props.submitBlocked || props.submitting
   });
-  const runModeOptions = createRunModeOptions(t);
-  const placeholder = !props.sessionAvailable
-    ? t("Select a session first", "请先选择会话")
-    : props.running
-      ? t("Type a message; Enter queues it", "输入消息，Enter 排队")
-      : (sessionTip ?? t("Type a message; press Enter to send", "输入消息，Enter 发送"));
+
+  /**
+   * 将文件选择器中的图片加入当前草稿。
+   * @param event 文件选择事件
+   * @returns 无返回值
+   */
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (files.length) void props.onAddImages(files, props.value.length, props.value.length);
+  };
+  const placeholder = !props.sessionAvailable ? t("Select a session first", "请先选择会话")
+    : props.running ? t("Add a follow-up. Enter to queue it.", "补充任务内容，Enter 加入队列")
+      : t("Describe a task, or type @ to add context", "描述任务，或输入 @ 添加上下文");
 
   return (
     <div className="composer-shell">
-      <div className="composer-context-strip">
-        <WorkspaceSwitcher />
-        {git.data?.status === "ready" && git.data.head && <span className="composer-context-chip" title={git.data.upstream || git.data.head}><GitBranch size={13}/><span>{git.data.head}</span></span>}
-        <TodoMarkdownView sessionId={props.sessionId} compact />
-        {!externalEngine && !engineStatusPending && (
-          <SystemUsage
-            selection={props.selection}
-            mode={props.mode}
-            agentId={props.agentSelection?.id}
-            onCompact={props.onCompact}
-            compactDisabled={props.running}
-          />
-        )}
-        {/* 运行中保持可选：Agent 只影响下一轮请求参数，不打断当前 turn */}
-        <AgentSelector choices={props.agentChoices} selection={props.agentSelection} loading={props.agentLoading} disabled={false} onSelect={props.onAgentSelect} />
-        <Button className="composer-rail-button" onClick={props.onUndo} disabled={!props.undoAvailable || props.running} title={t("Undo the last turn and its worktree changes", "撤销最后一轮及其工作树修改")} aria-label={t("Undo last turn", "撤销最后一轮")}><Undo2 size={14} /></Button>
-        <button type="button" className={`composer-rail-button composer-activity-button${runtimeActivity.runningTasks > 0 ? " is-active" : ""}`} onClick={() => window.dispatchEvent(new Event("sai:open-tasks"))} title={runtimeActivity.runningTasks > 0 ? t(`${runtimeActivity.runningTasks} background tasks running`, `${runtimeActivity.runningTasks} 个后台任务进行中`) : t("Open background tasks", "打开后台任务")} aria-label={t("Open background tasks", "打开后台任务")}>
-          <Activity size={14} />
-          {runtimeActivity.runningTasks > 0 && <span className="composer-activity-badge">{runtimeActivity.runningTasks}</span>}
-        </button>
-        <button
-          type="button"
-          className="composer-rail-button"
-          onClick={() => window.dispatchEvent(new Event("sai:toggle-terminal"))}
-          title={t("Toggle bottom terminal", "切换底部终端")}
-          aria-label={t("Toggle bottom terminal", "切换底部终端")}
-        >
-          <SquareTerminal size={14} />
-        </button>
-        {runtimeActivity.runningSubagents > 0 && (
-          <button type="button" className="composer-rail-button composer-activity-button is-active" onClick={() => window.dispatchEvent(new Event("sai:open-subagents"))} title={t(`${runtimeActivity.runningSubagents} subagents running`, `${runtimeActivity.runningSubagents} 个子智能体运行中`)} aria-label={t("View subagents", "查看子智能体")}>
-            <Bot size={14} />
-            <span className="composer-activity-badge">{runtimeActivity.runningSubagents}</span>
-          </button>
-        )}
-      </div>
       <ComposerSurface
         variant="full"
         className="composer"
@@ -164,61 +61,21 @@ export function ChatComposer(props: ChatComposerProps) {
         onSubmit={props.onSubmit}
       >
         <div className="composer-footer">
-          <div className="composer-toolrail">
-            <div className="composer-model-group">
-              {externalEngine && props.choices.length === 0 ? (
-                <EngineConnectionBadge status={externalEngine} running={props.running} />
-              ) : engineStatusPending ? (
-                <span className="composer-engine-badge">
-                  <Cpu size={12} aria-hidden />
-                  {t("Loading engine", "读取内核")}
-                </span>
-              ) : (
-                <ModelThinkingSelector
-                  choices={props.choices}
-                  selection={props.selection}
-                  pendingSelection={props.pendingSelection}
-                  thinkingLevel={props.thinkingLevel}
-                  thinkingLevels={props.thinkingLevels}
-                  loading={props.modelLoading}
-                  disabled={false}
-                  onModelSelect={props.onModelSelect}
-                  onThinkingLevelChange={props.onThinkingLevelChange}
-                />
-              )}
-              {externalEngine && props.choices.length > 0 && (
-                <AcpRuntimeControls status={externalEngine} running={props.running} />
-              )}
-              <GoalControl sessionId={props.sessionId} running={props.running} draftValue={props.value} onDraftChange={props.onChange} onContinue={props.onContinueGoal} />
-              <div className="composer-mode">
-                <Select
-                  value={props.mode}
-                  options={runModeOptions}
-                  disabled={false}
-                  ariaLabel={t("Run mode", "运行模式")}
-                  menuPreferredWidth={240}
-                  menuMinimumWidth={200}
-                  menuAlign="left"
-                  menuClassName="run-mode-menu"
-                  onChange={props.onModeChange}
-                />
-              </div>
-            </div>
-          </div>
+          <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} hidden />
+          <Button variant="ghost" size="icon" className="composer-attach" onClick={() => fileInputRef.current?.click()} disabled={availability.inputDisabled} title={t("Attach images", "添加图片")} aria-label={t("Add images", "添加图片")}><Plus size={18} /></Button>
+          <ComposerModelControls composer={props} engine={externalEngine} loading={enginePending} />
           <div className="composer-actions">
-            <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} hidden />
-            <button type="button" className="composer-icon-button" onClick={() => fileInputRef.current?.click()} disabled={availability.inputDisabled} aria-label={t("Add images", "添加图片")}><Paperclip size={16} /></button>
-            {/* 同一个按钮在发送与停止之间切换：两个按钮并排会让界面跳变，也会误导连续点击 */}
             {availability.showStop ? (
-              <button type="button" className="composer-send stop" onClick={props.onStop} aria-label={t("Stop run", "停止运行")}><Square size={13} fill="currentColor" /></button>
+              <Button variant="primary" size="icon" className="composer-send stop" onClick={props.onStop} aria-label={t("Stop run", "停止运行")} title={t("Stop run", "停止运行")}><Square size={12} fill="currentColor" /></Button>
             ) : (
-              <button type="submit" className="composer-send" disabled={availability.sendDisabled || props.submitting} aria-label={props.running ? t("Queue message", "排队发送") : t("Send message", "发送消息")}>
-                {props.submitting ? <Loader2 size={16} className="composer-send-spin" /> : <ArrowRight size={18} />}
-              </button>
+              <Button variant="primary" size="icon" type="submit" className="composer-send" disabled={availability.sendDisabled || props.submitting} aria-label={props.running ? t("Queue message", "排队发送") : t("Send message", "发送消息")} title={props.running ? t("Queue message", "排队发送") : t("Send message", "发送消息")}>
+                {props.submitting ? <Loader2 size={16} className="composer-send-spin" /> : <ArrowUp size={18} />}
+              </Button>
             )}
           </div>
         </div>
       </ComposerSurface>
+      <ComposerContextFooter composer={props} showUsage={!externalEngine && !enginePending} />
     </div>
   );
 }

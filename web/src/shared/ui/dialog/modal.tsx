@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import { useEffect, useId, useRef, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../../features/i18n/use-i18n";
+import { Button } from "../button/button";
 
 type ModalProps = {
   open: boolean;
@@ -39,9 +40,11 @@ export function Modal({ open, title, description, size = "medium", className, ch
       focusable?.focus();
     });
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") onCloseRef.current();
       if (event.key !== "Tab" || !dialogRef.current) return;
-      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'));
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), [tabindex]'))
+        .filter((element) => element.tabIndex >= 0 && element.getClientRects().length > 0 && !element.closest("[inert]"));
       if (focusable.length === 0) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -67,7 +70,7 @@ export function Modal({ open, title, description, size = "medium", className, ch
       <section ref={dialogRef} className={`ui-modal ${size}${className ? ` ${className}` : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}>
         <header className="ui-modal-header">
           <div><h2 id={titleId}>{title}</h2>{description && <p id={descriptionId}>{description}</p>}</div>
-          <button type="button" onClick={onClose} aria-label={t("Close dialog", "关闭对话框")}><X size={16} /></button>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("Close dialog", "关闭对话框")}><X size={16} /></Button>
         </header>
         <div className="ui-modal-body">{children}</div>
         {footer && <footer className="ui-modal-footer">{footer}</footer>}

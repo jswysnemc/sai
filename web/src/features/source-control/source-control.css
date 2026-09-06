@@ -1,4 +1,7 @@
 .git-review {
+  container-type: inline-size;
+  container-name: git-panel;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto auto;
 }
 

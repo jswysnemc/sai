@@ -1,25 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Archive, Cpu, Gauge, HardDrive, TerminalSquare, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Cpu, Gauge, X } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../api/client";
-import { localizeApiMessage } from "../../api/api-error";
 import type { RunMode, RunModelSelection } from "../../api/contracts";
+import { Button } from "../../shared/ui/button/button";
+import { Modal } from "../../shared/ui/dialog/modal";
 import { useAnchoredPopover } from "../../shared/ui/popover/use-anchored-popover";
-import { ContextDonut } from "./context-donut";
+import { useI18n } from "../i18n/use-i18n";
 import { COMPACTION_POLICY_FALLBACK, CompactionPolicyPanel } from "./compaction-policy/compaction-policy-panel";
+import { ContextUsagePanel } from "./context-usage-panel";
+import { ProcessUsagePanel } from "./process-usage-panel";
 import { formatTokenCount } from "./token-format";
 import "./system-usage.css";
-import { useI18n } from "../i18n/use-i18n";
+
+export { formatContextCacheDetail } from "./usage-format";
 
 /**
- * 渲染顶栏系统用量入口和详情浮层。
- *
- * 浮层通过 Portal 渲染到 body,按视口空间自动上下翻转,避免被
- * 输入区其他元素遮挡或溢出屏幕。
- *
- * @param selection 主界面当前选择的供应商和模型
- * @returns 系统用量组件
+ * 分别提供上下文用量和进程资源入口，共享同一份用量查询。
+ * @param props 当前模型、运行模式、压缩回调和禁用状态
+ * @returns 两个紧凑入口及各自的详情弹层
  */
 export function SystemUsage({ selection, mode, agentId, onCompact, compactDisabled }: {
   selection: RunModelSelection | null;
@@ -28,295 +28,85 @@ export function SystemUsage({ selection, mode, agentId, onCompact, compactDisabl
   onCompact: () => Promise<void>;
   compactDisabled: boolean;
 }) {
-  const { locale, t } = useI18n();
+  const { t } = useI18n();
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState<"context" | "process" | null>(null);
+  const [policyOpen, setPolicyOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const contextRef = useRef<HTMLButtonElement>(null);
+  const processRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
   const usage = useQuery({
     queryKey: ["system-usage", selection?.providerId, selection?.model, mode, agentId ?? ""],
     queryFn: () => api.system.usage(selection, mode, agentId),
-    refetchInterval: open ? 2_000 : 5_000
+    refetchInterval: open || policyOpen ? 2_000 : 5_000
   });
   const compact = useMutation({
     mutationFn: onCompact,
-    onSettled: () => {
-      // 压缩启动或失败后都拉一次；真正降量仍依赖 compaction.finished 与后端清空旧 usage
-      void queryClient.invalidateQueries({ queryKey: ["system-usage"] });
-    }
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: ["system-usage"] }); }
+  });
+  const activeTrigger = open === "process" ? processRef : contextRef;
+  const popoverStyle = useAnchoredPopover({
+    open: open !== null, anchorRef: activeTrigger,
+    preferredWidth: open === "process" ? 300 : 360, minimumWidth: 280, align: "right", maxHeight: 430,
+    preferredHeight: open === "process" ? 250 : 340
   });
   const contextPercent = Math.round(Math.min(1, Math.max(0, usage.data?.session.context_token_ratio ?? 0)) * 100);
-  const contextBreakdown = usage.data ? resolveContextBreakdown(usage.data.session, t) : null;
-  const contextCache = usage.data?.session.context_cache;
-  const popoverStyle = useAnchoredPopover({ open, anchorRef: triggerRef, preferredWidth: 390, minimumWidth: 300, align: "right", maxHeight: 620 });
 
   useEffect(() => {
     if (!open) return;
-    /** 在触发器和 Portal 浮层外按下指针时关闭浮层。 */
-    const handlePointerDown = (event: PointerEvent) => {
+    /** 关闭外部点击的弹层，保留点击目标的焦点。@param event 指针事件 @returns 无 */
+    const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
-      if (!rootRef.current?.contains(target) && !popoverRef.current?.contains(target)) setOpen(false);
+      if (!rootRef.current?.contains(target) && !popoverRef.current?.contains(target)) setOpen(null);
     };
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [open]);
+    /** 按 Escape 关闭并返回入口。@param event 键盘事件 @returns 无 */
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOpen(null);
+      activeTrigger.current?.focus();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [activeTrigger, open]);
 
   return (
     <div className="system-usage" ref={rootRef}>
-      <button ref={triggerRef} type="button" className="system-usage-trigger" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label={t("View system usage", "查看系统用量")}>
-        <span className="usage-ring" style={{ background: `conic-gradient(var(--signal) ${contextPercent}%, color-mix(in srgb, var(--ink) 12%, transparent) 0)` }}><Gauge size={10} /></span>
-        <span><strong>{usage.data ? formatTokenCount(usage.data.session.context_prompt_tokens) : "--"}</strong><small>{contextPercent}%</small></span>
-      </button>
+      <Button ref={contextRef} variant="ghost" size="small" className="system-usage-trigger" onClick={() => setOpen(open === "context" ? null : "context")} aria-expanded={open === "context"} aria-label={t("View context usage", "查看上下文用量")}>
+        <span className="usage-ring" style={{ background: `conic-gradient(var(--signal) ${contextPercent}%, var(--line) 0)` }}><Gauge size={10} /></span>
+        <span className="hidden sm:inline-flex"><strong>{usage.data ? formatTokenCount(usage.data.session.context_prompt_tokens) : "--"}</strong><small>{contextPercent}%</small></span>
+      </Button>
+      <Button ref={processRef} variant="ghost" size="icon" className="system-process-trigger" onClick={() => setOpen(open === "process" ? null : "process")} aria-expanded={open === "process"} aria-label={t("View process resources", "查看进程资源")}><Cpu size={14} /></Button>
       {open && createPortal(
-        <div ref={popoverRef} className="system-usage-popover" style={popoverStyle}>
+        <div ref={popoverRef} className="system-usage-popover" style={popoverStyle} role="dialog" aria-labelledby={titleId}>
           <header>
-            <div>
-              <span>{t("System usage", "系统用量")}</span>
-              <strong>{t("Current session and process", "当前会话与进程")}</strong>
-            </div>
-            <button
-              type="button"
-              className="system-usage-close"
-              onClick={() => setOpen(false)}
-              aria-label={t("Close", "关闭")}
-            >
-              <X size={14} />
-            </button>
+            <strong id={titleId}>{open === "context" ? t("Context usage", "上下文用量") : t("Process resources", "进程资源")}</strong>
+            <Button variant="ghost" size="icon" onClick={() => { setOpen(null); activeTrigger.current?.focus(); }} aria-label={t("Close", "关闭")}><X size={14} /></Button>
           </header>
-          {usage.isLoading && <div className="usage-loading">{t("Loading usage", "正在读取用量")}</div>}
-          {usage.error && <div className="usage-error">{usage.error.message}</div>}
-          {usage.data && (
-            <>
-              <section className="context-usage-card">
-                <div className="context-usage-head">
-                  <span>{t("Context usage", "上下文用量")}</span>
-                </div>
-                {contextBreakdown ? (
-                  <div className="context-usage-chart">
-                    <ContextDonut
-                      segments={contextBreakdown.segments.map((segment) => ({
-                        key: segment.key,
-                        color: segment.color,
-                        share: segment.share,
-                        title: `${segment.label} ${formatTokenApprox(segment.tokens)} · ${Math.round(segment.share * 100)}%`
-                      }))}
-                      percentLabel={formatContextPercent(usage.data.session.context_token_ratio)}
-                      usedLabel={`${formatTokenCount(usage.data.session.context_prompt_tokens)}/${formatTokenCount(usage.data.session.context_window_tokens)}`}
-                      ariaLabel={t("Context usage breakdown", "上下文用量构成")}
-                    />
-                    <ul className="context-usage-legend">
-                      {contextBreakdown.segments.map((segment) => (
-                        <li key={segment.key}>
-                          <i style={{ background: segment.color }} />
-                          <span>{segment.label}</span>
-                          <strong>{formatTokenApprox(segment.tokens)}</strong>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <>
-                    <div className="context-usage-summary">
-                      <strong>{formatContextPercent(usage.data.session.context_token_ratio)}</strong>
-                      <small>{t("Used", "已使用")} {formatTokenCount(usage.data.session.context_prompt_tokens)}/{formatTokenCount(usage.data.session.context_window_tokens)}</small>
-                    </div>
-                    <div className="context-usage-track" aria-hidden="true">
-                      <span style={{ width: `${contextPercent}%` }} />
-                    </div>
-                  </>
-                )}
-                {contextCache && (
-                  <div className="context-cache-summary">
-                    <span>{t("Cache hit", "缓存命中")} <strong>{formatContextPercent(contextCache.hit_ratio)}</strong></span>
-                    <small>{formatContextCacheDetail(contextCache, t)}</small>
-                  </div>
-                )}
-                <CompactionPolicyPanel
-                  sessionId={usage.data.session.id}
-                  ratio={usage.data.session.compaction_ratio ?? COMPACTION_POLICY_FALLBACK.ratio}
-                  reserve={usage.data.session.compaction_reserve_tokens ?? COMPACTION_POLICY_FALLBACK.reserve}
-                  windowTokens={usage.data.session.context_window_tokens}
-                  usedTokens={usage.data.session.context_prompt_tokens}
-                  overridden={Boolean(usage.data.session.compaction_policy_override)}
-                  onSaved={() => {
-                    void queryClient.invalidateQueries({ queryKey: ["system-usage"] });
-                  }}
-                />
-                <div className="context-compaction-actions">
-                  <span>{usage.data.session.checkpoint_count > 0 ? t(`Compacted ${usage.data.session.compacted_turns} turns · ${formatCompactionReason(usage.data.session.latest_checkpoint_reason, t)}`, `已压缩 ${usage.data.session.compacted_turns} 轮 · ${formatCompactionReason(usage.data.session.latest_checkpoint_reason, t)}`) : t("Not compacted", "尚未压缩")}</span>
-                  <button type="button" onClick={() => compact.mutate()} disabled={compact.isPending || compactDisabled || usage.data.runtime.active_run}>
-                    <Archive size={13} />
-                    {compact.isPending ? t("Compacting", "正在压缩") : t("Compact now", "手动压缩")}
-                  </button>
-                </div>
-                {compact.error && <p className="usage-error">{compact.error.message}</p>}
-                {usage.data.session.compaction_warning && <p className="context-compaction-result">{localizeApiMessage(usage.data.session.compaction_warning, locale)}</p>}
-              </section>
-              <div className="usage-metric-grid">
-                <UsageMetric icon={<Activity size={14} />} label={t("Total tokens", "累计 Token")} value={formatTokenCount(usage.data.session.total_tokens)} detail={t(`${usage.data.session.requests} requests`, `${usage.data.session.requests} 次请求`)} />
-                <UsageMetric icon={<Cpu size={14} />} label={t("Process CPU", "进程 CPU")} value={`${usage.data.process.cpu_percent.toFixed(1)}%`} detail={`PID ${usage.data.process.pid}`} />
-                <UsageMetric icon={<HardDrive size={14} />} label={t("Resident memory", "常驻内存")} value={formatBytes(usage.data.process.rss_bytes, t)} detail={formatDuration(usage.data.process.uptime_seconds, locale)} />
-                <UsageMetric icon={<TerminalSquare size={14} />} label={t("Runtime", "运行时")} value={t(`${usage.data.runtime.terminal_count} terminals`, `${usage.data.runtime.terminal_count} 个终端`)} detail={usage.data.runtime.active_run ? t("Agent running", "Agent 正在运行") : t("Agent idle", "Agent 空闲")} />
-              </div>
-              <div className="usage-token-breakdown"><span>{t("Input", "输入")} {formatTokenCount(usage.data.session.prompt_tokens)}</span><span>{t("Output", "输出")} {formatTokenCount(usage.data.session.completion_tokens)}</span><span>{t("Tools", "工具")} {usage.data.session.tool_calls}</span><span>{t("Turns", "轮次")} {usage.data.session.turn_count}</span></div>
-            </>
-          )}
-        </div>,
-        document.body
+          {usage.isLoading && <p className="usage-loading">{t("Loading usage", "正在读取用量")}</p>}
+          {usage.error && <p className="usage-error" role="alert">{usage.error.message}</p>}
+          {usage.data && (open === "context"
+            ? <ContextUsagePanel usage={usage.data} compactPending={compact.isPending} compactDisabled={compactDisabled} compactError={compact.error?.message} onCompact={() => compact.mutate()} onConfigure={() => { setOpen(null); setPolicyOpen(true); }} />
+            : <ProcessUsagePanel usage={usage.data} />)}
+        </div>, document.body
       )}
+      <Modal open={policyOpen} title={t("Context compaction", "上下文压缩设置")} size="small" onClose={() => { setPolicyOpen(false); contextRef.current?.focus(); }}>
+        {usage.data && <CompactionPolicyPanel
+          sessionId={usage.data.session.id}
+          ratio={usage.data.session.compaction_ratio ?? COMPACTION_POLICY_FALLBACK.ratio}
+          reserve={usage.data.session.compaction_reserve_tokens ?? COMPACTION_POLICY_FALLBACK.reserve}
+          windowTokens={usage.data.session.context_window_tokens}
+          usedTokens={usage.data.session.context_prompt_tokens}
+          overridden={Boolean(usage.data.session.compaction_policy_override)}
+          onSaved={() => { void queryClient.invalidateQueries({ queryKey: ["system-usage"] }); }}
+        />}
+      </Modal>
     </div>
   );
-}
-
-/**
- * 渲染单个系统用量指标。
- *
- * @param props 图标、名称、数值和说明
- * @returns 指标卡片
- */
-function UsageMetric({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
-  return <div className="usage-metric"><span>{icon}</span><div><small>{label}</small><strong>{value}</strong><i>{detail}</i></div></div>;
-}
-
-
-type ContextBreakdownSession = {
-  context_prompt_tokens: number;
-  context_window_tokens: number;
-  context_breakdown?: {
-    system_prompt_tokens: number;
-    tools_and_agents_tokens: number;
-    conversation_tokens: number;
-    connectors_and_mcp_tokens: number;
-    skills_tokens: number;
-  } | null;
-};
-
-type ContextLegendSegment = {
-  key: string;
-  label: string;
-  tokens: number;
-  color: string;
-  /** 占分项总和的相对份额（0~1），供环形图分扇 */
-  share: number;
-};
-
-/**
- * 解析上下文分项并映射为环形图扇区与图例。
- *
- * 份额分母是分项总和而非上下文窗口——整体占用很低时，
- * 各分项在环形图上依然有可辨认的扇区。
- *
- * @param session 会话用量数据
- * @param t 中英文文案函数
- * @returns 图例分段；无分项或分项全为零时返回 null
- */
-function resolveContextBreakdown(
-  session: ContextBreakdownSession,
-  t: (en: string, zh: string) => string
-): { segments: ContextLegendSegment[] } | null {
-  const raw = session.context_breakdown;
-  if (!raw) return null;
-  // 1. 固定分项顺序与配色，对齐参考图例
-  const items: Array<{ key: string; label: string; tokens: number; color: string }> = [
-    { key: "system", label: t("System prompt", "系统提示词"), tokens: raw.system_prompt_tokens, color: "var(--context-system)" },
-    { key: "tools", label: t("Tools & subagents", "工具及子智能体"), tokens: raw.tools_and_agents_tokens, color: "var(--context-tools)" },
-    { key: "conversation", label: t("Conversation", "对话消息"), tokens: raw.conversation_tokens, color: "var(--context-conversation)" },
-    { key: "connectors", label: t("Connectors & MCP", "连接器及MCP"), tokens: raw.connectors_and_mcp_tokens, color: "var(--context-connectors)" },
-    { key: "skills", label: t("Skills", "技能"), tokens: raw.skills_tokens, color: "var(--context-skills)" }
-  ];
-  // 2. 按分项总和求相对份额；全为零时退回单色摘要展示
-  const estimatedTotal = items.reduce((sum, item) => sum + Math.max(0, item.tokens), 0);
-  if (estimatedTotal <= 0) return null;
-  const segments = items.map((item) => {
-    const tokens = Math.max(0, item.tokens);
-    return {
-      key: item.key,
-      label: item.label,
-      tokens,
-      color: item.color,
-      share: tokens / estimatedTotal
-    };
-  });
-  return { segments };
-}
-
-/**
- * 格式化上下文占用百分比，保留一位小数。
- *
- * @param ratio 0~1 比例
- * @returns 百分比文本
- */
-function formatContextPercent(ratio: number): string {
-  const value = Math.min(100, Math.max(0, ratio * 100));
-  if (value > 0 && value < 0.1) return "<0.1%";
-  return `${value.toFixed(1).replace(/\.0$/, "")}%`;
-}
-
-/**
- * 格式化上下文缓存命中、未命中和写入明细。
- *
- * @param cache 缓存 Token 明细
- * @param t 中英文文案函数
- * @returns 始终包含写入量的缓存明细
- */
-export function formatContextCacheDetail(
-  cache: { hit_tokens: number; miss_tokens: number; write_tokens: number },
-  t: (en: string, zh: string) => string
-): string {
-  return `${formatTokenCount(cache.hit_tokens)} ${t("hit", "命中")} · ${formatTokenCount(cache.miss_tokens)} ${t("miss", "未命中")} · ${formatTokenCount(cache.write_tokens)} ${t("write", "写入")}`;
-}
-
-/**
- * 格式化图例中的约略 token 数。
- *
- * @param value token 数
- * @returns 带波浪号的紧凑文本
- */
-function formatTokenApprox(value: number): string {
-  return `~${formatTokenCount(Math.max(0, value))}`;
-}
-
-/**
- * 格式化最近一次压缩原因。
- *
- * @param reason 后端 checkpoint 原因
- * @returns 中文原因标签
- */
-function formatCompactionReason(reason: "auto" | "manual" | "legacy" | null | undefined, t: (en: string, zh: string) => string): string {
-  if (reason === "manual") return t("Manual", "手动");
-  if (reason === "legacy") return t("Legacy migration", "旧记录迁移");
-  return t("Automatic", "自动");
-}
-
-/**
- * 格式化字节数。
- *
- * @param value 字节数
- * @returns 内存大小文本
- */
-function formatBytes(value: number | null | undefined, t: (en: string, zh: string) => string): string {
-  if (!value) return t("Unavailable", "不可用");
-  const units = ["B", "KiB", "MiB", "GiB"];
-  let amount = value;
-  let index = 0;
-  while (amount >= 1024 && index < units.length - 1) {
-    amount /= 1024;
-    index += 1;
-  }
-  return `${amount.toFixed(index > 1 ? 1 : 0)} ${units[index]}`;
-}
-
-/**
- * 格式化服务运行时间。
- *
- * @param seconds 运行秒数
- * @returns 运行时间文本
- */
-function formatDuration(seconds: number, locale: "en-US" | "zh-CN"): string {
-  if (seconds < 60) return locale === "zh-CN" ? `运行 ${seconds} 秒` : `Up ${seconds}s`;
-  if (seconds < 3_600) return locale === "zh-CN" ? `运行 ${Math.floor(seconds / 60)} 分钟` : `Up ${Math.floor(seconds / 60)}m`;
-  return locale === "zh-CN"
-    ? `运行 ${Math.floor(seconds / 3_600)} 小时 ${Math.floor(seconds % 3_600 / 60)} 分钟`
-    : `Up ${Math.floor(seconds / 3_600)}h ${Math.floor(seconds % 3_600 / 60)}m`;
 }

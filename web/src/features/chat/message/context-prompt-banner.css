@@ -22,7 +22,7 @@
   padding: var(--space-md) var(--space-md) var(--space-md) var(--space-lg);
 }
 
-.context-prompt-banner-toggle {
+.context-prompt-banner .context-prompt-banner-toggle {
   grid-column: 1;
   grid-row: 1;
   display: flex;
@@ -88,11 +88,12 @@
   padding-left: calc(22px + var(--space-md));
 }
 
-.context-prompt-banner-tag {
+.context-prompt-banner .context-prompt-banner-tag {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2xs);
   max-width: 100%;
+  min-height: 1.5rem;
   padding: var(--space-3xs) var(--space-xs);
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
@@ -110,13 +111,14 @@
   color: var(--ink);
 }
 
-.context-prompt-banner-close {
+.context-prompt-banner .context-prompt-banner-close {
   grid-column: 2;
   grid-row: 1;
   display: grid;
   align-self: start;
   width: 1.75rem;
   height: 1.75rem;
+  min-height: 1.75rem;
   place-items: center;
   padding: 0;
   border: 0;
@@ -139,12 +141,13 @@
 
 .context-prompt-banner-body {
   border-top: 1px solid var(--line);
-  padding: var(--space-xl) var(--space-xl) var(--space-2xl);
+  padding: 0;
   background: color-mix(in srgb, var(--paper) 88%, var(--control-surface));
 }
 
 .context-prompt-banner-markdown {
   min-width: 0;
+  padding: 0.75rem 1rem 1.25rem;
   color: var(--ink-soft);
   font-size: var(--text-lg);
   line-height: 1.65;
@@ -199,6 +202,7 @@
 }
 
 .context-prompt-banner-status {
+  padding: 1rem;
   color: var(--ink-soft);
   font-size: var(--text-sm);
 }
@@ -206,6 +210,15 @@
 .context-prompt-banner-status.error {
   color: var(--danger);
 }
+
+/* 【Web 对话】【上下文摘要】默认只占一行，展开后再展示指令和工具详情 */
+.context-prompt-banner:not(.is-open) { border-color: transparent; background: transparent; }
+.context-prompt-banner:not(.is-open) .context-prompt-banner-head { display: flex; padding: 0; }
+.context-prompt-banner:not(.is-open) .context-prompt-banner-toggle { align-items: center; gap: 0.375rem; min-height: 1.75rem; }
+.context-prompt-banner:not(.is-open) .context-prompt-banner-title { font-size: var(--text-xs); font-weight: 400; color: var(--ink-soft); }
+.context-prompt-banner:not(.is-open) .context-prompt-banner-tokens { font-size: var(--text-xs); }
+.context-prompt-banner:not(.is-open) .context-prompt-banner-icon { width: 1.25rem; height: 1.25rem; margin: 0; background: transparent; }
+.context-prompt-banner:not(.is-open) :is(.context-prompt-banner-tags, .context-prompt-banner-subtitle, .context-prompt-banner-close) { display: none; }
 
 @media (max-width: 48rem) {
   .context-prompt-banner-head {
@@ -217,7 +230,7 @@
   }
 
   .context-prompt-banner-body {
-    padding: var(--space-lg) var(--space-md) var(--space-xl);
+    padding: 0;
   }
 
   .context-prompt-banner-markdown {

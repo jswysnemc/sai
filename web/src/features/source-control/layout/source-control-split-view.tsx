@@ -1,6 +1,7 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Children, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useI18n } from "../../i18n/use-i18n";
+import { Button } from "../../../shared/ui/button/button";
 import {
   SOURCE_CONTROL_SPLIT_DEFAULT_WIDTH,
   SOURCE_CONTROL_SPLIT_MIN_DETAIL_WIDTH,
@@ -21,6 +22,11 @@ type SourceControlSplitViewProps = {
    * 自动从列表切到详情；宽屏两侧同屏，无需切换。
    */
   detailKey?: string | null;
+  /** 审阅变更时优先展示详情，避免窄栏打开后看不到代码。 */
+  preferDetail?: boolean;
+  /** 窄栏返回按钮与审阅入口的名称。 */
+  listLabel?: string;
+  detailLabel?: string;
   children: ReactNode;
 };
 
@@ -58,9 +64,9 @@ export function SourceControlSplitView(props: SourceControlSplitViewProps) {
   useEffect(() => {
     // 窄屏下选中新条目即进入详情；detailKey 为空表示回到无选中态
     if (!stacked) return;
-    if (props.detailKey) showDetail();
+    if (props.detailKey || props.preferDetail) showDetail();
     else showList();
-  }, [props.detailKey, showDetail, showList, stacked]);
+  }, [props.detailKey, props.preferDetail, showDetail, showList, stacked]);
 
   useEffect(() => {
     // 进入详情时复位滚动，避免沿用上一个条目的偏移
@@ -122,37 +128,35 @@ export function SourceControlSplitView(props: SourceControlSplitViewProps) {
     (rootRef.current?.clientWidth ?? 0) - SOURCE_CONTROL_SPLIT_MIN_DETAIL_WIDTH
   );
 
-  if (stacked) {
-    return (
-      <div ref={rootRef} className={`source-control-stacked ${direction} ${props.className}`} data-pane={pane}>
-        {pane === "list" ? (
-          <div key="list" className="source-control-stacked-pane">
-            {list}
-          </div>
-        ) : (
-          <div key="detail" className="source-control-stacked-pane" ref={detailRef}>
-            <div className="source-control-stacked-back">
-              <button type="button" onClick={showList}>
-                <ArrowLeft size={14} />
-                {t("Back", "返回")}
-              </button>
-              {props.detailTitle && <span title={props.detailTitle}>{props.detailTitle}</span>}
-            </div>
-            {detail}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div
       ref={rootRef}
-      className={`source-control-split ${props.className}`}
+      className={`${stacked ? `source-control-stacked ${direction}` : "source-control-split"} ${props.className}`}
       style={style}
+      data-pane={stacked ? pane : undefined}
     >
-      {props.children}
-      <div
+      <div className="source-control-stacked-pane" hidden={stacked && pane !== "list"}>
+        {stacked && props.detailLabel && (
+          <div className="source-control-stacked-back">
+            <Button variant="ghost" size="small" onClick={showDetail}>
+              {props.detailLabel}<ArrowRight size={14} />
+            </Button>
+          </div>
+        )}
+        {list}
+      </div>
+      <div className="source-control-stacked-pane" hidden={stacked && pane !== "detail"} ref={detailRef}>
+        {stacked && (
+          <div className="source-control-stacked-back">
+            <Button variant="ghost" size="small" onClick={showList}>
+              <ArrowLeft size={14} />{props.listLabel ?? t("Back", "返回")}
+            </Button>
+            {props.detailTitle && <span title={props.detailTitle}>{props.detailTitle}</span>}
+          </div>
+        )}
+        {detail}
+      </div>
+      {!stacked && <div
         className="source-control-split-handle"
         role="separator"
         tabIndex={0}
@@ -166,7 +170,7 @@ export function SourceControlSplitView(props: SourceControlSplitViewProps) {
         onKeyDown={handleKeyDown}
       >
         <span />
-      </div>
+      </div>}
     </div>
   );
 }

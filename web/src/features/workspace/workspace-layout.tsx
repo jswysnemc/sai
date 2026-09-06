@@ -1,7 +1,6 @@
-import { PanelRightOpen } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { CSSProperties } from "react";
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { ChatPage } from "../chat/chat-page";
 import { SessionSidebar } from "../sessions/session-sidebar";
@@ -10,6 +9,14 @@ import { useSessionSidebarLayout } from "../sessions/use-session-sidebar-layout"
 import { WorkspacePane } from "./workspace-pane";
 import { WorkspaceResizeHandle } from "./workspace-resize-handle";
 import { useWorkspaceLayout } from "./use-workspace-layout";
+import { WorkbenchToolbar } from "./workbench-toolbar";
+import { WorkbenchStatusBar } from "./workbench-status-bar";
+import { useWorkbenchShortcuts } from "./use-workbench-shortcuts";
+import { useMobileSidebarDialog } from "./use-mobile-sidebar-dialog";
+import { WORKBENCH_COMMAND_EVENT, type WorkbenchCommand } from "./workbench-shortcuts";
+import { FOCUS_COMPOSER_EVENT } from "../chat/composer/composer-events";
+import { RuntimeOverview } from "../runtime-overview/runtime-overview";
+import { Button } from "../../shared/ui/button/button";
 import { workspaceRelativePath } from "./workspace-path-utils";
 import type { PaneTab } from "./workspace-tab";
 import { useTerminalManager } from "../terminal/use-terminal-manager";
@@ -53,6 +60,8 @@ type WorkspaceLayoutProps = {
 export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: WorkspaceLayoutProps) {
   const { t } = useI18n();
   const layout = useWorkspaceLayout();
+  useWorkbenchShortcuts();
+  const [workspaceMounted, setWorkspaceMounted] = useState(layout.workspaceOpen);
   const terminalManager = useTerminalManager();
   const sessionSidebar = useSessionSidebarLayout();
   const [paneTab, setPaneTab] = useState<PaneTab | null>(null);
@@ -61,8 +70,11 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
   const [sideConversationRequest, setSideConversationRequest] = useState<SideConversationRequest | null>(null);
   const [mobileLayout, dispatchMobileLayout] = useReducer(reduceMobileWorkbenchState, initialMobileWorkbenchState);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY).matches);
+  const sidebarRef = useRef<HTMLElement>(null);
+  useMobileSidebarDialog(isMobile && mobileLayout.sidebarOpen, sidebarRef, () => dispatchMobileLayout({ type: "close-sidebar" }));
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
   const sessions = useQuery({ queryKey: ["sessions"], queryFn: api.sessions.list });
+  const git = useQuery({ queryKey: ["runtime-overview", "git-status"], queryFn: () => api.workspace.gitStatus(), refetchInterval: 2500, retry: false });
   const activeSession = sessions.data?.find((session) => session.active);
   const activeTimeline = useQuery({
     queryKey: ["timeline", activeSession?.id],
@@ -70,6 +82,9 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
     enabled: Boolean(activeSession)
   });
   const activeWorkspace = workspaces.data?.workspaces.find((workspace) => workspace.id === workspaces.data.active_id);
+  // 1. 【Web 工作台】【响应式布局】全屏审阅缩到窄屏时继续显示工作区，避免两侧同时隐藏
+  const mobilePane = !layout.workspaceOpen ? "chat"
+    : layout.workspaceMaximized || !layout.chatOpen ? "workspace" : mobileLayout.pane;
   const style = {
     "--session-sidebar-width": `${sessionSidebar.width}px`,
     "--workspace-panel-width": `${layout.workspaceWidth}px`,
@@ -84,8 +99,30 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
     layout.terminalOpen ? "terminal-open" : "terminal-closed",
     sessionSidebar.collapsed ? "sidebar-collapsed" : "sidebar-expanded",
     mobileLayout.sidebarOpen ? "mobile-sidebar-open" : "mobile-sidebar-closed",
-    `mobile-pane-${mobileLayout.pane}`
+    `mobile-pane-${mobilePane}`
   ].filter(Boolean).join(" ");
+
+  useEffect(() => {
+    if (layout.workspaceOpen) setWorkspaceMounted(true);
+  }, [layout.workspaceOpen]);
+
+  useEffect(() => {
+    /** 【Web 工作台】【快捷操作】将全局操作映射到当前布局与面板。 */
+    const handleCommand = (event: Event) => {
+      const command = (event as CustomEvent<WorkbenchCommand>).detail;
+      if (command === "toggle-sidebar") {
+        if (window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY).matches) window.dispatchEvent(new Event(MOBILE_SIDEBAR_TOGGLE_EVENT));
+        else sessionSidebar.toggleCollapsed();
+      }
+      if (command === "toggle-terminal") window.dispatchEvent(new Event("sai:toggle-terminal"));
+      if (command === "focus-composer") window.dispatchEvent(new Event(FOCUS_COMPOSER_EVENT));
+      if (command === "open-files" || command === "open-changes") {
+        window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_PANEL_EVENT, { detail: { tab: command === "open-files" ? "files" : "diff", revealFileTree: command === "open-files" } }));
+      }
+    };
+    window.addEventListener(WORKBENCH_COMMAND_EVENT, handleCommand);
+    return () => window.removeEventListener(WORKBENCH_COMMAND_EVENT, handleCommand);
+  }, [sessionSidebar.toggleCollapsed]);
 
   useEffect(() => {
     const media = window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY);
@@ -231,8 +268,6 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
   /** 关闭工作区，并在移动端回到聊天面板。 */
   const closeWorkspace = () => {
     layout.closeWorkspace();
-    setPaneTab(null);
-    setPassiveDiff(null);
     dispatchMobileLayout({ type: "show-pane", pane: "chat" });
   };
 
@@ -243,8 +278,6 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
    * - 无返回值
    */
   const openEmptyWorkspace = () => {
-    setPaneTab(null);
-    setPassiveDiff(null);
     layout.openWorkspace();
     if (window.matchMedia(MOBILE_WORKBENCH_MEDIA_QUERY).matches) {
       dispatchMobileLayout({ type: "show-pane", pane: "workspace" });
@@ -254,16 +287,18 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
   return (
     <div className={classes} style={style}>
       {mobileLayout.sidebarOpen && (
-        <button type="button" className="mobile-sidebar-scrim" onClick={() => dispatchMobileLayout({ type: "close-sidebar" })} aria-label={t("Close session sidebar", "关闭会话侧栏")} />
+        <Button tabIndex={-1} className="mobile-sidebar-scrim" onClick={() => dispatchMobileLayout({ type: "close-sidebar" })} aria-label={t("Close session sidebar", "关闭会话侧栏")}>{null}</Button>
       )}
-      <aside className="coding-sidebar" aria-hidden={isMobile && !mobileLayout.sidebarOpen} inert={isMobile && !mobileLayout.sidebarOpen}>
+      <aside ref={sidebarRef} className="coding-sidebar" role={isMobile && mobileLayout.sidebarOpen ? "dialog" : undefined} aria-label={t("Session sidebar", "会话侧栏")} aria-modal={isMobile && mobileLayout.sidebarOpen ? true : undefined} aria-hidden={isMobile && !mobileLayout.sidebarOpen} inert={isMobile && !mobileLayout.sidebarOpen}>
         <SessionSidebar
           collapsed={sessionSidebar.collapsed}
-          onToggleCollapsed={sessionSidebar.toggleCollapsed}
+          onToggleCollapsed={() => isMobile ? dispatchMobileLayout({ type: "close-sidebar" }) : sessionSidebar.toggleCollapsed()}
           onNavigate={() => dispatchMobileLayout({ type: "close-sidebar" })}
           selectedFile={selectedFile}
           onSelectFile={(path) => {
             onSelectFile(path);
+            setPaneTab("files");
+            setPassiveDiff(null);
             layout.openWorkspace();
             dispatchMobileLayout({ type: "show-pane", pane: "workspace" });
           }}
@@ -271,12 +306,22 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
         />
         {!sessionSidebar.collapsed && <SessionSidebarResizeHandle width={sessionSidebar.width} onResize={sessionSidebar.resize} />}
       </aside>
-      <div className="workbench-main">
+      <div className="workbench-main" inert={isMobile && mobileLayout.sidebarOpen}>
         <div className="workbench-content">
-          {layout.chatOpen && !layout.workspaceMaximized && <section className="coding-chat"><ChatPage /></section>}
+          {layout.chatOpen && !layout.workspaceMaximized && <section className="coding-chat"><ChatPage toolbar={(
+            <WorkbenchToolbar
+              workspaceOpen={layout.workspaceOpen}
+              terminalOpen={layout.terminalOpen}
+              activePanel={paneTab}
+              overview={<RuntimeOverview sessionId={activeSession?.id} placement="toolbar" />}
+              onToggleWorkspace={layout.workspaceOpen ? closeWorkspace : openEmptyWorkspace}
+              onSwap={layout.toggleSwapped}
+              onMaximize={layout.toggleWorkspaceMaximized}
+            />
+          )} /></section>}
           {layout.workspaceOpen && layout.chatOpen && !layout.workspaceMaximized && <WorkspaceResizeHandle swapped={layout.swapped} onResize={layout.resizeWorkspace} />}
-          {layout.workspaceOpen && (
-            <aside className="coding-workspace">
+          {(layout.workspaceOpen || workspaceMounted) && (
+            <aside className="coding-workspace" hidden={!layout.workspaceOpen} inert={!layout.workspaceOpen || (isMobile && mobilePane === "chat")}>
               <WorkspacePane
                 selectedFile={selectedFile}
                 activeType={paneTab}
@@ -295,19 +340,6 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
               />
             </aside>
           )}
-          {!layout.workspaceOpen && (
-            <div className="workspace-reopen-anchor">
-              <button
-                type="button"
-                className="workspace-reopen"
-                onClick={openEmptyWorkspace}
-                title={t("Open workspace panel", "打开工作区")}
-                aria-label={t("Open workspace panel", "打开工作区")}
-              >
-                <PanelRightOpen size={16} />
-              </button>
-            </div>
-          )}
         </div>
         {layout.terminalOpen && (
           <BottomTerminalPanel
@@ -317,6 +349,7 @@ export function WorkspaceLayout({ selectedFile, onSelectFile, onClearFile }: Wor
             onClose={layout.closeTerminal}
           />
         )}
+        <WorkbenchStatusBar branch={git.data?.status === "ready" ? git.data.head : undefined} terminalOpen={layout.terminalOpen} />
       </div>
     </div>
   );

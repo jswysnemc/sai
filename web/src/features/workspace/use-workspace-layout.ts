@@ -40,8 +40,13 @@ export function useWorkspaceLayout() {
   /** 打开右侧工作区。 */
   const openWorkspace = () => setLayout((current) => ({ ...current, workspaceOpen: true }));
 
-  /** 关闭右侧工作区。 */
-  const closeWorkspace = () => setLayout((current) => ({ ...current, workspaceOpen: false }));
+  /**
+   * 收起右侧工作区时恢复聊天，并清除全屏状态。
+   * @returns 无返回值
+   */
+  const closeWorkspace = () => setLayout((current) => ({
+    ...current, workspaceOpen: false, workspaceMaximized: false, chatOpen: true
+  }));
 
   /** 切换聊天主渲染区。 */
   const toggleChat = () => setLayout((current) => ({ ...current, chatOpen: !current.chatOpen, workspaceMaximized: false }));

@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api/client";
 import { localizeApiMessage } from "../../api/api-error";
 import type { FileNode } from "../../api/contracts";
 import { useOutsidePointerDown } from "../../shared/hooks/use-outside-pointer-down";
 import { FileTypeIcon } from "../../shared/ui/file-icon";
 import { breadcrumbDirectoryPath, buildBreadcrumbParts } from "./editor-breadcrumb-utils";
-import { workspaceRelativePath } from "./workspace-path-utils";
+import { isAbsoluteFilePath, workspaceRelativePath } from "./workspace-path-utils";
 import "./editor-breadcrumbs.css";
 import { useI18n } from "../i18n/use-i18n";
 
@@ -26,22 +26,28 @@ export function EditorBreadcrumbs({ path, onSelectFile }: EditorBreadcrumbsProps
   const { locale, t } = useI18n();
   const rootRef = useRef<HTMLElement>(null);
   const [openPath, setOpenPath] = useState<string | null>(null);
-  const tree = useQuery({ queryKey: ["file-tree"], queryFn: () => api.workspace.tree() });
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: api.workspaces.list });
   const workspace = workspaces.data?.workspaces.find((item) => item.id === workspaces.data.active_id);
   const workspaceName = workspace ? localizeApiMessage(workspace.name, locale) : t("Workspace", "工作区");
-  const nodes = tree.data ?? [];
   const relativePath = useMemo(() => workspaceRelativePath(path, workspace?.path ?? ""), [path, workspace?.path]);
+  const external = isAbsoluteFilePath(relativePath);
+  const tree = useQuery({ queryKey: ["file-tree"], queryFn: () => api.workspace.tree(), enabled: !external });
+  const nodes = tree.data ?? [];
   const parts = useMemo(() => buildBreadcrumbParts(relativePath, nodes, workspaceName), [relativePath, nodes, workspaceName]);
   const openPart = parts.find((part) => part.path === openPath) ?? null;
   const menuDirectory = breadcrumbDirectoryPath(openPart);
   const directory = useQuery({
     queryKey: ["breadcrumb-directory", menuDirectory],
     queryFn: () => api.workspace.tree(menuDirectory ?? "", 5),
-    enabled: menuDirectory !== null
+    enabled: !external && menuDirectory !== null
   });
   const menuNodes = directory.data ?? [];
   useOutsidePointerDown(rootRef, () => setOpenPath(null), openPath !== null);
+  useEffect(() => { setOpenPath(null); }, [path]);
+
+  if (external) return <nav className="editor-breadcrumbs editor-external-path" aria-label={t("Current file path", "当前文件路径")} title={path}>
+    <FileTypeIcon name={path} size={14} /><strong>{path.split(/[\\/]/).pop()}</strong><span>{path}</span>
+  </nav>;
 
   return (
     <nav className="editor-breadcrumbs" aria-label={t("Current file path", "当前文件路径")} ref={rootRef}>

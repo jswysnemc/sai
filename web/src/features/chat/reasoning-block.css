@@ -11,7 +11,8 @@
 .reasoning-content {
   min-width: 0;
   max-width: 100%;
-  max-height: 260px;
+  /* 高度对齐整行：上下 0.55em 内边距 + 8 个 1.75em 行高，滚动停靠处不残留半行文字 */
+  max-height: calc(0.55em * 2 + 1.75em * 8);
   overflow: auto;
   overflow-anchor: none;
   margin: var(--space-3xs) 0 0 calc(10px);

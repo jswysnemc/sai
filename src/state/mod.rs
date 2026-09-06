@@ -13,6 +13,7 @@ mod runtime_recovery;
 pub(crate) mod session_memory;
 mod session_snapshot;
 mod session_timeline;
+mod session_turn_preview;
 mod sessions;
 mod store_context_epoch;
 mod store_lifecycle;
@@ -49,6 +50,7 @@ pub use session_timeline::{
     SessionTimeline, SessionTimelineCompaction, SessionTimelineTurn, TimelineMessage,
     TimelinePermissionDecision, TimelineToolEntry, TimelineTurnMessage,
 };
+pub use session_turn_preview::SessionTurnPreview;
 #[allow(unused_imports)]
 pub use sessions::{
     active_session_id_for_workspace, active_state_dir, create_session, create_session_detached,

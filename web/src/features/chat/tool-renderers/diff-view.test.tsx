@@ -86,19 +86,19 @@ describe("DiffView idea side-by-side", () => {
   });
 
   it("长上下文段折叠为折条并可展开", () => {
-    const longContext = Array.from({ length: 12 }, (_, index) => `ctx ${index + 1}`).join("\n");
+    const longContext = Array.from({ length: 12 }, (_, index) => ` ctx ${index + 1}`).join("\n");
     const longPatch = `diff --git a/src/b.ts b/src/b.ts
 --- a/src/b.ts
 +++ b/src/b.ts
-@@ -1,14 +1,14 @@
+@@ -1,13 +1,13 @@
 -old line
 +new line
 ${longContext}
 `;
     const html = renderToStaticMarkup(<DiffView source={longPatch} layout="side" />);
-    // 13 行上下文超过两倍边距，中间 7 行折叠
+    // 12 行上下文保留首尾各 3 行，中间 6 行折叠
     expect(html).toContain("diff-idea-fold");
-    expect(html).toContain("展开 7 行未改动内容");
+    expect(html).toContain("展开 6 行未改动内容");
   });
 
   it("配对行左右同列且字符级高亮", () => {

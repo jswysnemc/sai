@@ -20,9 +20,12 @@ describe("WorkspaceTabBar", () => {
       />
     );
 
-    expect(html).toContain('class="workspace-tab-close"');
+    expect(html).toMatch(/<button[^>]*class="[^"]*workspace-tab-close[^"]*"[^>]*tabindex="0"/);
     expect(html).toContain('aria-label="关闭 README.md"');
     expect(html.match(/workspace-tab-close/g)).toHaveLength(1);
+    expect(html.match(/role="tab"/g)).toHaveLength(2);
+    expect(html).toContain('aria-selected="true" tabindex="0"');
+    expect(html).toContain('aria-selected="false" tabindex="-1"');
   });
 
   it("把添加按钮放在标签滚动区外、末标签右侧", () => {
@@ -45,8 +48,8 @@ describe("WorkspaceTabBar", () => {
     const rowStart = html.indexOf('class="workspace-tab-scroll-row"');
     const scrollStart = html.indexOf('class="workspace-tab-scroll"');
     const scrollEnd = html.indexOf("</div>", scrollStart);
-    const actionsStart = html.indexOf('class="workspace-tab-actions"');
-    const layoutStart = html.indexOf('class="workspace-tab-layout"');
+    const actionsStart = html.indexOf('workspace-tab-actions');
+    const layoutStart = html.indexOf('workspace-tab-layout');
     expect(rowStart).toBeGreaterThan(-1);
     expect(scrollStart).toBeGreaterThan(rowStart);
     expect(actionsStart).toBeGreaterThan(scrollEnd);

@@ -22,6 +22,7 @@ import { SideConversationPane } from "../side-conversation/side-conversation-pan
 import type { SideConversationRequest } from "../side-conversation/side-conversation-events";
 import { useWorkspaceGitEntries } from "./use-workspace-git-entries";
 import { useFileNavigationHistory } from "./use-file-navigation-history";
+import { selectExistingWorkspacePanel } from "./workspace-panel-selection";
 
 type WorkspacePaneProps = {
   selectedFile: string | null;
@@ -136,7 +137,7 @@ export function WorkspacePane({
       return;
     }
     setTabs((current) => {
-      const existing = current.find((tab) => tab.type === activeType);
+      const existing = selectExistingWorkspacePanel(current, activeType, activeTabId, selectedFile);
       if (existing) {
         setActiveTabId((id) => (id === existing.id ? id : existing.id));
         return current;
@@ -148,7 +149,7 @@ export function WorkspacePane({
       setActiveTabId(created.id);
       return [...current, created];
     });
-  }, [activeType, locale, passiveDiff, terminalManager.activeId, terminalManager.terminals, t]);
+  }, [activeTabId, activeType, locale, passiveDiff, selectedFile, terminalManager.activeId, terminalManager.terminals, t]);
 
   useEffect(() => {
     if (!passiveDiff) return;
@@ -313,7 +314,10 @@ export function WorkspacePane({
           const tab = tabs.find((item) => item.id === id);
           if (!tab) return;
           onActiveTypeChange(tab.type);
-          if (tab.type === "files" && tab.path) onSelectFile(tab.path);
+          if (tab.type === "files") {
+            if (tab.path) onSelectFile(tab.path);
+            else onClearFile();
+          }
           if (tab.type === "terminal" && tab.terminalId) terminalManager.setActiveId(tab.terminalId);
         }}
         onClose={closeTab}
@@ -324,7 +328,7 @@ export function WorkspacePane({
         onCollapse={onCollapse}
       />
       <ErrorBoundary key={activeTab?.id ?? "empty"} label={t("This panel failed to render", "该面板渲染失败")}>
-      <div className="pane-body">
+      <div id="workspace-panel-content" className="pane-body" role={activeTab ? "tabpanel" : undefined} aria-labelledby={activeTab ? `workspace-tab-${activeTab.id}` : undefined}>
         {!activeTab && (
           <WorkspaceEmptyState onOpen={(type) => void addTab(type)} />
         )}

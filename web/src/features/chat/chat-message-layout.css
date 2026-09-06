@@ -1,0 +1,216 @@
+/* 【Web 对话】【消息布局】消息部件、操作与内容状态 */
+.message {
+  min-width: 0;
+  max-width: 100%;
+  margin:0 0 var(--space-3xl);
+}
+
+.assistant-message {
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.68;
+}
+
+.live-message {
+  min-height: 40px;
+}
+
+.asset-source {
+  position: relative;
+  overflow: auto;
+  margin:var(--space-xl) 0;
+  padding:var(--space-2xl);
+  border: 1px solid var(--technical-border);
+  border-radius:var(--radius-3);
+  background: var(--technical-surface);
+  color: var(--technical-text);
+  font-size:var(--text-base);
+  line-height: 1.65;
+}
+
+.rotate { transform: rotate(180deg); }
+
+.message-parts {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  gap: var(--space-sm);
+}
+
+/* 部件是网格项，默认 min-width:auto 会让宽内容（如压缩摘要里的长代码行）
+   按内容最小宽度把整列撑破；普通消息的 .markdown-body 已自带 min-width:0，
+   这里把保护范围补全到所有部件 */
+.message-parts > * { min-width: 0; }
+
+/*
+ * 工具卡的外框、悬停与导轨已统一到 tool-card-shell。
+ * 详情里的代码块不再自带外框：区块边界由外壳的左导轨表达，
+ * 再套一层框会重新回到改造前"框中框"的观感。
+ */
+.tool-shell-body pre {
+  max-height: 340px;
+  margin: 0;
+  padding:var(--space-sm) 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--technical-text);
+  font-size:var(--text-sm);
+  line-height: 1.65;
+}
+
+.tool-output {
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent) !important;
+  color: var(--technical-muted) !important;
+}
+
+.inline-diff { overflow: auto; background: var(--technical-surface); color: var(--technical-text); font:400 var(--text-base)/1.55 var(--font-code); }
+.diff-line { min-width: max-content; padding:1px var(--space-lg); white-space: pre; }
+.diff-line.added { background: var(--diff-added-bg); color: var(--diff-added-text); }
+.diff-line.removed { background: var(--diff-removed-bg); color: var(--diff-removed-text); }
+
+.pulse { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+
+.message-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap:var(--space-sm);
+  min-height: 22px;
+  margin-top:var(--space-3xs);
+  opacity: 0;
+  transition:opacity var(--transition-base);
+}
+
+.user-message-stack:hover .message-actions,
+.user-message-stack:focus-within .message-actions,
+.assistant-message:focus-within .message-actions,
+.assistant-message:hover .message-actions {
+  opacity: 1;
+}
+
+.user-message-actions {
+  justify-self: end;
+  width: max-content;
+  margin-top: 0;
+}
+
+.assistant-message .message-actions {
+  justify-content: flex-start;
+  margin-top:var(--space-xs);
+}
+
+.message-timestamp {
+  color: var(--ink-soft);
+  font:400 var(--text-2xs) var(--font-code);
+}
+
+.message-copy {
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius:var(--radius-2);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.message-copy:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.message-copy:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+
+@media (pointer: coarse) {
+  .message-copy { width: 1.875rem; height: 1.875rem; }
+}
+.context-compaction-block { display:flex; flex-direction:column; gap:var(--space-sm); width:100%; max-width:100%; min-width:0; margin:var(--space-xs) 0; overflow-anchor: none; }
+.context-compaction-part { display:flex; align-items:center; gap:var(--space-xs); width:max-content; max-width:100%; padding:var(--space-2xs) var(--space-sm); border:1px solid var(--line); border-radius:var(--radius-3); color:var(--ink-soft); background:var(--control-surface); font-size:var(--text-sm); }
+.context-compaction-block.running .context-compaction-part { color:var(--signal); border-color:color-mix(in srgb, var(--signal) 30%, var(--line)); }
+.context-compaction-divider { display:flex; align-items:center; gap:var(--space-md); width:100%; margin:var(--space-3xs) 0; color:var(--ink-soft); font-size:var(--text-xs); user-select:none; }
+.context-compaction-divider-line { flex:1 1 auto; height:1px; background:var(--line); }
+.context-compaction-divider-label { flex:0 0 auto; letter-spacing:0.02em; }
+.context-compaction-summary {
+  width: 100%;
+  max-width: 100%;
+  max-height: min(32rem, calc(100dvh - 16rem));
+  overflow: auto;
+  overflow-anchor: none;
+  overscroll-behavior: contain;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-4);
+  background: var(--control-surface);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+.context-compaction-summary .markdown-body {
+  font-size: inherit;
+  color: inherit;
+  overflow: hidden;
+  overflow-anchor: none;
+}
+.conversation-compaction { width:100%; max-width:100%; margin:var(--space-2xs) 0 var(--space-md); overflow-anchor: none; }
+
+/* 历史加载骨架：占位宽度与助手正文一致，加载完成后不产生横向跳动 */
+.chat-timeline-skeleton {
+  padding:var(--space-3xl) 0;
+}
+
+/*
+ * 轨迹视图占满会话列：头部固定，其下交给轨迹视图自行分配高度。
+ * 它与对话视图互斥，共用同一列宽，切换时左右两侧的面板位置不动。
+ */
+.chat-trajectory-region {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  height: 100%;
+}
+
+/*
+ * 视图切换：与 mermaid 工具栏同一套分段控件形制。
+ * SegmentedControl 不自带样式，配色与圆角在使用处给。
+ */
+.chat-view-switch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3xs);
+  padding: var(--space-3xs);
+  border-radius: var(--radius-2);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.chat-view-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3xs);
+  min-height: 22px;
+  padding: 0 var(--space-xs);
+  border: 0;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--text-2xs);
+  cursor: pointer;
+}
+
+.chat-view-switch button:hover {
+  color: var(--ink);
+}
+
+.chat-view-switch button.active {
+  background: var(--paper-raised);
+  color: var(--ink);
+}
+
+@media (hover: none), (pointer: coarse) { .message-actions { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }

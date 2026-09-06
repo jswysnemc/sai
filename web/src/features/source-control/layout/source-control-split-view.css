@@ -4,8 +4,11 @@
   grid-template-columns: minmax(0, var(--source-control-list-width)) minmax(0, 1fr);
   width: 100%;
   height: 100%;
+  min-width: 0;
   min-height: 0;
 }
+
+.source-control-split > .source-control-stacked-pane { overflow: hidden; }
 
 .source-control-split-handle {
   position: absolute;

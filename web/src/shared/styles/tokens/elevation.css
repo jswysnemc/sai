@@ -25,9 +25,9 @@
 
   /* 状态光晕：运行中指示灯外扩的一圈信号色 */
   --ring-signal: 0 0 0 4px var(--signal-soft);
-  /* 焦点环与危险态环，与 :focus-visible 的 outline 配合使用 */
-  --ring-focus: 0 0 0 2px color-mix(in srgb, var(--signal) 45%, transparent);
-  --ring-danger: 0 0 0 2px color-mix(in srgb, var(--danger) 28%, transparent);
+  /* 焦点使用控件内部细边，保持键盘可见性并避免外围光晕 */
+  --ring-focus: inset 0 0 0 1px var(--ink-soft);
+  --ring-danger: inset 0 0 0 1px var(--danger);
 
   /* 历史别名，数值与改造前一致，新代码请使用 elevation 档位 */
   --shadow: 0 16px 42px rgb(var(--shadow-hue) / calc(10% * var(--shadow-boost)));

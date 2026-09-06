@@ -1,0 +1,9 @@
+.workbench-toolbar { display: flex; flex: none; align-items: center; gap: 0.1875rem; }
+.workbench-toolbar .workbench-tool { height: 1.875rem; gap: 0.375rem; padding-inline: 0.5rem; font-size: var(--text-sm); }
+.workbench-toolbar .workbench-review { border-color: var(--line); background: var(--paper-raised); color: var(--ink); }
+.workbench-toolbar .workbench-review[aria-pressed="true"] { background: var(--surface-selected); }
+.workbench-toolbar svg { flex: none; }
+@container (max-width: 35rem) {
+  .workbench-tool-label, .workbench-terminal-tool { display: none; }
+  .workbench-toolbar .workbench-tool { width: 1.875rem; padding: 0; }
+}

@@ -11,6 +11,7 @@ body,
 }
 
 html {
+  font-size: 100%;
   /* 移动端 Safari / Chrome 在横屏等场景会自行放大文字，跨端字号不一致 */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -25,7 +26,7 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size:var(--text-xl);
+  font-size:var(--text-base);
   /* 显式行高：浏览器默认 normal 随字族浮动（约 1.14–1.2），跨浏览器高度不齐 */
   line-height: var(--leading-normal);
   /* 字重渲染：关闭次像素加粗，中英混排时两段字族的观感字重才一致 */
@@ -108,14 +109,14 @@ button {
 button:focus-visible,
 select:focus-visible,
 [role="button"]:focus-visible {
-  outline: 1px solid color-mix(in srgb, var(--signal) 70%, transparent);
-  outline-offset: 1px;
+  outline: 1px solid var(--ink-soft);
+  outline-offset: -2px;
 }
 
 input:focus-visible,
 textarea:focus-visible {
   outline: none;
-  border-color: var(--signal);
+  border-color: var(--ink-soft);
 }
 
 /* 去掉 number 输入框上下三角步进按钮。 */

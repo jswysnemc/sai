@@ -1,4 +1,8 @@
 .editor-breadcrumbs { position: relative; min-width: 0; flex: 1; align-self: stretch; }
+.editor-external-path { display: flex; align-items: center; gap: 0.5rem; overflow: hidden; }
+.editor-external-path > img, .editor-external-path > svg { flex: none; }
+.editor-external-path strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); font-weight: 500; }
+.editor-external-path > span { min-width: 0; overflow: hidden; color: var(--ink-soft); font-size: var(--text-2xs); text-overflow: ellipsis; white-space: nowrap; }
 .editor-breadcrumb-list { display: flex; align-items: center; height: 100%; min-width: 0; overflow: hidden; }
 .editor-breadcrumb-part { display: inline-flex; align-items: center; min-width: 0; flex: 0 1 auto; }
 .editor-breadcrumb-part:last-child { flex-shrink: 1; }

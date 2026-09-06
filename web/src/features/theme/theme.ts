@@ -27,15 +27,15 @@ export const THEME_PRESETS: Array<{
     nameZh: "跟随系统",
     descriptionEn: "Match the operating system appearance",
     descriptionZh: "自动匹配系统明暗外观",
-    colors: ["#f3f5f5", "#202526", "#477d70"]
+    colors: ["#ffffff", "#202020", "#737373"]
   },
   {
     id: "linen",
-    nameEn: "Linen",
-    nameZh: "雾白",
-    descriptionEn: "Low-contrast cool gray workspace",
-    descriptionZh: "低对比冷灰专业界面",
-    colors: ["#f3f5f5", "#202526", "#477d70"]
+    nameEn: "Light",
+    nameZh: "浅色",
+    descriptionEn: "White canvas with quiet neutral surfaces",
+    descriptionZh: "白色画布与中性灰工作区",
+    colors: ["#ffffff", "#f7f7f7", "#242424"]
   },
   {
     id: "amber",
@@ -75,7 +75,7 @@ export const THEME_PRESETS: Array<{
     nameZh: "石墨",
     descriptionEn: "Neutral dark engineering workspace",
     descriptionZh: "中性深色工程工作区",
-    colors: ["#151a17", "#e5e9e6", "#52c488"],
+    colors: ["#202020", "#181818", "#ededed"],
     dark: true
   },
   {

@@ -1,6 +1,6 @@
 use super::super::app_state::WebAppState;
 use super::super::error::{WebError, WebResult};
-use crate::state::{SessionTree, StateStore};
+use crate::state::{SessionTree, SessionTurnPreview, StateStore};
 use axum::extract::{Path, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -30,8 +30,24 @@ pub(super) struct BranchResponse {
 pub(super) fn routes() -> Router<WebAppState> {
     Router::new()
         .route("/api/sessions/:id/turn-tree", get(turn_tree))
+        .route("/api/sessions/:id/turn-tree/:turn_id", get(turn_preview))
         .route("/api/sessions/:id/turn-tree/switch", post(switch_branch))
         .route("/api/sessions/:id/turn-tree/undo", post(undo_to_parent))
+}
+
+/// 【会话分支】【消息预览】返回指定轮次完整消息，保持活动分支不变。
+/// 参数：`state` 为应用状态，`id` 为会话标识，`turn_id` 为轮次标识；返回：完整可见消息。
+async fn turn_preview(
+    State(state): State<WebAppState>,
+    Path((id, turn_id)): Path<(String, String)>,
+) -> WebResult<Json<SessionTurnPreview>> {
+    let store = StateStore::for_session(&state.paths, &id)
+        .map_err(|error| WebError::not_found(error.to_string()))?;
+    let preview = store
+        .session_turn_preview(&turn_id)
+        .map_err(WebError::from)?
+        .ok_or_else(|| WebError::not_found(format!("turn not found: {turn_id}")))?;
+    Ok(Json(preview))
 }
 
 /// 读取会话的完整轮次树。

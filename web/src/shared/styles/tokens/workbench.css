@@ -1,0 +1,16 @@
+/* 【Web 工作台】【视觉基础】统一工作区表面、控件尺寸与状态层级 */
+:root {
+  --surface-hover: color-mix(in srgb, var(--ink) 5%, transparent);
+  --surface-selected: color-mix(in srgb, var(--ink) 8%, transparent);
+  --sidebar-surface: color-mix(in srgb, var(--paper) 35%, var(--paper-deep));
+  --panel-surface: var(--paper);
+  --composer-surface: var(--paper-raised);
+  --toolbar-height: 3rem;
+  --statusbar-height: 1.75rem;
+  --control-height: 1.875rem;
+  --shadow-composer: 0 2px 10px rgb(var(--shadow-hue) / 4%);
+  --chat-column-width: 52rem;
+  --chat-column-gutter: 2rem;
+  --chat-content-width: calc(var(--chat-column-width) - var(--chat-column-gutter) * 2);
+  --chat-header-height: var(--toolbar-height);
+}

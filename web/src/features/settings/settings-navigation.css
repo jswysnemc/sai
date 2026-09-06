@@ -1,0 +1,73 @@
+/* 【Web 设置】【分类导航】独立滚动的紧凑侧栏与移动端分类栏 */
+.settings-navigation {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  min-height: 0;
+  padding: 1rem 0.75rem;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  background: var(--sidebar-surface);
+}
+.settings-nav-search {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2rem;
+  margin: 0 0 1rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--paper);
+  color: var(--ink-soft);
+}
+.settings-nav-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: var(--text-sm);
+}
+.settings-nav-search:focus-within { border-color: var(--line-strong); box-shadow: var(--ring-focus); }
+.settings-nav-search > svg { flex: none; }
+.settings-nav-group { display: grid; gap: 0.125rem; margin-bottom: 1rem; }
+.settings-nav-group-label { margin: 0.25rem 0.5rem 0.375rem; color: var(--ink-soft); font-size: var(--text-xs); font-weight: 500; }
+.settings-navigation a {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 2rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.375rem;
+  color: var(--ink-soft);
+  text-align: left;
+  text-decoration: none;
+}
+.settings-navigation a > svg { flex: none; }
+.settings-navigation a > span { min-width: 0; }
+.settings-navigation strong { color: inherit; font-size: var(--text-base); font-weight: 400; }
+.settings-navigation a:hover { background: var(--surface-hover); color: var(--ink); }
+.settings-navigation a.active { background: var(--surface-selected); color: var(--ink); }
+.settings-navigation a.active strong { font-weight: 500; }
+.settings-navigation a:focus-visible { outline: none; box-shadow: var(--ring-focus); }
+.settings-nav-empty { margin: 0.5rem; color: var(--ink-soft); font-size: var(--text-sm); }
+
+@media (width < 48rem) {
+  .settings-navigation {
+    flex-direction: row;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    scrollbar-width: none;
+  }
+  .settings-nav-search, .settings-nav-group-label { display: none; }
+  .settings-nav-group { display: contents; }
+  .settings-navigation a { flex: none; min-height: 2rem; padding: 0.25rem 0.5rem; white-space: nowrap; }
+  .settings-navigation strong { font-size: var(--text-sm); }
+}

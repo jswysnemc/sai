@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import type { RefObject } from "react";
 import type { WorkspaceSessions } from "../../api/contracts";
 import { localizeApiMessage } from "../../api/api-error";
@@ -8,12 +8,17 @@ import { ActiveAgentIndicator } from "./active-agent-indicator";
 import { SessionWorkspaceIcon } from "./session-workspace-icon";
 import { SessionRow } from "./session-row";
 import { SessionSelectionBar } from "./session-selection-bar";
+import { Button } from "../../shared/ui/button/button";
 import type { useSessionSelection } from "./use-session-selection";
+import { SessionRenameDialog } from "./session-rename-dialog";
+import { sessionActivityKey } from "./session-running-state";
 
 type SelectionState = ReturnType<typeof useSessionSelection>;
 
 type SessionListViewProps = {
+  showWorkspaceHeader?: boolean;
   workspace: WorkspaceSessions;
+  runningSessions: ReadonlySet<string>;
   selection: SelectionState;
   /** 相对时间基准，由外层按分钟推进 */
   now: number;
@@ -39,25 +44,24 @@ type SessionListViewProps = {
  */
 export function SessionListView({
   workspace,
+  runningSessions,
   selection,
   now,
-  menuRef,
-  menu,
   onToggleMenu,
   onOpenSession,
   onRename,
-  onDelete
+  onDelete,
+  showWorkspaceHeader = true
 }: SessionListViewProps) {
   const { locale, t } = useI18n();
-  const [renaming, setRenaming] = useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = useState("");
-  const [renamePending, setRenamePending] = useState(false);
-  // 提交后异步返回前若用户已开始编辑别的行，不能把新的编辑态清掉
-  const renameTarget = useRef<string | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   const workspaceName = localizeApiMessage(workspace.workspace_name, locale);
   const sessions = workspace.sessions;
-  const workspaceLoaded = sessions.some((session) => session.loaded);
+  const selecting = selection.selecting && workspace.active;
+  const visibleSessions = showAll || selecting || showWorkspaceHeader ? sessions : sessions.filter((session, index) => index < 8 || (workspace.active && session.active));
+  const workspaceRunning = sessions.some((session) => runningSessions.has(sessionActivityKey(workspace.workspace_id, session.id)));
 
   /**
    * 进入指定会话的重命名编辑态。
@@ -66,38 +70,18 @@ export function SessionListView({
    * @param title 当前标题
    */
   const startRename = (id: string, title: string) => {
-    setRenaming(id);
-    setRenameDraft(title);
+    setRenaming({ id, title });
     onToggleMenu(null);
-  };
-
-  /** 提交重命名，标题为空或未变化时直接退出编辑态。 */
-  const submitRename = async () => {
-    if (!renaming) return;
-    const title = renameDraft.trim();
-    const current = sessions.find((session) => session.id === renaming);
-    if (!title || title === current?.title) {
-      setRenaming(null);
-      return;
-    }
-    renameTarget.current = renaming;
-    setRenamePending(true);
-    try {
-      await onRename(renaming, title);
-    } finally {
-      setRenamePending(false);
-      setRenaming((value) => (value === renameTarget.current ? null : value));
-    }
   };
 
   return (
     <div className="session-list sidebar-sessions-view">
-      <div className="workspace-context-row">
+      {(showWorkspaceHeader || selecting) && <div className="workspace-context-row">
         <SessionWorkspaceIcon isGitRepository={workspace.is_git_repository} size={13} />
         <strong title={workspace.workspace_path}>{workspaceName}</strong>
-        {workspaceLoaded && <ActiveAgentIndicator />}
+        {workspaceRunning && <ActiveAgentIndicator />}
         <small>{t(`${sessions.length} sessions`, `${sessions.length} 个会话`)}</small>
-        {selection.selecting && (
+        {selecting && (
           <button
             type="button"
             className="workspace-context-exit"
@@ -108,8 +92,8 @@ export function SessionListView({
             <X size={13} />
           </button>
         )}
-      </div>
-      {selection.selecting && (
+      </div>}
+      {selecting && (
         <SessionSelectionBar
           sessionIds={sessions.map((session) => session.id)}
           selectedCount={selection.selected.size}
@@ -123,28 +107,21 @@ export function SessionListView({
         {sessions.length === 0 && (
           <p className="session-list-empty">{t("No sessions yet. Create a task to start.", "还没有会话。新建任务开始对话。")}</p>
         )}
-        {sessions.map((session) => (
+        {visibleSessions.map((session) => (
           <SessionRow
             key={session.id}
-            session={session}
+            session={{ ...session, active: workspace.active && session.active }}
             loaded={Boolean(session.loaded)}
+            running={runningSessions.has(sessionActivityKey(workspace.workspace_id, session.id))}
             holder={session.holder}
             now={now}
-            selectable={selection.selecting}
+            selectable={selecting}
             checked={selection.selected.has(session.id)}
-            renaming={renaming === session.id}
-            renameDraft={renameDraft}
-            renamePending={renamePending}
-            menuOpen={menu === session.id}
-            menuRef={menuRef}
             canSelect={sessions.length > 0}
+            canManage={workspace.active}
             onOpen={() => onOpenSession(session.id, session.active)}
             onToggleChecked={() => selection.toggleSelected(session.id)}
-            onToggleMenu={() => onToggleMenu(menu === session.id ? null : session.id)}
             onStartRename={() => startRename(session.id, session.title)}
-            onRenameDraft={setRenameDraft}
-            onRenameSubmit={() => void submitRename()}
-            onRenameCancel={() => setRenaming(null)}
             onEnterSelection={() => {
               onToggleMenu(null);
               selection.enterSelection();
@@ -155,7 +132,9 @@ export function SessionListView({
             }}
           />
         ))}
+        {sessions.length > 8 && !selecting && !showWorkspaceHeader && <Button variant="ghost" className="sidebar-show-more" onClick={() => setShowAll((value) => !value)}>{showAll ? t("Show less", "收起") : t(`Show all ${sessions.length} tasks`, `显示全部 ${sessions.length} 个任务`)}</Button>}
       </div>
+      {renaming && <SessionRenameDialog key={renaming.id} session={renaming} onRename={onRename} onClose={() => setRenaming(null)} />}
     </div>
   );
 }

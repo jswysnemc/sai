@@ -1,218 +1,24 @@
-/*
- * 分支面板从左上角展开，与右上角的工作概览左右对称。
- * 宽度、圆角、阴影、最大高度都取自 runtime-overview，两者是一对镜像组件。
- */
-.turn-tree-panel {
-  position: absolute;
-  top: calc(var(--chat-header-height, 2.5rem) + var(--space-xs));
-  left: var(--space-md);
-  z-index: 19;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  width: 278px;
-  max-width: calc(100% - var(--space-xl));
-  max-height: min(440px, calc(100vh - 190px));
-  border: 1px solid var(--line);
-  border-radius: var(--radius-3);
-  background: color-mix(in srgb, var(--paper-raised) 96%, transparent);
-  box-shadow: var(--elevation-3);
-  backdrop-filter: blur(12px);
-  overflow: hidden;
-}
-
-.turn-tree-head {
-  display: flex;
-  min-height: 38px;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: 0 var(--space-sm) 0 var(--space-md);
-  border-bottom: 1px solid var(--line);
-  color: var(--ink-soft);
-}
-
-.turn-tree-head > strong {
-  font-size: var(--text-xs);
-  font-weight: 500;
-}
-
-.turn-tree-head > small {
-  margin-left: auto;
-  font: var(--text-2xs)/var(--leading-control) var(--font-code);
-}
-
-.turn-tree-close {
-  width: 28px;
-  min-height: 28px;
-  padding: 0;
-  border-color: transparent;
-  background: transparent;
-  color: var(--ink-soft);
-}
-
-.turn-tree-body {
-  overflow: auto;
-  padding: var(--space-2xs);
-}
-
-.turn-tree-empty {
-  margin: 0;
-  padding: var(--space-sm);
-  color: var(--ink-soft);
-  font-size: var(--text-xs);
-}
-
-.turn-tree-row {
-  display: flex;
-  width: 100%;
-  min-height: 1.75rem;
-  align-items: center;
-  gap: var(--space-2xs);
-  padding: 0 var(--space-2xs);
-  border: 0;
-  border-radius: var(--radius-2);
-  background: transparent;
-  color: var(--ink-soft);
-  font-size: var(--text-xs);
-  text-align: left;
-}
-
-.turn-tree-row:hover:not(:disabled) {
-  background: var(--paper-deep);
-  color: var(--ink);
-}
-
-/* 活动路径上的祖先：文字提亮，但不抢当前轮次的强调 */
-.turn-tree-row.on-path {
-  color: var(--ink);
-}
-
-.turn-tree-row.is-active {
-  background: color-mix(in srgb, var(--signal) 12%, transparent);
-  color: var(--ink);
-}
-
-.turn-tree-row:disabled {
-  cursor: default;
-}
-
-.turn-tree-gutter {
-  display: flex;
-  flex: none;
-  align-items: center;
-  color: var(--line);
-}
-
-/* 装订线：竖线延续祖先分支，拐角与丁字表达同级位置 */
-.turn-tree-gutter i {
-  display: block;
-  width: 0.75rem;
-  height: 1.75rem;
-  background-repeat: no-repeat;
-  background-position: center;
-}
-
-.turn-tree-gutter i.bar {
-  background-image: linear-gradient(currentColor, currentColor);
-  background-size: 1px 100%;
-}
-
-.turn-tree-gutter i.tee {
-  background-image:
-    linear-gradient(currentColor, currentColor),
-    linear-gradient(currentColor, currentColor);
-  background-size: 1px 100%, 50% 1px;
-  background-position: center, right center;
-}
-
-.turn-tree-gutter i.corner {
-  background-image:
-    linear-gradient(currentColor, currentColor),
-    linear-gradient(currentColor, currentColor);
-  background-size: 1px 50%, 50% 1px;
-  background-position: center top, right center;
-}
-
-.turn-tree-dot {
-  flex: none;
-  width: 0.4rem;
-  height: 0.4rem;
-  border: 1px solid currentColor;
-  border-radius: var(--radius-circle);
-}
-
-.turn-tree-row.is-active .turn-tree-dot {
-  border-color: var(--signal);
-  background: var(--signal);
-}
-
-.turn-tree-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (max-width: 48rem) {
-  .turn-tree-panel {
-    left: var(--space-sm);
-    width: min(278px, calc(100vw - var(--space-xl)));
-  }
-}
-
-/*
- * 有分叉时在聊天区左上角显示的入口按钮。
- * 尺寸与右侧工作概览的收起态胶囊一致，两者是一对镜像入口。
- */
-.turn-tree-open {
-  position: absolute;
-  top: calc(var(--chat-header-height, 2.5rem) + var(--space-xs));
-  left: var(--space-md);
-  z-index: 18;
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: 0 var(--space-sm);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-2);
-  background: var(--paper-raised);
-  box-shadow: var(--elevation-2);
-  color: var(--ink);
-  cursor: pointer;
-}
-
-.turn-tree-open:hover {
-  border-color: var(--line-strong);
-  background: var(--paper-deep);
-}
-
-.turn-tree-open-label {
-  font-size: var(--text-xs);
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-/* 分叉数量：等宽数字，与文字拉开层次 */
-.turn-tree-open-count {
-  color: var(--ink-soft);
-  font: var(--text-2xs)/1 var(--font-code);
-  font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 48rem) {
-  .turn-tree-open {
-    left: var(--space-sm);
-  }
-}
-
-/* 聊天区宽度不足时，分支入口收为纯图标，避免与右侧工作概览相撞 */
-@container (max-width: 40rem) {
-  .turn-tree-open .turn-tree-open-label,
-  .turn-tree-open .turn-tree-open-count {
-    display: none;
-  }
-
-  .turn-tree-open {
-    padding: 0 var(--space-xs);
-  }
-}
+.turn-tree-navigation.ui-button { flex: none; gap: 0.375rem; height: 1.75rem; min-height: 1.75rem; color: var(--ink-soft); }
+.turn-tree-navigation[aria-expanded="true"] { background: var(--surface-selected); color: var(--ink); }
+.turn-tree-navigation small { font: 400 var(--text-2xs) var(--font-code); }
+.turn-tree-panel { display: grid; grid-template-rows: auto minmax(0, 1fr); width: 100%; max-height: min(13rem, 30dvh); border-bottom: 1px solid var(--line); background: var(--paper); overflow: hidden; }
+.turn-tree-head { display: flex; align-items: center; gap: 0.5rem; min-height: 2.125rem; padding: 0 0.75rem; border-bottom: 1px solid var(--line); color: var(--ink-soft); }
+.turn-tree-head > svg { flex: none; }
+.turn-tree-head > strong { font-size: var(--text-xs); font-weight: 500; white-space: nowrap; }
+.turn-tree-head > small { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 var(--text-2xs) var(--font-code); }
+.turn-tree-close.ui-button { flex: none; width: 1.625rem; height: 1.625rem; min-height: 1.625rem; padding: 0; border: 0; background: transparent; color: var(--ink-soft); }
+.turn-tree-body { overflow: auto; padding: 0.375rem 0.625rem; }
+.turn-tree-empty { margin: 0; padding: 0.5rem; color: var(--ink-soft); font-size: var(--text-xs); }
+.turn-tree-row.ui-button { display: flex; justify-content: flex-start; align-items: center; width: 100%; min-height: 1.75rem; gap: 0.375rem; padding: 0 0.375rem; border: 0; border-radius: var(--radius-2); background: transparent; color: var(--ink-soft); font-size: var(--text-xs); text-align: left; }
+.turn-tree-row.ui-button:hover:not(:disabled) { background: var(--surface-hover); color: var(--ink); }
+.turn-tree-row.on-path { color: var(--ink); }
+.turn-tree-row.ui-button.is-active { background: var(--surface-selected); color: var(--ink); opacity: 1; }
+.turn-tree-row:disabled { cursor: default; }
+.turn-tree-gutter { display: flex; flex: none; max-width: 40%; overflow: hidden; align-items: center; color: var(--line-strong); }
+.turn-tree-gutter i { display: block; flex: none; width: 0.75rem; height: 1.75rem; background-repeat: no-repeat; background-position: center; }
+.turn-tree-gutter i.bar { background-image: linear-gradient(currentColor, currentColor); background-size: 1px 100%; }
+.turn-tree-gutter i.tee { background-image: linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor); background-size: 1px 100%, 50% 1px; background-position: center, right center; }
+.turn-tree-gutter i.corner { background-image: linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor); background-size: 1px 50%, 50% 1px; background-position: center top, right center; }
+.turn-tree-dot { flex: none; width: 0.375rem; height: 0.375rem; border: 1px solid currentColor; border-radius: 50%; }
+.turn-tree-row.is-active .turn-tree-dot { background: var(--ink-soft); }
+.turn-tree-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

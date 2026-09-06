@@ -1,4 +1,5 @@
 import { Save } from "lucide-react";
+import { Button } from "../../../shared/ui/button/button";
 import { SaveStatusBadge } from "../save-status-badge";
 import { showsAppConfigSave } from "../settings-registry";
 import type { SettingsSectionMeta } from "../settings-types";
@@ -40,15 +41,15 @@ export function SettingsSaveBar({
     return (
       <>
         <SaveStatusBadge dirty={dirty} saving={saving} saveError={saveError} saveErrorMessage={saveErrorMessage} loaded={loaded} />
-        <button
-          type="button"
+        <Button
+          variant="primary"
           className="settings-save"
           onClick={onSave}
           disabled={!loaded || !dirty || saving}
         >
           <Save size={14} />
           {saving ? t("Saving", "正在保存") : t("Save changes", "保存修改")}
-        </button>
+        </Button>
       </>
     );
   }

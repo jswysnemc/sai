@@ -5,6 +5,8 @@ import { FOCUS_COMPOSER_EVENT, INSERT_TERMINAL_SELECTION_EVENT, type TerminalSel
 import { createTerminalOptions } from "./terminal-options";
 import { connectTerminalSession, type TerminalConnectionStatus } from "./terminal-session-controller";
 import { TerminalContextMenu } from "./terminal-context-menu";
+import { disposeTerminalView } from "./terminal-disposal";
+import { handleWorkbenchShortcut } from "../workspace/workbench-shortcuts";
 import "./terminal-pane.css";
 import { useI18n } from "../i18n/use-i18n";
 
@@ -26,6 +28,8 @@ export function TerminalPane({ terminalId, title }: { terminalId: string; title:
     if (!container) return;
     const terminal = new Terminal(createTerminalOptions());
     terminalRef.current = terminal;
+    // 1. 【Web 终端】【快捷操作】先处理工作台组合键，避免 Ctrl+J 等按键作为终端输入发送
+    terminal.attachCustomKeyEventHandler((event) => event.type !== "keydown" || !handleWorkbenchShortcut(event));
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     terminal.open(container);
@@ -52,7 +56,7 @@ export function TerminalPane({ terminalId, title }: { terminalId: string; title:
       container.removeEventListener("contextmenu", handleContextMenu);
       observer.disconnect();
       controller.dispose();
-      terminal.dispose();
+      disposeTerminalView(terminal);
       terminalRef.current = null;
     };
   }, [t, terminalId]);

@@ -1,4 +1,4 @@
-import { GitBranch, Maximize2, X } from "lucide-react";
+import { GitBranch, X } from "lucide-react";
 import type { SessionTurnTree } from "../../../api/turn-tree-contracts";
 import { Button } from "../../../shared/ui/button/button";
 import { useI18n } from "../../i18n/use-i18n";
@@ -11,8 +11,6 @@ type TurnTreePanelProps = {
   busy?: boolean;
   onSelect: (turnId: string) => void;
   onClose: () => void;
-  /** 打开整树总览 */
-  onOpenOverview?: () => void;
 };
 
 /**
@@ -24,7 +22,7 @@ type TurnTreePanelProps = {
  * @param props 树数据、忙碌状态与回调
  * @returns 分支树面板
  */
-export function TurnTreePanel({ tree, busy, onSelect, onClose, onOpenOverview }: TurnTreePanelProps) {
+export function TurnTreePanel({ tree, busy, onSelect, onClose }: TurnTreePanelProps) {
   const { t } = useI18n();
   const rows = flattenTurnTree(tree);
 
@@ -39,16 +37,6 @@ export function TurnTreePanel({ tree, busy, onSelect, onClose, onOpenOverview }:
             `${tree.total_turns} 轮 · ${tree.branch_points} 处分叉`
           )}
         </small>
-        {onOpenOverview && (
-          <Button
-            className="turn-tree-close"
-            onClick={onOpenOverview}
-            aria-label={t("Open branch overview", "打开分支总览")}
-            title={t("Open branch overview", "打开分支总览")}
-          >
-            <Maximize2 size={13} />
-          </Button>
-        )}
         <Button
           className="turn-tree-close"
           onClick={onClose}
@@ -63,9 +51,9 @@ export function TurnTreePanel({ tree, busy, onSelect, onClose, onOpenOverview }:
           <p className="turn-tree-empty">{t("No turns yet.", "还没有任何对话轮次。")}</p>
         )}
         {rows.map((row) => (
-          <button
+          <Button
             key={row.node.turn_id}
-            type="button"
+            variant="ghost"
             className={[
               "turn-tree-row",
               row.isActive ? "is-active" : "",
@@ -78,14 +66,14 @@ export function TurnTreePanel({ tree, busy, onSelect, onClose, onOpenOverview }:
             title={row.node.user_summary}
           >
             <span className="turn-tree-gutter" aria-hidden>
-              {row.ancestorBars.map((hasSibling, index) => (
+              {row.ancestorBars.slice(-6).map((hasSibling, index) => (
                 <i key={index} className={hasSibling ? "bar" : "gap"} />
               ))}
               {row.depth > 0 && <i className={row.isLast ? "corner" : "tee"} />}
             </span>
             <span className="turn-tree-dot" aria-hidden />
             <span className="turn-tree-text">{row.node.user_summary || t("(empty)", "（空）")}</span>
-          </button>
+          </Button>
         ))}
       </div>
     </aside>

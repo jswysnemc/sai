@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Button } from "./button/button";
 
 export type SegmentedControlOption<T extends string> = {
   value: T;
@@ -21,7 +22,11 @@ type SegmentedControlProps<T extends string> = {
  * @returns 可访问的分段切换控件
  */
 export function SegmentedControl<T extends string>({ value, options, onChange, ariaLabel, className = "" }: SegmentedControlProps<T>) {
-  /** 根据方向键选择相邻选项。 */
+  /**
+   * 根据方向键选择选项，并同步键盘焦点。
+   * @param event 分段控件的键盘事件
+   * @returns 无返回值
+   */
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
@@ -29,13 +34,14 @@ export function SegmentedControl<T extends string>({ value, options, onChange, a
     const direction = event.key === "ArrowRight" ? 1 : -1;
     const next = (current + direction + options.length) % options.length;
     onChange(options[next].value);
+    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
   };
 
   return (
     <div className={`segmented-control ${className}`.trim()} role="radiogroup" aria-label={ariaLabel} onKeyDown={handleKeyDown}>
       {options.map((option) => (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           role="radio"
           aria-checked={option.value === value}
           className={option.value === value ? "active" : ""}
@@ -45,7 +51,7 @@ export function SegmentedControl<T extends string>({ value, options, onChange, a
         >
           {option.icon}
           <span>{option.label}</span>
-        </button>
+        </Button>
       ))}
     </div>
   );

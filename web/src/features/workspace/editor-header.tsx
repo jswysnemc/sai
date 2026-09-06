@@ -1,4 +1,5 @@
-import { ArrowLeft, ArrowRight, FolderTree, RefreshCw, Save } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileUp, FolderTree, RefreshCw, Save } from "lucide-react";
+import { Button } from "../../shared/ui/button/button";
 import { MarkdownModeToggle } from "../../shared/ui/markdown-editor/markdown-mode-toggle";
 import type { MarkdownEditorMode } from "../../shared/ui/markdown-editor/markdown-editor-mode";
 import { EditorBreadcrumbs } from "./editor-breadcrumbs";
@@ -15,6 +16,7 @@ export type EditorNavigation = {
 type EditorHeaderProps = {
   path: string;
   onSelectFile: (path: string) => void;
+  onOpenFile?: () => void;
   /** 历史后退/前进；宿主未接入时不渲染 */
   navigation?: EditorNavigation;
   /** 磁盘内容已变化 */
@@ -40,6 +42,7 @@ type EditorHeaderProps = {
 export function EditorHeader({
   path,
   onSelectFile,
+  onOpenFile,
   navigation,
   externalChange,
   onReload,
@@ -77,6 +80,7 @@ export function EditorHeader({
         </span>
       )}
       <EditorBreadcrumbs path={path} onSelectFile={onSelectFile} />
+      {onOpenFile && <Button variant="ghost" size="icon" className="editor-open-file" onClick={onOpenFile} aria-label={t("Open file by path", "通过路径打开文件")} title={t("Open file", "打开文件")}><FileUp size={14} /></Button>}
       {externalChange && (
         <span className="editor-external-change">{t("File changed on disk", "磁盘内容已变化")}</span>
       )}

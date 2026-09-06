@@ -13,6 +13,8 @@ export type AnchoredPopoverOptions = {
   align: "left" | "right";
   /** 弹层内容期望的最大高度,与可用空间取较小值 */
   maxHeight?: number;
+  /** 已知内容高度；较短弹层据此判断是否翻转，避免有空间却启用滚动 */
+  preferredHeight?: number;
   padding?: number;
   gap?: number;
 };
@@ -55,7 +57,7 @@ export function calculateAnchoredPopoverPosition(
   const spaceBelow = options.viewportHeight - anchor.bottom - gap - padding;
   const spaceAbove = anchor.top - gap - padding;
   // 1. 下方空间足够或不逊于上方时向下弹出,否则翻转到触发器上方
-  if (spaceBelow >= Math.min(desired, FLIP_THRESHOLD) || spaceBelow >= spaceAbove) {
+  if (spaceBelow >= Math.min(desired, options.preferredHeight ?? FLIP_THRESHOLD) || spaceBelow >= spaceAbove) {
     return {
       left,
       width,

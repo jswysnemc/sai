@@ -11,7 +11,8 @@ import {
   Target,
   Terminal
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { useOutsidePointerDown } from "../../shared/hooks/use-outside-pointer-down";
 import type { TodoStatus } from "../../api/contracts";
 import type { Goal, GoalStatus } from "../../api/goal-contracts";
 import { Button } from "../../shared/ui/button/button";
@@ -24,6 +25,7 @@ import { selectTodoOverviewItems, useRuntimeOverviewData } from "./runtime-overv
 import { requestSubagentFocus } from "../subagents/subagent-focus";
 import { subagentStatusLabel } from "../subagents/subagent-labels";
 import "./runtime-overview.css";
+import "./runtime-overview-toolbar.css";
 
 const COLLAPSED_STORAGE_KEY = "sai.runtime-overview.collapsed";
 
@@ -43,6 +45,7 @@ const pulseIcons = {
 
 type RuntimeOverviewProps = {
   sessionId?: string;
+  placement?: "floating" | "toolbar";
 };
 
 /**
@@ -54,16 +57,32 @@ type RuntimeOverviewProps = {
  * @param props 当前会话标识
  * @returns 可收缩的运行总览浮层
  */
-export function RuntimeOverview({ sessionId }: RuntimeOverviewProps) {
+export function RuntimeOverview({ sessionId, placement = "floating" }: RuntimeOverviewProps) {
   const { locale, t } = useI18n();
+  const panelId = useId();
   const data = useRuntimeOverviewData(sessionId);
   const pulse = useActivityPulse(data.snapshot);
   const [responsiveOpen, setResponsiveOpen] = useState(false);
+  const rootRef = useRef<HTMLElement>(null);
   const [collapsed, setCollapsed] = useState(() => {
+    if (placement === "toolbar") return true;
     if (typeof window === "undefined") return false;
     if (window.matchMedia("(max-width: 48rem)").matches) return true;
     return window.localStorage.getItem(COLLAPSED_STORAGE_KEY) === "true";
   });
+  useOutsidePointerDown(rootRef, () => setCollapsed(true), placement === "toolbar" && !collapsed);
+
+  useEffect(() => {
+    if (collapsed || placement !== "toolbar") return;
+    /** 退出工作概览并恢复工具栏焦点。 */
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setCollapsed(true);
+      rootRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [collapsed, placement]);
 
   useEffect(() => {
     window.localStorage.setItem(COLLAPSED_STORAGE_KEY, String(collapsed));
@@ -73,7 +92,9 @@ export function RuntimeOverview({ sessionId }: RuntimeOverviewProps) {
     ?? data.todos.items.find((item) => item.status === "pending");
 
   /** 胶囊内容：活动播报优先，其次展示 Todo 或子智能体，Git 不可用时不占位。 */
-  const pillContent = pulse
+  const pillContent = placement === "toolbar"
+    ? <><ListChecks size={15} aria-hidden /><span className="sr-only">{t("Work overview", "工作概览")}</span>{data.subagents.running > 0 && <span>{data.subagents.running}</span>}</>
+    : pulse
     ? <PulseContent pulse={pulse} />
     : activeTodo
       ? (
@@ -109,7 +130,7 @@ export function RuntimeOverview({ sessionId }: RuntimeOverviewProps) {
 
   if (collapsed) {
     return (
-      <aside className="runtime-overview is-collapsed">
+      <aside ref={rootRef} className={`runtime-overview is-collapsed runtime-overview-${placement}`}>
         <Button
           className={`runtime-overview-pill${pulse ? " is-pulsing" : ""}`}
           onClick={() => {
@@ -117,6 +138,8 @@ export function RuntimeOverview({ sessionId }: RuntimeOverviewProps) {
             setCollapsed(false);
           }}
           aria-label={t("Expand work overview", "展开工作概览")}
+          aria-expanded={false}
+          aria-controls={panelId}
           title={t("Expand work overview", "展开工作概览")}
         >
           {pillContent}
@@ -126,16 +149,18 @@ export function RuntimeOverview({ sessionId }: RuntimeOverviewProps) {
   }
 
   return (
-    <aside className={`runtime-overview is-expanded${responsiveOpen ? " is-responsive-open" : ""}`} aria-label={t("Work overview", "工作概览")}>
+    <aside ref={rootRef} className={`runtime-overview is-expanded runtime-overview-${placement}${responsiveOpen ? " is-responsive-open" : ""}`} aria-label={t("Work overview", "工作概览")}>
       <Button
         className={`runtime-overview-pill runtime-overview-responsive-pill${pulse ? " is-pulsing" : ""}`}
         onClick={() => setResponsiveOpen(true)}
         aria-label={t("Expand work overview", "展开工作概览")}
+        aria-expanded={true}
+        aria-controls={panelId}
         title={t("Expand work overview", "展开工作概览")}
       >
         {pillContent}
       </Button>
-      <div className="runtime-overview-panel">
+      <div id={panelId} className="runtime-overview-panel" role="region" aria-label={t("Work overview", "工作概览")}>
         <header className="runtime-overview-head">
           <strong>{t("Work overview", "工作概览")}</strong>
           {pulse && <PulseContent pulse={pulse} className="runtime-overview-head-pulse" />}

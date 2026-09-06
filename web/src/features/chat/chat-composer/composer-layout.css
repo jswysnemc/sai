@@ -1,179 +1,53 @@
-.composer-shell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap:var(--space-2xs);
-  padding:var(--space-xs) var(--chat-column-gutter) var(--space-lg);
-  background: var(--paper);
-}
-
+.composer-shell { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; padding: 0.75rem var(--chat-column-gutter) 0.75rem; background: var(--paper); }
 .composer {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap:var(--space-xs);
+  gap: 0.625rem;
   width: 100%;
   max-width: var(--chat-content-width);
-  min-height: 58px;
-  padding:var(--space-sm) var(--space-md) var(--space-xs);
-  border: 1px solid transparent;
-  border-radius:var(--radius-5);
-  background: var(--control-surface);
-  box-shadow: none;
-  transition:border-color var(--transition-base), box-shadow var(--transition-base);
+  min-height: 7rem;
+  padding: 0.75rem 0.625rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--composer-surface);
+  box-shadow: var(--shadow-composer);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-
-.composer:focus-within {
-  border-color: var(--line-strong);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 4%, transparent);
-}
-
-.composer-context-strip {
-  display: flex;
-  align-items: center;
-  gap:var(--space-3xs);
-  width: 100%;
-  max-width: var(--chat-content-width);
-  min-height: 28px;
-  /* 上下留出角标探出的空间：overflow-x:auto 会把 overflow-y 也变成裁切 */
-  padding: 4px var(--space-3xs);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.composer-context-strip::-webkit-scrollbar {
-  display: none;
-}
-
-.composer-context-strip .agent-selector {
-  margin-right: auto;
-}
-
-.composer-context-chip {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap:var(--space-2xs);
-  max-width: 120px;
-  height: 28px;
-  padding:0 var(--space-xs);
-  border-radius:var(--radius-2);
-  color: var(--ink-soft);
-  font-size:var(--text-xs);
-  line-height: var(--leading-control);
-}
-
-.composer-context-chip span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/*
- * Windows Edge 上按钮默认 appearance 会加额外内边距，
- * SVG 走行内基线时图标与文字不在同一光学中线。
- * 控件行高仍用 --leading-control，避免 line-height:1 让字形溢出。
- */
-.composer-context-strip .workspace-trigger,
-.composer-context-strip .system-usage-trigger,
-.composer-context-strip .agent-selector .ui-select > button,
-.composer-context-strip .ui-button.composer-rail-button,
-.composer-footer .model-thinking-trigger,
-.composer-footer .composer-mode .ui-select > button {
-  appearance: none;
-  -webkit-appearance: none;
-  box-sizing: border-box;
-  padding-block: 0;
-}
-
-.composer-context-strip svg,
-.composer-footer .model-thinking-trigger svg,
-.composer-footer .composer-mode .ui-select > button svg,
-.workspace-trigger svg,
-.agent-selector svg {
-  display: block;
-  flex-shrink: 0;
-}
-
-.workspace-trigger strong,
-.system-usage-trigger strong,
-.system-usage-trigger small,
-.model-thinking-model,
-.model-thinking-level,
-.agent-selector .ui-select-value,
-.composer-context-chip span {
-  line-height: var(--leading-control);
-}
-
-/*
- * 文本修剪只用于不会截断字形的纯标签。
- * .model-thinking-model 是 flex 项且自带 overflow: hidden（省略号截断），
- * 行盒一旦被修剪到 cap..alphabetic，基线以下的下伸部（g/p/y）与中文下半
- * 就会被裁掉，出现"底部拦腰截断"；它必须保留完整行盒。
- */
-@supports (text-box: trim-both cap alphabetic) {
-  .workspace-trigger strong,
-  .system-usage-trigger strong,
-  .system-usage-trigger small,
-  .model-thinking-level,
-  .agent-selector .ui-select-value > span,
-  .composer-context-chip span {
-    text-box: trim-both cap alphabetic;
-  }
-}
-
-.composer-context-strip .ui-button.composer-rail-button {
-  height: 28px;
-  min-height: 28px;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--ink-soft);
-  font-size:var(--text-xs);
-  line-height: var(--leading-control);
-}
-
-.composer-context-strip .ui-button.composer-rail-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--ink) 7%, transparent);
-  color: var(--ink);
-}
-
-.composer-text-wrap {
-  position: relative;
-  min-height: 32px;
-}
-
+.composer:focus-within { border-color: color-mix(in srgb, var(--ink) 40%, var(--line)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 4%, transparent); }
+.composer-text-wrap { position: relative; min-height: 3rem; }
 .composer-editor {
+  position: relative;
+  z-index: 2;
   display: block;
   width: 100%;
-  min-height: 32px;
-  max-height: 166px;
-  padding:var(--space-2xs) var(--space-3xs);
+  min-height: 3rem;
+  max-height: min(15rem, 35dvh);
+  padding: 0.1875rem 0.375rem;
   box-sizing: border-box;
-  font:400 var(--text-lg)/22px var(--font-ui);
-  letter-spacing: normal;
   overflow-y: auto;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-  position: relative;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--ink);
   caret-color: var(--ink);
-  z-index: 2;
+  font: 400 var(--text-xl)/1.65 var(--font-ui);
+  letter-spacing: normal;
 }
-
-.composer-editor:empty::before {
-  content: attr(data-placeholder);
-  color: var(--ink-soft);
-  opacity: 0.62;
-  pointer-events: none;
-}
-
-.composer-editor[aria-disabled="true"] {
-  cursor: not-allowed;
-  opacity: 0.55;
+.composer-editor:empty::before { content: attr(data-placeholder); color: var(--ink-soft); pointer-events: none; }
+.composer-editor[aria-disabled="true"] { cursor: not-allowed; opacity: 0.6; }
+.composer-context-footer { display: flex; justify-content: space-between; align-items: center; gap: 0.375rem; width: 100%; max-width: var(--chat-content-width); min-height: 1.875rem; }
+.composer-context-options, .composer-context-meta { display: flex; align-items: center; gap: 0.25rem; min-width: 0; }
+.composer-context-meta { flex: none; }
+.composer-context-footer .system-usage-trigger { height: 1.625rem; }
+.composer-context-footer .system-usage-trigger strong { font-family: var(--font-ui); font-weight: 400; }
+.composer-context-footer .composer-undo { width: 1.625rem; height: 1.625rem; min-height: 1.625rem; }
+@media (max-width: 48rem) {
+  .composer-shell { padding: 0.625rem 0.75rem 0.375rem; }
+  .composer { min-height: 6.75rem; padding: 0.625rem 0.5rem 0.375rem; border-radius: 0.875rem; }
+  .composer-editor { font-size: 1rem; }
 }
 
 .composer-atom {

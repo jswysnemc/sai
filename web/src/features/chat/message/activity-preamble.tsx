@@ -53,8 +53,8 @@ export function ActivityPreamble({
   }, [defaultOpen, pendingSecret, setOpen, userToggled]);
 
   const label = working
-    ? t("Preparing reply", "正在准备回复")
-    : t("Prepared reply", "准备回复");
+    ? t("Working", "正在处理")
+    : t("Work log", "处理过程");
   const detail = [
     counts.reasoning ? t(`${counts.reasoning} thoughts`, `思考 ${counts.reasoning}`) : "",
     counts.tools ? t(`${counts.tools} tools`, `工具 ${counts.tools}`) : ""

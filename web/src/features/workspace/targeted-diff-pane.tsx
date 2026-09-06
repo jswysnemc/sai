@@ -1,7 +1,6 @@
-import { Columns2, Rows3 } from "lucide-react";
-import { useState } from "react";
-import { Button } from "../../shared/ui/button/button";
-import { DiffView, type DiffLayout } from "../chat/tool-renderers/diff-view";
+import { DiffView } from "../chat/tool-renderers/diff-view";
+import { DiffViewControls } from "../chat/tool-renderers/diff/diff-view-controls";
+import { useDiffViewOptions } from "../chat/tool-renderers/diff/use-diff-view-options";
 import { useI18n } from "../i18n/use-i18n";
 
 type TargetedDiffPaneProps = {
@@ -20,34 +19,17 @@ type TargetedDiffPaneProps = {
  */
 export function TargetedDiffPane({ path, source }: TargetedDiffPaneProps) {
   const { t } = useI18n();
-  const [layout, setLayout] = useState<DiffLayout>("side");
+  const display = useDiffViewOptions("side");
   if (!source.trim()) {
     return <div className="workspace-targeted-diff-empty">{t("No diff content is available", "没有可显示的差异内容")}</div>;
   }
   return (
-    <div className="workspace-targeted-diff" aria-label={t(`Diff for ${path}`, `${path} 的差异`)}>
+    <div className="workspace-targeted-diff" ref={display.ref} aria-label={t(`Diff for ${path}`, `${path} 的差异`)}>
       <header className="workspace-targeted-diff-head">
-        <span>{path}</span>
-        <span className="workspace-targeted-diff-layout-toggle" role="group" aria-label={t("Diff layout", "差异布局")}>
-          <Button
-            className={layout === "unified" ? "is-active" : ""}
-            onClick={() => setLayout("unified")}
-            title={t("Unified view", "统一视图")}
-            aria-label={t("Unified view", "统一视图")}
-          >
-            <Rows3 size={13} />
-          </Button>
-          <Button
-            className={layout === "side" ? "is-active" : ""}
-            onClick={() => setLayout("side")}
-            title={t("Side by side view", "并排对比")}
-            aria-label={t("Side by side view", "并排对比")}
-          >
-            <Columns2 size={13} />
-          </Button>
-        </span>
+        <span title={path}>{path}</span>
+        <DiffViewControls options={display} />
       </header>
-      <DiffView source={source} headerPath={path} onlyPath={path} layout={layout} />
+      <DiffView source={source} headerPath={path} onlyPath={path} layout={display.layout} wrap={display.wrap} review />
     </div>
   );
 }

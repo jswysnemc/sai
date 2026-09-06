@@ -11,7 +11,8 @@ export type MobileWorkbenchAction =
   | { type: "show-pane"; pane: MobileWorkbenchPane };
 
 export const MOBILE_SIDEBAR_TOGGLE_EVENT = "sai:toggle-session-sidebar";
-export const MOBILE_WORKBENCH_MEDIA_QUERY = "(max-width: 760px)";
+// 【Web 工作台】【响应式布局】与 Tailwind md 断点保持一致，48rem 起使用桌面导航
+export const MOBILE_WORKBENCH_MEDIA_QUERY = "(width < 48rem)";
 
 export const initialMobileWorkbenchState: MobileWorkbenchState = {
   sidebarOpen: false,

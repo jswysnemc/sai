@@ -62,12 +62,8 @@ export function SyntaxHighlighter({
   source: string;
   showLineNumbers?: boolean;
 }) {
-  const normalized = normalizeLanguage(language);
-  const resolved = normalized && hljs.getLanguage(normalized) ? normalized : detectLanguage(source);
-  const result = resolved
-    ? hljs.highlight(source, { language: resolved, ignoreIllegals: true })
-    : hljs.highlightAuto(source, AUTO_DETECT_LANGUAGES);
-  const className = `hljs${resolved ? ` language-${resolved}` : ""}`;
+  const result = highlightSource(source, language);
+  const className = `hljs${result.language ? ` language-${result.language}` : ""}`;
   if (!showLineNumbers) {
     return <code className={className} dangerouslySetInnerHTML={{ __html: result.value }} />;
   }
@@ -84,6 +80,21 @@ export function SyntaxHighlighter({
       ))}
     </code>
   );
+}
+
+/**
+ * 为代码块与差异视图生成统一的安全着色标记。
+ * @param source 原始代码文本
+ * @param language 文件语言或扩展名
+ * @returns 经过转义的着色 HTML 及已确认的语言名称
+ */
+export function highlightSource(source: string, language?: string): { value: string; language: string } {
+  const normalized = normalizeLanguage(language);
+  const resolved = normalized && hljs.getLanguage(normalized) ? normalized : detectLanguage(source);
+  const result = resolved
+    ? hljs.highlight(source, { language: resolved, ignoreIllegals: true })
+    : hljs.highlightAuto(source, AUTO_DETECT_LANGUAGES);
+  return { value: result.value, language: resolved };
 }
 
 /**

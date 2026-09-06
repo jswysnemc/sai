@@ -1,26 +1,31 @@
+@import "./settings-navigation.css";
+
 /* 设置页框架：页面容器、吸顶标题条、分类导航、对象列表和编辑区骨架 */
 
 .settings-page {
+  display: grid;
+  grid-template-rows: var(--toolbar-height) minmax(0, 1fr);
   width: 100%;
   min-width: 0;
   height: 100%;
-  overflow: auto;
-  /* 不同 section 内容高低不一会导致纵向滚动条出现/消失，
-     预留 gutter 避免整页（含左侧导航）宽度微抖 */
-  scrollbar-gutter: stable;
+  overflow: hidden;
   background: var(--paper);
 }
 
 .settings-back {
   display: inline-flex;
   align-items: center;
-  gap:var(--space-2xs);
+  gap: 0.375rem;
+  min-height: 1.875rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-2);
   color: var(--ink-soft);
-  font-size:var(--text-sm);
+  font-size: var(--text-sm);
   text-decoration: none;
 }
 
-.settings-back:hover { color: var(--ink); }
+.settings-back:hover { background: var(--surface-hover); color: var(--ink); }
+.settings-back:focus-visible { outline: none; box-shadow: var(--ring-focus); }
 
 /* ---------- 吸顶紧凑标题条 ---------- */
 
@@ -30,32 +35,24 @@
   z-index: 20;
   border-bottom: 1px solid var(--line);
   background: var(--paper);
-  box-shadow: var(--elevation-2);
+  box-shadow: none;
 }
 
 .settings-topbar-inner {
   display: flex;
   align-items: center;
   gap:var(--space-lg);
-  width: min(100%, 1600px);
-  height: 3.5rem;
+  width: 100%;
+  height: var(--toolbar-height);
   margin: 0 auto;
-  padding:0 clamp(var(--space-lg), 2.5vw, var(--space-5xl));
+  padding: 0 1rem;
 }
 
 .settings-topbar h1 {
   margin: 0;
-  font-size:var(--text-2xl);
-  letter-spacing: -0.02em;
-}
-
-.settings-topbar p {
-  overflow: hidden;
-  margin: 0;
-  color: var(--ink-soft);
-  font-size:var(--text-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: var(--text-lg);
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
 .settings-topbar-actions {
@@ -77,7 +74,7 @@
   white-space: nowrap;
 }
 
-.settings-status-badge.saved { background: var(--signal-soft); color: var(--signal); }
+.settings-status-badge.saved { background: transparent; color: var(--ink-soft); }
 .settings-status-badge.dirty { background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--warning); }
 .settings-status-badge.failed { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
 .settings-status-badge-text {
@@ -90,91 +87,20 @@
 
 .settings-workspace {
   display: grid;
-  /* 左栏定宽，避免随内容或滚动条状态被挤动 */
-  grid-template-columns: 13.75rem minmax(0, 1fr);
-  width: min(100%, 1600px);
+  grid-template-columns: 14.5rem minmax(0, 1fr);
   min-width: 0;
-  margin: 0 auto;
-  min-height: calc(100% - 57px);
-}
-
-.settings-navigation {
-  position: sticky;
-  top: 3.5rem;
-  align-self: start;
-  display: grid;
-  align-content: start;
-  gap:var(--space-2xs);
-  width: 100%;
-  min-width: 0;
-  max-height: calc(100vh - 3.5rem);
-  padding:var(--space-2xl) var(--space-lg) var(--space-4xl);
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  border-right: 1px solid var(--line);
-  box-sizing: border-box;
-}
-
-.settings-navigation-label {
-  padding:0 var(--space-md) var(--space-sm);
-  color: var(--ink-soft);
-  font:500 var(--text-2xs) var(--font-code);
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.settings-navigation button,
-.settings-navigation a {
-  display: grid;
-  grid-template-columns: 1.125rem minmax(0, 1fr);
-  align-items: center;
-  gap:var(--space-md);
-  width: 100%;
-  padding:var(--space-sm) var(--space-md);
-  border: 0;
-  border-radius:var(--radius-3);
-  background: transparent;
-  color: var(--ink-soft);
-  text-align: left;
-  text-decoration: none;
-}
-
-.settings-navigation button > svg,
-.settings-navigation a > svg {
-  color: var(--ink-soft);
-}
-
-.settings-navigation button > span,
-.settings-navigation a > span {
-  display: grid;
-  gap:var(--space-3xs);
-  min-width: 0;
-}
-
-.settings-navigation strong { color: inherit; font-size:var(--text-base); font-weight: 500; }
-.settings-navigation button:hover,
-.settings-navigation a:hover { background: var(--paper-deep); color: var(--ink); }
-.settings-navigation button:focus-visible,
-.settings-navigation a:focus-visible {
-  outline: 2px solid var(--signal);
-  outline-offset: -2px;
-}
-
-.settings-navigation button.active,
-.settings-navigation a.active {
-  background: var(--signal-soft);
-  color: var(--ink);
-}
-
-.settings-navigation button.active > svg,
-.settings-navigation a.active > svg {
-  color: var(--signal);
+  min-height: 0;
 }
 
 .settings-main {
   min-width: 0;
-  padding:var(--space-xl) clamp(var(--space-lg), 2vw, var(--space-4xl)) 2.5rem;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding: 1.75rem clamp(1.25rem, 3vw, 3.5rem) 3rem;
 }
+
+.settings-main-content { width: 100%; max-width: 70rem; margin: 0 auto; }
 
 /* ---------- 对象列表中列 ---------- */
 
@@ -221,44 +147,6 @@
 
 /* 手机端：顶栏保持单行紧凑，分类导航降级为吸顶横向滚动页签 */
 
-/* 分组导航与搜索 */
-.settings-nav-search {
-  display: block;
-  margin:0 0 var(--space-md);
-}
-.settings-nav-search input {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  padding:var(--space-xs) var(--space-md);
-  border: 1px solid var(--line);
-  border-radius:var(--radius-3);
-  background: var(--paper);
-  color: var(--ink);
-  font: inherit;
-  font-size:var(--text-sm);
-}
-.settings-nav-search input:focus {
-  outline: none;
-}
-.settings-nav-group {
-  display: grid;
-  gap:var(--space-3xs);
-  margin-bottom:var(--space-xl);
-}
-.settings-nav-group-label {
-  margin:var(--space-xs) var(--space-3xs) var(--space-xs);
-  color: var(--ink-soft);
-  font-size:var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.settings-nav-empty {
-  margin:var(--space-sm) var(--space-3xs);
-  color: var(--ink-soft);
-  font-size:var(--text-sm);
-}
 .settings-save-hint {
   display: inline-flex;
   align-items: center;
@@ -282,56 +170,15 @@
 }
 
 @media (max-width: 48rem) {
-  .settings-topbar-inner { gap:var(--space-sm); }
-  .settings-topbar h1 { font-size:var(--text-2xl); }
-  .settings-topbar p { display: none; }
-  .settings-back { gap: 0; }
+  .settings-topbar-inner { gap: 0.5rem; padding-inline: 0.75rem; }
+  .settings-back { gap: 0; padding: 0.375rem; }
   .settings-back span { display: none; }
-  .settings-topbar-actions { gap:var(--space-xs); }
-  .settings-status-badge { width: 26px; padding: 0; justify-content: center; }
+  .settings-topbar-actions { gap: 0.375rem; }
+  .settings-status-badge { width: 1.625rem; padding: 0; justify-content: center; }
   .settings-status-badge-text { display: none; }
-  .settings-workspace { display: block; min-height: 0; }
-  .settings-navigation {
-    top: 3.5rem;
-    z-index: 15;
-    display: flex;
-    gap:var(--space-2xs);
-    width: 100%;
-    min-width: 0;
-    max-height: none;
-    margin: 0;
-    padding:var(--space-sm) var(--space-lg);
-    overflow-x: auto;
-    overflow-y: hidden;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-    background: var(--paper);
-    scrollbar-width: none;
-  }
-  .settings-navigation::-webkit-scrollbar { display: none; }
-  .settings-navigation-label { display: none; }
-  .settings-nav-search { display: none; }
-  .settings-nav-group { display: contents; }
-  .settings-nav-group-label { display: none; }
-  .settings-navigation button,
-  .settings-navigation a {
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    gap:var(--space-xs);
-    width: auto;
-    padding:var(--space-xs) var(--space-md);
-    border-radius: var(--radius-pill);
-    white-space: nowrap;
-  }
-  .settings-navigation button.active,
-  .settings-navigation a.active {
-    box-shadow: none;
-    background: var(--signal-soft);
-  }
-  .settings-navigation button > span,
-  .settings-navigation a > span { display: block; }
-  .settings-main { padding:var(--space-2xl) var(--space-lg) 72px; }
+  .settings-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .settings-main { padding: 1.25rem 1rem 3rem; }
+  .settings-save-hint { max-width: 9rem; font-size: var(--text-xs); }
 }
 
 .settings-inline-note {

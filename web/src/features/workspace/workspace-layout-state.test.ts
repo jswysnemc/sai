@@ -29,12 +29,17 @@ describe("workspace layout state", () => {
   it("uses defaults for invalid persisted content", () => {
     expect(parseWorkspaceLayout("invalid", 1440)).toEqual({
       chatOpen: true,
-      workspaceOpen: true,
+      workspaceOpen: false,
       workspaceWidth: 520,
       workspaceMaximized: false,
       terminalOpen: false,
       terminalHeight: 280,
       swapped: false
     });
+  });
+
+  it("工作区已关闭时恢复聊天并清除残留全屏状态", () => {
+    const layout = parseWorkspaceLayout('{"workspaceOpen":false,"chatOpen":false,"workspaceMaximized":true}', 390);
+    expect(layout).toMatchObject({ workspaceOpen: false, chatOpen: true, workspaceMaximized: false });
   });
 });

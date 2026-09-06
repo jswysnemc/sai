@@ -1,6 +1,6 @@
-import "@fontsource/fira-sans/latin-400.css";
-import "@fontsource/fira-sans/latin-500.css";
-import "@fontsource/fira-sans/latin-600.css";
+import "@fontsource/inter/latin-400.css";
+import "@fontsource/inter/latin-500.css";
+import "@fontsource/inter/latin-600.css";
 import "@fontsource/fira-code/latin-400.css";
 import "@fontsource/fira-code/latin-500.css";
 // 中文自托管：系统 CJK 字体（苹方/雅黑/Noto）跨平台字形与字重差异大，
@@ -46,6 +46,10 @@ function Root({ authenticated }: { authenticated: boolean }) {
   );
 }
 
+/**
+ * 【Web 工作台】【应用启动】初始化主题、认证和渲染入口。
+ * @returns 初始化完成后的异步结果
+ */
 async function start() {
   initializeTheme();
   // 尽早配置 Monaco，避免设置页 JSON 编辑器在未进代码页时触发 toUrl 报错

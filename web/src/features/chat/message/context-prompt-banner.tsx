@@ -1,11 +1,13 @@
-import { BookMarked, ChevronDown, FileText, Loader2, X } from "lucide-react";
+import { BookMarked, ChevronDown, Loader2, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Button } from "../../../shared/ui/button/button";
 import { api } from "../../../api/client";
 import type { RunMode, RunModelSelection, SessionContextPromptSection } from "../../../api/contracts";
 import { MarkdownRenderer } from "../markdown-renderer";
 import { useI18n } from "../../i18n/use-i18n";
 import { formatContextPromptMarkdown } from "./format-context-prompt-markdown";
+import { ContextBannerNavigation } from "./context-banner-navigation";
 import "./context-prompt-banner.css";
 
 type ContextPromptBannerProps = {
@@ -156,6 +158,9 @@ export function ContextPromptBanner({
   const [open, setOpen] = useState(false);
   const [pendingSectionId, setPendingSectionId] = useState<string | null>(null);
   const markdownRef = useRef<HTMLDivElement | null>(null);
+  const rootRef = useRef<HTMLElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const bodyId = useId();
   const query = useQuery({
     queryKey: [
       "session-context-prompt",
@@ -208,7 +213,7 @@ export function ContextPromptBanner({
   /**
    * 展开上下文并定位到标签对应的 Markdown 标题。
    *
-   * @param tag 用户点击的上下文标签
+   * @param sectionId 用户点击的上下文段落标识
    * @returns 无返回值
    */
   const revealTag = (sectionId: string) => {
@@ -216,25 +221,52 @@ export function ContextPromptBanner({
     setOpen(true);
   };
 
+  /** 关闭内容后将标题与键盘焦点留在视口中。@returns 无 */
+  const closeContext = () => {
+    setOpen(false);
+    setPendingSectionId(null);
+    requestAnimationFrame(() => {
+      rootRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
+      toggleRef.current?.focus({ preventScroll: true });
+    });
+  };
+
+  /**
+   * 定位上下文首尾，为底部固定输入区预留可见空间。
+   * @param edge 顶部或底部
+   * @returns 无
+   */
+  const navigateContext = (edge: "top" | "bottom") => {
+    const root = rootRef.current;
+    const scroll = root?.closest<HTMLElement>(".message-scroll");
+    if (!root || !scroll) return;
+    const rect = root.getBoundingClientRect();
+    const viewport = scroll.getBoundingClientRect();
+    const composerHeight = scroll.querySelector<HTMLElement>(".composer-dock")?.offsetHeight ?? 0;
+    const top = edge === "top" ? rect.top - viewport.top + scroll.scrollTop
+      : rect.bottom - viewport.top + scroll.scrollTop - scroll.clientHeight + composerHeight + 12;
+    scroll.scrollTo({ top, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+  };
+
   useEffect(() => {
     if (!open || !pendingSectionId || renderedSections.length === 0) return;
     const frame = window.requestAnimationFrame(() => {
       const target = findContextSection(markdownRef.current, pendingSectionId);
-      target?.scrollIntoView({ block: "start", behavior: "smooth" });
+      target?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
       setPendingSectionId(null);
     });
     return () => window.cancelAnimationFrame(frame);
   }, [open, pendingSectionId, renderedSections.length]);
 
   return (
-    <section className={`context-prompt-banner${open ? " is-open" : ""}`} data-overview-id="context-prompt">
+    <section ref={rootRef} className={`context-prompt-banner${open ? " is-open" : ""}`} data-overview-id="context-prompt">
       <div className="context-prompt-banner-head">
-        <button
-          type="button"
+        <Button
+          ref={toggleRef}
           className="context-prompt-banner-toggle"
-          onClick={() => setOpen((value) => !value)}
+          onClick={() => open ? closeContext() : setOpen(true)}
           aria-expanded={open}
-          aria-controls="context-prompt-body"
+          aria-controls={bodyId}
           aria-label={title}
         >
           <span className="context-prompt-banner-icon" aria-hidden>
@@ -251,38 +283,23 @@ export function ContextPromptBanner({
             </span>
             <span className="context-prompt-banner-subtitle">{subtitle}</span>
           </span>
-        </button>
-        {meta.length > 0 && (
-          <span className="context-prompt-banner-tags" role="list" aria-label={t("Context sections", "上下文段落")}>
-            {meta.map((tag) => (
-              <button
-                key={`${tag.id}:${tag.label}`}
-                type="button"
-                className="context-prompt-banner-tag"
-                onClick={() => revealTag(tag.id)}
-                aria-label={t(`Open ${tag.label}`, `打开${tag.label}`)}
-              >
-                <FileText size={11} aria-hidden />
-                {tag.label}
-              </button>
-            ))}
-          </span>
-        )}
-        <button
-          type="button"
+          {!open && <ChevronDown size={13} aria-hidden />}
+        </Button>
+        <Button
           className="context-prompt-banner-close"
-          onClick={() => setOpen((value) => !value)}
+          onClick={() => open ? closeContext() : setOpen(true)}
           aria-expanded={open}
-          aria-controls="context-prompt-body"
+          aria-controls={bodyId}
           aria-label={open ? t("Close context", "关闭上下文") : title}
         >
           {open
             ? <X size={14} aria-hidden />
             : <ChevronDown size={14} className="context-prompt-banner-chevron" aria-hidden />}
-        </button>
+        </Button>
       </div>
       {open && (
-        <div id="context-prompt-body" className="context-prompt-banner-body">
+        <div id={bodyId} className="context-prompt-banner-body">
+          <ContextBannerNavigation sections={renderedSections.length ? renderedSections : meta} onSection={revealTag} onTop={() => navigateContext("top")} onBottom={() => navigateContext("bottom")} onClose={closeContext} />
           {query.isLoading && (
             <div className="context-prompt-banner-status">
               {t("Loading…", "加载中…")}

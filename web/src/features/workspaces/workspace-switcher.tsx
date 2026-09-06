@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Check, ChevronDown, FolderGit2, FolderOpen, X } from "lucide-react";
+import { Check, ChevronDown, ChevronsLeftRight, FolderGit2, FolderOpen, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../api/client";
@@ -9,7 +9,9 @@ import { useAnchoredPopover } from "../../shared/ui/popover/use-anchored-popover
 import { ServerDirectoryDialog } from "./server-directory-dialog";
 import "./workspace-switcher.css";
 import { useI18n } from "../i18n/use-i18n";
-import type { Translate } from "../i18n/i18n-context";
+import { switchWithTerminalConfirm } from "./workspace-switch-confirmation";
+
+export { switchWithTerminalConfirm } from "./workspace-switch-confirmation";
 
 /**
  * 渲染紧凑工作区入口、最近工作区和服务端目录浏览器。
@@ -20,6 +22,8 @@ export function WorkspaceSwitcher() {
   const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
+  // 触发器在「名称」与「完整路径」两种展示之间切换
+  const [showPath, setShowPath] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -53,9 +57,21 @@ export function WorkspaceSwitcher() {
 
   return (
     <div className="workspace-switcher" ref={rootRef}>
-      <button ref={triggerRef} className="workspace-trigger" type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-        <FolderGit2 size={13} /><strong>{activeName}</strong><ChevronDown size={12} className={open ? "open" : ""} />
+      <button ref={triggerRef} className="workspace-trigger" type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} title={active?.path}>
+        <FolderGit2 size={13} /><strong className={showPath && active ? "path" : undefined}>{showPath && active ? active.path : activeName}</strong><ChevronDown size={12} className={open ? "open" : ""} />
       </button>
+      {active?.path && active.path !== activeName && (
+        <button
+          className="workspace-path-toggle"
+          type="button"
+          aria-pressed={showPath}
+          aria-label={showPath ? t("Show workspace name", "显示工作区名称") : t("Show full path", "显示完整路径")}
+          title={showPath ? t("Show workspace name", "显示工作区名称") : t("Show full path", "显示完整路径")}
+          onClick={() => setShowPath((value) => !value)}
+        >
+          <ChevronsLeftRight size={12} />
+        </button>
+      )}
       {open && createPortal(
         <div ref={menuRef} className="workspace-menu" style={menuStyle}>
           <div className="workspace-menu-head"><span><strong>{activeName}</strong><small>{active?.path}</small></span><button type="button" aria-label={t("Close workspace menu", "关闭工作区菜单")} onClick={() => setOpen(false)}><X size={15} /></button></div>
@@ -74,39 +90,4 @@ export function WorkspaceSwitcher() {
       <ServerDirectoryDialog open={browserOpen} onClose={() => setBrowserOpen(false)} onSelect={openDirectory} />
     </div>
   );
-}
-
-/**
- * 切换工作区，遇到终端占用冲突时经确认后关闭终端重试。
- *
- * @param id 目标工作区 ID
- * @param confirm 全局确认对话框方法
- * @param t 双语文本选择方法
- * @returns 是否完成切换
- */
-export async function switchWithTerminalConfirm(
-  id: string,
-  confirm: (options: { title: string; description: string; confirmLabel?: string; danger?: boolean }) => Promise<boolean>,
-  t: Translate
-): Promise<boolean> {
-  try {
-    // 1. 先尝试普通切换
-    await api.workspaces.switch(id);
-    return true;
-  } catch (error) {
-    // 2. 非终端占用错误直接抛出
-    const message = error instanceof Error ? error.message : String(error);
-    if (!message.includes("terminal")) throw error;
-    // 3. 询问用户是否关闭全部终端并切换
-    const confirmed = await confirm({
-      title: t("Close terminals and switch workspace", "关闭终端并切换工作区"),
-      description: t("Terminal sessions are running. Close all terminals and switch workspace?", "当前有终端会话在运行，关闭全部终端并切换？"),
-      confirmLabel: t("Close and switch", "关闭并切换"),
-      danger: true
-    });
-    if (!confirmed) return false;
-    // 4. 携带 close_terminals=true 重试
-    await api.workspaces.switch(id, true);
-    return true;
-  }
 }
