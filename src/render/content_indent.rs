@@ -1,3 +1,4 @@
+use crate::render::activity_animation::ACTIVITY_GUIDE;
 use crossterm::terminal;
 use unicode_width::UnicodeWidthChar;
 
@@ -14,7 +15,7 @@ pub(crate) const DIFF_BLOCK_INSET: usize = CONTENT_LEFT_INDENT + DIFF_NESTED_IND
 
 /// 判断字符是否为悬挂在视觉引导线列的行首符号。
 ///
-/// `●` 用户回显、`•` 工具/状态、`◦` 思考、`✗` 失败、`›` 系统提示，
+/// `●` 用户回显、`•` 工具/状态、`◦` 思考、`✗` 失败、`›` 系统提示及活动竖条，
 /// 都必须停在引导线列，否则会被推到正文列与正文混在一起。
 ///
 /// 参数:
@@ -25,7 +26,7 @@ pub(crate) const DIFF_BLOCK_INSET: usize = CONTENT_LEFT_INDENT + DIFF_NESTED_IND
 fn is_guide_marker(ch: char) -> bool {
     matches!(
         ch,
-        '●' | '○' | '•' | '◦' | '✗' | '›' | '◐' | '◓' | '◑' | '◒'
+        '●' | '○' | '•' | '◦' | '✗' | '›' | '◐' | '◓' | '◑' | '◒' | ACTIVITY_GUIDE
     )
 }
 
@@ -48,7 +49,7 @@ pub(crate) fn normalize_guide_marker(text: &str) -> String {
 /// 【终端】【视觉引导】替换活动标题的引导符号，正文与列宽保持不变。
 ///
 /// 参数: `text` 为标题行，`frame` 为动画帧号
-/// 返回: 带旋转引导符号的标题行
+/// 返回: 带呼吸竖条的标题行
 pub(crate) fn animate_guide_marker(text: &str, frame: usize) -> String {
     let Some(marker) =
         first_non_space_visible_char(text).filter(|marker| is_guide_marker(marker.ch))

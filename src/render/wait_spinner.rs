@@ -365,7 +365,7 @@ mod tests {
         assert!(frame.contains("model gpt"));
     }
 
-    /// 【终端】【等待状态测试】验证等待状态与工作状态共用白色流光和固定引导点。
+    /// 【终端】【等待状态测试】验证等待状态与工作状态共用明亮流光和呼吸竖条。
     ///
     /// 参数:
     /// - 无
@@ -377,13 +377,13 @@ mod tests {
         let state = make_state("Thinking", None);
 
         let (first, lines) = render_frame(0, &state);
-        // 亮带按字符位离散推进，相邻帧可能停在原位；跨过一个字符位再比较
+        // 1. 对比呼吸周期内不同阶段，确认状态行持续变化
         let (second, _) = render_frame(14, &state);
         let plain = strip_ansi_for_test(&first);
 
         assert!(plain.contains("Thinking"));
         assert!(plain.contains("0s"));
-        assert!(plain.starts_with("◐ "));
+        assert!(plain.starts_with("▮ "));
         assert!(!plain.contains('·'));
         assert_ne!(first, second);
         assert_eq!(lines, 1);

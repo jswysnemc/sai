@@ -1,4 +1,4 @@
-use crate::render::activity_animation::{render_activity_detail, render_activity_text};
+use crate::render::activity_animation::render_activity_line;
 use crate::render::fold_text::{
     fold_display_lines, terminal_wrap_width, wrap_display_lines, FoldedDisplayLine,
     FOLD_HEAD_LINES, FOLD_TAIL_LINES,
@@ -103,17 +103,8 @@ pub(crate) fn render_live(
     )
     .trim_start()
     .to_string();
-    // 【终端】【思考状态】1. 活动思考使用旋转引导符号，定稿后恢复空心圆
-    let title = format!(
-        "{} {}{}",
-        crate::render::activity_animation::render_thinking_dot(frame),
-        render_activity_text(THINKING_LABEL, frame),
-        if detail.is_empty() {
-            String::new()
-        } else {
-            format!(" {}", render_activity_detail(&detail))
-        }
-    );
+    // 【终端】【思考状态】1. 活动思考使用呼吸竖条，定稿后恢复空心圆
+    let title = render_activity_line(THINKING_LABEL, &detail, frame);
     match mode {
         ReasoningDisplayMode::Hidden => String::new(),
         ReasoningDisplayMode::Summary => title,

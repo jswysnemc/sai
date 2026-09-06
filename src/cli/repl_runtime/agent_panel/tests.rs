@@ -159,7 +159,7 @@ fn inactive_panel_is_a_single_summary_line() {
     let lines = panel.panel_lines(&entries, 0);
     assert_eq!(lines.len(), 1);
     let plain = crate::render::activity_animation::strip_ansi_for_test(&lines[0]);
-    assert!(plain.starts_with('◐'), "摘要行应以引导点起头: {plain}");
+    assert!(plain.starts_with('▮'), "摘要行应以活动竖条起头: {plain}");
     assert!(plain.contains("(2)"), "摘要行应给出条目数: {plain}");
     assert!(plain.contains('1'), "摘要行应给出运行中条数: {plain}");
     assert!(plain.contains('↓'), "摘要行应提示 ↓ 展开: {plain}");
@@ -237,7 +237,7 @@ fn header_is_a_guide_dot_and_entry_columns_align() {
         .collect();
     // 标题行与 todo、队列同一套沉底装饰：顶格引导点
     assert!(
-        plain_lines[0].starts_with('◐'),
+        plain_lines[0].starts_with('▮'),
         "标题行应以引导点顶格: {:?}",
         plain_lines[0]
     );

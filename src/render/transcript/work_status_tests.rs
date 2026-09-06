@@ -22,8 +22,7 @@ fn live_reasoning_body_animates_without_waiting_for_consolidation() {
     ));
 
     let first = store.display_live_tail(80, &options());
-    // 帧号由真实时间推导，直接把计时起点回拨来模拟动效推进。
-    // 亮带起步于文字左侧的留白，回拨量需大到足以让它扫进文字区
+    // 1. 帧号由真实时间推导，回拨计时起点以对比暗带扫描的不同阶段
     assert!(store.advance_live_animation());
     store.rewind_live_animation_for_test(ACTIVITY_FRAME_INTERVAL * 16);
     let second = store.display_live_tail(80, &options());
@@ -37,7 +36,7 @@ fn live_reasoning_body_animates_without_waiting_for_consolidation() {
         .collect::<Vec<_>>();
     // 区块前空行与定稿 Reasoning 对齐
     assert!(plain[0].is_empty());
-    assert!(plain[1].starts_with(['◐', '◓', '◑', '◒']));
+    assert!(plain[1].starts_with('▮'));
     assert!(plain[1].contains(" Thinking"));
     assert!(plain[1].contains("tokens"));
     assert!(plain.iter().any(|line| line.contains("inspect resize")));

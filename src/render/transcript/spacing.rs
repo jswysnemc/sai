@@ -1,6 +1,6 @@
 use super::cell::HistoryCell;
 use super::line::AnsiLine;
-use crate::render::activity_animation::strip_ansi_for_test;
+use crate::render::activity_animation::{strip_ansi_for_test, ACTIVITY_GUIDE};
 
 /// 判断一行在终端上是否看起来是空行。
 ///
@@ -77,7 +77,7 @@ pub(super) fn needs_section_gap(previous: &HistoryCell, next: &HistoryCell) -> b
 /// - `lines`: live 预换行
 ///
 /// 返回:
-/// - 首个非空行以 `•` 开头时为 true
+/// - 首个非空行以工具引导符或活动竖条开头时为 true
 pub(super) fn live_opens_with_tool(lines: &[AnsiLine]) -> bool {
     lines
         .iter()
@@ -85,7 +85,7 @@ pub(super) fn live_opens_with_tool(lines: &[AnsiLine]) -> bool {
         .is_some_and(|line| {
             strip_ansi_for_test(line.as_str())
                 .trim_start()
-                .starts_with(['•', '●', '◐', '◓', '◑', '◒'])
+                .starts_with(['•', '●', '◐', '◓', '◑', '◒', ACTIVITY_GUIDE])
         })
 }
 

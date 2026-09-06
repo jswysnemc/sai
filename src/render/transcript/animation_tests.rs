@@ -2,9 +2,10 @@ use super::test_support::options;
 use super::TranscriptStore;
 use crate::render::activity_animation::strip_ansi_for_test;
 
-/// 工具运行中的引导符轮换且不改变布局，完成后保持静态。
+/// 【终端】【动效测试】工具运行时引导符呼吸且不改变布局，完成后保持静态。
+/// 参数：无；返回：无。
 #[test]
-fn tool_guides_rotate_only_while_running() {
+fn tool_guides_pulse_only_while_running() {
     for (name, args, output) in [
         (
             "run_command",
@@ -19,12 +20,9 @@ fn tool_guides_rotate_only_while_running() {
         let later = store.cells[0].display_lines_framed(80, &options(), 12);
         let first_title = strip_ansi_for_test(first[0].as_str());
         let later_title = strip_ansi_for_test(later[0].as_str());
-        assert!(first_title.starts_with('◓'), "{first_title}");
-        assert!(later_title.starts_with('◒'), "{later_title}");
-        assert_eq!(
-            first_title.chars().skip(1).collect::<String>(),
-            later_title.chars().skip(1).collect::<String>()
-        );
+        assert!(first_title.starts_with('▮'), "{first_title}");
+        assert_eq!(first_title, later_title);
+        assert_ne!(first[0], later[0]);
         assert_eq!(first.len(), later.len());
 
         store.push_tool_result(name.into(), true, output.into());
