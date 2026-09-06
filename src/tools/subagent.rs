@@ -13,6 +13,9 @@ use std::time::Duration;
 #[path = "subagent_args.rs"]
 mod args;
 mod control;
+#[cfg(test)]
+#[path = "subagent/model_settings_tests.rs"]
+mod model_settings_tests;
 mod runner_factory;
 mod wait;
 

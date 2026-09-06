@@ -58,7 +58,7 @@ export function AgentRuntimeFields({
         disabled={modelChoices.length === 0}
         ariaLabel={t("Agent model", "Agent 模型")}
       />
-      <small>{t("Select an enabled provider and model combination", "直接选择已启用的供应商与模型组合")}</small>
+      <small>{t("For subagents, task-specific settings take priority over this model; this model takes priority over shared defaults.", "作为子任务运行时，类型专用设置优先于此处模型，此处模型优先于共享默认值。")}</small>
     </div>
     <div className="settings-field">
       <span>{t("Thinking level", "思考等级")}</span>

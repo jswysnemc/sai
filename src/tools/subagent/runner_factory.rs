@@ -1,6 +1,6 @@
 use super::*;
 
-/// 【子任务】【模型刷新】启动前读取最新设置，并保留主对话当前模型和思考覆盖。
+/// 【子任务】【模型刷新】启动前读取最新档案及子任务设置，保留主对话当前模型和思考覆盖。
 ///
 /// 参数: `context` 为即将启动的子任务上下文
 /// 返回: 配置读取结果；未保存配置时沿用上下文
@@ -10,6 +10,8 @@ pub(super) fn refresh_model_settings(context: &mut SubagentContext) -> Result<()
     }
     let saved = AppConfig::load(&context.paths)?;
     let main = context.config.provider(None)?.clone();
+    // 1. 【子任务】【模型刷新】档案是类型专用设置缺省时的模型来源，必须一并刷新
+    context.config.agents = saved.agents;
     context.config.subagent = saved.subagent;
     context.config.providers = saved.providers;
     if let Some(provider) = context

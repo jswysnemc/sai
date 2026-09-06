@@ -55,7 +55,7 @@ export function SubagentModelDialog({ open, onClose }: SubagentModelDialogProps)
     <Modal
       open={open}
       title={t("Subagent models & thinking", "子任务模型与思考")}
-      description={t("Set shared defaults or override individual task types. Changes apply to newly started subagents.", "设置共享默认值，或单独调整任务类型。保存后对新启动的子任务生效。")}
+      description={t("Configure Sai subagents. Saved settings apply to newly started subagents in Web and TUI.", "配置 Sai 子任务模型；保存后对 Web 和 TUI 新启动的子任务生效。")}
       size="small"
       onClose={onClose}
       footer={<>
@@ -106,6 +106,9 @@ export function SubagentModelDialog({ open, onClose }: SubagentModelDialogProps)
               />
             </div>
           </div>
+          <p>{target
+            ? t("Saving here takes priority over the Agent profile. Inherit shared defaults skips the profile model.", "此处保存的类型设置优先于 Agent 档案；选择沿用共享默认值会跳过档案模型。")
+            : t("Task-specific settings and Agent profile models take priority over shared defaults. Select a task type above to override its profile.", "类型专用设置和 Agent 档案模型优先于共享默认值。若要覆盖档案模型，请先选择对应的子任务类型。")}</p>
           <p role="status">{saved
             ? t("Saved. New subagents will use these settings.", "已保存，后续启动的子任务将使用此设置。")
             : t("Shared across Web and TUI. Existing subagents keep their current settings.", "Web 与 TUI 共用此设置，已运行的子任务保留当前设置。")}</p>
