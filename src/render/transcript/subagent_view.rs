@@ -156,7 +156,7 @@ fn render_view_text(id: &str, label: &str, frame: usize) -> String {
             output.push_str(&markdown_cell::render_completed(result));
         }
     }
-    // 3. 【终端】【子智能体状态】运行中显示 Working 白色流光；待命给出留言提示
+    // 3. 【终端】【子智能体状态】运行中显示 Working 主题流光；待命给出留言提示
     if status == "run" {
         output.push('\n');
         let label = WorkStatus::Working.localized_label();
@@ -206,7 +206,7 @@ mod tests {
         assert!(!lines.is_empty());
     }
 
-    /// 【终端】【子智能体状态】验证运行状态只保留 Working 白色流光。
+    /// 【终端】【子智能体状态】验证运行状态只保留 Working 主题流光。
     ///
     /// 参数:
     /// - 无
@@ -216,8 +216,8 @@ mod tests {
     #[test]
     fn running_view_uses_working_shimmer() {
         let first = render_view_text("missing-id", "检查项目", 0);
-        // 亮带按字符位离散推进，相邻帧可能停在原位；跨过一个字符位再比较
-        let second = render_view_text("missing-id", "检查项目", 14);
+        // 【终端】【流光测试】对比扫描带在文字外与文字中的阶段，覆盖 ANSI 降级样式
+        let second = render_view_text("missing-id", "检查项目", 31);
         let first_status = first.lines().last().unwrap_or_default();
         let second_status = second.lines().last().unwrap_or_default();
 

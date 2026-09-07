@@ -21,10 +21,11 @@ fn live_reasoning_body_animates_without_waiting_for_consolidation() {
         "inspect resize\ncompare layout\n",
     ));
 
-    let first = store.display_live_tail(80, &options());
-    // 1. 帧号由真实时间推导，回拨计时起点以对比暗带扫描的不同阶段
     assert!(store.advance_live_animation());
-    store.rewind_live_animation_for_test(ACTIVITY_FRAME_INTERVAL * 16);
+    // 1. 【终端】【动效测试】固定两个脉冲阶段，避免进程共享时钟影响样式比较
+    store.set_live_animation_elapsed_for_test(std::time::Duration::ZERO);
+    let first = store.display_live_tail(80, &options());
+    store.set_live_animation_elapsed_for_test(ACTIVITY_FRAME_INTERVAL * 8);
     let second = store.display_live_tail(80, &options());
 
     assert!(first.len() > 1);
@@ -36,7 +37,7 @@ fn live_reasoning_body_animates_without_waiting_for_consolidation() {
         .collect::<Vec<_>>();
     // 区块前空行与定稿 Reasoning 对齐
     assert!(plain[0].is_empty());
-    assert!(plain[1].starts_with('▮'));
+    assert!(plain[1].starts_with('●'));
     assert!(plain[1].contains(" Thinking"));
     assert!(plain[1].contains("tokens"));
     assert!(plain.iter().any(|line| line.contains("inspect resize")));

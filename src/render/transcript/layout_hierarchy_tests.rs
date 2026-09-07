@@ -129,7 +129,7 @@ fn live_content_and_tool_preview_keep_section_gap() {
     let lines = plain_tail(&mut store, &opts);
     assert_no_consecutive_blanks(&lines);
     assert_body_preceded_by_blank(&lines);
-    assert_preceded_by_blank(&lines, '•', true);
+    assert_preceded_by_blank(&lines, "Read", true);
 }
 
 /// 【终端】【块间距】正文已定稿、工具仍在 live 预览时，中间也必须空一行。
@@ -150,7 +150,7 @@ fn finalized_body_and_live_tool_preview_keep_section_gap() {
 
     let lines = plain_tail(&mut store, &opts);
     assert_no_consecutive_blanks(&lines);
-    assert_preceded_by_blank(&lines, '•', true);
+    assert_preceded_by_blank(&lines, "Read", true);
 }
 
 /// 【终端】【块间距】流式中间态与定稿后的块间空行必须一致，且不能出现连续空行。
@@ -164,14 +164,14 @@ fn streaming_section_gaps_match_finalized_cells() {
 
     let mid_reasoning = plain_tail(&mut live, &opts);
     assert_no_consecutive_blanks(&mid_reasoning);
-    assert_preceded_by_blank(&mid_reasoning, '▮', true);
+    assert_preceded_by_blank(&mid_reasoning, "Thinking", true);
 
     live.finalize_live_tail();
     live.push_tool_call("read_file".into(), r#"{"path":"a.rs"}"#.into());
     live.set_work_status(WorkStatus::Working);
     let mid_tool = plain_tail(&mut live, &opts);
     assert_no_consecutive_blanks(&mid_tool);
-    assert_preceded_by_blank(&mid_tool, '•', false);
+    assert_preceded_by_blank(&mid_tool, "Read", false);
 
     live.push_tool_result("read_file".into(), true, "ok".into());
     live.push_chunk(&chunk(ChatStreamKind::Content, "Here is the answer.\n"));
@@ -216,8 +216,8 @@ fn live_reasoning_and_tool_preview_share_single_gap_rules() {
 
     let lines = plain_tail(&mut store, &opts);
     assert_no_consecutive_blanks(&lines);
-    assert_preceded_by_blank(&lines, '▮', true);
-    assert_preceded_by_blank(&lines, '•', false);
+    assert_preceded_by_blank(&lines, "Thinking", true);
+    assert_preceded_by_blank(&lines, "Read", false);
 }
 
 /// 渲染当前窗口为去 ANSI 后的纯文本行。
@@ -239,18 +239,18 @@ fn assert_no_consecutive_blanks(lines: &[String]) {
     }
 }
 
-/// 断言指定引导符那一行前面是否恰好有一块空行。
-fn assert_preceded_by_blank(lines: &[String], marker: char, expect_blank: bool) {
+/// 断言指定标题那一行前面是否恰好有一块空行。
+fn assert_preceded_by_blank(lines: &[String], title: &str, expect_blank: bool) {
     let index = lines
         .iter()
-        .position(|line| line.trim_start().starts_with(marker))
-        .unwrap_or_else(|| panic!("missing marker {marker}: {lines:?}"));
+        .position(|line| line.contains(title))
+        .unwrap_or_else(|| panic!("missing title {title}: {lines:?}"));
     let previous_blank = index
         .checked_sub(1)
         .is_some_and(|prev| lines[prev].trim().is_empty());
     assert_eq!(
         previous_blank, expect_blank,
-        "marker {marker} gap mismatch: {lines:?}"
+        "title {title} gap mismatch: {lines:?}"
     );
 }
 

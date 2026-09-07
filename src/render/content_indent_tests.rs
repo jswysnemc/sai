@@ -4,7 +4,7 @@ use super::{
     indent_diff_for_transcript, wrap_cli_stream_block_with_width, CONTENT_LEFT_INDENT,
 };
 
-/// 【终端】【视觉引导测试】活动竖条始终停在引导列，窄终端按可用空间压缩间隔。
+/// 【终端】【视觉引导测试】脉冲圆点始终停在引导列，窄终端按可用空间压缩间隔。
 /// 参数：无；返回：无。
 #[test]
 fn animated_guides_stay_aligned_at_every_supported_width() {
@@ -12,7 +12,7 @@ fn animated_guides_stay_aligned_at_every_supported_width() {
 
     for frame in [0, 12, 31, 62] {
         let line = render_activity_line("Working", "", frame);
-        for (width, expected) in [(2, "▮ Working"), (1, "▮Working"), (0, "Working")] {
+        for (width, expected) in [(2, "● Working"), (1, "●Working"), (0, "Working")] {
             let aligned = align_to_guide_column_with_width(&line, width);
             assert_eq!(strip_ansi_for_test(&aligned), expected);
         }

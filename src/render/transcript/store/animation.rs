@@ -1,5 +1,5 @@
 use super::*;
-use crate::render::activity_animation::activity_frame_at;
+use crate::render::activity_animation::{activity_frame_at, activity_started_at};
 use crate::render::transcript::tool_cell::ToolCell;
 
 impl TranscriptStore {
@@ -34,8 +34,8 @@ impl TranscriptStore {
 
     /// 维持 live 动效的计时并判断是否仍需刷新。
     ///
-    /// 帧号由起点到当前的时长换算，这里只负责在动效首次出现时立起计时起点，
-    /// 因此调用频率不再影响动效速度——主循环快一点或慢一点，扫光都按同一节奏走。
+    /// 帧号由共享时钟换算；首次出现动效时绑定进程起点，
+    /// 切换状态或会话不会重置扫描位置，调用频率也不影响动效速度。
     ///
     /// 参数:
     /// - 无
@@ -58,7 +58,8 @@ impl TranscriptStore {
         {
             return false;
         }
-        self.live_animation_started.get_or_insert_with(Instant::now);
+        self.live_animation_started
+            .get_or_insert_with(activity_started_at);
         if let Some(index) = self.first_pending_tool_index() {
             self.mark_dirty(index);
         }
@@ -78,10 +79,7 @@ impl TranscriptStore {
             .unwrap_or_default()
     }
 
-    /// 【终端】【状态动效测试】把动效计时起点向前拨指定时长。
-    ///
-    /// 帧号由真实时间推导，测试无法靠反复调用推进它；这里直接回拨起点，
-    /// 等价于"已经过去了这么久"。
+    /// 【终端】【状态动效测试】指定本窗口已经经过的动画时长，不改动进程共享时钟。
     ///
     /// 参数:
     /// - `elapsed`: 需要模拟经过的时长
@@ -89,10 +87,8 @@ impl TranscriptStore {
     /// 返回:
     /// - 无
     #[cfg(test)]
-    pub(crate) fn rewind_live_animation_for_test(&mut self, elapsed: std::time::Duration) {
-        let started = self
-            .live_animation_started
-            .unwrap_or_else(Instant::now)
+    pub(crate) fn set_live_animation_elapsed_for_test(&mut self, elapsed: std::time::Duration) {
+        let started = Instant::now()
             .checked_sub(elapsed)
             .unwrap_or_else(Instant::now);
         self.live_animation_started = Some(started);

@@ -301,7 +301,8 @@ impl TranscriptStore {
             Some(tail) if tail.kind == chunk.kind => tail.source.push_str(&chunk.text),
             Some(_) => {
                 self.finalize_live_tail();
-                self.live_animation_started = Some(Instant::now());
+                self.live_animation_started =
+                    Some(crate::render::activity_animation::activity_started_at());
                 self.live_tail = Some(LiveTail {
                     kind: chunk.kind,
                     source: chunk.text.clone(),
@@ -309,7 +310,8 @@ impl TranscriptStore {
                 });
             }
             None => {
-                self.live_animation_started = Some(Instant::now());
+                self.live_animation_started =
+                    Some(crate::render::activity_animation::activity_started_at());
                 self.live_tail = Some(LiveTail {
                     kind: chunk.kind,
                     source: chunk.text.clone(),

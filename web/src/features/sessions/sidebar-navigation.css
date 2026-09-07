@@ -1,5 +1,12 @@
-.sidebar-navigation { display: flex; align-items: center; min-width: 0; min-height: 1.75rem; margin: 0.375rem 0; }
+.sidebar-navigation { display: flex; align-items: center; min-width: 0; min-height: 1.75rem; margin: 0.375rem 0; container-type: inline-size; }
 .sidebar-view-switcher { display: flex; flex: 1; min-width: 0; gap: 0.125rem; padding: 0; border: 0; background: transparent; }
-.sidebar-view-switcher .ui-button { flex: 1; min-width: 0; min-height: 1.75rem; height: 1.75rem; padding: 0 0.25rem; border: 0; border-radius: var(--radius-2); background: transparent; color: var(--ink-soft); font-size: var(--text-xs); white-space: nowrap; box-shadow: none; }
+.sidebar-view-switcher .ui-button { flex: 1 1 auto; min-width: 0; min-height: 1.75rem; height: 1.75rem; padding: 0 0.25rem; border: 0; border-radius: var(--radius-2); background: transparent; color: var(--ink-soft); font-size: var(--text-xs); white-space: nowrap; box-shadow: none; }
+.sidebar-view-switcher .ui-button > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-view-switcher .ui-button > svg { display: none; flex: none; }
 .sidebar-view-switcher .ui-button:hover { color: var(--ink); background: var(--surface-hover); }
 .sidebar-view-switcher .ui-button.active { background: var(--surface-selected); color: var(--ink); font-weight: 500; }
+@container (max-width: 12rem) {
+  .sidebar-view-switcher .ui-button { flex: 1; }
+  .sidebar-view-switcher .ui-button > svg { display: block; }
+  .sidebar-view-switcher .ui-button > span { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; clip-path: inset(50%); white-space: nowrap; }
+}

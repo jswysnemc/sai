@@ -5,6 +5,7 @@ export type SegmentedControlOption<T extends string> = {
   value: T;
   label: string;
   icon?: ReactNode;
+  title?: string;
 };
 
 type SegmentedControlProps<T extends string> = {
@@ -44,6 +45,7 @@ export function SegmentedControl<T extends string>({ value, options, onChange, a
           variant="ghost"
           role="radio"
           aria-checked={option.value === value}
+          title={option.title}
           className={option.value === value ? "active" : ""}
           tabIndex={option.value === value ? 0 : -1}
           onClick={() => onChange(option.value)}

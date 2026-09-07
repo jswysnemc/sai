@@ -1,3 +1,4 @@
+import { Files, FolderGit2, MessagesSquare } from "lucide-react";
 import { SegmentedControl } from "../../shared/ui/segmented-control";
 import { useI18n } from "../i18n/use-i18n";
 import { SessionScopeControl, type SessionScope } from "./session-scope-control";
@@ -22,9 +23,9 @@ export function SidebarNavigation({ view, onViewChange, scope, onScopeChange }: 
   return (
     <div className="sidebar-navigation gap-1 max-sm:gap-0.5">
       <SegmentedControl className="sidebar-view-switcher" value={view} onChange={onViewChange} ariaLabel={t("Sidebar view", "侧栏视图")} options={[
-        { value: "sessions", label: t("Sessions", "会话") },
-        { value: "workspaces", label: t("Workspaces", "工作区") },
-        { value: "files", label: t("Files", "文件") }
+        { value: "sessions", label: t("Sessions", "会话"), title: t("Sessions", "会话"), icon: <MessagesSquare size={14} aria-hidden="true" /> },
+        { value: "workspaces", label: t("Workspaces", "工作区"), title: t("Workspaces", "工作区"), icon: <FolderGit2 size={14} aria-hidden="true" /> },
+        { value: "files", label: t("Files", "文件"), title: t("Files", "文件"), icon: <Files size={14} aria-hidden="true" /> }
       ]} />
       {view === "sessions" && <SessionScopeControl value={scope} onChange={onScopeChange} />}
     </div>

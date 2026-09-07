@@ -1,4 +1,5 @@
-use std::time::Duration;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
 mod guide;
 mod shimmer;
@@ -9,24 +10,23 @@ pub(crate) use shimmer::render_activity_text;
 /// 状态动效统一刷新节拍
 pub(crate) const ACTIVITY_FRAME_INTERVAL: Duration = Duration::from_millis(32);
 const RESET: &str = "\x1b[0m";
+static PROCESS_START: OnceLock<Instant> = OnceLock::new();
 
 /// 【终端】【状态动效】按比例混合两个 RGB 颜色。
 /// 参数：`from` 为起始颜色，`to` 为目标颜色，`ratio` 为混合比例；返回：混合后的 RGB 颜色。
 fn blend_color(from: (u8, u8, u8), to: (u8, u8, u8), ratio: f32) -> (u8, u8, u8) {
-    let mix = |a: u8, b: u8| -> u8 {
-        let value = a as f32 + (b as f32 - a as f32) * ratio.clamp(0.0, 1.0);
-        value.round().clamp(0.0, 255.0) as u8
-    };
+    let ratio = ratio.clamp(0.0, 1.0);
+    let mix = |a: u8, b: u8| (b as f32 * ratio + a as f32 * (1.0 - ratio)) as u8;
     (mix(from.0, to.0), mix(from.1, to.1), mix(from.2, to.2))
 }
 
 /// 【终端】【状态动效】渲染状态文字后的弱化说明。
-/// 参数：`text` 为耗时、token 或模型等辅助信息；返回：弱化白色 ANSI 文本。
+/// 参数：`text` 为耗时、token 或模型等辅助信息；返回：弱化默认前景色的 ANSI 文本。
 pub(crate) fn render_activity_detail(text: &str) -> String {
-    format!("\x1b[2m\x1b[37m{text}{RESET}")
+    format!("\x1b[22m\x1b[39m\x1b[2m{text}{RESET}")
 }
 
-/// 【终端】【状态动效】组合呼吸竖条、流光标题和弱化详情。
+/// 【终端】【状态动效】组合脉冲圆点、流光标题和弱化详情。
 /// 参数：`label` 为状态文字，`detail` 为可选详情，`frame` 为动画帧号；返回：完整 ANSI 状态行。
 pub(crate) fn render_activity_line(label: &str, detail: &str, frame: usize) -> String {
     let mut output = format!(
@@ -46,6 +46,12 @@ pub(crate) fn render_activity_line(label: &str, detail: &str, frame: usize) -> S
 pub(crate) fn activity_frame_at(elapsed: Duration) -> usize {
     let interval = ACTIVITY_FRAME_INTERVAL.as_micros().max(1);
     (elapsed.as_micros() / interval) as usize
+}
+
+/// 【终端】【状态动效】共享进程级时钟，使等待提示、工具卡和面板保持相同节拍。
+/// 参数：无；返回：首次启用状态动效时的时钟起点。
+pub(crate) fn activity_started_at() -> Instant {
+    *PROCESS_START.get_or_init(Instant::now)
 }
 
 /// 【终端】【状态动效测试】去除终端文本中的 ANSI 控制序列。

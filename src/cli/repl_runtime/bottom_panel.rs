@@ -267,7 +267,7 @@ mod tests {
         let current_at = body.find("current").unwrap();
         let next_at = body.find("next").unwrap();
         assert!(current_at < next_at && next_at < done_at);
-        assert!(plain.contains('▮'));
+        assert!(plain.contains('●'));
         assert!(!plain.contains('├') && !plain.contains('└'));
         assert!(
             !lines.join("\n").contains("\x1b[9m"),

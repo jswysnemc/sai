@@ -124,7 +124,7 @@ impl WorkStatus {
 
     /// 【终端】【工作状态】渲染适合历史区展示的动态状态行。
     ///
-    /// 各状态共用固定单列的呼吸竖条，状态文字保持明亮并展示从左向右的窄暗带。
+    /// 各状态共用固定单列的脉冲圆点，状态文字按终端主题渲染从左向右的流光。
     /// 末尾展示本轮整数秒时长。
     ///
     /// 参数:
@@ -245,7 +245,7 @@ mod tests {
         );
     }
 
-    /// 【终端】【工作状态测试】验证 Working 使用白色流光和整数秒。
+    /// 【终端】【工作状态测试】验证 Working 使用主题流光和整数秒。
     ///
     /// 参数:
     /// - 无
@@ -253,17 +253,17 @@ mod tests {
     /// 返回:
     /// - 无
     #[test]
-    fn working_uses_white_shimmer_and_integer_seconds() {
+    fn working_uses_theme_shimmer_and_integer_seconds() {
         let line = WorkStatus::Working.render_line(0, Duration::from_millis(1500));
         let plain = strip_ansi_for_test(&line);
         assert!(plain.contains(&WorkStatus::Working.localized_label()));
         assert!(plain.contains("1s"));
         assert!(!plain.contains("1.5s"));
         assert!(!plain.contains('·'));
-        // 亮带按字符位离散推进，相邻帧可能停在原位；跨过一个字符位再比较
+        // 【终端】【流光测试】对比扫描带在文字外与文字中的阶段，覆盖 ANSI 降级样式
         assert_ne!(
             line,
-            WorkStatus::Working.render_line(14, Duration::from_millis(1500))
+            WorkStatus::Working.render_line(31, Duration::from_millis(1500))
         );
     }
 

@@ -1,5 +1,6 @@
 use crate::render::activity_animation::{
-    activity_frame_at, render_activity_detail, render_activity_line, ACTIVITY_FRAME_INTERVAL,
+    activity_frame_at, activity_started_at, render_activity_detail, render_activity_line,
+    ACTIVITY_FRAME_INTERVAL,
 };
 use crate::render::terminal_paint::paint_lock;
 use crate::render::work_status::format_elapsed;
@@ -142,9 +143,8 @@ impl Drop for WaitSpinner {
 
 /// 【终端】【等待状态】按固定节拍刷新文字扫光帧。
 ///
-/// 帧号由动画启动至今的时长换算，而不是每睡一轮加一：后者没有把渲染与写终端
-/// 的耗时算进去，实际间隔是 32ms 加上这段开销，扫光会比主 transcript 里的
-/// 同款动效慢一拍，两处并存时能看出速度不一致。
+/// 帧号由进程共享时钟换算，等待提示与 transcript 使用相同起点，
+/// 渲染和写终端的耗时不会累积成节拍偏差。
 ///
 /// 参数:
 /// - `state`: 等待动画共享状态
@@ -153,7 +153,7 @@ impl Drop for WaitSpinner {
 /// 返回:
 /// - 无
 fn run_spinner_loop(state: Arc<Mutex<WaitSpinnerState>>, running: Arc<AtomicBool>) {
-    let started = Instant::now();
+    let started = activity_started_at();
     while running.load(Ordering::SeqCst) {
         let frame = activity_frame_at(started.elapsed());
         let (output, anchor_row, prev_lines, lines) = match state.lock() {
@@ -183,7 +183,8 @@ fn render_initial_spinner_frame(state: &Arc<Mutex<WaitSpinnerState>>) {
     let (output, anchor_row, prev_lines, lines) = match state.lock() {
         Ok(mut guard) => {
             let prev = guard.lines_rendered;
-            let (output, lines) = render_frame(0, &guard);
+            let frame = activity_frame_at(activity_started_at().elapsed());
+            let (output, lines) = render_frame(frame, &guard);
             guard.lines_rendered = lines;
             (output, guard.anchor_row, prev, lines)
         }
@@ -365,7 +366,7 @@ mod tests {
         assert!(frame.contains("model gpt"));
     }
 
-    /// 【终端】【等待状态测试】验证等待状态与工作状态共用明亮流光和呼吸竖条。
+    /// 【终端】【等待状态测试】验证等待状态与工作状态共用主题流光和脉冲圆点。
     ///
     /// 参数:
     /// - 无
@@ -373,17 +374,17 @@ mod tests {
     /// 返回:
     /// - 无
     #[test]
-    fn render_frame_uses_white_shimmer_with_fixed_guide() {
+    fn render_frame_uses_theme_shimmer_with_fixed_guide() {
         let state = make_state("Thinking", None);
 
         let (first, lines) = render_frame(0, &state);
-        // 1. 对比呼吸周期内不同阶段，确认状态行持续变化
-        let (second, _) = render_frame(14, &state);
+        // 1. 【终端】【流光测试】对比扫描带在文字外与文字中的阶段
+        let (second, _) = render_frame(31, &state);
         let plain = strip_ansi_for_test(&first);
 
         assert!(plain.contains("Thinking"));
         assert!(plain.contains("0s"));
-        assert!(plain.starts_with("▮ "));
+        assert!(plain.starts_with("● "));
         assert!(!plain.contains('·'));
         assert_ne!(first, second);
         assert_eq!(lines, 1);

@@ -40,6 +40,7 @@ mod table;
 pub(crate) mod terminal_frame;
 pub(crate) mod terminal_image;
 pub(crate) mod terminal_paint;
+pub(crate) mod terminal_palette;
 pub(crate) mod todo_style;
 mod tool_call_blocks;
 mod tool_event_line;

@@ -49,6 +49,8 @@ pub(super) async fn run_repl(
         reasoning_mode: render::ReasoningDisplayMode::from_config(&config.display.reasoning),
         tool_call_mode: render::ToolCallDisplayMode::from_config(&config.display.tool_calls),
     };
+    // 【终端】【颜色探测】在光标查询和键盘事件读取之前缓存默认前景与背景
+    render::terminal_palette::initialize_terminal_palette();
     // 光标不在行首时先换行，避免受管区域首行覆盖 shell 残留输出
     if crossterm::cursor::position()
         .map(|(col, _)| col != 0)
