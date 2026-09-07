@@ -22,6 +22,7 @@ mod paths;
 mod perf_trace;
 mod permission;
 mod platform;
+mod plugins;
 mod prompts;
 mod question;
 mod question_tui;

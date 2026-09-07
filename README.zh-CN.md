@@ -86,6 +86,7 @@ Sai 是一个用 Rust 编写的终端 AI 桌面助手。它把大语言模型的
 - **子代理** - `subagent` 工具启动独立 LLM 循环,带 `max_steps` 预算与超时;可写任务在 git 仓库内自动创建 `.sai-subagents` worktree 隔离,完成后自动 apply 回父工作区并清理。支持 persistent 待命复用与留言通道(REPL `/subagents`、`/msg`)
 - **Skills 技能包** - `SKILL.md` 格式的可复用技能,三级暴露(不暴露 / 仅名称 / 完整);TUI 与 CLI 均可启用 / 禁用 / 列出 / 统计 / 清理。会话内 load 缓存见上。
 - **MCP 协议桥接** - 原生支持 stdio / http 两种 MCP Server,工具名以 `mcp_` 前缀注入注册表,独立 `mcp.jsonc` 配置文件
+- **Lua 插件** - 安装本地 Lua 5.4 包，扩展工具、用户命令和生命周期回调；配置独立保存，HTTP 来源需明确授权。在线手册和 DeepSeek 状态查询已迁为内置 Lua 包。参见[开发指南](design/lua-plugins/getting-started.md)、[接口说明](design/lua-plugins/api.md)和[迁移进度](design/lua-plugins/migration.md)。
 - **会话级 Todo** - 任务计划清单,跨工具轮次跟踪进度
 - **Cron 定时任务** - bash / http / prompt 三种类型,持久化到 `jobs.db`,后台调度器到期触发
 

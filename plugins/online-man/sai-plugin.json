@@ -1,0 +1,16 @@
+{
+  "api_version": 1,
+  "id": "online-man",
+  "version": "1.0.0",
+  "name": "在线手册",
+  "description": "搜索和阅读 Arch Linux 与 man7 在线手册",
+  "entry": "init.lua",
+  "capabilities": {
+    "http": ["https://man.archlinux.org", "https://man7.org"]
+  },
+  "limits": {
+    "timeout_ms": 60000,
+    "output_bytes": 4194304,
+    "memory_bytes": 33554432
+  }
+}

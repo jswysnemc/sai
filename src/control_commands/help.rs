@@ -163,6 +163,14 @@ fn repl_only_help_lines() -> Vec<String> {
             t("manage background tasks", "管理后台任务")
         ),
         format!(
+            "  /plugins [reload]  {}",
+            t("show or reload session plugins", "查看或重新加载会话插件")
+        ),
+        format!(
+            "  /plugin <id>/<command> [args]  {}",
+            t("run a plugin command", "执行插件命令")
+        ),
+        format!(
             "  /subagents  {}",
             t(
                 "list session subagents and their liveness",

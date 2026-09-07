@@ -16,6 +16,7 @@ fn main() {
     println!("cargo:rerun-if-changed=src/prompts/yolo.md");
     println!("cargo:rerun-if-changed=src/prompts/plan.md");
     println!("cargo:rerun-if-changed=assets/o200k_base.tiktoken");
+    println!("cargo:rerun-if-changed=plugins");
 
     let prompt = fs::read("src/prompts/sai.md").expect("read src/prompts/sai.md");
     let encoded = prompt

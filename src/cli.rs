@@ -45,6 +45,7 @@ mod message;
 mod model_select;
 mod models_picker;
 mod permission_prompt;
+mod plugins;
 mod providers;
 mod render_options;
 mod repl;
@@ -167,7 +168,9 @@ pub async fn run(cli: Cli) -> Result<()> {
         .await;
     }
 
-    if !paths.config_file.exists() && !matches!(cli.command, Some(Command::Init)) {
+    if !paths.config_file.exists()
+        && !matches!(cli.command, Some(Command::Init | Command::Plugins(_)))
+    {
         run_init(&paths, InitKind::FirstRun)?;
     }
 
@@ -260,6 +263,7 @@ pub async fn run(cli: Cli) -> Result<()> {
         Some(Command::Kb(args)) => run_kb(&paths, args).await,
         Some(Command::Memory(args)) => run_memory(&paths, args),
         Some(Command::Skills(args)) => run_skills(&paths, args),
+        Some(Command::Plugins(args)) => plugins::run(&paths, args, mode_override).await,
         Some(Command::Ps(args)) => run_background_commands(&paths, args).await,
         Some(Command::Gateway(args)) => run_gateway(&paths, args).await,
         Some(Command::WeixinLogin(args)) => {
@@ -361,10 +365,14 @@ enum PermissionSurface {
     Cli,
 }
 
+/// 【命令行】【单工具执行】绑定宿主会话上下文并复用工具权限与审计入口。
+/// @param paths 为存储路径；mode 为权限模式；args 为工具名和 JSON 参数
+/// @returns 工具执行与终端输出结果
 async fn run_tool(paths: &SaiPaths, mode: AgentMode, args: ToolArgs) -> Result<()> {
     let config = AppConfig::load_or_default(paths)?;
     // 单工具 CLI 只需要本地工具定义，避免同步发现 MCP 服务阻塞命令执行
     let mut registry = build_tool_registry_without_mcp(&config, paths, mode)?;
+    registry.start_plugin_session("cli-tool")?;
     let profile_mode = mode.permission_profile_mode();
     let audit = (mode != AgentMode::Yolo).then(|| {
         crate::permission::PermissionAuditLog::new(

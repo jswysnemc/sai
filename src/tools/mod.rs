@@ -7,7 +7,6 @@ pub(crate) mod command;
 mod configurable_cli_tools;
 mod context;
 mod deep_diagnose;
-mod deepseek_status;
 mod default_tools;
 mod descriptions;
 mod diagnostics;
@@ -24,7 +23,6 @@ mod http_body;
 mod image_generation;
 pub mod knowledge_base;
 mod linux_game;
-mod man;
 pub(crate) mod memes;
 mod memory;
 pub(crate) mod mesh;
@@ -43,6 +41,7 @@ pub(crate) mod subagent_event;
 mod subagent_feed;
 pub(crate) mod subagent_goal;
 mod subagent_persistence;
+mod subagent_progress;
 mod subagent_runner;
 #[cfg(test)]
 mod subagent_runner_tests;
@@ -51,6 +50,7 @@ pub(crate) mod subagent_state;
 pub(crate) mod subagent_timeline;
 mod subagent_worktree;
 pub(crate) mod todo;
+mod tool_spec;
 mod trash_path;
 mod vision;
 mod weather;
@@ -235,10 +235,7 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     if config.plugins.archlinux.enabled {
         archlinux::register(&mut registry);
     }
-    if config.plugins.man.enabled {
-        man::register(&mut registry);
-    }
-    deepseek_status::register(&mut registry);
+    crate::plugins::register_plugins(&mut registry, config, paths, false);
     vision::register_print(&mut registry, config.clone());
     if config.plugins.memes.enabled {
         memes::register(&mut registry, config.clone(), paths.clone());
@@ -390,9 +387,7 @@ pub fn readonly_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     if config.plugins.archlinux.enabled {
         archlinux::register(&mut registry);
     }
-    if config.plugins.man.enabled {
-        man::register(&mut registry);
-    }
+    crate::plugins::register_plugins(&mut registry, config, paths, true);
     if config.plugins.web.enabled {
         web::register(&mut registry, config.plugins.web.clone());
     }

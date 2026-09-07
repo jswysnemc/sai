@@ -7,10 +7,12 @@ use super::repl_turn_failure::{interrupted_failure_text, turn_failure_text};
 use super::*;
 use crate::agent::Agent;
 
+mod agent_selection;
 mod compact;
 mod exit_hint;
 mod model_selection;
 mod navigation;
+mod plugin_commands;
 mod session_support;
 pub(super) mod subagent_commands;
 mod submission_queue;
@@ -114,6 +116,7 @@ pub(super) async fn run_repl(
         mode,
     )?;
     let mut external_events = ReplExternalEvents::new();
+    plugin_commands::show_diagnostics(&agent, &mut runtime)?;
     // 跨进程会话链接：本终端是否驱动这一会话，取决于有没有别的 sai 实例先抢到租约
     let mut session_link =
         ReplSessionLink::attach(paths, &state, runtime.submission_queue_handle()).await;
@@ -267,6 +270,19 @@ pub(super) async fn run_repl(
             continue;
         }
         let mut goal_continuation = false;
+        if plugin_commands::handle(
+            input,
+            &mut agent,
+            &mut runtime,
+            &mut tool_warmup,
+            paths,
+            &config,
+            mode,
+        )
+        .await?
+        {
+            continue;
+        }
         match crate::control_commands::parse_control_command(
             input,
             crate::control_commands::ControlSurface::Repl,
@@ -401,50 +417,16 @@ pub(super) async fn run_repl(
                         navigation::select_turn(&agent, &mut runtime, turn_id)?;
                     }
                     crate::control_commands::ControlCommand::Agent { selection } => {
-                        let selection = match selection {
-                            Some(index) => Some(index),
-                            None => {
-                                let picked = agent_select::select_agent_index_interactively(paths);
-                                // 内联选择 UI 退出后全量重放，清除其占用行的残留
-                                runtime.redraw()?;
-                                match picked {
-                                    Ok(index) => index,
-                                    Err(err) => {
-                                        runtime.record_meta(err.to_string())?;
-                                        continue;
-                                    }
-                                }
-                            }
-                        };
-                        let Some(selection) = selection else {
-                            runtime.record_meta(
-                                t("agent selection cancelled", "已取消 Agent 选择").to_string(),
-                            )?;
-                            continue;
-                        };
-                        match crate::control_commands::run_agent_command(
+                        agent_selection::run_command(
                             paths,
-                            Some(selection),
-                            crate::control_commands::ControlSurface::Repl,
-                        ) {
-                            Ok(result) => {
-                                runtime.record_meta(result.message)?;
-                                if result.changed {
-                                    reload_repl_agent(
-                                        paths,
-                                        &mut config,
-                                        &mut client,
-                                        &mut agent,
-                                        mode,
-                                        thinking_override.as_deref(),
-                                    )?;
-                                    runtime.record_meta(
-                                        t("configuration reloaded", "配置已重新加载").to_string(),
-                                    )?;
-                                }
-                            }
-                            Err(err) => runtime.record_meta(err.to_string())?,
-                        }
+                            selection,
+                            &mut config,
+                            &mut client,
+                            &mut agent,
+                            &mut runtime,
+                            mode,
+                            thinking_override.as_deref(),
+                        )?;
                     }
                     crate::control_commands::ControlCommand::Goal(command) => {
                         match crate::control_commands::execute_goal_command(&state, command) {

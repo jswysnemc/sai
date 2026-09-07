@@ -100,6 +100,8 @@ pub enum Command {
     Kb(KbArgs),
     Memory(MemoryArgs),
     Skills(SkillsArgs),
+    /// Manage Lua plugins, tools, commands and grants
+    Plugins(super::plugins::PluginsArgs),
     Ps(BackgroundCommandsArgs),
     Gateway(GatewayArgs),
     WeixinLogin(TopLevelWeixinLoginArgs),

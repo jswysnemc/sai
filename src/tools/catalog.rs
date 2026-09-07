@@ -77,6 +77,7 @@ fn catalog_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     //    某个 Agent 预先勾选它——而 Agent 白名单本就该独立于全局开关
     let catalog = catalog_config(config);
     let mut registry = builtin_registry_without_mcp(&catalog, paths);
+    crate::plugins::register_bundled_catalog_tools(&mut registry, &catalog, paths);
     // 2. 挂上只在会话中注册的工具，保证目录与会话看到同一份工具集合
     register_interactive_tools(
         &mut registry,

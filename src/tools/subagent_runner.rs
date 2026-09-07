@@ -1,170 +1,16 @@
-use super::subagent_feed::STATS_PREFIX;
-use super::{readable_tool_name, tool_output_for_context, ToolProgress, ToolRegistry};
+pub(crate) use super::subagent_progress::{ProgressMode, SubagentProgress};
+#[path = "subagent_model.rs"]
+mod model;
+use super::{tool_output_for_context, ToolRegistry};
 use crate::agent::repeat_guard::{self, RepeatGuard, RepeatVerdict};
 use crate::agent::{evaluate_tool_gate, resolve_execution_call, ToolGate, ToolVisibility};
 use crate::config::AppConfig;
 use crate::i18n::is_zh;
-use crate::llm::{
-    ChatMessage, ChatResult, ChatStreamChunk, ChatStreamKind, OpenAiCompatibleClient, Usage,
-};
+use crate::llm::{ChatMessage, ChatResult, OpenAiCompatibleClient, Usage};
 use crate::paths::SaiPaths;
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::time::Duration;
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub(crate) enum ProgressMode {
-    Hidden,
-    Summary,
-    Full,
-}
-
-#[derive(Clone)]
-pub(crate) struct SubagentProgress {
-    progress: ToolProgress,
-    mode: ProgressMode,
-    enabled: bool,
-}
-
-impl SubagentProgress {
-    /// 创建子代理进度回调封装。
-    ///
-    /// 参数:
-    /// - `progress`: 宿主工具进度发送器
-    /// - `mode`: 展示模式
-    /// - `enabled`: 是否展示进度
-    ///
-    /// 返回:
-    /// - 子代理进度对象
-    pub(crate) fn new(progress: ToolProgress, mode: ProgressMode, enabled: bool) -> Self {
-        Self {
-            progress,
-            mode,
-            enabled,
-        }
-    }
-
-    /// 上报阶段进度信息。
-    ///
-    /// 参数:
-    /// - `message`: 阶段文本
-    ///
-    /// 返回:
-    /// - 无
-    pub(crate) fn phase(&self, message: impl Into<String>) {
-        if self.enabled && self.mode != ProgressMode::Hidden {
-            self.progress.report(message.into());
-        }
-    }
-
-    /// 上报累计用量快照。
-    ///
-    /// 与阶段文本不同，用量不受展示模式限制：进度被隐藏时底部面板
-    /// 仍要能读到实时 token，否则长任务期间数字一直是空的。
-    ///
-    /// 参数:
-    /// - `stats`: `SubagentStats::public()` 生成的用量 JSON
-    ///
-    /// 返回:
-    /// - 无
-    pub(crate) fn stats(&self, stats: Value) {
-        self.progress.report(format!("{STATS_PREFIX}{stats}"));
-    }
-
-    /// 上报子代理推理文本。
-    ///
-    /// 参数:
-    /// - `text`: 推理文本
-    ///
-    /// 返回:
-    /// - 无
-    pub(crate) fn reasoning(&self, text: &str) {
-        if self.enabled && self.mode != ProgressMode::Hidden {
-            self.progress
-                .report(format!("__subagent_reasoning__{}", text));
-        }
-    }
-
-    /// 上报子智能体正文流分片。
-    ///
-    /// 参数:
-    /// - `text`: 模型实时返回的正文分片
-    ///
-    /// 返回:
-    /// - 无
-    pub(crate) fn content(&self, text: &str) {
-        if self.enabled && self.mode == ProgressMode::Full && !text.is_empty() {
-            self.progress.report(format!("__subagent_text__{}", text));
-        }
-    }
-
-    /// 上报子工具开始运行。
-    ///
-    /// 参数:
-    /// - `step`: 当前工具调用序号
-    /// - `name`: 子工具名称
-    ///
-    /// 返回:
-    /// - 无
-    pub(crate) fn tool_start(&self, step: usize, name: &str) {
-        if !self.enabled || self.mode == ProgressMode::Hidden {
-            return;
-        }
-        if self.mode == ProgressMode::Summary {
-            self.progress.report(if is_zh() {
-                format!("工具 #{step}：{} 运行中", readable_tool_name(name))
-            } else {
-                format!("tool #{step}: {name} running")
-            });
-        }
-    }
-
-    /// 上报子工具调用参数。
-    ///
-    /// 参数:
-    /// - `name`: 子工具名称
-    /// - `args`: 子工具参数 JSON
-    ///
-    /// 返回:
-    /// - 无
-    pub(crate) fn tool_call_detail(&self, name: &str, args: &str) {
-        if self.enabled && self.mode == ProgressMode::Full {
-            self.progress.report(format!(
-                "__subtool_call__{}",
-                json!({ "name": name, "args": args })
-            ));
-        }
-    }
-
-    /// 上报子工具完成状态。
-    ///
-    /// 参数:
-    /// - `step`: 当前工具调用序号
-    /// - `name`: 子工具名称
-    /// - `ok`: 是否成功
-    /// - `output`: 子工具输出
-    ///
-    /// 返回:
-    /// - 无
-    pub(crate) fn tool_end(&self, step: usize, name: &str, ok: bool, output: &str) {
-        if !self.enabled || self.mode == ProgressMode::Hidden {
-            return;
-        }
-        if self.mode == ProgressMode::Summary {
-            self.progress.report(if is_zh() {
-                format!("工具 #{step}：{} ok", readable_tool_name(name))
-            } else {
-                format!("tool #{step}: {name} ok")
-            });
-        }
-        if self.mode == ProgressMode::Full {
-            self.progress.report(format!(
-                "__subtool_result__{}",
-                json!({ "name": name, "ok": ok, "output": output })
-            ));
-        }
-    }
-}
 
 #[derive(Default)]
 pub(crate) struct SubagentStats {
@@ -489,7 +335,12 @@ impl SubagentRunner {
         let mut messages = self.initial_messages(prompt);
         let mut tool_visibility = self.fresh_tool_visibility();
         let result = self
-            .chat_with_tools(&mut messages, &mut stats, &mut tool_visibility)
+            .tools
+            .plugin_events()
+            .agent_run(
+                json!({"kind":"subagent"}),
+                self.chat_with_tools(&mut messages, &mut stats, &mut tool_visibility),
+            )
             .await?;
         stats.add_usage_or_estimate(
             result.usage.as_ref(),
@@ -543,7 +394,12 @@ impl SubagentRunner {
         tool_visibility: &mut ToolVisibility,
     ) -> Result<ChatResult> {
         let result = self
-            .chat_with_tools(messages, stats, tool_visibility)
+            .tools
+            .plugin_events()
+            .agent_run(
+                json!({"kind":"subagent"}),
+                self.chat_with_tools(messages, stats, tool_visibility),
+            )
             .await?;
         // 1. 段末把最终回复写回共享对话，后续任务段才能看到完整历史
         if !result.content.trim().is_empty() {
@@ -629,7 +485,9 @@ impl SubagentRunner {
         // 运行时限只提醒一次，避免每轮刷屏挤占上下文
         let started = tokio::time::Instant::now();
         let mut deadline_reminded = false;
+        let mut round = 0;
         loop {
+            round += 1;
             // 0. 步间注入排队的追加消息（不打断进行中的工具调用）
             self.inject_queued_messages(messages);
             // 1. 时限临近时注入软提醒；工具不受限，由子代理自行收敛
@@ -647,21 +505,13 @@ impl SubagentRunner {
                 stats.budget_reached = true;
                 messages.push(ChatMessage::plain("user", finalization_prompt()));
                 let result = self
-                    .client
-                    .chat_stream(messages.clone(), Vec::new(), |chunk: ChatStreamChunk| {
-                        match chunk.kind {
-                            ChatStreamKind::Reasoning => self.progress.reasoning(&chunk.text),
-                            ChatStreamKind::Content => self.progress.content(&chunk.text),
-                        }
-                        Ok(())
-                    })
+                    .request_model_round(messages.clone(), Vec::new(), round)
                     .await?;
                 stats.add_usage_or_estimate(result.usage.as_ref(), &[&result.content]);
                 return Ok(result);
             }
             let result = self
-                .client
-                .chat_stream(
+                .request_model_round(
                     messages.clone(),
                     tool_visibility
                         .definitions(&self.tools)
@@ -672,13 +522,7 @@ impl SubagentRunner {
                                 .any(|name| *name == definition.function.name)
                         })
                         .collect(),
-                    |chunk: ChatStreamChunk| {
-                        match chunk.kind {
-                            ChatStreamKind::Reasoning => self.progress.reasoning(&chunk.text),
-                            ChatStreamKind::Content => self.progress.content(&chunk.text),
-                        }
-                        Ok(())
-                    },
+                    round,
                 )
                 .await?;
             stats.add_usage_or_estimate(result.usage.as_ref(), &[]);

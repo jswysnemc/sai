@@ -28,6 +28,37 @@ impl Agent {
     where
         F: FnMut(AgentEvent) -> Result<()>,
     {
+        let events = self.tools.plugin_events();
+        events
+            .model_round(
+                serde_json::json!({"turn_id": turn_id, "round": round}),
+                self.request_model_round_inner(
+                    turn_id,
+                    messages,
+                    definitions,
+                    round,
+                    on_event,
+                    perf,
+                ),
+            )
+            .await
+    }
+
+    /// 【Agent】【模型传输】执行模型请求及有限重试，生命周期由外层统一配对。
+    /// @param turn_id、round 为逻辑轮次；messages、definitions 为请求；on_event 为流式接收器；perf 为计时器
+    /// @returns 实际 provider 响应或传输错误
+    async fn request_model_round_inner<F>(
+        &mut self,
+        turn_id: &str,
+        messages: Vec<ChatMessage>,
+        definitions: Vec<ToolDefinition>,
+        round: usize,
+        on_event: &mut F,
+        perf: &mut PerfTrace,
+    ) -> Result<ChatResult>
+    where
+        F: FnMut(AgentEvent) -> Result<()>,
+    {
         let mut saw_reasoning = false;
         let mut saw_content = false;
         let mut saw_tool_progress = false;

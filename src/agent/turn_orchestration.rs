@@ -88,6 +88,38 @@ impl Agent {
     where
         F: FnMut(AgentEvent) -> Result<()>,
     {
+        let turn_id = turn_id.unwrap_or_else(new_turn_id);
+        let events = self.tools.plugin_events();
+        events
+            .agent_run(
+                serde_json::json!({"turn_id": turn_id}),
+                self.chat_stream_with_images_and_inter_messages_inner(
+                    input,
+                    image_urls,
+                    Some(turn_id),
+                    inter_message_source,
+                    wait_for_external,
+                    on_event,
+                ),
+            )
+            .await
+    }
+
+    /// 【Agent】【轮次执行】执行原生或外部内核轮次，插件生命周期在入口统一维护。
+    /// @param input、image_urls 为输入；turn_id 为轮次；inter_message_source 为排队来源；wait_for_external 控制等待；on_event 为输出回调
+    /// @returns 真实轮次结果或错误
+    async fn chat_stream_with_images_and_inter_messages_inner<F>(
+        &mut self,
+        input: &str,
+        image_urls: Vec<String>,
+        turn_id: Option<String>,
+        inter_message_source: Option<Arc<dyn InterMessageSource>>,
+        wait_for_external: bool,
+        on_event: F,
+    ) -> Result<ChatResult>
+    where
+        F: FnMut(AgentEvent) -> Result<()>,
+    {
         // HTTP 调试按会话落盘时绑定 session_id
         let _http_debug_session = crate::llm::HttpDebugSessionGuard::new(self.state.session_id());
         let input = clean_user_visible_text(input);

@@ -23,6 +23,7 @@ mod message_usage;
 mod mode;
 mod model_context;
 pub(crate) mod model_json;
+mod plugin_commands;
 mod recovery;
 pub(crate) mod repeat_guard;
 mod runtime_context;

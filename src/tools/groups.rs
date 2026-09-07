@@ -110,6 +110,7 @@ pub(crate) fn group_for_tool(name: &str) -> &'static str {
         "mcp_manager" => "mcp",
         "session_probe" | "agent_probe" | "mesh_send" => "mesh",
         _ if name.starts_with("mcp_") => "mcp",
+        _ if name.starts_with("lua__") => "plugins",
         _ if is_base_tool(name) => "base",
         _ => "other",
     }
@@ -268,6 +269,15 @@ pub(crate) fn group_meta(group: &str) -> ToolGroupMeta {
             hint_en: "Mesh coordinates across sessions and subagents: probes observe without touching, and mesh_send delivers into the receiver's session queue as an active receipt. Leaving the current session requires mesh.cross_session=true.",
             hint_zh: "会话网格用于跨会话与子智能体协作：探测器只看不碰，mesh_send 投进接收方的会话队列作为主动回执。发给当前会话之外的目标需要 mesh.cross_session=true。",
             model_description: "Mesh coordination: list live sessions with their holder, watcher count and running turn, list subagents with status, step count and token usage, and send or reply to messages across sessions and subagents. Incoming messages are queued as active receipts; there is no receive tool.",
+            settings_path: None,
+        },
+        "plugins" => ToolGroupMeta {
+            rank: 13,
+            label_en: "Lua plugins",
+            label_zh: "Lua 插件",
+            hint_en: "Manage plugins and grants with sai plugins.",
+            hint_zh: "使用 sai plugins 管理插件及授权。",
+            model_description: "Tools provided by enabled Lua plugins",
             settings_path: None,
         },
         "other" => UNKNOWN_GROUP,

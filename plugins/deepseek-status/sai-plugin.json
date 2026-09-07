@@ -1,0 +1,15 @@
+{
+  "api_version": 1,
+  "id": "deepseek-status",
+  "version": "1.0.0",
+  "name": "DeepSeek 服务状态",
+  "description": "解析官方状态页面并汇总服务、可用率和近期事件",
+  "entry": "init.lua",
+  "capabilities": { "http": ["https://status.deepseek.com"] },
+  "limits": {
+    "instructions": 10000000,
+    "timeout_ms": 45000,
+    "output_bytes": 4194304,
+    "memory_bytes": 33554432
+  }
+}

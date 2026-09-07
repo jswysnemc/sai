@@ -201,6 +201,7 @@ fn localize_subcommands(mut command: clap::Command) -> clap::Command {
             "查看或编辑助手记忆",
         ),
         ("skills", "Manage assistant skills", "管理助手 skills"),
+        ("plugins", "Manage Lua plugins and grants", "管理 Lua 插件及授权"),
         ("ps", "Manage background commands", "管理后台命令"),
         (
             "gateway",

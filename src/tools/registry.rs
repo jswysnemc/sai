@@ -1,234 +1,23 @@
-use super::descriptions::tool_description;
-use crate::llm::{FunctionDefinition, ToolDefinition};
+pub use super::tool_spec::{
+    ToolInfo, ToolModelAttachment, ToolOutput, ToolPermission, ToolProgress, ToolSpec,
+};
+
+#[path = "registry_execution.rs"]
+mod execution;
+#[path = "registry_plugins.rs"]
+mod plugins;
+
+use crate::llm::ToolDefinition;
 use crate::permission::PermissionProfile;
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
+#[cfg(test)]
 use std::sync::Arc;
-use tokio::sync::mpsc;
-
-pub type ToolFuture = Pin<Box<dyn Future<Output = Result<ToolOutput>> + Send>>;
-pub type ToolHandler = Arc<dyn Fn(Value, ToolProgress) -> ToolFuture + Send + Sync>;
 
 /// Provider-facing dsh bash is executed by run_command with a trusted shell override.
 pub(crate) const DSH_BASH_EXECUTION_ALIAS: &str = "__sai_dsh_bash";
-
-/// 工具希望在下一次模型请求中附加的图片。
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ToolModelAttachment {
-    pub(crate) image_url: String,
-    pub(crate) source: String,
-    pub(crate) prompt: String,
-}
-
-impl ToolModelAttachment {
-    /// 创建模型图片附件。
-    ///
-    /// 参数:
-    /// - `image_url`: 图片 data URL 或远程 URL
-    /// - `source`: 图片来源路径或标识
-    /// - `prompt`: 当前模型分析图片时使用的提示
-    ///
-    /// 返回:
-    /// - 模型图片附件
-    pub(crate) fn new(
-        image_url: impl Into<String>,
-        source: impl Into<String>,
-        prompt: impl Into<String>,
-    ) -> Self {
-        Self {
-            image_url: image_url.into(),
-            source: source.into(),
-            prompt: prompt.into(),
-        }
-    }
-}
-
-/// 工具文本结果和仅供下一次模型请求使用的附件。
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ToolOutput {
-    pub(crate) content: String,
-    pub(crate) model_attachments: Vec<ToolModelAttachment>,
-}
-
-impl ToolOutput {
-    /// 创建不包含模型附件的普通工具结果。
-    ///
-    /// 参数:
-    /// - `content`: 工具文本结果
-    ///
-    /// 返回:
-    /// - 普通工具结果
-    pub(crate) fn text(content: impl Into<String>) -> Self {
-        Self {
-            content: content.into(),
-            model_attachments: Vec::new(),
-        }
-    }
-
-    /// 为工具结果附加下一次模型请求使用的图片。
-    ///
-    /// 参数:
-    /// - `attachments`: 图片附件列表
-    ///
-    /// 返回:
-    /// - 包含模型图片附件的工具结果
-    pub(crate) fn with_model_attachments(
-        mut self,
-        attachments: impl IntoIterator<Item = ToolModelAttachment>,
-    ) -> Self {
-        self.model_attachments.extend(attachments);
-        self
-    }
-}
-
-#[derive(Clone, Default)]
-pub struct ToolProgress {
-    sender: Option<mpsc::UnboundedSender<String>>,
-}
-
-impl ToolProgress {
-    pub fn new(sender: mpsc::UnboundedSender<String>) -> Self {
-        Self {
-            sender: Some(sender),
-        }
-    }
-
-    pub fn report(&self, message: impl Into<String>) {
-        if let Some(sender) = &self.sender {
-            let _ = sender.send(message.into());
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct ToolSpec {
-    pub name: String,
-    pub description: String,
-    pub parameters: Value,
-    pub permission: ToolPermission,
-    handler: ToolHandler,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ToolPermission {
-    ReadOnly,
-    Writes,
-}
-
-#[derive(Clone, Debug)]
-pub struct ToolInfo {
-    pub name: String,
-    pub description: String,
-    pub permission: ToolPermission,
-}
-
-impl ToolSpec {
-    pub fn new<F, Fut>(
-        name: impl Into<String>,
-        description: impl Into<String>,
-        parameters: Value,
-        handler: F,
-    ) -> Self
-    where
-        F: Fn(Value) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<String>> + Send + 'static,
-    {
-        let name = name.into();
-        let fallback_description = description.into();
-        let description = tool_description(&name, &fallback_description);
-        Self {
-            name,
-            description,
-            parameters,
-            permission: ToolPermission::ReadOnly,
-            handler: Arc::new(move |args, _progress| {
-                let future = handler(args);
-                Box::pin(async move { future.await.map(ToolOutput::text) })
-            }),
-        }
-    }
-
-    /// 创建可以返回下一次模型请求附件的工具。
-    ///
-    /// 参数:
-    /// - `name`: 工具名称
-    /// - `description`: 工具说明
-    /// - `parameters`: JSON Schema 参数定义
-    /// - `handler`: 返回结构化工具结果的异步处理函数
-    ///
-    /// 返回:
-    /// - 工具定义
-    pub(crate) fn new_with_output<F, Fut>(
-        name: impl Into<String>,
-        description: impl Into<String>,
-        parameters: Value,
-        handler: F,
-    ) -> Self
-    where
-        F: Fn(Value) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<ToolOutput>> + Send + 'static,
-    {
-        let name = name.into();
-        let fallback_description = description.into();
-        let description = tool_description(&name, &fallback_description);
-        Self {
-            name,
-            description,
-            parameters,
-            permission: ToolPermission::ReadOnly,
-            handler: Arc::new(move |args, _progress| Box::pin(handler(args))),
-        }
-    }
-
-    pub fn new_with_progress<F, Fut>(
-        name: impl Into<String>,
-        description: impl Into<String>,
-        parameters: Value,
-        handler: F,
-    ) -> Self
-    where
-        F: Fn(Value, ToolProgress) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<String>> + Send + 'static,
-    {
-        let name = name.into();
-        let fallback_description = description.into();
-        let description = tool_description(&name, &fallback_description);
-        Self {
-            name,
-            description,
-            parameters,
-            permission: ToolPermission::ReadOnly,
-            handler: Arc::new(move |args, progress| {
-                let future = handler(args, progress);
-                Box::pin(async move { future.await.map(ToolOutput::text) })
-            }),
-        }
-    }
-
-    pub fn writes(mut self) -> Self {
-        self.permission = ToolPermission::Writes;
-        self
-    }
-
-    pub fn definition(&self) -> ToolDefinition {
-        ToolDefinition {
-            kind: "function",
-            function: FunctionDefinition {
-                name: self.name.clone(),
-                description: self.description.clone(),
-                parameters: self.parameters.clone(),
-            },
-        }
-    }
-
-    async fn call(&self, args: Value, progress: ToolProgress) -> Result<ToolOutput> {
-        (self.handler)(args, progress).await
-    }
-}
 
 #[derive(Default, Clone)]
 pub struct ToolRegistry {
@@ -242,6 +31,11 @@ pub struct ToolRegistry {
     session_id: String,
     /// 是否允许网格工具跨越会话边界（`mesh.cross_session`）
     mesh_cross_session: bool,
+    /// 【插件】【会话所有权】工具定义克隆只复制定位信息，Lua 状态由注册表提供
+    plugins: crate::plugins::PluginSession,
+    /// 【插件】【调用身份】子 Agent 使用独立标识，不改变网格工具的会话归属
+    plugin_session_id: Option<String>,
+    plugin_diagnostics: Vec<crate::plugins::PluginDiagnostic>,
 }
 
 impl ToolRegistry {
@@ -479,6 +273,9 @@ impl ToolRegistry {
         registry.session_id = self.session_id.clone();
         registry.mesh_cross_session = self.mesh_cross_session;
         registry.permission_profile = self.permission_profile.clone();
+        registry.plugins = self.plugins.clone();
+        registry.plugin_session_id = self.plugin_session_id.clone();
+        registry.plugin_diagnostics = self.plugin_diagnostics.clone();
         registry
     }
 
@@ -493,6 +290,12 @@ impl ToolRegistry {
         let excluded = excluded.iter().copied().collect::<BTreeSet<_>>();
         let mut registry = ToolRegistry::new();
         registry.permission_profile = self.permission_profile.clone();
+        registry.session_key = self.session_key.clone();
+        registry.session_id = self.session_id.clone();
+        registry.mesh_cross_session = self.mesh_cross_session;
+        registry.plugins = self.plugins.clone();
+        registry.plugin_session_id = self.plugin_session_id.clone();
+        registry.plugin_diagnostics = self.plugin_diagnostics.clone();
         // 1. 按来源注册顺序复制，确保供应商工具定义顺序稳定
         for tool in self.ordered_tools() {
             if !excluded.contains(tool.name.as_str()) {
@@ -515,6 +318,9 @@ impl ToolRegistry {
             .tools
             .get(name)
             .with_context(|| format!("unknown tool: {name}"))?;
+        if let Some(id) = tool.plugin_id() {
+            self.plugins.inherit(&source.plugins, id)?;
+        }
         self.register(tool.clone());
         Ok(())
     }
@@ -588,108 +394,6 @@ impl ToolRegistry {
             profile.record_denied(local_tool_name(name), &arguments, reply);
         }
         Ok(())
-    }
-
-    pub async fn call(&self, name: &str, arguments: &str) -> Result<String> {
-        let requested_name = name;
-        let name = local_tool_name(name);
-        let Some(tool) = self.tools.get(name) else {
-            bail!("unknown tool: {name}");
-        };
-        let mut args = parse_arguments(arguments)?;
-        Ok(self
-            .call_authorized(
-                tool,
-                name,
-                &mut args,
-                ToolProgress::default(),
-                false,
-                requested_name == DSH_BASH_EXECUTION_ALIAS,
-            )
-            .await?
-            .content)
-    }
-
-    pub async fn call_with_progress(
-        &self,
-        name: &str,
-        arguments: &str,
-        sender: mpsc::UnboundedSender<String>,
-    ) -> Result<ToolOutput> {
-        let requested_name = name;
-        let name = local_tool_name(name);
-        let Some(tool) = self.tools.get(name) else {
-            bail!("unknown tool: {name}");
-        };
-        let mut args = parse_arguments(arguments)?;
-        self.call_authorized(
-            tool,
-            name,
-            &mut args,
-            ToolProgress::new(sender),
-            true,
-            requested_name == DSH_BASH_EXECUTION_ALIAS,
-        )
-        .await
-    }
-
-    /// 统一完成权限判定、沙盒标记注入和审计结果记录。
-    ///
-    /// 参数:
-    /// - `tool`: 待执行工具定义
-    /// - `name`: 本地工具名称
-    /// - `args`: 已解析工具参数
-    /// - `progress`: 工具进度通道
-    /// - `accept_model_attachments`: 调用方是否会把临时附件提交给模型
-    ///
-    /// 返回:
-    /// - 工具执行结果
-    async fn call_authorized(
-        &self,
-        tool: &ToolSpec,
-        name: &str,
-        args: &mut Value,
-        progress: ToolProgress,
-        accept_model_attachments: bool,
-        use_dsh_bash: bool,
-    ) -> Result<ToolOutput> {
-        if let Some(profile) = &self.permission_profile {
-            // 网格工具按目标地址判定归属：投给别人的会话默认直接拒绝
-            let scope = super::mesh::session_scope_for_call(
-                name,
-                args,
-                &self.session_key,
-                &self.session_id,
-            );
-            let sandboxed = profile.authorize_scoped(name, tool.permission, args, scope)?;
-            if sandboxed {
-                args.as_object_mut()
-                    .context("tool arguments must be a JSON object")?
-                    .insert("_sai_sandbox".to_string(), Value::Bool(true));
-            }
-        }
-        if accept_model_attachments && name == "read_file" {
-            args.as_object_mut()
-                .context("tool arguments must be a JSON object")?
-                .insert("_sai_model_attachments".to_string(), Value::Bool(true));
-        }
-        if use_dsh_bash {
-            args.as_object_mut()
-                .context("tool arguments must be a JSON object")?
-                .insert(
-                    "_sai_command_shell".to_string(),
-                    Value::String(dsh_bash_shell()),
-                );
-        }
-        let result = tool.call(args.clone(), progress).await;
-        if let Some(profile) = &self.permission_profile {
-            profile.record_result(
-                name,
-                args,
-                result.as_ref().map(|output| output.content.as_str()),
-            );
-        }
-        result
     }
 }
 

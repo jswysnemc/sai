@@ -84,6 +84,7 @@ Run `sai config` (also reachable from the REPL) for the terminal configurator. T
 - **Subagents** - The `subagent` tool starts an independent LLM loop with a `max_steps` budget and timeout; writable tasks auto-create a `.sai-subagents` git worktree for isolation, then apply back and clean up on success. Persistent agents can idle and take follow-ups (REPL `/subagents`, `/msg`)
 - **Skills** - Reusable `SKILL.md` skill packs with three visibility tiers (hidden / name-only / full); enable / disable / list / stats / prune from the TUI or CLI. Session loads are cached as described above.
 - **MCP bridging** - Native stdio / http MCP servers; tools registered with `mcp_` prefix; dedicated `mcp.jsonc` config
+- **Lua plugins** - Install local Lua 5.4 packages with tools, user commands, and lifecycle callbacks. Plugins use separate settings and explicit HTTP grants; online manuals and DeepSeek status use bundled Lua implementations. See the [plugin guide](design/lua-plugins/getting-started.md), [API](design/lua-plugins/api.md), and [migration status](design/lua-plugins/migration.md) (Chinese).
 - **Session-level Todo** - A plan checklist tracked across tool rounds
 - **Cron jobs** - bash / http / prompt types, persisted to `jobs.db`, triggered by a background scheduler
 

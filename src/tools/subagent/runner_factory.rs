@@ -83,6 +83,8 @@ pub(super) fn build_subagent_runner(
     };
     // 2. 渐进网关按子 Agent 的实际工具集合和延迟配置重建，避免沿用主 Agent 的描述
     let mut tools = tools.clone_excluding(&[crate::tools::LOAD_NAME, crate::tools::INVOKE_NAME]);
+    // 【插件】【子任务隔离】独立 VM 保留父任务权限配置，但不继承父任务 Lua 全局状态
+    tools.start_plugin_session(&format!("{}/subagent/{subagent_id}", context.session_id))?;
     crate::tools::progressive::register_loader(&mut tools, &profile.deferred_tools);
     let base_prompt = if profile.system_prompt.trim().is_empty() {
         default_prompt.to_string()

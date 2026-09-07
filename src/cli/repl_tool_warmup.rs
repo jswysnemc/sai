@@ -11,6 +11,22 @@ pub(super) struct ReplToolWarmup {
 }
 
 impl ReplToolWarmup {
+    /// 【插件】【预热刷新】仅在存在未消费结果时重建任务，避免旧快照覆盖显式重新加载。
+    /// @param config、paths、mode 为当前配置；session_id、state_dir 为真实会话
+    /// @returns 无；旧线程完成后自行释放，结果不再进入会话
+    pub(super) fn refresh_if_pending(
+        &mut self,
+        config: AppConfig,
+        paths: SaiPaths,
+        mode: AgentMode,
+        session_id: String,
+        state_dir: PathBuf,
+    ) {
+        if self.task.is_some() {
+            *self = Self::start(config, paths, mode, session_id, state_dir);
+        }
+    }
+
     /// 后台构建包含 MCP 动态工具的完整注册表。
     ///
     /// 参数:

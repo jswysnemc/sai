@@ -53,6 +53,8 @@ const EXTRA_REPL_COMMANDS: &[&str] = &[
     "/undo",
     "/thinking",
     "/ps",
+    "/plugins",
+    "/plugin",
 ];
 
 /// 其中只切换权限模式的命令：等价于 Shift+Tab 热切换，可立即生效。
@@ -261,6 +263,11 @@ pub(super) fn complete_repl_command(input: &str, streaming: bool) -> Option<&'st
 fn command_description(command: &str) -> &'static str {
     match command {
         "/help" => t("show available commands", "显示可用命令"),
+        "/plugins" => t("show or reload session plugins", "查看或重新加载会话插件"),
+        "/plugin" => t(
+            "run a plugin command in this session",
+            "在当前会话执行插件命令",
+        ),
         "/context" => t(
             "show context usage and compaction policy",
             "查看上下文占用与压缩策略",
