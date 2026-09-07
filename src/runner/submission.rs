@@ -147,6 +147,21 @@ impl UserInputSubmission {
         ));
         self
     }
+
+    /// 【自动续聊】【通知来源】附加包含消费确认标识的外部事件。
+    ///
+    /// 参数:
+    /// - `batch`: 监听器选出的待处理通知
+    ///
+    /// 返回:
+    /// - 可校验通知状态并在请求成功后确认的输入
+    pub(crate) fn with_external_event_batch(
+        mut self,
+        batch: crate::agent::ExternalEventBatch,
+    ) -> Self {
+        self.automatic_input = Some(AutomaticInput::from_external_event(batch));
+        self
+    }
 }
 
 /// 控制命令 submission。

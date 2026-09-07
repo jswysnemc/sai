@@ -1,4 +1,5 @@
-use super::background_tasks::{read_log_tail, refresh_task_statuses, BackgroundRuntimeOwner};
+use super::background_refresh::refresh_task_statuses;
+use super::background_tasks::{read_log_tail, BackgroundRuntimeOwner};
 use super::store::BackgroundCommandStore;
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
@@ -69,15 +70,14 @@ pub(super) async fn wait_background_task(
             }
             tracked_task_ids = Some(running_ids);
         }
-        if refresh_task_statuses(&mut tasks, config).await {
-            // 2. 只合并本次刷新过的任务，保留其他会话的任务记录
-            let mut all = store.load()?;
-            for task in &tasks {
-                if let Some(current) = all.iter_mut().find(|item| item.id == task.id) {
-                    *current = task.clone();
-                }
-            }
-            store.save(&all)?;
+        refresh_task_statuses(&mut tasks, config).await;
+        // 2. 【后台命令】【等待合并】合并进程状态后，使用最新任务表判断等待结果
+        tasks = store.merge_statuses(&tasks)?;
+        if let Some(owner) = owner {
+            tasks.retain(|task| {
+                task.runtime_owner_id.as_deref() == Some(&owner.owner_id)
+                    && task.runtime_owner_kind.as_deref() == Some(owner.owner_kind.as_str())
+            });
         }
 
         let terminal_task = if let Some(id) = task_id.as_deref() {

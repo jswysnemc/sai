@@ -1,8 +1,11 @@
+use super::background_refresh::refresh_background_tasks;
+#[cfg(test)]
+use super::background_refresh::refresh_task_statuses;
 use super::background_runtime::{
     background_runtime_process_id, record_runtime_output_read, sync_runtime_task,
     sync_runtime_tasks, LogTail,
 };
-use super::background_timeout::{is_unlimited, timeout_seconds_from_args};
+use super::background_timeout::timeout_seconds_from_args;
 use super::exit_status::{
     exit_status_path, remove_exit_status_file, wrap_command_with_exit_status,
 };
@@ -204,23 +207,8 @@ pub(super) async fn list_background_tasks(
     runtime_owner: Option<&BackgroundRuntimeOwner>,
 ) -> Result<String> {
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
-    let mut tasks = store.load()?;
-    refresh_task_statuses(&mut tasks, config).await;
-    // 1. 回执已消费或前台已完整读取的终态任务不再展示
-    let mut pruned = false;
-    tasks.retain(|task| {
-        let drop = task.status != "running" && task.completion_notified;
-        if drop {
-            let _ = std::fs::remove_file(&task.stdout_log);
-            let _ = std::fs::remove_file(&task.stderr_log);
-            remove_exit_status_file(&task.stdout_log);
-            pruned = true;
-            false
-        } else {
-            true
-        }
-    });
-    store.save(&tasks)?;
+    let mut tasks = refresh_background_tasks(&store, config, |_| true).await?;
+    // 1. 【后台命令】【列表快照】通知确认后仍允许读取日志，删除交给显式 cleanup
     // 2. 同步到各任务自己的会话库：按 current 指针打开会把别的会话的任务
     //    写错库，或者把本会话的任务漏掉（当前终端不在 current 上时）
     {
@@ -239,9 +227,11 @@ pub(super) async fn list_background_tasks(
             }
         }
     }
-    // 3. 网关进程由网关管理页独立管理，通用后台任务列表不展示
+    // 3. 【后台命令】【列表快照】只在展示中隐藏已消费终态记录，保留任务及日志
+    tasks.retain(|task| task.status == "running" || !task.completion_notified);
+    // 4. 网关进程由网关管理页独立管理，通用后台任务列表不展示
     tasks.retain(|task| !is_gateway_owned_task(task));
-    // 4. 会话视角只看自己起的任务：任务表是机器级全局的，不过滤会让别的会话、
+    // 5. 会话视角只看自己起的任务：任务表是机器级全局的，不过滤会让别的会话、
     //    以及 CLI 起的无主任务一并出现在当前会话的面板里。CLI 传 false 看全量。
     if session_scoped {
         let session_id = runtime_owner
@@ -249,7 +239,6 @@ pub(super) async fn list_background_tasks(
             .unwrap_or_default();
         tasks.retain(|task| task.owned_by_session(session_id));
     }
-    let _ = pruned;
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
         "tasks": tasks,
@@ -300,8 +289,7 @@ pub(super) async fn read_background_task_output(
         && args.get("max_lines").is_none()
         && args.get("head_lines").is_none();
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
-    let mut tasks = store.load()?;
-    refresh_task_statuses(&mut tasks, config).await;
+    let mut tasks = refresh_background_tasks(&store, config, |_| true).await?;
     let task_index = tasks
         .iter()
         .position(|task| task.id == task_id)
@@ -335,11 +323,19 @@ pub(super) async fn read_background_task_output(
     if let Some(output) = stderr.as_ref() {
         record_runtime_output_read(&state, task, "stderr", &task.stderr_log, output)?;
     }
-    // 显式读取终态输出已经完成结果交付，不再额外发送自动完成回执
+    // 1. 【后台命令】【输出消费】只确认已读取的终态记录，不写回旧任务表
     if tasks[task_index].status != "running" {
         tasks[task_index].completion_notified = true;
+        store.update(|current| {
+            if let Some(task) = current
+                .iter_mut()
+                .find(|task| task.id == task_id && task.status != "running")
+            {
+                task.completion_notified = true;
+            }
+            Ok(())
+        })?;
     }
-    store.save(&tasks)?;
     let task = &tasks[task_index];
     if task.status == "running" {
         if let Some(session_id) = task
@@ -385,8 +381,7 @@ pub(super) async fn stop_background_task(
     let task_id = required(&args, "task_id")?;
     let force = args.get("force").and_then(Value::as_bool).unwrap_or(false);
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
-    let mut tasks = store.load()?;
-    refresh_task_statuses(&mut tasks, config).await;
+    let mut tasks = refresh_background_tasks(&store, config, |_| true).await?;
     let task = tasks
         .iter_mut()
         .find(|item| item.id == task_id)
@@ -407,7 +402,13 @@ pub(super) async fn stop_background_task(
         task.updated_at = unix_seconds();
     }
     let task = task.clone();
-    store.save(&tasks)?;
+    // 1. 【后台命令】【停止合并】停止等待期间发生的确认和清理保持有效
+    let tasks = store.merge_statuses(std::slice::from_ref(&task))?;
+    let task = tasks
+        .iter()
+        .find(|current| current.id == task_id)
+        .cloned()
+        .unwrap_or(task);
     // 状态同步到任务自己的会话库，而不是工作区 current 指向的会话
     let state = state_for_task(paths, &task)?;
     sync_runtime_tasks(&state, &tasks)?;
@@ -442,74 +443,37 @@ pub(super) async fn cleanup_background_tasks(
         .map(str::trim)
         .filter(|value| !value.is_empty());
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
-    let mut tasks = store.load()?;
-    refresh_task_statuses(&mut tasks, config).await;
+    let tasks = refresh_background_tasks(&store, config, |_| true).await?;
     let state = StateStore::new(paths)?;
     sync_runtime_tasks(&state, &tasks)?;
-    let mut removed = Vec::new();
-    // 指定 task_id 时只清理该任务（无论状态）；否则清理全部非运行中任务
-    tasks.retain(|task| {
-        if let Some(target_id) = target_task_id {
-            if task.id != target_id {
+    // 1. 【后台命令】【任务清理】在事务内选择待删除记录，避免恢复并发删除的任务
+    let (removed, remaining) = store.update(|tasks| {
+        let mut removed = Vec::new();
+        tasks.retain(|task| {
+            if let Some(target_id) = target_task_id {
+                if task.id != target_id {
+                    return true;
+                }
+            } else if task.status == "running" {
                 return true;
             }
-        } else if task.status == "running" {
-            return true;
-        }
+            removed.push(task.clone());
+            false
+        });
+        Ok((removed, tasks.len()))
+    })?;
+    for task in &removed {
         if remove_logs {
             let _ = std::fs::remove_file(&task.stdout_log);
             let _ = std::fs::remove_file(&task.stderr_log);
             remove_exit_status_file(&task.stdout_log);
         }
-        removed.push(task.id.clone());
-        false
-    });
-    store.save(&tasks)?;
+    }
     Ok(serde_json::to_string_pretty(&json!({
         "ok": true,
-        "removed": removed,
-        "remaining": tasks.len(),
+        "removed": removed.iter().map(|task| &task.id).collect::<Vec<_>>(),
+        "remaining": remaining,
     }))?)
-}
-
-/// 刷新任务运行状态。
-///
-/// 参数:
-/// - `tasks`: 任务列表
-/// - `config`: 应用配置
-pub(super) async fn refresh_task_statuses(
-    tasks: &mut [BackgroundCommandTask],
-    config: &AppConfig,
-) -> bool {
-    let now = unix_seconds();
-    let mut changed = false;
-    for task in tasks {
-        if task.status != "running" {
-            continue;
-        }
-        if !process_exists(task.pid) {
-            task.status = "exited".to_string();
-            task.updated_at = now;
-            changed = true;
-            continue;
-        }
-        if !is_unlimited(task.timeout_seconds)
-            && now.saturating_sub(task.started_at) >= task.timeout_seconds
-        {
-            terminate_process(task.pid, task.pgid, false).await;
-            tokio::time::sleep(Duration::from_secs(
-                config.tools.background_command_stop_grace_seconds,
-            ))
-            .await;
-            if process_exists(task.pid) {
-                terminate_process(task.pid, task.pgid, true).await;
-            }
-            task.status = "timed_out".to_string();
-            task.updated_at = unix_seconds();
-            changed = true;
-        }
-    }
-    changed
 }
 
 /// 打开后台任务所属会话的状态存储。

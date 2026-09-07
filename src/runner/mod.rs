@@ -1,6 +1,7 @@
 #![allow(dead_code, unused_imports)]
 
 mod automatic_input;
+mod automatic_source;
 mod continuation;
 mod control_runner;
 mod events;

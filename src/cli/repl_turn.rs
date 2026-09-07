@@ -44,7 +44,7 @@ pub(super) fn automatic_repl_submission(
         ),
         ExternalEventWake::Completion(batch) => {
             let input = crate::runner::UserInputSubmission::new(String::new(), mode)
-                .with_external_event(batch.prompt().to_string(), batch.display().to_string());
+                .with_external_event_batch(batch.clone());
             (input, Some(batch))
         }
     };
@@ -112,8 +112,8 @@ pub(super) async fn execute_automatic_repl_turn(
     // 中断同样算作已消费：用户按下 Ctrl+C 就是看到了这批回执并主动放弃。
     // 若此时不确认，下一次等待会立刻重投同一批，而 take_ready 又排在读键之前，
     // 用户既抢不回输入、也退不出去，形成中断→重投→再中断的活锁。
-    // 仅在真正失败（provider 报错）时保留，留给下次重试。
-    if outcome.interrupted || outcome.result.is_ok() {
+    // 请求成功时由统一消息间隙确认；这里只处理用户主动中断，失败保留待重试
+    if outcome.interrupted {
         if let Some(batch) = batch.as_ref() {
             let _ = agent.acknowledge_external_events(batch);
         }

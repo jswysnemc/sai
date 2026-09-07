@@ -29,6 +29,7 @@ pub(crate) struct AutomaticInput {
     pub(crate) kind: AutomaticInputKind,
     pub(crate) prompt: Option<String>,
     pub(crate) display: Option<String>,
+    pub(crate) external_event: Option<crate::agent::ExternalEventBatch>,
 }
 
 impl AutomaticInput {
@@ -44,6 +45,7 @@ impl AutomaticInput {
             kind: AutomaticInputKind::GoalContinuation,
             prompt: None,
             display: None,
+            external_event: None,
         }
     }
 
@@ -60,6 +62,23 @@ impl AutomaticInput {
             kind: AutomaticInputKind::ExternalCompletion,
             prompt: Some(prompt),
             display: Some(display),
+            external_event: None,
+        }
+    }
+
+    /// 【自动续聊】【通知来源】创建携带确认标识的外部通知输入。
+    ///
+    /// 参数:
+    /// - `batch`: 已排队的外部通知快照
+    ///
+    /// 返回:
+    /// - 可校验和确认来源的自动输入
+    pub(crate) fn from_external_event(batch: crate::agent::ExternalEventBatch) -> Self {
+        Self {
+            kind: AutomaticInputKind::ExternalCompletion,
+            prompt: Some(batch.prompt().to_string()),
+            display: Some(batch.display().to_string()),
+            external_event: Some(batch),
         }
     }
 

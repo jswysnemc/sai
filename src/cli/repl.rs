@@ -139,6 +139,8 @@ pub(super) async fn run_repl(
         // 2. 先把排队中的消息跑掉：跟随端上行的一轮在本终端空闲时落到这里。
         //    队列为空时这一步是空操作，本地单终端行为完全不变
         if runtime.queue_len() > 0 {
+            external_events.cancel();
+            external_events.resume();
             let owner_key = state.state_dir().display().to_string();
             let exit = drain_submission_queue(
                 paths,
@@ -182,6 +184,7 @@ pub(super) async fn run_repl(
                     wake,
                     draft,
                 }) => {
+                    external_events.cancel();
                     mode = automatic_mode;
                     prefill = (!draft.text.trim().is_empty()).then_some(draft.text);
                     prefill_clipboard = prefill.as_ref().map(|_| draft.clipboard_state);
@@ -208,10 +211,14 @@ pub(super) async fn run_repl(
                             runtime.record_failure(interrupted_failure_text(&error))?;
                         }
                     } else if let Err(error) = outcome.result {
+                        external_events.pause(agent.state().state_dir());
                         runtime.record_failure(turn_failure_text(&error))?;
                     }
                     if let Some(draft) = outcome.leftover_draft {
                         prefill = Some(draft);
+                    }
+                    if runtime.queue_len() > 0 {
+                        external_events.resume();
                     }
                     let exit = drain_submission_queue(
                         paths,
@@ -238,6 +245,8 @@ pub(super) async fn run_repl(
                 None => break,
             }
         };
+        external_events.cancel();
+        external_events.resume();
         apply_ready_tool_registry(&mut tool_warmup, &mut agent, mode, &mut runtime)?;
         let input = submission.raw_input.trim();
         if !input.eq_ignore_ascii_case("/undo") {

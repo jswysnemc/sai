@@ -9,7 +9,7 @@ const LONG_RUNNING_SECONDS: u64 = 600;
 const REMINDER_INTERVAL_SECONDS: u64 = 300;
 
 /// 仍在运行、需要检查进展的任务摘要。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct BackgroundAttentionNotice {
     pub(crate) event_id: String,
     pub(crate) task_id: String,

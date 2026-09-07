@@ -3,11 +3,10 @@ use crate::config::AppConfig;
 use crate::paths::SaiPaths;
 use crate::state::StateStore;
 use crate::tools::command::{
-    acknowledge_background_attention, acknowledge_background_completions,
-    poll_background_completions, poll_session_background_completions, BackgroundAttentionNotice,
-    BackgroundCompletionNotice,
+    acknowledge_background_completions, poll_background_completions,
+    poll_session_background_completions, BackgroundAttentionNotice, BackgroundCompletionNotice,
 };
-use crate::tools::mesh::{acknowledge_mesh_messages, next_pending};
+use crate::tools::mesh::next_pending;
 use crate::tools::subagent_goal::{list_subagents_for_goal, pending_finished_notices_for_goal};
 use crate::tools::subagent_state::{
     acknowledge_finished_notices, list_subagents_for_owner, pending_finished_notices,
@@ -21,12 +20,15 @@ const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(500);
 #[path = "external_attention.rs"]
 mod attention;
 
+#[path = "external_delivery.rs"]
+mod delivery;
+
 #[cfg(test)]
 #[path = "external_attention_tests.rs"]
 mod attention_tests;
 
 /// 一批尚未交给主 Agent 的外部完成事件。
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ExternalEventBatch {
     prompt: String,
     display: String,
@@ -132,8 +134,8 @@ impl Agent {
 
     /// 确认外部完成事件已被成功消费。
     ///
-    /// 这是通知的唯一清除点：轮次被中断或失败时不确认，
-    /// 下一次等待会重新投递同一批完成回执。
+    /// 请求成功接收通知后确认；TUI 用户主动中断时也可明确放弃该通知。
+    /// 请求失败时保留待处理记录。
     ///
     /// 参数:
     /// - `batch`: 已消费事件批次
@@ -141,27 +143,12 @@ impl Agent {
     /// 返回:
     /// - 持久化是否成功
     pub(crate) fn acknowledge_external_events(&self, batch: &ExternalEventBatch) -> Result<()> {
-        let owner_key = self.state.state_dir().display().to_string();
-        acknowledge_background_completions(
-            &self.paths,
-            self.state.session_id(),
-            &batch.background_task_ids,
-        )?;
-        if let Some(notice) = &batch.background_attention {
-            acknowledge_background_attention(
-                &self.paths,
-                self.state.session_id(),
-                std::slice::from_ref(&notice.task_id),
-            )?;
-        }
-        acknowledge_finished_notices(&owner_key, &batch.subagent_ids);
-        acknowledge_mesh_messages(self.state.state_dir(), &batch.mesh_message_ids);
-        Ok(())
+        self.external_event_monitor().acknowledge(batch)
     }
 
     /// 静默清除积压的外部完成回执，不投递给模型。
     ///
-    /// 回执的确认延后到轮次成功结束，因此中断、崩溃、跨进程恢复都会留下未确认的
+    /// 回执的确认延后到模型请求成功，因此请求失败、崩溃、跨进程恢复都会留下未确认的
     /// 回执。用户主动发话说明他要开始新话题，此时把陈年回执整包注入既打断意图，
     /// 也会在上下文里反复堆积同一条内容。这里在用户输入落地前把它们确认掉。
     ///

@@ -414,6 +414,10 @@ fn uses_progressive_loading(config: &AppConfig) -> bool {
 mod gateway_tests;
 
 #[cfg(test)]
+#[path = "session_runner_automatic_tests.rs"]
+mod automatic_tests;
+
+#[cfg(test)]
 #[path = "session_runner_tool_mode_tests.rs"]
 mod tool_mode_tests;
 

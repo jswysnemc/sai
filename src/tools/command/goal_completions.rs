@@ -1,4 +1,4 @@
-use super::background_tasks::refresh_task_statuses;
+use super::background_refresh::refresh_background_tasks;
 use super::store::{BackgroundCommandStore, BackgroundCommandTask};
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
@@ -59,21 +59,17 @@ pub(crate) async fn poll_session_background_completions(
     .await
 }
 
-/// 按任务归属条件查询后台命令完成事件。
+/// 【后台命令】【完成通知】按归属范围查询最新的未消费完成事件。
+///
+/// 参数: `paths` 为状态路径，`config` 为运行配置，`matches` 为任务范围
+/// 返回: 未消费通知和仍在运行的任务数量
 async fn poll_background_completions_matching(
     paths: &SaiPaths,
     config: &AppConfig,
     matches: impl Fn(&BackgroundCommandTask) -> bool,
 ) -> Result<(Vec<BackgroundCompletionNotice>, usize)> {
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
-    let mut tasks = store.load()?;
-    let mut changed = false;
-    for task in tasks.iter_mut().filter(|task| matches(task)) {
-        changed |= refresh_task_statuses(std::slice::from_mut(task), config).await;
-    }
-    if changed {
-        store.save(&tasks)?;
-    }
+    let tasks = refresh_background_tasks(&store, config, &matches).await?;
     let mut notices = Vec::new();
     let mut running = 0;
     for task in tasks.iter().filter(|task| matches(task)) {
@@ -85,7 +81,6 @@ async fn poll_background_completions_matching(
             continue;
         }
         // 主动完成回执不附带日志正文，避免一次性塞入大量 token
-        let _ = config;
         notices.push(BackgroundCompletionNotice {
             task_id: task.id.clone(),
             label: task.label.clone(),
@@ -121,18 +116,18 @@ pub(crate) fn acknowledge_background_completions(
         return Ok(());
     }
     let store = BackgroundCommandStore::new(paths.state_dir.clone());
-    let mut tasks = store.load()?;
-    // 回执只确认投递状态，保留任务与日志供模型继续调用 output 读取
-    for task in &mut tasks {
-        if task_ids.iter().any(|id| id == &task.id)
-            && owned_by_session(task, session_id)
-            && task.status != "running"
-        {
-            task.completion_notified = true;
+    store.update(|tasks| {
+        // 1. 【后台命令】【完成通知】只确认最新记录，保留日志供后续读取
+        for task in tasks {
+            if task_ids.iter().any(|id| id == &task.id)
+                && owned_by_session(task, session_id)
+                && task.status != "running"
+            {
+                task.completion_notified = true;
+            }
         }
-    }
-    store.save(&tasks)?;
-    Ok(())
+        Ok(())
+    })
 }
 
 /// 判断任务是否绑定到交互式会话。

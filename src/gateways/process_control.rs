@@ -151,14 +151,20 @@ pub(crate) fn migrate_legacy_gateway_tasks(paths: &SaiPaths) -> Result<()> {
         Ok(tasks) => tasks,
         Err(_) => return Ok(()),
     };
-    let (gateway_tasks, other_tasks): (Vec<_>, Vec<_>) =
-        tasks.into_iter().partition(is_legacy_gateway_task);
+    let gateway_tasks = tasks
+        .into_iter()
+        .filter(is_legacy_gateway_task)
+        .collect::<Vec<_>>();
     if gateway_tasks.is_empty() {
         return Ok(());
     }
     let store = GatewayProcessStore::new(paths.state_dir.clone());
     store.init()?;
     let mut records = store.load()?;
+    let migrated_ids = gateway_tasks
+        .iter()
+        .map(|task| task.id.clone())
+        .collect::<Vec<_>>();
     for task in gateway_tasks {
         let gateway_id = legacy_gateway_id(&task);
         // 1. 网关存储中已有同网关记录时优先保留现有记录，仅补充缺失网关
@@ -179,7 +185,11 @@ pub(crate) fn migrate_legacy_gateway_tasks(paths: &SaiPaths) -> Result<()> {
         });
     }
     store.save(&records)?;
-    legacy_store.save(&other_tasks)?;
+    // 2. 【网关】【任务迁移】只删除已迁移记录，保留迁移期间新建或确认的后台任务
+    legacy_store.update(|tasks| {
+        tasks.retain(|task| !migrated_ids.contains(&task.id));
+        Ok(())
+    })?;
     Ok(())
 }
 

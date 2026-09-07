@@ -318,10 +318,13 @@ async fn wait_managed_task(
             let stderr = read_log_text(&task.stderr_log)?;
             let exit_code = read_exit_code(exit_status_path(&task.stdout_log))?;
             let store = BackgroundCommandStore::new(paths.state_dir.clone());
-            let mut tasks = store.load()?;
-            if let Some(index) = tasks.iter().position(|item| item.id == task.id) {
-                let finished = tasks.remove(index);
-                store.save(&tasks)?;
+            let finished = store.update(|tasks| {
+                Ok(tasks
+                    .iter()
+                    .position(|item| item.id == task.id)
+                    .map(|index| tasks.remove(index)))
+            })?;
+            if let Some(finished) = finished {
                 let _ = std::fs::remove_file(&finished.stdout_log);
                 let _ = std::fs::remove_file(&finished.stderr_log);
                 remove_exit_status_file(&finished.stdout_log);

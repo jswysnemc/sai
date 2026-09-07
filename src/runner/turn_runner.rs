@@ -80,6 +80,29 @@ impl<'agent> TurnRunner<'agent> {
             .state()
             .goal()?
             .filter(|goal| goal.status.is_active());
+        // 1. 【自动续聊】【消息投递】自动输入复用消息间隙的持久化、投递和确认边界
+        let inter_message_source = if let Some(automatic) = &input.automatic_input {
+            let Some(source) = super::automatic_source::AutomaticInputSource::new(
+                automatic,
+                self.agent,
+                self.inter_message_source.clone(),
+            )?
+            else {
+                let result = ChatResult {
+                    content: String::new(),
+                    reasoning: None,
+                    usage: None,
+                    tool_calls: Vec::new(),
+                    duration_ms: 0,
+                    ttft_ms: 0,
+                };
+                sink.on_runner_event(RunnerEvent::Completed(result.clone()))?;
+                return Ok(result);
+            };
+            Some(Arc::new(source) as Arc<dyn InterMessageSource>)
+        } else {
+            self.inter_message_source.clone()
+        };
         let started = Instant::now();
         // 1. 本轮耗时从首次思考或正文输出开始；没有输出时从请求开始
         let first_output = std::sync::Arc::new(std::sync::Mutex::new(None::<Instant>));
@@ -90,7 +113,7 @@ impl<'agent> TurnRunner<'agent> {
                     &input.input,
                     input.image_urls.clone(),
                     input.turn_id.clone(),
-                    self.inter_message_source.clone(),
+                    inter_message_source,
                     self.wait_for_external_events,
                     |event| {
                         if matches!(&event, crate::agent::AgentEvent::Chunk(_)) {

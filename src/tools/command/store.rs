@@ -1,9 +1,10 @@
 use crate::runtime_recovery::OwnerKind;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::fs::File;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) struct BackgroundCommandTask {
     pub(crate) id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -105,17 +106,81 @@ impl BackgroundCommandStore {
         }
     }
 
-    /// 保存任务列表。
+    /// 【后台命令】【事务更新】串行修改最新任务表，避免覆盖并发确认或删除。
     ///
     /// 参数:
-    /// - `tasks`: 后台任务列表
+    /// - `update`: 只执行同步状态修改的闭包，不可再次访问同一存储
     ///
     /// 返回:
-    /// - 保存是否成功
-    pub(crate) fn save(&self, tasks: &[BackgroundCommandTask]) -> Result<()> {
+    /// - 修改结果；失败时不写入任务表
+    pub(crate) fn update<T>(
+        &self,
+        update: impl FnOnce(&mut Vec<BackgroundCommandTask>) -> Result<T>,
+    ) -> Result<T> {
+        let _lock = self.lock()?;
+        let mut tasks = self.load()?;
+        let original = tasks.clone();
+        let result = update(&mut tasks)?;
+        if tasks != original {
+            self.write(&tasks)?;
+        }
+        Ok(result)
+    }
+
+    /// 【后台命令】【状态合并】只推进仍存在任务的运行状态。
+    ///
+    /// 参数:
+    /// - `observed`: 异步刷新或停止操作得到的任务快照
+    ///
+    /// 返回:
+    /// - 最新完整任务表；已确认、已删除和新建任务均保留最新结果
+    pub(super) fn merge_statuses(
+        &self,
+        observed: &[BackgroundCommandTask],
+    ) -> Result<Vec<BackgroundCommandTask>> {
+        self.update(|tasks| {
+            for current in tasks.iter_mut().filter(|task| task.status == "running") {
+                if let Some(update) = observed.iter().find(|task| {
+                    task.id == current.id
+                        && task.pid == current.pid
+                        && task.started_at == current.started_at
+                        && task.status != "running"
+                }) {
+                    current.status.clone_from(&update.status);
+                    current.updated_at = current.updated_at.max(update.updated_at);
+                }
+            }
+            Ok(tasks.clone())
+        })
+    }
+
+    /// 【后台命令】【事务更新】取得独立锁文件的跨进程排他锁。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 持锁文件句柄，离开作用域时释放；异步进程等待不持有此锁
+    fn lock(&self) -> Result<File> {
         self.init()?;
-        // 原子替换：直接写目标文件在写入被打断时会留下半截内容，下一次
-        // 读取就会失败。先写临时文件再 rename，读到的永远是完整内容。
+        let file = File::options()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(self.root.join("tasks.lock"))?;
+        file.lock()?;
+        Ok(file)
+    }
+
+    /// 【后台命令】【事务更新】在已持锁的事务内原子替换任务文件。
+    ///
+    /// 参数:
+    /// - `tasks`: 最新任务列表
+    ///
+    /// 返回:
+    /// - 文件写入结果
+    fn write(&self, tasks: &[BackgroundCommandTask]) -> Result<()> {
         let payload = format!("{}\n", serde_json::to_string_pretty(tasks)?);
         let temp = tempfile::NamedTempFile::new_in(&self.root)?;
         std::fs::write(temp.path(), payload)?;
@@ -125,6 +190,19 @@ impl BackgroundCommandStore {
         Ok(())
     }
 
+    /// 【后台命令】【测试夹具】替换测试任务表；业务代码必须使用事务更新。
+    ///
+    /// 参数:
+    /// - `tasks`: 测试任务列表
+    ///
+    /// 返回:
+    /// - 文件写入结果
+    #[cfg(test)]
+    pub(crate) fn save(&self, tasks: &[BackgroundCommandTask]) -> Result<()> {
+        let _lock = self.lock()?;
+        self.write(tasks)
+    }
+
     /// 追加或替换任务。
     ///
     /// 参数:
@@ -132,14 +210,20 @@ impl BackgroundCommandStore {
     ///
     /// 返回:
     /// - 保存是否成功
-    pub(crate) fn upsert(&self, task: BackgroundCommandTask) -> Result<()> {
-        let mut tasks = self.load()?;
-        if let Some(existing) = tasks.iter_mut().find(|item| item.id == task.id) {
-            *existing = task;
-        } else {
-            tasks.push(task);
-        }
-        self.save(&tasks)
+    pub(crate) fn upsert(&self, mut task: BackgroundCommandTask) -> Result<()> {
+        self.update(|tasks| {
+            if let Some(existing) = tasks.iter_mut().find(|item| item.id == task.id) {
+                task.completion_notified |= existing.completion_notified;
+                if existing.status != "running" {
+                    task.status.clone_from(&existing.status);
+                    task.updated_at = task.updated_at.max(existing.updated_at);
+                }
+                *existing = task;
+            } else {
+                tasks.push(task);
+            }
+            Ok(())
+        })
     }
 
     /// 返回日志目录。

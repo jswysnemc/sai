@@ -1,6 +1,9 @@
 mod background;
 mod background_actions;
 mod background_attention;
+#[cfg(test)]
+mod background_consumption_tests;
+mod background_refresh;
 mod background_runtime;
 mod background_schema;
 mod background_tasks;
