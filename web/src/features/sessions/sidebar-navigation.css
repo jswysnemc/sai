@@ -1,0 +1,5 @@
+.sidebar-navigation { display: flex; align-items: center; min-width: 0; min-height: 1.75rem; margin: 0.375rem 0; }
+.sidebar-view-switcher { display: flex; flex: 1; min-width: 0; gap: 0.125rem; padding: 0; border: 0; background: transparent; }
+.sidebar-view-switcher .ui-button { flex: 1; min-width: 0; min-height: 1.75rem; height: 1.75rem; padding: 0 0.25rem; border: 0; border-radius: var(--radius-2); background: transparent; color: var(--ink-soft); font-size: var(--text-xs); white-space: nowrap; box-shadow: none; }
+.sidebar-view-switcher .ui-button:hover { color: var(--ink); background: var(--surface-hover); }
+.sidebar-view-switcher .ui-button.active { background: var(--surface-selected); color: var(--ink); font-weight: 500; }

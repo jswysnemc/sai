@@ -129,49 +129,6 @@
   gap:var(--space-3xs);
 }
 
-/*
- * 视图切换器：紧凑分段控件，宽度随内容而非占满整行。
- * 三个短标签撑满侧栏会显得像三个大按钮；收到内容宽度后，
- * 它恢复为一个「切换器」应有的体量。
- */
-.sidebar-view-switcher {
-  display: inline-flex;
-  gap: 2px;
-  width: fit-content;
-  margin: 0.75rem 0 0.5rem;
-  padding: 2px;
-  border: 0;
-  border-radius: var(--radius-2);
-  background: transparent;
-}
-
-.sidebar-view-switcher button {
-  flex: 0 0 auto;
-  min-width: 3.25rem;
-  min-height: 1.625rem;
-  padding: 0 var(--space-sm);
-  border: 0;
-  border-radius: var(--radius-2);
-  background: transparent;
-  color: var(--ink-soft);
-  font-size: var(--text-xs);
-  white-space: nowrap;
-  transition:
-    color var(--duration-fast) var(--ease-standard),
-    background-color var(--duration-fast) var(--ease-standard);
-}
-
-.sidebar-view-switcher button:hover:not(.active) {
-  color: var(--ink);
-}
-
-.sidebar-view-switcher button.active {
-  background: var(--surface-selected);
-  color: var(--ink);
-  font-weight: 500;
-  box-shadow: none;
-}
-
 .sidebar-session-actions {
   display: grid;
   gap: var(--space-3xs);

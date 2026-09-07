@@ -1,7 +1,7 @@
 import { Activity, Bot, GitBranch, Keyboard, SquareTerminal } from "lucide-react";
 import { Button } from "../../shared/ui/button/button";
 import { useI18n } from "../i18n/use-i18n";
-import { WorkspaceSwitcher } from "../workspaces/workspace-switcher";
+import { WorkbenchWorkspacePath } from "./workbench-workspace-path";
 import { useRuntimeActivity } from "../runtime-activity/use-runtime-activity";
 import { requestWorkbenchCommand } from "./workbench-shortcuts";
 import "./workbench-status-bar.css";
@@ -19,7 +19,7 @@ export function WorkbenchStatusBar({ branch, terminalOpen }: WorkbenchStatusBarP
   return (
     <footer className="workbench-status-bar" aria-label={t("Workspace status", "工作区状态")}>
       <div className="workbench-status-project">
-        <WorkspaceSwitcher />
+        <WorkbenchWorkspacePath />
         {branch && <Button variant="ghost" size="small" className="workbench-status-branch" title={t(`Git branch: ${branch}`, `Git 分支：${branch}`)} onClick={() => requestWorkbenchCommand("open-changes")}><GitBranch size={12} /><span>{branch}</span></Button>}
       </div>
       <div className="workbench-status-actions">

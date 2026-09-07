@@ -80,6 +80,8 @@ unicode-width = "0.1"
 usvg = "0.46"
 urlencoding = "2.1"
 uuid = { version = "1.11", features = ["v4"] }
+supports-color = "3.0.2"
+terminal-colorsaurus = "1.0.3"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_ProcessStatus", "Win32_System_Threading"] }

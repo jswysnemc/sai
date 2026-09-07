@@ -13,9 +13,9 @@ import { LocaleSwitcher } from "../i18n/locale-switcher";
 import { useI18n } from "../i18n/use-i18n";
 import { SessionSidebarActions } from "./session-sidebar-actions";
 import { Button } from "../../shared/ui/button/button";
-import { SegmentedControl } from "../../shared/ui/segmented-control";
 import { SidebarProjectGroup } from "./sidebar-project-group";
-import { SessionScopeControl, SESSION_SCOPE_KEY, type SessionScope } from "./session-scope-control";
+import { SESSION_SCOPE_KEY, type SessionScope } from "./session-scope-control";
+import { SidebarNavigation, type SidebarView } from "./sidebar-navigation";
 import { useRunningSessions } from "./session-running-state";
 import { WORKBENCH_COMMAND_EVENT, type WorkbenchCommand } from "../workspace/workbench-shortcuts";
 import { SessionListView } from "./session-list-view";
@@ -35,8 +35,6 @@ type SessionSidebarProps = {
   onSelectFile: (path: string) => void;
   onClearFile: () => void;
 };
-
-type SidebarView = "sessions" | "workspaces" | "files";
 
 /**
  * 渲染会话侧栏：会话、工作区与文件树三个视图的壳。
@@ -185,12 +183,7 @@ export function SessionSidebar({ collapsed, onToggleCollapsed, onNavigate, selec
         onSkills={() => { navigate("/settings/skills"); onNavigate?.(); }}
         createPending={actions.create.isPending}
       />
-      <SegmentedControl className="sidebar-view-switcher" value={sidebarView} onChange={setSidebarView} ariaLabel={t("Sidebar view", "侧栏视图")} options={[
-        { value: "sessions", label: t("Sessions", "会话") },
-        { value: "workspaces", label: t("Workspaces", "工作区") },
-        { value: "files", label: t("Files", "文件") }
-      ]} />
-      {sidebarView === "sessions" && <SessionScopeControl value={sessionScope} onChange={(scope) => { setSessionScope(scope); selection.exitSelection(); }} />}
+      <SidebarNavigation view={sidebarView} onViewChange={setSidebarView} scope={sessionScope} onScopeChange={(scope) => { setSessionScope(scope); selection.exitSelection(); }} />
       {sidebarView === "files" && (
         <div className="sidebar-file-tree-view">
           <FileTree
