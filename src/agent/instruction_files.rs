@@ -244,13 +244,14 @@ fn content_hash(content: &str) -> u64 {
 mod tests {
     use super::*;
     use std::fs;
-    use std::sync::{Mutex, OnceLock};
 
-    fn cwd_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
+    /// 【Sai/指令】【测试路径】创建互不共享的应用目录集合。
+    ///
+    /// 参数:
+    /// - `root`: 当前测试的临时根目录
+    ///
+    /// 返回:
+    /// - 全部位于临时根目录内的 Sai 路径
     fn test_paths(root: PathBuf) -> SaiPaths {
         SaiPaths {
             config_dir: root.join("config"),
@@ -268,9 +269,15 @@ mod tests {
         }
     }
 
-    #[test]
-    fn loads_global_and_project_instruction_files() {
-        let _guard = cwd_lock().lock().unwrap();
+    /// 【Sai/指令】【加载测试】验证全局、项目与嵌套指令按目录层级加载。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无；指令内容或顺序错误时断言失败
+    #[tokio::test]
+    async fn loads_global_and_project_instruction_files() {
         let temp = tempfile::tempdir().unwrap();
         let config_dir = temp.path().join("config");
         let project = temp.path().join("project");
@@ -282,49 +289,52 @@ mod tests {
         fs::write(nested.join(".CLAUDE.md"), "nested rules").unwrap();
 
         let paths = test_paths(temp.path().to_path_buf());
-        let previous = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&nested).unwrap();
-        let prompt = load_instruction_prompt(&paths);
-        let _ = std::env::set_current_dir(previous);
+        let prompt = runtime_cwd::scope(nested, async { load_instruction_prompt(&paths) }).await;
 
         assert!(prompt.contains("global rules"));
         assert!(prompt.contains("project rules"));
         assert!(prompt.contains("nested rules"));
         assert!(prompt.contains("<instruction-files>"));
-        // 根项目文件应出现在嵌套文件之前
+        // 【Sai/指令】【加载测试】1. 根项目文件应出现在嵌套文件之前
         let project_pos = prompt.find("project rules").unwrap();
         let nested_pos = prompt.find("nested rules").unwrap();
         assert!(project_pos < nested_pos);
     }
 
-    #[test]
-    fn prefers_first_matching_project_name_in_directory() {
-        let _guard = cwd_lock().lock().unwrap();
+    /// 【Sai/指令】【优先级测试】验证同目录中只使用优先匹配的指令文件。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无；指令优先级错误时断言失败
+    #[tokio::test]
+    async fn prefers_first_matching_project_name_in_directory() {
         let temp = tempfile::tempdir().unwrap();
         let project = temp.path().join("repo");
         fs::create_dir_all(&project).unwrap();
         fs::write(project.join(".AGENT.md"), "agent file").unwrap();
         fs::write(project.join(".CLAUDE.md"), "claude file").unwrap();
         let paths = test_paths(temp.path().to_path_buf());
-        let previous = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&project).unwrap();
-        let prompt = load_instruction_prompt(&paths);
-        let _ = std::env::set_current_dir(previous);
+        let prompt = runtime_cwd::scope(project, async { load_instruction_prompt(&paths) }).await;
         assert!(prompt.contains("agent file"));
         assert!(!prompt.contains("claude file"));
     }
 
-    #[test]
-    fn skips_missing_files_quietly() {
-        let _guard = cwd_lock().lock().unwrap();
+    /// 【Sai/指令】【缺失测试】验证独立空目录没有指令时返回空提示。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无；缺失文件产生非空提示时断言失败
+    #[tokio::test]
+    async fn skips_missing_files_quietly() {
         let temp = tempfile::tempdir().unwrap();
         let project = temp.path().join("empty");
         fs::create_dir_all(&project).unwrap();
         let paths = test_paths(temp.path().to_path_buf());
-        let previous = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&project).unwrap();
-        let prompt = load_instruction_prompt(&paths);
-        let _ = std::env::set_current_dir(previous);
+        let prompt = runtime_cwd::scope(project, async { load_instruction_prompt(&paths) }).await;
         assert!(prompt.is_empty());
     }
 

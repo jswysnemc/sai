@@ -196,56 +196,66 @@ mod tests {
     use crate::state::StateStore;
     use crate::tools::ToolRegistry;
 
-    /// 外部轮次必须同时获得记忆索引和最新活动目标。
-    #[test]
-    fn builds_memory_and_goal_contexts_for_external_turns() {
+    /// 【Sai/ACP】【上下文测试】验证独立工作目录中的记忆和活动目标均进入外部轮次。
+    ///
+    /// 参数:
+    /// - 无
+    ///
+    /// 返回:
+    /// - 无；上下文缺失时断言失败
+    #[tokio::test]
+    async fn builds_memory_and_goal_contexts_for_external_turns() {
         let temp = tempfile::tempdir().unwrap();
-        let paths = test_paths(temp.path());
-        let config = AppConfig::default();
-        let state = StateStore::new(&paths).unwrap();
-        state.init_files().unwrap();
-        state
-            .replace_goal("Complete the Codex ACP integration", Some(10_000), false)
-            .unwrap();
-        let client = OpenAiCompatibleClient::from_config(&config, &paths).unwrap();
-        let agent = Agent::new(
-            config,
-            &paths,
-            state,
-            client,
-            ToolRegistry::new(),
-            AgentMode::Yolo,
-        )
-        .unwrap();
-        let workspace = crate::runtime_cwd::current_dir().unwrap();
-        agent
-            .memory
-            .notes(Some(&workspace))
-            .save(
-                crate::memory::file_store::MemoryScope::Project,
-                &crate::memory::file_store::MemoryEntry {
-                    front: crate::memory::file_store::Frontmatter {
-                        name: "acp-embedded-resources".to_string(),
-                        description: "Codex ACP supports embedded resources".to_string(),
-                        memory_type: crate::memory::file_store::MemoryType::Project,
-                    },
-                    body: "正文".to_string(),
-                },
-                "Codex ACP supports embedded resources",
+        // 【Sai/ACP】【上下文测试】1. 为记忆写入与读取绑定同一个任务目录
+        crate::runtime_cwd::scope(temp.path().to_path_buf(), async {
+            let paths = test_paths(temp.path());
+            let config = AppConfig::default();
+            let state = StateStore::new(&paths).unwrap();
+            state.init_files().unwrap();
+            state
+                .replace_goal("Complete the Codex ACP integration", Some(10_000), false)
+                .unwrap();
+            let client = OpenAiCompatibleClient::from_config(&config, &paths).unwrap();
+            let agent = Agent::new(
+                config,
+                &paths,
+                state,
+                client,
+                ToolRegistry::new(),
+                AgentMode::Yolo,
             )
             .unwrap();
+            let workspace = crate::runtime_cwd::current_dir().unwrap();
+            agent
+                .memory
+                .notes(Some(&workspace))
+                .save(
+                    crate::memory::file_store::MemoryScope::Project,
+                    &crate::memory::file_store::MemoryEntry {
+                        front: crate::memory::file_store::Frontmatter {
+                            name: "acp-embedded-resources".to_string(),
+                            description: "Codex ACP supports embedded resources".to_string(),
+                            memory_type: crate::memory::file_store::MemoryType::Project,
+                        },
+                        body: "正文".to_string(),
+                    },
+                    "Codex ACP supports embedded resources",
+                )
+                .unwrap();
 
-        let contexts = agent
-            .external_prompt_contexts("Codex ACP resources")
-            .unwrap();
+            let contexts = agent
+                .external_prompt_contexts("Codex ACP resources")
+                .unwrap();
 
-        assert!(contexts.iter().any(|context| {
-            context.uri == "sai://memory/index" && context.text.contains("embedded resources")
-        }));
-        assert!(contexts.iter().any(|context| {
-            context.uri == "sai://goal/active"
-                && context.text.contains("Complete the Codex ACP integration")
-        }));
+            assert!(contexts.iter().any(|context| {
+                context.uri == "sai://memory/index" && context.text.contains("embedded resources")
+            }));
+            assert!(contexts.iter().any(|context| {
+                context.uri == "sai://goal/active"
+                    && context.text.contains("Complete the Codex ACP integration")
+            }));
+        })
+        .await;
     }
 
     /// 创建隔离的应用路径集合。
