@@ -1,0 +1,30 @@
+{
+  "source_commit": "b407d955ad84d4f55f0c0d93d1c05bccdeb7ecd8",
+  "source_file": "src/tools/linux_game/signals.rs",
+  "source_sha256": "f3bae6b564916ecc6927d7f75520fc2ee40150af165bfd750abfb74aa3844d79",
+  "normalization": "traffic_light maps the original color symbols to red, yellow, or green",
+  "cases": [
+    {"name": "query-01", "input": {"kind": "query", "game": "Cyberpunk 2077"}, "output": {"candidates": ["Cyberpunk 2077"], "normalized": "Cyberpunk 2077", "slug": "cyberpunk-2077", "slugs": ["cyberpunk-2077"]}},
+    {"name": "query-02", "input": {"kind": "query", "game": "赛博朋克2077"}, "output": {"candidates": ["Cyberpunk 2077"], "normalized": "Cyberpunk 2077", "slug": "2077", "slugs": ["cyberpunk-2077"]}},
+    {"name": "query-03", "input": {"kind": "query", "game": "Linux 能玩赛博朋克 2077 吗"}, "output": {"candidates": ["Cyberpunk 2077"], "normalized": "Cyberpunk 2077", "slug": "linux-2077", "slugs": ["cyberpunk-2077"]}},
+    {"name": "query-04", "input": {"kind": "query", "game": "电驭叛客2077"}, "output": {"candidates": ["Cyberpunk 2077"], "normalized": "Cyberpunk 2077", "slug": "2077", "slugs": ["cyberpunk-2077"]}},
+    {"name": "query-05", "input": {"kind": "query", "game": "CYBERPUNK　2077"}, "output": {"candidates": ["Cyberpunk 2077"], "normalized": "Cyberpunk 2077", "slug": "cyberpunk-2077", "slugs": ["cyberpunk-2077"]}},
+    {"name": "query-06", "input": {"kind": "query", "game": "原神"}, "output": {"candidates": ["Genshin Impact"], "normalized": "Genshin Impact", "slug": "", "slugs": ["genshin-impact"]}},
+    {"name": "query-07", "input": {"kind": "query", "game": "linux能玩原神吗"}, "output": {"candidates": ["Genshin Impact"], "normalized": "Genshin Impact", "slug": "linux", "slugs": ["genshin-impact"]}},
+    {"name": "query-08", "input": {"kind": "query", "game": "GENSHIN\tImpact"}, "output": {"candidates": ["Genshin Impact"], "normalized": "Genshin Impact", "slug": "genshin-impact", "slugs": ["genshin-impact"]}},
+    {"name": "query-09", "input": {"kind": "query", "game": "Tom Clancy's Rainbow Six® Siege"}, "output": {"candidates": ["Tom Clancy's Rainbow Six® Siege"], "normalized": "Tom Clancy's Rainbow Six® Siege", "slug": "tom-clancy-s-rainbow-six-siege", "slugs": ["tom-clancy-s-rainbow-six-siege"]}},
+    {"name": "query-10", "input": {"kind": "query", "game": "  Portal 2\n"}, "output": {"candidates": ["Portal 2"], "normalized": "Portal 2", "slug": "portal-2", "slugs": ["portal-2"]}},
+    {"name": "query-11", "input": {"kind": "query", "game": "A---B___C"}, "output": {"candidates": ["A---B___C"], "normalized": "A---B___C", "slug": "a-b-c", "slugs": ["a-b-c"]}},
+    {"name": "query-12", "input": {"kind": "query", "game": "中文游戏"}, "output": {"candidates": ["中文游戏"], "normalized": "中文游戏", "slug": "", "slugs": []}},
+    {"name": "query-13", "input": {"kind": "query", "game": ""}, "output": {"candidates": [], "normalized": "", "slug": "", "slugs": []}},
+    {"name": "query-14", "input": {"kind": "query", "game": " \t　\r\n"}, "output": {"candidates": [], "normalized": "", "slug": "", "slugs": []}},
+    {"name": "query-15", "input": {"kind": "query", "game": "---"}, "output": {"candidates": ["---"], "normalized": "---", "slug": "", "slugs": []}},
+    {"name": "query-16", "input": {"kind": "query", "game": "ÉLITE Dangerous"}, "output": {"candidates": ["ÉLITE Dangerous"], "normalized": "ÉLITE Dangerous", "slug": "lite-dangerous", "slugs": ["lite-dangerous"]}},
+    {"name": "query-17", "input": {"kind": "query", "game": "A​B"}, "output": {"candidates": ["A​B"], "normalized": "A​B", "slug": "a-b", "slugs": ["a-b"]}},
+    {"name": "query-18", "input": {"kind": "query", "game": "Straße 2"}, "output": {"candidates": ["Straße 2"], "normalized": "Straße 2", "slug": "stra-e-2", "slugs": ["stra-e-2"]}},
+    {"name": "query-19", "input": {"kind": "query", "game": "A\rB"}, "output": {"candidates": ["A\rB"], "normalized": "A\rB", "slug": "a-b", "slugs": ["a-b"]}},
+    {"name": "query-20", "input": {"kind": "query", "game": "Cyberpunk 2077"}, "output": {"candidates": ["Cyberpunk 2077"], "normalized": "Cyberpunk 2077", "slug": "cyberpunk-2077", "slugs": ["cyberpunk-2077"]}},
+    {"name": "query-21", "input": {"kind": "query", "game": "Genshin Impact"}, "output": {"candidates": ["Genshin Impact"], "normalized": "Genshin Impact", "slug": "genshin-impact", "slugs": ["genshin-impact"]}},
+    {"name": "query-22", "input": {"kind": "query", "game": "中文 Game & DLC"}, "output": {"candidates": ["中文 Game & DLC"], "normalized": "中文 Game & DLC", "slug": "game-dlc", "slugs": ["game-dlc"]}}
+  ]
+}

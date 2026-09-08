@@ -1,0 +1,23 @@
+{
+  "api_version": 1,
+  "id": "linux-game-signals",
+  "version": "1.0.0",
+  "name": "Linux 游戏兼容性信号",
+  "description": "收集四个游戏资料来源并汇总兼容性证据、判定和置信度",
+  "entry": "init.lua",
+  "capabilities": {
+    "http": [
+      "https://store.steampowered.com",
+      "https://www.protondb.com",
+      "https://caniplayonlinux.com",
+      "https://areweanticheatyet.com"
+    ]
+  },
+  "limits": {
+    "memory_bytes": 33554432,
+    "instructions": 2000000,
+    "timeout_ms": 150000,
+    "http_timeout_ms": 20000,
+    "output_bytes": 2097152
+  }
+}

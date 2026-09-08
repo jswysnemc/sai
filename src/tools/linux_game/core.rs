@@ -1,13 +1,12 @@
-use super::{readable_tool_name, ToolProgress, ToolRegistry, ToolSpec};
 use crate::config::AppConfig;
 use crate::i18n::is_zh;
 use crate::llm::{
     ChatMessage, ChatResult, ChatStreamChunk, ChatStreamKind, OpenAiCompatibleClient, Usage,
 };
 use crate::paths::SaiPaths;
+use crate::tools::{readable_tool_name, ToolProgress, ToolRegistry, ToolSpec};
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
-use std::time::Duration;
 
 const GAME_COMPATIBILITY_PROMPT: &str = crate::prompts::GAME_COMPATIBILITY_PROMPT;
 
@@ -152,6 +151,9 @@ fn estimate_tokens(texts: &[&str]) -> u64 {
     crate::token_estimate::estimate_texts_tokens(texts)
 }
 
+/// 【游戏调查】【注册】将调查入口接入工具表，证据采集由已加载的 Lua 插件提供。
+/// @param registry 当前工具表；config 为调查配置；paths 为应用路径；tools 为可调用的工具快照
+/// @returns 无
 pub fn register(
     registry: &mut ToolRegistry,
     config: AppConfig,
@@ -180,6 +182,12 @@ async fn linux_game_compatibility(
     progress: ToolProgress,
 ) -> Result<String> {
     let game = required(&args, "game")?;
+    if !context
+        .tools
+        .contains("gather_linux_game_compatibility_signals")
+    {
+        bail!("linux-game-signals plugin is disabled or unavailable");
+    }
     let issue = args
         .get("issue")
         .and_then(Value::as_str)
@@ -201,7 +209,7 @@ async fn linux_game_compatibility(
             ChatMessage::system(system_prompt),
             ChatMessage::plain("user", prompt.clone()),
         ],
-        game_tool_registry(&context),
+        context.tools,
         context
             .config
             .plugins
@@ -224,17 +232,6 @@ async fn linux_game_compatibility(
         "stats": stats.public(),
         "output_instruction": OUTPUT_INSTRUCTION,
     }))?)
-}
-
-fn game_tool_registry(context: &GameCompatibilityContext) -> ToolRegistry {
-    let mut registry = context.tools.clone();
-    registry.register(ToolSpec::new(
-        "gather_linux_game_compatibility_signals",
-        "Gather Steam, ProtonDB, Can I Play on Linux, and AreWeAntiCheatYet compatibility signals for one game. / 收集单个游戏在 Steam、ProtonDB、Can I Play on Linux、AreWeAntiCheatYet 上的兼容性信号。",
-        json!({"type":"object","properties":{"game":{"type":"string","description":"Game title. / 游戏名称。"},"issue":{"type":"string","description":"Optional issue such as crash, multiplayer, anti-cheat, performance, mods. / 可选关注点，例如崩溃、多人、反作弊、性能、Mod。"}},"required":["game"],"additionalProperties":false}),
-        |args| async move { gather_linux_game_compatibility_signals(args).await },
-    ));
-    registry
 }
 
 async fn chat_with_tools(
@@ -414,3 +411,21 @@ fn clip_inline(value: &str, max_chars: usize) -> String {
     }
 }
 
+/// 【游戏调查】【必填参数】读取非空文本，不从证据采集实现继承参数处理函数。
+/// @param args 调用参数；key 为必填字段
+/// @returns 去除首尾空白后的文本，缺失或空白时返回错误
+fn required(args: &Value, key: &str) -> Result<String> {
+    let value = args
+        .get(key)
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim();
+    if value.is_empty() {
+        bail!("missing required argument: {key}")
+    }
+    Ok(value.to_string())
+}
+
+#[cfg(test)]
+#[path = "tests.rs"]
+mod tests;

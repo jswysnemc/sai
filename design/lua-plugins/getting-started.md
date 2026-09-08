@@ -94,6 +94,7 @@ sai plugins remove hello
 | `fcitx-wiki` | `fcitx5_input_method_wiki_qurey` | 默认启用，保留旧名称中的 `qurey` 拼写 |
 | `protondb` | `protondb_query` | 默认启用 |
 | `web-search` | `web_search` | 沿用主配置 `plugins.web.enabled` |
+| `linux-game-signals` | `gather_linux_game_compatibility_signals` | 沿用主配置 `plugins.linux_game_compatibility.enabled` |
 
 `plugins.jsonc` 的显式设置优先于上述默认值。内置包保留原工具名称；外部包不能使用内置插件 ID，也不能覆盖现有工具。已禁用的内置工具仍可在 Agent 设置中预先选择，但无法实际执行。
 
@@ -127,6 +128,20 @@ sai plugins remove hello
 五个可配置服务地址继续支持自定义 HTTP(S) 端点，地址同时受插件 URL 规则约束。兼容层将地址转换为来源和必要的 POST 查询端点，不在清单或授权展示中保留查询参数。内置包没有显式 `grants` 时沿用内置授权；已有显式授权不会因地址修改自动扩大。更换来源后，可核对 `sai plugins info web-search --json` 并使用 `--grant-declared` 更新授权。
 
 新增搜索供应商的实现、选择规则和参数放在 Lua 包内，来源与查询端点放在清单中；新增设置放入插件自己的 `settings`，无需增加 AppConfig 字段。
+
+### 游戏兼容性证据
+
+`linux-game-signals` 收集 Steam、ProtonDB、Can I Play on Linux 和 AreWeAntiCheatYet 的游戏资料。可直接调用只读工具：
+
+```sh
+sai --plan __tool gather_linux_game_compatibility_signals '{"game":"Portal 2","issue":"multiplayer"}'
+```
+
+包内处理游戏别名、候选路径、页面摘要、可玩性判定及证据置信度；来源请求各限 20 秒，整个回调限 150 秒。失败来源保留尝试记录，成功取得的空页面或 JSON null 与请求失败分别记录。数据不足时 `needs_followup` 为 true。
+
+结果中的 `verdict.traffic_light` 使用 `red`、`yellow`、`green` 文本值；中文 `label` 和原有判定条件不变。其他结果字段保持兼容，但 HTTP 错误措辞由插件宿主管理。界面可按文本状态使用自身图标组件。
+
+原 `linux_game_compatibility` 调查入口会调用同一采集插件。禁用 `linux-game-signals` 后，采集工具从可执行目录移除，调查入口在请求模型之前报告插件不可用。旧游戏开关是包的默认值；显式插件启用设置优先，可在停用调查入口时单独启用证据采集。
 
 ## 验证
 

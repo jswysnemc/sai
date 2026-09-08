@@ -5,6 +5,8 @@ mod events;
 mod fcitx_wiki;
 mod http;
 mod http_redirects;
+mod linux_game_reference;
+mod linux_game_signals;
 mod management;
 mod protondb;
 mod registry;

@@ -31,7 +31,7 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 
 ## 已落地的版本 1
 
-独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、JSON、文本、时间能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb` 与 `web-search` 已迁为随程序嵌入的 Lua 包，共提供 11 个查询工具；相应 Rust 业务实现已删除，公开工具名称保持兼容。
+独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、JSON、文本、时间能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search` 与 `linux-game-signals` 已迁为随程序嵌入的 Lua 包，共提供 12 个查询工具；相应 Rust 业务实现已删除，公开工具名称保持兼容。
 
 CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。
 
@@ -68,13 +68,17 @@ Lua 状态属于 Agent 实例内存，不是持久化会话存储。不同入口
 
 旧功能必须通过 Lua 实现执行，不能仅用 Lua 包装原有 Rust 业务函数。HTTP、文本解码、时间和 HTML 转文本或 Markdown 等通用能力保留为宿主能力。HTML 转换统一放在运行时的 `text.rs`，业务包负责页面范围、截断规则和返回格式。
 
-Arch 包内部按软件包、状态和 Wiki 查询拆分；Fcitx 的主题、双语规则、正文提取和响应格式各自独立；ProtonDB 的搜索、评论地址计算和评论格式分别维护。新增内置包由资源目录自动发现，Rust 层只保留必要的旧配置兼容。综合游戏诊断的多来源信号采集列入后续独立评估。
+Arch 包内部按软件包、状态和 Wiki 查询拆分；Fcitx 的主题、双语规则、正文提取和响应格式各自独立；ProtonDB 的搜索、评论地址计算和评论格式分别维护。新增内置包由资源目录自动发现，Rust 层只保留必要的旧配置兼容。
 
 网页搜索的选择顺序、请求构造、失败回退和结果格式化全部位于 `plugins/web-search`。六个供应商各有独立 Lua 文件，共用包内配置及结果格式。`src/tools/web_fetch.rs` 负责通用网页读取；原有 Rust 搜索注册及供应商模块已删除。
 
 搜索兼容层以旧 `WebSearchConfig` 为默认值，再按字段合并显式插件设置。原始设置与派生设置分开保存，管理命令只写原始设置；凭据解析结果参与实例修订比较，使重载能识别环境值轮换。自定义地址只转换成来源和 POST 查询路径，不将查询参数写入清单展示。显式授权保持固定，新地址仍须在其范围内。
 
 只读 POST 使用通用 `http_read_only_post` 能力；查询语义由插件契约保证，宿主执行精确路径及方法检查，并在每次重定向后重新检查。HTTP 请求绑定独立放在运行时的 `http.rs`，请求和回调时长分别受清单限制，普通插件默认仍为 30 秒和 20 秒。
+
+`linux-game-signals` 负责 Steam、ProtonDB、Can I Play on Linux 和 AreWeAntiCheatYet 四来源采集，以及名称归一化、摘要、判定和置信度。原调查工具通过共用工具表调用该包，不再在私有工具表中注册 Rust 采集器；采集工具也可独立调用。禁用采集包后，调查入口在初始化模型之前报错。调查中的模型循环仍由 Rust 负责，尚未迁移为插件能力。
+
+游戏证据沿用原有字段，`verdict.traffic_light` 改用 `red`、`yellow`、`green`，避免把图形字符作为界面状态。来源缺失、空正文、JSON null、状态优先级及 Unicode 截断均有原版对照。网络错误文本由统一宿主生成，保留失败尝试而不承诺沿用旧 HTTP 库的错误措辞。
 
 ## 验证与完成依据
 
