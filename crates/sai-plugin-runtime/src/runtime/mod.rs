@@ -1,6 +1,7 @@
 mod bindings;
 mod control;
 mod execution;
+mod http;
 mod modules;
 mod registration;
 mod text;
@@ -68,15 +69,7 @@ impl PluginRuntime {
         package.manifest.validate()?;
         granted.validate()?;
         let manifest = Arc::new(package.manifest.clone());
-        let capabilities = Capabilities {
-            http: package
-                .manifest
-                .capabilities
-                .http
-                .intersection(&granted.http)
-                .cloned()
-                .collect(),
-        };
+        let capabilities = package.manifest.capabilities.intersection(&granted);
         let lua = Lua::new_with(
             StdLib::TABLE | StdLib::STRING | StdLib::MATH | StdLib::UTF8,
             LuaOptions::default(),

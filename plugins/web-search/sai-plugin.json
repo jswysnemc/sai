@@ -1,0 +1,29 @@
+{
+  "api_version": 1,
+  "id": "web-search",
+  "version": "1.0.0",
+  "name": "网页搜索",
+  "description": "选择搜索供应商、执行查询并返回统一的 Markdown 结果",
+  "entry": "init.lua",
+  "capabilities": {
+    "http": [
+      "https://api.search.tinyfish.ai",
+      "https://api.tavily.com",
+      "https://api.firecrawl.dev",
+      "https://api.anysearch.com",
+      "https://html.duckduckgo.com"
+    ],
+    "http_read_only_post": [
+      "https://api.tavily.com/search",
+      "https://api.firecrawl.dev/v2/search",
+      "https://api.anysearch.com/v1/search"
+    ]
+  },
+  "limits": {
+    "memory_bytes": 33554432,
+    "instructions": 2000000,
+    "timeout_ms": 750000,
+    "http_timeout_ms": 120000,
+    "output_bytes": 4194304
+  }
+}

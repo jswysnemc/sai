@@ -63,11 +63,12 @@ HTTP 插件必须在清单中声明精确来源，例如 `https://api.example.co
 
 ```sh
 sai plugins enable network-plugin --allow-http https://api.example.com
+sai plugins enable network-plugin --allow-http https://api.example.com --allow-http-read-only-post https://api.example.com/search
 sai plugins enable network-plugin --grant-declared
 sai plugins enable network-plugin --no-http
 ```
 
-`--allow-http` 替换显式 HTTP 来源集合，可以重复传入。`--grant-declared` 明确授权当前清单中的来源；`--no-http` 撤销 HTTP 授权。实际可访问来源始终是清单声明与授权的交集。URL 路径、凭据、通配符和尾部 `/` 不属于合法来源声明。
+`--allow-http` 替换显式 HTTP 来源集合，可以重复传入。需要只读 POST 的包另用 `--allow-http-read-only-post` 授予清单中声明的精确端点，并同时提供所属来源。`--grant-declared` 明确授权当前清单中的全部网络能力；`--no-http` 撤销来源和只读 POST 授权。只设置 `--allow-http` 时不会保留旧的只读 POST 授权。实际可访问范围始终是声明与授权的交集。URL 路径、凭据、通配符和尾部 `/` 不属于合法来源声明。
 
 `sai plugins info <id> --json` 显示清单、安装位置和有效授权，不输出插件设置中的秘密值。
 
@@ -92,10 +93,40 @@ sai plugins remove hello
 | `archlinux` | `aur_search_packages`、`aur_get_package_info`、`archlinux_official_package_query`、`aur_check_status`、`archwiki_query` | 沿用主配置 `plugins.archlinux.enabled` |
 | `fcitx-wiki` | `fcitx5_input_method_wiki_qurey` | 默认启用，保留旧名称中的 `qurey` 拼写 |
 | `protondb` | `protondb_query` | 默认启用 |
+| `web-search` | `web_search` | 沿用主配置 `plugins.web.enabled` |
 
 `plugins.jsonc` 的显式设置优先于上述默认值。内置包保留原工具名称；外部包不能使用内置插件 ID，也不能覆盖现有工具。已禁用的内置工具仍可在 Agent 设置中预先选择，但无法实际执行。
 
 这些查询工具均为只读。ProtonDB 的 Algolia 搜索使用 GET，数字 App ID 的名称查询失败时保留原 ID，评论读取失败时仍返回评级。Fcitx 的 `include_page_excerpt=false` 完全使用包内规则；启用摘录时最多读取 512 KiB 页面，保留 Markdown 并截取 12,000 个 Unicode 字符。ArchWiki 页面同样保留 Markdown 链接。
+
+### 网页搜索设置
+
+`web-search` 包含 TinyFish、Tavily、Firecrawl、AnySearch、SearXNG 和 DuckDuckGo。自动模式沿用此顺序；显式指定供应商时仅尝试该供应商，`script` 保留为 DuckDuckGo 的旧别名。通用网页读取仍使用 `web_fetch`。
+
+旧版 `plugins.web` 字段继续提供默认设置，`plugins.jsonc` 的 `web-search.settings` 按字段覆盖。例如：
+
+```json
+{
+  "api_version": 1,
+  "plugins": {
+    "web-search": {
+      "enabled": true,
+      "settings": {
+        "default_provider": "tavily",
+        "tavily_api_keys": ["$env:TAVILY_API_KEY"],
+        "tavily_search_depth": "advanced",
+        "timeout_seconds": 60
+      }
+    }
+  }
+}
+```
+
+设置使用原有字段名称。宿主只向该内置包传递搜索配置；API Key 按首个非空配置值、显式 `$env:` 引用和原供应商环境变量的规则解析。解析结果保存在运行时快照中，启停和配置操作不会将其写回磁盘。环境变量变化在新实例或显式重载后生效，外部插件不能借此读取 Sai 配置或任意环境变量。
+
+五个可配置服务地址继续支持自定义 HTTP(S) 端点，地址同时受插件 URL 规则约束。兼容层将地址转换为来源和必要的 POST 查询端点，不在清单或授权展示中保留查询参数。内置包没有显式 `grants` 时沿用内置授权；已有显式授权不会因地址修改自动扩大。更换来源后，可核对 `sai plugins info web-search --json` 并使用 `--grant-declared` 更新授权。
+
+新增搜索供应商的实现、选择规则和参数放在 Lua 包内，来源与查询端点放在清单中；新增设置放入插件自己的 `settings`，无需增加 AppConfig 字段。
 
 ## 验证
 

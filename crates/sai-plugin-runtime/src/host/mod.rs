@@ -1,3 +1,4 @@
+use crate::Capabilities;
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -32,12 +33,13 @@ pub struct HttpResponse {
 #[async_trait]
 pub trait PluginHost: Send + Sync {
     /// 【插件】【HTTP 执行】执行已经过来源和权限校验的请求。
-    /// @param request 请求信息；allowed_origins 为重定向仍须遵守的授权来源
+    /// @param request 请求信息；capabilities 为有效网络授权；allow_writes 为宿主确认的写入权限
     /// @returns 有界响应，失败时返回不包含请求凭据的错误
     async fn http(
         &self,
         request: HttpRequest,
-        allowed_origins: Vec<String>,
+        capabilities: Capabilities,
+        allow_writes: bool,
     ) -> Result<HttpResponse>;
 }
 

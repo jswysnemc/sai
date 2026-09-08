@@ -96,7 +96,10 @@ fn network_grants_are_explicit_and_bounded_by_the_manifest() {
         &paths,
         "network",
         true,
-        GrantUpdate::Http(["https://other.test".into()].into())
+        GrantUpdate::Explicit(sai_plugin_runtime::Capabilities {
+            http: ["https://other.test".into()].into(),
+            ..Default::default()
+        })
     )
     .is_err());
     plugins::set_enabled(&config, &paths, "network", true, GrantUpdate::Declared).unwrap();
@@ -113,7 +116,7 @@ fn network_grants_are_explicit_and_bounded_by_the_manifest() {
         &paths,
         "network",
         true,
-        GrantUpdate::Http(Default::default()),
+        GrantUpdate::Explicit(Default::default()),
     )
     .unwrap();
     assert!(load_config(&paths).unwrap().plugins["network"]
@@ -121,6 +124,74 @@ fn network_grants_are_explicit_and_bounded_by_the_manifest() {
         .as_ref()
         .unwrap()
         .http
+        .is_empty());
+}
+
+/// 【插件测试】【查询授权保存】端点授权参与管理校验，更新包不会新增查询权限。
+#[test]
+fn read_only_post_grants_are_explicit_and_survive_package_updates() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(root.path());
+    let config = AppConfig::default();
+    let source = root.path().join("source");
+    let mut package = descriptor("query-api", "");
+    package
+        .package
+        .manifest
+        .capabilities
+        .http_read_only_post
+        .insert("https://example.test/search".into());
+    write_package(&source, &package);
+    plugins::install(&source, &paths, false).unwrap();
+    let grants = package.package.manifest.capabilities.clone();
+    let mut invalid = grants.clone();
+    invalid
+        .http_read_only_post
+        .insert("https://example.test/other".into());
+    assert!(plugins::set_enabled(
+        &config,
+        &paths,
+        "query-api",
+        true,
+        GrantUpdate::Explicit(invalid)
+    )
+    .is_err());
+    plugins::set_enabled(
+        &config,
+        &paths,
+        "query-api",
+        true,
+        GrantUpdate::Explicit(grants.clone()),
+    )
+    .unwrap();
+    package.package.manifest.version = "1.0.1".into();
+    package
+        .package
+        .manifest
+        .capabilities
+        .http_read_only_post
+        .insert("https://example.test/new".into());
+    write_package(&source, &package);
+    plugins::install(&source, &paths, true).unwrap();
+    assert_eq!(
+        load_config(&paths).unwrap().plugins["query-api"]
+            .grants
+            .as_ref(),
+        Some(&grants)
+    );
+    plugins::set_enabled(
+        &config,
+        &paths,
+        "query-api",
+        true,
+        GrantUpdate::Explicit(Default::default()),
+    )
+    .unwrap();
+    assert!(load_config(&paths).unwrap().plugins["query-api"]
+        .grants
+        .as_ref()
+        .unwrap()
+        .http_read_only_post
         .is_empty());
 }
 

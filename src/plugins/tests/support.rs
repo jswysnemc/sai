@@ -40,17 +40,15 @@ impl FixtureHost {
 #[async_trait]
 impl PluginHost for FixtureHost {
     /// 【插件测试】【请求捕获】记录真实插件请求，并返回下一个固定响应。
-    /// @param request 实际请求；allowed_origins 为运行时交付的授权集合
+    /// @param request 实际请求；capabilities 为有效网络授权；allow_writes 为宿主调用权限
     /// @returns 下一个响应，没有对应样本时失败
     async fn http(
         &self,
         request: HttpRequest,
-        allowed_origins: Vec<String>,
+        capabilities: Capabilities,
+        allow_writes: bool,
     ) -> Result<HttpResponse> {
-        Capabilities {
-            http: allowed_origins.into_iter().collect(),
-        }
-        .authorize_url(&request.url)?;
+        capabilities.authorize_request(&request.method, &request.url, allow_writes)?;
         let max_bytes = request.max_bytes;
         self.requests.lock().unwrap().push(request);
         match self.responses.lock().unwrap().pop_front() {
@@ -111,6 +109,7 @@ pub(super) fn descriptor(id: &str, source: &str) -> PluginDescriptor {
             enabled: true,
             ..Default::default()
         },
+        overrides: None,
     }
 }
 

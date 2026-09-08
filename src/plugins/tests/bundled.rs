@@ -180,6 +180,7 @@ fn migrated_tools_are_present_in_common_and_readonly_registries() {
         "archwiki_query",
         "fcitx5_input_method_wiki_qurey",
         "protondb_query",
+        "web_search",
     ] {
         assert!(common.contains(name));
         assert!(readonly.contains(name));
@@ -198,7 +199,13 @@ fn disabled_bundled_tools_remain_configurable_without_becoming_callable() {
     let root = tempfile::tempdir().unwrap();
     let paths = crate::paths::SaiPaths::for_tests(root.path());
     let config = crate::config::AppConfig::default();
-    for id in ["online-man", "archlinux", "fcitx-wiki", "protondb"] {
+    for id in [
+        "online-man",
+        "archlinux",
+        "fcitx-wiki",
+        "protondb",
+        "web-search",
+    ] {
         crate::plugins::set_enabled(
             &config,
             &paths,
@@ -219,6 +226,7 @@ fn disabled_bundled_tools_remain_configurable_without_becoming_callable() {
         "archwiki_query",
         "fcitx5_input_method_wiki_qurey",
         "protondb_query",
+        "web_search",
     ] {
         assert!(!actual.contains(name));
         assert!(catalog.iter().any(|tool| tool.name == name));

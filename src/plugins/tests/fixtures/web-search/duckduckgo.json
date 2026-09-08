@@ -1,0 +1,94 @@
+{
+  "source_commit": "44bddd0974ac6ce5c3b8b212debab57e70521bf1",
+  "source_file": "src/tools/web/providers.rs",
+  "cases": [
+    {
+      "provider": "duckduckgo",
+      "name": "normal",
+      "args": {
+        "query": "　Rust 与 Linux　 ",
+        "provider": "duckduckgo",
+        "max_results": 5
+      },
+      "response": "<a class=\"result__a\" href=\"https://example.test/?a=1&amp;b=2\">输入法&nbsp; Rust</a><a class=\"result__snippet\">中文　与 Lua</a>",
+      "output": "## Search results for: Rust 与 Linux\n**Provider**: DuckDuckGo HTML fallback\n\n### 1. 输入法 Rust\n**URL**: https://example.test/?a=1&b=2\n**Snippet**: 中文 与 Lua\n"
+    },
+    {
+      "provider": "duckduckgo",
+      "name": "nested",
+      "args": {
+        "query": "　Rust 与 Linux　 ",
+        "provider": "duckduckgo",
+        "max_results": 5
+      },
+      "response": "<a class=\"result__a\" href=\"https://example.test/\">A <b>bold</b> &amp; 中文</a><div class=\"result__snippet\">before <em>inside</em> after</div>",
+      "output": "## Search results for: Rust 与 Linux\n**Provider**: DuckDuckGo HTML fallback\n\n### 1. A bold & 中文\n**URL**: https://example.test/\n**Snippet**: before *inside*\n"
+    },
+    {
+      "provider": "duckduckgo",
+      "name": "later_snippet",
+      "args": {
+        "query": "　Rust 与 Linux　 ",
+        "provider": "duckduckgo",
+        "max_results": 5
+      },
+      "response": "<a class=\"result__a\" href=\"https://one.test/\">One</a><a class=\"result__a\" href=\"https://two.test/\">Two</a><p class=\"result__snippet\">Second summary</p>",
+      "output": "## Search results for: Rust 与 Linux\n**Provider**: DuckDuckGo HTML fallback\n\n### 1. One\n**URL**: https://one.test/\n**Snippet**: Second summary\n\n### 2. Two\n**URL**: https://two.test/\n**Snippet**: Second summary\n"
+    },
+    {
+      "provider": "duckduckgo",
+      "name": "limit",
+      "args": {
+        "query": "　Rust 与 Linux　 ",
+        "provider": "duckduckgo",
+        "max_results": 1
+      },
+      "response": "<a class=\"result__a\" href=\"https://one.test/\">One</a><p class=\"result__snippet\">First</p><a class=\"result__a\" href=\"https://two.test/\">Two</a><p class=\"result__snippet\">Second</p>",
+      "output": "## Search results for: Rust 与 Linux\n**Provider**: DuckDuckGo HTML fallback\n\n### 1. One\n**URL**: https://one.test/\n**Snippet**: First\n"
+    },
+    {
+      "provider": "duckduckgo",
+      "name": "entities",
+      "args": {
+        "query": "　Rust 与 Linux　 ",
+        "provider": "duckduckgo",
+        "max_results": 5
+      },
+      "response": "<a class=\"result__a\" href=\"https://example.test/?x=&quot;q&quot;&amp;y=&#x27;a&#39;\">&lt;A&gt; &amp;amp; B</a><span class=\"result__snippet\">&nbsp;一个&#32;摘要　</span>",
+      "output": "## Search results for: Rust 与 Linux\n**Provider**: DuckDuckGo HTML fallback\n\n### 1. <A> & B\n**URL**: https://example.test/?x=\"q\"&y='a'\n**Snippet**: 一个 摘要\n"
+    },
+    {
+      "provider": "duckduckgo",
+      "name": "single_quote",
+      "args": {
+        "query": "　Rust 与 Linux　 ",
+        "provider": "duckduckgo",
+        "max_results": 5
+      },
+      "response": "<a class='result__a' href='https://one.test/'>One</a>",
+      "error": "DuckDuckGo returned no parseable results"
+    },
+    {
+      "provider": "duckduckgo",
+      "name": "broken",
+      "args": {
+        "query": "　Rust 与 Linux　 ",
+        "provider": "duckduckgo",
+        "max_results": 5
+      },
+      "response": "<a class=\"result__a\" href=\"https://example.test/\">No closing tag",
+      "error": "DuckDuckGo returned no parseable results"
+    },
+    {
+      "provider": "duckduckgo",
+      "name": "empty",
+      "args": {
+        "query": "　Rust 与 Linux　 ",
+        "provider": "duckduckgo",
+        "max_results": 5
+      },
+      "response": "<html><body>No results</body></html>",
+      "error": "DuckDuckGo returned no parseable results"
+    }
+  ]
+}

@@ -22,6 +22,7 @@ pub(crate) struct PluginDescriptor {
     pub package: PluginPackage,
     pub source: PluginSource,
     pub setting: PluginSetting,
+    pub(super) overrides: Option<super::compatibility::RuntimeOverrides>,
 }
 
 /// 【插件】【诊断】单个坏包不阻止其他包进入注册事务。
@@ -38,14 +39,14 @@ pub(crate) struct Discovery {
 }
 
 impl PluginDescriptor {
-    /// 【插件】【授权合并】内置包沿用发布时授权，外部包缺省没有授权。
+    /// 【插件】【授权合并】内置包采用兼容后的默认能力授权，外部包缺省没有授权。
     /// @returns 用户授权；运行时还会与清单声明求交集
     pub fn grants(&self) -> Capabilities {
         self.setting
             .grants
             .clone()
             .unwrap_or_else(|| match self.source {
-                PluginSource::Bundled => self.package.manifest.capabilities.clone(),
+                PluginSource::Bundled => self.capabilities().clone(),
                 PluginSource::Installed(_) => Capabilities::default(),
             })
     }
@@ -54,12 +55,63 @@ impl PluginDescriptor {
     /// @returns 用于同一会话替换工具表时复用实例的内容摘要
     pub fn revision(&self) -> Result<String> {
         let bytes = serde_json::to_vec(&(
-            &self.package.manifest,
+            &self.runtime_manifest(),
             self.package.sources(),
-            &self.setting.settings,
+            self.settings(),
             self.grants(),
         ))?;
         Ok(blake3::hash(&bytes).to_hex().to_string())
+    }
+
+    /// 【插件】【有效设置】读取执行快照，未迁移配置的包直接使用原始插件设置。
+    /// @returns 当前实例可见的设置，不向管理命令提供保存用副本
+    pub(super) fn settings(&self) -> &serde_json::Value {
+        self.overrides
+            .as_ref()
+            .map(|value| &value.settings)
+            .unwrap_or(&self.setting.settings)
+    }
+
+    /// 【插件】【有效声明】读取包含兼容地址的能力声明，显式授权仍须与之求交集。
+    /// @returns 本次加载使用的网络能力声明
+    pub(crate) fn capabilities(&self) -> &Capabilities {
+        self.overrides
+            .as_ref()
+            .map(|value| &value.capabilities)
+            .unwrap_or(&self.package.manifest.capabilities)
+    }
+
+    /// 【插件】【运行源码】派生运行时清单，保持原始包和管理配置不变。
+    /// @returns 可传给独立运行时的源码快照
+    pub(crate) fn runtime_package(&self) -> PluginPackage {
+        let mut package = self.package.clone();
+        package.manifest.capabilities = self.capabilities().clone();
+        package
+    }
+
+    /// 【插件】【运行清单】派生用于诊断和修订比较的清单，避免复制全部 Lua 源码。
+    /// @returns 包含有效能力声明的清单
+    pub(crate) fn runtime_manifest(&self) -> sai_plugin_runtime::PluginManifest {
+        let mut manifest = self.package.manifest.clone();
+        manifest.capabilities = self.capabilities().clone();
+        manifest
+    }
+
+    /// 【插件】【兼容快照】只为可信内置包解析旧配置，外部包无法继承应用凭据。
+    /// @param config 旧应用配置
+    /// @returns 设置和派生能力均合法时成功
+    pub(super) fn refresh_compatibility(&mut self, config: &AppConfig) -> Result<()> {
+        self.overrides = if matches!(self.source, PluginSource::Bundled) {
+            super::compatibility::resolve(
+                &self.package.manifest.id,
+                config,
+                &self.setting.settings,
+                &self.package.manifest.capabilities,
+            )?
+        } else {
+            None
+        };
+        Ok(())
     }
 
     /// 【插件】【工具名称】为外部工具添加插件命名空间并验证供应商长度限制。
@@ -90,7 +142,7 @@ pub(super) fn public_tool_name(id: &str, local: &str, bundled: bool) -> Result<S
 }
 
 /// 【插件】【发现】读取受信任目录和显式配置，不执行工作区中的任意插件。
-/// @param config 主配置，仅用于旧功能开关默认值；paths 为 Sai 路径
+/// @param config 主配置，用于旧功能开关默认值和内置包定向设置兼容；paths 为 Sai 路径
 /// @returns 稳定排序的包和独立诊断；配置损坏时不采用可能扩大权限的缺省值
 pub(crate) fn discover(config: &AppConfig, paths: &SaiPaths) -> Discovery {
     let mut found = Discovery::default();
@@ -115,11 +167,18 @@ pub(crate) fn discover(config: &AppConfig, paths: &SaiPaths) -> Discovery {
                         ..Default::default()
                     });
                 ids.insert(id.clone());
-                found.plugins.push(PluginDescriptor {
+                let mut descriptor = PluginDescriptor {
                     package,
                     source: PluginSource::Bundled,
                     setting,
-                });
+                    overrides: None,
+                };
+                match descriptor.refresh_compatibility(config) {
+                    Ok(()) => found.plugins.push(descriptor),
+                    Err(error) => found
+                        .diagnostics
+                        .push(diagnostic(descriptor.package.manifest.id.clone(), error)),
+                }
             }
         }
         Err(error) => found.diagnostics.push(diagnostic("bundled", error)),
@@ -171,6 +230,7 @@ pub(crate) fn discover(config: &AppConfig, paths: &SaiPaths) -> Discovery {
                 package,
                 source: PluginSource::Installed(path.clone()),
                 setting,
+                overrides: None,
             })
         })();
         match result {

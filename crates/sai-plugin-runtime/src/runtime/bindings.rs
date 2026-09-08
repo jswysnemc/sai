@@ -1,10 +1,9 @@
 use super::control::CallControl;
 use super::registration::lua_error;
-use crate::host::{HttpRequest, PluginHost};
+use crate::host::PluginHost;
 use crate::{Capabilities, ExecutionLimits};
 use chrono::{DateTime, FixedOffset, Utc};
 use mlua::{Lua, LuaSerdeExt, Table, Value};
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 /// 【插件】【宿主绑定】安装 JSON、文本、时间和受授权的 HTTP 接口。
@@ -21,95 +20,7 @@ pub(super) fn install(
     install_json(lua, api, limits.output_bytes)?;
     super::text::install(lua, api, limits.output_bytes)?;
     install_time(lua, api)?;
-    let http = lua.create_table()?;
-    http.set(
-        "request",
-        lua.create_async_function(move |lua, value: Table| {
-            let host = host.clone();
-            let capabilities = capabilities.clone();
-            let control = control.clone();
-            let limits = limits.clone();
-            async move {
-                if !control.active.load(Ordering::Acquire) {
-                    return Err(mlua::Error::runtime(
-                        "HTTP is only available during plugin callbacks",
-                    ));
-                }
-                let mut request: HttpRequest = lua.from_value(Value::Table(value))?;
-                if request.url.len() > 8192
-                    || request
-                        .headers
-                        .iter()
-                        .map(|(name, value)| name.len().saturating_add(value.len()))
-                        .sum::<usize>()
-                        > 16 * 1024
-                {
-                    return Err(mlua::Error::runtime(
-                        "plugin HTTP URL or headers exceed size limits",
-                    ));
-                }
-                if request.headers.keys().any(|name| {
-                    matches!(
-                        name.to_ascii_lowercase().as_str(),
-                        "host"
-                            | "connection"
-                            | "content-length"
-                            | "transfer-encoding"
-                            | "proxy-authorization"
-                            | "proxy-connection"
-                    )
-                }) {
-                    return Err(mlua::Error::runtime(
-                        "plugin HTTP transport headers are host controlled",
-                    ));
-                }
-                capabilities
-                    .authorize_url(&request.url)
-                    .map_err(lua_error)?;
-                request.method = request.method.to_ascii_uppercase();
-                if !matches!(request.method.as_str(), "GET" | "HEAD")
-                    && !control.writable.load(Ordering::Acquire)
-                {
-                    return Err(mlua::Error::runtime(
-                        "read-only plugin callback cannot make a writing HTTP request",
-                    ));
-                }
-                if !matches!(
-                    request.method.as_str(),
-                    "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE"
-                ) {
-                    return Err(mlua::Error::runtime("unsupported plugin HTTP method"));
-                }
-                if request.headers.len() > 32
-                    || request
-                        .body
-                        .as_ref()
-                        .is_some_and(|body| body.len() > limits.output_bytes)
-                {
-                    return Err(mlua::Error::runtime(
-                        "plugin HTTP request exceeds size limits",
-                    ));
-                }
-                request.max_bytes = request.max_bytes.clamp(1, limits.output_bytes);
-                request.timeout_ms = request.timeout_ms.clamp(1, 30_000);
-                let timeout = std::time::Duration::from_millis(request.timeout_ms);
-                let response = tokio::time::timeout(
-                    timeout,
-                    host.http(request, capabilities.http.iter().cloned().collect()),
-                )
-                .await
-                .map_err(|_| mlua::Error::runtime("plugin HTTP request timed out"))?
-                .map_err(lua_error)?;
-                if response.text.len() > limits.output_bytes {
-                    return Err(mlua::Error::runtime(
-                        "plugin HTTP response exceeds size limit",
-                    ));
-                }
-                lua.to_value(&response)
-            }
-        })?,
-    )?;
-    api.set("http", http)
+    super::http::install(lua, api, host, capabilities, limits, control)
 }
 
 /// 【插件】【JSON 绑定】保留空数组和 null 的类型，避免 Lua 空表产生歧义。

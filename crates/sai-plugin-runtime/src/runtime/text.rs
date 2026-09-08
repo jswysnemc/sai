@@ -10,6 +10,15 @@ pub(super) fn install(lua: &Lua, api: &Table, limit: usize) -> mlua::Result<()> 
         lua.create_function(|_, value: String| Ok(value.trim().to_string()))?,
     )?;
     text.set(
+        "collapse_whitespace",
+        lua.create_function(move |_, value: String| {
+            if value.len() > limit {
+                return Err(mlua::Error::runtime("text input exceeds plugin size limit"));
+            }
+            Ok(value.split_whitespace().collect::<Vec<_>>().join(" "))
+        })?,
+    )?;
+    text.set(
         "url_encode",
         lua.create_function(|_, value: String| Ok(urlencoding::encode(&value).into_owned()))?,
     )?;

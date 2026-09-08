@@ -91,6 +91,7 @@ async fn existing_text_helpers_keep_their_contract() {
                     clipped=sai.text.clip("输入法", 2),
                     exact=sai.text.clip("输入法", 3),
                     trimmed=sai.text.trim("　输入法  "),
+                    collapsed=sai.text.collapse_whitespace("　输入法 \t 与\n Lua　"),
                 }
             end})
     "#,
@@ -105,4 +106,5 @@ async fn existing_text_helpers_keep_their_contract() {
     assert_eq!(result["clipped"], "输入\n...[truncated]");
     assert_eq!(result["exact"], "输入法");
     assert_eq!(result["trimmed"], "输入法");
+    assert_eq!(result["collapsed"], "输入法 与 Lua");
 }

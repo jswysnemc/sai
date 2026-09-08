@@ -16,14 +16,15 @@ pub struct RecordingHost {
 #[async_trait]
 impl PluginHost for RecordingHost {
     /// 【插件测试】【HTTP】记录真实宿主调用并返回固定数据。
-    /// @param request 已授权请求；allowed_origins 为重定向来源约束
+    /// @param request 已授权请求；capabilities 为网络授权；allow_writes 为调用权限
     /// @returns 可供 Lua 解析的 JSON 响应
     async fn http(
         &self,
         request: HttpRequest,
-        allowed_origins: Vec<String>,
+        capabilities: Capabilities,
+        allow_writes: bool,
     ) -> Result<HttpResponse> {
-        assert!(!allowed_origins.is_empty());
+        capabilities.authorize_request(&request.method, &request.url, allow_writes)?;
         self.requests.lock().unwrap().push(request);
         Ok(HttpResponse {
             status: 200,

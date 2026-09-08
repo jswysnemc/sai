@@ -30,8 +30,8 @@ impl PluginInstance {
     pub(super) fn load(descriptor: PluginDescriptor, host: Arc<dyn PluginHost>) -> Result<Self> {
         let revision = descriptor.revision()?;
         let runtime = PluginRuntime::load(
-            descriptor.package.clone(),
-            descriptor.setting.settings.clone(),
+            descriptor.runtime_package(),
+            descriptor.settings().clone(),
             descriptor.grants(),
             host.clone(),
         )?;

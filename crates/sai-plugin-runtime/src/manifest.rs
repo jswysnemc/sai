@@ -1,7 +1,6 @@
+use crate::Capabilities;
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
-use url::Url;
 
 pub const API_VERSION: u32 = 1;
 
@@ -21,14 +20,6 @@ pub struct PluginManifest {
     pub limits: ExecutionLimits,
 }
 
-/// 【插件】【能力声明】HTTP 访问限定为明确声明并获准的来源。
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct Capabilities {
-    #[serde(default)]
-    pub http: BTreeSet<String>,
-}
-
 /// 【插件】【资源限制】限制单次回调的内存、指令、时长和结果大小。
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -36,6 +27,7 @@ pub struct ExecutionLimits {
     pub memory_bytes: usize,
     pub instructions: u64,
     pub timeout_ms: u64,
+    pub http_timeout_ms: u64,
     pub output_bytes: usize,
 }
 
@@ -46,6 +38,7 @@ impl Default for ExecutionLimits {
             memory_bytes: 16 * 1024 * 1024,
             instructions: 2_000_000,
             timeout_ms: 20_000,
+            http_timeout_ms: 30_000,
             output_bytes: 1024 * 1024,
         }
     }
@@ -94,53 +87,14 @@ impl PluginManifest {
     }
 }
 
-impl Capabilities {
-    /// 【插件】【能力校验】验证声明的 HTTP 来源，不接受路径、凭据或通配符。
-    /// @returns 来源格式合法时成功
-    pub fn validate(&self) -> Result<()> {
-        if self.http.len() > 32 {
-            bail!("a plugin may declare at most 32 HTTP origins");
-        }
-        for origin in &self.http {
-            let url = Url::parse(origin).context("invalid plugin HTTP origin")?;
-            if !matches!(url.scheme(), "http" | "https")
-                || url.host_str().is_none()
-                || !url.username().is_empty()
-                || url.password().is_some()
-                || url.query().is_some()
-                || url.fragment().is_some()
-                || url.path() != "/"
-                || url.origin().ascii_serialization() != *origin
-            {
-                bail!("HTTP capability must be an exact origin: {origin}");
-            }
-        }
-        Ok(())
-    }
-
-    /// 【插件】【网络授权】检查完整 URL 是否属于授权来源。
-    /// @param url 待访问地址
-    /// @returns 合法且获准的解析后地址，否则返回错误
-    pub fn authorize_url(&self, url: &str) -> Result<Url> {
-        let url = Url::parse(url).context("invalid plugin request URL")?;
-        if !url.username().is_empty() || url.password().is_some() {
-            bail!("plugin request URLs must not contain credentials");
-        }
-        let origin = url.origin().ascii_serialization();
-        if !self.http.contains(&origin) {
-            bail!("plugin HTTP origin is not allowed: {origin}");
-        }
-        Ok(url)
-    }
-}
-
 impl ExecutionLimits {
     /// 【插件】【资源校验】拒绝插件扩大到宿主硬上限之外的限制值。
     /// @returns 各项限制均在允许范围内时成功
     pub fn validate(&self) -> Result<()> {
         if !(1024 * 1024..=64 * 1024 * 1024).contains(&self.memory_bytes)
             || !(1_000..=20_000_000).contains(&self.instructions)
-            || !(100..=60_000).contains(&self.timeout_ms)
+            || !(100..=900_000).contains(&self.timeout_ms)
+            || !(1..=120_000).contains(&self.http_timeout_ms)
             || !(1024..=4 * 1024 * 1024).contains(&self.output_bytes)
         {
             bail!("plugin execution limits exceed supported bounds");

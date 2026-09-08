@@ -1,10 +1,33 @@
+use super::{ToolRegistry, ToolSpec};
 use anyhow::{bail, Result};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::time::Duration;
 
 const MAX_RESPONSE_SIZE: usize = 5 * 1024 * 1024;
 const DEFAULT_FETCH_MAX_CHARS: usize = 24_000;
 const MAX_FETCH_CHARS: usize = 80_000;
+
+/// 【网页读取】【工具注册】注册不依赖搜索供应商的已知地址读取工具。
+/// @param registry 工具注册表
+/// @returns 无
+pub fn register(registry: &mut ToolRegistry) {
+    registry.register(ToolSpec::new(
+        "web_fetch",
+        "Fetch a URL and return markdown, text, or html. Prefer this for opening a known URL. Does not search the web.",
+        json!({
+            "type": "object",
+            "properties": {
+                "url": { "type": "string", "description": "Fully-qualified http or https URL." },
+                "format": { "type": "string", "enum": ["markdown", "text", "html"], "description": "Output format. Defaults to markdown." },
+                "timeout": { "type": "integer", "description": "Timeout seconds, max 120." },
+                "max_chars": { "type": "integer", "description": "Maximum characters to return. Defaults to 24000, max 80000." }
+            },
+            "required": ["url"],
+            "additionalProperties": false
+        }),
+        |args| async move { web_fetch(args).await },
+    ));
+}
 
 /// 【网页读取】【请求执行】读取已知 HTTP(S) 地址并按指定格式返回内容。
 ///

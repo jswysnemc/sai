@@ -51,7 +51,7 @@ mod tool_spec;
 mod trash_path;
 mod vision;
 mod weather;
-mod web;
+mod web_fetch;
 mod web_images;
 mod write_file;
 mod xuanxue;
@@ -225,15 +225,12 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     default_tools::register(&mut registry, config, paths);
     trash_path::register(&mut registry);
     alarm::register(&mut registry, paths.clone());
-    web::register_fetch(&mut registry);
+    web_fetch::register(&mut registry);
     configurable_cli_tools::register(&mut registry, config);
     crate::plugins::register_plugins(&mut registry, config, paths, false);
     vision::register_print(&mut registry, config.clone());
     if config.plugins.memes.enabled {
         memes::register(&mut registry, config.clone(), paths.clone());
-    }
-    if config.plugins.web.enabled {
-        web::register(&mut registry, config.plugins.web.clone());
     }
     if config.plugins.web_images.enabled {
         web_images::register(&mut registry, config.clone(), paths.clone(), true);
@@ -373,11 +370,8 @@ pub fn readonly_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     let mut registry = ToolRegistry::new();
     command::register_readonly(&mut registry, config, paths);
     default_tools::register_readonly(&mut registry, config, paths);
-    web::register_fetch(&mut registry);
+    web_fetch::register(&mut registry);
     crate::plugins::register_plugins(&mut registry, config, paths, true);
-    if config.plugins.web.enabled {
-        web::register(&mut registry, config.plugins.web.clone());
-    }
     if config.plugins.web_images.enabled {
         web_images::register(&mut registry, config.clone(), paths.clone(), false);
     }

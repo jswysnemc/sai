@@ -5,6 +5,7 @@ use crate::plugins::{self, GrantUpdate, PluginSource};
 use crate::tools::ToolRegistry;
 use anyhow::{bail, Result};
 use clap::{Args, Subcommand};
+use sai_plugin_runtime::Capabilities;
 use serde_json::json;
 use std::path::PathBuf;
 
@@ -35,10 +36,17 @@ pub(crate) enum PluginsCommand {
     /// Enable a plugin, optionally setting explicit HTTP grants
     Enable {
         id: String,
-        #[arg(long, conflicts_with_all = ["allow_http", "no_http"])]
+        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http"])]
         grant_declared: bool,
         #[arg(long, value_name = "ORIGIN", conflicts_with = "no_http")]
         allow_http: Vec<String>,
+        #[arg(
+            long,
+            value_name = "ENDPOINT",
+            requires = "allow_http",
+            conflicts_with = "no_http"
+        )]
+        allow_http_read_only_post: Vec<String>,
         #[arg(long)]
         no_http: bool,
     },
@@ -115,15 +123,21 @@ pub(crate) async fn run(
                     bail!("plugin not found: {id}");
                 }
             }
-            let entries = found.plugins.iter().map(|plugin| json!({
-                "id": plugin.package.manifest.id,
-                "version": plugin.package.manifest.version,
-                "name": plugin.package.manifest.name,
-                "enabled": plugin.setting.enabled,
-                "source": plugin.source,
-                "manifest": plugin.package.manifest,
-                "effective_grants": {"http": plugin.grants().http.intersection(&plugin.package.manifest.capabilities.http).collect::<Vec<_>>()},
-            })).collect::<Vec<_>>();
+            let entries = found
+                .plugins
+                .iter()
+                .map(|plugin| {
+                    json!({
+                        "id": plugin.package.manifest.id,
+                        "version": plugin.package.manifest.version,
+                        "name": plugin.package.manifest.name,
+                        "enabled": plugin.setting.enabled,
+                        "source": plugin.source,
+                        "manifest": plugin.runtime_manifest(),
+                        "effective_grants": plugin.capabilities().intersection(&plugin.grants()),
+                    })
+                })
+                .collect::<Vec<_>>();
             if args.json {
                 println!(
                     "{}",
@@ -166,12 +180,16 @@ pub(crate) async fn run(
             id,
             grant_declared,
             allow_http,
+            allow_http_read_only_post,
             no_http,
         } => {
             let update = if grant_declared {
                 GrantUpdate::Declared
             } else if no_http || !allow_http.is_empty() {
-                GrantUpdate::Http(allow_http.into_iter().collect())
+                GrantUpdate::Explicit(Capabilities {
+                    http: allow_http.into_iter().collect(),
+                    http_read_only_post: allow_http_read_only_post.into_iter().collect(),
+                })
             } else {
                 GrantUpdate::Keep
             };

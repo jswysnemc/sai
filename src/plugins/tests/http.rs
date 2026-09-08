@@ -1,5 +1,6 @@
 use crate::plugins::host::SaiPluginHost;
 use sai_plugin_runtime::host::{HttpRequest, PluginHost};
+use sai_plugin_runtime::Capabilities;
 use std::collections::BTreeMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -32,6 +33,16 @@ fn request(url: String, max_bytes: usize) -> HttpRequest {
     }
 }
 
+/// 【插件测试】【来源授权】构造仅允许指定来源的读取权限。
+/// @param origin 精确来源
+/// @returns 不含只读 POST 端点的网络能力
+fn grants(origin: String) -> Capabilities {
+    Capabilities {
+        http: [origin].into(),
+        ..Default::default()
+    }
+}
+
 /// 【插件测试】【重定向授权】宿主在跟随重定向之前检查目标来源，错误不包含查询凭据。
 #[tokio::test]
 async fn redirects_cannot_escape_the_granted_origin() {
@@ -39,7 +50,7 @@ async fn redirects_cannot_escape_the_granted_origin() {
     let response = format!("HTTP/1.1 302 Found\r\nLocation: http://{}/secret?token=private-value\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", target.local_addr().unwrap());
     let (origin, task) = server(response.into_bytes()).await;
     let error = SaiPluginHost
-        .http(request(format!("{origin}/"), 1024), vec![origin])
+        .http(request(format!("{origin}/"), 1024), grants(origin), false)
         .await
         .unwrap_err();
     task.await.unwrap();
@@ -57,14 +68,14 @@ async fn http_decoding_and_response_limits_apply_to_real_responses() {
     let response = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=windows-1252\r\nContent-Length: 1\r\nConnection: close\r\n\r\n\xe9".to_vec();
     let (origin, task) = server(response.clone()).await;
     let output = SaiPluginHost
-        .http(request(format!("{origin}/"), 8), vec![origin])
+        .http(request(format!("{origin}/"), 8), grants(origin), false)
         .await
         .unwrap();
     task.await.unwrap();
     assert_eq!(output.text, "é");
     let (origin, task) = server(response).await;
     assert!(SaiPluginHost
-        .http(request(format!("{origin}/"), 1), vec![origin])
+        .http(request(format!("{origin}/"), 1), grants(origin), false)
         .await
         .is_err());
     task.await.unwrap();
@@ -72,7 +83,7 @@ async fn http_decoding_and_response_limits_apply_to_real_responses() {
         server(b"HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: close\r\n\r\n123456".to_vec())
             .await;
     assert!(SaiPluginHost
-        .http(request(format!("{origin}/"), 3), vec![origin])
+        .http(request(format!("{origin}/"), 3), grants(origin), false)
         .await
         .is_err());
     task.await.unwrap();

@@ -11,7 +11,7 @@ use sai_plugin_runtime::{
 };
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -24,11 +24,11 @@ pub(crate) struct PluginInspection {
     pub events: Vec<EventKind>,
 }
 
-/// 【插件】【授权更新】保持、清单全量授权或显式来源集合。
+/// 【插件】【授权更新】保持、清单全量授权或显式网络能力集合。
 pub(crate) enum GrantUpdate {
     Keep,
     Declared,
-    Http(BTreeSet<String>),
+    Explicit(Capabilities),
 }
 
 /// 【插件】【包验证】执行受限初始化并检查实际导出的契约。
@@ -135,20 +135,14 @@ pub(crate) fn set_enabled(
     let _lock = mutation_lock(paths)?;
     let descriptor = find(config, paths, id)?;
     let mut plugin_config = load_config(paths)?;
-    let mut setting = descriptor.setting;
+    let mut setting = descriptor.setting.clone();
     setting.enabled = enabled;
     match update {
         GrantUpdate::Keep => {}
-        GrantUpdate::Declared => {
-            setting.grants = Some(descriptor.package.manifest.capabilities.clone())
-        }
-        GrantUpdate::Http(http) => {
-            let grants = Capabilities { http };
+        GrantUpdate::Declared => setting.grants = Some(descriptor.capabilities().clone()),
+        GrantUpdate::Explicit(grants) => {
             grants.validate()?;
-            if !grants
-                .http
-                .is_subset(&descriptor.package.manifest.capabilities.http)
-            {
+            if !grants.is_subset(descriptor.capabilities()) {
                 bail!("HTTP grants must be declared in the plugin manifest");
             }
             setting.grants = Some(grants);
@@ -172,14 +166,15 @@ pub(crate) fn configure(
         bail!("plugin settings must be a JSON object");
     }
     let mut descriptor = find(config, paths, id)?;
-    // 【插件】【配置验证】初始化使用新设置，确保配置错误在保存之前暴露
+    descriptor.setting.settings = settings;
+    descriptor.refresh_compatibility(config)?;
+    // 【插件】【配置验证】校验派生设置但只保存原始设置，环境凭据不会写回配置
     PluginRuntime::load(
-        descriptor.package.clone(),
-        settings.clone(),
+        descriptor.runtime_package(),
+        descriptor.settings().clone(),
         descriptor.grants(),
         Arc::new(SaiPluginHost),
     )?;
-    descriptor.setting.settings = settings;
     let mut plugin_config = load_config(paths)?;
     plugin_config
         .plugins

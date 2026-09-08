@@ -1,8 +1,10 @@
 mod bundled;
+mod compatibility;
 mod config;
 mod discovery;
 mod events;
 mod host;
+mod http;
 mod management;
 mod registry;
 mod session;

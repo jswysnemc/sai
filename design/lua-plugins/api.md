@@ -156,11 +156,24 @@ local response = sai.http.request({
 })
 ```
 
-响应包含 `status`、`headers`、`text`。支持 GET、HEAD、POST、PUT、PATCH、DELETE；GET/HEAD 以外的方法还要求当前工具或命令声明 `writes`，并通过 Sai 授权。HTTP 错误状态作为响应返回，由业务代码选择处理方式。
+响应包含 `status`、`headers`、`text`。支持 GET、HEAD、POST、PUT、PATCH、DELETE。GET/HEAD 允许在只读回调中使用；其他方法默认要求当前工具或命令声明 `writes`，并通过 Sai 授权。HTTP 错误状态作为响应返回，由业务代码选择处理方式。
 
-初始 URL 和每次重定向都必须属于有效来源集合；URL 不允许凭据，最多跟随 5 次重定向。Host、Connection、Content-Length、Transfer-Encoding 和代理授权头由宿主控制。最多 32 个请求头，总计 16 KiB；URL 最多 8192 字节。
+搜索等使用 POST 的只读接口可另外声明精确端点：
 
-`timeout_ms` 可缩短单次请求时长，默认 30,000 毫秒，运行时将其限制为 1–30,000 毫秒。请求超时会取消受管 I/O，并作为 Lua 错误交给 `pcall`，便于保留静态规则或已有结果；整个回调仍受清单总时长约束。正文和响应都有字节上限，`max_bytes` 不得突破包的 `output_bytes`。宿主按 Content-Type 的 charset 解码文本，并再次检查解码后的大小。
+```json
+{
+  "capabilities": {
+    "http": ["https://api.example.com"],
+    "http_read_only_post": ["https://api.example.com/search"]
+  }
+}
+```
+
+来源与 `http_read_only_post` 都必须获得授权。端点使用规范 HTTP(S) 地址，包含精确路径，不允许查询参数、片段或内嵌凭据；最多 32 个端点。端点授权允许查询参数，不覆盖子路径，也不允许 PUT、PATCH 或 DELETE。该声明表示插件对接口查询用途的契约，插件仍须保证 POST 内容为只读操作。
+
+初始 URL 和每次重定向都使用同一授权检查。保留 POST 的重定向仍须匹配查询端点；303 等按 HTTP 语义改为 GET 后，宿主移除原正文。最多跟随 5 次重定向，整个过程共用同一截止时间。跨来源跳转不转发正文，只保留 Accept、Accept-Language、User-Agent，避免泄露标准或自定义认证头。Host、Connection、Content-Length、Transfer-Encoding 和代理授权头由宿主控制。最多 32 个请求头，总计 16 KiB；URL 最多 8192 字节。
+
+请求 `timeout_ms` 默认 30,000 毫秒，运行时将其限制为 1 至清单的 `limits.http_timeout_ms`，该清单值默认同样为 30,000，硬上限为 120,000。请求超时会取消受管 I/O，并作为 Lua 错误交给 `pcall`，便于保留静态规则或已有结果；整个回调仍受清单总时长约束。正文和响应都有字节上限，`max_bytes` 不得突破包的 `output_bytes`。宿主按 Content-Type 的 charset 解码文本，并再次检查解码后的大小。
 
 ### JSON、文本与时间
 
@@ -171,6 +184,7 @@ local response = sai.http.request({
 | `sai.json.array(table?)` | 保留空数组的类型 |
 | `sai.json.null` | 表示 JSON null |
 | `sai.text.trim(text)` | 去除两端 Unicode 空白，保留正文内容 |
+| `sai.text.collapse_whitespace(text)` | 去除首尾空白，并把连续 Unicode 空白替换为一个空格；输入受 `output_bytes` 限制 |
 | `sai.text.url_encode(text)` | URL 百分号编码 |
 | `sai.text.html_to_text(html, width?)` | HTML 转文本，宽度默认 120，范围 20–200 |
 | `sai.text.html_to_markdown(html)` | HTML 转 Markdown，保留标题、链接、列表和代码格式 |
@@ -188,9 +202,12 @@ HTML 转换前后的 UTF-8 文本均受包内 `output_bytes` 限制。Markdown �
 | --- | --- | --- |
 | Lua 堆内存 | 16 MiB | 1–64 MiB |
 | 单次指令预算 | 2000000 | 1000–20000000 |
-| 回调总时长 | 20 秒 | 0.1–60 秒 |
+| 回调总时长 | 20 秒 | 0.1–900 秒 |
+| 单次 HTTP 最大时长 | 30 秒 | 0.001–120 秒 |
 | 输出与 HTTP 大小 | 1 MiB | 1 KiB–4 MiB |
 
 Lua 计算位于阻塞工作线程，受指令 Hook、堆内存和总时长约束。取消会停止受管宿主 I/O，并在 Lua 恢复执行时终止回调。能力隔离不等于操作系统进程隔离；这里的内存上限针对 Lua 堆，不是整个 Sai 进程。
+
+长查询必须在清单中显式提高限制，不改变其他插件的默认值。`web-search` 保留旧版单个供应商 1–120 秒的配置范围，包的回调上限为 750 秒，覆盖六个供应商依次回退。
 
 版本 1 仅提供 HTTP、JSON、文本和时间能力。文件、进程、持久插件存储、模型上下文变换和界面组件扩展尚未开放，需要独立契约与授权设计。

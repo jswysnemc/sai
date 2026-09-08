@@ -4,7 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use common::{package, RecordingHost};
 use sai_plugin_runtime::host::{HttpRequest, HttpResponse, PluginHost};
-use sai_plugin_runtime::{InvocationContext, PluginRuntime};
+use sai_plugin_runtime::{Capabilities, InvocationContext, PluginRuntime};
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -68,6 +68,49 @@ async fn request_timeouts_are_defaulted_and_clamped_before_host_dispatch() {
 
 struct PendingCall(Arc<AtomicUsize>);
 
+/// 【插件测试】【显式长查询】包可在硬上限内声明较长请求，缺省限制不会随之改变。
+#[tokio::test]
+async fn explicitly_declared_http_timeouts_preserve_long_search_requests() {
+    let mut package = package(
+        r#"
+        sai.register_tool({name="query",description="Long query",parameters={type="object"},execute=function(args)
+            return sai.http.request({url="https://example.test/", timeout_ms=args.timeout_ms}).text
+        end})
+    "#,
+    );
+    package
+        .manifest
+        .capabilities
+        .http
+        .insert("https://example.test".into());
+    package.manifest.limits.timeout_ms = 750_000;
+    package.manifest.limits.http_timeout_ms = 120_000;
+    let host = Arc::new(RecordingHost::default());
+    let granted = package.manifest.capabilities.clone();
+    let plugin = PluginRuntime::load(package.clone(), json!({}), granted, host.clone()).unwrap();
+    for timeout in [120_000, 150_000] {
+        plugin
+            .call_tool(
+                "query",
+                json!({"timeout_ms":timeout}),
+                InvocationContext::default(),
+            )
+            .await
+            .unwrap();
+    }
+    assert!(host
+        .requests
+        .lock()
+        .unwrap()
+        .iter()
+        .all(|request| request.timeout_ms == 120_000));
+    package.manifest.limits.http_timeout_ms = 120_001;
+    assert!(package.manifest.validate().is_err());
+    package.manifest.limits.http_timeout_ms = 120_000;
+    package.manifest.limits.timeout_ms = 900_001;
+    assert!(package.manifest.validate().is_err());
+}
+
 impl Drop for PendingCall {
     /// 【插件测试】【请求回收】记录未完成的宿主 Future 何时释放，无返回值。
     fn drop(&mut self) {
@@ -78,14 +121,16 @@ impl Drop for PendingCall {
 #[async_trait]
 impl PluginHost for PendingHost {
     /// 【插件测试】【延迟请求】记录请求后持续等待，验证运行时主动回收 I/O。
-    /// @param request 已授权请求；allowed_origins 为来源集合
+    /// @param request 已授权请求；capabilities 为网络授权；allow_writes 为调用权限
     /// @returns 持续等待，由调用方取消 Future
     async fn http(
         &self,
         request: HttpRequest,
-        allowed_origins: Vec<String>,
+        capabilities: Capabilities,
+        allow_writes: bool,
     ) -> Result<HttpResponse> {
-        assert_eq!(allowed_origins, vec!["https://example.test"]);
+        assert_eq!(capabilities.http, ["https://example.test".into()].into());
+        assert!(!allow_writes);
         self.requests.lock().unwrap().push(request);
         let _pending = PendingCall(self.dropped.clone());
         std::future::pending().await

@@ -101,12 +101,13 @@ impl Drop for DropSignal {
 #[async_trait]
 impl PluginHost for PendingHost {
     /// 【插件测试】【阻塞 HTTP】模拟等待响应的请求，以观察调用取消。
-    /// @param request 请求；allowed_origins 为授权来源
+    /// @param request 请求；capabilities 为网络授权；allow_writes 为调用权限
     /// @returns 永不自行完成的 Future，取消时记录释放状态
     async fn http(
         &self,
         _request: HttpRequest,
-        _allowed_origins: Vec<String>,
+        _capabilities: Capabilities,
+        _allow_writes: bool,
     ) -> Result<HttpResponse> {
         let _drop = DropSignal(self.dropped.clone());
         self.entered.notify_one();
