@@ -1,0 +1,21 @@
+{
+  "api_version": 1,
+  "id": "archlinux",
+  "version": "1.0.0",
+  "name": "Arch Linux 查询",
+  "description": "查询 AUR、官方软件包、服务状态和 ArchWiki",
+  "entry": "init.lua",
+  "capabilities": {
+    "http": [
+      "https://aur.archlinux.org",
+      "https://archlinux.org",
+      "https://status.archlinux.org",
+      "https://wiki.archlinux.org"
+    ]
+  },
+  "limits": {
+    "timeout_ms": 60000,
+    "output_bytes": 4194304,
+    "memory_bytes": 33554432
+  }
+}

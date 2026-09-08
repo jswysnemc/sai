@@ -3,6 +3,7 @@ mod control;
 mod execution;
 mod modules;
 mod registration;
+mod text;
 
 use crate::host::PluginHost;
 use crate::{

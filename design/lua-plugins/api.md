@@ -152,6 +152,7 @@ local response = sai.http.request({
     method = "GET",
     headers = { accept = "application/json" },
     max_bytes = 65536,
+    timeout_ms = 12000,
 })
 ```
 
@@ -159,7 +160,7 @@ local response = sai.http.request({
 
 初始 URL 和每次重定向都必须属于有效来源集合；URL 不允许凭据，最多跟随 5 次重定向。Host、Connection、Content-Length、Transfer-Encoding 和代理授权头由宿主控制。最多 32 个请求头，总计 16 KiB；URL 最多 8192 字节。
 
-HTTP 请求本身最多 30 秒，同时受回调总时长约束。正文和响应都有字节上限，`max_bytes` 不得突破包的 `output_bytes`。宿主按 Content-Type 的 charset 解码文本，并再次检查解码后的大小。
+`timeout_ms` 可缩短单次请求时长，默认 30,000 毫秒，运行时将其限制为 1–30,000 毫秒。请求超时会取消受管 I/O，并作为 Lua 错误交给 `pcall`，便于保留静态规则或已有结果；整个回调仍受清单总时长约束。正文和响应都有字节上限，`max_bytes` 不得突破包的 `output_bytes`。宿主按 Content-Type 的 charset 解码文本，并再次检查解码后的大小。
 
 ### JSON、文本与时间
 
@@ -169,11 +170,15 @@ HTTP 请求本身最多 30 秒，同时受回调总时长约束。正文和响�
 | `sai.json.encode(value)` | Lua 值转 JSON 文本 |
 | `sai.json.array(table?)` | 保留空数组的类型 |
 | `sai.json.null` | 表示 JSON null |
+| `sai.text.trim(text)` | 去除两端 Unicode 空白，保留正文内容 |
 | `sai.text.url_encode(text)` | URL 百分号编码 |
 | `sai.text.html_to_text(html, width?)` | HTML 转文本，宽度默认 120，范围 20–200 |
+| `sai.text.html_to_markdown(html)` | HTML 转 Markdown，保留标题、链接、列表和代码格式 |
 | `sai.text.clip(text, count)` | 按 Unicode 字符截取并附截断说明 |
 | `sai.time.now()` | 当前 Unix 秒时间戳 |
 | `sai.time.iso(seconds, offset_seconds?)` | 指定时区的 ISO 时间，默认 UTC |
+
+HTML 转换前后的 UTF-8 文本均受包内 `output_bytes` 限制。Markdown 转换复用 `html2md`，相对链接保持原地址；正文范围提取与业务截断由插件负责。
 
 运行时提供 Lua 5.4 的表、字符串、数学和 UTF-8 标准库。没有 `io`、`os`、`package`、`debug`、`load`、`loadfile`、`dofile`、直接 `coroutine` 或原生动态库入口。HTTP 仅在回调执行期间可用。
 

@@ -89,8 +89,13 @@ sai plugins remove hello
 | --- | --- | --- |
 | `online-man` | `online_man_search`、`online_man_get_page` | 沿用主配置 `plugins.man.enabled` |
 | `deepseek-status` | `query_deepseek_status` | 默认启用 |
+| `archlinux` | `aur_search_packages`、`aur_get_package_info`、`archlinux_official_package_query`、`aur_check_status`、`archwiki_query` | 沿用主配置 `plugins.archlinux.enabled` |
+| `fcitx-wiki` | `fcitx5_input_method_wiki_qurey` | 默认启用，保留旧名称中的 `qurey` 拼写 |
+| `protondb` | `protondb_query` | 默认启用 |
 
 `plugins.jsonc` 的显式设置优先于上述默认值。内置包保留原工具名称；外部包不能使用内置插件 ID，也不能覆盖现有工具。已禁用的内置工具仍可在 Agent 设置中预先选择，但无法实际执行。
+
+这些查询工具均为只读。ProtonDB 的 Algolia 搜索使用 GET，数字 App ID 的名称查询失败时保留原 ID，评论读取失败时仍返回评级。Fcitx 的 `include_page_excerpt=false` 完全使用包内规则；启用摘录时最多读取 512 KiB 页面，保留 Markdown 并截取 12,000 个 Unicode 字符。ArchWiki 页面同样保留 Markdown 链接。
 
 ## 验证
 

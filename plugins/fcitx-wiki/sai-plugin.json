@@ -1,0 +1,16 @@
+{
+  "api_version": 1,
+  "id": "fcitx-wiki",
+  "version": "1.0.0",
+  "name": "Fcitx 5 Wiki",
+  "description": "查询 Fcitx 5 官方规则与页面摘录",
+  "entry": "init.lua",
+  "capabilities": {
+    "http": ["https://fcitx-im.org"]
+  },
+  "limits": {
+    "timeout_ms": 20000,
+    "output_bytes": 1048576,
+    "memory_bytes": 16777216
+  }
+}

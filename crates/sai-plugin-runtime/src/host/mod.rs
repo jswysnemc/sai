@@ -16,6 +16,8 @@ pub struct HttpRequest {
     pub body: Option<String>,
     #[serde(default = "response_limit")]
     pub max_bytes: usize,
+    #[serde(default = "request_timeout")]
+    pub timeout_ms: u64,
 }
 
 /// 【插件】【HTTP 响应】宿主已完成解码且大小受限的结果。
@@ -47,4 +49,10 @@ fn get_method() -> String {
 /// 返回 HTTP 默认响应字节上限，无参数。
 fn response_limit() -> usize {
     1024 * 1024
+}
+
+/// 【插件】【请求超时】返回单次 HTTP 请求的默认毫秒上限，无参数。
+/// @returns 30 秒对应的毫秒数
+fn request_timeout() -> u64 {
+    30_000
 }

@@ -3,10 +3,12 @@ use crate::plugins::discovery::{PluginDescriptor, PluginSource};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use sai_plugin_runtime::host::{HttpRequest, HttpResponse, PluginHost};
-use sai_plugin_runtime::{Capabilities, PluginManifest, PluginPackage};
-use serde_json::json;
+use sai_plugin_runtime::{
+    Capabilities, InvocationContext, PluginManifest, PluginPackage, PluginRuntime,
+};
+use serde_json::{json, Value};
 use std::collections::{BTreeMap, VecDeque};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 pub(super) struct FixtureHost {
@@ -49,12 +51,40 @@ impl PluginHost for FixtureHost {
             http: allowed_origins.into_iter().collect(),
         }
         .authorize_url(&request.url)?;
+        let max_bytes = request.max_bytes;
         self.requests.lock().unwrap().push(request);
         match self.responses.lock().unwrap().pop_front() {
+            Some(response) if response.text.len() > max_bytes => {
+                bail!("plugin HTTP response exceeds byte limit")
+            }
             Some(response) => Ok(response),
             None => bail!("no HTTP fixture for request"),
         }
     }
+}
+
+/// 【插件测试】【内置运行时】加载实际发布的 Lua 包，注入可观察的 HTTP 宿主。
+/// @param id 内置包 ID；host 为测试或真实网络宿主
+/// @returns 使用真实清单、源码和授权声明的运行时
+pub(super) fn runtime(id: &str, host: Arc<dyn PluginHost>) -> PluginRuntime {
+    let package = crate::plugins::bundled::packages()
+        .unwrap()
+        .into_iter()
+        .find(|package| package.manifest.id == id)
+        .unwrap();
+    let grants = package.manifest.capabilities.clone();
+    PluginRuntime::load(package, json!({}), grants, host).unwrap()
+}
+
+/// 【插件测试】【JSON 调用】通过真实工具接口执行只读调用并解析结果。
+/// @param plugin 待测运行时；name 为工具名；args 为 JSON 参数
+/// @returns 工具返回的 JSON 数据，执行失败时终止当前测试
+pub(super) async fn call_json(plugin: &PluginRuntime, name: &str, args: Value) -> Value {
+    let text = plugin
+        .call_tool(name, args, InvocationContext::default())
+        .await
+        .unwrap();
+    serde_json::from_str(&text).unwrap()
 }
 
 /// 【插件测试】【外部描述】从独立源码创建不带隐式网络授权的外部插件。

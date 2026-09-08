@@ -1,0 +1,16 @@
+{
+  "api_version": 1,
+  "id": "protondb",
+  "version": "1.0.0",
+  "name": "ProtonDB",
+  "description": "查询 Linux 游戏兼容性评级和用户评论",
+  "entry": "init.lua",
+  "capabilities": {
+    "http": ["https://www.protondb.com", "https://94he6yatei-dsn.algolia.net"]
+  },
+  "limits": {
+    "timeout_ms": 60000,
+    "output_bytes": 4194304,
+    "memory_bytes": 33554432
+  }
+}

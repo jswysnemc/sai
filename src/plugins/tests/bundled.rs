@@ -1,21 +1,7 @@
-use super::support::FixtureHost;
-use crate::plugins::bundled::packages;
-use sai_plugin_runtime::{InvocationContext, PluginRuntime};
+use super::support::{runtime, FixtureHost};
+use sai_plugin_runtime::InvocationContext;
 use serde_json::{json, Value};
 use std::sync::Arc;
-
-/// 【插件测试】【内置运行时】直接加载随二进制发布的 Lua 包并注入固定 HTTP 宿主。
-/// @param id 内置包 ID；host 为测试宿主
-/// @returns 与应用使用相同源码和授权声明的运行时
-fn runtime(id: &str, host: Arc<FixtureHost>) -> PluginRuntime {
-    let package = packages()
-        .unwrap()
-        .into_iter()
-        .find(|package| package.manifest.id == id)
-        .unwrap();
-    let grants = package.manifest.capabilities.clone();
-    PluginRuntime::load(package, json!({}), grants, host).unwrap()
-}
 
 /// 【插件测试】【手册搜索】真实 Lua 解析链接，处理重复结果、单引号和非 ASCII 查询。
 #[tokio::test]
@@ -179,6 +165,7 @@ fn migrated_tools_are_present_in_common_and_readonly_registries() {
     let root = tempfile::tempdir().unwrap();
     let paths = crate::paths::SaiPaths::for_tests(root.path());
     let mut config = crate::config::AppConfig::default();
+    config.plugins.archlinux.enabled = true;
     config.plugins.man.enabled = true;
     let common = crate::tools::builtin_registry_without_mcp(&config, &paths);
     let readonly = crate::tools::readonly_registry(&config, &paths);
@@ -186,6 +173,13 @@ fn migrated_tools_are_present_in_common_and_readonly_registries() {
         "online_man_search",
         "online_man_get_page",
         "query_deepseek_status",
+        "aur_search_packages",
+        "aur_get_package_info",
+        "archlinux_official_package_query",
+        "aur_check_status",
+        "archwiki_query",
+        "fcitx5_input_method_wiki_qurey",
+        "protondb_query",
     ] {
         assert!(common.contains(name));
         assert!(readonly.contains(name));
@@ -194,6 +188,8 @@ fn migrated_tools_are_present_in_common_and_readonly_registries() {
             readonly.definition(name).unwrap().function.parameters
         );
     }
+    assert!(common.plugin_diagnostics().is_empty());
+    assert!(readonly.plugin_diagnostics().is_empty());
 }
 
 /// 【插件测试】【目录兼容】内置工具禁用后仍可预先加入 Agent 白名单，但不能实际调用。
@@ -202,16 +198,67 @@ fn disabled_bundled_tools_remain_configurable_without_becoming_callable() {
     let root = tempfile::tempdir().unwrap();
     let paths = crate::paths::SaiPaths::for_tests(root.path());
     let config = crate::config::AppConfig::default();
-    crate::plugins::set_enabled(
-        &config,
-        &paths,
-        "online-man",
-        false,
-        crate::plugins::GrantUpdate::Keep,
-    )
-    .unwrap();
+    for id in ["online-man", "archlinux", "fcitx-wiki", "protondb"] {
+        crate::plugins::set_enabled(
+            &config,
+            &paths,
+            id,
+            false,
+            crate::plugins::GrantUpdate::Keep,
+        )
+        .unwrap();
+    }
     let actual = crate::tools::builtin_registry_without_mcp(&config, &paths);
-    assert!(!actual.contains("online_man_search"));
     let catalog = crate::tools::tool_catalog(&config, &paths);
-    assert!(catalog.iter().any(|tool| tool.name == "online_man_search"));
+    for name in [
+        "online_man_search",
+        "aur_search_packages",
+        "aur_get_package_info",
+        "archlinux_official_package_query",
+        "aur_check_status",
+        "archwiki_query",
+        "fcitx5_input_method_wiki_qurey",
+        "protondb_query",
+    ] {
+        assert!(!actual.contains(name));
+        assert!(catalog.iter().any(|tool| tool.name == name));
+    }
+}
+
+/// 【插件测试】【Arch 开关】旧配置决定缺省状态，显式插件设置覆盖旧开关。
+#[test]
+fn archlinux_plugin_settings_override_the_legacy_default_in_both_registries() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = crate::paths::SaiPaths::for_tests(root.path());
+    let mut config = crate::config::AppConfig::default();
+    config.plugins.archlinux.enabled = false;
+    let initial = crate::tools::builtin_registry_without_mcp(&config, &paths);
+    assert!(!initial.contains("aur_search_packages"));
+    assert!(initial.contains("fcitx5_input_method_wiki_qurey"));
+    assert!(initial.contains("protondb_query"));
+    for (enabled, legacy) in [(true, false), (false, true)] {
+        config.plugins.archlinux.enabled = legacy;
+        crate::plugins::set_enabled(
+            &config,
+            &paths,
+            "archlinux",
+            enabled,
+            crate::plugins::GrantUpdate::Keep,
+        )
+        .unwrap();
+        for registry in [
+            crate::tools::builtin_registry_without_mcp(&config, &paths),
+            crate::tools::readonly_registry(&config, &paths),
+        ] {
+            for name in [
+                "aur_search_packages",
+                "aur_get_package_info",
+                "archlinux_official_package_query",
+                "aur_check_status",
+                "archwiki_query",
+            ] {
+                assert_eq!(registry.contains(name), enabled);
+            }
+        }
+    }
 }

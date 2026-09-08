@@ -28,6 +28,7 @@ fn request(url: String, max_bytes: usize) -> HttpRequest {
         headers: BTreeMap::new(),
         body: None,
         max_bytes,
+        timeout_ms: 30_000,
     }
 }
 

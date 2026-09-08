@@ -1,5 +1,4 @@
 mod alarm;
-mod archlinux;
 mod ask_question;
 mod calculator;
 mod catalog;
@@ -11,7 +10,6 @@ mod default_tools;
 mod descriptions;
 mod diagnostics;
 mod exchange_rate;
-mod fcitx_wiki;
 pub(crate) mod file_change_model;
 pub(crate) mod file_diff;
 mod file_edit;
@@ -30,7 +28,6 @@ mod moegirl;
 mod native_search;
 mod package_advisor;
 pub(crate) mod progressive;
-mod protondb_query;
 mod registry;
 mod search_process;
 mod skill_management;
@@ -229,12 +226,7 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     trash_path::register(&mut registry);
     alarm::register(&mut registry, paths.clone());
     web::register_fetch(&mut registry);
-    fcitx_wiki::register(&mut registry);
-    protondb_query::register(&mut registry);
     configurable_cli_tools::register(&mut registry, config);
-    if config.plugins.archlinux.enabled {
-        archlinux::register(&mut registry);
-    }
     crate::plugins::register_plugins(&mut registry, config, paths, false);
     vision::register_print(&mut registry, config.clone());
     if config.plugins.memes.enabled {
@@ -382,11 +374,6 @@ pub fn readonly_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     command::register_readonly(&mut registry, config, paths);
     default_tools::register_readonly(&mut registry, config, paths);
     web::register_fetch(&mut registry);
-    fcitx_wiki::register(&mut registry);
-    protondb_query::register(&mut registry);
-    if config.plugins.archlinux.enabled {
-        archlinux::register(&mut registry);
-    }
     crate::plugins::register_plugins(&mut registry, config, paths, true);
     if config.plugins.web.enabled {
         web::register(&mut registry, config.plugins.web.clone());

@@ -34,6 +34,7 @@ pub(super) fn packages() -> Result<Vec<PluginPackage>> {
 /// @returns 未写入 plugins.jsonc 时采用的启用状态
 pub(super) fn default_enabled(config: &AppConfig, id: &str) -> bool {
     match id {
+        "archlinux" => config.plugins.archlinux.enabled,
         "online-man" => config.plugins.man.enabled,
         _ => true,
     }

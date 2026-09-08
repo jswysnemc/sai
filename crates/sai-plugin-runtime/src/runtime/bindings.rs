@@ -19,7 +19,7 @@ pub(super) fn install(
     control: Arc<CallControl>,
 ) -> mlua::Result<()> {
     install_json(lua, api, limits.output_bytes)?;
-    install_text(lua, api, limits.output_bytes)?;
+    super::text::install(lua, api, limits.output_bytes)?;
     install_time(lua, api)?;
     let http = lua.create_table()?;
     http.set(
@@ -91,10 +91,15 @@ pub(super) fn install(
                     ));
                 }
                 request.max_bytes = request.max_bytes.clamp(1, limits.output_bytes);
-                let response = host
-                    .http(request, capabilities.http.iter().cloned().collect())
-                    .await
-                    .map_err(lua_error)?;
+                request.timeout_ms = request.timeout_ms.clamp(1, 30_000);
+                let timeout = std::time::Duration::from_millis(request.timeout_ms);
+                let response = tokio::time::timeout(
+                    timeout,
+                    host.http(request, capabilities.http.iter().cloned().collect()),
+                )
+                .await
+                .map_err(|_| mlua::Error::runtime("plugin HTTP request timed out"))?
+                .map_err(lua_error)?;
                 if response.text.len() > limits.output_bytes {
                     return Err(mlua::Error::runtime(
                         "plugin HTTP response exceeds size limit",
@@ -148,46 +153,6 @@ fn install_json(lua: &Lua, api: &Table, limit: usize) -> mlua::Result<()> {
         })?,
     )?;
     api.set("json", json)
-}
-
-/// 【插件】【文本绑定】提供与平台无关的 URL 编码、HTML 读取和 Unicode 截取。
-/// @param lua 虚拟机；api 为 sai 表；limit 为输入输出字节限制
-/// @returns 文本帮助函数安装结果
-fn install_text(lua: &Lua, api: &Table, limit: usize) -> mlua::Result<()> {
-    let text = lua.create_table()?;
-    text.set(
-        "url_encode",
-        lua.create_function(|_, value: String| Ok(urlencoding::encode(&value).into_owned()))?,
-    )?;
-    text.set(
-        "html_to_text",
-        lua.create_function(move |_, (html, width): (String, Option<usize>)| {
-            if html.len() > limit {
-                return Err(mlua::Error::runtime("HTML input exceeds plugin size limit"));
-            }
-            let output = html2text::from_read(html.as_bytes(), width.unwrap_or(120).clamp(20, 200));
-            if output.len() > limit {
-                return Err(mlua::Error::runtime(
-                    "HTML output exceeds plugin size limit",
-                ));
-            }
-            Ok(output)
-        })?,
-    )?;
-    text.set(
-        "clip",
-        lua.create_function(move |_, (value, count): (String, usize)| {
-            let count = count.min(limit);
-            let mut chars = value.chars();
-            let clipped = chars.by_ref().take(count).collect::<String>();
-            Ok(if chars.next().is_some() {
-                format!("{clipped}\n...[truncated]")
-            } else {
-                clipped
-            })
-        })?,
-    )?;
-    api.set("text", text)
 }
 
 /// 【插件】【时间绑定】提供时间戳和明确时区的 ISO 时间格式。

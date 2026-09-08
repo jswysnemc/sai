@@ -31,7 +31,7 @@ impl PluginHost for SaiPluginHost {
             attempt.follow()
         });
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
+            .timeout(Duration::from_millis(request.timeout_ms.clamp(1, 30_000)))
             .redirect(policy)
             .build()?;
         let method = reqwest::Method::from_bytes(request.method.as_bytes())

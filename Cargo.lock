@@ -5117,6 +5117,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "html2md",
  "html2text",
  "jsonschema",
  "mlua",

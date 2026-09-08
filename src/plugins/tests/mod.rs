@@ -1,6 +1,10 @@
+mod archlinux;
+mod archlinux_status;
 mod bundled;
 mod events;
+mod fcitx_wiki;
 mod http;
 mod management;
+mod protondb;
 mod registry;
 mod support;
