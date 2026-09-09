@@ -13,6 +13,7 @@ use std::{
 /// 【插件目录】【缓存租约】缓存内容保留供审查，锁的寿命覆盖目录中的全部进程和解压任务。
 struct Workspace {
     root: PathBuf,
+    canonical_root: PathBuf,
     directory: Arc<Dir>,
     lock: Arc<paths::Lock>,
 }
@@ -47,8 +48,12 @@ pub(super) fn open(
         directory.remove_dir_all(&name)?;
     }
     directory.create_dir(&name)?;
+    let root = display.join(&name);
+    // 【插件目录】【可信锚点】1. 创建时固定规范根，Windows 长短路径始终使用一致的扩展前缀校验
+    let canonical_root = std::fs::canonicalize(&root)?;
     Ok(Arc::new(Workspace {
-        root: display.join(&name),
+        root,
+        canonical_root,
         directory: Arc::new(directory.open_dir_nofollow(&name)?),
         lock: Arc::new(lock),
     }))
@@ -146,14 +151,14 @@ impl PluginWorkspace for Workspace {
         allow_writes: bool,
     ) -> Result<ProcessOutput> {
         validate_workspace_path(&directory)?;
-        let path = dunce::canonicalize(self.root.join(directory))?;
-        if !path.starts_with(&self.root) || !path.is_dir() {
+        let path = std::fs::canonicalize(self.root.join(directory))?;
+        if !path.starts_with(&self.canonical_root) || !path.is_dir() {
             bail!("process directory is outside the private workspace");
         }
         system::execute_workspace(
             request,
             SystemContext {
-                workdir: path.to_string_lossy().into_owned(),
+                workdir: dunce::simplified(&path).to_string_lossy().into_owned(),
                 allow_writes,
             },
             capabilities,
