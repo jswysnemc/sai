@@ -4,6 +4,8 @@ pub use super::tool_spec::{
 
 #[path = "registry_execution.rs"]
 mod execution;
+#[path = "registry_plugin_services.rs"]
+mod plugin_services;
 #[path = "registry_plugins.rs"]
 mod plugins;
 
@@ -36,6 +38,8 @@ pub struct ToolRegistry {
     /// 【插件】【调用身份】子 Agent 使用独立标识，不改变网格工具的会话归属
     plugin_session_id: Option<String>,
     plugin_diagnostics: Vec<crate::plugins::PluginDiagnostic>,
+    /// 【插件】【模型绑定】模型来源独立于 Lua 状态，重载实例时不保留过期客户端
+    plugin_model: Option<crate::plugins::PluginModelSource>,
 }
 
 impl ToolRegistry {
@@ -276,6 +280,7 @@ impl ToolRegistry {
         registry.plugins = self.plugins.clone();
         registry.plugin_session_id = self.plugin_session_id.clone();
         registry.plugin_diagnostics = self.plugin_diagnostics.clone();
+        registry.plugin_model = self.plugin_model.clone();
         registry
     }
 
@@ -296,6 +301,7 @@ impl ToolRegistry {
         registry.plugins = self.plugins.clone();
         registry.plugin_session_id = self.plugin_session_id.clone();
         registry.plugin_diagnostics = self.plugin_diagnostics.clone();
+        registry.plugin_model = self.plugin_model.clone();
         // 1. 按来源注册顺序复制，确保供应商工具定义顺序稳定
         for tool in self.ordered_tools() {
             if !excluded.contains(tool.name.as_str()) {

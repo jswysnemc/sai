@@ -19,8 +19,39 @@ pub(super) fn install(
 ) -> mlua::Result<()> {
     install_json(lua, api, limits.output_bytes)?;
     super::text::install(lua, api, limits.output_bytes)?;
+    install_token_estimation(lua, api, host.clone(), limits.output_bytes)?;
     install_time(lua, api)?;
+    super::services::install(
+        lua,
+        api,
+        capabilities.clone(),
+        limits.clone(),
+        control.clone(),
+    )?;
     super::http::install(lua, api, host, capabilities, limits, control)
+}
+
+/// 【插件】【文本分词】使用宿主分词器，保持业务统计和主会话使用同一估算口径。
+/// @param lua 虚拟机；api 为 sai 表；host 为纯文本能力实现；limit 为输入字节限制
+/// @returns 文本分词函数的安装结果
+fn install_token_estimation(
+    lua: &Lua,
+    api: &Table,
+    host: Arc<dyn PluginHost>,
+    limit: usize,
+) -> mlua::Result<()> {
+    let text: Table = api.get("text")?;
+    text.set(
+        "estimate_tokens",
+        lua.create_function(move |_, value: String| {
+            if value.len() > limit {
+                return Err(mlua::Error::runtime(
+                    "token estimation input exceeds plugin size limit",
+                ));
+            }
+            host.estimate_tokens(&value).map_err(lua_error)
+        })?,
+    )
 }
 
 /// 【插件】【JSON 绑定】保留空数组和 null 的类型，避免 Lua 空表产生歧义。

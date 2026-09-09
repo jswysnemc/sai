@@ -2,6 +2,7 @@ use super::{
     dsh_bash_shell, local_tool_name, parse_arguments, ToolOutput, ToolPermission, ToolProgress,
     ToolRegistry, ToolSpec, DSH_BASH_EXECUTION_ALIAS,
 };
+use crate::plugins::PluginServices;
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
 use tokio::sync::mpsc;
@@ -105,31 +106,50 @@ impl ToolRegistry {
                     Value::String(dsh_bash_shell()),
                 );
         }
-        let context =
+        // 【插件】【嵌套边界】1. 递归检查先于事件，旧注册表的活动观察者使用独立 VM
+        if let Some(id) = tool.plugin_id() {
+            PluginServices::check_invocation(id)?;
+        }
+        let plugins = self
+            .plugins
+            .fork_active(&PluginServices::active_instances())?;
+        let mut context =
             self.plugin_context(progress.clone(), tool.permission == ToolPermission::Writes);
         let result = async {
-            self.plugins
-                .check_tool(name, &original_args, &context)
-                .await?;
+            plugins.check_tool(name, &original_args, &context).await?;
             // 【插件】【参数隔离】宿主内部标记只交给原生工具，不能污染插件公开 Schema
             let call_args = if tool.plugin_id().is_some() {
                 original_args.clone()
             } else {
                 args.clone()
             };
-            tool.call(call_args, progress, &self.plugins, context.clone())
-                .await
+            let services = match tool.plugin_id() {
+                Some(id) => self.plugin_services(id, &context)?,
+                None => None,
+            };
+            if let Some(services) = &services {
+                context.services = Some(services.clone());
+            }
+            let operation = tool.call(call_args, progress, &plugins, context.clone());
+            if let Some(services) = services {
+                services
+                    .events()
+                    .agent_run(
+                        serde_json::json!({"kind":"plugin", "plugin_id":tool.plugin_id()}),
+                        operation,
+                    )
+                    .await
+            } else {
+                operation.await
+            }
         }
         .await;
-        if self
-            .plugins
-            .listens(sai_plugin_runtime::EventKind::ToolResult)
-        {
+        if plugins.listens(sai_plugin_runtime::EventKind::ToolResult) {
             let output: String = match &result {
                 Ok(output) => output.content.chars().take(16_384).collect(),
                 Err(error) => format!("{error:#}").chars().take(16_384).collect(),
             };
-            self.plugins
+            plugins
                 .notify(
                     sai_plugin_runtime::EventKind::ToolResult,
                     &context,

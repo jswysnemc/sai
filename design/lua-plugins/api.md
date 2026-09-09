@@ -122,7 +122,7 @@ sai.on("tool_call", check_tool)
 
 `tool_call` 只接受 `nil` 或 `{deny="原因"}`；拒绝原因必须非空且不超过 4096 字节。异常或非法返回值阻止本次工具执行。监听器不能批准宿主已拒绝的操作，也不能修改真实参数。
 
-其他事件仅用于观察；返回值不会注入模型消息。监听器失败独立诊断，不替换业务结果，也不阻止其他插件。事件回调没有写入授权。
+其他事件仅用于观察；返回值不会注入模型消息。监听器失败独立诊断，不替换业务结果，也不阻止其他插件。事件回调没有写入授权，也没有模型和工具调用服务，不能沿用上一工具回调的权限。
 
 外部取消会回收正在运行的 Future，不另外启动后台任务补发结束事件。插件不能依赖结束监听器释放宿主资源；取消、I/O 回收和实例释放由 Rust 负责。
 
@@ -132,6 +132,7 @@ sai.on("tool_call", check_tool)
 | --- | --- |
 | `sai.plugin_id` | 当前插件 ID |
 | `sai.config` | 当前包设置的快照 |
+| `sai.limits` | 清单资源限制的 Lua 副本；修改它不能提高 Rust 实际限制 |
 | `ctx.session_id` | 宿主提供的会话标识；子任务使用独立标识 |
 | `ctx.workdir` | 本次调用所属任务的真实工作目录 |
 | `ctx.progress(text)` | 单条最多 4096 字节，每次调用最多 128 条 |
@@ -140,9 +141,64 @@ sai.on("tool_call", check_tool)
 
 同一 Agent 的工具表副本、工具、命令和监听器共享 VM。新 Agent、新会话和子任务创建独立 VM；重新加载时，源码、设置和授权全部未变才沿用原实例。注册元数据必须可重复生成。
 
+需要模型或工具服务的插件调用使用独立的嵌套执行环境：完整复制当前 Agent 的工具目录并重新建立插件 VM，再按调用插件的声明与授权限制可见名称。嵌套事件不会进入正在执行的 Lua VM；原生包装器持有旧注册表时，宿主同样隔离活动监听器。调用完成、失败或取消都会撤销本次服务，不在长期存活的 VM 中保留注册表引用。
+
 Lua 全局变量属于当前实例，不是持久会话存储。进程重启、创建新 Agent 或切换会话都会重新初始化；不同交互入口对 Agent 的复用时长可能不同。
 
 ## 宿主能力
+
+### 模型与工具
+
+模型与工具调用分别声明、分别授权：
+
+```json
+{
+  "capabilities": {
+    "model": true,
+    "tools": ["read_file", "web_search"]
+  },
+  "limits": {
+    "model_requests": 32,
+    "tool_calls": 128
+  }
+}
+```
+
+`tools` 只接受精确名称，最多 128 项；每项最多 64 字节，仅包含 ASCII 字母、数字、`_` 和 `-`。外部插件使用完整的 `lua__<id>__<tool>` 名称。有效范围同时受清单、用户授权、当前 Agent 工具白名单和工具或命令的读写权限约束。
+
+```lua
+local available = sai.tools.list()
+local response = sai.model.complete({
+    messages = {
+        { role = "system", content = "根据已取得的资料回答问题。" },
+        { role = "user", content = "说明这段资料。" },
+    },
+    tools = sai.json.array({ "read_file" }),
+    stream_reasoning = false,
+    timeout_ms = 10000,
+})
+```
+
+`sai.model.complete` 只完成一次请求。消息支持 `system`、`user`、`assistant`，包含文本 `content` 和可选文本 `reasoning`；最多 256 条，最后一条必须是 `user`。不自动加入主对话、系统提示或用户消息。工具列表最多 128 项，省略或空数组表示此次不提供工具。未知请求字段会被拒绝，不能传入供应商、地址、模型名称或 API Key。
+
+请求使用当前 Agent 或子任务实际选定的客户端；模型切换、重载和工具表替换不会沿用旧配置来源。独立 CLI 命令在首次模型请求时才解析当前配置，管理和纯工具命令不需要初始化模型。供应商与凭据只存在于 Rust 宿主。
+
+返回值包含以下字段：
+
+| 字段 | 内容 |
+| --- | --- |
+| `content` | 模型正文 |
+| `reasoning` | 可选思考文本，缺失时为 JSON null |
+| `tool_calls` | `{id, name, arguments}` 列表；`arguments` 保留为 JSON 文本 |
+| `usage` | 可选单次请求用量：`prompt_tokens`、`completion_tokens`、`total_tokens`、`cache_read_tokens`、`cache_write_tokens` |
+
+宿主不会自动执行模型建议。插件可用 `sai.tools.call(name, arguments)` 显式调用工具；参数接受 Lua 对象表或原始 JSON 对象文本，返回工具文本。该入口沿用正常参数解析、权限、插件检查和审计，运行中切换到计划模式也会阻止后续写入。`pcall` 可以捕获调用错误，嵌套错误保留具体原因。
+
+`sai.tools.list()` 返回当前可调用的 `{name, display_name, description, parameters, access}` 列表。模型目录和工具执行使用同一授权范围。供应商公开的 `sai_web_search` 别名会恢复为 `web_search`；未公开的内部执行别名不会转换成已授权工具。
+
+如果 A 声明调用 B，B 可以使用自己已授权的 C，但 A 不能直接调用 C。所有层级仍受原 Agent 工具白名单约束。目录排除当前插件和祖先插件；再次进入祖先插件或超过 8 层会在事件分发之前失败。每次需要模型或工具能力的调用都有独立的 `agent_start/end`，每次模型请求都有正常的轮次和消息事件。
+
+模型请求 `timeout_ms` 默认使用回调总时长，限制在 1 毫秒至该回调上限；请求超时可由 `pcall` 捕获。模型请求和结果、工具目录、参数及输出受 `output_bytes` 约束，模型正文、思考和工具参数在流式接收时也检查大小。失败的实际模型或工具请求同样消耗次数预算。业务循环应为最终报告预留模型、工具和消息数量空间。
 
 ### HTTP
 
@@ -185,6 +241,7 @@ local response = sai.http.request({
 | `sai.json.null` | 表示 JSON null |
 | `sai.text.trim(text)` | 去除两端 Unicode 空白，保留正文内容 |
 | `sai.text.collapse_whitespace(text)` | 去除首尾空白，并把连续 Unicode 空白替换为一个空格；输入受 `output_bytes` 限制 |
+| `sai.text.estimate_tokens(text)` | 使用 Sai 分词器估算文本 token 数量；输入受 `output_bytes` 限制 |
 | `sai.text.url_encode(text)` | URL 百分号编码 |
 | `sai.text.html_to_text(html, width?)` | HTML 转文本，宽度默认 120，范围 20–200 |
 | `sai.text.html_to_markdown(html)` | HTML 转 Markdown，保留标题、链接、列表和代码格式 |
@@ -205,9 +262,13 @@ HTML 转换前后的 UTF-8 文本均受包内 `output_bytes` 限制。Markdown �
 | 回调总时长 | 20 秒 | 0.1–900 秒 |
 | 单次 HTTP 最大时长 | 30 秒 | 0.001–120 秒 |
 | 输出与 HTTP 大小 | 1 MiB | 1 KiB–4 MiB |
+| 单次回调模型请求数 | 32 | 1–256 |
+| 单次回调工具调用数 | 128 | 1–1024 |
 
 Lua 计算位于阻塞工作线程，受指令 Hook、堆内存和总时长约束。取消会停止受管宿主 I/O，并在 Lua 恢复执行时终止回调。能力隔离不等于操作系统进程隔离；这里的内存上限针对 Lua 堆，不是整个 Sai 进程。
 
 长查询必须在清单中显式提高限制，不改变其他插件的默认值。`web-search` 保留旧版单个供应商 1–120 秒的配置范围，包的回调上限为 750 秒，覆盖六个供应商依次回退。
 
-版本 1 仅提供 HTTP、JSON、文本和时间能力。文件、进程、持久插件存储、模型上下文变换和界面组件扩展尚未开放，需要独立契约与授权设计。
+`linux-game-investigation` 声明 32 MiB Lua 堆、2000 万指令、900 秒、2 MiB 输出、256 次模型请求和 1024 次工具调用。调查工具的业务步数可以进一步收窄，但不能突破这些宿主限制。
+
+版本 1 提供 HTTP、单次模型请求、显式工具调用、JSON、文本和时间能力。原生文件与进程接口、持久插件存储、主 Agent 模型上下文变换和界面组件扩展尚未开放；插件可以在授权范围内组合现有文件和进程工具。

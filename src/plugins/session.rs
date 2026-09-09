@@ -72,6 +72,40 @@ impl PluginInstance {
 }
 
 impl PluginSession {
+    /// 【插件】【实例定位】读取当前包对应的 VM 标识，不获取执行锁。
+    /// @param id 插件标识
+    /// @returns 进程内实例标识；未加载插件返回错误
+    pub(crate) fn instance_id(&self, id: &str) -> Result<u64> {
+        Ok(self.runtime(id)?.instance_id())
+    }
+
+    /// 【插件】【观察者隔离】旧注册表可能持有正在执行的 VM，只重建这些实例供嵌套事件使用。
+    /// @param active 当前调用链内正在执行的实例标识
+    /// @returns 可安全分发事件的会话，其他插件继续共享原有状态
+    pub(crate) fn fork_active(&self, active: &[u64]) -> Result<Self> {
+        let mut session = self.clone();
+        for (id, instance) in self.instances.iter() {
+            if active.contains(&instance.runtime.instance_id()) {
+                Arc::make_mut(&mut session.instances).insert(id.clone(), instance.fork()?);
+            }
+        }
+        Ok(session)
+    }
+
+    /// 【插件】【有效能力】取得当前固定实例的声明与授权交集。
+    /// @param id 当前实例标识
+    /// @returns 实际生效的模型、工具与网络能力
+    pub(crate) fn capabilities(&self, id: &str) -> Result<sai_plugin_runtime::Capabilities> {
+        let instance = self
+            .instances
+            .get(id)
+            .with_context(|| format!("plugin instance missing: {id}"))?;
+        Ok(instance
+            .descriptor
+            .capabilities()
+            .intersection(&instance.descriptor.grants()))
+    }
+
     /// 【插件】【事件查询】没有监听器时跳过事件载荷复制与序列化。
     /// @param event 事件类型
     /// @returns 是否存在相应监听器

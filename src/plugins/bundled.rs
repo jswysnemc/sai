@@ -35,7 +35,9 @@ pub(super) fn packages() -> Result<Vec<PluginPackage>> {
 pub(super) fn default_enabled(config: &AppConfig, id: &str) -> bool {
     match id {
         "archlinux" => config.plugins.archlinux.enabled,
-        "linux-game-signals" => config.plugins.linux_game_compatibility.enabled,
+        "linux-game-signals" | "linux-game-investigation" => {
+            config.plugins.linux_game_compatibility.enabled
+        }
         "online-man" => config.plugins.man.enabled,
         "web-search" => config.plugins.web.enabled,
         _ => true,

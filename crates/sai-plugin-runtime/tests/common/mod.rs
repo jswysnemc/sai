@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+pub mod services;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use sai_plugin_runtime::host::{HttpRequest, HttpResponse, PluginHost};

@@ -96,6 +96,7 @@ fn grants(origin: &str, paths: &[&str]) -> Capabilities {
     Capabilities {
         http: [origin.to_string()].into(),
         http_read_only_post: paths.iter().map(|path| format!("{origin}{path}")).collect(),
+        ..Default::default()
     }
 }
 

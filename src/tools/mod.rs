@@ -20,7 +20,6 @@ mod hash_codec;
 mod http_body;
 mod image_generation;
 pub mod knowledge_base;
-mod linux_game;
 pub(crate) mod memes;
 mod memory;
 pub(crate) mod mesh;
@@ -40,6 +39,8 @@ pub(crate) mod subagent_goal;
 mod subagent_persistence;
 mod subagent_progress;
 mod subagent_runner;
+#[cfg(test)]
+pub(crate) use subagent_runner::{ProgressMode, SubagentProgress, SubagentRunner};
 #[cfg(test)]
 mod subagent_runner_tests;
 mod subagent_runtime;
@@ -253,10 +254,6 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     if config.plugins.package_advisor.enabled {
         package_advisor::register(&mut registry, paths.clone());
     }
-    if config.plugins.linux_game_compatibility.enabled {
-        let game_tools = registry.clone();
-        linux_game::register(&mut registry, config.clone(), paths.clone(), game_tools);
-    }
     if config.plugins.diagnostics.enabled {
         diagnostics::register(&mut registry, config.clone());
     }
@@ -380,10 +377,6 @@ pub fn readonly_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     }
     if config.plugins.package_advisor.enabled {
         package_advisor::register(&mut registry, paths.clone());
-    }
-    if config.plugins.linux_game_compatibility.enabled {
-        let game_tools = registry.clone();
-        linux_game::register(&mut registry, config.clone(), paths.clone(), game_tools);
     }
     if config.plugins.diagnostics.enabled {
         diagnostics::register(&mut registry, config.clone());

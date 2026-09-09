@@ -29,6 +29,8 @@ pub struct ExecutionLimits {
     pub timeout_ms: u64,
     pub http_timeout_ms: u64,
     pub output_bytes: usize,
+    pub model_requests: usize,
+    pub tool_calls: usize,
 }
 
 impl Default for ExecutionLimits {
@@ -40,6 +42,8 @@ impl Default for ExecutionLimits {
             timeout_ms: 20_000,
             http_timeout_ms: 30_000,
             output_bytes: 1024 * 1024,
+            model_requests: 32,
+            tool_calls: 128,
         }
     }
 }
@@ -96,6 +100,8 @@ impl ExecutionLimits {
             || !(100..=900_000).contains(&self.timeout_ms)
             || !(1..=120_000).contains(&self.http_timeout_ms)
             || !(1024..=4 * 1024 * 1024).contains(&self.output_bytes)
+            || !(1..=256).contains(&self.model_requests)
+            || !(1..=1024).contains(&self.tool_calls)
         {
             bail!("plugin execution limits exceed supported bounds");
         }

@@ -17,6 +17,7 @@ pub(crate) fn register_plugins(
     paths: &SaiPaths,
     readonly: bool,
 ) -> Vec<PluginDiagnostic> {
+    registry.configure_plugin_model(config, paths);
     let found = discover(config, paths);
     let mut diagnostics = found.diagnostics;
     for descriptor in found

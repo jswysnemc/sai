@@ -18,7 +18,7 @@ sai plugins run hello stats
 
 外部工具名称为 `lua__hello__greet`。启用后，工具会出现在 Agent 设置的 Lua 插件分组中。使用工具白名单的 Agent 还需要选中该工具；使用渐进加载的 Agent 仍须先调用 `load`。
 
-`sai plugins run` 启动独立命令实例，不调用语言模型。写入命令沿用 CLI 权限模式和审计流程；需要时使用现有的 `--plan`、`--audited` 或 `--yolo` 顶层选项。
+`sai plugins run` 启动独立命令实例。命令可显式调用已授权的工具和模型；仅在调用模型时初始化客户端。写入命令沿用 CLI 权限模式和审计流程；需要时使用现有的 `--plan`、`--audited` 或 `--yolo` 顶层选项。
 
 ## 在 TUI 会话中使用
 
@@ -68,7 +68,17 @@ sai plugins enable network-plugin --grant-declared
 sai plugins enable network-plugin --no-http
 ```
 
-`--allow-http` 替换显式 HTTP 来源集合，可以重复传入。需要只读 POST 的包另用 `--allow-http-read-only-post` 授予清单中声明的精确端点，并同时提供所属来源。`--grant-declared` 明确授权当前清单中的全部网络能力；`--no-http` 撤销来源和只读 POST 授权。只设置 `--allow-http` 时不会保留旧的只读 POST 授权。实际可访问范围始终是声明与授权的交集。URL 路径、凭据、通配符和尾部 `/` 不属于合法来源声明。
+`--allow-http` 替换显式 HTTP 来源集合，可以重复传入。需要只读 POST 的包另用 `--allow-http-read-only-post` 授予清单中声明的精确端点，并同时提供所属来源。`--grant-declared` 明确授权当前清单中的全部能力，不能与分项参数组合；`--no-http` 仅撤销来源和只读 POST 授权，保留模型与工具授权。只设置 `--allow-http` 时不会保留旧的只读 POST 授权。实际可访问范围始终是声明与授权的交集。URL 路径、凭据、通配符和尾部 `/` 不属于合法来源声明。
+
+调查、诊断等插件可声明 `"model": true` 和精确工具名称列表 `"tools": ["read_file", "web_search"]`，然后单独授权：
+
+```sh
+sai plugins enable investigation --allow-model --allow-tool read_file --allow-tool web_search
+sai plugins enable investigation --no-model
+sai plugins enable investigation --no-tools
+```
+
+`--allow-model` 与 `--no-model` 只修改模型授权。重复的 `--allow-tool` 构成新的工具集合，`--no-tools` 清空它；未指定的其他能力保持原值。外部插件启用本身不授予模型或工具权限。模型客户端继承当前 Agent 或子任务实际选择，地址和 API Key 不进入 Lua 配置。工具组合仍受 Agent 白名单及实时权限模式约束，接口与调用限制见 [Lua API](api.md)。
 
 `sai plugins info <id> --json` 显示清单、安装位置和有效授权，不输出插件设置中的秘密值。
 
@@ -80,9 +90,9 @@ sai plugins disable hello
 sai plugins remove hello
 ```
 
-更新保留已有开关、设置和授权。新的来源声明不会自动扩大授权。管理命令使用文件锁、同目录暂存和原子配置替换；失败时恢复旧安装目录。
+更新保留已有开关、设置和授权。新增来源、模型或工具声明不会自动扩大显式授权。管理命令使用文件锁、同目录暂存和原子配置替换；失败时恢复旧安装目录。
 
-禁用、更新和移除在新的工具表或 `/plugins reload` 后生效。已经开始的调用和后台子任务使用原快照，直到完成或取消。移除会清除安装目录，并将配置置为禁用、撤销网络授权。内置插件只能禁用。
+禁用、更新和移除在新的工具表或 `/plugins reload` 后生效。已经开始的调用和后台子任务使用原快照，直到完成或取消。移除会清除安装目录，并将配置置为禁用、撤销全部能力授权。内置插件只能禁用。
 
 ## 现有功能的兼容迁移
 
@@ -95,6 +105,7 @@ sai plugins remove hello
 | `protondb` | `protondb_query` | 默认启用 |
 | `web-search` | `web_search` | 沿用主配置 `plugins.web.enabled` |
 | `linux-game-signals` | `gather_linux_game_compatibility_signals` | 沿用主配置 `plugins.linux_game_compatibility.enabled` |
+| `linux-game-investigation` | `linux_game_compatibility` | 沿用主配置 `plugins.linux_game_compatibility.enabled` |
 
 `plugins.jsonc` 的显式设置优先于上述默认值。内置包保留原工具名称；外部包不能使用内置插件 ID，也不能覆盖现有工具。已禁用的内置工具仍可在 Agent 设置中预先选择，但无法实际执行。
 
@@ -141,7 +152,17 @@ sai --plan __tool gather_linux_game_compatibility_signals '{"game":"Portal 2","i
 
 结果中的 `verdict.traffic_light` 使用 `red`、`yellow`、`green` 文本值；中文 `label` 和原有判定条件不变。其他结果字段保持兼容，但 HTTP 错误措辞由插件宿主管理。界面可按文本状态使用自身图标组件。
 
-原 `linux_game_compatibility` 调查入口会调用同一采集插件。禁用 `linux-game-signals` 后，采集工具从可执行目录移除，调查入口在请求模型之前报告插件不可用。旧游戏开关是包的默认值；显式插件启用设置优先，可在停用调查入口时单独启用证据采集。
+`linux-game-investigation` 负责整个调查循环：组装提示、请求模型、逐项调用证据工具、控制预算、记录进度与统计，并整理最终报告。公开名称仍为 `linux_game_compatibility`，调用同一采集插件：
+
+```sh
+sai --plan __tool linux_game_compatibility '{"game":"Portal 2","issue":"multiplayer"}'
+```
+
+两个包各自保留独立开关。禁用 `linux-game-signals` 后，采集工具从可执行目录移除，调查入口在请求模型之前报告插件不可用。旧游戏开关提供两个包的默认值；显式插件启用设置分别优先，可单独保留证据采集。
+
+调查包支持 `max_tool_steps`、`progress_mode`（`hidden`、`summary`、`full`）与 `language` 设置，省略时分别沿用旧游戏预算、工具显示模式和当前语言。`max_tool_steps=0` 表示不增加业务步数限制，宿主资源上限仍有效。工具预算耗尽、模型请求额度接近上限或消息数接近 256 条时，循环请求一次无工具最终报告。
+
+结果保留 `final_report`、`stats` 和 `output_instruction`。每个模型响应只计入一次用量，修正旧版末次响应重复累加；缺失用量时估算本次消息与响应文本，并保留原统计字段及估算方法标签。概要进度区分工具成功和错误；详细进度最多 128 条，缩短过长预览并保留有效 JSON，展示额度耗尽不会停止调查。
 
 ## 验证
 
@@ -151,6 +172,6 @@ cargo test -p sai --locked plugins::tests
 cargo test --locked
 ```
 
-运行时测试不依赖 Sai 配置；业务测试通过固定 HTTP 样本运行实际 Lua 源码。完整回归包含会话与后台交付流程，能发现新增异步包装对已有运行链路的影响。
+运行时测试不依赖 Sai 配置；业务测试通过固定 HTTP 样本运行实际 Lua 源码。模型与工具集成测试用本地 SSE 服务驱动真实客户端和注册表，覆盖模型切换、权限、插件组合、递归、取消和完整游戏调查。报告与 Unicode 摘录另有 45 组旧版 Rust 对照。完整回归包含会话与后台交付流程，能发现新增异步包装对已有运行链路的影响。
 
 完整接口见 [Lua API](api.md)，架构依据见 [架构说明](architecture.md)，迁移证据见 [迁移清单](migration.md)。

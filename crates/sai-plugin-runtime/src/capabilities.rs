@@ -11,6 +11,10 @@ pub struct Capabilities {
     pub http: BTreeSet<String>,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub http_read_only_post: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub model: bool,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub tools: BTreeSet<String>,
 }
 
 impl Capabilities {
@@ -39,6 +43,19 @@ impl Capabilities {
                 bail!("read-only POST endpoint must belong to a declared HTTP origin");
             }
         }
+        if self.tools.len() > 128 {
+            bail!("a plugin may declare at most 128 host tools");
+        }
+        for name in &self.tools {
+            if name.is_empty()
+                || name.len() > 64
+                || !name
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"_-".contains(&byte))
+            {
+                bail!("tool capability must be an exact tool name of at most 64 bytes");
+            }
+        }
         Ok(())
     }
 
@@ -53,6 +70,8 @@ impl Capabilities {
                 .intersection(&granted.http_read_only_post)
                 .cloned()
                 .collect(),
+            model: self.model && granted.model,
+            tools: self.tools.intersection(&granted.tools).cloned().collect(),
         }
     }
 
@@ -64,6 +83,8 @@ impl Capabilities {
             && self
                 .http_read_only_post
                 .is_subset(&declared.http_read_only_post)
+            && (!self.model || declared.model)
+            && self.tools.is_subset(&declared.tools)
     }
 
     /// 【插件】【来源授权】检查完整 URL 是否属于有效来源，拒绝 URL 内嵌凭据。

@@ -1,11 +1,10 @@
 use crate::config::AppConfig;
 use crate::i18n::text as t;
 use crate::paths::SaiPaths;
-use crate::plugins::{self, GrantUpdate, PluginSource};
+use crate::plugins::{self, GrantChanges, GrantUpdate, PluginSource};
 use crate::tools::ToolRegistry;
 use anyhow::{bail, Result};
 use clap::{Args, Subcommand};
-use sai_plugin_runtime::Capabilities;
 use serde_json::json;
 use std::path::PathBuf;
 
@@ -33,10 +32,10 @@ pub(crate) enum PluginsCommand {
         #[arg(long)]
         replace: bool,
     },
-    /// Enable a plugin, optionally setting explicit HTTP grants
+    /// Enable a plugin, optionally changing network, model and tool grants
     Enable {
         id: String,
-        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http"])]
+        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_tool", "no_tools"])]
         grant_declared: bool,
         #[arg(long, value_name = "ORIGIN", conflicts_with = "no_http")]
         allow_http: Vec<String>,
@@ -49,6 +48,14 @@ pub(crate) enum PluginsCommand {
         allow_http_read_only_post: Vec<String>,
         #[arg(long)]
         no_http: bool,
+        #[arg(long, conflicts_with = "no_model")]
+        allow_model: bool,
+        #[arg(long)]
+        no_model: bool,
+        #[arg(long, value_name = "NAME", conflicts_with = "no_tools")]
+        allow_tool: Vec<String>,
+        #[arg(long)]
+        no_tools: bool,
     },
     /// Disable a plugin for subsequent loads
     Disable { id: String },
@@ -182,13 +189,28 @@ pub(crate) async fn run(
             allow_http,
             allow_http_read_only_post,
             no_http,
+            allow_model,
+            no_model,
+            allow_tool,
+            no_tools,
         } => {
             let update = if grant_declared {
                 GrantUpdate::Declared
-            } else if no_http || !allow_http.is_empty() {
-                GrantUpdate::Explicit(Capabilities {
-                    http: allow_http.into_iter().collect(),
-                    http_read_only_post: allow_http_read_only_post.into_iter().collect(),
+            } else if no_http
+                || !allow_http.is_empty()
+                || allow_model
+                || no_model
+                || !allow_tool.is_empty()
+                || no_tools
+            {
+                let change_http = no_http || !allow_http.is_empty();
+                GrantUpdate::Changes(GrantChanges {
+                    http: change_http.then(|| allow_http.into_iter().collect()),
+                    http_read_only_post: change_http
+                        .then(|| allow_http_read_only_post.into_iter().collect()),
+                    model: (allow_model || no_model).then_some(allow_model),
+                    tools: (no_tools || !allow_tool.is_empty())
+                        .then(|| allow_tool.into_iter().collect()),
                 })
             } else {
                 GrantUpdate::Keep
@@ -292,7 +314,14 @@ async fn execute_command(
     arguments: &str,
     mode: crate::agent::AgentMode,
 ) -> Result<String> {
-    let mut registry = plugin_registry(config, paths)?;
+    // 【插件命令】【执行目录】实际调用使用普通 CLI 工具集合，管理查询仍保持轻量
+    let mut registry = crate::tools::builtin_registry_without_mcp(config, paths);
+    if !registry.plugin_diagnostics().is_empty() {
+        bail!(
+            "plugin loading failed: {}",
+            serde_json::to_string(registry.plugin_diagnostics())?
+        );
+    }
     let tool = registry.plugin_command(id, command)?;
     let name = tool.name.clone();
     registry.register(tool);

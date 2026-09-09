@@ -39,6 +39,13 @@ impl FixtureHost {
 
 #[async_trait]
 impl PluginHost for FixtureHost {
+    /// 【插件测试】【文本分词】迁移统计使用与正式宿主相同的分词器。
+    /// @param text 待估算文本
+    /// @returns token 估算数量
+    fn estimate_tokens(&self, text: &str) -> Result<u64> {
+        Ok(crate::token_estimate::estimate_tokens(text) as u64)
+    }
+
     /// 【插件测试】【请求捕获】记录真实插件请求，并返回下一个固定响应。
     /// @param request 实际请求；capabilities 为有效网络授权；allow_writes 为宿主调用权限
     /// @returns 下一个响应，没有对应样本时失败

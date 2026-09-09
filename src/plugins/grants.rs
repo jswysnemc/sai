@@ -1,0 +1,48 @@
+use anyhow::{bail, Result};
+use sai_plugin_runtime::Capabilities;
+use std::collections::BTreeSet;
+
+/// 【插件】【授权更新】全量替换与按能力修改分开，撤销网络不会隐式改变模型或工具授权。
+pub(crate) enum GrantUpdate {
+    Keep,
+    Declared,
+    Changes(GrantChanges),
+}
+
+/// 【插件】【分项授权】未指定的能力保持原值，空集合或 false 明确撤销授权。
+#[derive(Default)]
+pub(crate) struct GrantChanges {
+    pub http: Option<BTreeSet<String>>,
+    pub http_read_only_post: Option<BTreeSet<String>>,
+    pub model: Option<bool>,
+    pub tools: Option<BTreeSet<String>>,
+}
+
+impl GrantUpdate {
+    /// 【插件】【授权合并】在保存前验证完整交集，不允许授权清单之外的能力。
+    /// @param current 当前有效授权；declared 为固定清单声明
+    /// @returns 更新后的授权；Keep 返回 None 以保留缺省授权语义
+    pub(super) fn resolve(
+        self,
+        current: Capabilities,
+        declared: &Capabilities,
+    ) -> Result<Option<Capabilities>> {
+        let grants = match self {
+            Self::Keep => return Ok(None),
+            Self::Declared => declared.clone(),
+            Self::Changes(changes) => Capabilities {
+                http: changes.http.unwrap_or(current.http),
+                http_read_only_post: changes
+                    .http_read_only_post
+                    .unwrap_or(current.http_read_only_post),
+                model: changes.model.unwrap_or(current.model),
+                tools: changes.tools.unwrap_or(current.tools),
+            },
+        };
+        grants.validate()?;
+        if !grants.is_subset(declared) {
+            bail!("plugin grants must be declared in the plugin manifest");
+        }
+        Ok(Some(grants))
+    }
+}

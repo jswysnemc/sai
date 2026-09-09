@@ -4,6 +4,12 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+mod services;
+pub use services::{
+    HostTool, InvocationServices, ModelMessage, ModelRequest, ModelResponse, ModelRole,
+    ModelToolCall, ModelUsage,
+};
+
 /// 【插件】【HTTP 请求】宿主执行的请求，不允许插件直接创建网络连接。
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -32,6 +38,13 @@ pub struct HttpResponse {
 /// 【插件】【宿主接口】插件运行时所需的异步能力，实现不依赖 Sai 应用配置。
 #[async_trait]
 pub trait PluginHost: Send + Sync {
+    /// 【插件】【文本分词】由宿主提供统一的文本 token 估算。
+    /// @param text 已通过字节限制的文本
+    /// @returns 估算数量；未提供分词能力的宿主返回明确错误
+    fn estimate_tokens(&self, _text: &str) -> Result<u64> {
+        anyhow::bail!("token estimation is unavailable in this host")
+    }
+
     /// 【插件】【HTTP 执行】执行已经过来源和权限校验的请求。
     /// @param request 请求信息；capabilities 为有效网络授权；allow_writes 为宿主确认的写入权限
     /// @returns 有界响应，失败时返回不包含请求凭据的错误

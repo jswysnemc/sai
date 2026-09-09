@@ -15,10 +15,8 @@ impl Vm {
         invocation: Invocation,
         context: InvocationContext,
     ) -> Result<Value> {
-        self.control.generation.fetch_add(1, Ordering::AcqRel);
-        self.control.progress_messages.store(0, Ordering::Release);
+        let _lease = self.control.begin(context.services.clone())?;
         let ctx = context_table(&self.lua, &context, self.control.clone())?;
-        self.control.active.store(true, Ordering::Release);
         match invocation {
             Invocation::Tool(name, arguments) => {
                 let tool = self

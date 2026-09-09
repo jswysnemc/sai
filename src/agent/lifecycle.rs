@@ -47,6 +47,7 @@ impl Agent {
         extra_system_prompt: Option<&str>,
     ) -> Result<Self> {
         tools.start_plugin_session(state.session_id())?;
+        tools.set_plugin_model_client(&client);
         let tools_enabled = config.tools.enabled && config.active_model_tools_enabled()?;
         let base_system_prompt =
             build_base_system_prompt(&config, paths, tools_enabled, extra_system_prompt)?;
@@ -229,6 +230,7 @@ impl Agent {
     /// - 模式切换与会话工具状态恢复结果
     pub fn switch_mode(&mut self, mode: AgentMode, mut tools: ToolRegistry) -> Result<()> {
         tools.continue_plugin_session(&self.tools);
+        tools.set_plugin_model_client(&self.client);
         let loaded = if !self.tool_visibility.is_progressive() {
             Vec::new()
         } else {
@@ -273,6 +275,7 @@ impl Agent {
     /// - 无
     pub fn replace_tools(&mut self, mut tools: ToolRegistry) {
         tools.continue_plugin_session(&self.tools);
+        tools.set_plugin_model_client(&self.client);
         let loaded = self.tool_visibility.loaded_tool_names();
         crate::goal::register_tools_for_config(&mut tools, self.state.goal_file(), &self.config)
             .expect("failed to register goal tools");
@@ -331,6 +334,7 @@ impl Agent {
         mode: AgentMode,
     ) -> Result<()> {
         tools.continue_plugin_session(&self.tools);
+        tools.set_plugin_model_client(&client);
         let compaction_runtime =
             compaction_model::resolve_compaction_runtime(&config, &self.paths)?;
         self.config = config;

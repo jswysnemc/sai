@@ -98,6 +98,7 @@ impl ToolRegistry {
                 .unwrap_or_default(),
             allow_writes,
             progress: Some(Arc::new(move |message| progress.report(message))),
+            services: None,
         }
     }
 }

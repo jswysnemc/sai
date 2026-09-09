@@ -182,9 +182,12 @@ fn migrated_tools_are_present_in_common_and_readonly_registries() {
         "protondb_query",
         "web_search",
         "gather_linux_game_compatibility_signals",
+        "linux_game_compatibility",
     ] {
         assert!(common.contains(name));
         assert!(readonly.contains(name));
+        assert!(common.plugin_owner(name).is_some());
+        assert!(readonly.plugin_owner(name).is_some());
         assert_eq!(
             common.definition(name).unwrap().function.parameters,
             readonly.definition(name).unwrap().function.parameters

@@ -4,9 +4,10 @@ mod execution;
 mod http;
 mod modules;
 mod registration;
+mod services;
 mod text;
 
-use crate::host::PluginHost;
+use crate::host::{InvocationServices, PluginHost};
 use crate::{
     Capabilities, EventContext, EventKind, PluginCommand, PluginManifest, PluginPackage, PluginTool,
 };
@@ -16,12 +17,15 @@ use mlua::{Lua, LuaOptions, LuaSerdeExt, StdLib, Value as LuaValue};
 use registration::{RegisteredCommand, RegisteredTool, Registrations};
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
 pub type ProgressCallback = Arc<dyn Fn(String) + Send + Sync>;
+
+static NEXT_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 
 /// 【插件】【调用上下文】宿主明确交付的会话信息与当前操作权限。
 #[derive(Clone, Default)]
@@ -30,11 +34,13 @@ pub struct InvocationContext {
     pub workdir: String,
     pub allow_writes: bool,
     pub progress: Option<ProgressCallback>,
+    pub services: Option<Arc<dyn InvocationServices>>,
 }
 
 /// 【插件】【运行实例】独立 Lua 状态与全部注册的共同所有者。
 #[derive(Clone)]
 pub struct PluginRuntime {
+    instance_id: u64,
     manifest: Arc<PluginManifest>,
     tools: Arc<Vec<PluginTool>>,
     commands: Arc<Vec<PluginCommand>>,
@@ -81,6 +87,7 @@ impl PluginRuntime {
         let api = lua.create_table()?;
         api.set("config", lua.to_value(&settings)?)?;
         api.set("plugin_id", manifest.id.as_str())?;
+        api.set("limits", lua.to_value(&manifest.limits)?)?;
         bindings::install(
             &lua,
             &api,
@@ -125,6 +132,7 @@ impl PluginRuntime {
         let event_metadata = events.keys().copied().collect();
         drop(registrations);
         Ok(Self {
+            instance_id: NEXT_INSTANCE_ID.fetch_add(1, Ordering::Relaxed),
             manifest,
             tools: Arc::new(metadata),
             commands: Arc::new(command_metadata),
@@ -142,6 +150,12 @@ impl PluginRuntime {
     /// 返回插件清单的只读引用，无参数。
     pub fn manifest(&self) -> &PluginManifest {
         &self.manifest
+    }
+
+    /// 【插件】【实例标识】供宿主识别共享同一 VM 的运行时克隆，避免嵌套事件重入。
+    /// @returns 进程内实例标识；克隆保留标识，重新加载生成新标识，不用于持久化
+    pub fn instance_id(&self) -> u64 {
+        self.instance_id
     }
 
     /// 返回已经提交的工具定义，无参数。
@@ -174,7 +188,7 @@ impl PluginRuntime {
         )
     }
 
-    /// 【插件】【命令执行】执行用户命令，不调用语言模型。
+    /// 【插件】【命令执行】执行用户命令，宿主能力仍由本次调用上下文约束。
     /// @param name 包内命令名；arguments 为用户参数；context 为宿主上下文
     /// @returns 命令显示文本
     pub async fn call_command(

@@ -1,3 +1,4 @@
+mod linux_game;
 mod web_search;
 
 use crate::config::AppConfig;
@@ -23,6 +24,7 @@ pub(super) fn resolve(
 ) -> Result<Option<RuntimeOverrides>> {
     match id {
         "web-search" => web_search::resolve(&config.plugins.web, settings, declared).map(Some),
+        "linux-game-investigation" => linux_game::resolve(config, settings, declared).map(Some),
         _ => Ok(None),
     }
 }

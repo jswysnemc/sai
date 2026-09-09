@@ -1,6 +1,7 @@
 use super::bundled;
 use super::config::{load_config, mutation_lock, save_config, PluginSetting};
 use super::discovery::{find, public_tool_name, PluginSource};
+use super::grants::GrantUpdate;
 use super::host::SaiPluginHost;
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
@@ -22,13 +23,6 @@ pub(crate) struct PluginInspection {
     pub tools: Vec<PluginTool>,
     pub commands: Vec<PluginCommand>,
     pub events: Vec<EventKind>,
-}
-
-/// 【插件】【授权更新】保持、清单全量授权或显式网络能力集合。
-pub(crate) enum GrantUpdate {
-    Keep,
-    Declared,
-    Explicit(Capabilities),
 }
 
 /// 【插件】【包验证】执行受限初始化并检查实际导出的契约。
@@ -137,16 +131,8 @@ pub(crate) fn set_enabled(
     let mut plugin_config = load_config(paths)?;
     let mut setting = descriptor.setting.clone();
     setting.enabled = enabled;
-    match update {
-        GrantUpdate::Keep => {}
-        GrantUpdate::Declared => setting.grants = Some(descriptor.capabilities().clone()),
-        GrantUpdate::Explicit(grants) => {
-            grants.validate()?;
-            if !grants.is_subset(descriptor.capabilities()) {
-                bail!("HTTP grants must be declared in the plugin manifest");
-            }
-            setting.grants = Some(grants);
-        }
+    if let Some(grants) = update.resolve(descriptor.grants(), descriptor.capabilities())? {
+        setting.grants = Some(grants);
     }
     plugin_config.plugins.insert(id.to_string(), setting);
     save_config(paths, &plugin_config)

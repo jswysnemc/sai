@@ -222,9 +222,10 @@ impl SubagentRunner {
     pub(crate) fn new(
         client: OpenAiCompatibleClient,
         system_prompt: impl Into<String>,
-        tools: ToolRegistry,
+        mut tools: ToolRegistry,
         progress: SubagentProgress,
     ) -> Self {
+        tools.set_plugin_model_client(&client);
         Self {
             client,
             system_prompt: system_prompt.into(),

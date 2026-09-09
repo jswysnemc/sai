@@ -2,8 +2,107 @@ use super::support::{descriptor, write_package};
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
 use crate::plugins::config::{load_config, save_config};
-use crate::plugins::{self, GrantUpdate};
+use crate::plugins::{self, GrantChanges, GrantUpdate};
 use serde_json::json;
+
+/// 【插件测试】【分项授权】撤销网络不影响模型和工具；各项更新保持未指定授权，非法范围不写入配置。
+#[test]
+fn capability_updates_preserve_other_grants_and_reject_undeclared_tools() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(root.path());
+    let config = AppConfig::default();
+    let mut plugin = descriptor("capabilities", "");
+    plugin.package.manifest.capabilities = serde_json::from_value(json!({
+        "http":["https://example.test"], "http_read_only_post":["https://example.test/search"],
+        "model":true, "tools":["read_file", "write_file"]
+    }))
+    .unwrap();
+    write_package(&paths.config_dir.join("plugins/capabilities"), &plugin);
+    plugins::set_enabled(&config, &paths, "capabilities", true, GrantUpdate::Keep).unwrap();
+    assert!(load_config(&paths).unwrap().plugins["capabilities"]
+        .grants
+        .is_none());
+    plugins::set_enabled(&config, &paths, "capabilities", true, GrantUpdate::Declared).unwrap();
+    plugins::set_enabled(
+        &config,
+        &paths,
+        "capabilities",
+        true,
+        GrantUpdate::Changes(GrantChanges {
+            http: Some(Default::default()),
+            http_read_only_post: Some(Default::default()),
+            ..Default::default()
+        }),
+    )
+    .unwrap();
+    let read_grants = || {
+        load_config(&paths).unwrap().plugins["capabilities"]
+            .grants
+            .clone()
+            .unwrap()
+    };
+    assert!(read_grants().http.is_empty());
+    assert!(read_grants().http_read_only_post.is_empty());
+    assert!(read_grants().model);
+    assert_eq!(
+        read_grants().tools,
+        ["read_file".into(), "write_file".into()].into()
+    );
+    plugins::set_enabled(
+        &config,
+        &paths,
+        "capabilities",
+        true,
+        GrantUpdate::Changes(GrantChanges {
+            tools: Some(["read_file".into()].into()),
+            ..Default::default()
+        }),
+    )
+    .unwrap();
+    assert!(read_grants().model);
+    assert_eq!(read_grants().tools, ["read_file".into()].into());
+    let previous = std::fs::read(paths.config_dir.join("plugins.jsonc")).unwrap();
+    assert!(plugins::set_enabled(
+        &config,
+        &paths,
+        "capabilities",
+        true,
+        GrantUpdate::Changes(GrantChanges {
+            tools: Some(["run_command".into()].into()),
+            ..Default::default()
+        })
+    )
+    .is_err());
+    assert_eq!(
+        std::fs::read(paths.config_dir.join("plugins.jsonc")).unwrap(),
+        previous
+    );
+    plugins::set_enabled(
+        &config,
+        &paths,
+        "capabilities",
+        true,
+        GrantUpdate::Changes(GrantChanges {
+            model: Some(false),
+            ..Default::default()
+        }),
+    )
+    .unwrap();
+    assert!(!read_grants().model);
+    assert_eq!(read_grants().tools, ["read_file".into()].into());
+    plugins::set_enabled(
+        &config,
+        &paths,
+        "capabilities",
+        true,
+        GrantUpdate::Changes(GrantChanges {
+            tools: Some(Default::default()),
+            ..Default::default()
+        }),
+    )
+    .unwrap();
+    assert!(read_grants().tools.is_empty());
+}
 
 /// 【插件测试】【安装生命周期】新包不会自动启用，更新保留设置，卸载清理安装目录和授权。
 #[test]
@@ -96,8 +195,8 @@ fn network_grants_are_explicit_and_bounded_by_the_manifest() {
         &paths,
         "network",
         true,
-        GrantUpdate::Explicit(sai_plugin_runtime::Capabilities {
-            http: ["https://other.test".into()].into(),
+        GrantUpdate::Changes(crate::plugins::GrantChanges {
+            http: Some(["https://other.test".into()].into()),
             ..Default::default()
         })
     )
@@ -116,7 +215,11 @@ fn network_grants_are_explicit_and_bounded_by_the_manifest() {
         &paths,
         "network",
         true,
-        GrantUpdate::Explicit(Default::default()),
+        GrantUpdate::Changes(crate::plugins::GrantChanges {
+            http: Some(Default::default()),
+            http_read_only_post: Some(Default::default()),
+            ..Default::default()
+        }),
     )
     .unwrap();
     assert!(load_config(&paths).unwrap().plugins["network"]
@@ -153,7 +256,11 @@ fn read_only_post_grants_are_explicit_and_survive_package_updates() {
         &paths,
         "query-api",
         true,
-        GrantUpdate::Explicit(invalid)
+        GrantUpdate::Changes(crate::plugins::GrantChanges {
+            http: Some(invalid.http),
+            http_read_only_post: Some(invalid.http_read_only_post),
+            ..Default::default()
+        })
     )
     .is_err());
     plugins::set_enabled(
@@ -161,7 +268,11 @@ fn read_only_post_grants_are_explicit_and_survive_package_updates() {
         &paths,
         "query-api",
         true,
-        GrantUpdate::Explicit(grants.clone()),
+        GrantUpdate::Changes(crate::plugins::GrantChanges {
+            http: Some(grants.http.clone()),
+            http_read_only_post: Some(grants.http_read_only_post.clone()),
+            ..Default::default()
+        }),
     )
     .unwrap();
     package.package.manifest.version = "1.0.1".into();
@@ -184,7 +295,11 @@ fn read_only_post_grants_are_explicit_and_survive_package_updates() {
         &paths,
         "query-api",
         true,
-        GrantUpdate::Explicit(Default::default()),
+        GrantUpdate::Changes(crate::plugins::GrantChanges {
+            http: Some(Default::default()),
+            http_read_only_post: Some(Default::default()),
+            ..Default::default()
+        }),
     )
     .unwrap();
     assert!(load_config(&paths).unwrap().plugins["query-api"]

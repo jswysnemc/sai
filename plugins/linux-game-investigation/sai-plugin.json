@@ -1,0 +1,32 @@
+{
+  "api_version": 1,
+  "id": "linux-game-investigation",
+  "version": "1.0.0",
+  "name": "Linux 游戏兼容性调查",
+  "description": "通过已授权的证据工具和当前模型调查游戏兼容性，输出完整报告。",
+  "entry": "init.lua",
+  "capabilities": {
+    "model": true,
+    "tools": [
+      "gather_linux_game_compatibility_signals",
+      "protondb_query",
+      "web_search",
+      "web_fetch",
+      "search_knowledge_base",
+      "search_knowledge_base_by_name",
+      "read_knowledge_base_file",
+      "check_os_info",
+      "read_file",
+      "glob",
+      "grep"
+    ]
+  },
+  "limits": {
+    "memory_bytes": 33554432,
+    "instructions": 20000000,
+    "timeout_ms": 900000,
+    "output_bytes": 2097152,
+    "model_requests": 256,
+    "tool_calls": 1024
+  }
+}
