@@ -102,6 +102,8 @@ local result = work:process("build", {}, {
 
 默认超时 30 秒，私有目录进程最多 1800 秒，并受整个回调时限约束。普通目录进程保持 120 秒上限。两种入口使用同一进程树回收实现和有界输出规则。为覆盖构建与安装多个步骤，清单的回调总时长硬上限为 3600 秒，缺省仍为 20 秒。
 
+Windows 的进程工作目录仍受[系统长度限制](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setcurrentdirectory)。超限时宿主查询已有的[短路径](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getshortpathnamew)，并确认它仍指向授权目录，再传给子进程。没有可用短路径的超限目录会明确返回错误。该转换不改变全局工作目录，也不修改卷上的短文件名设置。
+
 ## AUR 插件的业务约束
 
 `package-advisor` 保留 `review_aur_package` 和 `install_aur_package`。前者只读，后者声明 writes；旧 `plugins.package_advisor.enabled` 只决定缺省启用状态，独立插件配置优先。

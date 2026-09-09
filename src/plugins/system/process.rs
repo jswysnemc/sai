@@ -54,6 +54,8 @@ async fn execute_in(
     }
     let cwd = paths::workdir(&context)?;
     let executable = executable_path(&program, &cwd)?;
+    #[cfg(windows)]
+    let cwd = super::process_windows_paths::working_directory(&cwd)?;
     let mut command = Command::new(executable);
     command
         .args(arguments)
