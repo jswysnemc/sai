@@ -9,6 +9,16 @@ use std::time::Duration;
 async fn private_workspace_processes_and_directory_locks_end_with_the_callback() {
     for cancelled in [false, true] {
         let root = tempfile::tempdir().unwrap();
+        // 【私有进程测试】【路径别名】1. Unix 固定使用符号链接根，覆盖临时目录别名与真实路径不同的情况
+        #[cfg(unix)]
+        let paths = {
+            let actual = root.path().join("actual");
+            let alias = root.path().join("alias");
+            std::fs::create_dir(&actual).unwrap();
+            std::os::unix::fs::symlink(&actual, &alias).unwrap();
+            SaiPaths::for_tests(&alias)
+        };
+        #[cfg(not(unix))]
         let paths = SaiPaths::for_tests(root.path());
         let capabilities: Capabilities = serde_json::from_value(json!({"system":{
             "workspace":true,"processes":{"fixture":{
@@ -42,7 +52,13 @@ async fn private_workspace_processes_and_directory_locks_end_with_the_callback()
         let cache = paths.cache_dir.clone();
         let progress = Arc::new(move |message: String| {
             let path = std::path::PathBuf::from(message);
-            assert!(path.starts_with(&cache));
+            let cache = dunce::canonicalize(&cache).unwrap();
+            assert!(
+                path.starts_with(&cache),
+                "workspace {} is outside cache {}",
+                path.display(),
+                cache.display()
+            );
             std::fs::write(path.join("plugin-process-fixture"), "fixture").unwrap();
             send.send(path).unwrap();
         });
