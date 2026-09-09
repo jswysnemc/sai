@@ -1,0 +1,32 @@
+{
+  "api_version": 1,
+  "id": "input-method-investigation",
+  "version": "1.0.0",
+  "name": "Linux 输入法调查",
+  "description": "使用当前模型和已授权的诊断、文档工具调查输入法问题，输出证据与修复建议。",
+  "entry": "init.lua",
+  "capabilities": {
+    "model": true,
+    "tools": [
+      "check_issue",
+      "check_os_info",
+      "fcitx5_input_method_wiki_qurey",
+      "read_file",
+      "glob",
+      "grep",
+      "web_search",
+      "web_fetch",
+      "search_knowledge_base",
+      "search_knowledge_base_by_name",
+      "read_knowledge_base_file"
+    ]
+  },
+  "limits": {
+    "memory_bytes": 33554432,
+    "instructions": 20000000,
+    "timeout_ms": 900000,
+    "output_bytes": 2097152,
+    "model_requests": 256,
+    "tool_calls": 1024
+  }
+}

@@ -7,6 +7,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+/// 【插件】【工具选项】只接受单次调用时长，不能通过选项覆盖权限或工作目录。
+#[derive(Default, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ToolCallOptions {
+    timeout_ms: Option<u64>,
+}
+
 /// 【插件】【调查能力】绑定单次模型请求与显式工具调用，业务循环仍由 Lua 控制。
 /// @param lua 虚拟机；api 为 sai 表；capabilities 为有效授权；limits 为资源限制；control 为当前调用
 /// @returns 全部调查接口的安装结果
@@ -145,57 +152,71 @@ fn install_tools(
     )?;
     tools.set(
         "call",
-        lua.create_async_function(move |lua, (name, arguments): (String, Value)| {
-            let capabilities = capabilities.clone();
-            let control = control.clone();
-            let limits = limits.clone();
-            async move {
-                if !capabilities.tools.contains(&name) {
-                    return Err(mlua::Error::runtime(format!(
-                        "plugin tool capability is not allowed: {name}"
-                    )));
-                }
-                let services = control.services()?;
-                let available = allowed_tools(
-                    services.tools().map_err(service_error)?,
-                    &capabilities,
-                    &control,
-                );
-                if !available.iter().any(|tool| tool.name == name) {
-                    return Err(mlua::Error::runtime(format!(
-                        "plugin tool is not available: {name}"
-                    )));
-                }
-                let arguments: serde_json::Value = lua.from_value(arguments)?;
-                let arguments = match arguments {
-                    serde_json::Value::String(text) => text,
-                    value @ serde_json::Value::Object(_) => {
-                        serde_json::to_string(&value).map_err(lua_error)?
+        lua.create_async_function(
+            move |lua, (name, arguments, options): (String, Value, Option<Table>)| {
+                let capabilities = capabilities.clone();
+                let control = control.clone();
+                let limits = limits.clone();
+                async move {
+                    if !capabilities.tools.contains(&name) {
+                        return Err(mlua::Error::runtime(format!(
+                            "plugin tool capability is not allowed: {name}"
+                        )));
                     }
-                    _ => {
+                    let options: ToolCallOptions = match options {
+                        Some(value) => lua.from_value(Value::Table(value))?,
+                        None => ToolCallOptions::default(),
+                    };
+                    let services = control.services()?;
+                    let available = allowed_tools(
+                        services.tools().map_err(service_error)?,
+                        &capabilities,
+                        &control,
+                    );
+                    if !available.iter().any(|tool| tool.name == name) {
+                        return Err(mlua::Error::runtime(format!(
+                            "plugin tool is not available: {name}"
+                        )));
+                    }
+                    let arguments: serde_json::Value = lua.from_value(arguments)?;
+                    let arguments = match arguments {
+                        serde_json::Value::String(text) => text,
+                        value @ serde_json::Value::Object(_) => {
+                            serde_json::to_string(&value).map_err(lua_error)?
+                        }
+                        _ => {
+                            return Err(mlua::Error::runtime(
+                                "plugin tool arguments must be an object or JSON text",
+                            ))
+                        }
+                    };
+                    if arguments.len() > limits.output_bytes {
                         return Err(mlua::Error::runtime(
-                            "plugin tool arguments must be an object or JSON text",
-                        ))
+                            "plugin tool arguments exceed size limit",
+                        ));
                     }
-                };
-                if arguments.len() > limits.output_bytes {
-                    return Err(mlua::Error::runtime(
-                        "plugin tool arguments exceed size limit",
-                    ));
-                }
-                charge(&control.tool_calls, limits.tool_calls, "tool call")?;
-                let output = services
-                    .call_tool(&name, &arguments)
+                    charge(&control.tool_calls, limits.tool_calls, "tool call")?;
+                    // 【插件】【工具超时】单次超时回收当前 Future，总回调时限继续由外层执行器约束
+                    let timeout = options
+                        .timeout_ms
+                        .unwrap_or(limits.timeout_ms)
+                        .clamp(1, limits.timeout_ms);
+                    let output = tokio::time::timeout(
+                        Duration::from_millis(timeout),
+                        services.call_tool(&name, &arguments),
+                    )
                     .await
+                    .map_err(|_| mlua::Error::runtime("plugin tool call timed out"))?
                     .map_err(service_error)?;
-                if output.len() > limits.output_bytes {
-                    return Err(mlua::Error::runtime(
-                        "plugin tool output exceeds size limit",
-                    ));
+                    if output.len() > limits.output_bytes {
+                        return Err(mlua::Error::runtime(
+                            "plugin tool output exceeds size limit",
+                        ));
+                    }
+                    Ok(output)
                 }
-                Ok(output)
-            }
-        })?,
+            },
+        )?,
     )?;
     api.set("tools", tools)
 }

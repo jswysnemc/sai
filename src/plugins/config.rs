@@ -6,6 +6,8 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::io::Write;
 
+pub(super) use super::management_lock::acquire as mutation_lock;
+
 /// 【插件】【用户配置】独立于 AppConfig 的插件开关、设置和授权。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -113,20 +115,4 @@ fn validate(config: &PluginConfig) -> Result<()> {
         }
     }
     Ok(())
-}
-
-/// 【插件】【管理锁】避免两个管理进程覆盖彼此配置或交错移动安装目录。
-/// @param paths Sai 路径
-/// @returns 随作用域释放的文件锁，已有管理命令时立即返回错误
-pub(super) fn mutation_lock(paths: &SaiPaths) -> Result<std::fs::File> {
-    std::fs::create_dir_all(&paths.config_dir)?;
-    let file = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(paths.config_dir.join(".plugins.lock"))?;
-    file.try_lock()
-        .context("another plugin management command is in progress")?;
-    Ok(file)
 }

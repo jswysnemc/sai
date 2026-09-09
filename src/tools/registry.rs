@@ -161,13 +161,6 @@ impl ToolRegistry {
         Some(tool.definition())
     }
 
-    pub fn definitions_except(&self, excluded: &[&str]) -> Vec<ToolDefinition> {
-        self.ordered_tools()
-            .filter(|tool| !excluded.iter().any(|name| *name == tool.name))
-            .map(ToolSpec::definition)
-            .collect()
-    }
-
     /// 按注册顺序遍历工具。
     ///
     /// 参数:

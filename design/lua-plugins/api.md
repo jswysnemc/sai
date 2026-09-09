@@ -192,7 +192,9 @@ local response = sai.model.complete({
 | `tool_calls` | `{id, name, arguments}` 列表；`arguments` 保留为 JSON 文本 |
 | `usage` | 可选单次请求用量：`prompt_tokens`、`completion_tokens`、`total_tokens`、`cache_read_tokens`、`cache_write_tokens` |
 
-宿主不会自动执行模型建议。插件可用 `sai.tools.call(name, arguments)` 显式调用工具；参数接受 Lua 对象表或原始 JSON 对象文本，返回工具文本。该入口沿用正常参数解析、权限、插件检查和审计，运行中切换到计划模式也会阻止后续写入。`pcall` 可以捕获调用错误，嵌套错误保留具体原因。
+宿主不会自动执行模型建议。插件可用 `sai.tools.call(name, arguments, options?)` 显式调用工具；参数接受 Lua 对象表或原始 JSON 对象文本，返回工具文本。该入口沿用正常参数解析、权限、插件检查和审计，运行中切换到计划模式也会阻止后续写入。`pcall` 可以捕获调用错误，嵌套错误保留具体原因。
+
+第三个参数可省略，也可传入 `{timeout_ms=5000}`，只接受可选的非负整数 `timeout_ms` 字段。缺省时使用回调总时长，实际时限限制在 1 毫秒至回调上限；单次设置不能延长整个回调的截止时间。超时会释放正在等待的宿主 Future，Lua 可以捕获错误并继续调用其他工具；该次请求仍计入调用预算。未知选项、错误类型和负数在执行工具与消耗预算之前被拒绝，选项不能覆盖工作目录或授权。
 
 `sai.tools.list()` 返回当前可调用的 `{name, display_name, description, parameters, access}` 列表。模型目录和工具执行使用同一授权范围。供应商公开的 `sai_web_search` 别名会恢复为 `web_search`；未公开的内部执行别名不会转换成已授权工具。
 
@@ -269,6 +271,6 @@ Lua 计算位于阻塞工作线程，受指令 Hook、堆内存和总时长约�
 
 长查询必须在清单中显式提高限制，不改变其他插件的默认值。`web-search` 保留旧版单个供应商 1–120 秒的配置范围，包的回调上限为 750 秒，覆盖六个供应商依次回退。
 
-`linux-game-investigation` 声明 32 MiB Lua 堆、2000 万指令、900 秒、2 MiB 输出、256 次模型请求和 1024 次工具调用。调查工具的业务步数可以进一步收窄，但不能突破这些宿主限制。
+`linux-game-investigation` 和 `input-method-investigation` 均声明 32 MiB Lua 堆、2000 万指令、900 秒、2 MiB 输出、256 次模型请求和 1024 次工具调用。调查工具的业务步数及单工具超时可以进一步收窄，但不能突破这些宿主限制。
 
 版本 1 提供 HTTP、单次模型请求、显式工具调用、JSON、文本和时间能力。原生文件与进程接口、持久插件存储、主 Agent 模型上下文变换和界面组件扩展尚未开放；插件可以在授权范围内组合现有文件和进程工具。

@@ -13,6 +13,28 @@ const TOOL: &str = "linux_game_compatibility";
 const SIGNALS: &str = "gather_linux_game_compatibility_signals";
 const REPORT: &str = "以下是最终报告\n\n## 调查结果\n绿灯，可以游玩\n\n## 怎么玩\n启用 Proton 9.0-3\n\n## 注意事项\n部分模组需要调整";
 
+/// 【游戏调查测试】【配置类型】false 不能被当成缺省值，否则会绕过预算和显示模式的类型校验。
+#[test]
+fn false_settings_do_not_silently_select_defaults() {
+    let root = tempfile::tempdir().unwrap();
+    let paths = SaiPaths::for_tests(root.path());
+    let config = crate::config::AppConfig::default();
+    for settings in [
+        json!({"max_tool_steps":false}),
+        json!({"progress_mode":false}),
+    ] {
+        let mut plugin = find(&config, &paths, PLUGIN).unwrap();
+        plugin.setting.settings = settings;
+        plugin.refresh_compatibility(&config).unwrap();
+        let mut tools = ToolRegistry::new();
+        assert!(
+            register_descriptor(&mut tools, plugin, Arc::new(FixtureHost::default()), false)
+                .is_err()
+        );
+        assert!(!tools.contains(TOOL));
+    }
+}
+
 /// 【游戏调查测试】【采集宿主】提供四来源证据，HTTP 调用仍由真实采集 Lua 包构造。
 /// @returns 固定响应和可观察请求记录
 fn signal_host() -> Arc<FixtureHost> {

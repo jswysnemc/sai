@@ -5,7 +5,6 @@ mod catalog;
 pub(crate) mod command;
 mod configurable_cli_tools;
 mod context;
-mod deep_diagnose;
 mod default_tools;
 mod descriptions;
 mod diagnostics;
@@ -235,15 +234,6 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     }
     if config.plugins.web_images.enabled {
         web_images::register(&mut registry, config.clone(), paths.clone(), true);
-    }
-    if config.plugins.deep_diagnose.enabled {
-        let diagnosis_tools = registry.clone();
-        deep_diagnose::register(
-            &mut registry,
-            config.clone(),
-            paths.clone(),
-            diagnosis_tools,
-        );
     }
     if config.plugins.image_generation.enabled {
         image_generation::register(&mut registry, config.clone());

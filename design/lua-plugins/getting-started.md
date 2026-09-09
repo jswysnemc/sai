@@ -106,6 +106,7 @@ sai plugins remove hello
 | `web-search` | `web_search` | 沿用主配置 `plugins.web.enabled` |
 | `linux-game-signals` | `gather_linux_game_compatibility_signals` | 沿用主配置 `plugins.linux_game_compatibility.enabled` |
 | `linux-game-investigation` | `linux_game_compatibility` | 沿用主配置 `plugins.linux_game_compatibility.enabled` |
+| `input-method-investigation` | `linux_input_method_diagnose` | 沿用主配置 `plugins.deep_diagnose.enabled` |
 
 `plugins.jsonc` 的显式设置优先于上述默认值。内置包保留原工具名称；外部包不能使用内置插件 ID，也不能覆盖现有工具。已禁用的内置工具仍可在 Agent 设置中预先选择，但无法实际执行。
 
@@ -164,6 +165,31 @@ sai --plan __tool linux_game_compatibility '{"game":"Portal 2","issue":"multipla
 
 结果保留 `final_report`、`stats` 和 `output_instruction`。每个模型响应只计入一次用量，修正旧版末次响应重复累加；缺失用量时估算本次消息与响应文本，并保留原统计字段及估算方法标签。概要进度区分工具成功和错误；详细进度最多 128 条，缩短过长预览并保留有效 JSON，展示额度耗尽不会停止调查。
 
+### Linux 输入法调查
+
+`input-method-investigation` 通过当前 Agent 或子任务的模型调查问题，使用同一工具目录中的 `check_issue`、Fcitx Wiki、知识库、文件读取和网页查询：
+
+```sh
+sai --plan __tool linux_input_method_diagnose '{"issue":"Steam 无法输入中文","target":"steam"}'
+```
+
+`issue` 必填，`target` 可省略；结果保留 `kind`、`issue`、`target`、`final_answer`、`stats` 和 `output_instruction`，没有目标时 `target` 为 JSON null。统计每个模型响应一次，修正原版重复累计末次用量的问题。单项探测失败或超时后，模型仍能根据已有证据继续调查并整理报告；摘要进度准确区分成功和错误。
+
+包设置支持 `max_tool_steps`、`tool_timeout_ms`、`progress_mode` 与 `language`。缺省步数沿用主配置 `plugins.deep_diagnose.max_tool_steps`，`0` 表示不增加业务步数限制。缺省超时从旧 `tool_call_timeout_seconds` 转换，保留五秒下限并受 900 秒回调上限约束；显式 `tool_timeout_ms` 接受正整数毫秒。进度模式沿用当前显示配置，支持 `hidden`、`summary` 和 `full`。预算、超时和进度模式中的显式 `false` 属于类型错误，不会静默采用默认值。
+
+例如将以下设置保存为 `input-method-settings.json`：
+
+```json
+{"max_tool_steps":12,"tool_timeout_ms":15000,"progress_mode":"summary"}
+```
+
+```sh
+sai plugins configure input-method-investigation ./input-method-settings.json
+sai plugins disable input-method-investigation
+```
+
+调查包可以独立启停，禁用后 `check_issue` 和 Fcitx Wiki 仍可单独使用。显式插件开关优先于旧输入法开关。调查只使用授权范围内的只读工具；模型消息不包含主会话历史或供应商凭据。模型、工具和消息预算的收尾规则与游戏调查一致，接口限制见 [Lua API](api.md)。
+
 ## 验证
 
 ```sh
@@ -172,6 +198,6 @@ cargo test -p sai --locked plugins::tests
 cargo test --locked
 ```
 
-运行时测试不依赖 Sai 配置；业务测试通过固定 HTTP 样本运行实际 Lua 源码。模型与工具集成测试用本地 SSE 服务驱动真实客户端和注册表，覆盖模型切换、权限、插件组合、递归、取消和完整游戏调查。报告与 Unicode 摘录另有 45 组旧版 Rust 对照。完整回归包含会话与后台交付流程，能发现新增异步包装对已有运行链路的影响。
+运行时测试不依赖 Sai 配置；业务测试通过固定 HTTP 样本运行实际 Lua 源码。模型与工具集成测试用本地 SSE 服务驱动真实客户端和注册表，覆盖模型切换、权限、插件组合、递归、取消、单工具超时和完整调查。游戏报告有 45 组旧版 Rust 对照，输入法报告、Unicode 摘录和问题提示有 75 组对照。完整回归包含会话与后台交付流程，能发现新增异步包装对已有运行链路的影响。
 
 完整接口见 [Lua API](api.md)，架构依据见 [架构说明](architecture.md)，迁移证据见 [迁移清单](migration.md)。

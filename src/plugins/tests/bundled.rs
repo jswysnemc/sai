@@ -183,6 +183,7 @@ fn migrated_tools_are_present_in_common_and_readonly_registries() {
         "web_search",
         "gather_linux_game_compatibility_signals",
         "linux_game_compatibility",
+        "linux_input_method_diagnose",
     ] {
         assert!(common.contains(name));
         assert!(readonly.contains(name));
@@ -195,6 +196,20 @@ fn migrated_tools_are_present_in_common_and_readonly_registries() {
     }
     assert!(common.plugin_diagnostics().is_empty());
     assert!(readonly.plugin_diagnostics().is_empty());
+}
+
+/// 【插件检查测试】【内置源码】所有内置源码包都必须通过实际管理检查入口，避免发布无法检查的工具名称。
+#[test]
+fn bundled_source_packages_pass_the_management_check() {
+    for package in crate::plugins::bundled::packages().unwrap() {
+        let id = &package.manifest.id;
+        let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("plugins")
+            .join(id);
+        let inspected = crate::plugins::validate_package(&directory)
+            .unwrap_or_else(|error| panic!("bundled package {id} cannot be checked: {error:#}"));
+        assert_eq!(inspected.manifest.id, *id);
+    }
 }
 
 /// 【插件测试】【目录兼容】内置工具禁用后仍可预先加入 Agent 白名单，但不能实际调用。

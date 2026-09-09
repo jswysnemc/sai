@@ -4,10 +4,12 @@ local report = require("report")
 local prompt = require("prompt")
 local M = {}
 
-local max_steps = sai.config.max_tool_steps or 0
+local max_steps = sai.config.max_tool_steps
+if max_steps == nil then max_steps = 0 end
 assert(type(max_steps) == "number" and max_steps >= 0 and max_steps % 1 == 0
     and max_steps <= math.maxinteger, "max_tool_steps must be a non-negative integer")
-local progress_mode = sai.config.progress_mode or "summary"
+local progress_mode = sai.config.progress_mode
+if progress_mode == nil then progress_mode = "summary" end
 assert(progress_mode == "hidden" or progress_mode == "summary" or progress_mode == "full",
     "progress_mode must be hidden, summary or full")
 

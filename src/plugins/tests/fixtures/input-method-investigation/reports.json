@@ -1,0 +1,205 @@
+{
+  "source_commit": "757cb7145d60bdd75efda44795141355f3794c82",
+  "source_file": "src/tools/deep_diagnose.rs",
+  "function_sha256": {
+    "strip_report_preamble": "2ee4bc57f129d7164764c29f2c7e6e5033818fbd3b2f3ac8fb2961550ca644dc",
+    "clip_inline": "2e069025854ca5a759d00020985d6fe9971ae228f7a36a7a15a9c750cb0e04a8",
+    "render_internal_tool_result": "7aa78eb639decc93ad4b95f8aa6df470d6177ac0109e235dd697d7ed162f32ca",
+    "render_internal_tool_transcript": "0ebb16808d0b83776923df9fcaeb08294d3b8fe249fb23e926880c64539573ad",
+    "input_method_prompt": "bbd3b5b83ac27fa2c74031ab8e9c1f64c3383547e86eda2671ba88043dad1658"
+  },
+  "cases": [
+    {
+      "name": "report-01",
+      "input": {
+        "kind": "strip",
+        "content": ""
+      },
+      "output": ""
+    },
+    {
+      "name": "report-02",
+      "input": {
+        "kind": "strip",
+        "content": " \t\r\n　"
+      },
+      "output": ""
+    },
+    {
+      "name": "report-03",
+      "input": {
+        "kind": "strip",
+        "content": "正文"
+      },
+      "output": "正文"
+    },
+    {
+      "name": "report-04",
+      "input": {
+        "kind": "strip",
+        "content": "  正文  "
+      },
+      "output": "正文"
+    },
+    {
+      "name": "report-05",
+      "input": {
+        "kind": "strip",
+        "content": "以下是报告\n正文"
+      },
+      "output": "正文"
+    },
+    {
+      "name": "report-06",
+      "input": {
+        "kind": "strip",
+        "content": "诊断报告\n\n正文"
+      },
+      "output": "正文"
+    },
+    {
+      "name": "report-07",
+      "input": {
+        "kind": "strip",
+        "content": "---\n以下是诊断报告\r\n\r\n正文"
+      },
+      "output": "正文"
+    },
+    {
+      "name": "report-08",
+      "input": {
+        "kind": "strip",
+        "content": "诊断报告甲乙\n正文"
+      },
+      "output": "正文"
+    },
+    {
+      "name": "report-09",
+      "input": {
+        "kind": "strip",
+        "content": "诊断报告甲乙丙\n正文"
+      },
+      "output": "诊断报告甲乙丙\n正文"
+    },
+    {
+      "name": "report-10",
+      "input": {
+        "kind": "strip",
+        "content": "前言\n## 问题分析\n结论\n"
+      },
+      "output": "## 问题分析\n结论"
+    },
+    {
+      "name": "report-11",
+      "input": {
+        "kind": "strip",
+        "content": "前言\n# 问题分析\n结论\n"
+      },
+      "output": "# 问题分析\n结论"
+    },
+    {
+      "name": "report-12",
+      "input": {
+        "kind": "strip",
+        "content": "# 问题分析\n第一节\n## 问题分析\n第二节"
+      },
+      "output": "## 问题分析\n第二节"
+    },
+    {
+      "name": "report-13",
+      "input": {
+        "kind": "strip",
+        "content": "正文\n以下是保留的段落"
+      },
+      "output": "正文\n以下是保留的段落"
+    },
+    {
+      "name": "report-14",
+      "input": {
+        "kind": "strip",
+        "content": "  第一行\n  第二行  \n\n"
+      },
+      "output": "第一行\n  第二行"
+    },
+    {
+      "name": "report-15",
+      "input": {
+        "kind": "strip",
+        "content": "以下是说明\n---\n正文\n---"
+      },
+      "output": "正文\n---"
+    },
+    {
+      "name": "report-16",
+      "input": {
+        "kind": "strip",
+        "content": "prefix## 问题分析 suffix"
+      },
+      "output": "## 问题分析 suffix"
+    },
+    {
+      "name": "report-17",
+      "input": {
+        "kind": "strip",
+        "content": "   # 问题分析\n中文　"
+      },
+      "output": "# 问题分析\n中文"
+    },
+    {
+      "name": "report-18",
+      "input": {
+        "kind": "strip",
+        "content": "以下是\r正文"
+      },
+      "output": ""
+    },
+    {
+      "name": "report-19",
+      "input": {
+        "kind": "strip",
+        "content": "以下是说明\r\n正文\r\n下一行"
+      },
+      "output": "正文\n下一行"
+    },
+    {
+      "name": "report-20",
+      "input": {
+        "kind": "strip",
+        "content": "​正文​"
+      },
+      "output": "​正文​"
+    },
+    {
+      "name": "report-21",
+      "input": {
+        "kind": "strip",
+        "content": "诊断报告\n"
+      },
+      "output": ""
+    },
+    {
+      "name": "report-22",
+      "input": {
+        "kind": "strip",
+        "content": "诊断报告AAAAAAA\n正文"
+      },
+      "output": "正文"
+    },
+    {
+      "name": "report-23",
+      "input": {
+        "kind": "strip",
+        "content": "诊断报告AAAAAAAA\n正文"
+      },
+      "output": "诊断报告AAAAAAAA\n正文"
+    },
+    {
+      "name": "report-24",
+      "input": {
+        "kind": "strip",
+        "content": "第一行 第二行 第三行"
+      },
+      "output": "第一行 第二行 第三行"
+    }
+  ]
+}

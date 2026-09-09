@@ -1,0 +1,67 @@
+{
+  "source_commit": "757cb7145d60bdd75efda44795141355f3794c82",
+  "source_file": "src/tools/deep_diagnose.rs",
+  "function_sha256": {
+    "strip_report_preamble": "2ee4bc57f129d7164764c29f2c7e6e5033818fbd3b2f3ac8fb2961550ca644dc",
+    "clip_inline": "2e069025854ca5a759d00020985d6fe9971ae228f7a36a7a15a9c750cb0e04a8",
+    "render_internal_tool_result": "7aa78eb639decc93ad4b95f8aa6df470d6177ac0109e235dd697d7ed162f32ca",
+    "render_internal_tool_transcript": "0ebb16808d0b83776923df9fcaeb08294d3b8fe249fb23e926880c64539573ad",
+    "input_method_prompt": "bbd3b5b83ac27fa2c74031ab8e9c1f64c3383547e86eda2671ba88043dad1658"
+  },
+  "cases": [
+    {
+      "name": "prompt-01",
+      "input": {
+        "kind": "prompt",
+        "issue": "无法输入中文\n候选框消失",
+        "target": null
+      },
+      "output": "用户输入法问题：\n无法输入中文\n候选框消失\n\n目标软件：未明确，需从问题中推断\n\n请按照系统提示词中的流程完成诊断。优先调用 check_issue 收集输入法证据；如果目标软件框架或特殊行为不清楚，可以使用 fcitx5_input_method_wiki_qurey、知识库和网络搜索。最终只输出诊断报告。"
+    },
+    {
+      "name": "prompt-02",
+      "input": {
+        "kind": "prompt",
+        "issue": "无法输入中文\n候选框消失",
+        "target": ""
+      },
+      "output": "用户输入法问题：\n无法输入中文\n候选框消失\n\n目标软件：\n\n请按照系统提示词中的流程完成诊断。优先调用 check_issue 收集输入法证据；如果目标软件框架或特殊行为不清楚，可以使用 fcitx5_input_method_wiki_qurey、知识库和网络搜索。最终只输出诊断报告。"
+    },
+    {
+      "name": "prompt-03",
+      "input": {
+        "kind": "prompt",
+        "issue": "无法输入中文\n候选框消失",
+        "target": "steam"
+      },
+      "output": "用户输入法问题：\n无法输入中文\n候选框消失\n\n目标软件：steam\n\n请按照系统提示词中的流程完成诊断。优先调用 check_issue 收集输入法证据；如果目标软件框架或特殊行为不清楚，可以使用 fcitx5_input_method_wiki_qurey、知识库和网络搜索。最终只输出诊断报告。"
+    },
+    {
+      "name": "prompt-04",
+      "input": {
+        "kind": "prompt",
+        "issue": "无法输入中文\n候选框消失",
+        "target": "中文软件"
+      },
+      "output": "用户输入法问题：\n无法输入中文\n候选框消失\n\n目标软件：中文软件\n\n请按照系统提示词中的流程完成诊断。优先调用 check_issue 收集输入法证据；如果目标软件框架或特殊行为不清楚，可以使用 fcitx5_input_method_wiki_qurey、知识库和网络搜索。最终只输出诊断报告。"
+    },
+    {
+      "name": "prompt-05",
+      "input": {
+        "kind": "prompt",
+        "issue": "无法输入中文\n候选框消失",
+        "target": "target\nsecond line"
+      },
+      "output": "用户输入法问题：\n无法输入中文\n候选框消失\n\n目标软件：target\nsecond line\n\n请按照系统提示词中的流程完成诊断。优先调用 check_issue 收集输入法证据；如果目标软件框架或特殊行为不清楚，可以使用 fcitx5_input_method_wiki_qurey、知识库和网络搜索。最终只输出诊断报告。"
+    },
+    {
+      "name": "prompt-06",
+      "input": {
+        "kind": "prompt",
+        "issue": "无法输入中文\n候选框消失",
+        "target": "target\"quote"
+      },
+      "output": "用户输入法问题：\n无法输入中文\n候选框消失\n\n目标软件：target\"quote\n\n请按照系统提示词中的流程完成诊断。优先调用 check_issue 收集输入法证据；如果目标软件框架或特殊行为不清楚，可以使用 fcitx5_input_method_wiki_qurey、知识库和网络搜索。最终只输出诊断报告。"
+    }
+  ]
+}

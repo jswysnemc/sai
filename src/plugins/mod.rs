@@ -7,6 +7,7 @@ mod grants;
 mod host;
 mod http;
 mod management;
+mod management_lock;
 mod registry;
 mod services;
 mod session;

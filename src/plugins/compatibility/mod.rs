@@ -1,3 +1,4 @@
+mod input_method;
 mod linux_game;
 mod web_search;
 
@@ -25,6 +26,7 @@ pub(super) fn resolve(
     match id {
         "web-search" => web_search::resolve(&config.plugins.web, settings, declared).map(Some),
         "linux-game-investigation" => linux_game::resolve(config, settings, declared).map(Some),
+        "input-method-investigation" => input_method::resolve(config, settings, declared).map(Some),
         _ => Ok(None),
     }
 }
