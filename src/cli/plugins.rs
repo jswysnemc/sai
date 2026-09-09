@@ -35,7 +35,7 @@ pub(crate) enum PluginsCommand {
     /// 【插件命令】【启用授权】启用插件，可分别调整网络、模型、工具、文件、环境和进程授权
     Enable {
         id: String,
-        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_env", "no_env", "allow_process", "no_processes"])]
+        #[arg(long, conflicts_with_all = ["allow_http", "allow_http_read_only_post", "no_http", "allow_model", "no_model", "allow_tool", "no_tools", "allow_read_path", "no_file_read", "allow_env", "no_env", "allow_process", "no_processes", "allow_session_storage", "no_session_storage", "allow_workspace", "no_workspace"])]
         grant_declared: bool,
         #[arg(long, value_name = "ORIGIN", conflicts_with = "no_http")]
         allow_http: Vec<String>,
@@ -68,6 +68,14 @@ pub(crate) enum PluginsCommand {
         allow_process: Vec<String>,
         #[arg(long)]
         no_processes: bool,
+        #[arg(long, conflicts_with = "no_session_storage")]
+        allow_session_storage: bool,
+        #[arg(long)]
+        no_session_storage: bool,
+        #[arg(long, conflicts_with = "no_workspace")]
+        allow_workspace: bool,
+        #[arg(long)]
+        no_workspace: bool,
     },
     /// Disable a plugin for subsequent loads
     Disable { id: String },
@@ -211,6 +219,10 @@ pub(crate) async fn run(
             no_env,
             allow_process,
             no_processes,
+            allow_session_storage,
+            no_session_storage,
+            allow_workspace,
+            no_workspace,
         } => {
             let update = if grant_declared {
                 GrantUpdate::Declared
@@ -226,9 +238,16 @@ pub(crate) async fn run(
                 || no_env
                 || !allow_process.is_empty()
                 || no_processes
+                || allow_session_storage
+                || no_session_storage
+                || allow_workspace
+                || no_workspace
             {
                 let change_http = no_http || !allow_http.is_empty();
                 GrantUpdate::Changes(GrantChanges {
+                    session_storage: (allow_session_storage || no_session_storage)
+                        .then_some(allow_session_storage),
+                    workspace: (allow_workspace || no_workspace).then_some(allow_workspace),
                     http: change_http.then(|| allow_http.into_iter().collect()),
                     http_read_only_post: change_http
                         .then(|| allow_http_read_only_post.into_iter().collect()),

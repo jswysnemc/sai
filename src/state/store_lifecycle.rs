@@ -20,6 +20,7 @@ impl StateStore {
         let state_dir = sessions::active_state_dir(paths)?;
         let conv_db = Arc::new(ConversationDb::open(&state_dir)?);
         let store = Self {
+            plugin_state_root: Some(paths.state_dir.clone()),
             base_state_dir,
             session_id: session.id,
             state_dir,
@@ -67,6 +68,7 @@ impl StateStore {
         let (base_state_dir, state_dir) = sessions::locate_session_dirs(paths, session_id)?;
         let conv_db = Arc::new(ConversationDb::open(&state_dir)?);
         let store = Self {
+            plugin_state_root: Some(paths.state_dir.clone()),
             base_state_dir,
             session_id: session_id.trim().to_string(),
             state_dir,
@@ -94,6 +96,7 @@ impl StateStore {
             sessions::state_dir_for_workspace_session(paths, workspace_path, session_id)?;
         let conv_db = Arc::new(ConversationDb::open(&state_dir)?);
         let store = Self {
+            plugin_state_root: Some(paths.state_dir.clone()),
             base_state_dir,
             session_id: session_id.trim().to_string(),
             state_dir,

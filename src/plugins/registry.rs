@@ -1,5 +1,5 @@
 use super::discovery::{diagnostic, discover, PluginDescriptor, PluginDiagnostic, PluginSource};
-use super::host::SaiPluginHost;
+use super::private::PrivatePluginHost;
 use super::session::{PluginInstance, PluginSession};
 use crate::config::AppConfig;
 use crate::paths::SaiPaths;
@@ -26,9 +26,12 @@ pub(crate) fn register_plugins(
         .filter(|plugin| plugin.setting.enabled)
     {
         let id = descriptor.package.manifest.id.clone();
-        if let Err(error) =
-            register_descriptor(registry, descriptor, Arc::new(SaiPluginHost), readonly)
-        {
+        if let Err(error) = register_descriptor(
+            registry,
+            descriptor,
+            Arc::new(PrivatePluginHost::new(paths, &id)),
+            readonly,
+        ) {
             diagnostics.push(diagnostic(id, error));
         }
     }
@@ -52,9 +55,12 @@ pub(crate) fn register_bundled_catalog_tools(
     {
         descriptor.setting.enabled = true;
         let id = descriptor.package.manifest.id.clone();
-        if let Err(error) =
-            register_descriptor(registry, descriptor, Arc::new(SaiPluginHost), false)
-        {
+        if let Err(error) = register_descriptor(
+            registry,
+            descriptor,
+            Arc::new(PrivatePluginHost::new(paths, &id)),
+            false,
+        ) {
             let mut diagnostics = registry.plugin_diagnostics().to_vec();
             diagnostics.push(diagnostic(id, error));
             registry.set_plugin_diagnostics(diagnostics);

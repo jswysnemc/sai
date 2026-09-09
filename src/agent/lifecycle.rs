@@ -47,6 +47,7 @@ impl Agent {
         extra_system_prompt: Option<&str>,
     ) -> Result<Self> {
         tools.start_plugin_session(state.session_id())?;
+        tools.inherit_plugin_storage_session(&state.state_dir().to_string_lossy());
         tools.set_plugin_model_client(&client);
         let tools_enabled = config.tools.enabled && config.active_model_tools_enabled()?;
         let base_system_prompt =
@@ -382,6 +383,8 @@ impl Agent {
     /// - 切换是否成功
     pub fn replace_state(&mut self, state: StateStore) -> Result<()> {
         self.tools.start_plugin_session(state.session_id())?;
+        self.tools
+            .inherit_plugin_storage_session(&state.state_dir().to_string_lossy());
         self.state = state;
         crate::goal::register_tools_for_config(
             &mut self.tools,

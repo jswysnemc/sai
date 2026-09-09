@@ -35,7 +35,10 @@ impl PluginEvents {
             EventKind::AgentStart,
             EventKind::AgentEnd,
             data,
-            Box::pin(operation),
+            Box::pin(super::operation::scope(
+                &self.context.operation_id,
+                Box::pin(operation),
+            )),
         )
     }
 

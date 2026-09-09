@@ -89,6 +89,7 @@ mod tests {
         db.start_turn("turn_current", "当前输入").unwrap();
         db.complete_turn("turn_current", "当前回复", None).unwrap();
         let store = StateStore {
+            plugin_state_root: None,
             base_state_dir: root.path().to_path_buf(),
             session_id: "preview_session".to_string(),
             state_dir: root.path().to_path_buf(),

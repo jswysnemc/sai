@@ -51,5 +51,9 @@ pub struct EventContext {
     pub session_id: String,
     pub workdir: String,
     #[serde(default)]
+    pub storage_session_id: String,
+    #[serde(default)]
+    pub operation_id: String,
+    #[serde(default)]
     pub data: Value,
 }

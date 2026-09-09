@@ -380,6 +380,7 @@ mod tests {
             db.complete_turn(&turn_id, "done", None).unwrap();
         }
         let store = StateStore {
+            plugin_state_root: None,
             base_state_dir: temp.path().to_path_buf(),
             session_id: "default".to_string(),
             state_dir: temp.path().to_path_buf(),
@@ -491,6 +492,7 @@ mod tests {
         let db = ConversationDb::open(temp.path()).unwrap();
         db.start_turn("turn_running", "inspect").unwrap();
         let store = StateStore {
+            plugin_state_root: None,
             base_state_dir: temp.path().to_path_buf(),
             session_id: "default".to_string(),
             state_dir: temp.path().to_path_buf(),

@@ -4,8 +4,12 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+mod private;
 mod services;
 mod system;
+pub use private::{
+    validate_storage_key, validate_workspace_path, ArchiveRequest, PluginWorkspace, StorageRequest,
+};
 pub use services::{
     HostTool, InvocationServices, ModelMessage, ModelRequest, ModelResponse, ModelRole,
     ModelToolCall, ModelUsage,
@@ -43,6 +47,30 @@ pub struct HttpResponse {
 /// 【插件】【宿主接口】插件运行时所需的异步能力，实现不依赖 Sai 应用配置。
 #[async_trait]
 pub trait PluginHost: Send + Sync {
+    /// 【插件】【私有状态】读取或原子更新宿主会话内的插件数据。
+    /// @param request 键值操作；session 为可信会话；capabilities 为有效授权
+    /// @returns 读取值、写入后的值或比较交换是否成功
+    fn storage(
+        &self,
+        _request: StorageRequest,
+        _session: &str,
+        _capabilities: &Capabilities,
+    ) -> Result<serde_json::Value> {
+        anyhow::bail!("private storage is unavailable in this host")
+    }
+
+    /// 【插件】【工作目录创建】重建指定键的私有缓存目录，锁住目录直到调用结束。
+    /// @param key 插件私有键；session 为可信会话；capabilities 为有效授权
+    /// @returns 不能访问其他工作目录的宿主句柄
+    fn workspace(
+        &self,
+        _key: &str,
+        _session: &str,
+        _capabilities: &Capabilities,
+    ) -> Result<std::sync::Arc<dyn PluginWorkspace>> {
+        anyhow::bail!("private workspaces are unavailable in this host")
+    }
+
     /// 【插件】【环境读取】读取精确授权的环境变量，缺失值返回 None。
     /// @param name 变量名；capabilities 为有效授权
     /// @returns 环境变量文本，未实现该能力的宿主返回错误

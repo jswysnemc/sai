@@ -286,7 +286,7 @@ impl Agent {
                     }
                     // 未知工具名、畸形参数、未加载工具等可恢复问题在专用流程前统一拦下
                     if let ToolGate::Reject(output) =
-                        evaluate_tool_gate(&self.tools, &self.tool_visibility, &call, &used_tools)
+                        evaluate_tool_gate(&self.tools, &self.tool_visibility, &call)
                     {
                         // 门禁拒绝的调用重发多少次结果都一样，计入重复统计以便及时停止
                         repeat_guard

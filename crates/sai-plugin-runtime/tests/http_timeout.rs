@@ -107,7 +107,7 @@ async fn explicitly_declared_http_timeouts_preserve_long_search_requests() {
     package.manifest.limits.http_timeout_ms = 120_001;
     assert!(package.manifest.validate().is_err());
     package.manifest.limits.http_timeout_ms = 120_000;
-    package.manifest.limits.timeout_ms = 900_001;
+    package.manifest.limits.timeout_ms = 3_600_001;
     assert!(package.manifest.validate().is_err());
 }
 

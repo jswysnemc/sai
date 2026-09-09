@@ -1,0 +1,665 @@
+{
+  "source_commit": "529889391122e0faaaebd6621a6acb3df33419c5",
+  "risk_cases": [
+    {
+      "files": [
+        {
+          "content": "curl ",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "curl "
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "CURL ",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "curl "
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "prefix curl  suffix",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "curl "
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "wget ",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "wget "
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "WGET ",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "wget "
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "prefix wget  suffix",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "wget "
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "| sh",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "| sh"
+          }
+        ],
+        "level": "high"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "| SH",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "| sh"
+          }
+        ],
+        "level": "high"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "prefix | sh suffix",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "| sh"
+          }
+        ],
+        "level": "high"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "|sh",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "|sh"
+          }
+        ],
+        "level": "high"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "|SH",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "|sh"
+          }
+        ],
+        "level": "high"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "prefix |sh suffix",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "|sh"
+          }
+        ],
+        "level": "high"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "chmod 777",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "chmod 777"
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "CHMOD 777",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "chmod 777"
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "prefix chmod 777 suffix",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "chmod 777"
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "chown root",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "chown root"
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "CHOWN ROOT",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "chown root"
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "prefix chown root suffix",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "chown root"
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "setcap ",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "setcap "
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "SETCAP ",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "setcap "
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "prefix setcap  suffix",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "setcap "
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "systemctl enable",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "systemctl enable"
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "SYSTEMCTL ENABLE",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "systemctl enable"
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "prefix systemctl enable suffix",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "systemctl enable"
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "rm -rf /",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "rm -rf /"
+          }
+        ],
+        "level": "high"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "RM -RF /",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "rm -rf /"
+          }
+        ],
+        "level": "high"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "prefix rm -rf / suffix",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "rm -rf /"
+          }
+        ],
+        "level": "high"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "skipsums",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "skipsums"
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "SKIPSUMS",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "skipsums"
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "prefix skipsums suffix",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "skipsums"
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "sha256sums=('skip'",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "sha256sums=('skip'"
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "SHA256SUMS=('SKIP'",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "sha256sums=('skip'"
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "prefix sha256sums=('skip' suffix",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "sha256sums=('skip'"
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "sha256sums=(\"skip\"",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "sha256sums=(\"skip\""
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "SHA256SUMS=(\"SKIP\"",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "sha256sums=(\"skip\""
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "prefix sha256sums=(\"skip\" suffix",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "sha256sums=(\"skip\""
+          }
+        ],
+        "level": "medium"
+      }
+    },
+    {
+      "files": [],
+      "risk": {
+        "findings": [],
+        "level": "low"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "pkgname=demo\n安全",
+          "path": "PKGBUILD"
+        }
+      ],
+      "risk": {
+        "findings": [],
+        "level": "low"
+      }
+    },
+    {
+      "files": [
+        {
+          "content": "curl example",
+          "path": "PKGBUILD"
+        },
+        {
+          "content": "|sh and chmod 777",
+          "path": "helper.install"
+        }
+      ],
+      "risk": {
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "pattern": "curl "
+          },
+          {
+            "file": "helper.install",
+            "pattern": "|sh"
+          },
+          {
+            "file": "helper.install",
+            "pattern": "chmod 777"
+          }
+        ],
+        "level": "high"
+      }
+    }
+  ]
+}

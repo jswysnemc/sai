@@ -641,9 +641,7 @@ impl SubagentRunner {
                 true,
             );
         }
-        if let ToolGate::Reject(output) =
-            evaluate_tool_gate(&self.tools, tool_visibility, call, &[])
-        {
+        if let ToolGate::Reject(output) = evaluate_tool_gate(&self.tools, tool_visibility, call) {
             return (output, false, true);
         }
         if tool_visibility.is_loader_call(&call.function.name) {

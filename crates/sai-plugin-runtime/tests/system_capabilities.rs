@@ -4,6 +4,36 @@ use common::system::capabilities;
 use sai_plugin_runtime::{Capabilities, PluginManifest};
 use serde_json::json;
 
+/// 【私有能力测试】【授权交集】私有状态和目录各自授权，改变目录类型不能沿用旧进程模板授权。
+#[test]
+fn private_capabilities_and_workspace_templates_require_exact_grants() {
+    let declared: sai_plugin_runtime::Capabilities = serde_json::from_value(json!({"system":{
+        "workspace":true,"session_storage":true,"processes":{"build":{"program":"build","workspace":true}}
+    }})).unwrap();
+    declared.validate().unwrap();
+    let empty = declared.intersection(&Default::default());
+    assert!(empty.system.is_empty());
+    let mut old = declared.clone();
+    old.system.workspace = false;
+    old.system.processes.get_mut("build").unwrap().workspace = false;
+    let effective = declared.intersection(&old);
+    assert!(effective.system.session_storage);
+    assert!(!effective.system.workspace);
+    assert!(effective.system.processes.is_empty());
+    assert!(!old.is_subset(&declared));
+}
+
+/// 【私有能力测试】【长步骤预算】显式构建流程可以声明较长时限，默认值及硬上限仍有效。
+#[test]
+fn private_build_workflows_use_explicit_bounded_long_deadlines() {
+    let mut limits = sai_plugin_runtime::ExecutionLimits::default();
+    assert_eq!(limits.timeout_ms, 20000);
+    limits.timeout_ms = 3000000;
+    limits.validate().unwrap();
+    limits.timeout_ms = 3600001;
+    assert!(limits.validate().is_err());
+}
+
 /// 【系统授权测试】【完整模板】模板任一字段变化都会撤销原授权，路径与变量仍按精确交集保留。
 #[test]
 fn process_grants_are_bound_to_the_entire_template() {

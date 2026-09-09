@@ -115,7 +115,8 @@ impl ToolRegistry {
             .fork_active(&PluginServices::active_instances())?;
         let mut context =
             self.plugin_context(progress.clone(), tool.permission == ToolPermission::Writes);
-        let result = async {
+        let operation_id = context.operation_id.clone();
+        let result = crate::plugins::operation::scope(&operation_id, async {
             plugins.check_tool(name, &original_args, &context).await?;
             // 【插件】【参数隔离】宿主内部标记只交给原生工具，不能污染插件公开 Schema
             let call_args = if tool.plugin_id().is_some() {
@@ -142,7 +143,7 @@ impl ToolRegistry {
             } else {
                 operation.await
             }
-        }
+        })
         .await;
         if plugins.listens(sai_plugin_runtime::EventKind::ToolResult) {
             let output: String = match &result {

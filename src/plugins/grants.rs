@@ -19,6 +19,8 @@ pub(crate) struct GrantChanges {
     pub read_paths: Option<BTreeSet<String>>,
     pub environment: Option<BTreeSet<String>>,
     pub processes: Option<BTreeSet<String>>,
+    pub session_storage: Option<bool>,
+    pub workspace: Option<bool>,
 }
 
 impl GrantUpdate {
@@ -43,6 +45,10 @@ impl GrantUpdate {
                 model: changes.model.unwrap_or(current.model),
                 tools: changes.tools.unwrap_or(current.tools),
                 system: SystemCapabilities {
+                    session_storage: changes
+                        .session_storage
+                        .unwrap_or(current.system.session_storage),
+                    workspace: changes.workspace.unwrap_or(current.system.workspace),
                     read_paths: changes.read_paths.unwrap_or(current.system.read_paths),
                     environment: changes.environment.unwrap_or(current.system.environment),
                     processes: match changes.processes {

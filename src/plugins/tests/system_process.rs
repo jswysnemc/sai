@@ -205,7 +205,7 @@ async fn runtime_timeout_and_cancellation_reclaim_the_real_process_tree() {
 /// 【进程宿主测试】【等待样本】等到测试进程写入完整 PID，不用固定启动延迟推断进程状态。
 /// @param path PID 文件
 /// @returns 无；超时则测试失败
-async fn wait_file(path: &Path) {
+pub(super) async fn wait_file(path: &Path) {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             if std::fs::read_to_string(path)
@@ -224,14 +224,14 @@ async fn wait_file(path: &Path) {
 /// 【进程宿主测试】【进程标识】读取样本明确写入的 PID，避免按名称影响其他进程。
 /// @param path 当前临时目录内的标识文件
 /// @returns 测试进程 PID
-fn read_pid(path: &Path) -> u32 {
+pub(super) fn read_pid(path: &Path) -> u32 {
     std::fs::read_to_string(path).unwrap().parse().unwrap()
 }
 
 /// 【进程宿主测试】【终止确认】验证真实进程已停止，Linux 僵尸仅代表等待父进程回收。
 /// @param pid 当前样本的 PID
 /// @returns 无；进程仍活动则测试失败
-async fn wait_stopped(pid: u32) {
+pub(super) async fn wait_stopped(pid: u32) {
     tokio::time::timeout(Duration::from_secs(5), async {
         while process_running(pid) {
             tokio::time::sleep(Duration::from_millis(10)).await;

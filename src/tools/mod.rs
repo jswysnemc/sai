@@ -21,7 +21,6 @@ pub(crate) mod memes;
 mod memory;
 pub(crate) mod mesh;
 mod native_search;
-mod package_advisor;
 pub(crate) mod progressive;
 mod registry;
 mod search_process;
@@ -157,10 +156,6 @@ pub fn readable_tool_name(name: &str) -> &str {
     }
 }
 
-pub fn clear_aur_review_state(paths: &SaiPaths) -> anyhow::Result<()> {
-    package_advisor::clear_aur_review_state(paths)
-}
-
 /// 构建完整工具注册表，包括外部 MCP 动态工具。
 ///
 /// 参数:
@@ -236,9 +231,6 @@ pub(crate) fn builtin_registry_without_mcp(config: &AppConfig, paths: &SaiPaths)
     }
     if config.plugins.knowledge_base.enabled {
         knowledge_base::register(&mut registry, config.clone(), paths.clone());
-    }
-    if config.plugins.package_advisor.enabled {
-        package_advisor::register(&mut registry, paths.clone());
     }
     if config.memory_config().enabled {
         memory::register(&mut registry, config.clone(), paths.clone());
@@ -357,9 +349,6 @@ pub fn readonly_registry(config: &AppConfig, paths: &SaiPaths) -> ToolRegistry {
     }
     if config.plugins.knowledge_base.enabled {
         knowledge_base::register_readonly(&mut registry, config.clone(), paths.clone());
-    }
-    if config.plugins.package_advisor.enabled {
-        package_advisor::register(&mut registry, paths.clone());
     }
     if config.memory_config().enabled {
         memory::register_readonly(&mut registry, config.clone(), paths.clone());

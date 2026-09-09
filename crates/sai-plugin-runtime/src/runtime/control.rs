@@ -17,6 +17,9 @@ pub(super) struct CallControl {
     pub tool_calls: AtomicUsize,
     pub system_calls: AtomicUsize,
     workdir: Mutex<String>,
+    session: Mutex<String>,
+    pub private_mutations: AtomicBool,
+    pub workspaces: Mutex<Vec<Arc<dyn crate::host::PluginWorkspace>>>,
     services: Mutex<Option<Arc<dyn InvocationServices>>>,
 }
 
@@ -31,6 +34,8 @@ impl CallControl {
         self: &Arc<Self>,
         services: Option<Arc<dyn InvocationServices>>,
         workdir: &str,
+        session: &str,
+        private_mutations: bool,
     ) -> mlua::Result<InvocationLease> {
         *self
             .services
@@ -41,6 +46,13 @@ impl CallControl {
             .lock()
             .map_err(|_| mlua::Error::runtime("plugin workdir lock poisoned"))? =
             workdir.to_string();
+        *self
+            .session
+            .lock()
+            .map_err(|_| mlua::Error::runtime("plugin session lock poisoned"))? =
+            session.to_string();
+        self.private_mutations
+            .store(private_mutations, Ordering::Release);
         self.generation.fetch_add(1, Ordering::AcqRel);
         self.progress_messages.store(0, Ordering::Release);
         self.model_requests.store(0, Ordering::Release);
@@ -83,6 +95,22 @@ impl CallControl {
             allow_writes: self.writable.load(Ordering::Acquire),
         })
     }
+
+    /// 【插件】【私有作用域】从宿主状态读取会话标识，事件不允许改变私有数据。
+    /// @param mutation 本次操作是否写入状态或创建目录
+    /// @returns 可信会话标识；加载阶段及失效调用返回错误
+    pub fn private_session(&self, mutation: bool) -> mlua::Result<String> {
+        self.system_context()?;
+        if mutation && !self.private_mutations.load(Ordering::Acquire) {
+            return Err(mlua::Error::runtime(
+                "private mutations are unavailable for event callbacks",
+            ));
+        }
+        self.session
+            .lock()
+            .map(|value| value.clone())
+            .map_err(|_| mlua::Error::runtime("plugin session lock poisoned"))
+    }
 }
 
 impl Drop for InvocationLease {
@@ -91,6 +119,10 @@ impl Drop for InvocationLease {
     fn drop(&mut self) {
         self.0.active.store(false, Ordering::Release);
         self.0.writable.store(false, Ordering::Release);
+        self.0.private_mutations.store(false, Ordering::Release);
+        if let Ok(mut workspaces) = self.0.workspaces.lock() {
+            workspaces.clear();
+        }
         if let Ok(mut services) = self.0.services.lock() {
             services.take();
         }

@@ -296,6 +296,8 @@ fn event_context(context: &InvocationContext, data: Value) -> EventContext {
     EventContext {
         session_id: context.session_id.clone(),
         workdir: context.workdir.clone(),
+        storage_session_id: context.storage_session_id.clone(),
+        operation_id: context.operation_id.clone(),
         data,
     }
 }

@@ -4,7 +4,7 @@ mod process;
 mod process_group;
 
 pub(super) use files::{file_info, read_directory, read_text};
-pub(super) use process::execute;
+pub(super) use process::{execute, execute_workspace};
 
 use anyhow::Result;
 use sai_plugin_runtime::Capabilities;

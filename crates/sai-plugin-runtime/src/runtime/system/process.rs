@@ -44,6 +44,11 @@ pub(super) fn install(
                         .system
                         .process_command(&template, &parameters, context.allow_writes)
                         .map_err(error)?;
+                    if capabilities.system.processes[&template].workspace {
+                        return Err(mlua::Error::runtime(
+                            "process template requires a private workspace",
+                        ));
+                    }
                     let options: ProcessOptions = options
                         .map(|table| lua.from_value(Value::Table(table)))
                         .transpose()?

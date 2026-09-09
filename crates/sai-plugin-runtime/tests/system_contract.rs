@@ -222,6 +222,7 @@ async fn events_can_read_granted_system_data_but_cannot_inherit_write_access() {
                 session_id: "event".into(),
                 workdir: "/event".into(),
                 data: json!({}),
+                ..Default::default()
             },
         )
         .await

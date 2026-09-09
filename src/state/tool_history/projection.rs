@@ -567,6 +567,7 @@ mod tests {
         )
         .unwrap();
         let store = crate::state::StateStore {
+            plugin_state_root: None,
             base_state_dir: _temp.path().to_path_buf(),
             session_id: "default".to_string(),
             state_dir: _temp.path().to_path_buf(),

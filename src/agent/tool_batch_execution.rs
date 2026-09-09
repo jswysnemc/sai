@@ -103,7 +103,7 @@ impl Agent {
             }
 
             if let ToolGate::Reject(output) =
-                evaluate_tool_gate(&self.tools, &self.tool_visibility, &call, used_tools)
+                evaluate_tool_gate(&self.tools, &self.tool_visibility, &call)
             {
                 repeat_guard.observe_rejected(&call.function.name, &call.function.arguments);
                 self.record_simple_tool_result(turn_id, &provider_call, false, &output)?;

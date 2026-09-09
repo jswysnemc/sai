@@ -99,7 +99,7 @@ impl ExecutionLimits {
     pub fn validate(&self) -> Result<()> {
         if !(1024 * 1024..=64 * 1024 * 1024).contains(&self.memory_bytes)
             || !(1_000..=20_000_000).contains(&self.instructions)
-            || !(100..=900_000).contains(&self.timeout_ms)
+            || !(100..=3_600_000).contains(&self.timeout_ms)
             || !(1..=120_000).contains(&self.http_timeout_ms)
             || !(1024..=4 * 1024 * 1024).contains(&self.output_bytes)
             || !(1..=256).contains(&self.model_requests)

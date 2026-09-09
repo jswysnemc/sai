@@ -40,6 +40,7 @@ impl ToolRegistry {
     pub(crate) fn start_plugin_session(&mut self, session_id: &str) -> Result<()> {
         self.plugins = self.plugins.fork()?;
         self.plugin_session_id = Some(session_id.to_string());
+        self.plugin_storage_session_id = Some(session_id.to_string());
         Ok(())
     }
 
@@ -49,6 +50,14 @@ impl ToolRegistry {
     pub(crate) fn continue_plugin_session(&mut self, previous: &Self) {
         self.plugins.preserve_from(&previous.plugins);
         self.plugin_session_id = previous.plugin_session_id.clone();
+        self.plugin_storage_session_id = previous.plugin_storage_session_id.clone();
+    }
+
+    /// 【插件】【组合状态归属】独立 Lua 实例仍在原用户会话内使用各自插件的私有状态。
+    /// @param session_id 可信父会话标识
+    /// @returns 无；新建真正的 Agent 仍通过 start_plugin_session 隔离
+    pub(crate) fn inherit_plugin_storage_session(&mut self, session_id: &str) {
+        self.plugin_storage_session_id = Some(session_id.to_string());
     }
 
     /// 【插件】【命令目录】列出当前启用插件的用户命令。
@@ -87,7 +96,15 @@ impl ToolRegistry {
         progress: ToolProgress,
         allow_writes: bool,
     ) -> InvocationContext {
+        let session = self.plugin_session_id.as_ref().unwrap_or(&self.session_id);
+        let storage_session = self.plugin_storage_session_id.as_ref().unwrap_or(session);
         InvocationContext {
+            storage_session_id: if storage_session.is_empty() {
+                "direct-command".into()
+            } else {
+                storage_session.clone()
+            },
+            operation_id: crate::plugins::operation::current(),
             session_id: self
                 .plugin_session_id
                 .as_ref()

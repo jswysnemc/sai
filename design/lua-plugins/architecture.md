@@ -34,11 +34,11 @@ Rust 宿主负责会话事实、权限、资源约束、取消和平台能力。
 
 ## 已落地的版本 1
 
-独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、模型、工具调用、文件、环境、模板进程、JSON、文本、时间能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation` 与 `diagnostic-evidence` 已迁为随程序嵌入的十三个 Lua 包，共提供 19 个工具；相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
+独立运行时使用 Lua 5.4，包含包验证、受限模块加载、工具、命令、事件和 HTTP、模型、工具调用、文件、环境、模板进程、JSON、文本、时间能力。`online-man`、`deepseek-status`、`archlinux`、`fcitx-wiki`、`protondb`、`web-search`、`weather`、`exchange-rate`、`moegirl`、`linux-game-signals`、`linux-game-investigation`、`input-method-investigation`、`diagnostic-evidence` 与 `package-advisor` 已迁为随程序嵌入的十四个 Lua 包，共提供 21 个工具；相应 Rust 业务实现已删除，旧公开工具名称保持兼容，应用执行使用独立写入入口。
 
 CLI 提供创建、验证、安装、替换、配置、授权、启停、移除和命令执行。TUI 提供 `/plugins`、`/plugins reload` 与 `/plugin <id>/<command>`。模型工具通过原有共用注册入口进入 CLI、TUI、Web 和子任务，直接用户命令目前只有 CLI 与 TUI 入口。
 
-持久插件存储、主 Agent 模型上下文变换、插件界面组件和远端包分发尚未开放。后续业务迁移见[迁移清单](migration.md)。
+私有会话状态、有界归档与工作目录能力已开放，契约见[私有接口](private-api.md)。主 Agent 模型上下文变换、插件界面组件和远端包分发尚未开放。后续业务迁移见[迁移清单](migration.md)。
 
 ## 契约原则
 
@@ -130,3 +130,9 @@ Arch 包内部按软件包、状态和 Wiki 查询拆分；Fcitx 的主题、双
 - 从 Sai 工具注册表和命令行验证加载、调用、禁用、恢复和配置覆盖。
 - 既有 Rust 与 Web 测试保持通过，Windows、Linux、macOS 构建验证 vendored Lua 的可移植性。
 - 迁移清单逐项记录实际证据，未实现能力保持待办，不能用局部测试证明整个目标完成。
+
+## AUR 与私有数据
+
+`plugins/package-advisor` 包含元数据、审查文件选择、风险规则、审查记录和完整安装编排。Rust 的 `host/private.rs` 与 `runtime/private` 定义契约、授权、预算和有期限的目录句柄；`src/plugins/private` 负责插件及会话隔离、原子记录、二进制下载、安全解压和缓存目录。宿主不包含 AUR 风险模式或助手选择分支。
+
+用户操作标识由 `src/plugins/operation.rs` 维护，在普通 Agent 请求和跨 Lua VM 的组合调用中传递。审查记录使用完整会话目录区分工作区内同名会话；`StateStore` 的共同重置入口只清理当前作用域。通知模块仍保留宿主平台投递职责。

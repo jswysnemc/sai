@@ -21,11 +21,37 @@ pub(in crate::plugins) async fn execute(
     context: SystemContext,
     capabilities: Capabilities,
 ) -> Result<ProcessOutput> {
+    execute_in(request, context, capabilities, false).await
+}
+
+/// 【插件系统】【私有目录执行】仅由持有私有目录句柄的宿主调用。
+/// @param request 模板参数；context 为已验证目录；capabilities 为授权
+/// @returns 受管进程输出
+pub(in crate::plugins) async fn execute_workspace(
+    request: ProcessRequest,
+    context: SystemContext,
+    capabilities: Capabilities,
+) -> Result<ProcessOutput> {
+    execute_in(request, context, capabilities, true).await
+}
+
+/// 【插件系统】【目录类型校验】完整模板必须与宿主选定的目录类型一致。
+/// @param request 模板参数；context 为可信目录；capabilities 为授权；workspace 为是否使用私有目录
+/// @returns 受管进程输出
+async fn execute_in(
+    request: ProcessRequest,
+    context: SystemContext,
+    capabilities: Capabilities,
+    workspace: bool,
+) -> Result<ProcessOutput> {
     let (program, arguments) = capabilities.system.process_command(
         &request.template,
         &request.parameters,
         context.allow_writes,
     )?;
+    if capabilities.system.processes[&request.template].workspace != workspace {
+        bail!("plugin process template working directory does not match its grant");
+    }
     let cwd = paths::workdir(&context)?;
     let executable = executable_path(&program, &cwd)?;
     let mut command = Command::new(executable);

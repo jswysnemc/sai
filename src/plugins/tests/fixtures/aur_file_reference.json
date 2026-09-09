@@ -1,0 +1,93 @@
+{
+  "source_commit": "529889391122e0faaaebd6621a6acb3df33419c5",
+  "selection_cases": [
+    {
+      "path": "PKGBUILD",
+      "selected": false
+    },
+    {
+      "path": ".SRCINFO",
+      "selected": false
+    },
+    {
+      "path": "demo.install",
+      "selected": true
+    },
+    {
+      "path": "demo.INSTALL",
+      "selected": false
+    },
+    {
+      "path": "a/b.patch",
+      "selected": true
+    },
+    {
+      "path": "unit.service",
+      "selected": true
+    },
+    {
+      "path": "unit.timer",
+      "selected": true
+    },
+    {
+      "path": "unit.socket",
+      "selected": true
+    },
+    {
+      "path": "demo.desktop",
+      "selected": true
+    },
+    {
+      "path": "setup.sh",
+      "selected": true
+    },
+    {
+      "path": "fix.diff",
+      "selected": true
+    },
+    {
+      "path": "pkg.sysusers",
+      "selected": true
+    },
+    {
+      "path": "sysusers.conf",
+      "selected": true
+    },
+    {
+      "path": "tmpfiles.d/config",
+      "selected": false
+    },
+    {
+      "path": "demo.tmpfiles",
+      "selected": true
+    },
+    {
+      "path": "README.md",
+      "selected": false
+    },
+    {
+      "path": "demo.sh.backup",
+      "selected": false
+    },
+    {
+      "path": "script",
+      "selected": false
+    },
+    {
+      "path": "folder.sh/demo",
+      "selected": false
+    },
+    {
+      "path": ".install",
+      "selected": true
+    },
+    {
+      "path": ".sh",
+      "selected": false
+    },
+    {
+      "path": ".patch",
+      "selected": false
+    }
+  ]
+}

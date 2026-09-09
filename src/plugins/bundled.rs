@@ -42,6 +42,7 @@ pub(super) fn default_enabled(config: &AppConfig, id: &str) -> bool {
             config.plugins.linux_game_compatibility.enabled
         }
         "online-man" => config.plugins.man.enabled,
+        "package-advisor" => config.plugins.package_advisor.enabled,
         "moegirl" => config.plugins.moegirl.enabled,
         "weather" => config.plugins.weather.enabled,
         "web-search" => config.plugins.web.enabled,

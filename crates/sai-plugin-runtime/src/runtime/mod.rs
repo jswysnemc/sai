@@ -3,6 +3,7 @@ mod control;
 mod execution;
 mod http;
 mod modules;
+mod private;
 mod registration;
 mod services;
 mod system;
@@ -32,6 +33,8 @@ static NEXT_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 #[derive(Clone, Default)]
 pub struct InvocationContext {
     pub session_id: String,
+    pub storage_session_id: String,
+    pub operation_id: String,
     pub workdir: String,
     pub allow_writes: bool,
     pub progress: Option<ProgressCallback>,
@@ -217,6 +220,8 @@ impl PluginRuntime {
         let invocation_context = InvocationContext {
             session_id: context.session_id,
             workdir: context.workdir,
+            storage_session_id: context.storage_session_id,
+            operation_id: context.operation_id,
             ..Default::default()
         };
         let value = self

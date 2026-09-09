@@ -20,7 +20,6 @@ pub(crate) enum ToolGate {
 /// - `registry`: 当前会话工具注册表
 /// - `visibility`: 渐进式加载可见性状态
 /// - `call`: 待执行的工具调用
-/// - `used_tools`: 本轮已经执行过的工具名
 ///
 /// 返回:
 /// - 允许继续执行，或需要回传给模型的错误说明
@@ -28,7 +27,6 @@ pub(crate) fn evaluate_tool_gate(
     registry: &ToolRegistry,
     visibility: &super::tool_visibility::ToolVisibility,
     call: &ToolCall,
-    used_tools: &[String],
 ) -> ToolGate {
     let name = call.function.name.as_str();
     // 1. load 走可见性专用分支，不做注册表存在性判定，但参数仍需可解析
@@ -51,12 +49,6 @@ pub(crate) fn evaluate_tool_gate(
     // 4. 参数必须满足真实工具 Schema，统一外壳不能降低具体调用的校验强度
     if let Err(err) = registry.validate_arguments(name, &call.function.arguments) {
         return ToolGate::Reject(invalid_arguments_notice(name, &err));
-    }
-    // 5. AUR 安装与审查必须分轮，避免同轮内跳过用户确认
-    if name == "install_aur_package" && used_tools.iter().any(|used| used == "review_aur_package") {
-        return ToolGate::Reject(
-            "tool error: install_aur_package cannot run in the same turn as review_aur_package. This is a workflow confirmation error, not a tool loading error. Do not call load again; ask the user to confirm installation in a new turn first.".to_string(),
-        );
     }
     ToolGate::Proceed
 }
@@ -211,12 +203,7 @@ mod tests {
         let registry = registry_with("read_file");
         let visibility = super::super::tool_visibility::ToolVisibility::new(Vec::new());
 
-        let gate = evaluate_tool_gate(
-            &registry,
-            &visibility,
-            &call("hallucinated_tool", "{}"),
-            &[],
-        );
+        let gate = evaluate_tool_gate(&registry, &visibility, &call("hallucinated_tool", "{}"));
 
         let ToolGate::Reject(message) = gate else {
             panic!("unknown tool must be rejected");
@@ -235,7 +222,6 @@ mod tests {
             &registry,
             &visibility,
             &call("read_file", "{\"path\": \"/tmp/a"),
-            &[],
         );
 
         let ToolGate::Reject(message) = gate else {
@@ -264,7 +250,6 @@ mod tests {
             &registry,
             &visibility,
             &call("read_file", r#"{"action":"read","path":"/tmp/a"}"#),
-            &[],
         );
 
         let ToolGate::Reject(message) = gate else {
@@ -279,7 +264,7 @@ mod tests {
         let registry = registry_with("read_file");
         let visibility = super::super::tool_visibility::ToolVisibility::new(Vec::new());
 
-        let gate = evaluate_tool_gate(&registry, &visibility, &call("read_file", "[1, 2]"), &[]);
+        let gate = evaluate_tool_gate(&registry, &visibility, &call("read_file", "[1, 2]"));
 
         assert!(matches!(gate, ToolGate::Reject(_)));
     }
@@ -290,7 +275,7 @@ mod tests {
         let registry = registry_with("read_file");
         let visibility = super::super::tool_visibility::ToolVisibility::new(Vec::new());
 
-        let gate = evaluate_tool_gate(&registry, &visibility, &call("read_file", ""), &[]);
+        let gate = evaluate_tool_gate(&registry, &visibility, &call("read_file", ""));
 
         assert_eq!(gate, ToolGate::Proceed);
     }
@@ -302,7 +287,7 @@ mod tests {
         let visibility =
             super::super::tool_visibility::ToolVisibility::new(vec!["web_search".to_string()]);
 
-        let gate = evaluate_tool_gate(&registry, &visibility, &call("web_search", "{}"), &[]);
+        let gate = evaluate_tool_gate(&registry, &visibility, &call("web_search", "{}"));
 
         let ToolGate::Reject(message) = gate else {
             panic!("deferred tool must be rejected before load");
@@ -316,27 +301,8 @@ mod tests {
         let registry = registry_with("ask_question");
         let visibility = super::super::tool_visibility::ToolVisibility::new(vec!["*".to_string()]);
 
-        let gate = evaluate_tool_gate(&registry, &visibility, &call("ask_question", "{}"), &[]);
+        let gate = evaluate_tool_gate(&registry, &visibility, &call("ask_question", "{}"));
 
         assert_eq!(gate, ToolGate::Proceed);
-    }
-
-    /// 验证 AUR 安装与审查同轮调用被拒绝。
-    #[test]
-    fn aur_install_after_review_in_same_turn_is_rejected() {
-        let registry = registry_with("install_aur_package");
-        let visibility = super::super::tool_visibility::ToolVisibility::new(Vec::new());
-
-        let gate = evaluate_tool_gate(
-            &registry,
-            &visibility,
-            &call("install_aur_package", "{}"),
-            &["review_aur_package".to_string()],
-        );
-
-        let ToolGate::Reject(message) = gate else {
-            panic!("same-turn install must be rejected");
-        };
-        assert!(message.contains("cannot run in the same turn"));
     }
 }

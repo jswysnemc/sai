@@ -3,7 +3,6 @@ use crate::i18n::text as t;
 use crate::memory::MemoryStore;
 use crate::paths::SaiPaths;
 use crate::state::StateStore;
-use crate::tools;
 use anyhow::Result;
 
 /// 清空当前会话状态。
@@ -24,7 +23,7 @@ pub fn clear_state(paths: &SaiPaths, all: bool) -> Result<String> {
     } else {
         memory.clear_evicted_context()?;
     }
-    tools::clear_aur_review_state(paths)?;
+    crate::plugins::clear_session_storage(&paths.state_dir, "direct-command")?;
     Ok(if all {
         t(
             "cleared current conversation history and all memory",

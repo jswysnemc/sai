@@ -91,6 +91,8 @@ pub struct StateStore {
     base_state_dir: PathBuf,
     session_id: String,
     state_dir: PathBuf,
+    /// 【插件状态】【清理归属】应用状态根目录；只读投影用的测试存储不绑定实际插件数据
+    plugin_state_root: Option<PathBuf>,
     conv_db: Arc<ConversationDb>,
 }
 
@@ -451,6 +453,9 @@ impl StateStore {
     /// 返回:
     /// - 清空是否成功
     pub fn reset_conversation(&self) -> Result<()> {
+        if let Some(root) = &self.plugin_state_root {
+            crate::plugins::clear_session_storage(root, &self.state_dir.to_string_lossy())?;
+        }
         self.conv_db.reset()?;
         self.clear_loaded_tools()?;
         self.clear_loaded_skills()?;

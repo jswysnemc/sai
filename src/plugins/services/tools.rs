@@ -45,9 +45,12 @@ impl PluginServices {
         CALL_CHAIN
             .scope(
                 self.chain.clone(),
-                crate::runtime_cwd::scope(self.workdir.clone(), async {
-                    self.tools.call(name, arguments).await
-                }),
+                crate::plugins::operation::scope(
+                    &self.operation_id,
+                    crate::runtime_cwd::scope(self.workdir.clone(), async {
+                        self.tools.call(name, arguments).await
+                    }),
+                ),
             )
             .await
     }

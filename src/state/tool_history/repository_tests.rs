@@ -77,6 +77,7 @@ fn records_call_and_result_summary() {
 fn clipped_output_writes_reference_and_replacement() {
     let (temp, db) = test_db();
     let store = StateStore {
+        plugin_state_root: None,
         base_state_dir: PathBuf::new(),
         session_id: "default".to_string(),
         state_dir: temp.path().to_path_buf(),

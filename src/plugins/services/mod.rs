@@ -35,6 +35,7 @@ pub(crate) struct PluginServices {
     progress: Option<ProgressCallback>,
     allowed: BTreeSet<String>,
     workdir: PathBuf,
+    operation_id: String,
     chain: Vec<CallFrame>,
     rounds: AtomicUsize,
 }
@@ -58,6 +59,7 @@ impl PluginServices {
         });
         let serial = NEXT_INVOCATION.fetch_add(1, Ordering::Relaxed);
         tools.start_plugin_session(&format!("{}/plugin/{id}/{serial}", context.session_id))?;
+        tools.inherit_plugin_storage_session(&context.storage_session_id);
         Ok(Self {
             tools,
             model,
@@ -65,6 +67,7 @@ impl PluginServices {
             progress: context.progress.clone(),
             allowed,
             workdir: PathBuf::from(&context.workdir),
+            operation_id: context.operation_id.clone(),
             chain,
             rounds: AtomicUsize::new(0),
         })

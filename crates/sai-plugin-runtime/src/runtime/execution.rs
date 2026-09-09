@@ -13,11 +13,30 @@ impl Vm {
     pub(super) async fn execute(
         &mut self,
         invocation: Invocation,
-        context: InvocationContext,
+        mut context: InvocationContext,
     ) -> Result<Value> {
-        let _lease = self
-            .control
-            .begin(context.services.clone(), &context.workdir)?;
+        if context.operation_id.is_empty() {
+            static SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+            context.operation_id = format!(
+                "{}:{}:{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)?
+                    .as_nanos(),
+                SERIAL.fetch_add(1, Ordering::Relaxed)
+            );
+        }
+        let storage_session = if context.storage_session_id.is_empty() {
+            &context.session_id
+        } else {
+            &context.storage_session_id
+        };
+        let _lease = self.control.begin(
+            context.services.clone(),
+            &context.workdir,
+            storage_session,
+            !matches!(invocation, Invocation::Event(..)),
+        )?;
         let ctx = context_table(&self.lua, &context, self.control.clone())?;
         match invocation {
             Invocation::Tool(name, arguments) => {
@@ -35,6 +54,10 @@ impl Vm {
                     context.allow_writes && tool.definition.access == ToolAccess::Writes,
                     Ordering::Release,
                 );
+                ctx.set(
+                    "allow_writes",
+                    self.control.writable.load(Ordering::Acquire),
+                )?;
                 let value = tool
                     .handler
                     .call_async::<LuaValue>((self.lua.to_value(&arguments)?, ctx))
@@ -50,6 +73,10 @@ impl Vm {
                     context.allow_writes && command.definition.access == ToolAccess::Writes,
                     Ordering::Release,
                 );
+                ctx.set(
+                    "allow_writes",
+                    self.control.writable.load(Ordering::Acquire),
+                )?;
                 let value = command
                     .handler
                     .call_async::<LuaValue>((arguments, ctx))
@@ -84,6 +111,8 @@ fn context_table(
     let table = lua.create_table()?;
     table.set("session_id", context.session_id.as_str())?;
     table.set("workdir", context.workdir.as_str())?;
+    table.set("operation_id", context.operation_id.as_str())?;
+    table.set("allow_writes", false)?;
     let progress = context.progress.clone();
     let generation = control.generation.load(Ordering::Acquire);
     table.set(

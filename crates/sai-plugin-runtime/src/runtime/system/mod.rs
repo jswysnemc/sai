@@ -42,7 +42,7 @@ pub(super) fn install(
 /// 【插件】【系统预算】只有通过输入和权限校验的调用才消耗一次额度。
 /// @param control 当前调用；limit 为系统调用次数上限
 /// @returns 仍有可用额度时成功
-fn charge(control: &CallControl, limit: usize) -> mlua::Result<()> {
+pub(crate) fn charge(control: &CallControl, limit: usize) -> mlua::Result<()> {
     control
         .system_calls
         .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
@@ -55,7 +55,11 @@ fn charge(control: &CallControl, limit: usize) -> mlua::Result<()> {
 /// 【插件】【系统结果】在结果进入 Lua 堆之前检查序列化后的大小。
 /// @param lua 虚拟机；value 为宿主结果；limit 为字节上限
 /// @returns 可传入 Lua 的有界结果
-fn result_value(lua: &Lua, value: &impl serde::Serialize, limit: usize) -> mlua::Result<Value> {
+pub(crate) fn result_value(
+    lua: &Lua,
+    value: &impl serde::Serialize,
+    limit: usize,
+) -> mlua::Result<Value> {
     let bytes = serde_json::to_vec(value).map_err(error)?;
     if bytes.len() > limit {
         return Err(mlua::Error::runtime(
@@ -68,6 +72,6 @@ fn result_value(lua: &Lua, value: &impl serde::Serialize, limit: usize) -> mlua:
 /// 【插件】【系统错误】保留宿主错误原因链，便于 Lua 记录缺失证据。
 /// @param error 原始宿主错误
 /// @returns Lua 可捕获错误
-fn error(error: impl std::fmt::Display) -> mlua::Error {
+pub(crate) fn error(error: impl std::fmt::Display) -> mlua::Error {
     mlua::Error::runtime(format!("{error:#}"))
 }

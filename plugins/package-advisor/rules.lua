@@ -1,3 +1,5 @@
+--- 【AUR】【审查规则】向模型提供构建文件审查步骤与报告规范
+return [=[
 # AUR Review Workflow
 
 This is a pac-compatible AUR review workflow. Review AUR build files only. Do not install, build, run `makepkg`, run `pacman -U`, or execute package build scripts.
@@ -71,7 +73,7 @@ Required structure:
 
 1. `## PKGBUILD意图` — 1-3 sentences: what the package does, how it builds, and trust anchor.
 2. `## 具体风险` — concrete findings only. Each risk item should be one line. Optional blockquote for exact evidence.
-3. `## 🟢/🟡/🔴 <PKG> 审查结果：<风险等级>` — risk level heading plus 1-3 recommendations.
+3. `## // <PKG> 审查结果：<风险等级>` — risk level heading plus 1-3 recommendations.
 
 Controlled first recommendation bullet, choose exactly one:
 
@@ -80,3 +82,4 @@ Controlled first recommendation bullet, choose exactly one:
 - `- 建议取消安装`
 
 Do not output `PAC_DECISION`; this review is shown directly to the user and does not need the machine-readable pac decision line.
+]=]

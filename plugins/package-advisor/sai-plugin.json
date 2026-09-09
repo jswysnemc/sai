@@ -1,0 +1,190 @@
+{
+  "api_version": 1,
+  "id": "package-advisor",
+  "version": "1.0.0",
+  "name": "AUR package advisor",
+  "description": "Review AUR build files and install only after a later explicit confirmation.",
+  "entry": "init.lua",
+  "capabilities": {
+    "http": [
+      "https://aur.archlinux.org"
+    ],
+    "system": {
+      "session_storage": true,
+      "workspace": true,
+      "environment": [
+        "PATH",
+        "HOME",
+        "USER",
+        "LOGNAME",
+        "LANG",
+        "LC_ALL",
+        "XDG_CACHE_HOME",
+        "XDG_CONFIG_HOME",
+        "SystemRoot"
+      ],
+      "processes": {
+        "paru_version": {
+          "program": "paru",
+          "args": [
+            "--version"
+          ],
+          "read_only": true
+        },
+        "paru_fetch": {
+          "program": "paru",
+          "args": [
+            "--aur",
+            "--redownload",
+            "-G",
+            {
+              "parameter": "package"
+            }
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "package": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_+][A-Za-z0-9_+.\\-]*$",
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "package"
+            ],
+            "additionalProperties": false
+          },
+          "read_only": true,
+          "workspace": true
+        },
+        "paru_install": {
+          "program": "paru",
+          "args": [
+            "-S",
+            "--noconfirm",
+            "--needed",
+            {
+              "parameter": "package"
+            }
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "package": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_+][A-Za-z0-9_+.\\-]*$",
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "package"
+            ],
+            "additionalProperties": false
+          },
+          "workspace": true
+        },
+        "yay_version": {
+          "program": "yay",
+          "args": [
+            "--version"
+          ],
+          "read_only": true
+        },
+        "yay_fetch": {
+          "program": "yay",
+          "args": [
+            "--aur",
+            "--redownload",
+            "-G",
+            {
+              "parameter": "package"
+            }
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "package": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_+][A-Za-z0-9_+.\\-]*$",
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "package"
+            ],
+            "additionalProperties": false
+          },
+          "read_only": true,
+          "workspace": true
+        },
+        "yay_install": {
+          "program": "yay",
+          "args": [
+            "-S",
+            "--noconfirm",
+            "--needed",
+            {
+              "parameter": "package"
+            }
+          ],
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "package": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_+][A-Za-z0-9_+.\\-]*$",
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "package"
+            ],
+            "additionalProperties": false
+          },
+          "workspace": true
+        },
+        "makepkg": {
+          "program": "makepkg",
+          "args": [
+            "--noconfirm"
+          ],
+          "workspace": true
+        },
+        "pacman_install": {
+          "program": "pacman",
+          "args": [
+            "-U",
+            "--noconfirm",
+            {
+              "parameter": "archive"
+            }
+          ],
+          "workspace": true,
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "archive": {
+                "type": "string",
+                "pattern": "^\\./[^/\\\\\\u0000]+\\.pkg\\.tar(?:\\.[A-Za-z0-9]+)?$",
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "archive"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  },
+  "limits": {
+    "memory_bytes": 33554432,
+    "instructions": 20000000,
+    "timeout_ms": 3000000,
+    "http_timeout_ms": 30000,
+    "output_bytes": 4194304,
+    "system_calls": 4096
+  }
+}
